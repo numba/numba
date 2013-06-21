@@ -14,7 +14,7 @@ def compile_kernel(func, argtys):
     lmod, lfunc = compile_common(func, None, argtys)
     # PTX-ization
     cudakernel = CUDAKernel(lfunc.name, to_ptx(lfunc), argtys)
-    #print cudakernel.ptx
+    print cudakernel.ptx
     return cudakernel
 
 def compile_device(func, retty, argtys, inline=False):
@@ -59,7 +59,7 @@ def compile_common(func, retty, argtys):
     gvars = cg.extern_globals
     assert not gvars
 
-    #print lfunc.module
+    print lfunc.module
 
     lfunc.module.verify()
 

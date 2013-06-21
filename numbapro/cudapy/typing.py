@@ -3,7 +3,7 @@ from numbapro.npm import types
 from numbapro.npm.typing import (cast_penalty, Restrict, MustBe,
                                  Conditional, int_set)
 from numbapro.npm.errors import CompileError
-from . import ptx
+from . import ptx, libdevice
 import numbapro
 
 class CudaPyInferError(CompileError):
@@ -212,7 +212,7 @@ cudapy_call_typing_ext = {
 }
 
 cudapy_call_typing_ext.update(numba_cast_ext)
-
+cudapy_call_typing_ext.update(libdevice.math_infer_rules)
 
 cudapy_global_typing_ext.update(npy_dtype_ext)
 cudapy_global_typing_ext.update(numba_type_ext)

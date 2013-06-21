@@ -4,7 +4,7 @@ from llvm.core import Type, Constant, LINKAGE_EXTERNAL, LINKAGE_INTERNAL
 
 from numbapro.npm.errors import CompileError
 from numbapro.npm import types
-from . import ptx
+from . import ptx, libdevice
 from numbapro.cudadrv.nvvm import ADDRSPACE_SHARED
 import numbapro
 
@@ -179,4 +179,4 @@ numba_cast_ext = {
 }
 
 cudapy_call_codegen_ext.update(numba_cast_ext)
-
+cudapy_call_codegen_ext.update(libdevice.math_codegen)

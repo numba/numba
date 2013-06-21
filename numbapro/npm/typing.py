@@ -5,6 +5,7 @@ from collections import namedtuple, defaultdict, deque, Set, Mapping
 from .symbolic import OP_MAP, find_dominators, Coerce, Expr
 from .utils import cache
 from .errors import CompileError
+from . import errors
 
 class TypeInferError(CompileError):
     def __init__(self, value, msg):
@@ -410,7 +411,9 @@ class Infer(object):
         fname = OP_MAP.get(value.kind, value.kind)
 
         fn = getattr(self, 'visit_' + fname, self.generic_visit)
-        fn(value)
+
+        with errors.error_context(value.lineno):
+            fn(value)
 
     def generic_visit(self, value):
         raise NotImplementedError(value)

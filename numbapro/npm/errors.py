@@ -10,4 +10,4 @@ def error_context(lineno):
     try:
         yield
     except Exception, e:
-        raise
+        raise Exception("At line %d: %s" % (lineno, e))

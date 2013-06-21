@@ -347,10 +347,7 @@ class SymbolicExecution(object):
 
         funcname = func.value.args[0]
 
-        funcobj = None
-        if (funcname in ['range', 'xrange']
-                and funcname not in self.func.func_globals):
-            funcobj = get_global_value(self.func, funcname)
+        funcobj = get_global_value(self.func, funcname)
 
         if funcobj in [range, xrange]:
             if kws:
