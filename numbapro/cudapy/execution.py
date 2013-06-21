@@ -3,24 +3,14 @@ from numbapro.npm.execution import (to_ctype, prepare_args, Complex64,
                                     Complex128, ArrayBase)
 from numbapro.cudadrv import driver, devicearray
 
-class CUDAKernel(object):
-    '''A callable object representing a CUDA kernel.
+class CUDAKernelBase(object):
+    '''Define interface for configurable kernels
     '''
-    def __init__(self, name, ptx, argtys):
-        self.name = name                # to lookup entry kernel
-        self.ptx = ptx                  # for debug and inspection
-        self.c_argtys = [to_ctype(t) for t in argtys]
+    def __init__(self):
         self.griddim = (1, 1)
         self.blockdim = (1, 1, 1)
         self.sharedmem = 0
         self.stream = 0
-
-    def bind(self):
-        '''Associate to the current context.
-        NOTE: free to invoke for multiple times.
-        '''
-        self.cu_module = driver.Module(self.ptx)
-        self.cu_function = driver.Function(self.cu_module, self.name)
 
     def copy(self):
         return copy.copy(self)
@@ -55,6 +45,24 @@ class CUDAKernel(object):
             raise ValueError('must specify at least the griddim and blockdim')
         clone.configure(*args)
         return clone
+
+
+
+class CUDAKernel(CUDAKernelBase):
+    '''A callable object representing a CUDA kernel.
+    '''
+    def __init__(self, name, ptx, argtys):
+        super(CUDAKernel, self).__init__()
+        self.name = name                # to lookup entry kernel
+        self.ptx = ptx                  # for debug and inspection
+        self.c_argtys = [to_ctype(t) for t in argtys]
+
+    def bind(self):
+        '''Associate to the current context.
+        NOTE: free to invoke for multiple times.
+        '''
+        self.cu_module = driver.Module(self.ptx)
+        self.cu_function = driver.Function(self.cu_module, self.name)
 
     def __call__(self, *args):
         self._call(args = args,

@@ -1,6 +1,9 @@
+import numpy
 import numba
 from numbapro.npm import types
 from numbapro.cudapy import compiler
+from numbapro.cudapy.execution import CUDAKernelBase
+from numbapro.cudadrv import devicearray
 
 NUMBA_TO_NPM_TYPES = {
     numba.int8: types.int8,
@@ -76,5 +79,63 @@ def jit(restype=None, argtypes=None, device=False, inline=False, bind=True):
     else:
         return kernel_jit
 
-def autojit(): pass
+def autojit(func):
+    return AutoJitCUDAKernel(func, bind=True)
+
+class AutoJitCUDAKernel(CUDAKernelBase):
+    def __init__(self, func, bind):
+        super(AutoJitCUDAKernel, self).__init__()
+        self.intp = {4: types.int32, 8: types.int64}[tuple.__itemsize__]
+        self.func = func
+        self.bind = bind
+        self.definitions = {}
+
+    def __call__(self, *args, **kws):
+        argtypes = []
+        for a in args:
+            if (devicearray.is_cuda_ndarray(a) or
+                    isinstance(a, numpy.ndarray)):
+                dty = numpy.dtype(a.dtype)
+                ety = FROM_DTYPE[dty]
+                aty = types.arraytype(ety, a.ndim, 'A')
+                argtypes.append(aty)
+            elif isinstance(a, complex):
+                argtypes.append(types.complex128)
+            elif isinstance(a, float):
+                argtypes.append(types.float64)
+            elif isinstance(a, (int, long)):
+                argtypes.append(self.intp)
+            else:
+                raise TypeError("unsupported type: %s" % type(a))
+        sig = tuple(argtypes)
+        if sig in self.definitions:
+            defn = self.definitions[sig]
+        else:
+            defn = compiler.compile_kernel(self.func, argtypes)
+            if self.bind: defn.bind()
+
+            self.definitions[sig] = defn
+
+        cfg = defn[self.griddim, self.blockdim, self.stream, self.sharedmem]
+        cfg(*args, **kws)
+
+
+FROM_DTYPE = {
+    numpy.dtype('int8'): types.int8,
+    numpy.dtype('int16'): types.int16,
+    numpy.dtype('int32'): types.int32,
+    numpy.dtype('int64'): types.int64,
+
+    numpy.dtype('uint8'): types.uint8,
+    numpy.dtype('uint16'): types.uint16,
+    numpy.dtype('uint32'): types.uint32,
+    numpy.dtype('uint64'): types.uint64,
+
+    numpy.dtype('float32'): types.float32,
+    numpy.dtype('float64'): types.float64,
+
+    numpy.dtype('complex64'): types.complex64,
+    numpy.dtype('complex128'): types.complex128,
+
+}
 
