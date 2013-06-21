@@ -234,6 +234,10 @@ class CodeGen(object):
         ty = self.typemap[expr]
         self.valmap[expr] = self.define_const(ty, expr.args.value)
 
+    def expr_Coerce(self, expr):
+        ty = self.typemap[expr]
+        self.valmap[expr] = self.cast(expr.args.src.value, ty)
+
     def expr_Phi(self, expr):
         ty = self.typemap[expr]
         phi = self.builder.phi(self.to_llvm(ty), name=expr.args.name)
@@ -241,9 +245,7 @@ class CodeGen(object):
         for blkoff, valref in expr.args.incomings:
             val = valref.value
             vty = self.typemap[val]
-            # XXX: when PHI node mismatch...
-            assert typing.can_coerce(vty, ty), (vty, ty, expr)
-            self.typemap[val] = ty
+
         self.pending_phis[phi] = expr.args.incomings
         self.valmap[expr] = phi
 

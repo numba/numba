@@ -2,7 +2,7 @@ import __builtin__
 import itertools, inspect
 #from pprint import pprint
 from collections import namedtuple, defaultdict, deque, Set, Mapping
-from .symbolic import OP_MAP, find_dominators
+from .symbolic import OP_MAP, find_dominators, Coerce, Expr
 from .utils import cache
 from .errors import CompileError
 
@@ -309,7 +309,7 @@ class Infer(object):
 
         topsorted = topsort_blocks(doms)
 
-        # infer block by block
+        # infer block by block starting with the entry block
         processed_blocks = set()
         for blknum in topsorted:
             blk = self.blocks[blknum]
@@ -370,12 +370,40 @@ class Infer(object):
                     elif len(bests) == 1:
                         soln = bests[0]
                     else:
-                        raise TypeInferError(value, "cannot infer value/operation not supported on input types")
+                        msg = ("cannot infer value/operation not supported on "
+                               "input types")
+                        raise TypeInferError(value, msg)
                     for k, v in soln.iteritems():
                         possibles[k] = frozenset([v])
             processed_blocks.add(blknum)
 
-        soln = dict((k, iter(vs).next()) for k, vs in possibles.iteritems())
+        # ensure we have only one solution for each value
+        soln = {}
+        for k, vs in possibles.iteritems():
+            assert len(vs) == 1
+            soln[k] = iter(vs).next()
+
+        # postprocess all PHI nodes and ensure the type matches for all
+        # incoming values
+        for phi, incomings in self.phis.iteritems():
+            expect = soln[phi]
+            for inc in incomings:
+                got = soln[inc]
+                if expect != got:
+                    assert can_coerce(expect, got)
+                    for blknum, ref in phi.args.incomings:
+                        if ref.value is inc:
+                            break
+                    else:
+                        assert False, 'value not found in PHI'
+                    blk = self.blocks[blknum]
+                    coercion_node = blk.insert(Expr('Coerce', None, Coerce(ref)))
+                    soln[coercion_node.value] = expect
+                    blk.varmap[phi.args.name].append(coercion_node.value)
+                    # update PHI incoming
+                    phi.args.incomings.remove((blknum, ref))
+                    phi.args.incomings.add((blknum, coercion_node))
+
         return soln
 
     def visit(self, value):

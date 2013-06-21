@@ -19,6 +19,7 @@ UnaryOp = namedtuple('UnaryOp', ['value'])
 Unpack = namedtuple('Unpack', ['obj', 'offset'])
 GetItem = namedtuple('GetItem', ['obj', 'idx'])
 SetItem = namedtuple('SetItem', ['obj', 'idx', 'value'])
+Coerce = namedtuple('Coerce', ['src'])
 
 ComplexGetAttr = namedtuple('ComplexGetAttr', ['obj', 'attr'])
 
