@@ -593,6 +593,8 @@ INT_OPMAP  = {
      '&': (lc.Builder.and_, lc.Builder.and_),
      '|': (lc.Builder.or_, lc.Builder.or_),
      '^': (lc.Builder.xor, lc.Builder.xor),
+     '<<': (lc.Builder.shl, lc.Builder.shl),
+     '>>': (lc.Builder.ashr, lc.Builder.lshr),
 }
 
 INT_UNARY_OPMAP = {

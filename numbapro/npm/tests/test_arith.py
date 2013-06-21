@@ -27,6 +27,9 @@ def expr1(a, b, c):
     cc = c * 3
     return (ac + 1) * (bc + 1) * (cc + 1)
 
+def shifts(a, b):
+    return (a >> b) << 8
+
 iset = [int8, int16, int32, int64, uint8, uint16, uint32, uint64]
 fset = [float32, float64]
 cset = [complex64, complex128]
@@ -225,6 +228,27 @@ def test_expr1_integer():
 
     for ty in set([int32, int64]):
         run(ty, 121, 11, 231)
+
+#------------------------------------------------------------------------------
+# shifts
+
+@testcase
+def test_shifts_signed():
+    cfunc = compile(shifts, int32, [int32, int32])
+
+    a, b = -0xdead, 12
+    got = cfunc(a, b)
+    exp = shifts(a, b)
+    assert got == exp, (got, exp)
+
+@testcase
+def test_shifts_unsigned():
+    cfunc = compile(shifts, uint32, [uint32, uint32])
+
+    a, b = 0xdead, 12
+    got = cfunc(a, b)
+    exp = shifts(a, b)
+    assert got == exp, (got, exp)
 
 
 

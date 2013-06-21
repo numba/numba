@@ -506,12 +506,12 @@ class Infer(object):
             self.rules[lhs].add(Restrict(int_set|float_set))
             self.rules[rhs].add(Restrict(int_set|float_set))
             
-        elif value.kind in ['&', '|', '^']:
+        elif value.kind in ['&', '|', '^', '>>', '<<']:
             
             def rule(value, lhs, rhs):
                 rty = coerce(lhs, rhs)
                 if rty.is_int:
-                    return cast_penalty(value, rty)
+                    return value == rty
 
             self.rules[value].add(Conditional(rule, lhs, rhs))
             self.rules[value].add(Restrict(int_set))

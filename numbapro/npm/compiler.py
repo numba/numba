@@ -5,7 +5,7 @@ def compile(func, retty, argtys):
     # symbolic interpretation
     se = symbolic.SymbolicExecution(func)
     se.visit()
-    print se.dump()
+    #print se.dump()
 
     argspec = inspect.getargspec(func)
     assert not argspec.keywords

@@ -49,6 +49,8 @@ BINARYOP_MAP = {
      '&': 'BinOp',
      '|': 'BinOp',
      '^': 'BinOp',
+     '<<': 'BinOp',
+     '>>': 'BinOp',
 'ForInit': 'BinOp',
 }
 
@@ -554,6 +556,12 @@ class SymbolicExecution(object):
     def visit_BINARY_XOR(self, inst):
         self.visit_generic_binary('^', inst)
 
+    def visit_BINARY_LSHIFT(self, inst):
+        self.visit_generic_binary('<<', inst)
+
+    def visit_BINARY_RSHIFT(self, inst):
+        self.visit_generic_binary('>>', inst)
+
     def visit_COMPARE_OP(self, inst):
         rhs = self.pop()
         lhs = self.pop()
@@ -589,6 +597,12 @@ class SymbolicExecution(object):
 
     def visit_INPLACE_XOR(self, inst):
         self.visit_generic_inplace('^', inst)
+
+    def visit_INPLACE_LSHIFT(self, inst):
+        self.visit_generic_inplace('<<', inst)
+
+    def visit_INPLACE_RSHIFT(self, inst):
+        self.visit_generic_inplace('>>', inst)
 
     def visit_generic_unary(self, op, inst):
         tos = self.pop()
