@@ -130,7 +130,7 @@ class ByteCodeOperation(object):
 class ByteCode(object):
     def __init__(self, func):
         self.code = get_code_object(func)
-        print dis.dis(self.code)
+        #print dis.dis(self.code)
         assert not self.code.co_freevars
         assert not self.code.co_cellvars
         self.table = SortedMap(ByteCodeIter(self.code))

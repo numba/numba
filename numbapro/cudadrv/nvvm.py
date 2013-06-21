@@ -15,7 +15,7 @@ ADDRSPACE_CONSTANT = 4
 ADDRSPACE_LOCAL = 5
 
 # Opaque handle for comilation unit
-nvvm_cu = c_void_p
+nvvm_program = c_void_p
 
 # Result code
 nvvm_result = c_int
@@ -24,15 +24,13 @@ nvvm_result = c_int
 RESULT_CODE_NAMES = '''
 NVVM_SUCCESS
 NVVM_ERROR_OUT_OF_MEMORY
-NVVM_ERROR_NOT_INITIALIZED
-NVVM_ERROR_ALREADY_INITIALIZED
-NVVM_ERROR_CU_CREATION_FAILURE
+NVVM_ERROR_PROGRAM_CREATION_FAILURE
 NVVM_ERROR_IR_VERSION_MISMATCH
 NVVM_ERROR_INVALID_INPUT
-NVVM_ERROR_INVALID_CU
+NVVM_ERROR_INVALID_PROGRAM
 NVVM_ERROR_INVALID_IR
 NVVM_ERROR_INVALID_OPTION
-NVVM_ERROR_NO_MODULE_IN_CU
+NVVM_ERROR_NO_MODULE_IN_PROGRAM
 NVVM_ERROR_COMPILATION
 '''.split()
 
@@ -79,41 +77,36 @@ class NVVM(object):
     '''Process-wide singleton.
     '''
     _PROTOTYPES = {
-        # nvvmResult nvvmInit()
-        'nvvmInit': (nvvm_result,),
-
-        # nvvmResult nvvmFini()
-        'nvvmFini': (nvvm_result,),
 
         # nvvmResult nvvmVersion(int *major, int *minor)
         'nvvmVersion': (nvvm_result, POINTER(c_int), POINTER(c_int)),
 
-        # nvvmResult nvvmCreateCU(nvvmCU *cu)
-        'nvvmCreateCU': (nvvm_result, POINTER(nvvm_cu)),
+        # nvvmResult nvvmCreateProgram(nvvmProgram *cu)
+        'nvvmCreateProgram': (nvvm_result, POINTER(nvvm_program)),
 
-        # nvvmResult nvvmDestroyCU(nvvmCU *cu)
-        'nvvmDestroyCU': (nvvm_result, POINTER(nvvm_cu)),
+        # nvvmResult nvvmDestroyProgram(nvvmProgram *cu)
+        'nvvmDestroyProgram': (nvvm_result, POINTER(nvvm_program)),
 
-        # nvvmResult nvvmCUAddModule(nvvmCU cu, const char *buffer, size_t size)
-        'nvvmCUAddModule': (nvvm_result, nvvm_cu, c_char_p, c_size_t),
+        # nvvmResult nvvmAddModuleToProgram(nvvmProgram cu, const char *buffer, size_t size)
+        'nvvmAddModuleToProgram': (nvvm_result, nvvm_program, c_char_p, c_size_t),
 
-        # nvvmResult nvvmCompileCU(nvvmCU cu, int numOptions,
+        # nvvmResult nvvmCompileProgram(nvvmProgram cu, int numOptions,
         #                          const char **options)
-        'nvvmCompileCU': (nvvm_result, nvvm_cu, c_int, POINTER(c_char_p)),
+        'nvvmCompileProgram': (nvvm_result, nvvm_program, c_int, POINTER(c_char_p)),
 
-        # nvvmResult nvvmGetCompiledResultSize(nvvmCU cu,
+        # nvvmResult nvvmGetCompiledResultSize(nvvmProgram cu,
         #                                      size_t *bufferSizeRet)
-        'nvvmGetCompiledResultSize': (nvvm_result, nvvm_cu, POINTER(c_size_t)),
+        'nvvmGetCompiledResultSize': (nvvm_result, nvvm_program, POINTER(c_size_t)),
 
-        # nvvmResult nvvmGetCompiledResult(nvvmCU cu, char *buffer)
-        'nvvmGetCompiledResult': (nvvm_result, nvvm_cu, c_char_p),
+        # nvvmResult nvvmGetCompiledResult(nvvmProgram cu, char *buffer)
+        'nvvmGetCompiledResult': (nvvm_result, nvvm_program, c_char_p),
 
-        # nvvmResult nvvmGetCompilationLogSize(nvvmCU cu,
+        # nvvmResult nvvmGetProgramLogSize(nvvmProgram cu,
         #                                      size_t *bufferSizeRet)
-        'nvvmGetCompilationLogSize': (nvvm_result, nvvm_cu, POINTER(c_size_t)),
+        'nvvmGetProgramLogSize': (nvvm_result, nvvm_program, POINTER(c_size_t)),
 
-        # nvvmResult nvvmGetCompilationLog(nvvmCU cu, char *buffer)
-        'nvvmGetCompilationLog': (nvvm_result, nvvm_cu, c_char_p),
+        # nvvmResult nvvmGetProgramLog(nvvmProgram cu, char *buffer)
+        'nvvmGetProgramLog': (nvvm_result, nvvm_program, c_char_p),
     }
 
     # Singleton reference
@@ -146,15 +139,7 @@ class NVVM(object):
                 func.argtypes = proto[1:]
                 setattr(inst, name, func)
 
-            # Initialize
-            err = inst.nvvmInit()
-            inst.check_error(err, 'Failed to initialize NVVM.')
-
         return cls.__INSTANCE
-
-    def __del__(self):
-        err = self.driver.nvvmFini()
-        self.check_error(err, 'Failed to finalize NVVM.', exit=True)
 
     def get_version(self):
         major = c_int()
@@ -175,15 +160,15 @@ class NVVM(object):
 class CompilationUnit(finalizer.OwnerMixin):
     def __init__(self):
         self.driver = NVVM()
-        self._handle = nvvm_cu()
-        err = self.driver.nvvmCreateCU(byref(self._handle))
+        self._handle = nvvm_program()
+        err = self.driver.nvvmCreateProgram(byref(self._handle))
         self.driver.check_error(err, 'Failed to create CU')
         self._finalizer_track(self._handle)
 
     @classmethod
     def _finalize(cls, handle):
         driver = NVVM()
-        err = driver.nvvmDestroyCU(byref(handle))
+        err = driver.nvvmDestroyProgram(byref(handle))
         driver.check_error(err, 'Failed to destroy CU', exit=True)
 
     def add_module(self, llvmir):
@@ -192,7 +177,7 @@ class CompilationUnit(finalizer.OwnerMixin):
          - The buffer should contain an NVVM module IR either in the bitcode
            representation (LLVM3.0) or in the text representation.
         '''
-        err = self.driver.nvvmCUAddModule(self._handle, llvmir, len(llvmir))
+        err = self.driver.nvvmAddModuleToProgram(self._handle, llvmir, len(llvmir))
         self.driver.check_error(err, 'Failed to add module')
 
     def compile(self, **options):
@@ -200,38 +185,37 @@ class CompilationUnit(finalizer.OwnerMixin):
 
         The valid compiler options are
 
-        target=<value>
-          <value>: ptx (default), verify
-        debug
-        opt=<level>
-          <level>: 0, 3 (default)
-        arch=<arch_value>
-          <arch_value>: compute_20 (default), compute_30
-        ftz=<value>
-          <value>: 0 (default, preserve denormal values, when performing
-                      single-precision floating-point operations)
-                   1 (flush denormal values to zero, when performing
-                      single-precision floating-point operations)
-        prec_sqrt=<value>
-          <value>: 0 (use a faster approximation for single-precision
-                      floating-point square root)
-                   1 (default, use IEEE round-to-nearest mode for
-                      single-precision floating-point square root)
-        prec_div=<value>
-          <value>: 0 (use a faster approximation for single-precision
-                      floating-point division and reciprocals)
-                   1 (default, use IEEE round-to-nearest mode for
-                      single-precision floating-point division and reciprocals)
-        fma=<value>
-          <value>: 0 (disable FMA contraction),
-                   1 (default, enable FMA contraction),
-        '''
+         *   - -g (enable generation of debugging information)
+         *   - -opt=
+         *     - 0 (disable optimizations)
+         *     - 3 (default, enable optimizations)
+         *   - -arch=
+         *     - compute_20 (default)
+         *     - compute_30
+         *     - compute_35
+         *   - -ftz=
+         *     - 0 (default, preserve denormal values, when performing
+         *          single-precision floating-point operations)
+         *     - 1 (flush denormal values to zero, when performing
+         *          single-precision floating-point operations)
+         *   - -prec-sqrt=
+         *     - 0 (use a faster approximation for single-precision
+         *          floating-point square root)
+         *     - 1 (default, use IEEE round-to-nearest mode for
+         *          single-precision floating-point square root)
+         *   - -prec-div=
+         *     - 0 (use a faster approximation for single-precision
+         *          floating-point division and reciprocals)
+         *     - 1 (default, use IEEE round-to-nearest mode for
+         *          single-precision floating-point division and reciprocals)
+         *   - -fma=
+         *     - 0 (disable FMA contraction)
+         *     - 1 (default, enable FMA contraction)
+         *        
+         '''
 
         # stringify options
         opts = []
-
-        if options.get('target'):
-            opts.append('-target=%s' % options.pop('target'))
 
         if options.get('debug'):
             opts.append('-g')
@@ -250,7 +234,7 @@ class CompilationUnit(finalizer.OwnerMixin):
 
         # compile
         c_opts = (c_char_p * len(opts))(*map(c_char_p, opts))
-        err = self.driver.nvvmCompileCU(self._handle, len(opts), c_opts)
+        err = self.driver.nvvmCompileProgram(self._handle, len(opts), c_opts)
         self.driver.check_error(err, 'Failed to compile')
 
         # get result
@@ -263,12 +247,12 @@ class CompilationUnit(finalizer.OwnerMixin):
         self.driver.check_error(err, 'Failed to get compiled result.')
 
         # get log
-        err = self.driver.nvvmGetCompilationLogSize(self._handle, byref(reslen))
+        err = self.driver.nvvmGetProgramLogSize(self._handle, byref(reslen))
         self.driver.check_error(err, 'Failed to get compilation log size.')
 
         if reslen > 1:
             logbuf = (c_char * reslen.value)()
-            err = self.driver.nvvmGetCompilationLog(self._handle, logbuf)
+            err = self.driver.nvvmGetProgramLog(self._handle, logbuf)
             self.driver.check_error(err, 'Failed to get compilation log.')
 
             self.log = logbuf[:] # popluate log attribute
@@ -280,6 +264,16 @@ data_layout = {32 : 'e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f3
 64: 'e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64'}
 
 default_data_layout = data_layout[tuple.__itemsize__ * 8]
+
+SUPPORTED_CC = frozenset([(2, 0), (3, 0), (3, 5)])
+
+def get_arch_option(major, minor):
+    if major == 2:
+        minor = 0
+    if major == 3 and minor != 5:
+        minor = 0
+    assert (major, minor) in SUPPORTED_CC
+    arch = 'compute_%d%d' % (major, minor)
 
 def llvm_to_ptx(llvmir, **opts):
     cu = CompilationUnit()

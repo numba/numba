@@ -14,7 +14,7 @@ def compile_kernel(func, argtys):
     lmod, lfunc = compile_common(func, None, argtys)
     # PTX-ization
     cudakernel = CUDAKernel(lfunc.name, to_ptx(lfunc), argtys)
-    print cudakernel.ptx
+    #print cudakernel.ptx
     return cudakernel
 
 def compile_device(func, retty, argtys, inline=False):
@@ -27,7 +27,7 @@ def compile_common(func, retty, argtys):
     # symbolic interpretation
     se = symbolic.SymbolicExecution(func)
     se.visit()
-    print se.dump()
+    #print se.dump()
 
     argspec = inspect.getargspec(func)
     assert not argspec.keywords
@@ -59,7 +59,7 @@ def compile_common(func, retty, argtys):
     gvars = cg.extern_globals
     assert not gvars
 
-    print lfunc.module
+    #print lfunc.module
 
     lfunc.module.verify()
 
@@ -68,10 +68,8 @@ def compile_common(func, retty, argtys):
 
 def to_ptx(lfunc):
     context = driver.get_or_create_context()
-    cc_major = context.device.COMPUTE_CAPABILITY[0]
-
-    arch = 'compute_%d0' % cc_major
-
+    cc_major, cc_minor = context.device.COMPUTE_CAPABILITY
+    arch = nvvm.get_arch_option(cc_major, cc_minor)
     nvvm.fix_data_layout(lfunc.module)
     nvvm.set_cuda_kernel(lfunc)
     ptx = nvvm.llvm_to_ptx(str(lfunc.module), opt=3, arch=arch)
