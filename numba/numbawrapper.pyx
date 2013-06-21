@@ -129,6 +129,7 @@ def create_numba_wrapper(py_func, numbafunction, signature, lfunc):
         # Function is called recursively, use a placeholder
         return NumbaCompiledWrapper(py_func, signature, lfunc)
 
+    # lfunc_pointer is set by create_function()
     numbafunction.py_func = py_func
     numbafunction.signature = signature
     numbafunction.lfunc = lfunc

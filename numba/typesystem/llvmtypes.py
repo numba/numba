@@ -67,4 +67,10 @@ def pointer(base_type):
 def function(rettype, argtypes, name=None, is_vararg=False):
     return llvm.core.Type.function(rettype, argtypes, is_vararg)
 
+def array_(dtype, ndim, *args):
+    from numba import environment
+    # TODO: this is gross, we need to pass in 'env'
+    env = environment.NumbaEnvironment.get_environment()
+    return env.crnt.array.from_type(dtype)
+
 carray = llvm.core.Type.array

@@ -22,7 +22,6 @@ from numba.codegen.llvmcontext import LLVMContextManager
 from numba import visitors, nodes, llvm_types, utils, function_util
 from numba.minivect import minitypes, llvm_codegen
 from numba import ndarray_helpers, error
-from numba.typesystem import is_obj
 from numba.utils import dump
 from numba import metadata
 from numba.control_flow import ssa
@@ -157,7 +156,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
     def incref_arg(self, argname, argtype, larg, variable):
         # TODO: incref objects in structs
         if not (self.nopython or argtype.is_closure_scope):
-            if is_obj(variable.type) and self.refcount_args:
+            if self.is_obj(variable.type) and self.refcount_args:
                 if self.renameable(variable):
                     lvalue = self._allocate_arg_local(argname, argtype,
                                                       variable.lvalue)
@@ -233,7 +232,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             elif name in self.locals and not name in self.argnames:
                 # var = self.symtab.lookup_renamed(name, 0)
                 name = 'var_%s' % var.name
-                if is_obj(var.type):
+                if self.is_obj(var.type):
                     lvalue = self._null_obj_temp(name, type=var.ltype)
                 else:
                     lvalue = self.builder.alloca(var.ltype, name=name)
@@ -499,10 +498,19 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
     # Assignment
     #------------------------------------------------------------------------
 
+    @property
+    def using_numpy_array(self):
+        return issubclass(self.env.crnt.array, ndarray_helpers.NumpyArray)
+
+    def is_obj(self, type):
+        if type.is_array:
+            return self.using_numpy_array
+        return type.is_object
+
     def visit_Assign(self, node):
         target_node = node.targets[0]
         # print target_node
-        is_object = is_obj(target_node.type)
+        is_object = self.is_obj(target_node.type)
         value = self.visit(node.value)
 
         incref = is_object
@@ -536,7 +544,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
                 # ast.Attribute | ast.Subscript  store.
                 # These types don't have pointer types but rather
                 # scalar values
-                if is_obj(target_node.type):
+                if self.is_obj(target_node.type):
                     target_type = object_
                 else:
                     target_type = target_node.type
@@ -582,6 +590,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         Pre-load ndarray attributes data/shape/strides.
         """
         if not (var.preload_data or var.preload_shape or var.preload_strides):
+            return
+        if not self.using_numpy_array:
             return
 
         if not var.renameable:
@@ -882,7 +892,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             rettype = self.func_signature.return_type
 
             retval = self.visit(node.value)
-            if is_obj(rettype) or rettype.is_pointer:
+            if self.is_obj(rettype) or rettype.is_pointer:
                 retval = self.builder.bitcast(retval,
                                               self.return_value.type.pointee)
 
@@ -898,7 +908,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             self.builder.store(retval, self.return_value)
 
             ret_type = self.func_signature.return_type
-            if is_obj(rettype):
+            if self.is_obj(rettype):
                 self.xincref_temp(self.return_value)
 
         if not self.is_block_terminated():
@@ -1219,7 +1229,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
     def visit_CoerceToObject(self, node):
         from_type = node.node.type
         result = self.visit(node.node)
-        if not is_obj(from_type):
+        if not self.is_obj(from_type):
             result = self.object_coercer.convert_single(from_type, result,
                                                         name=node.name)
         return result

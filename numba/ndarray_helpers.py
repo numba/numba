@@ -12,6 +12,7 @@ from __future__ import print_function, division, absolute_import
 #    } PyArrayObject;
 
 from numba import *
+from numba import typedefs
 from numba.typesystem import tbaa
 from numba.llvm_types import _head_len, _int32, _LLVMCaster, constant_int
 import llvm.core as lc
@@ -135,6 +136,7 @@ class NumpyArray(object):
     def __init__(self, pyarray_ptr, builder, tbaa=None, type=None):
         self.type = type
         self.nd = type.ndim
+        self.array_type = pyarray_ptr.type.pointee
 
         # LLVM attributes
         self.arr = PyArrayAccessor(builder, pyarray_ptr, tbaa, type.dtype)
@@ -142,6 +144,10 @@ class NumpyArray(object):
         self._shape = None
         self._strides = None
         self.caster = _LLVMCaster(builder)
+
+    @classmethod
+    def from_type(cls, llvm_dtype):
+        return typedefs.PyArray.pointer().to_llvm()
 
     @property
     def data(self):
