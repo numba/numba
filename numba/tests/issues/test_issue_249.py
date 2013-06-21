@@ -10,7 +10,11 @@ import numba
 from numba import jit, autojit, size_t
 import numpy as np
 import numpy.testing as npt
-from skimage import img_as_float
+try:
+    from skimage import img_as_float
+except ImportError, e:
+    print("skimage not available, skipping")
+    sys.exit()
 
 SCALAR_DTYPE = np.float64
 # This doesn't work :(

@@ -63,14 +63,19 @@ def pointer(base_type):
         base_type = llvm.core.Type.int(8)
     return llvm.core.Type.pointer(base_type)
 
+def sized_pointer(base_type, size):
+    return pointer(base_type)
+
 # @consing
 def function(rettype, argtypes, name=None, is_vararg=False):
     return llvm.core.Type.function(rettype, argtypes, is_vararg)
 
 def array_(dtype, ndim, *args):
-    from numba import environment
+    from numba import environment, ndarray_helpers
     # TODO: this is gross, we need to pass in 'env'
     env = environment.NumbaEnvironment.get_environment()
-    return env.crnt.array.from_type(dtype)
+    if env.crnt:
+        return env.crnt.array.from_type(dtype)
+    return ndarray_helpers.NumpyArray.from_type(dtype)
 
 carray = llvm.core.Type.array
