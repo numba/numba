@@ -1,4 +1,6 @@
 from contextlib import contextmanager
+import sys
+
 class CompileError(Exception):
     def __init__(self, lineno, msg):
         if lineno != -1:
@@ -10,4 +12,6 @@ def error_context(lineno):
     try:
         yield
     except Exception, e:
-        raise Exception("At line %d: %s" % (lineno, e))
+        if lineno < 0:
+            lineno = "?"
+        raise Exception("At line %s: %s" % (lineno, e)), None, sys.exc_info()[2]

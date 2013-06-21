@@ -3,7 +3,7 @@ from collections import namedtuple
 import llvm.core as lc
 from llvm.core import Type, Constant
 
-from . import typing, symbolic
+from . import typing, symbolic, errors
 from .errors import CompileError
 
 GlobalVar = namedtuple('GlobalVar', ['type', 'gvar'])
@@ -180,17 +180,19 @@ class CodeGen(object):
         return self.lfunc
 
     def generate_expression(self, expr):
-        kind = symbolic.OP_MAP.get(expr.kind, expr.kind)
-        fn = getattr(self, 'expr_' + kind, self.generic_expr)
-        fn(expr)
+        with errors.error_context(expr.lineno):
+            kind = symbolic.OP_MAP.get(expr.kind, expr.kind)
+            fn = getattr(self, 'expr_' + kind, self.generic_expr)
+            fn(expr)
 
     def generic_expr(self, expr):
         raise CodeGenError(expr, "%s not implemented" % expr)
 
     def generate_terminator(self, term):
-        kind = term.kind
-        fn = getattr(self, 'term_' + kind, self.generic_term)
-        fn(term)
+        with errors.error_context(term.lineno):
+            kind = term.kind
+            fn = getattr(self, 'term_' + kind, self.generic_term)
+            fn(term)
 
     def generic_term(self, term):
         raise CodeGenError(term, "not implemented")
