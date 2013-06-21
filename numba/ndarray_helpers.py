@@ -151,25 +151,31 @@ class NumpyArray(object):
 
     @property
     def shape_ptr(self):
+        if self._shape_ptr is None:
+            self._shape_ptr = self.arr.shape
         return self._shape_ptr
 
     @property
     def strides_ptr(self):
+        if self._strides_ptr is None:
+            self._strides_ptr = self.arr.strides
         return self._strides_ptr
 
     @property
     def shape(self):
         if not self._shape:
-            self._shape_ptr = self.arr.shape
-            self._shape = self.preload(self._shape_ptr, self.nd)
+            self._shape = self.preload(self.shape_ptr, self.nd)
         return self._shape
 
     @property
     def strides(self):
         if not self._strides:
-            self._strides_ptr = self.arr.strides
-            self._strides = self.preload(self._strides_ptr, self.nd)
+            self._strides = self.preload(self.strides_ptr, self.nd)
         return self._strides
+
+    @property
+    def ndim(self):
+        return _const_int(self.nd)
 
     # def setstrides(self, p_strides, strides=None):
     #     self._strides_ptr = p_strides

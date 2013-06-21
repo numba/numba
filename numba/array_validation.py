@@ -16,11 +16,11 @@ class ArrayValidator(ast.NodeVisitor):
 
     def __init__(self, env):
         self.env = env
-        self.is_numpy = issubclass(env.crnt.array, NumpyArray)
+        self.foreign = not issubclass(env.crnt.array, NumpyArray)
 
     def visit_CoercionNode(self, node):
         t1, t2 = node.type, node.node.type
-        if t1.is_array ^ t2.is_array:
+        if self.foreign and t1.is_array ^ t2.is_array:
             raise error.NumbaError(node, "Cannot coerce non-numpy array %s" %
                                          self.env.crnt.array)
 
@@ -28,7 +28,7 @@ class ArrayValidator(ast.NodeVisitor):
     visit_CoerceToNative = visit_CoercionNode
 
     def visit_MultiArrayAPINode(self, node):
-        if self.is_numpy:
+        if self.foreign:
             signature = node.signature
             types = (signature.return_type,) + signature.argtypes
             for ty in types:

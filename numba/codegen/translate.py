@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
-import ast
+import ast, collections
 
 import llvm
 import llvm.core as lc
@@ -1534,8 +1534,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         lvalue = self.visit(node.node)
         lindices = self.visit(node.slice)
         ndarray = self.ndarray(lvalue, node.node.type)
+        if not isinstance(lindices, collections.Iterable):
+            lindices = (lindices,)
         lptr = ndarray.getptr(*lindices)
-        print("...............", lptr)
         return self._handle_ctx(node, lptr, node.type.pointer())
 
     #def visit_Index(self, node):
