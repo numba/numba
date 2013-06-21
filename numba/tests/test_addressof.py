@@ -64,7 +64,7 @@ def test_addressof_error(arg, **kwds):
     >>> test_addressof_error(func, propagate=False)
     Traceback (most recent call last):
         ...
-    ValueError: Writing unraisable exception is not yet supported
+    ValueError: Writing unraisable exceptions is not yet supported
     """
     return numba.addressof(arg, **kwds)
 

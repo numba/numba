@@ -133,7 +133,9 @@ def compile_function(env, func, argtypes, restype=None, **kwds):
     func_env = pipeline.compile2(env, func, restype, argtypes, **kwds)
 
     function_cache.register_specialization(func_env)
-    return func_env
+    return (func_env.func_signature,
+            func_env.lfunc,
+            func_env.numba_wrapper_func)
 
 
 def _autojit(template_signature, target, nopython, env_name=None, env=None,
@@ -216,12 +218,10 @@ def _jit(restype=None, argtypes=None, nopython=False,
 
         assert kwargs.get('llvm_module') is None # TODO link to user module
         assert kwargs.get('llvm_ee') is None, "Engine should never be provided"
-        func_env = compile_function(env, func, argtys,
-                                    restype=return_type,
-                                    nopython=nopython, **kwargs)
-        return numbawrapper.create_numba_wrapper(
-            func, func_env.numba_wrapper_func, func_env.func_signature,
-            func_env.lfunc)
+        sig, lfunc, wrapper = compile_function(env, func, argtys,
+                                               restype=return_type,
+                                               nopython=nopython, **kwargs)
+        return numbawrapper.create_numba_wrapper(func, wrapper, sig, lfunc)
 
     return _jit_decorator
 
