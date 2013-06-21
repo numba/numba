@@ -24,6 +24,7 @@ from numba import closures
 from numba import reporting
 from numba import normalize
 from numba import validate
+from numba.array_validation import ArrayValidator
 from numba.viz import cfgviz
 from numba import typesystem
 from numba.codegen import llvmwrapper
@@ -247,6 +248,10 @@ def validate_signature(tree, env):
             env.crnt.func_name)
 
     return tree
+
+def validate_arrays(ast, env):
+    ArrayValidator(env).visit(ast)
+    return ast
 
 def update_signature(tree, env):
     func_env = env.translation.crnt

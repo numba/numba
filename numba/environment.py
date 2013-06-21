@@ -75,6 +75,7 @@ default_pipeline_order = default_normalize_order + [
     'FixASTLocations',
     'cleanup_symtab',
     # 'dump_ast',
+    'validate_arrays',
     'CodeGen',
     'PostPass',
     'LinkingStage',

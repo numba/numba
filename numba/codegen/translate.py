@@ -57,14 +57,6 @@ _compare_mapping_uint = {'>':lc.ICMP_UGT,
                           '<=':lc.ICMP_ULE,
                           '!=':lc.ICMP_NE}
 
-def validate_array_representation(env, signature):
-    if not env.crnt.array is ndarray_helpers.NumpyArray:
-        types = (signature.return_type,) + signature.argtypes
-        for ty in types:
-            if not ty.is_array:
-                raise TypeError("Cannot pass array %s as NumPy array" %
-                                                        env.crnt.array)
-
 
 # TODO: use composition instead of mixins
 
@@ -1553,7 +1545,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         return self.visitlist(node.dims)
 
     def visit_MultiArrayAPINode(self, node):
-        validate_array_representation(self.env, node.signature)
         meth = getattr(self.multiarray_api, 'load_' + node.func_name)
         lfunc = meth(self.llvm_module, self.builder)
         lsignature = node.signature.pointer().to_llvm(self.context)
