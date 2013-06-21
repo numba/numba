@@ -127,9 +127,8 @@ class CodeGen(object):
                 lty = self.to_llvm(ty)
                 return Constant.real(lty, val)
             elif ty.kind == 'c':
-                lty = self.to_llvm(ty.complex_element)
-                real = self.define_const(lty, val.real)
-                imag = self.define_const(lty, val.imag)
+                real = self.define_const(ty.complex_element, val.real)
+                imag = self.define_const(ty.complex_element, val.imag)
                 return Constant.struct([real, imag])
         elif ty.is_tuple:
             ev = [self.define_const(ty.element, v) for v in val]
@@ -580,6 +579,19 @@ def complex_sub(builder, lhs, rhs):
 
     return complex_make(builder, lhs.type, real, imag)
 
+def complex_mul(builder, lhs, rhs):
+    a, b = complex_extract(builder, lhs)
+    c, d = complex_extract(builder, rhs)
+    # (ac -bd) + (ad + bc)i
+    ac = builder.fmul(a, c)
+    bd = builder.fmul(b, d)
+    ad = builder.fmul(a, d)
+    bc = builder.fmul(b, c)
+    real = builder.fsub(ac, bd)
+    imag = builder.fadd(ad, bc)
+
+    return complex_make(builder, lhs.type, real, imag)
+
 def integer_invert(builder, val):
     return builder.xor(val, Constant.int_signextend(val.type, -1))
 
@@ -613,6 +625,7 @@ FLOAT_OPMAP = {
 COMPLEX_OPMAP = {
     '+': complex_add,
     '-': complex_sub,
+    '*': complex_mul,
 }
 
 INT_BOOL_OP_MAP = {

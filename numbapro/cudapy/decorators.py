@@ -23,9 +23,9 @@ NUMBA_TO_NPM_TYPES = {
 }
 
 def _eval_type_string(text):
-    func = eval(text, globals=vars(numba))
-    assert False
-    return restype, argtypes
+    func = eval(text, vars(numba))
+    assert func.is_function
+    return func.return_type, func.args
 
 def _map_numba_to_npm_types(typ):
     if typ.is_array:
@@ -46,6 +46,7 @@ def jit(restype=None, argtypes=None, device=False, inline=False, bind=True):
 
     if argtypes is None:
         # must be a function then
+        assert restype.is_function
         argtypes = restype.args
         restype = restype.return_type
 

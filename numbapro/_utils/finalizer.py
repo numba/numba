@@ -17,8 +17,9 @@ def _run_finalizer(ref):
         try:
             finalizer(item)
         except Exception:
-            print>>sys.stderr, "Exception running {}:".format(finalizer)
-            traceback.print_exc()
+            pass
+            #print>>sys.stderr, "Exception running {}:".format(finalizer)
+            #traceback.print_exc()
 
 _finalize_refs = {}
 

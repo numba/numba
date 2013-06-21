@@ -135,6 +135,17 @@ def test_mul_float():
     for ty in fset:
         run(ty, 1.234, 2.345)
 
+
+@testcase
+def test_mul_complex():
+    def run(ty, a, b):
+        cmul = compile(mul, ty, [ty, ty])
+        got = cmul(a, b)
+        exp = mul(a, b)
+        assert np.allclose(got, exp), 'mul(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+
+    for ty in cset:
+        run(ty, 1.2+34j, 2.4+56j)
 #------------------------------------------------------------------------------
 # div
 

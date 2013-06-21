@@ -44,7 +44,7 @@ def prepare_args(ty, val):
                       strides=val.ctypes.strides)
         return ctypes.byref(arrayval)
     else:
-        return val
+        return ty(val)
 
 def prepare_ret(ty, val):
     if isinstance(val, (Complex64, Complex128)):
