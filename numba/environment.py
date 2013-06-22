@@ -160,7 +160,7 @@ class FunctionErrorEnvironment(object):
     enable_post_mortem = TypedProperty(
         bool,
         "Enable post-mortem debugging for the Numba compiler",
-        False
+        False,
     )
 
     collection = TypedProperty(

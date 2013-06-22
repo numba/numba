@@ -333,7 +333,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             self.llvm_module.verify()  # only Module level verification checks everything.
         except:
             # Delete the function to prevent an invalid function from living in the module
-            if self.lfunc is not None:
+            post_mortem = self.env.crnt.error_env.enable_post_mortem
+            if self.lfunc is not None and not post_mortem:
                 self.lfunc.delete()
             raise
 
