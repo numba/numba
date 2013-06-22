@@ -46,33 +46,33 @@ ext_modules = [
     ),
 
 
-    CythonExtension(
-        name = "numbapro._minidispatch",
-        sources = ["numbapro/_minidispatch.pyx"],
-        depends = [miniutils_dep, "numbapro/dispatch.pxd"],
-        include_dirs = [numpy.get_include(), minivect.get_include()],
-        cython_include_dirs = [minivect.get_include()],
-        cython_gdb=True,
-    ),
-
-    CythonExtension(
-        name = "numbapro.dispatch",
-        sources = ["numbapro/dispatch.pyx"],
-        include_dirs = [numpy.get_include(), vectorize.get_include()],
-        depends = [miniutils_dep, "numbapro/dispatch.pxd"],
-        extra_compile_args = OMP_ARGS + ['-D_FORTIFY_SOURCE=0'],
-        extra_link_args = OMP_LINK,
-        cython_gdb=True,
-    ),
-
-    CythonExtension(
-        name = "numbapro.parallel.kernel.cpuimpl._cpuscheduler",
-        sources = ["numbapro/parallel/kernel/cpuimpl/_cpuscheduler.pyx",
-                   "numbapro/parallel/kernel/cpuimpl/cpuscheduler.c"],
-        depends = ["numbapro/parallel/kernel/cpuimpl/cpuscheduler.pxd"],
-        extra_compile_args = ['-D_FORTIFY_SOURCE=0'],
+#    CythonExtension(
+#        name = "numbapro._minidispatch",
+#        sources = ["numbapro/_minidispatch.pyx"],
+#        depends = [miniutils_dep, "numbapro/dispatch.pxd"],
+#        include_dirs = [numpy.get_include(), minivect.get_include()],
+#        cython_include_dirs = [minivect.get_include()],
 #        cython_gdb=True,
-    ),
+#    ),
+#
+#    CythonExtension(
+#        name = "numbapro.dispatch",
+#        sources = ["numbapro/dispatch.pyx"],
+#        include_dirs = [numpy.get_include(), vectorize.get_include()],
+#        depends = [miniutils_dep, "numbapro/dispatch.pxd"],
+#        extra_compile_args = OMP_ARGS + ['-D_FORTIFY_SOURCE=0'],
+#        extra_link_args = OMP_LINK,
+#        cython_gdb=True,
+#    ),
+#
+#    CythonExtension(
+#        name = "numbapro.parallel.kernel.cpuimpl._cpuscheduler",
+#        sources = ["numbapro/parallel/kernel/cpuimpl/_cpuscheduler.pyx",
+#                   "numbapro/parallel/kernel/cpuimpl/cpuscheduler.c"],
+#        depends = ["numbapro/parallel/kernel/cpuimpl/cpuscheduler.pxd"],
+#        extra_compile_args = ['-D_FORTIFY_SOURCE=0'],
+##        cython_gdb=True,
+#    ),
 
 #    CythonExtension(
 #        name = "numbapro._cudadispatchlib",

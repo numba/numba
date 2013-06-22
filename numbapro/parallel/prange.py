@@ -30,7 +30,7 @@ from numba.type_inference import infer
 from numba.specialize.loops import unpack_range_args
 
 import numbapro
-from numbapro.vectorize import parallel
+from numbapro.vectorizers import parallel
 
 
 opmap = {
