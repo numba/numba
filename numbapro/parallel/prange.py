@@ -30,7 +30,43 @@ from numba.type_inference import infer
 from numba.specialize.loops import unpack_range_args
 
 import numbapro
-from numbapro.vectorize import parallel, minivectorize
+from numbapro.vectorize import parallel
+
+
+opmap = {
+    # Unary
+    ast.Invert: '~',
+    ast.Not: None, # not supported
+    ast.UAdd: '+',
+    ast.USub: '-',
+
+    # Binary
+    ast.Add: '+',
+    ast.Sub: '-',
+    ast.Mult: '*',
+    ast.Div: '/',
+    ast.Mod: '%',
+    ast.Pow: '**',
+    ast.LShift: '<<',
+    ast.RShift: '>>',
+    ast.BitOr: '|',
+    ast.BitXor: '^',
+    ast.BitAnd: '&',
+    ast.FloorDiv: '//',
+
+    # Comparison
+    ast.Eq: '==',
+    ast.NotEq: '!=',
+    ast.Lt: '<',
+    ast.LtE: '<=',
+    ast.Gt: '>',
+    ast.GtE: '>=',
+    ast.Is: None,
+    ast.IsNot: None,
+    ast.In: None,
+    ast.NotIn: None,
+}
+
 
 import logging
 logger = logging.getLogger(__name__)
@@ -39,7 +75,7 @@ def get_reduction_op(op):
     # TODO: recognize invalid operators
     op = type(op)
 
-    reduction_op = minivectorize.opmap[op]
+    reduction_op = opmap[op]
     reduction_ops = {'-': '+', '/': '*'}
     if reduction_op in reduction_ops:
         reduction_op = reduction_ops[reduction_op]
