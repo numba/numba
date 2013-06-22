@@ -1,5 +1,5 @@
+import sys
 import numpy as np
-
 from .support import testcase, main
 from numbapro import cuda
 from numbapro import cudapy
@@ -303,10 +303,11 @@ def test_math_exp():
 #------------------------------------------------------------------------------
 # test_math_expm1
 
-@testcase
-def test_math_expm1():
-    unary_template_float32(math_expm1, np.expm1)
-    unary_template_float64(math_expm1, np.expm1)
+if sys.version_info[:2] >= (2, 7):
+    @testcase
+    def test_math_expm1():
+        unary_template_float32(math_expm1, np.expm1)
+        unary_template_float64(math_expm1, np.expm1)
 
 #------------------------------------------------------------------------------
 # test_math_fabs
@@ -322,16 +323,16 @@ def test_math_fabs():
 
 @testcase
 def test_math_log():
-    unary_template_float32(math_log, np.log)
-    unary_template_float64(math_log, np.log)
+    unary_template_float32(math_log, np.log, start=1)
+    unary_template_float64(math_log, np.log, start=1)
 
 #------------------------------------------------------------------------------
 # test_math_log10
 
 @testcase
 def test_math_log10():
-    unary_template_float32(math_log10, np.log10)
-    unary_template_float64(math_log10, np.log10)
+    unary_template_float32(math_log10, np.log10, start=1)
+    unary_template_float64(math_log10, np.log10, start=1)
 
 #------------------------------------------------------------------------------
 # test_math_log1p

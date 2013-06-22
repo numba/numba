@@ -95,7 +95,7 @@ def test_laplace_small():
         
         jocabi_relax_core[griddim, blockdim, stream](dA, dAnew, derror_grid)
         
-        derror_grid.to_host(stream)
+        derror_grid.copy_to_host(error_grid, stream=stream)
         
         
         # error_grid is available on host

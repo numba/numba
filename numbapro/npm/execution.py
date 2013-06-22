@@ -59,7 +59,9 @@ def make_engine(lfunc):
     if not avx_support.detect_avx_support():
         attrs.append('-avx')
 
-    eb = le.EngineBuilder.new(lmod).mcjit(True).opt(2).mattrs(','.join(attrs))
+    # NOTE: LLVMPY in Anaconda does not have MCJIT?
+    #eb = le.EngineBuilder.new(lmod).mcjit(True).opt(2).mattrs(','.join(attrs))
+    eb = le.EngineBuilder.new(lmod).opt(2).mattrs(','.join(attrs))
     tm = eb.select_target()
 
     # optimize

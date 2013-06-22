@@ -1,3 +1,4 @@
+import sys
 import math
 import numpy
 from llvm.core import Type
@@ -189,7 +190,6 @@ math_infer_rules = {
     math.exp:               rule_infer_exp,
     numpy.exp:              rule_infer_exp,
     # expm1
-    math.expm1:               rule_infer_expm1,
     numpy.expm1:              rule_infer_expm1,
     # fabs
     math.fabs:               rule_infer_fabs,
@@ -229,6 +229,11 @@ math_infer_rules = {
     math.isinf:             rule_infer_isinf,
     numpy.isinf:             rule_infer_isinf,
 }
+
+if sys.version_info[:2] >= (2, 7):
+    math_infer_rules.update({
+        math.expm1:               rule_infer_expm1,
+    })
 
 #------------------------------------------------------------------------------
 # Code generation
@@ -401,7 +406,6 @@ math_codegen = {
     math.atan2:         cg_atan2,
 
     math.exp:           cg_exp,
-    math.expm1:         cg_expm1,
     math.fabs:          cg_fabs,
     math.log:          cg_log,
     math.log10:          cg_log10,
@@ -417,4 +421,10 @@ math_codegen = {
     math.isnan:           cg_isnan,
     math.isinf:           cg_isinf,
 }
+
+if sys.version_info[:2] >= (2, 7):
+    math_codegen.update({
+        math.expm1:         cg_expm1,
+    })
+
 

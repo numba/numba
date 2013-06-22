@@ -61,7 +61,7 @@ class TestSupport(object):
         suite = self.get_test_suite()
         
         if sys.version_info[:2] <= (2, 6):
-            cfg.pop('buffer', None) # remove unsupported kw
+            kws.pop('buffer', None) # remove unsupported kw
         runner = unittest.TextTestRunner(**kws)
 
         result = runner.run(suite)

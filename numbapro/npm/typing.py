@@ -309,7 +309,6 @@ class Infer(object):
             return topsorted
 
         topsorted = topsort_blocks(doms)
-
         # infer block by block starting with the entry block
         processed_blocks = set()
         for blknum in topsorted:
@@ -387,23 +386,30 @@ class Infer(object):
         # postprocess all PHI nodes and ensure the type matches for all
         # incoming values
         for phi, incomings in self.phis.iteritems():
+            # if PHI is undefined, pick the first of the incoming set
+            if phi not in soln:
+                for inc in incomings:
+                    if inc in soln:
+                        soln[phi] = soln[inc]
+            
             expect = soln[phi]
             for inc in incomings:
-                got = soln[inc]
-                if expect != got:
-                    assert can_coerce(expect, got)
-                    for blknum, ref in phi.args.incomings:
-                        if ref.value is inc:
-                            break
-                    else:
-                        assert False, 'value not found in PHI'
-                    blk = self.blocks[blknum]
-                    coercion_node = blk.insert(Expr('Coerce', None, Coerce(ref)))
-                    soln[coercion_node.value] = expect
-                    blk.varmap[phi.args.name].append(coercion_node.value)
-                    # update PHI incoming
-                    phi.args.incomings.remove((blknum, ref))
-                    phi.args.incomings.add((blknum, coercion_node))
+                if inc in soln:
+                    got = soln[inc]
+                    if expect != got:
+                        assert can_coerce(expect, got)
+                        for blknum, ref in phi.args.incomings:
+                            if ref.value is inc:
+                                break
+                        else:
+                            assert False, 'value not found in PHI'
+                        blk = self.blocks[blknum]
+                        coercion_node = blk.insert(Expr('Coerce', None, Coerce(ref)))
+                        soln[coercion_node.value] = expect
+                        blk.varmap[phi.args.name].append(coercion_node.value)
+                        # update PHI incoming
+                        phi.args.incomings.remove((blknum, ref))
+                        phi.args.incomings.add((blknum, coercion_node))
 
         return soln
 
