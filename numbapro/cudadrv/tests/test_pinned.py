@@ -17,7 +17,7 @@ class TestPinned(support.CudaTestCase):
 
         ptr.copy_to_device(A, stream=stream)
 
-        ptr.to_host(stream=stream)
+        ptr.copy_to_host(A, stream=stream)
         stream.synchronize()
 
         e = timer()

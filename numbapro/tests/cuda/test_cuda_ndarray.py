@@ -31,7 +31,7 @@ class TestCudaNDArray(support.CudaTestCase):
         original = array.copy()
         gpumem = cuda.to_device(array)
         array[:] = 0
-        gpumem.to_host()
+        gpumem.copy_to_host(array)
 
         self.assertTrue((array == original).all())
 
@@ -57,7 +57,7 @@ class TestCudaNDArray(support.CudaTestCase):
         original = array.copy()
         gpumem = cuda.to_device(array)
         cuda.to_device(array * 2, to=gpumem)
-        gpumem.to_host()
+        gpumem.copy_to_host(array)
         self.assertTrue((array == original * 2).all())
 
 

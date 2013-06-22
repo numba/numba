@@ -32,8 +32,8 @@ class TestCURandPseudo(unittest.TestCase):
         self.rndgen.set_pseudo_random_generator_seed(1234)
 
     def tearDown(self):
-        self.devary32.to_host(stream=self.stream)
-        self.devary64.to_host(stream=self.stream)
+        self.devary32.copy_to_host(self.ary32, stream=self.stream)
+        self.devary64.copy_to_host(self.ary64, stream=self.stream)
 
         self.stream.synchronize()
 
@@ -79,7 +79,7 @@ class TestCURandPoisson(unittest.TestCase):
         self.rndgen.set_pseudo_random_generator_seed(1234)
 
     def tearDown(self):
-        self.devary32.to_host(stream=self.stream)
+        self.devary32.copy_to_host(self.ary32, stream=self.stream)
 
         self.stream.synchronize()
 
@@ -112,7 +112,7 @@ class TestCURandQuasi(unittest.TestCase):
         rndgen.set_quasi_random_generator_dimensions(1)
         rndgen.generate(devary32, N)
 
-        devary32.to_host(stream=stream)
+        devary32.copy_to_host(ary32, stream=stream)
         stream.synchronize()
 
         self.assertTrue(any(ary32 != 0))
@@ -127,7 +127,7 @@ class TestCURandQuasi(unittest.TestCase):
         rndgen.set_quasi_random_generator_dimensions(1)
         rndgen.generate(devary64, N)
 
-        devary64.to_host(stream=stream)
+        devary64.copy_to_host(ary64, stream=stream)
         stream.synchronize()
 
         self.assertTrue(any(ary64 != 0))

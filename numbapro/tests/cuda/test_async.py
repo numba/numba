@@ -27,7 +27,7 @@ class TestCudaAsync(support.CudaTestCase):
 
             self.assertFalse((C == A + B).all())
 
-            dC.to_host(stream)
+            dC.copy_to_host(C, stream)
 
         # synchronized here
         self.assertTrue((C == A + B).all())

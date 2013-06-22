@@ -96,7 +96,7 @@ class PRNG(RNG):
         dary, conv = cuda._auto_device(ary, stream=self.stream)
         self._gen.generate_uniform(dary, size)
         if conv:
-            dary.to_host(stream=self.stream)
+            dary.copy_to_host(ary, stream=self.stream)
 
     def normal(self, ary, mean, sigma, size=None):
         '''Generate floating point random number sampled
@@ -112,7 +112,7 @@ class PRNG(RNG):
         dary, conv = cuda._auto_device(ary, stream=self.stream)
         self._gen.generate_normal(dary, size, mean, sigma)
         if conv:
-            dary.to_host(stream=self.stream)
+            dary.copy_to_host(ary, stream=self.stream)
 
 
     def lognormal(self, ary, mean, sigma, size=None):
@@ -129,7 +129,7 @@ class PRNG(RNG):
         dary, conv = cuda._auto_device(ary, stream=self.stream)
         self._gen.generate_log_normal(dary, size, mean, sigma)
         if conv:
-            dary.to_host(stream=self.stream)
+            dary.copy_to_host(ary, stream=self.stream)
 
     def poisson(self, ary, lmbd, size=None):
         '''Generate floating point random number sampled
@@ -144,7 +144,7 @@ class PRNG(RNG):
         dary, conv = cuda._auto_device(ary, stream=self.stream)
         self._gen.generate_poisson(dary, lmbd, size)
         if conv:
-            dary.to_host(stream=self.stream)
+            dary.copy_to_host(ary, stream=self.stream)
 
 
 class QRNG(RNG):
@@ -202,7 +202,7 @@ class QRNG(RNG):
         dary, conv = cuda._auto_device(ary, stream=self.stream)
         self._gen.generate(dary, size)
         if conv:
-            dary.to_host(stream=self.stream)
+            dary.copy_to_host(ary, stream=self.stream)
 
 
 #
@@ -254,7 +254,7 @@ def uniform(size, dtype=np.float, device=False):
     if device:
         return devary
     else:
-        devary.to_host()
+        devary.copy_to_host(ary)
         return ary
 
 def normal(mean, sigma, size, dtype=np.float, device=False):
@@ -283,7 +283,7 @@ def normal(mean, sigma, size, dtype=np.float, device=False):
     if device:
         return devary
     else:
-        devary.to_host()
+        devary.copy_to_host(ary)
         return ary
 
 def lognormal(mean, sigma, size, dtype=np.float, device=False):
@@ -312,7 +312,7 @@ def lognormal(mean, sigma, size, dtype=np.float, device=False):
     if device:
         return devary
     else:
-        devary.to_host()
+        devary.copy_to_host(ary)
         return ary
 
 def poisson(lmbd, size, device=False):
@@ -338,7 +338,7 @@ def poisson(lmbd, size, device=False):
     if device:
         return devary
     else:
-        devary.to_host()
+        devary.copy_to_host(ary)
         return ary
 
 def quasi(size, bits=32, nd=1, device=False):
@@ -371,5 +371,5 @@ def quasi(size, bits=32, nd=1, device=False):
     if device:
         return devary
     else:
-        devary.to_host()
+        devary.copy_to_host(ary)
         return ary

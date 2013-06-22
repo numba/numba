@@ -22,7 +22,7 @@ class TestCuFFTPlan(unittest.TestCase):
         fftplan = Plan.one(CUFFT_C2C, n)
         fftplan.forward(d_data, d_data)
         fftplan.inverse(d_data, d_data)
-        d_data.to_host()
+        d_data.copy_to_host(data)
         result = data / n
         self.assertTrue(np.allclose(orig, result.real))
 
@@ -35,7 +35,7 @@ class TestCuFFTPlan(unittest.TestCase):
         fftplan = Plan.two(CUFFT_C2C, *data.shape)
         fftplan.forward(d_data, d_data)
         fftplan.inverse(d_data, d_data)
-        d_data.to_host()
+        d_data.copy_to_host(data)
         result = data / n
         self.assertTrue(np.allclose(orig, result.real))
 
@@ -49,7 +49,7 @@ class TestCuFFTPlan(unittest.TestCase):
         fftplan = Plan.three(CUFFT_C2C, *data.shape)
         fftplan.forward(d_data, d_data)
         fftplan.inverse(d_data, d_data)
-        d_data.to_host()
+        d_data.copy_to_host(data)
         result = data / n
         self.assertTrue(np.allclose(orig, result.real))
 
@@ -64,7 +64,7 @@ class TestCuFFTPlan(unittest.TestCase):
         d_xf_gpu = cuda.to_device(xf_gpu)
         plan = Plan.many(x.shape, CUFFT_R2C)
         plan.forward(d_x_gpu, d_xf_gpu)
-        d_xf_gpu.to_host()
+        d_xf_gpu.copy_to_host(xf)
         self.assertTrue( np.allclose(xf[0:N/2+1], xf_gpu, atol=1e-6) )
 
     def test_against_fft_2d(self):
@@ -79,7 +79,7 @@ class TestCuFFTPlan(unittest.TestCase):
         d_xf_gpu = cuda.to_device(xf_gpu)
         plan = Plan.many(x.shape, CUFFT_R2C)
         plan.forward(d_x_gpu, d_xf_gpu)
-        d_xf_gpu.to_host()
+        d_xf_gpu.copy_to_host(xf)
         self.assertTrue(np.allclose(xf[:, 0:rowsize//2+1], xf_gpu, atol=1e-6))
 
     def test_against_fft_3d(self):
@@ -95,7 +95,7 @@ class TestCuFFTPlan(unittest.TestCase):
         d_xf_gpu = cuda.to_device(xf_gpu)
         plan = Plan.many(x.shape, CUFFT_R2C)
         plan.forward(d_x_gpu, d_xf_gpu)
-        d_xf_gpu.to_host()
+        d_xf_gpu.copy_to_host(xf)
         self.assertTrue(np.allclose(xf[:, :, 0:rowsize//2+1], xf_gpu, atol=1e-6))
 
 

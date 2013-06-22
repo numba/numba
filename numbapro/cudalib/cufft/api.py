@@ -119,7 +119,7 @@ class FFTPlan(object):
         d_ary, d_out, h_out, do_host_copy = self._prepare(ary, out)
         self._plan.forward(d_ary, d_out)
         if do_host_copy:
-            d_out.to_host()
+            d_out.copy_to_host(h_out)
         return h_out
 
     def inverse(self, ary, out=None):
@@ -137,7 +137,7 @@ class FFTPlan(object):
         d_ary, d_out, h_out, do_host_copy = self._prepare(ary, out)
         self._plan.inverse(d_ary, d_out)
         if do_host_copy:
-            d_out.to_host()
+            d_out.copy_to_host(h_out)
         return h_out
 
 #
@@ -173,7 +173,7 @@ def fft_inplace(ary, stream=None):
     d_ary, conv = _cuda._auto_device(ary, stream=stream)
     fft(d_ary, d_ary, stream=stream)
     if conv:
-        d_ary.to_host()
+        d_ary.copy_to_host(ary)
     return ary
 
 
@@ -186,5 +186,5 @@ def ifft_inplace(ary, stream=None):
     d_ary, conv = _cuda._auto_device(ary, stream=stream)
     ifft(d_ary, d_ary, stream=stream)
     if conv:
-        d_ary.to_host()
+        d_ary.copy_to_host(ary)
     return ary

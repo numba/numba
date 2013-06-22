@@ -19,7 +19,7 @@ class TestCudaAutoContext(unittest.TestCase):
 
         orig = A.copy()
         foo[(1,), A.shape](dA)
-        dA.to_host()
+        dA.copy_to_host(A)
 
         self.assertTrue(np.allclose(A, orig * 2), (A, orig * 2))
 

@@ -50,13 +50,10 @@ def test_blackscholes():
     OPT_N = 400
     iterations = 2
 
-    callResultNumpy = np.zeros(OPT_N)
-    putResultNumpy = -np.ones(OPT_N)
     stockPrice = randfloat(np.random.random(OPT_N), 5.0, 30.0)
     optionStrike = randfloat(np.random.random(OPT_N), 1.0, 100.0)
     optionYears = randfloat(np.random.random(OPT_N), 0.25, 10.0)
-    callResultNumba = np.zeros(OPT_N)
-    putResultNumba = -np.ones(OPT_N)
+
     callResultNumbapro = np.zeros(OPT_N)
     putResultNumbapro = -np.ones(OPT_N)
 
@@ -75,8 +72,8 @@ def test_blackscholes():
         black_scholes_cuda[griddim, blockdim, stream](
             d_callResult, d_putResult, d_stockPrice, d_optionStrike,
             d_optionYears, RISKFREE, VOLATILITY)
-        d_callResult.to_host(stream)
-        d_putResult.to_host(stream)
+        d_callResult.copy_to_host(callResultNumbapro, stream)
+        d_putResult.copy_to_host(putResultNumbapro, stream)
         stream.synchronize()
     time2 = time.time()
     dt = (time1 - time0) * 10 + (time2 - time1)

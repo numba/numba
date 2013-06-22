@@ -63,7 +63,7 @@ def _auto_l2_functions(fname, tnames, argfmt, extras):
             dmem, conv = cuda._auto_device(kws[a], stream=stream)
             newkws[a] = dmem
             if conv:
-                cleanups.append(dmem)
+                cleanups.append((dmem, kws[a]))
         return newkws, cleanups
 
     def _dispatch(self, *args, **kws):
@@ -79,8 +79,8 @@ def _auto_l2_functions(fname, tnames, argfmt, extras):
         fn = getattr(self._cublas, '%s%s' % (typecode, fname))
         kws, cleanups = autodevice(kws, self.stream)
         res = fn(**kws)
-        for dmem in cleanups:
-            dmem.to_host(stream=self.stream)
+        for dmem, ary in cleanups:
+            dmem.copy_to_host(ary, stream=self.stream)
         return res
 
     # changes how user see this function through help()
@@ -111,9 +111,9 @@ class Blas(object):
             yield darys[0]
         else:
             yield darys
-        for dary, conv in zip(darys, convs):
+        for dary, conv, ary in zip(darys, convs, arys):
             if conv:
-                dary.to_host(stream=self.stream)
+                dary.copy_to_host(ary, stream=self.stream)
 
     @contextmanager
     def _auto_read(self, *arys):

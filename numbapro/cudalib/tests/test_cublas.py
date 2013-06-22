@@ -84,7 +84,7 @@ class TestCuBlasBinding(unittest.TestCase):
         blas = cuBlas()
         getattr(blas, fn)(x.size, alpha, d_x, 1)
 
-        d_x.to_host()
+        d_x.copy_to_host(x)
 
         self.assertTrue(np.allclose(x0 * alpha, x))
 
@@ -119,7 +119,7 @@ class TestCuBlasBinding(unittest.TestCase):
         blas = cuBlas()
         getattr(blas, fn)(x.size, alpha, d_x, 1, d_y, 1)
 
-        d_y.to_host()
+        d_y.copy_to_host(y)
 
         self.assertTrue(np.allclose(alpha * x + y0, y))
 
@@ -217,8 +217,8 @@ class TestCuBlasBinding(unittest.TestCase):
         blas = cuBlas()
         getattr(blas, fn)(x.size, d_x, 1, d_y, 1, c, s)
 
-        d_x.to_host()
-        d_y.to_host()
+        d_x.copy_to_host(x)
+        d_y.copy_to_host(y)
 
         self.assertTrue(np.allclose(x, x0))
         self.assertTrue(np.allclose(y, y0))
@@ -285,8 +285,8 @@ class TestCuBlasBinding(unittest.TestCase):
         blas = cuBlas()
         getattr(blas, fn)(x.size, d_x, 1, d_y, 1, param)
 
-        d_x.to_host()
-        d_y.to_host()
+        d_x.copy_to_host(x)
+        d_y.copy_to_host(y)
 
         self.assertTrue(np.allclose(x, x0))
         self.assertTrue(np.allclose(y, y0))

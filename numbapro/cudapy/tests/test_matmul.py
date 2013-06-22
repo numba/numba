@@ -56,7 +56,7 @@ def test_func():
         dB = cuda.to_device(B, stream)
         dC = cuda.to_device(C, stream)
         cu_square_matrix_mul[(bpg, bpg), (tpb, tpb), stream](dA, dB, dC)
-        dC.to_host(stream)
+        dC.copy_to_host(C, stream)
 
     e = time()
     tcuda = e - s

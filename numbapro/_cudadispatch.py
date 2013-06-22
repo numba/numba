@@ -168,7 +168,7 @@ class CudaUFuncDispatcher(object):
 
             cuda_func[griddim, blockdim, stream](*kernel_args)
             
-            device_out.to_host(stream) # only retrive the last one
+            device_out.copy_to_host(out, stream) # only retrive the last one
             # Revert the shape of the array if it has been modified earlier
             return out.reshape(reshape)
 
