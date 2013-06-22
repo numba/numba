@@ -352,6 +352,8 @@ class Infer(object):
                                     chosen.append((penalty, localmap))
 
                         chosen_sorted = sorted(chosen)
+                        if not chosen_sorted:
+                            raise TypeError("cannot resolve type")
                         best_score = chosen_sorted[0][0]
                         take_filter = lambda x: x[0] == best_score
                         filterout = itertools.takewhile(take_filter, chosen_sorted)

@@ -1,21 +1,22 @@
 import numpy as np
-from numba import *
-from numbapro.vectorizers import Vectorize
-from numbapro import cuda
-from timing import time
+from numbapro import vectorize
+from numbapro import cuda, int32, float32, float64
+from timeit import default_timer as time
+from .support import testcase, main
 
+sig = [int32(int32, int32),
+       float32(float32, float32),
+       float64(float64, float64)]
+
+@vectorize(sig, target='gpu')
 def vector_add(a, b):
     return a + b
 
-# build cuda code ufunc
-pv = Vectorize(vector_add, target='gpu')
-pv.add(restype=int32, argtypes=[int32, int32])
-pv.add(restype=f4, argtypes=[f4, f4])
-pv.add(restype=f8, argtypes=[f8, f8])
-cuda_ufunc = pv.build_ufunc()
+cuda_ufunc = vector_add
 
 test_dtypes = np.float32, np.int32
 
+@testcase
 def test_1d():
     # build python ufunc
     np_ufunc = np.add
@@ -48,7 +49,7 @@ def test_1d():
     test(np.float32)
     test(np.int32)
 
-
+@testcase
 def test_1d_async():
     # build python ufunc
     np_ufunc = np.add
@@ -86,9 +87,9 @@ def test_1d_async():
     test(np.int32)
 
 
-
+@testcase
 def test_nd():
-    def test(dtype, order, nd, size=10):
+    def test(dtype, order, nd, size=4):
         data = np.random.random((size,) * nd).astype(dtype)
         data[data != data] = 2.4
         data[data == float('inf')] = 3.8
@@ -104,6 +105,7 @@ def test_nd():
             for order in ('C', 'F'):
                 test(dtype, order, nd)
 
+@testcase
 def test_ufunc_attrib():
     test_reduce(8)
     test_reduce(100)
@@ -118,7 +120,6 @@ def test_reduce(n):
     result = cuda_ufunc.reduce(x)
     assert result == gold, (result, gold)
 
-
 def test_reduce2(n):
     x = np.arange(n, dtype=np.int32)
     gold = np.add.reduce(x)
@@ -129,7 +130,4 @@ def test_reduce2(n):
 
 
 if __name__ == '__main__':
-    test_ufunc_attrib()
-    test_nd()
-    test_1d()
-    test_1d_async()
+    main()

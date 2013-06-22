@@ -20,32 +20,15 @@ from .stream import StreamVectorize, StreamASTVectorize
 GUFuncVectorize = GUVectorize
 GUFuncASTVectorize = GUVectorize
 
-CudaVectorize = BasicVectorize
-CUDAGUFuncVectorize = GUFuncVectorize
-CudaGUFuncASTVectorize = GUFuncVectorize
-CudaASTVectorize = BasicVectorize
-
-#from numbapro.cudadrv.error import CudaSupportError
-#try:
-#    from .cuda import  CudaASTVectorize, CudaGUFuncASTVectorize
-#except CudaSupportError, e:
-#    logging.warning("Cuda vectorizers not available, using fallbacks")
-#    CudaVectorize = BasicVectorize
-#    CUDAGUFuncVectorize = GUFuncVectorize
-#    CudaGUFuncASTVectorize = GUFuncVectorize
-#    CudaASTVectorize = BasicVectorize
+from numbapro.cudavec.vectorizers import  CudaVectorize, CudaGUFuncVectorize
 
 install_vectorizer('ast', 'parallel', ParallelASTVectorize)
 install_vectorizer('ast', 'stream', StreamASTVectorize)
-install_vectorizer('ast', 'gpu', CudaASTVectorize)
-
-#_bytecode_guvectorizers = {
-#    'cpu': GUFuncVectorize,
-#}
+install_vectorizer('ast', 'gpu', CudaVectorize)
 
 _ast_guvectorizers = {
     'cpu': GUFuncVectorize,
-    'gpu': CudaGUFuncASTVectorize,
+    'gpu': CudaGUFuncVectorize,
 }
 
 _guvectorizers = {

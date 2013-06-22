@@ -64,6 +64,10 @@ class CUDAKernel(CUDAKernelBase):
         self.cu_module = driver.Module(self.ptx)
         self.cu_function = driver.Function(self.cu_module, self.name)
 
+    @property
+    def device(self):
+        return self.cu_function.device
+
     def __call__(self, *args):
         self._call(args = args,
                    griddim = self.griddim,
