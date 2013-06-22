@@ -508,12 +508,21 @@ class SymbolicExecution(object):
     
     def visit_UNPACK_SEQUENCE(self, inst):
         tos = self.pop()
-        if tos.value.kind != 'Call':
-            raise TypeError("can only unpack from return value")
-        count = inst.arg
-        for i in reversed(range(count)):
-            ref = self.insert(Expr('Unpack', inst, Unpack(tos, i)))
-            self.push(ref)
+        if isinstance(tos, ArrayAttr):
+            assert tos.idx is None
+            count = inst.arg
+            for i in reversed(range(count)):
+                ci = self.insert(Expr('Const', inst, Const(i)))
+                ref = self.insert(Expr('ArrayAttr', inst,
+                                        tos._replace(idx=ci)))
+                self.push(ref)
+        elif tos.value.kind == 'Call':
+            count = inst.arg
+            for i in reversed(range(count)):
+                ref = self.insert(Expr('Unpack', inst, Unpack(tos, i)))
+                self.push(ref)
+        else:
+            raise TypeError("can only unpack from return value or array attr")
 
     def visit_generic_binary(self, op, inst):
         rhs = self.pop()

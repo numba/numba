@@ -15,6 +15,10 @@ def setitem(a, i, b):
 def getshape(a):
     return a.shape[0]
 
+def unpack_shape(a):
+    m, n = a.shape
+    return m + n * 2
+
 def getstrides(a):
     return a.strides[0]
 
@@ -121,6 +125,11 @@ def test_getshape():
     ary = np.zeros(10, dtype=np.int32)
     assert compiled(ary) == ary.shape[0]
 
+@testcase
+def test_unpack_shape():
+    compiled = compile(unpack_shape, int32, [arraytype(int32, 2, 'C')])
+    ary = np.empty((2, 3), dtype=np.int32)
+    assert compiled(ary) == 2 + 3 * 2
 
 #------------------------------------------------------------------------------
 # getstrides
