@@ -99,7 +99,6 @@ CUDA support for GPU execution and a multi-threaded parallel range.
    cudalib
    CUDADevice
    CUDASupport
-   cu
 
 Additional examples:
 `GitHub repo of NumbaPro examples <https://github.com/ContinuumIO/numbapro-examples>`_
@@ -112,12 +111,11 @@ Requirements
 
 * python 2.6 or 2.7 (support is not yet available for 3.x)
 * LLVM (>= 3.2)
-* nVidia CUDA and NVVM libraries (>= 5.0)
+* nVidia CUDA and NVVM libraries (>= 5.5)
 
 Python modules:
 
 * llvmpy (>= 0.11.0)
-* bitarray (>= 0.8.1)
 
 Release Notes
 -------------
