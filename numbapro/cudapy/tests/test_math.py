@@ -229,8 +229,8 @@ def test_math_asinh():
 
 @testcase
 def test_math_atanh():
-    unary_template_float32(math_atanh, np.arctanh)
-    unary_template_float64(math_atanh, np.arctanh)
+    unary_template_float32(math_atanh, np.arctanh, start=0, stop=.9)
+    unary_template_float64(math_atanh, np.arctanh, start=0, stop=.9)
 
 
 
