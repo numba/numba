@@ -34,17 +34,17 @@ class CUDAKernelBase(object):
         while len(blockdim) < 3:
             blockdim.append(1)
 
-        self.griddim = tuple(griddim)
-        self.blockdim = tuple(blockdim)
-        self.stream = stream
-        self.sharedmem = sharedmem
+        clone = self.copy()
+        clone.griddim = tuple(griddim)
+        clone.blockdim = tuple(blockdim)
+        clone.stream = stream
+        clone.sharedmem = sharedmem
+        return clone
 
     def __getitem__(self, args):
-        clone = self.copy()
         if len(args) not in [2, 3, 4]:
             raise ValueError('must specify at least the griddim and blockdim')
-        clone.configure(*args)
-        return clone
+        return self.configure(*args)
 
 
 

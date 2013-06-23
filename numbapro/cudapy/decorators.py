@@ -43,14 +43,14 @@ def _map_numba_to_npm_types(typ):
     return NUMBA_TO_NPM_TYPES[typ]
 
 def jit(restype=None, argtypes=None, device=False, inline=False, bind=True,
-        nopython=True, backend=None):
+        **kws):
     # eval type string
     if isinstance(restype, str):
         restype, argtypes = _eval_type_string(restype)
 
     if argtypes is None:
         # must be a function then
-        assert restype.is_function
+        assert restype.is_function, restype
         argtypes = restype.args
         restype = restype.return_type
 
@@ -80,7 +80,7 @@ def jit(restype=None, argtypes=None, device=False, inline=False, bind=True,
     else:
         return kernel_jit
 
-def autojit(func):
+def autojit(func, **kws):
     return AutoJitCUDAKernel(func, bind=True)
 
 class AutoJitCUDAKernel(CUDAKernelBase):
