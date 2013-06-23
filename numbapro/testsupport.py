@@ -1,3 +1,4 @@
+import numbapro
 import unittest, os, sys
 
 class TestSupport(object):
@@ -38,15 +39,20 @@ class TestSupport(object):
         '''
         scripts = []
         basedir = os.path.dirname(self.basefile)
+
         for dirpath, _, filenames in os.walk(basedir):
             for name in filenames:
                 if name.startswith('test'):
                     modname = name.rsplit('.', 1)[0]
                     scripts.append(modname)
 
-        base = basedir.rsplit('.', 1)[0].replace(os.path.sep, '.')
+        package_base = os.path.dirname(numbapro.__file__)
+        assert basedir.startswith(package_base)
+        base = basedir[len(package_base) + 1:]
+        base = base.rsplit('.', 1)[0].replace(os.path.sep, '.')
+
         for script in scripts:
-            path = '.'.join([base, script])
+            path = '.'.join(['numbapro', base, script])
             __import__(path)
 
     def run(self, **kws):
