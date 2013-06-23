@@ -38,10 +38,10 @@ def _init_nvvm():
     NVVM() # raises NvvmSupportError
 
 def _init_numba_jit_registry():
-    from .decorators import cuda_jit, CudaAutoJitNumbaFunction
+    from numbapro.cudapy.decorators import jit
     from numba.decorators import jit_targets, autojit_wrappers
-    jit_targets[('gpu', 'ast')] = cuda_jit
-    autojit_wrappers[('gpu', 'ast')] = CudaAutoJitNumbaFunction
+    jit_targets[('gpu', 'ast')] = jit
+    # cannot initialize autojit
 
 def _init_poison_jit_registry():
     from numba.decorators import jit_targets

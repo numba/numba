@@ -42,7 +42,8 @@ def _map_numba_to_npm_types(typ):
         return types.arraytype(elem, ndim, order)
     return NUMBA_TO_NPM_TYPES[typ]
 
-def jit(restype=None, argtypes=None, device=False, inline=False, bind=True):
+def jit(restype=None, argtypes=None, device=False, inline=False, bind=True,
+        nopython=True, backend=None):
     # eval type string
     if isinstance(restype, str):
         restype, argtypes = _eval_type_string(restype)

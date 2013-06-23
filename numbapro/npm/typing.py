@@ -1,4 +1,5 @@
 import __builtin__
+import math
 import itertools, inspect
 #from pprint import pprint
 from collections import namedtuple, defaultdict, deque, Set, Mapping
@@ -641,10 +642,13 @@ class Infer(object):
 
     def visit_Call(self, value):
         funcname = value.args.func
-        parts = funcname.split('.')
-        obj = self.globals[parts[0]]
-        for attr in parts[1:]:
-            obj = getattr(obj, attr)
+        if funcname == '.pow':
+            obj = math.pow
+        else:
+            parts = funcname.split('.')
+            obj = self.globals[parts[0]]
+            for attr in parts[1:]:
+                obj = getattr(obj, attr)
         if obj not in self.callrules:
             if not hasattr(obj, '_npm_context_'):
                 msg = "%s is not a regconized builtins"

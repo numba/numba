@@ -552,7 +552,7 @@ class SymbolicExecution(object):
         rhs = self.pop()
         lhs = self.pop()
 
-        call = Expr('Call', inst, Call(func='math.pow', args=[lhs, rhs], kws=()))
+        call = Expr('Call', inst, Call(func='.pow', args=[lhs, rhs], kws=()))
         ref = self.insert(call)
         self.push(ref)
 

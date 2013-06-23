@@ -14,9 +14,12 @@ class CudaPyCGError(CompileError):
 
 
 def declare_sreg(cg, sregobj):
+    return declare_sreg_util(cg.lmod, sregobj)
+
+def declare_sreg_util(lmod, sregobj):
     fname = ptx.SREG_MAPPING[sregobj]
     fnty = ptx.SREG_FUNCTION_TYPE
-    func = cg.lmod.get_or_insert_function(fnty, name=fname)
+    func = lmod.get_or_insert_function(fnty, name=fname)
     return func
 
 def cg_sreg(cg, value):

@@ -2,10 +2,14 @@ from numba.decorators import jit
 from numba import *
 import numpy as np
 import numpy.core.umath_tests as ut
-from numbapro.vectorizers import GUVectorize
+from numbapro import guvectorize
 from numbapro import cuda
 from timeit import default_timer as time
+from .support import testcase, main
 
+@guvectorize([void(f4[:,:], f4[:,:], f4[:,:])],
+             '(m,n),(n,p)->(m,p)',
+             target='gpu')
 def matmulcore(A, B, C):
     m, n = A.shape
     n, p = B.shape
@@ -15,15 +19,14 @@ def matmulcore(A, B, C):
             for k in range(n):
                 C[i, j] += A[i, k] * B[k, j]
 
-gufunc = GUVectorize(matmulcore, '(m,n),(n,p)->(m,p)', target='gpu')
-gufunc.add(argtypes=[f4[:,:], f4[:,:], f4[:,:]])
-gufunc = gufunc.build_ufunc()
+gufunc = matmulcore
 gufunc.max_blocksize = 512
 
 non_stream_speedups = []
 stream_speedups = []
 
-def _test_gufunc():
+@testcase
+def test_gufunc():
     matrix_ct = 1001 # an odd number to test thread/block division in CUDA
     A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2, 4)
     B = np.arange(matrix_ct * 4 * 5, dtype=np.float32).reshape(matrix_ct, 4, 5)
@@ -40,7 +43,8 @@ def _test_gufunc():
     assert np.allclose(C, Gold)
 
 
-def _test_gufunc_adjust_blocksize():
+@testcase
+def test_gufunc_adjust_blocksize():
     matrix_ct = 1001 # an odd number to test thread/block division in CUDA
     A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2, 4)
     B = np.arange(matrix_ct * 4 * 5, dtype=np.float32).reshape(matrix_ct, 4, 5)
@@ -56,8 +60,8 @@ def _test_gufunc_adjust_blocksize():
     
     assert np.allclose(C, Gold)
 
-
-def _test_gufunc_stream():
+@testcase
+def test_gufunc_stream():
     matrix_ct = 1001 # an odd number to test thread/block division in CUDA
     A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2, 4)
     B = np.arange(matrix_ct * 4 * 5, dtype=np.float32).reshape(matrix_ct, 4, 5)
@@ -77,18 +81,6 @@ def _test_gufunc_stream():
 
     stream_speedups.append(tcpu / tcuda)
     assert np.allclose(C, Gold)
-
-def test_cuda_gufunc():
-    for _ in range(50):
-        _test_gufunc()
-        _test_gufunc_adjust_blocksize()
-        _test_gufunc_stream()
-    print 'CUDA speedup: %f' % max(non_stream_speedups)
-    print 'CUDA streamed speedup: %f' % max(stream_speedups)
-
-def main():
-    test_cuda_gufunc()
-    print 'ok'
 
 if __name__ == '__main__':
     main()

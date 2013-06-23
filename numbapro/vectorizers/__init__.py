@@ -7,8 +7,8 @@ __all__ = [
     'StreamVectorize',
     'GUFuncVectorize',
     'GUFuncASTVectorize',
-    'CudaASTVectorize',
-    'CudaGUFuncASTVectorize',
+    'CudaVectorize',
+    'CudaGUFuncVectorize',
 ]
 import logging
 from numba.vectorize import *

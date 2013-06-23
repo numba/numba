@@ -56,6 +56,10 @@ def test():
         import numbapro.cudapy.tests.support
         failfast(numbapro.cudapy.tests.support.run(**cfg))
 
+        print 'cudavec'.center(80, '-')
+        import numbapro.cudavec.tests.support
+        failfast(numbapro.cudavec.tests.support.run(**cfg))
+
     else:
         print 'skipped cuda tests'
 
