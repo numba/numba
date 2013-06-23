@@ -1,3 +1,4 @@
+import re
 import llvm.core as lc
 from numbapro import cuda
 from numbapro.npm import types, codegen
@@ -45,18 +46,38 @@ class CudaVectorize(object):
 #------------------------------------------------------------------------------
 # Generalized CUDA ufuncs
 
+def parse_signature(sig):
+    inargs, outargs = sig.split('->')
+    pat = re.compile(r'\([^\)]*\)')
+    inargs = pat.findall(inargs)
+    outargs = pat.findall(outargs)
+    inargs = [a.strip('()') for a in inargs]
+    outargs = [a.strip('()') for a in outargs]
+
+    def stripall(s):
+        return tuple(filter(bool, [x.strip() for x in s]))
+
+    inargs = [stripall(a.split(',')) for a in inargs]
+    outargs = [stripall(a.split(',')) for a in outargs]
+
+    return inargs, outargs
+
 class CudaGUFuncVectorize(object):
 
     def __init__(self, func, sig):
         self.pyfunc = func
         self.signature = sig
+        self.inputsig, self.outputsig = parse_signature(self.signature)
+        assert len(self.outputsig) == 1, "only support 1 output"
         self.kernelmap = {}  # { arg_dtype: (return_dtype), cudakernel }
 
     def add(self, argtypes, restype=None):
         cudevfn = cuda.jit(argtypes=argtypes,
                            device=True, inline=True)(self.pyfunc)
 
-        lmod, lgufunc, outertys = build_gufunc_stager(cudevfn)
+        dims = [len(x) for x in self.inputsig]
+        dims += [len(x) for x in self.outputsig]
+        lmod, lgufunc, outertys = build_gufunc_stager(cudevfn, dims)
 
         ptx = to_ptx(lgufunc)
         kernel = CUDAKernel(lgufunc.name, ptx, outertys)
@@ -68,11 +89,11 @@ class CudaGUFuncVectorize(object):
     def build_ufunc(self):
         return dispatch.CudaGUFuncDispatcher(self.kernelmap, self.signature)
 
-def build_gufunc_stager(devfn):
+def build_gufunc_stager(devfn, dims):
     lmod, lfunc, return_type, args = devfn._npm_context_
     assert return_type is None
-    outer_args = [types.arraytype(a.element, a.ndim + 1, a.order)
-                  for a in args]
+    outer_args = [types.arraytype(a.element, dim + 1, a.order)
+                  for a, dim in zip(args, dims)]
 
     # copy a new module
     lmod = lmod.clone()
