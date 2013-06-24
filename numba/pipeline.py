@@ -19,7 +19,6 @@ from numba import error
 from numba import functions
 from numba import transforms
 from numba import control_flow
-from numba import optimize
 from numba import closures
 from numba import reporting
 from numba import normalize
