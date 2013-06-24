@@ -4,6 +4,7 @@ from collections import namedtuple
 from functools import partial
 import numba
 from numba import *
+from numba import ndarray_helpers
 import llvm.core as lc
 
 # ______________________________________________________________________
@@ -84,6 +85,8 @@ class MyArray(object):
         data_ptr_ty = lc.Type.pointer(lc.Type.double())
         dptr_plus_offset = self.builder.gep(self.data, [offset])
         return self.builder.bitcast(dptr_plus_offset, data_ptr_ty)
+
+ndarray_helpers.Array.register(MyArray)
 
 # ______________________________________________________________________
 # Test functions

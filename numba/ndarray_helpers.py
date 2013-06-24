@@ -11,6 +11,8 @@ from __future__ import print_function, division, absolute_import
 #    int flags;                      // 6
 #    } PyArrayObject;
 
+import abc
+
 from numba import *
 from numba import typedefs
 from numba.typesystem import tbaa
@@ -120,7 +122,51 @@ class PyArrayAccessor(object):
     def flags(self):
         return self._get_element(6)
 
-class NumpyArray(object):
+
+class Array(object):
+    """
+    Interface for foreign arrays, like LLArray
+    """
+
+    __metaclass__ = abc.ABCMeta
+
+    @abc.abstractmethod
+    def from_type(cls, llvm_dtype):
+        """
+        Given an LLVM representation of the dtype, return the LLVM array type
+        representation
+        """
+
+    @abc.abstractproperty
+    def data(self):
+        """Return the data pointer of this array (for A.data)"""
+
+    @abc.abstractproperty
+    def shape_ptr(self):
+        """Return the shape pointer of this array (for A.shape[0], etc)"""
+
+    @abc.abstractproperty
+    def strides_ptr(self):
+        """Return the strides pointer of this array (for A.strides[0], etc)"""
+
+    @abc.abstractproperty
+    def shape(self):
+        """Return the extents as a list of loaded LLVM values"""
+
+    @abc.abstractproperty
+    def strides(self):
+        """Return the strides as a list of loaded LLVM values"""
+
+    @abc.abstractproperty
+    def ndim(self):
+        """Return the dimensionality of this array as an LLVM constant"""
+
+    @abc.abstractmethod
+    def getptr(self, *indices):
+        """Compute an element pointer given LLVM indices into the array"""
+
+
+class NumpyArray(Array):
     """
     LLArray compatible inferface for NumPy's ndarray
     """
@@ -183,18 +229,6 @@ class NumpyArray(object):
     def ndim(self):
         return _const_int(self.nd)
 
-    # def setstrides(self, p_strides, strides=None):
-    #     self._strides_ptr = p_strides
-    #     self._strides = strides
-
-    @property
-    def itemsize(self):
-        raise NotImplementedError
-
-    def preload(self, ptr, count=None):
-        assert count is not None
-        return [load_at(self.builder, ptr, i) for i in range(count)]
-
     def getptr(self, *indices):
         offset = _const_int(0)
         for i, (stride, index) in enumerate(zip(self.strides, indices)):
@@ -209,3 +243,13 @@ class NumpyArray(object):
 
         ptr = self.builder.bitcast(dptr_plus_offset, data_ptr_ty)
         return ptr
+
+    # Misc, optional methods
+
+    @property
+    def itemsize(self):
+        raise NotImplementedError
+
+    def preload(self, ptr, count=None):
+        assert count is not None
+        return [load_at(self.builder, ptr, i) for i in range(count)]

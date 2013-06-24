@@ -456,6 +456,7 @@ class FunctionEnvironment(object):
         self.typesystem = typesystem or numba_typesystem
         if array:
             self.array = array
+            # assert issubclass(array, NumpyArray)
 
         import numba.postpasses
         self.postpasses = postpasses or numba.postpasses.default_postpasses
