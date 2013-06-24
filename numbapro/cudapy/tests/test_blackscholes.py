@@ -59,7 +59,7 @@ def test_blackscholes():
 
 
     time0 = time.time()
-    blockdim = 1024, 1
+    blockdim = 512, 1
     griddim = int(math.ceil(float(OPT_N)/blockdim[0])), 1
     stream = cuda.stream()
     d_callResult = cuda.to_device(callResultNumbapro, stream)
