@@ -148,5 +148,6 @@ class TestArray(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    # TestArray('test_attributes').debug()
-    unittest.main()
+    TestArray('test_attributes').debug()
+    TestArray('test_indexing').debug()
+    # unittest.main()

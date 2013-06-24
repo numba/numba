@@ -54,59 +54,6 @@ def get_strides(builder, tbaa_metadata, strides_pointer, ndim):
         yield stride
 
 #----------------------------------------------------------------------------
-# Utilities for ndarray attribute preloading
-#----------------------------------------------------------------------------
-
-# NOTE: See also optimize.py:Preloader
-
-def make_shape_phis(context, builder, attr, name, ndim):
-    "Make phi values for the extents of an array variable merge"
-    ltype = npy_intp.to_llvm(context)
-    for i in range(ndim):
-        yield builder.phi(ltype, "%s%d(%s)" % (attr, i, name))
-
-def make_strides_phis(context, builder, name, ndim):
-    "Make phi values for the strides of an array variable merge"
-    ltype = typesystem.numpy_strides.to_llvm(context)
-    for i in range(ndim):
-        yield builder.phi(ltype, "strides%d(%s)" % name)
-
-def make_preload_phi(context, builder, phi_node):
-    """
-    Build phi values for preloaded data/shape/stride values.
-    """
-    var = phi_node.variable
-    name = var.unmangled_name
-    ndim = var.type.ndim
-
-    if var.preload_data:
-        ltype = char.pointer().to_llvm(context)
-        var.preloaded_data = builder.phi(ltype,
-                                         "data(%s)" % name)
-    if var.preload_shape:
-        var.preloaded_shape = tuple(make_shape_phis(context, builder,
-                                                    "shape", name, ndim))
-    if var.preload_strides:
-        var.preloaded_strides = tuple(make_shape_phis(context, builder,
-                                                      "strides", name, ndim))
-
-def update_preloaded_phi(phi_var, incoming_var, llvm_incoming_block):
-    if phi_var.preload_data:
-        phi_var.preloaded_data.add_incoming(incoming_var.preloaded_data,
-                                            llvm_incoming_block)
-
-    if phi_var.preload_shape:
-        for extent, incoming in zip(phi_var.preloaded_shape,
-                                    incoming_var.preloaded_shape):
-            extent.add_incoming(incoming, llvm_incoming_block)
-
-    if phi_var.preload_strides:
-        for stride, incoming in zip(phi_var.preloaded_strides,
-                                    incoming_var.preloaded_strides):
-            stride.add_incoming(incoming, llvm_incoming_block)
-
-
-#----------------------------------------------------------------------------
 # NumPy Array Attributes
 #----------------------------------------------------------------------------
 
@@ -120,41 +67,6 @@ class DataPointerNode(ExprNode):
         self.type = node.type.dtype
         self.variable = Variable(self.type)
         self.ctx = ctx
-
-    def data_descriptors(self, builder, tbaa, llvm_value):
-        '''
-        Returns a tuple of (dptr, strides)
-        - dptr:    a pointer of the data buffer
-        - strides: a pointer to an array of stride information;
-                   has `ndim` elements.
-        '''
-        acc = PyArrayAccessor(builder, llvm_value, tbaa, self.type)
-
-        var = self.node.variable
-
-        # Load the data pointer. Use preloaded value if available
-        if var.preload_data:
-            # print "using preloaded data", var.preloaded_data
-            dptr = var.preloaded_data
-        else:
-            dptr = acc.data
-
-        # Load the strides. Use preloaded values if available
-        if var.preload_strides:
-            # print "using preloaded strides", var.preloaded_strides
-            strides = var.preloaded_strides
-        else:
-            strides_pointer = acc.strides
-            strides = get_strides(builder, tbaa, strides_pointer, self.ndim)
-
-        assert dptr is not None
-        assert strides is not None
-
-        return dptr, strides
-
-    @property
-    def ndim(self):
-        return self.node.type.ndim
 
     def __repr__(self):
         return "%s.data" % self.node

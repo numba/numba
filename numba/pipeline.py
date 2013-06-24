@@ -450,20 +450,11 @@ class SpecializeSSA(PipelineStage):
         return ast
 
 class SpecializeClosures(SimplePipelineStage):
-
     transformer = closures.ClosureSpecializer
-
 
 class Optimize(PipelineStage):
     def transform(self, ast, env):
         return ast
-
-
-class Preloader(PipelineStage):
-    def transform(self, ast, env):
-        transform = self.make_specializer(optimize.Preloader, ast, env)
-        return transform.visit(ast)
-
 
 class SpecializeLoops(PipelineStage):
     def transform(self, ast, env):

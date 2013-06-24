@@ -65,7 +65,6 @@ default_pipeline_order = default_normalize_order + [
     'SpecializeSSA',
     'SpecializeClosures',
     'Optimize',
-    'Preloader',
     'SpecializeLoops',
     'FixASTLocations',
     'LateSpecializer',

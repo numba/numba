@@ -84,22 +84,7 @@ class Variable(object):
         # For arrays. These variables indicate whether to preload data, shape
         # and strides. These are set during late specialization in
         # visit_Subscript.
-        self.preload_data = False
-        self.preload_shape = False
-        self.preload_strides = False
-
-        # These are the preloaded llvm values set during code generation time.
-        # These are set iff the respective flags above are true, *and* the
-        # Variable definition belongs to an Assignment or Phi definition
-        # (as opposed to e.g. a function call):
-
-        # A = np.array(...); A[0]
-        #   ... versus
-        # func()[0]
-
-        self.preloaded_data = None
-        self.preloaded_shape = None    # tuple of size ndim
-        self.preloaded_strides = None  # tuple of size ndim
+        self.ndarray = None
 
     def perform_assignment(self, rhs_type):
         """

@@ -557,7 +557,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         self.generate_assign_stack(value, target, tbaa_node,
                                    decref=decref, incref=incref)
 
-        self.preload_attributes(target_node.variable, value)
+        if target_node.type.is_array:
+            self.preload_attributes(target_node.variable, value)
 
     def generate_assign_stack(self, lvalue, ltarget,
                               tbaa_node=None, tbaa_type=None,
@@ -589,29 +590,16 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         """
         Pre-load ndarray attributes data/shape/strides.
         """
-        if not (var.preload_data or var.preload_shape or var.preload_strides):
-            return
-        if not self.using_numpy_array:
-            return
-
         if not var.renameable:
             # Stack allocated variable
             var = self.builder.load(value)
 
-        acc = self.pyarray_accessor(value, var.type.dtype)
+        var.ndarray = self.ndarray(value, var.type)
 
-        if var.preload_data:
-            var.preloaded_data = acc.data
-
-        if var.preload_shape:
-            shape = nodes.get_strides(self.builder, self.tbaa,
-                                      acc.shape, var.type.ndim)
-            var.preloaded_shape = tuple(shape)
-
-        if var.preload_strides:
-            strides = nodes.get_strides(self.builder, self.tbaa,
-                                        acc.strides, var.type.ndim)
-            var.preloaded_strides = tuple(strides)
+        # Trigger preload
+        var.ndarray.data
+        var.ndarray.shape
+        var.ndarray.strides
 
     #------------------------------------------------------------------------
     # Variables
@@ -654,9 +642,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             ltype = phi_node.variable.type.to_llvm(self.context)
             phi = self.builder.phi(ltype, phi_node.variable.unmangled_name)
             phi_node.variable.lvalue = phi
-
-            if phi_node.variable.type.is_array:
-                nodes.make_preload_phi(self.context, self.builder, phi_node)
 
     def setblock(self, cfg_basic_block):
         if cfg_basic_block.is_fabricated:
@@ -1543,7 +1528,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         assert node.node.type.is_array
         lvalue = self.visit(node.node)
         lindices = self.visit(node.slice)
-        ndarray = self.ndarray(lvalue, node.node.type)
+        array_var = node.node.variable
+        ndarray = array_var.ndarray or self.ndarray(lvalue, node.node.type)
         if not isinstance(lindices, collections.Iterable):
             lindices = (lindices,)
         lptr = ndarray.getptr(*lindices)
