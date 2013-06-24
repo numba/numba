@@ -373,6 +373,7 @@ static PyMethodDef core_methods[] = {
 #undef declmethod
 };
 
+/*MARK1*/
 
 /* Module main function, hairy because of py3k port */
 
@@ -394,6 +395,8 @@ static PyMethodDef core_methods[] = {
     initmviewbuf(void)
 #endif
     {
+        /*MARK2*/
+
 #if PY_MAJOR_VERSION >= 3
         PyObject *module = PyModule_Create( &module_def );
 #else
