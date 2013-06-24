@@ -85,3 +85,8 @@ Filterbank Correlation
 Multi threading
 ---------------
 .. literalinclude:: /../../examples/multithread.py
+
+Strings and libc
+----------------
+
+.. literalinclude:: /../../examples/strings.py
