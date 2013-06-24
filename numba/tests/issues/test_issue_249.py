@@ -12,7 +12,7 @@ import numpy as np
 import numpy.testing as npt
 try:
     from skimage import img_as_float
-except ImportError, e:
+except ImportError as e:
     print("skimage not available, skipping")
     sys.exit()
 
