@@ -29,6 +29,13 @@ def coop_smem2d(ary):
     ary[i, j] = sm[i, j]
 
 
+def dyn_shared_memory(ary):
+    i = cuda.grid(1)
+    sm = cuda.shared.array(0, numbapro.float32)
+    sm[i] = i * 2
+    cuda.syncthreads()
+    ary[i] = sm[i]
+
 #------------------------------------------------------------------------------
 # useless_sync
 
@@ -77,6 +84,21 @@ def test_coop_smem2d():
         for j in range(ary.shape[1]):
             exp[i, j] = float(i + 1) / (j + 1)
     assert np.allclose(ary, exp)
+
+#------------------------------------------------------------------------------
+# test_dyn_shared_memory
+
+@testcase
+def test_dyn_shared_memory():
+    compiled = cudapy.compile_kernel(dyn_shared_memory,
+                                     [arraytype(float32, 1, 'C')])
+    compiled.bind()
+
+    shape = 50
+    ary = np.empty(shape, dtype=np.float32)
+    compiled[1, shape, 0, ary.size * 4](ary)
+
+    assert np.all(ary == 2 * np.arange(ary.size, dtype=np.int32))
 
 if __name__ == '__main__':
     main()
