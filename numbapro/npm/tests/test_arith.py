@@ -1,3 +1,4 @@
+import sys
 import numpy as np
 from ..compiler import compile
 from ..types import *
@@ -149,16 +150,17 @@ def test_mul_complex():
 #------------------------------------------------------------------------------
 # div
 
-@testcase
-def test_div_integer():
-    def run(ty, a, b):
-        cdiv = compile(div, ty, [ty, ty])
-        got = cdiv(a, b)
-        exp = div(a, b)
-        assert got == exp, 'div(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+if sys.platform != 'win32':
+    @testcase
+    def test_div_integer():
+        def run(ty, a, b):
+            cdiv = compile(div, ty, [ty, ty])
+            got = cdiv(a, b)
+            exp = div(a, b)
+            assert got == exp, 'div(%s, %s) got = %s expect=%s' % (a, b, got, exp)
 
-    for ty in iset:
-        run(ty, 4, 2)
+        for ty in iset:
+            run(ty, 4, 2)
 
 @testcase
 def test_div_float():
@@ -202,6 +204,7 @@ def test_floordiv_float():
 #------------------------------------------------------------------------------
 # mod
 
+
 @testcase
 def test_mod_integer():
     def run(ty, a, b):
@@ -213,16 +216,19 @@ def test_mod_integer():
     for ty in iset:
         run(ty, 121, 11)
 
-@testcase
-def test_mod_float():
-    def run(ty, a, b):
-        cmod = compile(mod, ty, [ty, ty])
-        got = cmod(a, b)
-        exp = mod(a, b)
-        assert got == exp, 'mod(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+if sys.platform != 'win32':
+    '''Known problem that llvm generates the wrong symbol for fmodf
+    '''
+    @testcase
+    def test_mod_float():
+        def run(ty, a, b):
+            cmod = compile(mod, ty, [ty, ty])
+            got = cmod(a, b)
+            exp = mod(a, b)
+            assert got == exp, 'mod(%s, %s) got = %s expect=%s' % (a, b, got, exp)
 
-    for ty in fset:
-        run(ty, 432., 21.)
+        for ty in fset:
+            run(ty, 432., 21.)
 
 
 #------------------------------------------------------------------------------
