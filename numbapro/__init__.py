@@ -24,45 +24,52 @@ import numbapro.cuda
 
 
 def test():
-    print 'NumbaPro Tests'
+    try:
+        print 'NumbaPro Tests'
 
-    def failfast(ok):
-        if not ok:
-            raise Exception('Test Failed')
-    cfg = dict(buffer=True, verbosity=3)
+        def failfast(ok):
+            if not ok:
+                raise Exception('Test Failed')
+        cfg = dict(buffer=True, verbosity=3)
 
-    print 'npm'.center(80, '-')
-    import numbapro.npm.tests.support
-    failfast(numbapro.npm.tests.support.run(**cfg))
+        print 'npm'.center(80, '-')
+        import numbapro.npm.tests.support
+        failfast(numbapro.npm.tests.support.run(**cfg))
 
-    print 'vectorizers'.center(80, '-')
-    import numbapro.vectorizers.tests.support
-    failfast(numbapro.vectorizers.tests.support.run(**cfg))
+        print 'vectorizers'.center(80, '-')
+        import numbapro.vectorizers.tests.support
+        failfast(numbapro.vectorizers.tests.support.run(**cfg))
 
-    print 'parallel'.center(80, '-')
-    import numbapro.parallel.tests.support
-    failfast(numbapro.parallel.tests.support.run(**cfg))
+        print 'parallel'.center(80, '-')
+        import numbapro.parallel.tests.support
+        failfast(numbapro.parallel.tests.support.run(**cfg))
 
-    if numbapro.cuda.is_available:
-        print 'cudadrv'.center(80, '-')
-        import numbapro.cudadrv.tests.support
-        failfast(numbapro.cudadrv.tests.support.run(**cfg))
+        if numbapro.cuda.is_available:
+            print 'cudadrv'.center(80, '-')
+            import numbapro.cudadrv.tests.support
+            failfast(numbapro.cudadrv.tests.support.run(**cfg))
 
-        print 'cudalib'.center(80, '-')
-        import numbapro.cudalib.tests.support
-        failfast(numbapro.cudalib.tests.support.run(**cfg))
+            print 'cudalib'.center(80, '-')
+            import numbapro.cudalib.tests.support
+            failfast(numbapro.cudalib.tests.support.run(**cfg))
 
-        print 'cudapy'.center(80, '-')
-        import numbapro.cudapy.tests.support
-        failfast(numbapro.cudapy.tests.support.run(**cfg))
+            print 'cudapy'.center(80, '-')
+            import numbapro.cudapy.tests.support
+            failfast(numbapro.cudapy.tests.support.run(**cfg))
 
-        print 'cudavec'.center(80, '-')
-        import numbapro.cudavec.tests.support
-        failfast(numbapro.cudavec.tests.support.run(**cfg))
+            print 'cudavec'.center(80, '-')
+            import numbapro.cudavec.tests.support
+            failfast(numbapro.cudavec.tests.support.run(**cfg))
 
+        else:
+            print 'skipped cuda tests'
+    except Exception, e:
+        import traceback
+        traceback.print_exc()
+        print 'Test failed'
+        return False
     else:
-        print 'skipped cuda tests'
-
-    print 'All test passed'
+        print 'All test passed'
+        return True
 
 
