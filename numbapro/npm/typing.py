@@ -286,33 +286,11 @@ class Infer(object):
 
     def find_solutions(self, possibles, conditions):
         '''
-        IDom dictates the type of values when they participate in a PHI.
+        Parent block dictates the type of values when they participate in a PHI.
         '''
-        # find dominators
-        doms = find_dominators(self.blocks)
-        # topsort
-        def topsort_blocks(doms):
-            # make copy of doms
-            doms = dict((k, set(v)) for k, v in doms.iteritems())
-            topsorted = []
-            pending = deque(self.blocks.keys())
-            while pending:
-                tos = pending.popleft()
-                domset = doms[tos]
-                domset.discard(tos)
-                for x in list(domset):
-                    if x in topsorted:
-                        domset.remove(x)
-                if not domset:
-                    topsorted.append(tos)
-                else:
-                    pending.append(tos)
-            return topsorted
-
-        topsorted = topsort_blocks(doms)
         # infer block by block starting with the entry block
         processed_blocks = set()
-        for blknum in topsorted:
+        for blknum in sorted(self.blocks):
             blk = self.blocks[blknum]
             values = []
             for value in blk.body:
@@ -389,12 +367,6 @@ class Infer(object):
         # postprocess all PHI nodes and ensure the type matches for all
         # incoming values
         for phi, incomings in self.phis.iteritems():
-            # if PHI is undefined, pick the first of the incoming set
-            if phi not in soln:
-                for inc in incomings:
-                    if inc in soln:
-                        soln[phi] = soln[inc]
-            
             expect = soln[phi]
             for inc in incomings:
                 if inc in soln:
