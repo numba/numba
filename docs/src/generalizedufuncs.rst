@@ -13,7 +13,7 @@ Imports
 ::
 
 	from numbapro import float32, float64, int32
-	from numbapro.vectorize import GUVectorize
+	from numbapro import guvectorize
 	import numpy as np
 
 Basic generalized ufuncs are available in numba. In addition to the basic generalized

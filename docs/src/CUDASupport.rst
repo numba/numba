@@ -2,13 +2,18 @@
 CUDA Support
 ------------
 
-All CUDA support requires `CUDA 5 <https://developer.nvidia.com/cuda-toolkit>`_ and `NVVM <https://developer.nvidia.com/cuda-llvm-compiler>`_.  NVVM is a CUDA LLVM Compiler that is currently available to `NVIDIA CUDA Registered Developers <https://developer.nvidia.com/nvidia-registered-developer-program>`_.  NVVM will be integrated into the official CUDA Toolkit in a future release.
+All CUDA support requires `CUDA 5.5 <https://developer.nvidia.com/cuda-toolkit>`_.
 
-NumbaPro tries to locate the CUDA driver automatically.  Users can override the location by setting the environment variable NUMBAPRO_CUDA_DRIVER to point to the path of the CUDA driver shared library.
+NumbaPro searches in the system shared library path for the CUDA drivers and CUDA libraries (e.g. cuRAND, cuBLAS).  Users can set environment variable `LD_LIBRARY_PATH` to the directory of the CUDA drivers to ensure that NumbaPro can find them.  The instruction to do so it printed at the end of the CUDA SDK installation.
 
-For the NVVM shared library, NumbaPro will try to find it in the current directory.  Users can override the location by providing the environment variable NUMBAPRO_NVVM that points to the path of the NVVM shared library.
+User can override the search path with the following environment variables:
 
-All CUDA features are experimental. Computation speeds may have unexpected results.
+- NUMBAPRO_CUDA_DRIVER
+    path to CUDA driver shared library file
+- NUMBAPRO_NVVM
+    path to CUDA libNVVM shared library file
+- NUMBAPRO_LIBDEVICE
+    path to CUDA libNVVM libdevice directory which contains .bc files.
 
-**Supported**: Linux, Windows and Mac OSX 32/64-bit with CUDA 5 and NVVM.  Only support CUDA devices with compute capability 2.0 and above.
+**Supported**: Linux, Windows and Mac OSX 32/64-bit with CUDA 5.5.  Only support CUDA devices with **compute capability 2.0 and above**.
 

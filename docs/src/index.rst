@@ -111,11 +111,12 @@ Requirements
 
 * python 2.6 or 2.7 (support is not yet available for 3.x)
 * LLVM (>= 3.2)
-* nVidia CUDA and NVVM libraries (>= 5.5)
+* nVidia CUDA SDK (>= 5.5rc)
 
 Python modules:
 
-* llvmpy (>= 0.11.0)
+* llvmpy (>= 0.12.0)
+* numba 0.9
 
 Release Notes
 -------------
