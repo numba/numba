@@ -395,8 +395,6 @@ static PyMethodDef core_methods[] = {
     initmviewbuf(void)
 #endif
     {
-        /*MARK2*/
-
 #if PY_MAJOR_VERSION >= 3
         PyObject *module = PyModule_Create( &module_def );
 #else
@@ -404,6 +402,8 @@ static PyMethodDef core_methods[] = {
 #endif
         if (module == NULL)
             INITERROR;
+
+        /*MARK2*/
 
         MemAllocType.tp_new = PyType_GenericNew;
         if (PyType_Ready(&MemAllocType) < 0)
