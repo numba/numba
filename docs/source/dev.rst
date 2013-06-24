@@ -528,6 +528,120 @@ Compiling @autojit extension classes works as follows:
         for all live objects (e.g. by adding a specialization for
         an autojit method).
 
+Wrappers
+~~~~~~~~
+There are several wrappers in numba that wrap functions, classes and methods.
+The key implementations are in:
+
+    * numba/numbawrapper.pyx
+    * numba/numbafunction.c
+    * numba/codegen/llvmwrapper.py
+
+What numba does is it creates a function like this (in C pseudo-code):
+
+.. code-block:: c
+
+    double square(double arg) {
+        return arg * arg;
+    }
+
+and it wraps it as follows:
+
+.. code-block:: c
+
+    PyObject *square_wrapper(PyObject *self, PyObject *args) {
+        double arg;
+
+        if (!PyArg_ParseTuple(args, "d", &arg))
+            return NULL;
+
+        return PyFloat_FromDouble(square(arg));
+    }
+
+The wrapper is a CPython compatible function the likes of which you often
+see in extension modules. It is created by llvmwrapper.py.
+This wrapper is turned into an ``PyCFunctionObject``,
+defined in ``Include/methodobject.h`` in CPython's source tree:
+
+.. code-block:: c
+
+    typedef struct {
+        PyObject_HEAD
+        PyMethodDef *m_ml; /* Description of the C function to call */
+        PyObject    *m_self; /* Passed as 'self' arg to the C func, can be NULL */
+        PyObject    *m_module; /* The __module__ attribute, can be anything */
+    } PyCFunctionObject;
+
+Numba uses a wrapper (a subclass) of ``PyCFunctionObject``, called
+``numbafunction``, which has some extra fields and gives the function a
+more pythonic interface, such as a dict, a way to override ``__doc__``, etc.
+It also has a field to hold a closure frame (see :ref:`closures`).
+
+This function object is created after compilation of the function and its
+wrapper (``square_wrapper``). It is instantiated in
+``llvmwrapper.py:numbafunction_new``, calling ``NumbaFunction_NewEx``.
+
+@jit
+----
+Jit functions are wrapped typically by the ``NumbaFunction`` in
+``numbafunction.c``. The ``NumbaCompiledWrapper`` is only a temporary wrapper
+used in case of a recursive function that is still being compiled, and for
+which we have no pointer.
+
+@autojit
+--------
+Autojit functions are handled by ``NumbaSpecializingWrapper``, which wraps
+a Python function and when called does a lookup in a cache to see if a
+previously compiled version is available. This code in in ``numbawrapper.pyx``.
+
+
+``NumbaSpecializingWrapper`` holds an ``AutojitCache`` which tries to find
+a match very quickly. However, it may not always find a compiled version
+even though it's in the cache, for instance because there are values of
+different Python types which are represented using the same numba type.
+
+This is then corrected by a slower path which tries to compile the function,
+and creates a type for each argument. It uses these types to do a lookup
+in ``numba.functions.FunctionCache``.
+
+classes
+-------
+The story for classes is slightly different. ``@jit`` classes are simply
+turned into a compiled extension type, with compiled methods set as class
+attributes. The ``NumbaFunction`` handles binding to bound or unbound methods.
+
+``@autojit`` classes are wrapped in the same way as autojit functions, but
+with a different compiler entry point that triggers when the wrapper is
+called. The entry point compiles a special version of the extension class,
+and any methods that are not specialized (e.g. because they take further
+arguments than ``self``), are wrapped by wrappers (again
+``NumbaSpecializingWrapper``) that compile a method on call and update the
+method table (the table supporting fast call from numba space).
+
+The only special case are unbound methods, consider the code below::
+
+    from numba import *
+
+    @autojit
+    class A(object):
+        def __init__(self, arg):
+            self.arg = arg
+
+        def add(self, other):
+            return self.arg * other
+
+    print A(10).exttype     # <AutojitExtension A({'arg': int})>
+    print A(10.0).exttype   # <AutojitExtension A({'arg': float64})>
+
+We have two versions of our extension type, one with ``arg = int`` and one
+with ``arg = float64``. Now consider calling ``add`` as an unbound method::
+
+    print A.add(A(10.0), 5.0)   # 50.0
+
+To dispatch from unbound method ``A.add`` of unspecialized class ``A`` to
+specialized method ``A[{'arg':int_}].add``, numba creates a
+``UnboundDelegatingMethod`` defined in ``numba.exttypes.autojitclass``.
+
 Testing
 ~~~~~~~
 Whenever you make changes to the code, you should see what impact this has
