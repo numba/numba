@@ -16,10 +16,12 @@ def _make_bytecode_table(seq):
 if sys.version_info[:2] == (2, 6):  # python 2.6
     BYTECODE_VERSION_SPECIFIC = [
         ('JUMP_IF_FALSE', 2),
+        ('JUMP_IF_TRUE', 2),
     ]
 elif sys.version_info[:2] >= (2, 7):  # python 2.7
     BYTECODE_VERSION_SPECIFIC = [
         ('POP_JUMP_IF_FALSE', 2),
+        ('POP_JUMP_IF_TRUE', 2),
     ]
 BYTECODES = [
     # opname, operandlen

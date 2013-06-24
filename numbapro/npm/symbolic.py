@@ -418,15 +418,30 @@ class SymbolicExecution(object):
         self.ignore_first_pop_top.add(truebr)
         self.ignore_first_pop_top.add(falsebr)
         cmp = self.pop()
-        self._pop_jump_if_false(inst, cmp, truebr, falsebr)
+        self._pop_jump_if(inst, cmp, truebr, falsebr)
+    
+    def visit_JUMP_IF_TRUE(self, inst):
+        falsebr = inst.next
+        truebr = inst.next + inst.arg
+        self.ignore_first_pop_top.add(truebr)
+        self.ignore_first_pop_top.add(falsebr)
+        cmp = self.pop()
+        self._pop_jump_if(inst, cmp, truebr, falsebr)
+
 
     def visit_POP_JUMP_IF_FALSE(self, inst):
         truebr = inst.next
         falsebr = inst.arg
         cmp = self.pop()
-        self._pop_jump_if_false(inst, cmp, truebr, falsebr)
+        self._pop_jump_if(inst, cmp, truebr, falsebr)
 
-    def _pop_jump_if_false(self, inst, cmp, truebr, falsebr):
+    def visit_POP_JUMP_IF_TRUE(self, inst):
+        falsebr = inst.next
+        truebr = inst.arg
+        cmp = self.pop()
+        self._pop_jump_if(inst, cmp, truebr, falsebr)
+    
+    def _pop_jump_if(self, inst, cmp, truebr, falsebr):
         term = Term('Branch', inst,
                     Branch(cmp=cmp, true=truebr, false=falsebr))
         self.terminate(term)
