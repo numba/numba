@@ -660,10 +660,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             # Not a renamed but an alloca'd variable
             return self.load_tbaa(var.lvalue, var.type)
         else:
-            if not node.lineno in self.annotations:
-                self.annotations[node.lineno] = []
-            annotation = Annotation(A_type, (node.name, str(node.type)))
-            self.annotations[node.lineno].append(annotation)
+            if hasattr(node, 'lineno'):
+                if not node.lineno in self.annotations:
+                    self.annotations[node.lineno] = []
+                annotation = Annotation(A_type, (node.name, str(node.type)))
+                self.annotations[node.lineno].append(annotation)
             return var.lvalue
 
     #------------------------------------------------------------------------
