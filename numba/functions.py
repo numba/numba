@@ -82,7 +82,7 @@ def _get_ast(func, flags=0):
         module_ast = compile(source, source_file, "exec",
                              ast.PyCF_ONLY_AST | flags, True)
 
-        lineoffset = func.__code__.co_firstlineno
+        lineoffset = func.__code__.co_firstlineno + decorators - 1
         ast.increment_lineno(module_ast, lineoffset)
 
         assert len(module_ast.body) == 1
