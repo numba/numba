@@ -1736,7 +1736,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         return self.load_tbaa(result, node.type.pointer())
 
     def visit_PointerFromObject(self, node):
-        return self.visit(node.node)
+        result = self.visit(node.node)
+        return self.builder.bitcast(result, node.type.to_llvm())
 
     #------------------------------------------------------------------------
     # Constant Nodes

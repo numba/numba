@@ -62,8 +62,9 @@ do_raise(PyObject *type, PyObject *value, PyObject *tb)
         Py_DECREF(tmp);
     }
 
-    if (PyExceptionClass_Check(type))
+    if (PyExceptionClass_Check(type)) {
         PyErr_NormalizeException(&type, &value, &tb);
+    }
 
     else if (PyExceptionInstance_Check(type)) {
         /* Raising an instance.  The value should be a dummy. */

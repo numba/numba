@@ -461,6 +461,9 @@ class SpecializeLoops(PipelineStage):
                                           env)
         return transform.visit(ast)
 
+class LowerRaise(PipelineStage):
+    def transform(self, ast, env):
+        return self.make_specializer(exceptions.LowerRaise, ast, env).visit(ast)
 
 class LateSpecializer(PipelineStage):
     def transform(self, ast, env):
