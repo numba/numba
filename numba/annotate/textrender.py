@@ -16,7 +16,7 @@ lex = partial(lex_source, output="console")
 
 # ______________________________________________________________________
 
-def render(program, func_call, (func_call_filename, func_call_lineno), emit=sys.stdout.write,
+def render(annotation_blocks, emit=sys.stdout.write,
            intermediate_names=(), inline=True):
     """
     Render a Program as text.
@@ -27,21 +27,26 @@ def render(program, func_call, (func_call_filename, func_call_lineno), emit=sys.
     indent = 8
     emitline = lambda indent, s: emit(u" " * indent + s + u"\n")
     emitter = Emitter(emit, emitline)
-    if program.intermediates:
-        irs = [i for i in program.intermediates if i.name in intermediate_names]
-    else:
-        irs = None
 
-    # Render main source
-    render_source(program.python_source, emitter, indent,
-                  irs if inline and irs else [])
+    for i, block in enumerate(annotation_blocks):
+        python_source = block['python_source']
+        intermediates = block['intermediates']
 
-    if not inline and irs:
-        # Render IRs seperately
-        for irname, linenomap, ir_source in irs:
-            emitter.emitline(0, irname.center(80, "="))
-            render_source(ir_source, emitter, indent, [], linenomap)
-        emitter.emitline(0, "=" * 80)
+        if intermediates:
+            irs = [i for i in intermediates if i.name in intermediate_names]
+        else:
+            irs = None
+
+        # Render main source
+        render_source(python_source, emitter, indent,
+                      irs if inline and irs else [])
+
+        if not inline and irs:
+            # Render IRs seperately
+            for irname, linenomap, ir_source in irs:
+                emitter.emitline(0, irname.center(80, "="))
+                render_source(ir_source, emitter, indent, [], linenomap)
+            emitter.emitline(0, "=" * 80)
 
 def render_source(source, emitter, indent, intermediates, linenomap=None):
     """
