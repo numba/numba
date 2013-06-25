@@ -86,7 +86,7 @@ class CodeGen(object):
             # int -> int
             if destty.bitwidth > ty.bitwidth:
                 op = (self.builder.sext
-                        if destty.is_signed
+                        if ty.is_signed
                         else self.builder.zext)
             else:
                 op = self.builder.trunc
