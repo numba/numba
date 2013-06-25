@@ -2,7 +2,7 @@
 Thanks to Aron Ahmadia
 """
 
-from __future__ import division
+from __future__ import division, print_function
 
 import sys
 import math
@@ -148,8 +148,8 @@ def growcut(image, state, max_iter=20, window_size=3):
         changes = kernel(image, state, state_next, window_radius)
         state_next, state = state, state_next
         #print n, changes
-        print '.',
-    print ''
+        print('.', end='')
+    print('')
     return state_next[:, :, 0]
 
 
