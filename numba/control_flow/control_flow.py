@@ -925,10 +925,11 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
             cond_block.add_child(exit_block)
             else_block = None
 
-        node = nodes.build_if(cond_block=cond_block, test=node.test,
+        new_node = nodes.build_if(cond_block=cond_block, test=node.test,
                               if_block=if_block, body=node.body,
                               else_block=else_block, orelse=node.orelse,
                               exit_block=exit_block)
+        ast.copy_location(new_node, node)
         return self.exit_block(exit_block, node)
 
     def _visit_loop_body(self, node, if_block=None, is_for=None):
@@ -972,7 +973,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         node.test = self.visit(node.test)
 
         self._visit_loop_body(node)
-        return nodes.build_while(**vars(node))
+        return ast.copy_location(nodes.build_while(**vars(node)), node)
 
     def visit_For(self, node):
         # Evaluate iterator in previous block
@@ -992,7 +993,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         node.target, name_assignment = self.mark_assignment(
                     node.target, assignment=None, warn_unused=False)
         self._visit_loop_body(node, if_block=if_block, is_for=True)
-        node = nodes.For(**vars(node))
+        node = ast.copy_location(nodes.For(**vars(node)), node)
         if name_assignment:
             name_assignment.assignment_node = node
         return node

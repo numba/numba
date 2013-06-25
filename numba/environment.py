@@ -7,6 +7,7 @@ import ast as ast_module
 import types
 import logging
 import pprint
+import collections
 
 import llvm.core
 
@@ -71,13 +72,16 @@ default_pipeline_order = default_normalize_order + [
     'ExtensionTypeLowerer',
     'SpecializeFunccalls',
     'SpecializeExceptions',
-    'FixASTLocations',
     'cleanup_symtab',
-    # 'dump_ast',
     'validate_arrays',
+    'dump_ast',
+    'FixASTLocations',
     'CodeGen',
+    'dump_annotations',
+    'dump_llvm',
     'PostPass',
     'LinkingStage',
+    'dump_optimized',
     'WrapperStage',
     'ErrorReporting',
 ]
@@ -161,7 +165,7 @@ class FunctionErrorEnvironment(object):
     enable_post_mortem = TypedProperty(
         bool,
         "Enable post-mortem debugging for the Numba compiler",
-        False,
+        1|False,
     )
 
     collection = TypedProperty(
@@ -363,6 +367,14 @@ class FunctionEnvironment(object):
         'Flag that enables control flow warnings on a per-function level.',
         True)
 
+    annotations = TypedProperty(
+        dict, "Annotation dict { lineno : Annotation }"
+    )
+
+    intermediates = TypedProperty(
+        list, "list of Intermediate objects for annotation",
+    )
+
     warnstyle = TypedProperty(
         str if PY3 else basestring,
         'Warning style, currently available: simple, fancy',
@@ -395,7 +407,7 @@ class FunctionEnvironment(object):
              closures=None, closure_scope=None,
              refcount_args=True,
              ast_metadata=None, warn=True, warnstyle='fancy',
-             typesystem=None, array=None, postpasses=None,
+             typesystem=None, array=None, postpasses=None, annotate=False,
              **kws):
 
         self.parent = parent
@@ -435,6 +447,7 @@ class FunctionEnvironment(object):
         self.llvm_module = (llvm_module if llvm_module
                                  else self.numba.llvm_context.module)
 
+        self._annotate = annotate
         self.wrap = wrap
         self.link = link
         self.llvm_wrapper_func = None
@@ -465,6 +478,8 @@ class FunctionEnvironment(object):
         else:
             self.ast_metadata = metadata.create_metadata_env()
 
+        self.annotations = collections.defaultdict(list)
+        self.intermediates = []
         self.warn = warn
         self.warnstyle = warnstyle
         self.kwargs = kws
@@ -503,6 +518,11 @@ class FunctionEnvironment(object):
         state = self.getstate()
         state.update(kwds)
         return type(self)(**state)
+
+    @property
+    def annotate(self):
+        "Whether we need to annotate the source"
+        return self._annotate or self.numba.cmdopts.get('annotate')
 
     @property
     def func_doc(self):
@@ -777,6 +797,10 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
         globalconstants.LLVMConstantsManager,
         "Holds constant values in an LLVM module.",
         default=globalconstants.LLVMConstantsManager(),
+    )
+
+    cmdopts = TypedProperty(
+        dict, "Dict of command line options from bin/numba.py", {},
     )
 
     # ____________________________________________________________

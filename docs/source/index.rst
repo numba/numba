@@ -39,6 +39,7 @@ Documentation for numba
    :maxdepth: 2
 
    pycc.rst
+   annotate.rst
    type_inference.rst
 
 **Examples:**

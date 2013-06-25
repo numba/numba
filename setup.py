@@ -172,6 +172,7 @@ setup(
             'pycc = numba.pycc:main',
             ]
     },
+    scripts=["bin/numba"],
     package_data={
         '': ['*.md'],
         'numba.minivect': ['include/*'],
@@ -183,6 +184,8 @@ setup(
         'numba.external.utilities': ['*.c', '*.h'],
         'numba': ['*.c', '*.h', 'include/*', '*.pxd'],
         'numba.vectorize': ['*.h'],
+        'numba.annotate': ['annotate_template.html'],
+        'numba.annotate': ['annotate_inline_template.html'],
     },
     ext_modules=extensibletype_extensions + [
         Extension(
