@@ -10,9 +10,17 @@ import sys
 import cgi
 import os
 import re
-from numba.lexing import lex_source
 from .annotate import format_annotations, groupdict, A_c_api
 from .step import Template
+
+try:
+    from pygments import highlight
+    from pygments.lexers import PythonLexer
+    from pygments.lexers import LlvmLexer
+    from pygments.formatters import HtmlFormatter
+    pygments_installed = True
+except ImportError:
+    pygments_installed = False
 
 css = u"""
 <style type="text/css">
@@ -136,7 +144,19 @@ def render(annotation_blocks, emit=sys.stdout.write,
                 ir = intermediates[0].source.linemap[llvm_num]
                 if re.search(py_c_api, ir):
                     python_calls += 1
-                llvm_ir += ir + '<br/>'
+
+                if pygments_installed:
+
+                    class LlvmHtmlFormatter(HtmlFormatter):
+                        def wrap(self, source, outfile):
+                            return self._wrap_code(source)
+                        def _wrap_code(self, source):
+                            for i, t in source:
+                                yield i, t
+
+                    ir = highlight(ir, LlvmLexer(), LlvmHtmlFormatter())
+                       
+                llvm_ir += '<div>' + ir + '</div>'
 
             if python_calls > 0:
                 tag = '*'
@@ -151,7 +171,18 @@ def render(annotation_blocks, emit=sys.stdout.write,
                 firstlastline = 'lastline'
             else:
                 firstlastline = 'innerline'
-           
+
+            if pygments_installed:
+
+                class PythonHtmlFormatter(HtmlFormatter):
+                    def wrap(self, source, outfile):
+                        return self._wrap_code(source)
+                    def _wrap_code(self, source):
+                        for i, t in source:
+                            yield i, t
+
+                source = highlight(source, PythonLexer(), PythonHtmlFormatter())
+               
             data['blocks'][-1]['func_call'] = block['func_call']
             data['blocks'][-1]['func_call_filename'] = block['func_call_filename']
             data['blocks'][-1]['func_call_lineno'] = block['func_call_lineno']

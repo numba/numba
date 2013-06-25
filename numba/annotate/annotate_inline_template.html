@@ -15,8 +15,8 @@ padding: 10px;
 float: left;
 margin-right: 10px;
 border-collapse: collapse;
-color: #ffffff;
-background-color: #666666;
+color: #000000;
+background-color: #eeeeee;
 font-family: monospace;
 }
 
@@ -27,10 +27,12 @@ padding-right: 10px;
 
 .firstline {
 padding-top: 10px;
+border-top: 1px solid #cccccc;
 }
 
 .lastline {
 padding-bottom: 10px;
+border-bottom: 1px solid #cccccc;
 }
 
 .python_code {
@@ -48,7 +50,7 @@ white-space: pre;
 }
 
 .line {
-border:1px solid #666666;
+border:1px solid #eeeeee;
 }
 
 .python_line {
@@ -57,12 +59,74 @@ display: table-row;
 
 .llvm_line {
 display: none;
-background-color: #999999;
+background-color: #ffffff;
 }
 
 .tag {
-color: #ffff33;
+color: #cc3300;
+font-weight: bold;
 }
+
+.c { color: #0099FF; font-style: italic } /* Comment */
+.err { color: #AA0000; background-color: #FFAAAA } /* Error */
+.k { color: #006699; font-weight: bold } /* Keyword */
+.o { color: #555555 } /* Operator */
+.cm { color: #0099FF; font-style: italic } /* Comment.Multiline */
+.cp { color: #009999 } /* Comment.Preproc */
+.c1 { color: #0099FF; font-style: italic } /* Comment.Single */
+.cs { color: #0099FF; font-weight: bold; font-style: italic } /* Comment.Special */
+.gd { background-color: #FFCCCC; border: 1px solid #CC0000 } /* Generic.Deleted */
+.ge { font-style: italic } /* Generic.Emph */
+.gr { color: #FF0000 } /* Generic.Error */
+.gh { color: #003300; font-weight: bold } /* Generic.Heading */
+.gi { background-color: #CCFFCC; border: 1px solid #00CC00 } /* Generic.Inserted */
+.go { color: #AAAAAA } /* Generic.Output */
+.gp { color: #000099; font-weight: bold } /* Generic.Prompt */
+.gs { font-weight: bold } /* Generic.Strong */
+.gu { color: #003300; font-weight: bold } /* Generic.Subheading */
+.gt { color: #99CC66 } /* Generic.Traceback */
+.kc { color: #006699; font-weight: bold } /* Keyword.Constant */
+.kd { color: #006699; font-weight: bold } /* Keyword.Declaration */
+.kn { color: #006699; font-weight: bold } /* Keyword.Namespace */
+.kp { color: #006699 } /* Keyword.Pseudo */
+.kr { color: #006699; font-weight: bold } /* Keyword.Reserved */
+.kt { color: #007788; font-weight: bold } /* Keyword.Type */
+.m { color: #FF6600 } /* Literal.Number */
+.s { color: #CC3300 } /* Literal.String */
+.na { color: #330099 } /* Name.Attribute */
+.nb { color: #336666 } /* Name.Builtin */
+.nc { color: #00AA88; font-weight: bold } /* Name.Class */
+.no { color: #336600 } /* Name.Constant */
+.nd { color: #9999FF } /* Name.Decorator */
+.ni { color: #999999; font-weight: bold } /* Name.Entity */
+.ne { color: #CC0000; font-weight: bold } /* Name.Exception */
+.nf { color: #CC00FF } /* Name.Function */
+.nl { color: #9999FF } /* Name.Label */
+.nn { color: #00CCFF; font-weight: bold } /* Name.Namespace */
+.nt { color: #330099; font-weight: bold } /* Name.Tag */
+.nv { color: #003333 } /* Name.Variable */
+.ow { color: #000000; font-weight: bold } /* Operator.Word */
+.w { color: #bbbbbb } /* Text.Whitespace */
+.mf { color: #FF6600 } /* Literal.Number.Float */
+.mh { color: #FF6600 } /* Literal.Number.Hex */
+.mi { color: #FF6600 } /* Literal.Number.Integer */
+.mo { color: #FF6600 } /* Literal.Number.Oct */
+.sb { color: #CC3300 } /* Literal.String.Backtick */
+.sc { color: #CC3300 } /* Literal.String.Char */
+.sd { color: #CC3300; font-style: italic } /* Literal.String.Doc */
+.s2 { color: #CC3300 } /* Literal.String.Double */
+.se { color: #CC3300; font-weight: bold } /* Literal.String.Escape */
+.sh { color: #CC3300 } /* Literal.String.Heredoc */
+.si { color: #AA0000 } /* Literal.String.Interpol */
+.sx { color: #CC3300 } /* Literal.String.Other */
+.sr { color: #33AAAA } /* Literal.String.Regex */
+.s1 { color: #CC3300 } /* Literal.String.Single */
+.ss { color: #FFCC33 } /* Literal.String.Symbol */
+.bp { color: #336666 } /* Name.Builtin.Pseudo */
+.vc { color: #003333 } /* Name.Variable.Class */
+.vg { color: #003333 } /* Name.Variable.Global */
+.vi { color: #003333 } /* Name.Variable.Instance */
+.il { color: #FF6600 } /* Literal.Number.Integer.Long */
 
 </style>
 
@@ -99,7 +163,7 @@ $(document).ready(function() {
      });
 
      $(".python_line").mouseout(function() {
-        $(this).css("background-color", "#666666");
+        $(this).css("background-color", "#eeeeee");
      });
 });
 
@@ -115,7 +179,7 @@ $(document).ready(function() {
 
 <table class="annotation_table">
     %for line in block['lines']:
-    <tr class="id${line['id']} line python_line"><td class="linenum ${line['firstlastline']} ${line['tag']}">${line['num']}</td><td class="python_code ${line['firstlastline']}" title="${line['types']}">${line['python_source']}</td></tr>
+    <tr class="id${line['id']} line python_line"><td class="linenum ${line['firstlastline']} ${line['tag']}">${line['num']}</td><td class="python_code ${line['firstlastline']} highlight" title="${line['types']}">${line['python_source']}</td></tr>
     <tr class="id${line['id']} line llvm_line"><td>&nbsp;</td><td class="llvm_code">${line['llvm_source']}</td></tr>
     %endfor
 </table>
