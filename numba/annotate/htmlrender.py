@@ -113,13 +113,15 @@ def render(program, (func_call, func_call_filename, func_call_lineno), emit=sys.
 
     for num, python_source in sorted(program.python_source.linemap.items()):
 
-        types = ''
+        types = {}
         if num in program.python_source.annotations.keys():
             for a in program.python_source.annotations[num]:
                 if a.type == 'Types':
                     name = a.value[0]
                     type = a.value[1]
-                    types += '{0}:{1}, '.format(name, type)
+                    types[name] = type
+        
+        types_str = ','.join(name + ':' + type for name, type in types.items())
 
         python_calls = 0
         llvm_nums = program.intermediates[0].linenomap[num]
@@ -149,7 +151,7 @@ def render(program, (func_call, func_call_filename, func_call_lineno), emit=sys.
                               'python_source':python_source,
                               'llvm_source':llvm_source,
                               'colorlevel':level,
-                              'types':types,
+                              'types':types_str,
                               'firstlastline':firstlastline})
 
     html = Template(template).expand(data)

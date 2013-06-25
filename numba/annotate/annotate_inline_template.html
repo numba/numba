@@ -85,7 +85,7 @@ color: ff6666;
 
 $(function() {
     $( document ).tooltip({
-        position: { my: "left", at: "center bottom+10" }
+        position: { my: "left", at: "left bottom+20" }
     });
 });
 
@@ -107,8 +107,14 @@ $(document).ready(function() {
                 $(this).next().next().children(".python_code, .linenum").css("padding-top", "1px");
             }
         }
-        
+     });
 
+     $(".python_line").mouseover(function() {
+        $(this).css("background-color", "#999999");
+     });
+
+     $(".python_line").mouseout(function() {
+        $(this).css("background-color", "#666666");
      });
 });
 
