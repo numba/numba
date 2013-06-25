@@ -140,6 +140,19 @@ class shared(Stub):
         '''
         _description_ = '<array>'
 
+#-------------------------------------------------------------------------------
+# atomic
+
+class atomic(Stub):
+    '''atomic namespace
+    '''
+    _description_ = '<atomic>'
+
+    class add(Stub):
+        '''add(ary, idx, val)
+        
+        Perform atomic ary[idx] += val
+        '''
 
 __all__ = '''
 threadIdx
@@ -149,4 +162,5 @@ gridDim
 grid
 syncthreads
 shared
+atomic
 '''.split()

@@ -1,6 +1,6 @@
 import numpy as np
 from numbapro.npm import types
-from numbapro.npm.typing import (cast_penalty, Restrict, MustBe,
+from numbapro.npm.typing import (cast_penalty, Restrict, MustBe, filter_array,
                                  Conditional, int_set)
 from numbapro.npm.errors import CompileError
 from . import ptx, libdevice
@@ -118,6 +118,42 @@ def rule_shared_array(infer, value):
 
     value.replace(func=ptx.shared.array)
 
+def rule_atomic_add(infer, value):
+    assert not value.args.kws, "does not support keyword args"
+    argvals = list(value.args.args)
+    if len(argvals) != 3:
+        raise TypeError("atomic.add takes exactly 3 args")
+    arg_ary, arg_idx, ary_val = argvals
+    if not isinstance(arg_idx, tuple):
+        arg_idx = (arg_idx,)
+    getvalue = lambda x: x.value
+
+    # normalize the call args
+    value.replace(args=[arg_ary, arg_idx, ary_val], kws=())
+
+    ary = getvalue(arg_ary)
+    idx = map(getvalue, arg_idx)
+    val = getvalue(ary_val)
+
+    infer.rules[ary].add(Restrict(filter_array(infer.possible_types)))
+
+    def is_element_type(val, ary):
+        if ary.is_array:
+            return val == ary.element
+    infer.rules[value].add(Conditional(is_element_type, ary))
+
+    def match_element_type(val, ary):
+        if ary.is_array:
+            return cast_penalty(val, ary.element)
+    infer.rules[val].add(Conditional(match_element_type, ary))
+
+
+    def prefer_intp(idx):
+        return cast_penalty(idx, infer.intp)
+    for i in idx:
+        infer.rules[val].add(Restrict(int_set))
+        infer.rules[val].add(Conditional(prefer_intp))
+    value.replace(func=ptx.atomic.add)
 
 #-------------------------------------------------------------------------------
 
@@ -209,6 +245,8 @@ cudapy_call_typing_ext = {
     ptx.syncthreads:    rule_syncthread,
     # shared
     ptx.shared.array:   rule_shared_array,
+    # atomic
+    ptx.atomic.add:     rule_atomic_add,
 }
 
 cudapy_call_typing_ext.update(numba_cast_ext)

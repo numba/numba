@@ -301,7 +301,7 @@ class Infer(object):
                             if ib in processed_blocks:
                                 possibles[value] = possibles[iv.value]
                                 break
-                    elif value.ref.uses:
+                    else: #if value.ref.uses:
                         # only process the values that are used.
                         depset = set([value])
                         clist = conditions[value]
@@ -361,8 +361,9 @@ class Infer(object):
         # ensure we have only one solution for each value
         soln = {}
         for k, vs in possibles.iteritems():
-            assert len(vs) == 1
-            soln[k] = iter(vs).next()
+            with errors.error_context(k.lineno):
+                assert len(vs) == 1, "cannot unify type %s" % vs
+                soln[k] = iter(vs).next()
 
         # postprocess all PHI nodes and ensure the type matches for all
         # incoming values

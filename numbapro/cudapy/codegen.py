@@ -56,7 +56,7 @@ def cg_grid_macro(cg, value):
         cg.valmap[value] = tidx, tidy
 
 def cg_syncthreads(cg, value):
-    assert value not in cg.typemap, "syncthread() should have no return type"
+    assert cg.typemap.get(value) is None, "syncthread() should have no return type"
     assert not value.args.args, "syncthread() takes no argument"
     fname = 'llvm.nvvm.barrier0'
     fnty = Type.function(Type.void(), ())
@@ -126,6 +126,12 @@ def cg_shared_array(cg, value):
 
     cg.valmap[value] = aryptr
 
+def cg_atomic_add(cg, value):
+    arg_ary, arg_idx, arg_val = value.args.args
+    val = cg.cast(arg_val.value, cg.typemap[arg_ary.value].element)
+    ptr = cg.array_getpointer(arg_ary.value, arg_idx)
+    res = cg.builder.atomic_rmw('add', ptr, val, 'monotonic')
+    cg.valmap[value] = res
 
 #-------------------------------------------------------------------------------
 
@@ -164,6 +170,7 @@ cudapy_call_codegen_ext = {
     ptx.grid:           cg_grid_macro,
     ptx.syncthreads:    cg_syncthreads,
     ptx.shared.array:   cg_shared_array,
+    ptx.atomic.add:     cg_atomic_add,
 }
 
 numba_cast_ext = {

@@ -6,7 +6,7 @@ from .cudadrv.driver import require_context
 from .cudadrv import devicearray, driver
 
 from .cudapy.ptx import (threadIdx, blockIdx, blockDim, gridDim, syncthreads,
-                         shared, grid)
+                         shared, grid, atomic)
 from .cudapy import jit, autojit
 
 # NDarray device helper
