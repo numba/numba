@@ -803,6 +803,10 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
         dict, "Dict of command line options from bin/numba.py", {},
     )
 
+    annotation_blocks = TypedProperty(
+        list, "List of annotation information for different functions."
+    )
+
     # ____________________________________________________________
     # Class members
 
@@ -860,6 +864,7 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
         context.external_library = default_external_library(context)
         context.utility_library = default_utility_library(context)
         self.llvm_context = translate.LLVMContextManager()
+        self.annotation_blocks = []
 
     def link_cbuilder_utilities(self):
         self.context.cbuilder_library = library.CBuilderLibrary()

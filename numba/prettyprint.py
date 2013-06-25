@@ -76,7 +76,13 @@ def dump_annotations(ast, env, fancy):
             func_call_lineno = str(stack[i][1])
             break
 
-    render(p, (func_call, func_call_filename, func_call_lineno), emit=out.write, intermediate_names=["llvm"])
+    env.annotation_blocks.append({'func_call':func_call,
+                                  'func_call_filename':func_call_filename,
+                                  'func_call_lineno':func_call_lineno,
+                                  'python_source':p.python_source,
+                                  'intermediates':p.intermediates})
+
+    render(env.annotation_blocks, emit=out.write, intermediate_names=["llvm"])
 
 @dumppass("dump-llvm")
 def dump_llvm(ast, env, fancy):

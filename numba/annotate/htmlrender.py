@@ -87,7 +87,7 @@ def render_lines(py_source, llvm_intermediate, emit):
              u"style='background-color: #%s'>\n%s</pre>\n" %
                 (lineno, color, lex_source(u"\n".join(llvm_lines), "llvm", "html")))
 
-def render(program, (func_call, func_call_filename, func_call_lineno), emit=sys.stdout.write,
+def render(annotation_blocks, emit=sys.stdout.write,
            intermediate_names=(), inline=True):
     """
     Render a Program as html.
@@ -109,50 +109,56 @@ def render(program, (func_call, func_call_filename, func_call_lineno), emit=sys.
         template = f.read()
 
     py_c_api = re.compile(u'(Py[A-Z][a-z]+_[A-Z][a-z][A-Za-z_]+)\(')
-    data = {'lines': []}
 
-    for num, python_source in sorted(program.python_source.linemap.items()):
+    data = {'blocks': []}
 
-        types = {}
-        if num in program.python_source.annotations.keys():
-            for a in program.python_source.annotations[num]:
-                if a.type == 'Types':
-                    name = a.value[0]
-                    type = a.value[1]
-                    types[name] = type
-        
-        types_str = ','.join(name + ':' + type for name, type in types.items())
+    for block in annotation_blocks:
+        python_source = block['python_source']
+        intermediates = block['intermediates']
+        data['blocks'].append({'lines':[]})
 
-        python_calls = 0
-        llvm_nums = program.intermediates[0].linenomap[num]
-        llvm_source = ''
-        for llvm_num in llvm_nums:
-            source = program.intermediates[0].source.linemap[llvm_num]
-            if re.search(py_c_api, source):
-                python_calls += 1
-            llvm_source += source + '<br/>'
+        for num, source in sorted(python_source.linemap.items()):
 
-        if python_calls > 4:
-            level = 4
-        else:
-            level = python_calls
+            types = {}
+            if num in python_source.annotations.keys():
+                for a in python_source.annotations[num]:
+                    if a.type == 'Types':
+                        name = a.value[0]
+                        type = a.value[1]
+                        types[name] = type
+            
+            types_str = ','.join(name + ':' + type for name, type in types.items())
 
-        if num == program.python_source.linemap.keys()[0]:
-            firstlastline = 'firstline'
-        elif num == program.python_source.linemap.keys()[-1]:
-            firstlastline = 'lastline'
-        else:
-            firstlastline = 'innerline'
-       
-        data['func_call'] = func_call
-        data['func_call_filename'] = func_call_filename
-        data['func_call_lineno'] = func_call_lineno
-        data['lines'].append({'num':num,
-                              'python_source':python_source,
-                              'llvm_source':llvm_source,
-                              'colorlevel':level,
-                              'types':types_str,
-                              'firstlastline':firstlastline})
+            python_calls = 0
+            llvm_nums = intermediates[0].linenomap[num]
+            llvm_ir = ''
+            for llvm_num in llvm_nums:
+                ir = intermediates[0].source.linemap[llvm_num]
+                if re.search(py_c_api, ir):
+                    python_calls += 1
+                llvm_ir += ir + '<br/>'
+
+            if python_calls > 4:
+                level = 4
+            else:
+                level = python_calls
+
+            if num == python_source.linemap.keys()[0]:
+                firstlastline = 'firstline'
+            elif num == python_source.linemap.keys()[-1]:
+                firstlastline = 'lastline'
+            else:
+                firstlastline = 'innerline'
+           
+            data['blocks'][-1]['func_call'] = block['func_call']
+            data['blocks'][-1]['func_call_filename'] = block['func_call_filename']
+            data['blocks'][-1]['func_call_lineno'] = block['func_call_lineno']
+            data['blocks'][-1]['lines'].append({'num':num,
+                                  'python_source':source,
+                                  'llvm_source':llvm_ir,
+                                  'colorlevel':level,
+                                  'types':types_str,
+                                  'firstlastline':firstlastline})
 
     html = Template(template).expand(data)
 

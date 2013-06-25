@@ -7,6 +7,7 @@
 <style>
 
 .meta {
+clear: left;
 padding: 10px;
 }
 
@@ -124,14 +125,20 @@ $(document).ready(function() {
 
 <body>
 
-<div class="meta">${func_call}<br/>${func_call_filename}:${func_call_lineno}</div>
+%for block in blocks:
+
+<div class="meta">${block['func_call']}<br/>${block['func_call_filename']}:${block['func_call_lineno']}</div>
 
 <table class="annotation_table">
-    %for line in lines:
+    %for line in block['lines']:
     <tr class="id${line['num']} line python_line color${line['colorlevel']}"><td class="linenum ${line['firstlastline']}">${line['num']}</td><td class="python_code ${line['firstlastline']}" title="${line['types']}">${line['python_source']}</td></tr>
     <tr class="id${line['num']} line llvm_line"><td>&nbsp;</td><td class="llvm_code">${line['llvm_source']}</td></tr>
     %endfor
 </table>
+
+<div style="clear:left;" /><br/>
+
+%endfor
 
 </body>
 
