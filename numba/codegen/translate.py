@@ -108,7 +108,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         # internal states
         self._nodes = []  # for tracking parent nodes
 
-        if func:
+        if self.env.crnt.annotate:
             import inspect
             source = inspect.getsource(func)
             decorators = 0
@@ -661,7 +661,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             # Not a renamed but an alloca'd variable
             return self.load_tbaa(var.lvalue, var.type)
         else:
-            if hasattr(node, 'lineno'):
+            if self.env.crnt.annotate and hasattr(node, 'lineno'):
                 if not node.lineno in self.annotations:
                     self.annotations[node.lineno] = []
                 annotation = Annotation(A_type, (node.name, str(node.type)))
@@ -942,7 +942,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
                     
             v = LineNumVisitor()
             v.visit(node)
-            if v.lineno > -1:
+            if self.env.crnt.annotate and hasattr(node, 'lineno') and v.lineno > -1:
                 lineno = v.lineno
                 if not lineno in self.annotations:
                     self.annotations[lineno] = []
