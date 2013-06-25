@@ -112,7 +112,7 @@ def render(annotation_blocks, emit=sys.stdout.write,
 
     data = {'blocks': []}
 
-    for block in annotation_blocks:
+    for i, block in enumerate(annotation_blocks):
         python_source = block['python_source']
         intermediates = block['intermediates']
         data['blocks'].append({'lines':[]})
@@ -138,10 +138,12 @@ def render(annotation_blocks, emit=sys.stdout.write,
                     python_calls += 1
                 llvm_ir += ir + '<br/>'
 
-            if python_calls > 4:
-                level = 4
+            if python_calls > 0:
+                tag = '*'
+                tag_css = 'tag'
             else:
-                level = python_calls
+                tag = ''
+                tag_css = ''
 
             if num == python_source.linemap.keys()[0]:
                 firstlastline = 'firstline'
@@ -153,10 +155,11 @@ def render(annotation_blocks, emit=sys.stdout.write,
             data['blocks'][-1]['func_call'] = block['func_call']
             data['blocks'][-1]['func_call_filename'] = block['func_call_filename']
             data['blocks'][-1]['func_call_lineno'] = block['func_call_lineno']
-            data['blocks'][-1]['lines'].append({'num':num,
+            data['blocks'][-1]['lines'].append({'id': str(i) + str(num),
+                                  'num':str(num) + tag,
+                                  'tag':tag_css,
                                   'python_source':source,
                                   'llvm_source':llvm_ir,
-                                  'colorlevel':level,
                                   'types':types_str,
                                   'firstlastline':firstlastline})
 

@@ -60,24 +60,8 @@ display: none;
 background-color: #999999;
 }
 
-.color0 {
-color: #ffffff;
-}
-
-.color1 {
-color: #ffffcc;
-}
-
-.color2 {
-color: #ffcc99;
-}
-
-.color3 {
-color: #ff9966;
-}
-
-.color4 {
-color: ff6666;
+.tag {
+color: #ffff33;
 }
 
 </style>
@@ -131,8 +115,8 @@ $(document).ready(function() {
 
 <table class="annotation_table">
     %for line in block['lines']:
-    <tr class="id${line['num']} line python_line color${line['colorlevel']}"><td class="linenum ${line['firstlastline']}">${line['num']}</td><td class="python_code ${line['firstlastline']}" title="${line['types']}">${line['python_source']}</td></tr>
-    <tr class="id${line['num']} line llvm_line"><td>&nbsp;</td><td class="llvm_code">${line['llvm_source']}</td></tr>
+    <tr class="id${line['id']} line python_line"><td class="linenum ${line['firstlastline']} ${line['tag']}">${line['num']}</td><td class="python_code ${line['firstlastline']}" title="${line['types']}">${line['python_source']}</td></tr>
+    <tr class="id${line['id']} line llvm_line"><td>&nbsp;</td><td class="llvm_code">${line['llvm_source']}</td></tr>
     %endfor
 </table>
 
