@@ -930,7 +930,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
                               else_block=else_block, orelse=node.orelse,
                               exit_block=exit_block)
         ast.copy_location(new_node, node)
-        return self.exit_block(exit_block, node)
+        return self.exit_block(exit_block, new_node)
 
     def _visit_loop_body(self, node, if_block=None, is_for=None):
         """
