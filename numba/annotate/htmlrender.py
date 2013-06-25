@@ -134,7 +134,14 @@ def render(program, (func_call, func_call_filename, func_call_lineno), emit=sys.
             level = 4
         else:
             level = python_calls
-        
+
+        if num == program.python_source.linemap.keys()[0]:
+            firstlastline = 'firstline'
+        elif num == program.python_source.linemap.keys()[-1]:
+            firstlastline = 'lastline'
+        else:
+            firstlastline = 'innerline'
+       
         data['func_call'] = func_call
         data['func_call_filename'] = func_call_filename
         data['func_call_lineno'] = func_call_lineno
@@ -142,7 +149,8 @@ def render(program, (func_call, func_call_filename, func_call_lineno), emit=sys.
                               'python_source':python_source,
                               'llvm_source':llvm_source,
                               'colorlevel':level,
-                              'types':types})
+                              'types':types,
+                              'firstlastline':firstlastline})
 
     html = Template(template).expand(data)
 

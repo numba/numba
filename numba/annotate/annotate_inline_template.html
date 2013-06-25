@@ -12,57 +12,38 @@ margin: 0 auto;
 clear:left;*/
 }
 
-.header {
-background-color: #dddddd;
-}
-
-.header-cell {
-padding: 5px;
-}
-
-table {
-border-collapse: collapse;
-background-color: #666666;
-padding: 5px;
-}
-
 .python-table {
 float: left;
 margin-right: 10px;
-}
-
-.llvm-table {
+border-collapse: collapse;
+background-color: #666666;
 }
 
 .linenum {
 padding-left: 10px;
 padding-right: 10px;
-padding-top: 5px;
-padding-bottom: 5px;
 }
 
-.firstlinenum {
+.firstline {
 padding-top: 10px;
 }
 
-.lastlinenum {
+.lastline {
 padding-bottom: 10px;
 }
 
-.code {
+.python_code {
 padding-left: 10px;
 padding-right: 10px;
-padding-top: 5px;
-padding-bottom: 5px;
 white-space: pre;
 }
 
-.firstcode {
+.llvm_code {
+padding-left: 10px;
+padding-right: 10px;
 padding-top: 10px;
-}
-
-.lastcode {
 padding-bottom: 10px;
+white-space: pre;
 }
 
 .line {
@@ -131,14 +112,21 @@ $(document).ready(function() {
         return "#" + hex(rgb[1]) + hex(rgb[2]) + hex(rgb[3]);
     }
 
-    $(".line").click(function() {
+    $(".line.python").click(function() {
         var this_id = "." + $(this).attr("class").split(" ")[0];
         var llvm_element = $(this_id + ".llvm");
         if (llvm_element.css("display") == "none") {
             llvm_element.css("display", "table-row");
+            $(this).children(".python_code, .linenum").css("padding-bottom", "10px");
+            var temp = $(this).next().children();
+            $(this).next().next().children(".python_code, .linenum").css("padding-top", "10px");
         }
         else {
             llvm_element.css("display", "none");
+            if ($(this).children(".python_code, linenum").attr("class").indexOf("lastline") == -1) {
+                $(this).children(".python_code, .linenum").css("padding-bottom", "1px");
+                $(this).next().next().children(".python_code, .linenum").css("padding-top", "1px");
+            }
         }
         
 
@@ -157,8 +145,8 @@ $(document).ready(function() {
 
 <table class="python-table">
     %for line in lines:
-    <tr class="id${line['num']} line python"><td class="linenum firstlinenum">${line['num']}</td><td class="code firstcode color${line['colorlevel']}" title="${line['types']}">${line['python_source']}</td></tr>
-    <tr class="id${line['num']} line llvm"><td>&nbsp;</td><td class="code firstcode">${line['llvm_source']}</td></tr>
+    <tr class="id${line['num']} line python"><td class="linenum ${line['firstlastline']}">${line['num']}</td><td class="python_code color${line['colorlevel']} ${line['firstlastline']}" title="${line['types']}">${line['python_source']}</td></tr>
+    <tr class="id${line['num']} line llvm"><td>&nbsp;</td><td class="llvm_code">${line['llvm_source']}</td></tr>
     %endfor
 </table>
 
