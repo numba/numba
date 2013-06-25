@@ -10,7 +10,7 @@ import numba
 
 class ExternalFunction(object):
     _attributes = ('func_name', 'arg_types', 'return_type', 'is_vararg',
-                   'check_pyerr_occurred')
+                   'check_pyerr_occurred', 'badval', 'goodval')
     func_name = None
     arg_types = None
     return_type = None

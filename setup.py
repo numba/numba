@@ -201,7 +201,8 @@ setup(
             depends=["numba/external/utilities/type_conversion.c",
                      "numba/external/utilities/virtuallookup.c",
                      "numba/external/utilities/generated_conversions.c",
-                     "numba/external/utilities/generated_conversions.h"]),
+                     "numba/external/utilities/generated_conversions.h",
+                     "numba/external/utilities/cpyutils.c"]),
         CythonExtension(
             name="numba.pyconsts",
             sources=["numba/pyconsts.pyx"],

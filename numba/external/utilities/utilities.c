@@ -15,6 +15,7 @@
 
 #include "type_conversion.c"
 #include "virtuallookup.c"
+#include "cpyutils.c"
 
 #if PY_MAJOR_VERSION >= 3
 static struct PyModuleDef moduledef = {
@@ -52,6 +53,8 @@ PyMODINIT_FUNC PyInit_utilities(void)
     if (export_type_conversion(module) < 0)
         goto error;
     if (export_virtuallookup(module) < 0)
+        goto error;
+    if (export_cpyutils(module) < 0)
         goto error;
 
     goto success; /* done */
