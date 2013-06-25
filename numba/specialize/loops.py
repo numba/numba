@@ -141,9 +141,10 @@ class TransformForIterable(visitors.NumbaTransformer):
             target=node.target,
             body=body, else_body=else_body)
         ast.copy_location(result, node)
-        visitor = missing.FixMissingLocations(node.lineno, node.col_offset,
+        if hasattr(node, 'lineno'):
+            visitor = missing.FixMissingLocations(node.lineno, node.col_offset,
                                               override=True)
-        visitor.visit(result)
+            visitor.visit(result)
 
         #--------------------------------------------------------------------
         # Patch the body and else clause

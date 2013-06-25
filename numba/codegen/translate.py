@@ -108,16 +108,17 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         # internal states
         self._nodes = []  # for tracking parent nodes
 
-        import inspect
-        source = inspect.getsource(func)
-        decorators = 0
-        while not source.lstrip().startswith('def'):
-            decorator, sep, source = source.partition('\n')
-            decorators += 1
+        if func:
+            import inspect
+            source = inspect.getsource(func)
+            decorators = 0
+            while not source.lstrip().startswith('def'):
+                decorator, sep, source = source.partition('\n')
+                decorators += 1
 
-        for argname, argtype in zip(self.argnames, self.func_signature.args):
-            self.annotations[func.__code__.co_firstlineno + decorators] = \
-                [Annotation(A_type, (argname, str(argtype)))]
+            for argname, argtype in zip(self.argnames, self.func_signature.args):
+                self.annotations[func.__code__.co_firstlineno + decorators] = \
+                    [Annotation(A_type, (argname, str(argtype)))]
 
     # ________________________ visitors __________________________
 
