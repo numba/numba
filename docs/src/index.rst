@@ -59,26 +59,6 @@ the GPU with NumbaPro via its Just-In-Time (JIT) compiler::
 
     # Invoke like:  sum[grid_dim, block_dim](big_input_1, big_input_2, result_array)
 
-NumbaPro also supports a higher-level approach for targeting the GPU via the still
-rapidly evolving ComputeUnit (CU) abstraction.  Working with CU involves
-concepts from stream computing interfaces for working with CUDA-capable GPUs.
-As a starting example::
-
-    from numbapro import CU
-    import numpy as np
-
-    def sum(tid, a, b, result):
-        result[tid] = a[tid] + b[tid]
-
-    def execute_sum_on_gpu_via_CU(a, b):
-        assert a.shape == b.shape
-        cu = CU(target='gpu')
-        result = np.zeros_like(a)
-        d_result = cu.output(result)
-        cu.enqueue(sum, ntid=result.size, args=(a, b, result))
-        cu.wait()
-        cu.close()
-        return result
 
 User Guide
 ----------
@@ -94,6 +74,7 @@ CUDA support for GPU execution and a multi-threaded parallel range.
    ufuncs
    generalizedufuncs
    prange
+   CUDAPySpec
    CUDAufunc
    CUDAJit
    cudalib
