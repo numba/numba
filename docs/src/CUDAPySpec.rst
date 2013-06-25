@@ -3,7 +3,7 @@ CUDA Python Specification (v0.1)
 
 (This documents reflects the implementation of CUDA-Python in NumbaPro 0.12.  In time, we may refine the specification.)
 
-As CUDA python is becoming more mature, it has become necessary to define a formal specification for CUDA Python and the mapping to the PTX ISA.  There are places where the semantic of CUDA Python differs from the Python semantic.  The change in semantic is necessary for us to generate high-performance code that is otherwise hard to achieve.
+As CUDA python is becoming more mature, it has become necessary to define a formal specification for CUDA Python and the mapping to the `PTX ISA <http://docs.nvidia.com/cuda/parallel-thread-execution/index.html>`_.  There are places where the semantic of CUDA Python differs from the Python semantic.  The change in semantic is necessary for us to generate high-performance code that is otherwise hard to achieve.
 
 No-Python Mode (NPM)
 ---------------------
@@ -80,6 +80,26 @@ Array attributes are read-only:
 
 ``__setitem__`` stores a value into the array at an index.  The value is coerced if necessary.
 
+CUDA Intrinsics
+-----------------
+
+All intrinsics are defined under the ``numbapro.cuda`` namespace.
+
+Thread ID intrinsics:
+
+* ``cuda.threadIdx.x``, ``cuda.threadIdx.y``, ``cuda.threadIdx.z`` are the X, Y and Z IDs of the thread.
+* ``cuda.blockIdx.x``, ``cuda.blockIdx.y`` are the X and Y ID of the block.
+* ``cuda.blockDim.x``, ``cuda.blockDim.y``, ``cuda.blockDim.z`` are the X, Y and Z width of the thread block.
+* ``cuda.gridDim.x``, ``cuda.gridDim.y`` are the X and Y width of the grid.
+
+Barrier intrinsics:
+
+* ``cuda.syncthreads()`` equivalent to ``__syncthreads()`` in CUDA-C.  It is a thread block level barrier.
+
+Shared memory intrinsics
+
+* ``cuda.shared.array(shape, dtype)``  constructs a statically allocated array in the shared memory of kernel.  ``dtype`` argument must be a type object defined in the ``numbapro`` namespace.  It must be declared in the entry block of the kernel.
+
 Math
 -----
 
@@ -116,3 +136,8 @@ Supported functions::
     math.isnan
     math.isinf
     
+Fast Math
+----------
+
+`coming soon in the next release...`
+
