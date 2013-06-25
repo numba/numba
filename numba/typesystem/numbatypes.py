@@ -3,6 +3,7 @@
 Shorthands for type constructing, promotions, etc.
 """
 from __future__ import print_function, division, absolute_import
+import __future__
 
 import inspect
 
@@ -131,5 +132,6 @@ c16 = complex128
 c32 = complex256
 
 for name, value in list(globals().iteritems()): # TODO: Do this better
-    if not inspect.ismodule(value) and not name.startswith("_"):
+    if (not isinstance(value, __future__ ._Feature) and not
+        inspect.ismodule(value) and not name.startswith("_")):
         __all__.append(name)

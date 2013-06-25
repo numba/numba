@@ -177,12 +177,6 @@ def process_incoming(phi_node):
         phi.add_incoming(incoming_var.lvalue,
                          parent_block.exit_block)
 
-        if phi_node.type.is_array:
-            nodes.update_preloaded_phi(phi_node.variable,
-                                       incoming_var,
-                                       parent_block.exit_block)
-
-
 def handle_phis(flow):
     """
     Update all our phi nodes after translation is done and all Variables
