@@ -1125,8 +1125,9 @@ class TypeInferer(visitors.NumbaTransformer):
         constant_value = self._get_constant_list(node)
         if constant_value is not None:
             constant_value = tuple(constant_value)
-        # TODO: determine element type of node.elts
-        type = typesystem.tuple_(object_, size=len(node.elts))
+            type = numba.typeof(constant_value)
+        else:
+            type = typesystem.tuple_(object_, size=len(node.elts))
         node.variable = Variable(type, is_constant=constant_value is not None,
                                  constant_value=constant_value)
         return node
@@ -1134,8 +1135,10 @@ class TypeInferer(visitors.NumbaTransformer):
     def visit_List(self, node):
         node.elts = self.visitlist(node.elts)
         constant_value = self._get_constant_list(node)
-        # TODO: determine element type of node.elts
-        type = typesystem.list_(object_, size=len(node.elts))
+        if constant_value:
+            type = numba.typeof(constant_value)
+        else:
+            type = typesystem.list_(object_, size=len(node.elts))
         node.variable = Variable(type, is_constant=constant_value is not None,
                                  constant_value=constant_value)
         return node

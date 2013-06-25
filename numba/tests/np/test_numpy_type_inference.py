@@ -78,6 +78,14 @@ def sum_dtype(a, dtype):
 def sum_out(a, out):
     return numba.typeof(np.sum(a, out=out))
 
+# ------------- Basic tests ------------
+
+@autojit
+def array_from_list():
+    ids = np.array([3,4,5])
+    ids2 = ids < 4
+    return ids2
+
 #------------------------------------------------------------------------
 # Tests
 #------------------------------------------------------------------------
@@ -220,6 +228,9 @@ def test_sum():
     equals(sum_dtype(a, np.double), double)
     equals(sum_out(b, a), int32[:]) # Not a valid call to sum :)
 
+def test_basic():
+    assert np.all(array_from_list() == np.array([True, False, False]))
+
 if __name__ == "__main__":
     test_array()
     test_nonzero()
@@ -231,3 +242,4 @@ if __name__ == "__main__":
     test_numba_tensordot()
     test_numba_tensordot2()
     test_sum()
+    test_basic()
