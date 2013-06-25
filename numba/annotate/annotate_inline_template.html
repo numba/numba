@@ -6,17 +6,17 @@
 
 <style>
 
-.block {
-/*width: 500px;
-margin: 0 auto;
-clear:left;*/
+.meta {
+padding: 10px;
 }
 
-.python-table {
+.annotation_table {
 float: left;
 margin-right: 10px;
 border-collapse: collapse;
+color: #ffffff;
 background-color: #666666;
+font-family: monospace;
 }
 
 .linenum {
@@ -47,27 +47,14 @@ white-space: pre;
 }
 
 .line {
-background-color: #666666;
 border:1px solid #666666;
-/*color: rgb(227, 206, 171);*/
-color: #ffffff;
-font-family: monospace;
 }
 
-.meta {
-padding: 10px;
-}
-
-.type {
-/*color: rgb(204, 147, 147);*/
-}
-
-.python {
+.python_line {
 display: table-row;
-background-color: #666666;
 }
 
-.llvm {
+.llvm_line {
 display: none;
 background-color: #999999;
 }
@@ -104,17 +91,9 @@ $(function() {
 
 $(document).ready(function() {
 
-    function rgb2hex(rgb) {
-        rgb = rgb.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
-        function hex(x) {
-            return ("0" + parseInt(x).toString(16)).slice(-2);
-        }
-        return "#" + hex(rgb[1]) + hex(rgb[2]) + hex(rgb[3]);
-    }
-
-    $(".line.python").click(function() {
+    $(".python_line").click(function() {
         var this_id = "." + $(this).attr("class").split(" ")[0];
-        var llvm_element = $(this_id + ".llvm");
+        var llvm_element = $(this_id + ".llvm_line");
         if (llvm_element.css("display") == "none") {
             llvm_element.css("display", "table-row");
             $(this).children(".python_code, .linenum").css("padding-bottom", "10px");
@@ -139,18 +118,14 @@ $(document).ready(function() {
 
 <body>
 
-<div class="block">
-
 <div class="meta">${func_call}<br/>${func_call_filename}:${func_call_lineno}</div>
 
-<table class="python-table">
+<table class="annotation_table">
     %for line in lines:
-    <tr class="id${line['num']} line python"><td class="linenum ${line['firstlastline']}">${line['num']}</td><td class="python_code color${line['colorlevel']} ${line['firstlastline']}" title="${line['types']}">${line['python_source']}</td></tr>
-    <tr class="id${line['num']} line llvm"><td>&nbsp;</td><td class="llvm_code">${line['llvm_source']}</td></tr>
+    <tr class="id${line['num']} line python_line color${line['colorlevel']}"><td class="linenum ${line['firstlastline']}">${line['num']}</td><td class="python_code ${line['firstlastline']}" title="${line['types']}">${line['python_source']}</td></tr>
+    <tr class="id${line['num']} line llvm_line"><td>&nbsp;</td><td class="llvm_code">${line['llvm_source']}</td></tr>
     %endfor
 </table>
-
-</div>
 
 </body>
 
