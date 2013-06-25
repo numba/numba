@@ -19,11 +19,11 @@ from numba import error
 from numba import functions
 from numba import transforms
 from numba import control_flow
-from numba import optimize
 from numba import closures
 from numba import reporting
 from numba import normalize
 from numba import validate
+from numba.array_validation import ArrayValidator
 from numba.viz import cfgviz
 from numba import typesystem
 from numba.codegen import llvmwrapper
@@ -248,6 +248,10 @@ def validate_signature(tree, env):
 
     return tree
 
+def validate_arrays(ast, env):
+    ArrayValidator(env).visit(ast)
+    return ast
+
 def update_signature(tree, env):
     func_env = env.translation.crnt
     func_signature = func_env.func_signature
@@ -445,20 +449,11 @@ class SpecializeSSA(PipelineStage):
         return ast
 
 class SpecializeClosures(SimplePipelineStage):
-
     transformer = closures.ClosureSpecializer
-
 
 class Optimize(PipelineStage):
     def transform(self, ast, env):
         return ast
-
-
-class Preloader(PipelineStage):
-    def transform(self, ast, env):
-        transform = self.make_specializer(optimize.Preloader, ast, env)
-        return transform.visit(ast)
-
 
 class SpecializeLoops(PipelineStage):
     def transform(self, ast, env):

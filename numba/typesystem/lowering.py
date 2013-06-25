@@ -65,6 +65,8 @@ def create_type_lowerer(table, domain, codomain):
 
 def lower_object(domain, codomain, type, params):
     from numba import typedefs # hurr
+    if type.is_array:
+        return codomain.array_(*params)
     return codomain.pointer(typedefs.PyObject_HEAD)
 
 def lower_string(domain, codomain, type, params):
@@ -97,10 +99,6 @@ def lower_complex(domain, codomain, type, params):
     base_type, = params
     return codomain.struct_([('real', base_type), ('imag', base_type)])
 
-def lower_array(domain, codomain, type, params):
-    from numba import typedefs
-    return codomain.pointer(typedefs.PyArray)
-
 def lower_to_pointer(domain, codomain, type, params):
     return codomain.pointer(params[0])
 
@@ -113,7 +111,7 @@ default_numba_lowering_table = {
     # parametrized types
     "function":         lower_function,
     "complex":          lower_complex,
-    "array":            lower_array,
+    # "array":            lower_array,
     "string":           lower_string,
     # "carray":           lower_to_pointer,
     "sized_pointer":    lower_to_pointer,
