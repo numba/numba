@@ -4,7 +4,7 @@
 >>> tuple_unpacking_error(2)
 Traceback (most recent call last):
     ...
-NumbaError: ...: Only NumPy attributes and list or tuple literals can currently be unpacked
+NumbaError: ...: Cannot unpack value of type int
 """
 
 from __future__ import print_function, division, absolute_import

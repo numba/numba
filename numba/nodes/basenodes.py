@@ -94,7 +94,7 @@ class CloneableNode(ExprNode):
         super(CloneableNode, self).__init__(**kwargs)
         self.node = node
         self.clone_nodes = []
-        self.type = node.type
+        self.type = getattr(node, 'type', None) or node.variable.type
 
     @property
     def clone(self):
