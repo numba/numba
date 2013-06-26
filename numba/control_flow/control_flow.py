@@ -1068,8 +1068,6 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         return node
 
     def visit_Raise(self, node):
-        raise error.NumbaError(node, "Raise statement not implemented yet")
-
         self.visitchildren(node)
         if self.flow.exceptions:
             self.flow.block.add_child(self.flow.exceptions[-1].entry_point)
