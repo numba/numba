@@ -65,6 +65,7 @@ BOOLOP_MAP = {
 
 UNARYOP_MAP = {
     '~': 'UnaryOp',
+    'not': 'UnaryOp',
 }
 
 OP_MAP = dict()
@@ -635,6 +636,9 @@ class SymbolicExecution(object):
 
     def visit_UNARY_INVERT(self, inst):
         self.visit_generic_unary('~', inst)
+
+    def visit_UNARY_NOT(self, inst):
+        self.visit_generic_unary('not', inst)
 
 
 #############################################################################

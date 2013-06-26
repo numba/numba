@@ -286,8 +286,14 @@ class CodeGen(object):
         finalty = self.typemap[expr]
         operand = expr.args.value.value
         ity = self.typemap[operand]
-        res = INT_UNARY_OPMAP[expr.kind](self.builder, self.valmap[operand])
-        self.valmap[expr] = self.do_cast(res, ity, finalty)
+        if expr.kind == 'not':
+            assert finalty.is_int and finalty.bitwidth == 1
+            pred = self._do_compare('==', ity, self.valmap[operand],
+                                    self.define_const(ity, 0))
+            self.valmap[expr] = pred
+        elif ity.is_int:
+            res = INT_UNARY_OPMAP[expr.kind](self.builder, self.valmap[operand])
+            self.valmap[expr] = self.do_cast(res, ity, finalty)
 
     def expr_For(self, expr):
         index = expr.args.index.value
@@ -617,6 +623,7 @@ INT_OPMAP  = {
 
 INT_UNARY_OPMAP = {
     '~': integer_invert,
+    'not': integer_invert,
 }
 
 FLOAT_OPMAP = {

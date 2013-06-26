@@ -545,17 +545,14 @@ class Infer(object):
 
     def visit_UnaryOp(self, value):
         operand = value.args.value.value
-        self.depmap[value] |= set([operand])
         if value.kind == '~':
-            self.rules[lhs].add(Restrict(int_set))
-            self.rules[rhs].add(Restrict(int_set))
-            self.rules[value].add(Restrict(int_set))
+            self.rules[operand].add(Restrict(int_set|bool_set))
+            self.rules[value].add(Restrict(int_set|bool_set))
+        elif value.kind == 'not':
+            self.rules[operand].add(Restrict(int_set|bool_set|float_set))
+            self.rules[value].add(Restrict(bool_set))
         else:
-            operand_set = int_set | float_set
-            self.rules[lhs].add(Restrict(operand_set))
-            self.rules[rhs].add(Restrict(operand_set))
-            self.rules[value].add(Restrict(operand_set))
-
+            raise Exception('unhandled unary %s' % value.kind)
 
     def visit_Phi(self, value):
         incs = [inc.value for bb, inc in value.args.incomings]

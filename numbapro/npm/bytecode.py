@@ -40,6 +40,7 @@ BYTECODES = [
     ('BINARY_RSHIFT', 0),
     ('BREAK_LOOP', 0),
     ('UNARY_INVERT', 0),
+    ('UNARY_NOT', 0),
     ('BUILD_TUPLE', 2),
     ('CALL_FUNCTION', 2),
     ('COMPARE_OP', 2),
