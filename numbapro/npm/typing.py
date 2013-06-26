@@ -104,6 +104,13 @@ class ArrayType(namedtuple('ArrayType', ['element', 'ndim', 'order'])):
     def __repr__(self):
         return '[%s x %s %s]' % (self.element, self.ndim, self.order)
 
+    def compatible_with(self, arg):
+        if arg.is_array:
+            return (self.element == arg.element and
+                    (arg.order == 'A' or self.order == arg.order) and
+                    self.ndim == arg.ndim)
+        return False
+
 class TupleType(namedtuple('TupleType', ['element', 'count'])):
     is_tuple = True
     is_scalar = False
@@ -332,6 +339,8 @@ class Infer(object):
 
                         chosen_sorted = sorted(chosen)
                         if not chosen_sorted:
+                            print value
+                            print chosen_sorted
                             raise TypeError("cannot resolve type")
                         best_score = chosen_sorted[0][0]
                         take_filter = lambda x: x[0] == best_score
@@ -640,9 +649,16 @@ class Infer(object):
                     raise TypeInferError(value, msg % msgargs)
 
                 for aval, aty in zip(args, argtys):
-                    self.rules[aval].add(Conditional(can_cast_to(aty)))
+                    if aty.is_scalar:
+                        self.rules[aval].add(Conditional(can_cast_to(aty)))
+                    elif aty.is_array:
+                        def compatible_array(val, arg):
+                            if val.is_array and arg.is_array:
+                                return val.compatible_with(arg)
+                        self.rules[aval].add(Conditional(compatible_array, aval))
 
-                self.rules[value].add(MustBe(retty))
+                if retty:
+                    self.rules[value].add(MustBe(retty))
             value.replace(func=obj)
         else:
             callrule = self.callrules[obj]

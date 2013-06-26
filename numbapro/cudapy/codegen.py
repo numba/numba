@@ -113,7 +113,7 @@ def cg_shared_array(cg, value):
 
     strides_raw = [reduce(operator.mul, shape[i + 1:], 1)
                    for i in range(len(shape))]
-    strides = [cg.builder.mul(cg.sizeof(cg.typesetter.intp), const_intp(s))
+    strides = [cg.builder.mul(cg.sizeof(elemtype), const_intp(s))
                for s in strides_raw]
 
     cstrides = Constant.array(cg.typesetter.llvm_intp, strides)

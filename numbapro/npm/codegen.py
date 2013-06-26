@@ -82,7 +82,13 @@ class CodeGen(object):
         if ty == destty:  # same type
             return lval
 
-        if ty.is_int and destty.is_int:
+        if ty.is_array:
+            assert ty.compatible_with(destty), ('incompatible array %s -> %s' %
+                                                (ty, destty))
+            print lval
+            return lval
+
+        elif ty.is_int and destty.is_int:
             # int -> int
             if destty.bitwidth > ty.bitwidth:
                 op = (self.builder.sext
