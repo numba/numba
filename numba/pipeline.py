@@ -28,7 +28,7 @@ from numba.viz import cfgviz
 from numba import typesystem
 from numba.codegen import llvmwrapper
 from numba import ast_constant_folding as constant_folding
-from numba.control_flow import ssa
+from numba.control_flow import ssa, cfstats
 from numba.codegen import translate
 from numba import utils
 from numba.missing import FixMissingLocations
@@ -419,6 +419,44 @@ class TransformFor(PipelineStage):
         transform = self.make_specializer(loops.TransformForIterable, ast,
                                           env)
         return transform.visit(ast)
+
+#----------------------------------------------------------------------------
+# Prange
+#----------------------------------------------------------------------------
+
+def run_prange(name):
+    def wrapper(ast, env):
+        from numba import parallel
+        stage = getattr(parallel, name)
+        return PipelineStage().make_specializer(stage, ast, env).visit(ast)
+
+    wrapper.__name__ = name
+    return wrapper
+
+ExpandPrange = run_prange('PrangeExpander')
+RewritePrangePrivates = run_prange('PrangePrivatesReplacer')
+CleanupPrange = run_prange('PrangeCleanup')
+
+
+class UpdateAttributeStatements(PipelineStage):
+    def transform(self, ast, env):
+        func_env = env.translation.crnt
+
+        for block in func_env.flow.blocks:
+            stats = []
+            for cf_stat in block.stats:
+                if isinstance(cf_stat, cfstats.AttributeAssignment):
+                    value = cf_stat.lhs.value
+                    if (isinstance(value, ast_module.Name) and
+                                value.id in func_env.kill_attribute_assignments):
+                        cf_stat = None
+
+                if cf_stat:
+                    stats.append(cf_stat)
+
+            block.stats = stats
+
+        return ast
 
 #----------------------------------------------------------------------------
 # Specializing/Lowering Transforms
