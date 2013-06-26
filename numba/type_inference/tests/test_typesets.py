@@ -16,7 +16,8 @@ def typeset_matching():
 
     assert ts.find_match(promote, [float_, float_]) == s(float_)
     assert ts.find_match(promote, [float_, double]) == s(double)
-    assert ts.find_match(promote, [longdouble, float_]) == s(longdouble)
+    assert ts.find_match(promote, [longdouble, float_]) in (s(longdouble),
+                                                            s(double))
 
     assert ts.find_match(promote, [int_, int_]) == s(int_)
     # assert ts.find_match(promote, [int_, longlong]) == s(longlong)
