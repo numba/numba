@@ -20,8 +20,8 @@ class LowerRaise(visitors.NumbaTransformer):
 
     def visit_Raise(self, node):
         # Create void * temporaries
-        args = []
-        for arg in  [node.type, node.inst, node.tback]:
+        args = [] # Type, Value, Traceback, Cause
+        for arg in [node.type, node.inst, node.tback, None]:
             if arg:
                 arg = nodes.CoercionNode(arg, object_)
                 arg = nodes.PointerFromObject(arg)
@@ -34,7 +34,7 @@ class LowerRaise(visitors.NumbaTransformer):
         set_exc = function_util.utility_call(
             self.context,
             self.llvm_module,
-            'do_raise', args)
+            'Raise', args)
 
         result = self.visit(set_exc)
         return result
