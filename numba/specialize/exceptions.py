@@ -10,6 +10,36 @@ logger = logging.getLogger(__name__)
 from numba.typesystem import is_obj
 
 #------------------------------------------------------------------------
+# 'raise'
+#------------------------------------------------------------------------
+
+class LowerRaise(visitors.NumbaTransformer):
+    """
+    Resolve the 'raise' statement.
+    """
+
+    def visit_Raise(self, node):
+        # Create void * temporaries
+        args = [] # Type, Value, Traceback, Cause
+        for arg in [node.type, node.inst, node.tback, None]:
+            if arg:
+                arg = nodes.CoercionNode(arg, object_)
+                arg = nodes.PointerFromObject(arg)
+            else:
+                arg = nodes.NULL
+
+            args.append(arg)
+
+        # Call numba/external/utitilies/cpyutils.c:do_raise()
+        set_exc = function_util.utility_call(
+            self.context,
+            self.llvm_module,
+            'Raise', args)
+
+        result = self.visit(set_exc)
+        return result
+
+#------------------------------------------------------------------------
 # Specialize Error Checking and Raising
 #------------------------------------------------------------------------
 
@@ -100,7 +130,7 @@ class ExceptionSpecializer(visitors.NumbaTransformer):
     # Exception Raising
     #------------------------------------------------------------------------
 
-    def _raise_exception(self, body, node):
+    def _raise_exception(self, node):
         if node.exc_type:
             assert node.exc_msg
 
@@ -117,9 +147,11 @@ class ExceptionSpecializer(visitors.NumbaTransformer):
                                                          'PyErr_SetString',
                                                          args=args)
 
-            body.append(raise_node)
+            return [raise_node]
+        return []
 
-    def _trap(self, body, node):
+    def _trap(self, node):
+        body = []
         if node.exc_msg and node.print_on_trap:
             pos = error.format_pos(node)
             if node.exception_type:
@@ -138,14 +170,12 @@ class ExceptionSpecializer(visitors.NumbaTransformer):
 
         trap = nodes.LLVMIntrinsicNode(signature=void(), args=[],
                                        func_name='TRAP')
-        body.append(trap)
+        return body + [trap]
 
     def visit_RaiseNode(self, node):
-        body = []
         if self.nopython:
-            self._trap(body, node)
+            result = self._trap(node)
         else:
-            self._raise_exception(body, node)
+            result = self._raise_exception(node)
 
-        body.append(nodes.PropagateNode())
-        return ast.Suite(body=body)
+        return ast.Suite(body=result + [nodes.PropagateNode()])

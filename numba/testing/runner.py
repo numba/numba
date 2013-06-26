@@ -20,6 +20,8 @@ EXCLUDE_TEST_PACKAGES = [
     "numba.pyextensibletype",
     "numba.tests.broken_issues",
 ]
+if PY3:
+    EXCLUDE_TEST_PACKAGES.append("numba.tests.py2x")
 
 def make_path(root, predicate):
     "Call the predicate with a file path (e.g. numba/test/foo.py)"

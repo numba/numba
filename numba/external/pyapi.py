@@ -107,6 +107,10 @@ class PyErr_Occurred(ExternalFunction):
 class PyErr_Clear(ExternalFunction):
     arg_types = []
     return_type = void
+
+class PyErr_SetObject(ExternalFunction):
+    arg_types = [object_, object_]
+    return_type = void
 #
 ### Object conversions to native types
 #

@@ -60,6 +60,10 @@ void_pp = void_p.pointer()
 utility_funcs = list(object_to_numeric.itervalues()) + [
     UtilityFunction.load(
         "lookup_method", void_p(void_pp, uint64, char.pointer())),
+    UtilityFunction.load(
+        "Raise", int_(*[void_p] * 4),
+        badval=-1,
+    ),
 ]
 
 def default_utility_library(context):
