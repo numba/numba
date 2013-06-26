@@ -3,7 +3,7 @@ import ctypes
 
 from numba import *
 
-@autojit(backend='ast', nopython=True)
+@autojit(nopython=True)
 def call_ctypes_func(func, value):
     return func(value)
 

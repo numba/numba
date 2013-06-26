@@ -66,7 +66,7 @@ type_sizes = {
     # "float16":      2,
     "float32":      4,
     "float64":      8,
-    "float128":     16,
+    # "float128":     16,
     "float":        4,
     "double":       8,
     # Complex
@@ -76,6 +76,8 @@ type_sizes = {
 }
 
 ctypes_npy_intp = np.empty(0).ctypes.strides._type_
+
+sizeof_longdouble = np.dtype(np.longdouble).itemsize # Use numpy's opinion here
 
 native_sizes = {
     "char":         1,
@@ -95,7 +97,11 @@ native_sizes = {
     "size_t":       getsize('c_size_t', _plat_bits // 8),
     "Py_uintptr_t": ctypes.sizeof(ctypes.c_void_p),
     # Float
-    "longdouble":   ctypes.sizeof(ctypes.c_longdouble),
+    # ctypes and numpy may disagree on longdouble
+    "longdouble":   sizeof_longdouble,
+    "float128":     sizeof_longdouble,
+    # Complex
+    "complex256":   sizeof_longdouble * 2,
     # Pointer
     "pointer":      ctypes.sizeof(ctypes.c_void_p),
 }
