@@ -117,5 +117,5 @@ class AST3to2(ast.NodeTransformer):
     def visit_Raise(self, node):
         if node.cause:
             raise error.NumbaError(node, "Cause to 'raise' not supported")
-        newnode = Raise(type=None, inst=node.exc, tback=None)
+        newnode = Raise(type=node.exc, inst=None, tback=None)
         return ast.copy_location(newnode, node)
