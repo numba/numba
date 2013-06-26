@@ -25,6 +25,11 @@ class With(ast.stmt):
     _fields = ['context_expr', 'optional_vars', 'body']
 
 
+class Raise(ast.stmt):
+    """Py2 compatible Raise node"""
+
+    _fields = ['type', 'inst', 'tback']
+
 class AST3to2(ast.NodeTransformer):
 
     def _visit_list(self, alist):
@@ -108,3 +113,9 @@ class AST3to2(ast.NodeTransformer):
 
         self.generic_visit(node)
         return node
+
+    def visit_Raise(self, node):
+        if node.cause:
+            raise error.NumbaError(node, "Cause to 'raise' not supported")
+        newnode = Raise(type=None, inst=node.exc, tback=None)
+        return ast.copy_location(newnode, node)
