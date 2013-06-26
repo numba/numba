@@ -47,12 +47,17 @@ def unary_bool_math(infer, call, obj):
     infer.rules[operand].add(Restrict(float_set))
     call.replace(func=obj) # normalize
 
-def binary_math(infer, call, obj):
+def binary_math(infer, call, obj, integer=False):
     args = unpack_args(call)
     if len(args) != 2:
         raise TypeError("%s takes exactly two arguments" % obj)
     (op1, op2) = args
-    infer.rules[call].add(Restrict(float_set))
+    if integer:
+        rtset = int_set | float_set
+    else:
+        rtset = float_set
+
+    infer.rules[call].add(Restrict(rtset))
     infer.rules[call].add(Conditional(matches_binary, op1, op2))
     infer.rules[op1].add(Restrict(int_set|float_set))
     infer.rules[op2].add(Restrict(int_set|float_set))
@@ -123,7 +128,7 @@ def rule_infer_sqrt(infer, call):
     unary_math(infer, call, math.sqrt)
 
 def rule_infer_pow(infer, call):
-    binary_math(infer, call, math.pow)
+    binary_math(infer, call, math.pow, integer=True)
 
 def rule_infer_ceil(infer, call):
     unary_math(infer, call, math.ceil)
@@ -359,7 +364,21 @@ def cg_sqrt(cg, call):
 
 def cg_pow(cg, call):
     dispatch = {float64: '__nv_pow', float32: '__nv_powf'}
-    cg_math_binary(cg, call, dispatch)
+    restype = cg.typemap[call]
+    (a, b) = unpack_args(call)
+    if cg.typemap[b].is_int:
+        # handle integer power differently
+        a = cg.cast(a, float64)
+        b = cg.cast(b, int32)
+        fname = '__nv_powi'
+        types = [cg.to_llvm(t) for t in [float64, float64, int32]]
+        lres, largs = types[0], types[1:]
+        func = cg.lmod.get_or_insert_function(Type.function(lres, largs),
+                                              name=fname)
+        res = cg.builder.call(func, [a, b])
+        cg.valmap[call] = cg.do_cast(res, float64, restype)
+    else:
+        cg_math_binary(cg, call, dispatch)
 
 def cg_ceil(cg, call):
     dispatch = {float64: '__nv_ceil', float32: '__nv_ceilf'}
