@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
+
+import sys
+import traceback
 import unittest
+
 from numba import autojit
 
 # ______________________________________________________________________
@@ -8,6 +12,13 @@ from numba import autojit
 
 class SpecialException(Exception):
     pass
+
+def make_tb():
+    try:
+        raise SpecialException # hee hee hee
+    except:
+        type, val, tb = sys.exc_info()
+        return tb
 
 # ______________________________________________________________________
 
@@ -34,6 +45,7 @@ class TestRaise(unittest.TestCase):
     def test_raise(self):
         self._assert_raises(raise1, [])
         self._assert_raises(raise2, ["hello"])
+
 
 if __name__ == "__main__":
     unittest.main()
