@@ -592,7 +592,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         """
         if not var.renameable:
             # Stack allocated variable
-            var = self.builder.load(value)
+            value = self.builder.load(value)
 
         var.ndarray = self.ndarray(value, var.type)
 

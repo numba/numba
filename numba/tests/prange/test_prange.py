@@ -227,7 +227,6 @@ def test_test_prange_in_closure2():
             sum = 100.0
             for i in numba.prange(N):
                 for j in range(N):
-                    print((i * N + j) * x)
                     sum += (i * N + j) * x
             return sum
         return inner
