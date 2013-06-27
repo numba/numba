@@ -4,6 +4,7 @@ import ast
 import textwrap
 
 import numba
+from numba import missing
 from numba import *
 from numba import error
 from numba import typesystem
@@ -38,7 +39,7 @@ def make_while_loop(flow_node):
     while_node = nodes.While(test=flow_node.test,
                              body=flow_node.body,
                              orelse=flow_node.orelse)
-    return while_node
+    return ast.copy_location(while_node, flow_node)
 
 def copy_basic_blocks(flow_node_src, flow_node_dst):
     "Copy cfg basic blocks from one flow node to another"
@@ -54,7 +55,7 @@ def make_while_from_for(for_node):
                              orelse=for_node.orelse)
     copy_basic_blocks(for_node, while_node)
     while_node = nodes.build_while(**vars(while_node))
-    return while_node
+    return ast.copy_location(while_node, for_node)
 
 
 #------------------------------------------------------------------------
@@ -139,6 +140,11 @@ class TransformForIterable(visitors.NumbaTransformer):
             temp=temp.store(), temp_load=temp.load(),
             target=node.target,
             body=body, else_body=else_body)
+        ast.copy_location(result, node)
+        if hasattr(node, 'lineno'):
+            visitor = missing.FixMissingLocations(node.lineno, node.col_offset,
+                                              override=True)
+            visitor.visit(result)
 
         #--------------------------------------------------------------------
         # Patch the body and else clause

@@ -6,6 +6,7 @@ define the transformations and the order in which they run on the AST.
 from __future__ import print_function, division, absolute_import
 
 import os
+import sys
 import ast as ast_module
 import logging
 import pprint
@@ -34,6 +35,8 @@ from numba import utils
 from numba.missing import FixMissingLocations
 from numba.type_inference import infer as type_inference
 from numba.asdl import schema
+from numba.prettyprint import (dump_ast, dump_cfg, dump_annotations,
+                               dump_llvm, dump_optimized)
 import numba.visitors
 
 from numba.specialize import comparisons
@@ -311,21 +314,6 @@ def create_lfunc3(tree, env):
 
 # ______________________________________________________________________
 
-def dump_ast(ast, env):
-    # astviz.render_ast(ast, os.path.expanduser("~/ast.dot"))
-    return ast
-
-def dump_cfg(ast, env):
-    # dotfile = env.crnt.cfdirectives['control_flow.dot_output']
-    # cfgviz.render_cfg(env.crnt.cfg, dotfile)
-    # for block in env.crnt.cfg.blocks:
-    #     print(block)
-    #     print("    ", block.parents)
-    #     print("    ", block.children)
-    return ast
-
-# ______________________________________________________________________
-
 class ValidateASTStage(PipelineStage):
     def transform(self, ast, env):
         validate.ValidateAST().visit(ast)
@@ -539,10 +527,10 @@ def cleanup_symtab(ast, env):
 
 class FixASTLocations(PipelineStage):
     def transform(self, ast, env):
-        fixer = self.make_specializer(FixMissingLocations, ast, env)
-        fixer.visit(ast)
+        lineno = getattr(ast, 'lineno', 1)
+        col_offset = getattr(ast, 'col_offset', 1)
+        FixMissingLocations(lineno, col_offset).visit(ast)
         return ast
-
 
 class CodeGen(PipelineStage):
     def transform(self, ast, env):

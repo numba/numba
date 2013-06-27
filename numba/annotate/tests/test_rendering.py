@@ -2,8 +2,9 @@
 from __future__ import print_function, division, absolute_import
 
 from io import StringIO
-from numba.annotate.annotate import (Source, Annotation, Intermediate, Program,
-                                     A_type, render_text, Renderer)
+from numba.annotate import render_text
+from numba.annotate.annotate import (Source, Annotation, SourceIntermediate,
+                                     Program, A_type)
 
 # ______________________________________________________________________
 
@@ -16,29 +17,23 @@ py_source = Source(
                       Annotation(A_type, (u'b', u'double'))] }
 )
 
-class LLVMRenderer(Renderer):
-    capabilities = frozenset(["source"])
-
-    def render(self, capability):
-        linenomap = { 1: [0], 2: [1, 2, 3], 4: [5], }
-        llvm_linemap = {
-            0: u'call @printf(%a, %b)',
-            1: u'%0 = load a',
-            2: u'%1 = load b',
-            3: u'%2 = fadd %0 %1',
-            4: u'%3 = fdiv %a %b',
-            5: u'ret something',
-        }
-        annotations = {
-            3: [Annotation(A_type, (u'%0', u'double')),
-                Annotation(A_type, (u'%1', u'double'))],
-        }
-
-        return linenomap, Source(llvm_linemap, annotations)
-
-
-llvm_intermediate = Intermediate("llvm", LLVMRenderer())
-p = Program(py_source, [llvm_intermediate])
+linenomap = { 1: [0], 2: [1, 2, 3], 4: [5], }
+llvm_linemap = {
+    0: u'call @printf(%a, %b)',
+    1: u'%0 = load a',
+    2: u'%1 = load b',
+    3: u'%2 = fadd %0 %1',
+    4: u'%3 = fdiv %a %b',
+    5: u'ret something',
+}
+annotations = {
+    3: [Annotation(A_type, (u'%0', u'double')),
+        Annotation(A_type, (u'%1', u'double'))],
+}
+llvm_intermediate = SourceIntermediate("llvm", linenomap,
+                                       Source(llvm_linemap, annotations))
+# p = Program(py_source, [llvm_intermediate])
+p = [{'python_source': py_source, 'intermediates': [llvm_intermediate]}]
 
 # ______________________________________________________________________
 
