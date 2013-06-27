@@ -17,25 +17,30 @@ else:
 
 # ______________________________________________________________________
 
-lexers = {
-    "python": PythonLexer,
-    "llvm": LlvmLexer,
-}
+if pygments:
 
-formatters = {
-    "html": HtmlFormatter,
-    "console": partial(TerminalFormatter, bg=config.terminal_background),
-}
+    lexers = {
+        "python": PythonLexer,
+        "llvm": LlvmLexer,
+    }
 
-def lex_source(code, lexer="python", output='html', inline_css=True):
-    """
-    >>> lex_source("print 'hello world'", "python", "html")
-    <div ...> ... </div>
-    """
-    if not config.colour:
-        return code
+    formatters = {
+        "html": HtmlFormatter,
+        "console": partial(TerminalFormatter, bg=config.terminal_background),
+    }
 
-    Lexer = lexers[lexer]
-    Formatter = formatters[output]
-    result = highlight(code, Lexer(), Formatter(noclasses=inline_css))
-    return result.rstrip()
+    def lex_source(code, lexer="python", output='html', inline_css=True):
+        """
+        >>> lex_source("print 'hello world'", "python", "html")
+        <div ...> ... </div>
+        """
+        if not config.colour:
+            return code
+
+        Lexer = lexers[lexer]
+        Formatter = formatters[output]
+        result = highlight(code, Lexer(), Formatter(noclasses=inline_css))
+        return result.rstrip()
+
+else:
+    lex_source = lambda code, *args, **kwargs: code
