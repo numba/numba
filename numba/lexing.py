@@ -7,7 +7,7 @@ from numba.config import config
 
 try:
     import pygments
-except ImportError, e:
+except ImportError as e:
     warnings.warn("Pygments not installed")
     pygments = None
 else:
