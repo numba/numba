@@ -259,6 +259,15 @@ Package Structure
 
     Format ASTs and CFGs with graphviz. See also the 'annotate' branch
 
+* numba/minivect
+
+    Array expression compiler. ``numba.array_expressions`` is the only
+    remaining module depending on this. However, since none of the
+    optimizations are actually used, it doens't make sense to keep this.
+    Instead we can use the ``loop_nest`` function from the lair project.
+
+    More on how the array expressions work: :ref:`arrayexprs`
+
 .. _dependence:
 
 Type Dependence Graph Construction
@@ -641,6 +650,68 @@ with ``arg = float64``. Now consider calling ``add`` as an unbound method::
 To dispatch from unbound method ``A.add`` of unspecialized class ``A`` to
 specialized method ``A[{'arg':int_}].add``, numba creates a
 ``UnboundDelegatingMethod`` defined in ``numba.exttypes.autojitclass``.
+
+.. _arrayexprs:
+
+Array Expressions
+~~~~~~~~~~~~~~~~~
+Array expressions live in ``numba.array_expressions``. Array expressions
+roughly work as follows:
+
+    * Detect array expressions (``ArrayExpressionRewrite``)
+
+        This code finds a maximal sub-expression that operates on arrays,
+        e.g. ``A + B * C``. These expressions are captured via
+        ``register_array_expression``.
+
+    * The registered expression is extracted using ``get_py_ufunc_ast``.
+      This function traverses the subexpression and does the following:
+
+        - demote types from arrays to scalars
+        - register any non-array sub-expression of our expression as an
+          operand. More on this below.
+
+    * Compile the extracted sub-expression as a seprate function
+    * Generate a loop nest using minivect that calls this compiled function
+
+Let's walk through an example, consider for argument's sake the following
+expression::
+
+    A + sin(B) * g(x)
+
+Where ``g(x)`` returns a scalar and is not part of the array expression.
+Our AST looks like this:
+
+.. digraph:: expr
+
+    mul -> add
+    mul -> "g(x)"
+    add -> a
+    add -> "sin(b)"
+
+We take this expression and build a function with ``g(x)`` as operand::
+
+    def kernel(op0, op1, op2):
+        return op0 + sin(op1) * op2
+
+Each operation acts on scalars. Note that the ``g(x)`` is not part of the
+kernel. We now use minivect to generate a loop nest, e.g. for 2D arrays::
+
+    def loop_nest(shape, result, A, B, g_of_x):
+        for i in range(shape[0]):
+            for j in range(shape[1]):
+                result[i, j] = kernel(A[i, j], B[i, j], g_of_x)
+
+Result is allocated, or in cases of slice assignment it is the LHS::
+
+    LHS[:, :] = A + sin(B) * g(x)
+
+The passed in ``shape`` is the broadcasted result of the shapes of ``A``
+and ``B``::
+
+    shape = broadcast(A.shape, B.shape)
+    result = np.empty(shape)
+    loop_nest(shape, result, A, B, g(x))
 
 Testing
 ~~~~~~~
