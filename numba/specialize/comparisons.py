@@ -35,8 +35,8 @@ def extract(complex_node):
 
     return real, imag
 
-def compare(lhs, rhs):
-    result = ast.Compare(lhs, [ast.Eq()], [rhs])
+def compare(lhs, op, rhs):
+    result = ast.Compare(lhs, [op], [rhs])
     return nodes.typednode(result, bool_)
 
 class SpecializeComparisons(visitors.NumbaTransformer):
@@ -65,9 +65,18 @@ class SpecializeComparisons(visitors.NumbaTransformer):
         elif node.left.type.is_complex and rhs.type.is_complex:
             real1, imag1 = extract(node.left)
             real2, imag2 = extract(rhs)
-            lhs = compare(real1, real2)
-            rhs = compare(imag1, imag2)
-            result = ast.BoolOp(ast.And(), [lhs, rhs])
+            op = type(node.ops[0])
+            if op == ast.Eq:
+                lhs = compare(real1, ast.Eq(), real2)
+                rhs = compare(imag1, ast.Eq(), imag2)
+                result = ast.BoolOp(ast.And(), [lhs, rhs])
+            elif op == ast.NotEq:
+                lhs = compare(real1, ast.NotEq(), real2)
+                rhs = compare(imag1, ast.NotEq(), imag2)
+                result = ast.BoolOp(ast.Or(), [lhs, rhs])
+            else:
+                raise NotImplementedError("ordered comparisons are not "
+                                          "implemented for complex numbers")
             node = nodes.typednode(result, bool_)
 
         return node
