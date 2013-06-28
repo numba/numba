@@ -558,6 +558,9 @@ class SymbolicExecution(object):
     def visit_BINARY_DIVIDE(self, inst):
         self.visit_generic_binary('/', inst)
 
+    def visit_BINARY_TRUE_DIVIDE(self, inst):
+        self.visit_generic_binary('/', inst)
+
     def visit_BINARY_FLOOR_DIVIDE(self, inst):
         self.visit_generic_binary('//', inst)
 
@@ -606,6 +609,9 @@ class SymbolicExecution(object):
         self.visit_generic_inplace('*', inst)
 
     def visit_INPLACE_DIVIDE(self, inst):
+        self.visit_generic_inplace('/', inst)
+
+    def visit_INPLACE_TRUE_DIVIDE(self, inst):
         self.visit_generic_inplace('/', inst)
 
     def visit_INPLACE_FLOOR_DIVIDE(self, inst):

@@ -27,6 +27,7 @@ BYTECODES = [
     # opname, operandlen
     ('BINARY_ADD', 0),
     ('BINARY_DIVIDE', 0),
+    ('BINARY_TRUE_DIVIDE', 0),
     ('BINARY_MULTIPLY', 0),
     ('BINARY_SUBSCR', 0),
     ('BINARY_SUBTRACT', 0),
@@ -52,6 +53,7 @@ BYTECODES = [
     ('INPLACE_SUBTRACT', 0),
     ('INPLACE_MULTIPLY', 0),
     ('INPLACE_DIVIDE', 0),
+    ('INPLACE_TRUE_DIVIDE', 0),
     ('INPLACE_FLOOR_DIVIDE', 0),
     ('INPLACE_POWER', 0),
     ('INPLACE_AND', 0),
