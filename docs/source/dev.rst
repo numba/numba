@@ -772,7 +772,7 @@ generate a webpage:
 .. code-block:: bash
 
     usage: numba [-h] [--annotate] [--dump-llvm] [--dump-optimized] [--dump-cfg]
-             [--dump-ast] [--time-compile] [--fancy]
+             [--dump-ast] [--fancy]
              filename
 
     positional arguments:
@@ -785,7 +785,6 @@ generate a webpage:
       --dump-optimized  Dump the optimized llvm assembly
       --dump-cfg        Dump the control flow graph
       --dump-ast        Dump the AST
-      --time-compile    Time the compilation process
       --fancy           Try to output fancy files (.dot or .html)
 
 The ``--annotate`` feature also prints the types of each variable used in a

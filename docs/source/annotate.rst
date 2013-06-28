@@ -8,7 +8,7 @@ annotated code.
 
     $ numba -h
     usage: numba [-h] [--annotate] [--dump-llvm] [--dump-optimized] [--dump-cfg]
-                 [--dump-ast] [--time-compile] [--fancy]
+                 [--dump-ast] [--fancy]
                  filename
     
     positional arguments:
@@ -21,7 +21,6 @@ annotated code.
       --dump-optimized  Dump the optimized llvm assembly
       --dump-cfg        Dump the control flow graph
       --dump-ast        Dump the AST
-      --time-compile    Time the compilation process
       --fancy           Try to output fancy files (.dot or .html)
 
 For instance, it's easy to dump the generated llvm code to the terminal.

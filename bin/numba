@@ -34,8 +34,6 @@ def make_parser():
                         help='Dump the control flow graph')
     parser.add_argument('--dump-ast', action="store_true",
                         help='Dump the AST')
-    parser.add_argument('--time-compile', action="store_true",
-                        help='Time the compilation process')
     parser.add_argument('--fancy', action='store_true',
                         help='Try to output fancy files (.dot or .html)')
     parser.add_argument('filename', help='Python source filename')
@@ -50,7 +48,6 @@ if __name__ == "__main__":
         'dump-optimized': args.dump_optimized,
         'dump-cfg': args.dump_cfg,
         'dump-ast': args.dump_ast,
-        'time-compile': args.time_compile,
         'fancy': args.fancy,
         'filename': args.filename,
     }
