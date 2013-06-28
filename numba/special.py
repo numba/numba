@@ -6,7 +6,7 @@ Special compiler-recognized numba functions and attributes.
 
 from __future__ import print_function, division, absolute_import
 
-__all__ = ['NULL', 'typeof', 'python', 'nopython', 'addressof']
+__all__ = ['NULL', 'typeof', 'python', 'nopython', 'addressof', 'prange']
 
 import ctypes
 
@@ -84,3 +84,12 @@ class NoopContext(object):
 python = NoopContext("python")
 nopython = NoopContext("nopython")
 
+#------------------------------------------------------------------------
+# prange
+#------------------------------------------------------------------------
+
+def prange(start=0, stop=None, step=1):
+    if stop is None:
+        stop = start
+        start = 0
+    return range(start, stop, step)

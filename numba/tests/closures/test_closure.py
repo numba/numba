@@ -119,7 +119,7 @@ NumbaError: ...: Expected 3 arguments, got 4
 >>> error5()
 Traceback (most recent call last):
     ...
-NumbaError: Got multiple values for positional argument 'a'
+NumbaError: ...: Got multiple values for positional argument 'a'
 
 Test closures
 

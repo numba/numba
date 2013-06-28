@@ -49,11 +49,16 @@ default_normalize_order = [
 ]
 
 default_pipeline_order = default_normalize_order + [
+    'ExpandPrange',
+    'RewritePrangePrivates',
+    'FixASTLocations',
     'ControlFlowAnalysis',
     'dump_cfg',
     #'ConstFolding',
     # 'dump_ast',
+    'UpdateAttributeStatements',
     'TypeInfer',
+    'CleanupPrange',
     'update_signature',
     'create_lfunc2',
     'TypeSet',
@@ -87,15 +92,16 @@ default_pipeline_order = default_normalize_order + [
     'ErrorReporting',
 ]
 
+
 default_cf_pipeline_order = [
     'ast3to2',
     'ControlFlowAnalysis',
 ]
 
-default_type_infer_pipeline_order = default_cf_pipeline_order + [
-    'resolve_templates',
-    'TypeInfer',
-]
+# default_type_infer_pipeline_order = default_cf_pipeline_order + [
+#     'resolve_templates',
+#     'TypeInfer',
+# ]
 
 default_dummy_type_infer_pipeline_order = [
     'ast3to2',
@@ -121,6 +127,7 @@ default_numba_late_translate_pipeline_order = \
 upto = lambda order, x: order[:order.index(x)+1]
 upfr = lambda order, x: order[order.index(x)+1:]
 
+default_type_infer_pipeline_order = upto(default_pipeline_order, 'TypeInfer')
 default_compile_pipeline_order = upfr(default_pipeline_order, 'TypeInfer')
 default_codegen_pipeline = upto(default_pipeline_order, 'CodeGen')
 default_post_codegen_pipeline = upfr(default_pipeline_order, 'CodeGen')
@@ -329,6 +336,14 @@ class FunctionEnvironment(object):
         },
     )
 
+    kill_attribute_assignments = TypedProperty( # Prange
+        (set, frozenset),
+        "Assignments to attributes that need to be removed from type "
+        "inference pre-analysis. We need to do this for prange since we "
+        "need to infer the types of variables to build a struct type for "
+        "those variables. So we need type inference to be properly ordered, "
+        "and not look at the attributes first.")
+
     # FIXME: Get rid of this property; pipeline stages are users and
     # transformers of the environment.  Any state needed beyond a
     # given stage should be put in the environment instead of keeping
@@ -464,6 +479,7 @@ class FunctionEnvironment(object):
         self.is_closure = is_closure
         self.closures = closures if closures is not None else {}
         self.closure_scope = closure_scope
+        self.kill_attribute_assignments = set()
 
         self.refcount_args = refcount_args
         self.typesystem = typesystem or numba_typesystem
@@ -503,6 +519,7 @@ class FunctionEnvironment(object):
             template_signature=self.template_signature,
             is_closure=self.is_closure,
             closures=self.closures,
+            kill_attribute_assignments=self.kill_attribute_assignments,
             closure_scope=self.closure_scope,
             warn=self.warn,
             warnstyle=self.warnstyle,
