@@ -1,4 +1,5 @@
 from numba import jit as numba_jit, autojit as numba_autojit
+from numbapro.pipeline import numbapro_env
 from numbapro.cudadrv.initialize import last_error
 from numbapro import cuda
 
@@ -9,6 +10,7 @@ def autojit(*args, **kwds):
             raise last_error
         return cuda.autojit(*args, **kwds)
     else:
+        kwds.setdefault('env', numbapro_env)
         return numba_autojit(*args, **kwds)
 
 def jit(*args, **kwds):
@@ -18,4 +20,5 @@ def jit(*args, **kwds):
             raise last_error
         return cuda.jit(*args, **kwds)
     else:
+        kwds.setdefault('env', numbapro_env)
         return numba_jit(*args, **kwds)

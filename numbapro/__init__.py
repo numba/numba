@@ -6,6 +6,7 @@ del get_versions
 import numba
 from numba import *
 from numbapro.decorators import autojit, jit
+from numbapro.parallel.prange import prange
 from numbapro.vectorizers import vectorize, guvectorize
 
 from numba.special import *
@@ -38,6 +39,10 @@ def test():
         print 'vectorizers'.center(80, '-')
         import numbapro.vectorizers.tests.support
         failfast(numbapro.vectorizers.tests.support.run(**cfg))
+
+        print 'parallel'.center(80, '-')
+        import numbapro.parallel.tests.support
+        failfast(numbapro.parallel.tests.support.run(**cfg))
 
         if numbapro.cuda.is_available:
             print 'cudadrv'.center(80, '-')
