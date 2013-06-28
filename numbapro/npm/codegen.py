@@ -1,3 +1,4 @@
+import logging
 from collections import namedtuple
 
 import llvm.core as lc
@@ -5,6 +6,8 @@ from llvm.core import Type, Constant
 
 from . import typing, symbolic, errors
 from .errors import CompileError
+
+logger = logging.getLogger(__name__)
 
 GlobalVar = namedtuple('GlobalVar', ['type', 'gvar'])
 
@@ -308,7 +311,9 @@ class CodeGen(object):
         stop = self.cast(stop, intp)
         step = self.cast(step, intp)
 
-        assert step_ty.is_signed
+        if not step_ty.is_signed:
+            logger.warn("At line %d, step is implicitly casted to signed int" %
+                        expr.lineno)
 
         positive = self.builder.icmp(lc.ICMP_SGE,
                                      step, self.define_const(intp, 0))

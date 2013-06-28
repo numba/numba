@@ -28,6 +28,17 @@ def simple_grid2d(ary):
     i, j = cuda.grid(2)
     ary[i, j] = i + j
 
+def intrinsic_forloop_step(c):
+    startX, startY = cuda.grid(2)
+    gridX = cuda.gridDim.x * cuda.blockDim.x
+    gridY = cuda.gridDim.y * cuda.blockDim.y
+    height, width = c.shape
+    
+    for x in range(startX, width, gridX):
+        for y in range(startY, height, gridY):
+            c[y, x] = x + y
+
+
 #------------------------------------------------------------------------------
 # simple_threadidx
 
@@ -119,6 +130,30 @@ def test_simple_grid2d():
             exp[i, j] = i + j
 
     assert np.all(ary == exp)
+
+#------------------------------------------------------------------------------
+# intrinsic_forloop_step
+
+@testcase
+def test_intrinsic_forloop_step():
+    compiled = cudapy.compile_kernel(intrinsic_forloop_step,
+                                     [arraytype(float32, 2, 'C')])
+    compiled.bind()
+    ntid = (4, 3)
+    nctaid = (5, 6)
+    shape = (ntid[0] * nctaid[0], ntid[1] * nctaid[1])
+    ary = np.empty(shape, dtype=np.int32)
+    exp = ary.copy()
+    compiled[nctaid, ntid](ary)
+
+    gridX, gridY = shape
+    height, width = ary.shape
+    for i, j in zip(range(ntid[0]), range(ntid[1])):
+        startX, startY = gridX  + i, gridY + j
+        for x in range(startX, width, gridX):
+            for y in range(startY, height, gridY):
+                assert ary[y, x] == x + y, (ary[y, x], x + y)
+
 
 if __name__ == '__main__':
     main()
