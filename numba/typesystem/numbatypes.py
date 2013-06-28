@@ -79,12 +79,13 @@ Py_uintptr_t = unit("int", "Py_uintptr_t", flags=["numeric"])
 
 float32      = unit("float", "float32",    flags=["numeric"])
 float64      = unit("float", "float64",    flags=["numeric"])
-float128     = unit("float", "float128",   flags=["numeric"])
-float_, double, longdouble = float32, float64, float128
+# float128     = unit("float", "float128",   flags=["numeric"])
+# float_, double, longdouble = float32, float64, float128
+float_, double = float32, float64
 
 complex64    = complex_(float32)
 complex128   = complex_(float64)
-complex256   = complex_(float128)
+# complex256   = complex_(float128)
 
 bool_        = unit("bool", "bool", flags=["int", "numeric"])
 null         = unit("null", "null", flags=["pointer"])
@@ -104,7 +105,7 @@ string_      = unit("string", "string", flags=[#"object",
                                                "c_string"])
 c_string_type = string_
 
-complextypes.extend([complex64, complex128, complex256])
+complextypes.extend([complex64, complex128]) #, complex256])
 
 tuple_of_obj       = tuple_(object_, -1)
 list_of_obj        = list_(object_, -1)
@@ -125,11 +126,11 @@ u8 = uint64
 
 f4 = float32
 f8 = float64
-f16 = float128
+# f16 = float128
 
 c8 = complex64
 c16 = complex128
-c32 = complex256
+# c32 = complex256
 
 for name, value in list(globals().iteritems()): # TODO: Do this better
     if (not isinstance(value, __future__ ._Feature) and not

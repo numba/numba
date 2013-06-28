@@ -41,7 +41,7 @@ def run_render_text():
     f = StringIO()
     render_text(p, emit=f.write)
     src = f.getvalue()
-    assert 'def foo(a, b):' in src
+    assert 'def foo(a, b):' in src, src
     assert 'print a * b' in src
     assert 'return a - b' in src
     assert 'double' in src

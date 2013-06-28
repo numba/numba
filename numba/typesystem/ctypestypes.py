@@ -19,7 +19,7 @@ domain_name = "ctypes"
 nb2ctypes = {
     ts.float32:    ctypes.c_float,
     ts.float64:    ctypes.c_double,
-    ts.float128:   ctypes.c_longdouble,
+    # ts.float128:   ctypes.c_longdouble,
     ts.object_:    ctypes.py_object,
     ts.void:       None,
     ts.string_:    ctypes.c_char_p,
@@ -34,7 +34,8 @@ for name in map(tyname, universe.int_typenames):
     cint(name)
 
 globals().update((tyname(ty.typename), cty) for ty, cty in nb2ctypes.iteritems())
-float_, double, longdouble = float32, float64, float128
+# float_, double, longdouble = float32, float64, float128
+float_, double = float32, float64
 
 ctypes_map = dict((cty, ty) for ty, cty in nb2ctypes.iteritems())
 
