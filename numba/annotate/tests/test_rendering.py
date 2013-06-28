@@ -2,6 +2,8 @@
 from __future__ import print_function, division, absolute_import
 
 from io import StringIO
+
+from numba import config
 from numba.annotate import render_text
 from numba.annotate.annotate import (Source, Annotation, SourceIntermediate,
                                      Program, A_type)
@@ -36,6 +38,8 @@ llvm_intermediate = SourceIntermediate("llvm", linenomap,
 p = [{'python_source': py_source, 'intermediates': [llvm_intermediate]}]
 
 # ______________________________________________________________________
+
+config.config.colour = False    # Disable lexing for tests
 
 def run_render_text():
     f = StringIO()
