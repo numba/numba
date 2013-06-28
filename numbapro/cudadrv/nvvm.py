@@ -42,7 +42,6 @@ def find_libnvvm(override_path):
     Try to discover libNVVM automatically in the following order:
     1) `override_path` if defined
     2) environment variable NUMBAPRO_NVVM if defines
-    3) specify Anaconda path
     4) default library path
 
     the return value is always a list of possible libnvvm path locations
@@ -58,7 +57,6 @@ def find_libnvvm(override_path):
 
     # Search in default library path as well
     candidates = [
-        join(dlldir, dllname), # Anaconda specific location
         join(dirname(__file__), dllname), # alongside this module
         dllname, # just the name tells dlopen() to also look in LD_LIBRARY_PATH
     ]
