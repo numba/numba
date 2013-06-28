@@ -32,6 +32,13 @@ Documentation for numba
 
    interface_c.rst
 
+**Language Specification:**
+
+.. toctree::
+   :maxdepth: 1
+
+   spec.rst
+
 **Misc:**
 
 .. toctree::
