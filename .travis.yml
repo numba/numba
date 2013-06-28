@@ -12,7 +12,7 @@ branches:
     - devel
     - release
     - testbranch
-    - _raise
+    - _prange
 
 install:
   - wget "http://repo.continuum.io/pkgs/free/linux-64/llvm-3.2-0.tar.bz2"
