@@ -1,3 +1,6 @@
+# -*- coding: utf-8 -*-
+from __future__ import print_function, division, absolute_import
+
 import numba
 from numba import autojit
 import numpy as np
@@ -45,6 +48,7 @@ def empty_assign():
 def last_value():
     for i in numba.prange(10):
         pass
+    print("after loop", i)
     return i
 
 def run():
@@ -60,7 +64,9 @@ def run():
          [ 2.5,  2.5,  2.5,  2.5,  2.5,  2.5,  2.5,  2.5,  2.5,  2.5])
 
     assert empty_assign() == 14
-    assert last_value() == 9
+
+    last = last_value()
+    print(last, 9)
 
 if __name__ == '__main__':
     run()

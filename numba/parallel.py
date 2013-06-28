@@ -298,7 +298,7 @@ def rewrite_prange(env, prange_node, target, locals_dict, closures_dict):
                                   'nsteps': nsteps,
                                 }
 
-    # print templ.substituted_template
+    # print(templ.substituted_template)
     return tree
 
 def typeof(name, expr):
@@ -356,7 +356,7 @@ def perform_reductions(context, prange_node):
     substitutions = { "num_threads": prange_node.num_threads_node }
     result = templ.template(substitutions)
 
-    # print templ.substituted_template
+    # print(templ.substituted_template)
     return result
 
 #------------------------------------------------------------------------
