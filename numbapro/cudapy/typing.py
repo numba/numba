@@ -14,8 +14,7 @@ def cast_from_sregtype(value):
     return cast_penalty(ptx.SREG_TYPE, value)
 
 def rule_sreg(infer, value, obj):
-    infer.rules[value].add(Conditional(cast_from_sregtype))
-    infer.rules[value].add(Restrict(int_set))
+    infer.rules[value].add(MustBe(types.uint32))
     value.replace(value=obj)
 
 def rule_grid_macro(infer, value):

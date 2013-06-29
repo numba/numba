@@ -510,7 +510,6 @@ class Infer(object):
             self.rules[rhs].add(Restrict(int_set))
 
         elif value.kind == 'ForInit':
-            value.kind = '-'
 
             self.rules[value].add(MustBe(self.intp))
 

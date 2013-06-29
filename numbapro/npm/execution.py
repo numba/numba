@@ -7,6 +7,7 @@ from . import typing
 class JIT(object):
     def __init__(self, lfunc, retty, argtys, gvars, globals):
         self.engine = make_engine(lfunc)
+        self.lfunc = lfunc
         self.args = [to_ctype(x) for x in argtys]
         self.return_type = to_ctype(retty)
         self.pointer = self.engine.get_pointer_to_function(lfunc)

@@ -1,4 +1,3 @@
-import logging
 from collections import namedtuple
 
 import llvm.core as lc
@@ -6,8 +5,6 @@ from llvm.core import Type, Constant
 
 from . import typing, symbolic, errors
 from .errors import CompileError
-
-logger = logging.getLogger(__name__)
 
 GlobalVar = namedtuple('GlobalVar', ['type', 'gvar'])
 
@@ -262,10 +259,12 @@ class CodeGen(object):
         finalty = self.typemap[expr]
         lhs, rhs = expr.args.lhs.value, expr.args.rhs.value
         lty, rty = map(self.typemap.get, [lhs, rhs])
-        if expr.kind == '/':
+        if expr.kind in ['/', 'ForInit']:
             opty = finalty
         else:
             opty = lty.coerce(rty)
+        if expr.kind == 'ForInit':
+            expr.kind = '-'
         lhs, rhs = map(lambda x: self.cast(x, opty), [lhs, rhs])
         if opty.is_int:
             offset = 'iu'.index(opty.kind)
@@ -307,13 +306,8 @@ class CodeGen(object):
 
         intp = index_ty
         index = self.cast(index, intp)
-
         stop = self.cast(stop, intp)
         step = self.cast(step, intp)
-
-        if not step_ty.is_signed:
-            logger.warn("At line %d, step is implicitly casted to signed int" %
-                        expr.lineno)
 
         positive = self.builder.icmp(lc.ICMP_SGE,
                                      step, self.define_const(intp, 0))
