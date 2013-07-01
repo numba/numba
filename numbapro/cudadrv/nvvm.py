@@ -46,14 +46,13 @@ def find_libnvvm(override_path):
 
     the return value is always a list of possible libnvvm path locations
     '''
-    from os.path import dirname, join
+    from os.path import dirname, join, isdir
     # Determine DLL name
-    dllname = {'linux2': 'libnvvm.so',
-               'darwin': 'libnvvm.dylib',
-               'win32' : 'nvvm.dll'}[sys.platform]
+    DLLNAMEMAP = {'linux2': 'libnvvm.so',
+                  'darwin': 'libnvvm.dylib',
+                  'win32' : 'nvvm.dll'}
 
-    # This is Anaconda specific search directories
-    dlldir = join(sys.prefix, 'DLLs' if sys.platform == 'win32' else 'lib')
+    dllname = DLLNAMEMAP[sys.platform]
 
     # Search in default library path as well
     candidates = [
@@ -66,7 +65,10 @@ def find_libnvvm(override_path):
     else:
         envpath = os.getenv('NUMBAPRO_NVVM')
         if envpath:
-            return [os.getenv('NUMBAPRO_NVVM')]
+            if isdir(envpath):
+                # accept directory path because user always get this wrong.
+                envpath = join(envpath, dllname)
+            return [envpath]
         else:
             return candidates
 
