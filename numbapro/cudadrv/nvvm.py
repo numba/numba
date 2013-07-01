@@ -298,8 +298,9 @@ class LibDevice(object):
                 except KeyError:
                     raise Exception(MISSING_LIBDEVICE_MSG)
                 else:
-                    rel = os.path.join(os.path.dirname(libnvvm_path),
-                                       '..', 'libdevice')
+                    if not os.path.isdir(libnvvm_path):
+                        libnvvm_path = os.path.dirname(libnvvm_path)
+                    rel = os.path.join(libnvvm_path, '..', 'libdevice')
                     libdevice_dir = os.path.abspath(rel)
             prefix_template = 'libdevice.%s'
             ext = '.bc'
