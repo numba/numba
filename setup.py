@@ -18,22 +18,19 @@ ext_modules = [
     ),
 ]
 
-def find_packages(where='.', exclude=()):
+def find_packages(rootdir):
     out = []
-    stack=[(convert_path(where), '')]
+    stack=[convert_path(rootdir)]
     while stack:
-        where, prefix = stack.pop(0)
+        where = stack.pop()
         for name in os.listdir(where):
-            fn = os.path.join(where,name)
-            if ('.' not in name and os.path.isdir(fn) and
-                os.path.isfile(os.path.join(fn, '__init__.py'))
-            ):
-                out.append(prefix+name)
-                stack.append((fn, prefix+name+'.'))
-    for pat in list(exclude) + ['ez_setup', 'distribute_setup']:
-        out = [item for item in out if not fnmatchcase(item, pat)]
+            path = os.path.join(where, name)
+            if os.path.isfile(path) and name == '__init__.py':
+                out.append(where.replace(os.path.sep, '.'))
+            elif os.path.isdir(path):
+                stack.append(path)
+    print out
     return out
-
 
 cmdclass = versioneer.get_cmdclass()
 
@@ -46,7 +43,7 @@ setup(
     license = "Proprietary",
     description = "compile Python code",
     ext_modules = ext_modules,
-    packages = find_packages(),
+    packages = find_packages('numbapro'),
     cmdclass = cmdclass,
 )
 
