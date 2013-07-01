@@ -4,6 +4,7 @@ It properly has a lot of resemblence with PyCUDA.
 '''
 
 import sys, os
+import functools
 import contextlib
 from ctypes import (c_int, c_void_p, POINTER, c_size_t, byref, addressof,
                     sizeof, c_uint, c_uint8, c_char_p, c_float, cast, c_char,)
@@ -1154,6 +1155,7 @@ def get_or_create_context():
 
 def require_context(fn):
     "Decorator to ensure a context exists for the current thread."
+    @functools.wraps(fn)
     def _wrapper(*args, **kws):
         get_or_create_context()
         return fn(*args, **kws)
