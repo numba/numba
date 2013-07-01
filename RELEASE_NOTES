@@ -1,3 +1,9 @@
+Version (0.12.1)
+================
+* Fix libNVVM search path (now accept directory path)
+* Fix sign-extension error in forloop precondition
+* Fix support for true-division
+
 Version (0.12.0)
 ================
 * Use CUDA 5.5rc
