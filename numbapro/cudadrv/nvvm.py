@@ -238,9 +238,14 @@ SUPPORTED_CC = frozenset([(2, 0), (3, 0), (3, 5)])
 def get_arch_option(major, minor):
     if major == 2:
         minor = 0
-    if major == 3 and minor != 5:
-        minor = 0
-    assert (major, minor) in SUPPORTED_CC
+    if major == 3:
+        if minor < 5:
+            minor = 0
+        else:
+            minor = 5
+    if (major, minor) not in SUPPORTED_CC:
+        raise Exception("compute compability %d.%d is not supported" %
+                        (major, minor))
     arch = 'compute_%d%d' % (major, minor)
     return arch
 

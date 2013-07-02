@@ -1,5 +1,6 @@
 from numbapro.cudadrv.nvvm import (NVVM, CompilationUnit, llvm_to_ptx,
-                                   set_cuda_kernel, fix_data_layout)
+                                   set_cuda_kernel, fix_data_layout,
+                                   get_arch_option)
 from ctypes import c_size_t, c_uint64, sizeof
 from llvm.core import Module, Type, Builder
 import support
@@ -53,6 +54,18 @@ class TestNvvmDriver(support.CudaTestCase):
             self.assertTrue('.address_size 64' in ptx)
         else:
             self.assertTrue('.address_size 32' in ptx)
+
+
+@support.addtest
+class TestArchOption(support.CudaTestCase):
+    def test_get_arch_option(self):
+        self.assertTrue(get_arch_option(2, 0) == 'compute_20')
+        self.assertTrue(get_arch_option(2, 1) == 'compute_20')
+        self.assertTrue(get_arch_option(3, 0) == 'compute_30')
+        self.assertTrue(get_arch_option(3, 3) == 'compute_30')
+        self.assertTrue(get_arch_option(3, 4) == 'compute_30')
+        self.assertTrue(get_arch_option(3, 5) == 'compute_35')
+        self.assertTrue(get_arch_option(3, 6) == 'compute_35')
 
 
 gpu64='''
