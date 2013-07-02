@@ -76,11 +76,15 @@ def dump_annotations(ast, env, fancy):
             func_call_lineno = str(stack[i][1])
             break
 
-    env.annotation_blocks.append({'func_call':func_call,
-                                  'func_call_filename':func_call_filename,
-                                  'func_call_lineno':func_call_lineno,
-                                  'python_source':p.python_source,
-                                  'intermediates':p.intermediates})
+    annotation = {'func_call':func_call,
+                  'func_call_filename':func_call_filename,
+                  'func_call_lineno':func_call_lineno,
+                  'python_source':p.python_source,
+                  'intermediates':p.intermediates}
+    if fancy:
+        env.annotation_blocks.append(annotation)
+    else:
+        env.annotation_blocks = [annotation]
 
     render(env.annotation_blocks, emit=out.write, intermediate_names=["llvm"])
 
