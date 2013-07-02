@@ -113,7 +113,7 @@ class CuRandError(Exception):
         super(CuRandError, self).__init__(STATUS[code])
 
 class libcurand(Lib):
-    lib = 'libcurand'
+    lib = 'curand'
     ErrorType = CuRandError
 
     @property

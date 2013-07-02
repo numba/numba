@@ -49,7 +49,7 @@ class CuFFTError(Exception):
         super(CuFFTError, self).__init__(STATUS[code])
 
 class libcufft(Lib):
-    lib = 'libcufft'
+    lib = 'cufft'
     ErrorType = CuFFTError
 
     @property

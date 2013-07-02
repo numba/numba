@@ -1,0 +1,37 @@
+Component : CUDA Runtime
+ Windows : cudart.dll, cudart_static.lib
+ MacOS : libcudart.dylib, libcudart_static.a
+ Linux : libcudart.so, libcudart_static.a
+Component : CUDA FFT Library
+ Windows : cufft.dll
+ MacOS : libcufft.dylib
+ Linux : libcufft.so
+Component : CUDA BLAS Library
+ Windows : cublas.dll
+ MacOS : libcublas.dylib
+ Linux : libcublas.so
+Component : CUDA Sparse Matrix Library 
+ Windows : cusparse.dll
+ MacOs : libcusparse.dylib
+ Linux : libcusparse.so
+Component : CUDA Random Number Generation Library 
+ Windows : curand.dll
+ MacOs : libcurand.dylib
+ Linux : libcurand.so
+Component : NVIDIA Performance Primitives Library 
+ Windows : nppc.dll, nppi.dll, npps.dll
+ MacOs : libnppc.dylib, libnppi.dylib, libnpps.dylib
+ Linux : libnppc.so, libnppi.so, libnpps.so
+Component : NVIDIA Optimizing Compiler Library
+ Windows : nvvm.dll
+ MacOs : libnvvm.so
+ Linux : libnvvm.dylib
+Component : NVIDIA Common Device Math Functions Library
+ Windows : libdevice.compute_20.bc, libdevice.compute_30.bc,
+ libdevice.compute_35.bc
+ MacOs : libdevice.compute_20.bc, libdevice.compute_30.bc,
+ libdevice.compute_35.bc
+ Linux : libdevice.compute_20.bc, libdevice.compute_30.bc,
+ libdevice.compute_35.bc
+Component : NVIDIA Internal Library
+ MacOs : libtlshook.dylib

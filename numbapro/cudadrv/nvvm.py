@@ -37,42 +37,6 @@ NVVM_ERROR_COMPILATION
 for i, k in enumerate(RESULT_CODE_NAMES):
     setattr(sys.modules[__name__], k, i)
 
-def find_libnvvm(override_path):
-    '''
-    Try to discover libNVVM automatically in the following order:
-    1) `override_path` if defined
-    2) environment variable NUMBAPRO_NVVM if defines
-    4) default library path
-
-    the return value is always a list of possible libnvvm path locations
-    '''
-    from os.path import dirname, join, isdir
-    # Determine DLL name
-    DLLNAMEMAP = {'linux2': 'libnvvm.so',
-                  'darwin': 'libnvvm.dylib',
-                  'win32' : 'nvvm.dll'}
-
-    dllname = DLLNAMEMAP[sys.platform]
-
-    # Search in default library path as well
-    candidates = [
-        join(dirname(__file__), dllname), # alongside this module
-        dllname, # just the name tells dlopen() to also look in LD_LIBRARY_PATH
-    ]
-
-    if override_path:
-        return [override_path]
-    else:
-        envpath = os.getenv('NUMBAPRO_NVVM')
-        if envpath:
-            if isdir(envpath):
-                # accept directory path because user always get this wrong.
-                envpath = join(envpath, dllname)
-            return [envpath]
-        else:
-            return candidates
-
-
 class NVVM(object):
     '''Process-wide singleton.
     '''
@@ -114,8 +78,12 @@ class NVVM(object):
 
     def __new__(cls, override_path=None):
         if not cls.__INSTANCE:
+            from numbapro import findlib
             # Load the driver
-            for path in find_libnvvm(override_path):
+            where = ([override_path]
+                        if override_path is not None
+                        else findlib.find_lib('nvvm', 'NUMBAPRO_NVVM'))
+            for path in where:
                 try:
                     driver = CDLL(path)
                     inst = cls.__INSTANCE = object.__new__(cls)
@@ -288,29 +256,28 @@ class LibDevice(object):
         '''
         arch --- must be result from get_arch_option()
         '''
+        from os.path import join
         if arch not in self._cache_:
             try:
                 libdevice_dir = os.environ['NUMBAPRO_LIBDEVICE']
             except KeyError:
-                # try the relative path to NUMBAPRO_NVVM
-                try:
-                    libnvvm_path = os.environ['NUMBAPRO_NVVM']
-                except KeyError:
-                    raise Exception(MISSING_LIBDEVICE_MSG)
-                else:
-                    if not os.path.isdir(libnvvm_path):
-                        libnvvm_path = os.path.dirname(libnvvm_path)
-                    rel = os.path.join(libnvvm_path, '..', 'libdevice')
-                    libdevice_dir = os.path.abspath(rel)
+                from numbapro import findlib
+                libdevice_dir = findlib.get_lib_dir()
+
             prefix_template = 'libdevice.%s'
             ext = '.bc'
+
+            candidates = []
             for fname in os.listdir(libdevice_dir):
                 prefix = prefix_template % arch
                 if fname.startswith(prefix) and fname.endswith(ext):
                     chosen = os.path.join(libdevice_dir, fname)
-                    break
-            else:
+                    candidates.append(chosen)
+
+            if not candidates:
                 raise Exception(MISSING_LIBDEVICE_MSG)
+
+            chosen = max(candidates)
             with open(chosen, 'rb') as bcfile:
                 bc = bcfile.read()
                 self._cache_[arch] = bc

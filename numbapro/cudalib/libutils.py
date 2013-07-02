@@ -13,22 +13,29 @@ class Lib(object):
     def __new__(cls, override_path=None):
         # Check if we already have opened the dll
         if cls.__singleton is None:
-            # No
-
+            from numbapro import findlib
             # Determine dll extension type for the platform
             if sys.platform == 'win32':
-                dlext = '.dll'
                 dllopener = WinDLL
             elif sys.platform == 'darwin':
-                dlext = '.dylib'
                 dllopener = CDLL
             else:
-                dlext = '.so'
                 dllopener = CDLL
-            # Open the DLL
-            path = cls.lib + dlext if not override_path else override_path
-            dll = dllopener(path)
 
+            # Open the DLL
+            where = ([override_path]
+                     if override_path is not None
+                     else findlib.find_lib(cls.lib))
+
+            for path in where:
+                try:
+                    dll = dllopener(path)
+                except OSError:
+                    pass
+                else:
+                    break
+            else:
+                raise Exception("Cannot find library for %s" % cls.lib)
             # Create new instance
             inst = object.__new__(cls)
             cls.__singleton = inst

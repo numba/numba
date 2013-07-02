@@ -79,7 +79,7 @@ class CuBLASError(Exception):
         super(CuBLASError, self).__init__(STATUS[code])
 
 class libcublas(Lib):
-    lib = 'libcublas'
+    lib = 'cublas'
     ErrorType = CuBLASError
 
     cublasCreate_v2 = ctype_function(cublasStatus_t,
