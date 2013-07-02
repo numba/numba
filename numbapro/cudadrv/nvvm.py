@@ -256,7 +256,6 @@ class LibDevice(object):
         '''
         arch --- must be result from get_arch_option()
         '''
-        from os.path import join
         if arch not in self._cache_:
             try:
                 libdevice_dir = os.environ['NUMBAPRO_LIBDEVICE']

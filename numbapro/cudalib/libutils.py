@@ -1,5 +1,5 @@
 import sys
-from ctypes import *
+from ctypes import CDLL
 
 class ctype_function(object):
     def __init__(self, restype=None, *argtypes):
@@ -16,6 +16,7 @@ class Lib(object):
             from numbapro import findlib
             # Determine dll extension type for the platform
             if sys.platform == 'win32':
+                from ctypes import WinDLL
                 dllopener = WinDLL
             elif sys.platform == 'darwin':
                 dllopener = CDLL

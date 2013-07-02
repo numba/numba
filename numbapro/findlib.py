@@ -28,7 +28,7 @@ def find_lib(libname, env=None):
         envpath = None
 
     if envpath:
-        if isdir(envpath):
+        if os.path.isdir(envpath):
             envpath = os.path.join(envpath, fullname)
         return [envpath]
     else:
