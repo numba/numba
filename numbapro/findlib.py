@@ -33,3 +33,31 @@ def find_lib(libname, env=None):
         return [envpath]
     else:
         return candidates
+
+def test():
+    failed = False
+    libs = 'cublas cusparse cufft curand nvvm'.split()
+    for lib in libs:
+        cand = find_lib(lib)
+        print 'Finding', lib
+        for path in cand:
+            if os.path.isfile(path):
+                print '\tlocated at', path
+                break
+        else:
+            print 'can\'t open lib'
+            failed = True
+    bcs = ['libdevice.compute_20.bc', 'libdevice.compute_30.bc',
+           'libdevice.compute_35.bc']
+    bcdir = get_lib_dir()
+    listing = os.listdir(bcdir)
+    print 'In', bcdir
+    for bc in bcs:
+        print '\tfinding', bc,
+
+        if bc not in listing:
+            print '\tcan\'t open %s' % bc
+            failed = True
+        else:
+            print '\tok'
+    return not failed

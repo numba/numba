@@ -44,6 +44,10 @@ def test():
         import numbapro.parallel.tests.support
         failfast(numbapro.parallel.tests.support.run(**cfg))
 
+        print 'cuda libraries locator'.center(80, '-')
+        import numbapro.findlib
+        failfast(numbapro.findlib.test())
+
         if numbapro.cuda.is_available:
             print 'cudadrv'.center(80, '-')
             import numbapro.cudadrv.tests.support
