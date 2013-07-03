@@ -1,3 +1,8 @@
+Version (0.12.2)
+================
+* Distribute CUDA toolkit in Anaconda
+* Better error message
+
 Version (0.12.1)
 ================
 * Fix libNVVM search path (now accept directory path)
