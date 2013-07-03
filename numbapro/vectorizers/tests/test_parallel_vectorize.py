@@ -1,6 +1,14 @@
-from numbapro.vectorizers.parallel import *
 import unittest
+from llvm.core import Module
+from llvm.passes import PassManager, PassManagerBuilder
 from llvm.ee import EngineBuilder
+from llvm_cbuilder import CExecutor, CDefinition
+from llvm_cbuilder import shortnames as C
+from numbapro.vectorizers.parallel import (
+    SpecializedParallelUFunc,
+    ParallelUFuncPlatform,
+    UFuncCoreGeneric,
+    )
 from .support import addtest, main
 
 class Work_D_D(CDefinition):

@@ -1,9 +1,6 @@
 import ast as ast_module
-from functools import partial
-
 from numba import pipeline
 from numba import environment
-from numba.pipeline import ComposedPipelineStage
 from numba.environment import insert_stage, TypedProperty
 from numba.control_flow import cfstats
 

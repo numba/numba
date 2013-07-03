@@ -8,7 +8,7 @@ def diagproduct(c, a, b, data):
   startY = data[0]
   gridX = data[1]
   gridY = data[1]
-  height = c.shape[0]
+  #height = c.shape[0] # unsed
   width  = c.shape[1]
 
   y = 0

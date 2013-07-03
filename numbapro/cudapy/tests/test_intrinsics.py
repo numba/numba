@@ -3,7 +3,7 @@ import numpy as np
 from .support import testcase, main
 from numbapro import cuda
 from numbapro import cudapy
-from numbapro.npm.types import *
+from numbapro.npm.types import arraytype, int32, float32
 
 def simple_threadidx(ary):
     i = cuda.threadIdx.x
@@ -143,7 +143,7 @@ def test_intrinsic_forloop_step():
     nctaid = (5, 6)
     shape = (ntid[0] * nctaid[0], ntid[1] * nctaid[1])
     ary = np.empty(shape, dtype=np.int32)
-    exp = ary.copy()
+
     compiled[nctaid, ntid](ary)
 
     gridX, gridY = shape

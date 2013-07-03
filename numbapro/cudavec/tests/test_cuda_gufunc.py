@@ -1,5 +1,4 @@
-from numba.decorators import jit
-from numba import *
+from numba import void, float32
 import numpy as np
 import numpy.core.umath_tests as ut
 from numbapro import guvectorize
@@ -7,7 +6,7 @@ from numbapro import cuda
 from timeit import default_timer as time
 from .support import testcase, main
 
-@guvectorize([void(f4[:,:], f4[:,:], f4[:,:])],
+@guvectorize([void(float32[:,:], float32[:,:], float32[:,:])],
              '(m,n),(n,p)->(m,p)',
              target='gpu')
 def matmulcore(A, B, C):
@@ -49,15 +48,9 @@ def test_gufunc_adjust_blocksize():
     A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2, 4)
     B = np.arange(matrix_ct * 4 * 5, dtype=np.float32).reshape(matrix_ct, 4, 5)
 
-    ts = time()
     gufunc.max_blocksize = 32
     C = gufunc(A, B)
-    tcuda = time() - ts
-
-    ts = time()
     Gold = ut.matrix_multiply(A, B)
-    tcpu = time() - ts
-    
     assert np.allclose(C, Gold)
 
 @testcase

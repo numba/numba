@@ -1,6 +1,4 @@
-import numpy as np
 import math
-import time
 from numbapro import cuda
 from .support import testcase, main
 

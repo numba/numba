@@ -2,8 +2,15 @@
 Test parallel-vectorize with numpy.fromfunc.
 Uses the work load from test_parallel_vectorize.
 '''
+from llvm.core import Module
+from llvm.passes import PassManager, PassManagerBuilder
 from llvm.ee import EngineBuilder
-from numbapro.vectorizers.parallel import *
+from llvm_cbuilder import CExecutor
+from numbapro.vectorizers.parallel import (
+    SpecializedParallelUFunc,
+    ParallelUFuncPlatform,
+    UFuncCoreGeneric,
+    )
 from numba.vectorize._internal import fromfunc
 import numpy as np
 import unittest

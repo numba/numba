@@ -42,7 +42,6 @@ def test_gufunc_scalar_output():
     dev_out.copy_to_host(out)                 # retrieve the result
 
     # verify result
-    goal = np.empty_like(out)
     for i in xrange(inp.shape[0]):
         assert out[i] == inp[i].sum()
 

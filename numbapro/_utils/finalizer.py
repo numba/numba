@@ -2,8 +2,6 @@
 Modified C-level finalizer by Benjamin Peterson <benjamin@python.org>
 Available at http://code.activestate.com/recipes/577242-calling-c-level-finalizers-without-__del__/
 '''
-import sys
-import traceback
 import weakref
 
 class OwnerRef(weakref.ref):

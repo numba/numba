@@ -1,6 +1,6 @@
 import numpy as np
 from ..compiler import compile
-from ..types import *
+from ..types import int32, float32, float64, arraytype
 from .support import testcase, main
 
 def loop_case_1(a, b):

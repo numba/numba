@@ -1,6 +1,6 @@
 import numpy as np
 from ..compiler import compile
-from ..types import *
+from ..types import int32, arraytype, float32, float64
 from .support import testcase, main
 
 def getitem(a, i):

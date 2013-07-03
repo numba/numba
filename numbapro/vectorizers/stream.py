@@ -8,9 +8,8 @@ Caching does not show any benefit. In fact, the code is running a lot slower.
 
 '''
 
-from llvm_cbuilder import *
+from llvm_cbuilder import CFuncRef
 import llvm_cbuilder.shortnames as C
-import numpy as np
 from numba.vectorize.basic import BasicUFunc
 from . import _common
 

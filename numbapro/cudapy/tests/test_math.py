@@ -3,7 +3,7 @@ import numpy as np
 from .support import testcase, main
 from numbapro import cuda
 from numbapro import cudapy
-from numbapro.npm.types import *
+from numbapro.npm.types import float32, float64, arraytype
 import math
 
 def math_acos(A, B):

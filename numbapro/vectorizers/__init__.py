@@ -10,8 +10,13 @@ __all__ = [
     'CudaVectorize',
     'CudaGUFuncVectorize',
 ]
-import logging
-from numba.vectorize import *
+
+from numba.vectorize import (
+    GUVectorize,
+    vectorize,
+    Vectorize,
+    BasicVectorize,
+    )
 from numba.vectorize import install_vectorizer, _prepare_sig
 
 from .parallel import ParallelVectorize, ParallelASTVectorize

@@ -3,8 +3,7 @@ There was a deadlock problem when work count is smaller than number of threads.
 '''
 
 import numpy as np
-from numba import *
-f, d = f4, f8
+from numba import float32, float64, int32, uint32
 from numbapro.vectorizers import Vectorize
 from time import time
 import unittest
@@ -20,8 +19,8 @@ class TestParallelLowWorkCount(unittest.TestCase):
         pv = Vectorize(vector_add, target='parallel')
         pv.add(restype=int32, argtypes=[int32, int32])
         pv.add(restype=uint32, argtypes=[uint32, uint32])
-        pv.add(restype=f, argtypes=[f, f])
-        pv.add(restype=d, argtypes=[d, d])
+        pv.add(restype=float32, argtypes=[float32, float32])
+        pv.add(restype=float64, argtypes=[float64, float64])
         para_ufunc = pv.build_ufunc()
 
         # build python ufunc
@@ -29,7 +28,7 @@ class TestParallelLowWorkCount(unittest.TestCase):
 
         # test it out
         def test(ty):
-            #print("Test %s" % ty)
+            print("Test %s" % ty)
             data = np.arange(1).astype(ty) # just one item
 
             ts = time()
@@ -40,13 +39,13 @@ class TestParallelLowWorkCount(unittest.TestCase):
             gold = np_ufunc(data, data)
             tnumpy = time() - ts
 
-            #print("Numpy time: %fs" % tnumpy)
-            #print("Numba time: %fs" % tnumba)
+            print("Numpy time: %fs" % tnumpy)
+            print("Numba time: %fs" % tnumba)
 
-            #if tnumba < tnumpy:
-            #    print("Numba is FASTER by %fx" % (tnumpy/tnumba))
-            #else:
-            #    print("Numba is SLOWER by %fx" % (tnumba/tnumpy))
+            if tnumba < tnumpy:
+                print("Numba is FASTER by %fx" % (tnumpy/tnumba))
+            else:
+                print("Numba is SLOWER by %fx" % (tnumba/tnumpy))
 
 
             for expect, got in zip(gold, result):

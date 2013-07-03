@@ -243,9 +243,9 @@ class CodeGen(object):
         ty = self.typemap[expr]
         phi = self.builder.phi(self.to_llvm(ty), name=expr.args.name)
 
-        for blkoff, valref in expr.args.incomings:
-            val = valref.value
-            vty = self.typemap[val]
+#        for blkoff, valref in expr.args.incomings:
+#            val = valref.value
+#            vty = self.typemap[val]
 
         self.pending_phis[phi] = expr.args.incomings
         self.valmap[expr] = phi
@@ -299,7 +299,7 @@ class CodeGen(object):
         step = expr.args.step.value
 
         index_ty = self.typemap[index]
-        step_ty = self.typemap[step]
+        #step_ty = self.typemap[step]
 
         intp = index_ty
         index = self.cast(index, intp)

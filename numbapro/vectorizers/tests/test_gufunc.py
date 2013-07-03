@@ -1,5 +1,5 @@
 from numba.decorators import jit
-from numba import *
+from numba import float32, float_
 import numpy as np
 import numpy.core.umath_tests as ut
 from numbapro.vectorizers import GUVectorize
@@ -16,8 +16,7 @@ def matmulcore(A, B, C):
 
 @testcase
 def test_numba():
-    from itertools import product
-    jit_matmulcore = jit(argtypes=[f4[:,:], f4[:,:], f4[:,:]])(matmulcore)
+    jit_matmulcore = jit(argtypes=[float32[:,:], float32[:,:], float32[:,:]])(matmulcore)
 
     A = np.arange(16, dtype=np.float32).reshape(4, 4)
     B = np.arange(16, dtype=np.float32).reshape(4, 4)
@@ -32,7 +31,7 @@ def test_numba():
 def _test_gufunc(backend, target):
     gufunc = GUVectorize(matmulcore, '(m,n),(n,p)->(m,p)', backend=backend,
                                                            target=target)
-    gufunc.add(argtypes=[f4[:,:], f4[:,:], f4[:,:]])
+    gufunc.add(argtypes=[float32[:,:], float32[:,:], float32[:,:]])
     gufunc = gufunc.build_ufunc()
 
     matrix_ct = 1001 # an odd number to test thread/block division in CUDA

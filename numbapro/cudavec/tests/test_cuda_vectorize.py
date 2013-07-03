@@ -125,7 +125,7 @@ def test_reduce2(n):
     gold = np.add.reduce(x)
     stream = cuda.stream()
     dx = cuda.to_device(x, stream)
-    result = cuda_ufunc.reduce(x, stream=stream)
+    result = cuda_ufunc.reduce(dx, stream=stream)
     assert result == gold, (result, gold)
 
 

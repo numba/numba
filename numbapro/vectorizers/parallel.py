@@ -10,16 +10,12 @@ UFuncCore also defines a work-stealing mechanism that allows idle threads
 to steal works from other threads.
 '''
 
-from llvm.core import *
-from llvm.passes import *
-from llvm.ee import TargetMachine
-
-from llvm_cbuilder import *
-import llvm_cbuilder.shortnames as C
-
-import numpy as np
-
 import sys
+
+from llvm.core import ATTR_NO_ALIAS, Type, CC_X86_STDCALL
+#from llvm.passes import *
+from llvm_cbuilder import CStruct, CDefinition, CExternal, CFunc
+import llvm_cbuilder.shortnames as C
 
 
 from . import _common
@@ -205,7 +201,6 @@ class ParallelUFunc(CDefinition):
     def _populate_context(self, contexts, common, num_thread):
         '''loop over all threads and populate contexts for each of them.
         '''
-        ONE = self.constant(num_thread.type, 1)
         with self.for_range(num_thread) as (loop, i):
             cur_ctxt = contexts[i].as_struct(Context)
             cur_ctxt.common.assign(common.reference())
@@ -294,9 +289,6 @@ class UFuncCore(CDefinition):
     def _do_workqueue(self, common, workqueue, tid, completed):
         '''process local workqueue.
         '''
-        ZERO = self.constant_null(C.int)
-
-
         with self.forever() as loop:
             workqueue.Lock()
             # Critical section
@@ -484,14 +476,8 @@ class UFuncCoreGeneric(UFuncCore):
 
     def specialize(self, lfunc):
         '''specialize to a LLVM function type
-
-        fntype : a LLVM function type (llvm.core.FunctionType)
         '''
-        fntype = lfunc.type.pointee
         self._name_ = '.'.join([self._name_, lfunc.name])
-
-        #cls.RETTY = fntype.return_type
-        #cls.ARGTYS = tuple(fntype.args)
         self.WORKER = lfunc
 
 

@@ -1,16 +1,16 @@
-from numbapro.vectorizers.parallel import *
-from numbapro.vectorizers._common import _llvm_ty_to_dtype
-from llvm_cbuilder import shortnames as C
-from llvm.core import *
-from llvm.ee import EngineBuilder
-import numpy as np
+
 import unittest
-from random import random
+import numpy as np
+from llvm_cbuilder import shortnames as C
+from llvm_cbuilder import CExecutor, CDefinition
+from llvm.core import Module
+from llvm.ee import EngineBuilder
+from numbapro.vectorizers._common import _llvm_ty_to_dtype
+from numbapro.vectorizers.parallel import parallel_vectorize_from_func
 from .support import addtest, main
 
 
 class OneOne(CDefinition):
-
     def body(self, inval):
         self.ret( (inval * inval).cast(self.OUT_TYPE) )
 

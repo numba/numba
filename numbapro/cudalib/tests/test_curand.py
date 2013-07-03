@@ -9,7 +9,7 @@ class TestCURand(unittest.TestCase):
     def test_lib(self):
         from numbapro.cudalib.curand.binding import libcurand
         curand = libcurand()
-        print('curand version %d' % libcurand().version)
+        print('curand version %d' % curand.version)
         self.assertNotEqual(libcurand().version, 0)
 
 

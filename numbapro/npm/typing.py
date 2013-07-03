@@ -1,9 +1,9 @@
 import __builtin__
 import math
-import itertools, inspect
+import itertools
 #from pprint import pprint
-from collections import namedtuple, defaultdict, deque, Set, Mapping
-from .symbolic import OP_MAP, find_dominators, Coerce, Expr
+from collections import namedtuple, defaultdict, Set
+from .symbolic import OP_MAP, Coerce, Expr
 from .utils import cache
 from . import errors
 
@@ -294,7 +294,7 @@ class Infer(object):
         processed_blocks = set()
         for blknum in sorted(self.blocks):
             blk = self.blocks[blknum]
-            values = []
+
             for value in blk.body:
                 with errors.error_context(value.lineno):
                     if value.kind == 'Phi':
@@ -395,7 +395,6 @@ class Infer(object):
         return soln
 
     def visit(self, value):
-        kind = value.kind
         fname = OP_MAP.get(value.kind, value.kind)
 
         fn = getattr(self, 'visit_' + fname, self.generic_visit)

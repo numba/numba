@@ -9,7 +9,7 @@ class TestCuFFTLib(unittest.TestCase):
     def test_lib(self):
         from numbapro.cudalib.cufft.binding import libcufft
         cufft = libcufft()
-        print('cufft version %d' % libcufft().version)
+        print('cufft version %d' % cufft.version)
         self.assertNotEqual(libcufft().version, 0)
 
 class TestCuFFTPlan(unittest.TestCase):
@@ -43,7 +43,7 @@ class TestCuFFTPlan(unittest.TestCase):
         from numbapro.cudalib.cufft.binding import Plan, CUFFT_C2C
         n = 32
         data = np.arange(n, dtype=np.complex64).reshape(2, 2, 8)
-        fft = np.empty_like(data)
+
         orig = data.copy()
         d_data = cuda.to_device(data)
         fftplan = Plan.three(CUFFT_C2C, *data.shape)
@@ -101,7 +101,7 @@ class TestCuFFTPlan(unittest.TestCase):
 
 class TestCuFFTAPI(unittest.TestCase):
     def test_fft_1d_single(self):
-        from numbapro.cudalib.cufft import FFTPlan, fft
+        from numbapro.cudalib.cufft import fft
         N = 32
         x = np.asarray(np.arange(N), dtype=np.float32)
         xf = np.fft.fft(x)
@@ -112,7 +112,7 @@ class TestCuFFTAPI(unittest.TestCase):
         self.assertTrue( np.allclose(xf[0:N/2+1], xf_gpu, atol=1e-6) )
 
     def test_fft_1d_double(self):
-        from numbapro.cudalib.cufft import FFTPlan, fft
+        from numbapro.cudalib.cufft import fft
         N = 32
         x = np.asarray(np.arange(N), dtype=np.float64)
         xf = np.fft.fft(x)
@@ -123,7 +123,7 @@ class TestCuFFTAPI(unittest.TestCase):
         self.assertTrue( np.allclose(xf[0:N/2+1], xf_gpu, atol=1e-6) )
 
     def test_fft_2d_single(self):
-        from numbapro.cudalib.cufft import FFTPlan, fft
+        from numbapro.cudalib.cufft import fft
         N2 = 2
         N1 = 32
         N = N1 * N2
@@ -137,7 +137,7 @@ class TestCuFFTAPI(unittest.TestCase):
 
 
     def test_fft_2d_double(self):
-        from numbapro.cudalib.cufft import FFTPlan, fft
+        from numbapro.cudalib.cufft import fft
         N2 = 2
         N1 = 32
         N = N1 * N2
@@ -151,7 +151,7 @@ class TestCuFFTAPI(unittest.TestCase):
 
 
     def test_fft_3d_single(self):
-        from numbapro.cudalib.cufft import FFTPlan, fft
+        from numbapro.cudalib.cufft import fft
         N3 = 2
         N2 = 2
         N1 = 32
@@ -165,7 +165,7 @@ class TestCuFFTAPI(unittest.TestCase):
         self.assertTrue( np.allclose(xf[:, :, 0:N1/2+1], xf_gpu, atol=1e-6) )
 
     def test_fft_3d_double(self):
-        from numbapro.cudalib.cufft import FFTPlan, fft
+        from numbapro.cudalib.cufft import fft
         N3 = 2
         N2 = 2
         N1 = 32
@@ -179,7 +179,7 @@ class TestCuFFTAPI(unittest.TestCase):
         self.assertTrue( np.allclose(xf[:, :, 0:N1/2+1], xf_gpu, atol=1e-6) )
 
     def test_fft_1d_roundtrip_single(self):
-        from numbapro.cudalib.cufft import FFTPlan, fft, ifft
+        from numbapro.cudalib.cufft import fft, ifft
         N = 32
         x = np.asarray(np.arange(N), dtype=np.float32)
         x0 = x.copy()
@@ -189,7 +189,7 @@ class TestCuFFTAPI(unittest.TestCase):
         self.assertTrue( np.allclose(x / N, x0, atol=1e-6) )
 
     def test_fft_1d_roundtrip_double(self):
-        from numbapro.cudalib.cufft import FFTPlan, fft, ifft
+        from numbapro.cudalib.cufft import fft, ifft
         N = 32
         x = np.asarray(np.arange(N), dtype=np.float64)
         x0 = x.copy()
@@ -200,7 +200,7 @@ class TestCuFFTAPI(unittest.TestCase):
 
 
     def test_fft_2d_roundtrip_single(self):
-        from numbapro.cudalib.cufft import FFTPlan, fft, ifft
+        from numbapro.cudalib.cufft import fft, ifft
         N2 = 2
         N1 = 32
         N = N2 * N1
@@ -212,7 +212,7 @@ class TestCuFFTAPI(unittest.TestCase):
         self.assertTrue( np.allclose(x / N, x0, atol=1e-6) )
 
     def test_fft_3d_roundtrip_single(self):
-        from numbapro.cudalib.cufft import FFTPlan, fft, ifft
+        from numbapro.cudalib.cufft import fft, ifft
         N3 = 2
         N2 = 2
         N1 = 32
@@ -225,7 +225,7 @@ class TestCuFFTAPI(unittest.TestCase):
         self.assertTrue( np.allclose(x / N, x0, atol=1e-6) )
 
     def test_fft_inplace_1d_single(self):
-        from numbapro.cudalib.cufft import FFTPlan, fft_inplace
+        from numbapro.cudalib.cufft import fft_inplace
         N = 32
         x = np.asarray(np.arange(N), dtype=np.complex64)
         xf = np.fft.fft(x)
@@ -235,7 +235,7 @@ class TestCuFFTAPI(unittest.TestCase):
         self.assertTrue( np.allclose(xf, x, atol=1e-6) )
 
     def test_fft_inplace_1d_double(self):
-        from numbapro.cudalib.cufft import FFTPlan, fft_inplace
+        from numbapro.cudalib.cufft import fft_inplace
         N = 32
         x = np.asarray(np.arange(N), dtype=np.complex128)
         xf = np.fft.fft(x)
@@ -245,7 +245,7 @@ class TestCuFFTAPI(unittest.TestCase):
         self.assertTrue( np.allclose(xf, x, atol=1e-6) )
 
     def test_fft_inplace_2d_single(self):
-        from numbapro.cudalib.cufft import FFTPlan, fft_inplace
+        from numbapro.cudalib.cufft import fft_inplace
         N1 = 32
         N2 = 2
         N = N1 * N2
@@ -257,7 +257,7 @@ class TestCuFFTAPI(unittest.TestCase):
         self.assertTrue( np.allclose(xf, x, atol=1e-6) )
 
     def test_fft_inplace_2d_double(self):
-        from numbapro.cudalib.cufft import FFTPlan, fft_inplace
+        from numbapro.cudalib.cufft import fft_inplace
         N1 = 32
         N2 = 2
         N = N1 * N2
@@ -268,8 +268,8 @@ class TestCuFFTAPI(unittest.TestCase):
 
         self.assertTrue( np.allclose(xf, x, atol=1e-6) )
 
-    def test_fft_1d_roundtrip_single(self):
-        from numbapro.cudalib.cufft import FFTPlan, fft_inplace, ifft_inplace
+    def test_fft_1d_roundtrip_single_2(self):
+        from numbapro.cudalib.cufft import fft_inplace, ifft_inplace
         N = 32
         x = np.asarray(np.arange(N), dtype=np.complex64)
         x0 = x.copy()
@@ -279,8 +279,8 @@ class TestCuFFTAPI(unittest.TestCase):
         
         self.assertTrue( np.allclose(x / N, x0, atol=1e-6) )
 
-    def test_fft_1d_roundtrip_double(self):
-        from numbapro.cudalib.cufft import FFTPlan, fft_inplace, ifft_inplace
+    def test_fft_1d_roundtrip_double_2(self):
+        from numbapro.cudalib.cufft import fft_inplace, ifft_inplace
         N = 32
         x = np.asarray(np.arange(N), dtype=np.complex128)
         x0 = x.copy()
@@ -291,8 +291,8 @@ class TestCuFFTAPI(unittest.TestCase):
         self.assertTrue( np.allclose(x / N, x0, atol=1e-6) )
 
 
-    def test_fft_2d_roundtrip_single(self):
-        from numbapro.cudalib.cufft import FFTPlan, fft_inplace, ifft_inplace
+    def test_fft_2d_roundtrip_single_2(self):
+        from numbapro.cudalib.cufft import fft_inplace, ifft_inplace
         N2 = 2
         N1 = 32
         N = N1 * N2
@@ -305,7 +305,7 @@ class TestCuFFTAPI(unittest.TestCase):
         self.assertTrue( np.allclose(x / N, x0, atol=1e-6) )
 
     def test_fft_3d_roundtrip_double(self):
-        from numbapro.cudalib.cufft import FFTPlan, fft_inplace, ifft_inplace
+        from numbapro.cudalib.cufft import fft_inplace, ifft_inplace
         N3 = 2
         N2 = 2
         N1 = 8

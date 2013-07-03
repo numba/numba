@@ -1,6 +1,5 @@
-import numpy as np
 from ..compiler import compile
-from ..types import *
+from ..types import int32, float64, complex128
 from .support import testcase, main
 
 A_INT = 1234

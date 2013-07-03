@@ -68,10 +68,10 @@ class TestCuBlasBinding(unittest.TestCase):
     def test_Zdotu(self):
         self.Tdot('Zdotu', np.complex128)
 
-    def test_Cdotu(self):
+    def test_Cdotc(self):
         self.Tdot('Cdotc', np.complex64)
 
-    def test_Zdotu(self):
+    def test_Zdotc(self):
         self.Tdot('Zdotc', np.complex128)
 
     def Tscal(self, fn, dtype):
@@ -370,8 +370,6 @@ class TestCuBlasBinding(unittest.TestCase):
     def Tgemv(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
         blas = cuBlas()
-        kl = 0
-        ku = 0
         alpha = 1.
         beta = 0.
         A = np.array([[1, 2, 0],
@@ -617,7 +615,6 @@ class TestCuBlasBinding(unittest.TestCase):
         blas = cuBlas()
         uplo = 'U'
         lda = n = 3
-        k = 0
         y0 = y.copy()
         incx = incy = 1
         getattr(blas, fn)(uplo, n, alpha, dA, lda, dx, incx, beta, dy, incy)
@@ -672,7 +669,7 @@ class TestCuBlasBinding(unittest.TestCase):
     def test_Ssbmv(self):
         self._Tsbmv('Ssbmv', np.float32)
 
-    def test_Dsymv(self):
+    def test_Dsbmv(self):
         self._Tsbmv('Dsbmv', np.float64)
 
     _Thbmv = _Tsbmv
@@ -698,8 +695,7 @@ class TestCuBlasBinding(unittest.TestCase):
         beta = .34
         blas = cuBlas()
         uplo = 'U'
-        lda = n = 3
-        k = 0
+        n = 3
         y0 = y.copy()
         incx = incy = 1
         getattr(blas, fn)(uplo, n, alpha, dAP, dx, incx, beta, dy, incy)
@@ -718,7 +714,7 @@ class TestCuBlasBinding(unittest.TestCase):
     def test_Chpmv(self):
         self._Thpmv('Chpmv', np.complex64)
 
-    def test_Dspmv(self):
+    def test_Zspmv(self):
         self._Tspmv('Zhpmv', np.complex128)
 
     def _Tger(self, fn, dtype):
@@ -777,9 +773,9 @@ class TestCuBlasBinding(unittest.TestCase):
         uplo = 'U'
         blas = cuBlas()
 
-        lda = m = n = 3
+        lda = n = 3
         A0 = A.copy()
-        incx = incy = 1
+        incx = 1
         getattr(blas, fn)(uplo, n, alpha, dx, incx, dA, lda)
         dA.copy_to_host(A)
         
@@ -811,9 +807,9 @@ class TestCuBlasBinding(unittest.TestCase):
         uplo = 'U'
         blas = cuBlas()
 
-        lda = m = n = 3
+        lda = n = 3
         A0 = A.copy()
-        incx = incy = 1
+        incx = 1
         getattr(blas, fn)(uplo, n, alpha, dx, incx, dA, lda)
         dA.copy_to_host(A)
         
@@ -839,9 +835,9 @@ class TestCuBlasBinding(unittest.TestCase):
         uplo = 'U'
         blas = cuBlas()
 
-        lda = m = n = 3
+        n = 3
         AP0 = AP.copy()
-        incx = incy = 1
+        incx = 1
         getattr(blas, fn)(uplo, n, alpha, dx, incx, dAP)
         dAP.copy_to_host(AP)
         
@@ -875,7 +871,7 @@ class TestCuBlasBinding(unittest.TestCase):
         uplo = 'U'
         blas = cuBlas()
 
-        lda = m = n = 3
+        lda = n = 3
         A0 = A.copy()
         incx = incy = 1
         getattr(blas, fn)(uplo, n, alpha, dx, incx, dy, incy, dA, lda)
@@ -994,16 +990,12 @@ class TestCuBlasBinding(unittest.TestCase):
         A = np.array([[1, 2, 0],
                       [0, 3, 0],
                       [1, 0, 1]], order='F', dtype=dtype)
-        B = np.array([[2, 2, 0],
-                      [7, 0, 0],
-                      [1, 4, 1]], order='F', dtype=dtype)
 
         C = np.array([[0, 9, 0],
                       [0, 1, 1],
                       [0, 0, 1]], order='F', dtype=dtype)
 
         dA = cuda.to_device(A)
-        dB = cuda.to_device(B)
         dC = cuda.to_device(C)
 
         alpha = 1.2
@@ -1014,7 +1006,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
         blas = cuBlas()
 
-        lda = ldb = ldc = m = n = k = 3
+        lda = ldc = n = k = 3
         C0 = C.copy()
         getattr(blas, fn)(uplo, trans, n, k, alpha, dA, lda, beta, dC, ldc)
         dC.copy_to_host(C)
@@ -1063,11 +1055,10 @@ class TestCuBlasBinding(unittest.TestCase):
 
         side = 'L'
         uplo =  'U'
-        trans = 'N'
 
         blas = cuBlas()
 
-        lda = ldb = ldc = m = n = k = 3
+        lda = ldb = ldc = m = n = 3
         C0 = C.copy()
         getattr(blas, fn)(side, uplo, m, n, alpha, dA, lda, dB, ldb, beta, dC,
                           ldc)
@@ -1107,8 +1098,6 @@ class TestCuBlasBinding(unittest.TestCase):
         dB = cuda.to_device(B)
 
         alpha = 1.2
-        beta = .34
-
         side = 'L'
         uplo =  'U'
         trans = 'N'
@@ -1116,7 +1105,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
         blas = cuBlas()
 
-        lda = ldb = ldc = m = n = k = 3
+        lda = ldb = m = n = 3
         B0 = B.copy()
         getattr(blas, fn)(side, uplo, trans, diag, m, n, alpha, dA, lda, dB,
                           ldb)
@@ -1154,7 +1143,6 @@ class TestCuBlasBinding(unittest.TestCase):
         dC = cuda.to_device(C)
 
         alpha = 1.2
-        beta = .34
 
         side = 'L'
         uplo =  'U'
@@ -1163,7 +1151,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
         blas = cuBlas()
 
-        lda = ldb = ldc = m = n = k = 3
+        lda = ldb = ldc = m = n = 3
         C0 = C.copy()
         getattr(blas, fn)(side, uplo, trans, diag, m, n, alpha, dA, lda, dB,
                           ldb, dC, ldc)
@@ -1200,11 +1188,10 @@ class TestCuBlasBinding(unittest.TestCase):
         dC = cuda.to_device(C)
 
         side = 'L'
-        diag = False
 
         blas = cuBlas()
 
-        lda = ldb = ldc = m = n = k = 3
+        lda = ldc = m = n = 3
         C0 = C.copy()
         incx = 1
         getattr(blas, fn)(side, m, n, dA, lda, dx, incx, dC, ldc)
@@ -1250,7 +1237,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
         blas = cuBlas()
 
-        lda = ldb = ldc = m = n = k = 3
+        lda = ldb = ldc = m = n = 3
         C0 = C.copy()
         getattr(blas, fn)(transa, transb, m, n, alpha, dA, lda, beta, dB,
                           ldb, dC, ldc)
@@ -1498,10 +1485,6 @@ class TestCuBlasAPI(unittest.TestCase):
         self._test_all(self.Tgbmv, self.blas.gbmv)
     
     def Tgemv(self, fn, dtype):
-        from numbapro.cudalib.cublas.binding import cuBlas
-        blas = cuBlas()
-        kl = 0
-        ku = 0
         alpha = 1.
         beta = 0.
         A = np.array([[1, 2, 0],
@@ -1630,7 +1613,6 @@ class TestCuBlasAPI(unittest.TestCase):
         beta = .34
         uplo = 'U'
         n = 3
-        k = 0
         y0 = y.copy()
         fn(uplo, n, alpha, A, x, beta, y)
         self.assertFalse(all(y == y0))
@@ -1677,7 +1659,6 @@ class TestCuBlasAPI(unittest.TestCase):
         beta = .34
         uplo = 'U'
         n = 3
-        k = 0
         y0 = y.copy()
         fn(uplo, n, alpha, AP, x, beta, y)
         self.assertFalse(all(y == y0))
@@ -1719,7 +1700,7 @@ class TestCuBlasAPI(unittest.TestCase):
 
         alpha = 1.2
         uplo = 'U'
-        m = n = 3
+        n = 3
         A0 = A.copy()
         fn(uplo, n, alpha, x, A)
         self.assertFalse(np.all(A == A0))
@@ -1734,7 +1715,7 @@ class TestCuBlasAPI(unittest.TestCase):
         x = np.array([1, 2, 3], dtype=dtype)
         alpha = 1.2
         uplo = 'U'
-        m = n = 3
+        n = 3
         A0 = A.copy()
         fn(uplo, n, alpha, x, A)
         self.assertFalse(np.all(A == A0))
@@ -1749,7 +1730,7 @@ class TestCuBlasAPI(unittest.TestCase):
         x = np.array([1, 2, 3], dtype=dtype)
         alpha = 1.2
         uplo = 'U'
-        m = n = 3
+        n = 3
         AP0 = AP.copy()
         fn(uplo, n, alpha, x, AP)
         self.assertFalse(np.all(AP == AP0))
@@ -1770,7 +1751,7 @@ class TestCuBlasAPI(unittest.TestCase):
         y = np.array([8, 2, 3], dtype=dtype)
         alpha = 1.2
         uplo = 'U'
-        m = n = 3
+        n = 3
         A0 = A.copy()
         fn(uplo, n, alpha, x, y, A)
         self.assertFalse(np.all(A == A0))
@@ -1834,9 +1815,7 @@ class TestCuBlasAPI(unittest.TestCase):
         A = np.array([[1, 2, 0],
                       [0, 3, 0],
                       [1, 0, 1]], order='F', dtype=dtype)
-        B = np.array([[2, 2, 0],
-                      [7, 0, 0],
-                      [1, 4, 1]], order='F', dtype=dtype)
+
 
         C = np.array([[0, 9, 0],
                       [0, 1, 1],
@@ -1845,7 +1824,7 @@ class TestCuBlasAPI(unittest.TestCase):
         beta = .34
         uplo = 'U'
         trans = 'N'
-        m = n = k = 3
+        n = k = 3
         C0 = C.copy()
         fn(uplo, trans, n, k, alpha, A, beta, C)
         self.assertFalse(np.all(C == C0))
@@ -1873,8 +1852,7 @@ class TestCuBlasAPI(unittest.TestCase):
         beta = .34
         side = 'L'
         uplo =  'U'
-        trans = 'N'
-        m = n = k = 3
+        m = n = 3
         C0 = C.copy()
         fn(side, uplo, m, n, alpha, A, B, beta, C)
         self.assertFalse(np.all(C == C0))
@@ -1895,12 +1873,11 @@ class TestCuBlasAPI(unittest.TestCase):
                       [7, 0, 0],
                       [1, 4, 1]], order='F', dtype=dtype)
         alpha = 1.2
-        beta = .34
         side = 'L'
         uplo =  'U'
         trans = 'N'
         diag = False
-        m = n = k = 3
+        m = n = 3
         B0 = B.copy()
         fn(side, uplo, trans, diag, m, n, alpha, A, B)
         self.assertFalse(np.all(B == B0))
@@ -1920,12 +1897,11 @@ class TestCuBlasAPI(unittest.TestCase):
                       [0, 1, 1],
                       [0, 0, 1]], order='F', dtype=dtype)
         alpha = 1.2
-        beta = .34
         side = 'L'
         uplo =  'U'
         trans = 'N'
         diag = False
-        m = n = k = 3
+        m = n = 3
         C0 = C.copy()
         fn(side, uplo, trans, diag, m, n, alpha, A, B, C)
         self.assertFalse(np.all(C == C0))
@@ -1942,8 +1918,7 @@ class TestCuBlasAPI(unittest.TestCase):
                       [0, 1, 1],
                       [0, 0, 1]], order='F', dtype=dtype)
         side = 'L'
-        diag = False
-        m = n = k = 3
+        m = n = 3
         C0 = C.copy()
         fn(side, m, n, A, x, C)
         self.assertFalse(np.all(C == C0))
@@ -1967,7 +1942,7 @@ class TestCuBlasAPI(unittest.TestCase):
         beta = .34
         transa = 'N'
         transb = 'N'
-        m = n = k = 3
+        m = n = 3
         C0 = C.copy()
         fn(transa, transb, m, n, alpha, A, beta, B, C)
         self.assertFalse(np.all(C == C0))

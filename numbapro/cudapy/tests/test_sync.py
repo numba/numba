@@ -1,9 +1,9 @@
 import numpy as np
 
-from .support import testcase, main, run
+from .support import testcase, main
 from numbapro import cuda
 from numbapro import cudapy
-from numbapro.npm.types import *
+from numbapro.npm.types import int32, float32, arraytype
 import numbapro
 
 def useless_sync(ary):

@@ -1,12 +1,11 @@
-from numbapro.vectorizers.stream import stream_vectorize_from_func
-from numbapro.vectorizers._common import _llvm_ty_to_dtype
-from llvm_cbuilder import *
+import unittest
+import numpy as np
+from llvm_cbuilder import CExecutor, CDefinition
 from llvm_cbuilder import shortnames as C
 from llvm.ee import EngineBuilder
-from llvm.core import *
-import numpy as np
-import unittest
-from random import random
+from llvm.core import Module
+from numbapro.vectorizers.stream import stream_vectorize_from_func
+from numbapro.vectorizers._common import _llvm_ty_to_dtype
 from .support import addtest, main
 
 class OneOne(CDefinition):

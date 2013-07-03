@@ -1,5 +1,7 @@
 import numpy as np
-from ctypes import *
+from ctypes import (c_float, c_int, c_void_p, POINTER, byref, cast, c_ulonglong,
+                    c_uint, c_double, c_size_t)
+
 
 from numbapro.cudadrv.driver import cu_stream, device_pointer
 from numbapro.cudalib.libutils import Lib, ctype_function
@@ -207,7 +209,7 @@ class Generator(finalizer.OwnerMixin):
     def __init__(self, rng_type=CURAND_RNG_TEST):
         self._api = libcurand()
         self._handle = curandGenerator_t(0)
-        status = self._api.curandCreateGenerator(byref(self._handle), rng_type)
+        self._api.curandCreateGenerator(byref(self._handle), rng_type)
         self._finalizer_track((self._handle, self._api))
 
     @classmethod

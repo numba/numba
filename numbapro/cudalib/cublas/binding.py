@@ -1,11 +1,9 @@
-import sys
 import numpy as np
-from ctypes import *
+from ctypes import c_float, c_double, byref, c_int, Structure, c_void_p, POINTER
 
 from numbapro.cudalib.libutils import Lib, ctype_function
 from numbapro.cudadrv.driver import cu_stream, device_pointer, host_pointer
 from numbapro._utils import finalizer
-from numbapro import cuda
 
 INV_STATUS = dict(
     CUBLAS_STATUS_SUCCESS         =0,

@@ -1,6 +1,5 @@
-from numbapro import jit, cuda
-from numbapro import float32, int32, int64, uint32
-import numbapro.cudalib.cublas as cublas
+from numbapro import cuda
+from numbapro import float32
 import numpy as np
 from .support import main, testcase
 
@@ -31,7 +30,7 @@ def test_for_pre():
     N = 8
 
     A, B = generate_input(N)
-    D = np.empty(A.shape, dtype=A.dtype)
+    
     E = np.zeros(A.shape, dtype=A.dtype)
     F = np.empty(A.shape, dtype=A.dtype)
 

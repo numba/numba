@@ -1,9 +1,6 @@
-import sys
 import numpy as np
 from .support import testcase, main
 from numbapro import cuda, uint32
-import numbapro
-from numbapro import cudapy
 
 def atomic_add(ary):
     tid = cuda.threadIdx.x

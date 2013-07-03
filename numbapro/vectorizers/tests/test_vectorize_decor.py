@@ -1,5 +1,5 @@
 from .support import addtest, main
-from numbapro import vectorize, f8, f4
+from numbapro import vectorize, float64, float32
 import math
 import numpy as np
 import unittest
@@ -22,13 +22,13 @@ class TestVectorizeDecor(unittest.TestCase):
 
     def test_all_cpu_based_targets(self):
         for target in ['cpu', 'stream', 'parallel']:
-            numba_sinc = vectorize(['f8(f8)', 'f4(f4)'], target=target)(sinc)
+            numba_sinc = vectorize(['float64(float64)', 'float32(float32)'], target=target)(sinc)
             numpy_sinc = np.vectorize(sinc)
             self._run_and_compare(numba_sinc, numpy_sinc)
 
     def test_all_cpu_based_targets_2(self):
         for target in ['cpu', 'stream', 'parallel']:
-            numba_sinc = vectorize([f8(f8), f4(f4)], target=target)(sinc)
+            numba_sinc = vectorize([float64(float64), float32(float32)], target=target)(sinc)
             numpy_sinc = np.vectorize(sinc)
             self._run_and_compare(numba_sinc, numpy_sinc)
 

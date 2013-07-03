@@ -39,7 +39,7 @@ def _init_nvvm():
 
 def _init_numba_jit_registry():
     from numbapro.cudapy.decorators import jit
-    from numba.decorators import jit_targets, autojit_wrappers
+    from numba.decorators import jit_targets
     jit_targets[('gpu', 'ast')] = jit
     # cannot initialize autojit
 

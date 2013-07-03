@@ -1,9 +1,4 @@
-# Raise ImportError if we cannot find CUDA Driver.
-
-from llvm import core as _lc
 import numpy as np
-from ctypes import *
-from numbapro.cudadrv import driver as _cuda
 from numbapro.cudadrv import devicearray
 from numbapro import cuda
 import math
@@ -43,7 +38,6 @@ class CudaUFuncDispatcher(object):
         '''Reshape the broadcasted arrays so that they are all 1D arrays.
         Uses ndarray.ravel() to flatten.  It only copy if necessary.
         '''
-        reshape = broadcast_arrays[0].shape
         for i, ary in enumerate(broadcast_arrays):
             if ary.ndim > 1: # flatten multi-dimension arrays
                 broadcast_arrays[i] = ary.ravel() # copy if necessary
@@ -235,7 +229,6 @@ class CudaUFuncDispatcher(object):
 
 
     def __reduce(self, mem, gpu_mems, stream):
-        from math import log, floor
         n = mem.shape[0]
         if n % 2 != 0: # odd?
             fatcut, thincut = mem.split(n - 1)

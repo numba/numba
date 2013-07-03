@@ -141,7 +141,6 @@ def mapped(*arylist, **kws):
 
     devarylist = []
     for ary, pm in zip(arylist, pmlist):
-        dptr = driver.device_pointer(pm)
         devary = devicearray.from_array_like(ary, gpu_data=pm, stream=stream)
         devarylist.append(devary)
     if len(devarylist) == 1:
@@ -167,7 +166,7 @@ def select_device(device_id):
     '''
     drv = driver.Driver()
     device = driver.Device(device_id)
-    context = drv.create_context(device)
+    drv.create_context(device)
     return device
 
 def get_current_device():

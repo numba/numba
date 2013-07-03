@@ -1,6 +1,5 @@
-import sys
 import numpy as np
-from ctypes import *
+from ctypes import c_void_p, c_int, POINTER, byref
 
 from numbapro.cudalib.libutils import Lib, ctype_function
 from numbapro.cudadrv.driver import cu_stream, device_pointer
@@ -164,7 +163,7 @@ class Plan(finalizer.OwnerMixin):
         inst._api = libcufft()
         inst._handle = cufftHandle()
         BATCH = 1           # deprecated args to cufftPlan1d
-        status = inst._api.cufftPlan1d(byref(inst._handle), int(nx), int(dtype),
+        inst._api.cufftPlan1d(byref(inst._handle), int(nx), int(dtype),
                                        BATCH)
         inst.dtype = dtype
         inst._finalizer_track((inst._handle, inst._api))
@@ -176,7 +175,7 @@ class Plan(finalizer.OwnerMixin):
         inst = object.__new__(cls)
         inst._api = libcufft()
         inst._handle = cufftHandle()
-        status = inst._api.cufftPlan2d(byref(inst._handle), int(nx), int(ny),
+        inst._api.cufftPlan2d(byref(inst._handle), int(nx), int(ny),
                                        int(dtype))
         inst.dtype = dtype
         inst._finalizer_track((inst._handle, inst._api))
@@ -188,7 +187,7 @@ class Plan(finalizer.OwnerMixin):
         inst = object.__new__(cls)
         inst._api = libcufft()
         inst._handle = cufftHandle()
-        status = inst._api.cufftPlan3d(byref(inst._handle), int(nx), int(ny),
+        inst._api.cufftPlan3d(byref(inst._handle), int(nx), int(ny),
                                        int(nz), int(dtype))
         inst.dtype = dtype
         inst._finalizer_track((inst._handle, inst._api))
@@ -202,12 +201,12 @@ class Plan(finalizer.OwnerMixin):
         inst._handle = cufftHandle()
 
         c_shape = np.asarray(shape, dtype=np.int32)
-        status = inst._api.cufftPlanMany(byref(inst._handle),
-                                         len(shape),
-                                         c_shape.ctypes.data,
-                                         None, 1, 0,
-                                         None, 1, 0,
-                                         int(dtype), int(batch))
+        inst._api.cufftPlanMany(byref(inst._handle),
+                                len(shape),
+                                c_shape.ctypes.data,
+                                None, 1, 0,
+                                None, 1, 0,
+                                int(dtype), int(batch))
         inst.shape = shape
         inst.dtype = dtype
         inst.batch = batch
@@ -237,8 +236,6 @@ class Plan(finalizer.OwnerMixin):
 
     def set_fftw_all_mode(self):
         return self.set_compatibility_mode(CUFFT_COMPATIBILITY_FFTW_ALL)
-
-    set_native_mode = set_fftw_padding_mode
 
     def exe(self, idata, odata, dir):
         postfix = cufft_dtype_to_name[self.dtype]

@@ -1,7 +1,6 @@
 from .support import addtest, main
 from numbapro import guvectorize
-from numba import *
-import math
+from numba import void, float32
 import numpy as np
 import numpy.core.umath_tests as ut
 import unittest
@@ -21,7 +20,7 @@ class TestVectorizeDecor(unittest.TestCase):
     def test_cpu_guvectorize(self):
         target = 'cpu'
 
-        gufunc = guvectorize([void(f4[:,:], f4[:,:], f4[:,:])],
+        gufunc = guvectorize([void(float32[:,:], float32[:,:], float32[:,:])],
                              '(m,n),(n,p)->(m,p)',
                              target=target)(matmulcore)
 

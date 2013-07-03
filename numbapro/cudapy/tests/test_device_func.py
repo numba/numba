@@ -1,9 +1,8 @@
 import numpy as np
-
-from .support import testcase, main, run
+from .support import testcase, main
 from numbapro import cuda
 from numbapro import cudapy
-from numbapro.npm.types import *
+from numbapro.npm.types import float32, arraytype
 
 def add2f(a, b):
     return a + b

@@ -19,7 +19,7 @@ class TestSupport(object):
 
     def addtest(self, testcase):
         assert testcase.__name__ not in self.tests, \
-            "duplicated test name %s" % func.__name__
+            "duplicated test name %s" % testcase.__name__
         if hasattr(testcase, 'runTest'):
             self.tests[testcase.__name__] = testcase()
         else:
@@ -89,6 +89,7 @@ class TestSupport(object):
         else:
             suite = self.get_test_suite()
         result = runner.run(suite)
+        return result
 
 
 def set_base(globals):

@@ -1,6 +1,6 @@
 import numpy as np
 from ..compiler import compile
-from ..types import *
+from ..types import float32, complex64
 from .support import testcase, main
 
 def complex_real(c):

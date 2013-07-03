@@ -1,7 +1,6 @@
 from numbapro import cuda
 from numba import float32
 import numpy as np
-import math
 from timeit import default_timer as time
 from .support import testcase, main
 
