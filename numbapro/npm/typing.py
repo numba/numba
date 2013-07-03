@@ -28,12 +28,12 @@ class ScalarType(namedtuple('ScalarType', ['code'])):
 
     @property
     def is_unsigned(self):
-        assert self.is_int
+        assert self.is_int, "expecting an int"
         return self.kind == 'u'
 
     @property
     def is_signed(self):
-        assert self.is_int
+        assert self.is_int, "expecting an int"
         return self.kind == 'i'
 
     @property
@@ -55,7 +55,7 @@ class ScalarType(namedtuple('ScalarType', ['code'])):
 
     @property
     def complex_element(self):
-        assert self.is_complex
+        assert self.is_complex, "expecting a complex"
         return ScalarType('f%d' % (self.bitwidth//2))
 
     def coerce(self, other):
@@ -181,12 +181,12 @@ numeric_set  = int_set | float_set | complex_set
 scalar_set   = numeric_set | bool_set
 
 def arraytype(elemty, ndim, order):
-    assert order in 'CFA'
+    assert order in 'CFA', "invalid array order"
     return ArrayType(elemty, ndim, order)
 
 
 def tupletype(elemty, count):
-    assert elemty.is_scalar
+    assert elemty.is_scalar, "tuple element must be scalars"
     return TupleType(elemty, count)
 
 ###############################################################################
@@ -382,7 +382,8 @@ class Infer(object):
                 if inc in soln:
                     got = soln[inc]
                     if expect != got:
-                        assert can_coerce(expect, got)
+                        assert can_coerce(expect, got), \
+                            "cannot coerce %s -> %s" % (expect, got)
                         for blknum, ref in phi.args.incomings:
                             if ref.value is inc:
                                 break
@@ -522,7 +523,8 @@ class Infer(object):
             self.rules[rhs].add(Restrict(int_set))
 
         else:
-            assert value.kind in ['+', '-', '*', '%']
+            assert value.kind in ['+', '-', '*', '%'], \
+                "unsupport binary op %s" % value.kind
             
             def rule(value, lhs, rhs):
                 return cast_penalty(coerce(lhs, rhs), value)
@@ -603,9 +605,11 @@ class Infer(object):
         obj = value.args.obj.value
         self.rules[obj].add(Restrict(filter_array(self.possible_types)))
         idx = value.args.idx
-        assert value.args.attr in ['size', 'ndim', 'shape', 'strides']
+        assert value.args.attr in ['size', 'ndim', 'shape', 'strides'], \
+            "unsupport array attribute %s" % value.args.attr
         if idx:
-            assert value.args.attr in ['shape', 'strides']
+            assert value.args.attr in ['shape', 'strides'], \
+                "unsupport array attribute %s" % value.args.attr
             self.rules[idx.value].add(Restrict(int_set))
 
         self.rules[value].add(MustBe(self.intp))
@@ -680,7 +684,7 @@ class Rule(object):
     conditional = False
 
     def __init__(self, checker):
-        assert callable(callable)
+        assert callable(checker), "expecting a callable"
         self.checker = checker
 
 class Require(Rule):
@@ -704,7 +708,7 @@ def MustBe(expect):
 
 
 def Restrict(tset):
-    assert isinstance(tset, Set)
+    assert isinstance(tset, Set), "expecting a set"
     def _restrict(t):
         return t in tset
     return Require(_restrict)

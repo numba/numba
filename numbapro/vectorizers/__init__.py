@@ -36,9 +36,9 @@ _guvectorizers = {
 }
 
 def GUVectorize(func, signature, backend='ast', target='cpu'):
-    assert backend in _guvectorizers
+    assert backend in _guvectorizers, "unsupported backend"
     targets = _guvectorizers[backend]
-    assert target in targets
+    assert target in targets, "unsupported target"
     return targets[target](func, signature)
 
 def guvectorize(fnsigs, gusig, backend='ast', target='cpu'):

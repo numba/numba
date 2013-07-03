@@ -21,7 +21,7 @@ def ndarray_device_transfer_data(ary, gpu_data, stream=0):
 
 def ndarray_populate_head(gpu_head, gpu_data, shape, strides, stream=0):
     nd = len(shape)
-    assert nd > 0
+    assert nd > 0, "0 or -ve dimension"
 
     arraytype = make_array_type(nd)
     struct = arraytype(data = driver.device_pointer(gpu_data),

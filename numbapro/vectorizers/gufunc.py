@@ -32,7 +32,7 @@ class _GeneralizedUFuncFromFunc(_common.CommonVectorizeFromFunc):
 
         return a function object which can be called from python.
         '''
-        assert 'cuda_dispatcher' not in kws, "Temporary check for mismatch API"
+        assert 'cuda_dispatcher' not in kws, "temporary check for mismatch API"
         kws['signature'] = signature
 
         try:
@@ -84,7 +84,7 @@ class GUFuncASTVectorize(object):
         return [t.lfunc for t in self.translates]
 
     def build_ufunc(self):
-        assert self.translates, "No translation"
+        assert self.translates, "empty definition"
         lfunclist = self._get_lfunc_list()
         tyslist = self._get_tys_list()
         engine = self._get_ee()
@@ -153,7 +153,7 @@ class PyArray(CStruct):
     ]
 
     def fakeit(self, dtype, data, dimensions, steps):
-        assert len(dimensions) == len(steps)
+        assert len(dimensions) == len(steps), "not enough element for `steps`"
         constant = self.parent.constant
 
         self.ob_refcnt.assign(constant(C.intp, 1))
@@ -219,7 +219,7 @@ class GUFuncEntry(CDefinition):
     def body(self, args, dimensions, steps, data):
         diminfo = list(_parse_signature(self.Signature))
         n_pyarys = len(diminfo)
-        assert n_pyarys == len(self.dtypes)
+        assert n_pyarys == len(self.dtypes), "not empty array args"
 
         # extract unique dimension names
         dims = []

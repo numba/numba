@@ -114,9 +114,9 @@ class SymbolicExecution(object):
 
     def prepare_arguements(self):
         argspec = inspect.getargspec(self.func)
-        assert not argspec.defaults
-        assert not argspec.varargs
-        assert not argspec.keywords
+        assert not argspec.defaults, "does not support defaults"
+        assert not argspec.varargs, "does not support varargs"
+        assert not argspec.keywords, "does not support keywords"
         for i, arg in enumerate(argspec.args):
             value = Expr('Arg', None, Arg(num=i, name=arg))
             self.curblock.varmap[arg].append(self.insert(value))
@@ -152,7 +152,7 @@ class SymbolicExecution(object):
             with errors.error_context(inst.lineno):
                 func(inst)
 
-        assert not self.stack, self.stack
+        assert not self.stack, "stack not empty %s" % self.stack
         self.complete_for()
         self.strip_dead_block()
         self.doms = find_dominators(self.blocks)
@@ -259,7 +259,8 @@ class SymbolicExecution(object):
         return self.curblock.insert(expr)
 
     def terminate(self, term):
-        assert self.curblock.terminator is None
+        assert self.curblock.terminator is None, \
+                    "basicblock has already been terminated"
         self.curblock.terminator = term
 
     def make_subblock(self, offset):
@@ -333,7 +334,7 @@ class SymbolicExecution(object):
         def pop_kws():
             val = self.pop()
             key = self.pop()
-            assert key.value.kind == 'Const'
+            assert key.value.kind == 'Const', "keyword is not a constant"
             key = key.value.args.value
             return key, val
 
@@ -525,7 +526,7 @@ class SymbolicExecution(object):
     def visit_UNPACK_SEQUENCE(self, inst):
         tos = self.pop()
         if isinstance(tos, ArrayAttr):
-            assert tos.idx is None
+            assert tos.idx is None, "cannot unpack"
             count = inst.arg
             for i in reversed(range(count)):
                 ci = self.insert(Expr('Const', inst, Const(i)))
@@ -721,7 +722,8 @@ class Block(object):
 
 class Expr(object):
     def __init__(self, kind, inst, args=None):
-        assert args is None or isinstance(args, tuple)
+        assert args is None or isinstance(args, tuple), \
+                "invalid args to Expr"
         self.kind = kind
         self.lineno = inst.lineno if inst is not None else -1
         self.args = args
@@ -738,7 +740,8 @@ class Expr(object):
 
 class Term(object):
     def __init__(self, kind, inst, args=None):
-        assert args is None or isinstance(args, tuple)
+        assert args is None or isinstance(args, tuple), \
+            "invalid args to Term"
         self.kind = kind
         self.lineno = inst.lineno if inst is not None else -1
         self.args = args

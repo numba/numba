@@ -276,7 +276,8 @@ class CodeGen(object):
         self.valmap[expr] = self.do_cast(res, opty, finalty)
 
     def expr_BoolOp(self, expr):
-        assert self.typemap[expr] == typing.boolean
+        assert self.typemap[expr] == typing.boolean, \
+                "boolop must return a boolean"
         lhs, rhs = expr.args.lhs.value, expr.args.rhs.value
         lty, rty = map(self.typemap.get, [lhs, rhs])
         opty = lty.coerce(rty)
@@ -288,7 +289,8 @@ class CodeGen(object):
         operand = expr.args.value.value
         ity = self.typemap[operand]
         if expr.kind == 'not':
-            assert finalty.is_int and finalty.bitwidth == 1
+            assert finalty == typing.boolean, \
+                "return type of `not x` must be boolean"
             pred = self._do_compare('==', ity, self.valmap[operand],
                                     self.define_const(ity, 0))
             self.valmap[expr] = pred
@@ -395,8 +397,8 @@ class CodeGen(object):
             myfunc = self.lmod.get_or_insert_function(lfunc.type.pointee,
                                                       name=lfunc.name)
             args = expr.args.args
-            assert len(args) == len(argtys)
-
+            assert len(args) == len(argtys), \
+                "expecting %d arguments but got %d" % (len(argtys), len(args))
             args = [self.cast(a.value, t) for a, t in zip(args, argtys)]
 
             if retty:
@@ -430,7 +432,7 @@ class CodeGen(object):
             realval = self.cast(real.value, cmplxty.complex_element)
             imagval = Constant.null(realval.type)
         else:
-            assert nargs == 2
+            assert nargs == 2, "complex() takes exactly two arguments"
             real, imag = args
             realval = self.cast(real.value, cmplxty.complex_element)
             imagval = self.cast(imag.value, cmplxty.complex_element)
@@ -441,12 +443,12 @@ class CodeGen(object):
 
     def call_int(self, expr):
         outty = self.typemap[expr]
-        assert len(expr.args.args) == 1
+        assert len(expr.args.args) == 1, "int() takes exactly one argument"
         self.valmap[expr] = self.cast(expr.args.args[0].value, outty)
 
     def call_float(self, expr):
         outty = self.typemap[expr]
-        assert len(expr.args.args) == 1
+        assert len(expr.args.args) == 1, "float() takes exactly one argument"
         self.valmap[expr] = self.cast(expr.args.args[0].value, outty)
 
     def call_min(self, expr):
@@ -473,11 +475,11 @@ class CodeGen(object):
         zero = Constant.null(llopty)
         llnum = self.valmap[number]
         if opty.is_int:
-            assert opty.is_signed
+            assert opty.is_signed, "using abs() on unsigned integer"
             negone = Constant.int_signextend(llopty, -1)
             mul = self.builder.mul
         else:
-            assert opty.is_float
+            assert opty.is_float, "using abs() on %s" % opty
             negone = Constant.real(llopty, -1.)
             mul = self.builder.fmul
         isneg = self._do_compare('<', opty, llnum, zero)
@@ -659,7 +661,7 @@ FLOAT_BOOL_OP_MAP = {
 
 
 def array_pointer(builder, data, shape, strides, order, indices):
-    assert order in 'CFA'
+    assert order in 'CFA', "invalid array order code '%s'" % order
     intp = shape[0].type
     if order in 'CF':
         # optimize for C and F contiguous
@@ -677,7 +679,7 @@ def array_pointer(builder, data, shape, strides, order, indices):
                     last = builder.mul(last, j)
                 steps.append(last)
         else:
-            assert False
+            assert False, "unreachable"
         loc = Constant.null(intp)
         for i, s in zip(indices, steps):
             tmp = builder.mul(i, s)

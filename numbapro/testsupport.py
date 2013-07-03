@@ -12,12 +12,14 @@ class TestSupport(object):
         as the description of the test.
         '''
         testcase = unittest.FunctionTestCase(func, description=func.__doc__)
-        assert func.__name__ not in self.tests
+        assert func.__name__ not in self.tests, \
+            "duplicated test name %s" % func.__name__
         self.tests[func.__name__] = testcase
         return testcase
 
     def addtest(self, testcase):
-        assert testcase.__name__ not in self.tests
+        assert testcase.__name__ not in self.tests, \
+            "duplicated test name %s" % func.__name__
         if hasattr(testcase, 'runTest'):
             self.tests[testcase.__name__] = testcase()
         else:
@@ -47,7 +49,8 @@ class TestSupport(object):
                     scripts.append(modname)
 
         package_base = os.path.dirname(numbapro.__file__)
-        assert basedir.startswith(package_base)
+        assert basedir.startswith(package_base), \
+                    "not relative sub-directory to base"
         base = basedir[len(package_base) + 1:]
         base = base.rsplit('.', 1)[0].replace(os.path.sep, '.')
 

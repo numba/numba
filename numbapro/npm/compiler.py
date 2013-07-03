@@ -8,9 +8,9 @@ def compile(func, retty, argtys):
     #print se.dump()
 
     argspec = inspect.getargspec(func)
-    assert not argspec.keywords
-    assert not argspec.varargs
-    assert not argspec.defaults
+    assert not argspec.keywords, "does not support keywords"
+    assert not argspec.varargs, "does not support varargs"
+    assert not argspec.defaults, "does not support defaults"
 
     # type infernece
     tydict = dict(zip(argspec.args, argtys))

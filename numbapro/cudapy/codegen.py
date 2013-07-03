@@ -30,11 +30,11 @@ def cg_sreg(cg, value):
 
 def cg_grid_macro(cg, value):
     ty = cg.typemap[value]
-    assert len(value.args.args) == 1
+    assert len(value.args.args) == 1, "invalid number of argument"
     arg = value.args.args[0].value
-    assert arg.kind == 'Const'
+    assert arg.kind == 'Const', "argument is not a constant"
     ndim = arg.args.value
-    assert ndim in (1, 2)
+    assert ndim in (1, 2), "argument must be 1 or 2"
     if ndim == 1:
         tx = cg.builder.call(declare_sreg(cg, ptx.threadIdx.x), ())
         bx = cg.builder.call(declare_sreg(cg, ptx.blockIdx.x), ())
@@ -42,7 +42,6 @@ def cg_grid_macro(cg, value):
         tid = cg.builder.add(tx, cg.builder.mul(bx, bw))
         cg.valmap[value] = cg.do_cast(tid, ptx.SREG_TYPE, ty)
     else:
-        assert ndim == 2
         tx = cg.builder.call(declare_sreg(cg, ptx.threadIdx.x), ())
         bx = cg.builder.call(declare_sreg(cg, ptx.blockIdx.x), ())
         bwx = cg.builder.call(declare_sreg(cg, ptx.blockDim.x), ())

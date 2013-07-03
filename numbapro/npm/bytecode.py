@@ -145,8 +145,8 @@ class ByteCode(object):
     def __init__(self, func):
         self.code = get_code_object(func)
         #print dis.dis(self.code)
-        assert not self.code.co_freevars
-        assert not self.code.co_cellvars
+        assert not self.code.co_freevars, "does not support freevars"
+        assert not self.code.co_cellvars, "does not support cellvars"
         self.table = SortedMap(ByteCodeIter(self.code))
 
         labels = set(dis.findlabels(self.code.co_code))

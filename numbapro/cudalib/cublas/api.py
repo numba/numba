@@ -29,7 +29,7 @@ def _auto_l2_functions(fname, tnames, argfmt, extras):
         a = a.lstrip().rstrip()
         if ':' in a:
             name, mode = a.split(':')
-            assert mode in 'wr'
+            assert mode in 'wr', "invalid mode"
             if mode == 'w':
                 writebacks.add(name)
             else:
@@ -41,7 +41,7 @@ def _auto_l2_functions(fname, tnames, argfmt, extras):
     def prepare_args(args, kws):
         for i, a in enumerate(args):
             name = arglist[i]
-            assert name not in kws
+            assert name not in kws, "missing argument %s" % name
             kws[name] = a
         for a in extras:
             if a.startswith('ld') and len(a) == 3:
@@ -75,7 +75,7 @@ def _auto_l2_functions(fname, tnames, argfmt, extras):
                 msg = "%dth array dtype mismatch: got %s but expect %s"
                 raise TypeError(msg % (i + 1, got, dtype))
         typecode = dtypemap[dtype]
-        assert typecode in tnames
+        assert typecode in tnames, "unknown typecode"
         fn = getattr(self._cublas, '%s%s' % (typecode, fname))
         kws, cleanups = autodevice(kws, self.stream)
         res = fn(**kws)

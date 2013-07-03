@@ -30,9 +30,9 @@ def compile_common(func, retty, argtys):
     #print se.dump()
 
     argspec = inspect.getargspec(func)
-    assert not argspec.keywords
-    assert not argspec.varargs
-    assert not argspec.defaults
+    assert not argspec.keywords, "does not support keywords"
+    assert not argspec.varargs, "does not support varargs"
+    assert not argspec.defaults, "does not support defaults"
 
     globals = func.func_globals
     
@@ -57,7 +57,9 @@ def compile_common(func, retty, argtys):
                          extended_calls=cudapy_call_codegen_ext)
     lfunc = cg.generate()
     gvars = cg.extern_globals
-    assert not gvars
+    if gvars:
+        raise NotImplementedError(
+                            "binding of external arguments are not supported")
 
     #print lfunc.module
 

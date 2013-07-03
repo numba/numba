@@ -19,12 +19,15 @@ def rule_sreg(infer, value, obj):
 
 def rule_grid_macro(infer, value):
     args = value.args.args
+
     if len(args) != 1:
         raise CudaPyInferError(value, "grid() takes exactly 1 argument")
     arg = args[0].value
+
     if arg.kind != 'Const':
         raise CudaPyInferError(value, "arg to grid() must be a constant")
     ndim = arg.args.value
+
     if ndim not in [1, 2]:
         raise CudaPyInferError(value, "arg to grid() must be 1 or 2")
 
@@ -32,7 +35,6 @@ def rule_grid_macro(infer, value):
         infer.rules[value].add(Conditional(cast_from_sregtype))
         infer.rules[value].add(Restrict(int_set))
     else:
-        assert ndim == 2
         tuplety = types.tupletype(ptx.SREG_TYPE, 2)
         infer.rules[value].add(MustBe(tuplety))
         infer.possible_types.add(tuplety)
@@ -158,10 +160,11 @@ def rule_atomic_add(infer, value):
 
 def extract_shape_arg(shape_argref):
     if not isinstance(shape_argref, tuple):
-        assert shape_argref.value.kind == 'Const'
+        assert shape_argref.value.kind == 'Const', "shape is not a constant"
         if isinstance(shape_argref.value.args.value, tuple):
             shape = shape_argref.value.args.value
-            assert all(isinstance(x, int) for x in shape)
+            assert all(isinstance(x, int) for x in shape), \
+                                    "shape must be a constant tuple of ints"
             return shape
 
         shape_argref = (shape_argref,)

@@ -126,7 +126,8 @@ class CudaUFuncDispatcher(object):
                                                stream=stream)
             else:
                 device_out = kws['out']
-                assert devicearray.is_cuda_ndarray(device_out)
+                if not devicearray.is_cuda_ndarray(device_out):
+                    raise TypeError("output array must be a device array")
             kernel_args = list(args) + [device_out, element_count]
 
             cuda_func[griddim, blockdim, stream](*kernel_args)
@@ -144,8 +145,10 @@ class CudaUFuncDispatcher(object):
                 out = self._allocate_output(broadcast_arrays, result_dtype)
             else:
                 out = kws['out']
-                assert not devicearray.is_cuda_ndarray(device_out)
-                assert out.shape[0] >= broadcast_arrays[0].shape[0]
+                if devicearray.is_cuda_ndarray(device_out):
+                    raise TypeError("output array must not be a device array")
+                if out.shape[0] < broadcast_arrays[0].shape[0]:
+                    raise ValueError("insufficient storage for output array")
 
             # Reshape the arrays if necessary.
             # Ufunc expects 1D array.
@@ -156,7 +159,8 @@ class CudaUFuncDispatcher(object):
             nctaid, ntid = self._determine_dimensions(element_count, MAX_THREAD)
 
             assert all(isinstance(array, np.ndarray)
-                       for array in broadcast_arrays)
+                       for array in broadcast_arrays), \
+                    "not all arrays are numpy ndarray"
 
             device_ins = [cuda.to_device(x, stream) for x in broadcast_arrays]
             device_out = cuda.to_device(out, stream, copy=False)
@@ -188,11 +192,12 @@ class CudaUFuncDispatcher(object):
         return np.prod(broadcast_arrays[0].shape)
 
     def _arguments_requirement(self, args):
-        assert args[0].ndim == 1
+        assert args[0].ndim == 1, "must use 1d array"
         # Accept same shape or array scalar
         assert all(x.shape == args[0].shape or
                    (x.strides == (0,) and x.shape == (1,))
-                   for x in args)
+                   for x in args), \
+                "invalid combination of shape and strides"
 
     def _determine_dimensions(self, n, max_thread):
         # determine grid and block dimension
@@ -201,8 +206,8 @@ class CudaUFuncDispatcher(object):
         return block_count, thread_count
 
     def reduce(self, arg, stream=0):
-        assert len(self.functions.keys()[0]) == 2, "Must be a binary ufunc"
-        assert arg.ndim == 1
+        assert len(self.functions.keys()[0]) == 2, "must be a binary ufunc"
+        assert arg.ndim == 1, "must use 1d array"
 
         n = arg.shape[0]
         gpu_mems = []

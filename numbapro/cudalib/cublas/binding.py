@@ -812,9 +812,9 @@ def _Trotm(fmt, dtype):
     def rotm(self, n, x, incx, y, incy, param):
         "Stores result to x, y"
         fn = getattr(self._api, 'cublas%srotm_v2' % fmt)
-        assert len(param.shape) == 1
-        assert param.size >= 5
-        assert param.dtype == np.dtype(dtype)
+        assert len(param.shape) == 1, "param must be a 1-d array"
+        assert param.size >= 5, "param must have at least 5 elements"
+        assert param.dtype == np.dtype(dtype), "param dtype mismatch"
         fn(self._handle, int(n), device_pointer(x), int(incx),
            device_pointer(y), int(incy), host_pointer(param))
     return rotm

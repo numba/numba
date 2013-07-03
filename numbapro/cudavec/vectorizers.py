@@ -91,7 +91,7 @@ class CudaGUFuncVectorize(object):
 
 def build_gufunc_stager(devfn, dims):
     lmod, lfunc, return_type, args = devfn._npm_context_
-    assert return_type is None
+    assert return_type is None, "must return nothing"
     outer_args = [types.arraytype(a.element, dim + 1, a.order)
                   for a, dim in zip(args, dims)]
 

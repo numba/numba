@@ -627,7 +627,7 @@ class Device(object):
         got_device = c_int()
         error = self.driver.cuDeviceGet(byref(got_device), device_id)
         self.driver.check_error(error, 'Failed to get device %d' % device_id)
-        assert device_id == got_device.value
+        assert device_id == got_device.value, "driver returned another device"
         self.id = got_device.value
         self.__read_attributes()
 
@@ -691,7 +691,7 @@ class _Context(finalizer.OwnerMixin):
         if self.device.CAN_MAP_HOST_MEMORY:
             flags |= CU_CTX_MAP_HOST
         else:
-            assert False
+            assert False, "unreachable"
         error = self.driver.cuCtxCreate(byref(self._handle), flags,
                                         self.device.id)
         self.driver.check_error(error,
@@ -818,7 +818,7 @@ class DeviceMemory(finalizer.OwnerMixin):
             debug_memory_free += 1
 
     def _allocate(self, bytesize):
-        assert not hasattr(self, '_handle')
+        assert not hasattr(self, '_handle'), "_handle is already defined"
         self._handle = cu_device_ptr()
         error = self.driver.cuMemAlloc(byref(self._handle), bytesize)
         self.driver.check_error(error, 'Failed to allocate memory')
@@ -847,7 +847,7 @@ class DeviceView(object):
             sz = device_memory_size(owner) - start
         else:
             sz = stop - start
-        assert sz > 0
+        assert sz > 0, "zero memory size"
         self._cuda_memsize_ = sz
 
     @property
@@ -867,8 +867,8 @@ class PinnedMemory(finalizer.OwnerMixin):
                                   self.device)
 
         self._pointer = ptr
-        # possible flags are portable (between context)
-        # and deivce-map (map host memory to device thus no need
+        # possible flags are "portable" (between context)
+        # and "device-map" (map host memory to device thus no need
         # for memory transfer).
         flags = 0
         self._mapped = mapped
@@ -885,7 +885,7 @@ class PinnedMemory(finalizer.OwnerMixin):
         self._finalizer_track(self._pointer)
 
     def _get_device_pointer(self):
-        assert self._mapped
+        assert self._mapped, "memory not mapped"
         self._devmem = cu_device_ptr(0)
         flags = 0 # must be zero for now
         error = self.driver.cuMemHostGetDevicePointer(byref(self._devmem),
@@ -1011,7 +1011,8 @@ class Function(finalizer.OwnerMixin):
         '''
         *args -- Must be either ctype objects of DevicePointer instances.
         '''
-        assert self.driver.current_context().device is self.device
+        assert self.driver.current_context().device is self.device, \
+                "function not defined in current active context"
         launch_kernel(self._handle, self.griddim, self.blockdim,
                       self.sharedmem, self.stream, args)
 
@@ -1212,7 +1213,7 @@ def device_memory_size(devmem):
         s, e = device_extents(devmem)
         sz = e - s
         devmem._cuda_memsize_ = sz
-    assert sz > 0
+    assert sz > 0, "zero length array"
     return sz
 
 def host_pointer(obj):
@@ -1233,7 +1234,7 @@ def memory_size_from_info(shape, strides, itemsize):
     """et the byte size of a contiguous memory buffer given the shape, strides
     and itemsize.
     """
-    assert len(shape) == len(strides)
+    assert len(shape) == len(strides), "# dim mismatch"
     ndim = len(shape)
     s, e = mviewbuf.memoryview_get_extents_info(shape, strides, ndim, itemsize)
     return e - s
@@ -1241,7 +1242,7 @@ def memory_size_from_info(shape, strides, itemsize):
 def host_memory_size(obj):
     "Get the size of the memory"
     s, e = host_memory_extents(obj)
-    assert e >= s
+    assert e >= s, "memory extend of negative size"
     return e - s
 
 def device_pointer(obj):
