@@ -6,6 +6,7 @@ from numbapro.cudapy import codegen as cudapy_codegen
 from numbapro.cudapy.compiler import to_ptx
 from numbapro.cudapy.execution import CUDAKernel
 from . import dispatch
+from numbapro.vectorizers._common import parse_signature
 
 vectorizer_stager_source = '''
 def __vectorizer_stager__(%(args)s, __out__):
@@ -45,22 +46,6 @@ class CudaVectorize(object):
 
 #------------------------------------------------------------------------------
 # Generalized CUDA ufuncs
-
-def parse_signature(sig):
-    inargs, outargs = sig.split('->')
-    pat = re.compile(r'\([^\)]*\)')
-    inargs = pat.findall(inargs)
-    outargs = pat.findall(outargs)
-    inargs = [a.strip('()') for a in inargs]
-    outargs = [a.strip('()') for a in outargs]
-
-    def stripall(s):
-        return tuple(filter(bool, [x.strip() for x in s]))
-
-    inargs = [stripall(a.split(',')) for a in inargs]
-    outargs = [stripall(a.split(',')) for a in outargs]
-
-    return inargs, outargs
 
 class CudaGUFuncVectorize(object):
 
