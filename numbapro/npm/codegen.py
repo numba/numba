@@ -4,13 +4,8 @@ import llvm.core as lc
 from llvm.core import Type, Constant
 
 from . import typing, symbolic, errors
-from .errors import CompileError
 
 GlobalVar = namedtuple('GlobalVar', ['type', 'gvar'])
-
-class CodeGenError(CompileError):
-    def __init__(self, value, msg):
-        super(CodeGenError, self).__init__(value.lineno, msg)
 
 class CodeGen(object):
     def __init__(self, name, blocks, typemap, consts, args, return_type, intp,
@@ -190,7 +185,7 @@ class CodeGen(object):
             fn(expr)
 
     def generic_expr(self, expr):
-        raise CodeGenError(expr, "%s not implemented" % expr)
+        raise NotImplementedError("%s not implemented" % expr)
 
     def generate_terminator(self, term):
         with errors.error_context(term.lineno):
@@ -199,7 +194,7 @@ class CodeGen(object):
             fn(term)
 
     def generic_term(self, term):
-        raise CodeGenError(term, "not implemented")
+        raise NotImplementedError("not implemented")
 
     # -------- expr ---------
 
@@ -411,7 +406,7 @@ class CodeGen(object):
             else:
                 self.builder.call(myfunc, args)
         else:
-            raise CodeGenError(expr, "function %s not implemented" % func)
+            raise NotImplementedError("function %s not implemented" % func)
 
     def expr_Unpack(self, expr):
         tuplevalue = expr.args.obj.value

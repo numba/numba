@@ -5,16 +5,11 @@ import itertools, inspect
 from collections import namedtuple, defaultdict, deque, Set, Mapping
 from .symbolic import OP_MAP, find_dominators, Coerce, Expr
 from .utils import cache
-from .errors import CompileError
 from . import errors
 
-class TypeInferError(CompileError):
-    def __init__(self, value, msg):
-        super(TypeInferError, self).__init__(value.lineno, msg)
-
-class KeywordNotSupported(TypeInferError):
-    def __init__(self, value, msg="kwargs is not supported"):
-        super(KeywordNotSupported, self).__init__(value, msgs)
+class KeywordNotSupported(TypeError):
+    def __init__(self):
+        super(KeywordNotSupported, self).__init__("keyword args not supported")
 
 class ScalarType(namedtuple('ScalarType', ['code'])):
     is_array = False
@@ -362,7 +357,7 @@ class Infer(object):
                         else:
                             msg = ("cannot infer value/operation not supported on "
                                    "input types")
-                            raise TypeInferError(value, msg)
+                            raise TypeError(msg)
                         for k, v in soln.iteritems():
                             possibles[k] = frozenset([v])
             processed_blocks.add(blknum)
@@ -417,7 +412,7 @@ class Infer(object):
         val = term.args.value.value
         def rule(value):
             if not self.retty:
-                raise TypeInferError(value, 'function has no return value')
+                raise TypeError('function has no return value')
             return cast_penalty(value, self.retty)
         self.rules[val].add(Conditional(rule))
 
@@ -436,7 +431,7 @@ class Infer(object):
         try:
             obj = self.globals[key]
         except KeyError:
-            raise TypeInferError(value, "global %s is not defined" % key)
+            raise TypeError("global %s is not defined" % key)
         for part in parts[1:]:
             obj = getattr(obj, part)
 
@@ -449,7 +444,7 @@ class Infer(object):
             self.extended_globals[obj](self, value, obj)
         else:
             msg = "only support global value of int, float or complex"
-            raise TypeInferError(value, msg)
+            raise TypeError(msg)
 
 
     def visit_Const(self, value):
@@ -467,7 +462,7 @@ class Infer(object):
             self.rules[value].add(MustBe(tuty))
         else:
             msg = 'invalid constant value of %s' % type(const)
-            raise TypeInferError(value, msg)
+            raise TypeError(msg)
 
     def visit_BinOp(self, value):
         lhs, rhs = value.args.lhs.value, value.args.rhs.value
@@ -634,7 +629,7 @@ class Infer(object):
         if obj not in self.callrules:
             if not hasattr(obj, '_npm_context_'):
                 msg = "%s is not a regconized builtins"
-                raise TypeInferError(value, msg % funcname)
+                raise TypeError(msg % funcname)
             else:
                 _lmod, _lfunc, retty, argtys = obj._npm_context_
                 args = map(lambda x: x.value, value.args.args)
@@ -646,7 +641,7 @@ class Infer(object):
                 if len(args) != len(argtys):
                     msg = "call to %s takes %d args but %d given"
                     msgargs = obj, len(argtys), len(args)
-                    raise TypeInferError(value, msg % msgargs)
+                    raise TypeError(msg % msgargs)
 
                 for aval, aty in zip(args, argtys):
                     if aty.is_scalar:
@@ -727,7 +722,7 @@ def call_complex_rule(infer, call):
     args = call.args.args
     kws = call.args.kws
     if kws:
-        raise KeywordNotSupported(call)
+        raise KeywordNotSupported
     nargs = len(args)
     if nargs == 1:
         (real,) = args
@@ -740,7 +735,7 @@ def call_complex_rule(infer, call):
         infer.rules[real.value].add(Conditional(cond_to_float, call))
         infer.rules[imag.value].add(Conditional(cond_to_float, call))
     else:
-        raise TypeInferError(call, "invalid use of complex(real[, imag])")
+        raise TypeError("invalid use of complex(real[, imag])")
     infer.rules[call].add(Restrict(complex_set))
     call.replace(func=complex)
 
@@ -748,13 +743,13 @@ def call_int_rule(infer, call):
     args = call.args.args
     kws = call.args.kws
     if kws:
-        raise KeywordNotSupported(call)
+        raise KeywordNotSupported
     nargs = len(args)
     if nargs == 1:
         (num,) = args
         infer.rules[num.value].add(Restrict(int_set|float_set))
     else:
-        raise TypeInferError(call, "invalid use of int(x)")
+        raise TypeError("invalid use of int(x)")
     infer.rules[call].add(Restrict(int_set))
     call.replace(func=int)
 
@@ -762,13 +757,13 @@ def call_float_rule(infer, call):
     args = call.args.args
     kws = call.args.kws
     if kws:
-        raise KeywordNotSupported(call)
+        raise KeywordNotSupported
     nargs = len(args)
     if nargs == 1:
         (num,) = args
         infer.rules[num.value].add(Restrict(int_set|float_set))
     else:
-        raise TypeInferError(call, "invalid use of float(x)")
+        raise TypeError("invalid use of float(x)")
     infer.rules[call].add(Restrict(float_set))
     call.replace(func=float)
 
@@ -777,11 +772,11 @@ def call_maxmin_rule(fname):
         args = call.args.args
         kws = call.args.kws
         if kws:
-            raise KeywordNotSupported(call)
+            raise KeywordNotSupported
         nargs = len(args)
         if nargs < 2:
             msg = "%s() must have at least two arguments"
-            raise TypeInferError(call, msg % fname)
+            raise TypeError(msg % fname)
 
         argvals =[a.value for a in args]
 
@@ -800,10 +795,10 @@ def call_abs_rule(infer, call):
     args = call.args.args
     kws = call.args.kws
     if kws:
-        raise KeywordNotSupported(call)
+        raise KeywordNotSupported
     nargs = len(args)
     if nargs != 1:
-        raise TypeInferError(call, "abs(number) takes one argument only")
+        raise TypeError("abs(number) takes one argument only")
 
     arg = args[0].value
     infer.rules[arg].add(Restrict(signed_set|float_set))

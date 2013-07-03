@@ -2,16 +2,10 @@ import operator
 import numpy as np
 from llvm.core import Type, Constant, LINKAGE_EXTERNAL, LINKAGE_INTERNAL
 
-from numbapro.npm.errors import CompileError
 from numbapro.npm import types
 from . import ptx, libdevice
 from numbapro.cudadrv.nvvm import ADDRSPACE_SHARED
 import numbapro
-
-class CudaPyCGError(CompileError):
-    def __init__(self, value, msg):
-        super(CudaPyCGError, self).__init__(value, msg)
-
 
 def declare_sreg(cg, sregobj):
     return declare_sreg_util(cg.lmod, sregobj)

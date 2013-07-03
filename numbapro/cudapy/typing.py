@@ -2,13 +2,8 @@ import numpy as np
 from numbapro.npm import types
 from numbapro.npm.typing import (cast_penalty, Restrict, MustBe, filter_array,
                                  Conditional, int_set)
-from numbapro.npm.errors import CompileError
 from . import ptx, libdevice
 import numbapro
-
-class CudaPyInferError(CompileError):
-    def __init__(self, value, msg):
-        super(CudaPyInferError, self).__init__(value.lineno, msg)
 
 def cast_from_sregtype(value):
     return cast_penalty(ptx.SREG_TYPE, value)
@@ -21,15 +16,15 @@ def rule_grid_macro(infer, value):
     args = value.args.args
 
     if len(args) != 1:
-        raise CudaPyInferError(value, "grid() takes exactly 1 argument")
+        raise TypeError("grid() takes exactly 1 argument")
     arg = args[0].value
 
     if arg.kind != 'Const':
-        raise CudaPyInferError(value, "arg to grid() must be a constant")
+        raise TypeError("arg to grid() must be a constant")
     ndim = arg.args.value
 
     if ndim not in [1, 2]:
-        raise CudaPyInferError(value, "arg to grid() must be 1 or 2")
+        raise ValueError("arg to grid() must be 1 or 2")
 
     if ndim == 1:
         infer.rules[value].add(Conditional(cast_from_sregtype))
@@ -43,7 +38,7 @@ def rule_grid_macro(infer, value):
 
 def rule_syncthread(infer, value):
     if value.args.args:
-        raise CudaPyInferError(value, "syncthreads() takes no arguments")
+        raise TypeError("syncthreads() takes no arguments")
     value.replace(func=ptx.syncthreads)
 
 def rule_np_dtype(infer, value, obj):
@@ -86,8 +81,7 @@ def rule_shared_array(infer, value):
         argvals.append(kws.pop(arg))
 
     if kws:
-        errmsg = "duplicated keywords %s" % ','.join(kws.keys())
-        raise CudaPyInferError(value, errmsg)
+        raise NameError("duplicated keywords %s" % ','.join(kws.keys()))
 
     # normalize the call so there will be no kws
     value.replace(args=list(argvals), kws=())
@@ -96,7 +90,7 @@ def rule_shared_array(infer, value):
     nargs = len(value.args.args)
     if nargs != 2:
         msg = "cuda.shared.array() takes eactly two arguments"
-        raise CudaPyInferError(value, msg)
+        raise TypeError(msg)
     shape_argref, dtype_argref = value.args.args
 
     shape = extract_shape_arg(shape_argref)
@@ -105,7 +99,7 @@ def rule_shared_array(infer, value):
     dtype_arg = dtype_argref.value
     if dtype_arg.kind != 'Global':
         msg = "dtype must be a global constant"
-        raise CudaPyInferError(dtype_arg, msg)
+        raise ValueError(msg)
 
     dtype = dtype_arg.args.value
 
@@ -174,7 +168,7 @@ def extract_shape_arg(shape_argref):
     for sarg in shape_args:
         if sarg.kind != 'Const':
             msg = "shape must be a constant"
-            raise CudaPyInferError(sarg, msg)
+            raise TypeError(msg)
     shape = tuple(x.args.value for x in shape_args)
     return shape
 
