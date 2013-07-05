@@ -7,7 +7,7 @@ from .cudadrv import devicearray, driver
 
 from .cudapy.ptx import (threadIdx, blockIdx, blockDim, gridDim, syncthreads,
                          shared, grid, atomic)
-from .cudapy import jit, autojit
+from .cudapy import jit, autojit, declare_device
 
 # NDarray device helper
 @require_context
@@ -180,10 +180,10 @@ def list_devices():
     return [driver.Device(i) for i in range(drv.get_device_count())]
 
 def close():
-    '''Explicitly closes the context.
+    """Explicitly closes the context.
 
-        Destroy the current context of the current thread
-        '''
+    Destroy the current context of the current thread
+    """
     drv = driver.Driver()
     drv.release_context(drv.current_context())
 

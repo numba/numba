@@ -3,7 +3,7 @@ import llvm.core as lc
 from numbapro import cuda
 from numbapro.npm import types, codegen
 from numbapro.cudapy import codegen as cudapy_codegen
-from numbapro.cudapy.compiler import to_ptx
+from numbapro.cudapy.compiler import to_ptx, CUDA_ADDR_SIZE
 from numbapro.cudapy.execution import CUDAKernel
 from . import dispatch
 from numbapro.vectorizers._common import parse_signature
@@ -83,7 +83,7 @@ def build_gufunc_stager(devfn, dims):
     # copy a new module
     lmod = lmod.clone()
     lfunc = lmod.get_function_named(lfunc.name)
-    typer = codegen.TypeSetter(intp=tuple.__itemsize__ * 8)
+    typer = codegen.TypeSetter(intp=CUDA_ADDR_SIZE)
 
     argtypes = [typer.to_llvm(t) for t in outer_args]
     fnty = lc.Type.function(lc.Type.void(), argtypes)

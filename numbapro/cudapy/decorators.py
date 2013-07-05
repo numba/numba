@@ -43,7 +43,34 @@ def _map_numba_to_npm_types(typ):
     return NUMBA_TO_NPM_TYPES[typ]
 
 def jit(restype=None, argtypes=None, device=False, inline=False, bind=True,
-        **kws):
+        link=[], **kws):
+    restype, argtypes = convert_types(restype, argtypes)
+
+    if restype and not device:
+        raise TypeError("CUDA kernel must have void return type.")
+
+    def kernel_jit(func):
+        cukern = compiler.compile_kernel(func, argtypes)
+        cukern.linkfiles += link
+        if bind: cukern.bind()
+        return cukern
+
+    def device_jit(func):
+        return compiler.compile_device(func, restype, argtypes, inline=True)
+
+    if device:
+        return device_jit
+    else:
+        return kernel_jit
+
+def autojit(func, **kws):
+    return AutoJitCUDAKernel(func, bind=True)
+
+def declare_device(name, restype=None, argtypes=None):
+    restype, argtypes = convert_types(restype, argtypes)
+    return compiler.declare_device_function(name, restype, argtypes)
+
+def convert_types(restype, argtypes):
     # eval type string
     if isinstance(restype, str):
         restype, argtypes = _eval_type_string(restype)
@@ -63,25 +90,7 @@ def jit(restype=None, argtypes=None, device=False, inline=False, bind=True,
     except KeyError, e:
         raise TypeError("invalid type for CUDA: %s" % e)
 
-    if restype and not device:
-        raise TypeError("CUDA kernel must have void return type.")
-
-    def kernel_jit(func):
-        cukern = compiler.compile_kernel(func, argtypes)
-        if bind: cukern.bind()
-        return cukern
-
-    def device_jit(func):
-        return compiler.compile_device(func, restype, argtypes,
-                                            inline=True)
-
-    if device:
-        return device_jit
-    else:
-        return kernel_jit
-
-def autojit(func, **kws):
-    return AutoJitCUDAKernel(func, bind=True)
+    return restype, argtypes
 
 class AutoJitCUDAKernel(CUDAKernelBase):
     def __init__(self, func, bind):

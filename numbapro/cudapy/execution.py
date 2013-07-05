@@ -55,14 +55,31 @@ class CUDAKernel(CUDAKernelBase):
         super(CUDAKernel, self).__init__()
         self.name = name                # to lookup entry kernel
         self.ptx = ptx                  # for debug and inspection
+        self.linkfiles = []             # external files to be linked
         self.c_argtys = [to_ctype(t) for t in argtys]
 
     def bind(self):
         '''Associate to the current context.
         NOTE: free to invoke for multiple times.
         '''
-        self.cu_module = driver.Module(self.ptx)
+        if self.linkfiles:
+            self.link()
+        else:
+            self.cu_module = driver.Module(ptx=self.ptx)
+            self.compile_info = self.cu_module.info_log
+
         self.cu_function = driver.Function(self.cu_module, self.name)
+
+    def link(self):
+        '''Link external files
+        '''
+        linker = driver.Linker()
+        linker.add_ptx(self.ptx)
+        for file in self.linkfiles:
+            linker.add_file_guess_ext(file)
+        cubin, _size = linker.complete()
+        self.cu_module = driver.Module(image=cubin)
+        self.compile_info = linker.info_log
 
     @property
     def device(self):

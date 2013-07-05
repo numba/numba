@@ -23,6 +23,16 @@ def compile_device(func, retty, argtys, inline=False):
         lfunc.add_attribute(lc.ATTR_ALWAYS_INLINE)
     return DeviceFunction(func, lmod, lfunc, retty, argtys)
 
+def declare_device_function(name, retty, argtys):
+    lmod = lc.Module.new('extern-%s' % name)
+    ts = codegen.TypeSetter(intp=CUDA_ADDR_SIZE)
+    lret = ts.to_llvm(retty)
+    largs = [ts.to_llvm(t) for t in argtys]
+    lfty = lc.Type.function(lc.Type.void(), largs + [lc.Type.pointer(lret)])
+    lfunc = lmod.add_function(lfty, name=name)
+    edf = ExternalDeviceFunction(name, lmod, lfunc, retty, argtys)
+    return edf
+
 def compile_common(func, retty, argtys):
     # symbolic interpretation
     se = symbolic.SymbolicExecution(func)
@@ -87,3 +97,14 @@ class DeviceFunction(object):
     def __repr__(self):
         args = (self.return_type or 'void', self.args)
         return '<cuda device function %s%s>' % args
+
+class ExternalDeviceFunction(object):
+    def __init__(self, name, lmod, lfunc, retty, argtys):
+        self.name = name
+        self.args = tuple(argtys)
+        self.return_type = retty
+        self._npm_context_ = lmod, lfunc, self.return_type, self.args
+
+    def __repr__(self):
+        args = (self.name, self.return_type or 'void', self.args)
+        return '<cuda external device function %s %s%s>' % args

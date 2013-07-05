@@ -33,11 +33,13 @@ cu_device_attribute = c_int     # enum
 cu_context = c_void_p           # an opaque handle
 cu_module = c_void_p            # an opaque handle
 cu_jit_option = c_int           # enum
+cu_jit_input_type = c_int       # enum
 cu_function = c_void_p          # an opaque handle
 cu_device_ptr = c_size_t        # defined as unsigned int on 32-bit
                                 # and unsigned long long on 64-bit machine
 cu_stream = c_void_p            # an opaque handle
 cu_event = c_void_p
+cu_link_state = c_void_p
 
 CUDA_SUCCESS                              = 0
 CUDA_ERROR_INVALID_VALUE                  = 1
@@ -170,6 +172,157 @@ CU_MEMORYTYPE_DEVICE  = 0x02
 CU_MEMORYTYPE_ARRAY   = 0x03
 # Unified device or host memory
 CU_MEMORYTYPE_UNIFIED = 0x04
+
+
+
+# Compiled device-class-specific device code
+# Applicable options: none
+CU_JIT_INPUT_CUBIN = 0
+
+# PTX source code
+# Applicable options: PTX compiler options
+CU_JIT_INPUT_PTX = 1
+
+# Bundle of multiple cubins and/or PTX of some device code
+# Applicable options: PTX compiler options, ::CU_JIT_FALLBACK_STRATEGY
+CU_JIT_INPUT_FATBINAR = 2
+
+# Host object with embedded device code
+# Applicable options: PTX compiler options, ::CU_JIT_FALLBACK_STRATEGY
+CU_JIT_INPUT_OBJECT = 3
+
+# Archive of host objects with embedded device code
+# Applicable options: PTX compiler options, ::CU_JIT_FALLBACK_STRATEGY
+CU_JIT_INPUT_LIBRARY = 4
+
+
+
+# Max number of registers that a thread may use.
+# Option type: unsigned int
+# Applies to: compiler only
+
+CU_JIT_MAX_REGISTERS = 0,
+
+
+# IN: Specifies minimum number of threads per block to target compilation
+# for
+# OUT: Returns the number of threads the compiler actually targeted.
+# This restricts the resource utilization fo the compiler (e.g. max
+# registers) such that a block with the given number of threads should be
+# able to launch based on register limitations. Note, this option does not
+# currently take into account any other resource limitations, such as
+# shared memory utilization.
+# Cannot be combined with ::CU_JIT_TARGET.
+# Option type: unsigned int
+# Applies to: compiler only
+
+CU_JIT_THREADS_PER_BLOCK = 1
+
+
+# Overwrites the option value with the total wall clock time, in
+# milliseconds, spent in the compiler and linker
+# Option type: float
+# Applies to: compiler and linker
+
+CU_JIT_WALL_TIME = 2  
+
+
+# Pointer to a buffer in which to print any log messages
+# that are informational in nature (the buffer size is specified via
+# option ::CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES)
+# Option type: char *
+# Applies to: compiler and linker
+
+CU_JIT_INFO_LOG_BUFFER = 3
+
+
+# IN: Log buffer size in bytes.  Log messages will be capped at this size
+# (including null terminator)
+# OUT: Amount of log buffer filled with messages
+# Option type: unsigned int
+# Applies to: compiler and linker
+
+CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES = 4
+
+
+# Pointer to a buffer in which to print any log messages that
+# reflect errors (the buffer size is specified via option
+# ::CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES)
+# Option type: char *
+# Applies to: compiler and linker
+
+CU_JIT_ERROR_LOG_BUFFER = 5
+
+
+# IN: Log buffer size in bytes.  Log messages will be capped at this size
+# (including null terminator)
+# OUT: Amount of log buffer filled with messages
+# Option type: unsigned int
+# Applies to: compiler and linker
+
+CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES = 6
+
+
+# Level of optimizations to apply to generated code (0 - 4), with 4
+# being the default and highest level of optimizations.
+# Option type: unsigned int
+# Applies to: compiler only
+
+CU_JIT_OPTIMIZATION_LEVEL = 7
+
+
+# No option value required. Determines the target based on the current
+# attached context (default)
+# Option type: No option value needed
+# Applies to: compiler and linker
+
+CU_JIT_TARGET_FROM_CUCONTEXT = 8
+
+
+# Target is chosen based on supplied ::CUjit_target.  Cannot be
+# combined with ::CU_JIT_THREADS_PER_BLOCK.
+# Option type: unsigned int for enumerated type ::CUjit_target
+# Applies to: compiler and linker
+
+CU_JIT_TARGET = 9
+
+
+# Specifies choice of fallback strategy if matching cubin is not found.
+# Choice is based on supplied ::CUjit_fallback.
+# Option type: unsigned int for enumerated type ::CUjit_fallback
+# Applies to: compiler only
+
+CU_JIT_FALLBACK_STRATEGY = 10
+
+
+# Specifies whether to create debug information in output (-g)
+# (0: false, default)
+# Option type: int
+# Applies to: compiler and linker
+
+CU_JIT_GENERATE_DEBUG_INFO = 11
+
+
+# Generate verbose log messages (0: false, default)
+# Option type: int
+# Applies to: compiler and linker
+
+CU_JIT_LOG_VERBOSE = 12
+
+
+# Generate line number information (-lineinfo) (0: false, default)
+# Option type: int
+# Applies to: compiler only
+
+CU_JIT_GENERATE_LINE_INFO = 13
+
+
+# Specifies whether to enable caching explicitly (-dlcm) 
+# Choice is based on supplied ::CUjit_cacheMode_enum.
+# Option type: unsigned int for enumerated type ::CUjit_cacheMode_enum
+# Applies to: compiler only
+
+CU_JIT_CACHE_MODE = 14
 
 
 def _build_reverse_error_map():
@@ -373,6 +526,41 @@ class Driver(object):
 
         #   CUresult cuCtxSynchronize ( void )
         'cuCtxSynchronize' : (c_int,),
+
+        #    CUresult
+        #    cuLinkCreate(unsigned int numOptions, CUjit_option *options,
+        #                 void **optionValues, CUlinkState *stateOut);
+        'cuLinkCreate': (c_int,
+                         c_uint, POINTER(cu_jit_option),
+                         POINTER(c_void_p), POINTER(cu_link_state)),
+
+        #    CUresult
+        #    cuLinkAddData(CUlinkState state, CUjitInputType type, void *data,
+        #                  size_t size, const char *name, unsigned
+        #                  int numOptions, CUjit_option *options,
+        #                  void **optionValues);
+        'cuLinkAddData': (c_int,
+                          cu_link_state, cu_jit_input_type, c_void_p,
+                          c_size_t, c_char_p, c_uint, POINTER(cu_jit_option),
+                          POINTER(c_void_p)),
+
+        #    CUresult
+        #    cuLinkAddFile(CUlinkState state, CUjitInputType type,
+        #                  const char *path, unsigned int numOptions,
+        #                  CUjit_option *options, void **optionValues);
+
+        'cuLinkAddFile': (c_int,
+                          cu_link_state, cu_jit_input_type, c_char_p, c_uint,
+                          POINTER(cu_jit_option), POINTER(c_void_p)),
+
+        #    CUresult CUDAAPI
+        #    cuLinkComplete(CUlinkState state, void **cubinOut, size_t *sizeOut)
+        'cuLinkComplete': (c_int,
+                           cu_link_state, POINTER(c_void_p), POINTER(c_size_t)),
+
+        #    CUresult CUDAAPI
+        #    cuLinkDestroy(CUlinkState state)
+        'cuLinkDestroy': (c_int, cu_link_state),
     }
 
     _REVERSE_ERROR_MAP = _build_reverse_error_map()
@@ -869,35 +1057,48 @@ class PinnedMemory(finalizer.OwnerMixin):
     def driver(self):
         return Driver()
 
-CU_JIT_INFO_LOG_BUFFER = 3
-CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES = 4
-
 class Module(finalizer.OwnerMixin):
-    def __init__(self, ptx):
-        self.ptx = ptx
+    def __init__(self, ptx=None, image=None):
+        assert ptx is not None or image is not None
+        if ptx is not None:
+            self.load_data(c_char_p(ptx))
+        elif image is not None:
+            self.load_data(image)
+        else:
+            raise ValueError
+
+    def load_data(self, image):
+        """
+        image must be a pointer
+        """
+        logsz = os.environ.get('NUMBAPRO_CUDA_LOG_SIZE', 1024)
+
+        jitinfo = (c_char * logsz)()
+        jiterrors = (c_char * logsz)()
+
+        options = {
+            CU_JIT_INFO_LOG_BUFFER              : addressof(jitinfo),
+            CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES   : c_void_p(logsz),
+            CU_JIT_ERROR_LOG_BUFFER             : addressof(jiterrors),
+            CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES  : c_void_p(logsz),
+            CU_JIT_LOG_VERBOSE                  : c_void_p(1),
+        }
+
+        option_keys = (cu_jit_option * len(options))(*options.keys())
+        option_vals = (c_void_p * len(options))(*options.values())
+
         self._handle = cu_module()
-        ptx = c_char_p(self.ptx)
+        status = self.driver.cuModuleLoadDataEx(byref(self._handle),
+                                                image,
+                                                len(options),
+                                                option_keys,
+                                                option_vals)
 
-        info_log_n = 256
-        c_info_log_n = c_int(info_log_n)
-        c_info_log_buffer = (c_char * info_log_n)()
+        self.driver.check_error(status,
+                                'Failed to load module: %s' % jiterrors.value)
 
-        option_keys = [CU_JIT_INFO_LOG_BUFFER,
-                       CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES]
-        option_vals = [cast(c_info_log_buffer, c_void_p),
-                       addressof(c_info_log_n)]
-        option_n = len(option_keys)
-        c_option_keys = (c_int * option_n)(*option_keys)
-        c_option_vals = (c_void_p * option_n)(*option_vals)
-
-        error = self.driver.cuModuleLoadDataEx(byref(self._handle), ptx,
-                                               option_n, c_option_keys,
-                                               c_option_vals)
-
-        self.driver.check_error(error, 'Failed to load module')
         self._finalizer_track(self._handle)
-
-        self.info_log = c_info_log_buffer[:c_info_log_n.value]
+        self.info_log = jitinfo.value
 
     @classmethod
     def _finalize(cls, handle):
@@ -1036,6 +1237,108 @@ class Event(finalizer.OwnerMixin):
     def driver(self):
         return Driver()
 
+FILE_EXTENSION_MAP = {
+    'o'      : CU_JIT_INPUT_OBJECT,
+    'ptx'    : CU_JIT_INPUT_PTX,
+    'a'      : CU_JIT_INPUT_LIBRARY,
+    'cubin'  : CU_JIT_INPUT_CUBIN,
+    'fatbin' : CU_JIT_INPUT_FATBINAR,
+}
+
+class Linker(finalizer.OwnerMixin):
+    def __init__(self):
+        self.driver = Driver()
+
+        logsz = os.environ.get('NUMBAPRO_CUDA_LOG_SIZE', 1024)
+        linkerinfo = (c_char * logsz)()
+        linkererrors = (c_char * logsz)()
+
+        options = {
+            CU_JIT_INFO_LOG_BUFFER              : addressof(linkerinfo),
+            CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES   : c_void_p(logsz),
+            CU_JIT_ERROR_LOG_BUFFER             : addressof(linkererrors),
+            CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES  : c_void_p(logsz),
+            CU_JIT_LOG_VERBOSE                  : c_void_p(1),
+        }
+
+        option_keys = (cu_jit_option * len(options))(*options.keys())
+        option_vals = (c_void_p * len(options))(*options.values())
+
+        self._handle = cu_link_state()
+        status = self.driver.cuLinkCreate(len(options),
+                                          option_keys,
+                                          option_vals,
+                                          byref(self._handle))
+
+        self.driver.check_error(status, 'Failed to initialize linker')
+
+        self._finalizer_track(self._handle)
+        self.linker_info_buf = linkerinfo
+        self.linker_errors_buf = linkererrors
+
+        self._keep_alive = [linkerinfo, linkererrors, option_keys, option_vals] 
+
+    @property
+    def info_log(self):
+        return self.linker_info_buf.value
+
+    @property
+    def error_log(self):
+        return self.linker_errors_buf.value
+
+    @classmethod
+    def _finalize(cls, handle):
+        driver = Driver()
+        error =  driver.cuLinkDestroy(handle)
+        driver.check_error(error, 'Failed to unload module', exit=True)
+
+    def add_ptx(self, ptx, name='<cudapy-ptx>'):
+        ptxbuf = c_char_p(ptx)
+        namebuf = c_char_p(name)
+        self._keep_alive += [ptxbuf, namebuf]
+
+        status = self.driver.cuLinkAddData(self._handle,
+                                           CU_JIT_INPUT_PTX,
+                                           ptxbuf,
+                                           len(ptx),
+                                           namebuf,
+                                           0, None, None)
+        self.driver.check_error(status,
+                                'Failed to add ptx: %s' % self.error_log)
+
+    def add_file(self, path, kind):
+        pathbuf = c_char_p(path)
+        self._keep_alive.append(pathbuf)
+
+        status = self.driver.cuLinkAddFile(self._handle,
+                                           kind,
+                                           pathbuf,
+                                           0, None, None)
+        self.driver.check_error(status, 'Failed to add file %s: %s' %
+                                (path, self.error_log))
+
+
+    def add_file_guess_ext(self, path):
+        ext = path.rsplit('.', 1)[1]
+        kind = FILE_EXTENSION_MAP[ext]
+        self.add_file(path, kind)
+
+    def complete(self):
+        '''
+        Returns (cubin, size)
+            cubin is a pointer to a internal buffer of cubin owned
+            by the linker; thus, it should be loaded before the linker
+            is destroyed.
+        '''
+        cubin = c_void_p(0)
+        size = c_size_t(0)
+        status = self.driver.cuLinkComplete(self._handle,
+                                            byref(cubin),
+                                            byref(size))
+        self.driver.check_error(status, 'Failed to link: %s' % self.error_log)
+        assert size > 0, 'linker returned a zero sized cubin'
+        del self._keep_alive[:]
+        return cubin, size
 
 def event_elapsed_time(evtstart, evtend):
     driver = evtstart.driver
