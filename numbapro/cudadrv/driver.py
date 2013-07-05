@@ -375,30 +375,6 @@ class Driver(object):
         'cuCtxSynchronize' : (c_int,),
     }
 
-    OLD_API_PROTOTYPES = {
-        # CUresult cuFuncSetBlockShape(CUfunction hfunc, int x, int y, int z);
-        'cuFuncSetBlockShape': (c_int, cu_function, c_int, c_int, c_int),
-
-        # CUresult cuFuncSetSharedSize(CUfunction hfunc, unsigned int bytes);
-        'cuFuncSetSharedSize': (c_int, cu_function, c_uint),
-
-        # CUresult cuLaunchGrid(CUfunction f, int grid_width, int grid_height);
-        'cuLaunchGrid':        (c_int, cu_function, c_int, c_int),
-
-        # CUresult cuLaunchGridAsync(CUfunction f, int grid_width,
-        #                            int grid_height, CUstream hStream);
-        'cuLaunchGridAsync':   (c_int, cu_function, c_int, c_int, cu_stream),
-
-        # CUresult cuParamSetSize(CUfunction hfunc, unsigned int numbytes);
-        'cuParamSetSize':      (c_int, cu_function, c_uint),
-
-        # CUresult cuParamSetv(CUfunction hfunc, int offset, void *ptr,
-        #                      unsigned int numbytes);
-        'cuParamSetv':         (c_int, cu_function, c_int, c_void_p, c_uint),
-    }
-
-    NOT_IN_OLD_API = ['cuLaunchKernel']
-
     _REVERSE_ERROR_MAP = _build_reverse_error_map()
 
     __INSTANCE = None
@@ -412,7 +388,6 @@ class Driver(object):
     def __new__(cls, override_path=None):
         if cls.__INSTANCE is None:
             cls.__INSTANCE = inst = object.__new__(Driver)
-            inst.old_api = False
 
             # Determine DLL type
             if sys.platform == 'win32':
@@ -461,21 +436,9 @@ class Driver(object):
                 try:
                     ct_func = inst._cu_symbol_newer(func)
                 except AttributeError:
-                    if func in inst.NOT_IN_OLD_API:
-                        # Symbol not found and is not in the old API?
-                        # This indicates the driver is old
-                        inst.old_api = True
+                    raise CudaDriverError("driver api incomptabile. "
+                                          "requires CUDA 5.5")
                 else:
-                    ct_func.restype = restype
-                    ct_func.argtypes = argtypes
-                    setattr(inst, func, ct_func)
-
-            if inst.old_api:
-                # Old API, primiarily in Ocelot
-                for func, prototype in inst.OLD_API_PROTOTYPES.items():
-                    restype = prototype[0]
-                    argtypes = prototype[1:]
-                    ct_func = inst._cu_symbol_newer(func)
                     ct_func.restype = restype
                     ct_func.argtypes = argtypes
                     setattr(inst, func, ct_func)
@@ -1084,67 +1047,28 @@ def event_elapsed_time(evtstart, evtend):
 
 def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, hstream, args):
     driver = Driver()
-    if driver.old_api:
-        error = driver.cuFuncSetBlockShape(cufunc_handle,  *blockdim)
-        driver.check_error(error, "Failed to set block shape.")
+    gx, gy, gz = griddim
+    bx, by, bz = blockdim
 
-        error = driver.cuFuncSetSharedSize(cufunc_handle, sharedmem)
-        driver.check_error(error, "Failed to set shared memory size.")
+    param_vals = []
+    for arg in args:
+        if is_device_memory(arg):
+            param_vals.append(addressof(device_ctypes_pointer(arg)))
+        else:
+            param_vals.append(addressof(arg))
 
-        # count parameter byte size
-        bytesize = 0
-        for arg in args:
-            if is_device_memory(arg):
-                size = sizeof(device_ctypes_pointer(arg))
-            else:
-                size = sizeof(arg)
-            bytesize += size
+    params = (c_void_p * len(param_vals))(*param_vals)
 
-        error = driver.cuParamSetSize(cufunc_handle, bytesize)
-        driver.check_error(error, 'Failed to set parameter size (%d)' % bytesize)
+    error = driver.cuLaunchKernel(
+                cufunc_handle,
+                gx, gy, gz,
+                bx, by, bz,
+                sharedmem,
+                hstream,
+                params,
+                None)
 
-        offset = 0
-        for i, arg in enumerate(args):
-            if is_device_memory(arg):
-                devptr = device_ctypes_pointer(arg)
-                error = driver.cuParamSetv(cufunc_handle, offset,
-                                           addressof(devptr), sizeof(devptr))
-            else:
-                size = sizeof(arg)
-                error = driver.cuParamSetv(cufunc_handle, offset,
-                                           addressof(arg), size)
-            driver.check_error(error, 'Failed to set parameter %d' % i)
-            offset += size
-
-
-        gx, gy, _ = griddim
-        error = driver.cuLaunchGridAsync(cufunc_handle, gx, gy, hstream)
-
-        driver.check_error(error, 'Failed to launch kernel')
-    else:
-        gx, gy, gz = griddim
-        bx, by, bz = blockdim
-
-        param_vals = []
-        for arg in args:
-            if is_device_memory(arg):
-                param_vals.append(addressof(device_ctypes_pointer(arg)))
-            else:
-                param_vals.append(addressof(arg))
-
-        params = (c_void_p * len(param_vals))(*param_vals)
-
-        error = driver.cuLaunchKernel(
-                    cufunc_handle,
-                    gx, gy, gz,
-                    bx, by, bz,
-                    sharedmem,
-                    hstream,
-                    params,
-                    None)
-
-        driver.check_error(error, "Failed to launch kernel")
-
+    driver.check_error(error, "Failed to launch kernel")
 
 def get_or_create_context():
     "Get the current context if it exists or create one."
