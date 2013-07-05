@@ -1,0 +1,40 @@
+==============================
+CUDA Programming Introduction
+==============================
+
+NumbaPro provides multiple entry points for programmers of different level
+of expertise on CUDA.  For expert CUDA-C programmers, The CUDA-Python defines
+a subset of Python for low-level programming on the CUDA hardware.  It provides
+full control over the hardware for fine tunning the performance of CUDA kernels.
+For new CUDA programmers, the high-level API such as the 
+`universal functions (ufunc) <CUDAufunc.html>`_ and
+`generalized ufuncs (gufunc) <CUDAufunc.html#generalized-cuda-ufuncs>`_
+are the easiest way to write array operations for the GPU.
+
+
+A Very Brief Introduction to CUDA
+----------------------------------
+
+A CUDA GPU contains one or more streaming multiprocessors (SMs). Each SM is
+a manycore processor that is optimized for high memory throughput.  The manycore
+architecture is very different from the common multicore CPU architecture.
+Instead of having a large cache and complex logic for instruction level 
+optimization, a manycore processor achieves high throughput by executing many
+threads in parallel on many simpler cores.  It overcomes latency due to cache
+miss or long operations by using zero-cost context switching.  It is common
+to launch a CUDA kernel with hundreds or thousands of threads to keep the
+GPU busy.
+
+The CUDA programming model is simliar to the SIMD vector model that is common in
+modern CPUs.  A CUDA SM schedules the same instruction from a *warp* 
+of 32-threads at each issuing cycle.
+The advantage of CUDA is that the programmer does not need to
+handle the divergence of execution path in a warp, whereas a SIMD
+programmer would be required to properly mask and shuffle the vectors.
+The CUDA model decouples the data structure from the program logic.
+
+To know more about CUDA, please refer to `NVIDIA CUDA-C Programming Guide
+<http://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html>`_.
+
+
+

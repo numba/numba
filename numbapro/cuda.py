@@ -13,8 +13,31 @@ from .cudapy import jit, autojit, declare_device
 @require_context
 def to_device(ary, stream=0, copy=True, to=None):
     """Allocate and transfer a numpy ndarray to the device.
-    If `to` is not None, it is used for storing the data and no allocation will
-    occur.  The amount of byte transferred is min(sizeof(ary), sizeof(to)).
+    
+    To copy host->device a numpy array::
+        
+        ary = numpy.arange(10)
+        d_ary = cuda.to_device(ary)
+        
+    To enqueue the transfer to a stream
+        
+        stream = cuda.stream()
+        d_ary = cuda.to_device(ary, stream=stream)
+        
+    The resulting ``d_ary`` is a ``DeviceNDArray``.
+    
+    To copy device->host::
+    
+        hary = d_ary.copy_to_host()
+
+    To copy device->host to an existing array::
+    
+        ary = numpy.empty_like(d_ary)
+        d_ary.copy_to_host(ary)
+
+    To enqueue the transfer to a stream::
+    
+        hary = d_ary.copy_to_host(stream=stream)
     """
     if to is None:
         devarray = devicearray.from_array_like(ary, stream=stream)

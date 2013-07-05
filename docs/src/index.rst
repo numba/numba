@@ -74,12 +74,13 @@ CUDA support for GPU execution and a multi-threaded parallel range.
    ufuncs
    generalizedufuncs
    prange
-   CUDAPySpec
+   CUDAintro
    CUDAufunc
    CUDAJit
    cudalib
    CUDADevice
    CUDASupport
+   CUDAPySpec
 
 Additional examples:
 `GitHub repo of NumbaPro examples <https://github.com/ContinuumIO/numbapro-examples>`_

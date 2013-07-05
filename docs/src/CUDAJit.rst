@@ -1,83 +1,99 @@
-CUDA JIT
-========
+Writing CUDA-Python
+=========================
 
-CUDA JIT translates Python functions into PTX code which execute as CUDA
-kernels.  More specifically, it uses translated code from Numba and
-converts it to
-`PTX <http://en.wikipedia.org/wiki/Parallel_Thread_Execution>`_.
-NumbaPro interacts with the CUDA Driver Libraries to load the PTX onto
+The CUDA JIT is a low-level entry point to the CUDA features in NumbaPro.
+It translates Python functions into `PTX
+<http://en.wikipedia.org/wiki/Parallel_Thread_Execution>`_ code which execute on
+the CUDA hardware.  The ``jit`` decorator is applied to Python functions written 
+in the `CUDA-Python <CUDAPySpec.html>`_ subset.
+NumbaPro interacts with the `CUDA Driver API 
+<http://docs.nvidia.com/cuda/cuda-driver-api/index.html>`_ to load the PTX onto
 the CUDA device and execute.
+
 
 Imports
 -------
 
-::
+Most of the CUDA public API for CUDA features are exposed in the
+``numbapro.cuda`` module::
 
-	from numbapro import cuda, jit, float32
-	import numpy as np
+	from numbapro import cuda
 
+Compiling
+-----------
 
-CUDA Kernel Definition
-----------------------
+CUDA kernels and device functions are compiled by decorating a CUDA-Python
+function with the ``jit`` or ``autojit`` decorators.
 
-A CUDA kernel is a special function that executes on a CUDA-enabled GPU device.
-The kernel is executed once for every thread.  It does not return any value.
-Results must be written to an array argument.  By default, all array arguments are copied
-back to the host upon completion of the kernel.
+.. autofunction:: numbapro.cuda.jit
 
-::
+.. autofunction:: numbapro.cuda.autojit
 
-	@jit(argtypes=[float32[:], float32[:], float32[:]], target='gpu')
-	def cuda_sum(a, b, c):
-		tid = cuda.threadIdx.x
-		blkid = cuda.blockIdx.x
-		blkdim = cuda.blockDim.x
-		i = tid + blkid * blkdim
-		c[i] = a[i] + b[i]
-
-CUDA JIT enhances Numba translation by recognizing CUDA-C intrinsics, including threadIdx, blockIdx, blockDim, gridDim. All intrinsics are defined inside the `numbapro.cuda` module.
-
-Since a CUDA kernel does not return any value, there is no `restype` for `jit` when the target is 'gpu'.
-
-To invoke the CUDA kernel, it must be configured for the grid and block dimensions. By default, gridDim and blockDim are (1, 1, 1).
-
-::
-
-	griddim = 10, 1
-	blockdim = 32, 1, 1
-	cuda_sum_configured = cuda_sum[griddim, blockdim]
-
-Above, we configured the kernel to use 10 blocks and 32 threads per block.
-
-Lastly, we call `cuda_sum_configured` with three NumPy arrays as arguments::
-
-	a = np.array(np.random.random(320), dtype=np.float32)
-	b = np.array(np.random.random(320), dtype=np.float32)
-	c = np.empty_like(a)
-	cuda_sum_configured(a, b, c)
-
-Users can also do the configuration and calling together::
-
-	cuda_sum[griddim, blockdim](a, b, c)
-
-This style looks closer to CUDA-C kernel<<<griddim, blockdim>>>(…).
-
-**Note: All arrays are passed to the device without casting even if the array type does not match the signature of the CUDA kernel.  It is important to ensure all arguments have the correct type.**
-
-Transferring Numpy Arrays to Device
+Thread Identity by CUDA Instrinsics
 ------------------------------------
 
-Numpy arrays can be transferred to the device by::
+A set of CUDA intrinsics is used to identify the current execution thread.
+These intrinsics are meaningful inside a CUDA kernel or device function only.
+A common pattern to assign the computation of each element in the output array 
+to a thread.
 
-	device_array = cuda.to_device(array)
+For a 1D grid::
 
-To retrieve the data, do::
+    tx = cuda.threadIdx.x
+    bx = cuda.blockIdx.x
+    bw = cuda.blockDim.x
+    i = tx + bx * bw
+    array[i] = something(i)
 
-	device_array.to_host()
+For a 2D grid::
 
-This call copies the device memory back to the data buffer of `array`.
+    tx = cuda.threadIdx.x
+    ty = cuda.threadIdx.y
+    bx = cuda.blockIdx.x
+    by = cuda.blockIdx.y
+    bw = cuda.blockDim.x
+    bh = cuda.blockDim.y
+    x = tx + bx * bw
+    y = ty + by * bh
+    array[x, y] = something(x, y)
 
-`device_array` is of type `DeviceNDArray`, which is a subclass of `numpy.ndarray`.  After the call, `device_array` contains the same buffer as `array`.  The lifetime of the device memory is tied to the `DeviceNDArray` instance.  When the `DeviceNDArray` is released, the device memory is also released.
+
+Since these patterns are so common, there is a shorthand function to produce
+the same result.
+
+For a 1D grid::
+
+    i = cuda.grid(1)
+    array[i] = something(i)
+
+For a 2D grid::
+
+    x, y = cuda.grid(2)
+    array[x, y] = something(x, y)
+
+Memory Transfer
+---------------
+
+By default, any Numpy arrays used as argument of a CUDA kernel is transferred
+automatically to and from the device.  However, to achieve maximum performance 
+and minimizing redundant memory transfer,
+user should manage the memory transfer explicitly.
+
+Host->device transfers are asynchronous to the host.
+Device->host transfers are synchronous to the host.
+If a non-zero CUDA stream is provided, the transfer becomes asynchronous.
+
+.. autofunction:: numbapro.cuda.to_device
+
+.. automethod:: numbapro.cudadrv.devicearray.DeviceNDArray.copy_to_host
+
+
+Memory Lifetime
+-----------------
+
+The live time of a device array is bound to the lifetime of the 
+``DeviceNDArray`` instance.
+
 
 CUDA Stream
 -----------

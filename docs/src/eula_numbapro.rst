@@ -1,6 +1,7 @@
-==========
+==============
 NumbaPro EULA
-==========
+==============
+
 END USER LICENSE AGREEMENT
 ==========================
 NumbaPro ("the Software Product") and accompanying documentation is licensed and not sold. The Software Product is protected by copyright laws and treaties, as well as laws and treaties related to other forms of intellectual property. Continuum Analytics Inc or its subsidiaries, affiliates, and suppliers (collectively "Continuum ") own intellectual property rights in the Software Product. The Licensee's ("you" or "your") license to download, use, copy, or change the Software Product is subject to these rights and to all the terms and conditions of this End User License Agreement ("Agreement").

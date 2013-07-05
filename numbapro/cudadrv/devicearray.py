@@ -102,7 +102,10 @@ class DeviceNDArray(object):
             _driver.host_to_device(self, ary, sz, stream=stream)
 
     def copy_to_host(self, ary=None, stream=0):
-        """Copy `self` to `ary` or create an numpy ndarray is ary is None.
+        """Copy ``self`` to ``ary`` or create a new numpy ndarray
+        if ``ary`` is ``None``.
+        
+        Always returns the host array.
         """
         if ary is None:
             ary = np.empty(shape=self.shape, dtype=self.dtype)

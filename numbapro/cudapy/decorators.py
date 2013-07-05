@@ -44,6 +44,76 @@ def _map_numba_to_npm_types(typ):
 
 def jit(restype=None, argtypes=None, device=False, inline=False, bind=True,
         link=[], **kws):
+    """JIT compile a python function conforming to
+    the CUDA-Python specification.
+    
+    To define a CUDA kernel that takes two int 1D-arrays::
+
+        @cuda.jit('void(int32[:], int32[:])')
+        def foo(aryA, aryB):
+            ...
+            
+    .. note:: A kernel cannot have any return value.
+
+    To launch the cuda kernel::
+        
+        griddim = 1, 2
+        blockdim = 3, 4
+        foo[griddim, blockdim](aryA, aryB)
+        
+
+    ``griddim`` is the number of thread-block per grid. 
+    It can be:
+
+    * an int;
+    * tuple-1 of ints;
+    * tuple-2 of ints.
+    
+    ``blockdim`` is the number of threads per block. 
+    It can be:
+    
+    * an int;
+    * tuple-1 of ints;
+    * tuple-2 of ints;
+    * tuple-3 of ints.
+
+    The above code is equaivalent to the following CUDA-C.
+    
+    .. code-block:: C
+    
+        dim3 griddim(1, 2);
+        dim3 blockdim(3, 4);
+        foo<<<griddim, blockdim>>>(aryA, aryB);
+
+
+    To access the compiled PTX code::
+    
+        print foo.ptx
+
+        
+    To define a CUDA device function that takes two ints and returns a int::
+
+        @cuda.jit('int(int, int)', device=True)
+        def bar(a, b):
+            ...
+            
+    To force inline the device function::
+
+        @cuda.jit('int(int, int)', device=True, inline=True)
+        def bar_forced_inline(a, b):
+            ...
+
+    A device function can only be used inside another kernel.
+    It cannot be called from the host.
+    
+    Using ``bar`` in a CUDA kernel::
+
+        @cuda.jit('void(int32[:], int32[:], int32[:])')
+        def use_bar(aryA, aryB, aryOut):
+            i = cuda.grid(1) # global position of the thread for a 1D grid.
+            aryOut[i] = bar(aryA[i], aryB[i])
+
+    """
     restype, argtypes = convert_types(restype, argtypes)
 
     if restype and not device:
@@ -64,6 +134,28 @@ def jit(restype=None, argtypes=None, device=False, inline=False, bind=True,
         return kernel_jit
 
 def autojit(func, **kws):
+    '''JIT at callsite.  Function signature is not needed as this
+    will capture the type at call time.  Each signature of the kernel
+    is cached for future use.
+    
+    .. note:: Can only compile CUDA kernel.
+
+    Example::
+    
+        import numpy
+        
+        @cuda.autojit
+        def foo(aryA, aryB):
+            ...
+            
+        aryA = numpy.arange(10, dtype=np.int32)
+        aryB = numpy.arange(10, dtype=np.float32)
+        foo[griddim, blockdim](aryA, aryB)
+        
+    In the above code, a version of foo with the signature
+    "void(int32[:], float32[:])" is compiled.
+
+    '''
     return AutoJitCUDAKernel(func, bind=True)
 
 def declare_device(name, restype=None, argtypes=None):
