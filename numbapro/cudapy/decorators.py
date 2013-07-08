@@ -79,7 +79,7 @@ def jit(restype=None, argtypes=None, device=False, inline=False, bind=True,
 
     The above code is equaivalent to the following CUDA-C.
     
-    .. code-block:: C
+    .. code-block:: c
     
         dim3 griddim(1, 2);
         dim3 blockdim(3, 4);

@@ -59,7 +59,9 @@ For binary bitwise ``& | ^ >> <<``, the operands must be of integer types and th
 
 For complex numbers, only ``+ - *`` are defined.
 
-Please refer to the `CUDA-C Programming Guide <http://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#arithmetic-instructions>`_ for the precision each operation.
+Please refer to the `CUDA-C Programming Guide: Arithmetic Instructions
+<http://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#arithmetic-instructions>`_ 
+for the precision each operation.
 
 Intp
 -----
@@ -103,7 +105,10 @@ Shared memory intrinsics
 Math
 -----
 
-CUDA-Python translates math functions defined in the math module of the Python standard library.  All the function uses semantic of the CUDA-C definition.  Please refer to the `CUDA-C Programming Guide <http://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#mathematical-functions-appendix>`_.
+CUDA-Python translates math functions defined in the math module of the Python
+standard library.  All the function uses semantic of the CUDA-C definition.
+Please refer to the `CUDA-C Programming Guide: Math Function 
+<http://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#mathematical-functions-appendix>`_.
 
 Supported functions::
 
