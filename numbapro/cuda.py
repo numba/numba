@@ -19,7 +19,7 @@ def to_device(ary, stream=0, copy=True, to=None):
         ary = numpy.arange(10)
         d_ary = cuda.to_device(ary)
         
-    To enqueue the transfer to a stream
+    To enqueue the transfer to a stream::
         
         stream = cuda.stream()
         d_ary = cuda.to_device(ary, stream=stream)
