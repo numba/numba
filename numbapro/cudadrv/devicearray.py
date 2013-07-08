@@ -82,6 +82,19 @@ class DeviceNDArray(object):
 
         self.__writeback = writeback # should deprecate the use of this
 
+        # define the array interface to work with numpy
+        #
+        # XXX: problem with data being accessed.
+        #      is NULL pointer alright?
+        #
+        #        self.__array_interface__ = {
+        #            'shape'     : self.shape,
+        #            'typestr'   : self.dtype.str,
+        #            'data'      : (0, True),
+        #            'version'   : 3,
+        #        }
+
+
     @property
     def device_ctypes_pointer(self):
         "Returns the ctypes pointer to the GPU data buffer"

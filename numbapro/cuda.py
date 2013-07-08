@@ -32,7 +32,7 @@ def to_device(ary, stream=0, copy=True, to=None):
 
     To copy device->host to an existing array::
     
-        ary = numpy.empty_like(d_ary)
+        ary = numpy.empty(shape=d_ary.shape, dtype=d_ary.dtype)
         d_ary.copy_to_host(ary)
 
     To enqueue the transfer to a stream::
