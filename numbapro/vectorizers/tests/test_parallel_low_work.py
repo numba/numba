@@ -1,11 +1,11 @@
 '''
 There was a deadlock problem when work count is smaller than number of threads.
 '''
-
+from __future__ import division
 import numpy as np
 from numba import float32, float64, int32, uint32
 from numbapro.vectorizers import Vectorize
-from time import time
+from timeit import default_timer as time
 import unittest
 from .support import addtest, main
 
