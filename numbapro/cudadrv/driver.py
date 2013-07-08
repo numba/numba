@@ -890,6 +890,8 @@ class Stream(finalizer.OwnerMixin):
         return self._handle.value
 
     def synchronize(self):
+        '''Ensure all commands in the stream has been completed
+        '''
         self.driver.cuStreamSynchronize(self._handle)
 
     @contextlib.contextmanager

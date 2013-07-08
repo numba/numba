@@ -3,6 +3,8 @@ Version (0.12.2)
 * Distribute CUDA toolkit in Anaconda
 * Better error message
 * Fix gufunc signature parsing to accept trailing comma.
+* Fix CUDA driver log info bug
+* Support JIT linking
 
 Version (0.12.1)
 ================

@@ -19,9 +19,8 @@ Device selection must be done before any cuda feature is used.
     from numbapro import cuda
     cuda.select_device(0)
 
-This creates a new CUDA context with the selected device.
-The context is associated with the current thread.
-NumbaPro currently allows only one context per thread.
+.. autofunction:: numbapro.cuda.select_device
+
 
 The device can be closed by:
 
@@ -29,9 +28,10 @@ The device can be closed by:
 
     cuda.close()
 
-This releases the CUDA context from the current thread.
+.. autofunction:: numbapro.cuda.close
 
-Users can than create a new context with another device.
+
+Users can then create a new context with another device.
 
 ::
 
@@ -39,9 +39,9 @@ Users can than create a new context with another device.
 
 
 .. NOTE:: Compiled functions are associated with the context CUDA context.
-This makes it not very useful to close and create new devices.
-But, it is certainly useful for choosing which device to use when the machine
-has multiple GPUs.
+    This makes it not very useful to close and create new devices.
+    But, it is certainly useful for choosing which device to use when the machine
+    has multiple GPUs.
 
 
 .. Future feature that needs more polishing.

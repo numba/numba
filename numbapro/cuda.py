@@ -181,7 +181,9 @@ def event(timing=True):
 # Device selection
 
 def select_device(device_id):
-    '''Call this before any CUDA feature is used in each thread.
+    '''Creates a new CUDA context with the selected device.
+    The context is associated with the current thread.
+    NumbaPro currently allows only one context per thread.
 
     Returns a device instance
 

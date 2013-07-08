@@ -1,9 +1,10 @@
-==============================
+=====================================
 CUDA Programming Introduction
-==============================
+=====================================
 
 NumbaPro provides multiple entry points for programmers of different level
-of expertise on CUDA.  For expert CUDA-C programmers, The CUDA-Python defines
+of expertise on CUDA.  For expert CUDA-C programmers, The `CUDA-Python
+<CUDAJit.html>`_ defines
 a subset of Python for low-level programming on the CUDA hardware.  It provides
 full control over the hardware for fine tunning the performance of CUDA kernels.
 For new CUDA programmers, the high-level API such as the 

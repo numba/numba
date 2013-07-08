@@ -81,7 +81,7 @@ user should manage the memory transfer explicitly.
 
 Host->device transfers are asynchronous to the host.
 Device->host transfers are synchronous to the host.
-If a non-zero CUDA stream is provided, the transfer becomes asynchronous.
+If a non-zero `CUDA stream`_ is provided, the transfer becomes asynchronous.
 
 .. autofunction:: numbapro.cuda.to_device
 
@@ -98,16 +98,22 @@ The live time of a device array is bound to the lifetime of the
 CUDA Stream
 -----------
 
-A CUDA stream is a command queue for the CUDA device.  By specifying a stream, the CUDA API call become asynchronous, meaning that the call may return before the command has been completed.  Memory transfer instructions and kernel invocation can use CUDA stream::
+A CUDA stream is a command queue for the CUDA device.  By specifying a stream, 
+the CUDA API calls become asynchronous, meaning that the call may return before
+the command has been completed.  Memory transfer instructions and kernel 
+invocation can use CUDA stream::
 
-	stream = cuda.stream()
-	devary = cuda.to_device(an_array, stream=stream)
-	a_cuda_kernel[griddim, blockdim, stream](devary)
-	cuda.to_host(devary, stream=stream)
-	stream.synchronize()
-	# data available in an_array
+    stream = cuda.stream()
+    devary = cuda.to_device(an_array, stream=stream)
+    a_cuda_kernel[griddim, blockdim, stream](devary)
+    cuda.copy_to_host(an_array, stream=stream)
+    # data may not be available in an_array
+    stream.synchronize()
+    # data available in an_array
 
-Use `stream.synchronize()` to ensure all commands in the stream has been completed.
+.. autofunction:: numbapro.cuda.stream
+
+.. automethod:: numbapro.cudadrv.driver.Stream.synchronize
 
 An alternative syntax is available for use with a python context::
 
@@ -115,10 +121,10 @@ An alternative syntax is available for use with a python context::
 	with stream.auto_synchronize():
 	    devary = cuda.to_device(an_array, stream=stream)
 	    a_cuda_kernel[griddim, blockdim, stream](devary)
-	    cuda.to_host(devary)
+	    devary.copy_to_host(an_array, stream=stream)
 	# data available in an_array
 
-When the python "with" context exits, the stream is automatically synchronized.
+When the python ``with`` context exits, the stream is automatically synchronized.
 
 Shared Memory
 ------------------
@@ -164,7 +170,9 @@ For example:::
         if x < n and y < n:
             C[y, x] = acc
 
-The equivalent code in CUDA-C would be:::
+The equivalent code in CUDA-C would be:
+
+.. code-block:: c
 
     #define pos2d(Y, X, W) ((Y) * (W) + (X))
 
@@ -217,4 +225,4 @@ The return value of `cuda.shared.array` is a numpy-array-like object.  The `shap
 Synchronization Primitives
 --------------------------
 
-We currently support the `cuda.syncthreads()` only.  It is the same as `__syncthreads()` in CUDA-C.
+We currently support the ``cuda.syncthreads()`` only.  It is the same as ``__syncthreads()`` in CUDA-C.
