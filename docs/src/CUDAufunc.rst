@@ -20,7 +20,7 @@ to be overlapped.  This can increase the throughput of your ufunc and
 enables your ufunc to operate on data that is larger than the memory
 capacity of your GPU.  For example::
 
-    from numbapro import vectorize, cuda, float32, float64
+    from numbapro import vectorize, cuda
     import numpy as np
 
     # the ufunc kernel
@@ -28,8 +28,8 @@ capacity of your GPU.  For example::
         return math.sqrt(b ** 2 - 4 * a * c)
 
     # create the ufunc
-    cu_discriminant = vectorize([float32(float32, float32, float32),
-                                 float64(float64, float64, float64)],
+    cu_discriminant = vectorize(['float32(float32, float32, float32)',
+                                 'float64(float64, float64, float64)'],
                                 target='gpu')(discriminant)
 
     N = 1e+8
@@ -69,7 +69,7 @@ capacity of your GPU.  For example::
             # launch kernel
             cu_discriminant(dA, dB, dC, out=dD, stream=stream)
             # retrieve result
-            dD.to_host(stream)
+            dD.copy_to_host(d, stream)
             # store device pointers to prevent them from freeing before
             # the kernel is scheduled
             device_ptrs.extend([dA, dB, dC, dD])
@@ -82,39 +82,31 @@ Example: Calling Device Functions
 
 All CUDA ufunc kernels have the ability to call other CUDA device functions::
 
-    from numbapro import vectorize, jit, float32
+    from numbapro import vectorize, cuda
 
     # define a device function
-    @jit(float32(float32, float32, float32), device=True, inline=True, target='gpu')
+    @cuda.jit('float32(float32, float32, float32)', device=True, inline=True)
     def cu_device_fn(x, y, z):
         return x ** y / z
 
     # define a ufunc that calls our device function
-    @vectorize([float32(float32, float32, float32)], target='gpu')
+    @vectorize(['float32(float32, float32, float32)'], target='gpu')
     def cu_ufunc(x, y, z):
         return cu_device_fn(x, y, z)
 
+
 Generalized CUDA ufuncs
 -----------------------
+
 Generalized ufuncs may be executed on the GPU using CUDA, analogous to
 the CUDA ufunc functionality.  This may be accomplished as follows::
 
-    from numbapro.vectorize import GUVectorize
-
-    def matmulcore(A, B, C):
-        ...
-
-    gufunc = GUVectorize(matmulcore, '(m,n),(n,p)->(m,p)', target='gpu')
-
-Or, through the one line decorator syntax::
-
     from numbapro import guvectorize
 
-    @guvectorize([void(float32[:,:], float32[:,:], float32[:,:])], '(m,n),(n,p)->(m,p)', target='gpu')
+    @guvectorize(['void(float32[:,:], float32[:,:], float32[:,:])'], 
+                 '(m,n),(n,p)->(m,p)', target='gpu')
     def matmulcore(A, B, C):
         ...
-
-.. NOTE:: Remember that `GUVectorize(..., target='gpu').build_ufunc` returns an *ufunc-like* object.
 
 There are times when the gufunc kernel uses too many of a GPU's
 resources, which can cause the kernel launch to fail.  The user can

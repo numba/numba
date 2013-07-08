@@ -87,6 +87,13 @@ If a non-zero `CUDA stream`_ is provided, the transfer becomes asynchronous.
 
 .. automethod:: numbapro.cudadrv.devicearray.DeviceNDArray.copy_to_host
 
+The following are special DeviceNDArray factories:
+
+.. autofunction:: numbapro.cuda.device_array
+
+.. autofunction:: numbapro.cuda.pinned_array
+
+.. autofunction:: numbapro.cuda.mapped_array
 
 Memory Lifetime
 -----------------
@@ -226,3 +233,4 @@ Synchronization Primitives
 --------------------------
 
 We currently support the ``cuda.syncthreads()`` only.  It is the same as ``__syncthreads()`` in CUDA-C.
+

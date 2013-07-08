@@ -12,8 +12,10 @@ from .cudapy import jit, autojit, declare_device
 # NDarray device helper
 @require_context
 def to_device(ary, stream=0, copy=True, to=None):
-    """Allocate and transfer a numpy ndarray to the device.
+    """to_device(ary, stream=0, copy=True, to=None)
     
+    Allocate and transfer a numpy ndarray to the device.
+
     To copy host->device a numpy array::
         
         ary = numpy.arange(10)
@@ -49,7 +51,9 @@ def to_device(ary, stream=0, copy=True, to=None):
 
 @require_context
 def device_array(shape, dtype=np.float, strides=None, order='C', stream=0):
-    """Allocate a device ndarray like numpy.empty()
+    """device_array(shape, dtype=np.float, strides=None, order='C', stream=0)
+    
+    Allocate an empty device ndarray. Similar to numpy.empty()
     """
     shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype,
                                                          order)
@@ -58,7 +62,9 @@ def device_array(shape, dtype=np.float, strides=None, order='C', stream=0):
 
 @require_context
 def pinned_array(shape, dtype=np.float, strides=None, order='C'):
-    """Allocate a numpy.ndarray with a buffer that is pinned (pagelocked).
+    """pinned_array(shape, dtype=np.float, strides=None, order='C')
+    
+    Allocate a numpy.ndarray with a buffer that is pinned (pagelocked).
     Similar to numpy.empty().
     """
     shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype,
@@ -71,12 +77,14 @@ def pinned_array(shape, dtype=np.float, strides=None, order='C'):
 @require_context
 def mapped_array(shape, dtype=np.float, strides=None, order='C', stream=0,
                  portable=False, wc=False):
-    """Allocate a mapped ndarray with a buffer that is pinned and mapped on
+    """mapped_array(shape, dtype=np.float, strides=None, order='C', stream=0, portable=False, wc=False)
+                 
+    Allocate a mapped ndarray with a buffer that is pinned and mapped on
     to the device. Similar to numpy.empty()
     
-    portable: a boolean flag to allow the allocated device memory to be 
+    :param portable: a boolean flag to allow the allocated device memory to be
               usable in multiple devices.
-    wc: a boolean flag to enable writecombined allocation which is faster
+    :param wc: a boolean flag to enable writecombined allocation which is faster
         to write by the host and to read by the device, but slower to 
         write by the host and slower to write by the device.
     """
@@ -130,7 +138,9 @@ def device_array_like(ary, stream=0):
 # Stream helper
 @require_context
 def stream():
-    """Create a CUDA stream that represents a command queue for the device.
+    """stream()
+    
+    Create a CUDA stream that represents a command queue for the device.
     """
     return driver.Stream()
 
