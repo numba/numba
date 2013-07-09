@@ -16,6 +16,8 @@ import threading
 #------------------
 # Configuration
 
+MIN_REQUIRED_CC = (2, 0)
+
 # debug memory
 debug_memory = False
 debug_memory_alloc = 0
@@ -352,6 +354,9 @@ class Driver(object):
 
         # CUresult cuDeviceGet(CUdevice *device, int ordinal);
         'cuDeviceGet':          (c_int, POINTER(cu_device), c_int),
+        
+        # CUresult cuDeviceGetName ( char* name, int  len, CUdevice dev )
+        'cuDeviceGetName':      (c_int, c_char_p, c_int, cu_device),
 
         # CUresult cuDeviceGetAttribute(int *pi, CUdevice_attribute attrib,
         #                               CUdevice dev);
@@ -565,6 +570,8 @@ class Driver(object):
         #    cuLinkDestroy(CUlinkState state)
         'cuLinkDestroy': (c_int, cu_link_state),
 
+
+        # NOTE: this is a dummy function to test if the defer error reporting
         'easteregg': (c_int,),
     }
 
@@ -772,6 +779,8 @@ CU_DEVICE_ATTRIBUTE_CAN_MAP_HOST_MEMORY = 19
 CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT = 16
 CU_DEVICE_ATTRIBUTE_WARP_SIZE = 10
 CU_DEVICE_ATTRIBUTE_UNIFIED_ADDRESSING = 41
+CU_DEVICE_ATTRIBUTE_PCI_BUS_ID = 33
+CU_DEVICE_ATTRIBUTE_PCI_DEVICE_ID = 34
 
 class Device(object):
 
@@ -789,6 +798,8 @@ class Device(object):
       'MULTIPROCESSOR_COUNT':  CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT,
       'WARP_SIZE':             CU_DEVICE_ATTRIBUTE_WARP_SIZE,
       'UNIFIED_ADDRESSING':    CU_DEVICE_ATTRIBUTE_UNIFIED_ADDRESSING,
+      'PCI_BUS_ID':            CU_DEVICE_ATTRIBUTE_PCI_BUS_ID,
+      'PCI_DEVICE_ID':         CU_DEVICE_ATTRIBUTE_PCI_DEVICE_ID
     }
 
     def __init__(self, device_id):
@@ -798,10 +809,11 @@ class Device(object):
         self.driver.check_error(error, 'Failed to get device %d' % device_id)
         assert device_id == got_device.value, "driver returned another device"
         self.id = got_device.value
+        self.__read_name()
         self.__read_attributes()
 
-    def __str__(self):
-        return "CUDA device %d" % self.id
+    def __repr__(self):
+        return "<CUDA device %d '%s'>" % (self.id, self.name)
 
     def get_memory_info(self):
         "Returns (free, total) memory in bytes on the device."
@@ -811,6 +823,14 @@ class Device(object):
         msg = 'Failed to get memory info on device %d' % self.id
         self.driver.check_error(error, msg)
         return free.value, total.value
+
+    def __read_name(self):
+        bufsz = 128
+        buf = (c_char * bufsz)()
+        error = self.driver.cuDeviceGetName(buf, bufsz, self.id)
+        msg = 'Failed to get name of device %d' % self.id
+        self.driver.check_error(error, msg)
+        self.name = buf.value
 
     def __read_attributes(self):
         got_value = c_int()
@@ -855,11 +875,16 @@ class Device(object):
 class _Context(finalizer.OwnerMixin):
     def __init__(self, device):
         self.device = device
+        if self.device.COMPUTE_CAPABILITY < MIN_REQUIRED_CC:
+            msg = ("only support device with compute capability >2.0\n"
+                   "%s" % self.device)
+            raise CudaSupportError(msg)
         self._handle = cu_context()
         flags = 0
         if self.device.CAN_MAP_HOST_MEMORY:
             flags |= CU_CTX_MAP_HOST
         else:
+            # XXX: do I really need this?
             assert False, "unreachable: cannot map host memory"
         error = self.driver.cuCtxCreate(byref(self._handle), flags,
                                         self.device.id)
