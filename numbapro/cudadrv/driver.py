@@ -344,6 +344,9 @@ class Driver(object):
         # CUresult cuInit(unsigned int Flags);
         'cuInit' :              (c_int, c_uint),
 
+        # CUresult cuDriverGetVersion ( int* driverVersion )
+        'cuDriverGetVersion':   (c_int, POINTER(c_int)),
+
         # CUresult cuDeviceGetCount(int *count);
         'cuDeviceGetCount':     (c_int, POINTER(c_int)),
 
@@ -561,6 +564,8 @@ class Driver(object):
         #    CUresult CUDAAPI
         #    cuLinkDestroy(CUlinkState state)
         'cuLinkDestroy': (c_int, cu_link_state),
+
+        'easteregg': (c_int,),
     }
 
     _REVERSE_ERROR_MAP = _build_reverse_error_map()
@@ -618,18 +623,25 @@ class Driver(object):
                 cls._raise_driver_not_found()
 
             # Obtain function pointers
+            def make_poison(func):
+                def poison(*args, **kws):
+                    msg = ("incompatible CUDA driver: "
+                           "function %s not found. "
+                           "\nrequires CUDA driver distributed with CUDA 5.5")
+                    raise CudaDriverError(msg % (func,))
+                return poison
+
             for func, prototype in inst.API_PROTOTYPES.items():
                 restype = prototype[0]
                 argtypes = prototype[1:]
                 try:
                     ct_func = inst._cu_symbol_newer(func)
                 except AttributeError:
-                    raise CudaDriverError("driver api incomptabile. "
-                                          "requires CUDA 5.5")
+                    ct_func = make_poison(func)
                 else:
                     ct_func.restype = restype
                     ct_func.argtypes = argtypes
-                    setattr(inst, func, ct_func)
+                setattr(inst, func, ct_func)
 
             # initialize the API
             try:
@@ -643,6 +655,12 @@ class Driver(object):
                 cls._raise_driver_not_found()
 
         return cls.__INSTANCE
+
+    @property
+    def version(self):
+        ver = c_int(0)
+        self.cuDriverGetVersion(byref(ver))
+        return ver.value
 
     @classmethod
     def _raise_driver_not_found(cls):
@@ -842,7 +860,7 @@ class _Context(finalizer.OwnerMixin):
         if self.device.CAN_MAP_HOST_MEMORY:
             flags |= CU_CTX_MAP_HOST
         else:
-            assert False, "unreachable"
+            assert False, "unreachable: cannot map host memory"
         error = self.driver.cuCtxCreate(byref(self._handle), flags,
                                         self.device.id)
         self.driver.check_error(error,
@@ -1061,7 +1079,7 @@ class PinnedMemory(finalizer.OwnerMixin):
 
 class Module(finalizer.OwnerMixin):
     def __init__(self, ptx=None, image=None):
-        assert ptx is not None or image is not None
+        assert ptx is not None or image is not None, "internal error"
         if ptx is not None:
             self.load_data(c_char_p(ptx))
         elif image is not None:
