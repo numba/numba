@@ -1,8 +1,7 @@
 CUDA Ufuncs and Generalized Ufuncs
 ==================================
 
-This page describes the CUDA ufunc-like object returned from
-Vectorize.build_ufunc and GUVectorize.build_ufunc.
+This page describes the CUDA ufunc-like object.
 
 To support the programming pattern of CUDA programs, CUDA Vectorize and
 GUVectorize cannot produce a conventional ufunc.  Instead, a ufunc-like
