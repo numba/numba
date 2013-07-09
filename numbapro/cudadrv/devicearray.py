@@ -5,9 +5,11 @@ on the object.  If it exists and evaluate to True, it must define shape,
 strides, dtype and size attributes similar to a NumPy ndarray.
 '''
 
-import numpy as np
+
 import warnings
 import math
+import operator
+import numpy as np
 from .ndarray import ndarray_device_allocate_head, ndarray_populate_head
 from . import driver as _driver
 
@@ -74,7 +76,6 @@ class DeviceNDArray(object):
 
         if gpu_head is None:
             gpu_head = ndarray_device_allocate_head(self.ndim)
-
             ndarray_populate_head(gpu_head, gpu_data, self.shape,
                                   self.strides, stream=stream)
         self.gpu_head = gpu_head
@@ -121,9 +122,21 @@ class DeviceNDArray(object):
         Always returns the host array.
         """
         if ary is None:
-            ary = np.empty(shape=self.shape, dtype=self.dtype)
-        _driver.device_to_host(ary, self, self.alloc_size, stream=stream)
-        return ary
+            hostary = np.empty(shape=self.alloc_size, dtype=np.byte)
+        else:
+            if ary.shape != self.shape:
+                raise TypeError('incompatible shape')
+            if ary.strides != self.strides:
+                raise TypeError('incompatible strides')
+            if ary.dtype != self.dtype:
+                raise TypeError('incompatible dtype')
+            hostary = ary
+        _driver.device_to_host(hostary, self, self.alloc_size, stream=stream)
+
+        if ary is None:
+            hostary = np.ndarray(shape=self.shape, strides=self.strides,
+                                 dtype=self.dtype, buffer=hostary)
+        return hostary
 
     def to_host(self, stream=0):
         warnings.warn("to_host() is deprecated and will be removed",
@@ -163,25 +176,30 @@ class DeviceNDArray(object):
 
     #---- array operations -----
 
-    def _yields_f_strides_by_shape(self):
+    def _yields_f_strides_by_shape(self, shape=None):
         '''yields the f-contigous strides
         '''
+        shape = self.shape if shape is None else shape
         itemsize = self.dtype.itemsize
         yield itemsize
         sum = 1
-        for s in self.shape[:-1]:
+        for s in shape[:-1]:
             sum *= s
             yield sum * itemsize
 
-    def _yields_c_strides_by_shape(self):
+    def _yields_c_strides_by_shape(self, shape=None):
         '''yields the c-contigous strides in
         '''
+        shape = self.shape if shape is None else shape
         itemsize = self.dtype.itemsize
-        yield itemsize
-        sum = 1
-        for s in reversed(self.shape[1:]):
-            sum *= s
-            yield sum * itemsize
+        def gen():
+            yield itemsize
+            sum = 1
+            for s in reversed(shape[1:]):
+                sum *= s
+                yield sum * itemsize
+        for i in reversed(list(gen())):
+            yield i
 
     def is_f_contigous(self):
         return all(i == j for i, j in
@@ -190,11 +208,48 @@ class DeviceNDArray(object):
     def is_c_contigous(self):
         return all(i == j for i, j in
                    zip(self._yields_c_strides_by_shape(),
-                       reversed(self.strides)))
+                       self.strides))
+
+    def reshape(self, *newshape, **kws):
+        '''reshape(self, *newshape, order='C'):
+        
+        Reshape the array and keeping the original data
+        '''
+        order = kws.pop('order', 'C')
+        if kws:
+            ArgumentError('unknown keyword arguments %s' % kws.keys())
+        if order not in 'CFA':
+            raise ValueError('order not C|F|A')
+        # compute new array size
+        if len(newshape) > 1:
+            newsize = reduce(operator.mul, newshape)
+        else:
+            (newsize,) = newshape
+        if newsize != self.size:
+            raise ValueError("reshape changes the size of the array")
+        elif  self.is_f_contigous() or self.is_c_contigous():
+            if order == 'A':
+                order = 'F' if self.is_f_contigous() else 'C'
+            if order == 'C':
+                newstrides = list(self._yields_c_strides_by_shape(newshape))
+            elif order == 'F':
+                newstrides = list(self._yields_f_strides_by_shape(newshape))
+            else:
+                assert False, 'unreachable'
+
+            ret = DeviceNDArray(shape=newshape, strides=newstrides,
+                                 dtype=self.dtype, gpu_data=self.gpu_data)
+                    
+            return ret
+        else:
+            raise NotImplementedError("reshaping non-contiguous array requires"
+                                    "autojitting a special kernel to complete")
+
+
 
     def ravel(self, order='C', stream=0):
         if order not in 'CFA':
-            raise ValueError('invalid order code')
+            raise ValueError('order not C|F|A')
         elif self.ndim == 1:
             return DeviceNDArray(shape=self.shape, strides=self.strides,
                                  dtype=self.dtype, gpu_data=self.gpu_data)
@@ -208,6 +263,7 @@ class DeviceNDArray(object):
             raise NotImplementedError("this ravel operation requires "
                                 "autojitting a special kernel to complete")
 
+
 class MappedNDArray(DeviceNDArray, np.ndarray):
     def device_setup(self, gpu_data, stream=0):
         gpu_head = ndarray_device_allocate_head(self.ndim)
@@ -217,6 +273,7 @@ class MappedNDArray(DeviceNDArray, np.ndarray):
 
         self.gpu_data = gpu_data
         self.gpu_head = gpu_head
+
 
 def from_array_like(ary, stream=0, gpu_head=None, gpu_data=None):
     "Create a DeviceNDArray object that is like ary."
