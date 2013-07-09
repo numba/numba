@@ -161,6 +161,52 @@ class DeviceNDArray(object):
         '''
         return self.gpu_head
 
+    #---- array operations -----
+
+    def _yields_f_strides_by_shape(self):
+        '''yields the f-contigous strides
+        '''
+        itemsize = self.dtype.itemsize
+        yield itemsize
+        sum = 1
+        for s in self.shape[:-1]:
+            sum *= s
+            yield sum * itemsize
+
+    def _yields_c_strides_by_shape(self):
+        '''yields the c-contigous strides in
+        '''
+        itemsize = self.dtype.itemsize
+        yield itemsize
+        sum = 1
+        for s in reversed(self.shape[1:]):
+            sum *= s
+            yield sum * itemsize
+
+    def is_f_contigous(self):
+        return all(i == j for i, j in
+                   zip(self._yields_f_strides_by_shape(), self.strides))
+
+    def is_c_contigous(self):
+        return all(i == j for i, j in
+                   zip(self._yields_c_strides_by_shape(),
+                       reversed(self.strides)))
+
+    def ravel(self, order='C', stream=0):
+        if order not in 'CFA':
+            raise ValueError('invalid order code')
+        elif self.ndim == 1:
+            return DeviceNDArray(shape=self.shape, strides=self.strides,
+                                 dtype=self.dtype, gpu_data=self.gpu_data)
+        elif (order == 'C' and self.is_c_contigous() or
+                order == 'F' and self.is_f_contigous()):
+            # just flatten it
+            return DeviceNDArray(shape=self.size, strides=self.dtype.itemsize,
+                                 dtype=self.dtype, gpu_data=self.gpu_data,
+                                 stream=stream)
+        else:
+            raise NotImplementedError("this ravel operation requires "
+                                "autojitting a special kernel to complete")
 
 class MappedNDArray(DeviceNDArray, np.ndarray):
     def device_setup(self, gpu_data, stream=0):
@@ -188,3 +234,4 @@ def auto_device(ary, stream=0, copy=True):
         if copy:
             devarray.copy_to_device(ary, stream=stream)
         return devarray, True
+
