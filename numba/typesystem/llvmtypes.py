@@ -42,6 +42,7 @@ for typename in universe.int_typenames:
 for typename in universe.float_typenames:
     unittypes[typename] = lfloat(typename, size(typename))
 unittypes["void"] = llvm.core.Type.void()
+unittypes["datetime"] = llvm.core.Type.int(64)
 
 globals().update((tyname(name), ty) for name, ty in unittypes.iteritems())
 

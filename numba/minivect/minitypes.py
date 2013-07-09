@@ -34,7 +34,8 @@ __all__ = ['Py_ssize_t', 'void', 'char', 'uchar', 'short', 'ushort',
            'size_t', 'npy_intp', 'c_string_type', 'bool_', 'object_',
            'float_', 'double', 'longdouble', 'float32', 'float64', 'float128',
            'int8', 'int16', 'int32', 'int64', 'uint8', 'uint16', 'uint32', 'uint64',
-           'complex64', 'complex128', 'complex256', 'struct', 'Py_uintptr_t']
+           'complex64', 'complex128', 'complex256', 'struct', 'Py_uintptr_t',
+           'datetime']
 
 import sys
 import math
@@ -379,6 +380,8 @@ class Type(miniutils.ComparableObjectMixin):
     is_int_like = False
     is_complex = False
     is_void = False
+
+    is_datetime = False
 
     kind = NONE_KIND
 
@@ -742,6 +745,16 @@ class IntType(NumericType):
         else:
             return str(self)
 
+
+class DateTimeType(Type):
+    is_datetime = True
+    name = "datetime"
+
+    def __repr__(self):
+        return ("datetime")
+
+    def to_llvm(self, context):
+        return llvm.core.Type.uint(64)
 
 class BoolType(IntType):
     is_bool = True
@@ -1202,6 +1215,8 @@ complex128 = ComplexType(name="complex128", base_type=float64,
                          rank=31, itemsize=16)
 complex256 = ComplexType(name="complex256", base_type=float128,
                          rank=32, itemsize=32)
+
+datetime = DateTimeType(name="datetime")
 
 integral = []
 native_integral = []

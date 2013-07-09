@@ -330,6 +330,8 @@ class ResolveCoercions(visitors.NumbaTransformer):
                     nodes.ComplexAttributeNode(complex_value, "real"),
                     nodes.ComplexAttributeNode(complex_value.clone, "imag")
                 ]
+            elif node_type.is_datetime:
+                print('JNB: coerce to datetime')
             else:
                 raise error.NumbaError(
                     node, "Don't know how to coerce type %r to PyObject" %
@@ -410,6 +412,8 @@ class ResolveCoercions(visitors.NumbaTransformer):
                     imag=function_util.external_call(
                         self.context, self.llvm_module,
                         "PyComplex_ImagAsDouble", args=[cloneable.clone]))
+            elif node_type.is_datetime:
+                print('JNB: visit_CoerceToNative()')
             else:
                 raise error.NumbaError(
                     node, "Don't know how to coerce a Python object to a %r" %

@@ -111,6 +111,8 @@ tuple_of_obj       = tuple_(object_, -1)
 list_of_obj        = list_(object_, -1)
 dict_of_obj        = dict_(object_, object_, -1)
 
+datetime = unit("datetime", "datetime", flags=["numeric"])
+
 # ______________________________________________________________________
 
 O = object_
