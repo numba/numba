@@ -93,7 +93,7 @@ Requirements
 
 * python 2.6 or 2.7 (support is not yet available for 3.x)
 * LLVM (>= 3.2)
-* nVidia CUDA SDK (>= 5.5rc)
+* Latest NVIDIA CUDA driver
 
 Python modules:
 
