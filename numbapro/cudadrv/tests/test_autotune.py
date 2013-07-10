@@ -1,5 +1,5 @@
 from .support import testcase, main
-from numbapro.cudapy import autotune
+from numbapro.cudadrv import autotune
 
 
 SAMPLE1 = '''
