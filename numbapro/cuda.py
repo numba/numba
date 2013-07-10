@@ -225,6 +225,33 @@ def close():
 def _auto_device(ary, stream=0, copy=True):
     return devicearray.auto_device(ary, stream=stream, copy=copy)
 
+
+def detect():
+    '''Detect hardware support
+    '''
+    devlist = list_devices()
+    print 'Found %d CUDA devices' % len(devlist)
+    supported_count = 0
+    for dev in devlist:
+        attrs = []
+        cc = dev.attributes['COMPUTE_CAPABILITY']
+        attrs += [('compute capability', '%d.%d' % cc)]
+        attrs += [('pci device id', dev.attributes['PCI_DEVICE_ID'])]
+        attrs += [('pci bus id', dev.attributes['PCI_BUS_ID'])]
+        if cc < (2, 0):
+            support = '[NOT SUPPORTED: CC < 2.0]'
+        else:
+            support = '[SUPPORTED]'
+            supported_count += 1
+
+        print 'id %d    %20s %40s' % (dev.id, dev.name, support)
+        for key, val in attrs:
+            print '%40s: %s' % (key, val)
+
+    print 'Summary:'
+    print '\t%d/%d devices are supported' % (supported_count, len(devlist))
+    return supported_count > 0
+
 #
 # Initialize the CUDA system
 #

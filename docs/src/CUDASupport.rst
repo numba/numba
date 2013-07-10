@@ -4,6 +4,8 @@ CUDA Support
 
 .. NOTE:: Platforms supported: Linux, Windows and Mac OSX 32/64-bit.
           Only support CUDA devices with **compute capability 2.0 and above**.
+          Please see `CUDA GPUs <https://developer.nvidia.com/cuda-gpus>`_ for 
+          a list of CUDA GPUs and their compute capability.
 
 
 .. NOTE:: As of version 0.12.2, Anaconda is distributing a subset of CUDA 

@@ -77,3 +77,24 @@ def test():
         return True
 
 
+def check_cuda():
+    import numbapro.findlib
+    from numbapro import cuda
+    ok = True
+
+    print 'libraries detection'.center(80, '-')
+    if not numbapro.findlib.test():
+        ok = False
+
+    print 'hardware detection'.center(80, '-')
+    if not cuda.detect():
+        ok = False
+        
+    # result
+    if not ok:
+        print 'FAILED'
+    else:
+        print 'PASSED'
+    return ok
+
+
