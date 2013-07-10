@@ -2,6 +2,7 @@ import copy
 from numbapro.npm.execution import (to_ctype, prepare_args, Complex64,
                                     Complex128, ArrayBase)
 from numbapro.cudadrv import driver, devicearray
+from numbapro.cudadrv.autotune import AutoTuner
 
 class CUDAKernelBase(object):
     '''Define interface for configurable kernels
@@ -84,6 +85,15 @@ class CUDAKernel(CUDAKernelBase):
     @property
     def device(self):
         return self.cu_function.device
+
+    @property
+    def autotune(self):
+        try:
+            return self._autotune
+        except AttributeError:
+            self._autotune = AutoTuner(self.name, self.compile_info,
+                                       cc=self.device.COMPUTE_CAPABILITY)
+            return self._autotune
 
     def __call__(self, *args):
         self._call(args = args,

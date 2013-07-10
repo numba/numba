@@ -11,20 +11,20 @@ class CudaUFuncDispatcher(object):
     def __init__(self, types_to_retty_kernels):
         self.functions = types_to_retty_kernels
 
-    def _set_max_blocksize(self, blksz):
-        self.__max_blocksize = blksz
-
-    def _get_max_blocksize(self):
+    @property
+    def max_blocksize(self):
         try:
             return self.__max_blocksize
         except AttributeError:
             return 2**30 # a very large number
 
-    def _del_max_blocksize(self, blksz):
-        del self.__max_blocksize
+    @max_blocksize.setter
+    def max_blocksize(self, blksz):
+        self.__max_blocksize = blksz
 
-    max_blocksize = property(_get_max_blocksize, _set_max_blocksize,
-                             _del_max_blocksize)
+    @max_blocksize.deleter
+    def max_blocksize(self, blksz):
+        del self.__max_blocksize
 
     def _prepare_inputs(self, args):
         # prepare broadcasted contiguous arrays
@@ -47,6 +47,16 @@ class CudaUFuncDispatcher(object):
         # return np.empty_like(broadcast_arrays[0], dtype=result_dtype)
         # for numpy1.5
         return np.empty(broadcast_arrays[0].shape, dtype=result_dtype)
+
+    def _apply_autotuning(self, func):
+        atune = func.autotune
+        max_threads = atune.best()
+        
+        if not max_threads:
+            raise Exception("insufficient resources to run kernel"
+                            "at any thread-per-block.")
+
+        return max_threads
 
     def __call__(self, *args, **kws):
         '''
@@ -86,8 +96,13 @@ class CudaUFuncDispatcher(object):
 
         # find the fitting function
         result_dtype, cuda_func = self._get_function_by_dtype(dtypes)
-        MAX_THREAD = min(cuda_func.device.MAX_THREADS_PER_BLOCK,
+
+        max_threads = min(cuda_func.device.MAX_THREADS_PER_BLOCK,
                          self.max_blocksize)
+
+        # apply autotune
+        if max_threads == cuda_func.device.MAX_THREADS_PER_BLOCK:
+            self._apply_autotuning(cuda_func)
 
         if has_device_array_arg:
             # Ugly: convert array scalar into zero-strided one element array.
@@ -105,15 +120,13 @@ class CudaUFuncDispatcher(object):
             args, argconv = zip(*(cuda._auto_device(a) for a in args))
     
             element_count = self._determine_element_count(args)
-            nctaid, ntid = self._determine_dimensions(element_count, MAX_THREAD)
-            
+            nctaid, ntid = self._determine_dimensions(element_count,
+                                                      max_threads)
+
             griddim = (nctaid,)
             blockdim = (ntid,)
 
             if 'out' not in kws:
-                #out = self._allocate_output(args, result_dtype)
-                #np.empty(args[0].shape[0], dtype=result_dtype)
-                #device_out = cuda.to_device(out, stream, copy=False)
                 out_shape = self._determine_output_shape(args)
                 device_out = cuda.device_array(shape=out_shape,
                                                dtype=result_dtype,
@@ -126,9 +139,7 @@ class CudaUFuncDispatcher(object):
 
             cuda_func[griddim, blockdim, stream](*kernel_args)
 
-#            for ary, conv in zip(args, argconv):
-#                if conv:
-#                    ary.to_host()
+
             return device_out
 
         else:
@@ -150,7 +161,8 @@ class CudaUFuncDispatcher(object):
             (out,) = self._adjust_dimension([out])
             broadcast_arrays = self._adjust_dimension(broadcast_arrays)
 
-            nctaid, ntid = self._determine_dimensions(element_count, MAX_THREAD)
+            nctaid, ntid = self._determine_dimensions(element_count,
+                                                      max_threads)
 
             assert all(isinstance(array, np.ndarray)
                        for array in broadcast_arrays), \

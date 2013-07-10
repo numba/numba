@@ -75,7 +75,7 @@ def test_autotune_occupancy_2():
 @testcase
 def test_autotune():
     at = autotune.AutoTuner('foo', SAMPLE1, cc=(2, 0))
-    assert (1.0, 192) == at.max_occupancy_max_blocks()
+    assert 192 == at.max_occupancy_max_blocks()
     assert 352 == at.prefer(320, 352, 416)
     assert 512 == at.prefer(320, 352, 416, 512)
     assert 256 == at.prefer(320, 352, 416, 512, 256)

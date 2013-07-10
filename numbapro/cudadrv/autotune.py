@@ -53,7 +53,7 @@ class AutoTuner(object):
         Maximum blocks allows for the best utilization of parallel execution
         because each block can be executed concurrently on different SM.
         '''
-        return self.by_occupancy[0]
+        return self.by_occupancy[0][1]
 
     def closest(self, tpb):
         '''Find the occupancy of the closest tpb
