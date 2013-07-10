@@ -876,8 +876,10 @@ class _Context(finalizer.OwnerMixin):
     def __init__(self, device):
         self.device = device
         if self.device.COMPUTE_CAPABILITY < MIN_REQUIRED_CC:
-            msg = ("only support device with compute capability >2.0\n"
-                   "%s" % self.device)
+            msg = ("failed to initialize %s\n"
+                   "only support device with compute capability >=2.0\n"
+                   "please use numbapro.check_cuda() to scan for supported "
+                   "CUDA GPUs" % self.device)
             raise CudaSupportError(msg)
         self._handle = cu_context()
         flags = 0
