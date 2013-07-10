@@ -1,11 +1,15 @@
 import numbapro
 import unittest, os, sys
+try:
+    from collections import OrderedDict
+except ImportError:
+    OrderedDict = dict
 
 class TestSupport(object):
 
     def __init__(self, basefile):
         self.basefile = basefile
-        self.tests = {}
+        self.tests = OrderedDict()
 
     def testcase(self, func, **kws):
         '''Create simple test case from a function and uses the docstring
