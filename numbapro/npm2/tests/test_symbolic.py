@@ -1,21 +1,33 @@
+import dis
 from numbapro.npm2.symbolic import SymbolicExecution
 from .support import testcase, main
 
 
 def foo(a, b):
-    c = a + b
-    if a > b:
-        return c + a - b
-    else:
-        sum = c
-        for i in range(b - a):
+    sum = a
+    if a == b:
+        for i in range(b):
             sum += i
-        return sum
+    a = a + b - c / d // d % e
+    a = a >> b << c | b ^ d & e
+    b = +a
+    b = -a
+    b = ~a
+    # not supported
+    # a = a > b and not a < c or a == d and b != e or a >= f or a <= g:
+    if a > b and not a < c or a == d and b != e or a >= f or a <= g:
+        a = True
+    else:
+        a = False
+    return sum
 
 @testcase
 def test_symbolic():
+    dis.dis(foo)
     se = SymbolicExecution(foo)
     se.visit()
+    for b in se.runtime.blocks:
+        print b
 
 if __name__ == '__main__':
     main()

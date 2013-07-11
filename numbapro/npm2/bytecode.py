@@ -22,6 +22,8 @@ elif sys.version_info[:2] >= (2, 7):  # python 2.7
     BYTECODE_VERSION_SPECIFIC = [
         ('POP_JUMP_IF_FALSE', 2),
         ('POP_JUMP_IF_TRUE', 2),
+        ('JUMP_IF_TRUE_OR_POP', 2),
+        ('JUMP_IF_FALSE_OR_POP', 2),
     ]
 
 BYTECODES = [
@@ -41,6 +43,8 @@ BYTECODES = [
     ('BINARY_LSHIFT', 0),
     ('BINARY_RSHIFT', 0),
     ('BREAK_LOOP', 0),
+    ('UNARY_POSITIVE', 0),
+    ('UNARY_NEGATIVE', 0),
     ('UNARY_INVERT', 0),
     ('UNARY_NOT', 0),
     ('BUILD_TUPLE', 2),
@@ -56,6 +60,7 @@ BYTECODES = [
     ('INPLACE_DIVIDE', 0),
     ('INPLACE_TRUE_DIVIDE', 0),
     ('INPLACE_FLOOR_DIVIDE', 0),
+    ('INPLACE_MODULO', 0),
     ('INPLACE_POWER', 0),
     ('INPLACE_AND', 0),
     ('INPLACE_OR', 0),
