@@ -23,6 +23,7 @@ elif sys.version_info[:2] >= (2, 7):  # python 2.7
         ('POP_JUMP_IF_FALSE', 2),
         ('POP_JUMP_IF_TRUE', 2),
     ]
+
 BYTECODES = [
     # opname, operandlen
     ('BINARY_ADD', 0),

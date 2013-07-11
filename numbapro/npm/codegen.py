@@ -109,6 +109,16 @@ class CodeGen(object):
                     if destty.is_signed
                     else self.builder.fptoui)
 
+        elif (ty.is_int or ty.is_float) and destty.is_complex:
+            # int|float -> complex
+            def float_to_complex(real, complexty):
+                celem = destty.complex_element
+                lcelem = self.to_llvm(celem)
+                real = self.do_cast(real, ty, celem)
+                imag = lc.Constant.real(lcelem, 0)
+                return complex_make(self.builder, complexty, real, imag)
+
+            op = float_to_complex
 
         try:
             return op(lval, self.to_llvm(destty))
@@ -394,7 +404,20 @@ class CodeGen(object):
             args = expr.args.args
             assert len(args) == len(argtys), \
                 "expecting %d arguments but got %d" % (len(argtys), len(args))
+
             args = [self.cast(a.value, t) for a, t in zip(args, argtys)]
+
+            #adapt arguments
+            def adapt_arguments():
+                for a, t in zip(args, argtys):
+                    if t.is_scalar and t.is_complex:
+                        ptr = self.builder.alloca(self.to_llvm(t))
+                        self.builder.store(a, ptr)
+                        yield ptr
+                    else:
+                        yield a
+
+            args = list(adapt_arguments())
 
             if retty:
                 retptr = self.builder.alloca(myfunc.args[-1].type.pointee)
