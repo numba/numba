@@ -1,4 +1,5 @@
 import copy
+import ctypes
 from numbapro.npm.execution import (to_ctype, prepare_args, Complex64,
                                     Complex128, ArrayBase)
 from numbapro.cudadrv import driver, devicearray
@@ -124,6 +125,11 @@ class CUDAKernel(CUDAKernelBase):
                 retr.append(lambda: devary.copy_to_host(val, stream=stream))
             return devary.as_cuda_arg()
         elif issubclass(ty, (Complex64, Complex128)):
-            raise NotImplementedError("complex argument is not supported")
+            size = ctypes.sizeof(ty)
+            dmem = driver.DeviceMemory(size)
+            cval = ty(val)
+            driver.host_to_device(dmem, ctypes.addressof(cval), size,
+                                  stream=stream)
+            return dmem
         else:
             return prepare_args(ty, val)
