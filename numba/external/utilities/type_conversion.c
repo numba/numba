@@ -1,5 +1,6 @@
 #include <Python.h>
 #include "generated_conversions.h"
+#include "datetime.h"
 
 /* Utilities copied from Cython/Utility/TypeConversion.c */
 
@@ -258,6 +259,18 @@ static NUMBA_INLINE Py_ssize_t __Numba_PyIndex_AsSsize_t(PyObject*);
 static NUMBA_INLINE PyObject * __Numba_PyInt_FromSize_t(size_t);
 static NUMBA_INLINE size_t __Numba_PyInt_AsSize_t(PyObject*);
 
+static unsigned long int datetime2long(PyObject *object)
+{
+    return 333;
+}
+
+static PyObject* long2datetime(unsigned long int x)
+{
+    PyObject *result = PyDate_FromDate(2013, 7, 13);
+    Py_INCREF(result);
+    return result;
+}
+
 static int
 export_type_conversion(PyObject *module)
 {
@@ -274,6 +287,9 @@ export_type_conversion(PyObject *module)
 
     EXPORT_FUNCTION(__Numba_PyIndex_AsSsize_t, module, error);
     EXPORT_FUNCTION(__Numba_PyInt_FromSize_t, module, error);
+    
+    EXPORT_FUNCTION(datetime2long, module, error);
+    EXPORT_FUNCTION(long2datetime, module, error);
 
     EXPORT_FUNCTION(__Numba_PyInt_FromLongLong, module, error);
     EXPORT_FUNCTION(__Numba_PyInt_FromUnsignedLongLong, module, error);

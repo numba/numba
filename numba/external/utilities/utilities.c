@@ -38,6 +38,7 @@ PyMODINIT_FUNC PyInit_utilities(void)
 #endif
 {
     PyObject *module;
+    PyDateTime_IMPORT;
 
 #if PY_MAJOR_VERSION < 3
     module = Py_InitModule4(__Numba_NAMESTR("utilities"), NULL, 0, 0, PYTHON_API_VERSION);
