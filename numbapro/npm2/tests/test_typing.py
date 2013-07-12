@@ -9,26 +9,16 @@ from .support import testcase, main
 
 def foo(a, b):
     sum = a
+    sum = b
     if a == b:
+        i = 0
+        i = 1
         for i in range(b):
             sum += i
+            i = 132
+            i = 321
+        i = 2
     return sum
-
-#@testcase
-def test_infer():
-    dis.dis(foo)
-    se = SymbolicExecution(foo)
-    se.interpret()
-
-    for blk in se.blocks:
-        print blk
-
-    infer = Infer(args={'a': types.int32, 'b': types.int32},
-                  return_type=types.int32,
-                  intp=tuple.__itemsize__)
-    typemap = infer.infer()
-    pprint(typemap)
-
 
 @testcase
 def test_type_coercion():
@@ -42,6 +32,23 @@ def test_type_coercion():
     for fromty, toty in itertools.product(numerics, numerics):
         pts = Type(fromty).coerce(Type(toty), noraise=True)
         print '%s -> %s :: %s' % (fromty, toty, pts)
+
+@testcase
+def test_infer():
+    dis.dis(foo)
+    se = SymbolicExecution(foo)
+    se.interpret()
+
+    for blk in se.blocks:
+        print blk
+
+    infer = Infer(symbolic = se,
+                  args = {'a': types.int32, 'b': types.int32},
+                  return_type = types.int32,
+                  intp = tuple.__itemsize__)
+    typemap = infer.infer()
+    pprint(typemap)
+
 
 
 

@@ -53,13 +53,22 @@ class SymbolicExecution(object):
                     if offset in self.blocks:
                         self.pending_run.add(offset)
                         if not self.curblock.is_terminated():
-                            self.terminate('jump', target=self.blocks[offset])
+                            self.jump(target=self.blocks[offset])
                         break
+
+
+        for blk in self.blocks:
+            print blk
+
         # run passes
         self.doms = find_dominators(self.blocks)
         self.mark_backbone()
         self.strip_dead_block()
         self.complete_phis()
+        self.rename_definition()
+
+    def rename_definition(self):
+        RenameDefinition(self.blocks, self.doms, self.backbone).run()
 
     def mark_backbone(self):
         '''The backbone control flow path.
@@ -94,7 +103,8 @@ class SymbolicExecution(object):
         # guess line no
         self.lineno = self.bytecode[0].lineno - 1
         for argnum, argname in enumerate(argspec.args):
-            self.push_insert('arg', num=argnum, name=argname)
+            arg = self.insert('arg', num=argnum, name=argname)
+            self.push_insert('store', name=argname, value=arg)
 
     def op(self, inst):
         with error_context(lineno=inst.lineno):
@@ -400,13 +410,71 @@ def find_dominators(blocks):
         for blk in remainblks:
             d = doms[blk]
             ps = [doms[p] for p in blk.incoming_blocks]
-            p = reduce(set.intersection, ps)
+            if not ps:
+                p = set()
+            else:
+                p = reduce(set.intersection, ps)
             new = set([blk]) | p
             if new != d:
                 doms[blk] = new
                 changed = True
 
+    from pprint import pprint
+    pprint(doms)
     return doms
+
+class RenameDefinition(object):
+    '''Rename definition so that each assignment is unique when it is defined
+    along the backbone --- the backbone is the controlflow path that must
+    be visited.
+    '''
+    def __init__(self, blocks, doms, backbone):
+        self.blocks = blocks
+        self.doms = doms
+        self.backbone = backbone
+
+        self.defcount = defaultdict(int)
+        self.defmap = {}
+        for b in self.blocks:
+            self.defmap[b] = {}
+
+    def run(self):
+        for b in self.blocks:
+            for i in b.code:
+                with error_context(lineno=i.lineno):
+                    if i.opcode == 'load':
+                        self.op_load(i)
+                    elif i.opcode == 'store':
+                        self.op_store(i)
+
+    def op_load(self, load):
+        name, _ = self.lookup(load.block, load.name)
+        if not name:
+            raise NameError('variable "%s" can be undefined' % load.name)
+        load.update(name=name)
+
+    def op_store(self, store):
+        block = store.block
+        name = store.name
+        rename, defblock = self.lookup(store.block, name)
+        if not rename or self.can_define(block) or defblock is block:
+            rename = '%s.%d' % (name, self.defcount[name])
+            self.defcount[name] += 1
+            self.defmap[block][name] = rename
+        store.update(name=rename)
+
+    def can_define(self, block):
+        return block in self.backbone
+
+    def lookup(self, block, name):
+        '''return (name, block) where block is the defined block
+        '''
+        doms = sorted((x.offset, x) for x in self.doms[block])
+        for offset, block in reversed(doms):
+            defmap = self.defmap[block]
+            if name in defmap:
+                return defmap[name], block
+        return None, None
 
 #---------------------------------------------------------------------------
 # Internals
