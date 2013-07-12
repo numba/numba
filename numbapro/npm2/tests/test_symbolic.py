@@ -13,21 +13,23 @@ def foo(a, b):
     b = +a
     b = -a
     b = ~a
-    # not supported
-    # a = a > b and not a < c or a == d and b != e or a >= f or a <= g:
+    if a:
+        return
+    a = a > b and not a < c or a == d and b != e or a >= f or a <= g
     if a > b and not a < c or a == d and b != e or a >= f or a <= g:
         a = True
     else:
         a = False
-    return sum
+        return sum
 
 @testcase
 def test_symbolic():
     dis.dis(foo)
     se = SymbolicExecution(foo)
-    se.visit()
-    for b in se.runtime.blocks:
-        print b
+    se.interpret()
+    for blk in se.blocks:
+        print blk
+
 
 if __name__ == '__main__':
     main()

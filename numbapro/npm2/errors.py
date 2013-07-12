@@ -2,7 +2,7 @@ from contextlib import contextmanager
 import sys
 
 @contextmanager
-def error_context(lineno):
+def error_context(lineno=-1):
     try:
         yield
     except Exception, e:

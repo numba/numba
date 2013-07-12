@@ -89,7 +89,11 @@ BYTECODES = [
 BYTECODE_TABLE = _make_bytecode_table(BYTECODES)
 
 
-JUMP_OPS = ['JUMP_ABSOLUTE', 'JUMP_FORWARD', 'POP_JUMP_IF_FALSE']
+JUMP_OPS = ['JUMP_ABSOLUTE', 'JUMP_FORWARD',
+            'POP_JUMP_IF_FALSE', 'POP_JUMP_IF_TRUE',
+            'JUMP_IF_FALSE', 'JUMP_IF_TRUE',
+            'JUMP_IF_TRUE_OR_POP', 'JUMP_IF_FALSE_OR_POP',
+            'FOR_ITER', ]
 
 
 class ByteCodeInst(object):
@@ -178,6 +182,9 @@ class ByteCode(object):
 
     def __getitem__(self, offset):
         return self.table[offset]
+
+    def __contains__(self, offset):
+        return offset in self.table
 
     def dump(self):
         return '\n'.join('%10d\t%s' % i for i in self.table.iteritems())

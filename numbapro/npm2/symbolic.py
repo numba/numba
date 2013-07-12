@@ -16,235 +16,368 @@ COMPARE_OP_FUNC = {
     '!=': operator.ne,
 }
 
+
 class SymbolicExecution(object):
     def __init__(self, func):
         self.func = func
         self.bytecode = ByteCode(func)
-        self.runtime = SymbolicRuntime(self, self.bytecode)
+        self.blocks = BlockMap()
+        for offset in self.bytecode.labels:
+            self.blocks[offset]
 
-        # ignore any POP_TOP at the first of a block for python26
-        self._ignore_first_pop_top = set()
+        self.pending_run = set([0])
+        self.processed = set()
+
+        self.varnames = self.bytecode.code.co_varnames
+        self.consts = self.bytecode.code.co_consts
+        self.names = self.bytecode.code.co_names
+
+    def interpret(self):
+        # interpretation loop
+        while self.pending_run:
+            offset = self.pending_run.pop()
+            if offset not in self.processed:    # don't repeat the work
+                self.processed.add(offset)
+
+                self.curblock = self.blocks[offset]
+                if offset == 0:
+                    self.push_arguments()
+
+                while offset in self.bytecode:
+                    inst = self.bytecode[offset]
+                    self.op(inst)
+                    offset = inst.next
+                    if self.curblock.is_terminated():
+                        break
+
+                    if offset in self.blocks:
+                        self.pending_run.add(offset)
+                        if not self.curblock.is_terminated():
+                            self.terminate('jump', target=self.blocks[offset])
+                        break
+        # run passes
+        self.doms = find_dominators(self.blocks)
+        self.mark_backbone()
+        self.strip_dead_block()
+        self.complete_phis()
+
+    def mark_backbone(self):
+        '''The backbone control flow path.
+        Variable can only be defined on this path
+        '''
+        self.backbone = self.doms[self.blocks.last()]
+
+    def complete_phis(self):
+        for blk in self.blocks:
+            for pos, inst in enumerate(blk.code):
+                if inst.opcode == 'phi':
+                    for ib in blk.incoming_blocks:
+                        inst.phi.add_incoming(ib, ib.stack[-1-pos])
+                else:
+                    break
 
     def strip_dead_block(self):
         dead = []
         # scan
-        for blk in self.runtime.blocks:
+        for blk in self.blocks:
             if blk.is_dead():
                 dead.append(blk)
         # remove
         for blk in dead:
-            self.runtime.blocks.remove(blk)
+            self.blocks.remove(blk)
 
-    def visit(self):
-        # prepare arguments
+    def push_arguments(self):
         argspec = inspect.getargspec(self.func)
         assert not argspec.defaults, "does not support defaults"
         assert not argspec.varargs, "does not support varargs"
         assert not argspec.keywords, "does not support keywords"
-        firstinst = self.bytecode[0]
+        # guess line no
+        self.lineno = self.bytecode[0].lineno - 1
         for argnum, argname in enumerate(argspec.args):
-            self.runtime.load_argument(num=argnum, name=argname,
-                                       lineno=firstinst.lineno - 1)
-        # visit every bytecode
-        for inst in self.bytecode:
-            with error_context(inst.lineno):
-                if self.runtime.curblock.terminator is not None:
-                    self.runtime.curblock = self.runtime.blocks[inst.offset]
+            self.push_insert('arg', num=argnum, name=argname)
 
-                oldblock = self.runtime.curblock
-                self.runtime.on_next_inst(inst)         # update curblock
+    def op(self, inst):
+        with error_context(lineno=inst.lineno):
+            self.lineno = inst.lineno
+            attr = 'op_%s' % inst.opname
+            fn = getattr(self, attr, self.generic_op)
+            fn(inst)
 
-
-                if oldblock is not self.runtime.curblock:
-                    if (inst.opname == 'POP_TOP' and
-                           self.runtime.curblock in self._ignore_first_pop_top):
-                        continue    # skip
-                attr = 'visit_' + inst.opname
-                func = getattr(self, attr, self.generic_visit)
-                func(inst)
-
-        # run passes
-        self.strip_dead_block()
-        # generate dominator sets for each block
-        self.doms = find_dominators(self.runtime.blocks)
-
-    def generic_visit(self, inst):
+    def generic_op(self, inst):
         raise NotImplementedError(inst)
 
-    def visit_POP_TOP(self, inst):
-        self.runtime.pop()
+    @property
+    def stack(self):
+        return self.curblock.stack
 
-    def visit_LOAD_FAST(self, inst):
-        name = self.runtime.varnames[inst.arg]
-        self.runtime.load_name(name, inst.lineno)
+    def insert(self, op, **kws):
+        inst = Inst(op, self.lineno, **kws)
+        inst.block = self.curblock
+        self.curblock.code.append(inst)
+        return inst
+        
 
-    def visit_LOAD_GLOBAL(self, inst):
-        name = self.runtime.names[inst.arg]
-        self.runtime.load_global(name, inst.lineno)
+    def _prepend_phi(self, op, **kws):
+        inst = Inst(op, self.lineno, **kws)
+        inst.block = self.curblock
+        self.curblock.code = [inst] + self.curblock.code
+        return inst
 
-    def visit_LOAD_CONST(self, inst):
-        const = self.runtime.consts[inst.arg]
-        self.runtime.load_const(const, inst.lineno)
+    def push_insert(self, op, **kws):
+        inst = self.insert(op, **kws)
+        self.push(inst)
+        return inst
 
-    def visit_STORE_FAST(self, inst):
-        name = self.runtime.varnames[inst.arg]
-        self.runtime.store_name(name, self.runtime.pop(), inst.lineno)
+    def push(self, val):
+        self.stack.append(val)
 
-    def visit_UNARY_POSITIVE(self, inst):
-        self.runtime.unary_op(operator.pos, inst.lineno)
+    def _insert_phi(self):
+        phi = Inst('phi', self.lineno, phi=Incomings())
+        phi.block = self.curblock
+        pos = 0
+        for pos, inst in enumerate(self.curblock.code):
+            if inst.opcode != 'phi':
+                break
+        self.curblock.code.insert(pos, phi)
+        return phi
 
-    def visit_UNARY_NEGATIVE(self, inst):
-        self.runtime.unary_op(operator.neg, inst.lineno)
+    def peek(self):
+        if not self.stack:
+            return self._insert_phi()
+        else:
+            return self.stack[-1]
 
-    def visit_UNARY_INVERT(self, inst):
-        self.runtime.unary_op(operator.invert, inst.lineno)
+    def pop(self):
+        if not self.stack:
+            return self._insert_phi()
+        else:
+            return self.stack.pop()
 
-    def visit_UNARY_NOT(self, inst):
-        self.runtime.unary_op(operator.not_, inst.lineno)
+    def call(self, func, args=(), kws=()):
+        self.push_insert('call', callee=func, args=args, kws=kws)
 
-    def visit_BINARY_ADD(self, inst):
-        self.runtime.binary_op(operator.add, inst.lineno)
+    def binary_op(self, op):
+        rhs = self.pop()
+        lhs = self.pop()
+        self.call(op, args=(lhs, rhs))
 
-    def visit_BINARY_SUBTRACT(self, inst):
-        self.runtime.binary_op(operator.sub, inst.lineno)
+    def unary_op(self, op):
+        tos = self.pop()
+        self.call(op, args=(tos,))
 
-    def visit_BINARY_MULTIPLY(self, inst):
-        self.runtime.binary_op(operator.mul, inst.lineno)
+    def jump(self, target):
+        self.pending_run.add(target.offset)
+        self.terminate('jump', target=target)
+        self.curblock.connect(target)
 
-    def visit_BINARY_DIVIDE(self, inst):
-        self.runtime.binary_op(operator.floordiv, inst.lineno)
+    def jump_if(self, cond, truebr, falsebr):
+        self.pending_run.add(truebr.offset)
+        self.pending_run.add(falsebr.offset)
+        self.terminate('branch', cond=cond, truebr=truebr, falsebr=falsebr)
+        self.curblock.connect(truebr)
+        self.curblock.connect(falsebr)
 
-    def visit_BINARY_FLOOR_DIVIDE(self, inst):
-        self.runtime.binary_op(operator.floordiv, inst.lineno)
+    def terminate(self, op, **kws):
+        assert not self.curblock.is_terminated()
+        self.curblock.terminator = Inst(op, self.lineno, **kws)
 
-    def visit_BINARY_TRUE_DIVIDE(self, inst):
-        self.runtime.binary_op(operator.truediv, inst.lineno)
+    # ------ op_* ------- #
+    
+    def op_POP_JUMP_IF_TRUE(self, inst):
+        falsebr = self.blocks[inst.next]
+        truebr = self.blocks[inst.arg]
+        self.jump_if(self.pop(), truebr, falsebr)
 
-    def visit_BINARY_MODULO(self, inst):
-        self.runtime.binary_op(operator.mod, inst.lineno)
+    def op_POP_JUMP_IF_FALSE(self, inst):
+        truebr = self.blocks[inst.next]
+        falsebr = self.blocks[inst.arg]
+        self.jump_if(self.pop(), truebr, falsebr)
 
-    def visit_BINARY_POWER(self, inst):
-        self.runtime.binary_op(operator.pow, inst.lineno)
+    def op_JUMP_IF_TRUE(self, inst):
+        falsebr = self.blocks[inst.next]
+        truebr = self.blocks[inst.arg]
+        self.jump_if(self.peek(), truebr, falsebr)
 
-    def visit_BINARY_RSHIFT(self, inst):
-        self.runtime.binary_op(operator.rshift, inst.lineno)
+    def op_JUMP_IF_FALSE(self, inst):
+        truebr = self.blocks[inst.next]
+        falsebr = self.blocks[inst.arg]
+        self.jump_if(self.peek(), truebr, falsebr)
 
-    def visit_BINARY_LSHIFT(self, inst):
-        self.runtime.binary_op(operator.lshift, inst.lineno)
+    def op_JUMP_IF_TRUE_OR_POP(self, inst):
+        falsebr = self.blocks[inst.next]
+        truebr = self.blocks[inst.arg]
+        self.jump_if(self.peek(), truebr, falsebr)
 
-    def visit_BINARY_AND(self, inst):
-        self.runtime.binary_op(operator.and_, inst.lineno)
+    def op_JUMP_IF_TRUE_OR_POP(self, inst):
+        truebr = self.blocks[inst.next]
+        falsebr = self.blocks[inst.arg]
+        self.jump_if(self.peek(), truebr, falsebr)
 
-    def visit_BINARY_OR(self, inst):
-        self.runtime.binary_op(operator.or_, inst.lineno)
+    def op_JUMP_ABSOLUTE(self, inst):
+        target = self.blocks[inst.arg]
+        self.jump(target)
 
-    def visit_BINARY_XOR(self, inst):
-        self.runtime.binary_op(operator.xor, inst.lineno)
+    def op_JUMP_FORWARD(self, inst):
+        target = self.blocks[inst.next + inst.arg]
+        self.jump(target)
 
-    def visit_INPLACE_ADD(self, inst):
-        self.runtime.binary_op(operator.add, inst.lineno)
+    def op_RETURN_VALUE(self, inst):
+        val = self.pop()
+        if val.opcode == 'const' and val.value is None:
+            self.terminate('retvoid')
+        else:
+            self.terminate('ret', value=val)
 
-    def visit_INPLACE_SUBTRACT(self, inst):
-        self.runtime.binary_op(operator.sub, inst.lineno)
+    def op_SETUP_LOOP(self, inst):
+        pass # noop?
 
-    def visit_INPLACE_MULTIPLY(self, inst):
-        self.runtime.binary_op(operator.mul, inst.lineno)
+    def op_POP_BLOCK(self, inst):
+        pass # noop?
 
-    def visit_INPLACE_DIVIDE(self, inst):
-        self.runtime.binary_op(operator.floordiv, inst.lineno)
-
-    def visit_INPLACE_FLOOR_DIVIDE(self, inst):
-        self.runtime.binary_op(operator.floordiv, inst.lineno)
-
-    def visit_INPLACE_TRUE_DIVIDE(self, inst):
-        self.runtime.binary_op(operator.truediv, inst.lineno)
-
-    def visit_INPLACE_MODULO(self, inst):
-        self.runtime.binary_op(operator.mod, inst.lineno)
-
-    def visit_INPLACE_POWER(self, inst):
-        self.runtime.binary_op(operator.pow, inst.lineno)
-
-    def visit_INPLACE_RSHIFT(self, inst):
-        self.runtime.binary_op(operator.rshift, inst.lineno)
-
-    def visit_INPLACE_LSHIFT(self, inst):
-        self.runtime.binary_op(operator.lshift, inst.lineno)
-
-    def visit_INPLACE_AND(self, inst):
-        self.runtime.binary_op(operator.and_, inst.lineno)
-
-    def visit_INPLACE_OR(self, inst):
-        self.runtime.binary_op(operator.or_, inst.lineno)
-
-    def visit_INPLACE_XOR(self, inst):
-        self.runtime.binary_op(operator.xor, inst.lineno)
-
-    def visit_COMPARE_OP(self, inst):
-        opfunc = COMPARE_OP_FUNC[dis.cmp_op[inst.arg]]
-        self.runtime.binary_op(opfunc, inst.lineno)
-
-    def visit_SETUP_LOOP(self, inst):
-        self.runtime.setup_loop(inst.arg + inst.next)
-
-    def visit_BREAK_LOOP(self, inst):
-        self.runtime.break_loop(inst.next, inst.lineno)
-
-    def visit_CALL_FUNCTION(self, inst):
+    def op_CALL_FUNCTION(self, inst):
         argc = inst.arg & 0xff
         kwsc = (inst.arg >> 8) & 0xff
-        self.runtime.setup_call(argc, kwsc, inst.lineno)
 
-    def visit_GET_ITER(self, inst):
-        self.runtime.get_iter(inst.lineno)
+        def pop_kws():
+            val = self.pop()
+            key = self.pop()
+            if key.opcode != 'const':
+                raise ArgumentError('keyword must be a constant')
+            return key.value, val
 
-    def visit_FOR_ITER(self, inst):
-        self.runtime.for_iter(inst.arg + inst.next, inst.offset, inst.next,
-                              inst.lineno)
+        kws = list(reversed([pop_kws() for i in range(kwsc)]))
+        args = list(reversed([self.pop() for i in range(argc)]))
 
-    def visit_JUMP_IF_TRUE_OR_POP(self, inst):
-        raise Exception('do not support `a = b and c or d`')
+        func = self.pop()
+        self.call(func, args=args, kws=kws)
 
-    def visit_JUMP_IF_FALSE_OR_POP(self, inst):
-        raise Exception('do not support `a = b and c or d`')
+    def op_GET_ITER(self, inst):
+        self.call(iter, args=(self.pop(),))
 
-    def visit_POP_JUMP_IF_TRUE(self, inst):
-        falsebr = self.runtime.blocks[inst.next]
-        truebr = self.runtime.blocks[inst.arg]
-        self.runtime.jump_if(truebr, falsebr, inst.lineno)
+    def op_FOR_ITER(self, inst):
+        iterobj = self.peek()
+        delta = inst.arg
+        loopexit = self.blocks[inst.next + delta]
+        loopbody = self.blocks[inst.next]
+        self.call('itervalid', args=(iterobj,))
+        pred = self.pop()
+        self.jump_if(cond=pred, truebr=loopbody, falsebr=loopexit)
 
-    def visit_POP_JUMP_IF_FALSE(self, inst):
-        truebr = self.runtime.blocks[inst.next]
-        falsebr = self.runtime.blocks[inst.arg]
-        self.runtime.jump_if(truebr, falsebr, inst.lineno)
+        self.curblock, oldblock = loopbody, self.curblock
+        self.call('iternext', args=(iterobj,))
 
-    def visit_POP_BLOCK(self, inst):
-        self.runtime.pop_block(inst.lineno)
+        self.curblock = oldblock
 
-    def visit_JUMP_IF_TRUE(self, inst):
-        falsebr = self.runtime.blocks[inst.next]
-        truebr = self.runtime.blocks[inst.arg]
-        self._ignore_first_pop_top.add(truebr)
-        self._ignore_first_pop_top.add(falsebr)
-        self.runtime.jump_if(truebr, falsebr, inst.lineno)
+    def op_LOAD_GLOBAL(self, inst):
+        name = self.names[inst.arg]
+        self.push_insert('global', name=name)
 
-    def visit_JUMP_IF_FALSE(self, inst):
-        truebr = self.runtime.blocks[inst.next]
-        falsebr = self.runtime.blocks[inst.arg]
-        self._ignore_first_pop_top.add(truebr)
-        self._ignore_first_pop_top.add(falsebr)
-        self.runtime.jump_if(truebr, falsebr, inst.lineno)
+    def op_LOAD_FAST(self, inst):
+        name = self.varnames[inst.arg]
+        self.push_insert('load', name=name)
 
-    def visit_JUMP_ABSOLUTE(self, inst):
-        target = self.runtime.blocks[inst.arg]
-        self.runtime.jump(target, inst.lineno)
+    def op_LOAD_CONST(self, inst):
+        const = self.consts[inst.arg]
+        self.push_insert('const', value=const)
 
-    def visit_JUMP_FORWARD(self, inst):
-        target = self.runtime.blocks[inst.arg + inst.next]
-        self.runtime.jump(target, inst.lineno)
+    def op_STORE_FAST(self, inst):
+        tos = self.pop()
+        name = self.varnames[inst.arg]
+        self.push_insert('store', name=name, value=tos)
 
-    def visit_RETURN_VALUE(self, inst):
-        self.runtime.ret(inst.lineno)
+    def op_COMPARE_OP(self, inst):
+        opfunc = COMPARE_OP_FUNC[dis.cmp_op[inst.arg]]
+        self.binary_op(opfunc)
+
+    def op_UNARY_POSITIVE(self, inst):
+        self.unary_op(operator.pos)
+
+    def op_UNARY_NEGATIVE(self, inst):
+        self.unary_op(operator.neg)
+
+    def op_UNARY_INVERT(self, inst):
+        self.unary_op(operator.invert)
+
+    def op_UNARY_NOT(self, inst):
+        self.unary_op(operator.not_)
+
+    def op_BINARY_ADD(self, inst):
+        self.binary_op(operator.add)
+
+    def op_BINARY_SUBTRACT(self, inst):
+        self.binary_op(operator.sub)
+
+    def op_BINARY_MULTIPLY(self, inst):
+        self.binary_op(operator.mul)
+
+    def op_BINARY_DIVIDE(self, inst):
+        self.binary_op(operator.floordiv)
+
+    def op_BINARY_FLOOR_DIVIDE(self, inst):
+        self.binary_op(operator.floordiv)
+
+    def op_BINARY_TRUE_DIVIDE(self, inst):
+        self.binary_op(operator.truediv)
+
+    def op_BINARY_MODULO(self, inst):
+        self.binary_op(operator.mod)
+
+    def op_BINARY_POWER(self, inst):
+        self.binary_op(operator.pow)
+
+    def op_BINARY_RSHIFT(self, inst):
+        self.binary_op(operator.rshift)
+
+    def op_BINARY_LSHIFT(self, inst):
+        self.binary_op(operator.lshift)
+
+    def op_BINARY_AND(self, inst):
+        self.binary_op(operator.and_)
+
+    def op_BINARY_OR(self, inst):
+        self.binary_op(operator.or_)
+
+    def op_BINARY_XOR(self, inst):
+        self.binary_op(operator.xor)
+
+    def op_INPLACE_ADD(self, inst):
+        self.binary_op(operator.add)
+
+    def op_INPLACE_SUBTRACT(self, inst):
+        self.binary_op(operator.sub)
+
+    def op_INPLACE_MULTIPLY(self, inst):
+        self.binary_op(operator.mul)
+
+    def op_INPLACE_DIVIDE(self, inst):
+        self.binary_op(operator.floordiv)
+
+    def op_INPLACE_FLOOR_DIVIDE(self, inst):
+        self.binary_op(operator.floordiv)
+
+    def op_INPLACE_TRUE_DIVIDE(self, inst):
+        self.binary_op(operator.truediv)
+
+    def op_INPLACE_MODULO(self, inst):
+        self.binary_op(operator.mod)
+
+    def op_INPLACE_POWER(self, inst):
+        self.binary_op(operator.pow)
+
+    def op_INPLACE_RSHIFT(self, inst):
+        self.binary_op(operator.rshift)
+
+    def op_INPLACE_LSHIFT(self, inst):
+        self.binary_op(operator.lshift)
+
+    def op_INPLACE_AND(self, inst):
+        self.binary_op(operator.and_)
+
+    def op_INPLACE_OR(self, inst):
+        self.binary_op(operator.or_)
+
+    def op_INPLACE_XOR(self, inst):
+        self.binary_op(operator.xor)
 
 #---------------------------------------------------------------------------
 # Passes
@@ -278,151 +411,6 @@ def find_dominators(blocks):
 #---------------------------------------------------------------------------
 # Internals
 
-setup_loop_info = namedtuple('setup_loop_info', ['sp', 'block', 'nextblock'])
-
-class SymbolicRuntime(object):
-    def __init__(self, parent, bytecode):
-        self.parent = parent
-
-        self.varnames = bytecode.code.co_varnames
-        self.consts = bytecode.code.co_consts
-        self.names = bytecode.code.co_names
-        self.blocks = BlockMap()
-        self.curblock = self.blocks[0]
-        self.scopes = []
-
-    @property
-    def stack(self):
-        return self.curblock.stack
-
-    def on_next_inst(self, inst):
-        oldblock = self.curblock
-        self.curblock = self.blocks.get(inst.offset, oldblock)
-
-    def setup_loop(self, offset):
-        self.scopes.append(setup_loop_info(sp=len(self.stack),
-                                           block=self.curblock,
-                                           nextblock=self.blocks[offset]))
-
-    def break_loop(self, next, lineno):
-        target = self.scopes[-1].nextblock
-        self.terminate(Inst('jump', lineno, target=target))
-        self.curblock.connect(target)
-        self.curblock = self.blocks[next]
-    
-    def pop_block(self, lineno):
-        del self.stack[self.scopes[-1].sp:]
-        self.scopes.pop()
-
-    def setup_call(self, argc, kwsc, lineno):
-        def pop_kws():
-            val = self.pop()
-            key = self.pop()
-            if key.opcode != 'const':
-                raise ArgumentError('keyword must be a constant')
-            return key.value, val
-
-        kws = list(reversed([pop_kws() for i in range(kwsc)]))
-        args = list(reversed([self.pop() for i in range(argc)]))
-
-        func = self.pop()
-        self.call(lineno, func, args=args, kws=kws)
-
-
-    def push(self, value):
-        "push value onto the stack"
-        self.stack.append(value)
-
-    def pop(self):
-        "pop value from the stack"
-        return self.stack.pop()
-
-    def peek(self):
-        "peek at the TOS"
-        return self.stack[-1]
-
-    def insert(self, inst):
-        inst.block = self.curblock
-        self.curblock.code.append(inst)
-        return inst
-
-    def terminate(self, inst):
-        assert self.curblock.terminator is None
-        inst.block = self.curblock
-        self.curblock.terminator = inst
-
-    def store_name(self, name, value, lineno):
-        self.insert(Inst('store', lineno, name=name, value=value))
-
-    def load_argument(self, num, name, lineno):
-        inst = Inst('arg', lineno, argnum=num)
-        ref = self.insert(inst)
-        self.store_name(name, inst, lineno)
-
-    def load_name(self, name, lineno):
-        self.push(self.insert(Inst('load', lineno, name=name)))
-
-    def load_global(self, name, lineno):
-        self.push(self.insert(Inst('global', lineno, name=name)))
-
-    def load_const(self, value, lineno):
-        self.push(self.insert(Inst('const', lineno, value=value)))
-
-    def get_iter(self, lineno):
-        obj = self.pop()
-        self.push(self.insert(Inst('iter', lineno, obj=obj)))
-
-
-    def for_iter(self, delta, ipcur, ipnext, lineno):
-        iterobj = self.peek()
-
-        loophead = self.blocks[ipcur]
-        self.terminate(Inst('jump', lineno, target=loophead))
-        self.curblock.connect(loophead)
-        self.curblock = loophead
-
-        predloop = self.insert(Inst('for_valid', lineno, iter=iterobj))
-        loopbody = self.blocks[ipnext]
-        loopexit = self.blocks[delta]
-        self.terminate(Inst('branch', lineno, cond=predloop,
-                            truebr=loopbody, falsebr=loopexit))
-        self.curblock.connect(loopbody)
-        self.curblock.connect(loopexit)
-        self.curblock = loopbody
-        
-        self.push(self.insert(Inst('for_next', lineno, iter=iterobj)))
-
-    def call(self, lineno, func, args=(), kws=()):
-        callinst = Inst('call', lineno, callee=func, args=args, kws=kws)
-        self.push(self.insert(callinst))
-
-    def unary_op(self, op, lineno):
-        tos = self.pop()
-        self.call(lineno, op, args=(tos,))
-
-    def binary_op(self, op, lineno):
-        rhs = self.pop()
-        lhs = self.pop()
-        self.call(lineno, op, args=(lhs, rhs))
-
-    def jump_if(self, truebr, falsebr, lineno):
-        cond = self.pop()
-        self.terminate(Inst('branch', lineno, cond=cond, truebr=truebr, falsebr=falsebr))
-        self.curblock.connect(truebr)
-        self.curblock.connect(falsebr)
-
-    def jump(self, target, lineno):
-        self.terminate(Inst('jump', lineno, target=target))
-        self.curblock.connect(target)
-
-    def ret(self, lineno):
-        val = self.pop()
-        if val.opcode == 'const' and val.value is None:
-            self.terminate(Inst('retvoid', lineno))
-        else:
-            self.terminate(Inst('ret', lineno, value=val))
-
-
 class BlockMap(object):
     def __init__(self):
         self._map = {}
@@ -433,6 +421,9 @@ class BlockMap(object):
         except KeyError:
             self._map[offset] = Block(offset)
             return self._map[offset]
+
+    def __contains__(self, offset):
+        return offset in self._map
 
     def __setitem__(self, offset):
         del self._sorted
@@ -458,9 +449,16 @@ class BlockMap(object):
     def __iter__(self):
         return iter(v for k, v in self.sorted())
 
+    def last(self):
+        return self.sorted()[-1][1]
+
 class Incomings(object):
     def __init__(self):
         self.incomings = {}
+
+    def add_incoming(self, block, value):
+        assert block not in self.incomings, "duplicated incoming block for phi"
+        self.incomings[block] = value
 
     def __repr__(self):
         ins = '; '.join('%r=%r' % it for it in self.incomings.iteritems())
@@ -480,6 +478,9 @@ class Block(object):
 
     def is_empty(self):
         return not self.code
+
+    def is_terminated(self):
+        return self.terminator is not None
 
     def is_dead(self):
         return not self.incoming_blocks and not self.outgoing_blocks
