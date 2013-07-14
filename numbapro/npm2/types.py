@@ -1,16 +1,58 @@
-__all__ = ('int8', 'int16', 'int32', 'int64', 'uint8', 'uint16', 'uint32',
-           'uint64', 'float32', 'float64', 'complex64', 'complex128',
+from math import copysign
+
+__all__ = ('int8', 'int16', 'int32', 'int64', 'intp',
+           'uint8', 'uint16', 'uint32', 'uint64',
+           'float32', 'float64', 'complex64', 'complex128',
            'arraytype')
 
+class Type(object):
+    def __new__(cls, desc):
+        if isinstance(desc, Type):
+            return desc
+        else:
+            cls.check_interface(desc)
+            instance = object.__new__(cls)
+            instance.desc = desc
+            return instance
+
+    @classmethod
+    def check_interface(cls, desc):
+        assert hasattr(desc, 'coerce')
+        assert hasattr(desc, 'fields')
+
+    def coerce(self, other, noraise=False):
+        ret = self.desc.coerce(Type(other).desc)
+        if ret is None and not noraise:
+            raise TypeError('can not coerce %s -> %s' % (other, self))
+        return ret
+
+    def __str__(self):
+        return str(self.desc)
+
+    def __repr__(self):
+        return repr(self.desc)
+
+    def list_fields(self):
+        values = []
+        for field in self.desc.fields:
+            values.append(getattr(self.desc, field))
+        return values
+
+    def __hash__(self):
+        return hash(tuple(self.list_fields()))
+
+    def __eq__(self, other):
+        if type(self.desc) == type(other.desc):
+            return all(a == b
+                        for a, b
+                        in zip(self.list_fields(), Type(other).list_fields()))
+
 class Integer(object):
+    fields = 'signed', 'bitwidth'
+    
     def __init__(self, signed, bitwidth):
         self.signed = signed
         self.bitwidth = bitwidth
-
-    def __eq__(self, other):
-        if isinstance(other, Integer):
-            return (self.signed == other.signed and
-                    self.bitwidth == other.bitwidth)
 
     def __repr__(self):
         if self.signed:
@@ -18,38 +60,30 @@ class Integer(object):
         else:
             return 'uint%d' % self.bitwidth
 
+    def coerce(self, other):
+        if isinstance(other, Integer):
+            pts = (other.bitwidth - self.bitwidth) // 8
+            if self.signed != other.signed: # signedness mismatch
+                pts += copysign(25, pts)
+            return pts
+        elif isinstance(other, Float):
+            return (other.bitwidth - self.bitwidth) // 8 + 50
+        elif isinstance(other, Complex):
+            return (other.bitwidth - self.bitwidth) // 8 + 100
+
 
 class Signed(Integer):
     def __init__(self, bitwidth):
         super(Signed, self).__init__(True, bitwidth)
 
-    def coerce(self, other):
-        if isinstance(other, Signed):
-            return (other.bitwidth - self.bitwidth) // 8
-        elif isinstance(other, Unsigned):
-            return (other.bitwidth - self.bitwidth) // 8 * 2
-        elif isinstance(other, Float):
-            return (other.bitwidth - self.bitwidth) // 8 + 50
-        elif isinstance(other, Complex):
-            return (other.bitwidth - self.bitwidth) // 8 + 100
-
-
 class Unsigned(Integer):
     def __init__(self, bitwidth):
         super(Unsigned, self).__init__(False, bitwidth)
 
-    def coerce(self, other):
-        if isinstance(other, Unsigned):
-            return (other.bitwidth - self.bitwidth) // 8
-        elif isinstance(other, Signed):
-            return (other.bitwidth - self.bitwidth) // 8 * 2
-        elif isinstance(other, Float):
-            return (other.bitwidth - self.bitwidth) // 8 + 50
-        elif isinstance(other, Complex):
-            return (other.bitwidth - self.bitwidth) // 8 + 100
-
 
 class Float(object):
+    fields = 'bitwidth',
+
     def __init__(self, bitwidth):
         self.bitwidth = bitwidth
 
@@ -62,15 +96,13 @@ class Float(object):
         elif isinstance(other, Complex):
             return (other.bitwidth - self.bitwidth) // 8 + 50
 
-    def __eq__(self, other):
-        if isinstance(other, Float):
-            return self.bitwidth == other.bitwidth
-
     def __repr__(self):
         return 'float%d' % self.bitwidth
 
 
 class Complex(object):
+    fields = 'bitwidth',
+    
     def __init__(self, bitwidth):
         self.bitwidth = bitwidth
 
@@ -78,15 +110,13 @@ class Complex(object):
         if isinstance(other, Complex):
             return (other.bitwidth - self.bitwidth) // 8
 
-    def __eq__(self, other):
-        if isinstance(other, Complex):
-            return self.bitwidth == other.bitwidth
-
     def __repr__(self):
         return 'complex%d' % self.bitwidth
 
 
 class Array(object):
+    fields = 'element', 'shape', 'layout'
+    
     def __init__(self, element, shape, layout):
         assert isinstance(shape, tuple)
         assert layout in 'CFA'
@@ -97,32 +127,48 @@ class Array(object):
     def coerce(self, other):
         return (self == other)
 
-    def __eq__(self, other):
-        return (isinstance(other, Array) and
-                self.element == other.element and
-                self.shape == other.shape and
-                self.layout == other.layout)
-
     def __repr__(self):
         return 'complex%d' % self.bitwidth
 
 
-int8  = Signed(8)
-int16 = Signed(16)
-int32 = Signed(32)
-int64 = Signed(64)
+class BuiltinObject(object):
+    fields = 'name',
+    
+    def __init__(self, name):
+        self.name = name
 
-uint8  = Unsigned(8)
-uint16 = Unsigned(16)
-uint32 = Unsigned(32)
-uint64 = Unsigned(64)
+    def coerce(self, other):
+        if isinstance(other, BuiltinObject):
+            return self.name == other.name
 
-float32 = Float(32)
-float64 = Float(64)
+    def __repr__(self):
+        return '<builtin %s>' % self.name
 
-complex64 = Complex(64)
-complex128 = Complex(128)
+ModuleType = Type(BuiltinObject('Module'))
+FunctionType = Type(BuiltinObject('Function'))
+RangeType = Type(BuiltinObject('Range'))
+RangeIterType = Type(BuiltinObject('RangeIter'))
 
-arraytype = Array
 
+boolean = Type(Unsigned(1))
 
+int8  = Type(Signed(8))
+int16 = Type(Signed(16))
+int32 = Type(Signed(32))
+int64 = Type(Signed(64))
+
+uint8  = Type(Unsigned(8))
+uint16 = Type(Unsigned(16))
+uint32 = Type(Unsigned(32))
+uint64 = Type(Unsigned(64))
+
+float32 = Type(Float(32))
+float64 = Type(Float(64))
+
+complex64 = Type(Complex(64))
+complex128 = Type(Complex(128))
+
+def arraytype(element, shape, layout):
+    return Type(Array(element, shape, layout))
+
+intp = {4: int32, 8: int64}[tuple.__itemsize__]

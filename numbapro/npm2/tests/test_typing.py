@@ -2,8 +2,8 @@ import dis
 import itertools
 from pprint import pprint
 from numbapro.npm2.symbolic import SymbolicExecution
-from numbapro.npm2.typing import Infer, Type
-from numbapro.npm2 import types
+from numbapro.npm2.typing import Infer
+from numbapro.npm2 import types, functions
 from .support import testcase, main
 
 
@@ -17,7 +17,7 @@ def foo(a, b):
             sum += i
             i = 132
             i = 321
-        i = 2
+
     return sum
 
 @testcase
@@ -30,7 +30,7 @@ def test_type_coercion():
     numerics = signed + unsigned + real + complex
 
     for fromty, toty in itertools.product(numerics, numerics):
-        pts = Type(fromty).coerce(Type(toty), noraise=True)
+        pts = fromty.coerce(toty, noraise=True)
         print '%s -> %s :: %s' % (fromty, toty, pts)
 
 @testcase
@@ -42,12 +42,17 @@ def test_infer():
     for blk in se.blocks:
         print blk
 
+    intp = types.int64
+    funclib = functions.get_builtin_function_library()
+
     infer = Infer(symbolic = se,
                   args = {'a': types.int32, 'b': types.int32},
                   return_type = types.int32,
-                  intp = tuple.__itemsize__)
-    typemap = infer.infer()
-    pprint(typemap)
+                  funclib = funclib)
+    infer.infer()
+    
+    for blk in se.blocks:
+        print blk
 
 
 

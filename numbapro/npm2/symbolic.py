@@ -1,4 +1,5 @@
 import inspect
+import textwrap
 import dis
 import operator
 from contextlib import contextmanager
@@ -56,10 +57,6 @@ class SymbolicExecution(object):
                             self.jump(target=self.blocks[offset])
                         break
 
-
-        for blk in self.blocks:
-            print blk
-
         # run passes
         self.doms = find_dominators(self.blocks)
         self.mark_backbone()
@@ -81,7 +78,10 @@ class SymbolicExecution(object):
             for pos, inst in enumerate(blk.code):
                 if inst.opcode == 'phi':
                     for ib in blk.incoming_blocks:
-                        inst.phi.add_incoming(ib, ib.stack[-1-pos])
+                        try:
+                            inst.phi.add_incoming(ib, ib.stack[-1-pos])
+                        except IndexError:
+                            pass
                 else:
                     break
 
@@ -293,7 +293,7 @@ class SymbolicExecution(object):
     def op_STORE_FAST(self, inst):
         tos = self.pop()
         name = self.varnames[inst.arg]
-        self.push_insert('store', name=name, value=tos)
+        self.insert('store', name=name, value=tos)
 
     def op_COMPARE_OP(self, inst):
         opfunc = COMPARE_OP_FUNC[dis.cmp_op[inst.arg]]
@@ -530,7 +530,13 @@ class Incomings(object):
 
     def __repr__(self):
         ins = '; '.join('%r=%r' % it for it in self.incomings.iteritems())
-        return ins
+        return '[%s]' % ins
+
+    def __iter__(self):
+        return self.incomings.iteritems()
+
+    def values(self):
+        return self.incomings.values()
 
     def __setitem__(self, k, v):
         self.incomings[k] = v
@@ -558,10 +564,14 @@ class Block(object):
         self.outgoing_blocks.add(nextblk)
 
     def descr(self):
+        def wrap(text, w=27):
+            lines = text.splitlines()
+            return '\n'.join([lines[0]] + [_indent(ln, w) for ln in lines[1:]])
+
         ins = ', '.join(str(b.offset) for b in self.incoming_blocks)
         head = ["block %4d        ; incoming %s" % (self.offset, ins)]
-        body = ["    {!r:<30} = {!s}".format(c, c) for c in self.code]
-        tail = ["    %s" % self.terminator]
+        body = ["    {!r:<20} = {!s}".format(c, wrap(str(c))) for c in self.code]
+        tail = ["    %s\n" % wrap(str(self.terminator), w=4)]
         buf = head + body + tail
         return '\n'.join(buf)
 
@@ -585,8 +595,16 @@ class Inst(object):
         return ((k, getattr(self, k)) for k in self.attrs)
 
     def __str__(self):
-        attrs = ', '.join('%s=%1r' % (k, v) for k, v in self.list_attrs())
-        return '%s(%s)' % (self.opcode, attrs)
+        head = '%s ' % self.opcode
+        w = len(head)
+        keys, vals = zip(*sorted(self.list_attrs()))
+        max_key_len = max(len(k) for k in keys)
+        keycolfmt = '{!s:<%d} = {!r}' % (max_key_len)
+        rows = [keycolfmt.format(k, v) for k, v in zip(keys, vals)]
+
+        out = '\n'.join([head + rows[0]] + [_indent(r, w) for r in rows[1:]])
+
+        return out
 
     def __repr__(self):
         return '<%s 0x%x>' % (self.opcode, id(self))
@@ -601,3 +619,6 @@ class Inst(object):
     def __contains__(self, attrname):
         return attrname not in self.attrs
 
+def _indent(t, w, c=' '):
+    ind = c * w
+    return '%s%s' % (ind, t)
