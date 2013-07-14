@@ -10,6 +10,8 @@ from .typesets import (signed_set, unsigned_set, integer_set, float_set,
                        complex_set)
 
 class Function(object):
+    __slots__ = 'funcobj', 'args', 'return_type'
+    
     def __init__(self, funcobj, args, return_type):
         self.funcobj = funcobj
         self.args = tuple(x for x in args)
@@ -36,6 +38,12 @@ class FunctionLibrary(object):
         if func in bin:
             raise ValueError('duplicated function')
         bin.add(func)
+
+    def lookup(self, func, args):
+        versions = self.lib[func]
+        for ver in versions:
+            if ver.args == args:
+                return ver
 
     def get(self, func, args):
         graded = []

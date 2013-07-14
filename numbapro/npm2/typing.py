@@ -6,22 +6,23 @@ from .symbolic import Inst
 from types import FunctionType, BuiltinFunctionType
 
 class Infer(object):
-    def __init__(self, symbolic, funclib, args, return_type=None):
-        self.symbolic = symbolic
+    def __init__(self, func, blocks, funclib, args, return_type=None):
+        self.func = func
+        self.blocks = blocks
         self.funclib = funclib
 
         self.args = args
         self.return_type = return_type
 
         self.globals = dict(vars(__builtin__))
-        self.globals.update(self.symbolic.func.func_globals)
+        self.globals.update(self.func.func_globals)
 
         self.valmap = {}
         self.phimap = {}
 
     def infer(self):
         # infer instructions
-        for block in self.symbolic.blocks:
+        for block in self.blocks:
             for op in block.code:
                 with error_context(lineno=op.lineno,
                                    when='type inference'):
@@ -43,7 +44,7 @@ class Infer(object):
 
         # check return type
         
-        for block in self.symbolic.blocks:
+        for block in self.blocks:
             term = block.terminator
             with error_context(lineno=term.lineno, when='unifying return type'):
                 if term.opcode == 'ret':
@@ -56,6 +57,7 @@ class Infer(object):
                                             (self.return_type, return_type))
                         else: # infer return type
                             self.return_type = return_type
+                    term.update(astype=return_type)
                 elif term.opcode == 'retvoid':
                     if self.return_type != types.void:
                         msg = "must return a value of %s"
@@ -80,11 +82,12 @@ class Infer(object):
         sty = inst.value.type
         if inst.name not in self.valmap:
             # defining
-            self.valmap[inst.name] = sty
+            self.valmap[inst.name] = dty = sty
         else:
             # overwriting
             dty = self.valmap[inst.name]
             sty.coerce(dty)
+        inst.update(astype=dty)
 
     def op_call(self, inst):
         args = [v.type for v in inst.args]
@@ -114,9 +117,9 @@ class Infer(object):
             raise ValueError("invalid constant value %s" % inst.value)
 
     def op_global(self, inst):
-        glbl = self.symbolic.func.func_globals
+        glbl = self.func.func_globals
         value = self.globals[inst.name]
-        inst.update(value=value)
+        inst.update(value=value, type=types.function_type)
         if not isinstance(value, (FunctionType, BuiltinFunctionType)):
             assert False, 'XXX: inline global value'
 
