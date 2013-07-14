@@ -4,8 +4,8 @@ from .types import (int8, int16, int32, int64, intp,
                     uint8, uint16, uint32, uint64,
                     float32, float64,
                     complex64, complex128,
-                    boolean,
-                    RangeType, RangeIterType)
+                    boolean, range_type, range_iter_type)
+from . import types
 from .typesets import (signed_set, unsigned_set, integer_set, float_set,
                        complex_set)
 
@@ -45,7 +45,7 @@ class FunctionLibrary(object):
             raise NotImplementedError('function %s is not implemented' % func)
         for ver in versions:
             if len(args) == len(ver.args):
-                cur = tuple(actual.coerce(formal, noraise=True)
+                cur = tuple(actual.try_coerce(formal)
                             for actual, formal in zip(args, ver.args))
                 graded.append((cur, ver))
 
@@ -74,18 +74,18 @@ def bool_func(ty):
     return (ty, ty), boolean
 
 def range_func():
-    return [((intp, intp, intp),    RangeType),
-            ((intp, intp),          RangeType),
-            ((intp,),               RangeType)]
+    return [((intp, intp, intp),    range_type),
+            ((intp, intp),          range_type),
+            ((intp,),               range_type)]
 
 def iter_func():
-    return [((RangeType,), RangeIterType)]
+    return [((range_type,), range_iter_type)]
 
 def iter_valid_func():
-    return [((RangeIterType,), boolean)]
+    return [((range_iter_type,), boolean)]
 
 def iter_next_func():
-    return [((RangeIterType,), intp)]
+    return [((range_iter_type,), intp)]
 
 builtins = {
     range           : range_func(),

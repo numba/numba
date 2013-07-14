@@ -20,11 +20,15 @@ class Type(object):
         assert hasattr(desc, 'coerce')
         assert hasattr(desc, 'fields')
 
-    def coerce(self, other, noraise=False):
-        ret = self.desc.coerce(Type(other).desc)
-        if ret is None and not noraise:
+    def coerce(self, other):
+        ret = self.try_coerce(other)
+        if ret is None:
             raise TypeError('can not coerce %s -> %s' % (other, self))
         return ret
+
+    def try_coerce(self, other):
+        return self.desc.coerce(Type(other).desc)
+
 
     def __str__(self):
         return str(self.desc)
@@ -144,11 +148,12 @@ class BuiltinObject(object):
     def __repr__(self):
         return '<builtin %s>' % self.name
 
-ModuleType = Type(BuiltinObject('Module'))
-FunctionType = Type(BuiltinObject('Function'))
-RangeType = Type(BuiltinObject('Range'))
-RangeIterType = Type(BuiltinObject('RangeIter'))
+module_type = Type(BuiltinObject('module'))
+function_type = Type(BuiltinObject('function'))
+range_type = Type(BuiltinObject('range'))
+range_iter_type = Type(BuiltinObject('range-iter'))
 
+void = Type(BuiltinObject('void'))
 
 boolean = Type(Unsigned(1))
 

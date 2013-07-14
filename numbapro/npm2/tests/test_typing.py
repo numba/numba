@@ -30,7 +30,7 @@ def test_type_coercion():
     numerics = signed + unsigned + real + complex
 
     for fromty, toty in itertools.product(numerics, numerics):
-        pts = fromty.coerce(toty, noraise=True)
+        pts = fromty.try_coerce(toty)
         print '%s -> %s :: %s' % (fromty, toty, pts)
 
 @testcase

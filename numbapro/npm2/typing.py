@@ -20,8 +20,8 @@ class Infer(object):
         self.phimap = {}
 
     def infer(self):
+        # infer instructions
         for block in self.symbolic.blocks:
-            self.curblock = block
             for op in block.code:
                 with error_context(lineno=op.lineno,
                                    when='type inference'):
@@ -30,7 +30,7 @@ class Infer(object):
                         assert not hasattr(op, 'type'), "redefining type"
                         op.update(type=ty)
 
-
+        # unify phi nodes
         for op, newty in self.phimap.iteritems():
             with error_context(lineno=op.lineno,
                                when='phi unification'):
@@ -40,6 +40,26 @@ class Infer(object):
                     op.update(type=newty, castfrom=oldty)
                 else:
                     op.update(type=newty)
+
+        # check return type
+        
+        for block in self.symbolic.blocks:
+            term = block.terminator
+            with error_context(lineno=term.lineno, when='unifying return type'):
+                if term.opcode == 'ret':
+                    return_type = term.value.type
+                    if self.return_type != return_type:
+                        if (self.return_type is not None and
+                                not return_type.try_coerce(self.return_type)):
+                            msg = "expect return type of %s but got %s"
+                            raise TypeError(msg %
+                                            (self.return_type, return_type))
+                        else: # infer return type
+                            self.return_type = return_type
+                elif term.opcode == 'retvoid':
+                    if self.return_type != types.void:
+                        msg = "must return a value of %s"
+                        raise TypeError(msg % self.return_type)
 
     def op(self, inst):
         attr = 'op_%s' % inst.opcode
@@ -82,7 +102,9 @@ class Infer(object):
             return defn.return_type
 
     def op_const(self, inst):
-        if isinstance(inst.value, complex):
+        if inst.value is None:
+            return types.void
+        elif isinstance(inst.value, complex):
             return types.complex128
         elif isinstance(inst.value, float):
             return types.float64

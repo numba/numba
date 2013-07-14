@@ -592,17 +592,20 @@ class Inst(object):
             setattr(self, k, v)
 
     def list_attrs(self):
-        return ((k, getattr(self, k)) for k in self.attrs)
+        return [(k, getattr(self, k)) for k in self.attrs]
 
     def __str__(self):
         head = '%s ' % self.opcode
         w = len(head)
-        keys, vals = zip(*sorted(self.list_attrs()))
-        max_key_len = max(len(k) for k in keys)
-        keycolfmt = '{!s:<%d} = {!r}' % (max_key_len)
-        rows = [keycolfmt.format(k, v) for k, v in zip(keys, vals)]
-
-        out = '\n'.join([head + rows[0]] + [_indent(r, w) for r in rows[1:]])
+        if self.attrs:
+            keys, vals = zip(*sorted(self.list_attrs()))
+            max_key_len = max(len(k) for k in keys)
+            keycolfmt = '{!s:<%d} = {!r}' % (max_key_len)
+            rows = [keycolfmt.format(k, v) for k, v in zip(keys, vals)]
+            out = '\n'.join([head + rows[0]] +
+                            [_indent(r, w) for r in rows[1:]])
+        else:
+            out = head
 
         return out
 
