@@ -74,13 +74,21 @@ def test_autotune_occupancy_2():
 
 @testcase
 def test_autotune():
-    at = autotune.AutoTuner('foo', SAMPLE1, cc=(2, 0))
+    at = autotune.AutoTuner.parse('foo', SAMPLE1, cc=(2, 0))
     assert 192 == at.max_occupancy_max_blocks()
     assert 352 == at.prefer(320, 352, 416)
     assert 512 == at.prefer(320, 352, 416, 512)
     assert 256 == at.prefer(320, 352, 416, 512, 256)
     assert 192 == at.best_within(100, 300)
 
+@testcase
+def test_calc_occupancy():
+    from numbapro import cuda
+    autotuner= cuda.calc_occupancy(cc=(2, 0), reg=32, smem=1200)
+    assert autotuner.best() == 128
+
+
+    
 if __name__ == '__main__':
     main()
 
