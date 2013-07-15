@@ -1,3 +1,11 @@
+Version (0.?.?)
+================
+* Autotuning base on compiler info and occupancy calculator
+* Accept older driver by defering driver error to first use of specific API
+* Report incompatible GPU at context creation
+* Add basic support for ravel and reshape
+* Improve device information reporting
+
 Version (0.12.2)
 ================
 * Distribute CUDA toolkit in Anaconda
