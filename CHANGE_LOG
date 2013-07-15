@@ -1,3 +1,17 @@
+Version 0.10
+------------
+* Annotation tool (./bin/numba --annotate --fancy)
+* Open sourced prange
+* Support for raise statement
+* Pluggable array representation
+
+
+Version 0.9
+-----------
+* Improved math support
+* Open sourced generalized ufuncs
+* Improved array expressions
+
 Version 0.8
 -----------
 * Support for autojit classes
