@@ -94,9 +94,11 @@ class CUDAKernel(CUDAKernelBase):
         if has_autotune:
             return self._autotune
         else:
-            self._autotune = AutoTuner.parse(self.name,
-                                             self.compile_info,
-                                             cc=self.device.COMPUTE_CAPABILITY)
+            at = AutoTuner.parse(self.name, self.compile_info,
+                                 cc=self.device.COMPUTE_CAPABILITY)
+            if at is None:
+                raise RuntimeError('driver does not report compiliation info')
+            self._autotune = at
             return self._autotune
 
     @property

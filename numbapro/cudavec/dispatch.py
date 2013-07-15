@@ -48,15 +48,19 @@ class CudaUFuncDispatcher(object):
         # for numpy1.5
         return np.empty(broadcast_arrays[0].shape, dtype=result_dtype)
 
-    def _apply_autotuning(self, func):
-        atune = func.autotune
-        max_threads = atune.best()
-        
-        if not max_threads:
-            raise Exception("insufficient resources to run kernel"
-                            "at any thread-per-block.")
+    def _apply_autotuning(self, func, max_threads):
+        try:
+            atune = func.autotune
+        except RuntimeError:
+            return max_threads
+        else:
+            max_threads = atune.best()
+            
+            if not max_threads:
+                raise Exception("insufficient resources to run kernel"
+                                "at any thread-per-block.")
 
-        return max_threads
+            return max_threads
 
     def __call__(self, *args, **kws):
         '''
@@ -102,7 +106,7 @@ class CudaUFuncDispatcher(object):
 
         # apply autotune
         if max_threads == cuda_func.device.MAX_THREADS_PER_BLOCK:
-            self._apply_autotuning(cuda_func)
+            max_threads = self._apply_autotuning(cuda_func, max_threads)
 
         if has_device_array_arg:
             # Ugly: convert array scalar into zero-strided one element array.

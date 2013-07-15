@@ -13,9 +13,12 @@ from .error import CudaDriverError, CudaSupportError
 from numbapro._utils import finalizer, mviewbuf
 import threading
 
+
+
 #------------------
 # Configuration
 
+VERBOSE_JIT_LOG = int(os.environ.get('NUMBAPRO_VERBOSE_CU_JIT_LOG', 1))
 MIN_REQUIRED_CC = (2, 0)
 
 # debug memory
@@ -1128,7 +1131,7 @@ class Module(finalizer.OwnerMixin):
             CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES   : c_void_p(logsz),
             CU_JIT_ERROR_LOG_BUFFER             : addressof(jiterrors),
             CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES  : c_void_p(logsz),
-            CU_JIT_LOG_VERBOSE                  : c_void_p(1),
+            CU_JIT_LOG_VERBOSE                  : c_void_p(VERBOSE_JIT_LOG),
         }
 
         option_keys = (cu_jit_option * len(options))(*options.keys())

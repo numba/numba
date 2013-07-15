@@ -36,6 +36,8 @@ class AutoTuner(object):
         :param cc: compute capability as a tuple-2 ints
         '''
         parsed = parse_compile_info(compile_info)
+        if name not in parsed:
+            return
         usage = parsed[name]
         return AutoTuner(cc=cc, usage=usage)
 
