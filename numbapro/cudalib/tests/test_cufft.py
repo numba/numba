@@ -1,6 +1,6 @@
 import numpy as np
 import unittest
-from .support import addtest
+from .support import addtest, main
 
 from numbapro import cuda
 
@@ -12,6 +12,7 @@ class TestCuFFTLib(unittest.TestCase):
         print('cufft version %d' % cufft.version)
         self.assertNotEqual(libcufft().version, 0)
 
+@addtest
 class TestCuFFTPlan(unittest.TestCase):
     def test_plan1d(self):
         from numbapro.cudalib.cufft.binding import Plan, CUFFT_C2C
@@ -64,8 +65,9 @@ class TestCuFFTPlan(unittest.TestCase):
         d_xf_gpu = cuda.to_device(xf_gpu)
         plan = Plan.many(x.shape, CUFFT_R2C)
         plan.forward(d_x_gpu, d_xf_gpu)
-        d_xf_gpu.copy_to_host(xf)
-        self.assertTrue( np.allclose(xf[0:N/2+1], xf_gpu, atol=1e-6) )
+        d_xf_gpu.copy_to_host(xf_gpu)
+        self.assertTrue( np.allclose(xf[0:N/2+1], xf_gpu,
+                                      atol=1e-6) )
 
     def test_against_fft_2d(self):
         from numbapro.cudalib.cufft.binding import Plan, CUFFT_R2C
@@ -79,7 +81,7 @@ class TestCuFFTPlan(unittest.TestCase):
         d_xf_gpu = cuda.to_device(xf_gpu)
         plan = Plan.many(x.shape, CUFFT_R2C)
         plan.forward(d_x_gpu, d_xf_gpu)
-        d_xf_gpu.copy_to_host(xf)
+        d_xf_gpu.copy_to_host(xf_gpu)
         self.assertTrue(np.allclose(xf[:, 0:rowsize//2+1], xf_gpu, atol=1e-6))
 
     def test_against_fft_3d(self):
@@ -95,10 +97,10 @@ class TestCuFFTPlan(unittest.TestCase):
         d_xf_gpu = cuda.to_device(xf_gpu)
         plan = Plan.many(x.shape, CUFFT_R2C)
         plan.forward(d_x_gpu, d_xf_gpu)
-        d_xf_gpu.copy_to_host(xf)
+        d_xf_gpu.copy_to_host(xf_gpu)
         self.assertTrue(np.allclose(xf[:, :, 0:rowsize//2+1], xf_gpu, atol=1e-6))
 
-
+@addtest
 class TestCuFFTAPI(unittest.TestCase):
     def test_fft_1d_single(self):
         from numbapro.cudalib.cufft import fft
@@ -319,11 +321,6 @@ class TestCuFFTAPI(unittest.TestCase):
         self.assertTrue( np.allclose(x / N, x0, atol=1e-6) )
 
 
-
-
-
-
-
 if __name__ == '__main__':
-    unittest.main()
+    main()
 

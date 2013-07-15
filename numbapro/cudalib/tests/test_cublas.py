@@ -1,6 +1,6 @@
 import numpy as np
 import unittest
-from .support import addtest
+from .support import addtest, main
 
 from numbapro import cuda
 
@@ -1259,7 +1259,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
 
 
-
+@addtest
 class TestCuBlasAPI(unittest.TestCase):
     def setUp(self):
         from numbapro.cudalib.cublas import Blas
@@ -1951,5 +1951,5 @@ class TestCuBlasAPI(unittest.TestCase):
         self._test_all(self.Tgeam, self.blas.geam)
 
 if __name__ == '__main__':
-    unittest.main()
+    main()
 
