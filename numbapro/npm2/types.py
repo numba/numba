@@ -76,29 +76,30 @@ class Type(object):
         else:
             return self.desc.llvm_const(builder, value)
 
-    def ctype_argument(self):
-        if not hasattr(self.desc, 'ctype_argument'):
+    def ctype_as_argument(self):
+        if not hasattr(self.desc, 'ctype_as_argument'):
             raise TypeError('%s cannot be used as ctype argument' % self)
         else:
-            return self.desc.ctype_argument()
+            return self.desc.ctype_as_argument()
 
-    def ctype_return(self):
-        if not hasattr(self.desc, 'ctype_return'):
-            raise TypeError('%s cannot be used as ctype return' % self)
+    def ctype_as_return(self):
+        if not hasattr(self.desc, 'ctype_as_return'):
+            return self.desc.ctype_as_argument()
         else:
-            return self.desc.ctype_return()
+            return self.desc.ctype_as_return()
 
     def ctype_pack_argument(self, value):
         if not hasattr(self.desc, 'ctype_pack_argument'):
-            return self.ctype_argument()(value)
+            cty = self.ctype_as_argument()
+            return cty(value)
         else:
-            return self.desc.ctype_prepare_argument(value)
+            return self.desc.ctype_pack_argument(value)
 
     def ctype_unpack_return(self, value):
         if not hasattr(self.desc, 'ctype_unpack_return'):
             return value.value
         else:
-            return self.desc.ctype_prepare_return(value)
+            return self.desc.ctype_unpack_return(value)
 
     def __str__(self):
         return str(self.desc)
@@ -162,12 +163,8 @@ class Signed(Integer):
             else:
                 return builder.trunc(value, dst.llvm_as_value())
 
-    def ctype_argument(self):
+    def ctype_as_argument(self):
         return getattr(ct, 'c_int%d' % self.bitwidth)
-
-    def ctype_return(self):
-        return self.ctype_argument()
-
 
 class Unsigned(Integer):
     def __init__(self, bitwidth):
@@ -176,11 +173,8 @@ class Unsigned(Integer):
     def llvm_const(self, builder, value):
         return lc.Constant.int(self.llvm_as_value(), value)
 
-    def ctype_argument(self):
+    def ctype_as_argument(self):
         return getattr(ct, 'c_uint%d' % self.bitwidth)
-
-    def ctype_return(self):
-        return self.ctype_argument()
 
 class Float(object):
     fields = 'bitwidth',
@@ -200,12 +194,39 @@ class Float(object):
     def __repr__(self):
         return 'float%d' % self.bitwidth
 
+    def llvm_as_value(self):
+        return {32: lc.Type.float(), 64: lc.Type.double()}[self.bitwidth]
+
+    def llvm_const(self, builder, value):
+        return lc.Constant.real(self.llvm_as_value(), value)
+
+    def ctype_as_argument(self):
+        ctname = {32: 'c_float', 64: 'c_double'}[self.bitwidth]
+        return getattr(ct, ctname)
+
+
+class c_complex_base(ct.Structure):
+    def __init__(self, real=0, imag=0):
+        if isinstance(real, complex):
+            real, imag = real.real, real.imag
+        self.real = real
+        self.imag = imag
+
+class c_complex64(c_complex_base):
+    _fields_ = [('real', ct.c_float),
+                ('imag', ct.c_float),]
+
+class c_complex128(c_complex_base):
+    _fields_ = [('real', ct.c_double),
+                ('imag', ct.c_double),]
+
 
 class Complex(object):
     fields = 'bitwidth',
     
     def __init__(self, bitwidth):
         self.bitwidth = bitwidth
+        self.element = Type(Float(self.bitwidth // 2))
 
     def coerce(self, other):
         if isinstance(other, Complex):
@@ -214,6 +235,48 @@ class Complex(object):
     def __repr__(self):
         return 'complex%d' % self.bitwidth
 
+    def llvm_as_value(self):
+        return lc.Type.struct([self.element.llvm_as_value()] * 2)
+
+    def llvm_as_argument(self):
+        return lc.Type.pointer(self.llvm_as_value())
+
+    def llvm_const(self, builder, value):
+        real = self.element.llvm_const(builder, value.real)
+        imag = self.element.llvm_const(builder, value.imag)
+        return self.llvm_pack(builder, real, imag)
+
+    def llvm_value_from_arg(self, builder, value):
+        return builder.load(value)
+
+    def ctype_value(self):
+        return {64: c_complex64, 128: c_complex128}[self.bitwidth]
+
+    def ctype_as_argument(self):
+        return ct.POINTER(self.ctype_value())
+
+    def ctype_as_return(self):
+        return self.ctype_value()
+
+    def ctype_pack_argument(self, value):
+        cty = self.ctype_value()
+        val = cty(value)
+        return ct.byref(val)
+
+    def ctype_unpack_return(self, value):
+        print value.real, value.imag
+        return complex(value.real, value.imag)
+
+    def llvm_pack(self, builder, real, imag):
+        c = lc.Constant.undef(self.llvm_as_value())
+        c = builder.insert_value(c, real, 0)
+        c = builder.insert_value(c, imag, 1)
+        return c
+
+    def llvm_unpack(self, builder, value):
+        real = builder.extract_value(value, 0)
+        imag = builder.extract_value(value, 1)
+        return real, imag
 
 class Array(object):
     fields = 'element', 'shape', 'layout'

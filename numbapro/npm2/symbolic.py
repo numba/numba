@@ -89,7 +89,7 @@ class SymbolicExecution(object):
         dead = []
         # scan
         for blk in self.blocks:
-            if blk.is_dead():
+            if blk.offset != 0 and blk.is_dead():
                 dead.append(blk)
         # remove
         for blk in dead:

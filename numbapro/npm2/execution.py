@@ -10,8 +10,8 @@ class JIT(object):
         self.lfunc = lfunc
         self.args = argtys
         self.return_type = retty
-        self.c_args = [t.ctype_argument() for t in self.args]
-        self.c_return_type = (self.return_type.ctype_return()
+        self.c_args = [t.ctype_as_argument() for t in self.args]
+        self.c_return_type = (self.return_type.ctype_as_return()
                               if self.return_type is not None
                               else None)
         self.pointer = self.engine.get_pointer_to_function(lfunc)
@@ -43,7 +43,7 @@ def make_engine(lfunc):
     # optimize
     pms = lp.build_pass_managers(opt=2, tm=tm, fpm=False)
     pms.pm.run(lmod)
-    #print lmod
+    print lmod
     
     return eb.create()
 

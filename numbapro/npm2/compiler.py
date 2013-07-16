@@ -1,5 +1,5 @@
 import inspect
-from . import symbolic, typing, codegen, execution, functions
+from . import symbolic, typing, codegen, execution, fnlib, imlib
 
 def compile(func, retty, argtys):
     # preparation
@@ -11,9 +11,9 @@ def compile(func, retty, argtys):
     args = dict((arg, typ) for arg, typ in zip(argspec.args, argtys))
     return_type = retty
 
-    funclib = functions.get_builtin_function_library()
+    funclib = fnlib.get_builtin_function_library()
 
-    implib = codegen.ImpLib(funclib)
+    implib = imlib.ImpLib(funclib)
     implib.populate_builtin()
 
     # compilation

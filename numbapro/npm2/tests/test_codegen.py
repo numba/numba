@@ -3,8 +3,9 @@ import itertools
 from pprint import pprint
 from numbapro.npm2.symbolic import SymbolicExecution
 from numbapro.npm2.typing import Infer
-from numbapro.npm2 import types, functions
-from numbapro.npm2.codegen import CodeGen, ImpLib
+from numbapro.npm2 import types, fnlib
+from numbapro.npm2.codegen import CodeGen
+from numbapro.npm2.imlib import ImpLib
 from numbapro.npm2.compiler import compile
 from .support import testcase, main
 
@@ -26,7 +27,7 @@ def test_codegen():
     for blk in se.blocks:
         print blk
 
-    funclib = functions.get_builtin_function_library()
+    funclib = fnlib.get_builtin_function_library()
 
     args = {'a': types.int32, 'b': types.int32}
     return_type = types.int32
@@ -57,6 +58,7 @@ def test_codegen():
 
 @testcase
 def test_compile():
+    from timeit import default_timer as timer
     cfoo = compile(foo, types.int32, [types.int32, types.int32])
     print foo(12, 32)
     print cfoo(12, 32)

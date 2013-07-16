@@ -53,30 +53,30 @@ def test_add_integer():
     for ty in iset:
         run(ty, 12, 34)
 
-#
-#@testcase
-#def test_add_float():
-#    def run(ty, a, b):
-#        cadd = compile(add, ty, [ty, ty])
-#        got = cadd(a, b)
-#        exp = add(a, b)
-#        assert np.allclose(got, exp), 'add(%s, %s) got = %s expect=%s' % (a, b, got, exp)
-#
-#    for ty in fset:
-#        run(ty, 1.234, 2.345)
-#
-#
-#@testcase
-#def test_add_complex():
-#    def run(ty, a, b):
-#        cadd = compile(add, ty, [ty, ty])
-#        got = cadd(a, b)
-#        exp = add(a, b)
-#        assert np.allclose(got, exp), 'add(%s, %s) got = %s expect=%s' % (a, b, got, exp)
-#
-#    for ty in cset:
-#        run(ty, 1.2+34j, 2.4+56j)
-#
+
+@testcase
+def test_add_float():
+    def run(ty, a, b):
+        cadd = compile(add, ty, [ty, ty])
+        got = cadd(a, b)
+        exp = add(a, b)
+        assert np.allclose(got, exp), 'add(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+
+    for ty in fset:
+        run(ty, 1.234, 2.345)
+
+
+@testcase
+def test_add_complex():
+    def run(ty, a, b):
+        cadd = compile(add, ty, [ty, ty])
+        got = cadd(a, b)
+        exp = add(a, b)
+        assert np.allclose(got, exp), 'add(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+
+    for ty in cset:
+        run(ty, 1.2+34j, 2.4+56j)
+
 ##------------------------------------------------------------------------------
 ## sub
 #
