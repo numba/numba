@@ -34,6 +34,12 @@ def test_type_coercion():
         print '%s -> %s :: %s' % (fromty, toty, pts)
 
 @testcase
+def test_int64_to_float():
+    assert (types.int64.try_coerce(types.float32) >
+                    types.int64.try_coerce(types.float64)), \
+                            "int64 should prefer double"
+
+@testcase
 def test_infer():
     dis.dis(foo)
     se = SymbolicExecution(foo)

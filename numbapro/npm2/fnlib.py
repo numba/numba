@@ -61,7 +61,6 @@ class FunctionLibrary(object):
         no_downcast = [(sum(pts), defn) for pts, defn in graded
                        if not any(p < 0 for p in pts)]
 
-
         least_promotion = sorted(no_downcast)
         return least_promotion[0][1]
 
@@ -74,6 +73,17 @@ def binary_func_from_sets(typesets):
 
 def binary_func(ty):
     return (ty, ty), ty
+
+def binary_div(ty, out):
+    return [((ty, ty), out)]
+
+def floor_divisions():
+    out = []
+    for ty in integer_set:
+        out += binary_div(ty, ty)
+    out += binary_div(types.float32, types.int32)
+    out += binary_div(types.float64, types.int64)
+    return out
 
 def bool_func_from_sets(typesets):
     return [bool_func(t) for t in typesets]
@@ -105,8 +115,10 @@ builtins = {
     operator.add: binary_func_from_sets(integer_set|float_set|complex_set),
     operator.sub: binary_func_from_sets(integer_set|float_set|complex_set),
     operator.mul: binary_func_from_sets(integer_set|float_set|complex_set),
-    operator.div: binary_func_from_sets(integer_set|float_set|complex_set),
-    
+    operator.floordiv: floor_divisions(),
+    operator.truediv: binary_func_from_sets(float_set),
+    operator.mod: binary_func_from_sets(integer_set|float_set),
+
     operator.eq: bool_func_from_sets(integer_set|float_set|complex_set),
 }
 
@@ -116,7 +128,7 @@ def get_builtin_function_library(lib=None):
     lib = FunctionLibrary() if lib is None else lib
     for k, vl in builtins.iteritems():
         for args, return_type in vl:
-            fn = Function(funcobj=k, args=args, return_type=return_type)
+            fn = Function(funcobj=k, args=args, return_type=return_type)            
             lib.define(fn)
     return lib
 

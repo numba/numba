@@ -142,9 +142,15 @@ class Integer(object):
                 pts += copysign(25, pts)
             return pts
         elif isinstance(other, Float):
-            return (other.bitwidth - self.bitwidth) // 8 + 50
+            if self.bitwidth < 32:
+                return other.bitwidth - 32 + 50
+            else:
+                return 64 - other.bitwidth + 50
         elif isinstance(other, Complex):
-            return (other.bitwidth - self.bitwidth) // 8 + 100
+            if self.bitwidth < 32:
+                return other.bitwidth//2 - 32 + 100
+            else:
+                return 64 - other.bitwidth//2 + 100
 
     def llvm_as_value(self):
         return lc.Type.int(self.bitwidth)
@@ -162,6 +168,8 @@ class Signed(Integer):
                 return builder.sext(value, dst.llvm_as_value())
             else:
                 return builder.trunc(value, dst.llvm_as_value())
+        elif isinstance(dst, Float):
+            return builder.sitofp(value, dst.llvm_as_value())
 
     def ctype_as_argument(self):
         return getattr(ct, 'c_int%d' % self.bitwidth)
@@ -172,6 +180,15 @@ class Unsigned(Integer):
 
     def llvm_const(self, builder, value):
         return lc.Constant.int(self.llvm_as_value(), value)
+    
+    def llvm_cast(self, builder, value, dst):
+        if isinstance(dst, Integer):
+            if dst.bitwidth > self.bitwidth:
+                return builder.zext(value, dst.llvm_as_value())
+            else:
+                return builder.trunc(value, dst.llvm_as_value())
+        elif isinstance(dst, Float):
+            return builder.uitofp(value, dst.llvm_as_value())
 
     def ctype_as_argument(self):
         return getattr(ct, 'c_uint%d' % self.bitwidth)
@@ -199,6 +216,16 @@ class Float(object):
 
     def llvm_const(self, builder, value):
         return lc.Constant.real(self.llvm_as_value(), value)
+
+    def llvm_cast(self, builder, value, dst):
+        if isinstance(dst, Integer):
+            op = (builder.fptosi if dst.signed else builder.fptoui)
+            return op(value, dst.llvm_as_value())
+        elif isinstance(dst, Float):
+            if dst.bitwidth > self.bitwidth:
+                return builder.fpext(value, dst.llvm_as_value())
+            else:
+                return builder.fptrunc(value, dst.llvm_as_value())
 
     def ctype_as_argument(self):
         ctname = {32: 'c_float', 64: 'c_double'}[self.bitwidth]
@@ -264,7 +291,6 @@ class Complex(object):
         return ct.byref(val)
 
     def ctype_unpack_return(self, value):
-        print value.real, value.imag
         return complex(value.real, value.imag)
 
     def llvm_pack(self, builder, real, imag):

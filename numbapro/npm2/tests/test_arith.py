@@ -92,164 +92,164 @@ def test_sub_integer():
         run(ty, 45, 12)
 
 
-#@testcase
-#def test_sub_float():
-#    def run(ty, a, b):
-#        csub = compile(sub, ty, [ty, ty])
-#        got = csub(a, b)
-#        exp = sub(a, b)
-#        assert np.allclose(got, exp), 'sub(%s, %s) got = %s expect=%s' % (a, b, got, exp)
-#
-#    for ty in fset:
-#        run(ty, 1.234, 2.345)
-#
-#
-#@testcase
-#def test_sub_complex():
-#    def run(ty, a, b):
-#        csub = compile(sub, ty, [ty, ty])
-#        got = csub(a, b)
-#        exp = sub(a, b)
-#        assert np.allclose(got, exp), 'sub(%s, %s) got = %s expect=%s' % (a, b, got, exp)
-#
-#    for ty in cset:
-#        run(ty, 1.2+34j, 2.4+56j)
-#
-##------------------------------------------------------------------------------
-## mul
-#
-#@testcase
-#def test_mul_integer():
-#    def run(ty, a, b):
-#        cmul = compile(mul, ty, [ty, ty])
-#        got = cmul(a, b)
-#        exp = mul(a, b)
-#        assert got == exp, 'mul(%s, %s) got = %s expect=%s' % (a, b, got, exp)
-#
-#    for ty in iset:
-#        run(ty, 2, 3)
-#
-#@testcase
-#def test_mul_float():
-#    def run(ty, a, b):
-#        cmul = compile(mul, ty, [ty, ty])
-#        got = cmul(a, b)
-#        exp = mul(a, b)
-#        assert np.allclose(got, exp), 'mul(%s, %s) got = %s expect=%s' % (a, b, got, exp)
-#
-#    for ty in fset:
-#        run(ty, 1.234, 2.345)
-#
-#
-#@testcase
-#def test_mul_complex():
-#    def run(ty, a, b):
-#        cmul = compile(mul, ty, [ty, ty])
-#        got = cmul(a, b)
-#        exp = mul(a, b)
-#        assert np.allclose(got, exp), 'mul(%s, %s) got = %s expect=%s' % (a, b, got, exp)
-#
-#    for ty in cset:
-#        run(ty, 1.2+34j, 2.4+56j)
-##------------------------------------------------------------------------------
-## div
-#
-#if sys.platform != 'win32':
-#    @testcase
-#    def test_div_integer():
-#        def run(ty, a, b):
-#            cdiv = compile(div, ty, [ty, ty])
-#            got = cdiv(a, b)
-#            exp = div(a, b)
-#            assert got == exp, 'div(%s, %s) got = %s expect=%s' % (a, b, got, exp)
-#
-#        for ty in iset:
-#            run(ty, 4, 2)
-#
-#@testcase
-#def test_div_float():
-#    def run(ty, a, b):
-#        cdiv = compile(div, ty, [ty, ty])
-#        got = cdiv(a, b)
-#        exp = div(a, b)
-#        assert np.allclose(got, exp), 'div(%s, %s) got = %s expect=%s' % (a, b, got, exp)
-#
-#    for ty in fset:
-#        run(ty, 1.234, 2.345)
-#
-#
-##------------------------------------------------------------------------------
-## floordiv
-#
-#@testcase
-#def test_floordiv_integer():
-#    def run(ty, a, b):
-#        cfloordiv = compile(floordiv, ty, [ty, ty])
-#        got = cfloordiv(a, b)
-#        exp = floordiv(a, b)
-#        assert got == exp, 'floordiv(%s, %s) got = %s expect=%s' % (a, b, got, exp)
-#
-#    for ty in iset:
-#        run(ty, 4, 2)
-#
-#@testcase
-#def test_floordiv_float():
-#    def run(ty, a, b):
-#        cfloordiv = compile(floordiv, ty, [ty, ty])
-#        got = cfloordiv(a, b)
-#        exp = floordiv(a, b)
-#        assert got == exp, 'floordiv(%s, %s) got = %s expect=%s' % (a, b, got, exp)
-#
-#    for ty in fset:
-#        run(ty, 1.234, 2.345)
-#
-#
-#
-##------------------------------------------------------------------------------
-## mod
-#
-#
-#@testcase
-#def test_mod_integer():
-#    def run(ty, a, b):
-#        cmod = compile(mod, ty, [ty, ty])
-#        got = cmod(a, b)
-#        exp = mod(a, b)
-#        assert got == exp, 'mod(%s, %s) got = %s expect=%s' % (a, b, got, exp)
-#
-#    for ty in iset:
-#        run(ty, 121, 11)
-#
-#if sys.platform != 'win32':
-#    '''Known problem that llvm generates the wrong symbol for fmodf
-#    '''
-#    @testcase
-#    def test_mod_float():
-#        def run(ty, a, b):
-#            cmod = compile(mod, ty, [ty, ty])
-#            got = cmod(a, b)
-#            exp = mod(a, b)
-#            assert got == exp, 'mod(%s, %s) got = %s expect=%s' % (a, b, got, exp)
-#
-#        for ty in fset:
-#            run(ty, 432., 21.)
-#
-#
-##------------------------------------------------------------------------------
-## expr1
-#
-#@testcase
-#def test_expr1_integer():
-#    def run(ty, a, b, c):
-#        cexpr1 = compile(expr1, ty, [ty, ty, ty])
-#        got = cexpr1(a, b, c)
-#        exp = expr1(a, b, c)
-#        msg = 'expr1(%s, %s, %s) got = %s expect=%s'
-#        assert got == exp, msg % (a, b, c, got, exp)
-#
-#    for ty in set([int32, int64]):
-#        run(ty, 121, 11, 231)
-#
+@testcase
+def test_sub_float():
+    def run(ty, a, b):
+        csub = compile(sub, ty, [ty, ty])
+        got = csub(a, b)
+        exp = sub(a, b)
+        assert np.allclose(got, exp), 'sub(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+
+    for ty in fset:
+        run(ty, 1.234, 2.345)
+
+
+@testcase
+def test_sub_complex():
+    def run(ty, a, b):
+        csub = compile(sub, ty, [ty, ty])
+        got = csub(a, b)
+        exp = sub(a, b)
+        assert np.allclose(got, exp), 'sub(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+
+    for ty in cset:
+        run(ty, 1.2+34j, 2.4+56j)
+
+#------------------------------------------------------------------------------
+# mul
+
+@testcase
+def test_mul_integer():
+    def run(ty, a, b):
+        cmul = compile(mul, ty, [ty, ty])
+        got = cmul(a, b)
+        exp = mul(a, b)
+        assert got == exp, 'mul(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+
+    for ty in iset:
+        run(ty, 2, 3)
+
+@testcase
+def test_mul_float():
+    def run(ty, a, b):
+        cmul = compile(mul, ty, [ty, ty])
+        got = cmul(a, b)
+        exp = mul(a, b)
+        assert np.allclose(got, exp), 'mul(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+
+    for ty in fset:
+        run(ty, 1.234, 2.345)
+
+
+@testcase
+def test_mul_complex():
+    def run(ty, a, b):
+        cmul = compile(mul, ty, [ty, ty])
+        got = cmul(a, b)
+        exp = mul(a, b)
+        assert np.allclose(got, exp), 'mul(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+
+    for ty in cset:
+        run(ty, 1.2+34j, 2.4+56j)
+#------------------------------------------------------------------------------
+# div
+
+if sys.platform != 'win32':
+    @testcase
+    def test_div_integer():
+        def run(ty, a, b):
+            cdiv = compile(div, ty, [ty, ty])
+            got = cdiv(a, b)
+            exp = div(a, b)
+            assert got == exp, 'div(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+
+        for ty in iset:
+            run(ty, 4, 2)
+
+@testcase
+def test_div_float():
+    def run(ty, a, b):
+        cdiv = compile(div, ty, [ty, ty])
+        got = cdiv(a, b)
+        exp = div(a, b)
+        assert np.allclose(got, exp), 'div(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+
+    for ty in fset:
+        run(ty, 1.234, 2.345)
+
+
+#------------------------------------------------------------------------------
+# floordiv
+
+@testcase
+def test_floordiv_integer():
+    def run(ty, a, b):
+        cfloordiv = compile(floordiv, ty, [ty, ty])
+        got = cfloordiv(a, b)
+        exp = floordiv(a, b)
+        assert got == exp, 'floordiv(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+
+    for ty in iset:
+        run(ty, 4, 2)
+
+@testcase
+def test_floordiv_float():
+    def run(ty, a, b):
+        cfloordiv = compile(floordiv, ty, [ty, ty])
+        got = cfloordiv(a, b)
+        exp = floordiv(a, b)
+        assert got == exp, 'floordiv(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+
+    for ty in fset:
+        run(ty, 1.234, 2.345)
+
+
+
+#------------------------------------------------------------------------------
+# mod
+
+
+@testcase
+def test_mod_integer():
+    def run(ty, a, b):
+        cmod = compile(mod, ty, [ty, ty])
+        got = cmod(a, b)
+        exp = mod(a, b)
+        assert got == exp, 'mod(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+
+    for ty in iset:
+        run(ty, 121, 11)
+
+if sys.platform != 'win32':
+    '''Known problem that llvm generates the wrong symbol for fmodf
+    '''
+    @testcase
+    def test_mod_float():
+        def run(ty, a, b):
+            cmod = compile(mod, ty, [ty, ty])
+            got = cmod(a, b)
+            exp = mod(a, b)
+            assert got == exp, 'mod(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+
+        for ty in fset:
+            run(ty, 432., 21.)
+
+
+#------------------------------------------------------------------------------
+# expr1
+
+@testcase
+def test_expr1_integer():
+    def run(ty, a, b, c):
+        cexpr1 = compile(expr1, ty, [ty, ty, ty])
+        got = cexpr1(a, b, c)
+        exp = expr1(a, b, c)
+        msg = 'expr1(%s, %s, %s) got = %s expect=%s'
+        assert got == exp, msg % (a, b, c, got, exp)
+
+    for ty in set([int32, int64]):
+        run(ty, 121, 11, 231)
+
 ##------------------------------------------------------------------------------
 ## shifts
 #

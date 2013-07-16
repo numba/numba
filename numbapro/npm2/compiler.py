@@ -19,6 +19,9 @@ def compile(func, retty, argtys):
     # compilation
     blocks =  symbolic_interpret(func)
     type_infer(func, blocks, return_type, args, funclib)
+
+    for b in blocks:
+        print b
     lmod, lfunc = code_generation(func, blocks, return_type, args, implib)
 
     jit = execution.JIT(lfunc = lfunc,
