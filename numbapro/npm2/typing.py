@@ -25,7 +25,7 @@ class Infer(object):
         for block in self.blocks:
             for op in block.code:
                 with error_context(lineno=op.lineno,
-                                   when='type inference'):
+                                   during='type inference'):
                     ty = self.op(op)
                     if ty is not None:
                         assert not hasattr(op, 'type'), "redefining type"
@@ -34,7 +34,7 @@ class Infer(object):
         # unify phi nodes
         for op, newty in self.phimap.iteritems():
             with error_context(lineno=op.lineno,
-                               when='phi unification'):
+                               during='phi unification'):
                 # ensure it can be casted to phi node
                 oldty = op.type
                 if newty != oldty:
@@ -46,7 +46,7 @@ class Infer(object):
         
         for block in self.blocks:
             term = block.terminator
-            with error_context(lineno=term.lineno, when='unifying return type'):
+            with error_context(lineno=term.lineno, during='unifying return type'):
                 if term.opcode == 'ret':
                     return_type = term.value.type
                     if self.return_type != return_type:
@@ -99,7 +99,7 @@ class Infer(object):
         if not callee:
             raise TypeError("invalid call to %s" % callee)
 
-        with error_context(when="resolving function %s" % callee):
+        with error_context(during="resolving function %s" % callee):
             defn = self.funclib.get(callee, args)
             inst.update(defn=defn)
             return defn.return_type

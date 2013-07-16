@@ -422,7 +422,7 @@ def find_dominators(blocks):
     return doms
 
 class RenameDefinition(object):
-    '''Rename definition so that each assignment is unique when it is defined
+    '''Rename definition so that each assignment is unique during it is defined
     along the backbone --- the backbone is the controlflow path that must
     be visited.
     '''

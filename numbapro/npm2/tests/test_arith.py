@@ -77,21 +77,21 @@ def test_add_complex():
     for ty in cset:
         run(ty, 1.2+34j, 2.4+56j)
 
-##------------------------------------------------------------------------------
-## sub
-#
-#@testcase
-#def test_sub_integer():
-#    def run(ty, a, b):
-#        csub = compile(sub, ty, [ty, ty])
-#        got = csub(a, b)
-#        exp = sub(a, b)
-#        assert got == exp, 'sub(%s, %s) got = %s expect=%s' % (a, b, got, exp)
-#
-#    for ty in iset:
-#        run(ty, 45, 12)
-#
-#
+#------------------------------------------------------------------------------
+# sub
+
+@testcase
+def test_sub_integer():
+    def run(ty, a, b):
+        csub = compile(sub, ty, [ty, ty])
+        got = csub(a, b)
+        exp = sub(a, b)
+        assert got == exp, 'sub(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+
+    for ty in iset:
+        run(ty, 45, 12)
+
+
 #@testcase
 #def test_sub_float():
 #    def run(ty, a, b):

@@ -74,7 +74,7 @@ class CodeGen(object):
             self.builder.position_at_end(self.bbmap[block])
             for inst in block.code:
                 with error_context(lineno=inst.lineno,
-                                   when='instruction codegen'):
+                                   during='instruction codegen'):
                     self.valmap[inst] = self.op(inst)
             self.op(block.terminator)
 
