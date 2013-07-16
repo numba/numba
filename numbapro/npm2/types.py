@@ -1,5 +1,6 @@
 from math import copysign
 from llvm import core as lc
+import ctypes as ct
 
 __all__ = ('int8', 'int16', 'int32', 'int64', 'intp',
            'uint8', 'uint16', 'uint32', 'uint64',
@@ -75,6 +76,30 @@ class Type(object):
         else:
             return self.desc.llvm_const(builder, value)
 
+    def ctype_argument(self):
+        if not hasattr(self.desc, 'ctype_argument'):
+            raise TypeError('%s cannot be used as ctype argument' % self)
+        else:
+            return self.desc.ctype_argument()
+
+    def ctype_return(self):
+        if not hasattr(self.desc, 'ctype_return'):
+            raise TypeError('%s cannot be used as ctype return' % self)
+        else:
+            return self.desc.ctype_return()
+
+    def ctype_pack_argument(self, value):
+        if not hasattr(self.desc, 'ctype_pack_argument'):
+            return self.ctype_argument()(value)
+        else:
+            return self.desc.ctype_prepare_argument(value)
+
+    def ctype_unpack_return(self, value):
+        if not hasattr(self.desc, 'ctype_unpack_return'):
+            return value.value
+        else:
+            return self.desc.ctype_prepare_return(value)
+
     def __str__(self):
         return str(self.desc)
 
@@ -137,12 +162,25 @@ class Signed(Integer):
             else:
                 return builder.trunc(value, dst.llvm_as_value())
 
+    def ctype_argument(self):
+        return getattr(ct, 'c_int%d' % self.bitwidth)
+
+    def ctype_return(self):
+        return self.ctype_argument()
+
+
 class Unsigned(Integer):
     def __init__(self, bitwidth):
         super(Unsigned, self).__init__(False, bitwidth)
 
     def llvm_const(self, builder, value):
         return lc.Constant.int(self.llvm_as_value(), value)
+
+    def ctype_argument(self):
+        return getattr(ct, 'c_uint%d' % self.bitwidth)
+
+    def ctype_return(self):
+        return self.ctype_argument()
 
 class Float(object):
     fields = 'bitwidth',

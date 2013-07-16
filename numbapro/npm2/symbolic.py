@@ -419,8 +419,6 @@ def find_dominators(blocks):
                 doms[blk] = new
                 changed = True
 
-    from pprint import pprint
-    pprint(doms)
     return doms
 
 class RenameDefinition(object):

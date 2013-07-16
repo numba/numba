@@ -5,20 +5,16 @@ from numbapro.npm2.symbolic import SymbolicExecution
 from numbapro.npm2.typing import Infer
 from numbapro.npm2 import types, functions
 from numbapro.npm2.codegen import CodeGen, ImpLib
+from numbapro.npm2.compiler import compile
 from .support import testcase, main
 
 
 def foo(a, b):
     sum = a
-    sum = b
-    if a == b:
-        i = 0
-        i = 1
-        for i in range(b):
-            sum += i
-            i = 132
-            i = 321
-
+    for i in range(b):
+        sum += i
+        i = 132
+        i = 321
     return sum
 
 @testcase
@@ -59,13 +55,11 @@ def test_codegen():
 
     print cg.lmod
 
-    from llvm import passes as lp
-    from llvm import ee as le
-    eb = le.EngineBuilder.new(cg.lmod)
-    tm = eb.select_target()
-    pms = lp.build_pass_managers(tm, mod=cg.lmod, opt=3)
-    pms.pm.run(cg.lmod)
-    print cg.lmod
+@testcase
+def test_compile():
+    cfoo = compile(foo, types.int32, [types.int32, types.int32])
+    print foo(12, 32)
+    print cfoo(12, 32)
 
 if __name__ == '__main__':
     main()
