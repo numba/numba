@@ -250,28 +250,28 @@ def test_expr1_integer():
     for ty in set([int32, int64]):
         run(ty, 121, 11, 231)
 
-##------------------------------------------------------------------------------
-## shifts
-#
-#@testcase
-#def test_shifts_signed():
-#    cfunc = compile(shifts, int32, [int32, int32])
-#
-#    a, b = -0xdead, 12
-#    got = cfunc(a, b)
-#    exp = shifts(a, b)
-#    assert got == exp, (got, exp)
-#
-#@testcase
-#def test_shifts_unsigned():
-#    cfunc = compile(shifts, uint32, [uint32, uint32])
-#
-#    a, b = 0xdead, 12
-#    got = cfunc(a, b)
-#    exp = shifts(a, b)
-#    assert got == exp, (got, exp)
-#
-#
+#------------------------------------------------------------------------------
+# shifts
+
+@testcase
+def test_shifts_signed():
+    cfunc = compile(shifts, int32, [int32, int32])
+
+    a, b = -0xdead, 12
+    got = cfunc(a, b)
+    exp = shifts(a, b)
+    assert got == exp, (got, exp)
+
+@testcase
+def test_shifts_unsigned():
+    cfunc = compile(shifts, uint32, [uint32, uint32])
+
+    a, b = 0xdead, 12
+    got = cfunc(a, b)
+    exp = shifts(a, b)
+    assert got == exp, (got, exp)
+
+
 
 if __name__ == '__main__':
     main()

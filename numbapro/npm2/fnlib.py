@@ -119,6 +119,9 @@ builtins = {
     operator.truediv: binary_func_from_sets(float_set),
     operator.mod: binary_func_from_sets(integer_set|float_set),
 
+    operator.lshift: binary_func_from_sets(integer_set),
+    operator.rshift: binary_func_from_sets(integer_set),
+
     operator.eq: bool_func_from_sets(integer_set|float_set|complex_set),
 }
 

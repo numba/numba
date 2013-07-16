@@ -151,6 +151,21 @@ def imp_mod_float(builder, args):
     a, b = args
     return builder.frem(a, b)
 
+# binary lshift
+
+def imp_lshift_integer(builder, args):
+    a, b = args
+    return builder.shl(a, b)
+
+# binary rshift
+
+def imp_rshift_signed(builder, args):
+    a, b = args
+    return builder.ashr(a, b)
+
+def imp_rshift_unsigned(builder, args):
+    a, b = args
+    return builder.lshr(a, b)
 
 # range
 
@@ -257,6 +272,15 @@ def populate_builtin_impl(implib):
     imps += binary_op_imp(operator.mod, imp_mod_signed, typesets.signed_set)
     imps += binary_op_imp(operator.mod, imp_mod_unsigned, typesets.unsigned_set)
     imps += binary_op_imp(operator.mod, imp_mod_float, typesets.float_set)
+
+    # binary lshift
+    imps += binary_op_imp(operator.lshift, imp_lshift_integer,
+                          typesets.integer_set)
+    # binary rshift
+    imps += binary_op_imp(operator.rshift, imp_rshift_signed,
+                          typesets.signed_set)
+    imps += binary_op_imp(operator.rshift, imp_rshift_unsigned,
+                          typesets.unsigned_set)
 
     imps += bool_op_imp(operator.eq, imp_eq_signed, typesets.signed_set)
 
