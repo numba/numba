@@ -55,9 +55,9 @@ class Infer(object):
                             msg = "expect return type of %s but got %s"
                             raise TypeError(msg %
                                             (self.return_type, return_type))
-                        else: # infer return type
+                        elif self.return_type is None:
                             self.return_type = return_type
-                    term.update(astype=return_type)
+                    term.update(astype=self.return_type)
                 elif term.opcode == 'retvoid':
                     if self.return_type != types.void:
                         msg = "must return a value of %s"
