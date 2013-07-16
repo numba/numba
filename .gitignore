@@ -4,3 +4,17 @@
 *.o
 build
 cython_debug
+examples/linregr/linregr_bench.py
+examples/linregr/linregr_numba.py
+examples/linregr/linregr_numbapro.py
+examples/linregr/linregr_numbapro_cuda.py
+examples/linregr/linregr_python.py
+nbodytests/nbody0.py
+nbodytests/nbody0sub.py
+nbodytests/nbody1.py
+workspace.xcworkspace/contents.xcworkspacedata
+workspace.xcworkspace/xcuserdata/sklam.xcuserdatad/UserInterfaceState.xcuserstate
+workspace.xcworkspace/xcuserdata/sklam.xcuserdatad/WorkspaceSettings.xcsettings
+workspace.xcworkspace/xcuserdata/sklam.xcuserdatad/xcdebugger/Breakpoints.xcbkptlist
+workspace.xcworkspace/xcuserdata/sklam.xcuserdatad/xcschemes/pythondev.xcscheme
+workspace.xcworkspace/xcuserdata/sklam.xcuserdatad/xcschemes/xcschememanagement.plist
