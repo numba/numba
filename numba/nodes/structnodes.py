@@ -77,3 +77,27 @@ class ComplexAttributeNode(ExprNode):
         self.attr = attr
         self.type = value.type.base_type
         self.variable = Variable(self.type)
+
+class DateTimeNode(ExprNode):
+
+    #_fields = ['year', 'month', 'day', 'hour', 'min', 'sec', 'us', 'ps', '_as']
+    _fields = ['year', 'month', 'day']
+
+    type = datetime
+    variable = Variable(type)
+
+    def __init__(self, year, month, day):
+        self.year = year
+        self.month = month
+        self.day = day
+
+class DateTimeAttributeNode(ExprNode):
+    
+    _fields = ['value']
+
+    def __init__(self, value, attr):
+        self.value = value
+        self.attr = attr
+        self.type = value.type
+        self.variable = Variable(self.type)
+

@@ -16,7 +16,7 @@ from numba import *
 from numba.codegen import debug
 from numba.codegen.debug import logger
 from numba.codegen.codeutils import llvm_alloca
-from numba.codegen import coerce, complexsupport, refcounting
+from numba.codegen import coerce, complexsupport, refcounting, datetimesupport
 from numba.codegen.llvmcontext import LLVMContextManager
 
 from numba import visitors, nodes, llvm_types, utils, function_util
@@ -64,7 +64,8 @@ _compare_mapping_uint = {'>':lc.ICMP_UGT,
 class LLVMCodeGenerator(visitors.NumbaVisitor,
                         complexsupport.ComplexSupportMixin,
                         refcounting.RefcountingMixin,
-                        visitors.NoPythonContextMixin):
+                        visitors.NoPythonContextMixin,
+                        datetimesupport.DateTimeSupportMixin):
     """
     Translate a Python AST to LLVM. Each visit_* method should directly
     return an LLVM value.
@@ -1457,6 +1458,28 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
                 return self.builder.extract_value(result, 0)
             elif node.attr == 'imag':
                 return self.builder.extract_value(result, 1)
+
+    #------------------------------------------------------------------------
+    # DateTime
+    #------------------------------------------------------------------------
+
+    def visit_DateTimeNode(self, node):
+        year = self.visit(node.year)
+        month = self.visit(node.month)
+        day = self.visit(node.day)
+        return self._create_datetime(year, month, day)
+
+    def visit_DateTimeAttributeNode(self, node):
+        print('JNB: visit_DateTimeAttributeNode()', node, node.value)
+        result = self.visit(node.value)
+        if node.value.type.is_datetime:
+            assert result.type.kind == llvm.core.TYPE_STRUCT, result.type
+            if node.attr == 'year':
+                return self.builder.extract_value(result, 0)
+            elif node.attr == 'month':
+                return self.builder.extract_value(result, 1)
+            elif node.attr == 'day':
+                return self.builder.extract_value(result, 2)
 
     #------------------------------------------------------------------------
     # Structs

@@ -68,6 +68,10 @@ utility_funcs = list(object_to_numeric.itervalues()) + [
     UtilityFunction.load("__Numba_PyInt_FromUnsignedLongLong", object_(ulonglong)),
     UtilityFunction.load("datetime2long", ulong(object_)),
     UtilityFunction.load("long2datetime", object_(ulong)),
+    UtilityFunction.load("pydatetime2year", long_(object_)),
+    UtilityFunction.load("pydatetime2month", int_(object_)),
+    UtilityFunction.load("pydatetime2day", int_(object_)),
+    UtilityFunction.load("primitive2pydatetime", object_(ulong, uint, uint)),
 ]
 
 def default_utility_library(context):

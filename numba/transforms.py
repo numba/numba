@@ -331,9 +331,15 @@ class ResolveCoercions(visitors.NumbaTransformer):
                     nodes.ComplexAttributeNode(complex_value.clone, "imag")
                 ]
             elif node_type.is_datetime:
+                datetime_value = nodes.CloneableNode(node.node)
+                args = [
+                    nodes.DateTimeAttributeNode(datetime_value, 'year'),
+                    nodes.DateTimeAttributeNode(datetime_value, 'month'),
+                    nodes.DateTimeAttributeNode(datetime_value, 'day')
+                ]
                 new_node = function_util.utility_call(
                         self.context, self.llvm_module,
-                        "long2datetime", args=[node.node])
+                        "primitive2pydatetime", args=args)
             else:
                 raise error.NumbaError(
                     node, "Don't know how to coerce type %r to PyObject" %
@@ -415,9 +421,16 @@ class ResolveCoercions(visitors.NumbaTransformer):
                         self.context, self.llvm_module,
                         "PyComplex_ImagAsDouble", args=[cloneable.clone]))
             elif node_type.is_datetime:
-                new_node = function_util.utility_call(
-                        self.context, self.llvm_module,
-                        "datetime2long", args=[node.node])
+                year_func = function_util.utility_call(
+                    self.context, self.llvm_module,
+                    "pydatetime2year", args=[node.node])
+                month_func = function_util.utility_call(
+                    self.context, self.llvm_module,
+                    "pydatetime2month", args=[node.node])
+                day_func = function_util.utility_call(
+                    self.context, self.llvm_module,
+                    "pydatetime2day", args=[node.node])
+                new_node = nodes.DateTimeNode(year_func, month_func, day_func)
             else:
                 raise error.NumbaError(
                     node, "Don't know how to coerce a Python object to a %r" %
@@ -789,13 +802,16 @@ class LateSpecializer(ResolveCoercions,
 
     def visit_Attribute(self, node):
         if (self.nopython and not node.value.type.is_module and
-            not node.value.type.is_complex):
+            not node.value.type.is_complex and not node.value.type.is_datetime):
             raise error.NumbaError(
                     node, "Cannot access Python attribute in nopython context (%s)" % node.attr)
 
         if node.value.type.is_complex:
             value = self.visit(node.value)
             return nodes.ComplexAttributeNode(value, node.attr)
+        elif node.value.type.is_datetime:
+            value = self.visit(node.value)
+            return nodes.DateTimeAttributeNode(value, node.attr)
         elif node.type.is_numpy_attribute:
             return nodes.ObjectInjectNode(node.type.value)
         elif node.type.is_numpy_dtype:
