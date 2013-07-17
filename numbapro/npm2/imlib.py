@@ -167,6 +167,50 @@ def imp_rshift_unsigned(builder, args):
     a, b = args
     return builder.lshr(a, b)
 
+# binary and
+
+def imp_and_integer(builder, args):
+    a, b = args
+    return builder.and_(a, b)
+
+# binary or
+
+def imp_or_integer(builder, args):
+    a, b = args
+    return builder.or_(a, b)
+
+# unary negate
+
+def imp_neg_signed(ty):
+    def imp(builder, args):
+        x, = args
+        zero = ty.llvm_const(builder, 0)
+        return imp_sub_integer(builder, (zero, x))
+    return imp
+
+def imp_neg_float(ty):
+    def imp(builder, args):
+        x, = args
+        zero = ty.llvm_const(builder, 0)
+        return imp_sub_float(builder, (zero, x))
+    return imp
+
+def imp_neg_complex(ty):
+    def imp(builder, args):
+        x, = args
+        zero = ty.llvm_const(builder, 0)
+        return imp_sub_complex(ty)(builder, (zero, x))
+    return imp
+
+# unary invert
+
+def imp_invert_integer(ty):
+    def imp(builder, args):
+        x, = args
+        ones = lc.Constant.all_ones(ty.llvm_as_value())
+        return builder.xor(x, ones)
+    return imp
+
 # range
 
 def imp_range(builder, args):
@@ -222,6 +266,10 @@ def bool_op_imp(funcobj, imp, typeset):
 
 def binary_op_imp(funcobj, imp, typeset):
     return [Imp(imp, funcobj, args=(ty, ty), return_type=ty)
+            for ty in typeset]
+
+def unary_op_imp(funcobj, imp, typeset):
+    return [Imp(imp(ty), funcobj, args=(ty,), return_type=ty)
             for ty in typeset]
 
 def floordiv_imp(funcobj, imp, ty, ret):
@@ -281,8 +329,29 @@ def populate_builtin_impl(implib):
                           typesets.signed_set)
     imps += binary_op_imp(operator.rshift, imp_rshift_unsigned,
                           typesets.unsigned_set)
+    
+    # binary and
+    imps += binary_op_imp(operator.and_, imp_and_integer,
+                          typesets.integer_set)
+
+    # binary or
+    imps += binary_op_imp(operator.or_, imp_or_integer,
+                          typesets.integer_set)
+
+    # binary eq
 
     imps += bool_op_imp(operator.eq, imp_eq_signed, typesets.signed_set)
+
+    # unary arith negate
+    imps += unary_op_imp(operator.neg, imp_neg_signed, typesets.signed_set)
+    imps += unary_op_imp(operator.neg, imp_neg_float, typesets.float_set)
+    imps += unary_op_imp(operator.neg, imp_neg_complex, typesets.complex_set)
+
+    # unary logical negate
+    imps += unary_op_imp(operator.invert, imp_invert_integer,
+                         typesets.integer_set)
+
+    # range
 
     imps += [Imp(imp_range, range,
                  args=(types.intp,),

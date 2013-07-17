@@ -35,6 +35,18 @@ def expr1(a, b, c):
 def shifts(a, b):
     return (a >> b) << 8
 
+def arith_negate(a):
+    return -a
+
+def logical_negate(a):
+    return ~a
+
+def logical_and(a, b):
+    return a & b
+
+def logical_or(a, b):
+    return a | b
+
 iset = [int8, int16, int32, int64, uint8, uint16, uint32, uint64]
 fset = [float32, float64]
 cset = [complex64, complex128]
@@ -270,6 +282,72 @@ def test_shifts_unsigned():
     got = cfunc(a, b)
     exp = shifts(a, b)
     assert got == exp, (got, exp)
+
+#------------------------------------------------------------------------------
+# arithmetic negate
+
+@testcase
+def test_arith_negate_signed():
+    for T in [int8, int16, int32, int64]:
+        cfunc = compile(arith_negate, T, [T])
+        a = 123
+        got = cfunc(a)
+        exp = arith_negate(a)
+        assert got == exp, (got, exp)
+
+@testcase
+def test_arith_negate_float():
+    for T in fset:
+        cfunc = compile(arith_negate, T, [T])
+        a = 1.23
+        got = cfunc(a)
+        exp = arith_negate(a)
+        assert np.allclose(got, exp), (got, exp)
+
+@testcase
+def test_arith_negate_complex():
+    for T in cset:
+        cfunc = compile(arith_negate, T, [T])
+        a = 1.2+4j
+        got = cfunc(a)
+        exp = arith_negate(a)
+        assert np.allclose(got, exp), (got, exp)
+
+#------------------------------------------------------------------------------
+# logical negate
+
+@testcase
+def test_logical_negate_signed():
+    for T in [int8, int16, int32, int64]:
+        cfunc = compile(logical_negate, T, [T])
+        a = 123
+        got = cfunc(a)
+        exp = logical_negate(a)
+        assert got == exp, (got, exp)
+
+#------------------------------------------------------------------------------
+# logical and
+
+@testcase
+def test_logical_and():
+    for T in iset:
+        cfunc = compile(logical_and, T, [T, T])
+        a, b = 123, 321
+        got = cfunc(a, b)
+        exp = logical_and(a, b)
+        assert got == exp, (got, exp)
+
+#------------------------------------------------------------------------------
+# logical or
+
+@testcase
+def test_logical_or():
+    for T in iset:
+        cfunc = compile(logical_or, T, [T, T])
+        a, b = 0xa, 0x10
+        got = cfunc(a, b)
+        exp = logical_or(a, b)
+        assert got == exp, (got, exp)
 
 
 

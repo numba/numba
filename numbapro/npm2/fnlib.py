@@ -91,6 +91,13 @@ def bool_func_from_sets(typesets):
 def bool_func(ty):
     return (ty, ty), boolean
 
+def unary_func_from_sets(typesets):
+    return [unary_func(t) for t in typesets]
+
+def unary_func(ty):
+    return (ty,), ty
+
+
 def range_func():
     return [((intp, intp, intp),    range_type),
             ((intp, intp),          range_type),
@@ -121,6 +128,12 @@ builtins = {
 
     operator.lshift: binary_func_from_sets(integer_set),
     operator.rshift: binary_func_from_sets(integer_set),
+
+    operator.and_: binary_func_from_sets(integer_set),
+    operator.or_: binary_func_from_sets(integer_set),
+
+    operator.neg:    unary_func_from_sets(signed_set|float_set|complex_set),
+    operator.invert:    unary_func_from_sets(integer_set),
 
     operator.eq: bool_func_from_sets(integer_set|float_set|complex_set),
 }
