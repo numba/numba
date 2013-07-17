@@ -42,11 +42,19 @@ class Infer(object):
                 else:
                     op.update(type=newty)
 
-        # check return type
-        
+        # check branch
         for block in self.blocks:
             term = block.terminator
-            with error_context(lineno=term.lineno, during='unifying return type'):
+            with error_context(lineno=term.lineno,
+                               during='checking branch condition'):
+                if term.opcode == 'branch':
+                    types.boolean.coerce(term.cond.type)
+
+        # check return type
+        for block in self.blocks:
+            term = block.terminator
+            with error_context(lineno=term.lineno,
+                               during='unifying return type'):
                 if term.opcode == 'ret':
                     return_type = term.value.type
                     if self.return_type != return_type:

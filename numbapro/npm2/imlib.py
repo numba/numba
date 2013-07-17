@@ -10,6 +10,11 @@ class ImpLib(object):
 
     def define(self, imp):
         defn = self.funclib.lookup(imp.funcobj, imp.args)
+        if defn is None:
+            from pprint import pprint
+            pprint(self.implib)
+            msg = 'no matching definition for %s(%s)'
+            raise TypeError(msg % (imp.funcobj, ', '.join(map(str, imp.args))))
         if defn.return_type != imp.return_type:
             msg = ('return-type mismatch for implementation; '
                    'expect %s but got %s')
@@ -32,9 +37,10 @@ class Imp(object):
     def __call__(self, builder, args):
         return self.impl(builder, args)
 
-def imp_eq_signed(builder, args):
-    a, b = args
-    return builder.icmp(lc.ICMP_EQ, a, b)
+
+    def __repr__(self):
+        return '<Impl %s %s -> %s >' % (self.funcobj, self.args,
+                                        self.return_type)
 
 # binary add
 
@@ -217,6 +223,67 @@ def imp_invert_integer(ty):
         return builder.xor(x, ones)
     return imp
 
+# bool eq
+
+def imp_eq_signed(builder, args):
+    a, b = args
+    return builder.icmp(lc.ICMP_EQ, a, b)
+
+# bool comparisions
+
+def imp_cmp_signed(cmp, ty):
+    CMP = {
+        operator.gt: lc.ICMP_SGT,
+        operator.lt: lc.ICMP_SLT,
+        operator.ge: lc.ICMP_SGE,
+        operator.le: lc.ICMP_SLE,
+        operator.eq: lc.ICMP_EQ,
+        operator.ne: lc.ICMP_NE,
+    }
+    def imp(builder, args):
+        a, b = args
+        return builder.icmp(CMP[cmp], a, b)
+    return imp
+
+def imp_cmp_unsigned(cmp, ty):
+    CMP = {
+        operator.gt: lc.ICMP_UGT,
+        operator.lt: lc.ICMP_ULT,
+        operator.ge: lc.ICMP_UGE,
+        operator.le: lc.ICMP_ULE,
+        operator.eq: lc.ICMP_EQ,
+        operator.ne: lc.ICMP_NE,
+    }
+    def imp(builder, args):
+        a, b = args
+        return builder.icmp(CMP[cmp], a, b)
+    return imp
+
+def imp_cmp_float(cmp, ty):
+    CMP = {
+        operator.gt: lc.FCMP_OGT,
+        operator.lt: lc.FCMP_OLT,
+        operator.ge: lc.FCMP_OGE,
+        operator.le: lc.FCMP_OLE,
+        operator.eq: lc.FCMP_OEQ,
+        operator.ne: lc.FCMP_ONE,
+    }
+    def imp(builder, args):
+        a, b = args
+        return builder.fcmp(CMP[cmp], a, b)
+    return imp
+
+def imp_cmp_complex(cmp, ty):
+    def imp(builder, args):
+        a, b = args
+        areal, aimag = ty.desc.llvm_unpack(a)
+        breal, bimag = ty.desc.llvm_unpack(b)
+        cmptor = imp_cmp_float(cmp, ty.desc.element)
+        c = cmptor(areal, breal)
+        d = cmptor(aimag, bimag)
+        return builder.and_(c, d)
+    return imp
+
 # range
 
 def imp_range(builder, args):
@@ -267,7 +334,9 @@ def imp_range_next(builder, args):
 # utils
 
 def bool_op_imp(funcobj, imp, typeset):
-    return [Imp(imp, funcobj, args=(ty, ty), return_type=types.boolean)
+    return [Imp(imp(funcobj, ty), funcobj,
+                args=(ty, ty),
+                return_type=types.boolean)
             for ty in typeset]
 
 def binary_op_imp(funcobj, imp, typeset):
@@ -280,6 +349,7 @@ def unary_op_imp(funcobj, imp, typeset):
 
 def floordiv_imp(funcobj, imp, ty, ret):
     return [Imp(imp(ret), funcobj, args=(ty, ty), return_type=ret)]
+
 
 def populate_builtin_impl(implib):
     imps = []
@@ -348,8 +418,14 @@ def populate_builtin_impl(implib):
     imps += binary_op_imp(operator.xor, imp_xor_integer,
                           typesets.integer_set)
 
-    # binary eq
-    imps += bool_op_imp(operator.eq, imp_eq_signed, typesets.signed_set)
+    # bool gt
+    for cmp in [operator.gt, operator.ge, operator.lt, operator.le,
+                operator.eq, operator.ne]:
+#    for cmp in [operator.gt]:
+        imps += bool_op_imp(cmp, imp_cmp_signed,   typesets.signed_set)
+        imps += bool_op_imp(cmp, imp_cmp_unsigned, typesets.unsigned_set)
+        imps += bool_op_imp(cmp, imp_cmp_float,    typesets.float_set)
+        imps += bool_op_imp(cmp, imp_cmp_complex,  typesets.complex_set)
 
     # unary arith negate
     imps += unary_op_imp(operator.neg, imp_neg_signed, typesets.signed_set)

@@ -133,10 +133,15 @@ builtins = {
     operator.or_: binary_func_from_sets(integer_set),
     operator.xor: binary_func_from_sets(integer_set),
 
-    operator.neg:    unary_func_from_sets(signed_set|float_set|complex_set),
-    operator.invert:    unary_func_from_sets(integer_set),
+    operator.neg: unary_func_from_sets(signed_set|float_set|complex_set),
+    operator.invert: unary_func_from_sets(integer_set),
 
+    operator.gt: bool_func_from_sets(integer_set|float_set|complex_set),
+    operator.lt: bool_func_from_sets(integer_set|float_set|complex_set),
+    operator.ge: bool_func_from_sets(integer_set|float_set|complex_set),
+    operator.le: bool_func_from_sets(integer_set|float_set|complex_set),
     operator.eq: bool_func_from_sets(integer_set|float_set|complex_set),
+    operator.ne: bool_func_from_sets(integer_set|float_set|complex_set),
 }
 
 def get_builtin_function_library(lib=None):

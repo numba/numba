@@ -122,6 +122,38 @@ class Type(object):
                         for a, b
                         in zip(self.list_fields(), Type(other).list_fields()))
 
+class Boolean(object):
+    fields = ()
+
+    def __repr__(self):
+        return 'bool'
+
+    def coerce(self, other):
+        if isinstance(other, Integer):
+            return other.bitwidth // 8
+        elif isinstance(other, Float):
+            return other.bitwidth // 8 + 50
+        elif isinstance(other, Complex):
+            return other.bitwidth // 8 + 100
+        elif isinstance(other, Boolean):
+            return 0
+
+    def llvm_as_value(self):
+        return lc.Type.int(1)
+
+    def llvm_const(self, builder, value):
+        return lc.Constant.int(self.llvm_as_value(), value)
+
+    def llvm_cast(self, builder, value, dst):
+        if isinstance(dst, Integer):
+            return self.builder.zext(value, dst.llvm_as_value())
+        elif isinstance(dst, Float):
+            return self.builder.uitofp(value, dst.llvm_as_value())
+        elif isinstance(dst, Complex):
+            freal = self.llvm_cast(builder, value, dst.element.desc)
+            fimag = dst.element.llvm_const(builder, 0)
+            return dst.llvm_pack(builder, freal, fimag)
+
 class Integer(object):
     fields = 'signed', 'bitwidth'
     
@@ -151,6 +183,8 @@ class Integer(object):
                 return other.bitwidth//2 - 32 + 100
             else:
                 return 64 - other.bitwidth//2 + 100
+        elif isinstance(other, Boolean):
+            return self.bitwidth
 
     def llvm_as_value(self):
         return lc.Type.int(self.bitwidth)
@@ -170,6 +204,13 @@ class Signed(Integer):
                 return builder.trunc(value, dst.llvm_as_value())
         elif isinstance(dst, Float):
             return builder.sitofp(value, dst.llvm_as_value())
+        elif isinstance(dst, Complex):
+            freal = self.llvm_cast(builder, value, dst.element.desc)
+            fimag = dst.element.llvm_const(builder, 0)
+            return dst.llvm_pack(builder, freal, fimag)
+        elif isinstance(dst, Boolean):
+            zero = self.llvm_const(builder, 0)
+            return builder.icmp(lc.ICMP_NE, value, zero)
 
     def ctype_as_argument(self):
         return getattr(ct, 'c_int%d' % self.bitwidth)
@@ -189,6 +230,13 @@ class Unsigned(Integer):
                 return builder.trunc(value, dst.llvm_as_value())
         elif isinstance(dst, Float):
             return builder.uitofp(value, dst.llvm_as_value())
+        elif isinstance(dst, Complex):
+            freal = self.llvm_cast(builder, value, dst.element.desc)
+            fimag = dst.element.llvm_const(builder, 0)
+            return dst.llvm_pack(builder, freal, fimag)
+        elif isinstance(dst, Boolean):
+            zero = self.llvm_const(builder, 0)
+            return builder.icmp(lc.ICMP_NE, value, zero)
 
     def ctype_as_argument(self):
         return getattr(ct, 'c_uint%d' % self.bitwidth)
@@ -207,6 +255,8 @@ class Float(object):
             return (other.bitwidth - self.bitwidth) // 8 - 50 - 1
         elif isinstance(other, Complex):
             return (other.bitwidth - self.bitwidth) // 8 + 50
+        elif isinstance(other, Boolean):
+            return self.bitwidth + 50
 
     def __repr__(self):
         return 'float%d' % self.bitwidth
@@ -226,6 +276,13 @@ class Float(object):
                 return builder.fpext(value, dst.llvm_as_value())
             else:
                 return builder.fptrunc(value, dst.llvm_as_value())
+        elif isinstance(dst, Complex):
+            elem = self.llvm_cast(builder, value, dst.element.desc)
+            zero = dst.element.desc.llvm_const(builder, 0)
+            return dst.llvm_pack(builder, elem, zero)
+        elif isinstance(dst, Boolean):
+            zero = lc.Constant.real(value.type, 0)
+            return builder.fcmp(lc.FCMP_ONE, value, zero)
 
     def ctype_as_argument(self):
         ctname = {32: 'c_float', 64: 'c_double'}[self.bitwidth]
@@ -258,6 +315,8 @@ class Complex(object):
     def coerce(self, other):
         if isinstance(other, Complex):
             return (other.bitwidth - self.bitwidth) // 8
+        elif isinstance(other, Boolean):
+            return self.bitwidth + 100
 
     def __repr__(self):
         return 'complex%d' % self.bitwidth
@@ -347,7 +406,7 @@ range_iter_type = Type(BuiltinObject('range-iter'))
 
 void = Type(BuiltinObject('void'))
 
-boolean = Type(Unsigned(1))
+boolean = Type(Boolean())
 
 int8  = Type(Signed(8))
 int16 = Type(Signed(16))

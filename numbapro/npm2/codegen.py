@@ -76,7 +76,9 @@ class CodeGen(object):
                 with error_context(lineno=inst.lineno,
                                    during='instruction codegen'):
                     self.valmap[inst] = self.op(inst)
-            self.op(block.terminator)
+            with error_context(lineno=inst.lineno,
+                               during='instruction codegen'):
+                self.op(block.terminator)
 
 
     def cast(self, val, src, dst):
