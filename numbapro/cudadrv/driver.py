@@ -694,7 +694,8 @@ class Driver(object):
 
     def check_error(self, error, msg, exit=False):
         if error:
-            exc = CudaDriverError(msg, self._REVERSE_ERROR_MAP[error])
+            exc = CudaDriverError('%s\n%s\n' %
+                                  (self._REVERSE_ERROR_MAP[error], msg))
             if exit:
                 print>>sys.stderr, exc
                 sys.exit(1)
@@ -1145,7 +1146,7 @@ class Module(finalizer.OwnerMixin):
                                                 option_vals)
 
         self.driver.check_error(status,
-                                'Failed to load module: %s' % jiterrors.value)
+                                'Failed to load module:\n%s' % jiterrors.value)
 
         self._finalizer_track(self._handle)
         self.info_log = jitinfo.value
