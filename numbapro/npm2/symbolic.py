@@ -285,6 +285,11 @@ class SymbolicExecution(object):
         scope = self.scopes[-1]
         self.jump(target=self.blocks[scope[1]])
 
+    def op_LOAD_ATTR(self, inst):
+        attr = self.names[inst.arg]
+        obj = self.pop()
+        self.call('.%s' % attr, args=(obj,))
+
     def op_LOAD_GLOBAL(self, inst):
         name = self.names[inst.arg]
         self.push_insert('global', name=name)

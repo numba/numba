@@ -122,6 +122,9 @@ class Type(object):
                         for a, b
                         in zip(self.list_fields(), Type(other).list_fields()))
 
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
 class Boolean(object):
     fields = ()
 
@@ -331,6 +334,14 @@ class Complex(object):
         real = self.element.llvm_const(builder, value.real)
         imag = self.element.llvm_const(builder, value.imag)
         return self.llvm_pack(builder, real, imag)
+
+    def llvm_cast(self, builder, value, dst):
+        if isinstance(dst, Complex):
+            real, imag = self.llvm_unpack(builder, value)
+            newelem = dst.element
+            newreal = self.element.llvm_cast(builder, real, newelem)
+            newimag = self.element.llvm_cast(builder, imag, newelem)
+            return dst.llvm_pack(builder, newreal, newimag)
 
     def llvm_value_from_arg(self, builder, value):
         return builder.load(value)

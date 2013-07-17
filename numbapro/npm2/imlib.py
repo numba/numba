@@ -349,6 +349,57 @@ def imp_range_next(builder, args):
     builder.store(next, startptr)
     return start
 
+
+# complex attributes
+
+def imp_complex_real(ty):
+    def imp(builder, args):
+        value, = args
+        real, imag = ty.desc.llvm_unpack(builder, value)
+        return real
+    return imp
+
+def imp_complex_imag(ty):
+    def imp(builder, args):
+        value, = args
+        real, imag = ty.desc.llvm_unpack(builder, value)
+        return imag
+    return imp
+
+def complex_attributes(complex_type):
+    imps = []
+    comb = [(imp_complex_real, '.real'), (imp_complex_imag, '.imag')]
+    for imp, attrname in comb:
+        imps += [Imp(imp(complex_type),
+                     attrname,
+                     args=(complex_type,),
+                     return_type=complex_type.desc.element)]
+    return imps
+
+def imp_complex_ctor_1(ty):
+    def imp(builder, args):
+        real, = args
+        imag = ty.desc.element.llvm_const(builder, 0)
+        return ty.desc.llvm_pack(builder, real, imag)
+    return imp
+
+def imp_complex_ctor_2(ty):
+    def imp(builder, args):
+        real, imag = args
+        return ty.desc.llvm_pack(builder, real, imag)
+    return imp
+
+def complex_ctor(complex_type):
+    imp1 = Imp(imp_complex_ctor_1(complex_type),
+               complex,
+               args=(complex_type.desc.element,),
+               return_type=complex_type)
+    imp2 = Imp(imp_complex_ctor_2(complex_type),
+               complex,
+               args=(complex_type.desc.element,) * 2,
+               return_type=complex_type)
+    return [imp1, imp2]
+
 #----------------------------------------------------------------------------
 # utils
 
@@ -481,7 +532,10 @@ def populate_builtin_impl(implib):
                  args=(types.range_iter_type,),
                  return_type=types.intp)]
 
-
+    # complex attributes
+    for complex_type in typesets.complex_set:
+        imps += complex_attributes(complex_type)
+        imps += complex_ctor(complex_type)
 
     for imp in imps:
         implib.define(imp)

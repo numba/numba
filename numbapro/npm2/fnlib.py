@@ -51,17 +51,29 @@ class FunctionLibrary(object):
 
         if not versions:
             raise NotImplementedError('function %s is not implemented' % func)
+
         for ver in versions:
             if len(args) == len(ver.args):
+                # reject coercion on first argument for instance attribute
+                if (isinstance(func, str) and
+                        func.startswith('.') and
+                        args[0] != ver.args[0]):
+                    continue
+                # try to coerce to arguments and calculate a grade
                 cur = tuple(actual.try_coerce(formal)
                             for actual, formal in zip(args, ver.args))
-                graded.append((cur, ver))
+
+                if not any(x is None for x in cur):
+                    graded.append((cur, ver))
 
         # filter out downcast
         no_downcast = [(sum(pts), defn) for pts, defn in graded
                        if not any(p < 0 for p in pts)]
 
         least_promotion = sorted(no_downcast)
+        if not least_promotion:
+            msg = 'no matching definition for %s(%s)'
+            raise TypeError(msg % (func, ', '.join(str(a) for a in args)))
         return least_promotion[0][1]
 
 
@@ -112,6 +124,20 @@ def iter_valid_func():
 def iter_next_func():
     return [((range_iter_type,), intp)]
 
+def complex_attr(typeset):
+    return [((ty,), ty.desc.element)
+            for ty in typeset]
+
+def complex_ctor(typeset):
+    defns = []
+    for ty in typeset:
+        elem = ty.desc.element
+        ver1 = ((elem,), ty)
+        ver2 = ((elem, elem), ty)
+        defns.append(ver1)
+        defns.append(ver2)
+    return defns
+
 builtins = {
     range           : range_func(),
     xrange          : range_func(),
@@ -142,6 +168,10 @@ builtins = {
     operator.le: bool_func_from_sets(integer_set|float_set|complex_set),
     operator.eq: bool_func_from_sets(integer_set|float_set|complex_set),
     operator.ne: bool_func_from_sets(integer_set|float_set|complex_set),
+
+    '.real': complex_attr(complex_set),
+    '.imag': complex_attr(complex_set),
+    complex: complex_ctor(complex_set),
 }
 
 def get_builtin_function_library(lib=None):
