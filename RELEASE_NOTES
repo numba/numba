@@ -1,10 +1,10 @@
-Version (0.?.?)
+Version (0.12.3)
 ================
-* Autotuning base on compiler info and occupancy calculator
 * Accept older driver by defering driver error to first use of specific API
 * Report incompatible GPU at context creation
-* Add basic support for ravel and reshape
 * Improve device information reporting
+* Autotuning base on compiler info and occupancy calculator
+* Add basic support for ravel and reshape
 
 Version (0.12.2)
 ================
