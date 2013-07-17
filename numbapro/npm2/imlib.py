@@ -286,21 +286,32 @@ def imp_cmp_complex(cmp, ty):
 
 # range
 
-def imp_range(builder, args):
-    assert len(args) == 1
-    (stop,) = args
-
-    start = types.intp.llvm_const(builder, 0)
-    step = types.intp.llvm_const(builder, 1)
-
+def make_range_obj(builder, start, stop, step):
     rangetype = types.range_type.llvm_as_value()
     rangeobj = lc.Constant.undef(rangetype)
-
+    
     rangeobj = builder.insert_value(rangeobj, start, 0)
     rangeobj = builder.insert_value(rangeobj, stop, 1)
     rangeobj = builder.insert_value(rangeobj, step, 2)
-
     return rangeobj
+
+def imp_range_1(builder, args):
+    assert len(args) == 1
+    (stop,) = args
+    start = types.intp.llvm_const(builder, 0)
+    step = types.intp.llvm_const(builder, 1)
+    return make_range_obj(builder, start, stop, step)
+
+def imp_range_2(builder, args):
+    assert len(args) == 2
+    start, stop = args
+    step = types.intp.llvm_const(builder, 1)
+    return make_range_obj(builder, start, stop, step)
+
+def imp_range_3(builder, args):
+    assert len(args) == 3
+    start, stop, step = args
+    return make_range_obj(builder, start, stop, step)
 
 def imp_range_iter(builder, args):
     obj, = args
@@ -315,9 +326,17 @@ def imp_range_valid(builder, args):
     ptr, = args
     idx0 = types.int32.llvm_const(builder, 0)
     idx1 = types.int32.llvm_const(builder, 1)
+    idx2 = types.int32.llvm_const(builder, 2)
     start = builder.load(builder.gep(ptr, [idx0, idx0]))
     stop = builder.load(builder.gep(ptr, [idx0, idx1]))
-    return builder.icmp(lc.ICMP_ULT, start, stop)
+    step = builder.load(builder.gep(ptr, [idx0, idx2]))
+
+    zero = types.intp.llvm_const(builder, 0)
+    positive = builder.icmp(lc.ICMP_SGE, step, zero)
+    posok = builder.icmp(lc.ICMP_SLT, start, stop)
+    negok = builder.icmp(lc.ICMP_SGT, start, stop)
+    
+    return builder.select(positive, posok, negok)
 
 def imp_range_next(builder, args):
     ptr, = args
@@ -437,10 +456,18 @@ def populate_builtin_impl(implib):
                          typesets.integer_set)
 
     # range
+    for rangeobj in [range, xrange]:
+        imps += [Imp(imp_range_1, rangeobj,
+                     args=(types.intp,),
+                     return_type=types.range_type)]
 
-    imps += [Imp(imp_range, range,
-                 args=(types.intp,),
-                 return_type=types.range_type)]
+        imps += [Imp(imp_range_2, rangeobj,
+                     args=(types.intp, types.intp),
+                     return_type=types.range_type)]
+
+        imps += [Imp(imp_range_3, rangeobj,
+                     args=(types.intp, types.intp, types.intp),
+                     return_type=types.range_type)]
 
     imps += [Imp(imp_range_iter, iter,
                  args=(types.range_type,),
@@ -454,7 +481,6 @@ def populate_builtin_impl(implib):
                  args=(types.range_iter_type,),
                  return_type=types.intp)]
 
-    
 
 
     for imp in imps:

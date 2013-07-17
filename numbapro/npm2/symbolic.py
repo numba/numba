@@ -29,6 +29,8 @@ class SymbolicExecution(object):
         self.pending_run = set([0])
         self.processed = set()
 
+        self.scopes = []
+
         self.varnames = self.bytecode.code.co_varnames
         self.consts = self.bytecode.code.co_consts
         self.names = self.bytecode.code.co_names
@@ -36,7 +38,8 @@ class SymbolicExecution(object):
     def interpret(self):
         # interpretation loop
         while self.pending_run:
-            offset = self.pending_run.pop()
+            offset = min(self.pending_run)
+            self.pending_run.discard(offset)
             if offset not in self.processed:    # don't repeat the work
                 self.processed.add(offset)
 
@@ -239,10 +242,10 @@ class SymbolicExecution(object):
             self.terminate('ret', value=val)
 
     def op_SETUP_LOOP(self, inst):
-        pass # noop?
+        self.scopes.append((inst.next, inst.next + inst.arg))
 
     def op_POP_BLOCK(self, inst):
-        pass # noop?
+        self.scopes.pop()
 
     def op_CALL_FUNCTION(self, inst):
         argc = inst.arg & 0xff
@@ -277,6 +280,10 @@ class SymbolicExecution(object):
         self.call('iternext', args=(iterobj,))
 
         self.curblock = oldblock
+
+    def op_BREAK_LOOP(self, inst):
+        scope = self.scopes[-1]
+        self.jump(target=self.blocks[scope[1]])
 
     def op_LOAD_GLOBAL(self, inst):
         name = self.names[inst.arg]

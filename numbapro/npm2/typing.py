@@ -15,6 +15,7 @@ class Infer(object):
         self.return_type = return_type
 
         self.globals = dict(vars(__builtin__))
+        self.builtins = set(self.globals.values())
         self.globals.update(self.func.func_globals)
 
         self.valmap = {}
@@ -128,8 +129,8 @@ class Infer(object):
         glbl = self.func.func_globals
         value = self.globals[inst.name]
         inst.update(value=value, type=types.function_type)
-        if not isinstance(value, (FunctionType, BuiltinFunctionType)):
-            assert False, 'XXX: inline global value'
+        if value not in self.builtins:
+            assert False, 'XXX: inline global value: %s' % value
 
     def op_phi(self, inst):
         for blk, val in inst.phi:
