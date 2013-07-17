@@ -131,6 +131,7 @@ builtins = {
 
     operator.and_: binary_func_from_sets(integer_set),
     operator.or_: binary_func_from_sets(integer_set),
+    operator.xor: binary_func_from_sets(integer_set),
 
     operator.neg:    unary_func_from_sets(signed_set|float_set|complex_set),
     operator.invert:    unary_func_from_sets(integer_set),

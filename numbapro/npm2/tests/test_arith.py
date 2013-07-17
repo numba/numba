@@ -47,6 +47,9 @@ def logical_and(a, b):
 def logical_or(a, b):
     return a | b
 
+def logical_xor(a, b):
+    return a ^ b
+
 iset = [int8, int16, int32, int64, uint8, uint16, uint32, uint64]
 fset = [float32, float64]
 cset = [complex64, complex128]
@@ -347,6 +350,18 @@ def test_logical_or():
         a, b = 0xa, 0x10
         got = cfunc(a, b)
         exp = logical_or(a, b)
+        assert got == exp, (got, exp)
+
+#------------------------------------------------------------------------------
+# logical xor
+
+@testcase
+def test_logical_xor():
+    for T in iset:
+        cfunc = compile(logical_xor, T, [T, T])
+        a, b = 0x23, 0x13
+        got = cfunc(a, b)
+        exp = logical_xor(a, b)
         assert got == exp, (got, exp)
 
 

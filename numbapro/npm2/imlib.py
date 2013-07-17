@@ -179,6 +179,12 @@ def imp_or_integer(builder, args):
     a, b = args
     return builder.or_(a, b)
 
+# binary xor
+
+def imp_xor_integer(builder, args):
+    a, b = args
+    return builder.xor(a, b)
+
 # unary negate
 
 def imp_neg_signed(ty):
@@ -338,8 +344,11 @@ def populate_builtin_impl(implib):
     imps += binary_op_imp(operator.or_, imp_or_integer,
                           typesets.integer_set)
 
-    # binary eq
+    # binary xor
+    imps += binary_op_imp(operator.xor, imp_xor_integer,
+                          typesets.integer_set)
 
+    # binary eq
     imps += bool_op_imp(operator.eq, imp_eq_signed, typesets.signed_set)
 
     # unary arith negate
