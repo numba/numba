@@ -3,7 +3,7 @@ from __future__ import print_function, division, absolute_import
 
 from numba import error
 from numba.typesystem import numpy_support
-from numba.typesystem import integral, floating, complextypes, unsigned_integral
+from numba.typesystem import integral, floating, complextypes, unsigned_integral, datetimetypes
 from numba.typesystem.kinds import *
 
 import numpy as np
@@ -65,11 +65,13 @@ def promote_int(u, promote, type1, type2):
 
 def promote_numeric(u, promote, type1, type2):
     "Promote two numeric types"
-    ranks = ["bool", "int", "float", "complex"]
+    ranks = ["bool", "int", "float", "complex", "datetime"]
     type = max([type1, type2], key=lambda type: ranks.index(type.kind))
     size = max(type1.itemsize, type2.itemsize)
     if type.is_complex:
         return find_type_of_size(size, complextypes)
+    elif type.is_datetime:
+        return find_type_of_size(size, datetimetypes)
     elif type.is_float:
         return find_type_of_size(size, floating)
     else:

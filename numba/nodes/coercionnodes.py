@@ -75,6 +75,16 @@ class CoercionNode(ExprNode):
             if not complex_type == complex128:
                 node = CoercionNode(node, complex128)
 
+        elif ((node.variable.type.is_datetime or dst_type.is_datetime) and
+            (node.variable.type.is_object or dst_type.is_object)):
+            if dst_type.is_datetime:
+                datetime_type = dst_type
+            else:
+                datetime_type = node.variable.type
+
+            if not datetime_type == datetime:
+                node = CoercionNode(node, datetime)
+
         return node
 
     def __repr__(self):

@@ -13,7 +13,7 @@ from itertools import izip
 from numba import typesystem
 from numba.typesystem import types
 
-__all__ = [ 'typeset', 'numeric', 'integral', 'floating', 'complextypes' ]
+__all__ = [ 'typeset', 'numeric', 'integral', 'floating', 'complextypes', 'datetimetypes']
 
 #----------------------------------------------------------------------------
 # Signature matching
@@ -129,3 +129,4 @@ numeric = typeset(typesystem.numeric)
 integral = typeset(typesystem.integral)
 floating = typeset(typesystem.floating)
 complextypes = typeset(typesystem.complextypes)
+datetimetypes = typeset(typesystem.datetimetypes)

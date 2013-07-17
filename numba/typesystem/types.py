@@ -249,7 +249,7 @@ class NumbaType(_NumbaType):
 #------------------------------------------------------------------------
 
 def pass_by_ref(type): # TODO: Get rid of this
-    return type.is_struct or type.is_complex
+    return type.is_struct or type.is_complex or type.is_datetime
 
 class Function(object):
     """
@@ -292,7 +292,7 @@ class function(NumbaType):
     @property
     def struct_by_reference(self):
         rt = self.return_type
-        byref = lambda t: t.is_struct or t.is_complex
+        byref = lambda t: t.is_struct or t.is_complex or t.is_datetime
         return rt and byref(rt) or any(imap(byref, self.args))
 
     @property
@@ -542,6 +542,19 @@ class complex_(NumbaType):
 
     def __repr__(self):
         return "complex%d" % (self.itemsize * 8,)
+
+@consing
+class datetime_(NumbaType):
+    argnames = ["year", "month", "day"]
+    #argnames = ["base_type"]
+    flags = ["numeric"]
+
+    @property
+    def itemsize(self):
+        return self.year.itemsize + self.month.itemsize + self.day.itemsize
+
+    def __repr__(self):
+        return "datetime"
 
 @consing
 class meta(NumbaType):

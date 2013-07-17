@@ -22,6 +22,7 @@ KIND_POINTER    = "pointer"
 KIND_NULL       = "null"
 KIND_CARRAY     = "carray"
 KIND_STRUCT     = "struct"
+KIND_DATEIME    = "datetime"
 
 # High-level Numba kinds
 

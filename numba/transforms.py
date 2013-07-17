@@ -1021,6 +1021,12 @@ class LateSpecializer(ResolveCoercions,
             imag = nodes.ConstNode(constant.imag, node.type.base_type)
             node = nodes.ComplexNode(real, imag)
 
+        elif node.type.is_datetime:
+            year = nodes.ConstNode(constant.year, node.type.base_type)
+            month = nodes.ConstNode(constant.year, node.type.base_type)
+            day = nodes.ConstNode(constant.year, node.type.base_type)
+            node = nodes.DateTimeNode(year, month, day)
+
         elif node.type.is_pointer and not node.type.is_string:
             addr_int = constnodes.get_pointer_address(constant, node.type)
             node = nodes.ptrfromint(addr_int, node.type)

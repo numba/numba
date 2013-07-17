@@ -1214,6 +1214,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             return self._handle_mod(node, lhs, rhs)
         elif node.type.is_complex:
             result = self._handle_complex_binop(lhs, op, rhs)
+        elif node.type.is_datetime:
+            raise error.NumbaError(
+                node, "binary operations on datetime values not yet supported")
         elif pointer_type:
             if not node.left.type.is_pointer:
                 lhs, rhs = rhs, lhs
@@ -1470,7 +1473,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         return self._create_datetime(year, month, day)
 
     def visit_DateTimeAttributeNode(self, node):
-        print('JNB: visit_DateTimeAttributeNode()', node, node.value)
         result = self.visit(node.value)
         if node.value.type.is_datetime:
             assert result.type.kind == llvm.core.TYPE_STRUCT, result.type

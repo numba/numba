@@ -166,6 +166,12 @@ class ObjectCoercer(object):
                                      llvm_result.type, name='complex_temp')
             self.builder.store(llvm_result, new_result)
             llvm_result = new_result
+        elif type.is_datetime:
+            # We have a Py_datetime value, construct a Py_datetime * temporary
+            new_result = llvm_alloca(self.translator.lfunc, self.builder,
+                                     llvm_result.type, name='datetime_temp')
+            self.builder.store(llvm_result, new_result)
+            llvm_result = new_result
 
         return self.buildvalue([type], llvm_result, name=name)
 

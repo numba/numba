@@ -35,6 +35,10 @@ complex_typenames = names(
     'complex64', 'complex128', #'complex256',
 )
 
+datetime_typenames = names(
+    'datetime',
+)
+
 #------------------------------------------------------------------------
 # Default type sizes
 #------------------------------------------------------------------------
@@ -73,6 +77,7 @@ type_sizes = {
     "complex64":    8,
     "complex128":   16,
     # "complex256":   32,
+    "datetime":     16,
 }
 
 ctypes_npy_intp = np.empty(0).ctypes.strides._type_
