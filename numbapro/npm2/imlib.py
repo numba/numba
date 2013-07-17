@@ -16,9 +16,9 @@ class ImpLib(object):
             msg = 'no matching definition for %s(%s)'
             raise TypeError(msg % (imp.funcobj, ', '.join(map(str, imp.args))))
         if defn.return_type != imp.return_type:
-            msg = ('return-type mismatch for implementation; '
-                   'expect %s but got %s')
-            raise TypeError(msg % (defn.return_type, imp.return_type))
+            msg = ('return-type mismatch for %s; '
+                   'got %s')
+            raise TypeError(msg % (defn, imp.return_type))
         self.implib[defn] = imp
 
     def get(self, funcdef):
@@ -400,6 +400,20 @@ def complex_ctor(complex_type):
                return_type=complex_type)
     return [imp1, imp2]
 
+# casts
+
+def imp_cast_int(fromty):
+    def imp(builder, args):
+        x, = args
+        return fromty.llvm_cast(builder, x, types.intp)
+    return imp
+
+def imp_cast_float(fromty):
+    def imp(builder, args):
+        x, = args
+        return fromty.llvm_cast(builder, x, types.float64)
+    return imp
+
 #----------------------------------------------------------------------------
 # utils
 
@@ -420,6 +434,9 @@ def unary_op_imp(funcobj, imp, typeset):
 def floordiv_imp(funcobj, imp, ty, ret):
     return [Imp(imp(ret), funcobj, args=(ty, ty), return_type=ret)]
 
+def casting_imp(funcobj, imp, retty, typeset):
+    return [Imp(imp(ty), funcobj, args=(ty,), return_type=retty)
+            for ty in typeset]
 
 def populate_builtin_impl(implib):
     imps = []
@@ -536,6 +553,14 @@ def populate_builtin_impl(implib):
     for complex_type in typesets.complex_set:
         imps += complex_attributes(complex_type)
         imps += complex_ctor(complex_type)
+
+    # casts
+    imps += casting_imp(int, imp_cast_int, types.intp,
+                   typesets.integer_set|typesets.float_set|typesets.complex_set)
+    imps += casting_imp(float, imp_cast_float, types.float64,
+                   typesets.integer_set|typesets.float_set|typesets.complex_set)
+
+    # --------------------------
 
     for imp in imps:
         implib.define(imp)

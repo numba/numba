@@ -138,6 +138,20 @@ def complex_ctor(typeset):
         defns.append(ver2)
     return defns
 
+def int_ctor(typeset):
+    defns = []
+    for ty in typeset:
+        defn = ((ty,), types.intp)
+        defns.append(defn)
+    return defns
+
+def float_ctor(typeset):
+    defns = []
+    for ty in typeset:
+        defn = ((ty,), types.float64)
+        defns.append(defn)
+    return defns
+
 builtins = {
     range           : range_func(),
     xrange          : range_func(),
@@ -172,6 +186,9 @@ builtins = {
     '.real': complex_attr(complex_set),
     '.imag': complex_attr(complex_set),
     complex: complex_ctor(complex_set),
+
+    int:   int_ctor(integer_set|float_set|complex_set),
+    float: float_ctor(integer_set|float_set|complex_set),
 }
 
 def get_builtin_function_library(lib=None):
