@@ -14,7 +14,7 @@ def gep(builder, ptr, indices):
     return builder.gep(ptr, [auto_intp(i) for i in indices])
 
 def setitem(builder, ary, order, indices, value):
-    shape, strides = preload_attr(builder, ary)
+    data, shape, strides = preload_attr(builder, ary)
     ptr = getpointer(builder, data, shape, strides, order, indices)
     builder.store(value, ptr)
 

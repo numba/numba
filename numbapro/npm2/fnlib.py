@@ -29,7 +29,10 @@ class Function(object):
                                ', '.join(str(a) for a in self.args),
                                self.return_type)
 
-
+def _least_demontion(demontables):
+    return sorted((sum(filter(lambda x: x < 0, pts)), ver)
+                  for pts, ver in demontables)
+    
 class FunctionLibrary(object):
     def __init__(self):
         self.concrete = defaultdict(set)
@@ -50,8 +53,12 @@ class FunctionLibrary(object):
         if versions is None:
             versions = self.concrete[func]
         for ver in versions:
-            if ver.args == args:
-                return ver
+            if len(ver.args) == len(args):
+                for a, b in zip(ver.args, args):
+                    if not (a == b or b is None):
+                        break
+                else:
+                    return ver
 
     def get(self, func, args):
         result = self.get_parametric(func, args)
@@ -64,23 +71,39 @@ class FunctionLibrary(object):
             return
         versions = self.parametric[func]
 
-        accepted = []
+        promotable = []
+        demontable = []
         for ver in versions:
-            matched = self._match_parametric_args(args, ver.args)
-            if matched is not None:
-                accepted.append((matched, ver))
+            pts = self._match_parametric_args(args, ver.args)
+            if pts is not None:
+                if all(x >= 0 for x in pts):
+                    promotable.append((sum(pts), ver))
+                else:
+                    demontable.append((pts, ver))
 
-        if accepted:
-            least_promotion = sorted(accepted)
-            return self._setup_param_defn(accepted[0][1], args)
+        if promotable:
+            least_promotion = sorted(promotable)
+            return self._setup_param_defn(least_promotion[0][1], args)
+        elif demontable:
+            least_demotion = _least_demontion(demontable)
+            return self._setup_param_defn(least_demotion[0][1], args)
 
     def _setup_param_defn(self, defn, actual_params):
+        args = []
+        for a in defn.args:
+            if callable(a):
+                args.append(a(actual_params))
+            else:
+                args.append(a)
+
         if callable(defn.return_type):
             return_type = defn.return_type(actual_params)
-            return Function(funcobj     = defn.funcobj,
-                            args        = defn.args,
-                            return_type = return_type)
-        return defn
+        else:
+            return_type = defn.return_type
+
+        return Function(funcobj     = defn.funcobj,
+                        args        = args,
+                        return_type = return_type)
 
     def _match_parametric_args(self, actual_params, formal_params):
         if len(actual_params) != len(formal_params):
@@ -93,14 +116,15 @@ class FunctionLibrary(object):
                     return
                 pts.append(0)
             else:
+                if callable(formal):
+                    formal = formal(actual_params)
+                
                 pt = actual.try_coerce(formal)
                 if pt is None:
                     return
-                if pt < 0:      # no downcast
-                    return
                 pts.append(pt)
 
-        return sum(pts)
+        return pts
 
     def get_concrete(self, func, args):
         versions = self.concrete[func]
@@ -108,17 +132,27 @@ class FunctionLibrary(object):
         if not versions:
             raise NotImplementedError('function %s is not implemented' % func)
 
-        accepted = []
-        for ver in versions:
-            m = self._match_concrete_args(func, args, ver.args)
-            if m is not None:
-                accepted.append((m, ver))
+        promotable = []
+        demontable = []
 
-        least_promotion = sorted(accepted)
-        if not least_promotion:
+        for ver in versions:
+            pts = self._match_concrete_args(func, args, ver.args)
+            if pts is not None:
+                if all(p >= 0 for p in pts):
+                    promotable.append((sum(pts), ver))
+                else:
+                    demontable.append((pts, ver))
+
+        if promotable:
+            least_promotion = sorted(promotable)
+            return least_promotion[0][1]
+        elif demontable:
+            least_demotion = _least_demontion(demontable)
+            return least_demotion[0][1]
+        else:
             msg = 'no matching definition for %s(%s)'
             raise TypeError(msg % (func, ', '.join(str(a) for a in args)))
-        return least_promotion[0][1]
+
 
     def _match_concrete_args(self, func, actual_params, formal_params):
         # num of args must match
@@ -136,11 +170,9 @@ class FunctionLibrary(object):
             pt = actual.try_coerce(formal)
             if pt is None:
                 return
-            if pt < 0:      # no downcast
-                return
             pts.append(pt)
 
-        return sum(pts)
+        return pts
 
 #------------------------------------------------------------------------------
 # builtin functions
@@ -218,7 +250,11 @@ def float_ctor(typeset):
     return defns
 
 def array_getitem_return(args):
-    ary, idx = args
+    ary = args[0]
+    return ary.desc.element
+
+def array_setitem_value(args):
+    ary = args[0]
     return ary.desc.element
 
 builtins = {
@@ -262,7 +298,10 @@ builtins = {
     operator.getitem: [((types.ArrayKind, types.intp),
                             array_getitem_return),
                        ((types.ArrayKind, types.TupleKind),
-                            array_getitem_return),]
+                            array_getitem_return),],
+
+    operator.setitem: [((types.ArrayKind, types.intp, array_setitem_value),
+                            types.void)],
 }
 
 def get_builtin_function_library(lib=None):

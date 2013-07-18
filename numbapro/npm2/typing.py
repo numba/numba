@@ -115,7 +115,7 @@ class Infer(object):
 
     def op_const(self, inst):
         if inst.value is None:
-            return types.void
+            return types.none_type
         elif isinstance(inst.value, complex):
             return types.complex128
         elif isinstance(inst.value, float):

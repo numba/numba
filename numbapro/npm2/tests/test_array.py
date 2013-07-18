@@ -1,6 +1,6 @@
 import numpy as np
 from ..compiler import compile
-from ..types import int32, arraytype, float32, float64
+from ..types import int32, int64, arraytype, float32, float64, void
 from .support import testcase, main
 
 def getitem(a, i):
@@ -110,7 +110,7 @@ def test_getitem2d_a():
 
 @testcase
 def test_setitem():
-    compiled = compile(setitem, None, [arraytype(int32, 1, 'C'), int32, int32])
+    compiled = compile(setitem, void, [arraytype(int32, 1, 'C'), int32, int64])
     ary = np.arange(10, dtype=np.int32)
     orig = np.arange(10, dtype=np.int32)
     for i in range(ary.size):
@@ -201,7 +201,7 @@ def test_saxpy():
               arraytype(float32, 1, 'C'),
               arraytype(float64, 1, 'C')]
 
-    compiled = compile(saxpy, None, argtys)
+    compiled = compile(saxpy, void, argtys)
     a = 2
     x = np.arange(10, dtype=np.float32)
     y = np.arange(10, dtype=np.float32)

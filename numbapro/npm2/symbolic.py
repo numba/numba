@@ -316,6 +316,13 @@ class SymbolicExecution(object):
         name = self.varnames[inst.arg]
         self.insert('store', name=name, value=tos)
 
+    def op_STORE_SUBSCR(self, inst):
+        tos0 = self.pop()
+        tos1 = self.pop()
+        tos2 = self.pop()
+        self.call(operator.setitem, args=(tos1, tos0, tos2))
+        self.pop()
+
     def op_COMPARE_OP(self, inst):
         opfunc = COMPARE_OP_FUNC[dis.cmp_op[inst.arg]]
         self.binary_op(opfunc)

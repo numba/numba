@@ -491,9 +491,13 @@ class BuiltinObject(object):
     def __repr__(self):
         return '<builtin %s>' % self.name
 
+    def llvm_as_value(self):
+        return lc.Type.pointer(lc.Type.int(8))
+
 
 module_type = Type(BuiltinObject('module'))
 function_type = Type(BuiltinObject('function'))
+none_type = Type(BuiltinObject('none'))
 
 class RangeType(BuiltinObject):
     def llvm_as_value(self):

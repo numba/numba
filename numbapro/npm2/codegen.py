@@ -112,6 +112,9 @@ class CodeGen(object):
     def op_jump(self, inst):
         self.builder.branch(self.bbmap[inst.target])
 
+    def op_retvoid(self, inst):
+        self.builder.ret_void()
+
     def op_ret(self, inst):
         val = self.cast(self.valmap[inst.value], inst.value.type, inst.astype)
         self.builder.store(val, self.lfunc.args[-1])
@@ -134,11 +137,15 @@ class CodeGen(object):
         imp = self.implib.get(inst.defn)
         assert not inst.kws
         argtys = [aval.type for aval in inst.args]
-        args = [self.cast(self.valmap[aval], aval.type, atype)
+        args = [(self.valmap[aval]
+                    if atype is None
+                    else self.cast(self.valmap[aval], aval.type, atype))
                 for aval, atype in zip(inst.args, imp.args)]
         return imp(self.builder, args, argtys, inst.defn.return_type)
 
     def op_const(self, inst):
+        if isinstance(inst.type.desc, types.BuiltinObject):
+            return # XXX: do not handle builtin object
         return inst.type.llvm_const(inst.value)
 
     def op_global(self, inst):

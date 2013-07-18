@@ -2,7 +2,7 @@ import ctypes
 import numpy as np
 from llvm import ee as le, passes as lp
 from llvm.workaround import avx_support
-from . import typing
+from . import typing, types
 
 class JIT(object):
     def __init__(self, lfunc, retty, argtys):
@@ -12,7 +12,7 @@ class JIT(object):
         self.return_type = retty
         self.c_args = [t.ctype_as_argument() for t in self.args]
         self.c_return_type = (self.return_type.ctype_as_return()
-                              if self.return_type is not None
+                              if self.return_type != types.void
                               else None)
         self.pointer = self.engine.get_pointer_to_function(lfunc)
         self.callable = make_callable(self.pointer, self.c_return_type,

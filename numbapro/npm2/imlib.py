@@ -1,3 +1,4 @@
+from collections import defaultdict
 from contextlib import contextmanager
 import operator
 import llvm.core as lc
@@ -7,30 +8,36 @@ class ImpLib(object):
     def __init__(self, funclib):
         self.funclib = funclib
         self.implib = {}
-        self.prmlib = {}
+        self.prmlib = defaultdict(list)
 
     def define(self, imp):
         defn = self.funclib.lookup(imp.funcobj, imp.args)
+
         if defn is None:
             msg = 'no matching definition for %s(%s)'
             raise TypeError(msg % (imp.funcobj, ', '.join(map(str, imp.args))))
 
-        if callable(defn.return_type):  # is parametric
-            assert imp.return_type is None
-            self.prmlib[defn] = imp
-        else:                           # is non-parametric
-            if defn.return_type != imp.return_type:
-                msg = ('return-type mismatch for %s; '
-                       'got %s')
-                raise TypeError(msg % (defn, imp.return_type))
+        if imp.return_type is not None and defn.return_type != imp.return_type:
+            msg = 'return-type mismatch for %s; got %s'
+            raise TypeError(msg % (defn, imp.return_type))
 
+        if imp.is_parametric:           # is parametric
+            self.prmlib[imp.funcobj].append(imp)
+        else:                           # is non-parametric
             self.implib[defn] = imp
 
     def get(self, funcdef):
-        if funcdef not in self.prmlib:
-            return self.implib[funcdef]
-        else:
-            return self.prmlib[funcdef]
+        if funcdef.funcobj in self.prmlib:
+            versions = self.prmlib[funcdef.funcobj]
+
+            for ver in versions:
+                for a, b in zip(ver.args, funcdef.args):
+                    if not (a is None or a == b):
+                        break
+                else:
+                    return ver
+
+        return self.implib[funcdef]
 
     def populate_builtin(self):
         populate_builtin_impl(self)
@@ -43,7 +50,8 @@ class Imp(object):
         self.funcobj = funcobj
         self.args = args
         self.return_type = return_type
-        self.is_parametric = (return_type is None)
+        self.is_parametric = ((return_type is None) or
+                                any(a is None for a in args))
 
     def __call__(self, builder, args, argtys, retty):
         if self.is_parametric:
@@ -448,6 +456,15 @@ def array_getitem_tuple(builder, args, argtys, retty):
     return aryutils.getitem(builder, ary, indices=indices,
                             order=aryty.desc.order)
 
+# array setitem
+def array_setitem_intp(builder, args, argtys, retty):
+    ary, idx, val = args
+    aryty, indty, valty = argtys
+    if valty != aryty.desc.element:
+        val = valty.llvm_cast(builder, val, aryty.desc.element)
+    aryutils.setitem(builder, ary, indices=[idx], order=aryty.desc.order,
+                     value=val)
+
 #----------------------------------------------------------------------------
 # utils
 
@@ -598,6 +615,11 @@ def populate_builtin_impl(implib):
                  args=(types.ArrayKind, types.intp))]
     imps += [Imp(array_getitem_tuple, operator.getitem,
                  args=(types.ArrayKind, types.TupleKind))]
+
+    # array setitem
+    imps += [Imp(array_setitem_intp, operator.setitem,
+                 args=(types.ArrayKind, types.intp, None),
+                 return_type=types.void)]
 
     # --------------------------
 
