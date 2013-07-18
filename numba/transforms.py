@@ -1023,8 +1023,8 @@ class LateSpecializer(ResolveCoercions,
 
         elif node.type.is_datetime:
             year = nodes.ConstNode(constant.year, node.type.base_type)
-            month = nodes.ConstNode(constant.year, node.type.base_type)
-            day = nodes.ConstNode(constant.year, node.type.base_type)
+            month = nodes.ConstNode(constant.month, node.type.base_type)
+            day = nodes.ConstNode(constant.day, node.type.base_type)
             node = nodes.DateTimeNode(year, month, day)
 
         elif node.type.is_pointer and not node.type.is_string:

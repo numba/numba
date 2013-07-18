@@ -1524,6 +1524,18 @@ class TypeInferer(visitors.NumbaTransformer):
 
         return result_type
 
+    def _resolve_datetime_attribute(self, node, type):
+        # TODO: make datetime a struct type
+        if node.attr in ('year', 'month', 'day'):
+            if self.is_store(node.ctx):
+                raise TypeError("Cannot assign to the %s attribute of "
+                                "datetime numbers" % node.attr)
+            result_type = getattr(type, node.attr)
+        else:
+            raise AttributeError("'%s' of datetime type" % node.attr)
+
+        return result_type
+
     def visit_Attribute(self, node, visitchildren=True):
         if visitchildren:
             node.value = self.visit(node.value)
@@ -1536,6 +1548,8 @@ class TypeInferer(visitors.NumbaTransformer):
             result_type = typesystem.method(type, 'conjugate')
         elif type.is_complex:
             result_type = self._resolve_complex_attribute(node, type)
+        elif type.is_datetime:
+            result_type = self._resolve_datetime_attribute(node, type)
         elif type.is_struct or (type.is_reference and
                                 type.referenced_type.is_struct):
             return self._resolve_struct_attribute(node, type)
