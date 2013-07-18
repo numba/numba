@@ -323,6 +323,9 @@ class SymbolicExecution(object):
     def op_UNARY_NOT(self, inst):
         self.unary_op(operator.not_)
 
+    def op_BINARY_SUBSCR(self, inst):
+        self.binary_op(operator.getitem)
+
     def op_BINARY_ADD(self, inst):
         self.binary_op(operator.add)
 

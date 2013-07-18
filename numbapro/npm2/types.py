@@ -43,7 +43,7 @@ class Type(object):
         else:
             ret = self.desc.llvm_as_argument()
         if ret is None:
-            raise TypeError('%s cannot be used as argument type')
+            raise TypeError('%s cannot be used as argument type' % self)
         return ret
 
     def llvm_as_return(self):
@@ -52,7 +52,7 @@ class Type(object):
         else:
             ret = self.desc.llvm_as_return()
         if ret is None:
-            raise TypeError('%s cannot be used as return type')
+            raise TypeError('%s cannot be used as return type' % self)
         return ret
 
     def llvm_value_from_arg(self, builder, arg):
@@ -70,11 +70,11 @@ class Type(object):
             raise TypeError('%s cannot be casted to %s' % (self, dst))
         return ret
 
-    def llvm_const(self, builder, value):
+    def llvm_const(self, value):
         if not hasattr(self.desc, 'llvm_const'):
             raise TypeError('%s does not support constant value' % self)
         else:
-            return self.desc.llvm_const(builder, value)
+            return self.desc.llvm_const(value)
 
     def ctype_as_argument(self):
         if not hasattr(self.desc, 'ctype_as_argument'):
@@ -125,6 +125,27 @@ class Type(object):
     def __ne__(self, other):
         return not self.__eq__(other)
 
+class Kind(object):
+    def __init__(self, desc):
+        self.desc = desc
+
+    def __hash__(self):
+        return hash((type(self), self.desc))
+
+    def __eq__(self, other):
+        if isinstance(other, Kind):
+            return self.desc == other.desc
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def matches(self, other):
+        if isinstance(other, Type):
+            return self.desc is type(other.desc)
+
+    def __repr__(self):
+        return '<kind %s>' % self.desc.__name__
+
 class Boolean(object):
     fields = ()
 
@@ -144,7 +165,7 @@ class Boolean(object):
     def llvm_as_value(self):
         return lc.Type.int(1)
 
-    def llvm_const(self, builder, value):
+    def llvm_const(self, value):
         return lc.Constant.int(self.llvm_as_value(), value)
 
     def llvm_cast(self, builder, value, dst):
@@ -154,7 +175,7 @@ class Boolean(object):
             return self.builder.uitofp(value, dst.llvm_as_value())
         elif isinstance(dst, Complex):
             freal = self.llvm_cast(builder, value, dst.element.desc)
-            fimag = dst.element.llvm_const(builder, 0)
+            fimag = dst.element.llvm_const(0)
             return dst.llvm_pack(builder, freal, fimag)
 
 class Integer(object):
@@ -196,7 +217,7 @@ class Signed(Integer):
     def __init__(self, bitwidth):
         super(Signed, self).__init__(True, bitwidth)
 
-    def llvm_const(self, builder, value):
+    def llvm_const(self, value):
         return lc.Constant.int_signextend(self.llvm_as_value(), value)
 
     def llvm_cast(self, builder, value, dst):
@@ -209,10 +230,10 @@ class Signed(Integer):
             return builder.sitofp(value, dst.llvm_as_value())
         elif isinstance(dst, Complex):
             freal = self.llvm_cast(builder, value, dst.element.desc)
-            fimag = dst.element.llvm_const(builder, 0)
+            fimag = dst.element.llvm_const(0)
             return dst.llvm_pack(builder, freal, fimag)
         elif isinstance(dst, Boolean):
-            zero = self.llvm_const(builder, 0)
+            zero = self.llvm_const(0)
             return builder.icmp(lc.ICMP_NE, value, zero)
 
     def ctype_as_argument(self):
@@ -222,7 +243,7 @@ class Unsigned(Integer):
     def __init__(self, bitwidth):
         super(Unsigned, self).__init__(False, bitwidth)
 
-    def llvm_const(self, builder, value):
+    def llvm_const(self, value):
         return lc.Constant.int(self.llvm_as_value(), value)
     
     def llvm_cast(self, builder, value, dst):
@@ -235,10 +256,10 @@ class Unsigned(Integer):
             return builder.uitofp(value, dst.llvm_as_value())
         elif isinstance(dst, Complex):
             freal = self.llvm_cast(builder, value, dst.element.desc)
-            fimag = dst.element.llvm_const(builder, 0)
+            fimag = dst.element.llvm_const(0)
             return dst.llvm_pack(builder, freal, fimag)
         elif isinstance(dst, Boolean):
-            zero = self.llvm_const(builder, 0)
+            zero = self.llvm_const(0)
             return builder.icmp(lc.ICMP_NE, value, zero)
 
     def ctype_as_argument(self):
@@ -267,7 +288,7 @@ class Float(object):
     def llvm_as_value(self):
         return {32: lc.Type.float(), 64: lc.Type.double()}[self.bitwidth]
 
-    def llvm_const(self, builder, value):
+    def llvm_const(self, value):
         return lc.Constant.real(self.llvm_as_value(), value)
 
     def llvm_cast(self, builder, value, dst):
@@ -281,7 +302,7 @@ class Float(object):
                 return builder.fptrunc(value, dst.llvm_as_value())
         elif isinstance(dst, Complex):
             elem = self.llvm_cast(builder, value, dst.element.desc)
-            zero = dst.element.desc.llvm_const(builder, 0)
+            zero = dst.element.desc.llvm_const(0)
             return dst.llvm_pack(builder, elem, zero)
         elif isinstance(dst, Boolean):
             zero = lc.Constant.real(value.type, 0)
@@ -330,10 +351,10 @@ class Complex(object):
     def llvm_as_argument(self):
         return lc.Type.pointer(self.llvm_as_value())
 
-    def llvm_const(self, builder, value):
-        real = self.element.llvm_const(builder, value.real)
-        imag = self.element.llvm_const(builder, value.imag)
-        return self.llvm_pack(builder, real, imag)
+    def llvm_const(self, value):
+        real = self.element.llvm_const(value.real)
+        imag = self.element.llvm_const(value.imag)
+        return lc.Constant.struct([real, imag])
 
     def llvm_cast(self, builder, value, dst):
         if isinstance(dst, Complex):
@@ -375,21 +396,54 @@ class Complex(object):
         return real, imag
 
 class Array(object):
-    fields = 'element', 'shape', 'layout'
+    fields = 'element', 'ndim', 'order'
     
-    def __init__(self, element, shape, layout):
-        assert isinstance(shape, tuple)
-        assert layout in 'CFA'
-        self.shape = shape
+    def __init__(self, element, ndim, order):
+        assert order in 'CFA'
+        self.ndim = ndim
         self.element = element
-        self.layout = layout
+        self.order = order
 
     def coerce(self, other):
         return (self == other)
 
     def __repr__(self):
-        return 'complex%d' % self.bitwidth
+        return 'array(%s, %s, %s)' % (self.element, self.ndim, self.order)
 
+    def llvm_as_value(self):
+        lelem = lc.Type.pointer(self.element.llvm_as_value())
+        lintp = intp.llvm_as_value()
+        shapestrides = lc.Type.array(lintp, self.ndim)
+        return lc.Type.struct([lelem, shapestrides, shapestrides])
+
+    def llvm_as_argument(self):
+        return lc.Type.pointer(self.llvm_as_value())
+
+    def llvm_value_from_arg(self, builder, arg):
+        return builder.load(arg)
+
+    def llvm_as_return(self):
+        '''does not support returning an array
+        '''
+        return
+
+    def ctype_as_argument(self):
+        return ct.c_void_p
+
+    def ctype_pack_argument(self, ary):
+        c_intp = intp.ctype_as_argument()
+
+        class c_array(ct.Structure):
+            _fields_ = [('data',    ct.c_void_p),
+                        ('shape',   c_intp * ary.ndim),
+                        ('strides', c_intp * ary.ndim)]
+
+        ary = c_array(data=ary.ctypes.data,
+                      shape=ary.ctypes.shape,
+                      strides=ary.ctypes.strides)
+        return ct.byref(ary)
+
+ArrayKind = Kind(Array)
 
 class BuiltinObject(object):
     fields = 'name',
@@ -435,7 +489,9 @@ float64 = Type(Float(64))
 complex64 = Type(Complex(64))
 complex128 = Type(Complex(128))
 
-def arraytype(element, shape, layout):
-    return Type(Array(element, shape, layout))
+def arraytype(element, ndim, layout):
+    return Type(Array(element, ndim, layout))
+
+
 
 intp = {4: int32, 8: int64}[tuple.__itemsize__]

@@ -1,42 +1,55 @@
 from contextlib import contextmanager
 import operator
 import llvm.core as lc
-from . import typesets, types
+from . import typesets, types, aryutils
 
 class ImpLib(object):
     def __init__(self, funclib):
         self.funclib = funclib
         self.implib = {}
+        self.prmlib = {}
 
     def define(self, imp):
         defn = self.funclib.lookup(imp.funcobj, imp.args)
         if defn is None:
-            from pprint import pprint
-            pprint(self.implib)
             msg = 'no matching definition for %s(%s)'
             raise TypeError(msg % (imp.funcobj, ', '.join(map(str, imp.args))))
-        if defn.return_type != imp.return_type:
-            msg = ('return-type mismatch for %s; '
-                   'got %s')
-            raise TypeError(msg % (defn, imp.return_type))
-        self.implib[defn] = imp
+
+        if callable(defn.return_type):  # is parametric
+            assert imp.return_type is None
+            self.prmlib[defn] = imp
+        else:                           # is non-parametric
+            if defn.return_type != imp.return_type:
+                msg = ('return-type mismatch for %s; '
+                       'got %s')
+                raise TypeError(msg % (defn, imp.return_type))
+
+            self.implib[defn] = imp
 
     def get(self, funcdef):
-        return self.implib[funcdef]
+        if funcdef not in self.prmlib:
+            return self.implib[funcdef]
+        else:
+            return self.prmlib[funcdef]
 
     def populate_builtin(self):
         populate_builtin_impl(self)
 
 class Imp(object):
-    def __init__(self, impl, funcobj, args, return_type):
+    __slots__ = 'impl', 'funcobj', 'args', 'return_type', 'is_parametric'
+
+    def __init__(self, impl, funcobj, args, return_type=None):
         self.impl = impl
         self.funcobj = funcobj
         self.args = args
         self.return_type = return_type
+        self.is_parametric = (return_type is None)
 
-    def __call__(self, builder, args):
-        return self.impl(builder, args)
-
+    def __call__(self, builder, args, argtys, retty):
+        if self.is_parametric:
+            return self.impl(builder, args, argtys, retty)
+        else:
+            return self.impl(builder, args)
 
     def __repr__(self):
         return '<Impl %s %s -> %s >' % (self.funcobj, self.args,
@@ -196,21 +209,21 @@ def imp_xor_integer(builder, args):
 def imp_neg_signed(ty):
     def imp(builder, args):
         x, = args
-        zero = ty.llvm_const(builder, 0)
+        zero = ty.llvm_const(0)
         return imp_sub_integer(builder, (zero, x))
     return imp
 
 def imp_neg_float(ty):
     def imp(builder, args):
         x, = args
-        zero = ty.llvm_const(builder, 0)
+        zero = ty.llvm_const(0)
         return imp_sub_float(builder, (zero, x))
     return imp
 
 def imp_neg_complex(ty):
     def imp(builder, args):
         x, = args
-        zero = ty.llvm_const(builder, 0)
+        zero = ty.llvm_const(0)
         return imp_sub_complex(ty)(builder, (zero, x))
     return imp
 
@@ -298,14 +311,14 @@ def make_range_obj(builder, start, stop, step):
 def imp_range_1(builder, args):
     assert len(args) == 1
     (stop,) = args
-    start = types.intp.llvm_const(builder, 0)
-    step = types.intp.llvm_const(builder, 1)
+    start = types.intp.llvm_const(0)
+    step = types.intp.llvm_const(1)
     return make_range_obj(builder, start, stop, step)
 
 def imp_range_2(builder, args):
     assert len(args) == 2
     start, stop = args
-    step = types.intp.llvm_const(builder, 1)
+    step = types.intp.llvm_const(1)
     return make_range_obj(builder, start, stop, step)
 
 def imp_range_3(builder, args):
@@ -324,14 +337,14 @@ def imp_range_iter(builder, args):
 
 def imp_range_valid(builder, args):
     ptr, = args
-    idx0 = types.int32.llvm_const(builder, 0)
-    idx1 = types.int32.llvm_const(builder, 1)
-    idx2 = types.int32.llvm_const(builder, 2)
+    idx0 = types.int32.llvm_const(0)
+    idx1 = types.int32.llvm_const(1)
+    idx2 = types.int32.llvm_const(2)
     start = builder.load(builder.gep(ptr, [idx0, idx0]))
     stop = builder.load(builder.gep(ptr, [idx0, idx1]))
     step = builder.load(builder.gep(ptr, [idx0, idx2]))
 
-    zero = types.intp.llvm_const(builder, 0)
+    zero = types.intp.llvm_const(0)
     positive = builder.icmp(lc.ICMP_SGE, step, zero)
     posok = builder.icmp(lc.ICMP_SLT, start, stop)
     negok = builder.icmp(lc.ICMP_SGT, start, stop)
@@ -340,8 +353,8 @@ def imp_range_valid(builder, args):
 
 def imp_range_next(builder, args):
     ptr, = args
-    idx0 = types.int32.llvm_const(builder, 0)
-    idx2 = types.int32.llvm_const(builder, 2)
+    idx0 = types.int32.llvm_const(0)
+    idx2 = types.int32.llvm_const(2)
     startptr = builder.gep(ptr, [idx0, idx0])
     start = builder.load(startptr)
     step = builder.load(builder.gep(ptr, [idx0, idx2]))
@@ -379,7 +392,7 @@ def complex_attributes(complex_type):
 def imp_complex_ctor_1(ty):
     def imp(builder, args):
         real, = args
-        imag = ty.desc.element.llvm_const(builder, 0)
+        imag = ty.desc.element.llvm_const(0)
         return ty.desc.llvm_pack(builder, real, imag)
     return imp
 
@@ -413,6 +426,12 @@ def imp_cast_float(fromty):
         x, = args
         return fromty.llvm_cast(builder, x, types.float64)
     return imp
+
+# array getitem
+def array_getitem(builder, args, argtys, retty):
+    ary, idx = args
+    aryty = argtys[0]
+    return aryutils.getitem(builder, ary, indices=[idx], order=aryty.desc.order)
 
 #----------------------------------------------------------------------------
 # utils
@@ -560,7 +579,12 @@ def populate_builtin_impl(implib):
     imps += casting_imp(float, imp_cast_float, types.float64,
                    typesets.integer_set|typesets.float_set|typesets.complex_set)
 
+    # array getitem
+    imps += [Imp(array_getitem, operator.getitem,
+                 args=(types.ArrayKind, types.intp))]
+
     # --------------------------
+
 
     for imp in imps:
         implib.define(imp)
