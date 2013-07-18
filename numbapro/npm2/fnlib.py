@@ -259,7 +259,10 @@ builtins = {
     int:   int_ctor(integer_set|float_set|complex_set),
     float: float_ctor(integer_set|float_set|complex_set),
 
-    operator.getitem: [((types.ArrayKind, types.intp), array_getitem_return)]
+    operator.getitem: [((types.ArrayKind, types.intp),
+                            array_getitem_return),
+                       ((types.ArrayKind, types.TupleKind),
+                            array_getitem_return),]
 }
 
 def get_builtin_function_library(lib=None):

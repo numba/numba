@@ -428,10 +428,25 @@ def imp_cast_float(fromty):
     return imp
 
 # array getitem
-def array_getitem(builder, args, argtys, retty):
+def array_getitem_intp(builder, args, argtys, retty):
     ary, idx = args
     aryty = argtys[0]
     return aryutils.getitem(builder, ary, indices=[idx], order=aryty.desc.order)
+
+def array_getitem_tuple(builder, args, argtys, retty):
+    ary, idx = args
+    aryty, idxty = argtys
+    indices = []
+
+    indexty = types.intp
+    for i, ety in enumerate(idxty.desc.elements):
+        elem = idxty.desc.llvm_getitem(builder, idx, i)
+        if ety != indexty:
+            elem = ety.llvm_cast(builder, elem, indexty)
+        indices.append(elem)
+
+    return aryutils.getitem(builder, ary, indices=indices,
+                            order=aryty.desc.order)
 
 #----------------------------------------------------------------------------
 # utils
@@ -527,7 +542,6 @@ def populate_builtin_impl(implib):
     # bool gt
     for cmp in [operator.gt, operator.ge, operator.lt, operator.le,
                 operator.eq, operator.ne]:
-#    for cmp in [operator.gt]:
         imps += bool_op_imp(cmp, imp_cmp_signed,   typesets.signed_set)
         imps += bool_op_imp(cmp, imp_cmp_unsigned, typesets.unsigned_set)
         imps += bool_op_imp(cmp, imp_cmp_float,    typesets.float_set)
@@ -580,8 +594,10 @@ def populate_builtin_impl(implib):
                    typesets.integer_set|typesets.float_set|typesets.complex_set)
 
     # array getitem
-    imps += [Imp(array_getitem, operator.getitem,
+    imps += [Imp(array_getitem_intp, operator.getitem,
                  args=(types.ArrayKind, types.intp))]
+    imps += [Imp(array_getitem_tuple, operator.getitem,
+                 args=(types.ArrayKind, types.TupleKind))]
 
     # --------------------------
 

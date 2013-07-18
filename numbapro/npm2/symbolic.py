@@ -288,6 +288,12 @@ class SymbolicExecution(object):
         scope = self.scopes[-1]
         self.jump(target=self.blocks[scope[1]])
 
+    def op_BUILD_TUPLE(self, inst):
+        count = inst.arg
+        items = [self.pop() for _ in range(count)]
+        ordered = [i for i in reversed(items)]
+        self.push_insert('tuple', items=ordered)
+
     def op_LOAD_ATTR(self, inst):
         attr = self.names[inst.arg]
         obj = self.pop()

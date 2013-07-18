@@ -445,6 +445,39 @@ class Array(object):
 
 ArrayKind = Kind(Array)
 
+class Tuple(object):
+    fields = 'elements',
+
+    def __init__(self, elements):
+        self.elements = map(Type, elements)
+
+    def coerce(self, other):
+        if isinstance(other, Tuple):
+            return 0
+
+    def __repr__(self):
+        return 'tuple(%s)' % (', '.join(repr(e) for e in self.elements))
+
+    def llvm_as_value(self):
+        return lc.Type.struct([t.llvm_as_value() for t in self.elements])
+
+    def llvm_as_argument(self):
+        return
+
+    def llvm_as_return(self):
+        return
+
+    def llvm_pack(self, builder, items):
+        out = lc.Constant.undef(self.llvm_as_value())
+        for i, item in enumerate(items):
+            out = builder.insert_value(out, item, i)
+        return out
+
+    def llvm_getitem(self, builder, tupleobj, index):
+        return builder.extract_value(tupleobj, index)
+
+TupleKind = Kind(Tuple)
+
 class BuiltinObject(object):
     fields = 'name',
     
@@ -457,6 +490,7 @@ class BuiltinObject(object):
 
     def __repr__(self):
         return '<builtin %s>' % self.name
+
 
 module_type = Type(BuiltinObject('module'))
 function_type = Type(BuiltinObject('function'))
@@ -492,6 +526,7 @@ complex128 = Type(Complex(128))
 def arraytype(element, ndim, layout):
     return Type(Array(element, ndim, layout))
 
-
+def tupletype(*elements):
+    return Type(Tuple(elements))
 
 intp = {4: int32, 8: int64}[tuple.__itemsize__]

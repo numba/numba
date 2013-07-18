@@ -143,3 +143,7 @@ class Infer(object):
         for val in inst.phi.values():
             self.phimap[val] = ty
         return ty
+
+    def op_tuple(self, inst):
+        return types.tupletype(*(i.type for i in inst.items))
+

@@ -152,3 +152,7 @@ class CodeGen(object):
         if len(values) == 1:
             return self.valmap[values[0]]
         assert False
+
+    def op_tuple(self, inst):
+        values = [self.valmap[i] for i in inst.items]
+        return inst.type.desc.llvm_pack(self.builder, values)
