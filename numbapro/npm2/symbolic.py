@@ -208,12 +208,12 @@ class SymbolicExecution(object):
 
     def op_JUMP_IF_TRUE(self, inst):
         falsebr = self.blocks[inst.next]
-        truebr = self.blocks[inst.arg]
+        truebr = self.blocks[inst.next + inst.arg]
         self.jump_if(self.peek(), truebr, falsebr)
 
     def op_JUMP_IF_FALSE(self, inst):
         truebr = self.blocks[inst.next]
-        falsebr = self.blocks[inst.arg]
+        falsebr = self.blocks[inst.next + inst.arg]
         self.jump_if(self.peek(), truebr, falsebr)
 
     def op_JUMP_IF_TRUE_OR_POP(self, inst):
@@ -266,6 +266,9 @@ class SymbolicExecution(object):
 
     def op_GET_ITER(self, inst):
         self.call(iter, args=(self.pop(),))
+
+    def op_POP_TOP(self, inst):
+        self.pop()
 
     def op_FOR_ITER(self, inst):
         iterobj = self.peek()
@@ -583,7 +586,8 @@ class Block(object):
 
         ins = ', '.join(str(b.offset) for b in self.incoming_blocks)
         head = ["block %4d        ; incoming %s" % (self.offset, ins)]
-        body = ["    {!r:<20} = {!s}".format(c, wrap(str(c))) for c in self.code]
+        body = ["    {0!r:<20} = {1!s}".format(c, wrap(str(c)))
+                for c in self.code]
         tail = ["    %s\n" % wrap(str(self.terminator), w=4)]
         buf = head + body + tail
         return '\n'.join(buf)
@@ -613,7 +617,7 @@ class Inst(object):
         if self.attrs:
             keys, vals = zip(*sorted(self.list_attrs()))
             max_key_len = max(len(k) for k in keys)
-            keycolfmt = '{!s:<%d} = {!r}' % (max_key_len)
+            keycolfmt = '{0!s:<%d} = {1!r}' % (max_key_len)
             rows = [keycolfmt.format(k, v) for k, v in zip(keys, vals)]
             out = '\n'.join([head + rows[0]] +
                             [_indent(r, w) for r in rows[1:]])

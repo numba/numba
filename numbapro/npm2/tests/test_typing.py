@@ -3,7 +3,7 @@ import itertools
 from pprint import pprint
 from numbapro.npm2.symbolic import SymbolicExecution
 from numbapro.npm2.typing import Infer
-from numbapro.npm2 import types, funclib
+from numbapro.npm2 import types, fnlib
 from .support import testcase, main
 
 
@@ -49,13 +49,13 @@ def test_infer():
         print blk
 
     intp = types.int64
-    fnlib = funclib.get_builtin_function_library()
+    funclib = fnlib.get_builtin_function_library()
 
     infer = Infer(func = se.func,
                   blocks = se.blocks,
                   args = {'a': types.int32, 'b': types.int32},
                   return_type = types.int32,
-                  funclib = fnlib)
+                  funclib = funclib)
     infer.infer()
     
     for blk in se.blocks:
