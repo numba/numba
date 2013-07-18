@@ -334,8 +334,8 @@ class ResolveCoercions(visitors.NumbaTransformer):
                 datetime_value = nodes.CloneableNode(node.node)
                 args = [
                     nodes.DateTimeAttributeNode(datetime_value, 'year'),
-                    nodes.DateTimeAttributeNode(datetime_value, 'month'),
-                    nodes.DateTimeAttributeNode(datetime_value, 'day')
+                    nodes.DateTimeAttributeNode(datetime_value.clone, 'month'),
+                    nodes.DateTimeAttributeNode(datetime_value.clone, 'day')
                 ]
                 new_node = function_util.utility_call(
                         self.context, self.llvm_module,
@@ -1022,9 +1022,10 @@ class LateSpecializer(ResolveCoercions,
             node = nodes.ComplexNode(real, imag)
 
         elif node.type.is_datetime:
-            year = nodes.ConstNode(constant.year, node.type.base_type)
-            month = nodes.ConstNode(constant.month, node.type.base_type)
-            day = nodes.ConstNode(constant.day, node.type.base_type)
+            # JNB: not sure what to do here for datetime value
+            year = nodes.ConstNode(0, int64)
+            month = nodes.ConstNode(0, int32)
+            day = nodes.ConstNode(0, int32)
             node = nodes.DateTimeNode(year, month, day)
 
         elif node.type.is_pointer and not node.type.is_string:
