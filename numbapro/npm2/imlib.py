@@ -77,8 +77,8 @@ def imp_add_complex(dtype):
     def imp(builder, args):
         a, b = args
 
-        a_real, a_imag = dtype.desc.llvm_unpack(builder, a)
-        b_real, b_imag = dtype.desc.llvm_unpack(builder, b)
+        a_real, a_imag = dtype.llvm_unpack(builder, a)
+        b_real, b_imag = dtype.llvm_unpack(builder, b)
 
         c_real = imp_add_float(builder, (a_real, b_real))
         c_imag = imp_add_float(builder, (a_imag, b_imag))
@@ -100,8 +100,8 @@ def imp_sub_complex(dtype):
     def imp(builder, args):
         a, b = args
 
-        a_real, a_imag = dtype.desc.llvm_unpack(builder, a)
-        b_real, b_imag = dtype.desc.llvm_unpack(builder, b)
+        a_real, a_imag = dtype.llvm_unpack(builder, a)
+        b_real, b_imag = dtype.llvm_unpack(builder, b)
 
         c_real = imp_sub_float(builder, (a_real, b_real))
         c_imag = imp_sub_float(builder, (a_imag, b_imag))
@@ -127,8 +127,8 @@ def imp_mul_complex(dtype):
     def imp(builder, args):
         x, y = args
 
-        a, b = dtype.desc.llvm_unpack(builder, x)
-        c, d = dtype.desc.llvm_unpack(builder, y)
+        a, b = dtype.llvm_unpack(builder, x)
+        c, d = dtype.llvm_unpack(builder, y)
 
         ac = imp_mul_float(builder, (a, c))
         bd = imp_mul_float(builder, (b, d))
@@ -297,8 +297,8 @@ def imp_cmp_float(cmp, ty):
 def imp_cmp_complex(cmp, ty):
     def imp(builder, args):
         a, b = args
-        areal, aimag = ty.desc.llvm_unpack(a)
-        breal, bimag = ty.desc.llvm_unpack(b)
+        areal, aimag = ty.llvm_unpack(a)
+        breal, bimag = ty.llvm_unpack(b)
         cmptor = imp_cmp_float(cmp, ty.desc.element)
         c = cmptor(areal, breal)
         d = cmptor(aimag, bimag)
@@ -376,14 +376,14 @@ def imp_range_next(builder, args):
 def imp_complex_real(ty):
     def imp(builder, args):
         value, = args
-        real, imag = ty.desc.llvm_unpack(builder, value)
+        real, imag = ty.llvm_unpack(builder, value)
         return real
     return imp
 
 def imp_complex_imag(ty):
     def imp(builder, args):
         value, = args
-        real, imag = ty.desc.llvm_unpack(builder, value)
+        real, imag = ty.llvm_unpack(builder, value)
         return imag
     return imp
 

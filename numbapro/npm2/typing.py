@@ -123,7 +123,7 @@ class Infer(object):
         elif isinstance(inst.value, int):
             return types.intp
         else:
-            raise ValueError("invalid constant value %s" % inst.value)
+            raise ValueError("invalid constant value %s" % (inst.value,))
 
     def op_global(self, inst):
         glbl = self.func.func_globals
