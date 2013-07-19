@@ -1,6 +1,6 @@
 from .support import testcase, main
 from ..compiler import compile
-from ..types import uint32, float32, arraytype
+from ..types import uint32, float32, arraytype, void
 import numpy as np
 
 def diagproduct(c, a, b, data):
@@ -27,7 +27,7 @@ def test_for_precondition():
     C.fill(-1)
     data = np.array([0, 1], dtype=np.uint32)
 
-    func = compile(diagproduct, None, [arraytype(float32, 2, 'C'),
+    func = compile(diagproduct, void, [arraytype(float32, 2, 'C'),
                                     arraytype(float32, 2, 'C'),
                                     arraytype(float32, 1, 'C'),
                                     arraytype(uint32, 1, 'C')])

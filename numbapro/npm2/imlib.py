@@ -482,6 +482,47 @@ def array_setitem_intp(builder, args, argtys, retty):
     aryutils.setitem(builder, ary, indices=[idx], order=aryty.desc.order,
                      value=val)
 
+def array_setitem_tuple(builder, args, argtys, retty):
+    ary, idx, val = args
+    aryty, indty, valty = argtys
+
+    indexty = types.intp
+    indices = []
+    for i, ety in enumerate(indty.desc.elements):
+        elem = indty.desc.llvm_getitem(builder, idx, i)
+        if ety != indexty:
+            elem = ety.llvm_cast(builder, elem, indexty)
+        indices.append(elem)
+
+    if valty != aryty.desc.element:
+        val = valty.llvm_cast(builder, val, aryty.desc.element)
+
+    aryutils.setitem(builder, ary, indices=indices,
+                     order=aryty.desc.order,
+                     value=val)
+
+
+def array_setitem_fixedarray(builder, args, argtys, retty):
+    ary, idx, val = args
+    aryty, indty, valty = argtys
+
+    indexty = types.intp
+    ety = indty.desc.element
+    indices = []
+    for i in range(indty.desc.length):
+        elem = indty.desc.llvm_getitem(builder, idx, i)
+        if ety != indexty:
+            elem = ety.llvm_cast(builder, elem, indexty)
+        indices.append(elem)
+
+    if valty != aryty.desc.element:
+        val = valty.llvm_cast(builder, val, aryty.desc.element)
+
+    aryutils.setitem(builder, ary, indices=indices,
+                     order=aryty.desc.order,
+                     value=val)
+
+
 # array shape strides size
 def array_shape(builder, args, argtys, retty):
     ary, = args
@@ -690,6 +731,12 @@ def populate_builtin_impl(implib):
     # array setitem
     imps += [Imp(array_setitem_intp, operator.setitem,
                  args=(types.ArrayKind, types.intp, None),
+                 return_type=types.void)]
+    imps += [Imp(array_setitem_tuple, operator.setitem,
+                 args=(types.ArrayKind, types.TupleKind, None),
+                 return_type=types.void)]
+    imps += [Imp(array_setitem_fixedarray, operator.setitem,
+                 args=(types.ArrayKind, types.FixedArrayKind, None),
                  return_type=types.void)]
 
     # array .shape, .strides, .size, .ndim
