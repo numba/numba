@@ -674,174 +674,175 @@ def minmax_imp(funcobj, imp, typeset, count):
     return [Imp(imp(ty), funcobj, args=(ty,) * count, return_type=ty)
             for ty in typeset]
 
+# --------------------------
+
+builtins = []
+
+# binary add
+builtins += binary_op_imp(operator.add, imp_add_integer, typesets.integer_set)
+builtins += binary_op_imp(operator.add, imp_add_float, typesets.float_set)
+builtins += binary_op_imp(operator.add, imp_add_complex(types.complex64),
+                      [types.complex64])
+builtins += binary_op_imp(operator.add, imp_add_complex(types.complex128),
+                      [types.complex128])
+
+# binary sub
+builtins += binary_op_imp(operator.sub, imp_sub_integer, typesets.integer_set)
+builtins += binary_op_imp(operator.sub, imp_sub_float, typesets.float_set)
+builtins += binary_op_imp(operator.sub, imp_sub_complex(types.complex64),
+                      [types.complex64])
+builtins += binary_op_imp(operator.sub, imp_sub_complex(types.complex128),
+                      [types.complex128])
+
+# binary mul
+builtins += binary_op_imp(operator.mul, imp_mul_integer, typesets.integer_set)
+builtins += binary_op_imp(operator.mul, imp_mul_float, typesets.float_set)
+builtins += binary_op_imp(operator.mul, imp_mul_complex(types.complex64),
+                      [types.complex64])
+builtins += binary_op_imp(operator.mul, imp_mul_complex(types.complex128),
+                      [types.complex128])
+
+# binary floordiv
+builtins += binary_op_imp(operator.floordiv, imp_floordiv_signed,
+                      typesets.signed_set)
+builtins += binary_op_imp(operator.floordiv, imp_floordiv_unsigned,
+                      typesets.unsigned_set)
+builtins += floordiv_imp(operator.floordiv, imp_floordiv_float,
+                     types.float32, types.int32)
+builtins += floordiv_imp(operator.floordiv, imp_floordiv_float,
+                     types.float64, types.int64)
+
+# binary truediv
+builtins += binary_op_imp(operator.truediv, imp_truediv_float,
+                      typesets.float_set)
+
+# binary mod
+builtins += binary_op_imp(operator.mod, imp_mod_signed, typesets.signed_set)
+builtins += binary_op_imp(operator.mod, imp_mod_unsigned, typesets.unsigned_set)
+builtins += binary_op_imp(operator.mod, imp_mod_float, typesets.float_set)
+
+# binary lshift
+builtins += binary_op_imp(operator.lshift, imp_lshift_integer,
+                      typesets.integer_set)
+# binary rshift
+builtins += binary_op_imp(operator.rshift, imp_rshift_signed,
+                      typesets.signed_set)
+builtins += binary_op_imp(operator.rshift, imp_rshift_unsigned,
+                      typesets.unsigned_set)
+
+# binary and
+builtins += binary_op_imp(operator.and_, imp_and_integer,
+                      typesets.integer_set)
+
+# binary or
+builtins += binary_op_imp(operator.or_, imp_or_integer,
+                      typesets.integer_set)
+
+# binary xor
+builtins += binary_op_imp(operator.xor, imp_xor_integer,
+                      typesets.integer_set)
+
+# bool gt
+for cmp in [operator.gt, operator.ge, operator.lt, operator.le,
+            operator.eq, operator.ne]:
+    builtins += bool_op_imp(cmp, imp_cmp_signed,   typesets.signed_set)
+    builtins += bool_op_imp(cmp, imp_cmp_unsigned, typesets.unsigned_set)
+    builtins += bool_op_imp(cmp, imp_cmp_float,    typesets.float_set)
+    builtins += bool_op_imp(cmp, imp_cmp_complex,  typesets.complex_set)
+
+# unary arith negate
+builtins += unary_op_imp(operator.neg, imp_neg_signed, typesets.signed_set)
+builtins += unary_op_imp(operator.neg, imp_neg_float, typesets.float_set)
+builtins += unary_op_imp(operator.neg, imp_neg_complex, typesets.complex_set)
+
+# unary logical negate
+builtins += unary_op_imp(operator.invert, imp_invert_integer,
+                     typesets.integer_set)
+
+# range
+for rangeobj in [range, xrange]:
+    builtins += [Imp(imp_range_1, rangeobj,
+                 args=(types.intp,),
+                 return_type=types.range_type)]
+
+    builtins += [Imp(imp_range_2, rangeobj,
+                 args=(types.intp, types.intp),
+                 return_type=types.range_type)]
+
+    builtins += [Imp(imp_range_3, rangeobj,
+                 args=(types.intp, types.intp, types.intp),
+                 return_type=types.range_type)]
+
+builtins += [Imp(imp_range_iter, iter,
+             args=(types.range_type,),
+             return_type=types.range_iter_type)]
+
+builtins += [Imp(imp_range_valid, 'itervalid',
+             args=(types.range_iter_type,),
+             return_type=types.boolean)]
+
+builtins += [Imp(imp_range_next, 'iternext',
+             args=(types.range_iter_type,),
+             return_type=types.intp)]
+
+# complex attributes
+for complex_type in typesets.complex_set:
+    builtins += complex_attributes(complex_type)
+    builtins += complex_ctor(complex_type)
+
+# casts
+builtins += casting_imp(int, imp_cast_int, types.intp,
+               typesets.integer_set|typesets.float_set|typesets.complex_set)
+builtins += casting_imp(float, imp_cast_float, types.float64,
+               typesets.integer_set|typesets.float_set|typesets.complex_set)
+
+# array getitem
+builtins += [Imp(array_getitem_intp, operator.getitem,
+             args=(types.ArrayKind, types.intp))]
+builtins += [Imp(array_getitem_tuple, operator.getitem,
+             args=(types.ArrayKind, types.TupleKind))]
+builtins += [Imp(array_getitem_fixedarray, operator.getitem,
+             args=(types.ArrayKind, types.FixedArrayKind))]
+
+# array setitem
+builtins += [Imp(array_setitem_intp, operator.setitem,
+             args=(types.ArrayKind, types.intp, None),
+             return_type=types.void)]
+builtins += [Imp(array_setitem_tuple, operator.setitem,
+             args=(types.ArrayKind, types.TupleKind, None),
+             return_type=types.void)]
+builtins += [Imp(array_setitem_fixedarray, operator.setitem,
+             args=(types.ArrayKind, types.FixedArrayKind, None),
+             return_type=types.void)]
+
+# array .shape, .strides, .size, .ndim
+builtins += [Imp(array_shape, '.shape', args=(types.ArrayKind,))]
+builtins += [Imp(array_strides, '.strides', args=(types.ArrayKind,))]
+builtins += [Imp(array_size, '.size', args=(types.ArrayKind,))]
+builtins += [Imp(array_ndim, '.ndim', args=(types.ArrayKind,))]
+
+# fixedarray getitem
+builtins += [Imp(fixedarray_getitem, operator.getitem,
+             args=(types.FixedArrayKind, types.intp))]
+
+# abs
+builtins += unary_op_imp(abs, imp_abs_integer, typesets.integer_set)
+builtins += unary_op_imp(abs, imp_abs_float, typesets.float_set)
+
+# min
+builtins += minmax_imp(min, imp_min_integer, typesets.integer_set, 2)
+builtins += minmax_imp(min, imp_min_integer, typesets.integer_set, 3)
+builtins += minmax_imp(min, imp_min_float, typesets.float_set, 2)
+builtins += minmax_imp(min, imp_min_float, typesets.float_set, 3)
+
+# max
+builtins += minmax_imp(max, imp_max_integer, typesets.integer_set, 2)
+builtins += minmax_imp(max, imp_max_integer, typesets.integer_set, 3)
+builtins += minmax_imp(max, imp_max_float, typesets.float_set, 2)
+builtins += minmax_imp(max, imp_max_float, typesets.float_set, 3)
+
+# --------------------------
 
 def populate_builtin_impl(implib):
-    imps = []
-
-    # binary add
-    imps += binary_op_imp(operator.add, imp_add_integer, typesets.integer_set)
-    imps += binary_op_imp(operator.add, imp_add_float, typesets.float_set)
-    imps += binary_op_imp(operator.add, imp_add_complex(types.complex64),
-                          [types.complex64])
-    imps += binary_op_imp(operator.add, imp_add_complex(types.complex128),
-                          [types.complex128])
-
-    # binary sub
-    imps += binary_op_imp(operator.sub, imp_sub_integer, typesets.integer_set)
-    imps += binary_op_imp(operator.sub, imp_sub_float, typesets.float_set)
-    imps += binary_op_imp(operator.sub, imp_sub_complex(types.complex64),
-                          [types.complex64])
-    imps += binary_op_imp(operator.sub, imp_sub_complex(types.complex128),
-                          [types.complex128])
-    
-    # binary mul
-    imps += binary_op_imp(operator.mul, imp_mul_integer, typesets.integer_set)
-    imps += binary_op_imp(operator.mul, imp_mul_float, typesets.float_set)
-    imps += binary_op_imp(operator.mul, imp_mul_complex(types.complex64),
-                          [types.complex64])
-    imps += binary_op_imp(operator.mul, imp_mul_complex(types.complex128),
-                          [types.complex128])
-
-    # binary floordiv
-    imps += binary_op_imp(operator.floordiv, imp_floordiv_signed,
-                          typesets.signed_set)
-    imps += binary_op_imp(operator.floordiv, imp_floordiv_unsigned,
-                          typesets.unsigned_set)
-    imps += floordiv_imp(operator.floordiv, imp_floordiv_float,
-                         types.float32, types.int32)
-    imps += floordiv_imp(operator.floordiv, imp_floordiv_float,
-                         types.float64, types.int64)
-
-    # binary truediv
-    imps += binary_op_imp(operator.truediv, imp_truediv_float,
-                          typesets.float_set)
-
-    # binary mod
-    imps += binary_op_imp(operator.mod, imp_mod_signed, typesets.signed_set)
-    imps += binary_op_imp(operator.mod, imp_mod_unsigned, typesets.unsigned_set)
-    imps += binary_op_imp(operator.mod, imp_mod_float, typesets.float_set)
-
-    # binary lshift
-    imps += binary_op_imp(operator.lshift, imp_lshift_integer,
-                          typesets.integer_set)
-    # binary rshift
-    imps += binary_op_imp(operator.rshift, imp_rshift_signed,
-                          typesets.signed_set)
-    imps += binary_op_imp(operator.rshift, imp_rshift_unsigned,
-                          typesets.unsigned_set)
-    
-    # binary and
-    imps += binary_op_imp(operator.and_, imp_and_integer,
-                          typesets.integer_set)
-
-    # binary or
-    imps += binary_op_imp(operator.or_, imp_or_integer,
-                          typesets.integer_set)
-
-    # binary xor
-    imps += binary_op_imp(operator.xor, imp_xor_integer,
-                          typesets.integer_set)
-
-    # bool gt
-    for cmp in [operator.gt, operator.ge, operator.lt, operator.le,
-                operator.eq, operator.ne]:
-        imps += bool_op_imp(cmp, imp_cmp_signed,   typesets.signed_set)
-        imps += bool_op_imp(cmp, imp_cmp_unsigned, typesets.unsigned_set)
-        imps += bool_op_imp(cmp, imp_cmp_float,    typesets.float_set)
-        imps += bool_op_imp(cmp, imp_cmp_complex,  typesets.complex_set)
-
-    # unary arith negate
-    imps += unary_op_imp(operator.neg, imp_neg_signed, typesets.signed_set)
-    imps += unary_op_imp(operator.neg, imp_neg_float, typesets.float_set)
-    imps += unary_op_imp(operator.neg, imp_neg_complex, typesets.complex_set)
-
-    # unary logical negate
-    imps += unary_op_imp(operator.invert, imp_invert_integer,
-                         typesets.integer_set)
-
-    # range
-    for rangeobj in [range, xrange]:
-        imps += [Imp(imp_range_1, rangeobj,
-                     args=(types.intp,),
-                     return_type=types.range_type)]
-
-        imps += [Imp(imp_range_2, rangeobj,
-                     args=(types.intp, types.intp),
-                     return_type=types.range_type)]
-
-        imps += [Imp(imp_range_3, rangeobj,
-                     args=(types.intp, types.intp, types.intp),
-                     return_type=types.range_type)]
-
-    imps += [Imp(imp_range_iter, iter,
-                 args=(types.range_type,),
-                 return_type=types.range_iter_type)]
-
-    imps += [Imp(imp_range_valid, 'itervalid',
-                 args=(types.range_iter_type,),
-                 return_type=types.boolean)]
-
-    imps += [Imp(imp_range_next, 'iternext',
-                 args=(types.range_iter_type,),
-                 return_type=types.intp)]
-
-    # complex attributes
-    for complex_type in typesets.complex_set:
-        imps += complex_attributes(complex_type)
-        imps += complex_ctor(complex_type)
-
-    # casts
-    imps += casting_imp(int, imp_cast_int, types.intp,
-                   typesets.integer_set|typesets.float_set|typesets.complex_set)
-    imps += casting_imp(float, imp_cast_float, types.float64,
-                   typesets.integer_set|typesets.float_set|typesets.complex_set)
-
-    # array getitem
-    imps += [Imp(array_getitem_intp, operator.getitem,
-                 args=(types.ArrayKind, types.intp))]
-    imps += [Imp(array_getitem_tuple, operator.getitem,
-                 args=(types.ArrayKind, types.TupleKind))]
-    imps += [Imp(array_getitem_fixedarray, operator.getitem,
-                 args=(types.ArrayKind, types.FixedArrayKind))]
-
-    # array setitem
-    imps += [Imp(array_setitem_intp, operator.setitem,
-                 args=(types.ArrayKind, types.intp, None),
-                 return_type=types.void)]
-    imps += [Imp(array_setitem_tuple, operator.setitem,
-                 args=(types.ArrayKind, types.TupleKind, None),
-                 return_type=types.void)]
-    imps += [Imp(array_setitem_fixedarray, operator.setitem,
-                 args=(types.ArrayKind, types.FixedArrayKind, None),
-                 return_type=types.void)]
-
-    # array .shape, .strides, .size, .ndim
-    imps += [Imp(array_shape, '.shape', args=(types.ArrayKind,))]
-    imps += [Imp(array_strides, '.strides', args=(types.ArrayKind,))]
-    imps += [Imp(array_size, '.size', args=(types.ArrayKind,))]
-    imps += [Imp(array_ndim, '.ndim', args=(types.ArrayKind,))]
-
-    # fixedarray getitem
-    imps += [Imp(fixedarray_getitem, operator.getitem,
-                 args=(types.FixedArrayKind, types.intp))]
-
-    # abs
-    imps += unary_op_imp(abs, imp_abs_integer, typesets.integer_set)
-    imps += unary_op_imp(abs, imp_abs_float, typesets.float_set)
-
-    # min
-    imps += minmax_imp(min, imp_min_integer, typesets.integer_set, 2)
-    imps += minmax_imp(min, imp_min_integer, typesets.integer_set, 3)
-    imps += minmax_imp(min, imp_min_float, typesets.float_set, 2)
-    imps += minmax_imp(min, imp_min_float, typesets.float_set, 3)
-
-    # max
-    imps += minmax_imp(max, imp_max_integer, typesets.integer_set, 2)
-    imps += minmax_imp(max, imp_max_integer, typesets.integer_set, 3)
-    imps += minmax_imp(max, imp_max_float, typesets.float_set, 2)
-    imps += minmax_imp(max, imp_max_float, typesets.float_set, 3)
-
-    # --------------------------
-
-    for imp in imps:
+    for imp in builtins:
         implib.define(imp)
