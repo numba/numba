@@ -28,6 +28,12 @@ class Type(object):
             raise TypeError('can not coerce %s -> %s' % (other, self))
         return ret
 
+    def unpack(self, count):
+        if hasattr(self.desc, 'unpack'):
+            return self.desc.unpack(count)
+        else:
+            raise TypeError('can not unpack %s' % (self))
+
     def try_coerce(self, other):
         return self.desc.coerce(Type(other).desc)
 
@@ -75,6 +81,12 @@ class Type(object):
             raise TypeError('%s does not support constant value' % self)
         else:
             return self.desc.llvm_const(value)
+
+    def llvm_unpack(self, builder, value):
+        if not hasattr(self.desc, 'llvm_unpack'):
+            raise TypeError('%s does not support unpacking' % self)
+        else:
+            return self.desc.llvm_unpack(builder, value)
 
     def ctype_as_argument(self):
         if not hasattr(self.desc, 'ctype_as_argument'):
@@ -490,6 +502,9 @@ class FixedArray(object):
         if isinstance(other, FixedArray):
             return 0
 
+    def unpack(self, count):
+        return (self.element,) * count
+
     def __repr__(self):
         return '[%s x %d]' % (self.element, self.length)
 
@@ -511,6 +526,10 @@ class FixedArray(object):
             assert val.type == out.type.element
             out = builder.insert_value(out, val, i)
         return out
+
+    def llvm_unpack(self, builder, value):
+        return [builder.extract_value(value, i) for i in range(self.length)]
+
 
 FixedArrayKind = Kind(FixedArray)
 

@@ -144,6 +144,11 @@ class Infer(object):
             self.phimap[val] = ty
         return ty
 
+    def op_unpack(self, inst):
+        source = inst.value
+        etys = source.type.unpack(inst.count)
+        return etys[inst.index]
+
     def op_tuple(self, inst):
         return types.tupletype(*(i.type for i in inst.items))
 

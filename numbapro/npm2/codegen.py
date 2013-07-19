@@ -163,3 +163,7 @@ class CodeGen(object):
     def op_tuple(self, inst):
         values = [self.valmap[i] for i in inst.items]
         return inst.type.desc.llvm_pack(self.builder, values)
+
+    def op_unpack(self, inst):
+        val = self.valmap[inst.value]
+        return inst.value.type.llvm_unpack(self.builder, val)[inst.index]

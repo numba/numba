@@ -323,6 +323,12 @@ class SymbolicExecution(object):
         self.call(operator.setitem, args=(tos1, tos0, tos2))
         self.pop()
 
+    def op_UNPACK_SEQUENCE(self, inst):
+        tos = self.pop()
+        itemct = inst.arg
+        for i in reversed(range(itemct)):
+            self.push_insert('unpack', value=tos, index=i, count=itemct)
+
     def op_COMPARE_OP(self, inst):
         opfunc = COMPARE_OP_FUNC[dis.cmp_op[inst.arg]]
         self.binary_op(opfunc)
