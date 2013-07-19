@@ -482,7 +482,7 @@ def array_setitem_intp(builder, args, argtys, retty):
     aryutils.setitem(builder, ary, indices=[idx], order=aryty.desc.order,
                      value=val)
 
-# array shape
+# array shape strides size
 def array_shape(builder, args, argtys, retty):
     ary, = args
     shape = aryutils.getshape(builder, ary)
@@ -492,6 +492,17 @@ def array_strides(builder, args, argtys, retty):
     ary, = args
     strides = aryutils.getstrides(builder, ary)
     return retty.desc.llvm_pack(builder, strides)
+
+def array_size(builder, args, argtys, retty):
+    ary, = args
+    sz = retty.llvm_const(1)
+    for axsz in aryutils.getshape(builder, ary):
+        sz = builder.mul(axsz, sz)
+    return sz
+
+def array_ndim(builder, args, argtys, retty):
+    ary, = args
+    return retty.llvm_const(aryutils.getndim(builder, ary))
 
 # fixedarray getitem
 def fixedarray_getitem(builder, args, argtys, retty):
@@ -681,9 +692,11 @@ def populate_builtin_impl(implib):
                  args=(types.ArrayKind, types.intp, None),
                  return_type=types.void)]
 
-    # array .shape, .strides
+    # array .shape, .strides, .size, .ndim
     imps += [Imp(array_shape, '.shape', args=(types.ArrayKind,))]
     imps += [Imp(array_strides, '.strides', args=(types.ArrayKind,))]
+    imps += [Imp(array_size, '.size', args=(types.ArrayKind,))]
+    imps += [Imp(array_ndim, '.ndim', args=(types.ArrayKind,))]
 
     # fixedarray getitem
     imps += [Imp(fixedarray_getitem, operator.getitem,

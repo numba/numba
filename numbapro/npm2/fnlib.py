@@ -350,11 +350,13 @@ builtins += def_(operator.getitem,
 builtins += def_(operator.setitem,
       [((types.ArrayKind, types.intp, array_setitem_value), types.void)])
 
-builtins += def_('.shape',
-                 [((types.ArrayKind,), array_attr_return)])
+builtins += def_('.shape', [((types.ArrayKind,), array_attr_return)])
 
-builtins += def_('.strides',
-                 [((types.ArrayKind,), array_attr_return)])
+builtins += def_('.strides', [((types.ArrayKind,), array_attr_return)])
+
+builtins += def_('.size', [((types.ArrayKind,), types.intp)])
+
+builtins += def_('.ndim',[((types.ArrayKind,), types.intp)])
 
 builtins += def_(operator.getitem,
              [((types.FixedArrayKind, types.intp), intparray_getitem_return)])
