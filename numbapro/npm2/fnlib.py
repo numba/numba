@@ -257,6 +257,17 @@ def array_setitem_value(args):
     ary = args[0]
     return ary.desc.element
 
+def array_attr_return(args):
+    ary = args[0]
+    return types.tupletype(*([types.intp] * ary.desc.ndim))
+
+def intparray_getitem_return(args):
+    ary = args[0]
+    return ary.desc.element
+
+#-----------------------------------------------------------------------------
+# Define Builtin Signatures
+
 def def_(funcobj, definitions):
     return [(funcobj, definitions)]
 
@@ -337,6 +348,14 @@ builtins += def_(operator.getitem,
 builtins += def_(operator.setitem,
       [((types.ArrayKind, types.intp, array_setitem_value), types.void)])
 
+builtins += def_('.shape',
+                 [((types.ArrayKind,), array_attr_return)])
+
+builtins += def_('.strides',
+                 [((types.ArrayKind,), array_attr_return)])
+
+builtins += def_(operator.getitem,
+             [((types.FixedArrayKind, types.intp), intparray_getitem_return)])
 
 def get_builtin_function_library(lib=None):
     '''Create or add builtin functions to a FunctionLibrary instance.

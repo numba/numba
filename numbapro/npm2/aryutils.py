@@ -24,13 +24,29 @@ def getitem(builder, ary, order, indices):
     val = builder.load(ptr)
     return val
 
-def preload_attr(builder, ary):
-    ndim = ary.type.elements[1].count
-    data = builder.extract_value(ary, 0)
+def getndim(builder, ary):
+    return ary.type.elements[1].count
+
+def getshape(builder, ary):
+    ndim = getndim(builder, ary)
     shapeary = builder.extract_value(ary, 1)
-    strideary = builder.extract_value(ary, 2)
     shape = [builder.extract_value(shapeary, i) for i in range(ndim)]
+    return shape
+
+def getstrides(builder, ary):
+    ndim = getndim(builder, ary)
+    strideary = builder.extract_value(ary, 2)
     strides = [builder.extract_value(strideary, i) for i in range(ndim)]
+    return strides
+
+def getdata(builder, ary):
+    return builder.extract_value(ary, 0)
+
+def preload_attr(builder, ary):
+    ndim = getndim(builder, ary)
+    data = getdata(builder, ary)
+    shape = getshape(builder, ary)
+    strides = getstrides(builder, ary)
     return data, shape, strides
 
 def getpointer(builder, data, shape, strides, order, indices):

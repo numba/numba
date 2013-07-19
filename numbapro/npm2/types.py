@@ -449,7 +449,7 @@ class Tuple(object):
     fields = 'elements',
 
     def __init__(self, elements):
-        self.elements = map(Type, elements)
+        self.elements = elements
 
     def coerce(self, other):
         if isinstance(other, Tuple):
@@ -477,6 +477,42 @@ class Tuple(object):
         return builder.extract_value(tupleobj, index)
 
 TupleKind = Kind(Tuple)
+
+class FixedArray(object):
+    fields = 'element', 'length'
+
+    def __init__(self, element, length):
+        assert length > 0
+        self.element = element
+        self.length = length
+
+    def coerce(self, other):
+        if isinstance(other, FixedArray):
+            return 0
+
+    def __repr__(self):
+        return '[%s x %d]' % (self.element, self.length)
+
+    def llvm_as_value(self):
+        return lc.Type.array(self.element.llvm_as_value(), self.length)
+
+    def llvm_as_argument(self):
+        return
+
+    def llvm_as_return(self):
+        return
+
+    def llvm_getitem(self, builder, aryobj, index):
+        return builder.extract_value(aryobj, index)
+
+    def llvm_pack(self, builder, values):
+        out = lc.Constant.undef(self.llvm_as_value())
+        for i, val in enumerate(values):
+            assert val.type == out.type.element
+            out = builder.insert_value(out, val, i)
+        return out
+
+FixedArrayKind = Kind(FixedArray)
 
 class BuiltinObject(object):
     fields = 'name',
@@ -531,6 +567,10 @@ def arraytype(element, ndim, layout):
     return Type(Array(element, ndim, layout))
 
 def tupletype(*elements):
-    return Type(Tuple(elements))
+    elements = map(Type, elements)
+    if all(elements[0] == other for other in elements[1:]):
+        return Type(FixedArray(elements[0], len(elements)))
+    else:
+        return Type(Tuple(elements))
 
 intp = {4: int32, 8: int64}[tuple.__itemsize__]

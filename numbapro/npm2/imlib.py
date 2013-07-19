@@ -2,7 +2,7 @@ from collections import defaultdict
 from contextlib import contextmanager
 import operator
 import llvm.core as lc
-from . import typesets, types, aryutils
+from . import typesets, types, aryutils, cgutils
 
 class ImpLib(object):
     def __init__(self, funclib):
@@ -336,7 +336,7 @@ def imp_range_3(builder, args):
 
 def imp_range_iter(builder, args):
     obj, = args
-    with goto_entry_block(builder):
+    with cgutils.goto_entry_block(builder):
         # allocate at the beginning
         # assuming a range object must be used statically
         ptr = builder.alloca(obj.type)
@@ -464,6 +464,47 @@ def array_setitem_intp(builder, args, argtys, retty):
         val = valty.llvm_cast(builder, val, aryty.desc.element)
     aryutils.setitem(builder, ary, indices=[idx], order=aryty.desc.order,
                      value=val)
+
+# array shape
+def array_shape(builder, args, argtys, retty):
+    ary, = args
+    shape = aryutils.getshape(builder, ary)
+    return retty.desc.llvm_pack(builder, shape)
+
+def array_strides(builder, args, argtys, retty):
+    ary, = args
+    strides = aryutils.getstrides(builder, ary)
+    return retty.desc.llvm_pack(builder, strides)
+
+# fixedarray getitem
+def fixedarray_getitem(builder, args, argtys, retty):
+    ary, ind = args
+    aryty, indty = argtys
+    assert retty == aryty.desc.element
+
+    bbafter = cgutils.append_block(builder)
+    bbelse = cgutils.append_block(builder)
+
+    switch = builder.switch(ind, bbelse, n=aryty.desc.length)
+
+    incomings = []
+    for n in range(aryty.desc.length):
+        bbcur = cgutils.append_block(builder)
+        switch.add_case(indty.llvm_const(n), bbcur)
+        with cgutils.goto_block(builder, bbcur):
+            res = builder.extract_value(ary, n)
+            builder.branch(bbafter)
+            incomings.append((res, bbcur))
+
+    with cgutils.goto_block(builder, bbelse):
+        builder.unreachable()
+
+    builder.position_at_end(bbafter)
+    phi = builder.phi(retty.llvm_as_value())
+    for val, bb in incomings:
+        phi.add_incoming(val, bb)
+
+    return phi
 
 #----------------------------------------------------------------------------
 # utils
@@ -621,20 +662,16 @@ def populate_builtin_impl(implib):
                  args=(types.ArrayKind, types.intp, None),
                  return_type=types.void)]
 
+    # array .shape, .strides
+    imps += [Imp(array_shape, '.shape', args=(types.ArrayKind,))]
+    imps += [Imp(array_strides, '.strides', args=(types.ArrayKind,))]
+
+    # fixedarray getitem
+    imps += [Imp(fixedarray_getitem, operator.getitem,
+                 args=(types.FixedArrayKind, types.intp))]
+
     # --------------------------
 
 
     for imp in imps:
         implib.define(imp)
-
-
-#------------------------------------------------------------------------------
-# utils
-
-@contextmanager
-def goto_entry_block(builder):
-    old = builder.basic_block
-    entry = builder.basic_block.function.basic_blocks[0]
-    builder.position_at_beginning(entry)
-    yield
-    builder.position_at_end(old)
