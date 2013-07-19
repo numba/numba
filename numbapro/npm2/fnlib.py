@@ -266,6 +266,13 @@ def intparray_getitem_return(args):
     ary = args[0]
     return ary.desc.element
 
+def minmax_from_sets(count, typeset):
+    sigs = []
+    for ty in typeset:
+        sig = ((ty,) * count, ty)
+        sigs.append(sig)
+    return sigs
+
 #-----------------------------------------------------------------------------
 # Define Builtin Signatures
 
@@ -365,6 +372,12 @@ builtins += def_(operator.getitem,
              [((types.FixedArrayKind, types.intp), intparray_getitem_return)])
 
 builtins += def_(abs, unary_func_from_sets(integer_set|float_set))
+
+builtins += def_(min, minmax_from_sets(2, integer_set|float_set))
+builtins += def_(min, minmax_from_sets(3, integer_set|float_set))
+
+builtins += def_(max, minmax_from_sets(2, integer_set|float_set))
+builtins += def_(max, minmax_from_sets(3, integer_set|float_set))
 
 def get_builtin_function_library(lib=None):
     '''Create or add builtin functions to a FunctionLibrary instance.

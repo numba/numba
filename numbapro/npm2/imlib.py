@@ -597,7 +597,53 @@ def imp_abs_float(ty):
         return builder.select(isneg, absval, x)
     return imp
 
+# min
 
+def imp_min_integer(ty):
+    cmpfunc  = imp_cmp_signed if ty.desc.signed else imp_cmp_unsigned
+    cmp = cmpfunc(operator.lt, ty)
+    def imp(builder, args):
+        sel = args[0]
+        for val in args[1:]:
+            pred = cmp(builder, (sel, val))
+            sel = builder.select(pred, sel, val)
+        return sel
+    return imp
+
+def imp_min_float(ty):
+    cmpfunc  = imp_cmp_float
+    cmp = cmpfunc(operator.lt, ty)
+    def imp(builder, args):
+        sel = args[0]
+        for val in args[1:]:
+            pred = cmp(builder, (sel, val))
+            sel = builder.select(pred, sel, val)
+        return sel
+    return imp
+
+# max
+
+def imp_max_integer(ty):
+    cmpfunc  = imp_cmp_signed if ty.desc.signed else imp_cmp_unsigned
+    cmp = cmpfunc(operator.gt, ty)
+    def imp(builder, args):
+        sel = args[0]
+        for val in args[1:]:
+            pred = cmp(builder, (sel, val))
+            sel = builder.select(pred, sel, val)
+        return sel
+    return imp
+
+def imp_max_float(ty):
+    cmpfunc  = imp_cmp_float
+    cmp = cmpfunc(operator.gt, ty)
+    def imp(builder, args):
+        sel = args[0]
+        for val in args[1:]:
+            pred = cmp(builder, (sel, val))
+            sel = builder.select(pred, sel, val)
+        return sel
+    return imp
 
 
 #----------------------------------------------------------------------------
@@ -623,6 +669,11 @@ def floordiv_imp(funcobj, imp, ty, ret):
 def casting_imp(funcobj, imp, retty, typeset):
     return [Imp(imp(ty), funcobj, args=(ty,), return_type=retty)
             for ty in typeset]
+
+def minmax_imp(funcobj, imp, typeset, count):
+    return [Imp(imp(ty), funcobj, args=(ty,) * count, return_type=ty)
+            for ty in typeset]
+
 
 def populate_builtin_impl(implib):
     imps = []
@@ -778,8 +829,19 @@ def populate_builtin_impl(implib):
     imps += unary_op_imp(abs, imp_abs_integer, typesets.integer_set)
     imps += unary_op_imp(abs, imp_abs_float, typesets.float_set)
 
-    # --------------------------
+    # min
+    imps += minmax_imp(min, imp_min_integer, typesets.integer_set, 2)
+    imps += minmax_imp(min, imp_min_integer, typesets.integer_set, 3)
+    imps += minmax_imp(min, imp_min_float, typesets.float_set, 2)
+    imps += minmax_imp(min, imp_min_float, typesets.float_set, 3)
 
+    # max
+    imps += minmax_imp(max, imp_max_integer, typesets.integer_set, 2)
+    imps += minmax_imp(max, imp_max_integer, typesets.integer_set, 3)
+    imps += minmax_imp(max, imp_max_float, typesets.float_set, 2)
+    imps += minmax_imp(max, imp_max_float, typesets.float_set, 3)
+
+    # --------------------------
 
     for imp in imps:
         implib.define(imp)
