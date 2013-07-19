@@ -478,6 +478,10 @@ class Tuple(object):
 
     def llvm_as_return(self):
         return
+    
+    def llvm_const(self, value):
+        elems = [t.llvm_const(v) for t, v in zip(self.elements, value)]
+        return lc.Constant.struct(elems)
 
     def llvm_pack(self, builder, items):
         out = lc.Constant.undef(self.llvm_as_value())
@@ -516,6 +520,10 @@ class FixedArray(object):
 
     def llvm_as_return(self):
         return
+    
+    def llvm_const(self, value):
+        elems = [self.element.llvm_const(i) for i in value]
+        return lc.Constant.array(self.element.llvm_as_value(), elems)
 
     def llvm_getitem(self, builder, aryobj, index):
         return builder.extract_value(aryobj, index)
@@ -529,7 +537,6 @@ class FixedArray(object):
 
     def llvm_unpack(self, builder, value):
         return [builder.extract_value(value, i) for i in range(self.length)]
-
 
 FixedArrayKind = Kind(FixedArray)
 

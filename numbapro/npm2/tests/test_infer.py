@@ -1,6 +1,6 @@
 import numpy as np
 from ..compiler import compile
-from ..types import int32, float32, float64, arraytype
+from ..types import int32, float32, float64, arraytype, void
 from .support import testcase, main
 
 def loop_case_1(a, b):
@@ -57,7 +57,7 @@ def test_array_getset_1():
     A = np.empty((2, 5), dtype=np.float64)
     B = np.arange(10, dtype=np.float32).reshape(2, 5)
     func = array_getset_1
-    cfunc = compile(func, None, [arraytype(float64, 2, 'C'),
+    cfunc = compile(func, void, [arraytype(float64, 2, 'C'),
                                  arraytype(float32, 2, 'C')])
     args = A, B
     cfunc(*args)

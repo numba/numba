@@ -114,16 +114,7 @@ class Infer(object):
             return defn.return_type
 
     def op_const(self, inst):
-        if inst.value is None:
-            return types.none_type
-        elif isinstance(inst.value, complex):
-            return types.complex128
-        elif isinstance(inst.value, float):
-            return types.float64
-        elif isinstance(inst.value, int):
-            return types.intp
-        else:
-            raise ValueError("invalid constant value %s" % (inst.value,))
+        return self.type_global(inst.value)
 
     def op_global(self, inst):
         glbl = self.func.func_globals
@@ -152,3 +143,17 @@ class Infer(object):
     def op_tuple(self, inst):
         return types.tupletype(*(i.type for i in inst.items))
 
+
+    def type_global(self, value):
+        if value is None:
+            return types.none_type
+        elif isinstance(value, complex):
+            return types.complex128
+        elif isinstance(value, float):
+            return types.float64
+        elif isinstance(value, int):
+            return types.intp
+        elif isinstance(value, tuple):
+            return types.tupletype(*[self.type_global(i) for i in value])
+        else:
+            raise ValueError("invalid constant value %s" % (value,))
