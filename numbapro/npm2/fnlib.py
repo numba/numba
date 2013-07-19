@@ -257,58 +257,92 @@ def array_setitem_value(args):
     ary = args[0]
     return ary.desc.element
 
-builtins = {
-    range           : range_func(),
-    xrange          : range_func(),
-    iter            : iter_func(),
-    'itervalid'     : iter_valid_func(),
-    'iternext'      : iter_next_func(),
+def def_(funcobj, definitions):
+    return [(funcobj, definitions)]
 
-    operator.add: binary_func_from_sets(integer_set|float_set|complex_set),
-    operator.sub: binary_func_from_sets(integer_set|float_set|complex_set),
-    operator.mul: binary_func_from_sets(integer_set|float_set|complex_set),
-    operator.floordiv: floor_divisions(),
-    operator.truediv: binary_func_from_sets(float_set),
-    operator.mod: binary_func_from_sets(integer_set|float_set),
+builtins = []
 
-    operator.lshift: binary_func_from_sets(integer_set),
-    operator.rshift: binary_func_from_sets(integer_set),
+builtins += def_(range, range_func())
 
-    operator.and_: binary_func_from_sets(integer_set),
-    operator.or_: binary_func_from_sets(integer_set),
-    operator.xor: binary_func_from_sets(integer_set),
+builtins += def_(xrange, range_func())
 
-    operator.neg: unary_func_from_sets(signed_set|float_set|complex_set),
-    operator.invert: unary_func_from_sets(integer_set),
+builtins += def_(iter, iter_func())
 
-    operator.gt: bool_func_from_sets(integer_set|float_set|complex_set),
-    operator.lt: bool_func_from_sets(integer_set|float_set|complex_set),
-    operator.ge: bool_func_from_sets(integer_set|float_set|complex_set),
-    operator.le: bool_func_from_sets(integer_set|float_set|complex_set),
-    operator.eq: bool_func_from_sets(integer_set|float_set|complex_set),
-    operator.ne: bool_func_from_sets(integer_set|float_set|complex_set),
+builtins += def_('itervalid', iter_valid_func())
 
-    '.real': complex_attr(complex_set),
-    '.imag': complex_attr(complex_set),
-    complex: complex_ctor(complex_set),
+builtins += def_('iternext', iter_next_func())
 
-    int:   int_ctor(integer_set|float_set|complex_set),
-    float: float_ctor(integer_set|float_set|complex_set),
+builtins += def_(operator.add,
+                   binary_func_from_sets(integer_set|float_set|complex_set))
 
-    operator.getitem: [((types.ArrayKind, types.intp),
-                            array_getitem_return),
-                       ((types.ArrayKind, types.TupleKind),
-                            array_getitem_return),],
+builtins += def_(operator.sub,
+                   binary_func_from_sets(integer_set|float_set|complex_set))
 
-    operator.setitem: [((types.ArrayKind, types.intp, array_setitem_value),
-                            types.void)],
-}
+builtins += def_(operator.mul,
+                   binary_func_from_sets(integer_set|float_set|complex_set))
+
+builtins += def_(operator.floordiv, floor_divisions())
+
+builtins += def_(operator.truediv, binary_func_from_sets(float_set))
+
+builtins += def_(operator.mod, binary_func_from_sets(integer_set|float_set))
+
+builtins += def_(operator.lshift, binary_func_from_sets(integer_set))
+
+builtins += def_(operator.rshift, binary_func_from_sets(integer_set))
+
+builtins += def_(operator.and_, binary_func_from_sets(integer_set))
+
+builtins += def_(operator.or_, binary_func_from_sets(integer_set))
+
+builtins += def_(operator.xor, binary_func_from_sets(integer_set))
+
+builtins += def_(operator.neg,
+                   unary_func_from_sets(signed_set|float_set|complex_set))
+
+builtins += def_(operator.invert, unary_func_from_sets(integer_set))
+
+builtins += def_(operator.gt,
+                   bool_func_from_sets(integer_set|float_set|complex_set))
+
+builtins += def_(operator.lt,
+                   bool_func_from_sets(integer_set|float_set|complex_set))
+
+builtins += def_(operator.ge,
+                   bool_func_from_sets(integer_set|float_set|complex_set))
+
+builtins += def_(operator.le,
+                   bool_func_from_sets(integer_set|float_set|complex_set))
+
+builtins += def_(operator.eq,
+                   bool_func_from_sets(integer_set|float_set|complex_set))
+
+builtins += def_(operator.ne,
+                   bool_func_from_sets(integer_set|float_set|complex_set))
+
+builtins += def_('.real', complex_attr(complex_set))
+
+builtins += def_('.imag', complex_attr(complex_set))
+
+builtins += def_(complex, complex_ctor(complex_set))
+
+builtins += def_(int, int_ctor(integer_set|float_set|complex_set))
+
+builtins += def_(float, float_ctor(integer_set|float_set|complex_set))
+
+builtins += def_(operator.getitem,
+                 [((types.ArrayKind, types.intp), array_getitem_return),
+                  ((types.ArrayKind, types.TupleKind), array_getitem_return)])
+
+builtins += def_(operator.setitem,
+      [((types.ArrayKind, types.intp, array_setitem_value), types.void)])
+
 
 def get_builtin_function_library(lib=None):
     '''Create or add builtin functions to a FunctionLibrary instance.
     '''
     lib = FunctionLibrary() if lib is None else lib
-    for k, vl in builtins.iteritems():
+    for k, vl in builtins:
         for args, return_type in vl:
             fn = Function(funcobj=k, args=args, return_type=return_type)            
             lib.define(fn)
