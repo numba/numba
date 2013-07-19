@@ -575,6 +575,31 @@ def fixedarray_getitem(builder, args, argtys, retty):
 
     return phi
 
+# abs
+
+def imp_abs_integer(ty):
+    def imp(builder, args):
+        x, = args
+        if not ty.desc.signed:
+            raise TypeError("absolute value of %s" % ty)
+        zero = ty.llvm_const(0)
+        isneg = imp_cmp_signed(operator.lt, ty)(builder, (x, zero))
+        absval = imp_sub_integer(builder, (zero, x))
+        return builder.select(isneg, absval, x)
+    return imp
+
+def imp_abs_float(ty):
+    def imp(builder, args):
+        x, = args
+        zero = ty.llvm_const(0)
+        isneg = imp_cmp_float(operator.lt, ty)(builder, (x, zero))
+        absval = imp_sub_float(builder, (zero, x))
+        return builder.select(isneg, absval, x)
+    return imp
+
+
+
+
 #----------------------------------------------------------------------------
 # utils
 
@@ -748,6 +773,10 @@ def populate_builtin_impl(implib):
     # fixedarray getitem
     imps += [Imp(fixedarray_getitem, operator.getitem,
                  args=(types.FixedArrayKind, types.intp))]
+
+    # abs
+    imps += unary_op_imp(abs, imp_abs_integer, typesets.integer_set)
+    imps += unary_op_imp(abs, imp_abs_float, typesets.float_set)
 
     # --------------------------
 

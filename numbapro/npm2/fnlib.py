@@ -364,6 +364,8 @@ builtins += def_('.ndim',[((types.ArrayKind,), types.intp)])
 builtins += def_(operator.getitem,
              [((types.FixedArrayKind, types.intp), intparray_getitem_return)])
 
+builtins += def_(abs, unary_func_from_sets(integer_set|float_set))
+
 def get_builtin_function_library(lib=None):
     '''Create or add builtin functions to a FunctionLibrary instance.
     '''
