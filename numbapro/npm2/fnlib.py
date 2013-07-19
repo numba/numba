@@ -130,7 +130,8 @@ class FunctionLibrary(object):
         versions = self.concrete[func]
 
         if not versions:
-            raise NotImplementedError('function %s is not implemented' % func)
+            raise NotImplementedError('function %s(%s) is not implemented' %
+                                      (func, ', '.join(str(a) for a in args)))
 
         promotable = []
         demontable = []
@@ -342,8 +343,9 @@ builtins += def_(int, int_ctor(integer_set|float_set|complex_set))
 builtins += def_(float, float_ctor(integer_set|float_set|complex_set))
 
 builtins += def_(operator.getitem,
-                 [((types.ArrayKind, types.intp), array_getitem_return),
-                  ((types.ArrayKind, types.TupleKind), array_getitem_return)])
+             [((types.ArrayKind, types.intp), array_getitem_return),
+              ((types.ArrayKind, types.TupleKind), array_getitem_return),
+              ((types.ArrayKind, types.FixedArrayKind), array_getitem_return)])
 
 builtins += def_(operator.setitem,
       [((types.ArrayKind, types.intp, array_setitem_value), types.void)])

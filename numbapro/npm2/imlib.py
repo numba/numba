@@ -456,6 +456,23 @@ def array_getitem_tuple(builder, args, argtys, retty):
     return aryutils.getitem(builder, ary, indices=indices,
                             order=aryty.desc.order)
 
+def array_getitem_fixedarray(builder, args, argtys, retty):
+    ary, idx = args
+    aryty, idxty = argtys
+    indices = []
+
+    indexty = types.intp
+    ety = idxty.desc.element
+    for i in range(idxty.desc.length):
+        elem = idxty.desc.llvm_getitem(builder, idx, i)
+        if ety != indexty:
+            elem = ety.llvm_cast(builder, elem, indexty)
+        indices.append(elem)
+
+    return aryutils.getitem(builder, ary, indices=indices,
+                            order=aryty.desc.order)
+
+
 # array setitem
 def array_setitem_intp(builder, args, argtys, retty):
     ary, idx, val = args
@@ -656,6 +673,8 @@ def populate_builtin_impl(implib):
                  args=(types.ArrayKind, types.intp))]
     imps += [Imp(array_getitem_tuple, operator.getitem,
                  args=(types.ArrayKind, types.TupleKind))]
+    imps += [Imp(array_getitem_fixedarray, operator.getitem,
+                 args=(types.ArrayKind, types.FixedArrayKind))]
 
     # array setitem
     imps += [Imp(array_setitem_intp, operator.setitem,
