@@ -98,7 +98,7 @@ def test_type_attributes(array, func, struct, pointer):
 def test_template_with_concretes(a, b):
     """
     >>> test_template_with_concretes(1, 2)
-    3L
+    3
     """
     return a + b
 
@@ -134,7 +134,7 @@ def test_unknown_template_error(a, b):
 def test_template_inconsistent_types_error(a, b):
     """
     >>> test_template_inconsistent_types_error(1, 2)
-    3L
+    3
     >>> test_template_inconsistent_types_error(1, 2.0)
     Traceback (most recent call last):
         ...

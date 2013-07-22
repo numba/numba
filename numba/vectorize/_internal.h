@@ -14,7 +14,7 @@
 #else
   #define MOD_ERROR_VAL
   #define MOD_SUCCESS_VAL(val)
-  #define MOD_INIT(name) void init##name(void)
+  #define MOD_INIT(name) PyMODINIT_FUNC init##name(void)
   #define MOD_DEF(ob, name, doc, methods) \
           ob = Py_InitModule3(name, methods, doc);
   #define MOD_INIT_EXEC(name) init##name();

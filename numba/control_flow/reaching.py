@@ -129,7 +129,8 @@ class CFWarner(object):
                             entry, "Unused argument '%s'" % entry.name)
                 else:
                     if (warn_unused and entry.warn_unused and
-                            flow.is_tracked(entry)):
+                        not entry.name.startswith('_') and
+                        flow.is_tracked(entry)):
                         if getattr(entry, 'lineno', 1) > 0:
                             self.messages.warning(
                                 entry, "Unused variable '%s'" % entry.name)

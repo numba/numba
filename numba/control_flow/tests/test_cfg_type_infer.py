@@ -131,7 +131,7 @@ def test_if_reassign2(value, obj1, obj2):
 def test_for_reassign(obj1, obj2, obj3, obj4):
     """
     >>> test_for_reassign(*values[:4])
-    (9L, Value(1), 2L, 5L)
+    (9, Value(1), 2, 5)
     >>> sig, syms = infer(test_for_reassign.py_func,
     ...                   functype(None, [object_] * 4))
     >>> types(syms, 'obj1', 'obj2', 'obj3')
@@ -160,7 +160,7 @@ def test_for_reassign(obj1, obj2, obj3, obj4):
 def test_while_reassign(obj1, obj2, obj3, obj4):
     """
     >>> test_while_reassign(*values[:4])
-    (9L, Value(1), 2L, 5L)
+    (9, Value(1), 2, 5)
     >>> sig, syms = infer(test_while_reassign.py_func,
     ...                   functype(None, [object_] * 4))
     >>> types(syms, 'obj1', 'obj2', 'obj3', 'obj4')

@@ -45,7 +45,7 @@ def index_error(type):
 def append(type):
     """
     >>> append(int_)
-    (0L, 1L, 2L, 3L)
+    (0, 1, 2, 3)
     """
     tlist = nb.typedlist(type)
     l1 = len(tlist)
@@ -61,7 +61,7 @@ def append(type):
 def append_many(type):
     """
     >>> append_many(int_)
-    1000L
+    1000
     """
     tlist = nb.typedlist(type)
     for i in range(1000):
@@ -75,7 +75,7 @@ def pop(type):
     2
     1
     0
-    (3L, 2L, 1L, 0L)
+    (3, 2, 1, 0)
     """
     tlist = nb.typedlist(type)
     for i in range(3):
@@ -94,7 +94,7 @@ def pop(type):
 def pop_many(type):
     """
     >>> pop_many(int_)
-    (1000L, 0L)
+    (1000, 0)
     """
     tlist = nb.typedlist(type)
     for i in range(1000):
@@ -171,7 +171,7 @@ def test_remove(type):
 def test_count(type, L):
     """
     >>> test_count(int_, [1, 2, 3, 4, 5, 1, 2])
-    (0L, 1L, 2L)
+    (0, 1, 2)
     """
     tlist = nb.typedlist(type, L)
     return tlist.count(0), tlist.count(3), tlist.count(1)
@@ -180,7 +180,7 @@ def test_count(type, L):
 def test_count_complex(type, L):
     """
     >>> test_count_complex(complex128, [1+1j, 1+2j, 2+1j, 2+2j, 1+1j, 2+2j, 2+2j])
-    (1L, 2L, 3L)
+    (1, 2, 3)
     """
     tlist = nb.typedlist(type, L)
     return tlist.count(1+2j), tlist.count(1+1j), tlist.count(2+2j)
@@ -189,7 +189,7 @@ def test_count_complex(type, L):
 def test_index(type):
     """
     >>> test_index(int_)
-    (0L, 2L, 4L)
+    (0, 2, 4)
     """
     tlist = nb.typedlist(type, [5, 4, 3, 2, 1])
     return tlist.index(5), tlist.index(3), tlist.index(1)
