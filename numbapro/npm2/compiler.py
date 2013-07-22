@@ -5,6 +5,11 @@ from timeit import default_timer as timer
 import inspect
 from . import symbolic, typing, codegen, execution, fnlib, imlib
 
+
+global_funclib = fnlib.get_builtin_function_library()
+global_implib = imlib.ImpLib(global_funclib)
+global_implib.populate_builtin()
+
 def compile(func, retty, argtys):
     with profile((func, tuple(argtys))):
         # preparation
@@ -16,16 +21,11 @@ def compile(func, retty, argtys):
         args = dict((arg, typ) for arg, typ in zip(argspec.args, argtys))
         return_type = retty
 
-        funclib = fnlib.get_builtin_function_library()
-
-        implib = imlib.ImpLib(funclib)
-        implib.populate_builtin()
-
         # compilation
         blocks =  symbolic_interpret(func)
-        type_infer(func, blocks, return_type, args, funclib)
+        type_infer(func, blocks, return_type, args, global_funclib)
 
-        lmod, lfunc = code_generation(func, blocks, return_type, args, implib)
+        lmod, lfunc = code_generation(func, blocks, return_type, args, global_implib)
 
         jit = execution.JIT(lfunc = lfunc,
                             retty = retty,
