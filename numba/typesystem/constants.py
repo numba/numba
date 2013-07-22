@@ -12,7 +12,7 @@ import ctypes
 from functools import partial
 
 import numba.typesystem
-from numba.typesystem import itypesystem
+from numba.typesystem import itypesystem, numpy_support
 from numba import numbawrapper
 
 from numba.support.ctypes_support import is_ctypes, from_ctypes_value
@@ -48,7 +48,6 @@ def get_default_typing_rules(u, typeof, promote):
 
     :param u: The type universe
     """
-    from numba.typesystem import numpy_support
 
     table = {}
     def register(*classes):
@@ -131,6 +130,9 @@ def get_constant_typer(universe, typeof, promote):
 def is_dtype_constructor(value):
     return isinstance(value, type) and issubclass(value, np.generic)
 
+def is_numpy_scalar(value): 
+    return isinstance(value, np.generic)
+
 def is_registered(value):
     from numba.type_inference import module_type_inference
     return module_type_inference.is_registered(value)
@@ -170,6 +172,8 @@ def get_default_match_table(u):
             lambda value: numba.typesystem.null,
         is_dtype_constructor:
             lambda value: numba.typesystem.from_numpy_dtype(np.dtype(value)),
+        is_numpy_scalar:
+            lambda value: numpy_support.map_dtype(value.dtype),
         is_ctypes:
             lambda value: from_ctypes(value, u),
         cffi_support.is_cffi_func:
