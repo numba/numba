@@ -7,7 +7,7 @@ Initial AST validation and normalization.
 from __future__ import print_function, division, absolute_import
 
 import ast
-from numba import error
+from numba import error, nodes
 
 class ValidateAST(ast.NodeVisitor):
     "Validate AST"
@@ -31,13 +31,14 @@ class ValidateAST(ast.NodeVisitor):
     def visit_Raise(self, node):
         raise error.NumbaError(node, "Raise statement not implemented yet")
 
-    # def visit_For(self, node):
-    #     if not isinstance(node.target, (ast.Name, ast.Attribute)):
-    #         raise error.NumbaError(
-    #             node.target, "Only a single target iteration variable is "
-    #                          "supported at the moment")
-    #
-    #     self.generic_visit(node)
+    def visit_For(self, node):
+        if not isinstance(node.target, (ast.Name, ast.Attribute,
+                                        nodes.TempStoreNode)):
+            raise error.NumbaError(
+                node.target, "Only a single target iteration variable is "
+                             "supported at the moment")
+
+        self.generic_visit(node)
 
     def visit_With(self, node):
         self.visit(node.context_expr)
