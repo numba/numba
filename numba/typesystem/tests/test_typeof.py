@@ -23,7 +23,7 @@ def test_typeof_pure(arg):
 def test_typeof_numba(a, b):
     """
     >>> test_typeof_numba(10, 11.0)
-    21L
+    21
     >>> test_typeof_numba(11.0, 10)
     21.0
     >>> test_typeof_numba(np.arange(10), 1)
