@@ -94,35 +94,30 @@ class TransformForIterable(visitors.NumbaTransformer):
         else:
             have_step = True
 
-        start, stop, step = [nodes.CloneableNode(n)
-                             for n in (start, stop, step)]
+        start, stop, step = map(nodes.CloneableNode, (start, stop, step))
 
         if have_step:
-            compute_nsteps = """
-                    $length = {{stop}} - {{start}}
-                    {{nsteps}} = $length / {{step}}
-                    if {{nsteps_load}} * {{step}} != $length: #$length % {{step}}:
-                        # Test for truncation
-                        {{nsteps}} = {{nsteps_load}} + 1
-                    # print "nsteps", {{nsteps_load}}
-                """
+            templ = textwrap.dedent("""
+                    {{temp}} = 0
+                    {{nsteps}} = ({{stop}} - {{start}} + {{step}} -
+                                    (1 if {{step}} >= 0 else -1)) / {{step}}
+                    while {{temp_load}} < {{nsteps_load}}:
+                        {{target}} = {{start}} + {{temp_load}} * {{step}}
+                        {{body}}
+                        {{temp}} = {{temp_load}} + 1
+                """)
         else:
-            compute_nsteps = "{{nsteps}} = {{stop}} - {{start}}"
+            templ = textwrap.dedent("""
+                    {{temp}} = {{start}}
+                    {{nsteps}} = {{stop}}
+                    while {{temp_load}} < {{nsteps_load}}:
+                        {{target}} = {{temp_load}}
+                        {{body}}
+                        {{temp}} = {{temp_load}} + 1
+                """)
 
         if node.orelse:
-            else_clause = "else: {{else_body}}"
-        else:
-            else_clause = ""
-
-        templ = textwrap.dedent("""
-                %s
-                {{temp}} = 0
-                while {{temp_load}} < {{nsteps_load}}:
-                    {{target}} = {{start}} + {{temp_load}} * {{step}}
-                    {{body}}
-                    {{temp}} = {{temp_load}} + 1
-                %s
-            """) % (textwrap.dedent(compute_nsteps), else_clause)
+            templ += "\nelse: {{else_body}}"
 
         # Leave the bodies empty, they are already analyzed
         body = ast.Suite(body=[])
@@ -195,8 +190,7 @@ class TransformForIterable(visitors.NumbaTransformer):
         # Replace node.target with a temporary
         #--------------------------------------------------------------------
 
-        target_name = orig_target.id + '.idx'
-        target_temp = nodes.TempNode(Py_ssize_t)
+        target_temp = nodes.TempNode(typesystem.Py_ssize_t)
         node.target = target_temp.store()
 
         #--------------------------------------------------------------------
