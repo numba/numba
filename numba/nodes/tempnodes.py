@@ -50,7 +50,7 @@ class TempLoadNode(ExprNode):
     def __init__(self, temp, invariant=False):
         self.temp = temp
         self.type = temp.type
-        self.variable = Variable(self.type)
+        self.variable = temp.variable
         self.invariant = invariant
 
     def __repr__(self):

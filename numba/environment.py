@@ -46,8 +46,15 @@ default_normalize_order = [
     'NormalizeASTStage',
 ]
 
-default_pipeline_order = default_normalize_order + [
+cf_order = [
+    'TransformBuiltinLoops',
     'ControlFlowAnalysis',
+]
+
+default_cf_pipeline_order = ['ast3to2'] + cf_order
+
+
+default_pipeline_order = default_normalize_order + cf_order + [
     'dump_cfg',
     #'ConstFolding',
     # 'dump_ast',
@@ -79,11 +86,6 @@ default_pipeline_order = default_normalize_order + [
     'LinkingStage',
     'WrapperStage',
     'ErrorReporting',
-]
-
-default_cf_pipeline_order = [
-    'ast3to2',
-    'ControlFlowAnalysis',
 ]
 
 default_type_infer_pipeline_order = default_cf_pipeline_order + [
@@ -160,7 +162,7 @@ class FunctionErrorEnvironment(object):
     enable_post_mortem = TypedProperty(
         bool,
         "Enable post-mortem debugging for the Numba compiler",
-        False
+        1|False
     )
 
     collection = TypedProperty(

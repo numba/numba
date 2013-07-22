@@ -773,8 +773,8 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
                     warn_unused=warn_unused)
 
         # TODO: Generate fake RHS for for iteration target variable
-        elif (isinstance(lhs, ast.Attribute) and self.flow.block and
-                  assignment is not None):
+        elif (isinstance(lhs, (ast.Attribute, nodes.TempStoreNode)) and
+              self.flow.block and assignment is not None):
             self.flow.block.stats.append(AttributeAssignment(assignment))
 
         if self.flow.exceptions:
