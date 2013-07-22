@@ -302,7 +302,7 @@ builtins += def_(operator.mul,
 
 builtins += def_(operator.floordiv, floor_divisions())
 
-builtins += def_(operator.truediv, binary_func_from_sets(float_set))
+builtins += def_(operator.truediv, binary_func_from_sets(float_set|complex_set))
 
 builtins += def_(operator.mod, binary_func_from_sets(integer_set|float_set))
 

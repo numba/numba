@@ -164,6 +164,29 @@ def imp_truediv_float(builder, args):
     a, b = args
     return builder.fdiv(a, b)
 
+def imp_truediv_complex(dtype):
+    '''
+    compute recipocal of a / b = a * (1 / b)
+    
+    1 / b = 1 / (x + i y) = x / |b| - i y /|b| 
+    |b| = x * x + y * y
+    '''
+    def imp(builder, args):
+        a, b = args
+        x, y = dtype.llvm_unpack(builder, b)
+        xx = imp_mul_float(builder, (x, x))
+        yy = imp_mul_float(builder, (y, y))
+        abs_b = imp_add_float(builder, (xx, yy))
+
+        real = imp_truediv_float(builder, (x, abs_b))
+        imag0 = imp_truediv_float(builder, (y, abs_b))
+        
+        imag = imp_neg_float(dtype.desc.element)(builder, (imag0,))
+
+        rb = dtype.desc.llvm_pack(builder, real, imag)
+        return imp_mul_complex(dtype)(builder, (a, rb))
+    return imp
+
 # binary mod
 
 def imp_mod_signed(builder, args):
@@ -714,7 +737,13 @@ builtins += floordiv_imp(operator.floordiv, imp_floordiv_float,
 
 # binary truediv
 builtins += binary_op_imp(operator.truediv, imp_truediv_float,
-                      typesets.float_set)
+                          typesets.float_set)
+builtins += binary_op_imp(operator.truediv,
+                          imp_truediv_complex(types.complex64),
+                          [types.complex64])
+builtins += binary_op_imp(operator.truediv,
+                          imp_truediv_complex(types.complex128),
+                          [types.complex128])
 
 # binary mod
 builtins += binary_op_imp(operator.mod, imp_mod_signed, typesets.signed_set)

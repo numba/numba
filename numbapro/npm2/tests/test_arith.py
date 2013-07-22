@@ -176,7 +176,8 @@ if sys.platform != 'win32':
             cdiv = compile(div, ty, [ty, ty])
             got = cdiv(a, b)
             exp = div(a, b)
-            assert got == exp, 'div(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+            assert got == exp, ('div(%s, %s) got = %s expect=%s' %
+                                                (a, b, got, exp))
 
         for ty in iset:
             run(ty, 4, 2)
@@ -187,11 +188,23 @@ def test_div_float():
         cdiv = compile(div, ty, [ty, ty])
         got = cdiv(a, b)
         exp = div(a, b)
-        assert np.allclose(got, exp), 'div(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+        assert np.allclose(got, exp), ('div(%s, %s) got = %s expect=%s' %
+                                                        (a, b, got, exp))
 
     for ty in fset:
         run(ty, 1.234, 2.345)
 
+@testcase
+def test_div_complex():
+    def run(ty, a, b):
+        cdiv = compile(div, ty, [ty, ty])
+        got = cdiv(a, b)
+        exp = div(a, b)
+        assert np.allclose(got, exp), ('div(%s, %s) got %s expect = %s' %
+                                                        (a, b, got, exp))
+
+    for ty in cset:
+        run(ty, 1.2+3j, 2.3+4j)
 
 #------------------------------------------------------------------------------
 # floordiv
