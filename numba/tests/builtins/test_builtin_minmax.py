@@ -1,6 +1,7 @@
 from numba import autojit
+from numba.testing.test_support import autojit_py3doc
 
-@autojit
+@autojit_py3doc
 def max1(x):
     """
     >>> max1([100])
@@ -16,7 +17,7 @@ def max1(x):
     """
     return max(x)
 
-@autojit
+@autojit_py3doc
 def min1(x):
     """
     >>> min1([100])
@@ -32,7 +33,7 @@ def min1(x):
     """
     return min(x)
 
-@autojit
+@autojit_py3doc
 def max2(x, y):
     """
     >>> max2(1, 2)
@@ -52,7 +53,7 @@ def max2(x, y):
     """
     return max(x, y)
 
-@autojit
+@autojit_py3doc
 def min2(x, y):
     """
     >>> min2(1, 2)

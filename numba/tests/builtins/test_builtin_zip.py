@@ -8,7 +8,7 @@ def zip1(L1, L2):
     >>> zip1(range(2), range(5, 8))
     [(0, 5), (1, 6)]
     """
-    return zip(L1, L2)
+    return list(zip(L1, L2))
 
 @autojit
 def zip2(L1, L2, L3):
@@ -16,7 +16,7 @@ def zip2(L1, L2, L3):
     >>> zip2(range(2), range(5, 8), range(9, 13))
     [(0, 5, 9), (1, 6, 10)]
     """
-    return zip(L1, L2, L3)
+    return list(zip(L1, L2, L3))
 
 @autojit
 def ziploop1(L1, L2):
