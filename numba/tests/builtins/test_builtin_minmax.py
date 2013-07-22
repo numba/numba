@@ -12,7 +12,7 @@ def max1(x):
     >>> max1(1)
     Traceback (most recent call last):
         ...
-    TypeError: 'long' object is not iterable
+    TypeError: 'int' object is not iterable
     """
     return max(x)
 
@@ -28,7 +28,7 @@ def min1(x):
     >>> min1(1)
     Traceback (most recent call last):
         ...
-    TypeError: 'long' object is not iterable
+    TypeError: 'int' object is not iterable
     """
     return min(x)
 
@@ -36,9 +36,9 @@ def min1(x):
 def max2(x, y):
     """
     >>> max2(1, 2)
-    2L
+    2
     >>> max2(1, -2)
-    1L
+    1
     >>> max2(10, 10.25)
     10.25
     >>> max2(10, 9.9)
@@ -56,9 +56,9 @@ def max2(x, y):
 def min2(x, y):
     """
     >>> min2(1, 2)
-    1L
+    1
     >>> min2(1, -2)
-    -2L
+    -2
     >>> min2(10, 10.1)
     10.0
     >>> min2(10, 9.75)
