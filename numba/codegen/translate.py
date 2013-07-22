@@ -1039,6 +1039,15 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
     # ____________________________________________________________
     # Compare
 
+    _cmp_op_map = {
+        ast.Gt    : '>',
+        ast.Lt    : '<',
+        ast.GtE   : '>=',
+        ast.LtE   : '<=',
+        ast.Eq    : '==',
+        ast.NotEq : '!=',
+    }
+
     def visit_Compare(self, node):
         op = node.ops[0]
 
@@ -1048,16 +1057,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         lhs_lvalue = self.visit(lhs)
         rhs_lvalue = self.visit(rhs)
 
-        op_map = {
-            ast.Gt    : '>',
-            ast.Lt    : '<',
-            ast.GtE   : '>=',
-            ast.LtE   : '<=',
-            ast.Eq    : '==',
-            ast.NotEq : '!=',
-        }
-
-        op = op_map[type(op)]
+        op = self._cmp_op_map[type(op)]
 
         if lhs.type.is_float and rhs.type.is_float:
             lfunc = self.builder.fcmp
@@ -1072,8 +1072,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         else:
             # These errors should be issued by the type inferencer or a
             # separate error checking pass
-            raise error.NumbaError(node, "Comparisons of type %s not yet "
-                                         "supported" % lhs.type)
+            raise error.NumbaError(node, "Comparisons of types %s and %s are not yet "
+                                         "supported" % (lhs.type, rhs.type))
 
         return lfunc(lop, lhs_lvalue, rhs_lvalue)
 

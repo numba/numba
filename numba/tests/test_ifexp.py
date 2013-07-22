@@ -37,7 +37,7 @@ def _f1(a,b):
     return a if a>b else b
 
 def test_type_promotion():
-    assert isinstance(_f1(1, 1), long)
+    assert isinstance(_f1(1, 1), (int, long))
     assert isinstance(_f1(1.0, 1), float)
     assert isinstance(_f1(1, 1.0), float)
 

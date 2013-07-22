@@ -170,7 +170,6 @@ make_prehash(intern_table_t *table, PyObject *key_obj, const char *key,
     const char *secret = table->secrets;
     int tries = 0;
     uint64_t prehash;
-    int result;
 
     while (1) {
         int result;

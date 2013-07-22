@@ -1,10 +1,10 @@
 """
 >>> native_convert(char, -10)
--10L
+-10
 >>> native_convert(char, 10)
-10L
+10
 >>> native_convert(char, 127)
-127L
+127
 
 This doesn't work yet, we should get an error here. We don't get one because
 autojit detects the int type which is natively truncated to a char.
@@ -20,13 +20,13 @@ Traceback (most recent call last):
     ...
 OverflowError: value too large to convert to signed char
 >>> object_convert(char, -128)
--128L
+-128
 >>> object_convert(char, -129)
 Traceback (most recent call last):
     ...
 OverflowError: value too large to convert to signed char
 >>> object_convert(char, 2.9)
-2L
+2
 
 TODO:::::::::::
 

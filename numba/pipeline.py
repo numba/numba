@@ -416,6 +416,12 @@ class TransformFor(PipelineStage):
                                           env)
         return transform.visit(ast)
 
+class TransformBuiltinLoops(PipelineStage):
+    def transform(self, ast, env):
+        transform = self.make_specializer(loops.TransformBuiltinLoops, ast,
+                                          env)
+        return transform.visit(ast)
+
 #----------------------------------------------------------------------------
 # Specializing/Lowering Transforms
 #----------------------------------------------------------------------------
