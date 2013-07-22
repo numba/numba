@@ -24,16 +24,16 @@ def expect_n_args(node, name, nargs):
                                                        expected))
 
 def register_with_argchecking(nargs, can_handle_deferred_types=False):
-    if not isinstance(nargs, tuple):
+    if nargs is not None and not isinstance(nargs, tuple):
         nargs = (nargs,)
 
     def decorator(func, value=None):
         @functools.wraps(func)
         def infer(context, node, *args):
-            expect_n_args(node, name, nargs)
-
-            need_nones = max(nargs) - len(args)
-            args += (None,) * need_nones
+            if nargs is not None:
+                expect_n_args(node, name, nargs)
+                need_nones = max(nargs) - len(args)
+                args += (None,) * need_nones
 
             return func(context, node, *args)
 
