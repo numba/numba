@@ -66,6 +66,17 @@ class SymbolicExecution(object):
         self.strip_dead_block()
         self.complete_phis()
         self.rename_definition()
+        self.dead_code_elimination()
+
+    def dead_code_elimination(self):
+        candidates = ['global']
+        for blk in self.blocks:
+            rmlist = []
+            for inst in blk.code:
+                if not inst.refs and inst.opcode in candidates:
+                    rmlist.append(inst)
+            for inst in rmlist:
+                blk.code.remove(inst)
 
     def rename_definition(self):
         RenameDefinition(self.blocks, self.doms, self.backbone).run()
@@ -146,6 +157,7 @@ class SymbolicExecution(object):
 
     def _insert_phi(self):
         phi = Inst('phi', self.lineno, phi=Incomings())
+        phi.phi.parent = phi
         phi.block = self.curblock
         pos = 0
         for pos, inst in enumerate(self.curblock.code):
@@ -558,9 +570,12 @@ class BlockMap(object):
 class Incomings(object):
     def __init__(self):
         self.incomings = {}
+        self.parent = None
 
     def add_incoming(self, block, value):
         assert block not in self.incomings, "duplicated incoming block for phi"
+        if isinstance(value, Inst):
+            self.parent.refers(value)
         self.incomings[block] = value
 
     def __repr__(self):
@@ -623,9 +638,25 @@ class Inst(object):
         self.lineno = lineno
         self.attrs = set(kwargs.keys())
         self.block = None
+        self.refs = set()
         for k, v in kwargs.items():
             assert not hasattr(self, k)
             setattr(self, k, v)
+            # keep references
+            if isinstance(v, Inst):
+                self.refers(v)
+            elif k == 'args':
+                for j in v:
+                    self.refers(j)
+            elif k == 'kws':
+                for _, j in v:
+                    self.refers(j)
+
+    def refers(self, *insts):
+        for i in insts:
+            assert isinstance(i, Inst)
+            i.refs.add(self)
+
 
     def list_attrs(self):
         return [(k, getattr(self, k)) for k in self.attrs]
