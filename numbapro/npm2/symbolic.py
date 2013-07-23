@@ -1,3 +1,4 @@
+import __builtin__
 import inspect
 import textwrap
 import dis
@@ -34,6 +35,10 @@ class SymbolicExecution(object):
         self.varnames = self.bytecode.code.co_varnames
         self.consts = self.bytecode.code.co_consts
         self.names = self.bytecode.code.co_names
+
+        self.globals = dict(vars(__builtin__))
+        self.builtins = set(self.globals.values())
+        self.globals.update(self.func.func_globals)
 
     def interpret(self):
         # interpretation loop
@@ -309,11 +314,20 @@ class SymbolicExecution(object):
     def op_LOAD_ATTR(self, inst):
         attr = self.names[inst.arg]
         obj = self.pop()
-        self.call('.%s' % attr, args=(obj,))
+        if obj.opcode == 'global' and 'value' in obj:
+            self.push_insert('global', name='.'.join([obj.name, attr]),
+                                       value=getattr(obj.value, attr))
+        else:
+            self.call('.%s' % attr, args=(obj,))
 
     def op_LOAD_GLOBAL(self, inst):
         name = self.names[inst.arg]
-        self.push_insert('global', name=name)
+        value = self.globals.get(name)
+        if value is not None:
+            self.push_insert('global', name=name, value=value)
+        else:
+            self.push_insert('global', name=name)
+
 
     def op_LOAD_FAST(self, inst):
         name = self.varnames[inst.arg]
@@ -687,7 +701,7 @@ class Inst(object):
             self.attrs.add(k)
 
     def __contains__(self, attrname):
-        return attrname not in self.attrs
+        return attrname in self.attrs
 
 def _indent(t, w, c=' '):
     ind = c * w

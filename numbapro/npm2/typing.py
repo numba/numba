@@ -1,5 +1,4 @@
 from __future__ import absolute_import
-import __builtin__
 from .errors import error_context
 from . import types
 from .symbolic import Inst
@@ -13,10 +12,6 @@ class Infer(object):
 
         self.args = args
         self.return_type = return_type
-
-        self.globals = dict(vars(__builtin__))
-        self.builtins = set(self.globals.values())
-        self.globals.update(self.func.func_globals)
 
         self.valmap = {}
         self.phimap = {}
@@ -114,13 +109,17 @@ class Infer(object):
             return defn.return_type
 
     def op_const(self, inst):
-        return self.type_global(inst.value)
+        ty = self.type_global(inst.value)
+        if ty is None:
+            raise ValueError("invalid constant value %s" % (value,))
+        return ty
 
     def op_global(self, inst):
-        glbl = self.func.func_globals
-        value = self.globals[inst.name]
-        inst.update(value=value, type=types.function_type)
-        if value not in self.builtins:
+        value = inst.value
+        ty = self.type_global(inst.value)
+        if ty is None:
+            return types.function_type
+        else:
             assert False, 'XXX: inline global value: %s' % value
 
     def op_phi(self, inst):
@@ -143,7 +142,6 @@ class Infer(object):
     def op_tuple(self, inst):
         return types.tupletype(*(i.type for i in inst.items))
 
-
     def type_global(self, value):
         if value is None:
             return types.none_type
@@ -155,5 +153,5 @@ class Infer(object):
             return types.intp
         elif isinstance(value, tuple):
             return types.tupletype(*[self.type_global(i) for i in value])
-        else:
-            raise ValueError("invalid constant value %s" % (value,))
+
+            
