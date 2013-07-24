@@ -1,14 +1,6 @@
 from llvm import core as lc
 from . import types
-
-def const_intp(x):
-    return types.intp.llvm_const(x)
-
-def auto_intp(x):
-    if isinstance(x, int):
-        return const_intp(x)
-    else:
-        return x
+from .cgutils import const_intp, auto_intp
 
 def gep(builder, ptr, indices):
     return builder.gep(ptr, [auto_intp(i) for i in indices])

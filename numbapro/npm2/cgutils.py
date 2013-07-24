@@ -1,5 +1,15 @@
 from llvm import core as lc
 from contextlib import contextmanager
+from . import types
+
+def const_intp(x):
+    return types.intp.llvm_const(x)
+
+def auto_intp(x):
+    if isinstance(x, int):
+        return const_intp(x)
+    else:
+        return x
 
 @contextmanager
 def goto_entry_block(builder):
