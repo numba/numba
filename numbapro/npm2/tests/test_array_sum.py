@@ -20,7 +20,13 @@ def array_sum_2(ary):
 def test_array_sum_2():
     cfunc = compile(array_sum_2, float32, [arraytype(float32, 1, 'C')])
     a = np.arange(10, dtype=np.float32)
-    print cfunc(a)
+    assert np.allclose(cfunc(a), np.sum(a))
+
+@testcase
+def test_array_sum_3():
+    cfunc = compile(array_sum_2, float32, [arraytype(float32, 2, 'C')])
+    a = np.arange(10, dtype=np.float32).reshape(2, 5)
+    assert np.allclose(cfunc(a), np.sum(a))
 
 if __name__ == '__main__':
     main()
