@@ -93,6 +93,9 @@ class CodeGen(object):
             return src.llvm_cast(self.builder, val, dst)
 
     def op(self, inst):
+        if getattr(inst, 'bypass', False):
+            return
+
         attr = 'op_%s' % inst.opcode
         func = getattr(self, attr, self.generic_op)
         return func(inst)

@@ -559,6 +559,7 @@ class BuiltinObject(object):
 
 module_type = Type(BuiltinObject('module'))
 function_type = Type(BuiltinObject('function'))
+method_type = Type(BuiltinObject('method'))
 none_type = Type(BuiltinObject('none'))
 
 class RangeType(BuiltinObject):

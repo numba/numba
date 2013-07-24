@@ -901,6 +901,7 @@ builtins += minmax_imp(max, imp_max_float, typesets.float_set, 3)
 
 # numpy sum
 builtins += [Imp(imp_numpy_sum, numpy.sum, args=(types.ArrayKind,))]
+builtins += [Imp(imp_numpy_sum, '@sum', args=(types.ArrayKind,))]
 
 # --------------------------
 

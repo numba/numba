@@ -15,7 +15,7 @@ class Infer(object):
 
         self.valmap = {}
         self.phimap = {}
-
+    
     def infer(self):
         # infer instructions
         for block in self.blocks:
@@ -95,17 +95,20 @@ class Infer(object):
 
     def op_call(self, inst):
         args = [v.type for v in inst.args]
-        if isinstance(inst.callee, Inst):
-            callee = getattr(inst.callee, 'value')
-        else:
-            callee = inst.callee
+        callee = getattr(inst.callee, 'value', inst.callee)
 
-        if not callee:
-            raise TypeError("invalid call to %s" % callee)
+        if isinstance(callee, Inst) and callee.type == types.method_type:
+            parent = callee
+            callee = '@%s' % (parent.callee[1:],)
+            assert len(parent.args) == 1
+            args = [parent.args[0].type] + args
+            inst.update(args=list(parent.args) + list(inst.args))
 
         with error_context(during="resolving function %s" % callee):
             defn = self.funclib.get(callee, args)
             inst.update(defn=defn)
+            if defn.return_type == types.method_type:
+                inst.update(bypass=True)    # codegen should bypass this
             return defn.return_type
 
     def op_const(self, inst):
