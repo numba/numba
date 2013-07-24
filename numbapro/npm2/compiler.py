@@ -27,6 +27,8 @@ def compile(func, retty, argtys):
 
         lmod, lfunc = code_generation(func, blocks, return_type, args, global_implib)
 
+        lmod.verify()
+
         jit = execution.JIT(lfunc = lfunc,
                             retty = retty,
                             argtys = argtys)

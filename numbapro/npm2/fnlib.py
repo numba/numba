@@ -1,3 +1,4 @@
+import numpy
 from collections import defaultdict
 import operator
 from .types import (int8, int16, int32, int64, intp,

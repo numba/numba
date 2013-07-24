@@ -1,3 +1,4 @@
+import numpy
 from collections import defaultdict
 from contextlib import contextmanager
 import operator
@@ -696,6 +697,7 @@ def casting_imp(funcobj, imp, retty, typeset):
 def minmax_imp(funcobj, imp, typeset, count):
     return [Imp(imp(ty), funcobj, args=(ty,) * count, return_type=ty)
             for ty in typeset]
+
 
 # --------------------------
 
