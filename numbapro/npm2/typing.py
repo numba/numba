@@ -15,8 +15,16 @@ class Infer(object):
 
         self.valmap = {}
         self.phimap = {}
-    
+
     def infer(self):
+        self.infer_instruction()
+        self.unify_phi_nodes()
+        self.check_branch()
+        self.check_return_type()
+
+    #----- internals ------
+
+    def infer_instruction(self):
         # infer instructions
         for block in self.blocks:
             for op in block.code:
@@ -27,6 +35,7 @@ class Infer(object):
                         assert not hasattr(op, 'type'), "redefining type"
                         op.update(type=ty)
 
+    def unify_phi_nodes(self):
         # unify phi nodes
         for op, newty in self.phimap.iteritems():
             with error_context(lineno=op.lineno,
@@ -38,6 +47,7 @@ class Infer(object):
                 else:
                     op.update(type=newty)
 
+    def check_branch(self):
         # check branch
         for block in self.blocks:
             term = block.terminator
@@ -46,6 +56,7 @@ class Infer(object):
                 if term.opcode == 'branch':
                     types.boolean.coerce(term.cond.type)
 
+    def check_return_type(self):
         # check return type
         for block in self.blocks:
             term = block.terminator
