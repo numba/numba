@@ -1,16 +1,18 @@
 '''
 Implements numpy array functions.
 '''
+import operator
 import numpy
 from . import cgutils, aryutils, types, imlib
 
-def imp_numpy_sum(builder, args, argtys, retty):
+def imp_numpy_sum(context, args, argtys, retty):
     '''
     tmp = 0
     for i in elementwise(ary):
         tmp += i
     return tmp
     '''
+    builder = context.builder
     (ary,) = args
     (aryty,) = argtys
     elemty = aryty.desc.element
@@ -26,7 +28,8 @@ def imp_numpy_sum(builder, args, argtys, retty):
                                              order=aryty.desc.order)
         # XXX: move to next level and reuse NPM to compile this
         assert isinstance(elemty.desc, types.Float)
-        new_sum = imlib.imp_add_float(builder, (builder.load(sum), val))
+        do_add = context.imp.lookup(operator.add, (elemty, elemty))
+        new_sum = do_add(context, (context.builder.load(sum), val))
         builder.store(new_sum, sum)
 
     return builder.load(sum)
@@ -38,14 +41,14 @@ def numpy_sum_return(args):
 class ArraySumMethod(object):
     method = 'sum', (types.ArrayKind,), numpy_sum_return
 
-    def generic_implement(self, builder, args, argtys, retty):
-        return imp_numpy_sum(builder, args, argtys, retty)
+    def generic_implement(self, context, args, argtys, retty):
+        return imp_numpy_sum(context, args, argtys, retty)
 
 class ArraySumFunction(object):
     function = numpy.sum, (types.ArrayKind,), numpy_sum_return
 
-    def generic_implement(self, builder, args, argtys, retty):
-        return imp_numpy_sum(builder, args, argtys, retty)
+    def generic_implement(self, context, args, argtys, retty):
+        return imp_numpy_sum(context, args, argtys, retty)
 
 extensions = [ArraySumMethod, ArraySumFunction]
 

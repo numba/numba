@@ -40,6 +40,13 @@ class ImpLib(object):
 
         return self.implib[funcdef]
 
+    def lookup(self, funcobj, argtys):
+        defn = self.funclib.lookup(funcobj, argtys)
+        imp = self.get(defn)
+        def wrap(context, args):
+            return imp(context, args, argtys, defn.return_type)
+        return wrap
+
     def populate_builtin(self):
         populate_builtin_impl(self)
 
@@ -54,11 +61,11 @@ class Imp(object):
         self.is_parametric = ((return_type is None) or
                                 any(a is None for a in args))
 
-    def __call__(self, builder, args, argtys, retty):
+    def __call__(self, context, args, argtys, retty):
         if self.is_parametric:
-            return self.impl(builder, args, argtys, retty)
+            return self.impl(context, args, argtys, retty)
         else:
-            return self.impl(builder, args)
+            return self.impl(context, args)
 
     def __repr__(self):
         return '<Impl %s %s -> %s >' % (self.funcobj, self.args,
@@ -66,104 +73,104 @@ class Imp(object):
 
 # binary add
 
-def imp_add_integer(builder, args):
+def imp_add_integer(context, args):
     a, b = args
-    return builder.add(a, b)
+    return context.builder.add(a, b)
 
-def imp_add_float(builder, args):
+def imp_add_float(context, args):
     a, b = args
-    return builder.fadd(a, b)
+    return context.builder.fadd(a, b)
 
 def imp_add_complex(dtype):
-    def imp(builder, args):
+    def imp(context, args):
         a, b = args
 
-        a_real, a_imag = dtype.llvm_unpack(builder, a)
-        b_real, b_imag = dtype.llvm_unpack(builder, b)
+        a_real, a_imag = dtype.llvm_unpack(context.builder, a)
+        b_real, b_imag = dtype.llvm_unpack(context.builder, b)
 
-        c_real = imp_add_float(builder, (a_real, b_real))
-        c_imag = imp_add_float(builder, (a_imag, b_imag))
+        c_real = imp_add_float(context, (a_real, b_real))
+        c_imag = imp_add_float(context, (a_imag, b_imag))
 
-        return dtype.desc.llvm_pack(builder, c_real, c_imag)
+        return dtype.desc.llvm_pack(context.builder, c_real, c_imag)
     return imp
 
 # binary sub
 
-def imp_sub_integer(builder, args):
+def imp_sub_integer(context, args):
     a, b = args
-    return builder.sub(a, b)
+    return context.builder.sub(a, b)
 
-def imp_sub_float(builder, args):
+def imp_sub_float(context, args):
     a, b = args
-    return builder.fsub(a, b)
+    return context.builder.fsub(a, b)
 
 def imp_sub_complex(dtype):
-    def imp(builder, args):
+    def imp(context, args):
         a, b = args
 
-        a_real, a_imag = dtype.llvm_unpack(builder, a)
-        b_real, b_imag = dtype.llvm_unpack(builder, b)
+        a_real, a_imag = dtype.llvm_unpack(context.builder, a)
+        b_real, b_imag = dtype.llvm_unpack(context.builder, b)
 
-        c_real = imp_sub_float(builder, (a_real, b_real))
-        c_imag = imp_sub_float(builder, (a_imag, b_imag))
+        c_real = imp_sub_float(context, (a_real, b_real))
+        c_imag = imp_sub_float(context, (a_imag, b_imag))
 
-        return dtype.desc.llvm_pack(builder, c_real, c_imag)
+        return dtype.desc.llvm_pack(context.builder, c_real, c_imag)
     return imp
 
 
 # binary mul
 
-def imp_mul_integer(builder, args):
+def imp_mul_integer(context, args):
     a, b = args
-    return builder.mul(a, b)
+    return context.builder.mul(a, b)
 
-def imp_mul_float(builder, args):
+def imp_mul_float(context, args):
     a, b = args
-    return builder.fmul(a, b)
+    return context.builder.fmul(a, b)
 
 def imp_mul_complex(dtype):
     '''
     x y = (a c - b d) + i (a d + b c)
     '''
-    def imp(builder, args):
+    def imp(context, args):
         x, y = args
 
-        a, b = dtype.llvm_unpack(builder, x)
-        c, d = dtype.llvm_unpack(builder, y)
+        a, b = dtype.llvm_unpack(context.builder, x)
+        c, d = dtype.llvm_unpack(context.builder, y)
 
-        ac = imp_mul_float(builder, (a, c))
-        bd = imp_mul_float(builder, (b, d))
-        ad = imp_mul_float(builder, (a, d))
-        bc = imp_mul_float(builder, (b, c))
+        ac = imp_mul_float(context, (a, c))
+        bd = imp_mul_float(context, (b, d))
+        ad = imp_mul_float(context, (a, d))
+        bc = imp_mul_float(context, (b, c))
 
-        real = imp_sub_float(builder, (ac, bd))
-        imag = imp_add_float(builder, (ad, bc))
+        real = imp_sub_float(context, (ac, bd))
+        imag = imp_add_float(context, (ad, bc))
 
-        return dtype.desc.llvm_pack(builder, real, imag)
+        return dtype.desc.llvm_pack(context.builder, real, imag)
     return imp
 
 # binary floordiv
 
-def imp_floordiv_signed(builder, args):
+def imp_floordiv_signed(context, args):
     a, b = args
-    return builder.sdiv(a, b)
+    return context.builder.sdiv(a, b)
 
-def imp_floordiv_unsigned(builder, args):
+def imp_floordiv_unsigned(context, args):
     a, b = args
-    return builder.udiv(a, b)
+    return context.builder.udiv(a, b)
 
 def imp_floordiv_float(intty):
-    def imp(builder, args):
+    def imp(context, args):
         a, b = args
-        return builder.fptosi(builder.fdiv(a, b),
-                              lc.Type.int(intty.desc.bitwidth))
+        return context.builder.fptosi(context.builder.fdiv(a, b),
+                                      intty.llvm_as_value())
     return imp
 
 # binary truediv
 
-def imp_truediv_float(builder, args):
+def imp_truediv_float(context, args):
     a, b = args
-    return builder.fdiv(a, b)
+    return context.builder.fdiv(a, b)
 
 def imp_truediv_complex(dtype):
     '''
@@ -172,107 +179,107 @@ def imp_truediv_complex(dtype):
     1 / b = 1 / (x + i y) = x / |b| - i y /|b| 
     |b| = x * x + y * y
     '''
-    def imp(builder, args):
+    def imp(context, args):
         a, b = args
-        x, y = dtype.llvm_unpack(builder, b)
-        xx = imp_mul_float(builder, (x, x))
-        yy = imp_mul_float(builder, (y, y))
-        abs_b = imp_add_float(builder, (xx, yy))
+        x, y = dtype.llvm_unpack(context.builder, b)
+        xx = imp_mul_float(context, (x, x))
+        yy = imp_mul_float(context, (y, y))
+        abs_b = imp_add_float(context, (xx, yy))
 
-        real = imp_truediv_float(builder, (x, abs_b))
-        imag0 = imp_truediv_float(builder, (y, abs_b))
+        real = imp_truediv_float(context, (x, abs_b))
+        imag0 = imp_truediv_float(context, (y, abs_b))
         
-        imag = imp_neg_float(dtype.desc.element)(builder, (imag0,))
+        imag = imp_neg_float(dtype.desc.element)(context, (imag0,))
 
-        rb = dtype.desc.llvm_pack(builder, real, imag)
-        return imp_mul_complex(dtype)(builder, (a, rb))
+        rb = dtype.desc.llvm_pack(context.builder, real, imag)
+        return imp_mul_complex(dtype)(context, (a, rb))
     return imp
 
 # binary mod
 
-def imp_mod_signed(builder, args):
+def imp_mod_signed(context, args):
     a, b = args
-    return builder.srem(a, b)
+    return context.builder.srem(a, b)
 
-def imp_mod_unsigned(builder, args):
+def imp_mod_unsigned(context, args):
     a, b = args
-    return builder.urem(a, b)
+    return context.builder.urem(a, b)
 
-def imp_mod_float(builder, args):
+def imp_mod_float(context, args):
     a, b = args
-    return builder.frem(a, b)
+    return context.builder.frem(a, b)
 
 # binary lshift
 
-def imp_lshift_integer(builder, args):
+def imp_lshift_integer(context, args):
     a, b = args
-    return builder.shl(a, b)
+    return context.builder.shl(a, b)
 
 # binary rshift
 
-def imp_rshift_signed(builder, args):
+def imp_rshift_signed(context, args):
     a, b = args
-    return builder.ashr(a, b)
+    return context.builder.ashr(a, b)
 
-def imp_rshift_unsigned(builder, args):
+def imp_rshift_unsigned(context, args):
     a, b = args
-    return builder.lshr(a, b)
+    return context.builder.lshr(a, b)
 
 # binary and
 
-def imp_and_integer(builder, args):
+def imp_and_integer(context, args):
     a, b = args
-    return builder.and_(a, b)
+    return context.builder.and_(a, b)
 
 # binary or
 
-def imp_or_integer(builder, args):
+def imp_or_integer(context, args):
     a, b = args
-    return builder.or_(a, b)
+    return context.builder.or_(a, b)
 
 # binary xor
 
-def imp_xor_integer(builder, args):
+def imp_xor_integer(context, args):
     a, b = args
-    return builder.xor(a, b)
+    return context.builder.xor(a, b)
 
 # unary negate
 
 def imp_neg_signed(ty):
-    def imp(builder, args):
+    def imp(context, args):
         x, = args
         zero = ty.llvm_const(0)
-        return imp_sub_integer(builder, (zero, x))
+        return imp_sub_integer(context, (zero, x))
     return imp
 
 def imp_neg_float(ty):
-    def imp(builder, args):
+    def imp(context, args):
         x, = args
         zero = ty.llvm_const(0)
-        return imp_sub_float(builder, (zero, x))
+        return imp_sub_float(context, (zero, x))
     return imp
 
 def imp_neg_complex(ty):
-    def imp(builder, args):
+    def imp(context, args):
         x, = args
         zero = ty.llvm_const(0)
-        return imp_sub_complex(ty)(builder, (zero, x))
+        return imp_sub_complex(ty)(context, (zero, x))
     return imp
 
 # unary invert
 
 def imp_invert_integer(ty):
-    def imp(builder, args):
+    def imp(context, args):
         x, = args
         ones = lc.Constant.all_ones(ty.llvm_as_value())
-        return builder.xor(x, ones)
+        return context.builder.xor(x, ones)
     return imp
 
 # bool eq
 
-def imp_eq_signed(builder, args):
+def imp_eq_signed(context, args):
     a, b = args
-    return builder.icmp(lc.ICMP_EQ, a, b)
+    return context.builder.icmp(lc.ICMP_EQ, a, b)
 
 # bool comparisions
 
@@ -285,9 +292,9 @@ def imp_cmp_signed(cmp, ty):
         operator.eq: lc.ICMP_EQ,
         operator.ne: lc.ICMP_NE,
     }
-    def imp(builder, args):
+    def imp(context, args):
         a, b = args
-        return builder.icmp(CMP[cmp], a, b)
+        return context.builder.icmp(CMP[cmp], a, b)
     return imp
 
 def imp_cmp_unsigned(cmp, ty):
@@ -299,9 +306,9 @@ def imp_cmp_unsigned(cmp, ty):
         operator.eq: lc.ICMP_EQ,
         operator.ne: lc.ICMP_NE,
     }
-    def imp(builder, args):
+    def imp(context, args):
         a, b = args
-        return builder.icmp(CMP[cmp], a, b)
+        return context.builder.icmp(CMP[cmp], a, b)
     return imp
 
 def imp_cmp_float(cmp, ty):
@@ -313,102 +320,102 @@ def imp_cmp_float(cmp, ty):
         operator.eq: lc.FCMP_OEQ,
         operator.ne: lc.FCMP_ONE,
     }
-    def imp(builder, args):
+    def imp(context, args):
         a, b = args
-        return builder.fcmp(CMP[cmp], a, b)
+        return context.builder.fcmp(CMP[cmp], a, b)
     return imp
 
 def imp_cmp_complex(cmp, ty):
     assert cmp in (operator.ne, operator.eq), "no ordering for complex"
-    def imp(builder, args):
+    def imp(context, args):
         a, b = args
-        areal, aimag = ty.llvm_unpack(builder, a)
-        breal, bimag = ty.llvm_unpack(builder, b)
+        areal, aimag = ty.llvm_unpack(context.builder, a)
+        breal, bimag = ty.llvm_unpack(context.builder, b)
         cmptor = imp_cmp_float(cmp, ty.desc.element)
-        c = cmptor(builder, (areal, breal))
-        d = cmptor(builder, (aimag, bimag))
-        return builder.and_(c, d)
+        c = cmptor(context, (areal, breal))
+        d = cmptor(context, (aimag, bimag))
+        return context.builder.and_(c, d)
     return imp
 
 # range
 
-def make_range_obj(builder, start, stop, step):
+def make_range_obj(context, start, stop, step):
     rangetype = types.range_type.llvm_as_value()
     rangeobj = lc.Constant.undef(rangetype)
     
-    rangeobj = builder.insert_value(rangeobj, start, 0)
-    rangeobj = builder.insert_value(rangeobj, stop, 1)
-    rangeobj = builder.insert_value(rangeobj, step, 2)
+    rangeobj = context.builder.insert_value(rangeobj, start, 0)
+    rangeobj = context.builder.insert_value(rangeobj, stop, 1)
+    rangeobj = context.builder.insert_value(rangeobj, step, 2)
     return rangeobj
 
-def imp_range_1(builder, args):
+def imp_range_1(context, args):
     assert len(args) == 1
     (stop,) = args
     start = types.intp.llvm_const(0)
     step = types.intp.llvm_const(1)
-    return make_range_obj(builder, start, stop, step)
+    return make_range_obj(context, start, stop, step)
 
-def imp_range_2(builder, args):
+def imp_range_2(context, args):
     assert len(args) == 2
     start, stop = args
     step = types.intp.llvm_const(1)
-    return make_range_obj(builder, start, stop, step)
+    return make_range_obj(context, start, stop, step)
 
-def imp_range_3(builder, args):
+def imp_range_3(context, args):
     assert len(args) == 3
     start, stop, step = args
-    return make_range_obj(builder, start, stop, step)
+    return make_range_obj(context, start, stop, step)
 
-def imp_range_iter(builder, args):
+def imp_range_iter(context, args):
     obj, = args
-    with cgutils.goto_entry_block(builder):
+    with cgutils.goto_entry_block(context.builder):
         # allocate at the beginning
         # assuming a range object must be used statically
-        ptr = builder.alloca(obj.type)
-    builder.store(obj, ptr)
+        ptr = context.builder.alloca(obj.type)
+    context.builder.store(obj, ptr)
     return ptr
 
-def imp_range_valid(builder, args):
+def imp_range_valid(context, args):
     ptr, = args
     idx0 = types.int32.llvm_const(0)
     idx1 = types.int32.llvm_const(1)
     idx2 = types.int32.llvm_const(2)
-    start = builder.load(builder.gep(ptr, [idx0, idx0]))
-    stop = builder.load(builder.gep(ptr, [idx0, idx1]))
-    step = builder.load(builder.gep(ptr, [idx0, idx2]))
+    start = context.builder.load(context.builder.gep(ptr, [idx0, idx0]))
+    stop = context.builder.load(context.builder.gep(ptr, [idx0, idx1]))
+    step = context.builder.load(context.builder.gep(ptr, [idx0, idx2]))
 
     zero = types.intp.llvm_const(0)
-    positive = builder.icmp(lc.ICMP_SGE, step, zero)
-    posok = builder.icmp(lc.ICMP_SLT, start, stop)
-    negok = builder.icmp(lc.ICMP_SGT, start, stop)
+    positive = context.builder.icmp(lc.ICMP_SGE, step, zero)
+    posok = context.builder.icmp(lc.ICMP_SLT, start, stop)
+    negok = context.builder.icmp(lc.ICMP_SGT, start, stop)
     
-    return builder.select(positive, posok, negok)
+    return context.builder.select(positive, posok, negok)
 
-def imp_range_next(builder, args):
+def imp_range_next(context, args):
     ptr, = args
     idx0 = types.int32.llvm_const(0)
     idx2 = types.int32.llvm_const(2)
-    startptr = builder.gep(ptr, [idx0, idx0])
-    start = builder.load(startptr)
-    step = builder.load(builder.gep(ptr, [idx0, idx2]))
-    next = builder.add(start, step)
-    builder.store(next, startptr)
+    startptr = context.builder.gep(ptr, [idx0, idx0])
+    start = context.builder.load(startptr)
+    step = context.builder.load(context.builder.gep(ptr, [idx0, idx2]))
+    next = context.builder.add(start, step)
+    context.builder.store(next, startptr)
     return start
 
 
 # complex attributes
 
 def imp_complex_real(ty):
-    def imp(builder, args):
+    def imp(context, args):
         value, = args
-        real, imag = ty.llvm_unpack(builder, value)
+        real, imag = ty.llvm_unpack(context.builder, value)
         return real
     return imp
 
 def imp_complex_imag(ty):
-    def imp(builder, args):
+    def imp(context, args):
         value, = args
-        real, imag = ty.llvm_unpack(builder, value)
+        real, imag = ty.llvm_unpack(context.builder, value)
         return imag
     return imp
 
@@ -423,16 +430,16 @@ def complex_attributes(complex_type):
     return imps
 
 def imp_complex_ctor_1(ty):
-    def imp(builder, args):
+    def imp(context, args):
         real, = args
         imag = ty.desc.element.llvm_const(0)
-        return ty.desc.llvm_pack(builder, real, imag)
+        return ty.desc.llvm_pack(context.builder, real, imag)
     return imp
 
 def imp_complex_ctor_2(ty):
-    def imp(builder, args):
+    def imp(context, args):
         real, imag = args
-        return ty.desc.llvm_pack(builder, real, imag)
+        return ty.desc.llvm_pack(context.builder, real, imag)
     return imp
 
 def complex_ctor(complex_type):
@@ -449,39 +456,40 @@ def complex_ctor(complex_type):
 # casts
 
 def imp_cast_int(fromty):
-    def imp(builder, args):
+    def imp(context, args):
         x, = args
-        return fromty.llvm_cast(builder, x, types.intp)
+        return fromty.llvm_cast(context.builder, x, types.intp)
     return imp
 
 def imp_cast_float(fromty):
-    def imp(builder, args):
+    def imp(context, args):
         x, = args
-        return fromty.llvm_cast(builder, x, types.float64)
+        return fromty.llvm_cast(context.builder, x, types.float64)
     return imp
 
 # array getitem
-def array_getitem_intp(builder, args, argtys, retty):
+def array_getitem_intp(context, args, argtys, retty):
     ary, idx = args
     aryty = argtys[0]
-    return aryutils.getitem(builder, ary, indices=[idx], order=aryty.desc.order)
+    return aryutils.getitem(context.builder, ary, indices=[idx],
+                            order=aryty.desc.order)
 
-def array_getitem_tuple(builder, args, argtys, retty):
+def array_getitem_tuple(context, args, argtys, retty):
     ary, idx = args
     aryty, idxty = argtys
     indices = []
 
     indexty = types.intp
     for i, ety in enumerate(idxty.desc.elements):
-        elem = idxty.desc.llvm_getitem(builder, idx, i)
+        elem = idxty.desc.llvm_getitem(context.builder, idx, i)
         if ety != indexty:
-            elem = ety.llvm_cast(builder, elem, indexty)
+            elem = ety.llvm_cast(context.builder, elem, indexty)
         indices.append(elem)
 
     return aryutils.getitem(builder, ary, indices=indices,
                             order=aryty.desc.order)
 
-def array_getitem_fixedarray(builder, args, argtys, retty):
+def array_getitem_fixedarray(context, args, argtys, retty):
     ary, idx = args
     aryty, idxty = argtys
     indices = []
@@ -489,45 +497,46 @@ def array_getitem_fixedarray(builder, args, argtys, retty):
     indexty = types.intp
     ety = idxty.desc.element
     for i in range(idxty.desc.length):
-        elem = idxty.desc.llvm_getitem(builder, idx, i)
+        elem = idxty.desc.llvm_getitem(context.builder, idx, i)
         if ety != indexty:
-            elem = ety.llvm_cast(builder, elem, indexty)
+            elem = ety.llvm_cast(context.builder, elem, indexty)
         indices.append(elem)
 
-    return aryutils.getitem(builder, ary, indices=indices,
+    return aryutils.getitem(context.builder, ary, indices=indices,
                             order=aryty.desc.order)
 
 
 # array setitem
-def array_setitem_intp(builder, args, argtys, retty):
+def array_setitem_intp(context, args, argtys, retty):
     ary, idx, val = args
     aryty, indty, valty = argtys
     if valty != aryty.desc.element:
-        val = valty.llvm_cast(builder, val, aryty.desc.element)
-    aryutils.setitem(builder, ary, indices=[idx], order=aryty.desc.order,
+        val = valty.llvm_cast(context.builder, val, aryty.desc.element)
+    aryutils.setitem(context.builder, ary, indices=[idx],
+                     order=aryty.desc.order,
                      value=val)
 
-def array_setitem_tuple(builder, args, argtys, retty):
+def array_setitem_tuple(context, args, argtys, retty):
     ary, idx, val = args
     aryty, indty, valty = argtys
 
     indexty = types.intp
     indices = []
     for i, ety in enumerate(indty.desc.elements):
-        elem = indty.desc.llvm_getitem(builder, idx, i)
+        elem = indty.desc.llvm_getitem(context.builder, idx, i)
         if ety != indexty:
-            elem = ety.llvm_cast(builder, elem, indexty)
+            elem = ety.llvm_cast(context.builder, elem, indexty)
         indices.append(elem)
 
     if valty != aryty.desc.element:
-        val = valty.llvm_cast(builder, val, aryty.desc.element)
+        val = valty.llvm_cast(context.builder, val, aryty.desc.element)
 
-    aryutils.setitem(builder, ary, indices=indices,
+    aryutils.setitem(context.builder, ary, indices=indices,
                      order=aryty.desc.order,
                      value=val)
 
 
-def array_setitem_fixedarray(builder, args, argtys, retty):
+def array_setitem_fixedarray(context, args, argtys, retty):
     ary, idx, val = args
     aryty, indty, valty = argtys
 
@@ -535,67 +544,67 @@ def array_setitem_fixedarray(builder, args, argtys, retty):
     ety = indty.desc.element
     indices = []
     for i in range(indty.desc.length):
-        elem = indty.desc.llvm_getitem(builder, idx, i)
+        elem = indty.desc.llvm_getitem(context.builder, idx, i)
         if ety != indexty:
-            elem = ety.llvm_cast(builder, elem, indexty)
+            elem = ety.llvm_cast(context.builder, elem, indexty)
         indices.append(elem)
 
     if valty != aryty.desc.element:
-        val = valty.llvm_cast(builder, val, aryty.desc.element)
+        val = valty.llvm_cast(context.builder, val, aryty.desc.element)
 
-    aryutils.setitem(builder, ary, indices=indices,
+    aryutils.setitem(context.builder, ary, indices=indices,
                      order=aryty.desc.order,
                      value=val)
 
 
 # array shape strides size
-def array_shape(builder, args, argtys, retty):
+def array_shape(context, args, argtys, retty):
     ary, = args
-    shape = aryutils.getshape(builder, ary)
-    return retty.desc.llvm_pack(builder, shape)
+    shape = aryutils.getshape(context.builder, ary)
+    return retty.desc.llvm_pack(context.builder, shape)
 
-def array_strides(builder, args, argtys, retty):
+def array_strides(context, args, argtys, retty):
     ary, = args
-    strides = aryutils.getstrides(builder, ary)
-    return retty.desc.llvm_pack(builder, strides)
+    strides = aryutils.getstrides(context.builder, ary)
+    return retty.desc.llvm_pack(context.builder, strides)
 
-def array_size(builder, args, argtys, retty):
+def array_size(context, args, argtys, retty):
     ary, = args
     sz = retty.llvm_const(1)
-    for axsz in aryutils.getshape(builder, ary):
-        sz = builder.mul(axsz, sz)
+    for axsz in aryutils.getshape(context.builder, ary):
+        sz = context.builder.mul(axsz, sz)
     return sz
 
-def array_ndim(builder, args, argtys, retty):
+def array_ndim(context, args, argtys, retty):
     ary, = args
-    return retty.llvm_const(aryutils.getndim(builder, ary))
+    return retty.llvm_const(aryutils.getndim(context.builder, ary))
 
 # fixedarray getitem
 
-def fixedarray_getitem(builder, args, argtys, retty):
+def fixedarray_getitem(context, args, argtys, retty):
     ary, ind = args
     aryty, indty = argtys
     assert retty == aryty.desc.element
 
-    bbafter = cgutils.append_block(builder)
-    bbelse = cgutils.append_block(builder)
+    bbafter = cgutils.append_block(context.builder)
+    bbelse = cgutils.append_block(context.builder)
 
-    switch = builder.switch(ind, bbelse, n=aryty.desc.length)
+    switch = context.builder.switch(ind, bbelse, n=aryty.desc.length)
 
     incomings = []
     for n in range(aryty.desc.length):
-        bbcur = cgutils.append_block(builder)
+        bbcur = cgutils.append_block(context.builder)
         switch.add_case(indty.llvm_const(n), bbcur)
-        with cgutils.goto_block(builder, bbcur):
-            res = builder.extract_value(ary, n)
-            builder.branch(bbafter)
+        with cgutils.goto_block(context.builder, bbcur):
+            res = context.builder.extract_value(ary, n)
+            context.builder.branch(bbafter)
             incomings.append((res, bbcur))
 
-    with cgutils.goto_block(builder, bbelse):
-        builder.unreachable()
+    with cgutils.goto_block(context.builder, bbelse):
+        context.builder.unreachable()
 
-    builder.position_at_end(bbafter)
-    phi = builder.phi(retty.llvm_as_value())
+    context.builder.position_at_end(bbafter)
+    phi = context.builder.phi(retty.llvm_as_value())
     for val, bb in incomings:
         phi.add_incoming(val, bb)
 
@@ -604,23 +613,23 @@ def fixedarray_getitem(builder, args, argtys, retty):
 # abs
 
 def imp_abs_integer(ty):
-    def imp(builder, args):
+    def imp(context, args):
         x, = args
         if not ty.desc.signed:
             raise TypeError("absolute value of %s" % ty)
         zero = ty.llvm_const(0)
-        isneg = imp_cmp_signed(operator.lt, ty)(builder, (x, zero))
-        absval = imp_sub_integer(builder, (zero, x))
-        return builder.select(isneg, absval, x)
+        isneg = imp_cmp_signed(operator.lt, ty)(context, (x, zero))
+        absval = imp_sub_integer(context, (zero, x))
+        return context.builder.select(isneg, absval, x)
     return imp
 
 def imp_abs_float(ty):
-    def imp(builder, args):
+    def imp(context, args):
         x, = args
         zero = ty.llvm_const(0)
-        isneg = imp_cmp_float(operator.lt, ty)(builder, (x, zero))
-        absval = imp_sub_float(builder, (zero, x))
-        return builder.select(isneg, absval, x)
+        isneg = imp_cmp_float(operator.lt, ty)(context, (x, zero))
+        absval = imp_sub_float(context, (zero, x))
+        return context.builder.select(isneg, absval, x)
     return imp
 
 # min
@@ -628,22 +637,22 @@ def imp_abs_float(ty):
 def imp_min_integer(ty):
     cmpfunc  = imp_cmp_signed if ty.desc.signed else imp_cmp_unsigned
     cmp = cmpfunc(operator.lt, ty)
-    def imp(builder, args):
+    def imp(context, args):
         sel = args[0]
         for val in args[1:]:
-            pred = cmp(builder, (sel, val))
-            sel = builder.select(pred, sel, val)
+            pred = cmp(context, (sel, val))
+            sel = context.builder.select(pred, sel, val)
         return sel
     return imp
 
 def imp_min_float(ty):
     cmpfunc  = imp_cmp_float
     cmp = cmpfunc(operator.lt, ty)
-    def imp(builder, args):
+    def imp(context, args):
         sel = args[0]
         for val in args[1:]:
-            pred = cmp(builder, (sel, val))
-            sel = builder.select(pred, sel, val)
+            pred = cmp(context, (sel, val))
+            sel = context.builder.select(pred, sel, val)
         return sel
     return imp
 
@@ -652,22 +661,22 @@ def imp_min_float(ty):
 def imp_max_integer(ty):
     cmpfunc  = imp_cmp_signed if ty.desc.signed else imp_cmp_unsigned
     cmp = cmpfunc(operator.gt, ty)
-    def imp(builder, args):
+    def imp(context, args):
         sel = args[0]
         for val in args[1:]:
-            pred = cmp(builder, (sel, val))
-            sel = builder.select(pred, sel, val)
+            pred = cmp(context, (sel, val))
+            sel = context.builder.select(pred, sel, val)
         return sel
     return imp
 
 def imp_max_float(ty):
     cmpfunc  = imp_cmp_float
     cmp = cmpfunc(operator.gt, ty)
-    def imp(builder, args):
+    def imp(context, args):
         sel = args[0]
         for val in args[1:]:
-            pred = cmp(builder, (sel, val))
-            sel = builder.select(pred, sel, val)
+            pred = cmp(context, (sel, val))
+            sel = context.builder.select(pred, sel, val)
         return sel
     return imp
 

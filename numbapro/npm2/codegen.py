@@ -1,10 +1,12 @@
-import inspect
+import inspect, collections
 from contextlib import contextmanager
 import operator
 from llvm import core as lc
 
 from .errors import error_context
 from . import types, typesets
+
+codegen_context = collections.namedtuple('codegen_context', ['imp', 'builder'])
 
 class CodeGen(object):
     def __init__(self, func, blocks, args, return_type, implib):
@@ -52,6 +54,8 @@ class CodeGen(object):
 
 
         self.builder = lc.Builder.new(self.bbmap[self.blocks[0]])
+        self.imp_context = codegen_context(imp=self.implib,
+                                           builder=self.builder)
         # initialize stack storage
         varnames = {}
         for block in self.blocks:
@@ -144,7 +148,7 @@ class CodeGen(object):
                     if atype is None
                     else self.cast(self.valmap[aval], aval.type, atype))
                 for aval, atype in zip(inst.args, imp.args)]
-        return imp(self.builder, args, argtys, inst.defn.return_type)
+        return imp(self.imp_context, args, argtys, inst.defn.return_type)
 
     def op_const(self, inst):
         if isinstance(inst.type.desc, types.BuiltinObject):
