@@ -300,7 +300,7 @@ static int pydatetime2day(PyObject *object)
 
 static PyObject* primitive2pydatetime(unsigned long int year, unsigned int month, unsigned int day)
 {
-    PyObject *result = PyDate_FromDate(year, month, day);
+    PyObject *result = PyDateTime_FromDateAndTime(year, month, day, 0, 0, 0, 0);
     Py_INCREF(result);
     return result;
 }
