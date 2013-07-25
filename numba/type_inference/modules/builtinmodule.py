@@ -91,6 +91,14 @@ def complex_(typesystem, node, a, b):
     else:
         return cast(node, complex128)
 
+@register_builtin((0, 1, 2, 3), can_handle_deferred_types=True)
+def datetime_(typesystem, node, a, b, c):
+    if len(node.args) == 3:
+        args = nodes.CoercionNode.coerce(node.args, [int64, int32, int32])
+        return nodes.DateTimeNode(year=args[0], month=args[1], day=args[2])
+    else:
+        return cast(node, datetime)
+
 def abstype(argtype):
     if argtype.is_complex:
         result_type = argtype.base_type

@@ -39,7 +39,11 @@ def register_with_argchecking(nargs, can_handle_deferred_types=False):
 
         if value is None:
             name = infer.__name__.strip("_")
-            value = getattr(builtins, name)
+            if name == 'datetime':
+                import datetime
+                value = datetime.datetime
+            else:
+                value = getattr(builtins, name)
         else:
             name = getattr(value, "__name__", "<unknown>")
 

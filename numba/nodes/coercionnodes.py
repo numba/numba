@@ -60,7 +60,9 @@ class CoercionNode(ExprNode):
 
     @classmethod
     def coerce(cls, node_or_nodes, dst_type):
-        if isinstance(node_or_nodes, list):
+        if isinstance(node_or_nodes, list) and isinstance(dst_type, list):
+            return [cls(node, dst) for node, dst in zip(node_or_nodes, dst_type)]
+        elif isinstance(node_or_nodes, list):
             return [cls(node, dst_type) for node in node_or_nodes]
         return cls(node_or_nodes, dst_type)
 

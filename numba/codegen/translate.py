@@ -1265,8 +1265,14 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
                 real = self.caster.cast(real, ldst_base_type, **flags)
             imag = llvm.core.Constant.real(ldst_base_type, 0.0)
             val = self._create_complex(real, imag)
+        elif dst_type.is_datetime and node_type.is_datetime:
+            val = self._promote_datetime(node_type, dst_type, val)
         elif dst_type.is_datetime and node_type.is_numeric:
-            val = self._create_datetime(0, 0, 0)
+            #year = llvm.core.Constant.int(llvm.core.Type.int(64), 0)
+            #month = llvm.core.Constant.int(llvm.core.Type.int(32), 0)
+            #day = llvm.core.Constant.int(llvm.core.Type.int(32), 0)
+            #val = self._create_datetime(year, month, day)
+            raise NotImplementedError
         else:
             flags = {}
             add_cast_flag_unsigned(flags, node_type, dst_type)
