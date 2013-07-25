@@ -571,6 +571,7 @@ def array_ndim(builder, args, argtys, retty):
     return retty.llvm_const(aryutils.getndim(builder, ary))
 
 # fixedarray getitem
+
 def fixedarray_getitem(builder, args, argtys, retty):
     ary, ind = args
     aryty, indty = argtys
@@ -669,34 +670,6 @@ def imp_max_float(ty):
             sel = builder.select(pred, sel, val)
         return sel
     return imp
-
-# numpy.sum
-def imp_numpy_sum(builder, args, argtys, retty):
-    '''
-    tmp = 0
-    for i in elementwise(ary):
-        tmp += i
-    return tmp
-    '''
-    (ary,) = args
-    (aryty,) = argtys
-    elemty = aryty.desc.element
-
-    begins = (0,) * aryty.desc.ndim
-    ends = aryutils.getshape(builder, ary)
-    steps = (1,) * aryty.desc.ndim
-
-    sum = builder.alloca(elemty.llvm_as_value())
-    builder.store(elemty.llvm_const(0), sum)
-    with cgutils.loop_nest(builder, begins, ends, steps) as indices:
-        val = aryutils.getitem(builder, ary, indices=indices,
-                                             order=aryty.desc.order)
-        # XXX: move to next level and reuse NPM to compile this
-        assert isinstance(elemty.desc, types.Float)
-        new_sum = imp_add_float(builder, (builder.load(sum), val))
-        builder.store(new_sum, sum)
-
-    return builder.load(sum)
 
 #----------------------------------------------------------------------------
 # utils
@@ -901,10 +874,6 @@ builtins += minmax_imp(max, imp_max_integer, typesets.integer_set, 2)
 builtins += minmax_imp(max, imp_max_integer, typesets.integer_set, 3)
 builtins += minmax_imp(max, imp_max_float, typesets.float_set, 2)
 builtins += minmax_imp(max, imp_max_float, typesets.float_set, 3)
-
-# numpy sum
-builtins += [Imp(imp_numpy_sum, numpy.sum, args=(types.ArrayKind,))]
-builtins += [Imp(imp_numpy_sum, '@sum', args=(types.ArrayKind,))]
 
 # --------------------------
 

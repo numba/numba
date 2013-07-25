@@ -274,10 +274,6 @@ def minmax_from_sets(count, typeset):
         sigs.append(sig)
     return sigs
 
-def numpy_sum_return(args):
-    ary, = args
-    return ary.desc.element
-
 #-----------------------------------------------------------------------------
 # Define Builtin Signatures
 
@@ -383,10 +379,6 @@ builtins += def_(min, minmax_from_sets(3, integer_set|float_set))
 
 builtins += def_(max, minmax_from_sets(2, integer_set|float_set))
 builtins += def_(max, minmax_from_sets(3, integer_set|float_set))
-
-builtins += def_(numpy.sum, [((types.ArrayKind,), numpy_sum_return)])
-builtins += def_('.sum', [((types.ArrayKind,), types.method_type)])
-builtins += def_('@sum', [((types.ArrayKind,), numpy_sum_return)])
 
 def get_builtin_function_library(lib=None):
     '''Create or add builtin functions to a FunctionLibrary instance.

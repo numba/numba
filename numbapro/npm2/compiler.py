@@ -3,14 +3,23 @@ from contextlib import contextmanager
 from collections import defaultdict
 from timeit import default_timer as timer
 import inspect
-from . import symbolic, typing, codegen, execution, fnlib, imlib
+from . import (symbolic, typing, codegen, execution, fnlib, imlib, extending,
+               arylib)
 
 
-global_funclib = fnlib.get_builtin_function_library()
-global_implib = imlib.ImpLib(global_funclib)
-global_implib.populate_builtin()
+def get_builtin_context():
+    funclib = fnlib.get_builtin_function_library()
+    implib = imlib.ImpLib(funclib)
+    implib.populate_builtin()
+    libs = funclib, implib
+    extending.extends(libs, arylib.extensions)
+    return libs
 
-def compile(func, retty, argtys):
+global_builtin_libs = get_builtin_context()
+
+def compile(func, retty, argtys, libs=global_builtin_libs):
+    funclib, implib = libs
+
     with profile((func, tuple(argtys))):
         # preparation
         argspec = inspect.getargspec(func)
@@ -23,9 +32,9 @@ def compile(func, retty, argtys):
 
         # compilation
         blocks =  symbolic_interpret(func)
-        type_infer(func, blocks, return_type, args, global_funclib)
+        type_infer(func, blocks, return_type, args, funclib)
 
-        lmod, lfunc = code_generation(func, blocks, return_type, args, global_implib)
+        lmod, lfunc = code_generation(func, blocks, return_type, args, implib)
 
         lmod.verify()
 
