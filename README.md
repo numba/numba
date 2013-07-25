@@ -70,6 +70,7 @@ See https://github.com/llvmpy/llvmpy for the most up-to-date instructions.
     $ git clone https://github.com/numba/numba.git
     $ cd numba
     $ pip install -r requirements.txt
+    $ python setup.py build_ext --inplace
     $ python setup.py install
 ```
 
