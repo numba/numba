@@ -319,6 +319,7 @@ def imp_cmp_float(cmp, ty):
     return imp
 
 def imp_cmp_complex(cmp, ty):
+    assert cmp in (operator.ne, operator.eq), "no ordering for complex"
     def imp(builder, args):
         a, b = args
         areal, aimag = ty.llvm_unpack(a)
@@ -800,12 +801,14 @@ builtins += binary_op_imp(operator.or_, imp_or_integer,
 builtins += binary_op_imp(operator.xor, imp_xor_integer,
                       typesets.integer_set)
 
-# bool gt
+# bool comparision
 for cmp in [operator.gt, operator.ge, operator.lt, operator.le,
             operator.eq, operator.ne]:
     builtins += bool_op_imp(cmp, imp_cmp_signed,   typesets.signed_set)
     builtins += bool_op_imp(cmp, imp_cmp_unsigned, typesets.unsigned_set)
     builtins += bool_op_imp(cmp, imp_cmp_float,    typesets.float_set)
+
+for cmp in [operator.eq, operator.ne]:
     builtins += bool_op_imp(cmp, imp_cmp_complex,  typesets.complex_set)
 
 # unary arith negate

@@ -327,16 +327,16 @@ builtins += def_(operator.neg,
 builtins += def_(operator.invert, unary_func_from_sets(integer_set))
 
 builtins += def_(operator.gt,
-                   bool_func_from_sets(integer_set|float_set|complex_set))
+                   bool_func_from_sets(integer_set|float_set))
 
 builtins += def_(operator.lt,
-                   bool_func_from_sets(integer_set|float_set|complex_set))
+                   bool_func_from_sets(integer_set|float_set))
 
 builtins += def_(operator.ge,
-                   bool_func_from_sets(integer_set|float_set|complex_set))
+                   bool_func_from_sets(integer_set|float_set))
 
 builtins += def_(operator.le,
-                   bool_func_from_sets(integer_set|float_set|complex_set))
+                   bool_func_from_sets(integer_set|float_set))
 
 builtins += def_(operator.eq,
                    bool_func_from_sets(integer_set|float_set|complex_set))
