@@ -322,11 +322,11 @@ def imp_cmp_complex(cmp, ty):
     assert cmp in (operator.ne, operator.eq), "no ordering for complex"
     def imp(builder, args):
         a, b = args
-        areal, aimag = ty.llvm_unpack(a)
-        breal, bimag = ty.llvm_unpack(b)
+        areal, aimag = ty.llvm_unpack(builder, a)
+        breal, bimag = ty.llvm_unpack(builder, b)
         cmptor = imp_cmp_float(cmp, ty.desc.element)
-        c = cmptor(areal, breal)
-        d = cmptor(aimag, bimag)
+        c = cmptor(builder, (areal, breal))
+        d = cmptor(builder, (aimag, bimag))
         return builder.and_(c, d)
     return imp
 

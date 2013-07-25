@@ -2,13 +2,14 @@ import numpy as np
 from ..compiler import compile
 from ..types import (
 int8, int16, int32, int64, uint8, uint16, uint32, uint64,
-float32, float64
+float32, float64, complex64, complex128
 )
 from .support import testcase, main
 
 
 iset = [int8, int16, int32, int64, uint8, uint16, uint32, uint64]
 fset = [float32, float64]
+cset = [complex64, complex128]
 
 def gt(a, b):
     if a > b:
@@ -78,6 +79,18 @@ def template_float(func, avalues, bvalues):
         run(ty)
 
 
+def template_complex(func, avalues, bvalues):
+    def run(ty):
+        compiled = compile(func, ty, [ty, ty])
+        for a, b, in zip(avalues, bvalues):
+            got = compiled(a, b)
+            exp = func(a, b)
+            msg = '%s(%s, %s) got = %s expect=%s' % (func, a, b, got, exp)
+            assert np.allclose(got, exp), msg
+
+    for ty in cset:
+        run(ty)
+
 #------------------------------------------------------------------------------
 # gt
 
@@ -136,6 +149,9 @@ def test_eq_integer():
 def test_eq_float():
     template_float(eq, [1.2, 5.6], [1.2, 3.2])
 
+@testcase
+def test_eq_complex():
+    template_complex(eq, [1.2j, 5.6j], [1.2j, 3.2j])
 
 #------------------------------------------------------------------------------
 # ne
@@ -147,6 +163,11 @@ def test_ne_integer():
 @testcase
 def test_ne_float():
     template_float(ne, [1.2, 5.6], [1.2, 3.2])
+
+@testcase
+def test_ne_complex():
+    template_complex(eq, [1.2j, 5.6j], [1.2j, 3.2j])
+
 
 #------------------------------------------------------------------------------
 # raw
