@@ -707,7 +707,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         # Update basic block in case the promotion created a new block
         self.flow_block.exit_block = self.builder.basic_block
 
-    def visit_ControlBlock(self, node):
+    _pending_block = None # Nested hack
+
+    def visit_ControlBlock(self, node, visit_body=True):
         """
         Return a new basic block and handle phis and promotions. Promotions
         are needed at merge (phi) points to have a consistent type.
@@ -730,8 +732,15 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         self.builder.position_at_end(node.entry_block)
         self._init_phis(node)
 
-        lbody = self.visitlist(node.body)
-        lbody = lbody[0] if len(lbody) == 1 else None
+        if self._pending_block:
+            self.visitlist(self._pending_block.body)
+            self._pending_block = None
+
+        if visit_body:
+            lbody = self.visitlist(node.body)
+            lbody = lbody[0] if len(lbody) == 1 else None
+        else:
+            lbody = None
 
         if not node.exit_block:
             node.exit_block = self.builder.basic_block
@@ -763,7 +772,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             test = self._generate_test(test)
 
         # Create exit block
-        self.visit_ControlBlock(node.exit_block)
+        self.visit_ControlBlock(node.exit_block, visit_body=False)
         bb_endif = node.exit_block.entry_block
         if is_while:
             self.setup_loop(node.continue_block, bb_cond, bb_endif)
@@ -809,6 +818,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
 
         # Swallow statements following the branch
         node.exit_block.exit_block = None
+
+        self._pending_block = node.exit_block
 
     def visit_IfExp(self, node):
         test = self.visit(node.test)
