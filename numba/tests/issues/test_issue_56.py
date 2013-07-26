@@ -23,9 +23,8 @@ class TestIssue56(unittest.TestCase):
         test_fn = jit('f8[:](f8[:],f8[:])')(maxstar1d)
         test_a = numpy.random.random(10)
         test_b = numpy.random.random(10)
-        self.assertTrue((test_fn(test_a, test_b) ==
-                         maxstar1d(test_a, test_b)).all())
-
+        self.assertTrue(numpy.allclose(test_fn(test_a, test_b),
+                                       maxstar1d(test_a, test_b)))
 
 if __name__ == "__main__":
 #    TestIssue56("test_maxstar1d").debug()
