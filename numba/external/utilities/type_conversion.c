@@ -259,48 +259,80 @@ static NUMBA_INLINE Py_ssize_t __Numba_PyIndex_AsSsize_t(PyObject*);
 static NUMBA_INLINE PyObject * __Numba_PyInt_FromSize_t(size_t);
 static NUMBA_INLINE size_t __Numba_PyInt_AsSize_t(PyObject*);
 
+static npy_datetimestruct pydatetime2npydatetime(PyObject *object)
+{
+    PyArray_DatetimeMetaData meta;
+    npy_datetime out;
+    npy_datetimestruct out2;
+    int result;
+
+    meta.base = -1;
+    convert_pyobject_to_datetime(&meta, object, NPY_SAME_KIND_CASTING, &out);
+    convert_datetime_to_datetimestruct(&meta, out, &out2);
+    return out2;
+}
+
 static npy_int64 pydatetime2year(PyObject *object)
 {
-    PyArray_DatetimeMetaData meta;
-    npy_datetime out;
-    npy_datetimestruct out2;
-    int result;
-
-    meta.base = -1;
-    convert_pyobject_to_datetime(&meta, object, NPY_SAME_KIND_CASTING, &out);
-    convert_datetime_to_datetimestruct(&meta, out, &out2);
-    return out2.year;
+    npy_datetimestruct out = pydatetime2npydatetime(object);
+    return out.year;
 }
 
-static int pydatetime2month(PyObject *object)
+static npy_int32 pydatetime2month(PyObject *object)
 {
-    PyArray_DatetimeMetaData meta;
-    npy_datetime out;
-    npy_datetimestruct out2;
-    int result;
-
-    meta.base = -1;
-    convert_pyobject_to_datetime(&meta, object, NPY_SAME_KIND_CASTING, &out);
-    convert_datetime_to_datetimestruct(&meta, out, &out2);
-    return out2.month;
+    npy_datetimestruct out = pydatetime2npydatetime(object);
+    return out.month;
 }
 
-static int pydatetime2day(PyObject *object)
+static npy_int32 pydatetime2day(PyObject *object)
 {
-    PyArray_DatetimeMetaData meta;
-    npy_datetime out;
-    npy_datetimestruct out2;
-    int result;
-
-    meta.base = -1;
-    convert_pyobject_to_datetime(&meta, object, NPY_SAME_KIND_CASTING, &out);
-    convert_datetime_to_datetimestruct(&meta, out, &out2);
-    return out2.day;
+    npy_datetimestruct out = pydatetime2npydatetime(object);
+    return out.day;
 }
 
-static PyObject* primitive2pydatetime(unsigned long int year, unsigned int month, unsigned int day)
+static npy_int32 pydatetime2hour(PyObject *object)
 {
-    PyObject *result = PyDateTime_FromDateAndTime(year, month, day, 0, 0, 0, 0);
+    npy_datetimestruct out = pydatetime2npydatetime(object);
+    return out.hour;
+}
+
+static npy_int32 pydatetime2min(PyObject *object)
+{
+    npy_datetimestruct out = pydatetime2npydatetime(object);
+    return out.min;
+}
+
+static npy_int32 pydatetime2sec(PyObject *object)
+{
+    npy_datetimestruct out = pydatetime2npydatetime(object);
+    return out.sec;
+}
+
+static npy_int32 pydatetime2usec(PyObject *object)
+{
+    npy_datetimestruct out = pydatetime2npydatetime(object);
+    return out.us;
+}
+
+static npy_int32 pydatetime2psec(PyObject *object)
+{
+    npy_datetimestruct out = pydatetime2npydatetime(object);
+    return out.ps;
+}
+
+static npy_int32 pydatetime2asec(PyObject *object)
+{
+    npy_datetimestruct out = pydatetime2npydatetime(object);
+    return out.as;
+}
+
+static PyObject* primitive2pydatetime(
+    npy_int64 year,
+    npy_int32 month,
+    npy_int32 day)
+{
+    //PyObject *result = PyDateTime_FromDateAndTime(year, month, day, 0, 0, 0, 0);
+    PyObject *result = PyDate_FromDate(year, month, day);
     Py_INCREF(result);
     return result;
 }
@@ -325,6 +357,12 @@ export_type_conversion(PyObject *module)
     EXPORT_FUNCTION(pydatetime2year, module, error);
     EXPORT_FUNCTION(pydatetime2month, module, error);
     EXPORT_FUNCTION(pydatetime2day, module, error);
+    EXPORT_FUNCTION(pydatetime2hour, module, error);
+    EXPORT_FUNCTION(pydatetime2min, module, error);
+    EXPORT_FUNCTION(pydatetime2sec, module, error);
+    EXPORT_FUNCTION(pydatetime2usec, module, error);
+    EXPORT_FUNCTION(pydatetime2psec, module, error);
+    EXPORT_FUNCTION(pydatetime2asec, module, error);
     EXPORT_FUNCTION(primitive2pydatetime, module, error);
 
     EXPORT_FUNCTION(__Numba_PyInt_FromLongLong, module, error);
