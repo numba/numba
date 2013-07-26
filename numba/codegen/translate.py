@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
-import ast
+import ast, collections
 
 import llvm
 import llvm.core as lc
@@ -22,13 +22,14 @@ from numba.codegen.llvmcontext import LLVMContextManager
 from numba import visitors, nodes, llvm_types, utils, function_util
 from numba.minivect import minitypes, llvm_codegen
 from numba import ndarray_helpers, error
-from numba.typesystem import is_obj
 from numba.utils import dump
 from numba import metadata
 from numba.control_flow import ssa
 from numba.support.numpy_support import sliceutils
 from numba.nodes import constnodes
 from numba.typesystem import llvm_typesystem as lts
+from numba.annotate.annotate import Annotation, A_type
+from numba.annotate.ir_capture import IRBuilder, get_intermediate
 
 from llvm_cbuilder import shortnames as C
 
@@ -107,30 +108,54 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         # internal states
         self._nodes = []  # for tracking parent nodes
 
+        if self.env.crnt.annotate:
+            import inspect
+            source = inspect.getsource(func)
+            decorators = 0
+            while not source.lstrip().startswith('def'):
+                decorator, sep, source = source.partition('\n')
+                decorators += 1
+
+            for argname, argtype in zip(self.argnames, self.func_signature.args):
+                self.annotations[func.__code__.co_firstlineno + decorators] = \
+                    [Annotation(A_type, (argname, str(argtype)))]
+
     # ________________________ visitors __________________________
+
+    @property
+    def annotations(self):
+        return self.env.crnt.annotations
 
     @property
     def current_node(self):
         return self._nodes[-1]
 
+    def update_pos(self, node):
+        "Update position for annotation"
+        if self.env.crnt.annotate and hasattr(node, 'lineno'):
+            self.builder.update_pos(node.lineno)
+            return self.builder.get_pos()
+
+    def reset_pos(self, pos):
+        "Reset position for annotation"
+        if self.env.crnt.annotate:
+            self.builder.update_pos(pos)
+
     def visit(self, node):
         # logger.debug('visiting %s', ast.dump(node))
+        pos = self.update_pos(node)
+        fn = getattr(self, 'visit_%s' % type(node).__name__)
+
         try:
-            fn = getattr(self, 'visit_%s' % type(node).__name__)
-        except AttributeError as e:
+            self._nodes.append(node) # push current node
+            result = fn(node)
+            self.reset_pos(pos)
+            return result
+        except Exception as e:
             # logger.exception(e)
-            logger.error('Unhandled visit to %s', ast.dump(node))
             raise
-            #raise compiler_errors.InternalError(node, 'Not yet implemented.')
-        else:
-            try:
-                self._nodes.append(node) # push current node
-                return fn(node)
-            except Exception as e:
-                # logger.exception(e)
-                raise
-            finally:
-                self._nodes.pop() # pop current node
+        finally:
+            self._nodes.pop() # pop current node
 
     # _________________________________________________________________________
 
@@ -157,7 +182,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
     def incref_arg(self, argname, argtype, larg, variable):
         # TODO: incref objects in structs
         if not (self.nopython or argtype.is_closure_scope):
-            if is_obj(variable.type) and self.refcount_args:
+            if self.is_obj(variable.type) and self.refcount_args:
                 if self.renameable(variable):
                     lvalue = self._allocate_arg_local(argname, argtype,
                                                       variable.lvalue)
@@ -233,7 +258,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             elif name in self.locals and not name in self.argnames:
                 # var = self.symtab.lookup_renamed(name, 0)
                 name = 'var_%s' % var.name
-                if is_obj(var.type):
+                if self.is_obj(var.type):
                     lvalue = self._null_obj_temp(name, type=var.ltype)
                 else:
                     lvalue = self.builder.alloca(var.ltype, name=name)
@@ -264,6 +289,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         entry = self.append_basic_block('entry')
 
         self.builder = lc.Builder.new(entry)
+        if self.env.crnt.annotate:
+            self.builder = IRBuilder("llvm", self.builder)
         self.caster = _LLVMCaster(self.builder)
         self.object_coercer = coerce.ObjectCoercer(self)
         self.multiarray_api.set_PyArray_API(self.llvm_module)
@@ -322,6 +349,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             self.handle_phis()
             self.terminate_cleanup_blocks()
 
+            if self.env.crnt.annotate:
+                self.env.crnt.intermediates.append(get_intermediate(self.builder))
+
             # Done code generation
             del self.builder  # release the builder to make GC happy
 
@@ -333,7 +363,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             self.llvm_module.verify()  # only Module level verification checks everything.
         except:
             # Delete the function to prevent an invalid function from living in the module
-            if self.lfunc is not None:
+            post_mortem = self.env.crnt.error_env.enable_post_mortem
+            if self.lfunc is not None and not post_mortem:
                 self.lfunc.delete()
             raise
 
@@ -498,10 +529,19 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
     # Assignment
     #------------------------------------------------------------------------
 
+    @property
+    def using_numpy_array(self):
+        return issubclass(self.env.crnt.array, ndarray_helpers.NumpyArray)
+
+    def is_obj(self, type):
+        if type.is_array:
+            return self.using_numpy_array
+        return type.is_object
+
     def visit_Assign(self, node):
         target_node = node.targets[0]
         # print target_node
-        is_object = is_obj(target_node.type)
+        is_object = self.is_obj(target_node.type)
         value = self.visit(node.value)
 
         incref = is_object
@@ -535,7 +575,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
                 # ast.Attribute | ast.Subscript  store.
                 # These types don't have pointer types but rather
                 # scalar values
-                if is_obj(target_node.type):
+                if self.is_obj(target_node.type):
                     target_type = object_
                 else:
                     target_type = target_node.type
@@ -548,7 +588,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         self.generate_assign_stack(value, target, tbaa_node,
                                    decref=decref, incref=incref)
 
-        self.preload_attributes(target_node.variable, value)
+        if target_node.type.is_array:
+            self.preload_attributes(target_node.variable, value)
 
     def generate_assign_stack(self, lvalue, ltarget,
                               tbaa_node=None, tbaa_type=None,
@@ -580,27 +621,16 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         """
         Pre-load ndarray attributes data/shape/strides.
         """
-        if not (var.preload_data or var.preload_shape or var.preload_strides):
-            return
-
         if not var.renameable:
             # Stack allocated variable
-            var = self.builder.load(value)
+            value = self.builder.load(value)
 
-        acc = self.pyarray_accessor(value, var.type.dtype)
+        var.ndarray = self.ndarray(value, var.type)
 
-        if var.preload_data:
-            var.preloaded_data = acc.data
-
-        if var.preload_shape:
-            shape = nodes.get_strides(self.builder, self.tbaa,
-                                      acc.shape, var.type.ndim)
-            var.preloaded_shape = tuple(shape)
-
-        if var.preload_strides:
-            strides = nodes.get_strides(self.builder, self.tbaa,
-                                        acc.strides, var.type.ndim)
-            var.preloaded_strides = tuple(strides)
+        # Trigger preload
+        var.ndarray.data
+        var.ndarray.shape
+        var.ndarray.strides
 
     #------------------------------------------------------------------------
     # Variables
@@ -631,6 +661,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             # Not a renamed but an alloca'd variable
             return self.load_tbaa(var.lvalue, var.type)
         else:
+            if self.env.crnt.annotate and hasattr(node, 'lineno'):
+                if not node.lineno in self.annotations:
+                    self.annotations[node.lineno] = []
+                annotation = Annotation(A_type, (node.name, str(node.type)))
+                self.annotations[node.lineno].append(annotation)
             return var.lvalue
 
     #------------------------------------------------------------------------
@@ -643,9 +678,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             ltype = phi_node.variable.type.to_llvm(self.context)
             phi = self.builder.phi(ltype, phi_node.variable.unmangled_name)
             phi_node.variable.lvalue = phi
-
-            if phi_node.variable.type.is_array:
-                nodes.make_preload_phi(self.context, self.builder, phi_node)
 
     def setblock(self, cfg_basic_block):
         if cfg_basic_block.is_fabricated:
@@ -675,7 +707,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         # Update basic block in case the promotion created a new block
         self.flow_block.exit_block = self.builder.basic_block
 
-    def visit_ControlBlock(self, node):
+    _pending_block = None # Nested hack
+
+    def visit_ControlBlock(self, node, visit_body=True):
         """
         Return a new basic block and handle phis and promotions. Promotions
         are needed at merge (phi) points to have a consistent type.
@@ -698,10 +732,14 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         self.builder.position_at_end(node.entry_block)
         self._init_phis(node)
 
-        if len(node.body) == 1:
-            lbody = self.visit(node.body[0])
+        if self._pending_block:
+            self.visitlist(self._pending_block.body)
+            self._pending_block = None
+
+        if visit_body:
+            lbody = self.visitlist(node.body)
+            lbody = lbody[0] if len(lbody) == 1 else None
         else:
-            self.visitlist(node.body)
             lbody = None
 
         if not node.exit_block:
@@ -734,7 +772,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             test = self._generate_test(test)
 
         # Create exit block
-        self.visit_ControlBlock(node.exit_block)
+        self.visit_ControlBlock(node.exit_block, visit_body=False)
         bb_endif = node.exit_block.entry_block
         if is_while:
             self.setup_loop(node.continue_block, bb_cond, bb_endif)
@@ -769,10 +807,19 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         self.builder.position_at_end(node.cond_block.exit_block)
         # assert not self.is_block_terminated()
         self.builder.cbranch(test, bb_true, bb_false)
-        self.builder.position_at_end(node.exit_block.exit_block)
+
+        ### Gross hack, remove unparented basic blocks for which we track
+        ### no incoming phi
+        if (not node.exit_block.parents and node.exit_block.id >= 0 and
+                node.exit_block.exit_block):
+            node.exit_block.exit_block.delete()
+        else:
+            self.builder.position_at_end(node.exit_block.exit_block)
 
         # Swallow statements following the branch
         node.exit_block.exit_block = None
+
+        self._pending_block = node.exit_block
 
     def visit_IfExp(self, node):
         test = self.visit(node.test)
@@ -874,7 +921,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             rettype = self.func_signature.return_type
 
             retval = self.visit(node.value)
-            if is_obj(rettype) or rettype.is_pointer:
+            if self.is_obj(rettype) or rettype.is_pointer:
                 retval = self.builder.bitcast(retval,
                                               self.return_value.type.pointee)
 
@@ -890,8 +937,25 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             self.builder.store(retval, self.return_value)
 
             ret_type = self.func_signature.return_type
-            if is_obj(rettype):
+            if self.is_obj(rettype):
                 self.xincref_temp(self.return_value)
+
+            # Visitor class for looking for node with valid line number
+            class LineNumVisitor(ast.NodeVisitor):
+                lineno = -1
+                def generic_visit(self, node):
+                    if hasattr(node, 'lineno'):
+                        if node.lineno > -1:
+                            self.lineno = node.lineno
+                    
+            v = LineNumVisitor()
+            v.visit(node)
+            if self.env.crnt.annotate and hasattr(node, 'lineno') and v.lineno > -1:
+                lineno = v.lineno
+                if not lineno in self.annotations:
+                    self.annotations[lineno] = []
+                annotation = Annotation(A_type, ('return', str(node.value.type)))
+                self.annotations[lineno].append(annotation)
 
         if not self.is_block_terminated():
             self.builder.branch(self.cleanup_label)
@@ -1211,7 +1275,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
     def visit_CoerceToObject(self, node):
         from_type = node.node.type
         result = self.visit(node.node)
-        if not is_obj(from_type):
+        if not self.is_obj(from_type):
             result = self.object_coercer.convert_single(from_type, result,
                                                         name=node.name)
         return result
@@ -1242,7 +1306,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         _, pyobject_call = self.context.external_library.declare(
                                         self.llvm_module, 'PyObject_Call')
 
-        res = self.builder.call(pyobject_call, largs, name=node.name)
+        res = self.builder.call(pyobject_call, largs)
         return self.caster.cast(res, node.variable.type.to_llvm(self.context))
 
     def visit_NativeCallNode(self, node, largs=None):
@@ -1258,13 +1322,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         else:
             lfunc = node.llvm_func
 
-
-        if node.signature.return_type.is_void or return_value is not None:
-            kwargs = {}
-        else:
-            kwargs = dict(name=node.name + '_result')
-
-        result = self.builder.call(lfunc, largs, **kwargs)
+        result = self.builder.call(lfunc, largs)
 
         if node.signature.struct_by_reference:
             if minitypes.pass_by_ref(node.signature.return_type):
@@ -1482,8 +1540,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         bb = self.builder.basic_block
         # Initialize temp to NULL at beginning of function
         self.builder.position_at_beginning(self.lfunc.get_entry_basic_block())
-        name = getattr(node.node, 'name', 'object') + '_temp'
-        lhs = self._null_obj_temp(name)
+        lhs = self._null_obj_temp('objtemp')
         node.llvm_temp = lhs
 
         # Assign value
@@ -1502,7 +1559,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
 
         # Generate Py_XDECREF(temp) at end-of-function cleanup path
         self.xdecref_temp_cleanup(lhs)
-        result = self.load_tbaa(lhs, object_, name=name + '_load')
+        result = self.load_tbaa(lhs, object_, name=lhs.name + '_load')
 
         if not node.type == object_:
             dst_type = node.type.to_llvm(self.context)
@@ -1525,7 +1582,11 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         assert node.node.type.is_array
         lvalue = self.visit(node.node)
         lindices = self.visit(node.slice)
-        lptr = node.subscript(self, self.tbaa, lvalue, lindices)
+        array_var = node.node.variable
+        ndarray = array_var.ndarray or self.ndarray(lvalue, node.node.type)
+        if not isinstance(lindices, collections.Iterable):
+            lindices = (lindices,)
+        lptr = ndarray.getptr(*lindices)
         return self._handle_ctx(node, lptr, node.type.pointer())
 
     #def visit_Index(self, node):
@@ -1543,28 +1604,32 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         return result
 
     def pyarray_accessor(self, llvm_array_ptr, dtype):
-        acc = ndarray_helpers.PyArrayAccessor(self.builder, llvm_array_ptr,
-                                              self.tbaa, dtype)
-        return acc
+        return ndarray_helpers.PyArrayAccessor(self.builder, llvm_array_ptr,
+                                               self.tbaa, dtype)
+
+    def ndarray(self, llvm_array_ptr, type):
+        if issubclass(self.env.crnt.array, ndarray_helpers.NumpyArray):
+            return ndarray_helpers.NumpyArray(llvm_array_ptr, self.builder,
+                                              self.tbaa, type)
+        else:
+            return self.env.crnt.array(llvm_array_ptr, self.builder)
 
     def visit_ArrayAttributeNode(self, node):
-        array = self.visit(node.array)
-        acc = self.pyarray_accessor(array, node.array_type.dtype)
+        l_array = self.visit(node.array)
+        ndarray = self.ndarray(l_array, node.array.type)
+        if node.attr_name in ('shape', 'strides'):
+            attr_name = node.attr_name + '_ptr'
+        else:
+            attr_name = node.attr_name
 
-        attr_name = node.attr_name
-        if attr_name == 'shape':
-            attr_name = 'dimensions'
-
-        result = getattr(acc, attr_name)
+        result = getattr(ndarray, attr_name)
         ltype = node.type.to_llvm(self.context)
         if node.attr_name == 'data':
             result = self.builder.bitcast(result, ltype)
 
         return result
 
-    def visit_ShapeAttributeNode(self, node):
-        # hurgh, no dispatch on superclasses?
-        return self.visit_ArrayAttributeNode(node)
+    visit_ShapeAttributeNode = visit_ArrayAttributeNode
 
     #------------------------------------------------------------------------
     # Array Slicing
@@ -1725,7 +1790,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         return self.load_tbaa(result, node.type.pointer())
 
     def visit_PointerFromObject(self, node):
-        return self.visit(node.node)
+        result = self.visit(node.node)
+        return self.builder.bitcast(result, node.type.to_llvm())
 
     #------------------------------------------------------------------------
     # Constant Nodes

@@ -97,9 +97,9 @@ def array_from_type(type):
     elif type.is_tuple or type.is_list:
         dtype = array_from_type(type.base_type)
         if dtype.is_array:
-            return dtype.add('ndim', type.ndim + 1)
+            return dtype.add('ndim', dtype.ndim + 1)
     elif not type.is_object:
-        return typesystem.array(dtype=type, ndim=0)
+        return typesystem.array_(dtype=type, ndim=0)
 
     return object_
 

@@ -44,7 +44,7 @@ def make_list(node):
         return [SomeConstant(node)]
 
 def nodes(node):
-    return [getattr(node, attr) for attr in node._fields]
+    return [getattr(node, attr, None) for attr in node._fields]
 
 def fields(node):
     return zip(node._fields, nodes(node))

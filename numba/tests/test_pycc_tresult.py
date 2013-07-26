@@ -22,7 +22,7 @@ def test_pycc():
         lib.multf.restype = c_float
 
         res = lib.mult(123, 321)
-        print('lib.mult(123, 321) = %f', res)
+        print('lib.mult(123, 321) = %f' % res)
         assert res == 123 * 321
 
         res = lib.multf(987, 321)

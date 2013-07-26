@@ -99,8 +99,8 @@ Suite = collections.namedtuple('Suite', ['mod', 'types'])
 merge = lambda d1, d2: dict(chain(d1.items(), d2.items()))
 
 integral = nb.short, nb.int_, nb.uint, nb.long_, nb.ulong, nb.longlong, nb.ulonglong
-floating = nb.float_, nb.double, nb.longdouble
-complexes = nb.complex64, nb.complex128, nb.complex256
+floating = nb.float_, nb.double, #nb.longdouble
+complexes = nb.complex64, nb.complex128, #nb.complex256
 
 fdata     = { integral : 6, floating: 6.0, (nb.object_,): 6.0 }
 cdata     = { complexes: 6.0+4.0j }
@@ -127,7 +127,8 @@ def run():
             for types, data in suite.types.iteritems():
                 for ty in types:
                     print("running:", test.__name__, ty)
-                    jitter = nb.jit(nb.object_(nb.typeof(suite.mod), ty))
+                    signature = nb.object_(nb.typeof(suite.mod), ty)
+                    jitter = nb.jit(signature)
                     jitted = jitter(test)
 
                     r1 = test(suite.mod, data)

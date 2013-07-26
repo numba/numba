@@ -34,7 +34,6 @@ class DeleteStatement(visitors.NumbaVisitor):
         # Visit ControlBlocks
         self.visit(node.cond_block)
         self.visit(node.if_block)
-        self.visit(node.incr_block)
         if node.orelse:
             self.visit(node.else_block)
         if node.exit_block:

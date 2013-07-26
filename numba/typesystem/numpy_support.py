@@ -41,7 +41,8 @@ def map_dtype(dtype):
         elif dtype.itemsize == 8:
             return float64
         elif dtype.itemsize == 16:
-            return float128
+            raise TypeError("long double is not support")
+            # return float128
     elif dtype.kind == 'b':
         return int8
     elif dtype.kind == 'c':
@@ -50,7 +51,8 @@ def map_dtype(dtype):
         elif dtype.itemsize == 16:
             return complex128
         elif dtype.itemsize == 32:
-            return complex256
+            raise TypeError("long double is not support")
+            # return complex256
     elif dtype.kind == 'V':
         fields = [(name, map_dtype(dtype.fields[name][0]))
                       for name in dtype.names]
@@ -72,7 +74,7 @@ typemap = {
 
     float_   : np.float32,
     double   : np.float64,
-    longdouble: np.longdouble,
+    # longdouble: np.longdouble,
 
     short    : np.dtype('h'),
     int_     : np.dtype('i'),
@@ -85,7 +87,7 @@ typemap = {
 
     complex64: np.complex64,
     complex128: np.complex128,
-    complex256: getattr(np, 'complex256', None),
+    # complex256: getattr(np, 'complex256', None),
 
     bool_    : np.bool,
     object_  : np.object,

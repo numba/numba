@@ -138,6 +138,13 @@ class _Compiler(object):
             objfile = tm.emit_object(lmod)
             fout.write(objfile)
 
+    def emit_type(self, tyobj):
+        ret_val = str(tyobj)
+        if hasattr(tyobj, 'kind') and tyobj.kind == 'int':
+            if ret_val.endswith(('8', '16', '32', '64')):
+                ret_val += "_t"
+        return ret_val
+
     def emit_header(self, output):
         from numba.minivect import minitypes
 
@@ -147,8 +154,8 @@ class _Compiler(object):
             fout.write("\n/* Prototypes */\n")
             for signature in self.exported_signatures.values():
                 name = signature.name
-                restype = signature.return_type.declare()
-                args = ", ".join(argtype.declare()
+                restype = self.emit_type(signature.return_type)
+                args = ", ".join(self.emit_type(argtype)
                                  for argtype in signature.args)
                 fout.write("extern %s %s(%s);\n" % (restype, name, args))
 

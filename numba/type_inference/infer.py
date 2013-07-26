@@ -495,8 +495,7 @@ class TypeInferer(visitors.NumbaTransformer):
 
     def _handle_unpacking(self, node):
         """
-        Handle tuple unpacking. We only handle tuples, lists and numpy attributes
-        such as shape on the RHS.
+        Handle tuple unpacking
         """
         value_type = node.value.variable.type
 
@@ -506,34 +505,51 @@ class TypeInferer(visitors.NumbaTransformer):
         else:
             targets = node.targets
 
+        # Do some validation
         valid_type = (value_type.is_carray or value_type.is_sized_pointer or
-                      value_type.is_list or value_type.is_tuple)
-
+                      value_type.is_list or value_type.is_tuple or
+                      value_type.is_object)
         if not valid_type:
             self.error(node.value,
-                       'Only NumPy attributes and list or tuple literals can '
-                       'currently be unpacked')
-        elif value_type.size != len(targets):
+                       'Cannot unpack value of type %s' % (value_type,))
+        elif value_type != object_ and value_type.size != len(targets):
             self.error(node.value,
                        "Too many/few arguments for tuple unpacking, "
                        "got (%d, %d)" % (value_type.size, len(targets)))
 
-        # Generate an assignment for each unpack
-        result = []
-        for i, target in enumerate(targets):
-            is_literal = isinstance(node.value, (ast.Tuple, ast.List))
-            if (value_type.is_carray or
-                    value_type.is_sized_pointer or not is_literal):
-                # C array
-                value = nodes.index(node.value, i)
-            else:
-                # list or tuple literal
-                value = node.value.elts[i]
+        if isinstance(node.value, (ast.Tuple, ast.List)):
+            stats = self._unpack_literal(node.targets, node.value.elts)
+        else:
+            # TODO: general iterables and iterators
+            stats = self._unpack_sequence(node.targets, node.value)
 
-            assmt = ast.Assign(targets=[target], value=value)
-            result.append(self.visit(assmt))
+        return ast.Suite(stats)
 
-        return ast.Suite(result)
+    def _unpack_literal(self, lhss, rhss):
+        """Unpack a literal given the lhs and rhs values as lists"""
+        rhss = list(map(nodes.CloneableNode, rhss))
+        # Evaluate RHS first, then generate assignments
+        return rhss + self._gen_assignments(lhss,
+                                            [nodes.CloneNode(n) for n in rhss])
+
+    def _unpack_sequence(self, targets, obj):
+        """Unpack a sequence given the lhs targets as a list"""
+        # TODO: Verify length!
+        obj = nodes.CloneableNode(obj) # evaluate only once!
+        clone = nodes.CloneNode(obj)
+        rhss = [nodes.index(clone, i) for i in range(len(targets))]
+        # Evaluate RHS obj before assignment
+        return [obj] + self._gen_assignments(targets, rhss)
+
+    def _gen_assignments(self, lhss, rhss):
+        """
+        Generate assignments from a list of RHS values to a list of LHS values
+        """
+        for lhs, rhs in zip(lhss, rhss):
+            lhs.variable.type = rhs.variable.type
+
+        return [ast.Assign(targets=[lhs], value=rhs)
+                    for lhs, rhs in zip(lhss, rhss)]
 
     def visit_Assign(self, node):
         # Initialize inplace operator
@@ -1130,8 +1146,9 @@ class TypeInferer(visitors.NumbaTransformer):
         constant_value = self._get_constant_list(node)
         if constant_value is not None:
             constant_value = tuple(constant_value)
-        # TODO: determine element type of node.elts
-        type = typesystem.tuple_(object_, size=len(node.elts))
+            type = numba.typeof(constant_value)
+        else:
+            type = typesystem.tuple_(object_, size=len(node.elts))
         node.variable = Variable(type, is_constant=constant_value is not None,
                                  constant_value=constant_value)
         return node
@@ -1139,8 +1156,10 @@ class TypeInferer(visitors.NumbaTransformer):
     def visit_List(self, node):
         node.elts = self.visitlist(node.elts)
         constant_value = self._get_constant_list(node)
-        # TODO: determine element type of node.elts
-        type = typesystem.list_(object_, size=len(node.elts))
+        if constant_value:
+            type = numba.typeof(constant_value)
+        else:
+            type = typesystem.list_(object_, size=len(node.elts))
         node.variable = Variable(type, is_constant=constant_value is not None,
                                  constant_value=constant_value)
         return node
@@ -1503,10 +1522,15 @@ class TypeInferer(visitors.NumbaTransformer):
 
         return result_type
 
-    def visit_Attribute(self, node):
-        node.value = self.visit(node.value)
+    def visit_Attribute(self, node, visitchildren=True):
+        if visitchildren:
+            node.value = self.visit(node.value)
+
         type = node.value.variable.type
-        if node.attr == 'conjugate' and (type.is_complex or type.is_float):
+        if type.is_unresolved:
+            result_type = deferred.create_deferred(self, node,
+                                                   typesystem.DeferredAttrType)
+        elif node.attr == 'conjugate' and (type.is_complex or type.is_float):
             result_type = typesystem.method(type, 'conjugate')
         elif type.is_complex:
             result_type = self._resolve_complex_attribute(node, type)

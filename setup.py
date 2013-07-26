@@ -172,6 +172,7 @@ setup(
             'pycc = numba.pycc:main',
             ]
     },
+    scripts=["bin/numba"],
     package_data={
         '': ['*.md'],
         'numba.minivect': ['include/*'],
@@ -183,6 +184,8 @@ setup(
         'numba.external.utilities': ['*.c', '*.h'],
         'numba': ['*.c', '*.h', 'include/*', '*.pxd'],
         'numba.vectorize': ['*.h'],
+        'numba.annotate': ['annotate_template.html'],
+        'numba.annotate': ['annotate_inline_template.html'],
     },
     ext_modules=extensibletype_extensions + [
         Extension(
@@ -201,7 +204,9 @@ setup(
             depends=["numba/external/utilities/type_conversion.c",
                      "numba/external/utilities/virtuallookup.c",
                      "numba/external/utilities/generated_conversions.c",
-                     "numba/external/utilities/generated_conversions.h"]),
+                     "numba/external/utilities/generated_conversions.h",
+                     "numba/external/utilities/cpyutils.c",
+                     "numba/external/utilities/exceptions.c"]),
         CythonExtension(
             name="numba.pyconsts",
             sources=["numba/pyconsts.pyx"],

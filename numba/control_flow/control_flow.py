@@ -925,11 +925,12 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
             cond_block.add_child(exit_block)
             else_block = None
 
-        node = nodes.build_if(cond_block=cond_block, test=node.test,
+        new_node = nodes.build_if(cond_block=cond_block, test=node.test,
                               if_block=if_block, body=node.body,
                               else_block=else_block, orelse=node.orelse,
                               exit_block=exit_block)
-        return self.exit_block(exit_block, node)
+        ast.copy_location(new_node, node)
+        return self.exit_block(exit_block, new_node)
 
     def _visit_loop_body(self, node, if_block=None, is_for=None):
         """
@@ -943,14 +944,6 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
                                                 pos=node.body[0])
         self.visitlist(node.body)
         self.flow.loops.pop()
-
-        if is_for:
-            if self.flow.block:
-                self.flow.block.add_child(node.incr_block)
-            # Ensure topological dominator order
-            self.flow.blocks.pop(node.incr_block.id)
-            self.flow.blocks.append(node.incr_block)
-            self.flow.block = node.incr_block
 
         if self.flow.block:
             # Add back-edge
@@ -980,7 +973,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         node.test = self.visit(node.test)
 
         self._visit_loop_body(node)
-        return nodes.build_while(**vars(node))
+        return ast.copy_location(nodes.build_while(**vars(node)), node)
 
     def visit_For(self, node):
         # Evaluate iterator in previous block
@@ -991,11 +984,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
                                               pos=node.iter)
         node.exit_block = self.flow.exit_block(label='exit_for', pos=node)
 
-        # Increment temporary variable, continue should branch here
-        node.incr_block = self.flow.newblock(label="for_increment", pos=node)
-        node.incr_block.branch_here = True
-
-        self.flow.loops.append(LoopDescr(node.exit_block, node.incr_block))
+        self.flow.loops.append(LoopDescr(node.exit_block, node.cond_block))
 
         # Target assignment
         if_block = self.flow.nextblock(label='loop_body', pos=node.body[0])
@@ -1004,7 +993,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         node.target, name_assignment = self.mark_assignment(
                     node.target, assignment=None, warn_unused=False)
         self._visit_loop_body(node, if_block=if_block, is_for=True)
-        node = nodes.For(**vars(node))
+        node = ast.copy_location(nodes.For(**vars(node)), node)
         if name_assignment:
             name_assignment.assignment_node = node
         return node
@@ -1079,8 +1068,6 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         return node
 
     def visit_Raise(self, node):
-        raise error.NumbaError(node, "Raise statement not implemented yet")
-
         self.visitchildren(node)
         if self.flow.exceptions:
             self.flow.block.add_child(self.flow.exceptions[-1].entry_point)

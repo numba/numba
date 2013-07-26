@@ -17,13 +17,8 @@ Documentation for numba
    userguide.rst
    types.rst
    pythonstuff.rst
-
-**Arrays:**
-
-.. toctree::
-   :maxdepth: 2
-
    arrays.rst
+   prange.rst
 
 **Interfacing with native code:**
 
@@ -32,6 +27,13 @@ Documentation for numba
 
    interface_c.rst
 
+**Language Specification:**
+
+.. toctree::
+   :maxdepth: 1
+
+   spec.rst
+
 **Misc:**
 
 .. toctree::
@@ -39,6 +41,7 @@ Documentation for numba
    :maxdepth: 2
 
    pycc.rst
+   annotate.rst
    type_inference.rst
 
 **Examples:**
@@ -69,6 +72,7 @@ Developer Documentation
    architecture.rst
    ir.rst
    roadmap.rst
+   dev.rst
    modules/modules.rst
 
 

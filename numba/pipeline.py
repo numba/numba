@@ -6,6 +6,7 @@ define the transformations and the order in which they run on the AST.
 from __future__ import print_function, division, absolute_import
 
 import os
+import sys
 import ast as ast_module
 import logging
 import pprint
@@ -19,21 +20,23 @@ from numba import error
 from numba import functions
 from numba import transforms
 from numba import control_flow
-from numba import optimize
 from numba import closures
 from numba import reporting
 from numba import normalize
 from numba import validate
+from numba.array_validation import ArrayValidator
 from numba.viz import cfgviz
 from numba import typesystem
 from numba.codegen import llvmwrapper
 from numba import ast_constant_folding as constant_folding
-from numba.control_flow import ssa
+from numba.control_flow import ssa, cfstats
 from numba.codegen import translate
 from numba import utils
 from numba.missing import FixMissingLocations
 from numba.type_inference import infer as type_inference
 from numba.asdl import schema
+from numba.prettyprint import (dump_ast, dump_cfg, dump_annotations,
+                               dump_llvm, dump_optimized)
 import numba.visitors
 
 from numba.specialize import comparisons
@@ -248,6 +251,10 @@ def validate_signature(tree, env):
 
     return tree
 
+def validate_arrays(ast, env):
+    ArrayValidator(env).visit(ast)
+    return ast
+
 def update_signature(tree, env):
     func_env = env.translation.crnt
     func_signature = func_env.func_signature
@@ -304,21 +311,6 @@ def create_lfunc3(tree, env):
     func_env = env.translation.crnt
     create_lfunc(tree, env)
     return tree
-
-# ______________________________________________________________________
-
-def dump_ast(ast, env):
-    # astviz.render_ast(ast, os.path.expanduser("~/ast.dot"))
-    return ast
-
-def dump_cfg(ast, env):
-    # dotfile = env.crnt.cfdirectives['control_flow.dot_output']
-    # cfgviz.render_cfg(env.crnt.cfg, dotfile)
-    # for block in env.crnt.cfg.blocks:
-    #     print(block)
-    #     print("    ", block.parents)
-    #     print("    ", block.children)
-    return ast
 
 # ______________________________________________________________________
 
@@ -423,6 +415,45 @@ class TransformBuiltinLoops(PipelineStage):
         return transform.visit(ast)
 
 #----------------------------------------------------------------------------
+# Prange
+#----------------------------------------------------------------------------
+
+def run_prange(name):
+    def wrapper(ast, env):
+        from numba import parallel
+        stage = getattr(parallel, name)
+        return PipelineStage().make_specializer(stage, ast, env).visit(ast)
+
+    wrapper.__name__ = name
+    return wrapper
+
+ExpandPrange = run_prange('PrangeExpander')
+RewritePrangePrivates = run_prange('PrangePrivatesReplacer')
+CleanupPrange = run_prange('PrangeCleanup')
+
+
+class UpdateAttributeStatements(PipelineStage):
+    def transform(self, ast, env):
+        func_env = env.translation.crnt
+
+        for block in func_env.flow.blocks:
+            stats = []
+            for cf_stat in block.stats:
+                if (isinstance(cf_stat, cfstats.AttributeAssignment) and
+                        isinstance(cf_stat.lhs, ast_module.Attribute)):
+                    value = cf_stat.lhs.value
+                    if (isinstance(value, ast_module.Name) and
+                                value.id in func_env.kill_attribute_assignments):
+                        cf_stat = None
+
+                if cf_stat:
+                    stats.append(cf_stat)
+
+            block.stats = stats
+
+        return ast
+
+#----------------------------------------------------------------------------
 # Specializing/Lowering Transforms
 #----------------------------------------------------------------------------
 
@@ -451,20 +482,11 @@ class SpecializeSSA(PipelineStage):
         return ast
 
 class SpecializeClosures(SimplePipelineStage):
-
     transformer = closures.ClosureSpecializer
-
 
 class Optimize(PipelineStage):
     def transform(self, ast, env):
         return ast
-
-
-class Preloader(PipelineStage):
-    def transform(self, ast, env):
-        transform = self.make_specializer(optimize.Preloader, ast, env)
-        return transform.visit(ast)
-
 
 class SpecializeLoops(PipelineStage):
     def transform(self, ast, env):
@@ -472,6 +494,9 @@ class SpecializeLoops(PipelineStage):
                                           env)
         return transform.visit(ast)
 
+class LowerRaise(PipelineStage):
+    def transform(self, ast, env):
+        return self.make_specializer(exceptions.LowerRaise, ast, env).visit(ast)
 
 class LateSpecializer(PipelineStage):
     def transform(self, ast, env):
@@ -509,10 +534,10 @@ def cleanup_symtab(ast, env):
 
 class FixASTLocations(PipelineStage):
     def transform(self, ast, env):
-        fixer = self.make_specializer(FixMissingLocations, ast, env)
-        fixer.visit(ast)
+        lineno = getattr(ast, 'lineno', 1)
+        col_offset = getattr(ast, 'col_offset', 1)
+        FixMissingLocations(lineno, col_offset).visit(ast)
         return ast
-
 
 class CodeGen(PipelineStage):
     def transform(self, ast, env):

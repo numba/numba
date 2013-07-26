@@ -17,11 +17,11 @@ except ImportError:
 def is_cffi_func(obj):
     "Check whether the obj is a CFFI function"
     try:
-        return type(obj) is cffi_func_type
+        # return type(obj) is cffi_func_type
         # This is dangerous:
         #   >>> ffi.typeof("void (*)()")
         #   <ctype 'void(*)()'>
-        # return ffi.typeof(obj).kind == 'function'
+        return ffi.typeof(obj).kind == 'function'
     except TypeError:
         return False
 
@@ -75,7 +75,7 @@ else:
         ffi.typeof('unsigned long long') :  ulonglong,
         ffi.typeof('float') :               float_,
         ffi.typeof('double') :              double,
-        ffi.typeof('long double') :         longdouble,
+        # ffi.typeof('long double') :         longdouble,
         ffi.typeof('char *') :              c_string_type,
         ffi.typeof('ssize_t') :             Py_ssize_t,
         ffi.typeof('size_t') :              size_t,

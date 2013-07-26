@@ -28,8 +28,10 @@ class ValidateAST(ast.NodeVisitor):
         raise error.NumbaError(
                 node, "Dict comprehensions are not yet supported")
 
-    def visit_Raise(self, node):
-        raise error.NumbaError(node, "Raise statement not implemented yet")
+    # def visit_Raise(self, node):
+    #     if node.tback:
+    #         raise error.NumbaError(
+    #             node, "Traceback argument to raise not supported")
 
     def visit_For(self, node):
         if not isinstance(node.target, (ast.Name, ast.Attribute,

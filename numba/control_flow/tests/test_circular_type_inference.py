@@ -375,8 +375,8 @@ def test_string_indexing_error2():
 @autojit(warn=False, warnstyle='simple')
 def test_string_indexing_valid():
     """
-    >>> chr(test_string_indexing_valid())
-    'm'
+    >>> test_string_indexing_valid() == b'm'
+    True
     """
     for i in range(4):
         s = "spam ham eggs"
@@ -451,6 +451,27 @@ def test_simple_call_promotion2():
     return x
 
 #print test_simple_call_promotion2.py_func()
+
+#------------------------------------------------------------------------
+# Delayed Attributes
+#------------------------------------------------------------------------
+
+@autojit(warn=False)
+def test_delayed_attributes1(A):
+    """
+    >>> A = np.empty(2, dtype=[('a', np.int32), ('b', np.float64)])
+    >>> list(test_delayed_attributes1(A))
+    [(1, 2.0), (2, 4.0)]
+    """
+    idx = 0
+    for i in range(A.shape[0]):
+        A[idx].a = i + 1
+        A[idx].b = A[idx].a * 2
+        idx += 1
+        if idx > 5:
+            idx = 5
+
+    return A
 
 #------------------------------------------------------------------------
 # Test Utilities

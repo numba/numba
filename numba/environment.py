@@ -7,6 +7,7 @@ import ast as ast_module
 import types
 import logging
 import pprint
+import collections
 
 import llvm.core
 
@@ -19,6 +20,7 @@ from numba.nodes import metadata
 from numba.control_flow import ControlFlow
 from numba.codegen import translate
 from numba.codegen import globalconstants
+from numba.ndarray_helpers import NumpyArray
 
 from numba.intrinsic import default_intrinsic_library
 from numba.external import default_external_library
@@ -51,11 +53,16 @@ default_cf_pipeline_order = ['ast3to2', 'ControlFlowAnalysis']
 
 
 default_pipeline_order = default_normalize_order + [
+    'ExpandPrange',
+    'RewritePrangePrivates',
+    'FixASTLocations',
     'ControlFlowAnalysis',
     'dump_cfg',
     #'ConstFolding',
     # 'dump_ast',
+    'UpdateAttributeStatements',
     'TypeInfer',
+    'CleanupPrange',
     'update_signature',
     'create_lfunc2',
     'TypeSet',
@@ -68,27 +75,27 @@ default_pipeline_order = default_normalize_order + [
     'SpecializeSSA',
     'SpecializeClosures',
     'Optimize',
-    'Preloader',
     'SpecializeLoops',
+    'LowerRaise',
     'FixASTLocations',
     'LateSpecializer',
     'ExtensionTypeLowerer',
     'SpecializeFunccalls',
     'SpecializeExceptions',
-    'FixASTLocations',
     'cleanup_symtab',
-    # 'dump_ast',
+    'validate_arrays',
+    'dump_ast',
+    'FixASTLocations',
     'CodeGen',
+    'dump_annotations',
+    'dump_llvm',
     'PostPass',
     'LinkingStage',
+    'dump_optimized',
     'WrapperStage',
     'ErrorReporting',
 ]
 
-default_type_infer_pipeline_order = default_cf_pipeline_order + [
-    'resolve_templates',
-    'TypeInfer',
-]
 
 default_dummy_type_infer_pipeline_order = [
     'ast3to2',
@@ -114,6 +121,7 @@ default_numba_late_translate_pipeline_order = \
 upto = lambda order, x: order[:order.index(x)+1]
 upfr = lambda order, x: order[order.index(x)+1:]
 
+default_type_infer_pipeline_order = upto(default_pipeline_order, 'TypeInfer')
 default_compile_pipeline_order = upfr(default_pipeline_order, 'TypeInfer')
 default_codegen_pipeline = upto(default_pipeline_order, 'CodeGen')
 default_post_codegen_pipeline = upfr(default_pipeline_order, 'CodeGen')
@@ -159,7 +167,7 @@ class FunctionErrorEnvironment(object):
     enable_post_mortem = TypedProperty(
         bool,
         "Enable post-mortem debugging for the Numba compiler",
-        False
+        False,
     )
 
     collection = TypedProperty(
@@ -291,6 +299,7 @@ class FunctionEnvironment(object):
         'numba.typesystem.templatetypes.')
 
     typesystem = TypedProperty(TypeSystem, "Typesystem for this compilation")
+    array = TypedProperty(object, "Array abstraction", NumpyArray)
 
     ast_metadata = TypedProperty(
         object,
@@ -320,6 +329,14 @@ class FunctionEnvironment(object):
             'control_flow.dot_annotate_defs': False,
         },
     )
+
+    kill_attribute_assignments = TypedProperty( # Prange
+        (set, frozenset),
+        "Assignments to attributes that need to be removed from type "
+        "inference pre-analysis. We need to do this for prange since we "
+        "need to infer the types of variables to build a struct type for "
+        "those variables. So we need type inference to be properly ordered, "
+        "and not look at the attributes first.")
 
     # FIXME: Get rid of this property; pipeline stages are users and
     # transformers of the environment.  Any state needed beyond a
@@ -360,6 +377,14 @@ class FunctionEnvironment(object):
         'Flag that enables control flow warnings on a per-function level.',
         True)
 
+    annotations = TypedProperty(
+        dict, "Annotation dict { lineno : Annotation }"
+    )
+
+    intermediates = TypedProperty(
+        list, "list of Intermediate objects for annotation",
+    )
+
     warnstyle = TypedProperty(
         str if PY3 else basestring,
         'Warning style, currently available: simple, fancy',
@@ -392,7 +417,7 @@ class FunctionEnvironment(object):
              closures=None, closure_scope=None,
              refcount_args=True,
              ast_metadata=None, warn=True, warnstyle='fancy',
-             typesystem=None, postpasses=None,
+             typesystem=None, array=None, postpasses=None, annotate=False,
              **kws):
 
         self.parent = parent
@@ -432,6 +457,7 @@ class FunctionEnvironment(object):
         self.llvm_module = (llvm_module if llvm_module
                                  else self.numba.llvm_context.module)
 
+        self._annotate = annotate
         self.wrap = wrap
         self.link = link
         self.llvm_wrapper_func = None
@@ -447,9 +473,13 @@ class FunctionEnvironment(object):
         self.is_closure = is_closure
         self.closures = closures if closures is not None else {}
         self.closure_scope = closure_scope
+        self.kill_attribute_assignments = set()
 
         self.refcount_args = refcount_args
         self.typesystem = typesystem or numba_typesystem
+        if array:
+            self.array = array
+            # assert issubclass(array, NumpyArray)
 
         import numba.postpasses
         self.postpasses = postpasses or numba.postpasses.default_postpasses
@@ -459,6 +489,8 @@ class FunctionEnvironment(object):
         else:
             self.ast_metadata = metadata.create_metadata_env()
 
+        self.annotations = collections.defaultdict(list)
+        self.intermediates = []
         self.warn = warn
         self.warnstyle = warnstyle
         self.kwargs = kws
@@ -481,6 +513,7 @@ class FunctionEnvironment(object):
             template_signature=self.template_signature,
             is_closure=self.is_closure,
             closures=self.closures,
+            kill_attribute_assignments=self.kill_attribute_assignments,
             closure_scope=self.closure_scope,
             warn=self.warn,
             warnstyle=self.warnstyle,
@@ -497,6 +530,11 @@ class FunctionEnvironment(object):
         state = self.getstate()
         state.update(kwds)
         return type(self)(**state)
+
+    @property
+    def annotate(self):
+        "Whether we need to annotate the source"
+        return self._annotate or self.numba.cmdopts.get('annotate')
 
     @property
     def func_doc(self):
@@ -773,6 +811,14 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
         default=globalconstants.LLVMConstantsManager(),
     )
 
+    cmdopts = TypedProperty(
+        dict, "Dict of command line options from bin/numba.py", {},
+    )
+
+    annotation_blocks = TypedProperty(
+        list, "List of annotation information for different functions."
+    )
+
     # ____________________________________________________________
     # Class members
 
@@ -830,6 +876,7 @@ class NumbaEnvironment(_AbstractNumbaEnvironment):
         context.external_library = default_external_library(context)
         context.utility_library = default_utility_library(context)
         self.llvm_context = translate.LLVMContextManager()
+        self.annotation_blocks = []
 
     def link_cbuilder_utilities(self):
         self.context.cbuilder_library = library.CBuilderLibrary()

@@ -4,6 +4,8 @@ Type functions for Python builtins.
 """
 from __future__ import print_function, division, absolute_import
 
+import warnings
+
 import ast
 from numba import *
 from numba import nodes
@@ -53,8 +55,10 @@ def len_(typesystem, node, obj):
         shape_attr = nodes.ArrayAttributeNode('shape', node.args[0])
         new_node = nodes.index(shape_attr, 0)
         return new_node
+    elif argtype.is_string:
+        return nodes.CoercionNode(nodes.typednode(node, size_t), Py_ssize_t)
 
-    return Py_ssize_t
+    return Py_ssize_t # Object call
 
 @register_builtin((0, 1, 2), can_handle_deferred_types=True)
 def _int(typesystem, node, x, base, dst_type=int_):
@@ -99,17 +103,27 @@ def abstype(argtype):
 
 @register_builtin(1)
 def abs_(typesystem, node, x):
-    node.variable = Variable(abstype(get_type(x)))
+    argtype = typesystem.promote(long_, get_type(x))
+    dst_type = abstype(argtype)
+    node.variable = Variable(dst_type)
+    node.args = [nodes.CoercionNode(x, argtype)]
     return node
 
 @register_builtin((2, 3))
-def pow_(typesystem, node, base, exponent, mod):
-    base_type = get_type(base)
-    exp_type = get_type(exponent)
-    node.variable = Variable(typesystem.promote(base_type, exp_type))
-    return node
-    # from . import mathmodule
-    # return mathmodule.pow_(typesystem, node, base, exponent)
+
+def pow_(typesystem, node, base, exponent, mod=None):
+    if mod:
+        warnings.warn(
+            "pow() with modulo (third) argument not natively supported")
+        return nodes.call_pyfunc(pow, [base, exponent, mod])
+
+    from . import mathmodule
+    dst_type = mathmodule.binop_type(typesystem, base, exponent)
+    result = mathmodule.infer_math_call(typesystem, node, base, exponent, mod)
+    if dst_type.is_int:
+        # TODO: Implement pow(int) in llvmmath
+        return nodes.CoercionNode(result, dst_type)
+    return result
 
 @register_builtin((1, 2))
 def round_(typesystem, node, number, ndigits):
@@ -173,3 +187,18 @@ def globals_(typesystem, node):
 @register_builtin(0)
 def locals_(typesystem, node):
     raise error.NumbaError("locals() is not supported in numba functions")
+
+@register_builtin(1)
+def ord_(typesystem, node, expr):
+    type = get_type(expr)
+    if type.is_int and type.typename in ("char", "uchar"):
+        return nodes.CoercionNode(expr, int_)
+    elif type.is_string:
+        # TODO:
+        pass
+
+@register_builtin(1)
+def chr_(typesystem, node, expr):
+    type = get_type(expr)
+    if type.is_int:
+        return nodes.CoercionNode(expr, char)

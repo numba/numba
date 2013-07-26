@@ -65,4 +65,6 @@
     #define unlikely(x) (x)
 #endif /* __GNUC__ */
 
+#define NUMBA_COMPILING_IN_CPYTHON 1
+
 /* End copies from Cython */

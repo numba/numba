@@ -28,11 +28,11 @@ signed = frozenset(names(
 ))
 
 float_typenames = names(
-    'float', 'double', 'longdouble', 'float32', 'float64', 'float128',
+    'float', 'double', 'float32', 'float64', #'longdouble', 'float128',
 )
 
 complex_typenames = names(
-    'complex64', 'complex128', 'complex256',
+    'complex64', 'complex128', #'complex256',
 )
 
 #------------------------------------------------------------------------
@@ -72,7 +72,7 @@ type_sizes = {
     # Complex
     "complex64":    8,
     "complex128":   16,
-    "complex256":   32,
+    # "complex256":   32,
 }
 
 ctypes_npy_intp = np.empty(0).ctypes.strides._type_
@@ -98,10 +98,11 @@ native_sizes = {
     "Py_uintptr_t": ctypes.sizeof(ctypes.c_void_p),
     # Float
     # ctypes and numpy may disagree on longdouble
-    "longdouble":   sizeof_longdouble,
-    "float128":     sizeof_longdouble,
+    # "longdouble":   sizeof_longdouble,
+    # "float128":     sizeof_longdouble,
     # Complex
-    "complex256":   sizeof_longdouble * 2,
+    # "complex256":   sizeof_longdouble * 2,
+
     # Pointer
     "pointer":      ctypes.sizeof(ctypes.c_void_p),
 }

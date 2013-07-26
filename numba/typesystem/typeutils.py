@@ -49,7 +49,7 @@ def index_type(type):
     "Result of indexing a value of the given type with an integer index"
     if type.is_array:
         result = array(type.dtype, type.ndim - 1)
-    elif type.is_container or type.is_pointer:
+    elif type.is_container or type.is_pointer or type.is_carray:
         result = type.base_type
     elif type.is_dict:
         result = type.value_type

@@ -6,7 +6,7 @@ Special compiler-recognized numba functions and attributes.
 
 from __future__ import print_function, division, absolute_import
 
-__all__ = ['NULL', 'typeof', 'python', 'nopython', 'addressof']
+__all__ = ['NULL', 'typeof', 'python', 'nopython', 'addressof', 'prange']
 
 import ctypes
 
@@ -35,14 +35,17 @@ def addressof(obj, propagate=True):
     from numba import numbawrapper
 
     if not propagate:
-        raise ValueError("Writing unraisable exception is not yet supported")
+        raise ValueError("Writing unraisable exceptions is not yet supported")
 
-    if not isinstance(obj, numbawrapper.numbafunction_type):
+    if not isinstance(obj, (numbawrapper.NumbaCompiledWrapper,
+                            numbawrapper.numbafunction_type)):
         raise TypeError("Object is not a jit function")
 
     if obj.lfunc_pointer is None:
-        raise ValueError(
-            "Jit function does not have pointer")
+        assert obj.lfunc is not None, obj
+        from numba.codegen import llvmcontext
+        llvm_context = llvmcontext.LLVMContextManager()
+        obj.lfunc_pointer = llvm_context.get_pointer_to_function(obj.lfunc)
 
     ctypes_sig = obj.signature.to_ctypes()
     return ctypes.cast(obj.lfunc_pointer, ctypes_sig)
@@ -81,3 +84,12 @@ class NoopContext(object):
 python = NoopContext("python")
 nopython = NoopContext("nopython")
 
+#------------------------------------------------------------------------
+# prange
+#------------------------------------------------------------------------
+
+def prange(start=0, stop=None, step=1):
+    if stop is None:
+        stop = start
+        start = 0
+    return range(start, stop, step)

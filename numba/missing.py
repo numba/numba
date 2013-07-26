@@ -1,21 +1,20 @@
-import numba.visitors
+import ast
 
-class FixMissingLocations(numba.visitors.NumbaVisitor):
+class FixMissingLocations(ast.NodeVisitor):
     """
     Fix missing source position information.
     """
 
-    def __init__(self, context, func, ast, *args, **kwargs):
-        super(FixMissingLocations, self).__init__(context, func, ast,
-                                                  *args, **kwargs)
-        self.lineno = getattr(ast, 'lineno', 1)
-        self.col_offset = getattr(ast, 'col_offset', 0)
+    def __init__(self, lineno, col_offset, override=False):
+        self.lineno = lineno
+        self.col_offset = col_offset
+        self.override = override
 
     def visit(self, node):
-        if not hasattr(node, 'lineno'):
+        super(FixMissingLocations, self).visit(node)
+        if not hasattr(node, 'lineno') or self.override:
             node.lineno = self.lineno
             node.col_offset = self.col_offset
-
-        super(FixMissingLocations, self).visit(node)
-
-
+        else:
+            self.lineno = node.lineno
+            self.col_offset = node.col_offset

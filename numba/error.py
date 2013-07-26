@@ -12,7 +12,7 @@ def format_pos(node):
 
 def format_postup(tup):
     lineno, col_offset = tup
-    return "%s:%s: " % (lineno - 1, col_offset)
+    return "%s:%s: " % (lineno, col_offset)
 
 class NumbaError(Exception):
     "Some error happened during compilation"

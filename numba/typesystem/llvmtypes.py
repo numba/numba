@@ -2,7 +2,7 @@ import llvm.core
 
 from numba.typesystem.itypesystem import consing, tyname
 from numba.typesystem import universe
-from llvmmath.ltypes import l_longdouble
+# from llvmmath.ltypes import l_longdouble
 
 domain_name = "llvm"
 
@@ -31,7 +31,8 @@ def lfloat(name, itemsize):
     elif itemsize == 8:
         return llvm.core.Type.double()
     else:
-        return l_longdouble
+        assert False, "long double is not supported"
+        # return l_longdouble
 
 size = universe.default_type_sizes.__getitem__
 
@@ -63,8 +64,19 @@ def pointer(base_type):
         base_type = llvm.core.Type.int(8)
     return llvm.core.Type.pointer(base_type)
 
+def sized_pointer(base_type, size):
+    return pointer(base_type)
+
 # @consing
 def function(rettype, argtypes, name=None, is_vararg=False):
     return llvm.core.Type.function(rettype, argtypes, is_vararg)
+
+def array_(dtype, ndim, *args):
+    from numba import environment, ndarray_helpers
+    # TODO: this is gross, we need to pass in 'env'
+    env = environment.NumbaEnvironment.get_environment()
+    if env.crnt:
+        return env.crnt.array.from_type(dtype)
+    return ndarray_helpers.NumpyArray.from_type(dtype)
 
 carray = llvm.core.Type.array

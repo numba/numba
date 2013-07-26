@@ -8,6 +8,7 @@ except ImportError:
     import builtins
 
 import numba
+from numba import missing
 from numba import *
 from numba import error
 from numba import typesystem
@@ -42,7 +43,7 @@ def make_while_loop(flow_node):
     while_node = nodes.While(test=flow_node.test,
                              body=flow_node.body,
                              orelse=flow_node.orelse)
-    return while_node
+    return ast.copy_location(while_node, flow_node)
 
 def copy_basic_blocks(flow_node_src, flow_node_dst):
     "Copy cfg basic blocks from one flow node to another"
@@ -58,7 +59,7 @@ def make_while_from_for(for_node):
                              orelse=for_node.orelse)
     copy_basic_blocks(for_node, while_node)
     while_node = nodes.build_while(**vars(while_node))
-    return while_node
+    return ast.copy_location(while_node, for_node)
 
 def untypedTemp():
     "Temp node with a yet unknown type"
@@ -113,8 +114,8 @@ class TransformForIterable(visitors.NumbaTransformer):
                                     (1 if {{step}} >= 0 else -1)) / {{step}}
                     while {{temp_load}} < {{nsteps_load}}:
                         {{target}} = {{start}} + {{temp_load}} * {{step}}
-                        {{body}}
                         {{temp}} = {{temp_load}} + 1
+                        {{body}}
                 """)
         else:
             templ = textwrap.dedent("""
@@ -122,8 +123,8 @@ class TransformForIterable(visitors.NumbaTransformer):
                     {{nsteps}} = {{stop}}
                     while {{temp_load}} < {{nsteps_load}}:
                         {{target}} = {{temp_load}}
-                        {{body}}
                         {{temp}} = {{temp_load}} + 1
+                        {{body}}
                 """)
 
         if node.orelse:
@@ -144,6 +145,11 @@ class TransformForIterable(visitors.NumbaTransformer):
             temp=temp.store(), temp_load=temp.load(),
             target=node.target,
             body=body, else_body=else_body)
+        ast.copy_location(result, node)
+        if hasattr(node, 'lineno'):
+            visitor = missing.FixMissingLocations(node.lineno, node.col_offset,
+                                              override=True)
+            visitor.visit(result)
 
         #--------------------------------------------------------------------
         # Patch the body and else clause
@@ -155,13 +161,6 @@ class TransformForIterable(visitors.NumbaTransformer):
         while_node = result.body[-1]
         assert isinstance(while_node, ast.While)
 
-        target_increment = while_node.body[-1]
-        assert isinstance(target_increment, ast.Assign)
-
-        # Add target variable increment basic block
-        node.incr_block.body = [target_increment]
-        while_node.body[-1] = node.incr_block
-
         #--------------------------------------------------------------------
         # Create a While with the ForNode's cfg blocks merged in
         #--------------------------------------------------------------------
@@ -171,7 +170,7 @@ class TransformForIterable(visitors.NumbaTransformer):
         while_node = nodes.build_while(**vars(while_node))
 
         # Create the place to jump to for 'continue'
-        while_node.continue_block = node.incr_block
+        while_node.continue_block = node.cond_block
 
         # Set the new while loop in the templated Suite
         result.body[-1] = while_node

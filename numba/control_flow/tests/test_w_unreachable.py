@@ -8,7 +8,7 @@ jitv = jit(void(), warnstyle='simple') #, nopython=True)
 def simple_return():
     """
     >>> result = jitv(simple_return)
-    Warning 14:4: Unreachable code
+    Warning ...: Unreachable code
     """
     return
     print('Where am I?')
@@ -16,12 +16,12 @@ def simple_return():
 def simple_loops():
     """
     >>> result = jitv(simple_loops)
-    Warning 28:8: Unreachable code
-    Warning 32:8: Unreachable code
-    Warning 36:8: Unreachable code
-    Warning 41:12: Unreachable code
-    Warning 46:8: Unreachable code
-    Warning 50:4: Unreachable code
+    Warning ...: Unreachable code
+    Warning ...: Unreachable code
+    Warning ...: Unreachable code
+    Warning ...: Unreachable code
+    Warning ...: Unreachable code
+    Warning ...: Unreachable code
     """
     for i in range(10):
         continue

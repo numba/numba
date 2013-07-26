@@ -9,6 +9,11 @@ hellohello0
 hellohello0
 hellohello1
 hellohello2
+
+>>> autojit(string_len)("hello")
+5
+>>> autojit(nopython=True)(string_len)("hello")
+5
 """
 
 import sys
@@ -46,6 +51,9 @@ def test():
 @jit(void())
 def string_constant():
     print("hello world")
+
+def string_len(s):
+    return len(s)
 
 if __name__ == '__main__':
     string_constant()
