@@ -125,16 +125,17 @@ def abs_(typesystem, node, x):
     from . import builtinmodule
 
     argtype = get_type(x)
+    nodes.annotate(typesystem.env, node, is_math=True)
 
     if argtype.is_array and argtype.dtype.is_numeric:
         # Handle np.abs() on arrays
         dtype = builtinmodule.abstype(argtype.dtype)
         result_type = argtype.add('dtype', dtype)
         node.variable = Variable(result_type)
-        return node
+    else:
+        node = builtinmodule.abs_(typesystem, node, x)
 
-    nodes.annotate(typesystem.env, node, is_math=True)
-    return builtinmodule.abs_(typesystem, node, x)
+    return node
 
 register_math_typefunc(1)(abs_, np.abs)
 
