@@ -121,12 +121,13 @@ class VariableFindingVisitor(visitors.VariableFindingVisitor):
                             node, "Incompatible reduction operators: "
                                   "(%s and %s) for variable %r" % (
                                             op, previous_op, target.id))
-            else:
+            elif op:
                 self.reductions[target.id] = redop
 
     def visit_Assign(self, node):
-        if isinstance(node.targets[0], ast.Name) and node.inplace_op:
-            self.register_assignment(node, node.targets[0], node.inplace_op)
+        if isinstance(node.targets[0], ast.Name):
+            self.register_assignment(node, node.targets[0],
+                                     getattr(node, 'inplace_op', None))
 
 
 def create_prange_closure(env, prange_node, body, target):
