@@ -331,8 +331,8 @@ static PyObject* primitive2pydatetime(
     npy_int32 month,
     npy_int32 day)
 {
-    //PyObject *result = PyDateTime_FromDateAndTime(year, month, day, 0, 0, 0, 0);
-    PyObject *result = PyDate_FromDate(year, month, day);
+    PyObject *result = PyDateTime_FromDateAndTime(year, month, day, 0, 0, 0, 0);
+    //PyObject *result = PyDate_FromDate(year, month, day);
     Py_INCREF(result);
     return result;
 }

@@ -19,6 +19,7 @@ from numba.support.ctypes_support import is_ctypes, from_ctypes_value
 from numba.support import cffi_support
 
 import numpy as np
+from datetime import datetime
 
 #------------------------------------------------------------------------
 # Class -> Type
@@ -35,6 +36,7 @@ def get_typing_defaults(u):
         bool: u.bool_,
         complex: u.complex128,
         str: u.string_,
+        datetime: u.datetime,
     }
     return typing_defaults
 
