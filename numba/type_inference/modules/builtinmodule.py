@@ -4,6 +4,8 @@ Type functions for Python builtins.
 """
 from __future__ import print_function, division, absolute_import
 
+import warnings
+
 from numba import *
 from numba import nodes
 from numba import error
@@ -97,13 +99,26 @@ def abstype(argtype):
 
 @register_builtin(1)
 def abs_(typesystem, node, x):
-    node.variable = Variable(abstype(get_type(x)))
+    argtype = typesystem.promote(long_, get_type(x))
+    dst_type = abstype(argtype)
+    node.variable = Variable(dst_type)
+    node.args = [nodes.CoercionNode(x, argtype)]
     return node
 
 @register_builtin((2, 3))
-def pow_(typesystem, node, base, exponent, mod):
+def pow_(typesystem, node, base, exponent, mod=None):
+    if mod:
+        warnings.warn(
+            "pow() with modulo (third) argument not natively supported")
+        return nodes.call_pyfunc(pow, [base, exponent, mod])
+
     from . import mathmodule
-    return mathmodule.pow_(typesystem, node, base, exponent)
+    dst_type = mathmodule.binop_type(typesystem, base, exponent)
+    result = mathmodule.infer_math_call(typesystem, node, base, exponent, mod)
+    if dst_type.is_int:
+        # TODO: Implement pow(int) in llvmmath
+        return nodes.CoercionNode(result, dst_type)
+    return result
 
 @register_builtin((1, 2))
 def round_(typesystem, node, number, ndigits):

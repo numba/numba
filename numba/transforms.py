@@ -81,6 +81,7 @@ from __future__ import print_function, division, absolute_import
 import sys
 import ast
 import ctypes
+import warnings
 
 if __debug__:
     import pprint
@@ -109,7 +110,7 @@ from numba.external import pyapi
 
 def get_funcname(py_func):
     if py_func in (abs, np.abs):
-        return 'fabs'
+        return 'abs'
     elif py_func is np.round:
         return 'round'
 
@@ -117,8 +118,7 @@ def get_funcname(py_func):
 
 def resolve_pow(env, restype, args):
     promote = env.crnt.typesystem.promote
-    have_mod = len(args) == 3
-    if restype.is_numeric and not have_mod:
+    if restype.is_numeric:
         type = reduce(promote, [double, restype] + [a.type for a in args])
         signature = type(*[type] * len(args))
         result = nodes.MathCallNode(signature, args, None, name='pow')
@@ -126,12 +126,12 @@ def resolve_pow(env, restype, args):
         result = nodes.call_pyfunc(pow, args)
     return nodes.CoercionNode(result, restype)
 
-def math_call(name, args, dst_type):
+def math_call(env, name, args, dst_type):
     signature = dst_type(*[a.type for a in args])
     return nodes.MathCallNode(signature, args, None, name=name)
 
-def math_call2(name, call_node):
-    return math_call(name, [call_node.args[0]], call_node.type)
+def math_call2(env, name, call_node):
+    return math_call(env, name, [call_node.args[0]], call_node.type)
 
 # ______________________________________________________________________
 
@@ -182,7 +182,7 @@ class BuiltinResolver(object):
         elif not node.type.is_numeric:
             result = nodes.call_pyfunc(func, node.args)
         else:
-            return math_call2('abs', node)
+            return math_call2(self.env, 'abs', node)
 
     def _resolve_round(self, func, node, argtype):
         return nodes.call_pyfunc(round, node.args)
@@ -621,7 +621,7 @@ class LateSpecializer(ResolveCoercions,
         if self.query(node, "is_math") and node.type.is_numeric:
             assert node.func.type.is_known_value
             name = get_funcname(node.func.type.value)
-            result = math_call(name, node.args, node.type)
+            result = math_call(self.env, name, node.args, node.type)
 
         elif func_type.is_builtin:
             result = self.builtin_resolver.resolve_builtin_call_or_object(

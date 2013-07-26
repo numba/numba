@@ -27,19 +27,19 @@ True
 from numpy import allclose
 from numba import *
 
-@autojit(backend='ast')
+@autojit
 def pow3(a,b,c):
     return pow(a,b,c)
 
-@autojit(backend='ast')
+@autojit
 def pow3_const():
     return pow(2,3,5)
 
-@autojit(backend='ast')
+@autojit(nopython=True)
 def pow2(a,b):
     return pow(a,b)
 
-@autojit(backend='ast')
+@autojit(nopython=True)
 def pow2_const():
     return pow(2,3)
 
@@ -47,4 +47,3 @@ if __name__ == '__main__':
 #    import logging; logging.getLogger().setLevel(0)
     import numba
     numba.testing.testmod()
-

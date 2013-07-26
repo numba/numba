@@ -127,7 +127,8 @@ def run():
             for types, data in suite.types.iteritems():
                 for ty in types:
                     print("running:", test.__name__, ty)
-                    jitter = nb.jit(nb.object_(nb.typeof(suite.mod), ty))
+                    signature = nb.object_(nb.typeof(suite.mod), ty)
+                    jitter = nb.jit(signature)
                     jitted = jitter(test)
 
                     r1 = test(suite.mod, data)

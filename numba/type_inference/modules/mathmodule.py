@@ -73,6 +73,7 @@ n_ary_mathsyms = {
     'atan2'     : 2,
     'logaddexp' : 2,
     'logaddexp2': 2,
+    'pow'       : (2, 3),
 }
 
 math2ufunc = {
@@ -118,34 +119,24 @@ infer_math_call = mk_infer_math_call(double)
 infer_cmath_call = mk_infer_math_call(complex128)
 
 # ______________________________________________________________________
-# pow()
-
-def pow_(typesystem, call_node, node, power, mod=None):
-    dst_type = binop_type(typesystem, node, power)
-    call_node.variable = Variable(dst_type)
-    return call_node
-
-register_math_typefunc((2, 3), math.pow)
-register_math_typefunc(2, np.power)
-
-# ______________________________________________________________________
 # abs()
 
 def abs_(typesystem, node, x):
-    import builtinmodule
+    from . import builtinmodule
 
     argtype = get_type(x)
 
-    if argtype.is_array and argtype.is_numeric:
+    if argtype.is_array and argtype.dtype.is_numeric:
         # Handle np.abs() on arrays
         dtype = builtinmodule.abstype(argtype.dtype)
         result_type = argtype.add('dtype', dtype)
         node.variable = Variable(result_type)
         return node
 
+    nodes.annotate(typesystem.env, node, is_math=True)
     return builtinmodule.abs_(typesystem, node, x)
 
-register_math_typefunc(1, np.abs)
+register_math_typefunc(1)(abs_, np.abs)
 
 #----------------------------------------------------------------------------
 # Register Type Functions
@@ -163,6 +154,7 @@ id_name = lambda x: x
 # ______________________________________________________________________
 
 def reg(mod, register, getname):
+    """Register all functions listed in mathsyms and n_ary_mathsyms"""
     nargs = lambda f: n_ary_mathsyms.get(f, 1)
     for symname in mathsyms + list(n_ary_mathsyms):
         if hasattr(mod, getname(symname)):
