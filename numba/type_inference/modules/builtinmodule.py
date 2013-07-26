@@ -6,11 +6,11 @@ from __future__ import print_function, division, absolute_import
 
 import warnings
 
+import ast
 from numba import *
 from numba import nodes
 from numba import error
 # from numba import function_util
-# from numba.specialize.mathcalls import is_math_function
 from numba.symtab import Variable
 from numba import typesystem
 from numba.typesystem import get_type
@@ -79,6 +79,10 @@ if not PY3:
 def _float(typesystem, node, x):
     return cast(node, double)
 
+@register_builtin((0, 1), can_handle_deferred_types=True)
+def _bool(context, node, x):
+    return cast(node, bool_)
+
 @register_builtin((0, 1, 2), can_handle_deferred_types=True)
 def complex_(typesystem, node, a, b):
     if len(node.args) == 2:
@@ -106,6 +110,7 @@ def abs_(typesystem, node, x):
     return node
 
 @register_builtin((2, 3))
+
 def pow_(typesystem, node, base, exponent, mod=None):
     if mod:
         warnings.warn(
@@ -122,7 +127,6 @@ def pow_(typesystem, node, base, exponent, mod=None):
 
 @register_builtin((1, 2))
 def round_(typesystem, node, number, ndigits):
-    # is_math = is_math_function(node.args, round)
     argtype = get_type(number)
 
     if len(node.args) == 1 and argtype.is_int:
@@ -137,6 +141,43 @@ def round_(typesystem, node, number, ndigits):
 
     node.variable = Variable(dst_type)
     return node # nodes.CoercionNode(node, double)
+
+def minmax(typesystem, args, op):
+    if len(args) < 2:
+        return
+
+    res = args[0]
+    for arg in args[1:]:
+        lhs_type = get_type(res)
+        rhs_type = get_type(arg)
+        res_type = typesystem.promote(lhs_type, rhs_type)
+        if lhs_type != res_type:
+            res = nodes.CoercionNode(res, res_type)
+        if rhs_type != res_type:
+            arg = nodes.CoercionNode(arg, res_type)
+
+        lhs_temp = nodes.TempNode(res_type)
+        rhs_temp = nodes.TempNode(res_type)
+        res_temp = nodes.TempNode(res_type)
+        lhs = lhs_temp.load(invariant=True)
+        rhs = rhs_temp.load(invariant=True)
+        expr = ast.IfExp(ast.Compare(lhs, [op], [rhs]), lhs, rhs)
+        body = [
+            ast.Assign([lhs_temp.store()], res),
+            ast.Assign([rhs_temp.store()], arg),
+            ast.Assign([res_temp.store()], expr),
+        ]
+        res = nodes.ExpressionNode(body, res_temp.load(invariant=True))
+
+    return res
+
+@register_builtin(None)
+def min_(typesystem, node, *args):
+    return minmax(typesystem, args, ast.Lt())
+
+@register_builtin(None)
+def max_(typesystem, node, *args):
+    return minmax(typesystem, args, ast.Gt())
 
 @register_builtin(0)
 def globals_(typesystem, node):

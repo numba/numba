@@ -861,7 +861,12 @@ class TypeInferer(visitors.NumbaTransformer):
                 ["is_int", 'is_object', 'is_bool'])
 
         v1, v2 = node.left.variable, node.right.variable
-        promoted_type = self.promote(v1, v2)
+
+        # Handle string formatting with %
+        if isinstance(node.op, ast.Mod) and v1.type.is_c_string:
+            promoted_type = object_
+        else:
+            promoted_type = self.promote(v1, v2)
 
         if promoted_type.is_pointer:
             self._verify_pointer_type(node, v1, v2)

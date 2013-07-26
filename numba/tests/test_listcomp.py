@@ -7,7 +7,7 @@ from numba.testing.test_support import testmod, autojit_py3doc
 def smoketest():
     """
     >>> smoketest()
-    ([0L, 4L, 8L], 4L)
+    ([0, 4, 8], 4)
     """
     x = -10 # 'abc'
     result = [x*2 for x in range(5) if x % 2 == 0]
@@ -31,7 +31,7 @@ def list_genexp():
 def int_runvar():
     """
     >>> int_runvar()
-    [0L, 4L, 8L]
+    [0, 4, 8]
     """
     print([x*2 for x in range(5) if x % 2 == 0])
 
@@ -65,7 +65,7 @@ def int_runvar():
 def nested_result():
     """
     >>> nested_result()
-    [[], [-1L], [-1L, 0L], [-1L, 0L, 1L]]
+    [[], [-1], [-1, 0], [-1, 0, 1]]
     """
     result = [[a-1 for a in range(b)] for b in range(4)]
     return result
@@ -105,7 +105,7 @@ def listcomp_const_condition_false():
 def listcomp_const_condition_true():
     """
     >>> listcomp_const_condition_true()
-    [0L, 2L, 4L]
+    [0, 2, 4]
     """
     return [x*2 for x in range(3) if 1]
 

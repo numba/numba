@@ -44,9 +44,13 @@ default_normalize_order = [
     'validate_signature',
     'update_signature',
     'create_lfunc1',
-    'ValidateASTStage',
     'NormalizeASTStage',
+    'TransformBuiltinLoops',
+    'ValidateASTStage',
 ]
+
+default_cf_pipeline_order = ['ast3to2', 'ControlFlowAnalysis']
+
 
 default_pipeline_order = default_normalize_order + [
     'ExpandPrange',
@@ -93,15 +97,10 @@ default_pipeline_order = default_normalize_order + [
 ]
 
 
-default_cf_pipeline_order = [
-    'ast3to2',
-    'ControlFlowAnalysis',
+default_type_infer_pipeline_order = default_cf_pipeline_order + [
+    'resolve_templates',
+    'TypeInfer',
 ]
-
-# default_type_infer_pipeline_order = default_cf_pipeline_order + [
-#     'resolve_templates',
-#     'TypeInfer',
-# ]
 
 default_dummy_type_infer_pipeline_order = [
     'ast3to2',

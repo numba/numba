@@ -33,11 +33,19 @@ def cint(name):
 for name in map(tyname, universe.int_typenames):
     cint(name)
 
-globals().update((tyname(ty.typename), cty) for ty, cty in nb2ctypes.iteritems())
+globals().update((tyname(ty.typename), cty)
+                     for ty, cty in nb2ctypes.iteritems())
 # float_, double, longdouble = float32, float64, float128
 float_, double = float32, float64
 
+
 ctypes_map = dict((cty, ty) for ty, cty in nb2ctypes.iteritems())
+
+if ctypes.c_double == ctypes.c_longdouble:
+    # Ctypes and numpy can disagree on longdouble. If ctypes assume
+    # double == longdouble, make sure we don't assume longdouble, and then
+    # later use the numpy representation
+    ctypes_map[ctypes.c_double] = ts.float64
 
 # ______________________________________________________________________
 

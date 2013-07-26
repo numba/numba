@@ -111,7 +111,7 @@ def test_simple_circular_binop_promotion():
 def test_circular_binop():
     """
     >>> test_circular_binop()
-    (1.0, 2.0, 1.0, -3L)
+    (1.0, 2.0, 1.0, -3)
     >>> sig, syms = infer(test_circular_binop.py_func,
     ...                   functype(None, []), warn=False)
     >>> types(syms, 'x', 'y', 'z', 'a')
@@ -176,7 +176,7 @@ def test_circular_compare3():
     2
     3
     4
-    (False, 10L)
+    (False, 10)
     >>> sig, syms = infer(test_circular_compare3.py_func,
     ...                   functype(None, []), warn=False)
     >>> types(syms, 'cond')
@@ -208,7 +208,7 @@ def test_circular_compare3():
 def test_delayed_array_indexing():
     """
     >>> test_delayed_array_indexing()
-    (array([ 0.,  1.,  2.,  3.,  4.,  5.,  6.,  7.,  8.,  9.]), 1.0, 10L)
+    (array([ 0.,  1.,  2.,  3.,  4.,  5.,  6.,  7.,  8.,  9.]), 1.0, 10)
     >>> sig, syms = infer(test_delayed_array_indexing.py_func,
     ...                   functype(None, []), warn=False)
     >>> types(syms, 'array', 'var', 'x')
@@ -272,7 +272,7 @@ def test_delayed_array_slicing2():
 def test_delayed_string_indexing_simple():
     """
     >>> test_delayed_string_indexing_simple()
-    ('eggs', 3L)
+    ('eggs', 3)
     >>> sig, syms = infer(test_delayed_string_indexing_simple.py_func,
     ...                   functype(None, []), warn=False)
     >>> types(syms, 's', 'x')
@@ -292,7 +292,7 @@ def test_delayed_string_indexing_simple():
 def test_delayed_string_indexing():
     """
     >>> test_delayed_string_indexing()
-    ('ham eggs', 3L)
+    ('ham eggs', 3)
     >>> sig, syms = infer(test_delayed_string_indexing.py_func,
     ...                   functype(None, []), warn=False)
     >>> types(syms, 's', 'x')
@@ -318,7 +318,7 @@ def test_delayed_string_indexing():
 def test_delayed_string_indexing2():
     """
     >>> test_delayed_string_indexing2()
-    ('ham eggs', 3L)
+    ('ham eggs', 3)
     >>> sig, syms = infer(test_delayed_string_indexing2.py_func,
     ...                   functype(None, []), warn=False)
     >>> types(syms, 's', 'x')
@@ -397,7 +397,7 @@ def simple_func(x):
 def test_simple_call():
     """
     >>> test_simple_call()
-    1091100052L
+    1091100052
     >>> infer_simple(test_simple_call, 'x')
     (int,)
     """

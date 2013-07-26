@@ -2,7 +2,7 @@
 >>> get_list('world')
 [1, 'hello', 2.0, 'world']
 >>> get_tuple('world')
-(1L, 'hello', 2.0, 'world')
+(1, 'hello', 2.0, 'world')
 >>> get_dict('world') == {"hello": 1, 2.0: 'world'}
 True
 """

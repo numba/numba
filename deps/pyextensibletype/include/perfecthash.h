@@ -57,7 +57,7 @@ void _PyCustomSlots_bucket_argsort(uint16_t *p, uint8_t *binsizes,
   /* Then simply write indices to the bins */
   for (ibin = 0; ibin != nbins; ++ibin) {
     binsize = binsizes[ibin];
-    sort_bins[binsize][0] = ibin;
+    sort_bins[binsize][0] = (uint16_t)ibin;
     sort_bins[binsize]++;
   }
 }
@@ -106,8 +106,9 @@ int _PyCustomSlots_FindDisplacements(PyCustomSlots_Table *table,
         int k;
         int collides = 0;
         for (k = 0; k != binsizes[bin]; ++k) {
-          uint16_t slot = (((hashes[bins[BIN_LIMIT * bin + k]] >> r) & m_f) ^
-                           dval);
+          uint16_t slot = (uint16_t)(
+                            ((hashes[bins[BIN_LIMIT * bin + k]] >> r) & m_f) ^
+                             dval);
           if (taken[slot]) {
             collides = 1;
             break;
@@ -122,8 +123,9 @@ int _PyCustomSlots_FindDisplacements(PyCustomSlots_Table *table,
         int k;
         /* mark slots as taken and shuffle in table elements */
         for (k = 0; k != binsizes[bin]; ++k) {
-          uint16_t slot = (((hashes[bins[BIN_LIMIT * bin + k]] >> r) & m_f) ^
-                           dval);
+          uint16_t slot = (uint16_t)(
+                            ((hashes[bins[BIN_LIMIT * bin + k]] >> r) & m_f) ^
+                             dval);
           taken[slot] = 1;
           table->entries[slot] = entries_copy[bins[BIN_LIMIT * bin + k]];
         }
@@ -137,7 +139,7 @@ int _PyCustomSlots_FindDisplacements(PyCustomSlots_Table *table,
 
 int PyCustomSlots_PerfectHash(PyCustomSlots_Table *table, uint64_t *hashes) {
   int result, r, retcode;
-  uint32_t bin, j;
+  uint32_t bin;
   uint8_t binsize;
   uint16_t i, n = table->n, b = table->b;
   uint64_t m_f = PyCustomSlots_roundup_2pow(table->n) - 1;
@@ -168,7 +170,7 @@ int PyCustomSlots_PerfectHash(PyCustomSlots_Table *table, uint64_t *hashes) {
     number_of_bins_by_size[binsize] = 0;
   }
   for (i = 0; i != n; ++i) {
-    bin = hashes[i] & m_g;
+    bin = (uint32_t)(hashes[i] & m_g);
     if (bin > b)
         abort();
     binsize = ++binsizes[bin];

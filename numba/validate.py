@@ -7,7 +7,7 @@ Initial AST validation and normalization.
 from __future__ import print_function, division, absolute_import
 
 import ast
-from numba import error
+from numba import error, nodes
 
 class ValidateAST(ast.NodeVisitor):
     "Validate AST"
@@ -34,7 +34,8 @@ class ValidateAST(ast.NodeVisitor):
     #             node, "Traceback argument to raise not supported")
 
     def visit_For(self, node):
-        if not isinstance(node.target, (ast.Name, ast.Attribute)):
+        if not isinstance(node.target, (ast.Name, ast.Attribute,
+                                        nodes.TempStoreNode)):
             raise error.NumbaError(
                 node.target, "Only a single target iteration variable is "
                              "supported at the moment")

@@ -174,6 +174,7 @@ We hope to support the following container types:
     * dict, ordereddict
     * set, orderedset
     * queues, channels
+    * fixedlist (fixed number of element and each element can have different type)
     * <your idea here>
 
 There are many more data structure that can be implemented, but future releases

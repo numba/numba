@@ -12,7 +12,7 @@ def test_modify():
     3
     4
     <BLANKLINE>
-    (4L, 0L)
+    (4, 0)
     """
     n = 5
     for i in range(n):
@@ -30,7 +30,7 @@ def test_negindex():
     4
     3
     2
-    (2L, 0L)
+    (2, 0)
     """
     n = 5
     for i in range(n+1, 1, -1):
@@ -46,7 +46,7 @@ def test_negindex_inferred():
     4
     3
     2
-    (2L, 0L)
+    (2, 0)
     """
     n = 5
     for i in range(n, 1, -1):
@@ -64,7 +64,7 @@ def test_fix():
     3
     4
     <BLANKLINE>
-    4L
+    4
     """
     for i in range(5):
         print(i)
@@ -79,7 +79,7 @@ def test_break():
     1
     2
     <BLANKLINE>
-    (2L, 0L)
+    (2, 0)
     """
     n = 5
     for i in range(n):
@@ -190,7 +190,7 @@ def test_return():
     0
     1
     2
-    (2L, 0L)
+    (2, 0)
     """
     n = 5
     for i in range(n):
@@ -208,7 +208,7 @@ def test_return2():
     0
     1
     2
-    2L
+    2
     """
     n = 5
     for i in range(n):

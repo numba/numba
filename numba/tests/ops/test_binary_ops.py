@@ -58,5 +58,8 @@ class TestBinops(unittest.TestCase):
 
     def test_floor(self): self._handle_binop(floor)
 
+    def test_stringformat(self):
+        self.assertEqual(autojit(mod)("hello %s", "world"), "hello world")
+
 if __name__ == "__main__":
     test_support.main()
