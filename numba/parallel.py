@@ -97,18 +97,19 @@ class VariableFindingVisitor(visitors.VariableFindingVisitor):
     "Find referenced and assigned ast.Name nodes"
     def __init__(self):
         super(VariableFindingVisitor, self).__init__()
-        self.referenced = {}
-        self.assigned = {}
+        self.reductions = {}
 
     def register_assignment(self, node, target, op):
         if isinstance(target, ast.Name):
+            self.assigned.add(target.id)
+
             if op is None:
                 redop = op
             else:
                 redop = get_reduction_op(op)
 
-            if target.id in self.assigned:
-                previous_op = self.assigned[target.id]
+            if target.id in self.reductions:
+                previous_op = self.reductions[target.id]
                 if ((previous_op is None and op is not None) or
                         (previous_op is not None and op is None)):
                     raise error.NumbaError(
@@ -121,7 +122,11 @@ class VariableFindingVisitor(visitors.VariableFindingVisitor):
                                   "(%s and %s) for variable %r" % (
                                             op, previous_op, target.id))
             else:
-                self.assigned[target.id] = redop
+                self.reductions[target.id] = redop
+
+    def visit_Assign(self, node):
+        if isinstance(node.targets[0], ast.Name) and node.inplace_op:
+            self.register_assignment(node, node.targets[0], node.inplace_op)
 
 
 def create_prange_closure(env, prange_node, body, target):
@@ -131,9 +136,8 @@ def create_prange_closure(env, prange_node, body, target):
 
     # Determine privates and reductions. Shared variables will be handled by
     # the closure support.
-    assigned = v.assigned.items()
-    privates = set(name for name, op in assigned if op is None)
-    reductions = dict((name, op) for name, op in assigned if op is not None)
+    privates = set(v.assigned) - set(v.reductions)
+    reductions = v.reductions
 
     if isinstance(target, ast.Name) and target.id in reductions:
         # Remove target variable from reductions if present

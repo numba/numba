@@ -11,9 +11,9 @@ hellohello1
 hellohello2
 
 >>> autojit(string_len)("hello")
-5L
+5
 >>> autojit(nopython=True)(string_len)("hello")
-5L
+5
 """
 
 import sys
