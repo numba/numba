@@ -439,7 +439,8 @@ class UpdateAttributeStatements(PipelineStage):
         for block in func_env.flow.blocks:
             stats = []
             for cf_stat in block.stats:
-                if isinstance(cf_stat, cfstats.AttributeAssignment):
+                if (isinstance(cf_stat, cfstats.AttributeAssignment) and
+                        isinstance(cf_stat.lhs, ast_module.Assign)):
                     value = cf_stat.lhs.value
                     if (isinstance(value, ast_module.Name) and
                                 value.id in func_env.kill_attribute_assignments):

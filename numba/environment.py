@@ -97,11 +97,6 @@ default_pipeline_order = default_normalize_order + [
 ]
 
 
-default_type_infer_pipeline_order = default_cf_pipeline_order + [
-    'resolve_templates',
-    'TypeInfer',
-]
-
 default_dummy_type_infer_pipeline_order = [
     'ast3to2',
     'TypeInfer',

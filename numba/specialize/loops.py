@@ -114,8 +114,8 @@ class TransformForIterable(visitors.NumbaTransformer):
                                     (1 if {{step}} >= 0 else -1)) / {{step}}
                     while {{temp_load}} < {{nsteps_load}}:
                         {{target}} = {{start}} + {{temp_load}} * {{step}}
-                        {{body}}
                         {{temp}} = {{temp_load}} + 1
+                        {{body}}
                 """)
         else:
             templ = textwrap.dedent("""
@@ -123,8 +123,8 @@ class TransformForIterable(visitors.NumbaTransformer):
                     {{nsteps}} = {{stop}}
                     while {{temp_load}} < {{nsteps_load}}:
                         {{target}} = {{temp_load}}
-                        {{body}}
                         {{temp}} = {{temp_load}} + 1
+                        {{body}}
                 """)
 
         if node.orelse:
