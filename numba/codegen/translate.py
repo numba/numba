@@ -730,11 +730,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         self.builder.position_at_end(node.entry_block)
         self._init_phis(node)
 
-        if len(node.body) == 1:
-            lbody = self.visit(node.body[0])
-        else:
-            self.visitlist(node.body)
-            lbody = None
+        lbody = self.visitlist(node.body)
+        lbody = lbody[0] if len(lbody) == 1 else None
 
         if not node.exit_block:
             node.exit_block = self.builder.basic_block

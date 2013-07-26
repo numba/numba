@@ -27,6 +27,17 @@ class CooperativeBase(object):
     def __init__(self, *args, **kwargs):
         pass
 
+def _flatmap(func, sequence):
+    result = []
+    for elem in sequence:
+        res = func(elem)
+        if res is not None:
+            if isinstance(res, list):
+                result.extend(res)
+            else:
+                result.append(res)
+    return result
+
 class NumbaVisitorMixin(CooperativeBase):
 
     _overloads = None
@@ -272,13 +283,7 @@ class NumbaVisitorMixin(CooperativeBase):
         return self.have(v1.type, v2.type, p1, p2)
 
     def visitlist(self, list):
-        newlist = []
-        for node in list:
-            result = self.visit(node)
-            if result is not None:
-                newlist.append(result)
-
-        list[:] = newlist
+        list[:] = _flatmap(self.visit, list)
         return list
 
     def is_complex(self, n):
@@ -337,7 +342,7 @@ class NumbaVisitor(ast.NodeVisitor, NumbaVisitorMixin):
     "Non-mutating visitor"
 
     def visitlist(self, list):
-        return [self.visit(item) for item in list]
+        return _flatmap(self.visit, list)
 
 class NumbaTransformer(NumbaVisitorMixin, ast.NodeTransformer):
     "Mutating visitor"
