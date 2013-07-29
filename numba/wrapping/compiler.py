@@ -6,6 +6,7 @@ from numba.exttypes import virtual
 import numba.exttypes.entrypoints
 
 import numba.decorators
+from numba import functions
 
 def resolve_argtypes(env, py_func, template_signature,
                      args, kwargs, translator_kwargs):
@@ -72,13 +73,17 @@ class Compiler(object):
 
 class FunctionCompiler(Compiler):
 
+    def __init__(self, env, py_func, nopython, flags, template_signature):
+        super(FunctionCompiler,self).__init__(env, py_func, nopython, flags, template_signature)
+        self.ast = functions._get_ast(py_func)
+
     def compile(self, signature):
         jitter = numba.decorators.jit_targets[(self.target, 'ast')]
 
         dec = jitter(restype=signature.return_type,
                      argtypes=signature.args,
                      target=self.target, nopython=self.nopython,
-                     env=self.env, **self.flags)
+                     env=self.env, func_ast=self.ast, **self.flags)
 
         compiled_function = dec(self.py_func)
         return compiled_function

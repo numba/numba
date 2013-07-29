@@ -12,6 +12,7 @@ import logging
 import pprint
 import random
 import types
+import copy
 import llvm.core as lc
 
 # import numba.closures
@@ -115,7 +116,7 @@ def infer_types2(env, func, restype=None, argtypes=None, **kwargs):
 
 
 def compile2(env, func, restype=None, argtypes=None, ctypes=False,
-             compile_only=False, **kwds):
+             compile_only=False, func_ast=None, **kwds):
     """
     Compile a numba annotated function.
 
@@ -128,7 +129,10 @@ def compile2(env, func, restype=None, argtypes=None, ctypes=False,
     assert 'llvm_module' not in kwds
     kwds['llvm_module'] = lc.Module.new(module_name(func))
     logger.debug(kwds)
-    func_ast = functions._get_ast(func)
+    if func_ast is None:
+        func_ast = functions._get_ast(func)
+    else:
+        func_ast = copy.deepcopy(func_ast)
     func_signature = typesystem.function(restype, argtypes)
     #pipeline, (func_signature, symtab, ast) = _infer_types2(
     #            env, func, restype, argtypes, codegen=True, **kwds)
