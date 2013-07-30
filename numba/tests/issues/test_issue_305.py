@@ -27,6 +27,7 @@ def test_fetch_latest_source():
     f.flush()
     exec open(fn) in env, env
 
+    f.seek(0)
     f.write(textwrap.dedent("""
     @jit('i8()')
     def test():
@@ -54,6 +55,7 @@ def test_no_auto_reload():
     f.flush()
     exec open(fn) in env, env
 
+    f.seek(0)
     f.write(textwrap.dedent("""
     @autojit
     def test2():
