@@ -24,6 +24,10 @@ def extract_month(date):
 def extract_day(date):
     return date.day
 
+@numba.autojit(nopython=True)
+def datetime_delta(d0, d1):
+    return d1 - d0
+
 def test_datetime():
 
     assert extract_year(datetime(2014, 1, 2)) == 2014
