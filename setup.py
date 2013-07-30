@@ -184,8 +184,10 @@ setup(
         'numba.external.utilities': ['*.c', '*.h'],
         'numba': ['*.c', '*.h', 'include/*', '*.pxd'],
         'numba.vectorize': ['*.h'],
-        'numba.annotate': ['annotate_template.html'],
-        'numba.annotate': ['annotate_inline_template.html'],
+        'numba.annotate': ['annotate_inline_template.html',
+                           'jquery-ui.min.css',
+                           'jquery.min.js',
+                           'jquery-ui.min.js'],
     },
     ext_modules=extensibletype_extensions + [
         Extension(
