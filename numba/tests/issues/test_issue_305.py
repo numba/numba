@@ -25,16 +25,17 @@ def test_fetch_latest_source():
         return 0
     """))
     f.flush()
-    exec open(fn) in env, env
+    exec open(fn).read() in env, env
 
     f.seek(0)
+    f.truncate()
     f.write(textwrap.dedent("""
     @jit('i8()')
     def test():
         return 1
     """))
     f.flush()
-    exec open(fn) in env, env
+    exec open(fn).read() in env, env
 
     assert env['test']() == env['test'].py_func() # gives 0 == 1
 
@@ -53,9 +54,10 @@ def test_no_auto_reload():
         return 0
     """))
     f.flush()
-    exec open(fn) in env, env
+    exec open(fn).read() in env, env
 
     f.seek(0)
+    f.truncate()
     f.write(textwrap.dedent("""
     @autojit
     def test2():
