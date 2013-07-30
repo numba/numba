@@ -6,13 +6,16 @@ from numba import jit, autojit
 
 # Thanks to @bfredl
 
+env = { '__file__': __file__, '__name__': __name__ ,
+        'jit': jit, 'autojit': autojit }
+
 def test_fetch_latest_source():
     """
     When reloading new versions of the same module into the same session (i.e.
     an interactive ipython session), numba sometimes gets the wrong version of
     the source from inspect.getsource()
     """
-    f = tempfile.NamedTemporaryFile()
+    f = tempfile.NamedTemporaryFile('w+')
     fn = f.name
     # fn = "/tmp/numbatest.py"
 
@@ -22,7 +25,7 @@ def test_fetch_latest_source():
         return 0
     """))
     f.flush()
-    exec open(fn)
+    exec open(fn) in env, env
 
     f.write(textwrap.dedent("""
     @jit('i8()')
@@ -30,9 +33,9 @@ def test_fetch_latest_source():
         return 1
     """))
     f.flush()
-    exec open(fn)
+    exec open(fn) in env, env
 
-    assert test() == test.py_func() # gives 0 == 1
+    assert env['test']() == env['test'].py_func() # gives 0 == 1
 
 def test_no_auto_reload():
     """
@@ -40,7 +43,7 @@ def test_no_auto_reload():
     hasn't been reloaded. This could be fixed by fetching the ast directly
     at declaration time rather that at first compilation (2nd commit)
     """
-    f = tempfile.NamedTemporaryFile()
+    f = tempfile.NamedTemporaryFile('w+')
     fn = f.name
 
     f.write(textwrap.dedent("""
@@ -49,7 +52,7 @@ def test_no_auto_reload():
         return 0
     """))
     f.flush()
-    exec open(fn)
+    exec open(fn) in env, env
 
     f.write(textwrap.dedent("""
     @autojit
@@ -60,7 +63,7 @@ def test_no_auto_reload():
 
     # note that we don't reexec the file
 
-    assert test2() == test2.py_func() # gives 1 == 0
+    assert env['test2']() == env['test2'].py_func() # gives 1 == 0
 
 test_fetch_latest_source()
 test_no_auto_reload()
