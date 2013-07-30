@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
-import ast, inspect, os
+import ast, inspect, linecache, os
 import logging
 import textwrap
 from collections import defaultdict
@@ -61,6 +61,7 @@ def _get_ast(func, flags=0):
         assert isinstance(func_def, ast.FunctionDef)
         return func_def
     try:
+        linecache.checkcache(inspect.getsourcefile(func))
         source = inspect.getsource(func)
         source_module = inspect.getmodule(func)
     except IOError:
