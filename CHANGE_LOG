@@ -1,9 +1,14 @@
 Version 0.10
 ------------
-* Annotation tool (./bin/numba --annotate --fancy)
+* Annotation tool (./bin/numba --annotate --fancy) (thanks to Jay Bourque)
 * Open sourced prange
 * Support for raise statement
 * Pluggable array representation
+* Support for enumerate and zip (thanks to Eugene Toder)
+* Better string formatting support (thanks to Eugene Toder)
+* Builtins min(), max() and bool() (thanks to Eugene Toder)
+* Fix some code reloading issues (thanks to Björn Linse)
+* Recognize NumPy scalar objects (thanks to Björn Linse)
 
 
 Version 0.9
