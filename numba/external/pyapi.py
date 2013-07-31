@@ -196,6 +196,7 @@ else:
     from_long('PyLong_FromLong', long_)
     from_long('PyLong_FromSize_t', size_t)
     from_long('PyLong_FromSsize_t', Py_ssize_t)
+
 from_long('PyLong_FromUnsignedLong', ulong)
 from_long('PyLong_FromLongLong', longlong)
 from_long('PyLong_FromUnsignedLongLong', ulonglong)

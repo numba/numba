@@ -301,6 +301,9 @@ class ResolveCoercions(visitors.NumbaTransformer):
         return result
 
     def _get_int_conversion_func(self, type, funcs_dict):
+        if type == Py_ssize_t:
+            return funcs_dict[Py_ssize_t]
+
         type = promote_to_native(type)
         if type.itemsize <= long_.itemsize:
             types = [ulong, long_]
