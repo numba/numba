@@ -27,8 +27,8 @@ def test_pointer_indexing(pointer_value, type_p):
     (1.0, 2.0, 3.0, 4.0)
 
     >>> a = np.array([1, 2, 3, 4], dtype=np.int64)
-    >>> test_pointer_indexing(a.ctypes.data, int64.pointer())
-    (1, 2, 3, 4)
+    >>> [int(x) for x in test_pointer_indexing(a.ctypes.data, int64.pointer())]
+    [1, 2, 3, 4]
     """
     p = type_p(pointer_value)
     return p[0], p[1], p[2], p[3]
