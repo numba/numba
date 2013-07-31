@@ -335,7 +335,10 @@ class ResolveCoercions(visitors.NumbaTransformer):
                 args = [
                     nodes.DateTimeAttributeNode(datetime_value, 'year'),
                     nodes.DateTimeAttributeNode(datetime_value.clone, 'month'),
-                    nodes.DateTimeAttributeNode(datetime_value.clone, 'day')
+                    nodes.DateTimeAttributeNode(datetime_value.clone, 'day'),
+                    nodes.DateTimeAttributeNode(datetime_value.clone, 'hour'),
+                    nodes.DateTimeAttributeNode(datetime_value.clone, 'min'),
+                    nodes.DateTimeAttributeNode(datetime_value.clone, 'sec'),
                 ]
                 new_node = function_util.utility_call(
                         self.context, self.llvm_module,
@@ -430,7 +433,18 @@ class ResolveCoercions(visitors.NumbaTransformer):
                 day_func = function_util.utility_call(
                     self.context, self.llvm_module,
                     "pydatetime2day", args=[node.node])
-                new_node = nodes.DateTimeNode(year_func, month_func, day_func)
+                hour_func = function_util.utility_call(
+                    self.context, self.llvm_module,
+                    "pydatetime2hour", args=[node.node])
+                min_func = function_util.utility_call(
+                    self.context, self.llvm_module,
+                    "pydatetime2min", args=[node.node])
+                sec_func = function_util.utility_call(
+                    self.context, self.llvm_module,
+                    "pydatetime2sec", args=[node.node])
+
+                new_node = nodes.DateTimeNode(year_func, month_func, day_func,
+                    hour_func, min_func, sec_func)
             else:
                 raise error.NumbaError(
                     node, "Don't know how to coerce a Python object to a %r" %
@@ -1026,7 +1040,10 @@ class LateSpecializer(ResolveCoercions,
             year = nodes.ConstNode(0, int64)
             month = nodes.ConstNode(0, int32)
             day = nodes.ConstNode(0, int32)
-            node = nodes.DateTimeNode(year, month, day)
+            hour = nodes.ConstNode(0, int32)
+            min = nodes.ConstNode(0, int32)
+            sec = nodes.ConstNode(0, int32)
+            node = nodes.DateTimeNode(year, month, day, hour, min, sec)
 
         elif node.type.is_pointer and not node.type.is_string:
             addr_int = constnodes.get_pointer_address(constant, node.type)

@@ -545,13 +545,14 @@ class complex_(NumbaType):
 
 @consing
 class datetime_(NumbaType):
-    argnames = ["year", "month", "day"]
+    argnames = ["year", "month", "day", "hour", "min", "sec"]
     #argnames = ["base_type"]
     flags = ["numeric"]
 
     @property
     def itemsize(self):
-        return self.year.itemsize + self.month.itemsize + self.day.itemsize
+        return self.year.itemsize + self.month.itemsize + self.day.itemsize + \
+               self.hour.itemsize + self.min.itemsize + self.sec.itemsize
 
     def __repr__(self):
         return "datetime"

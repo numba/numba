@@ -100,8 +100,9 @@ def lower_complex(domain, codomain, type, params):
     return codomain.struct_([('real', base_type), ('imag', base_type)])
 
 def lower_datetime(domain, codomain, type, params):
-    year, month, day = params
-    return codomain.struct_([('year', year), ('month', month), ('day', day)])
+    year, month, day, hour, min, sec = params
+    return codomain.struct_([('year', year), ('month', month), ('day', day),
+                             ('hour', hour), ('min', min), ('sec', sec)])
 
 def lower_to_pointer(domain, codomain, type, params):
     return codomain.pointer(params[0])

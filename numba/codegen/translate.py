@@ -1478,7 +1478,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         year = self.visit(node.year)
         month = self.visit(node.month)
         day = self.visit(node.day)
-        return self._create_datetime(year, month, day)
+        hour = self.visit(node.hour)
+        min = self.visit(node.min)
+        sec = self.visit(node.sec)
+        return self._create_datetime(year, month, day, hour, min, sec)
 
     def visit_DateTimeAttributeNode(self, node):
         result = self.visit(node.value)
@@ -1490,6 +1493,12 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
                 return self.builder.extract_value(result, 1)
             elif node.attr == 'day':
                 return self.builder.extract_value(result, 2)
+            elif node.attr == 'hour':
+                return self.builder.extract_value(result, 3)
+            elif node.attr == 'min':
+                return self.builder.extract_value(result, 4)
+            elif node.attr == 'sec':
+                return self.builder.extract_value(result, 5)
 
     #------------------------------------------------------------------------
     # Structs

@@ -329,9 +329,12 @@ static npy_int32 pydatetime2asec(PyObject *object)
 static PyObject* primitive2pydatetime(
     npy_int64 year,
     npy_int32 month,
-    npy_int32 day)
+    npy_int32 day,
+    npy_int32 hour,
+    npy_int32 min,
+    npy_int32 sec)
 {
-    PyObject *result = PyDateTime_FromDateAndTime(year, month, day, 0, 0, 0, 0);
+    PyObject *result = PyDateTime_FromDateAndTime(year, month, day, hour, min, sec, 0);
     //PyObject *result = PyDate_FromDate(year, month, day);
     Py_INCREF(result);
     return result;

@@ -19,6 +19,9 @@ class DateTimeMixin (object):
         self.year = value.year
         self.month = value.month
         self.day = value.day
+        self.hour = value.hour
+        self.min = value.min
+        self.sec = value.sec
 
     value = property(_get, _set)
 
@@ -47,7 +50,9 @@ class DateTimeMixin (object):
         return _make_datetime_result_wrapper
 
 class DateTime(ctypes.Structure, DateTimeMixin):
-    _fields_ = [('year', ctypes.c_int64), ('month', ctypes.c_int32), ('day', ctypes.c_int32)]
+    _fields_ = [('year', ctypes.c_int64), ('month', ctypes.c_int32),
+        ('day', ctypes.c_int32), ('hour', ctypes.c_int32),
+        ('min', ctypes.c_int32), ('sec', ctypes.c_int32)]
     _numpy_ty_ = np.datetime64
 
 ### End Taken from Numba ###

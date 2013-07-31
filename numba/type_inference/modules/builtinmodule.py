@@ -91,11 +91,13 @@ def complex_(typesystem, node, a, b):
     else:
         return cast(node, complex128)
 
-@register_builtin((0, 1, 2, 3), can_handle_deferred_types=True)
-def datetime_(typesystem, node, a, b, c):
-    if len(node.args) == 3:
-        args = nodes.CoercionNode.coerce(node.args, [int64, int32, int32])
-        return nodes.DateTimeNode(year=args[0], month=args[1], day=args[2])
+@register_builtin((0, 1, 2, 3, 4, 5, 6), can_handle_deferred_types=True)
+def datetime_(typesystem, node, a, b, c, d, e, f):
+    if len(node.args) == 6:
+        typelist = [int64, int32, int32, int32, int32, int32]
+        args = nodes.CoercionNode.coerce(node.args, typelist)
+        return nodes.DateTimeNode(year=args[0], month=args[1], day=args[2],
+            hour=args[3], min=args[4], sec=args[5])
     else:
         return cast(node, datetime)
 

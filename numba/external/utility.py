@@ -71,7 +71,10 @@ utility_funcs = list(object_to_numeric.itervalues()) + [
     UtilityFunction.load("pydatetime2year", long_(object_)),
     UtilityFunction.load("pydatetime2month", int_(object_)),
     UtilityFunction.load("pydatetime2day", int_(object_)),
-    UtilityFunction.load("primitive2pydatetime", object_(ulong, uint, uint)),
+    UtilityFunction.load("pydatetime2hour", int_(object_)),
+    UtilityFunction.load("pydatetime2min", int_(object_)),
+    UtilityFunction.load("pydatetime2sec", int_(object_)),
+    UtilityFunction.load("primitive2pydatetime", object_(long_, int_, int_, int_, int_, int_)),
 ]
 
 def default_utility_library(context):

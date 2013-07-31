@@ -1526,7 +1526,7 @@ class TypeInferer(visitors.NumbaTransformer):
 
     def _resolve_datetime_attribute(self, node, type):
         # TODO: make datetime a struct type
-        if node.attr in ('year', 'month', 'day'):
+        if node.attr in ('year', 'month', 'day', 'hour', 'min', 'sec'):
             if self.is_store(node.ctx):
                 raise TypeError("Cannot assign to the %s attribute of "
                                 "datetime numbers" % node.attr)
