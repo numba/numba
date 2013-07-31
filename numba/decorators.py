@@ -99,7 +99,7 @@ def exportmany(signatures, env_name=None, env=None, **kws):
 
 # TODO: Redo this entire module
 
-def compile_function(env, func, argtypes, restype=None, **kwds):
+def compile_function(env, func, argtypes, restype=None, func_ast=None, **kwds):
     """
     Compile a python function given the argument types. Compile only
     if not compiled already, and only if it is registered to the function
@@ -130,7 +130,7 @@ def compile_function(env, func, argtypes, restype=None, **kwds):
 
     assert kwds.get('llvm_module') is None, kwds.get('llvm_module')
 
-    func_env = pipeline.compile2(env, func, restype, argtypes, **kwds)
+    func_env = pipeline.compile2(env, func, restype, argtypes, func_ast=func_ast, **kwds)
 
     function_cache.register_specialization(func_env)
     return (func_env.func_signature,
@@ -192,7 +192,8 @@ def autojit(template_signature=None, backend='ast', target='cpu',
                         locals=locals, **kwargs)
 
 def _jit(restype=None, argtypes=None, nopython=False,
-         _llvm_module=None, env_name=None, env=None, **kwargs):
+         _llvm_module=None, env_name=None, env=None, func_ast=None, **kwargs):
+    #print(ast.dump(func_ast))
     if env is None:
         env = environment.NumbaEnvironment.get_environment(env_name)
     def _jit_decorator(func):
@@ -220,7 +221,7 @@ def _jit(restype=None, argtypes=None, nopython=False,
         assert kwargs.get('llvm_ee') is None, "Engine should never be provided"
         sig, lfunc, wrapper = compile_function(env, func, argtys,
                                                restype=return_type,
-                                               nopython=nopython, **kwargs)
+                                               nopython=nopython, func_ast=func_ast, **kwargs)
         return numbawrapper.create_numba_wrapper(func, wrapper, sig, lfunc)
 
     return _jit_decorator
