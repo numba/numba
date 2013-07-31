@@ -8,7 +8,6 @@ from numba.config import config
 try:
     import pygments
 except ImportError as e:
-    warnings.warn("Pygments not installed")
     pygments = None
 else:
     from pygments import highlight
@@ -43,4 +42,6 @@ if pygments:
         return result.rstrip()
 
 else:
-    lex_source = lambda code, *args, **kwargs: code
+    def lex_source(code, *args, **kwargs):
+        warnings.warn("Pygments not installed")
+        return code
