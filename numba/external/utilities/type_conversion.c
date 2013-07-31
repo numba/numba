@@ -1,3 +1,4 @@
+#include <Python.h>
 #include "generated_conversions.h"
 
 /* Utilities copied from Cython/Utility/TypeConversion.c */
@@ -225,6 +226,28 @@ static NUMBA_INLINE Py_UNICODE __Numba_PyObject_AsPy_UNICODE(PyObject* x) {
 /* End copy from Cython/Utility/TypeConversion.c */
 /* --------------------------------------------- */
 
+#define CUTOFF 0x7fffffffL /* 4-byte platform-independent cutoff */
+
+static PyObject *
+__Numba_PyInt_FromLongLong(PY_LONG_LONG value)
+{
+    assert(sizeof(long) >= 4);
+    if (value > CUTOFF || value < -CUTOFF) {
+        return PyLong_FromLongLong(value);
+    }
+    return PyInt_FromLong(value);
+}
+
+static PyObject *
+__Numba_PyInt_FromUnsignedLongLong(PY_LONG_LONG value)
+{
+    assert(sizeof(long) >= 4);
+    if (value > CUTOFF) {
+        return PyLong_FromUnsignedLongLong(value);
+    }
+    return PyInt_FromLong((long) value);
+}
+
 #include "generated_conversions.c"
 
 /* Export all utilities */
@@ -251,6 +274,9 @@ export_type_conversion(PyObject *module)
 
     EXPORT_FUNCTION(__Numba_PyIndex_AsSsize_t, module, error);
     EXPORT_FUNCTION(__Numba_PyInt_FromSize_t, module, error);
+
+    EXPORT_FUNCTION(__Numba_PyInt_FromLongLong, module, error);
+    EXPORT_FUNCTION(__Numba_PyInt_FromUnsignedLongLong, module, error);
 
     return 0;
 error:

@@ -64,6 +64,8 @@ utility_funcs = list(object_to_numeric.itervalues()) + [
         "Raise", int_(*[void_p] * 4),
         badval=-1,
     ),
+    UtilityFunction.load("__Numba_PyInt_FromLongLong", object_(longlong)),
+    UtilityFunction.load("__Numba_PyInt_FromUnsignedLongLong", object_(ulonglong)),
 ]
 
 def default_utility_library(context):
