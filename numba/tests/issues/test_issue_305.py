@@ -25,7 +25,7 @@ def test_fetch_latest_source():
         return 0
     """))
     f.flush()
-    exec open(fn).read() in env, env
+    exec compile(open(fn).read(),fn,'exec') in env, env
 
     f.seek(0)
     f.truncate()
@@ -35,7 +35,7 @@ def test_fetch_latest_source():
         return 1
     """))
     f.flush()
-    exec open(fn).read() in env, env
+    exec compile(open(fn).read(),fn,'exec') in env, env
 
     assert env['test']() == env['test'].py_func() # gives 0 == 1
 
@@ -54,7 +54,7 @@ def test_no_auto_reload():
         return 0
     """))
     f.flush()
-    exec open(fn).read() in env, env
+    exec compile(open(fn).read(),fn,'exec') in env, env
 
     f.seek(0)
     f.truncate()
