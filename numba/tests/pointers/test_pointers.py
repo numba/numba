@@ -12,7 +12,7 @@ voidp = void.pointer()
 def test_pointer_arithmetic():
     """
     >>> test_pointer_arithmetic()
-    48L
+    48
     """
     p = int32p(Py_uintptr_t(0))
     p = p + 10
