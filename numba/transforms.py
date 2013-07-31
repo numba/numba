@@ -300,18 +300,12 @@ class ResolveCoercions(visitors.NumbaTransformer):
         result = self.visit(node)
         return result
 
-    def _get_int_conversion_func(self, type, funcs_dict):
-        if type == Py_ssize_t:
-            return funcs_dict[Py_ssize_t]
-
-        type = promote_to_native(type)
-        if type.itemsize <= long_.itemsize:
-            types = [ulong, long_]
-        else:
-            assert type.itemsize > long_.itemsize
-            types = [ulonglong, longlong]
-
-        return funcs_dict[types[type.signed]]
+    def convert_int_to_object(self, arg):
+        funcs = ["__Numba_PyInt_FromLongLong",
+                 "__Numba_PyInt_FromUnsignedLongLong"]
+        func = funcs[arg.type.signed]
+        return function_util.utility_call(self.context, self.llvm_module,
+                                          func, [arg])
 
     def visit_CoerceToObject(self, node):
         new_node = node
@@ -326,8 +320,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
             cls = None
             args = node.node,
             if node_type.is_int:
-                cls = self._get_int_conversion_func(node_type,
-                                                    pyapi._from_long)
+                new_node = self.convert_int_to_object(node.node)
             elif node_type.is_float:
                 cls = pyapi.PyFloat_FromDouble
             elif node_type.is_complex:
