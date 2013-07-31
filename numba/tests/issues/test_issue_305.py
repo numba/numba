@@ -5,6 +5,11 @@ import contextlib
 from numba import jit, autojit
 from numba.tests.issues import issue_305_helper1, issue_305_helper2
 
+try:
+    from imp import reload
+except ImportError:
+    pass
+
 # Thanks to @bfredl
 
 env = { '__file__': __file__, '__name__': __name__ ,
