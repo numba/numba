@@ -2,21 +2,8 @@
 Implements numpy array functions.
 '''
 import operator
-from contextlib import contextmanager
 import numpy
 from . import cgutils, aryutils, types, imlib
-
-@contextmanager
-def elementwise(builder, ary, aryty):
-    ndim = aryty.desc.ndim
-    begins = (0,) * ndim
-    ends = aryutils.getshape(builder, ary)
-    steps = (1,) * ndim
-
-    with cgutils.loop_nest(builder, begins, ends, steps) as indices:
-        val = aryutils.getitem(builder, ary, indices=indices,
-                               order=aryty.desc.order)
-        yield val
 
 def imp_numpy_sum(context, args, argtys, retty):
     '''
@@ -32,7 +19,7 @@ def imp_numpy_sum(context, args, argtys, retty):
 
     sum = builder.alloca(elemty.llvm_as_value())
     builder.store(elemty.llvm_const(0), sum)
-    with elementwise(builder, ary, aryty) as val:
+    with aryutils.elementwise(builder, ary, aryty) as val:
         # XXX: move to next level and reuse NPM to compile this
         assert isinstance(elemty.desc, types.Float)
         do_add = context.imp.lookup(operator.add, (elemty, elemty))
@@ -54,7 +41,7 @@ def imp_numpy_prod(context, args, argtys, retty):
 
     prod = builder.alloca(elemty.llvm_as_value())
     builder.store(elemty.llvm_const(1), prod)
-    with elementwise(builder, ary, aryty) as val:
+    with aryutils.elementwise(builder, ary, aryty) as val:
         # XXX: move to next level and reuse NPM to compile this
         assert isinstance(elemty.desc, types.Float)
         do_mul = context.imp.lookup(operator.mul, (elemty, elemty))

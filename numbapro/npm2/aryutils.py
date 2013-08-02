@@ -1,6 +1,7 @@
+from contextlib import contextmanager
 from llvm import core as lc
 from . import types
-from .cgutils import const_intp, auto_intp
+from .cgutils import const_intp, auto_intp, loop_nest
 
 def gep(builder, ptr, indices):
     return builder.gep(ptr, [auto_intp(i) for i in indices])
@@ -77,3 +78,15 @@ def getpointer(builder, data, shape, strides, order, indices):
         ptr = builder.inttoptr(target, data.type)
     return ptr
 
+@contextmanager
+def elementwise(builder, ary, aryty):
+    '''Context manager for elementwise loop over an array.
+    '''
+    ndim = aryty.desc.ndim
+    begins = (0,) * ndim
+    ends = getshape(builder, ary)
+    steps = (1,) * ndim
+
+    with loop_nest(builder, begins, ends, steps) as indices:
+        val = getitem(builder, ary, indices=indices, order=aryty.desc.order)
+        yield val
