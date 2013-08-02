@@ -49,7 +49,7 @@ def imp_numpy_prod(context, args, argtys, retty):
         builder.store(new_prod, prod)
     return builder.load(prod)
 
-def numpy_dtype_return(args):
+def array_dtype_return(args):
     return args[0].desc.element
 
 def intp_tuple_return(args):
@@ -60,28 +60,36 @@ def array_setitem_value(args):
     ary = args[0]
     return ary.desc.element
 
+def array_slice_return(args):
+    ary, idx = args
+    assert isinstance(idx.desc, types.Slice)
+    if not (idx.desc.has_start or idx.desc.has_stop or idx.desc.has_step):
+        return ary
+    assert False
+
+
 #-------------------------------------------------------------------------------
 
 class ArraySumMethod(object):
-    method = 'sum', (types.ArrayKind,), numpy_dtype_return
+    method = 'sum', (types.ArrayKind,), array_dtype_return
 
     def generic_implement(self, context, args, argtys, retty):
         return imp_numpy_sum(context, args, argtys, retty)
 
 class ArraySumFunction(object):
-    function = numpy.sum, (types.ArrayKind,), numpy_dtype_return
+    function = numpy.sum, (types.ArrayKind,), array_dtype_return
 
     def generic_implement(self, context, args, argtys, retty):
         return imp_numpy_sum(context, args, argtys, retty)
 
 class ArrayProdMethod(object):
-    method = 'prod', (types.ArrayKind,), numpy_dtype_return
+    method = 'prod', (types.ArrayKind,), array_dtype_return
 
     def generic_implement(self, context, args, argtys, retty):
         return imp_numpy_prod(context, args, argtys, retty)
 
 class ArrayProdFunction(object):
-    function = numpy.prod, (types.ArrayKind,), numpy_dtype_return
+    function = numpy.prod, (types.ArrayKind,), array_dtype_return
 
     def generic_implement(self, context, args, argtys, retty):
         return imp_numpy_prod(context, args, argtys, retty)
@@ -122,7 +130,7 @@ class ArrayNdimAttr(object):
 class ArayGetItemIntp(object):
     function = (operator.getitem,
                 (types.ArrayKind, types.intp),
-                numpy_dtype_return)
+                array_dtype_return)
 
     def generic_implement(self, context, args, argtys, retty):
         ary, idx = args
@@ -133,7 +141,7 @@ class ArayGetItemIntp(object):
 class ArrayGetItemTuple(object):
     function = (operator.getitem,
                 (types.ArrayKind, types.TupleKind),
-                numpy_dtype_return)
+                array_dtype_return)
     
     def generic_implement(self, context, args, argtys, retty):
         ary, idx = args
@@ -153,7 +161,7 @@ class ArrayGetItemTuple(object):
 class ArrayGetItemFixedArray(object):
     function = (operator.getitem,
                 (types.ArrayKind, types.FixedArrayKind),
-                numpy_dtype_return)
+                array_dtype_return)
     
     def generic_implement(self, context, args, argtys, retty):
         ary, idx = args
@@ -170,6 +178,23 @@ class ArrayGetItemFixedArray(object):
 
         return aryutils.getitem(context.builder, ary, indices=indices,
                                 order=aryty.desc.order)
+
+class ArrayGetItemSlice(object):
+    function = (operator.getitem,
+                (types.ArrayKind, types.SliceKind),
+                array_slice_return)
+
+    def generic_implement(self, context, args, argtys, retty):
+        ary, idx = args
+        aryty, idxty = argtys
+        entire_array = not (idxty.desc.has_start or
+                            idxty.desc.has_stop or
+                            idxty.desc.has_step)
+        if entire_array:
+            # just return the same array
+            return ary
+        else:
+            raise NotImplementedError
 
 class ArraySetItemIntp(object):
     function = (operator.setitem,
@@ -245,6 +270,7 @@ ArrayNdimAttr,
 ArayGetItemIntp,
 ArrayGetItemTuple,
 ArrayGetItemFixedArray,
+ArrayGetItemSlice,
 ArraySetItemIntp,
 ArraySetItemTuple,
 ArraySetItemFixedArray,

@@ -1,3 +1,4 @@
+import sys
 from math import copysign
 from llvm import core as lc
 import ctypes as ct
@@ -539,6 +540,43 @@ class FixedArray(object):
 
 FixedArrayKind = Kind(FixedArray)
 
+class Slice(object):
+    fields = 'has_start', 'has_stop', 'has_step'
+
+    def __init__(self, has_start, has_stop, has_step):
+        self.has_start = has_start
+        self.has_stop = has_stop
+        self.has_step = has_step
+
+    def __repr__(self):
+        return 'slice(%s, %s, %s)' % (self.has_start, self.has_stop,
+                                      self.has_step)
+
+    def coerce(self, other):
+        if isinstance(other, Slice):
+            return 0
+
+    def llvm_as_value(self):
+        llintp = intp.llvm_as_value()
+        return lc.Type.struct([llintp] * 3)
+
+    def llvm_const(self, value):
+        start, stop, step = [intp.llvm_const(x)
+                             for x in (value.start, value.stop, value.step)]
+        return lc.Constant.struct([start, stop, step])
+
+    def llvm_pack(self, builder, values):
+        llintp = intp.llvm_as_value()
+        out = lc.Constant.undef(self.llvm_as_value())
+        if len(values) != 3:
+            raise ValueError
+        for i, val in enumerate(values):
+            assert val.type == llintp
+            out = builder.insert_value(out, val, i)
+        return out
+
+SliceKind = Kind(Slice)
+
 class BuiltinObject(object):
     fields = 'name',
     
@@ -598,5 +636,11 @@ def tupletype(*elements):
         return Type(FixedArray(elements[0], len(elements)))
     else:
         return Type(Tuple(elements))
+
+def slicetype(start, stop, step):
+    has_start = start != 0
+    has_stop = stop != sys.maxint
+    has_step = step != 1
+    return Type(Slice(has_start, has_stop, has_step))
 
 intp = {4: int32, 8: int64}[tuple.__itemsize__]

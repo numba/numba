@@ -1,4 +1,5 @@
 import __builtin__
+import sys
 import inspect
 import dis
 import operator
@@ -15,7 +16,6 @@ COMPARE_OP_FUNC = {
     '==': operator.eq,
     '!=': operator.ne,
 }
-
 
 class SymbolicExecution(object):
     def __init__(self, func):
@@ -126,7 +126,7 @@ class SymbolicExecution(object):
     def op(self, inst):
         with error_context(lineno=inst.lineno):
             self.lineno = inst.lineno
-            attr = 'op_%s' % inst.opname
+            attr = 'op_%s' % inst.opname.replace('+', '_')
             fn = getattr(self, attr, self.generic_op)
             fn(inst)
 
@@ -449,6 +449,11 @@ class SymbolicExecution(object):
 
     def op_INPLACE_XOR(self, inst):
         self.binary_op(operator.xor)
+
+    def op_SLICE_0(self, inst):
+        tos = self.pop()
+        sl = self.insert('const', value=slice(0, sys.maxint, 1))
+        self.call(operator.getitem, args=(tos, sl))
 
 #---------------------------------------------------------------------------
 # Passes

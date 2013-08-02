@@ -166,5 +166,7 @@ class Infer(object):
             return types.intp
         elif isinstance(value, tuple):
             return types.tupletype(*[self.type_global(i) for i in value])
+        elif isinstance(value, slice):
+            return types.slicetype(value.start, value.stop, value.step)
 
             

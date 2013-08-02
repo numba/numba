@@ -83,6 +83,10 @@ BYTECODES = [
 #    ('STORE_ATTR', 2), # not supported
     ('STORE_SUBSCR', 0),
     ('UNPACK_SEQUENCE', 2),
+    ('SLICE+0', 0),
+    ('SLICE+1', 0),
+    ('SLICE+2', 0),
+    ('SLICE+3', 0),
 ] + BYTECODE_VERSION_SPECIFIC
 
 
