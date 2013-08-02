@@ -467,57 +467,6 @@ def imp_cast_float(fromty):
         return fromty.llvm_cast(context.builder, x, types.float64)
     return imp
 
-# array setitem
-def array_setitem_intp(context, args, argtys, retty):
-    ary, idx, val = args
-    aryty, indty, valty = argtys
-    if valty != aryty.desc.element:
-        val = valty.llvm_cast(context.builder, val, aryty.desc.element)
-    aryutils.setitem(context.builder, ary, indices=[idx],
-                     order=aryty.desc.order,
-                     value=val)
-
-def array_setitem_tuple(context, args, argtys, retty):
-    ary, idx, val = args
-    aryty, indty, valty = argtys
-
-    indexty = types.intp
-    indices = []
-    for i, ety in enumerate(indty.desc.elements):
-        elem = indty.desc.llvm_getitem(context.builder, idx, i)
-        if ety != indexty:
-            elem = ety.llvm_cast(context.builder, elem, indexty)
-        indices.append(elem)
-
-    if valty != aryty.desc.element:
-        val = valty.llvm_cast(context.builder, val, aryty.desc.element)
-
-    aryutils.setitem(context.builder, ary, indices=indices,
-                     order=aryty.desc.order,
-                     value=val)
-
-
-def array_setitem_fixedarray(context, args, argtys, retty):
-    ary, idx, val = args
-    aryty, indty, valty = argtys
-
-    indexty = types.intp
-    ety = indty.desc.element
-    indices = []
-    for i in range(indty.desc.length):
-        elem = indty.desc.llvm_getitem(context.builder, idx, i)
-        if ety != indexty:
-            elem = ety.llvm_cast(context.builder, elem, indexty)
-        indices.append(elem)
-
-    if valty != aryty.desc.element:
-        val = valty.llvm_cast(context.builder, val, aryty.desc.element)
-
-    aryutils.setitem(context.builder, ary, indices=indices,
-                     order=aryty.desc.order,
-                     value=val)
-
-
 # fixedarray getitem
 
 def fixedarray_getitem(context, args, argtys, retty):
@@ -777,17 +726,6 @@ builtins += casting_imp(int, imp_cast_int, types.intp,
                typesets.integer_set|typesets.float_set|typesets.complex_set)
 builtins += casting_imp(float, imp_cast_float, types.float64,
                typesets.integer_set|typesets.float_set|typesets.complex_set)
-
-# array setitem
-builtins += [Imp(array_setitem_intp, operator.setitem,
-             args=(types.ArrayKind, types.intp, None),
-             return_type=types.void)]
-builtins += [Imp(array_setitem_tuple, operator.setitem,
-             args=(types.ArrayKind, types.TupleKind, None),
-             return_type=types.void)]
-builtins += [Imp(array_setitem_fixedarray, operator.setitem,
-             args=(types.ArrayKind, types.FixedArrayKind, None),
-             return_type=types.void)]
 
 # fixedarray getitem
 builtins += [Imp(fixedarray_getitem, operator.getitem,

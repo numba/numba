@@ -56,6 +56,10 @@ def intp_tuple_return(args):
     ary = args[0]
     return types.tupletype(*([types.intp] * ary.desc.ndim))
 
+def array_setitem_value(args):
+    ary = args[0]
+    return ary.desc.element
+
 #-------------------------------------------------------------------------------
 
 class ArraySumMethod(object):
@@ -167,6 +171,70 @@ class ArrayGetItemFixedArray(object):
         return aryutils.getitem(context.builder, ary, indices=indices,
                                 order=aryty.desc.order)
 
+class ArraySetItemIntp(object):
+    function = (operator.setitem,
+                (types.ArrayKind, types.intp, array_setitem_value),
+                types.void)
+
+    def generic_implement(self, context, args, argtys, retty):
+        ary, idx, val = args
+        aryty, indty, valty = argtys
+        if valty != aryty.desc.element:
+            val = valty.llvm_cast(context.builder, val, aryty.desc.element)
+        aryutils.setitem(context.builder, ary, indices=[idx],
+                         order=aryty.desc.order,
+                         value=val)
+
+class ArraySetItemTuple(object):
+    function = (operator.setitem,
+                (types.ArrayKind, types.TupleKind, array_setitem_value),
+                types.void)
+
+    def generic_implement(self, context, args, argtys, retty):
+        ary, idx, val = args
+        aryty, indty, valty = argtys
+
+        indexty = types.intp
+        indices = []
+        for i, ety in enumerate(indty.desc.elements):
+            elem = indty.desc.llvm_getitem(context.builder, idx, i)
+            if ety != indexty:
+                elem = ety.llvm_cast(context.builder, elem, indexty)
+            indices.append(elem)
+
+        if valty != aryty.desc.element:
+            val = valty.llvm_cast(context.builder, val, aryty.desc.element)
+
+        aryutils.setitem(context.builder, ary, indices=indices,
+                         order=aryty.desc.order,
+                         value=val)
+
+class ArraySetItemFixedArray(object):
+    function = (operator.setitem,
+                (types.ArrayKind, types.FixedArrayKind, array_setitem_value),
+                types.void)
+
+    def generic_implement(self, context, args, argtys, retty):
+        ary, idx, val = args
+        aryty, indty, valty = argtys
+
+        indexty = types.intp
+        ety = indty.desc.element
+        indices = []
+        for i in range(indty.desc.length):
+            elem = indty.desc.llvm_getitem(context.builder, idx, i)
+            if ety != indexty:
+                elem = ety.llvm_cast(context.builder, elem, indexty)
+            indices.append(elem)
+
+        if valty != aryty.desc.element:
+            val = valty.llvm_cast(context.builder, val, aryty.desc.element)
+
+        aryutils.setitem(context.builder, ary, indices=indices,
+                         order=aryty.desc.order,
+                         value=val)
+
+
 extensions = [
 ArraySumMethod, ArraySumFunction,
 ArrayProdMethod, ArrayProdFunction,
@@ -177,5 +245,8 @@ ArrayNdimAttr,
 ArayGetItemIntp,
 ArrayGetItemTuple,
 ArrayGetItemFixedArray,
+ArraySetItemIntp,
+ArraySetItemTuple,
+ArraySetItemFixedArray,
 ]
 

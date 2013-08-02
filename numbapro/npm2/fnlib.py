@@ -251,10 +251,6 @@ def float_ctor(typeset):
         defns.append(defn)
     return defns
 
-def array_setitem_value(args):
-    ary = args[0]
-    return ary.desc.element
-
 def intparray_getitem_return(args):
     ary = args[0]
     return ary.desc.element
@@ -341,13 +337,6 @@ builtins += def_(complex, complex_ctor(complex_set))
 builtins += def_(int, int_ctor(integer_set|float_set|complex_set))
 
 builtins += def_(float, float_ctor(integer_set|float_set|complex_set))
-
-
-builtins += def_(operator.setitem,
-      [((types.ArrayKind, types.intp, array_setitem_value), types.void),
-       ((types.ArrayKind, types.TupleKind, array_setitem_value), types.void),
-       ((types.ArrayKind, types.FixedArrayKind, array_setitem_value),
-            types.void),])
 
 builtins += def_(operator.getitem,
              [((types.FixedArrayKind, types.intp), intparray_getitem_return)])

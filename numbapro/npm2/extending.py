@@ -60,6 +60,7 @@ class Extension(object):
     @property
     def implementor(self):
         fnorder = 'generic_implement', 'implement'
+        # XXX implement should call the level-0 compiler
         for fname in fnorder:
             fn = getattr(self.ext, fname, None)
             return fn
@@ -75,5 +76,9 @@ class Extension(object):
             funcobj = '@%s' % self.funcobj
         else:
             raise neither_function_or_method
-        lib.define(imlib.Imp(self.implementor, funcobj, args=self.args))
+        def mask_callable_as_none(args):
+            return [None if callable(a) else a for a in args]
+
+        lib.define(imlib.Imp(self.implementor, funcobj,
+                             args=mask_callable_as_none(self.args)))
 
