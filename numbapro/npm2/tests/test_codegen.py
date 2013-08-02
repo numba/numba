@@ -1,6 +1,4 @@
 import dis
-import itertools
-from pprint import pprint
 from numbapro.npm2.symbolic import SymbolicExecution
 from numbapro.npm2.typing import Infer
 from numbapro.npm2 import types, fnlib
@@ -58,7 +56,6 @@ def test_codegen():
 
 @testcase
 def test_compile():
-    from timeit import default_timer as timer
     cfoo = compile(foo, types.int32, [types.int32, types.int32])
     print foo(12, 32)
     print cfoo(12, 32)

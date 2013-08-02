@@ -1,14 +1,8 @@
-import numpy
 from collections import defaultdict
 import operator
-from .types import (int8, int16, int32, int64, intp,
-                    uint8, uint16, uint32, uint64,
-                    float32, float64,
-                    complex64, complex128,
-                    boolean, range_type, range_iter_type)
+from .types import (intp, boolean, range_type, range_iter_type)
 from . import types
-from .typesets import (signed_set, unsigned_set, integer_set, float_set,
-                       complex_set)
+from .typesets import (signed_set, integer_set, float_set, complex_set)
 
 class Function(object):
     __slots__ = 'funcobj', 'args', 'return_type', 'is_parametric'

@@ -1,8 +1,7 @@
 import ctypes
-import numpy as np
 from llvm import ee as le, passes as lp
 from llvm.workaround import avx_support
-from . import typing, types
+from . import types
 
 class JIT(object):
     def __init__(self, lfunc, retty, argtys):

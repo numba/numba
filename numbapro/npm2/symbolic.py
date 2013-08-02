@@ -1,10 +1,8 @@
 import __builtin__
 import inspect
-import textwrap
 import dis
 import operator
-from contextlib import contextmanager
-from collections import defaultdict, namedtuple
+from collections import defaultdict
 
 from .errors import error_context
 from .bytecode import ByteCode
@@ -238,7 +236,7 @@ class SymbolicExecution(object):
         truebr = self.blocks[inst.arg]
         self.jump_if(self.peek(), truebr, falsebr)
 
-    def op_JUMP_IF_TRUE_OR_POP(self, inst):
+    def op_JUMP_IF_FALSE_OR_POP(self, inst):
         truebr = self.blocks[inst.next]
         falsebr = self.blocks[inst.arg]
         self.jump_if(self.peek(), truebr, falsebr)
@@ -272,7 +270,7 @@ class SymbolicExecution(object):
             val = self.pop()
             key = self.pop()
             if key.opcode != 'const':
-                raise ArgumentError('keyword must be a constant')
+                raise ValueError('keyword must be a constant')
             return key.value, val
 
         kws = list(reversed([pop_kws() for i in range(kwsc)]))

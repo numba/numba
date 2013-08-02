@@ -1,6 +1,5 @@
 import dis
 import itertools
-from pprint import pprint
 from numbapro.npm2.symbolic import SymbolicExecution
 from numbapro.npm2.typing import Infer
 from numbapro.npm2 import types, fnlib
@@ -48,7 +47,6 @@ def test_infer():
     for blk in se.blocks:
         print blk
 
-    intp = types.int64
     funclib = fnlib.get_builtin_function_library()
 
     infer = Infer(func = se.func,

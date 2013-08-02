@@ -2,7 +2,6 @@ from __future__ import absolute_import
 from .errors import error_context
 from . import types
 from .symbolic import Inst
-from types import FunctionType, BuiltinFunctionType
 
 class Infer(object):
     def __init__(self, func, blocks, funclib, args, return_type=None):
@@ -125,7 +124,7 @@ class Infer(object):
     def op_const(self, inst):
         ty = self.type_global(inst.value)
         if ty is None:
-            raise ValueError("invalid constant value %s" % (value,))
+            raise ValueError("invalid constant value %s" % (inst.value,))
         return ty
 
     def op_global(self, inst):

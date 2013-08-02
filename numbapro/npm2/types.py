@@ -287,7 +287,6 @@ class Float(object):
         if isinstance(other, Float):
             return (other.bitwidth - self.bitwidth) // 8
         elif isinstance(other, Integer):
-            factor = 0 if other.signed else 1
             return (other.bitwidth - self.bitwidth) // 8 - 50 - 1
         elif isinstance(other, Complex):
             return (other.bitwidth - self.bitwidth) // 8 + 50

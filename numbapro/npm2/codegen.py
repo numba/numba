@@ -1,10 +1,7 @@
 import inspect, collections
-from contextlib import contextmanager
-import operator
 from llvm import core as lc
-
 from .errors import error_context
-from . import types, typesets
+from . import types
 
 codegen_context = collections.namedtuple('codegen_context', ['imp', 'builder'])
 

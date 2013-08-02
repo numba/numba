@@ -1,9 +1,7 @@
-import numpy
 from collections import defaultdict
-from contextlib import contextmanager
 import operator
 import llvm.core as lc
-from . import typesets, types, aryutils, cgutils
+from . import typesets, types, cgutils
 
 class ImpLib(object):
     def __init__(self, funclib):

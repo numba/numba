@@ -3,7 +3,7 @@ from numbapro.npm2.symbolic import SymbolicExecution
 from .support import testcase, main
 
 
-def foo(a, b):
+def foo(a, b, c, d, e, f, g):
     sum = a
     if a == b:
         for i in range(b):

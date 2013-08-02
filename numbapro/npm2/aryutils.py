@@ -1,6 +1,4 @@
 from contextlib import contextmanager
-from llvm import core as lc
-from . import types
 from .cgutils import const_intp, auto_intp, loop_nest
 
 def gep(builder, ptr, indices):
@@ -36,7 +34,6 @@ def getdata(builder, ary):
     return builder.extract_value(ary, 0)
 
 def preload_attr(builder, ary):
-    ndim = getndim(builder, ary)
     data = getdata(builder, ary)
     shape = getshape(builder, ary)
     strides = getstrides(builder, ary)

@@ -3,7 +3,7 @@ Implements numpy array functions.
 '''
 import operator
 import numpy
-from . import cgutils, aryutils, types, imlib
+from . import aryutils, types
 
 def imp_numpy_sum(context, args, argtys, retty):
     '''
@@ -147,7 +147,7 @@ class ArrayGetItemTuple(object):
                 elem = ety.llvm_cast(context.builder, elem, indexty)
             indices.append(elem)
 
-        return aryutils.getitem(builder, ary, indices=indices,
+        return aryutils.getitem(context.builder, ary, indices=indices,
                                 order=aryty.desc.order)
 
 class ArrayGetItemFixedArray(object):
