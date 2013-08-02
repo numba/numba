@@ -168,6 +168,16 @@ class CodeGen(object):
         values = [self.valmap[i] for i in inst.items]
         return inst.type.desc.llvm_pack(self.builder, values)
 
+    def op_slice(self, inst):
+        tdesc = inst.type.desc
+        start = (self.valmap[inst.start]
+                 if tdesc.has_start else types.intp.llvm_const(0))
+        stop = (self.valmap[inst.stop]
+                if tdesc.has_stop else types.intp.llvm_const(-1))
+        step = (self.valmap[inst.step]
+                if tdesc.has_step else types.intp.llvm_const(1))
+        return inst.type.desc.llvm_pack(self.builder, (start, stop, step))
+
     def op_unpack(self, inst):
         val = self.valmap[inst.value]
         return inst.value.type.llvm_unpack(self.builder, val)[inst.index]

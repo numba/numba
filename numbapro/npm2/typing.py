@@ -118,7 +118,7 @@ class Infer(object):
             defn = self.funclib.get(callee, args)
             inst.update(defn=defn)
             if defn.return_type == types.method_type:
-                inst.update(bypass=True)    # codegen should bypass this
+                inst.update(bypass=True)           # codegen should bypass this
             return defn.return_type
 
     def op_const(self, inst):
@@ -155,6 +155,12 @@ class Infer(object):
     def op_tuple(self, inst):
         return types.tupletype(*(i.type for i in inst.items))
 
+    def op_slice(self, inst):
+        has_start = inst.start is not None
+        has_stop = inst.stop is not None
+        has_step = inst.step is not None
+        return types.slicetype(has_start, has_stop, has_step)
+
     def type_global(self, value):
         if value is None:
             return types.none_type
@@ -166,7 +172,4 @@ class Infer(object):
             return types.intp
         elif isinstance(value, tuple):
             return types.tupletype(*[self.type_global(i) for i in value])
-        elif isinstance(value, slice):
-            return types.slicetype(value.start, value.stop, value.step)
 
-            

@@ -1,5 +1,6 @@
 from contextlib import contextmanager
-from .cgutils import const_intp, auto_intp, loop_nest
+from .cgutils import const_intp, auto_intp, loop_nest, make_array
+from . import types
 
 def gep(builder, ptr, indices):
     return builder.gep(ptr, [auto_intp(i) for i in indices])
@@ -87,3 +88,14 @@ def elementwise(builder, ary, aryty):
     with loop_nest(builder, begins, ends, steps) as indices:
         val = getitem(builder, ary, indices=indices, order=aryty.desc.order)
         yield val
+
+def make_intp_array(builder, values):
+    llintp = types.intp.llvm_as_value()
+    return make_array(builder, llintp, [auto_intp(x) for x in values])
+
+def view(builder, ary, begins, ends):
+    oldstrides = getstrides(builder, ary)
+    strides = [builder.add(auto_intp(b), s) for b, s in zip(begins, oldstrides)]
+    newary = builder.insert_value(ary, make_intp_array(builder, ends), 1)
+    newary = builder.insert_value(newary, make_intp_array(builder, strides), 2)
+    return newary

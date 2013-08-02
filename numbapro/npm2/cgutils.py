@@ -93,5 +93,10 @@ def loop_nest(builder, begins, ends, steps):
     with old as out:
         yield out
 
-
+def make_array(builder, elemty, values):
+    n = len(values)
+    out = lc.Constant.undef(lc.Type.array(elemty, n))
+    for i, v in enumerate(values):
+        out = builder.insert_value(out, v, i)
+    return out
 

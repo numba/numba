@@ -637,10 +637,7 @@ def tupletype(*elements):
     else:
         return Type(Tuple(elements))
 
-def slicetype(start, stop, step):
-    has_start = start != 0
-    has_stop = stop != sys.maxint
-    has_step = step != 1
+def slicetype(has_start, has_stop, has_step):
     return Type(Slice(has_start, has_stop, has_step))
 
 intp = {4: int32, 8: int64}[tuple.__itemsize__]

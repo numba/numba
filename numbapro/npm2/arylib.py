@@ -63,10 +63,16 @@ def array_setitem_value(args):
 def array_slice_return(args):
     ary, idx = args
     assert isinstance(idx.desc, types.Slice)
-    if not (idx.desc.has_start or idx.desc.has_stop or idx.desc.has_step):
+    if ary.desc.ndim != 1:
+        raise TypeError('expecting 1d array')
+    start = idx.desc.has_start
+    stop = idx.desc.has_stop
+    step = idx.desc.has_step
+    if (not start and not stop and not step): # [:]
+        return ary
+    elif not start and stop and not step: # [:x]
         return ary
     assert False
-
 
 #-------------------------------------------------------------------------------
 
@@ -187,12 +193,16 @@ class ArrayGetItemSlice(object):
     def generic_implement(self, context, args, argtys, retty):
         ary, idx = args
         aryty, idxty = argtys
-        entire_array = not (idxty.desc.has_start or
-                            idxty.desc.has_stop or
-                            idxty.desc.has_step)
-        if entire_array:
-            # just return the same array
+
+        has_start = idxty.desc.has_start
+        has_stop = idxty.desc.has_stop
+        has_step = idxty.desc.has_step
+        if not has_start and not has_stop and not has_step: # [:]
             return ary
+        elif not has_start and has_stop and not has_step: # [:x]
+            stop = context.builder.extract_value(idx, 1)
+            res = aryutils.view(context.builder, ary, begins=[0], ends=[stop])
+            return res
         else:
             raise NotImplementedError
 
@@ -258,7 +268,7 @@ class ArraySetItemFixedArray(object):
         aryutils.setitem(context.builder, ary, indices=indices,
                          order=aryty.desc.order,
                          value=val)
-
+        
 
 extensions = [
 ArraySumMethod, ArraySumFunction,
