@@ -558,10 +558,6 @@ def array_setitem_fixedarray(context, args, argtys, retty):
 
 
 # array shape strides size
-def array_shape(context, args, argtys, retty):
-    ary, = args
-    shape = aryutils.getshape(context.builder, ary)
-    return retty.desc.llvm_pack(context.builder, shape)
 
 def array_strides(context, args, argtys, retty):
     ary, = args
@@ -859,7 +855,6 @@ builtins += [Imp(array_setitem_fixedarray, operator.setitem,
              return_type=types.void)]
 
 # array .shape, .strides, .size, .ndim
-builtins += [Imp(array_shape, '.shape', args=(types.ArrayKind,))]
 builtins += [Imp(array_strides, '.strides', args=(types.ArrayKind,))]
 builtins += [Imp(array_size, '.size', args=(types.ArrayKind,))]
 builtins += [Imp(array_ndim, '.ndim', args=(types.ArrayKind,))]

@@ -53,6 +53,12 @@ def numpy_dtype_return(args):
     ary, = args
     return ary.desc.element
 
+def intp_tuple_return(args):
+    ary = args[0]
+    return types.tupletype(*([types.intp] * ary.desc.ndim))
+
+#-------------------------------------------------------------------------------
+
 class ArraySumMethod(object):
     method = 'sum', (types.ArrayKind,), numpy_dtype_return
 
@@ -77,8 +83,17 @@ class ArrayProdFunction(object):
     def generic_implement(self, context, args, argtys, retty):
         return imp_numpy_prod(context, args, argtys, retty)
 
+class ArrayShapeAttr(object):
+    attribute = 'shape', (types.ArrayKind,), intp_tuple_return
+
+    def generic_implement(self, context, args, argtys, retty):
+        ary, = args
+        shape = aryutils.getshape(context.builder, ary)
+        return retty.desc.llvm_pack(context.builder, shape)
+
 extensions = [
 ArraySumMethod, ArraySumFunction,
 ArrayProdMethod, ArrayProdFunction,
+ArrayShapeAttr,
 ]
 
