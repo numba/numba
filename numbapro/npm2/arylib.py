@@ -50,8 +50,7 @@ def imp_numpy_prod(context, args, argtys, retty):
     return builder.load(prod)
 
 def numpy_dtype_return(args):
-    ary, = args
-    return ary.desc.element
+    return args[0].desc.element
 
 def intp_tuple_return(args):
     ary = args[0]
@@ -91,9 +90,92 @@ class ArrayShapeAttr(object):
         shape = aryutils.getshape(context.builder, ary)
         return retty.desc.llvm_pack(context.builder, shape)
 
+class ArrayStridesAttr(object):
+    attribute = 'strides', (types.ArrayKind,), intp_tuple_return
+
+    def generic_implement(self, context, args, argtys, retty):
+        ary, = args
+        strides = aryutils.getstrides(context.builder, ary)
+        return retty.desc.llvm_pack(context.builder, strides)
+
+class ArraySizeAttr(object):
+    attribute = 'size', (types.ArrayKind,), types.intp
+
+    def generic_implement(self, context, args, argtys, retty):
+        ary, = args
+        sz = retty.llvm_const(1)
+        for axsz in aryutils.getshape(context.builder, ary):
+            sz = context.builder.mul(axsz, sz)
+        return sz
+
+class ArrayNdimAttr(object):
+    attribute = 'ndim', (types.ArrayKind,), types.intp
+    
+    def generic_implement(self, context, args, argtys, retty):
+        ary, = args
+        return retty.llvm_const(aryutils.getndim(context.builder, ary))
+
+class ArayGetItemIntp(object):
+    function = (operator.getitem,
+                (types.ArrayKind, types.intp),
+                numpy_dtype_return)
+
+    def generic_implement(self, context, args, argtys, retty):
+        ary, idx = args
+        aryty = argtys[0]
+        return aryutils.getitem(context.builder, ary, indices=[idx],
+                                order=aryty.desc.order)
+
+class ArrayGetItemTuple(object):
+    function = (operator.getitem,
+                (types.ArrayKind, types.TupleKind),
+                numpy_dtype_return)
+    
+    def generic_implement(self, context, args, argtys, retty):
+        ary, idx = args
+        aryty, idxty = argtys
+        indices = []
+
+        indexty = types.intp
+        for i, ety in enumerate(idxty.desc.elements):
+            elem = idxty.desc.llvm_getitem(context.builder, idx, i)
+            if ety != indexty:
+                elem = ety.llvm_cast(context.builder, elem, indexty)
+            indices.append(elem)
+
+        return aryutils.getitem(builder, ary, indices=indices,
+                                order=aryty.desc.order)
+
+class ArrayGetItemFixedArray(object):
+    function = (operator.getitem,
+                (types.ArrayKind, types.FixedArrayKind),
+                numpy_dtype_return)
+    
+    def generic_implement(self, context, args, argtys, retty):
+        ary, idx = args
+        aryty, idxty = argtys
+        indices = []
+
+        indexty = types.intp
+        ety = idxty.desc.element
+        for i in range(idxty.desc.length):
+            elem = idxty.desc.llvm_getitem(context.builder, idx, i)
+            if ety != indexty:
+                elem = ety.llvm_cast(context.builder, elem, indexty)
+            indices.append(elem)
+
+        return aryutils.getitem(context.builder, ary, indices=indices,
+                                order=aryty.desc.order)
+
 extensions = [
 ArraySumMethod, ArraySumFunction,
 ArrayProdMethod, ArrayProdFunction,
 ArrayShapeAttr,
+ArrayStridesAttr,
+ArraySizeAttr,
+ArrayNdimAttr,
+ArayGetItemIntp,
+ArrayGetItemTuple,
+ArrayGetItemFixedArray,
 ]
 

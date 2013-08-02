@@ -467,45 +467,6 @@ def imp_cast_float(fromty):
         return fromty.llvm_cast(context.builder, x, types.float64)
     return imp
 
-# array getitem
-def array_getitem_intp(context, args, argtys, retty):
-    ary, idx = args
-    aryty = argtys[0]
-    return aryutils.getitem(context.builder, ary, indices=[idx],
-                            order=aryty.desc.order)
-
-def array_getitem_tuple(context, args, argtys, retty):
-    ary, idx = args
-    aryty, idxty = argtys
-    indices = []
-
-    indexty = types.intp
-    for i, ety in enumerate(idxty.desc.elements):
-        elem = idxty.desc.llvm_getitem(context.builder, idx, i)
-        if ety != indexty:
-            elem = ety.llvm_cast(context.builder, elem, indexty)
-        indices.append(elem)
-
-    return aryutils.getitem(builder, ary, indices=indices,
-                            order=aryty.desc.order)
-
-def array_getitem_fixedarray(context, args, argtys, retty):
-    ary, idx = args
-    aryty, idxty = argtys
-    indices = []
-
-    indexty = types.intp
-    ety = idxty.desc.element
-    for i in range(idxty.desc.length):
-        elem = idxty.desc.llvm_getitem(context.builder, idx, i)
-        if ety != indexty:
-            elem = ety.llvm_cast(context.builder, elem, indexty)
-        indices.append(elem)
-
-    return aryutils.getitem(context.builder, ary, indices=indices,
-                            order=aryty.desc.order)
-
-
 # array setitem
 def array_setitem_intp(context, args, argtys, retty):
     ary, idx, val = args
@@ -556,24 +517,6 @@ def array_setitem_fixedarray(context, args, argtys, retty):
                      order=aryty.desc.order,
                      value=val)
 
-
-# array shape strides size
-
-def array_strides(context, args, argtys, retty):
-    ary, = args
-    strides = aryutils.getstrides(context.builder, ary)
-    return retty.desc.llvm_pack(context.builder, strides)
-
-def array_size(context, args, argtys, retty):
-    ary, = args
-    sz = retty.llvm_const(1)
-    for axsz in aryutils.getshape(context.builder, ary):
-        sz = context.builder.mul(axsz, sz)
-    return sz
-
-def array_ndim(context, args, argtys, retty):
-    ary, = args
-    return retty.llvm_const(aryutils.getndim(context.builder, ary))
 
 # fixedarray getitem
 
@@ -835,14 +778,6 @@ builtins += casting_imp(int, imp_cast_int, types.intp,
 builtins += casting_imp(float, imp_cast_float, types.float64,
                typesets.integer_set|typesets.float_set|typesets.complex_set)
 
-# array getitem
-builtins += [Imp(array_getitem_intp, operator.getitem,
-             args=(types.ArrayKind, types.intp))]
-builtins += [Imp(array_getitem_tuple, operator.getitem,
-             args=(types.ArrayKind, types.TupleKind))]
-builtins += [Imp(array_getitem_fixedarray, operator.getitem,
-             args=(types.ArrayKind, types.FixedArrayKind))]
-
 # array setitem
 builtins += [Imp(array_setitem_intp, operator.setitem,
              args=(types.ArrayKind, types.intp, None),
@@ -853,11 +788,6 @@ builtins += [Imp(array_setitem_tuple, operator.setitem,
 builtins += [Imp(array_setitem_fixedarray, operator.setitem,
              args=(types.ArrayKind, types.FixedArrayKind, None),
              return_type=types.void)]
-
-# array .shape, .strides, .size, .ndim
-builtins += [Imp(array_strides, '.strides', args=(types.ArrayKind,))]
-builtins += [Imp(array_size, '.size', args=(types.ArrayKind,))]
-builtins += [Imp(array_ndim, '.ndim', args=(types.ArrayKind,))]
 
 # fixedarray getitem
 builtins += [Imp(fixedarray_getitem, operator.getitem,
