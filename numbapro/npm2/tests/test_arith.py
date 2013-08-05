@@ -70,6 +70,16 @@ def test_add_integer():
 
 
 @testcase
+def test_add_integer_overflow():
+    cadd = compile(add, int8, [int8, int8])
+    try:
+        cadd(127, 1)
+    except OverflowError, e:
+        print e
+    else:
+        raise AssertionError('overflowed')
+
+@testcase
 def test_add_float():
     def run(ty, a, b):
         cadd = compile(add, ty, [ty, ty])

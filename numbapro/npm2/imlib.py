@@ -69,11 +69,48 @@ class Imp(object):
         return '<Impl %s %s -> %s >' % (self.funcobj, self.args,
                                         self.return_type)
 
+def signbit(builder, intval):
+    shamt = lc.Constant.int(intval.type, intval.type.width - 1)
+    shifted = builder.lshr(intval, shamt)
+    return builder.trunc(shifted, lc.Type.int(1))
+
 # binary add
 
-def imp_add_integer(context, args):
+def imp_add_unsigned(context, args):
     a, b = args
     return context.builder.add(a, b)
+
+def imp_add_signed(context, args):
+    a, b = args
+    sum = context.builder.add(a, b)
+    if context.flags.suppress_overflow:
+        return context.builder.add(a, b)
+    else:
+        builder = context.builder
+        sa = signbit(builder, a)
+        sb = signbit(builder, b)
+        ss = signbit(builder, sum)
+
+        # a and b have the same sign
+        t1 = builder.not_(builder.xor(sa, sb))
+        # a and sum have different sign
+        t2 = builder.xor(sa, ss)
+
+        overflow = builder.and_(t1, t2)
+
+        bberr = cgutils.append_block(builder, 'overflow')
+        bbok = cgutils.append_block(builder, 'no-overflow')
+
+        builder.cbranch(overflow, bberr, bbok)
+        
+        # overflow
+        builder.position_at_end(bberr)
+        context.raises(OverflowError("integer operation overflow at line %d" %
+                                     context.lineno))
+
+        # no overflow
+        builder.position_at_end(bbok)
+        return sum
 
 def imp_add_float(context, args):
     a, b = args
@@ -600,7 +637,8 @@ def minmax_imp(funcobj, imp, typeset, count):
 builtins = []
 
 # binary add
-builtins += binary_op_imp(operator.add, imp_add_integer, typesets.integer_set)
+builtins += binary_op_imp(operator.add, imp_add_signed, typesets.signed_set)
+builtins += binary_op_imp(operator.add, imp_add_unsigned, typesets.unsigned_set)
 builtins += binary_op_imp(operator.add, imp_add_float, typesets.float_set)
 builtins += binary_op_imp(operator.add, imp_add_complex(types.complex64),
                       [types.complex64])
