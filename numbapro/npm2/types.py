@@ -411,7 +411,7 @@ class Array(object):
     fields = 'element', 'ndim', 'order'
     
     def __init__(self, element, ndim, order):
-        assert order in 'CFA'
+        assert order[0] in 'CFA'
         self.ndim = ndim
         self.element = element
         self.order = order

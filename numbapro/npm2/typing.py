@@ -114,7 +114,8 @@ class Infer(object):
             args = [parent.args[0].type] + args
             inst.update(args=list(parent.args) + list(inst.args))
 
-        with error_context(during="resolving function %s" % callee):
+        with error_context(during="resolving function %s(%s)" %
+                                  (callee, ', '.join(str(a) for a in args))):
             defn = self.funclib.get(callee, args)
             inst.update(defn=defn)
             if defn.return_type == types.method_type:

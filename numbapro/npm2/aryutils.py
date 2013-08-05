@@ -16,17 +16,17 @@ def getitem(builder, ary, order, indices):
     val = builder.load(ptr)
     return val
 
-def getndim(builder, ary):
+def getndim(ary):
     return ary.type.elements[1].count
 
 def getshape(builder, ary):
-    ndim = getndim(builder, ary)
+    ndim = getndim(ary)
     shapeary = builder.extract_value(ary, 1)
     shape = [builder.extract_value(shapeary, i) for i in range(ndim)]
     return shape
 
 def getstrides(builder, ary):
-    ndim = getndim(builder, ary)
+    ndim = getndim(ary)
     strideary = builder.extract_value(ary, 2)
     strides = [builder.extract_value(strideary, i) for i in range(ndim)]
     return strides
@@ -41,7 +41,7 @@ def preload_attr(builder, ary):
     return data, shape, strides
 
 def getpointer(builder, data, shape, strides, order, indices):
-    assert order in 'CFA', "invalid array order code '%s'" % order
+    assert order[0] in 'CFA', "invalid array order code '%s'" % order
     intp = shape[0].type
     if order in 'CF':
         # optimize for C and F contiguous
@@ -93,9 +93,37 @@ def make_intp_array(builder, values):
     llintp = types.intp.llvm_as_value()
     return make_array(builder, llintp, [auto_intp(x) for x in values])
 
-def view(builder, ary, begins, ends):
-    oldstrides = getstrides(builder, ary)
-    strides = [builder.add(auto_intp(b), s) for b, s in zip(begins, oldstrides)]
-    newary = builder.insert_value(ary, make_intp_array(builder, ends), 1)
-    newary = builder.insert_value(newary, make_intp_array(builder, strides), 2)
+def view(builder, ary, begins, ends, order):
+    assert order[0] in 'CFA'
+    if order[0] not in 'CF':
+        raise TypeError('array must be inner contiguous; order=%s' % order)
+
+    if order[0] == 'C':
+        innermost = -1
+        outermost = 0
+    elif order[0] == 'F':
+        innermost = 0
+        outermost = -1
+    else:
+        assert 'unreachable'
+
+    ndim = getndim(ary)
+    assert ndim == len(begins)
+    assert ndim == len(ends)
+
+    data = getdata(builder, ary)
+
+    if ndim == 1:
+        offset = auto_intp(begins[innermost])
+        newdata = builder.gep(data, [offset], inbounds=True)
+        dimlens = [builder.sub(auto_intp(e), auto_intp(b))
+                   for b, e in zip(begins, ends)]
+        newshape = make_intp_array(builder, dimlens)
+
+        newary = builder.insert_value(ary, newdata, 0)
+        newary = builder.insert_value(newary, newshape, 1)
+
     return newary
+
+
+

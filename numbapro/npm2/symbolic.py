@@ -455,6 +455,12 @@ class SymbolicExecution(object):
         sl = self.insert('slice', start=None, stop=None, step=None)
         self.call(operator.getitem, args=(tos, sl))
 
+    def op_SLICE_1(self, inst):
+        start = self.pop()
+        tos = self.pop()
+        sl = self.insert('slice', start=start, stop=None, step=None)
+        self.call(operator.getitem, args=(tos, sl))
+
     def op_SLICE_2(self, inst):
         stop = self.pop()
         tos = self.pop()
@@ -574,7 +580,8 @@ class BlockMap(object):
             return self._map[key]
 
     def remove(self, blk):
-        del self._sorted
+        if hasattr(self, '_sorted'):
+            del self._sorted
         del self._map[blk.offset]
 
     def sorted(self):

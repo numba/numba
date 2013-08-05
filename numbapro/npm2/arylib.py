@@ -70,7 +70,9 @@ def array_slice_return(args):
     step = idx.desc.has_step
     if (not start and not stop and not step): # [:]
         return ary
-    elif not start and stop and not step: # [:x]
+    elif (not start and stop and not step): # [:x]
+        return ary
+    elif (start and not stop and not step): # [x:]
         return ary
     assert False
 
@@ -131,7 +133,7 @@ class ArrayNdimAttr(object):
     
     def generic_implement(self, context, args, argtys, retty):
         ary, = args
-        return retty.llvm_const(aryutils.getndim(context.builder, ary))
+        return retty.llvm_const(aryutils.getndim(ary))
 
 class ArayGetItemIntp(object):
     function = (operator.getitem,
@@ -199,9 +201,16 @@ class ArrayGetItemSlice(object):
         has_step = idxty.desc.has_step
         if not has_start and not has_stop and not has_step: # [:]
             return ary
-        elif not has_start and has_stop and not has_step: # [:x]
+        elif not has_start and has_stop and not has_step:   # [:x]
             stop = context.builder.extract_value(idx, 1)
-            res = aryutils.view(context.builder, ary, begins=[0], ends=[stop])
+            res = aryutils.view(context.builder, ary, begins=[0], ends=[stop],
+                                order=aryty.desc.order)
+            return res
+        elif has_start and not has_stop and not has_step:   # [x:]
+            start = context.builder.extract_value(idx, 0)
+            ends = aryutils.getshape(context.builder, ary)
+            res = aryutils.view(context.builder, ary, begins=[start],
+                                ends=ends, order=aryty.desc.order)
             return res
         else:
             raise NotImplementedError
