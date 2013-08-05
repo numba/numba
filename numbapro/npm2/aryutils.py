@@ -1,5 +1,6 @@
 from contextlib import contextmanager
-from .cgutils import const_intp, auto_intp, loop_nest, make_array
+from .cgutils import (const_intp, auto_intp, loop_nest, make_array,
+                      explode_array,)
 from . import types
 
 def gep(builder, ptr, indices):
@@ -22,13 +23,13 @@ def getndim(ary):
 def getshape(builder, ary):
     ndim = getndim(ary)
     shapeary = builder.extract_value(ary, 1)
-    shape = [builder.extract_value(shapeary, i) for i in range(ndim)]
+    shape = explode_array(builder, shapeary)
     return shape
 
 def getstrides(builder, ary):
     ndim = getndim(ary)
     strideary = builder.extract_value(ary, 2)
-    strides = [builder.extract_value(strideary, i) for i in range(ndim)]
+    strides = explode_array(builder, strideary)
     return strides
 
 def getdata(builder, ary):

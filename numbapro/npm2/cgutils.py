@@ -94,6 +94,8 @@ def loop_nest(builder, begins, ends, steps):
         yield out
 
 def make_array(builder, elemty, values):
+    '''Make a static array out of the given values.
+    '''
     n = len(values)
     out = lc.Constant.undef(lc.Type.array(elemty, n))
     for i, v in enumerate(values):
@@ -101,6 +103,8 @@ def make_array(builder, elemty, values):
     return out
 
 def explode_array(builder, ary):
-    n = ary.type.length
+    '''Extract all elements of a static array into a list of values.
+    '''
+    n = ary.type.count
     return [builder.extract_value(ary, i) for i in range(n)]
 
