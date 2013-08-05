@@ -411,7 +411,7 @@ class Array(object):
     fields = 'element', 'ndim', 'order'
     
     def __init__(self, element, ndim, order):
-        assert order[0] in 'CFA'
+        assert order in ['C', 'CS', 'F', 'FS', 'A']
         self.ndim = ndim
         self.element = element
         self.order = order
@@ -454,6 +454,11 @@ class Array(object):
                       shape=ary.ctypes.shape,
                       strides=ary.ctypes.strides)
         return ct.byref(ary)
+
+    def copy(self, ndim=None, order=None):
+        ndim = ndim if ndim is not None else self.ndim
+        order = order if order is not None else self.order
+        return arraytype(element=self.element, ndim=ndim, order=order)
 
 ArrayKind = Kind(Array)
 
@@ -627,8 +632,8 @@ float64 = Type(Float(64))
 complex64 = Type(Complex(64))
 complex128 = Type(Complex(128))
 
-def arraytype(element, ndim, layout):
-    return Type(Array(element, ndim, layout))
+def arraytype(element, ndim, order):
+    return Type(Array(element, ndim, order))
 
 def tupletype(*elements):
     elements = map(Type, elements)

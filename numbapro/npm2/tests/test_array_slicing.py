@@ -24,6 +24,13 @@ def array_slicing_3(ary):
         tmp += slice[i]
     return tmp
 
+def array_slicing_4(ary):
+    slice = ary[3:7]   # sandwiche
+    tmp = 0
+    for i in range(slice.shape[0]):
+        tmp += slice[i]
+    return tmp
+
 @testcase
 def test_array_slicing_1():
     cfunc = compile(array_slicing_1, float32, [arraytype(float32, 1, 'C')])
@@ -41,6 +48,12 @@ def test_array_slicing_3():
     cfunc = compile(array_slicing_3, float32, [arraytype(float32, 1, 'C')])
     a = np.arange(10, dtype=np.float32)
     assert np.allclose(cfunc(a), array_slicing_3(a))
+
+@testcase
+def test_array_slicing_4():
+    cfunc = compile(array_slicing_4, float32, [arraytype(float32, 1, 'C')])
+    a = np.arange(10, dtype=np.float32)
+    assert np.allclose(cfunc(a), array_slicing_4(a))
 
 if __name__ == '__main__':
     main()

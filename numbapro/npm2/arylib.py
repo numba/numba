@@ -69,11 +69,11 @@ def array_slice_return(args):
     stop = idx.desc.has_stop
     step = idx.desc.has_step
     if (not start and not stop and not step): # [:]
-        return ary
+        return ary.desc.copy(order='%sS' % ary.desc.order[0])
     elif (not start and stop and not step): # [:x]
-        return ary
+        return ary.desc.copy(order='%sS' % ary.desc.order[0])
     elif (start and not stop and not step): # [x:]
-        return ary
+        return ary.desc.copy(order='%sS' % ary.desc.order[0])
     assert False
 
 #-------------------------------------------------------------------------------
