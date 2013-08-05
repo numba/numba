@@ -603,6 +603,7 @@ module_type = Type(BuiltinObject('module'))
 function_type = Type(BuiltinObject('function'))
 method_type = Type(BuiltinObject('method'))
 none_type = Type(BuiltinObject('none'))
+exception_type = Type(BuiltinObject('exception'))
 
 class RangeType(BuiltinObject):
     def llvm_as_value(self):

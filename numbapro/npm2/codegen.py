@@ -3,7 +3,8 @@ from llvm import core as lc
 from .errors import error_context
 from . import types
 
-codegen_context = collections.namedtuple('codegen_context', ['imp', 'builder'])
+codegen_context = collections.namedtuple('codegen_context',
+                                         ['imp', 'builder', 'raises'])
 
 class CodeGen(object):
     def __init__(self, func, blocks, args, return_type, implib):
@@ -17,6 +18,7 @@ class CodeGen(object):
         self.args = args
         self.return_type = return_type
         self.implib = implib
+        self.exceptions = {}    # map errcode to exceptions
 
     def make_module(self):
         return lc.Module.new('module.%s' % self.func.__name__)
@@ -34,7 +36,7 @@ class CodeGen(object):
         else:
             fnty_args = largtys
 
-        lfnty = lc.Type.function(lc.Type.void(), fnty_args)
+        lfnty = lc.Type.function(lc.Type.int(), fnty_args)
         lfunc = self.lmod.add_function(lfnty, name=self.func.__name__)
 
         return lfunc
@@ -51,8 +53,9 @@ class CodeGen(object):
 
 
         self.builder = lc.Builder.new(self.bbmap[self.blocks[0]])
-        self.imp_context = codegen_context(imp=self.implib,
-                                           builder=self.builder)
+        self.imp_context = codegen_context(imp     = self.implib,
+                                           builder = self.builder,
+                                           raises  = self.raises,)
         # initialize stack storage
         varnames = {}
         for block in self.blocks:
@@ -81,6 +84,12 @@ class CodeGen(object):
                                during='instruction codegen'):
                 self.op(block.terminator)
 
+        del self.imp_context        # prevent cyclic reference
+
+    def raises(self, excobj):
+        errcode = len(self.exceptions) + 1
+        self.exceptions[errcode] = excobj
+        self.return_error(errcode)
 
     def cast(self, val, src, dst):
         if src == dst:
@@ -92,6 +101,18 @@ class CodeGen(object):
             return val
         else:
             return src.llvm_cast(self.builder, val, dst)
+
+    def return_error(self, errcode):
+        '''errcode is a python integer
+        '''
+        assert errcode != 0
+        retty = self.lfunc.type.pointee.return_type
+        self.builder.ret(lc.Constant.int(retty, errcode))
+
+    def return_ok(self):
+        '''Returns zero
+        '''
+        self.builder.ret(lc.Constant.null(self.lfunc.type.pointee.return_type))
 
     def op(self, inst):
         if getattr(inst, 'bypass', False):
@@ -117,12 +138,12 @@ class CodeGen(object):
         self.builder.branch(self.bbmap[inst.target])
 
     def op_retvoid(self, inst):
-        self.builder.ret_void()
+        self.return_ok()
 
     def op_ret(self, inst):
         val = self.cast(self.valmap[inst.value], inst.value.type, inst.astype)
         self.builder.store(val, self.lfunc.args[-1])
-        self.builder.ret_void()
+        self.return_ok()
 
     def op_arg(self, inst):
         argval = self.lfunc.args[inst.num]
@@ -149,12 +170,14 @@ class CodeGen(object):
 
     def op_const(self, inst):
         if isinstance(inst.type.desc, types.BuiltinObject):
-            return # XXX: do not handle builtin object
+            return  # XXX: do not handle builtin object
         return inst.type.llvm_const(inst.value)
 
     def op_global(self, inst):
         if inst.type == types.function_type:
-            return # do nothing
+            return  # do nothing
+        elif inst.type == types.exception_type:
+            return  # do nothing
         else:
             assert False
 
@@ -181,3 +204,12 @@ class CodeGen(object):
     def op_unpack(self, inst):
         val = self.valmap[inst.value]
         return inst.value.type.llvm_unpack(self.builder, val)[inst.index]
+
+    def op_raise(self, inst):
+        args = inst.args
+        if len(args) > 1:
+            raise ValueError('only support one argument raise statement')
+        (excobj,) = args
+        if excobj.type is not types.exception_type:
+            raise TypeError('can only raise instance of exception')
+        self.raises(excobj.value)

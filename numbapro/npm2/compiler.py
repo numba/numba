@@ -34,13 +34,15 @@ def compile(func, retty, argtys, libs=global_builtin_libs):
         blocks =  symbolic_interpret(func)
         type_infer(func, blocks, return_type, args, funclib)
 
-        lmod, lfunc = code_generation(func, blocks, return_type, args, implib)
+        lmod, lfunc, excs = code_generation(func, blocks, return_type, args,
+                                            implib)
 
         lmod.verify()
 
         jit = execution.JIT(lfunc = lfunc,
                             retty = retty,
-                            argtys = argtys)
+                            argtys = argtys,
+                            exceptions = excs)
         return jit
 
 #----------------------------------------------------------------------------
@@ -102,4 +104,4 @@ def code_generation(func, blocks, return_type, args, implib):
                          return_type = return_type,
                          implib      = implib)
     cg.codegen()
-    return cg.lmod, cg.lfunc
+    return cg.lmod, cg.lfunc, cg.exceptions

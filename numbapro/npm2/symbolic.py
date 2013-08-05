@@ -474,6 +474,11 @@ class SymbolicExecution(object):
         sl = self.insert('slice', start=start, stop=stop, step=None)
         self.call(operator.getitem, args=(tos, sl))
 
+    def op_RAISE_VARARGS(self, inst):
+        nargs = inst.arg
+        args = list(reversed([self.pop() for _ in range(nargs)]))
+        self.terminate('raise', args=args)
+
 #---------------------------------------------------------------------------
 # Passes
 

@@ -4,7 +4,7 @@ from llvm.workaround import avx_support
 from . import types
 
 class JIT(object):
-    def __init__(self, lfunc, retty, argtys):
+    def __init__(self, lfunc, retty, argtys, exceptions):
         self.engine = make_engine(lfunc)
         self.lfunc = lfunc
         self.args = argtys
@@ -16,16 +16,28 @@ class JIT(object):
         self.pointer = self.engine.get_pointer_to_function(lfunc)
         self.callable = make_callable(self.pointer, self.c_return_type,
                                       self.c_args)
-
+        self.exceptions = exceptions
+    
     def __call__(self, *args):
         args = [t.ctype_pack_argument(v)
                 for t, v in zip(self.args, args)]
         if self.c_return_type is not None:
+            # has return value
             ret = self.c_return_type()
-            self.callable(*(args + [ctypes.byref(ret)]))
-            return self.return_type.ctype_unpack_return(ret)
+            errcode = self.callable(*(args + [ctypes.byref(ret)]))
+            if errcode == 0:
+                return self.return_type.ctype_unpack_return(ret)
         else:
-            self.callable(*args)
+            # no return value
+            errcode = self.callable(*args)
+            if errcode == 0:
+                return
+        # exception handling
+        try:
+            raise self.exceptions[errcode]
+        except KeyError:
+            raise RuntimeError('an unknown exception has raised: errcode=%d' %
+                                errcode)
 
 def make_engine(lfunc):
     lmod = lfunc.module
@@ -45,11 +57,10 @@ def make_engine(lfunc):
 
     return eb.create()
 
-
 def make_callable(ptr, cret, cargs):
     args = list(cargs)
     if cret is not None:
         args += [ctypes.POINTER(cret)]
-    prototype = ctypes.CFUNCTYPE(None, *args)
+    prototype = ctypes.CFUNCTYPE(ctypes.c_int, *args)
     return prototype(ptr)
 
