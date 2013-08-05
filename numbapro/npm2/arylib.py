@@ -68,13 +68,16 @@ def array_slice_return(args):
     start = idx.desc.has_start
     stop = idx.desc.has_stop
     step = idx.desc.has_step
+    order = ary.desc.order
     if (not start and not stop and not step): # [:]
-        return ary.desc.copy(order='%sS' % ary.desc.order[0])
-    elif (not start and stop and not step): # [:x]
-        return ary.desc.copy(order='%sS' % ary.desc.order[0])
-    elif (start and not stop and not step): # [x:]
-        return ary.desc.copy(order='%sS' % ary.desc.order[0])
-    assert False
+        return ary.desc.copy(order='%sS' % order[0])
+    elif order != 'A' and (not start and stop and not step): # [:x]
+        return ary.desc.copy(order='%sS' % order[0])
+    elif order != 'A' and (start and not stop and not step): # [x:]
+        return ary.desc.copy(order='%sS' % order[0])
+    elif order != 'A' and (start and stop and not step): # [x:y]
+        return ary.desc.copy(order='%sS' % order[0])
+    raise TypeError('unsupported slicing operation')
 
 #-------------------------------------------------------------------------------
 
@@ -193,6 +196,7 @@ class ArrayGetItemSlice(object):
                 array_slice_return)
 
     def generic_implement(self, context, args, argtys, retty):
+        builder = context.builder
         ary, idx = args
         aryty, idxty = argtys
 
@@ -202,15 +206,21 @@ class ArrayGetItemSlice(object):
         if not has_start and not has_stop and not has_step: # [:]
             return ary
         elif not has_start and has_stop and not has_step:   # [:x]
-            stop = context.builder.extract_value(idx, 1)
-            res = aryutils.view(context.builder, ary, begins=[0], ends=[stop],
+            end = builder.extract_value(idx, 1)
+            res = aryutils.view(builder, ary, begins=[0], ends=[end],
                                 order=aryty.desc.order)
             return res
         elif has_start and not has_stop and not has_step:   # [x:]
-            start = context.builder.extract_value(idx, 0)
-            ends = aryutils.getshape(context.builder, ary)
-            res = aryutils.view(context.builder, ary, begins=[start],
+            begin = builder.extract_value(idx, 0)
+            ends = aryutils.getshape(builder, ary)
+            res = aryutils.view(builder, ary, begins=[begin],
                                 ends=ends, order=aryty.desc.order)
+            return res
+        elif has_start and has_stop and not has_step:       # [x:y]
+            begin = builder.extract_value(idx, 0)
+            end = builder.extract_value(idx, 1)
+            res = aryutils.view(builder, ary, begins=[begin],
+                                ends=[end], order=aryty.desc.order)
             return res
         else:
             raise NotImplementedError

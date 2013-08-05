@@ -100,3 +100,7 @@ def make_array(builder, elemty, values):
         out = builder.insert_value(out, v, i)
     return out
 
+def explode_array(builder, ary):
+    n = ary.type.length
+    return [builder.extract_value(ary, i) for i in range(n)]
+

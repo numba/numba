@@ -467,6 +467,13 @@ class SymbolicExecution(object):
         sl = self.insert('slice', start=None, stop=stop, step=None)
         self.call(operator.getitem, args=(tos, sl))
 
+    def op_SLICE_3(self, inst):
+        stop = self.pop()
+        start = self.pop()
+        tos = self.pop()
+        sl = self.insert('slice', start=start, stop=stop, step=None)
+        self.call(operator.getitem, args=(tos, sl))
+
 #---------------------------------------------------------------------------
 # Passes
 

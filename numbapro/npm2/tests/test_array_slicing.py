@@ -4,7 +4,7 @@ from ..types import (arraytype, float32)
 from .support import testcase, main
 
 def array_slicing_1(ary):
-    slice = ary[:]      # entire array
+    slice = ary[:]                  # entire array
     tmp = 0
     for i in range(slice.shape[0]):
         tmp += slice[i]
@@ -25,7 +25,7 @@ def array_slicing_3(ary):
     return tmp
 
 def array_slicing_4(ary):
-    slice = ary[3:7]   # sandwiche
+    slice = ary[3:7]                # sandwiche
     tmp = 0
     for i in range(slice.shape[0]):
         tmp += slice[i]
