@@ -4,7 +4,8 @@ from .errors import error_context
 from . import types
 
 codegen_context = collections.namedtuple('codegen_context',
-                                         ['imp', 'builder', 'raises', 'lineno'])
+                                         ['imp', 'builder', 'raises', 'lineno',
+                                          'flags'])
 exception_info = collections.namedtuple('exception_info',
                                         ['exc', 'line'])
 
@@ -141,7 +142,8 @@ class CodeGen(object):
         self.imp_context = codegen_context(imp     = self.implib,
                                            builder = self.builder,
                                            raises  = self.raises,
-                                           lineno  = inst.lineno)
+                                           lineno  = inst.lineno,
+                                           flags   = self.flags)
 
         attr = 'op_%s' % inst.opcode
         func = getattr(self, attr, self.generic_op)
