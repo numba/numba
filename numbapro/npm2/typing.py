@@ -131,9 +131,7 @@ class Infer(object):
     def op_global(self, inst):
         value = inst.value
         ty = self.type_global(inst.value)
-        if ty is None:
-            return types.function_type
-        elif ty is types.exception_type:
+        if ty is types.function_type or ty is types.exception_type:
             return ty
         else:
             assert False, 'XXX: inline global value: %s' % value
@@ -177,3 +175,5 @@ class Infer(object):
             return types.tupletype(*[self.type_global(i) for i in value])
         elif isinstance(value, Exception):
             return types.exception_type
+        elif callable(value):
+            return types.function_type
