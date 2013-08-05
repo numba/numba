@@ -17,7 +17,7 @@ def get_builtin_context():
 
 global_builtin_libs = get_builtin_context()
 
-def compile(func, retty, argtys, libs=global_builtin_libs):
+def compile(func, retty, argtys, libs=global_builtin_libs, flags=()):
     funclib, implib = libs
 
     with profile((func, tuple(argtys))):
@@ -35,7 +35,7 @@ def compile(func, retty, argtys, libs=global_builtin_libs):
         type_infer(func, blocks, return_type, args, funclib)
 
         lmod, lfunc, excs = code_generation(func, blocks, return_type, args,
-                                            implib)
+                                            implib, flags=flags)
 
         lmod.verify()
 
@@ -97,11 +97,12 @@ def type_infer(func, blocks, return_type, args, funclib):
                          funclib     = funclib)
     infer.infer()
 
-def code_generation(func, blocks, return_type, args, implib):
+def code_generation(func, blocks, return_type, args, implib, flags):
     cg = codegen.CodeGen(func        = func,
                          blocks      = blocks,
                          args        = args,
                          return_type = return_type,
-                         implib      = implib)
+                         implib      = implib,
+                         flags       = flags)
     cg.codegen()
     return cg.lmod, cg.lfunc, cg.exceptions

@@ -4,10 +4,31 @@ from .errors import error_context
 from . import types
 
 codegen_context = collections.namedtuple('codegen_context',
-                                         ['imp', 'builder', 'raises'])
+                                         ['imp', 'builder', 'raises', 'lineno'])
+exception_info = collections.namedtuple('exception_info',
+                                        ['exc', 'line'])
+
+SUPPORTED_FLAGS = frozenset(['suppress-overflow'])
+
+def _check_supported_flags(flags):
+    for f in flags:
+        if f not in SUPPORTED_FLAGS:
+            raise NameError('unsupported compiler flag: %s' % f)
+
+class Flags(object):
+    def __init__(self, flags):
+        _check_supported_flags(flags)
+        self.flags = frozenset(flags)
+
+    def __getattr__(self, k):
+        k = k.replace('_', '-')
+        if k not in SUPPORTED_FLAGS:
+            raise AttributeError(k)
+        else:
+            return k in self.flags
 
 class CodeGen(object):
-    def __init__(self, func, blocks, args, return_type, implib):
+    def __init__(self, func, blocks, args, return_type, implib, flags=()):
         self.func = func
         self.argspec = inspect.getargspec(func)
         assert not self.argspec.keywords
@@ -19,6 +40,7 @@ class CodeGen(object):
         self.return_type = return_type
         self.implib = implib
         self.exceptions = {}    # map errcode to exceptions
+        self.flags = Flags(flags)
 
     def make_module(self):
         return lc.Module.new('module.%s' % self.func.__name__)
