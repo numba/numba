@@ -173,7 +173,8 @@ class Infer(object):
             return types.intp
         elif isinstance(value, tuple):
             return types.tupletype(*[self.type_global(i) for i in value])
-        elif isinstance(value, Exception):
+        elif (isinstance(value, Exception) or
+                (isinstance(value, type) and issubclass(value, Exception))):
             return types.exception_type
         elif callable(value):
             return types.function_type
