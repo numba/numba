@@ -34,7 +34,8 @@ class JIT(object):
                 return
         # exception handling
         try:
-            raise self.exceptions[errcode]
+            einfo = self.exceptions[errcode]
+            raise einfo.exc
         except KeyError:
             raise RuntimeError('an unknown exception has raised: errcode=%d' %
                                 errcode)

@@ -75,9 +75,7 @@ class CodeGen(object):
 
 
         self.builder = lc.Builder.new(self.bbmap[self.blocks[0]])
-        self.imp_context = codegen_context(imp     = self.implib,
-                                           builder = self.builder,
-                                           raises  = self.raises,)
+        
         # initialize stack storage
         varnames = {}
         for block in self.blocks:
@@ -106,11 +104,10 @@ class CodeGen(object):
                                during='instruction codegen'):
                 self.op(block.terminator)
 
-        del self.imp_context        # prevent cyclic reference
-
     def raises(self, excobj):
         errcode = len(self.exceptions) + 1
-        self.exceptions[errcode] = excobj
+        self.exceptions[errcode] = exception_info(excobj,
+                                                  self.imp_context.lineno)
         self.return_error(errcode)
 
     def cast(self, val, src, dst):
@@ -140,9 +137,18 @@ class CodeGen(object):
         if getattr(inst, 'bypass', False):
             return
 
+        # insert temporary attribute
+        self.imp_context = codegen_context(imp     = self.implib,
+                                           builder = self.builder,
+                                           raises  = self.raises,
+                                           lineno  = inst.lineno)
+
         attr = 'op_%s' % inst.opcode
         func = getattr(self, attr, self.generic_op)
-        return func(inst)
+        result = func(inst)
+
+        del self.imp_context
+        return result
 
     def generic_op(self, inst):
         print self.lfunc
@@ -235,3 +241,4 @@ class CodeGen(object):
         if excobj.type is not types.exception_type:
             raise TypeError('can only raise instance of exception')
         self.raises(excobj.value)
+
