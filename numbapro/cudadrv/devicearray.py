@@ -124,14 +124,20 @@ class DeviceNDArray(object):
         if ary is None:
             hostary = np.empty(shape=self.alloc_size, dtype=np.byte)
         else:
-            if ary.shape != self.shape:
-                raise TypeError('incompatible shape; device %s; host %s' %
-                                (self.shape, ary.shape))
-            if ary.strides != self.strides:
-                raise TypeError('incompatible strides; device %s; host %s' %
-                                (self.strides, ary.strides))
             if ary.dtype != self.dtype:
                 raise TypeError('incompatible dtype')
+
+            if ary.shape != self.shape:
+                scalshapes = (), (1,)
+                if not (ary.shape in scalshapes and self.shape in scalshapes):
+                    raise TypeError('incompatible shape; device %s; host %s' %
+                                    (self.shape, ary.shape))
+            if ary.strides != self.strides:
+                scalstrides = (), (self.dtype.itemsize,)
+                if not (ary.strides in scalstrides and
+                        self.strides in scalstrides):
+                    raise TypeError('incompatible strides; device %s; host %s' %
+                                    (self.strides, ary.strides))
             hostary = ary
         _driver.device_to_host(hostary, self, self.alloc_size, stream=stream)
 

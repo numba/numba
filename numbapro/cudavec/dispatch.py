@@ -44,9 +44,7 @@ class CudaUFuncDispatcher(object):
         return broadcast_arrays
 
     def _allocate_output(self, broadcast_arrays, result_dtype):
-        # return np.empty_like(broadcast_arrays[0], dtype=result_dtype)
-        # for numpy1.5
-        return np.empty(broadcast_arrays[0].shape, dtype=result_dtype)
+        return np.empty(shape=broadcast_arrays[0].shape, dtype=result_dtype)
 
     def _apply_autotuning(self, func, max_threads):
         try:
@@ -149,7 +147,7 @@ class CudaUFuncDispatcher(object):
         else:
             broadcast_arrays = self._prepare_inputs(args)
             element_count = self._determine_element_count(broadcast_arrays)
-
+            
             if 'out' not in kws:
                 out = self._allocate_output(broadcast_arrays, result_dtype)
             else:
@@ -202,16 +200,25 @@ class CudaUFuncDispatcher(object):
         return np.prod(broadcast_arrays[0].shape)
 
     def _arguments_requirement(self, args):
-        assert args[0].ndim == 1, "must use 1d array"
-        # Accept same shape or array scalar
-        assert all(x.shape == args[0].shape or
-                   (x.strides == (0,) and x.shape == (1,))
-                   for x in args), \
-                "invalid combination of shape and strides"
+        # all arguments must be 1 or 0 dimensional
+        for i, a in enumerate(args):
+            if a.ndim != 1:
+                raise ValueError("arg %d is not a 1D array" % i)
+
+        # get shape of all array
+        array_shapes = []
+        for i, a in enumerate(args):
+            if a.strides[0] != 0:
+                array_shapes.append((i, a.shape[0]))
+
+        _, ms = array_shapes[0]
+        for i, s in array_shapes[1:]:
+            if ms != s:
+                raise ValueError("arg %d should have length %d" % ms)
 
     def _determine_dimensions(self, n, max_thread):
         # determine grid and block dimension
-        thread_count =  min(max_thread, n)
+        thread_count =  int(min(max_thread, n))
         block_count = int(math.ceil(float(n) / max_thread))
         return block_count, thread_count
 
