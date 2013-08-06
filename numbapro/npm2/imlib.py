@@ -74,6 +74,33 @@ def signbit(builder, intval):
     shifted = builder.lshr(intval, shamt)
     return builder.trunc(shifted, lc.Type.int(1))
 
+def arith_int_overflow(context, sa, sb, ss):
+    '''Arithmetic integer overflow when the signbit of the two operands are
+    the same but the signbit of the result mismatches the signbit of the 
+    operands.
+    '''
+    builder = context.builder
+
+    # sa and sb have the same sign
+    t1 = builder.not_(builder.xor(sa, sb))
+    # sa (or sb) and ss have different sign
+    t2 = builder.xor(sa, ss)
+
+    overflow = builder.and_(t1, t2)
+
+    bberr = cgutils.append_block(builder, 'overflow')
+    bbok = cgutils.append_block(builder, 'no-overflow')
+
+    builder.cbranch(overflow, bberr, bbok)
+    
+    # overflow
+    with cgutils.goto_block(builder, bberr):
+        context.raises(OverflowError("integer operation overflow at line %d" %
+                                     context.lineno))
+
+    # no overflow
+    builder.position_at_end(bbok)
+
 # binary add
 
 def imp_add_unsigned(context, args):
@@ -83,34 +110,10 @@ def imp_add_unsigned(context, args):
 def imp_add_signed(context, args):
     a, b = args
     sum = context.builder.add(a, b)
-    if context.flags.suppress_overflow:
-        return context.builder.add(a, b)
-    else:
-        builder = context.builder
-        sa = signbit(builder, a)
-        sb = signbit(builder, b)
-        ss = signbit(builder, sum)
-
-        # a and b have the same sign
-        t1 = builder.not_(builder.xor(sa, sb))
-        # a and sum have different sign
-        t2 = builder.xor(sa, ss)
-
-        overflow = builder.and_(t1, t2)
-
-        bberr = cgutils.append_block(builder, 'overflow')
-        bbok = cgutils.append_block(builder, 'no-overflow')
-
-        builder.cbranch(overflow, bberr, bbok)
-        
-        # overflow
-        builder.position_at_end(bberr)
-        context.raises(OverflowError("integer operation overflow at line %d" %
-                                     context.lineno))
-
-        # no overflow
-        builder.position_at_end(bbok)
-        return sum
+    if not context.flags.suppress_overflow:
+        sb = lambda x: signbit(context.builder, x)
+        arith_int_overflow(context, sb(a), sb(b), sb(sum))
+    return sum
 
 def imp_add_float(context, args):
     a, b = args
@@ -131,9 +134,18 @@ def imp_add_complex(dtype):
 
 # binary sub
 
-def imp_sub_integer(context, args):
+def imp_sub_unsigned(context, args):
     a, b = args
     return context.builder.sub(a, b)
+
+def imp_sub_signed(context, args):
+    a, b = args
+    diff = context.builder.sub(a, b)
+    if not context.flags.suppress_overflow:
+        sb = lambda x: signbit(context.builder, x)
+        arith_int_overflow(context, sb(a), context.builder.not_(sb(b)),
+                           sb(diff))
+    return diff
 
 def imp_sub_float(context, args):
     a, b = args
@@ -284,7 +296,7 @@ def imp_neg_signed(ty):
     def imp(context, args):
         x, = args
         zero = ty.llvm_const(0)
-        return imp_sub_integer(context, (zero, x))
+        return imp_sub_signed(context, (zero, x))
     return imp
 
 def imp_neg_float(ty):
@@ -542,7 +554,7 @@ def imp_abs_integer(ty):
             raise TypeError("absolute value of %s" % ty)
         zero = ty.llvm_const(0)
         isneg = imp_cmp_signed(operator.lt, ty)(context, (x, zero))
-        absval = imp_sub_integer(context, (zero, x))
+        absval = imp_sub_signed(context, (zero, x))
         return context.builder.select(isneg, absval, x)
     return imp
 
@@ -646,7 +658,8 @@ builtins += binary_op_imp(operator.add, imp_add_complex(types.complex128),
                       [types.complex128])
 
 # binary sub
-builtins += binary_op_imp(operator.sub, imp_sub_integer, typesets.integer_set)
+builtins += binary_op_imp(operator.sub, imp_sub_signed, typesets.signed_set)
+builtins += binary_op_imp(operator.sub, imp_sub_unsigned, typesets.unsigned_set)
 builtins += binary_op_imp(operator.sub, imp_sub_float, typesets.float_set)
 builtins += binary_op_imp(operator.sub, imp_sub_complex(types.complex64),
                       [types.complex64])

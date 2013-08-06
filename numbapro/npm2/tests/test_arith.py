@@ -77,7 +77,7 @@ def test_add_integer_overflow():
     except OverflowError, e:
         print e
     else:
-        raise AssertionError('overflowed')
+        raise AssertionError('expecting exception')
 
 @testcase
 def test_add_float():
@@ -116,6 +116,16 @@ def test_sub_integer():
     for ty in iset:
         run(ty, 45, 12)
 
+@testcase
+def test_sub_integer_overflow():
+    ty = int8
+    csub = compile(sub, ty, [ty, ty])
+    try:
+        csub(-128, 1)
+    except OverflowError, e:
+        print e
+    else:
+        raise AssertionError('expecting exception')
 
 @testcase
 def test_sub_float():

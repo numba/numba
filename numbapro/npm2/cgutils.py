@@ -30,7 +30,6 @@ def goto_block(builder, block):
 def append_block(builder, name=''):
     return builder.basic_block.function.append_basic_block(name)
 
-
 @contextmanager
 def loop(builder, begin, end, step):
     '''
