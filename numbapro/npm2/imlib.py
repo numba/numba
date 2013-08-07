@@ -87,19 +87,11 @@ def arith_int_overflow(context, sa, sb, ss):
     t2 = builder.xor(sa, ss)
 
     overflow = builder.and_(t1, t2)
-
-    bberr = cgutils.append_block(builder, 'overflow')
-    bbok = cgutils.append_block(builder, 'no-overflow')
-
-    builder.cbranch(overflow, bberr, bbok)
     
     # overflow
-    with cgutils.goto_block(builder, bberr):
+    with cgutils.if_then(builder, overflow):
         context.raises(OverflowError("integer operation overflow at line %d" %
                                      context.lineno))
-
-    # no overflow
-    builder.position_at_end(bbok)
 
 # binary add
 

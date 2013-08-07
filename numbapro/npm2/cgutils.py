@@ -31,6 +31,15 @@ def append_block(builder, name=''):
     return builder.basic_block.function.append_basic_block(name)
 
 @contextmanager
+def if_then(builder, cond):
+    then = append_block(builder, 'then')
+    orelse = append_block(builder, 'else')
+    builder.cbranch(cond, then, orelse)
+    with goto_block(builder, then):
+        yield
+    builder.position_at_end(orelse)
+
+@contextmanager
 def loop(builder, begin, end, step):
     '''
     assumes positive steps and intp as index.
