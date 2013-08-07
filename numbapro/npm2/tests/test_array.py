@@ -239,5 +239,37 @@ def test_getitem2d_outofbound():
     else:
         raise AssertionError('expecting exception')
 
+#------------------------------------------------------------------------------
+# getitem wraparound
+
+@testcase
+def test_getitem_wraparound():
+    compiled = compile(getitem, int32, [arraytype(int32, 1, 'C'), int32])
+    ary = np.arange(10, dtype=np.int32)
+    exp = getitem(ary, -10)
+    got = compiled(ary, -10)
+    assert got == exp
+
+@testcase
+def test_getitem2d_wraparound():
+    compiled = compile(getitem2d, int32, [arraytype(int32, 2, 'C'), int32, int32])
+    ary = np.arange(10, dtype=np.int32).reshape(2, 5)
+    exp = getitem2d(ary, 1, -4)
+    got = compiled(ary, 1, -4)
+    assert got == exp
+
+@testcase
+def test_getitem_outofbound_overflow():
+    compiled = compile(getitem, int32, [arraytype(int32, 1, 'C'), int32])
+    ary = np.arange(10, dtype=np.int32)
+    try:
+        compiled(ary, -11)
+    except IndexError, e:
+        print e
+    else:
+        raise AssertionError('expecting exception')
+
+
+
 if __name__ == '__main__':
     main()

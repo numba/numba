@@ -137,3 +137,14 @@ def boundcheck(builder, raises, ary, indices):
         with if_then(builder, oob):
             raises(IndexError, 'out of bound')
 
+def wraparound(builder, raises, ary, indices):
+    assert getndim(ary) == len(indices), 'index dimension mismatch'
+    shape = getshape(builder, ary)
+    out = []
+    for i, s in zip(indices, shape):
+        i = auto_intp(i)
+        neg = builder.icmp(lc.ICMP_SLT, i, types.intp.llvm_const(0))
+        normed = builder.select(neg, builder.add(i, s), i)     # no -ve index
+        out.append(normed)
+    return out
+

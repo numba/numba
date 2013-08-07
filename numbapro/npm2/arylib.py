@@ -84,6 +84,19 @@ def boundcheck(context, ary, indices):
     if not context.flags.no_boundcheck:
         aryutils.boundcheck(context.builder, context.raises, ary, indices)
 
+def wraparound(context, ary, indices):
+    assert isinstance(indices, (tuple, list))
+    if not context.flags.no_wraparound:
+        return aryutils.wraparound(context.builder, context.raises, ary,
+                                   indices)
+    else:
+        return indices
+
+def wraparound_and_boundcheck(context, ary, indices):
+    indices = wraparound(context, ary, indices)
+    boundcheck(context, ary, indices)
+    return indices
+
 #-------------------------------------------------------------------------------
 
 class ArraySumMethod(object):
@@ -151,8 +164,8 @@ class ArayGetItemIntp(object):
     def generic_implement(self, context, args, argtys, retty):
         ary, idx = args
         aryty = argtys[0]
-        boundcheck(context, ary, [idx])
-        return aryutils.getitem(context.builder, ary, indices=[idx],
+        indices = wraparound_and_boundcheck(context, ary, [idx])
+        return aryutils.getitem(context.builder, ary, indices=indices,
                                 order=aryty.desc.order)
 
 class ArrayGetItemTuple(object):
@@ -171,7 +184,7 @@ class ArrayGetItemTuple(object):
             elem = context.cast(elem, ety, indexty)
             indices.append(elem)
 
-        boundcheck(context, ary, indices)
+        indices = wraparound_and_boundcheck(context, ary, indices)
         return aryutils.getitem(context.builder, ary, indices=indices,
                                 order=aryty.desc.order)
 
@@ -192,7 +205,7 @@ class ArrayGetItemFixedArray(object):
             elem = context.cast(elem, ety, indexty)
             indices.append(elem)
 
-        boundcheck(context, ary, indices)
+        indices = wraparound_and_boundcheck(context, ary, indices)
         return aryutils.getitem(context.builder, ary, indices=indices,
                                 order=aryty.desc.order)
 
@@ -242,8 +255,8 @@ class ArraySetItemIntp(object):
 
         val = context.cast(val, valty, aryty.desc.element)
         
-        boundcheck(context, ary, [idx])
-        aryutils.setitem(context.builder, ary, indices=[idx],
+        indices = wraparound_and_boundcheck(context, ary, [idx])
+        aryutils.setitem(context.builder, ary, indices=indices,
                          order=aryty.desc.order,
                          value=val)
 
@@ -265,7 +278,7 @@ class ArraySetItemTuple(object):
 
         val = context.cast(val, valty, aryty.desc.element)
 
-        boundcheck(context, ary, indices)
+        indices = wraparound_and_boundcheck(context, ary, indices)
         aryutils.setitem(context.builder, ary, indices=indices,
                          order=aryty.desc.order,
                          value=val)
@@ -289,7 +302,7 @@ class ArraySetItemFixedArray(object):
 
         val = context.cast(val, valty, aryty.desc.element)
 
-        boundcheck(context, ary, indices)
+        indices = wraparound_and_boundcheck(context, ary, indices)
         aryutils.setitem(context.builder, ary, indices=indices,
                          order=aryty.desc.order,
                          value=val)
