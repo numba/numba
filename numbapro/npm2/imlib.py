@@ -190,17 +190,32 @@ def imp_mul_complex(dtype):
 
 # binary floordiv
 
+def zero_division_check(context, divisor):
+    if not context.flags.no_div_by_zero:
+        builder = context.builder
+        if divisor.type.kind != lc.TYPE_INTEGER:
+            comparor = lambda x, y: builder.fcmp(lc.FCMP_OEQ, x, y)
+        else:
+            comparor = lambda x, y: builder.icmp(lc.ICMP_EQ, x, y)
+        is_zero = comparor(divisor, lc.Constant.null(divisor.type))
+        with cgutils.if_then(builder, is_zero):
+            context.raises(ZeroDivisionError("divide by zero at line %d" %
+                                             context.lineno))
+
 def imp_floordiv_signed(context, args):
     a, b = args
+    zero_division_check(context, b)
     return context.builder.sdiv(a, b)
 
 def imp_floordiv_unsigned(context, args):
     a, b = args
+    zero_division_check(context, b)
     return context.builder.udiv(a, b)
 
 def imp_floordiv_float(intty):
     def imp(context, args):
         a, b = args
+        zero_division_check(context, b)
         return context.builder.fptosi(context.builder.fdiv(a, b),
                                       intty.llvm_as_value())
     return imp
@@ -209,6 +224,7 @@ def imp_floordiv_float(intty):
 
 def imp_truediv_float(context, args):
     a, b = args
+    zero_division_check(context, b)
     return context.builder.fdiv(a, b)
 
 def imp_truediv_complex(dtype):
@@ -238,14 +254,17 @@ def imp_truediv_complex(dtype):
 
 def imp_mod_signed(context, args):
     a, b = args
+    zero_division_check(context, b)
     return context.builder.srem(a, b)
 
 def imp_mod_unsigned(context, args):
     a, b = args
+    zero_division_check(context, b)
     return context.builder.urem(a, b)
 
 def imp_mod_float(context, args):
     a, b = args
+    zero_division_check(context, b)
     return context.builder.frem(a, b)
 
 # binary lshift

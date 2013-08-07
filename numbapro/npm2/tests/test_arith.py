@@ -203,6 +203,17 @@ if sys.platform != 'win32':
             run(ty, 4, 2)
 
 @testcase
+def test_div_integer_zerodiv():
+    ty = int8
+    cdiv = compile(div, ty, [ty, ty])
+    try:
+        cdiv(1, 0)
+    except ZeroDivisionError, e:
+        print e
+    else:
+        raise AssertionError('expecting exception')
+
+@testcase
 def test_div_float():
     def run(ty, a, b):
         cdiv = compile(div, ty, [ty, ty])
@@ -213,6 +224,17 @@ def test_div_float():
 
     for ty in fset:
         run(ty, 1.234, 2.345)
+
+@testcase
+def test_div_float_zerodiv():
+    ty = float32
+    cdiv = compile(div, ty, [ty, ty])
+    try:
+        cdiv(1, 0)
+    except ZeroDivisionError, e:
+        print e
+    else:
+        raise AssertionError('expecting exception')
 
 @testcase
 def test_div_complex():
@@ -226,6 +248,16 @@ def test_div_complex():
     for ty in cset:
         run(ty, 1.2+3j, 2.3+4j)
 
+@testcase
+def test_div_complex_zerodiv():
+    ty = complex64
+    cdiv = compile(div, ty, [ty, ty])
+    try:
+        cdiv(1j, 0j)
+    except ZeroDivisionError, e:
+        print e
+    else:
+        raise AssertionError('expecting exception')
 #------------------------------------------------------------------------------
 # floordiv
 
@@ -241,6 +273,17 @@ def test_floordiv_integer():
         run(ty, 4, 2)
 
 @testcase
+def test_floordiv_integer_zerodiv():
+    ty = int8
+    cfloordiv = compile(floordiv, ty, [ty, ty])
+    try:
+        cfloordiv(1, 0)
+    except ZeroDivisionError, e:
+        print e
+    else:
+        raise AssertionError('expecting exception')
+
+@testcase
 def test_floordiv_float():
     def run(ty, a, b):
         cfloordiv = compile(floordiv, ty, [ty, ty])
@@ -251,7 +294,16 @@ def test_floordiv_float():
     for ty in fset:
         run(ty, 1.234, 2.345)
 
-
+@testcase
+def test_floordiv_float_zerodiv():
+    ty = float32
+    cfloordiv = compile(floordiv, ty, [ty, ty])
+    try:
+        cfloordiv(1., 0.)
+    except ZeroDivisionError, e:
+        print e
+    else:
+        raise AssertionError('expecting exception')
 
 #------------------------------------------------------------------------------
 # mod
@@ -268,6 +320,17 @@ def test_mod_integer():
     for ty in iset:
         run(ty, 121, 11)
 
+@testcase
+def test_mod_integer_zerodiv():
+    ty = int8
+    cmod = compile(mod, ty, [ty, ty])
+    try:
+        cmod(1, 0)
+    except ZeroDivisionError, e:
+        print e
+    else:
+        raise AssertionError('expecting exception')
+
 if sys.platform != 'win32':
     '''Known problem that llvm generates the wrong symbol for fmodf
     '''
@@ -282,6 +345,16 @@ if sys.platform != 'win32':
         for ty in fset:
             run(ty, 432., 21.)
 
+    @testcase
+    def test_mod_float_zerodiv():
+        ty = float32
+        cmod = compile(mod, ty, [ty, ty])
+        try:
+            cmod(1., 0.)
+        except ZeroDivisionError, e:
+            print e
+        else:
+            raise AssertionError('expecting exception')
 
 #------------------------------------------------------------------------------
 # expr1
