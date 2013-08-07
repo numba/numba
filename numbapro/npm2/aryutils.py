@@ -148,3 +148,13 @@ def wraparound(builder, raises, ary, indices):
         out.append(normed)
     return out
 
+def clip(builder, raises, ary, indices):
+    assert getndim(ary) == len(indices), 'index dimension mismatch'
+    shape = getshape(builder, ary)
+    out = []
+    for i, s in zip(indices, shape):
+        i = auto_intp(i)
+        clipping = builder.icmp(lc.ICMP_UGE, i, s)
+        res = builder.select(clipping, s, i)
+        out.append(res)
+    return out

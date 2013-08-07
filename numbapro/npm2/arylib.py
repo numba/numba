@@ -92,9 +92,21 @@ def wraparound(context, ary, indices):
     else:
         return indices
 
+def clip(context, ary, indices):
+    assert isinstance(indices, (tuple, list))
+    if context.flags.clip:
+        return aryutils.clip(context.builder, context.raises, ary, indices)
+    else:
+        return indices
+
 def wraparound_and_boundcheck(context, ary, indices):
     indices = wraparound(context, ary, indices)
     boundcheck(context, ary, indices)
+    return indices
+
+def wraparound_and_clip(context, ary, indices):
+    indices = wraparound(context, ary, indices)
+    indices = clip(context, ary, indices)
     return indices
 
 #-------------------------------------------------------------------------------
@@ -226,20 +238,24 @@ class ArrayGetItemSlice(object):
             return ary
         elif not has_start and has_stop and not has_step:   # [:x]
             end = builder.extract_value(idx, 1)
-            res = aryutils.view(builder, ary, begins=[0], ends=[end],
+            ends = wraparound_and_clip(context, ary, [end])
+            res = aryutils.view(builder, ary, begins=[0], ends=ends,
                                 order=aryty.desc.order)
             return res
         elif has_start and not has_stop and not has_step:   # [x:]
             begin = builder.extract_value(idx, 0)
             ends = aryutils.getshape(builder, ary)
-            res = aryutils.view(builder, ary, begins=[begin],
+            begins = wraparound_and_clip(context, ary, [begin])
+            res = aryutils.view(builder, ary, begins=begins,
                                 ends=ends, order=aryty.desc.order)
             return res
         elif has_start and has_stop and not has_step:       # [x:y]
             begin = builder.extract_value(idx, 0)
             end = builder.extract_value(idx, 1)
-            res = aryutils.view(builder, ary, begins=[begin],
-                                ends=[end], order=aryty.desc.order)
+            begins = wraparound_and_clip(context, ary, [begin])
+            ends = wraparound_and_clip(context, ary, [end])
+            res = aryutils.view(builder, ary, begins=begins,
+                                ends=ends, order=aryty.desc.order)
             return res
         else:
             raise NotImplementedError
