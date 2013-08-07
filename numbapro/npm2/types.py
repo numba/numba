@@ -9,8 +9,8 @@ __all__ = ('int8', 'int16', 'int32', 'int64', 'intp',
            'float32', 'float64', 'complex64', 'complex128',
            'arraytype')
 
-ERRMSG_CHANGE_OF_SIGN = 'casting resulting in change of sign'
-ERRMSG_NEGATIVE_TO_UNSIGNED = 'casting signed to unsigned'
+ERRMSG_CHANGE_OF_SIGN = 'cast resulting in change of sign'
+ERRMSG_NEGATIVE_TO_UNSIGNED = 'casting negative value to unsigned'
 ERRMSG_NAN = 'casting NaN to integer'
 
 class Type(object):
