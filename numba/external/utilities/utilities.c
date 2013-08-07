@@ -3,6 +3,7 @@
 */
 
 #include <Python.h>
+#include <datetime.h>
 #include "_numba.h"
 
 #define EXPORT_FUNCTION(func, module, errlabel) {                            \

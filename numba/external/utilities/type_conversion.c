@@ -1,6 +1,7 @@
 #include <Python.h>
+#include <numpy/ndarraytypes.h>
 #include "generated_conversions.h"
-#include "datetime/np_datetime.h"
+#include "datetime/_datetime.h"
 #include "datetime/np_datetime_strings.h"
 
 /* Utilities copied from Cython/Utility/TypeConversion.c */
@@ -260,30 +261,59 @@ static NUMBA_INLINE Py_ssize_t __Numba_PyIndex_AsSsize_t(PyObject*);
 static NUMBA_INLINE PyObject * __Numba_PyInt_FromSize_t(size_t);
 static NUMBA_INLINE size_t __Numba_PyInt_AsSize_t(PyObject*);
 
+static npy_datetimestruct iso_datetime2npydatetime(char *datetime_string)
+{
+    npy_datetimestruct out;
+    npy_bool out_local;
+    NPY_DATETIMEUNIT out_bestunit;
+    npy_bool out_special;
+
+    parse_iso_8601_datetime(datetime_string, strlen(datetime_string), -1, NPY_SAME_KIND_CASTING,
+        &out, &out_local, &out_bestunit, &out_special);
+
+    return out;
+}
+
 static npy_int64 iso_datetime2year(char *datetime_string)
 {
     npy_datetimestruct out;
-    npy_bool out_local;
-    NPY_DATETIMEUNIT out_bestunit;
-    npy_bool out_special;
-
-    parse_iso_8601_datetime(datetime_string, strlen(datetime_string), -1, NPY_SAME_KIND_CASTING,
-        &out, &out_local, &out_bestunit, &out_special);
-
+    out = iso_datetime2npydatetime(datetime_string);
     return out.year;
 }
 
-static npy_int32 iso_datetime2month(char *datetime_string)
+static npy_int64 iso_datetime2month(char *datetime_string)
 {
     npy_datetimestruct out;
-    npy_bool out_local;
-    NPY_DATETIMEUNIT out_bestunit;
-    npy_bool out_special;
-
-    parse_iso_8601_datetime(datetime_string, strlen(datetime_string), -1, NPY_SAME_KIND_CASTING,
-        &out, &out_local, &out_bestunit, &out_special);
-
+    out = iso_datetime2npydatetime(datetime_string);
     return out.month;
+}
+
+static npy_int64 iso_datetime2day(char *datetime_string)
+{
+    npy_datetimestruct out;
+    out = iso_datetime2npydatetime(datetime_string);
+    return out.day;
+}
+
+static npy_int64 iso_datetime2hour(char *datetime_string)
+{
+    npy_datetimestruct out;
+    out = iso_datetime2npydatetime(datetime_string);
+    return out.hour;
+}
+
+static npy_int64 iso_datetime2min(char *datetime_string)
+{
+    npy_datetimestruct out;
+    out = iso_datetime2npydatetime(datetime_string);
+    return out.min;
+}
+
+static npy_int64 iso_datetime2sec(char *datetime_string)
+{
+    npy_datetimestruct out;
+    out = iso_datetime2npydatetime(datetime_string);
+    return out.sec;
 }
 
 
@@ -397,6 +427,10 @@ export_type_conversion(PyObject *module)
     EXPORT_FUNCTION(primitive2pydatetime, module, error);
     EXPORT_FUNCTION(iso_datetime2year, module, error);
     EXPORT_FUNCTION(iso_datetime2month, module, error);
+    EXPORT_FUNCTION(iso_datetime2day, module, error);
+    EXPORT_FUNCTION(iso_datetime2hour, module, error);
+    EXPORT_FUNCTION(iso_datetime2min, module, error);
+    EXPORT_FUNCTION(iso_datetime2sec, module, error);
 
     EXPORT_FUNCTION(__Numba_PyInt_FromLongLong, module, error);
     EXPORT_FUNCTION(__Numba_PyInt_FromUnsignedLongLong, module, error);
