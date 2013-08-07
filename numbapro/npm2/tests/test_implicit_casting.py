@@ -18,17 +18,27 @@ def assert_raise(exc):
     else:
         raise AssertionError('expecting exception: %s' % exc)
 
+def caster_template(sty, dty, arg, exc):
+    compiled = compile(caster, dty, [sty])
+    with assert_raise(exc):
+        compiled(arg)
+
+
 @testcase
 def test_signed_to_unsigned():
-    compiled = compile(caster, uint32, [int32])
-    with assert_raise(OverflowError):
-        compiled(-123)
+    caster_template(int32, uint32, -123, OverflowError)
 
 @testcase
 def test_signed_to_signed_truncated():
-    compiled = compile(caster, int8, [int32])
-    with assert_raise(OverflowError):
-        compiled(-256)
+    caster_template(int32, int8, -256, OverflowError)
+
+@testcase
+def test_unsigned_to_signed():
+    caster_template(uint8, int8, 128, OverflowError)
+
+@testcase
+def test_unsigned_to_signed_truncated():
+    caster_template(uint16, int8, 0xffff, OverflowError)
 
 if __name__ == '__main__':
     main()

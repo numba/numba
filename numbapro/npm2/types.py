@@ -9,6 +9,9 @@ __all__ = ('int8', 'int16', 'int32', 'int64', 'intp',
            'float32', 'float64', 'complex64', 'complex128',
            'arraytype')
 
+ERRMSG_CHANGE_OF_SIGN = 'casting resulting in change of sign'
+ERRMSG_NEGATIVE_TO_UNSIGNED = 'casting signed to unsigned'
+
 class Type(object):
     def __new__(cls, desc):
         if isinstance(desc, Type):
@@ -265,9 +268,9 @@ class Signed(Integer):
         if isinstance(dst, Integer):
             # check signed value to unsigned type
             if isinstance(dst, Unsigned):
-                signed = signbit(builder, val)
-                with cgutils.if_then(builder, signed):
-                    raises(OverflowError, 'casting signed to unsigned')
+                negative = signbit(builder, val)
+                with cgutils.if_then(builder, negative):
+                    raises(OverflowError, ERRMSG_NEGATIVE_TO_UNSIGNED)
 
             res = self.llvm_cast(builder, val, dst)
 
@@ -277,7 +280,7 @@ class Signed(Integer):
                 sbres = signbit(builder, res)
                 change_of_sign = builder.xor(sbres, sbval)
                 with cgutils.if_then(builder, change_of_sign):
-                    raises(OverflowError, 'casting resulting in change of sign')
+                    raises(OverflowError, ERRMSG_CHANGE_OF_SIGN)
 
             return res
 
@@ -310,6 +313,21 @@ class Unsigned(Integer):
         elif isinstance(dst, Boolean):
             zero = self.llvm_const(0)
             return builder.icmp(lc.ICMP_NE, value, zero)
+
+    def llvm_cast_guarded(self, builder, raises, val, dst):
+        if isinstance(dst, Integer):
+
+            res = self.llvm_cast(builder, val, dst)
+        
+            # check change of sign
+            if isinstance(dst, Signed):
+                output_signed = signbit(builder, res)
+                with cgutils.if_then(builder, output_signed):
+                    raises(OverflowError, ERRMSG_CHANGE_OF_SIGN)
+
+            return res
+        else:
+            return self.llvm_cast(builder, val, dst)
 
     def ctype_as_argument(self):
         return getattr(ct, 'c_uint%d' % self.bitwidth)
