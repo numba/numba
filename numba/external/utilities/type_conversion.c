@@ -1,6 +1,7 @@
 #include <Python.h>
 #include "generated_conversions.h"
-#include "datetime/np_datetime.c"
+#include "datetime/np_datetime.h"
+#include "datetime/np_datetime_strings.h"
 
 /* Utilities copied from Cython/Utility/TypeConversion.c */
 
@@ -259,6 +260,33 @@ static NUMBA_INLINE Py_ssize_t __Numba_PyIndex_AsSsize_t(PyObject*);
 static NUMBA_INLINE PyObject * __Numba_PyInt_FromSize_t(size_t);
 static NUMBA_INLINE size_t __Numba_PyInt_AsSize_t(PyObject*);
 
+static npy_int64 iso_datetime2year(char *datetime_string)
+{
+    npy_datetimestruct out;
+    npy_bool out_local;
+    NPY_DATETIMEUNIT out_bestunit;
+    npy_bool out_special;
+
+    parse_iso_8601_datetime(datetime_string, strlen(datetime_string), -1, NPY_SAME_KIND_CASTING,
+        &out, &out_local, &out_bestunit, &out_special);
+
+    return out.year;
+}
+
+static npy_int32 iso_datetime2month(char *datetime_string)
+{
+    npy_datetimestruct out;
+    npy_bool out_local;
+    NPY_DATETIMEUNIT out_bestunit;
+    npy_bool out_special;
+
+    parse_iso_8601_datetime(datetime_string, strlen(datetime_string), -1, NPY_SAME_KIND_CASTING,
+        &out, &out_local, &out_bestunit, &out_special);
+
+    return out.month;
+}
+
+
 static npy_datetimestruct pydatetime2npydatetime(PyObject *object)
 {
     PyArray_DatetimeMetaData meta;
@@ -367,6 +395,8 @@ export_type_conversion(PyObject *module)
     EXPORT_FUNCTION(pydatetime2psec, module, error);
     EXPORT_FUNCTION(pydatetime2asec, module, error);
     EXPORT_FUNCTION(primitive2pydatetime, module, error);
+    EXPORT_FUNCTION(iso_datetime2year, module, error);
+    EXPORT_FUNCTION(iso_datetime2month, module, error);
 
     EXPORT_FUNCTION(__Numba_PyInt_FromLongLong, module, error);
     EXPORT_FUNCTION(__Numba_PyInt_FromUnsignedLongLong, module, error);

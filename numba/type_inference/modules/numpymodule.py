@@ -191,6 +191,10 @@ def array(object, dtype, order, subok):
     else:
         return type
 
+@register(np, pass_in_types=False)
+def datetime64(datetime_string):
+    return nodes.DateTime64Node(datetime_string)
+
 @register(np)
 def nonzero(a):
     return _nonzero(array_from_type(a))

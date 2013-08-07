@@ -201,7 +201,10 @@ setup(
 
         Extension(
             name="numba.external.utilities.utilities",
-            sources=["numba/external/utilities/utilities.c"],
+            sources=["numba/external/utilities/utilities.c",
+                     "numba/external/utilities/datetime/np_datetime.c",
+                     "numba/external/utilities/datetime/np_datetime_strings.c"],
+
             include_dirs=[numba_include_dir, extensibletype_include,
                           numpy.get_include()],
             depends=["numba/external/utilities/type_conversion.c",
@@ -209,8 +212,7 @@ setup(
                      "numba/external/utilities/generated_conversions.c",
                      "numba/external/utilities/generated_conversions.h",
                      "numba/external/utilities/cpyutils.c",
-                     "numba/external/utilities/exceptions.c",
-                     "numba/external/utilities/np_datetime.c"]),
+                     "numba/external/utilities/exceptions.c"]),
         CythonExtension(
             name="numba.pyconsts",
             sources=["numba/pyconsts.pyx"],

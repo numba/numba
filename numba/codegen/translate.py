@@ -1500,6 +1500,19 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             elif node.attr == 'sec':
                 return self.builder.extract_value(result, 5)
 
+    def visit_DateTime64Node(self, node):
+        year_func = function_util.utility_call(
+            self.context, self.llvm_module,
+            "iso_datetime2year", args=[node.datetime_string])
+        month_func = function_util.utility_call(
+            self.context, self.llvm_module,
+            "iso_datetime2month", args=[node.datetime_string])
+
+        newnode = nodes.DateTimeNode(year_func, month_func, month_func,
+            month_func, month_func, month_func)
+        return self.visit(newnode)
+
+
     #------------------------------------------------------------------------
     # Structs
     #------------------------------------------------------------------------
