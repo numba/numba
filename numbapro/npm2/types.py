@@ -262,15 +262,31 @@ class Signed(Integer):
             return builder.icmp(lc.ICMP_NE, value, zero)
 
     def llvm_cast_guarded(self, builder, raises, val, dst):
-        if isinstance(dst, Unsigned):
-            signed = signbit(builder, val)
-            with cgutils.if_then(builder, signed):
-                raises(OverflowError, 'casting signed integer to unsigned')
+        if isinstance(dst, Integer):
+            # check signed value to unsigned type
+            if isinstance(dst, Unsigned):
+                signed = signbit(builder, val)
+                with cgutils.if_then(builder, signed):
+                    raises(OverflowError, 'casting signed to unsigned')
 
-        return self.llvm_cast(builder, val, dst)
+            res = self.llvm_cast(builder, val, dst)
+
+            # check change of sign
+            if isinstance(dst, Signed):
+                sbval = signbit(builder, val)
+                sbres = signbit(builder, res)
+                change_of_sign = builder.xor(sbres, sbval)
+                with cgutils.if_then(builder, change_of_sign):
+                    raises(OverflowError, 'casting resulting in change of sign')
+
+            return res
+
+        else:
+            return self.llvm_cast(builder, val, dst)
 
     def ctype_as_argument(self):
         return getattr(ct, 'c_int%d' % self.bitwidth)
+
 
 class Unsigned(Integer):
     def __init__(self, bitwidth):
