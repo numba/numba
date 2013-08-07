@@ -102,7 +102,7 @@ def imp_add_unsigned(context, args):
 def imp_add_signed(context, args):
     a, b = args
     sum = context.builder.add(a, b)
-    if not context.flags.suppress_overflow:
+    if not context.flags.no_overflow:
         sb = lambda x: signbit(context.builder, x)
         arith_int_overflow(context, sb(a), sb(b), sb(sum))
     return sum
@@ -133,7 +133,7 @@ def imp_sub_unsigned(context, args):
 def imp_sub_signed(context, args):
     a, b = args
     diff = context.builder.sub(a, b)
-    if not context.flags.suppress_overflow:
+    if not context.flags.no_overflow:
         sb = lambda x: signbit(context.builder, x)
         arith_int_overflow(context, sb(a), context.builder.not_(sb(b)),
                            sb(diff))

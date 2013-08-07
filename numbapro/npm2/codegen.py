@@ -9,7 +9,7 @@ codegen_context = collections.namedtuple('codegen_context',
 exception_info = collections.namedtuple('exception_info',
                                         ['exc', 'line'])
 
-SUPPORTED_FLAGS = frozenset(['suppress-overflow'])
+SUPPORTED_FLAGS = frozenset(['no-overflow', 'no-div-by-zero'])
 
 def _check_supported_flags(flags):
     for f in flags:
