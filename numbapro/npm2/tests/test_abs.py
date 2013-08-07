@@ -1,6 +1,6 @@
 import numpy as np
 from ..compiler import compile
-from ..types import int32, float32
+from ..types import int8, int32, float32
 from .support import testcase, main
 
 def myabs(a):
@@ -15,6 +15,15 @@ def test_myabs_integer():
         got = compiled(a)
         assert got == exp, (got, exp)
 
+@testcase
+def test_myabs_integer_overflow():
+    compiled = compile(myabs, int8, [int8])
+    try:
+        got = compiled(-128)
+    except OverflowError, e:
+        print e
+    else:
+        raise AssertionError("expecting exception")
 
 @testcase
 def test_myabs_float():
