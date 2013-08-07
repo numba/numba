@@ -9,8 +9,10 @@ codegen_context = collections.namedtuple('codegen_context',
 exception_info = collections.namedtuple('exception_info',
                                         ['exc', 'line'])
 
-SUPPORTED_FLAGS = frozenset(['no-overflow', 'no-zerodiv', 'no-boundcheck',
-                             'no-wraparound'])
+SUPPORTED_FLAGS = frozenset(['overflow',
+                             'zerodivision',
+                             'boundcheck',
+                             'wraparound'])
 
 def _check_supported_flags(flags):
     for f in flags:
@@ -23,7 +25,6 @@ class Flags(object):
         self.flags = frozenset(flags)
 
     def __getattr__(self, k):
-        k = k.replace('_', '-')
         if k not in SUPPORTED_FLAGS:
             raise AttributeError(k)
         else:
@@ -122,7 +123,7 @@ class CodeGen(object):
                 raise TypeError('kind mismatch: expect %s got %s' %
                                 (dst, src))
             return val
-        elif self.flags.no_overflow:            # use unguarded cast
+        elif not self.flags.overflow:            # use unguarded cast
             return src.llvm_cast(self.builder, val, dst)
         else:                                   # use guarded cast
             return src.llvm_cast_guarded(self.builder, self.raises, val, dst)

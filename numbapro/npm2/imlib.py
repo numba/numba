@@ -96,7 +96,7 @@ def imp_add_unsigned(context, args):
 def imp_add_signed(context, args):
     a, b = args
     sum = context.builder.add(a, b)
-    if not context.flags.no_overflow:
+    if context.flags.overflow:
         sb = lambda x: types.signbit(context.builder, x)
         arith_int_overflow(context, sb(a), sb(b), sb(sum))
     return sum
@@ -127,7 +127,7 @@ def imp_sub_unsigned(context, args):
 def imp_sub_signed(context, args):
     a, b = args
     diff = context.builder.sub(a, b)
-    if not context.flags.no_overflow:
+    if context.flags.overflow:
         sb = lambda x: types.signbit(context.builder, x)
         arith_int_overflow(context, sb(a), context.builder.not_(sb(b)),
                            sb(diff))
@@ -185,7 +185,7 @@ def imp_mul_complex(dtype):
 # binary floordiv
 
 def zero_division_check(context, divisor):
-    if not context.flags.no_zerodiv:
+    if context.flags.zerodivision:
         builder = context.builder
         if divisor.type.kind != lc.TYPE_INTEGER:
             comparor = lambda x, y: builder.fcmp(lc.FCMP_OEQ, x, y)
@@ -263,7 +263,7 @@ def imp_mod_float(context, args):
 # binary lshift
 
 def out_of_range_shift(context, rhs):
-    if not context.flags.no_overflow:
+    if context.flags.overflow:
         builder = context.builder
         width = rhs.type.width
         maxval = lc.Constant.int(rhs.type, width)

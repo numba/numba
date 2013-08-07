@@ -6,6 +6,7 @@ import inspect
 from . import (symbolic, typing, codegen, execution, fnlib, imlib, extending,
                arylib)
 
+DEFAULT_FLAGS = 'overflow', 'zerodivision', 'boundcheck', 'wraparound'
 
 def get_builtin_context():
     funclib = fnlib.get_builtin_function_library()
@@ -17,7 +18,7 @@ def get_builtin_context():
 
 global_builtin_libs = get_builtin_context()
 
-def compile(func, retty, argtys, libs=global_builtin_libs, flags=()):
+def compile(func, retty, argtys, libs=global_builtin_libs, flags=DEFAULT_FLAGS):
     funclib, implib = libs
 
     with profile((func, tuple(argtys))):

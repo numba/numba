@@ -81,12 +81,12 @@ def array_slice_return(args):
 
 def boundcheck(context, ary, indices):
     assert isinstance(indices, (tuple, list))
-    if not context.flags.no_boundcheck:
+    if context.flags.boundcheck:
         aryutils.boundcheck(context.builder, context.raises, ary, indices)
 
 def wraparound(context, ary, indices):
     assert isinstance(indices, (tuple, list))
-    if not context.flags.no_wraparound:
+    if context.flags.wraparound:
         return aryutils.wraparound(context.builder, context.raises, ary,
                                    indices)
     else:
