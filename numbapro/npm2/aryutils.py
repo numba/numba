@@ -1,6 +1,7 @@
 from contextlib import contextmanager
-from .cgutils import (const_intp, auto_intp, loop_nest, make_array,
-                      explode_array,)
+from .cgutils import make_array, explode_array
+from .looputils import loop_nest
+from .types import const_intp, auto_intp
 from . import types
 
 def gep(builder, ptr, indices):

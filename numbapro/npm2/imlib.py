@@ -69,11 +69,6 @@ class Imp(object):
         return '<Impl %s %s -> %s >' % (self.funcobj, self.args,
                                         self.return_type)
 
-def signbit(builder, intval):
-    shamt = lc.Constant.int(intval.type, intval.type.width - 1)
-    shifted = builder.lshr(intval, shamt)
-    return builder.trunc(shifted, lc.Type.int(1))
-
 def arith_int_overflow(context, sa, sb, ss):
     '''Arithmetic integer overflow when the signbit of the two operands are
     the same but the signbit of the result mismatches the signbit of the 
@@ -90,8 +85,7 @@ def arith_int_overflow(context, sa, sb, ss):
     
     # overflow
     with cgutils.if_then(builder, overflow):
-        context.raises(OverflowError("integer operation overflow at line %d" %
-                                     context.lineno))
+        context.raises(OverflowError, "integer operation overflow")
 
 # binary add
 
@@ -103,7 +97,7 @@ def imp_add_signed(context, args):
     a, b = args
     sum = context.builder.add(a, b)
     if not context.flags.no_overflow:
-        sb = lambda x: signbit(context.builder, x)
+        sb = lambda x: types.signbit(context.builder, x)
         arith_int_overflow(context, sb(a), sb(b), sb(sum))
     return sum
 
@@ -134,7 +128,7 @@ def imp_sub_signed(context, args):
     a, b = args
     diff = context.builder.sub(a, b)
     if not context.flags.no_overflow:
-        sb = lambda x: signbit(context.builder, x)
+        sb = lambda x: types.signbit(context.builder, x)
         arith_int_overflow(context, sb(a), context.builder.not_(sb(b)),
                            sb(diff))
     return diff
@@ -199,8 +193,7 @@ def zero_division_check(context, divisor):
             comparor = lambda x, y: builder.icmp(lc.ICMP_EQ, x, y)
         is_zero = comparor(divisor, lc.Constant.null(divisor.type))
         with cgutils.if_then(builder, is_zero):
-            context.raises(ZeroDivisionError("divide by zero at line %d" %
-                                             context.lineno))
+            context.raises(ZeroDivisionError, "divide by zero")
 
 def imp_floordiv_signed(context, args):
     a, b = args
@@ -276,8 +269,7 @@ def out_of_range_shift(context, rhs):
         maxval = lc.Constant.int(rhs.type, width)
         outofrange = builder.icmp(lc.ICMP_UGT, rhs, maxval)
         with cgutils.if_then(builder, outofrange):
-            context.raises(OverflowError('shift out-of-range at line %d' %
-                                         context.lineno))
+            context.raises(OverflowError, "shift out-of-range")
         
 def imp_lshift_integer(context, args):
     a, b = args

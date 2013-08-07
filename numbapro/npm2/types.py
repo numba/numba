@@ -2,6 +2,7 @@ import sys
 from math import copysign
 from llvm import core as lc
 import ctypes as ct
+from . import cgutils
 
 __all__ = ('int8', 'int16', 'int32', 'int64', 'intp',
            'uint8', 'uint16', 'uint32', 'uint64',
@@ -73,6 +74,17 @@ class Type(object):
         if not hasattr(self.desc, 'llvm_cast'):
             raise TypeError('%s does not support casting' % self)
         ret = self.desc.llvm_cast(builder, val, dst.desc)
+        if ret is None:
+            raise TypeError('%s cannot be casted to %s' % (self, dst))
+        return ret
+
+    def llvm_cast_guarded(self, builder, raises, val, dst):
+        '''optional. guarded cast that can raise exception
+        '''
+        if not hasattr(self.desc, 'llvm_cast_guarded'):
+            ret = self.llvm_cast(builder, val, dst)
+        else:
+            ret = self.desc.llvm_cast_guarded(builder, raises, val, dst.desc)
         if ret is None:
             raise TypeError('%s cannot be casted to %s' % (self, dst))
         return ret
@@ -248,6 +260,14 @@ class Signed(Integer):
         elif isinstance(dst, Boolean):
             zero = self.llvm_const(0)
             return builder.icmp(lc.ICMP_NE, value, zero)
+
+    def llvm_cast_guarded(self, builder, raises, val, dst):
+        if isinstance(dst, Unsigned):
+            signed = signbit(builder, val)
+            with cgutils.if_then(builder, signed):
+                raises(OverflowError, 'casting signed integer to unsigned')
+
+        return self.llvm_cast(builder, val, dst)
 
     def ctype_as_argument(self):
         return getattr(ct, 'c_int%d' % self.bitwidth)
@@ -647,3 +667,20 @@ def slicetype(has_start, has_stop, has_step):
     return Type(Slice(has_start, has_stop, has_step))
 
 intp = {4: int32, 8: int64}[tuple.__itemsize__]
+
+#------------------------------------------------------------------------------
+# utils
+
+def signbit(builder, intval):
+    shamt = lc.Constant.int(intval.type, intval.type.width - 1)
+    shifted = builder.lshr(intval, shamt)
+    return builder.trunc(shifted, lc.Type.int(1))
+
+def const_intp(x):
+    return intp.llvm_const(x)
+
+def auto_intp(x):
+    if isinstance(x, int):
+        return const_intp(x)
+    else:
+        return x

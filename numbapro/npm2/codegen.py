@@ -105,22 +105,26 @@ class CodeGen(object):
                                during='instruction codegen'):
                 self.op(block.terminator)
 
-    def raises(self, excobj):
+    def raises(self, excobj, msg=None):
         errcode = len(self.exceptions) + 1
-        self.exceptions[errcode] = exception_info(excobj,
-                                                  self.imp_context.lineno)
+        lineno = self.imp_context.lineno
+        if msg is not None:
+            excobj = excobj('at line %d: %s' % (lineno, msg))
+        self.exceptions[errcode] = exception_info(excobj, lineno)
         self.return_error(errcode)
 
     def cast(self, val, src, dst):
-        if src == dst:
+        if src == dst:                          # types are the same
             return val
-        elif isinstance(dst, types.Kind):
+        elif isinstance(dst, types.Kind):       # cast to generic type
             if not dst.matches(src):
                 raise TypeError('kind mismatch: expect %s got %s' %
                                 (dst, src))
             return val
-        else:
+        elif self.flags.no_overflow:            # use unguarded cast
             return src.llvm_cast(self.builder, val, dst)
+        else:                                   # use guarded cast
+            return src.llvm_cast_guarded(self.builder, self.raises, val, dst)
 
     def return_error(self, errcode):
         '''errcode is a python integer
