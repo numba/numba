@@ -11,6 +11,7 @@ __all__ = ('int8', 'int16', 'int32', 'int64', 'intp',
 
 ERRMSG_CHANGE_OF_SIGN = 'casting resulting in change of sign'
 ERRMSG_NEGATIVE_TO_UNSIGNED = 'casting signed to unsigned'
+ERRMSG_NAN = 'casting NaN to integer'
 
 class Type(object):
     def __new__(cls, desc):
@@ -374,6 +375,13 @@ class Float(object):
             zero = lc.Constant.real(value.type, 0)
             return builder.fcmp(lc.FCMP_ONE, value, zero)
 
+    def llvm_cast_guarded(self, builder, raises, val, dst):
+        if isinstance(dst, Integer):
+            nan = isnan(builder, val)
+            with cgutils.if_then(builder, nan):
+                raises(ValueError, ERRMSG_NAN)
+        return self.llvm_cast(builder, val, dst)
+
     def ctype_as_argument(self):
         ctname = {32: 'c_float', 64: 'c_double'}[self.bitwidth]
         return getattr(ct, ctname)
@@ -709,6 +717,9 @@ def signbit(builder, intval):
     shamt = lc.Constant.int(intval.type, intval.type.width - 1)
     shifted = builder.lshr(intval, shamt)
     return builder.trunc(shifted, lc.Type.int(1))
+
+def isnan(builder, fltval):
+    return builder.fcmp(lc.FCMP_UNO, fltval, fltval)
 
 def const_intp(x):
     return intp.llvm_const(x)

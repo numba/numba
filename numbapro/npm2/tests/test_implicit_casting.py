@@ -40,5 +40,9 @@ def test_unsigned_to_signed():
 def test_unsigned_to_signed_truncated():
     caster_template(uint16, int8, 0xffff, OverflowError)
 
+@testcase
+def test_nan_to_int():
+    caster_template(float64, int64, float('nan'), ValueError)
+
 if __name__ == '__main__':
     main()
