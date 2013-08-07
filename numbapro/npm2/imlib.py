@@ -269,18 +269,31 @@ def imp_mod_float(context, args):
 
 # binary lshift
 
+def out_of_range_shift(context, rhs):
+    if not context.flags.no_overflow:
+        builder = context.builder
+        width = rhs.type.width
+        maxval = lc.Constant.int(rhs.type, width)
+        outofrange = builder.icmp(lc.ICMP_UGT, rhs, maxval)
+        with cgutils.if_then(builder, outofrange):
+            context.raises(OverflowError('shift out-of-range at line %d' %
+                                         context.lineno))
+        
 def imp_lshift_integer(context, args):
     a, b = args
+    out_of_range_shift(context, b)
     return context.builder.shl(a, b)
 
 # binary rshift
 
 def imp_rshift_signed(context, args):
     a, b = args
+    out_of_range_shift(context, b)
     return context.builder.ashr(a, b)
 
 def imp_rshift_unsigned(context, args):
     a, b = args
+    out_of_range_shift(context, b)
     return context.builder.lshr(a, b)
 
 # binary and

@@ -237,6 +237,17 @@ def test_div_float_zerodiv():
         raise AssertionError('expecting exception')
 
 @testcase
+def test_div_float_zerodiv_negzero():
+    ty = float64
+    cdiv = compile(div, ty, [ty, ty])
+    try:
+        cdiv(1, -1e-500)
+    except ZeroDivisionError, e:
+        print e
+    else:
+        raise AssertionError('expecting exception')
+
+@testcase
 def test_div_complex():
     def run(ty, a, b):
         cdiv = compile(div, ty, [ty, ty])
@@ -384,6 +395,17 @@ def test_shifts_signed():
     assert got == exp, (got, exp)
 
 @testcase
+def test_shifts_signed_overflow():
+    cfunc = compile(shifts, int32, [int32, int32])
+    a, b = -0xdead, 33
+    try:
+        cfunc(a, b)
+    except OverflowError, e:
+        print e
+    else:
+        raise AssertionError('expecting exception')
+
+@testcase
 def test_shifts_unsigned():
     cfunc = compile(shifts, uint32, [uint32, uint32])
 
@@ -391,6 +413,18 @@ def test_shifts_unsigned():
     got = cfunc(a, b)
     exp = shifts(a, b)
     assert got == exp, (got, exp)
+
+@testcase
+def test_shifts_unsigned_overflow():
+    cfunc = compile(shifts, uint32, [uint32, uint32])
+    a, b = 0xdead, 33
+    try:
+        cfunc(a, b)
+    except OverflowError, e:
+        print e
+    else:
+        raise AssertionError('expecting exception')
+
 
 #------------------------------------------------------------------------------
 # arithmetic negate
