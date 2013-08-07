@@ -165,6 +165,16 @@ def test_mul_integer():
         run(ty, 2, 3)
 
 @testcase
+def test_mul_integer_overflow():
+    cmul = compile(mul, int8, [int8, int8])
+    try:
+        cmul(127, 2)
+    except OverflowError, e:
+        print e
+    else:
+        raise AssertionError('expecting exception')
+
+@testcase
 def test_mul_float():
     def run(ty, a, b):
         cmul = compile(mul, ty, [ty, ty])

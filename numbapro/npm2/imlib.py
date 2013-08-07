@@ -150,12 +150,26 @@ def imp_sub_complex(dtype):
         return dtype.desc.llvm_pack(context.builder, c_real, c_imag)
     return imp
 
-
 # binary mul
 
-def imp_mul_integer(context, args):
+def imp_mul_unsigned(context, args):
     a, b = args
     return context.builder.mul(a, b)
+
+def imp_mul_signed(context, args):
+    a, b = args
+    res = context.builder.mul(a, b)
+    if context.flags.overflow:
+        # NOTE: Does not catch all cases, but helps a little in debugging.
+        sb = lambda x: types.signbit(context.builder, x)
+        builder = context.builder
+        diffsign = builder.xor(sb(a), sb(b))
+        # different sign --> negative result
+        # same sign --> positive result
+        of = builder.xor(sb(res), diffsign)
+        with cgutils.if_then(builder, of):
+            context.raises(OverflowError, "signed multiply overflow")
+    return res
 
 def imp_mul_float(context, args):
     a, b = args
@@ -683,7 +697,8 @@ builtins += binary_op_imp(operator.sub, imp_sub_complex(types.complex128),
                       [types.complex128])
 
 # binary mul
-builtins += binary_op_imp(operator.mul, imp_mul_integer, typesets.integer_set)
+builtins += binary_op_imp(operator.mul, imp_mul_signed, typesets.signed_set)
+builtins += binary_op_imp(operator.mul, imp_mul_unsigned, typesets.unsigned_set)
 builtins += binary_op_imp(operator.mul, imp_mul_float, typesets.float_set)
 builtins += binary_op_imp(operator.mul, imp_mul_complex(types.complex64),
                       [types.complex64])
