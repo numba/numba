@@ -5,7 +5,7 @@ from . import types
 
 codegen_context = collections.namedtuple('codegen_context',
                                          ['imp', 'builder', 'raises', 'lineno',
-                                          'flags'])
+                                          'flags', 'cast'])
 exception_info = collections.namedtuple('exception_info',
                                         ['exc', 'line'])
 
@@ -146,6 +146,7 @@ class CodeGen(object):
         self.imp_context = codegen_context(imp     = self.implib,
                                            builder = self.builder,
                                            raises  = self.raises,
+                                           cast    = self.cast,
                                            lineno  = inst.lineno,
                                            flags   = self.flags)
 

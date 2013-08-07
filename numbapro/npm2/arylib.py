@@ -168,8 +168,7 @@ class ArrayGetItemTuple(object):
         indexty = types.intp
         for i, ety in enumerate(idxty.desc.elements):
             elem = idxty.desc.llvm_getitem(context.builder, idx, i)
-            if ety != indexty:
-                elem = ety.llvm_cast(context.builder, elem, indexty)
+            elem = context.cast(elem, ety, indexty)
             indices.append(elem)
 
         boundcheck(context, ary, indices)
@@ -190,8 +189,7 @@ class ArrayGetItemFixedArray(object):
         ety = idxty.desc.element
         for i in range(idxty.desc.length):
             elem = idxty.desc.llvm_getitem(context.builder, idx, i)
-            if ety != indexty:
-                elem = ety.llvm_cast(context.builder, elem, indexty)
+            elem = context.cast(elem, ety, indexty)
             indices.append(elem)
 
         boundcheck(context, ary, indices)
@@ -241,8 +239,8 @@ class ArraySetItemIntp(object):
     def generic_implement(self, context, args, argtys, retty):
         ary, idx, val = args
         aryty, indty, valty = argtys
-        if valty != aryty.desc.element:
-            val = valty.llvm_cast(context.builder, val, aryty.desc.element)
+
+        val = context.cast(val, valty, aryty.desc.element)
         
         boundcheck(context, ary, [idx])
         aryutils.setitem(context.builder, ary, indices=[idx],
@@ -262,12 +260,10 @@ class ArraySetItemTuple(object):
         indices = []
         for i, ety in enumerate(indty.desc.elements):
             elem = indty.desc.llvm_getitem(context.builder, idx, i)
-            if ety != indexty:
-                elem = ety.llvm_cast(context.builder, elem, indexty)
+            elem = context.cast(elem, ety, indexty)
             indices.append(elem)
 
-        if valty != aryty.desc.element:
-            val = valty.llvm_cast(context.builder, val, aryty.desc.element)
+        val = context.cast(val, valty, aryty.desc.element)
 
         boundcheck(context, ary, indices)
         aryutils.setitem(context.builder, ary, indices=indices,
@@ -288,12 +284,10 @@ class ArraySetItemFixedArray(object):
         indices = []
         for i in range(indty.desc.length):
             elem = indty.desc.llvm_getitem(context.builder, idx, i)
-            if ety != indexty:
-                elem = ety.llvm_cast(context.builder, elem, indexty)
+            elem = context.cast(elem, ety, indexty)
             indices.append(elem)
 
-        if valty != aryty.desc.element:
-            val = valty.llvm_cast(context.builder, val, aryty.desc.element)
+        val = context.cast(val, valty, aryty.desc.element)
 
         boundcheck(context, ary, indices)
         aryutils.setitem(context.builder, ary, indices=indices,
