@@ -213,5 +213,31 @@ def test_saxpy():
     assert np.allclose(got, exp), (got, exp)
 
 
+#------------------------------------------------------------------------------
+# getitem out-of-bound
+
+@testcase
+def test_getitem_outofbound():
+    compiled = compile(getitem, int32, [arraytype(int32, 1, 'C'), int32])
+    ary = np.arange(10, dtype=np.int32)
+    try:
+        compiled(ary, 10)
+    except IndexError, e:
+        print e
+    else:
+        raise AssertionError('expecting exception')
+
+
+@testcase
+def test_getitem2d_outofbound():
+    compiled = compile(getitem2d, int32, [arraytype(int32, 2, 'C'), int32, int32])
+    ary = np.arange(10, dtype=np.int32).reshape(2, 5)
+    try:
+        compiled(ary, 1, 6)
+    except IndexError, e:
+        print e
+    else:
+        raise AssertionError('expecting exception')
+
 if __name__ == '__main__':
     main()

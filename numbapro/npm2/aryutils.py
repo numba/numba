@@ -1,5 +1,6 @@
 from contextlib import contextmanager
-from .cgutils import make_array, explode_array
+import llvm.core as lc
+from .cgutils import make_array, explode_array, if_then
 from .looputils import loop_nest
 from .types import const_intp, auto_intp
 from . import types
@@ -127,5 +128,12 @@ def view(builder, ary, begins, ends, order):
 
     return newary
 
-
+def boundcheck(builder, raises, ary, indices):
+    assert getndim(ary) == len(indices), 'index dimension mismatch'
+    shape = getshape(builder, ary)
+    for i, s in zip(indices, shape):
+        i = auto_intp(i)
+        oob = builder.icmp(lc.ICMP_UGE, i, s)
+        with if_then(builder, oob):
+            raises(IndexError, 'out of bound')
 

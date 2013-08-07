@@ -79,6 +79,11 @@ def array_slice_return(args):
         return ary.desc.copy(order='%sS' % order[0])
     raise TypeError('unsupported slicing operation')
 
+def boundcheck(context, ary, indices):
+    assert isinstance(indices, (tuple, list))
+    if not context.flags.no_boundcheck:
+        aryutils.boundcheck(context.builder, context.raises, ary, indices)
+
 #-------------------------------------------------------------------------------
 
 class ArraySumMethod(object):
@@ -146,6 +151,7 @@ class ArayGetItemIntp(object):
     def generic_implement(self, context, args, argtys, retty):
         ary, idx = args
         aryty = argtys[0]
+        boundcheck(context, ary, [idx])
         return aryutils.getitem(context.builder, ary, indices=[idx],
                                 order=aryty.desc.order)
 
@@ -166,6 +172,7 @@ class ArrayGetItemTuple(object):
                 elem = ety.llvm_cast(context.builder, elem, indexty)
             indices.append(elem)
 
+        boundcheck(context, ary, indices)
         return aryutils.getitem(context.builder, ary, indices=indices,
                                 order=aryty.desc.order)
 
@@ -187,6 +194,7 @@ class ArrayGetItemFixedArray(object):
                 elem = ety.llvm_cast(context.builder, elem, indexty)
             indices.append(elem)
 
+        boundcheck(context, ary, indices)
         return aryutils.getitem(context.builder, ary, indices=indices,
                                 order=aryty.desc.order)
 
@@ -235,6 +243,8 @@ class ArraySetItemIntp(object):
         aryty, indty, valty = argtys
         if valty != aryty.desc.element:
             val = valty.llvm_cast(context.builder, val, aryty.desc.element)
+        
+        boundcheck(context, ary, [idx])
         aryutils.setitem(context.builder, ary, indices=[idx],
                          order=aryty.desc.order,
                          value=val)
@@ -259,6 +269,7 @@ class ArraySetItemTuple(object):
         if valty != aryty.desc.element:
             val = valty.llvm_cast(context.builder, val, aryty.desc.element)
 
+        boundcheck(context, ary, indices)
         aryutils.setitem(context.builder, ary, indices=indices,
                          order=aryty.desc.order,
                          value=val)
@@ -284,6 +295,7 @@ class ArraySetItemFixedArray(object):
         if valty != aryty.desc.element:
             val = valty.llvm_cast(context.builder, val, aryty.desc.element)
 
+        boundcheck(context, ary, indices)
         aryutils.setitem(context.builder, ary, indices=indices,
                          order=aryty.desc.order,
                          value=val)

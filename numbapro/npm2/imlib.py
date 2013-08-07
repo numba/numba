@@ -185,7 +185,7 @@ def imp_mul_complex(dtype):
 # binary floordiv
 
 def zero_division_check(context, divisor):
-    if not context.flags.no_div_by_zero:
+    if not context.flags.no_zerodiv:
         builder = context.builder
         if divisor.type.kind != lc.TYPE_INTEGER:
             comparor = lambda x, y: builder.fcmp(lc.FCMP_OEQ, x, y)
