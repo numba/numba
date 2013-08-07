@@ -556,11 +556,13 @@ class TypeInferer(visitors.NumbaTransformer):
         node.inplace_op = getattr(node, 'inplace_op', None)
 
         node.value = self.visit(node.value)
+        for i in range(len(node.targets)):
+            node.targets[i] = self.visit(node.targets[i])
         if len(node.targets) != 1 or isinstance(node.targets[0], (ast.List,
                                                                   ast.Tuple)):
             return self._handle_unpacking(node)
 
-        target = node.targets[0] = self.visit(node.targets[0])
+        target = node.targets[0] 
         self.assign(target, node.value)
 
         lhs_var = target.variable
