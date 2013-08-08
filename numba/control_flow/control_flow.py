@@ -1072,7 +1072,7 @@ class ControlFlowAnalysis(visitors.NumbaTransformer):
         if self.flow.exceptions:
             self.flow.block.add_child(self.flow.exceptions[-1].entry_point)
 
-        self.flow.block = None
+        # self.flow.block = None
         return node
 
     def visit_Return(self, node):
