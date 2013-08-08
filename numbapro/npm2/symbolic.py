@@ -479,6 +479,28 @@ class SymbolicExecution(object):
         args = list(reversed([self.pop() for _ in range(nargs)]))
         self.terminate('raise', args=args)
 
+    def op_BUILD_SLICE(self, inst):
+        argc = inst.arg
+        tos = [self.pop() for _ in range(argc)]
+
+        def inline_if_none(x):
+            if x.opcode == 'const' and x.value is None:
+                return None
+            else:
+                return x
+
+        if argc == 2:
+            self.push_insert('slice',
+                             start=inline_if_none(tos[1]),
+                             stop=inline_if_none(tos[0]), step=None)
+        elif argc == 3:
+            self.push_insert('slice',
+                             start=inline_if_none(tos[2]),
+                             stop=inline_if_none(tos[1]),
+                             step=inline_if_none(tos[0]))
+        else:
+            raise Exception('unreachable')
+
 #---------------------------------------------------------------------------
 # Passes
 

@@ -157,10 +157,10 @@ class Infer(object):
         return types.tupletype(*(i.type for i in inst.items))
 
     def op_slice(self, inst):
-        has_start = inst.start is not None
-        has_stop = inst.stop is not None
-        has_step = inst.step is not None
-        return types.slicetype(has_start, has_stop, has_step)
+        if inst.step is not None:
+            return types.slice3
+        else:
+            return types.slice2
 
     def type_global(self, value):
         if value is None:

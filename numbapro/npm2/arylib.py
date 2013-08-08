@@ -52,6 +52,13 @@ def imp_numpy_prod(context, args, argtys, retty):
 def array_dtype_return(args):
     return args[0].desc.element
 
+def array_getitem_fixedarray(args):
+    ary, idx = args
+    if idx.desc.element in (types.slice2, types.slice3):
+        return ary.desc.copy(order='%sS' % ary.desc.order[0])
+    else:
+        return args[0].desc.element
+
 def intp_tuple_return(args):
     ary = args[0]
     return types.tupletype(*([types.intp] * ary.desc.ndim))
@@ -62,22 +69,11 @@ def array_setitem_value(args):
 
 def array_slice_return(args):
     ary, idx = args
-    assert isinstance(idx.desc, types.Slice)
+    assert isinstance(idx.desc, types.Slice2)
     if ary.desc.ndim != 1:
         raise TypeError('expecting 1d array')
-    start = idx.desc.has_start
-    stop = idx.desc.has_stop
-    step = idx.desc.has_step
     order = ary.desc.order
-    if (not start and not stop and not step): # [:]
-        return ary.desc.copy(order='%sS' % order[0])
-    elif order != 'A' and (not start and stop and not step): # [:x]
-        return ary.desc.copy(order='%sS' % order[0])
-    elif order != 'A' and (start and not stop and not step): # [x:]
-        return ary.desc.copy(order='%sS' % order[0])
-    elif order != 'A' and (start and stop and not step): # [x:y]
-        return ary.desc.copy(order='%sS' % order[0])
-    raise TypeError('unsupported slicing operation')
+    return ary.desc.copy(order='%sS' % order[0])
 
 def boundcheck(context, ary, indices):
     assert isinstance(indices, (tuple, list))
@@ -94,10 +90,7 @@ def wraparound(context, ary, indices):
 
 def clip(context, ary, indices):
     assert isinstance(indices, (tuple, list))
-    if context.flags.clip:
-        return aryutils.clip(context.builder, context.raises, ary, indices)
-    else:
-        return indices
+    return aryutils.clip(context.builder, context.raises, ary, indices)
 
 def wraparound_and_boundcheck(context, ary, indices):
     indices = wraparound(context, ary, indices)
@@ -203,27 +196,29 @@ class ArrayGetItemTuple(object):
 class ArrayGetItemFixedArray(object):
     function = (operator.getitem,
                 (types.ArrayKind, types.FixedArrayKind),
-                array_dtype_return)
+                array_getitem_fixedarray)
     
     def generic_implement(self, context, args, argtys, retty):
         ary, idx = args
         aryty, idxty = argtys
         indices = []
+        if idxty.desc.element in (types.slice2, types.slice3):
+            raise NotImplementedError
+        else:
+            indexty = types.intp
+            ety = idxty.desc.element
+            for i in range(idxty.desc.length):
+                elem = idxty.desc.llvm_getitem(context.builder, idx, i)
+                elem = context.cast(elem, ety, indexty)
+                indices.append(elem)
 
-        indexty = types.intp
-        ety = idxty.desc.element
-        for i in range(idxty.desc.length):
-            elem = idxty.desc.llvm_getitem(context.builder, idx, i)
-            elem = context.cast(elem, ety, indexty)
-            indices.append(elem)
+            indices = wraparound_and_boundcheck(context, ary, indices)
+            return aryutils.getitem(context.builder, ary, indices=indices,
+                                    order=aryty.desc.order)
 
-        indices = wraparound_and_boundcheck(context, ary, indices)
-        return aryutils.getitem(context.builder, ary, indices=indices,
-                                order=aryty.desc.order)
-
-class ArrayGetItemSlice(object):
+class ArrayGetItemSlice2(object):
     function = (operator.getitem,
-                (types.ArrayKind, types.SliceKind),
+                (types.ArrayKind, types.slice2),
                 array_slice_return)
 
     def generic_implement(self, context, args, argtys, retty):
@@ -231,34 +226,13 @@ class ArrayGetItemSlice(object):
         ary, idx = args
         aryty, idxty = argtys
 
-        has_start = idxty.desc.has_start
-        has_stop = idxty.desc.has_stop
-        has_step = idxty.desc.has_step
-        if not has_start and not has_stop and not has_step: # [:]
-            return ary
-        elif not has_start and has_stop and not has_step:   # [:x]
-            end = builder.extract_value(idx, 1)
-            ends = wraparound_and_clip(context, ary, [end])
-            res = aryutils.view(builder, ary, begins=[0], ends=ends,
-                                order=aryty.desc.order)
-            return res
-        elif has_start and not has_stop and not has_step:   # [x:]
-            begin = builder.extract_value(idx, 0)
-            ends = aryutils.getshape(builder, ary)
-            begins = wraparound_and_clip(context, ary, [begin])
-            res = aryutils.view(builder, ary, begins=begins,
-                                ends=ends, order=aryty.desc.order)
-            return res
-        elif has_start and has_stop and not has_step:       # [x:y]
-            begin = builder.extract_value(idx, 0)
-            end = builder.extract_value(idx, 1)
-            begins = wraparound_and_clip(context, ary, [begin])
-            ends = wraparound_and_clip(context, ary, [end])
-            res = aryutils.view(builder, ary, begins=begins,
-                                ends=ends, order=aryty.desc.order)
-            return res
-        else:
-            raise NotImplementedError
+        begin = builder.extract_value(idx, 0)
+        end = builder.extract_value(idx, 1)
+        begins = wraparound_and_clip(context, ary, [begin])
+        ends = wraparound_and_clip(context, ary, [end])
+        res = aryutils.view(builder, ary, begins=begins,
+                            ends=ends, order=aryty.desc.order)
+        return res
 
 class ArraySetItemIntp(object):
     function = (operator.setitem,
@@ -334,7 +308,7 @@ ArrayNdimAttr,
 ArayGetItemIntp,
 ArrayGetItemTuple,
 ArrayGetItemFixedArray,
-ArrayGetItemSlice,
+ArrayGetItemSlice2,
 ArraySetItemIntp,
 ArraySetItemTuple,
 ArraySetItemFixedArray,

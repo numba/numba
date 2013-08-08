@@ -76,7 +76,8 @@ class Type(object):
 
     def llvm_cast(self, builder, val, dst):
         if not hasattr(self.desc, 'llvm_cast'):
-            raise TypeError('%s does not support casting' % self)
+            raise TypeError('%s does not support casting '
+                            'when trying to cast to %s' % (self, dst))
         ret = self.desc.llvm_cast(builder, val, dst.desc)
         if ret is None:
             raise TypeError('%s cannot be casted to %s' % (self, dst))
@@ -291,6 +292,11 @@ class Signed(Integer):
     def ctype_as_argument(self):
         return getattr(ct, 'c_int%d' % self.bitwidth)
 
+    def maximum_value(self):
+        '''The constant maximum value
+        '''
+        all_significant = lc.Constant.all_ones(lc.Type.int(self.bitwidth - 1))
+        return lc.Constant.zext(all_significant, lc.Type.int(self.bitwidth))
 
 class Unsigned(Integer):
     def __init__(self, bitwidth):
@@ -332,6 +338,12 @@ class Unsigned(Integer):
 
     def ctype_as_argument(self):
         return getattr(ct, 'c_uint%d' % self.bitwidth)
+
+    def maximum_value(self):
+        '''The constant maximum value
+        '''
+        return lc.Constant.all_ones(lc.Type.int(self.bitwidth))
+
 
 class Float(object):
     fields = 'bitwidth',
@@ -607,20 +619,47 @@ class FixedArray(object):
 
 FixedArrayKind = Kind(FixedArray)
 
-class Slice(object):
-    fields = 'has_start', 'has_stop', 'has_step'
-
-    def __init__(self, has_start, has_stop, has_step):
-        self.has_start = has_start
-        self.has_stop = has_stop
-        self.has_step = has_step
+class Slice2(object):
+    '''Slice type that contains start and stop only
+    '''
+    fields = ()
 
     def __repr__(self):
-        return 'slice(%s, %s, %s)' % (self.has_start, self.has_stop,
-                                      self.has_step)
+        return 'slice2'
 
     def coerce(self, other):
-        if isinstance(other, Slice):
+        if isinstance(other, Slice2):
+            return 0
+
+    def llvm_as_value(self):
+        llintp = intp.llvm_as_value()
+        return lc.Type.struct([llintp] * 2)
+
+    def llvm_const(self, value):
+        start, stop = [intp.llvm_const(x)
+                       for x in (value.start, value.stop)]
+        return lc.Constant.struct([start, stop])
+
+    def llvm_pack(self, builder, values):
+        llintp = intp.llvm_as_value()
+        out = lc.Constant.undef(self.llvm_as_value())
+        if len(values) != 2:
+            raise ValueError
+        for i, val in enumerate(values):
+            assert val.type == llintp
+            out = builder.insert_value(out, val, i)
+        return out
+
+class Slice3(object):
+    '''Slice type that contains start, stop, step
+    '''
+    fields = ()
+
+    def __repr__(self):
+        return 'slice3'
+
+    def coerce(self, other):
+        if isinstance(other, Slice3):
             return 0
 
     def llvm_as_value(self):
@@ -642,7 +681,8 @@ class Slice(object):
             out = builder.insert_value(out, val, i)
         return out
 
-SliceKind = Kind(Slice)
+slice2 = Type(Slice2())
+slice3 = Type(Slice3())
 
 class BuiltinObject(object):
     fields = 'name',
@@ -704,9 +744,6 @@ def tupletype(*elements):
         return Type(FixedArray(elements[0], len(elements)))
     else:
         return Type(Tuple(elements))
-
-def slicetype(has_start, has_stop, has_step):
-    return Type(Slice(has_start, has_stop, has_step))
 
 intp = {4: int32, 8: int64}[tuple.__itemsize__]
 

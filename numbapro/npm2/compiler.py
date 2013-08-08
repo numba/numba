@@ -6,7 +6,7 @@ import inspect
 from . import (symbolic, typing, codegen, execution, fnlib, imlib, extending,
                arylib)
 
-DEFAULT_FLAGS = 'overflow', 'zerodivision', 'boundcheck', 'wraparound', 'clip'
+DEFAULT_FLAGS = 'overflow', 'zerodivision', 'boundcheck', 'wraparound'
 
 def get_builtin_context():
     funclib = fnlib.get_builtin_function_library()

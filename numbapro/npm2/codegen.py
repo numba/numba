@@ -12,8 +12,7 @@ exception_info = collections.namedtuple('exception_info',
 SUPPORTED_FLAGS = frozenset(['overflow',
                              'zerodivision',
                              'boundcheck',
-                             'wraparound',
-                             'clip',])
+                             'wraparound',])
 
 def _check_supported_flags(flags):
     for f in flags:
@@ -235,12 +234,17 @@ class CodeGen(object):
             val = self.valmap[var]
             return self.cast(val, var.type, types.intp)
         start = (_get_and_cast(inst.start)
-                 if tdesc.has_start else types.intp.llvm_const(0))
+                    if inst.start is not None
+                    else types.intp.llvm_const(0))
         stop = (_get_and_cast(inst.stop)
-                if tdesc.has_stop else types.intp.llvm_const(-1))
-        step = (_get_and_cast(inst.step)
-                if tdesc.has_step else types.intp.llvm_const(1))
-        return inst.type.desc.llvm_pack(self.builder, (start, stop, step))
+                    if inst.stop is not None
+                    else types.intp.desc.maximum_value())
+
+        if inst.type is types.slice2:
+            return inst.type.desc.llvm_pack(self.builder, (start, stop))
+        else:
+            step = _get_and_cast(inst.start)
+            return inst.type.desc.llvm_pack(self.builder, (start, stop, step))
 
     def op_unpack(self, inst):
         val = self.valmap[inst.value]
