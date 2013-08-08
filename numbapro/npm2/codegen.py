@@ -196,14 +196,15 @@ class CodeGen(object):
         return self.builder.load(storage)
 
     def op_call(self, inst):
-        imp = self.implib.get(inst.defn)
-        assert not inst.kws
-        argtys = [aval.type for aval in inst.args]
-        args = [(self.valmap[aval]
-                    if atype is None
-                    else self.cast(self.valmap[aval], aval.type, atype))
-                for aval, atype in zip(inst.args, imp.args)]
-        return imp(self.imp_context, args, argtys, inst.defn.return_type)
+        with error_context(during="resolving call %s" % inst.defn):
+            imp = self.implib.get(inst.defn)
+            assert not inst.kws
+            argtys = [aval.type for aval in inst.args]
+            args = [(self.valmap[aval]
+                        if callable(atype)
+                        else self.cast(self.valmap[aval], aval.type, atype))
+                    for aval, atype in zip(inst.args, imp.args)]
+            return imp(self.imp_context, args, argtys, inst.defn.return_type)
 
     def op_const(self, inst):
         if isinstance(inst.type.desc, types.BuiltinObject):

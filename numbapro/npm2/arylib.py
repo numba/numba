@@ -49,15 +49,19 @@ def imp_numpy_prod(context, args, argtys, retty):
         builder.store(new_prod, prod)
     return builder.load(prod)
 
+def getitem_fixedarray_intp(args):
+    ary = args[0]
+    return types.tupletype(*[types.intp] * ary.desc.ndim)
+
 def array_dtype_return(args):
     return args[0].desc.element
-
-def array_getitem_fixedarray(args):
-    ary, idx = args
-    if idx.desc.element in (types.slice2, types.slice3):
-        return ary.desc.copy(order='%sS' % ary.desc.order[0])
-    else:
-        return args[0].desc.element
+#
+#def array_getitem_fixedarray(args):
+#    ary, idx = args
+#    if idx.desc.element in (types.slice2, types.slice3):
+#        return ary.desc.copy(order='%sS' % ary.desc.order[0])
+#    else:
+#        return args[0].desc.element
 
 def intp_tuple_return(args):
     ary = args[0]
@@ -195,26 +199,24 @@ class ArrayGetItemTuple(object):
 
 class ArrayGetItemFixedArray(object):
     function = (operator.getitem,
-                (types.ArrayKind, types.FixedArrayKind),
-                array_getitem_fixedarray)
+                (types.ArrayKind, getitem_fixedarray_intp),
+                array_dtype_return)
     
     def generic_implement(self, context, args, argtys, retty):
         ary, idx = args
         aryty, idxty = argtys
         indices = []
-        if idxty.desc.element in (types.slice2, types.slice3):
-            raise NotImplementedError
-        else:
-            indexty = types.intp
-            ety = idxty.desc.element
-            for i in range(idxty.desc.length):
-                elem = idxty.desc.llvm_getitem(context.builder, idx, i)
-                elem = context.cast(elem, ety, indexty)
-                indices.append(elem)
 
-            indices = wraparound_and_boundcheck(context, ary, indices)
-            return aryutils.getitem(context.builder, ary, indices=indices,
-                                    order=aryty.desc.order)
+        indexty = types.intp
+        ety = idxty.desc.element
+        for i in range(idxty.desc.length):
+            elem = idxty.desc.llvm_getitem(context.builder, idx, i)
+            elem = context.cast(elem, ety, indexty)
+            indices.append(elem)
+
+        indices = wraparound_and_boundcheck(context, ary, indices)
+        return aryutils.getitem(context.builder, ary, indices=indices,
+                                order=aryty.desc.order)
 
 class ArrayGetItemSlice2(object):
     function = (operator.getitem,

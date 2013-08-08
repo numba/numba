@@ -4,10 +4,12 @@ import llvm.core as lc
 from . import typesets, types, cgutils
 
 class ImpLib(object):
+    '''There is 1-to-1 correspondance between function declaration
+    and function implementator.
+    '''
     def __init__(self, funclib):
         self.funclib = funclib
-        self.implib = {}
-        self.prmlib = defaultdict(list)
+        self.defnlib = {}
 
     def define(self, imp):
         defn = self.funclib.lookup(imp.funcobj, imp.args)
@@ -20,23 +22,10 @@ class ImpLib(object):
             msg = 'return-type mismatch for %s; got %s'
             raise TypeError(msg % (defn, imp.return_type))
 
-        if imp.is_parametric:           # is parametric
-            self.prmlib[imp.funcobj].append(imp)
-        else:                           # is non-parametric
-            self.implib[defn] = imp
+        self.defnlib[defn] = imp
 
     def get(self, funcdef):
-        if funcdef.funcobj in self.prmlib:
-            versions = self.prmlib[funcdef.funcobj]
-
-            for ver in versions:
-                for a, b in zip(ver.args, funcdef.args):
-                    if not (a is None or a == b):
-                        break
-                else:
-                    return ver
-
-        return self.implib[funcdef]
+        return self.defnlib[funcdef]
 
     def lookup(self, funcobj, argtys):
         defn = self.funclib.lookup(funcobj, argtys)
@@ -57,7 +46,7 @@ class Imp(object):
         self.args = args
         self.return_type = return_type
         self.is_parametric = ((return_type is None) or
-                                any(a is None for a in args))
+                                any(callable(a) for a in args))
 
     def __call__(self, context, args, argtys, retty):
         if self.is_parametric:

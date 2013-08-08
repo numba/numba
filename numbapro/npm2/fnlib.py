@@ -50,7 +50,7 @@ class FunctionLibrary(object):
         for ver in versions:
             if len(ver.args) == len(args):
                 for a, b in zip(ver.args, args):
-                    if not (a == b or b is None):
+                    if a != b:
                         break
                 else:
                     return ver
@@ -84,20 +84,18 @@ class FunctionLibrary(object):
             return self._setup_param_defn(least_demotion[0][1], args)
 
     def _setup_param_defn(self, defn, actual_params):
-        args = []
-        for a in defn.args:
-            if callable(a):
-                args.append(a(actual_params))
-            else:
-                args.append(a)
-
+        '''Return a new function object.
+        If the return-type is parameteric, replace it with a concrete type.
+        The new function object can be used lookup implementator.
+        The return-type is never part of the signature.
+        '''
         if callable(defn.return_type):
             return_type = defn.return_type(actual_params)
         else:
             return_type = defn.return_type
 
         return Function(funcobj     = defn.funcobj,
-                        args        = args,
+                        args        = defn.args,
                         return_type = return_type)
 
     def _match_parametric_args(self, actual_params, formal_params):

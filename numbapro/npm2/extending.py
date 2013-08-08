@@ -76,9 +76,6 @@ class Extension(object):
             funcobj = '@%s' % self.funcobj
         else:
             raise neither_function_or_method
-        def mask_callable_as_none(args):
-            return [None if callable(a) else a for a in args]
 
-        lib.define(imlib.Imp(self.implementor, funcobj,
-                             args=mask_callable_as_none(self.args)))
+        lib.define(imlib.Imp(self.implementor, funcobj, self.args))
 

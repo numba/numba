@@ -25,8 +25,8 @@ class Type(object):
 
     @classmethod
     def check_interface(cls, desc):
-        assert hasattr(desc, 'coerce')
-        assert hasattr(desc, 'fields')
+        assert hasattr(desc, 'coerce'), ('%s must define "coerce"' % cls)
+        assert hasattr(desc, 'fields'), ('%s must define "fields"' % cls)
 
     def coerce(self, other):
         ret = self.try_coerce(other)
@@ -147,7 +147,7 @@ class Type(object):
         return hash(tuple(self.list_fields()))
 
     def __eq__(self, other):
-        if type(self.desc) == type(other.desc):
+        if isinstance(other, Type) and type(self.desc) == type(other.desc):
             return all(a == b
                         for a, b
                         in zip(self.list_fields(), Type(other).list_fields()))
