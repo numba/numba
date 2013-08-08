@@ -53,15 +53,12 @@ def getitem_fixedarray_intp(args):
     ary = args[0]
     return types.tupletype(*[types.intp] * ary.desc.ndim)
 
+def getitem_fixedarray_slice2(args):
+    ary = args[0]
+    return types.tupletype(*[types.slice2] * ary.desc.ndim)
+
 def array_dtype_return(args):
     return args[0].desc.element
-#
-#def array_getitem_fixedarray(args):
-#    ary, idx = args
-#    if idx.desc.element in (types.slice2, types.slice3):
-#        return ary.desc.copy(order='%sS' % ary.desc.order[0])
-#    else:
-#        return args[0].desc.element
 
 def intp_tuple_return(args):
     ary = args[0]
@@ -72,12 +69,11 @@ def array_setitem_value(args):
     return ary.desc.element
 
 def array_slice_return(args):
-    ary, idx = args
-    assert isinstance(idx.desc, types.Slice2)
-    if ary.desc.ndim != 1:
-        raise TypeError('expecting 1d array')
-    order = ary.desc.order
-    return ary.desc.copy(order='%sS' % order[0])
+    ary = args[0]
+    if ary.desc.order == 'A':
+        return ary
+    else:
+        return ary.desc.copy(order='%sS' % ary.desc.order[0])
 
 def boundcheck(context, ary, indices):
     assert isinstance(indices, (tuple, list))
@@ -197,7 +193,8 @@ class ArrayGetItemTuple(object):
         return aryutils.getitem(context.builder, ary, indices=indices,
                                 order=aryty.desc.order)
 
-class ArrayGetItemFixedArray(object):
+
+class ArrayGetItemFixedArrayIntp(object):
     function = (operator.getitem,
                 (types.ArrayKind, getitem_fixedarray_intp),
                 array_dtype_return)
@@ -218,6 +215,31 @@ class ArrayGetItemFixedArray(object):
         return aryutils.getitem(context.builder, ary, indices=indices,
                                 order=aryty.desc.order)
 
+class ArrayGetItemFixedArraySlice2(object):
+    function = (operator.getitem,
+                (types.ArrayKind, getitem_fixedarray_slice2),
+                array_slice_return)
+    
+    def generic_implement(self, context, args, argtys, retty):
+        ary, ls = args
+        aryty, lsty = argtys
+        indices = []
+
+        begins = []
+        ends = []
+
+        builder = context.builder
+        slicety = lsty.desc.element
+        slices = lsty.desc.llvm_unpack(builder, ls)
+        begins, ends = zip(*[slicety.desc.llvm_unpack(builder, sl)
+                             for sl in slices])
+        
+        begins = wraparound_and_clip(context, ary, begins)
+        ends = wraparound_and_clip(context, ary, ends)
+        res = aryutils.view(builder, ary, begins=begins, ends=ends,
+                            order=aryty.desc.order)
+        return res
+
 class ArrayGetItemSlice2(object):
     function = (operator.getitem,
                 (types.ArrayKind, types.slice2),
@@ -228,8 +250,7 @@ class ArrayGetItemSlice2(object):
         ary, idx = args
         aryty, idxty = argtys
 
-        begin = builder.extract_value(idx, 0)
-        end = builder.extract_value(idx, 1)
+        begin, end = idxty.desc.llvm_unpack(builder, idx)
         begins = wraparound_and_clip(context, ary, [begin])
         ends = wraparound_and_clip(context, ary, [end])
         res = aryutils.view(builder, ary, begins=begins,
@@ -309,7 +330,8 @@ ArraySizeAttr,
 ArrayNdimAttr,
 ArayGetItemIntp,
 ArrayGetItemTuple,
-ArrayGetItemFixedArray,
+ArrayGetItemFixedArrayIntp,
+ArrayGetItemFixedArraySlice2,
 ArrayGetItemSlice2,
 ArraySetItemIntp,
 ArraySetItemTuple,

@@ -31,6 +31,14 @@ def array_slicing_4(ary, a, b):
         tmp += slice[i]
     return tmp
 
+def array_slicing_2d_1(ary, a, b):
+    slice = ary[a:, b:]
+    tmp = 0
+    for i in range(slice.shape[0]):
+        for j in range(slice.shape[1]):
+            tmp += slice[i, j]
+    return tmp
+
 @testcase
 def test_array_slicing_1():
     cfunc = compile(array_slicing_1, float32, [arraytype(float32, 1, 'C')])
@@ -79,6 +87,22 @@ def test_array_slicing_7():
                                      [arraytype(float32, 1, 'C'), int32, int32])
     a = np.arange(10, dtype=np.float32)
     assert np.allclose(cfunc(a, -4, -1), array_slicing_4(a, -4, -1))
+
+@testcase
+def test_array_slicing_2d_1_C():
+    cfunc = compile(array_slicing_2d_1, float32, [arraytype(float32, 2, 'C'),
+                                                  int32, int32])
+    a = np.arange(40, dtype=np.float32).reshape(8, 5)
+    assert np.allclose(cfunc(a, 2, 3), array_slicing_2d_1(a, 2, 3))
+
+@testcase
+def test_array_slicing_2d_1_F():
+    cfunc = compile(array_slicing_2d_1, float32, [arraytype(float32, 2, 'F'),
+                                                  int32, int32])
+    a = np.arange(40, dtype=np.float32).reshape(8, 5, order='F')
+    assert np.allclose(cfunc(a, 2, 3), array_slicing_2d_1(a, 2, 3))
+
+
 
 if __name__ == '__main__':
     main()

@@ -582,8 +582,8 @@ class FixedArray(object):
         self.length = length
 
     def coerce(self, other):
-        if isinstance(other, FixedArray):
-            return 0
+        if isinstance(other, FixedArray) and self.length == other.length:
+            return self.element.try_coerce(other.element)
 
     def unpack(self, count):
         return (self.element,) * count
@@ -649,6 +649,9 @@ class Slice2(object):
             assert val.type == llintp
             out = builder.insert_value(out, val, i)
         return out
+
+    def llvm_unpack(self, builder, val):
+        return [builder.extract_value(val, i) for i in range(2)]
 
 class Slice3(object):
     '''Slice type that contains start, stop, step

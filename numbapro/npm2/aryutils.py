@@ -101,31 +101,21 @@ def view(builder, ary, begins, ends, order):
     if order[0] not in 'CF':
         raise TypeError('array must be inner contiguous; order=%s' % order)
 
-    if order[0] == 'C':
-        innermost = -1
-        outermost = 0
-    elif order[0] == 'F':
-        innermost = 0
-        outermost = -1
-    else:
-        assert 'unreachable'
-
     ndim = getndim(ary)
     assert ndim == len(begins)
     assert ndim == len(ends)
 
     data = getdata(builder, ary)
+    shape = getshape(builder, ary)
+    strides = getstrides(builder, ary)
 
-    if ndim == 1:
-        offset = auto_intp(begins[innermost])
-        newdata = builder.gep(data, [offset], inbounds=True)
-        dimlens = [builder.sub(auto_intp(e), auto_intp(b))
-                   for b, e in zip(begins, ends)]
-        newshape = make_intp_array(builder, dimlens)
+    newdata = getpointer(builder, data, shape, strides, order, begins)
+    dimlens = [builder.sub(auto_intp(e), auto_intp(b))
+               for b, e in zip(begins, ends)]
+    newshape = make_intp_array(builder, dimlens)
 
-        newary = builder.insert_value(ary, newdata, 0)
-        newary = builder.insert_value(newary, newshape, 1)
-
+    newary = builder.insert_value(ary, newdata, 0)
+    newary = builder.insert_value(newary, newshape, 1)
     return newary
 
 def boundcheck(builder, raises, ary, indices):
