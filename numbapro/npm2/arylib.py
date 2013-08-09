@@ -215,7 +215,9 @@ class ArrayGetItemTuple(object):
         markcollapsed = [isinstance(t.desc, types.Integer)
                          for t in idxty.desc.elements]
 
-        assert len(filter(bool, markcollapsed)) == retty.desc.ndim
+        nah = lambda x: not bool(x)
+        assert len(filter(nah, markcollapsed)) == retty.desc.ndim, \
+                    (len(filter(bool, markcollapsed)), retty.desc.ndim)
 
         indices = idxty.desc.llvm_unpack(builder, idx)
 

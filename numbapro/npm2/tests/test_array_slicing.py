@@ -46,6 +46,18 @@ def array_slicing_2d_to_1d(ary):
         tmp += har[i] * har.ndim
     return tmp
 
+def array_slicing_3d_to_1d(ary):
+    har = ary[1, :-1, 1:-1]
+    tmp = 0
+    for i in range(har.shape[0]):
+        for j in range(har.shape[1]):
+            tmp += har[i, j] * har.ndim
+    return tmp
+
+def array_slicing_4d_to_2d(ary):
+    har = ary[:, :, 0, 0]
+    return har.sum() * har.ndim
+
 @testcase
 def test_array_slicing_1():
     cfunc = compile(array_slicing_1, float32, [arraytype(float32, 1, 'C')])
@@ -122,6 +134,34 @@ def test_array_slicing_2d_to_1d_F():
                     [arraytype(float32, 2, 'F')])
     a = np.arange(40, dtype=np.float32).reshape(8, 5, order='F')
     assert np.allclose(cfunc(a), array_slicing_2d_to_1d(a))
+
+@testcase
+def test_array_slicing_3d_to_1d_C():
+    cfunc = compile(array_slicing_3d_to_1d, float32,
+                    [arraytype(float32, 3, 'C')])
+    a = np.arange(40, dtype=np.float32).reshape(4, 2, 5)
+    assert np.allclose(cfunc(a), array_slicing_3d_to_1d(a))
+
+@testcase
+def test_array_slicing_3d_to_1d_F():
+    cfunc = compile(array_slicing_3d_to_1d, float32,
+                    [arraytype(float32, 3, 'F')])
+    a = np.arange(40, dtype=np.float32).reshape(4, 2, 5, order='F')
+    assert np.allclose(cfunc(a), array_slicing_3d_to_1d(a))
+
+@testcase
+def test_array_slicing_4d_to_2d_C():
+    cfunc = compile(array_slicing_4d_to_2d, float32,
+                    [arraytype(float32, 4, 'C')])
+    a = np.arange(40, dtype=np.float32).reshape(2, 2, 5, 2)
+    assert np.allclose(cfunc(a), array_slicing_4d_to_2d(a))
+
+@testcase
+def test_array_slicing_4d_to_2d_F():
+    cfunc = compile(array_slicing_4d_to_2d, float32,
+                    [arraytype(float32, 4, 'F')])
+    a = np.arange(40, dtype=np.float32).reshape(2, 2, 5, 2, order='F')
+    assert np.allclose(cfunc(a), array_slicing_4d_to_2d(a))
 
 if __name__ == '__main__':
     main()
