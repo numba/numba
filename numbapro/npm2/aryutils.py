@@ -96,6 +96,12 @@ def make_intp_array(builder, values):
     llintp = types.intp.llvm_as_value()
     return make_array(builder, llintp, [auto_intp(x) for x in values])
 
+def ndarray(builder, dtype, ndim, order, data, shape, strides):
+    shape = make_intp_array(builder, shape)
+    strides = make_intp_array(builder, strides)
+    aryty = types.arraytype(dtype, ndim, order)
+    return aryty.desc.llvm_pack(builder, (data, shape, strides))
+
 def view(builder, ary, begins, ends, order):
     assert order[0] in 'CFA'
     if order[0] not in 'CF':
@@ -127,24 +133,41 @@ def boundcheck(builder, raises, ary, indices):
         with if_then(builder, oob):
             raises(IndexError, 'out of bound')
 
-def wraparound(builder, raises, ary, indices):
+def wraparound(builder, ary, indices):
     assert getndim(ary) == len(indices), 'index dimension mismatch'
     shape = getshape(builder, ary)
-    out = []
-    for i, s in zip(indices, shape):
-        i = auto_intp(i)
-        neg = builder.icmp(lc.ICMP_SLT, i, types.intp.llvm_const(0))
-        normed = builder.select(neg, builder.add(i, s), i)     # no -ve index
-        out.append(normed)
-    return out
+    return [axis_wraparound(builder, i, s)
+            for i, s in zip(indices, shape)]
 
-def clip(builder, raises, ary, indices):
+def axis_wraparound(builder, val, end):
+    '''
+    :param val: [int|llvm Value of intp] the value to be wrapped around.
+    :param end: [llvm Value of intp] the max+1 value for val.
+    '''
+    val = auto_intp(val)
+    neg = builder.icmp(lc.ICMP_SLT, val, types.intp.llvm_const(0))
+    normed = builder.select(neg, builder.add(val, end), val)
+    return normed
+
+def clip(builder, ary, indices, plus1=False):
+    '''
+    :param val: [int|llvm Value of intp] the value
+    '''
     assert getndim(ary) == len(indices), 'index dimension mismatch'
     shape = getshape(builder, ary)
-    out = []
-    for i, s in zip(indices, shape):
-        i = auto_intp(i)
-        clipping = builder.icmp(lc.ICMP_UGE, i, s)
-        res = builder.select(clipping, s, i)
-        out.append(res)
-    return out
+    if plus1:
+        return [axis_clip(builder, i, s)
+                for i, s in zip(indices, shape)]
+    else:
+        return [axis_clip(builder, i, builder.sub(s, auto_intp(1)))
+                for i, s in zip(indices, shape)]
+
+def axis_clip(builder, val, bound):
+    '''
+    :param val: [int|llvm Value of intp] the value to be clipped.
+    :param bound: [llvm Value of intp] the upperbound
+    '''
+    val = auto_intp(val)
+    clipping = builder.icmp(lc.ICMP_UGT, val, bound)
+    res = builder.select(clipping, bound, val)
+    return res

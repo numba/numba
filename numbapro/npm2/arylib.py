@@ -3,7 +3,7 @@ Implements numpy array functions.
 '''
 import operator
 import numpy
-from . import aryutils, types
+from . import aryutils, types, cgutils
 
 def imp_numpy_sum(context, args, argtys, retty):
     '''
@@ -57,6 +57,25 @@ def getitem_fixedarray_slice2(args):
     ary = args[0]
     return types.tupletype(*[types.slice2] * ary.desc.ndim)
 
+def getitem_tuple(args):
+    ary, idx = args
+    if isinstance(idx.desc, types.Tuple):
+        def either_int_or_slice(x):
+            return isinstance(x.desc, (types.Integer, types.Slice2))
+        if all(either_int_or_slice(x) for x in idx.desc.elements):
+            return idx
+    return 
+
+def array_complex_slicing_return(args):
+    ary, idx = args
+    ct = 0
+    for x in idx.desc.elements:
+        if isinstance(x.desc, types.Integer):
+            ct += 1
+    ndim = ary.desc.ndim - ct
+    assert ndim > 0
+    return ary.desc.copy(ndim=ndim, order='A')
+
 def array_dtype_return(args):
     return args[0].desc.element
 
@@ -83,24 +102,34 @@ def boundcheck(context, ary, indices):
 def wraparound(context, ary, indices):
     assert isinstance(indices, (tuple, list))
     if context.flags.wraparound:
-        return aryutils.wraparound(context.builder, context.raises, ary,
-                                   indices)
+        return aryutils.wraparound(context.builder, ary, indices)
     else:
         return indices
 
-def clip(context, ary, indices):
+def clip(context, ary, indices, plus1=False):
     assert isinstance(indices, (tuple, list))
-    return aryutils.clip(context.builder, context.raises, ary, indices)
+    return aryutils.clip(context.builder, ary, indices, plus1=plus1)
 
 def wraparound_and_boundcheck(context, ary, indices):
     indices = wraparound(context, ary, indices)
     boundcheck(context, ary, indices)
     return indices
 
-def wraparound_and_clip(context, ary, indices):
+def wraparound_and_clip(context, ary, indices, plus1=False):
     indices = wraparound(context, ary, indices)
-    indices = clip(context, ary, indices)
+    indices = clip(context, ary, indices, plus1=plus1)
     return indices
+
+def axis_wraparound_and_clip(context, val, end, plus1=False):
+    builder = context.builder
+    if context.flags.wraparound:
+        val = aryutils.axis_wraparound(builder, val, end)
+    if plus1:
+        val = aryutils.axis_clip(builder, val, end)
+    else:
+        endm1 = builder.sub(end, types.auto_intp(1))
+        val = aryutils.axis_clip(builder, val, endm1)
+    return val
 
 #-------------------------------------------------------------------------------
 
@@ -175,24 +204,44 @@ class ArayGetItemIntp(object):
 
 class ArrayGetItemTuple(object):
     function = (operator.getitem,
-                (types.ArrayKind, types.TupleKind),
-                array_dtype_return)
+                (types.ArrayKind, getitem_tuple),
+                array_complex_slicing_return)
     
     def generic_implement(self, context, args, argtys, retty):
         ary, idx = args
         aryty, idxty = argtys
-        indices = []
 
-        indexty = types.intp
-        for i, ety in enumerate(idxty.desc.elements):
-            elem = idxty.desc.llvm_getitem(context.builder, idx, i)
-            elem = context.cast(elem, ety, indexty)
-            indices.append(elem)
+        builder = context.builder
+        markcollapsed = [isinstance(t.desc, types.Integer)
+                         for t in idxty.desc.elements]
 
-        indices = wraparound_and_boundcheck(context, ary, indices)
-        return aryutils.getitem(context.builder, ary, indices=indices,
-                                order=aryty.desc.order)
+        assert len(filter(bool, markcollapsed)) == retty.desc.ndim
 
+        indices = idxty.desc.llvm_unpack(builder, idx)
+
+        offsets = []
+        lengths = []
+        dataptr = aryutils.getdata(builder, ary)
+        shapeary = aryutils.getshape(builder, ary)
+        stridesary = aryutils.getstrides(builder, ary)
+        # for each axis
+        for marked, index, shape in zip(markcollapsed, indices, shapeary):
+            if marked:  # collapsed
+                offsets.append(index)
+            else:
+                begin, end = types.slice2.llvm_unpack(builder, index)
+                begin = axis_wraparound_and_clip(context, begin, shape)
+                end = axis_wraparound_and_clip(context, end, shape, plus1=True)
+                offsets.append(begin)
+                lengths.append(builder.sub(end, begin))
+
+        # build the view
+        newdata = aryutils.getpointer(builder, dataptr, shapeary, stridesary,
+                                      aryty.desc.order, offsets)
+        newstrides = [s for m, s in zip(markcollapsed, stridesary) if not m]
+        return aryutils.ndarray(builder, dtype=aryty.desc.element,
+                                ndim=retty.desc.ndim, order='A',
+                                data=newdata, shape=lengths, strides=newstrides)
 
 class ArrayGetItemFixedArrayIntp(object):
     function = (operator.getitem,
@@ -235,7 +284,7 @@ class ArrayGetItemFixedArraySlice2(object):
                              for sl in slices])
         
         begins = wraparound_and_clip(context, ary, begins)
-        ends = wraparound_and_clip(context, ary, ends)
+        ends = wraparound_and_clip(context, ary, ends, plus1=True)
         res = aryutils.view(builder, ary, begins=begins, ends=ends,
                             order=aryty.desc.order)
         return res
@@ -252,7 +301,7 @@ class ArrayGetItemSlice2(object):
 
         begin, end = idxty.desc.llvm_unpack(builder, idx)
         begins = wraparound_and_clip(context, ary, [begin])
-        ends = wraparound_and_clip(context, ary, [end])
+        ends = wraparound_and_clip(context, ary, [end], plus1=True)
         res = aryutils.view(builder, ary, begins=begins,
                             ends=ends, order=aryty.desc.order)
         return res

@@ -111,8 +111,9 @@ class FunctionLibrary(object):
             else:
                 if callable(formal):
                     formal = formal(actual_params)
-                
-                pt = actual.try_coerce(formal)
+                pt = (actual.try_coerce(formal)
+                        if formal is not None
+                        else None)
                 if pt is None:
                     return
                 pts.append(pt)

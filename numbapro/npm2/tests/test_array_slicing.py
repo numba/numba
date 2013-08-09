@@ -39,6 +39,13 @@ def array_slicing_2d_1(ary, a, b):
             tmp += slice[i, j]
     return tmp
 
+def array_slicing_2d_to_1d(ary):
+    har = ary[1, :]
+    tmp = 0
+    for i in range(har.shape[0]):
+        tmp += har[i] * har.ndim
+    return tmp
+
 @testcase
 def test_array_slicing_1():
     cfunc = compile(array_slicing_1, float32, [arraytype(float32, 1, 'C')])
@@ -102,7 +109,19 @@ def test_array_slicing_2d_1_F():
     a = np.arange(40, dtype=np.float32).reshape(8, 5, order='F')
     assert np.allclose(cfunc(a, 2, 3), array_slicing_2d_1(a, 2, 3))
 
+@testcase
+def test_array_slicing_2d_to_1d_C():
+    cfunc = compile(array_slicing_2d_to_1d, float32,
+                    [arraytype(float32, 2, 'C')])
+    a = np.arange(40, dtype=np.float32).reshape(8, 5)
+    assert np.allclose(cfunc(a), array_slicing_2d_to_1d(a))
 
+@testcase
+def test_array_slicing_2d_to_1d_F():
+    cfunc = compile(array_slicing_2d_to_1d, float32,
+                    [arraytype(float32, 2, 'F')])
+    a = np.arange(40, dtype=np.float32).reshape(8, 5, order='F')
+    assert np.allclose(cfunc(a), array_slicing_2d_to_1d(a))
 
 if __name__ == '__main__':
     main()

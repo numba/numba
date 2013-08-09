@@ -513,6 +513,14 @@ class Array(object):
         '''
         return
 
+    def llvm_pack(self, builder, values):
+        data, shape, strides = values
+        ary = lc.Constant.undef(self.llvm_as_value())
+        ary = builder.insert_value(ary, data, 0)
+        ary = builder.insert_value(ary, shape, 1)
+        ary = builder.insert_value(ary, strides, 2)
+        return ary
+
     def ctype_as_argument(self):
         return ct.c_void_p
 
@@ -566,6 +574,11 @@ class Tuple(object):
         out = lc.Constant.undef(self.llvm_as_value())
         for i, item in enumerate(items):
             out = builder.insert_value(out, item, i)
+        return out
+
+    def llvm_unpack(self, builder, tupleval):
+        out = [builder.extract_value(tupleval, i)
+               for i in range(len(self.elements))]
         return out
 
     def llvm_getitem(self, builder, tupleobj, index):
