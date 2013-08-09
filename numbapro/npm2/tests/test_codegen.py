@@ -1,7 +1,7 @@
 import dis
 from numbapro.npm2.symbolic import SymbolicExecution
 from numbapro.npm2.typing import Infer
-from numbapro.npm2 import types, fnlib
+from numbapro.npm2 import types, compiler
 from numbapro.npm2.codegen import CodeGen
 from numbapro.npm2.imlib import ImpLib
 from numbapro.npm2.compiler import compile
@@ -25,7 +25,7 @@ def test_codegen():
     for blk in se.blocks:
         print blk
 
-    funclib = fnlib.get_builtin_function_library()
+    funclib, implib = compiler.get_builtin_context()
 
     args = {'a': types.int32, 'b': types.int32}
     return_type = types.int32
@@ -39,10 +39,6 @@ def test_codegen():
 
     for blk in se.blocks:
         print blk
-
-
-    implib = ImpLib(funclib)
-    implib.populate_builtin()
 
     cg = CodeGen(func = se.func,
                  blocks = se.blocks,

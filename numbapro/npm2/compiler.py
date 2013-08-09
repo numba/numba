@@ -4,7 +4,7 @@ from collections import defaultdict
 from timeit import default_timer as timer
 import inspect
 from . import (symbolic, typing, codegen, execution, fnlib, imlib, extending,
-               arylib)
+               arylib, iterlib)
 
 DEFAULT_FLAGS = 'overflow', 'zerodivision', 'boundcheck', 'wraparound'
 
@@ -13,6 +13,7 @@ def get_builtin_context():
     implib = imlib.ImpLib(funclib)
     implib.populate_builtin()
     libs = funclib, implib
+    extending.extends(libs, iterlib.extensions)
     extending.extends(libs, arylib.extensions)
     return libs
 

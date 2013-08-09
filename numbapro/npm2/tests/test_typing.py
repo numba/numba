@@ -2,7 +2,7 @@ import dis
 import itertools
 from numbapro.npm2.symbolic import SymbolicExecution
 from numbapro.npm2.typing import Infer
-from numbapro.npm2 import types, fnlib
+from numbapro.npm2 import types, compiler
 from .support import testcase, main
 
 
@@ -47,7 +47,8 @@ def test_infer():
     for blk in se.blocks:
         print blk
 
-    funclib = fnlib.get_builtin_function_library()
+    funclib, _ = compiler.get_builtin_context()
+    
 
     infer = Infer(func = se.func,
                   blocks = se.blocks,

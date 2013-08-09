@@ -723,13 +723,108 @@ method_type = Type(BuiltinObject('method'))
 none_type = Type(BuiltinObject('none'))
 exception_type = Type(BuiltinObject('exception'))
 
+class IteratorFactory(object):
+    fields = 'imp',
+
+    def __init__(self, imp):
+        self.imp = imp
+
+    def coerce(self, other):
+        if isinstance(other, IteratorFactory) and self.imp == other.imp:
+            return 0
+
+    def llvm_as_value(self):
+        return self.imp.llvm_as_value()
+
+    def __repr__(self):
+        return repr(self.imp)
+
+    def iterator(self):
+        return self.imp.iterator()
+
+IteratorFactoryKind = Kind(IteratorFactory)
+
 class RangeType(BuiltinObject):
     def llvm_as_value(self):
         elem = intp.llvm_as_value()
         return lc.Type.struct((elem, elem, elem))
 
-range_type = Type(RangeType('range'))
-range_iter_type = Type(BuiltinObject('range-iter'))
+    def iterator(self):
+        return range_iter_type
+
+range_type = Type(IteratorFactory(RangeType('range')))
+
+class RangeIterType(BuiltinObject):
+    def llvm_as_value(self):
+        return lc.Type.pointer(range_type.llvm_as_value())
+
+    def iterate_data(self):
+        return intp
+
+class Iterator(object):
+    fields = 'imp',
+
+    def __init__(self, imp):
+        self.imp = imp
+
+    def coerce(self, other):
+        if isinstance(other, Iterator) and self.imp == other.imp:
+            return 0
+
+    def llvm_as_value(self):
+        return self.imp.llvm_as_value()
+
+    def __repr__(self):
+        return '<iter %s>' % self.imp
+
+    def iterate_data(self):
+        return self.imp.iterate_data()
+
+IteratorKind = Kind(Iterator)
+
+range_iter_type = Type(Iterator(RangeIterType('range-iter')))
+
+class EnumerateType(object):
+    fields = 'inner',
+
+    def __init__(self, inner):
+        self.inner = inner
+
+    def coerce(self, other):
+        if isinstance(other, EnumerateType) and self.inner == other.inner:
+            return 0
+
+    def llvm_as_value(self):
+        counter = intp.llvm_as_value()
+        inner = self.inner.llvm_as_value()
+        return lc.Type.struct([counter, inner])
+
+    def __repr__(self):
+        return '<enumerate %s>' % self.inner
+
+EnumerateKind = Kind(EnumerateType)
+
+class EnumerateIterType(object):
+    fields = 'state',
+    
+    def __init__(self, state):
+        self.state = state
+
+    def coerce(self, other):
+        if isinstance(other, EnumerateIterType) and self.inner == other.inner:
+            return 0
+
+    def llvm_as_value(self):
+        return lc.Type.pointer(self.state.llvm_as_value())
+
+    def __repr__(self):
+        return '<iter %s>' % self.state
+
+    
+
+
+EnumerateIterKind = Kind(EnumerateIterType)
+
 
 void = Type(BuiltinObject('void'))
 
@@ -761,7 +856,15 @@ def tupletype(*elements):
     else:
         return Type(Tuple(elements))
 
+def enumerate_type(inner):
+    return Type(EnumerateType(inner))
+
+def enumerate_iter_type(state):
+    return Type(EnumerateIterType(state))
+
 intp = {4: int32, 8: int64}[tuple.__itemsize__]
+
+
 
 #------------------------------------------------------------------------------
 # utils

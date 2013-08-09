@@ -46,7 +46,8 @@ class Imp(object):
         self.args = args
         self.return_type = return_type
         self.is_parametric = ((return_type is None) or
-                                any(callable(a) for a in args))
+                                any(callable(a) or isinstance(a, types.Kind)
+                                    for a in args))
 
     def __call__(self, context, args, argtys, retty):
         if self.is_parametric:
@@ -403,72 +404,6 @@ def imp_cmp_complex(cmp, ty):
         return context.builder.and_(c, d)
     return imp
 
-# range
-
-def make_range_obj(context, start, stop, step):
-    rangetype = types.range_type.llvm_as_value()
-    rangeobj = lc.Constant.undef(rangetype)
-    
-    rangeobj = context.builder.insert_value(rangeobj, start, 0)
-    rangeobj = context.builder.insert_value(rangeobj, stop, 1)
-    rangeobj = context.builder.insert_value(rangeobj, step, 2)
-    return rangeobj
-
-def imp_range_1(context, args):
-    assert len(args) == 1
-    (stop,) = args
-    start = types.intp.llvm_const(0)
-    step = types.intp.llvm_const(1)
-    return make_range_obj(context, start, stop, step)
-
-def imp_range_2(context, args):
-    assert len(args) == 2
-    start, stop = args
-    step = types.intp.llvm_const(1)
-    return make_range_obj(context, start, stop, step)
-
-def imp_range_3(context, args):
-    assert len(args) == 3
-    start, stop, step = args
-    return make_range_obj(context, start, stop, step)
-
-def imp_range_iter(context, args):
-    obj, = args
-    with cgutils.goto_entry_block(context.builder):
-        # allocate at the beginning
-        # assuming a range object must be used statically
-        ptr = context.builder.alloca(obj.type)
-    context.builder.store(obj, ptr)
-    return ptr
-
-def imp_range_valid(context, args):
-    ptr, = args
-    idx0 = types.int32.llvm_const(0)
-    idx1 = types.int32.llvm_const(1)
-    idx2 = types.int32.llvm_const(2)
-    start = context.builder.load(context.builder.gep(ptr, [idx0, idx0]))
-    stop = context.builder.load(context.builder.gep(ptr, [idx0, idx1]))
-    step = context.builder.load(context.builder.gep(ptr, [idx0, idx2]))
-
-    zero = types.intp.llvm_const(0)
-    positive = context.builder.icmp(lc.ICMP_SGE, step, zero)
-    posok = context.builder.icmp(lc.ICMP_SLT, start, stop)
-    negok = context.builder.icmp(lc.ICMP_SGT, start, stop)
-    
-    return context.builder.select(positive, posok, negok)
-
-def imp_range_next(context, args):
-    ptr, = args
-    idx0 = types.int32.llvm_const(0)
-    idx2 = types.int32.llvm_const(2)
-    startptr = context.builder.gep(ptr, [idx0, idx0])
-    start = context.builder.load(startptr)
-    step = context.builder.load(context.builder.gep(ptr, [idx0, idx2]))
-    next = context.builder.add(start, step)
-    context.builder.store(next, startptr)
-    return start
-
-
 # complex attributes
 
 def imp_complex_real(ty):
@@ -758,32 +693,6 @@ builtins += unary_op_imp(operator.neg, imp_neg_complex, typesets.complex_set)
 # unary logical negate
 builtins += unary_op_imp(operator.invert, imp_invert_integer,
                      typesets.integer_set)
-
-# range
-for rangeobj in [range, xrange]:
-    builtins += [Imp(imp_range_1, rangeobj,
-                 args=(types.intp,),
-                 return_type=types.range_type)]
-
-    builtins += [Imp(imp_range_2, rangeobj,
-                 args=(types.intp, types.intp),
-                 return_type=types.range_type)]
-
-    builtins += [Imp(imp_range_3, rangeobj,
-                 args=(types.intp, types.intp, types.intp),
-                 return_type=types.range_type)]
-
-builtins += [Imp(imp_range_iter, iter,
-             args=(types.range_type,),
-             return_type=types.range_iter_type)]
-
-builtins += [Imp(imp_range_valid, 'itervalid',
-             args=(types.range_iter_type,),
-             return_type=types.boolean)]
-
-builtins += [Imp(imp_range_next, 'iternext',
-             args=(types.range_iter_type,),
-             return_type=types.intp)]
 
 # complex attributes
 for complex_type in typesets.complex_set:

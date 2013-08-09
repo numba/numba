@@ -1,6 +1,6 @@
 from collections import defaultdict
 import operator
-from .types import (intp, boolean, range_type, range_iter_type)
+from .types import (intp, boolean)
 from . import types
 from .typesets import (signed_set, integer_set, float_set, complex_set)
 
@@ -11,7 +11,8 @@ class Function(object):
         self.funcobj = funcobj
         self.args = tuple(x for x in args)
         self.return_type = return_type
-        self.is_parametric = any(isinstance(a, types.Kind) for a in args)
+        self.is_parametric = any(isinstance(a, types.Kind) or callable(a)
+                                 for a in args)
 
     def __hash__(self):
         return hash((self.funcobj, self.args))
@@ -201,21 +202,6 @@ def unary_func_from_sets(typesets):
 def unary_func(ty):
     return (ty,), ty
 
-
-def range_func():
-    return [((intp, intp, intp),    range_type),
-            ((intp, intp),          range_type),
-            ((intp,),               range_type)]
-
-def iter_func():
-    return [((range_type,), range_iter_type)]
-
-def iter_valid_func():
-    return [((range_iter_type,), boolean)]
-
-def iter_next_func():
-    return [((range_iter_type,), intp)]
-
 def complex_attr(typeset):
     return [((ty,), ty.desc.element)
             for ty in typeset]
@@ -262,16 +248,6 @@ def def_(funcobj, definitions):
     return [(funcobj, definitions)]
 
 builtins = []
-
-builtins += def_(range, range_func())
-
-builtins += def_(xrange, range_func())
-
-builtins += def_(iter, iter_func())
-
-builtins += def_('itervalid', iter_valid_func())
-
-builtins += def_('iternext', iter_next_func())
 
 builtins += def_(operator.add,
                    binary_func_from_sets(integer_set|float_set|complex_set))
