@@ -34,13 +34,14 @@ def get_pointer(cffi_func):
 
 def map_type(cffi_type):
     "Map CFFI type to numba type"
-    if cffi_type.kind in ('struct', 'union'):
-        if cffi_type.kind == 'union':
+    kind = getattr(cffi_type, 'kind', '')
+    if kind in ('struct', 'union'):
+        if kind == 'union':
             result = None
         else:
-            result = struct([(name, map_type(field_type))
-                               for name, field_type in cffi_type.fields])
-    elif cffi_type.kind == 'function':
+            result = numba.struct([(name, map_type(field.type))
+                               for name, field in cffi_type.fields])
+    elif kind == 'function':
         restype = map_type(cffi_type.result)
         argtypes = [map_type(arg) for arg in cffi_type.args]
         result = numba.function(restype, argtypes,
@@ -73,6 +74,14 @@ else:
         ffi.typeof('unsigned int') :        uint,
         ffi.typeof('unsigned long') :       ulong,
         ffi.typeof('unsigned long long') :  ulonglong,
+        ffi.typeof('int8_t') :              char,
+        ffi.typeof('uint8_t') :             uchar,
+        ffi.typeof('int16_t') :             short,
+        ffi.typeof('uint16_t') :            ushort,
+        ffi.typeof('int32_t') :             int_,
+        ffi.typeof('uint32_t') :            uint,
+        ffi.typeof('int64_t') :             longlong,
+        ffi.typeof('uint64_t') :            ulonglong,
         ffi.typeof('float') :               float_,
         ffi.typeof('double') :              double,
         # ffi.typeof('long double') :         longdouble,
