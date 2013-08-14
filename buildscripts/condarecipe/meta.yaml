@@ -27,7 +27,6 @@ requirements:
 test:
   requires:
     - nose
-    - cython
   files:
     - mandel.py
   commands:
