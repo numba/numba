@@ -1,6 +1,6 @@
 package:
    name: numba
-   version: master
+   version: 99
    
 source:
   git_url: git@github.com:numba/numba.git
