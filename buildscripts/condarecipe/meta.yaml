@@ -1,0 +1,34 @@
+package:
+   name: numba
+   version: master
+   
+source:
+  git_url: git@github.com:numba/numba.git
+ # git_tag: 0.10.0
+
+build:
+  entry_points:
+    - pycc = numba.pycc:main
+
+requirements:
+  build:
+    - cython
+    - numpy
+    - chrpath         [linux]
+    - python
+  run:
+    - python
+    - argparse        [py26]
+    - numpy
+    - meta            [py27]
+    - llvmpy
+    - llvmmath
+
+test:
+  requires:
+    - nose
+    - cython
+  files:
+    - mandel.py
+  commands:
+    - pycc -h
