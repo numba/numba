@@ -10,6 +10,7 @@ requirements:
   build:
     - numba
     - numpy
+    - chrpath
   run:
     - python
     - numpy
