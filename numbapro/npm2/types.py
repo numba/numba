@@ -820,6 +820,9 @@ class EnumerateIterType(object):
     def __repr__(self):
         return '<iter %s>' % self.state
 
+    def inner(self):
+        return self.state.desc.inner
+
     
 
 

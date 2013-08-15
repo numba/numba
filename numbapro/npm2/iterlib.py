@@ -119,25 +119,66 @@ class Enumerate(object):
     function = enumerate, (types.IteratorFactoryKind,), enumerate_return
 
     def generic_implement(self, context, args, argtys, retty):
-        raise NotImplementedError
+        (iterfacttype,) = argtys
+        iterimptype = iterfacttype.desc.imp
+        (iterfact,) = args
+
+        builder = context.builder
+        enumtype = retty.llvm_as_value()
+        enumobj = lc.Constant.undef(enumtype)
+        enumobj = builder.insert_value(enumobj, types.const_intp(0), 0)
+        with cgutils.goto_entry_block(builder):
+            # allocate iterator 
+            iterptr = builder.alloca(iterfact.type)
+        enumobj = builder.insert_value(enumobj, iterptr, 1)
+        builder.store(iterfact, iterptr)
+        return enumobj
 
 class IterEnumerate(object):
     function = iter, (types.EnumerateKind,), iter_enumerate_return
 
     def generic_implement(self, context, args, argtys, retty):
-        raise NotImplementedError
+        iterval, = args
+        builder = context.builder
+        with cgutils.goto_entry_block(builder):
+            # allocate iterator
+            iterptr = builder.alloca(iterval.type)
+        builder.store(iterval, iterptr)
+        return iterptr
 
 class EnumerateIterValid(object):
     function = 'itervalid', (types.EnumerateIterKind,), types.boolean
 
     def generic_implement(self, context, args, argtys, retty):
-        raise NotImplementedError
+        (enumitertype,) = argtys
+        (enumiter,) = args
+        builder = context.builder
+        inneritertype = enumitertype.desc.inner()
+        inneriter = builder.extract_value(builder.load(enumiter), 1)
+        innervalid = context.imp.lookup('itervalid', (inneritertype,))
+        valid = innervalid(context, (inneriter,))
+        return valid
 
 class EnumerateIterNext(object):
     function = 'iternext', (types.EnumerateIterKind,), enumerate_iter_return
 
     def generic_implement(self, context, args, argtys, retty):
-        raise NotImplementedError
+        (enumitertype,) = argtys
+        (enumiter,) = args
+        builder = context.builder
+        # invoke inner iterator next
+        inneritertype = enumitertype.desc.inner()
+        inneriter = builder.extract_value(builder.load(enumiter), 1)
+        innernext = context.imp.lookup('iternext', (inneritertype,))
+        innerout = innernext(context, (inneriter,))
+        # increment enumerator
+        counterptr = builder.gep(enumiter, [types.const_intp(0),
+                                            types.int32.llvm_const(0)],
+                                 inbounds=True)
+        counter = builder.load(counterptr)
+        ncounter = builder.add(counter, types.const_intp(1))
+        builder.store(ncounter, counterptr)
+        return retty.desc.llvm_pack(builder, (counter, innerout))
 
 
 extensions = [

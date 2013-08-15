@@ -28,7 +28,7 @@ class ImpLib(object):
         return self.defnlib[funcdef]
 
     def lookup(self, funcobj, argtys):
-        defn = self.funclib.lookup(funcobj, argtys)
+        defn = self.funclib.get(funcobj, argtys)
         imp = self.get(defn)
         def wrap(context, args):
             return imp(context, args, argtys, defn.return_type)
