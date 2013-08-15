@@ -1,3 +1,8 @@
+Version (0.12.4)
+================
+* Update to Numba 0.10.0
+* Minor bug fixes
+
 Version (0.12.3)
 ================
 * Accept older driver by defering driver error to first use of specific API
