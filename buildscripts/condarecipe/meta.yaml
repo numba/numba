@@ -14,7 +14,7 @@ requirements:
   build:
     - cython
     - numpy
-    - chrpath         [linux]
+    #- chrpath         [linux]
     - python
   run:
     - python
