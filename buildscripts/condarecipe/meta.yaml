@@ -8,6 +8,7 @@ source:
 
 requirements:
   build:
+    - python
     - numba
     - numpy
     - chrpath    [linux]
