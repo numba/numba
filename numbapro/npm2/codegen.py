@@ -230,7 +230,6 @@ class CodeGen(object):
         return inst.type.desc.llvm_pack(self.builder, values)
 
     def op_slice(self, inst):
-        tdesc = inst.type.desc
         def _get_and_cast(var):
             val = self.valmap[var]
             return self.cast(val, var.type, types.intp)

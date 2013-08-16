@@ -1,7 +1,5 @@
-import dis
-import numpy as np
 from ..compiler import compile
-from ..types import (arraytype, float32, void)
+from ..types import float32, void
 from .support import testcase, main
 
 value_is_negative = ValueError("value is negative")

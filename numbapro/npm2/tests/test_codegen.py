@@ -3,7 +3,6 @@ from numbapro.npm2.symbolic import SymbolicExecution
 from numbapro.npm2.typing import Infer
 from numbapro.npm2 import types, compiler
 from numbapro.npm2.codegen import CodeGen
-from numbapro.npm2.imlib import ImpLib
 from numbapro.npm2.compiler import compile
 from .support import testcase, main
 

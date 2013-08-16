@@ -3,7 +3,7 @@ Implements numpy array functions.
 '''
 import operator
 import numpy
-from . import aryutils, types, cgutils
+from . import aryutils, types
 
 def imp_numpy_sum(context, args, argtys, retty):
     '''
@@ -274,7 +274,6 @@ class ArrayGetItemFixedArraySlice2(object):
     def generic_implement(self, context, args, argtys, retty):
         ary, ls = args
         aryty, lsty = argtys
-        indices = []
 
         begins = []
         ends = []

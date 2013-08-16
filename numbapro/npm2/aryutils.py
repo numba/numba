@@ -23,13 +23,11 @@ def getndim(ary):
     return ary.type.elements[1].count
 
 def getshape(builder, ary):
-    ndim = getndim(ary)
     shapeary = builder.extract_value(ary, 1)
     shape = explode_array(builder, shapeary)
     return shape
 
 def getstrides(builder, ary):
-    ndim = getndim(ary)
     strideary = builder.extract_value(ary, 2)
     strides = explode_array(builder, strideary)
     return strides

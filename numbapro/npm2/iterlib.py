@@ -120,7 +120,6 @@ class Enumerate(object):
 
     def generic_implement(self, context, args, argtys, retty):
         (iterfacttype,) = argtys
-        iterimptype = iterfacttype.desc.imp
         (iterfact,) = args
 
         builder = context.builder

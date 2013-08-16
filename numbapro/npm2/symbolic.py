@@ -1,5 +1,4 @@
 import __builtin__
-import sys
 import inspect
 import dis
 import operator

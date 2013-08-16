@@ -1,4 +1,3 @@
-from collections import defaultdict
 import operator
 import llvm.core as lc
 from . import typesets, types, cgutils

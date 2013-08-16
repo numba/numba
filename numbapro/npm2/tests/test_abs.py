@@ -19,7 +19,7 @@ def test_myabs_integer():
 def test_myabs_integer_overflow():
     compiled = compile(myabs, int8, [int8])
     try:
-        got = compiled(-128)
+        compiled(-128)
     except OverflowError, e:
         print e
     else:

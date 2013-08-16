@@ -1,4 +1,3 @@
-import sys
 from math import copysign
 from llvm import core as lc
 import ctypes as ct

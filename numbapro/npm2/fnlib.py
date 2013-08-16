@@ -1,6 +1,6 @@
 from collections import defaultdict
 import operator
-from .types import (intp, boolean)
+from .types import boolean
 from . import types
 from .typesets import (signed_set, integer_set, float_set, complex_set)
 
