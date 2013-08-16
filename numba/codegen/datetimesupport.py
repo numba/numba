@@ -27,7 +27,7 @@ class DateTimeSupportMixin(object):
 
     def _promote_datetime(self, src_type, dst_type, value):
         "Promote a datetime value to value with a larger or smaller datetime type"
-        year, month, day = self._extract(value)
+        year, month, day, hour, min, sec = self._extract(value)
 
         if dst_type.is_datetime:
             dst_type = dst_type.base_type

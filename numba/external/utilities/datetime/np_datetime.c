@@ -748,6 +748,38 @@ PyArray_TimedeltaToTimedeltaStruct(npy_timedelta val, NPY_DATETIMEUNIT fr,
 }
 
 /*
+ * Creates a datetime or timedelta dtype using a copy of the provided metadata.
+ */
+NPY_NO_EXPORT PyArray_Descr *
+create_datetime_dtype(int type_num, PyArray_DatetimeMetaData *meta)
+{
+    PyArray_Descr *dtype = NULL;
+    PyArray_DatetimeMetaData *dt_data;
+
+    /* Create a default datetime or timedelta */
+    if (type_num == NPY_DATETIME || type_num == NPY_TIMEDELTA) {
+        //dtype = PyArray_DescrNewFromType(type_num);
+    }
+    else {
+        PyErr_SetString(PyExc_RuntimeError,
+                "Asked to create a datetime type with a non-datetime "
+                "type number");
+        return NULL;
+    }
+
+    if (dtype == NULL) {
+        return NULL;
+    }
+
+    dt_data = &(((PyArray_DatetimeDTypeMetaData *)dtype->c_metadata)->meta);
+
+    /* Copy the metadata */
+    *dt_data = *meta;
+
+    return dtype;
+}
+
+/*
  * This function returns a pointer to the DateTimeMetaData
  * contained within the provided datetime dtype.
  */
@@ -900,6 +932,65 @@ bad_input:
     }
 
     return -1;
+}
+
+/*
+ * Converts a datetype dtype string into a dtype descr object.
+ * The "type" string should be NULL-terminated.
+ */
+NPY_NO_EXPORT PyArray_Descr *
+parse_dtype_from_datetime_typestr(char *typestr, Py_ssize_t len)
+{
+    PyArray_DatetimeMetaData meta;
+    char *metastr = NULL;
+    int is_timedelta = 0;
+    Py_ssize_t metalen = 0;
+
+    if (len < 2) {
+        PyErr_Format(PyExc_TypeError,
+                "Invalid datetime typestr \"%s\"",
+                typestr);
+        return NULL;
+    }
+
+    /*
+     * First validate that the root is correct,
+     * and get the metadata string address
+     */
+    if (typestr[0] == 'm' && typestr[1] == '8') {
+        is_timedelta = 1;
+        metastr = typestr + 2;
+        metalen = len - 2;
+    }
+    else if (typestr[0] == 'M' && typestr[1] == '8') {
+        is_timedelta = 0;
+        metastr = typestr + 2;
+        metalen = len - 2;
+    }
+    else if (len >= 11 && strncmp(typestr, "timedelta64", 11) == 0) {
+        is_timedelta = 1;
+        metastr = typestr + 11;
+        metalen = len - 11;
+    }
+    else if (len >= 10 && strncmp(typestr, "datetime64", 10) == 0) {
+        is_timedelta = 0;
+        metastr = typestr + 10;
+        metalen = len - 10;
+    }
+    else {
+        PyErr_Format(PyExc_TypeError,
+                "Invalid datetime typestr \"%s\"",
+                typestr);
+        return NULL;
+    }
+
+    /* Parse the metadata string into a metadata struct */
+    if (parse_datetime_metadata_from_metastr(metastr, metalen, &meta) < 0) {
+        return NULL;
+    }
+
+    return create_datetime_dtype(is_timedelta ? NPY_TIMEDELTA : NPY_DATETIME,
+                                    &meta);
 }
 
 static NPY_DATETIMEUNIT _multiples_table[16][4] = {

@@ -317,7 +317,7 @@ static npy_int64 iso_datetime2sec(char *datetime_string)
 }
 
 
-static npy_datetimestruct pydatetime2npydatetime(PyObject *object)
+static npy_datetimestruct pydatetime2npydatetime_struct(PyObject *object)
 {
     PyArray_DatetimeMetaData meta;
     npy_datetime out;
@@ -332,55 +332,55 @@ static npy_datetimestruct pydatetime2npydatetime(PyObject *object)
 
 static npy_int64 pydatetime2year(PyObject *object)
 {
-    npy_datetimestruct out = pydatetime2npydatetime(object);
+    npy_datetimestruct out = pydatetime2npydatetime_struct(object);
     return out.year;
 }
 
 static npy_int32 pydatetime2month(PyObject *object)
 {
-    npy_datetimestruct out = pydatetime2npydatetime(object);
+    npy_datetimestruct out = pydatetime2npydatetime_struct(object);
     return out.month;
 }
 
 static npy_int32 pydatetime2day(PyObject *object)
 {
-    npy_datetimestruct out = pydatetime2npydatetime(object);
+    npy_datetimestruct out = pydatetime2npydatetime_struct(object);
     return out.day;
 }
 
 static npy_int32 pydatetime2hour(PyObject *object)
 {
-    npy_datetimestruct out = pydatetime2npydatetime(object);
+    npy_datetimestruct out = pydatetime2npydatetime_struct(object);
     return out.hour;
 }
 
 static npy_int32 pydatetime2min(PyObject *object)
 {
-    npy_datetimestruct out = pydatetime2npydatetime(object);
+    npy_datetimestruct out = pydatetime2npydatetime_struct(object);
     return out.min;
 }
 
 static npy_int32 pydatetime2sec(PyObject *object)
 {
-    npy_datetimestruct out = pydatetime2npydatetime(object);
+    npy_datetimestruct out = pydatetime2npydatetime_struct(object);
     return out.sec;
 }
 
 static npy_int32 pydatetime2usec(PyObject *object)
 {
-    npy_datetimestruct out = pydatetime2npydatetime(object);
+    npy_datetimestruct out = pydatetime2npydatetime_struct(object);
     return out.us;
 }
 
 static npy_int32 pydatetime2psec(PyObject *object)
 {
-    npy_datetimestruct out = pydatetime2npydatetime(object);
+    npy_datetimestruct out = pydatetime2npydatetime_struct(object);
     return out.ps;
 }
 
 static npy_int32 pydatetime2asec(PyObject *object)
 {
-    npy_datetimestruct out = pydatetime2npydatetime(object);
+    npy_datetimestruct out = pydatetime2npydatetime_struct(object);
     return out.as;
 }
 
@@ -392,11 +392,43 @@ static PyObject* primitive2pydatetime(
     npy_int32 min,
     npy_int32 sec)
 {
-    PyObject *result = PyDateTime_FromDateAndTime(year, month, day, hour, min, sec, 0);
+    PyObject *result = PyDateTime_FromDateAndTime(year, month, day,
+        hour, min, sec, 0);
     //PyObject *result = PyDate_FromDate(year, month, day);
     Py_INCREF(result);
     return result;
 }
+
+static PyObject* primitive2numpydatetime(
+    npy_int64 year,
+    npy_int32 month,
+    npy_int32 day,
+    npy_int32 hour,
+    npy_int32 min,
+    npy_int32 sec)
+{
+    npy_datetimestruct input;
+    char output[100];
+
+    input.year = year;
+    input.month = month;
+    input.day = day;
+    input.hour = hour;
+    input.min = min;
+    input.sec = sec;
+
+    memset(output, '\0', 100);
+
+    int result = make_iso_8601_datetime(&input, output, 100,
+                    0, -1, -1,
+                    NPY_SAFE_CASTING);
+
+    PyArray_Descr* dtype = parse_dtype_from_datetime_typestr(output, 100);
+
+    Py_INCREF(dtype);
+    return (PyObject*)dtype;
+}
+
 
 static int
 export_type_conversion(PyObject *module)
@@ -425,6 +457,7 @@ export_type_conversion(PyObject *module)
     EXPORT_FUNCTION(pydatetime2psec, module, error);
     EXPORT_FUNCTION(pydatetime2asec, module, error);
     EXPORT_FUNCTION(primitive2pydatetime, module, error);
+    EXPORT_FUNCTION(primitive2numpydatetime, module, error);
     EXPORT_FUNCTION(iso_datetime2year, module, error);
     EXPORT_FUNCTION(iso_datetime2month, module, error);
     EXPORT_FUNCTION(iso_datetime2day, module, error);

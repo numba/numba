@@ -546,7 +546,6 @@ class complex_(NumbaType):
 @consing
 class datetime_(NumbaType):
     argnames = ["year", "month", "day", "hour", "min", "sec"]
-    #argnames = ["base_type"]
     flags = ["numeric"]
 
     @property
@@ -556,6 +555,13 @@ class datetime_(NumbaType):
 
     def __repr__(self):
         return "datetime"
+
+@consing
+class numpy_datetime_(datetime_):
+    flags = ["numeric", "numpy_datetime"]
+
+    def _repr__(self):
+        return "numpy_datetime"
 
 @consing
 class meta(NumbaType):

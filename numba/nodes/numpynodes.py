@@ -172,6 +172,10 @@ def PyArray_NewFromDescr(args):
 
     return MultiArrayAPINode('PyArray_NewFromDescr', signature, args)
 
+def PyArray_DescrNewFromType(args):
+    signature = object_()
+    return MultiArrayAPINode('Pyarray_DescrNewFromType', signature, args)
+
 def PyArray_SetBaseObject(args):
     signature = int_(object_, object_)
     return MultiArrayAPINode('PyArray_SetBaseObject', signature, args)

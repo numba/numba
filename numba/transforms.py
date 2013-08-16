@@ -330,6 +330,21 @@ class ResolveCoercions(visitors.NumbaTransformer):
                     nodes.ComplexAttributeNode(complex_value, "real"),
                     nodes.ComplexAttributeNode(complex_value.clone, "imag")
                 ]
+            elif node_type.is_numpy_datetime:
+                datetime_value = nodes.CloneableNode(node.node)
+                args = [
+                    nodes.DateTimeAttributeNode(datetime_value, 'year'),
+                    nodes.DateTimeAttributeNode(datetime_value.clone, 'month'),
+                    nodes.DateTimeAttributeNode(datetime_value.clone, 'day'),
+                    nodes.DateTimeAttributeNode(datetime_value.clone, 'hour'),
+                    nodes.DateTimeAttributeNode(datetime_value.clone, 'min'),
+                    nodes.DateTimeAttributeNode(datetime_value.clone, 'sec'),
+                ]
+                #new_node = function_util.utility_call(
+                #        self.context, self.llvm_module,
+                #        "primitive2numpydatetime", args=args)
+                raise NotImplementedError
+
             elif node_type.is_datetime:
                 datetime_value = nodes.CloneableNode(node.node)
                 args = [
@@ -1034,6 +1049,10 @@ class LateSpecializer(ResolveCoercions,
             real = nodes.ConstNode(constant.real, node.type.base_type)
             imag = nodes.ConstNode(constant.imag, node.type.base_type)
             node = nodes.ComplexNode(real, imag)
+
+        elif node.type.is_numpy_datetime:
+            datetime_str = nodes.ConstNode('', c_string_type)
+            node = nodes.DateTime64Node(datetime_str)
 
         elif node.type.is_datetime:
             # JNB: not sure what to do here for datetime value

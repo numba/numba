@@ -43,6 +43,7 @@ class ObjectCoercer(object):
         char.pointer() : "s",
         c_string_type: "s",
         datetime : "D",
+        numpy_datetime : "D",
     }
 
     def __init__(self, translator):
