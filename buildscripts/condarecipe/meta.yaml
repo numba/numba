@@ -11,7 +11,7 @@ requirements:
     - python
     - numba
     - numpy
-    - chrpath    [linux]
+    #- chrpath    [linux]
   run:
     - python
     - numpy
