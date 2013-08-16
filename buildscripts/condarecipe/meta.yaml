@@ -21,6 +21,7 @@ requirements:
 test:
   requires:
     - nose
+    - python
   imports:
     - numbapro
     - numbapro._utils.mviewbuf
