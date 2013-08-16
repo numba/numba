@@ -22,6 +22,8 @@ elif sys.version_info[:2] >= (2, 7):  # python 2.7
     BYTECODE_VERSION_SPECIFIC = [
         ('POP_JUMP_IF_FALSE', 2),
         ('POP_JUMP_IF_TRUE', 2),
+        ('JUMP_IF_TRUE_OR_POP', 2),
+        ('JUMP_IF_FALSE_OR_POP', 2),
     ]
 
 BYTECODES = [
@@ -41,6 +43,8 @@ BYTECODES = [
     ('BINARY_LSHIFT', 0),
     ('BINARY_RSHIFT', 0),
     ('BREAK_LOOP', 0),
+    ('UNARY_POSITIVE', 0),
+    ('UNARY_NEGATIVE', 0),
     ('UNARY_INVERT', 0),
     ('UNARY_NOT', 0),
     ('BUILD_TUPLE', 2),
@@ -56,6 +60,7 @@ BYTECODES = [
     ('INPLACE_DIVIDE', 0),
     ('INPLACE_TRUE_DIVIDE', 0),
     ('INPLACE_FLOOR_DIVIDE', 0),
+    ('INPLACE_MODULO', 0),
     ('INPLACE_POWER', 0),
     ('INPLACE_AND', 0),
     ('INPLACE_OR', 0),
@@ -78,13 +83,23 @@ BYTECODES = [
 #    ('STORE_ATTR', 2), # not supported
     ('STORE_SUBSCR', 0),
     ('UNPACK_SEQUENCE', 2),
+    ('SLICE+0', 0),
+    ('SLICE+1', 0),
+    ('SLICE+2', 0),
+    ('SLICE+3', 0),
+    ('RAISE_VARARGS', 2),
+    ('BUILD_SLICE', 2),
 ] + BYTECODE_VERSION_SPECIFIC
 
 
 BYTECODE_TABLE = _make_bytecode_table(BYTECODES)
 
 
-JUMP_OPS = ['JUMP_ABSOLUTE', 'JUMP_FORWARD', 'POP_JUMP_IF_FALSE']
+JUMP_OPS = ['JUMP_ABSOLUTE', 'JUMP_FORWARD',
+            'POP_JUMP_IF_FALSE', 'POP_JUMP_IF_TRUE',
+            'JUMP_IF_FALSE', 'JUMP_IF_TRUE',
+            'JUMP_IF_TRUE_OR_POP', 'JUMP_IF_FALSE_OR_POP',
+            'FOR_ITER', ]
 
 
 class ByteCodeInst(object):
@@ -174,5 +189,9 @@ class ByteCode(object):
     def __getitem__(self, offset):
         return self.table[offset]
 
+    def __contains__(self, offset):
+        return offset in self.table
+
     def dump(self):
         return '\n'.join('%10d\t%s' % i for i in self.table.iteritems())
+

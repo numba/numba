@@ -12,6 +12,12 @@ def complex_imag(c):
 def complex_arith(c, d):
     return complex(c.real * d.imag, c.imag * d.real)
 
+def complex_ctor_1(a):
+    return complex(a)
+
+def complex_ctor_2(a):
+    return complex(0, a)
+
 @testcase
 def test_complex_real():
     c = 123+234j
@@ -34,6 +40,23 @@ def test_complex_arith():
     compiled = compile(complex_arith, complex64, [complex64, complex64])
     exp = complex_arith(c, d)
     got = compiled(c, d)
+    assert np.allclose(got, exp), (got, exp)
+
+@testcase
+def test_complex_ctor_1():
+    a = 12.3
+    compiled = compile(complex_ctor_1, complex64, [float32])
+    exp = complex_ctor_1(a)
+    got = compiled(a)
+    assert np.allclose(got, exp), (got, exp)
+
+
+@testcase
+def test_complex_ctor_2():
+    a = 12.3
+    compiled = compile(complex_ctor_2, complex64, [float32])
+    exp = complex_ctor_2(a)
+    got = compiled(a)
     assert np.allclose(got, exp), (got, exp)
 
 if __name__ == '__main__':

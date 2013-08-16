@@ -1,819 +1,180 @@
-import __builtin__
-import math
-import itertools
-#from pprint import pprint
-from collections import namedtuple, defaultdict, Set
-from .symbolic import OP_MAP, Coerce, Expr
-from .utils import cache
-from . import errors
-
-class KeywordNotSupported(TypeError):
-    def __init__(self):
-        super(KeywordNotSupported, self).__init__("keyword args not supported")
-
-class ScalarType(namedtuple('ScalarType', ['code'])):
-    is_array = False
-    is_scalar = True
-    is_tuple = False
-    is_user = False
-    
-    @property
-    def is_int(self):
-        return self.kind in 'iu'
-
-    @property
-    def is_unsigned(self):
-        assert self.is_int, "expecting an int"
-        return self.kind == 'u'
-
-    @property
-    def is_signed(self):
-        assert self.is_int, "expecting an int"
-        return self.kind == 'i'
-
-    @property
-    def is_float(self):
-        return self.kind == 'f'
-
-    @property
-    def is_complex(self):
-        return self.kind == 'c'
-
-    @property
-    @cache
-    def bitwidth(self):
-        return int(self.code[1:])
-
-    @property
-    def kind(self):
-        return self.code[0]
-
-    @property
-    def complex_element(self):
-        assert self.is_complex, "expecting a complex"
-        return ScalarType('f%d' % (self.bitwidth//2))
-
-    def coerce(self, other):
-        def bitwidth_of(x):
-            return x.bitwidth
-        if not isinstance(other, ScalarType):
-            return
-
-        mykind, itskind = self.kind, other.kind
-        if mykind == itskind:
-            return max(self, other, key=bitwidth_of)
-        elif mykind in 'iu':
-            if itskind in 'fc':
-                return other
-            elif itskind in 'iu':
-                if self.bitwidth == other.bitwidth:
-                    if other.is_signed: return other
-                    else: return self
-                else:
-                    return max(self, other, key=bitwidth_of)
-            else:
-                return self
-        elif mykind in 'f':
-            if itskind == 'c': return other
-            else: return self
-        elif mykind in 'c':
-            return self
-
-        raise TypeError(self, other)
-
-    def __repr__(self):
-        return str(self.code)
-
-class ArrayType(namedtuple('ArrayType', ['element', 'ndim', 'order'])):
-    is_array = True
-    is_scalar = False
-    is_tuple = False
-    is_user = False
-
-    def coerce(self, other):
-        if isinstance(other, ArrayType) and self == other:
-            return self
-        else:
-            return None
-
-    def __repr__(self):
-        return '[%s x %s %s]' % (self.element, self.ndim, self.order)
-
-    def compatible_with(self, arg):
-        if arg.is_array:
-            return (self.element == arg.element and
-                    (arg.order == 'A' or self.order == arg.order) and
-                    self.ndim == arg.ndim)
-        return False
-
-class TupleType(namedtuple('TupleType', ['element', 'count'])):
-    is_tuple = True
-    is_scalar = False
-    is_array = False
-    is_user = False
-
-
-    def coerce(self, other):
-        if self == other: return self
-
-    def __repr__(self):
-        return '(%s x %d)' % (self.element, self.count)
-
-class UserType(namedtuple('UserType', ['name', 'object'])):
-    is_tuple = False
-    is_scalar = False
-    is_array = False
-    is_user = True
-
-    def coerce(self, other):
-        if self == other: return self
-
-    def __repr__(self):
-        return 'type(%s, %s)' % (self.name, self.object)
-
-def coerce(*args):
-    if len(args) == 1:
-        return args[0]
-    else:
-        base = args[0]
-        for ty in args[1:]:
-            base = base.coerce(ty)
-            if base is None:
-                return None
-        return base
-
-def can_coerce(*args):
-    return coerce(*args) is not None
-
-###############################################################################
-# Types
-
-boolean = ScalarType('i1')
-
-int8 = ScalarType('i8')
-int16 = ScalarType('i16')
-int32 = ScalarType('i32')
-int64 = ScalarType('i64')
-
-uint8 = ScalarType('u8')
-uint16 = ScalarType('u16')
-uint32 = ScalarType('u32')
-uint64 = ScalarType('u64')
-
-float32 = ScalarType('f32')
-float64 = ScalarType('f64')
-
-complex64 = ScalarType('c64')
-complex128 = ScalarType('c128')
-
-signed_set   = frozenset([int8, int16, int32, int64])
-unsigned_set = frozenset([uint8, uint16, uint32, uint64])
-int_set      = signed_set | unsigned_set
-float_set    = frozenset([float32, float64])
-complex_set  = frozenset([complex64, complex128])
-bool_set     = frozenset([boolean])
-numeric_set  = int_set | float_set | complex_set
-scalar_set   = numeric_set | bool_set
-
-def arraytype(elemty, ndim, order):
-    assert order in 'CFA', "invalid array order"
-    return ArrayType(elemty, ndim, order)
-
-
-def tupletype(elemty, count):
-    assert elemty.is_scalar, "tuple element must be scalars"
-    return TupleType(elemty, count)
-
-###############################################################################
-# Infer
-
-PENALTY_MAP = {
-    'ii': 1,
-    'uu': 1,
-    'ff': 1,
-    'cc': 1,
-    'iu': 3,
-    'ui': 2,
-    'if': 4,
-    'uf': 5,
-    'fi': 10,
-    'fu': 11,
-}
-
-def calc_cast_penalty(fromty, toty):
-
-    if fromty == toty:
-        return 1
-
-    szdiff = 1
-    if fromty.bitwidth > toty.bitwidth:
-        # large penalty so that this is highly discouraged
-        szdiff = (fromty.bitwidth - toty.bitwidth) * 100
-    elif fromty.bitwidth < toty.bitwidth:
-        szdiff = (toty.bitwidth - fromty.bitwidth)
-
-    code = '%s%s' % (fromty.kind, toty.kind)
-    factor = PENALTY_MAP.get(code)
-    if factor:
-        return factor * szdiff
-
-CAST_PENALTY = {}
-
-for pairs in itertools.product(scalar_set, scalar_set):
-    CAST_PENALTY[pairs] = calc_cast_penalty(*pairs)
-
-def cast_penalty(fromty, toty):
-    return CAST_PENALTY.get((fromty, toty))
+from __future__ import absolute_import
+from .errors import error_context
+from . import types
+from .symbolic import Inst
 
 class Infer(object):
-    '''Provide type inference and freeze the type of global values.
-    '''
-    def __init__(self, blocks, known, globals, intp, extended_globals={},
-                 extended_calls={}):
+    def __init__(self, func, blocks, funclib, args, return_type=None):
+        self.func = func
         self.blocks = blocks
-        self.argtys = known.copy()
-        self.retty = self.argtys.pop('')
-        self.globals = globals.copy()
-        self.globals.update(vars(__builtin__))
-        self.intp = ScalarType('i%d' % intp)
-        self.possible_types = set(scalar_set | set(self.argtys.itervalues()))
-        self.extended_globals = extended_globals
+        self.funclib = funclib
 
-        self.callrules = {}
-        self.callrules.update(BUILTIN_RULES)
-        self.callrules.update(extended_calls)
+        self.args = args
+        self.return_type = return_type
 
-        self.rules = defaultdict(set)
-        self.phis = defaultdict(set)
+        self.valmap = {}
+        self.phimap = {}
 
     def infer(self):
-        for blk in self.blocks.itervalues():
-            for v in blk.body:
-                self.visit(v)
-            if blk.terminator.kind == 'Ret':
-                self.visit_Ret(blk.terminator)
+        self.infer_instruction()
+        self.unify_phi_nodes()
+        self.check_branch()
+        self.check_return_type()
 
-#        self.propagate_rules()
-        possibles, conditions = self.deduce_possible_types()
-        return self.find_solutions(possibles, conditions)
+    #----- internals ------
 
-    def propagate_rules(self):
-        # propagate rules on PHIs
-        changed = True
-        while changed:
-            changed = False
-            for phi, incomings in self.phis.iteritems():
-                for i in incomings:
-                    phiold = self.rules[phi]
-                    iold = self.rules[i]
-                    new = phiold | iold
-                    if phiold != new or iold != new:
-                        self.rules[phi] = self.rules[i] = new
-                        changed = True
+    def infer_instruction(self):
+        # infer instructions
+        for block in self.blocks:
+            for op in block.code:
+                with error_context(lineno=op.lineno,
+                                   during='type inference'):
+                    ty = self.op(op)
+                    if ty is not None:
+                        assert not hasattr(op, 'type'), "redefining type"
+                        op.update(type=ty)
 
-    def deduce_possible_types(self):
-        # list possible types for each values
-        possibles = {}
-        conditions = defaultdict(list)
-        for v, rs in self.rules.iteritems():
-            if v not in self.phis:
-                tset = frozenset(self.possible_types)
-                for r in rs:
-                    if r.require:
-                        tset = set(filter(r, tset))
-                    else:
-                        conditions[v].append(r)
-                possibles[v] = tset
-        return possibles, conditions
+    def unify_phi_nodes(self):
+        # unify phi nodes
+        for op, newty in self.phimap.iteritems():
+            with error_context(lineno=op.lineno,
+                               during='phi unification'):
+                # ensure it can be casted to phi node
+                oldty = op.type
+                if newty != oldty:
+                    op.update(type=newty, castfrom=oldty)
+                else:
+                    op.update(type=newty)
 
-    def find_solutions(self, possibles, conditions):
-        '''
-        Parent block dictates the type of values when they participate in a PHI.
-        '''
-        # infer block by block starting with the entry block
-        processed_blocks = set()
-        for blknum in sorted(self.blocks):
-            blk = self.blocks[blknum]
+    def check_branch(self):
+        # check branch
+        for block in self.blocks:
+            term = block.terminator
+            with error_context(lineno=term.lineno,
+                               during='checking branch condition'):
+                if term.opcode == 'branch':
+                    types.boolean.coerce(term.cond.type)
 
-            for value in blk.body:
-                with errors.error_context(value.lineno):
-                    if value.kind == 'Phi':
-                        # pickup the type from the previously inferred set
-                        for ib, iv in value.args.incomings:
-                            if ib in processed_blocks:
-                                possibles[value] = possibles[iv.value]
-                                break
-                    else: #if value.ref.uses:
-                        # only process the values that are used.
-                        depset = set([value])
-                        clist = conditions[value]
-                        for cond in clist:
-                            depset |= set(cond.deps)
+    def check_return_type(self):
+        # check return type
+        for block in self.blocks:
+            term = block.terminator
+            with error_context(lineno=term.lineno,
+                               during='unifying return type'):
+                if term.opcode == 'ret':
+                    return_type = term.value.type
+                    if self.return_type != return_type:
+                        if (self.return_type is not None and
+                                not return_type.try_coerce(self.return_type)):
+                            msg = "expect return type of %s but got %s"
+                            raise TypeError(msg %
+                                            (self.return_type, return_type))
+                        elif self.return_type is None:
+                            self.return_type = return_type
+                    term.update(astype=self.return_type)
+                elif term.opcode == 'retvoid':
+                    if self.return_type != types.void:
+                        msg = "must return a value of %s"
+                        raise TypeError(msg % self.return_type)
 
-                        variables = list(depset)
-                        # earlier instruction has more heavier weight
-                        pool = []
-                        for v in variables:
-                            pool.append(possibles.get(v, self.possible_types))
+    def op(self, inst):
+        attr = 'op_%s' % inst.opcode
+        fn = getattr(self, attr, self.generic_op)
+        return fn(inst)
 
-                        chosen = []
-                        for selected in itertools.product(*pool):
-                            localmap = dict(zip(variables, selected))
-                            penalty = 1
-                            for cond in clist:
-                                deps = [value] + list(cond.deps)
-                                args = [localmap[x] for x in deps]
-                                res = cond(*args)
-                                if res and isinstance(res, int):
-                                    penalty += res
-                                else:
-                                    break
-                            else:
-                                if penalty:
-                                    chosen.append((penalty, localmap))
+    def generic_op(self, inst):
+        raise NotImplementedError(inst)
 
-                        chosen_sorted = sorted(chosen)
-                        if not chosen_sorted:
-                            #print value
-                            #print chosen_sorted
-                            raise TypeError("cannot resolve type")
-                        best_score = chosen_sorted[0][0]
-                        take_filter = lambda x: x[0] == best_score
-                        filterout = itertools.takewhile(take_filter, chosen_sorted)
-                        bests = [x for _, x in filterout]
+    def op_arg(self, inst):
+        ty = self.args[inst.name]
+        return ty
 
-                        if len(bests) > 1:
-                            # find the most generic solution
-                            temp = defaultdict(set)
-                            for b in bests:
-                                for v, t in b.iteritems():
-                                    temp[v].add(t)
-                            soln = {}
-                            for v, ts in temp.iteritems():
-                                soln[v] = coerce(*ts)
+    def op_load(self, inst):
+        return self.valmap[inst.name]
 
-                        elif len(bests) == 1:
-                            soln = bests[0]
-                        else:
-                            msg = ("cannot infer value/operation not supported on "
-                                   "input types")
-                            raise TypeError(msg)
-                        for k, v in soln.iteritems():
-                            possibles[k] = frozenset([v])
-            processed_blocks.add(blknum)
-
-        # ensure we have only one solution for each value
-        soln = {}
-        for k, vs in possibles.iteritems():
-            with errors.error_context(k.lineno):
-                assert len(vs) == 1, "cannot unify type %s" % vs
-                soln[k] = iter(vs).next()
-
-        # postprocess all PHI nodes and ensure the type matches for all
-        # incoming values
-        for phi, incomings in self.phis.iteritems():
-            expect = soln[phi]
-            for inc in incomings:
-                if inc in soln:
-                    got = soln[inc]
-                    if expect != got:
-                        assert can_coerce(expect, got), \
-                            "cannot coerce %s -> %s" % (expect, got)
-                        for blknum, ref in phi.args.incomings:
-                            if ref.value is inc:
-                                break
-                        else:
-                            assert False, 'value not found in PHI'
-                        blk = self.blocks[blknum]
-                        coercion_node = blk.insert(Expr('Coerce', None, Coerce(ref)))
-                        soln[coercion_node.value] = expect
-                        blk.varmap[phi.args.name].append(coercion_node.value)
-                        # update PHI incoming
-                        phi.args.incomings.remove((blknum, ref))
-                        phi.args.incomings.add((blknum, coercion_node))
-
-        return soln
-
-    def visit(self, value):
-        fname = OP_MAP.get(value.kind, value.kind)
-
-        fn = getattr(self, 'visit_' + fname, self.generic_visit)
-
-        with errors.error_context(value.lineno):
-            fn(value)
-
-    def generic_visit(self, value):
-        raise NotImplementedError(value)
-
-    # ------ specialized visit ------- #
-
-    def visit_Ret(self, term):
-        val = term.args.value.value
-        def rule(value):
-            if not self.retty:
-                raise TypeError('function has no return value')
-            return cast_penalty(value, self.retty)
-        self.rules[val].add(Conditional(rule))
-
-    def visit_Arg(self, value):
-        pos, name = value.args.num, value.args.name
-        expect = self.argtys[name]
-        self.rules[value].add(MustBe(expect))
-
-    def visit_Undef(self, value):
-        pass
-
-    def visit_Global(self, value):
-        gname = value.args.name
-        parts = gname.split('.')
-        key = parts[0]
-        try:
-            obj = self.globals[key]
-        except KeyError:
-            raise TypeError("global %s is not defined" % key)
-        for part in parts[1:]:
-            obj = getattr(obj, part)
-
-        if isinstance(obj, (int, float, complex)):
-            tymap = {int:       self.intp,
-                     float:     float64,
-                     complex:   complex128}
-            self.rules[value].add(MustBe(tymap[type(obj)]))
-        elif obj in self.extended_globals:
-            self.extended_globals[obj](self, value, obj)
+    def op_store(self, inst):
+        sty = inst.value.type
+        if inst.name not in self.valmap:
+            # defining
+            self.valmap[inst.name] = dty = sty
         else:
-            msg = "only support global value of int, float or complex"
-            raise TypeError(msg)
+            # overwriting
+            dty = self.valmap[inst.name]
+            sty.coerce(dty)
+        inst.update(astype=dty)
 
+    def op_call(self, inst):
+        args = [v.type for v in inst.args]
+        callee = getattr(inst.callee, 'value', inst.callee)
 
-    def visit_Const(self, value):
-        const = value.args.value
-        if isinstance(const, (int, long)):
-            self.rules[value].add(MustBe(self.intp))
-        elif isinstance(const, float):
-            self.rules[value].add(MustBe(float64))
-        elif isinstance(const, complex):
-            self.rules[value].add(MustBe(complex128))
-        elif isinstance(const, tuple) and all(isinstance(x, (int, long))
-                                              for x in const):
-            tuty = tupletype(self.intp, len(const))
-            self.possible_types.add(tuty)
-            self.rules[value].add(MustBe(tuty))
+        if isinstance(callee, Inst) and callee.type == types.method_type:
+            parent = callee
+            callee = '@%s' % (parent.callee[1:],)
+            assert len(parent.args) == 1
+            args = [parent.args[0].type] + args
+            inst.update(args=list(parent.args) + list(inst.args))
+
+        with error_context(during="resolving function %s(%s)" %
+                                  (callee, ', '.join(str(a) for a in args))):
+            defn = self.funclib.get(callee, args)
+            inst.update(defn=defn)
+            if defn.return_type == types.method_type:
+                inst.update(bypass=True)           # codegen should bypass this
+            return defn.return_type
+
+    def op_const(self, inst):
+        ty = self.type_global(inst.value)
+        if ty is None:
+            raise ValueError("invalid constant value %s" % (inst.value,))
+        return ty
+
+    def op_global(self, inst):
+        value = inst.value
+        ty = self.type_global(inst.value)
+        if ty is types.function_type or ty is types.exception_type:
+            return ty
         else:
-            msg = 'invalid constant value of %s' % type(const)
-            raise TypeError(msg)
+            assert False, 'XXX: inline global value: %s' % value
 
-    def visit_BinOp(self, value):
-        lhs, rhs = value.args.lhs.value, value.args.rhs.value
-
-        if value.kind == '/':
-            def rule(value, lhs, rhs):
-                rty = coerce(lhs, rhs)
-                if rty.is_float or rty.is_int:
-                    target = ScalarType('f%d' % max(rty.bitwidth, 32))
-                    return cast_penalty(value, target)
-
-            self.rules[value].add(Conditional(rule, lhs, rhs))
-            self.rules[value].add(Restrict(float_set))
-            self.rules[lhs].add(Restrict(int_set|float_set))
-            self.rules[rhs].add(Restrict(int_set|float_set))
-
-        
-        elif value.kind == '//':
-        
-            def rule(value, lhs, rhs):
-                rty = coerce(lhs, rhs)
-                if rty.is_int or rty.is_float:
-                    target = ScalarType('i%d' % max(rty.bitwidth, 32))
-                    return cast_penalty(value, target)
-
-            self.rules[value].add(Conditional(rule, lhs, rhs))
-            self.rules[value].add(Restrict(int_set))
-            self.rules[lhs].add(Restrict(int_set|float_set))
-            self.rules[rhs].add(Restrict(int_set|float_set))
-            
-        elif value.kind in ['&', '|', '^', '>>', '<<']:
-            
-            def rule(value, lhs, rhs):
-                rty = coerce(lhs, rhs)
-                if rty.is_int:
-                    return value == rty
-
-            self.rules[value].add(Conditional(rule, lhs, rhs))
-            self.rules[value].add(Restrict(int_set))
-            self.rules[lhs].add(Restrict(int_set))
-            self.rules[rhs].add(Restrict(int_set))
-
-        elif value.kind == 'ForInit':
-
-            self.rules[value].add(MustBe(self.intp))
-
-            def rule(value):
-                return cast_penalty(value, self.intp)
-
-            self.rules[lhs].add(Conditional(rule))
-            self.rules[rhs].add(Conditional(rule))
-            self.rules[lhs].add(Restrict(int_set))
-            self.rules[rhs].add(Restrict(int_set))
-
+    def op_phi(self, inst):
+        for blk, val in inst.phi:
+            # use the first type definition
+            ty = getattr(val, 'type')
+            if ty is not None:
+                break
         else:
-            assert value.kind in ['+', '-', '*', '%'], \
-                "unsupport binary op %s" % value.kind
-            
-            def rule(value, lhs, rhs):
-                return cast_penalty(coerce(lhs, rhs), value)
+            assert 'phi is not typed'
+        for val in inst.phi.values():
+            self.phimap[val] = ty
+        return ty
 
-            self.rules[value].add(Restrict(numeric_set))
-            self.rules[value].add(Conditional(rule, lhs, rhs))
-            self.rules[lhs].add(Restrict(numeric_set))
-            self.rules[rhs].add(Restrict(numeric_set))
+    def op_unpack(self, inst):
+        source = inst.value
+        etys = source.type.unpack(inst.count)
+        return etys[inst.index]
 
-    def visit_BoolOp(self, value):
-        lhs, rhs = value.args.lhs.value, value.args.rhs.value
+    def op_tuple(self, inst):
+        return types.tupletype(*(i.type for i in inst.items))
 
-        operand_set = int_set | float_set | bool_set
-        self.rules[lhs].add(Restrict(operand_set))
-        self.rules[rhs].add(Restrict(operand_set))
-        
-        self.rules[value].add(MustBe(boolean))
-
-
-    def visit_UnaryOp(self, value):
-        operand = value.args.value.value
-        if value.kind == '~':
-            self.rules[operand].add(Restrict(int_set|bool_set))
-            self.rules[value].add(Restrict(int_set|bool_set))
-        elif value.kind == 'not':
-            self.rules[operand].add(Restrict(int_set|bool_set|float_set))
-            self.rules[value].add(Restrict(bool_set))
+    def op_slice(self, inst):
+        if inst.step is not None:
+            return types.slice3
         else:
-            raise Exception('unhandled unary %s' % value.kind)
+            return types.slice2
 
-    def visit_Phi(self, value):
-        incs = [inc.value for bb, inc in value.args.incomings]
-        self.phis[value] |= set(incs)
-
-    def visit_For(self, value):
-        index, stop, step = (value.args.index.value,
-                             value.args.stop.value,
-                             value.args.step.value)
-
-        self.rules[index].add(MustBe(self.intp))
-        self.rules[stop].add(Restrict(int_set))
-        self.rules[step].add(Restrict(int_set))
-        self.rules[value].add(MustBe(boolean))
-
-    def visit_GetItem(self, value):
-        obj = value.args.obj.value
-        self.rules[obj].add(Restrict(filter_array(self.possible_types)))
-        for i in value.args.idx:
-            iv = i.value
-            self.rules[iv].add(Restrict(int_set))
-
-        self.rules[value].add(Restrict(numeric_set))
-
-        def rule(value, obj):
-            if obj.is_array:
-                return obj.element == value
-                #return cast_penalty(obj.element, value)
-        self.rules[value].add(Conditional(rule, obj))
-
-    def visit_SetItem(self, value):
-        obj = value.args.obj.value
-        self.rules[obj].add(Restrict(filter_array(self.possible_types)))
-        for i in value.args.idx:
-            iv = i.value
-            self.rules[iv].add(Restrict(int_set))
-
-        val = value.args.value.value
-
-        self.rules[val].add(Restrict(numeric_set))
-
-        def rule(value, obj):
-            if obj.is_array:
-                return cast_penalty(value, obj.element)
-
-        self.rules[val].add(Conditional(rule, obj))
-
-    def visit_ArrayAttr(self, value):
-        obj = value.args.obj.value
-        self.rules[obj].add(Restrict(filter_array(self.possible_types)))
-        idx = value.args.idx
-        assert value.args.attr in ['size', 'ndim', 'shape', 'strides'], \
-            "unsupport array attribute %s" % value.args.attr
-        if idx:
-            assert value.args.attr in ['shape', 'strides'], \
-                "unsupport array attribute %s" % value.args.attr
-            self.rules[idx.value].add(Restrict(int_set))
-
-        self.rules[value].add(MustBe(self.intp))
-
-    def visit_ComplexGetAttr(self, value):
-        obj = value.args.obj.value
-        self.rules[obj].add(Restrict(complex_set))
-        self.rules[value].add(Restrict(float_set))
-        def rule(value, obj):
-            return cast_penalty(value, obj.complex_element)
-        self.rules[value].add(Conditional(rule, obj))
-
-    def visit_Call(self, value):
-        funcname = value.args.func
-        if funcname == '.pow':
-            obj = math.pow
-        else:
-            parts = funcname.split('.')
-            obj = self.globals[parts[0]]
-            for attr in parts[1:]:
-                obj = getattr(obj, attr)
-        if obj not in self.callrules:
-            if not hasattr(obj, '_npm_context_'):
-                msg = "%s is not a regconized builtins"
-                raise TypeError(msg % funcname)
-            else:
-                _lmod, _lfunc, retty, argtys = obj._npm_context_
-                args = map(lambda x: x.value, value.args.args)
-                def can_cast_to(t):
-                    def wrapped(v):
-                        return cast_penalty(v, t)
-                    return wrapped
-
-                if len(args) != len(argtys):
-                    msg = "call to %s takes %d args but %d given"
-                    msgargs = obj, len(argtys), len(args)
-                    raise TypeError(msg % msgargs)
-
-                for aval, aty in zip(args, argtys):
-                    if aty.is_scalar:
-                        self.rules[aval].add(Conditional(can_cast_to(aty)))
-                    elif aty.is_array:
-                        def compatible_array(val, arg):
-                            if val.is_array and arg.is_array:
-                                return val.compatible_with(arg)
-                        self.rules[aval].add(Conditional(compatible_array, aval))
-
-                if retty:
-                    self.rules[value].add(MustBe(retty))
-            value.replace(func=obj)
-        else:
-            callrule = self.callrules[obj]
-            callrule(self, value)
-
-    def visit_Unpack(self, value):
-        obj = value.args.obj.value
-
-        def must_be_tuple(value):
-            return value.is_tuple
-        self.rules[obj].add(Conditional(must_be_tuple))
-
-        def match_element(value, obj):
-            if obj.is_tuple:
-                return value == obj.element
-        self.rules[value].add(Conditional(match_element, obj))
-
-###############################################################################
-# Rules
-
-class Rule(object):
-    require = False
-    conditional = False
-
-    def __init__(self, checker):
-        assert callable(checker), "expecting a callable"
-        self.checker = checker
-
-class Require(Rule):
-    require = True
-    def __call__(self, t):
-        return self.checker(t)
-
-class Conditional(Rule):
-    conditional = True
-    def __init__(self, checker, *deps):
-        super(Conditional, self).__init__(checker)
-        self.deps = deps
-
-    def __call__(self, *args):
-        return self.checker(*args)
-
-def MustBe(expect):
-    def _mustbe(t):
-        return t == expect
-    return Require(_mustbe)
-
-
-def Restrict(tset):
-    assert isinstance(tset, Set), "expecting a set"
-    def _restrict(t):
-        return t in tset
-    return Require(_restrict)
-
-def filter_array(ts):
-    return set(t for t in ts if t.is_array)
-
-
-###############################################################################
-# Rules for builtin functions
-
-def call_complex_rule(infer, call):
-    def cond_to_float(value, call):
-        return cast_penalty(value, call.complex_element)
-
-    args = call.args.args
-    kws = call.args.kws
-    if kws:
-        raise KeywordNotSupported
-    nargs = len(args)
-    if nargs == 1:
-        (real,) = args
-        infer.rules[real.value].add(Restrict(int_set|float_set))
-        infer.rules[real.value].add(Conditional(cond_to_float, call))
-    elif nargs == 2:
-        (real, imag) = args
-        infer.rules[real.value].add(Restrict(int_set|float_set))
-        infer.rules[imag.value].add(Restrict(int_set|float_set))
-        infer.rules[real.value].add(Conditional(cond_to_float, call))
-        infer.rules[imag.value].add(Conditional(cond_to_float, call))
-    else:
-        raise TypeError("invalid use of complex(real[, imag])")
-    infer.rules[call].add(Restrict(complex_set))
-    call.replace(func=complex)
-
-def call_int_rule(infer, call):
-    args = call.args.args
-    kws = call.args.kws
-    if kws:
-        raise KeywordNotSupported
-    nargs = len(args)
-    if nargs == 1:
-        (num,) = args
-        infer.rules[num.value].add(Restrict(int_set|float_set))
-    else:
-        raise TypeError("invalid use of int(x)")
-    infer.rules[call].add(Restrict(int_set))
-    call.replace(func=int)
-
-def call_float_rule(infer, call):
-    args = call.args.args
-    kws = call.args.kws
-    if kws:
-        raise KeywordNotSupported
-    nargs = len(args)
-    if nargs == 1:
-        (num,) = args
-        infer.rules[num.value].add(Restrict(int_set|float_set))
-    else:
-        raise TypeError("invalid use of float(x)")
-    infer.rules[call].add(Restrict(float_set))
-    call.replace(func=float)
-
-def call_maxmin_rule(fname):
-    def inner(infer, call):
-        args = call.args.args
-        kws = call.args.kws
-        if kws:
-            raise KeywordNotSupported
-        nargs = len(args)
-        if nargs < 2:
-            msg = "%s() must have at least two arguments"
-            raise TypeError(msg % fname)
-
-        argvals =[a.value for a in args]
-
-        for a in argvals:
-            infer.rules[a].add(Restrict(int_set|bool_set|float_set))
-
-        def rule(value, *tys):
-            rty = coerce(*tys)
-            return cast_penalty(rty, value)
-        infer.rules[call].add(Conditional(rule, *argvals))
-
-        call.replace(func={'min': min, 'max': max}[fname])
-    return inner
-
-def call_abs_rule(infer, call):
-    args = call.args.args
-    kws = call.args.kws
-    if kws:
-        raise KeywordNotSupported
-    nargs = len(args)
-    if nargs != 1:
-        raise TypeError("abs(number) takes one argument only")
-
-    arg = args[0].value
-    infer.rules[arg].add(Restrict(signed_set|float_set))
-
-    def prefer_same_as_arg(value, arg):
-        return cast_penalty(value, arg)
-
-    infer.rules[call].add(Conditional(prefer_same_as_arg, arg))
-    call.replace(func=abs)
-
-BUILTIN_RULES = {
-    complex:    call_complex_rule,
-    int:        call_int_rule,
-    float:      call_float_rule,
-    min:        call_maxmin_rule('min'),
-    max:        call_maxmin_rule('max'),
-    abs:        call_abs_rule,
-}
-
+    def type_global(self, value):
+        if value is None:
+            return types.none_type
+        elif isinstance(value, complex):
+            return types.complex128
+        elif isinstance(value, float):
+            return types.float64
+        elif isinstance(value, int):
+            return types.intp
+        elif isinstance(value, tuple):
+            return types.tupletype(*[self.type_global(i) for i in value])
+        elif (isinstance(value, Exception) or
+                (isinstance(value, type) and issubclass(value, Exception))):
+            return types.exception_type
+        elif callable(value):
+            return types.function_type

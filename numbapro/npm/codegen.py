@@ -1,739 +1,261 @@
-from collections import namedtuple
+import inspect, collections
+from llvm import core as lc
+from .errors import error_context
+from . import types
 
-import llvm.core as lc
-from llvm.core import Type, Constant
+codegen_context = collections.namedtuple('codegen_context',
+                                         ['imp', 'builder', 'raises', 'lineno',
+                                          'flags', 'cast'])
+exception_info = collections.namedtuple('exception_info',
+                                        ['exc', 'line'])
 
-from . import typing, symbolic, errors
+SUPPORTED_FLAGS = frozenset(['overflow',
+                             'zerodivision',
+                             'boundcheck',
+                             'wraparound',])
 
-GlobalVar = namedtuple('GlobalVar', ['type', 'gvar'])
+def _check_supported_flags(flags):
+    for f in flags:
+        if f not in SUPPORTED_FLAGS:
+            raise NameError('unsupported compiler flag: %s' % f)
+
+class Flags(object):
+    def __init__(self, flags):
+        _check_supported_flags(flags)
+        self.flags = frozenset(flags)
+
+    def __getattr__(self, k):
+        if k not in SUPPORTED_FLAGS:
+            raise AttributeError(k)
+        else:
+            return k in self.flags
 
 class CodeGen(object):
-    def __init__(self, name, blocks, typemap, consts, args, return_type, intp,
-                 extended_globals={}, extended_calls={}):
+    def __init__(self, func, blocks, args, return_type, implib, flags=()):
+        self.func = func
+        self.argspec = inspect.getargspec(func)
+        assert not self.argspec.keywords
+        assert not self.argspec.defaults
+        assert not self.argspec.varargs
+
         self.blocks = blocks
-        self.typemap = typemap
         self.args = args
         self.return_type = return_type
-        self.typesetter = TypeSetter(intp)
-        self.consts = consts                     # global values at compile time
-        self.extern_globals = {}                 # {name: GlobalVar}
-        self.extended_globals = extended_globals # codegen for special globals
-        self.extended_calls = extended_calls     # codegen for special functions
+        self.implib = implib
+        self.exceptions = {}    # map errcode to exceptions
+        self.flags = Flags(flags)
 
+    def make_module(self):
+        return lc.Module.new('module.%s' % self.func.__name__)
+
+    def make_function(self):
+        largtys = []
+        for argname in self.argspec.args:
+            argtype = self.args[argname]
+            argty = argtype.llvm_as_argument()
+            largtys.append(argty)
+
+        if self.return_type != types.void:
+            lretty = self.return_type.llvm_as_return()
+            fnty_args = largtys + [lretty]
+        else:
+            fnty_args = largtys
+
+        lfnty = lc.Type.function(lc.Type.int(), fnty_args)
+        lfunc = self.lmod.add_function(lfnty, name=self.func.__name__)
+
+        return lfunc
+
+    def codegen(self):
+        self.lmod = self.make_module()
+        self.lfunc = self.make_function()
+
+        # initialize all blocks
         self.bbmap = {}
-        self.valmap = {}
-        self.pending_phis = {}
-
-        self.link_later = set()
-
-        self.lmod = lc.Module.new(repr(self))
-
-        argtys = []
-        for ty in args:
-            lty = self.to_llvm(ty)
-            if ty.is_scalar and ty.is_complex:
-                lty = Type.pointer(lty)
-            argtys.append(lty)
-
-        if return_type:
-            retty = Type.pointer(self.to_llvm(return_type))
-            fnty = Type.function(Type.void(), argtys + [retty])
-        else:
-            fnty = Type.function(Type.void(), argtys)
-        self.lfunc = self.lmod.add_function(fnty, name=name)
-
-    def to_llvm(self, ty):
-        return self.typesetter.to_llvm(ty)
-
-    def sizeof(self, ty):
-        return sizeof(self.builder, self.to_llvm(ty), self.typesetter.llvm_intp)
-
-    def array_getpointer(self, ary, idx):
-        aryty = self.typemap[ary]
-        ary = self.valmap[ary]
-        data = self.builder.load(gep(self.builder, ary, 0, 0))
-        shapeptr = gep(self.builder, ary, 0, 1)
-        shape = [self.builder.load(gep(self.builder, shapeptr, 0, ax))
-                    for ax in range(aryty.ndim)]
-
-        strideptr = gep(self.builder, ary, 0, 2)
-        strides = [self.builder.load(gep(self.builder, strideptr, 0, ax))
-                    for ax in range(aryty.ndim)]
-
-        order = aryty.order
-        indices = [self.do_cast(self.valmap[i.value],
-                                self.typemap[i.value],
-                                self.typesetter.intp)
-                   for i in idx]
-
-        return array_pointer(self.builder, data, shape, strides, order, indices)
-
-    def cast(self, value, destty):
-        ty = self.typemap[value]
-        lval = self.valmap[value]
-        return self.do_cast(lval, ty, destty)
-
-    def do_cast(self, lval, ty, destty):
-        if ty == destty:  # same type
-            return lval
-
-        if ty.is_array:
-            assert ty.compatible_with(destty), ('incompatible array %s -> %s' %
-                                                (ty, destty))
-            return lval
-
-        elif ty.is_int and destty.is_int:
-            # int -> int
-            if destty.bitwidth > ty.bitwidth:
-                op = (self.builder.sext
-                        if ty.is_signed
-                        else self.builder.zext)
-            else:
-                op = self.builder.trunc
-
-        elif ty.is_int and destty.is_float:
-            # int -> float
-            op = (self.builder.sitofp
-                    if ty.is_signed
-                    else self.builder.uitofp)
-
-        elif ty.is_float and destty.is_float:
-            # float -> float
-            op = (self.builder.fptrunc
-                    if destty.bitwidth < ty.bitwidth
-                    else self.builder.fpext)
-
-        elif ty.is_float and destty.is_int:
-            # float -> int
-            op = (self.builder.fptosi
-                    if destty.is_signed
-                    else self.builder.fptoui)
-
-        elif (ty.is_int or ty.is_float) and destty.is_complex:
-            # int|float -> complex
-            def float_to_complex(real, complexty):
-                celem = destty.complex_element
-                lcelem = self.to_llvm(celem)
-                real = self.do_cast(real, ty, celem)
-                imag = lc.Constant.real(lcelem, 0)
-                return complex_make(self.builder, complexty, real, imag)
-
-            op = float_to_complex
-
-        try:
-            return op(lval, self.to_llvm(destty))
-        except NameError:
-            raise NotImplementedError('casting %s -> %s' % (ty, destty))
-
-    def define_const(self, ty, val):
-        if ty.is_scalar:
-            if ty.kind == 'i':
-                lty = self.to_llvm(ty)
-                return Constant.int_signextend(lty, val)
-            elif ty.kind == 'u':
-                lty = self.to_llvm(ty)
-                return Constant.int(lty, val)
-            elif ty.kind == 'f':
-                lty = self.to_llvm(ty)
-                return Constant.real(lty, val)
-            elif ty.kind == 'c':
-                real = self.define_const(ty.complex_element, val.real)
-                imag = self.define_const(ty.complex_element, val.imag)
-                return Constant.struct([real, imag])
-        elif ty.is_tuple:
-            ev = [self.define_const(ty.element, v) for v in val]
-            return Constant.struct(ev)
-        else:
-            raise NotImplementedError
-
-    def generate(self):
-        # generate in the order of basic block offset
-        genorder = list(sorted(self.blocks.iteritems()))
-        # init basicblock map
-        for off, blk in genorder:
-            self.bbmap[off] = self.lfunc.append_basic_block('bb%d' % off)
-
-        # add phi first
-        for _, blk in genorder:
-            bb = self.bbmap[blk.offset]
-            self.builder = lc.Builder.new(bb)
-            for expr in blk.body:
-                if expr.kind == 'Phi':
-                    self.generate_expression(expr)
-
-        # generate other expressions and terminator
-        for _, blk in genorder:
-            bb = self.bbmap[blk.offset]
-            self.builder = lc.Builder.new(bb)
-            for expr in blk.body:
-                if expr.kind != 'Phi':
-                    self.generate_expression(expr)
-            else:
-                self.generate_terminator(blk.terminator)
-
-        # fix PHIs
-        for phi, incomings in self.pending_phis.iteritems():
-            for blkoff, incval in incomings:
-                val = self.valmap[incval.value]
-                blk = self.bbmap[blkoff]
-                if val is None:
-                    val = Constant.undef(phi.type)
-                phi.add_incoming(val, blk)
-
-        # verify
-        self.lfunc.verify()
-
-        # link
-        for lmod in self.link_later:
-            self.lmod.link_in(lmod, preserve=True)
-        return self.lfunc
-
-    def generate_expression(self, expr):
-        with errors.error_context(expr.lineno):
-            kind = symbolic.OP_MAP.get(expr.kind, expr.kind)
-            fn = getattr(self, 'expr_' + kind, self.generic_expr)
-            fn(expr)
-
-    def generic_expr(self, expr):
-        raise NotImplementedError("%s not implemented" % expr)
-
-    def generate_terminator(self, term):
-        with errors.error_context(term.lineno):
-            kind = term.kind
-            fn = getattr(self, 'term_' + kind, self.generic_term)
-            fn(term)
-
-    def generic_term(self, term):
-        raise NotImplementedError("not implemented")
-
-    # -------- expr ---------
-
-    def expr_Arg(self, expr):
-        num = expr.args.num
-        argty = self.args[num]
-        if argty.is_scalar and argty.is_complex:
-            val = self.builder.load(self.lfunc.args[num])
-        else:
-            val = self.lfunc.args[num]
-        self.valmap[expr] = val
-
-    def expr_Undef(self, expr):
-        self.valmap[expr] = None
-
-    def expr_Global(self, expr):
-        name = expr.args.name
-        value = expr.args.value
-        if value is not None:
-            self.valmap[expr] = self.extended_globals[value](self, expr)
-        else:
-            # handle regular global value
-            if name not in self.extern_globals:
-                # first time reference to a global
-                ty = self.typemap[expr]
-                lty = self.to_llvm(ty)
-                gvar = self.lmod.add_global_variable(lty,
-                                             name='__npm_global_%s' % name)
-
-                gvar.initializer = Constant.undef(gvar.type.pointee)
-                self.extern_globals[name] = GlobalVar(type=ty, gvar=gvar)
-
-            self.valmap[expr] = self.builder.load(
-                                                self.extern_globals[name].gvar)
+        for block in self.blocks:
+            bb = self.lfunc.append_basic_block('B%d' % block.offset)
+            self.bbmap[block] = bb
 
 
-    def expr_Const(self, expr):
-        ty = self.typemap[expr]
-        self.valmap[expr] = self.define_const(ty, expr.args.value)
-
-    def expr_Coerce(self, expr):
-        ty = self.typemap[expr]
-        self.valmap[expr] = self.cast(expr.args.src.value, ty)
-
-    def expr_Phi(self, expr):
-        ty = self.typemap[expr]
-        phi = self.builder.phi(self.to_llvm(ty), name=expr.args.name)
-
-#        for blkoff, valref in expr.args.incomings:
-#            val = valref.value
-#            vty = self.typemap[val]
-
-        self.pending_phis[phi] = expr.args.incomings
-        self.valmap[expr] = phi
-
-    def expr_BinOp(self, expr):
-        finalty = self.typemap[expr]
-        lhs, rhs = expr.args.lhs.value, expr.args.rhs.value
-        lty, rty = map(self.typemap.get, [lhs, rhs])
-        if expr.kind in ['/', 'ForInit']:
-            opty = finalty
-        else:
-            opty = lty.coerce(rty)
-        if expr.kind == 'ForInit':
-            expr.kind = '-'
-        lhs, rhs = map(lambda x: self.cast(x, opty), [lhs, rhs])
-        if opty.is_int:
-            offset = 'iu'.index(opty.kind)
-            res = INT_OPMAP[expr.kind][offset](self.builder, lhs, rhs)
-        elif opty.is_float:
-            res = FLOAT_OPMAP[expr.kind](self.builder, lhs, rhs)
-        elif opty.is_complex:
-            res = COMPLEX_OPMAP[expr.kind](self.builder, lhs, rhs)
-        self.valmap[expr] = self.do_cast(res, opty, finalty)
-
-    def expr_BoolOp(self, expr):
-        assert self.typemap[expr] == typing.boolean, \
-                "boolop must return a boolean"
-        lhs, rhs = expr.args.lhs.value, expr.args.rhs.value
-        lty, rty = map(self.typemap.get, [lhs, rhs])
-        opty = lty.coerce(rty)
-        lhs, rhs = map(lambda x: self.cast(x, opty), [lhs, rhs])
-        self.valmap[expr] = self._do_compare(expr.kind, opty, lhs, rhs)
-
-    def expr_UnaryOp(self, expr):
-        finalty = self.typemap[expr]
-        operand = expr.args.value.value
-        ity = self.typemap[operand]
-        if expr.kind == 'not':
-            assert finalty == typing.boolean, \
-                "return type of `not x` must be boolean"
-            pred = self._do_compare('==', ity, self.valmap[operand],
-                                    self.define_const(ity, 0))
-            self.valmap[expr] = pred
-        elif ity.is_int:
-            res = INT_UNARY_OPMAP[expr.kind](self.builder, self.valmap[operand])
-            self.valmap[expr] = self.do_cast(res, ity, finalty)
-
-    def expr_For(self, expr):
-        index = expr.args.index.value
-        stop = expr.args.stop.value
-        step = expr.args.step.value
-
-        index_ty = self.typemap[index]
-        #step_ty = self.typemap[step]
-
-        intp = index_ty
-        index = self.cast(index, intp)
-        stop = self.cast(stop, intp)
-        step = self.cast(step, intp)
-
-        positive = self.builder.icmp(lc.ICMP_SGE,
-                                     step, self.define_const(intp, 0))
-        ok_pos = self.builder.icmp(lc.ICMP_SLT, index, stop)
-        ok_neg = self.builder.icmp(lc.ICMP_SGT, index, stop)
-
-        ok = self.builder.select(positive, ok_pos, ok_neg)
-
-        # fixes end of loop iterator value
-        index_prev = self.builder.sub(index, step)
-        self.valmap[expr.args.index.value] = self.builder.select(ok, index, index_prev)
-
-        self.valmap[expr] = ok
-
-    def expr_GetItem(self, expr):
-        elemty = self.typemap[expr.args.obj.value].element
-        outty = self.typemap[expr]
-        ptr = self.array_getpointer(expr.args.obj.value, expr.args.idx)
-        val = self.builder.load(ptr)
-        self.valmap[expr] = self.do_cast(val, elemty, outty)
-
-    def expr_SetItem(self, expr):
-        elemty = self.typemap[expr.args.obj.value].element
-        value = self.cast(expr.args.value.value, elemty)
-        ptr = self.array_getpointer(expr.args.obj.value, expr.args.idx)
-        self.builder.store(value, ptr)
-
-    def expr_ArrayAttr(self, expr):
-        attr = expr.args.attr
-        ary = self.valmap[expr.args.obj.value]
-        aryty = self.typemap[expr.args.obj.value]
-        if attr == 'shape':
-            idx = self.valmap[expr.args.idx.value]
-            shapeptr = gep(self.builder, ary, 0, 1, idx)
-            res = self.builder.load(shapeptr)
-        elif attr == 'strides':
-            idx = self.valmap[expr.args.idx.value]
-            strideptr = gep(self.builder, ary, 0, 2, idx)
-            res = self.builder.load(strideptr)
-        elif attr == 'ndim':
-            res = Constant.int(self.typesetter.llvm_intp, aryty.ndim)
-        elif attr == 'size':
-            shapeptr = gep(self.builder, ary, 0, 1)
-            shape = [self.builder.load(gep(self.builder, shapeptr, 0, ax))
-                        for ax in range(aryty.ndim)]
-            res = reduce(self.builder.mul, shape)
-            
-        self.valmap[expr] = self.do_cast(res, self.typesetter.intp,
-                                         self.typemap[expr])
-
-    def expr_ComplexGetAttr(self, expr):
-        attr = expr.args.attr
-        if attr == 'real':
-            offset = 0
-        elif attr == 'imag':
-            offset = 1
-        obj = expr.args.obj.value
-        cmplx = self.valmap[obj]
-        cty = self.typemap[obj]
-        res = self.builder.extract_value(cmplx, offset)
-        self.valmap[expr] = self.do_cast(res, cty.complex_element,
-                                         self.typemap[expr])
-
-
-    def expr_Call(self, expr):
-        func = expr.args.func
+        self.builder = lc.Builder.new(self.bbmap[self.blocks[0]])
         
-        if func is complex:
-            self.call_complex(expr)
-        elif func is int:
-            self.call_int(expr)
-        elif func is float:
-            self.call_int(expr)
-        elif func is min:
-            self.call_min(expr)
-        elif func is max:
-            self.call_max(expr)
-        elif func is abs:
-            self.call_abs(expr)
-        elif func in self.extended_calls:
-            self.extended_calls[func](self, expr)
-        elif hasattr(func, '_npm_context_'):
-            lmod, lfunc, retty, argtys = func._npm_context_
-            self.link_later.add(lmod)
-            myfunc = self.lmod.get_or_insert_function(lfunc.type.pointee,
-                                                      name=lfunc.name)
-            args = expr.args.args
-            assert len(args) == len(argtys), \
-                "expecting %d arguments but got %d" % (len(argtys), len(args))
-
-            args = [self.cast(a.value, t) for a, t in zip(args, argtys)]
-
-            #adapt arguments
-            def adapt_arguments():
-                for a, t in zip(args, argtys):
-                    if t.is_scalar and t.is_complex:
-                        ptr = self.builder.alloca(self.to_llvm(t))
-                        self.builder.store(a, ptr)
-                        yield ptr
+        # initialize stack storage
+        varnames = {}
+        for block in self.blocks:
+            for inst in block.code:
+                if inst.opcode == 'store':
+                    if inst.name in varnames:
+                        if inst.astype != varnames[inst.name]:
+                            raise AssertionError('store type mismatch')
                     else:
-                        yield a
+                        varnames[inst.name] = inst.astype
+        self.alloca = {}
+        for name, vtype in varnames.iteritems():
+            storage = self.builder.alloca(vtype.llvm_as_value(),
+                                          name='var.' + name)
+            self.alloca[name] = storage
 
-            args = list(adapt_arguments())
+        # generate all instructions
+        self.valmap = {}
+        for block in self.blocks:
+            self.builder.position_at_end(self.bbmap[block])
+            for inst in block.code:
+                with error_context(lineno=inst.lineno,
+                                   during='instruction codegen'):
+                    self.valmap[inst] = self.op(inst)
+            with error_context(lineno=inst.lineno,
+                               during='instruction codegen'):
+                self.op(block.terminator)
 
-            if retty:
-                retptr = self.builder.alloca(myfunc.args[-1].type.pointee)
-                args.append(retptr)
-                self.builder.call(myfunc, args)
-                retval = self.builder.load(retptr)
-                self.valmap[expr] = self.do_cast(retval, retty,
-                                                 self.typemap[expr])
-            else:
-                self.builder.call(myfunc, args)
-        else:
-            raise NotImplementedError("function %s not implemented" % func)
+    def raises(self, excobj, msg=None):
+        errcode = len(self.exceptions) + 1
+        lineno = self.imp_context.lineno
+        if msg is not None:
+            excobj = excobj('at line %d: %s' % (lineno, msg))
+        self.exceptions[errcode] = exception_info(excobj, lineno)
+        self.return_error(errcode)
 
-    def expr_Unpack(self, expr):
-        tuplevalue = expr.args.obj.value
-        tuty = self.typemap[tuplevalue]
-        package = self.valmap[tuplevalue]
-        offset = expr.args.offset
-        ty = self.typemap[expr]
-        self.valmap[expr] = self.do_cast(package[offset], tuty.element, ty)
+    def cast(self, val, src, dst):
+        if src == dst:                          # types are the same
+            return val
+        elif isinstance(dst, types.Kind):       # cast to generic type
+            if not dst.matches(src):
+                raise TypeError('kind mismatch: expect %s got %s' %
+                                (dst, src))
+            return val
+        elif not self.flags.overflow:            # use unguarded cast
+            return src.llvm_cast(self.builder, val, dst)
+        else:                                   # use guarded cast
+            return src.llvm_cast_guarded(self.builder, self.raises, val, dst)
 
-    # -------- call ---------
-    def call_complex(self, expr):
-        cmplxty = self.typemap[expr]
-        res = Constant.undef(self.to_llvm(cmplxty))
-        args = expr.args.args
-        nargs = len(args)
-        if nargs == 1:
-            (real,) = args
-            realval = self.cast(real.value, cmplxty.complex_element)
-            imagval = Constant.null(realval.type)
-        else:
-            assert nargs == 2, "complex() takes exactly two arguments"
-            real, imag = args
-            realval = self.cast(real.value, cmplxty.complex_element)
-            imagval = self.cast(imag.value, cmplxty.complex_element)
+    def return_error(self, errcode):
+        '''errcode is a python integer
+        '''
+        assert errcode != 0
+        retty = self.lfunc.type.pointee.return_type
+        self.builder.ret(lc.Constant.int(retty, errcode))
 
-        res = self.builder.insert_value(res, realval, 0)
-        res = self.builder.insert_value(res, imagval, 1)
-        self.valmap[expr] = res
+    def return_ok(self):
+        '''Returns zero
+        '''
+        self.builder.ret(lc.Constant.null(self.lfunc.type.pointee.return_type))
 
-    def call_int(self, expr):
-        outty = self.typemap[expr]
-        assert len(expr.args.args) == 1, "int() takes exactly one argument"
-        self.valmap[expr] = self.cast(expr.args.args[0].value, outty)
+    def op(self, inst):
+        if getattr(inst, 'bypass', False):
+            return
 
-    def call_float(self, expr):
-        outty = self.typemap[expr]
-        assert len(expr.args.args) == 1, "float() takes exactly one argument"
-        self.valmap[expr] = self.cast(expr.args.args[0].value, outty)
+        # insert temporary attribute
+        self.imp_context = codegen_context(imp     = self.implib,
+                                           builder = self.builder,
+                                           raises  = self.raises,
+                                           cast    = self.cast,
+                                           lineno  = inst.lineno,
+                                           flags   = self.flags)
 
-    def call_min(self, expr):
-        args = [a.value for a in expr.args.args]
-        opty = typing.coerce(*map(self.typemap.get, args))
-        castargs = [self.cast(a, opty) for a in args]
-        do_min = lambda a, b: self._do_min(opty, a, b)
-        res = reduce(do_min, castargs)
-        self.valmap[expr] = self.do_cast(res, opty, self.typemap[expr])
-    
-    def call_max(self, expr):
-        args = [a.value for a in expr.args.args]
-        opty = typing.coerce(*map(self.typemap.get, args))
-        castargs = [self.cast(a, opty) for a in args]
-        do_max = lambda a, b: self._do_max(opty, a, b)
-        res = reduce(do_max, castargs)
-        self.valmap[expr] = self.do_cast(res, opty, self.typemap[expr])
+        attr = 'op_%s' % inst.opcode
+        func = getattr(self, attr, self.generic_op)
+        result = func(inst)
 
-    def call_abs(self, expr):
-        (arg,) = expr.args.args
-        number = arg.value
-        opty = self.typemap[number]
-        llopty = self.to_llvm(opty)
-        zero = Constant.null(llopty)
-        llnum = self.valmap[number]
-        if opty.is_int:
-            assert opty.is_signed, "using abs() on unsigned integer"
-            negone = Constant.int_signextend(llopty, -1)
-            mul = self.builder.mul
-        else:
-            assert opty.is_float, "using abs() on %s" % opty
-            negone = Constant.real(llopty, -1.)
-            mul = self.builder.fmul
-        isneg = self._do_compare('<', opty, llnum, zero)
-        res = self.builder.select(isneg, mul(llnum, negone), llnum)
-        self.valmap[expr] = self.do_cast(res, opty, self.typemap[expr])
+        del self.imp_context
+        return result
 
-    # -------- _do_* ---------
+    def generic_op(self, inst):
+        print self.lfunc
+        raise NotImplementedError(inst)
 
-    def _do_compare(self, cmp, opty, lhs, rhs):
-        if opty.is_int:
-            offset = 'iu'.index(opty.kind)
-            flag = INT_BOOL_OP_MAP[cmp][offset]
-            res = self.builder.icmp(flag, lhs, rhs)
-        elif opty.is_float:
-            flag = FLOAT_BOOL_OP_MAP[cmp]
-            res = self.builder.fcmp(flag, lhs, rhs)
-        return res
+    def op_branch(self, inst):
+        cond = self.cast(self.valmap[inst.cond], inst.cond.type, types.boolean)
+        null = lc.Constant.null(cond.type)
+        pred = self.builder.icmp(lc.ICMP_NE, cond, null)
+        bbtrue = self.bbmap[inst.truebr]
+        bbfalse = self.bbmap[inst.falsebr]
+        self.builder.cbranch(pred, bbtrue, bbfalse)
 
-    def _do_min(self, opty, a, b):
-        pred = self._do_compare('<=', opty, a, b)
-        return self.builder.select(pred, a, b)
+    def op_jump(self, inst):
+        self.builder.branch(self.bbmap[inst.target])
 
-    def _do_max(self, opty, a, b):
-        pred = self._do_compare('>=', opty, a, b)
-        return self.builder.select(pred, a, b)
+    def op_retvoid(self, inst):
+        self.return_ok()
 
-    # -------- term ---------
-
-    def term_Jump(self, term):
-        self.builder.branch(self.bbmap[term.args.target])
-
-    def term_Branch(self, term):
-        opty = self.typemap[term.args.cmp.value]
-        pred = self._do_compare('!=', opty, self.valmap[term.args.cmp.value],
-                                Constant.null(self.to_llvm(opty)))
-        self.builder.cbranch(pred, self.bbmap[term.args.true],
-                             self.bbmap[term.args.false])
-
-    def term_Ret(self, expr):
-        ty = self.return_type
-        val = self.cast(expr.args.value.value, ty)
+    def op_ret(self, inst):
+        val = self.cast(self.valmap[inst.value], inst.value.type, inst.astype)
         self.builder.store(val, self.lfunc.args[-1])
-        self.builder.ret_void()
+        self.return_ok()
 
-    def term_RetVoid(self, expr):
-        self.builder.ret_void()
+    def op_arg(self, inst):
+        argval = self.lfunc.args[inst.num]
+        return inst.type.llvm_value_from_arg(self.builder, argval)
 
+    def op_store(self, inst):
+        val = self.valmap[inst.value]
+        val = self.cast(val, inst.value.type, inst.astype)
+        self.builder.store(val, self.alloca[inst.name])
 
-class TypeSetter(object):
-    def __init__(self, intp):
-        self.intp = typing.ScalarType('i%d' % intp)
-        self.llvm_intp = self.to_llvm(self.intp)
+    def op_load(self, inst):
+        storage = self.alloca[inst.name]
+        return self.builder.load(storage)
 
-    def to_llvm(self, ty):
-        if isinstance(ty, typing.ScalarType):
-            return self.convert_scalar(ty)
-        elif isinstance(ty, typing.ArrayType):
-            return self.convert_array(ty)
+    def op_call(self, inst):
+        with error_context(during="resolving call %s" % inst.defn):
+            imp = self.implib.get(inst.defn)
+            assert not inst.kws
+            argtys = [aval.type for aval in inst.args]
+            args = [(self.valmap[aval]
+                        if callable(atype)
+                        else self.cast(self.valmap[aval], aval.type, atype))
+                    for aval, atype in zip(inst.args, imp.args)]
+            return imp(self.imp_context, args, argtys, inst.defn.return_type)
+
+    def op_const(self, inst):
+        if isinstance(inst.type.desc, types.BuiltinObject):
+            return  # XXX: do not handle builtin object
+        return inst.type.llvm_const(inst.value)
+
+    def op_global(self, inst):
+        if inst.type == types.function_type:
+            return  # do nothing
+        elif inst.type == types.exception_type:
+            return  # do nothing
         else:
-            raise TypeError('unknown type: %s' % ty)
+            assert False
 
-    def convert_scalar(self, ty):
-        if ty.kind in 'iu':
-            return Type.int(ty.bitwidth)
-        elif ty.kind == 'f':
-            if ty.bitwidth == 32:
-                return Type.float()
-            elif ty.bitwidth == 64:
-                return Type.double()
-        elif ty.kind == 'c':
-            fty = self.convert_scalar(ty.complex_element)
-            return Type.struct([fty, fty])
+    def op_phi(self, inst):
+        values = inst.phi.values()
+        if len(values) == 1:
+            return self.valmap[values[0]]
+        assert False
 
-        raise TypeError('unknown scalar: %s' % ty)
+    def op_tuple(self, inst):
+        values = [self.valmap[i] for i in inst.items]
+        return inst.type.desc.llvm_pack(self.builder, values)
 
-    def convert_array(self, ty):
-        elemty = self.convert_scalar(ty.element)
-        data = Type.pointer(elemty)
-        shape = Type.array(self.llvm_intp, ty.ndim)
-        strides = Type.array(self.llvm_intp, ty.ndim)
-        struct = Type.struct([data, shape, strides])
-        return Type.pointer(struct)
+    def op_slice(self, inst):
+        def _get_and_cast(var):
+            val = self.valmap[var]
+            return self.cast(val, var.type, types.intp)
+        start = (_get_and_cast(inst.start)
+                    if inst.start is not None
+                    else types.intp.llvm_const(0))
+        stop = (_get_and_cast(inst.stop)
+                    if inst.stop is not None
+                    else types.intp.desc.maximum_value())
 
-def complex_extract(builder, cval):
-    return (builder.extract_value(cval, 0),
-            builder.extract_value(cval, 1))
-
-def complex_make(builder, complexty, real, imag):
-    res = Constant.undef(complexty)
-    res = builder.insert_value(res, real, 0)
-    res = builder.insert_value(res, imag, 1)
-    return res
-
-def complex_add(builder, lhs, rhs):
-    lreal, limag = complex_extract(builder, lhs)
-    rreal, rimag = complex_extract(builder, rhs)
-
-    real = builder.fadd(lreal, rreal)
-    imag = builder.fadd(limag, rimag)
-
-    return complex_make(builder, lhs.type, real, imag)
-
-def complex_sub(builder, lhs, rhs):
-    lreal, limag = complex_extract(builder, lhs)
-    rreal, rimag = complex_extract(builder, rhs)
-
-    real = builder.fsub(lreal, rreal)
-    imag = builder.fsub(limag, rimag)
-
-    return complex_make(builder, lhs.type, real, imag)
-
-def complex_mul(builder, lhs, rhs):
-    a, b = complex_extract(builder, lhs)
-    c, d = complex_extract(builder, rhs)
-    # (ac -bd) + (ad + bc)i
-    ac = builder.fmul(a, c)
-    bd = builder.fmul(b, d)
-    ad = builder.fmul(a, d)
-    bc = builder.fmul(b, c)
-    real = builder.fsub(ac, bd)
-    imag = builder.fadd(ad, bc)
-
-    return complex_make(builder, lhs.type, real, imag)
-
-def integer_invert(builder, val):
-    return builder.xor(val, Constant.int_signextend(val.type, -1))
-
-INT_OPMAP  = {
-     '+': (lc.Builder.add, lc.Builder.add),
-     '-': (lc.Builder.sub, lc.Builder.sub),
-     '*': (lc.Builder.mul, lc.Builder.mul),
-     '/': (lc.Builder.sdiv, lc.Builder.udiv),
-    '//': (lc.Builder.sdiv, lc.Builder.udiv),
-     '%': (lc.Builder.srem, lc.Builder.urem),
-     '&': (lc.Builder.and_, lc.Builder.and_),
-     '|': (lc.Builder.or_, lc.Builder.or_),
-     '^': (lc.Builder.xor, lc.Builder.xor),
-     '<<': (lc.Builder.shl, lc.Builder.shl),
-     '>>': (lc.Builder.ashr, lc.Builder.lshr),
-}
-
-INT_UNARY_OPMAP = {
-    '~': integer_invert,
-    'not': integer_invert,
-}
-
-FLOAT_OPMAP = {
-     '+': lc.Builder.fadd,
-     '-': lc.Builder.fsub,
-     '*': lc.Builder.fmul,
-     '/': lc.Builder.fdiv,
-    '//': lc.Builder.fdiv,
-     '%': lc.Builder.frem,
-}
-
-COMPLEX_OPMAP = {
-    '+': complex_add,
-    '-': complex_sub,
-    '*': complex_mul,
-}
-
-INT_BOOL_OP_MAP = {
-    '>': (lc.ICMP_SGT, lc.ICMP_UGT),
-    '>=': (lc.ICMP_SGE, lc.ICMP_UGE),
-    '<': (lc.ICMP_SLT, lc.ICMP_ULT),
-    '<=': (lc.ICMP_SLE, lc.ICMP_ULE),
-    '==': (lc.ICMP_EQ, lc.ICMP_EQ),
-    '!=': (lc.ICMP_NE, lc.ICMP_NE),
-}
-
-FLOAT_BOOL_OP_MAP = {
-    '>':  lc.FCMP_OGT,
-    '>=':  lc.FCMP_OGE,
-    '<':  lc.FCMP_OLT,
-    '<=':  lc.FCMP_OLE,
-    '==':  lc.FCMP_OEQ,
-    '!=':  lc.FCMP_ONE,
-}
-
-
-def array_pointer(builder, data, shape, strides, order, indices):
-    assert order in 'CFA', "invalid array order code '%s'" % order
-    intp = shape[0].type
-    if order in 'CF':
-        # optimize for C and F contiguous
-        steps = []
-        if order == 'C':
-            for i in range(len(shape)):
-                last = Constant.int(intp, 1)
-                for j in shape[i + 1:]:
-                    last = builder.mul(last, j)
-                steps.append(last)
-        elif order =='F':
-            for i in range(len(shape)):
-                last = Constant.int(intp, 1)
-                for j in shape[:i]:
-                    last = builder.mul(last, j)
-                steps.append(last)
+        if inst.type is types.slice2:
+            return inst.type.desc.llvm_pack(self.builder, (start, stop))
         else:
-            assert False, "unreachable"
-        loc = Constant.null(intp)
-        for i, s in zip(indices, steps):
-            tmp = builder.mul(i, s)
-            loc = builder.add(loc, tmp)
-        ptr = builder.gep(data, [loc])
-    else:
-        # any order
-        loc = Constant.null(intp)
-        for i, s in zip(indices, strides):
-            tmp = builder.mul(i, s)
-            loc = builder.add(loc, tmp)
-        base = builder.ptrtoint(data, intp)
-        target = builder.add(base, loc)
-        ptr = builder.inttoptr(target, data.type)
-    return ptr
+            step = _get_and_cast(inst.start)
+            return inst.type.desc.llvm_pack(self.builder, (start, stop, step))
 
-def array_setitem(builder, data, shape, strides, order, indices, value):
-    ptr = array_pointer(builder, data, shape, strides, order, indices)
-    builder.store(value, ptr)
+    def op_unpack(self, inst):
+        val = self.valmap[inst.value]
+        return inst.value.type.llvm_unpack(self.builder, val)[inst.index]
 
-def array_getitem(builder, data, shape, strides, order, indices):
-    ptr = array_pointer(builder, data, shape, strides, order, indices)
-    val = builder.load(ptr)
-    return val
+    def op_raise(self, inst):
+        args = inst.args
+        if len(args) > 1:
+            raise ValueError('only support one argument raise statement')
+        (excobj,) = args
+        if excobj.type is not types.exception_type:
+            raise TypeError('can only raise instance of exception')
+        self.raises(excobj.value)
 
-def auto_int(x):
-    if isinstance(x, int):
-        return Constant.int(Type.int(), x)
-    else:
-        return x
-
-def gep(builder, ptr, *idx):
-    return builder.gep(ptr, [auto_int(x) for x in idx])
-
-def sizeof(builder, ty, intp):
-    ptr = Type.pointer(ty)
-    null = Constant.null(ptr)
-    offset = builder.gep(null, [Constant.int(Type.int(), 1)])
-    return builder.ptrtoint(offset, intp)

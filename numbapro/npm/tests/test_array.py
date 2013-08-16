@@ -1,6 +1,6 @@
 import numpy as np
 from ..compiler import compile
-from ..types import int32, arraytype, float32, float64
+from ..types import int32, int64, arraytype, float32, float64, void
 from .support import testcase, main
 
 def getitem(a, i):
@@ -110,7 +110,7 @@ def test_getitem2d_a():
 
 @testcase
 def test_setitem():
-    compiled = compile(setitem, None, [arraytype(int32, 1, 'C'), int32, int32])
+    compiled = compile(setitem, void, [arraytype(int32, 1, 'C'), int32, int64])
     ary = np.arange(10, dtype=np.int32)
     orig = np.arange(10, dtype=np.int32)
     for i in range(ary.size):
@@ -201,7 +201,7 @@ def test_saxpy():
               arraytype(float32, 1, 'C'),
               arraytype(float64, 1, 'C')]
 
-    compiled = compile(saxpy, None, argtys)
+    compiled = compile(saxpy, void, argtys)
     a = 2
     x = np.arange(10, dtype=np.float32)
     y = np.arange(10, dtype=np.float32)
@@ -211,6 +211,64 @@ def test_saxpy():
     compiled(a, x, y, got)
     saxpy(a, x, y, exp)
     assert np.allclose(got, exp), (got, exp)
+
+
+#------------------------------------------------------------------------------
+# getitem out-of-bound
+
+@testcase
+def test_getitem_outofbound():
+    compiled = compile(getitem, int32, [arraytype(int32, 1, 'C'), int32])
+    ary = np.arange(10, dtype=np.int32)
+    try:
+        compiled(ary, 10)
+    except IndexError, e:
+        print e
+    else:
+        raise AssertionError('expecting exception')
+
+
+@testcase
+def test_getitem2d_outofbound():
+    compiled = compile(getitem2d, int32, [arraytype(int32, 2, 'C'), int32, int32])
+    ary = np.arange(10, dtype=np.int32).reshape(2, 5)
+    try:
+        compiled(ary, 1, 6)
+    except IndexError, e:
+        print e
+    else:
+        raise AssertionError('expecting exception')
+
+#------------------------------------------------------------------------------
+# getitem wraparound
+
+@testcase
+def test_getitem_wraparound():
+    compiled = compile(getitem, int32, [arraytype(int32, 1, 'C'), int32])
+    ary = np.arange(10, dtype=np.int32)
+    exp = getitem(ary, -10)
+    got = compiled(ary, -10)
+    assert got == exp
+
+@testcase
+def test_getitem2d_wraparound():
+    compiled = compile(getitem2d, int32, [arraytype(int32, 2, 'C'), int32, int32])
+    ary = np.arange(10, dtype=np.int32).reshape(2, 5)
+    exp = getitem2d(ary, 1, -4)
+    got = compiled(ary, 1, -4)
+    assert got == exp
+
+@testcase
+def test_getitem_outofbound_overflow():
+    compiled = compile(getitem, int32, [arraytype(int32, 1, 'C'), int32])
+    ary = np.arange(10, dtype=np.int32)
+    try:
+        compiled(ary, -11)
+    except IndexError, e:
+        print e
+    else:
+        raise AssertionError('expecting exception')
+
 
 
 if __name__ == '__main__':

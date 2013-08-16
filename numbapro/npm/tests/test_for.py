@@ -15,6 +15,7 @@ def forloop2(a, b):
     return b
 
 def forloop3(a, b, c):
+    i = a
     for i in xrange(a, b, c):
         pass
     return i
