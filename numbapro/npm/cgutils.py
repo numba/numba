@@ -44,3 +44,7 @@ def explode_array(builder, ary):
     n = ary.type.count
     return [builder.extract_value(ary, i) for i in range(n)]
 
+def get_function(builder, name, return_type, args):
+    mod = builder.basic_block.function.module
+    functype = lc.Type.function(return_type, args)
+    return mod.get_or_insert_function(functype, name)

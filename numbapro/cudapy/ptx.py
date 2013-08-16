@@ -2,7 +2,7 @@
 This scripts specifies all PTX special objects.
 '''
 from llvm.core import Type
-from numbapro.npm import types
+from numbapro.npm import types, macro
 
 class Stub(object):
     '''A stub object to represent special objects which is meaningless
@@ -18,81 +18,66 @@ class Stub(object):
 #-------------------------------------------------------------------------------
 # SREG
 
+def _ptx_sreg_tidx(): pass
+def _ptx_sreg_tidy(): pass
+def _ptx_sreg_tidz(): pass
+
+def _ptx_sreg_ntidx(): pass
+def _ptx_sreg_ntidy(): pass
+def _ptx_sreg_ntidz(): pass
+
+def _ptx_sreg_ctaidx(): pass
+def _ptx_sreg_ctaidy(): pass
+
+def _ptx_sreg_nctaidx(): pass
+def _ptx_sreg_nctaidy(): pass
+
+
 class threadIdx(Stub):
     '''threadIdx.{x, y, z}
     '''
     _description_ = '<threadIdx.{x,y,z}>'
-    class x(Stub):
-        '''threadIdx.x
-        '''
-        _description_ = '<threadIdx.x>'
-    class y(Stub):
-        '''threadIdx.y
-        '''
-        _description_ = '<threadIdx.y>'
-    class z(Stub):
-        '''threadIdx.z
-        '''
-        _description_ = '<threadIdx.z>'
+
+    x = macro.Macro('threadIdx.x', _ptx_sreg_tidx)
+    y = macro.Macro('threadIdx.y', _ptx_sreg_tidy)
+    z = macro.Macro('threadIdx.z', _ptx_sreg_tidz)
 
 class blockIdx(Stub):
     '''blockIdx.{x, y}
     '''
     _description_ = '<blockIdx.{x,y}>'
-    class x(Stub):
-        '''blockIdx.x
-        '''
-        _description_ = '<blockIdx.x>'
-    class y(Stub):
-        '''blockIdx.y
-        '''
-        _description_ = '<blockIdx.y>'
 
+    x = macro.Macro('blockIdx.x', _ptx_sreg_ctaidx)
+    y = macro.Macro('blockIdx.y', _ptx_sreg_ctaidy)
 
 class blockDim(Stub):
     '''blockDim.{x, y, z}
     '''
-    _description_ = '<blockDim.{x,y,z}>'
-    class x(Stub):
-        '''blockDim.x
-        '''
-        _description_ = '<blockDim.x>'
-    class y(Stub):
-        '''blockDim.y
-        '''
-        _description_ = '<blockDim.y>'
-    class z(Stub):
-        '''blockDim.z
-        '''
-        _description_ = '<blockDim.z>'
+    x = macro.Macro('blockDim.x', _ptx_sreg_ntidx)
+    y = macro.Macro('blockDim.y', _ptx_sreg_ntidy)
+    z = macro.Macro('blockDim.z', _ptx_sreg_ntidz)
 
 class gridDim(Stub):
-    '''gridDim.{x, y, z}
+    '''gridDim.{x, y}
     '''
     _description_ = '<gridDim.{x,y}>'
-    class x(Stub):
-        '''gridDim.x
-        '''
-        _description_ = '<gridDim.x>'
-    class y(Stub):
-        '''gridDim.y
-        '''
-        _description_ = '<gridDim.y>'
+    x = macro.Macro('gridDim.x', _ptx_sreg_nctaidx)
+    y = macro.Macro('gridDim.y', _ptx_sreg_nctaidy)
 
 SREG_MAPPING = {
-    threadIdx.x: 'llvm.nvvm.read.ptx.sreg.tid.x',
-    threadIdx.y: 'llvm.nvvm.read.ptx.sreg.tid.y',
-    threadIdx.z: 'llvm.nvvm.read.ptx.sreg.tid.z',
+    _ptx_sreg_tidx: 'llvm.nvvm.read.ptx.sreg.tid.x',
+    _ptx_sreg_tidy: 'llvm.nvvm.read.ptx.sreg.tid.y',
+    _ptx_sreg_tidz: 'llvm.nvvm.read.ptx.sreg.tid.z',
     
-    blockDim.x: 'llvm.nvvm.read.ptx.sreg.ntid.x',
-    blockDim.y: 'llvm.nvvm.read.ptx.sreg.ntid.y',
-    blockDim.z: 'llvm.nvvm.read.ptx.sreg.ntid.z',
+    _ptx_sreg_ntidx: 'llvm.nvvm.read.ptx.sreg.ntid.x',
+    _ptx_sreg_ntidy: 'llvm.nvvm.read.ptx.sreg.ntid.y',
+    _ptx_sreg_ntidz: 'llvm.nvvm.read.ptx.sreg.ntid.z',
     
-    blockIdx.x: 'llvm.nvvm.read.ptx.sreg.ctaid.x',
-    blockIdx.y: 'llvm.nvvm.read.ptx.sreg.ctaid.y',
+    _ptx_sreg_ctaidx: 'llvm.nvvm.read.ptx.sreg.ctaid.x',
+    _ptx_sreg_ctaidy: 'llvm.nvvm.read.ptx.sreg.ctaid.y',
     
-    gridDim.x: 'llvm.nvvm.read.ptx.sreg.nctaid.x',
-    gridDim.y: 'llvm.nvvm.read.ptx.sreg.nctaid.y',
+    _ptx_sreg_nctaidx: 'llvm.nvvm.read.ptx.sreg.nctaid.x',
+    _ptx_sreg_nctaidy: 'llvm.nvvm.read.ptx.sreg.nctaid.y',
 }
 
 SREG_FUNCTION_TYPE = Type.function(Type.int(), [])

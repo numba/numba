@@ -1,9 +1,9 @@
 import dis
-from numbapro.npm2.symbolic import SymbolicExecution
-from numbapro.npm2.typing import Infer
-from numbapro.npm2 import types, compiler
-from numbapro.npm2.codegen import CodeGen
-from numbapro.npm2.compiler import compile
+from ..symbolic import SymbolicExecution
+from ..typing import Infer
+from .. import types, compiler
+from ..codegen import CodeGen
+from ..compiler import compile
 from .support import testcase, main
 
 
@@ -39,7 +39,8 @@ def test_codegen():
     for blk in se.blocks:
         print blk
 
-    cg = CodeGen(func = se.func,
+    cg = CodeGen(name = se.func.__name__,
+                 func = se.func,
                  blocks = se.blocks,
                  args = args,
                  return_type = return_type,

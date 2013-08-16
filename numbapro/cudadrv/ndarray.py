@@ -1,10 +1,10 @@
 import ctypes
 from numbapro.cudadrv import driver
-from numbapro.npm.execution import make_array_type
+from numbapro.npm.types import make_array_ctype
 
 def ndarray_device_allocate_head(nd):
     "Allocate the metadata structure"
-    arraytype = make_array_type(nd)
+    arraytype = make_array_ctype(nd)
     gpu_head = driver.DeviceMemory(ctypes.sizeof(arraytype))
     return gpu_head
 
@@ -23,7 +23,7 @@ def ndarray_populate_head(gpu_head, gpu_data, shape, strides, stream=0):
     nd = len(shape)
     assert nd > 0, "0 or -ve dimension"
 
-    arraytype = make_array_type(nd)
+    arraytype = make_array_ctype(nd)
     struct = arraytype(data = driver.device_pointer(gpu_data),
                        shape = shape,
                        strides = strides)

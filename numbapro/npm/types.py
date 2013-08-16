@@ -524,12 +524,7 @@ class Array(object):
         return ct.c_void_p
 
     def ctype_pack_argument(self, ary):
-        c_intp = intp.ctype_as_argument()
-
-        class c_array(ct.Structure):
-            _fields_ = [('data',    ct.c_void_p),
-                        ('shape',   c_intp * ary.ndim),
-                        ('strides', c_intp * ary.ndim)]
+        c_array = make_array_ctype(ary.ndim)
 
         ary = c_array(data=ary.ctypes.data,
                       shape=ary.ctypes.shape,
@@ -540,6 +535,14 @@ class Array(object):
         ndim = ndim if ndim is not None else self.ndim
         order = order if order is not None else self.order
         return arraytype(element=self.element, ndim=ndim, order=order)
+
+def make_array_ctype(ndim):
+    c_intp = intp.ctype_as_argument()
+    class c_array(ct.Structure):
+            _fields_ = [('data',    ct.c_void_p),
+                        ('shape',   c_intp * ndim),
+                        ('strides', c_intp * ndim)]
+    return c_array
 
 ArrayKind = Kind(Array)
 
@@ -718,6 +721,7 @@ class BuiltinObject(object):
 
 module_type = Type(BuiltinObject('module'))
 function_type = Type(BuiltinObject('function'))
+macro_type = Type(BuiltinObject('macro'))
 method_type = Type(BuiltinObject('method'))
 none_type = Type(BuiltinObject('none'))
 exception_type = Type(BuiltinObject('exception'))

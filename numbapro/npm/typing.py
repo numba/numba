@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 from .errors import error_context
-from . import types
+from . import types, macro
 from .symbolic import Inst
 
 class Infer(object):
@@ -133,6 +133,9 @@ class Infer(object):
         ty = self.type_global(inst.value)
         if ty is types.function_type or ty is types.exception_type:
             return ty
+        elif ty is types.macro_type:
+            defn = self.funclib.get(value.func, ())
+            return defn.return_type
         else:
             assert False, 'XXX: inline global value: %s' % value
 
@@ -178,3 +181,6 @@ class Infer(object):
             return types.exception_type
         elif callable(value):
             return types.function_type
+        elif isinstance(value, macro.Macro):
+            return types.macro_type
+

@@ -1,5 +1,5 @@
 import dis
-from numbapro.npm2.symbolic import SymbolicExecution
+from ..symbolic import SymbolicExecution
 from .support import testcase, main
 
 

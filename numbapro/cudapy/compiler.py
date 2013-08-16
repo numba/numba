@@ -1,21 +1,56 @@
 import inspect
 import llvm.core as lc
-from numbapro.npm import symbolic, typing, codegen
-from numbapro.npm.compiler import get_func_name
+from numbapro.npm import (symbolic, typing, codegen, compiler, types, extending,
+                          cgutils,)
+
 from numbapro.cudadrv import nvvm, driver
 from .execution import CUDAKernel
-from .typing import cudapy_global_typing_ext, cudapy_call_typing_ext
-from .codegen import cudapy_global_codegen_ext, cudapy_call_codegen_ext
-from .passes import bind_scalar_constants
+from . import ptxlib
+#from .typing import cudapy_global_typing_ext, cudapy_call_typing_ext
+#from .codegen import cudapy_global_codegen_ext, cudapy_call_codegen_ext
+#from .passes import bind_scalar_constants
 
 CUDA_ADDR_SIZE = tuple.__itemsize__ * 8     # matches host
 
 def compile_kernel(func, argtys):
-    lmod, lfunc = compile_common(func, None, argtys)
+    lmod, lfunc, excs = compile_common(func, types.void, argtys,
+                                       flags=['no-exceptions'])
+    print excs
     # PTX-ization
-    cudakernel = CUDAKernel(lfunc.name, to_ptx(lfunc), argtys)
-    #print cudakernel.ptx
+    wrapper = generate_kernel_wrapper(lfunc, bool(excs))
+    cudakernel = CUDAKernel(wrapper.name, to_ptx(wrapper), argtys, excs)
+    print cudakernel.ptx
     return cudakernel
+
+def generate_kernel_wrapper(lfunc, has_excs):
+    fname = '_cudapy_wrapper_' + lfunc.name
+    argtypes = list(lfunc.type.pointee.args)
+    if has_excs:
+        exctype = lc.Type.int()
+        argtypes.append(lc.Type.pointer(exctype)) # for exception
+    fntype = lc.Type.function(lc.Type.void(), argtypes)
+
+    wrapper = lfunc.module.add_function(fntype, fname)
+
+    builder = lc.Builder.new(wrapper.append_basic_block(''))
+
+    if has_excs:
+        exc = builder.call(lfunc, wrapper.args[:-1])
+    else:
+        exc = builder.call(lfunc, wrapper.args)
+
+    if has_excs:
+        no_exc = lc.Constant.null(exctype)
+        raised = builder.icmp(lc.ICMP_NE, exc, no_exc)
+        
+        with cgutils.if_then(builder, raised):
+            builder.store(exc, wrapper.args[-1])
+            builder.ret_void()
+
+    builder.ret_void()
+
+    lfunc.add_attribute(lc.ATTR_ALWAYS_INLINE)
+    return wrapper
 
 def compile_device(func, retty, argtys, inline=False):
     lmod, lfunc = compile_common(func, retty, argtys)
@@ -33,50 +68,18 @@ def declare_device_function(name, retty, argtys):
     edf = ExternalDeviceFunction(name, lmod, lfunc, retty, argtys)
     return edf
 
-def compile_common(func, retty, argtys):
-    # symbolic interpretation
-    se = symbolic.SymbolicExecution(func)
-    se.visit()
-    #print se.dump()
+def get_cudapy_context():
+    libs = compiler.get_builtin_context()
+    extending.extends(libs, ptxlib.extensions)
+    return libs
 
-    argspec = inspect.getargspec(func)
-    assert not argspec.keywords, "does not support keywords"
-    assert not argspec.varargs, "does not support varargs"
-    assert not argspec.defaults, "does not support defaults"
+global_cudapy_libs = get_cudapy_context()
 
-    globals = func.func_globals
-    
-    # bind scalar constants
-    bind_scalar_constants(se.blocks, globals, intp=CUDA_ADDR_SIZE)
-
-    # type infernece
-    tydict = dict(zip(argspec.args, argtys))
-    tydict[''] = retty
-
-    infer = typing.Infer(se.blocks, tydict, globals, intp=CUDA_ADDR_SIZE,
-                         extended_globals=cudapy_global_typing_ext,
-                         extended_calls=cudapy_call_typing_ext)
-
-    typemap = infer.infer()
-
-    # code generation
-    name = get_func_name(func)
-    cg = codegen.CodeGen(name, se.blocks, typemap, globals,
-                         argtys, retty, intp=CUDA_ADDR_SIZE,
-                         extended_globals=cudapy_global_codegen_ext,
-                         extended_calls=cudapy_call_codegen_ext)
-    lfunc = cg.generate()
-    gvars = cg.extern_globals
-    if gvars:
-        raise NotImplementedError(
-                            "binding of external arguments are not supported")
-
-    #print lfunc.module
-
-    lfunc.module.verify()
-
-    return lfunc.module, lfunc
-
+def compile_common(func, retty, argtys, flags=compiler.DEFAULT_FLAGS):
+    libs = global_cudapy_libs
+    lmod, lfunc, excs = compiler.compile_common(func, retty, argtys, libs=libs,
+                                                flags=flags)
+    return lmod, lfunc, excs
 
 def to_ptx(lfunc):
     context = driver.get_or_create_context()

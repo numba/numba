@@ -1,7 +1,7 @@
 import copy
 import ctypes
-from numbapro.npm.execution import (to_ctype, prepare_args, Complex64,
-                                    Complex128, ArrayBase)
+import numpy
+from numbapro.npm import types
 from numbapro.cudadrv import driver, devicearray
 from numbapro.cudadrv.autotune import AutoTuner
 
@@ -53,12 +53,14 @@ class CUDAKernelBase(object):
 class CUDAKernel(CUDAKernelBase):
     '''A callable object representing a CUDA kernel.
     '''
-    def __init__(self, name, ptx, argtys):
+    def __init__(self, name, ptx, argtys, excs):
         super(CUDAKernel, self).__init__()
         self.name = name                # to lookup entry kernel
         self.ptx = ptx                  # for debug and inspection
+        self.excs = excs                # exception table
         self.linkfiles = []             # external files to be linked
-        self.c_argtys = [to_ctype(t) for t in argtys]
+        self.argtys = argtys
+        self.c_argtys = [t.ctype_as_argument() for t in argtys]
 
     def bind(self):
         '''Associate to the current context.
@@ -107,27 +109,45 @@ class CUDAKernel(CUDAKernelBase):
         # prepare arguments
         retr = []                       # hold functors for writeback
         args = [self._prepare_args(t, v, stream, retr)
-                for t, v in zip(self.c_argtys, args)]
+                for t, v in zip(self.argtys, args)]
+
+        # allocate space for exception
+        if self.excs:
+            excsize = ctypes.sizeof(ctypes.c_uint32)
+            excmem = driver.DeviceMemory(excsize)
+            driver.device_memset(excmem, 0, excsize)
+            args.append(excmem.device_ctypes_pointer)
+
         # configure kernel
         cu_func = self.cu_function.configure(griddim, blockdim,
                                              stream=stream,
                                              sharedmem=sharedmem)
         # invoke kernel
         cu_func(*args)
+
+        # check exceptions
+        if self.excs:
+            exchost = ctypes.c_uint32(0xffffffff)
+            exc = driver.device_to_host(ctypes.addressof(exchost), excmem,
+                                        excsize)
+            errcode = exchost.value
+            if errcode != 0:
+                raise self.excs[errcode]
+
         # retrieve auto converted arrays
         for wb in retr:
             wb()
 
     def _prepare_args(self, ty, val, stream, retr):
-        if issubclass(ty, ArrayBase):
+        if isinstance(ty.desc, types.Array):
             devary, conv = devicearray.auto_device(val, stream=stream)
             if conv:
                 retr.append(lambda: devary.copy_to_host(val, stream=stream))
             return devary.as_cuda_arg()
-        elif issubclass(ty, (Complex64, Complex128)):
-            size = ctypes.sizeof(ty)
+        elif isinstance(ty.desc, types.Complex):
+            size = ctypes.sizeof(ty.ctype_value())
             dmem = driver.DeviceMemory(size)
-            cval = ty(val)
+            cval = ty.ctype_pack_argument(val)
             driver.host_to_device(dmem, ctypes.addressof(cval), size,
                                   stream=stream)
             return dmem

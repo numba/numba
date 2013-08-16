@@ -1,8 +1,8 @@
 import dis
 import itertools
-from numbapro.npm2.symbolic import SymbolicExecution
-from numbapro.npm2.typing import Infer
-from numbapro.npm2 import types, compiler
+from ..symbolic import SymbolicExecution
+from ..typing import Infer
+from .. import types, compiler
 from .support import testcase, main
 
 

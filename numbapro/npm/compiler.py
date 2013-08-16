@@ -17,28 +17,41 @@ def get_builtin_context():
     extending.extends(libs, arylib.extensions)
     return libs
 
+def get_func_name(func):
+    try:
+        return func.func_name
+    except AttributeError:
+        try:
+            return func.__name__
+        except AttributeError:
+            return str(func)
+
 global_builtin_libs = get_builtin_context()
 
-def compile(func, retty, argtys, libs=global_builtin_libs, flags=DEFAULT_FLAGS):
+def compile_common(func, retty, argtys, libs=global_builtin_libs, flags=DEFAULT_FLAGS):
     funclib, implib = libs
 
+    # preparation
+    argspec = inspect.getargspec(func)
+    assert not argspec.defaults
+    assert not argspec.keywords
+    assert not argspec.varargs
+
+    args = dict((arg, typ) for arg, typ in zip(argspec.args, argtys))
+    return_type = retty
+
+    # compilation
+    blocks =  symbolic_interpret(func)
+    type_infer(func, blocks, return_type, args, funclib)
+
+    lmod, lfunc, excs = code_generation(func, blocks, return_type, args,
+                                        implib, flags=flags)
+
+    return lmod, lfunc, excs
+
+def compile(func, retty, argtys, libs=global_builtin_libs, flags=DEFAULT_FLAGS):
     with profile((func, tuple(argtys))):
-        # preparation
-        argspec = inspect.getargspec(func)
-        assert not argspec.defaults
-        assert not argspec.keywords
-        assert not argspec.varargs
-
-        args = dict((arg, typ) for arg, typ in zip(argspec.args, argtys))
-        return_type = retty
-
-        # compilation
-        blocks =  symbolic_interpret(func)
-        type_infer(func, blocks, return_type, args, funclib)
-
-        lmod, lfunc, excs = code_generation(func, blocks, return_type, args,
-                                            implib, flags=flags)
-
+        lmod, lfunc, excs = compile_common(func, retty, argtys, libs, flags)
         lmod.verify()
 
         jit = execution.JIT(lfunc = lfunc,
@@ -100,7 +113,8 @@ def type_infer(func, blocks, return_type, args, funclib):
     infer.infer()
 
 def code_generation(func, blocks, return_type, args, implib, flags):
-    cg = codegen.CodeGen(func        = func,
+    cg = codegen.CodeGen(name        = get_func_name(func),
+                         func        = func,
                          blocks      = blocks,
                          args        = args,
                          return_type = return_type,

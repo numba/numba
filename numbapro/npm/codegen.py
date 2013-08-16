@@ -1,7 +1,7 @@
 import inspect, collections
 from llvm import core as lc
 from .errors import error_context
-from . import types
+from . import types, macro
 
 codegen_context = collections.namedtuple('codegen_context',
                                          ['imp', 'builder', 'raises', 'lineno',
@@ -19,8 +19,17 @@ def _check_supported_flags(flags):
         if f not in SUPPORTED_FLAGS:
             raise NameError('unsupported compiler flag: %s' % f)
 
+def _expand_flags(flags):
+    if 'no-exceptions' in flags:
+        flags.discard('overflow')
+        flags.discard('zerodivision')
+        flags.discard('boundcheck')
+        flags.discard('no-exceptions')
+
 class Flags(object):
     def __init__(self, flags):
+        flags = set(flags)
+        _expand_flags(flags)
         _check_supported_flags(flags)
         self.flags = frozenset(flags)
 
@@ -31,8 +40,8 @@ class Flags(object):
             return k in self.flags
 
 class CodeGen(object):
-    def __init__(self, func, blocks, args, return_type, implib, flags=()):
-        self.func = func
+    def __init__(self, name, func, blocks, args, return_type, implib, flags=()):
+        self.name = name
         self.argspec = inspect.getargspec(func)
         assert not self.argspec.keywords
         assert not self.argspec.defaults
@@ -46,7 +55,7 @@ class CodeGen(object):
         self.flags = Flags(flags)
 
     def make_module(self):
-        return lc.Module.new('module.%s' % self.func.__name__)
+        return lc.Module.new('module.%s' % self.name)
 
     def make_function(self):
         largtys = []
@@ -62,7 +71,7 @@ class CodeGen(object):
             fnty_args = largtys
 
         lfnty = lc.Type.function(lc.Type.int(), fnty_args)
-        lfunc = self.lmod.add_function(lfnty, name=self.func.__name__)
+        lfunc = self.lmod.add_function(lfnty, name=self.name)
 
         return lfunc
 
@@ -212,12 +221,15 @@ class CodeGen(object):
         return inst.type.llvm_const(inst.value)
 
     def op_global(self, inst):
-        if inst.type == types.function_type:
+        if inst.type is types.function_type:
             return  # do nothing
-        elif inst.type == types.exception_type:
+        elif inst.type is types.exception_type:
             return  # do nothing
+        elif isinstance(inst.value, macro.Macro):
+            imp = self.implib.lookup(inst.value.func, ())
+            return imp(self.imp_context, ())
         else:
-            assert False
+            assert False, inst.type
 
     def op_phi(self, inst):
         values = inst.phi.values()
