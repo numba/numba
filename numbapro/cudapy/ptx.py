@@ -136,6 +136,7 @@ class shared(Stub):
     '''
     _description_ = '<shared>'
 
+    
     class array(Stub):
         '''array(shape, dtype)
         

@@ -1,3 +1,4 @@
+import llvm.core as lc
 from numbapro.npm import types, cgutils
 from . import ptx
 
@@ -99,6 +100,19 @@ class Grid2D(object):
         return retty.desc.llvm_pack(builder, (x, y))
 
 
+#-------------------------------------------------------------------------------
+#  Syncthreads
+
+class Syncthreads(object):
+    function = ptx.syncthreads, (), types.void
+
+    def generic_implement(self, context, args, argtys, retty):
+        builder = context.builder
+        fname = 'llvm.nvvm.barrier0'
+        sync = cgutils.get_function(builder, fname, lc.Type.void(), ())
+        return builder.call(sync, ())
+
+
 extensions = [
     # SReg
     TidX, TidY, TidZ,
@@ -107,5 +121,7 @@ extensions = [
     NCTAidX, NCTAidY,
     # Grid
     Grid1D, Grid2D,
+    # Syncthreads,
+    Syncthreads,
 ]
 

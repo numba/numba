@@ -40,7 +40,7 @@ def dyn_shared_memory(ary):
 # useless_sync
 
 @testcase
-def test_uesless_sync():
+def test_useless_sync():
     compiled = cudapy.compile_kernel(useless_sync,
                                      [arraytype(int32, 1, 'C')])
     compiled.bind()
