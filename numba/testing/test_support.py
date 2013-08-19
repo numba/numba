@@ -184,6 +184,7 @@ def parametrize(*parameters, **named_parameters):
             pass
 
         TestCase.__name__ = func.__name__
+        TestCase.__module__ = func.__module__
         names = named_parameters.keys()
         values = parameters or itertools.product(*named_parameters.values())
 
@@ -202,7 +203,6 @@ def parametrize(*parameters, **named_parameters):
                 testfunc.__doc__ = func.__doc__.replace(func.__name__, name)
 
             setattr(TestCase, name, testfunc)
-
 
         func.__globals__[func.__name__ + '_testcase'] = TestCase
         return func
