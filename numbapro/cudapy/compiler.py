@@ -15,11 +15,9 @@ CUDA_ADDR_SIZE = tuple.__itemsize__ * 8     # matches host
 def compile_kernel(func, argtys):
     lmod, lfunc, excs = compile_common(func, types.void, argtys,
                                        flags=['no-exceptions'])
-    print excs
     # PTX-ization
     wrapper = generate_kernel_wrapper(lfunc, bool(excs))
     cudakernel = CUDAKernel(wrapper.name, to_ptx(wrapper), argtys, excs)
-    print cudakernel.ptx
     return cudakernel
 
 def generate_kernel_wrapper(lfunc, has_excs):

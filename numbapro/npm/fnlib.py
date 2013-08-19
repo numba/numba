@@ -11,8 +11,9 @@ class Function(object):
         self.funcobj = funcobj
         self.args = tuple(x for x in args)
         self.return_type = return_type
-        self.is_parametric = any(isinstance(a, types.Kind) or callable(a)
-                                 for a in args)
+        self.is_parametric = (callable(return_type) or
+                                any(isinstance(a, types.Kind) or callable(a)
+                                    for a in args))
 
     def __hash__(self):
         return hash((self.funcobj, self.args))

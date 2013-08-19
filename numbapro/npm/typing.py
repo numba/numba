@@ -107,12 +107,16 @@ class Infer(object):
         args = [v.type for v in inst.args]
         callee = getattr(inst.callee, 'value', inst.callee)
 
-        if isinstance(callee, Inst) and callee.type == types.method_type:
+        if isinstance(callee, Inst) and callee.type is types.method_type:
             parent = callee
             callee = '@%s' % (parent.callee[1:],)
             assert len(parent.args) == 1
             args = [parent.args[0].type] + args
             inst.update(args=list(parent.args) + list(inst.args))
+
+        if isinstance(callee, macro.Macro):
+            with error_context(during="expanding macro %s" % callee):
+                callee = callee.func(inst.args)
 
         with error_context(during="resolving function %s(%s)" %
                                   (callee, ', '.join(str(a) for a in args))):
@@ -134,8 +138,7 @@ class Infer(object):
         if ty is types.function_type or ty is types.exception_type:
             return ty
         elif ty is types.macro_type:
-            defn = self.funclib.get(value.func, ())
-            return defn.return_type
+            return self.expand_macro(inst)
         else:
             assert False, 'XXX: inline global value: %s' % value
 
@@ -183,4 +186,12 @@ class Infer(object):
             return types.function_type
         elif isinstance(value, macro.Macro):
             return types.macro_type
+
+    def expand_macro(self, inst):
+        if inst.value.callable:
+            return types.macro_type
+        else:
+            defn = self.funclib.get(inst.value.func, ())
+            return defn.return_type
+
 

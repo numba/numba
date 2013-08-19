@@ -226,8 +226,11 @@ class CodeGen(object):
         elif inst.type is types.exception_type:
             return  # do nothing
         elif isinstance(inst.value, macro.Macro):
-            imp = self.implib.lookup(inst.value.func, ())
-            return imp(self.imp_context, ())
+            if not inst.value.callable:
+                imp = self.implib.lookup(inst.value.func, ())
+                return imp(self.imp_context, ())
+            else:
+                return  # do nothing
         else:
             assert False, inst.type
 

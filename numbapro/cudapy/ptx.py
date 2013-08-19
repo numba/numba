@@ -86,10 +86,14 @@ SREG_TYPE = types.uint32
 #-------------------------------------------------------------------------------
 # Grid Macro
 
-class grid(Stub):
+def _ptx_grid1d(): pass
+
+def _ptx_grid2d(): pass
+
+def grid_expand(args):
     '''grid(ndim)
 
-    ndim: [uint32] 1 or 2
+    ndim: [int] 1 or 2
     
         if ndim == 1:
             return cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
@@ -98,7 +102,21 @@ class grid(Stub):
             y = cuda.threadIdx.y + cuda.blockIdx.y * cuda.blockDim.y
             return x, y
     '''
-    _description_ = '<grid(ndim)>'
+    if len(args) != 1:
+        raise ValueError('takes exactly 1 argument')
+    ndim, = args
+    if ndim.opcode != 'const':
+        raise ValueError('argument must be constant')
+
+    if ndim.value == 1:
+        return _ptx_grid1d
+    elif ndim.value == 2:
+        return _ptx_grid2d
+    else:
+        raise ValueError('argument can only be 1 or 2')
+
+
+grid = macro.Macro('grid', grid_expand, callable=True)
 
 #-------------------------------------------------------------------------------
 # synthreads
