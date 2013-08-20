@@ -29,8 +29,11 @@ def build_linemap(func):
     lines = source.split('\n')
     if lines[-1] == '':
         lines = lines[0:-1]
-    
-    lineno = func.func_code.co_firstlineno
+   
+    func_code = getattr(func, 'func_code', None)
+    if func_code is None:
+        func_code = getattr(func, '__code__')
+    lineno = func_code.co_firstlineno
     linemap = {}
     for line in lines:
         linemap[lineno] = line
