@@ -68,7 +68,28 @@ class SymbolicExecution(object):
         self.strip_dead_block()
         self.complete_phis()
         self.rename_definition()
+        self.propagate_constants()
         self.dead_code_elimination()
+
+    def propagate_constants(self):
+        defns = {}
+
+        for b in self.blocks:
+            for c in b.code:
+                if c.opcode == 'store':
+                    if c.name not in defns:  # put the first definition
+                        value = c.value
+                        while value.opcode == 'alias':
+                            value = value.to
+                        defns[c.name] = value
+                    else:                    # drop if more than one definition
+                        del defns[c.name]
+
+        repls = {}
+        for b in self.blocks:
+            for c in b.code:
+                if c.opcode == 'load' and c.name in defns:
+                    c.replace('alias', to=defns[c.name])
 
     def dead_code_elimination(self):
         candidates = ['global']
@@ -81,7 +102,7 @@ class SymbolicExecution(object):
                 blk.code.remove(inst)
 
     def rename_definition(self):
-        RenameDefinition(self.blocks, self.doms, self.backbone).run()
+        return RenameDefinition(self.blocks, self.doms, self.backbone).run()
 
     def mark_backbone(self):
         '''The backbone control flow path.
@@ -702,6 +723,9 @@ class Inst(object):
         self.attrs = set(kwargs.keys())
         self.block = None
         self.refs = set()
+        self._set_attributes(kwargs)
+
+    def _set_attributes(self, kwargs):
         for k, v in kwargs.items():
             assert not hasattr(self, k)
             setattr(self, k, v)
@@ -714,6 +738,27 @@ class Inst(object):
             elif k == 'kws':
                 for _, j in v:
                     self.refers(j)
+
+
+    def replace(self, opcode, **kwargs):
+        for k in self.attrs:
+            v = getattr(self, k)
+            if isinstance(v, Inst):
+                self.drop_reference(v)
+            elif k == 'args':
+                for j in v:
+                    self.drop_reference(j)
+            elif k == 'kws':
+                for _, j in v:
+                    self.drop_reference(j)
+            delattr(self, k)
+        self.opcode = opcode
+        self.attrs = set(kwargs.keys())
+
+        self._set_attributes(kwargs)
+
+    def drop_reference(self, inst):
+        inst.refs.discard(self)
 
     def refers(self, *insts):
         for i in insts:
@@ -755,3 +800,14 @@ class Inst(object):
 def _indent(t, w, c=' '):
     ind = c * w
     return '%s%s' % (ind, t)
+
+def const_value_from_inst(x):
+    if x.opcode == 'alias':
+        if x.to.opcode == 'const':
+            return x.to.value
+    elif x.opcode == 'const':
+        return x.value
+
+    raise ValueError
+
+

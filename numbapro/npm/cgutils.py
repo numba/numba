@@ -1,5 +1,5 @@
-from llvm import core as lc
 from contextlib import contextmanager
+from llvm import core as lc
 
 @contextmanager
 def goto_entry_block(builder):

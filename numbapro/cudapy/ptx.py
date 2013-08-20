@@ -1,8 +1,10 @@
 '''
 This scripts specifies all PTX special objects.
 '''
-from llvm.core import Type
-from numbapro.npm import types, macro
+import operator
+import llvm.core as lc
+from numbapro.npm import types, macro, symbolic, cgutils
+from numbapro.cudadrv import nvvm
 
 class Stub(object):
     '''A stub object to represent special objects which is meaningless
@@ -80,7 +82,7 @@ SREG_MAPPING = {
     _ptx_sreg_nctaidy: 'llvm.nvvm.read.ptx.sreg.nctaid.y',
 }
 
-SREG_FUNCTION_TYPE = Type.function(Type.int(), [])
+SREG_FUNCTION_TYPE = lc.Type.function(lc.Type.int(), [])
 SREG_TYPE = types.uint32
 
 #-------------------------------------------------------------------------------
@@ -105,12 +107,15 @@ def grid_expand(args):
     if len(args) != 1:
         raise ValueError('takes exactly 1 argument')
     ndim, = args
-    if ndim.opcode != 'const':
+
+    try:
+        ndim = symbolic.const_value_from_inst(ndim)
+    except ValueError:
         raise ValueError('argument must be constant')
 
-    if ndim.value == 1:
+    if ndim == 1:
         return _ptx_grid1d
-    elif ndim.value == 2:
+    elif ndim == 2:
         return _ptx_grid2d
     else:
         raise ValueError('argument can only be 1 or 2')
@@ -131,18 +136,144 @@ class syncthreads(Stub):
 #-------------------------------------------------------------------------------
 # shared
 
+def shared_array(args):
+    if len(args) != 2:
+        raise ValueError('takes exactly 2 arguments')
+    shape, dtype = args
+
+    try:
+        shape = symbolic.const_value_from_inst(shape)
+    except ValueError:
+        raise ValueError('expecting constant value for shape')
+    dtype = types.from_numba_type(dtype.value)
+
+
+    if isinstance(shape, (tuple, list)):
+        shape = shape
+    elif isinstance(shape, int):
+        shape = [shape]
+    else:
+        raise TypeError('invalid type for shape')
+
+    def impl(context, args, argtys, retty):
+        builder = context.builder
+        size = reduce(operator.mul, shape)
+
+        elemtype = dtype.llvm_as_value()
+        smem_elemtype = retty.desc.element.llvm_as_value()
+        smem_type = lc.Type.array(smem_elemtype, size)
+        lmod = context.builder.basic_block.function.module
+        smem = lmod.add_global_variable(smem_type, 'smem',
+                                        nvvm.ADDRSPACE_SHARED)
+        if size == 0:    # dynamic shared memory
+            smem.linkage = lc.LINKAGE_EXTERNAL
+        else:            # static shared memory
+            smem.linkage = lc.LINKAGE_INTERNAL
+            smem.initializer = lc.Constant.undef(smem_type)
+
+        smem_elem_ptr_ty = lc.Type.pointer(smem_elemtype)
+        smem_elem_ptr_ty_addrspace = lc.Type.pointer(smem_elemtype,
+                                                     nvvm.ADDRSPACE_SHARED)
+
+        # convert to generic addrspace
+        tyname = str(smem_elemtype)
+        tyname = {'float': 'f32', 'double': 'f64'}.get(tyname, tyname)
+        s2g_name_fmt = 'llvm.nvvm.ptr.shared.to.gen.p0%s.p%d%s'
+        s2g_name = s2g_name_fmt % (tyname, nvvm.ADDRSPACE_SHARED, tyname)
+        s2g_fnty = lc.Type.function(smem_elem_ptr_ty,
+                                    [smem_elem_ptr_ty_addrspace])
+        shared_to_generic = lmod.get_or_insert_function(s2g_fnty, s2g_name)
+
+        data = builder.call(shared_to_generic,
+                        [builder.bitcast(smem, smem_elem_ptr_ty_addrspace)])
+
+        llintp = types.intp.llvm_as_value()
+        cshape = lc.Constant.array(llintp,
+                                   map(types.const_intp, shape))
+
+        strides_raw = [reduce(operator.mul, shape[i + 1:], 1)
+                       for i in range(len(shape))]
+
+        strides = [builder.mul(types.sizeof(elemtype), types.const_intp(s))
+                   for s in strides_raw]
+
+
+        cstrides = lc.Constant.array(llintp, strides)
+
+        ary = lc.Constant.struct([lc.Constant.null(data.type), cshape,
+                                  cstrides])
+        ary = builder.insert_value(ary, data, 0)
+
+        return ary
+
+    impl.codegen = True
+    impl.return_type = types.arraytype(dtype, len(shape), 'C')
+    return impl
+
+def cg_shared_array(cg, value):
+    args = value.args.args
+
+    arytype = cg.typemap[value]
+    elemtype = arytype.element
+
+    shape, _dtype = args
+
+    size = reduce(operator.mul, shape)
+
+    smem_elemtype = cg.to_llvm(elemtype)
+    smem_type = lc.Type.array(smem_elemtype, size)
+
+    smem = cg.lmod.add_global_variable(smem_type, 'smem', ADDRSPACE_SHARED)
+
+    if size == 0: # dynamic shared memory
+        smem.linkage = LINKAGE_EXTERNAL
+    else:
+        smem.linkage = LINKAGE_INTERNAL
+        smem.initializer = Constant.undef(smem_type)
+
+    smem_elem_ptr_ty = Type.pointer(smem_elemtype)
+    smem_elem_ptr_ty_addrspace = Type.pointer(smem_elemtype, ADDRSPACE_SHARED)
+
+    # convert to generic addrspace
+    tyname = str(smem_elemtype)
+    tyname = {'float': 'f32', 'double': 'f64'}.get(tyname, tyname)
+    s2g_name_fmt = 'llvm.nvvm.ptr.shared.to.gen.p0%s.p%d%s'
+    s2g_name = s2g_name_fmt % (tyname, ADDRSPACE_SHARED, tyname)
+    s2g_fnty = Type.function(smem_elem_ptr_ty, [smem_elem_ptr_ty_addrspace])
+    shared_to_generic = cg.lmod.get_or_insert_function(s2g_fnty, s2g_name)
+
+    data = cg.builder.call(shared_to_generic,
+                        [cg.builder.bitcast(smem, smem_elem_ptr_ty_addrspace)])
+
+    def const_intp(x):
+        return Constant.int_signextend(cg.typesetter.llvm_intp, x)
+
+    cshape = Constant.array(cg.typesetter.llvm_intp, map(const_intp, shape))
+
+    strides_raw = [reduce(operator.mul, shape[i + 1:], 1)
+                   for i in range(len(shape))]
+    strides = [cg.builder.mul(cg.sizeof(elemtype), const_intp(s))
+               for s in strides_raw]
+
+    cstrides = Constant.array(cg.typesetter.llvm_intp, strides)
+
+    ary = Constant.struct([Constant.null(data.type), cshape, cstrides])
+    ary = cg.builder.insert_value(ary, data, 0)
+
+    aryptr = cg.builder.alloca(ary.type)
+    cg.builder.store(ary, aryptr)
+
+    cg.valmap[value] = aryptr
+
+
+
 class shared(Stub):
     '''shared namespace
     '''
     _description_ = '<shared>'
 
-    
-    class array(Stub):
-        '''array(shape, dtype)
-        
-        Allocate shared array of shape and dtype
-        '''
-        _description_ = '<array>'
+    array = macro.Macro('shared.array', shared_array, callable=True)
+
 
 #-------------------------------------------------------------------------------
 # atomic

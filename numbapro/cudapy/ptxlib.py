@@ -1,3 +1,4 @@
+import numpy
 import llvm.core as lc
 from numbapro.npm import types, cgutils
 from . import ptx
@@ -111,7 +112,6 @@ class Syncthreads(object):
         fname = 'llvm.nvvm.barrier0'
         sync = cgutils.get_function(builder, fname, lc.Type.void(), ())
         return builder.call(sync, ())
-
 
 extensions = [
     # SReg

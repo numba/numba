@@ -1,5 +1,7 @@
 from math import copysign
+import numpy
 from llvm import core as lc
+import numbapro as numba
 import ctypes as ct
 from . import cgutils
 
@@ -725,6 +727,7 @@ macro_type = Type(BuiltinObject('macro'))
 method_type = Type(BuiltinObject('method'))
 none_type = Type(BuiltinObject('none'))
 exception_type = Type(BuiltinObject('exception'))
+object_type = Type(BuiltinObject('object'))
 
 class IteratorFactory(object):
     fields = 'imp',
@@ -826,11 +829,8 @@ class EnumerateIterType(object):
     def inner(self):
         return self.state.desc.inner
 
-    
-
 
 EnumerateIterKind = Kind(EnumerateIterType)
-
 
 void = Type(BuiltinObject('void'))
 
@@ -851,6 +851,53 @@ float64 = Type(Float(64))
 
 complex64 = Type(Complex(64))
 complex128 = Type(Complex(128))
+
+
+DTYPE_MAP = {
+    numpy.int8: int8,
+    numpy.uint8: uint8,
+
+    numpy.int16: int16,
+    numpy.uint16: uint16,
+
+    numpy.int32: int32,
+    numpy.uint32: uint32,
+
+    numpy.int64: int64,
+    numpy.uint64: uint64,
+
+    numpy.float32: float32,
+    numpy.float64: float64,
+
+    numpy.complex64: complex64,
+    numpy.complex128: complex128,
+}
+
+NUMBA_TYPE_MAP = {
+    numba.int8: int8,
+    numba.uint8: uint8,
+
+    numba.int16: int16,
+    numba.uint16: uint16,
+
+    numba.int32: int32,
+    numba.uint32: uint32,
+
+    numba.int64: int64,
+    numba.uint64: uint64,
+
+    numba.float32: float32,
+    numba.float64: float64,
+
+    numba.complex64: complex64,
+    numba.complex128: complex128,
+}
+
+def from_dtype(dtype):
+    return DTYPE_MAP[dtype]
+
+def from_numba_type(nbtype):
+    return NUMBA_TYPE_MAP[nbtype]
 
 def arraytype(element, ndim, order):
     return Type(Array(element, ndim, order))
@@ -891,3 +938,9 @@ def auto_intp(x):
         return const_intp(x)
     else:
         return x
+
+def sizeof(ty):
+    offset = lc.Constant.gep(lc.Constant.null(lc.Type.pointer(ty)),
+                              [lc.Constant.int(lc.Type.int(), 1)])
+
+    return lc.Constant.ptrtoint(offset, intp.llvm_as_value())

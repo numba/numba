@@ -118,6 +118,11 @@ class Infer(object):
             with error_context(during="expanding macro %s" % callee):
                 callee = callee.func(inst.args)
 
+        if getattr(callee, 'codegen', None) and hasattr(callee, 'return_type'):
+            # for macro
+            inst.update(defn=callee)
+            return callee.return_type
+        
         with error_context(during="resolving function %s(%s)" %
                                   (callee, ', '.join(str(a) for a in args))):
             defn = self.funclib.get(callee, args)
@@ -131,6 +136,10 @@ class Infer(object):
         if ty is None:
             raise ValueError("invalid constant value %s" % (inst.value,))
         return ty
+
+    def op_alias(self, inst):
+        inst.update(value=inst.to)
+        return inst.to.type
 
     def op_global(self, inst):
         value = inst.value

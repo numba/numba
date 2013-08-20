@@ -1,3 +1,4 @@
+from __future__ import division
 import numpy as np
 
 from .support import testcase, main
@@ -82,7 +83,8 @@ def test_coop_smem2d():
     exp = np.empty_like(ary)
     for i in range(ary.shape[0]):
         for j in range(ary.shape[1]):
-            exp[i, j] = float(i + 1) / (j + 1)
+            exp[i, j] = (i + 1) / (j + 1)
+
     assert np.allclose(ary, exp)
 
 #------------------------------------------------------------------------------

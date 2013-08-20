@@ -206,13 +206,21 @@ class CodeGen(object):
 
     def op_call(self, inst):
         with error_context(during="resolving call %s" % inst.defn):
-            imp = self.implib.get(inst.defn)
+            if (getattr(inst.defn, 'codegen', None) and
+                    hasattr(inst.defn, 'return_type')):
+                # for macros
+                imp = inst.defn
+                args = inst.args
+            else:
+                imp = self.implib.get(inst.defn)
+                args = [(self.valmap[aval]
+                            if callable(atype)
+                            else self.cast(self.valmap[aval], aval.type,
+                                           atype))
+                        for aval, atype in zip(inst.args, imp.args)]
+
             assert not inst.kws
             argtys = [aval.type for aval in inst.args]
-            args = [(self.valmap[aval]
-                        if callable(atype)
-                        else self.cast(self.valmap[aval], aval.type, atype))
-                    for aval, atype in zip(inst.args, imp.args)]
             return imp(self.imp_context, args, argtys, inst.defn.return_type)
 
     def op_const(self, inst):
@@ -233,6 +241,9 @@ class CodeGen(object):
                 return  # do nothing
         else:
             assert False, inst.type
+
+    def op_alias(self, inst):
+        return self.valmap[inst.to]
 
     def op_phi(self, inst):
         values = inst.phi.values()
