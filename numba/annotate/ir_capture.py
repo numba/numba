@@ -18,9 +18,11 @@ class IRBuilder(object):
         self.name = name
         self.builder = builder
         self.captured = collections.defaultdict(list)
-        self.pos = None
+        self.pos = -1
 
     def update_pos(self, pos):
+        if pos is None:
+            pos = -1
         self.pos = pos
 
     def get_pos(self):
@@ -71,7 +73,8 @@ def filter_llvm(captured):
 
 def filter_unique(captured):
     for values in captured.values():
-        def unique(item, seen=set()):
+        seen = set()
+        def unique(item):
             found = item in seen
             seen.add(item)
             return not found

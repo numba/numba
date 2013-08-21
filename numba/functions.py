@@ -56,8 +56,13 @@ def _fix_ast(myast):
         myast.decorator_list = []
 
 def _get_ast(func, flags=0):
-    if int(os.environ.get('NUMBA_FORCE_META_AST', 0)):
+    if (int(os.environ.get('NUMBA_FORCE_META_AST', 0)) or
+                func.__name__ == '<lambda>'):
         func_def = decompile_func(func)
+        if isinstance(func_def, ast.Lambda):
+            func_def = ast.FunctionDef(name='<lambda>', args=func_def.args,
+                                       body=[ast.Return(func_def.body)],
+                                       decorator_list=[])
         assert isinstance(func_def, ast.FunctionDef)
         return func_def
     try:
