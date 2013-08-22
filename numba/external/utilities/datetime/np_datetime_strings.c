@@ -17,32 +17,12 @@
 #define _MULTIARRAYMODULE
 #include <numpy/arrayobject.h>
 
-//#include "npy_config.h"
-//#include "npy_pycompat.h"
+#include "npy_config.h"
+#include "npy_pycompat.h"
 
 #include "numpy/arrayscalars.h"
-//#include "methods.h"
 #include "_datetime.h"
 #include "np_datetime_strings.h"
-
-const char *
-npy_casting_to_string(NPY_CASTING casting)
-{
-    switch (casting) {
-        case NPY_NO_CASTING:
-            return "'no'";
-        case NPY_EQUIV_CASTING:
-            return "'equiv'";
-        case NPY_SAFE_CASTING:
-            return "'safe'";
-        case NPY_SAME_KIND_CASTING:
-            return "'same_kind'";
-        case NPY_UNSAFE_CASTING:
-            return "'unsafe'";
-        default:
-            return "<unknown>";
-    }
-}
 
 /*
  * Platform-specific time_t typedef. Some platforms use 32 bit, some use 64 bit
@@ -396,7 +376,7 @@ convert_datetimestruct_local_to_utc(npy_datetimestruct *out_dts_utc,
  *
  * Returns 0 on success, -1 on failure.
  */
-int
+NPY_NO_EXPORT int
 parse_iso_8601_datetime(char *str, Py_ssize_t len,
                     NPY_DATETIMEUNIT unit,
                     NPY_CASTING casting,
@@ -966,7 +946,7 @@ error:
  * Provides a string length to use for converting datetime
  * objects with the given local and unit settings.
  */
-int
+NPY_NO_EXPORT int
 get_datetime_iso_8601_strlen(int local, NPY_DATETIMEUNIT base)
 {
     int len = 0;
@@ -1026,7 +1006,7 @@ get_datetime_iso_8601_strlen(int local, NPY_DATETIMEUNIT base)
  * Finds the largest unit whose value is nonzero, and for which
  * the remainder for the rest of the units is zero.
  */
-static NPY_DATETIMEUNIT
+NPY_DATETIMEUNIT
 lossless_unit_from_datetimestruct(npy_datetimestruct *dts)
 {
     if (dts->as % 1000 != 0) {
@@ -1093,7 +1073,7 @@ lossless_unit_from_datetimestruct(npy_datetimestruct *dts)
  *  Returns 0 on success, -1 on failure (for example if the output
  *  string was too short).
  */
-int
+NPY_NO_EXPORT int
 make_iso_8601_datetime(npy_datetimestruct *dts, char *outstr, int outlen,
                     int local, NPY_DATETIMEUNIT base, int tzoffset,
                     NPY_CASTING casting)

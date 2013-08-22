@@ -1,5 +1,6 @@
 #include <Python.h>
 #include <numpy/ndarraytypes.h>
+#include <numpy/arrayscalars.h>
 #include "generated_conversions.h"
 #include "datetime/_datetime.h"
 #include "datetime/np_datetime_strings.h"
@@ -405,11 +406,14 @@ static PyObject* primitive2numpydatetime(
     npy_int32 day,
     npy_int32 hour,
     npy_int32 min,
-    npy_int32 sec)
+    npy_int32 sec,
+    PyDatetimeScalarObject *scalar)
 {
     npy_datetimestruct input;
-    char output[100];
+    npy_datetime output = 0;
+    PyArray_DatetimeMetaData new_meta;
 
+    memset(&input, 0, sizeof(input));
     input.year = year;
     input.month = month;
     input.day = day;
@@ -417,16 +421,23 @@ static PyObject* primitive2numpydatetime(
     input.min = min;
     input.sec = sec;
 
-    memset(output, '\0', 100);
+    new_meta.base = lossless_unit_from_datetimestruct(&input);
+    new_meta.num = 1;
 
-    int result = make_iso_8601_datetime(&input, output, 100,
-                    0, -1, -1,
-                    NPY_SAFE_CASTING);
+    if (convert_datetimestruct_to_datetime(&new_meta, &input, &output) < 0) {
+        return NULL;
+    }
+    
+    //dtype_meta = &(((PyArray_DatetimeDTypeMetaData *)dtype->c_metadata)->meta);
+    //*dtype_meta = new_meta;
 
-    PyArray_Descr* dtype = parse_dtype_from_datetime_typestr(output, 100);
-
-    Py_INCREF(dtype);
-    return (PyObject*)dtype;
+    //ret = (PyDatetimeScalarObject *)PyDatetimeArrType_Type.tp_alloc(
+    //                                        &PyDatetimeArrType_Type, 0);
+    scalar->obval = output;
+    scalar->obmeta.base = new_meta.base;
+    scalar->obmeta.num = new_meta.num;
+ 
+    return (PyObject*)scalar;
 }
 
 

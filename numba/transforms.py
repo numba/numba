@@ -339,12 +339,11 @@ class ResolveCoercions(visitors.NumbaTransformer):
                     nodes.DateTimeAttributeNode(datetime_value.clone, 'hour'),
                     nodes.DateTimeAttributeNode(datetime_value.clone, 'min'),
                     nodes.DateTimeAttributeNode(datetime_value.clone, 'sec'),
+                    nodes.ConstNode(np.datetime64(), object_),
                 ]
-                #new_node = function_util.utility_call(
-                #        self.context, self.llvm_module,
-                #        "primitive2numpydatetime", args=args)
-                raise NotImplementedError
-
+                new_node = function_util.utility_call(
+                        self.context, self.llvm_module,
+                        "primitive2numpydatetime", args=args)
             elif node_type.is_datetime:
                 datetime_value = nodes.CloneableNode(node.node)
                 args = [

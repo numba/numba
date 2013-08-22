@@ -1,6 +1,6 @@
 /*
- * Adapted from NumPy.
- */
+* Adapted from NumPy.
+*/
 
 #ifndef _NPY_PRIVATE__DATETIME_STRINGS_H_
 #define _NPY_PRIVATE__DATETIME_STRINGS_H_
@@ -40,7 +40,7 @@
  *
  * Returns 0 on success, -1 on failure.
  */
-int
+NPY_NO_EXPORT int
 parse_iso_8601_datetime(char *str, Py_ssize_t len,
                     NPY_DATETIMEUNIT unit,
                     NPY_CASTING casting,
@@ -53,7 +53,7 @@ parse_iso_8601_datetime(char *str, Py_ssize_t len,
  * Provides a string length to use for converting datetime
  * objects with the given local and unit settings.
  */
-int
+NPY_NO_EXPORT int
 get_datetime_iso_8601_strlen(int local, NPY_DATETIMEUNIT base);
 
 /*
@@ -78,9 +78,16 @@ get_datetime_iso_8601_strlen(int local, NPY_DATETIMEUNIT base);
  *  Returns 0 on success, -1 on failure (for example if the output
  *  string was too short).
  */
-int
+NPY_NO_EXPORT int
 make_iso_8601_datetime(npy_datetimestruct *dts, char *outstr, int outlen,
                     int local, NPY_DATETIMEUNIT base, int tzoffset,
                     NPY_CASTING casting);
+
+/*
+ * Finds the largest unit whose value is nonzero, and for which
+ * the remainder for the rest of the units is zero.
+ */
+NPY_DATETIMEUNIT
+lossless_unit_from_datetimestruct(npy_datetimestruct *dts);
 
 #endif

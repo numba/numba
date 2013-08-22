@@ -75,7 +75,7 @@ utility_funcs = list(object_to_numeric.itervalues()) + [
     UtilityFunction.load("primitive2pydatetime",
         object_(long_, int_, int_, int_, int_, int_)),
     UtilityFunction.load("primitive2numpydatetime",
-        object_(long_, int_, int_, int_, int_, int_)),
+        object_(long_, int_, int_, int_, int_, int_, object_)),
     UtilityFunction.load("iso_datetime2year", long_(string_)),
     UtilityFunction.load("iso_datetime2month", int_(string_)),
     UtilityFunction.load("iso_datetime2day", int_(string_)),
