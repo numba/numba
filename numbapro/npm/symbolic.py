@@ -327,7 +327,10 @@ class SymbolicExecution(object):
         count = inst.arg
         items = [self.pop() for _ in range(count)]
         ordered = [i for i in reversed(items)]
-        self.push_insert('tuple', items=ordered)
+        if all(it.opcode == 'const' for it in ordered):   # create const tuple
+            self.push_insert('const', value=tuple(i.value for i in ordered))
+        else:
+            self.push_insert('tuple', args=ordered)
 
     def op_LOAD_ATTR(self, inst):
         attr = self.names[inst.arg]
@@ -342,7 +345,10 @@ class SymbolicExecution(object):
         name = self.names[inst.arg]
         value = self.globals.get(name)
         if value is not None:
-            self.push_insert('global', name=name, value=value)
+            if isinstance(value, (int, float, complex)):
+                self.push_insert('const', value=value)
+            else:
+                self.push_insert('global', name=name, value=value)
         else:
             self.push_insert('global', name=name)
 

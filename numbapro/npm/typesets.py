@@ -9,4 +9,4 @@ integer_set = signed_set | unsigned_set
 float_set = frozenset([float32, float64])
 complex_set = frozenset([complex64, complex128])
 
-
+number_set = integer_set | float_set | complex_set

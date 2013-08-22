@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 from .errors import error_context
-from . import types, macro
+from . import types, macro, typesets
 from .symbolic import Inst
 
 class Infer(object):
@@ -169,7 +169,7 @@ class Infer(object):
         return etys[inst.index]
 
     def op_tuple(self, inst):
-        return types.tupletype(*(i.type for i in inst.items))
+        return types.tupletype(*(i.type for i in inst.args))
 
     def op_slice(self, inst):
         if inst.step is not None:
@@ -195,7 +195,8 @@ class Infer(object):
             return types.function_type
         elif isinstance(value, macro.Macro):
             return types.macro_type
-
+        print value, type(value)
+    
     def expand_macro(self, inst):
         if inst.value.callable:
             return types.macro_type

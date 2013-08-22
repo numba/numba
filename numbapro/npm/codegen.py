@@ -252,7 +252,7 @@ class CodeGen(object):
         assert False
 
     def op_tuple(self, inst):
-        values = [self.valmap[i] for i in inst.items]
+        values = [self.valmap[i] for i in inst.args]
         return inst.type.desc.llvm_pack(self.builder, values)
 
     def op_slice(self, inst):

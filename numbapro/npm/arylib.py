@@ -66,15 +66,18 @@ def getitem_tuple(args):
             return idx
     return 
 
-def array_complex_slicing_return(args):
+def array_getitem_tuple_return(args):
     ary, idx = args
     ct = 0
     for x in idx.desc.elements:
         if isinstance(x.desc, types.Integer):
             ct += 1
     ndim = ary.desc.ndim - ct
-    assert ndim > 0
-    return ary.desc.copy(ndim=ndim, order='A')
+
+    if ndim == 0: # tuple indexing
+        return ary.desc.element
+    else:
+        return ary.desc.copy(ndim=ndim, order='A')
 
 def array_dtype_return(args):
     return args[0].desc.element
@@ -205,13 +208,26 @@ class ArayGetItemIntp(object):
 class ArrayGetItemTuple(object):
     function = (operator.getitem,
                 (types.ArrayKind, getitem_tuple),
-                array_complex_slicing_return)
+                array_getitem_tuple_return)
     
     def generic_implement(self, context, args, argtys, retty):
         ary, idx = args
         aryty, idxty = argtys
 
         builder = context.builder
+
+        if not isinstance(retty.desc, types.Array): # not slicing
+            indices = idxty.desc.llvm_unpack(builder, idx)
+
+            indices = [ty.llvm_cast(builder, val, types.intp)
+                    for val, ty in zip(indices, idxty.desc.elements)]
+
+            
+            indices = wraparound_and_boundcheck(context, ary, indices)
+            return aryutils.getitem(builder, ary, indices=indices,
+                                    order=aryty.desc.order)
+
+
         markcollapsed = [isinstance(t.desc, types.Integer)
                          for t in idxty.desc.elements]
 

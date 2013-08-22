@@ -42,7 +42,7 @@ class FunctionLibrary(object):
             bin = self.concrete[func.funcobj]
 
         if func in bin:
-            raise ValueError('duplicated function')
+            raise ValueError('duplicated function %s' % func)
         bin.add(func)
 
     def lookup(self, func, args):
