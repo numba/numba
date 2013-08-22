@@ -116,6 +116,15 @@ class Infer(object):
 
         if isinstance(callee, macro.Macro):
             with error_context(during="expanding macro %s" % callee):
+                if inst.kws:
+                    if not getattr(callee, 'argnames', None):
+                        raise TypeError('%s does not accept keywords' % callee)
+                    else:
+                        kws = dict(inst.kws)
+                        for k in callee.argnames[len(inst.args):]:
+                            v = kws[k]
+                            inst.args.append(v)
+                    inst.kws = None
                 callee = callee.func(inst.args)
 
         if getattr(callee, 'codegen', None) and hasattr(callee, 'return_type'):

@@ -272,7 +272,8 @@ class shared(Stub):
     '''
     _description_ = '<shared>'
 
-    array = macro.Macro('shared.array', shared_array, callable=True)
+    array = macro.Macro('shared.array', shared_array, callable=True,
+                        argnames=['shape', 'dtype'])
 
 
 #-------------------------------------------------------------------------------

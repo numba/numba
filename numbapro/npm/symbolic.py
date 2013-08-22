@@ -92,7 +92,7 @@ class SymbolicExecution(object):
                     c.replace('alias', to=defns[c.name])
 
     def dead_code_elimination(self):
-        candidates = ['global']
+        candidates = ['global', 'const']
         for blk in self.blocks:
             rmlist = []
             for inst in blk.code:
