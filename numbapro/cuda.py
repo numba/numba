@@ -110,6 +110,8 @@ def _prepare_shape_strides_dtype(shape, strides, dtype, order):
     if isinstance(strides, (int, long)):
         strides = (strides,)
     else:
+        if shape == ():
+            shape = (1,)
         strides = strides or _fill_stride_by_order(shape, dtype, order)
     return shape, strides, dtype
 

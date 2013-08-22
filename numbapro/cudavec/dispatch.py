@@ -152,7 +152,7 @@ class CudaUFuncDispatcher(object):
                 out = self._allocate_output(broadcast_arrays, result_dtype)
             else:
                 out = kws['out']
-                if devicearray.is_cuda_ndarray(device_out):
+                if devicearray.is_cuda_ndarray(out):
                     raise TypeError("output array must not be a device array")
                 if out.shape[0] < broadcast_arrays[0].shape[0]:
                     raise ValueError("insufficient storage for output array")
@@ -171,9 +171,9 @@ class CudaUFuncDispatcher(object):
                     "not all arrays are numpy ndarray"
 
             device_ins = [cuda.to_device(x, stream) for x in broadcast_arrays]
-            device_out = cuda.to_device(out, stream, copy=False)
+            device_out = cuda.device_array_like(out, stream=stream)
 
-            kernel_args = device_ins + [device_out, element_count]
+            kernel_args = device_ins + [device_out]
 
             griddim = (nctaid,)
             blockdim = (ntid,)

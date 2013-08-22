@@ -129,5 +129,13 @@ def test_reduce2(n):
     assert result == gold, (result, gold)
 
 
+@testcase
+def test_output_arg():
+    A = np.arange(10, dtype=np.float32)
+    B = np.arange(10, dtype=np.float32)
+    C = np.empty_like(A)
+    vector_add(A, B, out=C)
+    assert np.allclose(A + B, C)
+
 if __name__ == '__main__':
     main()
