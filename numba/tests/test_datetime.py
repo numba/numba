@@ -59,15 +59,13 @@ def test_datetime():
     assert extract_min(datetime.datetime(*datetime_components)) == 4
     assert extract_sec(datetime.datetime(*datetime_components)) == 5
 
-    control = datetime.datetime(2014, 1, 2, 3, 4, 5)
-    assert create_python_datetime(2014, 1, 2, 3, 4, 5) == control
+    control = datetime.datetime(*datetime_components)
+    assert create_python_datetime(*datetime_components) == control
     assert create_python_datetime_from_string("2014-01-02T03:04:05Z") == control
     
     datetime_str = '2014-01-02T03:04:05Z'
     control = numpy.datetime64(datetime_str)
-    x = create_numpy_datetime(datetime_str)
-    print control, x
-    assert x == control
+    assert create_numpy_datetime(datetime_str) == control
 
 if __name__ == "__main__":
     test_datetime()
