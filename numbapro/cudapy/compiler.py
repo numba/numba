@@ -5,11 +5,17 @@ from numbapro.npm import (symbolic, typing, compiler, types, extending,
 
 from numbapro.cudadrv import nvvm, driver
 from .execution import CUDAKernel
-from . import ptxlib, libdevice
+from . import ptxlib, libdevice, ptx
 
-def compile_kernel(func, argtys):
+def _set_flags(debug):
+    flags = list(compiler.DEFAULT_FLAGS)
+    if not debug:
+        flags.append('no-exceptions')
+    return flags
+
+def compile_kernel(func, argtys, debug=False):
     lmod, lfunc, excs = compile_common(func, types.void, argtys,
-                                       flags=['no-exceptions'])
+                                       flags=_set_flags(debug))
     # PTX-ization
     wrapper = generate_kernel_wrapper(lfunc, bool(excs))
     cudakernel = CUDAKernel(wrapper.name, to_ptx(wrapper), argtys, excs)
@@ -37,7 +43,42 @@ def generate_kernel_wrapper(lfunc, has_excs):
         raised = builder.icmp(lc.ICMP_NE, exc, no_exc)
         
         with cgutils.if_then(builder, raised):
-            builder.store(exc, wrapper.args[-1])
+            fname_tx = ptx.SREG_MAPPING[ptx._ptx_sreg_tidx]
+            fname_ty = ptx.SREG_MAPPING[ptx._ptx_sreg_tidy]
+            fname_tz = ptx.SREG_MAPPING[ptx._ptx_sreg_tidz]
+
+            fname_bx = ptx.SREG_MAPPING[ptx._ptx_sreg_ctaidx]
+            fname_by = ptx.SREG_MAPPING[ptx._ptx_sreg_ctaidy]
+
+            li32 = types.uint32.llvm_as_value()
+            fn_tx = cgutils.get_function(builder, fname_tx, li32, ())
+            fn_ty = cgutils.get_function(builder, fname_ty, li32, ())
+            fn_tz = cgutils.get_function(builder, fname_tz, li32, ())
+            
+            fn_bx = cgutils.get_function(builder, fname_bx, li32, ())
+            fn_by = cgutils.get_function(builder, fname_by, li32, ())
+            
+            tx = builder.call(fn_tx, ())
+            ty = builder.call(fn_ty, ())
+            tz = builder.call(fn_tz, ())
+            
+            bx = builder.call(fn_bx, ())
+            by = builder.call(fn_by, ())
+
+            excptr = wrapper.args[-1]
+
+            old = builder.atomic_cmpxchg(excptr, no_exc, exc, 'monotonic')
+
+            success = builder.icmp(lc.ICMP_EQ, old, no_exc)
+            with cgutils.if_then(builder, success):
+                values = [tx, ty, tz, bx, by]
+                for i, val in enumerate(values):
+                    offset = types.uint32.llvm_const(1 + i)
+                    ptr = builder.gep(wrapper.args[-1], [offset])
+                    builder.store(val, ptr)
+
+                builder.ret_void()
+
             builder.ret_void()
 
     builder.ret_void()
@@ -45,8 +86,9 @@ def generate_kernel_wrapper(lfunc, has_excs):
     lfunc.add_attribute(lc.ATTR_ALWAYS_INLINE)
     return wrapper
 
-def compile_device(func, retty, argtys, inline=False):
-    lmod, lfunc, excs = compile_common(func, retty, argtys, flags=['no-exceptions'])
+def compile_device(func, retty, argtys, inline=False, debug=False):
+    lmod, lfunc, excs = compile_common(func, retty, argtys,
+                                       flags=_set_flags(debug))
     if inline:
         lfunc.add_attribute(lc.ATTR_ALWAYS_INLINE)
     return DeviceFunction(func, lmod, lfunc, retty, argtys, excs)

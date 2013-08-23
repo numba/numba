@@ -5,6 +5,17 @@ from numbapro.npm import types
 from numbapro.cudadrv import driver, devicearray
 from numbapro.cudadrv.autotune import AutoTuner
 
+class CUDARuntimeError(RuntimeError):
+    def __init__(self, exc, tx, ty, tz, bx, by):
+        self.tid = tx, ty, tz
+        self.ctaid = bx, by
+        self.exc = exc
+        t = ("An exception was raised in thread=%s block=%s\n"
+             "\t%s: %s")
+        msg = t % (self.tid, self.ctaid, type(self.exc).__name__, self.exc)
+        super(CUDARuntimeError, self).__init__(msg)
+
+
 class CUDAKernelBase(object):
     '''Define interface for configurable kernels
     '''
@@ -132,7 +143,7 @@ class CUDAKernel(CUDAKernelBase):
 
         # allocate space for exception
         if self.excs:
-            excsize = ctypes.sizeof(ctypes.c_uint32)
+            excsize = ctypes.sizeof(ctypes.c_int32) * 6
             excmem = driver.DeviceMemory(excsize)
             driver.device_memset(excmem, 0, excsize)
             args.append(excmem.device_ctypes_pointer)
@@ -146,12 +157,10 @@ class CUDAKernel(CUDAKernelBase):
 
         # check exceptions
         if self.excs:
-            exchost = ctypes.c_uint32(0xffffffff)
+            exchost = (ctypes.c_int32 * 6)()
             exc = driver.device_to_host(ctypes.addressof(exchost), excmem,
                                         excsize)
-            errcode = exchost.value
-            if errcode != 0:
-                raise self.excs[errcode]
+            raise CUDARuntimeError(self.excs[exchost[0]].exc, *exchost[1:])
 
         # retrieve auto converted arrays
         for wb in retr:

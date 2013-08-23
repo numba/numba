@@ -2,9 +2,8 @@ import re
 import llvm.core as lc
 from numbapro import cuda
 from numbapro.npm import types, cgutils, aryutils
-from numbapro.cudapy.compiler import to_ptx
 from numbapro.cudapy.execution import CUDAKernel
-from numbapro.cudapy import ptx
+from numbapro.cudapy import ptx, compiler
 from . import dispatch
 from numbapro.vectorizers._common import parse_signature
 
@@ -65,10 +64,11 @@ class CudaGUFuncVectorize(object):
 
         dims = [len(x) for x in self.inputsig]
         dims += [len(x) for x in self.outputsig]
-        lmod, lgufunc, outertys = build_gufunc_stager(cudevfn, dims)
+        lmod, lgufunc, outertys, excs = build_gufunc_stager(cudevfn, dims)
 
-        ptx = to_ptx(lgufunc)
-        kernel = CUDAKernel(lgufunc.name, ptx, outertys, excs=None)
+        wrapper = compiler.generate_kernel_wrapper(lgufunc, bool(excs))
+        ptx = compiler.to_ptx(wrapper)
+        kernel = CUDAKernel(wrapper.name, ptx, outertys, excs=excs)
         kernel.bind()
 
         dtypes = tuple(t.dtype.get_dtype() for t in argtypes)
@@ -88,7 +88,7 @@ def build_gufunc_stager(devfn, dims):
     lfunc = lmod.get_function_named(lfunc.name)
 
     argtypes = [t.llvm_as_argument() for t in outer_args]
-    fnty = lc.Type.function(lc.Type.void(), argtypes)
+    fnty = lc.Type.function(lc.Type.int(), argtypes)
     lgufunc = lmod.add_function(fnty, name='gufunc_%s' % lfunc.name)
 
     builder = lc.Builder.new(lgufunc.append_basic_block(''))
@@ -147,11 +147,11 @@ def build_gufunc_stager(devfn, dims):
 
         builder.store(newary, slice)
 
-    builder.call(lfunc, slices)
-    builder.ret_void()
+    errcode = builder.call(lfunc, slices)
+    builder.ret(errcode)
 
     lmod.verify()
-    return lmod, lgufunc, outer_args
+    return lmod, lgufunc, outer_args, excs
 
 
 def get_slice_data(builder, data, shape, strides, order, index):

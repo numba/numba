@@ -26,7 +26,7 @@ def if_then(builder, cond):
     orelse = append_block(builder, 'else')
     builder.cbranch(cond, then, orelse)
     with goto_block(builder, then):
-        yield
+        yield orelse
     builder.position_at_end(orelse)
 
 def make_array(builder, elemty, values):

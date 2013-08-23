@@ -43,7 +43,7 @@ def _map_numba_to_npm_types(typ):
     return NUMBA_TO_NPM_TYPES[typ]
 
 def jit(restype=None, argtypes=None, device=False, inline=False, bind=True,
-        link=[], **kws):
+        link=[], debug=False, **kws):
     """JIT compile a python function conforming to
     the CUDA-Python specification.
     
@@ -120,13 +120,14 @@ def jit(restype=None, argtypes=None, device=False, inline=False, bind=True,
         raise TypeError("CUDA kernel must have void return type.")
 
     def kernel_jit(func):
-        cukern = compiler.compile_kernel(func, argtypes)
+        cukern = compiler.compile_kernel(func, argtypes, debug=debug)
         cukern.linkfiles += link
         if bind: cukern.bind()
         return cukern
 
     def device_jit(func):
-        return compiler.compile_device(func, restype, argtypes, inline=True)
+        return compiler.compile_device(func, restype, argtypes, inline=True,
+                                       debug=debug)
 
     if device:
         return device_jit
