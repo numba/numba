@@ -85,7 +85,6 @@ class SymbolicExecution(object):
                     else:                    # drop if more than one definition
                         del defns[c.name]
 
-        repls = {}
         for b in self.blocks:
             for c in b.code:
                 if c.opcode == 'load' and c.name in defns:

@@ -1,4 +1,3 @@
-import numpy
 import llvm.core as lc
 from numbapro.npm import types, cgutils, aryutils, arylib
 from . import ptx

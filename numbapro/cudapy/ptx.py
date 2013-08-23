@@ -3,7 +3,7 @@ This scripts specifies all PTX special objects.
 '''
 import operator
 import llvm.core as lc
-from numbapro.npm import types, macro, symbolic, cgutils
+from numbapro.npm import types, macro, symbolic
 from numbapro.cudadrv import nvvm
 
 class Stub(object):
@@ -209,63 +209,6 @@ def shared_array(args):
     impl.codegen = True
     impl.return_type = types.arraytype(dtype, len(shape), 'C')
     return impl
-
-def cg_shared_array(cg, value):
-    args = value.args.args
-
-    arytype = cg.typemap[value]
-    elemtype = arytype.element
-
-    shape, _dtype = args
-
-    size = reduce(operator.mul, shape)
-
-    smem_elemtype = cg.to_llvm(elemtype)
-    smem_type = lc.Type.array(smem_elemtype, size)
-
-    smem = cg.lmod.add_global_variable(smem_type, 'smem', ADDRSPACE_SHARED)
-
-    if size == 0: # dynamic shared memory
-        smem.linkage = LINKAGE_EXTERNAL
-    else:
-        smem.linkage = LINKAGE_INTERNAL
-        smem.initializer = Constant.undef(smem_type)
-
-    smem_elem_ptr_ty = Type.pointer(smem_elemtype)
-    smem_elem_ptr_ty_addrspace = Type.pointer(smem_elemtype, ADDRSPACE_SHARED)
-
-    # convert to generic addrspace
-    tyname = str(smem_elemtype)
-    tyname = {'float': 'f32', 'double': 'f64'}.get(tyname, tyname)
-    s2g_name_fmt = 'llvm.nvvm.ptr.shared.to.gen.p0%s.p%d%s'
-    s2g_name = s2g_name_fmt % (tyname, ADDRSPACE_SHARED, tyname)
-    s2g_fnty = Type.function(smem_elem_ptr_ty, [smem_elem_ptr_ty_addrspace])
-    shared_to_generic = cg.lmod.get_or_insert_function(s2g_fnty, s2g_name)
-
-    data = cg.builder.call(shared_to_generic,
-                        [cg.builder.bitcast(smem, smem_elem_ptr_ty_addrspace)])
-
-    def const_intp(x):
-        return Constant.int_signextend(cg.typesetter.llvm_intp, x)
-
-    cshape = Constant.array(cg.typesetter.llvm_intp, map(const_intp, shape))
-
-    strides_raw = [reduce(operator.mul, shape[i + 1:], 1)
-                   for i in range(len(shape))]
-    strides = [cg.builder.mul(cg.sizeof(elemtype), const_intp(s))
-               for s in strides_raw]
-
-    cstrides = Constant.array(cg.typesetter.llvm_intp, strides)
-
-    ary = Constant.struct([Constant.null(data.type), cshape, cstrides])
-    ary = cg.builder.insert_value(ary, data, 0)
-
-    aryptr = cg.builder.alloca(ary.type)
-    cg.builder.store(ary, aryptr)
-
-    cg.valmap[value] = aryptr
-
-
 
 class shared(Stub):
     '''shared namespace

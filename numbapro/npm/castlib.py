@@ -13,7 +13,6 @@ def caster_generator():
                  nb.int8, nb.int16, nb.int32, nb.int64,
                  nb.uint8, nb.uint16, nb.uint32, nb.uint64]
 
-    registered = set()
     for src, dst in itertools.product(datatypes, datatypes):
 
         nbobj = dst

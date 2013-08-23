@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 from .errors import error_context
-from . import types, macro, typesets
+from . import types, macro
 from .symbolic import Inst
 
 class Infer(object):

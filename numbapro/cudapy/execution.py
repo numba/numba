@@ -1,6 +1,5 @@
 import copy
 import ctypes
-import numpy
 from numbapro.npm import types
 from numbapro.cudadrv import driver, devicearray
 from numbapro.cudadrv.autotune import AutoTuner
@@ -158,8 +157,7 @@ class CUDAKernel(CUDAKernelBase):
         # check exceptions
         if self.excs:
             exchost = (ctypes.c_int32 * 6)()
-            exc = driver.device_to_host(ctypes.addressof(exchost), excmem,
-                                        excsize)
+            driver.device_to_host(ctypes.addressof(exchost), excmem, excsize)
             raise CUDARuntimeError(self.excs[exchost[0]].exc, *exchost[1:])
 
         # retrieve auto converted arrays

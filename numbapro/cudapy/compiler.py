@@ -1,7 +1,5 @@
-import inspect
 import llvm.core as lc
-from numbapro.npm import (symbolic, typing, compiler, types, extending,
-                          cgutils,)
+from numbapro.npm import compiler, types, extending, cgutils
 
 from numbapro.cudadrv import nvvm, driver
 from .execution import CUDAKernel
@@ -95,7 +93,6 @@ def compile_device(func, retty, argtys, inline=False, debug=False):
 
 def declare_device_function(name, retty, argtys):
     lmod = lc.Module.new('extern-%s' % name)
-    ts = types.intp
     lret = retty.llvm_as_return()
     largs = [t.llvm_as_argument() for t in argtys]
     lfty = lc.Type.function(lc.Type.void(), largs + [lret])

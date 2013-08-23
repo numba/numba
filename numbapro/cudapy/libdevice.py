@@ -1,7 +1,5 @@
 import sys
 import math
-import numpy
-import llvm.core as lc
 from numbapro.npm import cgutils, typesets, types
 
 def generate_unary_math(f64name, f32name, callobj, ty):
