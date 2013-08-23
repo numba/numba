@@ -2,7 +2,6 @@ import re
 import llvm.core as lc
 from numbapro import cuda
 from numbapro.npm import types, codegen
-from numbapro.cudapy import codegen as cudapy_codegen
 from numbapro.cudapy.compiler import to_ptx, CUDA_ADDR_SIZE
 from numbapro.cudapy.execution import CUDAKernel
 from . import dispatch

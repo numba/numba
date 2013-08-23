@@ -1,6 +1,6 @@
 import numpy as np
 from .support import testcase, main
-from numbapro import cuda, uint32
+from numbapro import cuda, uint32, uint64
 
 def atomic_add(ary):
     tid = cuda.threadIdx.x
@@ -11,6 +11,26 @@ def atomic_add(ary):
     cuda.atomic.add(sm, bin, 1)
     cuda.syncthreads()
     ary[tid] = sm[tid]
+
+def atomic_add2(ary):
+    tx = cuda.threadIdx.x
+    ty = cuda.threadIdx.y
+    sm = cuda.shared.array((4, 8), uint32)
+    sm[tx, ty] = ary[tx, ty]
+    cuda.syncthreads()
+    cuda.atomic.add(sm, (tx, ty), 1)
+    cuda.syncthreads()
+    ary[tx, ty] = sm[tx, ty]
+
+def atomic_add3(ary):
+    tx = cuda.threadIdx.x
+    ty = cuda.threadIdx.y
+    sm = cuda.shared.array((4, 8), uint32)
+    sm[tx, ty] = ary[tx, ty]
+    cuda.syncthreads()
+    cuda.atomic.add(sm, (tx, uint64(ty)), 1)
+    cuda.syncthreads()
+    ary[tx, ty] = sm[tx, ty]
 
 @testcase
 def test_atomic_add():
@@ -24,6 +44,26 @@ def test_atomic_add():
         gold[orig[i]] += 1
 
     assert np.all(ary == gold)
+
+
+@testcase
+def test_atomic_add2():
+    ary = np.random.randint(0, 32, size=32).astype(np.uint32).reshape(4, 8)
+    orig = ary.copy()
+    cuda_atomic_add2 = cuda.jit('void(uint32[:,:])')(atomic_add2)
+    cuda_atomic_add2[1, (4, 8)](ary)
+
+    assert np.all(ary == orig + 1)
+
+
+@testcase
+def test_atomic_add3():
+    ary = np.random.randint(0, 32, size=32).astype(np.uint32).reshape(4, 8)
+    orig = ary.copy()
+    cuda_atomic_add3 = cuda.jit('void(uint32[:,:])')(atomic_add3)
+    cuda_atomic_add3[1, (4, 8)](ary)
+
+    assert np.all(ary == orig + 1)
 
 
 if __name__ == '__main__':

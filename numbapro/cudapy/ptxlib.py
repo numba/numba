@@ -1,6 +1,6 @@
 import numpy
 import llvm.core as lc
-from numbapro.npm import types, cgutils
+from numbapro.npm import types, cgutils, aryutils, arylib
 from . import ptx
 
 def SRegImplFactory(func):
@@ -100,7 +100,6 @@ class Grid2D(object):
 
         return retty.desc.llvm_pack(builder, (x, y))
 
-
 #-------------------------------------------------------------------------------
 #  Syncthreads
 
@@ -113,6 +112,96 @@ class Syncthreads(object):
         sync = cgutils.get_function(builder, fname, lc.Type.void(), ())
         return builder.call(sync, ())
 
+#-------------------------------------------------------------------------------
+#  Atomics
+
+def atomic_value_template(args):
+    return args[0].desc.element
+
+class AtomicAdd(object):
+    function = ptx.atomic.add, (types.ArrayKind, types.intp,
+                                atomic_value_template), atomic_value_template
+
+    def generic_implement(self, context, args, argtys, retty):
+        builder = context.builder
+        ary, idx, val = args
+        aryty, idxty, valty = argtys
+        data = aryutils.getdata(builder, ary)
+        shape = aryutils.getshape(builder, ary)
+        strides = aryutils.getstrides(builder, ary)
+        order = aryty.desc.order
+        indices = arylib.wraparound(context, ary, [idx])
+
+        ptr = aryutils.getpointer(builder, data, shape, strides, order, indices)
+
+
+        castedval = context.cast(val, valty, retty)
+        res = builder.atomic_rmw('add', ptr, castedval, 'monotonic')
+
+        return res
+
+def atomic_fixed_array(args):
+    ary, idx, val = args
+    if (isinstance(idx.desc, types.FixedArray) and
+            ary.desc.ndim == idx.desc.length):
+        return idx
+
+class AtomicAddFixedArray(object):
+    function = ptx.atomic.add, (types.ArrayKind, atomic_fixed_array,
+                                atomic_value_template), atomic_value_template
+
+    def generic_implement(self, context, args, argtys, retty):
+        builder = context.builder
+        ary, idx, val = args
+        aryty, idxty, valty = argtys
+        data = aryutils.getdata(builder, ary)
+        shape = aryutils.getshape(builder, ary)
+        strides = aryutils.getstrides(builder, ary)
+        order = aryty.desc.order
+
+        indices = idxty.llvm_unpack(builder, idx)
+        indices = [idxty.desc.element.llvm_cast(builder, i, types.intp)
+                   for i in indices]
+        indices = arylib.wraparound(context, ary, indices)
+
+        ptr = aryutils.getpointer(builder, data, shape, strides, order, indices)
+
+        castedval = context.cast(val, valty, retty)
+        res = builder.atomic_rmw('add', ptr, castedval, 'monotonic')
+
+        return res
+
+def atomic_tuple(args):
+    ary, idx, val = args
+    if (isinstance(idx.desc, types.Tuple) and
+            ary.desc.ndim == len(idx.desc.elements)):
+        return idx
+
+class AtomicAddTuple(object):
+    function = ptx.atomic.add, (types.ArrayKind, atomic_tuple,
+                                atomic_value_template), atomic_value_template
+
+    def generic_implement(self, context, args, argtys, retty):
+        builder = context.builder
+        ary, idx, val = args
+        aryty, idxty, valty = argtys
+        data = aryutils.getdata(builder, ary)
+        shape = aryutils.getshape(builder, ary)
+        strides = aryutils.getstrides(builder, ary)
+        order = aryty.desc.order
+
+        indices = idxty.llvm_unpack(builder, idx)
+        indices = [t.llvm_cast(builder, i, types.intp)
+                   for t, i in zip(idxty.desc.elements, indices)]
+        indices = arylib.wraparound(context, ary, indices)
+
+        ptr = aryutils.getpointer(builder, data, shape, strides, order, indices)
+
+        castedval = context.cast(val, valty, retty)
+        res = builder.atomic_rmw('add', ptr, castedval, 'monotonic')
+
+        return res
+
 extensions = [
     # SReg
     TidX, TidY, TidZ,
@@ -123,5 +212,7 @@ extensions = [
     Grid1D, Grid2D,
     # Syncthreads,
     Syncthreads,
+    # Atomic
+    AtomicAdd, AtomicAddFixedArray, AtomicAddTuple
 ]
 

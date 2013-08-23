@@ -155,7 +155,10 @@ class Infer(object):
         return inst.to.type
 
     def op_global(self, inst):
-        value = inst.value
+        try:
+            value = inst.value
+        except AttributeError:
+            raise ValueError('global value "%s" undefined' % inst.name)
         ty = self.type_global(inst.value)
         if ty in [types.function_type, types.exception_type,
                   types.user_function_type]:

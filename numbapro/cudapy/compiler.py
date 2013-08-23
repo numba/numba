@@ -1,14 +1,11 @@
 import inspect
 import llvm.core as lc
-from numbapro.npm import (symbolic, typing, codegen, compiler, types, extending,
+from numbapro.npm import (symbolic, typing, compiler, types, extending,
                           cgutils,)
 
 from numbapro.cudadrv import nvvm, driver
 from .execution import CUDAKernel
 from . import ptxlib, libdevice
-#from .typing import cudapy_global_typing_ext, cudapy_call_typing_ext
-#from .codegen import cudapy_global_codegen_ext, cudapy_call_codegen_ext
-#from .passes import bind_scalar_constants
 
 CUDA_ADDR_SIZE = tuple.__itemsize__ * 8     # matches host
 
@@ -58,9 +55,9 @@ def compile_device(func, retty, argtys, inline=False):
 
 def declare_device_function(name, retty, argtys):
     lmod = lc.Module.new('extern-%s' % name)
-    ts = codegen.TypeSetter(intp=CUDA_ADDR_SIZE)
-    lret = ts.to_llvm(retty)
-    largs = [ts.to_llvm(t) for t in argtys]
+    ts = types.intp
+    lret = retty.llvm_as_return()
+    largs = [t.llvm_as_argument() for t in argtys]
     lfty = lc.Type.function(lc.Type.void(), largs + [lc.Type.pointer(lret)])
     lfunc = lmod.add_function(lfty, name=name)
     edf = ExternalDeviceFunction(name, lmod, lfunc, retty, argtys)

@@ -8,7 +8,10 @@ import numbapro as nb
 
 def caster_generator():
     exts = []
-    datatypes = [nb.float32, nb.int32]
+    datatypes = [nb.float32, nb.float64,
+                 nb.complex64, nb.complex128,
+                 nb.int8, nb.int16, nb.int32, nb.int64,
+                 nb.uint8, nb.uint16, nb.uint32, nb.uint64]
 
     registered = set()
     for src, dst in itertools.product(datatypes, datatypes):
