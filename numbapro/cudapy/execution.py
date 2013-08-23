@@ -145,9 +145,9 @@ class CUDAKernel(CUDAKernelBase):
                 retr.append(lambda: devary.copy_to_host(val, stream=stream))
             return devary.as_cuda_arg()
         elif isinstance(ty.desc, types.Complex):
-            size = ctypes.sizeof(ty.ctype_value())
+            size = ctypes.sizeof(ty.desc.ctype_value())
             dmem = driver.DeviceMemory(size)
-            cval = ty.ctype_pack_argument(val)
+            cval = ty.desc.ctype_value()(val)
             driver.host_to_device(dmem, ctypes.addressof(cval), size,
                                   stream=stream)
             return dmem

@@ -527,6 +527,19 @@ class SymbolicExecution(object):
         else:
             raise Exception('unreachable')
 
+    def op_DUP_TOPX(self, inst):
+        count = inst.arg
+        self.stack.extend(self.stack[-count:])
+
+    def op_ROT_THREE(self, inst):
+        one = self.pop()
+        two = self.pop()
+        three = self.pop()
+        self.push(one)
+        self.push(three)
+        self.push(two)
+
+
 #---------------------------------------------------------------------------
 # Passes
 
