@@ -5,7 +5,7 @@ from numbapro.npm import (symbolic, typing, codegen, compiler, types, extending,
 
 from numbapro.cudadrv import nvvm, driver
 from .execution import CUDAKernel
-from . import ptxlib
+from . import ptxlib, libdevice
 #from .typing import cudapy_global_typing_ext, cudapy_call_typing_ext
 #from .codegen import cudapy_global_codegen_ext, cudapy_call_codegen_ext
 #from .passes import bind_scalar_constants
@@ -69,6 +69,7 @@ def declare_device_function(name, retty, argtys):
 def get_cudapy_context():
     libs = compiler.get_builtin_context()
     extending.extends(libs, ptxlib.extensions)
+    extending.extends(libs, libdevice.extensions)
     return libs
 
 global_cudapy_libs = get_cudapy_context()

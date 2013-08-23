@@ -1,7 +1,7 @@
 import __builtin__
 import inspect
 import dis
-import operator
+import operator, math
 from collections import defaultdict
 
 from .errors import error_context
@@ -420,7 +420,7 @@ class SymbolicExecution(object):
         self.binary_op(operator.mod)
 
     def op_BINARY_POWER(self, inst):
-        self.binary_op(operator.pow)
+        self.binary_op(math.pow)
 
     def op_BINARY_RSHIFT(self, inst):
         self.binary_op(operator.rshift)
