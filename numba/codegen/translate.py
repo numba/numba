@@ -1511,9 +1511,21 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         month_func = function_util.utility_call(
             self.context, self.llvm_module,
             "iso_datetime2month", args=[node.datetime_string])
+        day_func = function_util.utility_call(
+            self.context, self.llvm_module,
+            "iso_datetime2day", args=[node.datetime_string])
+        hour_func = function_util.utility_call(
+            self.context, self.llvm_module,
+            "iso_datetime2hour", args=[node.datetime_string])
+        min_func = function_util.utility_call(
+            self.context, self.llvm_module,
+            "iso_datetime2min", args=[node.datetime_string])
+        sec_func = function_util.utility_call(
+            self.context, self.llvm_module,
+            "iso_datetime2sec", args=[node.datetime_string])
 
-        newnode = nodes.DateTimeNode(year_func, month_func, month_func,
-            month_func, month_func, month_func)
+        newnode = nodes.DateTimeNode(year_func, month_func, day_func,
+            hour_func, min_func, sec_func)
         return self.visit(newnode)
 
 

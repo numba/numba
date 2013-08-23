@@ -109,7 +109,8 @@ class DateTime64Node(ExprNode):
     #_fields = ['year', 'month', 'day', 'hour', 'min', 'sec', 'us', 'ps', '_as']
     _fields = ['datetime_string']
 
-    type = numpy_datetime
+    type = datetime
+    type.is_numpy_datetime = True
     variable = Variable(type)
 
     def __init__(self, datetime_string):
