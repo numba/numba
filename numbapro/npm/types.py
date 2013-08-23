@@ -723,6 +723,7 @@ class BuiltinObject(object):
 
 module_type = Type(BuiltinObject('module'))
 function_type = Type(BuiltinObject('function'))
+user_function_type = Type(BuiltinObject('user-function'))
 macro_type = Type(BuiltinObject('macro'))
 method_type = Type(BuiltinObject('method'))
 none_type = Type(BuiltinObject('none'))

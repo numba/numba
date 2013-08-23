@@ -104,6 +104,9 @@ class Infer(object):
         inst.update(astype=dty)
 
     def op_call(self, inst):
+        if getattr(inst.callee, 'type', None) is types.user_function_type:
+            return inst.callee.value._npm_context_[2]
+
         args = [v.type for v in inst.args]
         callee = getattr(inst.callee, 'value', inst.callee)
 
@@ -127,10 +130,11 @@ class Infer(object):
                     inst.kws = None
                 callee = callee.func(inst.args)
 
-        if getattr(callee, 'codegen', None) and hasattr(callee, 'return_type'):
-            # for macro
-            inst.update(defn=callee)
-            return callee.return_type
+            if getattr(callee, 'codegen', None) and hasattr(callee, 'return_type'):
+                # custom expansion for macro
+                inst.update(defn=callee)
+                return callee.return_type
+
         
         with error_context(during="resolving function %s(%s)" %
                                   (callee, ', '.join(str(a) for a in args))):
@@ -153,7 +157,8 @@ class Infer(object):
     def op_global(self, inst):
         value = inst.value
         ty = self.type_global(inst.value)
-        if ty is types.function_type or ty is types.exception_type:
+        if ty in [types.function_type, types.exception_type,
+                  types.user_function_type]:
             return ty
         elif ty is types.macro_type:
             return self.expand_macro(inst)
@@ -204,7 +209,8 @@ class Infer(object):
             return types.function_type
         elif isinstance(value, macro.Macro):
             return types.macro_type
-        print value, type(value)
+        elif getattr(value, '_npm_context_'):
+            return types.user_function_type
     
     def expand_macro(self, inst):
         if inst.value.callable:

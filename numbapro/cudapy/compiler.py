@@ -51,10 +51,10 @@ def generate_kernel_wrapper(lfunc, has_excs):
     return wrapper
 
 def compile_device(func, retty, argtys, inline=False):
-    lmod, lfunc = compile_common(func, retty, argtys)
+    lmod, lfunc, excs = compile_common(func, retty, argtys, flags=['no-exceptions'])
     if inline:
         lfunc.add_attribute(lc.ATTR_ALWAYS_INLINE)
-    return DeviceFunction(func, lmod, lfunc, retty, argtys)
+    return DeviceFunction(func, lmod, lfunc, retty, argtys, excs)
 
 def declare_device_function(name, retty, argtys):
     lmod = lc.Module.new('extern-%s' % name)
@@ -89,11 +89,12 @@ def to_ptx(lfunc):
     return ptx
 
 class DeviceFunction(object):
-    def __init__(self, func, lmod, lfunc, retty, argtys):
+    def __init__(self, func, lmod, lfunc, retty, argtys, excs):
         self.func = func
         self.args = tuple(argtys)
         self.return_type = retty
-        self._npm_context_ = lmod, lfunc, self.return_type, self.args
+        self.exceptions = excs
+        self._npm_context_ = lmod, lfunc, self.return_type, self.args, excs
 
     def __repr__(self):
         args = (self.return_type or 'void', self.args)
@@ -104,7 +105,7 @@ class ExternalDeviceFunction(object):
         self.name = name
         self.args = tuple(argtys)
         self.return_type = retty
-        self._npm_context_ = lmod, lfunc, self.return_type, self.args
+        self._npm_context_ = lmod, lfunc, self.return_type, self.args, None
 
     def __repr__(self):
         args = (self.name, self.return_type or 'void', self.args)

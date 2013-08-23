@@ -1,7 +1,7 @@
 import inspect, collections
 from llvm import core as lc
 from .errors import error_context
-from . import types, macro
+from . import types, macro, cgutils
 
 codegen_context = collections.namedtuple('codegen_context',
                                          ['imp', 'builder', 'raises', 'lineno',
@@ -53,6 +53,7 @@ class CodeGen(object):
         self.implib = implib
         self.exceptions = {}    # map errcode to exceptions
         self.flags = Flags(flags)
+        self.external_modules = set()
 
     def make_module(self):
         return lc.Module.new('module.%s' % self.name)
@@ -116,13 +117,20 @@ class CodeGen(object):
                                during='instruction codegen'):
                 self.op(block.terminator)
 
-    def raises(self, excobj, msg=None):
+        # link external modules
+        for m in self.external_modules:
+            self.lmod.link_in(m, preserve=True)
+
+    def add_exception(self, excobj, msg=None):
         errcode = len(self.exceptions) + 1
         lineno = self.imp_context.lineno
         if msg is not None:
             excobj = excobj('at line %d: %s' % (lineno, msg))
         self.exceptions[errcode] = exception_info(excobj, lineno)
-        self.return_error(errcode)
+        return errcode
+
+    def raises(self, excobj, msg=None):
+        self.return_error(self.add_exception(excobj, msg=msg))
 
     def cast(self, val, src, dst):
         if src == dst:                          # types are the same
@@ -205,23 +213,49 @@ class CodeGen(object):
         return self.builder.load(storage)
 
     def op_call(self, inst):
-        with error_context(during="resolving call %s" % inst.defn):
-            if (getattr(inst.defn, 'codegen', None) and
-                    hasattr(inst.defn, 'return_type')):
-                # for macros
-                imp = inst.defn
-                args = inst.args
-            else:
-                imp = self.implib.get(inst.defn)
-                args = [(self.valmap[aval]
-                            if callable(atype)
-                            else self.cast(self.valmap[aval], aval.type,
-                                           atype))
-                        for aval, atype in zip(inst.args, imp.args)]
+        if getattr(inst.callee, 'type', None) is types.user_function_type:
+            callee = inst.callee.value
+            lmod, lfunc, retty, argtys, exctable = callee._npm_context_
+            self.external_modules.add(lmod)
+            declfunc = self.lmod.get_or_insert_function(lfunc.type.pointee,
+                                                        name=lfunc.name)
+            declfunc.linkage = lc.LINKAGE_LINKONCE_ODR
+            args = [self.cast(self.valmap[aval], aval.type, atype)
+                    for aval, atype in zip(inst.args, argtys)]
 
-            assert not inst.kws
-            argtys = [aval.type for aval in inst.args]
-            return imp(self.imp_context, args, argtys, inst.defn.return_type)
+            retptr = self.builder.alloca(retty.llvm_as_value())
+            errcode = self.builder.call(declfunc, args + [retptr])
+
+            if exctable:
+                # callee defines an exception table
+                else_blk = cgutils.append_block(self.builder)
+                errswt = self.builder.switch(errcode, else_blk, len(exctable))
+                for code, exc in exctable.items():
+                    caseblk = cgutils.append_block(self.builder)
+                    code = self.add_exception(exc)
+                    errswt.add_case(caseblk, types.int32.llvm_const(code))
+                    with cgutils.goto_block(self.builder, caseblk):
+                        self.return_error(code)
+            
+            return self.builder.load(retptr)
+        else:
+            with error_context(during="resolving call %s" % inst.defn):
+                if (getattr(inst.defn, 'codegen', None) and
+                        hasattr(inst.defn, 'return_type')):
+                    # for macros
+                    imp = inst.defn
+                    args = inst.args
+                else:
+                    imp = self.implib.get(inst.defn)
+                    args = [(self.valmap[aval]
+                                if callable(atype)
+                                else self.cast(self.valmap[aval], aval.type,
+                                               atype))
+                            for aval, atype in zip(inst.args, imp.args)]
+
+                assert not inst.kws
+                argtys = [aval.type for aval in inst.args]
+                return imp(self.imp_context, args, argtys, inst.defn.return_type)
 
     def op_const(self, inst):
         if isinstance(inst.type.desc, types.BuiltinObject):
@@ -230,6 +264,8 @@ class CodeGen(object):
 
     def op_global(self, inst):
         if inst.type is types.function_type:
+            return  # do nothing
+        elif inst.type is types.user_function_type:
             return  # do nothing
         elif inst.type is types.exception_type:
             return  # do nothing
