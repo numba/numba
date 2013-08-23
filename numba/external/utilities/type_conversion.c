@@ -428,11 +428,6 @@ static PyObject* primitive2numpydatetime(
         return NULL;
     }
     
-    //dtype_meta = &(((PyArray_DatetimeDTypeMetaData *)dtype->c_metadata)->meta);
-    //*dtype_meta = new_meta;
-
-    //ret = (PyDatetimeScalarObject *)PyDatetimeArrType_Type.tp_alloc(
-    //                                        &PyDatetimeArrType_Type, 0);
     scalar->obval = output;
     scalar->obmeta.base = new_meta.base;
     scalar->obmeta.num = new_meta.num;
