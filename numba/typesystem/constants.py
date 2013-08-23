@@ -36,7 +36,7 @@ def get_typing_defaults(u):
         bool: u.bool_,
         complex: u.complex128,
         str: u.string_,
-        datetime.datetime: u.datetime,
+        #datetime.datetime: u.datetime,
         np.datetime64: u.datetime,
     }
     return typing_defaults

@@ -1266,7 +1266,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             imag = llvm.core.Constant.real(ldst_base_type, 0.0)
             val = self._create_complex(real, imag)
         elif dst_type.is_numpy_datetime and node_type.is_numpy_datetime:
-            raise NotImplementedError
+            val = self._promote_datetime(node_type, dst_type, val)
         elif dst_type.is_numpy_datetime and node_type.is_numeric:
             raise NotImplementedError
         elif dst_type.is_datetime and node_type.is_datetime:
@@ -1504,7 +1504,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             elif node.attr == 'sec':
                 return self.builder.extract_value(result, 5)
 
-    def visit_DateTime64Node(self, node):
+    def visit_NumpyDateTimeNode(self, node):
         year_func = function_util.utility_call(
             self.context, self.llvm_module,
             "iso_datetime2year", args=[node.datetime_string])

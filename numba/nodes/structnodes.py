@@ -104,13 +104,12 @@ class DateTimeAttributeNode(ExprNode):
         self.type = value.type
         self.variable = Variable(self.type)
 
-class DateTime64Node(ExprNode):
+class NumpyDateTimeNode(ExprNode):
 
     #_fields = ['year', 'month', 'day', 'hour', 'min', 'sec', 'us', 'ps', '_as']
     _fields = ['datetime_string']
 
     type = datetime
-    type.is_numpy_datetime = True
     variable = Variable(type)
 
     def __init__(self, datetime_string):

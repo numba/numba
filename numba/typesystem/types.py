@@ -547,7 +547,7 @@ class complex_(NumbaType):
 class datetime_(NumbaType):
     argnames = ["year", "month", "day", "hour", "min", "sec"]
     flags = ["numeric"]
-    is_numpy_datetime = False
+    is_numpy_datetime = True
 
     @property
     def itemsize(self):

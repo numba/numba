@@ -437,6 +437,27 @@ class ResolveCoercions(visitors.NumbaTransformer):
                     imag=function_util.external_call(
                         self.context, self.llvm_module,
                         "PyComplex_ImagAsDouble", args=[cloneable.clone]))
+            elif node_type.is_numpy_datetime:
+                year_func = function_util.utility_call(
+                    self.context, self.llvm_module,
+                    "numpydatetime2year", args=[node.node])
+                month_func = function_util.utility_call(
+                    self.context, self.llvm_module,
+                    "numpydatetime2month", args=[node.node])
+                day_func = function_util.utility_call(
+                    self.context, self.llvm_module,
+                    "numpydatetime2day", args=[node.node])
+                hour_func = function_util.utility_call(
+                    self.context, self.llvm_module,
+                    "numpydatetime2hour", args=[node.node])
+                min_func = function_util.utility_call(
+                    self.context, self.llvm_module,
+                    "numpydatetime2min", args=[node.node])
+                sec_func = function_util.utility_call(
+                    self.context, self.llvm_module,
+                    "numpydatetime2sec", args=[node.node])
+                new_node = nodes.DateTimeNode(year_func, month_func, day_func,
+                    hour_func, min_func, sec_func)
             elif node_type.is_datetime:
                 year_func = function_util.utility_call(
                     self.context, self.llvm_module,
@@ -456,7 +477,6 @@ class ResolveCoercions(visitors.NumbaTransformer):
                 sec_func = function_util.utility_call(
                     self.context, self.llvm_module,
                     "pydatetime2sec", args=[node.node])
-
                 new_node = nodes.DateTimeNode(year_func, month_func, day_func,
                     hour_func, min_func, sec_func)
             else:
@@ -1051,7 +1071,7 @@ class LateSpecializer(ResolveCoercions,
 
         elif node.type.is_numpy_datetime:
             datetime_str = nodes.ConstNode('', c_string_type)
-            node = nodes.DateTime64Node(datetime_str)
+            node = nodes.NumpyDateTimeNode(datetime_str)
 
         elif node.type.is_datetime:
             # JNB: not sure what to do here for datetime value

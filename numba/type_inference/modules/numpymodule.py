@@ -193,7 +193,7 @@ def array(object, dtype, order, subok):
 
 @register(np, pass_in_types=False)
 def datetime64(datetime_string):
-    return nodes.DateTime64Node(datetime_string)
+    return nodes.NumpyDateTimeNode(datetime_string)
 
 @register(np)
 def nonzero(a):

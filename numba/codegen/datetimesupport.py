@@ -27,7 +27,6 @@ class DateTimeSupportMixin(object):
 
     def _promote_datetime(self, src_type, dst_type, value):
         "Promote a datetime value to value with a larger or smaller datetime type"
-        import ipdb;ipdb.set_trace()
         year, month, day, hour, min, sec = self._extract_datetime(value)
 
         dst_ltype = dst_type.to_llvm(self.context)

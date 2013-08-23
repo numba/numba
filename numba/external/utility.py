@@ -82,6 +82,12 @@ utility_funcs = list(object_to_numeric.itervalues()) + [
     UtilityFunction.load("iso_datetime2hour", int_(string_)),
     UtilityFunction.load("iso_datetime2min", int_(string_)),
     UtilityFunction.load("iso_datetime2sec", int_(string_)),
+    UtilityFunction.load("numpydatetime2year", long_(object_)),
+    UtilityFunction.load("numpydatetime2month", int_(object_)),
+    UtilityFunction.load("numpydatetime2day", int_(object_)),
+    UtilityFunction.load("numpydatetime2hour", int_(object_)),
+    UtilityFunction.load("numpydatetime2min", int_(object_)),
+    UtilityFunction.load("numpydatetime2sec", int_(object_)),
 ]
 
 def default_utility_library(context):

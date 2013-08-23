@@ -84,8 +84,8 @@ class CoercionNode(ExprNode):
             else:
                 datetime_type = node.variable.type
 
-            if (not datetime_type == datetime and
-                not datetime_type == numpy_datetime):
+            if not datetime_type.is_datetime and \
+                    not datetime_type.is_numpy_datetime:
                 node = CoercionNode(node, datetime)
 
         return node

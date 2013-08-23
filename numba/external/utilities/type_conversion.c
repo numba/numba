@@ -395,7 +395,6 @@ static PyObject* primitive2pydatetime(
 {
     PyObject *result = PyDateTime_FromDateAndTime(year, month, day,
         hour, min, sec, 0);
-    //PyObject *result = PyDate_FromDate(year, month, day);
     Py_INCREF(result);
     return result;
 }
@@ -436,6 +435,59 @@ static PyObject* primitive2numpydatetime(
 }
 
 
+static npy_datetimestruct numpydatetime2npydatetime_struct(PyObject *numpy_datetime)
+{
+    PyArray_DatetimeMetaData meta;
+    npy_datetime value;
+    npy_datetimestruct out;
+
+    meta.base = ((PyDatetimeScalarObject*)numpy_datetime)->obmeta.base;
+    meta.num = ((PyDatetimeScalarObject*)numpy_datetime)->obmeta.num;
+    value = ((PyDatetimeScalarObject*)numpy_datetime)->obval;
+    memset(&out, 0, sizeof(npy_datetimestruct));
+
+    convert_datetime_to_datetimestruct(&meta, value, &out);
+
+    return out;
+}
+
+static npy_int64 numpydatetime2year(PyObject *numpy_datetime)
+{
+    npy_datetimestruct out = numpydatetime2npydatetime_struct(numpy_datetime);
+    return out.year;
+}
+
+static npy_int64 numpydatetime2month(PyObject *numpy_datetime)
+{
+    npy_datetimestruct out = numpydatetime2npydatetime_struct(numpy_datetime);
+    return out.month;
+}
+
+static npy_int64 numpydatetime2day(PyObject *numpy_datetime)
+{
+    npy_datetimestruct out = numpydatetime2npydatetime_struct(numpy_datetime);
+    return out.day;
+}
+
+static npy_int64 numpydatetime2hour(PyObject *numpy_datetime)
+{
+    npy_datetimestruct out = numpydatetime2npydatetime_struct(numpy_datetime);
+    return out.hour;
+}
+
+static npy_int64 numpydatetime2min(PyObject *numpy_datetime)
+{
+    npy_datetimestruct out = numpydatetime2npydatetime_struct(numpy_datetime);
+    return out.min;
+}
+
+static npy_int64 numpydatetime2sec(PyObject *numpy_datetime)
+{
+    npy_datetimestruct out = numpydatetime2npydatetime_struct(numpy_datetime);
+    return out.sec;
+}
+
+
 static int
 export_type_conversion(PyObject *module)
 {
@@ -470,6 +522,12 @@ export_type_conversion(PyObject *module)
     EXPORT_FUNCTION(iso_datetime2hour, module, error);
     EXPORT_FUNCTION(iso_datetime2min, module, error);
     EXPORT_FUNCTION(iso_datetime2sec, module, error);
+    EXPORT_FUNCTION(numpydatetime2year, module, error);
+    EXPORT_FUNCTION(numpydatetime2month, module, error);
+    EXPORT_FUNCTION(numpydatetime2day, module, error);
+    EXPORT_FUNCTION(numpydatetime2hour, module, error);
+    EXPORT_FUNCTION(numpydatetime2min, module, error);
+    EXPORT_FUNCTION(numpydatetime2sec, module, error);
 
     EXPORT_FUNCTION(__Numba_PyInt_FromLongLong, module, error);
     EXPORT_FUNCTION(__Numba_PyInt_FromUnsignedLongLong, module, error);
