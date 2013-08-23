@@ -64,6 +64,7 @@ class PRNG(RNG):
     MRG32K3A = binding.CURAND_RNG_PSEUDO_MRG32K3A
     MTGP32   = binding.CURAND_RNG_PSEUDO_MTGP32
 
+    @cuda.require_context
     def __init__(self, rndtype=DEFAULT, seed=None, offset=None, stream=None):
         super(PRNG, self).__init__(binding.Generator(rndtype))
         self.rndtype = rndtype
@@ -168,6 +169,7 @@ class QRNG(RNG):
     SOBOL64             = binding.CURAND_RNG_QUASI_SOBOL64
     SCRAMBLED_SOBOL64   = binding.CURAND_RNG_QUASI_SCRAMBLED_SOBOL64
 
+    @cuda.require_context
     def __init__(self, rndtype=DEFAULT, ndim=None, offset=None, stream=None):
         super(QRNG, self).__init__(binding.Generator(rndtype))
         self.rndtype = rndtype
