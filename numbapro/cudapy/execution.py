@@ -152,4 +152,4 @@ class CUDAKernel(CUDAKernelBase):
                                   stream=stream)
             return dmem
         else:
-            return prepare_args(ty, val)
+            return ty.ctype_pack_argument(val)
