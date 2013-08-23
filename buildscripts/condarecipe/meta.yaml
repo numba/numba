@@ -1,0 +1,32 @@
+package:
+  name: numbapro
+  version: 99.9.9
+
+source:
+  git_url: git@github.com:ContinuumIO/numbapro.git
+# git_tag: 0.12.3
+
+requirements:
+  build:
+    - python
+    - numba
+    - numpy
+    #- chrpath    [linux]
+  run:
+    - python
+    - numpy
+    - numba
+    - llvmpy
+    - cudatoolkit
+
+test:
+  requires:
+    - nose
+    - python
+  imports:
+    - numbapro
+    - numbapro._utils.mviewbuf
+
+about:
+  home:
+  license: proprietary - Continuum Analytics, Inc.

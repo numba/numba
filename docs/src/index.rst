@@ -73,7 +73,6 @@ CUDA support for GPU execution and a multi-threaded parallel range.
    install
    ufuncs
    generalizedufuncs
-   prange
    CUDAintro
    CUDAufunc
    CUDAJit

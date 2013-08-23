@@ -44,19 +44,21 @@ class CudaUFuncDispatcher(object):
         return broadcast_arrays
 
     def _allocate_output(self, broadcast_arrays, result_dtype):
-        # return np.empty_like(broadcast_arrays[0], dtype=result_dtype)
-        # for numpy1.5
-        return np.empty(broadcast_arrays[0].shape, dtype=result_dtype)
+        return np.empty(shape=broadcast_arrays[0].shape, dtype=result_dtype)
 
-    def _apply_autotuning(self, func):
-        atune = func.autotune
-        max_threads = atune.best()
-        
-        if not max_threads:
-            raise Exception("insufficient resources to run kernel"
-                            "at any thread-per-block.")
+    def _apply_autotuning(self, func, max_threads):
+        try:
+            atune = func.autotune
+        except RuntimeError:
+            return max_threads
+        else:
+            max_threads = atune.best()
+            
+            if not max_threads:
+                raise Exception("insufficient resources to run kernel"
+                                "at any thread-per-block.")
 
-        return max_threads
+            return max_threads
 
     def __call__(self, *args, **kws):
         '''
@@ -102,7 +104,7 @@ class CudaUFuncDispatcher(object):
 
         # apply autotune
         if max_threads == cuda_func.device.MAX_THREADS_PER_BLOCK:
-            self._apply_autotuning(cuda_func)
+            max_threads = self._apply_autotuning(cuda_func, max_threads)
 
         if has_device_array_arg:
             # Ugly: convert array scalar into zero-strided one element array.
@@ -145,12 +147,12 @@ class CudaUFuncDispatcher(object):
         else:
             broadcast_arrays = self._prepare_inputs(args)
             element_count = self._determine_element_count(broadcast_arrays)
-
+            
             if 'out' not in kws:
                 out = self._allocate_output(broadcast_arrays, result_dtype)
             else:
                 out = kws['out']
-                if devicearray.is_cuda_ndarray(device_out):
+                if devicearray.is_cuda_ndarray(out):
                     raise TypeError("output array must not be a device array")
                 if out.shape[0] < broadcast_arrays[0].shape[0]:
                     raise ValueError("insufficient storage for output array")
@@ -169,9 +171,9 @@ class CudaUFuncDispatcher(object):
                     "not all arrays are numpy ndarray"
 
             device_ins = [cuda.to_device(x, stream) for x in broadcast_arrays]
-            device_out = cuda.to_device(out, stream, copy=False)
+            device_out = cuda.device_array_like(out, stream=stream)
 
-            kernel_args = device_ins + [device_out, element_count]
+            kernel_args = device_ins + [device_out]
 
             griddim = (nctaid,)
             blockdim = (ntid,)
@@ -198,16 +200,25 @@ class CudaUFuncDispatcher(object):
         return np.prod(broadcast_arrays[0].shape)
 
     def _arguments_requirement(self, args):
-        assert args[0].ndim == 1, "must use 1d array"
-        # Accept same shape or array scalar
-        assert all(x.shape == args[0].shape or
-                   (x.strides == (0,) and x.shape == (1,))
-                   for x in args), \
-                "invalid combination of shape and strides"
+        # all arguments must be 1 or 0 dimensional
+        for i, a in enumerate(args):
+            if a.ndim != 1:
+                raise ValueError("arg %d is not a 1D array" % i)
+
+        # get shape of all array
+        array_shapes = []
+        for i, a in enumerate(args):
+            if a.strides[0] != 0:
+                array_shapes.append((i, a.shape[0]))
+
+        _, ms = array_shapes[0]
+        for i, s in array_shapes[1:]:
+            if ms != s:
+                raise ValueError("arg %d should have length %d" % ms)
 
     def _determine_dimensions(self, n, max_thread):
         # determine grid and block dimension
-        thread_count =  min(max_thread, n)
+        thread_count =  int(min(max_thread, n))
         block_count = int(math.ceil(float(n) / max_thread))
         return block_count, thread_count
 

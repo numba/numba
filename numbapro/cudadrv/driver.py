@@ -13,9 +13,12 @@ from .error import CudaDriverError, CudaSupportError
 from numbapro._utils import finalizer, mviewbuf
 import threading
 
+
+
 #------------------
 # Configuration
 
+VERBOSE_JIT_LOG = int(os.environ.get('NUMBAPRO_VERBOSE_CU_JIT_LOG', 1))
 MIN_REQUIRED_CC = (2, 0)
 
 # debug memory
@@ -691,7 +694,8 @@ class Driver(object):
 
     def check_error(self, error, msg, exit=False):
         if error:
-            exc = CudaDriverError(msg, self._REVERSE_ERROR_MAP[error])
+            exc = CudaDriverError('%s\n%s\n' %
+                                  (self._REVERSE_ERROR_MAP[error], msg))
             if exit:
                 print>>sys.stderr, exc
                 sys.exit(1)
@@ -1128,7 +1132,7 @@ class Module(finalizer.OwnerMixin):
             CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES   : c_void_p(logsz),
             CU_JIT_ERROR_LOG_BUFFER             : addressof(jiterrors),
             CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES  : c_void_p(logsz),
-            CU_JIT_LOG_VERBOSE                  : c_void_p(1),
+            CU_JIT_LOG_VERBOSE                  : c_void_p(VERBOSE_JIT_LOG),
         }
 
         option_keys = (cu_jit_option * len(options))(*options.keys())
@@ -1142,7 +1146,7 @@ class Module(finalizer.OwnerMixin):
                                                 option_vals)
 
         self.driver.check_error(status,
-                                'Failed to load module: %s' % jiterrors.value)
+                                'Failed to load module:\n%s' % jiterrors.value)
 
         self._finalizer_track(self._handle)
         self.info_log = jitinfo.value

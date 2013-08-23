@@ -1,6 +1,6 @@
 import numpy as np
 import unittest
-from .support import addtest
+from .support import addtest, main
 
 from numbapro import cuda
 
@@ -12,7 +12,7 @@ class TestCURand(unittest.TestCase):
         print('curand version %d' % curand.version)
         self.assertNotEqual(libcurand().version, 0)
 
-
+@addtest
 class TestCURandPseudo(unittest.TestCase):
     def setUp(self):
         from numbapro.cudalib.curand.binding import (Generator,
@@ -61,7 +61,7 @@ class TestCURandPseudo(unittest.TestCase):
         self.rndgen.generate_log_normal(self.devary32, self.N, 0, 1)
         self.rndgen.generate_log_normal(self.devary64, self.N, 0, 1)
 
-
+@addtest
 class TestCURandPoisson(unittest.TestCase):
     def setUp(self):
         from numbapro.cudalib.curand.binding import (Generator,
@@ -94,7 +94,7 @@ class TestCURandPoisson(unittest.TestCase):
         self.rndgen.generate_poisson(self.devary32, self.N, 1)
 
 
-
+@addtest
 class TestCURandQuasi(unittest.TestCase):
     def test_generate(self):
         from numbapro.cudalib.curand.binding import (Generator,
@@ -132,7 +132,7 @@ class TestCURandQuasi(unittest.TestCase):
 
         self.assertTrue(any(ary64 != 0))
 
-
+@addtest
 class TestCURandAPI(unittest.TestCase):
     def test_pseudo(self):
         from numbapro.cudalib import curand
@@ -156,7 +156,7 @@ class TestCURandAPI(unittest.TestCase):
         qrng.generate(ary, N)
         self.assertTrue(any(ary != 0))
 
-
+@addtest
 class TestTopLevel(unittest.TestCase):
     def test_uniform(self):
         from numbapro.cudalib import curand
@@ -202,5 +202,5 @@ class TestTopLevel(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main()
+    main()
 

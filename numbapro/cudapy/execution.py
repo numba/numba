@@ -91,12 +91,31 @@ class CUDAKernel(CUDAKernelBase):
 
     @property
     def autotune(self):
-        try:
+        has_autotune = (hasattr(self, '_autotune') and
+                        self._autotune.dynsmem == self.sharedmem)
+        if has_autotune:
             return self._autotune
-        except AttributeError:
-            self._autotune = AutoTuner(self.name, self.compile_info,
-                                       cc=self.device.COMPUTE_CAPABILITY)
+        else:
+            at = AutoTuner.parse(self.name, self.compile_info,
+                                 cc=self.device.COMPUTE_CAPABILITY)
+            if at is None:
+                raise RuntimeError('driver does not report compiliation info')
+            self._autotune = at
             return self._autotune
+
+    @property
+    def occupancy(self):
+        '''calculate the theoretical occupancy of the kernel given the
+        configuation.
+        '''
+        return self.autotune.closest(self.thread_per_block)
+
+    @property
+    def thread_per_block(self):
+        tpb = 1
+        for b in self.blockdim:
+            tpb *= b
+        return tpb
 
     def __call__(self, *args):
         self._call(args = args,

@@ -3,7 +3,7 @@ import numpy as np
 
 from .cudadrv import initialize as _initialize
 from .cudadrv.driver import require_context
-from .cudadrv import devicearray, driver
+from .cudadrv import devicearray, driver, autotune
 
 from .cudapy.ptx import (threadIdx, blockIdx, blockDim, gridDim, syncthreads,
                          shared, grid, atomic)
@@ -110,6 +110,8 @@ def _prepare_shape_strides_dtype(shape, strides, dtype, order):
     if isinstance(strides, (int, long)):
         strides = (strides,)
     else:
+        if shape == ():
+            shape = (1,)
         strides = strides or _fill_stride_by_order(shape, dtype, order)
     return shape, strides, dtype
 
@@ -225,6 +227,21 @@ def close():
 def _auto_device(ary, stream=0, copy=True):
     return devicearray.auto_device(ary, stream=stream, copy=copy)
 
+def calc_occupancy(cc, reg, smem=0, smem_config=None):
+    '''Occupancy calculator 
+    
+    :param cc: compute capability as a tuple-2 of ints.
+    :param reg: register used per thread.
+    :param smem: shared memory used per block.
+    :param smem_config: (optional) smem configuration
+    
+    returns an AutoTuner object
+    '''
+    usage = {}
+    usage['reg'] = reg
+    usage['shared'] = smem
+    at = autotune.AutoTuner(cc=cc, usage=usage, smem_config=smem_config)
+    return at
 
 def detect():
     '''Detect hardware support
