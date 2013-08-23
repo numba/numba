@@ -43,7 +43,7 @@ def compile_common(func, retty, argtys, libs=global_builtin_libs, flags=DEFAULT_
 
     # compilation
     blocks =  symbolic_interpret(func)
-    type_infer(func, blocks, return_type, args, funclib)
+    return_type = type_infer(func, blocks, return_type, args, funclib)
 
     lmod, lfunc, excs = code_generation(func, blocks, return_type, args,
                                         implib, flags=flags)
@@ -112,6 +112,7 @@ def type_infer(func, blocks, return_type, args, funclib):
                          return_type = return_type,
                          funclib     = funclib)
     infer.infer()
+    return infer.return_type
 
 def code_generation(func, blocks, return_type, args, implib, flags):
     cg = codegen.CodeGen(name        = get_func_name(func),

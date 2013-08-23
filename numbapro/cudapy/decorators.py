@@ -22,7 +22,7 @@ NUMBA_TO_NPM_TYPES = {
     numba.complex64: types.complex64,
     numba.complex128: types.complex128,
 
-    numba.void: None,
+    numba.void: types.void,
 }
 
 def _eval_type_string(text):
@@ -116,7 +116,7 @@ def jit(restype=None, argtypes=None, device=False, inline=False, bind=True,
     """
     restype, argtypes = convert_types(restype, argtypes)
 
-    if restype and not device:
+    if restype and not device and restype is not types.void:
         raise TypeError("CUDA kernel must have void return type.")
 
     def kernel_jit(func):

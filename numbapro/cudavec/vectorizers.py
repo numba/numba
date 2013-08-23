@@ -1,14 +1,15 @@
 import re
 import llvm.core as lc
 from numbapro import cuda
-from numbapro.npm import types, codegen
-from numbapro.cudapy.compiler import to_ptx, CUDA_ADDR_SIZE
+from numbapro.npm import types, cgutils, aryutils
+from numbapro.cudapy.compiler import to_ptx
 from numbapro.cudapy.execution import CUDAKernel
+from numbapro.cudapy import ptx
 from . import dispatch
 from numbapro.vectorizers._common import parse_signature
 
 vectorizer_stager_source = '''
-def __vectorizer_stager__(%(args)s, __out__):
+def __vectorized_%(name)s(%(args)s, __out__):
     __tid__ = __cuda__.grid(1)
     __out__[__tid__] = __core__(%(argitems)s)
 '''
@@ -25,14 +26,17 @@ class CudaVectorize(object):
 
         # generate outer loop as kernel
         args = ['a%d' % i for i in range(len(argtypes))]
-        fmts = dict(args = ', '.join(args),
+        funcname = self.pyfunc.__name__
+        fmts = dict(name=funcname,
+                    args = ', '.join(args),
                     argitems = ', '.join('%s[__tid__]' % i for i in args))
         kernelsource = vectorizer_stager_source % fmts
         glbl = self.pyfunc.func_globals
-        glbl.update({'__cuda__': cuda, '__core__': cudevfn})
+        glbl.update({'__cuda__': cuda,
+                     '__core__': cudevfn})
         exec kernelsource in glbl
 
-        stager = glbl['__vectorizer_stager__']
+        stager = glbl['__vectorized_%s' % funcname]
         kargs = [a[:] for a in list(argtypes) + [restype]]
         kernel = cuda.jit(argtypes=kargs)(stager)
 
@@ -64,7 +68,7 @@ class CudaGUFuncVectorize(object):
         lmod, lgufunc, outertys = build_gufunc_stager(cudevfn, dims)
 
         ptx = to_ptx(lgufunc)
-        kernel = CUDAKernel(lgufunc.name, ptx, outertys)
+        kernel = CUDAKernel(lgufunc.name, ptx, outertys, excs=None)
         kernel.bind()
 
         dtypes = tuple(t.dtype.get_dtype() for t in argtypes)
@@ -74,55 +78,74 @@ class CudaGUFuncVectorize(object):
         return dispatch.CudaGUFuncDispatcher(self.kernelmap, self.signature)
 
 def build_gufunc_stager(devfn, dims):
-    lmod, lfunc, return_type, args = devfn._npm_context_
+    lmod, lfunc, return_type, args, excs = devfn._npm_context_
     assert return_type is None, "must return nothing"
-    outer_args = [types.arraytype(a.element, dim + 1, a.order)
+    outer_args = [types.arraytype(a.desc.element, dim + 1, a.desc.order)
                   for a, dim in zip(args, dims)]
 
     # copy a new module
     lmod = lmod.clone()
     lfunc = lmod.get_function_named(lfunc.name)
-    typer = codegen.TypeSetter(intp=CUDA_ADDR_SIZE)
 
-    argtypes = [typer.to_llvm(t) for t in outer_args]
+    argtypes = [t.llvm_as_argument() for t in outer_args]
     fnty = lc.Type.function(lc.Type.void(), argtypes)
     lgufunc = lmod.add_function(fnty, name='gufunc_%s' % lfunc.name)
 
     builder = lc.Builder.new(lgufunc.append_basic_block(''))
 
     # allocate new array with one less dimension
-    txf = cudapy_codegen.declare_sreg_util(lmod, cuda.threadIdx.x)
-    bxf = cudapy_codegen.declare_sreg_util(lmod, cuda.blockIdx.x)
-    bdf = cudapy_codegen.declare_sreg_util(lmod, cuda.blockDim.x)
-    tx = builder.call(txf, ())
-    bx = builder.call(bxf, ())
-    bd = builder.call(bdf, ())
-    tid = builder.add(tx, builder.mul(bx, bd))
+    
+    fname_tidx = ptx.SREG_MAPPING[ptx._ptx_sreg_tidx]
+    fname_ntidx = ptx.SREG_MAPPING[ptx._ptx_sreg_ntidx]
+    fname_ctaidx = ptx.SREG_MAPPING[ptx._ptx_sreg_ctaidx]
+
+    li32 = types.uint32.llvm_as_value()
+    fn_tidx = cgutils.get_function(builder, fname_tidx, li32, ())
+    fn_ntidx = cgutils.get_function(builder, fname_ntidx, li32, ())
+    fn_ctaidx = cgutils.get_function(builder, fname_ctaidx, li32, ())
+
+    tidx = builder.call(fn_tidx, ())
+    ntidx = builder.call(fn_ntidx, ())
+    ctaidx = builder.call(fn_ctaidx, ())
+
+    tx = types.uint32.llvm_cast(builder, tidx, types.intp)
+    bw = types.uint32.llvm_cast(builder, ntidx, types.intp)
+    bx = types.uint32.llvm_cast(builder, ctaidx, types.intp)
+
+    tid = builder.add(tx, builder.mul(bw, bx))
 
     slices = []
-    for ary, inner, outer in zip(lgufunc.args, lfunc.type.pointee.args,
+    for aryptr, inner, outer in zip(lgufunc.args, args,
                                   outer_args):
-        slice = builder.alloca(inner.pointee)
+        slice = builder.alloca(inner.llvm_as_value())
         slices.append(slice)
 
-        data = builder.load(codegen.gep(builder, ary, 0, 0))
-        shapeptr = codegen.gep(builder, ary, 0, 1)
+        ary = builder.load(aryptr)
+        data = aryutils.getdata(builder, ary)
+        shape = aryutils.getshape(builder, ary)
+        strides = aryutils.getstrides(builder, ary)
 
-        shape = [builder.load(codegen.gep(builder, shapeptr, 0, ax))
-                    for ax in range(outer.ndim)]
+        slice_data = get_slice_data(builder, data, shape, strides,
+                                    outer.desc.order, tid)
 
-        strideptr = codegen.gep(builder, ary, 0, 2)
-        strides = [builder.load(codegen.gep(builder, strideptr, 0, ax))
-                    for ax in range(outer.ndim)]
+        if outer.desc.ndim == 1:
+            newary = aryutils.ndarray(builder,
+                                      dtype=outer.desc.element,
+                                      ndim=inner.desc.ndim,
+                                      order=inner.desc.order,
+                                      shape=[types.intp.llvm_const(1)],
+                                      strides=[types.intp.llvm_const(0)],
+                                      data=slice_data)
+        else:
+            newary = aryutils.ndarray(builder,
+            dtype=outer.desc.element,
+                                      ndim=inner.desc.ndim,
+                                      order=inner.desc.order,
+                                      shape=shape[1:],
+                                      strides=strides[1:],
+                                      data=slice_data)
 
-        slice_data = get_slice_data(builder, data, shape, strides, outer.order,
-                                    tid)
-
-        builder.store(slice_data, codegen.gep(builder, slice, 0, 0))
-        for i, s in enumerate(shape[1:]):
-            builder.store(s, codegen.gep(builder, slice, 0, 1, i))
-        for i, s in enumerate(strides[1:]):
-            builder.store(s, codegen.gep(builder, slice, 0, 2, i))
+        builder.store(newary, slice)
 
     builder.call(lfunc, slices)
     builder.ret_void()
@@ -135,4 +158,4 @@ def get_slice_data(builder, data, shape, strides, order, index):
     intp = shape[0].type
     indices = [builder.zext(index, intp)]
     indices += [lc.Constant.null(intp) for i in range(len(shape) - 1)]
-    return codegen.array_pointer(builder, data, shape, strides, order, indices)
+    return aryutils.getpointer(builder, data, shape, strides, order, indices)

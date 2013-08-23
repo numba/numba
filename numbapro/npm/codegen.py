@@ -216,15 +216,22 @@ class CodeGen(object):
         if getattr(inst.callee, 'type', None) is types.user_function_type:
             callee = inst.callee.value
             lmod, lfunc, retty, argtys, exctable = callee._npm_context_
+
             self.external_modules.add(lmod)
             declfunc = self.lmod.get_or_insert_function(lfunc.type.pointee,
                                                         name=lfunc.name)
-            declfunc.linkage = lc.LINKAGE_LINKONCE_ODR
-            args = [self.cast(self.valmap[aval], aval.type, atype)
+
+            args = [atype.llvm_value_to_arg(self.builder,
+                                self.cast(self.valmap[aval], aval.type, atype))
                     for aval, atype in zip(inst.args, argtys)]
 
             retptr = self.builder.alloca(retty.llvm_as_value())
+
+
             errcode = self.builder.call(declfunc, args + [retptr])
+
+            if declfunc.type.pointee.return_type is lc.Type.void():
+                return
 
             if exctable:
                 # callee defines an exception table

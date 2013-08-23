@@ -1,3 +1,4 @@
+from __future__ import division
 from numbapro import vectorize
 from numba import jit, float32
 import numpy as np

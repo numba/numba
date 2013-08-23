@@ -7,8 +7,6 @@ from numbapro.cudadrv import nvvm, driver
 from .execution import CUDAKernel
 from . import ptxlib, libdevice
 
-CUDA_ADDR_SIZE = tuple.__itemsize__ * 8     # matches host
-
 def compile_kernel(func, argtys):
     lmod, lfunc, excs = compile_common(func, types.void, argtys,
                                        flags=['no-exceptions'])
@@ -58,7 +56,7 @@ def declare_device_function(name, retty, argtys):
     ts = types.intp
     lret = retty.llvm_as_return()
     largs = [t.llvm_as_argument() for t in argtys]
-    lfty = lc.Type.function(lc.Type.void(), largs + [lc.Type.pointer(lret)])
+    lfty = lc.Type.function(lc.Type.void(), largs + [lret])
     lfunc = lmod.add_function(lfty, name=name)
     edf = ExternalDeviceFunction(name, lmod, lfunc, retty, argtys)
     return edf

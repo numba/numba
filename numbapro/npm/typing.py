@@ -63,6 +63,8 @@ class Infer(object):
                                during='unifying return type'):
                 if term.opcode == 'ret':
                     return_type = term.value.type
+                    if self.return_type is None:
+                        self.return_type = return_type
                     if self.return_type != return_type:
                         if (self.return_type is not None and
                                 not return_type.try_coerce(self.return_type)):
@@ -73,6 +75,8 @@ class Infer(object):
                             self.return_type = return_type
                     term.update(astype=self.return_type)
                 elif term.opcode == 'retvoid':
+                    if self.return_type is None:
+                        self.return_type = types.void
                     if self.return_type != types.void:
                         msg = "must return a value of %s"
                         raise TypeError(msg % self.return_type)

@@ -75,6 +75,13 @@ class Type(object):
             ret = self.desc.llvm_value_from_arg(builder, arg)
         return ret
 
+    def llvm_value_to_arg(self, builder, arg):
+        if not hasattr(self.desc, 'llvm_value_to_arg'):
+            ret = arg
+        else:
+            ret = self.desc.llvm_value_to_arg(builder, arg)
+        return ret
+    
     def llvm_cast(self, builder, val, dst):
         if not hasattr(self.desc, 'llvm_cast'):
             raise TypeError('%s does not support casting '
@@ -453,6 +460,11 @@ class Complex(object):
 
     def llvm_value_from_arg(self, builder, value):
         return builder.load(value)
+
+    def llvm_value_to_arg(self, builder, value):
+        pointer = builder.alloca(value.type)
+        builder.store(value, pointer)
+        return pointer
 
     def ctype_value(self):
         return {64: c_complex64, 128: c_complex128}[self.bitwidth]
