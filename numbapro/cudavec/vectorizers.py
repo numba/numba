@@ -75,7 +75,9 @@ class CudaGUFuncVectorize(object):
         self.kernelmap[tuple(dtypes[:-1])] = dtypes[-1], kernel
         
     def build_ufunc(self):
-        return dispatch.CudaGUFuncDispatcher(self.kernelmap, self.signature)
+        return dispatch.CUDAGenerializedUFunc(kernelmap=self.kernelmap,
+                                              inputsig=self.inputsig,
+                                              outputsig=self.outputsig[0])
 
 def build_gufunc_stager(devfn, dims):
     lmod, lfunc, return_type, args, excs = devfn._npm_context_
@@ -115,8 +117,7 @@ def build_gufunc_stager(devfn, dims):
     tid = builder.add(tx, builder.mul(bw, bx))
 
     slices = []
-    for aryptr, inner, outer in zip(lgufunc.args, args,
-                                  outer_args):
+    for aryptr, inner, outer in zip(lgufunc.args, args, outer_args):
         slice = builder.alloca(inner.llvm_as_value())
         slices.append(slice)
 
@@ -138,7 +139,7 @@ def build_gufunc_stager(devfn, dims):
                                       data=slice_data)
         else:
             newary = aryutils.ndarray(builder,
-            dtype=outer.desc.element,
+                                      dtype=outer.desc.element,
                                       ndim=inner.desc.ndim,
                                       order=inner.desc.order,
                                       shape=shape[1:],

@@ -55,6 +55,7 @@ def test_gufunc_adjust_blocksize():
 
 @testcase
 def test_gufunc_stream():
+    #cuda.driver.flush_pending_free()
     matrix_ct = 1001 # an odd number to test thread/block division in CUDA
     A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2, 4)
     B = np.arange(matrix_ct * 4 * 5, dtype=np.float32).reshape(matrix_ct, 4, 5)
@@ -66,6 +67,7 @@ def test_gufunc_stream():
     dC = gufunc(dA, dB, stream=stream)
     C = dC.copy_to_host(stream=stream)
     stream.synchronize()
+
     tcuda = time() - ts
 
     ts = time()

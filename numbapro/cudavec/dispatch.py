@@ -281,18 +281,7 @@ class CudaGUFuncDispatcher(CudaUFuncDispatcher):
 
     def __init__(self, types_to_retty_kernel, signature):
         super(CudaGUFuncDispatcher, self).__init__(types_to_retty_kernel)
-        self._parse_signature(signature)
-
-    def _parse_signature(self, signature):
-        signature = ''.join(signature.split()) # remove whitespace
-        inputs, outputs = signature.split('->')
-        groups = _re_signature.findall(inputs)
-        input_symbols = []
-        for grp in groups:
-            input_symbols.append(tuple(_re_symbols.findall(grp)))
-        output_symbols = tuple(_re_symbols.findall(outputs))
-        self.input_symbols = input_symbols
-        self.output_symbols = output_symbols
+        self.inputsig, self.outputsig = signature
 
     def _arguments_requirement(self, args):
         pass # TODO
@@ -302,6 +291,8 @@ class CudaGUFuncDispatcher(CudaUFuncDispatcher):
         return args
 
     def _adjust_dimension(self, broadcast_arrays):
+        print broadcast_arrays
+        raise
         return broadcast_arrays # do nothing
 
     def _allocate_output(self, broadcast_arrays, result_dtype):
@@ -325,5 +316,148 @@ class CudaGUFuncDispatcher(CudaUFuncDispatcher):
 
     def _determine_element_count(self, broadcast_arrays):
         return broadcast_arrays[0].shape[0]
+
+
+class CUDAGenerializedUFunc(object):
+    def __init__(self, kernelmap, inputsig, outputsig):
+        self.kernelmap = kernelmap
+        self.inputsig = inputsig
+        self.outputsig = outputsig
+        self.max_blocksize = 2**30
+
+    def __call__(self, *args, **kws):
+        is_device_array = [devicearray.is_cuda_ndarray(a) for a in args]
+        if any(is_device_array) != all(is_device_array):
+            raise TypeError('if device array is used, '
+                            'all arguments must be device array.')
+        out = kws.get('out')
+        stream = kws.get('stream', 0)
+        
+        if any(is_device_array):
+            res = self._execute(_device_executor(), args, out, stream)
+        else:
+            res = self._execute(_host_executor(), args, out, stream)
+
+        return res
+
+    def _execute(self, exe, args, out, stream):
+        # sanitize input
+        inputs = exe.prepare_inputs(args)
+        for i, (syms, ary) in enumerate(zip(self.inputsig, inputs)):
+            if ary.ndim != 1 + len(syms):   # number of dimension must match
+                raise ValueError('ndim mismatch for arg #%d' % i)
+
+        inputs = exe.normalize_outerdim(inputs)
+        assert all(i.shape[0] == inputs[0].shape[0] for i in inputs)
+
+        # find kernel
+        idtypes = tuple(i.dtype for i in inputs)
+        outdtype, kernel = self.kernelmap[idtypes]
+
+        # sanitize output
+        innershape = self._calc_output_shape(args)
+        outshape = (inputs[0].shape[0],) + innershape
+
+        out = out if out is not None else exe.allocate_output(outshape,
+                                                              outdtype,
+                                                              stream)
+
+        if outshape != out.shape:
+            raise ValueError('invalid output shape')
+
+        if out.dtype != outdtype:
+            raise TypeError('output array dtype mismatch')
+
+        # execute
+        params, cv = zip(*(cuda._auto_device(i, stream=stream) for i in inputs))
+        if not devicearray.is_cuda_ndarray(out):
+            retval = cuda.device_array_like(out)
+        else:
+            retval = out
+
+        kernelargs = params + (retval,)
+
+        nelem = out.shape[0]
+
+        max_threads = min(kernel.device.MAX_THREADS_PER_BLOCK,
+                          self.max_blocksize)
+
+        ntid = self._apply_autotuning(kernel, max_threads)
+        ncta_real = float(nelem) / ntid
+        ncta = int(ncta_real)
+        if ncta < ncta_real:
+            ncta += 1
+
+        kernel[ncta, ntid, stream](*kernelargs)
+
+        if retval is not out:
+            retval.copy_to_host(out, stream=stream)
+
+        return out
+
+    def _calc_output_shape(self, inputs):
+        values = _symbol_dict()
+        for i, (syms, array) in enumerate(zip(self.inputsig, inputs)):
+            for sym, shape in zip(syms, array.shape[1:]):
+                values[sym] = shape
+        return tuple(values[sym] for sym in self.outputsig)
+
+    def _apply_autotuning(self, func, max_threads):
+        try:
+            atune = func.autotune
+        except RuntimeError:
+            return max_threads
+        else:
+            max_threads = atune.best()
+            
+            if not max_threads:
+                raise Exception("insufficient resources to run kernel "
+                                "at any thread-per-block.")
+
+            return max_threads
+
+
+
+class _host_executor(object):
+    '''Executor when host arrays are provided
+    '''
+    def prepare_inputs(self, args):
+        '''returns list of array
+        '''
+        return [np.array(a) for a in args]
+
+    def normalize_outerdim(self, inputs):
+        outerdims = [iary.shape[0] for iary in inputs]
+        if not all(outerdims[0] == dim for dim in outerdims[1:]):
+            raise ValueError('outer dimension mismatch')
+        return inputs
+
+    def allocate_output(self, shape, dtype, stream):
+        return np.empty(shape=shape, dtype=dtype)
+
+class _device_executor(_host_executor):
+    '''Executor when device arrays are provided
+    '''
+    def prepare_inputs(self, args):
+        '''returns list of array
+        '''
+        return list(args)
+
+    def normalize_outerdim(self, inputs):
+        outerdims = [iary.shape[0] for iary in inputs]
+        if not all(outerdims[0] == dim for dim in outerdims[1:]):
+            raise ValueError('outer dimension mismatch')
+        return inputs
+
+    def allocate_output(self, shape, dtype, stream):
+        return cuda.device_array(shape=shape, dtype=dtype, stream=stream)
+
+class _symbol_dict(dict):
+    def __setitem__(self, k, v):
+        if k in self and self[k] != v:
+            args = k, self[k], v
+            raise ValueError("symbol '%s' error: expect %s but got %s" % args)
+        else:
+            return super(_symbol_dict, self).__setitem__(k, v)
 
 

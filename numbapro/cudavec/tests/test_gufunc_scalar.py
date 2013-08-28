@@ -32,18 +32,38 @@ def test_gufunc_scalar_output():
     inp = np.arange(300, dtype=np.int32).reshape(100, 3)
 
     # invoke on CUDA with manually managed memory
-    out = np.empty(100, dtype=inp.dtype)
+    out1 = np.empty(100, dtype=inp.dtype)
+    out2 = np.empty(100, dtype=inp.dtype)
 
-    dev_inp = cuda.to_device(inp)             # alloc and copy input data
-    dev_out = cuda.to_device(out, copy=False) # alloc only
+    dev_inp = cuda.to_device(inp)                 # alloc and copy input data
+    dev_out1 = cuda.to_device(out1, copy=False)   # alloc only
 
-    sum_row(dev_inp, out=dev_out)             # invoke the gufunc
+    sum_row(dev_inp, out=dev_out1)                # invoke the gufunc
+    dev_out2 = sum_row(dev_inp)                   # invoke the gufunc
 
-    dev_out.copy_to_host(out)                 # retrieve the result
+    dev_out1.copy_to_host(out1)                 # retrieve the result
+    dev_out2.copy_to_host(out2)                 # retrieve the result
 
     # verify result
     for i in xrange(inp.shape[0]):
-        assert out[i] == inp[i].sum()
+        assert out1[i] == inp[i].sum()
+        assert out2[i] == inp[i].sum()
+
+@testcase
+def test_gufunc_scalar_input():
+    @guvectorize(['void(float32[:], float32[:], float32[:], float32[:])'],
+                 '(),(t),(t)->(t)', target='gpu')
+    def saxpy(a, x, y, out):
+        for i in range(out.shape[0]):
+            out[i] = a[0] * x[i] + y[i]
+    A = np.float32(1)
+    X = np.arange(10, dtype=np.float32).reshape(5,2)
+    Y = np.arange(10, dtype=np.float32).reshape(5,2)
+    out = saxpy(A, X, Y)
+
+    print out
+
+
 
 if __name__ == '__main__':
     main()
