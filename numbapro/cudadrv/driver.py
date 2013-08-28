@@ -359,7 +359,6 @@ class ResourceManager(object):
         return Device(self.device_id)
 
     def add_memory(self, handle, dtor):
-        self.free_pending()
         if debug_memory:
             global debug_memory_alloc
             debug_memory_alloc += 1
@@ -1013,6 +1012,8 @@ class Stream(object):
     def __init__(self):
         self.device = self.driver.current_context().device
         self._handle = cu_stream()
+        
+        flush_pending_free()
         error = self.driver.cuStreamCreate(byref(self._handle), 0)
         msg = 'Failed to create stream on %s' % self.device
         self.driver.check_error(error, msg)
@@ -1066,6 +1067,7 @@ class HostAllocMemory(mviewbuf.MemAlloc):
         if wc:
             flags |= CU_MEMHOSTALLOC_WRITECOMBINED
 
+        flush_pending_free()
         error = self.driver.cuMemHostAlloc(byref(self._handle), bytesize, flags)
         self.driver.check_error(error, 'Failed to host alloc')
         self.device.resource_manager.add_memory(self._handle.value,
@@ -1109,6 +1111,8 @@ class DeviceMemory(object):
     def _allocate(self, bytesize):
         assert not hasattr(self, '_handle'), "_handle is already defined"
         self._handle = cu_device_ptr()
+        
+        flush_pending_free()
         error = self.driver.cuMemAlloc(byref(self._handle), bytesize)
         self.driver.check_error(error, 'Failed to allocate memory')
         self.device.resource_manager.add_memory(self._handle.value,
@@ -1160,6 +1164,8 @@ class PinnedMemory(object):
         self._mapped = mapped
         if mapped:
             flags |= CU_MEMHOSTREGISTER_DEVICEMAP
+        
+        flush_pending_free()
         error = self.driver.cuMemHostRegister(ptr, size, flags)
         self.driver.check_error(error, 'Failed to pin memory')
 
@@ -1223,6 +1229,8 @@ class Module(object):
         option_vals = (c_void_p * len(options))(*options.values())
 
         self._handle = cu_module()
+    
+        flush_pending_free()
         status = self.driver.cuModuleLoadDataEx(byref(self._handle),
                                                 image,
                                                 len(options),
