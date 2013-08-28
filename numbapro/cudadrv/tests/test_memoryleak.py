@@ -7,6 +7,7 @@ cudriver.debug_memory = True
 @support.addtest
 class TestMemoryLeak(support.CudaTestCase):
     def test_memoryleak(self):
+        cudriver.flush_pending_free()
         origalloc = cudriver.debug_memory_alloc
         origfree = cudriver.debug_memory_free
 
@@ -19,7 +20,9 @@ class TestMemoryLeak(support.CudaTestCase):
         self.assertTrue(allocated > 0)
 
         del dA
+        cudriver.flush_pending_free()
 
+        
         cudriver.print_debug_memory()
         freed = cudriver.debug_memory_free - origfree
         print allocated - freed

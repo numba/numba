@@ -15,6 +15,7 @@ class CudaTestCase(unittest.TestCase):
 
     def tearDown(self):
         from numbapro.cudadrv import driver
+        driver.flush_pending_free()
         driver.debug_memory = True
         alloced = driver.debug_memory_alloc - self._start_alloc
         freed = driver.debug_memory_free - self._start_free

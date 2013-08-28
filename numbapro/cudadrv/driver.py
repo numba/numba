@@ -10,7 +10,7 @@ from ctypes import (c_int, c_void_p, POINTER, c_size_t, byref, addressof,
                     sizeof, c_uint, c_uint8, c_char_p, c_float, cast, c_char,)
 import ctypes
 from .error import CudaDriverError, CudaSupportError
-from numbapro._utils import finalizer, mviewbuf
+from numbapro._utils import mviewbuf
 import threading
 
 
@@ -336,6 +336,70 @@ def _build_reverse_error_map():
     return dict((getattr(module, i), i)
                 for i in filter(lambda x: x.startswith(prefix), globals()))
 
+class ResourceManager(object):
+    '''Per device resource manager
+    '''
+    def __init__(self, device_id):
+        self.device_id = device_id
+        self.reset()
+
+    def reset(self):
+        self.allocated = {}
+        self.resources = {}
+        self.pending_free = []
+        self.pending_destroy = []
+        self.can_release = True
+
+    @property
+    def driver(self):
+        return Driver()
+
+    @property
+    def device(self):
+        return Device(self.device_id)
+
+    def add_memory(self, handle, dtor):
+        self.free_pending()
+        if debug_memory:
+            global debug_memory_alloc
+            debug_memory_alloc += 1
+        self.allocated[handle] = dtor
+
+    def free_memory(self, handle, later=False):
+        dtor = self.allocated.pop(handle, None)
+        if dtor:
+            self.pending_free.append((handle, dtor))
+            if not later:
+                self.free_pending()
+
+    def _free_memory(self, dtor, handle):
+        if debug_memory:
+            global debug_memory_free
+            debug_memory_free += 1
+        self.driver.check_error(dtor(handle), msg="Fail to free memory")
+
+    def free_pending(self):
+        if self.can_release:
+            while self.pending_free:
+                handle, dtor = self.pending_free.pop()
+                self._free_memory(dtor, handle)
+            while self.pending_destroy:
+                handle, dtor, msg = self.pending_destroy.pop()
+                self._destroy_resource(dtor, handle, msg)
+
+    def _destroy_resource(self, dtor, handle, msg):
+        self.driver.check_error(dtor(handle), msg=msg)
+
+    def add_resource(self, handle, dtor):
+        self.resources[handle] = dtor
+
+    def free_resource(self, handle, msg, later=False):
+        dtor = self.resources.pop(handle, None)
+        if dtor:
+            self.pending_destroy.append((handle, dtor, msg))
+            if not later:
+                self.free_pending()
+
 class Driver(object):
     '''Facade to the CUDA Driver API.  A singleton class.  It is safe to
     construct new instance.  The constructor (__new__) will only create a new
@@ -377,6 +441,9 @@ class Driver(object):
 
         # CUresult cuCtxGetCurrent	(CUcontext *pctx);
         'cuCtxGetCurrent':      (c_int, POINTER(cu_context)),
+
+        # CUresult cuCtxPopCurrent	(CUcontext *pctx);
+        'cuCtxPopCurrent':      (c_int, POINTER(cu_context)),
 
         # CUresult cuCtxDestroy(CUcontext pctx);
         'cuCtxDestroy':         (c_int, cu_context),
@@ -651,6 +718,7 @@ class Driver(object):
                 else:
                     ct_func.restype = restype
                     ct_func.argtypes = argtypes
+
                 setattr(inst, func, ct_func)
 
             # initialize the API
@@ -692,15 +760,15 @@ class Driver(object):
         self.check_error(error, 'Failed to get number of device')
         return count.value
 
-    def check_error(self, error, msg, exit=False):
+    def check_error(self, error, msg):
         if error:
             exc = CudaDriverError('%s\n%s\n' %
                                   (self._REVERSE_ERROR_MAP[error], msg))
-            if exit:
-                print>>sys.stderr, exc
-                sys.exit(1)
-            else:
-                raise exc
+            if error == CUDA_ERROR_LAUNCH_FAILED:
+                ctx = self.get_context_tls()
+                if ctx:
+                    ctx.device.reset()
+            raise exc
 
     def create_context(self, device=None):
         '''Create a new context.
@@ -721,18 +789,23 @@ class Driver(object):
         self._cache_current_context(ctxt)
         return ctxt
 
-    def current_context(self, noraise=False):
-        '''Get current context from TLS
-        '''
+    def get_context_tls(self):
         try:
             handle = self._THREAD_LOCAL.context
         except AttributeError:
+            return None
+        else:
+            return self._CONTEXTS[handle]
+
+    def current_context(self, noraise=False):
+        '''Get current context from TLS
+        '''
+        ctxt = self.get_context_tls()
+        if ctxt is None:
             ctxt = self._get_current_context(noraise=noraise)
             if ctxt:
                 self._cache_current_context(ctxt)
-            return ctxt
-        else:
-            return self._CONTEXTS[handle]
+        return ctxt
 
     def _cache_current_context(self, ctxt):
         '''Store current context into TLS
@@ -770,6 +843,17 @@ class Driver(object):
             for k in vars(self._THREAD_LOCAL).keys():
                 delattr(self._THREAD_LOCAL, k)
 
+    def reset_context(self):
+        ctx = self.get_context_tls()
+        device = ctx.device
+        self.release_context(ctx)
+        # discard current context
+        curctx = cu_context(0)
+        self.cuCtxPopCurrent(byref(curctx))
+        # create new context
+        self.create_context(device)
+
+
 CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK = 1
 CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X = 2
 CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y = 3
@@ -806,6 +890,8 @@ class Device(object):
       'PCI_DEVICE_ID':         CU_DEVICE_ATTRIBUTE_PCI_DEVICE_ID
     }
 
+    _resources = {}   # mapping from device to resource manager
+
     def __init__(self, device_id):
         self.driver = Driver()
         got_device = c_int()
@@ -815,6 +901,13 @@ class Device(object):
         self.id = got_device.value
         self.__read_name()
         self.__read_attributes()
+
+        self.resource_manager = ResourceManager(device_id)
+        self._resources[device_id] = self.resource_manager
+
+    def reset(self):
+        self.resource_manager.reset()
+        self.driver.reset_context()
 
     def __repr__(self):
         return "<CUDA device %d '%s'>" % (self.id, self.name)
@@ -876,7 +969,7 @@ class Device(object):
         return not (self == rhs)
 
 
-class _Context(finalizer.OwnerMixin):
+class _Context(object):
     def __init__(self, device):
         self.device = device
         if self.device.COMPUTE_CAPABILITY < MIN_REQUIRED_CC:
@@ -896,14 +989,13 @@ class _Context(finalizer.OwnerMixin):
                                         self.device.id)
         self.driver.check_error(error,
                                 'Failed to create context on %s' % self.device)
-        self._finalizer_track(self._handle)
+        self.device.resource_manager.add_resource(self._handle.value,
+                                                  self.driver.cuCtxDestroy)
 
-    @classmethod
-    def _finalize(cls, handle):
-        driver = Driver()
-        error = driver.cuCtxDestroy(handle)
-        driver.check_error(error, 'Failed to destroy context %s' % handle,
-                           exit=True)
+    def __del__(self):
+        self.device.resource_manager.free_resource(self._handle.value,
+                                               msg='Failed to destroy context',
+                                               later=True)
 
     @property
     def driver(self):
@@ -916,21 +1008,22 @@ class _Context(finalizer.OwnerMixin):
     def __str__(self):
         return 'Context %s on %s' % (id(self), self.device)
 
-class Stream(finalizer.OwnerMixin):
+
+class Stream(object):
     def __init__(self):
         self.device = self.driver.current_context().device
         self._handle = cu_stream()
         error = self.driver.cuStreamCreate(byref(self._handle), 0)
         msg = 'Failed to create stream on %s' % self.device
         self.driver.check_error(error, msg)
-        self._finalizer_track(self._handle)
 
-    @classmethod
-    def _finalize(cls, handle):
-        driver = Driver()
-        error = driver.cuStreamDestroy(handle)
-        driver.check_error(error, 'Failed to destory stream %s' % handle,
-                           exit=True)
+        self.device.resource_manager.add_resource(self._handle.value,
+                                                  self.driver.cuStreamDestroy)
+
+    def __del__(self):
+        self.device.resource_manager.free_resource(self._handle.value,
+                                               msg='Failed to destroy stream',
+                                               later=True)
 
     def __str__(self):
         return 'Stream %d on %s' % (self, self.device)
@@ -955,7 +1048,7 @@ class Stream(finalizer.OwnerMixin):
         return Driver()
 
 
-class HostAllocMemory(mviewbuf.MemAlloc, finalizer.OwnerMixin):
+class HostAllocMemory(mviewbuf.MemAlloc):
     '''A host allocation by the CUDA driver that is pagelocked.
     This object exposes the buffer interface; thus, user can use
     this as a buffer for ndarray.
@@ -975,7 +1068,8 @@ class HostAllocMemory(mviewbuf.MemAlloc, finalizer.OwnerMixin):
 
         error = self.driver.cuMemHostAlloc(byref(self._handle), bytesize, flags)
         self.driver.check_error(error, 'Failed to host alloc')
-        self._finalizer_track(self._handle)
+        self.device.resource_manager.add_memory(self._handle.value,
+                                                self.driver.cuMemFreeHost)
 
         self.devmem = cu_device_ptr(0)
 
@@ -990,10 +1084,8 @@ class HostAllocMemory(mviewbuf.MemAlloc, finalizer.OwnerMixin):
         self._buflen_ = self.bytesize
         self._bufptr_ = self._handle.value
 
-    @classmethod
-    def _finalize(cls, handle):
-        driver = Driver()
-        driver.cuMemFreeHost(handle)
+    def __del__(self):
+        self.device.resource_manager.free_memory(self._handle.value, later=True)
 
     @property
     def device_ctypes_pointer(self):
@@ -1004,32 +1096,24 @@ class HostAllocMemory(mviewbuf.MemAlloc, finalizer.OwnerMixin):
         return Driver()
 
 
-class DeviceMemory(finalizer.OwnerMixin):
+class DeviceMemory(object):
     __cuda_memory__ = True
+
     def __init__(self, bytesize):
         self.device = self.driver.current_context().device
         self._allocate(bytesize)
 
-    @classmethod
-    def _finalize(cls, handle):
-        driver = Driver()
-        error = driver.cuMemFree(handle)
-        driver.check_error(error, 'Failed to free memory', exit=True)
-        if debug_memory:
-            global debug_memory_free
-            debug_memory_free += 1
+    def __del__(self):
+        self.device.resource_manager.free_memory(self._handle.value, later=True)
 
     def _allocate(self, bytesize):
         assert not hasattr(self, '_handle'), "_handle is already defined"
         self._handle = cu_device_ptr()
         error = self.driver.cuMemAlloc(byref(self._handle), bytesize)
         self.driver.check_error(error, 'Failed to allocate memory')
-        self._finalizer_track(self._handle)
+        self.device.resource_manager.add_memory(self._handle.value,
+                                                self.driver.cuMemFree)
         self.bytesize = bytesize
-
-        if debug_memory:
-            global debug_memory_alloc
-            debug_memory_alloc += 1
 
     @property
     def device_ctypes_pointer(self):
@@ -1060,7 +1144,7 @@ class DeviceView(object):
     def driver(self):
         return Driver()
 
-class PinnedMemory(finalizer.OwnerMixin):
+class PinnedMemory(object):
     def __init__(self, owner, ptr, size, mapped=False):
         self._owner = owner
         self.device = self.driver.current_context().device
@@ -1084,7 +1168,8 @@ class PinnedMemory(finalizer.OwnerMixin):
 
         self.__cuda_memory__ = mapped
 
-        self._finalizer_track(self._pointer)
+        self.device.resource_manager.add_resource(self._pointer,
+                                                self.driver.cuMemHostUnregister)
 
     def _get_device_pointer(self):
         assert self._mapped, "memory not mapped"
@@ -1098,17 +1183,16 @@ class PinnedMemory(finalizer.OwnerMixin):
     def device_ctypes_pointer(self):
         return self._devmem
     
-    @classmethod
-    def _finalize(cls, pointer):
-        driver = Driver()
-        error = driver.cuMemHostUnregister(pointer)
-        driver.check_error(error, 'Failed to unpin memory')
+    def __del__(self):
+        self.device.resource_manager.free_resource(self._pointer,
+                                               msg='Failed to unpin memory',
+                                               later=True)
 
     @property
     def driver(self):
         return Driver()
 
-class Module(finalizer.OwnerMixin):
+class Module(object):
     def __init__(self, ptx=None, image=None):
         assert ptx is not None or image is not None, "internal error"
         if ptx is not None:
@@ -1148,20 +1232,27 @@ class Module(finalizer.OwnerMixin):
         self.driver.check_error(status,
                                 'Failed to load module:\n%s' % jiterrors.value)
 
-        self._finalizer_track(self._handle)
+        self.device = self.driver.current_context().device
+        self.device.resource_manager.add_resource(self._handle.value,
+                                                  self.driver.cuModuleUnload)
         self.info_log = jitinfo.value
 
     @classmethod
     def _finalize(cls, handle):
         driver = Driver()
         error =  driver.cuModuleUnload(handle)
-        driver.check_error(error, 'Failed to unload module', exit=True)
+        driver.check_error(error, 'Failed to unload module')
+
+    def __del__(self):
+        self.device.resource_manager.free_resource(self._handle.value,
+                                               msg='Failed to unload module',
+                                               later=True)
 
     @property
     def driver(self):
         return Driver()
 
-class Function(finalizer.OwnerMixin):
+class Function(object):
 
     griddim = 1, 1, 1
     blockdim = 1, 1, 1
@@ -1177,7 +1268,8 @@ class Function(finalizer.OwnerMixin):
                                                 self.module._handle,
                                                 name);
         self.driver.check_error(error, 'Failed to get function "%s" from module' % name)
-    
+
+
     @property
     def driver(self):
         return Driver()
@@ -1231,7 +1323,7 @@ class Function(finalizer.OwnerMixin):
         launch_kernel(self._handle, self.griddim, self.blockdim,
                       self.sharedmem, self.stream, args)
 
-class Event(finalizer.OwnerMixin):
+class Event(object):
     def __init__(self, timing=True):
         self.device = self.driver.current_context().device
         self._handle = cu_event()
@@ -1241,13 +1333,13 @@ class Event(finalizer.OwnerMixin):
             flags |= CU_EVENT_DISABLE_TIMING
         error = self.driver.cuEventCreate(byref(self._handle), flags)
         self.driver.check_error(error, 'Failed to create event')
-        self._finalizer_track(self._handle)
+        self.device.resource_manager.add_resource(self._handle.value,
+                                                  self.driver.cuEventDestroy)
 
-    @classmethod
-    def _finalize(cls, handle):
-        driver = Driver()
-        error =  driver.cuEventDestroy(handle)
-        driver.check_error(error, 'Failed to unload module', exit=True)
+    def __del__(self):
+        self.device.resource_manager.free_resource(self._handle.value,
+                                               msg='Failed to destroy event',
+                                               later=True)
 
     def query(self):
         '''Returns True if all work before the most recent record has completed;
@@ -1296,11 +1388,11 @@ FILE_EXTENSION_MAP = {
     'fatbin' : CU_JIT_INPUT_FATBINAR,
 }
 
-class Linker(finalizer.OwnerMixin):
+class Linker(object):
     def __init__(self):
         self.driver = Driver()
 
-        logsz = os.environ.get('NUMBAPRO_CUDA_LOG_SIZE', 1024)
+        logsz = int(os.environ.get('NUMBAPRO_CUDA_LOG_SIZE', 1024))
         linkerinfo = (c_char * logsz)()
         linkererrors = (c_char * logsz)()
 
@@ -1323,7 +1415,10 @@ class Linker(finalizer.OwnerMixin):
 
         self.driver.check_error(status, 'Failed to initialize linker')
 
-        self._finalizer_track(self._handle)
+        self.device = self.driver.current_context().device
+        self.device.resource_manager.add_resource(self._handle.value,
+                                                  self.driver.cuLinkDestroy)
+
         self.linker_info_buf = linkerinfo
         self.linker_errors_buf = linkererrors
 
@@ -1337,11 +1432,10 @@ class Linker(finalizer.OwnerMixin):
     def error_log(self):
         return self.linker_errors_buf.value
 
-    @classmethod
-    def _finalize(cls, handle):
-        driver = Driver()
-        error =  driver.cuLinkDestroy(handle)
-        driver.check_error(error, 'Failed to unload module', exit=True)
+    def __del__(self):
+        self.device.resource_manager.free_resource(self._handle.value,
+                                               msg='Failed to destroy linker',
+                                               later=True)
 
     def add_ptx(self, ptx, name='<cudapy-ptx>'):
         ptxbuf = c_char_p(ptx)
@@ -1431,6 +1525,9 @@ def get_or_create_context():
     if not context:
         context = drv.create_context(Device(0))
     return context
+
+def flush_pending_free():
+    get_or_create_context().device.resource_manager.free_pending()
 
 def require_context(fn):
     "Decorator to ensure a context exists for the current thread."
