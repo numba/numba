@@ -39,15 +39,16 @@ True
 8
 
 >>> c1, c2 = 1.2 + 4.1j, 0.6 + 0.5j
->>> pow2(c1, c2) == pow(c1, c2)
+>>> allclose(pow2(c1, c2), pow(c1, c2))
 True
 
 >>> d1, d2 = 4.2, 5.1
->>> pow2(d1, d2) == pow(d1, d2)
+>>> allclose(pow2(d1, d2), pow(d1, d2))
 True
 """
- 
+
 from numba import autojit
+from numpy import allclose
  
 @autojit
 def pow3(a,b,c):
