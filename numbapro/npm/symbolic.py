@@ -73,6 +73,7 @@ class SymbolicExecution(object):
 
     def propagate_constants(self):
         defns = {}
+        rejected = set()
 
         for b in self.blocks:
             for c in b.code:
@@ -83,12 +84,15 @@ class SymbolicExecution(object):
                             value = value.to
                         defns[c.name] = value
                     else:                    # drop if more than one definition
-                        del defns[c.name]
+                        rejected.add(c.name)
+
+        for each in rejected:
+            del defns[each]
 
         for b in self.blocks:
             for c in b.code:
                 if c.opcode == 'load' and c.name in defns:
-                    c.replace('alias', to=defns[c.name])
+                    c.replace('alias', name=c.name, to=defns[c.name])
 
     def dead_code_elimination(self):
         candidates = ['global', 'const']
