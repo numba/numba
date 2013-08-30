@@ -2,7 +2,7 @@ from . import _common
 
 from numba import llvm_types
 
-from llvm_cbuilder import *
+from llvm_cbuilder import CFuncRef, CStruct, CDefinition
 from llvm_cbuilder import shortnames as C
 
 from numba.codegen.llvmcontext import LLVMContextManager
@@ -58,7 +58,6 @@ class _GeneralizedUFuncFromFunc(_common.CommonVectorizeFromFunc):
     def build(self, lfunc, dtypes, signature):
         def_guf = GUFuncEntry(dtypes, signature, CFuncRef(lfunc))
         guf = def_guf(lfunc.module)
-        # print guf
         return guf
 
 
@@ -122,7 +121,7 @@ class PyObjectHead(CStruct):
     _fields_ = [
         ('ob_refcnt', C.intp),
         # NOTE: not a integer, just need to match definition in numba
-        ('ob_type', C.pointer(C.int)),
+        ('ob_type', C.void_p),
     ]
 
     if llvm_types._trace_refs_:
@@ -155,7 +154,7 @@ class PyArray(CStruct):
 
         self.ob_refcnt.assign(constant(C.intp, 1))
         type_p = constant(C.py_ssize_t, id(np.ndarray))
-        self.ob_type.assign(type_p.cast(C.pointer(C.int)))
+        self.ob_type.assign(type_p.cast(C.void_p))
 
         self.base.assign(self.parent.constant_null(C.void_p))
         dtype_p = constant(C.py_ssize_t, id(dtype))
@@ -201,20 +200,28 @@ class GUFuncEntry(CDefinition):
         ('data',       C.void_p),
     ]
 
-    def _outer_loop(self, args, dimensions, pyarys, steps, data):
+    def _outer_loop(self, dargs, dimensions, pyarys, steps, data):
         # implement outer loop
         innerfunc = self.depends(self.FuncDef)
         with self.for_range(dimensions[0]) as (loop, idx):
-            args = [arg.reference().cast(arg_type.type)
-                        for arg, arg_type in zip(pyarys, innerfunc.handle.args)]
+            args = []
+
+            for i, (arg, arg_type) in enumerate(zip(pyarys, innerfunc.handle.args)):
+                if C.pointer(PyArray.llvm_type()) != arg_type.type: # scalar
+                    val = arg.data[0:].cast(C.pointer(arg_type.type)).load()
+                    args.append(val)
+                else:
+                    casted = arg.reference().cast(arg_type.type)
+                    args.append(casted)
+
             innerfunc(*args)
-            # innerfunc(*map(lambda x: x.reference(), pyarys))
 
             for i, ary in enumerate(pyarys):
-                ary.data.assign(ary.data[steps[i]:])
+                    ary.data.assign(ary.data[steps[i]:])
 
     def body(self, args, dimensions, steps, data):
         diminfo = list(_parse_signature(self.Signature))
+
         n_pyarys = len(diminfo)
         assert n_pyarys == len(self.dtypes)
 
@@ -223,7 +230,8 @@ class GUFuncEntry(CDefinition):
         for grp in diminfo:
             for it in grp:
                 if it not in dims:
-                    dims.append(it)
+                    if it:
+                        dims.append(it)
 
         # build pyarrays for argument to inner function
         pyarys = [self.var(PyArray) for _ in range(n_pyarys)]
@@ -231,10 +239,18 @@ class GUFuncEntry(CDefinition):
         # populate pyarrays
         step_offset = len(pyarys)
         for i, (dtype, ary) in enumerate(zip(self.dtypes, pyarys)):
-            ary_ndim = len(diminfo[i])
-            ary_dims = [dimensions[1 + dims.index(k)] for k in diminfo[i]]
+            ary_ndim = len(filter(bool, diminfo[i]))
+            ary_dims = []
+            for k in diminfo[i]:
+                if k:
+                    ary_dims.append(dimensions[1 + dims.index(k)])
+                else:
+                    ary_dims.append(self.constant(C.intp, 0))
+
             ary_steps = []
 
+            if not ary_ndim:
+                ary_steps.append(self.constant(C.intp, 0))
             for j in range(ary_ndim):
                 ary_steps.append(steps[step_offset])
                 step_offset += 1
