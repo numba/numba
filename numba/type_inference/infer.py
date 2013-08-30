@@ -867,13 +867,18 @@ class TypeInferer(visitors.NumbaTransformer):
         # Handle string formatting with %
         if isinstance(node.op, ast.Mod) and v1.type.is_c_string:
             promoted_type = object_
+        elif isinstance(node.op, ast.Sub) and \
+                v1.type.is_numpy_datetime and \
+                v2.type.is_numpy_datetime:
+            promoted_type = timedelta
         else:
             promoted_type = self.promote(v1, v2)
 
         if promoted_type.is_pointer:
             self._verify_pointer_type(node, v1, v2)
-        elif not ((v1.type.is_array and v2.type.is_array) or
-                  (v1.type.is_unresolved or v2.type.is_unresolved)):
+        elif (not ((v1.type.is_array and v2.type.is_array) or
+                  (v1.type.is_unresolved or v2.type.is_unresolved)) and
+                  (promoted_type != timedelta or not v1.type.is_numpy_datetime or not v2.type.is_numpy_datetime)):
             # Don't coerce arrays to lesser or higher dimensionality
             # Broadcasting transforms should take care of this
             node.left, node.right = nodes.CoercionNode.coerce(
@@ -1535,6 +1540,17 @@ class TypeInferer(visitors.NumbaTransformer):
 
         return result_type
 
+    def _resolve_timedelta_attribute(self, node, type):
+        if node.attr in ('diff', 'units'):
+            if self.is_store(node.ctx):
+                raise TypeError("Cannot assign to the %s attribute of "
+                                "timedelta numbers" % node.attr)
+            result_type = getattr(type, node.attr)
+        else:
+            raise AttributeError("'%s' of timedelta type" % node.attr)
+
+        return result_type
+
     def visit_Attribute(self, node, visitchildren=True):
         if visitchildren:
             node.value = self.visit(node.value)
@@ -1549,6 +1565,8 @@ class TypeInferer(visitors.NumbaTransformer):
             result_type = self._resolve_complex_attribute(node, type)
         elif type.is_datetime:
             result_type = self._resolve_datetime_attribute(node, type)
+        elif type.is_timedelta:
+            result_type = self._resolve_timedelta_attribute(node, type)
         elif type.is_struct or (type.is_reference and
                                 type.referenced_type.is_struct):
             return self._resolve_struct_attribute(node, type)

@@ -107,6 +107,10 @@ def lower_datetime(domain, codomain, type, params):
 def lower_to_pointer(domain, codomain, type, params):
     return codomain.pointer(params[0])
 
+def lower_timedelta(domain, codomain, type, params):
+    diff, units = params
+    return codomain.struct_([('diff', diff), ('units', units)])
+
 #------------------------------------------------------------------------
 # Default Lowering Table
 #------------------------------------------------------------------------
@@ -117,6 +121,7 @@ default_numba_lowering_table = {
     "function":         lower_function,
     "complex":          lower_complex,
     "datetime":         lower_datetime,
+    "timedelta":        lower_timedelta,
     # "array":            lower_array,
     "string":           lower_string,
     # "carray":           lower_to_pointer,
@@ -130,6 +135,7 @@ ctypes_lowering_table = {
     "object":           lambda dom, cod, type, params: cod.object_,
     "complex":          lower_complex,
     "datetime":         lower_datetime,
+    "timedelta":        lower_timedelta,
     "array":            "object",
     # "string":           lambda dom, cod, type, params: ctypes.c_char_p,
     "sized_pointer":    lower_to_pointer,

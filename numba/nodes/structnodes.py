@@ -115,4 +115,24 @@ class NumpyDateTimeNode(ExprNode):
     def __init__(self, datetime_string):
         self.datetime_string = datetime_string
 
+class TimeDeltaNode(ExprNode):
+
+    _fields = ['diff', 'units']
+
+    type = timedelta
+    variable = Variable(type)
+
+    def __init__(self, diff, units):
+        self.diff = diff
+        self.units = units
+
+class TimeDeltaAttributeNode(ExprNode):
+    
+    _fields = ['value']
+
+    def __init__(self, value, attr):
+        self.value = value
+        self.attr = attr
+        self.type = value.type
+        self.variable = Variable(self.type)
 

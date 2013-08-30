@@ -88,6 +88,17 @@ class CoercionNode(ExprNode):
                     not datetime_type.is_numpy_datetime:
                 node = CoercionNode(node, datetime)
 
+        elif ((node.variable.type.is_timedelta or dst_type.is_timedelta) and
+            (node.variable.type.is_object or dst_type.is_object)):
+            if dst_type.is_timedelta:
+                timedelta_type = dst_type
+            else:
+                timedelta_type = node.variable.type
+
+            if not timedelta_type.is_timedelta and \
+                    not timedelta_type.is_timedelta:
+                node = CoercionNode(node, timedelta)
+
         return node
 
     def __repr__(self):

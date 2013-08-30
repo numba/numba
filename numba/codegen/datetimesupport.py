@@ -25,6 +25,10 @@ class DateTimeSupportMixin(object):
                 self.builder.extract_value(value, 4),
                 self.builder.extract_value(value, 5))
 
+    def _extract_timedelta(self, value):
+        return (self.builder.extract_value(value, 0),
+                self.builder.extract_value(value, 1))
+
     def _promote_datetime(self, src_type, dst_type, value):
         "Promote a datetime value to value with a larger or smaller datetime type"
         year, month, day, hour, min, sec = self._extract_datetime(value)
@@ -38,6 +42,13 @@ class DateTimeSupportMixin(object):
         min = self.caster.cast(min, dst_type.subtypes[4])
         sec = self.caster.cast(sec, dst_type.subtypes[5])
         return self._create_datetime(year, month, day, hour, min, sec)
+
+    def _promote_timedelta(self, src_type, dst_type, value):
+        diff, units = self._extract_timedelta(value)
+        dst_ltype = dst_type.to_llvm(self.context)
+        diff = self.caster.cast(diff, dst_type.subtypes[0])
+        units = self.caster.cast(units, dst_type.subtypes[1])
+        return self._create_timedelta(diff, units)
 
     def _create_datetime(self, year, month, day, hour, min, sec):
         datetime = llvm.core.Constant.undef(llvm.core.Type.struct([year.type,
@@ -54,4 +65,10 @@ class DateTimeSupportMixin(object):
         datetime = self.builder.insert_value(datetime, sec, 5)
         return datetime
 
+    def _create_timedelta(self, diff, units):
+        timedelta_struct = llvm.core.Constant.undef(llvm.core.Type.struct([diff.type,
+                                                                  units.type]))
+        timedelta_struct = self.builder.insert_value(timedelta_struct, diff, 0)
+        timedelta_struct = self.builder.insert_value(timedelta_struct, units, 1)
+        return timedelta_struct
 

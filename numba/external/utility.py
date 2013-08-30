@@ -88,6 +88,12 @@ utility_funcs = list(object_to_numeric.itervalues()) + [
     UtilityFunction.load("numpydatetime2hour", int_(object_)),
     UtilityFunction.load("numpydatetime2min", int_(object_)),
     UtilityFunction.load("numpydatetime2sec", int_(object_)),
+    UtilityFunction.load("primitive2numpytimedelta",
+        object_(long_, int_, object_)),
+    UtilityFunction.load("get_datetime_casting_unit", int_(long_, int_, int_,
+        int_, int_, int_, long_, int_, int_, int_, int_, int_)),
+    UtilityFunction.load("datetime_subtract", long_(long_, int_, int_,
+        int_, int_, int_, long_, int_, int_, int_, int_, int_, long_)),
 ]
 
 def default_utility_library(context):

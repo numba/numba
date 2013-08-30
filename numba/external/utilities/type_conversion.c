@@ -487,6 +487,135 @@ static npy_int64 numpydatetime2sec(PyObject *numpy_datetime)
     return out.sec;
 }
 
+static PyObject* primitive2numpytimedelta(
+    npy_timedelta timedelta,
+    NPY_DATETIMEUNIT units,
+    PyDatetimeScalarObject *scalar)
+{
+    /*npy_datetimestruct input;
+    npy_datetime output = 0;
+    PyArray_DatetimeMetaData new_meta;
+
+    memset(&input, 0, sizeof(input));
+    input.year = year;
+    input.month = 0;
+    input.day = 0;
+    input.hour = 0;
+    input.min = 0;
+    input.sec = sec;
+
+    new_meta.base = lossless_unit_from_datetimestruct(&input);
+    new_meta.num = 1;
+
+    if (convert_datetimestruct_to_datetime(&new_meta, &input, &output) < 0) {
+        return NULL;
+    }
+    
+    printf("JNB: primitive2numpytimedelta() %d %d %lld %d\n", year, sec, output, new_meta.base);
+    scalar->obval = output;
+    scalar->obmeta.base = new_meta.base;
+    scalar->obmeta.num = new_meta.num;*/
+    scalar->obval = timedelta;
+    scalar->obmeta.base = units;
+    scalar->obmeta.num = 1;
+ 
+    return (PyObject*)scalar;
+}
+
+static NPY_DATETIMEUNIT get_datetime_casting_unit(
+    npy_int64 year1,
+    npy_int32 month1,
+    npy_int32 day1,
+    npy_int32 hour1,
+    npy_int32 min1,
+    npy_int32 sec1,
+    npy_int64 year2,
+    npy_int32 month2,
+    npy_int32 day2,
+    npy_int32 hour2,
+    npy_int32 min2,
+    npy_int32 sec2)
+{
+    npy_datetimestruct input;
+    PyArray_DatetimeMetaData meta1;
+    PyArray_DatetimeMetaData meta2;
+
+    memset(&input, 0, sizeof(npy_datetimestruct));
+
+    input.year = year1;
+    input.month = month1;
+    input.day = day1;
+    input.hour = hour1;
+    input.min = min1;
+    input.sec = sec1;
+
+    memset(&meta1, 0, sizeof(PyArray_DatetimeMetaData));
+    meta1.base = lossless_unit_from_datetimestruct(&input);
+
+    input.year = year2;
+    input.month = month2;
+    input.day = day2;
+    input.hour = hour2;
+    input.min = min2;
+    input.sec = sec2;
+
+    memset(&meta2, 0, sizeof(PyArray_DatetimeMetaData));
+    meta2.base = lossless_unit_from_datetimestruct(&input);
+
+    if (can_cast_datetime64_metadata(&meta1, &meta2, NPY_SAFE_CASTING)) {
+        printf("JNB: get_datetime_casting_unit()1 %d %d %d\n", meta1.base, meta2.base, meta2.base);
+        return meta2.base;
+    }
+    else if (can_cast_datetime64_metadata(&meta2, &meta1, NPY_SAFE_CASTING)) {
+        printf("JNB: get_datetime_casting_unit()2 %d %d %d\n", meta2.base, meta1.base, meta1.base);
+        return meta1.base;
+    }
+
+    return NPY_FR_GENERIC;
+}
+
+static npy_timedelta datetime_subtract(
+    npy_int64 year1,
+    npy_int32 month1,
+    npy_int32 day1,
+    npy_int32 hour1,
+    npy_int32 min1,
+    npy_int32 sec1,
+    npy_int64 year2,
+    npy_int32 month2,
+    npy_int32 day2,
+    npy_int32 hour2,
+    npy_int32 min2,
+    npy_int32 sec2,
+    NPY_DATETIMEUNIT units)
+{
+    PyArray_DatetimeMetaData meta;
+    npy_datetimestruct input;
+    npy_datetime operand1 = 0;
+    npy_datetime operand2 = 0;
+
+    memset(&meta, 0, sizeof(PyArray_DatetimeMetaData));
+    meta.base = units;
+
+    input.year = year1;
+    input.month = month1;
+    input.day = day1;
+    input.hour = hour1;
+    input.min = min1;
+    input.sec = sec1;
+    convert_datetimestruct_to_datetime(&meta, &input, &operand1);
+
+    input.year = year2;
+    input.month = month2;
+    input.day = day2;
+    input.hour = hour2;
+    input.min = min2;
+    input.sec = sec2;
+    convert_datetimestruct_to_datetime(&meta, &input, &operand2);
+
+    printf("JNB: datetime_subtract() %d %d %d\n", operand1, operand2, operand1 - operand2);
+    return operand1 - operand2;
+}
 
 static int
 export_type_conversion(PyObject *module)
@@ -528,9 +657,12 @@ export_type_conversion(PyObject *module)
     EXPORT_FUNCTION(numpydatetime2hour, module, error);
     EXPORT_FUNCTION(numpydatetime2min, module, error);
     EXPORT_FUNCTION(numpydatetime2sec, module, error);
+    EXPORT_FUNCTION(primitive2numpytimedelta, module, error);
 
     EXPORT_FUNCTION(__Numba_PyInt_FromLongLong, module, error);
     EXPORT_FUNCTION(__Numba_PyInt_FromUnsignedLongLong, module, error);
+    EXPORT_FUNCTION(get_datetime_casting_unit, module, error);
+    EXPORT_FUNCTION(datetime_subtract, module, error);
 
     return 0;
 error:

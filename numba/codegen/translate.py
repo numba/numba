@@ -1214,9 +1214,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             return self._handle_mod(node, lhs, rhs)
         elif node.type.is_complex:
             result = self._handle_complex_binop(lhs, op, rhs)
-        elif node.type.is_datetime:
-            raise error.NumbaError(
-                node, "binary operations on datetime values not yet supported")
         elif pointer_type:
             if not node.left.type.is_pointer:
                 lhs, rhs = rhs, lhs
@@ -1276,6 +1273,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             #month = llvm.core.Constant.int(llvm.core.Type.int(32), 0)
             #day = llvm.core.Constant.int(llvm.core.Type.int(32), 0)
             #val = self._create_datetime(year, month, day)
+            raise NotImplementedError
+        elif dst_type.is_timedelta and node_type.is_timedelta:
+            val = self._promote_timedelta(node_type, dst_type, val)
+        elif dst_type.is_timedelta and node_type.is_numeric:
             raise NotImplementedError
         else:
             flags = {}
@@ -1528,6 +1529,19 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             hour_func, min_func, sec_func)
         return self.visit(newnode)
 
+    def visit_TimeDeltaNode(self, node):
+        diff = self.visit(node.diff)
+        units = self.visit(node.units)
+        return self._create_timedelta(diff, units)
+
+    def visit_TimeDeltaAttributeNode(self, node):
+        result = self.visit(node.value)
+        if node.value.type.is_timedelta:
+            assert result.type.kind == llvm.core.TYPE_STRUCT, result.type
+            if node.attr == 'diff':
+                return self.builder.extract_value(result, 0)
+            elif node.attr == 'units':
+                return self.builder.extract_value(result, 1)
 
     #------------------------------------------------------------------------
     # Structs

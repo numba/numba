@@ -34,7 +34,8 @@ __all__ = ['Py_ssize_t', 'void', 'char', 'uchar', 'short', 'ushort',
            'size_t', 'npy_intp', 'c_string_type', 'bool_', 'object_',
            'float_', 'double', 'longdouble', 'float32', 'float64', 'float128',
            'int8', 'int16', 'int32', 'int64', 'uint8', 'uint16', 'uint32', 'uint64',
-           'complex64', 'complex128', 'complex256', 'datetime', 'struct', 'Py_uintptr_t']
+           'complex64', 'complex128', 'complex256', 'datetime', 'timedelta',
+           'struct', 'Py_uintptr_t']
 
 import sys
 import math
@@ -357,6 +358,7 @@ INT_KIND = 2
 FLOAT_KIND = 3
 COMPLEX_KIND = 4
 DATETIME_KIND = 5
+TIMEDELTA_KIND = 6
 
 class Type(miniutils.ComparableObjectMixin):
     """
@@ -385,6 +387,7 @@ class Type(miniutils.ComparableObjectMixin):
     is_void = False
 
     is_datetime = False
+    is_timedelta = False
 
     kind = NONE_KIND
 
@@ -815,6 +818,11 @@ class DateTimeType(NumericType):
 
     kind = DATETIME_KIND
 
+class TimeDeltaType(NumericType):
+    is_timedelta = True
+    subtypes = ['base_type']
+
+    kind = TIMEDELTA_KIND
 
 class Py_ssize_t_Type(IntType):
     is_py_ssize_t = True
@@ -876,7 +884,7 @@ class ObjectType(Type):
         return "PyObject *"
 
 def pass_by_ref(type):
-    return type.is_struct or type.is_complex or type.is_datetime
+    return type.is_struct or type.is_complex or type.is_datetime or type.is_timedelta
 
 class Function(object):
     """
@@ -1217,6 +1225,7 @@ complex256 = ComplexType(name="complex256", base_type=float128,
                          rank=32, itemsize=32)
 
 datetime = DateTimeType(name="datetime", base_type=int64, itemsize=20)
+timedelta = TimeDeltaType(name="timedelta", base_type=int64, itemsize=12)
 
 integral = []
 native_integral = []

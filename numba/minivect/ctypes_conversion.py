@@ -81,6 +81,9 @@ def convert_to_ctypes(type):
     elif type.is_datetime:
         from . import datetime_support
         return datetime_support.Datetime
+    elif type.is_timedelta:
+        from . import datetime_support
+        return datetime_support.TimeDelta
     elif type.is_c_string:
         return ctypes.c_char_p
     elif type.is_function:

@@ -249,7 +249,7 @@ class NumbaType(_NumbaType):
 #------------------------------------------------------------------------
 
 def pass_by_ref(type): # TODO: Get rid of this
-    return type.is_struct or type.is_complex or type.is_datetime
+    return type.is_struct or type.is_complex or type.is_datetime or type.is_timedelta
 
 class Function(object):
     """
@@ -292,7 +292,7 @@ class function(NumbaType):
     @property
     def struct_by_reference(self):
         rt = self.return_type
-        byref = lambda t: t.is_struct or t.is_complex or t.is_datetime
+        byref = lambda t: t.is_struct or t.is_complex or t.is_datetime or t.is_timedelta
         return rt and byref(rt) or any(imap(byref, self.args))
 
     @property
@@ -568,6 +568,19 @@ class meta(NumbaType):
         "object",
         "cast",     # backwards compat
     ]
+
+@consing
+class timedelta_(NumbaType):
+    argnames = ["diff", "units"]
+    flags = ["numeric"]
+    is_timedelta = True
+
+    @property
+    def itemsize(self):
+        return self.diff.size + self.units.size
+
+    def __repr__(self):
+        return "timedelta"
 
 #------------------------------------------------------------------------
 # Container Types

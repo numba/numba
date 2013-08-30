@@ -65,13 +65,15 @@ def promote_int(u, promote, type1, type2):
 
 def promote_numeric(u, promote, type1, type2):
     "Promote two numeric types"
-    ranks = ["bool", "int", "float", "complex", "datetime"]
+    ranks = ["bool", "int", "float", "complex", "datetime", "timedelta"]
     type = max([type1, type2], key=lambda type: ranks.index(type.kind))
     size = max(type1.itemsize, type2.itemsize)
     if type.is_complex:
         return find_type_of_size(size, complextypes)
     elif type.is_datetime:
         return find_type_of_size(size, datetimetypes)
+    elif type.is_timedelta:
+        return find_type_of_size(size, timedeltatypes)
     elif type.is_float:
         return find_type_of_size(size, floating)
     else:

@@ -357,6 +357,16 @@ class ResolveCoercions(visitors.NumbaTransformer):
                 new_node = function_util.utility_call(
                         self.context, self.llvm_module,
                         "primitive2pydatetime", args=args)
+            elif node_type.is_timedelta:
+                timedelta_value = nodes.CloneableNode(node.node)
+                args = [
+                    nodes.TimeDeltaAttributeNode(timedelta_value, 'diff'),
+                    nodes.TimeDeltaAttributeNode(timedelta_value.clone, 'units'),
+                    nodes.ConstNode(np.timedelta64(), object_),
+                ]
+                new_node = function_util.utility_call(
+                        self.context, self.llvm_module,
+                        "primitive2numpytimedelta", args=args)
             else:
                 raise error.NumbaError(
                     node, "Don't know how to coerce type %r to PyObject" %
@@ -850,7 +860,9 @@ class LateSpecializer(ResolveCoercions,
 
     def visit_Attribute(self, node):
         if (self.nopython and not node.value.type.is_module and
-            not node.value.type.is_complex and not node.value.type.is_datetime):
+                not node.value.type.is_complex and
+                not node.value.type.is_datetime and
+                not node.value.type.is_timedelta):
             raise error.NumbaError(
                     node, "Cannot access Python attribute in nopython context (%s)" % node.attr)
 
@@ -860,6 +872,9 @@ class LateSpecializer(ResolveCoercions,
         elif node.value.type.is_datetime:
             value = self.visit(node.value)
             return nodes.DateTimeAttributeNode(value, node.attr)
+        elif node.value.type.is_timedelta:
+            value = self.visit(node.value)
+            return nodes.TimeDeltaAttributeNode(value, node.attr)
         elif node.type.is_numpy_attribute:
             return nodes.ObjectInjectNode(node.type.value)
         elif node.type.is_numpy_dtype:
@@ -1018,6 +1033,55 @@ class LateSpecializer(ResolveCoercions,
                 raise error.NumbaError(
                     node, 'Unsupported binary operation for object: %s' %
                     op_name)
+        elif node.left.type.is_datetime and node.right.type.is_datetime:
+            '''datetime_value = nodes.CloneableNode(node.left)
+            args1 = [
+                nodes.DateTimeAttributeNode(datetime_value, 'year'),
+                nodes.DateTimeAttributeNode(datetime_value.clone, 'month'),
+                nodes.DateTimeAttributeNode(datetime_value.clone, 'day'),
+                nodes.DateTimeAttributeNode(datetime_value.clone, 'hour'),
+                nodes.DateTimeAttributeNode(datetime_value.clone, 'min'),
+                nodes.DateTimeAttributeNode(datetime_value.clone, 'sec'),
+            ]
+            datetime_value = nodes.CloneableNode(node.right)
+            args2 = [
+                nodes.DateTimeAttributeNode(datetime_value, 'year'),
+                nodes.DateTimeAttributeNode(datetime_value.clone, 'month'),
+                nodes.DateTimeAttributeNode(datetime_value.clone, 'day'),
+                nodes.DateTimeAttributeNode(datetime_value.clone, 'hour'),
+                nodes.DateTimeAttributeNode(datetime_value.clone, 'min'),
+                nodes.DateTimeAttributeNode(datetime_value.clone, 'sec'),
+            ]
+
+            unit_node = function_util.utility_call(
+                    self.context, self.llvm_module,
+                    "get_datetime_casting_unit", args=args1+args2)
+
+            diff_node = function_util.utility_call(
+                    self.context, self.llvm_module,
+                    "datetime_subtract", args=args1+args2+[unit_node])'''
+
+            '''day_node = function_util.utility_call(
+                    self.context, self.llvm_module,
+                    "datetime_diff2day", args=[unit_node, diff_node])
+
+            sec_node = function_util.utility_call(
+                    self.context, self.llvm_module,
+                    "datetime_diff2sec", args=[unit_node, diff_node])'''
+
+            #node = nodes.TimeDeltaNode(diff_node, unit_node)
+            diff = nodes.ConstNode(2014, int64)
+            units = nodes.ConstNode(0, int32)
+            node = nodes.TimeDeltaNode(diff, units)
+            #node = nodes.ConstNode(1, int64)
+            '''year = nodes.ConstNode(1, int64)
+            month = nodes.ConstNode(2, int32)
+            day = nodes.ConstNode(3, int32)
+            hour = nodes.ConstNode(4, int32)
+            min = nodes.ConstNode(5, int32)
+            sec = nodes.ConstNode(6, int32)
+            node = nodes.DateTimeNode(year, month, day, hour, min, sec)'''
+
         return node
 
     def _object_unaryop(self, node, api_name):
@@ -1082,6 +1146,11 @@ class LateSpecializer(ResolveCoercions,
             min = nodes.ConstNode(0, int32)
             sec = nodes.ConstNode(0, int32)
             node = nodes.DateTimeNode(year, month, day, hour, min, sec)
+
+        elif node.type.is_timedelta:
+            diff = nodes.ConstNode(0, int64)
+            units = nodes.ConstNode(0, int32)
+            node = nodes.TimeDeltaNode(diff, units)
 
         elif node.type.is_pointer and not node.type.is_string:
             addr_int = constnodes.get_pointer_address(constant, node.type)
