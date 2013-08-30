@@ -56,9 +56,9 @@ def extract_min(date):
 def extract_sec(date):
     return date.sec
 
-#@numba.autojit(nopython=True)
-#def datetime_delta(d0, d1):
-#    return d1 - d0
+@numba.autojit(nopython=True)
+def datetime_delta(d0, d1):
+    return d1 - d0
 
 #@numba.jit(numba.int64(numba.datetime), nopython=True)
 #def cast_datetime_to_int(x):
@@ -69,14 +69,6 @@ def test_datetime():
     datetime_components = (2014, 1, 2, 3, 4, 5)
     datetime_str = '2014-01-02T03:04:05Z'
 
-    # JNB: only test numpy datetimes for now
-    #assert extract_year(datetime.datetime(*datetime_components)) == 2014
-    #assert extract_month(datetime.datetime(*datetime_components)) == 1
-    #assert extract_day(datetime.datetime(*datetime_components)) == 2
-    #assert extract_hour(datetime.datetime(*datetime_components)) == 3
-    #assert extract_min(datetime.datetime(*datetime_components)) == 4
-    #assert extract_sec(datetime.datetime(*datetime_components)) == 5
-
     assert extract_year(numpy.datetime64(datetime_str)) == 2014
     assert extract_month(numpy.datetime64(datetime_str)) == 1
     assert extract_day(numpy.datetime64(datetime_str)) == 2
@@ -84,20 +76,34 @@ def test_datetime():
     assert extract_min(numpy.datetime64(datetime_str)) == 4
     assert extract_sec(numpy.datetime64(datetime_str)) == 5
 
-    #control = datetime.datetime(*datetime_components)
-    #assert create_python_datetime(*datetime_components) == control
-    #assert create_python_datetime_from_string("2014-01-02T03:04:05Z") == control
-    
     control = numpy.datetime64(datetime_str)
     assert create_numpy_datetime(datetime_str) == control
     # JNB: string concatenation doesn't work right now
     #assert create_numpy_datetime_from_string(datetime_str) == control
 
-    #datetime1 = numpy.datetime64('2014-01-01')
-    #datetime2 = numpy.datetime64('2014-01-02')
-    #datetime_delta(datetime1, datetime2)
+    datetime1 = numpy.datetime64('2014-01-01')
+    datetime2 = numpy.datetime64('2014-01-04')
+    control = datetime2 - datetime1
+    assert datetime_delta(datetime1, datetime2) == control
+
+    datetime1 = numpy.datetime64('2014-01-01T01:01:01Z')
+    datetime2 = numpy.datetime64('2014-01-04T02:02:02Z')
+    control = datetime2 - datetime1
+    assert datetime_delta(datetime1, datetime2) == control
 
     #cast_datetime_to_int(numpy.datetime64('2014-01-02'))
 
+    # JNB: only test numpy datetimes for now
+    #assert extract_year(datetime.datetime(*datetime_components)) == 2014
+    #assert extract_month(datetime.datetime(*datetime_components)) == 1
+    #assert extract_day(datetime.datetime(*datetime_components)) == 2
+    #assert extract_hour(datetime.datetime(*datetime_components)) == 3
+    #assert extract_min(datetime.datetime(*datetime_components)) == 4
+    #assert extract_sec(datetime.datetime(*datetime_components)) == 5
+    
+    #control = datetime.datetime(*datetime_components)
+    #assert create_python_datetime(*datetime_components) == control
+    #assert create_python_datetime_from_string("2014-01-02T03:04:05Z") == control
+ 
 if __name__ == "__main__":
     test_datetime()

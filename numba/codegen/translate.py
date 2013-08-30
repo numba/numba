@@ -1269,10 +1269,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         elif dst_type.is_datetime and node_type.is_datetime:
             val = self._promote_datetime(node_type, dst_type, val)
         elif dst_type.is_datetime and node_type.is_numeric:
-            #year = llvm.core.Constant.int(llvm.core.Type.int(64), 0)
-            #month = llvm.core.Constant.int(llvm.core.Type.int(32), 0)
-            #day = llvm.core.Constant.int(llvm.core.Type.int(32), 0)
-            #val = self._create_datetime(year, month, day)
             raise NotImplementedError
         elif dst_type.is_timedelta and node_type.is_timedelta:
             val = self._promote_timedelta(node_type, dst_type, val)

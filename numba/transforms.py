@@ -1033,8 +1033,9 @@ class LateSpecializer(ResolveCoercions,
                 raise error.NumbaError(
                     node, 'Unsupported binary operation for object: %s' %
                     op_name)
-        elif node.left.type.is_datetime and node.right.type.is_datetime:
-            '''datetime_value = nodes.CloneableNode(node.left)
+        elif node.left.type.is_datetime and node.right.type.is_datetime and \
+                isinstance(node.op, ast.Sub):
+            datetime_value = nodes.CloneableNode(node.left)
             args1 = [
                 nodes.DateTimeAttributeNode(datetime_value, 'year'),
                 nodes.DateTimeAttributeNode(datetime_value.clone, 'month'),
@@ -1059,28 +1060,9 @@ class LateSpecializer(ResolveCoercions,
 
             diff_node = function_util.utility_call(
                     self.context, self.llvm_module,
-                    "datetime_subtract", args=args1+args2+[unit_node])'''
+                    "datetime_subtract", args=args1+args2+[unit_node])
 
-            '''day_node = function_util.utility_call(
-                    self.context, self.llvm_module,
-                    "datetime_diff2day", args=[unit_node, diff_node])
-
-            sec_node = function_util.utility_call(
-                    self.context, self.llvm_module,
-                    "datetime_diff2sec", args=[unit_node, diff_node])'''
-
-            #node = nodes.TimeDeltaNode(diff_node, unit_node)
-            diff = nodes.ConstNode(2014, int64)
-            units = nodes.ConstNode(0, int32)
-            node = nodes.TimeDeltaNode(diff, units)
-            #node = nodes.ConstNode(1, int64)
-            '''year = nodes.ConstNode(1, int64)
-            month = nodes.ConstNode(2, int32)
-            day = nodes.ConstNode(3, int32)
-            hour = nodes.ConstNode(4, int32)
-            min = nodes.ConstNode(5, int32)
-            sec = nodes.ConstNode(6, int32)
-            node = nodes.DateTimeNode(year, month, day, hour, min, sec)'''
+            node = nodes.TimeDeltaNode(diff_node, unit_node)
 
         return node
 
