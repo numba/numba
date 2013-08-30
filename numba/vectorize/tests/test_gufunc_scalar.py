@@ -63,9 +63,35 @@ def test_saxpy():
             assert exp == out[j, i]
 
 
+def mycore(A,B):
+    m, n = A.shape
+    B[0] = 0
+    for i in range(m):
+        for j in range(n):
+            B[0] += A[i,j]
+
+
+def test_scalar_output():
+    gufunc = GUVectorize(mycore, '(m,n)->()')
+    gufunc.add('void(float32[:,:], float32[:])')
+    gufunc.add('void(float64[:,:], float64[:])')
+
+    myfunc = gufunc.build_ufunc()
+
+    A = numpy.arange(2 * 2 * 10).reshape(10, 2, 2)
+    out = numpy.zeros(10)
+    myfunc(A, out=out)
+
+    expect = numpy.zeros_like(out)
+    for i in range(A.shape[0]):
+        expect[i] = A[i].sum()
+
+    numpy.allclose(expect, out)
+
 def main():
     test_exp_avg()
     test_saxpy()
+    test_scalar_output()
 
 if __name__ == '__main__':
     main()
