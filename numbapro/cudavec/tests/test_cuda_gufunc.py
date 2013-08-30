@@ -39,6 +39,7 @@ def test_gufunc():
     tcpu = time() - ts
 
     non_stream_speedups.append(tcpu / tcuda)
+
     assert np.allclose(C, Gold)
 
 
@@ -64,7 +65,9 @@ def test_gufunc_stream():
     stream = cuda.stream()
     dA = cuda.to_device(A, stream)
     dB = cuda.to_device(B, stream)
-    dC = gufunc(dA, dB, stream=stream)
+
+    dC = cuda.device_array(shape=(1001, 2, 5), dtype=A.dtype, stream=stream)
+    dC = gufunc(dA, dB, out=dC, stream=stream)
     C = dC.copy_to_host(stream=stream)
     stream.synchronize()
 
@@ -75,6 +78,7 @@ def test_gufunc_stream():
     tcpu = time() - ts
 
     stream_speedups.append(tcpu / tcuda)
+
     assert np.allclose(C, Gold)
 
 if __name__ == '__main__':

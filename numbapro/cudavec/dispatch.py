@@ -1,8 +1,8 @@
+import math
+import operator
 import numpy as np
 from numbapro.cudadrv import devicearray
 from numbapro import cuda
-import math
-import re
 
 class CudaUFuncDispatcher(object):
     """
@@ -274,9 +274,6 @@ class CudaUFuncDispatcher(object):
             else:
                 return left
 
-_re_signature = re.compile(r'\(\w+(?:,\w+)*\)')
-_re_symbols = re.compile(r'\w+')
-
 class CudaGUFuncDispatcher(CudaUFuncDispatcher):
 
     def __init__(self, types_to_retty_kernel, signature):
@@ -291,8 +288,6 @@ class CudaGUFuncDispatcher(CudaUFuncDispatcher):
         return args
 
     def _adjust_dimension(self, broadcast_arrays):
-        print broadcast_arrays
-        raise
         return broadcast_arrays # do nothing
 
     def _allocate_output(self, broadcast_arrays, result_dtype):
@@ -319,11 +314,11 @@ class CudaGUFuncDispatcher(CudaUFuncDispatcher):
 
 
 class CUDAGenerializedUFunc(object):
-    def __init__(self, kernelmap, inputsig, outputsig):
+    def __init__(self, kernelmap, engine):
         self.kernelmap = kernelmap
-        self.inputsig = inputsig
-        self.outputsig = outputsig
+        self.engine = engine
         self.max_blocksize = 2**30
+        assert self.engine.nout == 1, "only support single output"
 
     def __call__(self, *args, **kws):
         is_device_array = [devicearray.is_cuda_ndarray(a) for a in args]
@@ -332,53 +327,50 @@ class CUDAGenerializedUFunc(object):
                             'all arguments must be device array.')
         out = kws.get('out')
         stream = kws.get('stream', 0)
-        
-        if any(is_device_array):
-            res = self._execute(_device_executor(), args, out, stream)
+
+        need_cuda_conv = not any(is_device_array)
+        if need_cuda_conv:
+            inputs = [np.array(a) for a in args]
         else:
-            res = self._execute(_host_executor(), args, out, stream)
+            inputs = args
 
-        return res
-
-    def _execute(self, exe, args, out, stream):
-        # sanitize input
-        inputs = exe.prepare_inputs(args)
-        for i, (syms, ary) in enumerate(zip(self.inputsig, inputs)):
-            if ary.ndim != 1 + len(syms):   # number of dimension must match
-                raise ValueError('ndim mismatch for arg #%d' % i)
-
-        inputs = exe.normalize_outerdim(inputs)
-        assert all(i.shape[0] == inputs[0].shape[0] for i in inputs)
+        input_shapes = [a.shape for a in inputs]
+        schedule = self.engine.schedule(input_shapes)
 
         # find kernel
         idtypes = tuple(i.dtype for i in inputs)
         outdtype, kernel = self.kernelmap[idtypes]
 
-        # sanitize output
-        innershape = self._calc_output_shape(args)
-        outshape = (inputs[0].shape[0],) + innershape
+        # check output
+        if out is not None and schedule.output_shapes[0] != out.shape:
+                raise ValueError('output shape mismatch')
 
-        out = out if out is not None else exe.allocate_output(outshape,
-                                                              outdtype,
-                                                              stream)
+        # prepare inputs
+        if need_cuda_conv:
+            params = [cuda.to_device(a, stream=stream)
+                      for a in inputs]
+        else:
+            params = list(inputs)
 
-        if outshape != out.shape:
-            raise ValueError('invalid output shape')
+        # allocate output
 
-        if out.dtype != outdtype:
-            raise TypeError('output array dtype mismatch')
-
-        # execute
-        params, cv = zip(*(cuda._auto_device(i, stream=stream) for i in inputs))
-        if not devicearray.is_cuda_ndarray(out):
-            retval = cuda.device_array_like(out)
+        if need_cuda_conv or out is None:
+            retval = cuda.device_array(shape=schedule.output_shapes[0],
+                                       dtype=outdtype, stream=stream)
         else:
             retval = out
 
-        kernelargs = params + (retval,)
+        # execute
+        self._launch_kernel(kernel, schedule.loopn, stream, params + [retval])
 
-        nelem = out.shape[0]
+        # post execution
+        if need_cuda_conv:
+            out = retval.copy_to_host(out, stream=stream)
+        elif out is None:
+            out = retval
+        return out
 
+    def _launch_kernel(self, kernel, nelem, stream, args):
         max_threads = min(kernel.device.MAX_THREADS_PER_BLOCK,
                           self.max_blocksize)
 
@@ -388,19 +380,8 @@ class CUDAGenerializedUFunc(object):
         if ncta < ncta_real:
             ncta += 1
 
-        kernel[ncta, ntid, stream](*kernelargs)
+        kernel[ncta, ntid, stream](*args)
 
-        if retval is not out:
-            retval.copy_to_host(out, stream=stream)
-
-        return out
-
-    def _calc_output_shape(self, inputs):
-        values = _symbol_dict()
-        for i, (syms, array) in enumerate(zip(self.inputsig, inputs)):
-            for sym, shape in zip(syms, array.shape[1:]):
-                values[sym] = shape
-        return tuple(values[sym] for sym in self.outputsig)
 
     def _apply_autotuning(self, func, max_threads):
         try:
@@ -418,46 +399,121 @@ class CUDAGenerializedUFunc(object):
 
 
 
-class _host_executor(object):
-    '''Executor when host arrays are provided
-    '''
-    def prepare_inputs(self, args):
-        '''returns list of array
-        '''
-        return [np.array(a) for a in args]
 
-    def normalize_outerdim(self, inputs):
-        outerdims = [iary.shape[0] for iary in inputs]
-        if not all(outerdims[0] == dim for dim in outerdims[1:]):
-            raise ValueError('outer dimension mismatch')
-        return inputs
-
-    def allocate_output(self, shape, dtype, stream):
-        return np.empty(shape=shape, dtype=dtype)
-
-class _device_executor(_host_executor):
-    '''Executor when device arrays are provided
-    '''
-    def prepare_inputs(self, args):
-        '''returns list of array
-        '''
-        return list(args)
-
-    def normalize_outerdim(self, inputs):
-        outerdims = [iary.shape[0] for iary in inputs]
-        if not all(outerdims[0] == dim for dim in outerdims[1:]):
-            raise ValueError('outer dimension mismatch')
-        return inputs
-
-    def allocate_output(self, shape, dtype, stream):
-        return cuda.device_array(shape=shape, dtype=dtype, stream=stream)
-
-class _symbol_dict(dict):
-    def __setitem__(self, k, v):
-        if k in self and self[k] != v:
-            args = k, self[k], v
-            raise ValueError("symbol '%s' error: expect %s but got %s" % args)
-        else:
-            return super(_symbol_dict, self).__setitem__(k, v)
-
-
+#
+#        if any(is_device_array):
+#            res = self._execute(_device_executor(), args, out, stream)
+#        else:
+#            res = self._execute(_host_executor(), args, out, stream)
+#
+#        return res
+#
+#    def _execute(self, exe, args, out, stream):
+#        inputs = exe.prepare_inputs(args)
+#
+#        # find kernel
+#        idtypes = tuple(i.dtype for i in inputs)
+#        outdtype, kernel = self.kernelmap[idtypes]
+#
+#        # sanitize input
+#        outershapes = []
+#        innershapes = []
+#        for ary, sig in zip(inputs, self.inputsig):
+#            nd = len(sig)
+#            innershapes.append(ary.shape[-nd:])
+#            outershapes.append(ary.shape[:-nd])
+#
+#        outershape = tuple(max(outershapes))
+#
+#        for i, s in enumerate(outershapes):
+#            if not s == outershape and not (s == () or s == (1,)):
+#                fmt = 'outer dimension mismatch at argument #%s'
+#                raise ValueError(fmt % (i + 1))
+#
+#        del outershapes
+#
+#        # sanitize output
+#        innershape = self._calc_output_shape(inputs)
+#        outshape = outershape + innershape
+#
+#        out = out if out is not None else exe.allocate_output(outshape,
+#                                                              outdtype,
+#                                                              stream)
+#
+#        if outshape != out.shape:
+#            raise ValueError('invalid output shape')
+#
+#        if out.dtype != outdtype:
+#            raise TypeError('output array dtype mismatch')
+#
+#        # execute
+#        params, cv = zip(*(cuda._auto_device(i, stream=stream) for i in inputs))
+#        if not devicearray.is_cuda_ndarray(out):
+#            retval = cuda.device_array_like(out)
+#        else:
+#            retval = out
+#
+#        kernelargs = params + (retval,)
+#
+#        nelem = out.shape[0]
+#
+#        max_threads = min(kernel.device.MAX_THREADS_PER_BLOCK,
+#                          self.max_blocksize)
+#
+#        ntid = self._apply_autotuning(kernel, max_threads)
+#        ncta_real = float(nelem) / ntid
+#        ncta = int(ncta_real)
+#        if ncta < ncta_real:
+#            ncta += 1
+#
+#        kernel[ncta, ntid, stream](*kernelargs)
+#
+#        if retval is not out:
+#            retval.copy_to_host(out, stream=stream)
+#
+#        return out
+#
+#    def _calc_output_shape(self, inputs):
+#        values = _symbol_dict()
+#        for i, (syms, array) in enumerate(zip(self.inputsig, inputs)):
+#            for sym, shape in zip(syms, array.shape[-len(syms):]):
+#                values[sym] = shape
+#        return tuple(values[sym] for sym in self.outputsig)
+#
+#    def _apply_autotuning(self, func, max_threads):
+#        try:
+#            atune = func.autotune
+#        except RuntimeError:
+#            return max_threads
+#        else:
+#            max_threads = atune.best()
+#            
+#            if not max_threads:
+#                raise Exception("insufficient resources to run kernel "
+#                                "at any thread-per-block.")
+#
+#            return max_threads
+#
+#
+#
+#class _host_executor(object):
+#    '''Executor when host arrays are provided
+#    '''
+#    def prepare_inputs(self, args):
+#        '''returns list of array
+#        '''
+#        return [np.array(a) for a in args]
+#
+#    def allocate_output(self, shape, dtype, stream):
+#        return np.empty(shape=shape, dtype=dtype)
+#
+#class _device_executor(_host_executor):
+#    '''Executor when device arrays are provided
+#    '''
+#    def prepare_inputs(self, args):
+#        '''returns list of array
+#        '''
+#        return list(args)
+#
+#    def allocate_output(self, shape, dtype, stream):
+#        return cuda.device_array(shape=shape, dtype=dtype, stream=_re_symbols

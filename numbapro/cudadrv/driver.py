@@ -359,6 +359,7 @@ class ResourceManager(object):
         return Device(self.device_id)
 
     def add_memory(self, handle, dtor):
+        assert handle not in self.allocated
         if debug_memory:
             global debug_memory_alloc
             debug_memory_alloc += 1
@@ -390,6 +391,7 @@ class ResourceManager(object):
         self.driver.check_error(dtor(handle), msg=msg)
 
     def add_resource(self, handle, dtor):
+        assert handle not in self.resources
         self.resources[handle] = dtor
 
     def free_resource(self, handle, msg, later=False):

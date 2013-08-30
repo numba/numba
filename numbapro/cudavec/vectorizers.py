@@ -1,4 +1,5 @@
-import re
+import operator
+import numpy
 import llvm.core as lc
 from numbapro import cuda
 from numbapro.npm import types, cgutils, aryutils
@@ -67,23 +68,29 @@ class CudaGUFuncVectorize(object):
         lmod, lgufunc, outertys, excs = build_gufunc_stager(cudevfn, dims)
 
         wrapper = compiler.generate_kernel_wrapper(lgufunc, bool(excs))
-        ptx = compiler.to_ptx(wrapper)
-        kernel = CUDAKernel(wrapper.name, ptx, outertys, excs=excs)
+        ptxcode = compiler.to_ptx(wrapper)
+        kernel = CUDAKernel(wrapper.name, ptxcode, outertys, excs=excs)
         kernel.bind()
 
-        dtypes = tuple(t.dtype.get_dtype() for t in argtypes)
+        dtypes = tuple(numpy.dtype(str(t.desc.element)) for t in outertys)
         self.kernelmap[tuple(dtypes[:-1])] = dtypes[-1], kernel
         
     def build_ufunc(self):
+        engine = GUFuncEngine(self.inputsig, self.outputsig)
         return dispatch.CUDAGenerializedUFunc(kernelmap=self.kernelmap,
-                                              inputsig=self.inputsig,
-                                              outputsig=self.outputsig[0])
+                                              engine=engine)
 
 def build_gufunc_stager(devfn, dims):
     lmod, lfunc, return_type, args, excs = devfn._npm_context_
     assert return_type is None, "must return nothing"
-    outer_args = [types.arraytype(a.desc.element, dim + 1, a.desc.order)
-                  for a, dim in zip(args, dims)]
+
+    outer_args = []
+    for arg, dim in zip(args, dims):
+        if not isinstance(arg.desc, types.Array):
+            typ = types.arraytype(arg, 1, 'A')
+        else:
+            typ = types.arraytype(arg.desc.element, dim + 1, arg.desc.order)
+        outer_args.append(typ)
 
     # copy a new module
     lmod = lmod.clone()
@@ -116,11 +123,9 @@ def build_gufunc_stager(devfn, dims):
 
     tid = builder.add(tx, builder.mul(bw, bx))
 
-    slices = []
-    for aryptr, inner, outer in zip(lgufunc.args, args, outer_args):
-        slice = builder.alloca(inner.llvm_as_value())
-        slices.append(slice)
-
+    arguments = []
+    for aryptr, inner, outer, dim in zip(lgufunc.args, args, outer_args, dims):
+        
         ary = builder.load(aryptr)
         data = aryutils.getdata(builder, ary)
         shape = aryutils.getshape(builder, ary)
@@ -129,26 +134,36 @@ def build_gufunc_stager(devfn, dims):
         slice_data = get_slice_data(builder, data, shape, strides,
                                     outer.desc.order, tid)
 
-        if outer.desc.ndim == 1:
-            newary = aryutils.ndarray(builder,
-                                      dtype=outer.desc.element,
-                                      ndim=inner.desc.ndim,
-                                      order=inner.desc.order,
-                                      shape=[types.intp.llvm_const(1)],
-                                      strides=[types.intp.llvm_const(0)],
-                                      data=slice_data)
+        if not isinstance(inner.desc, types.Array): # scalar argument
+            item = aryutils.getitem(builder, ary, order=outer.desc.order,
+                                    indices=[types.intp.llvm_const(0)])
+
+            arguments.append(item)
         else:
-            newary = aryutils.ndarray(builder,
-                                      dtype=outer.desc.element,
-                                      ndim=inner.desc.ndim,
-                                      order=inner.desc.order,
-                                      shape=shape[1:],
-                                      strides=strides[1:],
-                                      data=slice_data)
+            storage = builder.alloca(inner.llvm_as_value())
+            arguments.append(storage)
 
-        builder.store(newary, slice)
+            if outer.desc.ndim == 1:
+                item = aryutils.ndarray(builder,
+                                          dtype=outer.desc.element,
+                                          ndim=inner.desc.ndim,
+                                          order=inner.desc.order,
+                                          shape=[types.intp.llvm_const(1)],
+                                          strides=[types.intp.llvm_const(0)],
+                                          data=slice_data)
+            else:
+                item = aryutils.ndarray(builder,
+                                          dtype=outer.desc.element,
+                                          ndim=inner.desc.ndim,
+                                          order=inner.desc.order,
+                                          shape=shape[1:],
+                                          strides=strides[1:],
+                                          data=slice_data)
 
-    errcode = builder.call(lfunc, slices)
+            builder.store(item, storage)
+
+
+    errcode = builder.call(lfunc, arguments)
     builder.ret(errcode)
 
     lmod.verify()
@@ -160,3 +175,98 @@ def get_slice_data(builder, data, shape, strides, order, index):
     indices = [builder.zext(index, intp)]
     indices += [lc.Constant.null(intp) for i in range(len(shape) - 1)]
     return aryutils.getpointer(builder, data, shape, strides, order, indices)
+
+
+class GUFuncEngine(object):
+    '''Determine how to broadcast and execute a gufunc
+    base on input shape and signature
+    '''
+    @classmethod
+    def from_signature(cls, signature):
+        return cls(*parse_signature(signature))
+
+    def __init__(self, inputsig, outputsig):
+        # signatures
+        self.sin = inputsig
+        self.sout = outputsig
+        # argument count
+        self.nin = len(self.sin)
+        self.nout = len(self.sout)
+
+    def schedule(self, ishapes):
+        if len(ishapes) != self.nin:
+            raise TypeError('invalid number of input argument')
+
+        # associate symbol values for input signature
+        symbolmap = {}
+        outer_shapes = []
+        inner_shapes = []
+
+        for argn, (shape, symbols) in enumerate(zip(ishapes, self.sin)):
+            argn += 1 # start from 1 for human
+            inner_ndim = len(symbols)
+            if len(shape) < inner_ndim:
+                fmt = "arg #%d: insufficient inner dimension"
+                raise ValueError(fmt % (argn,))
+            if inner_ndim:
+                inner_shape = shape[-inner_ndim:]
+                outer_shape = shape[:-inner_ndim]
+            else:
+                inner_shape = ()
+                outer_shape = shape
+
+
+            for axis, (dim, sym) in enumerate(zip(inner_shape, symbols)):
+                axis += len(outer_shape)
+                if sym in symbolmap:
+                    if symbolmap[sym] != dim:
+                        fmt = "arg #%d: shape[%d] mismatch argument"
+                        raise ValueError(fmt % (argn, axis))
+                symbolmap[sym] = dim
+
+            outer_shapes.append(outer_shape)
+            inner_shapes.append(inner_shape)
+    
+        # solve output shape
+        oshapes = []
+        for outsig in self.sout:
+            oshape = []
+            for sym in outsig:
+                oshape.append(symbolmap[sym])
+            oshapes.append(tuple(oshape))
+
+        # find the biggest outershape as looping dimension
+        sizes = [reduce(operator.mul, s, 1) for s in outer_shapes]
+        largest_i = numpy.argmax(sizes)
+        loopdims = outer_shapes[largest_i]
+
+        pinned = [False] * self.nin          # same argument for each iteration
+        for i, d in enumerate(outer_shapes):
+            if d != loopdims:
+                if d == (1,) or d == ():
+                    pinned[i] = True
+                else:
+                    fmt = "arg #%d: outer dimension mismatch"
+                    raise ValueError(fmt % (i + 1,))
+
+        return GUFuncSchedule(self, inner_shapes, oshapes, loopdims, pinned)
+
+class GUFuncSchedule(object):
+    def __init__(self, parent, ishapes, oshapes, loopdims, pinned):
+        self.parent = parent
+        # core shapes
+        self.ishapes = ishapes
+        self.oshapes = oshapes
+        # looping dimension
+        self.loopdims = loopdims
+        self.loopn = reduce(operator.mul, loopdims, 1)
+        # flags
+        self.pinned = pinned
+
+        self.output_shapes = [loopdims + s for s in oshapes]
+
+    def __str__(self):
+        import pprint
+        attrs = 'ishapes', 'oshapes', 'loopdims', 'pinned'
+        values = [(k, getattr(self, k)) for k in attrs]
+        return pprint.pformat(dict(values))
