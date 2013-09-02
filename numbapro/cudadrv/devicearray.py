@@ -35,7 +35,7 @@ def require_cuda_ndarray(obj):
     if not is_cuda_ndarray(obj):
         raise ValueError('require an cuda ndarray object')
 
-class DeviceNDArray(object):
+class DeviceNDArrayBase(object):
     '''A on GPU NDArray representation
     '''
     __cuda_memory__ = True
@@ -182,8 +182,8 @@ class DeviceNDArray(object):
         '''
         return self.gpu_head
 
-    #---- array operations -----
 
+class DeviceNDArray(DeviceNDArrayBase):
     def _yields_f_strides_by_shape(self, shape=None):
         '''yields the f-contigous strides
         '''
@@ -272,7 +272,7 @@ class DeviceNDArray(object):
                                 "autojitting a special kernel to complete")
 
 
-class MappedNDArray(DeviceNDArray, np.ndarray):
+class MappedNDArray(DeviceNDArrayBase, np.ndarray):
     def device_setup(self, gpu_data, stream=0):
         gpu_head = ndarray_device_allocate_head(self.ndim)
 

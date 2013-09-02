@@ -352,8 +352,8 @@ class CUDAGenerializedUFunc(object):
         else:
             params = list(inputs)
 
-        # allocate output
 
+        # allocate output
         if need_cuda_conv or out is None:
             retval = cuda.device_array(shape=schedule.output_shapes[0],
                                        dtype=outdtype, stream=stream)
@@ -361,7 +361,19 @@ class CUDAGenerializedUFunc(object):
             retval = out
 
         # execute
-        self._launch_kernel(kernel, schedule.loopn, stream, params + [retval])
+        assert schedule.loopn > 0, "zero looping dimension"
+        if not schedule.loopdims:
+            newparams = [p.reshape(1, *p.shape) for p in params]
+            newretval = retval.reshape(1, *retval.shape)
+            self._launch_kernel(kernel, schedule.loopn, stream, newparams + [newretval])
+        elif len(schedule.loopdims) > 1:
+            odim = schedule.loopn
+            newparams = [p.reshape(odim, *cs) for p, cs in zip(params, schedule.ishapes)]
+            newretval = retval.reshape(odim, *schedule.oshapes[0])
+            self._launch_kernel(kernel, schedule.loopn, stream, newparams + [newretval])
+        else:
+
+            self._launch_kernel(kernel, schedule.loopn, stream, params + [retval])
 
         # post execution
         if need_cuda_conv:

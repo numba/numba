@@ -68,35 +68,24 @@ def test_gufunc_scalar_input_saxpy():
             exp = A * X[j, i] + Y[j, i]
             assert exp == out[j, i]
 
+    X = np.arange(10, dtype=np.float32)
+    Y = np.arange(10, dtype=np.float32)
+    out = saxpy(A, X, Y)
+
+    for j in range(10):
+        exp = A * X[j] + Y[j]
+        assert exp == out[j], (exp, out[j])
+
     A = np.arange(5, dtype=np.float32)
+    X = np.arange(10, dtype=np.float32).reshape(5,2)
+    Y = np.arange(10, dtype=np.float32).reshape(5,2)
     out = saxpy(A, X, Y)
 
     for j in range(5):
         for i in range(2):
             exp = A[j] * X[j, i] + Y[j, i]
-            assert exp == out[j, i]
+            assert exp == out[j, i], (exp, out[j, i])
 
-
-#@testcase
-#def test_gufunc_scalar_input_2():
-#    @guvectorize(['void(f8[:], f8[:], f8[:])'], '(t),(scalar)->(t)',
-#                 target='gpu')
-#    def exp_avg(arr_t, decay_length, out_t):
-#        decay_factor = math.exp(-1.0 / decay_length[0])
-#        sum_w = 0.0
-#        sum_wx = 0.0
-#       
-#        n_t = arr_t.shape[0]
-#        for t in xrange(n_t):
-#            sum_w += 1.0
-#            sum_wx += arr_t[t]
-#            out_t[t] = sum_wx / sum_w
-#           
-#            sum_w *= decay_factor
-#            sum_wx *= decay_factor
-#
-#    np.arange(10, dtype=np.float64)
-#    exp_avg()
 
 if __name__ == '__main__':
     main()

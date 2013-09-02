@@ -135,8 +135,10 @@ def build_gufunc_stager(devfn, dims):
                                     outer.desc.order, tid)
 
         if not isinstance(inner.desc, types.Array): # scalar argument
+            ok = builder.icmp(lc.ICMP_SLT, tid, shape[0])
+            index = builder.select(ok, tid, types.intp.llvm_const(0))
             item = aryutils.getitem(builder, ary, order=outer.desc.order,
-                                    indices=[types.intp.llvm_const(0)])
+                                    indices=[index])
 
             arguments.append(item)
         else:
@@ -267,6 +269,6 @@ class GUFuncSchedule(object):
 
     def __str__(self):
         import pprint
-        attrs = 'ishapes', 'oshapes', 'loopdims', 'pinned'
+        attrs = 'ishapes', 'oshapes', 'loopdims', 'loop' 'pinned'
         values = [(k, getattr(self, k)) for k in attrs]
         return pprint.pformat(dict(values))
