@@ -3,7 +3,6 @@
 See Numpy documentation for detail about gufunc:
     http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
 '''
-import math
 import numpy as np
 from numbapro import guvectorize, cuda
 from .support import testcase, main

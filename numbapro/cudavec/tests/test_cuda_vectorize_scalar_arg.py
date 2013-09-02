@@ -1,7 +1,6 @@
 import numpy as np
 from numbapro import vectorize
-from numbapro import cuda, int32, float32, float64
-from timeit import default_timer as time
+from numbapro import cuda, float64
 from .support import testcase, main
 
 sig = [float64(float64, float64)]

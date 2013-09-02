@@ -32,7 +32,7 @@ def test_autotune_parsing_1():
 
 @testcase
 def test_autotune_parsing_2():
-    sample=    info = autotune.parse_compile_info(SAMPLE2)
+    info = autotune.parse_compile_info(SAMPLE2)
     assert info['foo']['stack'] == 8
     assert info['foo']['reg'] == 19
     assert info['foo']['shared'] == 0

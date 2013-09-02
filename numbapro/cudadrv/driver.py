@@ -7,7 +7,7 @@ import sys, os
 import functools
 import contextlib
 from ctypes import (c_int, c_void_p, POINTER, c_size_t, byref, addressof,
-                    sizeof, c_uint, c_uint8, c_char_p, c_float, cast, c_char,)
+                    c_uint, c_uint8, c_char_p, c_float, c_char,)
 import ctypes
 from .error import CudaDriverError, CudaSupportError
 from numbapro._utils import mviewbuf

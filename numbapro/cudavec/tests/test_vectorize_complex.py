@@ -1,5 +1,5 @@
 import numpy as np
-from numbapro import cuda, vectorize
+from numbapro import vectorize
 from .support import testcase, main
 
 @testcase

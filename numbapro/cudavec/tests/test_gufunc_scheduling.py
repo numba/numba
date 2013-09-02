@@ -1,5 +1,3 @@
-import math
-import numpy as np
 from numbapro.cudavec.vectorizers import GUFuncEngine
 from .support import testcase, main
 

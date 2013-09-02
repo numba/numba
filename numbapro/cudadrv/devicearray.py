@@ -225,7 +225,7 @@ class DeviceNDArray(DeviceNDArrayBase):
         '''
         order = kws.pop('order', 'C')
         if kws:
-            ArgumentError('unknown keyword arguments %s' % kws.keys())
+            raise TypeError('unknown keyword arguments %s' % kws.keys())
         if order not in 'CFA':
             raise ValueError('order not C|F|A')
         # compute new array size
