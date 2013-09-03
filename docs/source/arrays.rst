@@ -202,7 +202,7 @@ Building ufuncs using @vectorize
 An alternative syntax is available through the use of the `vectorize` decorator::
 
     from numba import float32, float64
-    from numba.vectorize import Vectorize, vectorize
+    from numba.vectorize import vectorize
     import math
 
     pi = math.pi
