@@ -201,12 +201,13 @@ Building ufuncs using @vectorize
 
 An alternative syntax is available through the use of the `vectorize` decorator::
 
-    from numba import *
+    from numba import float32, float64
+    from numba.vectorize import Vectorize, vectorize
     import math
 
     pi = math.pi
 
-    @vectorize([f4(f4), f8(f8)], target='cpu')
+    @vectorize([float32(float32), float64(float64)], target='cpu')
     def sinc(x):
         if x == 0.0:
             return 1.0
