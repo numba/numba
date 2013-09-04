@@ -1530,11 +1530,15 @@ class TypeInferer(visitors.NumbaTransformer):
         return result_type
 
     def _resolve_datetime_attribute(self, node, type):
-        if node.attr in ('year', 'month', 'day', 'hour', 'min', 'sec'):
+        if node.attr in ('timestamp', 'units'):
             if self.is_store(node.ctx):
                 raise TypeError("Cannot assign to the %s attribute of "
                                 "datetime numbers" % node.attr)
             result_type = getattr(type, node.attr)
+        elif node.attr == 'year':
+            result_type = int64
+        elif node.attr in ['month', 'day', 'hour', 'min', 'sec']:
+            result_type = int32
         else:
             raise AttributeError("'%s' of datetime type" % node.attr)
 
@@ -1546,6 +1550,8 @@ class TypeInferer(visitors.NumbaTransformer):
                 raise TypeError("Cannot assign to the %s attribute of "
                                 "timedelta numbers" % node.attr)
             result_type = getattr(type, node.attr)
+        elif node.attr == 'sec':
+            result_type = int32
         else:
             raise AttributeError("'%s' of timedelta type" % node.attr)
 

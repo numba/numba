@@ -333,12 +333,8 @@ class ResolveCoercions(visitors.NumbaTransformer):
             elif node_type.is_numpy_datetime:
                 datetime_value = nodes.CloneableNode(node.node)
                 args = [
-                    nodes.DateTimeAttributeNode(datetime_value, 'year'),
-                    nodes.DateTimeAttributeNode(datetime_value.clone, 'month'),
-                    nodes.DateTimeAttributeNode(datetime_value.clone, 'day'),
-                    nodes.DateTimeAttributeNode(datetime_value.clone, 'hour'),
-                    nodes.DateTimeAttributeNode(datetime_value.clone, 'min'),
-                    nodes.DateTimeAttributeNode(datetime_value.clone, 'sec'),
+                    nodes.DateTimeAttributeNode(datetime_value, 'timestamp'),
+                    nodes.DateTimeAttributeNode(datetime_value.clone, 'units'),
                     nodes.ConstNode(np.datetime64(), object_),
                 ]
                 new_node = function_util.utility_call(
@@ -347,12 +343,8 @@ class ResolveCoercions(visitors.NumbaTransformer):
             elif node_type.is_datetime:
                 datetime_value = nodes.CloneableNode(node.node)
                 args = [
-                    nodes.DateTimeAttributeNode(datetime_value, 'year'),
-                    nodes.DateTimeAttributeNode(datetime_value.clone, 'month'),
-                    nodes.DateTimeAttributeNode(datetime_value.clone, 'day'),
-                    nodes.DateTimeAttributeNode(datetime_value.clone, 'hour'),
-                    nodes.DateTimeAttributeNode(datetime_value.clone, 'min'),
-                    nodes.DateTimeAttributeNode(datetime_value.clone, 'sec'),
+                    nodes.DateTimeAttributeNode(datetime_value, 'timestamp'),
+                    nodes.DateTimeAttributeNode(datetime_value.clone, 'units'),
                 ]
                 new_node = function_util.utility_call(
                         self.context, self.llvm_module,
@@ -448,47 +440,21 @@ class ResolveCoercions(visitors.NumbaTransformer):
                         self.context, self.llvm_module,
                         "PyComplex_ImagAsDouble", args=[cloneable.clone]))
             elif node_type.is_numpy_datetime:
-                year_func = function_util.utility_call(
+                timestamp_func = function_util.utility_call(
                     self.context, self.llvm_module,
-                    "numpydatetime2year", args=[node.node])
-                month_func = function_util.utility_call(
+                    "numpydatetime2timestamp", args=[node.node])
+                units_func = function_util.utility_call(
                     self.context, self.llvm_module,
-                    "numpydatetime2month", args=[node.node])
-                day_func = function_util.utility_call(
-                    self.context, self.llvm_module,
-                    "numpydatetime2day", args=[node.node])
-                hour_func = function_util.utility_call(
-                    self.context, self.llvm_module,
-                    "numpydatetime2hour", args=[node.node])
-                min_func = function_util.utility_call(
-                    self.context, self.llvm_module,
-                    "numpydatetime2min", args=[node.node])
-                sec_func = function_util.utility_call(
-                    self.context, self.llvm_module,
-                    "numpydatetime2sec", args=[node.node])
-                new_node = nodes.DateTimeNode(year_func, month_func, day_func,
-                    hour_func, min_func, sec_func)
+                    "numpydatetime2units", args=[node.node])
+                new_node = nodes.DateTimeNode(timestamp_func, units_func)
             elif node_type.is_datetime:
-                year_func = function_util.utility_call(
+                timestamp_func = function_util.utility_call(
                     self.context, self.llvm_module,
-                    "pydatetime2year", args=[node.node])
-                month_func = function_util.utility_call(
+                    "pydatetime2timestamp", args=[node.node])
+                units_func = function_util.utility_call(
                     self.context, self.llvm_module,
-                    "pydatetime2month", args=[node.node])
-                day_func = function_util.utility_call(
-                    self.context, self.llvm_module,
-                    "pydatetime2day", args=[node.node])
-                hour_func = function_util.utility_call(
-                    self.context, self.llvm_module,
-                    "pydatetime2hour", args=[node.node])
-                min_func = function_util.utility_call(
-                    self.context, self.llvm_module,
-                    "pydatetime2min", args=[node.node])
-                sec_func = function_util.utility_call(
-                    self.context, self.llvm_module,
-                    "pydatetime2sec", args=[node.node])
-                new_node = nodes.DateTimeNode(year_func, month_func, day_func,
-                    hour_func, min_func, sec_func)
+                    "pydatetime2units", args=[node.node])
+                new_node = nodes.DateTimeNode(timestamp_func, units_func)
             else:
                 raise error.NumbaError(
                     node, "Don't know how to coerce a Python object to a %r" %
@@ -869,12 +835,42 @@ class LateSpecializer(ResolveCoercions,
         if node.value.type.is_complex:
             value = self.visit(node.value)
             return nodes.ComplexAttributeNode(value, node.attr)
+        elif node.value.type.is_numpy_datetime:
+            value = self.visit(node.value)
+            if node.attr in ['year', 'month', 'day', 'hour', 'min', 'sec']:
+                func_dict = {'year' : 'extract_datetime_year',
+                             'month' : 'extract_datetime_month',
+                             'day' : 'extract_datetime_day',
+                             'hour' : 'extract_datetime_hour',
+                             'min' : 'extract_datetime_min',
+                             'sec' : 'extract_datetime_sec',}
+                value = nodes.CloneableNode(value)
+                timestamp_node = nodes.DateTimeAttributeNode(value,
+                    'timestamp')
+                unit_node = nodes.DateTimeAttributeNode(value.clone, 'units')
+                new_node = function_util.utility_call(
+                        self.context, self.llvm_module,
+                        func_dict[node.attr],
+                        args=[timestamp_node, unit_node])
+                return new_node
+            else:
+                return nodes.DateTimeAttributeNode(value, node.attr)
+
         elif node.value.type.is_datetime:
             value = self.visit(node.value)
             return nodes.DateTimeAttributeNode(value, node.attr)
         elif node.value.type.is_timedelta:
             value = self.visit(node.value)
-            return nodes.TimeDeltaAttributeNode(value, node.attr)
+            if node.attr == 'sec':
+                value = nodes.CloneableNode(value)
+                diff_node = nodes.TimeDeltaAttributeNode(value, 'diff')
+                unit_node = nodes.TimeDeltaAttributeNode(value.clone, 'units')
+                new_node = function_util.utility_call(
+                        self.context, self.llvm_module,
+                        "extract_timedelta_sec", args=[diff_node, unit_node])
+                return new_node
+            else:
+                return nodes.TimeDeltaAttributeNode(value, node.attr)
         elif node.type.is_numpy_attribute:
             return nodes.ObjectInjectNode(node.type.value)
         elif node.type.is_numpy_dtype:
@@ -1037,30 +1033,34 @@ class LateSpecializer(ResolveCoercions,
                 isinstance(node.op, ast.Sub):
             datetime_value = nodes.CloneableNode(node.left)
             args1 = [
-                nodes.DateTimeAttributeNode(datetime_value, 'year'),
-                nodes.DateTimeAttributeNode(datetime_value.clone, 'month'),
-                nodes.DateTimeAttributeNode(datetime_value.clone, 'day'),
-                nodes.DateTimeAttributeNode(datetime_value.clone, 'hour'),
-                nodes.DateTimeAttributeNode(datetime_value.clone, 'min'),
-                nodes.DateTimeAttributeNode(datetime_value.clone, 'sec'),
+                nodes.DateTimeAttributeNode(datetime_value, 'timestamp'),
+                nodes.DateTimeAttributeNode(datetime_value.clone, 'units'),
             ]
             datetime_value = nodes.CloneableNode(node.right)
             args2 = [
-                nodes.DateTimeAttributeNode(datetime_value, 'year'),
-                nodes.DateTimeAttributeNode(datetime_value.clone, 'month'),
-                nodes.DateTimeAttributeNode(datetime_value.clone, 'day'),
-                nodes.DateTimeAttributeNode(datetime_value.clone, 'hour'),
-                nodes.DateTimeAttributeNode(datetime_value.clone, 'min'),
-                nodes.DateTimeAttributeNode(datetime_value.clone, 'sec'),
+                nodes.DateTimeAttributeNode(datetime_value, 'timestamp'),
+                nodes.DateTimeAttributeNode(datetime_value.clone, 'units'),
             ]
 
             unit_node = function_util.utility_call(
                     self.context, self.llvm_module,
                     "get_datetime_casting_unit", args=args1+args2)
 
+            datetime_value = nodes.CloneableNode(node.left)
+            args1 = [
+                nodes.DateTimeAttributeNode(datetime_value, 'timestamp'),
+                nodes.DateTimeAttributeNode(datetime_value.clone, 'units'),
+            ]
+            datetime_value = nodes.CloneableNode(node.right)
+            args2 = [
+                nodes.DateTimeAttributeNode(datetime_value, 'timestamp'),
+                nodes.DateTimeAttributeNode(datetime_value.clone, 'units'),
+            ]
+
+            x = args1+args2+[unit_node]
             diff_node = function_util.utility_call(
                     self.context, self.llvm_module,
-                    "datetime_subtract", args=args1+args2+[unit_node])
+                    "datetime_subtract", args=x)
 
             node = nodes.TimeDeltaNode(diff_node, unit_node)
 
@@ -1121,13 +1121,9 @@ class LateSpecializer(ResolveCoercions,
 
         elif node.type.is_datetime:
             # JNB: not sure what to do here for datetime value
-            year = nodes.ConstNode(0, int64)
-            month = nodes.ConstNode(0, int32)
-            day = nodes.ConstNode(0, int32)
-            hour = nodes.ConstNode(0, int32)
-            min = nodes.ConstNode(0, int32)
-            sec = nodes.ConstNode(0, int32)
-            node = nodes.DateTimeNode(year, month, day, hour, min, sec)
+            timestamp = nodes.ConstNode(0, int64)
+            units = nodes.ConstNode(0, int32)
+            node = nodes.DateTimeNode(timestamp, units)
 
         elif node.type.is_timedelta:
             diff = nodes.ConstNode(0, int64)

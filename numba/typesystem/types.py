@@ -545,29 +545,16 @@ class complex_(NumbaType):
 
 @consing
 class datetime_(NumbaType):
-    argnames = ["year", "month", "day", "hour", "min", "sec"]
+    argnames = ["timestamp", "units"]
     flags = ["numeric"]
     is_numpy_datetime = True
 
     @property
     def itemsize(self):
-        return self.year.itemsize + self.month.itemsize + self.day.itemsize + \
-               self.hour.itemsize + self.min.itemsize + self.sec.itemsize
+        return self.timestamp.size + self.units.size
 
     def __repr__(self):
         return "datetime"
-
-@consing
-class meta(NumbaType):
-    """
-    A type instance in user code. e.g. double(value). The Name node will have
-    a cast-type with dst_type 'double'.
-    """
-    argnames = ["dst_type"]
-    flags = [
-        "object",
-        "cast",     # backwards compat
-    ]
 
 @consing
 class timedelta_(NumbaType):
@@ -581,6 +568,18 @@ class timedelta_(NumbaType):
 
     def __repr__(self):
         return "timedelta"
+
+@consing
+class meta(NumbaType):
+    """
+    A type instance in user code. e.g. double(value). The Name node will have
+    a cast-type with dst_type 'double'.
+    """
+    argnames = ["dst_type"]
+    flags = [
+        "object",
+        "cast",     # backwards compat
+    ]
 
 #------------------------------------------------------------------------
 # Container Types

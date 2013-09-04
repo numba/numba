@@ -1476,53 +1476,28 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
     #------------------------------------------------------------------------
 
     def visit_DateTimeNode(self, node):
-        year = self.visit(node.year)
-        month = self.visit(node.month)
-        day = self.visit(node.day)
-        hour = self.visit(node.hour)
-        min = self.visit(node.min)
-        sec = self.visit(node.sec)
-        return self._create_datetime(year, month, day, hour, min, sec)
+        timestamp = self.visit(node.timestamp)
+        units = self.visit(node.units)
+        return self._create_datetime(timestamp, units)
 
     def visit_DateTimeAttributeNode(self, node):
         result = self.visit(node.value)
         if node.value.type.is_datetime:
             assert result.type.kind == llvm.core.TYPE_STRUCT, result.type
-            if node.attr == 'year':
+            if node.attr == 'timestamp':
                 return self.builder.extract_value(result, 0)
-            elif node.attr == 'month':
+            elif node.attr == 'units':
                 return self.builder.extract_value(result, 1)
-            elif node.attr == 'day':
-                return self.builder.extract_value(result, 2)
-            elif node.attr == 'hour':
-                return self.builder.extract_value(result, 3)
-            elif node.attr == 'min':
-                return self.builder.extract_value(result, 4)
-            elif node.attr == 'sec':
-                return self.builder.extract_value(result, 5)
 
     def visit_NumpyDateTimeNode(self, node):
-        year_func = function_util.utility_call(
+        timestamp_func = function_util.utility_call(
             self.context, self.llvm_module,
-            "iso_datetime2year", args=[node.datetime_string])
-        month_func = function_util.utility_call(
+            "iso_datetime2timestamp", args=[node.datetime_string])
+        units_func = function_util.utility_call(
             self.context, self.llvm_module,
-            "iso_datetime2month", args=[node.datetime_string])
-        day_func = function_util.utility_call(
-            self.context, self.llvm_module,
-            "iso_datetime2day", args=[node.datetime_string])
-        hour_func = function_util.utility_call(
-            self.context, self.llvm_module,
-            "iso_datetime2hour", args=[node.datetime_string])
-        min_func = function_util.utility_call(
-            self.context, self.llvm_module,
-            "iso_datetime2min", args=[node.datetime_string])
-        sec_func = function_util.utility_call(
-            self.context, self.llvm_module,
-            "iso_datetime2sec", args=[node.datetime_string])
+            "iso_datetime2units", args=[node.datetime_string])
 
-        newnode = nodes.DateTimeNode(year_func, month_func, day_func,
-            hour_func, min_func, sec_func)
+        newnode = nodes.DateTimeNode(timestamp_func, units_func)
         return self.visit(newnode)
 
     def visit_TimeDeltaNode(self, node):

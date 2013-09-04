@@ -112,7 +112,7 @@ tuple_of_obj       = tuple_(object_, -1)
 list_of_obj        = list_(object_, -1)
 dict_of_obj        = dict_(object_, object_, -1)
 
-datetime = datetime_(int64, int32, int32, int32, int32, int32)
+datetime = datetime_(int64, int32)
 timedelta = timedelta_(int64, int32)
 datetimetypes.extend([datetime, timedelta])
 

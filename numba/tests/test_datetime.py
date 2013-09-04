@@ -64,6 +64,11 @@ def datetime_delta(d0, d1):
 #def cast_datetime_to_int(x):
 #    return x
 
+@numba.autojit(nopython=True)
+def foo(a, b):
+    d = b - a
+    return d.sec
+
 def test_datetime():
 
     datetime_components = (2014, 1, 2, 3, 4, 5)

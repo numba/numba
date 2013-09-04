@@ -77,7 +77,7 @@ type_sizes = {
     "complex64":    8,
     "complex128":   16,
     # "complex256":   32,
-    "datetime":     28,
+    "datetime":     12,
     "timedelta":    12
 }
 

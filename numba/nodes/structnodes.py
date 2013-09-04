@@ -80,19 +80,14 @@ class ComplexAttributeNode(ExprNode):
 
 class DateTimeNode(ExprNode):
 
-    #_fields = ['year', 'month', 'day', 'hour', 'min', 'sec', 'us', 'ps', '_as']
-    _fields = ['year', 'month', 'day', 'hour', 'min', 'sec']
+    _fields = ['timestamp', 'units']
 
     type = datetime
     variable = Variable(type)
 
-    def __init__(self, year, month, day, hour, min, sec, npy=False):
-        self.year = year
-        self.month = month
-        self.day = day
-        self.hour = hour
-        self.min = min
-        self.sec = sec
+    def __init__(self, timestamp, units):
+        self.timestamp = timestamp
+        self.units = units
 
 class DateTimeAttributeNode(ExprNode):
     
@@ -106,7 +101,6 @@ class DateTimeAttributeNode(ExprNode):
 
 class NumpyDateTimeNode(ExprNode):
 
-    #_fields = ['year', 'month', 'day', 'hour', 'min', 'sec', 'us', 'ps', '_as']
     _fields = ['datetime_string']
 
     type = datetime

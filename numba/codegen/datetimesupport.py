@@ -8,22 +8,15 @@ class DateTimeSupportMixin(object):
     "Support for datetimes"
 
     def _generate_datetime_op(self, op, arg1, arg2):
-        (year1, month1, day1, hour1, min1, sec1), \
-            (year2, month2, day2, hour2, min2, sec2) = \
+        (timestamp1, units1), (timestamp2, units2) = \
             self._extract_datetime(arg1), self._extract_datetime(arg2)
-        year, month, day, hour, min, sec = \
-            op(year1, month1, day1, hour1, min1, sec1,
-                year2, month2, day2, hour2, min2, sec2)
-        return self._create_datetime(year, month, day, hour, min, sec)
+        timestamp, units = op(timestamp1, units1, timestamp2, units2)
+        return self._create_datetime(timestamp, units)
 
     def _extract_datetime(self, value):
         "Extract the parts of the datetime"
         return (self.builder.extract_value(value, 0),
-                self.builder.extract_value(value, 1),
-                self.builder.extract_value(value, 2),
-                self.builder.extract_value(value, 3),
-                self.builder.extract_value(value, 4),
-                self.builder.extract_value(value, 5))
+                self.builder.extract_value(value, 1))
 
     def _extract_timedelta(self, value):
         return (self.builder.extract_value(value, 0),
@@ -31,17 +24,13 @@ class DateTimeSupportMixin(object):
 
     def _promote_datetime(self, src_type, dst_type, value):
         "Promote a datetime value to value with a larger or smaller datetime type"
-        year, month, day, hour, min, sec = self._extract_datetime(value)
+        timestamp, units = self._extract_datetime(value)
 
         dst_ltype = dst_type.to_llvm(self.context)
 
-        year = self.caster.cast(year, dst_type.subtypes[0])
-        month = self.caster.cast(month, dst_type.subtypes[1])
-        day = self.caster.cast(day, dst_type.subtypes[2])
-        hour = self.caster.cast(hour, dst_type.subtypes[3])
-        min = self.caster.cast(min, dst_type.subtypes[4])
-        sec = self.caster.cast(sec, dst_type.subtypes[5])
-        return self._create_datetime(year, month, day, hour, min, sec)
+        timestamp = self.caster.cast(timestmap, dst_type.subtypes[0])
+        units = self.caster.cast(units, dst_type.subtypes[1])
+        return self._create_datetime(timestamp, units)
 
     def _promote_timedelta(self, src_type, dst_type, value):
         diff, units = self._extract_timedelta(value)
@@ -50,19 +39,11 @@ class DateTimeSupportMixin(object):
         units = self.caster.cast(units, dst_type.subtypes[1])
         return self._create_timedelta(diff, units)
 
-    def _create_datetime(self, year, month, day, hour, min, sec):
-        datetime = llvm.core.Constant.undef(llvm.core.Type.struct([year.type,
-                                                                  month.type,
-                                                                  day.type,
-                                                                  hour.type,
-                                                                  min.type,
-                                                                  sec.type]))
-        datetime = self.builder.insert_value(datetime, year, 0)
-        datetime = self.builder.insert_value(datetime, month, 1)
-        datetime = self.builder.insert_value(datetime, day, 2)
-        datetime = self.builder.insert_value(datetime, hour, 3)
-        datetime = self.builder.insert_value(datetime, min, 4)
-        datetime = self.builder.insert_value(datetime, sec, 5)
+    def _create_datetime(self, timestamp, units):
+        datetime = llvm.core.Constant.undef(llvm.core.Type.struct([timestamp.type,
+                                                                  units.type]))
+        datetime = self.builder.insert_value(datetime, timestamp, 0)
+        datetime = self.builder.insert_value(datetime, units, 1)
         return datetime
 
     def _create_timedelta(self, diff, units):
