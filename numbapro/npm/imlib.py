@@ -384,7 +384,7 @@ def imp_cmp_float(cmp, ty):
         operator.ge: lc.FCMP_OGE,
         operator.le: lc.FCMP_OLE,
         operator.eq: lc.FCMP_OEQ,
-        operator.ne: lc.FCMP_ONE,
+        operator.ne: lc.FCMP_UNE,
     }
     def imp(context, args):
         a, b = args

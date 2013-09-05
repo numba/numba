@@ -216,6 +216,9 @@ class Boolean(object):
             fimag = dst.element.llvm_const(0)
             return dst.llvm_pack(builder, freal, fimag)
 
+    def ctype_as_argument(self):
+        return ct.c_uint8
+
 class Integer(object):
     fields = 'signed', 'bitwidth'
     
@@ -393,7 +396,7 @@ class Float(object):
             return dst.llvm_pack(builder, elem, zero)
         elif isinstance(dst, Boolean):
             zero = lc.Constant.real(value.type, 0)
-            return builder.fcmp(lc.FCMP_ONE, value, zero)
+            return builder.fcmp(lc.FCMP_UNE, value, zero)
 
     def llvm_cast_guarded(self, builder, raises, val, dst):
         if isinstance(dst, Integer):
