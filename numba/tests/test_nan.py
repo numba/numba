@@ -7,5 +7,10 @@ from numba import *
 def isnan(x):
     return x != x
 
+@jit(bool_(float64))
+def equal(x):
+    return x == x
+
 assert isnan(float('nan'))
 assert not isnan(10.0)
+assert not equal(float('nan'))
