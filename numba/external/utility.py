@@ -83,7 +83,11 @@ utility_funcs = list(object_to_numeric.itervalues()) + [
         object_(long_, int_, object_)),
 
     UtilityFunction.load("get_datetime_casting_unit",
-        int_(long_, int_, long_, int_)),
+        int_(int_, int_)),
+    UtilityFunction.load("get_timedelta_casting_unit",
+        int_(int_, int_)),
+    UtilityFunction.load("get_datetime_timedelta_casting_unit",
+        int_(int_, int_)),
 
     UtilityFunction.load("extract_datetime_year", long_(int64, int32)),
     UtilityFunction.load("extract_datetime_month", int_(int64, int32)),
@@ -93,6 +97,8 @@ utility_funcs = list(object_to_numeric.itervalues()) + [
     UtilityFunction.load("extract_datetime_sec", int_(int64, int32)),
 
     UtilityFunction.load("datetime_subtract",
+        long_(long_, int_, long_, int_, int_)),
+    UtilityFunction.load("add_timedelta_to_datetime",
         long_(long_, int_, long_, int_, int_)),
     UtilityFunction.load("extract_timedelta_sec", int_(int64, int32)),
     UtilityFunction.load("convert_timedelta_units_str", int_(string_)),

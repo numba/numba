@@ -864,6 +864,8 @@ class TypeInferer(visitors.NumbaTransformer):
 
         v1, v2 = node.left.variable, node.right.variable
 
+        coerce_operands = True
+
         # Handle string formatting with %
         if isinstance(node.op, ast.Mod) and v1.type.is_c_string:
             promoted_type = object_
@@ -871,14 +873,24 @@ class TypeInferer(visitors.NumbaTransformer):
                 v1.type.is_numpy_datetime and \
                 v2.type.is_numpy_datetime:
             promoted_type = timedelta
+            coerce_operands = False
+        elif isinstance(node.op, ast.Add) and \
+                ((v1.type.is_numpy_datetime and v2.type.is_numpy_timedelta) or
+                 (v2.type.is_numpy_datetime and v1.type.is_numpy_timedelta)):
+            promoted_type = datetime
+            coerce_operands = False
+        elif isinstance(node.op, ast.Add) and \
+                ((v1.type.is_numpy_datetime and v2.type.is_numpy_timedelta) or
+                 (v2.type.is_numpy_datetime and v1.type.is_numpy_timedelta)):
+            promoted_type = datetime
+            coerce_operands = False
         else:
             promoted_type = self.promote(v1, v2)
 
         if promoted_type.is_pointer:
             self._verify_pointer_type(node, v1, v2)
-        elif (not ((v1.type.is_array and v2.type.is_array) or
-                  (v1.type.is_unresolved or v2.type.is_unresolved)) and
-                  (promoted_type != timedelta or not v1.type.is_numpy_datetime or not v2.type.is_numpy_datetime)):
+        elif coerce_operands and not ((v1.type.is_array and v2.type.is_array) or
+                  (v1.type.is_unresolved or v2.type.is_unresolved)):
             # Don't coerce arrays to lesser or higher dimensionality
             # Broadcasting transforms should take care of this
             node.left, node.right = nodes.CoercionNode.coerce(

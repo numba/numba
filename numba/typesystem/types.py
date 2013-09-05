@@ -551,7 +551,7 @@ class datetime_(NumbaType):
 
     @property
     def itemsize(self):
-        return self.timestamp.size + self.units.size
+        return self.timestamp.itemsize + self.units.itemsize
 
     def __repr__(self):
         return "datetime"
@@ -564,7 +564,7 @@ class timedelta_(NumbaType):
 
     @property
     def itemsize(self):
-        return self.diff.size + self.units.size
+        return self.diff.itemsize + self.units.itemsize
 
     def __repr__(self):
         return "timedelta"

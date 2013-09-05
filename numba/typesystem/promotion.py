@@ -70,10 +70,8 @@ def promote_numeric(u, promote, type1, type2):
     size = max(type1.itemsize, type2.itemsize)
     if type.is_complex:
         return find_type_of_size(size, complextypes)
-    elif type.is_datetime:
+    elif type.is_datetime or type.is_timedelta:
         return find_type_of_size(size, datetimetypes)
-    elif type.is_timedelta:
-        return find_type_of_size(size, timedeltatypes)
     elif type.is_float:
         return find_type_of_size(size, floating)
     else:

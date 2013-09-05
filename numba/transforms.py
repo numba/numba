@@ -1033,19 +1033,16 @@ class LateSpecializer(ResolveCoercions,
         elif node.left.type.is_datetime and node.right.type.is_datetime:
             if isinstance(node.op, ast.Sub):
                 datetime_value = nodes.CloneableNode(node.left)
-                args1 = [
-                    nodes.DateTimeAttributeNode(datetime_value, 'timestamp'),
-                    nodes.DateTimeAttributeNode(datetime_value.clone, 'units'),
-                ]
+                units1_node = nodes.DateTimeAttributeNode(
+                    datetime_value, 'units')
                 datetime_value = nodes.CloneableNode(node.right)
-                args2 = [
-                    nodes.DateTimeAttributeNode(datetime_value, 'timestamp'),
-                    nodes.DateTimeAttributeNode(datetime_value.clone, 'units'),
-                ]
+                units2_node = nodes.DateTimeAttributeNode(
+                    datetime_value, 'units')
 
                 unit_node = function_util.utility_call(
                         self.context, self.llvm_module,
-                        "get_datetime_casting_unit", args=args1+args2)
+                        "get_datetime_casting_unit",
+                        args=[units1_node, units2_node])
 
                 datetime_value = nodes.CloneableNode(node.left)
                 args1 = [
@@ -1058,10 +1055,9 @@ class LateSpecializer(ResolveCoercions,
                     nodes.DateTimeAttributeNode(datetime_value.clone, 'units'),
                 ]
 
-                x = args1+args2+[unit_node]
                 diff_node = function_util.utility_call(
                         self.context, self.llvm_module,
-                        "datetime_subtract", args=x)
+                        "datetime_subtract", args=args1+args2+[unit_node])
 
                 node = nodes.TimeDeltaNode(diff_node, unit_node)
             else:
@@ -1070,7 +1066,62 @@ class LateSpecializer(ResolveCoercions,
               node.right.type.is_timedelta) or \
              (node.left.type.is_timedelta and
               node.right.type.is_datetime):
-            raise NotImplementedError
+            if isinstance(node.op, ast.Add):
+                datetime_value = nodes.CloneableNode(node.left)
+                if node.left.type.is_datetime:
+                    units1_node = nodes.DateTimeAttributeNode(
+                        datetime_value, 'units')
+                else:
+                    units1_node = nodes.TimeDeltaAttributeNode(
+                        datetime_value, 'units')
+
+                datetime_value = nodes.CloneableNode(node.right)
+                if node.right.type.is_datetime:
+                    units2_node = nodes.DateTimeAttributeNode(
+                        datetime_value, 'units')
+                else:
+                    units2_node = nodes.TimeDeltaAttributeNode(
+                        datetime_value, 'units')
+
+                unit_node = function_util.utility_call(
+                        self.context, self.llvm_module,
+                        "get_datetime_timedelta_casting_unit",
+                        args=[units1_node, units2_node])
+
+                datetime_value = nodes.CloneableNode(node.left)
+                if node.left.type.is_datetime:
+                    args1 = [
+                        nodes.DateTimeAttributeNode(
+                            datetime_value, 'timestamp'),
+                        nodes.DateTimeAttributeNode(
+                            datetime_value.clone, 'units'),]
+                else:
+                    args1 = [
+                        nodes.TimeDeltaAttributeNode(
+                            datetime_value, 'diff'),
+                        nodes.TimeDeltaAttributeNode(
+                            datetime_value.clone, 'units'),]
+                datetime_value = nodes.CloneableNode(node.right)
+                if node.right.type.is_datetime:
+                    args2 = [
+                        nodes.DateTimeAttributeNode(
+                            datetime_value, 'timestamp'),
+                        nodes.DateTimeAttributeNode(
+                            datetime_value.clone, 'units'),]
+                else:
+                    args2 = [
+                        nodes.TimeDeltaAttributeNode(
+                            datetime_value, 'diff'),
+                        nodes.TimeDeltaAttributeNode(
+                            datetime_value.clone, 'units'),]
+                diff_node = function_util.utility_call(
+                        self.context, self.llvm_module,
+                        "add_timedelta_to_datetime",
+                        args=args1+args2+[unit_node])
+
+                node = nodes.DateTimeNode(diff_node, unit_node)
+            else:
+                raise NotImplementedError
         else:
             raise NotImplementedError
 
