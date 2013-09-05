@@ -34,31 +34,25 @@ Installing
 =================
 
 The easiest way to install numba and get updates is by using the Anaconda
-Distribution: http://continuum.io/anacondace.html
+Distribution: https://store.continuum.io/cshop/anaconda/
 
 ```bash
     $ conda install numba
 ```
 
-If you wanted to compile Numba from source, you can get prebuilt LLVM and llvmpy
-by:
-
-```bash
-    $ conda install llvmpy
-```
-
-It is recommended to use conda environment to maintain multiple isolated
+If you wanted to compile Numba from source,
+it is recommended to use conda environment to maintain multiple isolated
 development environments.  To create a new environment for Numba development:
 
 ```bash
-    $ conda create -p ~/dev/mynumba python numpy cython llvmpy nose meta
+    $ conda create -p ~/dev/mynumba python numpy cython llvmpy llvmmath nose meta
 ```
 
 To select the installed version, append "=VERSION" to the package name,
 where, "VERSION" is the version number.  For example:
 
 ```bash
-    $ conda create -p ~/dev/mynumba python=2.7 numpy=1.6 cython llvmpy nose meta
+    $ conda create -p ~/dev/mynumba python=2.7 numpy=1.6 cython llvmpy llvmmath  nose meta
 ```
 
 to use Python 2.7 and Numpy 1.6.
