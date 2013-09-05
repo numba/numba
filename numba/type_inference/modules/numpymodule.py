@@ -195,6 +195,10 @@ def array(object, dtype, order, subok):
 def datetime64(datetime_string):
     return nodes.NumpyDateTimeNode(datetime_string)
 
+@register(np, pass_in_types=False)
+def timedelta64(delta, units):
+    return nodes.NumpyTimeDeltaNode(delta, units)
+
 @register(np)
 def nonzero(a):
     return _nonzero(array_from_type(a))

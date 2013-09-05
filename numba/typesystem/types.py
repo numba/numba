@@ -560,7 +560,7 @@ class datetime_(NumbaType):
 class timedelta_(NumbaType):
     argnames = ["diff", "units"]
     flags = ["numeric"]
-    is_timedelta = True
+    is_numpy_timedelta = True
 
     @property
     def itemsize(self):

@@ -73,6 +73,9 @@ utility_funcs = list(object_to_numeric.itervalues()) + [
     UtilityFunction.load("numpydatetime2timestamp", long_(object_)),
     UtilityFunction.load("numpydatetime2units", int_(object_)),
 
+    UtilityFunction.load("numpytimedelta2delta", long_(object_)),
+    UtilityFunction.load("numpytimedelta2units", int_(object_)),
+
     UtilityFunction.load("primitive2pydatetime", object_(long_, int_)),
     UtilityFunction.load("primitive2numpydatetime",
         object_(long_, int_, object_)),
@@ -92,6 +95,7 @@ utility_funcs = list(object_to_numeric.itervalues()) + [
     UtilityFunction.load("datetime_subtract",
         long_(long_, int_, long_, int_, int_)),
     UtilityFunction.load("extract_timedelta_sec", int_(int64, int32)),
+    UtilityFunction.load("convert_timedelta_units_str", int_(string_)),
 ]
 
 def default_utility_library(context):

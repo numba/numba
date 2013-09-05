@@ -38,6 +38,7 @@ def get_typing_defaults(u):
         str: u.string_,
         #datetime.datetime: u.datetime,
         np.datetime64: u.datetime,
+        np.timedelta64: u.timedelta,
     }
     return typing_defaults
 

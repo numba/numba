@@ -3,12 +3,24 @@ import numpy
 import numba
 
 @numba.autojit(nopython=True)
+def datetime_identity(datetime):
+    return datetime
+    
+@numba.autojit(nopython=True)
+def timedelta_identity(delta):
+    return delta
+
+@numba.autojit(nopython=True)
 def create_python_datetime(year, month, day, hour, min, sec):
     return datetime.datetime(year, month, day, hour, min, sec)
 
 @numba.autojit(nopython=True)
 def create_numpy_datetime(datetime_str):
     return numpy.datetime64(datetime_str)
+
+@numba.autojit(nopython=True)
+def create_numpy_timedelta(delta, units):
+    return numpy.timedelta64(delta, units)
 
 @numba.autojit(nopython=True)
 def create_python_datetime_from_string(datetime_str):
@@ -60,16 +72,25 @@ def extract_sec(date):
 def datetime_delta(d0, d1):
     return d1 - d0
 
+@numba.autojit(nopython=True)
+def datetime_add_timedelta(d, t):
+    return d + t
+
+@numba.autojit(nopython=True)
+def datetime_subtract_timedelta(d, t):
+    return d - t
+
 #@numba.jit(numba.int64(numba.datetime), nopython=True)
 #def cast_datetime_to_int(x):
 #    return x
 
-@numba.autojit(nopython=True)
-def foo(a, b):
-    d = b - a
-    return d.sec
-
 def test_datetime():
+
+    datetime = numpy.datetime64('2014-01-01')
+    assert datetime_identity(datetime) == datetime
+
+    delta = numpy.timedelta64(1, 'Y')
+    assert timedelta_identity(delta) == delta
 
     datetime_components = (2014, 1, 2, 3, 4, 5)
     datetime_str = '2014-01-02T03:04:05Z'
@@ -95,6 +116,17 @@ def test_datetime():
     datetime2 = numpy.datetime64('2014-01-04T02:02:02Z')
     control = datetime2 - datetime1
     assert datetime_delta(datetime1, datetime2) == control
+
+    control = numpy.timedelta64(1, 'D')
+    assert create_numpy_timedelta(1, 'D') == control
+
+    datetime = numpy.datetime64('2014-01-01')
+    timedelta = numpy.timedelta64(1, 'D')
+
+    control = datetime + timedelta
+    assert datetime_add_timedelta(datetime, timedelta) == control
+    control = datetime - timedelta
+    assert datetime_subtract_timedelta(datetime, timedelta) == control
 
     #cast_datetime_to_int(numpy.datetime64('2014-01-02'))
 

@@ -1550,8 +1550,6 @@ class TypeInferer(visitors.NumbaTransformer):
                 raise TypeError("Cannot assign to the %s attribute of "
                                 "timedelta numbers" % node.attr)
             result_type = getattr(type, node.attr)
-        elif node.attr == 'sec':
-            result_type = int32
         else:
             raise AttributeError("'%s' of timedelta type" % node.attr)
 

@@ -455,6 +455,16 @@ class ResolveCoercions(visitors.NumbaTransformer):
                     self.context, self.llvm_module,
                     "pydatetime2units", args=[node.node])
                 new_node = nodes.DateTimeNode(timestamp_func, units_func)
+            elif node_type.is_numpy_timedelta:
+                delta_func = function_util.utility_call(
+                    self.context, self.llvm_module,
+                    "numpytimedelta2delta", args=[node.node])
+                units_func = function_util.utility_call(
+                    self.context, self.llvm_module,
+                    "numpytimedelta2units", args=[node.node])
+                new_node = nodes.DateTimeNode(delta_func, units_func)
+            elif node_type.is_timedelta:
+                raise NotImplementedError
             else:
                 raise error.NumbaError(
                     node, "Don't know how to coerce a Python object to a %r" %
@@ -861,16 +871,7 @@ class LateSpecializer(ResolveCoercions,
             return nodes.DateTimeAttributeNode(value, node.attr)
         elif node.value.type.is_timedelta:
             value = self.visit(node.value)
-            if node.attr == 'sec':
-                value = nodes.CloneableNode(value)
-                diff_node = nodes.TimeDeltaAttributeNode(value, 'diff')
-                unit_node = nodes.TimeDeltaAttributeNode(value.clone, 'units')
-                new_node = function_util.utility_call(
-                        self.context, self.llvm_module,
-                        "extract_timedelta_sec", args=[diff_node, unit_node])
-                return new_node
-            else:
-                return nodes.TimeDeltaAttributeNode(value, node.attr)
+            return nodes.TimeDeltaAttributeNode(value, node.attr)
         elif node.type.is_numpy_attribute:
             return nodes.ObjectInjectNode(node.type.value)
         elif node.type.is_numpy_dtype:
@@ -1029,40 +1030,49 @@ class LateSpecializer(ResolveCoercions,
                 raise error.NumbaError(
                     node, 'Unsupported binary operation for object: %s' %
                     op_name)
-        elif node.left.type.is_datetime and node.right.type.is_datetime and \
-                isinstance(node.op, ast.Sub):
-            datetime_value = nodes.CloneableNode(node.left)
-            args1 = [
-                nodes.DateTimeAttributeNode(datetime_value, 'timestamp'),
-                nodes.DateTimeAttributeNode(datetime_value.clone, 'units'),
-            ]
-            datetime_value = nodes.CloneableNode(node.right)
-            args2 = [
-                nodes.DateTimeAttributeNode(datetime_value, 'timestamp'),
-                nodes.DateTimeAttributeNode(datetime_value.clone, 'units'),
-            ]
+        elif node.left.type.is_datetime and node.right.type.is_datetime:
+            if isinstance(node.op, ast.Sub):
+                datetime_value = nodes.CloneableNode(node.left)
+                args1 = [
+                    nodes.DateTimeAttributeNode(datetime_value, 'timestamp'),
+                    nodes.DateTimeAttributeNode(datetime_value.clone, 'units'),
+                ]
+                datetime_value = nodes.CloneableNode(node.right)
+                args2 = [
+                    nodes.DateTimeAttributeNode(datetime_value, 'timestamp'),
+                    nodes.DateTimeAttributeNode(datetime_value.clone, 'units'),
+                ]
 
-            unit_node = function_util.utility_call(
-                    self.context, self.llvm_module,
-                    "get_datetime_casting_unit", args=args1+args2)
+                unit_node = function_util.utility_call(
+                        self.context, self.llvm_module,
+                        "get_datetime_casting_unit", args=args1+args2)
 
-            datetime_value = nodes.CloneableNode(node.left)
-            args1 = [
-                nodes.DateTimeAttributeNode(datetime_value, 'timestamp'),
-                nodes.DateTimeAttributeNode(datetime_value.clone, 'units'),
-            ]
-            datetime_value = nodes.CloneableNode(node.right)
-            args2 = [
-                nodes.DateTimeAttributeNode(datetime_value, 'timestamp'),
-                nodes.DateTimeAttributeNode(datetime_value.clone, 'units'),
-            ]
+                datetime_value = nodes.CloneableNode(node.left)
+                args1 = [
+                    nodes.DateTimeAttributeNode(datetime_value, 'timestamp'),
+                    nodes.DateTimeAttributeNode(datetime_value.clone, 'units'),
+                ]
+                datetime_value = nodes.CloneableNode(node.right)
+                args2 = [
+                    nodes.DateTimeAttributeNode(datetime_value, 'timestamp'),
+                    nodes.DateTimeAttributeNode(datetime_value.clone, 'units'),
+                ]
 
-            x = args1+args2+[unit_node]
-            diff_node = function_util.utility_call(
-                    self.context, self.llvm_module,
-                    "datetime_subtract", args=x)
+                x = args1+args2+[unit_node]
+                diff_node = function_util.utility_call(
+                        self.context, self.llvm_module,
+                        "datetime_subtract", args=x)
 
-            node = nodes.TimeDeltaNode(diff_node, unit_node)
+                node = nodes.TimeDeltaNode(diff_node, unit_node)
+            else:
+                raise NotImplementedError
+        elif (node.left.type.is_datetime and
+              node.right.type.is_timedelta) or \
+             (node.left.type.is_timedelta and
+              node.right.type.is_datetime):
+            raise NotImplementedError
+        else:
+            raise NotImplementedError
 
         return node
 

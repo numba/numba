@@ -306,8 +306,17 @@ static npy_int64 numpydatetime2timestamp(PyObject *numpy_datetime)
 
 static npy_int32 numpydatetime2units(PyObject *numpy_datetime)
 {
-    npy_int32 value;
     return ((PyDatetimeScalarObject*)numpy_datetime)->obmeta.base;
+}
+
+static npy_int64 numpytimedelta2delta(PyObject *numpy_timedelta)
+{
+    return ((PyDatetimeScalarObject*)numpy_timedelta)->obval;
+}
+
+static npy_int32 numpytimedelta2units(PyObject *numpy_timedelta)
+{
+    return ((PyDatetimeScalarObject*)numpy_timedelta)->obmeta.base;
 }
 
 static PyObject* primitive2pydatetime(
@@ -479,6 +488,14 @@ static npy_int32 extract_timedelta_sec(npy_timedelta timedelta,
 }
 
 
+static npy_int32 convert_timedelta_units_str(char *units_str)
+{
+    if (units_str == NULL)
+        return NPY_FR_GENERIC;
+
+    return parse_datetime_unit_from_string(units_str, strlen(units_str), NULL);
+}
+
 static int
 export_type_conversion(PyObject *module)
 {
@@ -505,6 +522,9 @@ export_type_conversion(PyObject *module)
     EXPORT_FUNCTION(numpydatetime2timestamp, module, error);
     EXPORT_FUNCTION(numpydatetime2units, module, error);
 
+    EXPORT_FUNCTION(numpytimedelta2delta, module, error);
+    EXPORT_FUNCTION(numpytimedelta2units, module, error);
+
     EXPORT_FUNCTION(primitive2pydatetime, module, error);
     EXPORT_FUNCTION(primitive2numpydatetime, module, error);
     EXPORT_FUNCTION(primitive2numpytimedelta, module, error);
@@ -518,6 +538,7 @@ export_type_conversion(PyObject *module)
     EXPORT_FUNCTION(extract_datetime_sec, module, error);
     EXPORT_FUNCTION(datetime_subtract, module, error);
     EXPORT_FUNCTION(extract_timedelta_sec, module, error);
+    EXPORT_FUNCTION(convert_timedelta_units_str, module, error);
 
     return 0;
 error:

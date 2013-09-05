@@ -1264,16 +1264,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             val = self._create_complex(real, imag)
         elif dst_type.is_numpy_datetime and node_type.is_numpy_datetime:
             val = self._promote_datetime(node_type, dst_type, val)
-        elif dst_type.is_numpy_datetime and node_type.is_numeric:
-            raise NotImplementedError
         elif dst_type.is_datetime and node_type.is_datetime:
             val = self._promote_datetime(node_type, dst_type, val)
-        elif dst_type.is_datetime and node_type.is_numeric:
-            raise NotImplementedError
         elif dst_type.is_timedelta and node_type.is_timedelta:
             val = self._promote_timedelta(node_type, dst_type, val)
-        elif dst_type.is_timedelta and node_type.is_numeric:
-            raise NotImplementedError
         else:
             flags = {}
             add_cast_flag_unsigned(flags, node_type, dst_type)
@@ -1504,6 +1498,14 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         diff = self.visit(node.diff)
         units = self.visit(node.units)
         return self._create_timedelta(diff, units)
+
+    def visit_NumpyTimeDeltaNode(self, node):
+        units_func = function_util.utility_call(
+            self.context, self.llvm_module,
+            "convert_timedelta_units_str", args=[node.units_str])
+        newnode = nodes.TimeDeltaNode(nodes.CoercionNode(node.diff, int64),
+            units_func)
+        return self.visit(newnode)
 
     def visit_TimeDeltaAttributeNode(self, node):
         result = self.visit(node.value)
