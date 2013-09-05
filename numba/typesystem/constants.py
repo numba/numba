@@ -84,8 +84,8 @@ def get_default_typing_rules(u, typeof, promote):
         assert isinstance(value, (tuple, list, dict))
 
         if isinstance(value, dict):
-            key_type = type_container(value.keys(), promote, typeof)
-            value_type = type_container(value.values(), promote, typeof)
+            key_type = type_container(value.keys())
+            value_type = type_container(value.values())
             return u.dict_(key_type, value_type, size=len(value))
 
         if isinstance(value, tuple):
