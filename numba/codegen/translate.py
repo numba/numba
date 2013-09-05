@@ -39,7 +39,7 @@ _int32_zero = lc.Constant.int(_int32, 0)
 
 _compare_mapping_float = {'>':lc.FCMP_OGT,
                            '<':lc.FCMP_OLT,
-                           '==':lc.FCMP_UEQ,
+                           '==':lc.FCMP_OEQ,   # (nan == nan) is False
                            '>=':lc.FCMP_OGE,
                            '<=':lc.FCMP_OLE,
                            '!=':lc.FCMP_UNE}
