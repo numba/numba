@@ -239,7 +239,7 @@ class GUFuncEntry(CDefinition):
         # populate pyarrays
         step_offset = len(pyarys)
         for i, (dtype, ary) in enumerate(zip(self.dtypes, pyarys)):
-            ary_ndim = len(filter(bool, diminfo[i]))
+            ary_ndim = len([x for x in diminfo[i] if x])
             ary_dims = []
             for k in diminfo[i]:
                 if k:
