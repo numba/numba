@@ -91,6 +91,7 @@ typemap = {
 
     bool_    : np.bool,
     object_  : np.object,
+    datetime : np.datetime64,
 }
 typemap = dict((k, np.dtype(v)) for k, v in typemap.iteritems())
 

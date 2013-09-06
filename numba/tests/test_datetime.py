@@ -1,6 +1,8 @@
 import datetime
 import numpy
 import numba
+import numba.vectorize
+from numba.vectorize import vectorize
 
 @numba.autojit(nopython=True)
 def datetime_identity(datetime):
@@ -80,9 +82,20 @@ def datetime_add_timedelta(d, t):
 def datetime_subtract_timedelta(d, t):
     return d - t
 
-#@numba.jit(numba.int64(numba.datetime), nopython=True)
-#def cast_datetime_to_int(x):
-#    return x
+# JNB: vectorize doesn't work for struct-like types right now
+#@vectorize([numba.datetime(numba.datetime)])
+def ufunc_inc_day(a):
+    b = numpy.timedelta64(1, 'D')
+    return a + b
+
+@numba.jit(numba.long_(numba.string_), nopython=True)
+def cast_datetime_to_int(datetime_str):
+    x = numpy.datetime64(datetime_str)
+    return x
+
+@numba.autojit(nopython=True)
+def max_datetime(datetimes):
+    return numpy.max(datetimes)
 
 def test_datetime():
 
@@ -125,10 +138,31 @@ def test_datetime():
 
     control = datetime + timedelta
     assert datetime_add_timedelta(datetime, timedelta) == control
-    '''control = datetime - timedelta
-    assert datetime_subtract_timedelta(datetime, timedelta) == control'''
+    control = datetime - timedelta
+    assert datetime_subtract_timedelta(datetime, timedelta) == control
 
-    #cast_datetime_to_int(numpy.datetime64('2014-01-02'))
+    # cast datetime to number of days since epoch
+    datetime_str  ='2014-01-02'
+    datetime = numpy.datetime64(datetime_str)
+    assert cast_datetime_to_int(datetime_str) == \
+        int(numpy.array(datetime, numpy.int64))
+
+    # JNB: How to cast datetime to days instead of years?
+    #datetime_str  ='2014-01-01'
+    #datetime = numpy.datetime64(datetime_str)
+    #assert cast_datetime_to_int(datetime_str) == \
+    #    int(numpy.array(datetime, numpy.int64))
+
+    # JNB: Does calling numpy ufunc work with nopython mode?
+    #datetimes = numpy.array(['2014-01-01', '2014-01-02', '2014-01-03'],
+    #    dtype=numpy.datetime64)
+    #assert max_datetime(datetimes) == datetimes.max()
+
+    # JNB: vectorize doesn't work for struct-like types right now
+    #array = numpy.array(['2014-01-01', '2014-01-02', '2014-01-03'],
+    #    dtype=numpy.datetime64)
+    #assert(ufunc_inc_day(array) == numpy.array(
+    #    ['2014-01-02', '2014-01-03', '2014-01-04'], dtype=numpy.datetime64)
 
     # JNB: only test numpy datetimes for now
     #assert extract_year(datetime.datetime(*datetime_components)) == 2014

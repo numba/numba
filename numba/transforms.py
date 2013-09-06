@@ -1122,8 +1122,6 @@ class LateSpecializer(ResolveCoercions,
                 node = nodes.DateTimeNode(diff_node, unit_node)
             else:
                 raise NotImplementedError
-        else:
-            raise NotImplementedError
 
         return node
 

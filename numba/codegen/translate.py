@@ -1264,6 +1264,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             val = self._create_complex(real, imag)
         elif dst_type.is_numpy_datetime and node_type.is_numpy_datetime:
             val = self._promote_datetime(node_type, dst_type, val)
+        elif dst_type.is_int and node_type.is_numpy_datetime and \
+                not isinstance(node.node, nodes.DateTimeAttributeNode):
+            return self.builder.extract_value(val, 0)
         elif dst_type.is_datetime and node_type.is_datetime:
             val = self._promote_datetime(node_type, dst_type, val)
         elif dst_type.is_timedelta and node_type.is_timedelta:
