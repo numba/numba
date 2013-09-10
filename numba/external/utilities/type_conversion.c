@@ -338,6 +338,7 @@ static PyObject* primitive2numpydatetime(
     scalar->obval = timestamp;
     scalar->obmeta.base = units;
     scalar->obmeta.num = 1;
+    Py_INCREF(scalar);
  
     return (PyObject*)scalar;
 }
@@ -350,6 +351,7 @@ static PyObject* primitive2numpytimedelta(
     scalar->obval = timedelta;
     scalar->obmeta.base = units;
     scalar->obmeta.num = 1;
+    Py_INCREF(scalar);
  
     return (PyObject*)scalar;
 }
