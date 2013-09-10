@@ -7,10 +7,10 @@
 NumbaPro
 ========
 
-NumbaPro is an enhanced version of Numba which adds premium features and
-functionality that allow developers to rapidly create optimized code that integrates well with NumPy.
+`NumbaPro` is an enhanced version of `Numba <http://docs.continuum.io/numba/index.html>`_ which adds premium features and
+functionality that allow developers to rapidly create optimized code that integrates well with `NumPy <http://www.numpy.org>`_.
 
-With NumbaPro, Python developers can define NumPy ufuncs and generalized ufuncs
+With NumbaPro, Python developers can define NumPy `ufuncs` and generalized `ufuncs`
 in Python, which are compiled to machine code dynamically and loaded on the fly.
 Additionally, NumbaPro offers developers the ability to target multicore and
 GPU architectures with Python code for both ufuncs and general-purpose code.
@@ -22,14 +22,14 @@ about the calculation
 
 For targeting the GPU, NumbaPro can either do the work automatically, doing
 its best to optimize the code for the GPU architecture.  Alternatively,
-CUDA-based API is provided for writing CUDA code specifically in Python for
+CUDA-based API is provided for writing `CUDA <http://www.nvidia.com/object/cuda_home_new.html>`_ code specifically in Python for
 ultimate control of the hardware (with thread and block identities).
 
 Getting Started
 ---------------
 
 Let's start with a simple function to add together all the pairwise values in two NumPy arrays.
-Asking NumbaPro to compile this python function to vectorized machine code for execution
+Asking NumbaPro to compile this Python function to vectorized machine code for execution
 on the CPU is as simple as adding a single line of code (invoked via a decorator on the
 function)::
 
@@ -41,14 +41,14 @@ function)::
 
     # Invoke like:  result_array = sum(big_input_1, big_input_2)
 
-Similarly, one can instead target the GPU for execution of the same python function by
+Similarly, one can instead target the GPU for execution of the same Python function by
 modifying a single line in the above example::
 
     @vectorize([float32(float32, float32)], target='gpu')
 
 Targeting the GPU for execution introduces the potential for numerous GPU-specific
 optimizations so as a starting point for more complex scenarios, one can also target
-the GPU with NumbaPro via its Just-In-Time (JIT) compiler::
+the GPU with NumbaPro via its `Just-In-Time` (JIT) compiler::
 
     from numbapro import cuda, float32
 
@@ -90,7 +90,7 @@ Additional examples:
 Requirements
 ------------
 
-* python 2.6 or 2.7 (support is not yet available for 3.x)
+* Python 2.6 or 2.7 (support is not yet available for 3.x)
 * LLVM (>= 3.2)
 * Latest NVIDIA CUDA driver
 
