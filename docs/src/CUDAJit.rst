@@ -4,7 +4,7 @@ Writing CUDA-Python
 The CUDA JIT is a low-level entry point to the CUDA features in NumbaPro.
 It translates Python functions into `PTX
 <http://en.wikipedia.org/wiki/Parallel_Thread_Execution>`_ code which execute on
-the CUDA hardware.  The ``jit`` decorator is applied to Python functions written 
+the CUDA hardware.  The `jit` decorator is applied to Python functions written 
 in the `CUDA-Python <CUDAPySpec.html>`_ subset.
 NumbaPro interacts with the `CUDA Driver API 
 <http://docs.nvidia.com/cuda/cuda-driver-api/index.html>`_ to load the PTX onto
@@ -23,13 +23,13 @@ Compiling
 -----------
 
 CUDA kernels and device functions are compiled by decorating a CUDA-Python
-function with the ``jit`` or ``autojit`` decorators.
+function with the jit or `autojit` decorators.
 
 .. autofunction:: numbapro.cuda.jit
 
 .. autofunction:: numbapro.cuda.autojit
 
-Thread Identity by CUDA Instrinsics
+Thread Identity by CUDA Intrinsics
 ------------------------------------
 
 A set of CUDA intrinsics is used to identify the current execution thread.
@@ -74,7 +74,7 @@ For a 2D grid::
 Memory Transfer
 ---------------
 
-By default, any Numpy arrays used as argument of a CUDA kernel is transferred
+By default, any NumPy arrays used as argument of a CUDA kernel is transferred
 automatically to and from the device.  However, to achieve maximum performance 
 and minimizing redundant memory transfer,
 user should manage the memory transfer explicitly.
@@ -99,7 +99,7 @@ Memory Lifetime
 -----------------
 
 The live time of a device array is bound to the lifetime of the 
-``DeviceNDArray`` instance.
+`DeviceNDArray` instance.
 
 
 CUDA Stream
@@ -136,7 +136,7 @@ When the python ``with`` context exits, the stream is automatically synchronized
 Shared Memory
 ------------------
 
-For maximum performance, a CUDA kernel needs to use shared memory for manual caching of data.  CUDA JIT supports the use of `cuda.shared.array(shape, dtype)` for specifying an numpy-array-like object inside a kernel.
+For maximum performance, a CUDA kernel needs to use shared memory for manual caching of data.  CUDA JIT supports the use of ``cuda.shared.array(shape, dtype)`` for specifying an NumPy-array-like object inside a kernel.
 
 For example:::
 
@@ -226,11 +226,11 @@ The equivalent code in CUDA-C would be:
 
 
 
-The return value of `cuda.shared.array` is a numpy-array-like object.  The `shape` argument  is similar as in Numpy API, with the requirement that it must contain a constant expression.  The `dtype` argument takes Numba types.
+The return value of ``cuda.shared.array`` is a NumPy-array-like object.  The ``shape`` argument  is similar as in NumPy API, with the requirement that it must contain a constant expression.  The `dtype` argument takes Numba types.
 
 
 Synchronization Primitives
 --------------------------
 
-We currently support the ``cuda.syncthreads()`` only.  It is the same as ``__syncthreads()`` in CUDA-C.
+We currently support ``cuda.syncthreads()`` only.  It is the same as ``__syncthreads()`` in CUDA-C.
 

@@ -2,13 +2,13 @@
 CUDA Libraries Host API
 =================================
 
-NumbaPro provides binding to cuRAND, cuFFT host API for operation on numpy
+NumbaPro provides binding to cuRAND, cuFFT host API for operation on NumPy
 arrays.
 
 cuRAND
 ======
 
-Provides pseudo-random number generator and quasi-random generator.
+Provides `pseudo-random number generator` (PRNG) and `quasi-random generator` (QRNG).
 See `NVIDIA cuRAND <http://docs.nvidia.com/cuda/cuRAND/index.html>`_.
 
 class PRNG
@@ -95,13 +95,13 @@ cuBLAS
 Provides basic linear algebra building blocks that operates on the CUDA device.
 See `NVIDIA cuBLAS <http://docs.nvidia.com/cuda/cublas/index.html>`_.
 
-The cuBlas binding provides a simpler interface to use numpy arrays and device
+The cuBlas binding provides a simpler interface to use NumPy arrays and device
 arrays.  We don't need special naming convention to identify the array types.
 Type information are inferred from the given arguments.
 Arguments for array storage information in cuBLAS C-API are not
-necessary since numpy arrays and device arrays already contain the information.
-Whenever an array is required in an argument, user can pass in numpy arrays
-or device arrays.  The binding will automatically transfer any numpy arrays
+necessary since NumPy arrays and device arrays already contain the information.
+Whenever an array is required in an argument, user can pass in NumPy arrays
+or device arrays.  The binding will automatically transfer any NumPy arrays
 to the device as needed.
 
 .. autoclass:: numbapro.cudalib.cublas.Blas

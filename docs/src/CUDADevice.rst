@@ -12,7 +12,7 @@ CUDA-capable GPU.
 Device Selection
 ----------------
 
-Device selection must be done before any cuda feature is used.
+Device selection must be done before any CUDA feature is used.
 
 ::
 
@@ -38,9 +38,9 @@ Users can then create a new context with another device.
     cuda.select_device(1)  # assuming we have 2 GPUs
 
 
-.. NOTE:: Compiled functions are associated with the context CUDA context.
-    This makes it not very useful to close and create new devices.
-    But, it is certainly useful for choosing which device to use when the machine
+.. NOTE:: Compiled functions are associated with the CUDA context.
+    This makes it not very useful to close and create new devices,
+    though it is certainly useful for choosing which device to use when the machine
     has multiple GPUs.
 
 

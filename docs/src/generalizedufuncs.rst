@@ -1,8 +1,8 @@
 Generalized Ufuncs
 ==================
 
-The GUFuncVectorize module of NumbaPro this creates a fast "generalized ufunc" from numba-compiled code.
-Traditional ufuncs perfom element-wise operations, whereas generalized ufuncs operate on entire
+The `GUFuncVectorize` module of NumbaPro creates a fast "generalized ufunc" from Numba-compiled code.
+Traditional ufuncs perform element-wise operations, whereas generalized ufuncs operate on entire
 sub-arrays. Unlike other NumbaPro Vectorize classes, the GUFuncVectorize constructor takes
 an additional signature of the generalized ufunc.
 
@@ -16,11 +16,11 @@ Imports
 	from numbapro import guvectorize
 	import numpy as np
 
-Basic generalized ufuncs are available in numba. In addition to the basic generalized
-ufuncs, numbapro provides a CUDA-accelerated generalized ufunc.
+Basic generalized ufuncs are available in Numba. In addition to the basic generalized
+ufuncs, NumbaPro provides a CUDA-accelerated generalized ufunc.
 
 To see how generalized ufuncs work, we refer the reader to
-`numba gufuncs <http://numba.pydata.org/numba-doc/dev/arrays.html#generalized-ufunc-definition>`_.
+`Numba gufuncs <http://numba.pydata.org/numba-doc/dev/arrays.html#generalized-ufunc-definition>`_.
 
 Generalized CUDA ufuncs
 -----------------------

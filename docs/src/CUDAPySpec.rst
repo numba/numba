@@ -3,12 +3,12 @@ CUDA Python Specification (v0.1)
 
 (This documents reflects the implementation of CUDA-Python in NumbaPro 0.12.  In time, we may refine the specification.)
 
-As CUDA python is becoming more mature, it has become necessary to define a formal specification for CUDA Python and the mapping to the `PTX ISA <http://docs.nvidia.com/cuda/parallel-thread-execution/index.html>`_.  There are places where the semantic of CUDA Python differs from the Python semantic.  The change in semantic is necessary for us to generate high-performance code that is otherwise hard to achieve.
+As CUDA Python is becoming more mature, it has become necessary to define a formal specification for CUDA Python and the mapping to the `PTX ISA <http://docs.nvidia.com/cuda/parallel-thread-execution/index.html>`_.  There are places where the semantic of CUDA Python differs from the Python semantic.  The change in semantic is necessary for us to generate high-performance code that is otherwise hard to achieve.
 
 No-Python Mode (NPM)
 ---------------------
 
-CUDA Python is a superset of the No-Python mode (NPM).  NPM is a statically typed subset of the Python language.  It only supports lower level types; such as booleans, ints, floats, complex numbers and arrays.  It does not support Python objects.  Since we drop the support for objects entirely, many basic language construct must be handled differently.  For instance, a simple for-loop is::
+CUDA Python is a superset of the `No-Python mode` (NPM).  NPM is a statically typed subset of the Python language.  It only supports lower level types; such as booleans, ints, floats, complex numbers and arrays.  It does not support Python objects.  Since we drop the support for objects entirely, many basic language constructs must be handled differently.  For instance, a simple for-loop is::
 
     for i in range(10):
         ...
@@ -66,7 +66,7 @@ for the precision each operation.
 Intp
 -----
 
-``intp`` is used to represent the integer which width equals the address width.
+``intp`` is used to represent the integer whose width equals the address width.
 
 Array Operations
 ------------------
@@ -75,8 +75,8 @@ Array attributes are read-only:
 
 * ``shape`` contains the number of elements for each dimension.  It can be indexed or unpacked like a tuple.  It is a tuple of intp.
 * ``strides`` contains the number of bytes skip to move forward to the next element for a given dimension.  It can be indexed or unpacked like a tuple.  It is a tuple of intp.
-* ``size`` contains the number of elements in the array but may not be correspond to the actual size of the data buffer since strides can be zero or negative.  It is a intp.
-* ``ndim`` contains the number of dimension in the array.  It is a intp.
+* ``size`` contains the number of elements in the array but may not be correspond to the actual size of the data buffer since strides can be zero or negative.  It is an intp.
+* ``ndim`` contains the number of dimension in the array.  It is an intp.
 
 ``__getitem__`` returns the element at the given index.  Slicing or fancy indexing are not supported.  The result type is always the same as the element type of the array.
 
@@ -100,13 +100,13 @@ Barrier intrinsics:
 
 Shared memory intrinsics
 
-* ``cuda.shared.array(shape, dtype)``  constructs a statically allocated array in the shared memory of kernel.  ``dtype`` argument must be a type object defined in the ``numbapro`` namespace.  It must be declared in the entry block of the kernel.
+* ``cuda.shared.array(shape, dtype)``  constructs a statically allocated array in the shared memory of kernel.  ``dtype`` argument must be a type object defined in the ``NumbaPro`` namespace.  It must be declared in the entry block of the kernel.
 
 Math
 -----
 
 CUDA-Python translates math functions defined in the math module of the Python
-standard library.  All the function uses semantic of the CUDA-C definition.
+standard library.  All the functions use the semantic of the CUDA-C definition.
 Please refer to the `CUDA-C Programming Guide: Math Function 
 <http://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#mathematical-functions-appendix>`_.
 
@@ -127,7 +127,7 @@ Supported functions::
     math.tanh
     math.atan2
     math.exp
-    math.expm1              # not available in python 2.6
+    math.expm1              # not available in Python 2.6
     math.fabs
     math.log
     math.log10

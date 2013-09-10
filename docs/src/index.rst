@@ -22,7 +22,7 @@ about the calculation
 
 For targeting the GPU, NumbaPro can either do the work automatically, doing
 its best to optimize the code for the GPU architecture.  Alternatively,
-CUDA-based API is provided for writing `CUDA <http://www.nvidia.com/object/cuda_home_new.html>`_ code specifically in Python for
+CUDA-based API is provided for writing :ref:`CUDA <CUDA_int>` code specifically in Python for
 ultimate control of the hardware (with thread and block identities).
 
 Getting Started
