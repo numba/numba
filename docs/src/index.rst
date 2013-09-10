@@ -10,7 +10,7 @@ NumbaPro
 `NumbaPro` is an enhanced version of `Numba <http://docs.continuum.io/numba/index.html>`_ which adds premium features and
 functionality that allow developers to rapidly create optimized code that integrates well with `NumPy <http://www.numpy.org>`_.
 
-With NumbaPro, Python developers can define NumPy `ufuncs` and generalized `ufuncs`
+With NumbaPro, Python developers can define NumPy `ufuncs` and `generalized ufuncs`
 in Python, which are compiled to machine code dynamically and loaded on the fly.
 Additionally, NumbaPro offers developers the ability to target multicore and
 GPU architectures with Python code for both ufuncs and general-purpose code.

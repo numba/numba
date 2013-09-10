@@ -25,14 +25,14 @@ To use multithreaded version, change the target to 'parallel'::
     def sum(a, b):
         return a + b
 
-The numbapro support for ufuncs is an extension of the support in numba.
-The basic vectorizer functionality was open sourced and put in numba.
+The NumbaPro support for ufuncs is an extension of the support in Numba.
+The basic vectorizer functionality was open sourced and put in Numba.
 NumbaPro provides parallel, stream and CUDA versions of those.
 
 .. NOTE:: Documentation for using ufuncs can be found here: http://numba.pydata.org/numba-doc/0.9/arrays.html#universal-functions-ufuncs
 
-In order to use the numbapro vectorizers, we recommend reviewing the above documentation. However, instead
-of importing ``vectorize`` from numba, we need to import it from numbapro.
+In order to use the NumbaPro vectorizers, we recommend reviewing the above documentation. However, instead
+of importing ``vectorize`` from Numba, we need to import it from NumbaPro.
 
 Universal Function Types
 ------------------------
