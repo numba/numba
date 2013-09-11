@@ -262,26 +262,27 @@ static NUMBA_INLINE Py_ssize_t __Numba_PyIndex_AsSsize_t(PyObject*);
 static NUMBA_INLINE PyObject * __Numba_PyInt_FromSize_t(size_t);
 static NUMBA_INLINE size_t __Numba_PyInt_AsSize_t(PyObject*);
 
-static npy_datetimestruct iso_datetime2npydatetime(char *datetime_string)
+
+static npy_datetimestruct convert_datetime_str(char *datetime_string)
 {
     npy_datetimestruct out;
     npy_bool out_local;
     NPY_DATETIMEUNIT out_bestunit;
     npy_bool out_special;
 
-    parse_iso_8601_datetime(datetime_string, strlen(datetime_string), -1, NPY_SAME_KIND_CASTING,
-        &out, &out_local, &out_bestunit, &out_special);
+    parse_iso_8601_datetime(datetime_string, strlen(datetime_string), -1,
+        NPY_SAME_KIND_CASTING, &out, &out_local, &out_bestunit, &out_special);
 
     return out;
 }
 
-static npy_int64 iso_datetime2timestamp(char *datetime_string)
+static npy_int64 convert_datetime_str_to_timestamp(char *datetime_string)
 {
     npy_datetimestruct temp;
     npy_datetime output;
     PyArray_DatetimeMetaData new_meta;
 
-    temp = iso_datetime2npydatetime(datetime_string);
+    temp = convert_datetime_str(datetime_string);
     new_meta.base = lossless_unit_from_datetimestruct(&temp);
     new_meta.num = 1;
 
@@ -292,45 +293,34 @@ static npy_int64 iso_datetime2timestamp(char *datetime_string)
     return output;
 }
 
-static npy_int32 iso_datetime2units(char *datetime_string)
+static npy_int32 convert_datetime_str_to_units(char *datetime_string)
 {
     npy_datetimestruct temp;
-    temp = iso_datetime2npydatetime(datetime_string);
+    temp = convert_datetime_str(datetime_string);
     return lossless_unit_from_datetimestruct(&temp);
 }
 
-static npy_int64 numpydatetime2timestamp(PyObject *numpy_datetime)
+static npy_int64 convert_numpy_datetime_to_timestamp(PyObject *numpy_datetime)
 {
     return ((PyDatetimeScalarObject*)numpy_datetime)->obval;
 }
 
-static npy_int32 numpydatetime2units(PyObject *numpy_datetime)
+static npy_int32 convert_numpy_datetime_to_units(PyObject *numpy_datetime)
 {
     return ((PyDatetimeScalarObject*)numpy_datetime)->obmeta.base;
 }
 
-static npy_int64 numpytimedelta2delta(PyObject *numpy_timedelta)
+static npy_int64 convert_numpy_timedelta_to_diff(PyObject *numpy_timedelta)
 {
     return ((PyDatetimeScalarObject*)numpy_timedelta)->obval;
 }
 
-static npy_int32 numpytimedelta2units(PyObject *numpy_timedelta)
+static npy_int32 convert_numpy_timedelta_to_units(PyObject *numpy_timedelta)
 {
     return ((PyDatetimeScalarObject*)numpy_timedelta)->obmeta.base;
 }
 
-static PyObject* primitive2pydatetime(
-    npy_int64 timestamp,
-    npy_int32 units)
-{
-    /*PyObject *result = PyDateTime_FromDateAndTime(year, month, day,
-        hour, min, sec, 0);
-    Py_INCREF(result);
-    return result;*/
-    return NULL;
-}
-
-static PyObject* primitive2numpydatetime(
+static PyObject* create_numpy_datetime(
     npy_int64 timestamp,
     npy_int32 units,
     PyDatetimeScalarObject *scalar)
@@ -343,7 +333,7 @@ static PyObject* primitive2numpydatetime(
     return (PyObject*)scalar;
 }
 
-static PyObject* primitive2numpytimedelta(
+static PyObject* create_numpy_timedelta(
     npy_timedelta timedelta,
     NPY_DATETIMEUNIT units,
     PyDatetimeScalarObject *scalar)
@@ -356,199 +346,93 @@ static PyObject* primitive2numpytimedelta(
     return (PyObject*)scalar;
 }
 
-static NPY_DATETIMEUNIT get_datetime_casting_unit(
-    npy_int32 units1,
-    npy_int32 units2)
-{
-    PyArray_DatetimeMetaData meta1;
-    PyArray_DatetimeMetaData meta2;
-
-    memset(&meta1, 0, sizeof(PyArray_DatetimeMetaData));
-    meta1.base = units1;
-    meta1.num = 1;
-
-    memset(&meta2, 0, sizeof(PyArray_DatetimeMetaData));
-    meta2.base = units2;
-    meta2.num = 1;
-
-    if (can_cast_datetime64_metadata(&meta1, &meta2, NPY_SAFE_CASTING)) {
-        return meta2.base;
-    }
-    else if (can_cast_datetime64_metadata(&meta2, &meta1, NPY_SAFE_CASTING)) {
-        return meta1.base;
-    }
-
-    return NPY_FR_GENERIC;
+#define GET_TARGET_UNIT(type1, type2) \
+static NPY_DATETIMEUNIT get_target_unit_for_##type1##_##type2( \
+    npy_int32 units1, \
+    npy_int32 units2) \
+{ \
+    PyArray_DatetimeMetaData meta1; \
+    PyArray_DatetimeMetaData meta2; \
+\
+    meta1.base = units1; \
+    meta1.num = 1; \
+\
+    meta2.base = units2; \
+    meta2.num = 1; \
+\
+    if (can_cast_##type1##64_metadata(&meta1, &meta2, NPY_SAFE_CASTING)) { \
+        return meta2.base; \
+    } \
+    else if (can_cast_##type2##64_metadata(&meta2, &meta1, NPY_SAFE_CASTING)) { \
+        return meta1.base; \
+    } \
+\
+    return NPY_FR_GENERIC; \
 }
 
-static NPY_DATETIMEUNIT get_timedelta_casting_unit(
-    npy_int32 units1,
-    npy_int32 units2)
-{
-    PyArray_DatetimeMetaData meta1;
-    PyArray_DatetimeMetaData meta2;
+GET_TARGET_UNIT(datetime, datetime)
+GET_TARGET_UNIT(timedelta, timedelta)
+GET_TARGET_UNIT(datetime, timedelta)
 
-    memset(&meta1, 0, sizeof(PyArray_DatetimeMetaData));
-    meta1.base = units1;
-    meta1.num = 1;
 
-    memset(&meta2, 0, sizeof(PyArray_DatetimeMetaData));
-    meta2.base = units2;
-    meta2.num = 1;
-
-    if (can_cast_timedelta64_metadata(&meta1, &meta2, NPY_SAFE_CASTING)) {
-        return meta2.base;
-    }
-    else if (can_cast_timedelta64_metadata(&meta2, &meta1, NPY_SAFE_CASTING)) {
-        return meta1.base;
-    }
-
-    return NPY_FR_GENERIC;
+#define DATETIME_ARITHMETIC(type1, type2, op, op_name, ret_type) \
+static npy_##ret_type op_name##_##type1##_##type2( \
+    npy_##type1 type1##1, \
+    NPY_DATETIMEUNIT units1, \
+    npy_##type2 type2##2, \
+    NPY_DATETIMEUNIT units2, \
+    NPY_DATETIMEUNIT target_units) \
+{ \
+    PyArray_DatetimeMetaData src_meta; \
+    PyArray_DatetimeMetaData dst_meta; \
+    npy_##type1 operand1 = type1##1; \
+    npy_##type2 operand2 = type2##2; \
+\
+    if (units1 == units2 == target_units) { \
+        return operand1 op operand2; \
+    } \
+\
+    dst_meta.base = target_units; \
+    dst_meta.num = 1; \
+\
+    src_meta.base = units1; \
+    src_meta.num = 1; \
+    cast_##type1##_to_##type1(&src_meta, &dst_meta, type1##1, &operand1); \
+\
+    src_meta.base = units2; \
+    src_meta.num = 1; \
+    cast_##type2##_to_##type2(&src_meta, &dst_meta, type2##2, &operand2); \
+\
+    return operand1 op operand2; \
 }
 
-static NPY_DATETIMEUNIT get_datetime_timedelta_casting_unit(
-    npy_int32 datetime_units,
-    npy_int32 timedelta_units)
-{
-    PyArray_DatetimeMetaData datetime_meta;
-    PyArray_DatetimeMetaData timedelta_meta;
+DATETIME_ARITHMETIC(datetime, datetime, -, sub, timedelta)
+DATETIME_ARITHMETIC(datetime, timedelta, -, sub, datetime)
+DATETIME_ARITHMETIC(datetime, timedelta, +, add, datetime)
 
-    memset(&datetime_meta, 0, sizeof(PyArray_DatetimeMetaData));
-    datetime_meta.base = datetime_units;
-    datetime_meta.num = 1;
 
-    memset(&timedelta_meta, 0, sizeof(PyArray_DatetimeMetaData));
-    timedelta_meta.base = timedelta_units;
-    timedelta_meta.num = 1;
-
-    if (can_cast_datetime64_metadata(&datetime_meta,
-            &timedelta_meta, NPY_SAFE_CASTING)) {
-        return timedelta_meta.base;
-    }
-    else if (can_cast_datetime64_metadata(&timedelta_meta,
-            &datetime_meta, NPY_SAFE_CASTING)) {
-        return datetime_meta.base;
-    }
-
-    return NPY_FR_GENERIC;
+#define EXTRACT_DATETIME(unit_name, ret_type) \
+static ret_type extract_datetime_##unit_name(npy_datetime timestamp, \
+    NPY_DATETIMEUNIT units) \
+{ \
+    PyArray_DatetimeMetaData meta; \
+    npy_datetimestruct output; \
+\
+    meta.base = units; \
+    meta.num = 1; \
+\
+    memset(&output, 0, sizeof(npy_datetimestruct)); \
+\
+    convert_datetime_to_datetimestruct(&meta, timestamp, &output); \
+    return output.unit_name; \
 }
 
-static npy_timedelta datetime_subtract(
-    npy_int64 timestamp1,
-    NPY_DATETIMEUNIT units1,
-    npy_int64 timestamp2,
-    NPY_DATETIMEUNIT units2,
-    NPY_DATETIMEUNIT target_units)
-{
-    PyArray_DatetimeMetaData src_meta;
-    PyArray_DatetimeMetaData dst_meta;
-    npy_datetime operand1;
-    npy_datetime operand2;
-
-    if (units1 == units2 == target_units) {
-        return timestamp1 - timestamp2;
-    }
-
-    dst_meta.base = target_units;
-    dst_meta.num = 1;
-
-    src_meta.base = units1;
-    src_meta.num = 1;
-    cast_datetime_to_datetime(&src_meta, &dst_meta, timestamp1, &operand1);
-
-    src_meta.base = units2;
-    src_meta.num = 1;
-    cast_datetime_to_datetime(&src_meta, &dst_meta, timestamp2, &operand2);
-
-    return operand1 - operand2;
-}
-
-static npy_timedelta add_timedelta_to_datetime(
-    npy_int64 datetime,
-    NPY_DATETIMEUNIT datetime_units,
-    npy_int64 timedelta,
-    NPY_DATETIMEUNIT timedelta_units,
-    NPY_DATETIMEUNIT target_units)
-{
-    PyArray_DatetimeMetaData src_meta;
-    PyArray_DatetimeMetaData dst_meta;
-    npy_datetime operand1;
-    npy_datetime operand2;
-
-    if (datetime_units == timedelta_units == target_units) {
-        return datetime + timedelta;
-    }
-
-    dst_meta.base = target_units;
-    dst_meta.num = 1;
-
-    src_meta.base = datetime_units;
-    src_meta.num = 1;
-    cast_datetime_to_datetime(&src_meta, &dst_meta, datetime, &operand1);
-
-    src_meta.base = timedelta_units;
-    src_meta.num = 1;
-    cast_datetime_to_datetime(&src_meta, &dst_meta, timedelta, &operand2);
-
-    return operand1 + operand2;
-}
-
-static npy_datetimestruct extract_datetime(npy_datetime timestamp,
-    NPY_DATETIMEUNIT units)
-{
-    PyArray_DatetimeMetaData meta;
-    npy_datetimestruct output;
-
-    meta.base = units;
-    meta.num = 1;
-
-    memset(&output, 0, sizeof(npy_datetimestruct));
-
-    convert_datetime_to_datetimestruct(&meta, timestamp, &output);
-    return output;
-}
-
-static npy_int64 extract_datetime_year(npy_datetime timestamp,
-    NPY_DATETIMEUNIT units)
-{
-    npy_datetimestruct output = extract_datetime(timestamp, units);
-    return output.year;
-}
-
-static npy_int32 extract_datetime_month(npy_datetime timestamp,
-    NPY_DATETIMEUNIT units)
-{
-    npy_datetimestruct output = extract_datetime(timestamp, units);
-    return output.month;
-}
-
-static npy_int32 extract_datetime_day(npy_datetime timestamp,
-    NPY_DATETIMEUNIT units)
-{
-    npy_datetimestruct output = extract_datetime(timestamp, units);
-    return output.day;
-}
-
-static npy_int32 extract_datetime_hour(npy_datetime timestamp,
-    NPY_DATETIMEUNIT units)
-{
-    npy_datetimestruct output = extract_datetime(timestamp, units);
-    return output.hour;
-}
-
-static npy_int32 extract_datetime_min(npy_datetime timestamp,
-    NPY_DATETIMEUNIT units)
-{
-    npy_datetimestruct output = extract_datetime(timestamp, units);
-    return output.min;
-}
-
-static npy_int32 extract_datetime_sec(npy_datetime timestamp,
-    NPY_DATETIMEUNIT units)
-{
-    npy_datetimestruct output = extract_datetime(timestamp, units);
-    return output.sec;
-}
+EXTRACT_DATETIME(year, npy_int64)
+EXTRACT_DATETIME(month, npy_int32)
+EXTRACT_DATETIME(day, npy_int32)
+EXTRACT_DATETIME(hour, npy_int32)
+EXTRACT_DATETIME(min, npy_int32)
+EXTRACT_DATETIME(sec, npy_int32)
 
 static npy_int32 extract_timedelta_sec(npy_timedelta timedelta,
     NPY_DATETIMEUNIT units)
@@ -598,31 +482,32 @@ export_type_conversion(PyObject *module)
     EXPORT_FUNCTION(__Numba_PyInt_FromLongLong, module, error);
     EXPORT_FUNCTION(__Numba_PyInt_FromUnsignedLongLong, module, error);
 
-    EXPORT_FUNCTION(iso_datetime2timestamp, module, error);
-    EXPORT_FUNCTION(iso_datetime2units, module, error);
+    EXPORT_FUNCTION(convert_datetime_str_to_timestamp, module, error);
+    EXPORT_FUNCTION(convert_datetime_str_to_units, module, error);
+    EXPORT_FUNCTION(convert_numpy_datetime_to_timestamp, module, error);
+    EXPORT_FUNCTION(convert_numpy_datetime_to_units, module, error);
+    EXPORT_FUNCTION(convert_numpy_timedelta_to_diff, module, error);
+    EXPORT_FUNCTION(convert_numpy_timedelta_to_units, module, error);
 
-    EXPORT_FUNCTION(numpydatetime2timestamp, module, error);
-    EXPORT_FUNCTION(numpydatetime2units, module, error);
+    EXPORT_FUNCTION(create_numpy_datetime, module, error);
+    EXPORT_FUNCTION(create_numpy_timedelta, module, error);
 
-    EXPORT_FUNCTION(numpytimedelta2delta, module, error);
-    EXPORT_FUNCTION(numpytimedelta2units, module, error);
-
-    EXPORT_FUNCTION(primitive2pydatetime, module, error);
-    EXPORT_FUNCTION(primitive2numpydatetime, module, error);
-    EXPORT_FUNCTION(primitive2numpytimedelta, module, error);
-
-    EXPORT_FUNCTION(get_datetime_casting_unit, module, error);
-    EXPORT_FUNCTION(get_timedelta_casting_unit, module, error);
-    EXPORT_FUNCTION(get_datetime_timedelta_casting_unit, module, error);
     EXPORT_FUNCTION(extract_datetime_year, module, error);
     EXPORT_FUNCTION(extract_datetime_month, module, error);
     EXPORT_FUNCTION(extract_datetime_day, module, error);
     EXPORT_FUNCTION(extract_datetime_hour, module, error);
     EXPORT_FUNCTION(extract_datetime_min, module, error);
     EXPORT_FUNCTION(extract_datetime_sec, module, error);
-    EXPORT_FUNCTION(datetime_subtract, module, error);
-    EXPORT_FUNCTION(add_timedelta_to_datetime, module, error);
     EXPORT_FUNCTION(extract_timedelta_sec, module, error);
+
+    EXPORT_FUNCTION(get_target_unit_for_datetime_datetime, module, error);
+    EXPORT_FUNCTION(get_target_unit_for_timedelta_timedelta, module, error);
+    EXPORT_FUNCTION(get_target_unit_for_datetime_timedelta, module, error);
+
+    EXPORT_FUNCTION(sub_datetime_datetime, module, error);
+    EXPORT_FUNCTION(add_datetime_timedelta, module, error);
+    EXPORT_FUNCTION(sub_datetime_timedelta, module, error);
+
     EXPORT_FUNCTION(convert_timedelta_units_str, module, error);
 
     return 0;

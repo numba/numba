@@ -67,26 +67,25 @@ utility_funcs = list(object_to_numeric.itervalues()) + [
     UtilityFunction.load("__Numba_PyInt_FromLongLong", object_(longlong)),
     UtilityFunction.load("__Numba_PyInt_FromUnsignedLongLong", object_(ulonglong)),
 
-    UtilityFunction.load("iso_datetime2timestamp", long_(string_)),
-    UtilityFunction.load("iso_datetime2units", int_(string_)),
+    UtilityFunction.load("convert_datetime_str_to_timestamp", long_(string_)),
+    UtilityFunction.load("convert_datetime_str_to_units", int_(string_)),
 
-    UtilityFunction.load("numpydatetime2timestamp", long_(object_)),
-    UtilityFunction.load("numpydatetime2units", int_(object_)),
+    UtilityFunction.load("convert_numpy_datetime_to_timestamp", long_(object_)),
+    UtilityFunction.load("convert_numpy_datetime_to_units", int_(object_)),
 
-    UtilityFunction.load("numpytimedelta2delta", long_(object_)),
-    UtilityFunction.load("numpytimedelta2units", int_(object_)),
+    UtilityFunction.load("convert_numpy_timedelta_to_diff", long_(object_)),
+    UtilityFunction.load("convert_numpy_timedelta_to_units", int_(object_)),
 
-    UtilityFunction.load("primitive2pydatetime", object_(long_, int_)),
-    UtilityFunction.load("primitive2numpydatetime",
+    UtilityFunction.load("create_numpy_datetime",
         object_(long_, int_, object_)),
-    UtilityFunction.load("primitive2numpytimedelta",
+    UtilityFunction.load("create_numpy_timedelta",
         object_(long_, int_, object_)),
 
-    UtilityFunction.load("get_datetime_casting_unit",
+    UtilityFunction.load("get_target_unit_for_datetime_datetime",
         int_(int_, int_)),
-    UtilityFunction.load("get_timedelta_casting_unit",
+    UtilityFunction.load("get_target_unit_for_timedelta_timedelta",
         int_(int_, int_)),
-    UtilityFunction.load("get_datetime_timedelta_casting_unit",
+    UtilityFunction.load("get_target_unit_for_datetime_timedelta",
         int_(int_, int_)),
 
     UtilityFunction.load("extract_datetime_year", long_(int64, int32)),
@@ -96,10 +95,12 @@ utility_funcs = list(object_to_numeric.itervalues()) + [
     UtilityFunction.load("extract_datetime_min", int_(int64, int32)),
     UtilityFunction.load("extract_datetime_sec", int_(int64, int32)),
 
-    UtilityFunction.load("datetime_subtract",
+    UtilityFunction.load("sub_datetime_datetime",
         long_(long_, int_, long_, int_, int_)),
-    UtilityFunction.load("add_timedelta_to_datetime",
+    UtilityFunction.load("add_datetime_timedelta",
         long_(long_, int_, long_, int_, int_)),
+    UtilityFunction.load("sub_datetime_timedelta",
+        long_(long_, int_, long_, int_, int_)),    
     UtilityFunction.load("extract_timedelta_sec", int_(int64, int32)),
     UtilityFunction.load("convert_timedelta_units_str", int_(string_)),
 ]

@@ -339,7 +339,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
                 ]
                 new_node = function_util.utility_call(
                         self.context, self.llvm_module,
-                        "primitive2numpydatetime", args=args)
+                        "create_numpy_datetime", args=args)
             elif node_type.is_datetime:
                 datetime_value = nodes.CloneableNode(node.node)
                 args = [
@@ -348,7 +348,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
                 ]
                 new_node = function_util.utility_call(
                         self.context, self.llvm_module,
-                        "primitive2pydatetime", args=args)
+                        "create_python_datetime", args=args)
             elif node_type.is_timedelta:
                 timedelta_value = nodes.CloneableNode(node.node)
                 args = [
@@ -358,7 +358,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
                 ]
                 new_node = function_util.utility_call(
                         self.context, self.llvm_module,
-                        "primitive2numpytimedelta", args=args)
+                        "create_numpy_timedelta", args=args)
             else:
                 raise error.NumbaError(
                     node, "Don't know how to coerce type %r to PyObject" %
@@ -442,10 +442,10 @@ class ResolveCoercions(visitors.NumbaTransformer):
             elif node_type.is_numpy_datetime:
                 timestamp_func = function_util.utility_call(
                     self.context, self.llvm_module,
-                    "numpydatetime2timestamp", args=[node.node])
+                    "convert_numpy_datetime_to_timestamp", args=[node.node])
                 units_func = function_util.utility_call(
                     self.context, self.llvm_module,
-                    "numpydatetime2units", args=[node.node])
+                    "convert_numpy_datetime_to_units", args=[node.node])
                 new_node = nodes.DateTimeNode(timestamp_func, units_func)
             elif node_type.is_datetime:
                 timestamp_func = function_util.utility_call(
@@ -456,13 +456,13 @@ class ResolveCoercions(visitors.NumbaTransformer):
                     "pydatetime2units", args=[node.node])
                 new_node = nodes.DateTimeNode(timestamp_func, units_func)
             elif node_type.is_numpy_timedelta:
-                delta_func = function_util.utility_call(
+                diff_func = function_util.utility_call(
                     self.context, self.llvm_module,
-                    "numpytimedelta2delta", args=[node.node])
+                    "convert_numpy_timedelta_to_diff", args=[node.node])
                 units_func = function_util.utility_call(
                     self.context, self.llvm_module,
-                    "numpytimedelta2units", args=[node.node])
-                new_node = nodes.DateTimeNode(delta_func, units_func)
+                    "convert_numpy_timedelta_to_units", args=[node.node])
+                new_node = nodes.DateTimeNode(diff_func, units_func)
             elif node_type.is_timedelta:
                 raise NotImplementedError
             else:
@@ -1041,7 +1041,7 @@ class LateSpecializer(ResolveCoercions,
 
                 unit_node = function_util.utility_call(
                         self.context, self.llvm_module,
-                        "get_datetime_casting_unit",
+                        "get_target_unit_for_datetime_datetime",
                         args=[units1_node, units2_node])
 
                 datetime_value = nodes.CloneableNode(node.left)
@@ -1057,7 +1057,7 @@ class LateSpecializer(ResolveCoercions,
 
                 diff_node = function_util.utility_call(
                         self.context, self.llvm_module,
-                        "datetime_subtract", args=args1+args2+[unit_node])
+                        "sub_datetime_datetime", args=args1+args2+[unit_node])
 
                 node = nodes.TimeDeltaNode(diff_node, unit_node)
             else:
@@ -1066,7 +1066,7 @@ class LateSpecializer(ResolveCoercions,
               node.right.type.is_timedelta) or \
              (node.left.type.is_timedelta and
               node.right.type.is_datetime):
-            if isinstance(node.op, ast.Add):
+            if isinstance(node.op, ast.Add) or isinstance(node.op, ast.Sub):
                 datetime_value = nodes.CloneableNode(node.left)
                 if node.left.type.is_datetime:
                     units1_node = nodes.DateTimeAttributeNode(
@@ -1085,7 +1085,7 @@ class LateSpecializer(ResolveCoercions,
 
                 unit_node = function_util.utility_call(
                         self.context, self.llvm_module,
-                        "get_datetime_timedelta_casting_unit",
+                        "get_target_unit_for_datetime_timedelta",
                         args=[units1_node, units2_node])
 
                 datetime_value = nodes.CloneableNode(node.left)
@@ -1114,10 +1114,17 @@ class LateSpecializer(ResolveCoercions,
                             datetime_value, 'diff'),
                         nodes.TimeDeltaAttributeNode(
                             datetime_value.clone, 'units'),]
-                diff_node = function_util.utility_call(
-                        self.context, self.llvm_module,
-                        "add_timedelta_to_datetime",
-                        args=args1+args2+[unit_node])
+
+                if isinstance(node.op, ast.Add):
+                    diff_node = function_util.utility_call(
+                            self.context, self.llvm_module,
+                            "add_datetime_timedelta",
+                            args=args1+args2+[unit_node])
+                elif isinstance(node.op, ast.Sub):
+                    diff_node = function_util.utility_call(
+                            self.context, self.llvm_module,
+                            "sub_datetime_timedelta",
+                            args=args1+args2+[unit_node])
 
                 node = nodes.DateTimeNode(diff_node, unit_node)
             else:

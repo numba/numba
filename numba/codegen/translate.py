@@ -1489,10 +1489,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
     def visit_NumpyDateTimeNode(self, node):
         timestamp_func = function_util.utility_call(
             self.context, self.llvm_module,
-            "iso_datetime2timestamp", args=[node.datetime_string])
+            "convert_datetime_str_to_timestamp", args=[node.datetime_string])
         units_func = function_util.utility_call(
             self.context, self.llvm_module,
-            "iso_datetime2units", args=[node.datetime_string])
+            "convert_datetime_str_to_units", args=[node.datetime_string])
 
         newnode = nodes.DateTimeNode(timestamp_func, units_func)
         return self.visit(newnode)
