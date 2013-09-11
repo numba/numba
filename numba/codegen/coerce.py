@@ -42,7 +42,6 @@ class ObjectCoercer(object):
         char.pointer(): "s",
         char.pointer() : "s",
         c_string_type: "s",
-        datetime : "D",
     }
 
     def __init__(self, translator):
@@ -164,16 +163,6 @@ class ObjectCoercer(object):
             # We have a Py_complex value, construct a Py_complex * temporary
             new_result = llvm_alloca(self.translator.lfunc, self.builder,
                                      llvm_result.type, name='complex_temp')
-            self.builder.store(llvm_result, new_result)
-            llvm_result = new_result
-        elif type.is_datetime:
-            new_result = llvm_alloca(self.translator.lfunc, self.builder,
-                                     llvm_result.type, name='datetime_temp')
-            self.builder.store(llvm_result, new_result)
-            llvm_result = new_result
-        elif type.is_timedelta:
-            new_result = llvm_alloca(self.translator.lfunc, self.builder,
-                                     llvm_result.type, name='timedelta_temp')
             self.builder.store(llvm_result, new_result)
             llvm_result = new_result
 

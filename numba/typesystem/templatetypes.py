@@ -12,8 +12,7 @@ from numba.typesystem import Type, NumbaType
 VALID_TYPE_ATTRIBUTES = {
     "dtype": ["is_array"],
     "base_type": ["is_pointer", "is_carray", "is_complex",
-                  "is_list", "is_tuple", "is_datetime", "is_numpy_datetime",
-                  "is_timedelta"],
+                  "is_list", "is_tuple"],
     "args": ["is_function"],
     "return_type": ["is_function"],
     # "fields": ["is_struct"],

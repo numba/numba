@@ -291,12 +291,6 @@ class NumbaVisitorMixin(CooperativeBase):
             return isinstance(n, numbers.Complex)
         return isinstance(n, complex)
 
-    def is_datetime(self, n):
-        return isinstance(n, datetime)
-
-    def is_timedelta(self, n):
-        return isinstance(n, timedelta)
-
     def is_real(self, n):
         if numbers:
             return isinstance(n, numbers.Real)

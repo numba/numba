@@ -22,7 +22,7 @@ datetimetypes = []
 
 domain_name = "numba"
 
-ranking = ["bool", "int", "float", "complex", "datetime", "object"]
+ranking = ["bool", "int", "float", "complex", "object"]
 
 def rank(type):
     return ranking.index(type.kind)

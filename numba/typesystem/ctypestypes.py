@@ -23,8 +23,6 @@ nb2ctypes = {
     ts.object_:    ctypes.py_object,
     ts.void:       None,
     ts.string_:    ctypes.c_char_p,
-    ts.datetime:  ctypes.c_ulong,
-    ts.timedelta:  ctypes.c_ulong,
 }
 
 def cint(name):
