@@ -209,14 +209,19 @@ def test_datetime():
     control = datetime - timedelta
     assert datetime_subtract_timedelta(datetime, timedelta) == control
 
-    # cast datetime to number of days since epoch
-    datetime_str  ='2014-01-02'
+    datetime_str  ='2014'
     datetime = numpy.datetime64(datetime_str)
     assert cast_datetime_to_int(datetime_str) == \
         int(numpy.array(datetime, numpy.int64))
 
-    # JNB: How to cast datetime to days instead of years?
+    # cast datetime to number of days since epoch
     datetime_str  ='2014-01-01'
+    datetime = numpy.datetime64(datetime_str)
+    assert cast_datetime_to_int(datetime_str) == \
+        int(numpy.array(datetime, numpy.int64))
+
+    # cast datetime to number of seconds since epoch
+    datetime_str  ='2014-01-02T03:04:05Z'
     datetime = numpy.datetime64(datetime_str)
     assert cast_datetime_to_int(datetime_str) == \
         int(numpy.array(datetime, numpy.int64))

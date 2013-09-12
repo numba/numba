@@ -263,15 +263,15 @@ static NUMBA_INLINE PyObject * __Numba_PyInt_FromSize_t(size_t);
 static NUMBA_INLINE size_t __Numba_PyInt_AsSize_t(PyObject*);
 
 
-static npy_datetimestruct convert_datetime_str(char *datetime_string)
+static npy_datetimestruct convert_datetime_str(char *datetime_string,
+    NPY_DATETIMEUNIT *out_bestunit)
 {
     npy_datetimestruct out;
     npy_bool out_local;
-    NPY_DATETIMEUNIT out_bestunit;
     npy_bool out_special;
 
     parse_iso_8601_datetime(datetime_string, strlen(datetime_string), -1,
-        NPY_SAME_KIND_CASTING, &out, &out_local, &out_bestunit, &out_special);
+        NPY_SAME_KIND_CASTING, &out, &out_local, out_bestunit, &out_special);
 
     return out;
 }
@@ -281,23 +281,25 @@ static npy_int64 convert_datetime_str_to_timestamp(char *datetime_string)
     npy_datetimestruct temp;
     npy_datetime output;
     PyArray_DatetimeMetaData new_meta;
+    NPY_DATETIMEUNIT out_bestunit;
 
-    temp = convert_datetime_str(datetime_string);
-    new_meta.base = lossless_unit_from_datetimestruct(&temp);
+    temp = convert_datetime_str(datetime_string, &out_bestunit);
+    new_meta.base = out_bestunit;
     new_meta.num = 1;
 
     if (convert_datetimestruct_to_datetime(&new_meta, &temp, &output) < 0) {
         return NULL;
     }
-    
+
     return output;
 }
 
 static npy_int32 convert_datetime_str_to_units(char *datetime_string)
 {
-    npy_datetimestruct temp;
-    temp = convert_datetime_str(datetime_string);
-    return lossless_unit_from_datetimestruct(&temp);
+    NPY_DATETIMEUNIT out_bestunit;
+
+    convert_datetime_str(datetime_string, &out_bestunit);
+    return out_bestunit;
 }
 
 static npy_int64 convert_numpy_datetime_to_timestamp(PyObject *numpy_datetime)
