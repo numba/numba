@@ -34,8 +34,7 @@ __all__ = ['Py_ssize_t', 'void', 'char', 'uchar', 'short', 'ushort',
            'size_t', 'npy_intp', 'c_string_type', 'bool_', 'object_',
            'float_', 'double', 'longdouble', 'float32', 'float64', 'float128',
            'int8', 'int16', 'int32', 'int64', 'uint8', 'uint16', 'uint32', 'uint64',
-           'complex64', 'complex128', 'complex256', 'datetime', 'timedelta',
-           'struct', 'Py_uintptr_t']
+           'complex64', 'complex128', 'complex256', 'struct', 'Py_uintptr_t']
 
 import sys
 import math
@@ -43,7 +42,6 @@ import copy
 import struct as struct_
 import types
 import textwrap
-import datetime
 
 from . import miniutils
 from . import minierror
@@ -172,8 +170,6 @@ class TypeMapper(object):
                 raise ValueError("Cannot represent %s as int32 or int64", value)
         elif isinstance(value, complex):
             return complex128
-        elif isinstance(value, datetime.datetime):
-            return datetime
         elif isinstance(value, str):
             return c_string_type
         elif np and isinstance(value, np.ndarray):
@@ -357,8 +353,6 @@ BOOL_KIND = 1
 INT_KIND = 2
 FLOAT_KIND = 3
 COMPLEX_KIND = 4
-DATETIME_KIND = 5
-TIMEDELTA_KIND = 6
 
 class Type(miniutils.ComparableObjectMixin):
     """
@@ -385,9 +379,6 @@ class Type(miniutils.ComparableObjectMixin):
     is_int_like = False
     is_complex = False
     is_void = False
-
-    is_datetime = False
-    is_timedelta = False
 
     kind = NONE_KIND
 
@@ -812,18 +803,6 @@ class ComplexType(NumericType):
 
     kind = COMPLEX_KIND
 
-class DateTimeType(NumericType):
-    is_datetime = True
-    subtypes = ['base_type']
-
-    kind = DATETIME_KIND
-
-class TimeDeltaType(NumericType):
-    is_timedelta = True
-    subtypes = ['base_type']
-
-    kind = TIMEDELTA_KIND
-
 class Py_ssize_t_Type(IntType):
     is_py_ssize_t = True
     name = "Py_ssize_t"
@@ -1223,9 +1202,6 @@ complex128 = ComplexType(name="complex128", base_type=float64,
                          rank=31, itemsize=16)
 complex256 = ComplexType(name="complex256", base_type=float128,
                          rank=32, itemsize=32)
-
-datetime = DateTimeType(name="datetime", base_type=int64, itemsize=20)
-timedelta = TimeDeltaType(name="timedelta", base_type=int64, itemsize=12)
 
 integral = []
 native_integral = []
