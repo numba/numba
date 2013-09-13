@@ -93,13 +93,13 @@ def jit(restype=None, argtypes=None, device=False, inline=False, bind=True,
         
     To define a CUDA device function that takes two ints and returns a int::
 
-        @cuda.jit('int(int, int)', device=True)
+        @cuda.jit('int32(int32, int32)', device=True)
         def bar(a, b):
             ...
             
     To force inline the device function::
 
-        @cuda.jit('int(int, int)', device=True, inline=True)
+        @cuda.jit('int32(int32, int32)', device=True, inline=True)
         def bar_forced_inline(a, b):
             ...
 
