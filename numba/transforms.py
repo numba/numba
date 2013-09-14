@@ -745,6 +745,20 @@ class LateSpecializer(ResolveCoercions,
             else:
                 # This is handled in visit_Assign
                 pass
+        elif (node.value.type.is_array and node.type.is_numpy_datetime and
+                node.slice.type.is_int):
+            node.value.type = array_(int64, node.value.type.ndim,
+                node.value.type.is_c_contig,
+                node.value.type.is_f_config,
+                node.value.type.inner_contig)
+            node.variable.type = node.value.type
+            node.value.variable.type = node.value.type
+            data_node = nodes.DataPointerNode(node.value, node.slice, node.ctx)
+            '''units_node = function_util.utility_call(
+                self.context, self.llvm_module,
+                "get_numpy_datetime_array_item",
+                args=[])'''
+            node = nodes.DateTimeNode(data_node, nodes.ConstNode(4, int32))
         elif (node.value.type.is_array and not node.type.is_array and
                   node.slice.type.is_int):
             # Array index with integer indices
