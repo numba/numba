@@ -41,6 +41,10 @@ def compile_common(func, retty, argtys, libs=global_builtin_libs, flags=DEFAULT_
     args = dict((arg, typ) for arg, typ in zip(argspec.args, argtys))
     return_type = retty
 
+    if len(argspec.args) != len(args):
+        raise TypeError("mismatching # of args: require %s but got %s" %
+                        (len(argspec.args), len(args)))
+
     # compilation
     blocks =  symbolic_interpret(func)
     return_type = type_infer(func, blocks, return_type, args, funclib)
