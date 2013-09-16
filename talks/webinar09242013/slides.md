@@ -23,6 +23,8 @@ Compile Python to:
 - CUDA PTX
 - Parallel CPU code
 
+Through simple decorators
+
 ## As a Library
 
 Bindings to:
@@ -37,6 +39,8 @@ Bindings to:
 Convert a scalar function into a NumPy Universal function that operates on NumPy array operands.
 
 ```python
+@vectorize(['float32(float32, float32)'], 
+           target='gpu')
 def foo(a, b):
     return (a + b) ** 2
 ```
@@ -132,8 +136,6 @@ def gufunc_core(a, b, ...):
     ...
 ```
 
-## Decorators: @vectorize Summary
-
 ## Decorators: @guvectorize Usage
 
 - Prototypes are the same as `@vectorize`
@@ -187,10 +189,70 @@ C = gufunc(A, B)
 - Similar to `@vectorize` but can use array as operands to the core function.
 - Can also target the CPU.
 
-## CUDA Library Support
+# Control Memory Transfer
 
-## Controlling Memory Transfer
+## to_device
 
+```python
+A = numpy.arange(10)    # cpu
+dA = cuda.to_device(A)  # gpu
+```
+
+## copy_to_host
+
+```python
+A = dA.copy_to_host()
+```
+
+## device_array
+
+Allocate device array like NumPy array
+
+```python
+B = cuda.device_array(shape=(2,3,4))
+C = cuda.device_array(shape=10, 
+                      dtype=numpy.float32)
+```
+
+# CUDA Library Support
+
+## FFT convolution
+
+- Use cuFFT to build a FFT convolution.
+
+## Forward FFT
+
+```python
+from numbapro.cudalib import cufft
+
+fft = cufft.fft(host_or_device_array)
+cufft.fft_inplace(host_or_device_array)
+```
+
+## Inverse FFT
+
+```python
+from numbapro.cudalib import cufft
+
+fft = cufft.ifft(host_or_device_array)
+cufft.ifft_inplace(host_or_device_array)
+```
+
+## FFT Convolution
+
+```python
+d_img = cuda.to_device(img)     # image
+d_fltr = cuda.to_device(fltr)   # filter
+
+cufft.fft_inplace(img)
+cufft.fft_inplace(fltr)
+
+vmult(img, fltr, out=img)
+
+cufft.ifft_inplace(img)
+
+filted_img = d_img.copy_to_host()
+```
 
 ## Where to Get?
 
