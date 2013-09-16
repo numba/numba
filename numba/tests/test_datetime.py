@@ -82,10 +82,9 @@ def datetime_subtract_timedelta(d, t):
     return d - t
 
 # JNB: vectorize doesn't work for struct-like types right now
-#@vectorize([numba.datetime(numba.datetime)])
+@vectorize([numba.datetime(units='D')(numba.datetime(units='D'))])
 def ufunc_inc_day(a):
-    b = numpy.timedelta64(1, 'D')
-    return a + b
+    return a + numpy.timedelta64(1, 'D')
 
 @numba.jit(numba.long_(numba.string_), nopython=True)
 def cast_datetime_to_int(datetime_str):

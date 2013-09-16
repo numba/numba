@@ -110,5 +110,7 @@ def to_dtype(type):
     elif type.is_int:
         name = 'int' if type.signed else 'uint'
         return np.dtype(getattr(np, name + str(type.itemsize * 8)))
+    elif type.is_numpy_datetime:
+        return np.dtype('M8[{0}]'.format(type.units_char))
     else:
         raise ValueError("Cannot convert '%s' to numpy type" % (type,))
