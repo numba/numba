@@ -464,6 +464,11 @@ static npy_int32 convert_timedelta_units_str(char *units_str)
     return parse_datetime_unit_from_string(units_str, strlen(units_str), NULL);
 }
 
+static npy_int32 get_units_num(char *units_char)
+{
+    return parse_datetime_unit_from_string(units_char, 1, NULL);
+}
+
 static int
 export_type_conversion(PyObject *module)
 {
@@ -511,6 +516,7 @@ export_type_conversion(PyObject *module)
     EXPORT_FUNCTION(sub_datetime_timedelta, module, error);
 
     EXPORT_FUNCTION(convert_timedelta_units_str, module, error);
+    EXPORT_FUNCTION(get_units_num, module, error);
 
     return 0;
 error:

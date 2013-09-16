@@ -82,7 +82,7 @@ class DateTimeNode(ExprNode):
 
     _fields = ['timestamp', 'units']
 
-    type = datetime
+    type = datetime()
     variable = Variable(type)
 
     def __init__(self, timestamp, units):
@@ -103,7 +103,7 @@ class NumpyDateTimeNode(ExprNode):
 
     _fields = ['datetime_string']
 
-    type = datetime
+    type = datetime()
     variable = Variable(type)
 
     def __init__(self, datetime_string):

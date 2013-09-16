@@ -28,7 +28,7 @@ class DateTimeSupportMixin(object):
 
         dst_ltype = dst_type.to_llvm(self.context)
 
-        timestamp = self.caster.cast(timestmap, dst_type.subtypes[0])
+        timestamp = self.caster.cast(timestamp, dst_type.subtypes[0])
         units = self.caster.cast(units, dst_type.subtypes[1])
         return self._create_datetime(timestamp, units)
 

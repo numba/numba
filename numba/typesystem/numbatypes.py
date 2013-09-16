@@ -112,9 +112,15 @@ tuple_of_obj       = tuple_(object_, -1)
 list_of_obj        = list_(object_, -1)
 dict_of_obj        = dict_(object_, object_, -1)
 
-datetime = datetime_(int64, int32)
 timedelta = timedelta_(int64, int32)
-datetimetypes.extend([datetime, timedelta])
+datetimetypes.extend([timedelta])
+
+def datetime(units=None, numpy=True):
+    if units not in ['Y', 'M', 'D', 'h', 'm', 's']:
+        units = None 
+    datetime_type = datetime_(int64, int32, units)
+    datetime_type.is_numpy_datetime = numpy
+    return datetime_type
 
 # ______________________________________________________________________
 

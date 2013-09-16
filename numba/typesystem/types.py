@@ -545,7 +545,7 @@ class complex_(NumbaType):
 
 @consing
 class datetime_(NumbaType):
-    argnames = ["timestamp", "units"]
+    argnames = ["timestamp", "units", "units_char"]
     flags = ["numeric"]
     is_numpy_datetime = True
 
@@ -554,7 +554,10 @@ class datetime_(NumbaType):
         return self.timestamp.itemsize + self.units.itemsize
 
     def __repr__(self):
-        return "datetime"
+        if self.units_char:
+            return "datetime_" + self.units_char
+        else:
+            return "datetime"
 
 @consing
 class timedelta_(NumbaType):

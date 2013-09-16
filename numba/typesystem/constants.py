@@ -37,7 +37,7 @@ def get_typing_defaults(u):
         complex: u.complex128,
         str: u.string_,
         #datetime.datetime: u.datetime,
-        np.datetime64: u.datetime,
+        np.datetime64: u.datetime(),
         np.timedelta64: u.timedelta,
     }
     return typing_defaults

@@ -1262,13 +1262,13 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
                 real = self.caster.cast(real, ldst_base_type, **flags)
             imag = llvm.core.Constant.real(ldst_base_type, 0.0)
             val = self._create_complex(real, imag)
-        elif dst_type.is_numpy_datetime and node_type.is_numpy_datetime:
-            val = self._promote_datetime(node_type, dst_type, val)
+        #elif dst_type.is_numpy_datetime and node_type.is_numpy_datetime:
+        #    val = self._promote_datetime(node_type, dst_type, val)
         elif dst_type.is_int and node_type.is_numpy_datetime and \
                 not isinstance(node.node, nodes.DateTimeAttributeNode):
             return self.builder.extract_value(val, 0)
-        elif dst_type.is_datetime and node_type.is_datetime:
-            val = self._promote_datetime(node_type, dst_type, val)
+        #elif dst_type.is_datetime and node_type.is_datetime:
+        #    val = self._promote_datetime(node_type, dst_type, val)
         elif dst_type.is_timedelta and node_type.is_timedelta:
             val = self._promote_timedelta(node_type, dst_type, val)
         else:

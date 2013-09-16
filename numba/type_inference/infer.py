@@ -877,12 +877,12 @@ class TypeInferer(visitors.NumbaTransformer):
         elif isinstance(node.op, ast.Add) and \
                 ((v1.type.is_numpy_datetime and v2.type.is_numpy_timedelta) or
                  (v2.type.is_numpy_datetime and v1.type.is_numpy_timedelta)):
-            promoted_type = datetime
+            promoted_type = datetime()
             coerce_operands = False
         elif isinstance(node.op, ast.Sub) and \
                 ((v1.type.is_numpy_datetime and v2.type.is_numpy_timedelta) or
                  (v2.type.is_numpy_datetime and v1.type.is_numpy_timedelta)):
-            promoted_type = datetime
+            promoted_type = datetime()
             coerce_operands = False
         else:
             promoted_type = self.promote(v1, v2)

@@ -103,6 +103,7 @@ utility_funcs = list(object_to_numeric.itervalues()) + [
         long_(long_, int_, long_, int_, int_)),    
     UtilityFunction.load("extract_timedelta_sec", int_(int64, int32)),
     UtilityFunction.load("convert_timedelta_units_str", int_(string_)),
+    UtilityFunction.load("get_units_num", int32(string_)),
 ]
 
 def default_utility_library(context):

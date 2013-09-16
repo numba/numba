@@ -61,6 +61,10 @@ def map_dtype(dtype):
                                                   is_aligned))
     elif dtype.kind == 'O':
         return object_
+    elif dtype.kind == 'M':
+        # Get datetime units from 2nd to last character in dtype string
+        # Example dtype string: '<M8[D]', where D is datetime units
+        return datetime(units=dtype.str[-2])
 
 typemap = {
     int8     : np.int8,

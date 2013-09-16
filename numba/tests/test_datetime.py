@@ -1,4 +1,3 @@
-import datetime
 import numpy
 import numba
 import numba.vectorize
@@ -94,8 +93,13 @@ def cast_datetime_to_int(datetime_str):
     return x
 
 @numba.autojit(nopython=True)
-def max_datetime(datetimes):
-    return numpy.max(datetimes)
+def datetime_array_index(datetimes, index):
+    return datetimes[index]
+
+@numba.jit(numba.datetime(units='M')(numba.datetime(units='M')[:], numba.int_),
+    nopython=True)
+def datetime_array_index2(datetimes, index):
+    return datetimes[index]
 
 def test_datetime():
 
@@ -227,9 +231,10 @@ def test_datetime():
         int(numpy.array(datetime, numpy.int64))
 
     # JNB: Does calling numpy ufunc work with nopython mode?
-    datetimes = numpy.array(['2014-01-01', '2014-01-02', '2014-01-03'],
+    datetimes = numpy.array(['2014-01', '2014-02', '2014-03'],
         dtype=numpy.datetime64)
-    assert max_datetime(datetimes) == datetimes.max()
+    assert datetime_array_index(datetimes, 0) == datetimes[0]
+    assert datetime_array_index2(datetimes, 0) == datetimes[0]
 
     # JNB: vectorize doesn't work for struct-like types right now
     array = numpy.array(['2014-01-01', '2014-01-02', '2014-01-03'],
@@ -237,18 +242,5 @@ def test_datetime():
     assert ufunc_inc_day(array) == numpy.array(
         ['2014-01-02', '2014-01-03', '2014-01-04'], dtype=numpy.datetime64)
 
-    # JNB: only test numpy datetimes for now
-    #datetime_components = (2014, 1, 2, 3, 4, 5)
-    #assert extract_year(datetime.datetime(*datetime_components)) == 2014
-    #assert extract_month(datetime.datetime(*datetime_components)) == 1
-    #assert extract_day(datetime.datetime(*datetime_components)) == 2
-    #assert extract_hour(datetime.datetime(*datetime_components)) == 3
-    #assert extract_min(datetime.datetime(*datetime_components)) == 4
-    #assert extract_sec(datetime.datetime(*datetime_components)) == 5
-    
-    #control = datetime.datetime(*datetime_components)
-    #assert create_python_datetime(*datetime_components) == control
-    #assert create_python_datetime_from_string("2014-01-02T03:04:05Z") == control
- 
 if __name__ == "__main__":
     test_datetime()
