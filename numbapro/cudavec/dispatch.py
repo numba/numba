@@ -116,10 +116,10 @@ class CudaUFuncDispatcher(object):
 
             # NOTE: When using DeviceArrayBase,
             #       it is assumed to be properly broadcasted.
-            self._arguments_requirement(args)
 
+            self._arguments_requirement(args)
             args, argconv = zip(*(cuda._auto_device(a) for a in args))
-    
+
             element_count = self._determine_element_count(args)
             nctaid, ntid = self._determine_dimensions(element_count,
                                                       max_threads)
@@ -136,10 +136,18 @@ class CudaUFuncDispatcher(object):
                 device_out = kws['out']
                 if not devicearray.is_cuda_ndarray(device_out):
                     raise TypeError("output array must be a device array")
-            kernel_args = list(args) + [device_out, element_count]
+
+            def flatten_args(a):
+                if a.ndim > 1:
+                    a = a.reshape(np.prod(a.shape))
+                    return a
+                return a
+
+            kernel_args = [flatten_args(a) for a in args]
+            kernel_args.append(flatten_args(device_out))
+            kernel_args.append(element_count)
 
             cuda_func[griddim, blockdim, stream](*kernel_args)
-
 
             return device_out
 
@@ -199,11 +207,6 @@ class CudaUFuncDispatcher(object):
         return np.prod(broadcast_arrays[0].shape)
 
     def _arguments_requirement(self, args):
-        # all arguments must be 1 or 0 dimensional
-        for i, a in enumerate(args):
-            if a.ndim != 1:
-                raise ValueError("arg %d is not a 1D array" % i)
-
         # get shape of all array
         array_shapes = []
         for i, a in enumerate(args):
