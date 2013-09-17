@@ -751,9 +751,8 @@ class LateSpecializer(ResolveCoercions,
             # int64, since numba datetime type doesn't match numpy datetime type.
             node.value.type = array_(int64, node.value.type.ndim,
                 node.value.type.is_c_contig,
-                node.value.type.is_f_config,
+                node.value.type.is_f_contig,
                 node.value.type.inner_contig)
-            node.variable.type = node.value.type
             node.value.variable.type = node.value.type
             data_node = nodes.DataPointerNode(node.value, node.slice, node.ctx)
 
