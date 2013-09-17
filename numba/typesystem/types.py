@@ -561,7 +561,7 @@ class datetime_(NumbaType):
 
 @consing
 class timedelta_(NumbaType):
-    argnames = ["diff", "units"]
+    argnames = ["diff", "units", "units_char"]
     flags = ["numeric"]
     is_numpy_timedelta = True
 
@@ -570,7 +570,10 @@ class timedelta_(NumbaType):
         return self.diff.itemsize + self.units.itemsize
 
     def __repr__(self):
-        return "timedelta"
+        if self.units_char:
+            return "timedelta_" + self.units_char
+        else:
+            return "timedelta"
 
 @consing
 class meta(NumbaType):

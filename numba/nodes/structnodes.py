@@ -113,7 +113,7 @@ class TimeDeltaNode(ExprNode):
 
     _fields = ['diff', 'units']
 
-    type = timedelta
+    type = timedelta()
     variable = Variable(type)
 
     def __init__(self, diff, units):
@@ -124,7 +124,7 @@ class NumpyTimeDeltaNode(ExprNode):
 
     _fields = ['diff', 'units_str']
 
-    type = timedelta
+    type = timedelta()
     variable = Variable(type)
 
     def __init__(self, diff, units_str):

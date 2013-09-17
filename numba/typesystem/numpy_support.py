@@ -65,6 +65,10 @@ def map_dtype(dtype):
         # Get datetime units from 2nd to last character in dtype string
         # Example dtype string: '<M8[D]', where D is datetime units
         return datetime(units=dtype.str[-2])
+    elif dtype.kind == 'm':
+        # Get timedelta units from 2nd to last character in dtype string
+        # Example dtype string: '<m8[D]', where D is timedelta units
+        return timedelta(units=dtype.str[-2])
 
 typemap = {
     int8     : np.int8,
@@ -112,5 +116,7 @@ def to_dtype(type):
         return np.dtype(getattr(np, name + str(type.itemsize * 8)))
     elif type.is_numpy_datetime:
         return np.dtype('M8[{0}]'.format(type.units_char))
+    elif type.is_numpy_timedelta:
+        return np.dtype('m8[{0}]'.format(type.units_char))
     else:
         raise ValueError("Cannot convert '%s' to numpy type" % (type,))

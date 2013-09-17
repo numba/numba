@@ -107,7 +107,7 @@ def lower_to_pointer(domain, codomain, type, params):
     return codomain.pointer(params[0])
 
 def lower_timedelta(domain, codomain, type, params):
-    diff, units = params
+    diff, units = params[0:2]
     return codomain.struct_([('diff', diff), ('units', units)])
 
 #------------------------------------------------------------------------

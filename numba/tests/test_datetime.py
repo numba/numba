@@ -100,6 +100,15 @@ def datetime_array_index(datetimes, index):
 def datetime_array_index2(datetimes, index):
     return datetimes[index]
 
+@numba.autojit(nopython=True)
+def timedelta_array_index(timedeltas, index):
+    return timedeltas[index]
+
+@numba.jit(numba.timedelta(units='M')(numba.timedelta(units='M')[:], numba.int_),
+    nopython=True)
+def timedelta_array_index2(timedeltas, index):
+    return timedeltas[index]
+
 def test_datetime():
 
     datetime = numpy.datetime64('2014-01-01')
@@ -232,7 +241,11 @@ def test_datetime():
     datetimes = numpy.array(['2014-01', '2014-02', '2014-03'],
         dtype=numpy.datetime64)
     assert datetime_array_index(datetimes, 0) == datetimes[0]
-    assert datetime_array_index2(datetimes, 0) == datetimes[0]
+    assert datetime_array_index2(datetimes, 1) == datetimes[1]
+
+    timedeltas = numpy.array([1, 2, 3], dtype='m8[M]')
+    assert timedelta_array_index(timedeltas, 0) == timedeltas[0]
+    assert timedelta_array_index2(timedeltas, 1) == timedeltas[1]
 
     # JNB: vectorize doesn't work for struct-like types right now
     #array = numpy.array(['2014-01-01', '2014-01-02', '2014-01-03'],

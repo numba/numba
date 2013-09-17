@@ -1265,8 +1265,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         elif dst_type.is_int and node_type.is_numpy_datetime and \
                 not isinstance(node.node, nodes.DateTimeAttributeNode):
             return self.builder.extract_value(val, 0)
-        elif dst_type.is_timedelta and node_type.is_timedelta:
-            val = self._promote_timedelta(node_type, dst_type, val)
         else:
             flags = {}
             add_cast_flag_unsigned(flags, node_type, dst_type)

@@ -761,6 +761,22 @@ class LateSpecializer(ResolveCoercions,
                     "get_units_num",
                     args=[nodes.ConstNode(node_type.dtype.units_char, string_)])
             node = nodes.DateTimeNode(data_node, units_node)
+        elif (node.value.type.is_array and node.type.is_numpy_timedelta and
+                node.slice.type.is_int):
+            # JNB: ugly hack to make array of timedeltas look like array of
+            # int64, since numba timedelta type doesn't match numpy timedelta type.
+            node.value.type = array_(int64, node.value.type.ndim,
+                node.value.type.is_c_contig,
+                node.value.type.is_f_contig,
+                node.value.type.inner_contig)
+            node.value.variable.type = node.value.type
+            data_node = nodes.DataPointerNode(node.value, node.slice, node.ctx)
+
+            units_node = function_util.utility_call(
+                    self.context, self.llvm_module,
+                    "get_units_num",
+                    args=[nodes.ConstNode(node_type.dtype.units_char, string_)])
+            node = nodes.TimeDeltaNode(data_node, units_node)
         elif (node.value.type.is_array and not node.type.is_array and
                   node.slice.type.is_int):
             # Array index with integer indices
