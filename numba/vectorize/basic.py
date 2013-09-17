@@ -24,9 +24,18 @@ class BasicUFunc(CDefinition):
         ufunc_ptr = self.depends(self.FuncDef)
         fnty = ufunc_ptr.type.pointee
 
+        if fnty.return_type.kind != lc.TYPE_VOID:
+            void_ret = False
+            argtypes = fnty.args
+            restype = fnty.return_type
+        else:
+            void_ret = True
+            argtypes = fnty.args[:-1]
+            restype = fnty.args[-1]
+
         arg_ptrs = []
         arg_steps = []
-        for i in range(len(fnty.args)+1):
+        for i in range(len(argtypes)+1):
             arg_ptrs.append(self.var_copy(args[i]))
             const_steps = self.var_copy(steps[i])
             const_steps.invariant = True
@@ -34,14 +43,21 @@ class BasicUFunc(CDefinition):
 
         with self.for_range(dimensions[0]) as (loop, item):
             callargs = []
-            for i, argty in enumerate(fnty.args):
+            for i, argty in enumerate(argtypes):
                 casted = arg_ptrs[i].cast(C.pointer(argty))
                 callargs.append(casted.load())
                 arg_ptrs[i].assign(arg_ptrs[i][arg_steps[i]:]) # increment pointer
 
+            if void_ret:
+                retvar = self.var(restype)
+                callargs.append(retvar)
+
             res = ufunc_ptr(*callargs, **dict(inline=True))
-            retval_ptr = arg_ptrs[-1].cast(C.pointer(fnty.return_type))
-            retval_ptr.store(res, nontemporal=True)
+            retval_ptr = arg_ptrs[-1].cast(C.pointer(restype))
+            if void_ret:
+                retval_ptr.store(retvar, nontemporal=True)
+            else:
+                retval_ptr.store(res, nontemporal=True)
             arg_ptrs[-1].assign(arg_ptrs[-1][arg_steps[-1]:])
 
         self.ret()
