@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
 import numpy as np
+import llvm.core as lc
 
 import numba
 from numba import decorators
@@ -72,7 +73,7 @@ class CommonVectorizeFromFunc(object):
         ptrlist = self._prepare_pointers(lfunclist, tyslist, engine, **kws)
 
         fntype = lfunclist[0].type.pointee
-        inct = len(fntype.args)
+        inct = len(fntype.args) - fntype.return_type.kind == lc.TYPE_VOID
         outct = 1
 
         datlist = [None] * len(lfunclist)
