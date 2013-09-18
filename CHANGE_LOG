@@ -1,3 +1,7 @@
+Version 0.11
+------------
+* Experimental support for NumPy datetime type
+
 Version 0.10
 ------------
 * Annotation tool (./bin/numba --annotate --fancy) (thanks to Jay Bourque)
