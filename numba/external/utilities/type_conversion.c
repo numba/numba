@@ -263,17 +263,30 @@ static NUMBA_INLINE PyObject * __Numba_PyInt_FromSize_t(size_t);
 static NUMBA_INLINE size_t __Numba_PyInt_AsSize_t(PyObject*);
 
 
-static npy_datetimestruct convert_datetime_str(char *datetime_string,
-    NPY_DATETIMEUNIT *out_bestunit)
+static int convert_datetime_str(char *datetime_string,
+    NPY_DATETIMEUNIT *out_bestunit, npy_datetimestruct *out_datetimestruct)
 {
-    npy_datetimestruct out;
     npy_bool out_local;
     npy_bool out_special;
+    npy_datetimestruct dummy;
 
-    parse_iso_8601_datetime(datetime_string, strlen(datetime_string), -1,
-        NPY_SAME_KIND_CASTING, &out, &out_local, out_bestunit, &out_special);
+    if (out_datetimestruct == NULL) {
+        out_datetimestruct = &dummy;
+    }
 
-    return out;
+    if (datetime_string == NULL) {
+        PyErr_SetString(PyExc_ValueError,
+            "Invalid datetime string");
+        return -1;
+    }
+
+    if (parse_iso_8601_datetime(datetime_string, strlen(datetime_string), -1,
+            NPY_SAME_KIND_CASTING, out_datetimestruct, &out_local, out_bestunit,
+            &out_special) < 0) {
+        return -1;
+    }
+
+    return 0;
 }
 
 static npy_int64 convert_datetime_str_to_timestamp(char *datetime_string)
@@ -283,12 +296,15 @@ static npy_int64 convert_datetime_str_to_timestamp(char *datetime_string)
     PyArray_DatetimeMetaData new_meta;
     NPY_DATETIMEUNIT out_bestunit;
 
-    temp = convert_datetime_str(datetime_string, &out_bestunit);
+    if (convert_datetime_str(datetime_string, &out_bestunit, &temp) < 0) {
+        return -1;
+    }
+
     new_meta.base = out_bestunit;
     new_meta.num = 1;
 
     if (convert_datetimestruct_to_datetime(&new_meta, &temp, &output) < 0) {
-        return NULL;
+        return -1;
     }
 
     return output;
@@ -298,7 +314,10 @@ static npy_int32 convert_datetime_str_to_units(char *datetime_string)
 {
     NPY_DATETIMEUNIT out_bestunit;
 
-    convert_datetime_str(datetime_string, &out_bestunit);
+    if (convert_datetime_str(datetime_string, &out_bestunit, NULL) < 0) {
+        return -1;
+    }
+
     return out_bestunit;
 }
 
@@ -327,6 +346,10 @@ static PyObject* create_numpy_datetime(
     npy_int32 units,
     PyDatetimeScalarObject *scalar)
 {
+    if (scalar == NULL) {
+        return NULL;
+    }
+
     scalar->obval = timestamp;
     scalar->obmeta.base = units;
     scalar->obmeta.num = 1;
@@ -340,6 +363,10 @@ static PyObject* create_numpy_timedelta(
     NPY_DATETIMEUNIT units,
     PyDatetimeScalarObject *scalar)
 {
+    if (scalar == NULL) {
+        return NULL;
+    }
+
     scalar->obval = timedelta;
     scalar->obmeta.base = units;
     scalar->obmeta.num = 1;
@@ -399,11 +426,15 @@ static npy_##ret_type op_name##_##type1##_##type2( \
 \
     src_meta.base = units1; \
     src_meta.num = 1; \
-    cast_##type1##_to_##type1(&src_meta, &dst_meta, type1##1, &operand1); \
+    if (cast_##type1##_to_##type1(&src_meta, &dst_meta, type1##1, &operand1) < 0) { \
+        return -1; \
+    } \
 \
     src_meta.base = units2; \
     src_meta.num = 1; \
-    cast_##type2##_to_##type2(&src_meta, &dst_meta, type2##2, &operand2); \
+    if (cast_##type2##_to_##type2(&src_meta, &dst_meta, type2##2, &operand2) < 0) { \
+        return -1; \
+    } \
 \
     return operand1 op operand2; \
 }
@@ -425,7 +456,9 @@ static ret_type extract_datetime_##unit_name(npy_datetime timestamp, \
 \
     memset(&output, 0, sizeof(npy_datetimestruct)); \
 \
-    convert_datetime_to_datetimestruct(&meta, timestamp, &output); \
+    if (convert_datetime_to_datetimestruct(&meta, timestamp, &output) < 0) { \
+        return -1; \
+    } \
     return output.unit_name; \
 }
 
@@ -451,7 +484,10 @@ static npy_int32 extract_timedelta_sec(npy_timedelta timedelta,
     meta2.base = 7;
     meta2.num = 1;
 
-    cast_timedelta_to_timedelta(&meta1, &meta2, timedelta, &output);
+    if (cast_timedelta_to_timedelta(&meta1, &meta2, timedelta, &output) < 0) {
+        return -1;
+    }
+
     return output;
 }
 
@@ -466,6 +502,9 @@ static npy_int32 convert_timedelta_units_str(char *units_str)
 
 static npy_int32 get_units_num(char *units_char)
 {
+    if (units_char == NULL)
+        return NPY_FR_GENERIC;
+
     return parse_datetime_unit_from_string(units_char, 1, NULL);
 }
 
