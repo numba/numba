@@ -2,41 +2,86 @@
 % Siu Kwan Lam
 % September 24, 2013
 
-# Overview
+# What is NumbaPro?
 
 ## NumbaPro
 
-Commerical extension to Numba.
+A commercial extension to Numba
 
-Goal
+## Numba
 
-Accelerate numerical Python code by fully utilizing available hardware:
+- Speedup numeric Python code
+- Native code speed
+- Free from the GIL
 
-- Multicore CPU
-- Manycore GPU
-- more in the future
+## Numba + Parallel = NumbaPro
 
-## As a JIT Compiler
+### **Accelerate** numerical Python code by fully utilizing **parallel hardware**:
 
-Compile Python to:
+- Multicore CPUs
+- Manycore GPUs
+
+<img style="box-shadow: none; background: none; border: none;" width="33%" src="img/intelcpu.png" />
+<img style="box-shadow: none; background: none; border: none;" width="33%" src="img/teslac2075.png" />
+
+# As a JIT Compiler
+
+## Compile Python to:
 
 - CUDA PTX
 - Parallel CPU code
 
-Through simple decorators
+## Through simple decorators
 
-## As a Library
+- @jit
+- @autojit
+- **@vectorize**
+- **@guvectorize**
 
-Bindings to:
+# As a Library
+
+## Bindings to
 
 - cuRAND
+    - Random number generation
 - cuBLAS
+    - Linear algebra
 - cuFFT
+    - Fourier transform
 
+# Softare Stack
 
-## Decorators: @vectorize
+## Components
 
-Convert a scalar function into a NumPy Universal function that operates on NumPy array operands.
+<img style="box-shadow: none; border: none;" src="img/numbapro_stack.png" />
+
+LLVM + NVVM -> PTX
+
+# Why use NumbaPro?
+
+## Use existing data analytics stack
+
+<center>
+| NumPy | Scipy | MatPlotlib |
+| --- | --- | --- |
+| NumExpr | Pandas | PyTables |
+| Scikit-Learn | Scikit-Image |
+</center>
+
+## Speedup data processing
+## Scale to BIG data sets with GPUs effortlessly
+## CUDA architecture knowledge not required
+
+# Pattern 1: @vectorize
+
+## @vectorize
+
+- Convert a scalar function into a NumPy **Universal function** that operates 
+  on NumPy array operands
+  
+- Applies a **element-wise function** over all dimensions
+
+## Example
 
 ```python
 @vectorize(['float32(float32, float32)'], 
@@ -45,18 +90,29 @@ def foo(a, b):
     return (a + b) ** 2
 ```
 
-## Decorators: @vectorize Usage
+```python
+an_array = numpy.arange(10, dtype=numpy.float32)
+a_scalar = numpy.float32(1.2)
+foo(an_array, a_scalar)
+```
+
+- Call `foo` on any arrays or numeric scalars
+
+
+## Usage
 
 ```python
+
 @vectorize([prototype0,
             prototype1,
             ...],
            target="targetname")
 def a_scalar_function(a, b, ...):
     ...
+
 ```
 
-## Decorators: @vectorize Signature example
+## Prototype
 
 - takes 2 float32 and returns a float32
 
@@ -71,9 +127,45 @@ def a_scalar_function(a, b, ...):
 ```
 
 
-## Decorators: @vectorize for CUDA
+## Single CPU code
 
 ```python
+
+@vectorize(['float32(float32, float32)'],
+           target='cpu')
+def foo(a, b):
+    return (a + b) ** 2
+
+N = 10000
+A = numpy.arange(N, dtype=numpy.float32)
+B = numpy.arange(N, dtype=numpy.float32)
+
+C = foo(A, B)
+
+```
+
+## Parallel CPU code
+
+```python
+
+@vectorize(['float32(float32, float32)'],
+           target='parallel')
+def foo(a, b):
+    return (a + b) ** 2
+
+N = 10000
+A = numpy.arange(N, dtype=numpy.float32)
+B = numpy.arange(N, dtype=numpy.float32)
+
+C = foo(A, B)
+
+```
+
+
+## CUDA code
+
+```python
+
 @vectorize(['float32(float32, float32)'], 
            target='gpu')
 def foo(a, b):
@@ -84,48 +176,26 @@ A = numpy.arange(N, dtype=numpy.float32)
 B = numpy.arange(N, dtype=numpy.float32)
 
 C = foo(A, B)
+
 ```
 
-## Decorators: @vectorize for Parallel CPU cores
+## Benchmark
 
-```python
-@vectorize(['float32(float32, float32)'], 
-           target='parallel')
-def foo(a, b):
-    return (a + b) ** 2
+<img src="img/vectorize_speedup_teslaC2075.png" />
 
-N = 10000
-A = numpy.arange(N, dtype=numpy.float32)
-B = numpy.arange(N, dtype=numpy.float32)
+## Compile multiple versions for CPU and GPU
 
-C = foo(A, B)
-```
+## Choose hardware according to the size of your data set
+
+## Scale your program without rewriting your algorithm
 
 
-## Decorators: @vectorize for Single CPU core
+# Pattern 2: @guvectorize
 
-```python
-@vectorize(['float32(float32, float32)'], 
-           target='cpu')
-def foo(a, b):
-    return (a + b) ** 2
 
-N = 10000
-A = numpy.arange(N, dtype=numpy.float32)
-B = numpy.arange(N, dtype=numpy.float32)
+## Example
 
-C = foo(A, B)
-```
-
-## Decorators: @vectorize Speedup
-
-<center>
-<img width="70%" src="img/vectorize_speedup_teslaC2075.png" />
-</center>
-
-## Decorators: @guvectorize
-
-Creates a Generialized Universal Function from a Python function
+Creates a Generalized Universal Function from a Python function
 
 ```python
 @guvectorize([prototype0,
@@ -136,10 +206,12 @@ def gufunc_core(a, b, ...):
     ...
 ```
 
-## Decorators: @guvectorize Usage
+Each element is a slice of an array
+
+## Usage
 
 - Prototypes are the same as `@vectorize`
-- The signature specificies the dimension requirement:
+- The signature specifies the dimension requirement:
 
 Signature example matrix-matrix multiplication
 
@@ -147,14 +219,28 @@ Signature example matrix-matrix multiplication
 "(m, n), (n, p) -> (m, p)"
 ```
 
-## Decorators: @guvectorize CUDA
+## CPU
 
 ```python
-prototype = '''void(float32[:,:], 
-                    float32[:,:], 
-                    float32[:,:])'''
-@guvectorize([prototype], '(m,n),(n,p)->(m,p)',
-             target='gpu')
+
+prototype = "void(float32[:,:], float32[:,:], float32[:,:])"
+@guvectorize([prototype], '(m,n),(n,p)->(m,p)', target='cpu')
+def matmulcore(A, B, C):
+    m, n = A.shape
+    n, p = B.shape
+    for i in range(m):
+        for j in range(p):
+            C[i, j] = 0
+            for k in range(n):
+                C[i, j] += A[i, k] * B[k, j]
+```
+
+## GPU
+
+```python
+
+prototype = "void(float32[:,:], float32[:,:], float32[:,:])"
+@guvectorize([prototype], '(m,n),(n,p)->(m,p)', target='gpu')
 def matmulcore(A, B, C):
     m, n = A.shape
     n, p = B.shape
@@ -166,11 +252,12 @@ def matmulcore(A, B, C):
 ```
 
 
-## Decorators: @guvectorize Launch
+## In Use
 
 Performs batch matrix-matrix multiplication
 
 ```python
+
 matrix_ct = 1000
 # creates an array of 1000 x 2 x 4
 A = np.arange(matrix_ct * 2 * 4, 
@@ -184,43 +271,69 @@ B = np.arange(matrix_ct * 4 * 5,
 C = gufunc(A, B)
 ```
 
-## Decorators: @guvectorize Summary
+## Similar to `@vectorize` but use array operands
 
-- Similar to `@vectorize` but can use array as operands to the core function.
-- Can also target the CPU.
+# Pattern 3: Optimize only when necessary
 
-# Control Memory Transfer
+## Manage data movement
+
+between CPU and GPU
+
+## Why??
+
+- Avoid redundant transfer
+- Allocate intermediate arrays on the GPU
 
 ## to_device
 
+Copy memory to the device
+
 ```python
+
 A = numpy.arange(10)    # cpu
 dA = cuda.to_device(A)  # gpu
 ```
 
 ## copy_to_host
 
+Copy memory to back to the host
+
 ```python
 A = dA.copy_to_host()
 ```
+
+Note: `dA` is a device array 
 
 ## device_array
 
 Allocate device array like NumPy array
 
 ```python
+
 B = cuda.device_array(shape=(2,3,4))
 C = cuda.device_array(shape=10, 
                       dtype=numpy.float32)
 ```
 
-# CUDA Library Support
+# Pattern 4: Use CUDA Libraries
+
+## Don't Rewrite
+
+- CUDA Libraries contains highly optimized code
 
 ## FFT convolution
 
 - Use cuFFT to build a FFT convolution.
 
+## How?
+
+1. forward FFT transform data and filter
+2. multiply data and filter in Fourier domain
+3. inverse FFT transform the product
+
 ## Forward FFT
+
+### NumbaPro
 
 ```python
 from numbapro.cudalib import cufft
@@ -229,34 +342,77 @@ fft = cufft.fft(host_or_device_array)
 cufft.fft_inplace(host_or_device_array)
 ```
 
+### NumPy
+
+```python
+import numpy
+fft = numpy.fft.fft(array)
+```
+
 ## Inverse FFT
+
+### NumbaPro
 
 ```python
 from numbapro.cudalib import cufft
 
-fft = cufft.ifft(host_or_device_array)
+ifft = cufft.ifft(host_or_device_array)
 cufft.ifft_inplace(host_or_device_array)
 ```
 
-## FFT Convolution
+### NumPy
 
 ```python
-d_img = cuda.to_device(img)     # image
-d_fltr = cuda.to_device(fltr)   # filter
-
-cufft.fft_inplace(img)
-cufft.fft_inplace(fltr)
-
-vmult(img, fltr, out=img)
-
-cufft.ifft_inplace(img)
-
-filted_img = d_img.copy_to_host()
+import numpy
+ifft = numpy.fft.ifft(ary)
 ```
 
-## Where to Get?
+## Code: FFT Convolution
 
-<center>
+```python
+@vectorize(['complex64(complex64, complex64)'],
+           target='gpu')
+def vmult(a, b):
+    return a * b
+```
+
+```python
+# host -> device
+d_img = cuda.to_device(img)     # image
+d_fltr = cuda.to_device(fltr)   # filter
+# FFT forward
+cufft.fft_inplace(d_img)
+cufft.fft_inplace(d_fltr)
+# multply
+vmult(d_img, d_fltr, out=d_img) # inplace
+# FFT inverse
+cufft.ifft_inplace(d_img)
+# device -> host
+filted_img = d_img.copy_to_host()
+```
+Works for 1D, 2D, 3D images
+
+## Benchmark
+
+<img src="img/fftconvolve.png" />
+
+# Coda
+
+## Summary
+
+- Use decorators to compile Python functions for the CUDA
+- Manage CUDA memory transfers
+- Use cuFFT to implement FFT convolution
+
+## Questions?
+
+<hr />
+
+### Where to Get?
+
 Parts of Anaconda Accelerate
-https://store.continuum.io/cshop/accelerate/
-</center>
+[https://store.continuum.io/cshop/accelerate/](https://store.continuum.io/cshop/accelerate/)
+
+
+More Examples: [https://github.com/ContinuumIO/numbapro-examples](https://github.com/ContinuumIO/numbapro-examples)
+

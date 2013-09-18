@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="generator" content="pandoc">
+  <meta name="author" content="Siu Kwan Lam" />
+  <meta name="dcterms.date" content="2013-09-24" />
+  <title>Pythonic Parallel Patterns for the GPU with NumbaPro</title>
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link rel="stylesheet" href="reveal.js/css/reveal.min.css"/>
+    <style type="text/css">code{white-space: pre;}</style>
+    <style type="text/css">
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; }
+code > span.dt { color: #902000; }
+code > span.dv { color: #40a070; }
+code > span.bn { color: #40a070; }
+code > span.fl { color: #40a070; }
+code > span.ch { color: #4070a0; }
+code > span.st { color: #4070a0; }
+code > span.co { color: #60a0b0; font-style: italic; }
+code > span.ot { color: #007020; }
+code > span.al { color: #ff0000; font-weight: bold; }
+code > span.fu { color: #06287e; }
+code > span.er { color: #ff0000; font-weight: bold; }
+    </style>
+
+  <link rel="stylesheet" href="reveal.js/css/theme/serif.css" id="theme">
+
+  <link rel="stylesheet" href="custom.css"/>
+  <link rel="stylesheet" media="print" href="reveal.js/css/print/pdf.css" />
+  <!--[if lt IE 9]>
+  <script src="reveal.js/lib/js/html5shiv.js"></script>
+  <![endif]-->
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+
+<section>
+    <h1 class="title">Pythonic Parallel Patterns for the GPU with NumbaPro</h1>
+    <h2 class="author">Siu Kwan Lam</h2>
+    <h3 class="date">September 24, 2013</h3>
+</section>
+
+<section><section id="what-is-numbapro" class="titleslide slide level1"><h1>What is NumbaPro?</h1></section><section id="numbapro" class="slide level2">
+<h1>NumbaPro</h1>
+<p>A commercial extension to Numba</p>
+</section><section id="numba" class="slide level2">
+<h1>Numba</h1>
+<ul>
+<li>Speedup numeric Python code</li>
+<li>Native code speed</li>
+<li>Free from the GIL</li>
+</ul>
+</section><section id="numba-parallel-numbapro" class="slide level2">
+<h1>Numba + Parallel = NumbaPro</h1>
+<h3 id="accelerate-numerical-python-code-by-fully-utilizing-parallel-hardware"><strong>Accelerate</strong> numerical Python code by fully utilizing <strong>parallel hardware</strong>:</h3>
+<ul>
+<li>Multicore CPUs</li>
+<li>Manycore GPUs</li>
+</ul>
+<p><img style="box-shadow: none; background: none; border: none;" width="33%" src="img/intelcpu.png" /> <img style="box-shadow: none; background: none; border: none;" width="33%" src="img/teslac2075.png" /></p>
+</section></section>
+<section><section id="as-a-jit-compiler" class="titleslide slide level1"><h1>As a JIT Compiler</h1></section><section id="compile-python-to" class="slide level2">
+<h1>Compile Python to:</h1>
+<ul>
+<li>CUDA PTX</li>
+<li>Parallel CPU code</li>
+</ul>
+</section><section id="through-simple-decorators" class="slide level2">
+<h1>Through simple decorators</h1>
+<ul>
+<li><span class="citation" data-cites="jit">@jit</span></li>
+<li><span class="citation" data-cites="autojit">@autojit</span></li>
+<li><strong><span class="citation" data-cites="vectorize">@vectorize</span></strong></li>
+<li><strong><span class="citation" data-cites="guvectorize">@guvectorize</span></strong></li>
+</ul>
+</section></section>
+<section><section id="as-a-library" class="titleslide slide level1"><h1>As a Library</h1></section><section id="bindings-to" class="slide level2">
+<h1>Bindings to</h1>
+<ul>
+<li>cuRAND
+<ul>
+<li>Random number generation</li>
+</ul></li>
+<li>cuBLAS
+<ul>
+<li>Linear algebra</li>
+</ul></li>
+<li>cuFFT
+<ul>
+<li>Fourier transform</li>
+</ul></li>
+</ul>
+</section></section>
+<section><section id="softare-stack" class="titleslide slide level1"><h1>Softare Stack</h1></section><section id="components" class="slide level2">
+<h1>Components</h1>
+<p><img style="box-shadow: none; border: none;" src="img/numbapro_stack.png" /></p>
+<p>LLVM + NVVM -&gt; PTX</p>
+</section></section>
+<section><section id="why-use-numbapro" class="titleslide slide level1"><h1>Why use NumbaPro?</h1></section><section id="use-existing-data-analytics-stack" class="slide level2">
+<h1>Use existing data analytics stack</h1>
+<center>
+<table>
+<thead>
+<tr class="header">
+<th style="text-align: left;">NumPy</th>
+<th style="text-align: left;">Scipy</th>
+<th style="text-align: left;">MatPlotlib</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">NumExpr</td>
+<td style="text-align: left;">Pandas</td>
+<td style="text-align: left;">PyTables</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Scikit-Learn</td>
+<td style="text-align: left;">Scikit-Image</td>
+</tr>
+</tbody>
+</table>
+</center>
+
+</section><section id="speedup-data-processing" class="slide level2">
+<h1>Speedup data processing</h1>
+</section><section id="scale-to-big-data-sets-with-gpus-effortlessly" class="slide level2">
+<h1>Scale to BIG data sets with GPUs effortlessly</h1>
+</section><section id="cuda-architecture-knowledge-not-required" class="slide level2">
+<h1>CUDA architecture knowledge not required</h1>
+</section></section>
+<section><section id="pattern-1-vectorize" class="titleslide slide level1"><h1>Pattern 1: <span class="citation" data-cites="vectorize">@vectorize</span></h1></section><section id="vectorize" class="slide level2">
+<h1><span class="citation" data-cites="vectorize">@vectorize</span></h1>
+<ul>
+<li><p>Convert a scalar function into a NumPy <strong>Universal function</strong> that operates on NumPy array operands</p></li>
+<li><p>Applies a <strong>element-wise function</strong> over all dimensions</p></li>
+</ul>
+</section><section id="example" class="slide level2">
+<h1>Example</h1>
+<pre class="sourceCode python"><code class="sourceCode python"><span class="ot">@vectorize</span>([<span class="st">&#39;float32(float32, float32)&#39;</span>], 
+           target=<span class="st">&#39;gpu&#39;</span>)
+<span class="kw">def</span> foo(a, b):
+    <span class="kw">return</span> (a + b) ** <span class="dv">2</span></code></pre>
+<pre class="sourceCode python"><code class="sourceCode python">an_array = numpy.arange(<span class="dv">10</span>, dtype=numpy.float32)
+a_scalar = numpy.float32(<span class="fl">1.2</span>)
+foo(an_array, a_scalar)</code></pre>
+<ul>
+<li>Call <code>foo</code> on any arrays or numeric scalars</li>
+</ul>
+</section><section id="usage" class="slide level2">
+<h1>Usage</h1>
+<pre class="sourceCode python"><code class="sourceCode python">
+<span class="ot">@vectorize</span>([prototype0,
+            prototype1,
+            ...],
+           target=<span class="st">&quot;targetname&quot;</span>)
+<span class="kw">def</span> a_scalar_function(a, b, ...):
+    ...</code></pre>
+</section><section id="prototype" class="slide level2">
+<h1>Prototype</h1>
+<ul>
+<li>takes 2 float32 and returns a float32</li>
+</ul>
+<pre class="sourceCode python"><code class="sourceCode python"><span class="co">&#39;float32(float32, float32)&#39;</span></code></pre>
+<ul>
+<li>takes 2 int32 and returns a int32</li>
+</ul>
+<pre class="sourceCode python"><code class="sourceCode python"><span class="co">&#39;int32(int32, int32)&#39;</span></code></pre>
+</section><section id="single-cpu-code" class="slide level2">
+<h1>Single CPU code</h1>
+<pre class="sourceCode python"><code class="sourceCode python">
+<span class="ot">@vectorize</span>([<span class="st">&#39;float32(float32, float32)&#39;</span>],
+           target=<span class="st">&#39;cpu&#39;</span>)
+<span class="kw">def</span> foo(a, b):
+    <span class="kw">return</span> (a + b) ** <span class="dv">2</span>
+
+N = <span class="dv">10000</span>
+A = numpy.arange(N, dtype=numpy.float32)
+B = numpy.arange(N, dtype=numpy.float32)
+
+C = foo(A, B)</code></pre>
+</section><section id="parallel-cpu-code" class="slide level2">
+<h1>Parallel CPU code</h1>
+<pre class="sourceCode python"><code class="sourceCode python">
+<span class="ot">@vectorize</span>([<span class="st">&#39;float32(float32, float32)&#39;</span>],
+           target=<span class="st">&#39;parallel&#39;</span>)
+<span class="kw">def</span> foo(a, b):
+    <span class="kw">return</span> (a + b) ** <span class="dv">2</span>
+
+N = <span class="dv">10000</span>
+A = numpy.arange(N, dtype=numpy.float32)
+B = numpy.arange(N, dtype=numpy.float32)
+
+C = foo(A, B)</code></pre>
+</section><section id="cuda-code" class="slide level2">
+<h1>CUDA code</h1>
+<pre class="sourceCode python"><code class="sourceCode python">
+<span class="ot">@vectorize</span>([<span class="st">&#39;float32(float32, float32)&#39;</span>], 
+           target=<span class="st">&#39;gpu&#39;</span>)
+<span class="kw">def</span> foo(a, b):
+    <span class="kw">return</span> (a + b) ** <span class="dv">2</span>
+
+N = <span class="dv">10000</span>
+A = numpy.arange(N, dtype=numpy.float32)
+B = numpy.arange(N, dtype=numpy.float32)
+
+C = foo(A, B)</code></pre>
+</section><section id="benchmark" class="slide level2">
+<h1>Benchmark</h1>
+<p><img src="img/vectorize_speedup_teslaC2075.png" /></p>
+</section><section id="compile-multiple-versions-for-cpu-and-gpu" class="slide level2">
+<h1>Compile multiple versions for CPU and GPU</h1>
+</section><section id="choose-hardware-according-to-the-size-of-your-data-set" class="slide level2">
+<h1>Choose hardware according to the size of your data set</h1>
+</section><section id="scale-your-program-without-rewriting-your-algorithm" class="slide level2">
+<h1>Scale your program without rewriting your algorithm</h1>
+</section></section>
+<section><section id="pattern-2-guvectorize" class="titleslide slide level1"><h1>Pattern 2: <span class="citation" data-cites="guvectorize">@guvectorize</span></h1></section><section id="example-1" class="slide level2">
+<h1>Example</h1>
+<p>Creates a Generalized Universal Function from a Python function</p>
+<pre class="sourceCode python"><code class="sourceCode python"><span class="ot">@guvectorize</span>([prototype0,
+              prototype1,
+              ...], 
+             signature)
+<span class="kw">def</span> gufunc_core(a, b, ...):
+    ...</code></pre>
+<p>Each element is a slice of an array</p>
+</section><section id="usage-1" class="slide level2">
+<h1>Usage</h1>
+<ul>
+<li>Prototypes are the same as <code>@vectorize</code></li>
+<li>The signature specifies the dimension requirement:</li>
+</ul>
+<p>Signature example matrix-matrix multiplication</p>
+<pre class="sourceCode python"><code class="sourceCode python"><span class="co">&quot;(m, n), (n, p) -&gt; (m, p)&quot;</span></code></pre>
+</section><section id="cpu" class="slide level2">
+<h1>CPU</h1>
+<pre class="sourceCode python"><code class="sourceCode python">
+prototype = <span class="st">&quot;void(float32[:,:], float32[:,:], float32[:,:])&quot;</span>
+<span class="ot">@guvectorize</span>([prototype], <span class="st">&#39;(m,n),(n,p)-&gt;(m,p)&#39;</span>, target=<span class="st">&#39;cpu&#39;</span>)
+<span class="kw">def</span> matmulcore(A, B, C):
+    m, n = A.shape
+    n, p = B.shape
+    <span class="kw">for</span> i in <span class="dt">range</span>(m):
+        <span class="kw">for</span> j in <span class="dt">range</span>(p):
+            C[i, j] = <span class="dv">0</span>
+            <span class="kw">for</span> k in <span class="dt">range</span>(n):
+                C[i, j] += A[i, k] * B[k, j]</code></pre>
+</section><section id="gpu" class="slide level2">
+<h1>GPU</h1>
+<pre class="sourceCode python"><code class="sourceCode python">
+prototype = <span class="st">&quot;void(float32[:,:], float32[:,:], float32[:,:])&quot;</span>
+<span class="ot">@guvectorize</span>([prototype], <span class="st">&#39;(m,n),(n,p)-&gt;(m,p)&#39;</span>, target=<span class="st">&#39;gpu&#39;</span>)
+<span class="kw">def</span> matmulcore(A, B, C):
+    m, n = A.shape
+    n, p = B.shape
+    <span class="kw">for</span> i in <span class="dt">range</span>(m):
+        <span class="kw">for</span> j in <span class="dt">range</span>(p):
+            C[i, j] = <span class="dv">0</span>
+            <span class="kw">for</span> k in <span class="dt">range</span>(n):
+                C[i, j] += A[i, k] * B[k, j]</code></pre>
+</section><section id="in-use" class="slide level2">
+<h1>In Use</h1>
+<p>Performs batch matrix-matrix multiplication</p>
+<pre class="sourceCode python"><code class="sourceCode python">
+matrix_ct = <span class="dv">1000</span>
+<span class="co"># creates an array of 1000 x 2 x 4</span>
+A = np.arange(matrix_ct * <span class="dv">2</span> * <span class="dv">4</span>, 
+              dtype=np.float32
+              ).reshape(matrix_ct, <span class="dv">2</span>, <span class="dv">4</span>)
+<span class="co"># creates an array of 1000 x 4 x 5</span>
+B = np.arange(matrix_ct * <span class="dv">4</span> * <span class="dv">5</span>, 
+              dtype=np.float32
+              ).reshape(matrix_ct, <span class="dv">4</span>, <span class="dv">5</span>)
+<span class="co"># outputs an array of 1000 x 2 x 5</span>
+C = gufunc(A, B)</code></pre>
+</section><section id="similar-to-vectorize-but-use-array-operands" class="slide level2">
+<h1>Similar to <code>@vectorize</code> but use array operands</h1>
+</section></section>
+<section><section id="pattern-3-optimize-only-when-necessary" class="titleslide slide level1"><h1>Pattern 3: Optimize only when necessary</h1></section><section id="manage-data-movement" class="slide level2">
+<h1>Manage data movement</h1>
+<p>between CPU and GPU</p>
+</section><section id="why" class="slide level2">
+<h1>Why??</h1>
+<ul>
+<li>Avoid redundant transfer</li>
+<li>Allocate intermediate arrays on the GPU</li>
+</ul>
+</section><section id="to_device" class="slide level2">
+<h1>to_device</h1>
+<p>Copy memory to the device</p>
+<pre class="sourceCode python"><code class="sourceCode python">
+A = numpy.arange(<span class="dv">10</span>)    <span class="co"># cpu</span>
+dA = cuda.to_device(A)  <span class="co"># gpu</span></code></pre>
+</section><section id="copy_to_host" class="slide level2">
+<h1>copy_to_host</h1>
+<p>Copy memory to back to the host</p>
+<pre class="sourceCode python"><code class="sourceCode python">A = dA.copy_to_host()</code></pre>
+<p>Note: <code>dA</code> is a device array</p>
+</section><section id="device_array" class="slide level2">
+<h1>device_array</h1>
+<p>Allocate device array like NumPy array</p>
+<pre class="sourceCode python"><code class="sourceCode python">
+B = cuda.device_array(shape=(<span class="dv">2</span>,<span class="dv">3</span>,<span class="dv">4</span>))
+C = cuda.device_array(shape=<span class="dv">10</span>, 
+                      dtype=numpy.float32)</code></pre>
+</section></section>
+<section><section id="pattern-4-use-cuda-libraries" class="titleslide slide level1"><h1>Pattern 4: Use CUDA Libraries</h1></section><section id="dont-rewrite" class="slide level2">
+<h1>Don't Rewrite</h1>
+<ul>
+<li>CUDA Libraries contains highly optimized code</li>
+</ul>
+</section><section id="fft-convolution" class="slide level2">
+<h1>FFT convolution</h1>
+<ul>
+<li>Use cuFFT to build a FFT convolution.</li>
+</ul>
+</section><section id="how" class="slide level2">
+<h1>How?</h1>
+<ol type="1">
+<li>forward FFT transform data and filter</li>
+<li>multiply data and filter in Fourier domain</li>
+<li>inverse FFT transform the product</li>
+</ol>
+</section><section id="forward-fft" class="slide level2">
+<h1>Forward FFT</h1>
+<h3 id="numbapro-1">NumbaPro</h3>
+<pre class="sourceCode python"><code class="sourceCode python"><span class="ch">from</span> numbapro.cudalib <span class="ch">import</span> cufft
+
+fft = cufft.fft(host_or_device_array)
+cufft.fft_inplace(host_or_device_array)</code></pre>
+<h3 id="numpy">NumPy</h3>
+<pre class="sourceCode python"><code class="sourceCode python"><span class="ch">import</span> numpy
+fft = numpy.fft.fft(array)</code></pre>
+</section><section id="inverse-fft" class="slide level2">
+<h1>Inverse FFT</h1>
+<h3 id="numbapro-2">NumbaPro</h3>
+<pre class="sourceCode python"><code class="sourceCode python"><span class="ch">from</span> numbapro.cudalib <span class="ch">import</span> cufft
+
+ifft = cufft.ifft(host_or_device_array)
+cufft.ifft_inplace(host_or_device_array)</code></pre>
+<h3 id="numpy-1">NumPy</h3>
+<pre class="sourceCode python"><code class="sourceCode python"><span class="ch">import</span> numpy
+ifft = numpy.fft.ifft(ary)</code></pre>
+</section><section id="code-fft-convolution" class="slide level2">
+<h1>Code: FFT Convolution</h1>
+<pre class="sourceCode python"><code class="sourceCode python"><span class="ot">@vectorize</span>([<span class="st">&#39;complex64(complex64, complex64)&#39;</span>],
+           target=<span class="st">&#39;gpu&#39;</span>)
+<span class="kw">def</span> vmult(a, b):
+    <span class="kw">return</span> a * b</code></pre>
+<pre class="sourceCode python"><code class="sourceCode python"><span class="co"># host -&gt; device</span>
+d_img = cuda.to_device(img)     <span class="co"># image</span>
+d_fltr = cuda.to_device(fltr)   <span class="co"># filter</span>
+<span class="co"># FFT forward</span>
+cufft.fft_inplace(d_img)
+cufft.fft_inplace(d_fltr)
+<span class="co"># multply</span>
+vmult(d_img, d_fltr, out=d_img) <span class="co"># inplace</span>
+<span class="co"># FFT inverse</span>
+cufft.ifft_inplace(d_img)
+<span class="co"># device -&gt; host</span>
+filted_img = d_img.copy_to_host()</code></pre>
+<p>Works for 1D, 2D, 3D images</p>
+</section><section id="benchmark-1" class="slide level2">
+<h1>Benchmark</h1>
+<p><img src="img/fftconvolve.png" /></p>
+</section></section>
+<section><section id="coda" class="titleslide slide level1"><h1>Coda</h1></section><section id="summary" class="slide level2">
+<h1>Summary</h1>
+<ul>
+<li>Use decorators to compile Python functions for the CUDA</li>
+<li>Manage CUDA memory transfers</li>
+<li>Use cuFFT to implement FFT convolution</li>
+</ul>
+</section><section id="questions" class="slide level2">
+<h1>Questions?</h1>
+<hr />
+
+<h3 id="where-to-get">Where to Get?</h3>
+<p>Parts of Anaconda Accelerate <a href="https://store.continuum.io/cshop/accelerate/">https://store.continuum.io/cshop/accelerate/</a></p>
+<p>More Examples: <a href="https://github.com/ContinuumIO/numbapro-examples">https://github.com/ContinuumIO/numbapro-examples</a></p>
+</section></section>
+    </div>
+  </div>
+
+  <div class="background"><img src="img/continuum_logo.png" /></div>
+
+  <script src="reveal.js/lib/js/head.min.js"></script>
+  <script src="reveal.js/js/reveal.min.js"></script>
+
+  <script>
+
+      // Full list of configuration options available here:
+      // https://github.com/hakimel/reveal.js#configuration
+      Reveal.initialize({
+        controls: true,
+        progress: true,
+        history: true,
+        center: true,
+        theme: Reveal.getQueryHash().theme, // available themes are in /css/theme
+        transition: Reveal.getQueryHash().transition || 'linear', // default/cube/page/concave/zoom/linear/fade/none
+
+        // Optional libraries used to extend on reveal.js
+        dependencies: [
+          { src: 'reveal.js/lib/js/classList.js', condition: function() { return !document.body.classList; } },
+          { src: 'reveal.js/plugin/zoom-js/zoom.js', async: true, condition: function() { return !!document.body.classList; } },
+          { src: 'reveal.js/plugin/notes/notes.js', async: true, condition: function() { return !!document.body.classList; } },
+//          { src: 'reveal.js/plugin/search/search.js', async: true, condition: function() { return !!document.body.classList; }, }
+//          { src: 'reveal.js/plugin/remotes/remotes.js', async: true, condition: function() { return !!document.body.classList; } }
+]});
+    </script>
+  </body>
+</html>

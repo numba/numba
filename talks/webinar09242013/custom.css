@@ -1,0 +1,21 @@
+.background {
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    width: 100%;
+    text-align: center;
+}
+.background img{
+    width: 33%;
+}
+
+.reveal section img {
+border-width: 1px;
+}
+
+.reveal h1 { font-size: 2.0em; }
+.reveal h2 { font-size: 1.80em;	}
+.reveal h3 { font-size: 1.55em;	}
+.reveal h4 { font-size: 1em;	}
+
+.reveal strong { color: #060; }
