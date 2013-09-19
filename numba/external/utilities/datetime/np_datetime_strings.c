@@ -376,7 +376,7 @@ convert_datetimestruct_local_to_utc(npy_datetimestruct *out_dts_utc,
  *
  * Returns 0 on success, -1 on failure.
  */
-NPY_NO_EXPORT int
+int
 parse_iso_8601_datetime(char *str, Py_ssize_t len,
                     NPY_DATETIMEUNIT unit,
                     NPY_CASTING casting,
@@ -946,7 +946,7 @@ error:
  * Provides a string length to use for converting datetime
  * objects with the given local and unit settings.
  */
-NPY_NO_EXPORT int
+int
 get_datetime_iso_8601_strlen(int local, NPY_DATETIMEUNIT base)
 {
     int len = 0;
@@ -1073,7 +1073,7 @@ lossless_unit_from_datetimestruct(npy_datetimestruct *dts)
  *  Returns 0 on success, -1 on failure (for example if the output
  *  string was too short).
  */
-NPY_NO_EXPORT int
+int
 make_iso_8601_datetime(npy_datetimestruct *dts, char *outstr, int outlen,
                     int local, NPY_DATETIMEUNIT base, int tzoffset,
                     NPY_CASTING casting)
