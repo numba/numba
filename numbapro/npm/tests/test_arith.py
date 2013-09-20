@@ -209,6 +209,9 @@ if sys.platform != 'win32':
             assert got == exp, ('div(%s, %s) got = %s expect=%s' %
                                                 (a, b, got, exp))
 
+        tyset = iset
+        if tuple.__itemsize__ == 4: # 32bit
+            tyset -= set([int64, uint64])
         for ty in iset:
             run(ty, 4, 2)
 
