@@ -132,7 +132,7 @@ memoryview_get_extents_info(PyObject *self, PyObject *args)
     PyObject *shape = NULL, *strides = NULL;
     Py_ssize_t itemsize = 0;
     int ndim = 0;
-    PyObject* res;
+    PyObject* res = NULL;
 
     if (!PyArg_ParseTuple(args, "OOin", &shape, &strides, &ndim, &itemsize))
         goto cleanup;
