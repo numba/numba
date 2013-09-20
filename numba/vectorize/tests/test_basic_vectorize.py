@@ -21,8 +21,6 @@ class TestBasicVectorize(unittest.TestCase):
         print("Test %s" % ty)
         data = np.linspace(0., 10000., 100000).astype(ty)
 
-        print self.basic_ufunc.signature
-        print self.basic_ufunc.types
         ts = time()
         result = self.basic_ufunc(data, data)
         tnumba = time() - ts
