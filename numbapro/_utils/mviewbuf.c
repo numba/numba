@@ -207,7 +207,7 @@ get_bufinfo(PyObject *self, Py_ssize_t *psize, void **pptr)
         goto cleanup;
     }
 
-    ptr = (void*)PyNumber_AsSsize_t(bufptr, PyExc_OverflowError);
+    ptr = PyLong_AsVoidPtr(PyNumber_Long(bufptr));
     if (PyErr_Occurred())
         goto cleanup;
     else if (!ptr) {
