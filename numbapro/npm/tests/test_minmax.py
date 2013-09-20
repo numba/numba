@@ -66,7 +66,7 @@ def test_min3_integer():
 
 @testcase
 def test_min3_float():
-    compiled = compile(min2, float32, [float32, float32, float32])
+    compiled = compile(min3, float32, [float32, float32, float32])
     a, b, c = 32.1, 12.3, 2091.
     got = compiled(a, b, c)
     exp = min3(a, b, c)
