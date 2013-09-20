@@ -86,7 +86,7 @@ def datetime_subtract_timedelta(d, t):
 def ufunc_inc_day(a):
     return a + numpy.timedelta64(1, 'D')
 
-@numba.jit(numba.long_(numba.string_), nopython=True)
+@numba.jit(numba.int64(numba.string_), nopython=True)
 def cast_datetime_to_int(datetime_str):
     x = numpy.datetime64(datetime_str)
     return x
