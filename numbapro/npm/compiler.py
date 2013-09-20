@@ -3,10 +3,15 @@ from contextlib import contextmanager
 from collections import defaultdict
 from timeit import default_timer as timer
 import inspect
+from llvm import llrt
 from . import (symbolic, typing, codegen, execution, fnlib, imlib, extending,
                arylib, iterlib, castlib)
 
 DEFAULT_FLAGS = 'overflow', 'zerodivision', 'boundcheck', 'wraparound'
+
+
+libllrt = llrt.LLRT()
+libllrt.install_symbols()
 
 def get_builtin_context():
     funclib = fnlib.get_builtin_function_library()
@@ -58,6 +63,8 @@ def compile(func, retty, argtys, libs=global_builtin_libs, flags=DEFAULT_FLAGS):
     with profile((func, tuple(argtys))):
         lmod, lfunc, excs = compile_common(func, retty, argtys, libs, flags)
         lmod.verify()
+
+        llrt.replace_divmod64(lfunc)
 
         jit = execution.JIT(lfunc = lfunc,
                             retty = retty,
