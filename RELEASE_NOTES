@@ -1,3 +1,9 @@
+Version (0.12.5)
+================
+* Update to Numba 0.10.2
+* Update to LLVM 3.3
+* Various bug fixes
+
 Version (0.12.4)
 ================
 * Update to Numba 0.10.0
