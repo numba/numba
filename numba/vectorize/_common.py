@@ -73,7 +73,10 @@ class CommonVectorizeFromFunc(object):
         ptrlist = self._prepare_pointers(lfunclist, tyslist, engine, **kws)
 
         fntype = lfunclist[0].type.pointee
-        inct = len(fntype.args) - fntype.return_type.kind == lc.TYPE_VOID
+        inct = len(fntype.args)
+        if fntype.return_type.kind == lc.TYPE_VOID:
+            # void return type means return value is passed as argument.
+            inct -= 1
         outct = 1
 
         datlist = [None] * len(lfunclist)
