@@ -2,11 +2,13 @@
 This is a direct translation of nvvm.h
 '''
 
-import sys, os
+import sys, os, logging, re
 from ctypes import (c_void_p, c_int, POINTER, c_char_p, c_size_t, CDLL, byref,
                     c_char)
 from error import NvvmError, NvvmSupportError
 from numbapro._utils import finalizer
+
+logger = logging.getLogger(__name__)
 
 ADDRSPACE_GENERIC = 0
 ADDRSPACE_GLOBAL = 1
@@ -203,18 +205,32 @@ class CompilationUnit(finalizer.OwnerMixin):
         # compile
         c_opts = (c_char_p * len(opts))(*map(c_char_p, opts))
         err = self.driver.nvvmCompileProgram(self._handle, len(opts), c_opts)
-        self.driver.check_error(err, 'Failed to compile')
+        self._try_error(err, 'Failed to compile')
 
         # get result
         reslen = c_size_t()
         err = self.driver.nvvmGetCompiledResultSize(self._handle, byref(reslen))
-        self.driver.check_error(err, 'Failed to get size of compiled result.')
+        
+        self._try_error(err, 'Failed to get size of compiled result.')
 
         ptxbuf = (c_char * reslen.value)()
         err = self.driver.nvvmGetCompiledResult(self._handle, ptxbuf)
-        self.driver.check_error(err, 'Failed to get compiled result.')
+        self._try_error(err, 'Failed to get compiled result.')
 
         # get log
+        self.log = self.get_log()
+        
+        return ptxbuf[:]
+
+    def _try_error(self, err, msg):
+        try:
+            self.driver.check_error(err, msg)
+        except:
+            logger.error(self.get_log())
+            raise
+
+    def get_log(self):
+        reslen = c_size_t()
         err = self.driver.nvvmGetProgramLogSize(self._handle, byref(reslen))
         self.driver.check_error(err, 'Failed to get compilation log size.')
 
@@ -223,10 +239,9 @@ class CompilationUnit(finalizer.OwnerMixin):
             err = self.driver.nvvmGetProgramLog(self._handle, logbuf)
             self.driver.check_error(err, 'Failed to get compilation log.')
 
-            self.log = logbuf[:] # popluate log attribute
-        self.log = ''
+            return logbuf[:] # popluate log attribute
 
-        return ptxbuf[:]
+        return ''
 
 data_layout = {
 32: ('e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-'
@@ -297,9 +312,33 @@ class LibDevice(object):
 def llvm_to_ptx(llvmir, **opts):
     cu = CompilationUnit()
     libdevice = LibDevice(arch=opts.get('arch', 'compute_20'))
-    cu.add_module(llvmir)
+    cu.add_module(llvm33_to_32_ir(llvmir))
     cu.add_module(libdevice.get())
     return cu.compile(**opts)
+
+
+re_fnattr_ref = re.compile('#\d+')
+re_fnattr_def = re.compile('attributes\s+(#\d+)\s*=\s*{((?:\s*\w+)+)\s*}')
+
+def llvm33_to_32_ir(ir):
+    '''rewrite function attributes in the IR
+    '''
+    attrs = {}
+    for m in re_fnattr_def.finditer(ir):
+        ct, text = m.groups()
+        attrs[ct] = text
+
+    def scanline(line):
+        if line.startswith('define') or line.startswith('declare'):
+            for k, v in attrs.iteritems():
+                if k in line:
+                    return line.replace(k, v)
+        elif re_fnattr_def.match(line):
+            return '; %s' % line
+        return line
+
+    return '\n'.join(scanline(ln) for ln in ir.splitlines())
+
 
 def set_cuda_kernel(lfunc):
     from llvm.core import MetaData, MetaDataString, Constant, Type

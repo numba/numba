@@ -1,9 +1,11 @@
 import numbapro
-import unittest, os, sys
+import unittest, os, sys, logging
 try:
     from collections import OrderedDict
 except ImportError:
     OrderedDict = dict
+
+logging.basicConfig()
 
 class TestSupport(object):
 
