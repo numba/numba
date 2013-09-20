@@ -177,6 +177,7 @@ class GenericASTVectorize(object):
         Add a specialization to the vectorizer. Pass any keyword arguments
         to numba.jit().
         """
+        kwds['ctypes'] = True
         dec = decorators.jit(restype, argtypes, **kwds)
         numba_func = dec(self.pyfunc)
         self.args_restypes.append(list(numba_func.signature.args) +

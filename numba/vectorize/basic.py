@@ -24,18 +24,14 @@ class BasicUFunc(CDefinition):
         ufunc_ptr = self.depends(self.FuncDef)
         fnty = ufunc_ptr.type.pointee
 
-        if fnty.return_type.kind != lc.TYPE_VOID:
-            void_ret = False
-            argtypes = fnty.args
-            restype = fnty.return_type
-        else:
-            void_ret = True
-            argtypes = fnty.args[:-1]
-            restype = fnty.args[-1]
+        # void return type implies return by reference in last argument
+        is_void_ret = fnty.return_type.kind == lc.TYPE_VOID
+
+        argtys = fnty.args[:-1] if is_void_ret else fnty.args
 
         arg_ptrs = []
         arg_steps = []
-        for i in range(len(argtypes)+1):
+        for i in range(len(argtys)+1):
             arg_ptrs.append(self.var_copy(args[i]))
             const_steps = self.var_copy(steps[i])
             const_steps.invariant = True
@@ -43,21 +39,30 @@ class BasicUFunc(CDefinition):
 
         with self.for_range(dimensions[0]) as (loop, item):
             callargs = []
-            for i, argty in enumerate(argtypes):
-                casted = arg_ptrs[i].cast(C.pointer(argty))
-                callargs.append(casted.load())
-                arg_ptrs[i].assign(arg_ptrs[i][arg_steps[i]:]) # increment pointer
+            for i, argty in enumerate(argtys):
+                if argty.kind == lc.TYPE_POINTER:
+                    casted = arg_ptrs[i].cast(argty)
+                    callargs.append(casted)
+                else:
+                    casted = arg_ptrs[i].cast(C.pointer(argty))
+                    callargs.append(casted.load())
+                # increment pointer
+                arg_ptrs[i].assign(arg_ptrs[i][arg_steps[i]:])
 
-            if void_ret:
-                retvar = self.var(restype)
-                callargs.append(retvar)
-
-            res = ufunc_ptr(*callargs, **dict(inline=True))
-            retval_ptr = arg_ptrs[-1].cast(C.pointer(restype))
-            if void_ret:
-                retval_ptr.store(retvar, nontemporal=True)
+            if is_void_ret:
+                retty = fnty.args[-1]
+                assert retty.kind == lc.TYPE_POINTER
+                retval = self.var(retty.pointee)
+                callargs.append(retval.ref)
+                for i in callargs:
+                    print(i)
+                ufunc_ptr(*callargs, **dict(inline=True))
+                res = retval
+                retval_ptr = arg_ptrs[-1].cast(retty)
             else:
-                retval_ptr.store(res, nontemporal=True)
+                res = ufunc_ptr(*callargs, **dict(inline=True))
+                retval_ptr = arg_ptrs[-1].cast(C.pointer(fnty.return_type))
+            retval_ptr.store(res, nontemporal=True)
             arg_ptrs[-1].assign(arg_ptrs[-1][arg_steps[-1]:])
 
         self.ret()

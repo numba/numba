@@ -1,5 +1,5 @@
 import numpy as np
-from numba import int32, uint32, float32, float64
+from numba import int32, uint32, float32, float64, complex64
 from numba.vectorize import Vectorize
 from timeit import default_timer as time
 import unittest
@@ -14,12 +14,15 @@ class TestBasicVectorize(unittest.TestCase):
         bv.add(restype=uint32,  argtypes=[uint32,   uint32])
         bv.add(restype=float32, argtypes=[float32,  float32])
         bv.add(restype=float64, argtypes=[float64, 	float64])
+        bv.add(restype=complex64, argtypes=[complex64, complex64])
         self.basic_ufunc = bv.build_ufunc()
 
     def _test(self, ty):
         print("Test %s" % ty)
         data = np.linspace(0., 10000., 100000).astype(ty)
 
+        print self.basic_ufunc.signature
+        print self.basic_ufunc.types
         ts = time()
         result = self.basic_ufunc(data, data)
         tnumba = time() - ts
@@ -51,6 +54,9 @@ class TestBasicVectorize(unittest.TestCase):
 
     def test_uint32(self):
         self._test(np.uint32)
+
+    def test_complex64(self):
+        self._test(np.complex64)
 
 if __name__ == '__main__':
     unittest.main()
