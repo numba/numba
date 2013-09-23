@@ -53,6 +53,8 @@ def get_include():
     return os.path.join(numba_root, "numba", "include")
 
 numba_include_dir = get_include()
+import llvmmath
+llvmmath_include_dir = llvmmath.__path__[0] + '/mathcode/private'
 
 #------------------------------------------------------------------------
 # Package finding
@@ -201,8 +203,12 @@ setup(
 
         Extension(
             name="numba.external.utilities.utilities",
-            sources=["numba/external/utilities/utilities.c"],
-            include_dirs=[numba_include_dir, extensibletype_include],
+            sources=["numba/external/utilities/utilities.c",
+                     "numba/external/utilities/datetime/np_datetime.c",
+                     "numba/external/utilities/datetime/np_datetime_strings.c"],
+
+            include_dirs=[numba_include_dir, extensibletype_include,
+                          numpy.get_include(), llvmmath_include_dir],
             depends=["numba/external/utilities/type_conversion.c",
                      "numba/external/utilities/virtuallookup.c",
                      "numba/external/utilities/generated_conversions.c",

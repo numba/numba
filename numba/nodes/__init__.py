@@ -105,7 +105,7 @@ def badval(type):
         value = None
     elif type.is_float:
         value = ConstNode(float('nan'), type=type)
-    elif type.is_int or type.is_complex:
+    elif type.is_int or type.is_complex or type.is_datetime or type.is_timedelta:
         # TODO: adjust for type.itemsize
         bad = 0xbadbad # This pattern is hard to detect in llvm code
         bad = 123456789

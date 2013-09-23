@@ -79,6 +79,10 @@ class SpecializeComparisons(visitors.NumbaTransformer):
                                           "implemented for complex numbers")
             node = nodes.typednode(result, bool_)
 
+        elif node.left.type.is_complex and rhs.type.is_datetime:
+            raise error.NumbaError(
+                node, "datetime comparisons not yet implemented")
+
         return node
 
     def single_compare_objects(self, node):

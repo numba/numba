@@ -16,7 +16,7 @@ from numba import *
 from numba.codegen import debug
 from numba.codegen.debug import logger
 from numba.codegen.codeutils import llvm_alloca
-from numba.codegen import coerce, complexsupport, refcounting
+from numba.codegen import coerce, complexsupport, refcounting, datetimesupport
 from numba.codegen.llvmcontext import LLVMContextManager
 
 from numba import visitors, nodes, llvm_types, utils, function_util
@@ -64,7 +64,8 @@ _compare_mapping_uint = {'>':lc.ICMP_UGT,
 class LLVMCodeGenerator(visitors.NumbaVisitor,
                         complexsupport.ComplexSupportMixin,
                         refcounting.RefcountingMixin,
-                        visitors.NoPythonContextMixin):
+                        visitors.NoPythonContextMixin,
+                        datetimesupport.DateTimeSupportMixin):
     """
     Translate a Python AST to LLVM. Each visit_* method should directly
     return an LLVM value.
@@ -304,6 +305,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         # TODO: Put current function into symbol table for recursive call
         self.setup_return()
 
+        self.in_loop = 0
+        self.loop_beginnings = []
+        self.loop_exits = []
+
         if self.have_cfg:
             block0 = self.ast.flow.blocks[0]
             block0.entry_block = entry
@@ -314,10 +319,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             self.flow_block = self.ast.flow.blocks[1]
         else:
             self.flow_block = None
-
-        self.in_loop = 0
-        self.loop_beginnings = []
-        self.loop_exits = []
 
     def to_llvm(self, type):
         return type.to_llvm(self.context)
@@ -356,8 +357,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             del self.builder  # release the builder to make GC happy
 
             if logger.level >= logging.DEBUG:
-                # logger.debug("ast translated function: %s" % self.lfunc)
-                logger.debug(self.llvm_module)
+                logger.debug("ast translated function: %s" % self.lfunc)
+                # logger.debug(self.llvm_module)
 
             # Verify code generation
             self.llvm_module.verify()  # only Module level verification checks everything.
@@ -1261,6 +1262,9 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
                 real = self.caster.cast(real, ldst_base_type, **flags)
             imag = llvm.core.Constant.real(ldst_base_type, 0.0)
             val = self._create_complex(real, imag)
+        elif dst_type.is_int and node_type.is_numpy_datetime and \
+                not isinstance(node.node, nodes.DateTimeAttributeNode):
+            return self.builder.extract_value(val, 0)
         else:
             flags = {}
             add_cast_flag_unsigned(flags, node_type, dst_type)
@@ -1456,6 +1460,57 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             if node.attr == 'real':
                 return self.builder.extract_value(result, 0)
             elif node.attr == 'imag':
+                return self.builder.extract_value(result, 1)
+
+    #------------------------------------------------------------------------
+    # DateTime
+    #------------------------------------------------------------------------
+
+    def visit_DateTimeNode(self, node):
+        timestamp = self.visit(node.timestamp)
+        units = self.visit(node.units)
+        return self._create_datetime(timestamp, units)
+
+    def visit_DateTimeAttributeNode(self, node):
+        result = self.visit(node.value)
+        if node.value.type.is_datetime:
+            assert result.type.kind == llvm.core.TYPE_STRUCT, result.type
+            if node.attr == 'timestamp':
+                return self.builder.extract_value(result, 0)
+            elif node.attr == 'units':
+                return self.builder.extract_value(result, 1)
+
+    def visit_NumpyDateTimeNode(self, node):
+        timestamp_func = function_util.utility_call(
+            self.context, self.llvm_module,
+            "convert_datetime_str_to_timestamp", args=[node.datetime_string])
+        units_func = function_util.utility_call(
+            self.context, self.llvm_module,
+            "convert_datetime_str_to_units", args=[node.datetime_string])
+
+        newnode = nodes.DateTimeNode(timestamp_func, units_func)
+        return self.visit(newnode)
+
+    def visit_TimeDeltaNode(self, node):
+        diff = self.visit(node.diff)
+        units = self.visit(node.units)
+        return self._create_timedelta(diff, units)
+
+    def visit_NumpyTimeDeltaNode(self, node):
+        units_func = function_util.utility_call(
+            self.context, self.llvm_module,
+            "convert_timedelta_units_str", args=[node.units_str])
+        newnode = nodes.TimeDeltaNode(nodes.CoercionNode(node.diff, int64),
+            units_func)
+        return self.visit(newnode)
+
+    def visit_TimeDeltaAttributeNode(self, node):
+        result = self.visit(node.value)
+        if node.value.type.is_timedelta:
+            assert result.type.kind == llvm.core.TYPE_STRUCT, result.type
+            if node.attr == 'diff':
+                return self.builder.extract_value(result, 0)
+            elif node.attr == 'units':
                 return self.builder.extract_value(result, 1)
 
     #------------------------------------------------------------------------

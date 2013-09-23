@@ -77,3 +77,67 @@ class ComplexAttributeNode(ExprNode):
         self.attr = attr
         self.type = value.type.base_type
         self.variable = Variable(self.type)
+
+class DateTimeNode(ExprNode):
+
+    _fields = ['timestamp', 'units']
+
+    type = datetime()
+    variable = Variable(type)
+
+    def __init__(self, timestamp, units):
+        self.timestamp = timestamp
+        self.units = units
+
+class DateTimeAttributeNode(ExprNode):
+    
+    _fields = ['value']
+
+    def __init__(self, value, attr):
+        self.value = value
+        self.attr = attr
+        self.type = value.type
+        self.variable = Variable(self.type)
+
+class NumpyDateTimeNode(ExprNode):
+
+    _fields = ['datetime_string']
+
+    type = datetime()
+    variable = Variable(type)
+
+    def __init__(self, datetime_string):
+        self.datetime_string = datetime_string
+
+class TimeDeltaNode(ExprNode):
+
+    _fields = ['diff', 'units']
+
+    type = timedelta()
+    variable = Variable(type)
+
+    def __init__(self, diff, units):
+        self.diff = diff
+        self.units = units
+
+class NumpyTimeDeltaNode(ExprNode):
+
+    _fields = ['diff', 'units_str']
+
+    type = timedelta()
+    variable = Variable(type)
+
+    def __init__(self, diff, units_str):
+        self.diff = diff
+        self.units_str = units_str
+
+class TimeDeltaAttributeNode(ExprNode):
+    
+    _fields = ['value']
+
+    def __init__(self, value, attr):
+        self.value = value
+        self.attr = attr
+        self.type = value.type
+        self.variable = Variable(self.type)
+

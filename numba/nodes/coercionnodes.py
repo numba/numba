@@ -60,7 +60,9 @@ class CoercionNode(ExprNode):
 
     @classmethod
     def coerce(cls, node_or_nodes, dst_type):
-        if isinstance(node_or_nodes, list):
+        if isinstance(node_or_nodes, list) and isinstance(dst_type, list):
+            return [cls(node, dst) for node, dst in zip(node_or_nodes, dst_type)]
+        elif isinstance(node_or_nodes, list):
             return [cls(node, dst_type) for node in node_or_nodes]
         return cls(node_or_nodes, dst_type)
 
@@ -74,6 +76,28 @@ class CoercionNode(ExprNode):
 
             if not complex_type == complex128:
                 node = CoercionNode(node, complex128)
+
+        elif ((node.variable.type.is_datetime or dst_type.is_datetime) and
+            (node.variable.type.is_object or dst_type.is_object)):
+            if dst_type.is_datetime:
+                datetime_type = dst_type
+            else:
+                datetime_type = node.variable.type
+
+            if not datetime_type.is_datetime and \
+                    not datetime_type.is_numpy_datetime:
+                node = CoercionNode(node, datetime)
+
+        elif ((node.variable.type.is_timedelta or dst_type.is_timedelta) and
+            (node.variable.type.is_object or dst_type.is_object)):
+            if dst_type.is_timedelta:
+                timedelta_type = dst_type
+            else:
+                timedelta_type = node.variable.type
+
+            if not timedelta_type.is_timedelta and \
+                    not timedelta_type.is_timedelta:
+                node = CoercionNode(node, timedelta)
 
         return node
 

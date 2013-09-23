@@ -99,8 +99,16 @@ def lower_complex(domain, codomain, type, params):
     base_type, = params
     return codomain.struct_([('real', base_type), ('imag', base_type)])
 
+def lower_datetime(domain, codomain, type, params):
+    timestamp, units = params[0:2]
+    return codomain.struct_([('timestamp', timestamp), ('units', units)])
+
 def lower_to_pointer(domain, codomain, type, params):
     return codomain.pointer(params[0])
+
+def lower_timedelta(domain, codomain, type, params):
+    diff, units = params[0:2]
+    return codomain.struct_([('diff', diff), ('units', units)])
 
 #------------------------------------------------------------------------
 # Default Lowering Table
@@ -111,6 +119,8 @@ default_numba_lowering_table = {
     # parametrized types
     "function":         lower_function,
     "complex":          lower_complex,
+    "datetime":         lower_datetime,
+    "timedelta":        lower_timedelta,
     # "array":            lower_array,
     "string":           lower_string,
     # "carray":           lower_to_pointer,

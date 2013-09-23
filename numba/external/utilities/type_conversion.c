@@ -1,5 +1,9 @@
 #include <Python.h>
+#include <numpy/ndarraytypes.h>
+#include <numpy/arrayscalars.h>
 #include "generated_conversions.h"
+#include "datetime/_datetime.h"
+#include "datetime/np_datetime_strings.h"
 
 /* Utilities copied from Cython/Utility/TypeConversion.c */
 
@@ -122,6 +126,53 @@ static NUMBA_INLINE size_t __Numba_PyInt_AsSize_t(PyObject* x) {
    }
    return (size_t)val;
 }
+
+static double numba_nan;
+
+static void init_nan(void) {
+  /* Initialize NaN. The sign is irrelevant, an exponent with all bits 1 and
+   a nonzero mantissa means NaN. If the first bit in the mantissa is 1, it is
+   a quiet NaN.
+
+   >>> struct.pack('d', float('nan'))
+   '\x00\x00\x00\x00\x00\x00\xf8\x7f'
+   >>> struct.pack('d', float('nan')) == struct.pack('d', np.nan)
+   True
+
+   We need to choose something different from this NaN representation.
+   */
+  char *p = (char *) &numba_nan;
+  int i;
+
+  /* Assume little endian */
+  p[7] = 0x7f;
+  p[6] = 0xf8;
+
+  for (i = 0; i < 6; i++) {
+      p[i] = 0x55;
+  }
+}
+
+static NUMBA_INLINE double numba_float_as_double(PyObject *x) {
+    double result;
+    if (x == Py_None) {
+        return numba_nan;
+    }
+    return PyFloat_AsDouble(x);
+}
+
+static NUMBA_INLINE PyObject *numba_float_from_double(double x) {
+    PyObject *result;
+    if (x != x) {
+        /* Check whether this NaN is numba_nan */
+        if (*(int *) &numba_nan == 0x55555555) {
+            Py_INCREF(Py_None);
+            return Py_None;
+        }
+    }
+    return PyFloat_FromDouble(x);
+}
+
 
 /////////////// ObjectAsUCS4.proto ///////////////
 
@@ -258,9 +309,257 @@ static NUMBA_INLINE Py_ssize_t __Numba_PyIndex_AsSsize_t(PyObject*);
 static NUMBA_INLINE PyObject * __Numba_PyInt_FromSize_t(size_t);
 static NUMBA_INLINE size_t __Numba_PyInt_AsSize_t(PyObject*);
 
+
+static int convert_datetime_str(char *datetime_string,
+    NPY_DATETIMEUNIT *out_bestunit, npy_datetimestruct *out_datetimestruct)
+{
+    npy_bool out_local;
+    npy_bool out_special;
+    npy_datetimestruct dummy;
+
+    if (out_datetimestruct == NULL) {
+        out_datetimestruct = &dummy;
+    }
+
+    if (datetime_string == NULL) {
+        PyErr_SetString(PyExc_ValueError,
+            "Invalid datetime string");
+        return -1;
+    }
+
+    if (parse_iso_8601_datetime(datetime_string, strlen(datetime_string), -1,
+            NPY_SAME_KIND_CASTING, out_datetimestruct, &out_local, out_bestunit,
+            &out_special) < 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+static npy_int64 convert_datetime_str_to_timestamp(char *datetime_string)
+{
+    npy_datetimestruct temp;
+    npy_datetime output;
+    PyArray_DatetimeMetaData new_meta;
+    NPY_DATETIMEUNIT out_bestunit;
+
+    if (convert_datetime_str(datetime_string, &out_bestunit, &temp) < 0) {
+        return -1;
+    }
+
+    new_meta.base = out_bestunit;
+    new_meta.num = 1;
+
+    if (convert_datetimestruct_to_datetime(&new_meta, &temp, &output) < 0) {
+        return -1;
+    }
+
+    return output;
+}
+
+static npy_int32 convert_datetime_str_to_units(char *datetime_string)
+{
+    NPY_DATETIMEUNIT out_bestunit;
+
+    if (convert_datetime_str(datetime_string, &out_bestunit, NULL) < 0) {
+        return -1;
+    }
+
+    return out_bestunit;
+}
+
+static npy_int64 convert_numpy_datetime_to_timestamp(PyObject *numpy_datetime)
+{
+    return ((PyDatetimeScalarObject*)numpy_datetime)->obval;
+}
+
+static npy_int32 convert_numpy_datetime_to_units(PyObject *numpy_datetime)
+{
+    return ((PyDatetimeScalarObject*)numpy_datetime)->obmeta.base;
+}
+
+static npy_int64 convert_numpy_timedelta_to_diff(PyObject *numpy_timedelta)
+{
+    return ((PyDatetimeScalarObject*)numpy_timedelta)->obval;
+}
+
+static npy_int32 convert_numpy_timedelta_to_units(PyObject *numpy_timedelta)
+{
+    return ((PyDatetimeScalarObject*)numpy_timedelta)->obmeta.base;
+}
+
+static PyObject* create_numpy_datetime(
+    npy_int64 timestamp,
+    npy_int32 units,
+    PyDatetimeScalarObject *scalar)
+{
+    if (scalar == NULL) {
+        return NULL;
+    }
+
+    scalar->obval = timestamp;
+    scalar->obmeta.base = units;
+    scalar->obmeta.num = 1;
+    Py_INCREF(scalar);
+ 
+    return (PyObject*)scalar;
+}
+
+static PyObject* create_numpy_timedelta(
+    npy_timedelta timedelta,
+    NPY_DATETIMEUNIT units,
+    PyDatetimeScalarObject *scalar)
+{
+    if (scalar == NULL) {
+        return NULL;
+    }
+
+    scalar->obval = timedelta;
+    scalar->obmeta.base = units;
+    scalar->obmeta.num = 1;
+    Py_INCREF(scalar);
+ 
+    return (PyObject*)scalar;
+}
+
+#define GET_TARGET_UNIT(type1, type2) \
+static NPY_DATETIMEUNIT get_target_unit_for_##type1##_##type2( \
+    npy_int32 units1, \
+    npy_int32 units2) \
+{ \
+    PyArray_DatetimeMetaData meta1; \
+    PyArray_DatetimeMetaData meta2; \
+\
+    meta1.base = units1; \
+    meta1.num = 1; \
+\
+    meta2.base = units2; \
+    meta2.num = 1; \
+\
+    if (can_cast_##type1##64_metadata(&meta1, &meta2, NPY_SAFE_CASTING)) { \
+        return meta2.base; \
+    } \
+    else if (can_cast_##type2##64_metadata(&meta2, &meta1, NPY_SAFE_CASTING)) { \
+        return meta1.base; \
+    } \
+\
+    return NPY_FR_GENERIC; \
+}
+
+GET_TARGET_UNIT(datetime, datetime)
+GET_TARGET_UNIT(timedelta, timedelta)
+GET_TARGET_UNIT(datetime, timedelta)
+
+
+#define DATETIME_ARITHMETIC(type1, type2, op, op_name, ret_type) \
+static npy_##ret_type op_name##_##type1##_##type2( \
+    npy_##type1 type1##1, \
+    NPY_DATETIMEUNIT units1, \
+    npy_##type2 type2##2, \
+    NPY_DATETIMEUNIT units2, \
+    NPY_DATETIMEUNIT target_units) \
+{ \
+    PyArray_DatetimeMetaData src_meta; \
+    PyArray_DatetimeMetaData dst_meta; \
+    npy_##type1 operand1 = type1##1; \
+    npy_##type2 operand2 = type2##2; \
+\
+    if (units1 == units2 == target_units) { \
+        return operand1 op operand2; \
+    } \
+\
+    dst_meta.base = target_units; \
+    dst_meta.num = 1; \
+\
+    src_meta.base = units1; \
+    src_meta.num = 1; \
+    if (cast_##type1##_to_##type1(&src_meta, &dst_meta, type1##1, &operand1) < 0) { \
+        return -1; \
+    } \
+\
+    src_meta.base = units2; \
+    src_meta.num = 1; \
+    if (cast_##type2##_to_##type2(&src_meta, &dst_meta, type2##2, &operand2) < 0) { \
+        return -1; \
+    } \
+\
+    return operand1 op operand2; \
+}
+
+DATETIME_ARITHMETIC(datetime, datetime, -, sub, timedelta)
+DATETIME_ARITHMETIC(datetime, timedelta, -, sub, datetime)
+DATETIME_ARITHMETIC(datetime, timedelta, +, add, datetime)
+
+
+#define EXTRACT_DATETIME(unit_name, ret_type) \
+static ret_type extract_datetime_##unit_name(npy_datetime timestamp, \
+    NPY_DATETIMEUNIT units) \
+{ \
+    PyArray_DatetimeMetaData meta; \
+    npy_datetimestruct output; \
+\
+    meta.base = units; \
+    meta.num = 1; \
+\
+    memset(&output, 0, sizeof(npy_datetimestruct)); \
+\
+    if (convert_datetime_to_datetimestruct(&meta, timestamp, &output) < 0) { \
+        return -1; \
+    } \
+    return output.unit_name; \
+}
+
+EXTRACT_DATETIME(year, npy_int64)
+EXTRACT_DATETIME(month, npy_int32)
+EXTRACT_DATETIME(day, npy_int32)
+EXTRACT_DATETIME(hour, npy_int32)
+EXTRACT_DATETIME(min, npy_int32)
+EXTRACT_DATETIME(sec, npy_int32)
+
+static npy_int32 extract_timedelta_sec(npy_timedelta timedelta,
+    NPY_DATETIMEUNIT units)
+{
+    PyArray_DatetimeMetaData meta1;
+    PyArray_DatetimeMetaData meta2;
+    npy_timedelta output = 0;
+
+    memset(&meta1, 0, sizeof(PyArray_DatetimeMetaData));
+    meta1.base = units;
+    meta1.num = 1;
+
+    memset(&meta2, 0, sizeof(PyArray_DatetimeMetaData));
+    meta2.base = 7;
+    meta2.num = 1;
+
+    if (cast_timedelta_to_timedelta(&meta1, &meta2, timedelta, &output) < 0) {
+        return -1;
+    }
+
+    return output;
+}
+
+
+static npy_int32 convert_timedelta_units_str(char *units_str)
+{
+    if (units_str == NULL)
+        return NPY_FR_GENERIC;
+
+    return parse_datetime_unit_from_string(units_str, strlen(units_str), NULL);
+}
+
+static npy_int32 get_units_num(char *units_char)
+{
+    if (units_char == NULL)
+        return NPY_FR_GENERIC;
+
+    return parse_datetime_unit_from_string(units_char, 1, NULL);
+}
+
 static int
 export_type_conversion(PyObject *module)
 {
+    init_nan();
+
     EXPORT_FUNCTION(__Numba_PyInt_AsSignedChar, module, error)
     EXPORT_FUNCTION(__Numba_PyInt_AsUnsignedChar, module, error)
     EXPORT_FUNCTION(__Numba_PyInt_AsSignedShort, module, error)
@@ -278,8 +577,40 @@ export_type_conversion(PyObject *module)
     EXPORT_FUNCTION(__Numba_PyInt_FromLongLong, module, error);
     EXPORT_FUNCTION(__Numba_PyInt_FromUnsignedLongLong, module, error);
 
+    EXPORT_FUNCTION(convert_datetime_str_to_timestamp, module, error);
+    EXPORT_FUNCTION(convert_datetime_str_to_units, module, error);
+    EXPORT_FUNCTION(convert_numpy_datetime_to_timestamp, module, error);
+    EXPORT_FUNCTION(convert_numpy_datetime_to_units, module, error);
+    EXPORT_FUNCTION(convert_numpy_timedelta_to_diff, module, error);
+    EXPORT_FUNCTION(convert_numpy_timedelta_to_units, module, error);
+
+    EXPORT_FUNCTION(create_numpy_datetime, module, error);
+    EXPORT_FUNCTION(create_numpy_timedelta, module, error);
+
+    EXPORT_FUNCTION(extract_datetime_year, module, error);
+    EXPORT_FUNCTION(extract_datetime_month, module, error);
+    EXPORT_FUNCTION(extract_datetime_day, module, error);
+    EXPORT_FUNCTION(extract_datetime_hour, module, error);
+    EXPORT_FUNCTION(extract_datetime_min, module, error);
+    EXPORT_FUNCTION(extract_datetime_sec, module, error);
+    EXPORT_FUNCTION(extract_timedelta_sec, module, error);
+
+    EXPORT_FUNCTION(get_target_unit_for_datetime_datetime, module, error);
+    EXPORT_FUNCTION(get_target_unit_for_timedelta_timedelta, module, error);
+    EXPORT_FUNCTION(get_target_unit_for_datetime_timedelta, module, error);
+
+    EXPORT_FUNCTION(sub_datetime_datetime, module, error);
+    EXPORT_FUNCTION(add_datetime_timedelta, module, error);
+    EXPORT_FUNCTION(sub_datetime_timedelta, module, error);
+
+    EXPORT_FUNCTION(convert_timedelta_units_str, module, error);
+    EXPORT_FUNCTION(get_units_num, module, error);
+
+    EXPORT_FUNCTION(numba_float_as_double, module, error);
+    EXPORT_FUNCTION(numba_float_from_double, module, error);
+
+
     return 0;
 error:
     return -1;
 }
-

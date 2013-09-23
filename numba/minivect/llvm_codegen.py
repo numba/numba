@@ -31,7 +31,9 @@ def handle_struct_passing(builder, alloca_func, largs, signature):
     for i, (arg_type, larg) in enumerate(zip(signature.args, largs)):
         if minitypes.pass_by_ref(arg_type):
             if signature.struct_by_reference:
-                if arg_type.is_complex:
+                if arg_type.is_complex or \
+                        arg_type.is_datetime or \
+                        arg_type.is_timedelta:
                     new_arg = alloca_func(arg_type)
                     builder.store(larg, new_arg)
                     larg = new_arg

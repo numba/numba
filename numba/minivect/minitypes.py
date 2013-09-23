@@ -863,7 +863,7 @@ class ObjectType(Type):
         return "PyObject *"
 
 def pass_by_ref(type):
-    return type.is_struct or type.is_complex
+    return type.is_struct or type.is_complex or type.is_datetime or type.is_timedelta
 
 class Function(object):
     """

@@ -19,6 +19,7 @@ from numba.support.ctypes_support import is_ctypes, from_ctypes_value
 from numba.support import cffi_support
 
 import numpy as np
+import datetime
 
 #------------------------------------------------------------------------
 # Class -> Type
@@ -35,6 +36,9 @@ def get_typing_defaults(u):
         bool: u.bool_,
         complex: u.complex128,
         str: u.string_,
+        #datetime.datetime: u.datetime,
+        np.datetime64: u.datetime(),
+        np.timedelta64: u.timedelta(),
     }
     return typing_defaults
 
@@ -105,6 +109,10 @@ def get_default_typing_rules(u, typeof, promote):
             base_type = u.object_
 
         return container_type(base_type, size=len(value))
+
+    @register(type(None))
+    def type_none(x):
+        return u.none
 
     register(np.dtype)(lambda value: u.numpy_dtype(numpy_support.map_dtype(value)))
     register(types.ModuleType)(lambda value: u.module(value))
