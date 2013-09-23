@@ -19,6 +19,7 @@ to be overlapped.  This can increase the throughput of your ufunc and
 enables your ufunc to operate on data that is larger than the memory
 capacity of your GPU.  For example::
 
+    import math
     from numbapro import vectorize, cuda
     import numpy as np
 
@@ -32,11 +33,12 @@ capacity of your GPU.  For example::
                                 target='gpu')(discriminant)
 
     N = 1e+8
+    dtype = np.float32
 
     # prepare the input
-    A = np.array(np.random.sample(n), dtype=dtype)
-    B = np.array(np.random.sample(n) + 10, dtype=dtype)
-    C = np.array(np.random.sample(n), dtype=dtype)
+    A = np.array(np.random.sample(N), dtype=dtype)
+    B = np.array(np.random.sample(N) + 10, dtype=dtype)
+    C = np.array(np.random.sample(N), dtype=dtype)
     D = np.empty(A.shape, dtype=A.dtype)
 
     # create a CUDA stream
