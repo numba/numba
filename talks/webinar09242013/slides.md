@@ -33,10 +33,15 @@ A commercial extension to Numba
 
 ## Through simple decorators
 
-- @jit
-- @autojit
-- **@vectorize**
-- **@guvectorize**
+### High-level
+
+@vectorize
+@guvectorize
+
+### Low-level
+
+@jit
+@autojit
 
 # As a Library
 
@@ -72,7 +77,7 @@ LLVM + NVVM -> PTX
 ## Scale to BIG data sets with GPUs effortlessly
 ## CUDA architecture knowledge not required
 
-# Pattern 1: @vectorize
+# @vectorize
 
 ## @vectorize
 
@@ -84,6 +89,7 @@ LLVM + NVVM -> PTX
 ## Example
 
 ```python
+from numbapro import vectorize
 @vectorize(['float32(float32, float32)'], 
            target='gpu')
 def foo(a, b):
@@ -185,8 +191,6 @@ C = foo(A, B)
 
 ## Compile multiple versions for CPU and GPU
 
-## Choose hardware according to the size of your data set
-
 ```python
 def foo(a, b):
     return (a + b) ** 2
@@ -197,10 +201,13 @@ par_foo = vectorize(prototypes, target='parallel')(foo)
 gpu_foo = vectorize(prototypes, target='gpu')(foo)
 ```
 
+## Choose hardware according to the size of your data set
+
+
 ## Scale your program without rewriting your algorithm
 
 
-# Pattern 2: @guvectorize
+# @guvectorize
 
 
 ## Example
@@ -208,6 +215,7 @@ gpu_foo = vectorize(prototypes, target='gpu')(foo)
 Creates a Generalized Universal Function from a Python function
 
 ```python
+from numbapro import guvectorize
 @guvectorize([prototype0,
               prototype1,
               ...], 
@@ -283,7 +291,7 @@ C = gufunc(A, B)
 
 ## Similar to `@vectorize` but use array operands
 
-# Pattern 3: Optimize only when necessary
+# Optimize only when necessary
 
 ## Manage data movement
 
@@ -325,7 +333,7 @@ C = cuda.device_array(shape=10,
                       dtype=numpy.float32)
 ```
 
-# Pattern 4: Use CUDA Libraries
+# Use CUDA Libraries
 
 ## Don't Rewrite
 
@@ -406,13 +414,199 @@ Works for 1D, 2D, 3D images
 
 <img src="img/fftconvolve.png" />
 
-# Coda
+# A Deeper Dive
+
+# Details of @vectorize
+
+## A @vectorize Example
+
+```python
+@vectorize(['float32(float32, float32)'],
+           target='gpu')
+def foo(a, b):
+    return (a + b) ** 2
+```
+
+## CUDA-C Equivalent
+
+It is roughly equivalent to:
+
+```C
+__global__
+void foo1D(float A[], float B[], float Out[], int Nelem){
+    int tid = threadIdx.x;
+    int ctaid = blockIdx.x;
+    int ntid = blockDim.x;
+    int i = tid + ctaid * ntid;
+    if ( i >= Nelem )   
+        return;
+    float temp = A[i] + B[i];
+    Out[i] = temp * temp;
+}
+```
+
+## Launch Code
+
+Python
+
+```python
+dOut = foo(dA, dB)
+```
+
+CUDA-C
+```C
+foo1D<<<gridDim, blockDim>>>(dA, dB, dOut, Nelem);
+```
+
+The launch code for the Python version is a lot simpler.
+
+## Inside the Launch
+
+- Divide work among blocks and threads
+- Compute optimal threads-per-block
+    - if compile log is available from the driver.
+    - optimize for optimal warp occupancy.
+
+## Future: ILP Autotune
+
+- Autotune for instruction-level parallelism (ILP)
+- **ILP is necessary** for peak performance in Kepler generation card.
+
+## ILP
+
+- Maybe impractical for manual unroll
+- But it can be done by the compiler
+
+<img width="70%" src="img/ilp_gt650m.png" />
+
+## High-Level APIs
+
+- High-level APIs like @vectorize and @guvectorize **decouples low-level details from the user**
+- Users concern only about the algorithm
+- Let the compiler do the optimization for portability
+- We will be doing more of this
+
+
+# Writing Low-level code in Python
+
+## Why Low-level Python?
+
+- Manual optimization
+- Pattern not yet recognized by the compiler
+- Library writers
+
+## @cuda.jit
+
+Python
+```python
+from numbapro import cuda
+@cuda.jit('void(float32[:], float32[:], float32[:])')
+def foo(A, B, Out):
+    tid = cuda.threadIdx.x
+    ctaid = cuda.blockIdx.x
+    ntid = cuda.blockDim.x
+    i = tid + ctaid * ntid
+    if i >= Out.shape[0]:
+        return
+    Out[i] =  A[i] + B[i]
+```
+
+CUDA-C
+```C
+__global__
+void foo(float A[], float B[], float Out[], int N) {
+    int tid = threadIdx.x;
+    int ctaid = blockIdx.x;
+    int ntid = blockDim.x;
+    int i = tid + ctaid * ntid;
+    if ( i >= N )   
+        return;
+    Out[i] = A[i] + B[i]
+}
+```
+
+## Access to Shared Memory
+
+```python
+from numbapro import cuda, float32
+@cuda.jit('void(float32[:,:], float32[:,:], float32[:,:])')
+def matrix_matrix_mult(A, B, C):
+    # allocate shared memory like NumPy array
+    # __shared__ float32 sA[tpb][tpb];
+    sA = cuda.shared.array(shape=(tpb, tpb), dtype=float32)
+    sB = cuda.shared.array(shape=(tpb, tpb), dtype=float32)
+    
+    ...
+
+    for i in range(bpg):
+        if x < n and y < n:
+            sA[ty, tx] = A[y, tx + i * tpb]
+            sB[ty, tx] = B[ty + i * tpb, x]
+
+        cuda.syncthreads()        # barrier __syncthreads()
+
+    ...
+```
+
+# As a Glue
+
+## Why not glue CUDA-C/C++ device function?
+
+- Python is already a good glue language
+- Workaround for missing feature in CUDA
+
+## Gluing CUDA-C/C++ code (Experimental Feature)
+
+Using CUDA JIT Linking.
+
+## A device function in CUDA-C
+
+bar.cu
+
+```C
+extern "C"{
+__device__
+void bar(int a, int* out) {
+    *out = a * 2;
+}
+}
+```
+
+## Compile .cu files
+
+```bash
+nvcc -arch=sm_20 -dc bar.cu  -o bar.o
+```
+
+## Use it in NumbaPro
+
+```python
+bar = cuda.declare_device('bar', 'int32(int32)')
+
+@cuda.jit('void(int32[:], int32[:])', link=['bar.o'])
+def foo(x, y):
+    i = cuda.grid(1)    # threadIdx.x + blockIdx.x * blockDim.x
+    x[i] += bar(y[i])   # call to extern C function
+```
+
+
+# Finally...
 
 ## Summary
 
-- Use decorators to compile Python functions for the CUDA
-- Manage CUDA memory transfers
-- Use cuFFT to implement FFT convolution
+We have seen...
+
+- Decorators for compiling Python for CUDA
+- CUDA memory transfers API
+- cuFFT-based convolution
+- Low-level CUDA code in Python
+- Gluing CUDA-C/C++ code with JIT Linking
+
+## CUDA + Python Course
+
+- Continuum will be offering an **introductary CUDA course in Python** in the near future.
+- For Python programmers with **no CUDA experience**
+
 
 ## Questions?
 
@@ -420,7 +614,7 @@ Works for 1D, 2D, 3D images
 
 ### Where to Get?
 
-Parts of Anaconda Accelerate
+In Anaconda Accelerate
 [https://store.continuum.io/cshop/accelerate/](https://store.continuum.io/cshop/accelerate/)
 
 

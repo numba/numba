@@ -82,7 +82,7 @@ $endfor$
         history: true,
         center: true,
         theme: $if(theme)$'$theme$'$else$Reveal.getQueryHash().theme$endif$, // available themes are in /css/theme
-        transition: $if(transition)$'$transition$'$else$Reveal.getQueryHash().transition || 'linear'$endif$, // default/cube/page/concave/zoom/linear/fade/none
+        transition: $if(transition)$'$transition$'$else$Reveal.getQueryHash().transition || 'none'$endif$, // default/cube/page/concave/zoom/linear/fade/none
 
         // Optional libraries used to extend on reveal.js
         dependencies: [
