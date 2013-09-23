@@ -187,6 +187,16 @@ C = foo(A, B)
 
 ## Choose hardware according to the size of your data set
 
+```python
+def foo(a, b):
+    return (a + b) ** 2
+
+prototypes = ['float32(float32, float32)']
+cpu_foo = vectorize(prototypes, target='cpu')(foo)
+par_foo = vectorize(prototypes, target='parallel')(foo)
+gpu_foo = vectorize(prototypes, target='gpu')(foo)
+```
+
 ## Scale your program without rewriting your algorithm
 
 
@@ -289,7 +299,7 @@ between CPU and GPU
 Copy memory to the device
 
 ```python
-
+from numbapro import cuda
 A = numpy.arange(10)    # cpu
 dA = cuda.to_device(A)  # gpu
 ```
