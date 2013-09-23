@@ -128,6 +128,9 @@ class DefaultPromoter(object):
             return result
         elif type1.is_numeric and type2.is_numeric:
             return promote_numeric(*args)
+        elif ((type1.is_float and type2.is_none) or
+                  (type1.is_none and type2.is_float)):
+            return [type1, type2][type2.is_float]
         elif type1.is_array and type2.is_array:
             return promote_arrays(*args)
         elif type1.is_array or type2.is_array:

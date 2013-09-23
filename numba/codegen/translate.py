@@ -305,6 +305,10 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         # TODO: Put current function into symbol table for recursive call
         self.setup_return()
 
+        self.in_loop = 0
+        self.loop_beginnings = []
+        self.loop_exits = []
+
         if self.have_cfg:
             block0 = self.ast.flow.blocks[0]
             block0.entry_block = entry
@@ -315,10 +319,6 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             self.flow_block = self.ast.flow.blocks[1]
         else:
             self.flow_block = None
-
-        self.in_loop = 0
-        self.loop_beginnings = []
-        self.loop_exits = []
 
     def to_llvm(self, type):
         return type.to_llvm(self.context)
@@ -357,8 +357,8 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
             del self.builder  # release the builder to make GC happy
 
             if logger.level >= logging.DEBUG:
-                # logger.debug("ast translated function: %s" % self.lfunc)
-                logger.debug(self.llvm_module)
+                logger.debug("ast translated function: %s" % self.lfunc)
+                # logger.debug(self.llvm_module)
 
             # Verify code generation
             self.llvm_module.verify()  # only Module level verification checks everything.

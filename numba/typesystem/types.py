@@ -587,6 +587,11 @@ class meta(NumbaType):
         "cast",     # backwards compat
     ]
 
+@consing
+class none(NumbaType):
+    argnames = []
+    flags = ["object"]
+
 #------------------------------------------------------------------------
 # Container Types
 #------------------------------------------------------------------------
