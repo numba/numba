@@ -5,11 +5,47 @@
 #ifndef _NPY_PRIVATE__DATETIME_H_
 #define _NPY_PRIVATE__DATETIME_H_
 
+
+typedef enum {
+        NUMBA_FR_Y = 0, /* Years */
+        NUMBA_FR_M = 1, /* Months */
+        NUMBA_FR_W = 2, /* Weeks */
+        /* Gap where NUMBA_FR_B was */
+        NUMBA_FR_D = 4, /* Days */
+        NUMBA_FR_h = 5, /* hours */
+        NUMBA_FR_m = 6, /* minutes */
+        NUMBA_FR_s = 7, /* seconds */
+        NUMBA_FR_ms = 8,/* milliseconds */
+        NUMBA_FR_us = 9,/* microseconds */
+        NUMBA_FR_ns = 10,/* nanoseconds */
+        NUMBA_FR_ps = 11,/* picoseconds */
+        NUMBA_FR_fs = 12,/* femtoseconds */
+        NUMBA_FR_as = 13,/* attoseconds */
+        NUMBA_FR_GENERIC = 14 /* Generic, unbound units, can convert to anything */
+} NUMBA_DATETIMEUNIT;
+
+#define NUMBA_DATETIME_NUMUNITS 13
+
+#define NUMBA_DATETIME_MAX_ISO8601_STRLEN (21+3*5+1+3*6+6+1)
+
+#define NUMBA_DATETIME_NAT NPY_MIN_INT64
+
+typedef struct {
+        npy_int64 year;
+        npy_int32 month, day, hour, min, sec, us, ps, as;
+} numba_datetimestruct;
+
+typedef struct {
+    NUMBA_DATETIMEUNIT base;
+    int num;
+} numba_datetime_metadata;
+
+
 #ifdef NPY_ENABLE_SEPARATE_COMPILATION
-extern char *_datetime_strings[NPY_DATETIME_NUMUNITS];
+extern char *_datetime_strings[NUMBA_DATETIME_NUMUNITS];
 extern int _days_per_month_table[2][12];
 #else
-char *_datetime_strings[NPY_DATETIME_NUMUNITS];
+char *_datetime_strings[NUMBA_DATETIME_NUMUNITS];
 int _days_per_month_table[2][12];
 #endif
 
@@ -26,7 +62,7 @@ is_leapyear(npy_int64 year);
  * Calculates the days offset from the 1970 epoch.
  */
 npy_int64
-get_datetimestruct_days(const npy_datetimestruct *dts);
+get_datetimestruct_days(const numba_datetimestruct *dts);
 
 /*
  * Creates a datetime or timedelta dtype using a copy of the provided metadata.
@@ -38,7 +74,7 @@ create_datetime_dtype(int type_num, PyArray_DatetimeMetaData *meta);
  * Creates a datetime or timedelta dtype using the given unit.
  */
 PyArray_Descr *
-create_datetime_dtype_with_unit(int type_num, NPY_DATETIMEUNIT unit);
+create_datetime_dtype_with_unit(int type_num, NUMBA_DATETIMEUNIT unit);
 
 /*
  * This function returns a pointer to the DateTimeMetaData
@@ -61,7 +97,7 @@ datetime_type_promotion(PyArray_Descr *type1, PyArray_Descr *type2);
  */
 int
 convert_datetimestruct_to_datetime(PyArray_DatetimeMetaData *meta,
-                                    const npy_datetimestruct *dts,
+                                    const numba_datetimestruct *dts,
                                     npy_datetime *out);
 
 /*
@@ -96,7 +132,7 @@ parse_dtype_from_datetime_typestr(char *typestr, Py_ssize_t len);
  *
  * Returns 0 on success, -1 on failure.
  */
-NPY_DATETIMEUNIT
+NUMBA_DATETIMEUNIT
 parse_datetime_unit_from_string(char *str, Py_ssize_t len, char *metastr);
 
 /*
@@ -127,8 +163,8 @@ datetime_metadata_divides(
  * for all but 'unsafe' casting.
  */
 npy_bool
-can_cast_datetime64_units(NPY_DATETIMEUNIT src_unit,
-                          NPY_DATETIMEUNIT dst_unit,
+can_cast_datetime64_units(NUMBA_DATETIMEUNIT src_unit,
+                          NUMBA_DATETIMEUNIT dst_unit,
                           NPY_CASTING casting);
 
 /*
@@ -146,8 +182,8 @@ can_cast_datetime64_metadata(PyArray_DatetimeMetaData *src_meta,
  * months units, and all the other units.
  */
 npy_bool
-can_cast_timedelta64_units(NPY_DATETIMEUNIT src_unit,
-                          NPY_DATETIMEUNIT dst_unit,
+can_cast_timedelta64_units(NUMBA_DATETIMEUNIT src_unit,
+                          NUMBA_DATETIMEUNIT dst_unit,
                           NPY_CASTING casting);
 
 /*
@@ -191,7 +227,7 @@ convert_datetime_metadata_tuple_to_datetime_metadata(PyObject *tuple,
  * the Python datetime.tzinfo object.
  */
 int
-get_tzoffset_from_pytzinfo(PyObject *timezone, npy_datetimestruct *dts);
+get_tzoffset_from_pytzinfo(PyObject *timezone, numba_datetimestruct *dts);
 
 /*
  * Converts an input object into datetime metadata. The input
@@ -218,7 +254,7 @@ append_metastr_to_string(PyArray_DatetimeMetaData *meta,
 
 /*
  * Tests for and converts a Python datetime.datetime or datetime.date
- * object into a NumPy npy_datetimestruct.
+ * object into a NumPy numba_datetimestruct.
  *
  * 'out_bestunit' gives a suggested unit based on whether the object
  *      was a datetime.date or datetime.datetime object.
@@ -230,28 +266,9 @@ append_metastr_to_string(PyArray_DatetimeMetaData *meta,
  * if obj doesn't have the neeeded date or datetime attributes.
  */
 int
-convert_pydatetime_to_datetimestruct(PyObject *obj, npy_datetimestruct *out,
-                                     NPY_DATETIMEUNIT *out_bestunit,
+convert_pydatetime_to_datetimestruct(PyObject *obj, numba_datetimestruct *out,
+                                     NUMBA_DATETIMEUNIT *out_bestunit,
                                      int apply_tzinfo);
-
-/*
- * Converts a PyObject * into a datetime, in any of the forms supported.
- *
- * If the units metadata isn't known ahead of time, set meta->base
- * to -1, and this function will populate meta with either default
- * values or values from the input object.
- *
- * The 'casting' parameter is used to control what kinds of inputs
- * are accepted, and what happens. For example, with 'unsafe' casting,
- * unrecognized inputs are converted to 'NaT' instead of throwing an error,
- * while with 'safe' casting an error will be thrown if any precision
- * from the input will be thrown away.
- *
- * Returns -1 on error, 0 on success.
- */
-int
-convert_pyobject_to_datetime(PyArray_DatetimeMetaData *meta, PyObject *obj,
-                                NPY_CASTING casting, npy_datetime *out);
 
 /*
  * Converts a PyObject * into a timedelta, in any of the forms supported
@@ -298,7 +315,7 @@ convert_timedelta_to_pyobject(npy_timedelta td, PyArray_DatetimeMetaData *meta);
 int
 convert_datetime_to_datetimestruct(PyArray_DatetimeMetaData *meta,
                                     npy_datetime dt,
-                                    npy_datetimestruct *out);
+                                    numba_datetimestruct *out);
 
 /*
  * Converts a datetime from a datetimestruct to a datetime based
@@ -310,7 +327,7 @@ convert_datetime_to_datetimestruct(PyArray_DatetimeMetaData *meta,
  */
 int
 convert_datetimestruct_to_datetime(PyArray_DatetimeMetaData *meta,
-                                    const npy_datetimestruct *dts,
+                                    const numba_datetimestruct *dts,
                                     npy_datetime *out);
 
 /*
@@ -318,14 +335,14 @@ convert_datetimestruct_to_datetime(PyArray_DatetimeMetaData *meta,
  * the current values are valid.
  */
 void
-add_seconds_to_datetimestruct(npy_datetimestruct *dts, int seconds);
+add_seconds_to_datetimestruct(numba_datetimestruct *dts, int seconds);
 
 /*
  * Adjusts a datetimestruct based on a minutes offset. Assumes
  * the current values are valid.
  */
 void
-add_minutes_to_datetimestruct(npy_datetimestruct *dts, int minutes);
+add_minutes_to_datetimestruct(numba_datetimestruct *dts, int minutes);
 
 /*
  * Returns true if the datetime metadata matches
