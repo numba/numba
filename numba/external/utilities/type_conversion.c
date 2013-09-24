@@ -369,7 +369,7 @@ static npy_int32 convert_datetime_str_to_units(char *datetime_string)
         return -1;
     }
 #else
-    out_bestunit = NPY_FR_us;
+    out_bestunit = NUMBA_FR_us;
 #endif
 
     return out_bestunit;
