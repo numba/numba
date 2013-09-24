@@ -24,7 +24,7 @@ typedef enum {
         NUMBA_FR_GENERIC = 14 /* Generic, unbound units, can convert to anything */
 } NUMBA_DATETIMEUNIT;
 
-#define NUMBA_DATETIME_NUMUNITS 13
+#define NUMBA_DATETIME_NUMUNITS 14
 
 #define NUMBA_DATETIME_MAX_ISO8601_STRLEN (21+3*5+1+3*6+6+1)
 
