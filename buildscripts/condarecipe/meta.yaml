@@ -1,7 +1,7 @@
 package:
    name: numba
    version: 99.9.9
-   
+
 source:
   git_url: git@github.com:numba/numba.git
  # git_tag: 0.10.0
@@ -16,6 +16,7 @@ requirements:
     - numpy
     #- chrpath         [linux]
     - python
+    - llvmmath
   run:
     - python
     - argparse        [py26]
