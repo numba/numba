@@ -104,9 +104,6 @@ utility_funcs = list(object_to_numeric.itervalues()) + [
     UtilityFunction.load("extract_timedelta_sec", int_(int64, int32)),
     UtilityFunction.load("convert_timedelta_units_str", int_(string_)),
     UtilityFunction.load("get_units_num", int32(string_)),
-
-    UtilityFunction.load("numba_float_as_double", double(object_)),
-    UtilityFunction.load("numba_float_from_double", object_(double)),
 ]
 
 def default_utility_library(context):

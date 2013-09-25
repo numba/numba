@@ -127,53 +127,6 @@ static NUMBA_INLINE size_t __Numba_PyInt_AsSize_t(PyObject* x) {
    return (size_t)val;
 }
 
-static double numba_nan;
-
-static void init_nan(void) {
-  /* Initialize NaN. The sign is irrelevant, an exponent with all bits 1 and
-   a nonzero mantissa means NaN. If the first bit in the mantissa is 1, it is
-   a quiet NaN.
-
-   >>> struct.pack('d', float('nan'))
-   '\x00\x00\x00\x00\x00\x00\xf8\x7f'
-   >>> struct.pack('d', float('nan')) == struct.pack('d', np.nan)
-   True
-
-   We need to choose something different from this NaN representation.
-   */
-  char *p = (char *) &numba_nan;
-  int i;
-
-  /* Assume little endian */
-  p[7] = 0x7f;
-  p[6] = 0xf8;
-
-  for (i = 0; i < 6; i++) {
-      p[i] = 0x55;
-  }
-}
-
-static NUMBA_INLINE double numba_float_as_double(PyObject *x) {
-    double result;
-    if (x == Py_None) {
-        return numba_nan;
-    }
-    return PyFloat_AsDouble(x);
-}
-
-static NUMBA_INLINE PyObject *numba_float_from_double(double x) {
-    PyObject *result;
-    if (x != x) {
-        /* Check whether this NaN is numba_nan */
-        if (*(int *) &numba_nan == 0x55555555) {
-            Py_INCREF(Py_None);
-            return Py_None;
-        }
-    }
-    return PyFloat_FromDouble(x);
-}
-
-
 /////////////// ObjectAsUCS4.proto ///////////////
 
 static NUMBA_INLINE Py_UCS4 __Numba_PyObject_AsPy_UCS4(PyObject*);
@@ -565,8 +518,6 @@ static npy_int32 get_units_num(char *units_char)
 static int
 export_type_conversion(PyObject *module)
 {
-    init_nan();
-
     EXPORT_FUNCTION(__Numba_PyInt_AsSignedChar, module, error)
     EXPORT_FUNCTION(__Numba_PyInt_AsUnsignedChar, module, error)
     EXPORT_FUNCTION(__Numba_PyInt_AsSignedShort, module, error)
@@ -613,11 +564,8 @@ export_type_conversion(PyObject *module)
     EXPORT_FUNCTION(convert_timedelta_units_str, module, error);
     EXPORT_FUNCTION(get_units_num, module, error);
 
-    EXPORT_FUNCTION(numba_float_as_double, module, error);
-    EXPORT_FUNCTION(numba_float_from_double, module, error);
-
-
     return 0;
 error:
     return -1;
 }
+
