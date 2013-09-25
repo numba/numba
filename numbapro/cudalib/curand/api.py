@@ -54,8 +54,7 @@ class PRNG(RNG):
     >>> rand = empty(10)
     >>> prng.uniform(rand)
     >>> rand
-    array([ 0.43845084,  0.4603647 ,  0.25021471,  0.49474377,  0.05301112,
-            0.33769926,  0.39676252,  0.87441866,  0.48216683,  0.0428398 ])
+    array([ ... ])
     '''
 
     TEST     = binding.CURAND_RNG_TEST
@@ -244,8 +243,7 @@ def uniform(size, dtype=np.float, device=False):
 
     >>> from numbapro.cudalib import curand
     >>> curand.uniform(size=10)
-    array([ 0.96062812,  0.19939146,  0.00879088,  0.54446284,  0.21085021,
-            0.36079724,  0.99012678,  0.7259001 ,  0.52894625,  0.48660392])
+    array([...])
 
     .. seealso:: :py:meth:`PRNG.uniform`
     '''
@@ -272,8 +270,7 @@ def normal(mean, sigma, size, dtype=np.float, device=False):
 
     >>> from numbapro.cudalib import curand
     >>> curand.normal(mean=0, sigma=1, size=10)
-    array([ 0.23894596, -0.7153815 ,  1.45921585,  0.03232115, -0.0544293 ,
-           -1.34810526,  0.05199384, -0.28817048, -1.00017829,  0.29783802])
+    array([...])
 
     .. seealso:: :py:meth:`PRNG.normal`
     
@@ -301,8 +298,7 @@ def lognormal(mean, sigma, size, dtype=np.float, device=False):
 
     >>> from numbapro.cudalib import curand
     >>> curand.lognormal(mean=0, sigma=1, size=10)
-    array([ 0.6855486 ,  3.30343649,  1.44001004,  1.10696554,  0.44116016,
-            1.50481311,  1.78961926,  3.68552686,  0.02069679,  1.80170149])
+    array([...])
             
     .. seealso:: :py:meth:`PRNG.lognormal`
     
@@ -328,8 +324,7 @@ def poisson(lmbd, size, device=False):
     
     >>> from numbapro.cudalib import curand
     >>> curand.poisson(lmbd=1, size=10)
-    array([        12, 1072610679, 3429724766, 1070171560, 3422754464,
-           1065484531, 1420594762, 1071737917, 3314491466, 1070267683], dtype=uint32)
+    array([...], dtype=uint32)
 
     .. seealso:: :py:meth:`PRNG.poisson`
     '''
@@ -354,8 +349,7 @@ def quasi(size, bits=32, nd=1, device=False):
     
     >>> from numbapro.cudalib import curand
     >>> curand.quasi(10)
-    array([         0, 2147483648, 3221225472, 1073741824, 1610612736,
-           3758096384, 2684354560,  536870912,  805306368, 2952790016], dtype=uint32)
+    array([...], dtype=uint32)
 
     .. seealso:: :py:meth:`QRNG.quasi`
     '''

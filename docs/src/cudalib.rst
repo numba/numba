@@ -9,7 +9,7 @@ cuRAND
 ======
 
 Provides `pseudo-random number generator` (PRNG) and `quasi-random generator` (QRNG).
-See `NVIDIA cuRAND <http://docs.nvidia.com/cuda/cuRAND/index.html>`_.
+See `NVIDIA cuRAND <http://docs.nvidia.com/cuda/curand/index.html>`_.
 
 class PRNG
 -----------

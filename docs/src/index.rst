@@ -7,8 +7,9 @@
 NumbaPro
 ========
 
-`NumbaPro` is an enhanced version of `Numba <http://docs.continuum.io/numba/index.html>`_ which adds premium features and
-functionality that allow developers to rapidly create optimized code that integrates well with `NumPy <http://www.numpy.org>`_.
+`NumbaPro` is an enhanced version of Numba_ which adds premium features and
+functionality that allow developers to rapidly create optimized code that 
+integrates well with NumPy_.
 
 With NumbaPro, Python developers can define NumPy `ufuncs` and `generalized ufuncs`
 in Python, which are compiled to machine code dynamically and loaded on the fly.
@@ -31,30 +32,35 @@ Getting Started
 Let's start with a simple function to add together all the pairwise values in two NumPy arrays.
 Asking NumbaPro to compile this Python function to vectorized machine code for execution
 on the CPU is as simple as adding a single line of code (invoked via a decorator on the
-function)::
+function):
 
-    from numbapro import vectorize, float32
+.. testcode::
 
-    @vectorize([float32(float32, float32)], target='cpu')
+    from numbapro import vectorize
+
+    @vectorize(['float32(float32, float32)'], target='cpu')
     def sum(a, b):
         return a + b
 
-    # Invoke like:  result_array = sum(big_input_1, big_input_2)
 
 Similarly, one can instead target the GPU for execution of the same Python function by
-modifying a single line in the above example::
+modifying a single line in the above example:
 
-    @vectorize([float32(float32, float32)], target='gpu')
+.. code-block:: python
+
+    @vectorize(['float32(float32, float32)'], target='gpu')
 
 Targeting the GPU for execution introduces the potential for numerous GPU-specific
 optimizations so as a starting point for more complex scenarios, one can also target
-the GPU with NumbaPro via its `Just-In-Time` (JIT) compiler::
+the GPU with NumbaPro via its `Just-In-Time` (JIT) compiler:
 
-    from numbapro import cuda, float32
+.. testcode::
 
-    @cuda.jit(argtypes=[float32[:], float32[:], float32[:]])
+    from numbapro import cuda
+
+    @cuda.jit('void(float32[:], float32[:], float32[:])')
     def sum(a, b, result):
-        i = cuda.grid(1)
+        i = cuda.grid(1)   # equals to threadIdx.x + blockIdx.x * blockDim.x
         result[i] = a[i] + b[i]
 
     # Invoke like:  sum[grid_dim, block_dim](big_input_1, big_input_2, result_array)
@@ -68,9 +74,13 @@ CUDA support for GPU execution and a multi-threaded parallel range.
 
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
 
    install
+
+.. toctree::
+   :maxdepth: 1
+
    ufuncs
    generalizedufuncs
    CUDAintro
@@ -122,3 +132,5 @@ License Agreement
    * :ref:`modindex`
    * :ref:`search`
 
+.. _Numba: http://docs.continuum.io/numba/index.html
+.. _NumPy:  http://www.numpy.org
