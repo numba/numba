@@ -240,6 +240,54 @@ This does not handle unicode, and is equivalent to ``char *``::
 C Arrays
 --------
 
+.. _datetimtypes:
+
+DateTimes
+---------
+NumPy datetime and timedelta types are supported with numba.datetime and
+numba.timedelta types. Internally a NumPy datetime or timedelta object is
+converted to a struct type with a timestamp/timedelta field and a datetime
+units field, so datetime and timedelta objects can be used in nopython mode.
+
+NumPy datetime and timedelta scalars and arrays can be passed to a numba
+function::
+
+    @numba.jit(void(numba.datetime), nopython=True)
+    def foo(x):
+        # do stuff with datetime x
+
+    foo(numpy.datetime64('2014-01-01'))
+
+New datetime and timedelta objects can be created inside a numba function and
+returned. Datetime components can also be accessed::
+
+    @numba.autojit(nopython=True)
+    def foo():
+        date = numpy.datetime64('2014-01-01')
+        year = date.year
+        return date
+
+Currently a datetime can be subtracted from another datetime to get a timedelta,
+and a timedelta can be added to or subtracted from a datetime to get a new
+datetime::
+
+    @numba.jit(numba.timedelta(numba.datetime, numba.datetime), nopython=True)
+    def foo1(date1, date2):
+        return date1 - date2
+
+    @numba.jit(numba.datetime(numba.datetime, numba.timedelta), nopython=True)
+    def foo2(date, delta):
+        return date + delta
+
+Arrays of datetimes and timedeltas can be passed in and returned from a numba
+function, and indexed within a numba function. When a datetime array type is
+specified, the datetime units must also be specified (datetime units are the
+same as NumPy datetime64 units)::
+
+    @numba.jit(numba.datetime(numba.datetime(units='M')[:]))
+    def foo(datetimes):
+        return datetimes[0]
+
 .. _templates:
 
 Templates
