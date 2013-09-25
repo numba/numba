@@ -14,7 +14,7 @@ Update Instructions
 -------------------
 With Anaconda Accelerate already installed, first update
 the conda_ package management tool to the latest version, then use conda
-to update the NumbaPro module:
+to update the NumbaPro module. In the terminal:
 
 .. code-block:: bash
 
@@ -29,13 +29,14 @@ CUDA Driver
 ~~~~~~~~~~~~
 
 NumbaPro does not ship the CUDA driver.  It is users responsibility to ensure
-their systems are using the latest driver.
+their systems are using the **latest driver**.
 Currently, users should use the driver shipped with `CUDA 5.5 SDK`_.
 
 CUDA Support & Detection
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-NumbaPro currently supports `NVIDIA CUDA GPUs`_ with compute-capability 2+ only.
+NumbaPro GPU support currently requires `NVIDIA CUDA GPUs`_ with 
+**compute-capability 2.0 or above**.
 Users should check their hardware with the following:
 
 .. code-block:: python

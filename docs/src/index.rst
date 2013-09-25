@@ -11,15 +11,10 @@ NumbaPro
 functionality that allow developers to rapidly create optimized code that 
 integrates well with NumPy_.
 
-With NumbaPro, Python developers can define NumPy `ufuncs` and `generalized ufuncs`
+With NumbaPro, Python developers can define NumPy ufuncs_ and `generalized ufuncs`_ (gufuncs)
 in Python, which are compiled to machine code dynamically and loaded on the fly.
 Additionally, NumbaPro offers developers the ability to target multicore and
 GPU architectures with Python code for both ufuncs and general-purpose code.
-
-Finally, with NumbaPro, high-level array-expressions (slicing, vectorized
-math, reductions, linear-algebra operations, etc.) can be compiled directy to
-machine code providing the fastest code using all the information available
-about the calculation
 
 For targeting the GPU, NumbaPro can either do the work automatically, doing
 its best to optimize the code for the GPU architecture.  Alternatively,
@@ -66,23 +61,40 @@ the GPU with NumbaPro via its `Just-In-Time` (JIT) compiler:
     # Invoke like:  sum[grid_dim, block_dim](big_input_1, big_input_2, result_array)
 
 
+Features
+---------
+
+Here's a list of highlighted features:
+
+* Portable data-parallel programming through ufuncs and gufuncs for single core CPU, multicore CPU and GPU
+* Bindings to CUDA libraries: cuRAND, cuBLAS, cuFFT
+* "CUDA-Python" programming for maximum control of hardware resources
+
+
+
 User Guide
 ----------
 
-Major features of NumbaPro include support for (parallel) NumPy ufuncs and gufuncs,
-CUDA support for GPU execution and a multi-threaded parallel range.
-
+New users should first read the installation manual:
 
 .. toctree::
    :maxdepth: 2
 
    install
 
+High-level APIs for CPU/GPU:
+
 .. toctree::
    :maxdepth: 1
 
    ufuncs
    generalizedufuncs
+   
+"CUDA-Python" Programming
+
+.. toctree::
+   :maxdepth: 1
+
    CUDAintro
    CUDAufunc
    CUDAJit
@@ -91,11 +103,13 @@ CUDA support for GPU execution and a multi-threaded parallel range.
    CUDASupport
    CUDAPySpec
 
-Additional examples:
-`GitHub repo of NumbaPro examples <https://github.com/ContinuumIO/numbapro-examples>`_
+Learn by Examples
+------------------
 
-.. Developer Guide
-   ---------------
+The developer team maintains a public `GitHub repository of examples`_.
+Many examples are designed to show off the potential performance gain by using
+GPUs.
+
 
 Requirements
 ------------
@@ -107,7 +121,7 @@ Requirements
 Python modules:
 
 * llvmpy (>= 0.12.0)
-* numba 0.9
+* numba 0.10.2
 
 Release Notes
 -------------
@@ -134,3 +148,6 @@ License Agreement
 
 .. _Numba: http://docs.continuum.io/numba/index.html
 .. _NumPy:  http://www.numpy.org
+.. _`GitHub repository of examples`: https://github.com/ContinuumIO/numbapro-examples
+.. _ufuncs: http://docs.scipy.org/doc/numpy/reference/ufuncs.html
+.. _`generalized ufuncs`: http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
