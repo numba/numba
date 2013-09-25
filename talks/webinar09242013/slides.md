@@ -553,7 +553,7 @@ def matrix_matrix_mult(A, B, C):
 ## Why not glue CUDA-C/C++ device function?
 
 - Python is already a good glue language
-- Workaround for missing feature in CUDA
+- Workaround for missing feature in NumbaPro
 
 ## Gluing CUDA-C/C++ code (Experimental Feature)
 
@@ -604,7 +604,7 @@ We have seen...
 
 ## CUDA + Python Course
 
-- Continuum will be offering an **introductary CUDA course in Python** in the near future.
+- Continuum will be offering an **introductory CUDA course in Python** in the near future.
 - For Python programmers with **no CUDA experience**
 
 
