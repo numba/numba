@@ -443,7 +443,7 @@ class FunctionEnvironment(object):
             self.function_globals = self.func.__globals__
 
         if self.func:
-            self.module_name = self.func.__module__
+            self.module_name = self.func.__module__ or '<unamed.module>'
         else:
             self.module_name = self.function_globals.get("__name__", "")
 
