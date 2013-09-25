@@ -42,11 +42,11 @@
  */
 int
 parse_iso_8601_datetime(char *str, Py_ssize_t len,
-                    NPY_DATETIMEUNIT unit,
+                    NUMBA_DATETIMEUNIT unit,
                     NPY_CASTING casting,
-                    npy_datetimestruct *out,
+                    numba_datetimestruct *out,
                     npy_bool *out_local,
-                    NPY_DATETIMEUNIT *out_bestunit,
+                    NUMBA_DATETIMEUNIT *out_bestunit,
                     npy_bool *out_special);
 
 /*
@@ -54,10 +54,10 @@ parse_iso_8601_datetime(char *str, Py_ssize_t len,
  * objects with the given local and unit settings.
  */
 int
-get_datetime_iso_8601_strlen(int local, NPY_DATETIMEUNIT base);
+get_datetime_iso_8601_strlen(int local, NUMBA_DATETIMEUNIT base);
 
 /*
- * Converts an npy_datetimestruct to an (almost) ISO 8601
+ * Converts an numba_datetimestruct to an (almost) ISO 8601
  * NULL-terminated string.
  *
  * If 'local' is non-zero, it produces a string in local time with
@@ -79,15 +79,15 @@ get_datetime_iso_8601_strlen(int local, NPY_DATETIMEUNIT base);
  *  string was too short).
  */
 int
-make_iso_8601_datetime(npy_datetimestruct *dts, char *outstr, int outlen,
-                    int local, NPY_DATETIMEUNIT base, int tzoffset,
+make_iso_8601_datetime(numba_datetimestruct *dts, char *outstr, int outlen,
+                    int local, NUMBA_DATETIMEUNIT base, int tzoffset,
                     NPY_CASTING casting);
 
 /*
  * Finds the largest unit whose value is nonzero, and for which
  * the remainder for the rest of the units is zero.
  */
-NPY_DATETIMEUNIT
-lossless_unit_from_datetimestruct(npy_datetimestruct *dts);
+NUMBA_DATETIMEUNIT
+lossless_unit_from_datetimestruct(numba_datetimestruct *dts);
 
 #endif

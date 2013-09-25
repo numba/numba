@@ -114,7 +114,7 @@ def test_datetime():
     datetime = numpy.datetime64('2014-01-01')
     assert datetime_identity(datetime) == datetime
 
-    delta = numpy.timedelta64(1, 'Y')
+    delta = numpy.timedelta64(1)
     assert timedelta_identity(delta) == delta
 
     datetime_str = '2014'
@@ -132,15 +132,16 @@ def test_datetime():
     control = numpy.datetime64(datetime_str)
     assert create_numpy_datetime(datetime_str) == control
 
-    datetime_str = '2014-01-02T03Z'
-    datetime = numpy.datetime64(datetime_str)
-    control = numpy.datetime64(datetime_str)
-    assert create_numpy_datetime(datetime_str) == control
+    if numpy.version.version[0:3] != '1.6':
+        datetime_str = '2014-01-02T03Z'
+        datetime = numpy.datetime64(datetime_str)
+        control = numpy.datetime64(datetime_str)
+        assert create_numpy_datetime(datetime_str) == control
 
-    datetime_str = '2014-01-02T03:04Z'
-    datetime = numpy.datetime64(datetime_str)
-    control = numpy.datetime64(datetime_str)
-    assert create_numpy_datetime(datetime_str) == control
+        datetime_str = '2014-01-02T03:04Z'
+        datetime = numpy.datetime64(datetime_str)
+        control = numpy.datetime64(datetime_str)
+        assert create_numpy_datetime(datetime_str) == control
 
     datetime_str = '2014-01-02T03:04:05Z'
     datetime = numpy.datetime64(datetime_str)
@@ -150,18 +151,19 @@ def test_datetime():
     # JNB: string concatenation doesn't work right now
     #assert create_numpy_datetime_from_string(datetime_str) == control
 
-    control = numpy.timedelta64(2014, 'Y')
-    assert create_numpy_timedelta(2014, 'Y') == control
-    control = numpy.timedelta64(100, 'M')
-    assert create_numpy_timedelta(100, 'M') == control
-    control = numpy.timedelta64(10000, 'D')
-    assert create_numpy_timedelta(10000, 'D') == control
-    control = numpy.timedelta64(100, 'h')
-    assert create_numpy_timedelta(100, 'h') == control
-    control = numpy.timedelta64(100, 'm')
-    assert create_numpy_timedelta(100, 'm') == control    
-    control = numpy.timedelta64(100, 's')
-    assert create_numpy_timedelta(100, 's') == control    
+    if numpy.version.version[0:3] != '1.6':
+        control = numpy.timedelta64(2014, 'Y')
+        assert create_numpy_timedelta(2014, 'Y') == control
+        control = numpy.timedelta64(100, 'M')
+        assert create_numpy_timedelta(100, 'M') == control
+        control = numpy.timedelta64(10000, 'D')
+        assert create_numpy_timedelta(10000, 'D') == control
+        control = numpy.timedelta64(100, 'h')
+        assert create_numpy_timedelta(100, 'h') == control
+        control = numpy.timedelta64(100, 'm')
+        assert create_numpy_timedelta(100, 'm') == control    
+        control = numpy.timedelta64(100, 's')
+        assert create_numpy_timedelta(100, 's') == control    
 
     datetime_str = '2014-01-02T03:04:05Z'
     assert extract_year(numpy.datetime64(datetime_str)) == 2014
@@ -202,22 +204,34 @@ def test_datetime():
     assert datetime_delta(datetime1, datetime2) == control
 
     datetime = numpy.datetime64('2014-01-01')
-    timedelta = numpy.timedelta64(1, 'D')
+    if numpy.version.version[0:3] != '1.6':
+        timedelta = numpy.timedelta64(1, 'D')
+    else:
+        timedelta = numpy.timedelta64(1)
     control = datetime + timedelta
     assert datetime_add_timedelta(datetime, timedelta) == control
 
     datetime = numpy.datetime64('2014-01-01T01:02:03Z')
-    timedelta = numpy.timedelta64(-10000, 's')
+    if numpy.version.version[0:3] != '1.6':
+        timedelta = numpy.timedelta64(-10000, 's')
+    else:
+        timedelta = numpy.timedelta64(-10000)
     control = datetime + timedelta
     assert datetime_add_timedelta(datetime, timedelta) == control
 
     datetime = numpy.datetime64('2014')
-    timedelta = numpy.timedelta64(10, 'Y')
+    if numpy.version.version[0:3] != '1.6':
+        timedelta = numpy.timedelta64(10, 'Y')
+    else:
+        timedelta = numpy.timedelta64(10)
     control = datetime - timedelta
     assert datetime_subtract_timedelta(datetime, timedelta) == control
 
     datetime = numpy.datetime64('2014-01-01T01:02:03Z')
-    timedelta = numpy.timedelta64(-10000, 'm')
+    if numpy.version.version[0:3] != '1.6':
+        timedelta = numpy.timedelta64(-10000, 'm')
+    else:
+        timedelta = numpy.timedelta64(-10000)
     control = datetime - timedelta
     assert datetime_subtract_timedelta(datetime, timedelta) == control
 

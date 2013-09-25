@@ -127,53 +127,6 @@ static NUMBA_INLINE size_t __Numba_PyInt_AsSize_t(PyObject* x) {
    return (size_t)val;
 }
 
-static double numba_nan;
-
-static void init_nan(void) {
-  /* Initialize NaN. The sign is irrelevant, an exponent with all bits 1 and
-   a nonzero mantissa means NaN. If the first bit in the mantissa is 1, it is
-   a quiet NaN.
-
-   >>> struct.pack('d', float('nan'))
-   '\x00\x00\x00\x00\x00\x00\xf8\x7f'
-   >>> struct.pack('d', float('nan')) == struct.pack('d', np.nan)
-   True
-
-   We need to choose something different from this NaN representation.
-   */
-  char *p = (char *) &numba_nan;
-  int i;
-
-  /* Assume little endian */
-  p[7] = 0x7f;
-  p[6] = 0xf8;
-
-  for (i = 0; i < 6; i++) {
-      p[i] = 0x55;
-  }
-}
-
-static NUMBA_INLINE double numba_float_as_double(PyObject *x) {
-    double result;
-    if (x == Py_None) {
-        return numba_nan;
-    }
-    return PyFloat_AsDouble(x);
-}
-
-static NUMBA_INLINE PyObject *numba_float_from_double(double x) {
-    PyObject *result;
-    if (x != x) {
-        /* Check whether this NaN is numba_nan */
-        if (*(int *) &numba_nan == 0x55555555) {
-            Py_INCREF(Py_None);
-            return Py_None;
-        }
-    }
-    return PyFloat_FromDouble(x);
-}
-
-
 /////////////// ObjectAsUCS4.proto ///////////////
 
 static NUMBA_INLINE Py_UCS4 __Numba_PyObject_AsPy_UCS4(PyObject*);
@@ -311,11 +264,11 @@ static NUMBA_INLINE size_t __Numba_PyInt_AsSize_t(PyObject*);
 
 
 static int convert_datetime_str(char *datetime_string,
-    NPY_DATETIMEUNIT *out_bestunit, npy_datetimestruct *out_datetimestruct)
+    NUMBA_DATETIMEUNIT *out_bestunit, numba_datetimestruct *out_datetimestruct)
 {
     npy_bool out_local;
     npy_bool out_special;
-    npy_datetimestruct dummy;
+    numba_datetimestruct dummy;
 
     if (out_datetimestruct == NULL) {
         out_datetimestruct = &dummy;
@@ -338,16 +291,19 @@ static int convert_datetime_str(char *datetime_string,
 
 static npy_int64 convert_datetime_str_to_timestamp(char *datetime_string)
 {
-    npy_datetimestruct temp;
+    numba_datetimestruct temp;
     npy_datetime output;
     PyArray_DatetimeMetaData new_meta;
-    NPY_DATETIMEUNIT out_bestunit;
+    NUMBA_DATETIMEUNIT out_bestunit;
 
     if (convert_datetime_str(datetime_string, &out_bestunit, &temp) < 0) {
         return -1;
     }
-
+#if NPY_API_VERSION > 6
     new_meta.base = out_bestunit;
+#else
+    new_meta.base = NUMBA_FR_us;
+#endif
     new_meta.num = 1;
 
     if (convert_datetimestruct_to_datetime(&new_meta, &temp, &output) < 0) {
@@ -359,11 +315,15 @@ static npy_int64 convert_datetime_str_to_timestamp(char *datetime_string)
 
 static npy_int32 convert_datetime_str_to_units(char *datetime_string)
 {
-    NPY_DATETIMEUNIT out_bestunit;
+    NUMBA_DATETIMEUNIT out_bestunit;
 
+#if NPY_API_VERSION > 6
     if (convert_datetime_str(datetime_string, &out_bestunit, NULL) < 0) {
         return -1;
     }
+#else
+    out_bestunit = NUMBA_FR_us;
+#endif
 
     return out_bestunit;
 }
@@ -407,7 +367,7 @@ static PyObject* create_numpy_datetime(
 
 static PyObject* create_numpy_timedelta(
     npy_timedelta timedelta,
-    NPY_DATETIMEUNIT units,
+    NUMBA_DATETIMEUNIT units,
     PyDatetimeScalarObject *scalar)
 {
     if (scalar == NULL) {
@@ -423,7 +383,7 @@ static PyObject* create_numpy_timedelta(
 }
 
 #define GET_TARGET_UNIT(type1, type2) \
-static NPY_DATETIMEUNIT get_target_unit_for_##type1##_##type2( \
+static NUMBA_DATETIMEUNIT get_target_unit_for_##type1##_##type2( \
     npy_int32 units1, \
     npy_int32 units2) \
 { \
@@ -443,7 +403,7 @@ static NPY_DATETIMEUNIT get_target_unit_for_##type1##_##type2( \
         return meta1.base; \
     } \
 \
-    return NPY_FR_GENERIC; \
+    return NUMBA_FR_GENERIC; \
 }
 
 GET_TARGET_UNIT(datetime, datetime)
@@ -454,10 +414,10 @@ GET_TARGET_UNIT(datetime, timedelta)
 #define DATETIME_ARITHMETIC(type1, type2, op, op_name, ret_type) \
 static npy_##ret_type op_name##_##type1##_##type2( \
     npy_##type1 type1##1, \
-    NPY_DATETIMEUNIT units1, \
+    NUMBA_DATETIMEUNIT units1, \
     npy_##type2 type2##2, \
-    NPY_DATETIMEUNIT units2, \
-    NPY_DATETIMEUNIT target_units) \
+    NUMBA_DATETIMEUNIT units2, \
+    NUMBA_DATETIMEUNIT target_units) \
 { \
     PyArray_DatetimeMetaData src_meta; \
     PyArray_DatetimeMetaData dst_meta; \
@@ -493,15 +453,15 @@ DATETIME_ARITHMETIC(datetime, timedelta, +, add, datetime)
 
 #define EXTRACT_DATETIME(unit_name, ret_type) \
 static ret_type extract_datetime_##unit_name(npy_datetime timestamp, \
-    NPY_DATETIMEUNIT units) \
+    NUMBA_DATETIMEUNIT units) \
 { \
     PyArray_DatetimeMetaData meta; \
-    npy_datetimestruct output; \
+    numba_datetimestruct output; \
 \
     meta.base = units; \
     meta.num = 1; \
 \
-    memset(&output, 0, sizeof(npy_datetimestruct)); \
+    memset(&output, 0, sizeof(numba_datetimestruct)); \
 \
     if (convert_datetime_to_datetimestruct(&meta, timestamp, &output) < 0) { \
         return -1; \
@@ -517,7 +477,7 @@ EXTRACT_DATETIME(min, npy_int32)
 EXTRACT_DATETIME(sec, npy_int32)
 
 static npy_int32 extract_timedelta_sec(npy_timedelta timedelta,
-    NPY_DATETIMEUNIT units)
+    NUMBA_DATETIMEUNIT units)
 {
     PyArray_DatetimeMetaData meta1;
     PyArray_DatetimeMetaData meta2;
@@ -542,7 +502,7 @@ static npy_int32 extract_timedelta_sec(npy_timedelta timedelta,
 static npy_int32 convert_timedelta_units_str(char *units_str)
 {
     if (units_str == NULL)
-        return NPY_FR_GENERIC;
+        return NUMBA_FR_GENERIC;
 
     return parse_datetime_unit_from_string(units_str, strlen(units_str), NULL);
 }
@@ -550,7 +510,7 @@ static npy_int32 convert_timedelta_units_str(char *units_str)
 static npy_int32 get_units_num(char *units_char)
 {
     if (units_char == NULL)
-        return NPY_FR_GENERIC;
+        return NUMBA_FR_GENERIC;
 
     return parse_datetime_unit_from_string(units_char, 1, NULL);
 }
@@ -558,8 +518,6 @@ static npy_int32 get_units_num(char *units_char)
 static int
 export_type_conversion(PyObject *module)
 {
-    init_nan();
-
     EXPORT_FUNCTION(__Numba_PyInt_AsSignedChar, module, error)
     EXPORT_FUNCTION(__Numba_PyInt_AsUnsignedChar, module, error)
     EXPORT_FUNCTION(__Numba_PyInt_AsSignedShort, module, error)
@@ -606,11 +564,8 @@ export_type_conversion(PyObject *module)
     EXPORT_FUNCTION(convert_timedelta_units_str, module, error);
     EXPORT_FUNCTION(get_units_num, module, error);
 
-    EXPORT_FUNCTION(numba_float_as_double, module, error);
-    EXPORT_FUNCTION(numba_float_from_double, module, error);
-
-
     return 0;
 error:
     return -1;
 }
+

@@ -4,7 +4,7 @@ package:
 
 source:
   git_url: git@github.com:numba/numba.git
- # git_tag: 0.10.0
+  git_tag: devel
 
 build:
   entry_points:
