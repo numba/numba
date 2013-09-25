@@ -183,7 +183,7 @@ setup(
         'numba.asdl.py2_7': ['*.asdl'],
         'numba.asdl.py3_2': ['*.asdl'],
         'numba.asdl.py3_3': ['*.asdl'],
-        'numba.external.utilities': ['*.c', '*.h'],
+        'numba.external.utilities': ['*.c', '*.h', 'datetime/*'],
         'numba': ['*.c', '*.h', 'include/*', '*.pxd'],
         'numba.vectorize': ['*.h'],
         'numba.annotate': ['annotate_inline_template.html',
