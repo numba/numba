@@ -250,21 +250,20 @@ converted to a struct type with a timestamp/timedelta field and a datetime
 units field, so datetime and timedelta objects can be used in nopython mode.
 
 NumPy datetime and timedelta scalars and arrays can be passed to a numba
-function::
+function. Datetime components can also be accessed::
 
     @numba.jit(void(numba.datetime), nopython=True)
     def foo(x):
-        # do stuff with datetime x
+        year = date.year
 
     foo(numpy.datetime64('2014-01-01'))
 
 New datetime and timedelta objects can be created inside a numba function and
-returned. Datetime components can also be accessed::
+returned. ::
 
     @numba.autojit(nopython=True)
     def foo():
         date = numpy.datetime64('2014-01-01')
-        year = date.year
         return date
 
 Currently a datetime can be subtracted from another datetime to get a timedelta,
