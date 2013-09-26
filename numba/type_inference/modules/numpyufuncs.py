@@ -138,8 +138,10 @@ def binary_map_bool(typesystem, a, b, out):
     type = binary_map(typesystem, a, b, out)
     if type.is_array:
         return type.add('dtype', bool_)
-    else:
+    elif type.is_numeric:
         return bool_
+    else:
+        return object_
 
 def reduce_(a, axis, dtype, out, static_dtype=None):
     if out is not None:
