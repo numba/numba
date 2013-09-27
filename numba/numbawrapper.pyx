@@ -81,7 +81,6 @@ cdef tuple hash_on_value_types = (
     itypesystem.Type,
     np.ufunc,
     np.dtype,
-    np.generic,
     NumbaWrapper,
     types.FunctionType,
     types.BuiltinFunctionType,
