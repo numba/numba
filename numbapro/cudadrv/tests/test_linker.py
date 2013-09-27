@@ -1,6 +1,6 @@
 import os.path
 import numpy as np
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 from numbapro.cudadrv.driver import Linker, require_context
 from numbapro import cuda
 
@@ -36,7 +36,7 @@ def test_linking():
 
     foo(A, B)
 
-    assert A[0] == 123 + 2 * 321
+    assertTrue(A[0] == 123 + 2 * 321)
 
 if __name__ == '__main__':
     main()

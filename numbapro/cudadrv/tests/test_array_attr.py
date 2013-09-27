@@ -1,7 +1,7 @@
 import numpy as np
 from numbapro import cuda
 
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 
 
 @testcase
@@ -12,10 +12,10 @@ def test_contigous_2d():
 
     dcary = cuda.to_device(cary)
     dfary = cuda.to_device(fary)
-    assert dcary.is_c_contigous()
-    assert not dfary.is_c_contigous()
-    assert not dcary.is_f_contigous()
-    assert dfary.is_f_contigous()
+    assertTrue(dcary.is_c_contigous())
+    assertTrue(not dfary.is_c_contigous())
+    assertTrue(not dcary.is_f_contigous())
+    assertTrue(dfary.is_f_contigous())
 
 @testcase
 def test_contigous_3d():
@@ -25,10 +25,10 @@ def test_contigous_3d():
     
     dcary = cuda.to_device(cary)
     dfary = cuda.to_device(fary)
-    assert dcary.is_c_contigous()
-    assert not dfary.is_c_contigous()
-    assert not dcary.is_f_contigous()
-    assert dfary.is_f_contigous()
+    assertTrue(dcary.is_c_contigous())
+    assertTrue(not dfary.is_c_contigous())
+    assertTrue(not dcary.is_f_contigous())
+    assertTrue(dfary.is_f_contigous())
 
 
 @testcase
@@ -39,10 +39,10 @@ def test_contigous_4d():
 
     dcary = cuda.to_device(cary)
     dfary = cuda.to_device(fary)
-    assert dcary.is_c_contigous()
-    assert not dfary.is_c_contigous()
-    assert not dcary.is_f_contigous()
-    assert dfary.is_f_contigous()
+    assertTrue(dcary.is_c_contigous())
+    assertTrue(not dfary.is_c_contigous())
+    assertTrue(not dcary.is_f_contigous())
+    assertTrue(dfary.is_f_contigous())
 
 @testcase
 def test_ravel_c():
@@ -52,8 +52,8 @@ def test_ravel_c():
     dary = cuda.to_device(reshaped)
     dflat = dary.ravel()
     flat = dflat.copy_to_host()
-    assert flat.ndim == 1
-    assert np.all(expect == flat)
+    assertTrue(flat.ndim == 1)
+    assertTrue(np.all(expect == flat))
 
 @testcase
 def test_ravel_f():
@@ -63,8 +63,8 @@ def test_ravel_f():
     dary = cuda.to_device(reshaped)
     dflat = dary.ravel(order='F')
     flat = dflat.copy_to_host()
-    assert flat.ndim == 1
-    assert np.all(expect == flat)
+    assertTrue(flat.ndim == 1)
+    assertTrue(np.all(expect == flat))
 
 @testcase
 def test_reshape_c():
@@ -73,7 +73,7 @@ def test_reshape_c():
     dary = cuda.to_device(ary)
     dary_reshaped = dary.reshape(2, 5)
     got = dary_reshaped.copy_to_host()
-    assert np.all(expect == got)
+    assertTrue(np.all(expect == got))
 
 @testcase
 def test_reshape_f():
@@ -82,7 +82,7 @@ def test_reshape_f():
     dary = cuda.to_device(ary)
     dary_reshaped = dary.reshape(2, 5, order='F')
     got = dary_reshaped.copy_to_host()
-    assert np.all(expect == got)
+    assertTrue(np.all(expect == got))
 
 if __name__ == '__main__':
     main()

@@ -1,7 +1,7 @@
 import numpy as np
 from ..compiler import compile
 from ..types import int32, float32, float64, arraytype, void
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 
 def loop_case_1(a, b):
     '''The type inference algorithm will use the type of at the dominator
@@ -33,9 +33,9 @@ def template(func, compiled, args, allclose=False):
     msg = '%s%s got = %s expect=%s' % (func, args, got, exp)
 
     if allclose:
-        assert np.allclose(got, exp), msg
+        assertTrue(np.allclose(got, exp), msg)
     else:
-        assert got == exp, msg
+        assertTrue(got == exp, msg)
 
 
 #------------------------------------------------------------------------------

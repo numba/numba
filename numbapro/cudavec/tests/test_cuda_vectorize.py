@@ -2,7 +2,7 @@ import numpy as np
 from numbapro import vectorize
 from numbapro import cuda, int32, float32, float64
 from timeit import default_timer as time
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 
 sig = [int32(int32, int32),
        float32(float32, float32),
@@ -43,7 +43,7 @@ def test_1d():
             print("Numba is SLOWER by %fx" % (tnumba/tnumpy))
 
 
-        assert np.allclose(gold, result), (gold, result)
+        assertTrue(np.allclose(gold, result), (gold, result))
 
     test(np.double)
     test(np.float32)
@@ -80,7 +80,7 @@ def test_1d_async():
             print("Numba is SLOWER by %fx" % (tnumba/tnumpy))
 
 
-        assert np.allclose(gold, result), (gold, result)
+        assertTrue(np.allclose(gold, result), (gold, result))
 
     test(np.double)
     test(np.float32)
@@ -98,7 +98,7 @@ def test_nd():
 
         result = data + data2
         our_result = cuda_ufunc(data, data2)
-        assert np.allclose(result, our_result), (dtype, order, result, our_result)
+        assertTrue(np.allclose(result, our_result), (dtype, order, result, our_result))
 
     for nd in range(1, 8):
         for dtype in test_dtypes:
@@ -118,7 +118,7 @@ def test_reduce(n):
     x = np.arange(n, dtype=np.int32)
     gold = np.add.reduce(x)
     result = cuda_ufunc.reduce(x)
-    assert result == gold, (result, gold)
+    assertTrue(result == gold, (result, gold))
 
 def test_reduce2(n):
     x = np.arange(n, dtype=np.int32)
@@ -126,7 +126,7 @@ def test_reduce2(n):
     stream = cuda.stream()
     dx = cuda.to_device(x, stream)
     result = cuda_ufunc.reduce(dx, stream=stream)
-    assert result == gold, (result, gold)
+    assertTrue(result == gold, (result, gold))
 
 
 @testcase
@@ -135,7 +135,7 @@ def test_output_arg():
     B = np.arange(10, dtype=np.float32)
     C = np.empty_like(A)
     vector_add(A, B, out=C)
-    assert np.allclose(A + B, C)
+    assertTrue(np.allclose(A + B, C))
 
 if __name__ == '__main__':
     main()

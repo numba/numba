@@ -1,7 +1,7 @@
 import numpy as np
 from ..compiler import compile
 from ..types import (arraytype, float32, int32)
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 
 def array_slicing_1(ary):
     slice = ary[:]                  # entire array
@@ -62,26 +62,26 @@ def array_slicing_4d_to_2d(ary):
 def test_array_slicing_1():
     cfunc = compile(array_slicing_1, float32, [arraytype(float32, 1, 'C')])
     a = np.arange(10, dtype=np.float32)
-    assert np.allclose(cfunc(a), array_slicing_1(a))
+    assertTrue(np.allclose(cfunc(a), array_slicing_1(a)))
 
 @testcase
 def test_array_slicing_2():
     cfunc = compile(array_slicing_2, float32, [arraytype(float32, 1, 'C')])
     a = np.arange(10, dtype=np.float32)
-    assert np.allclose(cfunc(a), array_slicing_2(a))
+    assertTrue(np.allclose(cfunc(a), array_slicing_2(a)))
 
 @testcase
 def test_array_slicing_3():
     cfunc = compile(array_slicing_3, float32, [arraytype(float32, 1, 'C')])
     a = np.arange(10, dtype=np.float32)
-    assert np.allclose(cfunc(a), array_slicing_3(a))
+    assertTrue(np.allclose(cfunc(a), array_slicing_3(a)))
 
 @testcase
 def test_array_slicing_4():
     cfunc = compile(array_slicing_4, float32,
                                      [arraytype(float32, 1, 'C'), int32, int32])
     a = np.arange(10, dtype=np.float32)
-    assert np.allclose(cfunc(a, 3, 7), array_slicing_4(a, 3, 7))
+    assertTrue(np.allclose(cfunc(a, 3, 7), array_slicing_4(a, 3, 7)))
 
 @testcase
 def test_array_slicing_5():
@@ -89,7 +89,7 @@ def test_array_slicing_5():
     cfunc = compile(array_slicing_4, float32,
                                      [arraytype(float32, 1, 'C'), int32, int32])
     a = np.arange(10, dtype=np.float32)
-    assert np.allclose(cfunc(a, 3, -1), array_slicing_4(a, 3, -1))
+    assertTrue(np.allclose(cfunc(a, 3, -1), array_slicing_4(a, 3, -1)))
 
 @testcase
 def test_array_slicing_6():
@@ -97,7 +97,7 @@ def test_array_slicing_6():
     cfunc = compile(array_slicing_4, float32,
                                      [arraytype(float32, 1, 'C'), int32, int32])
     a = np.arange(10, dtype=np.float32)
-    assert np.allclose(cfunc(a, 3, 11), array_slicing_4(a, 3, 11))
+    assertTrue(np.allclose(cfunc(a, 3, 11), array_slicing_4(a, 3, 11)))
 
 @testcase
 def test_array_slicing_7():
@@ -105,63 +105,63 @@ def test_array_slicing_7():
     cfunc = compile(array_slicing_4, float32,
                                      [arraytype(float32, 1, 'C'), int32, int32])
     a = np.arange(10, dtype=np.float32)
-    assert np.allclose(cfunc(a, -4, -1), array_slicing_4(a, -4, -1))
+    assertTrue(np.allclose(cfunc(a, -4, -1), array_slicing_4(a, -4, -1)))
 
 @testcase
 def test_array_slicing_2d_1_C():
     cfunc = compile(array_slicing_2d_1, float32, [arraytype(float32, 2, 'C'),
                                                   int32, int32])
     a = np.arange(40, dtype=np.float32).reshape(8, 5)
-    assert np.allclose(cfunc(a, 2, 3), array_slicing_2d_1(a, 2, 3))
+    assertTrue(np.allclose(cfunc(a, 2, 3), array_slicing_2d_1(a, 2, 3)))
 
 @testcase
 def test_array_slicing_2d_1_F():
     cfunc = compile(array_slicing_2d_1, float32, [arraytype(float32, 2, 'F'),
                                                   int32, int32])
     a = np.arange(40, dtype=np.float32).reshape(8, 5, order='F')
-    assert np.allclose(cfunc(a, 2, 3), array_slicing_2d_1(a, 2, 3))
+    assertTrue(np.allclose(cfunc(a, 2, 3), array_slicing_2d_1(a, 2, 3)))
 
 @testcase
 def test_array_slicing_2d_to_1d_C():
     cfunc = compile(array_slicing_2d_to_1d, float32,
                     [arraytype(float32, 2, 'C')])
     a = np.arange(40, dtype=np.float32).reshape(8, 5)
-    assert np.allclose(cfunc(a), array_slicing_2d_to_1d(a))
+    assertTrue(np.allclose(cfunc(a), array_slicing_2d_to_1d(a)))
 
 @testcase
 def test_array_slicing_2d_to_1d_F():
     cfunc = compile(array_slicing_2d_to_1d, float32,
                     [arraytype(float32, 2, 'F')])
     a = np.arange(40, dtype=np.float32).reshape(8, 5, order='F')
-    assert np.allclose(cfunc(a), array_slicing_2d_to_1d(a))
+    assertTrue(np.allclose(cfunc(a), array_slicing_2d_to_1d(a)))
 
 @testcase
 def test_array_slicing_3d_to_1d_C():
     cfunc = compile(array_slicing_3d_to_1d, float32,
                     [arraytype(float32, 3, 'C')])
     a = np.arange(40, dtype=np.float32).reshape(4, 2, 5)
-    assert np.allclose(cfunc(a), array_slicing_3d_to_1d(a))
+    assertTrue(np.allclose(cfunc(a), array_slicing_3d_to_1d(a)))
 
 @testcase
 def test_array_slicing_3d_to_1d_F():
     cfunc = compile(array_slicing_3d_to_1d, float32,
                     [arraytype(float32, 3, 'F')])
     a = np.arange(40, dtype=np.float32).reshape(4, 2, 5, order='F')
-    assert np.allclose(cfunc(a), array_slicing_3d_to_1d(a))
+    assertTrue(np.allclose(cfunc(a), array_slicing_3d_to_1d(a)))
 
 @testcase
 def test_array_slicing_4d_to_2d_C():
     cfunc = compile(array_slicing_4d_to_2d, float32,
                     [arraytype(float32, 4, 'C')])
     a = np.arange(40, dtype=np.float32).reshape(2, 2, 5, 2)
-    assert np.allclose(cfunc(a), array_slicing_4d_to_2d(a))
+    assertTrue(np.allclose(cfunc(a), array_slicing_4d_to_2d(a)))
 
 @testcase
 def test_array_slicing_4d_to_2d_F():
     cfunc = compile(array_slicing_4d_to_2d, float32,
                     [arraytype(float32, 4, 'F')])
     a = np.arange(40, dtype=np.float32).reshape(2, 2, 5, 2, order='F')
-    assert np.allclose(cfunc(a), array_slicing_4d_to_2d(a))
+    assertTrue(np.allclose(cfunc(a), array_slicing_4d_to_2d(a)))
 
 if __name__ == '__main__':
     main()

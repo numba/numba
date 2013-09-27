@@ -4,7 +4,7 @@ from ..types import (
 int8, int16, int32, int64, uint8, uint16, uint32, uint64,
 float32, float64, complex64, complex128
 )
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 
 
 iset = [int8, int16, int32, int64, uint8, uint16, uint32, uint64]
@@ -61,7 +61,7 @@ def template_integer(func, avalues, bvalues):
             got = compiled(a, b)
             exp = func(a, b)
             msg = '%s(%s, %s) got = %s expect=%s' % (func, a, b, got, exp)
-            assert got == exp, msg
+            assertTrue(got == exp, msg)
 
     for ty in iset:
         run(ty)
@@ -73,7 +73,7 @@ def template_float(func, avalues, bvalues):
             got = compiled(a, b)
             exp = func(a, b)
             msg = '%s(%s, %s) got = %s expect=%s' % (func, a, b, got, exp)
-            assert np.allclose(got, exp), msg
+            assertTrue(np.allclose(got, exp), msg)
 
     for ty in fset:
         run(ty)
@@ -86,7 +86,7 @@ def template_complex(func, avalues, bvalues):
             got = compiled(a, b)
             exp = func(a, b)
             msg = '%s(%s, %s) got = %s expect=%s' % (func, a, b, got, exp)
-            assert np.allclose(got, exp), msg
+            assertTrue(np.allclose(got, exp), msg)
 
     for ty in cset:
         run(ty)

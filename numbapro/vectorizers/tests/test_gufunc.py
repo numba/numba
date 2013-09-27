@@ -3,7 +3,7 @@ from numba import float32, float_
 import numpy as np
 import numpy.core.umath_tests as ut
 from numbapro.vectorizers import GUVectorize
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 
 def matmulcore(A, B, C):
     m, n = A.shape
@@ -41,7 +41,7 @@ def _test_gufunc(backend, target):
     C = gufunc(A, B)
     Gold = ut.matrix_multiply(A, B)
 
-    assert np.allclose(C, Gold)
+    assertTrue(np.allclose(C, Gold))
 
 #
 ### test gufuncs

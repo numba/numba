@@ -1,7 +1,7 @@
 import numpy as np
 from ..compiler import compile
 from ..types import int32, int64, arraytype, float32, float64, void
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 
 def getitem(a, i):
     return a[i]
@@ -54,21 +54,21 @@ def test_getitem_c():
     compiled = compile(getitem, int32, [arraytype(int32, 1, 'C'), int32])
     ary = np.arange(10, dtype=np.int32)
     for i in range(ary.size):
-        assert compiled(ary, i) == getitem(ary, i)
+        assertTrue(compiled(ary, i) == getitem(ary, i))
 
 @testcase
 def test_getitem_f():
     compiled = compile(getitem, int32, [arraytype(int32, 1, 'F'), int32])
     ary = np.asfortranarray(np.arange(10, dtype=np.int32))
     for i in range(ary.size):
-        assert compiled(ary, i) == getitem(ary, i)
+        assertTrue(compiled(ary, i) == getitem(ary, i))
 
 @testcase
 def test_getitem_a():
     compiled = compile(getitem, int32, [arraytype(int32, 1, 'A'), int32])
     ary = np.arange(10, dtype=np.int32)
     for i in range(ary.size):
-        assert compiled(ary, i) == getitem(ary, i)
+        assertTrue(compiled(ary, i) == getitem(ary, i))
 
 #------------------------------------------------------------------------------
 # getitem2d
@@ -81,7 +81,7 @@ def test_getitem2d_c():
         for j in range(ary.shape[1]):
             got = compiled(ary, i, j)
             exp = getitem2d(ary, i, j)
-            assert got == exp, (got, exp, (i, j))
+            assertTrue(got == exp, (got, exp, (i, j)))
 
 @testcase
 def test_getitem2d_f():
@@ -92,7 +92,7 @@ def test_getitem2d_f():
             got = compiled(ary, i, j)
             exp = getitem2d(ary, i, j)
             print ary
-            assert got == exp, (got, exp, (i, j))
+            assertTrue(got == exp, (got, exp, (i, j)))
 
 @testcase
 def test_getitem2d_a():
@@ -102,7 +102,7 @@ def test_getitem2d_a():
         for j in range(ary.shape[1]):
             got = compiled(ary, i, j)
             exp = getitem2d(ary, i, j)
-            assert got == exp, (got, exp, (i, j))
+            assertTrue(got == exp, (got, exp, (i, j)))
 
 
 #------------------------------------------------------------------------------
@@ -115,7 +115,7 @@ def test_setitem():
     orig = np.arange(10, dtype=np.int32)
     for i in range(ary.size):
         compiled(ary, i, i * 2)
-    assert np.all(orig * 2 == ary)
+    assertTrue(np.all(orig * 2 == ary))
 
 #------------------------------------------------------------------------------
 # getshape
@@ -124,13 +124,13 @@ def test_setitem():
 def test_getshape():
     compiled = compile(getshape, int32, [arraytype(int32, 1, 'C')])
     ary = np.zeros(10, dtype=np.int32)
-    assert compiled(ary) == ary.shape[0]
+    assertTrue(compiled(ary) == ary.shape[0])
 
 @testcase
 def test_unpack_shape():
     compiled = compile(unpack_shape, int32, [arraytype(int32, 2, 'C')])
     ary = np.empty((2, 3), dtype=np.int32)
-    assert compiled(ary) == 2 + 3 * 2
+    assertTrue(compiled(ary) == 2 + 3 * 2)
 
 #------------------------------------------------------------------------------
 # getstrides
@@ -139,7 +139,7 @@ def test_unpack_shape():
 def test_getstrides():
     compiled = compile(getstrides, int32, [arraytype(int32, 1, 'C')])
     ary = np.zeros(10, dtype=np.int32)
-    assert compiled(ary) == ary.strides[0]
+    assertTrue(compiled(ary) == ary.strides[0])
 
 #------------------------------------------------------------------------------
 # getsize
@@ -148,7 +148,7 @@ def test_getstrides():
 def test_getsize():
     compiled = compile(getsize, int32, [arraytype(int32, 1, 'C')])
     ary = np.zeros(10, dtype=np.int32)
-    assert compiled(ary) == ary.size
+    assertTrue(compiled(ary) == ary.size)
 
 #------------------------------------------------------------------------------
 # getndim
@@ -157,7 +157,7 @@ def test_getsize():
 def test_getndim():
     compiled = compile(getndim, int32, [arraytype(int32, 4, 'C')])
     ary = np.zeros((1, 2, 2, 4), dtype=np.int32)
-    assert compiled(ary) == ary.ndim
+    assertTrue(compiled(ary) == ary.ndim)
 
 #------------------------------------------------------------------------------
 # sum1d
@@ -168,7 +168,7 @@ def test_sum1d():
     ary = np.arange(10, dtype=np.int32)
     got = compiled(ary)
     exp = sum1d(ary)
-    assert got == exp, (got, exp)
+    assertTrue(got == exp, (got, exp))
 
 
 #------------------------------------------------------------------------------
@@ -180,7 +180,7 @@ def test_sum2d_c():
     ary = np.arange(10, dtype=np.int32).reshape(2, 5)
     got = compiled(ary)
     exp = sum2d(ary)
-    assert got == exp, (got, exp)
+    assertTrue(got == exp, (got, exp))
 
 @testcase
 def test_sum2d_f():
@@ -188,7 +188,7 @@ def test_sum2d_f():
     ary = np.asfortranarray(np.arange(10, dtype=np.int32).reshape(2, 5))
     got = compiled(ary)
     exp = sum2d(ary)
-    assert got == exp, (got, exp)
+    assertTrue(got == exp, (got, exp))
 
 
 #------------------------------------------------------------------------------
@@ -210,7 +210,7 @@ def test_saxpy():
 
     compiled(a, x, y, got)
     saxpy(a, x, y, exp)
-    assert np.allclose(got, exp), (got, exp)
+    assertTrue(np.allclose(got, exp), (got, exp))
 
 
 #------------------------------------------------------------------------------
@@ -248,7 +248,7 @@ def test_getitem_wraparound():
     ary = np.arange(10, dtype=np.int32)
     exp = getitem(ary, -10)
     got = compiled(ary, -10)
-    assert got == exp
+    assertTrue(got == exp)
 
 @testcase
 def test_getitem2d_wraparound():
@@ -256,7 +256,7 @@ def test_getitem2d_wraparound():
     ary = np.arange(10, dtype=np.int32).reshape(2, 5)
     exp = getitem2d(ary, 1, -4)
     got = compiled(ary, 1, -4)
-    assert got == exp
+    assertTrue(got == exp)
 
 @testcase
 def test_getitem_outofbound_overflow():

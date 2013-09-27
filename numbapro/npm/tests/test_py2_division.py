@@ -5,7 +5,7 @@ from ..types import (
     int8, int16, int32, int64, uint8, uint16, uint32, uint64,
     float32, float64, complex64, complex128
 )
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 
 def div(a, b):
     return a / b
@@ -27,8 +27,9 @@ if sys.platform != 'win32':
             cdiv = compile(div, ty, [ty, ty])
             got = cdiv(a, b)
             exp = div(a, b)
-            assert got == exp, ('div(%s, %s) got = %s expect=%s' %
-                                                (a, b, got, exp))
+            assertTrue(got == exp,
+                        msg=('div(%s, %s) got = %s expect=%s' %
+                                                (a, b, got, exp)))
 
         tyset = set(iset)
         if tuple.__itemsize__ == 4: # 32bit
@@ -42,8 +43,9 @@ def test_py2_div_float():
         cdiv = compile(div, ty, [ty, ty])
         got = cdiv(a, b)
         exp = div(a, b)
-        assert np.allclose(got, exp), ('div(%s, %s) got = %s expect=%s' %
-                                                        (a, b, got, exp))
+        assertTrue(np.allclose(got, exp),
+                   msg=('div(%s, %s) got = %s expect=%s' %
+                                                (a, b, got, exp)))
 
     for ty in fset:
         run(ty, 1.234, 2.345)
@@ -58,7 +60,7 @@ def test_py2_floordiv_integer():
         cfloordiv = compile(floordiv, ty, [ty, ty])
         got = cfloordiv(a, b)
         exp = floordiv(a, b)
-        assert got == exp, 'floordiv(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+        assertTrue(got == exp, 'floordiv(%s, %s) got = %s expect=%s' % (a, b, got, exp))
 
     for ty in iset:
         run(ty, 4, 2)
@@ -69,7 +71,7 @@ def test_py2_floordiv_float():
         cfloordiv = compile(floordiv, ty, [ty, ty])
         got = cfloordiv(a, b)
         exp = floordiv(a, b)
-        assert got == exp, 'floordiv(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+        assertTrue(got == exp, 'floordiv(%s, %s) got = %s expect=%s' % (a, b, got, exp))
 
     for ty in fset:
         run(ty, 1.234, 2.345)

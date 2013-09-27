@@ -4,7 +4,7 @@ import numpy.core.umath_tests as ut
 from numbapro import guvectorize
 from numbapro import cuda
 from timeit import default_timer as time
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 
 @guvectorize([void(float32[:,:], float32[:,:], float32[:,:])],
              '(m,n),(n,p)->(m,p)',
@@ -40,7 +40,7 @@ def test_gufunc():
 
     non_stream_speedups.append(tcpu / tcuda)
 
-    assert np.allclose(C, Gold)
+    assertTrue(np.allclose(C, Gold))
 
 
 @testcase
@@ -59,7 +59,7 @@ def test_gufunc_hidim():
 
     non_stream_speedups.append(tcpu / tcuda)
 
-    assert np.allclose(C, Gold)
+    assertTrue(np.allclose(C, Gold))
 
 
 
@@ -72,7 +72,7 @@ def test_gufunc_adjust_blocksize():
     gufunc.max_blocksize = 32
     C = gufunc(A, B)
     Gold = ut.matrix_multiply(A, B)
-    assert np.allclose(C, Gold)
+    assertTrue(np.allclose(C, Gold))
 
 @testcase
 def test_gufunc_stream():
@@ -99,7 +99,7 @@ def test_gufunc_stream():
 
     stream_speedups.append(tcpu / tcuda)
 
-    assert np.allclose(C, Gold)
+    assertTrue(np.allclose(C, Gold))
 
 if __name__ == '__main__':
     main()

@@ -1,7 +1,7 @@
 from numbapro import cuda
 from numbapro import float32
 import numpy as np
-from .support import main, testcase
+from .support import main, testcase, assertTrue
 
 def generate_input(n):
     A = np.array(np.arange(n*n).reshape(n,n), dtype=np.float32)
@@ -46,7 +46,7 @@ def test_for_pre():
     diagproduct[griddim, blockdim](dF, dA, dB)
     dF.to_host()
 
-    assert np.allclose(F, E)
+    assertTrue(np.allclose(F, E))
 
 if __name__ == '__main__':
     main()

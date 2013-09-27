@@ -1,7 +1,7 @@
 import numpy as np
 from ..compiler import compile
 from ..types import int32, float32
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 
 def min2(a, b):
     return min(a, b)
@@ -24,7 +24,7 @@ def test_min2_integer():
     a, b = 321, 123
     got = compiled(a, b)
     exp = min2(a, b)
-    assert got == exp, (got, exp)
+    assertTrue(got == exp, (got, exp))
 
 @testcase
 def test_min2_float():
@@ -32,7 +32,7 @@ def test_min2_float():
     a, b = 32.1, 12.3
     got = compiled(a, b)
     exp = min2(a, b)
-    assert np.allclose(got, exp), (got, exp)
+    assertTrue(np.allclose(got, exp), (got, exp))
 
 #-------------------------------------------------------------------------------
 # max2
@@ -43,7 +43,7 @@ def test_max2_integer():
     a, b = 321, 123
     got = compiled(a, b)
     exp = max2(a, b)
-    assert got == exp, (got, exp)
+    assertTrue(got == exp, (got, exp))
 
 @testcase
 def test_max2_float():
@@ -51,7 +51,7 @@ def test_max2_float():
     a, b = 32.1, 12.3
     got = compiled(a, b)
     exp = max2(a, b)
-    assert np.allclose(got, exp), (got, exp)
+    assertTrue(np.allclose(got, exp), (got, exp))
 
 #-------------------------------------------------------------------------------
 # min3
@@ -62,7 +62,7 @@ def test_min3_integer():
     a, b, c = 321, 123, 91
     got = compiled(a, b, c)
     exp = min3(a, b, c)
-    assert got == exp, (got, exp)
+    assertTrue(got == exp, (got, exp))
 
 @testcase
 def test_min3_float():
@@ -70,7 +70,7 @@ def test_min3_float():
     a, b, c = 32.1, 12.3, 2091.
     got = compiled(a, b, c)
     exp = min3(a, b, c)
-    assert np.allclose(got, exp), (got, exp)
+    assertTrue(np.allclose(got, exp), (got, exp))
 
 #-------------------------------------------------------------------------------
 # max3
@@ -81,7 +81,7 @@ def test_max3_integer():
     a, b, c = 321, 123, 91
     got = compiled(a, b, c)
     exp = max3(a, b, c)
-    assert got == exp, (got, exp)
+    assertTrue(got == exp, (got, exp))
 
 @testcase
 def test_max3_float():
@@ -89,7 +89,7 @@ def test_max3_float():
     a, b, c = 32.1, 12.3, 2091.
     got = compiled(a, b, c)
     exp = max3(a, b, c)
-    assert np.allclose(got, exp), (got, exp)
+    assertTrue(np.allclose(got, exp), (got, exp))
 
 
 if __name__ == '__main__':

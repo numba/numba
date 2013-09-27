@@ -1,6 +1,6 @@
 import numpy
 from numbapro import cuda
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 
 
 def cuadd(a, b):
@@ -16,7 +16,7 @@ def test_signed_overflow():
         jitted[1, a.size](a, a)
     except RuntimeError as e:
         i = e.tid[0]
-        assert int(a[i]) + int(a[i]) > 127
+        assertTrue(int(a[i]) + int(a[i]) > 127)
     else:
         raise AssertionError('expeating an exception')
 
@@ -29,7 +29,7 @@ def test_signed_overflow2():
         jitted[1, a.size](a, a)
     except RuntimeError as e:
         i = e.tid[0]
-        assert int(a[i]) + int(a[i]) > 127
+        assertTrue(int(a[i]) + int(a[i]) > 127)
     else:
         raise AssertionError('expeating an exception')
 
@@ -42,7 +42,7 @@ def test_signed_overflow3():
         jitted[2, a.size//2](a, a)
     except RuntimeError as e:
         i = e.tid[0] + e.ctaid[0] * a.size//2
-        assert int(a[i]) + int(a[i]) > 127
+        assertTrue(int(a[i]) + int(a[i]) > 127)
     else:
         raise AssertionError('expeating an exception')
 

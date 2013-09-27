@@ -1,6 +1,6 @@
 import numpy as np
 
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 from numbapro import cuda
 from numbapro import cudapy
 from numbapro.npm.types import arraytype, int32, float32
@@ -50,7 +50,7 @@ def test_simple_threadidx():
 
     ary = np.ones(1, dtype=np.int32)
     compiled(ary)
-    assert ary[0] == 0
+    assertTrue(ary[0] == 0)
 
 
 #------------------------------------------------------------------------------
@@ -66,7 +66,7 @@ def test_fill_threadidx():
     ary = np.ones(N, dtype=np.int32)
     exp = np.arange(N, dtype=np.int32)
     compiled[1, N](ary)
-    assert np.all(ary == exp)
+    assertTrue(np.all(ary == exp))
 
 #------------------------------------------------------------------------------
 # fill3d_threadidx
@@ -94,7 +94,7 @@ def test_fill3d_threadidx():
 
     c_res = c_contigous()
     f_res = f_contigous()
-    assert np.all(c_res == f_res)
+    assertTrue(np.all(c_res == f_res))
 
 #------------------------------------------------------------------------------
 # simple_grid1d
@@ -108,7 +108,7 @@ def test_simple_grid1d():
     nelem = ntid * nctaid
     ary = np.empty(nelem, dtype=np.int32)
     compiled[nctaid, ntid](ary)
-    assert np.all(ary == np.arange(nelem))
+    assertTrue(np.all(ary == np.arange(nelem)))
 
 #------------------------------------------------------------------------------
 # simple_grid2d
@@ -129,7 +129,7 @@ def test_simple_grid2d():
         for j in range(ary.shape[1]):
             exp[i, j] = i + j
 
-    assert np.all(ary == exp)
+    assertTrue(np.all(ary == exp))
 
 #------------------------------------------------------------------------------
 # intrinsic_forloop_step
@@ -152,7 +152,7 @@ def test_intrinsic_forloop_step():
         startX, startY = gridX  + i, gridY + j
         for x in range(startX, width, gridX):
             for y in range(startY, height, gridY):
-                assert ary[y, x] == x + y, (ary[y, x], x + y)
+                assertTrue(ary[y, x] == x + y, (ary[y, x], x + y))
 
 
 if __name__ == '__main__':

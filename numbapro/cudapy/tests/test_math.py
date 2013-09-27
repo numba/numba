@@ -1,6 +1,6 @@
 import sys
 import numpy as np
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 from numbapro import cuda
 from numbapro import cudapy
 from numbapro.npm.types import float32, float64, arraytype
@@ -146,7 +146,7 @@ def unary_template(func, npfunc, npdtype, npmtype, start, stop):
     cfunc = cudapy.compile_kernel(func, [arytype, arytype])
     cfunc.bind()
     cfunc[1, nelem](A, B)
-    assert np.allclose(npfunc(A), B)
+    assertTrue(np.allclose(npfunc(A), B))
 
 def unary_bool_template_float32(func, npfunc, start=0, stop=1):
     unary_template(func, npfunc, np.float32, float32, start, stop)
@@ -163,7 +163,7 @@ def unary_bool_template(func, npfunc, npdtype, npmtype, start, stop):
     cfunc = cudapy.compile_kernel(func, [iarytype, oarytype])
     cfunc.bind()
     cfunc[1, nelem](A, B)
-    assert np.all(npfunc(A), B)
+    assertTrue(np.all(npfunc(A), B))
 
 
 
@@ -181,7 +181,7 @@ def binary_template(func, npfunc, npdtype, npmtype, start, stop):
     cfunc = cudapy.compile_kernel(func, [arytype, arytype, arytype])
     cfunc.bind()
     cfunc[1, nelem](A, A, B)
-    assert np.allclose(npfunc(A, A), B)
+    assertTrue(np.allclose(npfunc(A, A), B))
 
 
 #------------------------------------------------------------------------------

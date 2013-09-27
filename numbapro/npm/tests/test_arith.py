@@ -6,7 +6,7 @@ from ..types import (
     int8, int16, int32, int64, uint8, uint16, uint32, uint64,
     float32, float64, complex64, complex128
 )
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 
 def add(a, b):
     return a + b
@@ -63,7 +63,8 @@ def test_add_integer():
         cadd = compile(add, ty, [ty, ty])
         got = cadd(a, b)
         exp = add(a, b)
-        assert got == exp, 'add(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+        assertTrue(got == exp,
+                   msg='add(%s, %s) got = %s expect=%s' % (a, b, got, exp))
 
     for ty in iset:
         run(ty, 12, 34)
@@ -85,7 +86,8 @@ def test_add_float():
         cadd = compile(add, ty, [ty, ty])
         got = cadd(a, b)
         exp = add(a, b)
-        assert np.allclose(got, exp), 'add(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+        assertTrue(np.allclose(got, exp),
+                   msg='add(%s, %s) got = %s expect=%s' % (a, b, got, exp))
 
     for ty in fset:
         run(ty, 1.234, 2.345)
@@ -97,7 +99,8 @@ def test_add_complex():
         cadd = compile(add, ty, [ty, ty])
         got = cadd(a, b)
         exp = add(a, b)
-        assert np.allclose(got, exp), 'add(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+        assertTrue(np.allclose(got, exp),
+                   msg='add(%s, %s) got = %s expect=%s' % (a, b, got, exp))
 
     for ty in cset:
         run(ty, 1.2+34j, 2.4+56j)
@@ -111,7 +114,8 @@ def test_sub_integer():
         csub = compile(sub, ty, [ty, ty])
         got = csub(a, b)
         exp = sub(a, b)
-        assert got == exp, 'sub(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+        assertTrue(got == exp,
+                   msg='sub(%s, %s) got = %s expect=%s' % (a, b, got, exp))
 
     for ty in iset:
         run(ty, 45, 12)
@@ -133,7 +137,8 @@ def test_sub_float():
         csub = compile(sub, ty, [ty, ty])
         got = csub(a, b)
         exp = sub(a, b)
-        assert np.allclose(got, exp), 'sub(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+        assertTrue(np.allclose(got, exp),
+                   msg='sub(%s, %s) got = %s expect=%s' % (a, b, got, exp))
 
     for ty in fset:
         run(ty, 1.234, 2.345)
@@ -145,7 +150,8 @@ def test_sub_complex():
         csub = compile(sub, ty, [ty, ty])
         got = csub(a, b)
         exp = sub(a, b)
-        assert np.allclose(got, exp), 'sub(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+        assertTrue(np.allclose(got, exp),
+                   msg='sub(%s, %s) got = %s expect=%s' % (a, b, got, exp))
 
     for ty in cset:
         run(ty, 1.2+34j, 2.4+56j)
@@ -159,7 +165,8 @@ def test_mul_integer():
         cmul = compile(mul, ty, [ty, ty])
         got = cmul(a, b)
         exp = mul(a, b)
-        assert got == exp, 'mul(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+        assertTrue(got == exp,
+                   msg='mul(%s, %s) got = %s expect=%s' % (a, b, got, exp))
 
     for ty in iset:
         run(ty, 2, 3)
@@ -180,7 +187,8 @@ def test_mul_float():
         cmul = compile(mul, ty, [ty, ty])
         got = cmul(a, b)
         exp = mul(a, b)
-        assert np.allclose(got, exp), 'mul(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+        assertTrue(np.allclose(got, exp),
+                   msg='mul(%s, %s) got = %s expect=%s' % (a, b, got, exp))
 
     for ty in fset:
         run(ty, 1.234, 2.345)
@@ -192,7 +200,8 @@ def test_mul_complex():
         cmul = compile(mul, ty, [ty, ty])
         got = cmul(a, b)
         exp = mul(a, b)
-        assert np.allclose(got, exp), 'mul(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+        assertTrue(np.allclose(got, exp),
+                   msg='mul(%s, %s) got = %s expect=%s' % (a, b, got, exp))
 
     for ty in cset:
         run(ty, 1.2+34j, 2.4+56j)
@@ -206,8 +215,9 @@ if sys.platform != 'win32':
             cdiv = compile(div, ty, [ty, ty])
             got = cdiv(a, b)
             exp = div(a, b)
-            assert got == exp, ('div(%s, %s) got = %s expect=%s' %
-                                                (a, b, got, exp))
+            assertTrue(got == exp,
+                       msg=('div(%s, %s) got = %s expect=%s' %
+                                                (a, b, got, exp)))
 
         tyset = set(iset)
         if tuple.__itemsize__ == 4: # 32bit
@@ -232,8 +242,9 @@ def test_div_float():
         cdiv = compile(div, ty, [ty, ty])
         got = cdiv(a, b)
         exp = div(a, b)
-        assert np.allclose(got, exp), ('div(%s, %s) got = %s expect=%s' %
-                                                        (a, b, got, exp))
+        assertTrue(np.allclose(got, exp),
+                   msg=('div(%s, %s) got = %s expect=%s' %
+                                                        (a, b, got, exp)))
 
     for ty in fset:
         run(ty, 1.234, 2.345)
@@ -266,8 +277,9 @@ def test_div_complex():
         cdiv = compile(div, ty, [ty, ty])
         got = cdiv(a, b)
         exp = div(a, b)
-        assert np.allclose(got, exp), ('div(%s, %s) got %s expect = %s' %
-                                                        (a, b, got, exp))
+        assertTrue(np.allclose(got, exp),
+                   msg=('div(%s, %s) got %s expect = %s' %
+                                                        (a, b, got, exp)))
 
     for ty in cset:
         run(ty, 1.2+3j, 2.3+4j)
@@ -291,7 +303,9 @@ def test_floordiv_integer():
         cfloordiv = compile(floordiv, ty, [ty, ty])
         got = cfloordiv(a, b)
         exp = floordiv(a, b)
-        assert got == exp, 'floordiv(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+        assertTrue(got == exp,
+                   msg='floordiv(%s, %s) got = %s expect=%s' %
+                                                        (a, b, got, exp))
 
     for ty in iset:
         run(ty, 4, 2)
@@ -313,7 +327,9 @@ def test_floordiv_float():
         cfloordiv = compile(floordiv, ty, [ty, ty])
         got = cfloordiv(a, b)
         exp = floordiv(a, b)
-        assert got == exp, 'floordiv(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+        assertTrue(got == exp,
+                   msg='floordiv(%s, %s) got = %s expect=%s' %
+                                                        (a, b, got, exp))
 
     for ty in fset:
         run(ty, 1.234, 2.345)
@@ -339,7 +355,8 @@ def test_mod_integer():
         cmod = compile(mod, ty, [ty, ty])
         got = cmod(a, b)
         exp = mod(a, b)
-        assert got == exp, 'mod(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+        assertTrue(got == exp,
+                   msg='mod(%s, %s) got = %s expect=%s' % (a, b, got, exp))
 
     for ty in iset:
         run(ty, 121, 11)
@@ -364,7 +381,9 @@ if sys.platform != 'win32':
             cmod = compile(mod, ty, [ty, ty])
             got = cmod(a, b)
             exp = mod(a, b)
-            assert got == exp, 'mod(%s, %s) got = %s expect=%s' % (a, b, got, exp)
+            assertTrue(got == exp,
+                       msg='mod(%s, %s) got = %s expect=%s' %
+                                                        (a, b, got, exp))
 
         for ty in fset:
             run(ty, 432., 21.)
@@ -390,7 +409,7 @@ def test_expr1_integer():
         got = cexpr1(a, b, c)
         exp = expr1(a, b, c)
         msg = 'expr1(%s, %s, %s) got = %s expect=%s'
-        assert got == exp, msg % (a, b, c, got, exp)
+        assertTrue(got == exp, msg=msg % (a, b, c, got, exp))
 
     for ty in set([int32, int64]):
         run(ty, 121, 11, 231)
@@ -405,7 +424,7 @@ def test_shifts_signed():
     a, b = -0xdead, 12
     got = cfunc(a, b)
     exp = shifts(a, b)
-    assert got == exp, (got, exp)
+    assertTrue(got == exp, msg=(got, exp))
 
 @testcase
 def test_shifts_signed_overflow():
@@ -425,7 +444,7 @@ def test_shifts_unsigned():
     a, b = 0xdead, 12
     got = cfunc(a, b)
     exp = shifts(a, b)
-    assert got == exp, (got, exp)
+    assertTrue(got == exp, msg=(got, exp))
 
 @testcase
 def test_shifts_unsigned_overflow():
@@ -449,7 +468,7 @@ def test_arith_negate_signed():
         a = 123
         got = cfunc(a)
         exp = arith_negate(a)
-        assert got == exp, (got, exp)
+        assertTrue(got == exp, msg=(got, exp))
 
 @testcase
 def test_arith_negate_float():
@@ -458,7 +477,7 @@ def test_arith_negate_float():
         a = 1.23
         got = cfunc(a)
         exp = arith_negate(a)
-        assert np.allclose(got, exp), (got, exp)
+        assertTrue(np.allclose(got, exp), msg=(got, exp))
 
 @testcase
 def test_arith_negate_complex():
@@ -467,7 +486,7 @@ def test_arith_negate_complex():
         a = 1.2+4j
         got = cfunc(a)
         exp = arith_negate(a)
-        assert np.allclose(got, exp), (got, exp)
+        assertTrue(np.allclose(got, exp), msg=(got, exp))
 
 #------------------------------------------------------------------------------
 # logical negate
@@ -479,7 +498,7 @@ def test_logical_negate_signed():
         a = 123
         got = cfunc(a)
         exp = logical_negate(a)
-        assert got == exp, (got, exp)
+        assertTrue(got == exp, msg=(got, exp))
 
 #------------------------------------------------------------------------------
 # logical and
@@ -491,7 +510,7 @@ def test_logical_and():
         a, b = 123, 321
         got = cfunc(a, b)
         exp = logical_and(a, b)
-        assert got == exp, (got, exp)
+        assertTrue(got == exp, msg=(got, exp))
 
 #------------------------------------------------------------------------------
 # logical or
@@ -503,7 +522,7 @@ def test_logical_or():
         a, b = 0xa, 0x10
         got = cfunc(a, b)
         exp = logical_or(a, b)
-        assert got == exp, (got, exp)
+        assertTrue(got == exp, msg=(got, exp))
 
 #------------------------------------------------------------------------------
 # logical xor
@@ -515,7 +534,7 @@ def test_logical_xor():
         a, b = 0x23, 0x13
         got = cfunc(a, b)
         exp = logical_xor(a, b)
-        assert got == exp, (got, exp)
+        assertTrue(got == exp, msg=(got, exp))
 
 
 

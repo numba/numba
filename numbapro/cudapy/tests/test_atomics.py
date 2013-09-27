@@ -1,5 +1,5 @@
 import numpy as np
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 from numbapro import cuda, uint32, uint64
 
 def atomic_add(ary):
@@ -43,7 +43,7 @@ def test_atomic_add():
     for i in range(orig.size):
         gold[orig[i]] += 1
 
-    assert np.all(ary == gold)
+    assertTrue(np.all(ary == gold))
 
 
 @testcase
@@ -53,7 +53,7 @@ def test_atomic_add2():
     cuda_atomic_add2 = cuda.jit('void(uint32[:,:])')(atomic_add2)
     cuda_atomic_add2[1, (4, 8)](ary)
 
-    assert np.all(ary == orig + 1)
+    assertTrue(np.all(ary == orig + 1))
 
 
 @testcase
@@ -63,7 +63,7 @@ def test_atomic_add3():
     cuda_atomic_add3 = cuda.jit('void(uint32[:,:])')(atomic_add3)
     cuda_atomic_add3[1, (4, 8)](ary)
 
-    assert np.all(ary == orig + 1)
+    assertTrue(np.all(ary == orig + 1))
 
 
 if __name__ == '__main__':

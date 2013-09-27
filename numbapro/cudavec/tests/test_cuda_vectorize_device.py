@@ -3,7 +3,7 @@ from numbapro import vectorize
 from numba import jit, float32
 import numpy as np
 import unittest
-from .support import addtest, main
+from .support import addtest, main, assertTrue
 
 @jit(float32(float32, float32, float32), device=True, inline=True, target='gpu')
 def cu_device_fn(x, y, z):
@@ -30,7 +30,7 @@ class TestCudaVectorizeDeviceCall(unittest.TestCase):
 
         gold = (X ** Y) / Z
 
-        assert np.allclose(out, gold)
+        assertTrue(np.allclose(out, gold))
 
 if __name__ == '__main__':
     main()

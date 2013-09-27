@@ -1,7 +1,7 @@
 from __future__ import division
 import numpy as np
 
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 from numbapro import cuda
 from numbapro import cudapy
 from numbapro.npm.types import int32, float32, arraytype
@@ -52,7 +52,7 @@ def test_useless_sync():
 
     compiled[1, nelem](ary)
 
-    assert np.all(ary == exp)
+    assertTrue(np.all(ary == exp))
 
 #------------------------------------------------------------------------------
 # simple_smem
@@ -66,7 +66,7 @@ def test_simple_smem():
     ary = np.empty(nelem, dtype=np.int32)
     compiled[1, nelem](ary)
 
-    assert np.all(ary == np.arange(nelem, dtype=np.int32))
+    assertTrue(np.all(ary == np.arange(nelem, dtype=np.int32)))
 
 #------------------------------------------------------------------------------
 # coop_smem2d
@@ -85,7 +85,7 @@ def test_coop_smem2d():
         for j in range(ary.shape[1]):
             exp[i, j] = (i + 1) / (j + 1)
 
-    assert np.allclose(ary, exp)
+    assertTrue(np.allclose(ary, exp))
 
 #------------------------------------------------------------------------------
 # test_dyn_shared_memory
@@ -100,7 +100,7 @@ def test_dyn_shared_memory():
     ary = np.empty(shape, dtype=np.float32)
     compiled[1, shape, 0, ary.size * 4](ary)
 
-    assert np.all(ary == 2 * np.arange(ary.size, dtype=np.int32))
+    assertTrue(np.all(ary == 2 * np.arange(ary.size, dtype=np.int32)))
 
 if __name__ == '__main__':
     main()

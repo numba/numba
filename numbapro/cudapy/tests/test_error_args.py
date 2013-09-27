@@ -1,4 +1,4 @@
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 from numbapro import vectorize, cuda
 
 def discriminant(a, b, c):
@@ -10,7 +10,7 @@ def test_narg_error():
     try:
         cu_discriminant = vectorize(sig, target='gpu')(discriminant)
     except TypeError, e:
-        assert "mismatching # of args" in str(e)
+        assertTrue("mismatching # of args" in str(e))
     else:
         raise AssertionError("Excepting an expection")
 

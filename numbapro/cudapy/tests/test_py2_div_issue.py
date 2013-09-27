@@ -1,4 +1,4 @@
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 from numbapro import cuda, jit, float32, int32
 import numpy as np
 
@@ -13,7 +13,6 @@ def test_py2_div_issue():
         y[i] = ans
         yA[i] = ans * 1.0
         yB[i] = ans / 1.0
-
 
     numDataPoints = 15
 
@@ -32,5 +31,5 @@ def test_py2_div_issue():
     print 'yB'
     print yB
 
-    assert(np.all(y == yA == yB))
+    assertTrue(np.all(y == yA == yB))
 

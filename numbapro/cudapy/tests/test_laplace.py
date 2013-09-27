@@ -2,7 +2,7 @@ import numpy as np
 import time
 from numba import float64, void
 from numbapro import cuda
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 
 # NOTE: CUDA kernel does not return any value
 
@@ -91,7 +91,7 @@ def test_laplace_small():
     derror_grid = cuda.to_device(error_grid, stream)
     
     while error > tol and iter < iter_max:
-        assert error_grid.dtype == np.float64
+        assertTrue(error_grid.dtype == np.float64)
         
         jocabi_relax_core[griddim, blockdim, stream](dA, dAnew, derror_grid)
         

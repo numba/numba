@@ -1,5 +1,5 @@
 import numpy as np
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 from numbapro import cuda
 from numbapro import cudapy
 from numbapro.npm.types import float32, arraytype
@@ -34,7 +34,7 @@ def test_use_add2f():
     exp = ary + ary
     compiled[1, nelem](ary)
 
-    assert np.all(ary == exp), (ary, exp)
+    assertTrue(np.all(ary == exp), (ary, exp))
 
 #------------------------------------------------------------------------------
 # test_indirect_add2f
@@ -58,7 +58,7 @@ def test_indirect_add2f():
     exp = ary + ary
     compiled[1, nelem](ary)
 
-    assert np.all(ary == exp), (ary, exp)
+    assertTrue(np.all(ary == exp), (ary, exp))
 
 
 if __name__ == '__main__':

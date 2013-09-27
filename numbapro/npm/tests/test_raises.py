@@ -1,6 +1,6 @@
 from ..compiler import compile
 from ..types import float32, void
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 
 value_is_negative = ValueError("value is negative")
 
@@ -21,7 +21,7 @@ def test_raises_1():
         cfunc(-10)
     except ValueError, e:
         print e
-        assert e is value_is_negative
+        assertTrue(e is value_is_negative)
     else:
         raise AssertionError('should raise exception')
 
@@ -34,7 +34,7 @@ def test_raises_2():
     try:
         cfunc(-10)
     except ValueError, e:
-        assert type(e) is ValueError
+        assertTrue(type(e) is ValueError)
     else:
         raise AssertionError('should raise exception')
 
