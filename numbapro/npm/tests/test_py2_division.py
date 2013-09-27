@@ -22,7 +22,7 @@ cset = [complex64, complex128]
 
 if sys.platform != 'win32':
     @testcase
-    def test_div_integer():
+    def test_py2_div_integer():
         def run(ty, a, b):
             cdiv = compile(div, ty, [ty, ty])
             got = cdiv(a, b)
@@ -37,7 +37,7 @@ if sys.platform != 'win32':
             run(ty, 4, 2)
 
 @testcase
-def test_div_float():
+def test_py2_div_float():
     def run(ty, a, b):
         cdiv = compile(div, ty, [ty, ty])
         got = cdiv(a, b)
@@ -53,7 +53,7 @@ def test_div_float():
 # floordiv
 
 @testcase
-def test_floordiv_integer():
+def test_py2_floordiv_integer():
     def run(ty, a, b):
         cfloordiv = compile(floordiv, ty, [ty, ty])
         got = cfloordiv(a, b)
@@ -64,7 +64,7 @@ def test_floordiv_integer():
         run(ty, 4, 2)
 
 @testcase
-def test_floordiv_float():
+def test_py2_floordiv_float():
     def run(ty, a, b):
         cfloordiv = compile(floordiv, ty, [ty, ty])
         got = cfloordiv(a, b)
@@ -73,8 +73,6 @@ def test_floordiv_float():
 
     for ty in fset:
         run(ty, 1.234, 2.345)
-
-
 
 if __name__ == '__main__':
     main()

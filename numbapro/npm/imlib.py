@@ -628,6 +628,22 @@ builtins += binary_op_imp(operator.mul, imp_mul_complex(types.complex64),
 builtins += binary_op_imp(operator.mul, imp_mul_complex(types.complex128),
                       [types.complex128])
 
+# binary div (py2)
+## floor division for integers
+builtins += binary_op_imp(operator.div, imp_floordiv_signed,
+                      typesets.signed_set)
+builtins += binary_op_imp(operator.div, imp_floordiv_unsigned,
+                      typesets.unsigned_set)
+## true division for reals
+builtins += binary_op_imp(operator.div, imp_truediv_float,
+                          typesets.float_set)
+builtins += binary_op_imp(operator.div,
+                          imp_truediv_complex(types.complex64),
+                          [types.complex64])
+builtins += binary_op_imp(operator.div,
+                          imp_truediv_complex(types.complex128),
+                          [types.complex128])
+
 # binary floordiv
 builtins += binary_op_imp(operator.floordiv, imp_floordiv_signed,
                       typesets.signed_set)
