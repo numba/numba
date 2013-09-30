@@ -1,6 +1,6 @@
 Version (0.12.6)
 ================
-* Fix major bug for mistreating division in py2 as floor-division for real numbers.
+* Fix major bug that mistreats py2 division as floor-division for real numbers.
 
 Version (0.12.5)
 ================
