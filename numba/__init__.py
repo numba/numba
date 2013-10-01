@@ -49,7 +49,7 @@ def _config_logger():
         parent_hldr = root.parent.handlers[0]
     except IndexError: # parent handler is not initialized?
         # build our own handler --- uses sys.stderr by default.
-        parent_hldr = logging.StreamHandler()
+        parent_hldr = logging.NullHandler()
     hldr = _RedirectingHandler()
     hldr.set_handler(parent_hldr)
     fmt = logging.Formatter(format)
