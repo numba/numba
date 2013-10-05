@@ -185,7 +185,7 @@ def dot(typesystem, a, b, out):
 def array(object, dtype, order, subok):
     type = array_from_type(object)
     if type.is_array and dtype is not None:
-        type = type.add('dtype', dtype)
+        return type.add('dtype', get_dtype(dtype).dtype)
     elif dtype is not None:
         return dtype
     else:
