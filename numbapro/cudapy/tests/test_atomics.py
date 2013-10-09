@@ -1,6 +1,6 @@
 import numpy as np
 from .support import testcase, main, assertTrue
-from numbapro import cuda, uint32, uint64
+from numbapro import cuda, uint32, uint64, float32
 
 def atomic_add(ary):
     tid = cuda.threadIdx.x
@@ -31,6 +31,16 @@ def atomic_add3(ary):
     cuda.atomic.add(sm, (tx, uint64(ty)), 1)
     cuda.syncthreads()
     ary[tx, ty] = sm[tx, ty]
+
+def atomic_add_float(ary):
+    tid = cuda.threadIdx.x
+    sm = cuda.shared.array(32, float32)
+    sm[tid] = 0
+    cuda.syncthreads()
+    bin = ary[tid] % 32
+    cuda.atomic.add(sm, bin, 1)
+    cuda.syncthreads()
+    ary[tid] = sm[tid]
 
 @testcase
 def test_atomic_add():
@@ -64,6 +74,16 @@ def test_atomic_add3():
     cuda_atomic_add3[1, (4, 8)](ary)
 
     assertTrue(np.all(ary == orig + 1))
+
+# Should support float atomic add
+#@testcase
+#def test_atomic_add_float():
+#    ary = np.random.randint(0, 32, size=32).astype(np.float32).reshape(4, 8)
+#    orig = ary.copy()
+#    cuda_atomic_add = cuda.jit('void(float32[:])')(atomic_add_float)
+#    cuda_atomic_add[1, (4, 8)](ary)
+#
+#    assertTrue(np.all(ary == orig + 1))
 
 
 if __name__ == '__main__':
