@@ -25,6 +25,9 @@ False
 >>> lt("bar", "foo")
 True
 
+>>> interpolate("%s and %s", "ham", "eggs")
+'ham and eggs'
+
 >>> autojit(string_len)("hello")
 5
 >>> autojit(nopython=True)(string_len)("hello")
@@ -79,6 +82,13 @@ def ne(s1, s2):
 def lt(s1, s2):
     return s1 < s2
 
+@jit(c_string_type(c_string_type, c_string_type))
+def concat(s1, s2):
+    return s1 + s2
+
+@jit(c_string_type(c_string_type, c_string_type, c_string_type))
+def interpolate(s, s1, s2):
+    return s % (s1, s2)
 
 def string_len(s):
     return len(s)
