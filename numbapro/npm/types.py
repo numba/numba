@@ -518,6 +518,11 @@ class Array(object):
         shapestrides = lc.Type.array(lintp, self.ndim)
         return lc.Type.struct([lelem, shapestrides, shapestrides])
 
+    def llvm_value_to_arg(self, builder, value):
+        pointer = builder.alloca(value.type)
+        builder.store(value, pointer)
+        return pointer
+
     def llvm_as_argument(self):
         return lc.Type.pointer(self.llvm_as_value())
 
