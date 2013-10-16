@@ -1,10 +1,17 @@
 from .support import testcase, main, assertTrue
 import numpy as np
-from numbapro import cuda, float32, int16
+from numbapro import cuda, float32, float64, int16
 
 
 @cuda.jit(argtypes=[float32[:,:], int16, int16])
 def div(grid, l_x, l_y):
+    for x in range(l_x):
+        for y in range(l_y):
+            grid[x,y] /= 2.0
+
+
+@cuda.jit(argtypes=[float64[:,:], int16, int16])
+def div_double(grid, l_x, l_y):
     for x in range(l_x):
         for y in range(l_y):
             grid[x,y] /= 2.0
@@ -14,6 +21,14 @@ def test_inplace_div():
     x = np.ones((2,2), dtype=np.float32)
     grid = cuda.to_device(x)
     div(grid, 2, 2)
+    y = grid.copy_to_host()
+    assertTrue(np.all(y == 0.5))
+
+@testcase
+def test_inplace_div_double():
+    x = np.ones((2,2), dtype=np.float64)
+    grid = cuda.to_device(x)
+    div_double(grid, 2, 2)
     y = grid.copy_to_host()
     assertTrue(np.all(y == 0.5))
 
