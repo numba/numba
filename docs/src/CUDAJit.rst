@@ -5,7 +5,7 @@ The CUDA JIT is a low-level entry point to the CUDA features in NumbaPro.
 It translates Python functions into `PTX
 <http://en.wikipedia.org/wiki/Parallel_Thread_Execution>`_ code which execute on
 the CUDA hardware.  The `jit` decorator is applied to Python functions written 
-in the `CUDA-Python <CUDAPySpec.html>`_ subset.
+in the `Python Dialect for CUDA <CUDAPySpec.html>`_ subset.
 NumbaPro interacts with the `CUDA Driver API 
 <http://docs.nvidia.com/cuda/cuda-driver-api/index.html>`_ to load the PTX onto
 the CUDA device and execute.
@@ -22,7 +22,7 @@ Most of the CUDA public API for CUDA features are exposed in the
 Compiling
 -----------
 
-CUDA kernels and device functions are compiled by decorating a CUDA-Python
+CUDA kernels and device functions are compiled by decorating a Python
 function with the jit or `autojit` decorators.
 
 .. autofunction:: numbapro.cuda.jit

@@ -19,6 +19,8 @@ Imports
 Basic generalized ufuncs are available in Numba. In addition to the basic generalized
 ufuncs, NumbaPro provides a CUDA-accelerated generalized ufunc.
 
+.. autofunction:: numbapro.guvectorize
+
 To see how generalized ufuncs work, we refer the reader to
 `Numba gufuncs <http://numba.pydata.org/numba-doc/dev/arrays.html#generalized-ufunc-definition>`_.
 

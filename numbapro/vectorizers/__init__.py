@@ -47,6 +47,21 @@ def GUVectorize(func, signature, backend='ast', target='cpu'):
     return targets[target](func, signature)
 
 def guvectorize(fnsigs, gusig, backend='ast', target='cpu'):
+    '''guvectorize(fnsigs, gusig[, target="cpu"])
+
+    Similar to ``numbapro.vectorize`` but creates a generalized-ufunc
+    (gufunc).  Takes an additional argument ``gusig`` to specify the gufunc 
+    signature.
+    
+    :param fnsigs: list of function type signature as function type object or
+                   as string.
+    
+    :param gusig:  gufunc signature string.
+    :param target: "cpu" or "gpu"
+
+    Please see `NumPy docs <http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html#details-of-signature>`_
+    for details of gufunc signature.
+    '''
     def _guvectorize(fn):
         vect = GUVectorize(fn, gusig, backend=backend, target=target)
         for sig in fnsigs:

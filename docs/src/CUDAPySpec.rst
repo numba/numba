@@ -1,14 +1,14 @@
-CUDA Python Specification (v0.1)
-================================
+Python Dialect for CUDA Specification (v0.2)
+=============================================
 
-(This documents reflects the implementation of CUDA-Python in NumbaPro 0.12.  In time, we may refine the specification.)
+(This documents reflects the implementation of Python Dialect for CUDA in NumbaPro 0.12.  In time, we may refine the specification.)
 
 As CUDA Python is becoming more mature, it has become necessary to define a formal specification for CUDA Python and the mapping to the `PTX ISA <http://docs.nvidia.com/cuda/parallel-thread-execution/index.html>`_.  There are places where the semantic of CUDA Python differs from the Python semantic.  The change in semantic is necessary for us to generate high-performance code that is otherwise hard to achieve.
 
 No-Python Mode (NPM)
 ---------------------
 
-CUDA Python is a superset of the `No-Python mode` (NPM).  NPM is a statically typed subset of the Python language.  It only supports lower level types; such as booleans, ints, floats, complex numbers and arrays.  It does not support Python objects.  Since we drop the support for objects entirely, many basic language constructs must be handled differently.  For instance, a simple for-loop is::
+Python Dialect for CUDA is a superset of the `No-Python mode` (NPM).  NPM is a statically typed subset of the Python language.  It only supports lower level types; such as booleans, ints, floats, complex numbers and arrays.  It does not support Python objects.  Since we drop the support for objects entirely, many basic language constructs must be handled differently.  For instance, a simple for-loop is::
 
     for i in range(10):
         ...
@@ -105,7 +105,7 @@ Shared memory intrinsics
 Math
 -----
 
-CUDA-Python translates math functions defined in the math module of the Python
+Python Dialect for CUDA translates math functions defined in the math module of the Python
 standard library.  All the functions use the semantic of the CUDA-C definition.
 Please refer to the `CUDA-C Programming Guide: Math Function 
 <http://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#mathematical-functions-appendix>`_.

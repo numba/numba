@@ -68,7 +68,7 @@ Here's a list of highlighted features:
 
 * Portable data-parallel programming through ufuncs and gufuncs for single core CPU, multicore CPU and GPU
 * Bindings to CUDA libraries: cuRAND, cuBLAS, cuFFT
-* "CUDA-Python" programming for maximum control of hardware resources
+* Python CUDA programming for maximum control of hardware resources
 
 
 
@@ -90,7 +90,7 @@ High-level APIs for CPU/GPU:
    ufuncs
    generalizedufuncs
    
-"CUDA-Python" Programming
+Python CUDA Programming
 
 .. toctree::
    :maxdepth: 1
