@@ -183,6 +183,12 @@ def binary_func(ty):
 def binary_div(ty, out):
     return [((ty, ty), out)]
 
+def py2_divisions():
+    out = []
+    for ty in integer_set:
+        out += binary_div(ty, ty)
+    return out
+
 def floor_divisions():
     out = []
     for ty in integer_set:
@@ -258,6 +264,10 @@ builtins += def_(operator.sub,
 
 builtins += def_(operator.mul,
                    binary_func_from_sets(integer_set|float_set|complex_set))
+
+builtins += def_(operator.div, py2_divisions())
+
+builtins += def_(operator.div, binary_func_from_sets(float_set|complex_set))
 
 builtins += def_(operator.floordiv, floor_divisions())
 

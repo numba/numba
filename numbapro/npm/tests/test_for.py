@@ -1,7 +1,7 @@
 import numpy as np
 from ..compiler import compile
 from ..types import int32, uint32, float32
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 
 def forloop1(a, b):
     j = 0
@@ -84,9 +84,9 @@ def template(func, compiled, args, allclose=False):
     msg = '%s%s got = %s expect=%s' % (func, args, got, exp)
 
     if allclose:
-        assert np.allclose(got, exp), msg
+        assertTrue(np.allclose(got, exp), msg)
     else:
-        assert got == exp, msg
+        assertTrue(got == exp, msg)
 
 
 #------------------------------------------------------------------------------

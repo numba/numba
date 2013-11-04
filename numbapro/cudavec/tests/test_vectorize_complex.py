@@ -1,6 +1,6 @@
 import numpy as np
 from numbapro import vectorize
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 
 @testcase
 def test_vectorize_complex():
@@ -10,7 +10,7 @@ def test_vectorize_complex():
 
     A = np.arange(5, dtype=np.complex128)
     B = vcomp(A)
-    assert np.allclose(A * A + 1., B)
+    assertTrue(np.allclose(A * A + 1., B))
 
 if __name__ == '__main__':
     main()

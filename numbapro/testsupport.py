@@ -23,6 +23,14 @@ class TestSupport(object):
         self.tests[func.__name__] = testcase
         return testcase
 
+    def assertTrue(self, res, msg=""):
+        if not res:
+            raise AssertionError(msg)
+
+    def assertFalse(self, res, msg=""):
+        if res:
+            raise AssertionError(msg)
+
     def addtest(self, testcase):
         assert testcase.__name__ not in self.tests, \
             "duplicated test name %s" % testcase.__name__
@@ -105,3 +113,5 @@ def set_base(globals):
     globals['addtest'] = testsupport.addtest
     globals['run'] = testsupport.run
     globals['main'] = testsupport.main
+    globals['assertTrue'] = testsupport.assertTrue
+    globals['assertFalse'] = testsupport.assertFalse

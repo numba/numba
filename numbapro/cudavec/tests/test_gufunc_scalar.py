@@ -5,7 +5,7 @@ See Numpy documentation for detail about gufunc:
 '''
 import numpy as np
 from numbapro import guvectorize, cuda
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 
 @testcase
 def test_gufunc_scalar_output():
@@ -46,8 +46,8 @@ def test_gufunc_scalar_output():
 
     # verify result
     for i in xrange(inp.shape[0]):
-        assert out1[i] == inp[i].sum()
-        assert out2[i] == inp[i].sum()
+        assertTrue(out1[i] == inp[i].sum())
+        assertTrue(out2[i] == inp[i].sum())
 
 @testcase
 def test_gufunc_scalar_input_saxpy():
@@ -65,7 +65,7 @@ def test_gufunc_scalar_input_saxpy():
     for j in range(5):
         for i in range(2):
             exp = A * X[j, i] + Y[j, i]
-            assert exp == out[j, i]
+            assertTrue(exp == out[j, i])
 
     X = np.arange(10, dtype=np.float32)
     Y = np.arange(10, dtype=np.float32)
@@ -73,7 +73,7 @@ def test_gufunc_scalar_input_saxpy():
 
     for j in range(10):
         exp = A * X[j] + Y[j]
-        assert exp == out[j], (exp, out[j])
+        assertTrue(exp == out[j], (exp, out[j]))
 
     A = np.arange(5, dtype=np.float32)
     X = np.arange(10, dtype=np.float32).reshape(5,2)
@@ -83,7 +83,7 @@ def test_gufunc_scalar_input_saxpy():
     for j in range(5):
         for i in range(2):
             exp = A[j] * X[j, i] + Y[j, i]
-            assert exp == out[j, i], (exp, out[j, i])
+            assertTrue(exp == out[j, i], (exp, out[j, i]))
 
 
 if __name__ == '__main__':

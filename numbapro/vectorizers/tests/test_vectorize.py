@@ -2,7 +2,7 @@ import numpy as np
 from numba import int32, uint32, float32, float64
 from numbapro import vectorize
 from timeit import default_timer as time
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 
 def vector_add(a, b):
     return a + b
@@ -39,7 +39,7 @@ def template_vectorize(target):
         else:
             print("Numba is SLOWER by %fx" % (tnumba/tnumpy))
 
-        assert np.allclose(gold, result)
+        assertTrue(np.allclose(gold, result))
 
     test(np.double)
     test(np.float32)

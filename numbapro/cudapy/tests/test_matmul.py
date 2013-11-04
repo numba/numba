@@ -2,7 +2,7 @@ from numbapro import cuda
 from numba import float32
 import numpy as np
 from timeit import default_timer as time
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 
 bpg = 50
 tpb = 32
@@ -74,7 +74,7 @@ def test_func():
     print 'cuda speedup: %.2fx' % (tcpu / tcuda)
 
     # Check result
-    assert np.allclose(C, Cans)
+    assertTrue(np.allclose(C, Cans))
 
 
 if __name__ == '__main__':

@@ -1,3 +1,7 @@
+Version (0.12.6)
+================
+* Fix major bug that mistreats py2 division as floor-division for real numbers.
+
 Version (0.12.5)
 ================
 * Update to Numba 0.10.2

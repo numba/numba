@@ -1,4 +1,4 @@
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 from ..compiler import compile
 from ..types import uint32, float32, arraytype, void
 import numpy as np
@@ -34,7 +34,7 @@ def test_for_precondition():
 
     func(C, A, B, data)
 
-    assert np.all(C != -1)
+    assertTrue(np.all(C != -1))
 
 if __name__ == '__main__':
     main()

@@ -1,20 +1,20 @@
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 from numbapro.vectorizers._common import parse_signature
 
 @testcase
 def test_signature():
-    assert parse_signature('(m, n) -> (m, n)') == \
-                ([('m', 'n')], [('m', 'n')])
-    assert parse_signature('(m, n), (n, p) -> (m, p)') == \
-                ([('m', 'n'), ('n', 'p')], [('m', 'p')])
-    assert parse_signature('(m,) -> ()') == \
-                ([('m',)], [()])
-    assert parse_signature('(m) -> ()') == \
-                ([('m',)], [()])
-    assert parse_signature('(m), -> ()') == \
-                ([('m',)], [()])
-    assert parse_signature('(m, n), -> (m), (n,)') == \
-                ([('m', 'n')], [('m',), ('n',)])
+    assertTrue(parse_signature('(m, n) -> (m, n)') == \
+                ([('m', 'n')], [('m', 'n')]))
+    assertTrue(parse_signature('(m, n), (n, p) -> (m, p)') == \
+                ([('m', 'n'), ('n', 'p')], [('m', 'p')]))
+    assertTrue(parse_signature('(m,) -> ()') == \
+                ([('m',)], [()]))
+    assertTrue(parse_signature('(m) -> ()') == \
+                ([('m',)], [()]))
+    assertTrue(parse_signature('(m), -> ()') == \
+                ([('m',)], [()]))
+    assertTrue(parse_signature('(m, n), -> (m), (n,)') == \
+                ([('m', 'n')], [('m',), ('n',)]))
 
     try:
         parse_signature('(m, n) -> (m, p)')

@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 from numba import float32
 from numbapro.vectorizers import BasicVectorize
-from .support import addtest, main
+from .support import addtest, main, assertTrue
 
 dtype = np.float32
 a = np.arange(80, dtype=dtype).reshape(8, 10)
@@ -46,10 +46,10 @@ class TestUFuncs(unittest.TestCase):
         ufunc = vectorizer.build_ufunc()
 
         info = (cls, a.ndim)
-        assert np.all(ufunc(a, b) == a + b), info
-        assert ufunc_reduce(ufunc, a) == np.sum(a), info
-        assert np.all(ufunc.accumulate(a) == np.add.accumulate(a)), info
-        assert np.all(ufunc.outer(a, b) == np.add.outer(a, b)), info
+        assertTrue(np.all(ufunc(a, b) == a + b), info)
+        assertTrue(ufunc_reduce(ufunc, a) == np.sum(a), info)
+        assertTrue(np.all(ufunc.accumulate(a) == np.add.accumulate(a)), info)
+        assertTrue(np.all(ufunc.outer(a, b) == np.add.outer(a, b)), info)
 
     def _test_broadcasting(self, cls, a, b, c, d):
         "Test multiple args"
@@ -58,7 +58,7 @@ class TestUFuncs(unittest.TestCase):
         ufunc = vectorizer.build_ufunc()
 
         info = (cls, a.shape)
-        assert np.all(ufunc(a, b, c, d) == a + b + c + d), info
+        assertTrue(np.all(ufunc(a, b, c, d) == a + b + c + d), info)
 
     def test_ufunc_attributes(self):
         for v in vectorizers: # 1D
@@ -85,7 +85,7 @@ class TestUFuncs(unittest.TestCase):
             ufunc = vectorizer.build_ufunc()
 
             broadcasting_b = b[np.newaxis, :, np.newaxis, np.newaxis, :]
-            assert np.all(ufunc(a, broadcasting_b) == a + broadcasting_b)
+            assertTrue(np.all(ufunc(a, broadcasting_b) == a + broadcasting_b))
 
 
 if __name__ == '__main__':

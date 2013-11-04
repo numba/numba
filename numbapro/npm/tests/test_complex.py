@@ -1,7 +1,7 @@
 import numpy as np
 from ..compiler import compile
 from ..types import float32, complex64
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 
 def complex_real(c):
     return c.real
@@ -24,7 +24,7 @@ def test_complex_real():
     compiled = compile(complex_real, float32, [complex64])
     got = compiled(c)
     exp = complex_real(c)
-    assert np.allclose(got, exp), (got, exp)
+    assertTrue(np.allclose(got, exp), (got, exp))
 
 @testcase
 def test_complex_imag():
@@ -32,7 +32,7 @@ def test_complex_imag():
     compiled = compile(complex_imag, float32, [complex64])
     got = compiled(c)
     exp = complex_imag(c)
-    assert np.allclose(got, exp), (got, exp)
+    assertTrue(np.allclose(got, exp), (got, exp))
 
 @testcase
 def test_complex_arith():
@@ -40,7 +40,7 @@ def test_complex_arith():
     compiled = compile(complex_arith, complex64, [complex64, complex64])
     exp = complex_arith(c, d)
     got = compiled(c, d)
-    assert np.allclose(got, exp), (got, exp)
+    assertTrue(np.allclose(got, exp), (got, exp))
 
 @testcase
 def test_complex_ctor_1():
@@ -48,7 +48,7 @@ def test_complex_ctor_1():
     compiled = compile(complex_ctor_1, complex64, [float32])
     exp = complex_ctor_1(a)
     got = compiled(a)
-    assert np.allclose(got, exp), (got, exp)
+    assertTrue(np.allclose(got, exp), (got, exp))
 
 
 @testcase
@@ -57,7 +57,7 @@ def test_complex_ctor_2():
     compiled = compile(complex_ctor_2, complex64, [float32])
     exp = complex_ctor_2(a)
     got = compiled(a)
-    assert np.allclose(got, exp), (got, exp)
+    assertTrue(np.allclose(got, exp), (got, exp))
 
 if __name__ == '__main__':
     main()

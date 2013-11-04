@@ -1,6 +1,6 @@
 from ..compiler import compile
 from ..types import intp
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 
 def enumerate_range():
     tmp = 0
@@ -12,7 +12,7 @@ def enumerate_range():
 def test_enumerate_range():
     cfunc = compile(enumerate_range, intp, ())
     print cfunc(), enumerate_range()
-    assert cfunc() == enumerate_range()
+    assertTrue(cfunc() == enumerate_range())
 
 if __name__ == '__main__':
     main()

@@ -1,7 +1,7 @@
 import numpy as np
 from ..compiler import compile
 from ..types import int8, int32, float32
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 
 def myabs(a):
     return abs(a)
@@ -13,7 +13,7 @@ def test_myabs_integer():
     for a in args:
         exp = myabs(a)
         got = compiled(a)
-        assert got == exp, (got, exp)
+        assertTrue(got == exp, (got, exp))
 
 @testcase
 def test_myabs_integer_overflow():
@@ -32,7 +32,8 @@ def test_myabs_float():
     for a in args:
         exp = myabs(a)
         got = compiled(a)
-        assert np.allclose(got, exp), (got, exp)
+        assertTrue(np.allclose(got, exp),
+                   msg=(got, exp))
 
 if __name__ == '__main__':
     main()

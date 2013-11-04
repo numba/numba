@@ -3,7 +3,7 @@ import itertools
 from ..symbolic import SymbolicExecution
 from ..typing import Infer
 from .. import types, compiler
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 
 
 def foo(a, b):
@@ -34,9 +34,9 @@ def test_type_coercion():
 
 @testcase
 def test_int64_to_float():
-    assert (types.int64.try_coerce(types.float32) >
-                    types.int64.try_coerce(types.float64)), \
-                            "int64 should prefer double"
+    assertTrue((types.int64.try_coerce(types.float32) >
+                    types.int64.try_coerce(types.float64)),
+               msg="int64 should prefer double")
 
 @testcase
 def test_infer():

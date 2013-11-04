@@ -1,7 +1,7 @@
 from __future__ import division
 import numpy as np
 
-from .support import testcase, main
+from .support import testcase, main, assertTrue
 from numbapro import cuda
 from numbapro import cudapy
 from numbapro.npm.types import int32, arraytype, float32
@@ -38,7 +38,7 @@ def test_global_int_const():
     ary = np.empty(nelem, dtype=np.int32)
     compiled[1, nelem](ary)
 
-    assert np.all(ary == np.arange(nelem, dtype=np.int32))
+    assertTrue(np.all(ary == np.arange(nelem, dtype=np.int32)))
 
 #------------------------------------------------------------------------------
 # coop_smem2d
@@ -56,7 +56,7 @@ def test_global_tuple_const():
     for i in range(ary.shape[0]):
         for j in range(ary.shape[1]):
             exp[i, j] = float(i + 1) / (j + 1)
-    assert np.allclose(ary, exp)
+    assertTrue(np.allclose(ary, exp))
 
 if __name__ == '__main__':
     main()

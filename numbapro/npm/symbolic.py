@@ -411,7 +411,7 @@ class SymbolicExecution(object):
         self.binary_op(operator.mul)
 
     def op_BINARY_DIVIDE(self, inst):
-        self.binary_op(operator.floordiv)
+        self.binary_op(operator.div)
 
     def op_BINARY_FLOOR_DIVIDE(self, inst):
         self.binary_op(operator.floordiv)
@@ -450,7 +450,7 @@ class SymbolicExecution(object):
         self.binary_op(operator.mul)
 
     def op_INPLACE_DIVIDE(self, inst):
-        self.binary_op(operator.floordiv)
+        self.binary_op(operator.div)
 
     def op_INPLACE_FLOOR_DIVIDE(self, inst):
         self.binary_op(operator.floordiv)
