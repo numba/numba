@@ -34,7 +34,7 @@ class SymbolicExecution(object):
         self.names = self.bytecode.code.co_names
 
         self.globals = dict(vars(__builtin__))
-        self.builtins = set(self.globals.values())
+        #self.builtins = set(self.globals.values())
         self.globals.update(self.func.func_globals)
 
     def interpret(self):

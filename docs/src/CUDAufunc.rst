@@ -11,71 +11,37 @@ passing intra-device arrays (already on the GPU device) to reduce
 traffic over the PCI-express bus.  It also accepts a `stream` keyword
 for launching in asynchronous mode.
 
-Example: A Chunk at a Time
----------------------------
+Example: Basic Example
+------------------------
 
-Partitioning your data into chunks allows computation and memory transfer
-to be overlapped.  This can increase the throughput of your ufunc and
-enables your ufunc to operate on data that is larger than the memory
-capacity of your GPU.  For example::
+.. testcode::
 
     import math
     from numbapro import vectorize, cuda
     import numpy as np
 
-    # the ufunc kernel
-    def discriminant(a, b, c):
+    @vectorize(['float32(float32, float32, float32)',
+                'float64(float64, float64, float64)'],
+               target='gpu')
+    def cu_discriminant(a, b, c):
         return math.sqrt(b ** 2 - 4 * a * c)
 
-    # create the ufunc
-    cu_discriminant = vectorize(['float32(float32, float32, float32)',
-                                 'float64(float64, float64, float64)'],
-                                target='gpu')(discriminant)
-
-    N = 1e+8
+    N = 1e+4
     dtype = np.float32
 
     # prepare the input
     A = np.array(np.random.sample(N), dtype=dtype)
     B = np.array(np.random.sample(N) + 10, dtype=dtype)
     C = np.array(np.random.sample(N), dtype=dtype)
-    D = np.empty(A.shape, dtype=A.dtype)
 
-    # create a CUDA stream
-    stream = cuda.stream()
+    D = cu_discriminant(A, B, C)
 
-    chunksize = 1e+7
-    chunkcount = N // chunksize
+    print(D)  # print result
 
-    # partition numpy arrays into chunks
-    # no copying is performed
-    sA = np.split(A, chunkcount)
-    sB = np.split(B, chunkcount)
-    sC = np.split(C, chunkcount)
-    sD = np.split(D, chunkcount)
+.. testoutput::
+    :hide:
 
-    device_ptrs = []
-
-    with stream.auto_synchronize():
-        # every operation in this context with be launched asynchronously
-        # by using the CUDA stream
-
-        # for each chunk
-        for a, b, c, d in zip(sA, sB, sC, sD):
-            # transfer to device
-            dA = cuda.to_device(a, stream)
-            dB = cuda.to_device(b, stream)
-            dC = cuda.to_device(c, stream)
-            dD = cuda.to_device(d, stream, copy=False) # no copying
-            # launch kernel
-            cu_discriminant(dA, dB, dC, out=dD, stream=stream)
-            # retrieve result
-            dD.copy_to_host(d, stream)
-            # store device pointers to prevent them from freeing before
-            # the kernel is scheduled
-            device_ptrs.extend([dA, dB, dC, dD])
-
-    # data is ready at this point inside D
+    ...
 
 
 Example: Calling Device Functions
@@ -124,3 +90,71 @@ the `max_blocksize` attribute on the compiled gufunc object.
 
     very_complex_kernel.max_blocksize = 32  # limits to 32 threads per block
 
+.. comment
+
+    Example: A Chunk at a Time
+    ---------------------------
+
+    Partitioning your data into chunks allows computation and memory transfer
+    to be overlapped.  This can increase the throughput of your ufunc and
+    enables your ufunc to operate on data that is larger than the memory
+    capacity of your GPU.  For example:
+
+    .. testcode::
+
+        import math
+        from numbapro import vectorize, cuda
+        import numpy as np
+
+        # the ufunc kernel
+        def discriminant(a, b, c):
+            return math.sqrt(b ** 2 - 4 * a * c)
+
+        cu_discriminant = vectorize(['float32(float32, float32, float32)',
+                                     'float64(float64, float64, float64)'],
+                                    target='gpu')(discriminant)
+
+        N = 1e+8
+        dtype = np.float32
+
+        # prepare the input
+        A = np.array(np.random.sample(N), dtype=dtype)
+        B = np.array(np.random.sample(N) + 10, dtype=dtype)
+        C = np.array(np.random.sample(N), dtype=dtype)
+        D = np.empty(A.shape, dtype=A.dtype)
+
+        # create a CUDA stream
+        stream = cuda.stream()
+
+        chunksize = 1e+6
+        chunkcount = N // chunksize
+
+        # partition numpy arrays into chunks
+        # no copying is performed
+        sA = np.split(A, chunkcount)
+        sB = np.split(B, chunkcount)
+        sC = np.split(C, chunkcount)
+        sD = np.split(D, chunkcount)
+
+        device_ptrs = []
+
+        with stream.auto_synchronize():
+            # every operation in this context with be launched asynchronously
+            # by using the CUDA stream
+
+            # for each chunk
+            for a, b, c, d in zip(sA, sB, sC, sD):
+                # transfer to device
+                dA = cuda.to_device(a, stream)
+                dB = cuda.to_device(b, stream)
+                dC = cuda.to_device(c, stream)
+                dD = cuda.to_device(d, stream, copy=False) # no copying
+                # launch kernel
+                cu_discriminant(dA, dB, dC, out=dD, stream=stream)
+                # retrieve result
+                dD.copy_to_host(d, stream)
+                # store device pointers to prevent them from freeing before
+                # the kernel is scheduled
+                device_ptrs.extend([dA, dB, dC, dD])
+
+        # data is ready at this point inside D
