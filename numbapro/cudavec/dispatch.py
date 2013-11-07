@@ -1,7 +1,6 @@
 import math
 import numpy as np
 from numbapro.cudadrv import devicearray
-from numbapro import cuda
 
 class CudaUFuncDispatcher(object):
     """
@@ -70,6 +69,7 @@ class CudaUFuncDispatcher(object):
                       depending on the input arguments.  Type must match
                       the input arguments.
         '''
+        from numbapro import cuda
         accepted_kws = 'stream', 'out'
         unknown_kws = [k for k in kws if k not in accepted_kws]
         assert not unknown_kws, ("Unknown keyword args %s" % unknown_kws)
@@ -225,6 +225,7 @@ class CudaUFuncDispatcher(object):
         return block_count, thread_count
 
     def reduce(self, arg, stream=0):
+        from numbapro import cuda
         assert len(self.functions.keys()[0]) == 2, "must be a binary ufunc"
         assert arg.ndim == 1, "must use 1d array"
 
@@ -284,6 +285,7 @@ class CUDAGenerializedUFunc(object):
         assert self.engine.nout == 1, "only support single output"
 
     def __call__(self, *args, **kws):
+        from numbapro import cuda
         is_device_array = [devicearray.is_cuda_ndarray(a) for a in args]
         if any(is_device_array) != all(is_device_array):
             raise TypeError('if device array is used, '

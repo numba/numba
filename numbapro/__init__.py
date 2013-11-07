@@ -19,10 +19,14 @@ from numba import (is_registered,
                    register_callable)
 __all__ = numba.__all__ + ['vectorize', 'guvectorize', 'prange']
 
-import numbapro.cuda
-
+# Delay import of CUDA to prevent the CUDA driver from messing with the virtual
+# memory space for applications that does not use the GPU feature.
+#
+#   import numbapro.cuda
+#
 
 def test():
+    import numbapro.cuda
     try:
         print 'NumbaPro Tests'
 
@@ -93,3 +97,4 @@ def check_cuda():
     return ok
 
 
+_initialization_completed = True

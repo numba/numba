@@ -1,7 +1,6 @@
 import operator
 import numpy
 import llvm.core as lc
-from numbapro import cuda
 from numbapro.npm import types, cgutils, aryutils
 from numbapro.cudapy.execution import CUDAKernel
 from numbapro.cudapy import ptx, compiler
@@ -20,6 +19,7 @@ class CudaVectorize(object):
         self.kernelmap = {} # { arg_dtype: (return_dtype), cudakernel }
 
     def add(self, restype, argtypes):
+        from numbapro import cuda
         # compile core as device function
         cudevfn = cuda.jit(restype, argtypes,
                            device=True, inline=True)(self.pyfunc)
@@ -60,6 +60,7 @@ class CudaGUFuncVectorize(object):
         self.kernelmap = {}  # { arg_dtype: (return_dtype), cudakernel }
 
     def add(self, argtypes, restype=None):
+        from numbapro import cuda
         cudevfn = cuda.jit(argtypes=argtypes,
                            device=True, inline=True)(self.pyfunc)
 

@@ -12,7 +12,7 @@ import ctypes
 from .error import CudaDriverError, CudaSupportError
 from numbapro._utils import mviewbuf
 import threading
-
+import numbapro
 
 
 #------------------
@@ -658,6 +658,10 @@ class Driver(object):
 
     def __new__(cls, override_path=None):
         if cls.__INSTANCE is None:
+            # Prevent driver loading at `import numbapro`
+            assert numbapro._initialization_completed
+
+            # Actual driver initialization
             cls.__INSTANCE = inst = object.__new__(Driver)
 
             # Determine DLL type
