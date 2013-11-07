@@ -354,9 +354,9 @@ class ResourceManager(object):
     def driver(self):
         return Driver()
 
-    @property
-    def device(self):
-        return Device(self.device_id)
+    #    @property
+    #    def device(self):
+    #        return Device(self.device_id)
 
     def add_memory(self, handle, dtor):
         assert handle not in self.allocated
@@ -439,6 +439,9 @@ class Driver(object):
         # CUresult cuCtxCreate(CUcontext *pctx, unsigned int flags,
         #                      CUdevice dev);
         'cuCtxCreate':          (c_int, POINTER(cu_context), c_uint, cu_device),
+
+        # CUresult cuCtxGetDevice	(	CUdevice * 	device	 )
+        'cuCtxGetDevice':       (c_int, POINTER(cu_device)),
 
         # CUresult cuCtxGetCurrent	(CUcontext *pctx);
         'cuCtxGetCurrent':      (c_int, POINTER(cu_context)),
@@ -828,8 +831,14 @@ class Driver(object):
                 return None
             else:
                 raise CudaDriverError("No CUDA context was created.")
-        else:
+        elif handle.value in self._CONTEXTS:
             context = self._CONTEXTS[handle.value]
+            return context
+        else:
+            # context is created externally
+            context = _Context(handle=handle)
+            self._CONTEXTS[handle.value] = context
+            self._cache_current_context(context)
             return context
 
     def get_or_create_context(self, device=None):
@@ -841,6 +850,8 @@ class Driver(object):
             return self.create_context(device)
 
     def release_context(self, context):
+        rm = context.device.resource_manager
+        rm.free_pending()
         handle = context._handle.value
         del self._CONTEXTS[handle]
         if handle == self._THREAD_LOCAL.context:
@@ -975,32 +986,42 @@ class Device(object):
 
 
 class _Context(object):
-    def __init__(self, device):
-        self.device = device
-        if self.device.COMPUTE_CAPABILITY < MIN_REQUIRED_CC:
-            msg = ("failed to initialize %s\n"
-                   "only support device with compute capability >=2.0\n"
-                   "please use numbapro.check_cuda() to scan for supported "
-                   "CUDA GPUs" % self.device)
-            raise CudaSupportError(msg)
-        self._handle = cu_context()
-        flags = 0
-        if self.device.CAN_MAP_HOST_MEMORY:
-            flags |= CU_CTX_MAP_HOST
+    def __init__(self, device=None, handle=None):
+        if device is not None:
+            assert handle is None
+            self.device = device
+            if self.device.COMPUTE_CAPABILITY < MIN_REQUIRED_CC:
+                msg = ("failed to initialize %s\n"
+                       "only support device with compute capability >=2.0\n"
+                       "please use numbapro.check_cuda() to scan for supported "
+                       "CUDA GPUs" % self.device)
+                raise CudaSupportError(msg)
+            self._handle = cu_context()
+            flags = 0
+            if self.device.CAN_MAP_HOST_MEMORY:
+                flags |= CU_CTX_MAP_HOST
+            else:
+                # XXX: do I really need this?
+                assert False, "unreachable: cannot map host memory"
+            error = self.driver.cuCtxCreate(byref(self._handle), flags,
+                                            self.device.id)
+            self.driver.check_error(error, ('Failed to create context on %s' %
+                                            self.device))
+            self.device.resource_manager.add_resource(self._handle.value,
+                                                      self.driver.cuCtxDestroy)
         else:
-            # XXX: do I really need this?
-            assert False, "unreachable: cannot map host memory"
-        error = self.driver.cuCtxCreate(byref(self._handle), flags,
-                                        self.device.id)
-        self.driver.check_error(error,
-                                'Failed to create context on %s' % self.device)
-        self.device.resource_manager.add_resource(self._handle.value,
-                                                  self.driver.cuCtxDestroy)
+            # Do not register the context to resource manager
+            assert handle is not None
+            self._handle = handle
+            device = cu_device()
+            error = self.driver.cuCtxGetDevice(byref(device))
+            self.driver.check_error(error, 'Failed to get device from context')
+            self.device = Device(device.value)
 
     def __del__(self):
         self.device.resource_manager.free_resource(self._handle.value,
                                                msg='Failed to destroy context',
-                                               later=True)
+                                               later=False)
 
     @property
     def driver(self):
