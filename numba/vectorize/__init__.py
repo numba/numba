@@ -72,6 +72,26 @@ def Vectorize(func, backend='ast', target='cpu'):
         raise NotImplementedError
 
 def vectorize(signatures, backend='ast', target='cpu'):
+    '''vectorize(type_signatures[, target='cpu'])
+
+    A decorator to create numpy ufunc object from Numba compiled code.
+    
+    :param type_signatures: an iterable of type signatures, which are either 
+                            function type object or a string describing the 
+                            function type.
+    
+    :param target: a string for hardware target; e.g. "cpu", "parallel", "gpu".
+                   For support for "parallel" and "gpu", use NumbaPro.
+
+    :returns: a vectorizers object.
+    
+    Example::
+
+        @vectorize(['float32(float32, float32)',
+                    'float64(float64, float64)'])
+        def sum(a, b):
+            return a + b
+    '''
     def _vectorize(fn):
         vect = Vectorize(fn, backend=backend, target=target)
         for sig in signatures:

@@ -2352,7 +2352,7 @@ cast_timedelta_to_timedelta(PyArray_DatetimeMetaData *src_meta,
  * Returns true if the object is something that is best considered
  * a Datetime, false otherwise.
  */
-static npy_bool
+/*static npy_bool
 is_any_numpy_datetime(PyObject *obj)
 {
     return (PyArray_IsScalar(obj, Datetime) ||
@@ -2361,31 +2361,31 @@ is_any_numpy_datetime(PyObject *obj)
                                                         NPY_DATETIME)) ||
             PyDate_Check(obj) ||
             PyDateTime_Check(obj));
-}
+}*/
 
 /*
  * Returns true if the object is something that is best considered
  * a Timedelta, false otherwise.
  */
-static npy_bool
+/*static npy_bool
 is_any_numpy_timedelta(PyObject *obj)
 {
     return (PyArray_IsScalar(obj, Timedelta) ||
         (PyArray_Check(obj) && (
             PyArray_DESCR((PyArrayObject *)obj)->type_num == NPY_TIMEDELTA)) ||
         PyDelta_Check(obj));
-}
+}*/
 
 /*
  * Returns true if the object is something that is best considered
  * a Datetime or Timedelta, false otherwise.
  */
-npy_bool
+/*npy_bool
 is_any_numpy_datetime_or_timedelta(PyObject *obj)
 {
     return obj != NULL &&
            (is_any_numpy_datetime(obj) ||
             is_any_numpy_timedelta(obj));
-}
+}*/
 
 

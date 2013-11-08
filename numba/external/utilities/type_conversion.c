@@ -424,7 +424,7 @@ static npy_##ret_type op_name##_##type1##_##type2( \
     npy_##type1 operand1 = type1##1; \
     npy_##type2 operand2 = type2##2; \
 \
-    if (units1 == units2 == target_units) { \
+    if (units1 == units2 && units2 == target_units) { \
         return operand1 op operand2; \
     } \
 \
