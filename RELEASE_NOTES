@@ -1,3 +1,11 @@
+Version (0.12.7)
+================
+* Fix major bug that mistreats py2 division as inplace floor-division for real numbers.
+* Fix using of array as argument of a CUDA device function.
+* Delay initialization the CUDA subsystem upon first import of the cuda package.
+* Add docstrings.
+
+
 Version (0.12.6)
 ================
 * Fix major bug that mistreats py2 division as floor-division for real numbers.
