@@ -29,7 +29,7 @@ def find_packages(rootdir):
                 out.append(where.replace(os.path.sep, '.'))
             elif os.path.isdir(path):
                 stack.append(path)
-    print out
+    print(out)
     return out
 
 cmdclass = versioneer.get_cmdclass()
