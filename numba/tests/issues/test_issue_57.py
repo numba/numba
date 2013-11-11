@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
 
+import sys
 from numba import *
 from numba.testing import test_support
 import numpy as np
@@ -48,6 +49,9 @@ def ra_numpy(doy, lat):
     return ra
 
 class TestIssue57(unittest.TestCase):
+    @test_support.skip_if((sys.platform == 'darwin' and
+                           sys.version_info[0] >= 3),
+                          "Skip on Darwin Py3.3 for now")
     def test_ra_numba(self):
         test_fn = jit('f4[:,:](i2,f4[:,:])')(ra_numba)
         lat = np.deg2rad(np.ones((5, 5), dtype=np.float32) * 45.)
