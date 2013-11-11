@@ -11,7 +11,7 @@ NumPy Broadcasting_ is applied to every argument with mismatching dimensions.
 Example: Basic
 ----------------
 
-Here is a simple example to perfoum element-wise addition:
+Here is a simple example to perform element-wise addition:
 
 .. testcode::
     
@@ -35,9 +35,9 @@ Here is a simple example to perfoum element-wise addition:
 
 
 
-The ufunc is compiled for to operate on `float32` and `float64`.
-It is used to compute element-wise addition of array `a` and `b` which are arrays of `numpy.float64` with 10 elements.
-The output:
+The ufunc is compiled to operate on `float32` and `float64` arrays.
+It is used to compute element-wise addition of array `a` and `b` which are 
+arrays of `numpy.float64` with 10 elements.  The output
 
 .. testoutput::
 
@@ -111,7 +111,7 @@ stream                  Optimize for CPU cache
 
 gpu                     CUDA GPU
 
-                        .. NOTE:: This creats an *ufunc-like* object.  See `documentation for CUDA ufunc <CUDAufunc.html>`_ for detail.
+                        .. NOTE:: This creates an *ufunc-like* object.  See `documentation for CUDA ufunc <CUDAufunc.html>`_ for detail.
 
 
 =================       ===============================================================
