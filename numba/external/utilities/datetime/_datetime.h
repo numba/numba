@@ -41,13 +41,8 @@ typedef struct {
 } numba_datetime_metadata;
 
 
-#ifdef NPY_ENABLE_SEPARATE_COMPILATION
 extern char *_datetime_strings[NUMBA_DATETIME_NUMUNITS];
 extern int _days_per_month_table[2][12];
-#else
-char *_datetime_strings[NUMBA_DATETIME_NUMUNITS];
-int _days_per_month_table[2][12];
-#endif
 
 void
 numpy_pydatetime_import(void);
