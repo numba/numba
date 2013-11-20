@@ -283,10 +283,13 @@ class Conser(object):
     def get(self, *args):
         args = tuple(tuple(arg) if isinstance(arg, list) else arg
                          for arg in args)
-        result = self._entries.get(args)
-        if result is None:
+        try:
+            result = self._entries.get(args)
+            if result is None:
+                result = self.constructor(*args)
+                self._entries[args] = result
+        except:
             result = self.constructor(*args)
-            self._entries[args] = result
 
         return result
 

@@ -369,7 +369,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
                                                        self.llvm_module,
                                                        cls.__name__,
                                                        args=args)
-        elif node_type.is_pointer and not node_type == char.pointer():
+        elif node_type.is_pointer and not node_type in (char.pointer(), string_):
             # Create ctypes pointer object
             ctypes_pointer_type = node_type.to_ctypes()
             args = [nodes.CoercionNode(node.node, int64),
