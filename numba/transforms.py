@@ -1162,6 +1162,11 @@ class LateSpecializer(ResolveCoercions,
             else:
                 raise NotImplementedError
 
+        elif node.left.type.is_string and node.right.type.is_string:
+            node.left = nodes.CoercionNode(node.left, object_)
+            node.right = nodes.CoercionNode(node.right, object_)
+            return nodes.CoercionNode(self.visit_BinOp(node), c_string_type)
+
         return node
 
     def _object_unaryop(self, node, api_name):

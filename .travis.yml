@@ -12,6 +12,7 @@ branches:
     - devel
     - release
     - devpatches
+    - strings
 
 install:
   - wget "http://repo.continuum.io/pkgs/free/linux-64/llvm-3.2-0.tar.bz2"

@@ -10,6 +10,24 @@ hellohello0
 hellohello1
 hellohello2
 
+>>> eq("foo", "foo")
+True
+>>> eq("foo", "bar")
+False
+>>> ne("foo", "foo")
+False
+>>> ne("foo", "bar")
+True
+>>> lt("foo", "foo")
+False
+>>> lt("foo", "bar")
+False
+>>> lt("bar", "foo")
+True
+
+>>> interpolate("%s and %s", "ham", "eggs")
+'ham and eggs'
+
 >>> autojit(string_len)("hello")
 5
 >>> autojit(nopython=True)(string_len)("hello")
@@ -52,11 +70,29 @@ def test():
 def string_constant():
     print("hello world")
 
+@jit(bool_(c_string_type, c_string_type))
+def eq(s1, s2):
+    return s1 == s2
+
+@jit(bool_(c_string_type, c_string_type))
+def ne(s1, s2):
+    return s1 != s2
+
+@jit(bool_(c_string_type, c_string_type))
+def lt(s1, s2):
+    return s1 < s2
+
+@jit(c_string_type(c_string_type, c_string_type))
+def concat(s1, s2):
+    return s1 + s2
+
+@jit(c_string_type(c_string_type, c_string_type, c_string_type))
+def interpolate(s, s1, s2):
+    return s % (s1, s2)
+
 def string_len(s):
     return len(s)
 
 if __name__ == '__main__':
-    string_constant()
-
     import numba
     numba.testing.testmod()
