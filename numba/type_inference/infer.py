@@ -312,7 +312,7 @@ class TypeInferer(visitors.NumbaTransformer):
 
         if start_point.is_scc:
             for type in start_point.types:
-                assert not type.is_scc
+                #assert not type.is_scc
                 self.remove_resolved_type(type)
 
     def assert_resolveable(self, start_point):
