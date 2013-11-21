@@ -7,6 +7,8 @@
 NumbaPro
 ========
 
+`Get started with the NumbaPro Quick Start [pdf] <https://store.continuum.io/static/img/NumbaPro-QuickStart.pdf>`_
+
 `NumbaPro` is an enhanced version of Numba_ which adds premium features and
 functionality that allow developers to rapidly create optimized code that 
 integrates well with NumPy_.
