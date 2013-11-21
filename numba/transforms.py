@@ -369,7 +369,7 @@ class ResolveCoercions(visitors.NumbaTransformer):
                                                        self.llvm_module,
                                                        cls.__name__,
                                                        args=args)
-        elif node_type.is_pointer and not node_type == char.pointer():
+        elif node_type.is_pointer and not node_type in (char.pointer(), string_):
             # Create ctypes pointer object
             ctypes_pointer_type = node_type.to_ctypes()
             args = [nodes.CoercionNode(node.node, int64),
@@ -1161,6 +1161,11 @@ class LateSpecializer(ResolveCoercions,
                 node = nodes.DateTimeNode(diff_node, unit_node)
             else:
                 raise NotImplementedError
+
+        elif node.left.type.is_string and node.right.type.is_string:
+            node.left = nodes.CoercionNode(node.left, object_)
+            node.right = nodes.CoercionNode(node.right, object_)
+            return nodes.CoercionNode(self.visit_BinOp(node), c_string_type)
 
         return node
 
