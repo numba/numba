@@ -132,12 +132,23 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer):
         return node
 
     def visit_BinOp(self, node):
-        if (hasattr(node.left, 'node') and node.left.node.type.is_object) or \
-                (hasattr(node.right, 'node') and node.right.node.type.is_object):
-            return node
-        else:
+    
+        class ObjectChecker(ast.NodeVisitor):
+        
+            def __init__(self):
+                self.object_calls = False
+
+            def visit(self, node):
+                if hasattr(node, 'type') and node.type.is_object:
+                    self.object_calls = True
+
+        object_checker = ObjectChecker()
+        object_checker.visit(node)
+        if not object_checker.object_calls:
             elementwise = node.type.is_array
             return self.visit_elementwise(elementwise, node)
+        else:
+            return node
 
     visit_UnaryOp = visit_BinOp
 
