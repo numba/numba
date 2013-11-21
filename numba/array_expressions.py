@@ -132,8 +132,12 @@ class ArrayExpressionRewrite(visitors.NumbaTransformer):
         return node
 
     def visit_BinOp(self, node):
-        elementwise = node.type.is_array
-        return self.visit_elementwise(elementwise, node)
+        if (hasattr(node.left, 'node') and node.left.node.type.is_object) or \
+                (hasattr(node.right, 'node') and node.right.node.type.is_object):
+            return node
+        else:
+            elementwise = node.type.is_array
+            return self.visit_elementwise(elementwise, node)
 
     visit_UnaryOp = visit_BinOp
 
