@@ -84,6 +84,13 @@ New users should first read the installation manual:
 
    install
 
+Quick Start:
+
+.. toctree::
+   :maxdepth: 1
+
+   decorators
+
 High-level APIs for CPU/GPU:
 
 .. toctree::

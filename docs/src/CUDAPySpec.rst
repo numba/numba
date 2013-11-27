@@ -1,14 +1,26 @@
-Python Dialect for CUDA Specification (v0.2)
+CUDA Python for CUDA Specification (v0.2)
 =============================================
 
-(This documents reflects the implementation of Python dialect for CUDA in NumbaPro 0.12.  In time, we may refine the specification.)
+(This documents reflects the implementation of CUDA Python in
+NumbaPro 0.12.  In time, we may refine the specification.)
 
-As usage of Python on CUDA GPUs is becoming more mature, it has become necessary to define a formal specification for a dialect and its mapping to the `PTX ISA <http://docs.nvidia.com/cuda/parallel-thread-execution/index.html>`_.  There are places where the semantic of this dialect differs from the Python semantic.  The change in semantic is necessary for us to generate high-performance code that is otherwise hard to achieve.
+As usage of Python on CUDA GPUs is becoming more mature,
+it has become necessary to define a formal specification for a dialect and
+its mapping to the
+`PTX ISA <http://docs.nvidia.com/cuda/parallel-thread-execution/index.html>`_.
+There are places where the semantic of this dialect differs from the Python
+semantic.  The change in semantic is necessary for us to generate
+high-performance code that is otherwise hard to achieve.
 
 No-Python Mode (NPM)
 ---------------------
 
-Our dialect for CUDA is a superset of the `No-Python mode` (NPM).  NPM is a statically typed subset of the Python language.  It only supports lower level types; such as booleans, ints, floats, complex numbers and arrays.  It does not support Python objects.  Since we drop the support for objects entirely, many basic language constructs must be handled differently.  For instance, a simple for-loop is::
+CUDA Python is a superset of the `No-Python mode` (NPM).  NPM is a
+statically typed subset of the Python language.  It only supports lower level
+types; such as booleans, ints, floats, complex numbers and arrays.  It does
+not support Python objects.  Since we drop the support for objects entirely,
+many basic language constructs must be handled differently.  For instance,
+a simple for-loop is::
 
     for i in range(10):
         ...
@@ -31,13 +43,19 @@ In time, we aim to enhance NPM to expand the supported subset and recognize more
 Type Inference
 ----------------
 
-The type inference algorithm for our dialect differs from Numba as we recognize that its users require stronger typing to better predict code performance.  This is a summary of the type inference rules:
+The type inference algorithm for CUDA Python differs from Numba as we
+recognize that its users require stronger typing to better predict code
+performance.  This is a summary of the type inference rules:
 
 * Implicit coercion for all ints and floats only.
-* Variable type is assigned at definition but a variable can be redefined; thus its type can be modified at the next assignment.
-* Inside a loop, the variable type remains unchanged even at redefinition.  The type assigned at the preloop block (the dominator of the basic-block) is assumed.  This greatly differs from Python semantic.
+* Variable type is assigned at definition but a variable can be redefined;
+  thus its type can be modified at the next assignment.
+* Inside a loop, the variable type remains unchanged even at redefinition.
+  The type assigned at the preloop block (the dominator of the basic-block) is
+  assumed.  This greatly differs from Python semantic.
 
-User can force the type of any value by using the type object defined in ``numbapro`` namespace::
+User can force the type of any value by using the type object defined in
+``numbapro`` namespace::
 
     from numbapro import cuda, int16, float32
 
@@ -49,13 +67,18 @@ User can force the type of any value by using the type object defined in ``numba
 Basic Arithmetic Operations
 ----------------------------
 
-For binary operators ``+ - *``, the operands are coerced to the most generic type of the two before the computation.  The result type is the coerced type.
+For binary operators ``+ - *``, the operands are coerced to the most generic
+type of the two before the computation.  The result type is the coerced type.
 
-For floordiv ``//``, the coercion rule on operands for basic binary operators applies.  But, the result type is always coerced to an integer of the same bitwidth and at least has 32-bits.
+For floordiv ``//``, the coercion rule on operands for basic binary operators
+ applies.  But, the result type is always coerced to an integer of the same bitwidth and at least has 32-bits.
 
-For truediv ``/``, the operands are promoted to a floating point representation with bitwidth equals to the maximum of the two operands before the computation and at least has 32-bits.  The result type is the coerced type.
+For truediv ``/``, the operands are promoted to a floating point
+representation with bitwidth equals to the maximum of the two operands before the computation and at least has 32-bits.  The result type is the coerced type.
 
-For binary bitwise ``& | ^ >> <<``, the operands must be of integer types and they are coerced to the most generic type of the two before the computation.  The result type is the coerced type.
+For binary bitwise ``& | ^ >> <<``, the operands must be of integer types and
+they are coerced to the most generic type of the two before the computation.
+The result type is the coerced type.
 
 For complex numbers, only ``+ - *`` are defined.
 
@@ -73,14 +96,22 @@ Array Operations
 
 Array attributes are read-only:
 
-* ``shape`` contains the number of elements for each dimension.  It can be indexed or unpacked like a tuple.  It is a tuple of intp.
-* ``strides`` contains the number of bytes skip to move forward to the next element for a given dimension.  It can be indexed or unpacked like a tuple.  It is a tuple of intp.
-* ``size`` contains the number of elements in the array but may not be correspond to the actual size of the data buffer since strides can be zero or negative.  It is an intp.
+* ``shape`` contains the number of elements for each dimension.
+  It can be indexed or unpacked like a tuple.  It is a tuple of intp.
+* ``strides`` contains the number of bytes skip to move forward to the next
+  element for a given dimension.  It can be indexed or unpacked like a tuple.
+  It is a tuple of intp.
+* ``size`` contains the number of elements in the array but may not be
+  correspond to the actual size of the data buffer since strides can be zero
+  or negative.  It is an intp.
 * ``ndim`` contains the number of dimension in the array.  It is an intp.
 
-``__getitem__`` returns the element at the given index.  Slicing or fancy indexing are not supported.  The result type is always the same as the element type of the array.
+``__getitem__`` returns the element at the given index.  Slicing or fancy
+indexing are not supported.  The result type is always the same as the
+element type of the array.
 
-``__setitem__`` stores a value into the array at an index.  The value is coerced if necessary.
+``__setitem__`` stores a value into the array at an index.  The value is
+coerced if necessary.
 
 CUDA Intrinsics
 -----------------
@@ -89,18 +120,24 @@ All intrinsics are defined under the ``numbapro.cuda`` namespace.
 
 Thread ID intrinsics:
 
-* ``cuda.threadIdx.x``, ``cuda.threadIdx.y``, ``cuda.threadIdx.z`` are the X, Y and Z IDs of the thread.
+* ``cuda.threadIdx.x``, ``cuda.threadIdx.y``, ``cuda.threadIdx.z`` are the X,
+  Y and Z IDs of the thread.
 * ``cuda.blockIdx.x``, ``cuda.blockIdx.y`` are the X and Y ID of the block.
-* ``cuda.blockDim.x``, ``cuda.blockDim.y``, ``cuda.blockDim.z`` are the X, Y and Z width of the thread block.
+* ``cuda.blockDim.x``, ``cuda.blockDim.y``, ``cuda.blockDim.z`` are the X, Y
+  and Z width of the thread block.
 * ``cuda.gridDim.x``, ``cuda.gridDim.y`` are the X and Y width of the grid.
 
 Barrier intrinsics:
 
-* ``cuda.syncthreads()`` equivalent to ``__syncthreads()`` in CUDA-C.  It is a thread block level barrier.
+* ``cuda.syncthreads()`` equivalent to ``__syncthreads()`` in CUDA-C.  It is a
+  thread block level barrier.
 
 Shared memory intrinsics
 
-* ``cuda.shared.array(shape, dtype)``  constructs a statically allocated array in the shared memory of kernel.  ``dtype`` argument must be a type object defined in the ``NumbaPro`` namespace.  It must be declared in the entry block of the kernel.
+* ``cuda.shared.array(shape, dtype)``  constructs a statically allocated array
+  in the shared memory of kernel.  ``dtype`` argument must be a type object
+  defined in the ``NumbaPro`` namespace.  It must be declared in the entry
+  block of the kernel.
 
 Math
 -----
