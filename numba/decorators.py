@@ -258,11 +258,6 @@ def jit(restype=None, argtypes=None, backend='ast', target='cpu', nopython=False
 
     * As above, but using a string instead of a constructed function
       type.  Example: ``jit("f8(f8)")``.
-
-    If backend='bytecode' the bytecode translator is used, if
-    backend='ast' the AST translator is used.  By default, the AST
-    translator is used.  *Note that the bytecode translator is
-    deprecated as of the 0.3 release.*
     """
     kws.update(nopython=nopython, backend=backend)
     if isinstance(restype, CLASS_TYPES):
