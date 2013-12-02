@@ -2,11 +2,12 @@
 This is a direct translation of nvvm.h
 '''
 
-import sys, os, logging, re
-from ctypes import (c_void_p, c_int, POINTER, c_char_p, c_size_t, CDLL, byref,
+import sys, logging, re
+from ctypes import (c_void_p, c_int, POINTER, c_char_p, c_size_t, byref,
                     c_char)
 from error import NvvmError, NvvmSupportError
 from numbapro._utils import finalizer
+from numbapro.cudadrv.libs import open_libdevice, open_cudalib
 
 logger = logging.getLogger(__name__)
 
@@ -78,29 +79,17 @@ class NVVM(object):
     # Singleton reference
     __INSTANCE = None
 
-    def __new__(cls, override_path=None):
+    def __new__(cls):
         if not cls.__INSTANCE:
-            from numbapro import findlib
-            # Load the driver
-            where = ([override_path]
-                        if override_path is not None
-                        else findlib.find_lib('nvvm', 'NUMBAPRO_NVVM'))
-            for path in where:
-                try:
-                    driver = CDLL(path)
-                    inst = cls.__INSTANCE = object.__new__(cls)
-                    inst.driver = driver
-                    inst.path = path
-                except OSError:
-                    pass # continue
-                else:
-                    break # got it, break out
-            else:
+            cls.__INSTANCE = inst = object.__new__(cls)
+            try:
+                inst.driver = open_cudalib('nvvm', ccc=True)
+            except OSError, e:
                 cls.__INSTANCE = None
-                raise NvvmSupportError(
-                           "libNVVM cannot be found. "
-                           "Try setting environment variable NUMBAPRO_NVVM "
-                           "with the path of the libNVVM shared library.")
+                errmsg = ("libNVVM cannot be found. "
+                          "Try setting environment variable NUMBAPRO_NVVM "
+                          "with the path of the libNVVM shared library.\n%s")
+                raise NvvmSupportError(errmsg % e)
 
             # Find & populate functions
             for name, proto in inst._PROTOTYPES.items():
@@ -280,30 +269,7 @@ class LibDevice(object):
         arch --- must be result from get_arch_option()
         '''
         if arch not in self._cache_:
-            try:
-                libdevice_dir = os.environ['NUMBAPRO_LIBDEVICE']
-            except KeyError:
-                from numbapro import findlib
-                libdevice_dir = findlib.get_lib_dir()
-
-            prefix_template = 'libdevice.%s'
-            ext = '.bc'
-
-            candidates = []
-            for fname in os.listdir(libdevice_dir):
-                prefix = prefix_template % arch
-                if fname.startswith(prefix) and fname.endswith(ext):
-                    chosen = os.path.join(libdevice_dir, fname)
-                    candidates.append(chosen)
-
-            if not candidates:
-                raise Exception(MISSING_LIBDEVICE_MSG)
-
-            chosen = max(candidates)
-            with open(chosen, 'rb') as bcfile:
-                bc = bcfile.read()
-                self._cache_[arch] = bc
-
+            self._cache_[arch] = open_libdevice(arch)
         self.bc = self._cache_[arch]
 
     def get(self):

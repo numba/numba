@@ -44,8 +44,8 @@ def test():
         failfast(numbapro.vectorizers.tests.support.run(**cfg))
 
         print 'cuda libraries locator'.center(80, '-')
-        import numbapro.findlib
-        failfast(numbapro.findlib.test())
+        import numbapro.cudadrv.libs
+        failfast(numbapro.cudadrv.libs.test())
 
         if numbapro.cuda.is_available:
             print 'cudadrv'.center(80, '-')
@@ -77,12 +77,12 @@ def test():
 
 
 def check_cuda():
-    import numbapro.findlib
+    from numbapro.cudadrv import libs
     from numbapro import cuda
     ok = True
 
     print 'libraries detection'.center(80, '-')
-    if not numbapro.findlib.test():
+    if not libs.test():
         ok = False
 
     print 'hardware detection'.center(80, '-')

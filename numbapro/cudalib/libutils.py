@@ -1,5 +1,4 @@
-import sys
-from ctypes import CDLL
+from numbapro.cudadrv.libs import open_cudalib
 
 class ctype_function(object):
     def __init__(self, restype=None, *argtypes):
@@ -10,33 +9,14 @@ class Lib(object):
     __singleton = None
     lib = None
 
-    def __new__(cls, override_path=None):
+    def __new__(cls):
         # Check if we already have opened the dll
         if cls.__singleton is None:
-            from numbapro import findlib
-            # Determine dll extension type for the platform
-            if sys.platform == 'win32':
-                from ctypes import WinDLL
-                dllopener = WinDLL
-            elif sys.platform == 'darwin':
-                dllopener = CDLL
-            else:
-                dllopener = CDLL
-
-            # Open the DLL
-            where = ([override_path]
-                     if override_path is not None
-                     else findlib.find_lib(cls.lib))
-
-            for path in where:
-                try:
-                    dll = dllopener(path)
-                except OSError:
-                    pass
-                else:
-                    break
-            else:
-                raise Exception("Cannot find library for %s" % cls.lib)
+            try:
+                dll = open_cudalib(cls.lib)
+            except OSError, e:
+                raise Exception("Cannot open library for %s:\n%s" % (cls.lib,
+                                                                     e))
             # Create new instance
             inst = object.__new__(cls)
             cls.__singleton = inst

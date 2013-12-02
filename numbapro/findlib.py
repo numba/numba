@@ -1,6 +1,6 @@
 import sys
-import os.path
 import os
+import re
 
 def get_lib_dir():
     dirname = 'DLLs' if sys.platform == 'win32' else 'lib'
@@ -9,55 +9,22 @@ def get_lib_dir():
 
 
 DLLNAMEMAP = {
-    'linux2': ('lib', '.so'),
-    'darwin': ('lib', '.dylib'),
-    'win32' : ('',    '.dll')
+    'linux2': r'lib%(name)s\.so\.%(ver)s$',
+    'darwin': r'lib%(name)s\.%(ver)s\.dylib$',
+    'win32' : r'%(name)s%(ver)s\.dll$',
 }
 
-def find_lib(libname, env=None):
-    prefix, ext = DLLNAMEMAP[sys.platform]
-    fullname = '%s%s%s' % (prefix, libname, ext)
-    candidates = [
-        os.path.join(get_lib_dir(), fullname),
-        fullname,
-        ]
+RE_VER = r'[0-9]*([_\.][0-9]+)*'
 
-    if env:
-        envpath = os.environ.get(env, '')
-    else:
-        envpath = None
+def find_lib(libname, libdir=None, platform=None):
+    platform  = platform or sys.platform
+    pat = DLLNAMEMAP[platform] % {"name": libname, "ver": RE_VER}
+    regex = re.compile(pat)
+    return find_file(regex, libdir)
 
-    if envpath:
-        if os.path.isdir(envpath):
-            envpath = os.path.join(envpath, fullname)
-        return [envpath]
-    else:
-        return candidates
-
-def test():
-    failed = False
-    libs = 'cublas cusparse cufft curand nvvm'.split()
-    for lib in libs:
-        cand = find_lib(lib)
-        print 'Finding', lib
-        for path in cand:
-            if os.path.isfile(path):
-                print '\tlocated at', path
-                break
-        else:
-            print 'can\'t open lib'
-            failed = True
-    bcs = ['libdevice.compute_20.bc', 'libdevice.compute_30.bc',
-           'libdevice.compute_35.bc']
-    bcdir = get_lib_dir()
-    listing = os.listdir(bcdir)
-    print 'In', bcdir
-    for bc in bcs:
-        print '\tfinding', bc,
-
-        if bc not in listing:
-            print '\tcan\'t open %s' % bc
-            failed = True
-        else:
-            print '\tok'
-    return not failed
+def find_file(pat, libdir=None):
+    libdir = libdir or get_lib_dir()
+    entries = os.listdir(libdir)
+    candidates = [os.path.join(libdir, ent)
+                  for ent in entries if pat.match(ent)]
+    return [c for c in candidates if os.path.isfile(c)]
