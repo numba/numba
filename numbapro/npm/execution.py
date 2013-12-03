@@ -49,11 +49,12 @@ def make_engine(lfunc):
 
     # NOTE: LLVMPY in Anaconda does not have MCJIT?
     #eb = le.EngineBuilder.new(lmod).mcjit(True).opt(2).mattrs(','.join(attrs))
-    eb = le.EngineBuilder.new(lmod).opt(2).mattrs(','.join(attrs))
+    eb = le.EngineBuilder.new(lmod).opt(3).mattrs(','.join(attrs))
     tm = eb.select_target()
 
     # optimize
-    pms = lp.build_pass_managers(opt=2, tm=tm, fpm=False)
+    pms = lp.build_pass_managers(opt=3, tm=tm, fpm=False,
+                                 loop_vectorize=True)
     pms.pm.run(lmod)
 
     return eb.create()

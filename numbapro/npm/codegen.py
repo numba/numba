@@ -74,6 +74,9 @@ class CodeGen(object):
         lfnty = lc.Type.function(lc.Type.int(), fnty_args)
         lfunc = self.lmod.add_function(lfnty, name=self.name)
 
+        if self.return_type != types.void:
+            lfunc.args[-1].add_attribute(lc.ATTR_NO_ALIAS)
+
         return lfunc
 
     def codegen(self):
