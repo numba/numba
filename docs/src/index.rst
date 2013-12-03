@@ -84,12 +84,12 @@ New users should first read the installation manual:
 
    install
 
-Quick Start:
+Basics:
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
 
-   decorators
+   quickstart
 
 High-level APIs for CPU/GPU:
 

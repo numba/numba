@@ -1,4 +1,4 @@
-CUDA Python for CUDA Specification (v0.2)
+CUDA Python Specification (v0.2)
 =============================================
 
 (This documents reflects the implementation of CUDA Python in
@@ -16,11 +16,11 @@ No-Python Mode (NPM)
 ---------------------
 
 CUDA Python is a superset of the `No-Python mode` (NPM).  NPM is a
-statically typed subset of the Python language.  It only supports lower level
-types; such as booleans, ints, floats, complex numbers and arrays.  It does
-not support Python objects.  Since we drop the support for objects entirely,
-many basic language constructs must be handled differently.  For instance,
-a simple for-loop is::
+statically typed subset of the Python language.  It does not use the Python
+runtime; thus, it only supports lower level types; such as booleans, ints,
+floats, complex numbers and arrays.  It does not support Python objects.
+Since we drop the support for objects entirely, many basic language
+constructs must be handled differently.  For instance, a simple for-loop is::
 
     for i in range(10):
         ...
