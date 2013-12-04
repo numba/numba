@@ -1,17 +1,16 @@
 package:
   name: numbapro
-  version: 99.9.9
+  version: latest
 
 source:
   git_url: git@github.com:ContinuumIO/numbapro.git
-# git_tag: 0.12.3
+  git_tag: 0.12.7
 
 requirements:
   build:
     - python
     - numba
     - numpy
-    #- chrpath    [linux]
   run:
     - python
     - numpy
@@ -21,8 +20,8 @@ requirements:
 
 test:
   requires:
-    - nose
     - python
+    - nose
   imports:
     - numbapro
     - numbapro._utils.mviewbuf
