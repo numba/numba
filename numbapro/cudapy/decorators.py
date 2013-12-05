@@ -23,6 +23,8 @@ NUMBA_TO_NPM_TYPES = {
     numba.complex128: types.complex128,
 
     numba.void: types.void,
+
+    numba.bool_: types.boolean,
 }
 
 def _eval_type_string(text):
