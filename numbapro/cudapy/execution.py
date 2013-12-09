@@ -158,7 +158,8 @@ class CUDAKernel(CUDAKernelBase):
         if self.excs:
             exchost = (ctypes.c_int32 * 6)()
             driver.device_to_host(ctypes.addressof(exchost), excmem, excsize)
-            raise CUDARuntimeError(self.excs[exchost[0]].exc, *exchost[1:])
+            if exchost[0] != 0:
+                raise CUDARuntimeError(self.excs[exchost[0]].exc, *exchost[1:])
 
         # retrieve auto converted arrays
         for wb in retr:
