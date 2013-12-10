@@ -133,10 +133,27 @@ class syncthreads(Stub):
     '''
     _description_ = '<syncthread()>'
 
-#-------------------------------------------------------------------------------
-# shared
 
-def shared_array(args):
+#-------------------------------------------------------------------------------
+# generic array
+
+def _insert_addrspace_conv(lmod, elemtype, addrspace):
+    addrspacename = {
+        nvvm.ADDRSPACE_SHARED: 'shared',
+        nvvm.ADDRSPACE_LOCAL: 'local',
+    }[addrspace]
+    tyname = str(elemtype)
+    tyname = {'float': 'f32', 'double': 'f64'}.get(tyname, tyname)
+    s2g_name_fmt = 'llvm.nvvm.ptr.' + addrspacename + '.to.gen.p0%s.p%d%s'
+    s2g_name = s2g_name_fmt % (tyname, nvvm.ADDRSPACE_SHARED, tyname)
+    elem_ptr_ty = lc.Type.pointer(elemtype)
+    elem_ptr_ty_addrspace = lc.Type.pointer(elemtype, addrspace)
+    s2g_fnty = lc.Type.function(elem_ptr_ty,
+                                [elem_ptr_ty_addrspace])
+    return lmod.get_or_insert_function(s2g_fnty, s2g_name)
+
+
+def _generic_array(args, symbol_name, addrspace, can_dynsized=False):
     if len(args) != 2:
         raise ValueError('takes exactly 2 arguments')
     shape, dtype = args
@@ -160,32 +177,26 @@ def shared_array(args):
         size = reduce(operator.mul, shape)
 
         elemtype = dtype.llvm_as_value()
-        smem_elemtype = retty.desc.element.llvm_as_value()
-        smem_type = lc.Type.array(smem_elemtype, size)
+        mem_elemtype = retty.desc.element.llvm_as_value()
+        mem_type = lc.Type.array(mem_elemtype, size)
         lmod = context.builder.basic_block.function.module
-        smem = lmod.add_global_variable(smem_type, 'smem',
-                                        nvvm.ADDRSPACE_SHARED)
-        if size == 0:    # dynamic shared memory
-            smem.linkage = lc.LINKAGE_EXTERNAL
+        mem = lmod.add_global_variable(mem_type, symbol_name, addrspace)
+
+        if size == 0:
+            if can_dynsized:    # dynamic shared memory
+                mem.linkage = lc.LINKAGE_EXTERNAL
+            else:
+                raise ValueError("zero array length")
         else:            # static shared memory
-            smem.linkage = lc.LINKAGE_INTERNAL
-            smem.initializer = lc.Constant.undef(smem_type)
+            mem.linkage = lc.LINKAGE_INTERNAL
+            mem.initializer = lc.Constant.undef(mem_type)
 
-        smem_elem_ptr_ty = lc.Type.pointer(smem_elemtype)
-        smem_elem_ptr_ty_addrspace = lc.Type.pointer(smem_elemtype,
-                                                     nvvm.ADDRSPACE_SHARED)
+        mem_elem_ptr_ty_addrspace = lc.Type.pointer(mem_elemtype, addrspace)
 
-        # convert to generic addrspace
-        tyname = str(smem_elemtype)
-        tyname = {'float': 'f32', 'double': 'f64'}.get(tyname, tyname)
-        s2g_name_fmt = 'llvm.nvvm.ptr.shared.to.gen.p0%s.p%d%s'
-        s2g_name = s2g_name_fmt % (tyname, nvvm.ADDRSPACE_SHARED, tyname)
-        s2g_fnty = lc.Type.function(smem_elem_ptr_ty,
-                                    [smem_elem_ptr_ty_addrspace])
-        shared_to_generic = lmod.get_or_insert_function(s2g_fnty, s2g_name)
+        to_generic = _insert_addrspace_conv(lmod, mem_elemtype, addrspace)
 
-        data = builder.call(shared_to_generic,
-                        [builder.bitcast(smem, smem_elem_ptr_ty_addrspace)])
+        data = builder.call(to_generic,
+                        [builder.bitcast(mem, mem_elem_ptr_ty_addrspace)])
 
         llintp = types.intp.llvm_as_value()
         cshape = lc.Constant.array(llintp,
@@ -196,7 +207,6 @@ def shared_array(args):
 
         strides = [builder.mul(types.sizeof(elemtype), types.const_intp(s))
                    for s in strides_raw]
-
 
         cstrides = lc.Constant.array(llintp, strides)
 
@@ -210,6 +220,13 @@ def shared_array(args):
     impl.return_type = types.arraytype(dtype, len(shape), 'C')
     return impl
 
+#-------------------------------------------------------------------------------
+# shared
+
+def shared_array(args):
+    return _generic_array(args, 'smem', nvvm.ADDRSPACE_SHARED,
+                          can_dynsized=True)
+
 class shared(Stub):
     '''shared namespace
     '''
@@ -218,6 +235,21 @@ class shared(Stub):
     array = macro.Macro('shared.array', shared_array, callable=True,
                         argnames=['shape', 'dtype'])
 
+
+#-------------------------------------------------------------------------------
+# local array
+
+
+def local_array(args):
+    return _generic_array(args, 'lmem', nvvm.ADDRSPACE_LOCAL)
+
+class local(Stub):
+    '''shared namespace
+    '''
+    _description_ = '<shared>'
+
+    array = macro.Macro('local.array', local_array, callable=True,
+                        argnames=['shape', 'dtype'])
 
 #-------------------------------------------------------------------------------
 # atomic
@@ -241,5 +273,6 @@ gridDim
 grid
 syncthreads
 shared
+local
 atomic
 '''.split()
