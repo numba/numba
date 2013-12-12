@@ -1,4 +1,4 @@
-from __future__ import absolute_import
+from __future__ import absolute_import, print_function
 from .errors import error_context
 from . import types, macro
 from .symbolic import Inst
@@ -216,6 +216,8 @@ class Infer(object):
             return types.function_type
         elif isinstance(value, macro.Macro):
             return types.macro_type
+        elif isinstance(value, str):
+            return types.const_string_type(value)
         elif getattr(value, '_npm_context_'):
             return types.user_function_type
     

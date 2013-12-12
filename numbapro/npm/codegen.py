@@ -257,11 +257,15 @@ class CodeGen(object):
                     args = inst.args
                 else:
                     imp = self.implib.get(inst.defn)
-                    args = [(self.valmap[aval]
-                                if callable(atype)
-                                else self.cast(self.valmap[aval], aval.type,
-                                               atype))
-                            for aval, atype in zip(inst.args, imp.args)]
+
+                    if imp.args is None:  # varargs
+                        args = [self.valmap[aval] for aval in inst.args]
+                    else:
+                        args = [(self.valmap[aval]
+                                    if callable(atype)
+                                    else self.cast(self.valmap[aval], aval.type,
+                                                   atype))
+                                for aval, atype in zip(inst.args, imp.args)]
 
                 assert not inst.kws
                 argtys = [aval.type for aval in inst.args]

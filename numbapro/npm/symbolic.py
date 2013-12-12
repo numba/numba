@@ -1,3 +1,4 @@
+from __future__ import print_function
 import __builtin__
 import inspect
 import dis
@@ -6,6 +7,7 @@ from collections import defaultdict
 
 from .errors import error_context
 from .bytecode import ByteCode
+from . import intrinsics
 
 COMPARE_OP_FUNC = {
     '>': operator.gt,
@@ -165,7 +167,7 @@ class SymbolicExecution(object):
         inst.block = self.curblock
         self.curblock.code.append(inst)
         return inst
-        
+
 
     def _prepend_phi(self, op, **kws):
         inst = Inst(op, self.lineno, **kws)
@@ -233,7 +235,7 @@ class SymbolicExecution(object):
         self.curblock.terminator = Inst(op, self.lineno, **kws)
 
     # ------ op_* ------- #
-    
+
     def op_POP_JUMP_IF_TRUE(self, inst):
         falsebr = self.blocks[inst.next]
         truebr = self.blocks[inst.arg]
@@ -542,6 +544,12 @@ class SymbolicExecution(object):
         self.push(three)
         self.push(two)
 
+    def op_PRINT_ITEM(self, inst):
+        val = self.pop()
+        self.call(intrinsics.print_inline, (val,))
+
+    def op_PRINT_NEWLINE(self, inst):
+        self.call(intrinsics.print_newline, ())
 
 #---------------------------------------------------------------------------
 # Passes

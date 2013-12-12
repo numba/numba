@@ -8,7 +8,7 @@ from . import cgutils
 __all__ = ('int8', 'int16', 'int32', 'int64', 'intp',
            'uint8', 'uint16', 'uint32', 'uint64',
            'float32', 'float64', 'complex64', 'complex128',
-           'arraytype')
+           'arraytype', 'string')
 
 ERRMSG_CHANGE_OF_SIGN = 'cast resulting in change of sign'
 ERRMSG_NEGATIVE_TO_UNSIGNED = 'casting negative value to unsigned'
@@ -853,6 +853,28 @@ class EnumerateIterType(object):
 
 EnumerateIterKind = Kind(EnumerateIterType)
 
+
+class ConstString(object):
+    fields = 'text'
+
+    def __init__(self, text):
+        self.text = text
+
+    def __repr__(self):
+        return 'conststring'
+
+    def coerce(self, other):
+        if isinstance(other, ConstString) and self.text == other.text:
+            return 0
+
+    def llvm_as_value(self):
+        return lc.Type.pointer(lc.Type.int(8))
+
+    def llvm_const(self, value):
+        return lc.Constant.stringz(self.text)
+
+ConstStringKind = Kind(ConstString)
+
 void = Type(BuiltinObject('void'))
 
 boolean = Type(Boolean())
@@ -936,8 +958,10 @@ def enumerate_type(inner):
 def enumerate_iter_type(state):
     return Type(EnumerateIterType(state))
 
-intp = {4: int32, 8: int64}[tuple.__itemsize__]
+def const_string_type(txt):
+    return Type(ConstString(txt))
 
+intp = {4: int32, 8: int64}[tuple.__itemsize__]
 
 
 #------------------------------------------------------------------------------

@@ -9,11 +9,12 @@ class Function(object):
     
     def __init__(self, funcobj, args, return_type):
         self.funcobj = funcobj
-        self.args = tuple(x for x in args)
+        self.args = None if args is None else tuple(x for x in args)
         self.return_type = return_type
-        self.is_parametric = (callable(return_type) or
-                                any(isinstance(a, types.Kind) or callable(a)
-                                    for a in args))
+        self.is_parametric = (args is not None and
+                              (callable(return_type) or
+                                    any(isinstance(a, types.Kind) or callable(a)
+                                        for a in args)))
 
     def __hash__(self):
         return hash((self.funcobj, self.args))
@@ -22,9 +23,12 @@ class Function(object):
         return (self.funcobj is other.funcobj and self.args == other.args)
 
     def __repr__(self):
-        return '%s :: (%s) -> %s' % (self.funcobj,
-                               ', '.join(str(a) for a in self.args),
-                               self.return_type)
+        if self.args is None:
+            return '%s :: (...) -> %s' % (self.funcobj, self.return_type)
+        else:
+            return '%s :: (%s) -> %s' % (self.funcobj,
+                                         ', '.join(str(a) for a in self.args),
+                                         self.return_type)
 
 def _least_demontion(demontables):
     return sorted((sum(filter(lambda x: x < 0, pts)), ver)
@@ -50,6 +54,8 @@ class FunctionLibrary(object):
         if versions is None:
             versions = self.concrete[func]
         for ver in versions:
+            if ver.args is None:
+                return ver
             if len(ver.args) == len(args):
                 for a, b in zip(ver.args, args):
                     if a != b:
@@ -152,6 +158,9 @@ class FunctionLibrary(object):
 
 
     def _match_concrete_args(self, func, actual_params, formal_params):
+        if formal_params is None: # varargs
+            return [0] * len(actual_params)
+
         # num of args must match
         if len(actual_params) != len(formal_params):
             return

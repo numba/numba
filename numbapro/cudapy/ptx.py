@@ -5,6 +5,7 @@ import operator
 import llvm.core as lc
 from numbapro.npm import types, macro, symbolic
 from numbapro.cudadrv import nvvm
+from . import nvvmutils
 
 class Stub(object):
     '''A stub object to represent special objects which is meaningless
@@ -137,21 +138,6 @@ class syncthreads(Stub):
 #-------------------------------------------------------------------------------
 # generic array
 
-def _insert_addrspace_conv(lmod, elemtype, addrspace):
-    addrspacename = {
-        nvvm.ADDRSPACE_SHARED: 'shared',
-        nvvm.ADDRSPACE_LOCAL: 'local',
-    }[addrspace]
-    tyname = str(elemtype)
-    tyname = {'float': 'f32', 'double': 'f64'}.get(tyname, tyname)
-    s2g_name_fmt = 'llvm.nvvm.ptr.' + addrspacename + '.to.gen.p0%s.p%d%s'
-    s2g_name = s2g_name_fmt % (tyname, nvvm.ADDRSPACE_SHARED, tyname)
-    elem_ptr_ty = lc.Type.pointer(elemtype)
-    elem_ptr_ty_addrspace = lc.Type.pointer(elemtype, addrspace)
-    s2g_fnty = lc.Type.function(elem_ptr_ty,
-                                [elem_ptr_ty_addrspace])
-    return lmod.get_or_insert_function(s2g_fnty, s2g_name)
-
 
 def _generic_array(args, symbol_name, addrspace, can_dynsized=False):
     if len(args) != 2:
@@ -193,7 +179,8 @@ def _generic_array(args, symbol_name, addrspace, can_dynsized=False):
 
         mem_elem_ptr_ty_addrspace = lc.Type.pointer(mem_elemtype, addrspace)
 
-        to_generic = _insert_addrspace_conv(lmod, mem_elemtype, addrspace)
+        to_generic = nvvmutils.insert_addrspace_conv(lmod, mem_elemtype,
+                                                     addrspace)
 
         data = builder.call(to_generic,
                         [builder.bitcast(mem, mem_elem_ptr_ty_addrspace)])

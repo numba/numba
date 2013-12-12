@@ -89,6 +89,8 @@ BYTECODES = [
     ('SLICE+3', 0),
     ('RAISE_VARARGS', 2),
     ('BUILD_SLICE', 2),
+    ('PRINT_ITEM', 0),
+    ('PRINT_NEWLINE', 0),
 ] + BYTECODE_VERSION_SPECIFIC
 
 
