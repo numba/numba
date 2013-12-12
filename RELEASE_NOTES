@@ -1,3 +1,13 @@
+Version (0.13)
+==============
+* Add print statement for strings and scalar numeric types for debugging on GPU
+* Add local memory array allocation on GPU
+* Add debug mode for GPU
+* Allow raising exception classes on GPU
+* Update CUDA toolkit libraries
+* Fix boolean mapping
+
+
 Version (0.12.7)
 ================
 * Fix major bug that mistreats py2 division as inplace floor-division for real numbers.
