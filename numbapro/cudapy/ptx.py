@@ -297,7 +297,6 @@ def const_array_like(args):
     impl.codegen = True
     impl.return_type = types.arraytype(dtype, ary.ndim, 'A')
     return impl
-    #return _generic_array(args, 'cmem', nvvm.ADDRSPACE_CONSTANT)
 
 
 class const(Stub):
