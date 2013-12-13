@@ -61,6 +61,8 @@ def guvectorize(fnsigs, gusig, backend='ast', target='cpu'):
 
     Please see `NumPy docs <http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html#details-of-signature>`_
     for details of gufunc signature.
+
+    Refer to http://docs.continuum.io/numbapro/quickstart.html for usage
     '''
     def _guvectorize(fn):
         vect = GUVectorize(fn, gusig, backend=backend, target=target)

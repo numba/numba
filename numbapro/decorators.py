@@ -9,6 +9,8 @@ def autojit(*args, **kwds):
     NumbaPro adds "gpu" target to ``numba.autojit`` to target CUDA GPUs.
     
     Please see docs for ``numbapro.cuda.autojit`` for details.
+
+    Refer to http://docs.continuum.io/numbapro/quickstart.html for usage
     '''
     target = kwds.get('target')
     if target == 'gpu':
@@ -41,6 +43,8 @@ def jit(*args, **kwds):
     
     Please see docs for ``numbapro.cuda.jit`` for details about additional usage
     for the GPU target.
+
+    Refer to http://docs.continuum.io/numbapro/quickstart.html for usage
     '''
     target = kwds.get('target')
     if target == 'gpu':
