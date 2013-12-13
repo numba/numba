@@ -1,7 +1,7 @@
 Version (0.13)
 ==============
 * Add print statement for strings and scalar numeric types for debugging on GPU
-* Add local memory array allocation on GPU
+* Add constant and local memory array allocation on GPU
 * Add debug mode for GPU
 * Allow raising exception classes on GPU
 * Update CUDA toolkit libraries
