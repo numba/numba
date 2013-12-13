@@ -1,7 +1,9 @@
 from __future__ import absolute_import, print_function
+import numpy
 from .errors import error_context
 from . import types, macro
 from .symbolic import Inst
+
 
 class Infer(object):
     def __init__(self, func, blocks, funclib, args, return_type=None):
@@ -169,6 +171,8 @@ class Infer(object):
             return ty
         elif ty is types.macro_type:
             return self.expand_macro(inst)
+        elif isinstance(ty.desc, types.ConstArray):
+            return ty
         else:
             assert False, 'XXX: inline global value: %s' % value
 
@@ -218,6 +222,8 @@ class Infer(object):
             return types.macro_type
         elif isinstance(value, str):
             return types.const_string_type(value)
+        elif isinstance(value, numpy.ndarray):
+            return types.const_array_type(value)
         elif getattr(value, '_npm_context_'):
             return types.user_function_type
     

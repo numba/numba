@@ -855,7 +855,7 @@ EnumerateIterKind = Kind(EnumerateIterType)
 
 
 class ConstString(object):
-    fields = 'text'
+    fields = 'text',
 
     def __init__(self, text):
         self.text = text
@@ -874,6 +874,22 @@ class ConstString(object):
         return lc.Constant.stringz(self.text)
 
 ConstStringKind = Kind(ConstString)
+
+class ConstArray(object):
+    fields = 'array'
+
+    def __init__(self, array):
+        self.array = array
+
+    def __repr__(self):
+        return 'constarray'
+
+    def coerce(self, other):
+        if (isinstance(other, ConstArray) and
+            self.array.shape == other.array.shape and
+            self.array.dtype == other.array.dtype):
+            return 0
+
 
 void = Type(BuiltinObject('void'))
 
@@ -896,7 +912,7 @@ complex64 = Type(Complex(64))
 complex128 = Type(Complex(128))
 
 
-DTYPE_MAP = {
+_DTYPE_MAP = {
     numpy.int8: int8,
     numpy.uint8: uint8,
 
@@ -915,6 +931,8 @@ DTYPE_MAP = {
     numpy.complex64: complex64,
     numpy.complex128: complex128,
 }
+
+DTYPE_MAP = dict((numpy.dtype(k), v) for k, v in _DTYPE_MAP.items())
 
 NUMBA_TYPE_MAP = {
     numba.int8: int8,
@@ -960,6 +978,9 @@ def enumerate_iter_type(state):
 
 def const_string_type(txt):
     return Type(ConstString(txt))
+
+def const_array_type(ary):
+    return Type(ConstArray(ary))
 
 intp = {4: int32, 8: int64}[tuple.__itemsize__]
 

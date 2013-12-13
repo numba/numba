@@ -289,6 +289,8 @@ class CodeGen(object):
                 return imp(self.imp_context, ())
             else:
                 return  # do nothing
+        elif isinstance(inst.type.desc, types.ConstArray):
+            return      # do nothing
         else:
             assert False, inst.type
 

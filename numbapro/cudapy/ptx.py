@@ -2,9 +2,11 @@
 This scripts specifies all PTX special objects.
 '''
 import operator
+import numpy
 import llvm.core as lc
 from numbapro.npm import types, macro, symbolic
 from numbapro.cudadrv import nvvm
+from numbapro._utils.mviewbuf import memoryview_get_extents
 from . import nvvmutils
 
 class Stub(object):
@@ -177,13 +179,14 @@ def _generic_array(args, symbol_name, addrspace, can_dynsized=False):
             mem.linkage = lc.LINKAGE_INTERNAL
             mem.initializer = lc.Constant.undef(mem_type)
 
-        mem_elem_ptr_ty_addrspace = lc.Type.pointer(mem_elemtype, addrspace)
+        byte = lc.Type.int(8)
+        byte_ptr_as = lc.Type.pointer(byte, addrspace)
 
-        to_generic = nvvmutils.insert_addrspace_conv(lmod, mem_elemtype,
-                                                     addrspace)
+        to_generic = nvvmutils.insert_addrspace_conv(lmod, byte, addrspace)
 
-        data = builder.call(to_generic,
-                        [builder.bitcast(mem, mem_elem_ptr_ty_addrspace)])
+        rawdata = builder.call(to_generic,
+                               [builder.bitcast(mem, byte_ptr_as)])
+        data = builder.bitcast(rawdata, lc.Type.pointer(elemtype))
 
         llintp = types.intp.llvm_as_value()
         cshape = lc.Constant.array(llintp,
@@ -230,13 +233,80 @@ class shared(Stub):
 def local_array(args):
     return _generic_array(args, 'lmem', nvvm.ADDRSPACE_LOCAL)
 
+
 class local(Stub):
     '''shared namespace
     '''
-    _description_ = '<shared>'
+    _description_ = '<local>'
 
     array = macro.Macro('local.array', local_array, callable=True,
                         argnames=['shape', 'dtype'])
+
+#-------------------------------------------------------------------------------
+# const array
+
+
+def const_array_like(args):
+    [aryarg] = args
+    ary = aryarg.value
+    count = reduce(operator.mul, ary.shape)
+    dtype = types.from_dtype(numpy.dtype(ary.dtype))
+
+    def impl(context, args, argtys, retty):
+        builder = context.builder
+        lmod = builder.basic_block.function.module
+
+        addrspace = nvvm.ADDRSPACE_CONSTANT
+
+        data_t = dtype.llvm_as_value()
+
+        flat = ary.flatten(order='A')  # preserve order
+        constvals = [dtype.llvm_const(flat[i]) for i in range(flat.size)]
+        constary = lc.Constant.array(data_t, constvals)
+
+        gv = lmod.add_global_variable(constary.type, "cmem", addrspace)
+        gv.linkage = lc.LINKAGE_INTERNAL
+        gv.global_constant = True
+        gv.initializer = constary
+
+        byte = lc.Type.int(8)
+        byte_ptr_as = lc.Type.pointer(byte, addrspace)
+        to_generic = nvvmutils.insert_addrspace_conv(lmod, byte, addrspace)
+        rawdata = builder.call(to_generic, [builder.bitcast(gv, byte_ptr_as)])
+        data = builder.bitcast(rawdata, lc.Type.pointer(data_t))
+
+        llintp = types.intp.llvm_as_value()
+        cshape = lc.Constant.array(llintp,
+                                   map(types.const_intp, ary.shape))
+
+        cstrides = lc.Constant.array(llintp,
+                                     map(types.const_intp, ary.strides))
+        res = lc.Constant.struct([lc.Constant.null(data.type), cshape,
+                                  cstrides])
+        res = builder.insert_value(res, data, 0)
+        return res
+
+    if ary.flags['C_CONTIGUOUS']:
+        contig = 'C'
+    elif ary.flags['F_CONTIGUOUS']:
+        contig = 'F'
+    else:
+        raise TypeError("array must be either C/F contiguous to be used as a "
+                        "constant")
+
+    impl.codegen = True
+    impl.return_type = types.arraytype(dtype, ary.ndim, 'A')
+    return impl
+    #return _generic_array(args, 'cmem', nvvm.ADDRSPACE_CONSTANT)
+
+
+class const(Stub):
+    '''shared namespace
+    '''
+    _description_ = '<const>'
+
+    array_like = macro.Macro('const.array_like', const_array_like,
+                             callable=True, argnames=['ary'])
 
 #-------------------------------------------------------------------------------
 # atomic
@@ -261,5 +331,6 @@ grid
 syncthreads
 shared
 local
+const
 atomic
 '''.split()

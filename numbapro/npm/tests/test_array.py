@@ -45,6 +45,10 @@ def saxpy(a, x, y, out):
     for i in range(out.shape[0]):
         out[i] = a * x[i] + y[i]
 
+def copy2d(inp, out):
+    for i in range(out.shape[0]):
+        for j in range(out.shape[1]):
+            out[i, j] = inp[i, j]
 
 #------------------------------------------------------------------------------
 # getitem
@@ -269,6 +273,24 @@ def test_getitem_outofbound_overflow():
     else:
         raise AssertionError('expecting exception')
 
+@testcase
+def test_copy2d_c_to_f():
+    compiled = compile(copy2d, void, [arraytype(int32, 2, 'C'),
+                                      arraytype(int32, 2, 'F')])
+    inp= np.arange(100, dtype=np.int32).reshape(10, 10)
+    out = np.empty_like(inp, order='F')
+    compiled(inp, out)
+    assertTrue(np.all(inp == out))
+
+
+@testcase
+def test_copy2d_f_to_c():
+    compiled = compile(copy2d, void, [arraytype(int32, 2, 'F'),
+                                      arraytype(int32, 2, 'C')])
+    inp = np.asfortranarray(np.arange(100, dtype=np.int32).reshape(10, 10))
+    out = np.empty_like(inp, order='C')
+    compiled(inp, out)
+    assertTrue(np.all(inp == out))
 
 
 if __name__ == '__main__':
