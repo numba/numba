@@ -3,6 +3,7 @@ import re
 import os
 import sys
 import ctypes
+import platform
 from numbapro.findlib import find_lib, find_file
 
 if sys.platform == 'win32':
@@ -59,7 +60,8 @@ def test(_platform=None):
                 print('\tok')
             except OSError, e:
                 print('\tERROR: failed to open %s:\n%s' % (lib, e))
-                failed = True
+                # NOTE: ignore failure of dlopen on cuBlas on OSX 10.5
+                failed = True if not _if_osx_10_5() else False
 
     archs = 'compute_20', 'compute_30', 'compute_35'
     for arch in archs:
@@ -72,3 +74,9 @@ def test(_platform=None):
             failed = True
     return not failed
 
+def _if_osx_10_5():
+    if sys.platform == 'darwin':
+        vers = tuple(map(int, platform.mac_ver()[0].split('.')))
+        if vers < (10, 6):
+            return True
+    return False
