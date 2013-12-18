@@ -1,5 +1,6 @@
 from . import fnlib, imlib, types
 
+
 def extends(libs, exts):
     funclib, implib = libs
     for extcls in exts:
@@ -9,6 +10,7 @@ def extends(libs, exts):
     return funclib, implib
 
 neither_function_or_method = Exception('neither function or method')
+
 
 class Extension(object):
     def __init__(self, ext):

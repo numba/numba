@@ -1,8 +1,10 @@
 from contextlib import contextmanager
 import sys
 
+
 class CompilerError(Exception):
     pass
+
 
 @contextmanager
 def error_context(lineno=-1, during=None):

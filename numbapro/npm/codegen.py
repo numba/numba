@@ -6,6 +6,7 @@ from . import types, macro, cgutils
 codegen_context = collections.namedtuple('codegen_context',
                                          ['imp', 'builder', 'raises', 'lineno',
                                           'flags', 'cast'])
+
 exception_info = collections.namedtuple('exception_info',
                                         ['exc', 'line'])
 
@@ -14,10 +15,12 @@ SUPPORTED_FLAGS = frozenset(['overflow',
                              'boundcheck',
                              'wraparound',])
 
+
 def _check_supported_flags(flags):
     for f in flags:
         if f not in SUPPORTED_FLAGS:
             raise NameError('unsupported compiler flag: %s' % f)
+
 
 def _expand_flags(flags):
     if 'no-exceptions' in flags:
@@ -25,6 +28,7 @@ def _expand_flags(flags):
         flags.discard('zerodivision')
         flags.discard('boundcheck')
         flags.discard('no-exceptions')
+
 
 class Flags(object):
     def __init__(self, flags):
@@ -38,6 +42,7 @@ class Flags(object):
             raise AttributeError(k)
         else:
             return k in self.flags
+
 
 class CodeGen(object):
     def __init__(self, name, func, blocks, args, return_type, implib, flags=()):

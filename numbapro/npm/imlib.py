@@ -2,6 +2,7 @@ import operator
 import llvm.core as lc
 from . import typesets, types, cgutils
 
+
 class ImpLib(object):
     '''There is 1-to-1 correspondance between function declaration
     and function implementator.
@@ -38,6 +39,7 @@ class ImpLib(object):
     def populate_builtin(self):
         populate_builtin_impl(self)
 
+
 class Imp(object):
     __slots__ = 'impl', 'funcobj', 'args', 'return_type', 'is_parametric'
 
@@ -60,6 +62,7 @@ class Imp(object):
         return '<Impl %s %s -> %s >' % (self.funcobj, self.args,
                                         self.return_type)
 
+
 def arith_int_overflow(context, sa, sb, ss):
     '''Arithmetic integer overflow when the signbit of the two operands are
     the same but the signbit of the result mismatches the signbit of the 
@@ -78,11 +81,13 @@ def arith_int_overflow(context, sa, sb, ss):
     with cgutils.if_then(builder, overflow):
         context.raises(OverflowError, "integer operation overflow")
 
+
 # binary add
 
 def imp_add_unsigned(context, args):
     a, b = args
     return context.builder.add(a, b)
+
 
 def imp_add_signed(context, args):
     a, b = args
@@ -92,9 +97,11 @@ def imp_add_signed(context, args):
         arith_int_overflow(context, sb(a), sb(b), sb(sum))
     return sum
 
+
 def imp_add_float(context, args):
     a, b = args
     return context.builder.fadd(a, b)
+
 
 def imp_add_complex(dtype):
     def imp(context, args):
@@ -111,9 +118,11 @@ def imp_add_complex(dtype):
 
 # binary sub
 
+
 def imp_sub_unsigned(context, args):
     a, b = args
     return context.builder.sub(a, b)
+
 
 def imp_sub_signed(context, args):
     a, b = args
@@ -124,9 +133,11 @@ def imp_sub_signed(context, args):
                            sb(diff))
     return diff
 
+
 def imp_sub_float(context, args):
     a, b = args
     return context.builder.fsub(a, b)
+
 
 def imp_sub_complex(dtype):
     def imp(context, args):
@@ -143,9 +154,11 @@ def imp_sub_complex(dtype):
 
 # binary mul
 
+
 def imp_mul_unsigned(context, args):
     a, b = args
     return context.builder.mul(a, b)
+
 
 def imp_mul_signed(context, args):
     a, b = args
@@ -162,9 +175,11 @@ def imp_mul_signed(context, args):
             context.raises(OverflowError, "signed multiply overflow")
     return res
 
+
 def imp_mul_float(context, args):
     a, b = args
     return context.builder.fmul(a, b)
+
 
 def imp_mul_complex(dtype):
     '''
@@ -189,6 +204,7 @@ def imp_mul_complex(dtype):
 
 # binary floordiv
 
+
 def zero_division_check(context, divisor):
     if context.flags.zerodivision:
         builder = context.builder
@@ -200,15 +216,18 @@ def zero_division_check(context, divisor):
         with cgutils.if_then(builder, is_zero):
             context.raises(ZeroDivisionError, "divide by zero")
 
+
 def imp_floordiv_signed(context, args):
     a, b = args
     zero_division_check(context, b)
     return context.builder.sdiv(a, b)
 
+
 def imp_floordiv_unsigned(context, args):
     a, b = args
     zero_division_check(context, b)
     return context.builder.udiv(a, b)
+
 
 def imp_floordiv_float(intty):
     def imp(context, args):
@@ -220,18 +239,20 @@ def imp_floordiv_float(intty):
 
 # binary truediv
 
+
 def imp_truediv_float(context, args):
     a, b = args
     zero_division_check(context, b)
     return context.builder.fdiv(a, b)
 
+
 def imp_truediv_complex(dtype):
-    '''
+    """
     compute recipocal of a / b = a * (1 / b)
     
     1 / b = 1 / (x + i y) = x / |b| - i y /|b| 
     |b| = x * x + y * y
-    '''
+    """
     def imp(context, args):
         a, b = args
         x, y = dtype.llvm_unpack(context.builder, b)
@@ -250,15 +271,18 @@ def imp_truediv_complex(dtype):
 
 # binary mod
 
+
 def imp_mod_signed(context, args):
     a, b = args
     zero_division_check(context, b)
     return context.builder.srem(a, b)
 
+
 def imp_mod_unsigned(context, args):
     a, b = args
     zero_division_check(context, b)
     return context.builder.urem(a, b)
+
 
 def imp_mod_float(context, args):
     a, b = args
@@ -266,6 +290,7 @@ def imp_mod_float(context, args):
     return context.builder.frem(a, b)
 
 # binary lshift
+
 
 def out_of_range_shift(context, rhs):
     if context.flags.overflow:
@@ -276,6 +301,7 @@ def out_of_range_shift(context, rhs):
         with cgutils.if_then(builder, outofrange):
             context.raises(OverflowError, "shift out-of-range")
         
+
 def imp_lshift_integer(context, args):
     a, b = args
     out_of_range_shift(context, b)
@@ -283,10 +309,12 @@ def imp_lshift_integer(context, args):
 
 # binary rshift
 
+
 def imp_rshift_signed(context, args):
     a, b = args
     out_of_range_shift(context, b)
     return context.builder.ashr(a, b)
+
 
 def imp_rshift_unsigned(context, args):
     a, b = args
@@ -295,11 +323,13 @@ def imp_rshift_unsigned(context, args):
 
 # binary and
 
+
 def imp_and_integer(context, args):
     a, b = args
     return context.builder.and_(a, b)
 
 # binary or
+
 
 def imp_or_integer(context, args):
     a, b = args
@@ -307,11 +337,13 @@ def imp_or_integer(context, args):
 
 # binary xor
 
+
 def imp_xor_integer(context, args):
     a, b = args
     return context.builder.xor(a, b)
 
 # unary negate
+
 
 def imp_neg_signed(ty):
     def imp(context, args):
@@ -320,12 +352,14 @@ def imp_neg_signed(ty):
         return imp_sub_signed(context, (zero, x))
     return imp
 
+
 def imp_neg_float(ty):
     def imp(context, args):
         x, = args
         zero = ty.llvm_const(0)
         return imp_sub_float(context, (zero, x))
     return imp
+
 
 def imp_neg_complex(ty):
     def imp(context, args):
@@ -336,6 +370,7 @@ def imp_neg_complex(ty):
 
 # unary invert
 
+
 def imp_invert_integer(ty):
     def imp(context, args):
         x, = args
@@ -345,53 +380,64 @@ def imp_invert_integer(ty):
 
 # bool eq
 
+
 def imp_eq_signed(context, args):
     a, b = args
     return context.builder.icmp(lc.ICMP_EQ, a, b)
 
 # bool comparisions
 
+
+SIGNED_CMP = {
+    operator.gt: lc.ICMP_SGT,
+    operator.lt: lc.ICMP_SLT,
+    operator.ge: lc.ICMP_SGE,
+    operator.le: lc.ICMP_SLE,
+    operator.eq: lc.ICMP_EQ,
+    operator.ne: lc.ICMP_NE,
+}
+
+
 def imp_cmp_signed(cmp, ty):
-    CMP = {
-        operator.gt: lc.ICMP_SGT,
-        operator.lt: lc.ICMP_SLT,
-        operator.ge: lc.ICMP_SGE,
-        operator.le: lc.ICMP_SLE,
-        operator.eq: lc.ICMP_EQ,
-        operator.ne: lc.ICMP_NE,
-    }
+    
     def imp(context, args):
         a, b = args
-        return context.builder.icmp(CMP[cmp], a, b)
+        return context.builder.icmp(SIGNED_CMP[cmp], a, b)
     return imp
+
+UNSIGNED_CMP = {
+    operator.gt: lc.ICMP_UGT,
+    operator.lt: lc.ICMP_ULT,
+    operator.ge: lc.ICMP_UGE,
+    operator.le: lc.ICMP_ULE,
+    operator.eq: lc.ICMP_EQ,
+    operator.ne: lc.ICMP_NE,
+}
+
 
 def imp_cmp_unsigned(cmp, ty):
-    CMP = {
-        operator.gt: lc.ICMP_UGT,
-        operator.lt: lc.ICMP_ULT,
-        operator.ge: lc.ICMP_UGE,
-        operator.le: lc.ICMP_ULE,
-        operator.eq: lc.ICMP_EQ,
-        operator.ne: lc.ICMP_NE,
-    }
     def imp(context, args):
         a, b = args
-        return context.builder.icmp(CMP[cmp], a, b)
+        return context.builder.icmp(UNSIGNED_CMP[cmp], a, b)
     return imp
 
+
+FLOAT_CMP = {
+    operator.gt: lc.FCMP_OGT,
+    operator.lt: lc.FCMP_OLT,
+    operator.ge: lc.FCMP_OGE,
+    operator.le: lc.FCMP_OLE,
+    operator.eq: lc.FCMP_OEQ,
+    operator.ne: lc.FCMP_UNE,
+}
+
+
 def imp_cmp_float(cmp, ty):
-    CMP = {
-        operator.gt: lc.FCMP_OGT,
-        operator.lt: lc.FCMP_OLT,
-        operator.ge: lc.FCMP_OGE,
-        operator.le: lc.FCMP_OLE,
-        operator.eq: lc.FCMP_OEQ,
-        operator.ne: lc.FCMP_UNE,
-    }
     def imp(context, args):
         a, b = args
-        return context.builder.fcmp(CMP[cmp], a, b)
+        return context.builder.fcmp(FLOAT_CMP[cmp], a, b)
     return imp
+
 
 def imp_cmp_complex(cmp, ty):
     assert cmp in (operator.ne, operator.eq), "no ordering for complex"
@@ -407,6 +453,7 @@ def imp_cmp_complex(cmp, ty):
 
 # complex attributes
 
+
 def imp_complex_real(ty):
     def imp(context, args):
         value, = args
@@ -414,12 +461,14 @@ def imp_complex_real(ty):
         return real
     return imp
 
+
 def imp_complex_imag(ty):
     def imp(context, args):
         value, = args
         real, imag = ty.llvm_unpack(context.builder, value)
         return imag
     return imp
+
 
 def complex_attributes(complex_type):
     imps = []
@@ -431,6 +480,7 @@ def complex_attributes(complex_type):
                      return_type=complex_type.desc.element)]
     return imps
 
+
 def imp_complex_ctor_1(ty):
     def imp(context, args):
         real, = args
@@ -438,11 +488,13 @@ def imp_complex_ctor_1(ty):
         return ty.desc.llvm_pack(context.builder, real, imag)
     return imp
 
+
 def imp_complex_ctor_2(ty):
     def imp(context, args):
         real, imag = args
         return ty.desc.llvm_pack(context.builder, real, imag)
     return imp
+
 
 def complex_ctor(complex_type):
     imp1 = Imp(imp_complex_ctor_1(complex_type),
@@ -457,17 +509,20 @@ def complex_ctor(complex_type):
 
 # casts
 
+
 def imp_cast_int(fromty):
     def imp(context, args):
         x, = args
         return fromty.llvm_cast(context.builder, x, types.intp)
     return imp
 
+
 def imp_cast_float(fromty):
     def imp(context, args):
         x, = args
         return fromty.llvm_cast(context.builder, x, types.float64)
     return imp
+
 
 # fixedarray getitem
 
@@ -500,6 +555,7 @@ def fixedarray_getitem(context, args, argtys, retty):
 
     return phi
 
+
 # abs
 
 def imp_abs_integer(ty):
@@ -513,6 +569,7 @@ def imp_abs_integer(ty):
         return context.builder.select(isneg, absval, x)
     return imp
 
+
 def imp_abs_float(ty):
     def imp(context, args):
         x, = args
@@ -521,6 +578,7 @@ def imp_abs_float(ty):
         absval = imp_sub_float(context, (zero, x))
         return context.builder.select(isneg, absval, x)
     return imp
+
 
 # min
 
@@ -535,6 +593,7 @@ def imp_min_integer(ty):
         return sel
     return imp
 
+
 def imp_min_float(ty):
     cmpfunc  = imp_cmp_float
     cmp = cmpfunc(operator.lt, ty)
@@ -545,6 +604,7 @@ def imp_min_float(ty):
             sel = context.builder.select(pred, sel, val)
         return sel
     return imp
+
 
 # max
 
@@ -559,6 +619,7 @@ def imp_max_integer(ty):
         return sel
     return imp
 
+
 def imp_max_float(ty):
     cmpfunc  = imp_cmp_float
     cmp = cmpfunc(operator.gt, ty)
@@ -570,6 +631,7 @@ def imp_max_float(ty):
         return sel
     return imp
 
+
 #----------------------------------------------------------------------------
 # utils
 
@@ -579,20 +641,25 @@ def bool_op_imp(funcobj, imp, typeset):
                 return_type=types.boolean)
             for ty in typeset]
 
+
 def binary_op_imp(funcobj, imp, typeset):
     return [Imp(imp, funcobj, args=(ty, ty), return_type=ty)
             for ty in typeset]
+
 
 def unary_op_imp(funcobj, imp, typeset):
     return [Imp(imp(ty), funcobj, args=(ty,), return_type=ty)
             for ty in typeset]
 
+
 def floordiv_imp(funcobj, imp, ty, ret):
     return [Imp(imp(ret), funcobj, args=(ty, ty), return_type=ret)]
+
 
 def casting_imp(funcobj, imp, retty, typeset):
     return [Imp(imp(ty), funcobj, args=(ty,), return_type=retty)
             for ty in typeset]
+
 
 def minmax_imp(funcobj, imp, typeset, count):
     return [Imp(imp(ty), funcobj, args=(ty,) * count, return_type=ty)
@@ -741,6 +808,7 @@ builtins += minmax_imp(max, imp_max_integer, typesets.integer_set, 2)
 builtins += minmax_imp(max, imp_max_integer, typesets.integer_set, 3)
 builtins += minmax_imp(max, imp_max_float, typesets.float_set, 2)
 builtins += minmax_imp(max, imp_max_float, typesets.float_set, 3)
+
 
 # --------------------------
 

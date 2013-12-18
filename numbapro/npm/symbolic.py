@@ -552,6 +552,7 @@ class SymbolicExecution(object):
     def op_PRINT_NEWLINE(self, inst):
         self.call(intrinsics.print_newline, ())
 
+
 #---------------------------------------------------------------------------
 # Passes
 
@@ -583,6 +584,7 @@ def find_dominators(blocks):
                 changed = True
 
     return doms
+
 
 class RenameDefinition(object):
     '''Rename definition so that each assignment is unique when it is defined
@@ -637,6 +639,7 @@ class RenameDefinition(object):
                 return defmap[name], block
         return None, None
 
+
 #---------------------------------------------------------------------------
 # Internals
 
@@ -682,6 +685,7 @@ class BlockMap(object):
     def last(self):
         return self.sorted()[-1][1]
 
+
 class Incomings(object):
     def __init__(self):
         self.incomings = {}
@@ -705,6 +709,7 @@ class Incomings(object):
 
     def __setitem__(self, k, v):
         self.incomings[k] = v
+
 
 class Block(object):
     def __init__(self, offset):
@@ -746,6 +751,7 @@ class Block(object):
 
     def __repr__(self):
         return '<block %d>' % self.offset
+
 
 class Inst(object):
     def __init__(self, opcode, lineno, **kwargs):
@@ -828,9 +834,11 @@ class Inst(object):
     def __contains__(self, attrname):
         return attrname in self.attrs
 
+
 def _indent(t, w, c=' '):
     ind = c * w
     return '%s%s' % (ind, t)
+
 
 def const_value_from_inst(x):
     if x.opcode == 'alias':

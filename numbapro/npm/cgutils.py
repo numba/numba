@@ -1,6 +1,7 @@
 from contextlib import contextmanager
 from llvm import core as lc
 
+
 @contextmanager
 def goto_entry_block(builder):
     old = builder.basic_block
@@ -17,8 +18,10 @@ def goto_block(builder, block):
     yield
     builder.position_at_end(old)
 
+
 def append_block(builder, name=''):
     return builder.basic_block.function.append_basic_block(name)
+
 
 @contextmanager
 def if_then(builder, cond):
@@ -29,20 +32,23 @@ def if_then(builder, cond):
         yield orelse
     builder.position_at_end(orelse)
 
+
 def make_array(builder, elemty, values):
-    '''Make a static array out of the given values.
-    '''
+    """Make a static array out of the given values.
+    """
     n = len(values)
     out = lc.Constant.undef(lc.Type.array(elemty, n))
     for i, v in enumerate(values):
         out = builder.insert_value(out, v, i)
     return out
 
+
 def explode_array(builder, ary):
-    '''Extract all elements of a static array into a list of values.
-    '''
+    """Extract all elements of a static array into a list of values.
+    """
     n = ary.type.count
     return [builder.extract_value(ary, i) for i in range(n)]
+
 
 def get_function(builder, name, return_type, args):
     mod = builder.basic_block.function.module

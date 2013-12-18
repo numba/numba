@@ -1,23 +1,28 @@
 import llvm.core as lc
 from . import types, cgutils
 
+
 def match_range_iter(args):
     it, = args
     if it == types.range_iter_type:
         return it
 
+
 def enumerate_return(args):
     inner, = args
     return types.enumerate_type(inner.desc.iterator())
+
 
 def enumerate_iter_return(args):
     it, = args
     return types.tupletype(types.intp,
                            it.desc.state.desc.inner.desc.iterate_data())
 
+
 def iter_enumerate_return(args):
     enum, = args
     return types.enumerate_iter_type(enum)
+
 
 def make_range_obj(context, start, stop, step):
     rangetype = types.range_type.llvm_as_value()
@@ -27,6 +32,7 @@ def make_range_obj(context, start, stop, step):
     rangeobj = context.builder.insert_value(rangeobj, stop, 1)
     rangeobj = context.builder.insert_value(rangeobj, step, 2)
     return rangeobj
+
 
 class Range1(object):
     function = range, (types.intp,), types.range_type
@@ -38,6 +44,7 @@ class Range1(object):
         step = types.intp.llvm_const(1)
         return make_range_obj(context, start, stop, step)
 
+
 class Range2(object):
     function = range, (types.intp, types.intp), types.range_type
 
@@ -47,6 +54,7 @@ class Range2(object):
         step = types.intp.llvm_const(1)
         return make_range_obj(context, start, stop, step)
 
+
 class Range3(object):
     function = range, (types.intp, types.intp, types.intp), types.range_type
 
@@ -55,14 +63,18 @@ class Range3(object):
         start, stop, step = args
         return make_range_obj(context, start, stop, step)
 
+
 class XRange1(Range1):
     function = xrange, (types.intp,), types.range_type
+
 
 class XRange2(Range2):
     function = xrange, (types.intp, types.intp), types.range_type
 
+
 class XRange3(Range3):
     function = xrange, (types.intp, types.intp, types.intp), types.range_type
+
 
 class IterRange(object):
     function = iter, (types.range_type,), types.range_iter_type
@@ -75,6 +87,7 @@ class IterRange(object):
             ptr = context.builder.alloca(types.range_iter_type.llvm_as_value().pointee)
         context.builder.store(obj, ptr)
         return ptr
+
 
 class RangeIterValid(object):
     function = ('itervalid',
@@ -98,6 +111,7 @@ class RangeIterValid(object):
         
         return builder.select(positive, posok, negok)
 
+
 class RangeIterNext(object):
     function = ('iternext',
                 (match_range_iter,),
@@ -114,6 +128,7 @@ class RangeIterNext(object):
         next = builder.add(start, step)
         builder.store(next, startptr)
         return start
+
 
 class Enumerate(object):
     function = enumerate, (types.IteratorFactoryKind,), enumerate_return
@@ -133,6 +148,7 @@ class Enumerate(object):
         builder.store(iterfact, iterptr)
         return enumobj
 
+
 class IterEnumerate(object):
     function = iter, (types.EnumerateKind,), iter_enumerate_return
 
@@ -144,6 +160,7 @@ class IterEnumerate(object):
             iterptr = builder.alloca(iterval.type)
         builder.store(iterval, iterptr)
         return iterptr
+
 
 class EnumerateIterValid(object):
     function = 'itervalid', (types.EnumerateIterKind,), types.boolean
@@ -157,6 +174,7 @@ class EnumerateIterValid(object):
         innervalid = context.imp.lookup('itervalid', (inneritertype,))
         valid = innervalid(context, (inneriter,))
         return valid
+
 
 class EnumerateIterNext(object):
     function = 'iternext', (types.EnumerateIterKind,), enumerate_iter_return

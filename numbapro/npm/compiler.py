@@ -13,6 +13,7 @@ DEFAULT_FLAGS = 'overflow', 'zerodivision', 'boundcheck', 'wraparound'
 libllrt = llrt.LLRT()
 libllrt.install_symbols()
 
+
 def get_builtin_context():
     funclib = fnlib.get_builtin_function_library()
     implib = imlib.ImpLib(funclib)
@@ -22,6 +23,7 @@ def get_builtin_context():
     extending.extends(libs, iterlib.extensions)
     extending.extends(libs, arylib.extensions)
     return libs
+
 
 def get_func_name(func):
     try:
@@ -33,6 +35,7 @@ def get_func_name(func):
             return str(func)
 
 global_builtin_libs = get_builtin_context()
+
 
 def compile_common(func, retty, argtys, libs=global_builtin_libs, flags=DEFAULT_FLAGS):
     funclib, implib = libs
@@ -59,6 +62,7 @@ def compile_common(func, retty, argtys, libs=global_builtin_libs, flags=DEFAULT_
 
     return lmod, lfunc, excs
 
+
 def compile(func, retty, argtys, libs=global_builtin_libs, flags=DEFAULT_FLAGS):
     with profile((func, tuple(argtys))):
         lmod, lfunc, excs = compile_common(func, retty, argtys, libs, flags)
@@ -78,6 +82,7 @@ def compile(func, retty, argtys, libs=global_builtin_libs, flags=DEFAULT_FLAGS):
 PROFILE_STATS = defaultdict(list)
 NPM_PROFILING = int(os.environ.get('NPM_PROFILING', 0))
 
+
 @contextmanager
 def profile(id):
     '''compiler profiler
@@ -89,6 +94,7 @@ def profile(id):
         PROFILE_STATS[id].append(te - ts)
     else:
         yield
+
 
 def print_stats():
     '''print profiling stats for compiler
@@ -111,10 +117,12 @@ def print_stats():
 #----------------------------------------------------------------------------
 # Internals
 
+
 def symbolic_interpret(func):
     se = symbolic.SymbolicExecution(func)
     se.interpret()
     return se.blocks
+
 
 def type_infer(func, blocks, return_type, args, funclib):
     infer = typing.Infer(func        = func,
@@ -124,6 +132,7 @@ def type_infer(func, blocks, return_type, args, funclib):
                          funclib     = funclib)
     infer.infer()
     return infer.return_type
+
 
 def code_generation(func, blocks, return_type, args, implib, flags):
     cg = codegen.CodeGen(name        = get_func_name(func),

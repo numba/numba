@@ -3,8 +3,8 @@ import functools
 
 
 class SortedMap(collections.Mapping):
-    '''Immutable
-    '''
+    """Immutable
+    """
     def __init__(self, seq):
         self._values = []
         self._index = {}
@@ -21,6 +21,7 @@ class SortedMap(collections.Mapping):
 
     def __iter__(self):
         return (k for k, v in self._values)
+
 
 class SortedSet(collections.Set):
     def __init__(self, seq):

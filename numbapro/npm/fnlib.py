@@ -4,6 +4,7 @@ from .types import boolean
 from . import types
 from .typesets import (signed_set, integer_set, float_set, complex_set)
 
+
 class Function(object):
     __slots__ = 'funcobj', 'args', 'return_type', 'is_parametric'
     
@@ -30,10 +31,12 @@ class Function(object):
                                          ', '.join(str(a) for a in self.args),
                                          self.return_type)
 
+
 def _least_demontion(demontables):
     return sorted((sum(filter(lambda x: x < 0, pts)), ver)
                   for pts, ver in demontables)
-    
+
+
 class FunctionLibrary(object):
     def __init__(self):
         self.concrete = defaultdict(set)
@@ -156,7 +159,6 @@ class FunctionLibrary(object):
             msg = 'no matching definition for %s(%s)'
             raise TypeError(msg % (func, ', '.join(str(a) for a in args)))
 
-
     def _match_concrete_args(self, func, actual_params, formal_params):
         if formal_params is None: # varargs
             return [0] * len(actual_params)
@@ -180,23 +182,28 @@ class FunctionLibrary(object):
 
         return pts
 
+
 #------------------------------------------------------------------------------
 # builtin functions
 
 def binary_func_from_sets(typesets):
     return [binary_func(t) for t in typesets]
 
+
 def binary_func(ty):
     return (ty, ty), ty
 
+
 def binary_div(ty, out):
     return [((ty, ty), out)]
+
 
 def py2_divisions():
     out = []
     for ty in integer_set:
         out += binary_div(ty, ty)
     return out
+
 
 def floor_divisions():
     out = []
@@ -206,21 +213,27 @@ def floor_divisions():
     out += binary_div(types.float64, types.int64)
     return out
 
+
 def bool_func_from_sets(typesets):
     return [bool_func(t) for t in typesets]
+
 
 def bool_func(ty):
     return (ty, ty), boolean
 
+
 def unary_func_from_sets(typesets):
     return [unary_func(t) for t in typesets]
+
 
 def unary_func(ty):
     return (ty,), ty
 
+
 def complex_attr(typeset):
     return [((ty,), ty.desc.element)
             for ty in typeset]
+
 
 def complex_ctor(typeset):
     defns = []
@@ -232,12 +245,14 @@ def complex_ctor(typeset):
         defns.append(ver2)
     return defns
 
+
 def int_ctor(typeset):
     defns = []
     for ty in typeset:
         defn = ((ty,), types.intp)
         defns.append(defn)
     return defns
+
 
 def float_ctor(typeset):
     defns = []
@@ -246,9 +261,11 @@ def float_ctor(typeset):
         defns.append(defn)
     return defns
 
+
 def intparray_getitem_return(args):
     ary = args[0]
     return ary.desc.element
+
 
 def minmax_from_sets(count, typeset):
     sigs = []
@@ -259,6 +276,7 @@ def minmax_from_sets(count, typeset):
 
 #-----------------------------------------------------------------------------
 # Define Builtin Signatures
+
 
 def def_(funcobj, definitions):
     return [(funcobj, definitions)]
@@ -337,6 +355,7 @@ builtins += def_(min, minmax_from_sets(3, integer_set|float_set))
 
 builtins += def_(max, minmax_from_sets(2, integer_set|float_set))
 builtins += def_(max, minmax_from_sets(3, integer_set|float_set))
+
 
 def get_builtin_function_library(lib=None):
     '''Create or add builtin functions to a FunctionLibrary instance.

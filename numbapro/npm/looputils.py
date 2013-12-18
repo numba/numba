@@ -3,6 +3,7 @@ import llvm.core as lc
 from .types import auto_intp
 from .cgutils import append_block, goto_block
 
+
 @contextmanager
 def loop(builder, begin, end, step):
     '''
@@ -35,6 +36,7 @@ def loop(builder, begin, end, step):
 
     builder.branch(bbcond)
     builder.position_at_end(bbend)
+
 
 @contextmanager
 def loop_nest(builder, begins, ends, steps):

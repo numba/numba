@@ -14,6 +14,7 @@ ERRMSG_CHANGE_OF_SIGN = 'cast resulting in change of sign'
 ERRMSG_NEGATIVE_TO_UNSIGNED = 'casting negative value to unsigned'
 ERRMSG_NAN = 'casting NaN to integer'
 
+
 class Type(object):
     def __new__(cls, desc):
         if isinstance(desc, Type):
@@ -163,6 +164,7 @@ class Type(object):
     def __ne__(self, other):
         return not self.__eq__(other)
 
+
 class Kind(object):
     def __init__(self, desc):
         self.desc = desc
@@ -183,6 +185,7 @@ class Kind(object):
 
     def __repr__(self):
         return '<kind %s>' % self.desc.__name__
+
 
 class Boolean(object):
     fields = ()
@@ -218,6 +221,7 @@ class Boolean(object):
 
     def ctype_as_argument(self):
         return ct.c_uint8
+
 
 class Integer(object):
     fields = 'signed', 'bitwidth'
@@ -308,6 +312,7 @@ class Signed(Integer):
         '''
         all_significant = lc.Constant.all_ones(lc.Type.int(self.bitwidth - 1))
         return lc.Constant.zext(all_significant, lc.Type.int(self.bitwidth))
+
 
 class Unsigned(Integer):
     def __init__(self, bitwidth):
@@ -417,9 +422,11 @@ class c_complex_base(ct.Structure):
         self.real = real
         self.imag = imag
 
+
 class c_complex64(c_complex_base):
     _fields_ = [('real', ct.c_float),
                 ('imag', ct.c_float),]
+
 
 class c_complex128(c_complex_base):
     _fields_ = [('real', ct.c_double),
@@ -497,6 +504,7 @@ class Complex(object):
         imag = builder.extract_value(value, 1)
         return real, imag
 
+
 class Array(object):
     fields = 'element', 'ndim', 'order'
     
@@ -558,6 +566,7 @@ class Array(object):
         order = order if order is not None else self.order
         return arraytype(element=self.element, ndim=ndim, order=order)
 
+
 def make_array_ctype(ndim):
     c_intp = intp.ctype_as_argument()
     class c_array(ct.Structure):
@@ -566,7 +575,9 @@ def make_array_ctype(ndim):
                         ('strides', c_intp * ndim)]
     return c_array
 
+
 ArrayKind = Kind(Array)
+
 
 class Tuple(object):
     fields = 'elements',
@@ -608,7 +619,9 @@ class Tuple(object):
     def llvm_getitem(self, builder, tupleobj, index):
         return builder.extract_value(tupleobj, index)
 
+
 TupleKind = Kind(Tuple)
+
 
 class FixedArray(object):
     fields = 'element', 'length'
@@ -654,7 +667,9 @@ class FixedArray(object):
     def llvm_unpack(self, builder, value):
         return [builder.extract_value(value, i) for i in range(self.length)]
 
+
 FixedArrayKind = Kind(FixedArray)
+
 
 class Slice2(object):
     '''Slice type that contains start and stop only
@@ -690,6 +705,7 @@ class Slice2(object):
     def llvm_unpack(self, builder, val):
         return [builder.extract_value(val, i) for i in range(2)]
 
+
 class Slice3(object):
     '''Slice type that contains start, stop, step
     '''
@@ -724,6 +740,7 @@ class Slice3(object):
 slice2 = Type(Slice2())
 slice3 = Type(Slice3())
 
+
 class BuiltinObject(object):
     fields = 'name',
     
@@ -750,6 +767,7 @@ none_type = Type(BuiltinObject('none'))
 exception_type = Type(BuiltinObject('exception'))
 object_type = Type(BuiltinObject('object'))
 
+
 class IteratorFactory(object):
     fields = 'imp',
 
@@ -771,6 +789,7 @@ class IteratorFactory(object):
 
 IteratorFactoryKind = Kind(IteratorFactory)
 
+
 class RangeType(BuiltinObject):
     def llvm_as_value(self):
         elem = intp.llvm_as_value()
@@ -781,12 +800,14 @@ class RangeType(BuiltinObject):
 
 range_type = Type(IteratorFactory(RangeType('range')))
 
+
 class RangeIterType(BuiltinObject):
     def llvm_as_value(self):
         return lc.Type.pointer(range_type.llvm_as_value())
 
     def iterate_data(self):
         return intp
+
 
 class Iterator(object):
     fields = 'imp',
@@ -811,6 +832,7 @@ IteratorKind = Kind(Iterator)
 
 range_iter_type = Type(Iterator(RangeIterType('range-iter')))
 
+
 class EnumerateType(object):
     fields = 'inner',
 
@@ -830,6 +852,7 @@ class EnumerateType(object):
         return '<enumerate %s>' % self.inner
 
 EnumerateKind = Kind(EnumerateType)
+
 
 class EnumerateIterType(object):
     fields = 'state',
@@ -874,6 +897,7 @@ class ConstString(object):
         return lc.Constant.stringz(self.text)
 
 ConstStringKind = Kind(ConstString)
+
 
 class ConstArray(object):
     fields = 'array'
@@ -954,14 +978,18 @@ NUMBA_TYPE_MAP = {
     numba.complex128: complex128,
 }
 
+
 def from_dtype(dtype):
     return DTYPE_MAP[dtype]
+
 
 def from_numba_type(nbtype):
     return NUMBA_TYPE_MAP[nbtype]
 
+
 def arraytype(element, ndim, order):
     return Type(Array(element, ndim, order))
+
 
 def tupletype(*elements):
     elements = map(Type, elements)
@@ -970,14 +998,18 @@ def tupletype(*elements):
     else:
         return Type(Tuple(elements))
 
+
 def enumerate_type(inner):
     return Type(EnumerateType(inner))
+
 
 def enumerate_iter_type(state):
     return Type(EnumerateIterType(state))
 
+
 def const_string_type(txt):
     return Type(ConstString(txt))
+
 
 def const_array_type(ary):
     return Type(ConstArray(ary))
@@ -993,17 +1025,21 @@ def signbit(builder, intval):
     shifted = builder.lshr(intval, shamt)
     return builder.trunc(shifted, lc.Type.int(1))
 
+
 def isnan(builder, fltval):
     return builder.fcmp(lc.FCMP_UNO, fltval, fltval)
 
+
 def const_intp(x):
     return intp.llvm_const(x)
+
 
 def auto_intp(x):
     if isinstance(x, int):
         return const_intp(x)
     else:
         return x
+
 
 def sizeof(ty):
     offset = lc.Constant.gep(lc.Constant.null(lc.Type.pointer(ty)),
