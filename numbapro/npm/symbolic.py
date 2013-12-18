@@ -18,6 +18,7 @@ COMPARE_OP_FUNC = {
     '!=': operator.ne,
 }
 
+
 class SymbolicExecution(object):
     def __init__(self, func):
         self.func = func
