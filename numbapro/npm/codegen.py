@@ -234,9 +234,10 @@ class CodeGen(object):
                     for aval, atype in zip(inst.args, argtys)]
 
             retptr = self.builder.alloca(retty.llvm_as_value())
+            if retty != types.void:
+                args += [retptr]
 
-
-            errcode = self.builder.call(declfunc, args + [retptr])
+            errcode = self.builder.call(declfunc, args)
 
             if declfunc.type.pointee.return_type is lc.Type.void():
                 return
