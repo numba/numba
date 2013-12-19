@@ -178,15 +178,15 @@ class DeviceNDArrayBase(object):
                                 gpu_head=gpu_head, gpu_data=gpu_data)
 
     def as_cuda_arg(self):
-        '''Returns a device memory object that is used as the argument.
-        '''
+        """Returns a device memory object that is used as the argument.
+        """
         return self.gpu_head
 
 
 class DeviceNDArray(DeviceNDArrayBase):
     def _yields_f_strides_by_shape(self, shape=None):
-        '''yields the f-contigous strides
-        '''
+        """yields the f-contigous strides
+        """
         shape = self.shape if shape is None else shape
         itemsize = self.dtype.itemsize
         yield itemsize
@@ -200,6 +200,7 @@ class DeviceNDArray(DeviceNDArrayBase):
         '''
         shape = self.shape if shape is None else shape
         itemsize = self.dtype.itemsize
+
         def gen():
             yield itemsize
             sum = 1
