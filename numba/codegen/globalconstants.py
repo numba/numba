@@ -25,7 +25,7 @@ class LLVMConstantsManager(object):
 
             ret_val.linkage = llvm.core.LINKAGE_LINKONCE_ODR
             ret_val.initializer = lconst_str
-            ret_val.is_global_constant = True
+            ret_val.global_constant = True
 
             self.constant_values[const_str] = ret_val
 

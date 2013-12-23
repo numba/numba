@@ -7,7 +7,7 @@ def llvm_alloca(lfunc, builder, ltype, name='', change_bb=True):
     if change_bb:
         bb = builder.basic_block
     builder.position_at_beginning(lfunc.get_entry_basic_block())
-    lstackvar = builder.alloca(ltype, name)
+    lstackvar = builder.alloca(ltype, name=name)
     if change_bb:
         builder.position_at_end(bb)
     return lstackvar

@@ -470,7 +470,7 @@ class LLVMCodeGenerator(visitors.NumbaVisitor,
         elif not self.is_void_return:
             llvm_ret_type = self.func_signature.return_type.to_llvm(self.context)
             self.return_value = self.builder.alloca(llvm_ret_type,
-                                                    "return_value")
+                                                    name="return_value")
 
         # All non-NULL object emporaries are DECREFed here
         self.cleanup_label = self.append_basic_block('cleanup_label')
