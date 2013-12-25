@@ -143,9 +143,13 @@ class TypeInferer(object):
         pprint(self.typevars.values())
 
     def seed_type(self, name, typ):
+        """All arguments should be seeded.
+        """
         self.typevars[name].lock(typ)
 
     def seed_return(self, typ):
+        """Seeding of return value is optional.
+        """
         for blk in self.blocks.itervalues():
             inst = blk.terminator
             if isinstance(inst, ir.Return):
@@ -218,6 +222,10 @@ class TypeInferer(object):
             else:
                 typ = types.pyobject
             self.typevars[target.name].lock(typ)
+        elif isinstance(const, float):
+            self.typevars[target.name].lock(types.float64)
+        else:
+            raise NotImplementedError(type(const))
 
     def typeof_global(self, inst, target, value):
         if value in ('range', 'xrange'):

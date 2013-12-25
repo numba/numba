@@ -13,7 +13,8 @@ class Context(object):
 
     """
 
-    def __init__(self):
+    def __init__(self, type_lattice=None):
+        self.type_lattice = type_lattice or types.type_lattice
         self.functions = {}
         self.load_builtins()
 
@@ -30,15 +31,11 @@ class Context(object):
         assert key not in self.functions, "Duplicated function template"
         self.functions[key] = ft
 
-    def type_distance(self, first, second):
-        if first == second:
+    def type_distance(self, fromty, toty):
+        if fromty == toty:
             return 0
 
-        domains = types.domains
-        for dom in domains:
-            r = _type_distance(dom, first, second)
-            if r is not None:
-                return r
+        return self.type_lattice.get((fromty, toty))
 
     def unify_types(self, *types):
         return reduce(self.unify_pairs, types)
@@ -48,13 +45,15 @@ class Context(object):
         Choose PyObject type as the abstract if we fail to determine a concrete
         type.
         """
-        d = self.type_distance(first, second)
+        d = self.type_distance(fromty=first, toty=second)
         if d is None:
             return types.pyobject
         elif d >= 0:
-            return first
-        else:
+            # A promotion from first -> second
             return second
+        else:
+            # A demontion from first -> second
+            return first
 
 
 def _uses_downcast(dists):
@@ -145,7 +144,7 @@ class FunctionTemplate(object):
             return None
         distances = []
         for formal, actual in zip(case.args, args):
-            tdist = self.context.type_distance(formal, actual)
+            tdist = self.context.type_distance(toty=formal, fromty=actual)
             if tdist is None:
                 return
             distances.append(tdist)
@@ -197,6 +196,8 @@ class BinOp(FunctionTemplate):
     cases = [
         signature(types.int32, types.int32, types.int32),
         signature(types.int64, types.int64, types.int64),
+        signature(types.float32, types.float32, types.float32),
+        signature(types.float64, types.float64, types.float64),
     ]
 
 
