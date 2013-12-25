@@ -1,5 +1,20 @@
+"""
+Type inference base on CPA.
+The algorithm guarantees monotonic growth of type-sets for each variable.
+
+Steps:
+    1. seed initial types
+    2. build constrains
+    3. propagate constrains
+    4. unify types
+
+Constrain propagation is precise and does not regret (no backtracing).
+Constrains push types forward following the dataflow.
+"""
+
 from __future__ import print_function
 from pprint import pprint
+import itertools
 from numba import ir, types, utils
 
 
@@ -10,39 +25,74 @@ class TypeVar(object):
         self.locked = False
 
     def add_types(self, *types):
-        if self.locked:
-            if set(types) != self.typeset:
-                raise Exception("Violating locked typevar")
+        if not types:
+            return
+
+        nbefore = len(self.typeset)
         self.typeset |= set(types)
+        nafter = len(self.typeset)
+
+        if self.locked and nafter != nbefore:
+            raise Exception("Violating locked type variable")
+
+        assert nbefore <= nafter, "Must grow monotonically"
 
     def lock(self, typ):
         self.typeset = set([typ])
         self.locked = True
 
+    def union(self, other):
+        self.add_types(*other.typeset)
+
     def __repr__(self):
         return '%s := {%s}' % (self.var, ', '.join(map(str, self.typeset)))
 
+    def get(self):
+        return tuple(self.typeset)
+
+    def getone(self):
+        assert len(self) == 1
+        return tuple(self.typeset)[0]
+
+    def __len__(self):
+        return len(self.typeset)
+
 
 class ConstrainNetwork(object):
-    def __init__(self, context, typevars):
-        self.context = context
-        self.typevars = typevars
+    """
+    TODO: It is possible to optimize constrain propagation to consider only
+          dirty type variables.
+    """
+
+    def __init__(self):
         self.constrains = []
 
     def append(self, constrain):
         self.constrains.append(constrain)
 
+    def propagate(self, context, typevars):
+        for constrain in self.constrains:
+            constrain(context, typevars)
+
 
 class Propagate(object):
+    """
+    A simple constrain for direct propagation of types for assignments.
+    """
+
     def __init__(self, dst, src):
         self.dst = dst
         self.src = src
 
     def __call__(self, context, typevars):
-        raise NotImplementedError
+        typevars[self.dst].union(typevars[self.src])
 
 
 class CallConstrain(object):
+    """Constrain for calling functions.
+    Perform case analysis foreach combinations of argument types.
+    """
+
     def __init__(self, target, func, args, kws):
         self.target = target
         self.func = func
@@ -50,16 +100,37 @@ class CallConstrain(object):
         self.kws = kws
 
     def __call__(self, context, typevars):
-        raise NotImplementedError
+        fnty = typevars[self.func].getone()
+        self.resolve(context, typevars, fnty)
+
+    def resolve(self, context, typevars, fnty):
+        assert not self.kws, "Keyword argument is not supported, yet"
+        argtypes = [typevars[a.name].get() for a in self.args]
+        restypes = []
+        # Case analysis for each combination of argument types.
+        for args in itertools.product(*argtypes):
+            # TODO handling keyword arguments
+            rt = context.resolve_function_type(fnty, args, ())
+            assert rt is not None, "%s" % fnty
+            restypes.append(rt)
+        typevars[self.target].add_types(*restypes)
+
+
+class IntrinsicCallConstrain(CallConstrain):
+    def __call__(self, context, typevars):
+        self.resolve(context, typevars, fnty=self.func)
 
 
 class TypeInferer(object):
+    """
+    Operates on block that shares the same ir.Scope.
+    """
+
     def __init__(self, context, blocks):
         self.context = context
         self.blocks = blocks
         self.typevars = {}
-        self.constrains = ConstrainNetwork(context=context,
-                                           typevars=self.typevars)
+        self.constrains = ConstrainNetwork()
         # Set of assumed immutable globals
         self.assumed_immutables = set()
         # Fill the type vars
@@ -76,15 +147,45 @@ class TypeInferer(object):
 
     def seed_return(self, typ):
         for blk in self.blocks.itervalues():
-            inst = blk.body.terminator
+            inst = blk.terminator
             if isinstance(inst, ir.Return):
-                self.seed_type(inst.value.name, typ)
-
+                self.typevars[inst.value.name].add_types(typ)
 
     def build_constrain(self):
         for blk in self.blocks.itervalues():
             for inst in blk.body:
                 self.constrain_statement(inst)
+
+    def propagate(self):
+        newtoken = self.get_state_token()
+        oldtoken = None
+        self.dump()
+        # Since the number of types are finite, the typesets will eventually
+        # stop growing.
+        while newtoken != oldtoken:
+            print("propagate".center(80, '-'))
+            oldtoken = newtoken
+            self.constrains.propagate(self.context, self.typevars)
+            newtoken = self.get_state_token()
+            self.dump()
+
+    def unify(self):
+        typdict = {}
+        for var, tv in self.typevars.items():
+            if len(tv) == 1:
+                typdict[var] = tv.getone()
+            elif len(tv) == 0:
+                raise TypeError("Variable %s has no type" % var)
+            else:
+                typdict[var] = self.context.unify_types(*tv.get())
+        return typdict
+
+    def get_state_token(self):
+        """The algorithm is monotonic.  It can only grow the typesets.
+        The sum of all lengths of type sets is a cheap and accurate
+        description of our progress.
+        """
+        return sum(len(tv) for tv in self.typevars.itervalues())
 
     def constrain_statement(self, inst):
         if isinstance(inst, ir.Assign):
@@ -129,15 +230,15 @@ class TypeInferer(object):
         elif expr.op in ('getiter', 'iternext', 'itervalid'):
             self.typeof_builtin_call(inst, target, expr.op, expr.value)
         elif expr.op == 'binop':
-            self.typeof_builtin_call(inst, target, expr.fn, (expr.lhs,
-                                                             expr.rhs))
+            self.typeof_builtin_call(inst, target, expr.fn, expr.lhs, expr.rhs)
         else:
             raise NotImplementedError(type(expr), expr)
 
     def typeof_call(self, inst, target, call):
-        constrain = CallConstrain(target.name, call.func, call.args, call.kws)
+        constrain = CallConstrain(target.name, call.func.name, call.args,
+                                  call.kws)
         self.constrains.append(constrain)
 
-    def typeof_builtin_call(self, inst, target, func, args):
-        constrain = CallConstrain(target.name, func, args, ())
+    def typeof_builtin_call(self, inst, target, func, *args):
+        constrain = IntrinsicCallConstrain(target.name, func, args, ())
         self.constrains.append(constrain)

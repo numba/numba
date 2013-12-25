@@ -224,7 +224,7 @@ class Interpreter(object):
         val = self.pop()
         iternext = ir.Expr.iternext(value=val, loc=self.loc)
         indval = self.store_temp(iternext)
-        itervalid = ir.Expr.itervalid(value=indval, loc=self.loc)
+        itervalid = ir.Expr.itervalid(value=val, loc=self.loc)
         pred = self.store_temp(itervalid)
         self.push(indval)
 

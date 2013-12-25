@@ -20,10 +20,15 @@ def main():
     infer = typeinfer.TypeInferer(ctx, interp.blocks)
     infer.seed_type('s', types.int32)
     infer.seed_type('e', types.int32)
+    infer.seed_return(types.int32)
     infer.dump()
 
     infer.build_constrain()
     infer.dump()
+    infer.propagate()
+    infer.dump()
+    pprint(infer.unify())
+
 
 
 if __name__ == '__main__':
