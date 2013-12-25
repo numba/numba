@@ -1,4 +1,5 @@
 from __future__ import print_function
+import __builtin__ as builtins
 import sys
 import dis
 import inspect
@@ -89,6 +90,16 @@ class Interpreter(object):
         for fn in self._block_actions.itervalues():
             fn(self.current_block_offset, self.current_block)
 
+    def get_global_value(self, name):
+        """
+        Get a global value from the func_global (first) or
+        as a builtins (second).  If both failed, return a ir.UNDEFINED.
+        """
+        try:
+            return self.bytecode.func.func_globals[name]
+        except KeyError:
+            return getattr(builtins, name, ir.UNDEFINED)
+
     @property
     def current_scope(self):
         return self.scopes[-1]
@@ -161,8 +172,9 @@ class Interpreter(object):
         self.push(tmp)
 
     def op_LOAD_GLOBAL(self, inst):
-        val = self.code_names[inst.arg]
-        glb = ir.Global(value=val, loc=self.loc)
+        name = self.code_names[inst.arg]
+        glb = ir.Global(name=name, value=self.get_global_value(name),
+                        loc=self.loc)
         tmp = self.store_temp(glb)
         self.push(tmp)
 

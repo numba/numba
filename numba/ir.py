@@ -190,12 +190,13 @@ class Const(object):
 
 
 class Global(object):
-    def __init__(self, value, loc):
+    def __init__(self, name, value, loc):
+        self.name = name
         self.value = value
         self.loc = loc
 
     def __str__(self):
-        return 'global(%s, %s)' % (type(self.value), self.value)
+        return 'global(%s: %s)' % (self.name, self.value)
 
 
 class Var(object):
@@ -350,3 +351,6 @@ class Loop(object):
         args = self.entry, self.condition, self.body, self.exit
         return "Loop(entry=%s, condition=%s, body=%s, exit=%s)" % args
 
+
+# A stub for undefined global reference
+UNDEFINED = object()

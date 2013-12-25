@@ -207,7 +207,7 @@ class TypeInferer(object):
             self.constrains.append(Propagate(dst=inst.target.name,
                                              src=value.name))
         elif isinstance(value, ir.Global):
-            self.typeof_global(inst, inst.target, value.value)
+            self.typeof_global(inst, inst.target, value)
         elif isinstance(value, ir.Expr):
             self.typeof_expr(inst, inst.target, value)
         else:
@@ -227,10 +227,14 @@ class TypeInferer(object):
         else:
             raise NotImplementedError(type(const))
 
-    def typeof_global(self, inst, target, value):
-        if value in ('range', 'xrange'):
+    def typeof_global(self, inst, target, gvar):
+        if gvar.name in ('range', 'xrange') and gvar.value in (range, xrange):
             self.typevars[target.name].lock(types.range_type)
             self.assumed_immutables.add(inst)
+        elif gvar.value is ir.UNDEFINED:
+            self.typevars[target.name].add_types(types.pyobject)
+        else:
+            raise NotImplementedError(gvar)
 
     def typeof_expr(self, inst, target, expr):
         if expr.op == 'call':
