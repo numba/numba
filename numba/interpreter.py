@@ -11,7 +11,6 @@ NEW_BLOCKERS = frozenset(['SETUP_LOOP'])
 class Interpreter(object):
     """A bytecode interpreter that builds up the IR.
     """
-
     def __init__(self, bytecode):
         self.bytecode = bytecode
         self.scopes = []

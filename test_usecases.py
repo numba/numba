@@ -1,38 +1,10 @@
 from __future__ import print_function
-from numba import bytecode, interpreter
-
-
-def sum_1d(s, e):
-    c = 0
-    for i in range(s, e):
-        c += i
-    return c
-
-
-def sum_2d(s, e):
-    c = 0
-    for i in range(s, e):
-        for j in range(s, e):
-            c += i * j
-    return c
-
-
-def while_count(s, e):
-    i = s
-    c = 0
-    while i < e:
-        c += 1
-        i += 1
-    return c
-
-
-def copy_arrays(a, b):
-    for i in range(a.shape[0]):
-        b[i] = a[i]
-
+from pprint import pprint
+from numba import bytecode, interpreter, typeinfer, typing, types
+from numba.tests import usecases
 
 def main():
-    bc = bytecode.ByteCode(func=while_count)
+    bc = bytecode.ByteCode(func=usecases.sum1d)
     print(bc.dump())
 
     interp = interpreter.Interpreter(bytecode=bc)
@@ -43,6 +15,16 @@ def main():
         print(syn)
 
     interp.verify()
+
+    ctx = typing.Context()
+    infer = typeinfer.TypeInferer(ctx, interp.blocks)
+    infer.seed_type('s', types.int32)
+    infer.seed_type('e', types.int32)
+    infer.dump()
+
+    infer.build_constrain()
+    infer.dump()
+
 
 if __name__ == '__main__':
     main()

@@ -58,6 +58,12 @@ class VarMap(object):
     def __repr__(self):
         return pprint.pformat(self._con)
 
+    def __hash__(self):
+        return hash(self.name)
+
+    def __iter__(self):
+        return self._con.iterkeys()
+
 
 class Stmt(object):
     is_terminator = False
@@ -294,6 +300,10 @@ class Block(object):
     def dump(self, file=sys.stdout):
         for inst in self.body:
             print('  ', inst, file=file)
+
+    @property
+    def terminator(self):
+        return self.body[-1]
 
     @property
     def is_terminated(self):

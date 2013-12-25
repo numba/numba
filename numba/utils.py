@@ -54,3 +54,7 @@ def cache(fn):
 
     return cached_func
 
+
+def bit_length(intval):
+    assert isinstance(intval, int)
+    return len(bin(abs(intval))) - 2
