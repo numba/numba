@@ -100,17 +100,20 @@ def _make_bytecode_table():
                 for opname, argsize in bytecodes)
 
 
+def _as_opcodes(seq):
+    lst = []
+    for s in seq:
+        c = dis.opmap.get(s)
+        if c is not None:
+            lst.append(c)
+    return lst
+
 BYTECODE_TABLE = _make_bytecode_table()
 
-JUMP_OPS = ('JUMP_ABSOLUTE', 'JUMP_FORWARD',
-            'POP_JUMP_IF_FALSE', 'POP_JUMP_IF_TRUE',
-            'JUMP_IF_FALSE', 'JUMP_IF_TRUE',
-            'JUMP_IF_TRUE_OR_POP', 'JUMP_IF_FALSE_OR_POP',
-            'FOR_ITER')
-
-RELATIVE_JUMP_OPS = ('JUMP_FORWARD',)
-
-TERM_OPS = ('RETURN_VALUE', 'RAISE_VARARGS')
+JREL_OPS = frozenset(dis.hasjrel)
+JABS_OPS = frozenset(dis.hasjabs)
+JUMP_OPS = JREL_OPS | JABS_OPS
+TERM_OPS = frozenset(_as_opcodes(['RETURN_VALUE', 'RAISE_VARARGS']))
 
 
 class ByteCodeInst(object):
@@ -138,17 +141,18 @@ class ByteCodeInst(object):
 
     @property
     def is_jump(self):
-        return self.opname in JUMP_OPS
+        return self.opcode in JUMP_OPS
 
     @property
     def is_terminator(self):
-        return self.opname == TERM_OPS
+        return self.opcode in TERM_OPS
 
     def get_jump_target(self):
         assert self.is_jump
-        if self.opname in RELATIVE_JUMP_OPS:
+        if self.opcode in JREL_OPS:
             return self.next + self.arg
         else:
+            assert self.opcode in JABS_OPS
             return self.arg
 
     def __repr__(self):

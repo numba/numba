@@ -84,53 +84,10 @@ class FunctionTemplate(object):
     def apply(self, args, kws):
         cases = getattr(self, 'cases', None)
         if cases:
-            upcast = []
-            downcast = []
-            # Find compatible definitions
-            for case in cases:
-                dists = self.apply_case(case, args, kws)
-                if dists is not None:
-                    if _uses_downcast(dists):
-                        downcast.append((dists, case))
-                    else:
-                        upcast.append((sum(dists), case))
-                # Find best definition
-            if not upcast and not downcast:
-                # No matching definition
-                raise TypeError(self.key, args, kws, cases)
-            elif len(upcast) == 1:
-                # Exactly one definition without downcasting
-                return upcast[0][1].return_type
-            elif len(upcast) > 1:
-                first = min(upcast)
-                upcast.remove(first)
-                second = min(upcast)
-                if first[0] < second[0]:
-                    return first[1].return_type
-                else:
-                    raise TypeError("Ambiguous overloading: %s and %s" % (
-                        first[1], second[1]))
-            elif len(downcast) == 1:
-                # Exactly one definition with downcasting
-                return downcast[0][1].return_type
-            else:
-                downdist = sys.maxint
-                leasts = []
-                for dists, case in downcast:
-                    n = _sum_downcast(dists)
-                    if n < downdist:
-                        downdist = n
-                        leasts = [(dists, case)]
-                    elif n == downdist:
-                        leasts.append((dists, case))
-
-                if len(leasts) == 1:
-                    return leasts[0][1].return_type
-                else:
-                    # Need to further decide which downcasted version?
-                    raise TypeError("Ambiguous overloading: %s" %
-                                    [c for _, c in leasts])
-
+            upcast, downcast = self._find_compatible_definitions(cases, args,
+                                                                 kws)
+            return self._select_best_definition(upcast, downcast, args, kws,
+                                                cases)
         else:
             # TODO: generic function template
             raise NotImplementedError
@@ -142,6 +99,7 @@ class FunctionTemplate(object):
         """
         assert not kws, "Keyword argument is not supported, yet"
         if len(case.args) != len(args):
+            # Number of arguments mismatch
             return None
         distances = []
         for formal, actual in zip(case.args, args):
@@ -151,6 +109,62 @@ class FunctionTemplate(object):
             distances.append(tdist)
         return tuple(distances)
 
+    def _find_compatible_definitions(self, cases, args, kws):
+        upcast = []
+        downcast = []
+        for case in cases:
+            dists = self.apply_case(case, args, kws)
+            if dists is not None:
+                if _uses_downcast(dists):
+                    downcast.append((dists, case))
+                else:
+                    upcast.append((sum(dists), case))
+        return upcast, downcast
+
+    def _select_best_definition(self, upcast, downcast, args, kws, cases):
+        if upcast:
+            return self._select_best_upcast(upcast)
+        elif downcast:
+            return self._select_best_downcast(downcast)
+
+    def _select_best_downcast(self, downcast):
+        assert downcast
+        if len(downcast) == 1:
+            # Exactly one definition with downcasting
+            return downcast[0][1].return_type
+        else:
+            downdist = sys.maxint
+            leasts = []
+            for dists, case in downcast:
+                n = _sum_downcast(dists)
+                if n < downdist:
+                    downdist = n
+                    leasts = [(dists, case)]
+                elif n == downdist:
+                    leasts.append((dists, case))
+
+            if len(leasts) == 1:
+                return leasts[0][1].return_type
+            else:
+                # Need to further decide which downcasted version?
+                raise TypeError("Ambiguous overloading: %s" %
+                                [c for _, c in leasts])
+
+    def _select_best_upcast(self, upcast):
+        assert upcast
+        if len(upcast) == 1:
+            # Exactly one definition without downcasting
+            return upcast[0][1].return_type
+        else:
+            assert len(upcast) > 1
+            first = min(upcast)
+            upcast.remove(first)
+            second = min(upcast)
+            if first[0] < second[0]:
+                return first[1].return_type
+            else:
+                raise TypeError("Ambiguous overloading: %s and %s" % (
+                    first[1], second[1]))
 
 _signature = namedtuple('signature', ['return_type', 'args'])
 
@@ -218,6 +232,23 @@ class BinOpDiv(BinOp):
     key = "/?"
 
 
+class CmpOp(FunctionTemplate):
+    cases = [
+        signature(types.boolean, types.int32, types.int32),
+        signature(types.boolean, types.int64, types.int64),
+        signature(types.boolean, types.float32, types.float32),
+        signature(types.boolean, types.float64, types.float64),
+    ]
+
+
+class CmpOpLt(CmpOp):
+    key = '<'
+
+
+class CmpOpGt(CmpOp):
+    key = '>'
+
+
 BUILTINS = [
     Range,
     GetIter,
@@ -225,5 +256,10 @@ BUILTINS = [
     IterValid,
     # binary operations
     BinOpAdd,
+    BinOpSub,
     BinOpMul,
+    BinOpDiv,
+    # compare operations
+    CmpOpLt,
+    CmpOpGt,
 ]

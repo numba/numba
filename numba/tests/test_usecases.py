@@ -36,6 +36,10 @@ class TestLoopDetection(unittest.TestCase):
         interp = interpret(usecases.copy_arrays)
         self.assertTrue(len(interp.syntax_info) == 1)
 
+    def test_andor(self):
+        interp = interpret(usecases.andor)
+        self.assertTrue(len(interp.syntax_info) == 0)
+
 
 if __name__ == '__main__':
     unittest.main()

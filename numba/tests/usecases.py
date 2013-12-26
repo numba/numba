@@ -35,3 +35,6 @@ def redefine1():
     for i in range(5):
         x += 1
     return x
+
+def andor(x, y):
+    return (x > 0 and x < 10) or (y > 0 and y < 10)

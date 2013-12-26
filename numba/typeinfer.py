@@ -88,6 +88,17 @@ class Propagate(object):
         typevars[self.dst].union(typevars[self.src])
 
 
+class Phi(object):
+    def __init__(self, dst, incomings):
+        self.dst = dst
+        self.incomings = incomings
+
+    def __call__(self, context, typevars):
+        tset = typevars[self.dst]
+        for inc in self.incomings:
+            tset.union(typevars[inc])
+
+
 class CallConstrain(object):
     """Constrain for calling functions.
     Perform case analysis foreach combinations of argument types.
@@ -210,6 +221,10 @@ class TypeInferer(object):
             self.typeof_global(inst, inst.target, value)
         elif isinstance(value, ir.Expr):
             self.typeof_expr(inst, inst.target, value)
+        elif isinstance(value, ir.Phi):
+            incs = [v.name for _, v in value]
+            self.constrains.append(Phi(dst=inst.target.name,
+                                       incomings=incs))
         else:
             raise NotImplementedError(type(value), value)
 

@@ -3,7 +3,7 @@ import __builtin__ as builtins
 import sys
 import dis
 import inspect
-from numba import ir, controlflow
+from numba import ir, controlflow, dataflow
 
 
 class Interpreter(object):
@@ -13,8 +13,12 @@ class Interpreter(object):
         self.bytecode = bytecode
         self.scopes = []
         self.loc = ir.Loc(line=1)
+        # Control flow analysis
         self.cfa = controlflow.ControlFlowAnalysis(bytecode)
         self.cfa.run()
+        # Data flow analysis
+        self.dfa = dataflow.DataFlowAnalysis(self.cfa)
+        self.dfa.run()
 
         global_scope = ir.Scope(parent=None, loc=self.loc)
         self._fill_global_scope(global_scope)
@@ -25,12 +29,11 @@ class Interpreter(object):
         self.syntax_info = []
 
         # Temp states during interpretation
+
         self.current_block = None
         self.current_block_offset = None
         self.syntax_blocks = []
-        self.stack = []
-
-        # Internal states during interpretation
+        self.dfainfo = None
         self._block_actions = {}
 
     def _fill_global_scope(self, scope):
@@ -47,9 +50,9 @@ class Interpreter(object):
         self.loc = ir.Loc(line=self.bytecode[0].lineno)
         self.scopes.append(ir.Scope(parent=self.current_scope, loc=self.loc))
         self._fill_args_into_scope(self.current_scope)
-
-        for inst in self._iter_inst():
-            self._dispatch(inst)
+        # Interpret loop
+        for inst, kws in self._iter_inst():
+            self._dispatch(inst, kws)
         # Clean up
         self._remove_invalid_syntax_blocks()
 
@@ -62,11 +65,11 @@ class Interpreter(object):
 
     def _iter_inst(self):
         for block in self.cfa.iterblocks():
-            for offset in block:
+            firstinst = self.bytecode[block.body[0]]
+            self._start_new_block(firstinst)
+            for offset, kws in self.dfainfo.insts:
                 inst = self.bytecode[offset]
-                if offset == block.offset:
-                    self._start_new_block(inst)
-                yield inst
+                yield inst, kws
 
     def _start_new_block(self, inst):
         self.loc = ir.Loc(line=inst.lineno)
@@ -76,9 +79,33 @@ class Interpreter(object):
         if oldblock is not None and not oldblock.is_terminated:
             jmp = ir.Jump(inst.offset, loc=self.loc)
             oldblock.append(jmp)
+        # Get DFA block info
+        self.dfainfo = self.dfa.infos[self.current_block_offset]
+        # Insert PHI
+        self._insert_phi()
         # Notify listeners for the new block
         for fn in self._block_actions.itervalues():
             fn(self.current_block_offset, self.current_block)
+
+    def _insert_phi(self):
+        if self.dfainfo.incomings:
+            assert len(self.dfainfo.incomings) == 1
+            incomings = self.cfa.blocks[self.current_block_offset].incoming
+            phivar = self.dfainfo.incomings[0]
+            if len(incomings) == 1:
+                ib = iter(incomings).next()
+                lingering = self.dfa.infos[ib].stack
+                assert len(lingering) == 1
+                iv = lingering[0]
+                self.store(self.get(iv), phivar)
+            else:
+                phi = ir.Phi(loc=self.loc)
+                self.store(phi, phivar)
+                for ib in incomings:
+                    lingering = self.dfa.infos[ib].stack
+                    assert len(lingering) == 1
+                    iv = lingering[0]
+                    phi.add(ib, self.get(iv))
 
     def get_global_value(self, name):
         """
@@ -106,7 +133,7 @@ class Interpreter(object):
     def code_names(self):
         return self.bytecode.code.co_names
 
-    def _dispatch(self, inst):
+    def _dispatch(self, inst, kws):
         assert self.current_block is not None
         fname = "op_%s" % inst.opname
         try:
@@ -114,7 +141,7 @@ class Interpreter(object):
         except AttributeError:
             raise NotImplementedError(inst)
         else:
-            return fn(inst)
+            return fn(inst, **kws)
 
     def dump(self, file=sys.stdout):
         for offset, block in sorted(self.blocks.items()):
@@ -123,20 +150,22 @@ class Interpreter(object):
 
     # --- Scope operations ---
 
-    def store_temp(self, value):
-        var = self.current_scope.make_temp(loc=self.loc)
-        stmt = ir.Assign(value=value, target=var, loc=self.loc)
-        self.current_block.append(stmt)
-        return var
-
     def store(self, value, name):
         if self.current_block_offset in self.cfa.backbone:
-            var = self.current_scope.redefine(name, loc=self.loc)
+            target = self.current_scope.redefine(name, loc=self.loc)
         else:
-            var = self.current_scope.get_or_define(name, loc=self.loc)
-        var = self.current_scope.get_or_define(name, loc=self.loc)
-        stmt = ir.Assign(value=value, target=var, loc=self.loc)
+            target = self.current_scope.get_or_define(name, loc=self.loc)
+        stmt = ir.Assign(value=value, target=target, loc=self.loc)
         self.current_block.append(stmt)
+
+    # def store_temp(self, value):
+    #     target = self.current_scope.make_temp(loc=self.loc)
+    #     stmt = ir.Assign(value=value, target=target, loc=self.loc)
+    #     self.current_block.append(stmt)
+    #     return target
+
+    def get(self, name):
+        return self.current_scope.get(name)
 
     # --- Block operations ---
 
@@ -149,44 +178,36 @@ class Interpreter(object):
         self.current_block_offset = offset
         return blk
 
-    # --- Stack operations ---
-
-    def push(self, val):
-        self.stack.append(val)
-
-    def pop(self):
-        return self.stack.pop()
+    def block_constains_opname(self, offset, opname):
+        for offset in self.cfa.blocks[offset]:
+            inst = self.bytecode[offset]
+            if inst.opname == opname:
+                return True
+        return False
 
     # --- Bytecode handlers ---
 
-    def op_LOAD_CONST(self, inst):
-        val = self.code_consts[inst.arg]
-        k = ir.Const(value=val, loc=self.loc)
-        tmp = self.store_temp(k)
-        self.push(tmp)
+    def op_STORE_FAST(self, inst, value):
+        dstname = self.code_locals[inst.arg]
+        value = self.get(value)
+        self.store(value=value, name=dstname)
 
-    def op_LOAD_GLOBAL(self, inst):
+    def op_LOAD_ATTR(self, inst, item, res):
+        item = self.get(item)
+        attr = self.code_names[inst.arg]
+        getattr = ir.Expr.getattr(item, attr, loc=self.loc)
+        self.store(getattr, res)
+
+    def op_LOAD_CONST(self, inst, res):
+        value = self.code_consts[inst.arg]
+        const = ir.Const(value, loc=self.loc)
+        self.store(const, res)
+
+    def op_LOAD_GLOBAL(self, inst, res):
         name = self.code_names[inst.arg]
-        glb = ir.Global(name=name, value=self.get_global_value(name),
-                        loc=self.loc)
-        tmp = self.store_temp(glb)
-        self.push(tmp)
-
-    def op_LOAD_FAST(self, inst):
-        varname = self.code_locals[inst.arg]
-        var = self.current_scope.refer(varname)
-        self.push(var)
-
-    def op_LOAD_ATTR(self, inst):
-        name = self.code_names[inst.arg]
-        expr = ir.Expr.getattr(value=self.pop(), attr=name, loc=self.loc)
-        tmp = self.store_temp(expr)
-        self.push(tmp)
-
-    def op_STORE_FAST(self, inst):
-        varname = self.code_locals[inst.arg]
-        val = self.pop()
-        self.store(val, varname)
+        value = self.get_global_value(name)
+        gl = ir.Global(name, value, loc=self.loc)
+        self.store(gl, res)
 
     def op_SETUP_LOOP(self, inst):
         assert self.blocks[inst.offset] is self.current_block
@@ -194,29 +215,18 @@ class Interpreter(object):
         self.syntax_blocks.append(loop)
         self.syntax_info.append(loop)
 
-    def op_CALL_FUNCTION(self, inst):
-        narg = inst.arg & 0xff
-        nkws = (inst.arg >> 8) & 0xff
+    def op_CALL_FUNCTION(self, inst, func, args, kws, res):
+        func = self.get(func)
+        args = [self.get(x) for x in args]
+        kws = [(self.get(k), self.get(v)) for k, v in kws]
+        expr = ir.Expr.call(func, args, kws, loc=self.loc)
+        self.store(expr, res)
 
-        def pop_kws():
-            val = self.pop()
-            key = self.pop()
-            return key.value, val
+    def op_GET_ITER(self, inst, value, res):
+        expr = ir.Expr.getiter(value=self.get(value), loc=self.loc)
+        self.store(expr, res)
 
-        kws = list(reversed([pop_kws() for _ in range(nkws)]))
-        args = list(reversed([self.pop() for _ in range(narg)]))
-        func = self.pop()
-
-        expr = ir.Expr.call(func=func, args=args, kws=kws, loc=self.loc)
-        tmp = self.store_temp(expr)
-        self.push(tmp)
-
-    def op_GET_ITER(self, inst):
-        expr = ir.Expr.getiter(value=self.pop(), loc=self.loc)
-        tmp = self.store_temp(expr)
-        self.push(tmp)
-
-    def op_FOR_ITER(self, inst):
+    def op_FOR_ITER(self, inst, iterator, indval, pred):
         """
         Assign new block other this instruction.
         """
@@ -227,12 +237,12 @@ class Interpreter(object):
         loop.condition = self.current_block_offset
 
         # Emit code
-        val = self.pop()
+        val = self.get(iterator)
         iternext = ir.Expr.iternext(value=val, loc=self.loc)
-        indval = self.store_temp(iternext)
+        self.store(iternext, indval)
+
         itervalid = ir.Expr.itervalid(value=val, loc=self.loc)
-        pred = self.store_temp(itervalid)
-        self.push(indval)
+        self.store(itervalid, pred)
 
         # Conditional jump
         br = ir.Branch(cond=pred, truebr=inst.next,
@@ -246,73 +256,66 @@ class Interpreter(object):
 
         self._block_actions[loop] = mark_as_body
 
-    def op_BINARY_SUBSCR(self, inst):
-        index = self.pop()
-        target = self.pop()
+    def op_BINARY_SUBSCR(self, inst, target, index, res):
+        index = self.get(index)
+        target = self.get(target)
         expr = ir.Expr.getitem(target=target, index=index, loc=self.loc)
-        tmp = self.store_temp(expr)
-        self.push(tmp)
+        self.store(expr, res)
 
-    def op_STORE_SUBSCR(self, inst):
-        index = self.pop()
-        target = self.pop()
-        value = self.pop()
+    def op_STORE_SUBSCR(self, inst, target, index, value):
+        index = self.get(index)
+        target = self.get(target)
+        value = self.get(value)
         stmt = ir.SetItem(target=target, index=index, value=value,
-                               loc=self.loc)
+                          loc=self.loc)
         self.current_block.append(stmt)
 
-    def _binop(self, op, inst):
-        rhs = self.pop()
-        lhs = self.pop()
+    def _binop(self, op, lhs, rhs, res):
+        lhs = self.get(lhs)
+        rhs = self.get(rhs)
         expr = ir.Expr.binop(op, lhs=lhs, rhs=rhs, loc=self.loc)
-        tmp = self.store_temp(expr)
-        self.push(tmp)
+        self.store(expr, res)
 
-    def op_BINARY_ADD(self, inst):
-        self._binop('+', inst)
+    def op_BINARY_ADD(self, inst, lhs, rhs, res):
+        self._binop('+', lhs, rhs, res)
 
-    def op_BINARY_SUBTRACT(self, inst):
-        self._binop('-', inst)
+    def op_BINARY_SUBTRACT(self, inst, lhs, rhs, res):
+        self._binop('-', lhs, rhs, res)
 
-    def op_BINARY_MULTIPLY(self, inst):
-        self._binop('*', inst)
+    def op_BINARY_MULTIPLY(self, inst, lhs, rhs, res):
+        self._binop('*', lhs, rhs, res)
 
-    def op_BINARY_DIVIDE(self, inst):
-        self._binop('/?', inst)
+    def op_BINARY_DIVIDE(self, inst, lhs, rhs, res):
+        self._binop('/?', lhs, rhs, res)
 
-    def op_BINARY_TRUE_DIVIDE(self, inst):
-        self._binop('/', inst)
+    def op_BINARY_TRUE_DIVIDE(self, inst, lhs, rhs, res):
+        self._binop('/', lhs, rhs, res)
 
-    def op_BINARY_FLOOR_DIVIDE(self, inst):
-        self._binop('//', inst)
+    def op_BINARY_FLOOR_DIVIDE(self, inst, lhs, rhs, res):
+        self._binop('//', lhs, rhs, res)
 
-    def op_BINARY_MODULO(self, inst):
-        self._binop('%', inst)
+    def op_BINARY_MODULO(self, inst, lhs, rhs, res):
+        self._binop('%', lhs, rhs, res)
 
-    def _inplace_binop(self, op, inst):
-        rhs = self.pop()
-        lhs = self.pop()
-        expr = ir.Expr.binop(op, lhs=lhs, rhs=rhs, loc=self.loc)
-        tmp = self.store_temp(expr)
-        self.push(tmp)
+    _inplace_binop = _binop
 
-    def op_INPLACE_ADD(self, inst):
-        self._inplace_binop('+', inst)
+    def op_INPLACE_ADD(self, inst, lhs, rhs, res):
+        self._inplace_binop('+', lhs, rhs, res)
 
-    def op_INPLACE_SUBSTRACT(self, inst):
-        self._inplace_binop('-', inst)
+    def op_INPLACE_SUBSTRACT(self, inst, lhs, rhs, res):
+        self._inplace_binop('-', lhs, rhs, res)
 
-    def op_INPLACE_MULTIPLY(self, inst):
-        self._inplace_binop('*', inst)
+    def op_INPLACE_MULTIPLY(self, inst, lhs, rhs, res):
+        self._inplace_binop('*', lhs, rhs, res)
 
-    def op_INPLACE_DIVIDE(self, inst):
-        self._inplace_binop('/?', inst)
+    def op_INPLACE_DIVIDE(self, inst, lhs, rhs, res):
+        self._inplace_binop('/?', lhs, rhs, res)
 
-    def op_INPLACE_TRUE_DIVIDE(self, inst):
-        self._inplace_binop('/', inst)
+    def op_INPLACE_TRUE_DIVIDE(self, inst, lhs, rhs, res):
+        self._inplace_binop('/', lhs, rhs, res)
 
-    def op_INPLACE_FLOOR_DIVIDE(self, inst):
-        self._inplace_binop('//', inst)
+    def op_INPLACE_FLOOR_DIVIDE(self, inst, lhs, rhs, res):
+        self._inplace_binop('//', lhs, rhs, res)
 
     def op_JUMP_ABSOLUTE(self, inst):
         jmp = ir.Jump(inst.get_jump_target(), loc=self.loc)
@@ -323,36 +326,44 @@ class Interpreter(object):
         if blk in self._block_actions:
             del self._block_actions[blk]
 
-    def op_RETURN_VALUE(self, inst):
-        value = self.pop()
-        ret = ir.Return(value, loc=self.loc)
+    def op_RETURN_VALUE(self, inst, retval):
+        ret = ir.Return(self.get(retval), loc=self.loc)
         self.current_block.append(ret)
 
-    def op_COMPARE_OP(self, inst):
+    def op_COMPARE_OP(self, inst, lhs, rhs, res):
         op = dis.cmp_op[inst.arg]
-        self._binop(op, inst)
+        self._binop(op, lhs, rhs, res)
 
-    def op_POP_JUMP_IF_FALSE(self, inst):
-        pred = self.pop()
-        truebr = inst.get_jump_target()
-        falsebr = inst.next
-        bra = ir.Branch(cond=pred, truebr=falsebr, falsebr=truebr,
+    def _op_JUMP_IF(self, inst, pred, iftrue, forward=False):
+        brs = {
+            True:  inst.get_jump_target(),
+            False: inst.next,
+        }
+        truebr = brs[iftrue]
+        falsebr = brs[not iftrue]
+        bra = ir.Branch(cond=self.get(pred), truebr=truebr, falsebr=falsebr,
                         loc=self.loc)
         self.current_block.append(bra)
-
         # In a while loop?
         self._determine_while_condition((truebr, falsebr))
 
-    def op_POP_JUMP_IF_TRUE(self, inst):
-        pred = self.pop()
-        truebr = inst.get_jump_target()
-        falsebr = inst.next
-        bra = ir.Branch(cond=pred, truebr=truebr, falsebr=falsebr,
-                        loc=self.loc)
-        self.current_block.append(bra)
+    def op_JUMP_IF_FALSE(self, inst, pred):
+        self._op_JUMP_IF(inst, pred=pred, iftrue=False)
 
-        # In a while loop?
-        self._determine_while_condition((truebr, falsebr))
+    def op_JUMP_IF_TRUE(self, inst, pred):
+        self._op_JUMP_IF(inst, pred=pred, iftrue=True)
+
+    def op_POP_JUMP_IF_FALSE(self, inst, pred):
+        self._op_JUMP_IF(inst, pred=pred, iftrue=False)
+
+    def op_POP_JUMP_IF_TRUE(self, inst, pred):
+        self._op_JUMP_IF(inst, pred=pred, iftrue=True)
+
+    def op_JUMP_IF_FALSE_OR_POP(self, inst, pred):
+        self._op_JUMP_IF(inst, pred=pred, iftrue=False)
+
+    def op_JUMP_IF_TRUE_OR_POP(self, inst, pred):
+        self._op_JUMP_IF(inst, pred=pred, iftrue=True)
 
     def _determine_while_condition(self, branches):
         assert branches
@@ -368,12 +379,13 @@ class Interpreter(object):
             return
         # One of the branches goes to a POP_BLOCK
         for br in branches:
-            if self.bytecode[br].opname == 'POP_BLOCK':
+            if self.block_constains_opname(br, 'POP_BLOCK'):
                 break
         else:
+            print("A")
             return
         # Which is the exit of the loop
-        if loop.exit != br + 1:
+        if br not in self.cfa.blocks[loop.exit].incoming:
             return
 
         # Therefore, current block is a while loop condition

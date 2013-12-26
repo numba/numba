@@ -42,7 +42,7 @@ class VarMap(object):
         else:
             self._con[name] = var
 
-    def refer(self, name):
+    def get(self, name):
         try:
             return self._con[name]
         except KeyError:
@@ -198,6 +198,27 @@ class Global(object):
         return 'global(%s: %s)' % (self.name, self.value)
 
 
+class Phi(object):
+    def __init__(self, loc):
+        self.loc = loc
+        self.values = []
+        self.blocks = []
+
+    def add(self, block, value):
+        self.blocks.append(block)
+        self.values.append(value)
+
+    def __getitem__(self, i):
+        return self.blocks[i], self.values[i]
+
+    def __repr__(self):
+        args = [("%s: %s" % self[i]) for i in range(len(self))]
+        return "phi(%s)" % ', '.join(args)
+
+    def __len__(self):
+        return len(self.values)
+
+
 class Var(object):
     """
     Attributes
@@ -251,17 +272,17 @@ class Scope(object):
         self.localvars.define(v.name, v)
         return v
 
-    def refer(self, name):
+    def get(self, name):
         """
         Refer to a variable
         """
         if name in self.redefined:
             name = "%s.%d" % (name, self.redefined[name])
         try:
-            return self.localvars.refer(name)
+            return self.localvars.get(name)
         except NotDefinedError:
             if self.has_parent:
-                return self.parent.refer(name)
+                return self.parent.get(name)
             else:
                 raise
 
@@ -273,7 +294,7 @@ class Scope(object):
         if name not in self.localvars:
             return self.define(name, loc)
         else:
-            return self.localvars.refer(name)
+            return self.localvars.get(name)
 
     def redefine(self, name, loc):
         """

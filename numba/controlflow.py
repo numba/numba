@@ -46,6 +46,9 @@ class ControlFlowAnalysis(object):
         self._blockstack = []
 
     def iterblocks(self):
+        """
+        Return all blocks in sequence of occurrence
+        """
         for i in self.blockseq:
             yield self.blocks[i]
 
@@ -56,7 +59,7 @@ class ControlFlowAnalysis(object):
             if fn is not None:
                 fn(inst)
             else:
-                assert not inst.is_jump
+                assert not inst.is_jump, inst
 
         # Close all blocks
         for cur, nxt in zip(self.blockseq, self.blockseq[1:]):
@@ -114,15 +117,17 @@ class ControlFlowAnalysis(object):
         self.jump(inst.next)
         self._force_new_block = True
 
-    def op_POP_JUMP_IF_FALSE(self, inst):
+    def _op_ABSOLUTE_JUMP_IF(self, inst):
         self.jump(inst.get_jump_target())
         self.jump(inst.next)
         self._force_new_block = True
 
-    def op_POP_JUMP_IF_TRUE(self, inst):
-        self.jump(inst.get_jump_target())
-        self.jump(inst.next)
-        self._force_new_block = True
+    op_POP_JUMP_IF_FALSE = _op_ABSOLUTE_JUMP_IF
+    op_POP_JUMP_IF_TRUE = _op_ABSOLUTE_JUMP_IF
+    op_JUMP_IF_FALSE = _op_ABSOLUTE_JUMP_IF
+    op_JUMP_IF_TRUE = _op_ABSOLUTE_JUMP_IF
+    op_JUMP_IF_FALSE_OR_POP = _op_ABSOLUTE_JUMP_IF
+    op_JUMP_IF_TRUE_OR_POP = _op_ABSOLUTE_JUMP_IF
 
     def op_JUMP_ABSOLUTE(self, inst):
         self.jump(inst.get_jump_target())
