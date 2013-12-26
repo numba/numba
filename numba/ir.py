@@ -1,6 +1,7 @@
 from __future__ import print_function
 import sys
 import pprint
+from collections import defaultdict
 
 
 class RedefinedError(NameError):
@@ -47,10 +48,8 @@ class VarMap(object):
         except KeyError:
             raise NotDefinedError(name)
 
-    def get_or_insert(self, name, var):
-        if name not in self._con:
-            self._con[name] = var
-        return self._con[name]
+    def __contains__(self, name):
+        return name in self._con
 
     def __len__(self):
         return len(self._con)
@@ -242,6 +241,7 @@ class Scope(object):
         self.parent = parent
         self.localvars = VarMap()
         self.loc = loc
+        self.redefined = defaultdict(int)
 
     def define(self, name, loc):
         """
@@ -255,6 +255,8 @@ class Scope(object):
         """
         Refer to a variable
         """
+        if name in self.redefined:
+            name = "%s.%d" % (name, self.redefined[name])
         try:
             return self.localvars.refer(name)
         except NotDefinedError:
@@ -263,10 +265,27 @@ class Scope(object):
             else:
                 raise
 
-    def get_or_insert(self, name, loc):
+    def get_or_define(self, name, loc):
+        if name in self.redefined:
+            name = "%s.%d" % (name, self.redefined[name])
+
         v = Var(scope=self, name=name, loc=loc)
-        self.localvars.get_or_insert(v.name, v)
-        return v
+        if name not in self.localvars:
+            return self.define(name, loc)
+        else:
+            return self.localvars.refer(name)
+
+    def redefine(self, name, loc):
+        """
+        Redefine if the name is already defined
+        """
+        if name not in self.localvars:
+            return self.define(name, loc)
+        else:
+            ct = self.redefined[name]
+            self.redefined[name] = ct + 1
+            newname = "%s.%d" % (name, ct + 1)
+            return self.define(newname, loc)
 
     def make_temp(self, loc):
         n = len(self.localvars)

@@ -11,8 +11,8 @@ def _type_distance(domain, first, second):
 class Context(object):
     """A typing context for storing function typing constrain template.
 
-    """
 
+    """
     def __init__(self, type_lattice=None):
         self.type_lattice = type_lattice or types.type_lattice
         self.functions = {}
@@ -45,6 +45,7 @@ class Context(object):
         Choose PyObject type as the abstract if we fail to determine a concrete
         type.
         """
+        # TODO: should add an option to reject unsafe type conversion
         d = self.type_distance(fromty=first, toty=second)
         if d is None:
             return types.pyobject

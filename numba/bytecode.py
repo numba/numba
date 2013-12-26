@@ -108,6 +108,10 @@ JUMP_OPS = ('JUMP_ABSOLUTE', 'JUMP_FORWARD',
             'JUMP_IF_TRUE_OR_POP', 'JUMP_IF_FALSE_OR_POP',
             'FOR_ITER')
 
+RELATIVE_JUMP_OPS = ('JUMP_FORWARD',)
+
+TERM_OPS = ('RETURN_VALUE', 'RAISE_VARARGS')
+
 
 class ByteCodeInst(object):
     '''
@@ -132,8 +136,20 @@ class ByteCodeInst(object):
         self.arg = arg
         self.lineno = -1  # unknown line number
 
+    @property
     def is_jump(self):
         return self.opname in JUMP_OPS
+
+    @property
+    def is_terminator(self):
+        return self.opname == TERM_OPS
+
+    def get_jump_target(self):
+        assert self.is_jump
+        if self.opname in RELATIVE_JUMP_OPS:
+            return self.next + self.arg
+        else:
+            return self.arg
 
     def __repr__(self):
         return '%s(arg=%s, lineno=%d)' % (self.opname, self.arg, self.lineno)

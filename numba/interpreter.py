@@ -3,10 +3,7 @@ import __builtin__ as builtins
 import sys
 import dis
 import inspect
-from numba import ir
-
-
-NEW_BLOCKERS = frozenset(['SETUP_LOOP'])
+from numba import ir, controlflow
 
 
 class Interpreter(object):
@@ -16,6 +13,8 @@ class Interpreter(object):
         self.bytecode = bytecode
         self.scopes = []
         self.loc = ir.Loc(line=1)
+        self.cfa = controlflow.ControlFlowAnalysis(bytecode)
+        self.cfa.run()
 
         global_scope = ir.Scope(parent=None, loc=self.loc)
         self._fill_global_scope(global_scope)
@@ -32,7 +31,6 @@ class Interpreter(object):
         self.stack = []
 
         # Internal states during interpretation
-        self._force_new_block = False
         self._block_actions = {}
 
     def _fill_global_scope(self, scope):
@@ -49,6 +47,7 @@ class Interpreter(object):
         self.loc = ir.Loc(line=self.bytecode[0].lineno)
         self.scopes.append(ir.Scope(parent=self.current_scope, loc=self.loc))
         self._fill_args_into_scope(self.current_scope)
+
         for inst in self._iter_inst():
             self._dispatch(inst)
         # Clean up
@@ -62,21 +61,12 @@ class Interpreter(object):
             b.verify()
 
     def _iter_inst(self):
-        for inst in self.bytecode:
-            if self._use_new_block(inst):
-                self._start_new_block(inst)
-            yield inst
-
-    def _use_new_block(self, inst):
-        if inst.offset in self.bytecode.labels:
-            res = True
-        elif inst.opname in NEW_BLOCKERS:
-            res = True
-        else:
-            res = self._force_new_block
-
-        self._force_new_block = False
-        return res
+        for block in self.cfa.iterblocks():
+            for offset in block:
+                inst = self.bytecode[offset]
+                if offset == block.offset:
+                    self._start_new_block(inst)
+                yield inst
 
     def _start_new_block(self, inst):
         self.loc = ir.Loc(line=inst.lineno)
@@ -140,7 +130,11 @@ class Interpreter(object):
         return var
 
     def store(self, value, name):
-        var = self.current_scope.get_or_insert(name, loc=self.loc)
+        if self.current_block_offset in self.cfa.backbone:
+            var = self.current_scope.redefine(name, loc=self.loc)
+        else:
+            var = self.current_scope.get_or_define(name, loc=self.loc)
+        var = self.current_scope.get_or_define(name, loc=self.loc)
         stmt = ir.Assign(value=value, target=var, loc=self.loc)
         self.current_block.append(stmt)
 
@@ -246,9 +240,6 @@ class Interpreter(object):
                        loc=self.loc)
         self.current_block.append(br)
 
-        # Split the block for the next instruction
-        self._force_new_block = True
-
         # Add event listener to mark the following blocks as loop body
         def mark_as_body(offset, block):
             loop.body.append(offset)
@@ -324,7 +315,7 @@ class Interpreter(object):
         self._inplace_binop('//', inst)
 
     def op_JUMP_ABSOLUTE(self, inst):
-        jmp = ir.Jump(inst.arg, loc=self.loc)
+        jmp = ir.Jump(inst.get_jump_target(), loc=self.loc)
         self.current_block.append(jmp)
 
     def op_POP_BLOCK(self, inst):
@@ -342,28 +333,24 @@ class Interpreter(object):
         self._binop(op, inst)
 
     def op_POP_JUMP_IF_FALSE(self, inst):
-        target = inst.arg
         pred = self.pop()
-        truebr = target
+        truebr = inst.get_jump_target()
         falsebr = inst.next
         bra = ir.Branch(cond=pred, truebr=falsebr, falsebr=truebr,
                         loc=self.loc)
         self.current_block.append(bra)
-        # Split block at next instruction
-        self._force_new_block = True
+
         # In a while loop?
         self._determine_while_condition((truebr, falsebr))
 
     def op_POP_JUMP_IF_TRUE(self, inst):
-        target = inst.arg
         pred = self.pop()
-        truebr = target
+        truebr = inst.get_jump_target()
         falsebr = inst.next
         bra = ir.Branch(cond=pred, truebr=truebr, falsebr=falsebr,
                         loc=self.loc)
         self.current_block.append(bra)
-        # Split block at next instruction
-        self._force_new_block = True
+
         # In a while loop?
         self._determine_while_condition((truebr, falsebr))
 
@@ -396,5 +383,3 @@ class Interpreter(object):
             loop.body.append(offset)
 
         self._block_actions[loop] = mark_as_body
-
-
