@@ -131,7 +131,7 @@ class FunctionTemplate(object):
         assert downcast
         if len(downcast) == 1:
             # Exactly one definition with downcasting
-            return downcast[0][1].return_type
+            return downcast[0][1]
         else:
             downdist = sys.maxint
             leasts = []
@@ -144,7 +144,7 @@ class FunctionTemplate(object):
                     leasts.append((dists, case))
 
             if len(leasts) == 1:
-                return leasts[0][1].return_type
+                return leasts[0][1]
             else:
                 # Need to further decide which downcasted version?
                 raise TypeError("Ambiguous overloading: %s" %
@@ -154,14 +154,14 @@ class FunctionTemplate(object):
         assert upcast
         if len(upcast) == 1:
             # Exactly one definition without downcasting
-            return upcast[0][1].return_type
+            return upcast[0][1]
         else:
             assert len(upcast) > 1
             first = min(upcast)
             upcast.remove(first)
             second = min(upcast)
             if first[0] < second[0]:
-                return first[1].return_type
+                return first[1]
             else:
                 raise TypeError("Ambiguous overloading: %s and %s" % (
                     first[1], second[1]))

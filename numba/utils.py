@@ -38,6 +38,12 @@ class SortedSet(collections.Set):
         return iter(self._values)
 
 
+class UniqueDict(dict):
+    def __setitem__(self, key, value):
+        assert key not in self
+        super(UniqueDict, self).__setitem__(key, value)
+
+
 def cache(fn):
     @functools.wraps(fn)
     def cached_func(self, *args, **kws):
@@ -53,6 +59,8 @@ def cache(fn):
     cached_func.invalidate = invalidate
 
     return cached_func
+
+
 
 
 def bit_length(intval):

@@ -1,7 +1,7 @@
 from llvm.core import Type, Constant
 import llvm.core as lc
 import llvm.passes as lp
-from numba import types
+from numba import types, utils
 from numba.typing import signature
 
 LTYPEMAP = {
@@ -14,7 +14,7 @@ LTYPEMAP = {
 
 class BaseContext(object):
     def __init__(self):
-        self.defns = {}
+        self.defns = utils.UniqueDict()
         # Initialize
         for defn in BUILTINS:
             self.defns[defn.key] = defn
@@ -36,14 +36,9 @@ class BaseContext(object):
         if ty in types.signed_domain:
             return Constant.int(lty, val)
 
-    def get_function(self, fn, *types):
-        defn = self.defns[fn]
-        for impl in defn.cases:
-            sig = impl.signature
-            if sig.args == types:
-                return impl
-        else:
-            raise NotImplementedError(fn, types)
+    def get_function(self, fn, sig):
+        key = fn, sig
+        return self.defns[key]
 
     def get_return_value(self, builder, ty, val):
         if ty is types.boolean:
@@ -51,6 +46,12 @@ class BaseContext(object):
             return builder.zext(val, r)
         else:
             return val
+
+    def cast(self, builder, val, fromty, toty):
+        if fromty == toty:
+            return val
+        else:
+            raise NotImplementedError("cast", val, fromty, toty)
 
     def optimize(self, module):
         pass
@@ -67,39 +68,30 @@ class CPUContext(BaseContext):
 
 #-------------------------------------------------------------------------------
 
-def implement(return_type, *args):
-    def wrapper(fn):
-        fn.signature = signature(return_type, *args)
-        return fn
-
+def implement(func, return_type, *args):
+    def wrapper(impl):
+        impl.signature = signature(return_type, *args)
+        impl.key = func, impl.signature
+        return impl
     return wrapper
 
+BUILTINS = []
 
-@implement(types.boolean, types.int32, types.int32)
+
+def builtin(impl):
+    BUILTINS.append(impl)
+
+#-------------------------------------------------------------------------------
+
+
+@builtin
+@implement('<', types.boolean, types.int32, types.int32)
 def int_lt_impl(context, builder, args):
     return builder.icmp(lc.ICMP_SLT, *args)
 
 
-@implement(types.boolean, types.int32, types.int32)
+@builtin
+@implement('>', types.boolean, types.int32, types.int32)
 def int_gt_impl(context, builder, args):
     return builder.icmp(lc.ICMP_SGT, *args)
 
-
-class CmpOpLt(object):
-    key = '<'
-    cases = [
-        int_lt_impl,
-    ]
-
-
-class CmpOpGt(object):
-    key = '>'
-    cases = [
-        int_gt_impl,
-    ]
-
-
-BUILTINS = [
-    CmpOpLt,
-    CmpOpGt,
-]

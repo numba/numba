@@ -121,9 +121,9 @@ class CallConstrain(object):
         # Case analysis for each combination of argument types.
         for args in itertools.product(*argtypes):
             # TODO handling keyword arguments
-            rt = context.resolve_function_type(fnty, args, ())
-            assert rt is not None, "%s" % fnty
-            restypes.append(rt)
+            sig = context.resolve_function_type(fnty, args, ())
+            assert sig is not None, "%s" % fnty
+            restypes.append(sig.return_type)
         typevars[self.target].add_types(*restypes)
 
 
@@ -140,10 +140,13 @@ class TypeInferer(object):
     def __init__(self, context, blocks):
         self.context = context
         self.blocks = blocks
-        self.typevars = {}
+        self.typevars = utils.UniqueDict()
         self.constrains = ConstrainNetwork()
         # Set of assumed immutable globals
         self.assumed_immutables = set()
+        # Track all calls
+        self.usercalls = []
+        self.intrcalls = []
         # Fill the type vars
         scope = self.blocks.itervalues().next().scope
         for var in scope.localvars:
@@ -185,7 +188,7 @@ class TypeInferer(object):
             self.dump()
 
     def unify(self):
-        typdict = {}
+        typdict = utils.UniqueDict()
         for var, tv in self.typevars.items():
             if len(tv) == 1:
                 typdict[var] = tv.getone()
@@ -194,7 +197,28 @@ class TypeInferer(object):
             else:
                 typdict[var] = self.context.unify_types(*tv.get())
 
-        return typdict, self.get_return_type(typdict)
+        retty = self.get_return_type(typdict)
+        fntys = self.get_function_types(typdict)
+        return typdict, retty, fntys
+
+    def get_function_types(self, typemap):
+        calltypes = utils.UniqueDict()
+        for call, args, kws in self.intrcalls:
+            fnty = call.fn
+            args = tuple(typemap[a.name] for a in args)
+            assert not kws
+            signature = self.context.resolve_function_type(fnty, args, ())
+            calltypes[call] = signature
+
+        for call, args, kws in self.usercalls:
+            fnty = typemap[call.func]
+            args = tuple(typemap[a.name] for a in args)
+            assert not kws
+            signature = self.context.resolve_function_type(fnty, args, ())
+            calltypes[call] = signature
+
+        return calltypes
+
 
     def get_return_type(self, typemap):
         rettypes = set()
@@ -264,9 +288,9 @@ class TypeInferer(object):
         if expr.op == 'call':
             self.typeof_call(inst, target, expr)
         elif expr.op in ('getiter', 'iternext', 'itervalid'):
-            self.typeof_builtin_call(inst, target, expr.op, expr.value)
+            self.typeof_intrinsic_call(inst, target, expr.op, expr.value)
         elif expr.op == 'binop':
-            self.typeof_builtin_call(inst, target, expr.fn, expr.lhs, expr.rhs)
+            self.typeof_intrinsic_call(inst, target, expr.fn, expr.lhs, expr.rhs)
         else:
             raise NotImplementedError(type(expr), expr)
 
@@ -274,7 +298,9 @@ class TypeInferer(object):
         constrain = CallConstrain(target.name, call.func.name, call.args,
                                   call.kws)
         self.constrains.append(constrain)
+        self.usercalls.append((inst.value, call.args, call.kws))
 
-    def typeof_builtin_call(self, inst, target, func, *args):
+    def typeof_intrinsic_call(self, inst, target, func, *args):
         constrain = IntrinsicCallConstrain(target.name, func, args, ())
         self.constrains.append(constrain)
+        self.intrcalls.append((inst.value, args, ()))

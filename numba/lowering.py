@@ -4,10 +4,11 @@ from numba import ir, utils
 
 
 class FunctionDescriptor(object):
-    def __init__(self, name, blocks, typemap, restype, args, kws):
+    def __init__(self, name, blocks, typemap, restype, calltypes, args, kws):
         self.name = name
         self.blocks = blocks
         self.typemap = typemap
+        self.calltypes = calltypes
         self.args = args
         self.kws = kws
         self.restype = restype
@@ -15,11 +16,12 @@ class FunctionDescriptor(object):
         self.argtypes = [self.typemap[a] for a in args]
 
 
-def describe_function(interp, typemap, restype):
+def describe_function(interp, typemap, restype, calltypes):
     args = interp.argspec.args
     kws = ()            #TODO
     fd = FunctionDescriptor(interp.bytecode.func.__name__,
-                            interp.blocks, typemap, restype, args, kws)
+                            interp.blocks, typemap, restype, calltypes, args,
+                            kws)
     return fd
 
 
@@ -123,11 +125,14 @@ class Lower(object):
             rhs = expr.rhs
             lty = self.typeof(lhs.name)
             rty = self.typeof(rhs.name)
-            impl = self.context.get_function(expr.fn, lty, rty)
-            assert impl.signature.return_type == resty
             lhs = self.loadvar(lhs.name)
             rhs = self.loadvar(rhs.name)
+            # Get function
+            signature = self.fndesc.calltypes[expr]
+            impl = self.context.get_function(expr.fn, signature)
             # Convert argument to match
+            lhs = self.context.cast(self.builder, lhs, lty, signature.args[0])
+            rhs = self.context.cast(self.builder, rhs, rty, signature.args[1])
             return impl(self.context, self.builder, (lhs, rhs))
         raise NotImplementedError(expr)
 

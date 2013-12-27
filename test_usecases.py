@@ -33,12 +33,13 @@ def main():
     infer.dump()
     infer.propagate()
 
-    typemap, restype = infer.unify()
+    typemap, restype, calltypes = infer.unify()
+    print(calltypes)
 
     pprint(typemap)
     pprint(restype)
 
-    fndesc = lowering.describe_function(interp, typemap, restype)
+    fndesc = lowering.describe_function(interp, typemap, restype, calltypes)
 
     cpuctx = targets.CPUContext()
     lower = lowering.Lower(cpuctx, fndesc)
