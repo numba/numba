@@ -193,7 +193,16 @@ class TypeInferer(object):
                 raise TypeError("Variable %s has no type" % var)
             else:
                 typdict[var] = self.context.unify_types(*tv.get())
-        return typdict
+
+        return typdict, self.get_return_type(typdict)
+
+    def get_return_type(self, typemap):
+        rettypes = set()
+        for blk in self.blocks.itervalues():
+            term = blk.terminator
+            if isinstance(term, ir.Return):
+                rettypes.add(typemap[term.value.name])
+        return self.context.unify_types(*rettypes)
 
     def get_state_token(self):
         """The algorithm is monotonic.  It can only grow the typesets.

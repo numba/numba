@@ -218,6 +218,10 @@ class Phi(object):
     def __len__(self):
         return len(self.values)
 
+    def __iter__(self):
+        for i in range(len(self)):
+            yield self[i]
+
 
 class Var(object):
     """

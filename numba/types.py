@@ -52,11 +52,10 @@ range_state64_type = Type('range_state64')
 range_iter32_type = Type('range_iter32')
 range_iter64_type = Type('range_iter64')
 
-
-# Type domains that defines precedence of types
-signed_domain = int32, int64
-unsigned_domain = uint32, uint64
-real_domain = float32, float64
+signed_domain = frozenset([int32, int64])
+unsigned_domain = frozenset([uint32, uint64])
+integer_domain = signed_domain | unsigned_domain
+real_domain = frozenset([float32, float64])
 
 domains = unsigned_domain, signed_domain, real_domain
 

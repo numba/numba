@@ -1,7 +1,9 @@
 from __future__ import print_function
 from pprint import pprint
-from numba import bytecode, interpreter, typeinfer, typing, types
+from numba import (bytecode, interpreter, typeinfer, typing, types,
+                   lowering, targets)
 from numba.tests import usecases
+
 
 def main():
     bc = bytecode.ByteCode(func=usecases.andor)
@@ -30,7 +32,19 @@ def main():
     infer.build_constrain()
     infer.dump()
     infer.propagate()
-    pprint(infer.unify())
+
+    typemap, restype = infer.unify()
+
+    pprint(typemap)
+    pprint(restype)
+
+    fndesc = lowering.describe_function(interp, typemap, restype)
+
+    cpuctx = targets.CPUContext()
+    lower = lowering.Lower(cpuctx, fndesc)
+    lower.lower()
+    cpuctx.optimize(lower.module)
+    print(lower.module)
 
 
 

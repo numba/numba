@@ -13,6 +13,7 @@ class Interpreter(object):
         self.bytecode = bytecode
         self.scopes = []
         self.loc = ir.Loc(line=1)
+        self.argspec = inspect.getargspec(self.bytecode.func)
         # Control flow analysis
         self.cfa = controlflow.ControlFlowAnalysis(bytecode)
         self.cfa.run()
@@ -42,8 +43,7 @@ class Interpreter(object):
         pass
 
     def _fill_args_into_scope(self, scope):
-        argspec = inspect.getargspec(self.bytecode.func)
-        for arg in argspec.args:
+        for arg in self.argspec.args:
             scope.define(name=arg, loc=self.loc)
 
     def interpret(self):
