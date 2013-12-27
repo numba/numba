@@ -17,7 +17,7 @@ def while_count(s, e):
     i = s
     c = 0
     while i < e:
-        c += 1
+        c += i
         i += 1
     return c
 

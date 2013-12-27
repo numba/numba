@@ -173,6 +173,16 @@ def signature(return_type, *args):
     return _signature(return_type, args)
 
 
+BUILTINS = []
+
+
+def builtin(template):
+    BUILTINS.append(template)
+    return template
+
+#-------------------------------------------------------------------------------
+
+@builtin
 class Range(FunctionTemplate):
     key = types.range_type
     cases = [
@@ -183,6 +193,7 @@ class Range(FunctionTemplate):
     ]
 
 
+@builtin
 class GetIter(FunctionTemplate):
     key = "getiter"
     cases = [
@@ -191,6 +202,7 @@ class GetIter(FunctionTemplate):
     ]
 
 
+@builtin
 class IterNext(FunctionTemplate):
     key = "iternext"
     cases = [
@@ -199,6 +211,7 @@ class IterNext(FunctionTemplate):
     ]
 
 
+@builtin
 class IterValid(FunctionTemplate):
     key = "itervalid"
     cases = [
@@ -216,18 +229,22 @@ class BinOp(FunctionTemplate):
     ]
 
 
+@builtin
 class BinOpAdd(BinOp):
     key = "+"
 
 
+@builtin
 class BinOpSub(BinOp):
     key = "-"
 
 
+@builtin
 class BinOpMul(BinOp):
     key = "*"
 
 
+@builtin
 class BinOpDiv(BinOp):
     key = "/?"
 
@@ -241,25 +258,32 @@ class CmpOp(FunctionTemplate):
     ]
 
 
+@builtin
 class CmpOpLt(CmpOp):
     key = '<'
 
 
+@builtin
+class CmpOpLe(CmpOp):
+    key = '<='
+
+
+@builtin
 class CmpOpGt(CmpOp):
     key = '>'
 
 
-BUILTINS = [
-    Range,
-    GetIter,
-    IterNext,
-    IterValid,
-    # binary operations
-    BinOpAdd,
-    BinOpSub,
-    BinOpMul,
-    BinOpDiv,
-    # compare operations
-    CmpOpLt,
-    CmpOpGt,
-]
+@builtin
+class CmpOpGe(CmpOp):
+    key = '>='
+
+
+@builtin
+class CmpOpEq(CmpOp):
+    key = '=='
+
+
+@builtin
+class CmpOpNe(CmpOp):
+    key = '!='
+

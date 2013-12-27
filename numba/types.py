@@ -9,6 +9,12 @@ class Type(object):
         return self.name
 
 
+class Dummy(Type):
+    """
+    For type that does not really have a representation.
+    """
+
+
 class Array(Type):
     LAYOUTS = frozenset(['C', 'F', 'CS', 'FS', 'A'])
 
@@ -46,7 +52,7 @@ float64 = Type('float64')
 complex64 = Type('complex64')
 complex128 = Type('complex128')
 
-range_type = Type('range')
+range_type = Dummy('range')
 range_state32_type = Type('range_state32')
 range_state64_type = Type('range_state64')
 range_iter32_type = Type('range_iter32')

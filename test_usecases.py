@@ -47,6 +47,9 @@ def main():
     cpuctx.optimize(lower.module)
     print(lower.module)
 
+    cfunc = cpuctx.get_executable(lower.function, fndesc)
+    print(cfunc(10, 0))
+
 
 
 if __name__ == '__main__':

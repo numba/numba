@@ -204,14 +204,17 @@ class TypeInferer(object):
     def get_function_types(self, typemap):
         calltypes = utils.UniqueDict()
         for call, args, kws in self.intrcalls:
-            fnty = call.fn
+            if call.op == 'binop':
+                fnty = call.fn
+            else:
+                fnty = call.op
             args = tuple(typemap[a.name] for a in args)
             assert not kws
             signature = self.context.resolve_function_type(fnty, args, ())
             calltypes[call] = signature
 
         for call, args, kws in self.usercalls:
-            fnty = typemap[call.func]
+            fnty = typemap[call.func.name]
             args = tuple(typemap[a.name] for a in args)
             assert not kws
             signature = self.context.resolve_function_type(fnty, args, ())

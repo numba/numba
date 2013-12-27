@@ -245,7 +245,7 @@ class Interpreter(object):
         self.store(itervalid, pred)
 
         # Conditional jump
-        br = ir.Branch(cond=pred, truebr=inst.next,
+        br = ir.Branch(cond=self.get(pred), truebr=inst.next,
                        falsebr=self.syntax_blocks[-1].exit,
                        loc=self.loc)
         self.current_block.append(br)
@@ -334,7 +334,7 @@ class Interpreter(object):
         op = dis.cmp_op[inst.arg]
         self._binop(op, lhs, rhs, res)
 
-    def _op_JUMP_IF(self, inst, pred, iftrue, forward=False):
+    def _op_JUMP_IF(self, inst, pred, iftrue):
         brs = {
             True:  inst.get_jump_target(),
             False: inst.next,

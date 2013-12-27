@@ -1,6 +1,6 @@
 from __future__ import print_function
 from llvm.core import Type, Builder, Module
-from numba import ir, utils
+from numba import ir, utils, types
 
 
 class FunctionDescriptor(object):
@@ -105,6 +105,15 @@ class Lower(object):
             return self.lower_expr(ty, value)
         elif isinstance(value, ir.Phi):
             return self.lower_phi(ty, value)
+        elif isinstance(value, ir.Var):
+            val = self.loadvar(value.name)
+            oty = self.typeof(value.name)
+            return self.context.cast(self.builder, val, oty, ty)
+        elif isinstance(value, ir.Global):
+            if isinstance(ty, types.Dummy):
+                return self.context.get_dummy_value()
+            else:
+                raise NotImplementedError('global', ty)
         else:
             raise NotImplementedError(type(value), value)
 
@@ -134,6 +143,25 @@ class Lower(object):
             lhs = self.context.cast(self.builder, lhs, lty, signature.args[0])
             rhs = self.context.cast(self.builder, rhs, rty, signature.args[1])
             return impl(self.context, self.builder, (lhs, rhs))
+        elif expr.op == 'call':
+            assert not expr.kws
+            argvals = [self.loadvar(a.name) for a in expr.args]
+            argtyps = [self.typeof(a.name) for a in expr.args]
+            signature = self.fndesc.calltypes[expr]
+            fnty = self.typeof(expr.func.name)
+            impl = self.context.get_function(fnty, signature)
+            castvals = [self.context.cast(self.builder, av, at, ft)
+                        for av, at, ft in zip(argvals, argtyps,
+                                              signature.args)]
+            return impl(self.context, self.builder, castvals)
+        elif expr.op in ('getiter', 'iternext', 'itervalid'):
+            val = self.loadvar(expr.value.name)
+            ty = self.typeof(expr.value.name)
+            signature = self.fndesc.calltypes[expr]
+            impl = self.context.get_function(expr.op, signature)
+            (fty,) = signature.args
+            castval = self.context.cast(self.builder, val, ty, fty)
+            return impl(self.context, self.builder, (val,))
         raise NotImplementedError(expr)
 
     def typeof(self, varname):
