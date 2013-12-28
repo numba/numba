@@ -53,7 +53,6 @@ def compile_extra(typingctx, targetctx, func, args, return_type=None):
 
     lower = lowering.Lower(targetctx, fndesc)
     lower.lower()
-    targetctx.optimize(lower.module)
 
     if __debug__:
         print(lower.module)

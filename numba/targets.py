@@ -1,13 +1,16 @@
 from __future__ import print_function
-import ctypes
 from llvm.core import Type, Constant
 import llvm.core as lc
 import llvm.passes as lp
 import llvm.ee as le
-from numba import types, utils, cgutils
+from numba import types, utils, cgutils, _dynfunc
 from numba.typing import signature
+from numba.callwrapper import PyCallWrapper
+from numba.pythonapi import PythonAPI
 
 LTYPEMAP = {
+    types.pyobject: Type.pointer(Type.int(8)),
+
     types.boolean: Type.int(1),
 
     types.int32: Type.int(32),
@@ -87,6 +90,9 @@ class BaseContext(object):
     def get_executable(self, func, fndesc):
         raise NotImplementedError
 
+    def get_python_api(self, builder):
+        return PythonAPI(self, builder)
+
 
 class CPUContext(BaseContext):
     def init(self):
@@ -105,16 +111,16 @@ class CPUContext(BaseContext):
 
     def optimize(self, module):
         self.pm.run(module)
-        self.pm.run(module)
 
     def get_executable(self, func, fndesc):
+        wrapper = PyCallWrapper(self, func.module, func, fndesc).build()
+        self.optimize(func.module)
+        print(func.module)
         self.engine.add_module(func.module)
-        fnptr = self.engine.get_pointer_to_function(func)
-        # Ctypes
-        cretty = {types.int32: ctypes.c_int32,
-                  types.boolean: ctypes.c_bool}[fndesc.restype]
-        proto = ctypes.CFUNCTYPE(cretty, ctypes.c_int32, ctypes.c_int32)
-        return proto(fnptr)
+        fnptr = self.engine.get_pointer_to_function(wrapper)
+
+        func = _dynfunc.make_function(fnptr).dyncallable
+        return func
 
 #-------------------------------------------------------------------------------
 
