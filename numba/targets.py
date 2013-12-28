@@ -172,7 +172,8 @@ class CPUContext(BaseContext):
         self.engine.add_module(func.module)
         fnptr = self.engine.get_pointer_to_function(wrapper)
 
-        func = _dynfunc.make_function(fnptr).dyncallable
+        func = _dynfunc.make_function(fndesc.pymod, fndesc.name, fndesc.doc,
+                                      fnptr)
         return func
 
 #-------------------------------------------------------------------------------

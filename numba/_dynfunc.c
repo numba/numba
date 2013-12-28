@@ -1,39 +1,44 @@
 #include <Python.h>
+#include <string.h>
 
-static unsigned long long TheCounter = 0;
-static char ModNameBuf[128];
+
+#if (PY_MAJOR_VERSION >= 3)
+    #define PyString_AsString PyUnicode_AsUTF8
+#endif
 
 static
 PyObject*
 make_function(PyObject *self, PyObject *args)
 {
-    PyObject * module = NULL;
-    Py_ssize_t fnaddr = 0;
+    PyObject *module, *fname, *fdoc;
+    Py_ssize_t fnaddr;
+    PyMethodDef *desc;
+    char *doc, *name;
+    char *mlname, *mldoc;
+    size_t szdoc, szname;
 
-    PyMethodDef dummy[] = {
-        { "dyncallable", 0, METH_KEYWORDS, NULL },
-        { NULL },
-    };
-
-    PyMethodDef *functable = NULL;
-
-    if (!PyArg_ParseTuple(args, "n", &fnaddr)) {
+    if (!PyArg_ParseTuple(args, "OOOn", &module, &fname, &fdoc, &fnaddr)) {
         return NULL;
     }
 
-    ((void**)dummy)[1] = (void*)fnaddr;
+    doc = PyString_AsString(fdoc);
+    name = PyString_AsString(fname);
+    szdoc = strlen(doc) + 1;
+    szname = strlen(name) + 1;
 
-    /* FIXME Need to figure out a way to free the table */
-    functable = malloc(sizeof(dummy));
-    memcpy(functable, dummy, sizeof(dummy));
+    mlname = malloc(szname);
+    mldoc = malloc(szdoc);
+    strcpy(mlname, name);
+    strcpy(mldoc, doc);
 
-    sprintf(ModNameBuf, "dynmod%llu", TheCounter++);
+    /* FIXME Need to figure out a way to free the mallocs */
+    desc = malloc(sizeof(PyMethodDef));
+    desc->ml_name = mlname;
+    desc->ml_meth = (void*)fnaddr;
+    desc->ml_flags = METH_KEYWORDS;
+    desc->ml_doc = mldoc;
 
-    /* FIXME Python3 */
-    module = Py_InitModule(ModNameBuf, functable);
-
-    Py_XINCREF(module);
-    return module;
+    return PyCFunction_NewEx(desc, module, module);
 }
 
 static PyMethodDef core_methods[] = {

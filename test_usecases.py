@@ -5,6 +5,7 @@ from numba.tests import usecases
 from numba import types
 from timeit import default_timer as timer
 
+
 def main():
     pyfunc = usecases.andor
     ctx, cfunc = compile_isolated(pyfunc, (types.int32, types.int32))

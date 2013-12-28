@@ -1,11 +1,16 @@
 from __future__ import print_function
+import inspect
 from llvm.core import Type, Builder, Module
 from numba import ir, utils, types
 
 
 class FunctionDescriptor(object):
-    def __init__(self, name, blocks, typemap, restype, calltypes, args, kws):
+    def __init__(self, pymod, name, doc, blocks, typemap, restype, calltypes,
+                 args,
+                 kws):
+        self.pymod = pymod
         self.name = name
+        self.doc = doc
         self.blocks = blocks
         self.typemap = typemap
         self.calltypes = calltypes
@@ -17,9 +22,12 @@ class FunctionDescriptor(object):
 
 
 def describe_function(interp, typemap, restype, calltypes):
+    func = interp.bytecode.func
+    pymod = inspect.getmodule(func)
+    doc = func.__doc__ or ''
     args = interp.argspec.args
     kws = ()            #TODO
-    fd = FunctionDescriptor(interp.bytecode.func.__name__,
+    fd = FunctionDescriptor(pymod, interp.bytecode.func.__name__, doc,
                             interp.blocks, typemap, restype, calltypes, args,
                             kws)
     return fd
