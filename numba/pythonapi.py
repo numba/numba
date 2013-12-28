@@ -11,8 +11,7 @@ class PythonAPI(object):
         self.long = Type.int(ctypes.sizeof(ctypes.c_long) * 8)
         self.module = builder.basic_block.function.module
 
-    def _get_function(self, fnty, name):
-        return self.module.get_or_insert_function(fnty, name=name)
+    # ------ utils -----
 
     def incref(self, obj):
         fnty = Type.function(Type.void(), [self.pyobj])
@@ -32,12 +31,6 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyArg_ParseTupleAndKeywords")
         return self.builder.call(fn, [args, kws, fmt, keywords] + list(objs))
 
-    def alloca_obj(self):
-        return self.builder.alloca(self.pyobj)
-
-    def get_null_object(self):
-        return Constant.null(self.pyobj)
-
     def int_as_long(self, intobj):
         fnty = Type.function(self.long, [self.pyobj])
         fn = self._get_function(fnty, name="PyInt_AsLong")
@@ -52,6 +45,17 @@ class PythonAPI(object):
         fnty = Type.function(self.pyobj, [self.long])
         fn = self._get_function(fnty, name="PyBool_FromLong")
         return self.builder.call(fn, [ival])
+
+    # ------ utils -----
+
+    def _get_function(self, fnty, name):
+        return self.module.get_or_insert_function(fnty, name=name)
+
+    def alloca_obj(self):
+        return self.builder.alloca(self.pyobj)
+
+    def get_null_object(self):
+        return Constant.null(self.pyobj)
 
     def to_native_arg(self, obj, typ):
         if typ == types.int32:

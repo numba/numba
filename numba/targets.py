@@ -1,4 +1,5 @@
 from __future__ import print_function
+from collections import namedtuple
 from llvm.core import Type, Constant
 import llvm.core as lc
 import llvm.passes as lp
@@ -18,6 +19,9 @@ LTYPEMAP = {
 }
 
 
+Status = namedtuple("Status", ("code", "ok", "err"))
+
+
 class BaseContext(object):
     def __init__(self):
         self.defns = utils.UniqueDict()
@@ -31,6 +35,35 @@ class BaseContext(object):
         For subclasses to add initializer
         """
         pass
+
+    def get_function_type(self, fndesc):
+        """
+        Calling Convention
+        ------------------
+        Returns: -1 for failure with python exception set;
+                  0 for success;
+                 >0 for user error code.
+        Return value is passed by reference as the first argument.
+        Actual arguments starts at the 2nd argument position.
+        Caller is responsible to allocate space for return value.
+        """
+        argtypes = [self.get_argument_type(aty)
+                    for aty in fndesc.argtypes]
+        restype = self.get_return_type(fndesc.restype)
+        resptr = Type.pointer(restype)
+        fnty = Type.function(Type.int(), [resptr] + argtypes)
+        return fnty
+
+    def declare_function(self, module, fndesc):
+        fnty = self.get_function_type(fndesc)
+        fn = module.add_function(fnty, name=fndesc.name)
+        for ak, av in zip(fndesc.args, self.get_arguments(fn)):
+            av.name = "arg.%s" % ak
+        fn.args[0] = ".ret"
+        return fn
+
+    def get_arguments(self, func):
+        return func.args[1:]
 
     def get_argument_type(self, ty):
         if ty is types.boolean:
@@ -68,11 +101,31 @@ class BaseContext(object):
         else:
             return val
 
+    def return_value(self, builder, retval):
+        fn = builder.basic_block.function
+        retptr = fn.args[0]
+        assert retval.type == retptr.type.pointee
+        builder.store(retval, retptr)
+        builder.ret(Constant.null(Type.int()))
+
     def cast(self, builder, val, fromty, toty):
         if fromty == toty:
             return val
         else:
             raise NotImplementedError("cast", val, fromty, toty)
+
+    def call_function(self, builder, callee, args):
+        retty = callee.args[0].type.pointee
+        # TODO: user supplied retval or let user tell where to allocate
+        retval = builder.alloca(retty)
+        realargs = [retval] + list(args)
+        code = builder.call(callee, realargs)
+
+        ok = builder.icmp(lc.ICMP_EQ, code, Constant.null(Type.int()))
+        err = builder.not_(ok)
+
+        status = Status(code=code, ok=ok, err=err)
+        return status, builder.load(retval)
 
     def get_struct_type(self, struct):
         fields = [self.get_value_type(v) for _, v in struct._fields]

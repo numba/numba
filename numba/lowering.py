@@ -35,12 +35,7 @@ class Lower(object):
         # Initialize LLVM
         self.module = Module.new("module.%s" % self.fndesc.name)
 
-        argtypes = [self.context.get_argument_type(aty)
-                    for aty in self.fndesc.argtypes]
-        restype = self.context.get_return_type(self.fndesc.restype)
-        fnty = Type.function(restype, argtypes)
-
-        self.function = self.module.add_function(fnty, name=self.fndesc.name)
+        self.function = context.declare_function(self.module, fndesc)
         self.entry_block = self.function.append_basic_block('entry')
         self.builder = Builder.new(self.entry_block)
 
@@ -50,7 +45,8 @@ class Lower(object):
 
     def lower(self):
         # Init argument variables
-        for ak, av in zip(self.fndesc.args, self.function.args):
+        fnargs = self.context.get_arguments(self.function)
+        for ak, av in zip(self.fndesc.args, fnargs):
             self.storevar(av, ak)
         # Init blocks
         for offset in self.fndesc.blocks:
@@ -93,7 +89,7 @@ class Lower(object):
             if ty != oty:
                 val = self.context.cast(val, oty, ty)
             retval = self.context.get_return_value(self.builder, ty, val)
-            self.builder.ret(retval)
+            self.context.return_value(self.builder, retval)
         else:
             raise NotImplementedError(type(inst))
 

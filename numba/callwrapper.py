@@ -28,8 +28,7 @@ class PyCallWrapper(object):
         api = self.context.get_python_api(builder)
         nargs = len(self.fndesc.args)
         keywords = self.make_keywords(self.fndesc.args)
-        argfmt = "O" * nargs
-        fmt = self.make_const_string(argfmt)
+        fmt = self.make_const_string("O" * nargs)
 
         objs = [api.alloca_obj() for _ in range(nargs)]
         parseok = api.parse_tuple_and_keywords(args, kws, fmt, keywords, *objs)
@@ -41,16 +40,18 @@ class PyCallWrapper(object):
         innerargs = [api.to_native_arg(builder.load(obj), ty)
                      for obj, ty in zip(objs, self.fndesc.argtypes)]
 
-        res = builder.call(self.func, innerargs)
+        status, res = self.context.call_function(builder, self.func, innerargs)
 
-        retval = api.from_native_return(res, self.fndesc.restype)
-        builder.ret(retval)
+        with cgutils.ifthen(builder, status.ok):
+            retval = api.from_native_return(res, self.fndesc.restype)
+            builder.ret(retval)
 
+        builder.ret(api.get_null_object())
 
     def make_const_string(self, string):
         stringtype = Type.pointer(Type.int(8))
         text = Constant.stringz(string)
-        name = "const.%s" % string
+        name = ".const.%s" % string
         gv = self.module.add_global_variable(text.type, name=name)
         gv.global_constant = True
         gv.initializer = text
@@ -67,7 +68,7 @@ class PyCallWrapper(object):
 
         kwlist = Constant.array(stringtype, strings)
 
-        gv = self.module.add_global_variable(kwlist.type, name="kwlist")
+        gv = self.module.add_global_variable(kwlist.type, name=".kwlist")
         gv.global_constant = True
         gv.initializer = kwlist
         gv.linkage = lc.LINKAGE_INTERNAL
