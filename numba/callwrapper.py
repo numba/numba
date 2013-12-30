@@ -49,14 +49,7 @@ class PyCallWrapper(object):
         builder.ret(api.get_null_object())
 
     def make_const_string(self, string):
-        stringtype = Type.pointer(Type.int(8))
-        text = Constant.stringz(string)
-        name = ".const.%s" % string
-        gv = self.module.add_global_variable(text.type, name=name)
-        gv.global_constant = True
-        gv.initializer = text
-        gv.linkage = lc.LINKAGE_INTERNAL
-        return Constant.bitcast(gv, stringtype)
+        return self.context.insert_const_string(self.module, string)
 
     def make_keywords(self, kws):
         strings = []

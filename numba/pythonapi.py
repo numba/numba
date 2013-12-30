@@ -1,17 +1,29 @@
 from llvm.core import Type, Constant
+import llvm.ee as le
+from llvm import LLVMException
 import ctypes
-from numba import types
+from numba import types, utils
+
+_PyNone = ctypes.c_ssize_t(id(None))
+
+
+@utils.runonce
+def fix_python_api():
+    le.dylib_add_symbol("Py_None", ctypes.addressof(_PyNone))
 
 
 class PythonAPI(object):
     def __init__(self, context, builder):
+        fix_python_api()
         self.context = context
         self.builder = builder
         self.pyobj = self.context.get_argument_type(types.pyobject)
         self.long = Type.int(ctypes.sizeof(ctypes.c_long) * 8)
+        self.py_ssize_t = Type.int(ctypes.sizeof(ctypes.c_ssize_t) * 8)
+        self.cstring = Type.pointer(Type.int(8))
         self.module = builder.basic_block.function.module
 
-    # ------ utils -----
+    # ------ Python API -----
 
     def incref(self, obj):
         fnty = Type.function(Type.void(), [self.pyobj])
@@ -31,22 +43,59 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyArg_ParseTupleAndKeywords")
         return self.builder.call(fn, [args, kws, fmt, keywords] + list(objs))
 
-    def int_as_long(self, intobj):
-        fnty = Type.function(self.long, [self.pyobj])
-        fn = self._get_function(fnty, name="PyInt_AsLong")
-        return self.builder.call(fn, [intobj])
-
-    def int_from_long(self, ival):
+    def long_from_long(self, ival):
         fnty = Type.function(self.pyobj, [self.long])
         fn = self._get_function(fnty, name="PyInt_FromLong")
         return self.builder.call(fn, [ival])
+
+    def number_as_ssize_t(self, numobj):
+        fnty = Type.function(self.py_ssize_t, [self.pyobj])
+        fn = self._get_function(fnty, name="PyNumber_AsSsize_t")
+        return self.builder.call(fn, [numobj])
 
     def bool_from_long(self, ival):
         fnty = Type.function(self.pyobj, [self.long])
         fn = self._get_function(fnty, name="PyBool_FromLong")
         return self.builder.call(fn, [ival])
 
+    def object_getattr_string(self, obj, attr):
+        cstr = self.context.insert_const_string(self.module, attr)
+        fnty = Type.function(self.pyobj, [self.pyobj, self.cstring])
+        fn = self._get_function(fnty, name="PyObject_GetAttrString")
+        return self.builder.call(fn, [obj, cstr])
+
+    def string_as_string(self, strobj):
+        fnty = Type.function(self.cstring, [self.pyobj])
+        fn = self._get_function(fnty, name="PyString_AsString")
+        return self.builder.call(fn, [strobj])
+
+    def object_str(self, obj):
+        fnty = Type.function(self.pyobj, [self.pyobj])
+        fn = self._get_function(fnty, name="PyObject_Str")
+        return self.builder.call(fn, [obj])
+
+    def tuple_getitem(self, tup, idx):
+        """
+        Borrow reference
+        """
+        fnty = Type.function(self.pyobj, [self.pyobj, self.py_ssize_t])
+        fn = self._get_function(fnty, "PyTuple_GetItem")
+        idx = self.context.get_constant(types.intp, idx)
+        return self.builder.call(fn, [tup, idx])
+
+    def make_none(self):
+        obj = self._get_object("Py_None")
+        self.incref(obj)
+        return obj
+
     # ------ utils -----
+
+    def _get_object(self, name):
+        try:
+            gv = self.module.get_global_variable_named(name)
+        except LLVMException:
+            gv = self.module.add_global_variable(self.pyobj, name)
+        return self.builder.load(gv)
 
     def _get_function(self, fnty, name):
         return self.module.get_or_insert_function(fnty, name=name)
@@ -59,16 +108,58 @@ class PythonAPI(object):
 
     def to_native_arg(self, obj, typ):
         if typ == types.int32:
-            longval = self.int_as_long(obj)
-            return self.builder.trunc(longval,
+            ssize_val = self.number_as_ssize_t(obj)
+            return self.builder.trunc(ssize_val,
                                       self.context.get_argument_type(typ))
+        elif isinstance(typ, types.Array):
+            return self.to_native_array(typ, obj)
         raise NotImplementedError(typ)
 
     def from_native_return(self, val, typ):
         if typ == types.boolean:
             longval = self.builder.zext(val, self.long)
             return self.bool_from_long(longval)
-        if typ == types.int32:
+
+        elif typ == types.int32:
             longval = self.builder.sext(val, self.long)
-            return self.int_from_long(longval)
+            return self.long_from_long(longval)
+
+        elif typ == types.none:
+            ret = self.make_none()
+            return ret
         raise NotImplementedError(typ)
+
+    def to_native_array(self, typ, ary):
+        nativearycls = self.context.make_array(typ)
+        nativeary = nativearycls(self.context, self.builder)
+        ctobj = self.object_getattr_string(ary, "ctypes")
+        cdata = self.object_getattr_string(ctobj, "data")
+        pyshape = self.object_getattr_string(ary, "shape")
+        pystrides = self.object_getattr_string(ary, "strides")
+
+        rawint = self.number_as_ssize_t(cdata)
+
+        nativeary.data = self.builder.inttoptr(rawint, nativeary.data.type)
+
+        shapeary = nativeary.shape
+        strideary = nativeary.strides
+
+        for i in range(typ.ndim):
+            shape = self.tuple_getitem(pyshape, i)
+            stride = self.tuple_getitem(pystrides, i)
+
+            shapeval = self.number_as_ssize_t(shape)
+            strideval = self.number_as_ssize_t(stride)
+
+            shapeary = self.builder.insert_value(shapeary, shapeval, i)
+            strideary = self.builder.insert_value(strideary, strideval, i)
+
+        nativeary.shape = shapeary
+        nativeary.strides = strideary
+
+        self.decref(cdata)
+        self.decref(pyshape)
+        self.decref(pystrides)
+
+        return nativeary._getvalue()
+

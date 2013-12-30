@@ -1,6 +1,7 @@
 from __future__ import print_function
 import unittest
 import itertools
+import numpy as np
 from numba.compiler import compile_isolated
 from numba import types
 from numba.tests import usecases
@@ -51,6 +52,21 @@ class TestUsecases(unittest.TestCase):
         for args in itertools.product(ss, es):
             print("case s=%d, e=%d" % args)
             self.assertEqual(pyfunc(*args), cfunc(*args))
+
+    def test_copy_arrays(self):
+        pyfunc = usecases.copy_arrays
+        arraytype = types.Array(types.int32, 1, 'A')
+        ctx, cfunc = compile_isolated(pyfunc, (arraytype, arraytype))
+
+        nda = 0, 1, 10, 100
+
+        for nd in nda:
+            a = np.arange(nd, dtype='int32')
+            b = np.empty_like(a)
+            args = a, b
+            cfunc(*args)
+            self.assertTrue(np.all(a == b))
+
 
 if __name__ == '__main__':
     unittest.main()

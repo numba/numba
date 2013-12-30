@@ -9,7 +9,7 @@ class Structure(object):
 
         if value is None:
             with goto_entry_block(builder):
-                    self._value = builder.alloca(self._type)
+                self._value = builder.alloca(self._type)
         else:
             assert value.type.pointee == self._type
             self._value = value
@@ -47,7 +47,10 @@ def append_basic_block(builder, name=''):
 @contextmanager
 def goto_block(builder, bb):
     bbold = builder.basic_block
-    builder.position_at_end(bb)
+    if bb.instructions and bb.instructions[-1].is_terminator:
+        builder.position_before(bb.instructions[-1])
+    else:
+        builder.position_at_end(bb)
     yield
     builder.position_at_end(bbold)
 

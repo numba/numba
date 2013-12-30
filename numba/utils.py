@@ -61,6 +61,15 @@ def cache(fn):
     return cached_func
 
 
+def runonce(fn):
+    @functools.wraps(fn)
+    def inner():
+        if not inner._ran:
+            fn()
+        inner._ran = True
+    inner._ran = False
+    return inner
+
 
 
 def bit_length(intval):

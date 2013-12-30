@@ -16,15 +16,39 @@ class Context(object):
     def __init__(self, type_lattice=None):
         self.type_lattice = type_lattice or types.type_lattice
         self.functions = {}
+        self.attributes = {}
         self.load_builtins()
 
     def resolve_function_type(self, func, args, kws):
         ft = self.functions[func]
         return ft.apply(args, kws)
 
+    def resolve_getattr(self, value, attr):
+        try:
+            attrinfo = self.attributes[value]
+        except KeyError:
+            if value.is_parametric:
+                attrinfo = self.attributes[type(value)]
+            else:
+                raise
+
+        return attrinfo.resolve(value, attr)
+
+    def resolve_setitem(self, target, index, value):
+        args = target, index, value
+        kws = ()
+        return self.resolve_function_type("setitem", args, kws)
+
     def load_builtins(self):
         for ftcls in BUILTINS:
             self.insert_function(ftcls(self))
+        for ftcls in BUILTIN_ATTRS:
+            self.insert_attributes(ftcls(self))
+
+    def insert_attributes(self, at):
+        key = at.key
+        assert key not in self.functions, "Duplicated attributes template"
+        self.attributes[key] = at
 
     def insert_function(self, ft):
         key = ft.key
@@ -34,6 +58,12 @@ class Context(object):
     def type_distance(self, fromty, toty):
         if fromty == toty:
             return 0
+
+        # if types.any == toty:
+        #     return 0
+        #
+        # if isinstance(toty, types.Kind) and isinstance(fromty, toty.of):
+        #     return 0
 
         return self.type_lattice.get((fromty, toty))
 
@@ -88,9 +118,11 @@ class FunctionTemplate(object):
                                                                  kws)
             return self._select_best_definition(upcast, downcast, args, kws,
                                                 cases)
-        else:
-            # TODO: generic function template
-            raise NotImplementedError
+
+        generic = getattr(self, "generic", None)
+        if generic:
+            return generic(args, kws)
+        raise NotImplementedError
 
     def apply_case(self, case, args, kws):
         """
@@ -166,19 +198,44 @@ class FunctionTemplate(object):
                 raise TypeError("Ambiguous overloading: %s and %s" % (
                     first[1], second[1]))
 
-_signature = namedtuple('signature', ['return_type', 'args'])
+
+class Signature(object):
+    __slots__ = 'return_type', 'args'
+
+    def __init__(self, return_type, args):
+        self.return_type = return_type
+        self.args = args
+
+    def __hash__(self):
+        return hash(self.args)
+
+    def __eq__(self, other):
+        if isinstance(other, Signature):
+            return self.args == other.args
+
+    def __ne__(self, other):
+        return not (self == other)
+
+    def __repr__(self):
+        return "%s -> %s" % (self.args, self.return_type)
 
 
 def signature(return_type, *args):
-    return _signature(return_type, args)
+    return Signature(return_type, args)
 
 
 BUILTINS = []
-
+BUILTIN_ATTRS = []
 
 def builtin(template):
     BUILTINS.append(template)
     return template
+
+
+def builtin_attr(template):
+    BUILTIN_ATTRS.append(template)
+    return template
+
 
 #-------------------------------------------------------------------------------
 
@@ -286,4 +343,60 @@ class CmpOpEq(CmpOp):
 @builtin
 class CmpOpNe(CmpOp):
     key = '!='
+
+
+@builtin
+class GetItem(FunctionTemplate):
+    key = "getitem"
+    # cases = [
+    #     signature(types.any, types.UniTuple, types.any),
+    #     signature(types.any, types.Array, types.any),
+    # ]
+    def generic(self, args, kws):
+        assert not kws
+        base = args[0]
+        if hasattr(base, "getitem"):
+            retty, indty = base.getitem()
+            case = signature(retty, base, indty)
+            m = self.apply_case(case, args, kws)
+            if m is not None:
+                return case
+        else:
+            raise NotImplementedError
+
+@builtin
+class SetItem(FunctionTemplate):
+    key = "setitem"
+
+    def generic(self, args, kws):
+        assert not kws
+        base, index, value = args
+        if hasattr(base, 'setitem'):
+            indty, valty = base.setitem()
+            sig = signature(types.none, base, indty, valty)
+            return sig
+        else:
+            raise NotImplementedError
+
+
+#-------------------------------------------------------------------------------
+
+
+class AttributeTemplate(object):
+    def __init__(self, context):
+        self.context = context
+
+    def resolve(self, value, attr):
+        fn = getattr(self, "resolve_%s" % attr, None)
+        if fn is None:
+            raise NotImplementedError(value, attr)
+        return fn(value)
+
+
+@builtin_attr
+class ArrayAttribute(AttributeTemplate):
+    key = types.Array
+
+    def resolve_shape(self, value):
+        return types.UniTuple(types.intp, value.ndim)
 

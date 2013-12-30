@@ -1,7 +1,7 @@
 from __future__ import print_function
 import inspect
 from llvm.core import Type, Builder, Module
-from numba import ir, utils, types
+from numba import ir, utils, types, typing
 
 
 class FunctionDescriptor(object):
@@ -82,14 +82,17 @@ class Lower(object):
             ty = self.typeof(inst.target.name)
             val = self.lower_assign(ty, inst)
             self.storevar(val, inst.target.name)
+
         elif isinstance(inst, ir.Branch):
             cond = self.loadvar(inst.cond.name)
             tr = self.blkmap[inst.truebr]
             fl = self.blkmap[inst.falsebr]
             self.builder.cbranch(cond, tr, fl)
+
         elif isinstance(inst, ir.Jump):
             target = self.blkmap[inst.target]
             self.builder.branch(target)
+
         elif isinstance(inst, ir.Return):
             val = self.loadvar(inst.value.name)
             oty = self.typeof(inst.value.name)
@@ -98,6 +101,30 @@ class Lower(object):
                 val = self.context.cast(val, oty, ty)
             retval = self.context.get_return_value(self.builder, ty, val)
             self.context.return_value(self.builder, retval)
+
+        elif isinstance(inst, ir.SetItem):
+            target = self.loadvar(inst.target.name)
+            value = self.loadvar(inst.value.name)
+            index = self.loadvar(inst.index.name)
+
+            targetty = self.typeof(inst.target.name)
+            valuety = self.typeof(inst.value.name)
+            indexty = self.typeof(inst.index.name)
+
+            signature = typing.signature(types.none, targetty, indexty,
+                                         valuety)
+
+            impl = self.context.get_function("setitem", signature)
+
+            argvals = (target, index, value)
+            argtyps = (targetty, indexty, valuety)
+
+            castvals = [self.context.cast(self.builder, av, at, ft)
+                        for av, at, ft in zip(argvals, argtyps,
+                                              signature.args)]
+
+            return impl(self.context, self.builder, argtyps, castvals)
+
         else:
             raise NotImplementedError(type(inst))
 
@@ -105,19 +132,24 @@ class Lower(object):
         value = inst.value
         if isinstance(value, ir.Const):
             return self.context.get_constant(ty, value.value)
+
         elif isinstance(value, ir.Expr):
             return self.lower_expr(ty, value)
+
         elif isinstance(value, ir.Phi):
             return self.lower_phi(ty, value)
+
         elif isinstance(value, ir.Var):
             val = self.loadvar(value.name)
             oty = self.typeof(value.name)
             return self.context.cast(self.builder, val, oty, ty)
+
         elif isinstance(value, ir.Global):
             if isinstance(ty, types.Dummy):
                 return self.context.get_dummy_value()
             else:
                 raise NotImplementedError('global', ty)
+
         else:
             raise NotImplementedError(type(value), value)
 
@@ -146,7 +178,7 @@ class Lower(object):
             # Convert argument to match
             lhs = self.context.cast(self.builder, lhs, lty, signature.args[0])
             rhs = self.context.cast(self.builder, rhs, rty, signature.args[1])
-            return impl(self.context, self.builder, (lhs, rhs))
+            return impl(self.context, self.builder, signature.args, (lhs, rhs))
         elif expr.op == 'call':
             assert not expr.kws
             argvals = [self.loadvar(a.name) for a in expr.args]
@@ -157,7 +189,7 @@ class Lower(object):
             castvals = [self.context.cast(self.builder, av, at, ft)
                         for av, at, ft in zip(argvals, argtyps,
                                               signature.args)]
-            return impl(self.context, self.builder, castvals)
+            return impl(self.context, self.builder, argtyps, castvals)
         elif expr.op in ('getiter', 'iternext', 'itervalid'):
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
@@ -165,7 +197,24 @@ class Lower(object):
             impl = self.context.get_function(expr.op, signature)
             (fty,) = signature.args
             castval = self.context.cast(self.builder, val, ty, fty)
-            return impl(self.context, self.builder, (val,))
+            return impl(self.context, self.builder, (fty,), (val,))
+        elif expr.op == "getattr":
+            val = self.loadvar(expr.value.name)
+            ty = self.typeof(expr.value.name)
+            impl = self.context.get_attribute(val, ty, expr.attr)
+            return impl(self.context, self.builder, ty, val)
+        elif expr.op == "getitem":
+            baseval = self.loadvar(expr.target.name)
+            indexval = self.loadvar(expr.index.name)
+            signature = self.fndesc.calltypes[expr]
+            impl = self.context.get_function("getitem", signature)
+            argvals = (baseval, indexval)
+            argtyps = (self.typeof(expr.target.name),
+                       self.typeof(expr.index.name))
+            castvals = [self.context.cast(self.builder, av, at, ft)
+                        for av, at, ft in zip(argvals, argtyps,
+                                              signature.args)]
+            return impl(self.context, self.builder, argtyps, castvals)
         raise NotImplementedError(expr)
 
     def typeof(self, varname):

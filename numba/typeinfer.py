@@ -132,6 +132,35 @@ class IntrinsicCallConstrain(CallConstrain):
         self.resolve(context, typevars, fnty=self.func)
 
 
+class GetAttrConstrain(object):
+    def __init__(self, target, attr, value):
+        self.target = target
+        self.attr = attr
+        self.value = value
+
+    def __call__(self, context, typevars):
+        valtys = typevars[self.value.name].get()
+        restypes = []
+        for ty in valtys:
+            restypes.append(context.resolve_getattr(value=ty, attr=self.attr))
+        typevars[self.target].add_types(*restypes)
+
+
+class SetItemConstrain(object):
+    def __init__(self, target, index, value):
+        self.target = target
+        self.index = index
+        self.value = value
+
+    def __call__(self, context, typevars):
+        targettys = typevars[self.target.name].get()
+        idxtys = typevars[self.index.name].get()
+        valtys = typevars[self.value.name].get()
+
+        for ty, it, vt in itertools.product(targettys, idxtys, valtys):
+            context.resolve_setitem(target=ty, index=it, value=vt)
+
+
 class TypeInferer(object):
     """
     Operates on block that shares the same ir.Scope.
@@ -222,7 +251,6 @@ class TypeInferer(object):
 
         return calltypes
 
-
     def get_return_type(self, typemap):
         rettypes = set()
         for blk in self.blocks.itervalues():
@@ -241,10 +269,17 @@ class TypeInferer(object):
     def constrain_statement(self, inst):
         if isinstance(inst, ir.Assign):
             self.typeof_assign(inst)
+        elif isinstance(inst, ir.SetItem):
+            self.typeof_setitem(inst)
         elif isinstance(inst, (ir.Jump, ir.Branch, ir.Return)):
             pass
         else:
             raise NotImplementedError(inst)
+
+    def typeof_setitem(self, inst):
+        constrain = SetItemConstrain(target=inst.target, index=inst.index,
+                                     value=inst.value)
+        self.constrains.append(constrain)
 
     def typeof_assign(self, inst):
         value = inst.value
@@ -275,6 +310,8 @@ class TypeInferer(object):
             self.typevars[target.name].lock(typ)
         elif isinstance(const, float):
             self.typevars[target.name].lock(types.float64)
+        elif const is None:
+            self.typevars[target.name].lock(types.none)
         else:
             raise NotImplementedError(type(const))
 
@@ -294,6 +331,16 @@ class TypeInferer(object):
             self.typeof_intrinsic_call(inst, target, expr.op, expr.value)
         elif expr.op == 'binop':
             self.typeof_intrinsic_call(inst, target, expr.fn, expr.lhs, expr.rhs)
+        elif expr.op == 'getitem':
+            self.typeof_intrinsic_call(inst, target, expr.op, expr.target,
+                                       expr.index)
+        elif expr.op == 'getattr':
+            constrain = GetAttrConstrain(target.name, attr=expr.attr,
+                                         value=expr.value)
+            self.constrains.append(constrain)
+        elif expr.op == 'getitem':
+            self.typeof_intrinsic_call(inst, target, expr.op, expr.target,
+                                       expr.index)
         else:
             raise NotImplementedError(type(expr), expr)
 

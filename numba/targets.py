@@ -1,5 +1,7 @@
 from __future__ import print_function
-from collections import namedtuple
+import functools
+from collections import namedtuple, defaultdict
+import ctypes
 from llvm.core import Type, Constant
 import llvm.core as lc
 import llvm.passes as lp
@@ -14,6 +16,7 @@ LTYPEMAP = {
 
     types.boolean: Type.int(1),
 
+    types.uint8: Type.int(8),
     types.int32: Type.int(32),
     types.int64: Type.int(64),
 }
@@ -22,12 +25,47 @@ LTYPEMAP = {
 Status = namedtuple("Status", ("code", "ok", "err"))
 
 
+class Overloads(object):
+    def __init__(self):
+        self.versions = []
+
+    def find(self, sig):
+        for ver in self.versions:
+            if ver.signature == sig:
+                return ver
+            # As generic type
+            if len(ver.signature.args) == len(sig.args):
+                match = True
+                for formal, actual in zip(ver.signature.args, sig.args):
+                    if formal == actual:
+                        pass
+                    elif types.any == formal:
+                        pass
+                    elif (isinstance(formal, types.Kind) and
+                          isinstance(actual, formal.of)):
+                        pass
+                    else:
+                        match = False
+                        break
+
+                if match:
+                    return ver
+
+        raise NotImplementedError(sig)
+
+    def append(self, impl):
+        self.versions.append(impl)
+
+
 class BaseContext(object):
     def __init__(self):
-        self.defns = utils.UniqueDict()
+        self.defns = defaultdict(Overloads)
+        self.attrs = utils.UniqueDict()
         # Initialize
         for defn in BUILTINS:
-            self.defns[defn.key] = defn
+            self.defns[defn.key].append(defn)
+        for attr in BUILTIN_ATTRS:
+            self.attrs[attr.key] = attr
         self.init()
 
     def init(self):
@@ -62,6 +100,16 @@ class BaseContext(object):
         fn.args[0] = ".ret"
         return fn
 
+    def insert_const_string(self, mod, string):
+        stringtype = Type.pointer(Type.int(8))
+        text = Constant.stringz(string)
+        name = ".const.%s" % string
+        gv = mod.add_global_variable(text.type, name=name)
+        gv.global_constant = True
+        gv.initializer = text
+        gv.linkage = lc.LINKAGE_INTERNAL
+        return Constant.bitcast(gv, stringtype)
+
     def get_arguments(self, func):
         return func.args[1:]
 
@@ -83,16 +131,52 @@ class BaseContext(object):
         elif ty == types.range_iter32_type:
             stty = self.get_struct_type(RangeIter32)
             return Type.pointer(stty)
+        elif ty == types.range_state64_type:
+            stty = self.get_struct_type(RangeState64)
+            return Type.pointer(stty)
+        elif ty == types.range_iter64_type:
+            stty = self.get_struct_type(RangeIter64)
+            return Type.pointer(stty)
+        elif isinstance(ty, types.Array):
+            stty = self.get_struct_type(make_array(ty))
+            return Type.pointer(stty)
+        elif isinstance(ty, types.CPointer):
+            dty = self.get_value_type(ty.dtype)
+            return Type.pointer(dty)
+        elif isinstance(ty, types.UniTuple):
+            dty = self.get_value_type(ty.dtype)
+            return Type.array(dty, ty.count)
         return LTYPEMAP[ty]
 
     def get_constant(self, ty, val):
         lty = self.get_value_type(ty)
-        if ty in types.signed_domain:
+
+        if ty == types.none:
+            assert val is None
+            return self.get_dummy_value()
+
+        elif ty in types.signed_domain:
             return Constant.int_signextend(lty, val)
 
+        raise NotImplementedError
+
     def get_function(self, fn, sig):
-        key = fn, sig
-        return self.defns[key]
+        overloads = self.defns[fn]
+        try:
+            return overloads.find(sig)
+        except NotImplementedError:
+            raise NotImplementedError(fn, sig)
+
+    def get_attribute(self, val, typ, attr):
+        key = typ, attr
+        try:
+            return self.attrs[key]
+        except KeyError:
+            if typ.is_parametric:
+                key = type(typ), attr
+                return self.attrs[key]
+            else:
+                raise
 
     def get_return_value(self, builder, ty, val):
         if ty is types.boolean:
@@ -108,11 +192,21 @@ class BaseContext(object):
         builder.store(retval, retptr)
         builder.ret(Constant.null(Type.int()))
 
+    def return_errcode(self, builder, code):
+        assert code > 0
+        builder.ret(Constant.int(Type.int(), code))
+
     def cast(self, builder, val, fromty, toty):
-        if fromty == toty:
+        if fromty == toty or toty == types.any or isinstance(toty, types.Kind):
             return val
-        else:
-            raise NotImplementedError("cast", val, fromty, toty)
+        elif fromty in types.signed_domain and toty in types.signed_domain:
+            lfrom = self.get_value_type(fromty)
+            lto = self.get_value_type(toty)
+            if lfrom.width < lto.width:
+                return builder.sext(val, lto)
+            elif lfrom.width > lto.width:
+                return builder.zext(val, lto)
+        raise NotImplementedError("cast", val, fromty, toty)
 
     def call_function(self, builder, callee, args):
         retty = callee.args[0].type.pointee
@@ -126,6 +220,11 @@ class BaseContext(object):
 
         status = Status(code=code, ok=ok, err=err)
         return status, builder.load(retval)
+
+    def print_string(self, text):
+        fnty = Type.function(Type.int(), [self.cstring])
+        self.get_or_insert_function(fnty, "puts")
+        return self.builder.call(puts, [text])
 
     def get_struct_type(self, struct):
         fields = [self.get_value_type(v) for _, v in struct._fields]
@@ -145,6 +244,9 @@ class BaseContext(object):
 
     def get_python_api(self, builder):
         return PythonAPI(self, builder)
+
+    def make_array(self, typ):
+        return make_array(typ)
 
 
 class CPUContext(BaseContext):
@@ -176,67 +278,91 @@ class CPUContext(BaseContext):
                                       fnptr)
         return func
 
+
 #-------------------------------------------------------------------------------
+
 
 def implement(func, return_type, *args):
     def wrapper(impl):
-        def res(context, builder, args):
-            return impl(context, builder, args)
+        @functools.wraps(impl)
+        def res(context, builder, tys, args):
+            ret = impl(context, builder, tys, args)
+            return ret
         res.signature = signature(return_type, *args)
-        res.key = func, res.signature
+        res.key = func
         return res
     return wrapper
 
+
+def impl_attribute(ty, attr, rtype):
+    def wrapper(impl):
+        @functools.wraps(impl)
+        def res(context, builder, typ, value):
+            ret = impl(context, builder, typ, value)
+            return ret
+        res.return_type = rtype
+        res.key = (ty, attr)
+        return res
+    return wrapper
+
+
 BUILTINS = []
+BUILTIN_ATTRS = []
 
 
 def builtin(impl):
     BUILTINS.append(impl)
     return impl
 
+
+def builtin_attr(impl):
+    BUILTIN_ATTRS.append(impl)
+    return impl
+
 #-------------------------------------------------------------------------------
 
-def int_add_impl(context, builder, args):
+
+def int_add_impl(context, builder, tys, args):
     return builder.add(*args)
 
 
-def int_sub_impl(context, builder, args):
+def int_sub_impl(context, builder, tys, args):
     return builder.sub(*args)
 
 
-def int_mul_impl(context, builder, args):
+def int_mul_impl(context, builder, tys, args):
     return builder.mul(*args)
 
 
-def int_udiv_impl(context, builder, args):
+def int_udiv_impl(context, builder, tys, args):
     return builder.udiv(*args)
 
 
-def int_sdiv_impl(context, builder, args):
+def int_sdiv_impl(context, builder, tys, args):
     return builder.sdiv(*args)
 
 
-def int_slt_impl(context, builder, args):
+def int_slt_impl(context, builder, tys, args):
     return builder.icmp(lc.ICMP_SLT, *args)
 
 
-def int_sle_impl(context, builder, args):
+def int_sle_impl(context, builder, tys, args):
     return builder.icmp(lc.ICMP_SLE, *args)
 
 
-def int_sgt_impl(context, builder, args):
+def int_sgt_impl(context, builder, tys, args):
     return builder.icmp(lc.ICMP_SGT, *args)
 
 
-def int_sge_impl(context, builder, args):
+def int_sge_impl(context, builder, tys, args):
     return builder.icmp(lc.ICMP_SGE, *args)
 
 
-def int_eq_impl(context, builder, args):
+def int_eq_impl(context, builder, tys, args):
     return builder.icmp(lc.ICMP_EQ, *args)
 
 
-def int_ne_impl(context, builder, args):
+def int_ne_impl(context, builder, tys, args):
     return builder.icmp(lc.ICMP_NE, *args)
 
 
@@ -260,7 +386,7 @@ for ty in types.signed_domain:
 
 
 class RangeState32(cgutils.Structure):
-    _fields = [('start',  types.int32),
+    _fields = [('start', types.int32),
                ('stop',  types.int32),
                ('step',  types.int32)]
 
@@ -272,9 +398,22 @@ class RangeIter32(cgutils.Structure):
                ('count', types.int32)]
 
 
+class RangeState64(cgutils.Structure):
+    _fields = [('start', types.int64),
+               ('stop',  types.int64),
+               ('step',  types.int64)]
+
+
+class RangeIter64(cgutils.Structure):
+    _fields = [('iter',  types.int64),
+               ('stop',  types.int64),
+               ('step',  types.int64),
+               ('count', types.int64)]
+
+
 @builtin
 @implement(types.range_type, types.range_state32_type, types.int32, types.int32)
-def range2_32_impl(context, builder, args):
+def range2_32_impl(context, builder, tys, args):
     start, stop = args
     state = RangeState32(context, builder)
 
@@ -287,7 +426,7 @@ def range2_32_impl(context, builder, args):
 
 @builtin
 @implement('getiter', types.range_iter32_type, types.range_state32_type)
-def getiter_range32_impl(context, builder, args):
+def getiter_range32_impl(context, builder, tys, args):
     (value,) = args
     state = RangeState32(context, builder, value)
     iterobj = RangeIter32(context, builder)
@@ -306,7 +445,7 @@ def getiter_range32_impl(context, builder, args):
 
 @builtin
 @implement('iternext', types.int32, types.range_iter32_type)
-def iternext_range32_impl(context, builder, args):
+def iternext_range32_impl(context, builder, tys, args):
     (value,) = args
     iterobj = RangeIter32(context, builder, value)
 
@@ -320,10 +459,171 @@ def iternext_range32_impl(context, builder, args):
 
 @builtin
 @implement('itervalid', types.boolean, types.range_iter32_type)
-def itervalid_range32_impl(context, builder, args):
+def itervalid_range32_impl(context, builder, tys, args):
     (value,) = args
     iterobj = RangeIter32(context, builder, value)
 
     zero = context.get_constant(types.int32, 0)
     gt = builder.icmp(lc.ICMP_SGE, iterobj.count, zero)
     return gt
+
+
+
+@builtin
+@implement(types.range_type, types.range_state64_type, types.int64)
+def range1_64_impl(context, builder, tys, args):
+    (stop,) = args
+    state = RangeState64(context, builder)
+
+    state.start = context.get_constant(types.int64, 0)
+    state.stop = stop
+    state.step = context.get_constant(types.int64, 1)
+
+    return state._getvalue()
+
+
+@builtin
+@implement(types.range_type, types.range_state64_type, types.int64,
+           types.int64)
+def range2_64_impl(context, builder, tys, args):
+    start, stop = args
+    state = RangeState64(context, builder)
+
+    state.start = start
+    state.stop = stop
+    state.step = context.get_constant(types.int64, 1)
+
+    return state._getvalue()
+
+
+@builtin
+@implement('getiter', types.range_iter64_type, types.range_state64_type)
+def getiter_range64_impl(context, builder, tys, args):
+    (value,) = args
+    state = RangeState64(context, builder, value)
+    iterobj = RangeIter64(context, builder)
+
+    start = state.start
+    stop = state.stop
+    step = state.step
+
+    iterobj.iter = start
+    iterobj.stop = stop
+    iterobj.step = step
+    iterobj.count = builder.sdiv(builder.sub(stop, start), step)
+
+    return iterobj._getvalue()
+
+
+@builtin
+@implement('iternext', types.int64, types.range_iter64_type)
+def iternext_range64_impl(context, builder, tys, args):
+    (value,) = args
+    iterobj = RangeIter64(context, builder, value)
+
+    res = iterobj.iter
+    one = context.get_constant(types.int64, 1)
+    iterobj.count = builder.sub(iterobj.count, one)
+    iterobj.iter = builder.add(res, iterobj.step)
+
+    return res
+
+
+@builtin
+@implement('itervalid', types.boolean, types.range_iter64_type)
+def itervalid_range64_impl(context, builder, tys, args):
+    (value,) = args
+    iterobj = RangeIter64(context, builder, value)
+
+    zero = context.get_constant(types.int64, 0)
+    gt = builder.icmp(lc.ICMP_SGE, iterobj.count, zero)
+    return gt
+
+
+@builtin
+@implement('getitem', types.any, types.Kind(types.UniTuple), types.intp)
+def getitem_unituple(context, builder, tys, args):
+    tupty, _ = tys
+    tup, idx = args
+
+    bbelse = cgutils.append_basic_block(builder, "switch.else")
+    bbend = cgutils.append_basic_block(builder, "switch.end")
+    switch = builder.switch(idx, bbelse, n=tupty.count)
+
+    with cgutils.goto_block(builder, bbelse):
+        # TODO: propagate exception to
+        context.return_errcode(builder, 1)
+
+    lrtty = context.get_value_type(tupty.dtype)
+    with cgutils.goto_block(builder, bbend):
+        phinode = builder.phi(lrtty)
+
+    for i in range(tupty.count):
+        ki = context.get_constant(types.intp, i)
+        bbi = cgutils.append_basic_block(builder, "switch.%d" % i)
+        switch.add_case(ki, bbi)
+        with cgutils.goto_block(builder, bbi):
+            value = builder.extract_value(tup, i)
+            builder.branch(bbend)
+            phinode.add_incoming(value, bbi)
+
+    builder.position_at_end(bbend)
+    return phinode
+
+
+@builtin
+@implement('getitem', types.any, types.Kind(types.Array), types.intp)
+def getitem_array(context, builder, tys, args):
+    aryty, _ = tys
+    ary, idx = args
+
+    arystty = make_array(aryty)
+    ary = arystty(context, builder, ary)
+    dataptr = ary.data
+
+    # TODO: other than 1D
+    ptr = builder.gep(dataptr, [idx])
+    return builder.load(ptr)
+
+
+@builtin
+@implement('setitem', types.none, types.Kind(types.Array), types.intp,
+           types.any)
+def setitem_array(context, builder, tys, args):
+    aryty, _, valty = tys
+    ary, idx, val = args
+
+    arystty = make_array(aryty)
+    ary = arystty(context, builder, ary)
+    dataptr = ary.data
+
+    # TODO: other than 1D
+    ptr = builder.gep(dataptr, [idx])
+    builder.store(val, ptr)
+    return
+
+
+#-------------------------------------------------------------------------------
+
+def make_array(ty):
+    dtype = ty.dtype
+    nd = ty.ndim
+
+    class ArrayTemplate(cgutils.Structure):
+        _fields = [('data',    types.CPointer(dtype)),
+                   ('shape',   types.UniTuple(types.intp, nd)),
+                   ('strides', types.UniTuple(types.intp, nd)),]
+
+    return ArrayTemplate
+
+
+#-------------------------------------------------------------------------------
+
+
+@builtin_attr
+@impl_attribute(types.Array, "shape", types.UniTuple)
+def array_shape(context, builder, typ, value):
+    arrayty = make_array(typ)
+    array = arrayty(context, builder, value)
+    return array.shape
+

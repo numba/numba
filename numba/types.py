@@ -2,11 +2,20 @@ import itertools
 
 
 class Type(object):
-    def __init__(self, name):
+    is_parametric = False
+
+    def __init__(self, name, param=False):
         self.name = name
+        self.is_parametric = param
 
     def __repr__(self):
         return self.name
+
+    def __eq__(self, other):
+        return self is other
+
+    def __ne__(self, other):
+        return not (self == other)
 
 
 class Dummy(Type):
@@ -15,29 +24,112 @@ class Dummy(Type):
     """
 
 
+class Kind(Type):
+    def __init__(self, of):
+        super(Kind, self).__init__("kind(%s)" % of)
+        self.of = of
+
+
 class Array(Type):
     LAYOUTS = frozenset(['C', 'F', 'CS', 'FS', 'A'])
 
     def __init__(self, dtype, ndim, layout):
-        if layout not in self.LAYOUT:
+        if layout not in self.LAYOUTS:
             raise ValueError("Invalid layout '%s'" % layout)
         name = "array(%s, %sd, %s)" % (dtype, ndim, layout)
-        super(Array, self).__init__(self, name)
+        super(Array, self).__init__(name, param=True)
         self.dtype = dtype
         self.ndim = ndim
         self.layout = layout
 
+    def get_layout(self, dim):
+        assert 0 <= dim < self.ndim
+        if self.layout in 'CFA':
+            return self.layout
+        elif self.layout == 'CS':
+            if dim == self.ndim - 1:
+                return 'C'
+        elif self.layout == 'FS':
+            if dim == 0:
+                return 'F'
+        return 'A'
 
-class Tuple(Type):
-    def __init__(self, *elements):
-        name = "(%s)" % ', '.join(str(e) for e in elements)
-        super(Tuple, self).__init__(name)
-        self.elements = elements
+    def getitem(self):
+        """Returns (return-type, index-type)
+        """
+        return self.dtype, intp
+
+    def setitem(self):
+        """Returns (index-type, value-type)
+        """
+        return intp, self.dtype
+
+    def __eq__(self, other):
+        if isinstance(other, Array):
+            return (self.dtype == other.dtype and
+                    self.ndim == other.ndim and
+                    self.layout == other.layout)
+
+    def __hash__(self):
+        return hash((self.dtype, self.ndim, self.layout))
+
+
+class UniTuple(Type):
+    def __init__(self, dtype, count):
+        name = "(%s x %d)" % (dtype, count)
+        super(UniTuple, self).__init__(name, param=True)
+        self.dtype = dtype
+        self.count = count
+
+    def getitem(self):
+        return self.dtype, intp
+
+    def __eq__(self, other):
+        if isinstance(other, UniTuple):
+            return self.dtype == other.dtype and self.count == other.count
+
+    def __hash__(self):
+        return hash((self.dtype, self.count))
+
+
+# class CArray(Type):
+#     def __init__(self, dtype, count):
+#         name = "[%s x %d]" % (dtype, count)
+#         super(CArray, self).__init__(name, param=True)
+#         self.dtype = dtype
+#         self.count = count
+#
+#     def __eq__(self, other):
+#         if isinstance(other, CArray):
+#             return self.dtype == other.dtype and self.count == other.count
+#
+#     def __hash__(self):
+#         return hash((self.dtype, self.count))
+
+
+class CPointer(Type):
+    def __init__(self, dtype):
+        name = "*%s" % dtype
+        super(CPointer, self).__init__(name, param=True)
+        self.dtype = dtype
+
+    def __eq__(self, other):
+        if isinstance(other, CPointer):
+            return self.dtype == other.dtype
+
+    def __hash__(self):
+        return hash(self.dtype)
+
 
 
 pyobject = Type('pyobject')
+none = Dummy('none')
+any = Dummy('any')
+
 
 boolean = bool_ = Type('bool')
+
+byte = uint8 = Type('uint8')
 
 int32 = Type('int32')
 int64 = Type('int64')
