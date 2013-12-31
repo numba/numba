@@ -89,8 +89,9 @@ class BaseContext(object):
         argtypes = [self.get_argument_type(aty)
                     for aty in fndesc.argtypes]
         restype = self.get_return_type(fndesc.restype)
+        scope = self.get_argument_type(types.pyobject)
         resptr = Type.pointer(restype)
-        fnty = Type.function(Type.int(), [resptr] + argtypes)
+        fnty = Type.function(Type.int(), [resptr, scope] + argtypes)
         return fnty
 
     def declare_function(self, module, fndesc):
@@ -111,8 +112,11 @@ class BaseContext(object):
         gv.linkage = lc.LINKAGE_INTERNAL
         return Constant.bitcast(gv, stringtype)
 
+    def get_scope(self, func):
+        return func.args[1]
+
     def get_arguments(self, func):
-        return func.args[1:]
+        return func.args[2:]
 
     def get_argument_type(self, ty):
         if ty is types.boolean:
@@ -205,6 +209,9 @@ class BaseContext(object):
         assert code > 0
         builder.ret(Constant.int(Type.int(), code))
 
+    def return_exc(self, builder):
+        builder.ret(Constant.int_signextend(Type.int(), -1))
+
     def cast(self, builder, val, fromty, toty):
         if fromty == toty or toty == types.any or isinstance(toty, types.Kind):
             return val
@@ -217,11 +224,11 @@ class BaseContext(object):
                 return builder.zext(val, lto)
         raise NotImplementedError("cast", val, fromty, toty)
 
-    def call_function(self, builder, callee, args):
+    def call_function(self, builder, scope, callee, args):
         retty = callee.args[0].type.pointee
         # TODO: user supplied retval or let user tell where to allocate
         retval = builder.alloca(retty)
-        realargs = [retval] + list(args)
+        realargs = [retval, scope] + list(args)
         code = builder.call(callee, realargs)
 
         ok = builder.icmp(lc.ICMP_EQ, code, Constant.null(Type.int()))
@@ -230,10 +237,12 @@ class BaseContext(object):
         status = Status(code=code, ok=ok, err=err)
         return status, builder.load(retval)
 
-    def print_string(self, text):
-        fnty = Type.function(Type.int(), [self.cstring])
-        puts = self.get_or_insert_function(fnty, "puts")
-        return self.builder.call(puts, [text])
+    def print_string(self, builder, text):
+        mod = builder.basic_block.function.module
+        cstring = Type.pointer(Type.int(8))
+        fnty = Type.function(Type.int(), [cstring])
+        puts = mod.get_or_insert_function(fnty, "puts")
+        return builder.call(puts, [text])
 
     def get_struct_type(self, struct):
         fields = [self.get_value_type(v) for _, v in struct._fields]
@@ -251,8 +260,8 @@ class BaseContext(object):
     def get_executable(self, func, fndesc):
         raise NotImplementedError
 
-    def get_python_api(self, builder):
-        return PythonAPI(self, builder)
+    def get_python_api(self, builder, globalscope=None):
+        return PythonAPI(self, builder, globalscope)
 
     def make_array(self, typ):
         return make_array(typ)

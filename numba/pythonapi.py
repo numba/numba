@@ -13,7 +13,7 @@ def fix_python_api():
 
 
 class PythonAPI(object):
-    def __init__(self, context, builder):
+    def __init__(self, context, builder, globalscope=None):
         fix_python_api()
         self.context = context
         self.builder = builder
@@ -22,6 +22,7 @@ class PythonAPI(object):
         self.py_ssize_t = self.context.get_value_type(types.intp)
         self.cstring = Type.pointer(Type.int(8))
         self.module = builder.basic_block.function.module
+        self.globalscope = globalscope
 
     # ------ Python API -----
 
@@ -42,6 +43,31 @@ class PythonAPI(object):
         fnty = Type.function(Type.int(), argtypes, var_arg=True)
         fn = self._get_function(fnty, name="PyArg_ParseTupleAndKeywords")
         return self.builder.call(fn, [args, kws, fmt, keywords] + list(objs))
+
+    def dict_getitem_string(self, dic, name):
+        """Returns a borrowed reference
+        """
+        fnty = Type.function(self.pyobj, [self.pyobj, self.cstring])
+        fn = self._get_function(fnty, name="PyDict_GetItemString")
+        cstr = self.context.insert_const_string(self.module, name)
+        return self.builder.call(fn, [dic, cstr])
+
+    def err_clear(self):
+        fnty = Type.function(Type.void(), ())
+        fn = self._get_function(fnty, name="PyErr_Clear")
+        return self.builder.call(fn, ())
+
+    def import_module_noblock(self, modname):
+        fnty = Type.function(self.pyobj, [self.cstring])
+        fn = self._get_function(fnty, name="PyImport_ImportModuleNoBlock")
+        return self.builder.call(fn, [modname])
+
+    def call_function_objargs(self, callee, objargs):
+        fnty = Type.function(self.pyobj, [self.pyobj], var_arg=True)
+        fn = self._get_function(fnty, name="PyObject_CallFunctionObjArgs")
+        args = [callee] + list(objargs)
+        args.append(self.context.get_constant_null(types.pyobject))
+        return self.builder.call(fn, args)
 
     def long_from_long(self, ival):
         fnty = Type.function(self.pyobj, [self.long])
@@ -118,6 +144,12 @@ class PythonAPI(object):
 
     def alloca_obj(self):
         return self.builder.alloca(self.pyobj)
+
+    def print_object(self, obj):
+        strobj = self.object_str(obj)
+        cstr = self.string_as_string(strobj)
+        self.context.print_string(self.builder, cstr)
+        self.decref(str)
 
     def get_null_object(self):
         return Constant.null(self.pyobj)

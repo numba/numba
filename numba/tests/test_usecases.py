@@ -2,7 +2,7 @@ from __future__ import print_function
 import unittest
 import itertools
 import numpy as np
-from numba.compiler import compile_isolated
+from numba.compiler import compile_isolated, Flags
 from numba import types
 from numba.tests import usecases
 
@@ -85,6 +85,20 @@ class TestUsecases(unittest.TestCase):
     def test_ifelse1(self):
         pyfunc = usecases.ifelse1
         ctx, cfunc = compile_isolated(pyfunc, (types.int32, types.int32))
+
+        xs = -1, 0, 1
+        ys = -1, 0, 1
+
+        for x, y in itertools.product(xs, ys):
+            args = x, y
+            self.assertEqual(pyfunc(*args), cfunc(*args))
+
+    def test_string1(self):
+        pyfunc = usecases.string1
+        flags = Flags()
+        flags.set("enable_pyobject")
+        ctx, cfunc = compile_isolated(pyfunc, (types.int32, types.int32),
+                                      flags=flags)
 
         xs = -1, 0, 1
         ys = -1, 0, 1

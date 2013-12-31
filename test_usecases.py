@@ -17,12 +17,12 @@ def main():
     b = 321
 
     ts = timer()
-    r = cfunc(a, b)
+    r = pyfunc(a, b)
     te = timer()
     print(te - ts, r)
 
     ts = timer()
-    r = pyfunc(a, b)
+    r = cfunc(a, b)
     te = timer()
     print(te - ts, r)
 

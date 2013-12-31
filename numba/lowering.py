@@ -2,7 +2,14 @@ from __future__ import print_function
 import inspect
 from collections import defaultdict
 from llvm.core import Type, Builder, Module
-from numba import ir, types, typing
+import llvm.core as lc
+from numba import ir, types, typing, cgutils
+
+
+try:
+    import builtins
+except ImportError:
+    import __builtin__ as builtins
 
 
 class FunctionDescriptor(object):
@@ -286,7 +293,8 @@ class Lower(BaseLower):
 
 class PyLower(BaseLower):
     def init(self):
-        self.pyapi = self.context.get_python_api(self.builder)
+        scope = self.context.get_scope(self.function)
+        self.pyapi = self.context.get_python_api(self.builder, scope)
 
     def init_argument(self, arg):
         self.incref(arg)
@@ -317,6 +325,8 @@ class PyLower(BaseLower):
             return val
         elif isinstance(value, ir.Expr):
             return self.lower_expr(value)
+        elif isinstance(value, ir.Global):
+            return self.lower_global(value.name)
         else:
             raise NotImplementedError(type(value), value)
 
@@ -330,6 +340,11 @@ class PyLower(BaseLower):
                 NotImplementedError(expr.fn)
             res = fn(lhs, rhs)
             return res
+        elif expr.op == 'call':
+            assert not expr.kws
+            argvals = [self.loadvar(a.name) for a in expr.args]
+            fn = self.loadvar(expr.func.name)
+            return self.pyapi.call_function_objargs(fn, argvals)
         else:
             raise NotImplementedError(expr)
 
@@ -339,7 +354,48 @@ class PyLower(BaseLower):
         else:
             raise NotImplementedError(type(const))
 
+    def lower_global(self, name):
+        obj = self.pyapi.dict_getitem_string(self.pyapi.globalscope, name)
+
+        if hasattr(builtins, name):
+            obj_is_null = self.is_null(obj)
+            bbelse = self.builder.basic_block
+
+            with cgutils.ifthen(self.builder, obj_is_null):
+                self.pyapi.err_clear()
+                mod = self.pyapi.dict_getitem_string(self.pyapi.globalscope,
+                                                     "__builtins__")
+                builtin = self.pyapi.dict_getitem_string(mod, name)
+
+                self.check_error(builtin)
+                bbif = self.builder.basic_block
+
+            retval = self.builder.phi(self.pyapi.pyobj)
+            retval.add_incoming(obj, bbelse)
+            retval.add_incoming(builtin, bbif)
+
+        else:
+            retval = obj
+            self.check_error(retval)
+
+        self.incref(retval)
+        return retval
+
     # -------------------------------------------------------------------------
+
+    def check_error(self, obj):
+        with cgutils.ifthen(self.builder, self.is_null(obj)):
+            self.cleanup()
+            self.context.return_exc(self.builder)
+
+    def is_null(self, obj):
+        null = self.context.get_constant_null(types.pyobject)
+        return self.builder.icmp(lc.ICMP_EQ, obj, null)
+
+    def return_error_occurred(self):
+        self.cleanup()
+        # TODO
+        self.builder.unreachable()
 
     def getvar(self, name):
         if name not in self.varmap:

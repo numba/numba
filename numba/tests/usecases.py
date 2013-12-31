@@ -58,4 +58,4 @@ def ifelse1(x, y):
 
 def string1(x, y):
     a = "whatzup"
-    return x + y
+    return a + str(x + y)
