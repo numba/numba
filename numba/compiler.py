@@ -1,7 +1,7 @@
 from __future__ import print_function
 from pprint import pprint
 from numba import (bytecode, interpreter, typing, typeinfer, lowering,
-                   targets, types)
+                   targets )
 
 
 def compile_isolated(func, args, return_type=None):

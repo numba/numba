@@ -1,7 +1,6 @@
 from __future__ import print_function
 import functools
 from collections import namedtuple, defaultdict
-import ctypes
 from llvm.core import Type, Constant
 import llvm.core as lc
 import llvm.passes as lp

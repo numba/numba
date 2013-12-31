@@ -1,7 +1,7 @@
 from __future__ import print_function
 import inspect
 from llvm.core import Type, Builder, Module
-from numba import ir, utils, types, typing
+from numba import ir, types, typing
 
 
 class FunctionDescriptor(object):
