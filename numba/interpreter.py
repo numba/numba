@@ -270,6 +270,11 @@ class Interpreter(object):
                           loc=self.loc)
         self.current_block.append(stmt)
 
+    def op_BUILD_TUPLE(self, inst, items, res):
+        expr = ir.Expr.build_tuple(items=[self.get(x) for x in items],
+                                   loc=self.loc)
+        self.store(expr, res)
+
     def _binop(self, op, lhs, rhs, res):
         lhs = self.get(lhs)
         rhs = self.get(rhs)

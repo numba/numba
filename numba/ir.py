@@ -87,6 +87,11 @@ class Expr(object):
         return cls(op=op, loc=loc, func=func, args=args, kws=kws)
 
     @classmethod
+    def build_tuple(cls, items, loc):
+        op = 'build_tuple'
+        return cls(op=op, loc=loc, items=items)
+
+    @classmethod
     def getiter(cls, value, loc):
         op = 'getiter'
         return cls(op=op, loc=loc, value=value)

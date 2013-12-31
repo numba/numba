@@ -82,3 +82,18 @@ def ifthen(builder, pred):
     builder.position_at_end(bbend)
 
 
+def unpack_tuple(builder, tup, count):
+    vals = [builder.extract_value(tup, i)
+            for i in range(count)]
+    return vals
+
+
+def get_item_pointer(builder, aryty, ary, inds):
+    # TODO only handle "any" layout for now
+    strides = unpack_tuple(builder, ary.strides, count=aryty.ndim)
+    dimoffs = [builder.mul(s, i) for s, i in zip(strides, inds)]
+    offset = reduce(builder.add, dimoffs)
+    base = builder.ptrtoint(ary.data, offset.type)
+    where = builder.add(base, offset)
+    ptr = builder.inttoptr(where, ary.data.type)
+    return ptr

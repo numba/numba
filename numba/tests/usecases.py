@@ -27,6 +27,12 @@ def copy_arrays(a, b):
         b[i] = a[i]
 
 
+def copy_arrays2d(a, b):
+    for i in range(a.shape[0]):
+        for j in range(a.shape[1]):
+            b[i, j] = a[i, j]
+
+
 def redefine1():
     x = 0
     for i in range(5):

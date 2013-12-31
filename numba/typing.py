@@ -348,21 +348,20 @@ class CmpOpNe(CmpOp):
 @builtin
 class GetItem(FunctionTemplate):
     key = "getitem"
-    # cases = [
-    #     signature(types.any, types.UniTuple, types.any),
-    #     signature(types.any, types.Array, types.any),
-    # ]
+
     def generic(self, args, kws):
+        # FIXME: rewrite these
         assert not kws
-        base = args[0]
+        base, ind = args
         if hasattr(base, "getitem"):
-            retty, indty = base.getitem()
+            retty, indty = base.getitem(ind)
             case = signature(retty, base, indty)
             m = self.apply_case(case, args, kws)
             if m is not None:
                 return case
         else:
             raise NotImplementedError
+
 
 @builtin
 class SetItem(FunctionTemplate):

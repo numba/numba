@@ -88,7 +88,7 @@ class Propagate(object):
         typevars[self.dst].union(typevars[self.src])
 
 
-class Phi(object):
+class PhiConstrain(object):
     def __init__(self, dst, incomings):
         self.dst = dst
         self.incomings = incomings
@@ -97,6 +97,22 @@ class Phi(object):
         tset = typevars[self.dst]
         for inc in self.incomings:
             tset.union(typevars[inc])
+
+
+class BuildTupleConstrain(object):
+    def __init__(self, target, items):
+        self.target = target
+        self.items = items
+
+    def __call__(self, context, typevars):
+        tsets = [typevars[i.name].get() for i in self.items]
+        oset = typevars[self.target]
+        for vals in itertools.product(*tsets):
+            if all(vals[0] == v for v in vals):
+                tup = types.UniTuple(dtype=vals[0], count=len(vals))
+            else:
+                tup = types.Tuple(vals)
+            oset.add_types(tup)
 
 
 class CallConstrain(object):
@@ -122,7 +138,7 @@ class CallConstrain(object):
         for args in itertools.product(*argtypes):
             # TODO handling keyword arguments
             sig = context.resolve_function_type(fnty, args, ())
-            assert sig is not None, "%s" % fnty
+            assert sig is not None, (fnty, args)
             restypes.append(sig.return_type)
         typevars[self.target].add_types(*restypes)
 
@@ -294,7 +310,7 @@ class TypeInferer(object):
             self.typeof_expr(inst, inst.target, value)
         elif isinstance(value, ir.Phi):
             incs = [v.name for _, v in value]
-            self.constrains.append(Phi(dst=inst.target.name,
+            self.constrains.append(PhiConstrain(dst=inst.target.name,
                                        incomings=incs))
         else:
             raise NotImplementedError(type(value), value)
@@ -341,6 +357,9 @@ class TypeInferer(object):
         elif expr.op == 'getitem':
             self.typeof_intrinsic_call(inst, target, expr.op, expr.target,
                                        expr.index)
+        elif expr.op == 'build_tuple':
+            constrain = BuildTupleConstrain(target.name, items=expr.items)
+            self.constrains.append(constrain)
         else:
             raise NotImplementedError(type(expr), expr)
 

@@ -197,7 +197,7 @@ class Lower(object):
             impl = self.context.get_function(expr.op, signature)
             (fty,) = signature.args
             castval = self.context.cast(self.builder, val, ty, fty)
-            return impl(self.context, self.builder, (fty,), (val,))
+            return impl(self.context, self.builder, (fty,), (castval,))
         elif expr.op == "getattr":
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
@@ -215,6 +215,15 @@ class Lower(object):
                         for av, at, ft in zip(argvals, argtyps,
                                               signature.args)]
             return impl(self.context, self.builder, argtyps, castvals)
+        elif expr.op == "build_tuple":
+            itemvals = [self.loadvar(i.name) for i in expr.items]
+            itemtys = [self.typeof(i.name) for i in expr.items]
+            castvals = [self.context.cast(self.builder, val, fromty, toty)
+                        for val, toty, fromty in zip(itemvals, resty, itemtys)]
+            tup = self.context.get_constant_undef(resty)
+            for i in range(len(castvals)):
+                tup = self.builder.insert_value(tup, itemvals[i], i)
+            return tup
         raise NotImplementedError(expr)
 
     def typeof(self, varname):

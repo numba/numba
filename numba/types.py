@@ -54,10 +54,14 @@ class Array(Type):
                 return 'F'
         return 'A'
 
-    def getitem(self):
+    def getitem(self, ind):
         """Returns (return-type, index-type)
         """
-        return self.dtype, intp
+        if isinstance(ind, UniTuple):
+            idxty = UniTuple(intp, ind.count)
+        else:
+            idxty = intp
+        return self.dtype, idxty
 
     def setitem(self):
         """Returns (index-type, value-type)
@@ -81,8 +85,21 @@ class UniTuple(Type):
         self.dtype = dtype
         self.count = count
 
-    def getitem(self):
+    def getitem(self, ind):
+        if isinstance(ind, UniTuple):
+            idxty = UniTuple(intp, ind.count)
+        else:
+            idxty = intp
         return self.dtype, intp
+
+    def __getitem__(self, i):
+        """
+        Return element at position i
+        """
+        return self.dtype
+
+    def __len__(self):
+        return self.count
 
     def __eq__(self, other):
         if isinstance(other, UniTuple):
@@ -90,6 +107,29 @@ class UniTuple(Type):
 
     def __hash__(self):
         return hash((self.dtype, self.count))
+
+
+class Tuple(Type):
+    def __init__(self, items):
+        name = "(%s)" % ', '.join(str(i) for i in items)
+        super(Tuple, self).__init__(name, param=True)
+        self.items = items
+
+    def __getitem__(self, i):
+        """
+        Return element at position i
+        """
+        return self.items[i]
+
+    def __len__(self):
+        return len(self.items)
+
+    def __eq__(self, other):
+        if isinstance(other, Tuple):
+            return self.items == other.items
+
+    def __hash__(self):
+        return hash(self.items)
 
 
 # class CArray(Type):

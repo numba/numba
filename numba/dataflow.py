@@ -35,6 +35,13 @@ class DataFlowAnalysis(object):
         fn = getattr(self, fname)
         fn(info, inst)
 
+    def op_BUILD_TUPLE(self, info, inst):
+        count = inst.arg
+        items = list(reversed([info.pop() for i in range(count)]))
+        tup = info.make_temp()
+        info.append(inst, items=items, res=tup)
+        info.push(tup)
+
     def op_POP_TOP(self, info, inst):
         info.pop()
 

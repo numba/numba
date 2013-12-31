@@ -160,6 +160,10 @@ class BaseContext(object):
 
         raise NotImplementedError
 
+    def get_constant_undef(self, ty):
+        lty = self.get_value_type(ty)
+        return Constant.undef(lty)
+
     def get_function(self, fn, sig):
         overloads = self.defns[fn]
         try:
@@ -573,7 +577,7 @@ def getitem_unituple(context, builder, tys, args):
 
 @builtin
 @implement('getitem', types.any, types.Kind(types.Array), types.intp)
-def getitem_array(context, builder, tys, args):
+def getitem_array1d(context, builder, tys, args):
     aryty, _ = tys
     ary, idx = args
 
@@ -581,15 +585,30 @@ def getitem_array(context, builder, tys, args):
     ary = arystty(context, builder, ary)
     dataptr = ary.data
 
-    # TODO: other than 1D
     ptr = builder.gep(dataptr, [idx])
+    return builder.load(ptr)
+
+
+@builtin
+@implement('getitem', types.any, types.Kind(types.Array),
+           types.Kind(types.UniTuple))
+def getitem_array_unituple(context, builder, tys, args):
+    aryty, idxty = tys
+    ary, idx = args
+
+    arystty = make_array(aryty)
+    ary = arystty(context, builder, ary)
+
+    # TODO: other than layout
+    indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
+    ptr = cgutils.get_item_pointer(builder, aryty, ary, indices)
     return builder.load(ptr)
 
 
 @builtin
 @implement('setitem', types.none, types.Kind(types.Array), types.intp,
            types.any)
-def setitem_array(context, builder, tys, args):
+def setitem_array1d(context, builder, tys, args):
     aryty, _, valty = tys
     ary, idx, val = args
 
@@ -602,6 +621,21 @@ def setitem_array(context, builder, tys, args):
     builder.store(val, ptr)
     return
 
+
+@builtin
+@implement('setitem', types.none, types.Kind(types.Array),
+           types.Kind(types.UniTuple), types.any)
+def setitem_array_unituple(context, builder, tys, args):
+    aryty, idxty, valty = tys
+    ary, idx, val = args
+
+    arystty = make_array(aryty)
+    ary = arystty(context, builder, ary)
+
+    # TODO: other than layout
+    indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
+    ptr = cgutils.get_item_pointer(builder, aryty, ary, indices)
+    builder.store(val, ptr)
 
 #-------------------------------------------------------------------------------
 
