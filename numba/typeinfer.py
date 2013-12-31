@@ -324,21 +324,22 @@ class TypeInferer(object):
             elif utils.bit_length(const) < 64:
                 typ = types.int64
             else:
-                typ = types.pyobject
+                raise NotImplementedError(const)
             self.typevars[target.name].lock(typ)
         elif isinstance(const, float):
             self.typevars[target.name].lock(types.float64)
         elif const is None:
             self.typevars[target.name].lock(types.none)
         else:
-            raise NotImplementedError(type(const))
+            raise NotImplementedError(const)
 
     def typeof_global(self, inst, target, gvar):
         if gvar.name in ('range', 'xrange') and gvar.value in (range, xrange):
             self.typevars[target.name].lock(types.range_type)
             self.assumed_immutables.add(inst)
-        elif gvar.value is ir.UNDEFINED:
-            self.typevars[target.name].add_types(types.pyobject)
+        # TODO Hmmm...
+        # elif gvar.value is ir.UNDEFINED:
+        #     self.typevars[target.name].add_types(types.pyobject)
         else:
             raise NotImplementedError(gvar)
 

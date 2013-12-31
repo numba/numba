@@ -1,14 +1,14 @@
 from __future__ import print_function
-import functools
+
 from collections import namedtuple, defaultdict
-from llvm.core import Type, Constant
+import functools
 import llvm.core as lc
-import llvm.passes as lp
-import llvm.ee as le
-from numba import types, utils, cgutils, _dynfunc
+from llvm.core import Type, Constant
+
+from numba import types, utils, cgutils
 from numba.typing import signature
-from numba.callwrapper import PyCallWrapper
 from numba.pythonapi import PythonAPI
+
 
 LTYPEMAP = {
     types.pyobject: Type.pointer(Type.int(8)),
@@ -60,11 +60,13 @@ class BaseContext(object):
     def __init__(self):
         self.defns = defaultdict(Overloads)
         self.attrs = utils.UniqueDict()
-        # Initialize
+
         for defn in BUILTINS:
             self.defns[defn.key].append(defn)
         for attr in BUILTIN_ATTRS:
             self.attrs[attr.key] = attr
+
+        # Initialize
         self.init()
 
     def init(self):
@@ -226,7 +228,7 @@ class BaseContext(object):
 
     def print_string(self, text):
         fnty = Type.function(Type.int(), [self.cstring])
-        self.get_or_insert_function(fnty, "puts")
+        puts = self.get_or_insert_function(fnty, "puts")
         return self.builder.call(puts, [text])
 
     def get_struct_type(self, struct):
@@ -252,34 +254,20 @@ class BaseContext(object):
         return make_array(typ)
 
 
-class CPUContext(BaseContext):
-    def init(self):
-        self.execmodule = lc.Module.new("numba.exec")
-        eb = le.EngineBuilder.new(self.execmodule).opt(3)
-        self.tm = tm = eb.select_target()
-        self.engine = eb.create(tm)
+#-------------------------------------------------------------------------------
 
-        pms = lp.build_pass_managers(tm=self.tm, loop_vectorize=True, opt=2,
-                                     fpm=False)
-        self.pm = pms.pm
 
-        # self.pm = lp.PassManager.new()
-        # self.pm.add(lp.Pass.new("mem2reg"))
-        # self.pm.add(lp.Pass.new("simplifycfg"))
+def make_array(ty):
+    dtype = ty.dtype
+    nd = ty.ndim
 
-    def optimize(self, module):
-        self.pm.run(module)
+    class ArrayTemplate(cgutils.Structure):
+        _fields = [('data',    types.CPointer(dtype)),
+                   ('shape',   types.UniTuple(types.intp, nd)),
+                   ('strides', types.UniTuple(types.intp, nd)),]
 
-    def get_executable(self, func, fndesc):
-        wrapper = PyCallWrapper(self, func.module, func, fndesc).build()
-        self.optimize(func.module)
-        print(func.module)
-        self.engine.add_module(func.module)
-        fnptr = self.engine.get_pointer_to_function(wrapper)
+    return ArrayTemplate
 
-        func = _dynfunc.make_function(fndesc.pymod, fndesc.name, fndesc.doc,
-                                      fnptr)
-        return func
 
 
 #-------------------------------------------------------------------------------
@@ -307,6 +295,8 @@ def impl_attribute(ty, attr, rtype):
         res.key = (ty, attr)
         return res
     return wrapper
+
+#-------------------------------------------------------------------------------
 
 
 BUILTINS = []
@@ -635,20 +625,6 @@ def setitem_array_unituple(context, builder, tys, args):
     indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
     ptr = cgutils.get_item_pointer(builder, aryty, ary, indices)
     builder.store(val, ptr)
-
-#-------------------------------------------------------------------------------
-
-def make_array(ty):
-    dtype = ty.dtype
-    nd = ty.ndim
-
-    class ArrayTemplate(cgutils.Structure):
-        _fields = [('data',    types.CPointer(dtype)),
-                   ('shape',   types.UniTuple(types.intp, nd)),
-                   ('strides', types.UniTuple(types.intp, nd)),]
-
-    return ArrayTemplate
-
 
 #-------------------------------------------------------------------------------
 

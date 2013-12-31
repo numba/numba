@@ -54,3 +54,8 @@ def ifelse1(x, y):
         return 2
     else:
         return 3
+
+
+def string1(x, y):
+    a = "whatzup"
+    return x + y

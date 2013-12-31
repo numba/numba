@@ -132,21 +132,6 @@ class Tuple(Type):
         return hash(self.items)
 
 
-# class CArray(Type):
-#     def __init__(self, dtype, count):
-#         name = "[%s x %d]" % (dtype, count)
-#         super(CArray, self).__init__(name, param=True)
-#         self.dtype = dtype
-#         self.count = count
-#
-#     def __eq__(self, other):
-#         if isinstance(other, CArray):
-#             return self.dtype == other.dtype and self.count == other.count
-#
-#     def __hash__(self):
-#         return hash((self.dtype, self.count))
-
-
 class CPointer(Type):
     def __init__(self, dtype):
         name = "*%s" % dtype
