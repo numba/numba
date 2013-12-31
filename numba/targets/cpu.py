@@ -26,6 +26,9 @@ class CPUContext(BaseContext):
         self.pm.run(module)
 
     def get_executable(self, func, fndesc):
+        if not fndesc.native:
+            self.optimize_pythonapi(func)
+
         wrapper = PyCallWrapper(self, func.module, func, fndesc).build()
         self.optimize(func.module)
         print(func.module)
@@ -35,3 +38,70 @@ class CPUContext(BaseContext):
         func = _dynfunc.make_function(fndesc.pymod, fndesc.name, fndesc.doc,
                                       fnptr)
         return func
+
+    def optimize_pythonapi(self, func):
+        # Simplify the function using
+        pms = lp.build_pass_managers(tm=self.tm, opt=1,
+                                     mod=func.module)
+        fpm = pms.fpm
+
+        fpm.initialize()
+        fpm.run(func)
+        fpm.finalize()
+
+        # remove extra refct api calls
+        remove_refct_calls(func)
+
+
+def remove_refct_calls(func):
+    """
+    Remove redundant incref/decref within on a per block basis
+    """
+    for bb in func.basic_blocks:
+        remove_null_refct_call(bb)
+        remove_refct_pairs(bb)
+
+
+def remove_null_refct_call(bb):
+    """
+    Remove refct api calls to NULL pointer
+    """
+    for inst in bb.instructions:
+        if isinstance(inst, lc.CallOrInvokeInstruction):
+            fname = inst.called_function.name
+            if fname == "Py_IncRef" or fname == "Py_DecRef":
+                arg = inst.operands[0]
+                if isinstance(arg, lc.ConstantPointerNull):
+                    inst.erase_from_parent()
+
+
+def remove_refct_pairs(bb):
+    """
+    Remove incref decref pairs on the same variable
+    """
+
+    didsomething = True
+
+    while didsomething:
+        didsomething = False
+
+        increfs = {}
+        decrefs = {}
+
+        # Mark
+        for inst in bb.instructions:
+            if isinstance(inst, lc.CallOrInvokeInstruction):
+                fname = inst.called_function.name
+                if fname == "Py_IncRef":
+                    arg = inst.operands[0]
+                    increfs[arg] = inst
+                elif fname == "Py_DecRef":
+                    arg = inst.operands[0]
+                    decrefs[arg] = inst
+
+        # Sweep
+        for val in increfs.keys():
+            if val in decrefs:
+                increfs[val].erase_from_parent()
+                decrefs[val].erase_from_parent()
+                didsomething = True

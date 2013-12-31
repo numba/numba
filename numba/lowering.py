@@ -6,8 +6,10 @@ from numba import ir, types, typing
 
 
 class FunctionDescriptor(object):
-    def __init__(self, pymod, name, doc, blocks, typemap, restype, calltypes,
+    def __init__(self, native, pymod, name, doc, blocks, typemap, restype,
+                 calltypes,
                  args, kws):
+        self.native = False
         self.pymod = pymod
         self.name = name
         self.doc = doc
@@ -32,7 +34,8 @@ def _describe(interp):
 
 def describe_function(interp, typemap, restype, calltypes):
     func, pymod, doc, args, kws = _describe(interp)
-    fd = FunctionDescriptor(pymod, interp.bytecode.func.__name__, doc,
+    native = True
+    fd = FunctionDescriptor(native, pymod, interp.bytecode.func.__name__, doc,
                             interp.blocks, typemap, restype, calltypes, args,
                             kws)
     return fd
@@ -44,7 +47,8 @@ def describe_pyfunction(interp):
     typemap = defdict()
     restype = types.pyobject
     calltypes = defdict()
-    fd = FunctionDescriptor(pymod, interp.bytecode.func.__name__, doc,
+    native = False
+    fd = FunctionDescriptor(native, pymod, interp.bytecode.func.__name__, doc,
                             interp.blocks, typemap, restype,  calltypes,
                             args, kws)
     return fd
