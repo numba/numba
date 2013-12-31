@@ -121,4 +121,5 @@ def py_lowering_stage(targetctx, interp):
     if __debug__:
         print(lower.module)
 
-    raise NotImplementedError
+    cfunc = targetctx.get_executable(lower.function, fndesc)
+    return cfunc

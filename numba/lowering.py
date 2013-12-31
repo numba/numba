@@ -68,10 +68,17 @@ class BaseLower(object):
         self.blkmap = {}
         self.varmap = {}
 
+        # Subclass initialization
+        self.init()
+
+    def init(self):
+        pass
+
     def lower(self):
         # Init argument variables
         fnargs = self.context.get_arguments(self.function)
         for ak, av in zip(self.fndesc.args, fnargs):
+            av = self.init_argument(av)
             self.storevar(av, ak)
         # Init blocks
         for offset in self.fndesc.blocks:
@@ -89,34 +96,15 @@ class BaseLower(object):
         print(self.module)
         self.module.verify()
 
+    def init_argument(self, arg):
+        return arg
+
     def lower_block(self, block):
         for inst in block.body:
             self.lower_inst(inst)
 
     def typeof(self, varname):
         return self.fndesc.typemap[varname]
-
-    def getvar(self, name):
-        if name not in self.varmap:
-            self.varmap[name] = self.alloca(name, self.typeof(name))
-        return self.varmap[name]
-
-    def loadvar(self, name):
-        ptr = self.getvar(name)
-        return self.builder.load(ptr)
-
-    def storevar(self, value, name):
-        ptr = self.getvar(name)
-        assert value.type == ptr.type.pointee
-        self.builder.store(value, ptr)
-
-    def alloca(self, name, type):
-        ltype = self.context.get_value_type(type)
-        bb = self.builder.basic_block
-        self.builder.position_at_end(self.entry_block)
-        ptr = self.builder.alloca(ltype, name=name)
-        self.builder.position_at_end(bb)
-        return ptr
 
 
 class Lower(BaseLower):
@@ -269,6 +257,120 @@ class Lower(BaseLower):
             return tup
         raise NotImplementedError(expr)
 
+    def getvar(self, name):
+        if name not in self.varmap:
+            self.varmap[name] = self.alloca(name, self.typeof(name))
+        return self.varmap[name]
+
+    def loadvar(self, name):
+        ptr = self.getvar(name)
+        return self.builder.load(ptr)
+
+    def storevar(self, value, name):
+        ptr = self.getvar(name)
+        assert value.type == ptr.type.pointee
+        self.builder.store(value, ptr)
+
+    def alloca(self, name, type):
+        ltype = self.context.get_value_type(type)
+        bb = self.builder.basic_block
+        self.builder.position_at_end(self.entry_block)
+        ptr = self.builder.alloca(ltype, name=name)
+        self.builder.position_at_end(bb)
+        return ptr
+
 
 class PyLower(BaseLower):
-    pass
+    def init(self):
+        self.pyapi = self.context.get_python_api(self.builder)
+
+    def init_argument(self, arg):
+        self.incref(arg)
+        return arg
+
+    def lower_inst(self, inst):
+        if isinstance(inst, ir.Assign):
+            value = self.lower_assign(inst)
+            self.storevar(value, inst.target.name)
+        elif isinstance(inst, ir.Return):
+            retval = self.loadvar(inst.value.name)
+            self.incref(retval)
+            self.cleanup()
+            self.context.return_value(self.builder, retval)
+        else:
+            raise NotImplementedError(type(inst), inst)
+
+    def lower_assign(self, inst):
+        """
+        The returned object must have a new reference
+        """
+        value = inst.value
+        if isinstance(value, ir.Const):
+            return self.lower_const(value.value)
+        elif isinstance(value, ir.Var):
+            val = self.loadvar(value.name)
+            self.incref(val)
+            return val
+        elif isinstance(value, ir.Expr):
+            return self.lower_expr(value)
+        else:
+            raise NotImplementedError(type(value), value)
+
+    def lower_expr(self, expr):
+        if expr.op == 'binop':
+            lhs = self.loadvar(expr.lhs.name)
+            rhs = self.loadvar(expr.rhs.name)
+            if expr.fn == '+':
+                fn = self.pyapi.number_add
+            else:
+                NotImplementedError(expr.fn)
+            res = fn(lhs, rhs)
+            return res
+        else:
+            raise NotImplementedError(expr)
+
+    def lower_const(self, const):
+        if isinstance(const, str):
+            return self.pyapi.string_from_string_and_size(const)
+        else:
+            raise NotImplementedError(type(const))
+
+    # -------------------------------------------------------------------------
+
+    def getvar(self, name):
+        if name not in self.varmap:
+            self.varmap[name] = self.alloca(name)
+        return self.varmap[name]
+
+    def loadvar(self, name):
+        ptr = self.getvar(name)
+        return self.builder.load(ptr)
+
+    def storevar(self, value, name):
+        ptr = self.getvar(name)
+        old = self.builder.load(ptr)
+        assert value.type == ptr.type.pointee
+        self.builder.store(value, ptr)
+        self.decref(old)
+
+    def cleanup(self):
+        for var in self.varmap.itervalues():
+            self.decref(self.builder.load(var))
+
+    def alloca(self, name):
+        """
+        Allocate a PyObject stack slot and initialize it to NULL
+        """
+        ltype = self.context.get_value_type(types.pyobject)
+        bb = self.builder.basic_block
+        self.builder.position_at_end(self.entry_block)
+        ptr = self.builder.alloca(ltype, name=name)
+        self.builder.store(self.context.get_constant_null(types.pyobject), ptr)
+        self.builder.position_at_end(bb)
+        return ptr
+
+    def incref(self, value):
+        self.pyapi.incref(value)
+
+    def decref(self, value):
+        self.pyapi.decref(value)

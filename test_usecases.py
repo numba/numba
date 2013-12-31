@@ -16,10 +16,15 @@ def main():
     a = 123
     b = 321
 
+    ts = timer()
     r = cfunc(a, b)
+    te = timer()
+    print(te - ts, r)
 
-    print(r)
-
+    ts = timer()
+    r = pyfunc(a, b)
+    te = timer()
+    print(te - ts, r)
 
 
 if __name__ == '__main__':

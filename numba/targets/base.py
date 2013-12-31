@@ -165,6 +165,10 @@ class BaseContext(object):
         lty = self.get_value_type(ty)
         return Constant.undef(lty)
 
+    def get_constant_null(self, ty):
+        lty = self.get_value_type(ty)
+        return Constant.null(lty)
+
     def get_function(self, fn, sig):
         overloads = self.defns[fn]
         try:

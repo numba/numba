@@ -35,4 +35,3 @@ class CPUContext(BaseContext):
         func = _dynfunc.make_function(fndesc.pymod, fndesc.name, fndesc.doc,
                                       fnptr)
         return func
-

@@ -19,7 +19,7 @@ class PythonAPI(object):
         self.builder = builder
         self.pyobj = self.context.get_argument_type(types.pyobject)
         self.long = Type.int(ctypes.sizeof(ctypes.c_long) * 8)
-        self.py_ssize_t = Type.int(ctypes.sizeof(ctypes.c_ssize_t) * 8)
+        self.py_ssize_t = self.context.get_value_type(types.intp)
         self.cstring = Type.pointer(Type.int(8))
         self.module = builder.basic_block.function.module
 
@@ -53,6 +53,15 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyNumber_AsSsize_t")
         return self.builder.call(fn, [numobj])
 
+    def _get_number_operator(self, name):
+        fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj])
+        fn = self._get_function(fnty, name="PyNumber_%s" % name)
+        return fn
+
+    def number_add(self, lhs, rhs):
+        fn = self._get_number_operator("Add")
+        return self.builder.call(fn, [lhs, rhs])
+
     def bool_from_long(self, ival):
         fnty = Type.function(self.pyobj, [self.long])
         fn = self._get_function(fnty, name="PyBool_FromLong")
@@ -68,6 +77,13 @@ class PythonAPI(object):
         fnty = Type.function(self.cstring, [self.pyobj])
         fn = self._get_function(fnty, name="PyString_AsString")
         return self.builder.call(fn, [strobj])
+
+    def string_from_string_and_size(self, string):
+        fnty = Type.function(self.pyobj, [self.cstring, self.py_ssize_t])
+        fn = self._get_function(fnty, name="PyString_FromStringAndSize")
+        cstr = self.context.insert_const_string(self.module, string)
+        sz = self.context.get_constant(types.intp, len(string))
+        return self.builder.call(fn, [cstr, sz])
 
     def object_str(self, obj):
         fnty = Type.function(self.pyobj, [self.pyobj])
@@ -107,7 +123,9 @@ class PythonAPI(object):
         return Constant.null(self.pyobj)
 
     def to_native_arg(self, obj, typ):
-        if typ == types.int32:
+        if typ == types.pyobject:
+            return obj
+        elif typ == types.int32:
             ssize_val = self.number_as_ssize_t(obj)
             return self.builder.trunc(ssize_val,
                                       self.context.get_argument_type(typ))
@@ -116,7 +134,9 @@ class PythonAPI(object):
         raise NotImplementedError(typ)
 
     def from_native_return(self, val, typ):
-        if typ == types.boolean:
+        if typ == types.pyobject:
+            return val
+        elif typ == types.boolean:
             longval = self.builder.zext(val, self.long)
             return self.bool_from_long(longval)
 
