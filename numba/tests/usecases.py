@@ -46,3 +46,11 @@ def redefine1():
 def andor(x, y):
     return (x > 0 and x < 10) or (y > 0 and y < 10)
 
+
+def ifelse1(x, y):
+    if x > y:
+        return 1
+    elif x == 0 or y == 0:
+        return 2
+    else:
+        return 3

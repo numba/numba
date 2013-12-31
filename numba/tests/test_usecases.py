@@ -67,7 +67,6 @@ class TestUsecases(unittest.TestCase):
             cfunc(*args)
             self.assertTrue(np.all(a == b))
 
-
     def test_copy_arrays2d(self):
         pyfunc = usecases.copy_arrays2d
         arraytype = types.Array(types.int32, 2, 'A')
@@ -82,6 +81,17 @@ class TestUsecases(unittest.TestCase):
             args = a, b
             cfunc(*args)
             self.assertTrue(np.all(a == b))
+
+    def test_ifelse1(self):
+        pyfunc = usecases.ifelse1
+        ctx, cfunc = compile_isolated(pyfunc, (types.int32, types.int32))
+
+        xs = -1, 0, 1
+        ys = -1, 0, 1
+
+        for x, y in itertools.product(xs, ys):
+            args = x, y
+            self.assertEqual(pyfunc(*args), cfunc(*args))
 
 
 if __name__ == '__main__':

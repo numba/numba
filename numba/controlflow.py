@@ -37,6 +37,7 @@ class ControlFlowAnalysis(object):
     def __init__(self, bytecode):
         self.bytecode = bytecode
         self.blocks = {}
+        self.liveblocks = {}
         self.blockseq = []
         self.doms = None
         self.backbone = None
@@ -51,6 +52,14 @@ class ControlFlowAnalysis(object):
         """
         for i in self.blockseq:
             yield self.blocks[i]
+
+    def iterliveblocks(self):
+        """
+        Return all live blocks in sequence of occurrence
+        """
+        for i in self.blockseq:
+            if i in self.liveblocks:
+                yield self.blocks[i]
 
     def run(self):
         for inst in self._iter_inst():
@@ -72,13 +81,21 @@ class ControlFlowAnalysis(object):
             for out in b.outgoing:
                 self.blocks[out].incoming.add(b.offset)
 
-        # Find dominators
-        liveblocks = {}
+        # Find liveblocks
         for offset, block in self.blocks.items():
             if offset == 0 or block.incoming:
-                liveblocks[offset] = block
-        self.doms = find_dominators(liveblocks)
-        self.backbone = self.doms[self.blockseq[-1]]
+                self.liveblocks[offset] = block
+
+        # Find dominators
+        self.doms = find_dominators(self.liveblocks)
+
+        for lastblk in reversed(self.blockseq):
+            if lastblk in self.liveblocks:
+                break
+        else:
+            raise AssertionError("No live block that exits!?")
+
+        self.backbone = self.doms[lastblk]
 
     def jump(self, target):
         self._curblock.outgoing.add(target)

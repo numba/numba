@@ -74,7 +74,7 @@ class Context(object):
             # A promotion from first -> second
             return second
         else:
-            # A demontion from first -> second
+            # A demotion from first -> second
             return first
 
 

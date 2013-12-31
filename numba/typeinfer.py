@@ -311,12 +311,14 @@ class TypeInferer(object):
         elif isinstance(value, ir.Phi):
             incs = [v.name for _, v in value]
             self.constrains.append(PhiConstrain(dst=inst.target.name,
-                                       incomings=incs))
+                                                incomings=incs))
         else:
             raise NotImplementedError(type(value), value)
 
     def typeof_const(self, inst, target, const):
-        if isinstance(const, int):
+        if const is True or const is False:
+            self.typevars[target.name].lock(types.boolean)
+        elif isinstance(const, int):
             if utils.bit_length(const) < 32:
                 typ = types.int32
             elif utils.bit_length(const) < 64:

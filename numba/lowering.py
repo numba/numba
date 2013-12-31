@@ -98,7 +98,7 @@ class Lower(object):
             oty = self.typeof(inst.value.name)
             ty = self.fndesc.restype
             if ty != oty:
-                val = self.context.cast(val, oty, ty)
+                val = self.context.cast(self.builder, val, oty, ty)
             retval = self.context.get_return_value(self.builder, ty, val)
             self.context.return_value(self.builder, retval)
 

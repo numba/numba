@@ -64,7 +64,7 @@ class Interpreter(object):
             b.verify()
 
     def _iter_inst(self):
-        for block in self.cfa.iterblocks():
+        for block in self.cfa.iterliveblocks():
             firstinst = self.bytecode[block.body[0]]
             self._start_new_block(firstinst)
             for offset, kws in self.dfainfo.insts:
