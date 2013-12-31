@@ -1,13 +1,13 @@
 from __future__ import print_function
 import inspect
+from collections import defaultdict
 from llvm.core import Type, Builder, Module
 from numba import ir, types, typing
 
 
 class FunctionDescriptor(object):
     def __init__(self, pymod, name, doc, blocks, typemap, restype, calltypes,
-                 args,
-                 kws):
+                 args, kws):
         self.pymod = pymod
         self.name = name
         self.doc = doc
@@ -21,19 +21,36 @@ class FunctionDescriptor(object):
         self.argtypes = [self.typemap[a] for a in args]
 
 
-def describe_function(interp, typemap, restype, calltypes):
+def _describe(interp):
     func = interp.bytecode.func
     pymod = inspect.getmodule(func)
     doc = func.__doc__ or ''
     args = interp.argspec.args
-    kws = ()            #TODO
+    kws = ()        # TODO
+    return func, pymod, doc, args, kws
+
+
+def describe_function(interp, typemap, restype, calltypes):
+    func, pymod, doc, args, kws = _describe(interp)
     fd = FunctionDescriptor(pymod, interp.bytecode.func.__name__, doc,
                             interp.blocks, typemap, restype, calltypes, args,
                             kws)
     return fd
 
 
-class Lower(object):
+def describe_pyfunction(interp):
+    func, pymod, doc, args, kws = _describe(interp)
+    defdict = lambda: defaultdict(lambda: types.pyobject)
+    typemap = defdict()
+    restype = types.pyobject
+    calltypes = defdict()
+    fd = FunctionDescriptor(pymod, interp.bytecode.func.__name__, doc,
+                            interp.blocks, typemap, restype,  calltypes,
+                            args, kws)
+    return fd
+
+
+class BaseLower(object):
     """
     Lower IR to LLVM
     """
@@ -72,11 +89,37 @@ class Lower(object):
         print(self.module)
         self.module.verify()
 
-
     def lower_block(self, block):
         for inst in block.body:
             self.lower_inst(inst)
 
+    def typeof(self, varname):
+        return self.fndesc.typemap[varname]
+
+    def getvar(self, name):
+        if name not in self.varmap:
+            self.varmap[name] = self.alloca(name, self.typeof(name))
+        return self.varmap[name]
+
+    def loadvar(self, name):
+        ptr = self.getvar(name)
+        return self.builder.load(ptr)
+
+    def storevar(self, value, name):
+        ptr = self.getvar(name)
+        assert value.type == ptr.type.pointee
+        self.builder.store(value, ptr)
+
+    def alloca(self, name, type):
+        ltype = self.context.get_value_type(type)
+        bb = self.builder.basic_block
+        self.builder.position_at_end(self.entry_block)
+        ptr = self.builder.alloca(ltype, name=name)
+        self.builder.position_at_end(bb)
+        return ptr
+
+
+class Lower(BaseLower):
     def lower_inst(self, inst):
         if isinstance(inst, ir.Assign):
             ty = self.typeof(inst.target.name)
@@ -226,28 +269,6 @@ class Lower(object):
             return tup
         raise NotImplementedError(expr)
 
-    def typeof(self, varname):
-        return self.fndesc.typemap[varname]
 
-    def getvar(self, name):
-        if name not in self.varmap:
-            self.varmap[name] = self.alloca(name, self.typeof(name))
-        return self.varmap[name]
-
-    def loadvar(self, name):
-        ptr = self.getvar(name)
-        return self.builder.load(ptr)
-
-    def storevar(self, value, name):
-        ptr = self.getvar(name)
-        assert value.type == ptr.type.pointee
-        self.builder.store(value, ptr)
-
-    def alloca(self, name, type):
-        ltype = self.context.get_value_type(type)
-        bb = self.builder.basic_block
-        self.builder.position_at_end(self.entry_block)
-        ptr = self.builder.alloca(ltype, name=name)
-        self.builder.position_at_end(bb)
-        return ptr
-
+class PyLower(BaseLower):
+    pass

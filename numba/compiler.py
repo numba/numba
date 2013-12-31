@@ -114,7 +114,8 @@ def native_lowering_stage(targetctx, interp, typemap, restype, calltypes):
 
 
 def py_lowering_stage(targetctx, interp):
-    lower = lowering.PyLower(targetctx, interp)
+    fndesc = lowering.describe_pyfunction(interp)
+    lower = lowering.PyLower(targetctx, fndesc)
     lower.lower()
 
     if __debug__:
