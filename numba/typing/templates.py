@@ -1,6 +1,7 @@
 """
 Define typing templates
 """
+import math
 from numba import types
 
 
@@ -167,6 +168,7 @@ class AttributeTemplate(object):
 
 BUILTINS = []
 BUILTIN_ATTRS = []
+BUILTIN_GLOBALS = []
 
 
 def builtin(template):
@@ -175,6 +177,14 @@ def builtin(template):
     else:
         BUILTINS.append(template)
     return template
+
+
+def builtin_global(v, t):
+    BUILTIN_GLOBALS.append((v, t))
+
+
+builtin_global(range, types.range_type)
+builtin_global(xrange, types.range_type)
 
 
 @builtin
@@ -330,5 +340,40 @@ class SetItemArray(AbstractTemplate):
 class ArrayAttribute(AttributeTemplate):
     key = types.Array
 
-    def resolve_shape(self, value):
-        return types.UniTuple(types.intp, value.ndim)
+    def resolve_shape(self, ary):
+        return types.UniTuple(types.intp, ary.ndim)
+
+#-------------------------------------------------------------------------------
+
+
+
+@builtin
+class MathModuleAttribute(AttributeTemplate):
+    key = types.Module(math)
+
+    def resolve_fabs(self, mod):
+        return types.Function(Math_fabs)
+
+    def resolve_exp(self, mod):
+        return types.Function(Math_exp)
+
+
+class Math_fabs(ConcreteTemplate):
+    key = math.fabs
+    cases = [
+        signature(types.float32, types.float32),
+        signature(types.float64, types.float64),
+    ]
+
+
+class Math_exp(ConcreteTemplate):
+    key = math.exp
+    cases = [
+        signature(types.float32, types.float32),
+        signature(types.float64, types.float64),
+    ]
+
+
+builtin_global(math, types.Module(math))
+builtin_global(math.fabs, types.Function(Math_fabs))
+builtin_global(math.exp, types.Function(Math_exp))

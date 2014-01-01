@@ -127,7 +127,7 @@ class DataFlowAnalysis(object):
     op_COMPARE_OP = _binaryop
 
     op_INPLACE_ADD = _binaryop
-    op_INPLACE_SUBSTRACT = _binaryop
+    op_INPLACE_SUBTRACT = _binaryop
     op_INPLACE_MULTIPLY = _binaryop
     op_INPLACE_DIVIDE = _binaryop
     op_INPLACE_TRUE_DIVIDE = _binaryop
@@ -135,7 +135,7 @@ class DataFlowAnalysis(object):
     op_INPLACE_MODULO = _binaryop
 
     op_BINARY_ADD = _binaryop
-    op_BINARY_SUBSTRACT = _binaryop
+    op_BINARY_SUBTRACT = _binaryop
     op_BINARY_MULTIPLY = _binaryop
     op_BINARY_DIVIDE = _binaryop
     op_BINARY_TRUE_DIVIDE = _binaryop
@@ -166,6 +166,10 @@ class DataFlowAnalysis(object):
     op_JUMP_IF_TRUE_OR_POP = op_JUMP_IF_TRUE
 
     def op_JUMP_ABSOLUTE(self, info, inst):
+        info.append(inst)
+        info.terminator = inst
+
+    def op_JUMP_FORWARD(self, info, inst):
         info.append(inst)
         info.terminator = inst
 

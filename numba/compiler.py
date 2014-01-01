@@ -37,8 +37,9 @@ def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS):
     """
     typingctx = typing.Context()
     targetctx = targets.CPUContext()
-    cfunc = compile_extra(typingctx, targetctx, func, args, return_type, flags)
-    return targetctx, cfunc
+    cfunc, whyinferfailed = compile_extra(typingctx, targetctx, func, args,
+                                          return_type, flags)
+    return targetctx, cfunc, whyinferfailed
 
 
 def compile_extra(typingctx, targetctx, func, args, return_type, flags):
@@ -49,17 +50,15 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags):
     try:
         typemap, restype, calltypes = type_inference_stage(typingctx, interp,
                                                            args, return_type)
-    except Exception, e:
-        print(flags)
+    except Exception, fail_reason:
         if not flags.enable_pyobject:
             raise
-        # TODO handle the fail reason
-        fail_reason = e
-        return py_lowering_stage(targetctx, interp)
+        func = py_lowering_stage(targetctx, interp)
     else:
-        return native_lowering_stage(targetctx, interp, typemap, restype,
+        fail_reason = None
+        func = native_lowering_stage(targetctx, interp, typemap, restype,
                                      calltypes)
-
+    return func, fail_reason
 
 def translate_stage(func):
     bc = bytecode.ByteCode(func=func)
@@ -122,4 +121,5 @@ def py_lowering_stage(targetctx, interp):
         print(lower.module)
 
     cfunc = targetctx.get_executable(lower.function, fndesc)
+
     return cfunc

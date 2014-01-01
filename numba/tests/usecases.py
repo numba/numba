@@ -1,3 +1,7 @@
+import math
+import numpy as np
+
+
 def sum1d(s, e):
     c = 0
     for i in range(s, e):
@@ -59,3 +63,18 @@ def ifelse1(x, y):
 def string1(x, y):
     a = "whatzup"
     return a + str(x + y)
+
+
+def blackscholes_cnd(d):
+    A1 = 0.31938153
+    A2 = -0.356563782
+    A3 = 1.781477937
+    A4 = -1.821255978
+    A5 = 1.330274429
+    RSQRT2PI = 0.39894228040143267793994605993438
+    K = 1.0 / (1.0 + 0.2316419 * math.fabs(d))
+    ret_val = (RSQRT2PI * math.exp(-0.5 * d * d) *
+               (K * (A1 + K * (A2 + K * (A3 + K * (A4 + K * A5))))))
+    if d > 0:
+        ret_val = 1.0 - ret_val
+    return ret_val

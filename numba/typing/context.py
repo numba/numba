@@ -1,5 +1,6 @@
+from __future__ import print_function
 from collections import defaultdict
-from numba import types
+from numba import types, utils
 from . import templates
 
 
@@ -15,9 +16,13 @@ class Context(object):
         self.type_lattice = types.type_lattice
         self.functions = defaultdict(list)
         self.attributes = {}
+        self.globals = utils.UniqueDict()
         self._load_builtins()
 
     def resolve_function_type(self, func, args, kws):
+        if isinstance(func, types.Function):
+            return func.template(self).apply(args, kws)
+
         defns = self.functions[func]
         for defn in defns:
             return defn.apply(args, kws)
@@ -38,11 +43,19 @@ class Context(object):
         kws = ()
         return self.resolve_function_type("setitem", args, kws)
 
+    def get_global_type(self, gv):
+        return self.globals[gv]
+
     def _load_builtins(self):
         for ftcls in templates.BUILTINS:
             self.insert_function(ftcls(self))
         for ftcls in templates.BUILTIN_ATTRS:
             self.insert_attributes(ftcls(self))
+        for gv, gty in templates.BUILTIN_GLOBALS:
+            self.insert_global(gv, gty)
+
+    def insert_global(self, gv, gty):
+        self.globals[gv] = gty
 
     def insert_attributes(self, at):
         key = at.key

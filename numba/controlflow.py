@@ -150,6 +150,10 @@ class ControlFlowAnalysis(object):
         self.jump(inst.get_jump_target())
         self._force_new_block = True
 
+    def op_JUMP_FORWARD(self, inst):
+        self.jump(inst.get_jump_target())
+        self._force_new_block = True
+
     def op_RETURN_VALUE(self, inst):
         self._curblock.terminating = True
         self._force_new_block = True

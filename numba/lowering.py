@@ -3,7 +3,7 @@ import inspect
 from collections import defaultdict
 from llvm.core import Type, Builder, Module
 import llvm.core as lc
-from numba import ir, types, typing, cgutils
+from numba import ir, types, typing, cgutils, utils
 
 
 try:
@@ -13,9 +13,8 @@ except ImportError:
 
 
 class FunctionDescriptor(object):
-    def __init__(self, native, pymod, name, doc, blocks, typemap, restype,
-                 calltypes,
-                 args, kws):
+    def __init__(self, native, pymod, name, doc, blocks, typemap,
+                 restype, calltypes, args, kws):
         self.native = False
         self.pymod = pymod
         self.name = name
@@ -32,32 +31,31 @@ class FunctionDescriptor(object):
 
 def _describe(interp):
     func = interp.bytecode.func
+    fname = func.__name__
     pymod = inspect.getmodule(func)
     doc = func.__doc__ or ''
     args = interp.argspec.args
     kws = ()        # TODO
-    return func, pymod, doc, args, kws
+    return fname, pymod, doc, args, kws
 
 
 def describe_function(interp, typemap, restype, calltypes):
-    func, pymod, doc, args, kws = _describe(interp)
+    fname, pymod, doc, args, kws = _describe(interp)
     native = True
-    fd = FunctionDescriptor(native, pymod, interp.bytecode.func.__name__, doc,
-                            interp.blocks, typemap, restype, calltypes, args,
-                            kws)
+    fd = FunctionDescriptor(native, pymod, fname, doc, interp.blocks,
+                            typemap, restype, calltypes, args, kws)
     return fd
 
 
 def describe_pyfunction(interp):
-    func, pymod, doc, args, kws = _describe(interp)
+    fname, pymod, doc, args, kws = _describe(interp)
     defdict = lambda: defaultdict(lambda: types.pyobject)
     typemap = defdict()
     restype = types.pyobject
     calltypes = defdict()
     native = False
-    fd = FunctionDescriptor(native, pymod, interp.bytecode.func.__name__, doc,
-                            interp.blocks, typemap, restype,  calltypes,
-                            args, kws)
+    fd = FunctionDescriptor(native, pymod, fname, doc, interp.blocks,
+                            typemap, restype,  calltypes, args, kws)
     return fd
 
 
@@ -85,6 +83,11 @@ class BaseLower(object):
     def init(self):
         pass
 
+    def post_lower(self):
+        """Called after all blocks are lowered
+        """
+        pass
+
     def lower(self):
         # Init argument variables
         fnargs = self.context.get_arguments(self.function)
@@ -100,6 +103,8 @@ class BaseLower(object):
             bb = self.blkmap[offset]
             self.builder.position_at_end(bb)
             self.lower_block(block)
+
+        self.post_lower()
         # Close entry block
         self.builder.position_at_end(self.entry_block)
         self.builder.branch(self.blkmap[0])
@@ -189,6 +194,8 @@ class Lower(BaseLower):
         elif isinstance(value, ir.Global):
             if isinstance(ty, types.Dummy):
                 return self.context.get_dummy_value()
+            elif isinstance(ty, types.Module):
+                return self.context.get_dummy_value()
             else:
                 raise NotImplementedError('global', ty)
 
@@ -244,7 +251,11 @@ class Lower(BaseLower):
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
             impl = self.context.get_attribute(val, ty, expr.attr)
-            return impl(self.context, self.builder, ty, val)
+            if impl is None:
+                # ignore the attribute
+                return self.context.get_dummy_value()
+            else:
+                return impl(self.context, self.builder, ty, val)
         elif expr.op == "getitem":
             baseval = self.loadvar(expr.target.name)
             indexval = self.loadvar(expr.index.name)
@@ -291,10 +302,25 @@ class Lower(BaseLower):
         return ptr
 
 
+PYTHON_OPMAP = {
+     '+': "number_add",
+     '-': "number_subtract",
+     '*': "number_multiply",
+    '/?': "number_divide",
+}
+
 class PyLower(BaseLower):
     def init(self):
         scope = self.context.get_scope(self.function)
         self.pyapi = self.context.get_python_api(self.builder, scope)
+
+        # Add error handling block
+        self.ehblock = self.function.append_basic_block('error')
+
+    def post_lower(self):
+        with cgutils.goto_block(self.builder, self.ehblock):
+            self.cleanup()
+            self.context.return_exc(self.builder)
 
     def init_argument(self, arg):
         self.incref(arg)
@@ -309,6 +335,17 @@ class PyLower(BaseLower):
             self.incref(retval)
             self.cleanup()
             self.context.return_value(self.builder, retval)
+        elif isinstance(inst, ir.Branch):
+            cond = self.loadvar(inst.cond.name)
+            istrue = self.pyapi.object_istrue(cond)
+            zero = lc.Constant.null(istrue.type)
+            pred = self.builder.icmp(lc.ICMP_NE, istrue, zero)
+            tr = self.blkmap[inst.truebr]
+            fl = self.blkmap[inst.falsebr]
+            self.builder.cbranch(pred, tr, fl)
+        elif isinstance(inst, ir.Jump):
+            target = self.blkmap[inst.target]
+            self.builder.branch(target)
         else:
             raise NotImplementedError(type(inst), inst)
 
@@ -334,23 +371,45 @@ class PyLower(BaseLower):
         if expr.op == 'binop':
             lhs = self.loadvar(expr.lhs.name)
             rhs = self.loadvar(expr.rhs.name)
-            if expr.fn == '+':
-                fn = self.pyapi.number_add
+            if expr.fn in PYTHON_OPMAP:
+                fname = PYTHON_OPMAP[expr.fn]
+                fn = getattr(self.pyapi, fname)
+                res = fn(lhs, rhs)
             else:
-                NotImplementedError(expr.fn)
-            res = fn(lhs, rhs)
+                # Assume to be rich comparision
+                res = self.pyapi.object_richcompare(lhs, rhs, expr.fn)
+            self.check_error(res)
             return res
         elif expr.op == 'call':
             assert not expr.kws
             argvals = [self.loadvar(a.name) for a in expr.args]
             fn = self.loadvar(expr.func.name)
-            return self.pyapi.call_function_objargs(fn, argvals)
+            ret = self.pyapi.call_function_objargs(fn, argvals)
+            self.check_error(ret)
+            return ret
+        elif expr.op == 'getattr':
+            obj = self.loadvar(expr.value.name)
+            res = self.pyapi.object_getattr_string(obj, expr.attr)
+            self.check_error(res)
+            return res
         else:
             raise NotImplementedError(expr)
 
     def lower_const(self, const):
         if isinstance(const, str):
-            return self.pyapi.string_from_string_and_size(const)
+            ret = self.pyapi.string_from_string_and_size(const)
+            self.check_error(ret)
+            return ret
+        elif isinstance(const, float):
+            fval = self.context.get_constant(types.float64, const)
+            ret = self.pyapi.float_from_double(fval)
+            self.check_error(ret)
+            return ret
+        elif isinstance(const, int):
+            if utils.bit_length(const) >= 64:
+                raise ValueError("Integer is too big to be lowered")
+            ival = self.context.get_constant(types.intp, const)
+            return self.pyapi.long_from_ssize_t(ival)
         else:
             raise NotImplementedError(type(const))
 
@@ -384,9 +443,20 @@ class PyLower(BaseLower):
     # -------------------------------------------------------------------------
 
     def check_error(self, obj):
+        bbold = self.builder.basic_block
         with cgutils.ifthen(self.builder, self.is_null(obj)):
-            self.cleanup()
-            self.context.return_exc(self.builder)
+            self.builder.branch(self.ehblock)
+
+        # Assign branch weight
+        lastinstr = bbold.instructions[-1]
+
+        mdid = lc.MetaDataString.get(self.module, "branch_weights")
+        trueweight = lc.Constant.int(Type.int(), 99)
+        falseweight = lc.Constant.int(Type.int(), 1)
+        md = lc.MetaData.get(self.module, [mdid, trueweight, falseweight])
+
+        lastinstr.set_metadata("prof", md)
+        return obj
 
     def is_null(self, obj):
         null = self.context.get_constant_null(types.pyobject)

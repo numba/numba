@@ -19,6 +19,7 @@ class PythonAPI(object):
         self.builder = builder
         self.pyobj = self.context.get_argument_type(types.pyobject)
         self.long = Type.int(ctypes.sizeof(ctypes.c_long) * 8)
+        self.double = Type.double()
         self.py_ssize_t = self.context.get_value_type(types.intp)
         self.cstring = Type.pointer(Type.int(8))
         self.module = builder.basic_block.function.module
@@ -71,8 +72,18 @@ class PythonAPI(object):
 
     def long_from_long(self, ival):
         fnty = Type.function(self.pyobj, [self.long])
-        fn = self._get_function(fnty, name="PyInt_FromLong")
+        fn = self._get_function(fnty, name="PyLong_FromLong")
         return self.builder.call(fn, [ival])
+
+    def long_from_ssize_t(self, ival):
+        fnty = Type.function(self.pyobj, [self.long])
+        fn = self._get_function(fnty, name="PyLong_FromSsize_t")
+        return self.builder.call(fn, [ival])
+
+    def float_from_double(self, fval):
+        fnty = Type.function(self.pyobj, [self.double])
+        fn = self._get_function(fnty, name="PyFloat_FromDouble")
+        return self.builder.call(fn, [fval])
 
     def number_as_ssize_t(self, numobj):
         fnty = Type.function(self.py_ssize_t, [self.pyobj])
@@ -87,6 +98,46 @@ class PythonAPI(object):
     def number_add(self, lhs, rhs):
         fn = self._get_number_operator("Add")
         return self.builder.call(fn, [lhs, rhs])
+
+    def number_subtract(self, lhs, rhs):
+        fn = self._get_number_operator("Subtract")
+        return self.builder.call(fn, [lhs, rhs])
+
+    def number_multiply(self, lhs, rhs):
+        fn = self._get_number_operator("Multiply")
+        return self.builder.call(fn, [lhs, rhs])
+
+    def number_divide(self, lhs, rhs):
+        fn = self._get_number_operator("Divide")
+        return self.builder.call(fn, [lhs, rhs])
+
+    def number_float(self, val):
+        fnty = Type.function(self.pyobj, [self.pyobj])
+        fn = self._get_function(fnty, name="PyNumber_Float")
+        return self.builder.call(fn, [val])
+
+    def float_as_double(self, fobj):
+        fnty = Type.function(self.double, [self.pyobj])
+        fn = self._get_function(fnty, name="PyFloat_AsDouble")
+        return self.builder.call(fn, [fobj])
+
+    def object_istrue(self, obj):
+        fnty = Type.function(Type.int(), [self.pyobj])
+        fn = self._get_function(fnty, name="PyObject_IsTrue")
+        return self.builder.call(fn, [obj])
+
+    def object_richcompare(self, lhs, rhs, opstr):
+        """
+        Refer to Python source Include/object.h for macros definition
+        of the opid.
+        """
+        ops = ['<', '<=', '==', '!=', '>', '>=']
+        opid = ops.index(opstr)
+        assert 0 <= opid < len(ops)
+        fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj, Type.int()])
+        fn = self._get_function(fnty, name="PyObject_RichCompare")
+        lopid = self.context.get_constant(types.int32, opid)
+        return self.builder.call(fn, (lhs, rhs, lopid))
 
     def bool_from_long(self, ival):
         fnty = Type.function(self.pyobj, [self.long])
@@ -161,6 +212,19 @@ class PythonAPI(object):
             ssize_val = self.number_as_ssize_t(obj)
             return self.builder.trunc(ssize_val,
                                       self.context.get_argument_type(typ))
+        elif typ == types.float32:
+            fobj = self.number_float(obj)
+            fval = self.float_as_double(fobj)
+            self.decref(fobj)
+            return self.builder.fptrunc(fval,
+                                        self.context.get_argument_type(typ))
+
+        elif typ == types.float64:
+            fobj = self.number_float(obj)
+            fval = self.float_as_double(fobj)
+            self.decref(fobj)
+            return fval
+
         elif isinstance(typ, types.Array):
             return self.to_native_array(typ, obj)
         raise NotImplementedError(typ)
@@ -175,6 +239,13 @@ class PythonAPI(object):
         elif typ == types.int32:
             longval = self.builder.sext(val, self.long)
             return self.long_from_long(longval)
+
+        elif typ == types.float32:
+            dbval = self.builder.fpext(val, self.double)
+            return self.float_from_double(val)
+
+        elif typ == types.float64:
+            return self.float_from_double(val)
 
         elif typ == types.none:
             ret = self.make_none()

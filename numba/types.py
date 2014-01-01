@@ -29,6 +29,39 @@ class Kind(Type):
         super(Kind, self).__init__("kind(%s)" % of)
         self.of = of
 
+    def __eq__(self, other):
+        if isinstance(other, Kind):
+            return self.of == other.of
+
+    def __hash__(self):
+        return hash(self.of)
+
+
+class Module(Type):
+    def __init__(self, pymod):
+        super(Module, self).__init__("Module(%s)" % pymod)
+        self.pymod = pymod
+
+    def __eq__(self, other):
+        if isinstance(other, Module):
+            return self.pymod == other.pymod
+
+    def __hash__(self):
+        return hash(self.pymod)
+
+
+class Function(Type):
+    def __init__(self, template):
+        super(Function, self).__init__("Function(%s)" % template)
+        self.template = template
+
+    def __eq__(self, other):
+        if isinstance(other, Function):
+            return self.template == other.template
+
+    def __hash__(self):
+        return hash(self.template)
+
 
 class Array(Type):
     LAYOUTS = frozenset(['C', 'F', 'CS', 'FS', 'A'])

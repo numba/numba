@@ -8,23 +8,28 @@ from timeit import default_timer as timer
 
 
 def main():
-    pyfunc = usecases.string1
+    pyfunc = usecases.blackscholes_cnd
     flags = Flags()
-    flags.set("enable_pyobject")
-    ctx, cfunc = compile_isolated(pyfunc, (types.int32, types.int32),
-                                  flags=flags)
-    a = 123
-    b = 321
+    # flags.set("enable_pyobject")
+    ctx, cfunc, err = compile_isolated(pyfunc, (types.float32,),
+                                       flags=flags)
+
+    d = 0.5
+    args = d,
 
     ts = timer()
-    r = pyfunc(a, b)
+    r = pyfunc(*args)
     te = timer()
-    print(te - ts, r)
+    pytime = te - ts
+    print(pytime, r)
 
     ts = timer()
-    r = cfunc(a, b)
+    r = cfunc(*args)
     te = timer()
-    print(te - ts, r)
+    jittime = te - ts
+    print(jittime, r)
+
+    print(pytime/jittime)
 
 
 if __name__ == '__main__':

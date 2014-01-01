@@ -13,6 +13,7 @@ Constrains push types forward following the dataflow.
 """
 
 from __future__ import print_function
+import inspect
 from pprint import pprint
 import itertools
 from numba import ir, types, utils
@@ -335,13 +336,18 @@ class TypeInferer(object):
 
     def typeof_global(self, inst, target, gvar):
         if gvar.name in ('range', 'xrange') and gvar.value in (range, xrange):
-            self.typevars[target.name].lock(types.range_type)
+            gvty = self.context.get_global_type(gvar.value)
+            self.typevars[target.name].lock(gvty)
             self.assumed_immutables.add(inst)
+        else:
+            gvty = self.context.get_global_type(gvar.value)
+            self.assumed_immutables.add(inst)
+            self.typevars[target.name].lock(gvty)
+
         # TODO Hmmm...
         # elif gvar.value is ir.UNDEFINED:
         #     self.typevars[target.name].add_types(types.pyobject)
-        else:
-            raise NotImplementedError(gvar)
+
 
     def typeof_expr(self, inst, target, expr):
         if expr.op == 'call':

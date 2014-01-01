@@ -1,5 +1,5 @@
 from __future__ import print_function
-
+import math
 from collections import namedtuple, defaultdict
 import functools
 import llvm.core as lc
@@ -18,6 +18,9 @@ LTYPEMAP = {
     types.uint8: Type.int(8),
     types.int32: Type.int(32),
     types.int64: Type.int(64),
+
+    types.float32: Type.float(),
+    types.float64: Type.double(),
 }
 
 
@@ -50,7 +53,7 @@ class Overloads(object):
                 if match:
                     return ver
 
-        raise NotImplementedError(sig)
+        raise NotImplementedError(self, sig)
 
     def append(self, impl):
         self.versions.append(impl)
@@ -128,7 +131,9 @@ class BaseContext(object):
         return self.get_argument_type(ty)
 
     def get_value_type(self, ty):
-        if isinstance(ty, types.Dummy):
+        if (isinstance(ty, types.Dummy) or
+                isinstance(ty, types.Module) or
+                isinstance(ty, types.Function)):
             return self.get_dummy_type()
         elif ty == types.range_state32_type:
             stty = self.get_struct_type(RangeState32)
@@ -163,7 +168,10 @@ class BaseContext(object):
         elif ty in types.signed_domain:
             return Constant.int_signextend(lty, val)
 
-        raise NotImplementedError
+        elif ty in types.real_domain:
+            return Constant.real(lty, val)
+
+        raise NotImplementedError(ty)
 
     def get_constant_undef(self, ty):
         lty = self.get_value_type(ty)
@@ -174,7 +182,10 @@ class BaseContext(object):
         return Constant.null(lty)
 
     def get_function(self, fn, sig):
-        overloads = self.defns[fn]
+        if isinstance(fn, types.Function):
+            overloads = self.defns[fn.template.key]
+        else:
+            overloads = self.defns[fn]
         try:
             return overloads.find(sig)
         except NotImplementedError:
@@ -185,7 +196,9 @@ class BaseContext(object):
         try:
             return self.attrs[key]
         except KeyError:
-            if typ.is_parametric:
+            if isinstance(typ, types.Module):
+                return
+            elif typ.is_parametric:
                 key = type(typ), attr
                 return self.attrs[key]
             else:
@@ -215,6 +228,7 @@ class BaseContext(object):
     def cast(self, builder, val, fromty, toty):
         if fromty == toty or toty == types.any or isinstance(toty, types.Kind):
             return val
+
         elif fromty in types.signed_domain and toty in types.signed_domain:
             lfrom = self.get_value_type(fromty)
             lto = self.get_value_type(toty)
@@ -222,6 +236,29 @@ class BaseContext(object):
                 return builder.sext(val, lto)
             elif lfrom.width > lto.width:
                 return builder.zext(val, lto)
+
+        elif fromty in types.real_domain and toty in types.real_domain:
+            lty = self.get_value_type(toty)
+            if fromty == types.float32 and toty == types.float64:
+                return builder.fpext(val, lty)
+            elif fromty == types.float64 and toty == types.float32:
+                return builder.fptrunc(val, lty)
+
+        elif fromty in types.integer_domain and toty in types.real_domain:
+            lty = self.get_value_type(toty)
+            if fromty in types.signed_domain:
+                return builder.sitofp(val, lty)
+            else:
+                return builder.uitofp(val, lty)
+
+        elif toty in types.integer_domain and fromty in types.real_domain:
+            lty = self.get_value_type(toty)
+            if toty in types.signed_domain:
+                return builder.fptosi(val, lty)
+            else:
+                return builder.fptoui(val, lty)
+
+
         raise NotImplementedError("cast", val, fromty, toty)
 
     def call_function(self, builder, scope, callee, args):
@@ -389,6 +426,61 @@ for ty in types.signed_domain:
     builtin(implement('<=', types.boolean, ty, ty)(int_sle_impl))
     builtin(implement('>', types.boolean, ty, ty)(int_sgt_impl))
     builtin(implement('>=', types.boolean, ty, ty)(int_sge_impl))
+
+
+
+def real_add_impl(context, builder, tys, args):
+    return builder.fadd(*args)
+
+
+def real_sub_impl(context, builder, tys, args):
+    return builder.fsub(*args)
+
+
+def real_mul_impl(context, builder, tys, args):
+    return builder.fmul(*args)
+
+
+def real_div_impl(context, builder, tys, args):
+    return builder.fdiv(*args)
+
+
+def real_lt_impl(context, builder, tys, args):
+    return builder.fcmp(lc.FCMP_OLT, *args)
+
+
+def real_le_impl(context, builder, tys, args):
+    return builder.fcmp(lc.FCMP_OLE, *args)
+
+
+def real_gt_impl(context, builder, tys, args):
+    return builder.fcmp(lc.FCMP_OGT, *args)
+
+
+def real_ge_impl(context, builder, tys, args):
+    return builder.fcmp(lc.FCMP_OGE, *args)
+
+
+def real_eq_impl(context, builder, tys, args):
+    return builder.fcmp(lc.FCMP_UEQ, *args)
+
+
+def real_ne_impl(context, builder, tys, args):
+    return builder.icmp(lc.FCMP_ONE, *args)
+
+
+for ty in types.real_domain:
+    builtin(implement('+', ty, ty, ty)(real_add_impl))
+    builtin(implement('-', ty, ty, ty)(real_sub_impl))
+    builtin(implement('*', ty, ty, ty)(real_mul_impl))
+    builtin(implement('/?', ty, ty, ty)(real_div_impl))
+    builtin(implement('/', ty, ty, ty)(real_div_impl))
+    builtin(implement('==', types.boolean, ty, ty)(real_eq_impl))
+    builtin(implement('!=', types.boolean, ty, ty)(real_ne_impl))
+    builtin(implement('<', types.boolean, ty, ty)(real_lt_impl))
+    builtin(implement('<=', types.boolean, ty, ty)(real_le_impl))
+    builtin(implement('>', types.boolean, ty, ty)(real_gt_impl))
+    builtin(implement('>=', types.boolean, ty, ty)(real_ge_impl))
 
 
 class RangeState32(cgutils.Structure):
@@ -649,3 +741,45 @@ def array_shape(context, builder, typ, value):
     array = arrayty(context, builder, value)
     return array.shape
 
+#-------------------------------------------------------------------------------
+
+
+@builtin
+@implement(math.fabs, types.float32, types.float32)
+def math_fabs_f32(context, builder, tys, args):
+    (val,) = args
+    mod = cgutils.get_module(builder)
+    lty = context.get_value_type(types.float32)
+    intr = lc.Function.intrinsic(mod, lc.INTR_FABS, [lty])
+    return builder.call(intr, args)
+
+
+
+@builtin
+@implement(math.fabs, types.float64, types.float64)
+def math_fabs_f64(context, builder, tys, args):
+    (val,) = args
+    mod = cgutils.get_module(builder)
+    lty = context.get_value_type(types.float64)
+    intr = lc.Function.intrinsic(mod, lc.INTR_FABS, [lty])
+    return builder.call(intr, args)
+
+
+@builtin
+@implement(math.exp, types.float32, types.float32)
+def math_exp_f32(context, builder, tys, args):
+    (val,) = args
+    mod = cgutils.get_module(builder)
+    lty = context.get_value_type(types.float32)
+    intr = lc.Function.intrinsic(mod, lc.INTR_EXP, [lty])
+    return builder.call(intr, args)
+
+
+@builtin
+@implement(math.exp, types.float64, types.float64)
+def math_exp_f64(context, builder, tys, args):
+    (val,) = args
+    mod = cgutils.get_module(builder)
+    lty = context.get_value_type(types.float64)
+    intr = lc.Function.intrinsic(mod, lc.INTR_EXP, [lty])
+    return builder.call(intr, args)

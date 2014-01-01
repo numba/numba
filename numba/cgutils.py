@@ -40,6 +40,10 @@ def get_function(builder):
     return builder.basic_block.function
 
 
+def get_module(builder):
+    return builder.basic_block.function.module
+
+
 def append_basic_block(builder, name=''):
     return get_function(builder).append_basic_block(name)
 
