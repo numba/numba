@@ -1,6 +1,7 @@
 from __future__ import print_function
 from pprint import pprint
 from numba import bytecode, interpreter, typing, typeinfer, lowering, targets
+from numba import DEBUG
 
 
 class Flags(object):
@@ -58,15 +59,16 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags):
         fail_reason = None
         func = native_lowering_stage(targetctx, interp, typemap, restype,
                                      calltypes)
+
     return func, fail_reason
 
 def translate_stage(func):
     bc = bytecode.ByteCode(func=func)
     interp = interpreter.Interpreter(bytecode=bc)
     interp.interpret()
-    interp.dump()
 
-    if __debug__:
+    if DEBUG:
+        interp.dump()
         for syn in interp.syntax_info:
             print(syn)
 
@@ -89,7 +91,7 @@ def type_inference_stage(typingctx, interp, args, return_type):
     infer.propagate()
     typemap, restype, calltypes = infer.unify()
 
-    if __debug__:
+    if DEBUG:
         pprint(typemap)
         pprint(restype)
         pprint(calltypes)
@@ -103,12 +105,12 @@ def native_lowering_stage(targetctx, interp, typemap, restype, calltypes):
 
     lower = lowering.Lower(targetctx, fndesc)
     lower.lower()
-
-    if __debug__:
-        print(lower.module)
-
+    
     # Prepare for execution
     cfunc = targetctx.get_executable(lower.function, fndesc)
+
+    targetctx.insert_user_function(cfunc, fndesc)
+
     return cfunc
 
 
@@ -117,7 +119,7 @@ def py_lowering_stage(targetctx, interp):
     lower = lowering.PyLower(targetctx, fndesc)
     lower.lower()
 
-    if __debug__:
+    if DEBUG:
         print(lower.module)
 
     cfunc = targetctx.get_executable(lower.function, fndesc)

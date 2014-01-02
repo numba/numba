@@ -82,6 +82,11 @@ class Expr(object):
         return cls(op=op, loc=loc, fn=fn, lhs=lhs, rhs=rhs)
 
     @classmethod
+    def unary(cls, fn, value, loc):
+        op = 'unary'
+        return cls(op=op, loc=loc, fn=fn, value=value)
+
+    @classmethod
     def call(cls, func, args, kws, loc):
         op = 'call'
         return cls(op=op, loc=loc, func=func, args=args, kws=kws)

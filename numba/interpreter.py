@@ -275,6 +275,11 @@ class Interpreter(object):
                                    loc=self.loc)
         self.store(expr, res)
 
+    def op_UNARY_NEGATIVE(self, inst, value, res):
+        value = self.get(value)
+        expr = ir.Expr.unary('-', value=value, loc=self.loc)
+        return self.store(expr, res)
+
     def _binop(self, op, lhs, rhs, res):
         lhs = self.get(lhs)
         rhs = self.get(rhs)

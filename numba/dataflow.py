@@ -117,6 +117,12 @@ class DataFlowAnalysis(object):
         info.append(inst, func=func, args=args, kws=kws, res=res)
         info.push(res)
 
+    def op_UNARY_NEGATIVE(self, info, inst):
+        val = info.pop()
+        res = info.make_temp()
+        info.append(inst, value=val, res=res)
+        info.push(res)
+
     def _binaryop(self, info, inst):
         rhs = info.pop()
         lhs = info.pop()

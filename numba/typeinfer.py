@@ -13,10 +13,9 @@ Constrains push types forward following the dataflow.
 """
 
 from __future__ import print_function
-import inspect
 from pprint import pprint
 import itertools
-from numba import ir, types, utils
+from numba import ir, types, utils, DEBUG
 
 
 class TypeVar(object):
@@ -223,15 +222,18 @@ class TypeInferer(object):
     def propagate(self):
         newtoken = self.get_state_token()
         oldtoken = None
-        self.dump()
+        if DEBUG:
+            self.dump()
         # Since the number of types are finite, the typesets will eventually
         # stop growing.
         while newtoken != oldtoken:
-            print("propagate".center(80, '-'))
+            if DEBUG:
+                print("propagate".center(80, '-'))
             oldtoken = newtoken
             self.constrains.propagate(self.context, self.typevars)
             newtoken = self.get_state_token()
-            self.dump()
+            if DEBUG:
+                self.dump()
 
     def unify(self):
         typdict = utils.UniqueDict()
@@ -319,16 +321,9 @@ class TypeInferer(object):
     def typeof_const(self, inst, target, const):
         if const is True or const is False:
             self.typevars[target.name].lock(types.boolean)
-        elif isinstance(const, int):
-            if utils.bit_length(const) < 32:
-                typ = types.int32
-            elif utils.bit_length(const) < 64:
-                typ = types.int64
-            else:
-                raise NotImplementedError(const)
-            self.typevars[target.name].lock(typ)
-        elif isinstance(const, float):
-            self.typevars[target.name].lock(types.float64)
+        elif isinstance(const, (int, float)):
+            ty = self.context.get_number_type(const)
+            self.typevars[target.name].lock(ty)
         elif const is None:
             self.typevars[target.name].lock(types.none)
         else:
@@ -337,6 +332,14 @@ class TypeInferer(object):
     def typeof_global(self, inst, target, gvar):
         if gvar.name in ('range', 'xrange') and gvar.value in (range, xrange):
             gvty = self.context.get_global_type(gvar.value)
+            self.typevars[target.name].lock(gvty)
+            self.assumed_immutables.add(inst)
+        elif gvar.name == 'len' and gvar.value is len:
+            gvty = self.context.get_global_type(gvar.value)
+            self.typevars[target.name].lock(gvty)
+            self.assumed_immutables.add(inst)
+        elif isinstance(gvar.value, (int, float)):
+            gvty = self.context.get_number_type(gvar.value)
             self.typevars[target.name].lock(gvty)
             self.assumed_immutables.add(inst)
         else:

@@ -185,6 +185,7 @@ def builtin_global(v, t):
 
 builtin_global(range, types.range_type)
 builtin_global(xrange, types.range_type)
+builtin_global(len, types.len_type)
 
 
 @builtin
@@ -315,7 +316,6 @@ class GetItemUniTuple(AbstractTemplate):
 @builtin
 class GetItemArray(AbstractTemplate):
     key = "getitem"
-    object = types.Kind(types.Array)
 
     def generic(self, args, kws):
         assert not kws
@@ -326,13 +326,21 @@ class GetItemArray(AbstractTemplate):
 @builtin
 class SetItemArray(AbstractTemplate):
     key = "setitem"
-    object = types.Kind(types.Array)
 
     def generic(self, args, kws):
         assert not kws
         ary, idx, val = args
         return signature(types.none, ary, normalize_index(idx), ary.dtype)
 
+
+@builtin
+class LenArray(AbstractTemplate):
+    key = types.len_type
+
+    def generic(self, args, kws):
+        assert not kws
+        (ary,) = args
+        return signature(types.intp, ary)
 
 #-------------------------------------------------------------------------------
 
@@ -345,8 +353,6 @@ class ArrayAttribute(AttributeTemplate):
 
 #-------------------------------------------------------------------------------
 
-
-
 @builtin
 class MathModuleAttribute(AttributeTemplate):
     key = types.Module(math)
@@ -356,6 +362,12 @@ class MathModuleAttribute(AttributeTemplate):
 
     def resolve_exp(self, mod):
         return types.Function(Math_exp)
+
+    def resolve_sqrt(self, mod):
+        return types.Function(Math_sqrt)
+
+    def resolve_log(self, mod):
+        return types.Function(Math_log)
 
 
 class Math_fabs(ConcreteTemplate):
@@ -374,6 +386,24 @@ class Math_exp(ConcreteTemplate):
     ]
 
 
+class Math_sqrt(ConcreteTemplate):
+    key = math.sqrt
+    cases = [
+        signature(types.float32, types.float32),
+        signature(types.float64, types.float64),
+    ]
+
+
+class Math_log(ConcreteTemplate):
+    key = math.log
+    cases = [
+        signature(types.float32, types.float32),
+        signature(types.float64, types.float64),
+    ]
+
+
 builtin_global(math, types.Module(math))
 builtin_global(math.fabs, types.Function(Math_fabs))
 builtin_global(math.exp, types.Function(Math_exp))
+builtin_global(math.sqrt, types.Function(Math_sqrt))
+builtin_global(math.log, types.Function(Math_log))

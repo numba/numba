@@ -3,7 +3,7 @@ import inspect
 from collections import defaultdict
 from llvm.core import Type, Builder, Module
 import llvm.core as lc
-from numba import ir, types, typing, cgutils, utils
+from numba import ir, types, typing, cgutils, utils, DEBUG
 
 
 try:
@@ -109,7 +109,8 @@ class BaseLower(object):
         self.builder.position_at_end(self.entry_block)
         self.builder.branch(self.blkmap[0])
 
-        print(self.module)
+        if DEBUG:
+            print(self.module)
         self.module.verify()
 
     def init_argument(self, arg):
@@ -192,10 +193,13 @@ class Lower(BaseLower):
             return self.context.cast(self.builder, val, oty, ty)
 
         elif isinstance(value, ir.Global):
-            if isinstance(ty, types.Dummy):
+            if (isinstance(ty, types.Dummy) or isinstance(ty, types.Module) or
+                    isinstance(ty, types.Function)):
                 return self.context.get_dummy_value()
-            elif isinstance(ty, types.Module):
-                return self.context.get_dummy_value()
+
+            elif ty in types.number_domain:
+                return self.context.get_constant(ty, value.value)
+
             else:
                 raise NotImplementedError('global', ty)
 
@@ -309,6 +313,7 @@ PYTHON_OPMAP = {
     '/?': "number_divide",
 }
 
+
 class PyLower(BaseLower):
     def init(self):
         scope = self.context.get_scope(self.function)
@@ -380,6 +385,14 @@ class PyLower(BaseLower):
                 res = self.pyapi.object_richcompare(lhs, rhs, expr.fn)
             self.check_error(res)
             return res
+        elif expr.op == 'unary':
+            value = self.loadvar(expr.value.name)
+            if expr.fn == '-':
+                res = self.pyapi.number_negative(value)
+            else:
+                raise NotImplementedError(expr)
+            self.check_error(res)
+            return res
         elif expr.op == 'call':
             assert not expr.kws
             argvals = [self.loadvar(a.name) for a in expr.args]
@@ -390,6 +403,11 @@ class PyLower(BaseLower):
         elif expr.op == 'getattr':
             obj = self.loadvar(expr.value.name)
             res = self.pyapi.object_getattr_string(obj, expr.attr)
+            self.check_error(res)
+            return res
+        elif expr.op == 'build_tuple':
+            items = [self.loadvar(it.name) for it in expr.items]
+            res = self.pyapi.tuple_pack(items)
             self.check_error(res)
             return res
         else:

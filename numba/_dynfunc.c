@@ -10,7 +10,7 @@ static
 PyObject*
 make_function(PyObject *self, PyObject *args)
 {
-    PyObject *module, *fname, *fdoc, *dict;
+    PyObject *module, *fname, *fdoc;
     Py_ssize_t fnaddr;
     PyMethodDef *desc;
     char *doc, *name;
@@ -25,7 +25,6 @@ make_function(PyObject *self, PyObject *args)
     name = PyString_AsString(fname);
     szdoc = strlen(doc) + 1;
     szname = strlen(name) + 1;
-    dict = PyObject_GetAttrString(module, "__dict__");
 
     mlname = malloc(szname);
     mldoc = malloc(szdoc);
@@ -39,7 +38,7 @@ make_function(PyObject *self, PyObject *args)
     desc->ml_flags = METH_KEYWORDS;
     desc->ml_doc = mldoc;
 
-    return PyCFunction_NewEx(desc, dict, module);
+    return PyCFunction_NewEx(desc, module, module);
 }
 
 static PyMethodDef core_methods[] = {

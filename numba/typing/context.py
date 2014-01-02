@@ -19,8 +19,24 @@ class Context(object):
         self.globals = utils.UniqueDict()
         self._load_builtins()
 
+    def get_number_type(self, num):
+        if isinstance(num, int):
+            nbits = utils.bit_length(num)
+            if nbits < 32:
+                typ = types.int32
+            elif nbits < 64:
+                typ = types.int64
+            else:
+                raise ValueError("Int value is too large: %s" % num)
+            return typ
+        elif isinstance(num, float):
+            return types.float64
+        else:
+            raise NotImplementedError(type(num), num)
+
     def resolve_function_type(self, func, args, kws):
         if isinstance(func, types.Function):
+            ft = func.template(self)
             return func.template(self).apply(args, kws)
 
         defns = self.functions[func]
@@ -65,6 +81,10 @@ class Context(object):
     def insert_function(self, ft):
         key = ft.key
         self.functions[key].append(ft)
+
+    def insert_user_function(self, fn, ft):
+        self.insert_function(ft)
+        self.globals[fn] = types.Function(ft)
 
     def type_distance(self, fromty, toty):
         if fromty == toty:

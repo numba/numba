@@ -5,7 +5,7 @@ import llvm.ee as le
 from numba import _dynfunc
 from numba.callwrapper import PyCallWrapper
 from .base import BaseContext
-
+from numba import utils
 
 class CPUContext(BaseContext):
     def init(self):
@@ -18,9 +18,14 @@ class CPUContext(BaseContext):
                                      fpm=False)
         self.pm = pms.pm
 
+        self.native_funcs = utils.UniqueDict()
         # self.pm = lp.PassManager.new()
         # self.pm.add(lp.Pass.new("mem2reg"))
         # self.pm.add(lp.Pass.new("simplifycfg"))
+
+    def dynamic_map_function(self, func):
+        name, ptr = self.native_funcs[func]
+        le.dylib_add_symbol(name, ptr)
 
     def optimize(self, module):
         self.pm.run(module)
@@ -31,13 +36,16 @@ class CPUContext(BaseContext):
 
         wrapper = PyCallWrapper(self, func.module, func, fndesc).build()
         self.optimize(func.module)
-        print(func.module)
+
         self.engine.add_module(func.module)
+        baseptr = self.engine.get_pointer_to_function(func)
         fnptr = self.engine.get_pointer_to_function(wrapper)
 
-        func = _dynfunc.make_function(fndesc.pymod, fndesc.name, fndesc.doc,
-                                      fnptr)
-        return func
+        cfunc = _dynfunc.make_function(fndesc.pymod, fndesc.name, fndesc.doc,
+                                       fnptr)
+
+        self.native_funcs[cfunc] = fndesc.name, baseptr
+        return cfunc
 
     def optimize_pythonapi(self, func):
         # Simplify the function using

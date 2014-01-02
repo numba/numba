@@ -13,7 +13,7 @@ def fix_python_api():
 
 
 class PythonAPI(object):
-    def __init__(self, context, builder, globalscope=None):
+    def __init__(self, context, builder, ownmod=None):
         fix_python_api()
         self.context = context
         self.builder = builder
@@ -23,7 +23,7 @@ class PythonAPI(object):
         self.py_ssize_t = self.context.get_value_type(types.intp)
         self.cstring = Type.pointer(Type.int(8))
         self.module = builder.basic_block.function.module
-        self.globalscope = globalscope
+        self.globalscope = self.object_getattr_string(ownmod, "__dict__")
 
     # ------ Python API -----
 
@@ -111,6 +111,11 @@ class PythonAPI(object):
         fn = self._get_number_operator("Divide")
         return self.builder.call(fn, [lhs, rhs])
 
+    def number_negative(self, obj):
+        fnty = Type.function(self.pyobj, [self.pyobj])
+        fn = self._get_function(fnty, name="PyNumber_Negative")
+        return self.builder.call(fn, (obj,))
+
     def number_float(self, val):
         fnty = Type.function(self.pyobj, [self.pyobj])
         fn = self._get_function(fnty, name="PyNumber_Float")
@@ -172,9 +177,17 @@ class PythonAPI(object):
         Borrow reference
         """
         fnty = Type.function(self.pyobj, [self.pyobj, self.py_ssize_t])
-        fn = self._get_function(fnty, "PyTuple_GetItem")
+        fn = self._get_function(fnty, name="PyTuple_GetItem")
         idx = self.context.get_constant(types.intp, idx)
         return self.builder.call(fn, [tup, idx])
+
+    def tuple_pack(self, items):
+        fnty = Type.function(self.pyobj, [self.py_ssize_t], var_arg=True)
+        fn = self._get_function(fnty, name="PyTuple_Pack")
+        n = self.context.get_constant(types.intp, len(items))
+        args = [n]
+        args.extend(items)
+        return self.builder.call(fn, args)
 
     def make_none(self):
         obj = self._get_object("Py_None")

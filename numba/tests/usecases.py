@@ -78,3 +78,4 @@ def blackscholes_cnd(d):
     if d > 0:
         ret_val = 1.0 - ret_val
     return ret_val
+

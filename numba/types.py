@@ -202,6 +202,7 @@ float64 = Type('float64')
 complex64 = Type('complex64')
 complex128 = Type('complex128')
 
+len_type = Dummy('len')
 range_type = Dummy('range')
 range_state32_type = Type('range_state32')
 range_state64_type = Type('range_state64')
@@ -212,6 +213,7 @@ signed_domain = frozenset([int32, int64])
 unsigned_domain = frozenset([uint32, uint64])
 integer_domain = signed_domain | unsigned_domain
 real_domain = frozenset([float32, float64])
+number_domain = real_domain | integer_domain
 
 domains = unsigned_domain, signed_domain, real_domain
 
