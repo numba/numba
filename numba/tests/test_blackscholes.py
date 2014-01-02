@@ -18,6 +18,7 @@ A4 = -1.821255978
 A5 = 1.330274429
 RSQRT2PI = 0.39894228040143267793994605993438
 
+
 def cnd_array(d):
     K = 1.0 / (1.0 + 0.2316419 * np.abs(d))
     ret_val = (RSQRT2PI * np.exp(-0.5 * d * d) *
@@ -35,7 +36,7 @@ def cnd(d):
 
 
 def blackscholes_arrayexpr(stockPrice, optionStrike, optionYears, Riskfree,
-                   Volatility):
+                           Volatility):
     S = stockPrice
     X = optionStrike
     T = optionYears
@@ -54,8 +55,8 @@ def blackscholes_arrayexpr(stockPrice, optionStrike, optionYears, Riskfree,
     return callResult, putResult
 
 
-def blackscholes_arrayexpr_jitted(stockPrice, optionStrike, optionYears, Riskfree,
-                   Volatility):
+def blackscholes_arrayexpr_jitted(stockPrice, optionStrike, optionYears,
+                                  Riskfree, Volatility):
     S = stockPrice
     X = optionStrike
     T = optionYears
@@ -94,7 +95,7 @@ def blackscholes_scalar(callResult, putResult, stockPrice, optionStrike,
 
 
 def blackscholes_scalar_jitted(callResult, putResult, stockPrice, optionStrike,
-                          optionYears, Riskfree, Volatility):
+                               optionYears, Riskfree, Volatility):
     S = stockPrice
     X = optionStrike
     T = optionYears
@@ -122,9 +123,10 @@ class TestBlackScholes(unittest.TestCase):
         flags.set("enable_pyobject")
 
         global cnd_array_jitted
-        ctx1, cnd_array_jitted, err = compile_isolated(cnd_array, (), flags=flags)
-        ctx2, jitted_bs, err = compile_isolated(blackscholes_arrayexpr_jitted, (),
-                                               flags=flags)
+        ctx1, cnd_array_jitted, err = compile_isolated(cnd_array, args=(),
+                                                       flags=flags)
+        ctx2, jitted_bs, err = compile_isolated(blackscholes_arrayexpr_jitted,
+                                                args=(), flags=flags)
 
         OPT_N = 400
         iterations = 10
@@ -157,7 +159,6 @@ class TestBlackScholes(unittest.TestCase):
         print("L1 norm: %E" % L1norm)
         print("Max absolute error: %E" % delta.max())
         self.assertEqual(delta.max(), 0)
-
 
     def test_scalar(self):
         flags = Flags()

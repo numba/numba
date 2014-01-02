@@ -213,7 +213,7 @@ class PythonAPI(object):
         strobj = self.object_str(obj)
         cstr = self.string_as_string(strobj)
         self.context.print_string(self.builder, cstr)
-        self.decref(str)
+        self.decref(strobj)
 
     def get_null_object(self):
         return Constant.null(self.pyobj)

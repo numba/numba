@@ -439,12 +439,21 @@ class PyLower(BaseLower):
             bbelse = self.builder.basic_block
 
             with cgutils.ifthen(self.builder, obj_is_null):
-                self.pyapi.err_clear()
                 mod = self.pyapi.dict_getitem_string(self.pyapi.globalscope,
                                                      "__builtins__")
-                builtin = self.pyapi.dict_getitem_string(mod, name)
+                fromdict = self.pyapi.dict_getitem_string(mod, name)
 
-                self.check_error(builtin)
+                bbifdict = self.builder.basic_block
+
+                with cgutils.ifthen(self.builder, self.is_null(fromdict)):
+                    # This happen if we are using the __main__ module
+                    frommod = self.pyapi.object_getattr_string(mod, name)
+                    self.check_error(frommod)
+                    bbifmod = self.builder.basic_block
+
+                builtin = self.builder.phi(self.pyapi.pyobj)
+                builtin.add_incoming(fromdict, bbifdict)
+                builtin.add_incoming(frommod, bbifmod)
                 bbif = self.builder.basic_block
 
             retval = self.builder.phi(self.pyapi.pyobj)
