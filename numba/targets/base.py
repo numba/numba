@@ -208,7 +208,9 @@ class BaseContext(object):
         return Constant.null(lty)
 
     def get_function(self, fn, sig):
-        if isinstance(fn, types.Function):
+        if isinstance(fn, types.Method):
+            return self.call_method
+        elif isinstance(fn, types.Function):
             overloads = self.defns[fn.template.key]
         else:
             overloads = self.defns[fn]
@@ -284,7 +286,6 @@ class BaseContext(object):
             else:
                 return builder.fptoui(val, lty)
 
-
         raise NotImplementedError("cast", val, fromty, toty)
 
     def call_function(self, builder, callee, args):
@@ -298,6 +299,28 @@ class BaseContext(object):
 
         status = Status(code=code, ok=ok, err=err)
         return status, builder.load(retval)
+
+    def call_class_method(self, builder, func, retty, tys, args):
+        api = self.get_python_api(builder)
+        pyargs = [api.from_native_value(av, at) for av, at in zip(args, tys)]
+        res = api.call_function_objargs(func, pyargs)
+
+        # clean up
+        api.decref(func)
+        for obj in pyargs:
+            api.decref(obj)
+
+        with cgutils.ifthen(builder, cgutils.is_null(builder, res)):
+            self.return_exc(builder)
+
+        if retty == types.none:
+            api.decref(res)
+            return self.get_dummy_value()
+        else:
+            nativeresult = api.to_native_value(res, retty)
+            api.decref(res)
+            return nativeresult
+
 
     def print_string(self, builder, text):
         mod = builder.basic_block.function.module
@@ -379,6 +402,7 @@ def user_function(func, fndesc):
         return retval
     return imp
 
+
 def python_attr_impl(cls, attr, atyp):
     @impl_attribute(cls, attr, atyp)
     def imp(context, builder, typ, value):
@@ -386,9 +410,13 @@ def python_attr_impl(cls, attr, atyp):
         aval = api.object_getattr_string(value, attr)
         with cgutils.ifthen(builder, cgutils.is_null(builder, aval)):
             context.return_exc(builder)
-        nativevalue = api.to_native_value(aval, atyp)
-        api.decref(aval)
-        return nativevalue
+
+        if isinstance(atyp, types.Method):
+            return aval
+        else:
+            nativevalue = api.to_native_value(aval, atyp)
+            api.decref(aval)
+            return nativevalue
     return imp
 
 #-------------------------------------------------------------------------------

@@ -239,11 +239,22 @@ class Lower(BaseLower):
             argtyps = [self.typeof(a.name) for a in expr.args]
             signature = self.fndesc.calltypes[expr]
             fnty = self.typeof(expr.func.name)
-            impl = self.context.get_function(fnty, signature)
             castvals = [self.context.cast(self.builder, av, at, ft)
                         for av, at, ft in zip(argvals, argtyps,
                                               signature.args)]
-            return impl(self.context, self.builder, argtyps, castvals)
+
+            if isinstance(fnty, types.Method):
+                # Method of objects are handled differently
+                fnobj = self.loadvar(expr.func.name)
+                return self.context.call_class_method(self.builder, fnobj,
+                                                      signature.return_type,
+                                                      argtyps, castvals)
+
+            else:
+                # Normal function resolution
+                impl = self.context.get_function(fnty, signature)
+                return impl(self.context, self.builder, argtyps, castvals)
+
         elif expr.op in ('getiter', 'iternext', 'itervalid'):
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)

@@ -52,7 +52,8 @@ class Module(Type):
 
 class Function(Type):
     def __init__(self, template):
-        super(Function, self).__init__("Function(%s)" % template)
+        cls = type(self)
+        super(Function, self).__init__("%s(%s)" % (cls.__name__, template))
         self.template = template
 
     def __eq__(self, other):
@@ -61,6 +62,10 @@ class Function(Type):
 
     def __hash__(self):
         return hash(self.template)
+
+
+class Method(Function):
+    pass
 
 
 class Array(Type):

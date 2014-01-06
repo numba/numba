@@ -249,6 +249,9 @@ class PythonAPI(object):
         raise NotImplementedError(typ)
 
     def from_native_return(self, val, typ):
+        return self.from_native_value(val, typ)
+
+    def from_native_value(self, val, typ):
         if typ == types.pyobject:
             return val
         elif typ == types.boolean:

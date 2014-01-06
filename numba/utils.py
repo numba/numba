@@ -1,5 +1,8 @@
+from __future__ import division, print_function
 import collections
 import functools
+from timeit import default_timer as timer
+import numpy
 
 
 class SortedMap(collections.Mapping):
@@ -73,7 +76,52 @@ def runonce(fn):
     return inner
 
 
-
 def bit_length(intval):
     assert isinstance(intval, int)
     return len(bin(abs(intval))) - 2
+
+
+class BenchmarkResult(object):
+    def __init__(self, func, records):
+        self.func = func
+        self.records = records
+        self.mean = numpy.mean(self.records)
+        self.best = numpy.min(self.records)
+        self.worst = numpy.max(self.records)
+
+    def __repr__(self):
+        name = getattr(self.func, "__name__", self.func)
+        args = (name, format_time(self.mean), format_time(self.best),
+                format_time(self.worst), len(self.records))
+        return "%20s | mean %7s | best %7s | worst %7s | repeat %d" % args
+
+
+
+def format_time(tm):
+    units = "s ms us ns ps".split()
+    base = 1
+    for unit in units[:-1]:
+        if tm >= base:
+            break
+        base /= 1000
+    else:
+        unit = units[-1]
+    return "%.1f%s" % (tm / base, unit)
+
+def benchmark(func, maxsec=.1, maxct=1000000):
+    total = 0
+    records = []
+
+    while True:
+        ts = timer()
+        func()
+        te = timer()
+        dur = te - ts
+        records.append(dur)
+        total += dur
+        if total > maxsec:
+            break
+        if len(records) >= maxct:
+            break
+
+    return BenchmarkResult(func, records)

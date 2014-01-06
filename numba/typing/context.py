@@ -116,4 +116,7 @@ class Context(object):
             return first
 
 
-
+def new_method(fn, sig):
+    gvs = dict(key=fn, cases=[sig])
+    ft = type("UserFunction_%s" % fn, (templates.ConcreteTemplate,), gvs)
+    return types.Method(ft)

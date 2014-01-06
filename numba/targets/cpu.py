@@ -2,7 +2,7 @@ from __future__ import print_function
 import llvm.core as lc
 import llvm.passes as lp
 import llvm.ee as le
-from numba import _dynfunc
+from numba import _dynfunc, DEBUG
 from numba.callwrapper import PyCallWrapper
 from .base import BaseContext
 from numba import utils
@@ -38,6 +38,9 @@ class CPUContext(BaseContext):
         wrapper, api = PyCallWrapper(self, func.module, func, fndesc).build()
         moddictsym = api.get_module_dict_symbol()
         self.optimize(func.module)
+
+        if DEBUG:
+            print(func.module)
 
         self.engine.add_module(func.module)
         baseptr = self.engine.get_pointer_to_function(func)
