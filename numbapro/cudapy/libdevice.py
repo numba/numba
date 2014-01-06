@@ -35,7 +35,8 @@ def generate_powi(nvname, callobj, ty):
         def generic_implement(self, context, args, argtys, retty):
             builder = context.builder
             lty = ty.llvm_as_value()
-            lfunc = cgutils.get_function(builder, nvname, lty, [lty, types.int32])
+            linty = types.int32.llvm_as_argument()
+            lfunc = cgutils.get_function(builder, nvname, lty, [lty, linty])
             return builder.call(lfunc, args)
 
     return BinaryMath

@@ -1,8 +1,9 @@
 from numba import jit as numba_jit, autojit as numba_autojit
 from numbapro.cudadrv.initialize import last_error
 
+
 def autojit(*args, **kwds):
-    '''Creates a type specialized function that lazily compiles to native code
+    """Creates a type specialized function that lazily compiles to native code
     at the first invocation for any function type.  Each function type is
     only compiled once.
     
@@ -11,18 +12,20 @@ def autojit(*args, **kwds):
     Please see docs for ``numbapro.cuda.autojit`` for details.
 
     Refer to http://docs.continuum.io/numbapro/quickstart.html for usage
-    '''
+    """
     target = kwds.get('target')
     if target == 'gpu':
         from numbapro import cuda
+
         if last_error is not None:
             raise last_error
         return cuda.autojit(*args, **kwds)
     else:
         return numba_autojit(*args, **kwds)
 
+
 def jit(*args, **kwds):
-    '''Compile a function given the parameter and return types.
+    """Compile a function given the parameter and return types.
     
     NumbaPro adds CUDA GPU support to ``numba.jit``.
     
@@ -45,10 +48,11 @@ def jit(*args, **kwds):
     for the GPU target.
 
     Refer to http://docs.continuum.io/numbapro/quickstart.html for usage
-    '''
+    """
     target = kwds.get('target')
     if target == 'gpu':
         from numbapro import cuda
+
         if last_error is not None:
             raise last_error
         return cuda.jit(*args, **kwds)
