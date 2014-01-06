@@ -222,7 +222,10 @@ class PythonAPI(object):
         return Constant.null(self.pyobj)
 
     def to_native_arg(self, obj, typ):
-        if typ == types.pyobject:
+        return self.to_native_value(obj, typ)
+
+    def to_native_value(self, obj, typ):
+        if isinstance(typ, types.Object) or typ == types.pyobject:
             return obj
         elif typ == types.int32:
             ssize_val = self.number_as_ssize_t(obj)

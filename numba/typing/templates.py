@@ -164,6 +164,17 @@ class AttributeTemplate(object):
             raise NotImplementedError(value, attr)
         return fn(value)
 
+
+class ClassAttrTemplate(AttributeTemplate):
+    def __init__(self, context, key, clsdict):
+        super(ClassAttrTemplate, self).__init__(context)
+        self.key = key
+        self.clsdict = clsdict
+
+    def resolve(self, value, attr):
+        return self.clsdict[attr]
+
+
 # -----------------------------------------------------------------------------
 
 BUILTINS = []

@@ -86,6 +86,11 @@ class Context(object):
         self.insert_function(ft)
         self.globals[fn] = types.Function(ft)
 
+    def insert_class(self, cls, attrs):
+        clsty = types.Object(cls)
+        at = templates.ClassAttrTemplate(self, clsty, attrs)
+        self.insert_attributes(at)
+
     def type_distance(self, fromty, toty):
         if fromty == toty:
             return 0

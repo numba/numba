@@ -96,6 +96,12 @@ class BaseContext(object):
 
         self.users[func] = UserFunction
 
+    def insert_class(self, cls, attrs):
+        clsty = types.Object(cls)
+        for name, vtype in attrs.iteritems():
+            imp = python_attr_impl(clsty, name, vtype)
+            self.attrs[imp.key] = imp
+
     def get_user_function(self, func):
         return self.users[func]
 
@@ -152,7 +158,8 @@ class BaseContext(object):
     def get_value_type(self, ty):
         if (isinstance(ty, types.Dummy) or
                 isinstance(ty, types.Module) or
-                isinstance(ty, types.Function)):
+                isinstance(ty, types.Function) or
+                isinstance(ty, types.Object)):
             return self.get_dummy_type()
         elif ty == types.range_state32_type:
             stty = self.get_struct_type(RangeState32)
@@ -307,7 +314,7 @@ class BaseContext(object):
         return Constant.null(self.get_dummy_type())
 
     def get_dummy_type(self):
-        return Type.int()
+        return Type.pointer(Type.int(8))
 
     def optimize(self, module):
         pass
@@ -370,6 +377,18 @@ def user_function(func, fndesc):
         status, retval = context.call_function(builder, func, args)
         # TODO handling error
         return retval
+    return imp
+
+def python_attr_impl(cls, attr, atyp):
+    @impl_attribute(cls, attr, atyp)
+    def imp(context, builder, typ, value):
+        api = context.get_python_api(builder)
+        aval = api.object_getattr_string(value, attr)
+        with cgutils.ifthen(builder, cgutils.is_null(builder, aval)):
+            context.return_exc(builder)
+        nativevalue = api.to_native_value(aval, atyp)
+        api.decref(aval)
+        return nativevalue
     return imp
 
 #-------------------------------------------------------------------------------

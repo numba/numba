@@ -179,11 +179,23 @@ class CPointer(Type):
         return hash(self.dtype)
 
 
+class Object(Type):
+    def __init__(self, clsobj):
+        name = "Object(%s)" % clsobj.__name__
+        super(Object, self).__init__(name, param=True)
+        self.cls = clsobj
+
+    def __eq__(self, other):
+        if isinstance(other, Object):
+            return self.cls == other.cls
+
+    def __hash__(self):
+        return hash(self.cls)
+
 
 pyobject = Type('pyobject')
 none = Dummy('none')
 any = Dummy('any')
-
 
 boolean = bool_ = Type('bool')
 
