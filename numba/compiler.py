@@ -62,6 +62,7 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags):
 
     return func, fail_reason
 
+
 def translate_stage(func):
     bc = bytecode.ByteCode(func=func)
     interp = interpreter.Interpreter(bytecode=bc)

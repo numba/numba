@@ -1,4 +1,5 @@
 from llvm.core import Type, Constant
+import llvm.core as lc
 import llvm.ee as le
 from llvm import LLVMException
 import ctypes
@@ -13,7 +14,7 @@ def fix_python_api():
 
 
 class PythonAPI(object):
-    def __init__(self, context, builder, ownmod=None):
+    def __init__(self, context, builder):
         fix_python_api()
         self.context = context
         self.builder = builder
@@ -23,7 +24,6 @@ class PythonAPI(object):
         self.py_ssize_t = self.context.get_value_type(types.intp)
         self.cstring = Type.pointer(Type.int(8))
         self.module = builder.basic_block.function.module
-        self.globalscope = self.object_getattr_string(ownmod, "__dict__")
 
     # ------ Python API -----
 
@@ -299,3 +299,15 @@ class PythonAPI(object):
 
         return nativeary._getvalue()
 
+    def get_module_dict_symbol(self):
+        pymodname = "__NUMBA_PYMODULE_DICT__"
+        try:
+            gv = self.module.get_global_variable_named(name=pymodname)
+        except LLVMException:
+            gv = self.module.add_global_variable(self.pyobj, name=pymodname)
+            gv.initializer = Constant.null(self.pyobj)
+        return gv
+
+    def get_module_dict(self):
+        gv = self.get_module_dict_symbol()
+        return self.builder.load(gv)

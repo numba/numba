@@ -21,7 +21,7 @@ class TestUsecases(unittest.TestCase):
 
         for args in itertools.product(xs, ys):
             print("case", args)
-            self.assertEqual(pyfunc(*args), cfunc(*args))
+            self.assertEqual(pyfunc(*args), cfunc(*args), "args %s" % (args,))
 
     def test_sum1d(self):
         pyfunc = usecases.sum1d

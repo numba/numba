@@ -7,6 +7,7 @@ from numba.callwrapper import PyCallWrapper
 from .base import BaseContext
 from numba import utils
 
+
 class CPUContext(BaseContext):
     def init(self):
         self.execmodule = lc.Module.new("numba.exec")
@@ -34,16 +35,18 @@ class CPUContext(BaseContext):
         if not fndesc.native:
             self.optimize_pythonapi(func)
 
-        wrapper = PyCallWrapper(self, func.module, func, fndesc).build()
+        wrapper, api = PyCallWrapper(self, func.module, func, fndesc).build()
+        moddictsym = api.get_module_dict_symbol()
         self.optimize(func.module)
 
         self.engine.add_module(func.module)
         baseptr = self.engine.get_pointer_to_function(func)
         fnptr = self.engine.get_pointer_to_function(wrapper)
-
+        moddictptr = self.engine.get_pointer_to_global(moddictsym)
         cfunc = _dynfunc.make_function(fndesc.pymod, fndesc.name, fndesc.doc,
                                        fnptr)
 
+        _dynfunc.set_arbitrary_addr(moddictptr, fndesc.pymod.__dict__)
         self.native_funcs[cfunc] = fndesc.name, baseptr
         return cfunc
 

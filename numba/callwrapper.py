@@ -19,16 +19,15 @@ class PyCallWrapper(object):
 
         builder = Builder.new(wrapper.append_basic_block('entry'))
 
-        ownmod, args, kws = wrapper.args
+        _, args, kws = wrapper.args
 
-        self.build_wrapper(builder, ownmod, args, kws)
+        api = self.context.get_python_api(builder)
+        self.build_wrapper(api, builder, args, kws)
 
         wrapper.verify()
-        return wrapper
+        return wrapper, api
 
-    def build_wrapper(self, builder, ownmod, args, kws):
-        api = self.context.get_python_api(builder, ownmod)
-
+    def build_wrapper(self, api, builder, args, kws):
         nargs = len(self.fndesc.args)
         keywords = self.make_keywords(self.fndesc.args)
         fmt = self.make_const_string("O" * nargs)
@@ -43,8 +42,7 @@ class PyCallWrapper(object):
         innerargs = [api.to_native_arg(builder.load(obj), ty)
                      for obj, ty in zip(objs, self.fndesc.argtypes)]
 
-        status, res = self.context.call_function(builder, ownmod,
-                                                 self.func, innerargs)
+        status, res = self.context.call_function(builder, self.func, innerargs)
 
         with cgutils.ifthen(builder, status.ok):
             retval = api.from_native_return(res, self.fndesc.restype)

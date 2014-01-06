@@ -15,7 +15,8 @@ except ImportError:
 class FunctionDescriptor(object):
     def __init__(self, native, pymod, name, doc, blocks, typemap,
                  restype, calltypes, args, kws):
-        self.native = False
+        # FIXME self.native is currently unused
+        self.native = native
         self.pymod = pymod
         self.name = name
         self.doc = doc
@@ -316,8 +317,7 @@ PYTHON_OPMAP = {
 
 class PyLower(BaseLower):
     def init(self):
-        scope = self.context.get_scope(self.function)
-        self.pyapi = self.context.get_python_api(self.builder, scope)
+        self.pyapi = self.context.get_python_api(self.builder)
 
         # Add error handling block
         self.ehblock = self.function.append_basic_block('error')
@@ -432,17 +432,22 @@ class PyLower(BaseLower):
             raise NotImplementedError(type(const))
 
     def lower_global(self, name):
-        obj = self.pyapi.dict_getitem_string(self.pyapi.globalscope, name)
+        """
+        1) Check global scope dictionary.
+        2) Check __builtins__.
+            2a) is it a dictionary (for non __main__ module)
+            2b) is it a module (for __main__ module)
+        """
+        moddict = self.pyapi.get_module_dict()
+        obj = self.pyapi.dict_getitem_string(moddict, name)
 
         if hasattr(builtins, name):
             obj_is_null = self.is_null(obj)
             bbelse = self.builder.basic_block
 
             with cgutils.ifthen(self.builder, obj_is_null):
-                mod = self.pyapi.dict_getitem_string(self.pyapi.globalscope,
-                                                     "__builtins__")
+                mod = self.pyapi.dict_getitem_string(moddict, "__builtins__")
                 fromdict = self.pyapi.dict_getitem_string(mod, name)
-
                 bbifdict = self.builder.basic_block
 
                 with cgutils.ifthen(self.builder, self.is_null(fromdict)):

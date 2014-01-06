@@ -38,12 +38,30 @@ make_function(PyObject *self, PyObject *args)
     desc->ml_flags = METH_KEYWORDS;
     desc->ml_doc = mldoc;
 
-    return PyCFunction_NewEx(desc, module, module);
+    return PyCFunction_NewEx(desc, NULL, module);
 }
+
+
+static
+PyObject*
+set_arbitrary_addr(PyObject* self, PyObject* args){
+    PyObject *obj;
+    union {
+        Py_ssize_t intval;
+        void **ptr;
+    } target;
+    if (!PyArg_ParseTuple(args, "nO", &target.intval, &obj)) {
+        return NULL;
+    }
+    *target.ptr = (void*)obj;
+    Py_RETURN_NONE;
+}
+
 
 static PyMethodDef core_methods[] = {
 #define declmethod(func) { #func , ( PyCFunction )func , METH_VARARGS , NULL }
     declmethod(make_function),
+    declmethod(set_arbitrary_addr),
     { NULL },
 #undef declmethod
 };

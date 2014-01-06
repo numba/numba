@@ -44,29 +44,31 @@ class UniqueDict(dict):
         super(UniqueDict, self).__setitem__(key, value)
 
 
-def cache(fn):
-    @functools.wraps(fn)
-    def cached_func(self, *args, **kws):
-        if self in cached_func.cache:
-            return cached_func.cache[self]
-        ret = fn(self, *args, **kws)
-        cached_func.cache[self] = ret
-        return ret
-    cached_func.cache = {}
-    def invalidate(self):
-        if self in cached_func.cache:
-            del cached_func.cache[self]
-    cached_func.invalidate = invalidate
-
-    return cached_func
+# def cache(fn):
+#     @functools.wraps(fn)
+#     def cached_func(self, *args, **kws):
+#         if self in cached_func.cache:
+#             return cached_func.cache[self]
+#         ret = fn(self, *args, **kws)
+#         cached_func.cache[self] = ret
+#         return ret
+#     cached_func.cache = {}
+#     def invalidate(self):
+#         if self in cached_func.cache:
+#             del cached_func.cache[self]
+#     cached_func.invalidate = invalidate
+#
+#     return cached_func
 
 
 def runonce(fn):
     @functools.wraps(fn)
     def inner():
         if not inner._ran:
-            fn()
-        inner._ran = True
+            res = fn()
+            inner._result = res
+            inner._ran = True
+        return inner._result
     inner._ran = False
     return inner
 
