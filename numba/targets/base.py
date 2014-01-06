@@ -39,21 +39,28 @@ class Overloads(object):
             if len(ver.signature.args) == len(sig.args):
                 match = True
                 for formal, actual in zip(ver.signature.args, sig.args):
-                    if formal == actual:
-                        pass
-                    elif types.any == formal:
-                        pass
-                    elif (isinstance(formal, types.Kind) and
-                          isinstance(actual, formal.of)):
-                        pass
-                    else:
-                        match = False
+                    match = self._match(formal, actual)
+                    if not match:
                         break
 
                 if match:
                     return ver
 
         raise NotImplementedError(self, sig)
+
+    @staticmethod
+    def _match(formal, actual):
+        if formal == actual:
+            # formal argument matches actual arguments
+            return True
+        elif types.any == formal:
+            # formal argument is any
+            return True
+        elif (isinstance(formal, types.Kind) and
+              isinstance(actual, formal.of)):
+            # formal argument is a kind and the actual argument
+            # is of that kind
+            return True
 
     def append(self, impl):
         self.versions.append(impl)

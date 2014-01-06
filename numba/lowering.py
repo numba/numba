@@ -295,7 +295,8 @@ class Lower(BaseLower):
 
     def storevar(self, value, name):
         ptr = self.getvar(name)
-        assert value.type == ptr.type.pointee
+        assert value.type == ptr.type.pointee, (str(value.type),
+                                                str(ptr.type.pointee))
         self.builder.store(value, ptr)
 
     def alloca(self, name, type):
@@ -491,8 +492,7 @@ class PyLower(BaseLower):
         return obj
 
     def is_null(self, obj):
-        null = self.context.get_constant_null(types.pyobject)
-        return self.builder.icmp(lc.ICMP_EQ, obj, null)
+        return cgutils.is_null(self.builder, obj)
 
     def return_error_occurred(self):
         self.cleanup()

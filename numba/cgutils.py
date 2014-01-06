@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 from llvm.core import Constant, Type
+import llvm.core as lc
 
 
 class Structure(object):
@@ -71,6 +72,11 @@ def terminate(builder, bbend):
     instr = bb.instructions
     if not instr or not instr[-1].is_terminator:
         builder.branch(bbend)
+
+
+def is_null(builder, val):
+    null = Constant.null(val.type)
+    return builder.icmp(lc.ICMP_EQ, null, val)
 
 
 @contextmanager

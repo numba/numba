@@ -44,6 +44,12 @@ def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS):
 
 
 def compile_extra(typingctx, targetctx, func, args, return_type, flags):
+    """
+    Args
+    ----
+    - return_type
+        Use ``None`` to indicate
+    """
     # Translate to IR
     interp = translate_stage(func)
 

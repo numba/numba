@@ -15,6 +15,9 @@ def fix_python_api():
 
 class PythonAPI(object):
     def __init__(self, context, builder):
+        """
+        Note: Maybe called multiple times when lowering a function
+        """
         fix_python_api()
         self.context = context
         self.builder = builder
