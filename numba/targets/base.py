@@ -137,10 +137,14 @@ class BaseContext(object):
         stringtype = Type.pointer(Type.int(8))
         text = Constant.stringz(string)
         name = ".const.%s" % string
-        gv = mod.add_global_variable(text.type, name=name)
-        gv.global_constant = True
-        gv.initializer = text
-        gv.linkage = lc.LINKAGE_INTERNAL
+        for gv in mod.global_variables:
+            if gv.name == name and gv.type.pointee == text.type:
+                break
+        else:
+            gv = mod.add_global_variable(text.type, name=name)
+            gv.global_constant = True
+            gv.initializer = text
+            gv.linkage = lc.LINKAGE_INTERNAL
         return Constant.bitcast(gv, stringtype)
 
     def get_arguments(self, func):
@@ -291,7 +295,7 @@ class BaseContext(object):
     def call_function(self, builder, callee, args):
         retty = callee.args[0].type.pointee
         # TODO: user supplied retval or let user tell where to allocate
-        retval = builder.alloca(retty)
+        retval = cgutils.alloca_once(builder, retty)
         realargs = [retval] + list(args)
         code = builder.call(callee, realargs)
         ok = builder.icmp(lc.ICMP_EQ, code, Constant.null(Type.int()))
@@ -320,7 +324,6 @@ class BaseContext(object):
             nativeresult = api.to_native_value(res, retty)
             api.decref(res)
             return nativeresult
-
 
     def print_string(self, builder, text):
         mod = builder.basic_block.function.module

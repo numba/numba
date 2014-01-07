@@ -124,13 +124,13 @@ class ControlFlowAnalysis(object):
         self.blockseq.append(inst.offset)
 
     def op_SETUP_LOOP(self, inst):
-        self._blockstack.append(inst.next + inst.arg)
+        self._blockstack.append(inst.get_jump_target())
 
     def op_POP_BLOCK(self, inst):
         self._blockstack.pop()
 
     def op_FOR_ITER(self, inst):
-        self.jump(self._blockstack[-1])
+        self.jump(inst.get_jump_target())
         self.jump(inst.next)
         self._force_new_block = True
 

@@ -3,7 +3,7 @@ import llvm.core as lc
 import llvm.ee as le
 from llvm import LLVMException
 import ctypes
-from numba import types, utils
+from numba import types, utils, cgutils
 
 _PyNone = ctypes.c_ssize_t(id(None))
 
@@ -55,6 +55,11 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyDict_GetItemString")
         cstr = self.context.insert_const_string(self.module, name)
         return self.builder.call(fn, [dic, cstr])
+
+    def err_occurred(self):
+        fnty = Type.function(self.pyobj, ())
+        fn = self._get_function(fnty, name="PyErr_Occurred")
+        return self.builder.call(fn, ())
 
     def err_clear(self):
         fnty = Type.function(Type.void(), ())
@@ -151,6 +156,17 @@ class PythonAPI(object):
         fnty = Type.function(self.pyobj, [self.long])
         fn = self._get_function(fnty, name="PyBool_FromLong")
         return self.builder.call(fn, [ival])
+
+    def iter_next(self, iterobj):
+        fnty = Type.function(self.pyobj, [self.pyobj])
+        fn = self._get_function(fnty, name="PyIter_Next")
+        return self.builder.call(fn, [iterobj])
+
+    def object_getiter(self, obj):
+        fnty = Type.function(self.pyobj, [self.pyobj])
+        fn = self._get_function(fnty, name="PyObject_GetIter")
+        return self.builder.call(fn, [obj])
+
 
     def object_getattr_string(self, obj, attr):
         cstr = self.context.insert_const_string(self.module, attr)
@@ -264,7 +280,7 @@ class PythonAPI(object):
 
         elif typ == types.float32:
             dbval = self.builder.fpext(val, self.double)
-            return self.float_from_double(val)
+            return self.float_from_double(dbval)
 
         elif typ == types.float64:
             return self.float_from_double(val)

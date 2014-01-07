@@ -177,6 +177,20 @@ class SetItemConstrain(object):
             context.resolve_setitem(target=ty, index=it, value=vt)
 
 
+class TypeVarMap(dict):
+    def __getitem__(self, name):
+        if name not in self:
+            self[name] = TypeVar(name)
+        return super(TypeVarMap, self).__getitem__(name)
+
+    def __setitem__(self, name, value):
+        assert isinstance(name, str)
+        if name in self:
+            raise KeyError("Cannot redefine typevar %s" % name)
+        else:
+            super(TypeVarMap, self).__setitem__(name, value)
+
+
 class TypeInferer(object):
     """
     Operates on block that shares the same ir.Scope.
@@ -185,17 +199,13 @@ class TypeInferer(object):
     def __init__(self, context, blocks):
         self.context = context
         self.blocks = blocks
-        self.typevars = utils.UniqueDict()
+        self.typevars = TypeVarMap()
         self.constrains = ConstrainNetwork()
         # Set of assumed immutable globals
         self.assumed_immutables = set()
         # Track all calls
         self.usercalls = []
         self.intrcalls = []
-        # Fill the type vars
-        scope = self.blocks.itervalues().next().scope
-        for var in scope.localvars:
-            self.typevars[var] = TypeVar(var)
 
     def dump(self):
         print('---- type variables ----')
@@ -290,7 +300,7 @@ class TypeInferer(object):
             self.typeof_assign(inst)
         elif isinstance(inst, ir.SetItem):
             self.typeof_setitem(inst)
-        elif isinstance(inst, (ir.Jump, ir.Branch, ir.Return)):
+        elif isinstance(inst, (ir.Jump, ir.Branch, ir.Return, ir.Del)):
             pass
         else:
             raise NotImplementedError(inst)

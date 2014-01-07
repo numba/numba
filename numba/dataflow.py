@@ -89,7 +89,7 @@ class DataFlowAnalysis(object):
         info.push(res)
         if self.syntax_blocks:
             loop = self.syntax_blocks[-1]
-            if isinstance(loop, LoopBlock):
+            if isinstance(loop, LoopBlock) and loop.iterator is None:
                 loop.iterator = res
 
     def op_FOR_ITER(self, info, inst):
@@ -188,8 +188,11 @@ class DataFlowAnalysis(object):
         info.append(inst)
 
     def op_POP_BLOCK(self, info, inst):
-        self.syntax_blocks.pop()
-        info.append(inst)
+        block = self.syntax_blocks.pop()
+        if isinstance(block, LoopBlock):
+            info.append(inst, delitem=block.iterator)
+        else:
+            info.append(inst)
 
     def _ignored(self, info, inst):
         pass

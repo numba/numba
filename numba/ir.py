@@ -144,6 +144,15 @@ class SetItem(Stmt):
         return '%s[%s] = %s' % (self.target, self.index, self.value)
 
 
+class Del(Stmt):
+    def __init__(self, value, loc):
+        self.value = value
+        self.loc = loc
+
+    def __str__(self):
+        return "del %s" % self.value
+
+
 class Return(Stmt):
     is_terminator = True
 
@@ -255,6 +264,10 @@ class Var(object):
 
     def __str__(self):
         return self.name
+
+    @property
+    def is_temp(self):
+        return self.name.startswith("$")
 
 
 class Scope(object):

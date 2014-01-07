@@ -1,11 +1,13 @@
 from __future__ import print_function
 from pprint import pprint
-from numba import bytecode, interpreter, typing, typeinfer, lowering, targets
+from numba import (bytecode, interpreter, typing, typeinfer, lowering, targets,
+                   irpasses)
 from numba import DEBUG
 
 
 class Flags(object):
-    FLAGS_SET = frozenset(['enable_pyobject'])
+    FLAGS_SET = frozenset(['enable_pyobject',
+                           'force_pyobject'])
 
     def __init__(self):
         self._enabled = set()
@@ -52,25 +54,37 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags):
     """
     # Translate to IR
     interp = translate_stage(func)
+    # Optimize
+    ir_optimize_stage(interp)
 
-    # Type inference
-    try:
-        typemap, restype, calltypes = type_inference_stage(typingctx, interp,
-                                                           args, return_type)
-    except Exception, fail_reason:
-        if not flags.enable_pyobject:
-            raise
-        func = py_lowering_stage(targetctx, interp)
+    if not flags.force_pyobject:
+        try:
+            # Type inference
+            typemap, restype, calltypes = type_inference_stage(typingctx, interp,
+                                                               args, return_type)
+        except Exception, fail_reason:
+            if not flags.enable_pyobject:
+                raise
+
+            func = py_lowering_stage(targetctx, interp)
+        else:
+            fail_reason = None
+            func = native_lowering_stage(targetctx, interp, typemap, restype,
+                                         calltypes)
+
     else:
+        # Forced to use all python mode
+        func = py_lowering_stage(targetctx, interp)
         fail_reason = None
-        func = native_lowering_stage(targetctx, interp, typemap, restype,
-                                     calltypes)
 
     return func, fail_reason
 
 
 def translate_stage(func):
     bc = bytecode.ByteCode(func=func)
+    if DEBUG:
+        print(bc.dump())
+
     interp = interpreter.Interpreter(bytecode=bc)
     interp.interpret()
 
@@ -81,6 +95,12 @@ def translate_stage(func):
 
     interp.verify()
     return interp
+
+
+def ir_optimize_stage(interp):
+    irpasses.RemoveRedundantAssign(interp).run()
+    if DEBUG:
+        interp.dump()
 
 
 def type_inference_stage(typingctx, interp, args, return_type):

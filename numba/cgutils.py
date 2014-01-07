@@ -3,16 +3,20 @@ from llvm.core import Constant, Type
 import llvm.core as lc
 
 
+true_bit = Constant.int(Type.int(1), 1)
+false_bit = Constant.int(Type.int(1), 0)
+
+
 class Structure(object):
     def __init__(self, context, builder, value=None):
         self._type = context.get_struct_type(self)
         self._builder = builder
 
         if value is None:
-            with goto_entry_block(builder):
-                self._value = builder.alloca(self._type)
+            self._value = alloca_once(builder, self._type)
         else:
-            assert value.type.pointee == self._type
+            assert value.type.pointee == self._type, (value.type.pointee,
+                                                      self._type)
             self._value = value
 
         self._fdmap = {}
@@ -35,6 +39,12 @@ class Structure(object):
 
     def _getvalue(self):
         return self._value
+
+    def __iter__(self):
+        def iterator():
+            for field, _ in self._fields:
+                yield getattr(self, field)
+        return iter(iterator())
 
 
 def get_function(builder):
@@ -67,6 +77,11 @@ def goto_entry_block(builder):
         yield
 
 
+def alloca_once(builder, ty):
+    with goto_entry_block(builder):
+        return builder.alloca(ty)
+
+
 def terminate(builder, bbend):
     bb = builder.basic_block
     instr = bb.instructions
@@ -74,15 +89,52 @@ def terminate(builder, bbend):
         builder.branch(bbend)
 
 
+def get_null_value(ltype):
+    return Constant.null(ltype)
+
+
 def is_null(builder, val):
-    null = Constant.null(val.type)
+    null = get_null_value(val.type)
     return builder.icmp(lc.ICMP_EQ, null, val)
+
+
+def is_not_null(builder, val):
+    null = get_null_value(val.type)
+    return builder.icmp(lc.ICMP_NE, null, val)
+
+
+def set_branch_weight(builder, brinst, trueweight, falseweight):
+    module = get_module(builder)
+    mdid = lc.MetaDataString.get(module, "branch_weights")
+    trueweight = lc.Constant.int(Type.int(), trueweight)
+    falseweight = lc.Constant.int(Type.int(), falseweight)
+    md = lc.MetaData.get(module, [mdid, trueweight, falseweight])
+    brinst.set_metadata("prof", md)
+
+
+@contextmanager
+def if_unlikely(builder, pred):
+    bb = builder.basic_block
+    with ifthen(builder, pred):
+        yield
+    brinst = bb.instructions[-1]
+    set_branch_weight(builder, brinst, trueweight=1, falseweight=99)
+
+
+@contextmanager
+def if_likely(builder, pred):
+    bb = builder.basic_block
+    with ifthen(builder, pred):
+        yield
+    brinst = bb.instructions[-1]
+    set_branch_weight(builder, brinst, trueweight=99, falseweight=1)
 
 
 @contextmanager
 def ifthen(builder, pred):
-    bbif = append_basic_block(builder, 'if')
-    bbend = append_basic_block(builder, 'endif')
+    bb = builder.basic_block
+    bbif = append_basic_block(builder, bb.name + '.if')
+    bbend = append_basic_block(builder, bb.name + '.endif')
     builder.cbranch(pred, bbif, bbend)
 
     with goto_block(builder, bbif):

@@ -96,7 +96,6 @@ class BenchmarkResult(object):
         return "%20s | mean %7s | best %7s | worst %7s | repeat %d" % args
 
 
-
 def format_time(tm):
     units = "s ms us ns ps".split()
     base = 1
@@ -107,6 +106,7 @@ def format_time(tm):
     else:
         unit = units[-1]
     return "%.1f%s" % (tm / base, unit)
+
 
 def benchmark(func, maxsec=.1, maxct=1000000):
     total = 0

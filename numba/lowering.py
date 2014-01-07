@@ -43,7 +43,8 @@ def _describe(interp):
 def describe_function(interp, typemap, restype, calltypes):
     fname, pymod, doc, args, kws = _describe(interp)
     native = True
-    fd = FunctionDescriptor(native, pymod, fname, doc, interp.blocks,
+    sortedblocks = utils.SortedMap(interp.blocks.iteritems())
+    fd = FunctionDescriptor(native, pymod, fname, doc, sortedblocks,
                             typemap, restype, calltypes, args, kws)
     return fd
 
@@ -55,7 +56,8 @@ def describe_pyfunction(interp):
     restype = types.pyobject
     calltypes = defdict()
     native = False
-    fd = FunctionDescriptor(native, pymod, fname, doc, interp.blocks,
+    sortedblocks = utils.SortedMap(interp.blocks.iteritems())
+    fd = FunctionDescriptor(native, pymod, fname, doc, sortedblocks,
                             typemap, restype,  calltypes, args, kws)
     return fd
 
@@ -173,6 +175,9 @@ class Lower(BaseLower):
                                               signature.args)]
 
             return impl(self.context, self.builder, argtyps, castvals)
+
+        elif isinstance(inst, ir.Del):
+            pass
 
         else:
             raise NotImplementedError(type(inst))
@@ -347,22 +352,32 @@ class PyLower(BaseLower):
         if isinstance(inst, ir.Assign):
             value = self.lower_assign(inst)
             self.storevar(value, inst.target.name)
+
         elif isinstance(inst, ir.Return):
             retval = self.loadvar(inst.value.name)
             self.incref(retval)
             self.cleanup()
             self.context.return_value(self.builder, retval)
+
         elif isinstance(inst, ir.Branch):
             cond = self.loadvar(inst.cond.name)
-            istrue = self.pyapi.object_istrue(cond)
+            if cond.type == Type.int(1):
+                istrue = cond
+            else:
+                istrue = self.pyapi.object_istrue(cond)
             zero = lc.Constant.null(istrue.type)
             pred = self.builder.icmp(lc.ICMP_NE, istrue, zero)
             tr = self.blkmap[inst.truebr]
             fl = self.blkmap[inst.falsebr]
             self.builder.cbranch(pred, tr, fl)
+
         elif isinstance(inst, ir.Jump):
             target = self.blkmap[inst.target]
             self.builder.branch(target)
+
+        elif isinstance(inst, ir.Del):
+            obj = self.loadvar(inst.value)
+            self.decref(obj)
         else:
             raise NotImplementedError(type(inst), inst)
 
@@ -422,6 +437,21 @@ class PyLower(BaseLower):
             res = self.pyapi.tuple_pack(items)
             self.check_error(res)
             return res
+        elif expr.op == 'getiter':
+            obj = self.loadvar(expr.value.name)
+            res = self.pyapi.object_getiter(obj)
+            self.check_error(res)
+            return self.pack_iter(res)
+        elif expr.op == 'iternext':
+            iterstate = self.loadvar(expr.value.name)
+            iterobj, _ = self.unpack_iter(iterstate)
+            item = self.pyapi.iter_next(iterobj)
+            self.set_iter_valid(iterstate, item)
+            return item
+        elif expr.op == 'itervalid':
+            iterstate = self.loadvar(expr.value.name)
+            _, valid = self.unpack_iter(iterstate)
+            return valid
         else:
             raise NotImplementedError(expr)
 
@@ -462,7 +492,7 @@ class PyLower(BaseLower):
                 fromdict = self.pyapi.dict_getitem_string(mod, name)
                 bbifdict = self.builder.basic_block
 
-                with cgutils.ifthen(self.builder, self.is_null(fromdict)):
+                with cgutils.if_unlikely(self.builder, self.is_null(fromdict)):
                     # This happen if we are using the __main__ module
                     frommod = self.pyapi.object_getattr_string(mod, name)
                     self.check_error(frommod)
@@ -486,20 +516,31 @@ class PyLower(BaseLower):
 
     # -------------------------------------------------------------------------
 
+    def pack_iter(self, obj):
+        iterstate = PyIterState(self.context, self.builder)
+        iterstate.iterator = obj
+        iterstate.valid = cgutils.false_bit
+        return iterstate._getvalue()
+
+    def unpack_iter(self, state):
+        iterstate = PyIterState(self.context, self.builder, value=state)
+        return tuple(iterstate)
+
+    def set_iter_valid(self, state, item):
+        iterstate = PyIterState(self.context, self.builder, value=state)
+        iterstate.valid = cgutils.is_not_null(self.builder, item)
+
+        with cgutils.if_unlikely(self.builder, self.is_null(item)):
+            err_occurred = cgutils.is_not_null(self.builder,
+                                               self.pyapi.err_occurred())
+
+            with cgutils.if_unlikely(self.builder, err_occurred):
+                self.builder.branch(self.ehblock)
+
     def check_error(self, obj):
-        bbold = self.builder.basic_block
-        with cgutils.ifthen(self.builder, self.is_null(obj)):
+        with cgutils.if_unlikely(self.builder, self.is_null(obj)):
             self.builder.branch(self.ehblock)
 
-        # Assign branch weight
-        lastinstr = bbold.instructions[-1]
-
-        mdid = lc.MetaDataString.get(self.module, "branch_weights")
-        trueweight = lc.Constant.int(Type.int(), 99)
-        falseweight = lc.Constant.int(Type.int(), 1)
-        md = lc.MetaData.get(self.module, [mdid, trueweight, falseweight])
-
-        lastinstr.set_metadata("prof", md)
         return obj
 
     def is_null(self, obj):
@@ -510,9 +551,9 @@ class PyLower(BaseLower):
         # TODO
         self.builder.unreachable()
 
-    def getvar(self, name):
+    def getvar(self, name, ltype=None):
         if name not in self.varmap:
-            self.varmap[name] = self.alloca(name)
+            self.varmap[name] = self.alloca(name, ltype=ltype)
         return self.varmap[name]
 
     def loadvar(self, name):
@@ -520,25 +561,34 @@ class PyLower(BaseLower):
         return self.builder.load(ptr)
 
     def storevar(self, value, name):
-        ptr = self.getvar(name)
+        """
+        Stores a llvm value and allocate stack slot if necessary.
+        The llvm value can be of arbitrary type.
+        """
+        ptr = self.getvar(name, ltype=value.type)
         old = self.builder.load(ptr)
-        assert value.type == ptr.type.pointee
+        assert value.type == ptr.type.pointee, (str(value.type),
+                                                str(ptr.type.pointee))
         self.builder.store(value, ptr)
+        # Safe to call decref even on non python object
         self.decref(old)
 
     def cleanup(self):
         for var in self.varmap.itervalues():
             self.decref(self.builder.load(var))
 
-    def alloca(self, name):
+    def alloca(self, name, ltype=None):
         """
-        Allocate a PyObject stack slot and initialize it to NULL
+        Allocate a stack slot and initialize it to NULL.
+        The default is to allocate a pyobject pointer.
+        Use ``ltype`` to override.
         """
-        ltype = self.context.get_value_type(types.pyobject)
+        if ltype is None:
+            ltype = self.context.get_value_type(types.pyobject)
         bb = self.builder.basic_block
         self.builder.position_at_end(self.entry_block)
         ptr = self.builder.alloca(ltype, name=name)
-        self.builder.store(self.context.get_constant_null(types.pyobject), ptr)
+        self.builder.store(cgutils.get_null_value(ltype), ptr)
         self.builder.position_at_end(bb)
         return ptr
 
@@ -546,4 +596,30 @@ class PyLower(BaseLower):
         self.pyapi.incref(value)
 
     def decref(self, value):
-        self.pyapi.decref(value)
+        """
+        This is allow to be called on non pyobject pointer, in which case
+        no code is inserted.
+
+        If the value is a PyIterState, it unpack the structure and decref
+        the iterator.
+        """
+        lpyobj = self.context.get_value_type(types.pyobject)
+
+        if value.type.kind == lc.TYPE_POINTER:
+            if value.type != lpyobj:
+                # Handle PyIterState
+                not_null = cgutils.is_not_null(self.builder, value)
+                with cgutils.if_likely(self.builder, not_null):
+                    iterstate = PyIterState(self.context, self.builder,
+                                            value=value)
+                    value = iterstate.iterator
+                    self.pyapi.decref(value)
+            else:
+                self.pyapi.decref(value)
+
+
+class PyIterState(cgutils.Structure):
+    _fields = [
+        ("iterator", types.pyobject),
+        ("valid",    types.boolean),
+    ]

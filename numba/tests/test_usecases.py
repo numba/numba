@@ -3,11 +3,14 @@ import unittest
 import itertools
 import numpy as np
 from numba.compiler import compile_isolated, Flags
-from numba import types
+from numba import types, utils
 from numba.tests import usecases
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
+
+force_pyobj_flags = Flags()
+force_pyobj_flags.set("force_pyobject")
 
 
 class TestUsecases(unittest.TestCase):
@@ -33,6 +36,29 @@ class TestUsecases(unittest.TestCase):
         for args in itertools.product(ss, es):
             print("case", args)
             self.assertEqual(pyfunc(*args), cfunc(*args))
+
+    def test_sum1d_pyobj(self):
+        pyfunc = usecases.sum1d
+        ctx, cfunc, err = compile_isolated(pyfunc, (types.int32, types.int32),
+                                           flags=force_pyobj_flags)
+
+        ss = -1, 0, 1, 100, 200
+        es = -1, 0, 1, 100, 200
+
+        for args in itertools.product(ss, es):
+            print("case", args)
+            self.assertEqual(pyfunc(*args), cfunc(*args))
+
+        args = 0, 500
+
+        def bm_python():
+            pyfunc(*args)
+
+        def bm_numba():
+            cfunc(*args)
+
+        print(utils.benchmark(bm_python, maxct=100))
+        print(utils.benchmark(bm_numba, maxct=100))
 
     def test_sum2d(self):
         pyfunc = usecases.sum2d
