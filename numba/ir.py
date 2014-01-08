@@ -1,5 +1,6 @@
 from __future__ import print_function
 import sys
+import os
 import pprint
 from collections import defaultdict
 
@@ -21,15 +22,24 @@ class Loc(object):
 
     """
 
-    def __init__(self, line, col=None):
+    def __init__(self, filename, line, col=None):
+        self.filename = filename
         self.line = line
         self.col = col
 
     def __repr__(self):
-        return "Loc(line=%s, col=%s)" % (self.line, self.col)
+        return "Loc(filename=%s, line=%s, col=%s)" % (self.filename,
+                                                      self.line, self.col)
 
     def __str__(self):
-        return "(line=%s, col=%s)" % (self.line, self.col)
+        if self.col is not None:
+            return "%s (%s:%s)" % (self.filename, self.line, self.col)
+        else:
+            return "%s (%s)" % (self.filename, self.line)
+
+    def strformat(self):
+        relpath = os.path.relpath(self.filename)
+        return 'File "%s", line %d' % (relpath, self.line)
 
 
 class VarMap(object):

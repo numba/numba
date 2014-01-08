@@ -6,26 +6,29 @@ from numba import ir
 class TestIR(unittest.TestCase):
 
     def test_IRScope(self):
-        top = ir.Scope(parent=None, loc=ir.Loc(line=1))
-        local = ir.Scope(parent=top, loc=ir.Loc(line=2))
+        filename = "<?>"
+        top = ir.Scope(parent=None, loc=ir.Loc(filename=filename, line=1))
+        local = ir.Scope(parent=top, loc=ir.Loc(filename=filename, line=2))
 
-        apple = local.define('apple', loc=ir.Loc(line=3))
+        apple = local.define('apple', loc=ir.Loc(filename=filename, line=3))
         self.assertTrue(local.get('apple') is apple)
         self.assertEqual(len(local.localvars), 1)
 
-        orange = top.define('orange', loc=ir.Loc(line=4))
+        orange = top.define('orange', loc=ir.Loc(filename=filename, line=4))
         self.assertEqual(len(local.localvars), 1)
         self.assertEqual(len(top.localvars), 1)
         self.assertTrue(top.get('orange') is orange)
         self.assertTrue(local.get('orange') is orange)
 
-        more_orange = local.define('orange', loc=ir.Loc(line=5))
+        more_orange = local.define('orange', loc=ir.Loc(filename=filename,
+                                                        line=5))
         self.assertTrue(top.get('orange') is orange)
         self.assertTrue(local.get('orange') is not orange)
         self.assertTrue(local.get('orange') is more_orange)
 
         try:
-            bad_orange = local.define('orange', loc=ir.Loc(line=5))
+            bad_orange = local.define('orange', loc=ir.Loc(filename=filename,
+                                                           line=5))
         except ir.RedefinedError:
             pass
         else:

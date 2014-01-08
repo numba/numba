@@ -18,6 +18,13 @@ import itertools
 from numba import ir, types, utils, DEBUG
 
 
+class TypingError(Exception):
+    def __init__(self, msg, loc):
+        self.msg = msg
+        self.loc = loc
+        super(TypingError, self).__init__("%s\n%s" % (msg, loc.strformat()))
+
+
 class TypeVar(object):
     def __init__(self, var):
         self.var = var
@@ -80,18 +87,20 @@ class Propagate(object):
     A simple constrain for direct propagation of types for assignments.
     """
 
-    def __init__(self, dst, src):
+    def __init__(self, dst, src, loc):
         self.dst = dst
         self.src = src
+        self.loc = loc
 
     def __call__(self, context, typevars):
         typevars[self.dst].union(typevars[self.src])
 
 
 class PhiConstrain(object):
-    def __init__(self, dst, incomings):
+    def __init__(self, dst, incomings, loc):
         self.dst = dst
         self.incomings = incomings
+        self.loc = loc
 
     def __call__(self, context, typevars):
         tset = typevars[self.dst]
@@ -100,7 +109,7 @@ class PhiConstrain(object):
 
 
 class BuildTupleConstrain(object):
-    def __init__(self, target, items):
+    def __init__(self, target, items, loc):
         self.target = target
         self.items = items
 
@@ -120,11 +129,12 @@ class CallConstrain(object):
     Perform case analysis foreach combinations of argument types.
     """
 
-    def __init__(self, target, func, args, kws):
+    def __init__(self, target, func, args, kws, loc):
         self.target = target
         self.func = func
         self.args = args
         self.kws = kws
+        self.loc = loc
 
     def __call__(self, context, typevars):
         fnty = typevars[self.func].getone()
@@ -149,24 +159,31 @@ class IntrinsicCallConstrain(CallConstrain):
 
 
 class GetAttrConstrain(object):
-    def __init__(self, target, attr, value):
+    def __init__(self, target, attr, value, loc):
         self.target = target
         self.attr = attr
         self.value = value
+        self.loc = loc
 
     def __call__(self, context, typevars):
         valtys = typevars[self.value.name].get()
         restypes = []
         for ty in valtys:
-            restypes.append(context.resolve_getattr(value=ty, attr=self.attr))
+            try:
+                attrty = context.resolve_getattr(value=ty, attr=self.attr)
+            except KeyError:
+                msg = "Unknown attribute '%s' for %s" % (self.attr, ty)
+                raise TypingError(msg, loc=self.loc)
+            restypes.append(attrty)
         typevars[self.target].add_types(*restypes)
 
 
 class SetItemConstrain(object):
-    def __init__(self, target, index, value):
+    def __init__(self, target, index, value, loc):
         self.target = target
         self.index = index
         self.value = value
+        self.loc = loc
 
     def __call__(self, context, typevars):
         targettys = typevars[self.target.name].get()
@@ -317,7 +334,7 @@ class TypeInferer(object):
 
     def typeof_setitem(self, inst):
         constrain = SetItemConstrain(target=inst.target, index=inst.index,
-                                     value=inst.value)
+                                     value=inst.value, loc=inst.loc)
         self.constrains.append(constrain)
 
     def typeof_assign(self, inst):
@@ -326,7 +343,7 @@ class TypeInferer(object):
             self.typeof_const(inst, inst.target, value.value)
         elif isinstance(value, ir.Var):
             self.constrains.append(Propagate(dst=inst.target.name,
-                                             src=value.name))
+                                             src=value.name, loc=inst.loc))
         elif isinstance(value, ir.Global):
             self.typeof_global(inst, inst.target, value)
         elif isinstance(value, ir.Expr):
@@ -334,7 +351,8 @@ class TypeInferer(object):
         elif isinstance(value, ir.Phi):
             incs = [v.name for _, v in value]
             self.constrains.append(PhiConstrain(dst=inst.target.name,
-                                                incomings=incs))
+                                                incomings=incs,
+                                                loc=inst.loc))
         else:
             raise NotImplementedError(type(value), value)
 
@@ -363,7 +381,11 @@ class TypeInferer(object):
             self.typevars[target.name].lock(gvty)
             self.assumed_immutables.add(inst)
         else:
-            gvty = self.context.get_global_type(gvar.value)
+            try:
+                gvty = self.context.get_global_type(gvar.value)
+            except KeyError:
+                raise TypingError("Untyped global name '%s'" % gvar.name,
+                                  loc=inst.loc)
             self.assumed_immutables.add(inst)
             self.typevars[target.name].lock(gvty)
 
@@ -384,24 +406,26 @@ class TypeInferer(object):
                                        expr.index)
         elif expr.op == 'getattr':
             constrain = GetAttrConstrain(target.name, attr=expr.attr,
-                                         value=expr.value)
+                                         value=expr.value, loc=inst.loc)
             self.constrains.append(constrain)
         elif expr.op == 'getitem':
             self.typeof_intrinsic_call(inst, target, expr.op, expr.target,
-                                       expr.index)
+                                       expr.index, loc=inst.loc)
         elif expr.op == 'build_tuple':
-            constrain = BuildTupleConstrain(target.name, items=expr.items)
+            constrain = BuildTupleConstrain(target.name, items=expr.items,
+                                            loc=inst.loc)
             self.constrains.append(constrain)
         else:
             raise NotImplementedError(type(expr), expr)
 
     def typeof_call(self, inst, target, call):
         constrain = CallConstrain(target.name, call.func.name, call.args,
-                                  call.kws)
+                                  call.kws, loc=inst.loc)
         self.constrains.append(constrain)
         self.usercalls.append((inst.value, call.args, call.kws))
 
     def typeof_intrinsic_call(self, inst, target, func, *args):
-        constrain = IntrinsicCallConstrain(target.name, func, args, ())
+        constrain = IntrinsicCallConstrain(target.name, func, args, (),
+                                           loc=inst.loc)
         self.constrains.append(constrain)
         self.intrcalls.append((inst.value, args, ()))

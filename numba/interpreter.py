@@ -12,7 +12,7 @@ class Interpreter(object):
     def __init__(self, bytecode):
         self.bytecode = bytecode
         self.scopes = []
-        self.loc = ir.Loc(line=1)
+        self.loc = ir.Loc(filename=bytecode.filename, line=1)
         self.argspec = inspect.getargspec(self.bytecode.func)
         # Control flow analysis
         self.cfa = controlflow.ControlFlowAnalysis(bytecode)
@@ -47,7 +47,8 @@ class Interpreter(object):
             scope.define(name=arg, loc=self.loc)
 
     def interpret(self):
-        self.loc = ir.Loc(line=self.bytecode[0].lineno)
+        self.loc = ir.Loc(filename=self.bytecode.filename,
+                          line=self.bytecode[0].lineno)
         self.scopes.append(ir.Scope(parent=self.current_scope, loc=self.loc))
         self._fill_args_into_scope(self.current_scope)
         # Interpret loop
@@ -72,7 +73,7 @@ class Interpreter(object):
                 yield inst, kws
 
     def _start_new_block(self, inst):
-        self.loc = ir.Loc(line=inst.lineno)
+        self.loc = ir.Loc(filename=self.bytecode.filename, line=inst.lineno)
         oldblock = self.current_block
         self.insert_block(inst.offset)
         # Ensure the last block is terminated

@@ -203,6 +203,7 @@ class ByteCode(object):
     def __init__(self, func):
         self.func = func
         self.code = get_code_object(func)
+        self.filename = self.code.co_filename
 
         # Do basic checking on support for the given bytecode
         if not self.code:
