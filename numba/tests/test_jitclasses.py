@@ -41,15 +41,15 @@ class TestJITClasses(unittest.TestCase):
         argtys = (car_object,)
 
         flags = compiler.Flags()
-        func, err = compiler.compile_extra(tyctx, cgctx, use_car_value,
-                                           args=argtys, return_type=None,
-                                           flags=flags)
-        if err:
-            raise err
+        cr = compiler.compile_extra(tyctx, cgctx, use_car_value, args=argtys,
+                                    return_type=None, flags=flags)
+        func = cr.entry_point
+
+        if cr.typing_error:
+            raise cr.typing_error
 
         car = Car(value=123)
         self.assertEqual(use_car_value(car), func(car))
-
 
         def bm_python():
             use_car_value(car)
@@ -74,11 +74,12 @@ class TestJITClasses(unittest.TestCase):
         argtys = (car_object, types.int32)
 
         flags = compiler.Flags()
-        func, err = compiler.compile_extra(tyctx, cgctx, use_car_move,
-                                           args=argtys, return_type=None,
-                                           flags=flags)
-        if err:
-            raise err
+        cr = compiler.compile_extra(tyctx, cgctx, use_car_move, args=argtys,
+                                    return_type=None, flags=flags)
+        func = cr.entry_point
+
+        if cr.typing_error:
+            raise cr.typing_error
 
         car1 = Car(value=123)
         car2 = Car(value=123)

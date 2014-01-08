@@ -1,5 +1,6 @@
 from __future__ import print_function
 from pprint import pprint
+from collections import namedtuple
 from numba import (bytecode, interpreter, typing, typeinfer, lowering, targets,
                    irpasses)
 from numba import DEBUG
@@ -30,7 +31,29 @@ class Flags(object):
     def __repr__(self):
         return "Flags(%s)" % ', '.join(str(x) for x in self._enabled)
 
+
 DEFAULT_FLAGS = Flags()
+
+
+CR_FIELDS = ["typing_context",
+             "target_context",
+             "entry_point",
+             "typing_error"]
+
+
+CompileResult = namedtuple("CompileResult", CR_FIELDS)
+
+
+def compile_result(**kws):
+    keys = set(kws.keys())
+    fieldset = set(CR_FIELDS)
+    badnames = keys - fieldset
+    if badnames:
+        raise NameError(*basenames)
+    missing = fieldset - keys
+    for k in missing:
+        kws[k] = None
+    return CompileResult(**kws)
 
 
 def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS):
@@ -40,9 +63,7 @@ def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS):
     """
     typingctx = typing.Context()
     targetctx = targets.CPUContext()
-    cfunc, whyinferfailed = compile_extra(typingctx, targetctx, func, args,
-                                          return_type, flags)
-    return targetctx, cfunc, whyinferfailed
+    return compile_extra(typingctx, targetctx, func, args, return_type, flags)
 
 
 def compile_extra(typingctx, targetctx, func, args, return_type, flags):
@@ -77,7 +98,11 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags):
         func = py_lowering_stage(targetctx, interp)
         fail_reason = None
 
-    return func, fail_reason
+    cr = compile_result(typing_context=typingctx,
+                        target_context=targetctx,
+                        entry_point=func,
+                        typing_error=fail_reason)
+    return cr
 
 
 def translate_stage(func):

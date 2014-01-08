@@ -11,8 +11,8 @@ def main():
     pyfunc = usecases.blackscholes_cnd
     flags = Flags()
     # flags.set("enable_pyobject")
-    ctx, cfunc, err = compile_isolated(pyfunc, (types.float32,),
-                                       flags=flags)
+    cr = compile_isolated(pyfunc, (types.float32,), flags=flags)
+    cfunc = cr.entry_point
 
     d = 0.5
     args = d,

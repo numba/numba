@@ -16,6 +16,7 @@ LTYPEMAP = {
     types.boolean: Type.int(1),
 
     types.uint8: Type.int(8),
+
     types.int32: Type.int(32),
     types.int64: Type.int(64),
 

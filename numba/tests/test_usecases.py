@@ -16,7 +16,8 @@ force_pyobj_flags.set("force_pyobject")
 class TestUsecases(unittest.TestCase):
     def test_andor(self):
         pyfunc = usecases.andor
-        ctx, cfunc, err = compile_isolated(pyfunc, (types.int32, types.int32))
+        cr = compile_isolated(pyfunc, (types.int32, types.int32))
+        cfunc = cr.entry_point
 
         # Argument boundaries
         xs = -1, 0, 1, 9, 10, 11
@@ -28,7 +29,8 @@ class TestUsecases(unittest.TestCase):
 
     def test_sum1d(self):
         pyfunc = usecases.sum1d
-        ctx, cfunc, err = compile_isolated(pyfunc, (types.int32, types.int32))
+        cr = compile_isolated(pyfunc, (types.int32, types.int32))
+        cfunc = cr.entry_point
 
         ss = -1, 0, 1, 100, 200
         es = -1, 0, 1, 100, 200
@@ -39,8 +41,9 @@ class TestUsecases(unittest.TestCase):
 
     def test_sum1d_pyobj(self):
         pyfunc = usecases.sum1d
-        ctx, cfunc, err = compile_isolated(pyfunc, (types.int32, types.int32),
-                                           flags=force_pyobj_flags)
+        cr = compile_isolated(pyfunc, (types.int32, types.int32),
+                              flags=force_pyobj_flags)
+        cfunc = cr.entry_point
 
         ss = -1, 0, 1, 100, 200
         es = -1, 0, 1, 100, 200
@@ -62,7 +65,8 @@ class TestUsecases(unittest.TestCase):
 
     def test_sum2d(self):
         pyfunc = usecases.sum2d
-        ctx, cfunc, err = compile_isolated(pyfunc, (types.int32, types.int32))
+        cr = compile_isolated(pyfunc, (types.int32, types.int32))
+        cfunc = cr.entry_point
 
         ss = -1, 0, 1, 100, 200
         es = -1, 0, 1, 100, 200
@@ -73,7 +77,8 @@ class TestUsecases(unittest.TestCase):
 
     def test_while_count(self):
         pyfunc = usecases.while_count
-        ctx, cfunc, err = compile_isolated(pyfunc, (types.int32, types.int32))
+        cr = compile_isolated(pyfunc, (types.int32, types.int32))
+        cfunc = cr.entry_point
 
         ss = -1, 0, 1, 100, 200
         es = -1, 0, 1, 100, 200
@@ -85,7 +90,8 @@ class TestUsecases(unittest.TestCase):
     def test_copy_arrays(self):
         pyfunc = usecases.copy_arrays
         arraytype = types.Array(types.int32, 1, 'A')
-        ctx, cfunc, err = compile_isolated(pyfunc, (arraytype, arraytype))
+        cr = compile_isolated(pyfunc, (arraytype, arraytype))
+        cfunc = cr.entry_point
 
         nda = 0, 1, 10, 100
 
@@ -101,7 +107,8 @@ class TestUsecases(unittest.TestCase):
     def test_copy_arrays2d(self):
         pyfunc = usecases.copy_arrays2d
         arraytype = types.Array(types.int32, 2, 'A')
-        ctx, cfunc, err = compile_isolated(pyfunc, (arraytype, arraytype))
+        cr = compile_isolated(pyfunc, (arraytype, arraytype))
+        cfunc = cr.entry_point
 
         nda = (0, 0), (1, 1), (2, 5), (4, 25)
 
@@ -125,7 +132,8 @@ class TestUsecases(unittest.TestCase):
         self.run_ifelse(usecases.ifelse3)
 
     def run_ifelse(self, pyfunc):
-        ctx, cfunc, err = compile_isolated(pyfunc, (types.int32, types.int32))
+        cr = compile_isolated(pyfunc, (types.int32, types.int32))
+        cfunc = cr.entry_point
 
         xs = -1, 0, 1
         ys = -1, 0, 1
@@ -137,8 +145,9 @@ class TestUsecases(unittest.TestCase):
 
     def test_string1(self):
         pyfunc = usecases.string1
-        ctx, cfunc, err = compile_isolated(pyfunc, (types.int32, types.int32),
-                                           flags=enable_pyobj_flags)
+        cr = compile_isolated(pyfunc, (types.int32, types.int32),
+                              flags=enable_pyobj_flags)
+        cfunc = cr.entry_point
 
         xs = -1, 0, 1
         ys = -1, 0, 1
@@ -150,7 +159,8 @@ class TestUsecases(unittest.TestCase):
 
     def test_blackscholes_cnd(self):
         pyfunc = usecases.blackscholes_cnd
-        ctx, cfunc, err = compile_isolated(pyfunc, (types.float32,))
+        cr = compile_isolated(pyfunc, (types.float32,))
+        cfunc = cr.entry_point
 
         ds = -0.5, 0, 0.5
 

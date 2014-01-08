@@ -123,10 +123,11 @@ class TestBlackScholes(unittest.TestCase):
         flags.set("enable_pyobject")
 
         global cnd_array_jitted
-        ctx1, cnd_array_jitted, err = compile_isolated(cnd_array, args=(),
-                                                       flags=flags)
-        ctx2, jitted_bs, err = compile_isolated(blackscholes_arrayexpr_jitted,
-                                                args=(), flags=flags)
+        cr1 = compile_isolated(cnd_array, args=(), flags=flags)
+        cnd_array_jitted = cr1.entry_point
+        cr2 = compile_isolated(blackscholes_arrayexpr_jitted, args=(),
+                                     flags=flags)
+        jitted_bs = cr2.entry_point
 
         OPT_N = 400
         iterations = 10
@@ -164,15 +165,19 @@ class TestBlackScholes(unittest.TestCase):
         flags = Flags()
 
         global cnd_jitted
-        ctx, cnd_jitted, _ = compile_isolated(cnd, (types.float64,))
-        tyctx = typing.Context()
+        cr1 = compile_isolated(cnd, (types.float64,))
+        cnd_jitted = cr1.entry_point
+        tyctx = cr1.typing_context
+        ctx = cr1.target_context
         ctx.dynamic_map_function(cnd_jitted)
-        tyctx.insert_user_function(cnd_jitted, ctx.get_user_function(cnd_jitted))
+        tyctx.insert_user_function(cnd_jitted,
+                                   ctx.get_user_function(cnd_jitted))
 
         array = types.Array(types.float64, 1, 'C')
         argtys = (array,) * 5 + (types.float64, types.float64)
-        jitted_bs, _ = compile_extra(tyctx, ctx, blackscholes_scalar_jitted,
-                                    args=argtys, return_type=None, flags=flags)
+        cr2 = compile_extra(tyctx, ctx, blackscholes_scalar_jitted,
+                            args=argtys, return_type=None, flags=flags)
+        jitted_bs = cr2.entry_point
 
         OPT_N = 400
         iterations = 10
