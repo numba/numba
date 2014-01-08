@@ -77,9 +77,21 @@ def ifelse3(x, y):
         return 1
 
 
-def string1(x, y):
+def string_concat(x, y):
     a = "whatzup"
     return a + str(x + y)
+
+def string_len(s):
+    return len(s)
+
+def string_slicing(s, start, stop):
+    return s[start:stop]
+
+def string_conversion(x):
+    return str(x)
+
+def string_comparison(s1, s2, op):
+    return op(s1, s2)
 
 
 def blackscholes_cnd(d):
@@ -95,4 +107,7 @@ def blackscholes_cnd(d):
     if d > 0:
         ret_val = 1.0 - ret_val
     return ret_val
+
+def slicing(a, start, stop, step):
+    return a[start:stop:step]
 

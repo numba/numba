@@ -143,8 +143,8 @@ class TestUsecases(unittest.TestCase):
             print("case", args)
             self.assertEqual(pyfunc(*args), cfunc(*args))
 
-    def test_string1(self):
-        pyfunc = usecases.string1
+    def test_string_concat(self):
+        pyfunc = usecases.string_concat
         cr = compile_isolated(pyfunc, (types.int32, types.int32),
                               flags=enable_pyobj_flags)
         cfunc = cr.entry_point
@@ -156,6 +156,74 @@ class TestUsecases(unittest.TestCase):
             args = x, y
             print("case", args)
             self.assertEqual(pyfunc(*args), cfunc(*args))
+
+    def test_string_len(self):
+        pyfunc = usecases.string_len
+        cr = compile_isolated(pyfunc, (types.pyobject),
+                              flags=enable_pyobj_flags)
+        cfunc = cr.entry_point
+
+        test_str = '123456'
+        self.assertEqual(pyfunc(test_str), cfunc(test_str))
+        test_str = '1'
+        self.assertEqual(pyfunc(test_str), cfunc(test_str))
+        test_str = ''
+        self.assertEqual(pyfunc(test_str), cfunc(test_str))
+
+    def test_string_slicing(self):
+        pyfunc = usecases.string_slicing
+        cr = compile_isolated(pyfunc, (types.pyobject),
+                              flags=enable_pyobj_flags)
+        cfunc = cr.entry_point
+
+        test_str = '123456'
+        self.assertEqual(pyfunc(test_str, 0, 3), cfunc(test_str, 0, 3))
+        self.assertEqual(pyfunc(test_str, 1, 5), cfunc(test_str, 1, 5))
+        self.assertEqual(pyfunc(test_str, 2, 3), cfunc(test_str, 2, 3))
+        
+    def test_string_conversion(self):
+        pyfunc = usecases.string_conversion
+
+        cr = compile_isolated(pyfunc, (types.int32),
+                              flags=enable_pyobj_flags)
+        cfunc = cr.entry_point
+        self.assertEqual(pyfunc(1), cfunc(1))
+
+        cr = compile_isolated(pyfunc, (types.float32),
+                              flags=enable_pyobj_flags)
+        cfunc = cr.entry_point
+        self.assertEqual(pyfunc(1.1), cfunc(1.1))
+
+    def test_string_comparisons(self):
+        import operator
+        pyfunc = usecases.string_comparison
+        cr = compile_isolated(pyfunc, (types.pyobject, types.pyobject),
+                              flags=enable_pyobj_flags)
+        cfunc = cr.entry_point
+
+        test_str1 = '123'
+        test_str2 = '123'
+        op = operator.eq
+        self.assertEqual(pyfunc(test_str1, test_str2, op),
+            cfunc(test_str1, test_str2, op))
+
+        test_str1 = '123'
+        test_str2 = '456'
+        op = operator.eq
+        self.assertEqual(pyfunc(test_str1, test_str2, op),
+            cfunc(test_str1, test_str2, op))
+
+        test_str1 = '123'
+        test_str2 = '123'
+        op = operator.ne
+        self.assertEqual(pyfunc(test_str1, test_str2, op),
+            cfunc(test_str1, test_str2, op))
+
+        test_str1 = '123'
+        test_str2 = '456'
+        op = operator.ne
+        self.assertEqual(pyfunc(test_str1, test_str2, op),
+            cfunc(test_str1, test_str2, op))
 
     def test_blackscholes_cnd(self):
         pyfunc = usecases.blackscholes_cnd
@@ -169,6 +237,30 @@ class TestUsecases(unittest.TestCase):
             print("case", args)
             self.assertEqual(pyfunc(*args), cfunc(*args))
 
+    def test_array_slicing(self):
+        pyfunc = usecases.slicing
+
+        arraytype = types.Array(types.int32, 1, 'C')
+        cr = compile_isolated(pyfunc, (arraytype, arraytype))
+        cfunc = cr.entry_point
+
+        a = np.arange(10, dtype='i4')
+        self.assertEqual(pyfunc(a, 0, 10, 1), cfunc(a, 0, 10, 1))
+        self.assertEqual(pyfunc(a, 0, 10, 2), cfunc(a, 0, 10, 2))
+        self.assertEqual(pyfunc(a, 0, 10, -1), cfunc(a, 0, 10, -1))
+        self.assertEqual(pyfunc(a, 2, 3, 1), cfunc(a, 2, 3, 1))
+        self.assertEqual(pyfunc(a, 10, 0, 1), cfunc(a, 10, 0, 1))
+
+        arraytype = types.Array(types.int32, 2, 'C')
+        cr = compile_isolated(pyfunc, (arraytype, arraytype))
+        cfunc = cr.entry_point
+
+        a = np.arange(100, dtype='i4').reshape(10, 10)
+        self.assertEqual(pyfunc(a, 0, 10, 1), cfunc(a, 0, 10, 1))
+        self.assertEqual(pyfunc(a, 0, 10, 2), cfunc(a, 0, 10, 2))
+        self.assertEqual(pyfunc(a, 0, 10, -1), cfunc(a, 0, 10, -1))
+        self.assertEqual(pyfunc(a, 2, 3, 1), cfunc(a, 2, 3, 1))
+        self.assertEqual(pyfunc(a, 10, 0, 1), cfunc(a, 10, 0, 1))
 
 if __name__ == '__main__':
     unittest.main()
