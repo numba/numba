@@ -116,7 +116,15 @@ class TestUsecases(unittest.TestCase):
             self.assertTrue(np.all(a == b))
 
     def test_ifelse1(self):
-        pyfunc = usecases.ifelse1
+        self.run_ifelse(usecases.ifelse1)
+
+    def test_ifelse2(self):
+        self.run_ifelse(usecases.ifelse2)
+
+    def test_ifelse3(self):
+        self.run_ifelse(usecases.ifelse3)
+
+    def run_ifelse(self, pyfunc):
         ctx, cfunc, err = compile_isolated(pyfunc, (types.int32, types.int32))
 
         xs = -1, 0, 1

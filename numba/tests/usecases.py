@@ -59,6 +59,23 @@ def ifelse1(x, y):
     else:
         return 3
 
+def ifelse2(x, y):
+    if x > 0:
+        if y > 0:
+            return 1
+        elif y < 0:
+            return 1
+        else:
+            return 0
+    elif x < 0:
+        return 1
+    else:
+        return 0
+
+def ifelse3(x, y):
+    if x == y:
+        return 1
+
 
 def string1(x, y):
     a = "whatzup"
