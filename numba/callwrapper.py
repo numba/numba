@@ -44,7 +44,10 @@ class PyCallWrapper(object):
 
         status, res = self.context.call_function(builder, self.func, innerargs)
 
-        with cgutils.ifthen(builder, status.ok):
+        with cgutils.if_likely(builder, status.ok):
+            with cgutils.ifthen(builder, status.none):
+                api.return_none()
+
             retval = api.from_native_return(res, self.fndesc.restype)
             builder.ret(retval)
 

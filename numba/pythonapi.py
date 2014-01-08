@@ -237,6 +237,10 @@ class PythonAPI(object):
     def get_null_object(self):
         return Constant.null(self.pyobj)
 
+    def return_none(self):
+        none = self.make_none()
+        self.builder.ret(none)
+
     def to_native_arg(self, obj, typ):
         return self.to_native_value(obj, typ)
 
@@ -270,6 +274,7 @@ class PythonAPI(object):
     def from_native_value(self, val, typ):
         if typ == types.pyobject:
             return val
+
         elif typ == types.boolean:
             longval = self.builder.zext(val, self.long)
             return self.bool_from_long(longval)
@@ -288,6 +293,10 @@ class PythonAPI(object):
         elif typ == types.none:
             ret = self.make_none()
             return ret
+
+        elif isinstance(typ, types.Optional):
+            return self.from_native_return(val, typ.type)
+
         raise NotImplementedError(typ)
 
     def to_native_array(self, typ, ary):

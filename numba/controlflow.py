@@ -110,9 +110,6 @@ class ControlFlowAnalysis(object):
         for offset in liveset:
             self.liveblocks[offset] = self.blocks[offset]
 
-        from pprint import pprint
-        pprint(self.liveblocks)
-
     def jump(self, target):
         self._curblock.outgoing.add(target)
 

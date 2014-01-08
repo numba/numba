@@ -148,6 +148,13 @@ class Lower(BaseLower):
             val = self.loadvar(inst.value.name)
             oty = self.typeof(inst.value.name)
             ty = self.fndesc.restype
+            if isinstance(ty, types.Optional):
+                if oty == types.none:
+                    self.context.return_native_none(self.builder)
+                    return
+                else:
+                    ty = ty.type
+
             if ty != oty:
                 val = self.context.cast(self.builder, val, oty, ty)
             retval = self.context.get_return_value(self.builder, ty, val)

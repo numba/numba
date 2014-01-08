@@ -286,7 +286,17 @@ class TypeInferer(object):
             term = blk.terminator
             if isinstance(term, ir.Return):
                 rettypes.add(typemap[term.value.name])
-        return self.context.unify_types(*rettypes)
+
+        if types.none in rettypes:
+            # Special case None return
+            rettypes = rettypes - set([types.none])
+            if rettypes:
+                unified = self.context.unify_types(*rettypes)
+                return types.Optional(unified)
+            else:
+                return types.none
+        else:
+            return self.context.unify_types(*rettypes)
 
     def get_state_token(self):
         """The algorithm is monotonic.  It can only grow the typesets.

@@ -25,7 +25,12 @@ LTYPEMAP = {
 }
 
 
-Status = namedtuple("Status", ("code", "ok", "err"))
+Status = namedtuple("Status", ("code", "ok", "err", "none"))
+
+
+RETCODE_OK = Constant.int_signextend(Type.int(), 0)
+RETCODE_NONE = Constant.int_signextend(Type.int(), -2)
+RETCODE_EXC = Constant.int_signextend(Type.int(), -1)
 
 
 class Overloads(object):
@@ -110,7 +115,8 @@ class BaseContext(object):
         """
         Calling Convention
         ------------------
-        Returns: -1 for failure with python exception set;
+        Returns: -2 for return none in native function;
+                 -1 for failure with python exception set;
                   0 for success;
                  >0 for user error code.
         Return value is passed by reference as the first argument.
@@ -166,6 +172,8 @@ class BaseContext(object):
                 isinstance(ty, types.Function) or
                 isinstance(ty, types.Object)):
             return self.get_dummy_type()
+        elif isinstance(ty, types.Optional):
+            return self.get_value_type(ty.type)
         elif ty == types.range_state32_type:
             stty = self.get_struct_type(RangeState32)
             return Type.pointer(stty)
@@ -187,6 +195,7 @@ class BaseContext(object):
         elif isinstance(ty, types.UniTuple):
             dty = self.get_value_type(ty.dtype)
             return Type.array(dty, ty.count)
+
         return LTYPEMAP[ty]
 
     def get_constant(self, ty, val):
@@ -245,18 +254,21 @@ class BaseContext(object):
             return val
 
     def return_value(self, builder, retval):
-        fn = builder.basic_block.function
+        fn = cgutils.get_function(builder)
         retptr = fn.args[0]
         assert retval.type == retptr.type.pointee
         builder.store(retval, retptr)
-        builder.ret(Constant.null(Type.int()))
+        builder.ret(RETCODE_OK)
+
+    def return_native_none(self, builder):
+        builder.ret(RETCODE_NONE)
 
     def return_errcode(self, builder, code):
         assert code > 0
         builder.ret(Constant.int(Type.int(), code))
 
     def return_exc(self, builder):
-        builder.ret(Constant.int_signextend(Type.int(), -1))
+        builder.ret(RETCODE_EXC)
 
     def cast(self, builder, val, fromty, toty):
         if fromty == toty or toty == types.any or isinstance(toty, types.Kind):
@@ -295,15 +307,20 @@ class BaseContext(object):
 
     def call_function(self, builder, callee, args):
         retty = callee.args[0].type.pointee
-        # TODO: user supplied retval or let user tell where to allocate
         retval = cgutils.alloca_once(builder, retty)
         realargs = [retval] + list(args)
         code = builder.call(callee, realargs)
-        ok = builder.icmp(lc.ICMP_EQ, code, Constant.null(Type.int()))
+        status = self.get_return_status(builder, code)
+        return status, builder.load(retval)
+
+    def get_return_status(self, builder, code):
+        norm = builder.icmp(lc.ICMP_EQ, code, RETCODE_OK)
+        none = builder.icmp(lc.ICMP_EQ, code, RETCODE_NONE)
+        ok = builder.or_(norm, none)
         err = builder.not_(ok)
 
-        status = Status(code=code, ok=ok, err=err)
-        return status, builder.load(retval)
+        status = Status(code=code, ok=ok, err=err, none=none)
+        return status
 
     def call_class_method(self, builder, func, retty, tys, args):
         api = self.get_python_api(builder)

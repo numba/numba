@@ -198,6 +198,20 @@ class Object(Type):
         return hash(self.cls)
 
 
+class Optional(Type):
+    def __init__(self, typ):
+        name = "?%s" % typ
+        super(Optional, self).__init__(name, param=True)
+        self.type = typ
+
+    def __eq__(self, other):
+        if isinstance(other, Optional):
+            return self.type == other.type
+
+    def __hash__(self):
+        return hash(self.type)
+
+
 pyobject = Type('pyobject')
 none = Dummy('none')
 any = Dummy('any')
