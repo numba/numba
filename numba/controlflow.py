@@ -82,9 +82,7 @@ class ControlFlowAnalysis(object):
                 self.blocks[out].incoming.add(b.offset)
 
         # Find liveblocks
-        for offset, block in self.blocks.items():
-            if offset == 0 or block.incoming:
-                self.liveblocks[offset] = block
+        self.dead_block_elimin()
 
         # Find dominators
         self.doms = find_dominators(self.liveblocks)
@@ -96,6 +94,24 @@ class ControlFlowAnalysis(object):
             raise AssertionError("No live block that exits!?")
 
         self.backbone = self.doms[lastblk]
+
+    def dead_block_elimin(self):
+        liveset = set([0])
+        pending = set([0])
+        finished = set()
+        while pending:
+            cur = pending.pop()
+            blk = self.blocks[cur]
+            outgoing = set(blk.outgoing)
+            liveset |= outgoing
+            pending |= outgoing - finished
+            finished.add(cur)
+
+        for offset in liveset:
+            self.liveblocks[offset] = self.blocks[offset]
+
+        from pprint import pprint
+        pprint(self.liveblocks)
 
     def jump(self, target):
         self._curblock.outgoing.add(target)

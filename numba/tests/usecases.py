@@ -59,6 +59,7 @@ def ifelse1(x, y):
     else:
         return 3
 
+
 def ifelse2(x, y):
     if x > 0:
         if y > 0:
@@ -71,6 +72,7 @@ def ifelse2(x, y):
         return 1
     else:
         return 0
+
 
 def ifelse3(x, y):
     if x == y:
