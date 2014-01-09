@@ -797,8 +797,27 @@ def getitem_array1d(context, builder, tys, args):
     ary = arystty(context, builder, ary)
     dataptr = ary.data
 
-    ptr = builder.gep(dataptr, [idx])
-    return builder.load(ptr)
+    if True or WARPAROUND:  # TODO target flag
+        ZERO = context.get_constant(types.intp, 0)
+        ONE = context.get_constant(types.intp, 1)
+        negative = builder.icmp(lc.ICMP_SLT, idx, ZERO)
+        bbnormal = builder.basic_block
+        with cgutils.if_unlikely(builder, negative):
+            # Index is negative, wraparound
+            [nelem] = cgutils.unpack_tuple(builder, ary.shape, 1)
+            wrapped = builder.sub(nelem, ONE)
+            bbwrapped = builder.basic_block
+
+        where = builder.phi(idx.type)
+        where.add_incoming(idx, bbnormal)
+        where.add_incoming(wrapped, bbwrapped)
+
+        ptr = builder.gep(dataptr, [where])
+        return builder.load(ptr)
+    else:
+        # No wraparound
+        ptr = builder.gep(dataptr, [idx])
+        return builder.load(ptr)
 
 
 @builtin
