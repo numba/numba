@@ -473,12 +473,15 @@ class PyLower(BaseLower):
             target = self.loadvar(expr.target.name)
             start = self.loadvar(expr.start.name)
             stop = self.loadvar(expr.stop.name)
-            szstart = self.pyapi.number_as_ssize_t(start)
-            self.check_occurred()
-            szstop = self.pyapi.number_as_ssize_t(stop)
-            self.check_occurred()
-            res = self.pyapi.sequence_getslice(target, szstart, szstop)
+
+            slicefn = self.get_builtin_obj("slice")
+            sliceobj = self.pyapi.call_function_objargs(slicefn, (start, stop))
+            self.decref(slicefn)
+            self.check_error(sliceobj)
+
+            res = self.pyapi.object_getitem(target, sliceobj)
             self.check_error(res)
+
             return res
         else:
             raise NotImplementedError(expr)
@@ -510,6 +513,7 @@ class PyLower(BaseLower):
         """
         moddict = self.pyapi.get_module_dict()
         obj = self.pyapi.dict_getitem_string(moddict, name)
+        self.incref(obj)  # obj is borrowed
 
         if hasattr(builtins, name):
             obj_is_null = self.is_null(obj)
@@ -517,18 +521,7 @@ class PyLower(BaseLower):
 
             with cgutils.ifthen(self.builder, obj_is_null):
                 mod = self.pyapi.dict_getitem_string(moddict, "__builtins__")
-                fromdict = self.pyapi.dict_getitem_string(mod, name)
-                bbifdict = self.builder.basic_block
-
-                with cgutils.if_unlikely(self.builder, self.is_null(fromdict)):
-                    # This happen if we are using the __main__ module
-                    frommod = self.pyapi.object_getattr_string(mod, name)
-                    self.check_error(frommod)
-                    bbifmod = self.builder.basic_block
-
-                builtin = self.builder.phi(self.pyapi.pyobj)
-                builtin.add_incoming(fromdict, bbifdict)
-                builtin.add_incoming(frommod, bbifmod)
+                builtin = self.builtin_lookup(mod, name)
                 bbif = self.builder.basic_block
 
             retval = self.builder.phi(self.pyapi.pyobj)
@@ -543,6 +536,36 @@ class PyLower(BaseLower):
         return retval
 
     # -------------------------------------------------------------------------
+
+    def get_builtin_obj(self, name):
+        moddict = self.pyapi.get_module_dict()
+        mod = self.pyapi.dict_getitem_string(moddict, "__builtins__")
+        return self.builtin_lookup(mod, name)
+
+    def builtin_lookup(self, mod, name):
+        """
+        Args
+        ----
+        mod:
+            The __builtins__ dictionary or module
+        name: str
+            The object to lookup
+        """
+        fromdict = self.pyapi.dict_getitem_string(mod, name)
+        self.incref(fromdict)       # fromdict is borrowed
+        bbifdict = self.builder.basic_block
+
+        with cgutils.if_unlikely(self.builder, self.is_null(fromdict)):
+            # This happen if we are using the __main__ module
+            frommod = self.pyapi.object_getattr_string(mod, name)
+            self.check_error(frommod)
+            bbifmod = self.builder.basic_block
+
+        builtin = self.builder.phi(self.pyapi.pyobj)
+        builtin.add_incoming(fromdict, bbifdict)
+        builtin.add_incoming(frommod, bbifmod)
+
+        return builtin
 
     def pack_iter(self, obj):
         iterstate = PyIterState(self.context, self.builder)
