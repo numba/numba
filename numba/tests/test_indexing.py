@@ -42,8 +42,8 @@ class TestIndexing(unittest.TestCase):
     def test_1d_slicing(self):
         pyfunc = slicing_1d_usecase
         arraytype = types.Array(types.int32, 1, 'C')
-        cr = compile_isolated(pyfunc,
-            (arraytype, types.int32, types.int32, types.int32))
+        argtys = (arraytype, types.int32, types.int32, types.int32)
+        cr = compile_isolated(pyfunc, argtys, flags=enable_pyobj_flags)
         cfunc = cr.entry_point
 
         a = np.arange(10, dtype='i4')
@@ -56,8 +56,8 @@ class TestIndexing(unittest.TestCase):
     def test_2d_slicing(self):
         pyfunc = slicing_1d_usecase
         arraytype = types.Array(types.int32, 2, 'C')
-        cr = compile_isolated(pyfunc,
-            (arraytype, types.int32, types.int32, types.int32))
+        argtys = (arraytype, types.int32, types.int32, types.int32)
+        cr = compile_isolated(pyfunc, argtys, flags=enable_pyobj_flags)
         cfunc = cr.entry_point
 
         a = np.arange(100, dtype='i4').reshape(10, 10)
@@ -69,9 +69,9 @@ class TestIndexing(unittest.TestCase):
 
         pyfunc = slicing_2d_usecase
         arraytype = types.Array(types.int32, 2, 'C')
-        cr = compile_isolated(pyfunc,
-            (arraytype, types.int32, types.int32, types.int32,
-            types.int32, types.int32, types.int32))
+        argtys = (arraytype, types.int32, types.int32, types.int32,
+                  types.int32, types.int32, types.int32)
+        cr = compile_isolated(pyfunc, argtys, flags=enable_pyobj_flags)
         cfunc = cr.entry_point
 
         self.assertTrue((pyfunc(a, 0, 10, 1, 0, 10, 1) ==
