@@ -34,40 +34,48 @@ def create_zeros(control):
 class TestArray(unittest.TestCase):
 
     def test_create_arrays(self):
-        
-        arraytype = types.Array(types.int32, 1, 'C')
-
         pyfunc = create_array
+        arraytype = types.Array(types.int32, 1, 'C')
         cr = compile_isolated(pyfunc, (arraytype,))
         cfunc = cr.entry_point
         control = np.array([1,2,3])
         self.assertTrue(cfunc(control))
 
+    def test_create_empty_array(self):
         pyfunc = create_empty_array
+        arraytype = types.Array(types.int32, 1, 'C')
         cr = compile_isolated(pyfunc, (arraytype,))
         cfunc = cr.entry_point
         control = np.array([])
         self.assertTrue(cfunc(control))
 
+    def test_create_arange(self):
         pyfunc = create_arange
+        arraytype = types.Array(types.int32, 1, 'C')
         cr = compile_isolated(pyfunc, (arraytype,))
         cfunc = cr.entry_point
         control = np.arange(10)
         self.assertTrue(cfunc(control))
         
+    def test_create_empty(self):
         pyfunc = create_empty
+        arraytype = types.Array(types.int32, 1, 'C')
         cr = compile_isolated(pyfunc, (arraytype,))
         cfunc = cr.entry_point
         control = np.empty(10)
         self.assertTrue(cfunc(control))
 
+    def test_create_ones(self):
         pyfunc = create_ones
+        arraytype = types.Array(types.int32, 1, 'C')
         cr = compile_isolated(pyfunc, (arraytype,))
         cfunc = cr.entry_point
         control = np.ones(10)
         self.assertTrue(cfunc(control))
 
+    def test_create_zeros(self):
         pyfunc = create_zeros
+        arraytype = types.Array(types.int32, 1, 'C')
         cr = compile_isolated(pyfunc, (arraytype,))
         cfunc = cr.entry_point
         control = np.zeros(10)
