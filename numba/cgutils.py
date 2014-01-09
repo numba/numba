@@ -150,10 +150,29 @@ def unpack_tuple(builder, tup, count):
     return vals
 
 
-def get_item_pointer(builder, aryty, ary, inds):
+def get_item_pointer(builder, aryty, ary, inds, warparound):
     # TODO only handle "any" layout for now
+    if warparound:
+        shapes = unpack_tuple(builder, ary.shape, count=aryty.ndim)
+        indices = []
+        for ind, dimlen in zip(inds, shapes):
+            ZERO = Constant.null(ind.type)
+            negative = builder.icmp(lc.ICMP_SLT, ind, ZERO)
+            bbnormal = builder.basic_block
+            with if_unlikely(builder, negative):
+                wrapped = builder.add(dimlen, ind)
+                bbwrapped = builder.basic_block
+
+            final = builder.phi(ind.type)
+            final.add_incoming(ind, bbnormal)
+            final.add_incoming(wrapped, bbwrapped)
+            indices.append(final)
+    else:
+        indices = inds
+    del inds
+
     strides = unpack_tuple(builder, ary.strides, count=aryty.ndim)
-    dimoffs = [builder.mul(s, i) for s, i in zip(strides, inds)]
+    dimoffs = [builder.mul(s, i) for s, i in zip(strides, indices)]
     offset = reduce(builder.add, dimoffs)
     base = builder.ptrtoint(ary.data, offset.type)
     where = builder.add(base, offset)

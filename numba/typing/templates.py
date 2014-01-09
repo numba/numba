@@ -354,8 +354,19 @@ class GetItemArray(AbstractTemplate):
         idx = normalize_index(idx)
         if idx in (types.slice2_type, types.slice3_type):
             res = ary.copy(layout='A')
-        else:
+        elif isinstance(idx, types.UniTuple):
+            if ary.ndim > len(idx):
+                return
+            elif ary.ndim < len(idx):
+                return
+            else:
+                res = ary.dtype
+        elif idx == types.intp:
+            if ary.ndim != 1:
+                return
             res = ary.dtype
+        else:
+            raise Exception("unreachable")
 
         return signature(res, ary, idx)
 

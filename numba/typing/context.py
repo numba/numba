@@ -95,6 +95,10 @@ class Context(object):
     def type_distance(self, fromty, toty):
         if fromty == toty:
             return 0
+        elif (isinstance(fromty, types.UniTuple) and
+                  isinstance(toty, types.UniTuple) and
+                  len(fromty) == len(toty)):
+            return self.type_lattice.get((fromty.dtype, toty.dtype))
         return self.type_lattice.get((fromty, toty))
 
     def unify_types(self, *types):

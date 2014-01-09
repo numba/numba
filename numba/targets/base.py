@@ -306,6 +306,17 @@ class BaseContext(object):
             else:
                 return builder.fptoui(val, lty)
 
+        elif (isinstance(toty, types.UniTuple) and
+                  isinstance(fromty, types.UniTuple) and
+                  len(fromty) == len(toty)):
+            olditems = cgutils.unpack_tuple(builder, val, len(fromty))
+            items = [self.cast(builder, i, fromty.dtype, toty.dtype)
+                     for i in olditems]
+            tup = self.get_constant_undef(toty)
+            for idx, val in enumerate(items):
+                tup = builder.insert_value(tup, val, idx)
+            return tup
+
         raise NotImplementedError("cast", val, fromty, toty)
 
     def call_function(self, builder, callee, args):
@@ -791,6 +802,10 @@ def getitem_unituple(context, builder, tys, args):
 @implement('getitem', types.any, types.Kind(types.Array), types.intp)
 def getitem_array1d(context, builder, tys, args):
     aryty, _ = tys
+    if aryty.ndim != 1:
+        # TODO
+        raise NotImplementedError("1D indexing into %dD array" % aryty.ndim)
+
     ary, idx = args
 
     arystty = make_array(aryty)
@@ -799,13 +814,12 @@ def getitem_array1d(context, builder, tys, args):
 
     if True or WARPAROUND:  # TODO target flag
         ZERO = context.get_constant(types.intp, 0)
-        ONE = context.get_constant(types.intp, 1)
         negative = builder.icmp(lc.ICMP_SLT, idx, ZERO)
         bbnormal = builder.basic_block
         with cgutils.if_unlikely(builder, negative):
             # Index is negative, wraparound
             [nelem] = cgutils.unpack_tuple(builder, ary.shape, 1)
-            wrapped = builder.sub(nelem, ONE)
+            wrapped = builder.add(nelem, idx)
             bbwrapped = builder.basic_block
 
         where = builder.phi(idx.type)
@@ -830,9 +844,11 @@ def getitem_array_unituple(context, builder, tys, args):
     arystty = make_array(aryty)
     ary = arystty(context, builder, ary)
 
-    # TODO: other than layout
+    # TODO: other layout
     indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
-    ptr = cgutils.get_item_pointer(builder, aryty, ary, indices)
+    # TODO warparound flag
+    ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
+                                   warparound=True)
     return builder.load(ptr)
 
 

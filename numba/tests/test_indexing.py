@@ -99,7 +99,8 @@ class TestIndexing(unittest.TestCase):
     def test_2d_integer_indexing(self):
         pyfunc = integer_indexing_1d_usecase
         arraytype = types.Array(types.int32, 2, 'C')
-        cr = compile_isolated(pyfunc, (arraytype, types.int32))
+        cr = compile_isolated(pyfunc, (arraytype, types.int32),
+                              flags=enable_pyobj_flags)
         cfunc = cr.entry_point
         
         a = np.arange(100, dtype='i4').reshape(10, 10)
