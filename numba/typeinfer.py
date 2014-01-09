@@ -378,7 +378,8 @@ class TypeInferer(object):
         elif const is None:
             self.typevars[target.name].lock(types.none)
         else:
-            raise NotImplementedError(const)
+            msg = "Unknown constant of type %s" % (const,)
+            raise TypingError(msg, loc=inst.loc)
 
     def typeof_global(self, inst, target, gvar):
         if gvar.name in ('range', 'xrange') and gvar.value in (range, xrange):

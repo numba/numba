@@ -880,7 +880,8 @@ def setitem_array_unituple(context, builder, tys, args):
 
     # TODO: other than layout
     indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
-    ptr = cgutils.get_item_pointer(builder, aryty, ary, indices)
+    ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
+                                   warparound=True)
     builder.store(val, ptr)
 
 

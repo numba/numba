@@ -120,7 +120,8 @@ class TestIndexing(unittest.TestCase):
     def test_ellipse(self):
         pyfunc = ellipse_usecase
         arraytype = types.Array(types.int32, 2, 'C')
-        cr = compile_isolated(pyfunc, (arraytype,))
+        # TODO should be enable to handle this in NoPython mode
+        cr = compile_isolated(pyfunc, (arraytype,), flags=enable_pyobj_flags)
         cfunc = cr.entry_point
         
         a = np.arange(100, dtype='i4').reshape(10, 10)
@@ -129,7 +130,8 @@ class TestIndexing(unittest.TestCase):
     def test_none_index(self):
         pyfunc = none_index_usecase
         arraytype = types.Array(types.int32, 2, 'C')
-        cr = compile_isolated(pyfunc, (arraytype,))
+        # TODO should be enable to handle this in NoPython mode
+        cr = compile_isolated(pyfunc, (arraytype,), flags=enable_pyobj_flags)
         cfunc = cr.entry_point
         
         a = np.arange(100, dtype='i4').reshape(10, 10)
@@ -139,7 +141,8 @@ class TestIndexing(unittest.TestCase):
         pyfunc = fancy_index_usecase
         arraytype = types.Array(types.int32, 2, 'C')
         indextype = types.Array(types.int32, 1, 'C')
-        cr = compile_isolated(pyfunc, (arraytype, indextype))
+        cr = compile_isolated(pyfunc, (arraytype, indextype),
+                              flags=enable_pyobj_flags)
         cfunc = cr.entry_point
         
         a = np.arange(100, dtype='i4').reshape(10, 10)
@@ -156,7 +159,8 @@ class TestIndexing(unittest.TestCase):
         pyfunc = boolean_indexing_usecase
         arraytype = types.Array(types.int32, 2, 'C')
         masktype = types.Array(types.boolean, 1, 'C')
-        cr = compile_isolated(pyfunc, (arraytype, masktype))
+        cr = compile_isolated(pyfunc, (arraytype, masktype),
+                              flags=enable_pyobj_flags)
         cfunc = cr.entry_point
         
         a = np.arange(100, dtype='i4').reshape(10, 10)

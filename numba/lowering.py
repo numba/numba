@@ -501,6 +501,13 @@ class PyLower(BaseLower):
                 raise ValueError("Integer is too big to be lowered")
             ival = self.context.get_constant(types.intp, const)
             return self.pyapi.long_from_ssize_t(ival)
+        elif isinstance(const, tuple):
+            items = [self.lower_const(i) for i in const]
+            return self.pyapi.tuple_pack(items)
+        elif const is Ellipsis:
+            return self.get_builtin_obj("Ellipsis")
+        elif const is None:
+            return self.pyapi.make_none()
         else:
             raise NotImplementedError(type(const))
 
