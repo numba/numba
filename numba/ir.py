@@ -131,6 +131,11 @@ class Expr(object):
         op = 'getitem'
         return cls(op=op, loc=loc, target=target, index=index)
 
+    @classmethod
+    def getslice(cls, target, start, stop, loc):
+        op = 'getslice'
+        return cls(op=op, loc=loc, target=target, start=start, stop=stop)
+
     def __repr__(self):
         if self.op == 'call':
             args = ', '.join(str(a) for a in self.args)

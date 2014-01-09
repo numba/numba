@@ -469,6 +469,17 @@ class PyLower(BaseLower):
             res = self.pyapi.object_getitem(target, index)
             self.check_error(res)
             return res
+        elif expr.op == 'getslice':
+            target = self.loadvar(expr.target.name)
+            start = self.loadvar(expr.start.name)
+            stop = self.loadvar(expr.stop.name)
+            szstart = self.pyapi.number_as_ssize_t(start)
+            self.check_occurred()
+            szstop = self.pyapi.number_as_ssize_t(stop)
+            self.check_occurred()
+            res = self.pyapi.sequence_getslice(target, szstart, szstop)
+            self.check_error(res)
+            return res
         else:
             raise NotImplementedError(expr)
 
@@ -548,11 +559,14 @@ class PyLower(BaseLower):
         iterstate.valid = cgutils.is_not_null(self.builder, item)
 
         with cgutils.if_unlikely(self.builder, self.is_null(item)):
-            err_occurred = cgutils.is_not_null(self.builder,
-                                               self.pyapi.err_occurred())
+            self.check_occurred()
 
-            with cgutils.if_unlikely(self.builder, err_occurred):
-                self.builder.branch(self.ehblock)
+    def check_occurred(self):
+        err_occurred = cgutils.is_not_null(self.builder,
+                                           self.pyapi.err_occurred())
+
+        with cgutils.if_unlikely(self.builder, err_occurred):
+            self.builder.branch(self.ehblock)
 
     def check_error(self, obj):
         with cgutils.if_unlikely(self.builder, self.is_null(obj)):

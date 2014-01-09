@@ -178,6 +178,12 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyObject_GetItem")
         return self.builder.call(fn, (obj, key))
 
+    def sequence_getslice(self, obj, start, stop):
+        fnty = Type.function(self.pyobj, [self.pyobj, self.py_ssize_t,
+                                          self.py_ssize_t])
+        fn = self._get_function(fnty, name="PySequence_GetSlice")
+        return self.builder.call(fn, (obj, start, stop))
+
     def string_as_string(self, strobj):
         fnty = Type.function(self.cstring, [self.pyobj])
         fn = self._get_function(fnty, name="PyString_AsString")

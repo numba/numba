@@ -136,7 +136,7 @@ class Interpreter(object):
 
     def _dispatch(self, inst, kws):
         assert self.current_block is not None
-        fname = "op_%s" % inst.opname
+        fname = "op_%s" % inst.opname.replace('+', '_')
         try:
             fn = getattr(self, fname)
         except AttributeError:
@@ -203,6 +203,15 @@ class Interpreter(object):
             sliceinst = ir.Expr.call(self.get(slicevar), (start, stop, step),
                                      (), loc=self.loc)
         self.store(value=sliceinst, name=res)
+
+    def op_SLICE_3(self, inst, base, start, stop, res):
+        base = self.get(base)
+        start = self.get(start)
+        stop = self.get(stop)
+
+        expr = ir.Expr.getslice(target=base, start=start, stop=stop,
+                                loc=self.loc)
+        self.store(value=expr, name=res)
 
     def op_STORE_FAST(self, inst, value):
         dstname = self.code_locals[inst.arg]
