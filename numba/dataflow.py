@@ -31,7 +31,7 @@ class DataFlowAnalysis(object):
             blk.dump()
 
     def dispatch(self, info, inst):
-        fname = "op_%s" % inst.opname
+        fname = "op_%s" % inst.opname.replace('+', '_')
         fn = getattr(self, fname)
         fn(info, inst)
 
@@ -147,6 +147,43 @@ class DataFlowAnalysis(object):
     op_BINARY_TRUE_DIVIDE = _binaryop
     op_BINARY_FLOOR_DIVIDE = _binaryop
     op_BINARY_MODULO = _binaryop
+
+    def op_SLICE_3(self, info, inst):
+        """
+        TOS = TOS2[TOS1:TOS]
+        """
+        tos = info.pop()
+        tos1 = info.pop()
+        tos2 = info.pop()
+        res = info.make_temp()
+        info.append(inst, base=tos2, start=tos1, stop=tos, res=res)
+        info.push(res)
+
+    def op_BUILD_SLICE(self, info, inst):
+        """
+        slice(TOS1, TOS) or slice(TOS2, TOS1, TOS)
+        """
+        argc = inst.arg
+        if argc == 2:
+            tos = info.pop()
+            tos1 = info.pop()
+            start = tos1
+            stop = tos
+            step = None
+        elif argc == 3:
+            tos = info.pop()
+            tos1 = info.pop()
+            tos2 = info.pop()
+            start = tos2
+            stop = tos1
+            step = tos
+        else:
+            raise Exception("unreachable")
+        slicevar = info.make_temp()
+        res = info.make_temp()
+        info.append(inst, start=start, stop=stop, step=step, res=res,
+                    slicevar=slicevar)
+        info.push(res)
 
     def op_POP_JUMP_IF_TRUE(self, info, inst):
         pred = info.pop()

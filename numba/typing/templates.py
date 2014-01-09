@@ -138,8 +138,10 @@ class AbstractTemplate(FunctionTemplate):
 
     def apply(self, args, kws):
         generic = getattr(self, "generic")
-        cases = [generic(args, kws)]
-        return self._select(cases, args, kws)
+        sig = generic(args, kws)
+        if sig:
+            cases = [sig]
+            return self._select(cases, args, kws)
 
 
 class ConcreteTemplate(FunctionTemplate):
@@ -197,6 +199,16 @@ def builtin_global(v, t):
 builtin_global(range, types.range_type)
 builtin_global(xrange, types.range_type)
 builtin_global(len, types.len_type)
+builtin_global(slice, types.slice_type)
+
+
+@builtin
+class Slice(ConcreteTemplate):
+    key = types.slice_type
+    cases = [
+        signature(types.slice2_type, types.intp, types.intp),
+        signature(types.slice3_type, types.intp, types.intp, types.intp),
+    ]
 
 
 @builtin
@@ -309,6 +321,12 @@ def normalize_index(index):
     if isinstance(index, types.UniTuple):
         return types.UniTuple(types.intp, index.count)
 
+    elif index == types.slice3_type:
+        return types.slice3_type
+
+    elif index == types.slice2_type:
+        return types.slice2_type
+
     else:
         return types.intp
 
@@ -316,12 +334,11 @@ def normalize_index(index):
 @builtin
 class GetItemUniTuple(AbstractTemplate):
     key = "getitem"
-    object = types.Kind(types.UniTuple)
 
     def generic(self, args, kws):
-        assert not kws
         tup, idx = args
-        return signature(tup.dtype, tup, normalize_index(idx))
+        if isinstance(tup, types.UniTuple):
+            return signature(tup.dtype, tup, normalize_index(idx))
 
 
 @builtin
@@ -331,7 +348,16 @@ class GetItemArray(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         ary, idx = args
-        return signature(ary.dtype, ary, normalize_index(idx))
+        if not isinstance(ary, types.Array):
+            return
+
+        idx = normalize_index(idx)
+        if idx in (types.slice2_type, types.slice3_type):
+            res = ary.copy(layout='A')
+        else:
+            res = ary.dtype
+
+        return signature(res, ary, idx)
 
 
 @builtin
@@ -341,7 +367,8 @@ class SetItemArray(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         ary, idx, val = args
-        return signature(types.none, ary, normalize_index(idx), ary.dtype)
+        if isinstance(ary, types.Array):
+            return signature(types.none, ary, normalize_index(idx), ary.dtype)
 
 
 @builtin
@@ -351,7 +378,8 @@ class LenArray(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         (ary,) = args
-        return signature(types.intp, ary)
+        if isinstance(ary, types.Array):
+            return signature(types.intp, ary)
 
 #-------------------------------------------------------------------------------
 

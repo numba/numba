@@ -3,7 +3,7 @@ import __builtin__ as builtins
 import sys
 import dis
 import inspect
-from numba import ir, controlflow, dataflow
+from numba import ir, controlflow, dataflow, types
 
 
 class Interpreter(object):
@@ -187,6 +187,22 @@ class Interpreter(object):
         return False
 
     # --- Bytecode handlers ---
+
+    def op_BUILD_SLICE(self, inst, start, stop, step, res, slicevar):
+        start = self.get(start)
+        stop = self.get(stop)
+
+        slicegv = ir.Global("slice", slice, loc=self.loc)
+        self.store(value=slicegv, name=slicevar)
+
+        if step is None:
+            sliceinst = ir.Expr.call(self.get(slicevar), (start, stop), (),
+                                     loc=self.loc)
+        else:
+            step = self.get(step)
+            sliceinst = ir.Expr.call(self.get(slicevar), (start, stop, step),
+                                     (), loc=self.loc)
+        self.store(value=sliceinst, name=res)
 
     def op_STORE_FAST(self, inst, value):
         dstname = self.code_locals[inst.arg]

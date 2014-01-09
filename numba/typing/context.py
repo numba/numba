@@ -36,12 +36,13 @@ class Context(object):
 
     def resolve_function_type(self, func, args, kws):
         if isinstance(func, types.Function):
-            ft = func.template(self)
             return func.template(self).apply(args, kws)
 
         defns = self.functions[func]
         for defn in defns:
-            return defn.apply(args, kws)
+            res = defn.apply(args, kws)
+            if res is not None:
+                return res
 
     def resolve_getattr(self, value, attr):
         try:

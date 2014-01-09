@@ -80,6 +80,15 @@ class Array(Type):
         self.ndim = ndim
         self.layout = layout
 
+    def copy(self, dtype=None, ndim=None, layout=None):
+        if dtype is None:
+            dtype = self.dtype
+        if ndim is None:
+            ndim = self.ndim
+        if layout is None:
+            layout = self.layout
+        return Array(dtype=dtype, ndim=ndim, layout=layout)
+
     def get_layout(self, dim):
         assert 0 <= dim < self.ndim
         if self.layout in 'CFA':
@@ -235,10 +244,15 @@ complex128 = Type('complex128')
 
 len_type = Dummy('len')
 range_type = Dummy('range')
+slice_type = Dummy('slice')
+
 range_state32_type = Type('range_state32')
 range_state64_type = Type('range_state64')
 range_iter32_type = Type('range_iter32')
 range_iter64_type = Type('range_iter64')
+
+slice2_type = Type('slice2_type')
+slice3_type = Type('slice3_type')
 
 signed_domain = frozenset([int32, int64])
 unsigned_domain = frozenset([uint32, uint64])

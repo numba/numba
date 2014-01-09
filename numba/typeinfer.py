@@ -112,6 +112,7 @@ class BuildTupleConstrain(object):
     def __init__(self, target, items, loc):
         self.target = target
         self.items = items
+        self.loc = loc
 
     def __call__(self, context, typevars):
         tsets = [typevars[i.name].get() for i in self.items]
@@ -148,7 +149,9 @@ class CallConstrain(object):
         for args in itertools.product(*argtypes):
             # TODO handling keyword arguments
             sig = context.resolve_function_type(fnty, args, ())
-            assert sig is not None, (fnty, args)
+            if sig is None:
+                msg = "Undeclared %s%s" % (fnty, args)
+                raise TypingError(msg, loc=self.loc)
             restypes.append(sig.return_type)
         typevars[self.target].add_types(*restypes)
 
@@ -286,6 +289,7 @@ class TypeInferer(object):
             args = tuple(typemap[a.name] for a in args)
             assert not kws
             signature = self.context.resolve_function_type(fnty, args, ())
+            assert signature is not None, (fnty, args)
             calltypes[call] = signature
 
         for call, args, kws in self.usercalls:
@@ -293,9 +297,15 @@ class TypeInferer(object):
             args = tuple(typemap[a.name] for a in args)
             assert not kws
             signature = self.context.resolve_function_type(fnty, args, ())
+            assert signature is not None, (fnty, args)
             calltypes[call] = signature
 
         return calltypes
+
+    def guard_return_type(self, ty):
+        if isinstance(ty, types.Array):
+            msg = "Cannot return array in nopython mode"
+            raise TypingError(msg, loc=self.blocks[0].loc)
 
     def get_return_type(self, typemap):
         rettypes = set()
@@ -309,11 +319,14 @@ class TypeInferer(object):
             rettypes = rettypes - set([types.none])
             if rettypes:
                 unified = self.context.unify_types(*rettypes)
+                self.guard_return_type(unified)
                 return types.Optional(unified)
             else:
                 return types.none
         else:
-            return self.context.unify_types(*rettypes)
+            unified = self.context.unify_types(*rettypes)
+            self.guard_return_type(unified)
+            return unified
 
     def get_state_token(self):
         """The algorithm is monotonic.  It can only grow the typesets.
@@ -372,6 +385,10 @@ class TypeInferer(object):
             gvty = self.context.get_global_type(gvar.value)
             self.typevars[target.name].lock(gvty)
             self.assumed_immutables.add(inst)
+        if gvar.name == 'slice' and gvar.value is slice:
+            gvty = self.context.get_global_type(gvar.value)
+            self.typevars[target.name].lock(gvty)
+            self.assumed_immutables.add(inst)
         elif gvar.name == 'len' and gvar.value is len:
             gvty = self.context.get_global_type(gvar.value)
             self.typevars[target.name].lock(gvty)
@@ -415,6 +432,7 @@ class TypeInferer(object):
             constrain = BuildTupleConstrain(target.name, items=expr.items,
                                             loc=inst.loc)
             self.constrains.append(constrain)
+
         else:
             raise NotImplementedError(type(expr), expr)
 

@@ -186,6 +186,9 @@ class BaseContext(object):
         elif ty == types.range_iter64_type:
             stty = self.get_struct_type(RangeIter64)
             return Type.pointer(stty)
+        elif ty == types.slice3_type:
+            stty = self.get_struct_type(Slice)
+            return Type.pointer(stty)
         elif isinstance(ty, types.Array):
             stty = self.get_struct_type(make_array(ty))
             return Type.pointer(stty)
@@ -575,6 +578,27 @@ for ty in types.real_domain:
     builtin(implement('<=', types.boolean, ty, ty)(real_le_impl))
     builtin(implement('>', types.boolean, ty, ty)(real_gt_impl))
     builtin(implement('>=', types.boolean, ty, ty)(real_ge_impl))
+
+
+class Slice(cgutils.Structure):
+    _fields = [('start', types.intp),
+               ('stop', types.intp),
+               ('step', types.intp),]
+
+
+@builtin
+@implement(types.slice_type, types.slice3_type, types.intp, types.intp,
+           types.intp)
+def slice3_impl(context, builder, tys, args):
+    start, stop, step = args
+
+    slice3 = Slice(context, builder)
+    slice3.start = start
+    slice3.stop = stop
+    slice3.step = step
+
+    return slice3._getvalue()
+
 
 
 class RangeState32(cgutils.Structure):

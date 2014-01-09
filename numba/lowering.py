@@ -275,6 +275,7 @@ class Lower(BaseLower):
             (fty,) = signature.args
             castval = self.context.cast(self.builder, val, ty, fty)
             return impl(self.context, self.builder, (fty,), (castval,))
+
         elif expr.op == "getattr":
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
@@ -284,6 +285,7 @@ class Lower(BaseLower):
                 return self.context.get_dummy_value()
             else:
                 return impl(self.context, self.builder, ty, val)
+
         elif expr.op == "getitem":
             baseval = self.loadvar(expr.target.name)
             indexval = self.loadvar(expr.index.name)
@@ -296,6 +298,7 @@ class Lower(BaseLower):
                         for av, at, ft in zip(argvals, argtyps,
                                               signature.args)]
             return impl(self.context, self.builder, argtyps, castvals)
+
         elif expr.op == "build_tuple":
             itemvals = [self.loadvar(i.name) for i in expr.items]
             itemtys = [self.typeof(i.name) for i in expr.items]
@@ -305,6 +308,7 @@ class Lower(BaseLower):
             for i in range(len(castvals)):
                 tup = self.builder.insert_value(tup, itemvals[i], i)
             return tup
+
         raise NotImplementedError(expr)
 
     def getvar(self, name):
@@ -459,6 +463,12 @@ class PyLower(BaseLower):
             iterstate = self.loadvar(expr.value.name)
             _, valid = self.unpack_iter(iterstate)
             return valid
+        elif expr.op == 'getitem':
+            target = self.loadvar(expr.target.name)
+            index = self.loadvar(expr.index.name)
+            res = self.pyapi.object_getitem(target, index)
+            self.check_error(res)
+            return res
         else:
             raise NotImplementedError(expr)
 

@@ -167,12 +167,16 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyObject_GetIter")
         return self.builder.call(fn, [obj])
 
-
     def object_getattr_string(self, obj, attr):
         cstr = self.context.insert_const_string(self.module, attr)
         fnty = Type.function(self.pyobj, [self.pyobj, self.cstring])
         fn = self._get_function(fnty, name="PyObject_GetAttrString")
         return self.builder.call(fn, [obj, cstr])
+
+    def object_getitem(self, obj, key):
+        fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj])
+        fn = self._get_function(fnty, name="PyObject_GetItem")
+        return self.builder.call(fn, (obj, key))
 
     def string_as_string(self, strobj):
         fnty = Type.function(self.cstring, [self.pyobj])

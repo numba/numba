@@ -83,14 +83,18 @@ def string_concat(x, y):
     a = "whatzup"
     return a + str(x + y)
 
+
 def string_len(s):
     return len(s)
+
 
 def string_slicing(s, start, stop):
     return s[start:stop]
 
+
 def string_conversion(x):
     return str(x)
+
 
 def string_comparison(s1, s2, op):
     return op(s1, s2)
@@ -110,6 +114,13 @@ def blackscholes_cnd(d):
         ret_val = 1.0 - ret_val
     return ret_val
 
+
 def slicing(a, start, stop, step):
+    """
+    NoPython mode cannot create new array object that out live the scope of
+    the function because the array data buffer is borrowed from an object in
+    the function scope or from an argument.  Returning array would require
+    stealing the data buffer reference or copying the array content.
+    """
     return a[start:stop:step]
 

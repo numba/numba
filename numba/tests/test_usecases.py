@@ -241,26 +241,39 @@ class TestUsecases(unittest.TestCase):
         pyfunc = usecases.slicing
 
         arraytype = types.Array(types.int32, 1, 'C')
-        cr = compile_isolated(pyfunc, (arraytype, arraytype))
+        argtys = (arraytype, types.intp, types.intp, types.intp)
+        cr = compile_isolated(pyfunc, argtys, flags=enable_pyobj_flags)
         cfunc = cr.entry_point
 
         a = np.arange(10, dtype='i4')
-        self.assertEqual(pyfunc(a, 0, 10, 1), cfunc(a, 0, 10, 1))
-        self.assertEqual(pyfunc(a, 0, 10, 2), cfunc(a, 0, 10, 2))
-        self.assertEqual(pyfunc(a, 0, 10, -1), cfunc(a, 0, 10, -1))
-        self.assertEqual(pyfunc(a, 2, 3, 1), cfunc(a, 2, 3, 1))
-        self.assertEqual(pyfunc(a, 10, 0, 1), cfunc(a, 10, 0, 1))
+
+        cases = [
+            (a, 0, 10, 1),
+            (a, 0, 10, 2),
+            (a, 0, 10, -1),
+            (a, 2, 3, 1),
+            (a, 10, 0, 1),
+        ]
+        for args in cases:
+            self.assertTrue(np.all(pyfunc(*args) == cfunc(*args)))
 
         arraytype = types.Array(types.int32, 2, 'C')
-        cr = compile_isolated(pyfunc, (arraytype, arraytype))
+        argtys = (arraytype, types.intp, types.intp, types.intp)
+        cr = compile_isolated(pyfunc, argtys, flags=enable_pyobj_flags)
         cfunc = cr.entry_point
 
         a = np.arange(100, dtype='i4').reshape(10, 10)
-        self.assertEqual(pyfunc(a, 0, 10, 1), cfunc(a, 0, 10, 1))
-        self.assertEqual(pyfunc(a, 0, 10, 2), cfunc(a, 0, 10, 2))
-        self.assertEqual(pyfunc(a, 0, 10, -1), cfunc(a, 0, 10, -1))
-        self.assertEqual(pyfunc(a, 2, 3, 1), cfunc(a, 2, 3, 1))
-        self.assertEqual(pyfunc(a, 10, 0, 1), cfunc(a, 10, 0, 1))
+
+        cases = [
+            (a, 0, 10, 1),
+            (a, 0, 10, 2),
+            (a, 0, 10, -1),
+            (a, 2, 3, 1),
+            (a, 10, 0, 1),
+        ]
+        for args in cases:
+            self.assertTrue(np.all(pyfunc(*args) == cfunc(*args)))
+
 
 if __name__ == '__main__':
     unittest.main()
