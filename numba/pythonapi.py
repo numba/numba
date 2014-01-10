@@ -23,6 +23,7 @@ class PythonAPI(object):
         self.builder = builder
         self.pyobj = self.context.get_argument_type(types.pyobject)
         self.long = Type.int(ctypes.sizeof(ctypes.c_long) * 8)
+        self.ulonglong = Type.int(ctypes.sizeof(ctypes.c_ulonglong) * 8)
         self.double = Type.double()
         self.py_ssize_t = self.context.get_value_type(types.intp)
         self.cstring = Type.pointer(Type.int(8))
@@ -98,6 +99,21 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyNumber_AsSsize_t")
         return self.builder.call(fn, [numobj])
 
+    def number_long(self, numobj):
+        fnty = Type.function(self.pyobj, [self.pyobj])
+        fn = self._get_function(fnty, name="PyNumber_Long")
+        return self.builder.call(fn, [numobj])
+
+    def long_as_ulonglong(self, numobj):
+        fnty = Type.function(self.ulonglong, [self.pyobj])
+        fn = self._get_function(fnty, name="PyLong_AsUnsignedLongLong")
+        return self.builder.call(fn, [numobj])
+
+    def long_from_ulonglong(self, numobj):
+        fnty = Type.function(self.pyobj, [self.ulonglong])
+        fn = self._get_function(fnty, name="PyLong_FromUnsignedLongLong")
+        return self.builder.call(fn, [numobj])
+
     def _get_number_operator(self, name):
         fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj])
         fn = self._get_function(fnty, name="PyNumber_%s" % name)
@@ -118,6 +134,15 @@ class PythonAPI(object):
     def number_divide(self, lhs, rhs):
         fn = self._get_number_operator("Divide")
         return self.builder.call(fn, [lhs, rhs])
+
+    def number_remainder(self, lhs, rhs):
+        fn = self._get_number_operator("Remainder")
+        return self.builder.call(fn, [lhs, rhs])
+
+    def number_power(self, lhs, rhs):
+        fnty = Type.function(self.pyobj, [self.pyobj] * 3)
+        fn = self._get_function(fnty, "PyNumber_Power")
+        return self.builder.call(fn, [lhs, rhs, self.borrow_none()])
 
     def number_negative(self, obj):
         fnty = Type.function(self.pyobj, [self.pyobj])
@@ -223,6 +248,10 @@ class PythonAPI(object):
         self.incref(obj)
         return obj
 
+    def borrow_none(self):
+        obj = self._get_object("Py_None")
+        return obj
+
     # ------ utils -----
 
     def _get_object(self, name):
@@ -257,10 +286,18 @@ class PythonAPI(object):
     def to_native_value(self, obj, typ):
         if isinstance(typ, types.Object) or typ == types.pyobject:
             return obj
-        elif typ == types.int32:
+
+        elif typ in types.unsigned_domain:
+            longval = self.number_long(obj)
+            ullval = self.long_as_ulonglong(longval)
+            return self.builder.trunc(ullval,
+                                      self.context.get_argument_type(typ))
+
+        elif typ in types.signed_domain:
             ssize_val = self.number_as_ssize_t(obj)
             return self.builder.trunc(ssize_val,
                                       self.context.get_argument_type(typ))
+
         elif typ == types.float32:
             fobj = self.number_float(obj)
             fval = self.float_as_double(fobj)
@@ -276,6 +313,7 @@ class PythonAPI(object):
 
         elif isinstance(typ, types.Array):
             return self.to_native_array(typ, obj)
+
         raise NotImplementedError(typ)
 
     def from_native_return(self, val, typ):
@@ -289,9 +327,13 @@ class PythonAPI(object):
             longval = self.builder.zext(val, self.long)
             return self.bool_from_long(longval)
 
-        elif typ == types.int32:
-            longval = self.builder.sext(val, self.long)
-            return self.long_from_long(longval)
+        elif typ in types.unsigned_domain:
+            ullval = self.builder.zext(val, self.ulonglong)
+            return self.long_from_ulonglong(ullval)
+
+        elif typ in types.signed_domain:
+            ival = self.builder.sext(val, self.py_ssize_t)
+            return self.long_from_ssize_t(ival)
 
         elif typ == types.float32:
             dbval = self.builder.fpext(val, self.double)

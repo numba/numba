@@ -1,4 +1,5 @@
 from __future__ import print_function
+from Terminal.Terminal_Suite import _Prop_title_displays_device_name
 import math
 from collections import namedtuple, defaultdict
 import functools
@@ -16,7 +17,12 @@ LTYPEMAP = {
     types.boolean: Type.int(1),
 
     types.uint8: Type.int(8),
+    types.uint16: Type.int(16),
+    types.uint32: Type.int(32),
+    types.uint64: Type.int(64),
 
+    types.int8: Type.int(8),
+    types.int16: Type.int(16),
     types.int32: Type.int(32),
     types.int64: Type.int(64),
 
@@ -277,13 +283,21 @@ class BaseContext(object):
         if fromty == toty or toty == types.any or isinstance(toty, types.Kind):
             return val
 
+        elif fromty in types.unsigned_domain and toty in types.signed_domain:
+            lfrom = self.get_value_type(fromty)
+            lto = self.get_value_type(toty)
+            if lfrom.width <= lto.width:
+                return builder.zext(val, lto)
+            elif lfrom.width > lto.width:
+                return builder.trunc(val, lto)
+
         elif fromty in types.signed_domain and toty in types.signed_domain:
             lfrom = self.get_value_type(fromty)
             lto = self.get_value_type(toty)
-            if lfrom.width < lto.width:
+            if lfrom.width <= lto.width:
                 return builder.sext(val, lto)
             elif lfrom.width > lto.width:
-                return builder.zext(val, lto)
+                return builder.trunc(val, lto)
 
         elif fromty in types.real_domain and toty in types.real_domain:
             lty = self.get_value_type(toty)
@@ -489,8 +503,108 @@ def int_udiv_impl(context, builder, tys, args):
     return builder.udiv(*args)
 
 
+def int_divmod(context, builder, x, y):
+    """
+    Reference Objects/intobject.c
+    xdivy = x / y;
+    xmody = (long)(x - (unsigned long)xdivy * y);
+    /* If the signs of x and y differ, and the remainder is non-0,
+     * C89 doesn't define whether xdivy is now the floor or the
+     * ceiling of the infinitely precise quotient.  We want the floor,
+     * and we have it iff the remainder's sign matches y's.
+     */
+    if (xmody && ((y ^ xmody) < 0) /* i.e. and signs differ */) {
+        xmody += y;
+        --xdivy;
+        assert(xmody && ((y ^ xmody) >= 0));
+    }
+    *p_xdivy = xdivy;
+    *p_xmody = xmody;
+    """
+    assert x.type == y.type
+    xdivy = builder.sdiv(x, y)
+    xmody = builder.srem(x, y)  # Intel has divmod instruction
+
+    ZERO = Constant.null(y.type)
+    ONE = Constant.int(y.type, 1)
+
+    y_xor_xmody_ltz = builder.icmp(lc.ICMP_SLT, builder.xor(y, xmody), ZERO)
+    xmody_istrue = builder.icmp(lc.ICMP_NE, xmody, ZERO)
+    cond = builder.and_(xmody_istrue, y_xor_xmody_ltz)
+
+    bb1 = builder.basic_block
+    with cgutils.ifthen(builder, cond):
+        xmody_plus_y = builder.add(xmody, y)
+        xdivy_minus_1 = builder.sub(xdivy, ONE)
+        bb2 = builder.basic_block
+
+    resdiv = builder.phi(y.type)
+    resdiv.add_incoming(xdivy, bb1)
+    resdiv.add_incoming(xdivy_minus_1, bb2)
+
+    resmod = builder.phi(x.type)
+    resmod.add_incoming(xmody, bb1)
+    resmod.add_incoming(xmody_plus_y, bb2)
+
+    return resdiv, resmod
+
+
 def int_sdiv_impl(context, builder, tys, args):
-    return builder.sdiv(*args)
+    x, y = args
+    div, _ = int_divmod(context, builder, x, y)
+    return div
+
+
+def int_srem_impl(context, builder, tys, args):
+    x, y = args
+    _, rem = int_divmod(context, builder, x, y)
+    return rem
+
+
+def int_urem_impl(context, builder, tys, args):
+    x, y = args
+    return builder.urem(x, y)
+
+
+def power_int_impl(context, builder, tys, args):
+    module = cgutils.get_module(builder)
+    x, y = args
+    powerfn = lc.Function.intrinsic(module, lc.INTR_POWI, [x.type])
+    return builder.call(powerfn, (x, y))
+
+
+def int_power_func_body(context, builder, x, y):
+    pcounter = builder.alloca(y.type)
+    presult = builder.alloca(x.type)
+    result = Constant.int(x.type, 1)
+    counter = y
+    builder.store(counter, pcounter)
+    builder.store(result, presult)
+
+    bbcond = cgutils.append_basic_block(builder, ".cond")
+    bbbody = cgutils.append_basic_block(builder, ".body")
+    bbexit = cgutils.append_basic_block(builder, ".exit")
+
+    del counter
+    del result
+
+    builder.branch(bbcond)
+
+    with cgutils.goto_block(builder, bbcond):
+        counter = builder.load(pcounter)
+        ONE = Constant.int(counter.type, 1)
+        ZERO = Constant.null(counter.type)
+        builder.store(builder.sub(counter, ONE), pcounter)
+        pred = builder.icmp(lc.ICMP_SGT, counter, ZERO)
+        builder.cbranch(pred, bbbody, bbexit)
+
+    with cgutils.goto_block(builder, bbbody):
+        result = builder.load(presult)
+        builder.store(builder.mul(result, x), presult)
+        builder.branch(bbcond)
+
+    builder.position_at_end(bbexit)
+    return builder.load(presult)
 
 
 def int_slt_impl(context, builder, tys, args):
@@ -526,15 +640,19 @@ for ty in types.integer_domain:
 
 for ty in types.unsigned_domain:
     builtin(implement('/?', ty, ty, ty)(int_udiv_impl))
+    builtin(implement('%', ty, ty, ty)(int_urem_impl))
 
 
 for ty in types.signed_domain:
     builtin(implement('/?', ty, ty, ty)(int_sdiv_impl))
+    builtin(implement('%', ty, ty, ty)(int_srem_impl))
     builtin(implement('<', types.boolean, ty, ty)(int_slt_impl))
     builtin(implement('<=', types.boolean, ty, ty)(int_sle_impl))
     builtin(implement('>', types.boolean, ty, ty)(int_sgt_impl))
     builtin(implement('>=', types.boolean, ty, ty)(int_sge_impl))
 
+builtin(implement('**', types.float64, types.float64, types.int32)
+        (power_int_impl))
 
 
 def real_add_impl(context, builder, tys, args):
@@ -551,6 +669,150 @@ def real_mul_impl(context, builder, tys, args):
 
 def real_div_impl(context, builder, tys, args):
     return builder.fdiv(*args)
+
+
+def real_divmod(context, builder, x, y):
+    assert x.type == y.type
+    floatty = x.type
+
+    module = cgutils.get_module(builder)
+    fname = ".numba.python.rem.%s" % x.type
+    fnty = Type.function(floatty, (floatty, floatty, Type.pointer(floatty)))
+    fn = module.get_or_insert_function(fnty, fname)
+
+    if fn.is_declaration:
+        fn.linkage = lc.LINKAGE_LINKONCE_ODR
+        fnbuilder = lc.Builder.new(fn.append_basic_block('entry'))
+        fx, fy, pmod = fn.args
+        div, mod = real_divmod_func_body(context, fnbuilder, fx, fy)
+        fnbuilder.store(mod, pmod)
+        fnbuilder.ret(div)
+
+    pmod = cgutils.alloca_once(builder, floatty)
+    quotient = builder.call(fn, (x, y, pmod))
+    return quotient, builder.load(pmod)
+
+
+def real_divmod_func_body(context, builder, vx, wx):
+    # Reference Objects/floatobject.c
+    #
+    # float_divmod(PyObject *v, PyObject *w)
+    # {
+    #     double vx, wx;
+    #     double div, mod, floordiv;
+    #     CONVERT_TO_DOUBLE(v, vx);
+    #     CONVERT_TO_DOUBLE(w, wx);
+    #     mod = fmod(vx, wx);
+    #     /* fmod is typically exact, so vx-mod is *mathematically* an
+    #        exact multiple of wx.  But this is fp arithmetic, and fp
+    #        vx - mod is an approximation; the result is that div may
+    #        not be an exact integral value after the division, although
+    #        it will always be very close to one.
+    #     */
+    #     div = (vx - mod) / wx;
+    #     if (mod) {
+    #         /* ensure the remainder has the same sign as the denominator */
+    #         if ((wx < 0) != (mod < 0)) {
+    #             mod += wx;
+    #             div -= 1.0;
+    #         }
+    #     }
+    #     else {
+    #         /* the remainder is zero, and in the presence of signed zeroes
+    #            fmod returns different results across platforms; ensure
+    #            it has the same sign as the denominator; we'd like to do
+    #            "mod = wx * 0.0", but that may get optimized away */
+    #         mod *= mod;  /* hide "mod = +0" from optimizer */
+    #         if (wx < 0.0)
+    #             mod = -mod;
+    #     }
+    #     /* snap quotient to nearest integral value */
+    #     if (div) {
+    #         floordiv = floor(div);
+    #         if (div - floordiv > 0.5)
+    #             floordiv += 1.0;
+    #     }
+    #     else {
+    #         /* div is zero - get the same sign as the true quotient */
+    #         div *= div;             /* hide "div = +0" from optimizers */
+    #         floordiv = div * vx / wx; /* zero w/ sign of vx/wx */
+    #     }
+    #     return Py_BuildValue("(dd)", floordiv, mod);
+    # }
+    pmod = builder.alloca(vx.type)
+    pdiv = builder.alloca(vx.type)
+    pfloordiv = builder.alloca(vx.type)
+
+    mod = builder.frem(vx, wx)
+    div = builder.fdiv(builder.fsub(vx, mod), wx)
+
+    builder.store(mod, pmod)
+    builder.store(div, pdiv)
+
+    ZERO = Constant.real(vx.type, 0)
+    ONE = Constant.real(vx.type, 1)
+    mod_istrue = builder.fcmp(lc.FCMP_ONE, mod, ZERO)
+    wx_ltz = builder.fcmp(lc.FCMP_OLT, wx, ZERO)
+    mod_ltz = builder.fcmp(lc.FCMP_OLT, mod, ZERO)
+
+    with cgutils.ifthen(builder, mod_istrue):
+        wx_ltz_ne_mod_ltz = builder.icmp(lc.ICMP_NE, wx_ltz, mod_ltz)
+
+        with cgutils.ifthen(builder, wx_ltz_ne_mod_ltz):
+            mod = builder.fadd(mod, wx)
+            div = builder.fsub(div, ONE)
+            builder.store(mod, pmod)
+            builder.store(div, pdiv)
+
+    del mod
+    del div
+
+    with cgutils.ifnot(builder, mod_istrue):
+        mod = builder.load(pmod)
+        mod = builder.fmul(mod, mod)
+        builder.store(mod, pmod)
+        del mod
+
+        with cgutils.ifthen(builder, wx_ltz):
+            mod = builder.load(pmod)
+            mod = builder.fsub(ZERO, mod)
+            builder.store(mod, pmod)
+            del mod
+
+    div = builder.load(pdiv)
+    div_istrue = builder.fcmp(lc.FCMP_ONE, div, ZERO)
+
+    with cgutils.ifthen(builder, div_istrue):
+        module = cgutils.get_module(builder)
+        floorfn = lc.Function.intrinsic(module, lc.INTR_FLOOR, [wx.type])
+        floordiv = builder.call(floorfn, [div])
+        floordivdiff = builder.fsub(div, floordiv)
+        floordivincr = builder.fadd(floordiv, ONE)
+        HALF = Constant.real(wx.type, 0.5)
+        pred = builder.fcmp(lc.FCMP_OGT, floordivdiff, HALF)
+        floordiv = builder.select(pred, floordivincr, floordiv)
+        builder.store(floordiv, pfloordiv)
+
+    with cgutils.ifnot(builder, div_istrue):
+        div = builder.fmul(div, div)
+        builder.store(div, pdiv)
+        floordiv = builder.fdiv(builder.fmul(div, vx), wx)
+        builder.store(floordiv, pfloordiv)
+
+    return builder.load(pfloordiv), builder.load(pmod)
+
+
+def real_mod_impl(context, builder, tys, args):
+    x, y = args
+    _, rem = real_divmod(context, builder, x, y)
+    return rem
+
+
+def real_power_impl(context, builder, tys, args):
+    x, y = args
+    module = cgutils.get_module(builder)
+    fn = lc.Function.intrinsic(module, lc.INTR_POW, [y.type])
+    return builder.call(fn, (x, y))
 
 
 def real_lt_impl(context, builder, tys, args):
@@ -583,6 +845,9 @@ for ty in types.real_domain:
     builtin(implement('*', ty, ty, ty)(real_mul_impl))
     builtin(implement('/?', ty, ty, ty)(real_div_impl))
     builtin(implement('/', ty, ty, ty)(real_div_impl))
+    builtin(implement('%', ty, ty, ty)(real_mod_impl))
+    builtin(implement('**', ty, ty, ty)(real_power_impl))
+
     builtin(implement('==', types.boolean, ty, ty)(real_eq_impl))
     builtin(implement('!=', types.boolean, ty, ty)(real_ne_impl))
     builtin(implement('<', types.boolean, ty, ty)(real_lt_impl))

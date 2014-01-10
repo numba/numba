@@ -139,6 +139,7 @@ class DataFlowAnalysis(object):
     op_INPLACE_TRUE_DIVIDE = _binaryop
     op_INPLACE_FLOOR_DIVIDE = _binaryop
     op_INPLACE_MODULO = _binaryop
+    op_INPLACE_POWER = _binaryop
 
     op_BINARY_ADD = _binaryop
     op_BINARY_SUBTRACT = _binaryop
@@ -147,6 +148,7 @@ class DataFlowAnalysis(object):
     op_BINARY_TRUE_DIVIDE = _binaryop
     op_BINARY_FLOOR_DIVIDE = _binaryop
     op_BINARY_MODULO = _binaryop
+    op_BINARY_POWER = _binaryop
 
     def op_SLICE_3(self, info, inst):
         """

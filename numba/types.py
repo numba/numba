@@ -228,13 +228,15 @@ any = Dummy('any')
 boolean = bool_ = Type('bool')
 
 byte = uint8 = Type('uint8')
+uint16 = Type('uint16')
+uint32 = Type('uint32')
+uint64 = Type('uint64')
 
+int8 = Type('int8')
+int16 = Type('int16')
 int32 = Type('int32')
 int64 = Type('int64')
 intp = int32 if tuple.__itemsize__ == 4 else int64
-
-uint32 = Type('uint32')
-uint64 = Type('uint64')
 
 float32 = Type('float32')
 float64 = Type('float64')
@@ -254,8 +256,8 @@ range_iter64_type = Type('range_iter64')
 slice2_type = Type('slice2_type')
 slice3_type = Type('slice3_type')
 
-signed_domain = frozenset([int32, int64])
-unsigned_domain = frozenset([uint32, uint64])
+signed_domain = frozenset([int8, int16, int32, int64])
+unsigned_domain = frozenset([uint8, uint16, uint32, uint64])
 integer_domain = signed_domain | unsigned_domain
 real_domain = frozenset([float32, float64])
 number_domain = real_domain | integer_domain
@@ -318,8 +320,12 @@ def _build_type_lattice():
     lattice = TypeLattice()
     # Write out all promotion rules
     # int
+    lattice.connect(int8, int16)
+    lattice.connect(int16, int32)
     lattice.connect(int32, int64)
     # uint
+    lattice.connect(uint8, uint16)
+    lattice.connect(uint16, uint32)
     lattice.connect(uint32, uint64)
     # uint -> int
     lattice.connect(uint32, int32, weight=1.5)

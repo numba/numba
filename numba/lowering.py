@@ -340,6 +340,8 @@ PYTHON_OPMAP = {
      '-': "number_subtract",
      '*': "number_multiply",
     '/?': "number_divide",
+     '%': "number_remainder",
+    '**': "number_power",
 }
 
 

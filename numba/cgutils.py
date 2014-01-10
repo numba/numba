@@ -144,6 +144,12 @@ def ifthen(builder, pred):
     builder.position_at_end(bbend)
 
 
+@contextmanager
+def ifnot(builder, pred):
+    with ifthen(builder, builder.not_(pred)):
+        yield
+
+
 def unpack_tuple(builder, tup, count):
     vals = [builder.extract_value(tup, i)
             for i in range(count)]

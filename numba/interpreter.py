@@ -333,6 +333,9 @@ class Interpreter(object):
     def op_BINARY_MODULO(self, inst, lhs, rhs, res):
         self._binop('%', lhs, rhs, res)
 
+    def op_BINARY_POWER(self, inst, lhs, rhs, res):
+        self._binop('**', lhs, rhs, res)
+
     _inplace_binop = _binop
 
     def op_INPLACE_ADD(self, inst, lhs, rhs, res):
