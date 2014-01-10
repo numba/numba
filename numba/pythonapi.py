@@ -283,6 +283,11 @@ class PythonAPI(object):
         obj = self._get_object("Py_None")
         return obj
 
+    def sys_write_stdout(self, fmt, *args):
+        fnty = Type.function(Type.void(), [self.cstring], var_arg=True)
+        fn = self._get_function(fnty, name="PySys_WriteStdout")
+        return self.builder.call(fn, (fmt,) + args)
+
     # ------ utils -----
 
     def _get_object(self, name):
@@ -301,7 +306,9 @@ class PythonAPI(object):
     def print_object(self, obj):
         strobj = self.object_str(obj)
         cstr = self.string_as_string(strobj)
-        self.context.print_string(self.builder, cstr)
+        self.sys_write_stdout(cstr)
+        endline = self.context.insert_const_string(self.module, "\n")
+        self.sys_write_stdout(endline)
         self.decref(strobj)
 
     def get_null_object(self):

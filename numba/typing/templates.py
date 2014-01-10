@@ -1,6 +1,7 @@
 """
 Define typing templates
 """
+from __future__ import print_function
 import math
 import numpy
 from numba import types
@@ -210,6 +211,15 @@ builtin_global(xrange, types.range_type)
 builtin_global(len, types.len_type)
 builtin_global(slice, types.slice_type)
 builtin_global(abs, types.abs_type)
+builtin_global(print, types.print_type)
+
+
+@builtin
+class Print(ConcreteTemplate):
+    key = types.print_type
+    intcases = [signature(types.none, ty) for ty in types.integer_domain]
+    realcases = [signature(types.none, ty) for ty in types.real_domain]
+    cases = intcases + realcases
 
 
 @builtin

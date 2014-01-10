@@ -642,12 +642,24 @@ def int_abs_impl(context, builder, tys, args):
     return builder.select(ltz, negated, x)
 
 
+def int_print_impl(context, builder, tys, args):
+    [x] = args
+    py = context.get_python_api(builder)
+    szval = context.cast(builder, x, tys[0], types.intp)
+    intobj = py.long_from_ssize_t(szval)
+    py.print_object(intobj)
+    py.decref(intobj)
+    return context.get_dummy_value()
+
+
 for ty in types.integer_domain:
     builtin(implement('+', ty, ty, ty)(int_add_impl))
     builtin(implement('-', ty, ty, ty)(int_sub_impl))
     builtin(implement('*', ty, ty, ty)(int_mul_impl))
     builtin(implement('==', types.boolean, ty, ty)(int_eq_impl))
     builtin(implement('!=', types.boolean, ty, ty)(int_ne_impl))
+
+    builtin(implement(types.print_type, types.none, ty)(int_print_impl))
 
 for ty in types.unsigned_domain:
     builtin(implement('/?', ty, ty, ty)(int_udiv_impl))
@@ -859,6 +871,16 @@ def real_abs_impl(context, builder, tys, args):
     return impl(context, builder, tys, args)
 
 
+def real_print_impl(context, builder, tys, args):
+    [x] = args
+    py = context.get_python_api(builder)
+    szval = context.cast(builder, x, tys[0], types.float64)
+    intobj = py.float_from_double(szval)
+    py.print_object(intobj)
+    py.decref(intobj)
+    return context.get_dummy_value()
+
+
 for ty in types.real_domain:
     builtin(implement('+', ty, ty, ty)(real_add_impl))
     builtin(implement('-', ty, ty, ty)(real_sub_impl))
@@ -876,6 +898,8 @@ for ty in types.real_domain:
     builtin(implement('>=', types.boolean, ty, ty)(real_ge_impl))
 
     builtin(implement(types.abs_type, ty, ty)(real_abs_impl))
+    builtin(implement(types.print_type, types.none, ty)(real_print_impl))
+
 
 class Slice(cgutils.Structure):
     _fields = [('start', types.intp),

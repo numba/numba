@@ -94,7 +94,6 @@ class TestUFuncs(unittest.TestCase):
                 ufunc(xy_operand, xy_operand, control)
                 self.assertTrue(np.allclose(result, control))
 
-
     def test_divide_ufuncs(self):
         ufunc_list = [divide_ufunc]
 
