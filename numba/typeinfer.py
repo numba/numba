@@ -96,18 +96,6 @@ class Propagate(object):
         typevars[self.dst].union(typevars[self.src])
 
 
-class PhiConstrain(object):
-    def __init__(self, dst, incomings, loc):
-        self.dst = dst
-        self.incomings = incomings
-        self.loc = loc
-
-    def __call__(self, context, typevars):
-        tset = typevars[self.dst]
-        for inc in self.incomings:
-            tset.union(typevars[inc])
-
-
 class BuildTupleConstrain(object):
     def __init__(self, target, items, loc):
         self.target = target
@@ -361,11 +349,6 @@ class TypeInferer(object):
             self.typeof_global(inst, inst.target, value)
         elif isinstance(value, ir.Expr):
             self.typeof_expr(inst, inst.target, value)
-        elif isinstance(value, ir.Phi):
-            incs = [v.name for _, v in value]
-            self.constrains.append(PhiConstrain(dst=inst.target.name,
-                                                incomings=incs,
-                                                loc=inst.loc))
         else:
             raise NotImplementedError(type(value), value)
 

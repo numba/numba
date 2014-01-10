@@ -197,9 +197,6 @@ class Lower(BaseLower):
         elif isinstance(value, ir.Expr):
             return self.lower_expr(ty, value)
 
-        elif isinstance(value, ir.Phi):
-            return self.lower_phi(ty, value)
-
         elif isinstance(value, ir.Var):
             val = self.loadvar(value.name)
             oty = self.typeof(value.name)
@@ -218,17 +215,6 @@ class Lower(BaseLower):
 
         else:
             raise NotImplementedError(type(value), value)
-
-    def lower_phi(self, ty, phi):
-        valty = self.context.get_value_type(ty)
-        ptrty = Type.pointer(valty)
-        phinode = self.builder.phi(ptrty)
-        for ib, iv in phi:
-            ib = self.blkmap[ib]
-            iv = self.getvar(iv.name)
-            assert phinode.type == iv.type
-            phinode.add_incoming(iv, ib)
-        return self.builder.load(phinode)
 
     def lower_expr(self, resty, expr):
         if expr.op == 'binop':
@@ -448,6 +434,11 @@ class PyLower(BaseLower):
         elif expr.op == 'build_tuple':
             items = [self.loadvar(it.name) for it in expr.items]
             res = self.pyapi.tuple_pack(items)
+            self.check_error(res)
+            return res
+        elif expr.op == 'build_list':
+            items = [self.loadvar(it.name) for it in expr.items]
+            res = self.pyapi.list_pack(items)
             self.check_error(res)
             return res
         elif expr.op == 'getiter':

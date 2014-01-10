@@ -1,9 +1,7 @@
 from __future__ import print_function
 import unittest
-import numpy as np
 from numba.compiler import compile_isolated, Flags
-from numba import types, utils
-from numba.tests import usecases
+from numba import types
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")

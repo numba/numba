@@ -100,13 +100,21 @@ class Interpreter(object):
                 iv = lingering[0]
                 self.store(self.get(iv), phivar)
             else:
-                phi = ir.Phi(loc=self.loc)
-                self.store(phi, phivar)
+                # Invert the PHI node
                 for ib in incomings:
                     lingering = self.dfa.infos[ib].stack
                     assert len(lingering) == 1
                     iv = lingering[0]
-                    phi.add(ib, self.get(iv))
+
+                    # Add assignment in incoming block to forward the value
+                    target = self.current_scope.get_or_define('$phi' + phivar,
+                                                              loc=self.loc)
+                    stmt = ir.Assign(value=self.get(iv), target=target,
+                                     loc=self.loc)
+                    self.blocks[ib].insert_before_terminator(stmt)
+
+                self.store(target, phivar)
+
 
     def get_global_value(self, name):
         """
@@ -299,6 +307,11 @@ class Interpreter(object):
     def op_BUILD_TUPLE(self, inst, items, res):
         expr = ir.Expr.build_tuple(items=[self.get(x) for x in items],
                                    loc=self.loc)
+        self.store(expr, res)
+
+    def op_BUILD_LIST(self, inst, items, res):
+        expr = ir.Expr.build_list(items=[self.get(x) for x in items],
+                                  loc=self.loc)
         self.store(expr, res)
 
     def op_UNARY_NEGATIVE(self, inst, value, res):

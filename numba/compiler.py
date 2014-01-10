@@ -125,6 +125,7 @@ def translate_stage(func):
 def ir_optimize_stage(interp):
     irpasses.RemoveRedundantAssign(interp).run()
     if DEBUG:
+        print("ir optimize".center(80, '-'))
         interp.dump()
 
 

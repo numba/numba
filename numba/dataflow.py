@@ -37,10 +37,17 @@ class DataFlowAnalysis(object):
 
     def op_BUILD_TUPLE(self, info, inst):
         count = inst.arg
-        items = list(reversed([info.pop() for i in range(count)]))
+        items = list(reversed([info.pop() for _ in range(count)]))
         tup = info.make_temp()
         info.append(inst, items=items, res=tup)
         info.push(tup)
+
+    def op_BUILD_LIST(self, info, inst):
+        count = inst.arg
+        items = list(reversed([info.pop() for _ in range(count)]))
+        lst = info.make_temp()
+        info.append(inst, items=items, res=lst)
+        info.push(lst)
 
     def op_POP_TOP(self, info, inst):
         info.pop()

@@ -107,6 +107,11 @@ class Expr(object):
         return cls(op=op, loc=loc, items=items)
 
     @classmethod
+    def build_list(cls, items, loc):
+        op = 'build_list'
+        return cls(op=op, loc=loc, items=items)
+
+    @classmethod
     def getiter(cls, value, loc):
         op = 'getiter'
         return cls(op=op, loc=loc, value=value)
@@ -230,31 +235,6 @@ class Global(object):
 
     def __str__(self):
         return 'global(%s: %s)' % (self.name, self.value)
-
-
-class Phi(object):
-    def __init__(self, loc):
-        self.loc = loc
-        self.values = []
-        self.blocks = []
-
-    def add(self, block, value):
-        self.blocks.append(block)
-        self.values.append(value)
-
-    def __getitem__(self, i):
-        return self.blocks[i], self.values[i]
-
-    def __repr__(self):
-        args = [("%s: %s" % self[i]) for i in range(len(self))]
-        return "phi(%s)" % ', '.join(args)
-
-    def __len__(self):
-        return len(self.values)
-
-    def __iter__(self):
-        for i in range(len(self)):
-            yield self[i]
 
 
 class Var(object):
@@ -400,6 +380,11 @@ class Block(object):
             if inst.is_terminator:
                 raise VerificationError("Terminator before the last "
                                         "instruction")
+
+    def insert_before_terminator(self, stmt):
+        assert isinstance(stmt, Stmt)
+        assert self.is_terminated
+        self.body.insert(-1, stmt)
 
 
 class Loop(object):

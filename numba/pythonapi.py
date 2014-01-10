@@ -243,6 +243,20 @@ class PythonAPI(object):
         args.extend(items)
         return self.builder.call(fn, args)
 
+    def list_new(self, szval):
+        fnty = Type.function(self.pyobj, [self.py_ssize_t])
+        fn = self._get_function(fnty, name="PyList_New")
+        return self.builder.call(fn, [szval])
+
+    def list_setitem(self, seq, idx, val):
+        """
+        Warning: Steals reference to ``val``
+        """
+        fnty = Type.function(Type.int(), [self.pyobj, self.py_ssize_t,
+                                          self.pyobj])
+        fn = self._get_function(fnty, name="PyList_SetItem")
+        return self.builder.call(fn, [seq, idx, val])
+
     def make_none(self):
         obj = self._get_object("Py_None")
         self.incref(obj)
@@ -279,6 +293,17 @@ class PythonAPI(object):
     def return_none(self):
         none = self.make_none()
         self.builder.ret(none)
+
+    def list_pack(self, items):
+        n = len(items)
+        seq = self.list_new(self.context.get_constant(types.intp, n))
+        not_null = cgutils.is_not_null(self.builder, seq)
+        with cgutils.if_likely(self.builder, not_null):
+            for i in range(n):
+                idx = self.context.get_constant(types.intp, i)
+                self.incref(items[i])
+                self.list_setitem(seq, idx, items[i])
+        return seq
 
     def to_native_arg(self, obj, typ):
         return self.to_native_value(obj, typ)

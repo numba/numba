@@ -22,7 +22,9 @@ def create_arange(control):
     return (np.arange(10) == control).all()
 
 def create_empty(control):
-    return (np.empty(10) == control).all()
+    my = np.empty(10)
+    return (my.shape == control.shape and my.strides == control.strides and
+            my.dtype == control.dtype)
 
 def create_ones(control):
     return (np.ones(10) == control).all()
@@ -36,7 +38,8 @@ class TestArray(unittest.TestCase):
     def test_create_arrays(self):
         pyfunc = create_array
         arraytype = types.Array(types.int32, 1, 'C')
-        cr = compile_isolated(pyfunc, (arraytype,))
+        cr = compile_isolated(pyfunc, (arraytype,),
+                              flags=enable_pyobj_flags)
         cfunc = cr.entry_point
         control = np.array([1,2,3])
         self.assertTrue(cfunc(control))
@@ -44,7 +47,8 @@ class TestArray(unittest.TestCase):
     def test_create_empty_array(self):
         pyfunc = create_empty_array
         arraytype = types.Array(types.int32, 1, 'C')
-        cr = compile_isolated(pyfunc, (arraytype,))
+        cr = compile_isolated(pyfunc, (arraytype,),
+                              flags=enable_pyobj_flags)
         cfunc = cr.entry_point
         control = np.array([])
         self.assertTrue(cfunc(control))
@@ -52,7 +56,8 @@ class TestArray(unittest.TestCase):
     def test_create_arange(self):
         pyfunc = create_arange
         arraytype = types.Array(types.int32, 1, 'C')
-        cr = compile_isolated(pyfunc, (arraytype,))
+        cr = compile_isolated(pyfunc, (arraytype,),
+                              flags=enable_pyobj_flags)
         cfunc = cr.entry_point
         control = np.arange(10)
         self.assertTrue(cfunc(control))
@@ -60,7 +65,9 @@ class TestArray(unittest.TestCase):
     def test_create_empty(self):
         pyfunc = create_empty
         arraytype = types.Array(types.int32, 1, 'C')
-        cr = compile_isolated(pyfunc, (arraytype,))
+        cr = compile_isolated(pyfunc, (arraytype,),
+                              flags=enable_pyobj_flags)
+
         cfunc = cr.entry_point
         control = np.empty(10)
         self.assertTrue(cfunc(control))
@@ -68,7 +75,8 @@ class TestArray(unittest.TestCase):
     def test_create_ones(self):
         pyfunc = create_ones
         arraytype = types.Array(types.int32, 1, 'C')
-        cr = compile_isolated(pyfunc, (arraytype,))
+        cr = compile_isolated(pyfunc, (arraytype,),
+                              flags=enable_pyobj_flags)
         cfunc = cr.entry_point
         control = np.ones(10)
         self.assertTrue(cfunc(control))
@@ -76,7 +84,8 @@ class TestArray(unittest.TestCase):
     def test_create_zeros(self):
         pyfunc = create_zeros
         arraytype = types.Array(types.int32, 1, 'C')
-        cr = compile_isolated(pyfunc, (arraytype,))
+        cr = compile_isolated(pyfunc, (arraytype,),
+                              flags=enable_pyobj_flags)
         cfunc = cr.entry_point
         control = np.zeros(10)
         self.assertTrue(cfunc(control))
