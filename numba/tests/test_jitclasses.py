@@ -22,7 +22,8 @@ def use_car_move(car, x):
 class TestJITClasses(unittest.TestCase):
 
     def setUp(self):
-        move_signature = typing.signature(types.none, types.int32)
+        move_signature = typing.signature(types.none, types.int32,
+                                          recvr=types.Object(Car))
         carattrs = {
             "value": types.int32,
             "move" : typing.new_method(Car.move, move_signature),

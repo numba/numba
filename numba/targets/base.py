@@ -65,7 +65,7 @@ class Overloads(object):
         if formal == actual:
             # formal argument matches actual arguments
             return True
-        elif types.any == formal:
+        elif types.Any == formal:
             # formal argument is any
             return True
         elif (isinstance(formal, types.Kind) and
@@ -280,7 +280,7 @@ class BaseContext(object):
         builder.ret(RETCODE_EXC)
 
     def cast(self, builder, val, fromty, toty):
-        if fromty == toty or toty == types.any or isinstance(toty, types.Kind):
+        if fromty == toty or toty == types.Any or isinstance(toty, types.Kind):
             return val
 
         elif fromty in types.unsigned_domain and toty in types.signed_domain:
@@ -406,6 +406,9 @@ class BaseContext(object):
 
 def make_array(ty):
     dtype = ty.dtype
+    if dtype == types.boolean:
+        dtype = types.byte
+
     nd = ty.ndim
 
     class ArrayTemplate(cgutils.Structure):
@@ -1033,7 +1036,7 @@ def itervalid_range64_impl(context, builder, tys, args):
 
 
 @builtin
-@implement('getitem', types.any, types.Kind(types.UniTuple), types.intp)
+@implement('getitem', types.Any, types.Kind(types.UniTuple), types.intp)
 def getitem_unituple(context, builder, tys, args):
     tupty, _ = tys
     tup, idx = args
@@ -1064,7 +1067,7 @@ def getitem_unituple(context, builder, tys, args):
 
 
 @builtin
-@implement('getitem', types.any, types.Kind(types.Array), types.intp)
+@implement('getitem', types.Any, types.Kind(types.Array), types.intp)
 def getitem_array1d(context, builder, tys, args):
     aryty, _ = tys
     if aryty.ndim != 1:
@@ -1100,7 +1103,7 @@ def getitem_array1d(context, builder, tys, args):
 
 
 @builtin
-@implement('getitem', types.any, types.Kind(types.Array),
+@implement('getitem', types.Any, types.Kind(types.Array),
            types.Kind(types.UniTuple))
 def getitem_array_unituple(context, builder, tys, args):
     aryty, idxty = tys
@@ -1119,7 +1122,7 @@ def getitem_array_unituple(context, builder, tys, args):
 
 @builtin
 @implement('setitem', types.none, types.Kind(types.Array), types.intp,
-           types.any)
+           types.Any)
 def setitem_array1d(context, builder, tys, args):
     aryty, _, valty = tys
     ary, idx, val = args
@@ -1135,7 +1138,7 @@ def setitem_array1d(context, builder, tys, args):
 
 @builtin
 @implement('setitem', types.none, types.Kind(types.Array),
-           types.Kind(types.UniTuple), types.any)
+           types.Kind(types.UniTuple), types.Any)
 def setitem_array_unituple(context, builder, tys, args):
     aryty, idxty, valty = tys
     ary, idx, val = args

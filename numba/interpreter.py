@@ -252,8 +252,22 @@ class Interpreter(object):
     def op_CALL_FUNCTION(self, inst, func, args, kws, res):
         func = self.get(func)
         args = [self.get(x) for x in args]
-        kws = [(self.get(k), self.get(v)) for k, v in kws]
-        expr = ir.Expr.call(func, args, kws, loc=self.loc)
+
+        # Process keywords
+        keyvalues = []
+        removethese = []
+        for k, v in kws:
+            k, v = self.get(k), self.get(v)
+            for inst in self.current_block.body:
+                if isinstance(inst, ir.Assign) and inst.target is k:
+                    removethese.append(inst)
+                    keyvalues.append((inst.value.value, v))
+
+        # Remove keyword constant statements
+        for inst in removethese:
+            self.current_block.remove(inst)
+
+        expr = ir.Expr.call(func, args, keyvalues, loc=self.loc)
         self.store(expr, res)
 
     def op_GET_ITER(self, inst, value, res):

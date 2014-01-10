@@ -420,10 +420,19 @@ class PyLower(BaseLower):
             self.check_error(res)
             return res
         elif expr.op == 'call':
-            assert not expr.kws
             argvals = [self.loadvar(a.name) for a in expr.args]
             fn = self.loadvar(expr.func.name)
-            ret = self.pyapi.call_function_objargs(fn, argvals)
+            if not expr.kws:
+                # No keyword
+                ret = self.pyapi.call_function_objargs(fn, argvals)
+            else:
+                # Have Keywords
+                keyvalues = [(k, self.loadvar(v.name)) for k, v in expr.kws]
+                args = self.pyapi.tuple_pack(argvals)
+                kws = self.pyapi.dict_pack(keyvalues)
+                ret = self.pyapi.call(fn, args, kws)
+                self.decref(kws)
+                self.decref(args)
             self.check_error(ret)
             return ret
         elif expr.op == 'getattr':

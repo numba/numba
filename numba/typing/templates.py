@@ -6,18 +6,20 @@ from numba import types
 
 
 class Signature(object):
-    __slots__ = 'return_type', 'args'
+    __slots__ = 'return_type', 'args', 'recvr'
 
-    def __init__(self, return_type, args):
+    def __init__(self, return_type, args, recvr):
         self.return_type = return_type
         self.args = args
+        self.recvr = recvr
 
     def __hash__(self):
         return hash(self.args)
 
     def __eq__(self, other):
         if isinstance(other, Signature):
-            return self.args == other.args
+            return (self.args == other.args and
+                    self.recvr == other.recvr)
 
     def __ne__(self, other):
         return not (self == other)
@@ -25,9 +27,15 @@ class Signature(object):
     def __repr__(self):
         return "%s -> %s" % (self.args, self.return_type)
 
+    @property
+    def is_method(self):
+        return self.recvr is not None
 
-def signature(return_type, *args):
-    return Signature(return_type, args)
+
+def signature(return_type, *args, **kws):
+    recvr = kws.pop('recvr', None)
+    assert not kws
+    return Signature(return_type, args, recvr=recvr)
 
 
 def _uses_downcast(dists):
@@ -430,6 +438,32 @@ class ArrayAttribute(AttributeTemplate):
 
     def resolve_shape(self, ary):
         return types.UniTuple(types.intp, ary.ndim)
+
+    def resolve_flatten(self, ary):
+        return types.Method(Array_flatten, ary)
+
+
+class Array_flatten(AbstractTemplate):
+    key = "array.flatten"
+
+    def generic(self, args, kws):
+        assert not args
+        assert not kws
+        this = self.this
+        if this.layout == 'C':
+            resty = this.copy(ndim=1)
+            return signature(resty, recvr=this)
+
+
+@builtin
+class CmpOpEqArray(AbstractTemplate):
+    key = '=='
+
+    def generic(self, args, kws):
+        assert not kws
+        [va, vb] = args
+        if isinstance(va, types.Array) and va == vb:
+            return signature(va.copy(dtype=types.boolean), va, vb)
 
 #-------------------------------------------------------------------------------
 

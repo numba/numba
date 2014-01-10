@@ -360,6 +360,10 @@ class Block(object):
         assert isinstance(inst, Stmt)
         self.body.append(inst)
 
+    def remove(self, inst):
+        assert isinstance(inst, Stmt)
+        del self.body[self.body.index(inst)]
+
     def dump(self, file=sys.stdout):
         for inst in self.body:
             print('  ', inst, file=file)

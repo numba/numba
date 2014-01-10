@@ -58,7 +58,7 @@ class TypeVar(object):
         return tuple(self.typeset)
 
     def getone(self):
-        assert len(self) == 1
+        assert len(self) == 1, self.typeset
         return tuple(self.typeset)[0]
 
     def __len__(self):
@@ -360,6 +360,8 @@ class TypeInferer(object):
             self.typevars[target.name].lock(ty)
         elif const is None:
             self.typevars[target.name].lock(types.none)
+        elif isinstance(const, str):
+            self.typevars[target.name].lock(types.string)
         else:
             msg = "Unknown constant of type %s" % (const,)
             raise TypingError(msg, loc=inst.loc)

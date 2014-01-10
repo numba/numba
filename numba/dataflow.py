@@ -114,7 +114,7 @@ class DataFlowAnalysis(object):
         def pop_kws():
             val = info.pop()
             key = info.pop()
-            return key.value, val
+            return key, val
 
         kws = list(reversed([pop_kws() for _ in range(nkws)]))
         args = list(reversed([info.pop() for _ in range(narg)]))

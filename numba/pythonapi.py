@@ -79,6 +79,11 @@ class PythonAPI(object):
         args.append(self.context.get_constant_null(types.pyobject))
         return self.builder.call(fn, args)
 
+    def call(self, callee, args, kws):
+        fnty = Type.function(self.pyobj, [self.pyobj] * 3)
+        fn = self._get_function(fnty, name="PyObject_Call")
+        return self.builder.call(fn, (callee, args, kws))
+
     def long_from_long(self, ival):
         fnty = Type.function(self.pyobj, [self.long])
         fn = self._get_function(fnty, name="PyLong_FromLong")
@@ -257,6 +262,18 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyList_SetItem")
         return self.builder.call(fn, [seq, idx, val])
 
+    def dict_new(self):
+        fnty = Type.function(self.pyobj, ())
+        fn = self._get_function(fnty, name="PyDict_New")
+        return self.builder.call(fn, ())
+
+    def dict_setitem_string(self, dictobj, name, valobj):
+        fnty = Type.function(Type.int(), (self.pyobj, self.cstring,
+                                          self.pyobj))
+        fn = self._get_function(fnty, name="PyDict_SetItemString")
+        cstr = self.context.insert_const_string(self.module, name)
+        return self.builder.call(fn, (dictobj, cstr, valobj))
+
     def make_none(self):
         obj = self._get_object("Py_None")
         self.incref(obj)
@@ -304,6 +321,19 @@ class PythonAPI(object):
                 self.incref(items[i])
                 self.list_setitem(seq, idx, items[i])
         return seq
+
+    def dict_pack(self, keyvalues):
+        """
+        Args
+        -----
+        keyvalues: iterable of (str, llvm.Value of PyObject*)
+        """
+        dictobj = self.dict_new()
+        not_null = cgutils.is_not_null(self.builder, dictobj)
+        with cgutils.if_likely(self.builder, not_null):
+            for k, v in keyvalues:
+                self.dict_setitem_string(dictobj, k, v)
+        return dictobj
 
     def to_native_arg(self, obj, typ):
         return self.to_native_value(obj, typ)

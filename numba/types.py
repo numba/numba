@@ -65,7 +65,20 @@ class Function(Type):
 
 
 class Method(Function):
-    pass
+    def __init__(self, template, this):
+        newcls = type(template.__name__ + '.' + str(this), (template,),
+                      dict(this=this))
+        super(Method, self).__init__(newcls)
+        self.this = this
+
+    def __eq__(self, other):
+        if isinstance(other, Method):
+            return (self.template.__name__ == other.template.__name__ and
+                    self.this == other.this)
+
+
+    def __hash__(self):
+        return hash((self.template.__name__, self.this))
 
 
 class Array(Type):
@@ -223,7 +236,8 @@ class Optional(Type):
 
 pyobject = Type('pyobject')
 none = Dummy('none')
-any = Dummy('any')
+Any = Dummy('any')
+string = Dummy('str')
 
 boolean = bool_ = Type('bool')
 
