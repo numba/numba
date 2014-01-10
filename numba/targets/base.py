@@ -1,10 +1,10 @@
 from __future__ import print_function
-from Terminal.Terminal_Suite import _Prop_title_displays_device_name
 import math
 from collections import namedtuple, defaultdict
 import functools
 import llvm.core as lc
 from llvm.core import Type, Constant
+import numpy
 
 from numba import types, utils, cgutils, typing
 from numba.typing import signature
@@ -634,6 +634,14 @@ def int_ne_impl(context, builder, tys, args):
     return builder.icmp(lc.ICMP_NE, *args)
 
 
+def int_abs_impl(context, builder, tys, args):
+    [x] = args
+    ZERO = Constant.null(x.type)
+    ltz = builder.icmp(lc.ICMP_SLT, x, ZERO)
+    negated = builder.neg(x)
+    return builder.select(ltz, negated, x)
+
+
 for ty in types.integer_domain:
     builtin(implement('+', ty, ty, ty)(int_add_impl))
     builtin(implement('-', ty, ty, ty)(int_sub_impl))
@@ -653,6 +661,8 @@ for ty in types.signed_domain:
     builtin(implement('<=', types.boolean, ty, ty)(int_sle_impl))
     builtin(implement('>', types.boolean, ty, ty)(int_sgt_impl))
     builtin(implement('>=', types.boolean, ty, ty)(int_sge_impl))
+    builtin(implement(types.abs_type, ty, ty)(int_abs_impl))
+
 
 builtin(implement('**', types.float64, types.float64, types.int32)
         (power_int_impl))
@@ -842,6 +852,13 @@ def real_ne_impl(context, builder, tys, args):
     return builder.fcmp(lc.FCMP_UNE, *args)
 
 
+def real_abs_impl(context, builder, tys, args):
+    [ty] = tys
+    sig = typing.signature(ty, ty)
+    impl = context.get_function(math.fabs, sig)
+    return impl(context, builder, tys, args)
+
+
 for ty in types.real_domain:
     builtin(implement('+', ty, ty, ty)(real_add_impl))
     builtin(implement('-', ty, ty, ty)(real_sub_impl))
@@ -858,6 +875,7 @@ for ty in types.real_domain:
     builtin(implement('>', types.boolean, ty, ty)(real_gt_impl))
     builtin(implement('>=', types.boolean, ty, ty)(real_ge_impl))
 
+    builtin(implement(types.abs_type, ty, ty)(real_abs_impl))
 
 class Slice(cgutils.Structure):
     _fields = [('start', types.intp),
@@ -1163,6 +1181,7 @@ def array_len(context, builder, tys, args):
     shapeary = ary.shape
     return builder.extract_value(shapeary, 0)
 
+
 #-------------------------------------------------------------------------------
 
 
@@ -1218,6 +1237,66 @@ def math_exp_f64(context, builder, tys, args):
 
 
 @builtin
+@implement(math.sin, types.float32, types.float32)
+def math_sin_f32(context, builder, tys, args):
+    (val,) = args
+    mod = cgutils.get_module(builder)
+    lty = context.get_value_type(types.float32)
+    intr = lc.Function.intrinsic(mod, lc.INTR_SIN, [lty])
+    return builder.call(intr, args)
+
+
+@builtin
+@implement(math.sin, types.float64, types.float64)
+def math_sin_f64(context, builder, tys, args):
+    (val,) = args
+    mod = cgutils.get_module(builder)
+    lty = context.get_value_type(types.float64)
+    intr = lc.Function.intrinsic(mod, lc.INTR_SIN, [lty])
+    return builder.call(intr, args)
+
+
+@builtin
+@implement(math.cos, types.float32, types.float32)
+def math_cos_f32(context, builder, tys, args):
+    (val,) = args
+    mod = cgutils.get_module(builder)
+    lty = context.get_value_type(types.float32)
+    intr = lc.Function.intrinsic(mod, lc.INTR_COS, [lty])
+    return builder.call(intr, args)
+
+
+@builtin
+@implement(math.cos, types.float64, types.float64)
+def math_cos_f64(context, builder, tys, args):
+    (val,) = args
+    mod = cgutils.get_module(builder)
+    lty = context.get_value_type(types.float64)
+    intr = lc.Function.intrinsic(mod, lc.INTR_COS, [lty])
+    return builder.call(intr, args)
+
+
+@builtin
+@implement(math.tan, types.float32, types.float32)
+def math_tan_f32(context, builder, tys, args):
+    (val,) = args
+    val = context.cast(builder, val, types.float32, types.float64)
+    impl = context.get_function(math.tan, types.float64, types.float64)
+    res = impl(context, builder, [types.float64], [val])
+    return context.cast(builder, res, types.float64, types.float32)
+
+
+@builtin
+@implement(math.tan, types.float64, types.float64)
+def math_tan_f64(context, builder, tys, args):
+    (val,) = args
+    mod = cgutils.get_module(builder)
+    fnty = Type.function(Type.double(), [Type.double()])
+    fn = mod.get_or_insert_function(fnty, name="tan")
+    return builder.call(fn, (val,))
+
+
+@builtin
 @implement(math.sqrt, types.float32, types.float32)
 def math_sqrt_f32(context, builder, tys, args):
     (val,) = args
@@ -1255,3 +1334,82 @@ def math_log_f64(context, builder, tys, args):
     lty = context.get_value_type(types.float64)
     intr = lc.Function.intrinsic(mod, lc.INTR_LOG, [lty])
     return builder.call(intr, args)
+
+#-------------------------------------------------------------------------------
+
+
+def numpy_unary_ufunc(funckey, asfloat=False):
+    def impl(context, builder, tys, args):
+        [tyinp, tyout] = tys
+        [inp, out] = args
+        assert tyinp.dtype == tyout.dtype
+        dtype = tyinp.dtype
+        ndim = tyinp.ndim
+
+        iary = make_array(tyinp)(context, builder, inp)
+        oary = make_array(tyout)(context, builder, out)
+
+        if asfloat:
+            sig = typing.signature(types.float64, types.float64)
+        else:
+            sig = typing.signature(dtype, dtype)
+
+        fnwork = context.get_function(funckey, sig)
+        intpty = context.get_value_type(types.intp)
+
+        shape = cgutils.unpack_tuple(builder, iary.shape, ndim)
+        with cgutils.loop_nest(builder, shape, intp=intpty) as indices:
+            pi = cgutils.get_item_pointer(builder, tyinp, iary, indices)
+            po = cgutils.get_item_pointer(builder, tyout, oary, indices)
+
+            ival = builder.load(pi)
+            if asfloat:
+                dval = context.cast(builder, ival, dtype, types.float64)
+                dres = fnwork(context, builder, [types.float64], [dval])
+                res = context.cast(builder, dres, types.float64, dtype)
+            else:
+                res = fnwork(context, builder, [dtype], [ival])
+            builder.store(res, po)
+
+        return out
+    return impl
+
+
+@builtin
+@implement(numpy.absolute, types.Kind(types.Array), types.Kind(types.Array),
+           types.Kind(types.Array))
+def numpy_absolute(context, builder, tys, args):
+    imp = numpy_unary_ufunc(types.abs_type)
+    return imp(context, builder, tys, args)
+
+
+@builtin
+@implement(numpy.exp, types.Kind(types.Array), types.Kind(types.Array),
+           types.Kind(types.Array))
+def numpy_exp(context, builder, tys, args):
+    imp = numpy_unary_ufunc(math.exp, asfloat=True)
+    return imp(context, builder, tys, args)
+
+
+@builtin
+@implement(numpy.sin, types.Kind(types.Array), types.Kind(types.Array),
+           types.Kind(types.Array))
+def numpy_sin(context, builder, tys, args):
+    imp = numpy_unary_ufunc(math.sin, asfloat=True)
+    return imp(context, builder, tys, args)
+
+
+@builtin
+@implement(numpy.cos, types.Kind(types.Array), types.Kind(types.Array),
+           types.Kind(types.Array))
+def numpy_cos(context, builder, tys, args):
+    imp = numpy_unary_ufunc(math.cos, asfloat=True)
+    return imp(context, builder, tys, args)
+
+
+@builtin
+@implement(numpy.tan, types.Kind(types.Array), types.Kind(types.Array),
+           types.Kind(types.Array))
+def numpy_tan(context, builder, tys, args):
+    imp = numpy_unary_ufunc(math.tan, asfloat=True)
+    return imp(context, builder, tys, args)

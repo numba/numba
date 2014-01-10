@@ -261,6 +261,7 @@ complex128 = Type('complex128')
 len_type = Dummy('len')
 range_type = Dummy('range')
 slice_type = Dummy('slice')
+abs_type = Dummy('abs')
 
 range_state32_type = Type('range_state32')
 range_state64_type = Type('range_state64')

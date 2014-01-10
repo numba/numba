@@ -150,13 +150,60 @@ def ifnot(builder, pred):
         yield
 
 
+@contextmanager
+def for_range(builder, count, intp):
+    start = Constant.int(intp, 0)
+    stop = count
+
+    bbcond = append_basic_block(builder, "for.cond")
+    bbbody = append_basic_block(builder, "for.body")
+    bbend = append_basic_block(builder, "for.end")
+
+    bbstart = builder.basic_block
+    builder.branch(bbcond)
+
+    ONE = Constant.int(intp, 1)
+
+    with goto_block(builder, bbcond):
+        index = builder.phi(intp)
+        pred = builder.icmp(lc.ICMP_SLT, index, stop)
+        builder.cbranch(pred, bbbody, bbend)
+
+    with goto_block(builder, bbbody):
+        yield index
+        incr = builder.add(index, ONE)
+        terminate(builder, bbcond)
+
+    index.add_incoming(start, bbstart)
+    index.add_incoming(incr, bbbody)
+
+    builder.position_at_end(bbend)
+
+
+@contextmanager
+def loop_nest(builder, shape, intp):
+    with _loop_nest(builder, shape, intp) as indices:
+        assert len(indices) == len(shape)
+        yield indices
+
+
+@contextmanager
+def _loop_nest(builder, shape, intp):
+    with for_range(builder, shape[0], intp) as ind:
+        if len(shape) > 1:
+            with _loop_nest(builder, shape[1:], intp) as indices:
+                yield (ind,) + indices
+        else:
+            yield (ind,)
+
+
 def unpack_tuple(builder, tup, count):
     vals = [builder.extract_value(tup, i)
             for i in range(count)]
     return vals
 
 
-def get_item_pointer(builder, aryty, ary, inds, warparound):
+def get_item_pointer(builder, aryty, ary, inds, warparound=False):
     # TODO only handle "any" layout for now
     if warparound:
         shapes = unpack_tuple(builder, ary.shape, count=aryty.ndim)

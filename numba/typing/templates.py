@@ -2,6 +2,7 @@
 Define typing templates
 """
 import math
+import numpy
 from numba import types
 
 
@@ -208,6 +209,13 @@ builtin_global(range, types.range_type)
 builtin_global(xrange, types.range_type)
 builtin_global(len, types.len_type)
 builtin_global(slice, types.slice_type)
+builtin_global(abs, types.abs_type)
+
+
+@builtin
+class Abs(ConcreteTemplate):
+    key = types.abs_type
+    cases = [signature(ty, ty) for ty in types.signed_domain]
 
 
 @builtin
@@ -521,3 +529,67 @@ builtin_global(math.fabs, types.Function(Math_fabs))
 builtin_global(math.exp, types.Function(Math_exp))
 builtin_global(math.sqrt, types.Function(Math_sqrt))
 builtin_global(math.log, types.Function(Math_log))
+
+#-------------------------------------------------------------------------------
+
+@builtin
+class NumpyModuleAttribute(AttributeTemplate):
+    key = types.Module(numpy)
+
+    def resolve_absolute(self, mod):
+        return types.Function(Numpy_absolute)
+
+    def resolve_exp(self, mod):
+        return types.Function(Numpy_exp)
+
+    def resolve_sin(self, mod):
+        return types.Function(Numpy_sin)
+
+    def resolve_cos(self, mod):
+        return types.Function(Numpy_cos)
+
+    def resolve_tan(self, mod):
+        return types.Function(Numpy_tan)
+
+
+class Numpy_unary_ufunc(AbstractTemplate):
+    key = numpy.absolute
+
+    def generic(self, args, kws):
+        assert not kws
+        [inp, out] = args
+        if isinstance(inp, types.Array) and isinstance(out, types.Array):
+            if inp.dtype != out.dtype:
+                # TODO handle differing dtypes
+                return
+            return signature(out, inp, out)
+
+
+class Numpy_absolute(Numpy_unary_ufunc):
+    key = numpy.absolute
+
+
+class Numpy_sin(Numpy_unary_ufunc):
+    key = numpy.sin
+
+
+class Numpy_cos(Numpy_unary_ufunc):
+    key = numpy.cos
+
+
+class Numpy_tan(Numpy_unary_ufunc):
+    key = numpy.tan
+
+
+class Numpy_exp(Numpy_unary_ufunc):
+    key = numpy.exp
+
+
+builtin_global(numpy, types.Module(numpy))
+builtin_global(numpy.absolute, types.Function(Numpy_absolute))
+builtin_global(numpy.exp, types.Function(Numpy_exp))
+builtin_global(numpy.sin, types.Function(Numpy_sin))
+builtin_global(numpy.cos, types.Function(Numpy_cos))
+builtin_global(numpy.tan, types.Function(Numpy_tan))
+
+

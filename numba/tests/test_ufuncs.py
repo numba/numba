@@ -67,8 +67,8 @@ class TestUFuncs(unittest.TestCase):
                 result = np.zeros(x_operand.size, dtype=x_operand.dtype)
                 cfunc(x_operand, result)
                 control = np.zeros(x_operand.size, dtype=x_operand.dtype)
-                ufunc(x_operand, control) 
-                self.assertTrue((result == control).all())
+                ufunc(x_operand, control)
+                self.assertTrue(np.allclose(result, control))
 
     def test_binary_ufuncs(self):
         ufunc_list = [add_ufunc, subtract_ufunc, multiply_ufunc, divide_ufunc]
