@@ -1357,6 +1357,7 @@ def numpy_unary_ufunc(funckey, asfloat=False):
         fnwork = context.get_function(funckey, sig)
         intpty = context.get_value_type(types.intp)
 
+        # TODO handle differing shape by mimicking broadcasting
         shape = cgutils.unpack_tuple(builder, iary.shape, ndim)
         with cgutils.loop_nest(builder, shape, intp=intpty) as indices:
             pi = cgutils.get_item_pointer(builder, tyinp, iary, indices)
@@ -1412,4 +1413,110 @@ def numpy_cos(context, builder, tys, args):
            types.Kind(types.Array))
 def numpy_tan(context, builder, tys, args):
     imp = numpy_unary_ufunc(math.tan, asfloat=True)
+    return imp(context, builder, tys, args)
+
+
+def numpy_binary_ufunc(core):
+    def impl(context, builder, tys, args):
+        [tyvx, tywy, tyout] = tys
+        [vx, wy, out] = args
+        assert tyvx.dtype == tyout.dtype
+        assert tyvx.dtype == tywy.dtype
+        dtype = tyvx.dtype
+        ndim = tyvx.ndim
+
+        xary = make_array(tyvx)(context, builder, vx)
+        yary = make_array(tywy)(context, builder, wy)
+        oary = make_array(tyout)(context, builder, out)
+
+        intpty = context.get_value_type(types.intp)
+
+        # TODO handle differing shape by mimicking broadcasting
+        shape = cgutils.unpack_tuple(builder, xary.shape, ndim)
+        with cgutils.loop_nest(builder, shape, intp=intpty) as indices:
+            px = cgutils.get_item_pointer(builder, tyvx, xary, indices)
+            py = cgutils.get_item_pointer(builder, tywy, yary, indices)
+            po = cgutils.get_item_pointer(builder, tyout, oary, indices)
+
+            x = builder.load(px)
+            y = builder.load(py)
+            res = core(context, builder, (dtype, dtype), (x, y))
+            builder.store(res, po)
+
+        return out
+    return impl
+
+
+@builtin
+@implement(numpy.add, types.Kind(types.Array), types.Kind(types.Array),
+           types.Kind(types.Array), types.Kind(types.Array))
+def numpy_add(context, builder, tys, args):
+    def intcore(context, builder, tys, args):
+        x, y = args
+        return builder.add(x, y)
+
+    def realcore(context, builder, tys, args):
+        x, y = args
+        return builder.fadd(x, y)
+
+    if tys[0].dtype in types.integer_domain:
+        imp = numpy_binary_ufunc(intcore)
+    else:
+        imp = numpy_binary_ufunc(realcore)
+
+    return imp(context, builder, tys, args)
+
+
+@builtin
+@implement(numpy.subtract, types.Kind(types.Array), types.Kind(types.Array),
+           types.Kind(types.Array), types.Kind(types.Array))
+def numpy_sub(context, builder, tys, args):
+    def intcore(context, builder, tys, args):
+        x, y = args
+        return builder.sub(x, y)
+
+    def realcore(context, builder, tys, args):
+        x, y = args
+        return builder.fsub(x, y)
+
+    if tys[0].dtype in types.integer_domain:
+        imp = numpy_binary_ufunc(intcore)
+    else:
+        imp = numpy_binary_ufunc(realcore)
+
+    return imp(context, builder, tys, args)
+
+
+@builtin
+@implement(numpy.multiply, types.Kind(types.Array), types.Kind(types.Array),
+           types.Kind(types.Array), types.Kind(types.Array))
+def numpy_multiply(context, builder, tys, args):
+    def intcore(context, builder, tys, args):
+        x, y = args
+        return builder.mul(x, y)
+
+    def realcore(context, builder, tys, args):
+        x, y = args
+        return builder.fmul(x, y)
+
+    if tys[0].dtype in types.integer_domain:
+        imp = numpy_binary_ufunc(intcore)
+    else:
+        imp = numpy_binary_ufunc(realcore)
+
+    return imp(context, builder, tys, args)
+
+
+@builtin
+@implement(numpy.divide, types.Kind(types.Array), types.Kind(types.Array),
+           types.Kind(types.Array), types.Kind(types.Array))
+def numpy_divide(context, builder, tys, args):
+    dtype = tys[0].dtype
+    if dtype in types.signed_domain:
+        imp = numpy_binary_ufunc(int_sdiv_impl)
+    elif dtype in types.unsigned_domain:
+        imp = numpy_binary_ufunc(int_udiv_impl)
+    else:
+        imp = numpy_binary_ufunc(real_div_impl)
+
     return imp(context, builder, tys, args)

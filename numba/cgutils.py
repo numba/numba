@@ -151,6 +151,40 @@ def ifnot(builder, pred):
 
 
 @contextmanager
+def ifelse(builder, pred, expect=None):
+    bbtrue = append_basic_block(builder, 'if.true')
+    bbfalse = append_basic_block(builder, 'if.false')
+    bbendif = append_basic_block(builder, 'endif')
+
+    br = builder.cbranch(pred, bbtrue, bbfalse)
+    if expect is not None:
+        if expect:
+            set_branch_weight(builder, br, trueweight=99, falseweight=1)
+        else:
+            set_branch_weight(builder, br, trueweight=1, falseweight=99)
+
+    then = IfBranchObj(builder, bbtrue, bbendif)
+    otherwise = IfBranchObj(builder, bbfalse, bbendif)
+
+    yield then, otherwise
+
+    builder.position_at_end(bbendif)
+
+
+class IfBranchObj(object):
+    def __init__(self, builder, bbenter, bbend):
+        self.builder = builder
+        self.bbenter = bbenter
+        self.bbend = bbend
+
+    def __enter__(self):
+        self.builder.position_at_end(self.bbenter)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        terminate(self.builder, self.bbend)
+
+
+@contextmanager
 def for_range(builder, count, intp):
     start = Constant.int(intp, 0)
     stop = count
@@ -165,12 +199,13 @@ def for_range(builder, count, intp):
     ONE = Constant.int(intp, 1)
 
     with goto_block(builder, bbcond):
-        index = builder.phi(intp)
+        index = builder.phi(intp, name="loop.index")
         pred = builder.icmp(lc.ICMP_SLT, index, stop)
         builder.cbranch(pred, bbbody, bbend)
 
     with goto_block(builder, bbbody):
         yield index
+        bbbody = builder.basic_block
         incr = builder.add(index, ONE)
         terminate(builder, bbcond)
 

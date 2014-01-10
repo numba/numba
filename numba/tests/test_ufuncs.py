@@ -71,8 +71,7 @@ class TestUFuncs(unittest.TestCase):
                 self.assertTrue(np.allclose(result, control))
 
     def test_binary_ufuncs(self):
-        ufunc_list = [add_ufunc, subtract_ufunc, multiply_ufunc, divide_ufunc]
-
+        ufunc_list = [add_ufunc, subtract_ufunc, multiply_ufunc]
         arraytypes = [types.Array(types.int32, 1, 'C'),
                       types.Array(types.int64, 1, 'C'),
                       types.Array(types.float32, 1, 'C'),
@@ -92,8 +91,40 @@ class TestUFuncs(unittest.TestCase):
                 result = np.zeros(xy_operand.size, dtype=xy_operand.dtype)
                 cfunc(xy_operand, xy_operand, result)
                 control = np.zeros(xy_operand.size, dtype=xy_operand.dtype)
-                ufunc(xy_operand, xy_operand, control) 
-                self.assertTrue((result == control).all())
+                ufunc(xy_operand, xy_operand, control)
+                self.assertTrue(np.allclose(result, control))
+
+
+    def test_divide_ufuncs(self):
+        ufunc_list = [divide_ufunc]
+
+        arraytypes = [types.Array(types.int32, 1, 'C'),
+                      types.Array(types.int64, 1, 'C'),
+                      types.Array(types.float32, 1, 'C'),
+                      types.Array(types.float64, 1, 'C')]
+
+        x_operands = [np.arange(-10, 10, dtype='i4'),
+                      np.arange(-10, 10, dtype='i8'),
+                      np.arange(-1, 1, 0.1, dtype='f4'),
+                      np.arange(-1, 1, 0.1, dtype='f8')]
+
+        y_operands = [np.arange(1, 21, dtype='i4'),
+                      np.arange(1, 21, dtype='i8'),
+                      np.arange(1, 3, 0.1, dtype='f4'),
+                      np.arange(1, 3, 0.1, dtype='f8')]
+
+        for arraytype, x_operand, y_operand in zip(arraytypes, x_operands,
+                                                    y_operands):
+            for ufunc in ufunc_list:
+                pyfunc = ufunc
+                cr = compile_isolated(pyfunc, (arraytype, arraytype, arraytype))
+                cfunc = cr.entry_point
+
+                result = np.zeros(x_operand.size, dtype=x_operand.dtype)
+                cfunc(x_operand, y_operand, result)
+                control = np.zeros(x_operand.size, dtype=x_operand.dtype)
+                ufunc(x_operand, y_operand, control)
+                self.assertTrue(np.allclose(result, control))
 
 
 if __name__ == '__main__':
