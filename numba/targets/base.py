@@ -832,11 +832,11 @@ def real_ge_impl(context, builder, tys, args):
 
 
 def real_eq_impl(context, builder, tys, args):
-    return builder.fcmp(lc.FCMP_UEQ, *args)
+    return builder.fcmp(lc.FCMP_OEQ, *args)
 
 
 def real_ne_impl(context, builder, tys, args):
-    return builder.icmp(lc.FCMP_ONE, *args)
+    return builder.fcmp(lc.FCMP_UNE, *args)
 
 
 for ty in types.real_domain:
