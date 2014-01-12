@@ -1158,7 +1158,7 @@ def getitem_array_unituple(context, builder, tys, args):
     indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
     # TODO warparound flag
     ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                   warparound=True)
+                                   wraparound=True)
     return builder.load(ptr)
 
 
@@ -1191,7 +1191,7 @@ def setitem_array_unituple(context, builder, tys, args):
     # TODO: other than layout
     indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
     ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                   warparound=True)
+                                   wraparound=True)
     builder.store(val, ptr)
 
 
@@ -1456,11 +1456,24 @@ def numpy_binary_ufunc(core):
         intpty = context.get_value_type(types.intp)
 
         # TODO handle differing shape by mimicking broadcasting
-        shape = cgutils.unpack_tuple(builder, xary.shape, ndim)
-        with cgutils.loop_nest(builder, shape, intp=intpty) as indices:
-            px = cgutils.get_item_pointer(builder, tyvx, xary, indices)
-            py = cgutils.get_item_pointer(builder, tywy, yary, indices)
-            po = cgutils.get_item_pointer(builder, tyout, oary, indices)
+        loopshape = cgutils.unpack_tuple(builder, xary.shape, ndim)
+
+        xyo_shape = [cgutils.unpack_tuple(builder, ary.shape, ndim)
+                     for ary in (xary, yary, oary)]
+        xyo_strides = [cgutils.unpack_tuple(builder, ary.strides, ndim)
+                       for ary in (xary, yary, oary)]
+        xyo_data = [ary.data for ary in (xary, yary, oary)]
+        xyo_layout = [ty.layout for ty in (tyvx, tywy, tyout)]
+
+        with cgutils.loop_nest(builder, loopshape, intp=intpty) as indices:
+            [px, py, po] = [cgutils.get_item_pointer2(builder,
+                                                      data=data, shape=shape,
+                                                      strides=strides,
+                                                      layout=layout,
+                                                      inds=indices)
+                            for data, shape, strides, layout
+                            in zip(xyo_data, xyo_shape, xyo_strides,
+                                   xyo_layout)]
 
             x = builder.load(px)
             y = builder.load(py)

@@ -3,7 +3,7 @@ import llvm.core as lc
 import llvm.ee as le
 from llvm import LLVMException
 import ctypes
-from numba import types, utils, cgutils
+from numba import types, utils, cgutils, _numpyadapt
 
 _PyNone = ctypes.c_ssize_t(id(None))
 
@@ -11,6 +11,7 @@ _PyNone = ctypes.c_ssize_t(id(None))
 @utils.runonce
 def fix_python_api():
     le.dylib_add_symbol("Py_None", ctypes.addressof(_PyNone))
+    le.dylib_add_symbol("NumbaArrayAdaptor", _numpyadapt.get_ndarray_adaptor())
 
 
 class PythonAPI(object):
@@ -414,38 +415,25 @@ class PythonAPI(object):
         raise NotImplementedError(typ)
 
     def to_native_array(self, typ, ary):
+        voidptr = Type.pointer(Type.int(8))
         nativearycls = self.context.make_array(typ)
         nativeary = nativearycls(self.context, self.builder)
-        ctobj = self.object_getattr_string(ary, "ctypes")
-        cdata = self.object_getattr_string(ctobj, "data")
-        pyshape = self.object_getattr_string(ary, "shape")
-        pystrides = self.object_getattr_string(ary, "strides")
+        aryptr = nativeary._getvalue()
+        ptr = self.builder.bitcast(aryptr, voidptr)
+        errcode = self.numba_array_adaptor(ary, ptr)
+        failed = cgutils.is_not_null(self.builder, errcode)
+        with cgutils.if_unlikely(self.builder, failed):
+            # TODO
+            self.builder.unreachable()
+        return aryptr
 
-        rawint = self.number_as_ssize_t(cdata)
-
-        nativeary.data = self.builder.inttoptr(rawint, nativeary.data.type)
-
-        shapeary = nativeary.shape
-        strideary = nativeary.strides
-
-        for i in range(typ.ndim):
-            shape = self.tuple_getitem(pyshape, i)
-            stride = self.tuple_getitem(pystrides, i)
-
-            shapeval = self.number_as_ssize_t(shape)
-            strideval = self.number_as_ssize_t(stride)
-
-            shapeary = self.builder.insert_value(shapeary, shapeval, i)
-            strideary = self.builder.insert_value(strideary, strideval, i)
-
-        nativeary.shape = shapeary
-        nativeary.strides = strideary
-
-        self.decref(cdata)
-        self.decref(pyshape)
-        self.decref(pystrides)
-
-        return nativeary._getvalue()
+    def numba_array_adaptor(self, ary, ptr):
+        voidptr = Type.pointer(Type.int(8))
+        fnty = Type.function(Type.int(), [self.pyobj, voidptr])
+        fn = self._get_function(fnty, name="NumbaArrayAdaptor")
+        fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
+        fn.args[1].add_attribute(lc.ATTR_NO_CAPTURE)
+        return self.builder.call(fn, (ary, ptr))
 
     def get_module_dict_symbol(self):
         pymodname = "__NUMBA_PYMODULE_DICT__"

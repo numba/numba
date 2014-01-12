@@ -94,6 +94,29 @@ class TestUFuncs(unittest.TestCase):
                 ufunc(xy_operand, xy_operand, control)
                 self.assertTrue(np.allclose(result, control))
 
+    def test_binary_ufunc_performance(self):
+
+        pyfunc = add_ufunc
+        arraytype = types.Array(types.float32, 1, 'C')
+        cr = compile_isolated(pyfunc, (arraytype, arraytype, arraytype))
+        cfunc = cr.entry_point
+
+        nelem = 5000
+        x_operand = np.arange(nelem, dtype=np.float32)
+        y_operand = np.arange(nelem, dtype=np.float32)
+        control = np.empty_like(x_operand)
+        result = np.empty_like(x_operand)
+
+        def bm_python():
+            pyfunc(x_operand, y_operand, control)
+
+        def bm_numba():
+            cfunc(x_operand, y_operand, result)
+
+        print(utils.benchmark(bm_python, maxct=1000))
+        print(utils.benchmark(bm_numba, maxct=1000))
+        assert np.allclose(control, result)
+
     def test_divide_ufuncs(self):
         ufunc_list = [divide_ufunc]
 

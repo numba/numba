@@ -1,4 +1,4 @@
-#include <Python.h>
+#include "_pymodule.h"
 #include <string.h>
 
 
@@ -58,7 +58,7 @@ set_arbitrary_addr(PyObject* self, PyObject* args){
 }
 
 
-static PyMethodDef core_methods[] = {
+static PyMethodDef ext_methods[] = {
 #define declmethod(func) { #func , ( PyCFunction )func , METH_VARARGS , NULL }
     declmethod(make_function),
     declmethod(set_arbitrary_addr),
@@ -67,33 +67,11 @@ static PyMethodDef core_methods[] = {
 };
 
 
-#if (PY_MAJOR_VERSION >= 3)
-    struct PyModuleDef module_def = {
-        PyModuleDef_HEAD_INIT,
-        "_dynfunc",
-        NULL,
-        -1,
-        core_methods,
-        NULL, NULL, NULL, NULL
-    };
-#define INITERROR return NULL
-    PyObject *
-    PyInit__dynfunc(void)
-#else
-#define INITERROR return
-    PyMODINIT_FUNC
-    init_dynfunc(void)
-#endif
-    {
-#if PY_MAJOR_VERSION >= 3
-        PyObject *module = PyModule_Create( &module_def );
-#else
-        PyObject *module = Py_InitModule("_dynfunc", core_methods);
-#endif
-        if (module == NULL){
-            INITERROR;
-        }
-#if PY_MAJOR_VERSION >= 3
-        return module;
-#endif
-    }
+MOD_INIT(_dynfunc) {
+    PyObject *m;
+    MOD_DEF(m, "_dynfunc", "No docs", ext_methods)
+    if (m == NULL)
+        return MOD_ERROR_VAL;
+
+    return MOD_SUCCESS_VAL(m);
+}

@@ -15,8 +15,8 @@ class CPUContext(BaseContext):
         self.tm = tm = eb.select_target()
         self.engine = eb.create(tm)
 
-        pms = lp.build_pass_managers(tm=self.tm, loop_vectorize=True, opt=2,
-                                     fpm=False)
+        pms = lp.build_pass_managers(tm=self.tm, loop_vectorize=True,
+                                     opt=2, fpm=False)
         self.pm = pms.pm
 
         self.native_funcs = utils.UniqueDict()

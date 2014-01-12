@@ -238,31 +238,96 @@ def unpack_tuple(builder, tup, count):
     return vals
 
 
-def get_item_pointer(builder, aryty, ary, inds, warparound=False):
-    # TODO only handle "any" layout for now
-    if warparound:
+def get_item_pointer(builder, aryty, ary, inds, wraparound=False):
+    if wraparound:
+        # Wraparound
         shapes = unpack_tuple(builder, ary.shape, count=aryty.ndim)
         indices = []
         for ind, dimlen in zip(inds, shapes):
             ZERO = Constant.null(ind.type)
             negative = builder.icmp(lc.ICMP_SLT, ind, ZERO)
-            bbnormal = builder.basic_block
-            with if_unlikely(builder, negative):
-                wrapped = builder.add(dimlen, ind)
-                bbwrapped = builder.basic_block
-
-            final = builder.phi(ind.type)
-            final.add_incoming(ind, bbnormal)
-            final.add_incoming(wrapped, bbwrapped)
-            indices.append(final)
+            wrapped = builder.add(dimlen, ind)
+            selected = builder.select(negative, wrapped, ind)
+            indices.append(selected)
     else:
         indices = inds
     del inds
+    intp = indices[0].type
+    # Indexing code
+    if aryty.layout == 'C':
+        # C contiguous
+        shapes = unpack_tuple(builder, ary.shape, count=aryty.ndim)
+        steps = []
+        for i in range(len(shapes)):
+            last = Constant.int(intp, 1)
+            for j in shapes[i + 1:]:
+                last = builder.mul(last, j)
+            steps.append(last)
 
-    strides = unpack_tuple(builder, ary.strides, count=aryty.ndim)
-    dimoffs = [builder.mul(s, i) for s, i in zip(strides, indices)]
-    offset = reduce(builder.add, dimoffs)
-    base = builder.ptrtoint(ary.data, offset.type)
-    where = builder.add(base, offset)
-    ptr = builder.inttoptr(where, ary.data.type)
-    return ptr
+        loc = Constant.int(intp, 0)
+        for i, s in zip(indices, steps):
+            tmp = builder.mul(i, s)
+            loc = builder.add(loc, tmp)
+        ptr = builder.gep(ary.data, [loc])
+        return ptr
+    else:
+        # Any layout
+        strides = unpack_tuple(builder, ary.strides, count=aryty.ndim)
+        dimoffs = [builder.mul(s, i) for s, i in zip(strides, indices)]
+        offset = reduce(builder.add, dimoffs)
+        base = builder.ptrtoint(ary.data, offset.type)
+        where = builder.add(base, offset)
+        ptr = builder.inttoptr(where, ary.data.type)
+        return ptr
+
+
+def get_item_pointer2(builder, data, shape, strides, layout, inds,
+                      wraparound=False):
+    if wraparound:
+        # Wraparound
+        indices = []
+        for ind, dimlen in zip(inds, shape):
+            ZERO = Constant.null(ind.type)
+            negative = builder.icmp(lc.ICMP_SLT, ind, ZERO)
+            wrapped = builder.add(dimlen, ind)
+            selected = builder.select(negative, wrapped, ind)
+            indices.append(selected)
+    else:
+        indices = inds
+    del inds
+    intp = indices[0].type
+    # Indexing code
+    if layout in 'CF':
+        steps = []
+        # Compute steps for each dimension
+        if layout == 'C':
+            # C contiguous
+            for i in range(len(shape)):
+                last = Constant.int(intp, 1)
+                for j in shape[i + 1:]:
+                    last = builder.mul(last, j)
+                steps.append(last)
+        elif layout == 'F':
+            # F contiguous
+            for i in range(len(shape)):
+                last = Constant.int(intp, 1)
+                for j in shape[:i]:
+                    last = builder.mul(last, j)
+                steps.append(last)
+        else:
+            raise Exception("unreachable")
+        # Compute index
+        loc = Constant.int(intp, 0)
+        for i, s in zip(indices, steps):
+            tmp = builder.mul(i, s)
+            loc = builder.add(loc, tmp)
+        ptr = builder.gep(data, [loc])
+        return ptr
+    else:
+        # Any layout
+        dimoffs = [builder.mul(s, i) for s, i in zip(strides, indices)]
+        offset = reduce(builder.add, dimoffs)
+        base = builder.ptrtoint(data, offset.type)
+        where = builder.add(base, offset)
+        ptr = builder.inttoptr(where, data.type)
+        return ptr
