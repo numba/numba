@@ -949,6 +949,19 @@ class RangeIter64(cgutils.Structure):
 
 
 @builtin
+@implement(types.range_type, types.range_state32_type, types.int32)
+def range1_32_impl(context, builder, tys, args):
+    [stop] = args
+    state = RangeState32(context, builder)
+
+    state.start = context.get_constant(types.int32, 0)
+    state.stop = stop
+    state.step = context.get_constant(types.int32, 1)
+
+    return state._getvalue()
+
+
+@builtin
 @implement(types.range_type, types.range_state32_type, types.int32, types.int32)
 def range2_32_impl(context, builder, tys, args):
     start, stop = args
@@ -957,6 +970,20 @@ def range2_32_impl(context, builder, tys, args):
     state.start = start
     state.stop = stop
     state.step = context.get_constant(types.int32, 1)
+
+    return state._getvalue()
+
+
+@builtin
+@implement(types.range_type, types.range_state32_type, types.int32,
+           types.int32, types.int32)
+def range2_32_impl(context, builder, tys, args):
+    [start, stop, step] = args
+    state = RangeState32(context, builder)
+
+    state.start = start
+    state.stop = stop
+    state.step = step
 
     return state._getvalue()
 
@@ -1029,6 +1056,20 @@ def range2_64_impl(context, builder, tys, args):
     state.start = start
     state.stop = stop
     state.step = context.get_constant(types.int64, 1)
+
+    return state._getvalue()
+
+
+@builtin
+@implement(types.range_type, types.range_state64_type, types.int64,
+           types.int64)
+def range3_64_impl(context, builder, tys, args):
+    [start, stop, step] = args
+    state = RangeState64(context, builder)
+
+    state.start = start
+    state.stop = stop
+    state.step = step
 
     return state._getvalue()
 
