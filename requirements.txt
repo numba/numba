@@ -1,8 +1,4 @@
-distribute
-nose
-meta
 numpy>=1.6
-cython
 llvmpy
 cffi
 argparse
