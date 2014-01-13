@@ -138,6 +138,7 @@ class Lower(BaseLower):
             cond = self.loadvar(inst.cond.name)
             tr = self.blkmap[inst.truebr]
             fl = self.blkmap[inst.falsebr]
+            assert cond.type == Type.int(1), ("cond is not i1: %s" % inst)
             self.builder.cbranch(cond, tr, fl)
 
         elif isinstance(inst, ir.Jump):
@@ -206,6 +207,9 @@ class Lower(BaseLower):
             if (isinstance(ty, types.Dummy) or isinstance(ty, types.Module) or
                     isinstance(ty, types.Function)):
                 return self.context.get_dummy_value()
+
+            elif ty == types.boolean:
+                return self.context.get_constant(ty, value.value)
 
             elif ty in types.number_domain:
                 return self.context.get_constant(ty, value.value)

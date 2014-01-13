@@ -390,6 +390,10 @@ class TypeInferer(object):
             gvty = self.context.get_global_type(gvar.value)
             self.typevars[target.name].lock(gvty)
             self.assumed_immutables.add(inst)
+        elif gvar.name in ('True', 'False'):
+            assert gvar.value in (True, False)
+            self.typevars[target.name].lock(types.boolean)
+            self.assumed_immutables.add(inst)
         elif isinstance(gvar.value, (int, float)):
             gvty = self.context.get_number_type(gvar.value)
             self.typevars[target.name].lock(gvty)
@@ -406,7 +410,6 @@ class TypeInferer(object):
         # TODO Hmmm...
         # elif gvar.value is ir.UNDEFINED:
         #     self.typevars[target.name].add_types(types.pyobject)
-
 
     def typeof_expr(self, inst, target, expr):
         if expr.op == 'call':

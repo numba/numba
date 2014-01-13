@@ -214,6 +214,9 @@ class BaseContext(object):
             assert val is None
             return self.get_dummy_value()
 
+        elif ty == types.boolean:
+            return Constant.int(Type.int(1), int(val))
+
         elif ty in types.signed_domain:
             return Constant.int_signextend(lty, val)
 

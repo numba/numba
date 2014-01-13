@@ -3,7 +3,7 @@ import __builtin__ as builtins
 import sys
 import dis
 import inspect
-from numba import ir, controlflow, dataflow, types
+from numba import ir, controlflow, dataflow
 
 
 class Interpreter(object):
@@ -152,7 +152,8 @@ class Interpreter(object):
         else:
             return fn(inst, **kws)
 
-    def dump(self, file=sys.stdout):
+    def dump(self, file=None):
+        file = file or sys.stdout
         for offset, block in sorted(self.blocks.items()):
             print('label %d:' % offset, file=file)
             block.dump(file=file)
