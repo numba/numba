@@ -149,7 +149,11 @@ class TestFlowControl(unittest.TestCase):
                       flags=enable_pyobj_flags)
 
     def test_for_loop3(self):
-        self.run_test(for_loop_usecase3, [1], [2])
+        """
+        List requires pyobject
+        """
+        self.run_test(for_loop_usecase3, [1], [2],
+                      flags=enable_pyobj_flags)
 
     def test_for_loop4(self):
         self.run_test(for_loop_usecase4, [10], [10])

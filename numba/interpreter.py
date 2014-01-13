@@ -416,6 +416,12 @@ class Interpreter(object):
         op = dis.cmp_op[inst.arg]
         self._binop(op, lhs, rhs, res)
 
+    def op_BREAK_LOOP(self, inst):
+        loop = self.syntax_blocks[-1]
+        assert isinstance(loop, ir.Loop)
+        jmp = ir.Jump(target=loop.exit, loc=self.loc)
+        self.current_block.append(jmp)
+
     def _op_JUMP_IF(self, inst, pred, iftrue):
         brs = {
             True:  inst.get_jump_target(),

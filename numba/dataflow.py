@@ -35,6 +35,7 @@ class DataFlowAnalysis(object):
         fn = getattr(self, fname)
         fn(info, inst)
 
+
     def op_DUP_TOPX(self, info, inst):
         count = inst.arg
         assert 1 <= count <= 5, "Invalid DUP_TOPX count"
@@ -248,6 +249,10 @@ class DataFlowAnalysis(object):
         info.terminator = inst
 
     def op_JUMP_FORWARD(self, info, inst):
+        info.append(inst)
+        info.terminator = inst
+
+    def op_BREAK_LOOP(self, info, inst):
         info.append(inst)
         info.terminator = inst
 

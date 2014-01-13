@@ -7,12 +7,9 @@ def test():
     loader = unittest.TestLoader()
     startdir = "numba.tests"
     suite = loader.discover(startdir)
-    result = unittest.TextTestResult(stream=sys.stderr, descriptions=True,
-                                     verbosity=1)
-    suite.run(result)
-    if result.wasSuccessful():
-        return True
-    else:
-        print(result)
-        return False
+
+    runner = unittest.TextTestRunner(descriptions=True, verbosity=1,
+                                     buffer=True)
+    result = runner.run(suite)
+    return result.wasSuccessful()
 
