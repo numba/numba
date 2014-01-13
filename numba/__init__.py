@@ -2,7 +2,7 @@
 Expose top-level symbols that are safe for import *
 """
 
-from numba import types, decorators
+from numba import types, decorators, testing
 
 # Re export decorators
 jit = decorators.jit
@@ -22,3 +22,5 @@ uint64 = types.uint64
 float_ = float32 = types.float32
 double = float64 = types.float64
 
+# Re-export test entrypoint
+test = testing.test
