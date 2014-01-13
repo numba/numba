@@ -2,7 +2,7 @@ from __future__ import print_function
 import llvm.core as lc
 import llvm.passes as lp
 import llvm.ee as le
-from numba import _dynfunc, DEBUG
+from numba import _dynfunc, config
 from numba.callwrapper import PyCallWrapper
 from .base import BaseContext
 from numba import utils
@@ -16,7 +16,7 @@ class CPUContext(BaseContext):
         self.engine = eb.create(tm)
 
         pms = lp.build_pass_managers(tm=self.tm, loop_vectorize=True,
-                                     opt=2, fpm=False)
+                                     opt=3, fpm=False)
         self.pm = pms.pm
 
         self.native_funcs = utils.UniqueDict()
@@ -39,7 +39,7 @@ class CPUContext(BaseContext):
         moddictsym = api.get_module_dict_symbol()
         self.optimize(func.module)
 
-        if DEBUG:
+        if config.DEBUG:
             print(func.module)
 
         self.engine.add_module(func.module)
@@ -51,7 +51,7 @@ class CPUContext(BaseContext):
 
         _dynfunc.set_arbitrary_addr(moddictptr, fndesc.pymod.__dict__)
         self.native_funcs[cfunc] = fndesc.name, baseptr
-        return cfunc
+        return cfunc, fnptr
 
     def optimize_pythonapi(self, func):
         # Simplify the function using

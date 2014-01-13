@@ -35,6 +35,32 @@ class DataFlowAnalysis(object):
         fn = getattr(self, fname)
         fn(info, inst)
 
+    def op_DUP_TOPX(self, info, inst):
+        count = inst.arg
+        assert 1 <= count <= 5, "Invalid DUP_TOPX count"
+        stack = [info.pop() for _ in range(count)]
+        for val in reversed(stack):
+            info.push(val)
+        for val in reversed(stack):
+            info.push(val)
+
+    def op_ROT_THREE(self, info, inst):
+        first = info.pop()
+        second = info.pop()
+        third = info.pop()
+        info.push(first)
+        info.push(third)
+        info.push(second)
+
+    def op_UNPACK_SEQUENCE(self, info, inst):
+        count = inst.arg
+        sequence = info.pop()
+        stores = [info.make_temp() for _ in range(count)]
+        indices = [info.make_temp() for _ in range(count)]
+        info.append(inst, sequence=sequence, stores=stores, indices=indices)
+        for st in reversed(stores):
+            info.push(st)
+
     def op_BUILD_TUPLE(self, info, inst):
         count = inst.arg
         items = list(reversed([info.pop() for _ in range(count)]))

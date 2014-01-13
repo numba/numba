@@ -3,7 +3,7 @@ import inspect
 from collections import defaultdict
 from llvm.core import Type, Builder, Module
 import llvm.core as lc
-from numba import ir, types, typing, cgutils, utils, DEBUG
+from numba import ir, types, typing, cgutils, utils, config
 
 
 try:
@@ -112,7 +112,7 @@ class BaseLower(object):
         self.builder.position_at_end(self.entry_block)
         self.builder.branch(self.blkmap[0])
 
-        if DEBUG:
+        if config.DEBUG:
             print(self.module)
         self.module.verify()
 
@@ -230,7 +230,9 @@ class Lower(BaseLower):
             # Convert argument to match
             lhs = self.context.cast(self.builder, lhs, lty, signature.args[0])
             rhs = self.context.cast(self.builder, rhs, rty, signature.args[1])
-            return impl(self.context, self.builder, signature.args, (lhs, rhs))
+            res = impl(self.context, self.builder, signature.args, (lhs, rhs))
+            return self.context.cast(self.builder, res, signature.return_type,
+                                     resty)
         elif expr.op == 'call':
             assert not expr.kws
             argvals = [self.loadvar(a.name) for a in expr.args]

@@ -5,6 +5,31 @@ from timeit import default_timer as timer
 import numpy
 
 
+class ConfigOptions(object):
+    OPTIONS = ()
+
+    def __init__(self):
+        self._enabled = set()
+
+    def set(self, name):
+        if name not in self.OPTIONS:
+            raise NameError("Invalid flag: %s" % name)
+        self._enabled.add(name)
+
+    def unset(self, name):
+        if name not in self.OPTIONS:
+            raise NameError("Invalid flag: %s" % name)
+        self._enabled.discard(name)
+
+    def __getattr__(self, name):
+        if name not in self.OPTIONS:
+            raise NameError("Invalid flag: %s" % name)
+        return name in self._enabled
+
+    def __repr__(self):
+        return "Flags(%s)" % ', '.join(str(x) for x in self._enabled)
+
+
 class SortedMap(collections.Mapping):
     """Immutable
     """

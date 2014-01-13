@@ -159,7 +159,7 @@ class TestUsecases(unittest.TestCase):
 
     def test_string_len(self):
         pyfunc = usecases.string_len
-        cr = compile_isolated(pyfunc, (types.pyobject),
+        cr = compile_isolated(pyfunc, (types.pyobject,),
                               flags=enable_pyobj_flags)
         cfunc = cr.entry_point
 
@@ -172,7 +172,7 @@ class TestUsecases(unittest.TestCase):
 
     def test_string_slicing(self):
         pyfunc = usecases.string_slicing
-        cr = compile_isolated(pyfunc, (types.pyobject),
+        cr = compile_isolated(pyfunc, (types.pyobject,),
                               flags=enable_pyobj_flags)
         cfunc = cr.entry_point
 
@@ -184,12 +184,12 @@ class TestUsecases(unittest.TestCase):
     def test_string_conversion(self):
         pyfunc = usecases.string_conversion
 
-        cr = compile_isolated(pyfunc, (types.int32),
+        cr = compile_isolated(pyfunc, (types.int32,),
                               flags=enable_pyobj_flags)
         cfunc = cr.entry_point
         self.assertEqual(pyfunc(1), cfunc(1))
 
-        cr = compile_isolated(pyfunc, (types.float32),
+        cr = compile_isolated(pyfunc, (types.float32,),
                               flags=enable_pyobj_flags)
         cfunc = cr.entry_point
         self.assertEqual(pyfunc(1.1), cfunc(1.1))

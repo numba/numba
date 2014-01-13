@@ -132,8 +132,8 @@ def ifelse_usecase4(x, y):
 
 class TestFlowControl(unittest.TestCase):
 
-    def run_test(self, pyfunc, x_operands, y_operands):
-        cr = compile_isolated(pyfunc, (types.int32, types.int32))
+    def run_test(self, pyfunc, x_operands, y_operands, flags=Flags()):
+        cr = compile_isolated(pyfunc, (types.int32, types.int32), flags=flags)
         cfunc = cr.entry_point
         for x, y in itertools.product(x_operands, y_operands):
             self.assertEqual(cfunc(x, y), pyfunc(x, y))
@@ -142,7 +142,11 @@ class TestFlowControl(unittest.TestCase):
         self.run_test(for_loop_usecase1, [-10, 0, 10], [0])
 
     def test_for_loop2(self):
-        self.run_test(for_loop_usecase2, [-10, 0, 10], [-10, 0, 10])
+        """
+        TODO handle enumerate
+        """
+        self.run_test(for_loop_usecase2, [-10, 0, 10], [-10, 0, 10],
+                      flags=enable_pyobj_flags)
 
     def test_for_loop3(self):
         self.run_test(for_loop_usecase3, [1], [2])

@@ -196,6 +196,15 @@ class Interpreter(object):
 
     # --- Bytecode handlers ---
 
+    def op_UNPACK_SEQUENCE(self, inst, sequence, stores, indices):
+        sequence = self.get(sequence)
+        for i, (st, ind) in enumerate(zip(stores, indices)):
+            index = ir.Const(value=i, loc=self.loc)
+            self.store(value=index, name=ind)
+            getitem = ir.Expr.getitem(target=sequence, index=self.get(ind),
+                                      loc=self.loc)
+            self.store(value=getitem, name=st)
+
     def op_BUILD_SLICE(self, inst, start, stop, step, res, slicevar):
         start = self.get(start)
         stop = self.get(stop)

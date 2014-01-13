@@ -2,34 +2,12 @@ from __future__ import print_function
 from pprint import pprint
 from collections import namedtuple
 from numba import (bytecode, interpreter, typing, typeinfer, lowering, targets,
-                   irpasses)
-from numba import DEBUG
+                   irpasses, utils, config)
 
 
-class Flags(object):
-    FLAGS_SET = frozenset(['enable_pyobject',
-                           'force_pyobject'])
-
-    def __init__(self):
-        self._enabled = set()
-
-    def set(self, name):
-        if name not in self.FLAGS_SET:
-            raise NameError("Invalid flag: %s" % name)
-        self._enabled.add(name)
-
-    def unset(self, name):
-        if name not in self.FLAGS_SET:
-            raise NameError("Invalid flag: %s" % name)
-        self._enabled.discard(name)
-
-    def __getattr__(self, name):
-        if name not in self.FLAGS_SET:
-            raise NameError("Invalid flag: %s" % name)
-        return name in self._enabled
-
-    def __repr__(self):
-        return "Flags(%s)" % ', '.join(str(x) for x in self._enabled)
+class Flags(utils.ConfigOptions):
+    OPTIONS = frozenset(['enable_pyobject',
+                         'force_pyobject'])
 
 
 DEFAULT_FLAGS = Flags()
@@ -38,7 +16,10 @@ DEFAULT_FLAGS = Flags()
 CR_FIELDS = ["typing_context",
              "target_context",
              "entry_point",
-             "typing_error"]
+             "entry_point_addr",
+             "typing_error",
+             "llvm_func",
+             "argtypes",]
 
 
 CompileResult = namedtuple("CompileResult", CR_FIELDS)
@@ -87,33 +68,37 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags):
             if not flags.enable_pyobject:
                 raise
 
-            func = py_lowering_stage(targetctx, interp)
+            func, fnptr, lfunc = py_lowering_stage(targetctx, interp)
         else:
             fail_reason = None
-            func = native_lowering_stage(targetctx, interp, typemap, restype,
-                                         calltypes)
+            func, fnptr, lfunc = native_lowering_stage(targetctx, interp,
+                                                       typemap, restype,
+                                                       calltypes)
 
     else:
         # Forced to use all python mode
-        func = py_lowering_stage(targetctx, interp)
+        func, fnptr, lfunc = py_lowering_stage(targetctx, interp)
         fail_reason = None
 
     cr = compile_result(typing_context=typingctx,
                         target_context=targetctx,
                         entry_point=func,
-                        typing_error=fail_reason)
+                        entry_point_addr=fnptr,
+                        typing_error=fail_reason,
+                        llvm_func=lfunc,
+                        argtypes=tuple(args))
     return cr
 
 
 def translate_stage(func):
     bc = bytecode.ByteCode(func=func)
-    if DEBUG:
+    if config.DEBUG:
         print(bc.dump())
 
     interp = interpreter.Interpreter(bytecode=bc)
     interp.interpret()
 
-    if DEBUG:
+    if config.DEBUG:
         interp.dump()
         for syn in interp.syntax_info:
             print(syn)
@@ -124,7 +109,7 @@ def translate_stage(func):
 
 def ir_optimize_stage(interp):
     irpasses.RemoveRedundantAssign(interp).run()
-    if DEBUG:
+    if config.DEBUG:
         print("ir optimize".center(80, '-'))
         interp.dump()
 
@@ -144,7 +129,7 @@ def type_inference_stage(typingctx, interp, args, return_type):
     infer.propagate()
     typemap, restype, calltypes = infer.unify()
 
-    if DEBUG:
+    if config.DEBUG:
         pprint(typemap)
         pprint(restype)
         pprint(calltypes)
@@ -160,11 +145,11 @@ def native_lowering_stage(targetctx, interp, typemap, restype, calltypes):
     lower.lower()
     
     # Prepare for execution
-    cfunc = targetctx.get_executable(lower.function, fndesc)
+    cfunc, fnptr = targetctx.get_executable(lower.function, fndesc)
 
     targetctx.insert_user_function(cfunc, fndesc)
 
-    return cfunc
+    return cfunc, fnptr, lower.function
 
 
 def py_lowering_stage(targetctx, interp):
@@ -172,9 +157,9 @@ def py_lowering_stage(targetctx, interp):
     lower = lowering.PyLower(targetctx, fndesc)
     lower.lower()
 
-    if DEBUG:
+    if config.DEBUG:
         print(lower.module)
 
-    cfunc = targetctx.get_executable(lower.function, fndesc)
+    cfunc, fnptr = targetctx.get_executable(lower.function, fndesc)
 
-    return cfunc
+    return cfunc, fnptr, lower.function

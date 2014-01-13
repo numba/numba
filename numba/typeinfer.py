@@ -15,7 +15,7 @@ Constrains push types forward following the dataflow.
 from __future__ import print_function
 from pprint import pprint
 import itertools
-from numba import ir, types, utils, DEBUG
+from numba import ir, types, utils, config
 
 
 class TypingError(Exception):
@@ -26,7 +26,8 @@ class TypingError(Exception):
 
 
 class TypeVar(object):
-    def __init__(self, var):
+    def __init__(self, context, var):
+        self.context = context
         self.var = var
         self.typeset = set()
         self.locked = False
@@ -36,12 +37,18 @@ class TypeVar(object):
             return
 
         nbefore = len(self.typeset)
-        self.typeset |= set(types)
+
+        if self.locked:
+            if set(types) != self.typeset:
+                [expect] = list(self.typeset)
+                for ty in types:
+                    if self.context.type_distance(ty, expect) is None:
+                        raise TypingError("No convertsion from %s to %s" %
+                                          (ty, expect))
+        else:
+            self.typeset |= set(types)
+
         nafter = len(self.typeset)
-
-        if self.locked and nafter != nbefore:
-            raise Exception("Violating locked type variable")
-
         assert nbefore <= nafter, "Must grow monotonically"
 
     def lock(self, typ):
@@ -186,9 +193,12 @@ class SetItemConstrain(object):
 
 
 class TypeVarMap(dict):
+    def set_context(self, context):
+        self.context = context
+
     def __getitem__(self, name):
         if name not in self:
-            self[name] = TypeVar(name)
+            self[name] = TypeVar(self.context, name)
         return super(TypeVarMap, self).__getitem__(name)
 
     def __setitem__(self, name, value):
@@ -208,6 +218,7 @@ class TypeInferer(object):
         self.context = context
         self.blocks = blocks
         self.typevars = TypeVarMap()
+        self.typevars.set_context(context)
         self.constrains = ConstrainNetwork()
         # Set of assumed immutable globals
         self.assumed_immutables = set()
@@ -240,17 +251,17 @@ class TypeInferer(object):
     def propagate(self):
         newtoken = self.get_state_token()
         oldtoken = None
-        if DEBUG:
+        if config.DEBUG:
             self.dump()
         # Since the number of types are finite, the typesets will eventually
         # stop growing.
         while newtoken != oldtoken:
-            if DEBUG:
+            if config.DEBUG:
                 print("propagate".center(80, '-'))
             oldtoken = newtoken
             self.constrains.propagate(self.context, self.typevars)
             newtoken = self.get_state_token()
-            if DEBUG:
+            if config.DEBUG:
                 self.dump()
 
     def unify(self):

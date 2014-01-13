@@ -1,3 +1,8 @@
+"""
+These type objects do not have a fixed machine representation.  It is up to
+the targets to choose their representation.
+"""
+
 import itertools
 
 
@@ -16,6 +21,35 @@ class Type(object):
 
     def __ne__(self, other):
         return not (self == other)
+
+    def __call__(self, *args):
+        return Prototype(args=args, return_type=self)
+
+    def __getitem__(self, args):
+        assert not isinstance(self, Array)
+        if isinstance(args, tuple):
+            ndim = len(args)
+            if args[0].step == 1:
+                layout = 'F'
+            elif args[-1].step == 1:
+                layout = 'C'
+            else:
+                layout = 'A'
+        else:
+            ndim = 1
+            layout = 'A'
+
+        return Array(dtype=self, ndim=ndim, layout=layout)
+
+    __iter__ = NotImplemented
+
+
+class Prototype(Type):
+    def __init__(self, args, return_type):
+        name = "%s%s" % (return_type, ', '.join(str(a) for a in args))
+        super(Prototype, self).__init__(name=name)
+        self.args = args
+        self.return_type = return_type
 
 
 class Dummy(Type):
@@ -76,7 +110,6 @@ class Method(Function):
             return (self.template.__name__ == other.template.__name__ and
                     self.this == other.this)
 
-
     def __hash__(self):
         return hash((self.template.__name__, self.this))
 
@@ -85,6 +118,8 @@ class Array(Type):
     LAYOUTS = frozenset(['C', 'F', 'CS', 'FS', 'A'])
 
     def __init__(self, dtype, ndim, layout):
+        if isinstance(dtype, Array):
+            raise TypeError("Array dtype cannot be Array")
         if layout not in self.LAYOUTS:
             raise ValueError("Invalid layout '%s'" % layout)
         name = "array(%s, %sd, %s)" % (dtype, ndim, layout)
@@ -157,6 +192,9 @@ class UniTuple(Type):
         Return element at position i
         """
         return self.dtype
+
+    def __iter__(self):
+        return iter([self.dtype] * self.count)
 
     def __len__(self):
         return self.count
