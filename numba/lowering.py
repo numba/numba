@@ -230,9 +230,8 @@ class Lower(BaseLower):
             # Convert argument to match
             lhs = self.context.cast(self.builder, lhs, lty, signature.args[0])
             rhs = self.context.cast(self.builder, rhs, rty, signature.args[1])
-            res = impl(self.context, self.builder, signature.args, (lhs, rhs))
-            return self.context.cast(self.builder, res, signature.return_type,
-                                     resty)
+            return impl(self.context, self.builder, signature.args, (lhs, rhs))
+
         elif expr.op == 'call':
             assert not expr.kws
             argvals = [self.loadvar(a.name) for a in expr.args]

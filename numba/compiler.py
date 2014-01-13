@@ -56,8 +56,6 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags):
     """
     # Translate to IR
     interp = translate_stage(func)
-    # Optimize
-    ir_optimize_stage(interp)
 
     if not flags.force_pyobject:
         try:
@@ -107,13 +105,6 @@ def translate_stage(func):
     return interp
 
 
-def ir_optimize_stage(interp):
-    irpasses.RemoveRedundantAssign(interp).run()
-    if config.DEBUG:
-        print("ir optimize".center(80, '-'))
-        interp.dump()
-
-
 def type_inference_stage(typingctx, interp, args, return_type):
     infer = typeinfer.TypeInferer(typingctx, interp.blocks)
 
@@ -153,6 +144,9 @@ def native_lowering_stage(targetctx, interp, typemap, restype, calltypes):
 
 
 def py_lowering_stage(targetctx, interp):
+    # Optimize for python code
+    ir_optimize_for_py_stage(interp)
+
     fndesc = lowering.describe_pyfunction(interp)
     lower = lowering.PyLower(targetctx, fndesc)
     lower.lower()
@@ -163,3 +157,14 @@ def py_lowering_stage(targetctx, interp):
     cfunc, fnptr = targetctx.get_executable(lower.function, fndesc)
 
     return cfunc, fnptr, lower.function
+
+
+def ir_optimize_for_py_stage(interp):
+    """
+    This passes breaks semantic for the type inferer but they reduces
+    refct calls for object mode.
+    """
+    irpasses.RemoveRedundantAssign(interp).run()
+    if config.DEBUG:
+        print("ir optimize".center(80, '-'))
+        interp.dump()
