@@ -21,6 +21,11 @@ class GlobalContext(object):
         self.typing_context = typing.Context()
 
 
+# TODO
+# The dispatcher to use python type object to determine which version to
+# call and use numpy.dtype for ndarray.
+# int default to int32
+# long default to pyobject?
 class Overloaded(object):
     def __init__(self, py_func):
         self.dispatcher = _dispatcher.Dispatcher()
@@ -62,7 +67,6 @@ class Overloaded(object):
         for i, a in enumerate(args):
             tys[i] = typeof_pyval(a)
 
-        # return self.overloads[tuple(tys)].entry_point(*args)
         return self.dispatcher(tuple(tys), args)
 
 

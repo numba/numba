@@ -180,6 +180,12 @@ class BaseContext(object):
             return self.get_dummy_type()
         elif isinstance(ty, types.Optional):
             return self.get_value_type(ty.type)
+        elif ty == types.complex64:
+            stty = self.get_struct_type(Complex64)
+            return Type.pointer(stty)
+        elif ty == types.complex128:
+            stty = self.get_struct_type(Complex128)
+            return Type.pointer(stty)
         elif ty == types.range_state32_type:
             stty = self.get_struct_type(RangeState32)
             return Type.pointer(stty)
@@ -207,7 +213,46 @@ class BaseContext(object):
 
         return LTYPEMAP[ty]
 
+    def is_struct_type(self, ty):
+        if isinstance(ty, types.Array):
+            return True
+
+        sttys = [
+            types.complex64, types.complex128,
+            types.range_state32_type, types.range_state64_type,
+            types.range_iter32_type, types.range_iter64_type,
+            types.slice2_type, types.slice3_type,
+        ]
+        return ty in sttys
+
+    def get_constant_struct(self, builder, ty, val):
+        assert self.is_struct_type(ty)
+        module = cgutils.get_module(builder)
+
+        if ty in types.complex_domain:
+            if ty == types.complex64:
+                innertype = types.float32
+            elif ty == types.complex128:
+                innertype = types.float64
+            else:
+                raise Exception("unreachable")
+
+            real = self.get_constant(innertype, val.real)
+            imag = self.get_constant(innertype, val.imag)
+            const = Constant.struct([real, imag])
+
+            gv = module.add_global_variable(const.type, name=".const")
+            gv.linkage = lc.LINKAGE_INTERNAL
+            gv.initializer = const
+            gv.global_constant = True
+            return gv
+
+        else:
+            raise NotImplementedError(ty)
+
     def get_constant(self, ty, val):
+        assert not self.is_struct_type(ty)
+
         lty = self.get_value_type(ty)
 
         if ty == types.none:
@@ -323,6 +368,23 @@ class BaseContext(object):
             else:
                 return builder.fptoui(val, lty)
 
+        elif fromty in types.integer_domain and toty in types.complex_domain:
+            cmplxcls, flty = get_complex_info(toty)
+            cmpl = cmplxcls(self, builder)
+            cmpl.real = self.cast(builder, val, fromty, flty)
+            cmpl.imag = self.get_constant(flty, 0)
+            return cmpl._getvalue()
+
+        elif fromty in types.complex_domain and toty in types.complex_domain:
+            srccls, srcty = get_complex_info(fromty)
+            dstcls, dstty = get_complex_info(toty)
+
+            src = srccls(self, builder, value=val)
+            dst = dstcls(self, builder)
+            dst.real = self.cast(builder, src.real, srcty, dstty)
+            dst.imag = self.cast(builder, src.imag, srcty, dstty)
+            return dst._getvalue()
+
         elif (isinstance(toty, types.UniTuple) and
                   isinstance(fromty, types.UniTuple) and
                   len(fromty) == len(toty)):
@@ -403,6 +465,9 @@ class BaseContext(object):
     def make_array(self, typ):
         return make_array(typ)
 
+    def make_complex(self, typ):
+        cls, _ = get_complex_info(typ)
+        return cls
 
 #-------------------------------------------------------------------------------
 
@@ -904,6 +969,131 @@ for ty in types.real_domain:
     builtin(implement(types.print_type, types.none, ty)(real_print_impl))
 
 
+class Complex64(cgutils.Structure):
+    _fields = [('real', types.float32),
+               ('imag', types.float32)]
+
+
+class Complex128(cgutils.Structure):
+    _fields = [('real', types.float64),
+               ('imag', types.float64)]
+
+
+def get_complex_info(ty):
+    if ty  == types.complex64:
+        cmplxcls = Complex64
+        flty = types.float32
+
+    elif ty == types.complex128:
+        cmplxcls = Complex128
+        flty = types.float64
+
+    return cmplxcls, flty
+
+
+@builtin_attr
+@impl_attribute(types.complex64, "real", types.float32)
+def complex64_real_impl(context, builder, typ, value):
+    cplx = Complex64(context, builder, value=value)
+    return cplx.real
+
+
+@builtin_attr
+@impl_attribute(types.complex128, "real", types.float64)
+def complex128_real_impl(context, builder, typ, value):
+    cplx = Complex128(context, builder, value=value)
+    return cplx.real
+
+
+@builtin_attr
+@impl_attribute(types.complex64, "imag", types.float32)
+def complex64_real_impl(context, builder, typ, value):
+    cplx = Complex64(context, builder, value=value)
+    return cplx.imag
+
+
+@builtin_attr
+@impl_attribute(types.complex128, "imag", types.float64)
+def complex128_real_impl(context, builder, typ, value):
+    cplx = Complex128(context, builder, value=value)
+    return cplx.imag
+
+
+#
+# @builtin
+# @implement("**", types.complex128, types.complex128, types.complex128)
+# def complex128_power_impl(context, builder, tys, args):
+#     """
+#     arg(x + y j) = atan(y/x)
+#     """
+#     [ca, cb] = args
+#     a = Complex128(context, builder, value=ca)
+#     b = Complex128(context, builder, value=cb)
+#     raise NotImplementedError
+
+
+def complex_add_impl(complexClass):
+    def impl(context, builder, tys, args):
+        [cx, cy] = args
+        x = complexClass(context, builder, value=cx)
+        y = complexClass(context, builder, value=cy)
+        z = complexClass(context, builder)
+        a = x.real
+        b = x.imag
+        c = y.real
+        d = y.imag
+        z.real = builder.fadd(a, c)
+        z.imag = builder.fadd(b, d)
+        return z._getvalue()
+    return impl
+
+
+def complex_sub_impl(complexClass):
+    def impl(context, builder, tys, args):
+        [cx, cy] = args
+        x = complexClass(context, builder, value=cx)
+        y = complexClass(context, builder, value=cy)
+        z = complexClass(context, builder)
+        a = x.real
+        b = x.imag
+        c = y.real
+        d = y.imag
+        z.real = builder.fsub(a, c)
+        z.imag = builder.fsub(b, d)
+        return z._getvalue()
+    return impl
+
+
+def complex_mult_impl(complexClass):
+    def impl(context, builder, tys, args):
+        """
+        (a+bi)(c+di)=(ac-bd)+i(ad+bc)
+        """
+        [cx, cy] = args
+        x = complexClass(context, builder, value=cx)
+        y = complexClass(context, builder, value=cy)
+        z = complexClass(context, builder)
+        a = x.real
+        b = x.imag
+        c = y.real
+        d = y.imag
+        ac = builder.fmul(a, c)
+        bd = builder.fmul(b, d)
+        ad = builder.fmul(a, d)
+        bc = builder.fmul(b, c)
+        z.real = builder.fsub(ac, bd)
+        z.imag = builder.fadd(ad, bc)
+        return z._getvalue()
+    return impl
+
+
+for ty, cls in zip([types.complex64, types.complex128],
+                   [Complex64, Complex128]):
+    builtin(implement("+", ty, ty, ty)(complex_add_impl(cls)))
+    builtin(implement("-", ty, ty, ty)(complex_sub_impl(cls)))
+    builtin(implement("*", ty, ty, ty)(complex_mult_impl(cls)))
+
+
 class Slice(cgutils.Structure):
     _fields = [('start', types.intp),
                ('stop', types.intp),
@@ -922,7 +1112,6 @@ def slice3_impl(context, builder, tys, args):
     slice3.step = step
 
     return slice3._getvalue()
-
 
 
 class RangeState32(cgutils.Structure):

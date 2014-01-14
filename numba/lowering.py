@@ -193,7 +193,12 @@ class Lower(BaseLower):
     def lower_assign(self, ty, inst):
         value = inst.value
         if isinstance(value, ir.Const):
-            return self.context.get_constant(ty, value.value)
+            if self.context.is_struct_type(ty):
+                const = self.context.get_constant_struct(self.builder, ty,
+                                                         value.value)
+            else:
+                const = self.context.get_constant(ty, value.value)
+            return const
 
         elif isinstance(value, ir.Expr):
             return self.lower_expr(ty, value)

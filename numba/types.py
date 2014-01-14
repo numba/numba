@@ -314,7 +314,8 @@ signed_domain = frozenset([int8, int16, int32, int64])
 unsigned_domain = frozenset([uint8, uint16, uint32, uint64])
 integer_domain = signed_domain | unsigned_domain
 real_domain = frozenset([float32, float64])
-number_domain = real_domain | integer_domain
+complex_domain = frozenset([complex64, complex128])
+number_domain = real_domain | integer_domain | complex_domain
 
 domains = unsigned_domain, signed_domain, real_domain
 
@@ -322,6 +323,7 @@ domains = unsigned_domain, signed_domain, real_domain
 class TypeLattice(object):
     def __init__(self):
         self.conns = {}
+        self.blacklist = set()
         self.types = set()
 
     def connect(self, fromty, toty, weight=1.):
@@ -329,6 +331,13 @@ class TypeLattice(object):
         self.conns[key] = weight
         self.types.add(fromty)
         self.types.add(toty)
+
+    def forbids(self, fromty, toty):
+        self.blacklist.add((fromty, toty))
+
+    def _set(self, k, v):
+        if k not in self.blacklist:
+            self.conns[k] = v
 
     def build(self):
         alltypes = tuple(self.types)
@@ -339,12 +348,13 @@ class TypeLattice(object):
             a, b = k
             rk = b, a
             if a == b:
-                self.conns[k] = 0
+                self._set(k, 0)
             elif k not in self.conns:
                 if rk in self.conns:
-                    self.conns[k] = -self.conns[rk]
+                    self._set(k, -self.conns[rk])
                 else:
-                    pending.append(k)
+                    if k not in self.blacklist:
+                        pending.append(k)
 
         # span first expansion
         while pending:
@@ -358,14 +368,15 @@ class TypeLattice(object):
                     k2 = t, b
                     if k1 in self.conns and k2 in self.conns:
                         w = self.conns[k1] + self.conns[k2]
-                        self.conns[k] = w
-                        self.conns[rk] = -w
+                        self._set(k, w)
+                        self._set(rk, -w)
                         break
                 else:
                     tried.append(k)
+
             pending = tried
             after = len(pending)
-            assert after < before, "Not making progress"
+            assert after < before, ("Not making progress", pending)
 
         return self.conns
 
@@ -393,8 +404,12 @@ def _build_type_lattice():
     lattice.connect(int32, float64)
     lattice.connect(int64, float64, weight=1.75)
     # real -> complex
-    lattice.connect(float32, complex64)
-    lattice.connect(float64, complex128)
+    lattice.connect(float32, complex64, weight=1.5)
+    lattice.connect(float64, complex128, weight=1.5)
+    # No dowcast from complex
+    for cty in [complex64, complex128]:
+        for ty in integer_domain | real_domain:
+            lattice.forbids(cty, ty)
 
     return lattice.build()
 

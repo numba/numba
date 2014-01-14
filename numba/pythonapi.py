@@ -4,6 +4,7 @@ import llvm.ee as le
 from llvm import LLVMException
 import ctypes
 from numba import types, utils, cgutils, _numpyadapt
+from versioneer import cmd_build
 
 _PyNone = ctypes.c_ssize_t(id(None))
 
@@ -187,6 +188,16 @@ class PythonAPI(object):
         fnty = Type.function(self.pyobj, [self.long])
         fn = self._get_function(fnty, name="PyBool_FromLong")
         return self.builder.call(fn, [ival])
+
+    def complex_real_as_double(self, cobj):
+        fnty = Type.function(Type.double(), [self.pyobj])
+        fn = self._get_function(fnty, name="PyComplex_RealAsDouble")
+        return self.builder.call(fn, [cobj])
+
+    def complex_imag_as_double(self, cobj):
+        fnty = Type.function(Type.double(), [self.pyobj])
+        fn = self._get_function(fnty, name="PyComplex_ImagAsDouble")
+        return self.builder.call(fn, [cobj])
 
     def iter_next(self, iterobj):
         fnty = Type.function(self.pyobj, [self.pyobj])
@@ -373,6 +384,24 @@ class PythonAPI(object):
             fval = self.float_as_double(fobj)
             self.decref(fobj)
             return fval
+
+        elif typ == types.complex128:
+            cplxcls = self.context.make_complex(typ)
+            cplx = cplxcls(self.context, self.builder)
+            cplx.real = self.complex_real_as_double(obj)
+            cplx.imag = self.complex_imag_as_double(obj)
+            return cplx._get_value()
+
+        elif typ == types.complex64:
+            cplxcls = self.context.make_complex(typ)
+            cplx = cplxcls(self.context, self.builder)
+            real = self.complex_real_as_double(obj)
+            imag = self.complex_imag_as_double(obj)
+            cplx.real = self.context.cast(self.builder, real, types.float64,
+                                          types.float32)
+            cplx.imag = self.context.cast(self.builder, imag, types.float64,
+                                          types.float32)
+            return cplx._getvalue()
 
         elif isinstance(typ, types.Array):
             return self.to_native_array(typ, obj)

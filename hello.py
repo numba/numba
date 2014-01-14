@@ -14,6 +14,11 @@ def foo(a, b):
 foo.jit((int32[:], int32), nopython=True)
 
 
+@jit((int32,))
+def bar(a):
+    return str(a) + " is a number"
+
+
 def main():
     a = numpy.arange(100, dtype='int32')
     b = 2
@@ -27,6 +32,8 @@ def main():
     c = foo(a, b)
     print(a)
     print(c)
+
+    print(bar(2))
 
 
 

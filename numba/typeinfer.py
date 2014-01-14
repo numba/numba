@@ -373,6 +373,8 @@ class TypeInferer(object):
             self.typevars[target.name].lock(types.none)
         elif isinstance(const, str):
             self.typevars[target.name].lock(types.string)
+        elif isinstance(const, complex):
+            self.typevars[target.name].lock(types.complex128)
         else:
             msg = "Unknown constant of type %s" % (const,)
             raise TypingError(msg, loc=inst.loc)

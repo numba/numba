@@ -3,6 +3,7 @@ Define typing templates
 """
 from __future__ import print_function
 import math
+import sys
 import numpy
 from numba import types
 
@@ -119,8 +120,8 @@ class FunctionTemplate(object):
                 return leasts[0][1]
             else:
                 # Need to further decide which downcasted version?
-                raise TypeError("Ambiguous overloading: %s" %
-                                [c for _, c in leasts])
+                raise TypeError("Ambiguous overloading: %s %s" %
+                                (self.key, [c for _, c in leasts]))
 
     def _select_best_upcast(self, upcast):
         assert upcast
@@ -135,8 +136,8 @@ class FunctionTemplate(object):
             if first[0] < second[0]:
                 return first[1]
             else:
-                raise TypeError("Ambiguous overloading: %s and %s" % (
-                    first[1], second[1]))
+                raise TypeError("Ambiguous overloading: %s %s and %s" %
+                                (self.key, first[1], second[1]))
 
 
 class AbstractTemplate(FunctionTemplate):
@@ -289,6 +290,9 @@ class BinOp(ConcreteTemplate):
 
         signature(types.float32, types.float32, types.float32),
         signature(types.float64, types.float64, types.float64),
+
+        signature(types.complex64, types.complex64, types.complex64),
+        signature(types.complex128, types.complex128, types.complex128),
     ]
 
 
@@ -324,7 +328,11 @@ class BinOpPower(ConcreteTemplate):
         signature(types.float64, types.float64, types.int32),
         signature(types.float32, types.float32, types.float32),
         signature(types.float64, types.float64, types.float64),
+
+        signature(types.complex64, types.complex64, types.complex64),
+        signature(types.complex128, types.complex128, types.complex128),
     ]
+
 
 class CmpOp(ConcreteTemplate):
     cases = [
@@ -482,6 +490,28 @@ class CmpOpEqArray(AbstractTemplate):
         [va, vb] = args
         if isinstance(va, types.Array) and va == vb:
             return signature(va.copy(dtype=types.boolean), va, vb)
+
+
+#-------------------------------------------------------------------------------
+class ComplexAttribute(AttributeTemplate):
+
+    def resolve_real(self, ty):
+        return self.innertype
+
+    def resolve_imag(self, ty):
+        return self.innertype
+
+
+@builtin
+class Complex64Attribute(ComplexAttribute):
+    key = types.complex64
+    innertype = types.float32
+
+
+@builtin
+class Complex128Attribute(ComplexAttribute):
+    key = types.complex128
+    innertype = types.float64
 
 #-------------------------------------------------------------------------------
 
