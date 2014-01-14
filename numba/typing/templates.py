@@ -338,9 +338,43 @@ class BinOpDiv(BinOp):
     key = "/?"
 
 
+
 @builtin
 class BinOpMod(BinOp):
     key = "%"
+
+
+@builtin
+class BinOpTrueDiv(ConcreteTemplate):
+    key = "/"
+
+    cases = [
+        signature(types.float32, types.float32, types.float32),
+        signature(types.float64, types.float64, types.float64),
+
+        signature(types.complex64, types.complex64, types.complex64),
+        signature(types.complex128, types.complex128, types.complex128),
+
+    ]
+
+
+@builtin
+class BinOpFloorDiv(ConcreteTemplate):
+    key = "//"
+    cases = [
+        signature(types.int8, types.int8, types.int8),
+        signature(types.int16, types.int16, types.int16),
+        signature(types.int32, types.int32, types.int32),
+        signature(types.int64, types.int64, types.int64),
+
+        signature(types.uint8, types.uint8, types.uint8),
+        signature(types.uint16, types.uint16, types.uint16),
+        signature(types.uint32, types.uint32, types.uint32),
+        signature(types.uint64, types.uint64, types.uint64),
+
+        signature(types.int32, types.float32, types.float32),
+        signature(types.int64, types.float64, types.float64),
+    ]
 
 
 @builtin

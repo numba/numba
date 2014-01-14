@@ -1140,11 +1140,46 @@ def complex_mult_impl(complexClass):
     return impl
 
 
+def complex_div_impl(complexClass):
+    def impl(context, builder, tys, args):
+        """
+        z = c^2 + d^2
+        (a+bi)/(c+di) = (ac + bd) / z, (bc - ad) / z
+        """
+        [cx, cy] = args
+        x = complexClass(context, builder, value=cx)
+        y = complexClass(context, builder, value=cy)
+        z = complexClass(context, builder)
+        a = x.real
+        b = x.imag
+        c = y.real
+        d = y.imag
+
+        ac = builder.fmul(a, c)
+        bd = builder.fmul(b, d)
+        ad = builder.fmul(a, d)
+        bc = builder.fmul(b, c)
+
+        cc = builder.fmul(c, c)
+        dd = builder.fmul(d, d)
+        zz = builder.fadd(cc, dd)
+
+        ac_bd = builder.fadd(ac, bd)
+        bc_ad = builder.fsub(bc, ad)
+
+        z.real = builder.fdiv(ac_bd, zz)
+        z.imag = builder.fdiv(bc_ad, zz)
+        return z._getvalue()
+    return impl
+
+
 for ty, cls in zip([types.complex64, types.complex128],
                    [Complex64, Complex128]):
     builtin(implement("+", ty, ty, ty)(complex_add_impl(cls)))
     builtin(implement("-", ty, ty, ty)(complex_sub_impl(cls)))
     builtin(implement("*", ty, ty, ty)(complex_mult_impl(cls)))
+    builtin(implement("/?", ty, ty, ty)(complex_div_impl(cls)))
+    builtin(implement("/", ty, ty, ty)(complex_div_impl(cls)))
 
 
 class Slice(cgutils.Structure):
