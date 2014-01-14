@@ -23,7 +23,10 @@ ext_numpyadapt = Extension(name='numba._numpyadapt',
 ext_dispatcher = Extension(name="numba._dispatcher",
                            sources=['numba/_dispatcher.c'])
 
-ext_modules = [ext_dynfunc, ext_numpyadapt, ext_dispatcher]
+ext_helperlib = Extension(name="numba._helperlib",
+                          sources=["numba/_helperlib.c"])
+
+ext_modules = [ext_dynfunc, ext_numpyadapt, ext_dispatcher, ext_helperlib]
 
 packages = [
     "numba",
@@ -32,7 +35,7 @@ packages = [
     "numba.typing",
 ]
 
-setup(name = 'numba',
+setup(name='numba',
       description="compiling Python code using LLVM",
       version=versioneer.get_version(),
       classifiers=[
@@ -47,8 +50,8 @@ setup(name = 'numba',
       ],
       author="Continuum Analytics, Inc.",
       author_email="numba-users@continuum.io",
-      ext_modules = ext_modules,
-      packages = packages,
-      license = "BSD",
+      ext_modules=ext_modules,
+      packages=packages,
+      license="BSD",
       cmdclass=cmdclass,
       **setup_args)

@@ -2,7 +2,7 @@ from __future__ import print_function
 import llvm.core as lc
 import llvm.passes as lp
 import llvm.ee as le
-from numba import _dynfunc, config
+from numba import _dynfunc, _helperlib, config
 from numba.callwrapper import PyCallWrapper
 from .base import BaseContext
 from numba import utils
@@ -23,6 +23,11 @@ class CPUContext(BaseContext):
         # self.pm = lp.PassManager.new()
         # self.pm.add(lp.Pass.new("mem2reg"))
         # self.pm.add(lp.Pass.new("simplifycfg"))
+
+        self.map_math_functions()
+
+    def map_math_functions(self):
+        le.dylib_add_symbol("numba.math.cpow", _helperlib.get_cpow_pointer())
 
     def dynamic_map_function(self, func):
         name, ptr = self.native_funcs[func]

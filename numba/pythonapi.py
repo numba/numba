@@ -189,6 +189,11 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyBool_FromLong")
         return self.builder.call(fn, [ival])
 
+    def complex_from_doubles(self, realval, imagval):
+        fnty = Type.function(self.pyobj, [Type.double(), Type.double()])
+        fn = self._get_function(fnty, name="PyComplex_FromDoubles")
+        return self.builder.call(fn, [realval, imagval])
+
     def complex_real_as_double(self, cobj):
         fnty = Type.function(Type.double(), [self.pyobj])
         fn = self._get_function(fnty, name="PyComplex_RealAsDouble")
@@ -390,7 +395,7 @@ class PythonAPI(object):
             cplx = cplxcls(self.context, self.builder)
             cplx.real = self.complex_real_as_double(obj)
             cplx.imag = self.complex_imag_as_double(obj)
-            return cplx._get_value()
+            return cplx._getvalue()
 
         elif typ == types.complex64:
             cplxcls = self.context.make_complex(typ)
@@ -433,6 +438,11 @@ class PythonAPI(object):
 
         elif typ == types.float64:
             return self.float_from_double(val)
+
+        elif typ == types.complex128:
+            cmplxcls = self.context.make_complex(typ)
+            cval = cmplxcls(self.context, self.builder, value=val)
+            return self.complex_from_doubles(cval.real, cval.imag)
 
         elif typ == types.none:
             ret = self.make_none()

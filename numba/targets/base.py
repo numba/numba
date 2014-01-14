@@ -733,7 +733,6 @@ for ty in types.unsigned_domain:
     builtin(implement('/?', ty, ty, ty)(int_udiv_impl))
     builtin(implement('%', ty, ty, ty)(int_urem_impl))
 
-
 for ty in types.signed_domain:
     builtin(implement('/?', ty, ty, ty)(int_sdiv_impl))
     builtin(implement('%', ty, ty, ty)(int_srem_impl))
@@ -1007,29 +1006,54 @@ def complex128_real_impl(context, builder, typ, value):
 
 @builtin_attr
 @impl_attribute(types.complex64, "imag", types.float32)
-def complex64_real_impl(context, builder, typ, value):
+def complex64_imag_impl(context, builder, typ, value):
     cplx = Complex64(context, builder, value=value)
     return cplx.imag
 
 
 @builtin_attr
 @impl_attribute(types.complex128, "imag", types.float64)
-def complex128_real_impl(context, builder, typ, value):
+def complex128_imag_impl(context, builder, typ, value):
     cplx = Complex128(context, builder, value=value)
     return cplx.imag
 
 
-#
-# @builtin
-# @implement("**", types.complex128, types.complex128, types.complex128)
-# def complex128_power_impl(context, builder, tys, args):
-#     """
-#     arg(x + y j) = atan(y/x)
-#     """
-#     [ca, cb] = args
-#     a = Complex128(context, builder, value=ca)
-#     b = Complex128(context, builder, value=cb)
-#     raise NotImplementedError
+@builtin
+@implement("**", types.complex128, types.complex128, types.complex128)
+def complex128_power_impl(context, builder, tys, args):
+    [ca, cb] = args
+    a = Complex128(context, builder, value=ca)
+    b = Complex128(context, builder, value=cb)
+    c = Complex128(context, builder)
+    module = cgutils.get_module(builder)
+    pa = a._getvalue()
+    pb = b._getvalue()
+    pc = c._getvalue()
+
+    # Optimize for square because cpow looses a lot of precsiion
+    TWO = context.get_constant(types.float64, 2)
+    ZERO = context.get_constant(types.float64, 0)
+
+    b_real_is_two = builder.fcmp(lc.FCMP_OEQ, b.real, TWO)
+    b_imag_is_zero = builder.fcmp(lc.FCMP_OEQ, b.imag, ZERO)
+    b_is_two = builder.and_(b_real_is_two, b_imag_is_zero)
+
+    with cgutils.ifelse(builder, b_is_two) as (then, otherwise):
+        with then:
+            # Lower as multiplication
+            multimpl = complex_mult_impl(Complex128)
+            res = multimpl(context, builder, tys, (ca, ca))
+            cres = Complex128(context, builder, value=res)
+            c.real = cres.real
+            c.imag = cres.imag
+
+        with otherwise:
+            # Lower with call to external function
+            fnty = Type.function(Type.void(), [pa.type] * 3)
+            cpow = module.get_or_insert_function(fnty, name="numba.math.cpow")
+            builder.call(cpow, (pa, pb, pc))
+
+    return pc
 
 
 def complex_add_impl(complexClass):
