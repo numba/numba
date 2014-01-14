@@ -20,7 +20,7 @@ def identity_func(l):
 def create_list(x, y, z):
     return [x, y, z]
 
-def creat_nested_list(x, y, z, a, b, c):
+def create_nested_list(x, y, z, a, b, c):
     return [[x, y, z], [a, b, c]]
 
 def get_list_item(l, i):
