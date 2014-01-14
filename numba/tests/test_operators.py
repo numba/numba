@@ -2,8 +2,7 @@ from __future__ import print_function
 import unittest
 import numpy as np
 from numba.compiler import compile_isolated, Flags
-from numba import types, utils
-from numba.tests import usecases
+from numba import types, typeinfer
 import itertools
 
 Noflags = Flags()
@@ -467,6 +466,16 @@ class TestOperators(unittest.TestCase):
                       (types.complex128, types.complex128),]
 
         self.run_test_floats(pyfunc, x_operands, y_operands, types_list)
+
+    def test_mod_complex(self):
+        pyfunc = mod_usecase
+
+        try:
+            cres = compile_isolated(pyfunc, (types.complex64, types.complex64))
+        except typeinfer.TypingError, e:
+            e.msg.startswith("Undeclared %(complex64, complex64)")
+        else:
+            self.fail("Complex % should trigger an undeclared error")
 
 
 if __name__ == '__main__':

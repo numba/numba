@@ -1180,6 +1180,7 @@ for ty, cls in zip([types.complex64, types.complex128],
     builtin(implement("*", ty, ty, ty)(complex_mult_impl(cls)))
     builtin(implement("/?", ty, ty, ty)(complex_div_impl(cls)))
     builtin(implement("/", ty, ty, ty)(complex_div_impl(cls)))
+    # Complex modulo is deprecated in python3
 
 
 class Slice(cgutils.Structure):
