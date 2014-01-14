@@ -210,7 +210,9 @@ class BaseContext(object):
         elif isinstance(ty, types.UniTuple):
             dty = self.get_value_type(ty.dtype)
             return Type.array(dty, ty.count)
-
+        elif isinstance(ty, types.UniTupleIter):
+            stty = self.get_struct_type(self.make_unituple_iter(ty))
+            return Type.pointer(stty)
         return LTYPEMAP[ty]
 
     def is_struct_type(self, ty):
@@ -469,6 +471,8 @@ class BaseContext(object):
         cls, _ = get_complex_info(typ)
         return cls
 
+    def make_unituple_iter(self, typ):
+        return make_unituple_iter(typ)
 #-------------------------------------------------------------------------------
 
 
@@ -1164,6 +1168,13 @@ class RangeIter64(cgutils.Structure):
                ('count', types.int64)]
 
 
+def make_unituple_iter(tupiter):
+    class UniTupleIter(cgutils.Structure):
+        _fields = [('index',  types.intp),
+                   ('tuple',  tupiter.unituple,)]
+    return UniTupleIter
+
+
 @builtin
 @implement(types.range_type, types.range_state32_type, types.int32)
 def range1_32_impl(context, builder, tys, args):
@@ -1332,6 +1343,37 @@ def itervalid_range64_impl(context, builder, tys, args):
     zero = context.get_constant(types.int64, 0)
     gt = builder.icmp(lc.ICMP_SGE, iterobj.count, zero)
     return gt
+
+
+@builtin
+@implement('getiter', types.Any, types.Kind(types.UniTuple))
+def getiter_unituple(context, builder, tys, args):
+    [tupty] = tys
+    [tup] = args
+
+    tupitercls = context.make_unituple_iter(types.UniTupleIter(tupty))
+    iterval = tupitercls(context, builder)
+    iterval.index = context.get_constant(types.intp, 0)
+    iterval.tuple = tup
+    return iterval._getvalue()
+
+
+@builtin
+@implement('iternextsafe', types.Any, types.Kind(types.UniTupleIter))
+def iternextsafe_unituple(context, builder, tys, args):
+    [tupiterty] = tys
+    [tupiter] = args
+
+    tupitercls = context.make_unituple_iter(tupiterty)
+    iterval = tupitercls(context, builder, value=tupiter)
+    tup = iterval.tuple
+    idx = iterval.index
+
+    # TODO lack out-of-bound check
+    res = getitem_unituple(context, builder, [tupiterty.unituple, types.intp],
+                           [tup, idx])
+    iterval.index = builder.add(idx, context.get_constant(types.intp, 1))
+    return res
 
 
 @builtin

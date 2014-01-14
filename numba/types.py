@@ -207,6 +207,20 @@ class UniTuple(Type):
         return hash((self.dtype, self.count))
 
 
+class UniTupleIter(Type):
+    def __init__(self, unituple):
+        name = 'iter(%s)' % unituple
+        super(UniTupleIter, self).__init__(name, param=True)
+        self.unituple = unituple
+
+    def __eq__(self, other):
+        if isinstance(other, UniTupleIter):
+            return self.unituple == other.unituple
+
+    def __hash__(self):
+        return hash(self.unituple)
+
+
 class Tuple(Type):
     def __init__(self, items):
         name = "(%s)" % ', '.join(str(i) for i in items)

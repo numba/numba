@@ -259,12 +259,34 @@ class GetIter(ConcreteTemplate):
 
 
 @builtin
+class GetIterUniTuple(AbstractTemplate):
+    key = "getiter"
+
+    def generic(self, args, kws):
+        assert not kws
+        [tup] = args
+        if isinstance(tup, types.UniTuple):
+            return signature(types.UniTupleIter(tup), tup)
+
+
+@builtin
 class IterNext(ConcreteTemplate):
     key = "iternext"
     cases = [
         signature(types.int32, types.range_iter32_type),
         signature(types.int64, types.range_iter64_type),
     ]
+
+
+@builtin
+class IterNextSafe(AbstractTemplate):
+    key = "iternextsafe"
+
+    def generic(self, args, kws):
+        assert not kws
+        [tupiter] = args
+        if isinstance(tupiter, types.UniTupleIter):
+            return signature(tupiter.unituple.dtype, tupiter)
 
 
 @builtin

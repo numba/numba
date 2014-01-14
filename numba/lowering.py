@@ -263,7 +263,7 @@ class Lower(BaseLower):
                 impl = self.context.get_function(fnty, signature)
                 return impl(self.context, self.builder, argtyps, castvals)
 
-        elif expr.op in ('getiter', 'iternext', 'itervalid'):
+        elif expr.op in ('getiter', 'iternext', 'itervalid', 'iternextsafe'):
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
             signature = self.fndesc.calltypes[expr]
@@ -467,8 +467,16 @@ class PyLower(BaseLower):
             return self.pack_iter(res)
         elif expr.op == 'iternext':
             iterstate = self.loadvar(expr.value.name)
+            iterobj, valid = self.unpack_iter(iterstate)
+            item = self.pyapi.iter_next(iterobj)
+            self.set_iter_valid(iterstate, item)
+            return item
+        elif expr.op == 'iternextsafe':
+            iterstate = self.loadvar(expr.value.name)
             iterobj, _ = self.unpack_iter(iterstate)
             item = self.pyapi.iter_next(iterobj)
+            # TODO need to add exception
+            self.check_error(item)
             self.set_iter_valid(iterstate, item)
             return item
         elif expr.op == 'itervalid':
@@ -589,7 +597,7 @@ class PyLower(BaseLower):
     def pack_iter(self, obj):
         iterstate = PyIterState(self.context, self.builder)
         iterstate.iterator = obj
-        iterstate.valid = cgutils.false_bit
+        iterstate.valid = cgutils.true_bit
         return iterstate._getvalue()
 
     def unpack_iter(self, state):
@@ -622,7 +630,7 @@ class PyLower(BaseLower):
     def return_error_occurred(self):
         self.cleanup()
         # TODO
-        self.builder.unreachable()
+        self.context.return_exc(self.builder)
 
     def getvar(self, name, ltype=None):
         if name not in self.varmap:

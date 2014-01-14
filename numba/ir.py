@@ -122,6 +122,11 @@ class Expr(object):
         return cls(op=op, loc=loc, value=value)
 
     @classmethod
+    def iternextsafe(cls, value, loc):
+        op = 'iternextsafe'
+        return cls(op=op, loc=loc, value=value)
+
+    @classmethod
     def itervalid(cls, value, loc):
         op = 'itervalid'
         return cls(op=op, loc=loc, value=value)

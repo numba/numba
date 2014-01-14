@@ -416,7 +416,7 @@ class TypeInferer(object):
     def typeof_expr(self, inst, target, expr):
         if expr.op == 'call':
             self.typeof_call(inst, target, expr)
-        elif expr.op in ('getiter', 'iternext', 'itervalid'):
+        elif expr.op in ('getiter', 'iternext', 'iternextsafe', 'itervalid'):
             self.typeof_intrinsic_call(inst, target, expr.op, expr.value)
         elif expr.op == 'binop':
             self.typeof_intrinsic_call(inst, target, expr.fn, expr.lhs, expr.rhs)
