@@ -1,6 +1,7 @@
 """
 Stub for early user testing
 """
+from __future__ import print_function, division, absolute_import
 import warnings
 from numba import types, compiler, dispatcher
 

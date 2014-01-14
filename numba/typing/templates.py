@@ -1,7 +1,7 @@
 """
 Define typing templates
 """
-from __future__ import print_function
+from __future__ import print_function, division, absolute_import
 import math
 import sys
 import numpy

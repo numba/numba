@@ -2,8 +2,7 @@
 These type objects do not have a fixed machine representation.  It is up to
 the targets to choose their representation.
 """
-
-import itertools
+from __future__ import print_function, division, absolute_import
 
 
 class Type(object):
@@ -332,102 +331,3 @@ complex_domain = frozenset([complex64, complex128])
 number_domain = real_domain | integer_domain | complex_domain
 
 domains = unsigned_domain, signed_domain, real_domain
-
-
-class TypeLattice(object):
-    def __init__(self):
-        self.conns = {}
-        self.blacklist = set()
-        self.types = set()
-
-    def connect(self, fromty, toty, weight=1.):
-        key = fromty, toty
-        self.conns[key] = weight
-        self.types.add(fromty)
-        self.types.add(toty)
-
-    def forbids(self, fromty, toty):
-        self.blacklist.add((fromty, toty))
-
-    def _set(self, k, v):
-        if k not in self.blacklist:
-            self.conns[k] = v
-
-    def build(self):
-        alltypes = tuple(self.types)
-        pending = []
-
-        # initialize
-        for k in itertools.product(alltypes, alltypes):
-            a, b = k
-            rk = b, a
-            if a == b:
-                self._set(k, 0)
-            elif k not in self.conns:
-                if rk in self.conns:
-                    self._set(k, -self.conns[rk])
-                else:
-                    if k not in self.blacklist:
-                        pending.append(k)
-
-        # span first expansion
-        while pending:
-            before = len(pending)
-            tried = []
-            for k in pending:
-                a, b = k
-                rk = b, a
-                for t in alltypes:
-                    k1 = a, t
-                    k2 = t, b
-                    if k1 in self.conns and k2 in self.conns:
-                        w = self.conns[k1] + self.conns[k2]
-                        self._set(k, w)
-                        self._set(rk, -w)
-                        break
-                else:
-                    tried.append(k)
-
-            pending = tried
-            after = len(pending)
-            assert after < before, ("Not making progress", pending)
-
-        return self.conns
-
-
-def _build_type_lattice():
-    lattice = TypeLattice()
-    # Write out all promotion rules
-    # int
-    lattice.connect(int8, int16)
-    lattice.connect(int16, int32)
-    lattice.connect(int32, int64)
-    # uint
-    lattice.connect(uint8, uint16)
-    lattice.connect(uint16, uint32)
-    lattice.connect(uint32, uint64)
-    # uint -> int
-    lattice.connect(uint32, int32, weight=1.5)
-    lattice.connect(uint64, int64, weight=1.5)
-    # real
-    lattice.connect(float32, float64)
-    # complex
-    lattice.connect(complex64, complex128)
-    # int -> real
-    lattice.connect(int32, float32, weight=1.75)
-    lattice.connect(int32, float64)
-    lattice.connect(int64, float64, weight=1.75)
-    # real -> complex
-    lattice.connect(float32, complex64, weight=1.5)
-    lattice.connect(float64, complex128, weight=1.5)
-    # No dowcast from complex
-    for cty in [complex64, complex128]:
-        for ty in integer_domain | real_domain:
-            lattice.forbids(cty, ty)
-
-    return lattice.build()
-
-
-type_lattice = _build_type_lattice()
-
-

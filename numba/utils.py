@@ -1,4 +1,4 @@
-from __future__ import division, print_function
+from __future__ import print_function, division, absolute_import
 import collections
 import functools
 from timeit import default_timer as timer

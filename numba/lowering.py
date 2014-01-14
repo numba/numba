@@ -1,4 +1,4 @@
-from __future__ import print_function
+from __future__ import print_function, division, absolute_import
 import inspect
 from collections import defaultdict
 from llvm.core import Type, Builder, Module

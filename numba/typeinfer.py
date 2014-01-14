@@ -12,7 +12,7 @@ Constrain propagation is precise and does not regret (no backtracing).
 Constrains push types forward following the dataflow.
 """
 
-from __future__ import print_function
+from __future__ import print_function, division, absolute_import
 from pprint import pprint
 import itertools
 from numba import ir, types, utils, config

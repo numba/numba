@@ -1,6 +1,6 @@
 from __future__ import print_function
 from collections import defaultdict
-from numba import types, utils
+from numba import types, typelattice, utils
 from . import templates
 
 
@@ -13,7 +13,7 @@ class Context(object):
     """A typing context for storing function typing constrain template.
     """
     def __init__(self):
-        self.type_lattice = types.type_lattice
+        self.type_lattice = typelattice.type_lattice
         self.functions = defaultdict(list)
         self.attributes = {}
         self.globals = utils.UniqueDict()

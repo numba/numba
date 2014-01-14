@@ -2,6 +2,7 @@
 From NumbaPro
 
 """
+from __future__ import print_function, division, absolute_import
 import dis, sys
 from collections import namedtuple
 

@@ -1,4 +1,4 @@
-from __future__ import print_function
+from __future__ import print_function, division, absolute_import
 from pprint import pprint
 from collections import namedtuple
 from numba import (bytecode, interpreter, typing, typeinfer, lowering, targets,
