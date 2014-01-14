@@ -2,7 +2,7 @@
 Expose top-level symbols that are safe for import *
 """
 from __future__ import print_function, division, absolute_import
-from numba import types, decorators, testing
+from numba import types, testing, decorators
 
 # Re export decorators
 jit = decorators.jit

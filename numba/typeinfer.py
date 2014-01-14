@@ -157,11 +157,12 @@ class IntrinsicCallConstrain(CallConstrain):
 
 
 class GetAttrConstrain(object):
-    def __init__(self, target, attr, value, loc):
+    def __init__(self, target, attr, value, loc, inst):
         self.target = target
         self.attr = attr
         self.value = value
         self.loc = loc
+        self.inst = inst
 
     def __call__(self, context, typevars):
         valtys = typevars[self.value.name].get()
@@ -170,8 +171,9 @@ class GetAttrConstrain(object):
             try:
                 attrty = context.resolve_getattr(value=ty, attr=self.attr)
             except KeyError:
-                msg = "Unknown attribute '%s' for %s" % (self.attr, ty)
-                raise TypingError(msg, loc=self.loc)
+                args = (self.attr, ty, self.value.name, self.inst)
+                msg = "Unknown attribute '%s' for %s %s %s" % args
+                raise TypingError(msg, loc=self.inst.loc)
             restypes.append(attrty)
         typevars[self.target].add_types(*restypes)
 
@@ -425,7 +427,8 @@ class TypeInferer(object):
                                        expr.index)
         elif expr.op == 'getattr':
             constrain = GetAttrConstrain(target.name, attr=expr.attr,
-                                         value=expr.value, loc=inst.loc)
+                                         value=expr.value, loc=inst.loc,
+                                         inst=inst)
             self.constrains.append(constrain)
         elif expr.op == 'getitem':
             self.typeof_intrinsic_call(inst, target, expr.op, expr.target,
