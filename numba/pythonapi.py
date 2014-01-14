@@ -4,7 +4,7 @@ import llvm.core as lc
 import llvm.ee as le
 from llvm import LLVMException
 import ctypes
-from numba import types, utils, cgutils, _numpyadapt
+from numba import types, utils, cgutils, _numpyadapt, _helperlib
 
 _PyNone = ctypes.c_ssize_t(id(None))
 
@@ -13,6 +13,8 @@ _PyNone = ctypes.c_ssize_t(id(None))
 def fix_python_api():
     le.dylib_add_symbol("Py_None", ctypes.addressof(_PyNone))
     le.dylib_add_symbol("NumbaArrayAdaptor", _numpyadapt.get_ndarray_adaptor())
+    le.dylib_add_symbol("NumbaComplexAdaptor",
+                        _helperlib.get_complex_adaptor())
 
 
 class PythonAPI(object):
@@ -390,23 +392,28 @@ class PythonAPI(object):
             self.decref(fobj)
             return fval
 
-        elif typ == types.complex128:
-            cplxcls = self.context.make_complex(typ)
+        elif typ in (types.complex128, types.complex64):
+            cplxcls = self.context.make_complex(types.complex128)
             cplx = cplxcls(self.context, self.builder)
-            cplx.real = self.complex_real_as_double(obj)
-            cplx.imag = self.complex_imag_as_double(obj)
-            return cplx._getvalue()
+            pcplx = cplx._getvalue()
+            ok = self.complex_adaptor(obj, pcplx)
+            failed = cgutils.is_false(self.builder, ok)
 
-        elif typ == types.complex64:
-            cplxcls = self.context.make_complex(typ)
-            cplx = cplxcls(self.context, self.builder)
-            real = self.complex_real_as_double(obj)
-            imag = self.complex_imag_as_double(obj)
-            cplx.real = self.context.cast(self.builder, real, types.float64,
-                                          types.float32)
-            cplx.imag = self.context.cast(self.builder, imag, types.float64,
-                                          types.float32)
-            return cplx._getvalue()
+            with cgutils.if_unlikely(self.builder, failed):
+                self.builder.ret(self.get_null_object())
+
+            if typ == types.complex64:
+                c64cls = self.context.make_complex(typ)
+                c64 = c64cls(self.context, self.builder)
+                freal = self.context.cast(self.builder, cplx.real,
+                                          types.float64, types.float32)
+                fimag = self.context.cast(self.builder, cplx.imag,
+                                          types.float64, types.float32)
+                c64.real = freal
+                c64.imag = fimag
+                return c64._getvalue()
+            else:
+                return cplx._getvalue()
 
         elif isinstance(typ, types.Array):
             return self.to_native_array(typ, obj)
@@ -473,6 +480,11 @@ class PythonAPI(object):
         fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
         fn.args[1].add_attribute(lc.ATTR_NO_CAPTURE)
         return self.builder.call(fn, (ary, ptr))
+
+    def complex_adaptor(self, cobj, cmplx):
+        fnty = Type.function(Type.int(), [self.pyobj, cmplx.type])
+        fn = self._get_function(fnty, name="NumbaComplexAdaptor")
+        return self.builder.call(fn, [cobj, cmplx])
 
     def get_module_dict_symbol(self):
         pymodname = "__NUMBA_PYMODULE_DICT__"

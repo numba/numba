@@ -104,6 +104,10 @@ def is_not_null(builder, val):
     return builder.icmp(lc.ICMP_NE, null, val)
 
 
+is_true = is_not_null
+is_false = is_null
+
+
 def set_branch_weight(builder, brinst, trueweight, falseweight):
     module = get_module(builder)
     mdid = lc.MetaDataString.get(module, "branch_weights")

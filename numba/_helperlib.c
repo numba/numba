@@ -13,9 +13,33 @@ void* get_cpow_pointer() {
 }
 
 
+static
+int Numba_to_complex(PyObject* obj, Py_complex *out) {
+    PyObject* fobj;
+    if (PyComplex_Check(obj)) {
+        out->real = PyComplex_RealAsDouble(obj);
+        out->imag = PyComplex_ImagAsDouble(obj);
+    } else {
+        fobj = PyNumber_Float(obj);
+        if (!fobj) return 0;
+        out->real = PyFloat_AsDouble(fobj);
+        out->imag = 0.;
+        Py_DECREF(fobj);
+    }
+    return 1;
+}
+
+
+static
+void* get_complex_adaptor() {
+    return PyLong_FromVoidPtr(&Numba_to_complex);
+}
+
+
 static PyMethodDef ext_methods[] = {
 #define declmethod(func) { #func , ( PyCFunction )func , METH_VARARGS , NULL }
     declmethod(get_cpow_pointer),
+    declmethod(get_complex_adaptor),
     { NULL },
 #undef declmethod
 };
