@@ -79,6 +79,16 @@ class Overloads(object):
 
 
 class BaseContext(object):
+    """
+
+    Notes on Structure
+    ------------------
+
+    Most objects are lowered as plain-old-data structure in the generated
+    llvm.  They are passed around by reference (a pointer to the structure).
+    Only POD structure can life across function boundaries by copying the
+    data.
+    """
     def __init__(self):
         self.defns = defaultdict(Overloads)
         self.attrs = utils.UniqueDict()
@@ -170,7 +180,11 @@ class BaseContext(object):
             return self.get_value_type(ty)
 
     def get_return_type(self, ty):
-        return self.get_argument_type(ty)
+        if self.is_struct_type(ty):
+            vty = self.get_value_type(ty)
+            return vty.pointee
+        else:
+            return self.get_argument_type(ty)
 
     def get_value_type(self, ty):
         if (isinstance(ty, types.Dummy) or
@@ -315,8 +329,14 @@ class BaseContext(object):
     def return_value(self, builder, retval):
         fn = cgutils.get_function(builder)
         retptr = fn.args[0]
-        assert retval.type == retptr.type.pointee
-        builder.store(retval, retptr)
+        if (retval.type.kind == lc.TYPE_POINTER and
+                retval.type.pointee.kind == lc.TYPE_STRUCT):
+            # Copy structure
+            builder.store(builder.load(retval), retptr)
+        else:
+            assert retval.type == retptr.type.pointee, \
+                        (str(retval.type), str(retptr.type.pointee))
+            builder.store(retval, retptr)
         builder.ret(RETCODE_OK)
 
     def return_native_none(self, builder):
@@ -406,7 +426,12 @@ class BaseContext(object):
         realargs = [retval] + list(args)
         code = builder.call(callee, realargs)
         status = self.get_return_status(builder, code)
-        return status, builder.load(retval)
+
+        if retval.type.pointee.kind == lc.TYPE_STRUCT:
+            # Handle structures
+            return status, retval
+        else:
+            return status, builder.load(retval)
 
     def get_return_status(self, builder, code):
         norm = builder.icmp(lc.ICMP_EQ, code, RETCODE_OK)

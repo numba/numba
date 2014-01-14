@@ -58,6 +58,8 @@ class TestOperators(unittest.TestCase):
             cfunc = cr.entry_point
 
             for x, y in itertools.product(x_operands, y_operands):
+                print(pyfunc(x, y))
+                print(cfunc(x, y))
                 self.assertTrue(np.allclose(pyfunc(x, y), cfunc(x, y)))
 
     def test_add_ints(self):
@@ -79,7 +81,7 @@ class TestOperators(unittest.TestCase):
         types_list = [(types.byte, types.byte),
                       (types.uint32, types.uint32),
                       (types.uint64, types.uint64)]
-        
+
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
 
         array = np.arange(-10, 10, dtype=np.int32)
@@ -89,7 +91,7 @@ class TestOperators(unittest.TestCase):
 
         arraytype = types.Array(types.int32, 1, 'C')
         types_list = [(arraytype, arraytype)]
-        
+
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=enable_pyobj_flags)
 
@@ -112,7 +114,7 @@ class TestOperators(unittest.TestCase):
 
         arraytype = types.Array(types.float32, 1, 'C')
         types_list = [(arraytype, arraytype)]
-        
+
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=enable_pyobj_flags)
 
@@ -136,7 +138,7 @@ class TestOperators(unittest.TestCase):
         types_list = [(types.byte, types.byte),
                       (types.uint32, types.uint32),
                       (types.uint64, types.uint64)]
-        
+
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
 
         array = np.arange(-10, 10, dtype=np.int32)
@@ -146,7 +148,7 @@ class TestOperators(unittest.TestCase):
 
         arraytype = types.Array(types.int32, 1, 'C')
         types_list = [(arraytype, arraytype)]
-        
+
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=enable_pyobj_flags)
 
@@ -169,7 +171,7 @@ class TestOperators(unittest.TestCase):
 
         arraytype = types.Array(types.float32, 1, 'C')
         types_list = [(arraytype, arraytype)]
-        
+
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=enable_pyobj_flags)
 
@@ -192,7 +194,7 @@ class TestOperators(unittest.TestCase):
         types_list = [(types.byte, types.byte),
                       (types.uint32, types.uint32),
                       (types.uint64, types.uint64)]
-        
+
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
 
         array = np.arange(-10, 10, dtype=np.int32)
@@ -202,7 +204,7 @@ class TestOperators(unittest.TestCase):
 
         arraytype = types.Array(types.int32, 1, 'C')
         types_list = [(arraytype, arraytype)]
-        
+
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=enable_pyobj_flags)
 
@@ -225,7 +227,7 @@ class TestOperators(unittest.TestCase):
 
         arraytype = types.Array(types.float32, 1, 'C')
         types_list = [(arraytype, arraytype)]
-        
+
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=enable_pyobj_flags)
 
@@ -248,7 +250,7 @@ class TestOperators(unittest.TestCase):
         types_list = [(types.byte, types.byte),
                       (types.uint32, types.uint32),
                       (types.uint64, types.uint64)]
-        
+
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
 
         array = np.arange(-10, 10, dtype=np.int32)
@@ -258,7 +260,7 @@ class TestOperators(unittest.TestCase):
 
         arraytype = types.Array(types.int32, 1, 'C')
         types_list = [(arraytype, arraytype)]
-        
+
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=enable_pyobj_flags)
 
@@ -281,7 +283,7 @@ class TestOperators(unittest.TestCase):
 
         arraytype = types.Array(types.float32, 1, 'C')
         types_list = [(arraytype, arraytype)]
-        
+
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=enable_pyobj_flags)
 
@@ -304,7 +306,7 @@ class TestOperators(unittest.TestCase):
         types_list = [(types.byte, types.byte),
                       (types.uint32, types.uint32),
                       (types.uint64, types.uint64)]
-        
+
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
 
         array = np.arange(-10, 10, dtype=np.int32)
@@ -314,7 +316,7 @@ class TestOperators(unittest.TestCase):
 
         arraytype = types.Array(types.int32, 1, 'C')
         types_list = [(arraytype, arraytype)]
-        
+
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=enable_pyobj_flags)
 
@@ -337,7 +339,7 @@ class TestOperators(unittest.TestCase):
 
         arraytype = types.Array(types.float32, 1, 'C')
         types_list = [(arraytype, arraytype)]
-        
+
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=enable_pyobj_flags)
 
@@ -360,7 +362,7 @@ class TestOperators(unittest.TestCase):
         types_list = [(types.byte, types.byte),
                       (types.uint32, types.uint32),
                       (types.uint64, types.uint64)]
-        
+
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
 
         array = np.arange(-10, 10, dtype=np.int32)
@@ -370,7 +372,7 @@ class TestOperators(unittest.TestCase):
 
         arraytype = types.Array(types.int32, 1, 'C')
         types_list = [(arraytype, arraytype)]
-        
+
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=enable_pyobj_flags)
 
@@ -404,7 +406,7 @@ class TestOperators(unittest.TestCase):
 
         arraytype = types.Array(types.float32, 1, 'C')
         types_list = [(arraytype, arraytype)]
-        
+
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=enable_pyobj_flags)
 
@@ -420,6 +422,17 @@ class TestOperators(unittest.TestCase):
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=enable_pyobj_flags)
+
+    def test_add_complex(self):
+        pyfunc = add_usecase
+
+        x_operands = [1+0j, 1j, -1-1j]
+        y_operands = x_operands
+
+        types_list = [(types.complex64, types.complex64),
+                      (types.complex128, types.complex128),]
+
+        self.run_test_floats(pyfunc, x_operands, y_operands, types_list)
 
 
 if __name__ == '__main__':

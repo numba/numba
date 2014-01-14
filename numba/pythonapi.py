@@ -451,6 +451,15 @@ class PythonAPI(object):
             cval = cmplxcls(self.context, self.builder, value=val)
             return self.complex_from_doubles(cval.real, cval.imag)
 
+        elif typ == types.complex64:
+            cmplxcls = self.context.make_complex(typ)
+            cval = cmplxcls(self.context, self.builder, value=val)
+            freal = self.context.cast(self.builder, cval.real,
+                                      types.float32, types.float64)
+            fimag = self.context.cast(self.builder, cval.imag,
+                                      types.float32, types.float64)
+            return self.complex_from_doubles(freal, fimag)
+
         elif typ == types.none:
             ret = self.make_none()
             return ret
