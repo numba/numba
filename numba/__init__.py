@@ -3,7 +3,10 @@ Expose top-level symbols that are safe for import *
 """
 from __future__ import print_function, division, absolute_import
 from . import types, testing, decorators
+from ._version import get_versions
 from .special import *
+
+__version__ = get_versions()['version']
 
 # Re export decorators
 jit = decorators.jit
