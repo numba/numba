@@ -1,5 +1,5 @@
 from __future__ import print_function
-import unittest
+import numba.unittest_support as unittest
 from numba import ir
 
 

@@ -1,7 +1,7 @@
 from __future__ import print_function
 import numpy as np
 import math
-import unittest
+import numba.unittest_support as unittest
 from timeit import default_timer as timer
 from numba.compiler import compile_isolated, compile_extra, Flags
 from numba import types, typing

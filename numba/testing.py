@@ -1,5 +1,5 @@
 from __future__ import print_function, division, absolute_import
-import unittest
+import numba.unittest_support as unittest
 
 
 def test():

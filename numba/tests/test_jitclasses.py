@@ -1,4 +1,4 @@
-import unittest
+import numba.unittest_support as unittest
 from numba import types, typing, compiler, targets, utils
 
 

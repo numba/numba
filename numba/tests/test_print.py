@@ -1,5 +1,5 @@
 from __future__ import print_function
-import unittest
+import numba.unittest_support as unittest
 from contextlib import contextmanager
 from numba.compiler import compile_isolated, Flags
 from numba import types, utils

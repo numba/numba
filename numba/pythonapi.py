@@ -3,7 +3,7 @@ from llvm.core import Type, Constant
 import llvm.core as lc
 import llvm.ee as le
 from llvm import LLVMException
-import ctypes
+import numba.ctypes_support as ctypes
 from numba import types, utils, cgutils, _numpyadapt, _helperlib
 
 _PyNone = ctypes.c_ssize_t(id(None))

@@ -1,5 +1,5 @@
 from __future__ import print_function
-import unittest
+import numba.unittest_support as unittest
 from numba.compiler import compile_isolated
 from numba import types
 from numba.typeinfer import TypingError

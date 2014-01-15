@@ -26,9 +26,12 @@ class Structure(object):
             self._fdmap[k] = (base, Constant.int(Type.int(), i))
 
     def __getattr__(self, field):
-        offset = self._fdmap[field]
-        ptr = self._builder.gep(self._value, offset)
-        return self._builder.load(ptr)
+        if not field.startswith('_'):
+            offset = self._fdmap[field]
+            ptr = self._builder.gep(self._value, offset)
+            return self._builder.load(ptr)
+        else:
+            raise AttributeError(field)
 
     def __setattr__(self, field, value):
         if field.startswith('_'):

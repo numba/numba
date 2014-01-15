@@ -1,7 +1,7 @@
 from __future__ import print_function
-from ctypes import *
+from numba.ctypes_support import *
 import numpy
-import unittest
+import numba.unittest_support as unittest
 from numba._numpyadapt import get_ndarray_adaptor
 
 
