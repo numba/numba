@@ -7,7 +7,7 @@ def test():
     startdir = "numba.tests"
     suite = loader.discover(startdir)
 
-    runner = unittest.TextTestRunner(descriptions=True, verbosity=1,
+    runner = unittest.TextTestRunner(descriptions=True, verbosity=2,
                                      buffer=True)
     result = runner.run(suite)
     return result.wasSuccessful()

@@ -2,6 +2,7 @@ from __future__ import print_function
 import llvm.core as lc
 import llvm.passes as lp
 import llvm.ee as le
+from llvm.workaround import avx_support
 from numba import _dynfunc, _helperlib, config
 from numba.callwrapper import PyCallWrapper
 from .base import BaseContext
@@ -12,6 +13,8 @@ class CPUContext(BaseContext):
     def init(self):
         self.execmodule = lc.Module.new("numba.exec")
         eb = le.EngineBuilder.new(self.execmodule).opt(3)
+        if not avx_support.detect_avx_support():
+            eb.mattrs("-avx")
         self.tm = tm = eb.select_target()
         self.engine = eb.create(tm)
 
