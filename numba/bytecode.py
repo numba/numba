@@ -16,19 +16,8 @@ def get_code_object(obj):
     "Shamelessly borrowed from llpython"
     return getattr(obj, '__code__', getattr(obj, 'func_code', None))
 
-def _make_bytecode_table():
-    version2 = [
-        ('BINARY_DIVIDE', 0),
-        ('DUP_TOPX', 2),
-        ('INPLACE_DIVIDE', 0),
-        ('PRINT_ITEM', 0),
-        ('PRINT_NEWLINE', 0),
-        ('SLICE+0', 0),
-        ('SLICE+1', 0),
-        ('SLICE+2', 0),
-        ('SLICE+3', 0),
-    ]
 
+def _make_bytecode_table():
     if sys.version_info[:2] == (2, 6):  # python 2.6
         version_specific = [
             ('JUMP_IF_FALSE', 2),
@@ -44,7 +33,21 @@ def _make_bytecode_table():
         ]
 
     if sys.version_info[0] == 2:
-        version_specific += version2
+        version_specific += [
+            ('BINARY_DIVIDE', 0),
+            ('DUP_TOPX', 2),
+            ('INPLACE_DIVIDE', 0),
+            ('PRINT_ITEM', 0),
+            ('PRINT_NEWLINE', 0),
+            ('SLICE+0', 0),
+            ('SLICE+1', 0),
+            ('SLICE+2', 0),
+            ('SLICE+3', 0),
+        ]
+    elif sys.version_info[0] == 3:
+        version_specific += [
+            ('DUP_TOP_TWO', 0)
+        ]
 
     bytecodes = [
                     # opname, operandlen

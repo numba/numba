@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 from pprint import pprint
+from numba import utils
 
 
 class DataFlowAnalysis(object):
@@ -35,15 +36,20 @@ class DataFlowAnalysis(object):
         fn = getattr(self, fname)
         fn(info, inst)
 
-
-    def op_DUP_TOPX(self, info, inst):
-        count = inst.arg
-        assert 1 <= count <= 5, "Invalid DUP_TOPX count"
+    def dup_topx(self, info, count):
         stack = [info.pop() for _ in range(count)]
         for val in reversed(stack):
             info.push(val)
         for val in reversed(stack):
             info.push(val)
+
+    def op_DUP_TOPX(self, info, inst):
+        count = inst.arg
+        assert 1 <= count <= 5, "Invalid DUP_TOPX count"
+        self.dup_topx(info, count)
+
+    def op_DUP_TOP_TWO(self, info, inst):
+        self.dup_topx(info, count=2)
 
     def op_ROT_THREE(self, info, inst):
         first = info.pop()
