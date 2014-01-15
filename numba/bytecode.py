@@ -3,10 +3,11 @@ From NumbaPro
 
 """
 from __future__ import print_function, division, absolute_import
-import dis, sys
+import dis
+import sys
 from collections import namedtuple
-
-from .utils import SortedMap
+from numba import utils
+from numba.config import PYVERSION
 
 opcode_info = namedtuple('opcode_info', ['argsize'])
 
@@ -15,14 +16,26 @@ def get_code_object(obj):
     "Shamelessly borrowed from llpython"
     return getattr(obj, '__code__', getattr(obj, 'func_code', None))
 
-
 def _make_bytecode_table():
+    version2 = [
+        ('BINARY_DIVIDE', 0),
+        ('DUP_TOPX', 2),
+        ('INPLACE_DIVIDE', 0),
+        ('PRINT_ITEM', 0),
+        ('PRINT_NEWLINE', 0),
+        ('SLICE+0', 0),
+        ('SLICE+1', 0),
+        ('SLICE+2', 0),
+        ('SLICE+3', 0),
+    ]
+
     if sys.version_info[:2] == (2, 6):  # python 2.6
         version_specific = [
             ('JUMP_IF_FALSE', 2),
             ('JUMP_IF_TRUE', 2),
         ]
-    elif sys.version_info[:2] >= (2, 7):  # python 2.7
+
+    elif sys.version_info[:2] >= (2, 7):  # python 2.7+
         version_specific = [
             ('POP_JUMP_IF_FALSE', 2),
             ('POP_JUMP_IF_TRUE', 2),
@@ -30,10 +43,12 @@ def _make_bytecode_table():
             ('JUMP_IF_FALSE_OR_POP', 2),
         ]
 
+    if sys.version_info[0] == 2:
+        version_specific += version2
+
     bytecodes = [
                     # opname, operandlen
                     ('BINARY_ADD', 0),
-                    ('BINARY_DIVIDE', 0),
                     ('BINARY_TRUE_DIVIDE', 0),
                     ('BINARY_MULTIPLY', 0),
                     ('BINARY_SUBSCR', 0),
@@ -53,13 +68,11 @@ def _make_bytecode_table():
                     ('CALL_FUNCTION', 2),
                     ('COMPARE_OP', 2),
                     ('DUP_TOP', 0),
-                    ('DUP_TOPX', 2),
                     ('FOR_ITER', 2),
                     ('GET_ITER', 0),
                     ('INPLACE_ADD', 0),
                     ('INPLACE_SUBTRACT', 0),
                     ('INPLACE_MULTIPLY', 0),
-                    ('INPLACE_DIVIDE', 0),
                     ('INPLACE_TRUE_DIVIDE', 0),
                     ('INPLACE_FLOOR_DIVIDE', 0),
                     ('INPLACE_MODULO', 0),
@@ -77,8 +90,6 @@ def _make_bytecode_table():
                     ('LOAD_GLOBAL', 2),
                     ('POP_BLOCK', 0),
                     ('POP_TOP', 0),
-                    ('PRINT_ITEM', 0),
-                    ('PRINT_NEWLINE', 0),
                     ('RAISE_VARARGS', 2),
                     ('RETURN_VALUE', 0),
                     ('ROT_THREE', 0),
@@ -92,10 +103,6 @@ def _make_bytecode_table():
                     ('UNARY_INVERT', 0),
                     ('UNARY_NOT', 0),
                     ('UNPACK_SEQUENCE', 2),
-                    ('SLICE+0', 0),
-                    ('SLICE+1', 0),
-                    ('SLICE+2', 0),
-                    ('SLICE+3', 0),
                 ] + version_specific
 
     return dict((dis.opmap[opname], opcode_info(argsize=argsize))
@@ -164,13 +171,16 @@ class ByteCodeInst(object):
 class ByteCodeIter(object):
     def __init__(self, code):
         self.code = code
-        self.iter = ((i, ord(x)) for i, x in enumerate(self.code.co_code))
+        if PYVERSION > (3, 0):
+            self.iter = enumerate(self.code.co_code)
+        else:
+            self.iter = ((i, ord(x)) for i, x in enumerate(self.code.co_code))
 
     def __iter__(self):
         return self
 
     def next(self):
-        offset, opcode = self.iter.next()
+        offset, opcode = next(self.iter)
         try:
             info = BYTECODE_TABLE[opcode]
         except KeyError:
@@ -183,10 +193,12 @@ class ByteCodeIter(object):
             arg = None
         return offset, ByteCodeInst(offset=offset, opcode=opcode, arg=arg)
 
+    __next__ = next
+
     def read_arg(self, size):
         buf = 0
         for i in range(size):
-            _offset, byte = self.iter.next()
+            _offset, byte = utils.iter_next(self.iter)
             buf |= byte << (8 * i)
         return buf
 
@@ -216,7 +228,7 @@ class ByteCode(object):
         if self.code.co_cellvars:
             raise ByteCodeSupportError("does not support cellvars")
 
-        self.table = SortedMap(ByteCodeIter(self.code))
+        self.table = utils.SortedMap(ByteCodeIter(self.code))
 
         labels = set(dis.findlabels(self.code.co_code))
         labels.add(0)
@@ -237,7 +249,7 @@ class ByteCode(object):
                 inst.lineno = known
 
     def __iter__(self):
-        return self.table.itervalues()
+        return utils.dict_itervalues(self.table)
 
     def __getitem__(self, offset):
         return self.table[offset]
@@ -253,5 +265,5 @@ class ByteCode(object):
                 return ' '
 
         return '\n'.join('%s %10d\t%s' % ((label_marker(i),) + i)
-                         for i in self.table.iteritems())
+                         for i in utils.dict_iteritems(self.table))
 

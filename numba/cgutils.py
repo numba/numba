@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 from contextlib import contextmanager
+import functools
 from llvm.core import Constant, Type
 import llvm.core as lc
 
@@ -282,7 +283,7 @@ def get_item_pointer(builder, aryty, ary, inds, wraparound=False):
         # Any layout
         strides = unpack_tuple(builder, ary.strides, count=aryty.ndim)
         dimoffs = [builder.mul(s, i) for s, i in zip(strides, indices)]
-        offset = reduce(builder.add, dimoffs)
+        offset = functools.reduce(builder.add, dimoffs)
         base = builder.ptrtoint(ary.data, offset.type)
         where = builder.add(base, offset)
         ptr = builder.inttoptr(where, ary.data.type)
@@ -334,7 +335,7 @@ def get_item_pointer2(builder, data, shape, strides, layout, inds,
     else:
         # Any layout
         dimoffs = [builder.mul(s, i) for s, i in zip(strides, indices)]
-        offset = reduce(builder.add, dimoffs)
+        offset = functools.reduce(builder.add, dimoffs)
         base = builder.ptrtoint(data, offset.type)
         where = builder.add(base, offset)
         ptr = builder.inttoptr(where, data.type)

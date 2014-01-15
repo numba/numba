@@ -6,6 +6,7 @@ import llvm.core as lc
 from llvm.core import Type, Constant
 import numpy
 
+from numba.config import PYVERSION
 from numba import types, utils, cgutils, typing
 from numba.typing import signature
 from numba.pythonapi import PythonAPI
@@ -120,7 +121,7 @@ class BaseContext(object):
 
     def insert_class(self, cls, attrs):
         clsty = types.Object(cls)
-        for name, vtype in attrs.iteritems():
+        for name, vtype in utils.dict_iteritems(attrs):
             imp = python_attr_impl(clsty, name, vtype)
             self.attrs[imp.key] = imp
 
@@ -653,6 +654,11 @@ def int_sdiv_impl(context, builder, tys, args):
     x, y = args
     div, _ = int_divmod(context, builder, x, y)
     return div
+
+
+def int_floordiv_impl(context, builder, tys, args):
+    x, y = args
+    return builder.sdiv(x, y)
 
 
 def int_srem_impl(context, builder, tys, args):
@@ -1910,7 +1916,10 @@ def numpy_multiply(context, builder, tys, args):
 def numpy_divide(context, builder, tys, args):
     dtype = tys[0].dtype
     if dtype in types.signed_domain:
-        imp = numpy_binary_ufunc(int_sdiv_impl)
+        if PYVERSION >= (3, 0):
+            imp = numpy_binary_ufunc(int_floordiv_impl)
+        else:
+            imp = numpy_binary_ufunc(int_sdiv_impl)
     elif dtype in types.unsigned_domain:
         imp = numpy_binary_ufunc(int_udiv_impl)
     else:

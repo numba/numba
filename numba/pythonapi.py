@@ -3,6 +3,7 @@ from llvm.core import Type, Constant
 import llvm.core as lc
 import llvm.ee as le
 from llvm import LLVMException
+from numba.config import PYVERSION
 import numba.ctypes_support as ctypes
 from numba import types, utils, cgutils, _numpyadapt, _helperlib
 
@@ -141,7 +142,16 @@ class PythonAPI(object):
         return self.builder.call(fn, [lhs, rhs])
 
     def number_divide(self, lhs, rhs):
+        assert PYVERSION < (3, 0)
         fn = self._get_number_operator("Divide")
+        return self.builder.call(fn, [lhs, rhs])
+
+    def number_truedivide(self, lhs, rhs):
+        fn = self._get_number_operator("TrueDivide")
+        return self.builder.call(fn, [lhs, rhs])
+
+    def number_floordivide(self, lhs, rhs):
+        fn = self._get_number_operator("FloorDivide")
         return self.builder.call(fn, [lhs, rhs])
 
     def number_remainder(self, lhs, rhs):
@@ -235,12 +245,20 @@ class PythonAPI(object):
 
     def string_as_string(self, strobj):
         fnty = Type.function(self.cstring, [self.pyobj])
-        fn = self._get_function(fnty, name="PyString_AsString")
+        if PYVERSION >= (3, 0):
+            fname = "PyUnicode_AsUTF8"
+        else:
+            fname = "PyString_AsString"
+        fn = self._get_function(fnty, name=fname)
         return self.builder.call(fn, [strobj])
 
     def string_from_string_and_size(self, string):
         fnty = Type.function(self.pyobj, [self.cstring, self.py_ssize_t])
-        fn = self._get_function(fnty, name="PyString_FromStringAndSize")
+        if PYVERSION >= (3, 0):
+            fname = "PyUnicode_FromStringAndSize"
+        else:
+            fname = "PyString_FromStringAndSize"
+        fn = self._get_function(fnty, name=fname)
         cstr = self.context.insert_const_string(self.module, string)
         sz = self.context.get_constant(types.intp, len(string))
         return self.builder.call(fn, [cstr, sz])
@@ -325,9 +343,8 @@ class PythonAPI(object):
     def print_object(self, obj):
         strobj = self.object_str(obj)
         cstr = self.string_as_string(strobj)
-        self.sys_write_stdout(cstr)
-        endline = self.context.insert_const_string(self.module, "\n")
-        self.sys_write_stdout(endline)
+        fmt = self.context.insert_const_string(self.module, "%s\n")
+        self.sys_write_stdout(fmt, cstr)
         self.decref(strobj)
 
     def get_null_object(self):

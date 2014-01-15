@@ -57,26 +57,29 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags):
     # Translate to IR
     interp = translate_stage(func)
 
+    fail_reason = None
+    use_python_mode = False
+
     if not flags.force_pyobject:
         try:
             # Type inference
             typemap, restype, calltypes = type_inference_stage(typingctx, interp,
                                                                args, return_type)
-        except Exception, fail_reason:
+        except Exception as e:
             if not flags.enable_pyobject:
                 raise
 
-            func, fnptr, lfunc = py_lowering_stage(targetctx, interp)
-        else:
-            fail_reason = None
-            func, fnptr, lfunc = native_lowering_stage(targetctx, interp,
-                                                       typemap, restype,
-                                                       calltypes)
-
+            fail_reason = e
+            use_python_mode = True
     else:
         # Forced to use all python mode
+        use_python_mode = True
+
+    if use_python_mode:
         func, fnptr, lfunc = py_lowering_stage(targetctx, interp)
-        fail_reason = None
+    else:
+        func, fnptr, lfunc = native_lowering_stage(targetctx, interp,
+                                                   typemap, restype, calltypes)
 
     cr = compile_result(typing_context=typingctx,
                         target_context=targetctx,

@@ -3,6 +3,7 @@ import numba.unittest_support as unittest
 import numpy as np
 from numba.compiler import compile_isolated, Flags
 from numba import types, typeinfer
+from numba.config import PYVERSION
 from numba.tests.true_div_usecase import truediv_usecase
 import itertools
 
@@ -46,6 +47,7 @@ class TestOperators(unittest.TestCase):
             cfunc = cr.entry_point
 
             for x, y in itertools.product(x_operands, y_operands):
+                print(pyfunc(x, y), '\n', cfunc(x, y))
                 self.assertTrue(np.all(pyfunc(x, y) == cfunc(x, y)))
 
     def run_test_floats(self, pyfunc, x_operands, y_operands, types_list,
@@ -233,6 +235,11 @@ class TestOperators(unittest.TestCase):
                            flags=enable_pyobj_flags)
 
     def test_div_ints(self):
+        if PYVERSION >= (3, 0):
+            # Due to true division returning float
+            tester = self.run_test_floats
+        else:
+            tester = self.run_test_ints
 
         pyfunc = div_usecase
 
@@ -243,7 +250,7 @@ class TestOperators(unittest.TestCase):
                       (types.int64, types.int64),
                       (types.pyobject, types.pyobject)]
 
-        self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
+        tester(pyfunc, x_operands, y_operands, types_list)
 
         x_operands = [0, 1, 2, 3]
         y_operands = [1, 2, 3]
@@ -252,9 +259,9 @@ class TestOperators(unittest.TestCase):
                       (types.uint32, types.uint32),
                       (types.uint64, types.uint64)]
 
-        self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
+        tester(pyfunc, x_operands, y_operands, types_list)
 
-        array = np.arange(-10, 10, dtype=np.int32)
+        array = np.array([-10, -9, -2, -1, 1, 2, 9, 10], dtype=np.int32)
 
         x_operands = [array]
         y_operands = [array]
@@ -508,7 +515,7 @@ class TestOperators(unittest.TestCase):
 
         try:
             cres = compile_isolated(pyfunc, (types.complex64, types.complex64))
-        except typeinfer.TypingError, e:
+        except typeinfer.TypingError as e:
             e.msg.startswith("Undeclared %(complex64, complex64)")
         else:
             self.fail("Complex % should trigger an undeclared error")

@@ -6,6 +6,7 @@ import math
 import sys
 import numpy
 from numba import types
+from numba.config import PYVERSION
 
 
 class Signature(object):
@@ -208,7 +209,8 @@ def builtin_global(v, t):
 
 
 builtin_global(range, types.range_type)
-builtin_global(xrange, types.range_type)
+if PYVERSION < (3, 0):
+    builtin_global(xrange, types.range_type)
 builtin_global(len, types.len_type)
 builtin_global(slice, types.slice_type)
 builtin_global(abs, types.abs_type)

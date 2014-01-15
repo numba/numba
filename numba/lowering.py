@@ -43,7 +43,7 @@ def _describe(interp):
 def describe_function(interp, typemap, restype, calltypes):
     fname, pymod, doc, args, kws = _describe(interp)
     native = True
-    sortedblocks = utils.SortedMap(interp.blocks.iteritems())
+    sortedblocks = utils.SortedMap(utils.dict_iteritems(interp.blocks))
     fd = FunctionDescriptor(native, pymod, fname, doc, sortedblocks,
                             typemap, restype, calltypes, args, kws)
     return fd
@@ -56,7 +56,7 @@ def describe_pyfunction(interp):
     restype = types.pyobject
     calltypes = defdict()
     native = False
-    sortedblocks = utils.SortedMap(interp.blocks.iteritems())
+    sortedblocks = utils.SortedMap(utils.dict_iteritems(interp.blocks))
     fd = FunctionDescriptor(native, pymod, fname, doc, sortedblocks,
                             typemap, restype,  calltypes, args, kws)
     return fd
@@ -336,6 +336,8 @@ PYTHON_OPMAP = {
      '-': "number_subtract",
      '*': "number_multiply",
     '/?': "number_divide",
+     '/': "number_truedivide",
+    '//': "number_floordivide",
      '%': "number_remainder",
     '**': "number_power",
 }
@@ -655,7 +657,7 @@ class PyLower(BaseLower):
         self.decref(old)
 
     def cleanup(self):
-        for var in self.varmap.itervalues():
+        for var in utils.dict_itervalues(self.varmap):
             self.decref(self.builder.load(var))
 
     def alloca(self, name, ltype=None):

@@ -3,6 +3,7 @@ import collections
 import functools
 from timeit import default_timer as timer
 import numpy
+from numba.config import PYVERSION
 
 
 class ConfigOptions(object):
@@ -48,7 +49,7 @@ class SortedMap(collections.Mapping):
         return len(self._values)
 
     def __iter__(self):
-        return (k for k, v in self._values)
+        return iter(k for k, v in self._values)
 
 
 class SortedSet(collections.Set):
@@ -150,3 +151,45 @@ def benchmark(func, maxsec=.1, maxct=1000000):
             break
 
     return BenchmarkResult(func, records)
+
+
+# Other common python2/3 adaptors
+# Copied from Blaze which borrowed from six
+
+if PYVERSION >= (3, 0):
+    def dict_iteritems(d):
+        return d.items().__iter__()
+
+    def dict_itervalues(d):
+        return d.values().__iter__()
+
+    def dict_values(d):
+        return list(d.values())
+
+    def dict_keys(d):
+        return list(d.keys())
+
+    def iter_next(it):
+        return it.__next__()
+
+    def func_globals(f):
+        return f.__globals__
+
+else:
+    def dict_iteritems(d):
+        return d.iteritems()
+
+    def dict_itervalues(d):
+        return d.itervalues()
+
+    def dict_values(d):
+        return d.values()
+
+    def dict_keys(d):
+        return d.keys()
+
+    def iter_next(it):
+        return it.next()
+
+    def func_globals(f):
+        return f.func_globals

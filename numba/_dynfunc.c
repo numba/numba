@@ -35,7 +35,7 @@ make_function(PyObject *self, PyObject *args)
     desc = malloc(sizeof(PyMethodDef));
     desc->ml_name = mlname;
     desc->ml_meth = (void*)fnaddr;
-    desc->ml_flags = METH_KEYWORDS;
+    desc->ml_flags = METH_VARARGS | METH_KEYWORDS;
     desc->ml_doc = mldoc;
 
     return PyCFunction_NewEx(desc, NULL, module);

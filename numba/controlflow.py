@@ -1,4 +1,8 @@
 from __future__ import print_function, division, absolute_import
+import functools
+from numba import utils
+
+
 NEW_BLOCKERS = frozenset(['SETUP_LOOP'])
 
 
@@ -46,6 +50,7 @@ class ControlFlowAnalysis(object):
         self._force_new_block = True
         self._curblock = None
         self._blockstack = []
+        self._loops = []
 
     def iterblocks(self):
         """
@@ -78,7 +83,7 @@ class ControlFlowAnalysis(object):
                 blk.outgoing.add(nxt)
 
         # Fill incoming
-        for b in self.blocks.itervalues():
+        for b in utils.dict_itervalues(self.blocks):
             for out in b.outgoing:
                 self.blocks[out].incoming.add(b.offset)
 
@@ -94,7 +99,15 @@ class ControlFlowAnalysis(object):
         else:
             raise AssertionError("No live block that exits!?")
 
-        self.backbone = self.doms[lastblk]
+        # Find backbone
+        backbone = set(self.doms[lastblk])
+        # Filter out in loop blocks (Assuming no other cyclic control blocks)
+        inloopblocks = set()
+        for b in self.blocks.keys():
+            for s, e in self._loops:
+                if s <= b < e:
+                    inloopblocks.add(b)
+        self.backbone = backbone - inloopblocks
 
     def dead_block_elimin(self):
         liveset = set([0])
@@ -138,7 +151,9 @@ class ControlFlowAnalysis(object):
         self.blockseq.append(inst.offset)
 
     def op_SETUP_LOOP(self, inst):
-        self._blockstack.append(inst.get_jump_target())
+        end = inst.get_jump_target()
+        self._blockstack.append(end)
+        self._loops.append((inst.offset, end))
 
     def op_POP_BLOCK(self, inst):
         self._blockstack.pop()
@@ -185,7 +200,8 @@ def find_dominators(blocks):
     doms[0].add(0)
     allblks = set(blocks)
 
-    remainblks = frozenset(blk.offset for blk in blocks.values()
+    remainblks = frozenset(blk.offset
+                           for blk in utils.dict_values(blocks)
                            if blk.offset != 0)
     for blk in remainblks:
         doms[blk] |= allblks
@@ -199,7 +215,7 @@ def find_dominators(blocks):
             if not ps:
                 p = set()
             else:
-                p = reduce(set.intersection, ps)
+                p = functools.reduce(set.intersection, ps)
             new = set([blk]) | p
             if new != d:
                 doms[blk] = new

@@ -1,5 +1,6 @@
 from __future__ import print_function
 from collections import defaultdict
+import functools
 from numba import types, typelattice, utils
 from . import templates
 
@@ -102,7 +103,7 @@ class Context(object):
         return self.type_lattice.get((fromty, toty))
 
     def unify_types(self, *types):
-        return reduce(self.unify_pairs, types)
+        return functools.reduce(self.unify_pairs, types)
 
     def unify_pairs(self, first, second):
         """

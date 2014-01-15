@@ -1,9 +1,12 @@
 from __future__ import print_function, division, absolute_import
-import __builtin__ as builtins
+try:
+    import __builtin__ as builtins
+except ImportError:
+    import builtins
 import sys
 import dis
 import inspect
-from numba import ir, controlflow, dataflow
+from numba import ir, controlflow, dataflow, utils
 
 
 class Interpreter(object):
@@ -61,7 +64,7 @@ class Interpreter(object):
         self.syntax_info = [syn for syn in self.syntax_info if syn.valid()]
 
     def verify(self):
-        for b in self.blocks.itervalues():
+        for b in utils.dict_itervalues(self.blocks):
             b.verify()
 
     def _iter_inst(self):
@@ -85,7 +88,7 @@ class Interpreter(object):
         # Insert PHI
         self._insert_phi()
         # Notify listeners for the new block
-        for fn in self._block_actions.itervalues():
+        for fn in utils.dict_itervalues(self._block_actions):
             fn(self.current_block_offset, self.current_block)
 
     def _insert_phi(self):
@@ -94,7 +97,7 @@ class Interpreter(object):
             incomings = self.cfa.blocks[self.current_block_offset].incoming
             phivar = self.dfainfo.incomings[0]
             if len(incomings) == 1:
-                ib = iter(incomings).next()
+                ib = utils.iter_next(iter(incomings))
                 lingering = self.dfa.infos[ib].stack
                 assert len(lingering) == 1
                 iv = lingering[0]
@@ -122,7 +125,7 @@ class Interpreter(object):
         as a builtins (second).  If both failed, return a ir.UNDEFINED.
         """
         try:
-            return self.bytecode.func.func_globals[name]
+            return utils.func_globals(self.bytecode.func)[name]
         except KeyError:
             return getattr(builtins, name, ir.UNDEFINED)
 

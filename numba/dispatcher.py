@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 import numpy
+from numba.config import PYVERSION
 from numba import _dispatcher, types, compiler, targets, typing
 
 
@@ -107,9 +108,13 @@ def read_flags(flags, kws):
 DTYPE_MAPPING = {}
 
 
+INT_TYPES = (int,)
+if PYVERSION < (3, 0):
+    INT_TYPES += (long,)
+
 def typeof_pyval(val):
     # TODO make this faster
-    if isinstance(val, (int, long)):
+    if isinstance(val, INT_TYPES):
         return types.int32
 
     elif isinstance(val, float):

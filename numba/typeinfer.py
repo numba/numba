@@ -13,9 +13,19 @@ Constrains push types forward following the dataflow.
 """
 
 from __future__ import print_function, division, absolute_import
+try:
+    import __builtin__ as builtins
+except ImportError:
+    import builtins
 from pprint import pprint
 import itertools
 from numba import ir, types, utils, config
+from numba.config import PYVERSION
+
+
+RANGE_ITER_OBJECTS = (builtins.range,)
+if PYVERSION < (3, 0):
+    RANGE_ITER_OBJECTS += (builtins.xrange,)
 
 
 class TypingError(Exception):
@@ -230,7 +240,7 @@ class TypeInferer(object):
 
     def dump(self):
         print('---- type variables ----')
-        pprint(self.typevars.values())
+        pprint(utils.dict_values(self.typevars))
 
     def seed_type(self, name, typ):
         """All arguments should be seeded.
@@ -240,13 +250,13 @@ class TypeInferer(object):
     def seed_return(self, typ):
         """Seeding of return value is optional.
         """
-        for blk in self.blocks.itervalues():
+        for blk in utils.dict_itervalues(self.blocks):
             inst = blk.terminator
             if isinstance(inst, ir.Return):
                 self.typevars[inst.value.name].add_types(typ)
 
     def build_constrain(self):
-        for blk in self.blocks.itervalues():
+        for blk in utils.dict_itervalues(self.blocks):
             for inst in blk.body:
                 self.constrain_statement(inst)
 
@@ -310,7 +320,7 @@ class TypeInferer(object):
 
     def get_return_type(self, typemap):
         rettypes = set()
-        for blk in self.blocks.itervalues():
+        for blk in utils.dict_itervalues(self.blocks):
             term = blk.terminator
             if isinstance(term, ir.Return):
                 rettypes.add(typemap[term.value.name])
@@ -334,7 +344,7 @@ class TypeInferer(object):
         The sum of all lengths of type sets is a cheap and accurate
         description of our progress.
         """
-        return sum(len(tv) for tv in self.typevars.itervalues())
+        return sum(len(tv) for tv in utils.dict_itervalues(self.typevars))
 
     def constrain_statement(self, inst):
         if isinstance(inst, ir.Assign):
@@ -382,7 +392,8 @@ class TypeInferer(object):
             raise TypingError(msg, loc=inst.loc)
 
     def typeof_global(self, inst, target, gvar):
-        if gvar.name in ('range', 'xrange') and gvar.value in (range, xrange):
+        if (gvar.name in ('range', 'xrange') and
+                    gvar.value in RANGE_ITER_OBJECTS):
             gvty = self.context.get_global_type(gvar.value)
             self.typevars[target.name].lock(gvty)
             self.assumed_immutables.add(inst)

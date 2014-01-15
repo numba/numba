@@ -2,11 +2,10 @@ from __future__ import print_function
 import numba.unittest_support as unittest
 from contextlib import contextmanager
 from numba.compiler import compile_isolated, Flags
-from numba import types, utils
-from numba.tests import usecases
+from numba import types
+from numba.io_support import StringIO
 import numpy as np
 import sys
-from StringIO import StringIO
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -49,7 +48,9 @@ class TestPrint(unittest.TestCase):
         with swap_stdout():
             cfunc(1.1)
             # Float32 will loose precision
-            self.assertEqual(sys.stdout.getvalue().strip(), '1.10000002384')
+            got = sys.stdout.getvalue().strip()
+            expect = '1.10000002384'
+            self.assertTrue(got.startswith(expect))
 
         cr = compile_isolated(pyfunc, (types.float64,))
         cfunc = cr.entry_point

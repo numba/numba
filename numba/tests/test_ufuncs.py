@@ -136,7 +136,7 @@ class TestUFuncs(unittest.TestCase):
                       np.arange(1, 3, 0.1, dtype='f8')]
 
         for arraytype, x_operand, y_operand in zip(arraytypes, x_operands,
-                                                    y_operands):
+                                                   y_operands):
             for ufunc in ufunc_list:
                 pyfunc = ufunc
                 cr = compile_isolated(pyfunc, (arraytype, arraytype, arraytype))
