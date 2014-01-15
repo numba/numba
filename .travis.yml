@@ -15,7 +15,7 @@ branches:
 
 before_install:
   # Install Miniconda
-  - if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then wget http://repo.continuum.io/miniconda/Miniconda-2.0.0-Linux-x86_64.sh -O miniconda.sh; else wget http://repo.continuum.io/miniconda/Miniconda3-2.0.0-Linux-x86_64.sh -O miniconda.sh; fi
+  - if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then wget http://repo.continuum.io/miniconda/Miniconda3-2.2.2-Linux-x86.sh -O miniconda.sh; else wget http://repo.continuum.io/miniconda/Miniconda3-2.2.2-Linux-x86_64.sh -O miniconda.sh; fi
   - chmod +x miniconda.sh
   - ./miniconda.sh -b
   - export PATH=/home/travis/anaconda/bin:$PATH
@@ -25,8 +25,9 @@ before_install:
   - sudo ln -s /run/shm /dev/shm
 
 install:
+    - conda update --yes conda
     # Install NumPy LLVM
-    - conda install --yes pip python=$TRAVIS_PYTHON_VERSION numpy llvm
+    - conda install --yes python=$TRAVIS_PYTHON_VERSION numpy llvm pip
     # Install unittest2 for Python 2
     - if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then conda install unittest2; fi
     # Install llvmpy
