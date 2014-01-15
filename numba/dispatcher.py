@@ -115,6 +115,9 @@ def typeof_pyval(val):
     elif isinstance(val, float):
         return types.float64
 
+    elif isinstance(val, complex):
+        return types.complex128
+
     elif isinstance(val, numpy.ndarray):
         # TODO complete dtype mapping
         dtype = FROM_DTYPE[val.dtype]

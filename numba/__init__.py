@@ -2,7 +2,8 @@
 Expose top-level symbols that are safe for import *
 """
 from __future__ import print_function, division, absolute_import
-from numba import types, testing, decorators
+from . import types, testing, decorators
+from .special import *
 
 # Re export decorators
 jit = decorators.jit
@@ -24,3 +25,4 @@ double = float64 = types.float64
 
 # Re-export test entrypoint
 test = testing.test
+
