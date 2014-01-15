@@ -3,6 +3,7 @@ import unittest
 import numpy as np
 from numba.compiler import compile_isolated, Flags
 from numba import types, typeinfer
+from numba.tests.true_div_usecase import truediv_usecase
 import itertools
 
 Noflags = Flags()
@@ -287,6 +288,30 @@ class TestOperators(unittest.TestCase):
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=enable_pyobj_flags)
 
+    def test_truediv_ints(self):
+        pyfunc = truediv_usecase
+
+        x_operands = [0, 1, 2, 3]
+        y_operands = [1, 1, 2, 3]
+
+        types_list = [(types.uint32, types.uint32),
+                      (types.uint64, types.uint64),
+                      (types.int32, types.int32),
+                      (types.int64, types.int64)]
+
+        self.run_test_floats(pyfunc, x_operands, y_operands, types_list)
+
+    def test_truediv_floats(self):
+        pyfunc = truediv_usecase
+
+        x_operands = [-111.111, 0.0, 2.2]
+        y_operands = [-2.2, 1.0, 111.111]
+
+        types_list = [(types.float32, types.float32),
+                      (types.float64, types.float64)]
+
+        self.run_test_floats(pyfunc, x_operands, y_operands, types_list)
+
     def test_mod_ints(self):
 
         pyfunc = mod_usecase
@@ -458,6 +483,17 @@ class TestOperators(unittest.TestCase):
 
     def test_div_complex(self):
         pyfunc = div_usecase
+
+        x_operands = [1+0j, 1j, -1-1j]
+        y_operands = [1, 2, 3]
+
+        types_list = [(types.complex64, types.complex64),
+                      (types.complex128, types.complex128),]
+
+        self.run_test_floats(pyfunc, x_operands, y_operands, types_list)
+
+    def test_truediv_complex(self):
+        pyfunc = truediv_usecase
 
         x_operands = [1+0j, 1j, -1-1j]
         y_operands = [1, 2, 3]
