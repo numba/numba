@@ -1271,7 +1271,7 @@ def range2_32_impl(context, builder, tys, args):
 @builtin
 @implement(types.range_type, types.range_state32_type, types.int32,
            types.int32, types.int32)
-def range2_32_impl(context, builder, tys, args):
+def range3_32_impl(context, builder, tys, args):
     [start, stop, step] = args
     state = RangeState32(context, builder)
 
@@ -1356,7 +1356,7 @@ def range2_64_impl(context, builder, tys, args):
 
 @builtin
 @implement(types.range_type, types.range_state64_type, types.int64,
-           types.int64)
+           types.int64, types.int64)
 def range3_64_impl(context, builder, tys, args):
     [start, stop, step] = args
     state = RangeState64(context, builder)

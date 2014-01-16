@@ -245,9 +245,12 @@ class Range(ConcreteTemplate):
     key = types.range_type
     cases = [
         signature(types.range_state32_type, types.int32),
-        signature(types.range_state32_type, types.int32, types.int32),
+        signature(types.range_state32_type, types.int32, types.int32,
+                  types.int32),
         signature(types.range_state64_type, types.int64),
         signature(types.range_state64_type, types.int64, types.int64),
+        signature(types.range_state64_type, types.int64, types.int64,
+                  types.int64),
     ]
 
 
