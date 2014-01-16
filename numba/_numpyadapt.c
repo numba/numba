@@ -13,6 +13,7 @@ int adapt_ndarray(PyObject *obj, void* arystruct) {
     void **dataptr;
     npy_intp *dimsptr;
     npy_intp *stridesptr;
+    int i;
 
     if (!PyArray_Check(obj)) {
         return -1;
@@ -28,7 +29,6 @@ int adapt_ndarray(PyObject *obj, void* arystruct) {
     dimsptr = (npy_intp*)(dataptr + 1);
     stridesptr = dimsptr + ndim;
 
-    int i;
     for (i = 0; i < ndim; ++i) {
         dimsptr[i] = dims[i];
         stridesptr[i] = strides[i];

@@ -1,4 +1,5 @@
 from distutils.core import setup, Extension
+import os
 import numpy
 import versioneer
 
@@ -13,18 +14,28 @@ setup_args = {
     'long_description': open('README.md').read(),
 }
 
+GCCFLAGS = ["-std=c89", "-Wdeclaration-after-statement", "-Werror"]
 
-ext_dynfunc = Extension(name='numba._dynfunc', sources=['numba/_dynfunc.c'])
+if os.environ.get("NUMBA_GCC_FLAGS"):
+    CFLAGS = GCCFLAGS
+else:
+    CFLAGS = []
+
+ext_dynfunc = Extension(name='numba._dynfunc', sources=['numba/_dynfunc.c'],
+                        extra_compile_args=CFLAGS)
 
 ext_numpyadapt = Extension(name='numba._numpyadapt',
                            sources=['numba/_numpyadapt.c'],
-                           include_dirs=[numpy.get_include()])
+                           include_dirs=[numpy.get_include()],
+                           extra_compile_args=CFLAGS)
 
 ext_dispatcher = Extension(name="numba._dispatcher",
-                           sources=['numba/_dispatcher.c'])
+                           sources=['numba/_dispatcher.c',],
+                           extra_compile_args=CFLAGS)
 
 ext_helperlib = Extension(name="numba._helperlib",
-                          sources=["numba/_helperlib.c"])
+                          sources=["numba/_helperlib.c"],
+                          extra_compile_args=CFLAGS)
 
 ext_modules = [ext_dynfunc, ext_numpyadapt, ext_dispatcher, ext_helperlib]
 
