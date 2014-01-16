@@ -11,7 +11,7 @@ typedef struct DefnList
 
 
 typedef struct DispatcherObject{
-    PyObject_HEAD;
+    PyObject_HEAD
     DefnList *defns;        /* singly-linked list */
 } DispatcherObject;
 
