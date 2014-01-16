@@ -47,7 +47,6 @@ class TestOperators(unittest.TestCase):
             cfunc = cr.entry_point
 
             for x, y in itertools.product(x_operands, y_operands):
-                print(pyfunc(x, y), '\n', cfunc(x, y))
                 self.assertTrue(np.all(pyfunc(x, y) == cfunc(x, y)))
 
     def run_test_floats(self, pyfunc, x_operands, y_operands, types_list,
