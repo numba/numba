@@ -12,14 +12,21 @@ def autojit(*args, **kws):
 
 
 def jit(*args, **kws):
-    if isinstance(args[0], (tuple, types.Prototype)):
+    if isinstance(args[0], (str, tuple, types.Prototype)):
         [sig] = args
+
+        sig = sig if not isinstance(sig, str) else _parse_signature(sig)
+
         return _jit(sig, kws)
     else:
         [pyfunc] = args
         disp = dispatcher.Overloaded(py_func=pyfunc)
         return disp
 
+
+def _parse_signature(signature_str):
+    # Just eval signature_str using the types submodules as globals
+    return eval(signature_str, {}, types.__dict__)
 
 def _jit(sig, kws):
     def wrapper(func):
