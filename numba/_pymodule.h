@@ -1,3 +1,6 @@
+#ifndef NUMBA_PY_MODULE_H_
+#define NUMBA_PY_MODULE_H_
+
 #include <Python.h>
 
 #if PY_MAJOR_VERSION >= 3
@@ -17,3 +20,7 @@
           ob = Py_InitModule3(name, methods, doc);
   #define MOD_INIT_EXEC(name) init##name();
 #endif
+
+
+#endif /* NUMBA_PY_MODULE_H_ */
+
