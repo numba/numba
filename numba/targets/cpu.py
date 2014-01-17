@@ -7,7 +7,7 @@ from numba import _dynfunc, _helperlib, config
 from numba.callwrapper import PyCallWrapper
 from .base import BaseContext
 from numba import utils
-from numba.targets.intrinsics import IntrinsicMapping
+from numba.targets import intrinsics
 
 
 class CPUContext(BaseContext):
@@ -28,10 +28,23 @@ class CPUContext(BaseContext):
         # self.pm.add(lp.Pass.new("mem2reg"))
         # self.pm.add(lp.Pass.new("simplifycfg"))
 
+        self.cmath_provider = {}
         self.map_math_functions()
 
     def map_math_functions(self):
         le.dylib_add_symbol("numba.math.cpow", _helperlib.get_cpow_pointer())
+
+        # List available C-math
+        for fname in intrinsics.INTR_MATH:
+            if le.dylib_address_of_symbol(fname):
+                # Exist
+                self.cmath_provider[fname] = 'builtin'
+            else:
+                # Non-exist
+                # Bind from C code
+                imp = getattr(_helperlib, "get_%s" % fname)
+                le.dylib_add_symbol(fname, imp())
+                self.cmath_provider[fname] = 'indirect'
 
     def dynamic_map_function(self, func):
         name, ptr = self.native_funcs[func]
@@ -41,7 +54,7 @@ class CPUContext(BaseContext):
         self.pm.run(module)
 
     def get_executable(self, func, fndesc):
-        im = IntrinsicMapping(self)
+        im = intrinsics.IntrinsicMapping(self)
         im.run(func.module)
 
         if not fndesc.native:

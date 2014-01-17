@@ -6,11 +6,28 @@ import llvm.core as lc
 
 
 class IntrinsicMapping(object):
-    def __init__(self, context, mapping=None):
+    def __init__(self, context, mapping=None, availintr=None):
+        """
+        Args
+        ----
+        mapping:
+            Optional. Intrinsic name to alternative implementation.
+            Default to global MAPPING
+
+        availintr:
+            Optional.  Available intrinsic set.
+            Default to global AVAILINTR
+
+        """
         self.context = context
         self.mapping = mapping or MAPPING
+        self.availintr = availintr or AVAILINTR
 
     def run(self, module):
+        self.apply_mapping(module)
+        self.translate_intrinsic_to_cmath(module)
+
+    def apply_mapping(self, module):
         modified = []
         for fn in module.functions:
             if fn.is_declaration and fn.name in self.mapping:
@@ -24,6 +41,20 @@ class IntrinsicMapping(object):
 
         if __debug__:
             module.verify()
+
+    def translate_intrinsic_to_cmath(self, module):
+        for fn in self._iter_unavail(module):
+            # Rename unavailable intrinsic to libc calls
+            fn.name = INTR_TO_CMATH[fn.name]
+
+        if __debug__:
+            module.verify()
+
+    def _iter_unavail(self, module):
+        for fn in module.functions:
+            if fn.is_declaration and fn.name.startswith('llvm.'):
+                if fn.name not in self.availintr:
+                    yield fn
 
 
 def powi_as_pow(context, fn):
@@ -39,3 +70,40 @@ MAPPING = {
     "llvm.powi.f64": powi_as_pow,
 }
 
+
+AVAILINTR = ()
+
+
+INTR_TO_CMATH = {
+    "llvm.pow.f32": "powf",
+    "llvm.pow.f64": "pow",
+
+    "llvm.sin.f32": "sinf",
+    "llvm.sin.f64": "sin",
+
+    "llvm.cos.f32": "cosf",
+    "llvm.cos.f64": "cos",
+
+    "llvm.sqrt.f32": "sqrtf",
+    "llvm.sqrt.f64": "sqrt",
+
+    "llvm.exp.f32": "expf",
+    "llvm.exp.f64": "exp",
+
+    "llvm.log.f32": "logf",
+    "llvm.log.f64": "log",
+
+    "llvm.log10.f32": "log10f",
+    "llvm.log10.f64": "log10",
+
+    "llvm.fabs.f32": "fabsf",
+    "llvm.fabs.f64": "fabs",
+
+    "llvm.floor.f32": "floorf",
+    "llvm.floor.f64": "floor",
+
+    "llvm.ceil.f32": "ceilf",
+    "llvm.ceil.f64": "ceil",
+}
+
+INTR_MATH = list(INTR_TO_CMATH.values())
