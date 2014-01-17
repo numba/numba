@@ -157,6 +157,11 @@ class Expr(object):
             args = ('%s=%s' % (k, v) for k, v in self._kws.items())
             return '%s(%s)' % (self.op, ', '.join(args))
 
+    def list_vars(self):
+        for v in self._kws.values():
+            if isinstance(v, Var):
+                return v
+
 
 class SetItem(Stmt):
     def __init__(self, target, index, value, loc):

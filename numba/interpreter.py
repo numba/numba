@@ -73,6 +73,7 @@ class Interpreter(object):
             self._start_new_block(firstinst)
             for offset, kws in self.dfainfo.insts:
                 inst = self.bytecode[offset]
+                self.loc = ir.Loc(filename=self.bytecode.filename, line=inst.lineno)
                 yield inst, kws
 
     def _start_new_block(self, inst):

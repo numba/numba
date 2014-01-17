@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 import numpy
 from numba.config import PYVERSION
-from numba import _dispatcher, types, compiler, targets, typing
+from numba import _dispatcher, types, compiler, targets, typing, utils
 
 
 class GlobalContext(object):
@@ -62,6 +62,13 @@ class Overloaded(object):
 
         self.add_overload(cres)
 
+    def inspect_types(self):
+        for ver, res in utils.dict_iteritems(self.overloads):
+            print("%s %s" % (self.py_func, ver))
+            print('-' * 80)
+            print(res.type_annotation)
+            print('=' * 80)
+
     def __call__(self, *args, **kws):
         assert not kws, "Keyword arguments are not supported"
         tys = [None] * len(args)
@@ -69,27 +76,6 @@ class Overloaded(object):
             tys[i] = typeof_pyval(a)
 
         return self.dispatcher(tuple(tys), args)
-
-
-def _jit(args, return_type, flags):
-    glctx =  GlobalContext()
-    typingctx = glctx.typing_context
-    targetctx = glctx.target_context
-
-    def wrapper(func):
-        disp = dispatcher.Overloaded(py_func=func)
-
-        cres = compiler.compile_extra(typingctx, targetctx, func, args=args,
-                                      return_type=return_type, flags=flags)
-
-        # Check typing error if nopython mode is used
-        if cres.typing_error is not None and not flags.enable_pyobject:
-            raise cres.typing_error
-
-        disp.add_overload(cres)
-        return disp
-
-    return wrapper
 
 
 def read_flags(flags, kws):
@@ -104,13 +90,13 @@ def read_flags(flags, kws):
         raise NameError("Unrecognized options: %s" % k.keys())
 
 
-
 DTYPE_MAPPING = {}
 
 
 INT_TYPES = (int,)
 if PYVERSION < (3, 0):
     INT_TYPES += (long,)
+
 
 def typeof_pyval(val):
     # TODO make this faster
@@ -135,7 +121,6 @@ def typeof_pyval(val):
         raise TypeError(type(val), val)
 
 
-
 FROM_DTYPE = {
     numpy.dtype('int8'): types.int8,
     numpy.dtype('int16'): types.int16,
@@ -150,8 +135,7 @@ FROM_DTYPE = {
     numpy.dtype('float32'): types.float32,
     numpy.dtype('float64'): types.float64,
 
-    # numpy.dtype('complex64'): types.complex64,
-    # numpy.dtype('complex128'): types.complex128,
-
+    numpy.dtype('complex64'): types.complex64,
+    numpy.dtype('complex128'): types.complex128,
 }
 

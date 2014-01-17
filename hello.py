@@ -13,6 +13,8 @@ def foo(a, b):
 
 foo.jit((int32[:], int32), nopython=True)
 
+print(foo.inspect_types())
+
 
 @jit((int32,))
 def bar(a):
