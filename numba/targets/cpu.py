@@ -7,6 +7,7 @@ from numba import _dynfunc, _helperlib, config
 from numba.callwrapper import PyCallWrapper
 from .base import BaseContext
 from numba import utils
+from numba.targets.intrinsics import IntrinsicMapping
 
 
 class CPUContext(BaseContext):
@@ -40,6 +41,9 @@ class CPUContext(BaseContext):
         self.pm.run(module)
 
     def get_executable(self, func, fndesc):
+        im = IntrinsicMapping(self)
+        im.run(func.module)
+
         if not fndesc.native:
             self.optimize_pythonapi(func)
 
