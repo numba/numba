@@ -27,7 +27,8 @@ before_install:
 install:
     - conda update --yes conda
     # Install NumPy LLVM
-    - conda install --yes python=$TRAVIS_PYTHON_VERSION numpy llvm
+    - echo ${TRAVIS_PYTHON_VERSION:0:3}
+    - conda install --yes python=${TRAVIS_PYTHON_VERSION:0:3} numpy llvm
     # Install unittest2 for Python 2
     - if [ ${TRAVIS_PYTHON_VERSION:0:3} == "2.6" ]; then conda install unittest2; fi
     # Install llvmpy
