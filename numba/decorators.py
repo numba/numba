@@ -28,6 +28,7 @@ def _parse_signature(signature_str):
     # Just eval signature_str using the types submodules as globals
     return eval(signature_str, {}, types.__dict__)
 
+
 def _jit(sig, kws):
     def wrapper(func):
         disp = dispatcher.Overloaded(py_func=func)

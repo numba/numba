@@ -61,6 +61,7 @@ class Overloaded(object):
             raise cres.typing_error
 
         self.add_overload(cres)
+        return cres.entry_point
 
     def inspect_types(self):
         for ver, res in utils.dict_iteritems(self.overloads):

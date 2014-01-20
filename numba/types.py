@@ -334,3 +334,32 @@ complex_domain = frozenset([complex64, complex128])
 number_domain = real_domain | integer_domain | complex_domain
 
 domains = unsigned_domain, signed_domain, real_domain
+
+
+# Alias
+
+float_ = float32
+double = float64
+void = none
+
+
+__all__ = '''
+int8
+int16
+int32
+int64
+uint8
+uint16
+uint32
+uint64
+boolean
+float32
+float64
+complex64
+complex128
+bool_
+float_
+double
+void
+none
+'''.split()

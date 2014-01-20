@@ -11,7 +11,7 @@ def foo(a, b):
         a[i] += b
     return c
 
-foo.jit((int32[:], int32), nopython=True)
+cfoo = foo.jit((int32[:], int32), nopython=True)
 
 print(foo.inspect_types())
 
@@ -24,7 +24,7 @@ def bar(a):
 def main():
     a = numpy.arange(100, dtype='int32')
     b = 2
-    c = foo(a, b)
+    c = cfoo(a, b)
     print(a)
     print(c)
 
