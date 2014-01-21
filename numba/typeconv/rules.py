@@ -54,7 +54,20 @@ def _init_type_manager():
     for ty in grp_unsigned[:-2]:
         tm.set_safe_convert(ty, f32)
 
+    # All numbers can unsafe convert to bool
+    boolean = tm.get(types.boolean)
+    for ty in grp_all:
+        tm.set_unsafe_convert(ty, boolean)
+
     return tm
 
 
 default_type_manager = _init_type_manager()
+
+
+def dump_number_rules():
+    tm = default_type_manager
+    for a, b in itertools.product(types.number_domain, types.number_domain):
+        ta = tm.get(a)
+        tb = tm.get(b)
+        print(a, '->', b, tm.check_compatible(ta, tb))
