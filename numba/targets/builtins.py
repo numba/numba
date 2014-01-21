@@ -104,15 +104,20 @@ def int_divmod(context, builder, x, y):
 
 
 def int_sdiv_impl(context, builder, sig, args):
-    x, y = args
-    div, _ = int_divmod(context, builder, x, y)
+    [va, vb] = args
+    [ta, tb] = sig.args
+    a = context.cast(builder, va, ta, sig.return_type)
+    b = context.cast(builder, vb, tb, sig.return_type)
+    div, _ = int_divmod(context, builder, a, b)
     return div
+
 
 def int_struediv_impl(context, builder, sig, args):
     x, y = args
     fx = builder.sitofp(x, Type.double())
     fy = builder.sitofp(y, Type.double())
     return builder.fdiv(fx, fy)
+
 
 def int_utruediv_impl(context, builder, sig, args):
     x, y = args
@@ -150,6 +155,7 @@ def int_spower_impl(context, builder, sig, args):
         y = builder.sext(y, Type.int(32))
     powerfn = lc.Function.intrinsic(module, lc.INTR_POWI, [x.type])
     return builder.call(powerfn, (x, y))
+
 
 def int_upower_impl(context, builder, sig, args):
     module = cgutils.get_module(builder)
@@ -239,38 +245,37 @@ def int_print_impl(context, builder, sig, args):
 
 
 for ty in types.integer_domain:
-    builtin(implement('+', ty, ty, ty)(int_add_impl))
-    builtin(implement('-', ty, ty, ty)(int_sub_impl))
-    builtin(implement('*', ty, ty, ty)(int_mul_impl))
-    builtin(implement('==', types.boolean, ty, ty)(int_eq_impl))
-    builtin(implement('!=', types.boolean, ty, ty)(int_ne_impl))
+    builtin(implement('+', ty, ty)(int_add_impl))
+    builtin(implement('-', ty, ty)(int_sub_impl))
+    builtin(implement('*', ty, ty)(int_mul_impl))
+    builtin(implement('==', ty, ty)(int_eq_impl))
+    builtin(implement('!=', ty, ty)(int_ne_impl))
 
-    builtin(implement(types.print_type, types.none, ty)(int_print_impl))
+    builtin(implement(types.print_type, ty)(int_print_impl))
 
 for ty in types.unsigned_domain:
-    builtin(implement('/?', ty, ty, ty)(int_udiv_impl))
-    builtin(implement('//', ty, ty, ty)(int_ufloordiv_impl))
-    builtin(implement('/', types.float64, ty, ty)(int_utruediv_impl))
-    builtin(implement('%', ty, ty, ty)(int_urem_impl))
-    builtin(implement('<', types.boolean, ty, ty)(int_slt_impl))
-    builtin(implement('<=', types.boolean, ty, ty)(int_sle_impl))
-    builtin(implement('>', types.boolean, ty, ty)(int_sgt_impl))
-    builtin(implement('>=', types.boolean, ty, ty)(int_sge_impl))
-    builtin(implement('**', types.float64, types.float64, ty)
-                     (int_upower_impl))
+    builtin(implement('/?', ty, ty)(int_udiv_impl))
+    builtin(implement('//', ty, ty)(int_ufloordiv_impl))
+    builtin(implement('/', ty, ty)(int_utruediv_impl))
+    builtin(implement('%', ty, ty)(int_urem_impl))
+    builtin(implement('<', ty, ty)(int_slt_impl))
+    builtin(implement('<=', ty, ty)(int_sle_impl))
+    builtin(implement('>', ty, ty)(int_sgt_impl))
+    builtin(implement('>=', ty, ty)(int_sge_impl))
+    builtin(implement('**', types.float64, ty)(int_upower_impl))
 
 for ty in types.signed_domain:
-    builtin(implement('/?', ty, ty, ty)(int_sdiv_impl))
-    builtin(implement('//', ty, ty, ty)(int_sfloordiv_impl))
-    builtin(implement('/', types.float64, ty, ty)(int_struediv_impl))
-    builtin(implement('%', ty, ty, ty)(int_srem_impl))
-    builtin(implement('<', types.boolean, ty, ty)(int_slt_impl))
-    builtin(implement('<=', types.boolean, ty, ty)(int_sle_impl))
-    builtin(implement('>', types.boolean, ty, ty)(int_sgt_impl))
-    builtin(implement('>=', types.boolean, ty, ty)(int_sge_impl))
-    builtin(implement(types.abs_type, ty, ty)(int_abs_impl))
-    builtin(implement('**', types.float64, types.float64, ty)
-        (int_spower_impl))
+    builtin(implement('/?', ty, ty)(int_sdiv_impl))
+    builtin(implement('//', ty, ty)(int_sfloordiv_impl))
+    builtin(implement('/', ty, ty)(int_struediv_impl))
+    builtin(implement('%', ty, ty)(int_srem_impl))
+    builtin(implement('<', ty, ty)(int_slt_impl))
+    builtin(implement('<=', ty, ty)(int_sle_impl))
+    builtin(implement('>', ty, ty)(int_sgt_impl))
+    builtin(implement('>=', ty, ty)(int_sge_impl))
+    builtin(implement(types.abs_type, ty)(int_abs_impl))
+    builtin(implement('**', types.float64, ty)(int_spower_impl))
+
 
 def real_add_impl(context, builder, sig, args):
     return builder.fadd(*args)
@@ -460,7 +465,7 @@ def real_abs_impl(context, builder, sig, args):
     [ty] = sig.args
     sig = typing.signature(ty, ty)
     impl = context.get_function(math.fabs, sig)
-    return impl(context, builder, sig.args, args)
+    return impl(builder, args)
 
 
 def real_print_impl(context, builder, sig, args):
@@ -474,23 +479,23 @@ def real_print_impl(context, builder, sig, args):
 
 
 for ty in types.real_domain:
-    builtin(implement('+', ty, ty, ty)(real_add_impl))
-    builtin(implement('-', ty, ty, ty)(real_sub_impl))
-    builtin(implement('*', ty, ty, ty)(real_mul_impl))
-    builtin(implement('/?', ty, ty, ty)(real_div_impl))
-    builtin(implement('/', ty, ty, ty)(real_div_impl))
-    builtin(implement('%', ty, ty, ty)(real_mod_impl))
-    builtin(implement('**', ty, ty, ty)(real_power_impl))
+    builtin(implement('+', ty, ty)(real_add_impl))
+    builtin(implement('-', ty, ty)(real_sub_impl))
+    builtin(implement('*', ty, ty)(real_mul_impl))
+    builtin(implement('/?', ty, ty)(real_div_impl))
+    builtin(implement('/', ty, ty)(real_div_impl))
+    builtin(implement('%', ty, ty)(real_mod_impl))
+    builtin(implement('**', ty, ty)(real_power_impl))
 
-    builtin(implement('==', types.boolean, ty, ty)(real_eq_impl))
-    builtin(implement('!=', types.boolean, ty, ty)(real_ne_impl))
-    builtin(implement('<', types.boolean, ty, ty)(real_lt_impl))
-    builtin(implement('<=', types.boolean, ty, ty)(real_le_impl))
-    builtin(implement('>', types.boolean, ty, ty)(real_gt_impl))
-    builtin(implement('>=', types.boolean, ty, ty)(real_ge_impl))
+    builtin(implement('==', ty, ty)(real_eq_impl))
+    builtin(implement('!=', ty, ty)(real_ne_impl))
+    builtin(implement('<', ty, ty)(real_lt_impl))
+    builtin(implement('<=', ty, ty)(real_le_impl))
+    builtin(implement('>', ty, ty)(real_gt_impl))
+    builtin(implement('>=', ty, ty)(real_ge_impl))
 
-    builtin(implement(types.abs_type, ty, ty)(real_abs_impl))
-    builtin(implement(types.print_type, types.none, ty)(real_print_impl))
+    builtin(implement(types.abs_type, ty)(real_abs_impl))
+    builtin(implement(types.print_type, ty)(real_print_impl))
 
 
 class Complex64(cgutils.Structure):
@@ -504,7 +509,7 @@ class Complex128(cgutils.Structure):
 
 
 def get_complex_info(ty):
-    if ty  == types.complex64:
+    if ty == types.complex64:
         cmplxcls = Complex64
         flty = types.float32
 
@@ -544,7 +549,7 @@ def complex128_imag_impl(context, builder, typ, value):
 
 
 @builtin
-@implement("**", types.complex128, types.complex128, types.complex128)
+@implement("**", types.complex128, types.complex128)
 def complex128_power_impl(context, builder, sig, args):
     [ca, cb] = args
     a = Complex128(context, builder, value=ca)
@@ -671,11 +676,11 @@ def complex_div_impl(complexClass):
 
 for ty, cls in zip([types.complex64, types.complex128],
                    [Complex64, Complex128]):
-    builtin(implement("+", ty, ty, ty)(complex_add_impl(cls)))
-    builtin(implement("-", ty, ty, ty)(complex_sub_impl(cls)))
-    builtin(implement("*", ty, ty, ty)(complex_mult_impl(cls)))
-    builtin(implement("/?", ty, ty, ty)(complex_div_impl(cls)))
-    builtin(implement("/", ty, ty, ty)(complex_div_impl(cls)))
+    builtin(implement("+", ty, ty)(complex_add_impl(cls)))
+    builtin(implement("-", ty, ty)(complex_sub_impl(cls)))
+    builtin(implement("*", ty, ty)(complex_mult_impl(cls)))
+    builtin(implement("/?", ty, ty)(complex_div_impl(cls)))
+    builtin(implement("/", ty, ty)(complex_div_impl(cls)))
     # Complex modulo is deprecated in python3
 
 
@@ -686,8 +691,7 @@ class Slice(cgutils.Structure):
 
 
 @builtin
-@implement(types.slice_type, types.slice3_type, types.intp, types.intp,
-           types.intp)
+@implement(types.slice_type, types.intp, types.intp, types.intp)
 def slice3_impl(context, builder, sig, args):
     start, stop, step = args
 
@@ -733,7 +737,7 @@ def make_unituple_iter(tupiter):
 
 
 @builtin
-@implement(types.range_type, types.range_state32_type, types.int32)
+@implement(types.range_type, types.int32)
 def range1_32_impl(context, builder, sig, args):
     [stop] = args
     state = RangeState32(context, builder)
@@ -746,7 +750,7 @@ def range1_32_impl(context, builder, sig, args):
 
 
 @builtin
-@implement(types.range_type, types.range_state32_type, types.int32, types.int32)
+@implement(types.range_type, types.int32, types.int32)
 def range2_32_impl(context, builder, sig, args):
     start, stop = args
     state = RangeState32(context, builder)
@@ -759,8 +763,7 @@ def range2_32_impl(context, builder, sig, args):
 
 
 @builtin
-@implement(types.range_type, types.range_state32_type, types.int32,
-           types.int32, types.int32)
+@implement(types.range_type, types.int32, types.int32, types.int32)
 def range3_32_impl(context, builder, sig, args):
     [start, stop, step] = args
     state = RangeState32(context, builder)
@@ -773,7 +776,7 @@ def range3_32_impl(context, builder, sig, args):
 
 
 @builtin
-@implement('getiter', types.range_iter32_type, types.range_state32_type)
+@implement('getiter', types.range_state32_type)
 def getiter_range32_impl(context, builder, sig, args):
     (value,) = args
     state = RangeState32(context, builder, value)
@@ -792,7 +795,7 @@ def getiter_range32_impl(context, builder, sig, args):
 
 
 @builtin
-@implement('iternext', types.int32, types.range_iter32_type)
+@implement('iternext', types.range_iter32_type)
 def iternext_range32_impl(context, builder, sig, args):
     (value,) = args
     iterobj = RangeIter32(context, builder, value)
@@ -806,7 +809,7 @@ def iternext_range32_impl(context, builder, sig, args):
 
 
 @builtin
-@implement('itervalid', types.boolean, types.range_iter32_type)
+@implement('itervalid', types.range_iter32_type)
 def itervalid_range32_impl(context, builder, sig, args):
     (value,) = args
     iterobj = RangeIter32(context, builder, value)
@@ -818,7 +821,7 @@ def itervalid_range32_impl(context, builder, sig, args):
 
 
 @builtin
-@implement(types.range_type, types.range_state64_type, types.int64)
+@implement(types.range_type, types.int64)
 def range1_64_impl(context, builder, sig, args):
     (stop,) = args
     state = RangeState64(context, builder)
@@ -831,8 +834,7 @@ def range1_64_impl(context, builder, sig, args):
 
 
 @builtin
-@implement(types.range_type, types.range_state64_type, types.int64,
-           types.int64)
+@implement(types.range_type, types.int64, types.int64)
 def range2_64_impl(context, builder, sig, args):
     start, stop = args
     state = RangeState64(context, builder)
@@ -845,8 +847,7 @@ def range2_64_impl(context, builder, sig, args):
 
 
 @builtin
-@implement(types.range_type, types.range_state64_type, types.int64,
-           types.int64, types.int64)
+@implement(types.range_type, types.int64, types.int64, types.int64)
 def range3_64_impl(context, builder, sig, args):
     [start, stop, step] = args
     state = RangeState64(context, builder)
@@ -859,7 +860,7 @@ def range3_64_impl(context, builder, sig, args):
 
 
 @builtin
-@implement('getiter', types.range_iter64_type, types.range_state64_type)
+@implement('getiter', types.range_state64_type)
 def getiter_range64_impl(context, builder, sig, args):
     (value,) = args
     state = RangeState64(context, builder, value)
@@ -878,7 +879,7 @@ def getiter_range64_impl(context, builder, sig, args):
 
 
 @builtin
-@implement('iternext', types.int64, types.range_iter64_type)
+@implement('iternext', types.range_iter64_type)
 def iternext_range64_impl(context, builder, sig, args):
     (value,) = args
     iterobj = RangeIter64(context, builder, value)
@@ -892,7 +893,7 @@ def iternext_range64_impl(context, builder, sig, args):
 
 
 @builtin
-@implement('itervalid', types.boolean, types.range_iter64_type)
+@implement('itervalid', types.range_iter64_type)
 def itervalid_range64_impl(context, builder, sig, args):
     (value,) = args
     iterobj = RangeIter64(context, builder, value)
@@ -903,7 +904,7 @@ def itervalid_range64_impl(context, builder, sig, args):
 
 
 @builtin
-@implement('getiter', types.Any, types.Kind(types.UniTuple))
+@implement('getiter', types.Kind(types.UniTuple))
 def getiter_unituple(context, builder, sig, args):
     [tupty] = sig.args
     [tup] = args
@@ -916,7 +917,7 @@ def getiter_unituple(context, builder, sig, args):
 
 
 @builtin
-@implement('iternextsafe', types.Any, types.Kind(types.UniTupleIter))
+@implement('iternextsafe', types.Kind(types.UniTupleIter))
 def iternextsafe_unituple(context, builder, sig, args):
     [tupiterty] = sig.args
     [tupiter] = args
@@ -935,7 +936,7 @@ def iternextsafe_unituple(context, builder, sig, args):
 
 
 @builtin
-@implement('getitem', types.Any, types.Kind(types.UniTuple), types.intp)
+@implement('getitem', types.Kind(types.UniTuple), types.intp)
 def getitem_unituple(context, builder, sig, args):
     tupty, _ = sig.args
     tup, idx = args
@@ -966,7 +967,7 @@ def getitem_unituple(context, builder, sig, args):
 
 
 @builtin
-@implement('getitem', types.Any, types.Kind(types.Array), types.intp)
+@implement('getitem', types.Kind(types.Array), types.intp)
 def getitem_array1d(context, builder, sig, args):
     aryty, _ = sig.args
     if aryty.ndim != 1:
@@ -1002,7 +1003,7 @@ def getitem_array1d(context, builder, sig, args):
 
 
 @builtin
-@implement('getitem', types.Any, types.Kind(types.Array),
+@implement('getitem', types.Kind(types.Array),
            types.Kind(types.UniTuple))
 def getitem_array_unituple(context, builder, sig, args):
     aryty, idxty = sig.args
@@ -1020,7 +1021,7 @@ def getitem_array_unituple(context, builder, sig, args):
 
 
 @builtin
-@implement('setitem', types.none, types.Kind(types.Array), types.intp,
+@implement('setitem', types.Kind(types.Array), types.intp,
            types.Any)
 def setitem_array1d(context, builder, sig, args):
     aryty, _, valty = sig.args
@@ -1036,7 +1037,7 @@ def setitem_array1d(context, builder, sig, args):
 
 
 @builtin
-@implement('setitem', types.none, types.Kind(types.Array),
+@implement('setitem', types.Kind(types.Array),
            types.Kind(types.UniTuple), types.Any)
 def setitem_array_unituple(context, builder, sig, args):
     aryty, idxty, valty = sig.args
@@ -1053,7 +1054,7 @@ def setitem_array_unituple(context, builder, sig, args):
 
 
 @builtin
-@implement(types.len_type, types.intp, types.Kind(types.Array))
+@implement(types.len_type, types.Kind(types.Array))
 def array_len(context, builder, sig, args):
     (aryty,) = sig.args
     (ary,) = args

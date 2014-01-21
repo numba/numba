@@ -306,7 +306,7 @@ class BaseContext(object):
         else:
             overloads = self.defns[fn]
         try:
-            return overloads.find(sig)
+            return _wrap_impl(overloads.find(sig), self, sig)
         except NotImplementedError:
             raise NotImplementedError(fn, sig)
 
@@ -505,3 +505,9 @@ class BaseContext(object):
 
     def make_unituple_iter(self, typ):
         return builtins.make_unituple_iter(typ)
+
+
+def _wrap_impl(imp, context, sig):
+    def wrapped(builder, args):
+        return imp(context, builder, sig, args)
+    return wrapped

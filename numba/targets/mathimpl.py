@@ -20,7 +20,7 @@ def register(f):
 
 def unary_math_int_impl(fn, f64impl):
     @register
-    @implement(fn, types.float64, types.int64)
+    @implement(fn, types.int64)
     def s64impl(context, builder, sig, args):
         [val] = args
         fpval = builder.sitofp(val, Type.double())
@@ -28,7 +28,7 @@ def unary_math_int_impl(fn, f64impl):
                        [fpval])
 
     @register
-    @implement(fn, types.float64, types.uint64)
+    @implement(fn, types.uint64)
     def u64impl(context, builder, sig, args):
         [val] = args
         fpval = builder.uitofp(val, Type.double())
@@ -38,7 +38,7 @@ def unary_math_int_impl(fn, f64impl):
 
 def unary_math_intr(fn, intrcode):
     @register
-    @implement(fn, types.float32, types.float32)
+    @implement(fn, types.float32)
     def f32impl(context, builder, sig, args):
         [val] = args
         mod = cgutils.get_module(builder)
@@ -47,7 +47,7 @@ def unary_math_intr(fn, intrcode):
         return builder.call(intr, args)
 
     @register
-    @implement(fn, types.float64, types.float64)
+    @implement(fn, types.float64)
     def f64impl(context, builder, sig, args):
         [val] = args
         mod = cgutils.get_module(builder)
@@ -60,7 +60,7 @@ def unary_math_intr(fn, intrcode):
 
 def unary_math_extern(fn, f32extern, f64extern):
     @register
-    @implement(fn, types.float32, types.float32)
+    @implement(fn, types.float32)
     def f32impl(context, builder, sig, args):
         [val] = args
         mod = cgutils.get_module(builder)
@@ -69,7 +69,7 @@ def unary_math_extern(fn, f32extern, f64extern):
         return builder.call(fn, (val,))
 
     @register
-    @implement(fn, types.float64, types.float64)
+    @implement(fn, types.float64)
     def f64impl(context, builder, sig, args):
         [val] = args
         mod = cgutils.get_module(builder)

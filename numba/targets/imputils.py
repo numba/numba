@@ -1,15 +1,16 @@
+from __future__ import print_function, absolute_import, division
 import functools
 from numba.typing import signature
 from numba import cgutils, types
 
 
-def implement(func, return_type, *args):
+def implement(func, *argtys):
     def wrapper(impl):
         @functools.wraps(impl)
         def res(context, builder, sig, args):
             ret = impl(context, builder, sig, args)
             return ret
-        res.signature = signature(return_type, *args)
+        res.signature = signature(types.Any, *argtys)
         res.key = func
         return res
     return wrapper
@@ -28,12 +29,13 @@ def impl_attribute(ty, attr, rtype):
 
 
 def user_function(func, fndesc):
-    @implement(func, fndesc.restype, *fndesc.argtypes)
     def imp(context, builder, sig, args):
         func = context.declare_function(cgutils.get_module(builder), fndesc)
         status, retval = context.call_function(builder, func, args)
         # TODO handling error
         return retval
+    imp.signature = signature(fndesc.restype, *fndesc.argtypes)
+    imp.key = func
     return imp
 
 

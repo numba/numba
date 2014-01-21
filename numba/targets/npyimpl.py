@@ -41,12 +41,10 @@ def numpy_unary_ufunc(funckey, asfloat=False):
             ival = builder.load(pi)
             if asfloat:
                 dval = context.cast(builder, ival, dtype, types.float64)
-                fnwork_sig = typing.signature(types.float64, types.float64)
-                dres = fnwork(context, builder, fnwork_sig, [dval])
+                dres = fnwork(builder, [dval])
                 res = context.cast(builder, dres, types.float64, dtype)
             else:
-                fnwork_sig = typing.signature(dtype, dtype)
-                res = fnwork(context, builder, fnwork_sig, [ival])
+                res = fnwork(builder, [ival])
             builder.store(res, po)
 
         return out
@@ -54,40 +52,35 @@ def numpy_unary_ufunc(funckey, asfloat=False):
 
 
 @register
-@implement(numpy.absolute, types.Kind(types.Array), types.Kind(types.Array),
-           types.Kind(types.Array))
+@implement(numpy.absolute, types.Kind(types.Array), types.Kind(types.Array))
 def numpy_absolute(context, builder, sig, args):
     imp = numpy_unary_ufunc(types.abs_type)
     return imp(context, builder, sig, args)
 
 
 @register
-@implement(numpy.exp, types.Kind(types.Array), types.Kind(types.Array),
-           types.Kind(types.Array))
+@implement(numpy.exp, types.Kind(types.Array), types.Kind(types.Array))
 def numpy_exp(context, builder, sig, args):
     imp = numpy_unary_ufunc(math.exp, asfloat=True)
     return imp(context, builder, sig, args)
 
 
 @register
-@implement(numpy.sin, types.Kind(types.Array), types.Kind(types.Array),
-           types.Kind(types.Array))
+@implement(numpy.sin, types.Kind(types.Array), types.Kind(types.Array))
 def numpy_sin(context, builder, sig, args):
     imp = numpy_unary_ufunc(math.sin, asfloat=True)
     return imp(context, builder, sig, args)
 
 
 @register
-@implement(numpy.cos, types.Kind(types.Array), types.Kind(types.Array),
-           types.Kind(types.Array))
+@implement(numpy.cos, types.Kind(types.Array), types.Kind(types.Array))
 def numpy_cos(context, builder, sig, args):
     imp = numpy_unary_ufunc(math.cos, asfloat=True)
     return imp(context, builder, sig, args)
 
 
 @register
-@implement(numpy.tan, types.Kind(types.Array), types.Kind(types.Array),
-           types.Kind(types.Array))
+@implement(numpy.tan, types.Kind(types.Array), types.Kind(types.Array))
 def numpy_tan(context, builder, sig, args):
     imp = numpy_unary_ufunc(math.tan, asfloat=True)
     return imp(context, builder, sig, args)
@@ -130,7 +123,7 @@ def numpy_binary_ufunc(core):
 
             x = builder.load(px)
             y = builder.load(py)
-            res = core(context, builder, (dtype, dtype), (x, y))
+            res = core(builder, (x, y))
             builder.store(res, po)
 
         return out
@@ -139,67 +132,40 @@ def numpy_binary_ufunc(core):
 
 @register
 @implement(numpy.add, types.Kind(types.Array), types.Kind(types.Array),
-           types.Kind(types.Array), types.Kind(types.Array))
+           types.Kind(types.Array))
 def numpy_add(context, builder, sig, args):
-    def intcore(context, builder, sig, args):
-        x, y = args
-        return builder.add(x, y)
-
-    def realcore(context, builder, sig, args):
-        x, y = args
-        return builder.fadd(x, y)
-
-    if sig.args[0].dtype in types.integer_domain:
-        imp = numpy_binary_ufunc(intcore)
-    else:
-        imp = numpy_binary_ufunc(realcore)
-
+    dtype = sig.args[0].dtype
+    coresig = typing.signature(types.Any, dtype, dtype)
+    core = context.get_function("+", coresig)
+    imp = numpy_binary_ufunc(core)
     return imp(context, builder, sig, args)
 
 
 @register
 @implement(numpy.subtract, types.Kind(types.Array), types.Kind(types.Array),
-           types.Kind(types.Array), types.Kind(types.Array))
+           types.Kind(types.Array))
 def numpy_sub(context, builder, sig, args):
-    def intcore(context, builder, sig, args):
-        x, y = args
-        return builder.sub(x, y)
-
-    def realcore(context, builder, sig, args):
-        x, y = args
-        return builder.fsub(x, y)
-
-    if sig.args[0].dtype in types.integer_domain:
-        imp = numpy_binary_ufunc(intcore)
-    else:
-        imp = numpy_binary_ufunc(realcore)
-
+    dtype = sig.args[0].dtype
+    coresig = typing.signature(types.Any, dtype, dtype)
+    core = context.get_function("-", coresig)
+    imp = numpy_binary_ufunc(core)
     return imp(context, builder, sig, args)
 
 
 @register
 @implement(numpy.multiply, types.Kind(types.Array), types.Kind(types.Array),
-           types.Kind(types.Array), types.Kind(types.Array))
+           types.Kind(types.Array))
 def numpy_multiply(context, builder, sig, args):
-    def intcore(context, builder, sig, args):
-        x, y = args
-        return builder.mul(x, y)
-
-    def realcore(context, builder, sig, args):
-        x, y = args
-        return builder.fmul(x, y)
-
-    if sig.args[0].dtype in types.integer_domain:
-        imp = numpy_binary_ufunc(intcore)
-    else:
-        imp = numpy_binary_ufunc(realcore)
-
+    dtype = sig.args[0].dtype
+    coresig = typing.signature(types.Any, dtype, dtype)
+    core = context.get_function("*", coresig)
+    imp = numpy_binary_ufunc(core)
     return imp(context, builder, sig, args)
 
 
 @register
 @implement(numpy.divide, types.Kind(types.Array), types.Kind(types.Array),
-           types.Kind(types.Array), types.Kind(types.Array))
+           types.Kind(types.Array))
 def numpy_divide(context, builder, sig, args):
     dtype = sig.args[0].dtype
     isig = typing.signature(dtype, dtype, dtype)
