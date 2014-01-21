@@ -335,8 +335,23 @@ number_domain = real_domain | integer_domain | complex_domain
 
 domains = unsigned_domain, signed_domain, real_domain
 
+# Aliases
 
-# Alias
+b1 = bool_
+i1 = int8
+i2 = int16
+i4 = int32
+i8 = int64
+u1 = uint8
+u2 = uint16
+u4 = uint32
+u8 = uint64
+
+f4 = float32
+f8 = float64
+
+c8 = complex64
+c16 = complex128
 
 float_ = float32
 double = float64
@@ -363,3 +378,4 @@ double
 void
 none
 '''.split()
+>>>>>>> fed92811dd12d995ea8b6fd5ad4b64bae4d0dc20
