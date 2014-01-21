@@ -7,7 +7,7 @@ from numba import _dynfunc, _helperlib, config
 from numba.callwrapper import PyCallWrapper
 from .base import BaseContext
 from numba import utils
-from numba.targets import intrinsics, mathimpl
+from numba.targets import intrinsics, mathimpl, npyimpl
 
 
 class CPUContext(BaseContext):
@@ -33,6 +33,7 @@ class CPUContext(BaseContext):
 
         # Add target specific implementations
         self.insert_func_defn(mathimpl.functions)
+        self.insert_func_defn(npyimpl.functions)
 
     def map_math_functions(self):
         le.dylib_add_symbol("numba.math.cpow", _helperlib.get_cpow_pointer())
