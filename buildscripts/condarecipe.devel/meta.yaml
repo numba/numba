@@ -16,7 +16,6 @@ requirements:
     #- chrpath         [linux]
     - python
     #- llvmmath
-    - pip
   run:
     - python
     - argparse        [py26]
