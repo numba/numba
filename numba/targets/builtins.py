@@ -1032,6 +1032,8 @@ def setitem_array1d(context, builder, sig, args):
     dataptr = ary.data
 
     ptr = builder.gep(dataptr, [idx])
+    val = context.cast(builder, val, valty, aryty.dtype)
+    assert val.type == ptr.type.pointee, (str(val.type), str(ptr.type.pointee))
     builder.store(val, ptr)
     return
 
