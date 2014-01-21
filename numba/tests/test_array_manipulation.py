@@ -22,7 +22,8 @@ def transpose_array(a, control):
     return (a.transpose() == control).all()
 
 def convert_array(a, control):
-    return (a.astype(dtype='f4') == control).all()
+    # astype takes no argument in numpy1.6
+    return (a.astype('f4') == control).all()
 
 
 class TestArrayManipulation(unittest.TestCase):
