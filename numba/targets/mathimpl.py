@@ -21,7 +21,7 @@ def register(f):
 def unary_math_int_impl(fn, f64impl):
     @register
     @implement(fn, types.float64, types.int64)
-    def s64impl(context, builder, tys, args):
+    def s64impl(context, builder, sig, args):
         [val] = args
         fpval = builder.sitofp(val, Type.double())
         return f64impl(context, builder, [types.float64, types.float64],
@@ -29,7 +29,7 @@ def unary_math_int_impl(fn, f64impl):
 
     @register
     @implement(fn, types.float64, types.uint64)
-    def u64impl(context, builder, tys, args):
+    def u64impl(context, builder, sig, args):
         [val] = args
         fpval = builder.uitofp(val, Type.double())
         return f64impl(context, builder, [types.float64, types.float64],
@@ -39,7 +39,7 @@ def unary_math_int_impl(fn, f64impl):
 def unary_math_intr(fn, intrcode):
     @register
     @implement(fn, types.float32, types.float32)
-    def f32impl(context, builder, tys, args):
+    def f32impl(context, builder, sig, args):
         [val] = args
         mod = cgutils.get_module(builder)
         lty = context.get_value_type(types.float32)
@@ -48,7 +48,7 @@ def unary_math_intr(fn, intrcode):
 
     @register
     @implement(fn, types.float64, types.float64)
-    def f64impl(context, builder, tys, args):
+    def f64impl(context, builder, sig, args):
         [val] = args
         mod = cgutils.get_module(builder)
         lty = context.get_value_type(types.float64)
@@ -61,7 +61,7 @@ def unary_math_intr(fn, intrcode):
 def unary_math_extern(fn, f32extern, f64extern):
     @register
     @implement(fn, types.float32, types.float32)
-    def f32impl(context, builder, tys, args):
+    def f32impl(context, builder, sig, args):
         [val] = args
         mod = cgutils.get_module(builder)
         fnty = Type.function(Type.float(), [Type.float()])
@@ -70,7 +70,7 @@ def unary_math_extern(fn, f32extern, f64extern):
 
     @register
     @implement(fn, types.float64, types.float64)
-    def f64impl(context, builder, tys, args):
+    def f64impl(context, builder, sig, args):
         [val] = args
         mod = cgutils.get_module(builder)
         fnty = Type.function(Type.double(), [Type.double()])

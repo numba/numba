@@ -103,14 +103,14 @@ class IterValid(ConcreteTemplate):
 
 class BinOp(ConcreteTemplate):
     cases = [
-        signature(types.uint8, types.uint8, types.uint8),
-        signature(types.uint16, types.uint16, types.uint16),
-        signature(types.uint32, types.uint32, types.uint32),
+        signature(types.uintp, types.uint8, types.uint8),
+        signature(types.uintp, types.uint16, types.uint16),
+        signature(types.uintp, types.uint32, types.uint32),
         signature(types.uint64, types.uint64, types.uint64),
 
-        signature(types.int8, types.int8, types.int8),
-        signature(types.int16, types.int16, types.int16),
-        signature(types.int32, types.int32, types.int32),
+        signature(types.intp, types.int8, types.int8),
+        signature(types.intp, types.int16, types.int16),
+        signature(types.intp, types.int32, types.int32),
         signature(types.int64, types.int64, types.int64),
 
         signature(types.float32, types.float32, types.float32),

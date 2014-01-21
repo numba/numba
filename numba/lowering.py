@@ -184,7 +184,7 @@ class Lower(BaseLower):
                         for av, at, ft in zip(argvals, argtyps,
                                               signature.args)]
 
-            return impl(self.context, self.builder, argtyps, castvals)
+            return impl(self.context, self.builder, signature, castvals)
 
         elif isinstance(inst, ir.Del):
             pass
@@ -241,7 +241,7 @@ class Lower(BaseLower):
             # Convert argument to match
             lhs = self.context.cast(self.builder, lhs, lty, signature.args[0])
             rhs = self.context.cast(self.builder, rhs, rty, signature.args[1])
-            return impl(self.context, self.builder, signature.args, (lhs, rhs))
+            return impl(self.context, self.builder, signature, (lhs, rhs))
 
         elif expr.op == 'call':
             assert not expr.kws
@@ -263,16 +263,16 @@ class Lower(BaseLower):
             else:
                 # Normal function resolution
                 impl = self.context.get_function(fnty, signature)
-                return impl(self.context, self.builder, argtyps, castvals)
+                return impl(self.context, self.builder, signature, castvals)
 
         elif expr.op in ('getiter', 'iternext', 'itervalid', 'iternextsafe'):
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
             signature = self.fndesc.calltypes[expr]
             impl = self.context.get_function(expr.op, signature)
-            (fty,) = signature.args
+            [fty] = signature.args
             castval = self.context.cast(self.builder, val, ty, fty)
-            return impl(self.context, self.builder, (fty,), (castval,))
+            return impl(self.context, self.builder, signature, (castval,))
 
         elif expr.op == "getattr":
             val = self.loadvar(expr.value.name)
@@ -295,7 +295,7 @@ class Lower(BaseLower):
             castvals = [self.context.cast(self.builder, av, at, ft)
                         for av, at, ft in zip(argvals, argtyps,
                                               signature.args)]
-            return impl(self.context, self.builder, argtyps, castvals)
+            return impl(self.context, self.builder, signature, castvals)
 
         elif expr.op == "build_tuple":
             itemvals = [self.loadvar(i.name) for i in expr.items]

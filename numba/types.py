@@ -305,6 +305,7 @@ int16 = Type('int16')
 int32 = Type('int32')
 int64 = Type('int64')
 intp = int32 if tuple.__itemsize__ == 4 else int64
+uintp = uint32 if tuple.__itemsize__ == 4 else uint64
 
 float32 = Type('float32')
 float64 = Type('float64')

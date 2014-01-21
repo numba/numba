@@ -6,8 +6,8 @@ from numba import cgutils, types
 def implement(func, return_type, *args):
     def wrapper(impl):
         @functools.wraps(impl)
-        def res(context, builder, tys, args):
-            ret = impl(context, builder, tys, args)
+        def res(context, builder, sig, args):
+            ret = impl(context, builder, sig, args)
             return ret
         res.signature = signature(return_type, *args)
         res.key = func
@@ -29,7 +29,7 @@ def impl_attribute(ty, attr, rtype):
 
 def user_function(func, fndesc):
     @implement(func, fndesc.restype, *fndesc.argtypes)
-    def imp(context, builder, tys, args):
+    def imp(context, builder, sig, args):
         func = context.declare_function(cgutils.get_module(builder), fndesc)
         status, retval = context.call_function(builder, func, args)
         # TODO handling error
