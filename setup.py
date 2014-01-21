@@ -37,13 +37,19 @@ ext_helperlib = Extension(name="numba._helperlib",
                           sources=["numba/_helperlib.c"],
                           extra_compile_args=CFLAGS)
 
-ext_modules = [ext_dynfunc, ext_numpyadapt, ext_dispatcher, ext_helperlib]
+ext_typeconv = Extension(name="numba.typeconv._typeconv",
+                         sources=["numba/typeconv/typeconv.cpp",
+                                  "numba/typeconv/_typeconv.cpp"])
+
+ext_modules = [ext_dynfunc, ext_numpyadapt, ext_dispatcher, ext_helperlib,
+               ext_typeconv]
 
 packages = [
     "numba",
     "numba.targets",
     "numba.tests",
     "numba.typing",
+    "numba.typeconv",
 ]
 
 setup(name='numba',

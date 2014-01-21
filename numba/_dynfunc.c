@@ -1,11 +1,6 @@
 #include "_pymodule.h"
 #include <string.h>
 
-
-#if (PY_MAJOR_VERSION >= 3)
-    #define PyString_AsString PyUnicode_AsUTF8
-#endif
-
 static
 PyObject*
 make_function(PyObject *self, PyObject *args)

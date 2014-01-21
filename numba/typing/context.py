@@ -1,23 +1,19 @@
 from __future__ import print_function
 from collections import defaultdict
 import functools
-from numba import types, typelattice, utils
+from numba import types, utils
+from numba.typeconv import rules
 from . import templates
-
-
-def _type_distance(domain, first, second):
-    if first in domain and second in domain:
-        return domain.index(first) - domain.index(second)
 
 
 class Context(object):
     """A typing context for storing function typing constrain template.
     """
     def __init__(self):
-        self.type_lattice = typelattice.type_lattice
         self.functions = defaultdict(list)
         self.attributes = {}
         self.globals = utils.UniqueDict()
+        self.tm = rules.default_type_manager
         self._load_builtins()
 
     def get_number_type(self, num):
@@ -93,14 +89,18 @@ class Context(object):
         at = templates.ClassAttrTemplate(self, clsty, attrs)
         self.insert_attributes(at)
 
-    def type_distance(self, fromty, toty):
+    def type_compatibility(self, fromty, toty):
+        """
+        Returns None or a string describing the conversion e.g. exact, promote,
+        unsafe, safe
+        """
         if fromty == toty:
-            return 0
+            return 'exact'
         elif (isinstance(fromty, types.UniTuple) and
                   isinstance(toty, types.UniTuple) and
                   len(fromty) == len(toty)):
-            return self.type_lattice.get((fromty.dtype, toty.dtype))
-        return self.type_lattice.get((fromty, toty))
+            return self.type_compatibility(fromty.dtype, toty.dtype)
+        return self.tm.check_compatible(self.tm.get(fromty), self.tm.get(toty))
 
     def unify_types(self, *types):
         return functools.reduce(self.unify_pairs, types)
@@ -111,15 +111,17 @@ class Context(object):
         type.
         """
         # TODO: should add an option to reject unsafe type conversion
-        d = self.type_distance(fromty=first, toty=second)
+        d = self.type_compatibility(fromty=first, toty=second)
         if d is None:
             return types.pyobject
-        elif d >= 0:
-            # A promotion from first -> second
+        elif d == "promote" or d == 'safe':
+            # A promotion or safe conversion from first -> second
             return second
-        else:
+        elif d == "unsafe":
             # A demotion from first -> second
             return first
+        else:
+            raise Exception("type_compatibility returned %s" % d)
 
 
 def new_method(fn, sig):

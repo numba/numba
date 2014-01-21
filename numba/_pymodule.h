@@ -22,5 +22,10 @@
 #endif
 
 
+#if (PY_MAJOR_VERSION >= 3)
+    #define PyString_AsString PyUnicode_AsUTF8
+    #define PyString_FromString PyUnicode_FromString
+#endif
+
 #endif /* NUMBA_PY_MODULE_H_ */
 

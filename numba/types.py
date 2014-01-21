@@ -333,8 +333,6 @@ real_domain = frozenset([float32, float64])
 complex_domain = frozenset([complex64, complex128])
 number_domain = real_domain | integer_domain | complex_domain
 
-domains = unsigned_domain, signed_domain, real_domain
-
 # Aliases
 
 b1 = bool_
@@ -378,4 +376,3 @@ double
 void
 none
 '''.split()
->>>>>>> fed92811dd12d995ea8b6fd5ad4b64bae4d0dc20

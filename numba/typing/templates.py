@@ -57,88 +57,71 @@ def _sum_downcast(dists):
     return c
 
 
+class Rating(object):
+    __slots__ = 'promote', 'safe_convert', "unsafe_convert"
+
+    def __init__(self):
+        self.promote = 0
+        self.safe_convert = 0
+        self.unsafe_convert = 0
+
+    def astuple(self):
+        """Returns a tuple suitable for comparing with the worse situation
+        start first.
+        """
+        return (self.unsafe_convert, self.safe_convert, self.promote)
+
+
 class FunctionTemplate(object):
     def __init__(self, context):
         self.context = context
 
-    def apply_case(self, case, args, kws):
-        """
-        Returns a tuple of type distances for each arguments
-        or return None if not match.
-        """
-        assert not kws, "Keyword argument is not supported, yet"
-        if len(case.args) != len(args):
-            # Number of arguments mismatch
-            return None
-        distances = []
-        for formal, actual in zip(case.args, args):
-            tdist = self.context.type_distance(toty=formal, fromty=actual)
-            if tdist is None:
-                return
-            distances.append(tdist)
-        return tuple(distances)
-
     def _select(self, cases, args, kws):
-        upcast, downcast = self._find_compatible_definitions(cases, args, kws)
-        return self._select_best_definition(upcast, downcast, args, kws,
-                                            cases)
+        selected = self._resolve_overload(cases, args, kws)
+        return selected
 
-    def _find_compatible_definitions(self, cases, args, kws):
-        upcast = []
-        downcast = []
+    def _resolve_overload(self, cases, args, kws):
+        assert not kws, "Keyword arguments are not supported, yet"
+        # Rate each cases
+        candids = []
+        ratings = []
         for case in cases:
-            dists = self.apply_case(case, args, kws)
-            if dists is not None:
-                if _uses_downcast(dists):
-                    downcast.append((dists, case))
+            if len(args) == len(case.args):
+                rate = Rating()
+                for actual, formal in zip(args, case.args):
+                    by = self.context.type_compatibility(actual, formal)
+                    if by is None:
+                        break
+
+                    if by == 'promote':
+                        rate.promote += 1
+                    elif by == 'safe':
+                        rate.safe_convert += 1
+                    elif by == 'unsafe':
+                        rate.unsafe_convert += 1
+                    elif by == 'exact':
+                        pass
+                    else:
+                        raise Exception("unreachable", by)
+
                 else:
-                    upcast.append((sum(dists), case))
-        return upcast, downcast
+                    ratings.append(rate.astuple())
+                    candids.append(case)
+        # Find the best case
+        ordered = sorted(zip(ratings, candids), key=lambda i: i[0])
+        if ordered:
+            if len(ordered) > 1:
+                (first, case1), (second, case2) = ordered[:2]
+                if first == second:
+                    ambiguous = []
+                    for rate, case in ordered:
+                        if rate == first:
+                            ambiguous.append(str(case))
+                    args = (self.key, args, '\n'.join(ambiguous))
+                    msg = "Ambiguous overloading for %s %s\n%s" % args
+                    raise TypeError(msg)
 
-    def _select_best_definition(self, upcast, downcast, args, kws, cases):
-        if upcast:
-            return self._select_best_upcast(upcast)
-        elif downcast:
-            return self._select_best_downcast(downcast)
-
-    def _select_best_downcast(self, downcast):
-        assert downcast
-        if len(downcast) == 1:
-            # Exactly one definition with downcasting
-            return downcast[0][1]
-        else:
-            downdist = sys.maxint
-            leasts = []
-            for dists, case in downcast:
-                n = _sum_downcast(dists)
-                if n < downdist:
-                    downdist = n
-                    leasts = [(dists, case)]
-                elif n == downdist:
-                    leasts.append((dists, case))
-
-            if len(leasts) == 1:
-                return leasts[0][1]
-            else:
-                # Need to further decide which downcasted version?
-                raise TypeError("Ambiguous overloading: %s %s" %
-                                (self.key, [c for _, c in leasts]))
-
-    def _select_best_upcast(self, upcast):
-        assert upcast
-        if len(upcast) == 1:
-            # Exactly one definition without downcasting
-            return upcast[0][1]
-        else:
-            assert len(upcast) > 1
-            first = min(upcast)
-            upcast.remove(first)
-            second = min(upcast)
-            if first[0] < second[0]:
-                return first[1]
-            else:
-                raise TypeError("Ambiguous overloading: %s %s and %s" %
-                                (self.key, first[1], second[1]))
+            return ordered[0][1]
 
 
 class AbstractTemplate(FunctionTemplate):
@@ -368,6 +351,17 @@ class BinOpTrueDiv(ConcreteTemplate):
     key = "/"
 
     cases = [
+        signature(types.float64, types.uint8, types.uint8),
+        signature(types.float64, types.uint16, types.uint16),
+        signature(types.float64, types.uint32, types.uint32),
+        signature(types.float64, types.uint64, types.uint64),
+
+        signature(types.float64, types.int8, types.int8),
+        signature(types.float64, types.int16, types.int16),
+        signature(types.float64, types.int32, types.int32),
+        signature(types.float64, types.int64, types.int64),
+
+
         signature(types.float32, types.float32, types.float32),
         signature(types.float64, types.float64, types.float64),
 
@@ -399,7 +393,15 @@ class BinOpFloorDiv(ConcreteTemplate):
 class BinOpPower(ConcreteTemplate):
     key = "**"
     cases = [
+        signature(types.float64, types.float64, types.uint8),
+        signature(types.float64, types.float64, types.uint16),
+        signature(types.float64, types.float64, types.uint32),
+        signature(types.float64, types.float64, types.uint64),
+
+        signature(types.float64, types.float64, types.int8),
+        signature(types.float64, types.float64, types.int16),
         signature(types.float64, types.float64, types.int32),
+        signature(types.float64, types.float64, types.int64),
         signature(types.float32, types.float32, types.float32),
         signature(types.float64, types.float64, types.float64),
 

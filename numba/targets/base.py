@@ -354,7 +354,10 @@ class BaseContext(object):
         if fromty == toty or toty == types.Any or isinstance(toty, types.Kind):
             return val
 
-        elif fromty in types.unsigned_domain and toty in types.signed_domain:
+        elif ((fromty in types.unsigned_domain and
+               toty in types.signed_domain) or
+              (fromty in types.integer_domain and
+               toty in types.unsigned_domain)):
             lfrom = self.get_value_type(fromty)
             lto = self.get_value_type(toty)
             if lfrom.width <= lto.width:
@@ -656,10 +659,26 @@ def int_sdiv_impl(context, builder, tys, args):
     div, _ = int_divmod(context, builder, x, y)
     return div
 
+def int_struediv_impl(context, builder, tys, args):
+    x, y = args
+    fx = builder.sitofp(x, Type.double())
+    fy = builder.sitofp(y, Type.double())
+    return builder.fdiv(fx, fy)
 
-def int_floordiv_impl(context, builder, tys, args):
+def int_utruediv_impl(context, builder, tys, args):
+    x, y = args
+    fx = builder.uitofp(x, Type.double())
+    fy = builder.uitofp(y, Type.double())
+    return builder.fdiv(fx, fy)
+
+
+def int_sfloordiv_impl(context, builder, tys, args):
     x, y = args
     return builder.sdiv(x, y)
+
+def int_ufloordiv_impl(context, builder, tys, args):
+    x, y = args
+    return builder.udiv(x, y)
 
 
 def int_srem_impl(context, builder, tys, args):
@@ -673,9 +692,23 @@ def int_urem_impl(context, builder, tys, args):
     return builder.urem(x, y)
 
 
-def power_int_impl(context, builder, tys, args):
+def int_spower_impl(context, builder, tys, args):
     module = cgutils.get_module(builder)
     x, y = args
+    if y.type.width > 32:
+        y = builder.trunc(y, Type.int(32))
+    elif y.type.width < 32:
+        y = builder.sext(y, Type.int(32))
+    powerfn = lc.Function.intrinsic(module, lc.INTR_POWI, [x.type])
+    return builder.call(powerfn, (x, y))
+
+def int_upower_impl(context, builder, tys, args):
+    module = cgutils.get_module(builder)
+    x, y = args
+    if y.type.width > 32:
+        y = builder.trunc(y, Type.int(32))
+    elif y.type.width < 32:
+        y = builder.zext(y, Type.int(32))
     powerfn = lc.Function.intrinsic(module, lc.INTR_POWI, [x.type])
     return builder.call(powerfn, (x, y))
 
@@ -767,21 +800,28 @@ for ty in types.integer_domain:
 
 for ty in types.unsigned_domain:
     builtin(implement('/?', ty, ty, ty)(int_udiv_impl))
+    builtin(implement('//', ty, ty, ty)(int_ufloordiv_impl))
+    builtin(implement('/', types.float64, ty, ty)(int_utruediv_impl))
     builtin(implement('%', ty, ty, ty)(int_urem_impl))
+    builtin(implement('<', types.boolean, ty, ty)(int_slt_impl))
+    builtin(implement('<=', types.boolean, ty, ty)(int_sle_impl))
+    builtin(implement('>', types.boolean, ty, ty)(int_sgt_impl))
+    builtin(implement('>=', types.boolean, ty, ty)(int_sge_impl))
+    builtin(implement('**', types.float64, types.float64, ty)
+                     (int_upower_impl))
 
 for ty in types.signed_domain:
     builtin(implement('/?', ty, ty, ty)(int_sdiv_impl))
+    builtin(implement('//', ty, ty, ty)(int_sfloordiv_impl))
+    builtin(implement('/', types.float64, ty, ty)(int_struediv_impl))
     builtin(implement('%', ty, ty, ty)(int_srem_impl))
     builtin(implement('<', types.boolean, ty, ty)(int_slt_impl))
     builtin(implement('<=', types.boolean, ty, ty)(int_sle_impl))
     builtin(implement('>', types.boolean, ty, ty)(int_sgt_impl))
     builtin(implement('>=', types.boolean, ty, ty)(int_sge_impl))
     builtin(implement(types.abs_type, ty, ty)(int_abs_impl))
-
-
-builtin(implement('**', types.float64, types.float64, types.int32)
-        (power_int_impl))
-
+    builtin(implement('**', types.float64, types.float64, ty)
+        (int_spower_impl))
 
 def real_add_impl(context, builder, tys, args):
     return builder.fadd(*args)
@@ -1918,7 +1958,7 @@ def numpy_divide(context, builder, tys, args):
     dtype = tys[0].dtype
     if dtype in types.signed_domain:
         if PYVERSION >= (3, 0):
-            imp = numpy_binary_ufunc(int_floordiv_impl)
+            imp = numpy_binary_ufunc(int_sfloordiv_impl)
         else:
             imp = numpy_binary_ufunc(int_sdiv_impl)
     elif dtype in types.unsigned_domain:
