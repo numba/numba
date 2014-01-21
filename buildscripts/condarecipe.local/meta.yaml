@@ -1,0 +1,24 @@
+package:
+   name: numba
+   version: 99.9.9
+
+build:
+  #entry_points:
+  #  - pycc = numba.pycc:main
+
+requirements:
+  build:
+    - numpy
+    #- chrpath         [linux]
+    - python
+    #- llvmmath
+  run:
+    - python
+    - argparse        [py26]
+    - numpy
+    - llvmpy
+    #- llvmmath
+
+test:
+  requires:
+    - unittest2       [py26]
