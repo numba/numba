@@ -4,6 +4,27 @@ MATH_UNARY(sinf, float, float)
 MATH_UNARY(cos, double, double)
 MATH_UNARY(cosf, float, float)
 
+MATH_UNARY(tan, double, double)
+MATH_UNARY(tanf, float, float)
+
+MATH_UNARY(asin, double, double)
+MATH_UNARY(asinf, float, float)
+
+MATH_UNARY(acos, double, double)
+MATH_UNARY(acosf, float, float)
+
+MATH_UNARY(atan, double, double)
+MATH_UNARY(atanf, float, float)
+
+MATH_UNARY(asinh, double, double)
+MATH_UNARY(asinhf, float, float)
+
+MATH_UNARY(acosh, double, double)
+MATH_UNARY(acoshf, float, float)
+
+MATH_UNARY(atanh, double, double)
+MATH_UNARY(atanhf, float, float)
+
 MATH_UNARY(exp, double, double)
 MATH_UNARY(expf, float, float)
 

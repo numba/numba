@@ -29,6 +29,8 @@ class FunctionDescriptor(object):
         # Argument types
         self.argtypes = [self.typemap[a] for a in args]
 
+        self.mangled_name = '.'.join([self.pymod.__name__, self.name])
+
 
 def _describe(interp):
     func = interp.bytecode.func

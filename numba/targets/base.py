@@ -1,15 +1,16 @@
 from __future__ import print_function
 import math
 from collections import namedtuple, defaultdict
-import functools
 import llvm.core as lc
 from llvm.core import Type, Constant
 import numpy
 
 from numba.config import PYVERSION
 from numba import types, utils, cgutils, typing
-from numba.typing import signature
 from numba.pythonapi import PythonAPI
+from numba.targets.imputils import (builtin, builtin_attr, implement,
+                                    user_function, impl_attribute,
+                                    python_attr_impl, BUILTINS, BUILTIN_ATTRS)
 
 
 LTYPEMAP = {
@@ -95,10 +96,8 @@ class BaseContext(object):
         self.attrs = utils.UniqueDict()
         self.users = utils.UniqueDict()
 
-        for defn in BUILTINS:
-            self.defns[defn.key].append(defn)
-        for attr in BUILTIN_ATTRS:
-            self.attrs[attr.key] = attr
+        self.insert_func_defn(BUILTINS)
+        self.insert_attr_defn(BUILTIN_ATTRS)
 
         # Initialize
         self.init()
@@ -108,6 +107,14 @@ class BaseContext(object):
         For subclasses to add initializer
         """
         pass
+
+    def insert_func_defn(self, defns):
+        for defn in defns:
+            self.defns[defn.key].append(defn)
+
+    def insert_attr_defn(self, defns):
+        for attr in defns:
+            self.attrs[attr.key] = attr
 
     def insert_user_function(self, func, fndesc):
         imp = user_function(func, fndesc)
@@ -150,7 +157,7 @@ class BaseContext(object):
 
     def declare_function(self, module, fndesc):
         fnty = self.get_function_type(fndesc)
-        fn = module.get_or_insert_function(fnty, name=fndesc.name)
+        fn = module.get_or_insert_function(fnty, name=fndesc.mangled_name)
         assert fn.is_declaration
         for ak, av in zip(fndesc.args, self.get_arguments(fn)):
             av.name = "arg.%s" % ak
@@ -519,75 +526,6 @@ def make_array(ty):
                    ('strides', types.UniTuple(types.intp, nd)),]
 
     return ArrayTemplate
-
-#-------------------------------------------------------------------------------
-
-
-def implement(func, return_type, *args):
-    def wrapper(impl):
-        @functools.wraps(impl)
-        def res(context, builder, tys, args):
-            ret = impl(context, builder, tys, args)
-            return ret
-        res.signature = signature(return_type, *args)
-        res.key = func
-        return res
-    return wrapper
-
-
-def impl_attribute(ty, attr, rtype):
-    def wrapper(impl):
-        @functools.wraps(impl)
-        def res(context, builder, typ, value):
-            ret = impl(context, builder, typ, value)
-            return ret
-        res.return_type = rtype
-        res.key = (ty, attr)
-        return res
-    return wrapper
-
-
-def user_function(func, fndesc):
-    @implement(func, fndesc.restype, *fndesc.argtypes)
-    def imp(context, builder, tys, args):
-        func = context.declare_function(cgutils.get_module(builder), fndesc)
-        status, retval = context.call_function(builder, func, args)
-        # TODO handling error
-        return retval
-    return imp
-
-
-def python_attr_impl(cls, attr, atyp):
-    @impl_attribute(cls, attr, atyp)
-    def imp(context, builder, typ, value):
-        api = context.get_python_api(builder)
-        aval = api.object_getattr_string(value, attr)
-        with cgutils.ifthen(builder, cgutils.is_null(builder, aval)):
-            context.return_exc(builder)
-
-        if isinstance(atyp, types.Method):
-            return aval
-        else:
-            nativevalue = api.to_native_value(aval, atyp)
-            api.decref(aval)
-            return nativevalue
-    return imp
-
-#-------------------------------------------------------------------------------
-
-
-BUILTINS = []
-BUILTIN_ATTRS = []
-
-
-def builtin(impl):
-    BUILTINS.append(impl)
-    return impl
-
-
-def builtin_attr(impl):
-    BUILTIN_ATTRS.append(impl)
-    return impl
 
 #-------------------------------------------------------------------------------
 
@@ -1622,149 +1560,6 @@ def array_shape(context, builder, typ, value):
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
     return array.shape
-
-#-------------------------------------------------------------------------------
-
-
-@builtin
-@implement(math.fabs, types.float32, types.float32)
-def math_fabs_f32(context, builder, tys, args):
-    (val,) = args
-    mod = cgutils.get_module(builder)
-    lty = context.get_value_type(types.float32)
-    intr = lc.Function.intrinsic(mod, lc.INTR_FABS, [lty])
-    return builder.call(intr, args)
-
-
-
-@builtin
-@implement(math.fabs, types.float64, types.float64)
-def math_fabs_f64(context, builder, tys, args):
-    (val,) = args
-    mod = cgutils.get_module(builder)
-    lty = context.get_value_type(types.float64)
-    intr = lc.Function.intrinsic(mod, lc.INTR_FABS, [lty])
-    return builder.call(intr, args)
-
-
-@builtin
-@implement(math.exp, types.float32, types.float32)
-def math_exp_f32(context, builder, tys, args):
-    (val,) = args
-    mod = cgutils.get_module(builder)
-    lty = context.get_value_type(types.float32)
-    intr = lc.Function.intrinsic(mod, lc.INTR_EXP, [lty])
-    return builder.call(intr, args)
-
-
-@builtin
-@implement(math.exp, types.float64, types.float64)
-def math_exp_f64(context, builder, tys, args):
-    (val,) = args
-    mod = cgutils.get_module(builder)
-    lty = context.get_value_type(types.float64)
-    intr = lc.Function.intrinsic(mod, lc.INTR_EXP, [lty])
-    return builder.call(intr, args)
-
-
-@builtin
-@implement(math.sin, types.float32, types.float32)
-def math_sin_f32(context, builder, tys, args):
-    (val,) = args
-    mod = cgutils.get_module(builder)
-    lty = context.get_value_type(types.float32)
-    intr = lc.Function.intrinsic(mod, lc.INTR_SIN, [lty])
-    return builder.call(intr, args)
-
-
-@builtin
-@implement(math.sin, types.float64, types.float64)
-def math_sin_f64(context, builder, tys, args):
-    (val,) = args
-    mod = cgutils.get_module(builder)
-    lty = context.get_value_type(types.float64)
-    intr = lc.Function.intrinsic(mod, lc.INTR_SIN, [lty])
-    return builder.call(intr, args)
-
-
-@builtin
-@implement(math.cos, types.float32, types.float32)
-def math_cos_f32(context, builder, tys, args):
-    (val,) = args
-    mod = cgutils.get_module(builder)
-    lty = context.get_value_type(types.float32)
-    intr = lc.Function.intrinsic(mod, lc.INTR_COS, [lty])
-    return builder.call(intr, args)
-
-
-@builtin
-@implement(math.cos, types.float64, types.float64)
-def math_cos_f64(context, builder, tys, args):
-    (val,) = args
-    mod = cgutils.get_module(builder)
-    lty = context.get_value_type(types.float64)
-    intr = lc.Function.intrinsic(mod, lc.INTR_COS, [lty])
-    return builder.call(intr, args)
-
-
-@builtin
-@implement(math.tan, types.float32, types.float32)
-def math_tan_f32(context, builder, tys, args):
-    (val,) = args
-    val = context.cast(builder, val, types.float32, types.float64)
-    impl = context.get_function(math.tan, types.float64, types.float64)
-    res = impl(context, builder, [types.float64], [val])
-    return context.cast(builder, res, types.float64, types.float32)
-
-
-@builtin
-@implement(math.tan, types.float64, types.float64)
-def math_tan_f64(context, builder, tys, args):
-    (val,) = args
-    mod = cgutils.get_module(builder)
-    fnty = Type.function(Type.double(), [Type.double()])
-    fn = mod.get_or_insert_function(fnty, name="tan")
-    return builder.call(fn, (val,))
-
-
-@builtin
-@implement(math.sqrt, types.float32, types.float32)
-def math_sqrt_f32(context, builder, tys, args):
-    (val,) = args
-    mod = cgutils.get_module(builder)
-    lty = context.get_value_type(types.float32)
-    intr = lc.Function.intrinsic(mod, lc.INTR_SQRT, [lty])
-    return builder.call(intr, args)
-
-
-@builtin
-@implement(math.sqrt, types.float64, types.float64)
-def math_sqrt_f64(context, builder, tys, args):
-    (val,) = args
-    mod = cgutils.get_module(builder)
-    lty = context.get_value_type(types.float64)
-    intr = lc.Function.intrinsic(mod, lc.INTR_SQRT, [lty])
-    return builder.call(intr, args)
-
-
-@builtin
-@implement(math.log, types.float32, types.float32)
-def math_log_f32(context, builder, tys, args):
-    (val,) = args
-    mod = cgutils.get_module(builder)
-    lty = context.get_value_type(types.float32)
-    intr = lc.Function.intrinsic(mod, lc.INTR_LOG, [lty])
-    return builder.call(intr, args)
-
-
-@builtin
-@implement(math.log, types.float64, types.float64)
-def math_log_f64(context, builder, tys, args):
-    (val,) = args
-    mod = cgutils.get_module(builder)
-    lty = context.get_value_type(types.float64)
-    intr = lc.Function.intrinsic(mod, lc.INTR_LOG, [lty])
-    return builder.call(intr, args)
 
 #-------------------------------------------------------------------------------
 

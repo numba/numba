@@ -7,7 +7,7 @@ from numba import _dynfunc, _helperlib, config
 from numba.callwrapper import PyCallWrapper
 from .base import BaseContext
 from numba import utils
-from numba.targets import intrinsics
+from numba.targets import intrinsics, mathimpl
 
 
 class CPUContext(BaseContext):
@@ -30,6 +30,9 @@ class CPUContext(BaseContext):
 
         self.cmath_provider = {}
         self.map_math_functions()
+
+        # Add target specific implementations
+        self.insert_func_defn(mathimpl.functions)
 
     def map_math_functions(self):
         le.dylib_add_symbol("numba.math.cpow", _helperlib.get_cpow_pointer())
@@ -75,7 +78,7 @@ class CPUContext(BaseContext):
                                        fnptr)
 
         _dynfunc.set_arbitrary_addr(moddictptr, fndesc.pymod.__dict__)
-        self.native_funcs[cfunc] = fndesc.name, baseptr
+        self.native_funcs[cfunc] = fndesc.mangled_name, baseptr
         return cfunc, fnptr
 
     def optimize_pythonapi(self, func):
