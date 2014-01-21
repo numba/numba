@@ -3,7 +3,7 @@ import llvm.core as lc
 import math
 from numba import types, typing, cgutils
 from numba.targets.imputils import (builtin, builtin_attr, implement,
-                                    impl_attribute, python_attr_impl)
+                                    impl_attribute)
 
 #-------------------------------------------------------------------------------
 

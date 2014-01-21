@@ -4,6 +4,8 @@ import functools
 from numba import types, utils
 from numba.typeconv import rules
 from . import templates
+# Initialize declarations
+from . import builtins, mathdecl, npydecl
 
 
 class Context(object):
