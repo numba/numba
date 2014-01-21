@@ -19,19 +19,18 @@ before_install:
   - chmod +x miniconda.sh
   - ./miniconda.sh -b
   - export PATH=/home/travis/anaconda/bin:$PATH
+  - conda update conda
+  # Setup environment
+  - conda create -n travisci python=${TRAVIS_PYTHON_VERSION:0:3} llvm numpy
+  - source activate travisci
+  # Install unittest2 for Python 2
+  - if [ ${TRAVIS_PYTHON_VERSION:0:3} == "2.6" ]; then conda install unittest2; fi
   # The next couple lines fix a crash with multiprocessing on Travis
   # and are not specific to using Miniconda
   - sudo rm -rf /dev/shm
   - sudo ln -s /run/shm /dev/shm
 
 install:
-    - conda update --yes conda
-    # Install NumPy LLVM
-    - echo ${TRAVIS_PYTHON_VERSION:0:3}
-    - conda install --yes python=${TRAVIS_PYTHON_VERSION:0:3}
-    - conda install --yes numpy llvm
-    # Install unittest2 for Python 2
-    - if [ ${TRAVIS_PYTHON_VERSION:0:3} == "2.6" ]; then conda install unittest2; fi
     # Install llvmpy
     - git clone git://github.com/llvmpy/llvmpy.git -q
     - cd llvmpy ; python setup.py install -q >/dev/null ; cd ..
