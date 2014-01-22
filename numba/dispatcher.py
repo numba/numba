@@ -1,8 +1,9 @@
 from __future__ import print_function, division, absolute_import
+import inspect
 import numpy
 from numba.config import PYVERSION
 from numba import _dispatcher, types, compiler, targets, typing, utils
-
+from numba.typeconv.rules import default_type_manager
 
 class GlobalContext(object):
     """
@@ -27,14 +28,21 @@ class GlobalContext(object):
 # call and use numpy.dtype for ndarray.
 # int default to int32
 # long default to pyobject?
-class Overloaded(object):
+class Overloaded(_dispatcher.Dispatcher):
     def __init__(self, py_func):
-        self.dispatcher = _dispatcher.Dispatcher()
+        self.tm = default_type_manager
+
+        argspec = inspect.getargspec(py_func)
+        argct = len(argspec.args)
+
+        super(Overloaded, self).__init__(self.tm.get_pointer(), argct)
+
         self.py_func = py_func
         self.overloads = {}
 
     def add_overload(self, cres):
-        self.dispatcher.insert(cres.argtypes, cres.entry_point_addr)
+        sig = [self.tm.get(a) for a in cres.argtypes]
+        self.insert(sig, cres.entry_point_addr)
         self.overloads[cres.argtypes] = cres
 
     def jit(self, sig, **kws):
@@ -70,13 +78,15 @@ class Overloaded(object):
             print(res.type_annotation)
             print('=' * 80)
 
-    def __call__(self, *args, **kws):
-        assert not kws, "Keyword arguments are not supported"
-        tys = [None] * len(args)
-        for i, a in enumerate(args):
-            tys[i] = typeof_pyval(a)
-
-        return self.dispatcher(tuple(tys), args)
+    # def __call__(self, *args, **kws):
+    #     assert not kws, "Keyword arguments are not supported"
+    #     tys = []
+    #     for i, a in enumerate(args):
+    #         tys.append(typeof_pyval(a))
+    #
+    #     sig = [self.tm.get(t) for t in tys]
+    #     ptr = self.find(sig)
+    #     return super(Overloaded, self).__call__(ptr, args)
 
 
 def read_flags(flags, kws):
@@ -100,7 +110,10 @@ if PYVERSION < (3, 0):
 
 
 def typeof_pyval(val):
-    # TODO make this faster
+    """
+    This is called from numba._dispatcher as a fallback if the native code
+    cannot decide the type.
+    """
     if isinstance(val, INT_TYPES):
         return types.int32
 

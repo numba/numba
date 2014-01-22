@@ -30,8 +30,9 @@ ext_numpyadapt = Extension(name='numba._numpyadapt',
                            extra_compile_args=CFLAGS)
 
 ext_dispatcher = Extension(name="numba._dispatcher",
-                           sources=['numba/_dispatcher.c',],
-                           extra_compile_args=CFLAGS)
+                           sources=['numba/_dispatcher.c',
+                                    'numba/_dispatcherimpl.cpp',
+                                    'numba/typeconv/typeconv.cpp'])
 
 ext_helperlib = Extension(name="numba._helperlib",
                           sources=["numba/_helperlib.c"],

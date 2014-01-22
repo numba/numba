@@ -13,8 +13,7 @@ class TestWrapper(unittest.TestCase):
         cfunc = cr.entry_point
         disp = dispatcher.Overloaded(overhead)
         disp.add_overload(cr)
-        direct = disp.dispatcher
-
+        # direct = disp.dispatcher
 
         x = 321
 
@@ -23,9 +22,9 @@ class TestWrapper(unittest.TestCase):
 
         def pycfunc():
             cfunc(x)
-
-        def dispatched():
-            direct((types.int32,), (x,))
+        #
+        # def dispatched():
+        #     direct((types.int32,), (x,))
 
         def overloaded():
             disp(x)
@@ -33,7 +32,7 @@ class TestWrapper(unittest.TestCase):
         MAXCT = 100000
         print(utils.benchmark(python, maxct=MAXCT))
         print(utils.benchmark(pycfunc, maxct=MAXCT))
-        print(utils.benchmark(dispatched, maxct=MAXCT))
+        # print(utils.benchmark(dispatched, maxct=MAXCT))
         print(utils.benchmark(overloaded, maxct=MAXCT))
 
 

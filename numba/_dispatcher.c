@@ -1,18 +1,13 @@
 #include "_pymodule.h"
 #include <structmember.h>
 #include <string.h>
-
-typedef struct DefnList
-{
-    PyObject *key;
-    PyCFunctionWithKeywords func;
-    struct DefnList *next;   /* link to next node or NULL */
-} DefnList;
+#include <time.h>
+#include "_dispatcher.h"
 
 
 typedef struct DispatcherObject{
     PyObject_HEAD
-    DefnList *defns;        /* singly-linked list */
+    void *dispatcher;
 } DispatcherObject;
 
 
@@ -20,16 +15,7 @@ static
 void
 Dispatcher_dealloc(DispatcherObject *self)
 {
-    DefnList *node, *tmpnode;;
-
-    node = self->defns;
-    while (node) {
-        Py_DECREF(node->key);
-        tmpnode = node;
-        node = node->next;
-        free(tmpnode);
-    }
-
+    dispatcher_del(self->dispatcher);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
@@ -38,7 +24,12 @@ static
 int
 Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
 {
-    self->defns = NULL;
+    Py_ssize_t tmaddr;
+    int argct;
+    if (!PyArg_ParseTuple(args, "ni", &tmaddr, &argct)) {
+
+    }
+    self->dispatcher = dispatcher_new((void*)tmaddr, argct);
     return 0;
 }
 
@@ -47,21 +38,24 @@ static
 PyObject*
 Dispatcher_Insert(DispatcherObject *self, PyObject *args)
 {
-    PyObject *key, *addr;
-    DefnList *node;
+    PyObject *sigtup;
+    Py_ssize_t addr;
+    int i, sigsz;
+    int *sig;
 
-    if (!PyArg_ParseTuple(args, "OO", &key, &addr)) {
+    if (!PyArg_ParseTuple(args, "On", &sigtup, &addr)) {
         return NULL;
     }
 
-    Py_INCREF(key);
+    sigsz = PySequence_Fast_GET_SIZE(sigtup);
+    sig = malloc(sigsz * sizeof(int));
+    for (i = 0; i < sigsz; ++i) {
+        sig[i] = PyLong_AsLong(PySequence_Fast_GET_ITEM(sigtup, i));
+    }
 
-    node = malloc(sizeof(DefnList));
-    node->key = key;
-    node->func = (PyCFunctionWithKeywords)PyLong_AsVoidPtr(addr);
-    node->next = self->defns;
+    dispatcher_add_defn(self->dispatcher, sig, (void*)addr);
 
-    self->defns = node;
+    free(sig);
 
     Py_RETURN_NONE;
 }
@@ -69,66 +63,72 @@ Dispatcher_Insert(DispatcherObject *self, PyObject *args)
 
 static
 PyObject*
-Dispatcher_List(DispatcherObject *self, PyObject *args)
-{
-    DefnList *node;
-    PyObject *retlist = PyList_New(0);
-    PyObject *tup, *addr;;
-
-    for (node = self->defns; node; node = node->next) {
-        addr = PyLong_FromVoidPtr(node->func);
-        tup = PyTuple_Pack(2, node->key, addr);
-        Py_XDECREF(addr);
-        if (!tup)
-            return NULL;
-        if (-1 == PyList_Append(retlist, tup))
-            return NULL;
-    }
-    return retlist;
-}
-
-
-static
-DefnList* Dispatcher_find(DispatcherObject* self, PyObject* match)
-{
-    /*
-    TODO cache the most recent node by moving it to the head
-    */
-    DefnList *node;
-    int cmpresult;
-    for (node = self->defns; node; node = node->next) {
-        cmpresult = PyObject_RichCompareBool(node->key, match, Py_EQ);
-        if (cmpresult == 1) {
-            break;
-        } else if (cmpresult == -1) {
-            return NULL;
-        }
-    }
-    return node;
-}
-
-
-static
-PyObject*
 Dispatcher_Find(DispatcherObject *self, PyObject *args)
 {
-    DefnList *node;
-    PyObject *match, *tup, *addr;
-    if (!PyArg_ParseTuple(args, "O", &match)) {
+    PyObject *sigtup;
+    int i, sigsz;
+    int *sig;
+    void *out;
+
+    if (!PyArg_ParseTuple(args, "O", &sigtup)) {
         return NULL;
     }
 
-    node = Dispatcher_find(self, match);
+    sigsz = PySequence_Fast_GET_SIZE(sigtup);
 
-    if (NULL == node) {
-        PyErr_SetString(PyExc_TypeError, "No matching definition");
-        return NULL;
+    sig = malloc(sigsz * sizeof(int));
+    for (i = 0; i < sigsz; ++i) {
+        sig[i] = PyLong_AsLong(PySequence_Fast_GET_ITEM(sigtup, i));
     }
 
-    addr = PyLong_FromVoidPtr(node->func);
-    tup = PyTuple_Pack(2, node->key, addr);
-    Py_XDECREF(addr);
-    return tup;
+    out = dispatcher_resolve(self->dispatcher, sig);
+
+    free(sig);
+
+    return PyLong_FromVoidPtr(out);
+}
+
+static
+int typecode_fallback(void *dispatcher, PyObject *val) {
+    PyObject *dpmod, *typeof_pyval, *tmptype, *tmpstr;
+    int typecode;
+
+    // Go back to the interpreter
+
+    dpmod = PyImport_ImportModule("numba.dispatcher");
+    typeof_pyval = PyObject_GetAttrString(dpmod, "typeof_pyval");
+    tmptype = PyObject_CallFunctionObjArgs(typeof_pyval, val, NULL);
+    tmpstr = PyObject_Str(tmptype);
+    typecode = dispatcher_get_type(dispatcher, PyString_AsString(tmpstr));
+
+    Py_XDECREF(tmptype);
+    Py_XDECREF(tmpstr);
+    Py_XDECREF(typeof_pyval);
+    Py_XDECREF(dpmod);
+
+    return typecode;
+}
+
+static
+int typecode(void *dispatcher, PyObject *val) {
+    if (PyObject_TypeCheck(val, &PyInt_Type)
+        || PyObject_TypeCheck(val, &PyLong_Type)) {
+        switch (sizeof(void*)) {
+        case 4: /* 32-bit */
+            return dispatcher_get_type(dispatcher, "int32");
+        case 8: /* 64-bit */
+            return dispatcher_get_type(dispatcher, "int64");
+        }
+    } else if (PyObject_TypeCheck(val, &PyFloat_Type)) {
+        return dispatcher_get_type(dispatcher, "float64");
+    } else if (PyObject_TypeCheck(val, &PyComplex_Type)) {
+        return dispatcher_get_type(dispatcher, "complex128");
+    }
+    /*
+    Add array handling
+    */
+
+    return typecode_fallback(dispatcher, val);
 }
 
 
@@ -136,21 +136,38 @@ static
 PyObject*
 Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
 {
-    PyObject *match, *argvals, *retval;
-    DefnList *node;
+    PyObject *tmptype, *retval;
+    int *tys;
+    int argct;
+    int i;
+    int prealloc[24];
+    PyCFunctionWithKeywords fn;
 
-    match = PyTuple_GET_ITEM(args, 0);
-    argvals = PyTuple_GET_ITEM(args, 1);
+    argct = PySequence_Fast_GET_SIZE(args);
 
-    node = Dispatcher_find(self, match);
+    if (argct < sizeof(prealloc) / sizeof(int))
+        tys = prealloc;
+    else
+        tys = malloc(argct * sizeof(int));
 
-    if (NULL == node) {
+    for (i = 0; i < argct; ++i) {
+        tmptype = PySequence_Fast_GET_ITEM(args, i);
+        tys[i] = typecode(self->dispatcher, tmptype);
+    }
+
+    fn = (PyCFunctionWithKeywords)dispatcher_resolve(self->dispatcher, tys);
+    if (!fn) {
         PyErr_SetString(PyExc_TypeError, "No matching definition");
         return NULL;
     }
 
-    retval = node->func(NULL, argvals, kws);
+    retval = fn(NULL, args, kws);
+
+    if (tys != prealloc)
+        free(tys);
+
     return retval;
+
 }
 
 
@@ -164,8 +181,6 @@ static PyMethodDef Dispatcher_methods[] = {
       "insert new definition"},
     { "find", (PyCFunction)Dispatcher_Find, METH_VARARGS,
       "find matching definition and return a tuple of (argtypes, callable)"},
-    { "list", (PyCFunction)Dispatcher_List, METH_NOARGS,
-      "return a list of definitions"},
     { NULL },
 };
 

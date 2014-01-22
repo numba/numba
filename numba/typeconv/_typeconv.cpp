@@ -23,6 +23,9 @@ check_compatible(PyObject* self, PyObject* args);
 static PyObject*
 set_compatible(PyObject* self, PyObject* args);
 
+static PyObject*
+get_pointer(PyObject* self, PyObject* args);
+
 
 static PyMethodDef ext_methods[] = {
 #define declmethod(func) { #func , ( PyCFunction )func , METH_VARARGS , NULL }
@@ -31,6 +34,7 @@ static PyMethodDef ext_methods[] = {
     declmethod(select_overload),
     declmethod(check_compatible),
     declmethod(set_compatible),
+    declmethod(get_pointer),
     { NULL },
 #undef declmethod
 };
@@ -65,7 +69,6 @@ new_type_manager(PyObject* self, PyObject* args)
     TypeManager* tm = new TypeManager();
     return PyCapsule_New(tm, PY_CAPSULE_TM_NAME, &del_type_manager);
 }
-
 
 void
 del_type_manager(PyObject *tm)
@@ -200,4 +203,16 @@ set_compatible(PyObject* self, PyObject* args)
     tm->addCompatibility(Type(from), Type(to), tcc);
     Py_RETURN_NONE;
 }
+
+
+PyObject*
+get_pointer(PyObject* self, PyObject* args)
+{
+    PyObject *tmcap;
+    if (!PyArg_ParseTuple(args, "O", &tmcap)) {
+        return NULL;
+    }
+    return PyLong_FromVoidPtr(unwrap_TypeManager(tmcap));
+}
+
 

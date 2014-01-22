@@ -27,3 +27,5 @@ class TypeManager(object):
     def set_safe_convert(self, fromty, toty):
         self.set_compatbile(fromty, toty, ord("s"))
 
+    def get_pointer(self):
+        return _typeconv.get_pointer(self._ptr)
