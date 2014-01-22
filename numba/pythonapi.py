@@ -29,6 +29,7 @@ class PythonAPI(object):
         self.pyobj = self.context.get_argument_type(types.pyobject)
         self.long = Type.int(ctypes.sizeof(ctypes.c_long) * 8)
         self.ulonglong = Type.int(ctypes.sizeof(ctypes.c_ulonglong) * 8)
+        self.longlong = self.ulonglong
         self.double = Type.double()
         self.py_ssize_t = self.context.get_value_type(types.intp)
         self.cstring = Type.pointer(Type.int(8))
@@ -119,9 +120,19 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyLong_AsUnsignedLongLong")
         return self.builder.call(fn, [numobj])
 
+    def long_as_longlong(self, numobj):
+        fnty = Type.function(self.ulonglong, [self.pyobj])
+        fn = self._get_function(fnty, name="PyLong_AsLongLong")
+        return self.builder.call(fn, [numobj])
+
     def long_from_ulonglong(self, numobj):
         fnty = Type.function(self.pyobj, [self.ulonglong])
         fn = self._get_function(fnty, name="PyLong_FromUnsignedLongLong")
+        return self.builder.call(fn, [numobj])
+
+    def long_from_longlong(self, numobj):
+        fnty = Type.function(self.pyobj, [self.ulonglong])
+        fn = self._get_function(fnty, name="PyLong_FromLongLong")
         return self.builder.call(fn, [numobj])
 
     def _get_number_operator(self, name):
@@ -386,14 +397,13 @@ class PythonAPI(object):
             return obj
 
         elif typ in types.unsigned_domain:
-            longval = self.number_long(obj)
-            ullval = self.long_as_ulonglong(longval)
+            ullval = self.long_as_ulonglong(obj)
             return self.builder.trunc(ullval,
                                       self.context.get_argument_type(typ))
 
         elif typ in types.signed_domain:
-            ssize_val = self.number_as_ssize_t(obj)
-            return self.builder.trunc(ssize_val,
+            llval = self.long_as_longlong(obj)
+            return self.builder.trunc(llval,
                                       self.context.get_argument_type(typ))
 
         elif typ == types.float32:
@@ -453,8 +463,8 @@ class PythonAPI(object):
             return self.long_from_ulonglong(ullval)
 
         elif typ in types.signed_domain:
-            ival = self.builder.sext(val, self.py_ssize_t)
-            return self.long_from_ssize_t(ival)
+            ival = self.builder.sext(val, self.longlong)
+            return self.long_from_longlong(ival)
 
         elif typ == types.float32:
             dbval = self.builder.fpext(val, self.double)
