@@ -5,16 +5,18 @@ static
 PyObject*
 make_function(PyObject *self, PyObject *args)
 {
-    PyObject *module, *fname, *fdoc;
-    Py_ssize_t fnaddr;
+    PyObject *module, *fname, *fdoc, *fnaddrobj;
+    void *fnaddr;
     PyMethodDef *desc;
     char *doc, *name;
     char *mlname, *mldoc;
     size_t szdoc, szname;
 
-    if (!PyArg_ParseTuple(args, "OOOn", &module, &fname, &fdoc, &fnaddr)) {
+    if (!PyArg_ParseTuple(args, "OOOO", &module, &fname, &fdoc, &fnaddrobj)) {
         return NULL;
     }
+
+    fnaddr = PyLong_AsVoidPtr(fnaddrobj);
 
     doc = PyString_AsString(fdoc);
     name = PyString_AsString(fname);
@@ -40,15 +42,13 @@ make_function(PyObject *self, PyObject *args)
 static
 PyObject*
 set_arbitrary_addr(PyObject* self, PyObject* args){
-    PyObject *obj;
-    union {
-        Py_ssize_t intval;
-        void **ptr;
-    } target;
-    if (!PyArg_ParseTuple(args, "nO", &target.intval, &obj)) {
+    PyObject *obj, *targetobj;
+    void **target;
+    if (!PyArg_ParseTuple(args, "OO", &targetobj, &obj)) {
         return NULL;
     }
-    *target.ptr = (void*)obj;
+    target = PyLong_AsVoidPtr(targetobj);
+    *target = obj;
     Py_RETURN_NONE;
 }
 

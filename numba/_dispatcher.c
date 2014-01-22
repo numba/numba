@@ -24,12 +24,14 @@ static
 int
 Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
 {
-    Py_ssize_t tmaddr;
+    PyObject *tmaddrobj;
+    void *tmaddr;
     int argct;
-    if (!PyArg_ParseTuple(args, "ni", &tmaddr, &argct)) {
+    if (!PyArg_ParseTuple(args, "Oi", &tmaddrobj, &argct)) {
 
     }
-    self->dispatcher = dispatcher_new((void*)tmaddr, argct);
+    tmaddr = PyLong_AsVoidPtr(tmaddrobj);
+    self->dispatcher = dispatcher_new(tmaddr, argct);
     return 0;
 }
 
@@ -38,17 +40,18 @@ static
 PyObject*
 Dispatcher_Insert(DispatcherObject *self, PyObject *args)
 {
-    PyObject *sigtup;
-    Py_ssize_t addr;
+    PyObject *sigtup, *addrobj;
+    void *addr;
     int i, sigsz;
     int *sig;
 
-    if (!PyArg_ParseTuple(args, "On", &sigtup, &addr)) {
+    if (!PyArg_ParseTuple(args, "OO", &sigtup, &addrobj)) {
         return NULL;
     }
-
+    addr = PyLong_AsVoidPtr(addrobj);
     sigsz = PySequence_Fast_GET_SIZE(sigtup);
     sig = malloc(sigsz * sizeof(int));
+
     for (i = 0; i < sigsz; ++i) {
         sig[i] = PyLong_AsLong(PySequence_Fast_GET_ITEM(sigtup, i));
     }
