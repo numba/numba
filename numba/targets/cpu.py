@@ -34,37 +34,46 @@ class CPUContext(BaseContext):
         self.insert_func_defn(npyimpl.functions)
 
     def build_pass_manager(self):
-        tm = self.tm
-        pm = lp.PassManager.new()
-        pm.add(tm.target_data.clone())
-        pm.add(lp.TargetLibraryInfo.new(tm.triple))
+        if config.OPT == 3:
+            # This uses the same passes for clang -O3
+            pms = lp.build_pass_managers(tm=self.tm, opt=3, loop_vectorize=True,
+                                         fpm=False)
+            return pms.pm
+        else:
+            # This uses minimum amount of passes for fast code.
+            # TODO: make it generate vector code
+            tm = self.tm
+            pm = lp.PassManager.new()
+            pm.add(tm.target_data.clone())
+            pm.add(lp.TargetLibraryInfo.new(tm.triple))
+            # Re-enable for target infomation for vectorization
+            # tm.add_analysis_passes(pm)
+            passes = '''
+            basicaa
+            scev-aa
+            mem2reg
+            sroa
+            adce
+            dse
+            sccp
+            instcombine
+            simplifycfg
+            loops
+            indvars
+            loop-simplify
+            licm
+            simplifycfg
+            instcombine
+            loop-vectorize
+            instcombine
+            simplifycfg
+            globalopt
+            globaldce
+            '''.split()
 
-        passes = '''
-        basicaa
-        scev-aa
-        mem2reg
-        sroa
-        adce
-        dse
-        sccp
-        instcombine
-        simplifycfg
-        loops
-        indvars
-        loop-simplify
-        licm
-        simplifycfg
-        instcombine
-        loop-vectorize
-        instcombine
-        simplifycfg
-        globalopt
-        globaldce
-        '''.split()
-
-        for p in passes:
-            pm.add(lp.Pass.new(p))
-        return pm
+            for p in passes:
+                pm.add(lp.Pass.new(p))
+            return pm
 
     def map_math_functions(self):
         le.dylib_add_symbol("numba.math.cpow", _helperlib.get_cpow_pointer())
