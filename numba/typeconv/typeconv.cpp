@@ -36,6 +36,43 @@ bool Type:: operator < (const Type& other) const {
 
 int Type::get() const { return id; }
 
+// ------ TypeManager ------
+
+unsigned int TCCMap::hash(TypePair key) const {
+    int a = key.first.get() * 9973;
+    int b = key.second.get() * 10007;
+
+    a += b;
+    b = (b << 17) | (b >> (32 - 17));
+    return b ^ a;
+}
+
+void TCCMap::insert(TypePair key, TypeCompatibleCode val) {
+    unsigned int i = hash(key) % TCCMAP_SIZE;
+    TCCMapBin &bin = records[i];
+    TCCRecord data;
+    data.key = key;
+    data.val = val;
+    for (int j = 0; j < bin.size(); ++j) {
+        if (bin[j].key == key) {
+            bin[j].val = val;
+            return;
+        }
+    }
+    bin.push_back(data);
+}
+
+TypeCompatibleCode TCCMap::find(TypePair key) const {
+    unsigned int i = hash(key) % TCCMAP_SIZE;
+    const TCCMapBin &bin = records[i];
+    for (int j = 0; j < bin.size(); ++j) {
+        if (bin[j].key == key) {
+            return bin[j].val;
+        }
+    }
+    return TCC_FALSE;
+}
+
 // ------ TypeManager ------ 
 
 Type TypeManager::get(const char name[]) {
@@ -77,18 +114,20 @@ void TypeManager::addSafeConversion(Type from, Type to) {
 
 void TypeManager::addCompatibility(Type from, Type to, TypeCompatibleCode tcc) {
 	TypePair pair(from, to);
-	tccmap[pair] = tcc;
+    //	tccmap[pair] = tcc;
+    tccmap.insert(pair, tcc);
 }
 
 TypeCompatibleCode TypeManager::isCompatible(Type from, Type to) const {
 	if (from == to)
 		return TCC_EXACT;
 	TypePair pair(from, to);
-	TCCMap::const_iterator it = tccmap.find(pair);
-	if (it == tccmap.end())
-		return TCC_FALSE;
-	else
-		return it->second;
+//	TCCMap::const_iterator it = tccmap.find(pair);
+//	if (it == tccmap.end())
+//		return TCC_FALSE;
+//	else
+//		return it->second;
+    return tccmap.find(pair);
 }
 
 
@@ -97,10 +136,13 @@ int TypeManager::selectOverload(Type sig[], Type ovsigs[], int sigsz, int ovct) 
 	if (ovct < 16) {
 		Rating ratings[16];
 		sel = _selectOverload(sig, ovsigs, sigsz, ovct, ratings);
-	} else if (ovct < 128) {
-		Rating ratings[128];
-		sel = _selectOverload(sig, ovsigs, sigsz, ovct, ratings);
-	} else {
+	}
+	// Necessary?
+    //	else if (ovct < 128) {
+    //		Rating ratings[128];
+    //		sel = _selectOverload(sig, ovsigs, sigsz, ovct, ratings);
+    //	}
+	else {
 		Rating *ratings = new Rating[ovct];
 		sel = _selectOverload(sig, ovsigs, sigsz, ovct, ratings);
 		delete [] ratings;

@@ -1,8 +1,8 @@
 #ifndef NUMBA_TYPECONV_HPP_
 #define NUMBA_TYPECONV_HPP_
 #include <map>
-#include <set>
 #include <string>
+#include <vector>
 
 class Type{
 public:
@@ -40,7 +40,25 @@ enum TypeCompatibleCode{
 
 typedef std::map<std::string, Type> TypeMap;
 typedef std::pair<Type, Type> TypePair;
-typedef std::map<TypePair, TypeCompatibleCode> TCCMap;
+//typedef std::map<TypePair, TypeCompatibleCode> TCCMap;
+
+struct TCCRecord {
+   TypePair key;
+   TypeCompatibleCode val;
+};
+
+typedef std::vector<TCCRecord> TCCMapBin;
+
+enum {TCCMAP_SIZE = 71};
+
+class TCCMap {
+public:
+    unsigned int hash(TypePair key) const;
+    void insert(TypePair key, TypeCompatibleCode val);
+    TypeCompatibleCode find(TypePair key) const;
+private:
+    TCCMapBin records[TCCMAP_SIZE];
+};
 
 struct Rating{
     unsigned short promote;
