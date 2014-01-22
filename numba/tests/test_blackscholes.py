@@ -214,7 +214,7 @@ class TestBlackScholes(unittest.TestCase):
         L1norm = delta.sum() / np.abs(callResultGold).sum()
         print("L1 norm: %E" % L1norm)
         print("Max absolute error: %E" % delta.max())
-        self.assertEqual(delta.max(), 0)
+        self.assertAlmostEqual(delta.max(), 0)
 
 
 if __name__ == "__main__":
