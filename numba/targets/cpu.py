@@ -2,6 +2,7 @@ from __future__ import print_function
 import llvm.core as lc
 import llvm.passes as lp
 import llvm.ee as le
+from llvm import llrt
 from llvm.workaround import avx_support
 from numba import _dynfunc, _helperlib, config
 from numba.callwrapper import PyCallWrapper
@@ -31,6 +32,12 @@ class CPUContext(BaseContext):
         self.cmath_provider = {}
         self.map_math_functions()
 
+        self.is32bit = (tuple.__itemsize__ == 4)
+        if self.is32bit:
+            # Initialize Low-level Runtime for divmod64 in 32-bit
+            self.llrt = llrt.LLRT()
+            self.llrt.install_symbols()
+
         # Add target specific implementations
         self.insert_func_defn(mathimpl.functions)
         self.insert_func_defn(npyimpl.functions)
@@ -58,6 +65,9 @@ class CPUContext(BaseContext):
         self.pm.run(module)
 
     def get_executable(self, func, fndesc):
+        if self.is32bit:
+            llrt.replace_divmod64(func)
+
         im = intrinsics.IntrinsicMapping(self)
         im.run(func.module)
 
