@@ -35,7 +35,7 @@ ext_dispatcher = Extension(name="numba._dispatcher",
                                     'numba/typeconv/typeconv.cpp'])
 
 ext_helperlib = Extension(name="numba._helperlib",
-                          sources=["numba/_helperlib.c"],
+                          sources=["numba/_helperlib.c", "numba/_math_c99.c"],
                           extra_compile_args=CFLAGS)
 
 ext_typeconv = Extension(name="numba.typeconv._typeconv",

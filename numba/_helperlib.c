@@ -1,12 +1,12 @@
 #include "_pymodule.h"
 #include <stdio.h>
 #include <math.h>
+#include "_math_c99.h"
 
 static
 void Numba_cpow(Py_complex *a, Py_complex *b, Py_complex *c) {
     *c = _Py_c_pow(*a, *b);
 }
-
 
 static
 void* get_cpow_pointer() {

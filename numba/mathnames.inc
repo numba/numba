@@ -28,6 +28,9 @@ MATH_UNARY(atanhf, float, float)
 MATH_UNARY(exp, double, double)
 MATH_UNARY(expf, float, float)
 
+MATH_UNARY(expm1, double, double)
+MATH_UNARY(expm1f, float, float)
+
 MATH_UNARY(sqrt, double, double)
 MATH_UNARY(sqrtf, float, float)
 
@@ -45,6 +48,9 @@ MATH_UNARY(logf, float, float)
 
 MATH_UNARY(log10, double, double)
 MATH_UNARY(log10f, float, float)
+
+MATH_UNARY(log1p, double, double)
+MATH_UNARY(log1pf, float, float)
 
 MATH_BINARY(pow, double, double, double)
 MATH_BINARY(powf, float, float, float)
