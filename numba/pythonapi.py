@@ -397,12 +397,16 @@ class PythonAPI(object):
             return obj
 
         elif typ in types.unsigned_domain:
-            ullval = self.long_as_ulonglong(obj)
+            longobj = self.number_long(obj)
+            ullval = self.long_as_ulonglong(longobj)
+            self.decref(longobj)
             return self.builder.trunc(ullval,
                                       self.context.get_argument_type(typ))
 
         elif typ in types.signed_domain:
-            llval = self.long_as_longlong(obj)
+            longobj = self.number_long(obj)
+            llval = self.long_as_longlong(longobj)
+            self.decref(longobj)
             return self.builder.trunc(llval,
                                       self.context.get_argument_type(typ))
 
