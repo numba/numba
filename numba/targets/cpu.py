@@ -24,10 +24,6 @@ class CPUContext(BaseContext):
         self.cmath_provider = {}
         self.map_math_functions()
         self.is32bit = (tuple.__itemsize__ == 4)
-        if self.is32bit:
-            # Initialize Low-level Runtime for divmod64 in 32-bit
-            self.llrt = llrt.LLRT()
-            self.llrt.install_symbols()
 
         # Add target specific implementations
         self.insert_func_defn(mathimpl.functions)
@@ -76,7 +72,11 @@ class CPUContext(BaseContext):
             return pm
 
     def map_math_functions(self):
-        le.dylib_add_symbol("numba.math.cpow", _helperlib.get_cpow_pointer())
+        le.dylib_add_symbol("numba.math.cpow", _helperlib.get_cpow())
+        le.dylib_add_symbol("numba.math.sdiv", _helperlib.get_sdiv())
+        le.dylib_add_symbol("numba.math.srem", _helperlib.get_srem())
+        le.dylib_add_symbol("numba.math.udiv", _helperlib.get_udiv())
+        le.dylib_add_symbol("numba.math.urem", _helperlib.get_urem())
 
         # List available C-math
         for fname in intrinsics.INTR_MATH:
@@ -99,7 +99,8 @@ class CPUContext(BaseContext):
 
     def get_executable(self, func, fndesc):
         if self.is32bit:
-            llrt.replace_divmod64(func)
+            dmf = intrinsics.DivmodFixer(self)
+            dmf.run(func)
 
         im = intrinsics.IntrinsicMapping(self)
         im.run(func.module)

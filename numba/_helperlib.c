@@ -2,16 +2,42 @@
 #include <stdio.h>
 #include <math.h>
 #include "_math_c99.h"
+#ifdef _MSC_VER
+    #define int64_t signed __int64
+    #define uint64_t unsigned __uint64
+#else
+    #include <stdint.h>
+#endif
 
+
+/* provide 64-bit division function to 32-bit platforms */
+static
+int64_t Numba_sdiv(int64_t a, int64_t b) {
+    return a / b;
+}
+
+static
+uint64_t Numba_udiv(uint64_t a, uint64_t b) {
+    return a / b;
+}
+
+/* provide 64-bit remainder function to 32-bit platforms */
+static
+int64_t Numba_srem(int64_t a, int64_t b) {
+    return a % b;
+}
+
+static
+uint64_t Numba_urem(uint64_t a, uint64_t b) {
+    return a % b;
+}
+
+/* provide complex power */
 static
 void Numba_cpow(Py_complex *a, Py_complex *b, Py_complex *c) {
     *c = _Py_c_pow(*a, *b);
 }
 
-static
-void* get_cpow_pointer() {
-    return PyLong_FromVoidPtr(&Numba_cpow);
-}
 
 static
 int Numba_to_complex(PyObject* obj, Py_complex *out) {
@@ -29,10 +55,16 @@ int Numba_to_complex(PyObject* obj, Py_complex *out) {
     return 1;
 }
 
-static
-void* get_complex_adaptor() {
-    return PyLong_FromVoidPtr(&Numba_to_complex);
-}
+
+
+#define EXPOSE(Fn, Sym) static void* Sym(){return PyLong_FromVoidPtr(&Fn);}
+EXPOSE(Numba_sdiv, get_sdiv)
+EXPOSE(Numba_srem, get_srem)
+EXPOSE(Numba_udiv, get_udiv)
+EXPOSE(Numba_urem, get_urem)
+EXPOSE(Numba_cpow, get_cpow)
+EXPOSE(Numba_to_complex, get_complex_adaptor)
+#undef EXPOSE
 
 /*
 Define bridge for all math functions
@@ -56,7 +88,11 @@ Expose all math functions
 
 static PyMethodDef ext_methods[] = {
 #define declmethod(func) { #func , ( PyCFunction )func , METH_VARARGS , NULL }
-    declmethod(get_cpow_pointer),
+    declmethod(get_sdiv),
+    declmethod(get_srem),
+    declmethod(get_udiv),
+    declmethod(get_urem),
+    declmethod(get_cpow),
     declmethod(get_complex_adaptor),
 
     /* Declare math exposer */
