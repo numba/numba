@@ -19,19 +19,10 @@ class CPUContext(BaseContext):
             eb.mattrs("-avx")
         self.tm = tm = eb.select_target()
         self.engine = eb.create(tm)
-
-        pms = lp.build_pass_managers(tm=self.tm, loop_vectorize=True,
-                                     opt=3, fpm=False)
-        self.pm = pms.pm
-
+        self.pm = self.build_pass_manager()
         self.native_funcs = utils.UniqueDict()
-        # self.pm = lp.PassManager.new()
-        # self.pm.add(lp.Pass.new("mem2reg"))
-        # self.pm.add(lp.Pass.new("simplifycfg"))
-
         self.cmath_provider = {}
         self.map_math_functions()
-
         self.is32bit = (tuple.__itemsize__ == 4)
         if self.is32bit:
             # Initialize Low-level Runtime for divmod64 in 32-bit
@@ -41,6 +32,39 @@ class CPUContext(BaseContext):
         # Add target specific implementations
         self.insert_func_defn(mathimpl.functions)
         self.insert_func_defn(npyimpl.functions)
+
+    def build_pass_manager(self):
+        tm = self.tm
+        pm = lp.PassManager.new()
+        pm.add(tm.target_data.clone())
+        pm.add(lp.TargetLibraryInfo.new(tm.triple))
+
+        passes = '''
+        basicaa
+        scev-aa
+        mem2reg
+        sroa
+        adce
+        dse
+        sccp
+        instcombine
+        simplifycfg
+        loops
+        indvars
+        loop-simplify
+        licm
+        simplifycfg
+        instcombine
+        loop-vectorize
+        instcombine
+        simplifycfg
+        globalopt
+        globaldce
+        '''.split()
+
+        for p in passes:
+            pm.add(lp.Pass.new(p))
+        return pm
 
     def map_math_functions(self):
         le.dylib_add_symbol("numba.math.cpow", _helperlib.get_cpow_pointer())
