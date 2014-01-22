@@ -19,7 +19,7 @@ before_install:
   - chmod +x miniconda.sh
   - ./miniconda.sh -b
   - export PATH=/home/travis/anaconda/bin:$PATH
-  - conda update conda
+  - conda update --yes conda
   # Setup environment
   - conda create -n travisci --yes python=${TRAVIS_PYTHON_VERSION:0:3} llvm numpy
   - source activate travisci
