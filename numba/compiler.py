@@ -31,7 +31,7 @@ def compile_result(**kws):
     fieldset = set(CR_FIELDS)
     badnames = keys - fieldset
     if badnames:
-        raise NameError(*basenames)
+        raise NameError(*badnames)
     missing = fieldset - keys
     for k in missing:
         kws[k] = None

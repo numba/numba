@@ -35,6 +35,11 @@ class Overloaded(_dispatcher.Dispatcher):
         self.py_func = py_func
         self.overloads = {}
 
+    def disable_compile(self, val=True):
+        """Disable the compilation of new signatures at call time.
+        """
+        self._disable_compile(int(val))
+
     def add_overload(self, cres):
         sig = [a._code for a in cres.argtypes]
         self._insert(sig, cres.entry_point_addr)
@@ -43,7 +48,7 @@ class Overloaded(_dispatcher.Dispatcher):
     def get_overload(self, *tys):
         return self.overloads[tys].entry_point
 
-    def jit(self, sig, **kws):
+    def compile(self, sig, **kws):
         flags = compiler.Flags()
         read_flags(flags, kws)
 
@@ -68,6 +73,8 @@ class Overloaded(_dispatcher.Dispatcher):
 
         self.add_overload(cres)
         return cres.entry_point
+
+    jit = compile
 
     def _compile_and_call(self, *args, **kws):
         assert not kws

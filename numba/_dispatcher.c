@@ -11,6 +11,7 @@
 typedef struct DispatcherObject{
     PyObject_HEAD
     void *dispatcher;
+    int can_compile;
 } DispatcherObject;
 
 static int tc_int8;
@@ -90,6 +91,7 @@ Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
     }
     tmaddr = PyLong_AsVoidPtr(tmaddrobj);
     self->dispatcher = dispatcher_new(tmaddr, argct);
+    self->can_compile = 1;
     return 0;
 }
 
@@ -122,32 +124,46 @@ Dispatcher_Insert(DispatcherObject *self, PyObject *args)
 }
 
 
+
 static
 PyObject*
-Dispatcher_Find(DispatcherObject *self, PyObject *args)
+Dispatcher_DisableCompile(DispatcherObject *self, PyObject *args)
 {
-    PyObject *sigtup;
-    int i, sigsz;
-    int *sig;
-    void *out;
-
-    if (!PyArg_ParseTuple(args, "O", &sigtup)) {
+    int val;
+    if (!PyArg_ParseTuple(args, "i", &val)) {
         return NULL;
     }
-
-    sigsz = PySequence_Fast_GET_SIZE(sigtup);
-
-    sig = malloc(sigsz * sizeof(int));
-    for (i = 0; i < sigsz; ++i) {
-        sig[i] = PyLong_AsLong(PySequence_Fast_GET_ITEM(sigtup, i));
-    }
-
-    out = dispatcher_resolve(self->dispatcher, sig);
-
-    free(sig);
-
-    return PyLong_FromVoidPtr(out);
+    self->can_compile = !val;
+    Py_RETURN_NONE;
 }
+
+// Unused?
+//static
+//PyObject*
+//Dispatcher_Find(DispatcherObject *self, PyObject *args)
+//{
+//    PyObject *sigtup;
+//    int i, sigsz;
+//    int *sig;
+//    void *out;
+//
+//    if (!PyArg_ParseTuple(args, "O", &sigtup)) {
+//        return NULL;
+//    }
+//
+//    sigsz = PySequence_Fast_GET_SIZE(sigtup);
+//
+//    sig = malloc(sigsz * sizeof(int));
+//    for (i = 0; i < sigsz; ++i) {
+//        sig[i] = PyLong_AsLong(PySequence_Fast_GET_ITEM(sigtup, i));
+//    }
+//
+//    out = dispatcher_resolve(self->dispatcher, sig);
+//
+//    free(sig);
+//
+//    return PyLong_FromVoidPtr(out);
+//}
 
 static PyObject* TheDispatcherModule = NULL; /* Stolen reference */
 static PyObject* TheTypeOfFunc = NULL;        /* Stolen reference */
@@ -315,13 +331,18 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
     fn = (PyCFunctionWithKeywords)dispatcher_resolve(self->dispatcher, tys);
     if (!fn) {
         /* No matching definition */
-        /* Compile a new one */
-        cac = PyObject_GetAttrString((PyObject*)self, "_compile_and_call");
-        if (!cac) {
-            goto CLEANUP;
+        if (self->can_compile) {
+            /* Compile a new one */
+            cac = PyObject_GetAttrString((PyObject*)self, "_compile_and_call");
+            if (cac) {
+                retval = PyObject_Call(cac, args, kws);
+                Py_DECREF(cac);
+            }
+        } else {
+            /* Raise TypeError */
+            PyErr_SetString(PyExc_TypeError, "No matching definition");
+            retval = NULL;
         }
-        retval = PyObject_Call(cac, args, kws);
-        Py_DECREF(cac);
     } else {
         /* Definition is found */
         retval = fn(NULL, args, kws);
@@ -344,8 +365,10 @@ static PyMemberDef Dispatcher_members[] = {
 static PyMethodDef Dispatcher_methods[] = {
     { "_insert", (PyCFunction)Dispatcher_Insert, METH_VARARGS,
       "insert new definition"},
-    { "_find", (PyCFunction)Dispatcher_Find, METH_VARARGS,
-      "find matching definition and return a tuple of (argtypes, callable)"},
+//    { "_find", (PyCFunction)Dispatcher_Find, METH_VARARGS,
+//      "find matching definition and return a tuple of (argtypes, callable)"},
+    { "_disable_compile", (PyCFunction)Dispatcher_DisableCompile,
+      METH_VARARGS, "Disable compilation"},
     { NULL },
 };
 
