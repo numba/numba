@@ -73,20 +73,7 @@ TypeCompatibleCode TCCMap::find(TypePair key) const {
     return TCC_FALSE;
 }
 
-// ------ TypeManager ------ 
-
-Type TypeManager::get(const char name[]) {
-	std::string key(name);
-	if (typemap.find(key) == typemap.end()) {
-		// not found
-		Type ty(typemap.size());
-		typemap.insert(std::make_pair(key, ty));
-		return ty;
-	} else {
-		// found
-		return typemap[key];
-	}
-}
+// ------ TypeManager ------
 
 bool TypeManager::canPromote(Type from, Type to) const {
 	return isCompatible(from, to) == TCC_PROMOTE;

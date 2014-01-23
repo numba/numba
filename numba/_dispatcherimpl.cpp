@@ -1,5 +1,5 @@
 #include "typeconv/typeconv.hpp"
-
+#include <cassert>
 #include <vector>
 
 typedef std::vector<Type> TypeTable;
@@ -28,10 +28,6 @@ public:
         return functions[sel];
     }
 
-    Type get_type(const char *name) {
-        return tm->get(name);
-    }
-
     const int argct;
 private:
     TypeManager *tm;
@@ -56,39 +52,18 @@ dispatcher_del(void *obj) {
 
 void
 dispatcher_add_defn(void *obj, int tys[], void* callable) {
-    Dispatcher *disp = static_cast<Dispatcher*>(obj);
-    Type *args = new Type[disp->argct];
-    for(int i = 0; i < disp->argct; ++i) {
-        args[i] = Type(tys[i]);
-    }
+    assert(sizeof(int) == sizeof(Type) &&
+            "Type should be representable by an int");
 
+    Dispatcher *disp = static_cast<Dispatcher*>(obj);
+    Type *args = reinterpret_cast<Type*>(tys);
     disp->addDefinition(args, callable);
-    delete [] args;
 }
 
 void*
 dispatcher_resolve(void* obj, int sig[]) {
-    Type prealloc[12];
     Dispatcher *disp = static_cast<Dispatcher*>(obj);
-    Type *args;
-    if (disp->argct < sizeof(prealloc) / sizeof(Type))
-        args = prealloc;
-    else
-        args = new Type[disp->argct];
-
-    for(int i = 0; i < disp->argct; ++i) {
-        args[i] = Type(sig[i]);
-    }
-
+    Type *args = reinterpret_cast<Type*>(sig);
     void *callable = disp->resolve(args);
-
-    if (args != prealloc)
-        delete [] args;
     return callable;
-}
-
-int
-dispatcher_get_type(void *obj, const char *name) {
-    Dispatcher *disp = static_cast<Dispatcher*>(obj);
-    return disp->get_type(name).get();
 }

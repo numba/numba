@@ -17,9 +17,6 @@ dispatcher_add_defn(void *obj, int tys[], void* callable);
 void*
 dispatcher_resolve(void *obj, int sig[]);
 
-int
-dispatcher_get_type(void *obj, const char *name);
-
 #ifdef __cplusplus
     }
 #endif

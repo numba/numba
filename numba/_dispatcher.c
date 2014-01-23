@@ -10,6 +10,30 @@ typedef struct DispatcherObject{
     void *dispatcher;
 } DispatcherObject;
 
+static int tc_int32, tc_int64, tc_float64, tc_complex128;
+static int tc_intp;
+
+static
+PyObject* init_types(PyObject *self, PyObject *args)
+{
+    if (!PyArg_ParseTuple(args, "iiii", &tc_int32, &tc_int64, &tc_float64,
+                          &tc_complex128)) {
+        return NULL;
+    }
+    switch(sizeof(void*)) {
+    case 4:
+        tc_intp = tc_int32;
+        break;
+    case 8:
+        tc_intp = tc_int64;
+        break;
+    default:
+        PyErr_SetString(PyExc_AssertionError, "sizeof(void*) != {4, 8}");
+        return NULL;
+    }
+
+    Py_RETURN_NONE;
+}
 
 static
 void
@@ -93,7 +117,7 @@ Dispatcher_Find(DispatcherObject *self, PyObject *args)
 
 static
 int typecode_fallback(void *dispatcher, PyObject *val) {
-    PyObject *dpmod, *typeof_pyval, *tmptype, *tmpstr;
+    PyObject *dpmod, *typeof_pyval, *tmptype, *tmpcode;
     int typecode;
 
     // Go back to the interpreter
@@ -101,11 +125,11 @@ int typecode_fallback(void *dispatcher, PyObject *val) {
     dpmod = PyImport_ImportModule("numba.dispatcher");
     typeof_pyval = PyObject_GetAttrString(dpmod, "typeof_pyval");
     tmptype = PyObject_CallFunctionObjArgs(typeof_pyval, val, NULL);
-    tmpstr = PyObject_Str(tmptype);
-    typecode = dispatcher_get_type(dispatcher, PyString_AsString(tmpstr));
+    tmpcode = PyObject_GetAttrString(tmptype, "_code");
+    typecode = PyLong_AsLong(tmpcode);
 
+    Py_XDECREF(tmpcode);
     Py_XDECREF(tmptype);
-    Py_XDECREF(tmpstr);
     Py_XDECREF(typeof_pyval);
     Py_XDECREF(dpmod);
 
@@ -114,19 +138,13 @@ int typecode_fallback(void *dispatcher, PyObject *val) {
 
 static
 int typecode(void *dispatcher, PyObject *val) {
-    if (PyObject_TypeCheck(val, &PyInt_Type)
-        || PyObject_TypeCheck(val, &PyLong_Type)) {
-        switch (sizeof(void*)) {
-        case 4: /* 32-bit */
-            return dispatcher_get_type(dispatcher, "int32");
-        case 8: /* 64-bit */
-            return dispatcher_get_type(dispatcher, "int64");
-        }
-    } else if (PyObject_TypeCheck(val, &PyFloat_Type)) {
-        return dispatcher_get_type(dispatcher, "float64");
-    } else if (PyObject_TypeCheck(val, &PyComplex_Type)) {
-        return dispatcher_get_type(dispatcher, "complex128");
-    }
+    PyTypeObject *tyobj = val->ob_type;
+    if (tyobj == &PyInt_Type || tyobj == &PyLong_Type)
+        return tc_intp;
+    else if (tyobj == &PyFloat_Type)
+        return tc_float64;
+    else if (tyobj == &PyComplex_Type)
+        return tc_complex128;
     /*
     Add array handling
     */
@@ -170,7 +188,6 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
         free(tys);
 
     return retval;
-
 }
 
 
@@ -237,9 +254,18 @@ static PyTypeObject DispatcherType = {
 
 
 
+static PyMethodDef ext_methods[] = {
+#define declmethod(func) { #func , ( PyCFunction )func , METH_VARARGS , NULL }
+    declmethod(init_types),
+    { NULL },
+#undef declmethod
+};
+
+
+
 MOD_INIT(_dispatcher) {
     PyObject *m;
-    MOD_DEF(m, "_dispatcher", "No docs", NULL)
+    MOD_DEF(m, "_dispatcher", "No docs", ext_methods)
     if (m == NULL)
         return MOD_ERROR_VAL;
 

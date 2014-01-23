@@ -12,9 +12,6 @@ static void
 del_type_manager(PyObject *);
 
 static PyObject*
-get_type(PyObject* self, PyObject* args);
-
-static PyObject*
 select_overload(PyObject* self, PyObject* args);
 
 static PyObject*
@@ -30,7 +27,6 @@ get_pointer(PyObject* self, PyObject* args);
 static PyMethodDef ext_methods[] = {
 #define declmethod(func) { #func , ( PyCFunction )func , METH_VARARGS , NULL }
     declmethod(new_type_manager),
-    declmethod(get_type),
     declmethod(select_overload),
     declmethod(check_compatible),
     declmethod(set_compatible),
@@ -74,25 +70,6 @@ void
 del_type_manager(PyObject *tm)
 {
     delete unwrap_TypeManager(tm);
-}
-
-
-PyObject*
-get_type(PyObject* self, PyObject* args)
-{
-    PyObject *tmcap, *typobj;
-    if (!PyArg_ParseTuple(args, "OO", &tmcap, &typobj)) {
-        return NULL;
-    }
-    TypeManager *tm = unwrap_TypeManager(tmcap);
-    if (!tm) {
-        BAD_TM_ARGUMENT;
-        return NULL;
-    }
-    PyObject *name = PyObject_Str(typobj);
-    PyObject* res = PyLong_FromLong(tm->get(PyString_AsString(name)).get());
-    Py_XDECREF(name);
-    return res;
 }
 
 PyObject*

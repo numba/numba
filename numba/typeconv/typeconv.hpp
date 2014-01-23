@@ -1,9 +1,11 @@
 #ifndef NUMBA_TYPECONV_HPP_
 #define NUMBA_TYPECONV_HPP_
-#include <map>
 #include <string>
 #include <vector>
 
+/*
+This object must be int sized
+*/
 class Type{
 public:
 	Type();
@@ -38,7 +40,6 @@ enum TypeCompatibleCode{
 	TCC_CONVERT_UNSAFE,
 };
 
-typedef std::map<std::string, Type> TypeMap;
 typedef std::pair<Type, Type> TypePair;
 //typedef std::map<TypePair, TypeCompatibleCode> TCCMap;
 
@@ -75,8 +76,6 @@ struct Rating{
 
 class TypeManager{
 public:
-	Type get(const char name[]);
-
 	bool canPromote(Type from, Type to) const;
 	bool canUnsafeConvert(Type from, Type to) const;
 	bool canSafeConvert(Type from, Type to) const;
@@ -93,7 +92,6 @@ private:
 	int _selectOverload(Type sig[], Type ovsigs[], int sigsz, int ovct,
 	                    Rating ratings[]) const;
 
-	TypeMap typemap;
 	TCCMap tccmap;
 };
 

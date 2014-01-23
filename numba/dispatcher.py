@@ -41,7 +41,7 @@ class Overloaded(_dispatcher.Dispatcher):
         self.overloads = {}
 
     def add_overload(self, cres):
-        sig = [self.tm.get(a) for a in cres.argtypes]
+        sig = [a._code for a in cres.argtypes]
         self.insert(sig, cres.entry_point_addr)
         self.overloads[cres.argtypes] = cres
 
@@ -153,3 +153,7 @@ FROM_DTYPE = {
     numpy.dtype('complex128'): types.complex128,
 }
 
+
+# Initialize dispatcher
+_dispatcher.init_types(types.int32._code, types.int64._code,
+                       types.float64._code, types.complex128._code)

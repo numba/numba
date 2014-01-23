@@ -3,14 +3,25 @@ These type objects do not have a fixed machine representation.  It is up to
 the targets to choose their representation.
 """
 from __future__ import print_function, division, absolute_import
+from collections import defaultdict
+
+
+def _autoincr():
+    n = len(_typecache)
+    # 4 billion types should be enough, right?
+    assert n <= 2 ** 32, "Limited to 4billion types"
+    return n
+
+_typecache = defaultdict(_autoincr)
 
 
 class Type(object):
-    is_parametric = False
+    __slots__ = '_code', 'name', 'is_parametric'
 
     def __init__(self, name, param=False):
         self.name = name
         self.is_parametric = param
+        self._code = _typecache[self]
 
     def __repr__(self):
         return self.name
@@ -48,10 +59,10 @@ class Type(object):
 
 class Prototype(Type):
     def __init__(self, args, return_type):
-        name = "%s%s" % (return_type, ', '.join(str(a) for a in args))
-        super(Prototype, self).__init__(name=name)
         self.args = args
         self.return_type = return_type
+        name = "%s%s" % (return_type, ', '.join(str(a) for a in args))
+        super(Prototype, self).__init__(name=name)
 
 
 class Dummy(Type):
@@ -62,8 +73,8 @@ class Dummy(Type):
 
 class Kind(Type):
     def __init__(self, of):
-        super(Kind, self).__init__("kind(%s)" % of)
         self.of = of
+        super(Kind, self).__init__("kind(%s)" % of)
 
     def __eq__(self, other):
         if isinstance(other, Kind):
@@ -75,8 +86,8 @@ class Kind(Type):
 
 class Module(Type):
     def __init__(self, pymod):
-        super(Module, self).__init__("Module(%s)" % pymod)
         self.pymod = pymod
+        super(Module, self).__init__("Module(%s)" % pymod)
 
     def __eq__(self, other):
         if isinstance(other, Module):
@@ -88,9 +99,9 @@ class Module(Type):
 
 class Function(Type):
     def __init__(self, template):
+        self.template = template
         cls = type(self)
         super(Function, self).__init__("%s(%s)" % (cls.__name__, template))
-        self.template = template
 
     def __eq__(self, other):
         if isinstance(other, Function):
@@ -102,10 +113,10 @@ class Function(Type):
 
 class Method(Function):
     def __init__(self, template, this):
+        self.this = this
         newcls = type(template.__name__ + '.' + str(this), (template,),
                       dict(this=this))
         super(Method, self).__init__(newcls)
-        self.this = this
 
     def __eq__(self, other):
         if isinstance(other, Method):
@@ -117,6 +128,8 @@ class Method(Function):
 
 
 class Array(Type):
+    __slots__ = 'dtype', 'ndim', 'layout'
+
     LAYOUTS = frozenset(['C', 'F', 'CS', 'FS', 'A'])
 
     def __init__(self, dtype, ndim, layout):
@@ -124,11 +137,12 @@ class Array(Type):
             raise TypeError("Array dtype cannot be Array")
         if layout not in self.LAYOUTS:
             raise ValueError("Invalid layout '%s'" % layout)
-        name = "array(%s, %sd, %s)" % (dtype, ndim, layout)
-        super(Array, self).__init__(name, param=True)
+
         self.dtype = dtype
         self.ndim = ndim
         self.layout = layout
+        name = "array(%s, %sd, %s)" % (dtype, ndim, layout)
+        super(Array, self).__init__(name, param=True)
 
     def copy(self, dtype=None, ndim=None, layout=None):
         if dtype is None:
@@ -177,10 +191,10 @@ class Array(Type):
 
 class UniTuple(Type):
     def __init__(self, dtype, count):
-        name = "(%s x %d)" % (dtype, count)
-        super(UniTuple, self).__init__(name, param=True)
         self.dtype = dtype
         self.count = count
+        name = "(%s x %d)" % (dtype, count)
+        super(UniTuple, self).__init__(name, param=True)
 
     def getitem(self, ind):
         if isinstance(ind, UniTuple):
@@ -211,9 +225,9 @@ class UniTuple(Type):
 
 class UniTupleIter(Type):
     def __init__(self, unituple):
+        self.unituple = unituple
         name = 'iter(%s)' % unituple
         super(UniTupleIter, self).__init__(name, param=True)
-        self.unituple = unituple
 
     def __eq__(self, other):
         if isinstance(other, UniTupleIter):
@@ -225,9 +239,9 @@ class UniTupleIter(Type):
 
 class Tuple(Type):
     def __init__(self, items):
+        self.items = items
         name = "(%s)" % ', '.join(str(i) for i in items)
         super(Tuple, self).__init__(name, param=True)
-        self.items = items
 
     def __getitem__(self, i):
         """
@@ -248,9 +262,9 @@ class Tuple(Type):
 
 class CPointer(Type):
     def __init__(self, dtype):
+        self.dtype = dtype
         name = "*%s" % dtype
         super(CPointer, self).__init__(name, param=True)
-        self.dtype = dtype
 
     def __eq__(self, other):
         if isinstance(other, CPointer):
@@ -262,9 +276,9 @@ class CPointer(Type):
 
 class Object(Type):
     def __init__(self, clsobj):
+        self.cls = clsobj
         name = "Object(%s)" % clsobj.__name__
         super(Object, self).__init__(name, param=True)
-        self.cls = clsobj
 
     def __eq__(self, other):
         if isinstance(other, Object):
@@ -276,9 +290,9 @@ class Object(Type):
 
 class Optional(Type):
     def __init__(self, typ):
+        self.type = typ
         name = "?%s" % typ
         super(Optional, self).__init__(name, param=True)
-        self.type = typ
 
     def __eq__(self, other):
         if isinstance(other, Optional):

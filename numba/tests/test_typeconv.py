@@ -10,9 +10,9 @@ class TestTypeConv(unittest.TestCase):
     def test_typeconv(self):
         tm = TypeManager()
 
-        i32 = tm.get(types.int32)
-        i64 = tm.get(types.int64)
-        f32 = tm.get(types.float32)
+        i32 = types.int32
+        i64 = types.int64
+        f32 = types.float32
 
         tm.set_promote(i32, i64)
         tm.set_unsafe_convert(i32, f32)
@@ -29,10 +29,10 @@ class TestTypeConv(unittest.TestCase):
     def test_default(self):
         tm = rules.default_type_manager
 
-        i16 = tm.get(types.int16)
-        i32 = tm.get(types.int32)
-        i64 = tm.get(types.int64)
-        f32 = tm.get(types.float32)
+        i16 = types.int16
+        i32 = types.int32
+        i64 = types.int64
+        f32 = types.float32
 
         self.assertEqual(tm.check_compatible(i32, i64), 'promote')
         self.assertEqual(tm.check_compatible(i32, f32), 'unsafe')
@@ -43,15 +43,14 @@ class TestTypeConv(unittest.TestCase):
                                         types.number_domain):
             if ta in types.complex_domain and tb not in types.complex_domain:
                 continue
-            a, b = tm.get(ta), tm.get(tb)
-            self.assertTrue(tm.check_compatible(a, b) is not None,
+            self.assertTrue(tm.check_compatible(ta, tb) is not None,
                             msg="No cast from %s to %s" % (ta, tb))
 
     def test_overload1(self):
         tm = rules.default_type_manager
 
-        i32 = tm.get(types.int32)
-        i64 = tm.get(types.int64)
+        i32 = types.int32
+        i64 = types.int64
 
         sig = (i64, i32, i32)
         ovs = [

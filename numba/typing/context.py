@@ -102,7 +102,7 @@ class Context(object):
                   isinstance(toty, types.UniTuple) and
                   len(fromty) == len(toty)):
             return self.type_compatibility(fromty.dtype, toty.dtype)
-        return self.tm.check_compatible(self.tm.get(fromty), self.tm.get(toty))
+        return self.tm.check_compatible(fromty, toty)
 
     def unify_types(self, *types):
         return functools.reduce(self.unify_pairs, types)
