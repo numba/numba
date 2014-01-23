@@ -477,6 +477,11 @@ class BaseContext(object):
         puts = mod.get_or_insert_function(fnty, "puts")
         return builder.call(puts, [text])
 
+    def debug_print(self, builder, text):
+        mod = cgutils.get_module(builder)
+        cstr = self.insert_const_string(mod, str(text))
+        self.print_string(builder, cstr)
+
     def get_struct_type(self, struct):
         fields = [self.get_value_type(v) for _, v in struct._fields]
         return Type.struct(fields)

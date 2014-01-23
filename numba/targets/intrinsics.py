@@ -12,10 +12,11 @@ class DivmodFixer(object):
     NAMES = 'sdiv', 'udiv', 'srem', 'urem'
     I64 = lc.Type.int(64)
 
-    def __init__(self, context):
-        self.context = context
-
-    def run(self, func):
+    def run(self, module):
+        for func in module.functions:
+            self.run_on_func(func)
+        
+    def run_on_func(self, func):
         to_replace = []
         for bb in func.basic_blocks:
             for instr in bb.instructions:
@@ -142,4 +143,35 @@ INTR_TO_CMATH = {
     "llvm.ceil.f64": "ceil",
 }
 
-INTR_MATH = list(INTR_TO_CMATH.values())
+OTHER_CMATHS = '''
+tan
+tanf
+sinh
+sinhf
+cosh
+coshf
+tanh
+tanhf
+asin
+asinf
+acos
+acosf
+atan
+atanf
+asinh
+asinhf
+acosh
+acoshf
+atanh
+atanhf
+expm1
+expm1f
+log1p
+log1pf
+log10
+log10f
+fmod
+fmodf
+'''.split()
+
+INTR_MATH = frozenset(INTR_TO_CMATH.values()) | frozenset(OTHER_CMATHS)

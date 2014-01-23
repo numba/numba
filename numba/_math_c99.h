@@ -2,45 +2,39 @@
 #define NUMBA_MATH_C99_H_
 
 double m_acosh(double x);
+float m_acoshf(float x);
+
 double m_asinh(double x);
+float m_asinhf(float x);
+
 double m_atanh(double x);
+float m_atanhf(float x);
+
 double m_expm1(double x);
+float m_expm1f(float x);
+
 double m_log1p(double x);
+float m_log1pf(float x);
 
 #ifdef _MSC_VER
 
 /* define asinh acosh atanh for windows */
 
 #define asinh m_asinh
+#define asinhf m_asinhf
 #define acosh m_acosh
+#define acoshf m_acoshf
 #define atanh m_atanh
+#define atanhf m_atanhf
 
 /* define expm1 log1p */
 
 #define expm1 m_expm1
+#define expm1f m_expm1f
 #define log1p m_log1p
+#define log1pf m_log1pf
 
 /* provide floating point equivalence */
-
-float asinhf(float x) {
-    return asinh(x);
-}
-
-float acoshf(float x) {
-    return acosh(x);
-}
-
-float atanhf(float x) {
-    return atanh(x);
-}
-
-float expm1f(float x) {
-    return expm1(x);
-}
-
-float log1pf(float x) {
-    return log1p(x);
-}
 
 #endif /* _MSC_VER */
 

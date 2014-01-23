@@ -37,11 +37,15 @@ class PyCallWrapper(object):
         parseok = api.parse_tuple_and_keywords(args, kws, fmt, keywords, *objs)
 
         pred = builder.icmp(lc.ICMP_EQ, parseok, Constant.null(parseok.type))
-        with cgutils.ifthen(builder, pred):
+        with cgutils.if_unlikely(builder, pred):
             builder.ret(api.get_null_object())
 
-        innerargs = [api.to_native_arg(builder.load(obj), ty)
-                     for obj, ty in zip(objs, self.fndesc.argtypes)]
+        innerargs = []
+        for obj, ty in zip(objs, self.fndesc.argtypes):
+            #api.context.debug_print(builder, "%s -> %s" % (obj, ty))
+            #api.print_object(builder.load(obj))
+            val = api.to_native_arg(builder.load(obj), ty)
+            innerargs.append(val)
 
         status, res = self.context.call_function(builder, self.func, innerargs)
 

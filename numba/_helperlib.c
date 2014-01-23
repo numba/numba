@@ -4,7 +4,7 @@
 #include "_math_c99.h"
 #ifdef _MSC_VER
     #define int64_t signed __int64
-    #define uint64_t unsigned __uint64
+    #define uint64_t unsigned __int64
 #else
     #include <stdint.h>
 #endif

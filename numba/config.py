@@ -3,10 +3,12 @@ import sys
 import os
 
 # Debug flag to control compiler debug print
-DEBUG = os.environ.get("NUMBA_DEBUG", False)
+DEBUG = int(os.environ.get("NUMBA_DEBUG", '0'))
+
+DEBUG_JIT = int(os.environ.get("NUMBA_DEBUG", '0'))
 
 # Optimization level
-OPT = os.environ.get("NUMBA_OPT", 2)
+OPT = int(os.environ.get("NUMBA_OPT", '2'))
 
 # Python version in (major, minor) tuple
 PYVERSION = sys.version_info[:2]

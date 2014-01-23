@@ -99,8 +99,8 @@ class CPUContext(BaseContext):
 
     def get_executable(self, func, fndesc):
         if self.is32bit:
-            dmf = intrinsics.DivmodFixer(self)
-            dmf.run(func)
+            dmf = intrinsics.DivmodFixer()
+            dmf.run(func.module)
 
         im = intrinsics.IntrinsicMapping(self)
         im.run(func.module)
@@ -114,6 +114,7 @@ class CPUContext(BaseContext):
 
         if config.DEBUG:
             print(func.module)
+            print(self.tm.emit_assembly(func.module))
 
         self.engine.add_module(func.module)
         baseptr = self.engine.get_pointer_to_function(func)

@@ -131,6 +131,8 @@ class BaseLower(object):
 
 class Lower(BaseLower):
     def lower_inst(self, inst):
+        if config.DEBUG_JIT:
+            self.context.debug_print(self.builder, str(inst))
         if isinstance(inst, ir.Assign):
             ty = self.typeof(inst.target.name)
             val = self.lower_assign(ty, inst)

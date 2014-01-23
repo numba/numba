@@ -28,6 +28,9 @@ def mul_usecase(x, y):
 def div_usecase(x, y):
     return x / y
 
+def floordiv_usecase(x, y):
+    return x / y
+
 def mod_usecase(x, y):
     return x % y
 
@@ -57,7 +60,6 @@ class TestOperators(unittest.TestCase):
 
             cr = compile_isolated(pyfunc, arg_types, flags=flags)
             cfunc = cr.entry_point
-
             for x, y in itertools.product(x_operands, y_operands):
                 self.assertTrue(np.allclose(pyfunc(x, y), cfunc(x, y)))
 
@@ -309,6 +311,17 @@ class TestOperators(unittest.TestCase):
 
     def test_truediv_floats(self):
         pyfunc = truediv_usecase
+
+        x_operands = [-111.111, 0.0, 2.2]
+        y_operands = [-2.2, 1.0, 111.111]
+
+        types_list = [(types.float32, types.float32),
+                      (types.float64, types.float64)]
+
+        self.run_test_floats(pyfunc, x_operands, y_operands, types_list)
+
+    def test_floordiv_floats(self):
+        pyfunc = floordiv_usecase
 
         x_operands = [-111.111, 0.0, 2.2]
         y_operands = [-2.2, 1.0, 111.111]

@@ -7,6 +7,15 @@ MATH_UNARY(cosf, float, float)
 MATH_UNARY(tan, double, double)
 MATH_UNARY(tanf, float, float)
 
+MATH_UNARY(sinh, double, double)
+MATH_UNARY(sinhf, float, float)
+
+MATH_UNARY(cosh, double, double)
+MATH_UNARY(coshf, float, float)
+
+MATH_UNARY(tanh, double, double)
+MATH_UNARY(tanhf, float, float)
+
 MATH_UNARY(asin, double, double)
 MATH_UNARY(asinf, float, float)
 
@@ -54,3 +63,6 @@ MATH_UNARY(log1pf, float, float)
 
 MATH_BINARY(pow, double, double, double)
 MATH_BINARY(powf, float, float, float)
+
+MATH_BINARY(fmod, double, double, double)
+MATH_BINARY(fmodf, float, float, float)

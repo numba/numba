@@ -231,3 +231,11 @@ m_log1p(double x)
         return log(1.+x);
     }
 }
+
+#define FLOATVER(Fn) float Fn##f(float x) { return (float)Fn(x); }
+
+FLOATVER(m_acosh);
+FLOATVER(m_asinh);
+FLOATVER(m_atanh);
+FLOATVER(m_expm1);
+FLOATVER(m_log1p);
