@@ -113,8 +113,8 @@ class TestUFuncs(unittest.TestCase):
         def bm_numba():
             cfunc(x_operand, y_operand, result)
 
-        print(utils.benchmark(bm_python, maxct=1000))
-        print(utils.benchmark(bm_numba, maxct=1000))
+        print(utils.benchmark(bm_python, maxsec=.1))
+        print(utils.benchmark(bm_numba, maxsec=.1))
         assert np.allclose(control, result)
 
     def test_divide_ufuncs(self):

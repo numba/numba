@@ -58,8 +58,8 @@ class TestJITClasses(unittest.TestCase):
         def bm_numba():
             func(car)
 
-        python = utils.benchmark(bm_python, maxct=100)
-        numba = utils.benchmark(bm_numba, maxct=100)
+        python = utils.benchmark(bm_python, maxsec=.1)
+        numba = utils.benchmark(bm_numba, maxsec=.1)
 
         print(python)
         print(numba)
@@ -92,8 +92,8 @@ class TestJITClasses(unittest.TestCase):
         def bm_numba():
             func(car2, 321)
 
-        python = utils.benchmark(bm_python, maxct=100)
-        numba = utils.benchmark(bm_numba, maxct=100)
+        python = utils.benchmark(bm_python, maxsec=.1)
+        numba = utils.benchmark(bm_numba, maxsec=.1)
 
         print(python)
         print(numba)

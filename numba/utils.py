@@ -1,7 +1,8 @@
 from __future__ import print_function, division, absolute_import
 import collections
 import functools
-from timeit import default_timer as timer
+import timeit
+import math
 import numpy
 from numba.config import PYVERSION
 
@@ -108,18 +109,16 @@ def bit_length(intval):
 
 
 class BenchmarkResult(object):
-    def __init__(self, func, records):
+    def __init__(self, func, records, loop):
         self.func = func
-        self.records = records
-        self.mean = numpy.mean(self.records)
+        self.loop = loop
+        self.records = numpy.array(records) / loop
         self.best = numpy.min(self.records)
-        self.worst = numpy.max(self.records)
 
     def __repr__(self):
         name = getattr(self.func, "__name__", self.func)
-        args = (name, format_time(self.mean), format_time(self.best),
-                format_time(self.worst), len(self.records))
-        return "%20s | mean %7s | best %7s | worst %7s | repeat %d" % args
+        args = (name, self.loop, self.records.size, format_time(self.best))
+        return "%20s: %10d loops, best of %d: %s per loop" % args
 
 
 def format_time(tm):
@@ -134,23 +133,24 @@ def format_time(tm):
     return "%.1f%s" % (tm / base, unit)
 
 
-def benchmark(func, maxsec=.1, maxct=1000000):
-    total = 0
-    records = []
-
-    while True:
-        ts = timer()
-        func()
-        te = timer()
-        dur = te - ts
-        records.append(dur)
-        total += dur
-        if total > maxsec:
-            break
-        if len(records) >= maxct:
-            break
-
-    return BenchmarkResult(func, records)
+def benchmark(func, maxsec=1):
+    timer = timeit.Timer(func)
+    number = 1
+    result = timer.repeat(3, number)
+    # Too fast to be measured
+    while min(result) / number == 0:
+        number *= 10
+        result = timer.repeat(3, number)
+    best = min(result) / number
+    if best >= maxsec:
+        return BenchmarkResult(func, result, number)
+    # Scale it up to make it close the maximum time
+    max_per_run_time = maxsec / 3 / number
+    number = max(max_per_run_time / best / 3, 1)
+    # Round to the next power of 10
+    number = int(10 ** math.ceil(math.log10(number)))
+    records = timer.repeat(3, number)
+    return BenchmarkResult(func, records, number)
 
 
 # Other common python2/3 adaptors

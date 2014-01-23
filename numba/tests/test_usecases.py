@@ -60,8 +60,8 @@ class TestUsecases(unittest.TestCase):
         def bm_numba():
             cfunc(*args)
 
-        print(utils.benchmark(bm_python, maxct=100))
-        print(utils.benchmark(bm_numba, maxct=100))
+        print(utils.benchmark(bm_python, maxsec=.1))
+        print(utils.benchmark(bm_numba, maxsec=.1))
 
     def test_sum2d(self):
         pyfunc = usecases.sum2d
