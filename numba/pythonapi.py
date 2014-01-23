@@ -96,7 +96,7 @@ class PythonAPI(object):
         return self.builder.call(fn, [ival])
 
     def long_from_ssize_t(self, ival):
-        fnty = Type.function(self.pyobj, [self.long])
+        fnty = Type.function(self.pyobj, [self.py_ssize_t])
         fn = self._get_function(fnty, name="PyLong_FromSsize_t")
         return self.builder.call(fn, [ival])
 
