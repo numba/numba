@@ -40,7 +40,11 @@ class Type(object):
 
     def __getitem__(self, args):
         assert not isinstance(self, Array)
-        if isinstance(args, tuple):
+        ndim, layout = self._determine_array_spec(args)
+        return Array(dtype=self, ndim=ndim, layout=layout)
+
+    def _determine_array_spec(self, args):
+        if isinstance(args, (tuple, list)):
             ndim = len(args)
             if args[0].step == 1:
                 layout = 'F'
@@ -48,11 +52,18 @@ class Type(object):
                 layout = 'C'
             else:
                 layout = 'A'
+        elif isinstance(args, slice):
+            ndim = 1
+            if args.step == 1:
+                layout = 'C'
+            else:
+                layout = 'A'
         else:
             ndim = 1
             layout = 'A'
 
-        return Array(dtype=self, ndim=ndim, layout=layout)
+        return ndim, layout
+
 
     __iter__ = NotImplemented
 
@@ -130,6 +141,7 @@ class Method(Function):
 class Array(Type):
     __slots__ = 'dtype', 'ndim', 'layout'
 
+    # CS and FS are not reserved for inner contig but strided
     LAYOUTS = frozenset(['C', 'F', 'CS', 'FS', 'A'])
 
     def __init__(self, dtype, ndim, layout):
@@ -187,6 +199,19 @@ class Array(Type):
 
     def __hash__(self):
         return hash((self.dtype, self.ndim, self.layout))
+
+
+    @property
+    def is_c_contig(self):
+        return self.layout == 'C' or (self.ndim == 1 and self.layout in 'CF')
+
+    @property
+    def is_f_contig(self):
+        return self.layout == 'F' or (self.ndim == 1 and self.layout in 'CF')
+
+    @property
+    def is_contig(self):
+        return self.layout in 'CF'
 
 
 class UniTuple(Type):
