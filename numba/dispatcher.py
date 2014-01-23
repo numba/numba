@@ -23,11 +23,6 @@ class GlobalContext(object):
         self.typing_context = typing.Context()
 
 
-# TODO
-# The dispatcher to use python type object to determine which version to
-# call and use numpy.dtype for ndarray.
-# int default to int32
-# long default to pyobject?
 class Overloaded(_dispatcher.Dispatcher):
     def __init__(self, py_func):
         self.tm = default_type_manager
@@ -42,8 +37,11 @@ class Overloaded(_dispatcher.Dispatcher):
 
     def add_overload(self, cres):
         sig = [a._code for a in cres.argtypes]
-        self.insert(sig, cres.entry_point_addr)
+        self._insert(sig, cres.entry_point_addr)
         self.overloads[cres.argtypes] = cres
+
+    def get_overload(self, *tys):
+        return self.overloads[tys].entry_point
 
     def jit(self, sig, **kws):
         flags = compiler.Flags()
@@ -70,6 +68,12 @@ class Overloaded(_dispatcher.Dispatcher):
 
         self.add_overload(cres)
         return cres.entry_point
+
+    def _compile_and_call(self, *args, **kws):
+        assert not kws
+        sig = [typeof_pyval(a) for a in args]
+        self.jit(sig)
+        return self(*args, **kws)
 
     def inspect_types(self):
         for ver, res in utils.dict_iteritems(self.overloads):

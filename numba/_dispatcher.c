@@ -291,12 +291,13 @@ static
 PyObject*
 Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
 {
-    PyObject *tmptype, *retval;
+    PyObject *tmptype, *retval = NULL;
     int *tys;
     int argct;
     int i;
     int prealloc[24];
     PyCFunctionWithKeywords fn;
+    PyObject *cac;                  /* compile and call function */
 
     argct = PySequence_Fast_GET_SIZE(args);
 
@@ -308,21 +309,30 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
     for (i = 0; i < argct; ++i) {
         tmptype = PySequence_Fast_GET_ITEM(args, i);
         tys[i] = typecode(self->dispatcher, tmptype);
-        if (tys[i] == -1) return NULL;
+        if (tys[i] == -1) goto CLEANUP;
     }
 
     fn = (PyCFunctionWithKeywords)dispatcher_resolve(self->dispatcher, tys);
     if (!fn) {
-        PyErr_SetString(PyExc_TypeError, "No matching definition");
-        return NULL;
+        /* No matching definition */
+        /* Compile a new one */
+        cac = PyObject_GetAttrString((PyObject*)self, "_compile_and_call");
+        if (!cac) {
+            goto CLEANUP;
+        }
+        retval = PyObject_Call(cac, args, kws);
+        Py_DECREF(cac);
+    } else {
+        /* Definition is found */
+        retval = fn(NULL, args, kws);
     }
 
-    retval = fn(NULL, args, kws);
-
+CLEANUP:
     if (tys != prealloc)
         free(tys);
 
     return retval;
+
 }
 
 
@@ -332,9 +342,9 @@ static PyMemberDef Dispatcher_members[] = {
 
 
 static PyMethodDef Dispatcher_methods[] = {
-    { "insert", (PyCFunction)Dispatcher_Insert, METH_VARARGS,
+    { "_insert", (PyCFunction)Dispatcher_Insert, METH_VARARGS,
       "insert new definition"},
-    { "find", (PyCFunction)Dispatcher_Find, METH_VARARGS,
+    { "_find", (PyCFunction)Dispatcher_Find, METH_VARARGS,
       "find matching definition and return a tuple of (argtypes, callable)"},
     { NULL },
 };
