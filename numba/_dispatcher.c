@@ -2,6 +2,9 @@
 #include <structmember.h>
 #include <string.h>
 #include <time.h>
+#include <assert.h>
+#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
+#include <numpy/ndarrayobject.h>
 #include "_dispatcher.h"
 
 
@@ -10,16 +13,47 @@ typedef struct DispatcherObject{
     void *dispatcher;
 } DispatcherObject;
 
-static int tc_int32, tc_int64, tc_float64, tc_complex128;
+static int tc_int8;
+static int tc_int16;
+static int tc_int32;
+static int tc_int64;
+static int tc_uint8;
+static int tc_uint16;
+static int tc_uint32;
+static int tc_uint64;
+static int tc_float32;
+static int tc_float64;
+static int tc_complex64;
+static int tc_complex128;
+
 static int tc_intp;
 
 static
 PyObject* init_types(PyObject *self, PyObject *args)
 {
-    if (!PyArg_ParseTuple(args, "iiii", &tc_int32, &tc_int64, &tc_float64,
-                          &tc_complex128)) {
-        return NULL;
-    }
+    PyObject *tmpobj;
+    PyObject* dict = PySequence_Fast_GET_ITEM(args, 0);
+
+    #define UNWRAP_TYPE(S)                                         \
+        if(!(tmpobj = PyDict_GetItemString(dict, #S))) return NULL;    \
+        else tc_##S = PyLong_AsLong(tmpobj);
+
+    UNWRAP_TYPE(int8)
+    UNWRAP_TYPE(int16)
+    UNWRAP_TYPE(int32)
+    UNWRAP_TYPE(int64)
+
+    UNWRAP_TYPE(uint8)
+    UNWRAP_TYPE(uint16)
+    UNWRAP_TYPE(uint32)
+    UNWRAP_TYPE(uint64)
+
+    UNWRAP_TYPE(float32)
+    UNWRAP_TYPE(float64)
+
+    UNWRAP_TYPE(complex64)
+    UNWRAP_TYPE(complex128)
+
     switch(sizeof(void*)) {
     case 4:
         tc_intp = tc_int32;
@@ -115,26 +149,125 @@ Dispatcher_Find(DispatcherObject *self, PyObject *args)
     return PyLong_FromVoidPtr(out);
 }
 
+static PyObject* TheDispatcherModule = NULL; /* Stolen reference */
+static PyObject* TheTypeOfFunc = NULL;        /* Stolen reference */
+
+static
+PyObject *GetDispatcherModule() {
+    if(!TheDispatcherModule) {
+        TheDispatcherModule = PyImport_ImportModule("numba.dispatcher");
+        Py_XDECREF(TheDispatcherModule);
+    }
+    return TheDispatcherModule;
+}
+
+
+static
+PyObject *GetTypeOfFunc() {
+    if(!TheTypeOfFunc) {
+        TheTypeOfFunc = PyObject_GetAttrString(GetDispatcherModule(),
+                                               "typeof_pyval");
+
+        Py_XDECREF(TheTypeOfFunc);
+    }
+    return TheTypeOfFunc;
+}
+
+
 static
 int typecode_fallback(void *dispatcher, PyObject *val) {
-    PyObject *dpmod, *typeof_pyval, *tmptype, *tmpcode;
+    PyObject *tmptype, *tmpcode;
     int typecode;
 
     // Go back to the interpreter
+    tmptype = PyObject_CallFunctionObjArgs(GetTypeOfFunc(), val, NULL);
+    if (!tmptype) {
+        return -1;
+    }
 
-    dpmod = PyImport_ImportModule("numba.dispatcher");
-    typeof_pyval = PyObject_GetAttrString(dpmod, "typeof_pyval");
-    tmptype = PyObject_CallFunctionObjArgs(typeof_pyval, val, NULL);
     tmpcode = PyObject_GetAttrString(tmptype, "_code");
     typecode = PyLong_AsLong(tmpcode);
 
     Py_XDECREF(tmpcode);
     Py_XDECREF(tmptype);
-    Py_XDECREF(typeof_pyval);
-    Py_XDECREF(dpmod);
-
     return typecode;
 }
+
+
+#define N_DTYPES 12
+static int cached_arycode[3][3][N_DTYPES];
+
+static
+int typecode_ndarray(void *dispatcher, PyArrayObject *ary) {
+    int typecode;
+    int dtype;
+    int ndim = PyArray_NDIM(ary);
+    int layout = 0;
+
+    if (ndim <= 0 && ndim > 3) goto FAILBACK;
+
+    if (PyArray_ISFARRAY(ary)) {
+        layout = 1;
+    } else if (PyArray_ISCARRAY(ary)){
+        layout = 2;
+    }
+
+    switch(PyArray_TYPE(ary)) {
+    case NPY_INT8:
+        dtype = 0;
+        break;
+    case NPY_INT16:
+        dtype = 1;
+        break;
+    case NPY_INT32:
+        dtype = 2;
+        break;
+    case NPY_INT64:
+        dtype = 3;
+        break;
+    case NPY_UINT8:
+        dtype = 4;
+        break;
+    case NPY_UINT16:
+        dtype = 5;
+        break;
+    case NPY_UINT32:
+        dtype = 6;
+        break;
+    case NPY_UINT64:
+        dtype = 7;
+        break;
+    case NPY_FLOAT32:
+        dtype = 8;
+        break;
+    case NPY_FLOAT64:
+        dtype = 9;
+        break;
+    case NPY_COMPLEX64:
+        dtype = 10;
+        break;
+    case NPY_COMPLEX128:
+        dtype = 11;
+        break;
+    default:
+        goto FAILBACK;
+    }
+
+    assert(layout < 3);
+    assert(ndim <= 3);
+    assert(dtype < N_DTYPES);
+
+    typecode = cached_arycode[ndim - 1][layout][dtype];
+    if (typecode == -1) {
+        typecode = typecode_fallback(dispatcher, (PyObject*)ary);
+        cached_arycode[ndim - 1][layout][dtype] = typecode;
+    }
+    return typecode;
+
+FAILBACK:
+    return typecode_fallback(dispatcher, (PyObject*)ary);
+}
+
 
 static
 int typecode(void *dispatcher, PyObject *val) {
@@ -145,9 +278,10 @@ int typecode(void *dispatcher, PyObject *val) {
         return tc_float64;
     else if (tyobj == &PyComplex_Type)
         return tc_complex128;
-    /*
-    Add array handling
-    */
+    /* Aarray handling */
+    else if (tyobj == &PyArray_Type) {
+        return typecode_ndarray(dispatcher, (PyArrayObject*)val);
+    }
 
     return typecode_fallback(dispatcher, val);
 }
@@ -174,6 +308,7 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
     for (i = 0; i < argct; ++i) {
         tmptype = PySequence_Fast_GET_ITEM(args, i);
         tys[i] = typecode(self->dispatcher, tmptype);
+        if (tys[i] == -1) return NULL;
     }
 
     fn = (PyCFunctionWithKeywords)dispatcher_resolve(self->dispatcher, tys);
@@ -268,6 +403,11 @@ MOD_INIT(_dispatcher) {
     MOD_DEF(m, "_dispatcher", "No docs", ext_methods)
     if (m == NULL)
         return MOD_ERROR_VAL;
+
+    import_array();
+
+    /* initialize cached_arycode to all ones (in bits) */
+    memset(cached_arycode, 0xFF, sizeof(cached_arycode));
 
     DispatcherType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&DispatcherType) < 0) {

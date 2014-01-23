@@ -55,6 +55,13 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyArg_ParseTupleAndKeywords")
         return self.builder.call(fn, [args, kws, fmt, keywords] + list(objs))
 
+    def parse_tuple(self, args, fmt, *objs):
+        charptr = Type.pointer(Type.int(8))
+        argtypes = [self.pyobj, charptr]
+        fnty = Type.function(Type.int(), argtypes, var_arg=True)
+        fn = self._get_function(fnty, name="PyArg_ParseTuple")
+        return self.builder.call(fn, [args, fmt] + list(objs))
+
     def dict_getitem_string(self, dic, name):
         """Returns a borrowed reference
         """

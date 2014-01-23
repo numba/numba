@@ -114,7 +114,22 @@ def typeof_pyval(val):
     This is called from numba._dispatcher as a fallback if the native code
     cannot decide the type.
     """
-    if isinstance(val, INT_TYPES):
+    if isinstance(val, numpy.ndarray):
+        # TODO complete dtype mapping
+        dtype = FROM_DTYPE[val.dtype]
+        ndim = val.ndim
+        if val.flags['C_CONTIGUOUS']:
+            layout = 'C'
+        elif val.flags['F_CONTIGUOUS']:
+            layout = 'F'
+        else:
+            layout = 'A'
+        aryty = types.Array(dtype, ndim, layout)
+        return aryty
+
+    # The following are handled in the C version for exact type match
+    # So test these later
+    elif isinstance(val, INT_TYPES):
         return types.int32
 
     elif isinstance(val, float):
@@ -122,14 +137,6 @@ def typeof_pyval(val):
 
     elif isinstance(val, complex):
         return types.complex128
-
-    elif isinstance(val, numpy.ndarray):
-        # TODO complete dtype mapping
-        dtype = FROM_DTYPE[val.dtype]
-        ndim = val.ndim
-        layout = 'A'
-        aryty = types.Array(dtype, ndim, layout)
-        return aryty
 
     else:
         raise TypeError(type(val), val)
@@ -155,5 +162,4 @@ FROM_DTYPE = {
 
 
 # Initialize dispatcher
-_dispatcher.init_types(types.int32._code, types.int64._code,
-                       types.float64._code, types.complex128._code)
+_dispatcher.init_types(dict((str(t), t._code) for t in types.number_domain))
