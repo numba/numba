@@ -1075,3 +1075,32 @@ def array_shape(context, builder, typ, value):
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
     return array.shape
+
+#-------------------------------------------------------------------------------
+
+
+def caster(restype):
+    @implement(restype, types.Any)
+    def _cast(context, builder, sig, args):
+        [val] = args
+        [valty] = sig.args
+        return context.cast(builder, val, valty, restype)
+    return _cast
+
+
+builtin(caster(types.int8))
+builtin(caster(types.int16))
+builtin(caster(types.int32))
+builtin(caster(types.int64))
+
+builtin(caster(types.uint8))
+builtin(caster(types.uint16))
+builtin(caster(types.uint32))
+builtin(caster(types.uint64))
+
+builtin(caster(types.float32))
+builtin(caster(types.float64))
+
+builtin(caster(types.complex64))
+builtin(caster(types.complex128))
+

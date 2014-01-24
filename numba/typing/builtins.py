@@ -404,3 +404,116 @@ class Complex64Attribute(ComplexAttribute):
 class Complex128Attribute(ComplexAttribute):
     key = types.complex128
     innertype = types.float64
+
+#-------------------------------------------------------------------------------
+
+@builtin
+class NumbaTypesModuleAttribute(AttributeTemplate):
+    key = types.Module(types)
+
+    def resolve_int8(self, mod):
+        return types.Function(ToInt8)
+
+    def resolve_int16(self, mod):
+        return types.Function(ToInt16)
+
+    def resolve_int32(self, mod):
+        return types.Function(ToInt32)
+
+    def resolve_int64(self, mod):
+        return types.Function(ToInt64)
+
+    def resolve_uint8(self, mod):
+        return types.Function(ToUint8)
+
+    def resolve_uint16(self, mod):
+        return types.Function(ToUint16)
+
+    def resolve_uint32(self, mod):
+        return types.Function(ToUint32)
+
+    def resolve_uint64(self, mod):
+        return types.Function(ToUint64)
+
+    def resolve_float32(self, mod):
+        return types.Function(ToFloat32)
+
+    def resolve_float64(self, mod):
+        return types.Function(ToFloat64)
+
+    def resolve_complex64(self, mod):
+        return types.Function(ToComplex64)
+
+    def resolve_complex128(self, mod):
+        return types.Function(ToComplex128)
+
+
+class Caster(AbstractTemplate):
+    def generic(self, args, kws):
+        assert not kws
+        [a] = args
+        if a in types.number_domain:
+            return signature(self.key, a)
+
+
+class ToInt8(Caster):
+    key = types.int8
+
+
+class ToInt16(Caster):
+    key = types.int16
+
+
+class ToInt32(Caster):
+    key = types.int32
+
+
+class ToInt64(Caster):
+    key = types.int64
+
+
+class ToUint8(Caster):
+    key = types.uint8
+
+
+class ToUint16(Caster):
+    key = types.uint16
+
+
+class ToUint32(Caster):
+    key = types.uint32
+
+
+class ToUint64(Caster):
+    key = types.uint64
+
+
+class ToFloat32(Caster):
+    key = types.float32
+
+
+class ToFloat64(Caster):
+    key = types.float64
+
+
+class ToComplex64(Caster):
+    key = types.complex64
+
+
+class ToComplex128(Caster):
+    key = types.complex128
+
+
+builtin_global(types, types.Module(types))
+builtin_global(types.int8, types.Function(ToInt8))
+builtin_global(types.int16, types.Function(ToInt16))
+builtin_global(types.int32, types.Function(ToInt32))
+builtin_global(types.int64, types.Function(ToInt64))
+builtin_global(types.uint8, types.Function(ToUint8))
+builtin_global(types.uint16, types.Function(ToUint16))
+builtin_global(types.uint32, types.Function(ToUint32))
+builtin_global(types.uint64, types.Function(ToUint64))
+builtin_global(types.float32, types.Function(ToFloat32))
+builtin_global(types.float64, types.Function(ToFloat64))
+builtin_global(types.complex64, types.Function(ToComplex64))
+builtin_global(types.complex128, types.Function(ToComplex128))

@@ -36,6 +36,8 @@ class Type(object):
         return not (self == other)
 
     def __call__(self, *args):
+        if len(args) == 1 and not isinstance(args[0], Type):
+            return self.cast_python_value(args[0])
         return Prototype(args=args, return_type=self)
 
     def __getitem__(self, args):
@@ -66,6 +68,22 @@ class Type(object):
 
 
     __iter__ = NotImplemented
+    cast_python_value = NotImplemented
+
+
+class Integer(Type):
+    def cast_python_value(self, value):
+        return int(value)
+
+
+class Float(Type):
+    def cast_python_value(self, value):
+        return float(value)
+
+
+class Complex(Type):
+    def cast_python_value(self, value):
+        return complex(value)
 
 
 class Prototype(Type):
@@ -334,23 +352,23 @@ string = Dummy('str')
 
 boolean = bool_ = Type('bool')
 
-byte = uint8 = Type('uint8')
-uint16 = Type('uint16')
-uint32 = Type('uint32')
-uint64 = Type('uint64')
+byte = uint8 = Integer('uint8')
+uint16 = Integer('uint16')
+uint32 = Integer('uint32')
+uint64 = Integer('uint64')
 
-int8 = Type('int8')
-int16 = Type('int16')
-int32 = Type('int32')
-int64 = Type('int64')
+int8 = Integer('int8')
+int16 = Integer('int16')
+int32 = Integer('int32')
+int64 = Integer('int64')
 intp = int32 if tuple.__itemsize__ == 4 else int64
 uintp = uint32 if tuple.__itemsize__ == 4 else uint64
 
-float32 = Type('float32')
-float64 = Type('float64')
+float32 = Float('float32')
+float64 = Float('float64')
 
-complex64 = Type('complex64')
-complex128 = Type('complex128')
+complex64 = Complex('complex64')
+complex128 = Complex('complex128')
 
 len_type = Dummy('len')
 range_type = Dummy('range')
