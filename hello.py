@@ -21,13 +21,15 @@ def bar(a):
     return str(a) + " is a number"
 
 
+class Haha: pass
+
+
 def main():
     a = numpy.arange(100, dtype='int32')
     b = 2
     c = cfoo(a, b)
     print(a)
     print(c)
-
 
     a = numpy.arange(100, dtype='float64')
     b = 2.
@@ -36,8 +38,8 @@ def main():
     print(c)
 
     print(bar(2))
-
-
+    print(bar(Haha()))
+    bar.inspect_types()
 
 if __name__ == '__main__':
     main()
