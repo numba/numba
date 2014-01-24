@@ -136,6 +136,10 @@ def typeof_pyval(val):
         # TODO complete dtype mapping
         dtype = FROM_DTYPE[val.dtype]
         ndim = val.ndim
+        if ndim == 0:
+            # is array scalar
+            return FROM_DTYPE[val.dtype]
+
         if val.flags['C_CONTIGUOUS']:
             layout = 'C'
         elif val.flags['F_CONTIGUOUS']:
@@ -155,6 +159,10 @@ def typeof_pyval(val):
 
     elif isinstance(val, complex):
         return types.complex128
+
+    elif numpy.dtype(type(val)) in FROM_DTYPE:
+        # Array scalar
+        return FROM_DTYPE[numpy.dtype(type(val))]
 
     # Other object
     else:

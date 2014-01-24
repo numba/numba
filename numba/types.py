@@ -4,6 +4,7 @@ the targets to choose their representation.
 """
 from __future__ import print_function, division, absolute_import
 from collections import defaultdict
+import numpy
 
 
 def _autoincr():
@@ -73,17 +74,17 @@ class Type(object):
 
 class Integer(Type):
     def cast_python_value(self, value):
-        return int(value)
+        return getattr(numpy, self.name)(value)
 
 
 class Float(Type):
     def cast_python_value(self, value):
-        return float(value)
+        return getattr(numpy, self.name)(value)
 
 
 class Complex(Type):
     def cast_python_value(self, value):
-        return complex(value)
+        return getattr(numpy, self.name)(value)
 
 
 class Prototype(Type):

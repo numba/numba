@@ -26,6 +26,7 @@ static int tc_float32;
 static int tc_float64;
 static int tc_complex64;
 static int tc_complex128;
+static int BAISC_TYPECODES[12];
 
 static int tc_intp;
 
@@ -34,10 +35,12 @@ PyObject* init_types(PyObject *self, PyObject *args)
 {
     PyObject *tmpobj;
     PyObject* dict = PySequence_Fast_GET_ITEM(args, 0);
+    int index = 0;
 
-    #define UNWRAP_TYPE(S)                                         \
-        if(!(tmpobj = PyDict_GetItemString(dict, #S))) return NULL;    \
-        else tc_##S = PyLong_AsLong(tmpobj);
+    #define UNWRAP_TYPE(S)                                              \
+        if(!(tmpobj = PyDict_GetItemString(dict, #S))) return NULL;     \
+        else {  tc_##S = PyLong_AsLong(tmpobj);                         \
+                BAISC_TYPECODES[index++] = tc_##S;  }
 
     UNWRAP_TYPE(int8)
     UNWRAP_TYPE(int16)
@@ -54,6 +57,8 @@ PyObject* init_types(PyObject *self, PyObject *args)
 
     UNWRAP_TYPE(complex64)
     UNWRAP_TYPE(complex128)
+
+    #undef UNWRAP_TYPE
 
     switch(sizeof(void*)) {
     case 4:
@@ -213,22 +218,9 @@ int typecode_fallback(void *dispatcher, PyObject *val) {
 #define N_DTYPES 12
 static int cached_arycode[3][3][N_DTYPES];
 
-static
-int typecode_ndarray(void *dispatcher, PyArrayObject *ary) {
-    int typecode;
+static int dtype_num_to_typecode(int type_num) {
     int dtype;
-    int ndim = PyArray_NDIM(ary);
-    int layout = 0;
-
-    if (ndim <= 0 && ndim > 3) goto FAILBACK;
-
-    if (PyArray_ISFARRAY(ary)) {
-        layout = 1;
-    } else if (PyArray_ISCARRAY(ary)){
-        layout = 2;
-    }
-
-    switch(PyArray_TYPE(ary)) {
+    switch(type_num) {
     case NPY_INT8:
         dtype = 0;
         break;
@@ -266,8 +258,29 @@ int typecode_ndarray(void *dispatcher, PyArrayObject *ary) {
         dtype = 11;
         break;
     default:
-        goto FAILBACK;
+        dtype = -1;
     }
+    return dtype;
+}
+
+
+static
+int typecode_ndarray(void *dispatcher, PyArrayObject *ary) {
+    int typecode;
+    int dtype;
+    int ndim = PyArray_NDIM(ary);
+    int layout = 0;
+
+    if (ndim <= 0 && ndim > 3) goto FALLBACK;
+
+    if (PyArray_ISFARRAY(ary)) {
+        layout = 1;
+    } else if (PyArray_ISCARRAY(ary)){
+        layout = 2;
+    }
+
+    dtype = dtype_num_to_typecode(PyArray_TYPE(ary));
+    if (dtype == -1) goto FALLBACK;
 
     assert(layout < 3);
     assert(ndim <= 3);
@@ -280,8 +293,22 @@ int typecode_ndarray(void *dispatcher, PyArrayObject *ary) {
     }
     return typecode;
 
-FAILBACK:
+FALLBACK:
     return typecode_fallback(dispatcher, (PyObject*)ary);
+}
+
+static
+int typecode_arrayscalar(void *dispatcher, PyObject* aryscalar) {
+    int typecode;
+    PyArray_Descr* descr;
+    descr = PyArray_DescrFromScalar(aryscalar);
+    if (!descr)
+        return typecode_fallback(dispatcher, aryscalar);
+    typecode = dtype_num_to_typecode(descr->type_num);
+    Py_DECREF(descr);
+    if (typecode == -1)
+        return typecode_fallback(dispatcher, aryscalar);
+    return BAISC_TYPECODES[typecode];
 }
 
 
@@ -294,7 +321,11 @@ int typecode(void *dispatcher, PyObject *val) {
         return tc_float64;
     else if (tyobj == &PyComplex_Type)
         return tc_complex128;
-    /* Aarray handling */
+    /* Array scalar handling */
+    else if (PyArray_CheckScalar(val)) {
+        return typecode_arrayscalar(dispatcher, val);
+    }
+    /* Array handling */
     else if (tyobj == &PyArray_Type) {
         return typecode_ndarray(dispatcher, (PyArrayObject*)val);
     }
