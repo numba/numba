@@ -4,6 +4,7 @@ import numpy
 from numba.config import PYVERSION
 from numba import _dispatcher, types, compiler, targets, typing, utils
 from numba.typeconv.rules import default_type_manager
+from numba.typing.templates import resolve_overload
 
 class GlobalContext(object):
     """
@@ -41,9 +42,9 @@ class Overloaded(_dispatcher.Dispatcher):
         self._disable_compile(int(val))
 
     def add_overload(self, cres):
-        sig = [a._code for a in cres.argtypes]
+        sig = [a._code for a in cres.signature.args]
         self._insert(sig, cres.entry_point_addr)
-        self.overloads[cres.argtypes] = cres
+        self.overloads[cres.signature] = cres
 
     def get_overload(self, *tys):
         return self.overloads[tys].entry_point
@@ -98,6 +99,12 @@ class Overloaded(_dispatcher.Dispatcher):
     #     sig = [self.tm.get(t) for t in tys]
     #     ptr = self.find(sig)
     #     return super(Overloaded, self).__call__(ptr, args)
+
+    def _explain_ambiguous(self, *args, **kws):
+        assert not kws, "kwargs not handled"
+        args = tuple([typeof_pyval(a) for a in args])
+        resolve_overload(GlobalContext().typing_context, self.py_func,
+                         tuple(self.overloads.keys()), args, kws)
 
 
 def read_flags(flags, kws):

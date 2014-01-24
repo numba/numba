@@ -302,6 +302,19 @@ int typecode(void *dispatcher, PyObject *val) {
     return typecode_fallback(dispatcher, val);
 }
 
+static
+void explain_ambiguous(PyObject *dispatcher, PyObject *args, PyObject *kws) {
+    PyObject *callback, *result;
+    callback = PyObject_GetAttrString(dispatcher, "_explain_ambiguous");
+    if (!callback) {
+        PyErr_SetString(PyExc_TypeError, "Ambigous overloading");
+        return;
+    }
+    result = PyObject_Call(callback, args, kws);
+    assert(result == NULL && "_explain_ambiguous must raise an exception");
+    Py_XDECREF(callback);
+}
+
 
 static
 PyObject*
@@ -312,6 +325,7 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
     int argct;
     int i;
     int prealloc[24];
+    int matches;
     PyCFunctionWithKeywords fn;
     PyObject *cac;                  /* compile and call function */
 
@@ -328,8 +342,12 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
         if (tys[i] == -1) goto CLEANUP;
     }
 
-    fn = (PyCFunctionWithKeywords)dispatcher_resolve(self->dispatcher, tys);
-    if (!fn) {
+    fn = (PyCFunctionWithKeywords)dispatcher_resolve(self->dispatcher, tys,
+                                                     &matches);
+    if (matches == 1) {
+        /* Definition is found */
+        retval = fn(NULL, args, kws);
+    } else if (matches == 0) {
         /* No matching definition */
         if (self->can_compile) {
             /* Compile a new one */
@@ -344,8 +362,9 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
             retval = NULL;
         }
     } else {
-        /* Definition is found */
-        retval = fn(NULL, args, kws);
+        /* Ambiguous */
+        explain_ambiguous((PyObject*)self, args, kws);
+        retval = NULL;
     }
 
 CLEANUP:

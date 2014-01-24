@@ -1,6 +1,5 @@
 #include <cstring>
 #include <algorithm>
-
 #include "typeconv.hpp"
 
 
@@ -118,11 +117,12 @@ TypeCompatibleCode TypeManager::isCompatible(Type from, Type to) const {
 }
 
 
-int TypeManager::selectOverload(Type sig[], Type ovsigs[], int sigsz, int ovct) const {
-	int sel;
+int TypeManager::selectOverload(Type sig[], Type ovsigs[], int &selected,
+                                int sigsz, int ovct) const {
+	int count;
 	if (ovct < 16) {
 		Rating ratings[16];
-		sel = _selectOverload(sig, ovsigs, sigsz, ovct, ratings);
+		count = _selectOverload(sig, ovsigs, selected, sigsz, ovct, ratings);
 	}
 	// Necessary?
     //	else if (ovct < 128) {
@@ -131,16 +131,17 @@ int TypeManager::selectOverload(Type sig[], Type ovsigs[], int sigsz, int ovct) 
     //	}
 	else {
 		Rating *ratings = new Rating[ovct];
-		sel = _selectOverload(sig, ovsigs, sigsz, ovct, ratings);
+		count = _selectOverload(sig, ovsigs, selected, sigsz, ovct, ratings);
 		delete [] ratings;
 	}
-	return sel;
+	return count;
 }
 
-int TypeManager::_selectOverload(Type sig[], Type ovsigs[], int sigsz, int ovct,
-                                 Rating ratings[]) const {
+int TypeManager::_selectOverload(Type sig[], Type ovsigs[], int &selected,
+                                 int sigsz, int ovct, Rating ratings[]) const {
 	// Generate rating table
 	// Use a penalize scheme.
+	int badcount = 0;
 	for (int i = 0; i < ovct; ++i) {
 		Type* entry = &ovsigs[i * sigsz];
 
@@ -149,6 +150,7 @@ int TypeManager::_selectOverload(Type sig[], Type ovsigs[], int sigsz, int ovct,
 			TypeCompatibleCode tcc = isCompatible(sig[j], entry[j]);
 			if (tcc == TCC_FALSE) {
 				rate.bad();
+				++badcount;
 				break; // stop the loop early for incompatbile type
 			}
 			switch(tcc) {
@@ -167,25 +169,23 @@ int TypeManager::_selectOverload(Type sig[], Type ovsigs[], int sigsz, int ovct,
 		}
 	}
 
-	// Find lowest rating
+	if (badcount == ovct) return 0;
+
+    // Find lowest rating
 	Rating best;
 	best.bad();
-	int bestsel = 0;
-	int bestrep = 0;
+
+	int matchcount = 0;
 	for (int i = 0; i < ovct; ++i) {
 		if (ratings[i] < best){
 			best = ratings[i];
-			bestrep = 0;
-			bestsel = i;
+			matchcount = 1;
+			selected = i;
 		} else if (ratings[i] == best) {
-			bestrep += 1;
+			matchcount += 1;
 		}
 	}
-
-	if (bestrep != 0)
-		return -1;
-
-	return bestsel;
+	return matchcount;
 }
 
 // ----- Ratings -----

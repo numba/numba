@@ -105,17 +105,20 @@ select_overload(PyObject* self, PyObject* args)
         }
     }
 
-    int sel = tm->selectOverload(sig, ovsigs, sigsz, ovsz);
+    int selected;
+    int matches = tm->selectOverload(sig, ovsigs, selected, sigsz, ovsz);
 
     delete [] sig;
     delete [] ovsigs;
 
-    if (sel == -1) {
+    if (matches > 1) {
         PyErr_SetString(PyExc_TypeError, "Ambigous overloading");
         return NULL;
+    } else if (matches == 0) {
+        PyErr_SetString(PyExc_TypeError, "No compatible overload");
     }
 
-    return PyLong_FromLong(sel);
+    return PyLong_FromLong(selected);
 }
 
 PyObject*

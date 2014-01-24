@@ -67,56 +67,57 @@ class Rating(object):
         return (self.unsafe_convert, self.safe_convert, self.promote)
 
 
+def resolve_overload(context, key, cases, args, kws):
+    assert not kws, "Keyword arguments are not supported, yet"
+    # Rate each cases
+    candids = []
+    ratings = []
+    for case in cases:
+        if len(args) == len(case.args):
+            rate = Rating()
+            for actual, formal in zip(args, case.args):
+                by = context.type_compatibility(actual, formal)
+                if by is None:
+                    break
+
+                if by == 'promote':
+                    rate.promote += 1
+                elif by == 'safe':
+                    rate.safe_convert += 1
+                elif by == 'unsafe':
+                    rate.unsafe_convert += 1
+                elif by == 'exact':
+                    pass
+                else:
+                    raise Exception("unreachable", by)
+
+            else:
+                ratings.append(rate.astuple())
+                candids.append(case)
+    # Find the best case
+    ordered = sorted(zip(ratings, candids), key=lambda i: i[0])
+    if ordered:
+        if len(ordered) > 1:
+            (first, case1), (second, case2) = ordered[:2]
+            if first == second:
+                ambiguous = []
+                for rate, case in ordered:
+                    if rate == first:
+                        ambiguous.append(str(case))
+                args = (key, args, '\n'.join(ambiguous))
+                msg = "Ambiguous overloading for %s %s\n%s" % args
+                raise TypeError(msg)
+
+        return ordered[0][1]
+
+
 class FunctionTemplate(object):
     def __init__(self, context):
         self.context = context
 
     def _select(self, cases, args, kws):
-        selected = self._resolve_overload(cases, args, kws)
+        selected = resolve_overload(self.context, self.key, cases, args, kws)
         return selected
-
-    def _resolve_overload(self, cases, args, kws):
-        assert not kws, "Keyword arguments are not supported, yet"
-        # Rate each cases
-        candids = []
-        ratings = []
-        for case in cases:
-            if len(args) == len(case.args):
-                rate = Rating()
-                for actual, formal in zip(args, case.args):
-                    by = self.context.type_compatibility(actual, formal)
-                    if by is None:
-                        break
-
-                    if by == 'promote':
-                        rate.promote += 1
-                    elif by == 'safe':
-                        rate.safe_convert += 1
-                    elif by == 'unsafe':
-                        rate.unsafe_convert += 1
-                    elif by == 'exact':
-                        pass
-                    else:
-                        raise Exception("unreachable", by)
-
-                else:
-                    ratings.append(rate.astuple())
-                    candids.append(case)
-        # Find the best case
-        ordered = sorted(zip(ratings, candids), key=lambda i: i[0])
-        if ordered:
-            if len(ordered) > 1:
-                (first, case1), (second, case2) = ordered[:2]
-                if first == second:
-                    ambiguous = []
-                    for rate, case in ordered:
-                        if rate == first:
-                            ambiguous.append(str(case))
-                    args = (self.key, args, '\n'.join(ambiguous))
-                    msg = "Ambiguous overloading for %s %s\n%s" % args
-                    raise TypeError(msg)
-
-            return ordered[0][1]
 
 
 class AbstractTemplate(FunctionTemplate):

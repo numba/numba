@@ -20,7 +20,7 @@ CR_FIELDS = ["typing_context",
              "typing_error",
              "type_annotation",
              "llvm_func",
-             "argtypes",]
+             "signature"]
 
 
 CompileResult = namedtuple("CompileResult", CR_FIELDS)
@@ -64,8 +64,10 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags):
     if not flags.force_pyobject:
         try:
             # Type inference
-            typemap, restype, calltypes = type_inference_stage(typingctx, interp,
-                                                               args, return_type)
+            typemap, return_type, calltypes = type_inference_stage(typingctx,
+                                                                   interp,
+                                                                   args,
+                                                                   return_type)
         except Exception as e:
             if not flags.enable_pyobject:
                 raise
@@ -82,11 +84,14 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags):
         calltypes = defaultdict(lambda: types.pyobject)
     else:
         func, fnptr, lfunc = native_lowering_stage(targetctx, interp,
-                                                   typemap, restype, calltypes)
+                                                   typemap, return_type,
+                                                   calltypes)
 
     type_annotation = type_annotations.TypeAnnotation(interp=interp,
                                                       typemap=typemap,
                                                       calltypes=calltypes)
+
+    signature = typing.signature(return_type, *args)
 
     cr = compile_result(typing_context=typingctx,
                         target_context=targetctx,
@@ -95,7 +100,7 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags):
                         typing_error=fail_reason,
                         type_annotation=type_annotation,
                         llvm_func=lfunc,
-                        argtypes=tuple(args))
+                        signature=signature)
     return cr
 
 

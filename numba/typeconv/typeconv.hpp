@@ -86,11 +86,18 @@ public:
 	void addCompatibility(Type from, Type to, TypeCompatibleCode by);
 
 	TypeCompatibleCode isCompatible(Type from, Type to) const;
-	int selectOverload(Type sig[], Type ovsigs[], int sigsz, int ovct) const;
+
+	/**
+	Output stored in selected.
+	Returns
+	    Number of matches
+	*/
+	int selectOverload(Type sig[], Type ovsigs[], int &selected, int sigsz,
+	                   int ovct) const;
 
 private:
-	int _selectOverload(Type sig[], Type ovsigs[], int sigsz, int ovct,
-	                    Rating ratings[]) const;
+	int _selectOverload(Type sig[], Type ovsigs[], int &selected, int sigsz,
+	                    int ovct, Rating ratings[]) const;
 
 	TCCMap tccmap;
 };

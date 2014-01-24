@@ -53,7 +53,7 @@ class TestWrapper(unittest.TestCase):
         disp = dispatcher.Overloaded(array_overhead)
         disp.add_overload(cr)
 
-        self.assertEqual(cr.argtypes[0].layout, 'C')
+        self.assertEqual(cr.signature.args[0].layout, 'C')
 
         x = numpy.zeros(shape=2, dtype='int32')
 

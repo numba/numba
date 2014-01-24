@@ -7,7 +7,7 @@ typedef std::vector<void*> Functions;
 
 class Dispatcher {
 public:
-    Dispatcher(TypeManager *tm, int argct): argct(argct), tm(tm), ovct(0) { }
+    Dispatcher(TypeManager *tm, int argct): argct(argct), tm(tm) { }
 
     void addDefinition(Type args[], void *callable) {
         overloads.reserve(argct + overloads.size());
@@ -17,15 +17,14 @@ public:
         functions.push_back(callable);
     }
 
-    void* resolve(Type sig[]) {
-        int sel = tm->selectOverload(sig, &overloads[0], argct,
-                                     functions.size());
-
-        if (sel == -1) {
-            return NULL;
+    void* resolve(Type sig[], int &matches) {
+        const int ovct = functions.size();
+        int selected;
+        matches = tm->selectOverload(sig, &overloads[0], selected, argct, ovct);
+        if (matches == 1){
+            return functions[selected];
         }
-
-        return functions[sel];
+        return NULL;
     }
 
     const int argct;
@@ -33,7 +32,6 @@ private:
     TypeManager *tm;
     TypeTable overloads;
     Functions functions;
-    int ovct;
 };
 
 
@@ -61,9 +59,9 @@ dispatcher_add_defn(void *obj, int tys[], void* callable) {
 }
 
 void*
-dispatcher_resolve(void* obj, int sig[]) {
+dispatcher_resolve(void* obj, int sig[], int *count) {
     Dispatcher *disp = static_cast<Dispatcher*>(obj);
     Type *args = reinterpret_cast<Type*>(sig);
-    void *callable = disp->resolve(args);
+    void *callable = disp->resolve(args, *count);
     return callable;
 }
