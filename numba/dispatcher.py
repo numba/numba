@@ -149,8 +149,9 @@ def typeof_pyval(val):
     elif isinstance(val, complex):
         return types.complex128
 
+    # Other object
     else:
-        raise TypeError(type(val), val)
+        return types.pyobject
 
 
 FROM_DTYPE = {

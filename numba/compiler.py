@@ -1,8 +1,8 @@
 from __future__ import print_function, division, absolute_import
 from pprint import pprint
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 from numba import (bytecode, interpreter, typing, typeinfer, lowering, targets,
-                   irpasses, utils, config, type_annotations)
+                   irpasses, utils, config, type_annotations, types)
 
 
 class Flags(utils.ConfigOptions):
@@ -78,21 +78,22 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags):
 
     if use_python_mode:
         func, fnptr, lfunc = py_lowering_stage(targetctx, interp)
-        type_annotation = None
+        typemap = defaultdict(lambda: types.pyobject)
+        calltypes = defaultdict(lambda: types.pyobject)
     else:
         func, fnptr, lfunc = native_lowering_stage(targetctx, interp,
                                                    typemap, restype, calltypes)
 
-        type_annotation = type_annotations.TypeAnnotation(interp=interp,
-                                                          typemap=typemap,
-                                                          calltypes=calltypes)
+    type_annotation = type_annotations.TypeAnnotation(interp=interp,
+                                                      typemap=typemap,
+                                                      calltypes=calltypes)
 
     cr = compile_result(typing_context=typingctx,
                         target_context=targetctx,
                         entry_point=func,
                         entry_point_addr=fnptr,
                         typing_error=fail_reason,
-                        type_annotation = type_annotation,
+                        type_annotation=type_annotation,
                         llvm_func=lfunc,
                         argtypes=tuple(args))
     return cr

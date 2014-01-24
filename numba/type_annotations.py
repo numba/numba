@@ -61,6 +61,9 @@ class TypeAnnotation(object):
                         atype = typemap[inst.target.name]
 
                     aline = "%s = %s  :: %s" % (inst.target, inst.value, atype)
+                elif isinstance(inst, ir.SetItem):
+                    atype = calltypes[inst]
+                    aline = "%s  :: %s" % (inst, atype)
                 else:
                     aline = "%s" % inst
                 groupedinst[lineno].append("  %s" % aline)
