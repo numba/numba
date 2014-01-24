@@ -237,6 +237,7 @@ class TypeInferer(object):
         # Track all calls
         self.usercalls = []
         self.intrcalls = []
+        self.setitemcalls = []
 
     def dump(self):
         print('---- type variables ----')
@@ -311,6 +312,13 @@ class TypeInferer(object):
             assert signature is not None, (fnty, args)
             calltypes[call] = signature
 
+        for inst in self.setitemcalls:
+            target = typemap[inst.target.name]
+            index = typemap[inst.index.name]
+            value = typemap[inst.value.name]
+            signature = self.context.resolve_setitem(target, index, value)
+            calltypes[inst] = signature
+
         return calltypes
 
     def guard_return_type(self, ty):
@@ -360,6 +368,7 @@ class TypeInferer(object):
         constrain = SetItemConstrain(target=inst.target, index=inst.index,
                                      value=inst.value, loc=inst.loc)
         self.constrains.append(constrain)
+        self.setitemcalls.append(inst)
 
     def typeof_assign(self, inst):
         value = inst.value

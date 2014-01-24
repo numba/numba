@@ -174,19 +174,17 @@ class Lower(BaseLower):
             valuety = self.typeof(inst.value.name)
             indexty = self.typeof(inst.index.name)
 
-            signature = typing.signature(types.none, targetty, indexty,
-                                         valuety)
+            signature = self.fndesc.calltypes[inst]
+            impl = self.context.get_function('setitem', signature)
 
-            impl = self.context.get_function("setitem", signature)
+            # Convert argument to match
+            assert targetty == signature.args[0]
+            index = self.context.cast(self.builder, index, indexty,
+                                      signature.args[1])
+            value = self.context.cast(self.builder, value, valuety,
+                                      signature.args[2])
 
-            argvals = (target, index, value)
-            argtyps = (targetty, indexty, valuety)
-
-            castvals = [self.context.cast(self.builder, av, at, ft)
-                        for av, at, ft in zip(argvals, argtyps,
-                                              signature.args)]
-
-            return impl(self.builder, castvals)
+            return impl(self.builder, (target, index, value))
 
         elif isinstance(inst, ir.Del):
             pass
