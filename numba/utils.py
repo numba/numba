@@ -175,6 +175,9 @@ if PYVERSION >= (3, 0):
     def func_globals(f):
         return f.__globals__
 
+    def longint(v):
+        return int(v)
+
 else:
     def dict_iteritems(d):
         return d.iteritems()
@@ -193,3 +196,6 @@ else:
 
     def func_globals(f):
         return f.func_globals
+
+    def longint(v):
+        return long(v)

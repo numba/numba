@@ -43,8 +43,14 @@ ext_typeconv = Extension(name="numba.typeconv._typeconv",
                          sources=["numba/typeconv/typeconv.cpp",
                                   "numba/typeconv/_typeconv.cpp"])
 
+ext_npyufunc_ufunc = Extension(name="numba.npyufunc._internal",
+                               sources=["numba/npyufunc/_internal.c"],
+                               include_dirs=[numpy.get_include()],
+                               depends=["numba/npyufunc/_internal.h"])
+
+
 ext_modules = [ext_dynfunc, ext_numpyadapt, ext_dispatcher, ext_helperlib,
-               ext_typeconv]
+               ext_typeconv, ext_npyufunc_ufunc]
 
 packages = [
     "numba",
@@ -52,6 +58,7 @@ packages = [
     "numba.tests",
     "numba.typing",
     "numba.typeconv",
+    "numba.npyufunc",
 ]
 
 setup(name='numba',

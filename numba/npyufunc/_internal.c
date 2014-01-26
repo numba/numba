@@ -3,22 +3,7 @@
  * All Rights reserved.
  */
 
-#include "miniutils.h"
 #include "_internal.h"
-
-/* For version 1.6 and earlier */
-#ifndef NPY_ARRAY_ALIGNED
-    #define NPY_ARRAY_ALIGNED NPY_ALIGNED
-#endif
-#ifndef NPY_ARRAY_OWNDATA
-    #define NPY_ARRAY_OWNDATA NPY_OWNDATA
-#endif
-#ifndef NPY_ARRAY_C_CONTIGUOUS
-    #define NPY_ARRAY_C_CONTIGUOUS NPY_C_CONTIGUOUS
-#endif
-#ifndef NPY_ARRAY_F_CONTIGUOUS
-    #define NPY_ARRAY_F_CONTIGUOUS NPY_F_CONTIGUOUS
-#endif
 
 PyObject *
 PyDynUFunc_New(PyUFuncObject *ufunc, PyObject *dispatcher)
@@ -47,7 +32,7 @@ dyn_dealloc(PyDynUFuncObject *self)
 {
     PyUFuncObject *ufunc = self->ufunc_original;
     Py_XDECREF(self->dispatcher);
-    
+
     if (ufunc->functions)
         PyArray_free(ufunc->functions);
     if (ufunc->types)
@@ -130,28 +115,20 @@ dyn_call(PyDynUFuncObject *self, PyObject *args, PyObject *kw)
 #endif
 };
 
-/*
-#include "_ufunc.c"
-#include "_gufunc.c"
-*/
-
 static PyMethodDef ext_methods[] = {
-
-#ifdef IS_PY3K
     {"fromfunc", (PyCFunction) ufunc_fromfunc, METH_VARARGS, NULL},
     {"fromfuncsig", (PyCFunction) ufunc_fromfuncsig, METH_VARARGS, NULL},
-    {"get_arrays_ordering", (PyCFunction) get_arrays_ordering, METH_VARARGS, NULL},
-#else
-    {"fromfunc", ufunc_fromfunc, METH_VARARGS, NULL},
-    {"fromfuncsig", ufunc_fromfuncsig, METH_VARARGS, NULL},
-    {"get_arrays_ordering", get_arrays_ordering, METH_VARARGS, NULL},
-#endif
+    /*
+    {"get_arrays_ordering", (PyCFunction) get_arrays_ordering, METH_VARARGS,
+     NULL},
+     */
     { NULL }
 };
 
 /* Don't remove this marker, it is used for inserting licensing code */
 /*MARK1*/
 
+/*
 static int
 add_ndarray_flags_constants(PyObject *module)
 {
@@ -164,6 +141,7 @@ add_ndarray_flags_constants(PyObject *module)
 #undef __err_if_neg
     return 0;
 }
+*/
 
 MOD_INIT(_internal)
 {
@@ -175,20 +153,19 @@ MOD_INIT(_internal)
     import_array();
     import_umath();
 
-    MOD_INIT_EXEC(ufunc)
-    MOD_INIT_EXEC(gufunc)
-
     MOD_DEF(m, "_internal", "No docs",
             ext_methods)
 
     if (m == NULL)
         return MOD_ERROR_VAL;
+/*
 
     if (add_array_order_constants(m) < 0)
         return MOD_ERROR_VAL;
 
     if (add_ndarray_flags_constants(m) < 0)
         return MOD_ERROR_VAL;
+*/
 
     /* Inherit the dynamic UFunc from UFunc */
     PyUFunc_Type.tp_flags |= Py_TPFLAGS_BASETYPE; /* Hack... */
@@ -204,3 +181,7 @@ MOD_INIT(_internal)
     return MOD_SUCCESS_VAL(m);
 
 }
+
+
+#include "_ufunc.c"
+#include "_gufunc.c"

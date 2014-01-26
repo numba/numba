@@ -241,7 +241,9 @@ class Lower(BaseLower):
             # Convert argument to match
             lhs = self.context.cast(self.builder, lhs, lty, signature.args[0])
             rhs = self.context.cast(self.builder, rhs, rty, signature.args[1])
-            return impl(self.builder, (lhs, rhs))
+            res = impl(self.builder, (lhs, rhs))
+            return self.context.cast(self.builder, res, signature.return_type,
+                                     resty)
 
         elif expr.op == 'call':
             assert not expr.kws
@@ -256,14 +258,16 @@ class Lower(BaseLower):
             if isinstance(fnty, types.Method):
                 # Method of objects are handled differently
                 fnobj = self.loadvar(expr.func.name)
-                return self.context.call_class_method(self.builder, fnobj,
+                res = self.context.call_class_method(self.builder, fnobj,
                                                       signature.return_type,
                                                       argtyps, castvals)
 
             else:
                 # Normal function resolution
                 impl = self.context.get_function(fnty, signature)
-                return impl(self.builder, castvals)
+                res = impl(self.builder, castvals)
+            return self.context.cast(self.builder, res, signature.return_type,
+                                     resty)
 
         elif expr.op in ('getiter', 'iternext', 'itervalid', 'iternextsafe'):
             val = self.loadvar(expr.value.name)
@@ -272,7 +276,9 @@ class Lower(BaseLower):
             impl = self.context.get_function(expr.op, signature)
             [fty] = signature.args
             castval = self.context.cast(self.builder, val, ty, fty)
-            return impl(self.builder, (castval,))
+            res = impl(self.builder, (castval,))
+            return self.context.cast(self.builder, res, signature.return_type,
+                                    resty)
 
         elif expr.op == "getattr":
             val = self.loadvar(expr.value.name)
@@ -280,9 +286,10 @@ class Lower(BaseLower):
             impl = self.context.get_attribute(val, ty, expr.attr)
             if impl is None:
                 # ignore the attribute
-                return self.context.get_dummy_value()
+                res = self.context.get_dummy_value()
             else:
-                return impl(self.context, self.builder, ty, val)
+                res = impl(self.context, self.builder, ty, val)
+            return res
 
         elif expr.op == "getitem":
             baseval = self.loadvar(expr.target.name)
@@ -295,7 +302,9 @@ class Lower(BaseLower):
             castvals = [self.context.cast(self.builder, av, at, ft)
                         for av, at, ft in zip(argvals, argtyps,
                                               signature.args)]
-            return impl(self.builder, castvals)
+            res = impl(self.builder, castvals)
+            return self.context.cast(self.builder, res, signature.return_type,
+                                     resty)
 
         elif expr.op == "build_tuple":
             itemvals = [self.loadvar(i.name) for i in expr.items]

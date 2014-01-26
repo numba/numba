@@ -8,7 +8,7 @@ from llvm_cbuilder import *
 import llvm_cbuilder.shortnames as C
 import numpy as np
 
-from . import _common
+from . import ufuncbuilder
 
 class BasicUFunc(CDefinition):
     '''a generic ufunc that wraps the workload
@@ -52,16 +52,16 @@ class BasicUFunc(CDefinition):
         cls._name_ = 'basicufunc_%s'% (func_def)
         cls.FuncDef = func_def
 
-class _BasicVectorizeFromFunc(_common.CommonVectorizeFromFunc):
+class _BasicVectorizeFromFunc(ufuncbuilder.CommonVectorizeFromFunc):
     def build(self, lfunc, dtypes):
         def_buf = BasicUFunc(CFuncRef(lfunc))
         func = def_buf(lfunc.module)
-        _common.post_vectorize_optimize(func)
+        ufuncbuilder.post_vectorize_optimize(func)
         return func
 
 basic_vectorize_from_func = _BasicVectorizeFromFunc()
 
-class BasicASTVectorize(_common.GenericASTVectorize):
+class BasicASTVectorize(ufuncbuilder.GenericASTVectorize):
 
     _from_func_factory = basic_vectorize_from_func
 

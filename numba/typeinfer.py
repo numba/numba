@@ -52,7 +52,7 @@ class TypeVar(object):
             if set(types) != self.typeset:
                 [expect] = list(self.typeset)
                 for ty in types:
-                    if self.context.type_distance(ty, expect) is None:
+                    if self.context.type_compatibility(ty, expect) is None:
                         raise TypingError("No convertsion from %s to %s" %
                                           (ty, expect))
         else:
@@ -232,6 +232,7 @@ class TypeInferer(object):
         self.typevars = TypeVarMap()
         self.typevars.set_context(context)
         self.constrains = ConstrainNetwork()
+        self.return_type = None
         # Set of assumed immutable globals
         self.assumed_immutables = set()
         # Track all calls
@@ -251,10 +252,12 @@ class TypeInferer(object):
     def seed_return(self, typ):
         """Seeding of return value is optional.
         """
+        # self.return_type = typ
         for blk in utils.dict_itervalues(self.blocks):
             inst = blk.terminator
             if isinstance(inst, ir.Return):
-                self.typevars[inst.value.name].add_types(typ)
+                self.typevars[inst.value.name].lock(typ)
+                # self.typevars[inst.value.name].lock()
 
     def build_constrain(self):
         for blk in utils.dict_itervalues(self.blocks):

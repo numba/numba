@@ -2,9 +2,31 @@ from __future__ import print_function, division, absolute_import
 import inspect
 import numpy
 from numba.config import PYVERSION
-from numba import _dispatcher, types, compiler, targets, typing, utils
+from numba import _dispatcher, compiler, targets, typing, utils
 from numba.typeconv.rules import default_type_manager
 from numba.typing.templates import resolve_overload
+from numba import types
+
+
+def is_signature(sig):
+    return isinstance(sig, (str, tuple, types.Prototype))
+
+
+def normalize_signature(sig):
+    if isinstance(sig, str):
+        return normalize_signature(parse_signature(sig))
+    elif isinstance(sig, tuple):
+        return sig, None
+    elif isinstance(sig, types.Prototype):
+        return sig.args, sig.return_type
+    else:
+        raise TypeError(type(sig))
+
+
+def parse_signature(signature_str):
+    # Just eval signature_str using the types submodules as globals
+    return eval(signature_str, {}, types.__dict__)
+
 
 class GlobalContext(object):
     """
@@ -57,18 +79,13 @@ class Overloaded(_dispatcher.Dispatcher):
         typingctx = glctx.typing_context
         targetctx = glctx.target_context
 
-        if isinstance(sig, types.Prototype):
-            args = sig.args
-            return_type = sig.return_type
-        else:
-            args = sig
-            return_type = None
+        args, return_type = normalize_signature(sig)
 
         cres = compiler.compile_extra(typingctx, targetctx, self.py_func,
                                       args=args, return_type=return_type,
                                       flags=flags)
 
-        # Check typing error if nopython mode is used
+        # Check typing error if object mode is used
         if cres.typing_error is not None and not flags.enable_pyobject:
             raise cres.typing_error
 
@@ -79,7 +96,7 @@ class Overloaded(_dispatcher.Dispatcher):
 
     def _compile_and_call(self, *args, **kws):
         assert not kws
-        sig = [typeof_pyval(a) for a in args]
+        sig = tuple([typeof_pyval(a) for a in args])
         self.jit(sig)
         return self(*args, **kws)
 
@@ -114,9 +131,12 @@ def read_flags(flags, kws):
     if kws.pop("forceobj", False) == True:
         flags.set("force_pyobject")
 
+    if kws.pop("nocompile", False) == True:
+        flags.set("no_compile")
+
     if kws:
         # Unread options?
-        raise NameError("Unrecognized options: %s" % k.keys())
+        raise NameError("Unrecognized options: %s" % kws.keys())
 
 
 DTYPE_MAPPING = {}

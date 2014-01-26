@@ -1,21 +1,5 @@
 /* Included by _internal.c */
-
 #include "_internal.h"
-
-MOD_INIT(ufunc) {
-
-    PyObject *m;
-
-    import_array();
-    import_umath();
-
-    MOD_DEF(m, "ufunc", "No docs", NULL)
-
-    if (m == NULL)
-        return MOD_ERROR_VAL;
-
-    return MOD_SUCCESS_VAL(m);
-}
 
 static PyObject *
 PyDynUFunc_FromFuncAndData(PyUFuncGenericFunction *func, void **data,
@@ -30,6 +14,7 @@ PyDynUFunc_FromFuncAndData(PyUFuncGenericFunction *func, void **data,
     ufunc = (PyUFuncObject *) PyUFunc_FromFuncAndData(
                         func, data, types, ntypes, nin, nout,
                         identity, name, doc, 0);
+
     if (!ufunc)
         goto err;
 
@@ -191,20 +176,21 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
                                            nin,
                                            nout,
                                            PyUFunc_None,
-                                           "test", (char*)
-                                           "test", object,
+                                           "ufunc", (char*)
+                                           "ufunc", object,
                                            dispatcher);
+
     }
     else {
         ufunc = PyDynUFunc_FromFuncAndData(0, 0, 0, 0,
                                            nin,
                                            nout,
                                            PyUFunc_None,
-                                           "test",
-                                           (char*) "test",
+                                           "ufunc",
+                                           (char*) "ufunc",
                                            object,
                                            dispatcher);
-        
+
         PyUFunc_RegisterLoopForType((PyUFuncObject*)ufunc,
                                     custom_dtype,
                                     funcs[0],

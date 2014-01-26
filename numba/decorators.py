@@ -53,21 +53,19 @@ def jit(*args, **kws):
         objects.  The above information is guarantee to be True for "cpu"
         target.
     """
-    if isinstance(args[0], (str, tuple, types.Prototype)):
+    if not args:
+        def configured_jit(arg):
+            return jit(arg, **kws)
+        return configured_jit
+    elif dispatcher.is_signature(args[0]):
         # Function signature is provided
         [sig] = args
-        sig = sig if not isinstance(sig, str) else _parse_signature(sig)
         return _jit(sig, kws)
     else:
         # No signature is provided
         [pyfunc] = args
         dispcls = target_registry[kws.pop('target', 'cpu')]
         return dispcls(py_func=pyfunc)
-
-
-def _parse_signature(signature_str):
-    # Just eval signature_str using the types submodules as globals
-    return eval(signature_str, {}, types.__dict__)
 
 
 def _jit(sig, kws):

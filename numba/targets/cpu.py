@@ -1,8 +1,7 @@
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 import llvm.core as lc
 import llvm.passes as lp
 import llvm.ee as le
-from llvm import llrt
 from llvm.workaround import avx_support
 from numba import _dynfunc, _helperlib, config
 from numba.callwrapper import PyCallWrapper
@@ -98,6 +97,17 @@ class CPUContext(BaseContext):
         self.pm.run(module)
 
     def get_executable(self, func, fndesc):
+        """
+        Returns
+        -------
+        (cfunc, fnptr)
+
+        - cfunc
+            callable function (Can be None)
+        - fnptr
+            callable function address
+
+        """
         if self.is32bit:
             dmf = intrinsics.DivmodFixer()
             dmf.run(func.module)
@@ -108,6 +118,10 @@ class CPUContext(BaseContext):
         if not fndesc.native:
             self.optimize_pythonapi(func)
 
+        cfunc, fnptr = self.prepare_for_call(func, fndesc)
+        return cfunc, fnptr
+
+    def prepare_for_call(self, func, fndesc):
         wrapper, api = PyCallWrapper(self, func.module, func, fndesc).build()
         moddictsym = api.get_module_dict_symbol()
         self.optimize(func.module)

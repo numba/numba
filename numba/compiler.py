@@ -7,7 +7,8 @@ from numba import (bytecode, interpreter, typing, typeinfer, lowering, targets,
 
 class Flags(utils.ConfigOptions):
     OPTIONS = frozenset(['enable_pyobject',
-                         'force_pyobject'])
+                         'force_pyobject',
+                         'no_compile'])
 
 
 DEFAULT_FLAGS = Flags()
@@ -19,6 +20,7 @@ CR_FIELDS = ["typing_context",
              "entry_point_addr",
              "typing_error",
              "type_annotation",
+             "llvm_module",
              "llvm_func",
              "signature"]
 
@@ -79,13 +81,16 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags):
         use_python_mode = True
 
     if use_python_mode:
-        func, fnptr, lfunc = py_lowering_stage(targetctx, interp)
+        func, fnptr, lmod, lfunc = py_lowering_stage(targetctx, interp,
+                                                     flags.no_compile)
         typemap = defaultdict(lambda: types.pyobject)
         calltypes = defaultdict(lambda: types.pyobject)
     else:
-        func, fnptr, lfunc = native_lowering_stage(targetctx, interp,
-                                                   typemap, return_type,
-                                                   calltypes)
+        func, fnptr, lmod, lfunc = native_lowering_stage(targetctx, interp,
+                                                         typemap,
+                                                         return_type,
+                                                         calltypes,
+                                                         flags.no_compile)
 
     type_annotation = type_annotations.TypeAnnotation(interp=interp,
                                                       typemap=typemap,
@@ -93,6 +98,7 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags):
 
     signature = typing.signature(return_type, *args)
 
+    assert lfunc.module is lmod
     cr = compile_result(typing_context=typingctx,
                         target_context=targetctx,
                         entry_point=func,
@@ -100,6 +106,7 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags):
                         typing_error=fail_reason,
                         type_annotation=type_annotation,
                         llvm_func=lfunc,
+                        llvm_module=lmod,
                         signature=signature)
     return cr
 
@@ -144,22 +151,26 @@ def type_inference_stage(typingctx, interp, args, return_type):
     return typemap, restype, calltypes
 
 
-def native_lowering_stage(targetctx, interp, typemap, restype, calltypes):
+def native_lowering_stage(targetctx, interp, typemap, restype, calltypes,
+                          nocompile):
     # Lowering
     fndesc = lowering.describe_function(interp, typemap, restype, calltypes)
 
     lower = lowering.Lower(targetctx, fndesc)
     lower.lower()
-    
-    # Prepare for execution
-    cfunc, fnptr = targetctx.get_executable(lower.function, fndesc)
 
-    targetctx.insert_user_function(cfunc, fndesc)
+    if nocompile:
+        return None, 0, lower.module, lower.function
+    else:
+        # Prepare for execution
+        cfunc, fnptr = targetctx.get_executable(lower.function, fndesc)
 
-    return cfunc, fnptr, lower.function
+        targetctx.insert_user_function(cfunc, fndesc)
+
+        return cfunc, fnptr, lower.module, lower.function
 
 
-def py_lowering_stage(targetctx, interp):
+def py_lowering_stage(targetctx, interp, nocompile):
     # Optimize for python code
     ir_optimize_for_py_stage(interp)
 
@@ -170,9 +181,11 @@ def py_lowering_stage(targetctx, interp):
     if config.DEBUG:
         print(lower.module)
 
-    cfunc, fnptr = targetctx.get_executable(lower.function, fndesc)
-
-    return cfunc, fnptr, lower.function
+    if nocompile:
+        return None, 0, lower.module, lower.function
+    else:
+        cfunc, fnptr = targetctx.get_executable(lower.function, fndesc)
+        return cfunc, fnptr, lower.module, lower.function
 
 
 def ir_optimize_for_py_stage(interp):

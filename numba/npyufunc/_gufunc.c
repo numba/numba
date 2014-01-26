@@ -2,29 +2,10 @@
 
 #include "_internal.h"
 
-#include "numpy/arrayobject.h"
-#include "numpy/ufuncobject.h"
-#include "numpy/arrayscalars.h"
-#include "numpy/ndarraytypes.h"
-
-MOD_INIT(gufunc) {
-
-    PyObject *m;
-
-    import_array();
-    import_umath();
-
-    MOD_DEF(m, "gufunc", "No docs", NULL)
-
-    if (m == NULL)
-        return MOD_ERROR_VAL;
-
-    return MOD_SUCCESS_VAL(m);
-}
-
-
+/*
 #define NPY_UF_DBG_PRINT(string) puts(string)
 #define NPY_UF_DBG_PRINT1(string, arg) printf(string, arg)
+*/
 
 /* Duplicate for FromFuncAndDataAndSignature
    Need to refactor to reduce code duplication. */
@@ -206,8 +187,8 @@ ufunc_fromfuncsig(PyObject *NPY_UNUSED(dummy), PyObject *args) {
                                          nin,
                                          nout,
                                          PyUFunc_None,
-                                         "test",
-                                         (char*)"test",
+                                         "gufunc",
+                                         (char*)"gufunc",
                                          signature,
                                          object);
     }
@@ -216,8 +197,8 @@ ufunc_fromfuncsig(PyObject *NPY_UNUSED(dummy), PyObject *args) {
                                                        nin,
                                                        nout,
                                                        PyUFunc_None,
-                                                       "test",
-                                                       (char*)"test",
+                                                       "gufunc",
+                                                       (char*)"gufunc",
                                                        signature,
                                                        object);
         PyUFunc_RegisterLoopForType((PyUFuncObject*)ufunc,

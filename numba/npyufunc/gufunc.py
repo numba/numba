@@ -1,4 +1,4 @@
-from . import _common
+from . import ufuncbuilder
 
 from numba import llvm_types
 
@@ -12,7 +12,7 @@ from numba import decorators
 import numpy as np
 
 
-class _GeneralizedUFuncFromFunc(_common.CommonVectorizeFromFunc):
+class _GeneralizedUFuncFromFunc(ufuncbuilder.CommonVectorizeFromFunc):
     def datalist(self, lfunclist, ptrlist):
         """
         Return a list of data pointers to the kernels.
