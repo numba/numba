@@ -3,6 +3,7 @@ import inspect
 from collections import defaultdict
 from llvm.core import Type, Builder, Module
 import llvm.core as lc
+from numba import ctypes_support as ctypes
 from numba import ir, types, typing, cgutils, utils, config
 
 
@@ -135,7 +136,8 @@ class BaseLower(object):
             except LoweringError:
                 raise
             except Exception as e:
-                raise LoweringError("Internal error\n%s" % e, inst.loc)
+                msg = "Internal error:\n%s: %s" % (type(e).__name__, e)
+                raise LoweringError(msg, inst.loc)
 
     def typeof(self, varname):
         return self.fndesc.typemap[varname]
@@ -271,8 +273,13 @@ class Lower(BaseLower):
                 # Method of objects are handled differently
                 fnobj = self.loadvar(expr.func.name)
                 res = self.context.call_class_method(self.builder, fnobj,
-                                                      signature.return_type,
-                                                      argtyps, castvals)
+                                                     signature, castvals)
+
+            elif isinstance(fnty, types.FunctionPointer):
+                # Handle function pointer)
+                pointer = ctypes.cast(fnty.funcptr, ctypes.c_void_p).value
+                res = self.context.call_function_pointer(self.builder, pointer,
+                                                         signature, castvals)
 
             else:
                 # Normal function resolution

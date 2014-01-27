@@ -38,6 +38,7 @@ class Context(object):
         if isinstance(func, types.Function):
             return func.template(self).apply(args, kws)
 
+
         defns = self.functions[func]
         for defn in defns:
             res = defn.apply(args, kws)

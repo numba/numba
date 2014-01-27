@@ -141,6 +141,12 @@ class Function(Type):
         return hash(self.template)
 
 
+class FunctionPointer(Function):
+    def __init__(self, template, funcptr):
+        self.funcptr = funcptr
+        super(FunctionPointer, self).__init__(template)
+
+
 class Method(Function):
     def __init__(self, template, this):
         self.this = this

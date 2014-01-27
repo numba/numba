@@ -310,9 +310,7 @@ class BaseContext(object):
         return Constant.null(lty)
 
     def get_function(self, fn, sig):
-        if isinstance(fn, types.Method):
-            return self.call_method
-        elif isinstance(fn, types.Function):
+        if isinstance(fn, types.Function):
             key = fn.template.key
             overloads = self.defns[key]
         else:
@@ -462,8 +460,18 @@ class BaseContext(object):
         status = Status(code=code, ok=ok, err=err, none=none)
         return status
 
-    def call_class_method(self, builder, func, retty, tys, args):
+    def call_function_pointer(self, builder, funcptr, signature, args):
+        retty = self.get_value_type(signature.return_type)
+        fnty = Type.function(retty, [a.type for a in args])
+        fnptrty = Type.pointer(fnty)
+        addr = self.get_constant(types.intp, funcptr)
+        ptr = builder.inttoptr(addr, fnptrty)
+        return builder.call(ptr, args)
+
+    def call_class_method(self, builder, func, signature, args):
         api = self.get_python_api(builder)
+        tys = signature.args
+        retty = signature.return_type
         pyargs = [api.from_native_value(av, at) for av, at in zip(args, tys)]
         res = api.call_function_objargs(func, pyargs)
 
