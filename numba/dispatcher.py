@@ -42,8 +42,8 @@ class GlobalContext(object):
         return cls.__instance
 
     def _init(self):
-        self.target_context = targets.CPUContext()
         self.typing_context = typing.Context()
+        self.target_context = targets.CPUContext(self.typing_context)
 
 
 class Overloaded(_dispatcher.Dispatcher):

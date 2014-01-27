@@ -1,6 +1,7 @@
 from llvm.core import Type, Constant
 import llvm.core as lc
 import math
+from functools import reduce
 from numba import types, typing, cgutils
 from numba.targets.imputils import (builtin, builtin_attr, implement,
                                     impl_attribute)
@@ -1121,3 +1122,54 @@ builtin(caster(types.float64))
 builtin(caster(types.complex64))
 builtin(caster(types.complex128))
 
+
+#-------------------------------------------------------------------------------
+
+@builtin
+@implement(max, types.VarArg)
+def max_impl(context, builder, sig, args):
+    argtys = sig.args
+    for a in argtys:
+        if a not in types.number_domain:
+            raise AssertionError("only implemented for numeric types")
+
+    def domax(a, b):
+        at, av = a
+        bt, bv = b
+        ty = context.typing_context.unify_types(at, bt)
+        cav = context.cast(builder, av, at, ty)
+        cbv = context.cast(builder, bv, bt, ty)
+        cmpsig = typing.signature(types.boolean, ty, ty)
+        ge = context.get_function(">=", cmpsig)
+        pred = ge(builder, (cav, cbv))
+        res = builder.select(pred, cav, cbv)
+        return ty, res
+
+    typvals = zip(argtys, args)
+    resty, resval = reduce(domax, typvals)
+    return resval
+
+
+@builtin
+@implement(min, types.VarArg)
+def min_impl(context, builder, sig, args):
+    argtys = sig.args
+    for a in argtys:
+        if a not in types.number_domain:
+            raise AssertionError("only implemented for numeric types")
+
+    def domax(a, b):
+        at, av = a
+        bt, bv = b
+        ty = context.typing_context.unify_types(at, bt)
+        cav = context.cast(builder, av, at, ty)
+        cbv = context.cast(builder, bv, bt, ty)
+        cmpsig = typing.signature(types.boolean, ty, ty)
+        le = context.get_function("<=", cmpsig)
+        pred = le(builder, (cav, cbv))
+        res = builder.select(pred, cav, cbv)
+        return ty, res
+
+    typvals = zip(argtys, args)
+    resty, resval = reduce(domax, typvals)
+    return resval

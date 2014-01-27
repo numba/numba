@@ -517,3 +517,38 @@ builtin_global(types.float32, types.Function(ToFloat32))
 builtin_global(types.float64, types.Function(ToFloat64))
 builtin_global(types.complex64, types.Function(ToComplex64))
 builtin_global(types.complex128, types.Function(ToComplex128))
+
+#------------------------------------------------------------------------------
+
+
+class Max(AbstractTemplate):
+    key = max
+
+    def generic(self, args, kws):
+        assert not kws
+
+        for a in args:
+            if a not in types.number_domain:
+                raise TypeError("max() only support for numbers")
+
+        retty = self.context.unify_types(*args)
+        return signature(retty, *args)
+
+
+
+class Min(AbstractTemplate):
+    key = min
+
+    def generic(self, args, kws):
+        assert not kws
+
+        for a in args:
+            if a not in types.number_domain:
+                raise TypeError("min() only support for numbers")
+
+        retty = self.context.unify_types(*args)
+        return signature(retty, *args)
+
+
+builtin_global(max, types.Function(Max))
+builtin_global(min, types.Function(Min))

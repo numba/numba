@@ -349,6 +349,7 @@ class Optional(Type):
 pyobject = Type('pyobject')
 none = Dummy('none')
 Any = Dummy('any')
+VarArg = Dummy('...')
 string = Dummy('str')
 
 boolean = bool_ = Type('bool')

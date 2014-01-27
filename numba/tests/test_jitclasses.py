@@ -35,7 +35,7 @@ class TestJITClasses(unittest.TestCase):
         tyctx = typing.Context()
         tyctx.insert_class(Car, self.carattrs)
 
-        cgctx = targets.CPUContext()
+        cgctx = targets.CPUContext(tyctx)
         cgctx.insert_class(Car, self.carattrs)
 
         car_object = types.Object(Car)
@@ -68,7 +68,7 @@ class TestJITClasses(unittest.TestCase):
         tyctx = typing.Context()
         tyctx.insert_class(Car, self.carattrs)
 
-        cgctx = targets.CPUContext()
+        cgctx = targets.CPUContext(tyctx)
         cgctx.insert_class(Car, self.carattrs)
 
         car_object = types.Object(Car)

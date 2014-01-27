@@ -46,7 +46,7 @@ def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS):
     Good for testing.
     """
     typingctx = typing.Context()
-    targetctx = targets.CPUContext()
+    targetctx = targets.CPUContext(typingctx)
     return compile_extra(typingctx, targetctx, func, args, return_type, flags)
 
 

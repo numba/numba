@@ -1,6 +1,7 @@
 from __future__ import print_function
 from collections import defaultdict
 import functools
+import numpy
 from numba import types, utils
 from numba.typeconv import rules
 from . import templates
@@ -116,12 +117,20 @@ class Context(object):
         d = self.type_compatibility(fromty=first, toty=second)
         if d is None:
             return types.pyobject
-        elif d == "promote" or d == 'safe':
-            # A promotion or safe conversion from first -> second
-            return second
-        elif d == "unsafe":
-            # A demotion from first -> second
+        elif d == 'exact':
+            # Same type
             return first
+        elif d == 'promote':
+            return second
+        elif d in ('safe', 'unsafe'):
+            assert first in types.number_domain
+            assert second in types.number_domain
+            a = numpy.dtype(str(first))
+            b = numpy.dtype(str(second))
+            # Just use NumPy coercion rules
+            sel = numpy.promote_types(a, b)
+            # Convert NumPy dtype back to Numba types
+            return getattr(types, str(sel))
         else:
             raise Exception("type_compatibility returned %s" % d)
 
@@ -130,3 +139,5 @@ def new_method(fn, sig):
     gvs = dict(key=fn, cases=[sig])
     ft = type("UserFunction_%s" % fn, (templates.ConcreteTemplate,), gvs)
     return types.Method(ft, this=sig.recvr)
+
+

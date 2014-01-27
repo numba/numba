@@ -46,15 +46,21 @@ class Overloads(object):
             if ver.signature == sig:
                 return ver
             # As generic type
-            if len(ver.signature.args) == len(sig.args):
+            if (len(ver.signature.args) == len(sig.args) or
+                    ver.signature.args[-1] == types.VarArg):
                 match = True
                 for formal, actual in zip(ver.signature.args, sig.args):
+                    if formal == types.VarArg:
+                        # vararg argument matches everything
+                        break
+
                     match = self._match(formal, actual)
                     if not match:
                         break
 
                 if match:
                     return ver
+
 
         raise NotImplementedError(self, sig)
 
@@ -87,7 +93,9 @@ class BaseContext(object):
     Only POD structure can life across function boundaries by copying the
     data.
     """
-    def __init__(self):
+    def __init__(self, typing_context):
+        self.typing_context = typing_context
+
         self.defns = defaultdict(Overloads)
         self.attrs = utils.UniqueDict()
         self.users = utils.UniqueDict()
@@ -305,13 +313,15 @@ class BaseContext(object):
         if isinstance(fn, types.Method):
             return self.call_method
         elif isinstance(fn, types.Function):
-            overloads = self.defns[fn.template.key]
+            key = fn.template.key
+            overloads = self.defns[key]
         else:
-            overloads = self.defns[fn]
+            key = fn
+            overloads = self.defns[key]
         try:
             return _wrap_impl(overloads.find(sig), self, sig)
         except NotImplementedError:
-            raise NotImplementedError(fn, sig)
+            raise Exception("No definition for lowering %s%s" % (key, sig))
 
     def get_attribute(self, val, typ, attr):
         key = typ, attr
