@@ -995,10 +995,13 @@ def getitem_array1d(context, builder, sig, args):
         where.add_incoming(wrapped, bbwrapped)
 
         ptr = builder.gep(dataptr, [where])
-        return builder.load(ptr)
     else:
         # No wraparound
         ptr = builder.gep(dataptr, [idx])
+
+    if context.is_struct_type(aryty.dtype):
+        return ptr
+    else:
         return builder.load(ptr)
 
 
@@ -1017,7 +1020,11 @@ def getitem_array_unituple(context, builder, sig, args):
     # TODO warparound flag
     ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
                                    wraparound=True)
-    return builder.load(ptr)
+
+    if context.is_struct_type(aryty.dtype):
+        return ptr
+    else:
+        return builder.load(ptr)
 
 
 @builtin
@@ -1033,8 +1040,14 @@ def setitem_array1d(context, builder, sig, args):
 
     ptr = builder.gep(dataptr, [idx])
     val = context.cast(builder, val, valty, aryty.dtype)
-    assert val.type == ptr.type.pointee, (str(val.type), str(ptr.type.pointee))
-    builder.store(val, ptr)
+
+    if context.is_struct_type(aryty.dtype):
+        stval = builder.load(val)
+    else:
+        stval = val
+    assert stval.type == ptr.type.pointee, (str(stval.type),
+                                            str(ptr.type.pointee))
+    builder.store(stval, ptr)
     return
 
 
@@ -1052,7 +1065,11 @@ def setitem_array_unituple(context, builder, sig, args):
     indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
     ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
                                    wraparound=True)
-    builder.store(val, ptr)
+    if context.is_struct_type(aryty.dtype):
+        stval = builder.load(val)
+    else:
+        stval = val
+    builder.store(stval, ptr)
 
 
 @builtin

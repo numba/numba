@@ -224,7 +224,10 @@ class BaseContext(object):
             return Type.pointer(stty)
         elif isinstance(ty, types.CPointer):
             dty = self.get_value_type(ty.dtype)
-            return Type.pointer(dty)
+            if self.is_struct_type(ty.dtype):
+                return dty
+            else:
+                return Type.pointer(dty)
         elif isinstance(ty, types.UniTuple):
             dty = self.get_value_type(ty.dtype)
             return Type.array(dty, ty.count)
