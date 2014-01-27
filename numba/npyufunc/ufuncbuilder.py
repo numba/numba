@@ -15,6 +15,13 @@ class UFuncDispatcher(object):
         self.overloads = utils.UniqueDict()
 
     def compile(self, sig, **kws):
+        if kws.get("nopython", True) == False:
+            raise AssertionError("nopython option must be True")
+        if kws.get("forceobj", False) == True:
+            raise AssertionError("forceobj option must be False")
+
+        kws.update(dict(nopython=True, forceobj=False))
+
         flags = compiler.Flags()
         read_flags(flags, kws)
 

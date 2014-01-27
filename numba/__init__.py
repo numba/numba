@@ -17,5 +17,9 @@ from .types import *
 jit = decorators.jit
 autojit = decorators.autojit
 
+# Re export vectorize decorators
+from .npyufunc import vectorize, guvectorize
+
+
 # Re-export test entrypoint
 test = testing.test

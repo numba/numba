@@ -89,3 +89,4 @@ def _read_flags(flags, kws):
     if kws:
         # Unread options?
         raise NameError("Unrecognized options: %s" % k.keys())
+

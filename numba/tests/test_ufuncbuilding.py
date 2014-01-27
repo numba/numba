@@ -1,15 +1,17 @@
 from __future__ import print_function, absolute_import, division
 import numpy
 from numba import unittest_support as unittest
-from numba.npyufunc import UFuncBuilder, GUFuncBuilder
-
+from numba.npyufunc.ufuncbuilder import UFuncBuilder, GUFuncBuilder
+from numba import vectorize, guvectorize
 
 def add(a, b):
     return a + b
 
+
 def guadd(a, b, c):
-    for i in range(c.shape[0]):
-        for j in range(c.shape[1]):
+    x, y = c.shape
+    for i in range(x):
+        for j in range(y):
             c[i, j] = a[i, j] + b[i, j]
 
 
@@ -55,6 +57,20 @@ class TestGUfuncBuilding(unittest.TestCase):
 
         self.assertTrue(numpy.all(a + a == b))
 
+
+class TestVectorizeDecor(unittest.TestCase):
+    def test_vectorize(self):
+        ufunc = vectorize(['int32(int32, int32)'])(add)
+        a = numpy.arange(10, dtype='int32')
+        b = ufunc(a, a)
+        self.assertTrue(numpy.all(a + a == b))
+
+    def test_guvectorize(self):
+        ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
+                            "(x,y),(x,y)->(x,y)")(guadd)
+        a = numpy.arange(10, dtype='int32').reshape(2, 5)
+        b = ufunc(a, a)
+        self.assertTrue(numpy.all(a + a == b))
 
 if __name__ == '__main__':
     unittest.main()
