@@ -1,11 +1,16 @@
 from __future__ import print_function, absolute_import, division
 import numpy
 from numba import unittest_support as unittest
-from numba.npyufunc import UFuncBuilder
+from numba.npyufunc import UFuncBuilder, GUFuncBuilder
 
 
 def add(a, b):
     return a + b
+
+def guadd(a, b, c):
+    for i in range(c.shape[0]):
+        for j in range(c.shape[1]):
+            c[i, j] = a[i, j] + b[i, j]
 
 
 class TestUfuncBuilding(unittest.TestCase):
@@ -26,6 +31,28 @@ class TestUfuncBuilding(unittest.TestCase):
 
         a = numpy.arange(10, dtype='complex64') + 1j
         b = ufunc(a, a)
+        self.assertTrue(numpy.all(a + a == b))
+
+
+class TestGUfuncBuilding(unittest.TestCase):
+    def test_basic_gufunc(self):
+        gufb = GUFuncBuilder(guadd, "(x, y),(x, y)->(x, y)")
+        gufb.add("void(int32[:,:], int32[:,:], int32[:,:])")
+        ufunc = gufb.build_ufunc()
+
+        a = numpy.arange(10, dtype="int32").reshape(2, 5)
+        b = ufunc(a, a)
+
+        self.assertTrue(numpy.all(a + a == b))
+
+    def test_gufunc_struct(self):
+        gufb = GUFuncBuilder(guadd, "(x, y),(x, y)->(x, y)")
+        gufb.add("void(complex64[:,:], complex64[:,:], complex64[:,:])")
+        ufunc = gufb.build_ufunc()
+
+        a = numpy.arange(10, dtype="complex64").reshape(2, 5) + 1j
+        b = ufunc(a, a)
+
         self.assertTrue(numpy.all(a + a == b))
 
 

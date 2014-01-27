@@ -241,6 +241,15 @@ def _loop_nest(builder, shape, intp):
             yield (ind,)
 
 
+def pack_array(builder, values):
+    n = len(values)
+    ty = values[0].type
+    ary = Constant.undef(Type.array(ty, n))
+    for i, v in enumerate(values):
+        ary = builder.insert_value(ary, v, i)
+    return ary
+
+
 def unpack_tuple(builder, tup, count):
     vals = [builder.extract_value(tup, i)
             for i in range(count)]
