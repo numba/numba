@@ -12,6 +12,13 @@ except ImportError:
     import __builtin__ as builtins
 
 
+class LoweringError(Exception):
+    def __init__(self, msg, loc):
+        self.msg = msg
+        self.loc = loc
+        super(LoweringError, self).__init__("%s\n%s" % (msg, loc.strformat()))
+
+
 class FunctionDescriptor(object):
     def __init__(self, native, pymod, name, doc, blocks, typemap,
                  restype, calltypes, args, kws):
@@ -123,7 +130,12 @@ class BaseLower(object):
 
     def lower_block(self, block):
         for inst in block.body:
-            self.lower_inst(inst)
+            try:
+                self.lower_inst(inst)
+            except LoweringError:
+                raise
+            except Exception as e:
+                raise LoweringError("Internal error\n%s" % e, inst.loc)
 
     def typeof(self, varname):
         return self.fndesc.typemap[varname]

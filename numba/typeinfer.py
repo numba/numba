@@ -96,7 +96,12 @@ class ConstrainNetwork(object):
 
     def propagate(self, context, typevars):
         for constrain in self.constrains:
-            constrain(context, typevars)
+            try:
+                constrain(context, typevars)
+            except TypingError:
+                raise
+            except Exception as e:
+                raise TypingError("Internal error:\n%s" % e, constrain.loc)
 
 
 class Propagate(object):
