@@ -535,7 +535,6 @@ class Max(AbstractTemplate):
         return signature(retty, *args)
 
 
-
 class Min(AbstractTemplate):
     key = min
 
@@ -552,3 +551,74 @@ class Min(AbstractTemplate):
 
 builtin_global(max, types.Function(Max))
 builtin_global(min, types.Function(Min))
+
+#------------------------------------------------------------------------------
+
+
+class Int(AbstractTemplate):
+    key = int
+
+    def generic(self, args, kws):
+        assert not kws
+
+        [arg] = args
+
+        if arg not in types.number_domain:
+            raise TypeError("int() only support for numbers")
+
+        if arg in types.complex_domain:
+            raise TypeError("int() does not support complex")
+
+        if arg in types.integer_domain:
+            return signature(arg, arg)
+
+        if arg in types.real_domain:
+            return signature(types.intp, arg)
+
+
+class Float(AbstractTemplate):
+    key = float
+
+    def generic(self, args, kws):
+        assert not kws
+
+        [arg] = args
+
+        if arg not in types.number_domain:
+            raise TypeError("float() only support for numbers")
+
+        if arg in types.complex_domain:
+            raise TypeError("float() does not support complex")
+
+        if arg in types.integer_domain:
+            return signature(types.float64, arg)
+
+        elif arg in types.real_domain:
+            return signature(arg, arg)
+
+
+class Complex(AbstractTemplate):
+    key = complex
+
+    def generic(self, args, kws):
+        assert not kws
+
+        if len(args) == 1:
+            [arg] = args
+            if arg not in types.number_domain:
+                raise TypeError("complex() only support for numbers")
+            return signature(types.complex128, arg)
+
+        elif len(args) == 2:
+            [real, imag] = args
+
+            if (real not in types.number_domain or
+                        imag not in types.number_domain):
+                raise TypeError("complex() only support for numbers")
+            return signature(types.complex128, real, imag)
+
+
+builtin_global(int, types.Function(Int))
+builtin_global(float, types.Function(Float))
+builtin_global(complex, types.Function(Complex))
+

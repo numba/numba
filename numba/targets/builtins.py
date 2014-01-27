@@ -1173,3 +1173,41 @@ def min_impl(context, builder, sig, args):
     typvals = zip(argtys, args)
     resty, resval = reduce(domax, typvals)
     return resval
+
+#-------------------------------------------------------------------------------
+
+@builtin
+@implement(int, types.Any)
+def int_impl(context, builder, sig, args):
+    [ty] = sig.args
+    [val] = args
+    return context.cast(builder, val, ty, sig.return_type)
+
+
+@builtin
+@implement(float, types.Any)
+def float_impl(context, builder, sig, args):
+    [ty] = sig.args
+    [val] = args
+    return context.cast(builder, val, ty, sig.return_type)
+
+
+@builtin
+@implement(complex, types.VarArg)
+def complex_impl(context, builder, sig, args):
+    if len(sig.args) == 1:
+        [realty] = sig.args
+        [real] = args
+        real = context.cast(builder, real, realty, types.float64)
+        imag = context.get_constant(types.float64, 0)
+
+    elif len(sig.args) == 2:
+        [realty, imagty] = sig.args
+        [real, imag] = args
+        real = context.cast(builder, real, realty, types.float64)
+        imag = context.cast(builder, imag, imagty, types.float64)
+
+    cmplx = Complex128(context, builder)
+    cmplx.real = real
+    cmplx.imag = imag
+    return cmplx._getvalue()
