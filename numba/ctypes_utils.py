@@ -7,7 +7,8 @@ from numba import types
 
 
 CTYPES_MAP = {
-    ctypes.c_int8: types.int8,
+    None: types.none,
+    ctypes.c_int8:  types.int8,
     ctypes.c_int16: types.int16,
     ctypes.c_int32: types.int32,
     ctypes.c_int64: types.int64,
@@ -19,6 +20,8 @@ CTYPES_MAP = {
 
     ctypes.c_float: types.float32,
     ctypes.c_double: types.float64,
+
+    ctypes.c_void_p: types.voidptr,
 }
 
 

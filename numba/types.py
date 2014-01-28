@@ -97,7 +97,8 @@ class Prototype(Type):
 
 class Dummy(Type):
     """
-    For type that does not really have a representation.
+    For type that does not really have a representation and is compatible
+    with a void*.
     """
 
 
@@ -357,6 +358,10 @@ none = Dummy('none')
 Any = Dummy('any')
 VarArg = Dummy('...')
 string = Dummy('str')
+
+# No operation is defined on voidptr
+# Can only pass it around
+voidptr = Dummy('void*')
 
 boolean = bool_ = Type('bool')
 

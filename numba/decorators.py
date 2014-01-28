@@ -1,5 +1,5 @@
 """
-Stub for early user testing
+Contains function decorators and target_registry
 """
 from __future__ import print_function, division, absolute_import
 import warnings
@@ -48,6 +48,7 @@ def jit(*args, **kws):
     The keyword arguments are compile flags.
 
     - nopython: bool
+        Use is deprecated.  Use target="nopython-cpu" instead.
         Set to True to forbids the use of Python API.
     - target: str
         Control code generation target.  Different target may return different

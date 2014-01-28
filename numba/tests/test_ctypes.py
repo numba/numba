@@ -16,13 +16,55 @@ def use_c_sin(x):
     return c_sin(x)
 
 
+ctype_wrapping = CFUNCTYPE(c_double, c_double)(use_c_sin)
+
+
+def use_ctype_wrapping(x):
+    return ctype_wrapping(x)
+
+
+
+savethread = pythonapi.PyEval_SaveThread
+savethread.argtypes = []
+savethread.restype = c_void_p
+
+restorethread = pythonapi.PyEval_RestoreThread
+restorethread.argtypes = [c_void_p]
+restorethread.restype = None
+
+
+def use_c_pointer(x):
+    """
+    Running in Python will cause a segfault.
+    """
+    threadstate = savethread()
+    x += 1
+    restorethread(threadstate)
+    return x
+
+
 class TestCTypes(unittest.TestCase):
     def test_c_sin(self):
         pyfunc = use_c_sin
-        cres = compile_isolated(use_c_sin, [types.double])
+        cres = compile_isolated(pyfunc, [types.double])
         cfunc = cres.entry_point
         x = 3.14
         self.assertEqual(pyfunc(x), cfunc(x))
+
+    def test_ctype_wrapping(self):
+        pyfunc = use_ctype_wrapping
+        cres = compile_isolated(pyfunc, [types.double])
+        cfunc = cres.entry_point
+        x = 3.14
+        self.assertEqual(pyfunc(x), cfunc(x))
+
+    def test_ctype_voidptr(self):
+        pyfunc = use_c_pointer
+        # pyfunc will segfault if called
+        cres = compile_isolated(pyfunc, [types.int32])
+        cfunc = cres.entry_point
+        x = 123
+        self.assertTrue(cfunc(x), x + 1)
 
 if __name__ == '__main__':
     unittest.main()
