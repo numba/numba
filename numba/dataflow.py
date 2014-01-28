@@ -157,11 +157,15 @@ class DataFlowAnalysis(object):
         info.append(inst, func=func, args=args, kws=kws, res=res)
         info.push(res)
 
-    def op_UNARY_NEGATIVE(self, info, inst):
+    def _unaryop(self, info, inst):
         val = info.pop()
         res = info.make_temp()
         info.append(inst, value=val, res=res)
         info.push(res)
+
+    op_UNARY_NEGATIVE = _unaryop
+    op_UNARY_NOT = _unaryop
+    op_UNARY_INVERT = _unaryop
 
     def _binaryop(self, info, inst):
         rhs = info.pop()
@@ -181,6 +185,12 @@ class DataFlowAnalysis(object):
     op_INPLACE_MODULO = _binaryop
     op_INPLACE_POWER = _binaryop
 
+    op_INPLACE_LSHIFT = _binaryop
+    op_INPLACE_RSHIFT = _binaryop
+    op_INPLACE_AND = _binaryop
+    op_INPLACE_OR = _binaryop
+    op_INPLACE_XOR = _binaryop
+
     op_BINARY_ADD = _binaryop
     op_BINARY_SUBTRACT = _binaryop
     op_BINARY_MULTIPLY = _binaryop
@@ -189,6 +199,12 @@ class DataFlowAnalysis(object):
     op_BINARY_FLOOR_DIVIDE = _binaryop
     op_BINARY_MODULO = _binaryop
     op_BINARY_POWER = _binaryop
+
+    op_BINARY_LSHIFT = _binaryop
+    op_BINARY_RSHIFT = _binaryop
+    op_BINARY_AND = _binaryop
+    op_BINARY_OR = _binaryop
+    op_BINARY_XOR = _binaryop
 
     def op_SLICE_3(self, info, inst):
         """

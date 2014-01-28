@@ -245,6 +245,68 @@ def int_print_impl(context, builder, sig, args):
     return context.get_dummy_value()
 
 
+def int_shl_impl(context, builder, sig, args):
+    [valty, amtty] = sig.args
+    [val, amt] = args
+    val = context.cast(builder, val, valty, sig.return_type)
+    amt = context.cast(builder, amt, amtty, sig.return_type)
+    return builder.shl(val, amt)
+
+
+def int_lshr_impl(context, builder, sig, args):
+    [valty, amtty] = sig.args
+    [val, amt] = args
+    val = context.cast(builder, val, valty, sig.return_type)
+    amt = context.cast(builder, amt, amtty, sig.return_type)
+    return builder.lshr(val, amt)
+
+
+def int_ashr_impl(context, builder, sig, args):
+    [valty, amtty] = sig.args
+    [val, amt] = args
+    val = context.cast(builder, val, valty, sig.return_type)
+    amt = context.cast(builder, amt, amtty, sig.return_type)
+    return builder.ashr(val, amt)
+
+
+def int_and_impl(context, builder, sig, args):
+    [at, bt] = sig.args
+    [av, bv] = args
+    cav = context.cast(builder, av, at, sig.return_type)
+    cbc = context.cast(builder, bv, bt, sig.return_type)
+    return builder.and_(cav, cbc)
+
+
+def int_or_impl(context, builder, sig, args):
+    [at, bt] = sig.args
+    [av, bv] = args
+    cav = context.cast(builder, av, at, sig.return_type)
+    cbc = context.cast(builder, bv, bt, sig.return_type)
+    return builder.or_(cav, cbc)
+
+
+def int_xor_impl(context, builder, sig, args):
+    [at, bt] = sig.args
+    [av, bv] = args
+    cav = context.cast(builder, av, at, sig.return_type)
+    cbc = context.cast(builder, bv, bt, sig.return_type)
+    return builder.xor(cav, cbc)
+
+
+def int_negate_impl(context, builder, sig, args):
+    [typ] = sig.args
+    [val] = args
+    val = context.cast(builder, val, typ, sig.return_type)
+    return builder.neg(val)
+
+
+def int_invert_impl(context, builder, sig, args):
+    [typ] = sig.args
+    [val] = args
+    val = context.cast(builder, val, typ, sig.return_type)
+    return builder.xor(val, Constant.all_ones(val.type))
+
+
 for ty in types.integer_domain:
     builtin(implement('+', ty, ty)(int_add_impl))
     builtin(implement('-', ty, ty)(int_sub_impl))
@@ -253,6 +315,14 @@ for ty in types.integer_domain:
     builtin(implement('!=', ty, ty)(int_ne_impl))
 
     builtin(implement(types.print_type, ty)(int_print_impl))
+    builtin(implement('<<', ty, types.uint32)(int_shl_impl))
+
+    builtin(implement('&', ty, ty)(int_and_impl))
+    builtin(implement('|', ty, ty)(int_or_impl))
+    builtin(implement('^', ty, ty)(int_xor_impl))
+
+    builtin(implement('-', ty)(int_negate_impl))
+    builtin(implement('~', ty)(int_invert_impl))
 
 for ty in types.unsigned_domain:
     builtin(implement('/?', ty, ty)(int_udiv_impl))
@@ -264,6 +334,8 @@ for ty in types.unsigned_domain:
     builtin(implement('>', ty, ty)(int_sgt_impl))
     builtin(implement('>=', ty, ty)(int_sge_impl))
     builtin(implement('**', types.float64, ty)(int_upower_impl))
+    # logical shift for unsigned
+    builtin(implement('>>', ty, types.uint32)(int_lshr_impl))
 
 for ty in types.signed_domain:
     builtin(implement('/?', ty, ty)(int_sdiv_impl))
@@ -276,6 +348,8 @@ for ty in types.signed_domain:
     builtin(implement('>=', ty, ty)(int_sge_impl))
     builtin(implement(types.abs_type, ty)(int_abs_impl))
     builtin(implement('**', types.float64, ty)(int_spower_impl))
+    # arithmetic shift for signed
+    builtin(implement('>>', ty, types.uint32)(int_ashr_impl))
 
 
 def real_add_impl(context, builder, sig, args):
@@ -479,6 +553,13 @@ def real_print_impl(context, builder, sig, args):
     return context.get_dummy_value()
 
 
+def real_negate_impl(context, builder, sig, args):
+    [typ] = sig.args
+    [val] = args
+    val = context.cast(builder, val, typ, sig.return_type)
+    return builder.fsub(context.get_constant(sig.return_type, 0), val)
+
+
 for ty in types.real_domain:
     builtin(implement('+', ty, ty)(real_add_impl))
     builtin(implement('-', ty, ty)(real_sub_impl))
@@ -497,6 +578,8 @@ for ty in types.real_domain:
 
     builtin(implement(types.abs_type, ty)(real_abs_impl))
     builtin(implement(types.print_type, ty)(real_print_impl))
+
+    builtin(implement('-', ty)(real_negate_impl))
 
 
 class Complex64(cgutils.Structure):
@@ -517,6 +600,9 @@ def get_complex_info(ty):
     elif ty == types.complex128:
         cmplxcls = Complex128
         flty = types.float64
+
+    else:
+        raise TypeError(ty)
 
     return cmplxcls, flty
 
@@ -572,8 +658,7 @@ def complex128_power_impl(context, builder, sig, args):
     with cgutils.ifelse(builder, b_is_two) as (then, otherwise):
         with then:
             # Lower as multiplication
-            multimpl = complex_mult_impl(Complex128)
-            res = multimpl(context, builder, sig.args, (ca, ca))
+            res = complex_mult_impl(context, builder, sig, (ca, ca))
             cres = Complex128(context, builder, value=res)
             c.real = cres.real
             c.imag = cres.imag
@@ -587,103 +672,132 @@ def complex128_power_impl(context, builder, sig, args):
     return pc
 
 
-def complex_add_impl(complexClass):
-    def impl(context, builder, sig, args):
-        [cx, cy] = args
-        x = complexClass(context, builder, value=cx)
-        y = complexClass(context, builder, value=cy)
-        z = complexClass(context, builder)
-        a = x.real
-        b = x.imag
-        c = y.real
-        d = y.imag
-        z.real = builder.fadd(a, c)
-        z.imag = builder.fadd(b, d)
-        return z._getvalue()
-    return impl
+def complex_add_impl(context, builder, sig, args):
+    [cx, cy] = args
+    complexClass = context.make_complex(sig.args[0])
+    x = complexClass(context, builder, value=cx)
+    y = complexClass(context, builder, value=cy)
+    z = complexClass(context, builder)
+    a = x.real
+    b = x.imag
+    c = y.real
+    d = y.imag
+    z.real = builder.fadd(a, c)
+    z.imag = builder.fadd(b, d)
+    return z._getvalue()
 
 
-def complex_sub_impl(complexClass):
-    def impl(context, builder, sig, args):
-        [cx, cy] = args
-        x = complexClass(context, builder, value=cx)
-        y = complexClass(context, builder, value=cy)
-        z = complexClass(context, builder)
-        a = x.real
-        b = x.imag
-        c = y.real
-        d = y.imag
-        z.real = builder.fsub(a, c)
-        z.imag = builder.fsub(b, d)
-        return z._getvalue()
-    return impl
+def complex_sub_impl(context, builder, sig, args):
+    [cx, cy] = args
+    complexClass = context.make_complex(sig.args[0])
+    x = complexClass(context, builder, value=cx)
+    y = complexClass(context, builder, value=cy)
+    z = complexClass(context, builder)
+    a = x.real
+    b = x.imag
+    c = y.real
+    d = y.imag
+    z.real = builder.fsub(a, c)
+    z.imag = builder.fsub(b, d)
+    return z._getvalue()
 
 
-def complex_mult_impl(complexClass):
-    def impl(context, builder, sig, args):
-        """
-        (a+bi)(c+di)=(ac-bd)+i(ad+bc)
-        """
-        [cx, cy] = args
-        x = complexClass(context, builder, value=cx)
-        y = complexClass(context, builder, value=cy)
-        z = complexClass(context, builder)
-        a = x.real
-        b = x.imag
-        c = y.real
-        d = y.imag
-        ac = builder.fmul(a, c)
-        bd = builder.fmul(b, d)
-        ad = builder.fmul(a, d)
-        bc = builder.fmul(b, c)
-        z.real = builder.fsub(ac, bd)
-        z.imag = builder.fadd(ad, bc)
-        return z._getvalue()
-    return impl
+def complex_mult_impl(context, builder, sig, args):
+    """
+    (a+bi)(c+di)=(ac-bd)+i(ad+bc)
+    """
+    [cx, cy] = args
+    complexClass = context.make_complex(sig.args[0])
+    x = complexClass(context, builder, value=cx)
+    y = complexClass(context, builder, value=cy)
+    z = complexClass(context, builder)
+    a = x.real
+    b = x.imag
+    c = y.real
+    d = y.imag
+    ac = builder.fmul(a, c)
+    bd = builder.fmul(b, d)
+    ad = builder.fmul(a, d)
+    bc = builder.fmul(b, c)
+    z.real = builder.fsub(ac, bd)
+    z.imag = builder.fadd(ad, bc)
+    return z._getvalue()
 
 
-def complex_div_impl(complexClass):
-    def impl(context, builder, sig, args):
-        """
-        z = c^2 + d^2
-        (a+bi)/(c+di) = (ac + bd) / z, (bc - ad) / z
-        """
-        [cx, cy] = args
-        x = complexClass(context, builder, value=cx)
-        y = complexClass(context, builder, value=cy)
-        z = complexClass(context, builder)
-        a = x.real
-        b = x.imag
-        c = y.real
-        d = y.imag
+def complex_div_impl(context, builder, sig, args):
+    """
+    z = c^2 + d^2
+    (a+bi)/(c+di) = (ac + bd) / z, (bc - ad) / z
+    """
+    [cx, cy] = args
+    complexClass = context.make_complex(sig.args[0])
+    x = complexClass(context, builder, value=cx)
+    y = complexClass(context, builder, value=cy)
+    z = complexClass(context, builder)
+    a = x.real
+    b = x.imag
+    c = y.real
+    d = y.imag
 
-        ac = builder.fmul(a, c)
-        bd = builder.fmul(b, d)
-        ad = builder.fmul(a, d)
-        bc = builder.fmul(b, c)
+    ac = builder.fmul(a, c)
+    bd = builder.fmul(b, d)
+    ad = builder.fmul(a, d)
+    bc = builder.fmul(b, c)
 
-        cc = builder.fmul(c, c)
-        dd = builder.fmul(d, d)
-        zz = builder.fadd(cc, dd)
+    cc = builder.fmul(c, c)
+    dd = builder.fmul(d, d)
+    zz = builder.fadd(cc, dd)
 
-        ac_bd = builder.fadd(ac, bd)
-        bc_ad = builder.fsub(bc, ad)
+    ac_bd = builder.fadd(ac, bd)
+    bc_ad = builder.fsub(bc, ad)
 
-        z.real = builder.fdiv(ac_bd, zz)
-        z.imag = builder.fdiv(bc_ad, zz)
-        return z._getvalue()
-    return impl
+    z.real = builder.fdiv(ac_bd, zz)
+    z.imag = builder.fdiv(bc_ad, zz)
+    return z._getvalue()
+
+
+def complex_negate_impl(context, builder, sig, args):
+    [typ] = sig.args
+    [val] = args
+    cmplxcls = context.make_complex(typ)
+    cmplx = cmplxcls(context, builder, val)
+
+    real = cmplx.real
+    imag = cmplx.imag
+
+    zero = Constant.real(real.type, 0)
+
+    res = cmplxcls(context, builder)
+    res.real = builder.fsub(zero, real)
+    res.imag = builder.fsub(zero, imag)
+    return res._getvalue()
 
 
 for ty, cls in zip([types.complex64, types.complex128],
                    [Complex64, Complex128]):
-    builtin(implement("+", ty, ty)(complex_add_impl(cls)))
-    builtin(implement("-", ty, ty)(complex_sub_impl(cls)))
-    builtin(implement("*", ty, ty)(complex_mult_impl(cls)))
-    builtin(implement("/?", ty, ty)(complex_div_impl(cls)))
-    builtin(implement("/", ty, ty)(complex_div_impl(cls)))
+    builtin(implement("+", ty, ty)(complex_add_impl))
+    builtin(implement("-", ty, ty)(complex_sub_impl))
+    builtin(implement("*", ty, ty)(complex_mult_impl))
+    builtin(implement("/?", ty, ty)(complex_div_impl))
+    builtin(implement("/", ty, ty)(complex_div_impl))
+    builtin(implement("-", ty)(complex_negate_impl))
     # Complex modulo is deprecated in python3
 
+
+#------------------------------------------------------------------------------
+
+
+def number_not_impl(context, builder, sig, args):
+    [typ] = sig.args
+    [val] = args
+    istrue = context.cast(builder, val, typ, sig.return_type)
+    return builder.not_(istrue)
+
+for ty in types.number_domain:
+    builtin(implement('not', ty)(number_not_impl))
+
+
+#------------------------------------------------------------------------------
 
 class Slice(cgutils.Structure):
     _fields = [('start', types.intp),

@@ -461,7 +461,23 @@ class BaseContext(object):
                 tup = builder.insert_value(tup, val, idx)
             return tup
 
+        elif toty == types.boolean:
+            return self.is_true(builder, fromty, val)
+
         raise NotImplementedError("cast", val, fromty, toty)
+
+    def is_true(self, builder, typ, val):
+        if typ in types.integer_domain:
+            return builder.icmp(lc.ICMP_NE, val, Constant.null(val.type))
+        elif typ in types.real_domain:
+            return builder.fcmp(lc.FCMP_ONE, val, Constant.real(val.type, 0))
+        elif typ in types.complex_domain:
+            cmplx = self.make_complex(typ)(self, builder, val)
+            fty = types.float32 if typ == types.complex64 else types.float64
+            real_istrue = self.is_true(builder, fty, cmplx.real)
+            imag_istrue = self.is_true(builder, fty, cmplx.imag)
+            return builder.or_(real_istrue, imag_istrue)
+        raise NotImplementedError("is_true", val, typ)
 
     def call_function(self, builder, callee, args):
         retty = callee.args[0].type.pointee

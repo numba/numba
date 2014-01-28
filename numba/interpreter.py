@@ -348,6 +348,16 @@ class Interpreter(object):
         expr = ir.Expr.unary('-', value=value, loc=self.loc)
         return self.store(expr, res)
 
+    def op_UNARY_INVERT(self, inst, value, res):
+        value = self.get(value)
+        expr = ir.Expr.unary('~', value=value, loc=self.loc)
+        return self.store(expr, res)
+
+    def op_UNARY_NOT(self, inst, value, res):
+        value = self.get(value)
+        expr = ir.Expr.unary('not', value=value, loc=self.loc)
+        return self.store(expr, res)
+
     def _binop(self, op, lhs, rhs, res):
         lhs = self.get(lhs)
         rhs = self.get(rhs)
@@ -378,6 +388,21 @@ class Interpreter(object):
     def op_BINARY_POWER(self, inst, lhs, rhs, res):
         self._binop('**', lhs, rhs, res)
 
+    def op_BINARY_LSHIFT(self, inst, lhs, rhs, res):
+        self._binop('<<', lhs, rhs, res)
+
+    def op_BINARY_RSHIFT(self, inst, lhs, rhs, res):
+        self._binop('>>', lhs, rhs, res)
+
+    def op_BINARY_AND(self, inst, lhs, rhs, res):
+        self._binop('&', lhs, rhs, res)
+
+    def op_BINARY_OR(self, inst, lhs, rhs, res):
+        self._binop('|', lhs, rhs, res)
+
+    def op_BINARY_XOR(self, inst, lhs, rhs, res):
+        self._binop('^', lhs, rhs, res)
+
     _inplace_binop = _binop
 
     def op_INPLACE_ADD(self, inst, lhs, rhs, res):
@@ -397,6 +422,27 @@ class Interpreter(object):
 
     def op_INPLACE_FLOOR_DIVIDE(self, inst, lhs, rhs, res):
         self._inplace_binop('//', lhs, rhs, res)
+
+    def op_INPLACE_MODULO(self, inst, lhs, rhs, res):
+        self._inplace_binop('%', lhs, rhs, res)
+
+    def op_INPLACE_POWER(self, inst, lhs, rhs, res):
+        self._inplace_binop('**', lhs, rhs, res)
+
+    def op_INPLACE_LSHIFT(self, inst, lhs, rhs, res):
+        self._inplace_binop('<<', lhs, rhs, res)
+
+    def op_INPLACE_RSHIFT(self, inst, lhs, rhs, res):
+        self._inplace_binop('>>', lhs, rhs, res)
+
+    def op_INPLACE_AND(self, inst, lhs, rhs, res):
+        self._inplace_binop('&', lhs, rhs, res)
+
+    def op_INPLACE_OR(self, inst, lhs, rhs, res):
+        self._inplace_binop('|', lhs, rhs, res)
+
+    def op_INPLACE_XOR(self, inst, lhs, rhs, res):
+        self._inplace_binop('^', lhs, rhs, res)
 
     def op_JUMP_ABSOLUTE(self, inst):
         jmp = ir.Jump(inst.get_jump_target(), loc=self.loc)
@@ -476,7 +522,6 @@ class Interpreter(object):
             if self.block_constains_opname(br, 'POP_BLOCK'):
                 break
         else:
-            print("A")
             return
         # Which is the exit of the loop
         if br not in self.cfa.blocks[loop.exit].incoming:

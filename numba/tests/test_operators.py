@@ -55,6 +55,12 @@ def bitwise_xor_usecase(x, y):
 def bitwise_not_usecase(x, y):
     return ~x
 
+def not_usecase(x):
+    return not(x)
+
+def negate_usecase(x):
+    return -x
+
 class TestOperators(unittest.TestCase):
 
     def run_test_ints(self, pyfunc, x_operands, y_operands, types_list,
@@ -621,32 +627,32 @@ class TestOperators(unittest.TestCase):
 
         pyfunc = bitwise_and_usecase
 
-        x_operands = range(0, 8) + [2**32 - 1]
-        y_operands = range(0, 8) + [2**32 - 1]
+        x_operands = list(range(0, 8)) + [2**32 - 1]
+        y_operands = list(range(0, 8)) + [2**32 - 1]
 
         types_list = [(types.uint32, types.uint32),
                       (types.pyobject, types.pyobject)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
 
-        x_operands = range(0, 8) + [2**64 - 1]
-        y_operands = range(0, 8) + [2**64 - 1]
+        x_operands = list(range(0, 8)) + [2**64 - 1]
+        y_operands = list(range(0, 8)) + [2**64 - 1]
 
         types_list = [(types.uint64, types.uint64),
                       (types.pyobject, types.pyobject)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
 
-        x_operands = range(-4, 4) + [-(2**31), 2**31 - 1]
-        y_operands = range(-4, 4) + [-(2**31), 2**31 - 1]
+        x_operands = list(range(-4, 4)) + [-(2**31), 2**31 - 1]
+        y_operands = list(range(-4, 4)) + [-(2**31), 2**31 - 1]
 
         types_list = [(types.int32, types.int32),
                       (types.pyobject, types.pyobject)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
 
-        x_operands = range(-4, 4) + [-(2**63), 2**63 - 1]
-        y_operands = range(-4, 4) + [-(2**63), 2**63 - 1]
+        x_operands = list(range(-4, 4)) + [-(2**63), 2**63 - 1]
+        y_operands = list(range(-4, 4)) + [-(2**63), 2**63 - 1]
 
         types_list = [(types.int64, types.int64),
                       (types.pyobject, types.pyobject)]
@@ -657,32 +663,32 @@ class TestOperators(unittest.TestCase):
 
         pyfunc = bitwise_or_usecase
 
-        x_operands = range(0, 8) + [2**32 - 1]
-        y_operands = range(0, 8) + [2**32 - 1]
+        x_operands = list(range(0, 8)) + [2**32 - 1]
+        y_operands = list(range(0, 8)) + [2**32 - 1]
 
         types_list = [(types.uint32, types.uint32),
                       (types.pyobject, types.pyobject)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
 
-        x_operands = range(0, 8) + [2**64 - 1]
-        y_operands = range(0, 8) + [2**64 - 1]
+        x_operands = list(range(0, 8)) + [2**64 - 1]
+        y_operands = list(range(0, 8)) + [2**64 - 1]
 
         types_list = [(types.uint64, types.uint64),
                       (types.pyobject, types.pyobject)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
 
-        x_operands = range(-4, 4) + [-(2**31), 2**31 - 1]
-        y_operands = range(-4, 4) + [-(2**31), 2**31 - 1]
+        x_operands = list(range(-4, 4)) + [-(2**31), 2**31 - 1]
+        y_operands = list(range(-4, 4)) + [-(2**31), 2**31 - 1]
 
         types_list = [(types.int32, types.int32),
                       (types.pyobject, types.pyobject)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
 
-        x_operands = range(-4, 4) + [-(2**63), 2**63 - 1]
-        y_operands = range(-4, 4) + [-(2**63), 2**63 - 1]
+        x_operands = list(range(-4, 4)) + [-(2**63), 2**63 - 1]
+        y_operands = list(range(-4, 4)) + [-(2**63), 2**63 - 1]
 
         types_list = [(types.int64, types.int64),
                       (types.pyobject, types.pyobject)]
@@ -693,32 +699,32 @@ class TestOperators(unittest.TestCase):
 
         pyfunc = bitwise_xor_usecase
 
-        x_operands = range(0, 8) + [2**32 - 1]
-        y_operands = range(0, 8) + [2**32 - 1]
+        x_operands = list(range(0, 8)) + [2**32 - 1]
+        y_operands = list(range(0, 8)) + [2**32 - 1]
 
         types_list = [(types.uint32, types.uint32),
                       (types.pyobject, types.pyobject)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
 
-        x_operands = range(0, 8) + [2**64 - 1]
-        y_operands = range(0, 8) + [2**64 - 1]
+        x_operands = list(range(0, 8)) + [2**64 - 1]
+        y_operands = list(range(0, 8)) + [2**64 - 1]
 
         types_list = [(types.uint64, types.uint64),
                       (types.pyobject, types.pyobject)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
 
-        x_operands = range(-4, 4) + [-(2**31), 2**31 - 1]
-        y_operands = range(-4, 4) + [-(2**31), 2**31 - 1]
+        x_operands = list(range(-4, 4)) + [-(2**31), 2**31 - 1]
+        y_operands = list(range(-4, 4)) + [-(2**31), 2**31 - 1]
 
         types_list = [(types.int32, types.int32),
                       (types.pyobject, types.pyobject)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
 
-        x_operands = range(-4, 4) + [-(2**63), 2**63 - 1]
-        y_operands = range(-4, 4) + [-(2**63), 2**63 - 1]
+        x_operands = list(range(-4, 4)) + [-(2**63), 2**63 - 1]
+        y_operands = list(range(-4, 4)) + [-(2**63), 2**63 - 1]
 
         types_list = [(types.int64, types.int64),
                       (types.pyobject, types.pyobject)]
@@ -729,7 +735,8 @@ class TestOperators(unittest.TestCase):
 
         pyfunc = bitwise_not_usecase
 
-        x_operands = range(0, 8) + [2**32 - 1]
+        x_operands = list(range(0, 8)) + [2**32 - 1]
+        x_operands = [np.uint32(x) for x in x_operands]
         y_operands = [0]
 
         types_list = [(types.uint32, types.uint32),
@@ -737,7 +744,7 @@ class TestOperators(unittest.TestCase):
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
 
-        x_operands = range(-4, 4) + [-(2**31), 2**31 - 1]
+        x_operands = list(range(-4, 4)) + [-(2**31), 2**31 - 1]
         y_operands = [0]
 
         types_list = [(types.int32, types.int32),
@@ -745,7 +752,8 @@ class TestOperators(unittest.TestCase):
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
 
-        x_operands = range(0, 8) + [2**64 - 1]
+        x_operands = list(range(0, 8)) + [2**64 - 1]
+        x_operands = [np.uint64(x) for x in x_operands]
         y_operands = [0]
 
         types_list = [(types.uint64, types.uint64),
@@ -753,13 +761,72 @@ class TestOperators(unittest.TestCase):
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
 
-        x_operands = range(-4, 4) + [-(2**63), 2**63 - 1]
+        x_operands = list(range(-4, 4)) + [-(2**63), 2**63 - 1]
         y_operands = [0]
 
         types_list = [(types.int64, types.int64),
                       (types.pyobject, types.pyobject)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
+
+    def test_not(self):
+        pyfunc = not_usecase
+        # test native mode
+        argtys = [
+            types.int8,
+            types.int32,
+            types.int64,
+            types.float32,
+            types.complex128,
+        ]
+        values = [
+            1,
+            2,
+            3,
+            1.2,
+            3.4j,
+        ]
+        for ty, val in zip(argtys, values):
+            cres = compile_isolated(pyfunc, [ty])
+            self.assertEqual(cres.signature.return_type, types.boolean)
+            cfunc = cres.entry_point
+            self.assertEqual(pyfunc(val), cfunc(val))
+
+        # test object mode
+        cres = compile_isolated(pyfunc, (), flags=enable_pyobj_flags)
+        cfunc = cres.entry_point
+        for val in values:
+            self.assertEqual(pyfunc(val), cfunc(val))
+
+    def test_negate(self):
+        pyfunc = negate_usecase
+        # test native mode
+        argtys = [
+            types.int8,
+            types.int32,
+            types.int64,
+            types.float32,
+            types.complex128,
+        ]
+        values = [
+            1,
+            2,
+            3,
+            1.2,
+            3.4j,
+        ]
+        for ty, val in zip(argtys, values):
+            cres = compile_isolated(pyfunc, [ty])
+            cfunc = cres.entry_point
+            self.assertAlmostEqual(pyfunc(val), cfunc(val))
+
+        # test object mode
+        cres = compile_isolated(pyfunc, (), flags=enable_pyobj_flags)
+        cfunc = cres.entry_point
+        for val in values:
+            self.assertEqual(pyfunc(val), cfunc(val))
+
+
 
 if __name__ == '__main__':
     unittest.main()

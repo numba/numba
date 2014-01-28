@@ -304,7 +304,7 @@ class TypeInferer(object):
     def get_function_types(self, typemap):
         calltypes = utils.UniqueDict()
         for call, args, kws in self.intrcalls:
-            if call.op == 'binop':
+            if call.op in ('binop', 'unary'):
                 fnty = call.fn
             else:
                 fnty = call.op
@@ -463,6 +463,8 @@ class TypeInferer(object):
             self.typeof_intrinsic_call(inst, target, expr.op, expr.value)
         elif expr.op == 'binop':
             self.typeof_intrinsic_call(inst, target, expr.fn, expr.lhs, expr.rhs)
+        elif expr.op == 'unary':
+            self.typeof_intrinsic_call(inst, target, expr.fn, expr.value)
         elif expr.op == 'getitem':
             self.typeof_intrinsic_call(inst, target, expr.op, expr.target,
                                        expr.index)

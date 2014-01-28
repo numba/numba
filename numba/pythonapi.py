@@ -176,6 +176,26 @@ class PythonAPI(object):
         fn = self._get_number_operator("Remainder")
         return self.builder.call(fn, [lhs, rhs])
 
+    def number_lshift(self, lhs, rhs):
+        fn = self._get_number_operator("Lshift")
+        return self.builder.call(fn, [lhs, rhs])
+
+    def number_rshift(self, lhs, rhs):
+        fn = self._get_number_operator("Rshift")
+        return self.builder.call(fn, [lhs, rhs])
+
+    def number_and(self, lhs, rhs):
+        fn = self._get_number_operator("And")
+        return self.builder.call(fn, [lhs, rhs])
+
+    def number_or(self, lhs, rhs):
+        fn = self._get_number_operator("Or")
+        return self.builder.call(fn, [lhs, rhs])
+
+    def number_xor(self, lhs, rhs):
+        fn = self._get_number_operator("Xor")
+        return self.builder.call(fn, [lhs, rhs])
+
     def number_power(self, lhs, rhs):
         fnty = Type.function(self.pyobj, [self.pyobj] * 3)
         fn = self._get_function(fnty, "PyNumber_Power")
@@ -191,6 +211,11 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyNumber_Float")
         return self.builder.call(fn, [val])
 
+    def number_invert(self, obj):
+        fnty = Type.function(self.pyobj, [self.pyobj])
+        fn = self._get_function(fnty, name="PyNumber_Invert")
+        return self.builder.call(fn, (obj,))
+
     def float_as_double(self, fobj):
         fnty = Type.function(self.double, [self.pyobj])
         fn = self._get_function(fnty, name="PyFloat_AsDouble")
@@ -199,6 +224,11 @@ class PythonAPI(object):
     def object_istrue(self, obj):
         fnty = Type.function(Type.int(), [self.pyobj])
         fn = self._get_function(fnty, name="PyObject_IsTrue")
+        return self.builder.call(fn, [obj])
+
+    def object_not(self, obj):
+        fnty = Type.function(Type.int(), [self.pyobj])
+        fn = self._get_function(fnty, name="PyObject_Not")
         return self.builder.call(fn, [obj])
 
     def object_richcompare(self, lhs, rhs, opstr):

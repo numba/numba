@@ -259,6 +259,18 @@ class Lower(BaseLower):
             return self.context.cast(self.builder, res, signature.return_type,
                                      resty)
 
+        elif expr.op == 'unary':
+            val = self.loadvar(expr.value.name)
+            typ = self.typeof(expr.value.name)
+            # Get function
+            signature = self.fndesc.calltypes[expr]
+            impl = self.context.get_function(expr.fn, signature)
+            # Convert argument to match
+            val = self.context.cast(self.builder, val, typ, signature.args[0])
+            res = impl(self.builder, [val])
+            return self.context.cast(self.builder, res, signature.return_type,
+                                     resty)
+
         elif expr.op == 'call':
             assert not expr.kws
             argvals = [self.loadvar(a.name) for a in expr.args]
@@ -370,6 +382,11 @@ PYTHON_OPMAP = {
     '//': "number_floordivide",
      '%': "number_remainder",
     '**': "number_power",
+    '<<': "number_lshift",
+    '>>': "number_rshift",
+     '&': "number_and",
+     '|': "number_or",
+     '^': "number_xor",
 }
 
 
@@ -468,6 +485,17 @@ class PyLower(BaseLower):
             value = self.loadvar(expr.value.name)
             if expr.fn == '-':
                 res = self.pyapi.number_negative(value)
+            elif expr.fn == 'not':
+                res = self.pyapi.object_not(value)
+                negone = lc.Constant.int_signextend(Type.int(), -1)
+                err = self.builder.icmp(lc.ICMP_EQ, res, negone)
+                with cgutils.if_unlikely(self.builder, err):
+                    self.exception_raised()
+
+                longval = self.builder.zext(res, self.pyapi.long)
+                res = self.pyapi.bool_from_long(longval)
+            elif expr.fn == '~':
+                res = self.pyapi.number_invert(value)
             else:
                 raise NotImplementedError(expr)
             self.check_error(res)

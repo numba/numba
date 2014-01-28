@@ -226,6 +226,157 @@ class BinOpPower(ConcreteTemplate):
     ]
 
 
+class BitwiseShiftOperation(ConcreteTemplate):
+    cases = [
+        signature(types.int8, types.int8, types.uint32),
+        signature(types.int16, types.int16, types.uint32),
+        signature(types.int32, types.int32, types.uint32),
+        signature(types.int64, types.int64, types.uint32),
+
+        signature(types.uint8, types.uint8, types.uint32),
+        signature(types.uint16, types.uint16, types.uint32),
+        signature(types.uint32, types.uint32, types.uint32),
+        signature(types.uint64, types.uint64, types.uint32),
+    ]
+
+
+@builtin
+class BitwiseLeftShift(BitwiseShiftOperation):
+    key = "<<"
+
+
+@builtin
+class BitwiseRightShift(BitwiseShiftOperation):
+    key = ">>"
+
+
+class BitwiseLogicOperation(BinOp):
+    cases = [
+        signature(types.uintp, types.uint8, types.uint8),
+        signature(types.uintp, types.uint16, types.uint16),
+        signature(types.uintp, types.uint32, types.uint32),
+        signature(types.uint64, types.uint64, types.uint64),
+
+        signature(types.intp, types.int8, types.int8),
+        signature(types.intp, types.int16, types.int16),
+        signature(types.intp, types.int32, types.int32),
+        signature(types.int64, types.int64, types.int64),
+    ]
+
+
+@builtin
+class BitwiseAnd(BitwiseLogicOperation):
+    key = "&"
+
+
+@builtin
+class BitwiseOr(BitwiseLogicOperation):
+    key = "|"
+
+
+@builtin
+class BitwiseXor(BitwiseLogicOperation):
+    key = "^"
+
+
+@builtin
+class BitwiseInvert(ConcreteTemplate):
+    key = "~"
+
+    cases = [
+        signature(types.uint8, types.uint8),
+        signature(types.uint16, types.uint16),
+        signature(types.uint32, types.uint32),
+        signature(types.uint64, types.uint64),
+
+        signature(types.int8, types.int8),
+        signature(types.int16, types.int16),
+        signature(types.int32, types.int32),
+        signature(types.int64, types.int64),
+    ]
+
+
+class UnaryOp(ConcreteTemplate):
+    cases = [
+        signature(types.uintp, types.uint8),
+        signature(types.uintp, types.uint16),
+        signature(types.uintp, types.uint32),
+        signature(types.uint64, types.uint64),
+
+        signature(types.intp, types.int8),
+        signature(types.intp, types.int16),
+        signature(types.intp, types.int32),
+        signature(types.int64, types.int64),
+
+        signature(types.float32, types.float32),
+        signature(types.float64, types.float64),
+
+        signature(types.complex64, types.complex64),
+        signature(types.complex128, types.complex128),
+    ]
+
+
+@builtin
+class UnaryNot(UnaryOp):
+    key = "not"
+    cases = [
+        signature(types.boolean, types.uint8),
+        signature(types.boolean, types.uint16),
+        signature(types.boolean, types.uint32),
+        signature(types.boolean, types.uint64),
+
+        signature(types.boolean, types.int8),
+        signature(types.boolean, types.int16),
+        signature(types.boolean, types.int32),
+        signature(types.boolean, types.int64),
+
+        signature(types.boolean, types.float32),
+        signature(types.boolean, types.float64),
+
+        signature(types.boolean, types.complex64),
+        signature(types.boolean, types.complex128),
+    ]
+
+
+@builtin
+class UnaryNegate(UnaryOp):
+    key = "-"
+    cases = [
+        signature(types.uintp, types.uint8),
+        signature(types.uintp, types.uint16),
+        signature(types.uintp, types.uint32),
+        signature(types.uint64, types.uint64),
+
+        signature(types.intp, types.int8),
+        signature(types.intp, types.int16),
+        signature(types.intp, types.int32),
+        signature(types.int64, types.int64),
+
+        signature(types.float32, types.float32),
+        signature(types.float64, types.float64),
+
+        signature(types.complex64, types.complex64),
+        signature(types.complex128, types.complex128),
+    ]
+
+
+@builtin
+class UnaryInvert(ConcreteTemplate):
+    key = "~"
+
+    cases = [
+        signature(types.uintp, types.uint8),
+        signature(types.uintp, types.uint16),
+        signature(types.uintp, types.uint32),
+        signature(types.uint64, types.uint64),
+
+        signature(types.intp, types.int8),
+        signature(types.intp, types.int16),
+        signature(types.intp, types.int32),
+        signature(types.int64, types.int64),
+    ]
+
+
 class CmpOp(ConcreteTemplate):
     cases = [
         signature(types.boolean, types.uint8, types.uint8),
