@@ -15,6 +15,9 @@ def int_to_float(x):
 def float_to_unsigned(x):
     return types.uint32(x)
 
+def float_to_complex(x):
+    return types.complex128(x)
+
 
 class TestCasting(unittest.TestCase):
     def test_float_to_int(self):
@@ -45,6 +48,13 @@ class TestCasting(unittest.TestCase):
         self.assertEqual(cfunc(-3.21), struct.unpack('I', struct.pack('i',
                                                                       -3))[0])
 
+    def test_float_to_complex(self):
+        pyfunc = float_to_complex
+        cr = compile_isolated(pyfunc, [types.float64])
+        cfunc = cr.entry_point
+        self.assertEqual(cr.signature.return_type, types.complex128)
+        self.assertEqual(cfunc(-3.21), pyfunc(-3.21))
+        self.assertEqual(cfunc(-3.21), -3.21 + 0j)
 
 
 if __name__ == '__main__':
