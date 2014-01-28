@@ -20,8 +20,6 @@ class UFuncDispatcher(object):
         if kws.get("forceobj", False) == True:
             raise AssertionError("forceobj option must be False")
 
-        kws.update(dict(nopython=True, forceobj=False))
-
         flags = compiler.Flags()
         read_flags(flags, kws)
 
@@ -43,12 +41,13 @@ target_registry['npyufunc'] = UFuncDispatcher
 
 
 class UFuncBuilder(object):
-    def __init__(self, py_func):
+    def __init__(self, py_func, kws={}):
         self.py_func = py_func
         self.nb_func = jit(target='npyufunc')(py_func)
+        self.kws = kws
 
     def add(self, sig):
-        self.nb_func.compile(sig, nocompile=True)
+        self.nb_func.compile(sig, nocompile=True, **self.kws)
 
     def build_ufunc(self):
         dtypelist = []
@@ -88,14 +87,15 @@ class UFuncBuilder(object):
 
 class GUFuncBuilder(object):
     # TODO handle scalar
-    def __init__(self, py_func, signature):
+    def __init__(self, py_func, signature, kws={}):
         self.py_func = py_func
         self.nb_func = jit(target='npyufunc')(py_func)
         self.signature = signature
         self.sin, self.sout = parse_signature(signature)
+        self.kws = kws
 
     def add(self, sig):
-        cres = self.nb_func.compile(sig, nocompile=True)
+        cres = self.nb_func.compile(sig, nocompile=True, **self.kws)
         if cres.signature.return_type != types.void:
             raise TypeError("gufunc kernel must have void return type")
 

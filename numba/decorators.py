@@ -7,6 +7,7 @@ from numba import types, dispatcher, utils
 
 target_registry = utils.UniqueDict()
 target_registry['cpu'] = dispatcher.Overloaded
+target_registry['nopython-cpu'] = dispatcher.NPMOverloaded
 
 
 def autojit(*args, **kws):
@@ -77,16 +78,4 @@ def _jit(sig, kws):
         return disp
 
     return wrapper
-
-
-def _read_flags(flags, kws):
-    if kws.pop('nopython', False) == False:
-        flags.set("enable_pyobject")
-
-    if kws.pop("forceobj", False) == True:
-        flags.set("force_pyobject")
-
-    if kws:
-        # Unread options?
-        raise NameError("Unrecognized options: %s" % k.keys())
 

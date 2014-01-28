@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 import inspect
+import warnings
 import numpy
 from numba.config import PYVERSION
 from numba import _dispatcher, compiler, targets, typing, utils
@@ -92,7 +93,10 @@ class Overloaded(_dispatcher.Dispatcher):
         self.add_overload(cres)
         return cres.entry_point
 
-    jit = compile
+    def jit(self, sig, **kws):
+        """Alias of compile(sig, **kws)
+        """
+        return self.compile(sig, **kws)
 
     def _compile_and_call(self, *args, **kws):
         assert not kws
@@ -124,7 +128,37 @@ class Overloaded(_dispatcher.Dispatcher):
                          tuple(self.overloads.keys()), args, kws)
 
 
+class NPMOverloaded(Overloaded):
+    def compile(self, sig, **kws):
+        flags = compiler.Flags()
+        read_flags(flags, kws)
+        if flags.enable_pyobject or flags.force_pyobject:
+            raise TypeError("Object mode enabled for nopython target")
+
+        glctx = GlobalContext()
+        typingctx = glctx.typing_context
+        targetctx = glctx.target_context
+
+        args, return_type = normalize_signature(sig)
+
+        cres = compiler.compile_extra(typingctx, targetctx, self.py_func,
+                                      args=args, return_type=return_type,
+                                      flags=flags)
+
+        # Check typing error if object mode is used
+        if cres.typing_error is not None and not flags.enable_pyobject:
+            raise cres.typing_error
+
+        self.add_overload(cres)
+        return cres.entry_point
+
+
 def read_flags(flags, kws):
+    if 'nopython' in kws:
+        warnings.warn('nopython option is deprecated; use '
+                      'target="nopython-cpu" instead',
+                      DeprecationWarning)
+
     if kws.pop('nopython', False) == False:
         flags.set("enable_pyobject")
 
