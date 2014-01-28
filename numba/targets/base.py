@@ -394,6 +394,31 @@ class BaseContext(object):
             elif fromty == types.float64 and toty == types.float32:
                 return builder.fptrunc(val, lty)
 
+        elif fromty in types.real_domain and toty in types.complex_domain:
+            if fromty == types.float32:
+                if toty == types.complex128:
+                    real = self.cast(builder, val, fromty, types.float64)
+                else:
+                    real = val
+
+            elif fromty == types.float64:
+                if toty == types.complex64:
+                    real = self.cast(builder, val, fromty, types.float32)
+                else:
+                    real = val
+
+            if toty == types.complex128:
+                imag = self.get_constant(types.float64, 0)
+            elif toty == types.complex64:
+                imag = self.get_constant(types.float32, 0)
+            else:
+                raise Exception("unreachable")
+
+            cmplx = self.make_complex(toty)(self, builder)
+            cmplx.real = real
+            cmplx.imag = imag
+            return cmplx._getvalue()
+
         elif fromty in types.integer_domain and toty in types.real_domain:
             lty = self.get_value_type(toty)
             if fromty in types.signed_domain:
