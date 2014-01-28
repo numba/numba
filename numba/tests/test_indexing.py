@@ -175,13 +175,16 @@ class TestIndexing(unittest.TestCase):
         from numba import jit
 
         def pyfunc(array):
-            for index in xrange(len(array)):
+            for index in range(len(array)):
                 array[index] = index % decimal.Decimal(100)
 
         cfunc = jit("void(i8[:])")(pyfunc)
 
-        a = np.arange(100, dtype='i1')
-        self.assertTrue((pyfunc(a, 1, 42) == cfunc(a,1,42)).all())
+        udt = np.arange(100, dtype='i1')
+        control = udt.copy()
+        pyfunc(control)
+        cfunc(udt)
+        self.assertTrue((udt == control).all())
 
 
 if __name__ == '__main__':

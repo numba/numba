@@ -394,6 +394,16 @@ class PyLower(BaseLower):
             value = self.lower_assign(inst)
             self.storevar(value, inst.target.name)
 
+        elif isinstance(inst, ir.SetItem):
+            target = self.loadvar(inst.target.name)
+            index = self.loadvar(inst.index.name)
+            value = self.loadvar(inst.value.name)
+            ok = self.pyapi.object_setitem(target, index, value)
+            negone = lc.Constant.int_signextend(ok.type, -1)
+            pred = self.builder.icmp(lc.ICMP_EQ, ok, negone)
+            with cgutils.if_unlikely(self.builder, pred):
+                self.exception_raised()
+
         elif isinstance(inst, ir.Return):
             retval = self.loadvar(inst.value.name)
             self.incref(retval)
@@ -419,6 +429,7 @@ class PyLower(BaseLower):
         elif isinstance(inst, ir.Del):
             obj = self.loadvar(inst.value)
             self.decref(obj)
+
         else:
             raise NotImplementedError(type(inst), inst)
 
@@ -659,9 +670,11 @@ class PyLower(BaseLower):
     def is_null(self, obj):
         return cgutils.is_null(self.builder, obj)
 
+    def exception_raised(self):
+        self.builder.branch(self.ehblock)
+
     def return_error_occurred(self):
         self.cleanup()
-        # TODO
         self.context.return_exc(self.builder)
 
     def getvar(self, name, ltype=None):
