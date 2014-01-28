@@ -37,6 +37,23 @@ def mod_usecase(x, y):
 def pow_usecase(x, y):
     return x ** y
 
+def bitshift_left_usecase(x, y):
+    return x << y
+
+def bitshift_right_usecase(x, y):
+    return x >> y
+
+def bitwise_and_usecase(x, y):
+    return x & y
+
+def bitwise_or_usecase(x, y):
+    return x | y
+
+def bitwise_xor_usecase(x, y):
+    return x ^ y
+
+def bitwise_not_usecase(x, y):
+    return ~x
 
 class TestOperators(unittest.TestCase):
 
@@ -532,6 +549,217 @@ class TestOperators(unittest.TestCase):
         else:
             self.fail("Complex % should trigger an undeclared error")
 
+    def test_bitshift_left(self):
+
+        pyfunc = bitshift_left_usecase
+
+        x_operands = [0, 1]
+        y_operands = [0, 1, 2, 4, 8, 16, 31]
+
+        types_list = [(types.uint32, types.uint32),
+                      (types.pyobject, types.pyobject)]
+
+        self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
+
+        x_operands = [0, 1]
+        y_operands = [0, 1, 2, 4, 8, 16, 32, 63]
+
+        types_list = [(types.uint64, types.uint64)]
+
+        self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
+
+        x_operands = [0, -1]
+        y_operands = [0, 1, 2, 4, 8, 16, 31]
+
+        types_list = [(types.int32, types.int32),
+                      (types.pyobject, types.pyobject)]
+
+        self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
+
+        x_operands = [0, -1]
+        y_operands = [0, 1, 2, 4, 8, 16, 32, 63]
+
+        types_list = [(types.int64, types.int64)]
+
+        self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
+
+    def test_bitshift_right(self):
+
+        pyfunc = bitshift_right_usecase
+
+        x_operands = [0, 1, 2**32 - 1]
+        y_operands = [0, 1, 2, 4, 8, 16, 31]
+
+        types_list = [(types.uint32, types.uint32),
+                      (types.pyobject, types.pyobject)]
+
+        self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
+
+        x_operands = [0, 1, 2**64 - 1]
+        y_operands = [0, 1, 2, 4, 8, 16, 32, 63]
+
+        types_list = [(types.uint64, types.uint64)]
+
+        self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
+
+        x_operands = [0, 1, -(2**31)]
+        y_operands = [0, 1, 2, 4, 8, 16, 31]
+
+        types_list = [(types.int32, types.int32),
+                      (types.pyobject, types.pyobject)]
+
+        self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
+
+        x_operands = [0, -1, -(2**31)]
+        y_operands = [0, 1, 2, 4, 8, 16, 32, 63]
+
+        types_list = [(types.int64, types.int64)]
+
+        self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
+
+    def test_bitwise_and(self):
+
+        pyfunc = bitwise_and_usecase
+
+        x_operands = range(0, 8) + [2**32 - 1]
+        y_operands = range(0, 8) + [2**32 - 1]
+
+        types_list = [(types.uint32, types.uint32),
+                      (types.pyobject, types.pyobject)]
+
+        self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
+
+        x_operands = range(0, 8) + [2**64 - 1]
+        y_operands = range(0, 8) + [2**64 - 1]
+
+        types_list = [(types.uint64, types.uint64),
+                      (types.pyobject, types.pyobject)]
+
+        self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
+
+        x_operands = range(-4, 4) + [-(2**31), 2**31 - 1]
+        y_operands = range(-4, 4) + [-(2**31), 2**31 - 1]
+
+        types_list = [(types.int32, types.int32),
+                      (types.pyobject, types.pyobject)]
+
+        self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
+
+        x_operands = range(-4, 4) + [-(2**63), 2**63 - 1]
+        y_operands = range(-4, 4) + [-(2**63), 2**63 - 1]
+
+        types_list = [(types.int64, types.int64),
+                      (types.pyobject, types.pyobject)]
+
+        self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
+
+    def test_bitwise_or(self):
+
+        pyfunc = bitwise_or_usecase
+
+        x_operands = range(0, 8) + [2**32 - 1]
+        y_operands = range(0, 8) + [2**32 - 1]
+
+        types_list = [(types.uint32, types.uint32),
+                      (types.pyobject, types.pyobject)]
+
+        self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
+
+        x_operands = range(0, 8) + [2**64 - 1]
+        y_operands = range(0, 8) + [2**64 - 1]
+
+        types_list = [(types.uint64, types.uint64),
+                      (types.pyobject, types.pyobject)]
+
+        self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
+
+        x_operands = range(-4, 4) + [-(2**31), 2**31 - 1]
+        y_operands = range(-4, 4) + [-(2**31), 2**31 - 1]
+
+        types_list = [(types.int32, types.int32),
+                      (types.pyobject, types.pyobject)]
+
+        self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
+
+        x_operands = range(-4, 4) + [-(2**63), 2**63 - 1]
+        y_operands = range(-4, 4) + [-(2**63), 2**63 - 1]
+
+        types_list = [(types.int64, types.int64),
+                      (types.pyobject, types.pyobject)]
+
+        self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
+
+    def test_bitwise_xor(self):
+
+        pyfunc = bitwise_xor_usecase
+
+        x_operands = range(0, 8) + [2**32 - 1]
+        y_operands = range(0, 8) + [2**32 - 1]
+
+        types_list = [(types.uint32, types.uint32),
+                      (types.pyobject, types.pyobject)]
+
+        self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
+
+        x_operands = range(0, 8) + [2**64 - 1]
+        y_operands = range(0, 8) + [2**64 - 1]
+
+        types_list = [(types.uint64, types.uint64),
+                      (types.pyobject, types.pyobject)]
+
+        self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
+
+        x_operands = range(-4, 4) + [-(2**31), 2**31 - 1]
+        y_operands = range(-4, 4) + [-(2**31), 2**31 - 1]
+
+        types_list = [(types.int32, types.int32),
+                      (types.pyobject, types.pyobject)]
+
+        self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
+
+        x_operands = range(-4, 4) + [-(2**63), 2**63 - 1]
+        y_operands = range(-4, 4) + [-(2**63), 2**63 - 1]
+
+        types_list = [(types.int64, types.int64),
+                      (types.pyobject, types.pyobject)]
+
+        self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
+
+    def test_bitwise_not(self):
+
+        pyfunc = bitwise_not_usecase
+
+        x_operands = range(0, 8) + [2**32 - 1]
+        y_operands = [0]
+
+        types_list = [(types.uint32, types.uint32),
+                      (types.pyobject, types.pyobject)]
+
+        self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
+
+        x_operands = range(-4, 4) + [-(2**31), 2**31 - 1]
+        y_operands = [0]
+
+        types_list = [(types.int32, types.int32),
+                      (types.pyobject, types.pyobject)]
+
+        self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
+
+        x_operands = range(0, 8) + [2**64 - 1]
+        y_operands = [0]
+
+        types_list = [(types.uint64, types.uint64),
+                      (types.pyobject, types.pyobject)]
+
+        self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
+
+        x_operands = range(-4, 4) + [-(2**63), 2**63 - 1]
+        y_operands = [0]
+
+        types_list = [(types.int64, types.int64),
+                      (types.pyobject, types.pyobject)]
+
+        self.run_test_ints(pyfunc, x_operands, y_operands, types_list)
 
 if __name__ == '__main__':
     unittest.main()
