@@ -5,6 +5,9 @@ from numba.compiler import compile_isolated, Flags
 from numba import types, utils
 from numba.tests import usecases
 
+import decimal
+
+
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
 
@@ -166,7 +169,20 @@ class TestIndexing(unittest.TestCase):
         a = np.arange(100, dtype='i4').reshape(10, 10)
         mask = np.array([True, False, True])
         self.assertTrue((pyfunc(a, mask) == cfunc(a, mask)).all())
-        
+
+    def test_conversion_setitem(self):
+        """ this used to work, and was used in one of the tutorials """
+        from numba import jit
+
+        def pyfunc(array):
+            for index in xrange(len(array)):
+                array[index] = index % decimal.Decimal(100)
+
+        cfunc = jit("void(i8[:])")(pyfunc)
+
+        a = np.arange(100, dtype='i1')
+        self.assertTrue((pyfunc(a, 1, 42) == cfunc(a,1,42)).all())
+
 
 if __name__ == '__main__':
     unittest.main()
