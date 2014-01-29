@@ -1,4 +1,5 @@
 *.pyc
 *.o
 *.so
+*.dylib
 build
