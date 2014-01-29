@@ -793,8 +793,16 @@ def number_not_impl(context, builder, sig, args):
     istrue = context.cast(builder, val, typ, sig.return_type)
     return builder.not_(istrue)
 
+def number_as_bool_impl(context, builder, sig, args):
+    [typ] = sig.args
+    [val] = args
+    istrue = context.cast(builder, val, typ, sig.return_type)
+    return istrue
+
+
 for ty in types.number_domain:
     builtin(implement('not', ty)(number_not_impl))
+    builtin(implement(bool, ty)(number_as_bool_impl))
 
 
 #------------------------------------------------------------------------------

@@ -26,7 +26,9 @@ class Print(ConcreteTemplate):
 @builtin
 class Abs(ConcreteTemplate):
     key = types.abs_type
-    cases = [signature(ty, ty) for ty in types.signed_domain]
+    intcases = [signature(ty, ty) for ty in types.signed_domain]
+    realcases = [signature(ty, ty) for ty in types.real_domain]
+    cases = intcases + realcases
 
 
 @builtin
@@ -706,6 +708,20 @@ builtin_global(min, types.Function(Min))
 #------------------------------------------------------------------------------
 
 
+class Bool(AbstractTemplate):
+    key = bool
+
+    def generic(self, args, kws):
+        assert not kws
+
+        [arg] = args
+
+        if arg not in types.number_domain:
+            raise TypeError("bool() only support for numbers")
+
+        return signature(types.boolean, arg)
+
+
 class Int(AbstractTemplate):
     key = int
 
@@ -769,6 +785,7 @@ class Complex(AbstractTemplate):
             return signature(types.complex128, real, imag)
 
 
+builtin_global(bool, types.Function(Bool))
 builtin_global(int, types.Function(Int))
 builtin_global(float, types.Function(Float))
 builtin_global(complex, types.Function(Complex))

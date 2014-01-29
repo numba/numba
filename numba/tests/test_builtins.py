@@ -56,9 +56,8 @@ class TestBuiltins(unittest.TestCase):
         cr = compile_isolated(pyfunc, (types.float32,), flags=flags)
         cfunc = cr.entry_point
         for x in [-1.1, 0.0, 1.1]:
-            self.assertEqual(cfunc(x), pyfunc(x))
+            self.assertAlmostEqual(cfunc(x), pyfunc(x))
 
-    @unittest.expectedFailure
     def test_abs_npm(self):
         self.test_abs(flags=no_pyobj_flags)
     
@@ -98,6 +97,12 @@ class TestBuiltins(unittest.TestCase):
         for x in [-1, 0, 1]:
             self.assertEqual(cfunc(x), pyfunc(x))
 
+    def test_bool_npm(self):
+        self.test_bool(flags=no_pyobj_flags)
+
+    def test_bool_nonnumber(self, flags=enable_pyobj_flags):
+        pyfunc = bool_usecase
+
         cr = compile_isolated(pyfunc, (types.string,), flags=flags)
         cfunc = cr.entry_point
         for x in ['x', '']:
@@ -109,8 +114,8 @@ class TestBuiltins(unittest.TestCase):
             self.assertEqual(cfunc(x), pyfunc(x))
 
     @unittest.expectedFailure
-    def test_bool_npm(self):
-        self.test_bool(flags=no_pyobj_flags)
+    def test_bool_nonnumber_npm(self):
+        self.test_bool_nonnumber(flags=no_pyobj_flags)
 
     def test_enumerate(self, flags=enable_pyobj_flags):
         pyfunc = enumerate_usecase
