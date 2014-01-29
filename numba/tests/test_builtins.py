@@ -72,6 +72,36 @@ def long_usecase(x, base):
 def map_usecase(x, map_func):
     return map(map_func, x)
 
+def max_usecase1(x, y):
+    return max(x, y)
+
+def max_usecase2(x, y):
+    return max([x, y])
+
+def min_usecase1(x, y):
+    return min(x, y)
+
+def min_usecase2(x, y):
+    return min([x, y])
+
+def oct_usecase(x):
+    return oct(x)
+
+def ord_usecase(x):
+    return ord(x)
+
+def reduce_usecase(reduce_func, x):
+    return reduce(reduce_func, x)
+
+def round_usecase(x):
+    return round(x)
+
+def sum_usecase(x):
+    return sum(x)
+
+def unichr_usecase(x):
+    return unichr(x)
+
 
 class TestBuiltins(unittest.TestCase):
 
@@ -318,6 +348,139 @@ class TestBuiltins(unittest.TestCase):
     @unittest.expectedFailure
     def test_map_npm(self):
         self.test_map(flags=no_pyobj_flags)
+
+    def test_max(self, flags=enable_pyobj_flags):
+
+        pyfunc = max_usecase1
+        cr = compile_isolated(pyfunc, (types.int32, types.int32), flags=flags)
+        cfunc = cr.entry_point
+        
+        x_operands = [-1, 0, 1]
+        y_operands = [-1, 0, 1]
+        for x, y in itertools.product(x_operands, y_operands):
+            self.assertEqual(cfunc(x, y), pyfunc(x, y))
+
+        pyfunc = max_usecase2
+        cr = compile_isolated(pyfunc, (types.int32, types.int32), flags=flags)
+        cfunc = cr.entry_point
+        
+        for x, y in itertools.product(x_operands, y_operands):
+            self.assertEqual(cfunc(x, y), pyfunc(x, y))
+
+    @unittest.expectedFailure
+    def test_max_npm(self):
+        self.test_max(flags=no_pyobj_flags)
+
+    def test_min(self, flags=enable_pyobj_flags):
+
+        pyfunc = min_usecase1
+        cr = compile_isolated(pyfunc, (types.int32, types.int32), flags=flags)
+        cfunc = cr.entry_point
+        
+        x_operands = [-1, 0, 1]
+        y_operands = [-1, 0, 1]
+        for x, y in itertools.product(x_operands, y_operands):
+            self.assertEqual(cfunc(x, y), pyfunc(x, y))
+
+        pyfunc = min_usecase2
+        cr = compile_isolated(pyfunc, (types.int32, types.int32), flags=flags)
+        cfunc = cr.entry_point
+        
+        for x, y in itertools.product(x_operands, y_operands):
+            self.assertEqual(cfunc(x, y), pyfunc(x, y))
+
+    @unittest.expectedFailure
+    def test_min_npm(self):
+        self.test_min(flags=no_pyobj_flags)
+
+    def test_oct(self, flags=enable_pyobj_flags):
+        pyfunc = oct_usecase
+
+        cr = compile_isolated(pyfunc, (types.int32,), flags=flags)
+        cfunc = cr.entry_point
+        for x in [-8, -1, 0, 1, 8]:
+            self.assertEqual(cfunc(x), pyfunc(x))
+
+    @unittest.expectedFailure
+    def test_oct_npm(self):
+        self.test_oct(flags=no_pyobj_flags)
+
+    def test_ord(self, flags=enable_pyobj_flags):
+        pyfunc = ord_usecase
+
+        cr = compile_isolated(pyfunc, (types.string,), flags=flags)
+        cfunc = cr.entry_point
+        for x in ['a', u'\u2020']:
+            self.assertEqual(cfunc(x), pyfunc(x))
+
+    @unittest.expectedFailure
+    def test_ord_npm(self):
+        self.test_ord(flags=no_pyobj_flags)
+
+    def test_reduce(self, flags=enable_pyobj_flags):
+        pyfunc = reduce_usecase
+        cr = compile_isolated(pyfunc, (types.Dummy('function_ptr'),
+                                       types.Dummy('list')),
+                                       flags=flags)
+        cfunc = cr.entry_point
+
+        reduce_func = lambda x, y: x + y
+
+        x = range(10)
+        self.assertEqual(cfunc(reduce_func, x), pyfunc(reduce_func, x))
+
+        x = [x + x/10.0 for x in range(10)]
+        self.assertEqual(cfunc(reduce_func, x), pyfunc(reduce_func, x))
+
+        x = [complex(x, x) for x in range(10)]
+        self.assertEqual(cfunc(reduce_func, x), pyfunc(reduce_func, x))
+
+    @unittest.expectedFailure
+    def test_reduce_npm(self):
+        self.test_reduce(flags=no_pyobj_flags)
+
+    def test_round(self, flags=enable_pyobj_flags):
+        pyfunc = round_usecase
+
+        cr = compile_isolated(pyfunc, (types.float32,), flags=flags)
+        cfunc = cr.entry_point
+        for x in [-0.5, -0.1, 0.0, 0.1, 0.5]:
+            self.assertEqual(cfunc(x), pyfunc(x))
+
+    @unittest.expectedFailure
+    def test_round_npm(self):
+        self.test_round(flags=no_pyobj_flags)
+
+    def test_sum(self, flags=enable_pyobj_flags):
+        pyfunc = sum_usecase
+
+        cr = compile_isolated(pyfunc, (types.Dummy('list'),), flags=flags)
+        cfunc = cr.entry_point
+
+        x = range(10)
+        self.assertEqual(cfunc(x), pyfunc(x))
+
+        x = [x + x/10.0 for x in range(10)]
+        self.assertEqual(cfunc(x), pyfunc(x))
+
+        x = [complex(x, x) for x in range(10)]
+        self.assertEqual(cfunc(x), pyfunc(x))
+
+    @unittest.expectedFailure
+    def test_sum_npm(self):
+        self.test_sum(flags=no_pyobj_flags)
+
+    def test_unichr(self, flags=enable_pyobj_flags):
+        pyfunc = unichr_usecase
+
+        cr = compile_isolated(pyfunc, (types.int32,), flags=flags)
+        cfunc = cr.entry_point
+        for x in range(0, 1000, 10):
+            self.assertEqual(cfunc(x), pyfunc(x))
+
+    @unittest.expectedFailure
+    def test_unichr_npm(self):
+        self.test_unichr(flags=no_pyobj_flags)
 
 
 if __name__ == '__main__':
