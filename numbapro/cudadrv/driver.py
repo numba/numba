@@ -695,17 +695,26 @@ class Driver(object):
                     candidates = [envpath]
 
             # Load the driver
+            path_not_exist = []
+            driver_load_error = []
             for path in candidates:
                 try:
                     inst.driver = dlloader(path)
                     inst.path = path
-                except OSError:
-                    pass # can't find it, continue
+                except OSError as e:
+                    # Problem opening the DLL
+                    path_not_exist.append(not os.path.isfile(path))
+                    driver_load_error.append(e)
+                    pass
                 else:
-                    break # got it; break out
+                    break       # got it; break out
             else:
                 # not found, barf
-                cls._raise_driver_not_found()
+                if all(path_not_exist):
+                    cls._raise_driver_not_found()
+                else:
+                    errmsg = '\n'.join(str(e) for e in driver_load_error)
+                    cls._raise_driver_error(errmsg)
 
             # Obtain function pointers
             def make_poison(func):
@@ -733,12 +742,12 @@ class Driver(object):
             try:
                 error = inst.cuInit(0)
                 inst.check_error(error, "Failed to initialize CUDA driver")
-            except AttributeError:
+            except AttributeError as e:
                 # Not a real driver?
-                cls._raise_driver_not_found()
-            except CudaDriverError:
+                cls._raise_driver_error(e)
+            except CudaDriverError as e:
                 # it doesn't work?
-                cls._raise_driver_not_found()
+                cls._raise_driver_error(e)
 
         return cls.__INSTANCE
 
@@ -755,6 +764,11 @@ class Driver(object):
                    "CUDA is not supported or the library cannot be found. "
                    "Try setting environment variable NUMBAPRO_CUDA_DRIVER "
                    "with the path of the CUDA driver shared library.")
+
+    @classmethod
+    def _raise_driver_error(cls, e):
+        cls.__INSTANCE = None # posion
+        raise CudaSupportError("Error loading CUDA library:\n%s" % e)
 
     def _cu_symbol_newer(self, symbol):
         try:

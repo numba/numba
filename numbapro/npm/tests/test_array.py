@@ -74,6 +74,16 @@ def test_getitem_a():
     for i in range(ary.size):
         assertTrue(compiled(ary, i) == getitem(ary, i))
 
+@testcase
+def test_getitem_a_strided():
+    compiled = compile(getitem, float64, [arraytype(float64, 1, 'A'), int32])
+    raw = np.arange(100, dtype=np.float64)
+    bytes = np.ndarray(shape=100*8, buffer=raw, dtype=np.byte)[4:-4]
+    data = np.ndarray(shape=99, buffer=bytes, dtype=np.float64)
+    ary = raw[::3]
+    for i in range(ary.size):
+        assertTrue(compiled(ary, i) == getitem(ary, i))
+
 #------------------------------------------------------------------------------
 # getitem2d
 

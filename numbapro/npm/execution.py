@@ -24,8 +24,12 @@ class JIT(object):
         self.exceptions = exceptions
 
     def __del__(self):
-        self.engine.free_machine_code_for(self.lfunc)
-        self.engine.remove_module(self.lfunc.module)
+        try:
+            self.engine.free_machine_code_for(self.lfunc)
+            self.engine.remove_module(self.lfunc.module)
+        except Exception:
+            # suppress
+            pass
 
     def __call__(self, *args):
         args = [t.ctype_pack_argument(v)
