@@ -8,8 +8,7 @@ import itertools
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
 
-force_pyobj_flags = Flags()
-force_pyobj_flags.set("force_pyobject")
+no_pyobj_flags = Flags()
 
 
 def for_loop_usecase1(x, y):
@@ -132,65 +131,111 @@ def ifelse_usecase4(x, y):
 
 class TestFlowControl(unittest.TestCase):
 
-    def run_test(self, pyfunc, x_operands, y_operands, flags=Flags()):
+    def run_test(self, pyfunc, x_operands, y_operands,
+                 flags=enable_pyobj_flags):
         cr = compile_isolated(pyfunc, (types.int32, types.int32), flags=flags)
         cfunc = cr.entry_point
         for x, y in itertools.product(x_operands, y_operands):
             self.assertEqual(cfunc(x, y), pyfunc(x, y))
 
-    def test_for_loop1(self):
-        self.run_test(for_loop_usecase1, [-10, 0, 10], [0])
+    def test_for_loop1(self, flags=enable_pyobj_flags):
+        self.run_test(for_loop_usecase1, [-10, 0, 10], [0], flags=flags)
 
-    def test_for_loop2(self):
+    def test_for_loop1_npm(self):
+        self.test_for_loop1(flags=no_pyobj_flags)
+
+    def test_for_loop2(self, flags=enable_pyobj_flags):
         """
         TODO handle enumerate
         """
         self.run_test(for_loop_usecase2, [-10, 0, 10], [-10, 0, 10],
-                      flags=enable_pyobj_flags)
+                      flags=flags)
 
-    def test_for_loop3(self):
+    def test_for_loop2_npm(self):
+        self.test_for_loop2(flags=no_pyobj_flags)
+
+    def test_for_loop3(self, flags=enable_pyobj_flags):
         """
         List requires pyobject
         """
         self.run_test(for_loop_usecase3, [1], [2],
-                      flags=enable_pyobj_flags)
+                      flags=flags)
 
-    def test_for_loop4(self):
-        self.run_test(for_loop_usecase4, [10], [10])
+    def test_for_loop3_npm(self):
+        self.test_for_loop3(flags=no_pyobj_flags)
 
-    def test_for_loop5(self):
-        self.run_test(for_loop_usecase5, [100], [50])
+    def test_for_loop4(self, flags=enable_pyobj_flags):
+        self.run_test(for_loop_usecase4, [10], [10], flags=flags)
 
-    def test_for_loop6(self):
-        self.run_test(for_loop_usecase6, [100], [50])
+    def test_for_loop4_npm(self):
+        self.test_for_loop4(flags=no_pyobj_flags)
 
-    def test_while_loop1(self):
-        self.run_test(while_loop_usecase1, [10], [0])
+    def test_for_loop5(self, flags=enable_pyobj_flags):
+        self.run_test(for_loop_usecase5, [100], [50], flags=flags)
 
-    def test_while_loop2(self):
-        self.run_test(while_loop_usecase2, [10], [0])
+    def test_for_loop5_npm(self):
+        self.test_for_loop5(flags=no_pyobj_flags)
 
-    def test_while_loop3(self):
-        self.run_test(while_loop_usecase3, [10], [10])
+    def test_for_loop6(self, flags=enable_pyobj_flags):
+        self.run_test(for_loop_usecase6, [100], [50], flags=flags)
 
-    def test_while_loop4(self):
-        self.run_test(while_loop_usecase4, [10], [0])
+    def test_for_loop6_npm(self):
+        self.test_for_loop6(flags=no_pyobj_flags)
 
-    def test_while_loop5(self):
-        self.run_test(while_loop_usecase5, [0, 5, 10], [0, 5, 10])
+    def test_while_loop1(self, flags=enable_pyobj_flags):
+        self.run_test(while_loop_usecase1, [10], [0], flags=flags)
 
-    def test_ifelse1(self):
-        self.run_test(ifelse_usecase1, [-1, 0, 1], [-1, 0, 1])
+    def test_while_loop1_npm(self):
+        self.test_while_loop1(flags=no_pyobj_flags)
 
-    def test_ifelse2(self):
-        self.run_test(ifelse_usecase2, [-1, 0, 1], [-1, 0, 1])
+    def test_while_loop2(self, flags=enable_pyobj_flags):
+        self.run_test(while_loop_usecase2, [10], [0], flags=flags)
 
-    def test_ifelse3(self):
-        self.run_test(ifelse_usecase3, [-1, 0, 1], [-1, 0, 1])
+    def test_while_loop2_npm(self):
+        self.test_while_loop2(flags=no_pyobj_flags)
 
-    def test_ifelse4(self):
-        self.run_test(ifelse_usecase4, [-1, 0, 1], [-1, 0, 1])
+    def test_while_loop3(self, flags=enable_pyobj_flags):
+        self.run_test(while_loop_usecase3, [10], [10], flags=flags)
+
+    def test_while_loop3_npm(self):
+        self.test_while_loop3(flags=no_pyobj_flags)
+
+    def test_while_loop4(self, flags=enable_pyobj_flags):
+        self.run_test(while_loop_usecase4, [10], [0], flags=flags)
+
+    def test_while_loop4_npm(self):
+        self.test_while_loop4(flags=no_pyobj_flags)
+
+    def test_while_loop5(self, flags=enable_pyobj_flags):
+        self.run_test(while_loop_usecase5, [0, 5, 10], [0, 5, 10], flags=flags)
+
+    def test_while_loop5_npm(self):
+        self.test_while_loop5(flags=no_pyobj_flags)
+
+    def test_ifelse1(self, flags=enable_pyobj_flags):
+        self.run_test(ifelse_usecase1, [-1, 0, 1], [-1, 0, 1], flags=flags)
+
+    def test_ifelse1_npm(self):
+        self.test_ifelse1(flags=no_pyobj_flags)
+
+    def test_ifelse2(self, flags=enable_pyobj_flags):
+        self.run_test(ifelse_usecase2, [-1, 0, 1], [-1, 0, 1], flags=flags)
+
+    def test_ifelse2_npm(self):
+        self.test_ifelse2(flags=no_pyobj_flags)
+
+    def test_ifelse3(self, flags=enable_pyobj_flags):
+        self.run_test(ifelse_usecase3, [-1, 0, 1], [-1, 0, 1], flags=flags)
+
+    def test_ifelse3_npm(self):
+        self.test_ifelse3(flags=no_pyobj_flags)
+
+    def test_ifelse4(self, flags=enable_pyobj_flags):
+        self.run_test(ifelse_usecase4, [-1, 0, 1], [-1, 0, 1], flags=flags)
+
+    def test_ifelse4_npm(self):
+        self.test_ifelse4(flags=no_pyobj_flags)
 
 if __name__ == '__main__':
-    unittest.main()
+    unittest.main(verbosity=2)
 
