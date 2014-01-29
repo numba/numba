@@ -34,6 +34,7 @@ class CPUContext(BaseContext):
 
         # Insert runtime error type object
         le.dylib_add_symbol(".numba_error_class", id(NativeError))
+        le.dylib_add_symbol("PyExc_NameError", id(NameError))
 
     def build_pass_manager(self):
         if config.OPT == 3:

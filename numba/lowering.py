@@ -419,7 +419,7 @@ class PyLower(BaseLower):
             negone = lc.Constant.int_signextend(ok.type, -1)
             pred = self.builder.icmp(lc.ICMP_EQ, ok, negone)
             with cgutils.if_unlikely(self.builder, pred):
-                self.exception_raised()
+                self.return_exception_raised()
 
         elif isinstance(inst, ir.Return):
             retval = self.loadvar(inst.value.name)
@@ -490,7 +490,7 @@ class PyLower(BaseLower):
                 negone = lc.Constant.int_signextend(Type.int(), -1)
                 err = self.builder.icmp(lc.ICMP_EQ, res, negone)
                 with cgutils.if_unlikely(self.builder, err):
-                    self.exception_raised()
+                    self.return_exception_raised()
 
                 longval = self.builder.zext(res, self.pyapi.long)
                 res = self.pyapi.bool_from_long(longval)
@@ -628,7 +628,9 @@ class PyLower(BaseLower):
 
         else:
             retval = obj
-            self.check_error(retval)
+            with cgutils.if_unlikely(self.builder, self.is_null(retval)):
+                self.pyapi.raise_missing_global_error(name)
+                self.return_exception_raised()
 
         self.incref(retval)
         return retval
@@ -656,7 +658,11 @@ class PyLower(BaseLower):
         with cgutils.if_unlikely(self.builder, self.is_null(fromdict)):
             # This happen if we are using the __main__ module
             frommod = self.pyapi.object_getattr_string(mod, name)
-            self.check_error(frommod)
+
+            with cgutils.if_unlikely(self.builder, self.is_null(frommod)):
+                self.pyapi.raise_missing_global_error(name)
+                self.return_exception_raised()
+
             bbifmod = self.builder.basic_block
 
         builtin = self.builder.phi(self.pyapi.pyobj)
@@ -687,18 +693,18 @@ class PyLower(BaseLower):
                                            self.pyapi.err_occurred())
 
         with cgutils.if_unlikely(self.builder, err_occurred):
-            self.builder.branch(self.ehblock)
+            self.return_exception_raised()
 
     def check_error(self, obj):
         with cgutils.if_unlikely(self.builder, self.is_null(obj)):
-            self.builder.branch(self.ehblock)
+            self.return_exception_raised()
 
         return obj
 
     def is_null(self, obj):
         return cgutils.is_null(self.builder, obj)
 
-    def exception_raised(self):
+    def return_exception_raised(self):
         self.builder.branch(self.ehblock)
 
     def return_error_occurred(self):

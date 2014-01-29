@@ -593,5 +593,22 @@ class PythonAPI(object):
     @property
     def native_error_type(self):
         name = ".numba_error_class"
-        gv = self.module.add_global_variable(self.pyobj.pointee, name=name)
-        return gv
+        try:
+            return self.module.get_global_variable_named(name)
+        except LLVMException:
+            return self.module.add_global_variable(self.pyobj.pointee,
+                                                  name=name)
+
+    def raise_missing_global_error(self, name):
+        msg = "global name '%s' is not defined" % name
+        cstr = self.context.insert_const_string(self.module, msg)
+        self.err_set_string(self.name_error_type, cstr)
+
+    @property
+    def name_error_type(self):
+        name = "PyExc_NameError"
+        try:
+            return self.module.get_global_variable_named(name)
+        except LLVMException:
+            return self.module.add_global_variable(self.pyobj.pointee,
+                                                   name=name)
