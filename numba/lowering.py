@@ -82,6 +82,11 @@ class BaseLower(object):
         # Initialize LLVM
         self.module = Module.new("module.%s" % self.fndesc.name)
 
+        # Install metadata
+        md_pymod = cgutils.MetadataKeyStore(self.module, "python.module")
+        md_pymod.set(fndesc.pymod.__name__)
+
+        # Setup function
         self.function = context.declare_function(self.module, fndesc)
         self.entry_block = self.function.append_basic_block('entry')
         self.builder = Builder.new(self.entry_block)

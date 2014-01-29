@@ -10,12 +10,21 @@ from numba import types, utils, cgutils, _numpyadapt, _helperlib
 _PyNone = ctypes.c_ssize_t(id(None))
 
 
+class NativeError(RuntimeError):
+    pass
+
+
 @utils.runonce
 def fix_python_api():
+    """
+    Execute once to install special symbols into the LLVM symbol table
+    """
     le.dylib_add_symbol("Py_None", ctypes.addressof(_PyNone))
     le.dylib_add_symbol("NumbaArrayAdaptor", _numpyadapt.get_ndarray_adaptor())
     le.dylib_add_symbol("NumbaComplexAdaptor",
                         _helperlib.get_complex_adaptor())
+    le.dylib_add_symbol("NumbaNativeError", id(NativeError))
+    le.dylib_add_symbol("PyExc_NameError", id(NameError))
 
 
 class PythonAPI(object):
@@ -26,6 +35,9 @@ class PythonAPI(object):
         fix_python_api()
         self.context = context
         self.builder = builder
+
+        self.module = builder.basic_block.function.module
+        # Initialize types
         self.pyobj = self.context.get_argument_type(types.pyobject)
         self.long = Type.int(ctypes.sizeof(ctypes.c_long) * 8)
         self.ulonglong = Type.int(ctypes.sizeof(ctypes.c_ulonglong) * 8)
@@ -33,7 +45,6 @@ class PythonAPI(object):
         self.double = Type.double()
         self.py_ssize_t = self.context.get_value_type(types.intp)
         self.cstring = Type.pointer(Type.int(8))
-        self.module = builder.basic_block.function.module
 
     # ------ Python API -----
 
@@ -574,17 +585,19 @@ class PythonAPI(object):
         return self.builder.call(fn, [cobj, cmplx])
 
     def get_module_dict_symbol(self):
-        pymodname = "__NUMBA_PYMODULE_DICT__"
+        md_pymod = cgutils.MetadataKeyStore(self.module, "python.module")
+        pymodname = ".pymodule.dict." + md_pymod.get()
+
         try:
             gv = self.module.get_global_variable_named(name=pymodname)
         except LLVMException:
-            gv = self.module.add_global_variable(self.pyobj, name=pymodname)
-            gv.initializer = Constant.null(self.pyobj)
+            gv = self.module.add_global_variable(self.pyobj.pointee,
+                                                 name=pymodname)
         return gv
 
     def get_module_dict(self):
-        gv = self.get_module_dict_symbol()
-        return self.builder.load(gv)
+        return self.get_module_dict_symbol()
+        # return self.builder.load(gv)
 
     def raise_native_error(self, msg):
         cstr = self.context.insert_const_string(self.module, msg)
@@ -592,7 +605,7 @@ class PythonAPI(object):
 
     @property
     def native_error_type(self):
-        name = ".numba_error_class"
+        name = "NumbaNativeError"
         try:
             return self.module.get_global_variable_named(name)
         except LLVMException:

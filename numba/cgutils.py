@@ -349,3 +349,25 @@ def get_item_pointer2(builder, data, shape, strides, layout, inds,
         where = builder.add(base, offset)
         ptr = builder.inttoptr(where, data.type)
         return ptr
+
+
+class MetadataKeyStore(object):
+    def __init__(self, module, name):
+        self.module = module
+        self.key = name
+        self.nmd = self.module.get_or_insert_named_metadata("python.module")
+
+    def set(self, value):
+        """
+        Add a string value
+        """
+        md = lc.MetaData.get(self.module,
+                             [lc.MetaDataString.get(self.module, value)])
+        self.nmd.add(md)
+
+    def get(self):
+        """
+        Get string value
+        """
+        node = self.nmd._ptr.getOperand(0)
+        return lc._make_value(node.getOperand(0)).string

@@ -10,10 +10,6 @@ from numba import utils
 from numba.targets import intrinsics, mathimpl, npyimpl
 
 
-class NativeError(RuntimeError):
-    pass
-
-
 class CPUContext(BaseContext):
     def init(self):
         self.execmodule = lc.Module.new("numba.exec")
@@ -31,10 +27,6 @@ class CPUContext(BaseContext):
         # Add target specific implementations
         self.insert_func_defn(mathimpl.functions)
         self.insert_func_defn(npyimpl.functions)
-
-        # Insert runtime error type object
-        le.dylib_add_symbol(".numba_error_class", id(NativeError))
-        le.dylib_add_symbol("PyExc_NameError", id(NameError))
 
     def build_pass_manager(self):
         if config.OPT == 3:
@@ -131,21 +123,23 @@ class CPUContext(BaseContext):
 
     def prepare_for_call(self, func, fndesc):
         wrapper, api = PyCallWrapper(self, func.module, func, fndesc).build()
-        moddictsym = api.get_module_dict_symbol()
         self.optimize(func.module)
 
         if config.DEBUG:
             print(func.module)
             print(self.tm.emit_assembly(func.module))
 
+        # Map module.__dict__
+        le.dylib_add_symbol(".pymodule.dict." + fndesc.pymod.__name__,
+                            id(fndesc.pymod.__dict__))
+
+        # Code gen
         self.engine.add_module(func.module)
         baseptr = self.engine.get_pointer_to_function(func)
         fnptr = self.engine.get_pointer_to_function(wrapper)
-        moddictptr = self.engine.get_pointer_to_global(moddictsym)
         cfunc = _dynfunc.make_function(fndesc.pymod, fndesc.name, fndesc.doc,
                                        fnptr)
 
-        _dynfunc.set_arbitrary_addr(moddictptr, fndesc.pymod.__dict__)
         self.native_funcs[cfunc] = fndesc.mangled_name, baseptr
         return cfunc, fnptr
 
