@@ -3,6 +3,7 @@ import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import types, utils
 import itertools
+import functools
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -91,7 +92,7 @@ def ord_usecase(x):
     return ord(x)
 
 def reduce_usecase(reduce_func, x):
-    return reduce(reduce_func, x)
+    return functools.reduce(reduce_func, x)
 
 def round_usecase(x):
     return round(x)
@@ -189,6 +190,7 @@ class TestBuiltins(unittest.TestCase):
     def test_chr_npm(self):
         self.test_chr(flags=no_pyobj_flags)
 
+    @unittest.skipIf(utils.IS_PY3, "cmp not available as global is Py3")
     def test_cmp(self, flags=enable_pyobj_flags):
         pyfunc = cmp_usecase
 
@@ -200,6 +202,7 @@ class TestBuiltins(unittest.TestCase):
         for x, y in itertools.product(x_operands, y_operands):
             self.assertEqual(cfunc(x, y), pyfunc(x, y))
 
+    @unittest.skipIf(utils.IS_PY3, "cmp not available as global is Py3")
     @unittest.expectedFailure
     def test_cmp_npm(self):
         self.test_cmp(flags=no_pyobj_flags)
@@ -237,7 +240,8 @@ class TestBuiltins(unittest.TestCase):
 
         filter_func = lambda x: x % 2
         x = [0, 1, 2, 3, 4]
-        self.assertEqual(cfunc(x, filter_func), pyfunc(x, filter_func))
+        self.assertSequenceEqual(list(cfunc(x, filter_func)),
+                                 list(pyfunc(x, filter_func)))
 
     @unittest.expectedFailure
     def test_filter_npm(self):
@@ -319,6 +323,7 @@ class TestBuiltins(unittest.TestCase):
     def test_int_npm(self):
         self.test_int(flags=no_pyobj_flags)
 
+    @unittest.skipIf(utils.IS_PY3, "long is not available as global is Py3")
     def test_long(self, flags=enable_pyobj_flags):
         pyfunc = long_usecase
 
@@ -330,6 +335,7 @@ class TestBuiltins(unittest.TestCase):
         for x, y in itertools.product(x_operands, y_operands):
             self.assertEqual(cfunc(x, y), pyfunc(x, y))
 
+    @unittest.skipIf(utils.IS_PY3, "cmp not available as global is Py3")
     @unittest.expectedFailure
     def test_long_npm(self):
         self.test_long(flags=no_pyobj_flags)
@@ -343,13 +349,14 @@ class TestBuiltins(unittest.TestCase):
 
         map_func = lambda x: x * 2
         x = [0, 1, 2, 3, 4]
-        self.assertEqual(cfunc(x, map_func), pyfunc(x, map_func))
+        self.assertSequenceEqual(list(cfunc(x, map_func)),
+                                 list(pyfunc(x, map_func)))
 
     @unittest.expectedFailure
     def test_map_npm(self):
         self.test_map(flags=no_pyobj_flags)
 
-    def test_max(self, flags=enable_pyobj_flags):
+    def test_max_1(self, flags=enable_pyobj_flags):
 
         pyfunc = max_usecase1
         cr = compile_isolated(pyfunc, (types.int32, types.int32), flags=flags)
@@ -360,19 +367,24 @@ class TestBuiltins(unittest.TestCase):
         for x, y in itertools.product(x_operands, y_operands):
             self.assertEqual(cfunc(x, y), pyfunc(x, y))
 
+    def test_max_2(self, flags=enable_pyobj_flags):
         pyfunc = max_usecase2
         cr = compile_isolated(pyfunc, (types.int32, types.int32), flags=flags)
         cfunc = cr.entry_point
-        
+
+        x_operands = [-1, 0, 1]
+        y_operands = [-1, 0, 1]
         for x, y in itertools.product(x_operands, y_operands):
             self.assertEqual(cfunc(x, y), pyfunc(x, y))
 
+    def test_max_npm_1(self):
+        self.test_max_1(flags=no_pyobj_flags)
+
     @unittest.expectedFailure
-    def test_max_npm(self):
-        self.test_max(flags=no_pyobj_flags)
+    def test_max_npm_2(self):
+        self.test_max_2(flags=no_pyobj_flags)
 
-    def test_min(self, flags=enable_pyobj_flags):
-
+    def test_min_1(self, flags=enable_pyobj_flags):
         pyfunc = min_usecase1
         cr = compile_isolated(pyfunc, (types.int32, types.int32), flags=flags)
         cfunc = cr.entry_point
@@ -382,16 +394,22 @@ class TestBuiltins(unittest.TestCase):
         for x, y in itertools.product(x_operands, y_operands):
             self.assertEqual(cfunc(x, y), pyfunc(x, y))
 
+    def test_min_2(self, flags=enable_pyobj_flags):
         pyfunc = min_usecase2
         cr = compile_isolated(pyfunc, (types.int32, types.int32), flags=flags)
         cfunc = cr.entry_point
-        
+
+        x_operands = [-1, 0, 1]
+        y_operands = [-1, 0, 1]
         for x, y in itertools.product(x_operands, y_operands):
             self.assertEqual(cfunc(x, y), pyfunc(x, y))
 
+    def test_min_npm_1(self):
+        self.test_min_1(flags=no_pyobj_flags)
+
     @unittest.expectedFailure
-    def test_min_npm(self):
-        self.test_min(flags=no_pyobj_flags)
+    def test_min_npm_2(self):
+        self.test_min_2(flags=no_pyobj_flags)
 
     def test_oct(self, flags=enable_pyobj_flags):
         pyfunc = oct_usecase
@@ -470,6 +488,7 @@ class TestBuiltins(unittest.TestCase):
     def test_sum_npm(self):
         self.test_sum(flags=no_pyobj_flags)
 
+    @unittest.skipIf(utils.IS_PY3, "cmp not available as global is Py3")
     def test_unichr(self, flags=enable_pyobj_flags):
         pyfunc = unichr_usecase
 
@@ -478,6 +497,7 @@ class TestBuiltins(unittest.TestCase):
         for x in range(0, 1000, 10):
             self.assertEqual(cfunc(x), pyfunc(x))
 
+    @unittest.skipIf(utils.IS_PY3, "cmp not available as global is Py3")
     @unittest.expectedFailure
     def test_unichr_npm(self):
         self.test_unichr(flags=no_pyobj_flags)

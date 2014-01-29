@@ -156,7 +156,9 @@ def benchmark(func, maxsec=1):
 # Other common python2/3 adaptors
 # Copied from Blaze which borrowed from six
 
-if PYVERSION >= (3, 0):
+IS_PY3 = PYVERSION >= (3, 0)
+
+if IS_PY3:
     def dict_iteritems(d):
         return d.items().__iter__()
 
