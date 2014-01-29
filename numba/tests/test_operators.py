@@ -85,8 +85,7 @@ class TestOperators(unittest.TestCase):
         y_operands = [-1, 0, 1]
 
         types_list = [(types.int32, types.int32),
-                      (types.int64, types.int64),
-                      (types.pyobject, types.pyobject)]
+                      (types.int64, types.int64)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
@@ -110,9 +109,8 @@ class TestOperators(unittest.TestCase):
         types_list = [(arraytype, arraytype)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
-                           flags=flags)
-
-    @unittest.expectedFailure
+                          flags=flags)
+        
     def test_add_ints_npm(self):
         self.test_add_ints(flags=Noflags)
 
@@ -140,7 +138,6 @@ class TestOperators(unittest.TestCase):
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
-    @unittest.expectedFailure
     def test_add_floats_npm(self):
         self.test_add_floats(flags=Noflags)
 
@@ -152,8 +149,7 @@ class TestOperators(unittest.TestCase):
         y_operands = [-1, 0, 1]
 
         types_list = [(types.int32, types.int32),
-                      (types.int64, types.int64),
-                      (types.pyobject, types.pyobject)]
+                      (types.int64, types.int64)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
@@ -180,7 +176,6 @@ class TestOperators(unittest.TestCase):
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
-    @unittest.expectedFailure
     def test_sub_ints_npm(self):
         self.test_sub_ints(flags=Noflags)
 
@@ -208,7 +203,6 @@ class TestOperators(unittest.TestCase):
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
-    @unittest.expectedFailure
     def test_sub_floats_npm(self):
         self.test_sub_floats(flags=Noflags)
 
@@ -220,8 +214,7 @@ class TestOperators(unittest.TestCase):
         y_operands = [-1, 0, 1]
 
         types_list = [(types.int32, types.int32),
-                      (types.int64, types.int64),
-                      (types.pyobject, types.pyobject)]
+                      (types.int64, types.int64)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
@@ -247,7 +240,6 @@ class TestOperators(unittest.TestCase):
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
-    @unittest.expectedFailure
     def test_mul_ints_npm(self):
         self.test_mul_ints(flags=Noflags)
 
@@ -275,7 +267,6 @@ class TestOperators(unittest.TestCase):
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
-    @unittest.expectedFailure
     def test_mul_floats_npm(self):
         self.test_mul_floats(flags=Noflags)
 
@@ -292,8 +283,7 @@ class TestOperators(unittest.TestCase):
         y_operands = [-3, -2, -1, 1]
 
         types_list = [(types.int32, types.int32),
-                      (types.int64, types.int64),
-                      (types.pyobject, types.pyobject)]
+                      (types.int64, types.int64)]
 
         tester(pyfunc, x_operands, y_operands, types_list, flags=flags)
 
@@ -317,7 +307,6 @@ class TestOperators(unittest.TestCase):
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
-    @unittest.expectedFailure
     def test_div_ints_npm(self):
         self.test_div_ints(flags=Noflags)
 
@@ -345,7 +334,6 @@ class TestOperators(unittest.TestCase):
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
-    @unittest.expectedFailure
     def test_div_floats_npm(self):
         self.test_div_floats(flags=Noflags)
 
@@ -363,9 +351,8 @@ class TestOperators(unittest.TestCase):
         self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
                              flags=flags)
 
-    @unittest.expectedFailure
     def test_truediv_ints_npm(self):
-        self.test_trudiv_ints(flags=Noflags)
+        self.test_truediv_ints(flags=Noflags)
 
     def test_truediv_floats(self, flags=enable_pyobj_flags):
         pyfunc = truediv_usecase
@@ -405,8 +392,7 @@ class TestOperators(unittest.TestCase):
         y_operands = [-3, -2, -1, 1]
 
         types_list = [(types.int32, types.int32),
-                      (types.int64, types.int64),
-                      (types.pyobject, types.pyobject)]
+                      (types.int64, types.int64)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
@@ -433,7 +419,6 @@ class TestOperators(unittest.TestCase):
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
-    @unittest.expectedFailure
     def test_mod_ints_npm(self):
         self.test_mod_ints(flags=Noflags)
 
@@ -461,7 +446,6 @@ class TestOperators(unittest.TestCase):
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
-    @unittest.expectedFailure
     def test_mod_floats_npm(self):
         self.test_mod_floats(flags=Noflags)
 
@@ -473,8 +457,7 @@ class TestOperators(unittest.TestCase):
         y_operands = [0, 1, 2]
 
         types_list = [(types.int32, types.int32),
-                      (types.int64, types.int64),
-                      (types.pyobject, types.pyobject)]
+                      (types.int64, types.int64)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
@@ -500,7 +483,6 @@ class TestOperators(unittest.TestCase):
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
-    @unittest.expectedFailure
     def test_pow_ints_npm(self):
         self.test_pow_ints(flags=Noflags)
 
@@ -553,7 +535,6 @@ class TestOperators(unittest.TestCase):
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
-    @unittest.expectedFailure
     def test_pow_floats_npm(self):
         self.test_pow_floats(flags=Noflags)
 
@@ -652,8 +633,7 @@ class TestOperators(unittest.TestCase):
         x_operands = [0, 1]
         y_operands = [0, 1, 2, 4, 8, 16, 31]
 
-        types_list = [(types.uint32, types.uint32),
-                      (types.pyobject, types.pyobject)]
+        types_list = [(types.uint32, types.uint32)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
@@ -669,8 +649,7 @@ class TestOperators(unittest.TestCase):
         x_operands = [0, -1]
         y_operands = [0, 1, 2, 4, 8, 16, 31]
 
-        types_list = [(types.int32, types.int32),
-                      (types.pyobject, types.pyobject)]
+        types_list = [(types.int32, types.int32)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
@@ -683,7 +662,6 @@ class TestOperators(unittest.TestCase):
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
-    @unittest.expectedFailure
     def test_bitshift_left_npm(self):
         self.test_bitshift_left(flags=Noflags)
 
@@ -694,8 +672,7 @@ class TestOperators(unittest.TestCase):
         x_operands = [0, 1, 2**32 - 1]
         y_operands = [0, 1, 2, 4, 8, 16, 31]
 
-        types_list = [(types.uint32, types.uint32),
-                      (types.pyobject, types.pyobject)]
+        types_list = [(types.uint32, types.uint32)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
@@ -711,8 +688,7 @@ class TestOperators(unittest.TestCase):
         x_operands = [0, 1, -(2**31)]
         y_operands = [0, 1, 2, 4, 8, 16, 31]
 
-        types_list = [(types.int32, types.int32),
-                      (types.pyobject, types.pyobject)]
+        types_list = [(types.int32, types.int32)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
@@ -725,7 +701,6 @@ class TestOperators(unittest.TestCase):
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
-    @unittest.expectedFailure
     def test_bitshift_right_npm(self):
         self.test_bitshift_right(flags=Noflags)
 
@@ -736,8 +711,7 @@ class TestOperators(unittest.TestCase):
         x_operands = list(range(0, 8)) + [2**32 - 1]
         y_operands = list(range(0, 8)) + [2**32 - 1]
 
-        types_list = [(types.uint32, types.uint32),
-                      (types.pyobject, types.pyobject)]
+        types_list = [(types.uint32, types.uint32)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
@@ -745,8 +719,7 @@ class TestOperators(unittest.TestCase):
         x_operands = list(range(0, 8)) + [2**64 - 1]
         y_operands = list(range(0, 8)) + [2**64 - 1]
 
-        types_list = [(types.uint64, types.uint64),
-                      (types.pyobject, types.pyobject)]
+        types_list = [(types.uint64, types.uint64)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
@@ -754,8 +727,7 @@ class TestOperators(unittest.TestCase):
         x_operands = list(range(-4, 4)) + [-(2**31), 2**31 - 1]
         y_operands = list(range(-4, 4)) + [-(2**31), 2**31 - 1]
 
-        types_list = [(types.int32, types.int32),
-                      (types.pyobject, types.pyobject)]
+        types_list = [(types.int32, types.int32)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
@@ -763,13 +735,11 @@ class TestOperators(unittest.TestCase):
         x_operands = list(range(-4, 4)) + [-(2**63), 2**63 - 1]
         y_operands = list(range(-4, 4)) + [-(2**63), 2**63 - 1]
 
-        types_list = [(types.int64, types.int64),
-                      (types.pyobject, types.pyobject)]
+        types_list = [(types.int64, types.int64)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
-    @unittest.expectedFailure
     def test_bitwise_and_npm(self):
         self.test_bitwise_and(flags=Noflags)
 
@@ -780,8 +750,7 @@ class TestOperators(unittest.TestCase):
         x_operands = list(range(0, 8)) + [2**32 - 1]
         y_operands = list(range(0, 8)) + [2**32 - 1]
 
-        types_list = [(types.uint32, types.uint32),
-                      (types.pyobject, types.pyobject)]
+        types_list = [(types.uint32, types.uint32)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
@@ -789,8 +758,7 @@ class TestOperators(unittest.TestCase):
         x_operands = list(range(0, 8)) + [2**64 - 1]
         y_operands = list(range(0, 8)) + [2**64 - 1]
 
-        types_list = [(types.uint64, types.uint64),
-                      (types.pyobject, types.pyobject)]
+        types_list = [(types.uint64, types.uint64)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
@@ -798,8 +766,7 @@ class TestOperators(unittest.TestCase):
         x_operands = list(range(-4, 4)) + [-(2**31), 2**31 - 1]
         y_operands = list(range(-4, 4)) + [-(2**31), 2**31 - 1]
 
-        types_list = [(types.int32, types.int32),
-                      (types.pyobject, types.pyobject)]
+        types_list = [(types.int32, types.int32)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
@@ -807,13 +774,11 @@ class TestOperators(unittest.TestCase):
         x_operands = list(range(-4, 4)) + [-(2**63), 2**63 - 1]
         y_operands = list(range(-4, 4)) + [-(2**63), 2**63 - 1]
 
-        types_list = [(types.int64, types.int64),
-                      (types.pyobject, types.pyobject)]
+        types_list = [(types.int64, types.int64)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
-    @unittest.expectedFailure
     def test_bitwise_or_npm(self):
         self.test_bitwise_or(flags=Noflags)
 
@@ -824,8 +789,7 @@ class TestOperators(unittest.TestCase):
         x_operands = list(range(0, 8)) + [2**32 - 1]
         y_operands = list(range(0, 8)) + [2**32 - 1]
 
-        types_list = [(types.uint32, types.uint32),
-                      (types.pyobject, types.pyobject)]
+        types_list = [(types.uint32, types.uint32)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
@@ -833,8 +797,7 @@ class TestOperators(unittest.TestCase):
         x_operands = list(range(0, 8)) + [2**64 - 1]
         y_operands = list(range(0, 8)) + [2**64 - 1]
 
-        types_list = [(types.uint64, types.uint64),
-                      (types.pyobject, types.pyobject)]
+        types_list = [(types.uint64, types.uint64)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
@@ -842,8 +805,7 @@ class TestOperators(unittest.TestCase):
         x_operands = list(range(-4, 4)) + [-(2**31), 2**31 - 1]
         y_operands = list(range(-4, 4)) + [-(2**31), 2**31 - 1]
 
-        types_list = [(types.int32, types.int32),
-                      (types.pyobject, types.pyobject)]
+        types_list = [(types.int32, types.int32)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
@@ -851,13 +813,11 @@ class TestOperators(unittest.TestCase):
         x_operands = list(range(-4, 4)) + [-(2**63), 2**63 - 1]
         y_operands = list(range(-4, 4)) + [-(2**63), 2**63 - 1]
 
-        types_list = [(types.int64, types.int64),
-                      (types.pyobject, types.pyobject)]
+        types_list = [(types.int64, types.int64)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
-    @unittest.expectedFailure
     def test_bitwise_xor_npm(self):
         self.test_bitwise_xor(flags=Noflags)
 
@@ -869,8 +829,7 @@ class TestOperators(unittest.TestCase):
         x_operands = [np.uint32(x) for x in x_operands]
         y_operands = [0]
 
-        types_list = [(types.uint32, types.uint32),
-                      (types.pyobject, types.pyobject)]
+        types_list = [(types.uint32, types.uint32)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
@@ -878,8 +837,7 @@ class TestOperators(unittest.TestCase):
         x_operands = list(range(-4, 4)) + [-(2**31), 2**31 - 1]
         y_operands = [0]
 
-        types_list = [(types.int32, types.int32),
-                      (types.pyobject, types.pyobject)]
+        types_list = [(types.int32, types.int32)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
@@ -888,8 +846,7 @@ class TestOperators(unittest.TestCase):
         x_operands = [np.uint64(x) for x in x_operands]
         y_operands = [0]
 
-        types_list = [(types.uint64, types.uint64),
-                      (types.pyobject, types.pyobject)]
+        types_list = [(types.uint64, types.uint64)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
@@ -897,13 +854,11 @@ class TestOperators(unittest.TestCase):
         x_operands = list(range(-4, 4)) + [-(2**63), 2**63 - 1]
         y_operands = [0]
 
-        types_list = [(types.int64, types.int64),
-                      (types.pyobject, types.pyobject)]
+        types_list = [(types.int64, types.int64)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
-    @unittest.expectedFailure
     def test_bitwise_not_npm(self):
         self.test_bitwise_not(flags=Noflags)
 
@@ -936,7 +891,6 @@ class TestOperators(unittest.TestCase):
         for val in values:
             self.assertEqual(pyfunc(val), cfunc(val))
 
-    @unittest.expectedFailure
     def test_not_npm(self):
         self.test_not(flags=Noflags)
 
@@ -968,7 +922,6 @@ class TestOperators(unittest.TestCase):
         for val in values:
             self.assertEqual(pyfunc(val), cfunc(val))
 
-    @unittest.expectedFailure
     def test_negate_npm(self):
         self.test_negate(flags=Noflags)
 
