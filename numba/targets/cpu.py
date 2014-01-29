@@ -10,6 +10,10 @@ from numba import utils
 from numba.targets import intrinsics, mathimpl, npyimpl
 
 
+class NativeError(RuntimeError):
+    pass
+
+
 class CPUContext(BaseContext):
     def init(self):
         self.execmodule = lc.Module.new("numba.exec")
@@ -27,6 +31,9 @@ class CPUContext(BaseContext):
         # Add target specific implementations
         self.insert_func_defn(mathimpl.functions)
         self.insert_func_defn(npyimpl.functions)
+
+        # Insert runtime error type object
+        le.dylib_add_symbol(".numba_error_class", id(NativeError))
 
     def build_pass_manager(self):
         if config.OPT == 3:

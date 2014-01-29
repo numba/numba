@@ -80,6 +80,11 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyErr_Clear")
         return self.builder.call(fn, ())
 
+    def err_set_string(self, exctype, msg):
+        fnty = Type.function(Type.void(), [self.pyobj, self.cstring])
+        fn = self._get_function(fnty, name="PyErr_SetString")
+        return self.builder.call(fn, (exctype, msg))
+
     def import_module_noblock(self, modname):
         fnty = Type.function(self.pyobj, [self.cstring])
         fn = self._get_function(fnty, name="PyImport_ImportModuleNoBlock")
@@ -580,3 +585,13 @@ class PythonAPI(object):
     def get_module_dict(self):
         gv = self.get_module_dict_symbol()
         return self.builder.load(gv)
+
+    def raise_native_error(self, msg):
+        cstr = self.context.insert_const_string(self.module, msg)
+        self.err_set_string(self.native_error_type, cstr)
+
+    @property
+    def native_error_type(self):
+        name = ".numba_error_class"
+        gv = self.module.add_global_variable(self.pyobj.pointee, name=name)
+        return gv

@@ -29,7 +29,7 @@ LTYPEMAP = {
 }
 
 
-Status = namedtuple("Status", ("code", "ok", "err", "none"))
+Status = namedtuple("Status", ("code", "ok", "err", "exc", "none"))
 
 
 RETCODE_OK = Constant.int_signextend(Type.int(), 0)
@@ -495,10 +495,11 @@ class BaseContext(object):
     def get_return_status(self, builder, code):
         norm = builder.icmp(lc.ICMP_EQ, code, RETCODE_OK)
         none = builder.icmp(lc.ICMP_EQ, code, RETCODE_NONE)
+        exc = builder.icmp(lc.ICMP_EQ, code, RETCODE_EXC)
         ok = builder.or_(norm, none)
         err = builder.not_(ok)
 
-        status = Status(code=code, ok=ok, err=err, none=none)
+        status = Status(code=code, ok=ok, err=err, exc=exc, none=none)
         return status
 
     def call_function_pointer(self, builder, funcptr, signature, args):
