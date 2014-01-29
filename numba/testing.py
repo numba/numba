@@ -12,3 +12,23 @@ def test():
     result = runner.run(suite)
     return result.wasSuccessful()
 
+
+def multitest():
+    """
+    Run tests in multiple processes.
+    """
+    import multiprocessing as mp
+    loader = unittest.TestLoader()
+    startdir = "numba.tests"
+    suites = loader.discover(startdir)
+
+    pool = mp.Pool(processes=mp.cpu_count())
+    results = pool.map(_multiruntest, suites)
+    return all(results)
+
+
+def _multiruntest(suite):
+    runner = unittest.TextTestRunner(descriptions=False, verbosity=0,
+                                     buffer=True)
+    result = runner.run(suite)
+    return result.wasSuccessful()

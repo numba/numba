@@ -2,5 +2,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
 import sys
-import numba
-sys.exit(0 if numba.test() else 1)
+import numba.testing as testing
+if '-m' in sys.argv:
+    result = testing.multitest()
+else:
+    result = testing.test()
+sys.exit(0 if result else 1)
