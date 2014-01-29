@@ -1,8 +1,7 @@
 from __future__ import print_function
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import types, utils
-from numba.tests import usecases
+from numba import types
 import itertools
 
 enable_pyobj_flags = Flags()
@@ -151,6 +150,7 @@ class TestFlowControl(unittest.TestCase):
         self.run_test(for_loop_usecase2, [-10, 0, 10], [-10, 0, 10],
                       flags=flags)
 
+    @unittest.expectedFailure
     def test_for_loop2_npm(self):
         self.test_for_loop2(flags=no_pyobj_flags)
 
@@ -161,6 +161,7 @@ class TestFlowControl(unittest.TestCase):
         self.run_test(for_loop_usecase3, [1], [2],
                       flags=flags)
 
+    @unittest.expectedFailure
     def test_for_loop3_npm(self):
         self.test_for_loop3(flags=no_pyobj_flags)
 
