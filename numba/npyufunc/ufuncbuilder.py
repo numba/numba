@@ -1,33 +1,46 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
 import numpy as np
-from numba.decorators import jit, target_registry
-from numba.dispatcher import read_flags, GlobalContext, normalize_signature
-from numba import utils, compiler, types
+from numba.decorators import jit
+from numba.targets.registry import target_registry
+from numba.targets import cpu
+from numba.targets.descriptors import TargetDescriptor
+from numba.targets.options import TargetOptions
+from numba import utils, compiler, types, sigutils, typing
 from . import _internal
 from .sigparse import parse_signature
 from .wrappers import build_ufunc_wrapper, build_gufunc_wrapper
 
 
+class UFuncTargetOptions(TargetOptions):
+    pass
+
+
+class UFuncTarget(TargetDescriptor):
+    options = UFuncTargetOptions
+    typing_context = typing.Context()
+    target_context = cpu.CPUContext(typing_context)
+
+
 class UFuncDispatcher(object):
-    def __init__(self, py_func):
+    targetdescr = UFuncTarget()
+
+    def __init__(self, py_func, targetoptions={}):
         self.py_func = py_func
         self.overloads = utils.UniqueDict()
+        self.targetoptions = targetoptions
 
-    def compile(self, sig, **kws):
-        if kws.get("nopython", True) == False:
-            raise AssertionError("nopython option must be True")
-        if kws.get("forceobj", False) == True:
-            raise AssertionError("forceobj option must be False")
+    def compile(self, sig, **targetoptions):
+        topt = self.targetoptions.copy()
+        topt.update(targetoptions)
 
         flags = compiler.Flags()
-        read_flags(flags, kws)
+        flags.set("no_compile")
+        self.targetdescr.options.parse_as_flags(flags, topt)
+        typingctx = self.targetdescr.typing_context
+        targetctx = self.targetdescr.target_context
 
-        glctx = GlobalContext()
-        typingctx = glctx.typing_context
-        targetctx = glctx.target_context
-
-        args, return_type = normalize_signature(sig)
+        args, return_type = sigutils.normalize_signature(sig)
 
         cres = compiler.compile_extra(typingctx, targetctx, self.py_func,
                                       args=args, return_type=return_type,
@@ -41,13 +54,12 @@ target_registry['npyufunc'] = UFuncDispatcher
 
 
 class UFuncBuilder(object):
-    def __init__(self, py_func, kws={}):
+    def __init__(self, py_func, targetoptions={}):
         self.py_func = py_func
-        self.nb_func = jit(target='npyufunc')(py_func)
-        self.kws = kws
+        self.nb_func = jit(target='npyufunc', **targetoptions)(py_func)
 
     def add(self, sig):
-        self.nb_func.compile(sig, nocompile=True, **self.kws)
+        self.nb_func.compile(sig)
 
     def build_ufunc(self):
         dtypelist = []
@@ -87,15 +99,15 @@ class UFuncBuilder(object):
 
 class GUFuncBuilder(object):
     # TODO handle scalar
-    def __init__(self, py_func, signature, kws={}):
+    def __init__(self, py_func, signature, targetoptions={}):
         self.py_func = py_func
         self.nb_func = jit(target='npyufunc')(py_func)
         self.signature = signature
         self.sin, self.sout = parse_signature(signature)
-        self.kws = kws
+        self.targetoptions = targetoptions
 
     def add(self, sig):
-        cres = self.nb_func.compile(sig, nocompile=True, **self.kws)
+        cres = self.nb_func.compile(sig, **self.targetoptions)
         if cres.signature.return_type != types.void:
             raise TypeError("gufunc kernel must have void return type")
 

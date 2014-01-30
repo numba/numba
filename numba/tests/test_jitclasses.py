@@ -1,5 +1,6 @@
 import numba.unittest_support as unittest
-from numba import types, typing, compiler, targets, utils
+from numba import types, typing, compiler, utils
+from numba.targets.cpu import CPUContext
 
 
 class Car(object):
@@ -35,7 +36,7 @@ class TestJITClasses(unittest.TestCase):
         tyctx = typing.Context()
         tyctx.insert_class(Car, self.carattrs)
 
-        cgctx = targets.CPUContext(tyctx)
+        cgctx = CPUContext(tyctx)
         cgctx.insert_class(Car, self.carattrs)
 
         car_object = types.Object(Car)
@@ -68,7 +69,7 @@ class TestJITClasses(unittest.TestCase):
         tyctx = typing.Context()
         tyctx.insert_class(Car, self.carattrs)
 
-        cgctx = targets.CPUContext(tyctx)
+        cgctx = CPUContext(tyctx)
         cgctx.insert_class(Car, self.carattrs)
 
         car_object = types.Object(Car)

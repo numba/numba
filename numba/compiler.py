@@ -1,8 +1,9 @@
 from __future__ import print_function, division, absolute_import
 from pprint import pprint
 from collections import namedtuple, defaultdict
-from numba import (bytecode, interpreter, typing, typeinfer, lowering, targets,
+from numba import (bytecode, interpreter, typing, typeinfer, lowering,
                    irpasses, utils, config, type_annotations, types)
+from numba.targets import cpu
 
 
 class Flags(utils.ConfigOptions):
@@ -46,7 +47,7 @@ def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS):
     Good for testing.
     """
     typingctx = typing.Context()
-    targetctx = targets.CPUContext(typingctx)
+    targetctx = cpu.CPUContext(typingctx)
     return compile_extra(typingctx, targetctx, func, args, return_type, flags)
 
 

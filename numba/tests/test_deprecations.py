@@ -12,22 +12,11 @@ def stub_vec(a):
 
 
 class TestDeprecation(unittest.TestCase):
-    def test_jit_nopython(self):
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            jit("void()", nopython=True)(dummy)
-            self.assertEqual(len(w), 1)
 
     def test_autojit(self):
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             autojit(dummy)
-            self.assertEqual(len(w), 1)
-
-    def test_vectorize(self):
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            vectorize(['int32(int32)'], nopython=True)(stub_vec)
             self.assertEqual(len(w), 1)
 
 

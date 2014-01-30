@@ -8,6 +8,7 @@ from numba.callwrapper import PyCallWrapper
 from .base import BaseContext
 from numba import utils
 from numba.targets import intrinsics, mathimpl, npyimpl
+from .options import TargetOptions
 
 
 class CPUContext(BaseContext):
@@ -156,6 +157,19 @@ class CPUContext(BaseContext):
         # remove extra refct api calls
         remove_refct_calls(func)
 
+
+# ----------------------------------------------------------------------------
+# TargetOptions
+
+class CPUTargetOptions(TargetOptions):
+    OPTIONS = {
+        "nopython": bool,
+        "forceobj": bool,
+    }
+
+
+# ----------------------------------------------------------------------------
+# Internal
 
 def remove_refct_calls(func):
     """

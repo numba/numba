@@ -3,30 +3,11 @@ import inspect
 import warnings
 import numpy
 from numba.config import PYVERSION
-from numba import _dispatcher, compiler, targets, typing, utils
+from numba import _dispatcher, compiler, typing, utils
 from numba.typeconv.rules import default_type_manager
 from numba.typing.templates import resolve_overload
-from numba import types
-
-
-def is_signature(sig):
-    return isinstance(sig, (str, tuple, types.Prototype))
-
-
-def normalize_signature(sig):
-    if isinstance(sig, str):
-        return normalize_signature(parse_signature(sig))
-    elif isinstance(sig, tuple):
-        return sig, None
-    elif isinstance(sig, types.Prototype):
-        return sig.args, sig.return_type
-    else:
-        raise TypeError(type(sig))
-
-
-def parse_signature(signature_str):
-    # Just eval signature_str using the types submodules as globals
-    return eval(signature_str, {}, types.__dict__)
+from numba import types, sigutils
+from numba.targets import cpu
 
 
 class GlobalContext(object):
@@ -44,11 +25,14 @@ class GlobalContext(object):
 
     def _init(self):
         self.typing_context = typing.Context()
-        self.target_context = targets.CPUContext(self.typing_context)
+        self.target_context = cpu.CPUContext(self.typing_context)
 
 
 class Overloaded(_dispatcher.Dispatcher):
-    def __init__(self, py_func):
+    """
+    Abstract class. Subclass should define targetdescr class attribute.
+    """
+    def __init__(self, py_func, targetoptions={}):
         self.tm = default_type_manager
 
         argspec = inspect.getargspec(py_func)
@@ -58,6 +42,9 @@ class Overloaded(_dispatcher.Dispatcher):
 
         self.py_func = py_func
         self.overloads = {}
+
+        self.targetoptions = targetoptions
+        self.doc = py_func.__doc__
 
     def disable_compile(self, val=True):
         """Disable the compilation of new signatures at call time.
@@ -72,15 +59,18 @@ class Overloaded(_dispatcher.Dispatcher):
     def get_overload(self, *tys):
         return self.overloads[tys].entry_point
 
-    def compile(self, sig, **kws):
+    def compile(self, sig, **targetoptions):
+        topt = self.targetoptions.copy()
+        topt.update(targetoptions)
+
         flags = compiler.Flags()
-        read_flags(flags, kws)
+        self.targetdescr.options.parse_as_flags(flags, topt)
 
         glctx = GlobalContext()
         typingctx = glctx.typing_context
         targetctx = glctx.target_context
 
-        args, return_type = normalize_signature(sig)
+        args, return_type = sigutils.normalize_signature(sig)
 
         cres = compiler.compile_extra(typingctx, targetctx, self.py_func,
                                       args=args, return_type=return_type,
@@ -128,49 +118,31 @@ class Overloaded(_dispatcher.Dispatcher):
                          tuple(self.overloads.keys()), args, kws)
 
 
-class NPMOverloaded(Overloaded):
-    def compile(self, sig, **kws):
-        flags = compiler.Flags()
-        read_flags(flags, kws)
-        if flags.enable_pyobject or flags.force_pyobject:
-            raise TypeError("Object mode enabled for nopython target")
-
-        glctx = GlobalContext()
-        typingctx = glctx.typing_context
-        targetctx = glctx.target_context
-
-        args, return_type = normalize_signature(sig)
-
-        cres = compiler.compile_extra(typingctx, targetctx, self.py_func,
-                                      args=args, return_type=return_type,
-                                      flags=flags)
-
-        # Check typing error if object mode is used
-        if cres.typing_error is not None and not flags.enable_pyobject:
-            raise cres.typing_error
-
-        self.add_overload(cres)
-        return cres.entry_point
-
-
-def read_flags(flags, kws):
-    if 'nopython' in kws:
-        warnings.warn('nopython option is deprecated; use '
-                      'target="nopython-cpu" instead',
-                      DeprecationWarning)
-
-    if kws.pop('nopython', False) == False:
-        flags.set("enable_pyobject")
-
-    if kws.pop("forceobj", False) == True:
-        flags.set("force_pyobject")
-
-    if kws.pop("nocompile", False) == True:
-        flags.set("no_compile")
-
-    if kws:
-        # Unread options?
-        raise NameError("Unrecognized options: %s" % kws.keys())
+#
+#
+# class NPMOverloaded(Overloaded):
+#     def compile(self, sig, **kws):
+#         flags = compiler.Flags()
+#         read_flags(flags, kws)
+#         if flags.enable_pyobject or flags.force_pyobject:
+#             raise TypeError("Object mode enabled for nopython target")
+#
+#         glctx = GlobalContext()
+#         typingctx = glctx.typing_context
+#         targetctx = glctx.target_context
+#
+#         args, return_type = sigutils.normalize_signature(sig)
+#
+#         cres = compiler.compile_extra(typingctx, targetctx, self.py_func,
+#                                       args=args, return_type=return_type,
+#                                       flags=flags)
+#
+#         # Check typing error if object mode is used
+#         if cres.typing_error is not None and not flags.enable_pyobject:
+#             raise cres.typing_error
+#
+#         self.add_overload(cres)
+#         return cres.entry_point
 
 
 DTYPE_MAPPING = {}
@@ -221,6 +193,7 @@ def typeof_pyval(val):
     # Other object
     else:
         return types.pyobject
+
 
 
 FROM_DTYPE = {
