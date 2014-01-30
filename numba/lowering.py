@@ -587,6 +587,12 @@ class PyLower(BaseLower):
             ret = self.pyapi.string_from_string_and_size(const)
             self.check_error(ret)
             return ret
+        elif isinstance(const, complex):
+            real = self.context.get_constant(types.float64, const.real)
+            imag = self.context.get_constant(types.float64, const.imag)
+            ret = self.pyapi.complex_from_doubles(real, imag)
+            self.check_error(ret)
+            return ret
         elif isinstance(const, float):
             fval = self.context.get_constant(types.float64, const)
             ret = self.pyapi.float_from_double(fval)
