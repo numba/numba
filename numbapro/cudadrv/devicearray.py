@@ -292,10 +292,16 @@ def from_array_like(ary, stream=0, gpu_head=None, gpu_data=None):
                          writeback=ary, stream=stream, gpu_head=gpu_head,
                          gpu_data=gpu_data)
 
+
 def auto_device(ary, stream=0, copy=True):
     if _driver.is_device_memory(ary):
         return ary, False
     else:
+        if not ary.flags['C_CONTIGUOUS'] and not ary.flags['F_CONTIGUOUS']:
+            raise ValueError("Array contains non-contiguous buffer and cannot "
+                             "be transferred as a single memory region.  "
+                             "Please ensure contiguous buffer with numpy"
+                             ".ascontiguousarray()")
         devarray = from_array_like(ary, stream=stream)
         if copy:
             devarray.copy_to_device(ary, stream=stream)

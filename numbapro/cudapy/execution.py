@@ -137,6 +137,7 @@ class CUDAKernel(CUDAKernelBase):
     def _call(self, args, griddim, blockdim, stream=0, sharedmem=0):
         # prepare arguments
         retr = []                       # hold functors for writeback
+
         args = [self._prepare_args(t, v, stream, retr)
                 for t, v in zip(self.argtys, args)]
 
