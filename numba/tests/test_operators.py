@@ -100,6 +100,10 @@ class TestOperators(unittest.TestCase):
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
+    def test_add_ints_array(self, flags=enable_pyobj_flags):
+
+        pyfunc = add_usecase
+
         array = np.arange(-10, 10, dtype=np.int32)
 
         x_operands = [array]
@@ -109,10 +113,14 @@ class TestOperators(unittest.TestCase):
         types_list = [(arraytype, arraytype)]
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
-                          flags=flags)
+                           flags=flags)
         
     def test_add_ints_npm(self):
         self.test_add_ints(flags=Noflags)
+
+    @unittest.expectedFailure
+    def test_add_ints_array_npm(self):
+        self.test_add_ints_array(flags=Noflags)
 
     def test_add_floats(self, flags=enable_pyobj_flags):
 
@@ -127,6 +135,8 @@ class TestOperators(unittest.TestCase):
         self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
                              flags=flags)
 
+    def test_add_floats_array(self, flags=enable_pyobj_flags):
+        pyfunc = add_usecase
         array = np.arange(-1, 1, 0.1, dtype=np.float32)
 
         x_operands = [array]
@@ -140,6 +150,11 @@ class TestOperators(unittest.TestCase):
 
     def test_add_floats_npm(self):
         self.test_add_floats(flags=Noflags)
+
+
+    @unittest.expectedFailure
+    def test_add_floats_array_npm(self):
+        self.test_add_floats_array(flags=Noflags)
 
     def test_sub_ints(self, flags=enable_pyobj_flags):
 
@@ -165,6 +180,10 @@ class TestOperators(unittest.TestCase):
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
+    def test_sub_ints_array(self, flags=enable_pyobj_flags):
+
+        pyfunc = sub_usecase
+
         array = np.arange(-10, 10, dtype=np.int32)
 
         x_operands = [array]
@@ -179,6 +198,10 @@ class TestOperators(unittest.TestCase):
     def test_sub_ints_npm(self):
         self.test_sub_ints(flags=Noflags)
 
+    @unittest.expectedFailure
+    def test_sub_ints_array_npm(self):
+        self.test_sub_ints_array(flags=Noflags)
+
     def test_sub_floats(self, flags=enable_pyobj_flags):
 
         pyfunc = sub_usecase
@@ -191,6 +214,10 @@ class TestOperators(unittest.TestCase):
 
         self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
                              flags=flags)
+
+    def test_sub_floats_array(self, flags=enable_pyobj_flags):
+
+        pyfunc = sub_usecase
 
         array = np.arange(-1, 1, 0.1, dtype=np.float32)
 
@@ -205,6 +232,10 @@ class TestOperators(unittest.TestCase):
 
     def test_sub_floats_npm(self):
         self.test_sub_floats(flags=Noflags)
+
+    @unittest.expectedFailure
+    def test_sub_floats_array_npm(self):
+        self.test_sub_floats_array(flags=Noflags)
 
     def test_mul_ints(self, flags=enable_pyobj_flags):
 
@@ -229,6 +260,10 @@ class TestOperators(unittest.TestCase):
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
+    def test_mul_ints_array(self, flags=enable_pyobj_flags):
+
+        pyfunc = mul_usecase
+
         array = np.arange(-10, 10, dtype=np.int32)
 
         x_operands = [array]
@@ -243,6 +278,10 @@ class TestOperators(unittest.TestCase):
     def test_mul_ints_npm(self):
         self.test_mul_ints(flags=Noflags)
 
+    @unittest.expectedFailure
+    def test_mul_ints_array_npm(self):
+        self.test_mul_ints_array(flags=Noflags)
+
     def test_mul_floats(self, flags=enable_pyobj_flags):
 
         pyfunc = mul_usecase
@@ -256,6 +295,9 @@ class TestOperators(unittest.TestCase):
         self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
                              flags=flags)
 
+    def test_mul_floats_array(self, flags=enable_pyobj_flags):
+
+        pyfunc = mul_usecase
         array = np.arange(-1, 1, 0.1, dtype=np.float32)
 
         x_operands = [array]
@@ -269,6 +311,10 @@ class TestOperators(unittest.TestCase):
 
     def test_mul_floats_npm(self):
         self.test_mul_floats(flags=Noflags)
+
+    @unittest.expectedFailure
+    def test_mul_floats_array_npm(self):
+        self.test_mul_floats_array(flags=Noflags)
 
     def test_div_ints(self, flags=enable_pyobj_flags):
         if PYVERSION >= (3, 0):
@@ -296,6 +342,8 @@ class TestOperators(unittest.TestCase):
 
         tester(pyfunc, x_operands, y_operands, types_list, flags=flags)
 
+    def test_div_ints_array(self, flags=enable_pyobj_flags):
+        pyfunc = div_usecase
         array = np.array([-10, -9, -2, -1, 1, 2, 9, 10], dtype=np.int32)
 
         x_operands = [array]
@@ -310,6 +358,10 @@ class TestOperators(unittest.TestCase):
     def test_div_ints_npm(self):
         self.test_div_ints(flags=Noflags)
 
+    @unittest.expectedFailure
+    def test_div_ints_array_npm(self):
+        self.test_div_ints_array(flags=Noflags)
+
     def test_div_floats(self, flags=enable_pyobj_flags):
 
         pyfunc = div_usecase
@@ -322,6 +374,10 @@ class TestOperators(unittest.TestCase):
 
         self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
                              flags=flags)
+
+    def test_div_floats_array(self, flags=enable_pyobj_flags):
+
+        pyfunc = div_usecase
 
         array = np.arange(-1, 1, 0.1, dtype=np.float32)
 
@@ -336,6 +392,10 @@ class TestOperators(unittest.TestCase):
 
     def test_div_floats_npm(self):
         self.test_div_floats(flags=Noflags)
+
+    @unittest.expectedFailure
+    def test_div_floats_array_npm(self):
+        self.test_div_floats_array(flags=Noflags)
 
     def test_truediv_ints(self, flags=enable_pyobj_flags):
         pyfunc = truediv_usecase
@@ -407,6 +467,10 @@ class TestOperators(unittest.TestCase):
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
+    def test_mod_ints_array(self, flags=enable_pyobj_flags):
+
+        pyfunc = mod_usecase
+
         array = np.concatenate((np.arange(1, 11, dtype=np.int32),
                                np.arange(-10, 0, dtype=np.int32)))
 
@@ -422,6 +486,10 @@ class TestOperators(unittest.TestCase):
     def test_mod_ints_npm(self):
         self.test_mod_ints(flags=Noflags)
 
+    @unittest.expectedFailure
+    def test_mod_ints_array_npm(self):
+        self.test_mod_ints_array(flags=Noflags)
+
     def test_mod_floats(self, flags=enable_pyobj_flags):
 
         pyfunc = mod_usecase
@@ -434,6 +502,10 @@ class TestOperators(unittest.TestCase):
 
         self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
                              flags=flags)
+
+    def test_mod_floats_array(self, flags=enable_pyobj_flags):
+
+        pyfunc = mod_usecase
 
         array = np.arange(-1, 1, 0.1, dtype=np.float32)
 
@@ -448,6 +520,10 @@ class TestOperators(unittest.TestCase):
 
     def test_mod_floats_npm(self):
         self.test_mod_floats(flags=Noflags)
+
+    @unittest.expectedFailure
+    def test_mod_floats_array_npm(self):
+        self.test_mod_floats_array(flags=Noflags)
 
     def test_pow_ints(self, flags=enable_pyobj_flags):
 
@@ -472,6 +548,10 @@ class TestOperators(unittest.TestCase):
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
+    def test_pow_ints_array(self, flags=enable_pyobj_flags):
+
+        pyfunc = pow_usecase
+
         array = np.arange(-10, 10, dtype=np.int32)
 
         x_operands = [array]
@@ -485,6 +565,10 @@ class TestOperators(unittest.TestCase):
 
     def test_pow_ints_npm(self):
         self.test_pow_ints(flags=Noflags)
+
+    @unittest.expectedFailure
+    def test_pow_ints_array_npm(self):
+        self.test_pow_ints_array(flags=Noflags)
 
     def test_pow_floats(self, flags=enable_pyobj_flags):
 
@@ -508,6 +592,9 @@ class TestOperators(unittest.TestCase):
         self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
                              flags=flags)
 
+    def test_pow_floats_array(self, flags=enable_pyobj_flags):
+
+        pyfunc = pow_usecase
         # NOTE
         # If x is finite negative and y is finite but not an integer,
         # it causes a domain error
@@ -537,6 +624,10 @@ class TestOperators(unittest.TestCase):
 
     def test_pow_floats_npm(self):
         self.test_pow_floats(flags=Noflags)
+
+    @unittest.expectedFailure
+    def test_pow_floats_array_npm(self):
+        self.test_pow_floats_array(flags=Noflags)
 
     def test_add_complex(self, flags=enable_pyobj_flags):
         pyfunc = add_usecase
@@ -862,7 +953,23 @@ class TestOperators(unittest.TestCase):
     def test_bitwise_not_npm(self):
         self.test_bitwise_not(flags=Noflags)
 
-    def test_not(self, flags=enable_pyobj_flags):
+    def test_not(self):
+        pyfunc = not_usecase
+
+        values = [
+            1,
+            2,
+            3,
+            1.2,
+            3.4j,
+        ]
+
+        cres = compile_isolated(pyfunc, (), flags=enable_pyobj_flags)
+        cfunc = cres.entry_point
+        for val in values:
+            self.assertEqual(pyfunc(val), cfunc(val))
+
+    def test_not_npm(self):
         pyfunc = not_usecase
         # test native mode
         argtys = [
@@ -885,16 +992,7 @@ class TestOperators(unittest.TestCase):
             cfunc = cres.entry_point
             self.assertEqual(pyfunc(val), cfunc(val))
 
-        # test object mode
-        cres = compile_isolated(pyfunc, (), flags=flags)
-        cfunc = cres.entry_point
-        for val in values:
-            self.assertEqual(pyfunc(val), cfunc(val))
-
-    def test_not_npm(self):
-        self.test_not(flags=Noflags)
-
-    def test_negate(self, flags=enable_pyobj_flags):
+    def test_negate_npm(self):
         pyfunc = negate_usecase
         # test native mode
         argtys = [
@@ -916,14 +1014,19 @@ class TestOperators(unittest.TestCase):
             cfunc = cres.entry_point
             self.assertAlmostEqual(pyfunc(val), cfunc(val))
 
-        # test object mode
-        cres = compile_isolated(pyfunc, (), flags=flags)
+    def test_negate(self):
+        pyfunc = negate_usecase
+        values = [
+            1,
+            2,
+            3,
+            1.2,
+            3.4j,
+        ]
+        cres = compile_isolated(pyfunc, (), flags=enable_pyobj_flags)
         cfunc = cres.entry_point
         for val in values:
             self.assertEqual(pyfunc(val), cfunc(val))
-
-    def test_negate_npm(self):
-        self.test_negate(flags=Noflags)
 
 
 if __name__ == '__main__':
