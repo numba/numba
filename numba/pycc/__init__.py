@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 ### Copyright (2012) Continuum Analytics, Inc
 ### All Rights Reserved
-
 from __future__ import print_function, division, absolute_import
 
 import os
@@ -12,7 +11,7 @@ import tempfile
 from .compiler import Compiler, find_shared_ending, find_args, find_linker
 
 
-def get_ending(args):  
+def get_ending(args):
     if args.llvm:
         return ".bc"
     if args.olibs:

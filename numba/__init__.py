@@ -6,6 +6,7 @@ from . import testing, decorators
 from ._version import get_versions
 # Re-export typeof
 from .special import *
+from .pycc.decorators import export, exportmany
 
 # Version
 __version__ = get_versions()['version']

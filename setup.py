@@ -59,11 +59,13 @@ packages = [
     "numba.typing",
     "numba.typeconv",
     "numba.npyufunc",
+    "numba.pycc",
 ]
 
 setup(name='numba',
       description="compiling Python code using LLVM",
       version=versioneer.get_version(),
+
       classifiers=[
         "Development Status :: 2 - Pre-Alpha",
         "Intended Audience :: Developers",
@@ -71,11 +73,13 @@ setup(name='numba',
         "Programming Language :: Python",
         # "Programming Language :: Python :: 2.6",
         "Programming Language :: Python :: 2.7",
-        # "Programming Language :: Python :: 3.2",
+        # "Programming Language :: Python :: 3.3",
         "Topic :: Utilities",
       ],
+      scripts=["numba/pycc/pycc"],
       author="Continuum Analytics, Inc.",
       author_email="numba-users@continuum.io",
+      url="http://numba.github.com",
       ext_modules=ext_modules,
       packages=packages,
       license="BSD",

@@ -1,4 +1,9 @@
+import os
 import numba.testing
-if not numba.testing.multitest():
+if int(os.environ.get("NUBMA_MULTITEST", 1)):
+    testfn = numba.testing.multitest
+else:
+    testfn = numba.testing.test
+if not testfn():
     raise RuntimeError("Test failed")
 print('numba.__version__: %s' % numba.__version__)
