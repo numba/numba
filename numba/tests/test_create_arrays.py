@@ -8,8 +8,7 @@ from numba.tests import usecases
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
 
-force_pyobj_flags = Flags()
-force_pyobj_flags.set("force_pyobject")
+no_pyobj_flags = Flags()
 
 
 def create_array(control):
@@ -35,60 +34,84 @@ def create_zeros(control):
 
 class TestArray(unittest.TestCase):
 
-    def test_create_arrays(self):
+    def test_create_arrays(self, flags=enable_pyobj_flags):
         pyfunc = create_array
         arraytype = types.Array(types.int32, 1, 'C')
         cr = compile_isolated(pyfunc, (arraytype,),
-                              flags=enable_pyobj_flags)
+                              flags=flags)
         cfunc = cr.entry_point
         control = np.array([1,2,3])
         self.assertTrue(cfunc(control))
 
-    def test_create_empty_array(self):
+    @unittest.expectedFailure
+    def test_create_arrays_npm(self):
+        self.test_create_arrays(flags=Noflags)
+
+    def test_create_empty_array(self, flags=enable_pyobj_flags):
         pyfunc = create_empty_array
         arraytype = types.Array(types.int32, 1, 'C')
         cr = compile_isolated(pyfunc, (arraytype,),
-                              flags=enable_pyobj_flags)
+                              flags=flags)
         cfunc = cr.entry_point
         control = np.array([])
         self.assertTrue(cfunc(control))
 
-    def test_create_arange(self):
+    @unittest.expectedFailure
+    def test_create_empty_array_npm(self):
+        self.test_create_empty_array(flags=Noflags)
+
+    def test_create_arange(self, flags=enable_pyobj_flags):
         pyfunc = create_arange
         arraytype = types.Array(types.int32, 1, 'C')
         cr = compile_isolated(pyfunc, (arraytype,),
-                              flags=enable_pyobj_flags)
+                              flags=flags)
         cfunc = cr.entry_point
         control = np.arange(10)
         self.assertTrue(cfunc(control))
         
-    def test_create_empty(self):
+    @unittest.expectedFailure
+    def test_create_arange_npm(self):
+        self.test_create_arange(flags=Noflags)
+
+    def test_create_empty(self, flags=enable_pyobj_flags):
         pyfunc = create_empty
         arraytype = types.Array(types.int32, 1, 'C')
         cr = compile_isolated(pyfunc, (arraytype,),
-                              flags=enable_pyobj_flags)
+                              flags=flags)
 
         cfunc = cr.entry_point
         control = np.empty(10)
         self.assertTrue(cfunc(control))
 
-    def test_create_ones(self):
+    @unittest.expectedFailure
+    def test_create_empty_npm(self):
+        self.test_create_empty(flags=Noflags)
+
+    def test_create_ones(self, flags=enable_pyobj_flags):
         pyfunc = create_ones
         arraytype = types.Array(types.int32, 1, 'C')
         cr = compile_isolated(pyfunc, (arraytype,),
-                              flags=enable_pyobj_flags)
+                              flags=flags)
         cfunc = cr.entry_point
         control = np.ones(10)
         self.assertTrue(cfunc(control))
 
-    def test_create_zeros(self):
+    @unittest.expectedFailure
+    def test_create_ones_npm(self):
+        self.test_create_ones(flags=Noflags)
+
+    def test_create_zeros(self, flags=enable_pyobj_flags):
         pyfunc = create_zeros
         arraytype = types.Array(types.int32, 1, 'C')
         cr = compile_isolated(pyfunc, (arraytype,),
-                              flags=enable_pyobj_flags)
+                              flags=flags)
         cfunc = cr.entry_point
         control = np.zeros(10)
         self.assertTrue(cfunc(control))
+
+    @unittest.expectedFailure
+    def test_create_zeros_npm(self):
+        self.test_create_zeros(flags=Noflags)
 
 
 if __name__ == '__main__':
