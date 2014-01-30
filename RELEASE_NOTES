@@ -1,3 +1,7 @@
+?
+=================
+* Guard error due to mishandling of interleaved memory buffer (#60)
+
 Version (0.13)
 ==============
 * Add print statement for strings and scalar numeric types for debugging on GPU
