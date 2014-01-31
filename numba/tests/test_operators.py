@@ -379,7 +379,8 @@ class TestOperators(unittest.TestCase):
 
         pyfunc = div_usecase
 
-        array = np.arange(-1, 1, 0.1, dtype=np.float32)
+        array = np.concatenate((np.arange(0.1, 1.1, 0.1, dtype=np.float32),
+                               np.arange(-1.0, 0.0, 0.1, dtype=np.float32)))
 
         x_operands = [array]
         y_operands = [array]
@@ -387,7 +388,7 @@ class TestOperators(unittest.TestCase):
         arraytype = types.Array(types.float32, 1, 'C')
         types_list = [(arraytype, arraytype)]
 
-        self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
+        self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
     def test_div_floats_npm(self):

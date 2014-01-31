@@ -8,8 +8,7 @@ from numba.tests import usecases
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
 
-force_pyobj_flags = Flags()
-force_pyobj_flags.set("force_pyobject")
+no_pyobj_flags = Flags()
 
 
 # unary ufuncs
@@ -44,7 +43,7 @@ def divide_ufunc(x, y, result):
 
 class TestUFuncs(unittest.TestCase):
 
-    def test_unary_ufuncs(self):
+    def test_unary_ufuncs(self, flags=enable_pyobj_flags):
         ufunc_list = [absolute_ufunc, exp_ufunc, sin_ufunc, cos_ufunc,
                       tan_ufunc]
 
@@ -61,7 +60,8 @@ class TestUFuncs(unittest.TestCase):
         for arraytype, x_operand in zip(arraytypes, x_operands):
             for ufunc in ufunc_list:
                 pyfunc = ufunc
-                cr = compile_isolated(pyfunc, (arraytype, arraytype))
+                cr = compile_isolated(pyfunc, (arraytype, arraytype),
+                                      flags=flags)
                 cfunc = cr.entry_point
 
                 result = np.zeros(x_operand.size, dtype=x_operand.dtype)
@@ -70,7 +70,10 @@ class TestUFuncs(unittest.TestCase):
                 ufunc(x_operand, control)
                 self.assertTrue(np.allclose(result, control))
 
-    def test_binary_ufuncs(self):
+    def test_unary_ufuncs_npm(self):
+        self.test_unary_ufuncs(flags=no_pyobj_flags)
+
+    def test_binary_ufuncs(self, flags=enable_pyobj_flags):
         ufunc_list = [add_ufunc, subtract_ufunc, multiply_ufunc]
         arraytypes = [types.Array(types.int32, 1, 'C'),
                       types.Array(types.int64, 1, 'C'),
@@ -85,7 +88,9 @@ class TestUFuncs(unittest.TestCase):
         for arraytype, xy_operand in zip(arraytypes, xy_operands):
             for ufunc in ufunc_list:
                 pyfunc = ufunc
-                cr = compile_isolated(pyfunc, (arraytype, arraytype, arraytype))
+                cr = compile_isolated(pyfunc,
+                                      (arraytype, arraytype, arraytype),
+                                      flags=flags)
                 cfunc = cr.entry_point
 
                 result = np.zeros(xy_operand.size, dtype=xy_operand.dtype)
@@ -93,6 +98,9 @@ class TestUFuncs(unittest.TestCase):
                 control = np.zeros(xy_operand.size, dtype=xy_operand.dtype)
                 ufunc(xy_operand, xy_operand, control)
                 self.assertTrue(np.allclose(result, control))
+
+    def test_binary_ufuncs_npm(self):
+        self.test_binary_ufuncs(flags=no_pyobj_flags)
 
     def test_binary_ufunc_performance(self):
 
@@ -117,7 +125,7 @@ class TestUFuncs(unittest.TestCase):
         print(utils.benchmark(bm_numba, maxsec=.1))
         assert np.allclose(control, result)
 
-    def test_divide_ufuncs(self):
+    def test_divide_ufuncs(self, flags=enable_pyobj_flags):
         ufunc_list = [divide_ufunc]
 
         arraytypes = [types.Array(types.int32, 1, 'C'),
@@ -139,7 +147,9 @@ class TestUFuncs(unittest.TestCase):
                                                    y_operands):
             for ufunc in ufunc_list:
                 pyfunc = ufunc
-                cr = compile_isolated(pyfunc, (arraytype, arraytype, arraytype))
+                cr = compile_isolated(pyfunc,
+                                      (arraytype, arraytype, arraytype),
+                                      flags=flags)
                 cfunc = cr.entry_point
 
                 result = np.zeros(x_operand.size, dtype=x_operand.dtype)
@@ -147,6 +157,9 @@ class TestUFuncs(unittest.TestCase):
                 control = np.zeros(x_operand.size, dtype=x_operand.dtype)
                 ufunc(x_operand, y_operand, control)
                 self.assertTrue(np.allclose(result, control))
+
+    def test_divide_ufuncs_npm(self):
+        self.test_divide_ufuncs(flags=no_pyobj_flags)
 
 
 if __name__ == '__main__':
