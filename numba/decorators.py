@@ -20,7 +20,8 @@ def autojit(*args, **kws):
     return jit(*args, **kws)
 
 
-def jit(signature_or_function=None, target='cpu', **targetoptions):
+def jit(signature_or_function=None, argtypes=None, restype=None,
+        target='cpu', **targetoptions):
     """jit([signature_or_function, [target='cpu', [**targetoptions]]])
 
     The function can be used as the following versions:
@@ -80,6 +81,20 @@ def jit(signature_or_function=None, target='cpu', **targetoptions):
             value is False.
 
     """
+
+    # Handle deprecated argtypes and restype keyword arguments
+    if argtypes is not None:
+
+        assert signature_or_function is None, "argtypes used but " \
+                                              "signature is provided"
+        warnings.warn("Keyword argument 'argtypes' is deprecated",
+                      DeprecationWarning)
+        if restype is None:
+            signature_or_function = tuple(argtypes)
+        else:
+            signature_or_function = restype(*argtypes)
+
+    # Handle signature
     if signature_or_function is None:
         # Used as autojit
         def configured_jit(arg):

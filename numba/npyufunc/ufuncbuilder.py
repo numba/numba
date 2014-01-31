@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, division, absolute_import
+import warnings
 import numpy as np
 from numba.decorators import jit
 from numba.targets.registry import target_registry
@@ -58,7 +59,17 @@ class UFuncBuilder(object):
         self.py_func = py_func
         self.nb_func = jit(target='npyufunc', **targetoptions)(py_func)
 
-    def add(self, sig):
+    def add(self, sig=None, argtypes=None, restype=None):
+        # Handle argtypes
+        if argtypes is not None:
+            warnings.warn("Keyword argument argtypes is deprecated",
+                          DeprecationWarning)
+            assert sig is None
+            if restype is None:
+                sig = tuple(argtypes)
+            else:
+                sig = restype(*argtypes)
+        # Actual work
         self.nb_func.compile(sig)
 
     def build_ufunc(self):
@@ -106,7 +117,17 @@ class GUFuncBuilder(object):
         self.sin, self.sout = parse_signature(signature)
         self.targetoptions = targetoptions
 
-    def add(self, sig):
+    def add(self, sig=None, argtypes=None, restype=None):
+        # Handle argtypes
+        if argtypes is not None:
+            warnings.warn("Keyword argument argtypes is deprecated",
+                          DeprecationWarning)
+            assert sig is None
+            if restype is None:
+                sig = tuple(argtypes)
+            else:
+                sig = restype(*argtypes)
+        # Actual work begins
         cres = self.nb_func.compile(sig, **self.targetoptions)
         if cres.signature.return_type != types.void:
             raise TypeError("gufunc kernel must have void return type")
