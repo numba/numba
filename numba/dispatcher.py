@@ -56,6 +56,16 @@ class Overloaded(_dispatcher.Dispatcher):
         self._insert(sig, cres.entry_point_addr)
         self.overloads[cres.signature] = cres
 
+        # Add native function for correct typing the code generation
+        typing = cres.typing_context
+        target = cres.target_context
+        cfunc = cres.entry_point
+        if cfunc in target.native_funcs:
+            target.dynamic_map_function(cfunc)
+            calltemplate = target.get_user_function(cfunc)
+            typing.insert_user_function(cfunc, calltemplate)
+            typing.extend_user_function(self, calltemplate)
+
     def get_overload(self, *tys):
         return self.overloads[tys].entry_point
 
@@ -96,7 +106,7 @@ class Overloaded(_dispatcher.Dispatcher):
 
     def inspect_types(self):
         for ver, res in utils.dict_iteritems(self.overloads):
-            print("%s %s" % (self.py_func, ver))
+            print("%s %s" % (self.py_func.__name__, ver))
             print('-' * 80)
             print(res.type_annotation)
             print('=' * 80)

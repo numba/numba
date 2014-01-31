@@ -23,7 +23,6 @@ class LoweringError(Exception):
 class FunctionDescriptor(object):
     def __init__(self, native, pymod, name, doc, blocks, typemap,
                  restype, calltypes, args, kws):
-        # FIXME self.native is currently unused
         self.native = native
         self.pymod = pymod
         self.name = name
@@ -37,7 +36,9 @@ class FunctionDescriptor(object):
         # Argument types
         self.argtypes = [self.typemap[a] for a in args]
 
-        self.mangled_name = '.'.join([self.pymod.__name__, self.name])
+        self.qualified_name = '.'.join([self.pymod.__name__, self.name])
+        codedargs = '.'.join(str(a).replace(' ', '_') for a in self.argtypes)
+        self.mangled_name = '.'.join([self.qualified_name, codedargs])
 
 
 def _describe(interp):

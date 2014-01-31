@@ -85,8 +85,31 @@ class Context(object):
         self.functions[key].append(ft)
 
     def insert_user_function(self, fn, ft):
-        self.insert_function(ft)
+        """Insert a user function.
+
+        Args
+        ----
+        - fn:
+            object used as callee
+        - ft:
+            function template
+        """
         self.globals[fn] = types.Function(ft)
+
+    def extend_user_function(self, fn, ft):
+        """ Insert of extend a user function.
+
+        Args
+        ----
+        - fn:
+            object used as callee
+        - ft:
+            function template
+        """
+        if fn in self.globals:
+            self.globals[fn].extend(ft)
+        else:
+            self.insert_user_function(fn, ft)
 
     def insert_class(self, cls, attrs):
         clsty = types.Object(cls)

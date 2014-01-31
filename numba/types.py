@@ -132,6 +132,7 @@ class Function(Type):
     def __init__(self, template):
         self.template = template
         cls = type(self)
+        # TODO template is mutable.  Should use different naming scheme
         super(Function, self).__init__("%s(%s)" % (cls.__name__, template))
 
     def __eq__(self, other):
@@ -139,7 +140,11 @@ class Function(Type):
             return self.template == other.template
 
     def __hash__(self):
+        # FIXME maybe this should not be hashable
         return hash(self.template)
+
+    def extend(self, template):
+        self.template.cases.extend(template.cases)
 
 
 class FunctionPointer(Function):

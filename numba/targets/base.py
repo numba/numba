@@ -124,11 +124,10 @@ class BaseContext(object):
         imp = user_function(func, fndesc)
         self.defns[func].append(imp)
 
-        class UserFunction(typing.templates.ConcreteTemplate):
-            key = func
-            cases = [imp.signature]
-
-        self.users[func] = UserFunction
+        baseclses = (typing.templates.ConcreteTemplate,)
+        glbls = dict(key=func, cases=[imp.signature])
+        name = "CallTemplate(%s)" % fndesc.mangled_name
+        self.users[func] = type(name, baseclses, glbls)
 
     def insert_class(self, cls, attrs):
         clsty = types.Object(cls)

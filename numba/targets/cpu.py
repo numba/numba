@@ -141,7 +141,9 @@ class CPUContext(BaseContext):
         cfunc = _dynfunc.make_function(fndesc.pymod, fndesc.name, fndesc.doc,
                                        fnptr)
 
-        self.native_funcs[cfunc] = fndesc.mangled_name, baseptr
+        if fndesc.native:
+            self.native_funcs[cfunc] = fndesc.mangled_name, baseptr
+
         return cfunc, fnptr
 
     def optimize_pythonapi(self, func):
