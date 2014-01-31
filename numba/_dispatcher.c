@@ -357,6 +357,7 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
     int i;
     int prealloc[24];
     int matches;
+    int old_can_compile;
     PyCFunctionWithKeywords fn;
     PyObject *cac;                  /* compile and call function */
 
@@ -384,7 +385,10 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
             /* Compile a new one */
             cac = PyObject_GetAttrString((PyObject*)self, "_compile_and_call");
             if (cac) {
+                old_can_compile = self->can_compile;
+                self->can_compile = 0;
                 retval = PyObject_Call(cac, args, kws);
+                self->can_compile = old_can_compile;
                 Py_DECREF(cac);
             }
         } else {

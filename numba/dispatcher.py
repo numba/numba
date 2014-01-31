@@ -1,6 +1,5 @@
 from __future__ import print_function, division, absolute_import
 import inspect
-import warnings
 import numpy
 from numba.config import PYVERSION
 from numba import _dispatcher, compiler, typing, utils
