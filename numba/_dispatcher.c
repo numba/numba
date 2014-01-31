@@ -270,8 +270,8 @@ int typecode_ndarray(void *dispatcher, PyArrayObject *ary) {
     int dtype;
     int ndim = PyArray_NDIM(ary);
     int layout = 0;
-
-    if (ndim <= 0 && ndim > 3) goto FALLBACK;
+    
+    if (ndim <= 0 || ndim > 3) goto FALLBACK;
 
     if (PyArray_ISFARRAY(ary)) {
         layout = 1;
