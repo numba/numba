@@ -55,6 +55,7 @@ def int_udiv_impl(context, builder, sig, args):
     [ta, tb] = sig.args
     a = context.cast(builder, va, ta, sig.return_type)
     b = context.cast(builder, vb, tb, sig.return_type)
+    cgutils.guard_zero(context, builder, b)
     return builder.udiv(a, b)
 
 
@@ -109,6 +110,7 @@ def int_sdiv_impl(context, builder, sig, args):
     [ta, tb] = sig.args
     a = context.cast(builder, va, ta, sig.return_type)
     b = context.cast(builder, vb, tb, sig.return_type)
+    cgutils.guard_zero(context, builder, b)
     div, _ = int_divmod(context, builder, a, b)
     return div
 
@@ -117,6 +119,7 @@ def int_struediv_impl(context, builder, sig, args):
     x, y = args
     fx = builder.sitofp(x, Type.double())
     fy = builder.sitofp(y, Type.double())
+    cgutils.guard_zero(context, builder, y)
     return builder.fdiv(fx, fy)
 
 
@@ -124,20 +127,24 @@ def int_utruediv_impl(context, builder, sig, args):
     x, y = args
     fx = builder.uitofp(x, Type.double())
     fy = builder.uitofp(y, Type.double())
+    cgutils.guard_zero(context, builder, y)
     return builder.fdiv(fx, fy)
 
 
 def int_sfloordiv_impl(context, builder, sig, args):
     x, y = args
+    cgutils.guard_zero(context, builder, y)
     return builder.sdiv(x, y)
 
 def int_ufloordiv_impl(context, builder, sig, args):
     x, y = args
+    cgutils.guard_zero(context, builder, y)
     return builder.udiv(x, y)
 
 
 def int_srem_impl(context, builder, sig, args):
     x, y = args
+    cgutils.guard_zero(context, builder, y)
     _, rem = int_divmod(context, builder, x, y)
     return rem
 
@@ -365,6 +372,7 @@ def real_mul_impl(context, builder, sig, args):
 
 
 def real_div_impl(context, builder, sig, args):
+    cgutils.guard_zero(context, builder, args[1])
     return builder.fdiv(*args)
 
 
@@ -501,6 +509,7 @@ def real_divmod_func_body(context, builder, vx, wx):
 
 def real_mod_impl(context, builder, sig, args):
     x, y = args
+    cgutils.guard_zero(context, builder, y)
     _, rem = real_divmod(context, builder, x, y)
     return rem
 
@@ -751,6 +760,7 @@ def complex_div_impl(context, builder, sig, args):
     ac_bd = builder.fadd(ac, bd)
     bc_ad = builder.fsub(bc, ad)
 
+    cgutils.guard_zero(context, builder, zz)
     z.real = builder.fdiv(ac_bd, zz)
     z.imag = builder.fdiv(bc_ad, zz)
     return z._getvalue()

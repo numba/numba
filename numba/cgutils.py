@@ -371,3 +371,20 @@ class MetadataKeyStore(object):
         """
         node = self.nmd._ptr.getOperand(0)
         return lc._make_value(node.getOperand(0)).string
+
+
+def is_scalar_zero(builder, value):
+    nullval = Constant.null(value.type)
+    if value.type in (Type.float(), Type.double()):
+        isnull = builder.fcmp(lc.FCMP_OEQ, nullval, value)
+    else:
+        isnull = builder.icmp(lc.ICMP_EQ, nullval, value)
+    return isnull
+
+
+def guard_null(context, builder, value):
+    with if_unlikely(builder, is_scalar_zero(builder, value)):
+        context.return_errcode(builder, 1)
+
+
+guard_zero = guard_null

@@ -4,6 +4,7 @@ import math
 from numba.utils import PYVERSION
 from numba import typing, types, cgutils
 from numba.targets.imputils import implement
+from llvm.core import Constant, Type
 
 functions = []
 
@@ -86,7 +87,7 @@ def numpy_tan(context, builder, sig, args):
     return imp(context, builder, sig, args)
 
 
-def numpy_binary_ufunc(core):
+def numpy_binary_ufunc(core, divbyzero=False):
     def impl(context, builder, sig, args):
         [tyvx, tywy, tyout] = sig.args
         [vx, wy, out] = args
@@ -123,8 +124,32 @@ def numpy_binary_ufunc(core):
 
             x = builder.load(px)
             y = builder.load(py)
-            res = core(builder, (x, y))
-            builder.store(res, po)
+            if divbyzero:
+                # Handle division
+                iszero = cgutils.is_scalar_zero(builder, y)
+                with cgutils.ifelse(builder, iszero, expect=False) as (then,
+                                                                       orelse):
+                    with then:
+                        # Divide by zero
+                        if y.type in (Type.float(), Type.double()):
+                            # If x is float and is 0 also, return Nan; else
+                            # return Inf
+                            shouldretnan = cgutils.is_scalar_zero(builder, x)
+                            nan = Constant.real(y.type, float("nan"))
+                            inf = Constant.real(y.type, float("inf"))
+                            res = builder.select(shouldretnan, nan, inf)
+                        else:
+                            # Integer types return 0 on divide by zero
+                            res = Constant.null(y.type)
+                        builder.store(res, po)
+                    with orelse:
+                        # Normal
+                        res = core(builder, (x, y))
+                        builder.store(res, po)
+            else:
+                # Handle other operations
+                res = core(builder, (x, y))
+                builder.store(res, po)
 
         return out
     return impl
@@ -172,15 +197,15 @@ def numpy_divide(context, builder, sig, args):
     if dtype in types.signed_domain:
         if PYVERSION >= (3, 0):
             int_sfloordiv_impl = context.get_function("//", isig)
-            imp = numpy_binary_ufunc(int_sfloordiv_impl)
+            imp = numpy_binary_ufunc(int_sfloordiv_impl, divbyzero=True)
         else:
             int_sdiv_impl = context.get_function("/?", isig)
-            imp = numpy_binary_ufunc(int_sdiv_impl)
+            imp = numpy_binary_ufunc(int_sdiv_impl, divbyzero=True)
     elif dtype in types.unsigned_domain:
         int_udiv_impl = context.get_function("/?", isig)
-        imp = numpy_binary_ufunc(int_udiv_impl)
+        imp = numpy_binary_ufunc(int_udiv_impl, divbyzero=True)
     else:
         real_div_impl = context.get_function("/?", isig)
-        imp = numpy_binary_ufunc(real_div_impl)
+        imp = numpy_binary_ufunc(real_div_impl, divbyzero=True)
 
     return imp(context, builder, sig, args)
