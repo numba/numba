@@ -82,9 +82,9 @@ def goto_entry_block(builder):
         yield
 
 
-def alloca_once(builder, ty):
+def alloca_once(builder, ty, name=''):
     with goto_entry_block(builder):
-        return builder.alloca(ty)
+        return builder.alloca(ty, name=name)
 
 
 def terminate(builder, bbend):

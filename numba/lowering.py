@@ -541,6 +541,7 @@ class PyLower(BaseLower):
             obj = self.loadvar(expr.value.name)
             res = self.pyapi.object_getiter(obj)
             self.check_error(res)
+            self.storevar(res, '$iter$' + expr.value.name)
             return self.pack_iter(res)
         elif expr.op == 'iternext':
             iterstate = self.loadvar(expr.value.name)
@@ -779,13 +780,15 @@ class PyLower(BaseLower):
 
         if value.type.kind == lc.TYPE_POINTER:
             if value.type != lpyobj:
-                # Handle PyIterState
-                not_null = cgutils.is_not_null(self.builder, value)
-                with cgutils.if_likely(self.builder, not_null):
-                    iterstate = PyIterState(self.context, self.builder,
-                                            value=value)
-                    value = iterstate.iterator
-                    self.pyapi.decref(value)
+                pass
+                #raise AssertionError(value.type)
+                # # Handle PyIterState
+                # not_null = cgutils.is_not_null(self.builder, value)
+                # with cgutils.if_likely(self.builder, not_null):
+                #     iterstate = PyIterState(self.context, self.builder,
+                #                             value=value)
+                #     value = iterstate.iterator
+                #     self.pyapi.decref(value)
             else:
                 self.pyapi.decref(value)
 
