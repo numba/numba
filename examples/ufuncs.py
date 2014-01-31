@@ -1,5 +1,5 @@
-from numba.vectorize import vectorize
-from numba import autojit, double, typedlist, jit
+from numba import vectorize
+from numba import autojit, double, jit
 import math
 import numpy as np
 
@@ -8,7 +8,7 @@ def sinc(x):
     if x == 0:
         return 1.0
     else:
-        return math.sin(x*math.pi)/(x*math.pi)
+        return math.sin(x*math.pi) / (x*math.pi)
 
 @vectorize(['int8(int8,int8)',
             'int16(int16,int16)',
