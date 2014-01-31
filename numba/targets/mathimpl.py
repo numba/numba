@@ -6,7 +6,7 @@ from __future__ import print_function, absolute_import, division
 import math
 import llvm.core as lc
 from llvm.core import Type
-from numba.targets.imputils import implement
+from numba.targets.imputils import implement, impl_attribute, builtin_attr
 from numba import types, cgutils
 
 
@@ -96,3 +96,14 @@ unary_math_extern(math.atanh, "atanhf", "atanh")
 unary_math_extern(math.sinh, "sinhf", "sinh")
 unary_math_extern(math.cosh, "coshf", "cosh")
 unary_math_extern(math.tanh, "tanhf", "tanh")
+
+
+@builtin_attr
+@impl_attribute(types.Module(math), "pi", types.float64)
+def math_pi_impl(context, builder, typ, value):
+    return context.get_constant(types.float64, math.pi)
+
+@builtin_attr
+@impl_attribute(types.Module(math), "e", types.float64)
+def math_e_impl(context, builder, typ, value):
+    return context.get_constant(types.float64, math.e)

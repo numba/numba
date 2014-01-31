@@ -56,6 +56,12 @@ class MathModuleAttribute(AttributeTemplate):
     def resolve_atanh(self, mod):
         return types.Function(Math_atanh)
 
+    def resolve_pi(self, mod):
+        return types.float64
+
+    def resolve_e(self, mod):
+        return types.float64
+
 
 class Math_unary(ConcreteTemplate):
     cases = [
@@ -147,3 +153,5 @@ builtin_global(math.atan, types.Function(Math_atan))
 builtin_global(math.asinh, types.Function(Math_asinh))
 builtin_global(math.acosh, types.Function(Math_acosh))
 builtin_global(math.atanh, types.Function(Math_atanh))
+builtin_global(math.pi, types.float64)
+builtin_global(math.e, types.float64)

@@ -510,6 +510,12 @@ class ArrayAttribute(AttributeTemplate):
     def resolve_shape(self, ary):
         return types.UniTuple(types.intp, ary.ndim)
 
+    def resolve_strides(self, ary):
+        return types.UniTuple(types.intp, ary.ndim)
+
+    def resolve_ndim(self, ary):
+        return types.intp
+
     def resolve_flatten(self, ary):
         return types.Method(Array_flatten, ary)
 
