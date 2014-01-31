@@ -1,6 +1,6 @@
 import os
 import numba.testing
-if int(os.environ.get("NUBMA_MULTITEST", 1)):
+if int(os.environ.get("NUMBA_MULTITEST", 1)):
     testfn = numba.testing.multitest
 else:
     testfn = numba.testing.test
