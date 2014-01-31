@@ -14,7 +14,9 @@ from .wrappers import build_ufunc_wrapper, build_gufunc_wrapper
 
 
 class UFuncTargetOptions(TargetOptions):
-    pass
+    OPTIONS = {
+        "nopython" : bool,
+    }
 
 
 class UFuncTarget(TargetDescriptor):
@@ -35,9 +37,14 @@ class UFuncDispatcher(object):
         topt = self.targetoptions.copy()
         topt.update(targetoptions)
 
+        if topt.get('nopython', True) == False:
+            raise TypeError("nopython option must be False")
+        topt['nopython'] = True
+
         flags = compiler.Flags()
         flags.set("no_compile")
         self.targetdescr.options.parse_as_flags(flags, topt)
+
         typingctx = self.targetdescr.typing_context
         targetctx = self.targetdescr.target_context
 

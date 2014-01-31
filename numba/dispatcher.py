@@ -65,8 +65,9 @@ class Overloaded(_dispatcher.Dispatcher):
             typing.insert_user_function(cfunc, calltemplate)
             typing.extend_user_function(self, calltemplate)
 
-    def get_overload(self, *tys):
-        return self.overloads[tys].entry_point
+    def get_overload(self, sig):
+        args, return_type = sigutils.normalize_signature(sig)
+        return self.overloads[tuple(args)].entry_point
 
     def compile(self, sig, **targetoptions):
         topt = self.targetoptions.copy()
@@ -79,7 +80,13 @@ class Overloaded(_dispatcher.Dispatcher):
         typingctx = glctx.typing_context
         targetctx = glctx.target_context
 
+
         args, return_type = sigutils.normalize_signature(sig)
+
+        # Don't recompile if signature already exist.
+        existing = self.overloads.get(tuple(args))
+        if existing is not None:
+            return existing.entry_point
 
         cres = compiler.compile_extra(typingctx, targetctx, self.py_func,
                                       args=args, return_type=return_type,
