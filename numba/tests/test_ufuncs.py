@@ -158,6 +158,39 @@ class TestUFuncs(unittest.TestCase):
                 ufunc(x_operand, y_operand, control)
                 self.assertTrue(np.allclose(result, control))
 
+        # NumPy integer division should return zero by default
+        arraytype = types.Array(types.int32, 1, 'C')
+        x_operand = np.array([0], dtype='i4')
+        y_operand = np.array([0], dtype='i4')
+        for ufunc in ufunc_list:
+            pyfunc = ufunc
+            cr = compile_isolated(pyfunc,
+                                  (arraytype, arraytype, arraytype),
+                                  flags=flags)
+            cfunc = cr.entry_point
+
+            # Initialize result value to something other than zero
+            result = np.array([999], dtype='i4')
+            cfunc(x_operand, y_operand, result)
+            self.assertTrue(np.allclose(result, np.array([0], dtype='i4')))
+
+        # NumPy float division should return NaN or inf by default
+        arraytype = types.Array(types.float32, 1, 'C')
+        x_operand = np.array([0.0, 1.0], dtype='f4')
+        y_operand = np.array([0.0, 0.0], dtype='f4')
+        for ufunc in ufunc_list:
+            pyfunc = ufunc
+            cr = compile_isolated(pyfunc,
+                                  (arraytype, arraytype, arraytype),
+                                  flags=flags)
+            cfunc = cr.entry_point
+
+            # Initialize result value to something other than zero
+            result = np.array([999.9, 999.9], dtype='f4')
+            cfunc(x_operand, y_operand, result)
+            self.assertTrue(np.isnan(result[0]))
+            self.assertTrue(result[1] == np.inf)
+
     def test_divide_ufuncs_npm(self):
         self.test_divide_ufuncs(flags=no_pyobj_flags)
 
