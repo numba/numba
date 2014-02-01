@@ -131,15 +131,17 @@ def numpy_binary_ufunc(core, divbyzero=False):
                                                                        orelse):
                     with then:
                         # Divide by zero
-                        if y.type in (Type.float(), Type.double()):
+                        if tyout.dtype in types.real_domain:
                             # If x is float and is 0 also, return Nan; else
                             # return Inf
                             shouldretnan = cgutils.is_scalar_zero(builder, x)
                             nan = Constant.real(y.type, float("nan"))
                             inf = Constant.real(y.type, float("inf"))
                             res = builder.select(shouldretnan, nan, inf)
-                        else:
+                        elif tyout.dtype in types.signed_domain:
                             # Integer types return 0 on divide by zero
+                            res = Constant.int(y.type, 0x1 << (y.type.width-1))
+                        else:
                             res = Constant.null(y.type)
                         builder.store(res, po)
                     with orelse:
