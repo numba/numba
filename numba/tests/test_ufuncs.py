@@ -242,7 +242,7 @@ class TestUFuncs(unittest.TestCase):
             cfunc = cr.entry_point
 
             numpy_ufunc = getattr(np, ufunc_name)
-            result_dtype = operand.dtype
+            result_dtype = numpy_ufunc(operand).dtype
 
             result = np.zeros(operand.size, dtype=result_dtype)
             cfunc(operand, result)
@@ -289,7 +289,7 @@ class TestUFuncs(unittest.TestCase):
             cfunc = cr.entry_point
 
             numpy_ufunc = getattr(np, ufunc_name)
-            result_dtype = y_operand.dtype
+            result_dtype = numpy_ufunc(x_operand, y_operand).dtype
 
             result = np.zeros(x_operand.size, dtype=result_dtype)
             cfunc(x_operand, y_operand, result)
