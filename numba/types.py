@@ -177,6 +177,8 @@ class Array(Type):
     LAYOUTS = frozenset(['C', 'F', 'CS', 'FS', 'A'])
 
     def __init__(self, dtype, ndim, layout):
+        from numba.typeconv.rules import default_type_manager as tm
+
         if isinstance(dtype, Array):
             raise TypeError("Array dtype cannot be Array")
         if layout not in self.LAYOUTS:
@@ -187,6 +189,11 @@ class Array(Type):
         self.layout = layout
         name = "array(%s, %sd, %s)" % (dtype, ndim, layout)
         super(Array, self).__init__(name, param=True)
+
+        if layout != 'A':
+            # Install conversion from non-any layout to any layout
+            ary_any = Array(dtype, ndim, 'A')
+            tm.set_safe_convert(self, ary_any)
 
     def copy(self, dtype=None, ndim=None, layout=None):
         if dtype is None:

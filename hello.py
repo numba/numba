@@ -43,8 +43,9 @@ def main():
 
     a = numpy.arange(100, dtype='float64')
     b = 2.
-    print(foo.overloads.keys())
+    foo.disable_compile()
     c = foo(a, b)
+    print(foo.overloads.keys())
     print(a)
     print(c)
 
