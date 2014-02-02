@@ -1,10 +1,11 @@
 from __future__ import print_function, division, absolute_import
 import numpy
 import math
+from llvm.core import Constant, Type
 from numba.utils import PYVERSION
 from numba import typing, types, cgutils
 from numba.targets.imputils import implement
-from llvm.core import Constant, Type
+from numba import numpy_support
 
 functions = []
 
@@ -138,8 +139,8 @@ def numpy_binary_ufunc(core, divbyzero=False):
                             nan = Constant.real(y.type, float("nan"))
                             inf = Constant.real(y.type, float("inf"))
                             res = builder.select(shouldretnan, nan, inf)
-                        elif tyout.dtype in types.signed_domain:
-                            # Integer types return 0 on divide by zero
+                        elif (tyout.dtype in types.signed_domain and
+                                not numpy_support.int_divbyzero_returns_zero):
                             res = Constant.int(y.type, 0x1 << (y.type.width-1))
                         else:
                             res = Constant.null(y.type)
@@ -198,6 +199,8 @@ def numpy_divide(context, builder, sig, args):
     isig = typing.signature(dtype, dtype, dtype)
     if dtype in types.signed_domain:
         if PYVERSION >= (3, 0):
+            # FIXME This only handles integer output
+            # divide in py3 can have real output
             int_sfloordiv_impl = context.get_function("//", isig)
             imp = numpy_binary_ufunc(int_sfloordiv_impl, divbyzero=True)
         else:

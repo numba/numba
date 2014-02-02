@@ -559,6 +559,9 @@ class PythonAPI(object):
         raise NotImplementedError(typ)
 
     def to_native_array(self, typ, ary):
+        # TODO check matching dtype.
+        #      currently, mismatching dtype will still work and causes
+        #      potential memory corruption
         voidptr = Type.pointer(Type.int(8))
         nativearycls = self.context.make_array(typ)
         nativeary = nativearycls(self.context, self.builder)

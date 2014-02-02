@@ -73,7 +73,7 @@ class Numpy_binary_ufunc(AbstractTemplate):
         [vx, wy, out] = args
         if (isinstance(vx, types.Array) and isinstance(wy, types.Array) and
                 isinstance(out, types.Array)):
-            if vx.dtype != wy.dtype and vx.dtype != out.dtype:
+            if vx.dtype != wy.dtype or vx.dtype != out.dtype:
                 # TODO handle differing dtypes
                 return
             return signature(out, vx, wy, out)

@@ -7,6 +7,7 @@ from numba.typeconv.rules import default_type_manager
 from numba.typing.templates import resolve_overload
 from numba import types, sigutils
 from numba.targets import cpu
+from numba import numpy_support
 
 
 class GlobalContext(object):
@@ -176,11 +177,11 @@ def typeof_pyval(val):
     """
     if isinstance(val, numpy.ndarray):
         # TODO complete dtype mapping
-        dtype = FROM_DTYPE[val.dtype]
+        dtype = numpy_support.from_dtype(val.dtype)
         ndim = val.ndim
         if ndim == 0:
             # is array scalar
-            return FROM_DTYPE[val.dtype]
+            return numpy_support.from_dtype(val.dtype)
 
         if val.flags['C_CONTIGUOUS']:
             layout = 'C'
@@ -202,33 +203,13 @@ def typeof_pyval(val):
     elif isinstance(val, complex):
         return types.complex128
 
-    elif numpy.dtype(type(val)) in FROM_DTYPE:
+    elif numpy_support.is_scalar_array(val):
         # Array scalar
-        return FROM_DTYPE[numpy.dtype(type(val))]
+        return numpy_support.from_dtype(numpy.dtype(type(val)))
 
     # Other object
     else:
         return types.pyobject
-
-
-
-FROM_DTYPE = {
-    numpy.dtype('int8'): types.int8,
-    numpy.dtype('int16'): types.int16,
-    numpy.dtype('int32'): types.int32,
-    numpy.dtype('int64'): types.int64,
-
-    numpy.dtype('uint8'): types.uint8,
-    numpy.dtype('uint16'): types.uint16,
-    numpy.dtype('uint32'): types.uint32,
-    numpy.dtype('uint64'): types.uint64,
-
-    numpy.dtype('float32'): types.float32,
-    numpy.dtype('float64'): types.float64,
-
-    numpy.dtype('complex64'): types.complex64,
-    numpy.dtype('complex128'): types.complex128,
-}
 
 
 # Initialize dispatcher
