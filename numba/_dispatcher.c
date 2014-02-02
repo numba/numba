@@ -11,7 +11,8 @@
 typedef struct DispatcherObject{
     PyObject_HEAD
     void *dispatcher;
-    int can_compile;
+    int can_compile;        /* Can auto compile */
+    PyCFunctionWithKeywords firstdef, fallbackdef;
 } DispatcherObject;
 
 static int tc_int8;
@@ -92,11 +93,13 @@ Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
     void *tmaddr;
     int argct;
     if (!PyArg_ParseTuple(args, "Oi", &tmaddrobj, &argct)) {
-
+        return -1;
     }
     tmaddr = PyLong_AsVoidPtr(tmaddrobj);
     self->dispatcher = dispatcher_new(tmaddr, argct);
     self->can_compile = 1;
+    self->firstdef = NULL;
+    self->fallbackdef = NULL;
     return 0;
 }
 
@@ -109,8 +112,9 @@ Dispatcher_Insert(DispatcherObject *self, PyObject *args)
     void *addr;
     int i, sigsz;
     int *sig;
+    int objectmode = 0;
 
-    if (!PyArg_ParseTuple(args, "OO", &sigtup, &addrobj)) {
+    if (!PyArg_ParseTuple(args, "OO|i", &sigtup, &addrobj, &objectmode)) {
         return NULL;
     }
     addr = PyLong_AsVoidPtr(addrobj);
@@ -122,6 +126,15 @@ Dispatcher_Insert(DispatcherObject *self, PyObject *args)
     }
 
     dispatcher_add_defn(self->dispatcher, sig, (void*)addr);
+
+    /* Add first definition */
+    if (!self->firstdef) {
+        self->firstdef = (PyCFunctionWithKeywords)addr;
+    }
+    /* Add pure python fallback */
+    if (!self->fallbackdef && objectmode){
+        self->fallbackdef = (PyCFunctionWithKeywords)addr;
+    }
 
     free(sig);
 
@@ -361,6 +374,12 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
     PyCFunctionWithKeywords fn;
     PyObject *cac;                  /* compile and call function */
 
+    /* Shortcut for single definition */
+    if (!self->can_compile && 1 == dispatcher_count(self->dispatcher)){
+        fn = self->firstdef;
+        return fn(NULL, args, kws);
+    }
+
     argct = PySequence_Fast_GET_SIZE(args);
 
     if (argct < sizeof(prealloc) / sizeof(int))
@@ -391,6 +410,9 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
                 self->can_compile = old_can_compile;
                 Py_DECREF(cac);
             }
+        } else if (self->fallbackdef) {
+            /* Have object fallback */
+            retval = self->fallbackdef(NULL, args, kws);
         } else {
             /* Raise TypeError */
             PyErr_SetString(PyExc_TypeError, "No matching definition");

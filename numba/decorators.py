@@ -108,7 +108,11 @@ def jit(signature_or_function=None, argtypes=None, restype=None,
         # No signature is provided
         pyfunc = signature_or_function
         dispatcher = registry.target_registry[target]
-        return dispatcher(py_func=pyfunc, targetoptions=targetoptions)
+        dispatcher = dispatcher(py_func=pyfunc, targetoptions=targetoptions)
+        # Compile a pure object mode
+        if target == 'cpu' and not targetoptions.get('nopython', False):
+            dispatcher.compile((), forceobj=True)
+        return dispatcher
 
 
 def _jit(sig, target, targetoptions):
@@ -117,6 +121,7 @@ def _jit(sig, target, targetoptions):
     def wrapper(func):
         disp = dispatcher(py_func=func, targetoptions=targetoptions)
         disp.compile(sig)
+        disp.disable_compile()
         return disp
 
     return wrapper

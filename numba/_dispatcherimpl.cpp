@@ -27,6 +27,8 @@ public:
         return NULL;
     }
 
+    int count() const { return functions.size(); }
+
     const int argct;
 private:
     TypeManager *tm;
@@ -64,4 +66,10 @@ dispatcher_resolve(void* obj, int sig[], int *count) {
     Type *args = reinterpret_cast<Type*>(sig);
     void *callable = disp->resolve(args, *count);
     return callable;
+}
+
+int
+dispatcher_count(void *obj) {
+    Dispatcher *disp = static_cast<Dispatcher*>(obj);
+    return disp->count();
 }

@@ -17,6 +17,9 @@ dispatcher_add_defn(void *obj, int tys[], void* callable);
 void*
 dispatcher_resolve(void *obj, int sig[], int *matches);
 
+int
+dispatcher_count(void *obj);
+
 #ifdef __cplusplus
     }
 #endif

@@ -42,6 +42,7 @@ class Overloaded(_dispatcher.Dispatcher):
 
         self.py_func = py_func
         self.overloads = {}
+        self.fallback = None
 
         self.targetoptions = targetoptions
         self.doc = py_func.__doc__
@@ -53,7 +54,9 @@ class Overloaded(_dispatcher.Dispatcher):
 
     def add_overload(self, cres):
         sig = [a._code for a in cres.signature.args]
-        self._insert(sig, cres.entry_point_addr)
+        self._insert(sig, cres.entry_point_addr, cres.objectmode)
+        if cres.objectmode:
+            self.fallback = cres.entry_point
         self.overloads[cres.signature] = cres
 
         # Add native function for correct typing the code generation
@@ -135,8 +138,6 @@ class Overloaded(_dispatcher.Dispatcher):
                          tuple(self.overloads.keys()), args, kws)
 
 
-#
-#
 # class NPMOverloaded(Overloaded):
 #     def compile(self, sig, **kws):
 #         flags = compiler.Flags()

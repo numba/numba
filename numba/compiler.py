@@ -23,7 +23,8 @@ CR_FIELDS = ["typing_context",
              "type_annotation",
              "llvm_module",
              "llvm_func",
-             "signature"]
+             "signature",
+             "objectmode",]
 
 
 CompileResult = namedtuple("CompileResult", CR_FIELDS)
@@ -60,6 +61,7 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags):
     """
     # Translate to IR
     interp = translate_stage(func)
+    nargs = len(interp.argspec.args)
 
     fail_reason = None
     use_python_mode = False
@@ -86,6 +88,9 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags):
                                                      flags.no_compile)
         typemap = defaultdict(lambda: types.pyobject)
         calltypes = defaultdict(lambda: types.pyobject)
+
+        return_type = types.pyobject
+        args = [types.pyobject] * nargs
     else:
         func, fnptr, lmod, lfunc = native_lowering_stage(targetctx, interp,
                                                          typemap,
@@ -96,6 +101,7 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags):
     type_annotation = type_annotations.TypeAnnotation(interp=interp,
                                                       typemap=typemap,
                                                       calltypes=calltypes)
+
 
     signature = typing.signature(return_type, *args)
 
@@ -108,7 +114,8 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags):
                         type_annotation=type_annotation,
                         llvm_func=lfunc,
                         llvm_module=lmod,
-                        signature=signature)
+                        signature=signature,
+                        objectmode=use_python_mode)
     return cr
 
 
