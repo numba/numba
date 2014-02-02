@@ -5,6 +5,7 @@ the targets to choose their representation.
 from __future__ import print_function, division, absolute_import
 from collections import defaultdict
 import numpy
+import ctypes
 
 
 def _autoincr():
@@ -430,6 +431,17 @@ c16 = complex128
 float_ = float32
 double = float64
 void = none
+
+char = globals()["int%d" % (ctypes.sizeof(ctypes.c_char) * 8)]
+uchar = byte = globals()["uint%d" % (ctypes.sizeof(ctypes.c_byte) * 8)]
+short = globals()["int%d" % (ctypes.sizeof(ctypes.c_short) * 8)]
+ushort = globals()["uint%d" % (ctypes.sizeof(ctypes.c_ushort) * 8)]
+int_ = globals()["uint%d" % (ctypes.sizeof(ctypes.c_int) * 8)]
+uint = globals()["uint%d" % (ctypes.sizeof(ctypes.c_uint) * 8)]
+long = globals()["int%d" % (ctypes.sizeof(ctypes.c_long) * 8)]
+ulong = globals()["uint%d" % (ctypes.sizeof(ctypes.c_ulong) * 8)]
+longlong = globals()["int%d" % (ctypes.sizeof(ctypes.c_longlong) * 8)]
+ulonglong = globals()["uint%d" % (ctypes.sizeof(ctypes.c_ulonglong) * 8)]
 
 
 __all__ = '''

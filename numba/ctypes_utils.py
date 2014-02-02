@@ -3,7 +3,7 @@ This file fixes portability issues for ctypes
 """
 from __future__ import absolute_import
 import ctypes
-from numba import types
+from numba import types, typing
 
 
 CTYPES_MAP = {
@@ -41,3 +41,15 @@ def is_ctypes_funcptr(obj):
     else:
         # Does it define argtypes and restype
         return hasattr(obj, 'argtypes') and hasattr(obj, 'restype')
+
+
+def make_function_type(cfnptr):
+    cargs = [convert_ctypes(a)
+             for a in cfnptr.argtypes]
+    cret = convert_ctypes(cfnptr.restype)
+
+    cases = [typing.signature(cret, *cargs)]
+    template = typing.make_concrete_template("CFuncPtr", cfnptr, cases)
+
+    pointer = ctypes.cast(cfnptr, ctypes.c_void_p).value
+    return types.FunctionPointer(template, pointer)

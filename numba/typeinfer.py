@@ -20,8 +20,7 @@ except ImportError:
 
 from pprint import pprint
 import itertools
-from numba import ir, types, utils, config, ctypes_utils, typing
-from numba import ctypes_support as ctypes
+from numba import ir, types, utils, config, ctypes_utils, cffi_support
 from numba.config import PYVERSION
 
 
@@ -434,13 +433,11 @@ class TypeInferer(object):
             self.assumed_immutables.add(inst)
         elif ctypes_utils.is_ctypes_funcptr(gvar.value):
             cfnptr = gvar.value
-            cargs = [ctypes_utils.convert_ctypes(a)
-                     for a in cfnptr.argtypes]
-            cret = ctypes_utils.convert_ctypes(cfnptr.restype)
-            class CFuncPtr(typing.templates.ConcreteTemplate):
-                key = gvar.value
-                cases = [typing.signature(cret, *cargs)]
-            fnty = types.FunctionPointer(CFuncPtr, cfnptr)
+            fnty = ctypes_utils.make_function_type(cfnptr)
+            self.typevars[target.name].lock(fnty)
+            self.assumed_immutables.add(inst)
+        elif cffi_support.SUPPORTED and cffi_support.is_cffi_func(gvar.value):
+            fnty = cffi_support.make_function_type(gvar.value)
             self.typevars[target.name].lock(fnty)
             self.assumed_immutables.add(inst)
         else:

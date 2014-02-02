@@ -33,6 +33,12 @@ class Signature(object):
         return self.recvr is not None
 
 
+def make_concrete_template(name, key, signatures):
+    baseclasses = (ConcreteTemplate,)
+    gvars = dict(key=key, cases=list(signatures))
+    return type(name, baseclasses, gvars)
+
+
 def signature(return_type, *args, **kws):
     recvr = kws.pop('recvr', None)
     assert not kws

@@ -295,7 +295,7 @@ class Lower(BaseLower):
 
             elif isinstance(fnty, types.FunctionPointer):
                 # Handle function pointer)
-                pointer = ctypes.cast(fnty.funcptr, ctypes.c_void_p).value
+                pointer = fnty.funcptr
                 res = self.context.call_function_pointer(self.builder, pointer,
                                                          signature, castvals)
 

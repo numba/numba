@@ -9,6 +9,7 @@ from . import templates
 from . import builtins, mathdecl, npydecl
 
 
+
 class Context(object):
     """A typing context for storing function typing constrain template.
     """
@@ -160,8 +161,8 @@ class Context(object):
 
 
 def new_method(fn, sig):
-    gvs = dict(key=fn, cases=[sig])
-    ft = type("UserFunction_%s" % fn, (templates.ConcreteTemplate,), gvs)
+    name = "UserFunction_%s" % fn
+    ft = templates.make_concrete_template(name, fn, [sig])
     return types.Method(ft, this=sig.recvr)
 
 
