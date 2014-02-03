@@ -22,3 +22,5 @@ requirements:
 test:
   requires:
     - unittest2       [py26]
+  commands:
+    - pycc -h
