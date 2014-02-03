@@ -9,7 +9,7 @@ DEBUG = int(os.environ.get("NUMBA_DEBUG", '0'))
 DEBUG_JIT = int(os.environ.get("NUMBA_DEBUG_JIT", '0'))
 
 # Optimization level
-OPT = int(os.environ.get("NUMBA_OPT", '2'))
+OPT = int(os.environ.get("NUMBA_OPT", '3'))
 
 # Python version in (major, minor) tuple
 PYVERSION = sys.version_info[:2]
