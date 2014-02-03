@@ -44,7 +44,7 @@ class TestJITClasses(unittest.TestCase):
 
         flags = compiler.Flags()
         cr = compiler.compile_extra(tyctx, cgctx, use_car_value, args=argtys,
-                                    return_type=None, flags=flags)
+                                    return_type=None, flags=flags, locals={})
         func = cr.entry_point
 
         if cr.typing_error:
@@ -77,7 +77,7 @@ class TestJITClasses(unittest.TestCase):
 
         flags = compiler.Flags()
         cr = compiler.compile_extra(tyctx, cgctx, use_car_move, args=argtys,
-                                    return_type=None, flags=flags)
+                                    return_type=None, flags=flags, locals={})
         func = cr.entry_point
 
         if cr.typing_error:
