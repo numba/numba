@@ -47,7 +47,9 @@ class PyCallWrapper(object):
             val = api.to_native_arg(builder.load(obj), ty)
             innerargs.append(val)
 
-        status, res = self.context.call_function(builder, self.func, innerargs)
+        status, res = self.context.call_function(builder, self.func,
+                                                 self.fndesc.argtypes,
+                                                 innerargs)
 
         with cgutils.if_likely(builder, status.ok):
             with cgutils.ifthen(builder, status.none):

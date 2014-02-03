@@ -47,7 +47,8 @@ def build_ufunc_wrapper(context, func, signature):
         elems = [ary.load(ind) for ary in arrays]
 
         # Compute
-        status, retval = context.call_function(builder, func, elems)
+        status, retval = context.call_function(builder, func, signature.args,
+                                               elems)
         # Ignoring error status and store result
 
         # Store
@@ -147,7 +148,8 @@ def build_gufunc_wrapper(context, func, signature, sin, sout):
     # Loop
     with cgutils.for_range(builder, loopcount, intp=intp_t) as ind:
         args = [a.array_value for a in arrays]
-        status, retval = context.call_function(builder, func, args)
+        status, retval = context.call_function(builder, func, signature.args,
+                                               args)
         # ignore status
         # ignore retval
 

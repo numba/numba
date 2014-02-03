@@ -31,7 +31,8 @@ def impl_attribute(ty, attr, rtype):
 def user_function(func, fndesc):
     def imp(context, builder, sig, args):
         func = context.declare_function(cgutils.get_module(builder), fndesc)
-        status, retval = context.call_function(builder, func, args)
+        status, retval = context.call_function(builder, func, fndesc.argtypes,
+                                               args)
         # TODO handling error
         return retval
     imp.signature = signature(fndesc.restype, *fndesc.argtypes)

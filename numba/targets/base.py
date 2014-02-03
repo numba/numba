@@ -333,6 +333,11 @@ class BaseContext(object):
             else:
                 raise
 
+    def get_argument_value(self, builder, ty, val):
+        if ty == types.boolean:
+            return builder.trunc(val, self.get_value_type(ty))
+        return val
+
     def get_return_value(self, builder, ty, val):
         if ty is types.boolean:
             r = self.get_return_type(ty)
@@ -478,10 +483,11 @@ class BaseContext(object):
             return builder.or_(real_istrue, imag_istrue)
         raise NotImplementedError("is_true", val, typ)
 
-    def call_function(self, builder, callee, args):
+    def call_function(self, builder, callee, argtys, args):
         retty = callee.args[0].type.pointee
         retval = cgutils.alloca_once(builder, retty)
-        realargs = [retval] + list(args)
+        realargs = [retval] + [self.get_argument_value(builder, t, a)
+                               for t, a in zip(argtys, args)]
         code = builder.call(callee, realargs)
         status = self.get_return_status(builder, code)
 

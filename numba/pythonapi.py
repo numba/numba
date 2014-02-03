@@ -454,6 +454,11 @@ class PythonAPI(object):
         if isinstance(typ, types.Object) or typ == types.pyobject:
             return obj
 
+        elif typ == types.boolean:
+            istrue = self.object_istrue(obj)
+            zero = Constant.null(istrue.type)
+            return self.builder.icmp(lc.ICMP_NE, istrue, zero)
+
         elif typ in types.unsigned_domain:
             longobj = self.number_long(obj)
             ullval = self.long_as_ulonglong(longobj)

@@ -111,6 +111,8 @@ class BaseLower(object):
         # Init argument variables
         fnargs = self.context.get_arguments(self.function)
         for ak, av in zip(self.fndesc.args, fnargs):
+            at = self.typeof(ak)
+            av = self.context.get_argument_value(self.builder, at, av)
             av = self.init_argument(av)
             self.storevar(av, ak)
         # Init blocks
