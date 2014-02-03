@@ -21,14 +21,10 @@ data structures such as those that exist in NumPy.
 Dependencies
 ============
 
-  * LLVM 3.1 or 3.2
+  * LLVM 3.2 or 3.3
   * llvmpy (from llvmpy/llvmpy fork)
-  * llvmmath
   * numpy (version 1.6 or higher)
-  * Meta (from numba/Meta fork (optional))
-  * Cython (build dependency only)
-  * nose (for unit tests)
-  * argparse (for pycc)
+  * argparse (for pycc in python2.6)
 
 Installing
 =================
@@ -45,14 +41,14 @@ it is recommended to use conda environment to maintain multiple isolated
 development environments.  To create a new environment for Numba development:
 
 ```bash
-    $ conda create -p ~/dev/mynumba python numpy cython llvmpy llvmmath nose meta
+    $ conda create -p ~/dev/mynumba python numpy llvmpy
 ```
 
 To select the installed version, append "=VERSION" to the package name,
 where, "VERSION" is the version number.  For example:
 
 ```bash
-    $ conda create -p ~/dev/mynumba python=2.7 numpy=1.6 cython llvmpy llvmmath  nose meta
+    $ conda create -p ~/dev/mynumba python=2.7 numpy=1.6 llvmpy
 ```
 
 to use Python 2.7 and Numpy 1.6.
