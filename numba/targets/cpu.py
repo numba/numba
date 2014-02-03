@@ -1,4 +1,6 @@
 from __future__ import print_function, absolute_import
+
+import sys
 import llvm.core as lc
 import llvm.passes as lp
 import llvm.ee as le
@@ -9,6 +11,15 @@ from .base import BaseContext
 from numba import utils
 from numba.targets import intrinsics, mathimpl, npyimpl
 from .options import TargetOptions
+
+
+def _windows_symbol_hacks():
+    # if we don't have _ftol2, bind _ftol as _ftol2
+    ftol2 = le.dylib_address_of_symbol("_ftol2")
+    if not ftol2:
+        ftol = le.dylib_address_of_symbol("_ftol")
+        assert ftol
+        le.dylib_add_symbol("_ftol2", ftol)
 
 
 class CPUContext(BaseContext):
@@ -77,6 +88,10 @@ class CPUContext(BaseContext):
         le.dylib_add_symbol("numba.math.srem", _helperlib.get_srem())
         le.dylib_add_symbol("numba.math.udiv", _helperlib.get_udiv())
         le.dylib_add_symbol("numba.math.urem", _helperlib.get_urem())
+
+        # windows symbol hacks
+        if sys.platform.startswith('win32'):
+            _windows_symbol_hacks()
 
         # List available C-math
         for fname in intrinsics.INTR_MATH:
