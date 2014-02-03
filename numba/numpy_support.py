@@ -30,6 +30,25 @@ def from_dtype(dtype):
     return FROM_DTYPE[dtype]
 
 
-def is_scalar_array(val):
+def is_arrayscalar(val):
     return numpy.dtype(type(val)) in FROM_DTYPE
+
+
+def map_arrayscalar_type(val):
+    return from_dtype(numpy.dtype(type(val)))
+
+
+def is_array(val):
+    return isinstance(val, numpy.ndarray)
+
+
+def map_layout(val):
+    if val.flags['C_CONTIGUOUS']:
+        layout = 'C'
+    elif val.flags['F_CONTIGUOUS']:
+        layout = 'F'
+    else:
+        layout = 'A'
+    return layout
+
 

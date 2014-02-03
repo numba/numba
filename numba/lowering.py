@@ -245,6 +245,10 @@ class Lower(BaseLower):
             elif ty in types.number_domain:
                 return self.context.get_constant(ty, value.value)
 
+            elif isinstance(ty, types.Array):
+                return self.context.make_constant_array(self.builder, ty,
+                                                        value.value)
+
             else:
                 raise NotImplementedError('global', ty)
 

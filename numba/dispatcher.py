@@ -169,13 +169,7 @@ def typeof_pyval(val):
         if ndim == 0:
             # is array scalar
             return numpy_support.from_dtype(val.dtype)
-
-        if val.flags['C_CONTIGUOUS']:
-            layout = 'C'
-        elif val.flags['F_CONTIGUOUS']:
-            layout = 'F'
-        else:
-            layout = 'A'
+        layout = numpy_support.map_layout(val)
         aryty = types.Array(dtype, ndim, layout)
         return aryty
 
@@ -190,7 +184,7 @@ def typeof_pyval(val):
     elif isinstance(val, complex):
         return types.complex128
 
-    elif numpy_support.is_scalar_array(val):
+    elif numpy_support.is_arrayscalar(val):
         # Array scalar
         return numpy_support.from_dtype(numpy.dtype(type(val)))
 

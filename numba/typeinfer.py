@@ -22,7 +22,7 @@ from pprint import pprint
 import itertools
 from numba import ir, types, utils, config, ctypes_utils, cffi_support
 from numba.config import PYVERSION
-
+from numba import numpy_support
 
 RANGE_ITER_OBJECTS = (builtins.range,)
 if PYVERSION < (3, 0):
@@ -429,6 +429,17 @@ class TypeInferer(object):
             self.assumed_immutables.add(inst)
         elif isinstance(gvar.value, (int, float)):
             gvty = self.context.get_number_type(gvar.value)
+            self.typevars[target.name].lock(gvty)
+            self.assumed_immutables.add(inst)
+        elif numpy_support.is_arrayscalar(gvar.value):
+            gvty = numpy_support.map_arrayscalar_type(gvar.value)
+            self.typevars[target.name].lock(gvty)
+            self.assumed_immutables.add(inst)
+        elif numpy_support.is_array(gvar.value):
+            ary = gvar.value
+            dtype = numpy_support.from_dtype(ary.dtype)
+            # force C contiguous
+            gvty = types.Array(dtype, ary.ndim, 'C')
             self.typevars[target.name].lock(gvty)
             self.assumed_immutables.add(inst)
         elif ctypes_utils.is_ctypes_funcptr(gvar.value):

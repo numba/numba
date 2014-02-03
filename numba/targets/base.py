@@ -2,6 +2,7 @@ from __future__ import print_function
 from collections import namedtuple, defaultdict
 import llvm.core as lc
 from llvm.core import Type, Constant
+import numpy
 from numba import types, utils, cgutils, typing
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, python_attr_impl, BUILTINS,
@@ -585,6 +586,48 @@ class BaseContext(object):
 
     def make_unituple_iter(self, typ):
         return builtins.make_unituple_iter(typ)
+
+    def make_constant_array(self, builder, typ, ary):
+        assert typ.layout == 'C'                # assumed in typeinfer.py
+        ary = numpy.ascontiguousarray(ary)
+        flat = ary.flatten()
+
+        # Handle data
+        if self.is_struct_type(typ.dtype):
+            # FIXME
+            raise TypeError("Do not support structure dtype as constant "
+                            "array, yet.")
+
+        values = [self.get_constant(typ.dtype, flat[i])
+                  for i in range(flat.size)]
+
+        lldtype = values[0].type
+        consts = Constant.array(lldtype, values)
+
+        module = cgutils.get_module(builder)
+
+        data = module.add_global_variable(consts.type, name=".const.array"
+                                                            ".data")
+        data.linkage = lc.LINKAGE_INTERNAL
+        data.global_constant = True
+        data.initializer = consts
+
+        # Handle shape
+        llintp = self.get_value_type(types.intp)
+        shapevals = [self.get_constant(types.intp, s) for s in ary.shape]
+        cshape = Constant.array(llintp, shapevals)
+
+
+        # Handle strides
+        stridevals = [self.get_constant(types.intp, s) for s in ary.strides]
+        cstrides = Constant.array(llintp, stridevals)
+
+        # Create array structure
+        cary = self.make_array(typ)(self, builder)
+        cary.data = builder.bitcast(data, cary.data.type)
+        cary.shape = cshape
+        cary.strides = cstrides
+        return cary._getvalue()
 
 
 def _wrap_impl(imp, context, sig):
