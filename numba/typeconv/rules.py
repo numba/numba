@@ -45,6 +45,10 @@ def _init_type_manager():
     for ty in grp_unsigned[:-1]:
         tm.set_safe_convert(ty, f64)
 
+    # Allow implicit convert from int64 to float64
+    tm.set_safe_convert(types.int64, types.float64)
+    tm.set_safe_convert(types.uint64, types.float64)
+
     # All ints less than 24 bits can safely convert to float32
     f32 = types.float32
     for ty in grp_signed[:-2]:
