@@ -20,6 +20,10 @@ public:
     void* resolve(Type sig[], int &matches) {
         const int ovct = functions.size();
         int selected;
+        matches = 0;
+        if (0 == ovct) {
+            return NULL;
+        }
         matches = tm->selectOverload(sig, &overloads[0], selected, argct, ovct);
         if (matches == 1){
             return functions[selected];
