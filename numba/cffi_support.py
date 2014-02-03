@@ -66,7 +66,7 @@ if ffi is not None:
         ffi.typeof('char') :                types.int8,
         ffi.typeof('short') :               types.short,
         ffi.typeof('int') :                 types.int_,
-        ffi.typeof('long') :                types.long,
+        ffi.typeof('long') :                types.long_,
         ffi.typeof('long long') :           types.longlong,
         ffi.typeof('unsigned char') :       types.uchar,
         ffi.typeof('unsigned short') :      types.ushort,

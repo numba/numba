@@ -462,7 +462,7 @@ short = globals()["int%d" % (ctypes.sizeof(ctypes.c_short) * 8)]
 ushort = globals()["uint%d" % (ctypes.sizeof(ctypes.c_ushort) * 8)]
 int_ = globals()["uint%d" % (ctypes.sizeof(ctypes.c_int) * 8)]
 uint = globals()["uint%d" % (ctypes.sizeof(ctypes.c_uint) * 8)]
-long = globals()["int%d" % (ctypes.sizeof(ctypes.c_long) * 8)]
+long_ = globals()["int%d" % (ctypes.sizeof(ctypes.c_long) * 8)]
 ulong = globals()["uint%d" % (ctypes.sizeof(ctypes.c_ulong) * 8)]
 longlong = globals()["int%d" % (ctypes.sizeof(ctypes.c_longlong) * 8)]
 ulonglong = globals()["uint%d" % (ctypes.sizeof(ctypes.c_ulonglong) * 8)]
@@ -483,6 +483,17 @@ float64
 complex64
 complex128
 bool_
+byte
+char
+uchar
+short
+ushort
+int_
+uint
+long_
+ulong
+longlong
+ulonglong
 float_
 double
 void
