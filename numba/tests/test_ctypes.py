@@ -1,48 +1,52 @@
 from __future__ import print_function, absolute_import, division
 from ctypes import *
+import sys
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
 from numba import types
 
+is_windows = sys.platform.startswith('win32')
 
-proc = CDLL(None)
+if not is_windows:
+    proc = CDLL(None)
 
-c_sin = proc.sin
-c_sin.argtypes = [c_double]
-c_sin.restype = c_double
-
-
-def use_c_sin(x):
-    return c_sin(x)
+    c_sin = proc.sin
+    c_sin.argtypes = [c_double]
+    c_sin.restype = c_double
 
 
-ctype_wrapping = CFUNCTYPE(c_double, c_double)(use_c_sin)
+    def use_c_sin(x):
+        return c_sin(x)
 
 
-def use_ctype_wrapping(x):
-    return ctype_wrapping(x)
+    ctype_wrapping = CFUNCTYPE(c_double, c_double)(use_c_sin)
+
+
+    def use_ctype_wrapping(x):
+        return ctype_wrapping(x)
 
 
 
-savethread = pythonapi.PyEval_SaveThread
-savethread.argtypes = []
-savethread.restype = c_void_p
+    savethread = pythonapi.PyEval_SaveThread
+    savethread.argtypes = []
+    savethread.restype = c_void_p
 
-restorethread = pythonapi.PyEval_RestoreThread
-restorethread.argtypes = [c_void_p]
-restorethread.restype = None
-
-
-def use_c_pointer(x):
-    """
-    Running in Python will cause a segfault.
-    """
-    threadstate = savethread()
-    x += 1
-    restorethread(threadstate)
-    return x
+    restorethread = pythonapi.PyEval_RestoreThread
+    restorethread.argtypes = [c_void_p]
+    restorethread.restype = None
 
 
+    def use_c_pointer(x):
+        """
+        Running in Python will cause a segfault.
+        """
+        threadstate = savethread()
+        x += 1
+        restorethread(threadstate)
+        return x
+
+
+@unittest.skipIf(is_windows, "Test not supported on windows")
 class TestCTypes(unittest.TestCase):
     def test_c_sin(self):
         pyfunc = use_c_sin

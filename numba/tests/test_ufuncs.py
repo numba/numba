@@ -5,6 +5,8 @@ from numba.compiler import compile_isolated, Flags
 from numba import types, utils
 from numba.numpy_support import from_dtype
 
+is32bits = tuple.__itemsize__ == 4
+
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
 
@@ -789,9 +791,15 @@ class TestUFuncs(unittest.TestCase):
     def test_copysign_ufunc_npm(self):
         self.binary_ufunc_test('copysign', flags=no_pyobj_flags)
 
+    # FIXME
+    @unittest.skipIf(is32bits, "Some types are not supported on 32-bit "
+                               "platform")
     def test_ldexp_ufunc(self):
         self.binary_int_ufunc_test('ldexp')
 
+    # FIXME
+    @unittest.skipIf(is32bits, "Some types are not supported on 32-bit "
+                               "platform")
     @unittest.expectedFailure
     def test_ldexp_ufunc_npm(self):
         self.binary_int_ufunc_test('ldexp', flags=no_pyobj_flags)
