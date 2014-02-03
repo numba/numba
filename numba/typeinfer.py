@@ -407,6 +407,17 @@ class TypeInferer(object):
             self.typevars[target.name].lock(types.string)
         elif isinstance(const, complex):
             self.typevars[target.name].lock(types.complex128)
+        elif isinstance(const, tuple):
+            tys = []
+            for elem in const:
+                if isinstance(elem, int):
+                    tys.append(types.intp)
+
+            if all(t == types.intp for t in tys):
+                typ = types.UniTuple(types.intp, len(tys))
+            else:
+                typ = types.Tuple(tys)
+            self.typevars[target.name].lock(typ)
         else:
             msg = "Unknown constant of type %s" % (const,)
             raise TypingError(msg, loc=inst.loc)
