@@ -16,8 +16,8 @@ def bubblesort(X, doprint):
 #        if doprint:
 #            print("Iteration: %d" % X)
 
-bubblesort_fast = autojit(bubblesort)
-#bubblesort_fast = jit(void(int64[::1], bool_))(bubblesort)
+# bubblesort_fast = autojit(bubblesort)
+bubblesort_fast = jit(void(int64[::1], boolean))(bubblesort)
 
 dtype = np.int64
 

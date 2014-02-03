@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
+# The best speedup is to just decorate hits() but this is to demonstrate
+# the support of untyped object.
 from __future__ import print_function, division, absolute_import
-import numba as nb
 from numba import *
 
 # Support for typedlist is removed in this release
 # ListInt = nb.typeof(nb.typedlist(int_)) # Define List[int] type
 
-@jit
+@jit(boolean(int32, int32, int32, int32))
 def hits(x1, y1, x2, y2):
     "Check whether a queen positioned at (x1, y1) will hit a queen at position (x2, y2)"
     return x1 == x2 or y1 == y2 or abs(x1 - x2) == abs(y1 - y2)
@@ -50,7 +51,12 @@ def solve(n):
     else:
         return None, None
 
-print(solve(1))
+
+solve.disable_compile()
+_solve.disable_compile()
+hitsany.disable_compile()
+
+print(solve(8))
 # %timeit solve(8)
 
 # Comment out @jit/@autojit
