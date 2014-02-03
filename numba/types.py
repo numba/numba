@@ -470,4 +470,17 @@ float_
 double
 void
 none
+b1
+i1
+i2
+i4
+i8
+u1
+u2
+u4
+u8
+f4
+f8
+c8
+c16
 '''.split()
