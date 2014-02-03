@@ -197,6 +197,7 @@ class Lower(BaseLower):
             indexty = self.typeof(inst.index.name)
 
             signature = self.fndesc.calltypes[inst]
+            assert signature is not None
             impl = self.context.get_function('setitem', signature)
 
             # Convert argument to match

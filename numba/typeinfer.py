@@ -207,7 +207,9 @@ class SetItemConstrain(object):
         valtys = typevars[self.value.name].get()
 
         for ty, it, vt in itertools.product(targettys, idxtys, valtys):
-            context.resolve_setitem(target=ty, index=it, value=vt)
+            if not context.resolve_setitem(target=ty, index=it, value=vt):
+                raise TypingError("Cannot resolve setitem: %s[%s] = %s" %
+                                  (ty, it, vt), loc=self.loc)
 
 
 class TypeVarMap(dict):

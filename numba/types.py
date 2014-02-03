@@ -317,6 +317,7 @@ class UniTupleIter(Type):
 class Tuple(Type):
     def __init__(self, items):
         self.items = items
+        self.count = len(items)
         name = "(%s)" % ', '.join(str(i) for i in items)
         super(Tuple, self).__init__(name, param=True)
 
@@ -335,6 +336,9 @@ class Tuple(Type):
 
     def __hash__(self):
         return hash(self.items)
+
+    def __iter__(self):
+        return iter(self.items)
 
 
 class CPointer(Type):

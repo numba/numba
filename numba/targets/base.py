@@ -240,6 +240,9 @@ class BaseContext(object):
         elif isinstance(ty, types.UniTuple):
             dty = self.get_value_type(ty.dtype)
             return Type.array(dty, ty.count)
+        elif isinstance(ty, types.Tuple):
+            dtys = [self.get_value_type(t) for t in ty]
+            return Type.struct(dtys)
         elif isinstance(ty, types.UniTupleIter):
             stty = self.get_struct_type(self.make_unituple_iter(ty))
             return Type.pointer(stty)

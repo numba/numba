@@ -430,6 +430,12 @@ def normalize_index(index):
     if isinstance(index, types.UniTuple):
         return types.UniTuple(types.intp, index.count)
 
+    elif isinstance(index, types.Tuple):
+        for ty in index:
+            if ty not in types.integer_domain:
+                return
+        return index
+
     elif index == types.slice3_type:
         return types.slice3_type
 
@@ -456,7 +462,7 @@ class GetItemArray(AbstractTemplate):
 
     def generic(self, args, kws):
         assert not kws
-        ary, idx = args
+        [ary, idx] = args
         if not isinstance(ary, types.Array):
             return
 

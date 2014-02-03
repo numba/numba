@@ -1159,6 +1159,29 @@ def getitem_array_unituple(context, builder, sig, args):
     else:
         return builder.load(ptr)
 
+@builtin
+@implement('getitem', types.Kind(types.Array),
+           types.Kind(types.UniTuple))
+def getitem_array_unituple(context, builder, sig, args):
+    aryty, idxty = sig.args
+    ary, idx = args
+
+    arystty = make_array(aryty)
+    ary = arystty(context, builder, ary)
+
+    # TODO: other layout
+    indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
+    indices = [context.cast(builder, i, t, types.intp)
+               for t, i in zip(idxty, indices)]
+    # TODO warparound flag
+    ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
+                                   wraparound=True)
+
+    if context.is_struct_type(aryty.dtype):
+        return ptr
+    else:
+        return builder.load(ptr)
+
 
 @builtin
 @implement('setitem', types.Kind(types.Array), types.intp,
@@ -1196,6 +1219,29 @@ def setitem_array_unituple(context, builder, sig, args):
 
     # TODO: other than layout
     indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
+    ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
+                                   wraparound=True)
+    if context.is_struct_type(aryty.dtype):
+        stval = builder.load(val)
+    else:
+        stval = val
+    builder.store(stval, ptr)
+
+
+@builtin
+@implement('setitem', types.Kind(types.Array),
+           types.Kind(types.Tuple), types.Any)
+def setitem_array_tuple(context, builder, sig, args):
+    aryty, idxty, valty = sig.args
+    ary, idx, val = args
+
+    arystty = make_array(aryty)
+    ary = arystty(context, builder, ary)
+
+    # TODO: other than layout
+    indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
+    indices = [context.cast(builder, i, t, types.intp)
+               for t, i in zip(idxty, indices)]
     ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
                                    wraparound=True)
     if context.is_struct_type(aryty.dtype):
