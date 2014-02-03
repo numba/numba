@@ -201,6 +201,7 @@ class BaseContext(object):
         if (isinstance(ty, types.Dummy) or
                 isinstance(ty, types.Module) or
                 isinstance(ty, types.Function) or
+                isinstance(ty, types.Dispatcher) or
                 isinstance(ty, types.Object)):
             return self.get_dummy_type()
         elif isinstance(ty, types.Optional):
@@ -312,6 +313,9 @@ class BaseContext(object):
         if isinstance(fn, types.Function):
             key = fn.template.key
             overloads = self.defns[key]
+        elif isinstance(fn, types.Dispatcher):
+            key = fn.overloaded.get_overload(sig.args)
+            overloads = self.defns[key]
         else:
             key = fn
             overloads = self.defns[key]
@@ -364,6 +368,9 @@ class BaseContext(object):
     def return_errcode(self, builder, code):
         assert code > 0
         builder.ret(Constant.int(Type.int(), code))
+
+    def return_errcode_propagate(self, builder, code):
+        builder.ret(code)
 
     def return_exc(self, builder):
         builder.ret(RETCODE_EXC)

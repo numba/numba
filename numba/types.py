@@ -148,6 +148,19 @@ class Function(Type):
         self.template.cases.extend(template.cases)
 
 
+class Dispatcher(Type):
+    def __init__(self, overloaded):
+        self.overloaded = overloaded
+        super(Dispatcher, self).__init__("Dispatcher(%s)" % overloaded)
+
+    def __eq__(self, other):
+        if isinstance(other, Dispatcher):
+            return self.overloaded is other.overloaded
+
+    def __hash__(self):
+        return hash(self.overloaded)
+
+
 class FunctionPointer(Function):
     def __init__(self, template, funcptr):
         self.funcptr = funcptr

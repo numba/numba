@@ -33,7 +33,8 @@ def user_function(func, fndesc):
         func = context.declare_function(cgutils.get_module(builder), fndesc)
         status, retval = context.call_function(builder, func, fndesc.argtypes,
                                                args)
-        # TODO handling error
+        with cgutils.if_unlikely(builder, status.err):
+            context.return_errcode_propagate(builder, status.code)
         return retval
     imp.signature = signature(fndesc.restype, *fndesc.argtypes)
     imp.key = func

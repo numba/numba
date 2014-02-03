@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 import inspect
+import contextlib
 import numpy
 from numba.config import PYVERSION
 from numba import _dispatcher, compiler, typing, utils
@@ -8,6 +9,7 @@ from numba.typing.templates import resolve_overload
 from numba import types, sigutils
 from numba.targets import cpu
 from numba import numpy_support
+from numba.bytecode import get_code_object
 
 
 class GlobalContext(object):
@@ -32,6 +34,8 @@ class Overloaded(_dispatcher.Dispatcher):
     """
     Abstract class. Subclass should define targetdescr class attribute.
     """
+    __numba__ = compile
+
     def __init__(self, py_func, targetoptions={}):
         self.tm = default_type_manager
 
@@ -41,11 +45,15 @@ class Overloaded(_dispatcher.Dispatcher):
         super(Overloaded, self).__init__(self.tm.get_pointer(), argct)
 
         self.py_func = py_func
+        self.func_code = get_code_object(py_func)
         self.overloads = {}
         self.fallback = None
 
         self.targetoptions = targetoptions
         self.doc = py_func.__doc__
+        self._compiling = False
+
+        GlobalContext().typing_context.insert_overloaded(self)
 
     def disable_compile(self, val=True):
         """Disable the compilation of new signatures at call time.
@@ -67,41 +75,53 @@ class Overloaded(_dispatcher.Dispatcher):
             target.dynamic_map_function(cfunc)
             calltemplate = target.get_user_function(cfunc)
             typing.insert_user_function(cfunc, calltemplate)
-            typing.extend_user_function(self, calltemplate)
 
     def get_overload(self, sig):
         args, return_type = sigutils.normalize_signature(sig)
         return self.overloads[tuple(args)].entry_point
 
+    @contextlib.contextmanager
+    def _compile_lock(self):
+        if self._compiling:
+            raise RuntimeError("Compiler re-entrant")
+        self._compiling = True
+        yield
+        self._compiling = False
+
+    @property
+    def is_compiling(self):
+        return self._compiling
+
     def compile(self, sig, **targetoptions):
-        topt = self.targetoptions.copy()
-        topt.update(targetoptions)
+        with self._compile_lock():
+            topt = self.targetoptions.copy()
+            topt.update(targetoptions)
 
-        flags = compiler.Flags()
-        self.targetdescr.options.parse_as_flags(flags, topt)
+            flags = compiler.Flags()
+            self.targetdescr.options.parse_as_flags(flags, topt)
 
-        glctx = GlobalContext()
-        typingctx = glctx.typing_context
-        targetctx = glctx.target_context
+            glctx = GlobalContext()
+            typingctx = glctx.typing_context
+            targetctx = glctx.target_context
 
 
-        args, return_type = sigutils.normalize_signature(sig)
+            args, return_type = sigutils.normalize_signature(sig)
 
-        # Don't recompile if signature already exist.
-        existing = self.overloads.get(tuple(args))
-        if existing is not None:
-            return existing.entry_point
+            # Don't recompile if signature already exist.
+            existing = self.overloads.get(tuple(args))
+            if existing is not None:
+                return existing.entry_point
 
-        cres = compiler.compile_extra(typingctx, targetctx, self.py_func,
-                                      args=args, return_type=return_type,
-                                      flags=flags)
+            cres = compiler.compile_extra(typingctx, targetctx, self.py_func,
+                                          args=args, return_type=return_type,
+                                          flags=flags)
 
-        # Check typing error if object mode is used
-        if cres.typing_error is not None and not flags.enable_pyobject:
-            raise cres.typing_error
+            # Check typing error if object mode is used
+            if cres.typing_error is not None and not flags.enable_pyobject:
+                raise cres.typing_error
 
-        self.add_overload(cres)
-        return cres.entry_point
+            self.add_overload(cres)
+            return cres.entry_point
 
     def jit(self, sig, **kws):
         """Alias of compile(sig, **kws)
@@ -121,49 +141,15 @@ class Overloaded(_dispatcher.Dispatcher):
             print(res.type_annotation)
             print('=' * 80)
 
-    # def __call__(self, *args, **kws):
-    #     assert not kws, "Keyword arguments are not supported"
-    #     tys = []
-    #     for i, a in enumerate(args):
-    #         tys.append(typeof_pyval(a))
-    #
-    #     sig = [self.tm.get(t) for t in tys]
-    #     ptr = self.find(sig)
-    #     return super(Overloaded, self).__call__(ptr, args)
-
     def _explain_ambiguous(self, *args, **kws):
         assert not kws, "kwargs not handled"
         args = tuple([typeof_pyval(a) for a in args])
         resolve_overload(GlobalContext().typing_context, self.py_func,
                          tuple(self.overloads.keys()), args, kws)
 
+    def __repr__(self):
+        return "%s(%s)" % (type(self).__name__, self.py_func)
 
-# class NPMOverloaded(Overloaded):
-#     def compile(self, sig, **kws):
-#         flags = compiler.Flags()
-#         read_flags(flags, kws)
-#         if flags.enable_pyobject or flags.force_pyobject:
-#             raise TypeError("Object mode enabled for nopython target")
-#
-#         glctx = GlobalContext()
-#         typingctx = glctx.typing_context
-#         targetctx = glctx.target_context
-#
-#         args, return_type = sigutils.normalize_signature(sig)
-#
-#         cres = compiler.compile_extra(typingctx, targetctx, self.py_func,
-#                                       args=args, return_type=return_type,
-#                                       flags=flags)
-#
-#         # Check typing error if object mode is used
-#         if cres.typing_error is not None and not flags.enable_pyobject:
-#             raise cres.typing_error
-#
-#         self.add_overload(cres)
-#         return cres.entry_point
-
-
-DTYPE_MAPPING = {}
 
 
 INT_TYPES = (int,)

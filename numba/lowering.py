@@ -233,8 +233,10 @@ class Lower(BaseLower):
             return self.context.cast(self.builder, val, oty, ty)
 
         elif isinstance(value, ir.Global):
-            if (isinstance(ty, types.Dummy) or isinstance(ty, types.Module) or
-                    isinstance(ty, types.Function)):
+            if (isinstance(ty, types.Dummy) or
+                    isinstance(ty, types.Module) or
+                    isinstance(ty, types.Function) or
+                    isinstance(ty, types.Dispatcher)):
                 return self.context.get_dummy_value()
 
             elif ty == types.boolean:
@@ -475,7 +477,7 @@ class PyLower(BaseLower):
         elif isinstance(value, ir.Expr):
             return self.lower_expr(value)
         elif isinstance(value, ir.Global):
-            return self.lower_global(value.name)
+            return self.lower_global(value.name, value.value)
         else:
             raise NotImplementedError(type(value), value)
 
@@ -620,7 +622,7 @@ class PyLower(BaseLower):
         else:
             raise NotImplementedError(type(const))
 
-    def lower_global(self, name):
+    def lower_global(self, name, value):
         """
         1) Check global scope dictionary.
         2) Check __builtins__.

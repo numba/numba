@@ -39,6 +39,19 @@ class Context(object):
         if isinstance(func, types.Function):
             return func.template(self).apply(args, kws)
 
+        if isinstance(func, types.Dispatcher):
+            if kws:
+                raise TypeError("kwargs not supported")
+            if not func.overloaded.is_compiling:
+                # Avoid compiler re-entrant
+                fnobj = func.overloaded.compile(tuple(args))
+            else:
+                try:
+                    fnobj = func.overloaded.get_overload(tuple(args))
+                except KeyError:
+                    return None
+            ty = self.globals[fnobj]
+            return self.resolve_function_type(ty, args, kws)
 
         defns = self.functions[func]
         for defn in defns:
@@ -84,6 +97,9 @@ class Context(object):
     def insert_function(self, ft):
         key = ft.key
         self.functions[key].append(ft)
+
+    def insert_overloaded(self, overloaded):
+        self.globals[overloaded] = types.Dispatcher(overloaded)
 
     def insert_user_function(self, fn, ft):
         """Insert a user function.
