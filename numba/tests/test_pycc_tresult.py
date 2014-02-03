@@ -9,6 +9,7 @@ from numba.pycc import find_shared_ending, main
 base_path = os.path.dirname(os.path.abspath(__file__))
 
 
+@unittest.skipIf(sys.platform.startswith("win32"), "Skip win32 test for now")
 class TestPYCC(unittest.TestCase):
 
     def test_pycc_ctypes_lib(self):
