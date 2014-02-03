@@ -13,7 +13,7 @@ from numba.targets import intrinsics, mathimpl, npyimpl
 from .options import TargetOptions
 
 
-def _windows_symbol_hacks():
+def _windows_symbol_hacks_32bits():
     # if we don't have _ftol2, bind _ftol as _ftol2
     ftol2 = le.dylib_address_of_symbol("_ftol2")
     if not ftol2:
@@ -90,8 +90,8 @@ class CPUContext(BaseContext):
         le.dylib_add_symbol("numba.math.urem", _helperlib.get_urem())
 
         # windows symbol hacks
-        if sys.platform.startswith('win32'):
-            _windows_symbol_hacks()
+        if sys.platform.startswith('win32') and self.is32bit:
+            _windows_symbol_hacks_32bits()
 
         # List available C-math
         for fname in intrinsics.INTR_MATH:
