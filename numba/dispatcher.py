@@ -3,31 +3,12 @@ import inspect
 import contextlib
 import numpy
 from numba.config import PYVERSION
-from numba import _dispatcher, compiler, typing, utils
+from numba import _dispatcher, compiler, utils
 from numba.typeconv.rules import default_type_manager
 from numba.typing.templates import resolve_overload
 from numba import types, sigutils
-from numba.targets import cpu
 from numba import numpy_support
 from numba.bytecode import get_code_object
-
-
-class GlobalContext(object):
-    """
-    Singleton object
-    """
-    __instance = None
-
-    def __new__(cls):
-        if cls.__instance is None:
-            inst = object.__new__(cls)
-            inst._init()
-            cls.__instance = inst
-        return cls.__instance
-
-    def _init(self):
-        self.typing_context = typing.Context()
-        self.target_context = cpu.CPUContext(self.typing_context)
 
 
 class Overloaded(_dispatcher.Dispatcher):
@@ -53,7 +34,7 @@ class Overloaded(_dispatcher.Dispatcher):
         self.doc = py_func.__doc__
         self._compiling = False
 
-        GlobalContext().typing_context.insert_overloaded(self)
+        self.targetdescr.typing_context.insert_overloaded(self)
 
     def disable_compile(self, val=True):
         """Disable the compilation of new signatures at call time.
@@ -100,7 +81,7 @@ class Overloaded(_dispatcher.Dispatcher):
             flags = compiler.Flags()
             self.targetdescr.options.parse_as_flags(flags, topt)
 
-            glctx = GlobalContext()
+            glctx = self.targetdescr
             typingctx = glctx.typing_context
             targetctx = glctx.target_context
 
@@ -144,7 +125,7 @@ class Overloaded(_dispatcher.Dispatcher):
     def _explain_ambiguous(self, *args, **kws):
         assert not kws, "kwargs not handled"
         args = tuple([typeof_pyval(a) for a in args])
-        resolve_overload(GlobalContext().typing_context, self.py_func,
+        resolve_overload(self.targetdescr.typing_context, self.py_func,
                          tuple(self.overloads.keys()), args, kws)
 
     def __repr__(self):

@@ -4,13 +4,13 @@ import warnings
 import numpy as np
 from numba.decorators import jit
 from numba.targets.registry import target_registry
-from numba.targets import cpu
 from numba.targets.descriptors import TargetDescriptor
 from numba.targets.options import TargetOptions
-from numba import utils, compiler, types, sigutils, typing
+from numba import utils, compiler, types, sigutils
 from . import _internal
 from .sigparse import parse_signature
 from .wrappers import build_ufunc_wrapper, build_gufunc_wrapper
+from numba.targets import registry
 
 
 class UFuncTargetOptions(TargetOptions):
@@ -19,10 +19,8 @@ class UFuncTargetOptions(TargetOptions):
     }
 
 
-class UFuncTarget(TargetDescriptor):
+class UFuncTarget(registry.CPUTarget):
     options = UFuncTargetOptions
-    typing_context = typing.Context()
-    target_context = cpu.CPUContext(typing_context)
 
 
 class UFuncDispatcher(object):

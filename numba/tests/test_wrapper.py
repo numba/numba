@@ -1,6 +1,7 @@
 from __future__ import print_function
 import numba.unittest_support as unittest
-from numba import compiler, types, utils, dispatcher
+from numba import compiler, types, utils
+from numba.targets import registry
 import numpy
 
 
@@ -24,7 +25,7 @@ class TestWrapper(unittest.TestCase):
         """
         cr = compiler.compile_isolated(overhead, [types.int32])
         cfunc = cr.entry_point
-        disp = dispatcher.Overloaded(overhead)
+        disp = registry.CPUOverloaded(overhead)
         disp.add_overload(cr)
 
         x = 321
@@ -50,7 +51,7 @@ class TestWrapper(unittest.TestCase):
         """
         cr = compiler.compile_isolated(array_overhead, [types.int32[::1]])
         cfunc = cr.entry_point
-        disp = dispatcher.Overloaded(array_overhead)
+        disp = registry.CPUOverloaded(array_overhead)
         disp.add_overload(cr)
 
         self.assertEqual(cr.signature.args[0].layout, 'C')
@@ -79,7 +80,7 @@ class TestWrapper(unittest.TestCase):
         """
         cr = compiler.compile_isolated(add, [types.int32])
         cfunc = cr.entry_point
-        disp = dispatcher.Overloaded(add)
+        disp = registry.CPUOverloaded(add)
         disp.add_overload(cr)
 
         x = 321
