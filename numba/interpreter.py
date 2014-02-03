@@ -201,6 +201,19 @@ class Interpreter(object):
 
     # --- Bytecode handlers ---
 
+    def op_PRINT_ITEM(self, inst, item, printvar, res):
+        item = self.get(item)
+        printgv = ir.Global("print", print, loc=self.loc)
+        self.store(value=printgv, name=printvar)
+        call = ir.Expr.call(self.get(printvar), (item,), (), loc=self.loc)
+        self.store(value=call, name=res)
+
+    def op_PRINT_NEWLINE(self, inst, printvar, res):
+        printgv = ir.Global("print", print, loc=self.loc)
+        self.store(value=printgv, name=printvar)
+        call = ir.Expr.call(self.get(printvar), (), (), loc=self.loc)
+        self.store(value=call, name=res)
+
     def op_UNPACK_SEQUENCE(self, inst, sequence, stores, iterobj):
         sequence = self.get(sequence)
         getiter = ir.Expr.getiter(value=sequence, loc=self.loc)

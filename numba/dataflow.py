@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 from pprint import pprint
 from numba import utils
+import warnings
 
 
 class DataFlowAnalysis(object):
@@ -156,6 +157,20 @@ class DataFlowAnalysis(object):
         res = info.make_temp()
         info.append(inst, func=func, args=args, kws=kws, res=res)
         info.push(res)
+
+    def op_PRINT_ITEM(self, info, inst):
+        warnings.warn("Python2 style print partially supported.  Please use "
+                      "Python3 style print.", RuntimeWarning)
+        item = info.pop()
+        printvar = info.make_temp()
+        res = info.make_temp()
+        info.append(inst, item=item, printvar=printvar, res=res)
+        info.push(item)
+
+    def op_PRINT_NEWLINE(self, info, inst):
+        printvar = info.make_temp()
+        res = info.make_temp()
+        info.append(inst, printvar=printvar, res=res)
 
     def _unaryop(self, info, inst):
         val = info.pop()
