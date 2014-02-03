@@ -33,8 +33,10 @@ class CPUContext(BaseContext):
         self.pm = self.build_pass_manager()
         self.native_funcs = utils.UniqueDict()
         self.cmath_provider = {}
-        self.map_math_functions()
         self.is32bit = (tuple.__itemsize__ == 4)
+
+        # map math functions
+        self.map_math_functions()
 
         # Add target specific implementations
         self.insert_func_defn(mathimpl.functions)
