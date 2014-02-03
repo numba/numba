@@ -20,9 +20,10 @@ def autojit(*args, **kws):
     return jit(*args, **kws)
 
 
-def jit(signature_or_function=None, argtypes=None, restype=None,
+def jit(signature_or_function=None, argtypes=None, restype=None, locals={},
         target='cpu', **targetoptions):
-    """jit([signature_or_function, [target='cpu', [**targetoptions]]])
+    """jit([signature_or_function, [locals={}, [target='cpu',
+            [**targetoptions]]]])
 
     The function can be used as the following versions:
 
@@ -98,28 +99,31 @@ def jit(signature_or_function=None, argtypes=None, restype=None,
     if signature_or_function is None:
         # Used as autojit
         def configured_jit(arg):
-            return jit(arg, target=target, **targetoptions)
+            return jit(arg, locals=locals, target=target, **targetoptions)
         return configured_jit
     elif sigutils.is_signature(signature_or_function):
         # Function signature is provided
         sig = signature_or_function
-        return _jit(sig, target=target, targetoptions=targetoptions)
+        return _jit(sig, locals=locals, target=target,
+                    targetoptions=targetoptions)
     else:
         # No signature is provided
         pyfunc = signature_or_function
         dispatcher = registry.target_registry[target]
-        dispatcher = dispatcher(py_func=pyfunc, targetoptions=targetoptions)
+        dispatcher = dispatcher(py_func=pyfunc, locals=locals,
+                                targetoptions=targetoptions)
         # Compile a pure object mode
         if target == 'cpu' and not targetoptions.get('nopython', False):
-            dispatcher.compile((), forceobj=True)
+            dispatcher.compile((), locals=locals, forceobj=True)
         return dispatcher
 
 
-def _jit(sig, target, targetoptions):
+def _jit(sig, locals, target, targetoptions):
     dispatcher = registry.target_registry[target]
 
     def wrapper(func):
-        disp = dispatcher(py_func=func, targetoptions=targetoptions)
+        disp = dispatcher(py_func=func,  locals=locals,
+                          targetoptions=targetoptions)
         disp.compile(sig)
         disp.disable_compile()
         return disp

@@ -113,7 +113,8 @@ class _Compiler(object):
         for entry in self.exported_signatures:
             cres = compile_extra(typing_ctx, target_ctx, entry.function,
                                  entry.signature.args,
-                                 entry.signature.return_type, flags)
+                                 entry.signature.return_type, flags,
+                                 locals={})
 
             if self.export_python_wrap:
                 module = cres.llvm_func.module

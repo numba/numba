@@ -17,7 +17,7 @@ class Overloaded(_dispatcher.Dispatcher):
     """
     __numba__ = compile
 
-    def __init__(self, py_func, targetoptions={}):
+    def __init__(self, py_func, locals={}, targetoptions={}):
         self.tm = default_type_manager
 
         argspec = inspect.getargspec(py_func)
@@ -31,6 +31,7 @@ class Overloaded(_dispatcher.Dispatcher):
         self.fallback = None
 
         self.targetoptions = targetoptions
+        self.locals = locals
         self.doc = py_func.__doc__
         self._compiling = False
 
@@ -73,8 +74,11 @@ class Overloaded(_dispatcher.Dispatcher):
     def is_compiling(self):
         return self._compiling
 
-    def compile(self, sig, **targetoptions):
+    def compile(self, sig, locals={}, **targetoptions):
         with self._compile_lock():
+            locs = self.locals.copy()
+            locs.update(locals)
+
             topt = self.targetoptions.copy()
             topt.update(targetoptions)
 
@@ -95,7 +99,7 @@ class Overloaded(_dispatcher.Dispatcher):
 
             cres = compiler.compile_extra(typingctx, targetctx, self.py_func,
                                           args=args, return_type=return_type,
-                                          flags=flags)
+                                          flags=flags, locals=locs)
 
             # Check typing error if object mode is used
             if cres.typing_error is not None and not flags.enable_pyobject:

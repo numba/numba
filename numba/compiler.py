@@ -42,17 +42,20 @@ def compile_result(**kws):
     return CompileResult(**kws)
 
 
-def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS):
+def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
+                     locals={}):
     """
     Compile the function is an isolated environment.
     Good for testing.
     """
     typingctx = typing.Context()
     targetctx = cpu.CPUContext(typingctx)
-    return compile_extra(typingctx, targetctx, func, args, return_type, flags)
+    return compile_extra(typingctx, targetctx, func, args, return_type, flags,
+                         locals)
 
 
-def compile_extra(typingctx, targetctx, func, args, return_type, flags):
+def compile_extra(typingctx, targetctx, func, args, return_type, flags,
+                  locals):
     """
     Args
     ----
@@ -72,7 +75,8 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags):
             typemap, return_type, calltypes = type_inference_stage(typingctx,
                                                                    interp,
                                                                    args,
-                                                                   return_type)
+                                                                   return_type,
+                                                                   locals)
         except Exception as e:
             if not flags.enable_pyobject:
                 raise
@@ -136,7 +140,7 @@ def translate_stage(func):
     return interp
 
 
-def type_inference_stage(typingctx, interp, args, return_type):
+def type_inference_stage(typingctx, interp, args, return_type, locals={}):
     infer = typeinfer.TypeInferer(typingctx, interp.blocks)
 
     # Seed argument types
@@ -146,6 +150,10 @@ def type_inference_stage(typingctx, interp, args, return_type):
     # Seed return type
     if return_type is not None:
         infer.seed_return(return_type)
+
+    # Seed local types
+    for k, v in locals.items():
+        infer.seed_type(k, v)
 
     infer.build_constrain()
     infer.propagate()

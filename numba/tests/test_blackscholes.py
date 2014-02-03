@@ -176,7 +176,8 @@ class TestBlackScholes(unittest.TestCase):
         array = types.Array(types.float64, 1, 'C')
         argtys = (array,) * 5 + (types.float64, types.float64)
         cr2 = compile_extra(tyctx, ctx, blackscholes_scalar_jitted,
-                            args=argtys, return_type=None, flags=flags)
+                            args=argtys, return_type=None, flags=flags,
+                            locals={})
         jitted_bs = cr2.entry_point
 
         OPT_N = 400

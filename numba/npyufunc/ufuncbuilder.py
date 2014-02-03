@@ -26,12 +26,16 @@ class UFuncTarget(registry.CPUTarget):
 class UFuncDispatcher(object):
     targetdescr = UFuncTarget()
 
-    def __init__(self, py_func, targetoptions={}):
+    def __init__(self, py_func, locals={}, targetoptions={}):
         self.py_func = py_func
         self.overloads = utils.UniqueDict()
         self.targetoptions = targetoptions
+        self.locals = locals
 
-    def compile(self, sig, **targetoptions):
+    def compile(self, sig, locals={}, **targetoptions):
+        locs = self.locals.copy()
+        locs.update(locals)
+
         topt = self.targetoptions.copy()
         topt.update(targetoptions)
 
@@ -50,7 +54,7 @@ class UFuncDispatcher(object):
 
         cres = compiler.compile_extra(typingctx, targetctx, self.py_func,
                                       args=args, return_type=return_type,
-                                      flags=flags)
+                                      flags=flags, locals=locals)
 
         self.overloads[cres.signature] = cres
         return cres
