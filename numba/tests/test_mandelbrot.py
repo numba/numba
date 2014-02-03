@@ -1,49 +1,37 @@
-"""
->>> image = np.zeros((50, 75), dtype=np.uint8)
->>> numpy_image = image.copy()
->>> image = create_fractal(-2.0, 1.0, -1.0, 1.0, image, 20)
->>> numpy_image = create_fractal.py_func(-2.0, 1.0, -1.0, 1.0, numpy_image, 20)
->>> assert np.allclose(image, numpy_image)
-"""
+from __future__ import print_function
+import numba.unittest_support as unittest
+from numba.compiler import compile_isolated, Flags
+from numba import types, utils
+from numba.tests import usecases
 
-from numba import *
-import numpy as np
+enable_pyobj_flags = Flags()
+enable_pyobj_flags.set("enable_pyobject")
 
-@autojit(nopython=True)
-def mandel(x, y, max_iters):
-    """
-    Given the real and imaginary parts of a complex number,
-    determine if it is a candidate for membership in the Mandelbrot
-    set given a fixed number of iterations.
-    """
+force_pyobj_flags = Flags()
+force_pyobj_flags.set("force_pyobject")
+
+
+def is_in_mandelbrot(c):
     i = 0
-    c = complex(x,y)
     z = 0.0j
-    for i in range(max_iters):
-        z = z*z + c
-        if (z.real*z.real + z.imag*z.imag) >= 4:
-            return i
-
-    return 255
-
-@autojit
-def create_fractal(min_x, max_x, min_y, max_y, image, iters):
-    with nopython:
-        height = image.shape[0]
-        width = image.shape[1]
-
-        pixel_size_x = (max_x - min_x) / width
-        pixel_size_y = (max_y - min_y) / height
-        for x in range(width):
-            real = min_x + x * pixel_size_x
-            for y in range(height):
-                imag = min_y + y * pixel_size_y
-                color = mandel(real, imag, iters)
-                image[y, x] = color
-
-    return image
+    for i in range(100):
+        z = z ** 2 + c
+        if (z.real * z.real + z.imag * z.imag) >= 4:
+            return False
+    return True
 
 
-if __name__ == "__main__":
-    import numba
-    numba.testing.testmod()
+class TestMandelbrot(unittest.TestCase):
+
+    def test_mandelbrot(self):
+        pyfunc = is_in_mandelbrot
+        cr = compile_isolated(pyfunc, (types.complex64,))
+        cfunc = cr.entry_point
+
+        points = [0+0j, 1+0j, 0+1j, 1+1j, 0.1+0.1j]
+        for p in points:
+            self.assertEqual(cfunc(p), pyfunc(p))
+
+if __name__ == '__main__':
+    unittest.main()
+

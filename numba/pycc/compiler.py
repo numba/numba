@@ -8,9 +8,13 @@ import functools
 
 import llvm.core as lc
 import llvm.ee as le
+import llvm.passes as lp
 
-from numba import environment, PY3
-from numba import llvm_types as lt
+from numba.utils import IS_PY3
+from . import llvm_types as lt
+from .decorators import registry as export_registry
+from numba.compiler import compile_extra, Flags
+from numba.targets.registry import CPUTarget
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +23,7 @@ __all__ = ['which', 'find_linker', 'find_args', 'find_shared_ending', 'Compiler'
 NULL = lc.Constant.null(lt._void_star)
 ZERO = lc.Constant.int(lt._int32, 0)
 ONE = lc.Constant.int(lt._int32, 1)
-
+METH_VARARGS_AND_KEYWORDS = lc.Constant.int(lt._int32, 1|2)
 
 def which(program):
     def is_exe(fpath):
@@ -79,12 +83,7 @@ class _Compiler(object):
     def __init__(self, inputs, module_name='numba_exported'):
         self.inputs = inputs
         self.module_name = module_name
-
-        self.env = environment.NumbaEnvironment.get_environment()
-
-        #: Map from function names to type signatures for the translated
-        #: function (used for header generation).
-        self.exported_signatures = {}
+        self.export_python_wrap = False
 
     def _emit_python_wrapper(self, llvm_module):
         """Emit generated Python wrapper and extension module code.
@@ -97,30 +96,60 @@ class _Compiler(object):
 
         Resets the export environment afterwards.
         """
-        exports_env = self.env.exports
-        self.exported_signatures = exports_env.function_signature_map
+        self.exported_signatures = export_registry
 
         # Create new module containing everything
         llvm_module = lc.Module.new(self.module_name)
 
-        # Link in all exported functions
-        for submod in exports_env.function_module_map.values():
-            llvm_module.link_in(submod)
+        # Compile all exported functions
+        typing_ctx = CPUTarget.typing_context
+        # TODO Use non JIT-ing target
+        target_ctx = CPUTarget.target_context
+        modules = []
+        flags = Flags()
+        if not self.export_python_wrap:
+            flags.set("no_compile")
 
-        # Link in cbuilder utilities and string constants
-        self.env.context.cbuilder_library.link(llvm_module)
-        self.env.constants_manager.link(llvm_module)
+        for entry in self.exported_signatures:
+            cres = compile_extra(typing_ctx, target_ctx, entry.function,
+                                 entry.signature.args,
+                                 entry.signature.return_type, flags,
+                                 locals={})
 
-        if exports_env.wrap_exports:
+            if self.export_python_wrap:
+                module = cres.llvm_func.module
+                cres.llvm_func.linkage = lc.LINKAGE_INTERNAL
+                wrappername = "wrapper." + cres.llvm_func.name
+                wrapper = module.get_function_named(wrappername)
+                wrapper.name = entry.symbol
+            else:
+                cres.llvm_func.name = entry.symbol
+
+            modules.append(cres.llvm_module)
+
+        # Link all exported functions
+        for mod in modules:
+            llvm_module.link_in(mod, preserve=self.export_python_wrap)
+
+        # Optimize
+        tm = le.TargetMachine.new(opt=3)
+        pms = lp.build_pass_managers(tm=tm, opt=3, loop_vectorize=True,
+                                     fpm=False)
+        pms.pm.run(llvm_module)
+
+        if self.export_python_wrap:
             self._emit_python_wrapper(llvm_module)
 
-        exports_env.reset()
+        del self.exported_signatures[:]
+        print(llvm_module)
         return llvm_module
 
     def _process_inputs(self, wrap=False, **kws):
-        self.env.exports.wrap_exports = wrap
         for ifile in self.inputs:
-            exec(compile(open(ifile).read(), ifile, 'exec'))
+            with open(ifile) as fin:
+                exec(compile(fin.read(), ifile, 'exec'))
+
+        self.export_python_wrap = wrap
 
     def write_llvm_bitcode(self, output, **kws):
         self._process_inputs(**kws)
@@ -131,9 +160,8 @@ class _Compiler(object):
     def write_native_object(self, output, **kws):
         self._process_inputs(**kws)
         lmod = self._cull_exports()
-        tm = le.TargetMachine.new(reloc=le.RELOC_PIC, features='-avx')
-        if not kws.get('wrap'):
-            _hack_strip_python_ref(lmod)
+        tm = le.TargetMachine.new(opt=3, reloc=le.RELOC_PIC, features='-avx')
+
         with open(output, 'wb') as fout:
             objfile = tm.emit_object(lmod)
             fout.write(objfile)
@@ -165,9 +193,10 @@ class _Compiler(object):
         :returns: a pointer to the PyMethodDef array.
         """
         method_defs = []
-        wrappers = self.env.exports.function_wrapper_map.items()
-        for name, (submod, lfunc) in wrappers:
-            llvm_module.link_in(submod)
+        for entry in self.exported_signatures:
+            name = entry.symbol
+            lfunc = llvm_module.get_function_named(name)
+
             method_name_init = lc.Constant.stringz(name)
             method_name = llvm_module.add_global_variable(
                 method_name_init.type, '.method_name')
@@ -175,7 +204,7 @@ class _Compiler(object):
             method_name.linkage = lc.LINKAGE_EXTERNAL
             method_def_const = lc.Constant.struct((lc.Constant.gep(method_name, [ZERO, ZERO]),
                                                    lc.Constant.bitcast(lfunc, lt._void_star),
-                                                   ONE,
+                                                   METH_VARARGS_AND_KEYWORDS,
                                                    NULL))
             method_defs.append(method_def_const)
 
@@ -387,31 +416,5 @@ class CompilerPy3(_Compiler):
         builder.ret(mod)
 
 
-Compiler = CompilerPy3 if PY3 else CompilerPy2
+Compiler = CompilerPy3 if IS_PY3 else CompilerPy2
 
-
-# XXX: hack
-def _hack_strip_python_ref(mod):
-    if int(os.environ.get('NO_PYCC_SYMBOL_STRIP', False)):
-        return # do nothing if the environment variable is set
-
-    removeglobals = ['PyArray_API']
-    for g in removeglobals:
-        try:
-            gv = mod.get_global_variable_named(g)
-        except:
-            pass
-        else:
-            if not gv.uses:
-                gv.delete()
-    removethese = ['IndexAxis', 'NewAxis', 'Broadcast']
-    while True:
-        for func in mod.functions:
-            if func.name.startswith('Py') and not func.uses:
-                func.delete()
-                break
-            elif func.name in removethese and not func.uses:
-                func.delete()
-                break
-        else:
-            break

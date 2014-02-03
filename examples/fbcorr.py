@@ -1,12 +1,17 @@
 # -*- coding: utf-8 -*-
+
 """
 This file demonstrates a filterbank correlation loop.
 """
 from __future__ import print_function, division, absolute_import
 import numpy as np
 import numba
+from numba.utils import IS_PY3
 from numba.decorators import jit
 nd4type = numba.double[:,:,:,:]
+
+if IS_PY3:
+    xrange = range
 
 @jit(argtypes=(nd4type, nd4type, nd4type))
 def fbcorr(imgs, filters, output):

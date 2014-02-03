@@ -7,28 +7,24 @@ source:
   git_tag: devel
 
 build:
-  entry_points:
-    - pycc = numba.pycc:main
+  #entry_points:
+  #  - pycc = numba.pycc:main
 
 requirements:
   build:
-    - cython
     - numpy
     #- chrpath         [linux]
     - python
-    - llvmmath
+    #- llvmmath
   run:
     - python
     - argparse        [py26]
     - numpy
-    - meta            [py27]
     - llvmpy
-    - llvmmath
+    #- llvmmath
 
 test:
   requires:
-    - nose
+    - unittest2       [py26]
   files:
     - mandel.py
-  commands:
-    - pycc -h
