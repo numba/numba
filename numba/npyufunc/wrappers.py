@@ -1,5 +1,5 @@
 from __future__ import print_function, division, absolute_import
-from llvm.core import Type, Builder, TYPE_POINTER
+from llvm.core import Type, Builder
 from numba import types, cgutils
 
 
@@ -47,8 +47,9 @@ def build_ufunc_wrapper(context, func, signature):
         elems = [ary.load(ind) for ary in arrays]
 
         # Compute
-        status, retval = context.call_function(builder, func, signature.args,
-                                               elems)
+        status, retval = context.call_function(builder, func,
+                                               signature.return_type,
+                                               signature.args, elems)
         # Ignoring error status and store result
 
         # Store
@@ -65,7 +66,7 @@ class UArrayArg(object):
     def __init__(self, context, builder, args, steps, i, argtype):
         # Get data
         p = builder.gep(args, [context.get_constant(types.intp, i)])
-        if argtype.kind == TYPE_POINTER:
+        if cgutils.is_struct_ptr(argtype):
             self.byref = True
             self.data = builder.bitcast(builder.load(p), argtype)
         else:
@@ -148,8 +149,9 @@ def build_gufunc_wrapper(context, func, signature, sin, sout):
     # Loop
     with cgutils.for_range(builder, loopcount, intp=intp_t) as ind:
         args = [a.array_value for a in arrays]
-        status, retval = context.call_function(builder, func, signature.args,
-                                               args)
+        status, retval = context.call_function(builder, func,
+                                               signature.return_type,
+                                               signature.args, args)
         # ignore status
         # ignore retval
 

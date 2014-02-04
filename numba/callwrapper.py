@@ -48,6 +48,7 @@ class PyCallWrapper(object):
             innerargs.append(val)
 
         status, res = self.context.call_function(builder, self.func,
+                                                 self.fndesc.restype,
                                                  self.fndesc.argtypes,
                                                  innerargs)
 

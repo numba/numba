@@ -31,8 +31,8 @@ def impl_attribute(ty, attr, rtype):
 def user_function(func, fndesc):
     def imp(context, builder, sig, args):
         func = context.declare_function(cgutils.get_module(builder), fndesc)
-        status, retval = context.call_function(builder, func, fndesc.argtypes,
-                                               args)
+        status, retval = context.call_function(builder, func, fndesc.restype,
+                                               fndesc.argtypes, args)
         with cgutils.if_unlikely(builder, status.err):
             context.return_errcode_propagate(builder, status.code)
         return retval

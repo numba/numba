@@ -388,3 +388,15 @@ def guard_null(context, builder, value):
 
 
 guard_zero = guard_null
+
+
+def is_struct(ltyp):
+    return ltyp.kind == lc.TYPE_STRUCT
+
+
+def is_pointer(ltyp):
+    return ltyp.kind == lc.TYPE_POINTER
+
+
+def is_struct_ptr(ltyp):
+    return is_pointer(ltyp) and is_struct(ltyp.pointee)

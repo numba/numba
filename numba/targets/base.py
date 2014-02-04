@@ -29,6 +29,15 @@ LTYPEMAP = {
     types.float64: Type.double(),
 }
 
+STRUCT_TYPES = {
+    types.complex64:            builtins.Complex64,
+    types.complex128:           builtins.Complex128,
+    types.range_state32_type:   builtins.RangeState32,
+    types.range_iter32_type:    builtins.RangeIter32,
+    types.range_state64_type:   builtins.RangeState64,
+    types.range_iter64_type:    builtins.RangeIter64,
+    types.slice3_type:          builtins.Slice,
+}
 
 Status = namedtuple("Status", ("code", "ok", "err", "exc", "none"))
 
@@ -61,7 +70,6 @@ class Overloads(object):
 
                 if match:
                     return ver
-
 
         raise NotImplementedError(self, sig)
 
@@ -154,8 +162,7 @@ class BaseContext(object):
         """
         argtypes = [self.get_argument_type(aty)
                     for aty in fndesc.argtypes]
-        restype = self.get_return_type(fndesc.restype)
-        resptr = Type.pointer(restype)
+        resptr = self.get_return_type(fndesc.restype)
         fnty = Type.function(Type.int(), [resptr] + argtypes)
         return fnty
 
@@ -192,73 +199,60 @@ class BaseContext(object):
             return self.get_value_type(ty)
 
     def get_return_type(self, ty):
-        if self.is_struct_type(ty):
-            vty = self.get_value_type(ty)
-            return vty.pointee
-        else:
-            return self.get_argument_type(ty)
+        ty = self.get_argument_type(ty)
+        if not cgutils.is_struct_ptr(ty):
+            ty = Type.pointer(ty)
+        return ty
 
-    def get_value_type(self, ty):
+    def get_data_type(self, ty):
+        """
+        Get a data representation of the type
+
+        Returns None if it is an opaque pointer
+        """
         if (isinstance(ty, types.Dummy) or
                 isinstance(ty, types.Module) or
                 isinstance(ty, types.Function) or
                 isinstance(ty, types.Dispatcher) or
                 isinstance(ty, types.Object)):
-            return self.get_dummy_type()
-        elif isinstance(ty, types.Optional):
-            return self.get_value_type(ty.type)
-        elif ty == types.complex64:
-            stty = self.get_struct_type(builtins.Complex64)
-            return Type.pointer(stty)
-        elif ty == types.complex128:
-            stty = self.get_struct_type(builtins.Complex128)
-            return Type.pointer(stty)
-        elif ty == types.range_state32_type:
-            stty = self.get_struct_type(builtins.RangeState32)
-            return Type.pointer(stty)
-        elif ty == types.range_iter32_type:
-            stty = self.get_struct_type(builtins.RangeIter32)
-            return Type.pointer(stty)
-        elif ty == types.range_state64_type:
-            stty = self.get_struct_type(builtins.RangeState64)
-            return Type.pointer(stty)
-        elif ty == types.range_iter64_type:
-            stty = self.get_struct_type(builtins.RangeIter64)
-            return Type.pointer(stty)
-        elif ty == types.slice3_type:
-            stty = self.get_struct_type(builtins.Slice)
-            return Type.pointer(stty)
-        elif isinstance(ty, types.Array):
-            stty = self.get_struct_type(self.make_array(ty))
-            return Type.pointer(stty)
+            return Type.pointer(Type.int(8))
+
         elif isinstance(ty, types.CPointer):
-            dty = self.get_value_type(ty.dtype)
-            if self.is_struct_type(ty.dtype):
-                return dty
-            else:
-                return Type.pointer(dty)
+            dty = self.get_data_type(ty.dtype)
+            return Type.pointer(dty)
+
+        elif isinstance(ty, types.Optional):
+            return self.get_data_type(ty.type)
+
+        elif isinstance(ty, types.Array):
+            return self.get_struct_type(self.make_array(ty))
+
         elif isinstance(ty, types.UniTuple):
             dty = self.get_value_type(ty.dtype)
             return Type.array(dty, ty.count)
+
         elif isinstance(ty, types.Tuple):
             dtys = [self.get_value_type(t) for t in ty]
             return Type.struct(dtys)
+
         elif isinstance(ty, types.UniTupleIter):
             stty = self.get_struct_type(self.make_unituple_iter(ty))
             return Type.pointer(stty)
-        return LTYPEMAP[ty]
+
+        elif ty in STRUCT_TYPES:
+            return self.get_struct_type(STRUCT_TYPES[ty])
+
+        else:
+            return LTYPEMAP[ty]
+
+    def get_value_type(self, ty):
+        dataty = self.get_data_type(ty)
+        if cgutils.is_struct(dataty):
+            return Type.pointer(dataty)
+        return dataty
 
     def is_struct_type(self, ty):
-        if isinstance(ty, types.Array):
-            return True
-
-        sttys = [
-            types.complex64, types.complex128,
-            types.range_state32_type, types.range_state64_type,
-            types.range_iter32_type, types.range_iter64_type,
-            types.slice2_type, types.slice3_type,
-        ]
-        return ty in sttys
+        return cgutils.is_struct(self.get_data_type(ty))
 
     def get_constant_struct(self, builder, ty, val):
         assert self.is_struct_type(ty)
@@ -346,22 +340,29 @@ class BaseContext(object):
                 raise
 
     def get_argument_value(self, builder, ty, val):
+        """
+        Argument representation to local value representation
+        """
         if ty == types.boolean:
             return builder.trunc(val, self.get_value_type(ty))
         return val
 
     def get_return_value(self, builder, ty, val):
+        """
+        Local value representation to return type representation
+        """
+
         if ty is types.boolean:
-            r = self.get_return_type(ty)
+            r = self.get_return_type(ty).pointee
             return builder.zext(val, r)
+
         else:
             return val
 
     def return_value(self, builder, retval):
         fn = cgutils.get_function(builder)
         retptr = fn.args[0]
-        if (retval.type.kind == lc.TYPE_POINTER and
-                retval.type.pointee.kind == lc.TYPE_STRUCT):
+        if cgutils.is_struct_ptr(retval.type):
             # Copy structure
             builder.store(builder.load(retval), retptr)
         else:
@@ -498,7 +499,7 @@ class BaseContext(object):
             return builder.or_(real_istrue, imag_istrue)
         raise NotImplementedError("is_true", val, typ)
 
-    def call_function(self, builder, callee, argtys, args):
+    def call_function(self, builder, callee, resty, argtys, args):
         retty = callee.args[0].type.pointee
         retval = cgutils.alloca_once(builder, retty)
         realargs = [retval] + [self.get_argument_value(builder, t, a)
@@ -506,11 +507,10 @@ class BaseContext(object):
         code = builder.call(callee, realargs)
         status = self.get_return_status(builder, code)
 
-        if retval.type.pointee.kind == lc.TYPE_STRUCT:
-            # Handle structures
-            return status, retval
-        else:
-            return status, builder.load(retval)
+        if not cgutils.is_struct_ptr(retval.type):
+            # Handle scalars
+            retval = builder.load(retval)
+        return status, self.get_argument_value(builder, resty, retval)
 
     def get_return_status(self, builder, code):
         norm = builder.icmp(lc.ICMP_EQ, code, RETCODE_OK)
@@ -566,7 +566,7 @@ class BaseContext(object):
         self.print_string(builder, cstr)
 
     def get_struct_type(self, struct):
-        fields = [self.get_value_type(v) for _, v in struct._fields]
+        fields = [self.get_data_type(v) for _, v in struct._fields]
         return Type.struct(fields)
 
     def get_dummy_value(self):
