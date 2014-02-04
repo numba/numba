@@ -1,3 +1,14 @@
+Version 0.12
+------------
+* Major refactor of compiler
+* Better fallback to object mode when native mode fails
+* Merge autojit into jit for unified interface
+* Jitted function can now be overloaded
+* Add njit for nopython mode jit
+* Provide numba.vectorize and numba.guvectorize
+    * Old numba.vectorize.vectorize is removed
+* Deprecate autojit, GUVectorize
+
 Version 0.11
 ------------
 * Experimental support for NumPy datetime type
