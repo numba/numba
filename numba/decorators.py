@@ -130,3 +130,15 @@ def _jit(sig, locals, target, targetoptions):
 
     return wrapper
 
+
+def njit(*args, **kws):
+    """Equavilent to jit(nopython=True)
+    """
+    if 'nopython' in kws:
+        warnings.warn('nopython is set for njit and is ignored', RuntimeWarning)
+    if 'forceobj' in kws:
+        warnings.warn('forceobj is set for njit and is ignored', RuntimeWarning)
+    kws.update({'nopython': True})
+    return jit(*args, **kws)
+
+
