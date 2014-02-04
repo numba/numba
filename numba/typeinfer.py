@@ -212,6 +212,24 @@ class SetItemConstrain(object):
                                   (ty, it, vt), loc=self.loc)
 
 
+class SetAttrConstrain(object):
+    def __init__(self, target, attr, value, loc):
+        self.target = target
+        self.attr = attr
+        self.value = value
+        self.loc = loc
+
+    def __call__(self, context, typevars):
+        targettys = typevars[self.target.name].get()
+        valtys = typevars[self.value.name].get()
+
+        for ty, vt in itertools.product(targettys, valtys):
+            if not context.resolve_setattr(target=ty, attr=self.attr,
+                                           value=vt):
+                raise TypingError("Cannot resolve setattr: (%s).%s = %s" %
+                                  (ty, self.attr, vt), loc=self.loc)
+
+
 class TypeVarMap(dict):
     def set_context(self, context):
         self.context = context
@@ -247,6 +265,7 @@ class TypeInferer(object):
         self.usercalls = []
         self.intrcalls = []
         self.setitemcalls = []
+        self.setattrcalls = []
 
     def dump(self):
         print('---- type variables ----')
@@ -330,6 +349,13 @@ class TypeInferer(object):
             signature = self.context.resolve_setitem(target, index, value)
             calltypes[inst] = signature
 
+        for inst in self.setattrcalls:
+            target = typemap[inst.target.name]
+            attr = inst.attr
+            value = typemap[inst.value.name]
+            signature = self.context.resolve_setattr(target, attr, value)
+            calltypes[inst] = signature
+
         return calltypes
 
     def guard_return_type(self, ty):
@@ -370,6 +396,8 @@ class TypeInferer(object):
             self.typeof_assign(inst)
         elif isinstance(inst, ir.SetItem):
             self.typeof_setitem(inst)
+        elif isinstance(inst, ir.SetAttr):
+            self.typeof_setattr(inst)
         elif isinstance(inst, (ir.Jump, ir.Branch, ir.Return, ir.Del)):
             pass
         else:
@@ -380,6 +408,12 @@ class TypeInferer(object):
                                      value=inst.value, loc=inst.loc)
         self.constrains.append(constrain)
         self.setitemcalls.append(inst)
+
+    def typeof_setattr(self, inst):
+        constrain = SetAttrConstrain(target=inst.target, attr=inst.attr,
+                                     value=inst.value, loc=inst.loc)
+        self.constrains.append(constrain)
+        self.setattrcalls.append(inst)
 
     def typeof_assign(self, inst):
         value = inst.value

@@ -400,3 +400,10 @@ def is_pointer(ltyp):
 
 def is_struct_ptr(ltyp):
     return is_pointer(ltyp) and is_struct(ltyp.pointee)
+
+
+def get_record_member(builder, record, offset, typ):
+    inds = [0, 0, offset]
+    cinds = [Constant.int(Type.int(), i) for i in inds]
+    ptr = builder.gep(record, cinds, inbounds=True)
+    return builder.bitcast(ptr, Type.pointer(typ))

@@ -86,6 +86,11 @@ class DataFlowAnalysis(object):
     def op_POP_TOP(self, info, inst):
         info.pop()
 
+    def op_STORE_ATTR(self, info, inst):
+        target = info.pop()
+        value = info.pop()
+        info.append(inst, target=target, value=value)
+
     def op_STORE_FAST(self, info, inst):
         value = info.pop()
         info.append(inst, value=value)
@@ -165,7 +170,6 @@ class DataFlowAnalysis(object):
         printvar = info.make_temp()
         res = info.make_temp()
         info.append(inst, item=item, printvar=printvar, res=res)
-        info.push(item)
 
     def op_PRINT_NEWLINE(self, info, inst):
         printvar = info.make_temp()

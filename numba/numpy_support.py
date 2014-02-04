@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 import numpy
+import re
 from numba import types, config
 
 version = tuple(map(int, numpy.__version__.split('.')[:2]))
@@ -26,8 +27,42 @@ FROM_DTYPE = {
 }
 
 
+re_typestr = re.compile(r'[<>=\|]([a-z])(\d+)?', re.I)
+
+
+sizeof_unicode_char = numpy.dtype('U1').itemsize
+
+
 def from_dtype(dtype):
-    return FROM_DTYPE[dtype]
+    if dtype.fields is None:
+        try:
+            basetype = FROM_DTYPE[dtype]
+        except KeyError:
+            m = re_typestr.match(dtype.str)
+            if not m:
+                raise NotImplementedError(dtype)
+            groups = m.groups()
+            typecode = groups[0]
+            if typecode == 'U':
+                # unicode
+                if dtype.byteorder not in '=|':
+                    raise NotImplementedError("Does not support non-native "
+                                              "byteorder")
+                count = dtype.itemsize // sizeof_unicode_char
+                assert count == int(groups[1]), "Unicode char size mismatch"
+                return types.UnicodeCharSeq(count)
+
+            elif typecode == 'S':
+                # char
+                count = dtype.itemsize
+                assert count == int(groups[1]), "Char size mismatch"
+                return types.CharSeq(count)
+
+            raise NotImplementedError(dtype)
+
+        return basetype
+    else:
+        return from_struct_dtype(dtype)
 
 
 def is_arrayscalar(val):
@@ -52,3 +87,15 @@ def map_layout(val):
     return layout
 
 
+def from_struct_dtype(dtype):
+    if dtype.hasobject:
+        raise TypeError("Do not support object containing dtype")
+
+    fields = {}
+    for name, (elemdtype, offset) in dtype.fields.items():
+        fields[name] = from_dtype(elemdtype), offset
+
+    size = dtype.itemsize
+    align = dtype.alignment
+
+    return types.Record(str(dtype.descr), fields, size, align)

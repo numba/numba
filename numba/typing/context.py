@@ -9,7 +9,6 @@ from . import templates
 from . import builtins, mathdecl, npydecl
 
 
-
 class Context(object):
     """A typing context for storing function typing constrain template.
     """
@@ -60,6 +59,9 @@ class Context(object):
                 return res
 
     def resolve_getattr(self, value, attr):
+        if isinstance(value, types.Record):
+            return value.typeof(attr)
+
         try:
             attrinfo = self.attributes[value]
         except KeyError:
@@ -74,6 +76,12 @@ class Context(object):
         args = target, index, value
         kws = ()
         return self.resolve_function_type("setitem", args, kws)
+
+    def resolve_setattr(self, target, attr, value):
+        if isinstance(target, types.Record):
+            expectedty = target.typeof(attr)
+            if self.type_compatibility(value, expectedty) is not None:
+                return templates.signature(types.void, target, value)
 
     def get_global_type(self, gv):
         return self.globals[gv]

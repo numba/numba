@@ -212,6 +212,23 @@ class Lower(BaseLower):
         elif isinstance(inst, ir.Del):
             pass
 
+        elif isinstance(inst, ir.SetAttr):
+            target = self.loadvar(inst.target.name)
+            value = self.loadvar(inst.value.name)
+            signature = self.fndesc.calltypes[inst]
+
+            targetty = self.typeof(inst.target.name)
+            valuety = self.typeof(inst.value.name)
+            assert signature is not None
+            assert signature.args[0] == targetty
+            impl = self.context.get_setattr(inst.attr, signature)
+
+            # Convert argument to match
+            value = self.context.cast(self.builder, value, valuety,
+                                      signature.args[1])
+
+            return impl(self.builder, (target, value))
+
         else:
             raise NotImplementedError(type(inst))
 

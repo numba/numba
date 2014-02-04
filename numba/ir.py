@@ -174,6 +174,17 @@ class SetItem(Stmt):
         return '%s[%s] = %s' % (self.target, self.index, self.value)
 
 
+class SetAttr(Stmt):
+    def __init__(self, target, attr, value, loc):
+        self.target = target
+        self.attr = attr
+        self.value = value
+        self.loc = loc
+
+    def __repr__(self):
+        return '(%s).%s = %s' % (self.target, self.attr, self.value)
+
+
 class Del(Stmt):
     def __init__(self, value, loc):
         self.value = value

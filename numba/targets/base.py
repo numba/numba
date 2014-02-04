@@ -3,10 +3,10 @@ from collections import namedtuple, defaultdict
 import llvm.core as lc
 from llvm.core import Type, Constant
 import numpy
-from numba import types, utils, cgutils, typing
+from numba import types, utils, cgutils, typing, numpy_support
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, python_attr_impl, BUILTINS,
-                                    BUILTIN_ATTRS)
+                                    BUILTIN_ATTRS, impl_attribute)
 from numba.targets import builtins
 
 
@@ -239,6 +239,14 @@ class BaseContext(object):
             stty = self.get_struct_type(self.make_unituple_iter(ty))
             return Type.pointer(stty)
 
+        elif isinstance(ty, types.Record):
+            # Record are represented as byte array
+            return Type.struct([Type.array(Type.int(8), ty.size)])
+
+        elif isinstance(ty, types.UnicodeCharSeq):
+            charty = Type.int(numpy_support.sizeof_unicode_char * 8)
+            return Type.struct([Type.array(charty, ty.count)])
+
         elif ty in STRUCT_TYPES:
             return self.get_struct_type(STRUCT_TYPES[ty])
 
@@ -311,6 +319,25 @@ class BaseContext(object):
         lty = self.get_value_type(ty)
         return Constant.null(lty)
 
+    def get_setattr(self, attr, sig):
+        typ = sig.args[0]
+        if isinstance(typ, types.Record):
+            offset = typ.offset(attr)
+            elemty = typ.typeof(attr)
+
+            def imp(context, builder, sig, args):
+                valty = sig.args[1]
+                [target, val] = args
+                dptr = cgutils.get_record_member(builder, target, offset,
+                                                 self.get_data_type(elemty))
+
+                if self.is_struct_type(valty):
+                    val = builder.load(val)
+
+                builder.store(val, dptr)
+
+            return _wrap_impl(imp, self, sig)
+
     def get_function(self, fn, sig):
         if isinstance(fn, types.Function):
             key = fn.template.key
@@ -327,6 +354,23 @@ class BaseContext(object):
             raise Exception("No definition for lowering %s%s" % (key, sig))
 
     def get_attribute(self, val, typ, attr):
+        if isinstance(typ, types.Record):
+            offset = typ.offset(attr)
+            elemty = typ.typeof(attr)
+
+            @impl_attribute(typ, attr, elemty)
+            def imp(context, builder, typ, val):
+                dataty = self.get_data_type(elemty)
+                dptr = cgutils.get_record_member(builder, val, offset,
+                                                 self.get_data_type(elemty))
+
+                if self.is_struct_type(elemty):
+                    return dptr
+                else:
+                    return builder.load(dptr)
+
+            return imp
+
         key = typ, attr
         try:
             return self.attrs[key]

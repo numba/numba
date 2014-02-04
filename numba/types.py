@@ -183,6 +183,66 @@ class Method(Function):
         return hash((self.template.__name__, self.this))
 
 
+class CharSeq(Type):
+    def __init__(self, count):
+        self.count = count
+        name = "[char x %d]" % count
+        super(CharSeq, self).__init__(name, param=True)
+
+    def __eq__(self, other):
+        if isinstance(other, CharSeq):
+            return self.count == other.count
+
+    def __hash__(self):
+        return hash(self.name)
+
+
+class UnicodeCharSeq(Type):
+    def __init__(self, count):
+        self.count = count
+        name = "[unichr x %d]" % count
+        super(UnicodeCharSeq, self).__init__(name, param=True)
+
+    def __eq__(self, other):
+        if isinstance(other, UnicodeCharSeq):
+            return self.count == other.count
+
+    def __hash__(self):
+        return hash(self.name)
+
+
+class Record(Type):
+    def __init__(self, id, fields, size, align):
+        self.id = id
+        self.fields = fields.copy()
+        self.size = size
+        self.align = align
+        name = 'Record(%s)' % id
+        super(Record, self).__init__(name)
+
+    def __eq__(self, other):
+        if isinstance(other, Record):
+            return (self.id == other.id and
+                    self.size == other.size and
+                    self.align == other.align)
+
+    def __hash__(self):
+        return hash(self.name)
+
+    def __len__(self):
+        return len(self.fields)
+
+    def offset(self, key):
+        return self.fields[key][1]
+
+    def typeof(self, key):
+        return self.fields[key][0]
+
+    @property
+    def members(self):
+        return [(f, t) for f, (t, _) in self.fields.items()]
+
+
 class Array(Type):
     __slots__ = 'dtype', 'ndim', 'layout'
 
