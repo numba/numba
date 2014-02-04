@@ -92,7 +92,7 @@ class Prototype(Type):
     def __init__(self, args, return_type):
         self.args = args
         self.return_type = return_type
-        name = "%s%s" % (return_type, ', '.join(str(a) for a in args))
+        name = "%s(%s)" % (return_type, ', '.join(str(a) for a in args))
         super(Prototype, self).__init__(name=name)
 
 
