@@ -37,6 +37,13 @@ class Overloaded(_dispatcher.Dispatcher):
 
         self.targetdescr.typing_context.insert_overloaded(self)
 
+    @property
+    def signatures(self):
+        """
+        Returns a list of compiled function signatures.
+        """
+        return list(self.overloads.keys())
+
     def disable_compile(self, val=True):
         """Disable the compilation of new signatures at call time.
         """
