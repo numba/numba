@@ -43,8 +43,8 @@ class TypeAnnotation(object):
 
     def annotate(self, interp, typemap, calltypes):
         source = SourceLines(interp.bytecode.func)
-        if not source.avail:
-            return "Source code unavailable"
+        # if not source.avail:
+        #     return "Source code unavailable"
 
         # Prepare annotations
         groupedinst = defaultdict(list)
@@ -71,15 +71,22 @@ class TypeAnnotation(object):
         # Format annotations
         io = StringIO()
         with closing(io):
-            for num in source:
-                srcline = source[num]
-                ind = _getindent(srcline)
-                print("%s# --- LINE %d --- " % (ind, num), file=io)
-                for inst in groupedinst[num]:
-                    print('%s# %s' % (ind, inst), file=io)
-                print(file=io)
-                print(srcline, file=io)
-                print(file=io)
+            if source.avail:
+                for num in source:
+                    srcline = source[num]
+                    ind = _getindent(srcline)
+                    print("%s# --- LINE %d --- " % (ind, num), file=io)
+                    for inst in groupedinst[num]:
+                        print('%s# %s' % (ind, inst), file=io)
+                    print(file=io)
+                    print(srcline, file=io)
+                    print(file=io)
+            else:
+                print("# Source code unavailable", file=io)
+                for num in groupedinst:
+                    for inst in groupedinst[num]:
+                        print('%s' % (inst,), file=io)
+                    print(file=io)
 
             return io.getvalue()
 
