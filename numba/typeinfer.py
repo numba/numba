@@ -30,10 +30,13 @@ if PYVERSION < (3, 0):
 
 
 class TypingError(Exception):
-    def __init__(self, msg, loc):
+    def __init__(self, msg, loc=None):
         self.msg = msg
         self.loc = loc
-        super(TypingError, self).__init__("%s\n%s" % (msg, loc.strformat()))
+        if loc:
+            super(TypingError, self).__init__("%s\n%s" % (msg, loc.strformat()))
+        else:
+            super(TypingError, self).__init__("%s" % (msg,))
 
 
 class TypeVar(object):
@@ -54,8 +57,8 @@ class TypeVar(object):
                 [expect] = list(self.typeset)
                 for ty in types:
                     if self.context.type_compatibility(ty, expect) is None:
-                        raise TypingError("No convertsion from %s to %s" %
-                                          (ty, expect))
+                        raise TypingError("No convertsion from %s to %s for "
+                                          "'%s'" % (ty, expect, self.var))
         else:
             self.typeset |= set(types)
 

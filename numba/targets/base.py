@@ -251,6 +251,33 @@ class BaseContext(object):
             return Type.pointer(dataty)
         return dataty
 
+    def pack_value(self, builder, ty, value, ptr):
+        """Pack data for array storage
+        """
+        if self.is_struct_type(ty):
+            # Structures are handed around as pointer to structures
+            value = builder.load(value)
+        assert value.type == ptr.type.pointee
+        builder.store(value, ptr)
+
+    def unpack_value(self, builder, ty, ptr):
+        """Unpack data from array storage
+        """
+        if self.is_struct_type(ty):
+            # Regular structures
+            # Copy the structure into the stack
+            lty = self.get_value_type(ty).pointee
+            tmp = cgutils.alloca_once(builder, lty)
+            val = builder.load(ptr)
+            assert val.type == tmp.type.pointee, \
+                    "storing %s into %s" % (val.type, tmp.type)
+            builder.store(val, tmp)
+            return tmp
+        else:
+            # Others, almost scalars
+            return builder.load(ptr)
+
+
     def is_struct_type(self, ty):
         return cgutils.is_struct(self.get_data_type(ty))
 
