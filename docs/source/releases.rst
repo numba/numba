@@ -8,6 +8,83 @@
 Release Notes
 ======================
 
+Version 0.12
+------------
+* Major refactor of compiler
+* Better fallback to object mode when native mode fails
+* Merge autojit into jit for unified interface
+* Jitted function can now be overloaded
+* Add njit for nopython mode jit
+* Provide numba.vectorize and numba.guvectorize
+    * Old numba.vectorize.vectorize is removed
+* Deprecate autojit, GUVectorize
+
+Version 0.11
+------------
+* Experimental support for NumPy datetime type
+
+Version 0.10
+------------
+* Annotation tool (./bin/numba --annotate --fancy) (thanks to Jay Bourque)
+* Open sourced prange
+* Support for raise statement
+* Pluggable array representation
+* Support for enumerate and zip (thanks to Eugene Toder)
+* Better string formatting support (thanks to Eugene Toder)
+* Builtins min(), max() and bool() (thanks to Eugene Toder)
+* Fix some code reloading issues (thanks to Björn Linse)
+* Recognize NumPy scalar objects (thanks to Björn Linse)
+
+
+Version 0.9
+-----------
+* Improved math support
+* Open sourced generalized ufuncs
+* Improved array expressions
+
+Version 0.8
+-----------
+* Support for autojit classes
+    * Inheritance not yet supported
+* Python 3 support for pycc
+* Allow retrieval of ctypes function wrapper
+    * And hence support retrieval of a pointer to the function
+* Fixed a memory leak of array slicing views
+
+Version 0.7.2
+-------------
+* Official Python 3 support (python 3.2 and 3.3)
+* Support for intrinsics and instructions
+* Various bug fixes (see https://github.com/numba/numba/issues?milestone=7&state=closed)
+
+Version 0.7.1
+-------------
+* Various bug fixes
+
+Version 0.7
+-----------
+* Open sourced single-threaded ufunc vectorizer
+* Open sourced NumPy array expression compilation
+* Open sourced fast NumPy array slicing
+* Experimental Python 3 support
+* Support for typed containers
+    * typed lists and tuples
+* Support for iteration over objects
+* Support object comparisons
+* Preliminary CFFI support
+    * Jit calls to CFFI functions (passed into autojit functions)
+    * TODO: Recognize ffi_lib.my_func attributes
+* Improved support for ctypes
+* Allow declaring extension attribute types as through class attributes
+* Support for type casting in Python
+    * Get the same semantics with or without numba compilation
+* Support for recursion
+    * For jit methods and extension classes
+* Allow jit functions as C callbacks
+* Friendlier error reporting
+* Internal improvements
+* A variety of bug fixes
+
 Version 0.6.1
 --------------
 * Support for bitwise operations

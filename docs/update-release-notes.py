@@ -3,7 +3,7 @@
 Run me to update the release notes in the documentation.
 
 I will pull the content from ../CHANGE_LOG and insert that into
-./source/doc/releases.rst
+./source/releases.rst
 '''
 from __future__ import print_function, division, absolute_import
 
@@ -25,7 +25,7 @@ def main():
     curdir = dirname(__file__)
     changelog_path = join(curdir, '..', 'CHANGE_LOG')
     assert isfile(changelog_path), ("%s does not exist" % changelog_path)
-    doc_releases = join(curdir, 'source', 'doc', 'releases.rst')
+    doc_releases = join(curdir, 'source', 'releases.rst')
     with open(changelog_path) as fin:
         content = fin.read()
     with open(doc_releases, 'w') as fout:

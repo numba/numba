@@ -2,13 +2,12 @@
 from __future__ import print_function, division, absolute_import
 import numba
 from numba import *
-from numba.tests.test_support import autojit_py3doc
 import numpy as np
 
 int32p = int32.pointer()
 voidp = void.pointer()
 
-@autojit_py3doc
+@jit
 def test_pointer_arithmetic():
     """
     >>> test_pointer_arithmetic()
@@ -19,7 +18,7 @@ def test_pointer_arithmetic():
     p += 2
     return Py_uintptr_t(p) # 0 + 4 * 12
 
-@autojit_py3doc(locals={"pointer_value": Py_uintptr_t})
+@jit(locals={"pointer_value": Py_uintptr_t})
 def test_pointer_indexing(pointer_value, type_p):
     """
     >>> a = np.array([1, 2, 3, 4], dtype=np.float32)
@@ -33,7 +32,7 @@ def test_pointer_indexing(pointer_value, type_p):
     p = type_p(pointer_value)
     return p[0], p[1], p[2], p[3]
 
-@autojit
+@jit
 def test_compare_null():
     """
     >>> test_compare_null()
@@ -41,4 +40,4 @@ def test_compare_null():
     """
     return voidp(Py_uintptr_t(0)) == numba.NULL
 
-numba.testing.testmod()
+test_pointer_arithmetic()

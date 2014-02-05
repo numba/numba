@@ -6,8 +6,6 @@ class MyClass(object):
     def mymethod(self, arg):
         return arg * 2
 
-# Support for locals keyword is removed
-# autojit(locals=dict(mydouble=double)) # specify types for local variables
 @jit
 def call_method(obj):
     print(obj.mymethod("hello"))  # object result
