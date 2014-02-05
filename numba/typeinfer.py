@@ -406,8 +406,8 @@ class TypeInferer(object):
             self.typevars[target.name].lock(ty)
         elif const is None:
             self.typevars[target.name].lock(types.none)
-        elif isinstance(const, str):
-            self.typevars[target.name].lock(types.string)
+        # elif isinstance(const, str):
+        #     self.typevars[target.name].lock(types.string)
         elif isinstance(const, complex):
             self.typevars[target.name].lock(types.complex128)
         elif isinstance(const, tuple):
