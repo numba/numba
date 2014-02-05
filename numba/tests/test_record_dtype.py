@@ -31,6 +31,10 @@ def set_c(ary, i, v):
     ary[i].c = v
 
 
+def set_record(ary, i, j):
+    ary[i] = ary[j]
+
+
 recordtype = np.dtype([('a', np.float64),
                        ('b', np.int32),
                        ('c', np.complex64),
@@ -103,6 +107,25 @@ class TestRecordDtype(unittest.TestCase):
 
     def test_set_c(self):
         self._test_set_equal(set_c, 43j, types.complex64)
+
+    def test_set_record(self):
+        pyfunc = set_record
+        rec = numpy_support.from_dtype(recordtype)
+        cres = compile_isolated(pyfunc, (rec[:], types.intp, types.intp))
+        cfunc = cres.entry_point
+
+        test_indices = [(0, 1), (1, 2), (0, 2)]
+        for i, j in test_indices:
+            expect = self.sample1d.copy()
+            pyfunc(expect, i, j)
+
+            got = self.sample1d.copy()
+            cfunc(got, i, j)
+
+            # Match the entire array to ensure no memory corruption
+            self.assertEqual(expect[i], expect[j])
+            self.assertEqual(got[i], got[j])
+            self.assertTrue(np.all(expect == got))
 
 
 if __name__ == '__main__':

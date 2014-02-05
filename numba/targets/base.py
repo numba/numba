@@ -255,13 +255,25 @@ class BaseContext(object):
 
     def get_value_type(self, ty):
         dataty = self.get_data_type(ty)
-        if cgutils.is_struct(dataty):
+        if isinstance(ty, types.Record):
+            # Record data are passed by refrence
+            datatype = self.get_data_type(ty)
+            memory = datatype.elements[0]
+            return Type.pointer(Type.struct([Type.pointer(memory)]))
+        elif cgutils.is_struct(dataty):
             return Type.pointer(dataty)
         return dataty
 
     def pack_value(self, builder, ty, value, ptr):
         """Pack data for array storage
         """
+        if isinstance(ty, types.Record):
+            pdata = cgutils.get_record_data(builder, value)
+            databuf = builder.load(pdata)
+            casted = builder.bitcast(ptr, Type.pointer(databuf.type))
+            builder.store(databuf, casted)
+            return
+
         if self.is_struct_type(ty):
             # Structures are handed around as pointer to structures
             value = builder.load(value)
@@ -271,7 +283,13 @@ class BaseContext(object):
     def unpack_value(self, builder, ty, ptr):
         """Unpack data from array storage
         """
-        if self.is_struct_type(ty):
+        if isinstance(ty, types.Record):
+            vt = self.get_value_type(ty)
+            tmp = cgutils.alloca_once(builder, vt.pointee)
+            dataptr = cgutils.inbound_gep(builder, ptr, 0, 0)
+            builder.store(dataptr, cgutils.inbound_gep(builder, tmp, 0, 0))
+            return tmp
+        elif self.is_struct_type(ty):
             # Regular structures
             # Copy the structure into the stack
             lty = self.get_value_type(ty).pointee
@@ -284,7 +302,6 @@ class BaseContext(object):
         else:
             # Others, almost scalars
             return builder.load(ptr)
-
 
     def is_struct_type(self, ty):
         return cgutils.is_struct(self.get_data_type(ty))

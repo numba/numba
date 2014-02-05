@@ -403,7 +403,35 @@ def is_struct_ptr(ltyp):
 
 
 def get_record_member(builder, record, offset, typ):
-    inds = [0, 0, offset]
-    cinds = [Constant.int(Type.int(), i) for i in inds]
-    ptr = builder.gep(record, cinds, inbounds=True)
-    return builder.bitcast(ptr, Type.pointer(typ))
+    pdata = get_record_data(builder, record)
+    pval = inbound_gep(builder, pdata, 0, offset)
+    assert not is_pointer(pval.type.pointee)
+    return builder.bitcast(pval, Type.pointer(typ))
+
+def get_record_data(builder, record):
+    ppdata = inbound_gep(builder, record, 0, 0)
+    pdata = builder.load(ppdata)
+    return pdata
+
+
+def inbound_gep(builder, ptr, *inds):
+    idx = []
+    for i in inds:
+        if isinstance(i, int):
+            ind = Constant.int(Type.int(32), i)
+        else:
+            ind = i
+        idx.append(ind)
+    return builder.gep(ptr, idx, inbounds=True)
+
+
+def gep(builder, ptr, *inds):
+    idx = []
+    for i in inds:
+        if isinstance(i, int):
+            ind = Constant.int(Type.int(64), i)
+        else:
+            ind = i
+        idx.append(ind)
+    return builder.gep(ptr, idx)
+
