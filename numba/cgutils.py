@@ -408,10 +408,24 @@ def get_record_member(builder, record, offset, typ):
     assert not is_pointer(pval.type.pointee)
     return builder.bitcast(pval, Type.pointer(typ))
 
+
 def get_record_data(builder, record):
     ppdata = inbound_gep(builder, record, 0, 0)
     pdata = builder.load(ppdata)
     return pdata
+
+
+def set_record_data(builder, record, buf):
+    ppdata = inbound_gep(builder, record, 0, 0)
+    builder.store(buf, ppdata)
+
+
+def init_record_by_ptr(builder, ltyp, ptr):
+    tmp = alloca_once(builder, ltyp.pointee)
+    pdata = ltyp.pointee.elements[0]
+    buf = builder.bitcast(ptr, pdata)
+    set_record_data(builder, tmp, buf)
+    return tmp
 
 
 def inbound_gep(builder, ptr, *inds):
@@ -434,4 +448,3 @@ def gep(builder, ptr, *inds):
             ind = i
         idx.append(ind)
     return builder.gep(ptr, idx)
-

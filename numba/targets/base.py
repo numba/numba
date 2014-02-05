@@ -374,11 +374,7 @@ class BaseContext(object):
                 [target, val] = args
                 dptr = cgutils.get_record_member(builder, target, offset,
                                                  self.get_data_type(elemty))
-
-                if self.is_struct_type(valty):
-                    val = builder.load(val)
-
-                builder.store(val, dptr)
+                self.pack_value(builder, valty, val, dptr)
 
             return _wrap_impl(imp, self, sig)
 
@@ -404,15 +400,9 @@ class BaseContext(object):
 
             @impl_attribute(typ, attr, elemty)
             def imp(context, builder, typ, val):
-                dataty = self.get_data_type(elemty)
                 dptr = cgutils.get_record_member(builder, val, offset,
                                                  self.get_data_type(elemty))
-
-                if self.is_struct_type(elemty):
-                    return dptr
-                else:
-                    return builder.load(dptr)
-
+                return self.unpack_value(builder, elemty, dptr)
             return imp
 
         key = typ, attr

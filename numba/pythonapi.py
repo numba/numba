@@ -24,6 +24,8 @@ def fix_python_api():
     le.dylib_add_symbol("NumbaComplexAdaptor",
                         _helperlib.get_complex_adaptor())
     le.dylib_add_symbol("NumbaNativeError", id(NativeError))
+    le.dylib_add_symbol("NumbaExtractRecordData",
+                        _helperlib.get_extract_record_data())
     le.dylib_add_symbol("PyExc_NameError", id(NameError))
 
 
@@ -512,6 +514,14 @@ class PythonAPI(object):
         elif isinstance(typ, types.Array):
             return self.to_native_array(typ, obj)
 
+        elif isinstance(typ, types.Record):
+            ptr = self.extract_recorddata(obj)
+            with cgutils.if_unlikely(self.builder,
+                                     cgutils.is_null(self.builder, ptr)):
+                self.builder.ret(ptr)
+            ltyp = self.context.get_value_type(typ)
+            return cgutils.init_record_by_ptr(self.builder, ltyp, ptr)
+
         raise NotImplementedError(typ)
 
     def from_native_return(self, val, typ):
@@ -591,6 +601,11 @@ class PythonAPI(object):
         fnty = Type.function(Type.int(), [self.pyobj, cmplx.type])
         fn = self._get_function(fnty, name="NumbaComplexAdaptor")
         return self.builder.call(fn, [cobj, cmplx])
+
+    def extract_recorddata(self, obj):
+        fnty = Type.function(Type.pointer(Type.int(8)), [self.pyobj])
+        fn = self._get_function(fnty, name="NumbaExtractRecordData")
+        return self.builder.call(fn, [obj])
 
     def get_module_dict_symbol(self):
         md_pymod = cgutils.MetadataKeyStore(self.module, "python.module")

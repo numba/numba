@@ -35,6 +35,24 @@ def set_record(ary, i, j):
     ary[i] = ary[j]
 
 
+def get_record_a(rec, val):
+    x = rec.a
+    rec.a = val
+    return x
+
+
+def get_record_b(rec, val):
+    x = rec.b
+    rec.b = val
+    return x
+
+
+def get_record_c(rec, val):
+    x = rec.c
+    rec.c = val
+    return x
+
+
 recordtype = np.dtype([('a', np.float64),
                        ('b', np.int32),
                        ('c', np.complex64),
@@ -126,6 +144,27 @@ class TestRecordDtype(unittest.TestCase):
             self.assertEqual(expect[i], expect[j])
             self.assertEqual(got[i], got[j])
             self.assertTrue(np.all(expect == got))
+
+    def test_record_args(self):
+        """
+        Testing scalar record value as argument
+        """
+        recval = self.sample1d.copy()[0]
+        attrs = 'abc'
+        valtypes = types.float64, types.int32, types.complex64
+        values = 1.23, 123432, 132j
+
+        for attr, valtyp, val in zip(attrs, valtypes, values):
+            expected = getattr(recval, attr)
+
+            pyfunc = globals()['get_record_' + attr]
+            nbrecord = numpy_support.from_dtype(recordtype)
+            cres = compile_isolated(pyfunc, [nbrecord, valtyp])
+            cfunc = cres.entry_point
+
+            got = cfunc(recval, val)
+            self.assertEqual(expected, got)
+            self.assertNotEqual(recval.a, got)
 
 
 if __name__ == '__main__':

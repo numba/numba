@@ -55,7 +55,58 @@ int Numba_to_complex(PyObject* obj, Py_complex *out) {
     return 1;
 }
 
+/* Minimum PyBufferObject structure to hack inside it */
+typedef struct {
+    PyObject_HEAD
+    PyObject *b_base;
+    void *b_ptr;
+    Py_ssize_t b_size;
+    Py_ssize_t b_offset;
+}  PyBufferObject_Hack;
 
+/*
+Get data address of record data buffer
+*/
+static
+void* Numba_extract_record_data(PyObject *recordobj) {
+    PyObject *attrdata;
+    PyBufferObject_Hack *hack;
+    void *ptr;
+    Py_buffer buf;
+
+    attrdata = PyObject_GetAttrString(recordobj, "data");
+    if (!attrdata) return NULL;
+
+    if (-1 == PyObject_GetBuffer(attrdata, &buf, 0)){
+        #if PY_MAJOR_VERSION >= 3
+            return NULL;
+        #else
+            /* HACK!!! */
+            /* In Python 2.6, it will report no buffer interface for record
+               even though it should */
+            hack = (PyBufferObject_Hack*) attrdata;
+
+            if (hack->b_base == NULL) {
+                ptr = hack->b_ptr;
+            } else {
+                PyBufferProcs *bp;
+                readbufferproc proc = NULL;
+
+                bp = hack->b_base->ob_type->tp_as_buffer;
+                /* FIXME Ignoring any flag.  Just give me the pointer */
+                proc = (readbufferproc)bp->bf_getreadbuffer;
+                if ((*proc)(hack->b_base, 0, &ptr) <= 0) {
+                    return NULL;
+                }
+                ptr = (char*)ptr + hack->b_offset;
+            }
+        #endif
+    } else {
+        ptr = buf.buf;
+    }
+    Py_DECREF(attrdata);
+    return ptr;
+}
 
 #define EXPOSE(Fn, Sym) static void* Sym(){return PyLong_FromVoidPtr(&Fn);}
 EXPOSE(Numba_sdiv, get_sdiv)
@@ -64,6 +115,7 @@ EXPOSE(Numba_udiv, get_udiv)
 EXPOSE(Numba_urem, get_urem)
 EXPOSE(Numba_cpow, get_cpow)
 EXPOSE(Numba_to_complex, get_complex_adaptor)
+EXPOSE(Numba_extract_record_data, get_extract_record_data)
 #undef EXPOSE
 
 /*
@@ -94,6 +146,7 @@ static PyMethodDef ext_methods[] = {
     declmethod(get_urem),
     declmethod(get_cpow),
     declmethod(get_complex_adaptor),
+    declmethod(get_extract_record_data),
 
     /* Declare math exposer */
     #define MATH_UNARY(F, R, A) declmethod(get_##F),
