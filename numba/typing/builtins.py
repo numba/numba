@@ -24,6 +24,25 @@ class Print(ConcreteTemplate):
 
 
 @builtin
+class PrintOthers(AbstractTemplate):
+    key = types.print_type
+
+    def accepted_types(self, ty):
+        if ty in types.integer_domain or ty in types.real_domain:
+            return True
+
+        if isinstance(ty, types.CharSeq):
+            return True
+
+    def generic(self, args, kws):
+        assert not kws, "kwargs to print is not supported."
+        for a in args:
+            if not self.accepted_types(a):
+                raise TypeError("Type %s is not printable." % a)
+        return signature(types.none, *args)
+
+
+@builtin
 class Abs(ConcreteTemplate):
     key = types.abs_type
     intcases = [signature(ty, ty) for ty in types.signed_domain]

@@ -615,7 +615,7 @@ class PyLower(BaseLower):
 
     def lower_const(self, const):
         if isinstance(const, str):
-            ret = self.pyapi.string_from_string_and_size(const)
+            ret = self.pyapi.string_from_constant_string(const)
             self.check_error(ret)
             return ret
         elif isinstance(const, complex):

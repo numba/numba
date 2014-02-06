@@ -52,12 +52,15 @@ class Overloads(object):
         self.versions = []
 
     def find(self, sig):
-        for ver in self.versions:
+        for i, ver in enumerate(self.versions):
             if ver.signature == sig:
                 return ver
+
             # As generic type
-            if (len(ver.signature.args) == len(sig.args) or
-                    ver.signature.args[-1] == types.VarArg):
+            nargs_matches = len(ver.signature.args) == len(sig.args)
+            varargs_matches = (ver.signature.args[-1] == types.VarArg and
+                               len(ver.signature.args) - 1 <= len(sig.args))
+            if nargs_matches or varargs_matches:
                 match = True
                 for formal, actual in zip(ver.signature.args, sig.args):
                     if formal == types.VarArg:
@@ -245,6 +248,10 @@ class BaseContext(object):
 
         elif isinstance(ty, types.UnicodeCharSeq):
             charty = Type.int(numpy_support.sizeof_unicode_char * 8)
+            return Type.struct([Type.array(charty, ty.count)])
+
+        elif isinstance(ty, types.CharSeq):
+            charty = Type.int(8)
             return Type.struct([Type.array(charty, ty.count)])
 
         elif ty in STRUCT_TYPES:

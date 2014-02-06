@@ -325,16 +325,23 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name=fname)
         return self.builder.call(fn, [strobj])
 
-    def string_from_string_and_size(self, string):
+    def string_from_string_and_size(self, string, size):
         fnty = Type.function(self.pyobj, [self.cstring, self.py_ssize_t])
         if PYVERSION >= (3, 0):
             fname = "PyUnicode_FromStringAndSize"
         else:
             fname = "PyString_FromStringAndSize"
         fn = self._get_function(fnty, name=fname)
-        cstr = self.context.insert_const_string(self.module, string)
-        sz = self.context.get_constant(types.intp, len(string))
-        return self.builder.call(fn, [cstr, sz])
+        return self.builder.call(fn, [string, size])
+
+    def bytes_from_string_and_size(self, string, size):
+        fnty = Type.function(self.pyobj, [self.cstring, self.py_ssize_t])
+        if PYVERSION >= (3, 0):
+            fname = "PyBytes_FromStringAndSize"
+        else:
+            fname = "PyString_FromStringAndSize"
+        fn = self._get_function(fnty, name=fname)
+        return self.builder.call(fn, [string, size])
 
     def object_str(self, obj):
         fnty = Type.function(self.pyobj, [self.pyobj])
@@ -416,9 +423,13 @@ class PythonAPI(object):
     def print_object(self, obj):
         strobj = self.object_str(obj)
         cstr = self.string_as_string(strobj)
-        fmt = self.context.insert_const_string(self.module, "%s\n")
+        fmt = self.context.insert_const_string(self.module, "%s")
         self.sys_write_stdout(fmt, cstr)
         self.decref(strobj)
+
+    def print_string(self, text):
+        fmt = self.context.insert_const_string(self.module, text)
+        self.sys_write_stdout(fmt)
 
     def get_null_object(self):
         return Constant.null(self.pyobj)
@@ -668,3 +679,8 @@ class PythonAPI(object):
         except LLVMException:
             return self.module.add_global_variable(self.pyobj.pointee,
                                                    name=name)
+
+    def string_from_constant_string(self, string):
+        cstr = self.context.insert_const_string(self.module, string)
+        sz = self.context.get_constant(types.intp, len(string))
+        return self.string_from_string_and_size(cstr, sz)
