@@ -18,6 +18,11 @@ _typecache = defaultdict(_autoincr)
 
 
 class Type(object):
+    """
+    The default behavior is to provide equality through `name` attribute.
+    Two types are equal if there `name` are equal.
+    Subclass can refine this behavior.
+    """
     __slots__ = '_code', 'name', 'is_parametric'
 
     def __init__(self, name, param=False):
@@ -32,7 +37,7 @@ class Type(object):
         return hash(self.name)
 
     def __eq__(self, other):
-        return self is other
+        return self.name == other.name
 
     def __ne__(self, other):
         return not (self == other)
