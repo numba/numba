@@ -53,6 +53,10 @@ def get_record_c(rec, val):
     return x
 
 
+def record_return(ary, i):
+    return ary[i]
+
+
 recordtype = np.dtype([('a', np.float64),
                        ('b', np.int32),
                        ('c', np.complex64),
@@ -165,6 +169,27 @@ class TestRecordDtype(unittest.TestCase):
             got = cfunc(recval, val)
             self.assertEqual(expected, got)
             self.assertNotEqual(recval.a, got)
+
+    def test_record_return(self):
+        """
+        Testing scalar record value as return value.
+        We can only return a copy of the record.
+        """
+        pyfunc = record_return
+        recty = numpy_support.from_dtype(recordtype)
+        cres = compile_isolated(pyfunc, [recty[:], types.intp])
+        cfunc = cres.entry_point
+
+        attrs = 'abc'
+        indices = [0, 1, 2]
+        for index, attr in zip(indices, attrs):
+            ary = self.sample1d.copy()
+            res = cfunc(ary, index)
+            self.assertEqual(ary[index], res)
+            # Prove that this is a by-value copy
+            setattr(res, attr, 0)
+            self.assertNotEqual(ary[index], res)
+
 
 
 if __name__ == '__main__':

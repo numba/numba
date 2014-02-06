@@ -26,6 +26,8 @@ def fix_python_api():
     le.dylib_add_symbol("NumbaNativeError", id(NativeError))
     le.dylib_add_symbol("NumbaExtractRecordData",
                         _helperlib.get_extract_record_data())
+    le.dylib_add_symbol("NumbaRecreateRecord",
+                        _helperlib.get_recreate_record())
     le.dylib_add_symbol("PyExc_NameError", id(NameError))
 
 
@@ -571,6 +573,18 @@ class PythonAPI(object):
         elif isinstance(typ, types.Optional):
             return self.from_native_return(val, typ.type)
 
+        elif isinstance(typ, types.Record):
+            # Note we will create a copy of the record
+            # This is the only safe way.
+            pdata = cgutils.get_record_data(self.builder, val)
+            size = Constant.int(Type.int(), pdata.type.pointee.count)
+            ptr = self.builder.bitcast(pdata, Type.pointer(Type.int(8)))
+            # Note: this will only work for CPU mode
+            #       The following requires access to python object
+            dtype_addr = Constant.int(self.py_ssize_t, id(typ.dtype))
+            dtypeobj = dtype_addr.inttoptr(self.pyobj)
+            return self.recreate_record(ptr, size, dtypeobj)
+
         raise NotImplementedError(typ)
 
     def to_native_array(self, typ, ary):
@@ -606,6 +620,12 @@ class PythonAPI(object):
         fnty = Type.function(Type.pointer(Type.int(8)), [self.pyobj])
         fn = self._get_function(fnty, name="NumbaExtractRecordData")
         return self.builder.call(fn, [obj])
+
+    def recreate_record(self, pdata, size, dtypeaddr):
+        fnty = Type.function(self.pyobj, [Type.pointer(Type.int(8)),
+                                          Type.int(), self.pyobj])
+        fn = self._get_function(fnty, name="NumbaRecreateRecord")
+        return self.builder.call(fn, [pdata, size, dtypeaddr])
 
     def get_module_dict_symbol(self):
         md_pymod = cgutils.MetadataKeyStore(self.module, "python.module")

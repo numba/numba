@@ -98,4 +98,4 @@ def from_struct_dtype(dtype):
     size = dtype.itemsize
     align = dtype.alignment
 
-    return types.Record(str(dtype.descr), fields, size, align)
+    return types.Record(str(dtype.descr), fields, size, align, dtype)

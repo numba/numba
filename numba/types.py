@@ -212,11 +212,12 @@ class UnicodeCharSeq(Type):
 
 
 class Record(Type):
-    def __init__(self, id, fields, size, align):
+    def __init__(self, id, fields, size, align, dtype):
         self.id = id
         self.fields = fields.copy()
         self.size = size
         self.align = align
+        self.dtype = dtype
         name = 'Record(%s)' % id
         super(Record, self).__init__(name)
 

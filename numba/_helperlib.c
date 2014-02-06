@@ -70,7 +70,6 @@ Get data address of record data buffer
 static
 void* Numba_extract_record_data(PyObject *recordobj) {
     PyObject *attrdata;
-    PyBufferObject_Hack *hack;
     void *ptr;
     Py_buffer buf;
 
@@ -84,6 +83,7 @@ void* Numba_extract_record_data(PyObject *recordobj) {
             /* HACK!!! */
             /* In Python 2.6, it will report no buffer interface for record
                even though it should */
+            PyBufferObject_Hack *hack;
             hack = (PyBufferObject_Hack*) attrdata;
 
             if (hack->b_base == NULL) {
@@ -108,6 +108,73 @@ void* Numba_extract_record_data(PyObject *recordobj) {
     return ptr;
 }
 
+static
+PyObject* Numba_recreate_record(void *pdata, int size, PyObject *dtype){
+    /*
+    import numpy
+    buffer = memoryview(pdata, size)
+    aryobj = numpy.array(buffer, dtype=(numpy.record, dtype))
+    return aryobj[0]
+    */
+    PyObject *buffer = NULL;
+    PyObject *numpy = NULL;
+    PyObject *numpy_array = NULL;
+    PyObject *numpy_record = NULL;
+    PyObject *aryobj = NULL;
+    PyObject *args = NULL;
+    PyObject *kwargs = NULL;
+    PyObject *dtypearg = NULL;
+    PyObject *record = NULL;
+    PyObject *index = NULL;
+
+#if PY_MAJOR_VERSION >= 3
+    buffer = PyMemoryView_FromMemory(pdata, size, PyBUF_WRITE);
+#else
+    buffer = PyBuffer_FromMemory(pdata, size);
+#endif
+    if (!buffer) goto CLEANUP;
+
+    numpy = PyImport_ImportModuleNoBlock("numpy");
+    if (!numpy) goto CLEANUP;
+
+    numpy_array = PyObject_GetAttrString(numpy, "array");
+    if (!numpy_array) goto CLEANUP;
+
+    numpy_record = PyObject_GetAttrString(numpy, "record");
+    if (!numpy_record) goto CLEANUP;
+
+    args = Py_BuildValue("([O])", buffer);
+    if (!args) goto CLEANUP;
+
+    dtypearg = Py_BuildValue("(OO)", numpy_record, dtype);
+    if (!dtypearg) goto CLEANUP;
+
+    kwargs = Py_BuildValue("{sO}", "dtype", dtypearg);
+    if (!kwargs) goto CLEANUP;
+
+    aryobj = PyObject_Call(numpy_array, args, kwargs);
+    if (!aryobj) goto CLEANUP;
+
+    index = Py_BuildValue("i", 0);
+    if (!index) goto CLEANUP;
+
+    record = PyObject_GetItem(aryobj, index);
+
+CLEANUP:
+    Py_DECREF(numpy);
+    Py_DECREF(numpy_array);
+    Py_DECREF(numpy_record);
+    Py_DECREF(aryobj);
+    Py_DECREF(args);
+    Py_DECREF(kwargs);
+    Py_DECREF(dtypearg);
+    Py_DECREF(buffer);
+    Py_DECREF(index);
+
+    return record;
+}
+
+
 #define EXPOSE(Fn, Sym) static void* Sym(){return PyLong_FromVoidPtr(&Fn);}
 EXPOSE(Numba_sdiv, get_sdiv)
 EXPOSE(Numba_srem, get_srem)
@@ -116,6 +183,7 @@ EXPOSE(Numba_urem, get_urem)
 EXPOSE(Numba_cpow, get_cpow)
 EXPOSE(Numba_to_complex, get_complex_adaptor)
 EXPOSE(Numba_extract_record_data, get_extract_record_data)
+EXPOSE(Numba_recreate_record, get_recreate_record)
 #undef EXPOSE
 
 /*
@@ -147,6 +215,7 @@ static PyMethodDef ext_methods[] = {
     declmethod(get_cpow),
     declmethod(get_complex_adaptor),
     declmethod(get_extract_record_data),
+    declmethod(get_recreate_record),
 
     /* Declare math exposer */
     #define MATH_UNARY(F, R, A) declmethod(get_##F),
