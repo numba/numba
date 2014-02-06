@@ -5,7 +5,6 @@ the targets to choose their representation.
 from __future__ import print_function, division, absolute_import
 from collections import defaultdict
 import numpy
-import ctypes
 
 
 def _autoincr():
@@ -465,16 +464,16 @@ void = none
 _make_signed = lambda x: globals()["int%d" % (numpy.dtype(x).itemsize * 8)]
 _make_unsigned = lambda x: globals()["uint%d" % (numpy.dtype(x).itemsize * 8)]
 
-char = _make_signed('byte')
-uchar = byte = _make_unsigned('byte')
-short = _make_signed('short')
-ushort = _make_unsigned('short')
-int_ = _make_signed('int')
-uint = _make_unsigned('int')
-long_ = _make_signed('long')
-ulong = _make_unsigned('long')
-longlong = _make_signed('longlong')
-ulonglong = _make_unsigned('longlong')
+char = _make_signed(numpy.byte)
+uchar = byte = _make_unsigned(numpy.byte)
+short = _make_signed(numpy.short)
+ushort = _make_unsigned(numpy.short)
+int_ = _make_signed(numpy.int_)
+uint = _make_unsigned(numpy.int_)
+long_ = _make_signed(numpy.long)
+ulong = _make_unsigned(numpy.long)
+longlong = _make_signed(numpy.longlong)
+ulonglong = _make_unsigned(numpy.longlong)
 
 
 __all__ = '''
