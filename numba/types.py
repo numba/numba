@@ -434,7 +434,7 @@ real_domain = frozenset([float32, float64])
 complex_domain = frozenset([complex64, complex128])
 number_domain = real_domain | integer_domain | complex_domain
 
-# Aliases
+# Aliases to Numpy type names
 
 b1 = bool_
 i1 = int8
@@ -456,16 +456,20 @@ float_ = float32
 double = float64
 void = none
 
-char = globals()["int%d" % (ctypes.sizeof(ctypes.c_char) * 8)]
-uchar = byte = globals()["uint%d" % (ctypes.sizeof(ctypes.c_byte) * 8)]
-short = globals()["int%d" % (ctypes.sizeof(ctypes.c_short) * 8)]
-ushort = globals()["uint%d" % (ctypes.sizeof(ctypes.c_ushort) * 8)]
-int_ = globals()["uint%d" % (ctypes.sizeof(ctypes.c_int) * 8)]
-uint = globals()["uint%d" % (ctypes.sizeof(ctypes.c_uint) * 8)]
-long_ = globals()["int%d" % (ctypes.sizeof(ctypes.c_long) * 8)]
-ulong = globals()["uint%d" % (ctypes.sizeof(ctypes.c_ulong) * 8)]
-longlong = globals()["int%d" % (ctypes.sizeof(ctypes.c_longlong) * 8)]
-ulonglong = globals()["uint%d" % (ctypes.sizeof(ctypes.c_ulonglong) * 8)]
+
+_make_signed = lambda x: globals()["int%d" % (numpy.dtype(x).itemsize * 8)]
+_make_unsigned = lambda x: globals()["uint%d" % (numpy.dtype(x).itemsize * 8)]
+
+char = _make_signed('byte')
+uchar = byte = _make_unsigned('byte')
+short = _make_signed('short')
+ushort = _make_unsigned('short')
+int_ = _make_signed('int')
+uint = _make_unsigned('int')
+long_ = _make_signed('long')
+ulong = _make_unsigned('long')
+longlong = _make_signed('longlong')
+ulonglong = _make_unsigned('longlong')
 
 
 __all__ = '''
