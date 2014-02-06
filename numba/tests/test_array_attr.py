@@ -17,6 +17,10 @@ def array_ndim(a):
     return a.ndim
 
 
+def array_size(a):
+    return a.size
+
+
 class TestArrayAttr(unittest.TestCase):
     def test_shape(self):
         pyfunc = array_shape
@@ -44,6 +48,13 @@ class TestArrayAttr(unittest.TestCase):
         a = np.arange(10).reshape(2, 5)
         self.assertEqual(pyfunc(a), cfunc(a))
 
+    def test_size(self):
+        pyfunc = array_size
+        cres = compile_isolated(pyfunc, (types.int32[:,:],))
+        cfunc = cres.entry_point
+
+        a = np.arange(10).reshape(2, 5)
+        self.assertEqual(pyfunc(a), cfunc(a))
 
 if __name__ == '__main__':
     unittest.main()

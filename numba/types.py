@@ -5,7 +5,6 @@ the targets to choose their representation.
 from __future__ import print_function, division, absolute_import
 from collections import defaultdict
 import numpy
-import ctypes
 
 
 def _autoincr():
@@ -18,6 +17,11 @@ _typecache = defaultdict(_autoincr)
 
 
 class Type(object):
+    """
+    The default behavior is to provide equality through `name` attribute.
+    Two types are equal if there `name` are equal.
+    Subclass can refine this behavior.
+    """
     __slots__ = '_code', 'name', 'is_parametric'
 
     def __init__(self, name, param=False):
@@ -32,7 +36,7 @@ class Type(object):
         return hash(self.name)
 
     def __eq__(self, other):
-        return self is other
+        return self.name == other.name
 
     def __ne__(self, other):
         return not (self == other)
@@ -495,7 +499,7 @@ real_domain = frozenset([float32, float64])
 complex_domain = frozenset([complex64, complex128])
 number_domain = real_domain | integer_domain | complex_domain
 
-# Aliases
+# Aliases to Numpy type names
 
 b1 = bool_
 i1 = int8
@@ -517,16 +521,20 @@ float_ = float32
 double = float64
 void = none
 
-char = globals()["int%d" % (ctypes.sizeof(ctypes.c_char) * 8)]
-uchar = byte = globals()["uint%d" % (ctypes.sizeof(ctypes.c_byte) * 8)]
-short = globals()["int%d" % (ctypes.sizeof(ctypes.c_short) * 8)]
-ushort = globals()["uint%d" % (ctypes.sizeof(ctypes.c_ushort) * 8)]
-int_ = globals()["uint%d" % (ctypes.sizeof(ctypes.c_int) * 8)]
-uint = globals()["uint%d" % (ctypes.sizeof(ctypes.c_uint) * 8)]
-long_ = globals()["int%d" % (ctypes.sizeof(ctypes.c_long) * 8)]
-ulong = globals()["uint%d" % (ctypes.sizeof(ctypes.c_ulong) * 8)]
-longlong = globals()["int%d" % (ctypes.sizeof(ctypes.c_longlong) * 8)]
-ulonglong = globals()["uint%d" % (ctypes.sizeof(ctypes.c_ulonglong) * 8)]
+
+_make_signed = lambda x: globals()["int%d" % (numpy.dtype(x).itemsize * 8)]
+_make_unsigned = lambda x: globals()["uint%d" % (numpy.dtype(x).itemsize * 8)]
+
+char = _make_signed(numpy.byte)
+uchar = byte = _make_unsigned(numpy.byte)
+short = _make_signed(numpy.short)
+ushort = _make_unsigned(numpy.short)
+int_ = _make_signed(numpy.int_)
+uint = _make_unsigned(numpy.int_)
+long_ = _make_signed(numpy.long)
+ulong = _make_unsigned(numpy.long)
+longlong = _make_signed(numpy.longlong)
+ulonglong = _make_unsigned(numpy.longlong)
 
 
 __all__ = '''

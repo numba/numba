@@ -1231,6 +1231,7 @@ def array_shape(context, builder, typ, value):
     array = arrayty(context, builder, value)
     return array.shape
 
+
 @builtin_attr
 @impl_attribute(types.Array, "strides", types.Kind(types.UniTuple))
 def array_strides(context, builder, typ, value):
@@ -1238,10 +1239,21 @@ def array_strides(context, builder, typ, value):
     array = arrayty(context, builder, value)
     return array.strides
 
+
 @builtin_attr
 @impl_attribute(types.Array, "ndim", types.intp)
 def array_ndim(context, builder, typ, value):
     return context.get_constant(types.intp, typ.ndim)
+
+
+@builtin_attr
+@impl_attribute(types.Array, "size", types.intp)
+def array_size(context, builder, typ, value):
+    arrayty = make_array(typ)
+    array = arrayty(context, builder, value)
+    dims = cgutils.unpack_tuple(builder, array.shape, typ.ndim)
+    return reduce(builder.mul, dims[1:], dims[0])
+
 
 #-------------------------------------------------------------------------------
 
