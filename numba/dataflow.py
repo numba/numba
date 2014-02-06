@@ -49,8 +49,17 @@ class DataFlowAnalysis(object):
         assert 1 <= count <= 5, "Invalid DUP_TOPX count"
         self.dup_topx(info, count)
 
+    def op_DUP_TOP(self, info, inst):
+        self.dup_topx(info, count=1)
+
     def op_DUP_TOP_TWO(self, info, inst):
         self.dup_topx(info, count=2)
+
+    def op_ROT_TWO(self, info, inst):
+        first = info.pop()
+        second = info.pop()
+        info.push(first)
+        info.push(second)
 
     def op_ROT_THREE(self, info, inst):
         first = info.pop()
