@@ -112,9 +112,7 @@ class TestRecordUsecase(unittest.TestCase):
         a.s1 = numpy.array(['abc'] * a.shape[0], dtype='|S3')
         return a, dtype, N
 
-    def test_usecase2(self):
-        pyfunc = usecase2
-
+    def _test_usecase2to5(self, pyfunc):
         array, dtype, N = self._setup_usecase2to5()
         record_type = numpy_support.from_dtype(dtype)
         cres = compile_isolated(pyfunc, (record_type[:], types.intp))
@@ -130,6 +128,17 @@ class TestRecordUsecase(unittest.TestCase):
 
         self.assertEqual(expect, got)
 
+    def test_usecase2(self):
+        self._test_usecase2to5(usecase2)
+
+    def test_usecase3(self):
+        self._test_usecase2to5(usecase3)
+
+    def test_usecase4(self):
+        self._test_usecase2to5(usecase4)
+
+    def test_usecase5(self):
+        self._test_usecase2to5(usecase5)
 
 
 if __name__ == '__main__':

@@ -420,9 +420,12 @@ class BaseContext(object):
                 return
             elif typ.is_parametric:
                 key = type(typ), attr
-                return self.attrs[key]
-            else:
-                raise
+                if key in self.attrs:
+                    return self.attrs[key]
+                else:
+                    key = type(typ), None
+                    return self.attrs[key]
+            raise
 
     def get_argument_value(self, builder, ty, val):
         """

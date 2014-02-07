@@ -351,10 +351,7 @@ class Lower(BaseLower):
                 # ignore the attribute
                 res = self.context.get_dummy_value()
             else:
-                res = impl(self.context, self.builder, ty, val)
-                if not isinstance(impl.return_type, types.Kind):
-                    res = self.context.cast(self.builder, res, impl.return_type,
-                                            resty)
+                res = impl(self.context, self.builder, ty, val, expr.attr)
             return res
 
         elif expr.op == "getitem":

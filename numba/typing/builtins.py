@@ -547,6 +547,12 @@ class ArrayAttribute(AttributeTemplate):
     def resolve_size(self, ary):
         return types.intp
 
+    def generic_resolve(self, ary, attr):
+        if isinstance(ary.dtype, types.Record):
+            if attr in ary.dtype.fields:
+                return types.Array(ary.dtype.typeof(attr), ndim=ary.ndim,
+                                   layout='A')
+
 
 class Array_flatten(AbstractTemplate):
     key = "array.flatten"

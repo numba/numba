@@ -19,11 +19,21 @@ def implement(func, *argtys):
 def impl_attribute(ty, attr, rtype):
     def wrapper(impl):
         @functools.wraps(impl)
-        def res(context, builder, typ, value):
+        def res(context, builder, typ, value, attr):
             ret = impl(context, builder, typ, value)
             return ret
-        res.return_type = rtype
         res.key = (ty, attr)
+        return res
+    return wrapper
+
+
+def impl_attribute_generic(ty):
+    def wrapper(impl):
+        @functools.wraps(impl)
+        def res(context, builder, typ, value, attr):
+            ret = impl(context, builder, typ, value, attr)
+            return ret
+        res.key = (ty, None)
         return res
     return wrapper
 
@@ -72,3 +82,4 @@ def builtin(impl):
 def builtin_attr(impl):
     BUILTIN_ATTRS.append(impl)
     return impl
+

@@ -4,7 +4,7 @@ import math
 from functools import reduce
 from numba import types, typing, cgutils
 from numba.targets.imputils import (builtin, builtin_attr, implement,
-                                    impl_attribute)
+                                    impl_attribute, impl_attribute_generic)
 
 #-------------------------------------------------------------------------------
 
@@ -1235,6 +1235,36 @@ def array_size(context, builder, typ, value):
     dims = cgutils.unpack_tuple(builder, array.shape, typ.ndim)
     return reduce(builder.mul, dims[1:], dims[0])
 
+
+@builtin_attr
+@impl_attribute_generic(types.Array)
+def array_record_getattr(context, builder, typ, value, attr):
+    arrayty = make_array(typ)
+    array = arrayty(context, builder, value)
+
+    rectype = typ.dtype
+    dtype = rectype.typeof(attr)
+    offset = rectype.offset(attr)
+
+    resty = types.Array(dtype, ndim=typ.ndim, layout='A')
+
+    raryty = make_array(resty)
+
+    rary = raryty(context, builder)
+    rary.shape = array.shape
+
+    constoffset = context.get_constant(types.intp, offset)
+    unpackedstrides = cgutils.unpack_tuple(builder, array.strides, typ.ndim)
+    newstrides = [builder.add(s, constoffset) for s in unpackedstrides]
+
+    rary.strides = array.strides
+
+    llintp = context.get_value_type(types.intp)
+    newdata = builder.add(builder.ptrtoint(array.data, llintp), constoffset)
+    newdataptr = builder.inttoptr(newdata, rary.data.type)
+    rary.data = newdataptr
+
+    return rary._getvalue()
 
 #-------------------------------------------------------------------------------
 
