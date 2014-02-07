@@ -32,13 +32,6 @@ Numba
 
    interface_c.rst
 
-**Language Specification**
-
-.. toctree::
-   :maxdepth: 1
-
-   spec.rst
-
 **Misc**
 
 .. toctree::
@@ -47,6 +40,13 @@ Numba
 
    pycc.rst
    debugging.rst
+
+**Language Specification (outdated)**
+
+.. toctree::
+   :maxdepth: 1
+
+   spec.rst
 
 **Developer Documentation (outdated)**
 
