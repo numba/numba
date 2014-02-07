@@ -11,9 +11,9 @@
 
 .. parsed-literal::
 
-    numba version: 0.12.0-3-gd7142a4-dirty 
+    numba version: 0.12.0 
     NumPy version: 1.7.1
-    llvm version: 0.12.1-15-g3db6d83
+    llvm version: 0.12.1
 
 
 Numba and types

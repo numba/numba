@@ -10,7 +10,7 @@ First Steps with numba
 
 .. parsed-literal::
 
-    0.12.0-3-gd7142a4-dirty
+    0.12.0
 
 
 Introduction to numba
