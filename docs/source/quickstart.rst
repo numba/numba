@@ -1,5 +1,5 @@
 ***********
-First Steps
+Quick Start
 ***********
 
 Numba compiles Python code to LLVM IR which can be natively executed at

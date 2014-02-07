@@ -11,11 +11,19 @@ Numba
    :titlesonly:
    :maxdepth: 2
 
-   firststeps.rst
+   quickstart.rst
    types.rst
    arrays.rst
    ufuncs.rst
    examples.rst
+
+**Tutorials**
+
+.. toctree::
+   :maxdepth: 1
+
+   tutorial_firststeps.rst
+   tutorial_types.rst
 
 **Interfacing with native code**
 
