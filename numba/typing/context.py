@@ -99,7 +99,7 @@ class Context(object):
 
     def insert_attributes(self, at):
         key = at.key
-        assert key not in self.functions, "Duplicated attributes template"
+        assert key not in self.attributes, "Duplicated attributes template"
         self.attributes[key] = at
 
     def insert_function(self, ft):
