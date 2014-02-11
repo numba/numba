@@ -3,7 +3,7 @@ import functools
 from numba import utils
 
 
-NEW_BLOCKERS = frozenset(['SETUP_LOOP'])
+NEW_BLOCKERS = frozenset(['SETUP_LOOP', 'FOR_ITER'])
 
 
 class CFBlock(object):
