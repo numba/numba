@@ -5,10 +5,10 @@ from numba import utils
 
 
 class Vectorize(object):
-    target_registry = utils.UniqueDict({'nopython-cpu': UFuncBuilder})
+    target_registry = utils.UniqueDict({'cpu': UFuncBuilder})
 
     def __new__(cls, func, **kws):
-        target = kws.pop('target', 'nopython-cpu')
+        target = kws.pop('target', 'cpu')
         try:
             imp = cls.target_registry[target]
         except KeyError:
@@ -18,10 +18,10 @@ class Vectorize(object):
 
 
 class GUVectorize(object):
-    target_registry = utils.UniqueDict({'nopython-cpu': GUFuncBuilder})
+    target_registry = utils.UniqueDict({'cpu': GUFuncBuilder})
 
     def __new__(cls, func, signature, **kws):
-        target = kws.pop('target', 'nopython-cpu')
+        target = kws.pop('target', 'cpu')
         try:
             imp = cls.target_registry[target]
         except KeyError:
@@ -31,7 +31,7 @@ class GUVectorize(object):
 
 
 def vectorize(ftylist, **kws):
-    """vectorize(ftylist[, target='nopython-cpu', [**kws]])
+    """vectorize(ftylist[, target='cpu', [**kws]])
 
     A decorator to create numpy ufunc object from Numba compiled code.
 
@@ -43,7 +43,7 @@ def vectorize(ftylist, **kws):
         function type.
 
     target: str
-            A string for code generation target.  Default to "nopython-cpu".
+            A string for code generation target.  Defaults to 'cpu'.
 
     Returns
     --------
@@ -89,8 +89,7 @@ def guvectorize(ftylist, signature, **kws):
         e.g. "(m, n), (n, p)->(m, p)"
 
     target: str
-            A string for code generation target.  Default to "cpu"
-            this should be
+            A string for code generation target.  Defaults to "cpu".
 
     Returns
     --------
