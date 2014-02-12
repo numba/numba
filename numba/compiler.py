@@ -95,6 +95,7 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
 
     if not status.use_python_mode:
         with _fallback_context(status):
+            legialize_given_types(args, return_type)
             # Type inference
             typemap, return_type, calltypes = type_inference_stage(typingctx,
                                                                    interp,
@@ -139,6 +140,23 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
                         signature=signature,
                         objectmode=status.use_python_mode)
     return cr
+
+
+def _is_nopython_types(t):
+    return t != types.pyobject and not isinstance(t, types.Dummy)
+
+
+def legialize_given_types(args, return_type):
+    # Filter argument types
+    for i, a in enumerate(args):
+        if not _is_nopython_types(a):
+            raise TypeError("Arg %d of %s is not legal in nopython "
+                            "mode" % (i, a))
+    # Filter return type
+    if (return_type and return_type != types.none and
+            not _is_nopython_types(return_type)):
+        raise TypeError('Return type of %s is not legal in nopython '
+                        'mode' % (return_type,))
 
 
 def legalize_return_type(return_type, interp, targetctx):
