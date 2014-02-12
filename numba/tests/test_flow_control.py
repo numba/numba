@@ -142,6 +142,9 @@ def ifelse_usecase4(x, y):
     if x == y:
         return 1
 
+def ternary_ifelse_usecase1(x, y):
+    return True if x > y else False
+
 
 class TestFlowControl(unittest.TestCase):
 
@@ -282,6 +285,13 @@ class TestFlowControl(unittest.TestCase):
 
     def test_ifelse4_npm(self):
         self.test_ifelse4(flags=no_pyobj_flags)
+
+    def test_ternary_ifelse1(self, flags=enable_pyobj_flags):
+        self.run_test(ternary_ifelse_usecase1, [-1, 0, 1], [-1, 0, 1],
+                      flags=flags)
+
+    def test_ternary_ifelse1_npm(self):
+        self.test_ternary_ifelse1(flags=no_pyobj_flags)
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
