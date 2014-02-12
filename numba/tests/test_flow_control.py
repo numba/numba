@@ -155,11 +155,13 @@ class TestFlowControl(unittest.TestCase):
             try:
                 pyres = pyfunc(x, y)
             except Exception as e:
+                print("note: ", pyfunc, (x, y), "raises exception: %s" % e)
                 pyerr = e
 
             try:
                 cres = cfunc(x, y)
             except Exception as e:
+                print("note: ", cfunc, (x, y), "raises exception: %s" % e)
                 if pyerr is None:
                     raise
                 cerr = e
