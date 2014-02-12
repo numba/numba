@@ -150,7 +150,24 @@ class TestFlowControl(unittest.TestCase):
         cr = compile_isolated(pyfunc, (types.int32, types.int32), flags=flags)
         cfunc = cr.entry_point
         for x, y in itertools.product(x_operands, y_operands):
-            self.assertEqual(cfunc(x, y), pyfunc(x, y))
+            pyerr = None
+            cerr = None
+            try:
+                pyres = pyfunc(x, y)
+            except Exception as e:
+                pyerr = e
+
+            try:
+                cres = cfunc(x, y)
+            except Exception as e:
+                if pyerr is None:
+                    raise
+                cerr = e
+            else:
+                if pyerr is not None:
+                    self.fail("Invalid for pure-python but numba works\n" +
+                              pyerr)
+            self.assertEqual(pyres, cres)
 
     def test_for_loop1(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase1, [-10, 0, 10], [0], flags=flags)

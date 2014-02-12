@@ -907,6 +907,30 @@ def range3_32_impl(context, builder, sig, args):
 
     return state._getvalue()
 
+def getiter_range_generic(context, builder, iterobj, start, stop, step):
+    diff = builder.sub(stop, start)
+    intty = start.type
+    zero = Constant.int(intty, 0)
+    one = Constant.int(intty, 1)
+    pos_diff = builder.icmp(lc.ICMP_SGT, diff, zero)
+    pos_step = builder.icmp(lc.ICMP_SGT, step, zero)
+    sign_differs = builder.xor(pos_diff, pos_step)
+    zero_step = builder.icmp(lc.ICMP_EQ, step, zero)
+
+    with cgutils.if_unlikely(builder, zero_step):
+        # step shouldn't be zero
+        context.return_errcode(builder, 1)
+
+    with cgutils.ifelse(builder, sign_differs) as (then, orelse):
+        with then:
+            iterobj.count = zero
+
+        with orelse:
+            rem = builder.srem(diff, step)
+            uneven = builder.icmp(lc.ICMP_SGT, rem, zero)
+            iterobj.count = builder.add(builder.sdiv(diff, step),
+                                        builder.select(uneven, one, zero))
+    return iterobj._getvalue()
 
 @builtin
 @implement('getiter', types.range_state32_type)
@@ -922,9 +946,8 @@ def getiter_range32_impl(context, builder, sig, args):
     iterobj.iter = start
     iterobj.stop = stop
     iterobj.step = step
-    iterobj.count = builder.sdiv(builder.sub(stop, start), step)
 
-    return iterobj._getvalue()
+    return getiter_range_generic(context, builder, iterobj, start, stop, step)
 
 
 @builtin
@@ -1006,9 +1029,8 @@ def getiter_range64_impl(context, builder, sig, args):
     iterobj.iter = start
     iterobj.stop = stop
     iterobj.step = step
-    iterobj.count = builder.sdiv(builder.sub(stop, start), step)
 
-    return iterobj._getvalue()
+    return getiter_range_generic(context, builder, iterobj, start, stop, step)
 
 
 @builtin
