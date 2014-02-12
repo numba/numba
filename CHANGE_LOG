@@ -1,13 +1,35 @@
 Version 0.12
 ------------
+
+Version 0.12 contains a big refactor of the compiler. The main
+objective being simplifying the code base to make a foundation for
+further work. The object mode has been heavily modified, trying to
+avoid overheads that were found. This is the first release with this
+retooled object mode, so it is still far from its potential.
+
 * Major refactor of compiler
+
 * Better fallback to object mode when native mode fails
-* Merge autojit into jit for unified interface
-* Jitted function can now be overloaded
-* Add njit for nopython mode jit
-* Provide numba.vectorize and numba.guvectorize
-    * Old numba.vectorize.vectorize is removed
-* Deprecate autojit, GUVectorize
+
+The public interface of numba has been slightly changed. The idea is
+making it more rational.
+
+* Jit modified, so that it can be called without a signature. When
+  called without a signature, it behaves as the old autojit. Autojit
+  has been deprecated in favour of this approach.
+
+* Jitted functions can now be overloaded
+
+* Added a "njit" decorator as a synonym of jit which defaults to
+  nopython mode.
+
+* The numba.vectorize namespace is gone. The vectorize decorator will
+  be in the main numba namespace.
+
+* Added a guvectorize decorator in the main numba namespace. It is
+  similiar to numba.vectorize, but taking a dimension signature. It
+  generates gufuncs. This is a replacement for the GUVectorize gufunc
+  factory, that has been deprecated.
 
 Version 0.11
 ------------
