@@ -10,14 +10,46 @@ Release Notes
 
 Version 0.12
 ------------
-* Major refactor of compiler
+
+Version 0.12 contains a big refactor of the compiler. The main objective for
+this refactor was to simplify the code base to create a better foundation for
+further work. A secondary objective was to improve the worst case performance
+to ensure that compiled functions in object mode never run slower than pure
+Python code (this was a problem in several cases with the old code base). This
+refactor is still a work in progress and further testing is needed.
+
+Main improvements:
+
+* Major refactor of compiler for performance and maintenance reasons
 * Better fallback to object mode when native mode fails
-* Merge autojit into jit for unified interface
-* Jitted function can now be overloaded
-* Add njit for nopython mode jit
-* Provide numba.vectorize and numba.guvectorize
-    * Old numba.vectorize.vectorize is removed
-* Deprecate autojit, GUVectorize
+* Improved worst case performance in object mode
+
+The public interface of numba has been slightly changed. The idea is to
+make it cleaner and more rational:
+
+* jit decorator has been modified, so that it can be called without a signature.
+  When called without a signature, it behaves as the old autojit. Autojit
+  has been deprecated in favour of this approach.
+* Jitted functions can now be overloaded.
+* Added a "njit" decorator that behaves like "jit" decorator with nopython=True.
+* The numba.vectorize namespace is gone. The vectorize decorator will
+  be in the main numba namespace.
+* Added a guvectorize decorator in the main numba namespace. It is
+  similiar to numba.vectorize, but takes a dimension signature. It
+  generates gufuncs. This is a replacement for the GUVectorize gufunc
+  factory which has been deprecated.
+
+Main regressions (will be fixed in a future release):
+
+* Creating new NumPy arrays is not supported in nopython mode
+* Returning NumPy arrays is not supported in nopython mode
+* NumPy array slicing is not supported in nopython mode
+* lists and tuples are not supported in nopython mode
+* string, datetime, cdecimal, and struct types are not implemented yet
+* Extension types (classes) are not supported in nopython mode
+* Closures are not supported
+* Raise keyword is not supported
+* Recursion is not support in nopython mode
 
 Version 0.11
 ------------

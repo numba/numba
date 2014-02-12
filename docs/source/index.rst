@@ -40,6 +40,7 @@ Numba
 
    pycc.rst
    debugging.rst
+   releases.rst
 
 **Language Specification (outdated)**
 
@@ -59,7 +60,6 @@ Numba
    roadmap.rst
    dev.rst
    modules/modules.rst
-   releases.rst
 
 
 **Indices and tables**
