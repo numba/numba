@@ -85,6 +85,8 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
     # Translate to IR
     interp = translate_stage(func)
     nargs = len(interp.argspec.args)
+    if len(args) > nargs:
+        raise TypeError("Too many argument types")
 
     status = _CompileStatus()
     status.can_fallback = flags.enable_pyobject
@@ -114,7 +116,10 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
         calltypes = defaultdict(lambda: types.pyobject)
 
         return_type = types.pyobject
-        args = [types.pyobject] * nargs
+
+        if len(args) != nargs:
+            # append missing
+            args = tuple(args) + (types.pyobject,) * (nargs - len(args))
     else:
         func, fnptr, lmod, lfunc = native_lowering_stage(localctx, interp,
                                                          typemap,
@@ -207,6 +212,9 @@ def translate_stage(func):
 
 
 def type_inference_stage(typingctx, interp, args, return_type, locals={}):
+    if len(args) != len(interp.argspec.args):
+        raise TypeError("Mismatch number of argument types")
+
     infer = typeinfer.TypeInferer(typingctx, interp.blocks)
 
     # Seed argument types
