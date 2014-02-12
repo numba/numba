@@ -164,8 +164,11 @@ class Lower(BaseLower):
             cond = self.loadvar(inst.cond.name)
             tr = self.blkmap[inst.truebr]
             fl = self.blkmap[inst.falsebr]
-            assert cond.type == Type.int(1), ("cond is not i1: %s" % inst)
-            self.builder.cbranch(cond, tr, fl)
+
+            condty = self.typeof(inst.cond.name)
+            pred = self.context.cast(self.builder, cond, condty, types.boolean)
+            assert pred.type == Type.int(1), ("cond is not i1: %s" % pred.type)
+            self.builder.cbranch(pred, tr, fl)
 
         elif isinstance(inst, ir.Jump):
             target = self.blkmap[inst.target]
