@@ -19,7 +19,8 @@ def make_array(ty):
     class ArrayTemplate(cgutils.Structure):
         _fields = [('data',    types.CPointer(dtype)),
                    ('shape',   types.UniTuple(types.intp, nd)),
-                   ('strides', types.UniTuple(types.intp, nd)),]
+                   ('strides', types.UniTuple(types.intp, nd)),
+                   ('parent',  types.pyobject),]
 
     return ArrayTemplate
 

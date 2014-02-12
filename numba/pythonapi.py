@@ -5,7 +5,7 @@ import llvm.ee as le
 from llvm import LLVMException
 from numba.config import PYVERSION
 import numba.ctypes_support as ctypes
-from numba import types, utils, cgutils, _numpyadapt, _helperlib
+from numba import types, utils, cgutils, _numpyadapt, _helperlib, assume
 
 _PyNone = ctypes.c_ssize_t(id(None))
 
@@ -561,6 +561,9 @@ class PythonAPI(object):
         elif isinstance(typ, types.Optional):
             return self.from_native_return(val, typ.type)
 
+        elif isinstance(typ, types.Array):
+            return self.from_native_array(typ, val)
+
         raise NotImplementedError(typ)
 
     def to_native_array(self, typ, ary):
@@ -578,6 +581,14 @@ class PythonAPI(object):
             # TODO
             self.builder.unreachable()
         return aryptr
+
+    def from_native_array(self, typ, ary):
+        assert assume.return_argument_array_only
+        nativearycls = self.context.make_array(typ)
+        nativeary = nativearycls(self.context, self.builder, value=ary)
+        parent = nativeary.parent
+        self.incref(parent)
+        return parent
 
     def numba_array_adaptor(self, ary, ptr):
         voidptr = Type.pointer(Type.int(8))
@@ -618,7 +629,7 @@ class PythonAPI(object):
             return self.module.get_global_variable_named(name)
         except LLVMException:
             return self.module.add_global_variable(self.pyobj.pointee,
-                                                  name=name)
+                                                   name=name)
 
     def raise_missing_global_error(self, name):
         msg = "global name '%s' is not defined" % name

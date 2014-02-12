@@ -1,8 +1,10 @@
 from __future__ import print_function, division, absolute_import
 from pprint import pprint
+from contextlib import contextmanager
 from collections import namedtuple, defaultdict
 from numba import (bytecode, interpreter, typing, typeinfer, lowering,
-                   irpasses, utils, config, type_annotations, types)
+                   irpasses, utils, config, type_annotations, types, ir,
+                   assume)
 from numba.targets import cpu
 
 
@@ -54,6 +56,24 @@ def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
                          locals)
 
 
+class _CompileStatus(object):
+    """
+    Used like a C record
+    """
+    __slots__ = 'fail_reason', 'use_python_mode', 'can_fallback'
+
+
+@contextmanager
+def _fallback_context(status):
+    try:
+        yield
+    except Exception as e:
+        if not status.can_fallback:
+            raise
+        status.fail_reason = e
+        status.use_python_mode = True
+
+
 def compile_extra(typingctx, targetctx, func, args, return_type, flags,
                   locals):
     """
@@ -66,29 +86,28 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
     interp = translate_stage(func)
     nargs = len(interp.argspec.args)
 
-    fail_reason = None
-    use_python_mode = False
+    status = _CompileStatus()
+    status.can_fallback = flags.enable_pyobject
+    status.fail_reason = None
+    status.use_python_mode = flags.force_pyobject
 
-    if not flags.force_pyobject:
-        try:
+    localctx = targetctx.localized()
+
+    if not status.use_python_mode:
+        with _fallback_context(status):
             # Type inference
             typemap, return_type, calltypes = type_inference_stage(typingctx,
                                                                    interp,
                                                                    args,
                                                                    return_type,
                                                                    locals)
-        except Exception as e:
-            if not flags.enable_pyobject:
-                raise
 
-            fail_reason = e
-            use_python_mode = True
-    else:
-        # Forced to use all python mode
-        use_python_mode = True
+        if not status.use_python_mode:
+            with _fallback_context(status):
+                legalize_return_type(return_type, interp, localctx)
 
-    if use_python_mode:
-        func, fnptr, lmod, lfunc = py_lowering_stage(targetctx, interp,
+    if status.use_python_mode:
+        func, fnptr, lmod, lfunc = py_lowering_stage(localctx, interp,
                                                      flags.no_compile)
         typemap = defaultdict(lambda: types.pyobject)
         calltypes = defaultdict(lambda: types.pyobject)
@@ -96,7 +115,7 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
         return_type = types.pyobject
         args = [types.pyobject] * nargs
     else:
-        func, fnptr, lmod, lfunc = native_lowering_stage(targetctx, interp,
+        func, fnptr, lmod, lfunc = native_lowering_stage(localctx, interp,
                                                          typemap,
                                                          return_type,
                                                          calltypes,
@@ -106,7 +125,6 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
                                                       typemap=typemap,
                                                       calltypes=calltypes)
 
-
     signature = typing.signature(return_type, *args)
 
     assert lfunc.module is lmod
@@ -114,13 +132,43 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
                         target_context=targetctx,
                         entry_point=func,
                         entry_point_addr=fnptr,
-                        typing_error=fail_reason,
+                        typing_error=status.fail_reason,
                         type_annotation=type_annotation,
                         llvm_func=lfunc,
                         llvm_module=lmod,
                         signature=signature,
-                        objectmode=use_python_mode)
+                        objectmode=status.use_python_mode)
     return cr
+
+
+def legalize_return_type(return_type, interp, targetctx):
+    """
+    Only accept array return type iff it is passed into the function.
+    """
+    assert assume.return_argument_array_only
+
+    if not isinstance(return_type, types.Array):
+        return
+
+    # Walk IR to discover all return statements
+    retstmts = []
+    for bid, blk in interp.blocks.items():
+        for inst in blk.body:
+            if isinstance(inst, ir.Return):
+                retstmts.append(inst)
+
+    assert retstmts, "No return statemants?"
+
+    # FIXME: In the future, we can return an array that is either a dynamically
+    #        allocated array or an array that is passed as argument.  This
+    #        must be statically resolvable.
+    for ret in retstmts:
+        if ret.value.name not in interp.argspec.args:
+            raise ValueError("Only accept returning of array passed into the "
+                              "function as argument")
+
+    # Legalized; tag return handling
+    targetctx.metdata['return.array'] = 'arg'
 
 
 def translate_stage(func):

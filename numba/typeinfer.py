@@ -335,11 +335,6 @@ class TypeInferer(object):
 
         return calltypes
 
-    def guard_return_type(self, ty):
-        if isinstance(ty, types.Array):
-            msg = "Cannot return array in nopython mode"
-            raise TypingError(msg, loc=self.blocks[0].loc)
-
     def get_return_type(self, typemap):
         rettypes = set()
         for blk in utils.dict_itervalues(self.blocks):
@@ -352,13 +347,11 @@ class TypeInferer(object):
             rettypes = rettypes - set([types.none])
             if rettypes:
                 unified = self.context.unify_types(*rettypes)
-                self.guard_return_type(unified)
                 return types.Optional(unified)
             else:
                 return types.none
         else:
             unified = self.context.unify_types(*rettypes)
-            self.guard_return_type(unified)
             return unified
 
     def get_state_token(self):
