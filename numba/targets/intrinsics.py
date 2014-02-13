@@ -141,6 +141,9 @@ INTR_TO_CMATH = {
 
     "llvm.ceil.f32": "ceilf",
     "llvm.ceil.f64": "ceil",
+
+    "llvm.trunc.f32": "truncf",
+    "llvm.trunc.f64": "trunc",
 }
 
 OTHER_CMATHS = '''
