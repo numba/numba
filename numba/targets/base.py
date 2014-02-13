@@ -124,6 +124,12 @@ class BaseContext(object):
         """
         pass
 
+    def localized(self):
+        """
+        Returns a localized context that contains extra environment information
+        """
+        return ContextProxy(self)
+
     def insert_func_defn(self, defns):
         for defn in defns:
             self.defns[defn.key].append(defn)
@@ -729,3 +735,18 @@ def _wrap_impl(imp, context, sig):
     def wrapped(builder, args):
         return imp(context, builder, sig, args)
     return wrapped
+
+
+class ContextProxy(object):
+    """
+    Add localized environment for the context of the compiling unit.
+    """
+    def __init__(self, base):
+        self.__base = base
+        self.metdata = utils.UniqueDict()
+
+    def __getattr__(self, name):
+        if not name.startswith('_'):
+            return getattr(self.__base, name)
+        else:
+            return super(ContextProxy, self).__getattr__(name)

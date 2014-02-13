@@ -10,6 +10,7 @@ class ArrayStruct3D(Structure):
         ("data", c_void_p),
         ("shape", (c_ssize_t * 3)),
         ("strides", (c_ssize_t * 3)),
+        ("parent", c_void_p),
     ]
 
 
@@ -28,3 +29,5 @@ class TestArrayAdaptor(unittest.TestCase):
             self.assertEqual(arystruct.shape[i], ary.ctypes.shape[i])
             self.assertEqual(arystruct.strides[i], ary.ctypes.strides[i])
 
+if __name__ == '__main__':
+    unittest.main()
