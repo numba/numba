@@ -7,19 +7,28 @@ import llvm.core as lc
 
 true_bit = Constant.int(Type.int(1), 1)
 false_bit = Constant.int(Type.int(1), 0)
+true_byte = Constant.int(Type.int(8), 1)
+false_byte = Constant.int(Type.int(8), 0)
+
+
+def as_bool_byte(builder, value):
+    return builder.zext(value, Type.int(8))
 
 
 class Structure(object):
-    def __init__(self, context, builder, value=None):
+    def __init__(self, context, builder, value=None, ref=None):
         self._type = context.get_struct_type(self)
         self._builder = builder
-
-        if value is None:
+        if ref is None:
             self._value = alloca_once(builder, self._type)
+            if value is not None:
+                assert not is_pointer(value.type)
+                assert value.type == self._type, (value.type, self._type)
+                builder.store(value, self._value)
         else:
-            assert value.type.pointee == self._type, (value.type.pointee,
-                                                      self._type)
-            self._value = value
+            assert value is None
+            assert self._type == ref.type.pointee
+            self._value = ref
 
         self._fdmap = {}
         base = Constant.int(Type.int(), 0)
@@ -39,11 +48,15 @@ class Structure(object):
             return super(Structure, self).__setattr__(field, value)
         offset = self._fdmap[field]
         ptr = self._builder.gep(self._value, offset)
-        assert ptr.type.pointee == value.type
+        assert ptr.type.pointee == value.type, (str(ptr.type.pointee),
+                                                str(value.type))
         self._builder.store(value, ptr)
 
-    def _getvalue(self):
+    def _getpointer(self):
         return self._value
+
+    def _getvalue(self):
+        return self._builder.load(self._value)
 
     def __iter__(self):
         def iterator():
@@ -410,19 +423,18 @@ def get_record_member(builder, record, offset, typ):
 
 
 def get_record_data(builder, record):
-    ppdata = inbound_gep(builder, record, 0, 0)
-    pdata = builder.load(ppdata)
-    return pdata
+    return builder.extract_value(record, 0)
 
 
 def set_record_data(builder, record, buf):
-    ppdata = inbound_gep(builder, record, 0, 0)
-    builder.store(buf, ppdata)
+    pdata = inbound_gep(builder, record, 0, 0)
+    assert pdata.type.pointee == buf.type
+    builder.store(buf, pdata)
 
 
 def init_record_by_ptr(builder, ltyp, ptr):
-    tmp = alloca_once(builder, ltyp.pointee)
-    pdata = ltyp.pointee.elements[0]
+    tmp = alloca_once(builder, ltyp)
+    pdata = ltyp.elements[0]
     buf = builder.bitcast(ptr, pdata)
     set_record_data(builder, tmp, buf)
     return tmp
@@ -448,3 +460,29 @@ def gep(builder, ptr, *inds):
             ind = i
         idx.append(ind)
     return builder.gep(ptr, idx)
+
+# ------------------------------------------------------------------------------
+# Debug
+
+class VerboseProxy(object):
+    """
+    Use to wrap llvm.core.Builder to track where segfault happens
+    """
+    def __init__(self, obj):
+        self.__obj = obj
+
+    def __getattr__(self, key):
+        fn = getattr(self.__obj, key)
+        if callable(fn):
+            def wrapped(*args, **kws):
+                import traceback
+                traceback.print_stack()
+                print(key, args, kws)
+                try:
+                    return fn(*args, **kws)
+                finally:
+                    print("ok")
+
+            return wrapped
+        return fn
+

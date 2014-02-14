@@ -504,7 +504,7 @@ class PythonAPI(object):
         elif typ in (types.complex128, types.complex64):
             cplxcls = self.context.make_complex(types.complex128)
             cplx = cplxcls(self.context, self.builder)
-            pcplx = cplx._getvalue()
+            pcplx = cplx._getpointer()
             ok = self.complex_adaptor(obj, pcplx)
             failed = cgutils.is_false(self.builder, ok)
 
@@ -608,14 +608,14 @@ class PythonAPI(object):
         voidptr = Type.pointer(Type.int(8))
         nativearycls = self.context.make_array(typ)
         nativeary = nativearycls(self.context, self.builder)
-        aryptr = nativeary._getvalue()
+        aryptr = nativeary._getpointer()
         ptr = self.builder.bitcast(aryptr, voidptr)
         errcode = self.numba_array_adaptor(ary, ptr)
         failed = cgutils.is_not_null(self.builder, errcode)
         with cgutils.if_unlikely(self.builder, failed):
             # TODO
             self.builder.unreachable()
-        return aryptr
+        return self.builder.load(aryptr)
 
     def from_native_array(self, typ, ary):
         assert assume.return_argument_array_only
