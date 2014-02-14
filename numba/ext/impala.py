@@ -20,12 +20,13 @@ def udf(signature):
 #---------------------------------------------------------------------------
 # Typing information
 
-FunctionContext = types.Dummy('impala-function-context')
+FunctionContext = types.OpaqueType('class.impala_udf::FunctionContext')
 
 
 class ImpalaValue(types.Type):
     pass
 
+AnyVal = ImpalaValue('AnyVal')
 IntVal = ImpalaValue('IntVal')
 IntValType = types.Dummy('IntValType')
 
@@ -92,9 +93,28 @@ def impala_typing_context():
 #---------------------------------------------------------------------------
 # Target implementation
 
+class AnyValStruct(cgutils.Structure):
+    _fields = [('is_null', types.boolean)]
+
+
 class IntValStruct(cgutils.Structure):
-    _fields = [('is_null', types.byte),
+    _fields = [('parent',  AnyVal),
                ('val',     types.int32),]
+
+
+def _get_is_null_pointer(builder, val):
+    ptr = cgutils.inbound_gep(builder, val._getpointer(), 0, 0, 0)
+    return ptr
+
+
+def _get_is_null(builder, val):
+    byte = builder.load(_get_is_null_pointer(builder, val))
+    return builder.trunc(byte, lc.Type.int(1))
+
+
+def _set_is_null(builder, val, is_null):
+    byte = builder.zext(is_null, lc.Type.int(8))
+    builder.store(byte, _get_is_null_pointer(builder, val))
 
 
 @impl_attribute(IntVal, "is_null", types.boolean)
@@ -103,7 +123,8 @@ def intval_is_null(context, builder, typ, value):
     IntVall::is_null
     """
     iv = IntValStruct(context, builder, value=value)
-    return cgutils.is_null(builder, iv.is_null)
+    is_null = _get_is_null(builder, iv)
+    return is_null
 
 @impl_attribute(IntVal, "val", types.int32)
 def intval_val(context, builder, typ, value):
@@ -120,7 +141,7 @@ def intval_null(context, builder, typ, value):
     IntVall::null
     """
     iv = IntValStruct(context, builder)
-    iv.is_null = lc.Constant.int(iv.is_null.type, 1)
+    _set_is_null(builder, iv, cgutils.true_bit)
     return iv._getvalue()
 
 
@@ -131,9 +152,15 @@ def intval_ctor(context, builder, sig, args):
     """
     [x] = args
     iv = IntValStruct(context, builder)
-    iv.is_null = lc.Constant.int(iv.is_null.type, 0)
+    _set_is_null(builder, iv, cgutils.false_bit)
     iv.val = x
     return iv._getvalue()
+
+
+TYPE_LAYOUT = {
+    AnyVal: AnyValStruct,
+    IntVal: IntValStruct,
+}
 
 
 class ImpalaTargetContext(BaseContext):
@@ -144,18 +171,24 @@ class ImpalaTargetContext(BaseContext):
         self.insert_func_defn([intval_ctor])
         self.optimizer = self.build_pass_manager()
 
+        # once per context
+        self._fnctximpltype = lc.Type.opaque("FunctionContextImpl")
+        fnctxbody = [lc.Type.pointer(self._fnctximpltype)]
+        self._fnctxtype = lc.Type.struct(fnctxbody,
+                                        name="class.impala_udf::FunctionContext")
+
     def get_data_type(self, ty):
-        if ty == IntVal:
-            return self.get_struct_type(IntValStruct)
+        if ty in TYPE_LAYOUT:
+            return self.get_struct_type(TYPE_LAYOUT[ty])
+        elif ty == FunctionContext:
+            return lc.Type.pointer(self._fnctxtype)
         else:
             return super(ImpalaTargetContext, self).get_data_type(ty)
 
     def build_pass_manager(self):
-        if config.OPT == 3:
-            # This uses the same passes for clang -O3
-            pms = lp.build_pass_managers(tm=self.tm, opt=3, loop_vectorize=True,
-                                         fpm=False)
-            return pms.pm
+        pms = lp.build_pass_managers(tm=self.tm, opt=3, loop_vectorize=True,
+                                     fpm=False)
+        return pms.pm
 
     def finalize(self, func, restype, argtypes):
         func.verify()
@@ -206,7 +239,7 @@ class ABIHandling(object):
             # Pack structure into int64
             # Endian specific
             iv = IntValStruct(self.context, builder, value=val)
-            lower = builder.zext(iv.is_null, lc.Type.int(64))
+            lower = builder.zext(_get_is_null(builder, iv), lc.Type.int(64))
             upper = builder.zext(iv.val, lc.Type.int(64))
 
             asint64 = builder.shl(upper, lc.Constant.int(lc.Type.int(64), 32))

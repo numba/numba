@@ -76,6 +76,13 @@ class Type(object):
     __iter__ = NotImplemented
     cast_python_value = NotImplemented
 
+class OpaqueType(Type):
+    """
+    To deal with externally defined literal types
+    """
+    def __init__(self, name):
+        super(OpaqueType, self).__init__(name)
+
 
 class Integer(Type):
     def cast_python_value(self, value):
