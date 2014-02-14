@@ -62,10 +62,24 @@ def numpy_absolute(context, builder, sig, args):
 
 
 @register
+@implement(numpy.absolute, types.float64)
+def numpy_absolute_scalar(context, builder, sig, args):
+    imp = context.get_function(math.fabs, sig)
+    return imp(builder, args)
+
+
+@register
 @implement(numpy.exp, types.Kind(types.Array), types.Kind(types.Array))
 def numpy_exp(context, builder, sig, args):
     imp = numpy_unary_ufunc(math.exp, asfloat=True)
     return imp(context, builder, sig, args)
+
+
+@register
+@implement(numpy.exp, types.float64)
+def numpy_exp_scalar(context, builder, sig, args):
+    imp = context.get_function(math.exp, sig)
+    return imp(builder, args)
 
 
 @register
@@ -76,6 +90,13 @@ def numpy_sin(context, builder, sig, args):
 
 
 @register
+@implement(numpy.sin, types.float64)
+def numpy_sin_scalar(context, builder, sig, args):
+    imp = context.get_function(math.sin, sig)
+    return imp(builder, args)
+
+
+@register
 @implement(numpy.cos, types.Kind(types.Array), types.Kind(types.Array))
 def numpy_cos(context, builder, sig, args):
     imp = numpy_unary_ufunc(math.cos, asfloat=True)
@@ -83,10 +104,24 @@ def numpy_cos(context, builder, sig, args):
 
 
 @register
+@implement(numpy.cos, types.float64)
+def numpy_cos_scalar(context, builder, sig, args):
+    imp = context.get_function(math.cos, sig)
+    return imp(builder, args)
+
+
+@register
 @implement(numpy.tan, types.Kind(types.Array), types.Kind(types.Array))
 def numpy_tan(context, builder, sig, args):
     imp = numpy_unary_ufunc(math.tan, asfloat=True)
     return imp(context, builder, sig, args)
+
+
+@register
+@implement(numpy.tan, types.float64)
+def numpy_tan_scalar(context, builder, sig, args):
+    imp = context.get_function(math.tan, sig)
+    return imp(builder, args)
 
 
 @register
@@ -101,6 +136,13 @@ def numpy_sqrt(context, builder, sig, args):
 def numpy_negative(context, builder, sig, args):
     imp = numpy_unary_ufunc(types.neg_type)
     return imp(context, builder, sig, args)
+
+
+@register
+@implement(numpy.sqrt, types.float64)
+def numpy_sqrt_scalar(context, builder, sig, args):
+    imp = context.get_function(math.sqrt, sig)
+    return imp(builder, args)
 
 
 def numpy_binary_ufunc(core, divbyzero=False):

@@ -41,13 +41,26 @@ class NumpyModuleAttribute(AttributeTemplate):
     def resolve_negative(self, mod):
         return types.Function(Numpy_negative)
 
+    def resolve_sqrt(self, mod):
+        return types.Function(Numpy_sqrt)
+
 
 class Numpy_unary_ufunc(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
-        [inp, out] = args
-        if isinstance(inp, types.Array) and isinstance(out, types.Array):
-            return signature(out, inp, out)
+        nargs = len(args)
+        if nargs == 2:
+            [inp, out] = args
+            if isinstance(inp, types.Array) and isinstance(out, types.Array):
+                return signature(out, inp, out)
+        elif nargs == 1:
+            [inp] = args
+            if inp in types.number_domain:
+                return signature(types.float64, types.float64)
+
+
+class Numpy_sqrt(Numpy_unary_ufunc):
+    key = numpy.sqrt
 
 
 class Numpy_absolute(Numpy_unary_ufunc):

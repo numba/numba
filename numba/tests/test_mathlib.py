@@ -1,8 +1,10 @@
 from __future__ import print_function, absolute_import, division
 import math
+import numpy as np
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import types
+
 
 
 enable_pyobj_flags = Flags()
@@ -61,6 +63,10 @@ def atanh(x):
 
 def sqrt(x):
     return math.sqrt(x)
+
+
+def npy_sqrt(x):
+    return np.sqrt(x)
 
 
 def exp(x):
@@ -146,6 +152,17 @@ class TestMathLib(unittest.TestCase):
 
     def test_sqrt_npm(self):
         self.test_sqrt(flags=no_pyobj_flags)
+
+    def test_npy_sqrt(self, flags=enable_pyobj_flags):
+        pyfunc = npy_sqrt
+        x_types = [types.int16, types.int32, types.int64,
+                   types.uint16, types.uint32, types.uint64,
+                   types.float32, types.float64]
+        x_values = [2, 1, 2, 2, 1, 2, .1, .2]
+        self.run_unary(pyfunc, x_types, x_values, flags)
+
+    def test_npy_sqrt_npm(self):
+        self.test_npy_sqrt(flags=no_pyobj_flags)
 
     def test_exp(self, flags=enable_pyobj_flags):
         pyfunc = exp
