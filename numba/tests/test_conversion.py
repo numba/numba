@@ -79,5 +79,16 @@ class TestConversion(unittest.TestCase):
         for xs, ys in itertools.product(xs, ys):
             self.assertEqual(pyfunc(xs, ys), cfunc(xs, ys))
 
+    def test_boolean_eq_boolean(self):
+        pyfunc = equality
+        cres = compile_isolated(pyfunc, [types.boolean, types.boolean])
+        cfunc = cres.entry_point
+
+        xs = True, False
+        ys = True, False
+
+        for xs, ys in itertools.product(xs, ys):
+            self.assertEqual(pyfunc(xs, ys), cfunc(xs, ys))
+
 if __name__ == '__main__':
     unittest.main()

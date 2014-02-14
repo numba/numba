@@ -224,6 +224,21 @@ def int_sge_impl(context, builder, sig, args):
     return builder.icmp(lc.ICMP_SGE, *args)
 
 
+def int_ult_impl(context, builder, sig, args):
+    return builder.icmp(lc.ICMP_ULT, *args)
+
+
+def int_ule_impl(context, builder, sig, args):
+    return builder.icmp(lc.ICMP_ULE, *args)
+
+
+def int_ugt_impl(context, builder, sig, args):
+    return builder.icmp(lc.ICMP_UGT, *args)
+
+
+def int_uge_impl(context, builder, sig, args):
+    return builder.icmp(lc.ICMP_UGE, *args)
+
 def int_eq_impl(context, builder, sig, args):
     return builder.icmp(lc.ICMP_EQ, *args)
 
@@ -315,6 +330,14 @@ def int_invert_impl(context, builder, sig, args):
     return builder.xor(val, Constant.all_ones(val.type))
 
 
+builtin(implement('==', types.boolean, types.boolean)(int_eq_impl))
+builtin(implement('!=', types.boolean, types.boolean)(int_ne_impl))
+builtin(implement('<', types.boolean, types.boolean)(int_ult_impl))
+builtin(implement('<=', types.boolean, types.boolean)(int_ule_impl))
+builtin(implement('>', types.boolean, types.boolean)(int_ugt_impl))
+builtin(implement('>=', types.boolean, types.boolean)(int_uge_impl))
+builtin(implement('~', types.boolean)(int_invert_impl))
+
 for ty in types.integer_domain:
     builtin(implement('+', ty, ty)(int_add_impl))
     builtin(implement('-', ty, ty)(int_sub_impl))
@@ -338,10 +361,10 @@ for ty in types.unsigned_domain:
     builtin(implement('//', ty, ty)(int_ufloordiv_impl))
     builtin(implement('/', ty, ty)(int_utruediv_impl))
     builtin(implement('%', ty, ty)(int_urem_impl))
-    builtin(implement('<', ty, ty)(int_slt_impl))
-    builtin(implement('<=', ty, ty)(int_sle_impl))
-    builtin(implement('>', ty, ty)(int_sgt_impl))
-    builtin(implement('>=', ty, ty)(int_sge_impl))
+    builtin(implement('<', ty, ty)(int_ult_impl))
+    builtin(implement('<=', ty, ty)(int_ule_impl))
+    builtin(implement('>', ty, ty)(int_ugt_impl))
+    builtin(implement('>=', ty, ty)(int_uge_impl))
     builtin(implement('**', types.float64, ty)(int_upower_impl))
     # logical shift for unsigned
     builtin(implement('>>', ty, types.uint32)(int_lshr_impl))
@@ -820,6 +843,7 @@ for ty in types.number_domain:
     builtin(implement('not', ty)(number_not_impl))
     builtin(implement(bool, ty)(number_as_bool_impl))
 
+builtin(implement('not', types.boolean)(number_not_impl))
 
 #------------------------------------------------------------------------------
 

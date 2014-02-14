@@ -286,6 +286,8 @@ class BitwiseInvert(ConcreteTemplate):
     key = "~"
 
     cases = [
+        signature(types.int8, types.boolean),
+
         signature(types.uint8, types.uint8),
         signature(types.uint16, types.uint16),
         signature(types.uint32, types.uint32),
@@ -322,6 +324,8 @@ class UnaryOp(ConcreteTemplate):
 class UnaryNot(UnaryOp):
     key = "not"
     cases = [
+        signature(types.boolean, types.boolean),
+
         signature(types.boolean, types.uint8),
         signature(types.boolean, types.uint16),
         signature(types.boolean, types.uint32),
@@ -362,25 +366,10 @@ class UnaryNegate(UnaryOp):
     ]
 
 
-@builtin
-class UnaryInvert(ConcreteTemplate):
-    key = "~"
-
-    cases = [
-        signature(types.uintp, types.uint8),
-        signature(types.uintp, types.uint16),
-        signature(types.uintp, types.uint32),
-        signature(types.uint64, types.uint64),
-
-        signature(types.intp, types.int8),
-        signature(types.intp, types.int16),
-        signature(types.intp, types.int32),
-        signature(types.int64, types.int64),
-    ]
-
-
 class CmpOp(ConcreteTemplate):
     cases = [
+        signature(types.boolean, types.boolean, types.boolean),
+
         signature(types.boolean, types.uint8, types.uint8),
         signature(types.boolean, types.uint16, types.uint16),
         signature(types.boolean, types.uint32, types.uint32),
