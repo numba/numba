@@ -90,6 +90,7 @@ class BaseLower(object):
         self.function = context.declare_function(self.module, fndesc)
         self.entry_block = self.function.append_basic_block('entry')
         self.builder = Builder.new(self.entry_block)
+        # self.builder = cgutils.VerboseProxy(self.builder)
 
         # Internal states
         self.blkmap = {}

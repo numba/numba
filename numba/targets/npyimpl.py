@@ -149,9 +149,7 @@ def numpy_binary_ufunc(core, divbyzero=False):
     def impl(context, builder, sig, args):
         [tyvx, tywy, tyout] = sig.args
         [vx, wy, out] = args
-        assert tyvx.dtype == tyout.dtype
         assert tyvx.dtype == tywy.dtype
-        dtype = tyvx.dtype
         ndim = tyvx.ndim
 
         xary = context.make_array(tyvx)(context, builder, vx)
@@ -192,23 +190,31 @@ def numpy_binary_ufunc(core, divbyzero=False):
                         if tyout.dtype in types.real_domain:
                             # If x is float and is 0 also, return Nan; else
                             # return Inf
+                            outltype = context.get_data_type(tyout.dtype)
                             shouldretnan = cgutils.is_scalar_zero(builder, x)
-                            nan = Constant.real(y.type, float("nan"))
-                            inf = Constant.real(y.type, float("inf"))
+                            nan = Constant.real(outltype, float("nan"))
+                            inf = Constant.real(outltype, float("inf"))
                             res = builder.select(shouldretnan, nan, inf)
                         elif (tyout.dtype in types.signed_domain and
                                 not numpy_support.int_divbyzero_returns_zero):
                             res = Constant.int(y.type, 0x1 << (y.type.width-1))
                         else:
                             res = Constant.null(y.type)
+
+                        assert res.type == po.type.pointee, \
+                                        (str(res.type), str(po.type.pointee))
                         builder.store(res, po)
                     with orelse:
                         # Normal
                         res = core(builder, (x, y))
+                        assert res.type == po.type.pointee, \
+                                        (str(res.type), str(po.type.pointee))
                         builder.store(res, po)
             else:
                 # Handle other operations
                 res = core(builder, (x, y))
+                assert res.type == po.type.pointee, (res.type,
+                                                     po.type.pointee)
                 builder.store(res, po)
 
         return out
@@ -253,13 +259,12 @@ def numpy_multiply(context, builder, sig, args):
            types.Kind(types.Array))
 def numpy_divide(context, builder, sig, args):
     dtype = sig.args[0].dtype
-    isig = typing.signature(dtype, dtype, dtype)
+    odtype = sig.return_type.dtype
+    isig = typing.signature(odtype, dtype, dtype)
     if dtype in types.signed_domain:
         if PYVERSION >= (3, 0):
-            # FIXME This only handles integer output
-            # divide in py3 can have real output
-            int_sfloordiv_impl = context.get_function("//", isig)
-            imp = numpy_binary_ufunc(int_sfloordiv_impl, divbyzero=True)
+            real_div_impl = context.get_function("/", isig)
+            imp = numpy_binary_ufunc(real_div_impl, divbyzero=True)
         else:
             int_sdiv_impl = context.get_function("/?", isig)
             imp = numpy_binary_ufunc(int_sdiv_impl, divbyzero=True)
