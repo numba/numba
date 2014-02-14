@@ -14,6 +14,9 @@ class NumpyModuleAttribute(AttributeTemplate):
     def resolve_exp(self, mod):
         return types.Function(Numpy_exp)
 
+    def resolve_sqrt(self, mod):
+        return types.Function(Numpy_sqrt)
+
     def resolve_sin(self, mod):
         return types.Function(Numpy_sin)
 
@@ -41,9 +44,6 @@ class Numpy_unary_ufunc(AbstractTemplate):
         assert not kws
         [inp, out] = args
         if isinstance(inp, types.Array) and isinstance(out, types.Array):
-            if inp.dtype != out.dtype:
-                # TODO handle differing dtypes
-                return
             return signature(out, inp, out)
 
 
@@ -65,6 +65,10 @@ class Numpy_tan(Numpy_unary_ufunc):
 
 class Numpy_exp(Numpy_unary_ufunc):
     key = numpy.exp
+
+
+class Numpy_sqrt(Numpy_unary_ufunc):
+    key = numpy.sqrt
 
 
 class Numpy_binary_ufunc(AbstractTemplate):
@@ -105,5 +109,6 @@ builtin_global(numpy.add, types.Function(Numpy_add))
 builtin_global(numpy.subtract, types.Function(Numpy_subtract))
 builtin_global(numpy.multiply, types.Function(Numpy_multiply))
 builtin_global(numpy.divide, types.Function(Numpy_divide))
+builtin_global(numpy.sqrt, types.Function(Numpy_sqrt))
 
 

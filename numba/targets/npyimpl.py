@@ -19,8 +19,6 @@ def numpy_unary_ufunc(funckey, asfloat=False):
     def impl(context, builder, sig, args):
         [tyinp, tyout] = sig.args
         [inp, out] = args
-        assert tyinp.dtype == tyout.dtype
-        dtype = tyinp.dtype
         ndim = tyinp.ndim
 
         iary = context.make_array(tyinp)(context, builder, inp)
@@ -29,7 +27,7 @@ def numpy_unary_ufunc(funckey, asfloat=False):
         if asfloat:
             sig = typing.signature(types.float64, types.float64)
         else:
-            sig = typing.signature(dtype, dtype)
+            sig = typing.signature(tyout.dtype, tyinp.dtype)
 
         fnwork = context.get_function(funckey, sig)
         intpty = context.get_value_type(types.intp)
@@ -42,9 +40,12 @@ def numpy_unary_ufunc(funckey, asfloat=False):
 
             ival = builder.load(pi)
             if asfloat:
-                dval = context.cast(builder, ival, dtype, types.float64)
+                dval = context.cast(builder, ival, tyinp.dtype, types.float64)
                 dres = fnwork(builder, [dval])
-                res = context.cast(builder, dres, types.float64, dtype)
+                res = context.cast(builder, dres, types.float64, tyout.dtype)
+            elif tyinp.dtype != tyout.dtype:
+                tempres = fnwork(builder, [ival])
+                res = context.cast(builder, tempres, tyinp.dtype, tyout.dtype)
             else:
                 res = fnwork(builder, [ival])
             builder.store(res, po)
@@ -85,6 +86,13 @@ def numpy_cos(context, builder, sig, args):
 @implement(numpy.tan, types.Kind(types.Array), types.Kind(types.Array))
 def numpy_tan(context, builder, sig, args):
     imp = numpy_unary_ufunc(math.tan, asfloat=True)
+    return imp(context, builder, sig, args)
+
+
+@register
+@implement(numpy.sqrt, types.Kind(types.Array), types.Kind(types.Array))
+def numpy_sqrt(context, builder, sig, args):
+    imp = numpy_unary_ufunc(math.sqrt, asfloat=True)
     return imp(context, builder, sig, args)
 
 
