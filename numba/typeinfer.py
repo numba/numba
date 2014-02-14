@@ -295,12 +295,14 @@ class TypeInferer(object):
         typdict = utils.UniqueDict()
         for var, tv in self.typevars.items():
             if len(tv) == 1:
-                typdict[var] = tv.getone()
+                unified = tv.getone()
             elif len(tv) == 0:
                 raise TypeError("Variable %s has no type" % var)
             else:
-                typdict[var] = self.context.unify_types(*tv.get())
-
+                unified = self.context.unify_types(*tv.get())
+            if unified == types.pyobject:
+                raise TypingError("Var '%s' unified to object: %s" % (var, tv))
+            typdict[var] = unified
         retty = self.get_return_type(typdict)
         fntys = self.get_function_types(typdict)
         return typdict, retty, fntys
