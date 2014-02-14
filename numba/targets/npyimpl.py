@@ -96,6 +96,13 @@ def numpy_sqrt(context, builder, sig, args):
     return imp(context, builder, sig, args)
 
 
+@register
+@implement(numpy.negative, types.Kind(types.Array), types.Kind(types.Array))
+def numpy_negative(context, builder, sig, args):
+    imp = numpy_unary_ufunc(types.neg_type)
+    return imp(context, builder, sig, args)
+
+
 def numpy_binary_ufunc(core, divbyzero=False):
     def impl(context, builder, sig, args):
         [tyvx, tywy, tyout] = sig.args

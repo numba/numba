@@ -38,6 +38,9 @@ class NumpyModuleAttribute(AttributeTemplate):
     def resolve_divide(self, mod):
         return types.Function(Numpy_divide)
 
+    def resolve_negative(self, mod):
+        return types.Function(Numpy_negative)
+
 
 class Numpy_unary_ufunc(AbstractTemplate):
     def generic(self, args, kws):
@@ -69,6 +72,10 @@ class Numpy_exp(Numpy_unary_ufunc):
 
 class Numpy_sqrt(Numpy_unary_ufunc):
     key = numpy.sqrt
+
+
+class Numpy_negative(Numpy_unary_ufunc):
+    key = numpy.negative
 
 
 class Numpy_binary_ufunc(AbstractTemplate):
@@ -110,5 +117,6 @@ builtin_global(numpy.subtract, types.Function(Numpy_subtract))
 builtin_global(numpy.multiply, types.Function(Numpy_multiply))
 builtin_global(numpy.divide, types.Function(Numpy_divide))
 builtin_global(numpy.sqrt, types.Function(Numpy_sqrt))
+builtin_global(numpy.negative, types.Function(Numpy_negative))
 
 

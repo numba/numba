@@ -302,7 +302,10 @@ def int_negate_impl(context, builder, sig, args):
     [typ] = sig.args
     [val] = args
     val = context.cast(builder, val, typ, sig.return_type)
-    return builder.neg(val)
+    if sig.return_type in types.real_domain:
+        return builder.fsub(context.get_constant(sig.return_type, 0), val)
+    else:
+        return builder.neg(val)
 
 
 def int_invert_impl(context, builder, sig, args):
@@ -327,6 +330,7 @@ for ty in types.integer_domain:
     builtin(implement('^', ty, ty)(int_xor_impl))
 
     builtin(implement('-', ty)(int_negate_impl))
+    builtin(implement(types.neg_type, ty)(int_negate_impl))
     builtin(implement('~', ty)(int_invert_impl))
 
 for ty in types.unsigned_domain:
@@ -564,7 +568,10 @@ def real_negate_impl(context, builder, sig, args):
     [typ] = sig.args
     [val] = args
     val = context.cast(builder, val, typ, sig.return_type)
-    return builder.fsub(context.get_constant(sig.return_type, 0), val)
+    if sig.return_type in types.real_domain:
+        return builder.fsub(context.get_constant(sig.return_type, 0), val)
+    else:
+        return builder.neg(val)
 
 
 for ty in types.real_domain:
@@ -587,6 +594,7 @@ for ty in types.real_domain:
     builtin(implement(types.print_type, ty)(real_print_impl))
 
     builtin(implement('-', ty)(real_negate_impl))
+    builtin(implement(types.neg_type, ty)(real_negate_impl))
 
 
 class Complex64(cgutils.Structure):

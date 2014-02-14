@@ -335,7 +335,6 @@ class TestUFuncs(unittest.TestCase):
     def test_negative_ufunc(self):
         self.unary_ufunc_test('negative')
 
-    @unittest.expectedFailure
     def test_negative_ufunc_npm(self):
         self.unary_ufunc_test('negative', flags=no_pyobj_flags)
 
