@@ -396,7 +396,10 @@ class BaseContext(object):
             builder.store(val, tmp)
             return tmp
 
-        raise NotImplementedError(str(argty), str(val.type))
+        elif ty == types.boolean:
+            return builder.zext(val, argty)
+
+        raise NotImplementedError("value %s -> arg %s" % (val.type, argty))
 
     def return_value(self, builder, retval):
         fn = cgutils.get_function(builder)
@@ -518,6 +521,12 @@ class BaseContext(object):
 
         elif toty == types.boolean:
             return self.is_true(builder, fromty, val)
+
+        elif fromty == types.boolean:
+            # first promote to int32
+            asint = builder.zext(val, Type.int())
+            # then promote to number
+            return self.cast(builder, asint, types.int32, toty)
 
         raise NotImplementedError("cast", val, fromty, toty)
 
