@@ -232,7 +232,16 @@ m_log1p(double x)
     }
 }
 
+/* Hand written */
+double m_trunc(double x)
+{
+    double integral;
+    (void)modf(x, &integral);
+    return integral;
+}
 
+
+/* Hand written */
 double m_round(double x) {
     if (x < 0.0) {
         return ceil(x - 0.5);
@@ -241,6 +250,7 @@ double m_round(double x) {
     }
 }
 
+/* Hand written */
 float m_roundf(float x) {
     if (x < 0.0) {
         return ceilf(x - 0.5);
@@ -250,6 +260,7 @@ float m_roundf(float x) {
 }
 
 
+
 #define FLOATVER(Fn) float Fn##f(float x) { return (float)Fn(x); }
 
 FLOATVER(m_acosh);
@@ -257,4 +268,5 @@ FLOATVER(m_asinh);
 FLOATVER(m_atanh);
 FLOATVER(m_expm1);
 FLOATVER(m_log1p);
+FLOATVER(m_trunc);
 

@@ -19,6 +19,9 @@ float m_log1pf(float x);
 double m_round(double x);
 float m_roundf(float x);
 
+double m_trunc(double x);
+float m_truncf(float x);
+
 #ifdef _MSC_VER
 
 /* define asinh acosh atanh for windows */
@@ -39,6 +42,8 @@ float m_roundf(float x);
 
 #define round m_round
 #define roundf m_roundf
+#define trunc m_trunc
+#define truncf m_truncf
 
 /* provide floating point equivalence */
 
