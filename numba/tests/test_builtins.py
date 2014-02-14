@@ -462,10 +462,9 @@ class TestBuiltins(unittest.TestCase):
 
         cr = compile_isolated(pyfunc, (types.float32,), flags=flags)
         cfunc = cr.entry_point
-        for x in [-0.5, -0.1, 0.0, 0.1, 0.5]:
+        for x in [-0.5, -0.1, 0.0, 0.1, 0.5, 1.5]:
             self.assertEqual(cfunc(x), pyfunc(x))
 
-    @unittest.expectedFailure
     def test_round_npm(self):
         self.test_round(flags=no_pyobj_flags)
 

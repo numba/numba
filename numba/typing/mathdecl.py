@@ -20,6 +20,9 @@ class MathModuleAttribute(AttributeTemplate):
     def resolve_log(self, mod):
         return types.Function(Math_log)
 
+    def resolve_log10(self, mod):
+        return types.Function(Math_log10)
+
     def resolve_sin(self, mod):
         return types.Function(Math_sin)
 
@@ -62,6 +65,15 @@ class MathModuleAttribute(AttributeTemplate):
     def resolve_e(self, mod):
         return types.float64
 
+    def resolve_floor(self, mod):
+        return types.Function(Math_floor)
+
+    def resolve_ceil(self, mod):
+        return types.Function(Math_ceil)
+
+    def resolve_trunc(self, mod):
+        return types.Function(Math_trunc)
+
 
 class Math_unary(ConcreteTemplate):
     cases = [
@@ -86,6 +98,10 @@ class Math_sqrt(Math_unary):
 
 class Math_log(Math_unary):
     key = math.log
+
+
+class Math_log10(Math_unary):
+    key = math.log10
 
 
 class Math_sin(Math_unary):
@@ -136,11 +152,24 @@ class Math_atanh(Math_unary):
     key = math.atanh
 
 
+class Math_floor(Math_unary):
+    key = math.floor
+
+
+class Math_ceil(Math_unary):
+    key = math.ceil
+
+
+class Math_trunc(Math_unary):
+    key = math.trunc
+
+
 builtin_global(math, types.Module(math))
 builtin_global(math.fabs, types.Function(Math_fabs))
 builtin_global(math.exp, types.Function(Math_exp))
 builtin_global(math.sqrt, types.Function(Math_sqrt))
 builtin_global(math.log, types.Function(Math_log))
+builtin_global(math.log10, types.Function(Math_log10))
 builtin_global(math.sin, types.Function(Math_sin))
 builtin_global(math.cos, types.Function(Math_cos))
 builtin_global(math.tan, types.Function(Math_tan))
@@ -153,3 +182,6 @@ builtin_global(math.atan, types.Function(Math_atan))
 builtin_global(math.asinh, types.Function(Math_asinh))
 builtin_global(math.acosh, types.Function(Math_acosh))
 builtin_global(math.atanh, types.Function(Math_atanh))
+builtin_global(math.floor, types.Function(Math_floor))
+builtin_global(math.ceil, types.Function(Math_ceil))
+builtin_global(math.trunc, types.Function(Math_trunc))

@@ -61,6 +61,12 @@ def _init_type_manager():
     for ty in grp_all:
         tm.set_unsafe_convert(ty, boolean)
 
+    # boolean can safely promote to all numbers
+    boolean = types.boolean
+    for ty in grp_all:
+        tm.set_promote(boolean, ty)
+
+
     return tm
 
 

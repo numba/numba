@@ -61,6 +61,9 @@ MATH_UNARY(log10f, float, float)
 MATH_UNARY(log1p, double, double)
 MATH_UNARY(log1pf, float, float)
 
+MATH_UNARY(round, double, double)
+MATH_UNARY(roundf, float, float)
+
 MATH_BINARY(pow, double, double, double)
 MATH_BINARY(powf, float, float, float)
 

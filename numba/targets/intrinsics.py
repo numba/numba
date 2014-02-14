@@ -141,6 +141,9 @@ INTR_TO_CMATH = {
 
     "llvm.ceil.f32": "ceilf",
     "llvm.ceil.f64": "ceil",
+
+    "llvm.trunc.f32": "truncf",
+    "llvm.trunc.f64": "trunc",
 }
 
 OTHER_CMATHS = '''
@@ -172,6 +175,8 @@ log10
 log10f
 fmod
 fmodf
+round
+roundf
 '''.split()
 
 INTR_MATH = frozenset(INTR_TO_CMATH.values()) | frozenset(OTHER_CMATHS)

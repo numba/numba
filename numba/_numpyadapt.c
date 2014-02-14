@@ -11,6 +11,7 @@ int adapt_ndarray(PyObject *obj, void* arystruct) {
     npy_intp *strides;
     void *data;
     void **dataptr;
+    void **objectptr;
     npy_intp *dimsptr;
     npy_intp *stridesptr;
     int i;
@@ -28,12 +29,14 @@ int adapt_ndarray(PyObject *obj, void* arystruct) {
     dataptr = (void**)arystruct;
     dimsptr = (npy_intp*)(dataptr + 1);
     stridesptr = dimsptr + ndim;
+    objectptr = stridesptr + ndim;
 
     for (i = 0; i < ndim; ++i) {
         dimsptr[i] = dims[i];
         stridesptr[i] = strides[i];
     }
     *dataptr = data;
+    *objectptr = obj;
 
     return 0;
 }
@@ -43,6 +46,7 @@ PyObject* get_ndarray_adaptor(PyObject* self, PyObject *args)
 {
     return PyLong_FromVoidPtr(&adapt_ndarray);
 }
+
 
 static PyMethodDef ext_methods[] = {
 #define declmethod(func) { #func , ( PyCFunction )func , METH_VARARGS , NULL }
