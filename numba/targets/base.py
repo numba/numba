@@ -263,6 +263,8 @@ class BaseContext(object):
     def pack_value(self, builder, ty, value, ptr):
         """Pack data for array storage
         """
+        if ty == types.boolean:
+            value = cgutils.as_bool_byte(builder, value)
         assert value.type == ptr.type.pointee
         builder.store(value, ptr)
 
@@ -270,7 +272,11 @@ class BaseContext(object):
         """Unpack data from array storage
         """
         assert cgutils.is_pointer(ptr.type)
-        return builder.load(ptr)
+        value = builder.load(ptr)
+        if ty == types.boolean:
+            return builder.trunc(value, Type.int(1))
+        else:
+            return value
 
     def is_struct_type(self, ty):
         return cgutils.is_struct(self.get_data_type(ty))
