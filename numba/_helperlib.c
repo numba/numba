@@ -56,6 +56,26 @@ int Numba_to_complex(PyObject* obj, Py_complex *out) {
 }
 
 
+static
+double Numba_round_even(double y) {
+    double z = round(y);
+    if (fabs(y-z) == 0.5) {
+        /* halfway between two integers; use round-half-even */
+        z = 2.0*round(y / 2.0);
+    }
+    return z;
+}
+
+static
+float Numba_roundf_even(float y) {
+    float z = roundf(y);
+    if (fabsf(y-z) == 0.5) {
+        /* halfway between two integers; use round-half-even */
+        z = 2.0 * roundf(y / 2.0);
+    }
+    return z;
+}
+
 
 #define EXPOSE(Fn, Sym) static void* Sym(){return PyLong_FromVoidPtr(&Fn);}
 EXPOSE(Numba_sdiv, get_sdiv)
@@ -64,6 +84,8 @@ EXPOSE(Numba_udiv, get_udiv)
 EXPOSE(Numba_urem, get_urem)
 EXPOSE(Numba_cpow, get_cpow)
 EXPOSE(Numba_to_complex, get_complex_adaptor)
+EXPOSE(Numba_round_even, get_round_even)
+EXPOSE(Numba_roundf_even, get_roundf_even)
 #undef EXPOSE
 
 /*
@@ -94,6 +116,8 @@ static PyMethodDef ext_methods[] = {
     declmethod(get_urem),
     declmethod(get_cpow),
     declmethod(get_complex_adaptor),
+    declmethod(get_round_even),
+    declmethod(get_roundf_even),
 
     /* Declare math exposer */
     #define MATH_UNARY(F, R, A) declmethod(get_##F),

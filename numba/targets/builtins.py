@@ -2,7 +2,7 @@ from llvm.core import Type, Constant
 import llvm.core as lc
 import math
 from functools import reduce
-from numba import types, typing, cgutils
+from numba import types, typing, cgutils, utils
 from numba.targets.imputils import (builtin, builtin_attr, implement,
                                     impl_attribute)
 
@@ -1382,6 +1382,30 @@ def min_impl(context, builder, sig, args):
     typvals = zip(argtys, args)
     resty, resval = reduce(domax, typvals)
     return resval
+
+@builtin
+@implement(round, types.float32)
+def round_impl_f32(context, builder, sig, args):
+    module = cgutils.get_module(builder)
+    fnty = Type.function(Type.float(), [Type.float()])
+    if utils.IS_PY3:
+        fn = module.get_or_insert_function(fnty, name="numba.roundf")
+    else:
+        fn = module.get_or_insert_function(fnty, name="roundf")
+    assert fn.is_declaration
+    return builder.call(fn, args)
+
+@builtin
+@implement(round, types.float64)
+def round_impl_f64(context, builder, sig, args):
+    module = cgutils.get_module(builder)
+    fnty = Type.function(Type.double(), [Type.double()])
+    if utils.IS_PY3:
+        fn = module.get_or_insert_function(fnty, name="numba.round")
+    else:
+        fn = module.get_or_insert_function(fnty, name="roundf")
+    assert fn.is_declaration
+    return builder.call(fn, args)
 
 #-------------------------------------------------------------------------------
 

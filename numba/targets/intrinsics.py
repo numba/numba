@@ -175,6 +175,8 @@ log10
 log10f
 fmod
 fmodf
+round
+roundf
 '''.split()
 
 INTR_MATH = frozenset(INTR_TO_CMATH.values()) | frozenset(OTHER_CMATHS)

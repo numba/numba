@@ -717,8 +717,18 @@ class Min(AbstractTemplate):
         return signature(retty, *args)
 
 
+class Round(ConcreteTemplate):
+    key = round
+    cases = [
+        signature(types.float32, types.float32),
+        signature(types.float64, types.float64),
+    ]
+
+
 builtin_global(max, types.Function(Max))
 builtin_global(min, types.Function(Min))
+builtin_global(round, types.Function(Round))
+
 
 #------------------------------------------------------------------------------
 
