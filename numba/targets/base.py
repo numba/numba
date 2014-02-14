@@ -13,7 +13,7 @@ from numba.targets import builtins
 LTYPEMAP = {
     types.pyobject: Type.pointer(Type.int(8)),
 
-    types.boolean: Type.int(1),
+    types.boolean: Type.int(8),
 
     types.uint8: Type.int(8),
     types.uint16: Type.int(16),
@@ -200,15 +200,18 @@ class BaseContext(object):
 
     def get_argument_type(self, ty):
         if ty is types.boolean:
-            return Type.int(8)
+            return self.get_data_type(ty)
+        elif self.is_struct_type(ty):
+            return Type.pointer(self.get_data_type(ty))
         else:
             return self.get_value_type(ty)
 
     def get_return_type(self, ty):
-        ty = self.get_argument_type(ty)
-        if not cgutils.is_struct_ptr(ty):
-            ty = Type.pointer(ty)
-        return ty
+        if self.is_struct_type(ty):
+            return self.get_argument_type(ty)
+        else:
+            argty = self.get_argument_type(ty)
+            return Type.pointer(argty)
 
     def get_data_type(self, ty):
         """
@@ -243,7 +246,7 @@ class BaseContext(object):
 
         elif isinstance(ty, types.UniTupleIter):
             stty = self.get_struct_type(self.make_unituple_iter(ty))
-            return Type.pointer(stty)
+            return stty
 
         elif ty in STRUCT_TYPES:
             return self.get_struct_type(STRUCT_TYPES[ty])
@@ -252,37 +255,22 @@ class BaseContext(object):
             return LTYPEMAP[ty]
 
     def get_value_type(self, ty):
+        if ty == types.boolean:
+            return Type.int(1)
         dataty = self.get_data_type(ty)
-        if cgutils.is_struct(dataty):
-            return Type.pointer(dataty)
         return dataty
 
     def pack_value(self, builder, ty, value, ptr):
         """Pack data for array storage
         """
-        if self.is_struct_type(ty):
-            # Structures are handed around as pointer to structures
-            value = builder.load(value)
         assert value.type == ptr.type.pointee
         builder.store(value, ptr)
 
     def unpack_value(self, builder, ty, ptr):
         """Unpack data from array storage
         """
-        if self.is_struct_type(ty):
-            # Regular structures
-            # Copy the structure into the stack
-            lty = self.get_value_type(ty).pointee
-            tmp = cgutils.alloca_once(builder, lty)
-            val = builder.load(ptr)
-            assert val.type == tmp.type.pointee, \
-                    "storing %s into %s" % (val.type, tmp.type)
-            builder.store(val, tmp)
-            return tmp
-        else:
-            # Others, almost scalars
-            return builder.load(ptr)
-
+        assert cgutils.is_pointer(ptr.type)
+        return builder.load(ptr)
 
     def is_struct_type(self, ty):
         return cgutils.is_struct(self.get_data_type(ty))
@@ -307,7 +295,7 @@ class BaseContext(object):
             gv.linkage = lc.LINKAGE_INTERNAL
             gv.initializer = const
             gv.global_constant = True
-            return gv
+            return builder.load(gv)
 
         else:
             raise NotImplementedError(ty)
@@ -378,6 +366,8 @@ class BaseContext(object):
         """
         if ty == types.boolean:
             return builder.trunc(val, self.get_value_type(ty))
+        elif self.is_struct_type(ty):
+            return builder.load(val)
         return val
 
     def get_return_value(self, builder, ty, val):
@@ -392,16 +382,28 @@ class BaseContext(object):
         else:
             return val
 
+    def get_value_as_argument(self, builder, ty, val):
+        """Prepare local value representation as argument type representation
+        """
+        argty = self.get_argument_type(ty)
+        if argty == val.type:
+            return val
+
+        elif self.is_struct_type(ty):
+            # Arguments are passed by pointer
+            assert argty.pointee == val.type
+            tmp = cgutils.alloca_once(builder, val.type)
+            builder.store(val, tmp)
+            return tmp
+
+        raise NotImplementedError(str(argty), str(val.type))
+
     def return_value(self, builder, retval):
         fn = cgutils.get_function(builder)
         retptr = fn.args[0]
-        if cgutils.is_struct_ptr(retval.type):
-            # Copy structure
-            builder.store(builder.load(retval), retptr)
-        else:
-            assert retval.type == retptr.type.pointee, \
-                        (str(retval.type), str(retptr.type.pointee))
-            builder.store(retval, retptr)
+        assert retval.type == retptr.type.pointee, \
+                    (str(retval.type), str(retptr.type.pointee))
+        builder.store(retval, retptr)
         builder.ret(RETCODE_OK)
 
     def return_native_none(self, builder):
@@ -535,15 +537,12 @@ class BaseContext(object):
     def call_function(self, builder, callee, resty, argtys, args):
         retty = callee.args[0].type.pointee
         retval = cgutils.alloca_once(builder, retty)
-        realargs = [retval] + [self.get_argument_value(builder, t, a)
-                               for t, a in zip(argtys, args)]
+        args = [self.get_value_as_argument(builder, ty, arg)
+                for ty, arg in zip(argtys, args)]
+        realargs = [retval] + list(args)
         code = builder.call(callee, realargs)
         status = self.get_return_status(builder, code)
-
-        if not cgutils.is_struct_ptr(retval.type):
-            # Handle scalars
-            retval = builder.load(retval)
-        return status, self.get_argument_value(builder, resty, retval)
+        return status, builder.load(retval)
 
     def get_return_status(self, builder, code):
         norm = builder.icmp(lc.ICMP_EQ, code, RETCODE_OK)

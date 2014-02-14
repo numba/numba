@@ -208,7 +208,7 @@ class GUArrayArg(object):
         self.array.data = builder.bitcast(self.data, self.array.data.type)
         self.array.shape = cgutils.pack_array(builder, self.shape)
         self.array.strides = cgutils.pack_array(builder, self.strides)
-        self.array_value = self.array._getvalue()
+        self.array_value = self.array._getpointer()
 
         self.builder = builder
 
