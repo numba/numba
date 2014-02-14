@@ -232,6 +232,24 @@ m_log1p(double x)
     }
 }
 
+
+double m_round(double x) {
+    if (x < 0.0) {
+        return ceil(x - 0.5);
+    } else {
+        return floor(x + 0.5);
+    }
+}
+
+float m_roundf(float x) {
+    if (x < 0.0) {
+        return ceilf(x - 0.5);
+    } else {
+        return floorf(x + 0.5);
+    }
+}
+
+
 #define FLOATVER(Fn) float Fn##f(float x) { return (float)Fn(x); }
 
 FLOATVER(m_acosh);
@@ -239,3 +257,4 @@ FLOATVER(m_asinh);
 FLOATVER(m_atanh);
 FLOATVER(m_expm1);
 FLOATVER(m_log1p);
+
