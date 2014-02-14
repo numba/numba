@@ -109,7 +109,7 @@ class TestIndexing(unittest.TestCase):
     def test_1d_integer_indexing_npm(self):
         self.test_1d_integer_indexing(flags=Noflags)
 
-    def test_2d_integer_indexing(self, flags=enable_pyobj_flags):
+    def test_integer_indexing_1d_for_2d(self, flags=enable_pyobj_flags):
         pyfunc = integer_indexing_1d_usecase
         arraytype = types.Array(types.int32, 2, 'C')
         cr = compile_isolated(pyfunc, (arraytype, types.int32), flags=flags)
@@ -120,6 +120,13 @@ class TestIndexing(unittest.TestCase):
         self.assertTrue((pyfunc(a, 9) == cfunc(a, 9)).all())
         self.assertTrue((pyfunc(a, -1) == cfunc(a, -1)).all())
 
+
+    @unittest.expectedFailure
+    def test_integer_indexing_1d_for_2d(self):
+        self.test_integer_indexing_1d_for_2d(flags=Noflags)
+
+    def test_2d_integer_indexing(self, flags=enable_pyobj_flags):
+        a = np.arange(100, dtype='i4').reshape(10, 10)
         pyfunc = integer_indexing_2d_usecase
         arraytype = types.Array(types.int32, 2, 'C')
         cr = compile_isolated(pyfunc, (arraytype, types.int32, types.int32),
@@ -130,9 +137,23 @@ class TestIndexing(unittest.TestCase):
         self.assertEqual(pyfunc(a, 9, 9), cfunc(a, 9, 9))
         self.assertEqual(pyfunc(a, -1, -1), cfunc(a, -1, -1))
 
-    @unittest.expectedFailure
     def test_2d_integer_indexing_npm(self):
         self.test_2d_integer_indexing(flags=Noflags)
+
+    def test_2d_float_indexing(self, flags=enable_pyobj_flags):
+        a = np.arange(100, dtype='i4').reshape(10, 10)
+        pyfunc = integer_indexing_2d_usecase
+        arraytype = types.Array(types.int32, 2, 'C')
+        cr = compile_isolated(pyfunc, (arraytype, types.float32, types.int32),
+                              flags=flags)
+        cfunc = cr.entry_point
+
+        self.assertEqual(pyfunc(a, 0, 0), cfunc(a, 0, 0))
+        self.assertEqual(pyfunc(a, 9, 9), cfunc(a, 9, 9))
+        self.assertEqual(pyfunc(a, -1, -1), cfunc(a, -1, -1))
+
+    def test_2d_float_indexing_npm(self):
+        self.test_2d_float_indexing(flags=Noflags)
 
     def test_ellipse(self, flags=enable_pyobj_flags):
         pyfunc = ellipse_usecase

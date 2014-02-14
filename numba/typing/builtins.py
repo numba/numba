@@ -421,7 +421,7 @@ def normalize_index(index):
 
     elif isinstance(index, types.Tuple):
         for ty in index:
-            if ty not in types.integer_domain:
+            if ty not in types.integer_domain and ty not in types.real_domain:
                 return
         return index
 
@@ -456,9 +456,12 @@ class GetItemArray(AbstractTemplate):
             return
 
         idx = normalize_index(idx)
+        if not idx:
+            return
+
         if idx in (types.slice2_type, types.slice3_type):
             res = ary.copy(layout='A')
-        elif isinstance(idx, types.UniTuple):
+        elif isinstance(idx, (types.UniTuple, types.Tuple)):
             if ary.ndim > len(idx):
                 return
             elif ary.ndim < len(idx):
@@ -469,8 +472,9 @@ class GetItemArray(AbstractTemplate):
             if ary.ndim != 1:
                 return
             res = ary.dtype
+
         else:
-            raise Exception("unreachable")
+            raise Exception("unreachable: index type of %s" % idx)
 
         return signature(res, ary, idx)
 
