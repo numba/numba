@@ -24,3 +24,4 @@ test:
     - unittest2       [py26]
   commands:
     - pycc -h
+    - numba -h
