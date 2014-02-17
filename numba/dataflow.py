@@ -52,11 +52,27 @@ class DataFlowAnalysis(object):
     def op_DUP_TOP_TWO(self, info, inst):
         self.dup_topx(info, count=2)
 
+    def op_ROT_TWO(self, info, inst):
+        first = info.pop()
+        second = info.pop()
+        info.push(first)
+        info.push(second)
+
     def op_ROT_THREE(self, info, inst):
         first = info.pop()
         second = info.pop()
         third = info.pop()
         info.push(first)
+        info.push(third)
+        info.push(second)
+
+    def op_ROT_FOUR(self, info, inst):
+        first = info.pop()
+        second = info.pop()
+        third = info.pop()
+        forth = info.pop()
+        info.push(first)
+        info.push(forth)
         info.push(third)
         info.push(second)
 
