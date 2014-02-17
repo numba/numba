@@ -1191,27 +1191,7 @@ def getitem_array1d(context, builder, sig, args):
 
     arystty = make_array(aryty)
     ary = arystty(context, builder, ary)
-    dataptr = ary.data
-
-    if True or WARPAROUND:  # TODO target flag
-        ZERO = context.get_constant(types.intp, 0)
-        negative = builder.icmp(lc.ICMP_SLT, idx, ZERO)
-        bbnormal = builder.basic_block
-        with cgutils.if_unlikely(builder, negative):
-            # Index is negative, wraparound
-            [nelem] = cgutils.unpack_tuple(builder, ary.shape, 1)
-            wrapped = builder.add(nelem, idx)
-            bbwrapped = builder.basic_block
-
-        where = builder.phi(idx.type)
-        where.add_incoming(idx, bbnormal)
-        where.add_incoming(wrapped, bbwrapped)
-
-        ptr = builder.gep(dataptr, [where])
-    else:
-        # No wraparound
-        ptr = builder.gep(dataptr, [idx])
-
+    ptr = cgutils.get_item_pointer(builder, aryty, ary, [idx], wraparound=True)
     return context.unpack_value(builder, aryty.dtype, ptr)
 
 
@@ -1267,9 +1247,10 @@ def setitem_array1d(context, builder, sig, args):
 
     arystty = make_array(aryty)
     ary = arystty(context, builder, ary)
-    dataptr = ary.data
 
-    ptr = builder.gep(dataptr, [idx])
+    ptr = cgutils.get_item_pointer(builder, aryty, ary, [idx],
+                                   wraparound=True)
+
     val = context.cast(builder, val, valty, aryty.dtype)
 
     context.pack_value(builder, aryty.dtype, val, ptr)
