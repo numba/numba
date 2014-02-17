@@ -8,6 +8,7 @@ import llvm.core as lc
 from llvm.core import Type
 from numba.targets.imputils import implement, impl_attribute, builtin_attr
 from numba import types, cgutils
+from numba.typing import signature
 
 
 functions = []
@@ -24,16 +25,16 @@ def unary_math_int_impl(fn, f64impl):
     def s64impl(context, builder, sig, args):
         [val] = args
         fpval = builder.sitofp(val, Type.double())
-        return f64impl(context, builder, [types.float64, types.float64],
-                       [fpval])
+        sig = signature(types.float64, types.float64)
+        return f64impl(context, builder, sig, [fpval])
 
     @register
     @implement(fn, types.uint64)
     def u64impl(context, builder, sig, args):
         [val] = args
         fpval = builder.uitofp(val, Type.double())
-        return f64impl(context, builder, [types.float64, types.float64],
-                       [fpval])
+        sig = signature(types.float64, types.float64)
+        return f64impl(context, builder, sig, [fpval])
 
 
 def unary_math_intr(fn, intrcode):
@@ -100,6 +101,47 @@ unary_math_extern(math.atanh, "atanhf", "atanh")
 unary_math_extern(math.sinh, "sinhf", "sinh")
 unary_math_extern(math.cosh, "coshf", "cosh")
 unary_math_extern(math.tanh, "tanhf", "tanh")
+
+
+
+@register
+@implement(math.atan2, types.int64, types.int64)
+def atan2_s64_impl(context, builder, sig, args):
+    [y, x] = args
+    y = builder.sitofp(y, Type.double())
+    x = builder.sitofp(x, Type.double())
+    fsig = signature(types.float64, types.float64, types.float64)
+    return atan2_f64_impl(context, builder, fsig, (y, x))
+
+@register
+@implement(math.atan2, types.uint64, types.uint64)
+def atan2_u64_impl(context, builder, sig, args):
+    [y, x] = args
+    y = builder.uitofp(y, Type.double())
+    x = builder.uitofp(x, Type.double())
+    fsig = signature(types.float64, types.float64, types.float64)
+    return atan2_f64_impl(context, builder, fsig, (y, x))
+
+
+@register
+@implement(math.atan2, types.float32, types.float32)
+def atan2_f32_impl(context, builder, sig, args):
+    assert len(args) == 2
+    mod = cgutils.get_module(builder)
+    fnty = Type.function(Type.float(), [Type.float(), Type.float()])
+    fn = mod.get_or_insert_function(fnty, name="atan2f")
+    return builder.call(fn, args)
+
+@register
+@implement(math.atan2, types.float64, types.float64)
+def atan2_f64_impl(context, builder, sig, args):
+    assert len(args) == 2
+    mod = cgutils.get_module(builder)
+    fnty = Type.function(Type.double(), [Type.double(), Type.double()])
+    fn = mod.get_or_insert_function(fnty, name="atan2")
+    return builder.call(fn, args)
+
+
 
 
 @builtin_attr

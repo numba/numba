@@ -49,6 +49,10 @@ def atan(x):
     return math.atan(x)
 
 
+def atan2(y, x):
+    return math.atan2(y, x)
+
+
 def asinh(x):
     return math.asinh(x)
 
@@ -229,6 +233,23 @@ class TestMathLib(unittest.TestCase):
 
     def test_atan_npm(self):
         self.test_atan(flags=no_pyobj_flags)
+
+    def test_atan2(self, flags=enable_pyobj_flags):
+        pyfunc = atan2
+        x_types = [types.int16, types.int32, types.int64,
+                   types.uint16, types.uint32, types.uint64,
+                   types.float32, types.float64]
+        x_values = [-2, -1, -2, 2, 1, 2, .1, .2]
+
+        for ty, xy in zip(x_types, x_values):
+            cres = compile_isolated(pyfunc, (ty, ty))
+            cfunc = cres.entry_point
+            x = xy
+            y = x * 2
+            self.assertAlmostEqual(pyfunc(x, y), cfunc(x, y))
+
+    def test_atan2_npm(self):
+        self.test_atan2(flags=no_pyobj_flags)
 
     def test_asinh(self, flags=enable_pyobj_flags):
         pyfunc = asinh

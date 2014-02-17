@@ -161,6 +161,8 @@ acos
 acosf
 atan
 atanf
+atan2
+atan2f
 asinh
 asinhf
 acosh

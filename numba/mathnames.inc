@@ -72,3 +72,6 @@ MATH_BINARY(powf, float, float, float)
 
 MATH_BINARY(fmod, double, double, double)
 MATH_BINARY(fmodf, float, float, float)
+
+MATH_BINARY(atan2, double, double, double)
+MATH_BINARY(atan2f, float, float, float)

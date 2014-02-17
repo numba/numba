@@ -50,6 +50,9 @@ class MathModuleAttribute(AttributeTemplate):
     def resolve_atan(self, mod):
         return types.Function(Math_atan)
 
+    def resolve_atan2(self, mod):
+        return types.Function(Math_atan2)
+
     def resolve_asinh(self, mod):
         return types.Function(Math_asinh)
 
@@ -139,6 +142,15 @@ class Math_acos(Math_unary):
 class Math_atan(Math_unary):
     key = math.atan
 
+class Math_atan2(ConcreteTemplate):
+    key = math.atan2
+    cases = [
+        signature(types.float64, types.int64, types.int64),
+        signature(types.float64, types.uint64, types.uint64),
+        signature(types.float32, types.float32, types.float32),
+        signature(types.float64, types.float64, types.float64),
+    ]
+
 
 class Math_asinh(Math_unary):
     key = math.asinh
@@ -179,6 +191,7 @@ builtin_global(math.tanh, types.Function(Math_tanh))
 builtin_global(math.asin, types.Function(Math_asin))
 builtin_global(math.acos, types.Function(Math_acos))
 builtin_global(math.atan, types.Function(Math_atan))
+builtin_global(math.atan2, types.Function(Math_atan2))
 builtin_global(math.asinh, types.Function(Math_asinh))
 builtin_global(math.acosh, types.Function(Math_acosh))
 builtin_global(math.atanh, types.Function(Math_atanh))
