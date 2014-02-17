@@ -167,7 +167,7 @@ def typeof_pyval(val):
     # The following are handled in the C version for exact type match
     # So test these later
     elif isinstance(val, INT_TYPES):
-        return types.int32
+        return types.int64
 
     elif isinstance(val, float):
         return types.float64

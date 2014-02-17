@@ -50,6 +50,9 @@ class NumpyModuleAttribute(AttributeTemplate):
     def resolve_trunc(self, mod):
         return types.Function(Numpy_trunc)
 
+    def resolve_sign(self, mod):
+        return types.Function(Numpy_sign)
+
 class Numpy_unary_ufunc(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
@@ -58,10 +61,12 @@ class Numpy_unary_ufunc(AbstractTemplate):
             [inp, out] = args
             if isinstance(inp, types.Array) and isinstance(out, types.Array):
                 return signature(out, inp, out)
+            elif inp in types.number_domain and isinstance(out, types.Array):
+                return signature(out, inp, out)
         elif nargs == 1:
             [inp] = args
             if inp in types.number_domain:
-                return signature(types.float64, types.float64)
+                return signature(inp, inp)
 
 
 class Numpy_sqrt(Numpy_unary_ufunc):
@@ -102,6 +107,10 @@ class Numpy_ceil(Numpy_unary_ufunc):
 
 class Numpy_trunc(Numpy_unary_ufunc):
     key = numpy.trunc
+
+
+class Numpy_sign(Numpy_unary_ufunc):
+    key = numpy.sign
 
 
 class Numpy_binary_ufunc(AbstractTemplate):
@@ -147,5 +156,6 @@ builtin_global(numpy.negative, types.Function(Numpy_negative))
 builtin_global(numpy.floor, types.Function(Numpy_floor))
 builtin_global(numpy.ceil, types.Function(Numpy_ceil))
 builtin_global(numpy.trunc, types.Function(Numpy_trunc))
+builtin_global(numpy.sign, types.Function(Numpy_sign))
 
 

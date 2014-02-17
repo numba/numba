@@ -57,7 +57,7 @@ class TypeVar(object):
                 [expect] = list(self.typeset)
                 for ty in types:
                     if self.context.type_compatibility(ty, expect) is None:
-                        raise TypingError("No convertsion from %s to %s for "
+                        raise TypingError("No conversion from %s to %s for "
                                           "'%s'" % (ty, expect, self.var))
         else:
             self.typeset |= set(types)

@@ -423,6 +423,7 @@ slice_type = Dummy('slice')
 abs_type = Dummy('abs')
 neg_type = Dummy('neg')
 print_type = Dummy('print')
+sign_type = Dummy('sign')
 
 range_state32_type = Type('range_state32')
 range_state64_type = Type('range_state64')
