@@ -1,5 +1,4 @@
 from __future__ import print_function, division, absolute_import
-import inspect
 from collections import defaultdict
 from llvm.core import Type, Builder, Module
 import llvm.core as lc
@@ -42,8 +41,8 @@ class FunctionDescriptor(object):
 
 def _describe(interp):
     func = interp.bytecode.func
-    fname = func.__name__
-    pymod = inspect.getmodule(func)
+    fname = interp.bytecode.func_name
+    pymod = interp.bytecode.module
     doc = func.__doc__ or ''
     args = interp.argspec.args
     kws = ()        # TODO
@@ -95,6 +94,7 @@ class BaseLower(object):
         # Internal states
         self.blkmap = {}
         self.varmap = {}
+        self.firstblk = min(self.fndesc.blocks.keys())
 
         # Subclass initialization
         self.init()
@@ -128,7 +128,7 @@ class BaseLower(object):
         self.post_lower()
         # Close entry block
         self.builder.position_at_end(self.entry_block)
-        self.builder.branch(self.blkmap[0])
+        self.builder.branch(self.blkmap[self.firstblk])
 
         if config.DEBUG:
             print(self.module)

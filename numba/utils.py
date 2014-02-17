@@ -31,6 +31,11 @@ class ConfigOptions(object):
     def __repr__(self):
         return "Flags(%s)" % ', '.join(str(x) for x in self._enabled)
 
+    def copy(self):
+        copy = type(self)()
+        copy._enabled = set(self._enabled)
+        return copy
+
 
 class SortedMap(collections.Mapping):
     """Immutable

@@ -91,7 +91,7 @@ class DataFlowAnalysis(object):
         info.append(inst, value=value)
 
     def op_LOAD_FAST(self, info, inst):
-        name = self.bytecode.code.co_varnames[inst.arg]
+        name = self.bytecode.co_varnames[inst.arg]
         info.push(name)
 
     def op_LOAD_CONST(self, info, inst):

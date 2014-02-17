@@ -5,7 +5,6 @@ except ImportError:
     import builtins
 import sys
 import dis
-import inspect
 from numba import ir, controlflow, dataflow, utils
 
 
@@ -16,7 +15,7 @@ class Interpreter(object):
         self.bytecode = bytecode
         self.scopes = []
         self.loc = ir.Loc(filename=bytecode.filename, line=1)
-        self.argspec = inspect.getargspec(self.bytecode.func)
+        self.argspec = bytecode.argspec
         # Control flow analysis
         self.cfa = controlflow.ControlFlowAnalysis(bytecode)
         self.cfa.run()
@@ -50,8 +49,9 @@ class Interpreter(object):
             scope.define(name=arg, loc=self.loc)
 
     def interpret(self):
+        firstblk = min(self.cfa.blocks.keys())
         self.loc = ir.Loc(filename=self.bytecode.filename,
-                          line=self.bytecode[0].lineno)
+                          line=self.bytecode[firstblk].lineno)
         self.scopes.append(ir.Scope(parent=self.current_scope, loc=self.loc))
         self._fill_args_into_scope(self.current_scope)
         # Interpret loop
@@ -136,15 +136,15 @@ class Interpreter(object):
 
     @property
     def code_consts(self):
-        return self.bytecode.code.co_consts
+        return self.bytecode.co_consts
 
     @property
     def code_locals(self):
-        return self.bytecode.code.co_varnames
+        return self.bytecode.co_varnames
 
     @property
     def code_names(self):
-        return self.bytecode.code.co_names
+        return self.bytecode.co_names
 
     def _dispatch(self, inst, kws):
         assert self.current_block is not None

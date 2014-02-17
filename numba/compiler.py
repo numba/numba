@@ -4,12 +4,13 @@ from contextlib import contextmanager
 from collections import namedtuple, defaultdict
 from numba import (bytecode, interpreter, typing, typeinfer, lowering,
                    irpasses, utils, config, type_annotations, types, ir,
-                   assume)
+                   assume, looplifting)
 from numba.targets import cpu
 
 
 class Flags(utils.ConfigOptions):
-    OPTIONS = frozenset(['enable_pyobject',
+    OPTIONS = frozenset(['enable_looplift',
+                         'enable_pyobject',
                          'force_pyobject',
                          'no_compile'])
 
@@ -26,7 +27,8 @@ CR_FIELDS = ["typing_context",
              "llvm_module",
              "llvm_func",
              "signature",
-             "objectmode",]
+             "objectmode",
+             "lifted",]
 
 
 CompileResult = namedtuple("CompileResult", CR_FIELDS)
@@ -82,8 +84,16 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
     - return_type
         Use ``None`` to indicate
     """
-    # Translate to IR
-    interp = translate_stage(func)
+    bc = bytecode.ByteCode(func=func)
+    if config.DEBUG:
+        print(bc.dump())
+    return compile_bytecode(typingctx, targetctx, bc, args,
+                            return_type, flags, locals)
+
+
+def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
+                     locals):
+    interp = translate_stage(bc)
     nargs = len(interp.argspec.args)
     if len(args) > nargs:
         raise TypeError("Too many argument types")
@@ -109,7 +119,24 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
             with _fallback_context(status):
                 legalize_return_type(return_type, interp, localctx)
 
+    if status.use_python_mode and flags.enable_looplift:
+        # Try loop lifting
+        entry, loops = looplifting.lift_loop(bc)
+        if not loops:
+            # No extracted loops
+            pass
+        else:
+            loopflags = flags.copy()
+            # Do not recursively loop lift
+            loopflags.unset('enable_looplift')
+            loopdisp = looplifting.bind(loops, typingctx, targetctx, locals,
+                                        loopflags)
+            cres = compile_bytecode(typingctx, targetctx, entry, args,
+                                    return_type, loopflags, locals)
+            return cres._replace(lifted=tuple(loopdisp))
+
     if status.use_python_mode:
+        # Object mode compilation
         func, fnptr, lmod, lfunc = py_lowering_stage(localctx, interp,
                                                      flags.no_compile)
         typemap = defaultdict(lambda: types.pyobject)
@@ -121,6 +148,7 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
             # append missing
             args = tuple(args) + (types.pyobject,) * (nargs - len(args))
     else:
+        # Native mode compilation
         func, fnptr, lmod, lfunc = native_lowering_stage(localctx, interp,
                                                          typemap,
                                                          return_type,
@@ -143,7 +171,8 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
                         llvm_func=lfunc,
                         llvm_module=lmod,
                         signature=signature,
-                        objectmode=status.use_python_mode)
+                        objectmode=status.use_python_mode,
+                        lifted=(),)
     return cr
 
 
@@ -194,12 +223,8 @@ def legalize_return_type(return_type, interp, targetctx):
     targetctx.metdata['return.array'] = 'arg'
 
 
-def translate_stage(func):
-    bc = bytecode.ByteCode(func=func)
-    if config.DEBUG:
-        print(bc.dump())
-
-    interp = interpreter.Interpreter(bytecode=bc)
+def translate_stage(bytecode):
+    interp = interpreter.Interpreter(bytecode=bytecode)
     interp.interpret()
 
     if config.DEBUG:
