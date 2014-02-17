@@ -144,7 +144,7 @@ def numpy_sqrt_scalar(context, builder, sig, args):
     imp = context.get_function(math.sqrt, sig)
     return imp(builder, args)
 
-
+@register
 @implement(numpy.floor, types.Kind(types.Array), types.Kind(types.Array))
 def numpy_floor(context, builder, sig, args):
     imp = numpy_unary_ufunc(math.floor, asfloat=True)
