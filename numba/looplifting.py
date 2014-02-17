@@ -227,5 +227,11 @@ def separate_loops(bytecode, outer, loops):
         else:
             cur.append(inst)
             if inst.next == endloop:
-                loops.append(cur)
+                for inst in cur:
+                    if inst.opname == 'RETURN_VALUE':
+                        # Reject if return inside loop
+                        outer.extend(cur)
+                        break
+                else:
+                    loops.append(cur)
                 endloop = None

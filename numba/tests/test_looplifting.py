@@ -19,6 +19,13 @@ def lift2(x):
     return a
 
 
+def reject1(x):
+    a = np.arange(4)
+    for i in range(a.shape[0]):
+        return a
+    return a
+
+
 class TestLoopLifting(unittest.TestCase):
     def test_lift1(self):
         compiled = jit(lift1)
@@ -41,6 +48,15 @@ class TestLoopLifting(unittest.TestCase):
         loopcres = list(cres.lifted[0].overloads.values())[0]
         self.assertIs(loopcres.typing_error, None)
         self.assertTrue(np.all(expect == got))
+
+    def test_reject1(self):
+        compiled = jit(reject1)
+        expect = reject1(1)
+        got = compiled(1)
+        self.assertTrue(np.all(expect == got))
+        cres = list(compiled.overloads.values())[0]
+        # Does not lift
+        self.assertFalse(cres.lifted)
 
 
 if __name__ == '__main__':
