@@ -103,6 +103,71 @@ unary_math_extern(math.cosh, "coshf", "cosh")
 unary_math_extern(math.tanh, "tanhf", "tanh")
 
 
+@register
+@implement(math.isnan, types.float32)
+def isnan_f32_impl(context, builder, sig, args):
+    [val] = args
+    return builder.not_(builder.fcmp(lc.FCMP_OEQ, val, val))
+
+
+@register
+@implement(math.isnan, types.float64)
+def isnan_f64_impl(context, builder, sig, args):
+    [val] = args
+    return builder.not_(builder.fcmp(lc.FCMP_OEQ, val, val))
+
+
+@register
+@implement(math.isnan, types.int64)
+def isnan_s64_impl(context, builder, sig, args):
+    return cgutils.false_bit
+
+
+@register
+@implement(math.isnan, types.uint64)
+def isnan_u64_impl(context, builder, sig, args):
+    return cgutils.false_bit
+
+
+POS_INF_F32 = lc.Constant.real(Type.float(), float("+inf"))
+NEG_INF_F32 = lc.Constant.real(Type.float(), float("-inf"))
+
+POS_INF_F64 = lc.Constant.real(Type.double(), float("+inf"))
+NEG_INF_F64 = lc.Constant.real(Type.double(), float("-inf"))
+
+
+@register
+@implement(math.isinf, types.float32)
+def isinf_f32_impl(context, builder, sig, args):
+    [val] = args
+    isposinf = builder.fcmp(lc.FCMP_OEQ, val, POS_INF_F32)
+    isneginf = builder.fcmp(lc.FCMP_OEQ, val, NEG_INF_F32)
+    return builder.or_(isposinf, isneginf)
+
+
+@register
+@implement(math.isinf, types.float64)
+def isinf_f64_impl(context, builder, sig, args):
+    [val] = args
+    isposinf = builder.fcmp(lc.FCMP_OEQ, val, POS_INF_F64)
+    isneginf = builder.fcmp(lc.FCMP_OEQ, val, NEG_INF_F64)
+    return builder.or_(isposinf, isneginf)
+
+
+@register
+@implement(math.isinf, types.int64)
+def isinf_s64_impl(context, builder, sig, args):
+    return cgutils.false_bit
+
+
+@register
+@implement(math.isinf, types.uint64)
+def isinf_u64_impl(context, builder, sig, args):
+    return cgutils.false_bit
+
+
+# -----------------------------------------------------------------------------
+
 
 @register
 @implement(math.atan2, types.int64, types.int64)

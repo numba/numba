@@ -359,7 +359,6 @@ class TestMathLib(unittest.TestCase):
         x_values = [0, 0, 0, 0, 0, 0, float('nan'), 0.0, float('nan'), 0.0]
         self.run_unary(pyfunc, x_types, x_values, flags)
 
-    @unittest.expectedFailure
     def test_isnan_npm(self):
         self.test_isnan(flags=no_pyobj_flags)
 
@@ -371,7 +370,6 @@ class TestMathLib(unittest.TestCase):
         x_values = [0, 0, 0, 0, 0, 0, float('inf'), 0.0, float('inf'), 0.0]
         self.run_unary(pyfunc, x_types, x_values, flags)
 
-    @unittest.expectedFailure
     def test_isinf_npm(self):
         self.test_isinf(flags=no_pyobj_flags)
 

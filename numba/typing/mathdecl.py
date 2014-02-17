@@ -77,6 +77,12 @@ class MathModuleAttribute(AttributeTemplate):
     def resolve_trunc(self, mod):
         return types.Function(Math_trunc)
 
+    def resolve_isnan(self, mod):
+        return types.Function(Math_isnan)
+
+    def resolve_isinf(self, mod):
+        return types.Function(Math_isinf)
+
 
 class Math_unary(ConcreteTemplate):
     cases = [
@@ -142,6 +148,7 @@ class Math_acos(Math_unary):
 class Math_atan(Math_unary):
     key = math.atan
 
+
 class Math_atan2(ConcreteTemplate):
     key = math.atan2
     cases = [
@@ -176,6 +183,26 @@ class Math_trunc(Math_unary):
     key = math.trunc
 
 
+class Math_isnan(ConcreteTemplate):
+    key = math.isnan
+    cases = [
+        signature(types.boolean, types.int64),
+        signature(types.boolean, types.uint64),
+        signature(types.boolean, types.float32),
+        signature(types.boolean, types.float64),
+    ]
+
+
+class Math_isinf(ConcreteTemplate):
+    key = math.isinf
+    cases = [
+        signature(types.boolean, types.int64),
+        signature(types.boolean, types.uint64),
+        signature(types.boolean, types.float32),
+        signature(types.boolean, types.float64),
+    ]
+
+
 builtin_global(math, types.Module(math))
 builtin_global(math.fabs, types.Function(Math_fabs))
 builtin_global(math.exp, types.Function(Math_exp))
@@ -198,3 +225,5 @@ builtin_global(math.atanh, types.Function(Math_atanh))
 builtin_global(math.floor, types.Function(Math_floor))
 builtin_global(math.ceil, types.Function(Math_ceil))
 builtin_global(math.trunc, types.Function(Math_trunc))
+builtin_global(math.isnan, types.Function(Math_isnan))
+builtin_global(math.isinf, types.Function(Math_isinf))
