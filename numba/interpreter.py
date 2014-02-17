@@ -322,7 +322,7 @@ class Interpreter(object):
 
         # Conditional jump
         br = ir.Branch(cond=self.get(pred), truebr=inst.next,
-                       falsebr=self.syntax_blocks[-1].exit,
+                       falsebr=inst.get_jump_target(),
                        loc=self.loc)
         self.current_block.append(br)
 
