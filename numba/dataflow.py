@@ -237,6 +237,46 @@ class DataFlowAnalysis(object):
     op_BINARY_OR = _binaryop
     op_BINARY_XOR = _binaryop
 
+    def op_SLICE_0(self, info, inst):
+        """
+        TOS = TOS[:]
+        """
+        tos = info.pop()
+        res = info.make_temp()
+        slicevar = info.make_temp()
+        indexvar = info.make_temp()
+        info.append(inst, base=tos, res=res, slicevar=slicevar,
+                    indexvar=indexvar)
+        info.push(res)
+
+    def op_SLICE_1(self, info, inst):
+        """
+        TOS = TOS1[TOS:]
+        """
+        tos = info.pop()
+        tos1 = info.pop()
+        res = info.make_temp()
+        slicevar = info.make_temp()
+        indexvar = info.make_temp()
+        nonevar = info.make_temp()
+        info.append(inst, base=tos1, start=tos, res=res, slicevar=slicevar,
+                    indexvar=indexvar, nonevar=nonevar)
+        info.push(res)
+
+    def op_SLICE_2(self, info, inst):
+        """
+        TOS = TOS1[:TOS]
+        """
+        tos = info.pop()
+        tos1 = info.pop()
+        res = info.make_temp()
+        slicevar = info.make_temp()
+        indexvar = info.make_temp()
+        nonevar = info.make_temp()
+        info.append(inst, base=tos1, stop=tos, res=res, slicevar=slicevar,
+                    indexvar=indexvar, nonevar=nonevar)
+        info.push(res)
+
     def op_SLICE_3(self, info, inst):
         """
         TOS = TOS2[TOS1:TOS]
@@ -245,7 +285,10 @@ class DataFlowAnalysis(object):
         tos1 = info.pop()
         tos2 = info.pop()
         res = info.make_temp()
-        info.append(inst, base=tos2, start=tos1, stop=tos, res=res)
+        slicevar = info.make_temp()
+        indexvar = info.make_temp()
+        info.append(inst, base=tos2, start=tos1, stop=tos, res=res,
+                    slicevar=slicevar, indexvar=indexvar)
         info.push(res)
 
     def op_BUILD_SLICE(self, info, inst):

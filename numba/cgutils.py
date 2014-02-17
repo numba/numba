@@ -364,6 +364,28 @@ def get_item_pointer2(builder, data, shape, strides, layout, inds,
         return ptr
 
 
+def normalize_slice(builder, slice, length):
+    """
+    Clip stop
+    """
+    stop = slice.stop
+    doclip = builder.icmp(lc.ICMP_SGT, stop, length)
+    slice.stop = builder.select(doclip, length, stop)
+
+
+def get_range_from_slice(builder, slicestruct):
+    diff = builder.sub(slicestruct.stop, slicestruct.start)
+    length = builder.sdiv(diff, slicestruct.step)
+    is_neg = is_neg_int(builder, length)
+    length = builder.select(is_neg, get_null_value(length.type), length)
+    return length
+
+
+def get_strides_from_slice(builder, ndim, strides, slice, ax):
+    oldstrides = unpack_tuple(builder, strides, ndim)
+    return builder.mul(slice.step, oldstrides[ax])
+
+
 class MetadataKeyStore(object):
     def __init__(self, module, name):
         self.module = module
@@ -413,6 +435,11 @@ def is_pointer(ltyp):
 
 def is_struct_ptr(ltyp):
     return is_pointer(ltyp) and is_struct(ltyp.pointee)
+
+
+def is_neg_int(builder, val):
+    return builder.icmp(lc.ICMP_SLT, val, get_null_value(val.type))
+
 
 # ------------------------------------------------------------------------------
 # Debug

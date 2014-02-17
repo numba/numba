@@ -57,7 +57,8 @@ class Overloads(object):
                 return ver
             # As generic type
             if (len(ver.signature.args) == len(sig.args) or
-                    ver.signature.args[-1] == types.VarArg):
+                    (ver.signature.args and
+                     ver.signature.args[-1] == types.VarArg)):
                 match = True
                 for formal, actual in zip(ver.signature.args, sig.args):
                     if formal == types.VarArg:
@@ -103,6 +104,7 @@ class BaseContext(object):
     data.
     """
     def __init__(self, typing_context):
+        self.address_size = tuple.__itemsize__ * 8
         self.typing_context = typing_context
 
         self.defns = defaultdict(Overloads)

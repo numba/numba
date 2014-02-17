@@ -17,8 +17,72 @@ Noflags = Flags()
 def slicing_1d_usecase(a, start, stop, step):
     return a[start:stop:step]
 
+def slicing_1d_usecase2(a, start, stop, step):
+    b = a[start:stop:step]
+    total = 0
+    for i in range(b.shape[0]):
+        total += b[i] * (i + 1)
+    return total
+
+def slicing_1d_usecase3(a, start, stop):
+    b = a[start:stop]
+    total = 0
+    for i in range(b.shape[0]):
+        total += b[i] * (i + 1)
+    return total
+
+def slicing_1d_usecase4(a):
+    b = a[:]
+    total = 0
+    for i in range(b.shape[0]):
+        total += b[i] * (i + 1)
+    return total
+
+def slicing_1d_usecase5(a, start):
+    b = a[start:]
+    total = 0
+    for i in range(b.shape[0]):
+        total += b[i] * (i + 1)
+    return total
+
+def slicing_1d_usecase6(a, stop):
+    b = a[:stop]
+    total = 0
+    for i in range(b.shape[0]):
+        total += b[i] * (i + 1)
+    return total
+
 def slicing_2d_usecase(a, start1, stop1, step1, start2, stop2, step2):
-    return a[start1:stop1:step1,start2:stop2:step2]
+    return a[start1:stop1:step1, start2:stop2:step2]
+
+def slicing_2d_usecase2(a, start1, stop1, step1, start2, stop2, step2):
+    b = a[start1:stop1:step1, start2:stop2:step2]
+    total = 0
+    for i in range(b.shape[0]):
+        for j in range(b.shape[1]):
+            total += b[i, j] * (i + j + 1)
+    return total
+
+def slicing_2d_usecase3(a, start1, stop1, step1, index):
+    b = a[start1:stop1:step1, index]
+    total = 0
+    for i in range(b.shape[0]):
+        total += b[i] * (i + 1)
+    return total
+
+def slicing_3d_usecase(a, index0, start1, index2):
+    b = a[index0, start1:, index2]
+    total = 0
+    for i in range(b.shape[0]):
+        total += b[i] * (i + 1)
+    return total
+
+def slicing_3d_usecase2(a, index0, stop1, index2):
+    b = a[index0, :stop1, index2]
+    total = 0
+    for i in range(b.shape[0]):
+        total += b[i] * (i + 1)
+    return total
 
 def integer_indexing_1d_usecase(a, i):
     return a[i]
@@ -57,7 +121,140 @@ class TestIndexing(unittest.TestCase):
 
     @unittest.expectedFailure
     def test_1d_slicing_npm(self):
+        """
+        Return of arbitrary array is not supported yet
+        """
         self.test_1d_slicing(flags=Noflags)
+
+    def test_1d_slicing2(self, flags=enable_pyobj_flags):
+        pyfunc = slicing_1d_usecase2
+        arraytype = types.Array(types.int32, 1, 'C')
+        argtys = (arraytype, types.int32, types.int32, types.int32)
+        cr = compile_isolated(pyfunc, argtys, flags=flags)
+        cfunc = cr.entry_point
+
+        a = np.arange(10, dtype='i4')
+
+        args = [(0, 10, 1),
+                (2, 3, 1),
+                (10, 0, 1),
+                (0, 10, -1),
+                (0, 10, 2)]
+
+        for arg in args:
+            self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
+
+
+        # Any
+        arraytype = types.Array(types.int32, 1, 'A')
+        argtys = (arraytype, types.int32, types.int32, types.int32)
+        cr = compile_isolated(pyfunc, argtys, flags=flags)
+        cfunc = cr.entry_point
+
+        a = np.arange(20, dtype='i4')[::2]
+        self.assertFalse(a.flags['C_CONTIGUOUS'])
+        self.assertFalse(a.flags['F_CONTIGUOUS'])
+
+        args = [(0, 10, 1),
+                (2, 3, 1),
+                (10, 0, 1),
+                (0, 10, -1),
+                (0, 10, 2)]
+
+        for arg in args:
+            self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
+
+    def test_1d_slicing2_npm(self):
+        self.test_1d_slicing2(flags=Noflags)
+
+    def test_1d_slicing3(self, flags=enable_pyobj_flags):
+        pyfunc = slicing_1d_usecase3
+        arraytype = types.Array(types.int32, 1, 'C')
+        argtys = (arraytype, types.int32, types.int32)
+        cr = compile_isolated(pyfunc, argtys, flags=flags)
+        cfunc = cr.entry_point
+
+        a = np.arange(10, dtype='i4')
+
+        args = [(3, 10),
+                (2, 3),
+                (10, 0),
+                (0, 10),
+                (5, 10)]
+
+        for arg in args:
+            self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
+
+
+        # Any
+        arraytype = types.Array(types.int32, 1, 'A')
+        argtys = (arraytype, types.int32, types.int32)
+        cr = compile_isolated(pyfunc, argtys, flags=flags)
+        cfunc = cr.entry_point
+
+        a = np.arange(20, dtype='i4')[::2]
+        self.assertFalse(a.flags['C_CONTIGUOUS'])
+        self.assertFalse(a.flags['F_CONTIGUOUS'])
+
+        for arg in args:
+            self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
+
+    def test_1d_slicing3_npm(self):
+        self.test_1d_slicing3(flags=Noflags)
+
+    def test_1d_slicing4(self, flags=enable_pyobj_flags):
+        pyfunc = slicing_1d_usecase4
+        arraytype = types.Array(types.int32, 1, 'C')
+        argtys = (arraytype,)
+        cr = compile_isolated(pyfunc, argtys, flags=flags)
+        cfunc = cr.entry_point
+
+        a = np.arange(10, dtype='i4')
+        self.assertEqual(pyfunc(a), cfunc(a))
+
+        # Any
+        arraytype = types.Array(types.int32, 1, 'A')
+        argtys = (arraytype,)
+        cr = compile_isolated(pyfunc, argtys, flags=flags)
+        cfunc = cr.entry_point
+
+        a = np.arange(20, dtype='i4')[::2]
+        self.assertFalse(a.flags['C_CONTIGUOUS'])
+        self.assertFalse(a.flags['F_CONTIGUOUS'])
+        self.assertEqual(pyfunc(a), cfunc(a))
+
+    def test_1d_slicing4_npm(self):
+        self.test_1d_slicing4(flags=Noflags)
+
+    def test_1d_slicing5(self, flags=enable_pyobj_flags):
+        pyfunc = slicing_1d_usecase5
+        arraytype = types.Array(types.int32, 1, 'C')
+        argtys = (arraytype, types.int32)
+        cr = compile_isolated(pyfunc, argtys, flags=flags)
+        cfunc = cr.entry_point
+
+        a = np.arange(10, dtype='i4')
+
+        args = [3, 2, 10, 0, 5]
+
+        for arg in args:
+            self.assertEqual(pyfunc(a, arg), cfunc(a, arg))
+
+
+        # Any
+        arraytype = types.Array(types.int32, 1, 'A')
+        argtys = (arraytype, types.int32)
+        cr = compile_isolated(pyfunc, argtys, flags=flags)
+        cfunc = cr.entry_point
+
+        a = np.arange(20, dtype='i4')[::2]
+        self.assertFalse(a.flags['C_CONTIGUOUS'])
+        self.assertFalse(a.flags['F_CONTIGUOUS'])
+        for arg in args:
+            self.assertEqual(pyfunc(a, arg), cfunc(a, arg))
+
+    def test_1d_slicing5_npm(self):
+        self.test_1d_slicing5(flags=Noflags)
 
     def test_2d_slicing(self, flags=enable_pyobj_flags):
         pyfunc = slicing_1d_usecase
@@ -94,6 +291,146 @@ class TestIndexing(unittest.TestCase):
     @unittest.expectedFailure
     def test_2d_slicing_npm(self):
         self.test_2d_slicing(flags=Noflags)
+
+    def test_2d_slicing2(self, flags=enable_pyobj_flags):
+        # C layout
+        pyfunc = slicing_2d_usecase2
+        arraytype = types.Array(types.int32, 2, 'C')
+        argtys = (arraytype, types.int32, types.int32, types.int32,
+                  types.int32, types.int32, types.int32)
+        cr = compile_isolated(pyfunc, argtys, flags=flags)
+        cfunc = cr.entry_point
+
+        a = np.arange(100, dtype='i4').reshape(10, 10)
+
+        args = [
+            (0, 10, 1, 0, 10, 1),
+            (2, 3, 1, 2, 3, 1),
+            (10, 0, 1, 10, 0, 1),
+            (0, 10, -1, 0, 10, -1),
+            (0, 10, 2, 0, 10, 2),
+        ]
+        for arg in args:
+            self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
+
+        # Any layout
+        arraytype = types.Array(types.int32, 2, 'A')
+        argtys = (arraytype, types.int32, types.int32, types.int32,
+                  types.int32, types.int32, types.int32)
+        cr = compile_isolated(pyfunc, argtys, flags=flags)
+        cfunc = cr.entry_point
+
+        a = np.arange(400, dtype='i4').reshape(20, 20)[::2, ::2]
+
+        for arg in args:
+            self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
+
+    def test_2d_slicing2_npm(self):
+        self.test_2d_slicing2(flags=Noflags)
+
+    def test_2d_slicing3(self, flags=enable_pyobj_flags):
+        # C layout
+        pyfunc = slicing_2d_usecase3
+        arraytype = types.Array(types.int32, 2, 'C')
+        argtys = (arraytype, types.int32, types.int32, types.int32,
+                  types.int32)
+        cr = compile_isolated(pyfunc, argtys, flags=flags)
+        cfunc = cr.entry_point
+
+        a = np.arange(100, dtype='i4').reshape(10, 10)
+
+        args = [
+            (0, 10, 1, 0),
+            (2, 3, 1, 2),
+            (10, 0, 1, 9),
+            (0, 10, -1, 0),
+            (0, 10, 2, 4),
+        ]
+        for arg in args:
+            self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
+
+        # Any layout
+        arraytype = types.Array(types.int32, 2, 'A')
+        argtys = (arraytype, types.int32, types.int32, types.int32,
+                  types.int32)
+        cr = compile_isolated(pyfunc, argtys, flags=flags)
+        cfunc = cr.entry_point
+
+        a = np.arange(400, dtype='i4').reshape(20, 20)[::2, ::2]
+
+        for arg in args:
+            self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
+
+    def test_2d_slicing3_npm(self):
+        self.test_2d_slicing3(flags=Noflags)
+
+    def test_3d_slicing(self, flags=enable_pyobj_flags):
+        # C layout
+        pyfunc = slicing_3d_usecase
+        arraytype = types.Array(types.int32, 3, 'C')
+        argtys = (arraytype, types.int32, types.int32, types.int32)
+        cr = compile_isolated(pyfunc, argtys, flags=flags)
+        cfunc = cr.entry_point
+
+        a = np.arange(1000, dtype='i4').reshape(10, 10, 10)
+
+        args = [
+            (0, 9, 1),
+            (2, 3, 1),
+            (9, 0, 1),
+            (0, 9, -1),
+            (0, 9, 2),
+        ]
+        for arg in args:
+            self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
+
+        # Any layout
+        arraytype = types.Array(types.int32, 3, 'A')
+        argtys = (arraytype, types.int32, types.int32, types.int32)
+        cr = compile_isolated(pyfunc, argtys, flags=flags)
+        cfunc = cr.entry_point
+
+        a = np.arange(2000, dtype='i4')[::2].reshape(10, 10, 10)
+
+        for arg in args:
+            self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
+
+    def test_3d_slicing_npm(self):
+        self.test_3d_slicing(flags=Noflags)
+
+    def test_3d_slicing2(self, flags=enable_pyobj_flags):
+        # C layout
+        pyfunc = slicing_3d_usecase2
+        arraytype = types.Array(types.int32, 3, 'C')
+        argtys = (arraytype, types.int32, types.int32, types.int32)
+        cr = compile_isolated(pyfunc, argtys, flags=flags)
+        cfunc = cr.entry_point
+
+        a = np.arange(1000, dtype='i4').reshape(10, 10, 10)
+
+        args = [
+            (0, 9, 1),
+            (2, 3, 1),
+            (9, 0, 1),
+            (0, 9, -1),
+            (0, 9, 2),
+        ]
+        for arg in args:
+            self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
+
+        # Any layout
+        arraytype = types.Array(types.int32, 3, 'A')
+        argtys = (arraytype, types.int32, types.int32, types.int32)
+        cr = compile_isolated(pyfunc, argtys, flags=flags)
+        cfunc = cr.entry_point
+
+        a = np.arange(2000, dtype='i4')[::2].reshape(10, 10, 10)
+
+        for arg in args:
+            self.assertEqual(pyfunc(a, *arg), cfunc(a, *arg))
+
+    def test_3d_slicing2_npm(self):
+        self.test_3d_slicing2(flags=Noflags)
 
     def test_1d_integer_indexing(self, flags=enable_pyobj_flags):
         # C layout

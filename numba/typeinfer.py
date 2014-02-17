@@ -499,7 +499,6 @@ class TypeInferer(object):
             constrain = BuildTupleConstrain(target.name, items=expr.items,
                                             loc=inst.loc)
             self.constrains.append(constrain)
-
         else:
             raise NotImplementedError(type(expr), expr)
 

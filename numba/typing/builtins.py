@@ -35,7 +35,11 @@ class Abs(ConcreteTemplate):
 class Slice(ConcreteTemplate):
     key = types.slice_type
     cases = [
-        signature(types.slice2_type, types.intp, types.intp),
+        signature(types.slice3_type),
+        signature(types.slice3_type, types.none, types.none),
+        signature(types.slice3_type, types.none, types.intp),
+        signature(types.slice3_type, types.intp, types.none),
+        signature(types.slice3_type, types.intp, types.intp),
         signature(types.slice3_type, types.intp, types.intp, types.intp),
     ]
 
@@ -417,19 +421,24 @@ class CmpOpNe(CmpOp):
 
 def normalize_index(index):
     if isinstance(index, types.UniTuple):
-        return types.UniTuple(types.intp, index.count)
+        if index.dtype in types.integer_domain:
+            return types.UniTuple(types.intp, len(index))
+        elif index.dtype == types.slice3_type:
+            return index
 
     elif isinstance(index, types.Tuple):
         for ty in index:
-            if ty not in types.integer_domain and ty not in types.real_domain:
+            if (ty not in types.integer_domain and
+                ty not in types.real_domain and
+                ty != types.slice3_type):
                 return
         return index
 
     elif index == types.slice3_type:
         return types.slice3_type
 
-    elif index == types.slice2_type:
-        return types.slice2_type
+    # elif index == types.slice2_type:
+    #     return types.slice2_type
 
     else:
         return types.intp
@@ -459,13 +468,19 @@ class GetItemArray(AbstractTemplate):
         if not idx:
             return
 
-        if idx in (types.slice2_type, types.slice3_type):
+        if idx == types.slice3_type: #(types.slice2_type, types.slice3_type):
             res = ary.copy(layout='A')
         elif isinstance(idx, (types.UniTuple, types.Tuple)):
             if ary.ndim > len(idx):
                 return
             elif ary.ndim < len(idx):
                 return
+            elif any(i == types.slice3_type for i in idx):
+                ndim = ary.ndim
+                for i in idx:
+                    if i != types.slice3_type:
+                        ndim -= 1
+                res = ary.copy(ndim=ndim, layout='A')
             else:
                 res = ary.dtype
         elif idx == types.intp:

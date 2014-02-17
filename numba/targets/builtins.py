@@ -866,6 +866,67 @@ def slice3_impl(context, builder, sig, args):
     return slice3._getvalue()
 
 
+@builtin
+@implement(types.slice_type, types.intp, types.intp)
+def slice2_impl(context, builder, sig, args):
+    start, stop = args
+
+    slice3 = Slice(context, builder)
+    slice3.start = start
+    slice3.stop = stop
+    slice3.step = context.get_constant(types.intp, 1)
+
+    return slice3._getvalue()
+
+
+@builtin
+@implement(types.slice_type, types.intp, types.none)
+def slice1_start_impl(context, builder, sig, args):
+    start, stop = args
+
+    slice3 = Slice(context, builder)
+    slice3.start = start
+    maxint = (1 << (context.address_size - 1)) - 1
+    slice3.stop = context.get_constant(types.intp, maxint)
+    slice3.step = context.get_constant(types.intp, 1)
+
+    return slice3._getvalue()
+
+
+@builtin
+@implement(types.slice_type, types.none, types.intp)
+def slice1_stop_impl(context, builder, sig, args):
+    start, stop = args
+
+    slice3 = Slice(context, builder)
+    slice3.start = context.get_constant(types.intp, 0)
+    slice3.stop = stop
+    slice3.step = context.get_constant(types.intp, 1)
+
+    return slice3._getvalue()
+
+
+@builtin
+@implement(types.slice_type)
+def slice0_empty_impl(context, builder, sig, args):
+    assert not args
+
+    slice3 = Slice(context, builder)
+    slice3.start = context.get_constant(types.intp, 0)
+    maxint = (1 << (context.address_size - 1)) - 1
+    slice3.stop = context.get_constant(types.intp, maxint)
+    slice3.step = context.get_constant(types.intp, 1)
+
+    return slice3._getvalue()
+
+@builtin
+@implement(types.slice_type, types.none, types.none)
+def slice0_none_none_impl(context, builder, sig, args):
+    assert len(args) == 2
+    newsig = typing.signature(types.slice_type)
+    return slice0_empty_impl(context, builder, newsig, ())
+
+
 class RangeState32(cgutils.Structure):
     _fields = [('start', types.int32),
                ('stop',  types.int32),
@@ -1181,7 +1242,7 @@ def getitem_unituple(context, builder, sig, args):
 
 @builtin
 @implement('getitem', types.Kind(types.Array), types.intp)
-def getitem_array1d(context, builder, sig, args):
+def getitem_array1d_intp(context, builder, sig, args):
     aryty, _ = sig.args
     if aryty.ndim != 1:
         # TODO
@@ -1196,25 +1257,87 @@ def getitem_array1d(context, builder, sig, args):
 
 
 @builtin
+@implement('getitem', types.Kind(types.Array), types.slice3_type)
+def getitem_array1d_slice(context, builder, sig, args):
+    aryty, _ = sig.args
+    if aryty.ndim != 1:
+        # TODO
+        raise NotImplementedError("1D indexing into %dD array" % aryty.ndim)
+
+    ary, idx = args
+
+    arystty = make_array(aryty)
+    ary = arystty(context, builder, value=ary)
+
+    shapes = cgutils.unpack_tuple(builder, ary.shape, aryty.ndim)
+
+    slicestruct = Slice(context, builder, value=idx)
+    cgutils.normalize_slice(builder, slicestruct, shapes[0])
+
+    dataptr = cgutils.get_item_pointer(builder, aryty, ary,
+                                       [slicestruct.start],
+                                       wraparound=True)
+
+    retstty = make_array(sig.return_type)
+    retary = retstty(context, builder)
+
+    shape = cgutils.get_range_from_slice(builder, slicestruct)
+    retary.shape = cgutils.pack_array(builder, [shape])
+
+    stride = cgutils.get_strides_from_slice(builder, aryty.ndim, ary.strides,
+                                             slicestruct, 0)
+    retary.strides = cgutils.pack_array(builder, [stride])
+    retary.data = dataptr
+
+    return retary._getvalue()
+
+
+@builtin
 @implement('getitem', types.Kind(types.Array),
            types.Kind(types.UniTuple))
 def getitem_array_unituple(context, builder, sig, args):
     aryty, idxty = sig.args
     ary, idx = args
 
+    ndim = aryty.ndim
     arystty = make_array(aryty)
     ary = arystty(context, builder, ary)
 
-    # TODO: other layout
-    indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
-    indices = [context.cast(builder, i, t, types.intp)
-               for t, i in zip(idxty, indices)]
-    # TODO warparound flag
-    ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                   wraparound=True)
+    if idxty.dtype == types.slice3_type:
+        # Slicing
+        raw_slices = cgutils.unpack_tuple(builder, idx, aryty.ndim)
+        slices = [Slice(context, builder, value=sl) for sl in raw_slices]
+        for sl, sh in zip(slices,
+                          cgutils.unpack_tuple(builder, ary.shape, ndim)):
+            cgutils.normalize_slice(builder, sl, sh)
+        indices = [sl.start for sl in slices]
+        dataptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
+                                           wraparound=True)
+        # Build array
+        retstty = make_array(sig.return_type)
+        retary = retstty(context, builder)
+        retary.data = dataptr
+        shapes = [cgutils.get_range_from_slice(builder, sl)
+                  for sl in slices]
+        retary.shape = cgutils.pack_array(builder, shapes)
+        strides = [cgutils.get_strides_from_slice(builder, ndim, ary.strides,
+                                                  sl, i)
+                   for i, sl in enumerate(slices)]
 
-    return context.unpack_value(builder, aryty.dtype, ptr)
+        retary.strides = cgutils.pack_array(builder, strides)
 
+        return retary._getvalue()
+    else:
+        # Indexing
+        assert idxty.dtype == types.intp
+        indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
+        indices = [context.cast(builder, i, t, types.intp)
+                   for t, i in zip(idxty, indices)]
+        # TODO warparound flag
+        ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
+                                       wraparound=True)
+
+        return context.unpack_value(builder, aryty.dtype, ptr)
 
 
 @builtin
@@ -1227,15 +1350,47 @@ def getitem_array_tuple(context, builder, sig, args):
     arystty = make_array(aryty)
     ary = arystty(context, builder, ary)
 
-    # TODO: other layout
-    indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
-    indices = [context.cast(builder, i, t, types.intp)
-               for t, i in zip(idxty, indices)]
-    # TODO warparound flag
-    ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                   wraparound=True)
+    ndim = aryty.ndim
+    if isinstance(sig.return_type, types.Array):
+        # Slicing
+        raw_indices = cgutils.unpack_tuple(builder, idx, aryty.ndim)
+        start = []
+        shapes = []
+        strides = []
 
-    return context.unpack_value(builder, aryty.dtype, ptr)
+        oshapes = cgutils.unpack_tuple(builder, ary.shape, ndim)
+        for ax, (indexval, idxty) in enumerate(zip(raw_indices, idxty)):
+            if idxty == types.slice3_type:
+                slice = Slice(context, builder, value=indexval)
+                cgutils.normalize_slice(builder, slice, oshapes[ax])
+                start.append(slice.start)
+                shapes.append(cgutils.get_range_from_slice(builder, slice))
+                strides.append(cgutils.get_strides_from_slice(builder, ndim,
+                                                              ary.strides,
+                                                              slice, ax))
+            else:
+                ind = context.cast(builder, indexval, idxty, types.intp)
+                start.append(ind)
+
+        dataptr = cgutils.get_item_pointer(builder, aryty, ary, start,
+                                           wraparound=True)
+        # Build array
+        retstty = make_array(sig.return_type)
+        retary = retstty(context, builder)
+        retary.data = dataptr
+        retary.shape = cgutils.pack_array(builder, shapes)
+        retary.strides = cgutils.pack_array(builder, strides)
+        return retary._getvalue()
+    else:
+        # Indexing
+        indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
+        indices = [context.cast(builder, i, t, types.intp)
+                   for t, i in zip(idxty, indices)]
+        # TODO warparound flag
+        ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
+                                       wraparound=True)
+
+        return context.unpack_value(builder, aryty.dtype, ptr)
 
 
 @builtin

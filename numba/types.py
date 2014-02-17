@@ -429,7 +429,7 @@ range_state64_type = Type('range_state64')
 range_iter32_type = Type('range_iter32')
 range_iter64_type = Type('range_iter64')
 
-slice2_type = Type('slice2_type')
+# slice2_type = Type('slice2_type')
 slice3_type = Type('slice3_type')
 
 signed_domain = frozenset([int8, int16, int32, int64])
