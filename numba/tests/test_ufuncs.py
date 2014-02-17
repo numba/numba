@@ -540,21 +540,18 @@ class TestUFuncs(unittest.TestCase):
     def test_floor_ufunc(self):
         self.unary_ufunc_test('floor')
 
-    @unittest.expectedFailure
     def test_floor_ufunc_npm(self):
         self.unary_ufunc_test('floor', flags=no_pyobj_flags)
 
     def test_ceil_ufunc(self):
         self.unary_ufunc_test('ceil')
 
-    @unittest.expectedFailure
     def test_ceil_ufunc_npm(self):
         self.unary_ufunc_test('ceil', flags=no_pyobj_flags)
 
     def test_trunc_ufunc(self):
         self.unary_ufunc_test('trunc')
 
-    @unittest.expectedFailure
     def test_trunc_ufunc_npm(self):
         self.unary_ufunc_test('trunc', flags=no_pyobj_flags)
 

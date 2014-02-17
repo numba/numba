@@ -145,6 +145,26 @@ def numpy_sqrt_scalar(context, builder, sig, args):
     return imp(builder, args)
 
 
+@implement(numpy.floor, types.Kind(types.Array), types.Kind(types.Array))
+def numpy_floor(context, builder, sig, args):
+    imp = numpy_unary_ufunc(math.floor, asfloat=True)
+    return imp(context, builder, sig, args)
+
+
+@register
+@implement(numpy.ceil, types.Kind(types.Array), types.Kind(types.Array))
+def numpy_ceil(context, builder, sig, args):
+    imp = numpy_unary_ufunc(math.ceil, asfloat=True)
+    return imp(context, builder, sig, args)
+
+
+@register
+@implement(numpy.trunc, types.Kind(types.Array), types.Kind(types.Array))
+def numpy_trunc(context, builder, sig, args):
+    imp = numpy_unary_ufunc(math.trunc, asfloat=True)
+    return imp(context, builder, sig, args)
+
+
 def numpy_binary_ufunc(core, divbyzero=False):
     def impl(context, builder, sig, args):
         [tyvx, tywy, tyout] = sig.args

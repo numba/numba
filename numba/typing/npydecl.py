@@ -44,6 +44,14 @@ class NumpyModuleAttribute(AttributeTemplate):
     def resolve_sqrt(self, mod):
         return types.Function(Numpy_sqrt)
 
+    def resolve_floor(self, mod):
+        return types.Function(Numpy_floor)
+
+    def resolve_ceil(self, mod):
+        return types.Function(Numpy_ceil)
+
+    def resolve_trunc(self, mod):
+        return types.Function(Numpy_trunc)
 
 class Numpy_unary_ufunc(AbstractTemplate):
     def generic(self, args, kws):
@@ -91,6 +99,18 @@ class Numpy_negative(Numpy_unary_ufunc):
     key = numpy.negative
 
 
+class Numpy_floor(Numpy_unary_ufunc):
+    key = numpy.floor
+
+
+class Numpy_ceil(Numpy_unary_ufunc):
+    key = numpy.ceil
+
+
+class Numpy_trunc(Numpy_unary_ufunc):
+    key = numpy.trunc
+
+
 class Numpy_binary_ufunc(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
@@ -131,5 +151,8 @@ builtin_global(numpy.multiply, types.Function(Numpy_multiply))
 builtin_global(numpy.divide, types.Function(Numpy_divide))
 builtin_global(numpy.sqrt, types.Function(Numpy_sqrt))
 builtin_global(numpy.negative, types.Function(Numpy_negative))
+builtin_global(numpy.floor, types.Function(Numpy_floor))
+builtin_global(numpy.ceil, types.Function(Numpy_ceil))
+builtin_global(numpy.trunc, types.Function(Numpy_trunc))
 
 
