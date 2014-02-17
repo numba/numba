@@ -1293,7 +1293,6 @@ def setitem_array_unituple(context, builder, sig, args):
                                    wraparound=True)
     context.pack_value(builder, aryty.dtype, val, ptr)
 
-
 @builtin
 @implement('setitem', types.Kind(types.Array),
            types.Kind(types.Tuple), types.Any)
@@ -1480,7 +1479,7 @@ def round_impl_f64(context, builder, sig, args):
     if utils.IS_PY3:
         fn = module.get_or_insert_function(fnty, name="numba.round")
     else:
-        fn = module.get_or_insert_function(fnty, name="roundf")
+        fn = module.get_or_insert_function(fnty, name="round")
     assert fn.is_declaration
     return builder.call(fn, args)
 
