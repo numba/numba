@@ -96,6 +96,7 @@ class TestIndexing(unittest.TestCase):
         self.test_2d_slicing(flags=Noflags)
 
     def test_1d_integer_indexing(self, flags=enable_pyobj_flags):
+        # C layout
         pyfunc = integer_indexing_1d_usecase
         arraytype = types.Array(types.int32, 1, 'C')
         cr = compile_isolated(pyfunc, (arraytype, types.int32), flags=flags)
@@ -104,6 +105,18 @@ class TestIndexing(unittest.TestCase):
         a = np.arange(10, dtype='i4')
         self.assertEqual(pyfunc(a, 0), cfunc(a, 0))
         self.assertEqual(pyfunc(a, 9), cfunc(a, 9))
+        self.assertEqual(pyfunc(a, -1), cfunc(a, -1))
+
+        # Any layout
+        arraytype = types.Array(types.int32, 1, 'A')
+        cr = compile_isolated(pyfunc, (arraytype, types.int32), flags=flags)
+        cfunc = cr.entry_point
+
+        a = np.arange(10, dtype='i4')[::2]
+        self.assertFalse(a.flags['C_CONTIGUOUS'])
+        self.assertFalse(a.flags['F_CONTIGUOUS'])
+        self.assertEqual(pyfunc(a, 0), cfunc(a, 0))
+        self.assertEqual(pyfunc(a, 2), cfunc(a, 2))
         self.assertEqual(pyfunc(a, -1), cfunc(a, -1))
 
     def test_1d_integer_indexing_npm(self):
@@ -126,6 +139,7 @@ class TestIndexing(unittest.TestCase):
         self.test_integer_indexing_1d_for_2d(flags=Noflags)
 
     def test_2d_integer_indexing(self, flags=enable_pyobj_flags):
+        # C layout
         a = np.arange(100, dtype='i4').reshape(10, 10)
         pyfunc = integer_indexing_2d_usecase
         arraytype = types.Array(types.int32, 2, 'C')
@@ -135,6 +149,21 @@ class TestIndexing(unittest.TestCase):
 
         self.assertEqual(pyfunc(a, 0, 0), cfunc(a, 0, 0))
         self.assertEqual(pyfunc(a, 9, 9), cfunc(a, 9, 9))
+        self.assertEqual(pyfunc(a, -1, -1), cfunc(a, -1, -1))
+
+        # Any layout
+        a = np.arange(100, dtype='i4').reshape(10, 10)[::2, ::2]
+        self.assertFalse(a.flags['C_CONTIGUOUS'])
+        self.assertFalse(a.flags['F_CONTIGUOUS'])
+
+        pyfunc = integer_indexing_2d_usecase
+        arraytype = types.Array(types.int32, 2, 'A')
+        cr = compile_isolated(pyfunc, (arraytype, types.int32, types.int32),
+                              flags=flags)
+        cfunc = cr.entry_point
+
+        self.assertEqual(pyfunc(a, 0, 0), cfunc(a, 0, 0))
+        self.assertEqual(pyfunc(a, 2, 2), cfunc(a, 2, 2))
         self.assertEqual(pyfunc(a, -1, -1), cfunc(a, -1, -1))
 
     def test_2d_integer_indexing_npm(self):
