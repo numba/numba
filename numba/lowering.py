@@ -130,8 +130,10 @@ class BaseLower(object):
         self.builder.position_at_end(self.entry_block)
         self.builder.branch(self.blkmap[self.firstblk])
 
-        if config.DEBUG:
+        if config.DUMP_LLVM:
+            print(("LLVM DUMP %s" % self.fndesc.qualified_name).center(80,'-'))
             print(self.module)
+            print('=' * 80)
         self.module.verify()
 
     def init_argument(self, arg):

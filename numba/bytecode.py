@@ -237,6 +237,7 @@ class ByteCodeBase(object):
         self.co_consts = co_consts
         self.table = table
         self.labels = labels
+        self.firstlineno = min(inst.lineno for inst in self.table.values())
 
     def __iter__(self):
         return utils.dict_itervalues(self.table)

@@ -92,7 +92,7 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
 
 
 def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
-                     locals):
+                     locals, lifted=()):
     interp = translate_stage(bc)
     nargs = len(interp.argspec.args)
     if len(args) > nargs:
@@ -120,6 +120,7 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
                 legalize_return_type(return_type, interp, localctx)
 
     if status.use_python_mode and flags.enable_looplift:
+        assert not lifted
         # Try loop lifting
         entry, loops = looplifting.lift_loop(bc)
         if not loops:
@@ -131,9 +132,11 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
             loopflags.unset('enable_looplift')
             loopdisp = looplifting.bind(loops, typingctx, targetctx, locals,
                                         loopflags)
+            lifted = tuple(loopdisp)
             cres = compile_bytecode(typingctx, targetctx, entry, args,
-                                    return_type, loopflags, locals)
-            return cres._replace(lifted=tuple(loopdisp))
+                                    return_type, loopflags, locals,
+                                    lifted=lifted)
+            return cres._replace(lifted=lifted)
 
     if status.use_python_mode:
         # Object mode compilation
@@ -157,7 +160,12 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
 
     type_annotation = type_annotations.TypeAnnotation(interp=interp,
                                                       typemap=typemap,
-                                                      calltypes=calltypes)
+                                                      calltypes=calltypes,
+                                                      lifted=lifted)
+    if config.ANNOTATE:
+        print("ANNOTATION".center(80, '-'))
+        print(type_annotation)
+        print('=' * 80)
 
     signature = typing.signature(return_type, *args)
 
@@ -172,7 +180,7 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
                         llvm_module=lmod,
                         signature=signature,
                         objectmode=status.use_python_mode,
-                        lifted=(),)
+                        lifted=lifted,)
     return cr
 
 
@@ -292,9 +300,6 @@ def py_lowering_stage(targetctx, interp, nocompile):
     fndesc = lowering.describe_pyfunction(interp)
     lower = lowering.PyLower(targetctx, fndesc)
     lower.lower()
-
-    if config.DEBUG:
-        print(lower.module)
 
     if nocompile:
         return None, 0, lower.module, lower.function

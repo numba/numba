@@ -146,9 +146,17 @@ class CPUContext(BaseContext):
         wrapper, api = PyCallWrapper(self, func.module, func, fndesc).build()
         self.optimize(func.module)
 
-        if config.DEBUG:
+        if config.DUMP_OPTIMIZED:
+            print(("OPTIMIZED DUMP %s" %
+                   fndesc.qualified_name).center(80,'-'))
             print(func.module)
+            print('=' * 80)
+
+        if config.DUMP_ASSEMBLY:
+            print(("ASSEMBLY %s" %
+                   fndesc.qualified_name).center(80, '-'))
             print(self.tm.emit_assembly(func.module))
+            print('=' * 80)
 
         # Map module.__dict__
         le.dylib_add_symbol(".pymodule.dict." + fndesc.pymod.__name__,
