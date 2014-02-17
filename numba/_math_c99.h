@@ -35,8 +35,6 @@ float m_atan2f(float y, float x);
 #define atanh m_atanh
 #define atanhf m_atanhf
 
-#define atan2f m_atan2f
-/* define expm1 log1p */
 
 #define expm1 m_expm1
 #define expm1f m_expm1f
@@ -48,6 +46,7 @@ float m_atan2f(float y, float x);
 #define trunc m_trunc
 #define truncf m_truncf
 
+#define atan2f m_atan2f
 /* provide floating point equivalence */
 
 #endif /* _MSC_VER */

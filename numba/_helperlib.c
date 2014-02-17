@@ -103,7 +103,8 @@ Expose all math functions
 */
 #define MATH_UNARY(F, R, A) static void* get_##F() \
                             { return PyLong_FromVoidPtr(&Numba_##F);}
-#define MATH_BINARY(F, R, A, B) MATH_UNARY(F, R, A)
+#define MATH_BINARY(F, R, A, B) static void* get_##F() \
+                            { return PyLong_FromVoidPtr(&Numba_##F);}
     #include "mathnames.inc"
 #undef MATH_UNARY
 #undef MATH_BINARY
@@ -121,7 +122,7 @@ static PyMethodDef ext_methods[] = {
 
     /* Declare math exposer */
     #define MATH_UNARY(F, R, A) declmethod(get_##F),
-    #define MATH_BINARY(F, R, A, B) MATH_UNARY(F, R, A)
+    #define MATH_BINARY(F, R, A, B) declmethod(get_##F),
         #include "mathnames.inc"
     #undef MATH_UNARY
     #undef MATH_BINARY
