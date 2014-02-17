@@ -162,7 +162,8 @@ class AttributeTemplate(object):
     def resolve(self, value, attr):
         fn = getattr(self, "resolve_%s" % attr, None)
         if fn is None:
-            raise NotImplementedError(value, attr)
+            raise NameError("Attribute '%s' of %s is not typed" % (attr,
+                                                                   value))
         return fn(value)
 
 

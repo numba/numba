@@ -1,5 +1,5 @@
 import math
-from numba import types
+from numba import types, utils
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     builtin_global, builtin, signature)
 
@@ -14,11 +14,17 @@ class MathModuleAttribute(AttributeTemplate):
     def resolve_exp(self, mod):
         return types.Function(Math_exp)
 
+    def resolve_expm1(self, mod):
+        return types.Function(Math_expm1)
+
     def resolve_sqrt(self, mod):
         return types.Function(Math_sqrt)
 
     def resolve_log(self, mod):
         return types.Function(Math_log)
+
+    def resolve_log1p(self, mod):
+        return types.Function(Math_log1p)
 
     def resolve_log10(self, mod):
         return types.Function(Math_log10)
@@ -83,6 +89,15 @@ class MathModuleAttribute(AttributeTemplate):
     def resolve_isinf(self, mod):
         return types.Function(Math_isinf)
 
+    def resolve_degrees(self, mod):
+        return types.Function(Math_degrees)
+
+    def resolve_radians(self, mod):
+        return types.Function(Math_radians)
+
+    def resolve_hypot(self, mod):
+        return types.Function(Math_hypot)
+
 
 class Math_unary(ConcreteTemplate):
     cases = [
@@ -101,12 +116,21 @@ class Math_exp(Math_unary):
     key = math.exp
 
 
+if utils.PYVERSION > (2, 6):
+    class Math_expm1(Math_unary):
+        key = math.expm1
+
+
 class Math_sqrt(Math_unary):
     key = math.sqrt
 
 
 class Math_log(Math_unary):
     key = math.log
+
+
+class Math_log1p(Math_unary):
+    key = math.log1p
 
 
 class Math_log10(Math_unary):
@@ -183,6 +207,24 @@ class Math_trunc(Math_unary):
     key = math.trunc
 
 
+class Math_radians(Math_unary):
+    key = math.radians
+
+
+class Math_degrees(Math_unary):
+    key = math.degrees
+
+
+class Math_hypot(ConcreteTemplate):
+    key = math.hypot
+    cases = [
+        signature(types.float64, types.int64, types.int64),
+        signature(types.float64, types.uint64, types.uint64),
+        signature(types.float32, types.float32, types.float32),
+        signature(types.float64, types.float64, types.float64),
+    ]
+
+
 class Math_isnan(ConcreteTemplate):
     key = math.isnan
     cases = [
@@ -206,8 +248,11 @@ class Math_isinf(ConcreteTemplate):
 builtin_global(math, types.Module(math))
 builtin_global(math.fabs, types.Function(Math_fabs))
 builtin_global(math.exp, types.Function(Math_exp))
+if utils.PYVERSION > (2, 6):
+    builtin_global(math.expm1, types.Function(Math_expm1))
 builtin_global(math.sqrt, types.Function(Math_sqrt))
 builtin_global(math.log, types.Function(Math_log))
+builtin_global(math.log1p, types.Function(Math_log1p))
 builtin_global(math.log10, types.Function(Math_log10))
 builtin_global(math.sin, types.Function(Math_sin))
 builtin_global(math.cos, types.Function(Math_cos))
@@ -222,8 +267,11 @@ builtin_global(math.atan2, types.Function(Math_atan2))
 builtin_global(math.asinh, types.Function(Math_asinh))
 builtin_global(math.acosh, types.Function(Math_acosh))
 builtin_global(math.atanh, types.Function(Math_atanh))
+builtin_global(math.hypot, types.Function(Math_hypot))
 builtin_global(math.floor, types.Function(Math_floor))
 builtin_global(math.ceil, types.Function(Math_ceil))
 builtin_global(math.trunc, types.Function(Math_trunc))
 builtin_global(math.isnan, types.Function(Math_isnan))
 builtin_global(math.isinf, types.Function(Math_isinf))
+builtin_global(math.degrees, types.Function(Math_degrees))
+builtin_global(math.radians, types.Function(Math_radians))

@@ -2,8 +2,10 @@ from __future__ import print_function, absolute_import, division
 import math
 import numpy as np
 from numba import unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
+from numba.compiler import compile_isolated, Flags, utils
 from numba import types
+
+PY27_AND_ABOVE = utils.PYVERSION > (2, 6)
 
 
 
@@ -77,8 +79,16 @@ def exp(x):
     return math.exp(x)
 
 
+def expm1(x):
+    return math.expm1(x)
+
+
 def log(x):
     return math.log(x)
+
+
+def log1p(x):
+    return math.log1p(x)
 
 
 def log10(x):
@@ -105,13 +115,42 @@ def isinf(x):
     return math.isinf(x)
 
 
+def hypot(x, y):
+    return math.hypot(x, y)
+
+
+def degrees(x):
+    return math.degrees(x)
+
+
+def radians(x):
+    return math.radians(x)
+
+
+def erf(x):
+    return math.erf(x)
+
+
+def erfc(x):
+    return math.erfc(x)
+
+
+def gamma(x):
+    return math.gamma(x)
+
+
+def lgamma(x):
+    return math.lgamma(x)
+
+
 class TestMathLib(unittest.TestCase):
 
-    def run_unary(self, pyfunc, x_types, x_values, flags=enable_pyobj_flags):
+    def run_unary(self, pyfunc, x_types, x_values, flags=enable_pyobj_flags,
+                  places=6):
         for tx, vx in zip(x_types, x_values):
             cr = compile_isolated(pyfunc, [tx], flags=flags)
             cfunc = cr.entry_point
-            self.assertAlmostEqual(cfunc(vx), pyfunc(vx), places=6)
+            self.assertAlmostEqual(cfunc(vx), pyfunc(vx), places=places)
 
     def test_sin(self, flags=enable_pyobj_flags):
         pyfunc = sin
@@ -179,6 +218,19 @@ class TestMathLib(unittest.TestCase):
     def test_exp_npm(self):
         self.test_exp(flags=no_pyobj_flags)
 
+    @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
+    def test_expm1(self, flags=enable_pyobj_flags):
+        pyfunc = expm1
+        x_types = [types.int16, types.int32, types.int64,
+                   types.uint16, types.uint32, types.uint64,
+                   types.float32, types.float64]
+        x_values = [-2, -1, -2, 2, 1, 2, .1, .2]
+        self.run_unary(pyfunc, x_types, x_values, flags)
+
+    @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
+    def test_expm1_npm(self):
+        self.test_expm1(flags=no_pyobj_flags)
+
     def test_log(self, flags=enable_pyobj_flags):
         pyfunc = log
         x_types = [types.int16, types.int32, types.int64,
@@ -189,6 +241,17 @@ class TestMathLib(unittest.TestCase):
 
     def test_log_npm(self):
         self.test_log(flags=no_pyobj_flags)
+
+    def test_log1p(self, flags=enable_pyobj_flags):
+        pyfunc = log1p
+        x_types = [types.int16, types.int32, types.int64,
+                   types.uint16, types.uint32, types.uint64,
+                   types.float32, types.float64]
+        x_values = [1, 10, 100, 1000, 100000, 1000000, 0.1, 1.1]
+        self.run_unary(pyfunc, x_types, x_values, flags)
+
+    def test_log1p_npm(self):
+        self.test_log1p(flags=no_pyobj_flags)
 
     def test_log10(self, flags=enable_pyobj_flags):
         pyfunc = log10
@@ -242,7 +305,7 @@ class TestMathLib(unittest.TestCase):
         x_values = [-2, -1, -2, 2, 1, 2, .1, .2]
 
         for ty, xy in zip(x_types, x_values):
-            cres = compile_isolated(pyfunc, (ty, ty))
+            cres = compile_isolated(pyfunc, (ty, ty), flags=flags)
             cfunc = cres.entry_point
             x = xy
             y = x * 2
@@ -317,7 +380,6 @@ class TestMathLib(unittest.TestCase):
     def test_tanh_npm(self):
         self.test_tanh(flags=no_pyobj_flags)
 
-
     def test_floor(self, flags=enable_pyobj_flags):
         pyfunc = floor
         x_types = [types.int16, types.int32, types.int64,
@@ -372,6 +434,102 @@ class TestMathLib(unittest.TestCase):
 
     def test_isinf_npm(self):
         self.test_isinf(flags=no_pyobj_flags)
+
+    def test_hypot(self, flags=enable_pyobj_flags):
+        pyfunc = hypot
+        x_types = [types.int16, types.int32, types.int64,
+                   types.uint16, types.uint32, types.uint64,
+                   types.float32, types.float64]
+        x_values = [1, 2, 3, 4, 5, 6, .21, .34]
+
+        for ty, xy in zip(x_types, x_values):
+            x = xy
+            y = xy * 2
+            cres = compile_isolated(pyfunc, (ty, ty), flags=flags)
+            cfunc = cres.entry_point
+            self.assertAlmostEqual(pyfunc(x, y), cfunc(x, y))
+
+    def test_hypot_npm(self):
+        self.test_hypot(flags=no_pyobj_flags)
+
+    def test_degrees(self, flags=enable_pyobj_flags):
+        pyfunc = degrees
+        x_types = [types.int16, types.int32, types.int64,
+                   types.uint16, types.uint32, types.uint64,
+                   types.float32, types.float64]
+        x_values = [1, 1, 1, 1, 1, 1, 1., 1.]
+        self.run_unary(pyfunc, x_types, x_values, flags, places=5)
+
+    def test_degrees_npm(self):
+        self.test_degrees(flags=no_pyobj_flags)
+
+    def test_radians(self, flags=enable_pyobj_flags):
+        pyfunc = radians
+        x_types = [types.int16, types.int32, types.int64,
+                   types.uint16, types.uint32, types.uint64,
+                   types.float32, types.float64]
+        x_values = [1, 1, 1, 1, 1, 1, 1., 1.]
+        self.run_unary(pyfunc, x_types, x_values, flags)
+
+    def test_radians_npm(self):
+        self.test_radians(flags=no_pyobj_flags)
+
+    @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
+    def test_erf(self, flags=enable_pyobj_flags):
+        pyfunc = erf
+        x_types = [types.int16, types.int32, types.int64,
+                   types.uint16, types.uint32, types.uint64,
+                   types.float32, types.float64]
+        x_values = [1, 1, 1, 1, 1, 1, 1., 1.]
+        self.run_unary(pyfunc, x_types, x_values, flags)
+
+    @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
+    @unittest.expectedFailure
+    def test_erf_npm(self):
+        self.test_erf(flags=no_pyobj_flags)
+
+    @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
+    def test_erfc(self, flags=enable_pyobj_flags):
+        pyfunc = erfc
+        x_types = [types.int16, types.int32, types.int64,
+                   types.uint16, types.uint32, types.uint64,
+                   types.float32, types.float64]
+        x_values = [1, 1, 1, 1, 1, 1, 1., 1.]
+        self.run_unary(pyfunc, x_types, x_values, flags)
+
+    @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
+    @unittest.expectedFailure
+    def test_erfc_npm(self):
+        self.test_erfc(flags=no_pyobj_flags)
+
+    @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
+    def test_gamma(self, flags=enable_pyobj_flags):
+        pyfunc = gamma
+        x_types = [types.int16, types.int32, types.int64,
+                   types.uint16, types.uint32, types.uint64,
+                   types.float32, types.float64]
+        x_values = [1, 1, 1, 1, 1, 1, 1., 1.]
+        self.run_unary(pyfunc, x_types, x_values, flags)
+
+    @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
+    @unittest.expectedFailure
+    def test_gamma_npm(self):
+        self.test_gamma(flags=no_pyobj_flags)
+
+    @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
+    def test_lgamma(self, flags=enable_pyobj_flags):
+        pyfunc = lgamma
+        x_types = [types.int16, types.int32, types.int64,
+                   types.uint16, types.uint32, types.uint64,
+                   types.float32, types.float64]
+        x_values = [1, 1, 1, 1, 1, 1, 1., 1.]
+        self.run_unary(pyfunc, x_types, x_values, flags)
+
+    @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
+    @unittest.expectedFailure
+    def test_lgamma_npm(self):
+        self.test_lgamma(flags=no_pyobj_flags)
+
 
 if __name__ == '__main__':
     unittest.main()
