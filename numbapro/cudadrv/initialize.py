@@ -60,7 +60,8 @@ class CUDADispatcher(object):
         from numbapro.cudapy import jit
         kernel = jit(sig, **options)(self.py_func)
         self.compiled = kernel
-        self._npm_context_ = kernel._npm_context_
+        if hasattr(kernel, "_npm_context_"):
+            self._npm_context_ = kernel._npm_context_
 
     def __call__(self, *args, **kws):
         return self.compiled(*args, **kws)
@@ -78,8 +79,10 @@ class CUDADispatcher(object):
         return self.compiled.__getitem__(*args)
 
 
-class CUDAPoison(object):
-    pass
+def CUDAPoison(*args, **kws):
+    if last_error:
+        raise last_error
+    raise RuntimeError("CUDA devices are not available")
 
 
 def _init_driver():
