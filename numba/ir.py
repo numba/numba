@@ -38,7 +38,7 @@ class Loc(object):
             return "%s (%s)" % (self.filename, self.line)
 
     def strformat(self):
-        relpath = os.path.relpath(self.filename)
+        relpath = os.path.abspath(self.filename)
         return 'File "%s", line %d' % (relpath, self.line)
 
 
