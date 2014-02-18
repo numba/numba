@@ -90,6 +90,9 @@ class CPUContext(BaseContext):
         le.dylib_add_symbol("numba.math.srem", _helperlib.get_srem())
         le.dylib_add_symbol("numba.math.udiv", _helperlib.get_udiv())
         le.dylib_add_symbol("numba.math.urem", _helperlib.get_urem())
+        # Necessary for Python3
+        le.dylib_add_symbol("numba.round", _helperlib.get_round_even())
+        le.dylib_add_symbol("numba.roundf", _helperlib.get_roundf_even())
 
         # windows symbol hacks
         if sys.platform.startswith('win32') and self.is32bit:
@@ -143,9 +146,17 @@ class CPUContext(BaseContext):
         wrapper, api = PyCallWrapper(self, func.module, func, fndesc).build()
         self.optimize(func.module)
 
-        if config.DEBUG:
+        if config.DUMP_OPTIMIZED:
+            print(("OPTIMIZED DUMP %s" %
+                   fndesc.qualified_name).center(80,'-'))
             print(func.module)
+            print('=' * 80)
+
+        if config.DUMP_ASSEMBLY:
+            print(("ASSEMBLY %s" %
+                   fndesc.qualified_name).center(80, '-'))
             print(self.tm.emit_assembly(func.module))
+            print('=' * 80)
 
         # Map module.__dict__
         le.dylib_add_symbol(".pymodule.dict." + fndesc.pymod.__name__,

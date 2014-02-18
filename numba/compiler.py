@@ -1,13 +1,16 @@
 from __future__ import print_function, division, absolute_import
 from pprint import pprint
+from contextlib import contextmanager
 from collections import namedtuple, defaultdict
 from numba import (bytecode, interpreter, typing, typeinfer, lowering,
-                   irpasses, utils, config, type_annotations, types)
+                   irpasses, utils, config, type_annotations, types, ir,
+                   assume, looplifting)
 from numba.targets import cpu
 
 
 class Flags(utils.ConfigOptions):
-    OPTIONS = frozenset(['enable_pyobject',
+    OPTIONS = frozenset(['enable_looplift',
+                         'enable_pyobject',
                          'force_pyobject',
                          'no_compile'])
 
@@ -24,7 +27,8 @@ CR_FIELDS = ["typing_context",
              "llvm_module",
              "llvm_func",
              "signature",
-             "objectmode",]
+             "objectmode",
+             "lifted",]
 
 
 CompileResult = namedtuple("CompileResult", CR_FIELDS)
@@ -54,6 +58,24 @@ def compile_isolated(func, args, return_type=None, flags=DEFAULT_FLAGS,
                          locals)
 
 
+class _CompileStatus(object):
+    """
+    Used like a C record
+    """
+    __slots__ = 'fail_reason', 'use_python_mode', 'can_fallback'
+
+
+@contextmanager
+def _fallback_context(status):
+    try:
+        yield
+    except Exception as e:
+        if not status.can_fallback:
+            raise
+        status.fail_reason = e
+        status.use_python_mode = True
+
+
 def compile_extra(typingctx, targetctx, func, args, return_type, flags,
                   locals):
     """
@@ -62,41 +84,75 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
     - return_type
         Use ``None`` to indicate
     """
-    # Translate to IR
-    interp = translate_stage(func)
+    bc = bytecode.ByteCode(func=func)
+    if config.DEBUG:
+        print(bc.dump())
+    return compile_bytecode(typingctx, targetctx, bc, args,
+                            return_type, flags, locals)
+
+
+def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
+                     locals, lifted=()):
+    interp = translate_stage(bc)
     nargs = len(interp.argspec.args)
+    if len(args) > nargs:
+        raise TypeError("Too many argument types")
 
-    fail_reason = None
-    use_python_mode = False
+    status = _CompileStatus()
+    status.can_fallback = flags.enable_pyobject
+    status.fail_reason = None
+    status.use_python_mode = flags.force_pyobject
 
-    if not flags.force_pyobject:
-        try:
+    localctx = targetctx.localized()
+
+    if not status.use_python_mode:
+        with _fallback_context(status):
+            legialize_given_types(args, return_type)
             # Type inference
             typemap, return_type, calltypes = type_inference_stage(typingctx,
                                                                    interp,
                                                                    args,
                                                                    return_type,
                                                                    locals)
-        except Exception as e:
-            if not flags.enable_pyobject:
-                raise
 
-            fail_reason = e
-            use_python_mode = True
-    else:
-        # Forced to use all python mode
-        use_python_mode = True
+        if not status.use_python_mode:
+            with _fallback_context(status):
+                legalize_return_type(return_type, interp, localctx)
 
-    if use_python_mode:
-        func, fnptr, lmod, lfunc = py_lowering_stage(targetctx, interp,
+    if status.use_python_mode and flags.enable_looplift:
+        assert not lifted
+        # Try loop lifting
+        entry, loops = looplifting.lift_loop(bc)
+        if not loops:
+            # No extracted loops
+            pass
+        else:
+            loopflags = flags.copy()
+            # Do not recursively loop lift
+            loopflags.unset('enable_looplift')
+            loopdisp = looplifting.bind(loops, typingctx, targetctx, locals,
+                                        loopflags)
+            lifted = tuple(loopdisp)
+            cres = compile_bytecode(typingctx, targetctx, entry, args,
+                                    return_type, loopflags, locals,
+                                    lifted=lifted)
+            return cres._replace(lifted=lifted)
+
+    if status.use_python_mode:
+        # Object mode compilation
+        func, fnptr, lmod, lfunc = py_lowering_stage(localctx, interp,
                                                      flags.no_compile)
         typemap = defaultdict(lambda: types.pyobject)
         calltypes = defaultdict(lambda: types.pyobject)
 
         return_type = types.pyobject
-        args = [types.pyobject] * nargs
+
+        if len(args) != nargs:
+            # append missing
+            args = tuple(args) + (types.pyobject,) * (nargs - len(args))
     else:
-        func, fnptr, lmod, lfunc = native_lowering_stage(targetctx, interp,
+        # Native mode compilation
+        func, fnptr, lmod, lfunc = native_lowering_stage(localctx, interp,
                                                          typemap,
                                                          return_type,
                                                          calltypes,
@@ -104,8 +160,12 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
 
     type_annotation = type_annotations.TypeAnnotation(interp=interp,
                                                       typemap=typemap,
-                                                      calltypes=calltypes)
-
+                                                      calltypes=calltypes,
+                                                      lifted=lifted)
+    if config.ANNOTATE:
+        print("ANNOTATION".center(80, '-'))
+        print(type_annotation)
+        print('=' * 80)
 
     signature = typing.signature(return_type, *args)
 
@@ -114,21 +174,65 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
                         target_context=targetctx,
                         entry_point=func,
                         entry_point_addr=fnptr,
-                        typing_error=fail_reason,
+                        typing_error=status.fail_reason,
                         type_annotation=type_annotation,
                         llvm_func=lfunc,
                         llvm_module=lmod,
                         signature=signature,
-                        objectmode=use_python_mode)
+                        objectmode=status.use_python_mode,
+                        lifted=lifted,)
     return cr
 
 
-def translate_stage(func):
-    bc = bytecode.ByteCode(func=func)
-    if config.DEBUG:
-        print(bc.dump())
+def _is_nopython_types(t):
+    return t != types.pyobject and not isinstance(t, types.Dummy)
 
-    interp = interpreter.Interpreter(bytecode=bc)
+
+def legialize_given_types(args, return_type):
+    # Filter argument types
+    for i, a in enumerate(args):
+        if not _is_nopython_types(a):
+            raise TypeError("Arg %d of %s is not legal in nopython "
+                            "mode" % (i, a))
+    # Filter return type
+    if (return_type and return_type != types.none and
+            not _is_nopython_types(return_type)):
+        raise TypeError('Return type of %s is not legal in nopython '
+                        'mode' % (return_type,))
+
+
+def legalize_return_type(return_type, interp, targetctx):
+    """
+    Only accept array return type iff it is passed into the function.
+    """
+    assert assume.return_argument_array_only
+
+    if not isinstance(return_type, types.Array):
+        return
+
+    # Walk IR to discover all return statements
+    retstmts = []
+    for bid, blk in interp.blocks.items():
+        for inst in blk.body:
+            if isinstance(inst, ir.Return):
+                retstmts.append(inst)
+
+    assert retstmts, "No return statemants?"
+
+    # FIXME: In the future, we can return an array that is either a dynamically
+    #        allocated array or an array that is passed as argument.  This
+    #        must be statically resolvable.
+    for ret in retstmts:
+        if ret.value.name not in interp.argspec.args:
+            raise ValueError("Only accept returning of array passed into the "
+                              "function as argument")
+
+    # Legalized; tag return handling
+    targetctx.metdata['return.array'] = 'arg'
+
+
+def translate_stage(bytecode):
+    interp = interpreter.Interpreter(bytecode=bytecode)
     interp.interpret()
 
     if config.DEBUG:
@@ -141,6 +245,9 @@ def translate_stage(func):
 
 
 def type_inference_stage(typingctx, interp, args, return_type, locals={}):
+    if len(args) != len(interp.argspec.args):
+        raise TypeError("Mismatch number of argument types")
+
     infer = typeinfer.TypeInferer(typingctx, interp.blocks)
 
     # Seed argument types
@@ -193,9 +300,6 @@ def py_lowering_stage(targetctx, interp, nocompile):
     fndesc = lowering.describe_pyfunction(interp)
     lower = lowering.PyLower(targetctx, fndesc)
     lower.lower()
-
-    if config.DEBUG:
-        print(lower.module)
 
     if nocompile:
         return None, 0, lower.module, lower.function

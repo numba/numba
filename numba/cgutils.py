@@ -7,19 +7,28 @@ import llvm.core as lc
 
 true_bit = Constant.int(Type.int(1), 1)
 false_bit = Constant.int(Type.int(1), 0)
+true_byte = Constant.int(Type.int(8), 1)
+false_byte = Constant.int(Type.int(8), 0)
+
+
+def as_bool_byte(builder, value):
+    return builder.zext(value, Type.int(8))
 
 
 class Structure(object):
-    def __init__(self, context, builder, value=None):
+    def __init__(self, context, builder, value=None, ref=None):
         self._type = context.get_struct_type(self)
         self._builder = builder
-
-        if value is None:
+        if ref is None:
             self._value = alloca_once(builder, self._type)
+            if value is not None:
+                assert not is_pointer(value.type)
+                assert value.type == self._type, (value.type, self._type)
+                builder.store(value, self._value)
         else:
-            assert value.type.pointee == self._type, (value.type.pointee,
-                                                      self._type)
-            self._value = value
+            assert value is None
+            assert self._type == ref.type.pointee
+            self._value = ref
 
         self._fdmap = {}
         base = Constant.int(Type.int(), 0)
@@ -39,11 +48,15 @@ class Structure(object):
             return super(Structure, self).__setattr__(field, value)
         offset = self._fdmap[field]
         ptr = self._builder.gep(self._value, offset)
-        assert ptr.type.pointee == value.type
+        assert ptr.type.pointee == value.type, (str(ptr.type.pointee),
+                                                str(value.type))
         self._builder.store(value, ptr)
 
-    def _getvalue(self):
+    def _getpointer(self):
         return self._value
+
+    def _getvalue(self):
+        return self._builder.load(self._value)
 
     def __iter__(self):
         def iterator():
@@ -351,6 +364,28 @@ def get_item_pointer2(builder, data, shape, strides, layout, inds,
         return ptr
 
 
+def normalize_slice(builder, slice, length):
+    """
+    Clip stop
+    """
+    stop = slice.stop
+    doclip = builder.icmp(lc.ICMP_SGT, stop, length)
+    slice.stop = builder.select(doclip, length, stop)
+
+
+def get_range_from_slice(builder, slicestruct):
+    diff = builder.sub(slicestruct.stop, slicestruct.start)
+    length = builder.sdiv(diff, slicestruct.step)
+    is_neg = is_neg_int(builder, length)
+    length = builder.select(is_neg, get_null_value(length.type), length)
+    return length
+
+
+def get_strides_from_slice(builder, ndim, strides, slice, ax):
+    oldstrides = unpack_tuple(builder, strides, ndim)
+    return builder.mul(slice.step, oldstrides[ax])
+
+
 class MetadataKeyStore(object):
     def __init__(self, module, name):
         self.module = module
@@ -388,3 +423,45 @@ def guard_null(context, builder, value):
 
 
 guard_zero = guard_null
+
+
+def is_struct(ltyp):
+    return ltyp.kind == lc.TYPE_STRUCT
+
+
+def is_pointer(ltyp):
+    return ltyp.kind == lc.TYPE_POINTER
+
+
+def is_struct_ptr(ltyp):
+    return is_pointer(ltyp) and is_struct(ltyp.pointee)
+
+
+def is_neg_int(builder, val):
+    return builder.icmp(lc.ICMP_SLT, val, get_null_value(val.type))
+
+
+# ------------------------------------------------------------------------------
+# Debug
+
+class VerboseProxy(object):
+    """
+    Use to wrap llvm.core.Builder to track where segfault happens
+    """
+    def __init__(self, obj):
+        self.__obj = obj
+
+    def __getattr__(self, key):
+        fn = getattr(self.__obj, key)
+        if callable(fn):
+            def wrapped(*args, **kws):
+                import traceback
+                traceback.print_stack()
+                print(key, args, kws)
+                try:
+                    return fn(*args, **kws)
+                finally:
+                    print("ok")
+
+            return wrapped
+        return fn

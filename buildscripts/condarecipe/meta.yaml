@@ -30,3 +30,4 @@ test:
     - mandel.py
   commands:
     - pycc -h
+    - numba -h

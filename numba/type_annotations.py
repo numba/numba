@@ -38,17 +38,22 @@ class SourceLines(Mapping):
 
 
 class TypeAnnotation(object):
-    def __init__(self, interp, typemap, calltypes):
-        self.text = self.annotate(interp, typemap, calltypes)
+    def __init__(self, interp, typemap, calltypes, lifted):
+        self.filename = interp.bytecode.filename
+        self.func = interp.bytecode.func
+        self.blocks = interp.blocks
+        self.typemap = typemap
+        self.calltypes = calltypes
+        self.lifted = lifted
 
-    def annotate(self, interp, typemap, calltypes):
-        source = SourceLines(interp.bytecode.func)
+    def annotate(self):
+        source = SourceLines(self.func)
         # if not source.avail:
         #     return "Source code unavailable"
 
         # Prepare annotations
         groupedinst = defaultdict(list)
-        for blkid, blk in interp.blocks.items():
+        for blkid, blk in self.blocks.items():
             groupedinst[blk.loc.line].append("label %d" % blkid)
             for inst in blk.body:
                 lineno = inst.loc.line
@@ -56,13 +61,13 @@ class TypeAnnotation(object):
                 if isinstance(inst, ir.Assign):
                     if (isinstance(inst.value, ir.Expr) and
                             inst.value.op ==  'call'):
-                        atype = calltypes[inst.value]
+                        atype = self.calltypes[inst.value]
                     else:
-                        atype = typemap[inst.target.name]
+                        atype = self.typemap[inst.target.name]
 
                     aline = "%s = %s  :: %s" % (inst.target, inst.value, atype)
                 elif isinstance(inst, ir.SetItem):
-                    atype = calltypes[inst]
+                    atype = self.calltypes[inst]
                     aline = "%s  :: %s" % (inst, atype)
                 else:
                     aline = "%s" % inst
@@ -72,6 +77,7 @@ class TypeAnnotation(object):
         io = StringIO()
         with closing(io):
             if source.avail:
+                print("# File: %s" % self.filename, file=io)
                 for num in source:
                     srcline = source[num]
                     ind = _getindent(srcline)
@@ -81,6 +87,15 @@ class TypeAnnotation(object):
                     print(file=io)
                     print(srcline, file=io)
                     print(file=io)
+                if self.lifted:
+                    print("# The function contains lifted loops", file=io)
+                    for loop in self.lifted:
+                        print("# Loop at line %d" % loop.bytecode.firstlineno,
+                              file=io)
+                        print("# Has %d overloads" % len(loop.overloads),
+                              file=io)
+                        for cres in loop.overloads.values():
+                            print(cres.type_annotation, file=io)
             else:
                 print("# Source code unavailable", file=io)
                 for num in groupedinst:
@@ -91,7 +106,7 @@ class TypeAnnotation(object):
             return io.getvalue()
 
     def __str__(self):
-        return self.text
+        return self.annotate()
 
 
 re_longest_white_prefix = re.compile('^\s*')

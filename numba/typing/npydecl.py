@@ -14,6 +14,9 @@ class NumpyModuleAttribute(AttributeTemplate):
     def resolve_exp(self, mod):
         return types.Function(Numpy_exp)
 
+    def resolve_sqrt(self, mod):
+        return types.Function(Numpy_sqrt)
+
     def resolve_sin(self, mod):
         return types.Function(Numpy_sin)
 
@@ -35,16 +38,34 @@ class NumpyModuleAttribute(AttributeTemplate):
     def resolve_divide(self, mod):
         return types.Function(Numpy_divide)
 
+    def resolve_negative(self, mod):
+        return types.Function(Numpy_negative)
+
+    def resolve_floor(self, mod):
+        return types.Function(Numpy_floor)
+
+    def resolve_ceil(self, mod):
+        return types.Function(Numpy_ceil)
+
+    def resolve_trunc(self, mod):
+        return types.Function(Numpy_trunc)
 
 class Numpy_unary_ufunc(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
-        [inp, out] = args
-        if isinstance(inp, types.Array) and isinstance(out, types.Array):
-            if inp.dtype != out.dtype:
-                # TODO handle differing dtypes
-                return
-            return signature(out, inp, out)
+        nargs = len(args)
+        if nargs == 2:
+            [inp, out] = args
+            if isinstance(inp, types.Array) and isinstance(out, types.Array):
+                return signature(out, inp, out)
+        elif nargs == 1:
+            [inp] = args
+            if inp in types.number_domain:
+                return signature(types.float64, types.float64)
+
+
+class Numpy_sqrt(Numpy_unary_ufunc):
+    key = numpy.sqrt
 
 
 class Numpy_absolute(Numpy_unary_ufunc):
@@ -67,13 +88,29 @@ class Numpy_exp(Numpy_unary_ufunc):
     key = numpy.exp
 
 
+class Numpy_negative(Numpy_unary_ufunc):
+    key = numpy.negative
+
+
+class Numpy_floor(Numpy_unary_ufunc):
+    key = numpy.floor
+
+
+class Numpy_ceil(Numpy_unary_ufunc):
+    key = numpy.ceil
+
+
+class Numpy_trunc(Numpy_unary_ufunc):
+    key = numpy.trunc
+
+
 class Numpy_binary_ufunc(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         [vx, wy, out] = args
         if (isinstance(vx, types.Array) and isinstance(wy, types.Array) and
                 isinstance(out, types.Array)):
-            if vx.dtype != wy.dtype or vx.dtype != out.dtype:
+            if vx.dtype != wy.dtype:
                 # TODO handle differing dtypes
                 return
             return signature(out, vx, wy, out)
@@ -105,5 +142,10 @@ builtin_global(numpy.add, types.Function(Numpy_add))
 builtin_global(numpy.subtract, types.Function(Numpy_subtract))
 builtin_global(numpy.multiply, types.Function(Numpy_multiply))
 builtin_global(numpy.divide, types.Function(Numpy_divide))
+builtin_global(numpy.sqrt, types.Function(Numpy_sqrt))
+builtin_global(numpy.negative, types.Function(Numpy_negative))
+builtin_global(numpy.floor, types.Function(Numpy_floor))
+builtin_global(numpy.ceil, types.Function(Numpy_ceil))
+builtin_global(numpy.trunc, types.Function(Numpy_trunc))
 
 

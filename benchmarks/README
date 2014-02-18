@@ -1,0 +1,20 @@
+This directory contains python script for benchmarking the performance of
+numba.
+
+Running the benchmark
+-----------------------
+
+    python runall.py
+
+
+Adding new bencharmk
+---------------------
+
+The "runall.py" will discover scripts if name prefix "bm_".  Each benchmark
+script should contains two no-argument functions: "python_main" and
+"numba_main".  They represent the entry point for the benchmark for python
+code and numba code, respectively.  The timing is produced by `numba.utils
+.benchmark`.  The best time is reported and it is normalized against the
+python timing.
+
+

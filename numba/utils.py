@@ -31,6 +31,11 @@ class ConfigOptions(object):
     def __repr__(self):
         return "Flags(%s)" % ', '.join(str(x) for x in self._enabled)
 
+    def copy(self):
+        copy = type(self)()
+        copy._enabled = set(self._enabled)
+        return copy
+
 
 class SortedMap(collections.Mapping):
     """Immutable
@@ -136,7 +141,7 @@ def format_time(tm):
 def benchmark(func, maxsec=1):
     timer = timeit.Timer(func)
     number = 1
-    result = timer.repeat(3, number)
+    result = timer.repeat(1, number)
     # Too fast to be measured
     while min(result) / number == 0:
         number *= 10

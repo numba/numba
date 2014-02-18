@@ -4,6 +4,7 @@ from numba import unittest_support as unittest
 from numba.npyufunc.ufuncbuilder import UFuncBuilder, GUFuncBuilder
 from numba import vectorize, guvectorize
 
+
 def add(a, b):
     return a + b
 

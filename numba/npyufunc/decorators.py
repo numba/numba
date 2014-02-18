@@ -43,7 +43,7 @@ def vectorize(ftylist, **kws):
         function type.
 
     target: str
-            A string for code generation target.  Defaults to 'cpu'.
+            A string for code generation target.  Default to "cpu".
 
     Returns
     --------

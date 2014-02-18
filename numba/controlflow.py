@@ -3,7 +3,7 @@ import functools
 from numba import utils
 
 
-NEW_BLOCKERS = frozenset(['SETUP_LOOP'])
+NEW_BLOCKERS = frozenset(['SETUP_LOOP', 'FOR_ITER'])
 
 
 class CFBlock(object):
@@ -110,8 +110,9 @@ class ControlFlowAnalysis(object):
         self.backbone = backbone - inloopblocks
 
     def dead_block_elimin(self):
-        liveset = set([0])
-        pending = set([0])
+        firstblk = min(self.blocks.keys())
+        liveset = set([firstblk])
+        pending = set([firstblk])
         finished = set()
         while pending:
             cur = pending.pop()
@@ -193,16 +194,17 @@ class ControlFlowAnalysis(object):
 
 
 def find_dominators(blocks):
+    firstblk = min(blocks.keys())
     doms = {}
     for b in blocks:
         doms[b] = set()
 
-    doms[0].add(0)
+    doms[firstblk].add(firstblk)
     allblks = set(blocks)
 
     remainblks = frozenset(blk.offset
                            for blk in utils.dict_values(blocks)
-                           if blk.offset != 0)
+                           if blk.offset != firstblk)
     for blk in remainblks:
         doms[blk] |= allblks
 

@@ -2,7 +2,7 @@ from llvm.core import Type, Constant
 import llvm.core as lc
 import math
 from functools import reduce
-from numba import types, typing, cgutils
+from numba import types, typing, cgutils, utils
 from numba.targets.imputils import (builtin, builtin_attr, implement,
                                     impl_attribute)
 
@@ -11,15 +11,13 @@ from numba.targets.imputils import (builtin, builtin_attr, implement,
 
 def make_array(ty):
     dtype = ty.dtype
-    if dtype == types.boolean:
-        dtype = types.byte
-
     nd = ty.ndim
 
     class ArrayTemplate(cgutils.Structure):
         _fields = [('data',    types.CPointer(dtype)),
                    ('shape',   types.UniTuple(types.intp, nd)),
-                   ('strides', types.UniTuple(types.intp, nd)),]
+                   ('strides', types.UniTuple(types.intp, nd)),
+                   ('parent',  types.pyobject),]
 
     return ArrayTemplate
 
@@ -226,6 +224,21 @@ def int_sge_impl(context, builder, sig, args):
     return builder.icmp(lc.ICMP_SGE, *args)
 
 
+def int_ult_impl(context, builder, sig, args):
+    return builder.icmp(lc.ICMP_ULT, *args)
+
+
+def int_ule_impl(context, builder, sig, args):
+    return builder.icmp(lc.ICMP_ULE, *args)
+
+
+def int_ugt_impl(context, builder, sig, args):
+    return builder.icmp(lc.ICMP_UGT, *args)
+
+
+def int_uge_impl(context, builder, sig, args):
+    return builder.icmp(lc.ICMP_UGE, *args)
+
 def int_eq_impl(context, builder, sig, args):
     return builder.icmp(lc.ICMP_EQ, *args)
 
@@ -304,7 +317,10 @@ def int_negate_impl(context, builder, sig, args):
     [typ] = sig.args
     [val] = args
     val = context.cast(builder, val, typ, sig.return_type)
-    return builder.neg(val)
+    if sig.return_type in types.real_domain:
+        return builder.fsub(context.get_constant(sig.return_type, 0), val)
+    else:
+        return builder.neg(val)
 
 
 def int_invert_impl(context, builder, sig, args):
@@ -313,6 +329,14 @@ def int_invert_impl(context, builder, sig, args):
     val = context.cast(builder, val, typ, sig.return_type)
     return builder.xor(val, Constant.all_ones(val.type))
 
+
+builtin(implement('==', types.boolean, types.boolean)(int_eq_impl))
+builtin(implement('!=', types.boolean, types.boolean)(int_ne_impl))
+builtin(implement('<', types.boolean, types.boolean)(int_ult_impl))
+builtin(implement('<=', types.boolean, types.boolean)(int_ule_impl))
+builtin(implement('>', types.boolean, types.boolean)(int_ugt_impl))
+builtin(implement('>=', types.boolean, types.boolean)(int_uge_impl))
+builtin(implement('~', types.boolean)(int_invert_impl))
 
 for ty in types.integer_domain:
     builtin(implement('+', ty, ty)(int_add_impl))
@@ -329,6 +353,7 @@ for ty in types.integer_domain:
     builtin(implement('^', ty, ty)(int_xor_impl))
 
     builtin(implement('-', ty)(int_negate_impl))
+    builtin(implement(types.neg_type, ty)(int_negate_impl))
     builtin(implement('~', ty)(int_invert_impl))
 
 for ty in types.unsigned_domain:
@@ -336,10 +361,10 @@ for ty in types.unsigned_domain:
     builtin(implement('//', ty, ty)(int_ufloordiv_impl))
     builtin(implement('/', ty, ty)(int_utruediv_impl))
     builtin(implement('%', ty, ty)(int_urem_impl))
-    builtin(implement('<', ty, ty)(int_slt_impl))
-    builtin(implement('<=', ty, ty)(int_sle_impl))
-    builtin(implement('>', ty, ty)(int_sgt_impl))
-    builtin(implement('>=', ty, ty)(int_sge_impl))
+    builtin(implement('<', ty, ty)(int_ult_impl))
+    builtin(implement('<=', ty, ty)(int_ule_impl))
+    builtin(implement('>', ty, ty)(int_ugt_impl))
+    builtin(implement('>=', ty, ty)(int_uge_impl))
     builtin(implement('**', types.float64, ty)(int_upower_impl))
     # logical shift for unsigned
     builtin(implement('>>', ty, types.uint32)(int_lshr_impl))
@@ -566,7 +591,10 @@ def real_negate_impl(context, builder, sig, args):
     [typ] = sig.args
     [val] = args
     val = context.cast(builder, val, typ, sig.return_type)
-    return builder.fsub(context.get_constant(sig.return_type, 0), val)
+    if sig.return_type in types.real_domain:
+        return builder.fsub(context.get_constant(sig.return_type, 0), val)
+    else:
+        return builder.neg(val)
 
 
 for ty in types.real_domain:
@@ -589,6 +617,7 @@ for ty in types.real_domain:
     builtin(implement(types.print_type, ty)(real_print_impl))
 
     builtin(implement('-', ty)(real_negate_impl))
+    builtin(implement(types.neg_type, ty)(real_negate_impl))
 
 
 class Complex64(cgutils.Structure):
@@ -652,9 +681,9 @@ def complex128_power_impl(context, builder, sig, args):
     b = Complex128(context, builder, value=cb)
     c = Complex128(context, builder)
     module = cgutils.get_module(builder)
-    pa = a._getvalue()
-    pb = b._getvalue()
-    pc = c._getvalue()
+    pa = a._getpointer()
+    pb = b._getpointer()
+    pc = c._getpointer()
 
     # Optimize for square because cpow looses a lot of precsiion
     TWO = context.get_constant(types.float64, 2)
@@ -678,7 +707,7 @@ def complex128_power_impl(context, builder, sig, args):
             cpow = module.get_or_insert_function(fnty, name="numba.math.cpow")
             builder.call(cpow, (pa, pb, pc))
 
-    return pc
+    return builder.load(pc)
 
 
 def complex_add_impl(context, builder, sig, args):
@@ -814,6 +843,7 @@ for ty in types.number_domain:
     builtin(implement('not', ty)(number_not_impl))
     builtin(implement(bool, ty)(number_as_bool_impl))
 
+builtin(implement('not', types.boolean)(number_not_impl))
 
 #------------------------------------------------------------------------------
 
@@ -836,6 +866,67 @@ def slice3_impl(context, builder, sig, args):
     return slice3._getvalue()
 
 
+@builtin
+@implement(types.slice_type, types.intp, types.intp)
+def slice2_impl(context, builder, sig, args):
+    start, stop = args
+
+    slice3 = Slice(context, builder)
+    slice3.start = start
+    slice3.stop = stop
+    slice3.step = context.get_constant(types.intp, 1)
+
+    return slice3._getvalue()
+
+
+@builtin
+@implement(types.slice_type, types.intp, types.none)
+def slice1_start_impl(context, builder, sig, args):
+    start, stop = args
+
+    slice3 = Slice(context, builder)
+    slice3.start = start
+    maxint = (1 << (context.address_size - 1)) - 1
+    slice3.stop = context.get_constant(types.intp, maxint)
+    slice3.step = context.get_constant(types.intp, 1)
+
+    return slice3._getvalue()
+
+
+@builtin
+@implement(types.slice_type, types.none, types.intp)
+def slice1_stop_impl(context, builder, sig, args):
+    start, stop = args
+
+    slice3 = Slice(context, builder)
+    slice3.start = context.get_constant(types.intp, 0)
+    slice3.stop = stop
+    slice3.step = context.get_constant(types.intp, 1)
+
+    return slice3._getvalue()
+
+
+@builtin
+@implement(types.slice_type)
+def slice0_empty_impl(context, builder, sig, args):
+    assert not args
+
+    slice3 = Slice(context, builder)
+    slice3.start = context.get_constant(types.intp, 0)
+    maxint = (1 << (context.address_size - 1)) - 1
+    slice3.stop = context.get_constant(types.intp, maxint)
+    slice3.step = context.get_constant(types.intp, 1)
+
+    return slice3._getvalue()
+
+@builtin
+@implement(types.slice_type, types.none, types.none)
+def slice0_none_none_impl(context, builder, sig, args):
+    assert len(args) == 2
+    newsig = typing.signature(types.slice_type)
+    return slice0_empty_impl(context, builder, newsig, ())
+
+
 class RangeState32(cgutils.Structure):
     _fields = [('start', types.int32),
                ('stop',  types.int32),
@@ -843,10 +934,10 @@ class RangeState32(cgutils.Structure):
 
 
 class RangeIter32(cgutils.Structure):
-    _fields = [('iter',  types.int32),
+    _fields = [('iter',  types.CPointer(types.int32)),
                ('stop',  types.int32),
                ('step',  types.int32),
-               ('count', types.int32)]
+               ('count', types.CPointer(types.int32))]
 
 
 class RangeState64(cgutils.Structure):
@@ -856,15 +947,15 @@ class RangeState64(cgutils.Structure):
 
 
 class RangeIter64(cgutils.Structure):
-    _fields = [('iter',  types.int64),
+    _fields = [('iter',  types.CPointer(types.int64)),
                ('stop',  types.int64),
                ('step',  types.int64),
-               ('count', types.int64)]
+               ('count', types.CPointer(types.int64))]
 
 
 def make_unituple_iter(tupiter):
     class UniTupleIter(cgutils.Structure):
-        _fields = [('index',  types.intp),
+        _fields = [('index',  types.CPointer(types.intp)),
                    ('tuple',  tupiter.unituple,)]
     return UniTupleIter
 
@@ -908,6 +999,34 @@ def range3_32_impl(context, builder, sig, args):
     return state._getvalue()
 
 
+def getiter_range_generic(context, builder, iterobj, start, stop, step):
+    diff = builder.sub(stop, start)
+    intty = start.type
+    zero = Constant.int(intty, 0)
+    one = Constant.int(intty, 1)
+    pos_diff = builder.icmp(lc.ICMP_SGT, diff, zero)
+    pos_step = builder.icmp(lc.ICMP_SGT, step, zero)
+    sign_differs = builder.xor(pos_diff, pos_step)
+    zero_step = builder.icmp(lc.ICMP_EQ, step, zero)
+
+    with cgutils.if_unlikely(builder, zero_step):
+        # step shouldn't be zero
+        context.return_errcode(builder, 1)
+
+    with cgutils.ifelse(builder, sign_differs) as (then, orelse):
+        with then:
+            builder.store(zero, iterobj.count)
+
+        with orelse:
+            rem = builder.srem(diff, step)
+            uneven = builder.icmp(lc.ICMP_SGT, rem, zero)
+            newcount = builder.add(builder.sdiv(diff, step),
+                                   builder.select(uneven, one, zero))
+            builder.store(newcount, iterobj.count)
+
+    return iterobj._getvalue()
+
+
 @builtin
 @implement('getiter', types.range_state32_type)
 def getiter_range32_impl(context, builder, sig, args):
@@ -919,12 +1038,17 @@ def getiter_range32_impl(context, builder, sig, args):
     stop = state.stop
     step = state.step
 
-    iterobj.iter = start
+    startptr = cgutils.alloca_once(builder, start.type)
+    builder.store(start, startptr)
+
+    countptr = cgutils.alloca_once(builder, start.type)
+
+    iterobj.iter = startptr
     iterobj.stop = stop
     iterobj.step = step
-    iterobj.count = builder.sdiv(builder.sub(stop, start), step)
+    iterobj.count = countptr
 
-    return iterobj._getvalue()
+    return getiter_range_generic(context, builder, iterobj, start, stop, step)
 
 
 @builtin
@@ -933,10 +1057,13 @@ def iternext_range32_impl(context, builder, sig, args):
     (value,) = args
     iterobj = RangeIter32(context, builder, value)
 
-    res = iterobj.iter
+    res = builder.load(iterobj.iter)
     one = context.get_constant(types.int32, 1)
-    iterobj.count = builder.sub(iterobj.count, one)
-    iterobj.iter = builder.add(res, iterobj.step)
+
+    countptr = iterobj.count
+    builder.store(builder.sub(builder.load(countptr), one), countptr)
+
+    builder.store(builder.add(res, iterobj.step), iterobj.iter)
 
     return res
 
@@ -948,7 +1075,7 @@ def itervalid_range32_impl(context, builder, sig, args):
     iterobj = RangeIter32(context, builder, value)
 
     zero = context.get_constant(types.int32, 0)
-    gt = builder.icmp(lc.ICMP_SGE, iterobj.count, zero)
+    gt = builder.icmp(lc.ICMP_SGE, builder.load(iterobj.count), zero)
     return gt
 
 
@@ -1003,12 +1130,17 @@ def getiter_range64_impl(context, builder, sig, args):
     stop = state.stop
     step = state.step
 
-    iterobj.iter = start
+    startptr = cgutils.alloca_once(builder, start.type)
+    builder.store(start, startptr)
+
+    countptr = cgutils.alloca_once(builder, start.type)
+
+    iterobj.iter = startptr
     iterobj.stop = stop
     iterobj.step = step
-    iterobj.count = builder.sdiv(builder.sub(stop, start), step)
+    iterobj.count = countptr
 
-    return iterobj._getvalue()
+    return getiter_range_generic(context, builder, iterobj, start, stop, step)
 
 
 @builtin
@@ -1017,10 +1149,10 @@ def iternext_range64_impl(context, builder, sig, args):
     (value,) = args
     iterobj = RangeIter64(context, builder, value)
 
-    res = iterobj.iter
+    res = builder.load(iterobj.iter)
     one = context.get_constant(types.int64, 1)
-    iterobj.count = builder.sub(iterobj.count, one)
-    iterobj.iter = builder.add(res, iterobj.step)
+    builder.store(builder.sub(builder.load(iterobj.count), one), iterobj.count)
+    builder.store(builder.add(res, iterobj.step), iterobj.iter)
 
     return res
 
@@ -1032,7 +1164,7 @@ def itervalid_range64_impl(context, builder, sig, args):
     iterobj = RangeIter64(context, builder, value)
 
     zero = context.get_constant(types.int64, 0)
-    gt = builder.icmp(lc.ICMP_SGE, iterobj.count, zero)
+    gt = builder.icmp(lc.ICMP_SGE, builder.load(iterobj.count), zero)
     return gt
 
 
@@ -1044,8 +1176,14 @@ def getiter_unituple(context, builder, sig, args):
 
     tupitercls = context.make_unituple_iter(types.UniTupleIter(tupty))
     iterval = tupitercls(context, builder)
-    iterval.index = context.get_constant(types.intp, 0)
+
+    index0 = context.get_constant(types.intp, 0)
+    indexptr = cgutils.alloca_once(builder, index0.type)
+    builder.store(index0, indexptr)
+
+    iterval.index = indexptr
     iterval.tuple = tup
+
     return iterval._getvalue()
 
 
@@ -1058,13 +1196,16 @@ def iternextsafe_unituple(context, builder, sig, args):
     tupitercls = context.make_unituple_iter(tupiterty)
     iterval = tupitercls(context, builder, value=tupiter)
     tup = iterval.tuple
-    idx = iterval.index
+    idxptr = iterval.index
+    idx = builder.load(idxptr)
 
     # TODO lack out-of-bound check
     getitem_sig = typing.signature(sig.return_type, tupiterty.unituple,
                                    types.intp)
     res = getitem_unituple(context, builder, getitem_sig, [tup, idx])
-    iterval.index = builder.add(idx, context.get_constant(types.intp, 1))
+
+    nidx = builder.add(idx, context.get_constant(types.intp, 1))
+    builder.store(nidx, iterval.index)
     return res
 
 
@@ -1101,7 +1242,7 @@ def getitem_unituple(context, builder, sig, args):
 
 @builtin
 @implement('getitem', types.Kind(types.Array), types.intp)
-def getitem_array1d(context, builder, sig, args):
+def getitem_array1d_intp(context, builder, sig, args):
     aryty, _ = sig.args
     if aryty.ndim != 1:
         # TODO
@@ -1111,31 +1252,44 @@ def getitem_array1d(context, builder, sig, args):
 
     arystty = make_array(aryty)
     ary = arystty(context, builder, ary)
-    dataptr = ary.data
+    ptr = cgutils.get_item_pointer(builder, aryty, ary, [idx], wraparound=True)
+    return context.unpack_value(builder, aryty.dtype, ptr)
 
-    if True or WARPAROUND:  # TODO target flag
-        ZERO = context.get_constant(types.intp, 0)
-        negative = builder.icmp(lc.ICMP_SLT, idx, ZERO)
-        bbnormal = builder.basic_block
-        with cgutils.if_unlikely(builder, negative):
-            # Index is negative, wraparound
-            [nelem] = cgutils.unpack_tuple(builder, ary.shape, 1)
-            wrapped = builder.add(nelem, idx)
-            bbwrapped = builder.basic_block
 
-        where = builder.phi(idx.type)
-        where.add_incoming(idx, bbnormal)
-        where.add_incoming(wrapped, bbwrapped)
+@builtin
+@implement('getitem', types.Kind(types.Array), types.slice3_type)
+def getitem_array1d_slice(context, builder, sig, args):
+    aryty, _ = sig.args
+    if aryty.ndim != 1:
+        # TODO
+        raise NotImplementedError("1D indexing into %dD array" % aryty.ndim)
 
-        ptr = builder.gep(dataptr, [where])
-    else:
-        # No wraparound
-        ptr = builder.gep(dataptr, [idx])
+    ary, idx = args
 
-    if context.is_struct_type(aryty.dtype):
-        return ptr
-    else:
-        return builder.load(ptr)
+    arystty = make_array(aryty)
+    ary = arystty(context, builder, value=ary)
+
+    shapes = cgutils.unpack_tuple(builder, ary.shape, aryty.ndim)
+
+    slicestruct = Slice(context, builder, value=idx)
+    cgutils.normalize_slice(builder, slicestruct, shapes[0])
+
+    dataptr = cgutils.get_item_pointer(builder, aryty, ary,
+                                       [slicestruct.start],
+                                       wraparound=True)
+
+    retstty = make_array(sig.return_type)
+    retary = retstty(context, builder)
+
+    shape = cgutils.get_range_from_slice(builder, slicestruct)
+    retary.shape = cgutils.pack_array(builder, [shape])
+
+    stride = cgutils.get_strides_from_slice(builder, aryty.ndim, ary.strides,
+                                             slicestruct, 0)
+    retary.strides = cgutils.pack_array(builder, [stride])
+    retary.data = dataptr
+
+    return retary._getvalue()
 
 
 @builtin
@@ -1145,42 +1299,98 @@ def getitem_array_unituple(context, builder, sig, args):
     aryty, idxty = sig.args
     ary, idx = args
 
+    ndim = aryty.ndim
     arystty = make_array(aryty)
     ary = arystty(context, builder, ary)
 
-    # TODO: other layout
-    indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
-    # TODO warparound flag
-    ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                   wraparound=True)
+    if idxty.dtype == types.slice3_type:
+        # Slicing
+        raw_slices = cgutils.unpack_tuple(builder, idx, aryty.ndim)
+        slices = [Slice(context, builder, value=sl) for sl in raw_slices]
+        for sl, sh in zip(slices,
+                          cgutils.unpack_tuple(builder, ary.shape, ndim)):
+            cgutils.normalize_slice(builder, sl, sh)
+        indices = [sl.start for sl in slices]
+        dataptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
+                                           wraparound=True)
+        # Build array
+        retstty = make_array(sig.return_type)
+        retary = retstty(context, builder)
+        retary.data = dataptr
+        shapes = [cgutils.get_range_from_slice(builder, sl)
+                  for sl in slices]
+        retary.shape = cgutils.pack_array(builder, shapes)
+        strides = [cgutils.get_strides_from_slice(builder, ndim, ary.strides,
+                                                  sl, i)
+                   for i, sl in enumerate(slices)]
 
-    if context.is_struct_type(aryty.dtype):
-        return ptr
+        retary.strides = cgutils.pack_array(builder, strides)
+
+        return retary._getvalue()
     else:
-        return builder.load(ptr)
+        # Indexing
+        assert idxty.dtype == types.intp
+        indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
+        indices = [context.cast(builder, i, t, types.intp)
+                   for t, i in zip(idxty, indices)]
+        # TODO warparound flag
+        ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
+                                       wraparound=True)
+
+        return context.unpack_value(builder, aryty.dtype, ptr)
+
 
 @builtin
 @implement('getitem', types.Kind(types.Array),
-           types.Kind(types.UniTuple))
-def getitem_array_unituple(context, builder, sig, args):
+           types.Kind(types.Tuple))
+def getitem_array_tuple(context, builder, sig, args):
     aryty, idxty = sig.args
     ary, idx = args
 
     arystty = make_array(aryty)
     ary = arystty(context, builder, ary)
 
-    # TODO: other layout
-    indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
-    indices = [context.cast(builder, i, t, types.intp)
-               for t, i in zip(idxty, indices)]
-    # TODO warparound flag
-    ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                   wraparound=True)
+    ndim = aryty.ndim
+    if isinstance(sig.return_type, types.Array):
+        # Slicing
+        raw_indices = cgutils.unpack_tuple(builder, idx, aryty.ndim)
+        start = []
+        shapes = []
+        strides = []
 
-    if context.is_struct_type(aryty.dtype):
-        return ptr
+        oshapes = cgutils.unpack_tuple(builder, ary.shape, ndim)
+        for ax, (indexval, idxty) in enumerate(zip(raw_indices, idxty)):
+            if idxty == types.slice3_type:
+                slice = Slice(context, builder, value=indexval)
+                cgutils.normalize_slice(builder, slice, oshapes[ax])
+                start.append(slice.start)
+                shapes.append(cgutils.get_range_from_slice(builder, slice))
+                strides.append(cgutils.get_strides_from_slice(builder, ndim,
+                                                              ary.strides,
+                                                              slice, ax))
+            else:
+                ind = context.cast(builder, indexval, idxty, types.intp)
+                start.append(ind)
+
+        dataptr = cgutils.get_item_pointer(builder, aryty, ary, start,
+                                           wraparound=True)
+        # Build array
+        retstty = make_array(sig.return_type)
+        retary = retstty(context, builder)
+        retary.data = dataptr
+        retary.shape = cgutils.pack_array(builder, shapes)
+        retary.strides = cgutils.pack_array(builder, strides)
+        return retary._getvalue()
     else:
-        return builder.load(ptr)
+        # Indexing
+        indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
+        indices = [context.cast(builder, i, t, types.intp)
+                   for t, i in zip(idxty, indices)]
+        # TODO warparound flag
+        ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
+                                       wraparound=True)
+
+        return context.unpack_value(builder, aryty.dtype, ptr)
 
 
 @builtin
@@ -1192,19 +1402,13 @@ def setitem_array1d(context, builder, sig, args):
 
     arystty = make_array(aryty)
     ary = arystty(context, builder, ary)
-    dataptr = ary.data
 
-    ptr = builder.gep(dataptr, [idx])
+    ptr = cgutils.get_item_pointer(builder, aryty, ary, [idx],
+                                   wraparound=True)
+
     val = context.cast(builder, val, valty, aryty.dtype)
 
-    if context.is_struct_type(aryty.dtype):
-        stval = builder.load(val)
-    else:
-        stval = val
-    assert stval.type == ptr.type.pointee, (str(stval.type),
-                                            str(ptr.type.pointee))
-    builder.store(stval, ptr)
-    return
+    context.pack_value(builder, aryty.dtype, val, ptr)
 
 
 @builtin
@@ -1219,13 +1423,31 @@ def setitem_array_unituple(context, builder, sig, args):
 
     # TODO: other than layout
     indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
+    indices = [context.cast(builder, i, t, types.intp)
+               for t, i in zip(idxty, indices)]
     ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
                                    wraparound=True)
-    if context.is_struct_type(aryty.dtype):
-        stval = builder.load(val)
-    else:
-        stval = val
-    builder.store(stval, ptr)
+    context.pack_value(builder, aryty.dtype, val, ptr)
+
+@builtin
+@implement('setitem', types.Kind(types.Array),
+           types.Kind(types.Tuple), types.Any)
+def setitem_array_tuple(context, builder, sig, args):
+    aryty, idxty, valty = sig.args
+    ary, idx, val = args
+
+    arystty = make_array(aryty)
+    ary = arystty(context, builder, ary)
+
+    # TODO: other than layout
+    indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
+    indices = [context.cast(builder, i, t, types.intp)
+               for t, i in zip(idxty, indices)]
+    ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
+                                   wraparound=True)
+    context.pack_value(builder, aryty.dtype, val, ptr)
+
+
 
 
 @builtin
@@ -1244,11 +1466,8 @@ def setitem_array_tuple(context, builder, sig, args):
                for t, i in zip(idxty, indices)]
     ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
                                    wraparound=True)
-    if context.is_struct_type(aryty.dtype):
-        stval = builder.load(val)
-    else:
-        stval = val
-    builder.store(stval, ptr)
+
+    context.pack_value(builder, aryty.dtype, val, ptr)
 
 
 @builtin
@@ -1272,6 +1491,7 @@ def array_shape(context, builder, typ, value):
     array = arrayty(context, builder, value)
     return array.shape
 
+
 @builtin_attr
 @impl_attribute(types.Array, "strides", types.Kind(types.UniTuple))
 def array_strides(context, builder, typ, value):
@@ -1279,10 +1499,21 @@ def array_strides(context, builder, typ, value):
     array = arrayty(context, builder, value)
     return array.strides
 
+
 @builtin_attr
 @impl_attribute(types.Array, "ndim", types.intp)
 def array_ndim(context, builder, typ, value):
     return context.get_constant(types.intp, typ.ndim)
+
+
+@builtin_attr
+@impl_attribute(types.Array, "size", types.intp)
+def array_size(context, builder, typ, value):
+    arrayty = make_array(typ)
+    array = arrayty(context, builder, value)
+    dims = cgutils.unpack_tuple(builder, array.shape, typ.ndim)
+    return reduce(builder.mul, dims[1:], dims[0])
+
 
 #-------------------------------------------------------------------------------
 
@@ -1363,6 +1594,30 @@ def min_impl(context, builder, sig, args):
     typvals = zip(argtys, args)
     resty, resval = reduce(domax, typvals)
     return resval
+
+@builtin
+@implement(round, types.float32)
+def round_impl_f32(context, builder, sig, args):
+    module = cgutils.get_module(builder)
+    fnty = Type.function(Type.float(), [Type.float()])
+    if utils.IS_PY3:
+        fn = module.get_or_insert_function(fnty, name="numba.roundf")
+    else:
+        fn = module.get_or_insert_function(fnty, name="roundf")
+    assert fn.is_declaration
+    return builder.call(fn, args)
+
+@builtin
+@implement(round, types.float64)
+def round_impl_f64(context, builder, sig, args):
+    module = cgutils.get_module(builder)
+    fnty = Type.function(Type.double(), [Type.double()])
+    if utils.IS_PY3:
+        fn = module.get_or_insert_function(fnty, name="numba.round")
+    else:
+        fn = module.get_or_insert_function(fnty, name="round")
+    assert fn.is_declaration
+    return builder.call(fn, args)
 
 #-------------------------------------------------------------------------------
 

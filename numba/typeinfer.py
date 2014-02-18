@@ -30,10 +30,13 @@ if PYVERSION < (3, 0):
 
 
 class TypingError(Exception):
-    def __init__(self, msg, loc):
+    def __init__(self, msg, loc=None):
         self.msg = msg
         self.loc = loc
-        super(TypingError, self).__init__("%s\n%s" % (msg, loc.strformat()))
+        if loc:
+            super(TypingError, self).__init__("%s\n%s" % (msg, loc.strformat()))
+        else:
+            super(TypingError, self).__init__("%s" % (msg,))
 
 
 class TypeVar(object):
@@ -54,8 +57,8 @@ class TypeVar(object):
                 [expect] = list(self.typeset)
                 for ty in types:
                     if self.context.type_compatibility(ty, expect) is None:
-                        raise TypingError("No convertsion from %s to %s" %
-                                          (ty, expect))
+                        raise TypingError("No convertsion from %s to %s for "
+                                          "'%s'" % (ty, expect, self.var))
         else:
             self.typeset |= set(types)
 
@@ -292,12 +295,14 @@ class TypeInferer(object):
         typdict = utils.UniqueDict()
         for var, tv in self.typevars.items():
             if len(tv) == 1:
-                typdict[var] = tv.getone()
+                unified = tv.getone()
             elif len(tv) == 0:
                 raise TypeError("Variable %s has no type" % var)
             else:
-                typdict[var] = self.context.unify_types(*tv.get())
-
+                unified = self.context.unify_types(*tv.get())
+            if unified == types.pyobject:
+                raise TypingError("Var '%s' unified to object: %s" % (var, tv))
+            typdict[var] = unified
         retty = self.get_return_type(typdict)
         fntys = self.get_function_types(typdict)
         return typdict, retty, fntys
@@ -332,11 +337,6 @@ class TypeInferer(object):
 
         return calltypes
 
-    def guard_return_type(self, ty):
-        if isinstance(ty, types.Array):
-            msg = "Cannot return array in nopython mode"
-            raise TypingError(msg, loc=self.blocks[0].loc)
-
     def get_return_type(self, typemap):
         rettypes = set()
         for blk in utils.dict_itervalues(self.blocks):
@@ -349,13 +349,11 @@ class TypeInferer(object):
             rettypes = rettypes - set([types.none])
             if rettypes:
                 unified = self.context.unify_types(*rettypes)
-                self.guard_return_type(unified)
                 return types.Optional(unified)
             else:
                 return types.none
         else:
             unified = self.context.unify_types(*rettypes)
-            self.guard_return_type(unified)
             return unified
 
     def get_state_token(self):
@@ -403,8 +401,8 @@ class TypeInferer(object):
             self.typevars[target.name].lock(ty)
         elif const is None:
             self.typevars[target.name].lock(types.none)
-        elif isinstance(const, str):
-            self.typevars[target.name].lock(types.string)
+        # elif isinstance(const, str):
+        #     self.typevars[target.name].lock(types.string)
         elif isinstance(const, complex):
             self.typevars[target.name].lock(types.complex128)
         elif isinstance(const, tuple):
@@ -501,7 +499,6 @@ class TypeInferer(object):
             constrain = BuildTupleConstrain(target.name, items=expr.items,
                                             loc=inst.loc)
             self.constrains.append(constrain)
-
         else:
             raise NotImplementedError(type(expr), expr)
 

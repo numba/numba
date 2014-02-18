@@ -28,3 +28,7 @@ test:
     - unittest2       [py26]
   files:
     - mandel.py
+  commands:
+    - pycc -h
+    - numba -h
+

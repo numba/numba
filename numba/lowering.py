@@ -1,10 +1,8 @@
 from __future__ import print_function, division, absolute_import
-import inspect
 from collections import defaultdict
 from llvm.core import Type, Builder, Module
 import llvm.core as lc
-from numba import ctypes_support as ctypes
-from numba import ir, types, typing, cgutils, utils, config
+from numba import ir, types, cgutils, utils, config
 
 
 try:
@@ -43,8 +41,8 @@ class FunctionDescriptor(object):
 
 def _describe(interp):
     func = interp.bytecode.func
-    fname = func.__name__
-    pymod = inspect.getmodule(func)
+    fname = interp.bytecode.func_name
+    pymod = interp.bytecode.module
     doc = func.__doc__ or ''
     args = interp.argspec.args
     kws = ()        # TODO
@@ -91,10 +89,12 @@ class BaseLower(object):
         self.function = context.declare_function(self.module, fndesc)
         self.entry_block = self.function.append_basic_block('entry')
         self.builder = Builder.new(self.entry_block)
+        # self.builder = cgutils.VerboseProxy(self.builder)
 
         # Internal states
         self.blkmap = {}
         self.varmap = {}
+        self.firstblk = min(self.fndesc.blocks.keys())
 
         # Subclass initialization
         self.init()
@@ -128,10 +128,12 @@ class BaseLower(object):
         self.post_lower()
         # Close entry block
         self.builder.position_at_end(self.entry_block)
-        self.builder.branch(self.blkmap[0])
+        self.builder.branch(self.blkmap[self.firstblk])
 
-        if config.DEBUG:
+        if config.DUMP_LLVM:
+            print(("LLVM DUMP %s" % self.fndesc.qualified_name).center(80,'-'))
             print(self.module)
+            print('=' * 80)
         self.module.verify()
 
     def init_argument(self, arg):
@@ -164,8 +166,11 @@ class Lower(BaseLower):
             cond = self.loadvar(inst.cond.name)
             tr = self.blkmap[inst.truebr]
             fl = self.blkmap[inst.falsebr]
-            assert cond.type == Type.int(1), ("cond is not i1: %s" % inst)
-            self.builder.cbranch(cond, tr, fl)
+
+            condty = self.typeof(inst.cond.name)
+            pred = self.context.cast(self.builder, cond, condty, types.boolean)
+            assert pred.type == Type.int(1), ("cond is not i1: %s" % pred.type)
+            self.builder.cbranch(pred, tr, fl)
 
         elif isinstance(inst, ir.Jump):
             target = self.blkmap[inst.target]
@@ -378,8 +383,8 @@ class Lower(BaseLower):
 
     def storevar(self, value, name):
         ptr = self.getvar(name)
-        assert value.type == ptr.type.pointee, (str(value.type),
-                                                str(ptr.type.pointee))
+        assert value.type == ptr.type.pointee,\
+            "store %s to ptr of %s" % (value.type, ptr.type.pointee)
         self.builder.store(value, ptr)
 
     def alloca(self, name, type):
@@ -572,7 +577,7 @@ class PyLower(BaseLower):
         elif expr.op == 'itervalid':
             iterstate = self.loadvar(expr.value.name)
             _, valid = self.unpack_iter(iterstate)
-            return valid
+            return self.builder.trunc(valid, Type.int(1))
         elif expr.op == 'getitem':
             target = self.loadvar(expr.target.name)
             index = self.loadvar(expr.index.name)
@@ -699,16 +704,18 @@ class PyLower(BaseLower):
     def pack_iter(self, obj):
         iterstate = PyIterState(self.context, self.builder)
         iterstate.iterator = obj
-        iterstate.valid = cgutils.true_bit
-        return iterstate._getvalue()
+        iterstate.valid = cgutils.true_byte
+        return iterstate._getpointer()
 
     def unpack_iter(self, state):
-        iterstate = PyIterState(self.context, self.builder, value=state)
+        iterstate = PyIterState(self.context, self.builder, ref=state)
         return tuple(iterstate)
 
     def set_iter_valid(self, state, item):
-        iterstate = PyIterState(self.context, self.builder, value=state)
-        iterstate.valid = cgutils.is_not_null(self.builder, item)
+        iterstate = PyIterState(self.context, self.builder, ref=state)
+        iterstate.valid = cgutils.as_bool_byte(self.builder,
+                                               cgutils.is_not_null(self.builder,
+                                                                   item))
 
         with cgutils.if_unlikely(self.builder, self.is_null(item)):
             self.check_occurred()
