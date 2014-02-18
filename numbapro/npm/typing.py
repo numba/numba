@@ -216,16 +216,16 @@ class Infer(object):
         elif (isinstance(value, Exception) or
                 (isinstance(value, type) and issubclass(value, Exception))):
             return types.exception_type
-        elif callable(value):
-            return types.function_type
         elif isinstance(value, macro.Macro):
             return types.macro_type
         elif isinstance(value, str):
             return types.const_string_type(value)
         elif isinstance(value, numpy.ndarray):
             return types.const_array_type(value)
-        elif getattr(value, '_npm_context_'):
+        elif hasattr(value, '_npm_context_'):
             return types.user_function_type
+        elif callable(value):
+            return types.function_type
     
     def expand_macro(self, inst):
         if inst.value.callable:

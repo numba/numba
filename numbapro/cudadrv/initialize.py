@@ -1,3 +1,7 @@
+from numba.targets.descriptors import TargetDescriptor
+from numba.targets.options import TargetOptions
+from numba.targets.registry import target_registry
+from numba.npyufunc import Vectorize, GUVectorize
 #
 # Public
 #
@@ -29,23 +33,74 @@ def initialize():
 # Privates
 #
 
+
+class CUDATargetOptions(TargetOptions):
+    OPTIONS = {}
+
+
+class CUDATarget(TargetDescriptor):
+    options = CUDATargetOptions
+
+
+class CUDADispatcher(object):
+    targetdescr = CUDATarget
+
+    def __init__(self, py_func, locals={}, targetoptions={}):
+        assert not locals
+        self.py_func = py_func
+        self.targetoptions = targetoptions
+        self.doc = py_func.__doc__
+        self.compiled = None
+
+    def compile(self, sig, locals={}, **targetoptions):
+        assert self.compiled is None
+        assert not locals
+        options = self.targetoptions.copy()
+        options.update(targetoptions)
+        from numbapro.cudapy import jit
+        kernel = jit(sig, **options)(self.py_func)
+        self.compiled = kernel
+        self._npm_context_ = kernel._npm_context_
+
+    def __call__(self, *args, **kws):
+        return self.compiled(*args, **kws)
+
+    def disable_compile(self, val=True):
+        """Disable the compilation of new signatures at call time.
+        """
+        assert val
+        assert self.compiled is not None
+
+    def configure(self, *args, **kws):
+        return self.compiled.configure(*args, **kws)
+
+    def __getitem__(self, *args):
+        return self.compiled.__getitem__(*args)
+
+
+class CUDAPoison(object):
+    pass
+
+
 def _init_driver():
     from .driver import Driver
     Driver() # raises CudaSupportError
+
 
 def _init_nvvm():
     from .nvvm import NVVM
     NVVM() # raises NvvmSupportError
 
+
 def _init_numba_jit_registry():
-    from numbapro.cudapy.decorators import jit
-    from numba.decorators import jit_targets
-    jit_targets[('gpu', 'ast')] = jit
-    # cannot initialize autojit
+    from numbapro.cudavec.vectorizers import CudaVectorize, CudaGUFuncVectorize
+    target_registry['gpu'] = CUDADispatcher
+    Vectorize.target_registry['gpu'] = CudaVectorize
+    GUVectorize.target_registry['gpu'] = CudaGUFuncVectorize
 
 def _init_poison_jit_registry():
-    from numba.decorators import jit_targets
-    def poison(*args, **kws):
-        raise last_error
-    jit_targets[('gpu', 'ast')] = poison
-
+    # def poison(*args, **kws):
+    #     raise last_error
+    target_registry['gpu'] = CUDAPoison
+    Vectorize.target_registry['gpu'] = CUDAPoison
+    GUVectorize.target_registry['gpu'] = CUDAPoison

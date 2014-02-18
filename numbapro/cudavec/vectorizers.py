@@ -1,11 +1,13 @@
 import operator
+import warnings
 import numpy
+from numba.npyufunc.sigparse import parse_signature
+from numba import sigutils
 import llvm.core as lc
 from numbapro.npm import types, cgutils, aryutils
 from numbapro.cudapy.execution import CUDAKernel
 from numbapro.cudapy import ptx, compiler
 from . import dispatch
-from numbapro.vectorizers._common import parse_signature
 
 vectorizer_stager_source = '''
 def __vectorized_%(name)s(%(args)s, __out__):
@@ -13,19 +15,38 @@ def __vectorized_%(name)s(%(args)s, __out__):
     __out__[__tid__] = __core__(%(argitems)s)
 '''
 
+def to_dtype(ty):
+    return numpy.dtype(str(ty))
+
+
 class CudaVectorize(object):
-    def __init__(self, func):
+    def __init__(self, func, targetoptions={}):
+        assert not targetoptions
         self.pyfunc = func
         self.kernelmap = {} # { arg_dtype: (return_dtype), cudakernel }
 
-    def add(self, restype, argtypes):
+    def add(self, sig=None, argtypes=None, restype=None):
+        # Handle argtypes
+        if argtypes is not None:
+            warnings.warn("Keyword argument argtypes is deprecated",
+                          DeprecationWarning)
+            assert sig is None
+            if restype is None:
+                sig = tuple(argtypes)
+            else:
+                sig = restype(*argtypes)
+        del argtypes
+        del restype
         from numbapro import cuda
         # compile core as device function
-        cudevfn = cuda.jit(restype, argtypes,
+        args, return_type = sigutils.normalize_signature(sig)
+        sig = return_type(*args)
+
+        cudevfn = cuda.jit(sig,
                            device=True, inline=True)(self.pyfunc)
 
         # generate outer loop as kernel
-        args = ['a%d' % i for i in range(len(argtypes))]
+        args = ['a%d' % i for i in range(len(sig.args))]
         funcname = self.pyfunc.__name__
         fmts = dict(name=funcname,
                     args = ', '.join(args),
@@ -37,11 +58,11 @@ class CudaVectorize(object):
         exec kernelsource in glbl
 
         stager = glbl['__vectorized_%s' % funcname]
-        kargs = [a[:] for a in list(argtypes) + [restype]]
+        kargs = [a[:] for a in list(sig.args) + [sig.return_type]]
         kernel = cuda.jit(argtypes=kargs)(stager)
 
-        argdtypes = tuple(t.get_dtype() for t in argtypes)
-        resdtype = restype.get_dtype()
+        argdtypes = tuple(to_dtype(t) for t in sig.args)
+        resdtype = to_dtype(sig.return_type)
         self.kernelmap[tuple(argdtypes)] = resdtype, kernel
 
     def build_ufunc(self):
@@ -52,16 +73,28 @@ class CudaVectorize(object):
 
 class CudaGUFuncVectorize(object):
 
-    def __init__(self, func, sig):
+    def __init__(self, func, sig, targetoptions={}):
+        assert not targetoptions
         self.pyfunc = func
         self.signature = sig
         self.inputsig, self.outputsig = parse_signature(self.signature)
         assert len(self.outputsig) == 1, "only support 1 output"
         self.kernelmap = {}  # { arg_dtype: (return_dtype), cudakernel }
 
-    def add(self, argtypes, restype=None):
+    def add(self, sig=None, argtypes=None, restype=None):
+        # Handle argtypes
+        if argtypes is not None:
+            warnings.warn("Keyword argument argtypes is deprecated",
+                          DeprecationWarning)
+            assert sig is None
+            if restype is None:
+                sig = tuple(argtypes)
+            else:
+                sig = restype(*argtypes)
+        del argtypes
+        del restype
         from numbapro import cuda
-        cudevfn = cuda.jit(argtypes=argtypes,
+        cudevfn = cuda.jit(sig,
                            device=True, inline=True)(self.pyfunc)
 
         dims = [len(x) for x in self.inputsig]
@@ -83,7 +116,7 @@ class CudaGUFuncVectorize(object):
 
 def build_gufunc_stager(devfn, dims):
     lmod, lfunc, return_type, args, excs = devfn._npm_context_
-    assert return_type is None, "must return nothing"
+    assert return_type == types.void, "must return nothing"
 
     outer_args = []
     for arg, dim in zip(args, dims):

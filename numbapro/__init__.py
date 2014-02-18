@@ -2,22 +2,11 @@ from ._version import get_versions
 __version__ = get_versions()['version']
 del get_versions
 
-
 import numba
 from numba import *
 from numbapro.decorators import autojit, jit
 from numbapro.vectorizers import vectorize, guvectorize
 
-from numba.special import *
-from numba.error import *
-from numba import typedlist, typedtuple
-from numba import (is_registered,
-                   register,
-                   register_inferer,
-                   get_inferer,
-                   register_unbound,
-                   register_callable)
-__all__ = numba.__all__ + ['vectorize', 'guvectorize', 'prange']
 
 # Delay import of CUDA to prevent the CUDA driver from messing with the virtual
 # memory space for applications that does not use the GPU feature.

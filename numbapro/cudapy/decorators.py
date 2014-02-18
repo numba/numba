@@ -1,5 +1,6 @@
 import numpy
 import numba
+from numba import sigutils
 from numbapro.npm import types
 from numbapro.cudapy import compiler
 from numbapro.cudapy.execution import CUDAKernelBase
@@ -27,22 +28,15 @@ NUMBA_TO_NPM_TYPES = {
     numba.bool_: types.boolean,
 }
 
-def _eval_type_string(text):
-    func = eval(text, vars(numba))
-    assert func.is_function, "not a function signature"
-    return func.return_type, func.args
 
 def _map_numba_to_npm_types(typ):
-    if typ.is_array:
+    if isinstance(typ, numba.types.Array):
         elem = _map_numba_to_npm_types(typ.dtype)
         ndim = typ.ndim
-        order = 'A'
-        if typ.is_c_contig:
-            order = 'C'
-        elif typ.is_f_contig:
-            order = 'F'
+        order = typ.layout
         return types.arraytype(elem, ndim, order)
     return NUMBA_TO_NPM_TYPES[typ]
+
 
 def jit(restype=None, argtypes=None, device=False, inline=False, bind=True,
         link=[], debug=False, **kws):
@@ -167,20 +161,16 @@ def declare_device(name, restype=None, argtypes=None):
 
 def convert_types(restype, argtypes):
     # eval type string
-    if isinstance(restype, str):
-        restype, argtypes = _eval_type_string(restype)
-
-    if argtypes is None:
-        # must be a function then
-        assert restype.is_function, "%s is not a function" % restype
-        argtypes = restype.args
-        restype = restype.return_type
+    if sigutils.is_signature(restype):
+        assert argtypes is None
+        argtypes, restype = sigutils.normalize_signature(restype)
 
     # convert Numba types to NPM types
     try:
         restype = (restype
                    if restype is None
                    else _map_numba_to_npm_types(restype))
+
         argtypes = [_map_numba_to_npm_types(t) for t in argtypes]
     except KeyError, e:
         raise TypeError("invalid type for CUDA: %s" % e)
