@@ -8,6 +8,32 @@
 Release Notes
 ======================
 
+Version 0.12.1
+--------------
+
+This version fixed many regressions reported by user for the 0.12 release.
+This release contains a new loop-lifting mechanism that specializes certains
+loop patterns for nopython mode compilation.  This avoid direct support
+for heap-allocating and other very dynamic operations.
+
+Improvements:
+
+* Add loop-lifting--jit-ing loops in nopython for object mode code. This allows
+  functions to allocate NumPy arrays and use Python objects, while the tight
+  loops in the function can still be compiled in nopython mode. Any arrays that
+  the tight loop uses should be created before the loop is entered.
+
+Fixes:
+
+* Add support for majority of "math" module functions
+* Fix for...else handling
+* Add support for builtin round()
+* Fix tenary if...else support
+* Revive "numba" script
+* Fix problems with some boolean expressions
+* Add support for more NumPy ufuncs 
+
+
 Version 0.12
 ------------
 
