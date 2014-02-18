@@ -28,9 +28,8 @@ def test_numba():
     if (C != Gold).any():
         raise ValueError
 
-def _test_gufunc(backend, target):
-    gufunc = GUVectorize(matmulcore, '(m,n),(n,p)->(m,p)', backend=backend,
-                                                           target=target)
+def _test_gufunc(target):
+    gufunc = GUVectorize(matmulcore, '(m,n),(n,p)->(m,p)', target=target)
     gufunc.add(argtypes=[float32[:,:], float32[:,:], float32[:,:]])
     gufunc = gufunc.build_ufunc()
 
@@ -46,36 +45,36 @@ def _test_gufunc(backend, target):
 #
 ### test gufuncs
 #
-def array_expr_gufunc(A, B, C):
-    m, n = A.shape
-    n, p = B.shape
-    for i in range(m):
-        for j in range(p):
-            result = (A[i, :] * B[:, j]).sum()
-            # print result
-            C[i, j] = result
-
-@testcase
-def test_gufunc_array_expressions():
-    gufunc = GUVectorize(array_expr_gufunc, '(m,n),(n,p)->(m,p)', backend='ast')
-    gufunc.add(argtypes=[float_[:,:], float_[:,:], float_[:,:]])
-    gufunc = gufunc.build_ufunc()
-
-    matrix_ct = 10
-    A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2, 4)
-    B = np.arange(matrix_ct * 4 * 5, dtype=np.float32).reshape(matrix_ct, 4, 5)
-
-    C = gufunc(A, B)
-    Gold = ut.matrix_multiply(A, B)
-
-    if (C != Gold).any():
-        print(C)
-        print(Gold)
-        raise ValueError
+# def array_expr_gufunc(A, B, C):
+#     m, n = A.shape
+#     n, p = B.shape
+#     for i in range(m):
+#         for j in range(p):
+#             result = (A[i, :] * B[:, j]).sum()
+#             # print result
+#             C[i, j] = result
+#
+# @testcase
+# def test_gufunc_array_expressions():
+#     gufunc = GUVectorize(array_expr_gufunc, '(m,n),(n,p)->(m,p)')
+#     gufunc.add(argtypes=[float_[:,:], float_[:,:], float_[:,:]])
+#     gufunc = gufunc.build_ufunc()
+#
+#     matrix_ct = 10
+#     A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2, 4)
+#     B = np.arange(matrix_ct * 4 * 5, dtype=np.float32).reshape(matrix_ct, 4, 5)
+#
+#     C = gufunc(A, B)
+#     Gold = ut.matrix_multiply(A, B)
+#
+#     if (C != Gold).any():
+#         print(C)
+#         print(Gold)
+#         raise ValueError
 
 @testcase
 def test_gufunc():
-    _test_gufunc('ast', 'cpu')
+    _test_gufunc('cpu')
 
 
 

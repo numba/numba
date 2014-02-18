@@ -12,13 +12,14 @@ to steal works from other threads.
 
 import sys
 
-from llvm.core import ATTR_NO_ALIAS, Type, CC_X86_STDCALL
-#from llvm.passes import *
+import numpy as np
+from llvm.core import (ATTR_NO_ALIAS, Type, CC_X86_STDCALL, Builder,
+                       LINKAGE_INTERNAL)
 from llvm_cbuilder import CStruct, CDefinition, CExternal, CFunc
 import llvm_cbuilder.shortnames as C
+from numba.npyufunc.ufuncbuilder import UFuncBuilder
+from numba import cgutils
 
-
-from . import _common
 
 ENABLE_WORK_STEALING = True
 CHECK_RACE_CONDITION = True
@@ -489,28 +490,47 @@ else:
 class ParallelUFuncPlatform(ParallelUFunc, ParallelMixin):
     pass
 
-class _ParallelVectorizeFromFunc(_common.CommonVectorizeFromFunc):
-    def build(self, lfunc, dtypes):
-        import multiprocessing
-        NUM_CPU = multiprocessing.cpu_count()
-        def_spuf = SpecializedParallelUFunc(
-                                    ParallelUFuncPlatform(num_thread=NUM_CPU),
-                                    UFuncCoreGeneric(lfunc))
+class ParallelUFuncBuilder(UFuncBuilder):
+    def build(self, cres):
+        # Buider wrapper for ufunc entry point
+        ctx = cres.target_context
+        signature = cres.signature
+        wrapper = build_ufunc_wrapper(ctx, cres.llvm_func, signature)
+        ctx.engine.add_module(wrapper.module)
+        ptr = ctx.engine.get_pointer_to_function(wrapper)
+        # Get dtypes
+        dtypenums = [np.dtype(a.name).num for a in signature.args]
+        dtypenums.append(np.dtype(signature.return_type.name).num)
+        return dtypenums, ptr
 
-        func = def_spuf(lfunc.module)
 
-        _common.post_vectorize_optimize(func)
+def wrap_core(ctx, lfunc, signature):
+    module = lfunc.module
+    ofnty = lfunc.type.pointee
+    # FIXME support for record types
+    fnty = Type.function(ofnty.args[0].pointee, ofnty.args[1:])
+    fn = module.add_function(fnty, name=".wrapper")
+    fn.linkage = LINKAGE_INTERNAL
+    builder = Builder.new(fn.append_basic_block(''))
+    status, retval = ctx.call_function(builder, lfunc, signature.return_type,
+                                       signature.args, fn.args)
+    # FIXME ignoring error
+    builder.ret(retval)
+    fn.verify()
 
-        return func
+    return fn
 
-parallel_vectorize_from_func = _ParallelVectorizeFromFunc()
 
-class ParallelASTVectorize(_common.GenericASTVectorize):
+def build_ufunc_wrapper(ctx, lfunc, signature):
+    import multiprocessing
+    NUM_CPU = multiprocessing.cpu_count()
+    wrapped = wrap_core(ctx, lfunc, signature)
+    def_spuf = SpecializedParallelUFunc(
+                                ParallelUFuncPlatform(num_thread=NUM_CPU),
+                                UFuncCoreGeneric(wrapped))
 
-    _from_func_factory = parallel_vectorize_from_func
+    func = def_spuf(lfunc.module)
 
-    def build_ufunc(self, dispatcher=None):
-        return self._from_func(dispatcher=dispatcher)
-
-ParallelVectorize = ParallelASTVectorize
+    ctx.optimize(lfunc.module)
+    return func
 

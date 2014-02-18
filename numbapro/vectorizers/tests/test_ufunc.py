@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 from numba import float32
-from numbapro.vectorizers import BasicVectorize
+from numbapro.vectorizers import Vectorize
 from .support import addtest, main, assertTrue
 
 dtype = np.float32
@@ -30,7 +30,7 @@ def ufunc_reduce(ufunc, arg):
     return arg
 
 vectorizers = [
-    BasicVectorize,
+    Vectorize,
     # ParallelVectorize,
     # StreamVectorize,
     # CudaVectorize,

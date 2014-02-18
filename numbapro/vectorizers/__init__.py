@@ -12,28 +12,12 @@ __all__ = [
 ]
 
 from numba.npyufunc import Vectorize, GUVectorize, vectorize, guvectorize
-#
-# from .parallel import ParallelVectorize, ParallelASTVectorize
-# from .stream import StreamVectorize, StreamASTVectorize
-#
-# GUFuncVectorize = GUVectorize
-# GUFuncASTVectorize = GUVectorize
-#
-# from numbapro.cudavec.vectorizers import  CudaVectorize, CudaGUFuncVectorize
-#
-# install_vectorizer('ast', 'parallel', ParallelASTVectorize)
-# install_vectorizer('ast', 'stream', StreamASTVectorize)
-# install_vectorizer('ast', 'gpu', CudaVectorize)
-#
-# _ast_guvectorizers = {
-#     'cpu': GUFuncVectorize,
-#     'gpu': CudaGUFuncVectorize,
-# }
-#
-# _guvectorizers = {
-#     'ast':      _ast_guvectorizers,
-# }
-#
+from .parallel import ParallelUFuncBuilder
+from .stream import StreamUFuncBuilder
+
+Vectorize.target_registry['parallel'] = ParallelUFuncBuilder
+Vectorize.target_registry['stream'] = StreamUFuncBuilder
+
 # def GUVectorize(func, signature, backend='ast', target='cpu'):
 #     assert backend in _guvectorizers, "unsupported backend"
 #     targets = _guvectorizers[backend]
