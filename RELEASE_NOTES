@@ -1,6 +1,8 @@
-?
+Version (0.13.1)
 =================
 * Guard error due to mishandling of interleaved memory buffer (#60)
+* Update to use Numba 0.12.1
+* Fix powi bug
 
 Version (0.13)
 ==============
