@@ -1,8 +1,8 @@
 from __future__ import print_function, division, absolute_import
-import numba.unittest_support as unittest
 
 
 def test():
+    import numba.unittest_support as unittest
     loader = unittest.TestLoader()
     startdir = "numba.tests"
     suite = loader.discover(startdir)
@@ -17,6 +17,7 @@ def multitest():
     """
     Run tests in multiple processes.
     """
+    import numba.unittest_support as unittest
     import multiprocessing as mp
     loader = unittest.TestLoader()
     startdir = "numba.tests"
@@ -28,6 +29,7 @@ def multitest():
 
 
 def _multiruntest(suite):
+    import numba.unittest_support as unittest
     runner = unittest.TextTestRunner(descriptions=False, verbosity=0,
                                      buffer=True)
     result = runner.run(suite)
