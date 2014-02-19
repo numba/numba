@@ -18,6 +18,7 @@ The documentation is under the 'docs' directory of the numba repo (this director
 To build the documentation, you need the basicstrap theme and sphinxjp.themecore:
 
     $ pip install sphinxjp.themes.basicstrap
+    $ pip install sphinxjp.themecore
 
 You can edit the source files under docs/source/, after which you can build and
 check the documentation:
