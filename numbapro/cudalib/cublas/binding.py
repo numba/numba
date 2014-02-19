@@ -1,9 +1,11 @@
 import numpy as np
-from ctypes import c_float, c_double, byref, c_int, Structure, c_void_p, POINTER
+from ctypes import c_float, c_double, byref, c_int, c_void_p, POINTER
+
 
 from numbapro.cudalib.libutils import Lib, ctype_function
 from numbapro.cudadrv.driver import cu_stream, device_pointer, host_pointer
 from numbapro._utils import finalizer
+from numbapro.cudalib.cctypes import c_complex, c_double_complex
 
 INV_STATUS = dict(
     CUBLAS_STATUS_SUCCESS         =0,
@@ -698,22 +700,6 @@ class libcublas(Lib):
     cublasCgeam = cublasSgeam
     cublasZgeam = cublasSgeam
 
-
-class c_complex(Structure):
-    _fields_ = [('real', c_float), ('imag', c_float)]
-
-    def __init__(self, real=0, imag=0):
-        if isinstance(real, complex):
-            real, imag = real.real, real.imag
-        super(c_complex, self).__init__(real, imag)
-
-class c_double_complex(Structure):
-    _fields_ = [('real', c_double), ('imag', c_double)]
-
-    def __init__(self, real=0, imag=0):
-        if isinstance(real, complex):
-            real, imag = real.real, real.imag
-        super(c_double_complex, self).__init__(real, imag)
 
 def _return_scalar(result):
     if isinstance(result, (c_complex, c_double_complex)):
