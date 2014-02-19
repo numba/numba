@@ -29,6 +29,110 @@ class ImpalaValue(types.Type):
 AnyVal = ImpalaValue('AnyVal')
 
 
+BooleanVal = ImpalaValue('BooleanVal')
+BooleanValType = types.Dummy('BooleanValType')
+
+
+class BooleanValCtor(ConcreteTemplate):
+    key = BooleanValType
+    cases = [signature(BooleanVal, types.int8)]
+
+
+class BooleanValValueAttr(AttributeTemplate):
+    key = BooleanVal
+
+    def resolve_is_null(self, val):
+        """
+        BooleanVal::is_null
+        """
+        return types.boolean
+
+    def resolve_val(self, val):
+        """
+        BooleanVal::val
+        """
+        return types.int8
+
+
+class BooleanValTypeAttr(AttributeTemplate):
+    key = BooleanValType
+
+    def resolve_null(self, typ):
+        """
+        BooleanVal::null
+        """
+        return BooleanVal
+
+
+TinyIntVal = ImpalaValue('TinyIntVal')
+TinyIntValType = types.Dummy('TinyIntValType')
+
+
+class TinyIntValCtor(ConcreteTemplate):
+    key = TinyIntValType
+    cases = [signature(TinyIntVal, types.int8)]
+
+
+class TinyIntValValueAttr(AttributeTemplate):
+    key = TinyIntVal
+
+    def resolve_is_null(self, val):
+        """
+        TinyIntVal::is_null
+        """
+        return types.boolean
+
+    def resolve_val(self, val):
+        """
+        TinyIntVal::val
+        """
+        return types.int8
+
+
+class TinyIntValTypeAttr(AttributeTemplate):
+    key = TinyIntValType
+
+    def resolve_null(self, typ):
+        """
+        TinyIntVal::null
+        """
+        return TinyIntVal
+
+SmallIntVal = ImpalaValue('SmallIntVal')
+SmallIntValType = types.Dummy('SmallIntValType')
+
+
+class SmallIntValCtor(ConcreteTemplate):
+    key = SmallIntValType
+    cases = [signature(SmallIntVal, types.int16)]
+
+
+class SmallIntValValueAttr(AttributeTemplate):
+    key = SmallIntVal
+
+    def resolve_is_null(self, val):
+        """
+        SmallIntVal::is_null
+        """
+        return types.boolean
+
+    def resolve_val(self, val):
+        """
+        SmallIntVal::val
+        """
+        return types.int16
+
+
+class SmallIntValTypeAttr(AttributeTemplate):
+    key = SmallIntValType
+
+    def resolve_null(self, typ):
+        """
+        SmallIntVal::null
+        """
+        return SmallIntVal
+
+
 IntVal = ImpalaValue('IntVal')
 IntValType = types.Dummy('IntValType')
 
@@ -62,6 +166,42 @@ class IntValTypeAttr(AttributeTemplate):
         IntVal::null
         """
         return IntVal
+
+
+
+BigIntVal = ImpalaValue('BigIntVal')
+BigIntValType = types.Dummy('BigIntValType')
+
+
+class BigIntValCtor(ConcreteTemplate):
+    key = BigIntValType
+    cases = [signature(BigIntVal, types.int64)]
+
+
+class BigIntValValueAttr(AttributeTemplate):
+    key = BigIntVal
+
+    def resolve_is_null(self, val):
+        """
+        BigIntVal::is_null
+        """
+        return types.boolean
+
+    def resolve_val(self, val):
+        """
+        BigIntVal::val
+        """
+        return types.int64
+
+
+class BigIntValTypeAttr(AttributeTemplate):
+    key = BigIntValType
+
+    def resolve_null(self, typ):
+        """
+        BigIntVal::null
+        """
+        return BigIntVal
 
 
 FloatVal = ImpalaValue('FloatVal')
@@ -156,10 +296,30 @@ class UDF(object):
 def impala_typing_context():
     base = typing.Context()
     
+    base.insert_global(BooleanVal, BooleanValType)
+    base.insert_function(BooleanValCtor(base))
+    base.insert_attributes(BooleanValValueAttr(base))
+    base.insert_attributes(BooleanValTypeAttr(base))
+    
+    base.insert_global(TinyIntVal, TinyIntValType)
+    base.insert_function(TinyIntValCtor(base))
+    base.insert_attributes(TinyIntValValueAttr(base))
+    base.insert_attributes(TinyIntValTypeAttr(base))
+    
+    base.insert_global(SmallIntVal, SmallIntValType)
+    base.insert_function(SmallIntValCtor(base))
+    base.insert_attributes(SmallIntValValueAttr(base))
+    base.insert_attributes(SmallIntValTypeAttr(base))
+    
     base.insert_global(IntVal, IntValType)
     base.insert_function(IntValCtor(base))
     base.insert_attributes(IntValValueAttr(base))
     base.insert_attributes(IntValTypeAttr(base))
+    
+    base.insert_global(BigIntVal, BigIntValType)
+    base.insert_function(BigIntValCtor(base))
+    base.insert_attributes(BigIntValValueAttr(base))
+    base.insert_attributes(BigIntValTypeAttr(base))
     
     base.insert_global(FloatVal, FloatValType)
     base.insert_function(FloatValCtor(base))
@@ -196,6 +356,141 @@ def _set_is_null(builder, val, is_null):
     builder.store(byte, _get_is_null_pointer(builder, val))
 
 
+class BooleanValStruct(cgutils.Structure):
+    _fields = [('parent',  AnyVal),
+               ('val',     types.int8),]
+
+
+@impl_attribute(BooleanVal, "is_null", types.boolean)
+def booleanval_is_null(context, builder, typ, value):
+    """
+    BooleanVal::is_null
+    """
+    iv = BooleanValStruct(context, builder, value=value)
+    is_null = _get_is_null(builder, iv)
+    return is_null
+
+@impl_attribute(BooleanVal, "val", types.int8)
+def booleanval_val(context, builder, typ, value):
+    """
+    BooleanVal::val
+    """
+    iv = BooleanValStruct(context, builder, value=value)
+    return iv.val
+
+
+@impl_attribute(BooleanValType, "null", BooleanVal)
+def booleanval_null(context, builder, typ, value):
+    """
+    BooleanVal::null
+    """
+    iv = BooleanValStruct(context, builder)
+    _set_is_null(builder, iv, cgutils.true_bit)
+    return iv._getvalue()
+
+
+@implement(BooleanValType, types.int8)
+def booleanval_ctor(context, builder, sig, args):
+    """
+    BooleanVal(int8)
+    """
+    [x] = args
+    iv = BooleanValStruct(context, builder)
+    _set_is_null(builder, iv, cgutils.false_bit)
+    iv.val = x
+    return iv._getvalue()
+
+
+class TinyIntValStruct(cgutils.Structure):
+    _fields = [('parent',  AnyVal),
+               ('val',     types.int8),]
+
+
+@impl_attribute(TinyIntVal, "is_null", types.boolean)
+def tinyintval_is_null(context, builder, typ, value):
+    """
+    TinyIntVal::is_null
+    """
+    iv = TinyIntValStruct(context, builder, value=value)
+    is_null = _get_is_null(builder, iv)
+    return is_null
+
+@impl_attribute(TinyIntVal, "val", types.int8)
+def tinyintval_val(context, builder, typ, value):
+    """
+    TinyIntVal::val
+    """
+    iv = TinyIntValStruct(context, builder, value=value)
+    return iv.val
+
+
+@impl_attribute(TinyIntValType, "null", TinyIntVal)
+def tinyintval_null(context, builder, typ, value):
+    """
+    TinyIntVal::null
+    """
+    iv = TinyIntValStruct(context, builder)
+    _set_is_null(builder, iv, cgutils.true_bit)
+    return iv._getvalue()
+
+
+@implement(TinyIntValType, types.int8)
+def tinyintval_ctor(context, builder, sig, args):
+    """
+    TinyIntVal(int8)
+    """
+    [x] = args
+    iv = TinyIntValStruct(context, builder)
+    _set_is_null(builder, iv, cgutils.false_bit)
+    iv.val = x
+    return iv._getvalue()
+
+
+class SmallIntValStruct(cgutils.Structure):
+    _fields = [('parent',  AnyVal),
+               ('val',     types.int16),]
+
+
+@impl_attribute(SmallIntVal, "is_null", types.boolean)
+def smallintval_is_null(context, builder, typ, value):
+    """
+    SmallIntVal::is_null
+    """
+    iv = SmallIntValStruct(context, builder, value=value)
+    is_null = _get_is_null(builder, iv)
+    return is_null
+
+@impl_attribute(SmallIntVal, "val", types.int16)
+def smallintval_val(context, builder, typ, value):
+    """
+    SmallIntVal::val
+    """
+    iv = SmallIntValStruct(context, builder, value=value)
+    return iv.val
+
+
+@impl_attribute(SmallIntValType, "null", SmallIntVal)
+def smallintval_null(context, builder, typ, value):
+    """
+    SmallIntVal::null
+    """
+    iv = SmallIntValStruct(context, builder)
+    _set_is_null(builder, iv, cgutils.true_bit)
+    return iv._getvalue()
+
+
+@implement(SmallIntValType, types.int16)
+def smallintval_ctor(context, builder, sig, args):
+    """
+    SmallIntVal(int16)
+    """
+    [x] = args
+    iv = SmallIntValStruct(context, builder)
+    _set_is_null(builder, iv, cgutils.false_bit)
+    iv.val = x
+    return iv._getvalue()
+
+
 class IntValStruct(cgutils.Structure):
     _fields = [('parent',  AnyVal),
                ('val',     types.int32),]
@@ -222,7 +517,7 @@ def intval_val(context, builder, typ, value):
 @impl_attribute(IntValType, "null", IntVal)
 def intval_null(context, builder, typ, value):
     """
-    IntVall::null
+    IntVal::null
     """
     iv = IntValStruct(context, builder)
     _set_is_null(builder, iv, cgutils.true_bit)
@@ -236,6 +531,51 @@ def intval_ctor(context, builder, sig, args):
     """
     [x] = args
     iv = IntValStruct(context, builder)
+    _set_is_null(builder, iv, cgutils.false_bit)
+    iv.val = x
+    return iv._getvalue()
+
+
+class BigIntValStruct(cgutils.Structure):
+    _fields = [('parent',  AnyVal),
+               ('val',     types.int64),]
+
+
+@impl_attribute(BigIntVal, "is_null", types.boolean)
+def bigintval_is_null(context, builder, typ, value):
+    """
+    BigIntVal::is_null
+    """
+    iv = BigIntValStruct(context, builder, value=value)
+    is_null = _get_is_null(builder, iv)
+    return is_null
+
+@impl_attribute(BigIntVal, "val", types.int64)
+def bigintval_val(context, builder, typ, value):
+    """
+    BigIntVal::val
+    """
+    iv = BigIntValStruct(context, builder, value=value)
+    return iv.val
+
+
+@impl_attribute(BigIntValType, "null", BigIntVal)
+def bigintval_null(context, builder, typ, value):
+    """
+    BigIntVal::null
+    """
+    iv = BigIntValStruct(context, builder)
+    _set_is_null(builder, iv, cgutils.true_bit)
+    return iv._getvalue()
+
+
+@implement(BigIntValType, types.int64)
+def bigintval_ctor(context, builder, sig, args):
+    """
+    BigIntVal(int64)
+    """
+    [x] = args
+    iv = BigIntValStruct(context, builder)
     _set_is_null(builder, iv, cgutils.false_bit)
     iv.val = x
     return iv._getvalue()
@@ -332,7 +672,11 @@ def doubleval_ctor(context, builder, sig, args):
 
 TYPE_LAYOUT = {
     AnyVal: AnyValStruct,
+    BooleanVal: BooleanValStruct,
+    TinyIntVal: TinyIntValStruct,
+    SmallIntVal: SmallIntValStruct,
     IntVal: IntValStruct,
+    BigIntVal: BigIntValStruct,
     FloatVal: FloatValStruct,
     DoubleVal: DoubleValStruct,
 }
@@ -341,10 +685,16 @@ TYPE_LAYOUT = {
 class ImpalaTargetContext(BaseContext):
     def init(self):
         self.tm = le.TargetMachine.new()
-        self.insert_attr_defn([intval_is_null, intval_val, intval_null,
+        self.insert_attr_defn([booleanval_is_null, booleanval_val, booleanval_null,
+                               tinyintval_is_null, tinyintval_val, tinyintval_null,
+                               smallintval_is_null, smallintval_val, smallintval_null,
+                               intval_is_null, intval_val, intval_null,
+                               bigintval_is_null, bigintval_val, bigintval_null,
                                floatval_is_null, floatval_val, floatval_null,
                                doubleval_is_null, doubleval_val, doubleval_null])
-        self.insert_func_defn([intval_ctor, floatval_ctor, doubleval_ctor])
+        self.insert_func_defn([booleanval_ctor, tinyintval_ctor,
+                               smallintval_ctor, intval_ctor, bigintval_ctor,
+                               floatval_ctor, doubleval_ctor])
         self.optimizer = self.build_pass_manager()
 
         # once per context
@@ -411,7 +761,34 @@ class ABIHandling(object):
         """
         Convert value to fit ABI requirement
         """
-        if ty == IntVal:
+        if ty == BooleanVal:
+            # Pack structure into int16
+            # Endian specific
+            iv = BooleanValStruct(self.context, builder, value=val)
+            lower = builder.zext(_get_is_null(builder, iv), lc.Type.int(16))
+            upper = builder.zext(iv.val, lc.Type.int(16))
+            asint16 = builder.shl(upper, lc.Constant.int(lc.Type.int(16), 8))
+            asint16 = builder.or_(asint16, lower)
+            return asint16
+        elif ty == TinyIntVal:
+            # Pack structure into int16
+            # Endian specific
+            iv = TinyIntValStruct(self.context, builder, value=val)
+            lower = builder.zext(_get_is_null(builder, iv), lc.Type.int(16))
+            upper = builder.zext(iv.val, lc.Type.int(16))
+            asint16 = builder.shl(upper, lc.Constant.int(lc.Type.int(16), 8))
+            asint16 = builder.or_(asint16, lower)
+            return asint16
+        elif ty == SmallIntVal:
+            # Pack structure into int32
+            # Endian specific
+            iv = SmallIntValStruct(self.context, builder, value=val)
+            lower = builder.zext(_get_is_null(builder, iv), lc.Type.int(32))
+            upper = builder.zext(iv.val, lc.Type.int(32))
+            asint32 = builder.shl(upper, lc.Constant.int(lc.Type.int(32), 16))
+            asint32 = builder.or_(asint32, lower)
+            return asint32
+        elif ty == IntVal:
             # Pack structure into int64
             # Endian specific
             iv = IntValStruct(self.context, builder, value=val)
@@ -420,6 +797,16 @@ class ABIHandling(object):
             asint64 = builder.shl(upper, lc.Constant.int(lc.Type.int(64), 32))
             asint64 = builder.or_(asint64, lower)
             return asint64
+        elif ty == BigIntVal:
+            # Pack structure into { int8, int64 }
+            # Endian specific
+            iv = BigIntValStruct(self.context, builder, value=val)
+            is_null = builder.zext(_get_is_null(builder, iv), lc.Type.int(8))
+            asstructi8i64 = builder.insert_value(lc.Constant.undef(lc.Type.struct([lc.Type.int(8), lc.Type.int(64)])),
+                                                 is_null,
+                                                 0)
+            asstructi8i64 = builder.insert_value(asstructi8i64, iv.val, 1)
+            return asstructi8i64
         elif ty == FloatVal:
             # Pack structure into int64
             # Endian specific
@@ -431,7 +818,7 @@ class ABIHandling(object):
             asint64 = builder.or_(asint64, lower)
             return asint64
         elif ty == DoubleVal:
-            # Pack structure into { int8, int64 }
+            # Pack structure into { int8, double }
             # Endian specific
             iv = DoubleValStruct(self.context, builder, value=val)
             is_null = builder.zext(_get_is_null(builder, iv), lc.Type.int(8))
@@ -445,8 +832,16 @@ class ABIHandling(object):
 
     def get_abi_return_type(self, ty):
         # FIXME only work on x86-64 + gcc
-        if ty == IntVal:
+        if ty == BooleanVal:
+            return lc.Type.int(16)
+        elif ty == TinyIntVal:
+            return lc.Type.int(16)
+        elif ty == SmallIntVal:
+            return lc.Type.int(32)
+        elif ty == IntVal:
             return lc.Type.int(64)
+        elif ty == BigIntVal:
+            return lc.Type.struct([lc.Type.int(8), lc.Type.int(64)])
         elif ty == FloatVal:
             return lc.Type.int(64)
         elif ty == DoubleVal:
@@ -464,4 +859,3 @@ class ABIHandling(object):
 
 impala_typing = impala_typing_context()
 impala_targets = ImpalaTargetContext(impala_typing)
-
