@@ -22,31 +22,40 @@ else:
     CFLAGS = []
 
 ext_dynfunc = Extension(name='numba._dynfunc', sources=['numba/_dynfunc.c'],
-                        extra_compile_args=CFLAGS)
+                        extra_compile_args=CFLAGS,
+                        depends=["numba/_pymodule.h"])
 
 ext_numpyadapt = Extension(name='numba._numpyadapt',
                            sources=['numba/_numpyadapt.c'],
                            include_dirs=[numpy.get_include()],
-                           extra_compile_args=CFLAGS)
+                           extra_compile_args=CFLAGS,
+                           depends=["numba/_pymodule.h"])
 
 ext_dispatcher = Extension(name="numba._dispatcher",
                            include_dirs=[numpy.get_include()],
                            sources=['numba/_dispatcher.c',
                                     'numba/_dispatcherimpl.cpp',
-                                    'numba/typeconv/typeconv.cpp'])
+                                    'numba/typeconv/typeconv.cpp'],
+                           depends=["numba/_pymodule.h",
+                                    "numba/_dispatcher.h"])
 
 ext_helperlib = Extension(name="numba._helperlib",
                           sources=["numba/_helperlib.c", "numba/_math_c99.c"],
-                          extra_compile_args=CFLAGS)
+                          extra_compile_args=CFLAGS,
+                          depends=["numba/_pymodule.h",
+                                   "numba/_math_c99.h",
+                                   "numba/mathnames.inc"])
 
 ext_typeconv = Extension(name="numba.typeconv._typeconv",
                          sources=["numba/typeconv/typeconv.cpp",
-                                  "numba/typeconv/_typeconv.cpp"])
+                                  "numba/typeconv/_typeconv.cpp"],
+                         depends=["numba/_pymodule.h"])
 
 ext_npyufunc_ufunc = Extension(name="numba.npyufunc._internal",
                                sources=["numba/npyufunc/_internal.c"],
                                include_dirs=[numpy.get_include()],
-                               depends=["numba/npyufunc/_internal.h"])
+                               depends=["numba/npyufunc/_internal.h",
+                                        "numba/_pymodule.h"])
 
 
 ext_modules = [ext_dynfunc, ext_numpyadapt, ext_dispatcher, ext_helperlib,
@@ -76,6 +85,11 @@ setup(name='numba',
         # "Programming Language :: Python :: 3.3",
         "Topic :: Utilities",
       ],
+      package_data={
+        "numba": ["*.c", "*.h", "*.cpp", "*.inc"],
+        "numba.npyufunc": ["*.c", "*.h"],
+        "numba.typeconv": ["*.cpp", "*.hpp"],
+      },
       scripts=["numba/pycc/pycc", "bin/numba"],
       author="Continuum Analytics, Inc.",
       author_email="numba-users@continuum.io",

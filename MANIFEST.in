@@ -1,5 +1,4 @@
 include *.md *.py *.txt *.asdl CHANGE_LOG AUTHORS
-recursive-include docs *.ipynb *.txt *.py Makefile *.rst
-recursive-include deps *
+recursive-include docs *.ipynb *.txt *.py Makefile *.rstls
 prune docs/_build
 prune docs/gh-pages
