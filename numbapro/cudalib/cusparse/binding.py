@@ -325,13 +325,21 @@ def _prepare_action(self, val):
         raise ValueError("Action must be either 'N' or 'S'")
 
 
+def _prepare_solveinfo(self, val):
+    raise NotImplementedError
+
+
+def _prepare_scalar(self, val):
+    v = self.T(val)
+    return byref(v), v
+
+
+_prepare_scalar_out = _prepare_scalar
+
 class _axpyi_v2(_api_function):
     __slots__ = ()
 
-    def prepare_alpha(self, alpha):
-        val = self.T(alpha)
-        return byref(val), val
-
+    prepare_alpha = _prepare_scalar
     prepare_xVal = _prepare_array
     prepare_xInt = _prepare_array
     prepare_y = _prepare_array
@@ -382,14 +390,8 @@ class _bsrmv(_api_function):
 
     prepare_dirA = _prepare_direction_flag
     prepare_transA = _prepare_operation_flag
-
-    def prepare_alpha(self, alpha):
-        val = self.T(alpha)
-        return byref(val), val
-
-    def prepare_beta(self, beta):
-        val = self.T(beta)
-        return byref(val), val
+    prepare_alpha = _prepare_scalar
+    prepare_beta = _prepare_scalar
 
     prepare_bsrValA = _prepare_array
     prepare_bsrRowPtrA = _prepare_array
@@ -426,13 +428,8 @@ class _bsrxmv(_api_function):
     prepare_dirA = _prepare_direction_flag
     prepare_transA = _prepare_operation_flag
 
-    def prepare_alpha(self, alpha):
-        val = self.T(alpha)
-        return byref(val), val
-
-    def prepare_beta(self, beta):
-        val = self.T(beta)
-        return byref(val), val
+    prepare_alpha = _prepare_scalar
+    prepare_beta = _prepare_scalar
 
     prepare_bsrMaskPtrA = _prepare_array
     prepare_bsrRowPtrA = _prepare_array
@@ -453,13 +450,8 @@ class _csc2dense(_api_function):
     prepare_dirA = _prepare_direction_flag
     prepare_transA = _prepare_operation_flag
 
-    def prepare_alpha(self, alpha):
-        val = self.T(alpha)
-        return byref(val), val
-
-    def prepare_beta(self, beta):
-        val = self.T(beta)
-        return byref(val), val
+    prepare_alpha = _prepare_scalar
+    prepare_beta = _prepare_scalar
 
     prepare_cscValA = _prepare_array
     prepare_cscRowIndA = _prepare_array
@@ -528,6 +520,500 @@ class _csr2dense(_api_function):
 Scsr2dense = Dcsr2dense = Ccsr2dense = Zcsr2dense = _csr2dense
 
 
+class _csr2hyb(_api_function):
+    descrA = _prepare_matdescr
+    csrValA = _prepare_array
+    csrRowPtrA = _prepare_array
+    csrColIndA = _prepare_array
+    hybA = _prepare_hybmat
+    partitionType = _prepare_hybpartition
+
+Scsr2hyb = Dcsr2hyb = Ccsr2hyb = Zcsr2hyb = _csr2hyb
+
+
+class _csrgeam(_api_function):
+
+    prepare_alpha = _prepare_scalar
+    prepare_beta = _prepare_scalar
+
+    prepare_descrA = _prepare_matdescr
+    prepare_csrValA = _prepare_array
+    prepare_csrRowPtrA = _prepare_array
+    prepare_csrColIndA = _prepare_array
+
+    prepare_descrB = _prepare_matdescr
+    prepare_csrValB = _prepare_array
+    prepare_csrRowPtrB = _prepare_array
+    prepare_csrColIndB = _prepare_array
+
+    prepare_descrC = _prepare_matdescr
+    prepare_csrValC = _prepare_array
+    prepare_csrRowPtrC = _prepare_array
+    prepare_csrColIndC = _prepare_array
+
+
+class Scsrgeam(_csrgeam):
+    T = c_float
+
+
+class Dcsrgeam(_csrgeam):
+    T = c_double
+
+
+class Ccsrgeam(_csrgeam):
+    T = c_complex
+
+
+class Zcsrgeam(_csrgeam):
+    T = c_double_complex
+
+
+class _csrgemm(_api_function):
+    prepare_transA = _prepare_action
+    prepare_transB = _prepare_action
+    prepare_descrA = _prepare_matdescr
+
+    prepare_csrValA = _prepare_array
+    prepare_csrRowPtrA = _prepare_array
+    prepare_csrColIndA = _prepare_array
+    prepare_descrB = _prepare_matdescr
+
+    prepare_csrValB = _prepare_array
+    prepare_csrRowPtrB = _prepare_array
+    prepare_csrColIndB = _prepare_array
+    prepare_descrC = _prepare_matdescr
+    prepare_csrValC = _prepare_array
+    prepare_csrRowPtrC = _prepare_array
+    prepare_csrColIndC = _prepare_array
+
+Scsrgemm = Dcsrgemm = Ccsrgemm = Zcsrgemm = _csrgemm
+
+
+class _csric0(_api_function):
+    prepare_trans = _prepare_operation_flag
+    prepare_descrA = _prepare_matdescr
+    prepare_csrValA_ValM = _prepare_array
+    prepare_csrRowPtrA = _prepare_array
+    prepare_csrColIndA = _prepare_array
+    prepare_info = _prepare_solveinfo
+
+Scsric0 = Dcsric0 = Ccsric0 = Zcsric0 = _csric0
+
+
+class _csrilu0(_api_function):
+    prepare_trans = _prepare_solveinfo
+    prepare_descrA = _prepare_matdescr
+    prepare_csrValA_ValM = _prepare_array
+    prepare_csrRowPtrA = _prepare_array
+    prepare_csrColIndA = _prepare_array
+    prepare_info = _prepare_solveinfo
+
+Scsrilu0 = Dcsrilu0 = Ccsrilu0 = Zcsrilu0 = _csrilu0
+
+
+class _csrmm2(_api_function):
+    prepare_transa = _prepare_action
+    prepare_transb = _prepare_action
+
+    prepare_alpha = _prepare_scalar
+    prepare_beta = _prepare_scalar
+
+    prepare_descrA = _prepare_matdescr
+
+    prepare_csrValA = _prepare_array
+    prepare_csrRowPtrA = _prepare_array
+    prepare_csrColIndA = _prepare_array
+
+    prepare_B = _prepare_array
+    prepare_C = _prepare_array
+
+
+class Scsrmm2(_csrmm2):
+    T = c_float
+
+
+class Dcsrmm2(_csrmm2):
+    T = c_double
+
+
+class Ccsrmm2(_csrmm2):
+    T = c_complex
+
+
+class Zcsrmm2(_csrmm2):
+    T = c_double_complex
+
+
+class _csrmm_v2(_api_function):
+    prepare_transA = _prepare_operation_flag
+    prepare_alpha = _prepare_scalar
+    prepare_descrA = _prepare_matdescr
+    prepare_csrValA = _prepare_array
+    prepare_csrRowPtrA = _prepare_array
+    prepare_csrColIndA = _prepare_array
+    prepare_B = _prepare_array
+    prepare_beta = _prepare_scalar
+    prepare_C = _prepare_array
+
+
+class Scsrmm_v2(_csrmm_v2):
+    T = c_float
+
+
+class Dcsrmm_v2(_csrmm_v2):
+    T = c_double
+
+
+class Ccsrmm_v2(_csrmm_v2):
+    T = c_complex
+
+
+class Zcsrmm_v2(_csrmm_v2):
+    T = c_double_complex
+
+
+class _csrmv_v2(_api_function):
+    prepare_transA = _prepare_operation_flag
+    prepare_alpha = _prepare_scalar
+    prepare_descrA = _prepare_matdescr
+    prepare_csrValA = _prepare_array
+    prepare_csrRowPtrA = _prepare_array
+    prepare_csrColIndA = _prepare_array
+    prepare_x = _prepare_array
+    prepare_beta = _prepare_scalar
+    prepare_y = _prepare_array
+
+
+class Scsrmv_v2(_csrmv_v2):
+    T = c_float
+
+
+class Dcsrmv_v2(_csrmv_v2):
+    T = c_double
+
+
+class Ccsrmv_v2(_csrmv_v2):
+    T = c_complex
+
+
+class Zcsrmv_v2(_csrmv_v2):
+    T = c_double_complex
+
+
+class _csrsm_analysis(_api_function):
+    prepare_transA = _prepare_operation_flag
+    prepare_descrA = _prepare_matdescr
+    prepare_csrValA = _prepare_array
+    prepare_csrRowPtrA = _prepare_array
+    prepare_csrColIndA = _prepare_array
+    prepare_info = _prepare_solveinfo
+
+Scsrsm_analysis = Dcsrsm_analysis = _csrsm_analysis
+Ccsrsm_analysis = Zcsrsm_analysis = _csrsm_analysis
+
+
+class _csrsm_solve(_api_function):
+    prepare_transA = _prepare_operation_flag
+    prepare_alpha = _prepare_scalar
+    prepare_descrA = _prepare_matdescr
+    prepare_csrValA = _prepare_array
+    prepare_csrRowPtrA = _prepare_array
+    prepare_csrColIndA = _prepare_array
+    prepare_info = _prepare_solveinfo
+    prepare_x = _prepare_array
+    prepare_y = _prepare_array
+
+Scsrsm_solve = Dcsrsm_solve = Ccsrsm_solve = Zcsrsm_solve = _csrsm_solve
+
+
+class _csrsv_analysis_v2(_api_function):
+    prepare_transA = _prepare_operation_flag
+    prepare_descrA = _prepare_matdescr
+    prepare_csrValA = _prepare_array
+    prepare_csrRowPtrA = _prepare_array
+    prepare_csrColIndA = _prepare_array
+    prepare_info = _prepare_solveinfo
+
+Scsrsv_analysis_v2 = Dcsrsv_analysis_v2 = _csrsv_analysis_v2
+Ccsrsv_analysis_v2 = Zcsrsv_analysis_v2 = _csrsv_analysis_v2
+
+
+class _csrsv_solve_v2(_api_function):
+    prepare_transA = _prepare_action
+    prepare_alpha = _prepare_scalar
+    prepare_descrA = _prepare_matdescr
+    prepare_csrValA = _prepare_array
+    prepare_csrRowPtrA = _prepare_array
+    prepare_csrColIndA = _prepare_array
+    prepare_info = _prepare_solveinfo
+    prepare_x = _prepare_array
+    prepare_y = _prepare_array
+
+Scsrsv_solve_v2 = Dcsrsv_solve_v2 = _csrsv_solve_v2
+Ccsrsv_solve_v2 = Zcsrsv_solve_v2 = _csrsv_solve_v2
+
+
+class _dense2csc(_api_function):
+    prepare_descrA = _prepare_matdescr
+    prepare_A = _prepare_array
+    prepare_nnzPerCol = _prepare_array
+    prepare_cscValA = _prepare_array
+    prepare_cscRowIndA = _prepare_array
+    prepare_cscColPtrA = _prepare_array
+
+
+Sdense2csc = Ddense2csc = Cdense2csc = Zdense2csc = _dense2csc
+
+
+class _dense2csr(_api_function):
+    prepare_descrA = _prepare_matdescr
+    prepare_A = _prepare_array
+    prepare_nnzPerRow = _prepare_array
+    prepare_csrValA = _prepare_array
+    prepare_csrRowPtrA = _prepare_array
+    prepare_csrColIndA = _prepare_array
+
+Sdense2csr = Ddense2csr = Cdense2csr = Zdense2csr = _dense2csr
+
+
+class _dense2hyb(_api_function):
+    prepare_descrA = _prepare_matdescr
+    prepare_A = _prepare_array
+    prepare_nnzPerRow = _prepare_array
+    prepare_hybA = _prepare_hybmat
+    prepare_partitionType = _prepare_hybpartition
+
+Sdense2hyb = Ddense2hyb = Cdense2hyb = Zdense2hyb = _dense2hyb
+
+
+class _dotci(_api_function):
+    prepare_xVal = _prepare_array
+    prepare_xInd = _prepare_array
+    prepare_y = _prepare_array
+
+    prepare_resultDevHostPtr = _prepare_scalar_out
+
+    def return_value(self, *args):
+        return args[self.argnames.index('resultDevHostPtr')]
+
+    def set_defaults(self):
+        super(_dotci, self).set_defaults()
+        self.defaults['resultDevHostPtr'] = 0
+
+
+class Cdotci(_dotci):
+    T = c_complex
+
+
+class Zdotci(_dotci):
+    T = c_double_complex
+
+
+class _doti(_api_function):
+    prepare_xVal = _prepare_array
+    prepare_xInd = _prepare_array
+    prepare_y = _prepare_array
+    prepare_resultDevHostPtr = _prepare_scalar_out
+
+    def return_value(self, *args):
+        return args[self.argnames.index('resultDevHostPtr')]
+
+Sdoti = Ddoti = Cdoti = Zdoti = _doti
+
+
+class _gthr(_api_function):
+    prepare_y = _prepare_array
+    prepare_xVal = _prepare_array
+    prepare_xInd = _prepare_array
+
+Sgthr = Dgthr = Cgthr = Zgthr = _gthr
+
+
+class _gthrz(_api_function):
+    prepare_y = _prepare_array
+    prepare_xVal = _prepare_array
+    prepare_xInd = _prepare_array
+
+Sgthrz = Dgthrz = Cgthrz = Zgthrz = _gthrz
+
+
+class _gtsv(_api_function):
+    prepare_dl = _prepare_array
+    prepare_d = _prepare_array
+    prepare_du = _prepare_array
+    prepare_B = _prepare_array
+
+Sgtsv = Dgtsv = Cgtsv = Zgtsv = _gtsv
+
+
+class _gtsvStridedBatch(_api_function):
+    prepare_dl = _prepare_array
+    prepare_d = _prepare_array
+    prepare_du = _prepare_array
+    prepare_x = _prepare_array
+
+SgtsvStridedBatch = DgtsvStridedBatch = _gtsvStridedBatch
+CgtsvStridedBatch = ZgtsvStridedBatch = _gtsvStridedBatch
+
+
+class _gtsv_nopivot(_api_function):
+    prepare_dl = _prepare_array
+    prepare_d = _prepare_array
+    prepare_du = _prepare_array
+    prepare_B = _prepare_array
+
+Sgtsv_nopivot = Dgtsv_nopivot = Cgtsv_nopivot = Zgtsv_nopivot = _gtsv_nopivot
+
+
+class _hyb2csc(_api_function):
+    prepare_descrA = _prepare_matdescr
+    prepare_hybA = _prepare_hybmat
+    prepare_cscVal = _prepare_array
+    prepare_cscRowInd = _prepare_array
+    prepare_cscColPtr = _prepare_array
+
+Shyb2csc = Dhyb2csc = Chyb2csc = Zhyb2csc = _hyb2csc
+
+
+class _hyb2csr(_api_function):
+    prepare_descrA = _prepare_matdescr
+    prepare_hybA = _prepare_hybmat
+    prepare_csrValA = _prepare_array
+    prepare_csrRowPtrA = _prepare_array
+    prepare_csrColIndA = _prepare_array
+
+Shyb2csr = Dhyb2csr = Chyb2csr = Zhyb2csr = _hyb2csr
+
+
+class _hyb2dense(_api_function):
+    prepare_descrA = _prepare_matdescr
+    prepare_hybA = _prepare_hybmat
+    prepare_A = _prepare_array
+
+Shyb2dense = Dhyb2dense = Chyb2dense = Zhyb2dense = _hyb2dense
+
+
+class _hybmv(_api_function):
+    prepare_transA = _prepare_operation_flag
+    prepare_alpha = _prepare_scalar
+    prepare_descrA = _prepare_matdescr
+    prepare_hybA = _prepare_hybmat
+    prepare_x = _prepare_array
+    prepare_beta = _prepare_scalar
+
+Shybmv = Dhybmv = Chybmv = Zhybmv = _hybmv
+
+
+class _hybsv_analysis(_api_function):
+    prepare_transA = _prepare_operation_flag
+    prepare_descrA = _prepare_matdescr
+    prepare_hybA = _prepare_hybmat
+    prepare_info = _prepare_solveinfo
+
+
+Shybsv_analysis = Dhybsv_analysis = _hybsv_analysis
+Chybsv_analysis = Zhybsv_analysis = _hybsv_analysis
+
+
+class _hybsv_solve(_api_function):
+    prepare_trans = _prepare_operation_flag
+    prepare_alpha = _prepare_scalar
+    prepare_descra = _prepare_matdescr
+    prepare_hybA = _prepare_hybmat
+    prepare_info = _prepare_solveinfo
+    prepare_x = _prepare_array
+    prepare_y = _prepare_array
+
+Shybsv_solve = Dhybsv_solve = Chybsv_solve = Zhybsv_solve = _hybsv_solve
+
+
+class _nnz(_api_function):
+    prepare_dirA = _prepare_direction_flag
+    prepare_descrA = _prepare_matdescr
+    prepare_A = _prepare_array
+    prepare_nnzPerRowCol = _prepare_array
+    prepare_nnzTotalDevHostPtr = _prepare_scalar_out
+
+    def return_value(self, *args):
+        return args[self.argnames.index('nnzTotalDevHostPtr')]
+
+
+Snnz = Dnnz = Cnnz = Znnz = _nnz
+
+
+class _sctr(_api_function):
+    prepare_xVal = _prepare_array
+    prepare_xInd = _prepare_array
+    prepare_y = _prepare_array
+
+Ssctr = Dsctr = Csctr = Zsctr = _sctr
+
+
+class _roti_v2(_api_function):
+    prepare_xVal = _prepare_array
+    prepare_xInd = _prepare_array
+    prepare_y = _prepare_array
+    prepare_c = _prepare_array
+    prepare_s = _prepare_array
+
+
+Sroti_v2 = Droti_v2 = _roti_v2
+
+
+class Xcoo2csr(_api_function):
+    prepare_cooRowInd = _prepare_array
+    prepare_csrRowPtr = _prepare_array
+
+
+class Xcsr2coo(_api_function):
+    csrRowPtr = _prepare_array
+    cooRowInd = _prepare_array
+
+
+class Xcsr2bsrNnz(_api_function):
+    prepare_dirA = _prepare_direction_flag
+    prepare_descrA = _prepare_matdescr
+    prepare_csrRowPtrA = _prepare_array
+    prepare_csrColIndA = _prepare_array
+    prepare_descrC = _prepare_array
+    prepare_bsrRowPtrC = _prepare_array
+    prepare_nnzTotalDevHostPtr = _prepare_scalar_out
+
+    def return_value(self, *args):
+        return args[self.argnames.index('nnzTotalDevHostPtr')]
+
+
+class XcsrgeamNnz(_api_function):
+    prepare_descrA = _prepare_matdescr
+
+    prepare_csrRowPtrA = _prepare_array
+    prepare_csrColIndA = _prepare_array
+    prepare_descrB = _prepare_matdescr
+
+    prepare_csrRowPtrB = _prepare_array
+    prepare_csrColIndB = _prepare_array
+    prepare_descrC = _prepare_matdescr
+    prepare_csrRowPtrC = _prepare_array
+    prepare_nnzTotalDevHostPtr = _prepare_scalar_out
+
+    def return_value(self, *args):
+        return args[self.argnames.index('nnzTotalDevHostPtr')]
+
+
+class XcsrgemmNnz(_api_function):
+    prepare_transA = _prepare_operation_flag
+    prepare_transB = _prepare_operation_flag
+    prepare_descrA = _prepare_matdescr
+    prepare_csrRowPtrA = _prepare_array
+    prepare_csrColIndA = _prepare_array
+    prepare_descrB = _prepare_matdescr
+    prepare_csrRowPtrB = _prepare_array
+    prepare_csrColIndB = _prepare_array
+    prepare_descrC = _prepare_matdescr
+    prepare_csrRowPtrC = _prepare_array
+    prepare_nnzTotalDevHostPtr = _prepare_scalar_out
+
+
 def _init_api_function(name, decl):
     mangled = mangle(name)
     for k in globals().keys():
@@ -536,6 +1022,7 @@ def _init_api_function(name, decl):
             break
     else:
         print("missing", name)
+        raise NotImplementedError(name)
         return mangled, None
 
     docs = _make_docstring(name, decl)
@@ -570,6 +1057,10 @@ cusparseSetMatDiagType
 cusparseSetMatFillMode
 cusparseSetMatIndexBase
 cusparseSetMatType
+cusparseGetPointerMode
+cusparseSetPointerMode
+cusparseSetStream
+cusparseGetVersion
 '''.split())
 
 
