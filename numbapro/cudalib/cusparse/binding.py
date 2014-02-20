@@ -146,9 +146,16 @@ class _cuSparse(finalizer.OwnerMixin):
     def __init__(self):
         self._api = libcusparse()
         self._handle = cusparseHandle_t()
-        self._api.cusparseCreate(byref(self._handle))
+        try:
+            self._api.cusparseCreate(byref(self._handle))
+        except CuSparseError:
+            raise RuntimeError("Cannot initialize cuSparse. "
+                               "Could be caused by insufficient GPU memory.")
         self._finalizer_track((self._handle, self._api))
+        # Default to NULL stream
         self._stream = 0
+        # Default to host pointer
+        self.use_host_pointer()
 
     @classmethod
     def _finalize(cls, res):
@@ -170,6 +177,22 @@ class _cuSparse(finalizer.OwnerMixin):
         self._stream = stream
         self._api.cusparseSetStream(self._handle, self._stream._handle)
 
+    @property
+    def pointer_mode(self):
+        mode = cusparsePointerMode_t()
+        self._api.cusparseGetPointerMode(self._handle, byref(mode))
+        return mode.value
+
+    @pointer_mode.setter
+    def pointer_mode(self, value):
+        self._api.cusparseSetPointerMode(self._handle, value)
+
+    def use_host_pointer(self):
+        self.pointer_mode = CUSPARSE_POINTER_MODE_HOST
+
+    def use_device_pointer(self):
+        self.pointer_mode = CUSPARSE_POINTER_MODE_DEVICE
+
 
 _strip_prefix = 'cusparse'
 _len_strip_prefix = len(_strip_prefix)
@@ -181,11 +204,15 @@ def mangle(name):
     return name
 
 
-def _flatten_args(args, kws, argnames):
+def _flatten_args(args, kws, argnames, defaults):
     values = list(args)
     for name in argnames[len(args):]:
         if name in kws:
             values.append(kws.pop(name))
+        elif name in defaults:
+            values.append(defaults[name])
+        else:
+            raise TypeError("missing '%s' arg" % name)
     if kws:
         raise TypeError("function has no keyword arguments: %s" %
                         tuple(kws.keys()))
@@ -206,26 +233,353 @@ def _make_docstring(name, decl):
     return '\n'.join(doc)
 
 
+class _api_function(object):
+    __slots__ = 'fn', 'argtypes', 'argnames', 'defaults'
+
+    def __init__(self, fn, decl):
+        self.fn = fn
+        self.argnames, self.argtypes = zip(*decl[1])
+        self.defaults = {}
+        self.set_defaults()
+        assert self.argnames[0] == 'handle'
+        preparers = []
+        for k in self.argnames:
+            pname = 'prepare_%s' % k
+            if hasattr(self, pname):
+                meth = getattr(self, pname)
+                preparers.append(meth)
+            else:
+                preparers.append(None)
+
+        self.preparers = tuple(preparers)
+
+    def __call__(self, *args, **kws):
+        args = _flatten_args(args, kws, self.argnames, self.defaults)
+        rargs = [pre(val) for pre, val in zip(self.preparers, args) if pre]
+        actual, hold = zip(*rargs)
+        self.fn(*args)
+        return self.return_value(*hold)
+
+    def set_defaults(self):
+        if ('idxBase' in self.argnames and
+                'cusparseIndexBase_t' in self.argtypes):
+            self.defaults['idxBase'] = CUSPARSE_INDEX_BASE_ZERO
+
+    def return_value(self, *args):
+        return
+
+
+def _make_api_function(name, base):
+    return type(name, (base,), {})
+
+
+def _prepare_array(self, val):
+    return device_pointer(val), val
+
+
+def _prepare_hybpartition(self, val):
+    if val == 'A':
+        return CUSPARSE_HYB_PARTITION_AUTO
+    elif val == 'U':
+        return CUSPARSE_HYB_PARTITION_USER
+    elif val == 'M':
+        return CUSPARSE_HYB_PARTITION_MAX
+    else:
+        raise ValueError("Partition flag must be either 'A', 'U' or 'M'")
+
+
+def _prepare_direction_flag(self, val):
+    if val == 'R':
+        return CUSPARSE_DIRECTION_ROW
+    elif val == 'C':
+        return CUSPARSE_DIRECTION_COLUMN
+    else:
+        raise ValueError("Direction flag must be either 'R' or 'C'")
+
+
+def _prepare_operation_flag(self, val):
+    if val == 'N':
+        return CUSPARSE_OPERATION_NON_TRANSPOSE
+    elif val == 'T':
+        return CUSPARSE_OPERATION_TRANSPOSE
+    elif val == 'C':
+        return CUSPARSE_OPERATION_CONJUGATE_TRANSPOSE
+    else:
+        raise ValueError("Operation flag must be either 'N', 'T' or 'C'")
+
+
+def _prepare_matdescr(self, val):
+    raise NotImplementedError
+
+
+def _prepare_hybmat(self, val):
+    raise NotImplementedError
+
+
+def _prepare_action(self, val):
+    if val == 'N':
+        return CUSPARSE_ACTION_NUMERIC
+    elif val == 'S':
+        return CUSPARSE_ACTION_SYMBOLIC
+    else:
+        raise ValueError("Action must be either 'N' or 'S'")
+
+
+class _axpyi_v2(_api_function):
+    __slots__ = ()
+
+    def prepare_alpha(self, alpha):
+        val = self.T(alpha)
+        return byref(val), val
+
+    prepare_xVal = _prepare_array
+    prepare_xInt = _prepare_array
+    prepare_y = _prepare_array
+
+
+class Saxpyi_v2(_axpyi_v2):
+    __slots__ = ()
+    T = c_float
+
+
+class Daxpyi_v2(_axpyi_v2):
+    __slots__ = ()
+    T = c_double
+
+
+class Caxpyi_v2(_axpyi_v2):
+    __slots__ = ()
+    T = c_complex
+
+
+class Zaxpyi_v2(_axpyi_v2):
+    __slots__ = ()
+    T = c_double_complex
+
+
+class _bsr2csr(_api_function):
+    __slots__ = ()
+
+    prepare_dirA = _prepare_direction_flag
+
+    prepare_bsrValA = _prepare_array
+    prepare_bsrRowPtrA = _prepare_array
+    prepare_bsrColIndA = _prepare_array
+    prepare_csrValC = _prepare_array
+    prepare_csrRowPtrC = _prepare_array
+    prepare_csrColIndC = _prepare_array
+
+    prepare_descrA = _prepare_matdescr
+    prepare_descrC = _prepare_matdescr
+
+
+
+Sbsr2csr = Dbsr2csr = Cbsr2csr = Zbsr2csr = _bsr2csr
+
+
+class _bsrmv(_api_function):
+    __slots__ = ()
+
+    prepare_dirA = _prepare_direction_flag
+    prepare_transA = _prepare_operation_flag
+
+    def prepare_alpha(self, alpha):
+        val = self.T(alpha)
+        return byref(val), val
+
+    def prepare_beta(self, beta):
+        val = self.T(beta)
+        return byref(val), val
+
+    prepare_bsrValA = _prepare_array
+    prepare_bsrRowPtrA = _prepare_array
+    prepare_bsrColIndA = _prepare_array
+    prepare_x = _prepare_array
+    prepare_y = _prepare_array
+
+    prepare_descrA = _prepare_matdescr
+
+
+class Sbsrmv(_bsrmv):
+    __slots__ = ()
+    T = c_float
+
+
+class Dbsrmv(_bsrmv):
+    __slots__ = ()
+    T = c_double
+
+
+class Cbsrmv(_bsrmv):
+    __slots__ = ()
+    T = c_complex
+
+
+class Zbsrmv(_bsrmv):
+    __slots__ = ()
+    T = c_double_complex
+
+
+class _bsrxmv(_api_function):
+    __slots__ = ()
+
+    prepare_dirA = _prepare_direction_flag
+    prepare_transA = _prepare_operation_flag
+
+    def prepare_alpha(self, alpha):
+        val = self.T(alpha)
+        return byref(val), val
+
+    def prepare_beta(self, beta):
+        val = self.T(beta)
+        return byref(val), val
+
+    prepare_bsrMaskPtrA = _prepare_array
+    prepare_bsrRowPtrA = _prepare_array
+    prepare_bsrEndPtrA = _prepare_array
+    prepare_bsrColIndA = _prepare_array
+
+    prepare_x = _prepare_array
+    prepare_y = _prepare_array
+
+    prepare_descrA = _prepare_matdescr
+
+Sbsrxmv = Dbsrxmv = Cbsrxmv = Zbsrxmv = _bsrxmv
+
+
+class _csc2dense(_api_function):
+    __slots__ = ()
+
+    prepare_dirA = _prepare_direction_flag
+    prepare_transA = _prepare_operation_flag
+
+    def prepare_alpha(self, alpha):
+        val = self.T(alpha)
+        return byref(val), val
+
+    def prepare_beta(self, beta):
+        val = self.T(beta)
+        return byref(val), val
+
+    prepare_cscValA = _prepare_array
+    prepare_cscRowIndA = _prepare_array
+    prepare_cscColPtrA = _prepare_array
+    prepare_A = _prepare_array
+
+    prepare_descrA = _prepare_matdescr
+
+Scsc2dense = Dcsc2dense = Ccsc2dense = Zcsc2dense = _csc2dense
+
+
+class _csc2hyb(_api_function):
+    __slots__ = ()
+    prepare_descrA = _prepare_matdescr
+    prepare_cscValA = _prepare_array
+    prepare_cscRowIndA = _prepare_array
+    prepare_cscColPtrA = _prepare_array
+    prepare_hybA = _prepare_hybmat
+    prepare_partitionType = _prepare_hybpartition
+
+Scsc2hyb = Dcsc2hyb = Ccsc2hyb = Zcsc2hyb = _csc2hyb
+
+
+class _csr2bsr(_api_function):
+    __slots__ = ()
+
+    prepare_dirA = _prepare_direction_flag
+    prepare_descrA = _prepare_matdescr
+
+    prepare_csrValA = _prepare_array
+    prepare_csrRowPtrA = _prepare_array
+    prepare_csrColIndA = _prepare_array
+
+    prepare_descrC = _prepare_matdescr
+
+    prepare_bsrValC = _prepare_array
+    prepare_bsrRowPtrC = _prepare_array
+    prepare_bsrColIndC = _prepare_array
+
+Scsr2bsr = Dcsr2bsr = Ccsr2bsr = Zcsr2bsr = _csr2bsr
+
+
+class _csr2csc_v2(_api_function):
+    __slots__ = ()
+
+    csrVal = _prepare_array
+    csrRowPtr = _prepare_array
+    csrColInd = _prepare_array
+    cscVal = _prepare_array
+    cscRowInd = _prepare_array
+    cscColPtr = _prepare_array
+
+    copyValues = _prepare_action
+
+Scsr2csc_v2 = Dcsr2csc_v2 = Ccsr2csc_v2 = Zcsr2csc_v2 = _csr2csc_v2
+
+
+class _csr2dense(_api_function):
+    __slots__ = ()
+    prepare_descrA = _prepare_matdescr
+    prepare_csrValA = _prepare_array
+    prepare_csrRowPtrA  = _prepare_array
+    prepare_csrColIndA = _prepare_array
+    prepare_A = _prepare_array
+
+Scsr2dense = Dcsr2dense = Ccsr2dense = Zcsr2dense = _csr2dense
+
+
 def _init_api_function(name, decl):
     mangled = mangle(name)
-    argnames = tuple([k for k, _ in decl[1]])
+    for k in globals().keys():
+        if mangled.endswith(k):
+            base = globals()[k]
+            break
+    else:
+        print("missing", name)
+        return mangled, None
+
+    docs = _make_docstring(name, decl)
+    cls = _make_api_function(name, base)
+
     fn = getattr(libcusparse, name)
 
-    def method(self, *args, **kws):
-        args = _flatten_args(args, kws, argnames)
-        fn(self, *args)
+    obj = cls(fn, decl)
 
-    method.__doc__ = _make_docstring(name, decl)
+    def method(self, *args, **kws):
+        return obj(self._handle, *args, **kws)
+    method.__doc__ = docs
 
     return mangled, method
+
+
+_bypassed = frozenset('''
+cusparseCreate
+cusparseDestroy
+cusparseCreateHybMat
+cusparseCreateMatDescr
+cusparseCreateSolveAnalysisInfo
+cusparseDestroyHybMat
+cusparseDestroyMatDescr
+cusparseDestroySolveAnalysisInfo
+cusparseGetMatDiagType
+cusparseGetLevelInfo
+cusparseGetMatFillMode
+cusparseGetMatIndexBase
+cusparseGetMatType
+cusparseSetMatDiagType
+cusparseSetMatFillMode
+cusparseSetMatIndexBase
+cusparseSetMatType
+'''.split())
 
 
 def _init_cuSparse():
     gv = {}
     for k, v in _declarations():
-        name, func = _init_api_function(k, v)
-        assert name not in gv
-        gv[name] = func
+        if k not in _bypassed:
+            name, func = _init_api_function(k, v)
+            assert name not in gv
+            gv[name] = func
 
     # rewrite _v2 names
     for k in list(gv.keys()):
