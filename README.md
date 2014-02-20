@@ -66,6 +66,7 @@ See https://github.com/llvmpy/llvmpy for the most up-to-date instructions.
 ```bash
     $ wget http://llvm.org/releases/3.2/llvm-3.2.src.tar.gz
     $ tar zxvf llvm-3.2.src.tar.gz
+    $ cd llvm-3.2.src
     $ ./configure --enable-optimized --prefix=LLVM_BUILD_DIR
     $ # It is recommended to separate the custom build from the default system
     $ # package.
