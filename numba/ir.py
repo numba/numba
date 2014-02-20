@@ -38,8 +38,15 @@ class Loc(object):
             return "%s (%s)" % (self.filename, self.line)
 
     def strformat(self):
-        relpath = os.path.relpath(self.filename)
-        return 'File "%s", line %d' % (relpath, self.line)
+        try:
+            # Try to get a relative path
+            path = os.path.relpath(self.filename)
+        except ValueError:
+            # Fallback to absolute path if error occured in getting the
+            # relative path.
+            # This may happen on windows if the drive is different
+            path = os.path.abspath(self.filename)
+        return 'File "%s", line %d' % (path, self.line)
 
 
 class VarMap(object):
