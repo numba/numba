@@ -44,6 +44,11 @@ class DataFlowAnalysis(object):
         for val in reversed(stack):
             info.push(val)
 
+    def op_DUP_TOP(self, info, inst):
+        tos = info.pop()
+        info.push(tos)
+        info.push(tos)
+
     def op_DUP_TOPX(self, info, inst):
         count = inst.arg
         assert 1 <= count <= 5, "Invalid DUP_TOPX count"
