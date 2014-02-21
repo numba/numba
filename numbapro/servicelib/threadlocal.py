@@ -1,0 +1,33 @@
+"""
+Implements:
+- Threadlocal stack
+"""
+from __future__ import print_function, absolute_import, division
+import threading
+
+
+class TLStack(object):
+    local = threading.Local()
+
+    @property
+    def stack(self):
+        try:
+            # Retrieve thread local stack
+            return self.local.stack
+        except AttributeError:
+            # Initialize stack for the thread
+            self.local.stack = []
+
+    def push(self, item):
+        self.stack.append(item)
+
+    def pop(self):
+        return self.stack.pop()
+
+    @property
+    def top(self):
+        return self.stack[-1]
+
+    @property
+    def is_empty(self):
+        return not self.stack
