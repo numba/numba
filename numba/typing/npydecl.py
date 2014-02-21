@@ -66,11 +66,15 @@ class Numpy_unary_ufunc(AbstractTemplate):
         elif nargs == 1:
             [inp] = args
             if inp in types.number_domain:
-                return signature(inp, inp)
+                if hasattr(self, "scalar_out_type"):
+                    return signature(self.scalar_out_type, inp)
+                else:
+                    return signature(inp, inp)
 
 
 class Numpy_sqrt(Numpy_unary_ufunc):
     key = numpy.sqrt
+    scalar_out_type = types.float64
 
 
 class Numpy_absolute(Numpy_unary_ufunc):
