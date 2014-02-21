@@ -1,3 +1,7 @@
+Version (0.13.2)
+================
+* Fix problem with numpy 18 array scalar contiguousness
+
 Version (0.13.1)
 =================
 * Guard error due to mishandling of interleaved memory buffer (#60)
@@ -71,7 +75,7 @@ Version (0.11.0)
 ================
 * Add cuBlas binding
 * Improve CUDA ndarray and memory managment
-* Add CUDA mapped host memory 
+* Add CUDA mapped host memory
 * Add CUDA event
 
 Version (0.10.1)

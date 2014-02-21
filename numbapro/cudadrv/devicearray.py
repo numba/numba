@@ -40,7 +40,7 @@ class DeviceNDArrayBase(object):
     '''
     __cuda_memory__ = True
     __cuda_ndarray__ = True # There must be a gpu_head and gpu_data attribute
-    
+
     def __init__(self, shape, strides, dtype, stream=0, writeback=None,
                  gpu_head=None, gpu_data=None):
         '''
@@ -103,7 +103,7 @@ class DeviceNDArrayBase(object):
 
     def copy_to_device(self, ary, stream=0):
         """Copy `ary` to `self`.
-        
+
         If `ary` is a CUDA memory, perform a device-to-device transfer.
         Otherwise, perform a a host-to-device transfer.
         """
@@ -118,7 +118,7 @@ class DeviceNDArrayBase(object):
     def copy_to_host(self, ary=None, stream=0):
         """Copy ``self`` to ``ary`` or create a new numpy ndarray
         if ``ary`` is ``None``.
-        
+
         Always returns the host array.
         """
         if ary is None:
@@ -155,7 +155,7 @@ class DeviceNDArrayBase(object):
 
     def split(self, section, stream=0):
         '''Split the array into equal partition of the `section` size.
-        If the array cannot be equally divided, the last section will be 
+        If the array cannot be equally divided, the last section will be
         smaller.
         '''
         if self.ndim != 1:
@@ -221,7 +221,7 @@ class DeviceNDArray(DeviceNDArrayBase):
 
     def reshape(self, *newshape, **kws):
         '''reshape(self, *newshape, order='C'):
-        
+
         Reshape the array and keeping the original data
         '''
         order = kws.pop('order', 'C')
@@ -248,7 +248,7 @@ class DeviceNDArray(DeviceNDArrayBase):
 
             ret = DeviceNDArray(shape=newshape, strides=newstrides,
                                  dtype=self.dtype, gpu_data=self.gpu_data)
-                    
+
             return ret
         else:
             raise NotImplementedError("reshaping non-contiguous array requires"
@@ -298,6 +298,7 @@ def auto_device(ary, stream=0, copy=True):
         return ary, False
     else:
         if not ary.flags['C_CONTIGUOUS'] and not ary.flags['F_CONTIGUOUS']:
+           if ary.ndim != 1 or ary.shape[0] != 1 or ary.strides[0] != 0:
             raise ValueError("Array contains non-contiguous buffer and cannot "
                              "be transferred as a single memory region.  "
                              "Please ensure contiguous buffer with numpy"

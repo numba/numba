@@ -13,32 +13,32 @@ from .cudapy import jit, autojit, declare_device
 @require_context
 def to_device(ary, stream=0, copy=True, to=None):
     """to_device(ary, stream=0, copy=True, to=None)
-    
+
     Allocate and transfer a numpy ndarray to the device.
 
     To copy host->device a numpy array::
-        
+
         ary = numpy.arange(10)
         d_ary = cuda.to_device(ary)
-        
+
     To enqueue the transfer to a stream::
-        
+
         stream = cuda.stream()
         d_ary = cuda.to_device(ary, stream=stream)
-        
+
     The resulting ``d_ary`` is a ``DeviceNDArray``.
-    
+
     To copy device->host::
-    
+
         hary = d_ary.copy_to_host()
 
     To copy device->host to an existing array::
-    
+
         ary = numpy.empty(shape=d_ary.shape, dtype=d_ary.dtype)
         d_ary.copy_to_host(ary)
 
     To enqueue the transfer to a stream::
-    
+
         hary = d_ary.copy_to_host(stream=stream)
     """
     if to is None:
@@ -52,7 +52,7 @@ def to_device(ary, stream=0, copy=True, to=None):
 @require_context
 def device_array(shape, dtype=np.float, strides=None, order='C', stream=0):
     """device_array(shape, dtype=np.float, strides=None, order='C', stream=0)
-    
+
     Allocate an empty device ndarray. Similar to numpy.empty()
     """
     shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype,
@@ -63,7 +63,7 @@ def device_array(shape, dtype=np.float, strides=None, order='C', stream=0):
 @require_context
 def pinned_array(shape, dtype=np.float, strides=None, order='C'):
     """pinned_array(shape, dtype=np.float, strides=None, order='C')
-    
+
     Allocate a numpy.ndarray with a buffer that is pinned (pagelocked).
     Similar to numpy.empty().
     """
@@ -78,14 +78,14 @@ def pinned_array(shape, dtype=np.float, strides=None, order='C'):
 def mapped_array(shape, dtype=np.float, strides=None, order='C', stream=0,
                  portable=False, wc=False):
     """mapped_array(shape, dtype=np.float, strides=None, order='C', stream=0, portable=False, wc=False)
-                 
+
     Allocate a mapped ndarray with a buffer that is pinned and mapped on
     to the device. Similar to numpy.empty()
-    
+
     :param portable: a boolean flag to allow the allocated device memory to be
               usable in multiple devices.
     :param wc: a boolean flag to enable writecombined allocation which is faster
-        to write by the host and to read by the device, but slower to 
+        to write by the host and to read by the device, but slower to
         write by the host and slower to write by the device.
     """
     shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype,
@@ -141,7 +141,7 @@ def device_array_like(ary, stream=0):
 @require_context
 def stream():
     """stream()
-    
+
     Create a CUDA stream that represents a command queue for the device.
     """
     return driver.Stream()
@@ -228,13 +228,13 @@ def _auto_device(ary, stream=0, copy=True):
     return devicearray.auto_device(ary, stream=stream, copy=copy)
 
 def calc_occupancy(cc, reg, smem=0, smem_config=None):
-    '''Occupancy calculator 
-    
+    '''Occupancy calculator
+
     :param cc: compute capability as a tuple-2 of ints.
     :param reg: register used per thread.
     :param smem: shared memory used per block.
     :param smem_config: (optional) smem configuration
-    
+
     returns an AutoTuner object
     '''
     usage = {}

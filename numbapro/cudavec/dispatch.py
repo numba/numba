@@ -51,7 +51,7 @@ class CudaUFuncDispatcher(object):
             return max_threads
         else:
             max_threads = atune.best()
-            
+
             if not max_threads:
                 raise Exception("insufficient resources to run kernel"
                                 "at any thread-per-block.")
@@ -154,7 +154,7 @@ class CudaUFuncDispatcher(object):
         else:
             broadcast_arrays = self._prepare_inputs(args)
             element_count = self._determine_element_count(broadcast_arrays)
-            
+
             if 'out' not in kws:
                 out = self._allocate_output(broadcast_arrays, result_dtype)
             else:
@@ -186,7 +186,7 @@ class CudaUFuncDispatcher(object):
             blockdim = (ntid,)
 
             cuda_func[griddim, blockdim, stream](*kernel_args)
-            
+
             device_out.copy_to_host(out, stream) # only retrive the last one
             # Revert the shape of the array if it has been modified earlier
             return out.reshape(reshape)
@@ -202,7 +202,7 @@ class CudaUFuncDispatcher(object):
         except KeyError:
             raise TypeError("Input dtypes not supported by ufunc %s" %
                             (dtypes,))
-    
+
     def _determine_element_count(self, broadcast_arrays):
         return np.prod(broadcast_arrays[0].shape)
 
@@ -367,7 +367,7 @@ class CUDAGenerializedUFunc(object):
             return max_threads
         else:
             max_threads = atune.best()
-            
+
             if not max_threads:
                 raise Exception("insufficient resources to run kernel "
                                 "at any thread-per-block.")
