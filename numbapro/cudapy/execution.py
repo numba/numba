@@ -1,7 +1,7 @@
 import copy
 import ctypes
 from numbapro.npm import types
-from numbapro.cudadrv import driver, devicearray
+from numbapro.cudadrv import old_driver, devicearray
 from numbapro.cudadrv.autotune import AutoTuner
 
 class CUDARuntimeError(RuntimeError):
@@ -79,20 +79,20 @@ class CUDAKernel(CUDAKernelBase):
         if self.linkfiles:
             self.link()
         else:
-            self.cu_module = driver.Module(ptx=self.ptx)
+            self.cu_module = old_driver.Module(ptx=self.ptx)
             self.compile_info = self.cu_module.info_log
 
-        self.cu_function = driver.Function(self.cu_module, self.name)
+        self.cu_function = old_driver.Function(self.cu_module, self.name)
 
     def link(self):
         '''Link external files
         '''
-        linker = driver.Linker()
+        linker = old_driver.Linker()
         linker.add_ptx(self.ptx)
         for file in self.linkfiles:
             linker.add_file_guess_ext(file)
         cubin, _size = linker.complete()
-        self.cu_module = driver.Module(image=cubin)
+        self.cu_module = old_driver.Module(image=cubin)
         self.compile_info = linker.info_log
 
     @property
@@ -144,8 +144,8 @@ class CUDAKernel(CUDAKernelBase):
         # allocate space for exception
         if self.excs:
             excsize = ctypes.sizeof(ctypes.c_int32) * 6
-            excmem = driver.DeviceMemory(excsize)
-            driver.device_memset(excmem, 0, excsize)
+            excmem = old_driver.DeviceMemory(excsize)
+            old_driver.device_memset(excmem, 0, excsize)
             args.append(excmem.device_ctypes_pointer)
 
         # configure kernel
@@ -158,7 +158,7 @@ class CUDAKernel(CUDAKernelBase):
         # check exceptions
         if self.excs:
             exchost = (ctypes.c_int32 * 6)()
-            driver.device_to_host(ctypes.addressof(exchost), excmem, excsize)
+            old_driver.device_to_host(ctypes.addressof(exchost), excmem, excsize)
             if exchost[0] != 0:
                 raise CUDARuntimeError(self.excs[exchost[0]].exc, *exchost[1:])
 
@@ -174,9 +174,9 @@ class CUDAKernel(CUDAKernelBase):
             return devary.as_cuda_arg()
         elif isinstance(ty.desc, types.Complex):
             size = ctypes.sizeof(ty.desc.ctype_value())
-            dmem = driver.DeviceMemory(size)
+            dmem = old_driver.DeviceMemory(size)
             cval = ty.desc.ctype_value()(val)
-            driver.host_to_device(dmem, ctypes.addressof(cval), size,
+            old_driver.host_to_device(dmem, ctypes.addressof(cval), size,
                                   stream=stream)
             return dmem
         else:

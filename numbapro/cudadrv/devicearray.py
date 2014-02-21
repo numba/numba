@@ -11,7 +11,7 @@ import math
 import operator
 import numpy as np
 from .ndarray import ndarray_device_allocate_head, ndarray_populate_head
-from . import driver as _driver
+from . import old_driver as _driver
 
 def is_cuda_ndarray(obj):
     "Check if an object is a CUDA ndarray"

@@ -1,4 +1,4 @@
-from numbapro.cudadrv.driver import Driver, CudaDriverError
+from numbapro.cudadrv.old_driver import Driver, CudaDriverError
 from .support import main, testcase
 
 @testcase

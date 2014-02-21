@@ -1,5 +1,5 @@
 import numpy as np
-from numbapro.cudadrv import driver as cudriver
+from numbapro.cudadrv import old_driver as cudriver
 from numbapro import cuda
 import support
 cudriver.debug_memory = True
@@ -22,7 +22,7 @@ class TestMemoryLeak(support.CudaTestCase):
         del dA
         cudriver.flush_pending_free()
 
-        
+
         cudriver.print_debug_memory()
         freed = cudriver.debug_memory_free - origfree
         print allocated - freed

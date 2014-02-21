@@ -2,7 +2,7 @@ import numpy as np
 from ctypes import c_void_p, c_int, POINTER, byref
 
 from numbapro.cudalib.libutils import Lib, ctype_function
-from numbapro.cudadrv.driver import cu_stream, device_pointer
+from numbapro.cudadrv.old_driver import cu_stream, device_pointer
 from numbapro._utils import finalizer
 
 STATUS = {
@@ -230,7 +230,7 @@ class Plan(finalizer.OwnerMixin):
 
     def set_fftw_padding_mode(self):
         return self.set_compatibility_mode(CUFFT_COMPATIBILITY_FFTW_PADDING)
-    
+
     def set_fftw_asymmetric_mode(self):
         return self.set_compatibility_mode(CUFFT_COMPATIBILITY_FFTW_ASYMMETRIC)
 

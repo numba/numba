@@ -1,5 +1,5 @@
 import numpy as np
-from numbapro.cudadrv.driver import Event
+from numbapro.cudadrv.old_driver import Event
 from numbapro import cuda
 
 import support

@@ -1,7 +1,7 @@
 import os.path
 import numpy as np
 from .support import testcase, main, assertTrue
-from numbapro.cudadrv.driver import Linker, require_context
+from numbapro.cudadrv.old_driver import Linker, require_context
 from numbapro import cuda
 
 

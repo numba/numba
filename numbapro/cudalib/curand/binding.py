@@ -3,7 +3,7 @@ from ctypes import (c_float, c_int, c_void_p, POINTER, byref, cast, c_ulonglong,
                     c_uint, c_double, c_size_t)
 
 
-from numbapro.cudadrv.driver import cu_stream, device_pointer
+from numbapro.cudadrv.old_driver import cu_stream, device_pointer
 from numbapro.cudalib.libutils import Lib, ctype_function
 from numbapro._utils import finalizer
 
@@ -61,7 +61,7 @@ CURAND_RNG_QUASI_SOBOL64 = 203
 CURAND_RNG_QUASI_SCRAMBLED_SOBOL64 = 204
 curandRngType_t = c_int
 
-# enum curandOrdering 
+# enum curandOrdering
 ## Best ordering for pseudorandom results
 CURAND_ORDERING_PSEUDO_BEST = 100
 ## Specific default 4096 thread sequence for pseudorandom results

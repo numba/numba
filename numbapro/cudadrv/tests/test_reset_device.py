@@ -1,5 +1,5 @@
 from numbapro import cuda
-from numbapro.cudadrv import driver
+from numbapro.cudadrv import old_driver
 import unittest, threading
 
 from . import support
@@ -9,7 +9,7 @@ class TestResetDevice(unittest.TestCase):
     def test_reset_device(self):
 
         def newthread():
-            drv = driver.Driver()
+            drv = old_driver.Driver()
             devices = range(drv.get_device_count())
             print 'Devices', devices
             for _ in range(2):

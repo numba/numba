@@ -2,8 +2,8 @@ import contextlib
 import numpy as np
 
 from .cudadrv import initialize as _initialize
-from .cudadrv.driver import require_context
-from .cudadrv import devicearray, driver, autotune
+from .cudadrv.old_driver import require_context
+from .cudadrv import devicearray, old_driver, autotune
 
 from .cudapy.ptx import (threadIdx, blockIdx, blockDim, gridDim, syncthreads,
                          shared, local, const, grid, atomic)
@@ -69,8 +69,8 @@ def pinned_array(shape, dtype=np.float, strides=None, order='C'):
     """
     shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype,
                                                          order)
-    bytesize = driver.memory_size_from_info(shape, strides, dtype.itemsize)
-    buffer = driver.HostAllocMemory(bytesize)
+    bytesize = old_driver.memory_size_from_info(shape, strides, dtype.itemsize)
+    buffer = old_driver.HostAllocMemory(bytesize)
     return np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order,
                       buffer=buffer)
 
@@ -90,8 +90,8 @@ def mapped_array(shape, dtype=np.float, strides=None, order='C', stream=0,
     """
     shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype,
                                                          order)
-    bytesize = driver.memory_size_from_info(shape, strides, dtype.itemsize)
-    buffer = driver.HostAllocMemory(bytesize, mapped=True)
+    bytesize = old_driver.memory_size_from_info(shape, strides, dtype.itemsize)
+    buffer = old_driver.HostAllocMemory(bytesize, mapped=True)
     npary = np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order,
                        buffer=buffer)
     mappedview = np.ndarray.view(npary, type=devicearray.MappedNDArray)
@@ -100,7 +100,7 @@ def mapped_array(shape, dtype=np.float, strides=None, order='C', stream=0,
 
 def synchronize():
     "Synchronize current context"
-    drv = driver.Driver()
+    drv = old_driver.Driver()
     return drv.current_context().synchronize()
 
 def _prepare_shape_strides_dtype(shape, strides, dtype, order):
@@ -144,7 +144,7 @@ def stream():
 
     Create a CUDA stream that represents a command queue for the device.
     """
-    return driver.Stream()
+    return old_driver.Stream()
 
 # Page lock
 @require_context
@@ -154,8 +154,8 @@ def pinned(*arylist):
     """
     pmlist = []
     for ary in arylist:
-        pm = driver.PinnedMemory(ary, driver.host_pointer(ary),
-                                 driver.host_memory_size(ary), mapped=False)
+        pm = old_driver.PinnedMemory(ary, old_driver.host_pointer(ary),
+                                 old_driver.host_memory_size(ary), mapped=False)
         pmlist.append(pm)
     yield
     del pmlist
@@ -170,8 +170,8 @@ def mapped(*arylist, **kws):
     pmlist = []
     stream = kws.get('stream', 0)
     for ary in arylist:
-        pm = driver.PinnedMemory(ary, driver.host_pointer(ary),
-                                 driver.host_memory_size(ary), mapped=True)
+        pm = old_driver.PinnedMemory(ary, old_driver.host_pointer(ary),
+                                 old_driver.host_memory_size(ary), mapped=True)
         pmlist.append(pm)
 
     devarylist = []
@@ -187,7 +187,7 @@ def mapped(*arylist, **kws):
 def event(timing=True):
     """Create a CUDA event.
     """
-    evt = driver.Event(timing=timing)
+    evt = old_driver.Event(timing=timing)
     return evt
 
 # Device selection
@@ -201,27 +201,27 @@ def select_device(device_id):
 
     Raises exception on error.
     '''
-    drv = driver.Driver()
-    device = driver.Device(device_id)
+    drv = old_driver.Driver()
+    device = old_driver.Device(device_id)
     drv.create_context(device)
     return device
 
 def get_current_device():
     "Get current device associated with the current thread"
-    drv = driver.Driver()
+    drv = old_driver.Driver()
     return drv.current_context().device
 
 def list_devices():
     "List all CUDA devices"
-    drv = driver.Driver()
-    return [driver.Device(i) for i in range(drv.get_device_count())]
+    drv = old_driver.Driver()
+    return [old_driver.Device(i) for i in range(drv.get_device_count())]
 
 def close():
     """Explicitly closes the context.
 
     Destroy the current context of the current thread
     """
-    drv = driver.Driver()
+    drv = old_driver.Driver()
     drv.release_context(drv.current_context())
 
 def _auto_device(ary, stream=0, copy=True):

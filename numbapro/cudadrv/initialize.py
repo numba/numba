@@ -96,7 +96,7 @@ def CUDAPoison(*args, **kws):
 
 
 def _init_driver():
-    from .driver import Driver
+    from .old_driver import Driver
     Driver() # raises CudaSupportError
 
 

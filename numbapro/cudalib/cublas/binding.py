@@ -2,7 +2,7 @@ import numpy as np
 from ctypes import c_float, c_double, byref, c_int, Structure, c_void_p, POINTER
 
 from numbapro.cudalib.libutils import Lib, ctype_function
-from numbapro.cudadrv.driver import cu_stream, device_pointer, host_pointer
+from numbapro.cudadrv.old_driver import cu_stream, device_pointer, host_pointer
 from numbapro._utils import finalizer
 
 INV_STATUS = dict(
@@ -62,7 +62,7 @@ CUBLAS_POINTER_MODE_DEVICE = 1
 cublasPointerMode_t = c_int
 
 CUBLAS_ATOMICS_NOT_ALLOWED   = 0
-CUBLAS_ATOMICS_ALLOWED       = 1        
+CUBLAS_ATOMICS_ALLOWED       = 1
 
 cublasAtomicsMode_t = c_int
 
@@ -171,7 +171,7 @@ class libcublas(Lib):
                                      c_void_p,       # x
                                      c_int,          # incx
                                      POINTER(c_int)) # result h/d ptr
-    
+
     cublasIdamax_v2 = cublasIsamax_v2
     cublasIcamax_v2 = cublasIsamax_v2
     cublasIzamax_v2 = cublasIsamax_v2
@@ -262,7 +262,7 @@ class libcublas(Lib):
     cublasDgbmv_v2 = cublasSgbmv_v2
     cublasCgbmv_v2 = cublasSgbmv_v2
     cublasZgbmv_v2 = cublasSgbmv_v2
-    
+
     cublasSgemv_v2 = ctype_function(cublasStatus_t,
                                  cublasHandle_t,        # handle,
                                  cublasOperation_t,     # trans,
@@ -388,7 +388,7 @@ class libcublas(Lib):
     cublasDsymv_v2 = cublasSsymv_v2
     cublasCsymv_v2 = cublasSsymv_v2
     cublasZsymv_v2 = cublasSsymv_v2
-                                     
+
     cublasChemv_v2 = ctype_function (cublasStatus_t,
                                      cublasHandle_t,    #handle,
                                      cublasFillMode_t,  #uplo,
@@ -478,7 +478,7 @@ class libcublas(Lib):
     cublasDsyr_v2 = cublasSsyr_v2
     cublasCsyr_v2 = cublasSsyr_v2
     cublasZsyr_v2 = cublasSsyr_v2
-                                               
+
     cublasCher_v2 = ctype_function (cublasStatus_t,
                                     cublasHandle_t,     #handle,
                                     cublasFillMode_t,   #uplo,
@@ -572,7 +572,7 @@ class libcublas(Lib):
                                      c_void_p,          #*C,
                                      c_int)             #ldc);
 
-    cublasDsyrk_v2 = cublasSsyrk_v2  
+    cublasDsyrk_v2 = cublasSsyrk_v2
     cublasCsyrk_v2 = cublasSsyrk_v2
     cublasZsyrk_v2 = cublasSsyrk_v2
 
@@ -605,8 +605,8 @@ class libcublas(Lib):
                                      c_void_p,          #*beta
                                      c_void_p,          #*C,
                                      c_int)             #ldc);
-                                     
-    cublasDsymm_v2 = cublasSsymm_v2  
+
+    cublasDsymm_v2 = cublasSsymm_v2
     cublasCsymm_v2 = cublasSsymm_v2
     cublasZsymm_v2 = cublasSsymm_v2
 
@@ -1157,7 +1157,7 @@ class cuBlas(finalizer.OwnerMixin):
     def _finalize(self, res):
         handle, api = res
         api.cublasDestroy_v2(handle)
-        
+
     @property
     def version(self):
         ver = c_int()

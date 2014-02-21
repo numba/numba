@@ -1,5 +1,5 @@
 import numpy as np
-from numbapro.cudadrv import driver
+from numbapro.cudadrv import old_driver
 from numbapro import cuda
 import support
 
@@ -7,13 +7,13 @@ import support
 class TestHostAlloc(support.CudaTestCase):
     def test_host_alloc_driver(self):
         n = 32
-        mem = driver.HostAllocMemory(n, mapped=True)
+        mem = old_driver.HostAllocMemory(n, mapped=True)
 
         dtype = np.dtype(np.uint8)
         ary = np.ndarray(shape=n / dtype.itemsize, dtype=dtype, buffer=mem)
 
         magic = 0xab
-        driver.device_memset(mem, magic, n)
+        old_driver.device_memset(mem, magic, n)
 
         self.assertTrue(np.all(ary == magic))
 
@@ -21,7 +21,7 @@ class TestHostAlloc(support.CudaTestCase):
 
         recv = np.empty_like(ary)
 
-        driver.device_to_host(recv, mem, ary.size)
+        old_driver.device_to_host(recv, mem, ary.size)
 
         self.assertTrue(np.all(ary == recv))
         self.assertTrue(np.all(recv == n))
@@ -31,7 +31,7 @@ class TestHostAlloc(support.CudaTestCase):
         ary.fill(123)
         self.assertTrue(all(ary == 123))
         devary = cuda.to_device(ary)
-        driver.device_memset(devary, 0, driver.device_memory_size(devary))
+        old_driver.device_memset(devary, 0, old_driver.device_memory_size(devary))
         self.assertTrue(all(ary == 123))
         devary.copy_to_host(ary)
         self.assertTrue(all(ary == 0))
@@ -40,7 +40,7 @@ class TestHostAlloc(support.CudaTestCase):
         ary = cuda.mapped_array(10, dtype=np.uint32)
         ary.fill(123)
         self.assertTrue(all(ary == 123))
-        driver.device_memset(ary, 0, driver.device_memory_size(ary))
+        old_driver.device_memset(ary, 0, old_driver.device_memory_size(ary))
         self.assertTrue(all(ary == 0))
 
 if __name__ == '__main__':
