@@ -7,7 +7,7 @@ import threading
 
 
 class TLStack(object):
-    local = threading.Local()
+    local = threading.local()
 
     @property
     def stack(self):

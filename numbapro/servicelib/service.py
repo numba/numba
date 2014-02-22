@@ -14,6 +14,7 @@ class Service(object):
         self.enabled = True
         self.arg = arg
         self._task = self.process(self.arg)
+        iter_next(self._task)
 
     def service(self):
         """
@@ -62,11 +63,11 @@ class Service(object):
 class HelloService(Service):
     def process(self, arg):
         count = 0
+        yield
         while True:
             print("Hello", count)
             count += 1
             yield
-
 
 def test():
     serv = HelloService("my.hello")
