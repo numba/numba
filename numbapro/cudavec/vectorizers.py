@@ -7,6 +7,7 @@ import llvm.core as lc
 from numbapro.npm import types, cgutils, aryutils
 from numbapro.cudapy.execution import CUDAKernel
 from numbapro.cudapy import ptx, compiler
+from numbapro.cudadrv.initialize import ensure_cuda_support
 from . import dispatch
 
 vectorizer_stager_source = '''
@@ -22,6 +23,7 @@ def to_dtype(ty):
 class CudaVectorize(object):
     def __init__(self, func, targetoptions={}):
         assert not targetoptions
+        ensure_cuda_support()
         self.pyfunc = func
         self.kernelmap = {} # { arg_dtype: (return_dtype), cudakernel }
 
@@ -75,6 +77,7 @@ class CudaGUFuncVectorize(object):
 
     def __init__(self, func, sig, targetoptions={}):
         assert not targetoptions
+        ensure_cuda_support()
         self.pyfunc = func
         self.signature = sig
         self.inputsig, self.outputsig = parse_signature(self.signature)
@@ -108,7 +111,7 @@ class CudaGUFuncVectorize(object):
 
         dtypes = tuple(numpy.dtype(str(t.desc.element)) for t in outertys)
         self.kernelmap[tuple(dtypes[:-1])] = dtypes[-1], kernel
-        
+
     def build_ufunc(self):
         engine = GUFuncEngine(self.inputsig, self.outputsig)
         return dispatch.CUDAGenerializedUFunc(kernelmap=self.kernelmap,
@@ -137,7 +140,7 @@ def build_gufunc_stager(devfn, dims):
     builder = lc.Builder.new(lgufunc.append_basic_block(''))
 
     # allocate new array with one less dimension
-    
+
     fname_tidx = ptx.SREG_MAPPING[ptx._ptx_sreg_tidx]
     fname_ntidx = ptx.SREG_MAPPING[ptx._ptx_sreg_ntidx]
     fname_ctaidx = ptx.SREG_MAPPING[ptx._ptx_sreg_ctaidx]
@@ -159,7 +162,7 @@ def build_gufunc_stager(devfn, dims):
 
     arguments = []
     for aryptr, inner, outer, dim in zip(lgufunc.args, args, outer_args, dims):
-        
+
         ary = builder.load(aryptr)
         data = aryutils.getdata(builder, ary)
         shape = aryutils.getshape(builder, ary)
@@ -262,7 +265,7 @@ class GUFuncEngine(object):
 
             outer_shapes.append(outer_shape)
             inner_shapes.append(inner_shape)
-    
+
         # solve output shape
         oshapes = []
         for outsig in self.sout:
