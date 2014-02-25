@@ -6,6 +6,9 @@ import numba
 from numba import *
 from numbapro.decorators import autojit, jit
 from numbapro.vectorizers import vectorize, guvectorize
+from numbapro.cudadrv.initialize import initialize_gpu_target
+initialize_gpu_target()
+del initialize_gpu_target
 
 
 
@@ -78,7 +81,7 @@ def check_cuda():
     print 'hardware detection'.center(80, '-')
     if not cuda.detect():
         ok = False
-        
+
     # result
     if not ok:
         print 'FAILED'

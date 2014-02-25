@@ -11,7 +11,7 @@ import weakref
 import functools
 import copy
 from ctypes import (c_int, byref, c_size_t, c_char, c_char_p, addressof,
-                    c_void_p)
+                    c_void_p, c_float)
 import contextlib
 from numba import utils
 from numbapro import servicelib
@@ -26,6 +26,12 @@ MIN_REQUIRED_CC = (2, 0)
 
 class DeadMemoryError(RuntimeError):
     pass
+
+
+class CudaAPIError(CudaDriverError):
+    def __init__(self, code, msg):
+        self.code = code
+        super(CudaAPIError, self).__init__(msg)
 
 
 def find_driver():
@@ -164,8 +170,8 @@ class Driver(object):
     def _check_error(self, fname, retcode):
         if retcode != enums.CUDA_SUCCESS:
             errname = ERROR_MAP.get(retcode, "UNKNOWN_CUDA_ERROR")
-            raise CudaDriverError("Call to %s results in %s" % (fname,
-                                                                errname))
+            msg = "Call to %s results in %s" % (fname, errname)
+            raise CudaDriverError(retcode, msg)
 
     def get_device(self, devnum=0):
         dev = self.devices.get(devnum)
@@ -497,6 +503,7 @@ class Context(object):
 
     def unload_module(self, module):
         del self.modules[module.handle.value]
+        self.trashing.service()
 
     def create_stream(self):
         self.trashing.service()
@@ -504,6 +511,20 @@ class Context(object):
         driver.cuStreamCreate(byref(handle), 0)
         return Stream(weakref.proxy(self), handle,
                       _stream_finalizer(self.trashing, handle))
+
+    def create_event(self, timing=True):
+        self.trashing.service()
+
+        handle = drvapi.cu_event()
+        flags = 0
+        if not timing:
+            flags |= enums.CU_EVENT_DISABLE_TIMING
+        driver.cuEventCreate(byref(handle), flags)
+        return Event(weakref.proxy(self), handle,
+                     finalizer=_event_finalizer(self.trashing, handle))
+
+    def synchonize(self):
+        driver.cuCtxSynchronize()
 
     def __repr__(self):
         return "<CUDA context %s of device %d>" % (self.handle, self.device.id)
@@ -536,7 +557,7 @@ def load_module_image(context, image):
     info_log = jitinfo.value
 
     return Module(weakref.proxy(context), handle, info_log,
-                  _module_finalizer(context.trashing, handle))
+                  _module_finalizer(context, handle))
 
 
 def _make_mem_finalizer(dtor):
@@ -562,6 +583,13 @@ _pinned_finalizer = _make_mem_finalizer(driver.cuMemHostUnregister)
 _memory_finalizer = _make_mem_finalizer(driver.cuMemFree)
 
 
+def _event_finalizer(trashing, handle):
+    def core():
+        trashing.add_trash(lambda: driver.cuEventDestroy(handle))
+
+    return core
+
+
 def _stream_finalizer(trashing, handle):
     def core():
         trashing.add_trash(lambda: driver.cuStreamDestroy(handle))
@@ -569,9 +597,17 @@ def _stream_finalizer(trashing, handle):
     return core
 
 
-def _module_finalizer(trashing, handle):
+def _module_finalizer(context, handle):
+    trashing = context.trashing
+    modules = context.modules
+
     def core():
-        trashing.add_trash(lambda: driver.cuModuleUnload(handle))
+        def cleanup():
+            if modules:
+                del modules[handle.value]
+            driver.cuModuleUnload(handle)
+
+        trashing.add_trash(cleanup)
 
     return core
 
@@ -634,7 +670,7 @@ class MemoryPointer(object):
         return self.device_pointer
 
 
-class MappedMemory(MemoryPointer):
+class MappedMemory(MemoryPointer, mviewbuf.MemAlloc):
     __cuda_memory__ = True
 
     def __init__(self, context, owner, hostpointer, size,
@@ -648,8 +684,12 @@ class MappedMemory(MemoryPointer):
                                            finalizer=finalizer)
         self.handle = self.host_pointer
 
+        # For buffer interface
+        self._buflen_ = self.size
+        self._bufptr_ = self.host_pointer.value
 
-class PinnedMemory(object):
+
+class PinnedMemory(mviewbuf.MemAlloc):
     def __init__(self, context, owner, pointer, size, finalizer=None):
         self.context = context
         self.owned = owner
@@ -659,6 +699,11 @@ class PinnedMemory(object):
         self.finalizer = finalizer
         self.is_alive = True
         self.handle = self.host_pointer
+
+        # For buffer interface
+        self._buflen_ = self.size
+        self._bufptr_ = self.host_pointer.value
+
 
     def __del__(self):
         try:
@@ -733,6 +778,63 @@ class Stream(object):
         self.synchronize()
 
 
+class Event(object):
+    def __init__(self, context, handle, finalizer=None):
+        self.context = context
+        self.handle = handle
+        self.finalizer = finalizer
+        self.is_managed = self.finalizer is not None
+
+    def __del__(self):
+        try:
+            if self.is_managed:
+                self.finalizer()
+        except:
+            traceback.print_exc()
+
+    def query(self):
+        """Returns True if all work before the most recent record has completed;
+        otherwise, returns False.
+        """
+        try:
+            driver.cuEventQuery(self.handle)
+        except CudaAPIError as e:
+            if e.code == enums.CUDA_ERROR_NOT_READY:
+                return False
+            else:
+                raise
+        else:
+            return True
+
+    def record(self, stream=0):
+        """Set the record state of the event at the stream.
+        """
+        hstream = stream.handle if stream else 0
+        driver.cuEventRecord(self.handle, hstream)
+
+    def synchronize(self):
+        """Synchronize the host thread for the completion of the event.
+        """
+        driver.cuEventSynchronize(self.handle)
+
+    def wait(self, stream=0):
+        """All future works submitted to stream will wait util the event
+        completes.
+        """
+        hstream = stream.handle if stream else 0
+        flags = 0
+        driver.cuStreamWaitEvent(hstream, self.handle, flags)
+
+    def elapsed_time(self, evtend):
+        return event_elapsed_time(self, evtend)
+
+
+def event_elapsed_time(evtstart, evtend):
+    msec = c_float()
+    driver.cuEventElapsedTime(byref(msec), evtstart.handle, evtend.handle)
+    return msec.value
+
+
 class Module(object):
     def __init__(self, context, handle, info_log, finalizer=None):
         self.context = context
@@ -770,6 +872,19 @@ class Function(object):
 
     def __repr__(self):
         return "<CUDA function %s>" % self.name
+
+    def cache_config(self, prefer_equal=False, prefer_cache=False,
+                     prefer_shared=False):
+        prefer_equal = prefer_equal or (prefer_cache and prefer_shared)
+        if prefer_equal:
+            flag = enums.CU_FUNC_CACHE_PREFER_EQUAL
+        elif prefer_cache:
+            flag = enums.CU_FUNC_CACHE_PREFER_L1
+        elif prefer_shared:
+            flag = enums.CU_FUNC_CACHE_PREFER_SHARED
+        else:
+            flag = enums.CU_FUNC_CACHE_PREFER_NONE
+        driver.cuFuncSetCacheConfig(self.handle, flag)
 
     def configure(self, griddim, blockdim, sharedmem=0, stream=0):
         while len(griddim) < 3:

@@ -2,7 +2,7 @@ import contextlib
 import numpy as np
 
 from .cudadrv import initialize as _initialize
-from .cudadrv import devicearray, autotune, devices
+from .cudadrv import devicearray, autotune, devices, driver
 # Re export
 from .cudapy.ptx import (threadIdx, blockIdx, blockDim, gridDim, syncthreads,
                          shared, local, const, grid, atomic)
@@ -12,6 +12,7 @@ from .cudapy import jit, autojit, declare_device
 # NDarray device helper
 
 require_context = devices.require_context
+current_context = devices.get_context
 
 
 @require_context
@@ -53,6 +54,7 @@ def to_device(ary, stream=0, copy=True, to=None):
         devarray.copy_to_device(ary, stream=stream)
     return devarray
 
+
 @require_context
 def device_array(shape, dtype=np.float, strides=None, order='C', stream=0):
     """device_array(shape, dtype=np.float, strides=None, order='C', stream=0)
@@ -64,6 +66,7 @@ def device_array(shape, dtype=np.float, strides=None, order='C', stream=0):
     return devicearray.DeviceNDArray(shape=shape, strides=strides, dtype=dtype,
                                      stream=stream)
 
+
 @require_context
 def pinned_array(shape, dtype=np.float, strides=None, order='C'):
     """pinned_array(shape, dtype=np.float, strides=None, order='C')
@@ -73,10 +76,12 @@ def pinned_array(shape, dtype=np.float, strides=None, order='C'):
     """
     shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype,
                                                          order)
-    bytesize = old_driver.memory_size_from_info(shape, strides, dtype.itemsize)
-    buffer = old_driver.HostAllocMemory(bytesize)
+    bytesize = driver.memory_size_from_info(shape, strides,
+                                            dtype.itemsize)
+    buffer = current_context().memhostalloc(bytesize)
     return np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order,
                       buffer=buffer)
+
 
 @require_context
 def mapped_array(shape, dtype=np.float, strides=None, order='C', stream=0,
@@ -94,18 +99,19 @@ def mapped_array(shape, dtype=np.float, strides=None, order='C', stream=0,
     """
     shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype,
                                                          order)
-    bytesize = old_driver.memory_size_from_info(shape, strides, dtype.itemsize)
-    buffer = old_driver.HostAllocMemory(bytesize, mapped=True)
+    bytesize = driver.memory_size_from_info(shape, strides, dtype.itemsize)
+    buffer = current_context().memhostalloc(bytesize, mapped=True)
     npary = np.ndarray(shape=shape, strides=strides, dtype=dtype, order=order,
                        buffer=buffer)
     mappedview = np.ndarray.view(npary, type=devicearray.MappedNDArray)
     mappedview.device_setup(buffer, stream=stream)
     return mappedview
 
+
 def synchronize():
     "Synchronize current context"
-    drv = old_driver.Driver()
-    return drv.current_context().synchronize()
+    return current_context().synchronize()
+
 
 def _prepare_shape_strides_dtype(shape, strides, dtype, order):
     dtype = np.dtype(dtype)
@@ -118,6 +124,7 @@ def _prepare_shape_strides_dtype(shape, strides, dtype, order):
             shape = (1,)
         strides = strides or _fill_stride_by_order(shape, dtype, order)
     return shape, strides, dtype
+
 
 def _fill_stride_by_order(shape, dtype, order):
     nd = len(shape)
@@ -148,7 +155,7 @@ def stream():
 
     Create a CUDA stream that represents a command queue for the device.
     """
-    return old_driver.Stream()
+    return current_context().create_stream()
 
 # Page lock
 @require_context
@@ -158,8 +165,9 @@ def pinned(*arylist):
     """
     pmlist = []
     for ary in arylist:
-        pm = old_driver.PinnedMemory(ary, old_driver.host_pointer(ary),
-                                 old_driver.host_memory_size(ary), mapped=False)
+        pm = current_context().mempin(ary, driver.host_pointer(ary),
+                                      driver.host_memory_size(ary),
+                                      mapped=False)
         pmlist.append(pm)
     yield
     del pmlist
@@ -174,8 +182,9 @@ def mapped(*arylist, **kws):
     pmlist = []
     stream = kws.get('stream', 0)
     for ary in arylist:
-        pm = old_driver.PinnedMemory(ary, old_driver.host_pointer(ary),
-                                 old_driver.host_memory_size(ary), mapped=True)
+        pm = current_context.mempin(ary, driver.host_pointer(ary),
+                                    driver.host_memory_size(ary),
+                                    mapped=True)
         pmlist.append(pm)
 
     devarylist = []
@@ -191,7 +200,7 @@ def mapped(*arylist, **kws):
 def event(timing=True):
     """Create a CUDA event.
     """
-    evt = old_driver.Event(timing=timing)
+    evt = current_context().create_event(timing=timing)
     return evt
 
 # Device selection
@@ -205,31 +214,32 @@ def select_device(device_id):
 
     Raises exception on error.
     '''
-    drv = old_driver.Driver()
-    device = old_driver.Device(device_id)
-    drv.create_context(device)
-    return device
+    context = devices.get_context(device_id)
+    return context.device
+
 
 def get_current_device():
     "Get current device associated with the current thread"
-    drv = old_driver.Driver()
-    return drv.current_context().device
+    return current_context().device
+
 
 def list_devices():
     "List all CUDA devices"
-    drv = old_driver.Driver()
-    return [old_driver.Device(i) for i in range(drv.get_device_count())]
+    return devices.gpus
+
 
 def close():
     """Explicitly closes the context.
 
     Destroy the current context of the current thread
     """
-    drv = old_driver.Driver()
-    drv.release_context(drv.current_context())
+    for gpu in devices.gpus:
+        gpu.reset()
+
 
 def _auto_device(ary, stream=0, copy=True):
     return devicearray.auto_device(ary, stream=stream, copy=copy)
+
 
 def calc_occupancy(cc, reg, smem=0, smem_config=None):
     '''Occupancy calculator
@@ -246,6 +256,7 @@ def calc_occupancy(cc, reg, smem=0, smem_config=None):
     usage['shared'] = smem
     at = autotune.AutoTuner(cc=cc, usage=usage, smem_config=smem_config)
     return at
+
 
 def detect():
     '''Detect hardware support

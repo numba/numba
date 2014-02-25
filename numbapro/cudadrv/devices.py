@@ -68,10 +68,9 @@ def get_gpu(i):
 _gpustack = servicelib.TLStack()
 
 
-def get_context():
+def get_context(devnum=0):
     if not _gpustack:
-        # Default to use device 0
-        _gpustack.push(get_gpu(0).context)
+        _gpustack.push(get_gpu(devnum).context)
     return _gpustack.top
 
 
