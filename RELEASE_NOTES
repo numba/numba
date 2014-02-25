@@ -2,6 +2,7 @@ Version (0.13.2)
 ================
 * Fix problem with numpy 18 array scalar contiguousness
 * Fix CUDA target auto initialization on `import numbapro`
+* Fix an access violation error on Windows 8 due to mishandling by LLVM.
 
 Version (0.13.1)
 =================
