@@ -31,3 +31,7 @@ class TLStack(object):
     @property
     def is_empty(self):
         return not self.stack
+
+    def __nonzero__(self):
+        return not self.is_empty
+

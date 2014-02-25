@@ -2,14 +2,18 @@ import contextlib
 import numpy as np
 
 from .cudadrv import initialize as _initialize
-from .cudadrv.old_driver import require_context
-from .cudadrv import devicearray, old_driver, autotune
-
+from .cudadrv import devicearray, autotune, devices
+# Re export
 from .cudapy.ptx import (threadIdx, blockIdx, blockDim, gridDim, syncthreads,
                          shared, local, const, grid, atomic)
 from .cudapy import jit, autojit, declare_device
 
+
 # NDarray device helper
+
+require_context = devices.require_context
+
+
 @require_context
 def to_device(ary, stream=0, copy=True, to=None):
     """to_device(ary, stream=0, copy=True, to=None)

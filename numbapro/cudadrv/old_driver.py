@@ -2,7 +2,7 @@
 This is more-or-less a object-oriented interface to the CUDA driver API.
 It properly has a lot of resemblence with PyCUDA.
 '''
-
+raise ImportError
 import sys, os
 import functools
 import contextlib

@@ -1,9 +1,10 @@
 import llvm.core as lc
 from numbapro.npm import compiler, types, extending, cgutils
 
-from numbapro.cudadrv import nvvm, old_driver
+from numbapro.cudadrv import nvvm
 from .execution import CUDAKernel
 from . import ptxlib, libdevice, ptx
+
 
 def _set_flags(debug):
     flags = list(compiler.DEFAULT_FLAGS)

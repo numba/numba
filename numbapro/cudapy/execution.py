@@ -1,7 +1,7 @@
 import copy
 import ctypes
 from numbapro.npm import types
-from numbapro.cudadrv import old_driver, devicearray
+from numbapro.cudadrv import devicearray
 from numbapro.cudadrv.autotune import AutoTuner
 
 class CUDARuntimeError(RuntimeError):

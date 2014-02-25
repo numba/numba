@@ -9,6 +9,7 @@ import traceback
 import ctypes
 import weakref
 import functools
+import copy
 from ctypes import (c_int, byref, c_size_t, c_char, c_char_p, addressof,
                     c_void_p)
 import contextlib
@@ -17,10 +18,14 @@ from numbapro import servicelib
 from numbapro.cudadrv.error import CudaSupportError, CudaDriverError
 from .drvapi import API_PROTOTYPES
 from . import enums, drvapi
-
+from numbapro._utils import mviewbuf
 
 VERBOSE_JIT_LOG = int(os.environ.get('NUMBAPRO_VERBOSE_CU_JIT_LOG', 1))
 MIN_REQUIRED_CC = (2, 0)
+
+
+class DeadMemoryError(RuntimeError):
+    pass
 
 
 def find_driver():
@@ -84,7 +89,6 @@ If you are sure that a CUDA driver is installed,
 try setting environment variable NUMBAPRO_CUDA_DRIVER
 with the file path of the CUDA driver shared library.
 """
-
 
 DRIVER_LOAD_ERROR_MSG = """
 Possible CUDA driver libraries are found but error occurred during load:
@@ -150,12 +154,12 @@ class Driver(object):
         libfn.argtypes = argtypes
 
         @functools.wraps(libfn)
-        def wrapper(*args):
+        def safe_cuda_api_call(*args):
             retcode = libfn(*args)
             self._check_error(fname, retcode)
 
-        setattr(self, fname, wrapper)
-        return wrapper
+        setattr(self, fname, safe_cuda_api_call)
+        return safe_cuda_api_call
 
     def _check_error(self, fname, retcode):
         if retcode != enums.CUDA_SUCCESS:
@@ -170,7 +174,7 @@ class Driver(object):
             self.devices[devnum] = dev
         return weakref.proxy(dev)
 
-    def get_num_devices(self):
+    def get_device_count(self):
         count = c_int()
         self.cuDeviceGetCount(byref(count))
         return count.value
@@ -238,6 +242,7 @@ class Device(object):
     The device object owns the CUDA contexts.  This is owned by the driver
     object.  User should not construct devices directly.
     """
+
     def __init__(self, devnum):
         got_devnum = c_int()
         driver.cuDeviceGet(byref(got_devnum), devnum)
@@ -280,6 +285,9 @@ class Device(object):
         driver.cuDeviceGetAttribute(byref(value), code, self.id)
         setattr(self, attr, value)
 
+        return value.value
+
+
     def __hash__(self):
         return hash(self.id)
 
@@ -311,19 +319,18 @@ class Device(object):
         return weakref.proxy(ctx)
 
     def close_all_context(self):
-        # for ctx in self.contexts.values():
-        #     ctx.reset()
         self.contexts.clear()
 
     def get_context(self):
         handle = drvapi.cu_context()
-        self.cuCtxGetCurrent(byref(handle))
+        driver.cuCtxGetCurrent(byref(handle))
         if not handle.value:
             return None
         try:
             return self.contexts[handle.value]
         except KeyError:
-            raise RuntimeError("Current context is not manged")
+            raise RuntimeError("Current context is not manged: %s" %
+                               handle.value)
 
     def get_or_create_context(self):
         ctx = self.get_context()
@@ -339,6 +346,7 @@ class Device(object):
 def _context_finalizer(trashing, ctxhandle):
     def core():
         trashing.add_trash(lambda: driver.cuCtxDestroy(ctxhandle))
+
     return core
 
 
@@ -355,6 +363,7 @@ class Context(object):
     owns this object.
 
     """
+
     def __init__(self, device, handle, finalizer=None):
         self.device = device
         self.handle = handle
@@ -406,16 +415,75 @@ class Context(object):
         ptr = drvapi.cu_device_ptr()
         driver.cuMemAlloc(byref(ptr), bytesize)
         mem = MemoryPointer(weakref.proxy(self), ptr, bytesize,
-                            _memory_finalizer(self.trashing, ptr))
+                            _memory_finalizer(self, ptr))
         self.allocations[ptr.value] = mem
+        return mem.own()
+
+    def memhostalloc(self, bytesize, mapped=False, portable=False, wc=False):
+        self.trashing.service()
+
+        pointer = c_void_p()
+        flags = 0
+        if mapped:
+            flags |= enums.CU_MEMHOSTALLOC_DEVICEMAP
+        if portable:
+            flags |= enums.CU_MEMHOSTALLOC_PORTABLE
+        if wc:
+            flags |= enums.CU_MEMHOSTALLOC_WRITECOMBINED
+
+        driver.cuMemHostAlloc(byref(pointer), bytesize, flags)
+        owner = None
+        finalizer = _hostalloc_finalizer(self, pointer)
+
+        if mapped:
+            mem = MappedMemory(weakref.proxy(self), owner, pointer,
+                               bytesize, finalizer=finalizer)
+        else:
+            mem = PinnedMemory(weakref.proxy(self), owner, pointer, bytesize,
+                               finalizer=finalizer)
+
+        self.allocations[mem.handle.value] = mem
         return mem.own()
 
     def memfree(self, pointer):
         try:
             del self.allocations[pointer.value]
         except KeyError:
-            raise RuntimeError("Freeing unmanaged device memory")
+            raise DeadMemoryError
         self.trashing.service()
+
+    def mempin(self, owner, pointer, size, mapped=False):
+        self.trashing.service()
+
+        if isinstance(pointer, (int, long)):
+            pointer = c_void_p(pointer)
+
+        if mapped and not self.device.CAN_MAP_HOST_MEMORY:
+            raise CudaDriverError("%s cannot map host memory" % self.device)
+
+        # possible flags are "portable" (between context)
+        # and "device-map" (map host memory to device thus no need
+        # for memory transfer).
+        flags = 0
+
+        if mapped:
+            flags |= enums.CU_MEMHOSTREGISTER_DEVICEMAP
+
+        driver.cuMemHostRegister(pointer, size, flags)
+
+        finalizer = _pinned_finalizer(self, pointer)
+        if mapped:
+            mem = MappedMemory(weakref.proxy(self), owner, pointer, size,
+                               finalizer=finalizer)
+        else:
+            mem = PinnedMemory(weakref.proxy(self), owner, pointer, size,
+                               finalizer=finalizer)
+
+        self.allocations[mem.handle.value] = mem
+        return mem.own()
+
+    def memunpin(self, pointer):
+        raise NotImplementedError
 
     def create_module_ptx(self, ptx):
         image = c_char_p(ptx)
@@ -451,11 +519,11 @@ def load_module_image(context, image):
     jiterrors = (c_char * logsz)()
 
     options = {
-        enums.CU_JIT_INFO_LOG_BUFFER              : addressof(jitinfo),
-        enums.CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES   : c_void_p(logsz),
-        enums.CU_JIT_ERROR_LOG_BUFFER             : addressof(jiterrors),
-        enums.CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES  : c_void_p(logsz),
-        enums.CU_JIT_LOG_VERBOSE                  : c_void_p(VERBOSE_JIT_LOG),
+        enums.CU_JIT_INFO_LOG_BUFFER: addressof(jitinfo),
+        enums.CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES: c_void_p(logsz),
+        enums.CU_JIT_ERROR_LOG_BUFFER: addressof(jiterrors),
+        enums.CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES: c_void_p(logsz),
+        enums.CU_JIT_LOG_VERBOSE: c_void_p(VERBOSE_JIT_LOG),
     }
 
     option_keys = (drvapi.cu_jit_option * len(options))(*options.keys())
@@ -468,39 +536,63 @@ def load_module_image(context, image):
     info_log = jitinfo.value
 
     return Module(weakref.proxy(context), handle, info_log,
-                  _module_finalizer(context.trashing), handle)
+                  _module_finalizer(context.trashing, handle))
+
+
+def _make_mem_finalizer(dtor):
+    def mem_finalize(context, handle):
+        trashing = context.trashing
+        allocations = context.allocations
+
+        def core():
+            def cleanup():
+                if allocations:
+                    del allocations[handle.value]
+                dtor(handle)
+
+            trashing.add_trash(cleanup)
+
+        return core
+
+    return mem_finalize
+
+
+_hostalloc_finalizer = _make_mem_finalizer(driver.cuMemFreeHost)
+_pinned_finalizer = _make_mem_finalizer(driver.cuMemHostUnregister)
+_memory_finalizer = _make_mem_finalizer(driver.cuMemFree)
 
 
 def _stream_finalizer(trashing, handle):
     def core():
         trashing.add_trash(lambda: driver.cuStreamDestroy(handle))
+
     return core
 
 
 def _module_finalizer(trashing, handle):
     def core():
         trashing.add_trash(lambda: driver.cuModuleUnload(handle))
-    return core
 
-
-def _memory_finalizer(trashing, ptr):
-    def core():
-        trashing.add_trash(lambda: driver.cuMemFree(ptr))
     return core
 
 
 class MemoryPointer(object):
+    __cuda_memory__ = True
+
     def __init__(self, context, pointer, size, finalizer=None):
         self.context = context
-        self.pointer = pointer
+        self.device_pointer = pointer
         self.size = size
+        self._cuda_memsize_ = size
         self.finalizer = finalizer
         self.is_managed = finalizer is not None
+        self.is_alive = True
         self.refct = 0
+        self.handle = self.device_pointer
 
     def __del__(self):
         try:
-            if self.is_managed:
+            if self.is_managed and self.is_alive:
                 self.finalizer()
         except:
             traceback.print_exc()
@@ -512,17 +604,22 @@ class MemoryPointer(object):
         """
         Forces the device memory to the trash.
         """
-        self.context.memfree(self.pointer)
+        if self.is_managed:
+            if not self.is_alive:
+                raise RuntimeError("Freeing dead memory")
+            self.finalizer()
+            self.is_alive = False
 
     def memset(self, byte, count=None, stream=0):
         count = self.size if count is None else count
         if stream:
-            driver.cuMemsetD8Async(self.pointer, byte, count, stream.handle)
+            driver.cuMemsetD8Async(self.device_pointer, byte, count,
+                                   stream.handle)
         else:
-            driver.cuMemsetD8(self.pointer, byte, count)
+            driver.cuMemsetD8(self.device_pointer, byte, count)
 
     def view(self, start, stop=None):
-        base = self.pointer.value + start
+        base = self.device_pointer.value + start
         if stop is None:
             size = self.size - start
         else:
@@ -531,6 +628,53 @@ class MemoryPointer(object):
         pointer = drvapi.cu_device_ptr(base)
         view = MemoryPointer(self.context, pointer, size)
         return OwnedPointer(weakref.proxy(self), view)
+
+    @property
+    def device_ctypes_pointer(self):
+        return self.device_pointer
+
+
+class MappedMemory(MemoryPointer):
+    __cuda_memory__ = True
+
+    def __init__(self, context, owner, hostpointer, size,
+                 finalizer=None):
+        self.owned = owner
+        self.host_pointer = hostpointer
+        devptr = drvapi.cu_device_ptr()
+        driver.cuMemHostGetDevicePointer(byref(devptr), hostpointer, 0)
+        self.device_pointer = devptr
+        super(MappedMemory, self).__init__(context, devptr, size,
+                                           finalizer=finalizer)
+        self.handle = self.host_pointer
+
+
+class PinnedMemory(object):
+    def __init__(self, context, owner, pointer, size, finalizer=None):
+        self.context = context
+        self.owned = owner
+        self.size = size
+        self.host_pointer = pointer
+        self.is_managed = finalizer is not None
+        self.finalizer = finalizer
+        self.is_alive = True
+        self.handle = self.host_pointer
+
+    def __del__(self):
+        try:
+            if self.is_managed and self.is_alive:
+                self.finalizer()
+        except:
+            traceback.print_exc()
+
+    def unpin(self):
+        if not self.is_alive:
+            raise DeadMemoryError
+        self.finalizer()
+        self.is_alive = False
+
+    def own(self):
+        return OwnedPointer(weakref.proxy(self))
 
 
 class OwnedPointer(object):
@@ -606,3 +750,276 @@ class Module(object):
 
     def unload(self):
         self.context.unload_module(self)
+
+    def get_function(self, name):
+        handle = drvapi.cu_function()
+        driver.cuModuleGetFunction(byref(handle), self.handle, name)
+        return Function(weakref.proxy(self), handle, name)
+
+
+class Function(object):
+    griddim = 1, 1, 1
+    blockdim = 1, 1, 1
+    stream = 0
+    sharedmem = 0
+
+    def __init__(self, module, handle, name):
+        self.module = module
+        self.handle = handle
+        self.name = name
+
+    def __repr__(self):
+        return "<CUDA function %s>" % self.name
+
+    def configure(self, griddim, blockdim, sharedmem=0, stream=0):
+        while len(griddim) < 3:
+            griddim += (1,)
+
+        while len(blockdim) < 3:
+            blockdim += (1,)
+
+        inst = copy.copy(self) # shallow clone the object
+        inst.griddim = griddim
+        inst.blockdim = blockdim
+        inst.sharedmem = sharedmem
+        if stream:
+            inst.stream = stream
+        else:
+            inst.stream = 0
+        return inst
+
+    def __call__(self, *args):
+        '''
+        *args -- Must be either ctype objects of DevicePointer instances.
+        '''
+        if self.stream:
+            streamhandle = self.stream.handle
+        else:
+            streamhandle = None
+        launch_kernel(self.handle, self.griddim, self.blockdim,
+                      self.sharedmem, streamhandle, args)
+
+
+def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, hstream, args):
+    gx, gy, gz = griddim
+    bx, by, bz = blockdim
+
+    param_vals = []
+    for arg in args:
+        if is_device_memory(arg):
+            param_vals.append(addressof(device_ctypes_pointer(arg)))
+        else:
+            param_vals.append(addressof(arg))
+
+    params = (c_void_p * len(param_vals))(*param_vals)
+
+    driver.cuLaunchKernel(cufunc_handle,
+                          gx, gy, gz,
+                          bx, by, bz,
+                          sharedmem,
+                          hstream,
+                          params,
+                          None)
+
+
+# -----------------------------------------------------------------------------
+
+
+def _device_pointer_attr(devmem, attr, odata):
+    """Query attribute on the device pointer
+    """
+    error = driver.cuPointerGetAttribute(byref(odata), attr,
+                                         device_ctypes_pointer(devmem))
+    driver.check_error(error, "Failed to query pointer attribute")
+
+
+def device_pointer_type(devmem):
+    """Query the device pointer type: host, device, array, unified?
+    """
+    ptrtype = c_int(0)
+    _device_pointer_attr(devmem, enums.CU_POINTER_ATTRIBUTE_MEMORY_TYPE,
+                         ptrtype)
+    map = {
+        enums.CU_MEMORYTYPE_HOST: 'host',
+        enums.CU_MEMORYTYPE_DEVICE: 'device',
+        enums.CU_MEMORYTYPE_ARRAY: 'array',
+        enums.CU_MEMORYTYPE_UNIFIED: 'unified',
+    }
+    return map[ptrtype.value]
+
+
+def device_extents(devmem):
+    """Find the extents (half open begin and end pointer) of the underlying
+    device memory allocation.
+
+    NOTE: it always returns the extents of the allocation but the extents
+    of the device memory view that can be a subsection of the entire allocation.
+    """
+    s = drvapi.cu_device_ptr()
+    n = c_size_t()
+    devptr = device_ctypes_pointer(devmem)
+    driver.cuMemGetAddressRange(byref(s), byref(n), devptr)
+    s, n = s.value, n.value
+    return s, s + n
+
+
+def device_memory_size(devmem):
+    """Check the memory size of the device memory.
+    The result is cached in the device memory object.
+    It may query the driver for the memory size of the device memory allocation.
+    """
+    sz = getattr(devmem, '_cuda_memsize_', None)
+    if sz is None:
+        s, e = device_extents(devmem)
+        sz = e - s
+        devmem._cuda_memsize_ = sz
+    assert sz > 0, "zero length array"
+    return sz
+
+
+def host_pointer(obj):
+    """
+    NOTE: The underlying data pointer from the host data buffer is used and
+    it should not be changed until the operation which can be asynchronous
+    completes.
+    """
+    if isinstance(obj, (int, long)):
+        return obj
+    return mviewbuf.memoryview_get_buffer(obj)
+
+
+def host_memory_extents(obj):
+    "Returns (start, end) the start and end pointer of the array (half open)."
+    return mviewbuf.memoryview_get_extents(obj)
+
+
+def memory_size_from_info(shape, strides, itemsize):
+    """et the byte size of a contiguous memory buffer given the shape, strides
+    and itemsize.
+    """
+    assert len(shape) == len(strides), "# dim mismatch"
+    ndim = len(shape)
+    s, e = mviewbuf.memoryview_get_extents_info(shape, strides, ndim, itemsize)
+    return e - s
+
+
+def host_memory_size(obj):
+    "Get the size of the memory"
+    s, e = host_memory_extents(obj)
+    assert e >= s, "memory extend of negative size"
+    return e - s
+
+
+def device_pointer(obj):
+    "Get the device pointer as an integer"
+    return device_ctypes_pointer(obj).value
+
+
+def device_ctypes_pointer(obj):
+    "Get the ctypes object for the device pointer"
+    require_device_memory(obj)
+    return obj.device_ctypes_pointer
+
+
+def is_device_memory(obj):
+    """All CUDA memory object is recognized as an instance with the attribute
+    "__cuda_memory__" defined and its value evaluated to True.
+
+    All CUDA memory object should also define an attribute named
+    "device_pointer" which value is an int(or long) object carrying the pointer
+    value of the device memory address.  This is not tested in this method.
+    """
+    return getattr(obj, '__cuda_memory__', False)
+
+
+def require_device_memory(obj):
+    """A sentry for methods that accept CUDA memory object.
+    """
+    if not is_device_memory(obj):
+        raise Exception("Not a CUDA memory object.")
+
+
+def device_memory_depends(devmem, *objs):
+    """Add dependencies to the device memory.
+
+    Mainly used for creating structures that points to other device memory,
+    so that the referees are not GC and released.
+    """
+    depset = getattr(devmem, "_depends_", [])
+    depset.extend(objs)
+
+
+def host_to_device(dst, src, size, stream=0):
+    """
+    NOTE: The underlying data pointer from the host data buffer is used and
+    it should not be changed until the operation which can be asynchronous
+    completes.
+    """
+    varargs = []
+
+    if stream:
+        assert isinstance(stream, Stream)
+        fn = driver.cuMemcpyHtoDAsync
+        varargs.append(stream.handle)
+    else:
+        fn = driver.cuMemcpyHtoD
+
+    fn(device_pointer(dst), host_pointer(src), size, *varargs)
+
+
+def device_to_host(dst, src, size, stream=0):
+    """
+    NOTE: The underlying data pointer from the host data buffer is used and
+    it should not be changed until the operation which can be asynchronous
+    completes.
+    """
+    varargs = []
+
+    if stream:
+        assert isinstance(stream, Stream)
+        fn = driver.cuMemcpyDtoHAsync
+        varargs.append(stream.handle)
+    else:
+        fn = driver.cuMemcpyDtoH
+
+    fn(host_pointer(dst), device_pointer(src), size, *varargs)
+
+
+def device_to_device(dst, src, size, stream=0):
+    """
+    NOTE: The underlying data pointer from the host data buffer is used and
+    it should not be changed until the operation which can be asynchronous
+    completes.
+    """
+    varargs = []
+
+    if stream:
+        assert isinstance(stream, Stream)
+        fn = driver.cuMemcpyDtoDAsync
+        varargs.append(stream.handle)
+    else:
+        fn = driver.cuMemcpyDtoD
+
+    fn(device_pointer(dst), device_pointer(src), size, *varargs)
+
+
+def device_memset(dst, val, size, stream=0):
+    """Memset on the device.
+    If stream is not zero, asynchronous mode is used.
+
+    dst: device memory
+    val: byte value to be written
+    size: number of byte to be written
+    stream: a CUDA stream
+    """
+    varargs = []
+
+    if stream:
+        assert isinstance(stream, Stream)
+        fn = driver.cuMemsetD8Async
+        varargs.append(stream.handle)
+    else:
+        fn = driver.cuMemsetD8
+
+    fn(device_pointer(dst), val, size, *varargs)
+
