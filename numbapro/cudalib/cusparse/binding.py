@@ -4,7 +4,8 @@ import numpy as np
 from ctypes import c_float, c_double, byref, c_int, Structure, c_void_p, POINTER
 
 from numbapro.cudalib.libutils import Lib, ctype_function
-from numbapro.cudadrv.driver import cu_stream, device_pointer, host_pointer
+from numbapro.cudadrv.drvapi import cu_stream
+from numbapro.cudadrv.driver import device_pointer, host_pointer
 from numbapro._utils import finalizer
 from numbapro.cudalib.cctypes import c_complex, c_double_complex
 
@@ -76,28 +77,27 @@ cusparseDirection_t = c_int
 cusparseHybPartition_t = c_int
 cusparseMatrixType_t = c_int
 
-
 _c_types = {
-    'int'                           : c_int,
-    'float'                         : c_float,
-    'double'                        : c_double,
-    'cuComplex'                     : c_complex,
-    'cuDoubleComplex'               : c_double_complex,
-    'cudaStream_t'                  : cu_stream,
-    'cusparseStatus_t'              : cusparseStatus_t,
-    'cusparseMatDescr_t'            : cusparseMatDescr_t,
-    'cusparseSolveAnalysisInfo_t'   : cusparseSolveAnalysisInfo_t,
-    'cusparseHybMat_t'              : cusparseHybMat_t,
-    'cusparseHandle_t'              : cusparseHandle_t,
-    'cusparsePointerMode_t'         : cusparsePointerMode_t,
-    'cusparseAction_t'              : cusparseAction_t,
-    'cusparseFillMode_t'            : cusparseFillMode_t,
-    'cusparseDiagType_t'            : cusparseDiagType_t,
-    'cusparseOperation_t'           : cusparseOperation_t,
-    'cusparseDirection_t'           : cusparseDirection_t,
-    'cusparseHybPartition_t'        : cusparseHybPartition_t,
-    'cusparseIndexBase_t'           : cusparseIndexBase_t,
-    'cusparseMatrixType_t'          : cusparseMatrixType_t,
+    'int': c_int,
+    'float': c_float,
+    'double': c_double,
+    'cuComplex': c_complex,
+    'cuDoubleComplex': c_double_complex,
+    'cudaStream_t': cu_stream,
+    'cusparseStatus_t': cusparseStatus_t,
+    'cusparseMatDescr_t': cusparseMatDescr_t,
+    'cusparseSolveAnalysisInfo_t': cusparseSolveAnalysisInfo_t,
+    'cusparseHybMat_t': cusparseHybMat_t,
+    'cusparseHandle_t': cusparseHandle_t,
+    'cusparsePointerMode_t': cusparsePointerMode_t,
+    'cusparseAction_t': cusparseAction_t,
+    'cusparseFillMode_t': cusparseFillMode_t,
+    'cusparseDiagType_t': cusparseDiagType_t,
+    'cusparseOperation_t': cusparseOperation_t,
+    'cusparseDirection_t': cusparseDirection_t,
+    'cusparseHybPartition_t': cusparseHybPartition_t,
+    'cusparseIndexBase_t': cusparseIndexBase_t,
+    'cusparseMatrixType_t': cusparseMatrixType_t,
 }
 
 
@@ -138,6 +138,7 @@ def _init_libcusparse():
         gv[k] = _init_ctype_function(k, v)
     base = _libcusparse
     return type('libcusparse', (base,), gv)
+
 
 libcusparse = _init_libcusparse()
 
@@ -262,7 +263,7 @@ class _api_function(object):
 
     def set_defaults(self):
         if ('idxBase' in self.argnames and
-                'cusparseIndexBase_t' in self.argtypes):
+                    'cusparseIndexBase_t' in self.argtypes):
             self.defaults['idxBase'] = CUSPARSE_INDEX_BASE_ZERO
 
     def return_value(self, *args):
@@ -336,6 +337,7 @@ def _prepare_scalar(self, val):
 
 _prepare_scalar_out = _prepare_scalar
 
+
 class _axpyi_v2(_api_function):
     __slots__ = ()
 
@@ -379,7 +381,6 @@ class _bsr2csr(_api_function):
 
     prepare_descrA = _prepare_matdescr
     prepare_descrC = _prepare_matdescr
-
 
 
 Sbsr2csr = Dbsr2csr = Cbsr2csr = Zbsr2csr = _bsr2csr
@@ -441,6 +442,7 @@ class _bsrxmv(_api_function):
 
     prepare_descrA = _prepare_matdescr
 
+
 Sbsrxmv = Dbsrxmv = Cbsrxmv = Zbsrxmv = _bsrxmv
 
 
@@ -460,6 +462,7 @@ class _csc2dense(_api_function):
 
     prepare_descrA = _prepare_matdescr
 
+
 Scsc2dense = Dcsc2dense = Ccsc2dense = Zcsc2dense = _csc2dense
 
 
@@ -471,6 +474,7 @@ class _csc2hyb(_api_function):
     prepare_cscColPtrA = _prepare_array
     prepare_hybA = _prepare_hybmat
     prepare_partitionType = _prepare_hybpartition
+
 
 Scsc2hyb = Dcsc2hyb = Ccsc2hyb = Zcsc2hyb = _csc2hyb
 
@@ -491,6 +495,7 @@ class _csr2bsr(_api_function):
     prepare_bsrRowPtrC = _prepare_array
     prepare_bsrColIndC = _prepare_array
 
+
 Scsr2bsr = Dcsr2bsr = Ccsr2bsr = Zcsr2bsr = _csr2bsr
 
 
@@ -506,6 +511,7 @@ class _csr2csc_v2(_api_function):
 
     copyValues = _prepare_action
 
+
 Scsr2csc_v2 = Dcsr2csc_v2 = Ccsr2csc_v2 = Zcsr2csc_v2 = _csr2csc_v2
 
 
@@ -513,9 +519,10 @@ class _csr2dense(_api_function):
     __slots__ = ()
     prepare_descrA = _prepare_matdescr
     prepare_csrValA = _prepare_array
-    prepare_csrRowPtrA  = _prepare_array
+    prepare_csrRowPtrA = _prepare_array
     prepare_csrColIndA = _prepare_array
     prepare_A = _prepare_array
+
 
 Scsr2dense = Dcsr2dense = Ccsr2dense = Zcsr2dense = _csr2dense
 
@@ -528,11 +535,11 @@ class _csr2hyb(_api_function):
     hybA = _prepare_hybmat
     partitionType = _prepare_hybpartition
 
+
 Scsr2hyb = Dcsr2hyb = Ccsr2hyb = Zcsr2hyb = _csr2hyb
 
 
 class _csrgeam(_api_function):
-
     prepare_alpha = _prepare_scalar
     prepare_beta = _prepare_scalar
 
@@ -586,6 +593,7 @@ class _csrgemm(_api_function):
     prepare_csrRowPtrC = _prepare_array
     prepare_csrColIndC = _prepare_array
 
+
 Scsrgemm = Dcsrgemm = Ccsrgemm = Zcsrgemm = _csrgemm
 
 
@@ -597,6 +605,7 @@ class _csric0(_api_function):
     prepare_csrColIndA = _prepare_array
     prepare_info = _prepare_solveinfo
 
+
 Scsric0 = Dcsric0 = Ccsric0 = Zcsric0 = _csric0
 
 
@@ -607,6 +616,7 @@ class _csrilu0(_api_function):
     prepare_csrRowPtrA = _prepare_array
     prepare_csrColIndA = _prepare_array
     prepare_info = _prepare_solveinfo
+
 
 Scsrilu0 = Dcsrilu0 = Ccsrilu0 = Zcsrilu0 = _csrilu0
 
@@ -708,6 +718,7 @@ class _csrsm_analysis(_api_function):
     prepare_csrColIndA = _prepare_array
     prepare_info = _prepare_solveinfo
 
+
 Scsrsm_analysis = Dcsrsm_analysis = _csrsm_analysis
 Ccsrsm_analysis = Zcsrsm_analysis = _csrsm_analysis
 
@@ -723,6 +734,7 @@ class _csrsm_solve(_api_function):
     prepare_x = _prepare_array
     prepare_y = _prepare_array
 
+
 Scsrsm_solve = Dcsrsm_solve = Ccsrsm_solve = Zcsrsm_solve = _csrsm_solve
 
 
@@ -733,6 +745,7 @@ class _csrsv_analysis_v2(_api_function):
     prepare_csrRowPtrA = _prepare_array
     prepare_csrColIndA = _prepare_array
     prepare_info = _prepare_solveinfo
+
 
 Scsrsv_analysis_v2 = Dcsrsv_analysis_v2 = _csrsv_analysis_v2
 Ccsrsv_analysis_v2 = Zcsrsv_analysis_v2 = _csrsv_analysis_v2
@@ -748,6 +761,7 @@ class _csrsv_solve_v2(_api_function):
     prepare_info = _prepare_solveinfo
     prepare_x = _prepare_array
     prepare_y = _prepare_array
+
 
 Scsrsv_solve_v2 = Dcsrsv_solve_v2 = _csrsv_solve_v2
 Ccsrsv_solve_v2 = Zcsrsv_solve_v2 = _csrsv_solve_v2
@@ -773,6 +787,7 @@ class _dense2csr(_api_function):
     prepare_csrRowPtrA = _prepare_array
     prepare_csrColIndA = _prepare_array
 
+
 Sdense2csr = Ddense2csr = Cdense2csr = Zdense2csr = _dense2csr
 
 
@@ -782,6 +797,7 @@ class _dense2hyb(_api_function):
     prepare_nnzPerRow = _prepare_array
     prepare_hybA = _prepare_hybmat
     prepare_partitionType = _prepare_hybpartition
+
 
 Sdense2hyb = Ddense2hyb = Cdense2hyb = Zdense2hyb = _dense2hyb
 
@@ -818,6 +834,7 @@ class _doti(_api_function):
     def return_value(self, *args):
         return args[self.argnames.index('resultDevHostPtr')]
 
+
 Sdoti = Ddoti = Cdoti = Zdoti = _doti
 
 
@@ -826,6 +843,7 @@ class _gthr(_api_function):
     prepare_xVal = _prepare_array
     prepare_xInd = _prepare_array
 
+
 Sgthr = Dgthr = Cgthr = Zgthr = _gthr
 
 
@@ -833,6 +851,7 @@ class _gthrz(_api_function):
     prepare_y = _prepare_array
     prepare_xVal = _prepare_array
     prepare_xInd = _prepare_array
+
 
 Sgthrz = Dgthrz = Cgthrz = Zgthrz = _gthrz
 
@@ -843,6 +862,7 @@ class _gtsv(_api_function):
     prepare_du = _prepare_array
     prepare_B = _prepare_array
 
+
 Sgtsv = Dgtsv = Cgtsv = Zgtsv = _gtsv
 
 
@@ -851,6 +871,7 @@ class _gtsvStridedBatch(_api_function):
     prepare_d = _prepare_array
     prepare_du = _prepare_array
     prepare_x = _prepare_array
+
 
 SgtsvStridedBatch = DgtsvStridedBatch = _gtsvStridedBatch
 CgtsvStridedBatch = ZgtsvStridedBatch = _gtsvStridedBatch
@@ -862,6 +883,7 @@ class _gtsv_nopivot(_api_function):
     prepare_du = _prepare_array
     prepare_B = _prepare_array
 
+
 Sgtsv_nopivot = Dgtsv_nopivot = Cgtsv_nopivot = Zgtsv_nopivot = _gtsv_nopivot
 
 
@@ -871,6 +893,7 @@ class _hyb2csc(_api_function):
     prepare_cscVal = _prepare_array
     prepare_cscRowInd = _prepare_array
     prepare_cscColPtr = _prepare_array
+
 
 Shyb2csc = Dhyb2csc = Chyb2csc = Zhyb2csc = _hyb2csc
 
@@ -882,6 +905,7 @@ class _hyb2csr(_api_function):
     prepare_csrRowPtrA = _prepare_array
     prepare_csrColIndA = _prepare_array
 
+
 Shyb2csr = Dhyb2csr = Chyb2csr = Zhyb2csr = _hyb2csr
 
 
@@ -889,6 +913,7 @@ class _hyb2dense(_api_function):
     prepare_descrA = _prepare_matdescr
     prepare_hybA = _prepare_hybmat
     prepare_A = _prepare_array
+
 
 Shyb2dense = Dhyb2dense = Chyb2dense = Zhyb2dense = _hyb2dense
 
@@ -900,6 +925,7 @@ class _hybmv(_api_function):
     prepare_hybA = _prepare_hybmat
     prepare_x = _prepare_array
     prepare_beta = _prepare_scalar
+
 
 Shybmv = Dhybmv = Chybmv = Zhybmv = _hybmv
 
@@ -924,6 +950,7 @@ class _hybsv_solve(_api_function):
     prepare_x = _prepare_array
     prepare_y = _prepare_array
 
+
 Shybsv_solve = Dhybsv_solve = Chybsv_solve = Zhybsv_solve = _hybsv_solve
 
 
@@ -945,6 +972,7 @@ class _sctr(_api_function):
     prepare_xVal = _prepare_array
     prepare_xInd = _prepare_array
     prepare_y = _prepare_array
+
 
 Ssctr = Dsctr = Csctr = Zsctr = _sctr
 
@@ -1034,6 +1062,7 @@ def _init_api_function(name, decl):
 
     def method(self, *args, **kws):
         return obj(self._handle, *args, **kws)
+
     method.__doc__ = docs
 
     return mangled, method
