@@ -1361,7 +1361,7 @@ class Function(object):
         inst.blockdim = blockdim
         inst.sharedmem = sharedmem
         if stream:
-            inst.stream = stream._handle
+            inst.stream = stream.handle
         else:
             inst.stream = None
         return inst
@@ -1406,7 +1406,7 @@ class Event(object):
     def record(self, stream=0):
         '''Set the record state of the event at the stream.
         '''
-        hstream = stream._handle if stream else 0
+        hstream = stream.handle if stream else 0
         error = self.driver.cuEventRecord(self._handle, hstream)
         self.driver.check_error(error, 'Failed to record event')
 
@@ -1420,7 +1420,7 @@ class Event(object):
         '''All future works submitted to stream will wait util the event
         completes.
         '''
-        hstream = stream._handle if stream else 0
+        hstream = stream.handle if stream else 0
         flags = 0
         error = self.driver.cuStreamWaitEvent(hstream, self._handle, flags)
         self.driver.check_error(error, 'Failed to do stream wait event')
@@ -1718,7 +1718,7 @@ def host_to_device(dst, src, size, stream=0):
 
     if stream:
         fn = driver.cuMemcpyHtoDAsync
-        varargs.append(stream._handle)
+        varargs.append(stream.handle)
     else:
         fn = driver.cuMemcpyHtoD
 
@@ -1736,7 +1736,7 @@ def device_to_host(dst, src, size, stream=0):
 
     if stream:
         fn = driver.cuMemcpyDtoHAsync
-        varargs.append(stream._handle)
+        varargs.append(stream.handle)
     else:
         fn = driver.cuMemcpyDtoH
 
@@ -1755,7 +1755,7 @@ def device_to_device(dst, src, size, stream=0):
 
     if stream:
         fn = driver.cuMemcpyDtoDAsync
-        varargs.append(stream._handle)
+        varargs.append(stream.handle)
     else:
         fn = driver.cuMemcpyDtoD
 
@@ -1776,7 +1776,7 @@ def device_memset(dst, val, size, stream=0):
 
     if stream:
         fn = driver.cuMemsetD8Async
-        varargs.append(stream._handle)
+        varargs.append(stream.handle)
     else:
         fn = driver.cuMemsetD8
 

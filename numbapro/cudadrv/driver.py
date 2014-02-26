@@ -1,5 +1,14 @@
 """
 CUDA driver bridge implementation
+
+NOTE:
+The new driver implementation uses a "trashing service" that help prevents a
+crashing the system (particularly OSX) when the CUDA context is corrupted at
+resource deallocation.  The old approach ties resource management directly
+into the object destructor; thus, at corruption of the CUDA context,
+subsequent deallocation could further corrupt the CUDA context and causes the
+system to freeze in some cases.
+
 """
 
 from __future__ import absolute_import, print_function, division
@@ -10,6 +19,7 @@ import ctypes
 import weakref
 import functools
 import copy
+import warnings
 from ctypes import (c_int, byref, c_size_t, c_char, c_char_p, addressof,
                     c_void_p, c_float)
 import contextlib
@@ -175,7 +185,7 @@ class Driver(object):
         if retcode != enums.CUDA_SUCCESS:
             errname = ERROR_MAP.get(retcode, "UNKNOWN_CUDA_ERROR")
             msg = "Call to %s results in %s" % (fname, errname)
-            raise CudaDriverError(retcode, msg)
+            raise CudaAPIError(retcode, msg)
 
     def get_device(self, devnum=0):
         dev = self.devices.get(devnum)
@@ -274,6 +284,15 @@ class Device(object):
         # A dictionary or all context with handle value as the key
         self.contexts = {}
 
+    @property
+    def COMPUTE_CAPABILITY(self):
+        """
+        For backward compatibility
+        """
+        warnings.warn("Deprecated attribute 'COMPUTE_CAPABILITY'; use lower "
+                      "case version", DeprecationWarning)
+        return self.compute_capability
+
     def __del__(self):
         try:
             self.reset()
@@ -293,10 +312,9 @@ class Device(object):
 
         value = c_int()
         driver.cuDeviceGetAttribute(byref(value), code, self.id)
-        setattr(self, attr, value)
+        setattr(self, attr, value.value)
 
         return value.value
-
 
     def __hash__(self):
         return hash(self.id)
@@ -453,7 +471,7 @@ class Context(object):
             self.allocations[mem.handle.value] = mem
             return mem.own()
         else:
-            finalizer = _pinned_finalizer(self.trashing, pointer)
+            finalizer = _pinnedalloc_finalizer(self.trashing, pointer)
             mem = PinnedMemory(weakref.proxy(self), owner, pointer, bytesize,
                                finalizer=finalizer)
             return mem
@@ -533,7 +551,7 @@ class Context(object):
         return Event(weakref.proxy(self), handle,
                      finalizer=_event_finalizer(self.trashing, handle))
 
-    def synchonize(self):
+    def synchronize(self):
         driver.cuCtxSynchronize()
 
     def __repr__(self):
@@ -592,6 +610,12 @@ _hostalloc_finalizer = _make_mem_finalizer(driver.cuMemFreeHost)
 _mapped_finalizer = _make_mem_finalizer(driver.cuMemHostUnregister)
 _memory_finalizer = _make_mem_finalizer(driver.cuMemFree)
 
+
+def _pinnedalloc_finalizer(trashing, handle):
+    def core():
+        trashing.add_trash(lambda: driver.cuMemFreeHost(handle))
+
+    return core
 
 def _pinned_finalizer(trashing, handle):
     def core():
@@ -934,8 +958,13 @@ class Function(object):
             streamhandle = self.stream.handle
         else:
             streamhandle = None
+
         launch_kernel(self.handle, self.griddim, self.blockdim,
                       self.sharedmem, streamhandle, args)
+
+    @property
+    def device(self):
+        return self.module.context.device
 
 
 def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, hstream, args):

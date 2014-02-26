@@ -2,20 +2,21 @@ import numpy as np
 from ctypes import c_void_p, c_int, POINTER, byref
 
 from numbapro.cudalib.libutils import Lib, ctype_function
-from numbapro.cudadrv.old_driver import cu_stream, device_pointer
+from numbapro.cudadrv.drvapi import cu_stream
+from numbapro.cudadrv.driver import device_pointer, host_pointer
 from numbapro._utils import finalizer
 
 STATUS = {
-  0x0 : 'CUFFT_SUCCESS',
-  0x1 : 'CUFFT_INVALID_PLAN',
-  0x2 : 'CUFFT_ALLOC_FAILED',
-  0x3 : 'CUFFT_INVALID_TYPE',
-  0x4 : 'CUFFT_INVALID_VALUE',
-  0x5 : 'CUFFT_INTERNAL_ERROR',
-  0x6 : 'CUFFT_EXEC_FAILED',
-  0x7 : 'CUFFT_SETUP_FAILED',
-  0x8 : 'CUFFT_INVALID_SIZE',
-  0x9 : 'CUFFT_UNALIGNED_DATA',
+    0x0: 'CUFFT_SUCCESS',
+    0x1: 'CUFFT_INVALID_PLAN',
+    0x2: 'CUFFT_ALLOC_FAILED',
+    0x3: 'CUFFT_INVALID_TYPE',
+    0x4: 'CUFFT_INVALID_VALUE',
+    0x5: 'CUFFT_INTERNAL_ERROR',
+    0x6: 'CUFFT_EXEC_FAILED',
+    0x7: 'CUFFT_SETUP_FAILED',
+    0x8: 'CUFFT_INVALID_SIZE',
+    0x9: 'CUFFT_UNALIGNED_DATA',
 }
 
 cufftResult = c_int
@@ -32,20 +33,22 @@ CUFFT_Z2Z = 0x69      # Double-Complex to Double-Complex
 
 cufftType = c_int
 
-CUFFT_COMPATIBILITY_NATIVE          = 0x00
-CUFFT_COMPATIBILITY_FFTW_PADDING    = 0x01    # The default value
+CUFFT_COMPATIBILITY_NATIVE = 0x00
+CUFFT_COMPATIBILITY_FFTW_PADDING = 0x01    # The default value
 CUFFT_COMPATIBILITY_FFTW_ASYMMETRIC = 0x02
-CUFFT_COMPATIBILITY_FFTW_ALL        = 0x03
+CUFFT_COMPATIBILITY_FFTW_ALL = 0x03
 
-CUFFT_COMPATIBILITY_DEFAULT         = CUFFT_COMPATIBILITY_FFTW_PADDING
+CUFFT_COMPATIBILITY_DEFAULT = CUFFT_COMPATIBILITY_FFTW_PADDING
 
 cufftCompatibility = c_int
 
 cufftHandle = c_int
 
+
 class CuFFTError(Exception):
     def __init__(self, code):
         super(CuFFTError, self).__init__(STATUS[code])
+
 
 class libcufft(Lib):
     lib = 'cufft'
@@ -61,99 +64,102 @@ class libcufft(Lib):
 
     cufftPlan1d = ctype_function(cufftResult,
                                  POINTER(cufftHandle), # plan
-                                 c_int,                # nx
-                                 cufftType,            # type
+                                 c_int, # nx
+                                 cufftType, # type
                                  c_int, # batch - deprecated - use cufftPlanMany
-                                 )
+    )
 
     cufftPlan2d = ctype_function(cufftResult,
                                  POINTER(cufftHandle), # plan
-                                 c_int,                # nx
-                                 c_int,                # ny
+                                 c_int, # nx
+                                 c_int, # ny
                                  cufftType             # type
-                                 )
+    )
 
     cufftPlan3d = ctype_function(cufftResult,
-                                 POINTER(cufftHandle),  # plan
-                                 c_int,                 # nx
-                                 c_int,                 # ny
-                                 c_int,                 # nz
+                                 POINTER(cufftHandle), # plan
+                                 c_int, # nx
+                                 c_int, # ny
+                                 c_int, # nz
                                  cufftType              # type
-                                 )
+    )
 
     cufftPlanMany = ctype_function(cufftResult,
                                    POINTER(cufftHandle), # plan
-                                   c_int,                # rank
+                                   c_int, # rank
                                    c_void_p, # POINTER(c_int) n
                                    c_void_p, # POINTER(c_int) inembed
-                                   c_int,                # istride
-                                   c_int,                # idist
+                                   c_int, # istride
+                                   c_int, # idist
                                    c_void_p, # POINTER(c_int) onembed
-                                   c_int,                # ostride
-                                   c_int,                # odist
-                                   cufftType,            # type
-                                   c_int,                # batch
-                                   )
+                                   c_int, # ostride
+                                   c_int, # odist
+                                   cufftType, # type
+                                   c_int, # batch
+    )
 
     cufftDestroy = ctype_function(cufftResult,
                                   cufftHandle, # plan
-                                  )
+    )
 
     cufftExecC2C = ctype_function(cufftResult,
-                                  cufftHandle,              # plan
+                                  cufftHandle, # plan
                                   c_void_p, # POINTER(cufftComplex) idata
                                   c_void_p, # POINTER(cufftComplex) odata
                                   c_int                     # direction
-                                  )
+    )
 
     cufftExecR2C = ctype_function(cufftResult,
-                                  cufftHandle,           # plan
+                                  cufftHandle, # plan
                                   c_void_p, # POINTER(cufftReal) idata
                                   c_void_p, # POINTER(cufftComplex) odata
-                                  )
+    )
 
     cufftExecC2R = ctype_function(cufftResult,
-                                  cufftHandle,              # plan
+                                  cufftHandle, # plan
                                   c_void_p, # POINTER(cufftComplex) idata
                                   c_void_p, # POINTER(cufftReal) odata
-                                  )
+    )
 
     cufftExecZ2Z = ctype_function(cufftResult,
-                                  cufftHandle,                 # plan
+                                  cufftHandle, # plan
                                   c_void_p, # POINTER(cufftDoubleComplex) idata
                                   c_void_p, # POINTER(cufftDoubleComplex) odata
-                                  c_int,                       # direction
-                                  )
+                                  c_int, # direction
+    )
 
     cufftExecD2Z = ctype_function(cufftResult,
-                                  cufftHandle,                 # plan
+                                  cufftHandle, # plan
                                   c_void_p, # POINTER(cufftDoubleReal) idata
                                   c_void_p, # POINTER(cufftDoubleComplex) odata
-                                  )
+    )
 
     cufftExecZ2D = ctype_function(cufftResult,
-                                  cufftHandle,                 # plan
+                                  cufftHandle, # plan
                                   c_void_p, # POINTER(cufftDoubleComplex) idata
                                   c_void_p, # POINTER(cufftDoubleReal) odata
-                                  )
+    )
 
     cufftSetStream = ctype_function(cufftResult,
-                                    cufftHandle,        # plan,
-                                    cu_stream,          # stream
-                                    )
+                                    cufftHandle, # plan,
+                                    cu_stream, # stream
+    )
 
     cufftSetCompatibilityMode = ctype_function(cufftResult,
-                                               cufftHandle,         # plan,
+                                               cufftHandle, # plan,
                                                cufftCompatibility   # mode
-                                               )
+    )
+
+
 cufft_dtype_to_name = {
-    CUFFT_R2C:'R2C',
-    CUFFT_C2R:'C2R',
-    CUFFT_C2C:'C2C',
-    CUFFT_D2Z:'D2Z',
-    CUFFT_Z2D:'Z2D',
-    CUFFT_Z2Z:'Z2Z',
+    CUFFT_R2C: 'R2C',
+    CUFFT_C2R: 'C2R',
+    CUFFT_C2C: 'C2C',
+    CUFFT_D2Z: 'D2Z',
+    CUFFT_Z2D: 'Z2D',
+    CUFFT_Z2Z: 'Z2Z',
 }
+
 
 class Plan(finalizer.OwnerMixin):
     @classmethod
@@ -164,7 +170,7 @@ class Plan(finalizer.OwnerMixin):
         inst._handle = cufftHandle()
         BATCH = 1           # deprecated args to cufftPlan1d
         inst._api.cufftPlan1d(byref(inst._handle), int(nx), int(dtype),
-                                       BATCH)
+                              BATCH)
         inst.dtype = dtype
         inst._finalizer_track((inst._handle, inst._api))
         return inst
@@ -176,7 +182,7 @@ class Plan(finalizer.OwnerMixin):
         inst._api = libcufft()
         inst._handle = cufftHandle()
         inst._api.cufftPlan2d(byref(inst._handle), int(nx), int(ny),
-                                       int(dtype))
+                              int(dtype))
         inst.dtype = dtype
         inst._finalizer_track((inst._handle, inst._api))
         return inst
@@ -188,7 +194,7 @@ class Plan(finalizer.OwnerMixin):
         inst._api = libcufft()
         inst._handle = cufftHandle()
         inst._api.cufftPlan3d(byref(inst._handle), int(nx), int(ny),
-                                       int(nz), int(dtype))
+                              int(nz), int(dtype))
         inst.dtype = dtype
         inst._finalizer_track((inst._handle, inst._api))
         return inst
@@ -220,7 +226,7 @@ class Plan(finalizer.OwnerMixin):
 
     def set_stream(self, stream):
         "Associate a CUDA stream to this plan object"
-        return self._api.cufftSetStream(self._handle, stream._handle)
+        return self._api.cufftSetStream(self._handle, stream.handle)
 
     def set_compatibility_mode(self, mode):
         return self._api.cufftSetCompatibilityMode(self._handle, mode)

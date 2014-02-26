@@ -7,7 +7,7 @@ import unittest
 
 REPEAT = 25
 
-class TestPinned(unittest.TestCase):
+class TestPinned(support.CUDATestCase):
 
     def _template(self, name, A):
         A0 = np.copy(A)

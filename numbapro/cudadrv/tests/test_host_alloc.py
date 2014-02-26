@@ -2,12 +2,11 @@ from __future__ import print_function, division, absolute_import
 import numpy as np
 from numbapro.cudadrv import driver
 from numbapro import cuda
-import unittest
 from . import support
 
 
 @support.addtest
-class TestHostAlloc(unittest.TestCase):
+class TestHostAlloc(support.CUDATestCase):
     def test_host_alloc_driver(self):
         n = 32
         mem = cuda.current_context().memhostalloc(n, mapped=True)

@@ -7,7 +7,8 @@ import threading
 
 
 class TLStack(object):
-    local = threading.local()
+    def __init__(self):
+        self.local = threading.local()
 
     @property
     def stack(self):
@@ -35,3 +36,5 @@ class TLStack(object):
     def __nonzero__(self):
         return not self.is_empty
 
+    def clear(self):
+        self.__init__()

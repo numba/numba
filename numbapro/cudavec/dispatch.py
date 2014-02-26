@@ -2,10 +2,12 @@ import math
 import numpy as np
 from numbapro.cudadrv import devicearray
 
+
 class CudaUFuncDispatcher(object):
     """
     Invoke the CUDA ufunc specialization for the given inputs.
     """
+
     def __init__(self, types_to_retty_kernels):
         self.functions = types_to_retty_kernels
 
@@ -14,7 +16,7 @@ class CudaUFuncDispatcher(object):
         try:
             return self.__max_blocksize
         except AttributeError:
-            return 2**30 # a very large number
+            return 2 ** 30 # a very large number
 
     @max_blocksize.setter
     def max_blocksize(self, blksz):
@@ -70,6 +72,7 @@ class CudaUFuncDispatcher(object):
                       the input arguments.
         '''
         from numbapro import cuda
+
         accepted_kws = 'stream', 'out'
         unknown_kws = [k for k in kws if k not in accepted_kws]
         assert not unknown_kws, ("Unknown keyword args %s" % unknown_kws)
@@ -99,7 +102,7 @@ class CudaUFuncDispatcher(object):
         result_dtype, cuda_func = self._get_function_by_dtype(dtypes)
 
         max_threads = min(cuda_func.device.MAX_THREADS_PER_BLOCK,
-                         self.max_blocksize)
+                          self.max_blocksize)
 
         # apply autotune
         if max_threads == cuda_func.device.MAX_THREADS_PER_BLOCK:
@@ -175,7 +178,7 @@ class CudaUFuncDispatcher(object):
 
             assert all(isinstance(array, np.ndarray)
                        for array in broadcast_arrays), \
-                    "not all arrays are numpy ndarray"
+                "not all arrays are numpy ndarray"
 
             device_ins = [cuda.to_device(x, stream) for x in broadcast_arrays]
             device_out = cuda.device_array_like(out, stream=stream)
@@ -220,12 +223,13 @@ class CudaUFuncDispatcher(object):
 
     def _determine_dimensions(self, n, max_thread):
         # determine grid and block dimension
-        thread_count =  int(min(max_thread, n))
+        thread_count = int(min(max_thread, n))
         block_count = int(math.ceil(float(n) / max_thread))
         return block_count, thread_count
 
     def reduce(self, arg, stream=0):
         from numbapro import cuda
+
         assert len(self.functions.keys()[0]) == 2, "must be a binary ufunc"
         assert arg.ndim == 1, "must use 1d array"
 
@@ -245,7 +249,7 @@ class CudaUFuncDispatcher(object):
                 mem = arg
             else:
                 mem = cuda.to_device(arg, stream)
-            # do reduction
+                # do reduction
             out = self.__reduce(mem, gpu_mems, stream)
             # use a small buffer to store the result element
             buf = np.array((1,), dtype=arg.dtype)
@@ -277,15 +281,17 @@ class CudaUFuncDispatcher(object):
             else:
                 return left
 
+
 class CUDAGenerializedUFunc(object):
     def __init__(self, kernelmap, engine):
         self.kernelmap = kernelmap
         self.engine = engine
-        self.max_blocksize = 2**30
+        self.max_blocksize = 2 ** 30
         assert self.engine.nout == 1, "only support single output"
 
     def __call__(self, *args, **kws):
         from numbapro import cuda
+
         is_device_array = [devicearray.is_cuda_ndarray(a) for a in args]
         if any(is_device_array) != all(is_device_array):
             raise TypeError('if device array is used, '
@@ -308,7 +314,7 @@ class CUDAGenerializedUFunc(object):
 
         # check output
         if out is not None and schedule.output_shapes[0] != out.shape:
-                raise ValueError('output shape mismatch')
+            raise ValueError('output shape mismatch')
 
         # prepare inputs
         if need_cuda_conv:
@@ -330,15 +336,19 @@ class CUDAGenerializedUFunc(object):
         if not schedule.loopdims:
             newparams = [p.reshape(1, *p.shape) for p in params]
             newretval = retval.reshape(1, *retval.shape)
-            self._launch_kernel(kernel, schedule.loopn, stream, newparams + [newretval])
+            self._launch_kernel(kernel, schedule.loopn, stream,
+                                newparams + [newretval])
         elif len(schedule.loopdims) > 1:
             odim = schedule.loopn
-            newparams = [p.reshape(odim, *cs) for p, cs in zip(params, schedule.ishapes)]
+            newparams = [p.reshape(odim, *cs) for p, cs in
+                         zip(params, schedule.ishapes)]
             newretval = retval.reshape(odim, *schedule.oshapes[0])
-            self._launch_kernel(kernel, schedule.loopn, stream, newparams + [newretval])
+            self._launch_kernel(kernel, schedule.loopn, stream,
+                                newparams + [newretval])
         else:
 
-            self._launch_kernel(kernel, schedule.loopn, stream, params + [retval])
+            self._launch_kernel(kernel, schedule.loopn, stream,
+                                params + [retval])
 
         # post execution
         if need_cuda_conv:

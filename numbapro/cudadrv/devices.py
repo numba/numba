@@ -60,6 +60,11 @@ class GPU(object):
         self._context.pop()
         _gpustack.pop()
 
+    def reset(self):
+        if self._context:
+            self._context.reset()
+            self._context = None
+
 
 def get_gpu(i):
     init_gpus()
@@ -83,4 +88,11 @@ def require_context(fn):
         get_context()
         return fn(*args, **kws)
     return _require_cuda_context
+
+
+def reset():
+    for gpu in gpus:
+        gpu.reset()
+    _gpustack.clear()
+
 

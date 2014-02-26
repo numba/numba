@@ -2,11 +2,11 @@ import unittest
 import ctypes
 import numpy
 from numbapro.cudadrv import driver, drvapi
-from .support import addtest, main
+from .support import addtest, main, CUDATestCase
 
 
 @addtest
-class TestCudaMemory(unittest.TestCase):
+class TestCudaMemory(CUDATestCase):
     def setUp(self):
         self.device = driver.driver.get_device()
         self.context = self.device.get_or_create_context()
@@ -38,7 +38,7 @@ class TestCudaMemory(unittest.TestCase):
 
 
 @addtest
-class TestCudaMemoryFunctions(unittest.TestCase):
+class TestCudaMemoryFunctions(CUDATestCase):
     def setUp(self):
         device = driver.driver.get_device()
         self.context = device.get_or_create_context()
@@ -80,7 +80,7 @@ class TestCudaMemoryFunctions(unittest.TestCase):
 
 
 @addtest
-class TestMVExtent(unittest.TestCase):
+class TestMVExtent(CUDATestCase):
     def test_c_contiguous_array(self):
         ary = numpy.arange(100)
         arysz = ary.dtype.itemsize * ary.size

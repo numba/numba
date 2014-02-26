@@ -233,8 +233,7 @@ def close():
 
     Destroy the current context of the current thread
     """
-    for gpu in devices.gpus:
-        gpu.reset()
+    devices.reset()
 
 
 def _auto_device(ary, stream=0, copy=True):

@@ -1,8 +1,10 @@
 import copy
 import ctypes
 from numbapro.npm import types
-from numbapro.cudadrv import devicearray
+from numbapro.cudadrv import devicearray, driver
 from numbapro.cudadrv.autotune import AutoTuner
+from numbapro.cudadrv.devices import get_context
+
 
 class CUDARuntimeError(RuntimeError):
     def __init__(self, exc, tx, ty, tz, bx, by):
@@ -18,6 +20,7 @@ class CUDARuntimeError(RuntimeError):
 class CUDAKernelBase(object):
     '''Define interface for configurable kernels
     '''
+
     def __init__(self):
         self.griddim = (1, 1)
         self.blockdim = (1, 1, 1)
@@ -59,10 +62,10 @@ class CUDAKernelBase(object):
         return self.configure(*args)
 
 
-
 class CUDAKernel(CUDAKernelBase):
-    '''A callable object representing a CUDA kernel.
-    '''
+    """A callable object representing a CUDA kernel.
+    """
+
     def __init__(self, name, ptx, argtys, excs):
         super(CUDAKernel, self).__init__()
         self.name = name                # to lookup entry kernel
@@ -79,20 +82,22 @@ class CUDAKernel(CUDAKernelBase):
         if self.linkfiles:
             self.link()
         else:
-            self.cu_module = old_driver.Module(ptx=self.ptx)
+            ctx = get_context()
+            self.cu_module = ctx.create_module_ptx(self.ptx)
             self.compile_info = self.cu_module.info_log
 
-        self.cu_function = old_driver.Function(self.cu_module, self.name)
+        self.cu_function = self.cu_module.get_function(self.name)
 
     def link(self):
         '''Link external files
         '''
-        linker = old_driver.Linker()
+        linker = driver.Linker()
         linker.add_ptx(self.ptx)
         for file in self.linkfiles:
             linker.add_file_guess_ext(file)
         cubin, _size = linker.complete()
-        self.cu_module = old_driver.Module(image=cubin)
+        ctx = get_context()
+        self.cu_module = ctx.create_module_image(cubin)
         self.compile_info = linker.info_log
 
     @property
@@ -107,7 +112,7 @@ class CUDAKernel(CUDAKernelBase):
             return self._autotune
         else:
             at = AutoTuner.parse(self.name, self.compile_info,
-                                 cc=self.device.COMPUTE_CAPABILITY)
+                                 cc=self.device.compute_capability)
             if at is None:
                 raise RuntimeError('driver does not report compiliation info')
             self._autotune = at
@@ -128,11 +133,11 @@ class CUDAKernel(CUDAKernelBase):
         return tpb
 
     def __call__(self, *args):
-        self._call(args = args,
-                   griddim = self.griddim,
-                   blockdim = self.blockdim,
-                   stream = self.stream,
-                   sharedmem = self.sharedmem)
+        self._call(args=args,
+                   griddim=self.griddim,
+                   blockdim=self.blockdim,
+                   stream=self.stream,
+                   sharedmem=self.sharedmem)
 
     def _call(self, args, griddim, blockdim, stream=0, sharedmem=0):
         # prepare arguments
@@ -143,9 +148,10 @@ class CUDAKernel(CUDAKernelBase):
 
         # allocate space for exception
         if self.excs:
+            ctx = get_context()
             excsize = ctypes.sizeof(ctypes.c_int32) * 6
-            excmem = old_driver.DeviceMemory(excsize)
-            old_driver.device_memset(excmem, 0, excsize)
+            excmem = ctx.memalloc(excsize)
+            driver.device_memset(excmem, 0, excsize)
             args.append(excmem.device_ctypes_pointer)
 
         # configure kernel
@@ -158,7 +164,8 @@ class CUDAKernel(CUDAKernelBase):
         # check exceptions
         if self.excs:
             exchost = (ctypes.c_int32 * 6)()
-            old_driver.device_to_host(ctypes.addressof(exchost), excmem, excsize)
+            driver.device_to_host(ctypes.addressof(exchost), excmem,
+                                  excsize)
             if exchost[0] != 0:
                 raise CUDARuntimeError(self.excs[exchost[0]].exc, *exchost[1:])
 
@@ -173,10 +180,11 @@ class CUDAKernel(CUDAKernelBase):
                 retr.append(lambda: devary.copy_to_host(val, stream=stream))
             return devary.as_cuda_arg()
         elif isinstance(ty.desc, types.Complex):
+            ctx = get_context()
             size = ctypes.sizeof(ty.desc.ctype_value())
-            dmem = old_driver.DeviceMemory(size)
+            dmem = ctx.memalloc(size)
             cval = ty.desc.ctype_value()(val)
-            old_driver.host_to_device(dmem, ctypes.addressof(cval), size,
+            driver.host_to_device(dmem, ctypes.addressof(cval), size,
                                   stream=stream)
             return dmem
         else:

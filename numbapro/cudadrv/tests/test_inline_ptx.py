@@ -6,7 +6,7 @@ from . import support
 
 
 @support.addtest
-class TestCudaInlineAsm(unittest.TestCase):
+class TestCudaInlineAsm(support.CUDATestCase):
     def test_inline_rsqrt(self):
         mod = Module.new(__name__)
         fnty = Type.function(Type.void(), [Type.pointer(Type.float())])

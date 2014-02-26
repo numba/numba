@@ -1,13 +1,13 @@
 from __future__ import print_function, absolute_import, division
-
 from numbapro import cuda
 from numbapro.cudadrv import driver
-import unittest, threading
+import threading
 
 from . import support
 
+
 @support.addtest
-class TestResetDevice(unittest.TestCase):
+class TestResetDevice(support.CUDATestCase):
     def test_reset_device(self):
 
         def newthread():
@@ -25,6 +25,7 @@ class TestResetDevice(unittest.TestCase):
         t = threading.Thread(target=newthread)
         t.start()
         t.join()
+
 
 if __name__ == '__main__':
     support.main()
