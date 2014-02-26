@@ -1,18 +1,20 @@
+from __future__ import absolute_import, print_function, division
+import unittest
 from numbapro.cudadrv.nvvm import (NVVM, CompilationUnit, llvm_to_ptx,
                                    set_cuda_kernel, fix_data_layout,
                                    get_arch_option)
 from ctypes import c_size_t, c_uint64, sizeof
 from llvm.core import Module, Type, Builder
-import support
+from . import support
 
 is64bit = sizeof(c_size_t) == sizeof(c_uint64)
 
 @support.addtest
-class TestNvvmDriver(support.CudaTestCase):
+class TestNvvmDriver(unittest.TestCase):
 
     def get_ptx(self):
         nvvm = NVVM()
-        print nvvm.get_version()
+        print(nvvm.get_version())
 
         if is64bit:
             return gpu64
@@ -25,15 +27,15 @@ class TestNvvmDriver(support.CudaTestCase):
 
         cu.add_module(nvvmir)
         ptx = cu.compile()
-        print ptx
+        print(ptx)
         self.assertTrue('simple' in ptx)
         self.assertTrue('ave' in ptx)
-        print cu.log
+        print(cu.log)
 
     def test_nvvm_compile_simple(self):
         nvvmir = self.get_ptx()
         ptx = llvm_to_ptx(nvvmir)
-        print ptx
+        print(ptx)
         self.assertTrue('simple' in ptx)
         self.assertTrue('ave' in ptx)
 
@@ -43,12 +45,12 @@ class TestNvvmDriver(support.CudaTestCase):
         kernel = m.add_function(fty, name='mycudakernel')
         bldr = Builder.new(kernel.append_basic_block('entry'))
         bldr.ret_void()
-        print m
+        print(m)
         set_cuda_kernel(kernel)
 
         fix_data_layout(m)
         ptx = llvm_to_ptx(str(m))
-        print ptx
+        print(ptx)
         self.assertTrue('mycudakernel' in ptx)
         if is64bit:
             self.assertTrue('.address_size 64' in ptx)
@@ -57,7 +59,7 @@ class TestNvvmDriver(support.CudaTestCase):
 
 
 @support.addtest
-class TestArchOption(support.CudaTestCase):
+class TestArchOption(unittest.TestCase):
     def test_get_arch_option(self):
         self.assertTrue(get_arch_option(2, 0) == 'compute_20')
         self.assertTrue(get_arch_option(2, 1) == 'compute_20')

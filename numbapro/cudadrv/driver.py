@@ -1,1352 +1,939 @@
-'''
-This is more-or-less a object-oriented interface to the CUDA driver API.
-It properly has a lot of resemblence with PyCUDA.
-'''
+"""
+CUDA driver bridge implementation
 
-import sys, os
-import functools
-import contextlib
-from ctypes import (c_int, c_void_p, POINTER, c_size_t, byref, addressof,
-                    c_uint, c_uint8, c_char_p, c_float, c_char,)
+NOTE:
+The new driver implementation uses a "trashing service" that help prevents a
+crashing the system (particularly OSX) when the CUDA context is corrupted at
+resource deallocation.  The old approach ties resource management directly
+into the object destructor; thus, at corruption of the CUDA context,
+subsequent deallocation could further corrupt the CUDA context and causes the
+system to freeze in some cases.
+
+"""
+
+from __future__ import absolute_import, print_function, division
+import sys
+import os
+import traceback
 import ctypes
-from .error import CudaDriverError, CudaSupportError
+import weakref
+import functools
+import copy
+import warnings
+from ctypes import (c_int, byref, c_size_t, c_char, c_char_p, addressof,
+                    c_void_p, c_float)
+import contextlib
+from numba import utils
+from numbapro import servicelib
+from numbapro.cudadrv.error import CudaSupportError, CudaDriverError
+from .drvapi import API_PROTOTYPES
+from . import enums, drvapi
 from numbapro._utils import mviewbuf
-import threading
-import numbapro
-
-
-#------------------
-# Configuration
 
 VERBOSE_JIT_LOG = int(os.environ.get('NUMBAPRO_VERBOSE_CU_JIT_LOG', 1))
 MIN_REQUIRED_CC = (2, 0)
 
-# debug memory
-debug_memory = False
-debug_memory_alloc = 0
-debug_memory_free = 0
-
-def print_debug_memory():
-    print "CUDA allocation: %d" % (debug_memory_alloc)
-    print "CUDA free:       %d" % (debug_memory_free)
-
-
-#------------------
-# CUDA specific typedefs
-cu_device = c_int
-cu_device_attribute = c_int     # enum
-cu_context = c_void_p           # an opaque handle
-cu_module = c_void_p            # an opaque handle
-cu_jit_option = c_int           # enum
-cu_jit_input_type = c_int       # enum
-cu_function = c_void_p          # an opaque handle
-cu_device_ptr = c_size_t        # defined as unsigned int on 32-bit
-                                # and unsigned long long on 64-bit machine
-cu_stream = c_void_p            # an opaque handle
-cu_event = c_void_p
-cu_link_state = c_void_p
-
-CUDA_SUCCESS                              = 0
-CUDA_ERROR_INVALID_VALUE                  = 1
-CUDA_ERROR_OUT_OF_MEMORY                  = 2
-CUDA_ERROR_NOT_INITIALIZED                = 3
-CUDA_ERROR_DEINITIALIZED                  = 4
-CUDA_ERROR_PROFILER_DISABLED              = 5
-CUDA_ERROR_PROFILER_NOT_INITIALIZED       = 6
-CUDA_ERROR_PROFILER_ALREADY_STARTED       = 7
-CUDA_ERROR_PROFILER_ALREADY_STOPPED       = 8
-CUDA_ERROR_NO_DEVICE                      = 100
-CUDA_ERROR_INVALID_DEVICE                 = 101
-CUDA_ERROR_INVALID_IMAGE                  = 200
-CUDA_ERROR_INVALID_CONTEXT                = 201
-CUDA_ERROR_CONTEXT_ALREADY_CURRENT        = 202
-CUDA_ERROR_MAP_FAILED                     = 205
-CUDA_ERROR_UNMAP_FAILED                   = 206
-CUDA_ERROR_ARRAY_IS_MAPPED                = 207
-CUDA_ERROR_ALREADY_MAPPED                 = 208
-CUDA_ERROR_NO_BINARY_FOR_GPU              = 209
-CUDA_ERROR_ALREADY_ACQUIRED               = 210
-CUDA_ERROR_NOT_MAPPED                     = 211
-CUDA_ERROR_NOT_MAPPED_AS_ARRAY            = 212
-CUDA_ERROR_NOT_MAPPED_AS_POINTER          = 213
-CUDA_ERROR_ECC_UNCORRECTABLE              = 214
-CUDA_ERROR_UNSUPPORTED_LIMIT              = 215
-CUDA_ERROR_CONTEXT_ALREADY_IN_USE         = 216
-CUDA_ERROR_INVALID_SOURCE                 = 300
-CUDA_ERROR_FILE_NOT_FOUND                 = 301
-CUDA_ERROR_SHARED_OBJECT_SYMBOL_NOT_FOUND = 302
-CUDA_ERROR_SHARED_OBJECT_INIT_FAILED      = 303
-CUDA_ERROR_OPERATING_SYSTEM               = 304
-CUDA_ERROR_INVALID_HANDLE                 = 400
-CUDA_ERROR_NOT_FOUND                      = 500
-CUDA_ERROR_NOT_READY                      = 600
-CUDA_ERROR_LAUNCH_FAILED                  = 700
-CUDA_ERROR_LAUNCH_OUT_OF_RESOURCES        = 701
-CUDA_ERROR_LAUNCH_TIMEOUT                 = 702
-CUDA_ERROR_LAUNCH_INCOMPATIBLE_TEXTURING  = 703
-CUDA_ERROR_PEER_ACCESS_ALREADY_ENABLED    = 704
-CUDA_ERROR_PEER_ACCESS_NOT_ENABLED        = 705
-CUDA_ERROR_PRIMARY_CONTEXT_ACTIVE         = 708
-CUDA_ERROR_CONTEXT_IS_DESTROYED           = 709
-CUDA_ERROR_ASSERT                         = 710
-CUDA_ERROR_TOO_MANY_PEERS                 = 711
-CUDA_ERROR_HOST_MEMORY_ALREADY_REGISTERED = 712
-CUDA_ERROR_HOST_MEMORY_NOT_REGISTERED     = 713
-CUDA_ERROR_UNKNOWN                        = 999
-
-
-# no preference for shared memory or L1 (default)
-CU_FUNC_CACHE_PREFER_NONE    = 0x00
-# prefer larger shared memory and smaller L1 cache
-CU_FUNC_CACHE_PREFER_SHARED  = 0x01
-# prefer larger L1 cache and smaller shared memory
-CU_FUNC_CACHE_PREFER_L1      = 0x02
-# prefer equal sized L1 cache and shared memory
-CU_FUNC_CACHE_PREFER_EQUAL   = 0x03
-
-# Automatic scheduling
-CU_CTX_SCHED_AUTO          = 0x00
-# Set spin as default scheduling
-CU_CTX_SCHED_SPIN          = 0x01
-# Set yield as default scheduling
-CU_CTX_SCHED_YIELD         = 0x02
-# Set blocking synchronization as default scheduling
-CU_CTX_SCHED_BLOCKING_SYNC = 0x04
-
-CU_CTX_SCHED_MASK          = 0x07
-
-# Support mapped pinned allocations
-CU_CTX_MAP_HOST            = 0x08
-# Keep local memory allocation after launch
-CU_CTX_LMEM_RESIZE_TO_MAX  = 0x10
-
-CU_CTX_FLAGS_MASK          = 0x1f
-
 
-
-# If set, host memory is portable between CUDA contexts.
-# Flag for cuMemHostAlloc()
-CU_MEMHOSTALLOC_PORTABLE = 0x01
-
-# If set, host memory is mapped into CUDA address space and
-# cuMemHostGetDevicePointer() may be called on the host pointer.
-# Flag for cuMemHostAlloc()
-CU_MEMHOSTALLOC_DEVICEMAP = 0x02
-
-# If set, host memory is allocated as write-combined - fast to write,
-# faster to DMA, slow to read except via SSE4 streaming load instruction
-# (MOVNTDQA).
-# Flag for cuMemHostAlloc()
-CU_MEMHOSTALLOC_WRITECOMBINED = 0x04
-
-# If set, host memory is portable between CUDA contexts.
-# Flag for cuMemHostRegister()
-CU_MEMHOSTREGISTER_PORTABLE = 0x01
-
-# If set, host memory is mapped into CUDA address space and
-# cuMemHostGetDevicePointer() may be called on the host pointer.
-# Flag for cuMemHostRegister()
-CU_MEMHOSTREGISTER_DEVICEMAP = 0x02
-
-
-# Default event flag
-CU_EVENT_DEFAULT        = 0x0
-# Event uses blocking synchronization
-CU_EVENT_BLOCKING_SYNC  = 0x1
-# Event will not record timing data
-CU_EVENT_DISABLE_TIMING = 0x2
-# Event is suitable for interprocess use. CU_EVENT_DISABLE_TIMING must be set
-CU_EVENT_INTERPROCESS   = 0x4
-
-# The CUcontext on which a pointer was allocated or registered
-CU_POINTER_ATTRIBUTE_CONTEXT = 1,
-# The CUmemorytype describing the physical location of a pointer
-CU_POINTER_ATTRIBUTE_MEMORY_TYPE = 2
-# The address at which a pointer's memory may be accessed on the device
-CU_POINTER_ATTRIBUTE_DEVICE_POINTER = 3
-# The address at which a pointer's memory may be accessed on the host
-CU_POINTER_ATTRIBUTE_HOST_POINTER = 4
-# A pair of tokens for use with the nv-p2p.h Linux kernel interface
-CU_POINTER_ATTRIBUTE_P2P_TOKENS = 5
-
-# Host memory
-CU_MEMORYTYPE_HOST    = 0x01
-# Device memory
-CU_MEMORYTYPE_DEVICE  = 0x02
-# Array memory
-CU_MEMORYTYPE_ARRAY   = 0x03
-# Unified device or host memory
-CU_MEMORYTYPE_UNIFIED = 0x04
-
-
-
-# Compiled device-class-specific device code
-# Applicable options: none
-CU_JIT_INPUT_CUBIN = 0
-
-# PTX source code
-# Applicable options: PTX compiler options
-CU_JIT_INPUT_PTX = 1
-
-# Bundle of multiple cubins and/or PTX of some device code
-# Applicable options: PTX compiler options, ::CU_JIT_FALLBACK_STRATEGY
-CU_JIT_INPUT_FATBINAR = 2
-
-# Host object with embedded device code
-# Applicable options: PTX compiler options, ::CU_JIT_FALLBACK_STRATEGY
-CU_JIT_INPUT_OBJECT = 3
-
-# Archive of host objects with embedded device code
-# Applicable options: PTX compiler options, ::CU_JIT_FALLBACK_STRATEGY
-CU_JIT_INPUT_LIBRARY = 4
-
-
-
-# Max number of registers that a thread may use.
-# Option type: unsigned int
-# Applies to: compiler only
-
-CU_JIT_MAX_REGISTERS = 0,
-
-
-# IN: Specifies minimum number of threads per block to target compilation
-# for
-# OUT: Returns the number of threads the compiler actually targeted.
-# This restricts the resource utilization fo the compiler (e.g. max
-# registers) such that a block with the given number of threads should be
-# able to launch based on register limitations. Note, this option does not
-# currently take into account any other resource limitations, such as
-# shared memory utilization.
-# Cannot be combined with ::CU_JIT_TARGET.
-# Option type: unsigned int
-# Applies to: compiler only
-
-CU_JIT_THREADS_PER_BLOCK = 1
-
-
-# Overwrites the option value with the total wall clock time, in
-# milliseconds, spent in the compiler and linker
-# Option type: float
-# Applies to: compiler and linker
-
-CU_JIT_WALL_TIME = 2  
-
-
-# Pointer to a buffer in which to print any log messages
-# that are informational in nature (the buffer size is specified via
-# option ::CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES)
-# Option type: char *
-# Applies to: compiler and linker
-
-CU_JIT_INFO_LOG_BUFFER = 3
-
-
-# IN: Log buffer size in bytes.  Log messages will be capped at this size
-# (including null terminator)
-# OUT: Amount of log buffer filled with messages
-# Option type: unsigned int
-# Applies to: compiler and linker
-
-CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES = 4
-
-
-# Pointer to a buffer in which to print any log messages that
-# reflect errors (the buffer size is specified via option
-# ::CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES)
-# Option type: char *
-# Applies to: compiler and linker
-
-CU_JIT_ERROR_LOG_BUFFER = 5
-
-
-# IN: Log buffer size in bytes.  Log messages will be capped at this size
-# (including null terminator)
-# OUT: Amount of log buffer filled with messages
-# Option type: unsigned int
-# Applies to: compiler and linker
-
-CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES = 6
-
-
-# Level of optimizations to apply to generated code (0 - 4), with 4
-# being the default and highest level of optimizations.
-# Option type: unsigned int
-# Applies to: compiler only
-
-CU_JIT_OPTIMIZATION_LEVEL = 7
-
-
-# No option value required. Determines the target based on the current
-# attached context (default)
-# Option type: No option value needed
-# Applies to: compiler and linker
-
-CU_JIT_TARGET_FROM_CUCONTEXT = 8
-
-
-# Target is chosen based on supplied ::CUjit_target.  Cannot be
-# combined with ::CU_JIT_THREADS_PER_BLOCK.
-# Option type: unsigned int for enumerated type ::CUjit_target
-# Applies to: compiler and linker
-
-CU_JIT_TARGET = 9
-
-
-# Specifies choice of fallback strategy if matching cubin is not found.
-# Choice is based on supplied ::CUjit_fallback.
-# Option type: unsigned int for enumerated type ::CUjit_fallback
-# Applies to: compiler only
-
-CU_JIT_FALLBACK_STRATEGY = 10
-
-
-# Specifies whether to create debug information in output (-g)
-# (0: false, default)
-# Option type: int
-# Applies to: compiler and linker
-
-CU_JIT_GENERATE_DEBUG_INFO = 11
-
-
-# Generate verbose log messages (0: false, default)
-# Option type: int
-# Applies to: compiler and linker
-
-CU_JIT_LOG_VERBOSE = 12
-
-
-# Generate line number information (-lineinfo) (0: false, default)
-# Option type: int
-# Applies to: compiler only
-
-CU_JIT_GENERATE_LINE_INFO = 13
-
-
-# Specifies whether to enable caching explicitly (-dlcm) 
-# Choice is based on supplied ::CUjit_cacheMode_enum.
-# Option type: unsigned int for enumerated type ::CUjit_cacheMode_enum
-# Applies to: compiler only
-
-CU_JIT_CACHE_MODE = 14
+class DeadMemoryError(RuntimeError):
+    pass
+
+
+class LinkerError(RuntimeError):
+    pass
+
+
+class CudaAPIError(CudaDriverError):
+    def __init__(self, code, msg):
+        self.code = code
+        super(CudaAPIError, self).__init__(msg)
+
+
+def find_driver():
+    envpath = os.environ.get('NUMBAPRO_CUDA_DRIVER', None)
+    if envpath is not None:
+        try:
+            envpath = os.path.abspath(envpath)
+        except ValueError:
+            raise ValueError("NUMBAPRO_CUDA_DRIVER %s is not a valid path" %
+                             envpath)
+        if not os.path.isfile(envpath):
+            raise ValueError("NUMBAPRO_CUDA_DRIVER %s is not a valid file "
+                             "path.  Note it must be a filepath of the .so/"
+                             ".dll/.dylib or the driver" % envpath)
+        candidates = [envpath]
+    else:
+        # Determine DLL type
+        if sys.platform == 'win32':
+            dlloader = ctypes.WinDLL
+            dldir = ['\\windows\\system32']
+            dlname = 'nvcuda.dll'
+        elif sys.platform == 'darwin':
+            dlloader = ctypes.CDLL
+            dldir = ['/usr/local/cuda/lib']
+            dlname = 'libcuda.dylib'
+        else:
+            # Assume to be *nix like
+            dlloader = ctypes.CDLL
+            dldir = ['/usr/lib', '/usr/lib64']
+            dlname = 'libcuda.so'
+
+        # First search for the name in the default library path.
+        # If that is not found, try the specific path.
+        candidates = [dlname] + [os.path.join(x, dlname) for x in dldir]
+
+    # Load the driver; Collect driver error information
+    path_not_exist = []
+    driver_load_error = []
+
+    for path in candidates:
+        try:
+            dll = dlloader(path)
+        except OSError as e:
+            # Problem opening the DLL
+            path_not_exist.append(not os.path.isfile(path))
+            driver_load_error.append(e)
+        else:
+            return dll
+
+    # Problem loading driver
+    if all(path_not_exist):
+        _raise_driver_not_found()
+    else:
+        errmsg = '\n'.join(str(e) for e in driver_load_error)
+        _raise_driver_error(errmsg)
+
+
+DRIVER_NOT_FOUND_MSG = """
+CUDA driver library cannot be found.
+If you are sure that a CUDA driver is installed,
+try setting environment variable NUMBAPRO_CUDA_DRIVER
+with the file path of the CUDA driver shared library.
+"""
+
+DRIVER_LOAD_ERROR_MSG = """
+Possible CUDA driver libraries are found but error occurred during load:
+%s
+"""
+
+
+def _raise_driver_not_found():
+    raise CudaSupportError(DRIVER_NOT_FOUND_MSG)
+
+
+def _raise_driver_error(e):
+    raise CudaSupportError(DRIVER_LOAD_ERROR_MSG % e)
 
 
 def _build_reverse_error_map():
     prefix = 'CUDA_ERROR'
-    module = sys.modules[__name__]
-    return dict((getattr(module, i), i)
-                for i in filter(lambda x: x.startswith(prefix), globals()))
+    map = utils.UniqueDict()
+    for name in dir(enums):
+        if name.startswith(prefix):
+            code = getattr(enums, name)
+            map[code] = name
+    return map
 
-class ResourceManager(object):
-    '''Per device resource manager
-    '''
-    def __init__(self, device_id):
-        self.device_id = device_id
-        self.reset()
 
-    def reset(self):
-        self.allocated = {}
-        self.resources = {}
-        self.pending_free = []
-        self.pending_destroy = []
-        self.can_release = True
+ERROR_MAP = _build_reverse_error_map()
 
-    @property
-    def driver(self):
-        return Driver()
-
-    #    @property
-    #    def device(self):
-    #        return Device(self.device_id)
-
-    def add_memory(self, handle, dtor):
-        assert handle not in self.allocated
-        if debug_memory:
-            global debug_memory_alloc
-            debug_memory_alloc += 1
-        self.allocated[handle] = dtor
-
-    def free_memory(self, handle, later=False):
-        dtor = self.allocated.pop(handle, None)
-        if dtor:
-            self.pending_free.append((handle, dtor))
-            if not later:
-                self.free_pending()
-
-    def _free_memory(self, dtor, handle):
-        if debug_memory:
-            global debug_memory_free
-            debug_memory_free += 1
-        self.driver.check_error(dtor(handle), msg="Fail to free memory")
-
-    def free_pending(self):
-        if self.can_release:
-            while self.pending_free:
-                handle, dtor = self.pending_free.pop()
-                self._free_memory(dtor, handle)
-            while self.pending_destroy:
-                handle, dtor, msg = self.pending_destroy.pop()
-                self._destroy_resource(dtor, handle, msg)
-
-    def _destroy_resource(self, dtor, handle, msg):
-        self.driver.check_error(dtor(handle), msg=msg)
-
-    def add_resource(self, handle, dtor):
-        assert handle not in self.resources
-        self.resources[handle] = dtor
-
-    def free_resource(self, handle, msg, later=False):
-        dtor = self.resources.pop(handle, None)
-        if dtor:
-            self.pending_destroy.append((handle, dtor, msg))
-            if not later:
-                self.free_pending()
 
 class Driver(object):
-    '''Facade to the CUDA Driver API.  A singleton class.  It is safe to
-    construct new instance.  The constructor (__new__) will only create a new
-    driver object if none exist already.
-    '''
-
-    '''
-    Only the ones that we use are listed.
-    '''
-    API_PROTOTYPES = {
-        # CUresult cuInit(unsigned int Flags);
-        'cuInit' :              (c_int, c_uint),
-
-        # CUresult cuDriverGetVersion ( int* driverVersion )
-        'cuDriverGetVersion':   (c_int, POINTER(c_int)),
-
-        # CUresult cuDeviceGetCount(int *count);
-        'cuDeviceGetCount':     (c_int, POINTER(c_int)),
-
-        # CUresult cuDeviceGet(CUdevice *device, int ordinal);
-        'cuDeviceGet':          (c_int, POINTER(cu_device), c_int),
-        
-        # CUresult cuDeviceGetName ( char* name, int  len, CUdevice dev )
-        'cuDeviceGetName':      (c_int, c_char_p, c_int, cu_device),
-
-        # CUresult cuDeviceGetAttribute(int *pi, CUdevice_attribute attrib,
-        #                               CUdevice dev);
-        'cuDeviceGetAttribute': (c_int, POINTER(c_int), cu_device_attribute,
-                                 cu_device),
-
-        # CUresult cuDeviceComputeCapability(int *major, int *minor,
-        #                                    CUdevice dev);
-        'cuDeviceComputeCapability': (c_int, POINTER(c_int), POINTER(c_int),
-                                      cu_device),
-
-        # CUresult cuCtxCreate(CUcontext *pctx, unsigned int flags,
-        #                      CUdevice dev);
-        'cuCtxCreate':          (c_int, POINTER(cu_context), c_uint, cu_device),
-
-        # CUresult cuCtxGetDevice	(	CUdevice * 	device	 )
-        'cuCtxGetDevice':       (c_int, POINTER(cu_device)),
-
-        # CUresult cuCtxGetCurrent	(CUcontext *pctx);
-        'cuCtxGetCurrent':      (c_int, POINTER(cu_context)),
-
-        # CUresult cuCtxPopCurrent	(CUcontext *pctx);
-        'cuCtxPopCurrent':      (c_int, POINTER(cu_context)),
-
-        # CUresult cuCtxDestroy(CUcontext pctx);
-        'cuCtxDestroy':         (c_int, cu_context),
-
-        # CUresult cuModuleLoadDataEx(CUmodule *module, const void *image,
-        #                             unsigned int numOptions,
-        #                             CUjit_option *options,
-        #                             void **optionValues);
-        'cuModuleLoadDataEx':   (c_int, cu_module, c_void_p, c_uint,
-                                POINTER(cu_jit_option), POINTER(c_void_p)),
-
-        # CUresult cuModuleUnload(CUmodule hmod);
-        'cuModuleUnload':       (c_int, cu_module),
-
-        # CUresult cuModuleGetFunction(CUfunction *hfunc, CUmodule hmod,
-        #                              const char *name);
-        'cuModuleGetFunction':  (c_int, cu_function, cu_module, c_char_p),
-        
-        # CUresult CUDAAPI cuFuncSetCacheConfig(CUfunction hfunc,
-        #                                       CUfunc_cache config);
-        'cuFuncSetCacheConfig': (c_int, cu_function, c_uint),
-
-        # CUresult cuMemAlloc(CUdeviceptr *dptr, size_t bytesize);
-        'cuMemAlloc':         (c_int, POINTER(cu_device_ptr), c_size_t),
-
-        # CUresult cuMemsetD8(CUdeviceptr dstDevice, unsigned char uc, size_t N)
-        'cuMemsetD8':         (c_int, cu_device_ptr, c_uint8, c_size_t),
-
-        # CUresult cuMemsetD8Async(CUdeviceptr dstDevice, unsigned char uc,
-        #                          size_t N, CUstream hStream);
-        'cuMemsetD8Async':    (c_int,
-                               cu_device_ptr, c_uint8, c_size_t, cu_stream),
-
-        # CUresult cuMemcpyHtoD(CUdeviceptr dstDevice, const void *srcHost,
-        #                       size_t ByteCount);
-        'cuMemcpyHtoD':         (c_int, cu_device_ptr, c_void_p, c_size_t),
-
-        # CUresult cuMemcpyHtoDAsync(CUdeviceptr dstDevice, const void *srcHost,
-        #                            size_t ByteCount, CUstream hStream);
-        'cuMemcpyHtoDAsync':    (c_int, cu_device_ptr, c_void_p, c_size_t,
-                                cu_stream),
-        
-        # CUresult cuMemcpyHtoD(CUdeviceptr dstDevice, const void *srcHost,
-        #                       size_t ByteCount);
-        'cuMemcpyDtoD':         (c_int, cu_device_ptr, cu_device_ptr, c_size_t),
-
-        # CUresult cuMemcpyHtoDAsync(CUdeviceptr dstDevice, const void *srcHost,
-        #                            size_t ByteCount, CUstream hStream);
-        'cuMemcpyDtoDAsync':    (c_int, cu_device_ptr, cu_device_ptr, c_size_t,
-                                cu_stream),
-
-
-        # CUresult cuMemcpyDtoH(void *dstHost, CUdeviceptr srcDevice,
-        #                       size_t ByteCount);
-        'cuMemcpyDtoH':         (c_int, c_void_p, cu_device_ptr, c_size_t),
-
-        # CUresult cuMemcpyDtoHAsync(void *dstHost, CUdeviceptr srcDevice,
-        #                            size_t ByteCount, CUstream hStream);
-        'cuMemcpyDtoHAsync':    (c_int, c_void_p, cu_device_ptr, c_size_t,
-                                cu_stream),
-
-        # CUresult cuMemFree(CUdeviceptr dptr);
-        'cuMemFree':            (c_int, cu_device_ptr),
-
-        # CUresult cuStreamCreate(CUstream *phStream, unsigned int Flags);
-        'cuStreamCreate':       (c_int, POINTER(cu_stream), c_uint),
-
-        # CUresult cuStreamDestroy(CUstream hStream);
-        'cuStreamDestroy':      (c_int, cu_stream),
-
-        # CUresult cuStreamSynchronize(CUstream hStream);
-        'cuStreamSynchronize':  (c_int, cu_stream),
-
-        # CUresult cuLaunchKernel(CUfunction f, unsigned int gridDimX,
-        #                        unsigned int gridDimY,
-        #                        unsigned int gridDimZ,
-        #                        unsigned int blockDimX,
-        #                        unsigned int blockDimY,
-        #                        unsigned int blockDimZ,
-        #                        unsigned int sharedMemBytes,
-        #                        CUstream hStream, void **kernelParams,
-        #                        void ** extra)
-        'cuLaunchKernel':       (c_int, cu_function, c_uint, c_uint, c_uint,
-                                 c_uint, c_uint, c_uint, c_uint, cu_stream,
-                                 POINTER(c_void_p), POINTER(c_void_p)),
-
-        #  CUresult cuMemHostAlloc	(	void ** 	pp,
-        #                               size_t 	bytesize,
-        #                               unsigned int 	Flags
-        #                           )
-        'cuMemHostAlloc': (c_int, c_void_p, c_size_t, c_uint),
-
-        #  CUresult cuMemFreeHost	(	void * 	p	 )
-        'cuMemFreeHost': (c_int, c_void_p),
-
-        # CUresult cuMemHostRegister(void * 	p,
-        #                            size_t 	bytesize,
-        #                            unsigned int 	Flags)
-        'cuMemHostRegister':    (c_int, c_void_p, c_size_t, c_uint),
-
-        # CUresult cuMemHostUnregister(void * 	p)
-        'cuMemHostUnregister':  (c_int, c_void_p),
-
-        # CUresult cuMemHostGetDevicePointer(CUdeviceptr * pdptr,
-        #                                    void *        p,
-        #                                    unsigned int  Flags)
-        'cuMemHostGetDevicePointer': (c_int, POINTER(cu_device_ptr),
-                                      c_void_p, c_uint),
-
-        # CUresult cuMemGetInfo(size_t * free, size_t * total)
-        'cuMemGetInfo' : (c_int, POINTER(c_size_t), POINTER(c_size_t)),
-
-        # CUresult cuEventCreate	(	CUevent * 	phEvent,
-        #                               unsigned int 	Flags )
-        'cuEventCreate': (c_int, POINTER(cu_event), c_uint),
-
-        # CUresult cuEventDestroy	(	CUevent 	hEvent	 )
-        'cuEventDestroy': (c_int, cu_event),
-
-        # CUresult cuEventElapsedTime	(	float * 	pMilliseconds,
-        #                                   CUevent 	hStart,
-        #                                   CUevent 	hEnd )
-        'cuEventElapsedTime': (c_int, POINTER(c_float), cu_event, cu_event),
-
-        # CUresult cuEventQuery	(	CUevent 	hEvent	 )
-        'cuEventQuery': (c_int, cu_event),
-
-        # CUresult cuEventRecord	(	CUevent 	hEvent,
-        #                               CUstream 	hStream )
-        'cuEventRecord': (c_int, cu_event, cu_stream),
-
-        # CUresult cuEventSynchronize	(	CUevent 	hEvent	 )
-        'cuEventSynchronize': (c_int, cu_event),
-
-
-        # CUresult cuStreamWaitEvent	(	CUstream        hStream,
-        #                                   CUevent         hEvent,
-        #                                	unsigned int 	Flags )
-        'cuStreamWaitEvent': (c_int, cu_stream, cu_event, c_uint),
-
-        # CUresult 	cuPointerGetAttribute (void *data, CUpointer_attribute attribute, CUdeviceptr ptr)
-        'cuPointerGetAttribute': (c_int, c_void_p, c_uint, cu_device_ptr),
-
-        #    CUresult cuMemGetAddressRange	(	CUdeviceptr * 	pbase,
-        #                                        size_t * 	psize,
-        #                                        CUdeviceptr 	dptr	 
-        #                                        )
-        'cuMemGetAddressRange': (c_int,
-                                 POINTER(cu_device_ptr),
-                                 POINTER(c_size_t),
-                                 cu_device_ptr),
-
-        #    CUresult cuMemHostGetFlags	(	unsigned int * 	pFlags,
-        #                                   void * 	p )
-        'cuMemHostGetFlags': (c_int,
-                              POINTER(c_uint),
-                              c_void_p),
-
-        #   CUresult cuCtxSynchronize ( void )
-        'cuCtxSynchronize' : (c_int,),
-
-        #    CUresult
-        #    cuLinkCreate(unsigned int numOptions, CUjit_option *options,
-        #                 void **optionValues, CUlinkState *stateOut);
-        'cuLinkCreate': (c_int,
-                         c_uint, POINTER(cu_jit_option),
-                         POINTER(c_void_p), POINTER(cu_link_state)),
-
-        #    CUresult
-        #    cuLinkAddData(CUlinkState state, CUjitInputType type, void *data,
-        #                  size_t size, const char *name, unsigned
-        #                  int numOptions, CUjit_option *options,
-        #                  void **optionValues);
-        'cuLinkAddData': (c_int,
-                          cu_link_state, cu_jit_input_type, c_void_p,
-                          c_size_t, c_char_p, c_uint, POINTER(cu_jit_option),
-                          POINTER(c_void_p)),
-
-        #    CUresult
-        #    cuLinkAddFile(CUlinkState state, CUjitInputType type,
-        #                  const char *path, unsigned int numOptions,
-        #                  CUjit_option *options, void **optionValues);
-
-        'cuLinkAddFile': (c_int,
-                          cu_link_state, cu_jit_input_type, c_char_p, c_uint,
-                          POINTER(cu_jit_option), POINTER(c_void_p)),
-
-        #    CUresult CUDAAPI
-        #    cuLinkComplete(CUlinkState state, void **cubinOut, size_t *sizeOut)
-        'cuLinkComplete': (c_int,
-                           cu_link_state, POINTER(c_void_p), POINTER(c_size_t)),
-
-        #    CUresult CUDAAPI
-        #    cuLinkDestroy(CUlinkState state)
-        'cuLinkDestroy': (c_int, cu_link_state),
-
-
-        # NOTE: this is a dummy function to test if the defer error reporting
-        'easteregg': (c_int,),
-    }
-
-    _REVERSE_ERROR_MAP = _build_reverse_error_map()
-
-    __INSTANCE = None
-
-    # A mapping from context handle -> Context instance
-    _CONTEXTS = {}
-
-    # Thread local storage for cache the context
-    _THREAD_LOCAL = threading.local()
-
-    def __new__(cls, override_path=None):
-        if cls.__INSTANCE is None:
-            # Prevent driver loading at `import numbapro`
-            assert numbapro._initialization_completed
-
-            # Actual driver initialization
-            cls.__INSTANCE = inst = object.__new__(Driver)
-
-            # Determine DLL type
-            if sys.platform == 'win32':
-                dlloader = ctypes.WinDLL
-                dldir = ['\\windows\\system32']
-                dlname = 'nvcuda.dll'
-            elif sys.platform == 'darwin':
-                dlloader = ctypes.CDLL
-                dldir = ['/usr/local/cuda/lib']
-                dlname = 'libcuda.dylib'
-            else:
-                dlloader = ctypes.CDLL
-                dldir = ['/usr/lib', '/usr/lib64']
-                dlname = 'libcuda.so'
-
-            # First search for the name in the default library path.
-            # If that is not found, try the specific path.
-            candidates = [dlname] + [os.path.join(x, dlname) for x in dldir]
-
-            if override_path:
-                # If override_path is provided, use it and ignore the others
-                candidates = [override_path]
-            else:
-                envpath = os.environ.get('NUMBAPRO_CUDA_DRIVER')
-                if envpath:
-                    # If envvar is provided, use it and ignore the others
-                    candidates = [envpath]
-
-            # Load the driver
-            path_not_exist = []
-            driver_load_error = []
-            for path in candidates:
-                try:
-                    inst.driver = dlloader(path)
-                    inst.path = path
-                except OSError as e:
-                    # Problem opening the DLL
-                    path_not_exist.append(not os.path.isfile(path))
-                    driver_load_error.append(e)
-                    pass
-                else:
-                    break       # got it; break out
-            else:
-                # not found, barf
-                if all(path_not_exist):
-                    cls._raise_driver_not_found()
-                else:
-                    errmsg = '\n'.join(str(e) for e in driver_load_error)
-                    cls._raise_driver_error(errmsg)
-
-            # Obtain function pointers
-            def make_poison(func):
-                def poison(*args, **kws):
-                    msg = ("incompatible CUDA driver: "
-                           "function %s not found. "
-                           "\nrequires CUDA driver distributed with CUDA 5.5")
-                    raise CudaDriverError(msg % (func,))
-                return poison
-
-            for func, prototype in inst.API_PROTOTYPES.items():
-                restype = prototype[0]
-                argtypes = prototype[1:]
-                try:
-                    ct_func = inst._cu_symbol_newer(func)
-                except AttributeError:
-                    ct_func = make_poison(func)
-                else:
-                    ct_func.restype = restype
-                    ct_func.argtypes = argtypes
-
-                setattr(inst, func, ct_func)
-
-            # initialize the API
-            try:
-                error = inst.cuInit(0)
-                inst.check_error(error, "Failed to initialize CUDA driver")
-            except AttributeError as e:
-                # Not a real driver?
-                cls._raise_driver_error(e)
-            except CudaDriverError as e:
-                # it doesn't work?
-                cls._raise_driver_error(e)
-
-        return cls.__INSTANCE
-
-    @property
-    def version(self):
-        ver = c_int(0)
-        self.cuDriverGetVersion(byref(ver))
-        return ver.value
-
-    @classmethod
-    def _raise_driver_not_found(cls):
-        cls.__INSTANCE = None # posion
-        raise CudaSupportError(
-                   "CUDA is not supported or the library cannot be found. "
-                   "Try setting environment variable NUMBAPRO_CUDA_DRIVER "
-                   "with the path of the CUDA driver shared library.")
-
-    @classmethod
-    def _raise_driver_error(cls, e):
-        cls.__INSTANCE = None # posion
-        raise CudaSupportError("Error loading CUDA library:\n%s" % e)
-
-    def _cu_symbol_newer(self, symbol):
+    """
+    Driver API functions are lazily bound.
+    """
+    _singleton = None
+
+    def __new__(cls):
+        obj = cls._singleton
+        if obj is not None:
+            return obj
+        else:
+            obj = object.__new__(cls)
+            obj.lib = find_driver()
+            obj.cuInit(0)
+            cls._singleton = obj
+        return obj
+
+    def __init__(self):
+        self.devices = utils.UniqueDict()
+
+    def __getattr__(self, fname):
+        # First request of a driver API function
         try:
-            return getattr(self.driver, '%s_v2' % symbol)
+            proto = API_PROTOTYPES[fname]
+        except KeyError:
+            raise AttributeError(fname)
+        restype = proto[0]
+        argtypes = proto[1:]
+        try:
+            # Try newer API
+            libfn = getattr(self.lib, fname + "_v2")
         except AttributeError:
-            return getattr(self.driver, symbol)
+            libfn = getattr(self.lib, fname)
+        libfn.restype = restype
+        libfn.argtypes = argtypes
+
+        @functools.wraps(libfn)
+        def safe_cuda_api_call(*args):
+            retcode = libfn(*args)
+            self._check_error(fname, retcode)
+
+        setattr(self, fname, safe_cuda_api_call)
+        return safe_cuda_api_call
+
+    def _check_error(self, fname, retcode):
+        if retcode != enums.CUDA_SUCCESS:
+            errname = ERROR_MAP.get(retcode, "UNKNOWN_CUDA_ERROR")
+            msg = "Call to %s results in %s" % (fname, errname)
+            raise CudaAPIError(retcode, msg)
+
+    def get_device(self, devnum=0):
+        dev = self.devices.get(devnum)
+        if dev is None:
+            dev = Device(devnum)
+            self.devices[devnum] = dev
+        return weakref.proxy(dev)
 
     def get_device_count(self):
         count = c_int()
-        error = self.cuDeviceGetCount(byref(count))
-        self.check_error(error, 'Failed to get number of device')
+        self.cuDeviceGetCount(byref(count))
         return count.value
 
-    def check_error(self, error, msg):
-        if error:
-            exc = CudaDriverError('%s\n%s\n' %
-                                  (self._REVERSE_ERROR_MAP[error], msg))
-            if error == CUDA_ERROR_LAUNCH_FAILED:
-                ctx = self.get_context_tls()
-                if ctx:
-                    ctx.device.reset()
-            raise exc
-
-    def create_context(self, device=None):
-        '''Create a new context.
-            
-        NOTE: If there is already a context for this module, 
-              this function will raise Exception.
-              We do not support multiple contexts per thread, yet.
-            
-        device --- [optional] The device object to be used for the new context.
-        '''
-        if device is None:
-            device = Device(0)
-        if self.current_context(noraise=True) is not None:
-            errmsg = "Does not support multiple context per thread, yet."
-            raise Exception(errmsg)
-        ctxt = _Context(device)
-        self._CONTEXTS[ctxt._handle.value] = ctxt
-        self._cache_current_context(ctxt)
-        return ctxt
-
-    def get_context_tls(self):
-        try:
-            handle = self._THREAD_LOCAL.context
-        except AttributeError:
-            return None
-        else:
-            return self._CONTEXTS[handle]
-
-    def current_context(self, noraise=False):
-        '''Get current context from TLS
-        '''
-        ctxt = self.get_context_tls()
-        if ctxt is None:
-            ctxt = self._get_current_context(noraise=noraise)
-            if ctxt:
-                self._cache_current_context(ctxt)
-        return ctxt
-
-    def _cache_current_context(self, ctxt):
-        '''Store current context into TLS
-        '''
-        self._THREAD_LOCAL.context = ctxt._handle.value
-
-    def _get_current_context(self, noraise=False):
-        '''Uses CUDA driver API to get current context
-        '''
-        handle = cu_context()
-        error = self.cuCtxGetCurrent(byref(handle))
-        self.check_error(error, "Fail to get current context.")
-        if handle.value is None:
-            if noraise:
-                return None
-            else:
-                raise CudaDriverError("No CUDA context was created.")
-        elif handle.value in self._CONTEXTS:
-            context = self._CONTEXTS[handle.value]
-            return context
-        else:
-            # context is created externally
-            context = _Context(handle=handle)
-            self._CONTEXTS[handle.value] = context
-            self._cache_current_context(context)
-            return context
-
-    def get_or_create_context(self, device=None):
-        '''Returns the current context if exists, or get create a new one.
-        '''
-        try:
-            return self.current_context()
-        except CudaDriverError:
-            return self.create_context(device)
-
-    def release_context(self, context):
-        rm = context.device.resource_manager
-        rm.free_pending()
-        handle = context._handle.value
-        del self._CONTEXTS[handle]
-        if handle == self._THREAD_LOCAL.context:
-            # Remove all thread local
-            for k in vars(self._THREAD_LOCAL).keys():
-                delattr(self._THREAD_LOCAL, k)
-
-    def reset_context(self):
-        ctx = self.get_context_tls()
-        device = ctx.device
-        self.release_context(ctx)
-        # discard current context
-        curctx = cu_context(0)
-        self.cuCtxPopCurrent(byref(curctx))
-        # create new context
-        self.create_context(device)
-
-
-CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK = 1
-CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X = 2
-CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y = 3
-CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Z = 4
-CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_X = 5
-CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Y = 6
-CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Z = 7
-CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK = 8
-CU_DEVICE_ATTRIBUTE_ASYNC_ENGINE_COUNT = 40
-CU_DEVICE_ATTRIBUTE_CAN_MAP_HOST_MEMORY = 19
-CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT = 16
-CU_DEVICE_ATTRIBUTE_WARP_SIZE = 10
-CU_DEVICE_ATTRIBUTE_UNIFIED_ADDRESSING = 41
-CU_DEVICE_ATTRIBUTE_PCI_BUS_ID = 33
-CU_DEVICE_ATTRIBUTE_PCI_DEVICE_ID = 34
-
-class Device(object):
-
-    ATTRIBUTES = { # attributes with integer values
-      'MAX_THREADS_PER_BLOCK': CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK,
-      'MAX_GRID_DIM_X':        CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_X,
-      'MAX_GRID_DIM_Y':        CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Y,
-      'MAX_GRID_DIM_Z':        CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Z,
-      'MAX_BLOCK_DIM_X':       CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X,
-      'MAX_BLOCK_DIM_Y':       CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y,
-      'MAX_BLOCK_DIM_Z':       CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Z,
-      'MAX_SHARED_MEMORY':     CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK,
-      'ASYNC_ENGINE_COUNT':    CU_DEVICE_ATTRIBUTE_ASYNC_ENGINE_COUNT,
-      'CAN_MAP_HOST_MEMORY':   CU_DEVICE_ATTRIBUTE_CAN_MAP_HOST_MEMORY,
-      'MULTIPROCESSOR_COUNT':  CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT,
-      'WARP_SIZE':             CU_DEVICE_ATTRIBUTE_WARP_SIZE,
-      'UNIFIED_ADDRESSING':    CU_DEVICE_ATTRIBUTE_UNIFIED_ADDRESSING,
-      'PCI_BUS_ID':            CU_DEVICE_ATTRIBUTE_PCI_BUS_ID,
-      'PCI_DEVICE_ID':         CU_DEVICE_ATTRIBUTE_PCI_DEVICE_ID
-    }
-
-    _resources = {}   # mapping from device to resource manager
-
-    def __init__(self, device_id):
-        self.driver = Driver()
-        got_device = c_int()
-        error = self.driver.cuDeviceGet(byref(got_device), device_id)
-        self.driver.check_error(error, 'Failed to get device %d' % device_id)
-        assert device_id == got_device.value, "driver returned another device"
-        self.id = got_device.value
-        self.__read_name()
-        self.__read_attributes()
-
-        self.resource_manager = ResourceManager(device_id)
-        self._resources[device_id] = self.resource_manager
+    def list_devices(self):
+        """Returns a list of active devices
+        """
+        return list(self.devices.values())
 
     def reset(self):
-        self.resource_manager.reset()
-        self.driver.reset_context()
+        """Reset all devices
+        """
+        for dev in self.devices.values():
+            dev.reset()
+
+
+driver = Driver()
+
+
+class TrashService(servicelib.Service):
+    """
+    We need this to enqueue things to be removed.  There are times when you
+    want to disable deallocation because that would break asynchronous work
+    queues.
+    """
+    CLEAN_LIMIT = 20
+
+    def add_trash(self, item):
+        self.trash.append(item)
+
+    def process(self, _arg):
+        self.trash = []
+        yield
+        while True:
+            count = 0
+            # Clean the trash
+            assert self.CLEAN_LIMIT > count
+            while self.trash and count < self.CLEAN_LIMIT:
+                cb = self.trash.pop()
+                # Invoke callback
+                cb()
+                count += 1
+            yield
+
+    def clear(self):
+        while self.trash:
+            cb = self.trash.pop()
+            cb()
+
+
+def _build_reverse_device_attrs():
+    prefix = "CU_DEVICE_ATTRIBUTE_"
+    map = utils.UniqueDict()
+    for name in dir(enums):
+        if name.startswith(prefix):
+            map[name[len(prefix):]] = getattr(enums, name)
+    return map
+
+
+DEVICE_ATTRIBUTES = _build_reverse_device_attrs()
+
+
+class Device(object):
+    """
+    The device object owns the CUDA contexts.  This is owned by the driver
+    object.  User should not construct devices directly.
+    """
+
+    def __init__(self, devnum):
+        got_devnum = c_int()
+        driver.cuDeviceGet(byref(got_devnum), devnum)
+        assert devnum == got_devnum.value, "Driver returned another device"
+        self.id = got_devnum.value
+        self.trashing = TrashService("cuda.device%d.trash" % self.id)
+        self.attributes = {}
+        # Read compute capability
+        cc_major = c_int()
+        cc_minor = c_int()
+        driver.cuDeviceComputeCapability(byref(cc_major), byref(cc_minor),
+                                         self.id)
+        self.compute_capability = (cc_major.value, cc_minor.value)
+        # Read name
+        bufsz = 128
+        buf = (c_char * bufsz)()
+        driver.cuDeviceGetName(buf, bufsz, self.id)
+        self.name = buf.value
+        # A dictionary or all context with handle value as the key
+        self.contexts = {}
+
+    @property
+    def COMPUTE_CAPABILITY(self):
+        """
+        For backward compatibility
+        """
+        warnings.warn("Deprecated attribute 'COMPUTE_CAPABILITY'; use lower "
+                      "case version", DeprecationWarning)
+        return self.compute_capability
+
+    def __del__(self):
+        try:
+            self.reset()
+        except:
+            traceback.print_exc()
 
     def __repr__(self):
         return "<CUDA device %d '%s'>" % (self.id, self.name)
 
-    def get_memory_info(self):
-        "Returns (free, total) memory in bytes on the device."
-        free = c_size_t()
-        total = c_size_t()
-        error = self.driver.cuMemGetInfo(byref(free), byref(total))
-        msg = 'Failed to get memory info on device %d' % self.id
-        self.driver.check_error(error, msg)
-        return free.value, total.value
+    def __getattr__(self, attr):
+        """Read attributes lazily
+        """
+        try:
+            code = DEVICE_ATTRIBUTES[attr]
+        except KeyError:
+            raise AttributeError(attr)
 
-    def __read_name(self):
-        bufsz = 128
-        buf = (c_char * bufsz)()
-        error = self.driver.cuDeviceGetName(buf, bufsz, self.id)
-        msg = 'Failed to get name of device %d' % self.id
-        self.driver.check_error(error, msg)
-        self.name = buf.value
+        value = c_int()
+        driver.cuDeviceGetAttribute(byref(value), code, self.id)
+        setattr(self, attr, value.value)
 
-    def __read_attributes(self):
-        got_value = c_int()
-        for name, num in self.ATTRIBUTES.items():
-            error = self.driver.cuDeviceGetAttribute(byref(got_value), num,
-                                                     self.id)
-            msg = 'Failed to read attribute "%s" from %s' % (name, self)
-            self.driver.check_error(error, msg)
-            setattr(self, name, got_value.value)
-
-        got_major = c_int()
-        got_minor = c_int()
-        error = self.driver.cuDeviceComputeCapability(byref(got_major),
-                                                      byref(got_minor),
-                                                      self.id)
-        msg = 'Failed to read compute capability from %s' % self
-        self.driver.check_error(error, msg)
-
-        setattr(self, 'COMPUTE_CAPABILITY', (got_major.value, got_minor.value))
-
-    @property
-    def attributes(self):
-        '''Returns all attributes as a dictionary
-        '''
-        keys = list(self.ATTRIBUTES.keys())
-        keys += ['COMPUTE_CAPABILITY']
-        return dict((k, getattr(self, k)) for k in keys)
+        return value.value
 
     def __hash__(self):
         return hash(self.id)
 
-    def __eq__(self, rhs):
+    def __eq__(self, other):
+        if isinstance(other, Device):
+            return self.id == other.id
+        return False
+
+    def __ne__(self, other):
+        return not (self == other)
+
+    def create_context(self):
+        met_requirement_for_device(self)
+
+        flags = 0
+        if self.CAN_MAP_HOST_MEMORY:
+            flags |= enums.CU_CTX_MAP_HOST
+
+        # Clean up any trash
+        self.trashing.service()
+
+        # Create new context
+        handle = drvapi.cu_context()
+        driver.cuCtxCreate(byref(handle), flags, self.id)
+
+        ctx = Context(weakref.proxy(self), handle,
+                      _context_finalizer(self.trashing, handle))
+        self.contexts[handle.value] = ctx
+        return weakref.proxy(ctx)
+
+    def close_all_context(self):
+        self.contexts.clear()
+
+    def get_context(self):
+        handle = drvapi.cu_context()
+        driver.cuCtxGetCurrent(byref(handle))
+        if not handle.value:
+            return None
         try:
-            return self.id == rhs.id
-        except AttributeError:
-            return False
+            return self.contexts[handle.value]
+        except KeyError:
+            raise RuntimeError("Current context is not manged: %s" %
+                               handle.value)
 
-    def __ne__(self, rhs):
-        return not (self == rhs)
+    def get_or_create_context(self):
+        ctx = self.get_context()
+        if ctx is None:
+            ctx = self.create_context()
+        return ctx
 
-
-class _Context(object):
-    def __init__(self, device=None, handle=None):
-        if device is not None:
-            assert handle is None
-            self.device = device
-            if self.device.COMPUTE_CAPABILITY < MIN_REQUIRED_CC:
-                msg = ("failed to initialize %s\n"
-                       "only support device with compute capability >=2.0\n"
-                       "please use numbapro.check_cuda() to scan for supported "
-                       "CUDA GPUs" % self.device)
-                raise CudaSupportError(msg)
-            self._handle = cu_context()
-            flags = 0
-            if self.device.CAN_MAP_HOST_MEMORY:
-                flags |= CU_CTX_MAP_HOST
-            else:
-                # XXX: do I really need this?
-                assert False, "unreachable: cannot map host memory"
-            error = self.driver.cuCtxCreate(byref(self._handle), flags,
-                                            self.device.id)
-            self.driver.check_error(error, ('Failed to create context on %s' %
-                                            self.device))
-            self.device.resource_manager.add_resource(self._handle.value,
-                                                      self.driver.cuCtxDestroy)
-        else:
-            # Do not register the context to resource manager
-            assert handle is not None
-            self._handle = handle
-            device = cu_device()
-            error = self.driver.cuCtxGetDevice(byref(device))
-            self.driver.check_error(error, 'Failed to get device from context')
-            self.device = Device(device.value)
-
-    def __del__(self):
-        self.device.resource_manager.free_resource(self._handle.value,
-                                               msg='Failed to destroy context',
-                                               later=False)
-
-    @property
-    def driver(self):
-        return Driver()
-
-    def synchronize(self):
-        error = self.driver.cuCtxSynchronize()
-        self.driver.check_error(error, 'Failed to synchronize context')
-
-    def __str__(self):
-        return 'Context %s on %s' % (id(self), self.device)
+    def reset(self):
+        self.close_all_context()
+        self.trashing.clear()
 
 
-class Stream(object):
-    def __init__(self):
-        self.device = self.driver.current_context().device
-        self._handle = cu_stream()
-        
-        flush_pending_free()
-        error = self.driver.cuStreamCreate(byref(self._handle), 0)
-        msg = 'Failed to create stream on %s' % self.device
-        self.driver.check_error(error, msg)
+def _context_finalizer(trashing, ctxhandle):
+    def core():
+        trashing.add_trash(lambda: driver.cuCtxDestroy(ctxhandle))
 
-        self.device.resource_manager.add_resource(self._handle.value,
-                                                  self.driver.cuStreamDestroy)
+    return core
+
+
+def met_requirement_for_device(device):
+    if device.compute_capability < MIN_REQUIRED_CC:
+        raise CudaSupportError("%s has compute capability < %s" %
+                               (device, MIN_REQUIRED_CC))
+
+
+class Context(object):
+    """This object is tied to the lifetime of the actual context resource.
+
+    This object is usually wrapped in a weakref proxy for user.  User seldom
+    owns this object.
+
+    """
+
+    def __init__(self, device, handle, finalizer=None):
+        self.device = device
+        self.handle = handle
+        self.finalizer = finalizer
+        self.trashing = TrashService("cuda.device%d.context%x.trash" %
+                                     (self.device.id, self.handle.value))
+        self.is_managed = finalizer is not None
+        self.allocations = utils.UniqueDict()
+        self.modules = utils.UniqueDict()
 
     def __del__(self):
-        self.device.resource_manager.free_resource(self._handle.value,
-                                               msg='Failed to destroy stream',
-                                               later=True)
+        try:
+            self.reset()
+            # Free itself
+            if self.is_managed:
+                self.finalizer()
+        except:
+            traceback.print_exc()
 
-    def __str__(self):
-        return 'Stream %d on %s' % (self, self.device)
+    def reset(self):
+        """Clean up all owned resources in this context
+        """
+        # Free owned resources
+        self.allocations.clear()
+        self.modules.clear()
+        # Clear trash
+        self.trashing.clear()
 
-    def __int__(self):
-        return self._handle.value
+    def get_memory_info(self):
+        """Returns (free, total) memory in bytes in the context.
+        """
+        free = c_size_t()
+        total = c_size_t()
+        driver.cuMemGetInfo(byref(free), byref(total))
+        return free.value, total.value
 
-    def synchronize(self):
-        '''Ensure all commands in the stream has been completed
-        '''
-        self.driver.cuStreamSynchronize(self._handle)
+    def push(self):
+        """Push context
+        """
+        driver.cuCtxPushCurrent(self.handle)
 
-    @contextlib.contextmanager
-    def auto_synchronize(self):
-        '''Use this for create a context that synchronize automatically.
-        '''
-        yield self
-        self.synchronize()
+    def pop(self):
+        """Pop context
+        """
+        driver.cuCtxPopCurrent(self.handle)
 
-    @property
-    def driver(self):
-        return Driver()
+    def memalloc(self, bytesize):
+        self.trashing.service()
+        ptr = drvapi.cu_device_ptr()
+        driver.cuMemAlloc(byref(ptr), bytesize)
+        mem = MemoryPointer(weakref.proxy(self), ptr, bytesize,
+                            _memory_finalizer(self, ptr))
+        self.allocations[ptr.value] = mem
+        return mem.own()
 
+    def memhostalloc(self, bytesize, mapped=False, portable=False, wc=False):
+        self.trashing.service()
 
-class HostAllocMemory(mviewbuf.MemAlloc):
-    '''A host allocation by the CUDA driver that is pagelocked.
-    This object exposes the buffer interface; thus, user can use
-    this as a buffer for ndarray.
-    '''
-    __cuda_memory__ = True
-    def __init__(self, bytesize, mapped=False, portable=False, wc=False):
-        self.device = self.driver.current_context().device
-        self.bytesize = bytesize
-        self._handle = c_void_p(0)
+        pointer = c_void_p()
         flags = 0
         if mapped:
-            flags |= CU_MEMHOSTALLOC_DEVICEMAP
+            flags |= enums.CU_MEMHOSTALLOC_DEVICEMAP
         if portable:
-            flags |= CU_MEMHOSTALLOC_PORTABLE
+            flags |= enums.CU_MEMHOSTALLOC_PORTABLE
         if wc:
-            flags |= CU_MEMHOSTALLOC_WRITECOMBINED
+            flags |= enums.CU_MEMHOSTALLOC_WRITECOMBINED
 
-        flush_pending_free()
-        error = self.driver.cuMemHostAlloc(byref(self._handle), bytesize, flags)
-        self.driver.check_error(error, 'Failed to host alloc')
-        self.device.resource_manager.add_memory(self._handle.value,
-                                                self.driver.cuMemFreeHost)
+        driver.cuMemHostAlloc(byref(pointer), bytesize, flags)
+        owner = None
 
-        self.devmem = cu_device_ptr(0)
 
-        self.__cuda_memory__ = mapped
         if mapped:
-            # get device pointer
-            error = self.driver.cuMemHostGetDevicePointer(byref(self.devmem),
-                                                          self._handle, 0)
-            self.driver.check_error(error,
-                                    'Failed to get device ptr from host ptr')
+            finalizer = _hostalloc_finalizer(self, pointer)
+            mem = MappedMemory(weakref.proxy(self), owner, pointer,
+                               bytesize, finalizer=finalizer)
 
-        self._buflen_ = self.bytesize
-        self._bufptr_ = self._handle.value
-
-    def __del__(self):
-        self.device.resource_manager.free_memory(self._handle.value, later=True)
-
-    @property
-    def device_ctypes_pointer(self):
-        return self.devmem
-
-    @property
-    def driver(self):
-        return Driver()
-
-
-class DeviceMemory(object):
-    __cuda_memory__ = True
-
-    def __init__(self, bytesize):
-        self.device = self.driver.current_context().device
-        self._allocate(bytesize)
-
-    def __del__(self):
-        self.device.resource_manager.free_memory(self._handle.value, later=True)
-
-    def _allocate(self, bytesize):
-        assert not hasattr(self, '_handle'), "_handle is already defined"
-        self._handle = cu_device_ptr()
-        
-        flush_pending_free()
-        error = self.driver.cuMemAlloc(byref(self._handle), bytesize)
-        self.driver.check_error(error, 'Failed to allocate memory')
-        self.device.resource_manager.add_memory(self._handle.value,
-                                                self.driver.cuMemFree)
-        self.bytesize = bytesize
-
-    @property
-    def device_ctypes_pointer(self):
-        return self._handle
-
-    @property
-    def driver(self):
-        return Driver()
-
-class DeviceView(object):
-    __cuda_memory__ = True
-    def __init__(self, owner, start, stop=None):
-        self.device = self.driver.current_context().device
-        self._handle = cu_device_ptr(device_pointer(owner) + start)
-        self._owner = owner
-        if stop is None:
-            sz = device_memory_size(owner) - start
+            self.allocations[mem.handle.value] = mem
+            return mem.own()
         else:
-            sz = stop - start
-        assert sz > 0, "zero memory size"
-        self._cuda_memsize_ = sz
+            finalizer = _pinnedalloc_finalizer(self.trashing, pointer)
+            mem = PinnedMemory(weakref.proxy(self), owner, pointer, bytesize,
+                               finalizer=finalizer)
+            return mem
 
-    @property
-    def device_ctypes_pointer(self):
-        return self._handle
-    
-    @property
-    def driver(self):
-        return Driver()
+    def memfree(self, pointer):
+        try:
+            del self.allocations[pointer.value]
+        except KeyError:
+            raise DeadMemoryError
+        self.trashing.service()
 
-class PinnedMemory(object):
-    def __init__(self, owner, ptr, size, mapped=False):
-        self._owner = owner
-        self.device = self.driver.current_context().device
+    def mempin(self, owner, pointer, size, mapped=False):
+        self.trashing.service()
+
+        if isinstance(pointer, (int, long)):
+            pointer = c_void_p(pointer)
+
         if mapped and not self.device.CAN_MAP_HOST_MEMORY:
-            raise CudaDriverError("Device %s cannot map host memory" %
-                                  self.device)
+            raise CudaDriverError("%s cannot map host memory" % self.device)
 
-        self._pointer = ptr
         # possible flags are "portable" (between context)
         # and "device-map" (map host memory to device thus no need
         # for memory transfer).
         flags = 0
-        self._mapped = mapped
-        if mapped:
-            flags |= CU_MEMHOSTREGISTER_DEVICEMAP
-        
-        flush_pending_free()
-        error = self.driver.cuMemHostRegister(ptr, size, flags)
-        self.driver.check_error(error, 'Failed to pin memory')
 
         if mapped:
-            self._get_device_pointer()
+            flags |= enums.CU_MEMHOSTREGISTER_DEVICEMAP
 
-        self.__cuda_memory__ = mapped
+        driver.cuMemHostRegister(pointer, size, flags)
 
-        self.device.resource_manager.add_resource(self._pointer,
-                                                self.driver.cuMemHostUnregister)
 
-    def _get_device_pointer(self):
-        assert self._mapped, "memory not mapped"
-        self._devmem = cu_device_ptr(0)
-        flags = 0 # must be zero for now
-        error = self.driver.cuMemHostGetDevicePointer(byref(self._devmem),
-                                                      self._pointer, flags)
-        self.driver.check_error(error, 'Failed to get device ptr from host ptr')
+        if mapped:
+            finalizer = _mapped_finalizer(self, pointer)
+            mem = MappedMemory(weakref.proxy(self), owner, pointer, size,
+                               finalizer=finalizer)
+            self.allocations[mem.handle.value] = mem
+            return mem.own()
+        else:
+            mem = PinnedMemory(weakref.proxy(self), owner, pointer, size,
+                               finalizer=_pinned_finalizer(self.trashing,
+                                                           pointer))
+            return mem
+
+
+    def memunpin(self, pointer):
+        raise NotImplementedError
+
+    def create_module_ptx(self, ptx):
+        image = c_char_p(ptx)
+        return self.create_module_image(image)
+
+    def create_module_image(self, image):
+        self.trashing.service()
+        module = load_module_image(self, image)
+        self.modules[module.handle.value] = module
+        return weakref.proxy(module)
+
+    def unload_module(self, module):
+        del self.modules[module.handle.value]
+        self.trashing.service()
+
+    def create_stream(self):
+        self.trashing.service()
+        handle = drvapi.cu_stream()
+        driver.cuStreamCreate(byref(handle), 0)
+        return Stream(weakref.proxy(self), handle,
+                      _stream_finalizer(self.trashing, handle))
+
+    def create_event(self, timing=True):
+        self.trashing.service()
+
+        handle = drvapi.cu_event()
+        flags = 0
+        if not timing:
+            flags |= enums.CU_EVENT_DISABLE_TIMING
+        driver.cuEventCreate(byref(handle), flags)
+        return Event(weakref.proxy(self), handle,
+                     finalizer=_event_finalizer(self.trashing, handle))
+
+    def synchronize(self):
+        driver.cuCtxSynchronize()
+
+    def __repr__(self):
+        return "<CUDA context %s of device %d>" % (self.handle, self.device.id)
+
+
+def load_module_image(context, image):
+    """
+    image must be a pointer
+    """
+    logsz = os.environ.get('NUMBAPRO_CUDA_LOG_SIZE', 1024)
+
+    jitinfo = (c_char * logsz)()
+    jiterrors = (c_char * logsz)()
+
+    options = {
+        enums.CU_JIT_INFO_LOG_BUFFER: addressof(jitinfo),
+        enums.CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES: c_void_p(logsz),
+        enums.CU_JIT_ERROR_LOG_BUFFER: addressof(jiterrors),
+        enums.CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES: c_void_p(logsz),
+        enums.CU_JIT_LOG_VERBOSE: c_void_p(VERBOSE_JIT_LOG),
+    }
+
+    option_keys = (drvapi.cu_jit_option * len(options))(*options.keys())
+    option_vals = (c_void_p * len(options))(*options.values())
+
+    handle = drvapi.cu_module()
+    driver.cuModuleLoadDataEx(byref(handle), image, len(options),
+                              option_keys, option_vals)
+
+    info_log = jitinfo.value
+
+    return Module(weakref.proxy(context), handle, info_log,
+                  _module_finalizer(context, handle))
+
+
+def _make_mem_finalizer(dtor):
+    def mem_finalize(context, handle):
+        trashing = context.trashing
+        allocations = context.allocations
+
+        def core():
+            def cleanup():
+                if allocations:
+                    del allocations[handle.value]
+                dtor(handle)
+
+            trashing.add_trash(cleanup)
+
+        return core
+
+    return mem_finalize
+
+
+_hostalloc_finalizer = _make_mem_finalizer(driver.cuMemFreeHost)
+_mapped_finalizer = _make_mem_finalizer(driver.cuMemHostUnregister)
+_memory_finalizer = _make_mem_finalizer(driver.cuMemFree)
+
+
+def _pinnedalloc_finalizer(trashing, handle):
+    def core():
+        trashing.add_trash(lambda: driver.cuMemFreeHost(handle))
+
+    return core
+
+def _pinned_finalizer(trashing, handle):
+    def core():
+        trashing.add_trash(lambda: driver.cuMemHostUnregister(handle))
+
+    return core
+
+
+def _event_finalizer(trashing, handle):
+    def core():
+        trashing.add_trash(lambda: driver.cuEventDestroy(handle))
+
+    return core
+
+
+def _stream_finalizer(trashing, handle):
+    def core():
+        trashing.add_trash(lambda: driver.cuStreamDestroy(handle))
+
+    return core
+
+
+def _module_finalizer(context, handle):
+    trashing = context.trashing
+    modules = context.modules
+
+    def core():
+        def cleanup():
+            if modules:
+                del modules[handle.value]
+            driver.cuModuleUnload(handle)
+
+        trashing.add_trash(cleanup)
+
+    return core
+
+
+class MemoryPointer(object):
+    __cuda_memory__ = True
+
+    def __init__(self, context, pointer, size, finalizer=None):
+        self.context = context
+        self.device_pointer = pointer
+        self.size = size
+        self._cuda_memsize_ = size
+        self.finalizer = finalizer
+        self.is_managed = finalizer is not None
+        self.is_alive = True
+        self.refct = 0
+        self.handle = self.device_pointer
+
+    def __del__(self):
+        try:
+            if self.is_managed and self.is_alive:
+                self.finalizer()
+        except:
+            traceback.print_exc()
+
+    def own(self):
+        return OwnedPointer(weakref.proxy(self))
+
+    def free(self):
+        """
+        Forces the device memory to the trash.
+        """
+        if self.is_managed:
+            if not self.is_alive:
+                raise RuntimeError("Freeing dead memory")
+            self.finalizer()
+            self.is_alive = False
+
+    def memset(self, byte, count=None, stream=0):
+        count = self.size if count is None else count
+        if stream:
+            driver.cuMemsetD8Async(self.device_pointer, byte, count,
+                                   stream.handle)
+        else:
+            driver.cuMemsetD8(self.device_pointer, byte, count)
+
+    def view(self, start, stop=None):
+        base = self.device_pointer.value + start
+        if stop is None:
+            size = self.size - start
+        else:
+            size = stop - start
+        assert size > 0, "zero or negative memory size"
+        pointer = drvapi.cu_device_ptr(base)
+        view = MemoryPointer(self.context, pointer, size)
+        return OwnedPointer(weakref.proxy(self), view)
 
     @property
     def device_ctypes_pointer(self):
-        return self._devmem
-    
-    def __del__(self):
-        self.device.resource_manager.free_resource(self._pointer,
-                                               msg='Failed to unpin memory',
-                                               later=True)
+        return self.device_pointer
 
-    @property
-    def driver(self):
-        return Driver()
+
+class MappedMemory(MemoryPointer):
+    __cuda_memory__ = True
+
+    def __init__(self, context, owner, hostpointer, size,
+                 finalizer=None):
+        self.owned = owner
+        self.host_pointer = hostpointer
+        devptr = drvapi.cu_device_ptr()
+        driver.cuMemHostGetDevicePointer(byref(devptr), hostpointer, 0)
+        self.device_pointer = devptr
+        super(MappedMemory, self).__init__(context, devptr, size,
+                                           finalizer=finalizer)
+        self.handle = self.host_pointer
+
+        # For buffer interface
+        self._buflen_ = self.size
+        self._bufptr_ = self.host_pointer.value
+
+    def own(self):
+        return MappedOwnedPointer(weakref.proxy(self))
+
+
+class PinnedMemory(mviewbuf.MemAlloc):
+    def __init__(self, context, owner, pointer, size, finalizer=None):
+        self.context = context
+        self.owned = owner
+        self.size = size
+        self.host_pointer = pointer
+        self.is_managed = finalizer is not None
+        self.finalizer = finalizer
+        self.is_alive = True
+        self.handle = self.host_pointer
+
+        # For buffer interface
+        self._buflen_ = self.size
+        self._bufptr_ = self.host_pointer.value
+
+    def __del__(self):
+        try:
+            if self.is_managed and self.is_alive:
+                self.finalizer()
+        except:
+            traceback.print_exc()
+
+    def unpin(self):
+        if not self.is_alive:
+            raise DeadMemoryError
+        self.finalizer()
+        self.is_alive = False
+
+    def own(self):
+        return self
+
+
+class OwnedPointer(object):
+    def __init__(self, memptr, view=None):
+        self._mem = memptr
+        self._mem.refct += 1
+        if view is None:
+            self._view = self._mem
+        else:
+            assert not view.is_managed
+            self._view = view
+
+    def __del__(self):
+        try:
+            self._mem.refct -= 1
+            assert self._mem.refct >= 0
+            if self._mem.refct == 0:
+                self._mem.free()
+        except weakref.ReferenceError:
+            pass
+        except:
+            traceback.print_exc()
+
+    def __getattr__(self, fname):
+        """Proxy MemoryPointer methods
+        """
+        return getattr(self._view, fname)
+
+
+class MappedOwnedPointer(OwnedPointer, mviewbuf.MemAlloc):
+    pass
+
+
+class Stream(object):
+    def __init__(self, context, handle, finalizer):
+        self.context = context
+        self.handle = handle
+        self.finalizer = finalizer
+        self.is_managed = finalizer is not None
+
+    def __del__(self):
+        try:
+            if self.is_managed:
+                self.finalizer()
+        except:
+            traceback.print_exc()
+
+    def __int__(self):
+        return self.handle.value
+
+    def __repr__(self):
+        return "<CUDA stream %d on %s>" % (self.handle.value, self.context)
+
+    def synchronize(self):
+        driver.cuStreamSynchronize(self.handle)
+
+    @contextlib.contextmanager
+    def auto_synchronize(self):
+        yield self
+        self.synchronize()
+
+
+class Event(object):
+    def __init__(self, context, handle, finalizer=None):
+        self.context = context
+        self.handle = handle
+        self.finalizer = finalizer
+        self.is_managed = self.finalizer is not None
+
+    def __del__(self):
+        try:
+            if self.is_managed:
+                self.finalizer()
+        except:
+            traceback.print_exc()
+
+    def query(self):
+        """Returns True if all work before the most recent record has completed;
+        otherwise, returns False.
+        """
+        try:
+            driver.cuEventQuery(self.handle)
+        except CudaAPIError as e:
+            if e.code == enums.CUDA_ERROR_NOT_READY:
+                return False
+            else:
+                raise
+        else:
+            return True
+
+    def record(self, stream=0):
+        """Set the record state of the event at the stream.
+        """
+        hstream = stream.handle if stream else 0
+        driver.cuEventRecord(self.handle, hstream)
+
+    def synchronize(self):
+        """Synchronize the host thread for the completion of the event.
+        """
+        driver.cuEventSynchronize(self.handle)
+
+    def wait(self, stream=0):
+        """All future works submitted to stream will wait util the event
+        completes.
+        """
+        hstream = stream.handle if stream else 0
+        flags = 0
+        driver.cuStreamWaitEvent(hstream, self.handle, flags)
+
+    def elapsed_time(self, evtend):
+        return event_elapsed_time(self, evtend)
+
+
+def event_elapsed_time(evtstart, evtend):
+    msec = c_float()
+    driver.cuEventElapsedTime(byref(msec), evtstart.handle, evtend.handle)
+    return msec.value
+
 
 class Module(object):
-    def __init__(self, ptx=None, image=None):
-        assert ptx is not None or image is not None, "internal error"
-        if ptx is not None:
-            self.load_data(c_char_p(ptx))
-        elif image is not None:
-            self.load_data(image)
-        else:
-            raise ValueError
-
-    def load_data(self, image):
-        """
-        image must be a pointer
-        """
-        logsz = os.environ.get('NUMBAPRO_CUDA_LOG_SIZE', 1024)
-
-        jitinfo = (c_char * logsz)()
-        jiterrors = (c_char * logsz)()
-
-        options = {
-            CU_JIT_INFO_LOG_BUFFER              : addressof(jitinfo),
-            CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES   : c_void_p(logsz),
-            CU_JIT_ERROR_LOG_BUFFER             : addressof(jiterrors),
-            CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES  : c_void_p(logsz),
-            CU_JIT_LOG_VERBOSE                  : c_void_p(VERBOSE_JIT_LOG),
-        }
-
-        option_keys = (cu_jit_option * len(options))(*options.keys())
-        option_vals = (c_void_p * len(options))(*options.values())
-
-        self._handle = cu_module()
-    
-        flush_pending_free()
-        status = self.driver.cuModuleLoadDataEx(byref(self._handle),
-                                                image,
-                                                len(options),
-                                                option_keys,
-                                                option_vals)
-
-        self.driver.check_error(status,
-                                'Failed to load module:\n%s' % jiterrors.value)
-
-        self.device = self.driver.current_context().device
-        self.device.resource_manager.add_resource(self._handle.value,
-                                                  self.driver.cuModuleUnload)
-        self.info_log = jitinfo.value
-
-    @classmethod
-    def _finalize(cls, handle):
-        driver = Driver()
-        error =  driver.cuModuleUnload(handle)
-        driver.check_error(error, 'Failed to unload module')
+    def __init__(self, context, handle, info_log, finalizer=None):
+        self.context = context
+        self.handle = handle
+        self.info_log = info_log
+        self.finalizer = finalizer
+        self.is_managed = self.finalizer is not None
 
     def __del__(self):
-        self.device.resource_manager.free_resource(self._handle.value,
-                                               msg='Failed to unload module',
-                                               later=True)
+        try:
+            if self.is_managed:
+                self.finalizer()
+        except:
+            traceback.print_exc()
 
-    @property
-    def driver(self):
-        return Driver()
+    def unload(self):
+        self.context.unload_module(self)
+
+    def get_function(self, name):
+        handle = drvapi.cu_function()
+        driver.cuModuleGetFunction(byref(handle), self.handle, name)
+        return Function(weakref.proxy(self), handle, name)
+
 
 class Function(object):
-
     griddim = 1, 1, 1
     blockdim = 1, 1, 1
-    stream = None
+    stream = 0
     sharedmem = 0
 
-    def __init__(self, module, name):
-        self.device = self.driver.current_context().device
+    def __init__(self, module, handle, name):
         self.module = module
+        self.handle = handle
         self.name = name
-        self._handle = cu_function()
-        error = self.driver.cuModuleGetFunction(byref(self._handle),
-                                                self.module._handle,
-                                                name);
-        self.driver.check_error(error, 'Failed to get function "%s" from module' % name)
 
+    def __repr__(self):
+        return "<CUDA function %s>" % self.name
 
-    @property
-    def driver(self):
-        return Driver()
-
-    @property
-    def context(self):
-        return self.module.context
-
-    def __str__(self):
-        return 'CUDA kernel %s on %s' % (self.name, self)
-    
-    def cache_config(self, prefer_equal=False, prefer_cache=False, prefer_shared=False):
+    def cache_config(self, prefer_equal=False, prefer_cache=False,
+                     prefer_shared=False):
         prefer_equal = prefer_equal or (prefer_cache and prefer_shared)
         if prefer_equal:
-            flag = CU_FUNC_CACHE_PREFER_EQUAL
+            flag = enums.CU_FUNC_CACHE_PREFER_EQUAL
         elif prefer_cache:
-            flag = CU_FUNC_CACHE_PREFER_L1
+            flag = enums.CU_FUNC_CACHE_PREFER_L1
         elif prefer_shared:
-            flag = CU_FUNC_CACHE_PREFER_SHARED
+            flag = enums.CU_FUNC_CACHE_PREFER_SHARED
         else:
-            flag = CU_FUNC_CACHE_PREFER_NONE
-   
-        err = self.driver.cuFuncSetCacheConfig(self._handle, flag)
-        self.driver.check_error(err, 'Failed to set cache config')
+            flag = enums.CU_FUNC_CACHE_PREFER_NONE
+        driver.cuFuncSetCacheConfig(self.handle, flag)
 
-    def configure(self, griddim, blockdim, sharedmem=0, stream=None):
-        import copy
-
+    def configure(self, griddim, blockdim, sharedmem=0, stream=0):
         while len(griddim) < 3:
             griddim += (1,)
 
@@ -1358,120 +945,88 @@ class Function(object):
         inst.blockdim = blockdim
         inst.sharedmem = sharedmem
         if stream:
-            inst.stream = stream._handle
+            inst.stream = stream
         else:
-            inst.stream = None
+            inst.stream = 0
         return inst
 
     def __call__(self, *args):
         '''
         *args -- Must be either ctype objects of DevicePointer instances.
         '''
-        assert self.driver.current_context().device is self.device, \
-                "function not defined in current active context"
-        launch_kernel(self._handle, self.griddim, self.blockdim,
-                      self.sharedmem, self.stream, args)
+        if self.stream:
+            streamhandle = self.stream.handle
+        else:
+            streamhandle = None
 
-class Event(object):
-    def __init__(self, timing=True):
-        self.device = self.driver.current_context().device
-        self._handle = cu_event()
-        self.timing = timing
-        flags = 0
-        if not timing:
-            flags |= CU_EVENT_DISABLE_TIMING
-        error = self.driver.cuEventCreate(byref(self._handle), flags)
-        self.driver.check_error(error, 'Failed to create event')
-        self.device.resource_manager.add_resource(self._handle.value,
-                                                  self.driver.cuEventDestroy)
-
-    def __del__(self):
-        self.device.resource_manager.free_resource(self._handle.value,
-                                               msg='Failed to destroy event',
-                                               later=True)
-
-    def query(self):
-        '''Returns True if all work before the most recent record has completed;
-        otherwise, returns False.
-        '''
-        status = self.driver.cuEventQuery(self._handle)
-        if status == CUDA_ERROR_NOT_READY:
-            return False
-        self.driver.check_error(status, 'Failed to query event')
-        return True
-
-    def record(self, stream=0):
-        '''Set the record state of the event at the stream.
-        '''
-        hstream = stream._handle if stream else 0
-        error = self.driver.cuEventRecord(self._handle, hstream)
-        self.driver.check_error(error, 'Failed to record event')
-
-    def synchronize(self):
-        '''Synchronize the host thread for the completion of the event.
-        '''
-        error = self.driver.cuEventSynchronize(self._handle)
-        self.driver.check_error(error, 'Failed to synchronize event')
-
-    def wait(self, stream=0):
-        '''All future works submitted to stream will wait util the event 
-        completes.
-        '''
-        hstream = stream._handle if stream else 0
-        flags = 0
-        error = self.driver.cuStreamWaitEvent(hstream, self._handle, flags)
-        self.driver.check_error(error, 'Failed to do stream wait event')
-
-    def elapsed_time(self, evtend):
-        return event_elapsed_time(self, evtend)
+        launch_kernel(self.handle, self.griddim, self.blockdim,
+                      self.sharedmem, streamhandle, args)
 
     @property
-    def driver(self):
-        return Driver()
+    def device(self):
+        return self.module.context.device
+
+
+def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, hstream, args):
+    gx, gy, gz = griddim
+    bx, by, bz = blockdim
+
+    param_vals = []
+    for arg in args:
+        if is_device_memory(arg):
+            param_vals.append(addressof(device_ctypes_pointer(arg)))
+        else:
+            param_vals.append(addressof(arg))
+
+    params = (c_void_p * len(param_vals))(*param_vals)
+
+    driver.cuLaunchKernel(cufunc_handle,
+                          gx, gy, gz,
+                          bx, by, bz,
+                          sharedmem,
+                          hstream,
+                          params,
+                          None)
+
 
 FILE_EXTENSION_MAP = {
-    'o'      : CU_JIT_INPUT_OBJECT,
-    'ptx'    : CU_JIT_INPUT_PTX,
-    'a'      : CU_JIT_INPUT_LIBRARY,
-    'cubin'  : CU_JIT_INPUT_CUBIN,
-    'fatbin' : CU_JIT_INPUT_FATBINAR,
+    'o': enums.CU_JIT_INPUT_OBJECT,
+    'ptx': enums.CU_JIT_INPUT_PTX,
+    'a': enums.CU_JIT_INPUT_LIBRARY,
+    'cubin': enums.CU_JIT_INPUT_CUBIN,
+    'fatbin': enums.CU_JIT_INPUT_FATBINAR,
 }
+
 
 class Linker(object):
     def __init__(self):
-        self.driver = Driver()
-
         logsz = int(os.environ.get('NUMBAPRO_CUDA_LOG_SIZE', 1024))
         linkerinfo = (c_char * logsz)()
         linkererrors = (c_char * logsz)()
 
         options = {
-            CU_JIT_INFO_LOG_BUFFER              : addressof(linkerinfo),
-            CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES   : c_void_p(logsz),
-            CU_JIT_ERROR_LOG_BUFFER             : addressof(linkererrors),
-            CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES  : c_void_p(logsz),
-            CU_JIT_LOG_VERBOSE                  : c_void_p(1),
+            enums.CU_JIT_INFO_LOG_BUFFER: addressof(linkerinfo),
+            enums.CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES: c_void_p(logsz),
+            enums.CU_JIT_ERROR_LOG_BUFFER: addressof(linkererrors),
+            enums.CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES: c_void_p(logsz),
+            enums.CU_JIT_LOG_VERBOSE: c_void_p(1),
         }
 
-        option_keys = (cu_jit_option * len(options))(*options.keys())
+        option_keys = (drvapi.cu_jit_option * len(options))(*options.keys())
         option_vals = (c_void_p * len(options))(*options.values())
 
-        self._handle = cu_link_state()
-        status = self.driver.cuLinkCreate(len(options),
-                                          option_keys,
-                                          option_vals,
-                                          byref(self._handle))
+        self.handle = handle = drvapi.cu_link_state()
+        driver.cuLinkCreate(len(options),
+                                     option_keys,
+                                     option_vals,
+                                     byref(self.handle))
 
-        self.driver.check_error(status, 'Failed to initialize linker')
-
-        self.device = self.driver.current_context().device
-        self.device.resource_manager.add_resource(self._handle.value,
-                                                  self.driver.cuLinkDestroy)
+        self.finalizer = lambda: driver.cuLinkDestroy(handle)
 
         self.linker_info_buf = linkerinfo
         self.linker_errors_buf = linkererrors
 
-        self._keep_alive = [linkerinfo, linkererrors, option_keys, option_vals] 
+        self._keep_alive = [linkerinfo, linkererrors, option_keys, option_vals]
 
     @property
     def info_log(self):
@@ -1482,35 +1037,30 @@ class Linker(object):
         return self.linker_errors_buf.value
 
     def __del__(self):
-        self.device.resource_manager.free_resource(self._handle.value,
-                                               msg='Failed to destroy linker',
-                                               later=True)
+        try:
+            self.finalizer()
+        except:
+            traceback.print_exc()
 
     def add_ptx(self, ptx, name='<cudapy-ptx>'):
         ptxbuf = c_char_p(ptx)
         namebuf = c_char_p(name)
         self._keep_alive += [ptxbuf, namebuf]
 
-        status = self.driver.cuLinkAddData(self._handle,
-                                           CU_JIT_INPUT_PTX,
-                                           ptxbuf,
-                                           len(ptx),
-                                           namebuf,
-                                           0, None, None)
-        self.driver.check_error(status,
-                                'Failed to add ptx: %s' % self.error_log)
+        try:
+            driver.cuLinkAddData(self.handle, enums.CU_JIT_INPUT_PTX,
+                                 ptxbuf, len(ptx), namebuf, 0, None, None)
+        except CudaAPIError as e:
+            raise LinkerError("%s\n%s" % (e, self.error_log))
 
     def add_file(self, path, kind):
         pathbuf = c_char_p(path)
         self._keep_alive.append(pathbuf)
 
-        status = self.driver.cuLinkAddFile(self._handle,
-                                           kind,
-                                           pathbuf,
-                                           0, None, None)
-        self.driver.check_error(status, 'Failed to add file %s: %s' %
-                                (path, self.error_log))
-
+        try:
+            driver.cuLinkAddFile(self.handle, kind, pathbuf, 0, None, None)
+        except CudaAPIError as e:
+            raise LinkerError("%s\n%s" % (e, self.error_log))
 
     def add_file_guess_ext(self, path):
         ext = path.rsplit('.', 1)[1]
@@ -1526,106 +1076,57 @@ class Linker(object):
         '''
         cubin = c_void_p(0)
         size = c_size_t(0)
-        status = self.driver.cuLinkComplete(self._handle,
-                                            byref(cubin),
-                                            byref(size))
-        self.driver.check_error(status, 'Failed to link: %s' % self.error_log)
+
+        try:
+            driver.cuLinkComplete(self.handle, byref(cubin), byref(size))
+        except CudaAPIError as e:
+            raise LinkerError("%s\n%s" % (e, self.error_log))
+
         assert size > 0, 'linker returned a zero sized cubin'
         del self._keep_alive[:]
         return cubin, size
 
-def event_elapsed_time(evtstart, evtend):
-    driver = evtstart.driver
-    msec = c_float()
-    err = driver.cuEventElapsedTime(byref(msec), evtstart._handle,
-                                    evtend._handle)
-    driver.check_error(err, 'Failed to get elapsed time')
-    return msec.value
 
-def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, hstream, args):
-    driver = Driver()
-    gx, gy, gz = griddim
-    bx, by, bz = blockdim
+# -----------------------------------------------------------------------------
 
-    param_vals = []
-    for arg in args:
-        if is_device_memory(arg):
-            param_vals.append(addressof(device_ctypes_pointer(arg)))
-        else:
-            param_vals.append(addressof(arg))
-
-    params = (c_void_p * len(param_vals))(*param_vals)
-
-    error = driver.cuLaunchKernel(
-                cufunc_handle,
-                gx, gy, gz,
-                bx, by, bz,
-                sharedmem,
-                hstream,
-                params,
-                None)
-
-    driver.check_error(error, "Failed to launch kernel")
-
-def get_or_create_context():
-    "Get the current context if it exists or create one."
-    drv = Driver()
-    context = drv.current_context(noraise=True)
-    if not context:
-        context = drv.create_context(Device(0))
-    return context
-
-def flush_pending_free():
-    get_or_create_context().device.resource_manager.free_pending()
-
-def require_context(fn):
-    "Decorator to ensure a context exists for the current thread."
-    @functools.wraps(fn)
-    def _wrapper(*args, **kws):
-        get_or_create_context()
-        return fn(*args, **kws)
-    return _wrapper
-
-#
-# CUDA memory functions
-#
 
 def _device_pointer_attr(devmem, attr, odata):
     """Query attribute on the device pointer
     """
-    driver = Driver()
-    attr = CU_POINTER_ATTRIBUTE_MEMORY_TYPE
     error = driver.cuPointerGetAttribute(byref(odata), attr,
                                          device_ctypes_pointer(devmem))
     driver.check_error(error, "Failed to query pointer attribute")
+
 
 def device_pointer_type(devmem):
     """Query the device pointer type: host, device, array, unified?
     """
     ptrtype = c_int(0)
-    _device_pointer_attr(devmem, CU_POINTER_ATTRIBUTE_MEMORY_TYPE, ptrtype)
+    _device_pointer_attr(devmem, enums.CU_POINTER_ATTRIBUTE_MEMORY_TYPE,
+                         ptrtype)
     map = {
-        CU_MEMORYTYPE_HOST    : 'host',
-        CU_MEMORYTYPE_DEVICE  : 'device',
-        CU_MEMORYTYPE_ARRAY   : 'array',
-        CU_MEMORYTYPE_UNIFIED : 'unified',
+        enums.CU_MEMORYTYPE_HOST: 'host',
+        enums.CU_MEMORYTYPE_DEVICE: 'device',
+        enums.CU_MEMORYTYPE_ARRAY: 'array',
+        enums.CU_MEMORYTYPE_UNIFIED: 'unified',
     }
     return map[ptrtype.value]
+
 
 def device_extents(devmem):
     """Find the extents (half open begin and end pointer) of the underlying
     device memory allocation.
-    
+
     NOTE: it always returns the extents of the allocation but the extents
     of the device memory view that can be a subsection of the entire allocation.
     """
-    driver = Driver()
-    s = cu_device_ptr()
+    s = drvapi.cu_device_ptr()
     n = c_size_t()
     devptr = device_ctypes_pointer(devmem)
     driver.cuMemGetAddressRange(byref(s), byref(n), devptr)
     s, n = s.value, n.value
     return s, s + n
+
 
 def device_memory_size(devmem):
     """Check the memory size of the device memory.
@@ -1640,19 +1141,22 @@ def device_memory_size(devmem):
     assert sz > 0, "zero length array"
     return sz
 
+
 def host_pointer(obj):
     """
     NOTE: The underlying data pointer from the host data buffer is used and
-    it should not be changed until the operation which can be asynchronous 
+    it should not be changed until the operation which can be asynchronous
     completes.
     """
     if isinstance(obj, (int, long)):
         return obj
     return mviewbuf.memoryview_get_buffer(obj)
 
+
 def host_memory_extents(obj):
     "Returns (start, end) the start and end pointer of the array (half open)."
     return mviewbuf.memoryview_get_extents(obj)
+
 
 def memory_size_from_info(shape, strides, itemsize):
     """et the byte size of a contiguous memory buffer given the shape, strides
@@ -1663,30 +1167,35 @@ def memory_size_from_info(shape, strides, itemsize):
     s, e = mviewbuf.memoryview_get_extents_info(shape, strides, ndim, itemsize)
     return e - s
 
+
 def host_memory_size(obj):
     "Get the size of the memory"
     s, e = host_memory_extents(obj)
     assert e >= s, "memory extend of negative size"
     return e - s
 
+
 def device_pointer(obj):
     "Get the device pointer as an integer"
     return device_ctypes_pointer(obj).value
+
 
 def device_ctypes_pointer(obj):
     "Get the ctypes object for the device pointer"
     require_device_memory(obj)
     return obj.device_ctypes_pointer
 
+
 def is_device_memory(obj):
     """All CUDA memory object is recognized as an instance with the attribute
     "__cuda_memory__" defined and its value evaluated to True.
-    
+
     All CUDA memory object should also define an attribute named
     "device_pointer" which value is an int(or long) object carrying the pointer
     value of the device memory address.  This is not tested in this method.
     """
     return getattr(obj, '__cuda_memory__', False)
+
 
 def require_device_memory(obj):
     """A sentry for methods that accept CUDA memory object.
@@ -1694,88 +1203,88 @@ def require_device_memory(obj):
     if not is_device_memory(obj):
         raise Exception("Not a CUDA memory object.")
 
+
 def device_memory_depends(devmem, *objs):
     """Add dependencies to the device memory.
-    
+
     Mainly used for creating structures that points to other device memory,
     so that the referees are not GC and released.
     """
     depset = getattr(devmem, "_depends_", [])
     depset.extend(objs)
-    devmem = depset
+
 
 def host_to_device(dst, src, size, stream=0):
     """
     NOTE: The underlying data pointer from the host data buffer is used and
-    it should not be changed until the operation which can be asynchronous 
+    it should not be changed until the operation which can be asynchronous
     completes.
     """
-    driver = Driver()
     varargs = []
 
     if stream:
+        assert isinstance(stream, Stream)
         fn = driver.cuMemcpyHtoDAsync
-        varargs.append(stream._handle)
+        varargs.append(stream.handle)
     else:
         fn = driver.cuMemcpyHtoD
 
-    error = fn(device_pointer(dst), host_pointer(src), size, *varargs)
-    driver.check_error(error, "Failed to copy memory H->D")
+    fn(device_pointer(dst), host_pointer(src), size, *varargs)
+
 
 def device_to_host(dst, src, size, stream=0):
     """
     NOTE: The underlying data pointer from the host data buffer is used and
-    it should not be changed until the operation which can be asynchronous 
+    it should not be changed until the operation which can be asynchronous
     completes.
     """
-    driver = Driver()
     varargs = []
 
     if stream:
+        assert isinstance(stream, Stream)
         fn = driver.cuMemcpyDtoHAsync
-        varargs.append(stream._handle)
+        varargs.append(stream.handle)
     else:
         fn = driver.cuMemcpyDtoH
 
-    error = fn(host_pointer(dst), device_pointer(src), size, *varargs)
-    driver.check_error(error, "Failed to copy memory D->H")
+    fn(host_pointer(dst), device_pointer(src), size, *varargs)
 
 
 def device_to_device(dst, src, size, stream=0):
     """
     NOTE: The underlying data pointer from the host data buffer is used and
-    it should not be changed until the operation which can be asynchronous 
+    it should not be changed until the operation which can be asynchronous
     completes.
     """
-    driver = Driver()
     varargs = []
 
     if stream:
+        assert isinstance(stream, Stream)
         fn = driver.cuMemcpyDtoDAsync
-        varargs.append(stream._handle)
+        varargs.append(stream.handle)
     else:
         fn = driver.cuMemcpyDtoD
 
-    error = fn(device_pointer(dst), device_pointer(src), size, *varargs)
-    driver.check_error(error, "Failed to copy memory D->H")
+    fn(device_pointer(dst), device_pointer(src), size, *varargs)
+
 
 def device_memset(dst, val, size, stream=0):
-    """Memset on the device.  
+    """Memset on the device.
     If stream is not zero, asynchronous mode is used.
-    
+
     dst: device memory
     val: byte value to be written
     size: number of byte to be written
     stream: a CUDA stream
     """
-    driver = Driver()
     varargs = []
 
     if stream:
+        assert isinstance(stream, Stream)
         fn = driver.cuMemsetD8Async
-        varargs.append(stream._handle)
+        varargs.append(stream.handle)
     else:
         fn = driver.cuMemsetD8
 
-    error = fn(device_pointer(dst), val, size, *varargs)
-    driver.check_error(error, "Failed to memset")
+    fn(device_pointer(dst), val, size, *varargs)
+

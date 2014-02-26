@@ -1,13 +1,15 @@
+from __future__ import print_function, division, absolute_import
 import numpy as np
 from numbapro.cudadrv import driver
 from numbapro import cuda
-import support
+from . import support
+
 
 @support.addtest
-class TestHostAlloc(support.CudaTestCase):
+class TestHostAlloc(support.CUDATestCase):
     def test_host_alloc_driver(self):
         n = 32
-        mem = driver.HostAllocMemory(n, mapped=True)
+        mem = cuda.current_context().memhostalloc(n, mapped=True)
 
         dtype = np.dtype(np.uint8)
         ary = np.ndarray(shape=n / dtype.itemsize, dtype=dtype, buffer=mem)
@@ -42,6 +44,7 @@ class TestHostAlloc(support.CudaTestCase):
         self.assertTrue(all(ary == 123))
         driver.device_memset(ary, 0, driver.device_memory_size(ary))
         self.assertTrue(all(ary == 0))
+
 
 if __name__ == '__main__':
     support.main()

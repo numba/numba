@@ -1,82 +1,83 @@
 import numpy as np
-from ctypes import c_float, c_double, byref, c_int, c_void_p, POINTER
-
+from ctypes import c_float, c_double, byref, c_int, Structure, c_void_p, POINTER
 
 from numbapro.cudalib.libutils import Lib, ctype_function
-from numbapro.cudadrv.driver import cu_stream, device_pointer, host_pointer
+from numbapro.cudadrv.drvapi import cu_stream
+from numbapro.cudadrv.driver import device_pointer, host_pointer
 from numbapro._utils import finalizer
-from numbapro.cudalib.cctypes import c_complex, c_double_complex
 
 INV_STATUS = dict(
-    CUBLAS_STATUS_SUCCESS         =0,
-    CUBLAS_STATUS_NOT_INITIALIZED =1,
-    CUBLAS_STATUS_ALLOC_FAILED    =3,
-    CUBLAS_STATUS_INVALID_VALUE   =7,
-    CUBLAS_STATUS_ARCH_MISMATCH   =8,
-    CUBLAS_STATUS_MAPPING_ERROR   =11,
+    CUBLAS_STATUS_SUCCESS=0,
+    CUBLAS_STATUS_NOT_INITIALIZED=1,
+    CUBLAS_STATUS_ALLOC_FAILED=3,
+    CUBLAS_STATUS_INVALID_VALUE=7,
+    CUBLAS_STATUS_ARCH_MISMATCH=8,
+    CUBLAS_STATUS_MAPPING_ERROR=11,
     CUBLAS_STATUS_EXECUTION_FAILED=13,
-    CUBLAS_STATUS_INTERNAL_ERROR  =14
+    CUBLAS_STATUS_INTERNAL_ERROR=14
 )
 
 STATUS = dict((v, k) for k, v in INV_STATUS.items())
 
 cublasStatus_t = c_int
 
-CUBLAS_FILL_MODE_LOWER=0
-CUBLAS_FILL_MODE_UPPER=1
+CUBLAS_FILL_MODE_LOWER = 0
+CUBLAS_FILL_MODE_UPPER = 1
 
 CUBLAS_FILL_MODE_MAP = {
-'L': CUBLAS_FILL_MODE_LOWER,
-'U': CUBLAS_FILL_MODE_UPPER,
+    'L': CUBLAS_FILL_MODE_LOWER,
+    'U': CUBLAS_FILL_MODE_UPPER,
 }
 
 cublasFillMode_t = c_int
 
-CUBLAS_DIAG_NON_UNIT=0
-CUBLAS_DIAG_UNIT=1
+CUBLAS_DIAG_NON_UNIT = 0
+CUBLAS_DIAG_UNIT = 1
 
 cublasDiagType_t = c_int
 
 CUBLAS_DIAG_MAP = {
-    True : CUBLAS_DIAG_UNIT,
+    True: CUBLAS_DIAG_UNIT,
     False: CUBLAS_DIAG_NON_UNIT,
 }
 
-CUBLAS_SIDE_LEFT =0
-CUBLAS_SIDE_RIGHT=1
+CUBLAS_SIDE_LEFT = 0
+CUBLAS_SIDE_RIGHT = 1
 
 CUBLAS_SIDE_MAP = {
-'L': CUBLAS_SIDE_LEFT,
-'R': CUBLAS_SIDE_RIGHT,
+    'L': CUBLAS_SIDE_LEFT,
+    'R': CUBLAS_SIDE_RIGHT,
 }
 
 cublasSideMode_t = c_int
 
-CUBLAS_OP_N=0
-CUBLAS_OP_T=1
-CUBLAS_OP_C=2
+CUBLAS_OP_N = 0
+CUBLAS_OP_T = 1
+CUBLAS_OP_C = 2
 
 cublasOperation_t = c_int
 
-CUBLAS_POINTER_MODE_HOST   = 0
+CUBLAS_POINTER_MODE_HOST = 0
 CUBLAS_POINTER_MODE_DEVICE = 1
 
 cublasPointerMode_t = c_int
 
-CUBLAS_ATOMICS_NOT_ALLOWED   = 0
-CUBLAS_ATOMICS_ALLOWED       = 1        
+CUBLAS_ATOMICS_NOT_ALLOWED = 0
+CUBLAS_ATOMICS_ALLOWED = 1
 
 cublasAtomicsMode_t = c_int
 
 cublasHandle_t = c_void_p # opaque handle
 
-CUBLAS_OP_MAP = { 'N': CUBLAS_OP_N,
-                  'T': CUBLAS_OP_T,
-                  'H': CUBLAS_OP_C, }
+CUBLAS_OP_MAP = {'N': CUBLAS_OP_N,
+                 'T': CUBLAS_OP_T,
+                 'H': CUBLAS_OP_C, }
+
 
 class CuBLASError(Exception):
     def __init__(self, code):
         super(CuBLASError, self).__init__(STATUS[code])
+
 
 class libcublas(Lib):
     lib = 'cublas'
@@ -101,11 +102,12 @@ class libcublas(Lib):
                                         POINTER(cu_stream))      # streamId
 
     cublasGetPointerMode_v2 = ctype_function(cublasStatus_t,
-                                             cublasHandle_t,            # handle
-                                             POINTER(cublasPointerMode_t)) # mode
+                                             cublasHandle_t, # handle
+                                             POINTER(
+                                                 cublasPointerMode_t)) # mode
 
     cublasSetPointerMode_v2 = ctype_function(cublasStatus_t,
-                                             cublasHandle_t,      # handle
+                                             cublasHandle_t, # handle
                                              cublasPointerMode_t) # mode
 
     cublasGetAtomicsMode = ctype_function(cublasStatus_t,
@@ -113,28 +115,28 @@ class libcublas(Lib):
                                           POINTER(cublasAtomicsMode_t)) # mode
 
     cublasSetAtomicsMode = ctype_function(cublasStatus_t,
-                                          cublasHandle_t,       # handle
+                                          cublasHandle_t, # handle
                                           cublasAtomicsMode_t)  # mode
 
     # Level 1
     cublasSnrm2_v2 = ctype_function(cublasStatus_t,
-                            cublasHandle_t, # handle
-                            c_int,          # n
-                            c_void_p,       # device array
-                            c_int,          # incx
-                            c_void_p)       # result - host/device scalar
+                                    cublasHandle_t, # handle
+                                    c_int, # n
+                                    c_void_p, # device array
+                                    c_int, # incx
+                                    c_void_p)       # result - host/device scalar
 
     cublasDnrm2_v2 = cublasSnrm2_v2
     cublasScnrm2_v2 = cublasSnrm2_v2
     cublasDznrm2_v2 = cublasSnrm2_v2
 
     cublasSdot_v2 = ctype_function(cublasStatus_t,
-                                   cublasHandle_t,     # handle
-                                   c_int,              # n
-                                   c_void_p,   # x
-                                   c_int,              # incx
-                                   c_void_p,   # y
-                                   c_int,              # incy,
+                                   cublasHandle_t, # handle
+                                   c_int, # n
+                                   c_void_p, # x
+                                   c_int, # incx
+                                   c_void_p, # y
+                                   c_int, # incy,
                                    c_void_p)   # result h/d ptr
     cublasDdot_v2 = cublasSdot_v2
     cublasCdotu_v2 = cublasSdot_v2
@@ -143,10 +145,10 @@ class libcublas(Lib):
     cublasZdotc_v2 = cublasSdot_v2
 
     cublasSscal_v2 = ctype_function(cublasStatus_t,
-                                    cublasHandle_t,   # handle
-                                    c_int,            # n
-                                    c_void_p,         # alpha h/d
-                                    c_void_p,         # x
+                                    cublasHandle_t, # handle
+                                    c_int, # n
+                                    c_void_p, # alpha h/d
+                                    c_void_p, # x
                                     c_int)            # incx
 
     cublasDscal_v2 = cublasSscal_v2
@@ -157,11 +159,11 @@ class libcublas(Lib):
 
     cublasSaxpy_v2 = ctype_function(cublasStatus_t,
                                     cublasHandle_t, # handle
-                                    c_int,          # n
-                                    c_void_p,       # alpha h/d
-                                    c_void_p,       # x
-                                    c_int,          # incx
-                                    c_void_p,       # y
+                                    c_int, # n
+                                    c_void_p, # alpha h/d
+                                    c_void_p, # x
+                                    c_int, # incx
+                                    c_void_p, # y
                                     c_int)          # incy
     cublasDaxpy_v2 = cublasSaxpy_v2
     cublasCaxpy_v2 = cublasSaxpy_v2
@@ -169,11 +171,11 @@ class libcublas(Lib):
 
     cublasIsamax_v2 = ctype_function(cublasStatus_t,
                                      cublasHandle_t, # handle
-                                     c_int,          # n
-                                     c_void_p,       # x
-                                     c_int,          # incx
+                                     c_int, # n
+                                     c_void_p, # x
+                                     c_int, # incx
                                      POINTER(c_int)) # result h/d ptr
-    
+
     cublasIdamax_v2 = cublasIsamax_v2
     cublasIcamax_v2 = cublasIsamax_v2
     cublasIzamax_v2 = cublasIsamax_v2
@@ -186,9 +188,9 @@ class libcublas(Lib):
 
     cublasSasum_v2 = ctype_function(cublasStatus_t,
                                     cublasHandle_t, # handle
-                                    c_int,          # n
-                                    c_void_p,       # x
-                                    c_int,          # incx
+                                    c_int, # n
+                                    c_void_p, # x
+                                    c_int, # incx
                                     c_void_p)       # result h/d ptr
 
     cublasDasum_v2 = cublasSasum_v2
@@ -196,13 +198,13 @@ class libcublas(Lib):
     cublasDzasum_v2 = cublasSasum_v2
 
     cublasSrot_v2 = ctype_function(cublasStatus_t,
-                                   cublasHandle_t,  # handle,
-                                   c_int,           # n
-                                   c_void_p,        # x
-                                   c_int,           # incx
-                                   c_void_p,        # y
-                                   c_int,           # incy
-                                   c_void_p,        # c
+                                   cublasHandle_t, # handle,
+                                   c_int, # n
+                                   c_void_p, # x
+                                   c_int, # incx
+                                   c_void_p, # y
+                                   c_int, # incy
+                                   c_void_p, # c
                                    c_void_p)        # s h/d ptr
 
     cublasDrot_v2 = cublasSrot_v2
@@ -212,10 +214,10 @@ class libcublas(Lib):
     cublasZdrot_v2 = cublasSrot_v2
 
     cublasSrotg_v2 = ctype_function(cublasStatus_t,
-                                    cublasHandle_t,     # handle,
-                                    c_void_p,           # a h/d ptr
-                                    c_void_p,           # b h/d ptr
-                                    c_void_p,           # c h/d ptr
+                                    cublasHandle_t, # handle,
+                                    c_void_p, # a h/d ptr
+                                    c_void_p, # b h/d ptr
+                                    c_void_p, # c h/d ptr
                                     c_void_p)           # s h/d ptr
 
     cublasDrotg_v2 = cublasSrotg_v2
@@ -223,21 +225,21 @@ class libcublas(Lib):
     cublasZrotg_v2 = cublasSrotg_v2
 
     cublasSrotm_v2 = ctype_function(cublasStatus_t,
-                                    cublasHandle_t,     # handle
-                                    c_int,              # n
-                                    c_void_p,           # x
-                                    c_int,              # incx
-                                    c_void_p,           # y
-                                    c_int,              # incy
+                                    cublasHandle_t, # handle
+                                    c_int, # n
+                                    c_void_p, # x
+                                    c_int, # incx
+                                    c_void_p, # y
+                                    c_int, # incy
                                     c_void_p)           # param h/d pointer
     cublasDrotm_v2 = cublasSrotm_v2
 
     cublasSrotmg_v2 = ctype_function(cublasStatus_t,
                                      cublasHandle_t, # handle,
-                                     c_void_p,       # d1 h/d ptr
-                                     c_void_p,       # d2 h/d ptr
-                                     c_void_p,       # x1 h/d ptr
-                                     c_void_p,       # y1 h/d ptr
+                                     c_void_p, # d1 h/d ptr
+                                     c_void_p, # d2 h/d ptr
+                                     c_void_p, # x1 h/d ptr
+                                     c_void_p, # y1 h/d ptr
                                      c_void_p)       # param h/d ptr
 
     cublasDrotmg_v2 = cublasSrotmg_v2
@@ -246,98 +248,97 @@ class libcublas(Lib):
     # Level 2
     #
     cublasSgbmv_v2 = ctype_function(cublasStatus_t,
-                                 cublasHandle_t,    # handle,
-                                 cublasOperation_t, # trans,
-                                 c_int,             # m,
-                                 c_int,             # n,
-                                 c_int,             # kl,
-                                 c_int,             # ku,
-                                 c_void_p,          # *alpha,
-                                 c_void_p,          # *A,
-                                 c_int,             # lda,
-                                 c_void_p,          # *x,
-                                 c_int,             # incx,
-                                 c_void_p,          # *beta,
-                                 c_void_p,          # *y,
-                                 c_int)             # incy)
+                                    cublasHandle_t, # handle,
+                                    cublasOperation_t, # trans,
+                                    c_int, # m,
+                                    c_int, # n,
+                                    c_int, # kl,
+                                    c_int, # ku,
+                                    c_void_p, # *alpha,
+                                    c_void_p, # *A,
+                                    c_int, # lda,
+                                    c_void_p, # *x,
+                                    c_int, # incx,
+                                    c_void_p, # *beta,
+                                    c_void_p, # *y,
+                                    c_int)             # incy)
 
     cublasDgbmv_v2 = cublasSgbmv_v2
     cublasCgbmv_v2 = cublasSgbmv_v2
     cublasZgbmv_v2 = cublasSgbmv_v2
-    
+
     cublasSgemv_v2 = ctype_function(cublasStatus_t,
-                                 cublasHandle_t,        # handle,
-                                 cublasOperation_t,     # trans,
-                                 c_int,                 # m,
-                                 c_int,                 # n,
-                                 c_void_p,              # *alpha,
-                                 c_void_p,              # *A,
-                                 c_int,                 # lda,
-                                 c_void_p,              # *x,
-                                 c_int,                 # incx,
-                                 c_void_p,              # *beta,
-                                 c_void_p,              # *y,
-                                 c_int)                 # incy)
+                                    cublasHandle_t, # handle,
+                                    cublasOperation_t, # trans,
+                                    c_int, # m,
+                                    c_int, # n,
+                                    c_void_p, # *alpha,
+                                    c_void_p, # *A,
+                                    c_int, # lda,
+                                    c_void_p, # *x,
+                                    c_int, # incx,
+                                    c_void_p, # *beta,
+                                    c_void_p, # *y,
+                                    c_int)                 # incy)
 
     cublasDgemv_v2 = cublasSgemv_v2
     cublasCgemv_v2 = cublasSgemv_v2
     cublasZgemv_v2 = cublasSgemv_v2
 
-    cublasStrmv_v2 = ctype_function(	cublasStatus_t,
-                                        cublasHandle_t,    # handle,
-                                        cublasFillMode_t,  # uplo,
-                                        cublasOperation_t, # trans,
-                                        cublasDiagType_t,  # diag,
-                                        c_int,             # n,
-                                        c_void_p,          # *A,
-                                        c_int,             # lda,
-                                        c_void_p,          # *x,
-                                        c_int)             # incx);
+    cublasStrmv_v2 = ctype_function(cublasStatus_t,
+                                    cublasHandle_t, # handle,
+                                    cublasFillMode_t, # uplo,
+                                    cublasOperation_t, # trans,
+                                    cublasDiagType_t, # diag,
+                                    c_int, # n,
+                                    c_void_p, # *A,
+                                    c_int, # lda,
+                                    c_void_p, # *x,
+                                    c_int)             # incx);
 
     cublasDtrmv_v2 = cublasStrmv_v2
     cublasCtrmv_v2 = cublasStrmv_v2
     cublasZtrmv_v2 = cublasStrmv_v2
 
-    cublasStbmv_v2 = ctype_function( cublasStatus_t,
-                                     cublasHandle_t,            # handle,
-                                     cublasFillMode_t,          # uplo,
-                                     cublasOperation_t,         # trans,
-                                     cublasDiagType_t,          # diag,
-                                     c_int,                    # n,
-                                     c_int,                    # k,
-                                     c_void_p,                  # *A,
-                                     c_int,                    # lda,
-                                     c_void_p,                  # *x,
-                                     c_int)                    # incx);
+    cublasStbmv_v2 = ctype_function(cublasStatus_t,
+                                    cublasHandle_t, # handle,
+                                    cublasFillMode_t, # uplo,
+                                    cublasOperation_t, # trans,
+                                    cublasDiagType_t, # diag,
+                                    c_int, # n,
+                                    c_int, # k,
+                                    c_void_p, # *A,
+                                    c_int, # lda,
+                                    c_void_p, # *x,
+                                    c_int)                    # incx);
 
     cublasDtbmv_v2 = cublasStbmv_v2
     cublasCtbmv_v2 = cublasStbmv_v2
     cublasZtbmv_v2 = cublasStbmv_v2
 
     cublasStpmv_v2 = ctype_function(cublasStatus_t,
-                                    cublasHandle_t,     # handle,
-                                    cublasFillMode_t,   # uplo,
-                                    cublasOperation_t,  # trans,
-                                    cublasDiagType_t,   # diag,
-                                    c_int,              # n,
-                                    c_void_p,           # *AP,
-                                    c_void_p,           # *x,
+                                    cublasHandle_t, # handle,
+                                    cublasFillMode_t, # uplo,
+                                    cublasOperation_t, # trans,
+                                    cublasDiagType_t, # diag,
+                                    c_int, # n,
+                                    c_void_p, # *AP,
+                                    c_void_p, # *x,
                                     c_int)              # incx);
-
 
     cublasDtpmv_v2 = cublasStpmv_v2
     cublasCtpmv_v2 = cublasStpmv_v2
     cublasZtpmv_v2 = cublasStpmv_v2
 
     cublasStrsv_v2 = ctype_function(cublasStatus_t,
-                                    cublasHandle_t,       # handle,
-                                    cublasFillMode_t,     # uplo,
-                                    cublasOperation_t,    # trans,
-                                    cublasDiagType_t,     # diag,
-                                    c_int,                # n,
-                                    c_void_p,             # *A,
-                                    c_int,                # lda,
-                                    c_void_p,             # *x,
+                                    cublasHandle_t, # handle,
+                                    cublasFillMode_t, # uplo,
+                                    cublasOperation_t, # trans,
+                                    cublasDiagType_t, # diag,
+                                    c_int, # n,
+                                    c_void_p, # *A,
+                                    c_int, # lda,
+                                    c_void_p, # *x,
                                     c_int)                # incx);
 
     cublasDtrsv_v2 = cublasStrsv_v2
@@ -345,13 +346,13 @@ class libcublas(Lib):
     cublasZtrsv_v2 = cublasStrsv_v2
 
     cublasStpsv_v2 = ctype_function(cublasStatus_t,
-                                    cublasHandle_t,     #handle,
-                                    cublasFillMode_t,   #uplo,
-                                    cublasOperation_t,  #trans,
-                                    cublasDiagType_t,   #diag,
-                                    c_int,              #n,
-                                    c_void_p,            #*AP,
-                                    c_void_p,            #*x,
+                                    cublasHandle_t, #handle,
+                                    cublasFillMode_t, #uplo,
+                                    cublasOperation_t, #trans,
+                                    cublasDiagType_t, #diag,
+                                    c_int, #n,
+                                    c_void_p, #*AP,
+                                    c_void_p, #*x,
                                     c_int)              #incx);
 
     cublasDtpsv_v2 = cublasStpsv_v2
@@ -359,15 +360,15 @@ class libcublas(Lib):
     cublasZtpsv_v2 = cublasStpsv_v2
 
     cublasStbsv_v2 = ctype_function(cublasStatus_t,
-                                    cublasHandle_t,     #handle,
-                                    cublasFillMode_t,   #uplo,
-                                    cublasOperation_t,  #trans,
-                                    cublasDiagType_t,   #diag,
-                                    c_int,              #n,
-                                    c_int,              #k,
-                                    c_void_p,            #*A,
-                                    c_int,              #lda,
-                                    c_void_p,            #*x,
+                                    cublasHandle_t, #handle,
+                                    cublasFillMode_t, #uplo,
+                                    cublasOperation_t, #trans,
+                                    cublasDiagType_t, #diag,
+                                    c_int, #n,
+                                    c_int, #k,
+                                    c_void_p, #*A,
+                                    c_int, #lda,
+                                    c_void_p, #*x,
                                     c_int)              #incx);
 
     cublasDtbsv_v2 = cublasStbsv_v2
@@ -375,148 +376,148 @@ class libcublas(Lib):
     cublasZtbsv_v2 = cublasStbsv_v2
 
     cublasSsymv_v2 = ctype_function(cublasStatus_t,
-                                    cublasHandle_t,     #handle,
-                                    cublasFillMode_t,   #uplo,
-                                    c_int,              #n,
-                                    c_void_p,            #*alpha,
-                                    c_void_p,            #*A,
-                                    c_int,              #lda,
-                                    c_void_p,            #*x,
-                                    c_int,              #incx,
-                                    c_void_p,            #*beta,
-                                    c_void_p,            #*y,
+                                    cublasHandle_t, #handle,
+                                    cublasFillMode_t, #uplo,
+                                    c_int, #n,
+                                    c_void_p, #*alpha,
+                                    c_void_p, #*A,
+                                    c_int, #lda,
+                                    c_void_p, #*x,
+                                    c_int, #incx,
+                                    c_void_p, #*beta,
+                                    c_void_p, #*y,
                                     c_int)              #incy);
 
     cublasDsymv_v2 = cublasSsymv_v2
     cublasCsymv_v2 = cublasSsymv_v2
     cublasZsymv_v2 = cublasSsymv_v2
-                                     
-    cublasChemv_v2 = ctype_function (cublasStatus_t,
-                                     cublasHandle_t,    #handle,
-                                     cublasFillMode_t,  #uplo,
-                                     c_int,             #n,
-                                     c_void_p,         #*alpha,
-                                     c_void_p,         #*A,
-                                     c_int,             #lda,
-                                     c_void_p,         #*x,
-                                     c_int,             #incx,
-                                     c_void_p,         #*beta,
-                                     c_void_p,         #*y,
-                                     c_int)             #incy);
+
+    cublasChemv_v2 = ctype_function(cublasStatus_t,
+                                    cublasHandle_t, #handle,
+                                    cublasFillMode_t, #uplo,
+                                    c_int, #n,
+                                    c_void_p, #*alpha,
+                                    c_void_p, #*A,
+                                    c_int, #lda,
+                                    c_void_p, #*x,
+                                    c_int, #incx,
+                                    c_void_p, #*beta,
+                                    c_void_p, #*y,
+                                    c_int)             #incy);
     cublasZhemv_v2 = cublasChemv_v2
 
-    cublasSsbmv_v2 = ctype_function (cublasStatus_t,
-                                     cublasHandle_t,    #handle,
-                                     cublasFillMode_t,  #uplo,
-                                     c_int,             #n,
-                                     c_int,             #k,
-                                     c_void_p,          #*alpha
-                                     c_void_p,          #*A,
-                                     c_int,             #lda,
-                                     c_void_p,          #*x,
-                                     c_int,             #incx,
-                                     c_void_p,          #*beta
-                                     c_void_p,          #*y,
-                                     c_int)             #incy);
+    cublasSsbmv_v2 = ctype_function(cublasStatus_t,
+                                    cublasHandle_t, #handle,
+                                    cublasFillMode_t, #uplo,
+                                    c_int, #n,
+                                    c_int, #k,
+                                    c_void_p, #*alpha
+                                    c_void_p, #*A,
+                                    c_int, #lda,
+                                    c_void_p, #*x,
+                                    c_int, #incx,
+                                    c_void_p, #*beta
+                                    c_void_p, #*y,
+                                    c_int)             #incy);
     cublasDsbmv_v2 = cublasSsbmv_v2
 
-    cublasChbmv_v2 = ctype_function (cublasStatus_t,
-                                     cublasHandle_t,        #handle,
-                                     cublasFillMode_t,      #uplo,
-                                     c_int,                 #n,
-                                     c_int,                 #k,
-                                     c_void_p,              #*alpha,
-                                     c_void_p,              #*A,
-                                     c_int,                 #lda,
-                                     c_void_p,              #*x,
-                                     c_int,                 #incx,
-                                     c_void_p,              #*beta,
-                                     c_void_p,              #*y,
-                                     c_int)                 #incy);
+    cublasChbmv_v2 = ctype_function(cublasStatus_t,
+                                    cublasHandle_t, #handle,
+                                    cublasFillMode_t, #uplo,
+                                    c_int, #n,
+                                    c_int, #k,
+                                    c_void_p, #*alpha,
+                                    c_void_p, #*A,
+                                    c_int, #lda,
+                                    c_void_p, #*x,
+                                    c_int, #incx,
+                                    c_void_p, #*beta,
+                                    c_void_p, #*y,
+                                    c_int)                 #incy);
     cublasZhbmv_v2 = cublasChbmv_v2
 
-    cublasSspmv_v2 = ctype_function (cublasStatus_t,
-                                     cublasHandle_t,     #handle,
-                                     cublasFillMode_t,  #uplo,
-                                     c_int,             #n,
-                                     c_void_p,  #*alpha,
-                                     c_void_p,  #*AP,
-                                     c_void_p,  #*x,
-                                     c_int,     #incx,
-                                     c_void_p,  #*beta,
-                                     c_void_p,  #*y,
-                                     c_int)     #incy);
+    cublasSspmv_v2 = ctype_function(cublasStatus_t,
+                                    cublasHandle_t, #handle,
+                                    cublasFillMode_t, #uplo,
+                                    c_int, #n,
+                                    c_void_p, #*alpha,
+                                    c_void_p, #*AP,
+                                    c_void_p, #*x,
+                                    c_int, #incx,
+                                    c_void_p, #*beta,
+                                    c_void_p, #*y,
+                                    c_int)     #incy);
 
     cublasDspmv_v2 = cublasSspmv_v2
     cublasChpmv_v2 = cublasSspmv_v2
     cublasZhpmv_v2 = cublasChpmv_v2
 
-    cublasSger_v2 = ctype_function (cublasStatus_t,
-                                    cublasHandle_t,  #handle,
-                                    c_int,           #m,
-                                    c_int,           #n,
-                                    c_void_p,        #*alpha,
-                                    c_void_p,        #*x,
-                                    c_int,           #incx,
-                                    c_void_p,        #*y,
-                                    c_int,           #incy,
-                                    c_void_p,        #*A,
-                                    c_int)           #lda);
+    cublasSger_v2 = ctype_function(cublasStatus_t,
+                                   cublasHandle_t, #handle,
+                                   c_int, #m,
+                                   c_int, #n,
+                                   c_void_p, #*alpha,
+                                   c_void_p, #*x,
+                                   c_int, #incx,
+                                   c_void_p, #*y,
+                                   c_int, #incy,
+                                   c_void_p, #*A,
+                                   c_int)           #lda);
     cublasDger_v2 = cublasSger_v2
     cublasCgeru_v2 = cublasDger_v2
     cublasCgerc_v2 = cublasDger_v2
     cublasZgeru_v2 = cublasDger_v2
     cublasZgerc_v2 = cublasDger_v2
 
-    cublasSsyr_v2 = ctype_function (cublasStatus_t,
-                                    cublasHandle_t,     #handle,
-                                    cublasFillMode_t,   #uplo,
-                                    c_int,              #n,
-                                    c_void_p,            #*alpha,
-                                    c_void_p,            #*x,
-                                    c_int,              #incx,
-                                    c_void_p,            #*A,
-                                    c_int)              #lda);
+    cublasSsyr_v2 = ctype_function(cublasStatus_t,
+                                   cublasHandle_t, #handle,
+                                   cublasFillMode_t, #uplo,
+                                   c_int, #n,
+                                   c_void_p, #*alpha,
+                                   c_void_p, #*x,
+                                   c_int, #incx,
+                                   c_void_p, #*A,
+                                   c_int)              #lda);
     cublasDsyr_v2 = cublasSsyr_v2
     cublasCsyr_v2 = cublasSsyr_v2
     cublasZsyr_v2 = cublasSsyr_v2
-                                               
-    cublasCher_v2 = ctype_function (cublasStatus_t,
-                                    cublasHandle_t,     #handle,
-                                    cublasFillMode_t,   #uplo,
-                                    c_int,       #n,
-                                    c_void_p,    #*alpha,
-                                    c_void_p,    #*x,
-                                    c_int,       #incx,
-                                    c_void_p,    #*A,
-                                    c_int)       #lda);
+
+    cublasCher_v2 = ctype_function(cublasStatus_t,
+                                   cublasHandle_t, #handle,
+                                   cublasFillMode_t, #uplo,
+                                   c_int, #n,
+                                   c_void_p, #*alpha,
+                                   c_void_p, #*x,
+                                   c_int, #incx,
+                                   c_void_p, #*A,
+                                   c_int)       #lda);
 
     cublasZher_v2 = cublasCher_v2
 
     cublasSspr_v2 = ctype_function(cublasStatus_t,
-                                   cublasHandle_t,  #handle,
-                                   cublasFillMode_t,# uplo,
-                                   c_int,           #n,
-                                   c_void_p,         #*alpha,
-                                   c_void_p,         #*x,
-                                   c_int,           #incx,
+                                   cublasHandle_t, #handle,
+                                   cublasFillMode_t, # uplo,
+                                   c_int, #n,
+                                   c_void_p, #*alpha,
+                                   c_void_p, #*x,
+                                   c_int, #incx,
                                    c_void_p)         #*AP);
 
     cublasDspr_v2 = cublasSspr_v2
     cublasChpr_v2 = cublasSspr_v2
     cublasZhpr_v2 = cublasSspr_v2
 
-    cublasSsyr2_v2 = ctype_function (cublasStatus_t,
-                                     cublasHandle_t,        #handle,
-                                     cublasFillMode_t,      #uplo,
-                                     c_int,                 #n,
-                                     c_void_p,               #*alpha,
-                                     c_void_p,              #*x,
-                                     c_int,                 #incx,
-                                     c_void_p,              #*y,
-                                     c_int,                 #incy,
-                                     c_void_p,              #*A,
-                                     c_int)                 #lda);
+    cublasSsyr2_v2 = ctype_function(cublasStatus_t,
+                                    cublasHandle_t, #handle,
+                                    cublasFillMode_t, #uplo,
+                                    c_int, #n,
+                                    c_void_p, #*alpha,
+                                    c_void_p, #*x,
+                                    c_int, #incx,
+                                    c_void_p, #*y,
+                                    c_int, #incy,
+                                    c_void_p, #*A,
+                                    c_int)                 #lda);
 
     cublasDsyr2_v2 = cublasSsyr2_v2
     cublasCsyr2_v2 = cublasSsyr2_v2
@@ -524,16 +525,16 @@ class libcublas(Lib):
     cublasCher2_v2 = cublasSsyr2_v2
     cublasZher2_v2 = cublasSsyr2_v2
 
-    cublasSspr2_v2 = ctype_function (cublasStatus_t,
-                                     cublasHandle_t,    #handle,
-                                     cublasFillMode_t,  #uplo,
-                                     c_int,             #n,
-                                     c_void_p,          #*alpha
-                                     c_void_p,          #*x,
-                                     c_int,             #incx,
-                                     c_void_p,          #*y,
-                                     c_int,             #incy,
-                                     c_void_p)          #*AP);
+    cublasSspr2_v2 = ctype_function(cublasStatus_t,
+                                    cublasHandle_t, #handle,
+                                    cublasFillMode_t, #uplo,
+                                    c_int, #n,
+                                    c_void_p, #*alpha
+                                    c_void_p, #*x,
+                                    c_int, #incx,
+                                    c_void_p, #*y,
+                                    c_int, #incy,
+                                    c_void_p)          #*AP);
 
     cublasDspr2_v2 = cublasSspr2_v2
 
@@ -541,126 +542,124 @@ class libcublas(Lib):
     cublasZhpr2_v2 = cublasSspr2_v2
 
     # Level 3
-    cublasSgemm_v2 = ctype_function (cublasStatus_t,
-                                     cublasHandle_t,        #handle,
-                                     cublasOperation_t,     #transa,
-                                     cublasOperation_t,     #transb,
-                                     c_int,         #m,
-                                     c_int,         #n,
-                                     c_int,         #k,
-                                     c_void_p,      #*alpha
-                                     c_void_p,      #*A,
-                                     c_int,         #lda,
-                                     c_void_p,      #*B,
-                                     c_int,         #ldb,
-                                     c_void_p,      #*beta,
-                                     c_void_p,      #*C,
-                                     c_int)         #ldc);
+    cublasSgemm_v2 = ctype_function(cublasStatus_t,
+                                    cublasHandle_t, #handle,
+                                    cublasOperation_t, #transa,
+                                    cublasOperation_t, #transb,
+                                    c_int, #m,
+                                    c_int, #n,
+                                    c_int, #k,
+                                    c_void_p, #*alpha
+                                    c_void_p, #*A,
+                                    c_int, #lda,
+                                    c_void_p, #*B,
+                                    c_int, #ldb,
+                                    c_void_p, #*beta,
+                                    c_void_p, #*C,
+                                    c_int)         #ldc);
 
     cublasDgemm_v2 = cublasSgemm_v2
     cublasCgemm_v2 = cublasSgemm_v2
     cublasZgemm_v2 = cublasSgemm_v2
 
-    cublasSsyrk_v2 = ctype_function (cublasStatus_t,
-                                     cublasHandle_t,    #handle,
-                                     cublasFillMode_t,  #uplo,
-                                     cublasOperation_t, #trans,
-                                     c_int,             #n,
-                                     c_int,             #k,
-                                     c_void_p,          #*alpha,
-                                     c_void_p,          #*A,
-                                     c_int,             #lda,
-                                     c_void_p,          #*beta,
-                                     c_void_p,          #*C,
-                                     c_int)             #ldc);
+    cublasSsyrk_v2 = ctype_function(cublasStatus_t,
+                                    cublasHandle_t, #handle,
+                                    cublasFillMode_t, #uplo,
+                                    cublasOperation_t, #trans,
+                                    c_int, #n,
+                                    c_int, #k,
+                                    c_void_p, #*alpha,
+                                    c_void_p, #*A,
+                                    c_int, #lda,
+                                    c_void_p, #*beta,
+                                    c_void_p, #*C,
+                                    c_int)             #ldc);
 
-    cublasDsyrk_v2 = cublasSsyrk_v2  
+    cublasDsyrk_v2 = cublasSsyrk_v2
     cublasCsyrk_v2 = cublasSsyrk_v2
     cublasZsyrk_v2 = cublasSsyrk_v2
 
-
-    cublasCherk_v2 = ctype_function (cublasStatus_t,
-                                     cublasHandle_t,        #handle,
-                                     cublasFillMode_t,      #uplo,
-                                     cublasOperation_t,     #trans,
-                                     c_int,                 #n,
-                                     c_int,                 #k,
-                                     c_void_p,              #*alpha,
-                                     c_void_p,              #*A,
-                                     c_int,                 #lda,
-                                     c_void_p,              #*beta
-                                     c_void_p,              #*C,
-                                     c_int)                 #ldc);
+    cublasCherk_v2 = ctype_function(cublasStatus_t,
+                                    cublasHandle_t, #handle,
+                                    cublasFillMode_t, #uplo,
+                                    cublasOperation_t, #trans,
+                                    c_int, #n,
+                                    c_int, #k,
+                                    c_void_p, #*alpha,
+                                    c_void_p, #*A,
+                                    c_int, #lda,
+                                    c_void_p, #*beta
+                                    c_void_p, #*C,
+                                    c_int)                 #ldc);
     cublasZherk_v2 = cublasCherk_v2
 
-    cublasSsymm_v2 = ctype_function (cublasStatus_t,
-                                     cublasHandle_t,    #handle,
-                                     cublasSideMode_t,  #side,
-                                     cublasFillMode_t,  #uplo,
-                                     c_int,             #m,
-                                     c_int,             #n,
-                                     c_void_p,          #*alpha
-                                     c_void_p,          #*A,
-                                     c_int,             #lda,
-                                     c_void_p,          #*B,
-                                     c_int,             #ldb,
-                                     c_void_p,          #*beta
-                                     c_void_p,          #*C,
-                                     c_int)             #ldc);
-                                     
-    cublasDsymm_v2 = cublasSsymm_v2  
+    cublasSsymm_v2 = ctype_function(cublasStatus_t,
+                                    cublasHandle_t, #handle,
+                                    cublasSideMode_t, #side,
+                                    cublasFillMode_t, #uplo,
+                                    c_int, #m,
+                                    c_int, #n,
+                                    c_void_p, #*alpha
+                                    c_void_p, #*A,
+                                    c_int, #lda,
+                                    c_void_p, #*B,
+                                    c_int, #ldb,
+                                    c_void_p, #*beta
+                                    c_void_p, #*C,
+                                    c_int)             #ldc);
+
+    cublasDsymm_v2 = cublasSsymm_v2
     cublasCsymm_v2 = cublasSsymm_v2
     cublasZsymm_v2 = cublasSsymm_v2
 
-    cublasChemm_v2 = ctype_function (cublasStatus_t,
-                                     cublasHandle_t,    #handle,
-                                     cublasSideMode_t,  #side,
-                                     cublasFillMode_t,  #uplo,
-                                     c_int,             #m,
-                                     c_int,             #n,
-                                     c_void_p,          #*alpha
-                                     c_void_p,          #*A,
-                                     c_int,             #lda,
-                                     c_void_p,          #*B,
-                                     c_int,             #ldb,
-                                     c_void_p,          #*beta
-                                     c_void_p,          #*C,
-                                     c_int)             #ldc);
+    cublasChemm_v2 = ctype_function(cublasStatus_t,
+                                    cublasHandle_t, #handle,
+                                    cublasSideMode_t, #side,
+                                    cublasFillMode_t, #uplo,
+                                    c_int, #m,
+                                    c_int, #n,
+                                    c_void_p, #*alpha
+                                    c_void_p, #*A,
+                                    c_int, #lda,
+                                    c_void_p, #*B,
+                                    c_int, #ldb,
+                                    c_void_p, #*beta
+                                    c_void_p, #*C,
+                                    c_int)             #ldc);
     cublasZhemm_v2 = cublasChemm_v2
 
-    cublasStrsm_v2 = ctype_function (cublasStatus_t,
-                                     cublasHandle_t,        #handle,
-                                     cublasSideMode_t,      #side,
-                                     cublasFillMode_t,      #uplo,
-                                     cublasOperation_t,     #trans,
-                                     cublasDiagType_t,      #diag,
-                                     c_int,                 #m,
-                                     c_int,                 #n,
-                                     c_void_p,              #*alpha
-                                     c_void_p,              #*A,
-                                     c_int,                 #lda,
-                                     c_void_p,              #*B,
-                                     c_int)                 #ldb);
-
+    cublasStrsm_v2 = ctype_function(cublasStatus_t,
+                                    cublasHandle_t, #handle,
+                                    cublasSideMode_t, #side,
+                                    cublasFillMode_t, #uplo,
+                                    cublasOperation_t, #trans,
+                                    cublasDiagType_t, #diag,
+                                    c_int, #m,
+                                    c_int, #n,
+                                    c_void_p, #*alpha
+                                    c_void_p, #*A,
+                                    c_int, #lda,
+                                    c_void_p, #*B,
+                                    c_int)                 #ldb);
 
     cublasDtrsm_v2 = cublasStrsm_v2
     cublasCtrsm_v2 = cublasStrsm_v2
     cublasZtrsm_v2 = cublasStrsm_v2
 
     cublasStrmm_v2 = ctype_function(cublasStatus_t,
-                                    cublasHandle_t,     #handle,
-                                    cublasSideMode_t,   #side,
-                                    cublasFillMode_t,   #uplo,
-                                    cublasOperation_t,  #trans,
-                                    cublasDiagType_t,   #diag,
-                                    c_int,              #m,
-                                    c_int,              #n,
-                                    c_void_p,           #*alpha
-                                    c_void_p,           #*A,
-                                    c_int,              #lda,
-                                    c_void_p,           #*B,
-                                    c_int,              #ldb,
-                                    c_void_p,           #*C,
+                                    cublasHandle_t, #handle,
+                                    cublasSideMode_t, #side,
+                                    cublasFillMode_t, #uplo,
+                                    cublasOperation_t, #trans,
+                                    cublasDiagType_t, #diag,
+                                    c_int, #m,
+                                    c_int, #n,
+                                    c_void_p, #*alpha
+                                    c_void_p, #*A,
+                                    c_int, #lda,
+                                    c_void_p, #*B,
+                                    c_int, #ldb,
+                                    c_void_p, #*C,
                                     c_int)              #ldc);
 
     cublasDtrmm_v2 = cublasStrmm_v2
@@ -668,37 +667,55 @@ class libcublas(Lib):
     cublasZtrmm_v2 = cublasStrmm_v2
 
     cublasSdgmm = ctype_function(cublasStatus_t,
-                                 cublasHandle_t,    #handle,
-                                 cublasSideMode_t,  #mode,
-                                 c_int,             #m,
-                                 c_int,             #n,
-                                 c_void_p,          #*A,
-                                 c_int,             #lda,
-                                 c_void_p,          #*x,
-                                 c_int,             #incx,
-                                 c_void_p,          #*C,
+                                 cublasHandle_t, #handle,
+                                 cublasSideMode_t, #mode,
+                                 c_int, #m,
+                                 c_int, #n,
+                                 c_void_p, #*A,
+                                 c_int, #lda,
+                                 c_void_p, #*x,
+                                 c_int, #incx,
+                                 c_void_p, #*C,
                                  c_int)             #ldc);
     cublasDdgmm = cublasSdgmm
     cublasCdgmm = cublasSdgmm
     cublasZdgmm = cublasSdgmm
 
     cublasSgeam = ctype_function(cublasStatus_t,
-                                 cublasHandle_t,        #handle,
-                                 cublasOperation_t,     #transa,
-                                 cublasOperation_t,     #transb,
-                                 c_int,                 #m,
-                                 c_int,                 #n,
-                                 c_void_p,              #*alpha,
-                                 c_void_p,              #*A,
-                                 c_int,                 #lda,
-                                 c_void_p,              #*beta,
-                                 c_void_p,              #*B,
-                                 c_int,                 #ldb,
-                                 c_void_p,               #*C
+                                 cublasHandle_t, #handle,
+                                 cublasOperation_t, #transa,
+                                 cublasOperation_t, #transb,
+                                 c_int, #m,
+                                 c_int, #n,
+                                 c_void_p, #*alpha,
+                                 c_void_p, #*A,
+                                 c_int, #lda,
+                                 c_void_p, #*beta,
+                                 c_void_p, #*B,
+                                 c_int, #ldb,
+                                 c_void_p, #*C
                                  c_int)                 #ldc);
     cublasDgeam = cublasSgeam
     cublasCgeam = cublasSgeam
     cublasZgeam = cublasSgeam
+
+
+class c_complex(Structure):
+    _fields_ = [('real', c_float), ('imag', c_float)]
+
+    def __init__(self, real=0, imag=0):
+        if isinstance(real, complex):
+            real, imag = real.real, real.imag
+        super(c_complex, self).__init__(real, imag)
+
+
+class c_double_complex(Structure):
+    _fields_ = [('real', c_double), ('imag', c_double)]
+
+    def __init__(self, real=0, imag=0):
+        if isinstance(real, complex):
+            real, imag = real.real, real.imag
+        super(c_double_complex, self).__init__(real, imag)
 
 
 def _return_scalar(result):
@@ -707,6 +724,7 @@ def _return_scalar(result):
     else:
         return result.value
 
+
 def _Tnrm2(fmt, cty):
     def nrm2(self, n, x, incx):
         result = cty()
@@ -714,7 +732,9 @@ def _Tnrm2(fmt, cty):
         fn(self._handle, int(n), device_pointer(x), int(incx),
            byref(result))
         return _return_scalar(result)
+
     return nrm2
+
 
 def _Tdot(fmt, cty, postfix=''):
     def dot(self, n, x, incx, y, incy):
@@ -723,7 +743,9 @@ def _Tdot(fmt, cty, postfix=''):
         fn(self._handle, int(n), device_pointer(x), int(incx),
            device_pointer(y), int(incy), byref(result))
         return _return_scalar(result)
+
     return dot
+
 
 def _Tscal(fmt, cty):
     def scal(self, n, alpha, x, incx):
@@ -732,7 +754,9 @@ def _Tscal(fmt, cty):
         fn = getattr(self._api, 'cublas%sscal_v2' % fmt)
         fn(self._handle, int(n), byref(c_alpha), device_pointer(x),
            int(incx))
+
     return scal
+
 
 def _Taxpy(fmt, cty):
     def axpy(self, n, alpha, x, incx, y, incy):
@@ -741,7 +765,9 @@ def _Taxpy(fmt, cty):
         fn = getattr(self._api, 'cublas%saxpy_v2' % fmt)
         fn(self._handle, int(n), byref(c_alpha), device_pointer(x),
            int(incx), device_pointer(y), int(incy))
+
     return axpy
+
 
 def _Itamax(fmt, cty):
     def amax(self, n, x, incx):
@@ -750,7 +776,9 @@ def _Itamax(fmt, cty):
         fn(self._handle, int(n), device_pointer(x), int(incx),
            byref(result))
         return result.value
+
     return amax
+
 
 def _Itamin(fmt, cty):
     def amin(self, n, x, incx):
@@ -759,7 +787,9 @@ def _Itamin(fmt, cty):
         fn(self._handle, int(n), device_pointer(x), int(incx),
            byref(result))
         return result.value
+
     return amin
+
 
 def _Tasum(fmt, cty):
     def asum(self, n, x, incx):
@@ -768,7 +798,9 @@ def _Tasum(fmt, cty):
         fn(self._handle, int(n), device_pointer(x), int(incx),
            byref(result))
         return _return_scalar(result)
+
     return asum
+
 
 def _Trot(fmt, cty, sty):
     def rot(self, n, x, incx, y, incy, c, s):
@@ -778,7 +810,9 @@ def _Trot(fmt, cty, sty):
         fn = getattr(self._api, 'cublas%srot_v2' % fmt)
         fn(self._handle, int(n), device_pointer(x), int(incx),
            device_pointer(y), int(incy), byref(c_c), byref(c_s))
+
     return rot
+
 
 def _Trotg(fmt, ty, cty):
     def rotg(self, a, b):
@@ -790,7 +824,9 @@ def _Trotg(fmt, ty, cty):
         fn(self._handle, byref(c_a), byref(c_b), byref(c_c), byref(c_s))
         r, z, c, s = map(_return_scalar, [c_a, c_b, c_c, c_s])
         return r, z, c, s
+
     return rotg
+
 
 def _Trotm(fmt, dtype):
     def rotm(self, n, x, incx, y, incy, param):
@@ -801,7 +837,9 @@ def _Trotm(fmt, dtype):
         assert param.dtype == np.dtype(dtype), "param dtype mismatch"
         fn(self._handle, int(n), device_pointer(x), int(incx),
            device_pointer(y), int(incy), host_pointer(param))
+
     return rotm
+
 
 def _Trotmg(fmt, cty, dtype):
     def rotmg(self, d1, d2, x1, y1):
@@ -814,7 +852,9 @@ def _Trotmg(fmt, cty, dtype):
         fn(self._handle, byref(c_d1), byref(c_d2), byref(c_x1), byref(c_y1),
            host_pointer(param))
         return param
+
     return rotmg
+
 
 def _Tgbmv(fmt, cty, dtype):
     def gbmv(self, trans, m, n, kl, ku, alpha, A, lda, x, incx, beta, y, incy):
@@ -826,6 +866,7 @@ def _Tgbmv(fmt, cty, dtype):
         trans = CUBLAS_OP_MAP[trans]
         fn(self._handle, trans, m, n, kl, ku, byref(c_alpha), device_pointer(A),
            lda, device_pointer(x), incx, byref(c_beta), device_pointer(y), incy)
+
     return gbmv
 
 
@@ -836,12 +877,14 @@ def _Tgemv(fmt, cty, dtype):
         fn = getattr(self._api, 'cublas%sgemv_v2' % fmt)
         c_alpha = cty(alpha)
         c_beta = cty(beta)
-        trans = { 'N': CUBLAS_OP_N,
-                  'T': CUBLAS_OP_T,
-                  'H': CUBLAS_OP_C, }[trans]
+        trans = {'N': CUBLAS_OP_N,
+                 'T': CUBLAS_OP_T,
+                 'H': CUBLAS_OP_C, }[trans]
         fn(self._handle, trans, m, n, byref(c_alpha), device_pointer(A),
            lda, device_pointer(x), incx, byref(c_beta), device_pointer(y), incy)
+
     return gemv
+
 
 def _Ttrmv(fmt, dtype):
     def trmv(self, uplo, trans, diag, n, A, lda, x, incx):
@@ -849,7 +892,9 @@ def _Ttrmv(fmt, dtype):
         fn(self._handle, CUBLAS_FILL_MODE_MAP[uplo], CUBLAS_OP_MAP[trans],
            CUBLAS_DIAG_MAP[diag], n, device_pointer(A), lda, device_pointer(x),
            incx)
+
     return trmv
+
 
 def _Ttbmv(fmt, dtype):
     def tbmv(self, uplo, trans, diag, n, k, A, lda, x, incx):
@@ -857,7 +902,9 @@ def _Ttbmv(fmt, dtype):
         fn(self._handle, CUBLAS_FILL_MODE_MAP[uplo], CUBLAS_OP_MAP[trans],
            CUBLAS_DIAG_MAP[diag], n, k, device_pointer(A), lda,
            device_pointer(x), incx)
+
     return tbmv
+
 
 def _Ttpmv(fmt, dtype):
     def tpmv(self, uplo, trans, diag, n, AP, x, incx):
@@ -865,7 +912,9 @@ def _Ttpmv(fmt, dtype):
         fn(self._handle, CUBLAS_FILL_MODE_MAP[uplo], CUBLAS_OP_MAP[trans],
            CUBLAS_DIAG_MAP[diag], n, device_pointer(AP), device_pointer(x),
            incx)
+
     return tpmv
+
 
 def _Ttrsv(fmt, dtype):
     def trsv(self, uplo, trans, diag, n, A, lda, x, incx):
@@ -873,7 +922,9 @@ def _Ttrsv(fmt, dtype):
         fn(self._handle, CUBLAS_FILL_MODE_MAP[uplo], CUBLAS_OP_MAP[trans],
            CUBLAS_DIAG_MAP[diag], n, device_pointer(A), lda, device_pointer(x),
            incx)
+
     return trsv
+
 
 def _Ttpsv(fmt, dtype):
     def tpsv(self, uplo, trans, diag, n, AP, x, incx):
@@ -881,7 +932,9 @@ def _Ttpsv(fmt, dtype):
         fn(self._handle, CUBLAS_FILL_MODE_MAP[uplo], CUBLAS_OP_MAP[trans],
            CUBLAS_DIAG_MAP[diag], n, device_pointer(AP), device_pointer(x),
            incx)
+
     return tpsv
+
 
 def _Ttbsv(fmt, dtype):
     def tbsv(self, uplo, trans, diag, n, k, A, lda, x, incx):
@@ -889,7 +942,9 @@ def _Ttbsv(fmt, dtype):
         fn(self._handle, CUBLAS_FILL_MODE_MAP[uplo], CUBLAS_OP_MAP[trans],
            CUBLAS_DIAG_MAP[diag], n, k, device_pointer(A), lda,
            device_pointer(x), incx)
+
     return tbsv
+
 
 def _Tsymv(fmt, cty, dtype):
     def symv(self, uplo, n, alpha, A, lda, x, incx, beta, y, incy):
@@ -899,7 +954,9 @@ def _Tsymv(fmt, cty, dtype):
         fn(self._handle, CUBLAS_FILL_MODE_MAP[uplo], n, byref(c_alpha),
            device_pointer(A), lda, device_pointer(x), incx, byref(c_beta),
            device_pointer(y), incy)
+
     return symv
+
 
 def _Themv(fmt, cty, dtype):
     def symv(self, uplo, n, alpha, A, lda, x, incx, beta, y, incy):
@@ -909,7 +966,9 @@ def _Themv(fmt, cty, dtype):
         fn(self._handle, CUBLAS_FILL_MODE_MAP[uplo], n, byref(c_alpha),
            device_pointer(A), lda, device_pointer(x), incx, byref(c_beta),
            device_pointer(y), incy)
+
     return symv
+
 
 def _Tsbmv(fmt, cty, dtype):
     def sbmv(self, uplo, n, k, alpha, A, lda, x, incx, beta, y, incy):
@@ -919,7 +978,9 @@ def _Tsbmv(fmt, cty, dtype):
         fn(self._handle, CUBLAS_FILL_MODE_MAP[uplo], n, k, byref(c_alpha),
            device_pointer(A), lda, device_pointer(x), incx, byref(c_beta),
            device_pointer(y), incy)
+
     return sbmv
+
 
 def _Thbmv(fmt, cty, dtype):
     def sbmv(self, uplo, n, k, alpha, A, lda, x, incx, beta, y, incy):
@@ -929,7 +990,9 @@ def _Thbmv(fmt, cty, dtype):
         fn(self._handle, CUBLAS_FILL_MODE_MAP[uplo], n, k, byref(c_alpha),
            device_pointer(A), lda, device_pointer(x), incx, byref(c_beta),
            device_pointer(y), incy)
+
     return sbmv
+
 
 def _Tspmv(fmt, cty, dtype):
     def sbmv(self, uplo, n, alpha, AP, x, incx, beta, y, incy):
@@ -939,7 +1002,9 @@ def _Tspmv(fmt, cty, dtype):
         fn(self._handle, CUBLAS_FILL_MODE_MAP[uplo], n, byref(c_alpha),
            device_pointer(AP), device_pointer(x), incx, byref(c_beta),
            device_pointer(y), incy)
+
     return sbmv
+
 
 def _Thpmv(fmt, cty, dtype):
     def sbmv(self, uplo, n, alpha, AP, x, incx, beta, y, incy):
@@ -949,7 +1014,9 @@ def _Thpmv(fmt, cty, dtype):
         fn(self._handle, CUBLAS_FILL_MODE_MAP[uplo], n, byref(c_alpha),
            device_pointer(AP), device_pointer(x), incx, byref(c_beta),
            device_pointer(y), incy)
+
     return sbmv
+
 
 def _Tger(fmt, cty, dtype):
     def ger(self, m, n, alpha, x, incx, y, incy, A, lda):
@@ -958,7 +1025,9 @@ def _Tger(fmt, cty, dtype):
         fn(self._handle, m, n, byref(c_alpha),
            device_pointer(x), incx, device_pointer(y), incy,
            device_pointer(A), lda)
+
     return ger
+
 
 def _Tgeru(fmt, cty, dtype):
     def ger(self, m, n, alpha, x, incx, y, incy, A, lda):
@@ -967,7 +1036,9 @@ def _Tgeru(fmt, cty, dtype):
         fn(self._handle, m, n, byref(c_alpha),
            device_pointer(x), incx, device_pointer(y), incy,
            device_pointer(A), lda)
+
     return ger
+
 
 def _Tgerc(fmt, cty, dtype):
     def ger(self, m, n, alpha, x, incx, y, incy, A, lda):
@@ -976,23 +1047,29 @@ def _Tgerc(fmt, cty, dtype):
         fn(self._handle, m, n, byref(c_alpha),
            device_pointer(x), incx, device_pointer(y), incy,
            device_pointer(A), lda)
+
     return ger
+
 
 def _Tsyr(fmt, cty, dtype):
     def syr(self, uplo, n, alpha, x, incx, A, lda):
         fn = getattr(self._api, 'cublas%ssyr_v2' % fmt)
         c_alpha = cty(alpha)
         fn(self._handle, CUBLAS_FILL_MODE_MAP[uplo], n, byref(c_alpha),
-           device_pointer(x), incx,  device_pointer(A), lda)
+           device_pointer(x), incx, device_pointer(A), lda)
+
     return syr
+
 
 def _Ther(fmt, cty, dtype):
     def her(self, uplo, n, alpha, x, incx, A, lda):
         fn = getattr(self._api, 'cublas%sher_v2' % fmt)
         c_alpha = cty(alpha)
         fn(self._handle, CUBLAS_FILL_MODE_MAP[uplo], n, byref(c_alpha),
-           device_pointer(x), incx,  device_pointer(A), lda)
+           device_pointer(x), incx, device_pointer(A), lda)
+
     return her
+
 
 def _Tspr(fmt, cty, dtype):
     def spr(self, uplo, n, alpha, x, incx, AP):
@@ -1000,7 +1077,9 @@ def _Tspr(fmt, cty, dtype):
         c_alpha = cty(alpha)
         fn(self._handle, CUBLAS_FILL_MODE_MAP[uplo], n, byref(c_alpha),
            device_pointer(x), incx, device_pointer(AP))
+
     return spr
+
 
 def _Thpr(fmt, cty, dtype):
     def hpr(self, uplo, n, alpha, x, incx, AP):
@@ -1008,7 +1087,9 @@ def _Thpr(fmt, cty, dtype):
         c_alpha = cty(alpha)
         fn(self._handle, CUBLAS_FILL_MODE_MAP[uplo], n, byref(c_alpha),
            device_pointer(x), incx, device_pointer(AP))
+
     return hpr
+
 
 def _Tsyr2(fmt, cty, dtype):
     def syr2(self, uplo, n, alpha, x, incx, y, incy, A, lda):
@@ -1017,7 +1098,9 @@ def _Tsyr2(fmt, cty, dtype):
         fn(self._handle, CUBLAS_FILL_MODE_MAP[uplo], n, byref(c_alpha),
            device_pointer(x), incx, device_pointer(y), incy, device_pointer(A),
            lda)
+
     return syr2
+
 
 def _Ther2(fmt, cty, dtype):
     def her2(self, uplo, n, alpha, x, incx, y, incy, A, lda):
@@ -1026,7 +1109,9 @@ def _Ther2(fmt, cty, dtype):
         fn(self._handle, CUBLAS_FILL_MODE_MAP[uplo], n, byref(c_alpha),
            device_pointer(x), incx, device_pointer(y), incy, device_pointer(A),
            lda)
+
     return her2
+
 
 def _Tspr2(fmt, cty, dtype):
     def spr2(self, uplo, n, alpha, x, incx, y, incy, A):
@@ -1034,7 +1119,9 @@ def _Tspr2(fmt, cty, dtype):
         c_alpha = cty(alpha)
         fn(self._handle, CUBLAS_FILL_MODE_MAP[uplo], n, byref(c_alpha),
            device_pointer(x), incx, device_pointer(y), incy, device_pointer(A))
+
     return spr2
+
 
 def _Thpr2(fmt, cty, dtype):
     def spr2(self, uplo, n, alpha, x, incx, y, incy, A):
@@ -1042,17 +1129,22 @@ def _Thpr2(fmt, cty, dtype):
         c_alpha = cty(alpha)
         fn(self._handle, CUBLAS_FILL_MODE_MAP[uplo], n, byref(c_alpha),
            device_pointer(x), incx, device_pointer(y), incy, device_pointer(A))
+
     return spr2
 
+
 def _Tgemm(fmt, cty, dtype):
-    def gemm(self, transa, transb, m, n, k, alpha, A, lda, B, ldb, beta, C, ldc):
+    def gemm(self, transa, transb, m, n, k, alpha, A, lda, B, ldb, beta, C,
+             ldc):
         fn = getattr(self._api, 'cublas%sgemm_v2' % fmt)
         c_alpha = cty(alpha)
         c_beta = cty(beta)
         fn(self._handle, CUBLAS_OP_MAP[transa], CUBLAS_OP_MAP[transb], m, n, k,
            byref(c_alpha), device_pointer(A), lda, device_pointer(B), ldb,
            byref(c_beta), device_pointer(C), ldc)
+
     return gemm
+
 
 def _Tsyrk(fmt, cty, dtype):
     def syrk(self, uplo, trans, n, k, alpha, A, lda, beta, C, ldc):
@@ -1062,7 +1154,9 @@ def _Tsyrk(fmt, cty, dtype):
         fn(self._handle, CUBLAS_FILL_MODE_MAP[uplo], CUBLAS_OP_MAP[trans], n, k,
            byref(c_alpha), device_pointer(A), lda, byref(c_beta),
            device_pointer(C), ldc)
+
     return syrk
+
 
 def _Therk(fmt, cty, dtype):
     def herk(self, uplo, trans, n, k, alpha, A, lda, beta, C, ldc):
@@ -1072,27 +1166,35 @@ def _Therk(fmt, cty, dtype):
         fn(self._handle, CUBLAS_FILL_MODE_MAP[uplo], CUBLAS_OP_MAP[trans], n, k,
            byref(c_alpha), device_pointer(A), lda, byref(c_beta),
            device_pointer(C), ldc)
+
     return herk
+
 
 def _Tsymm(fmt, cty, dtype):
     def symm(self, side, uplo, m, n, alpha, A, lda, B, ldb, beta, C, ldc):
         fn = getattr(self._api, 'cublas%ssymm_v2' % fmt)
         c_alpha = cty(alpha)
         c_beta = cty(beta)
-        fn(self._handle, CUBLAS_SIDE_MAP[side], CUBLAS_FILL_MODE_MAP[uplo], m, n,
+        fn(self._handle, CUBLAS_SIDE_MAP[side], CUBLAS_FILL_MODE_MAP[uplo], m,
+           n,
            byref(c_alpha), device_pointer(A), lda, device_pointer(B), ldb,
            byref(c_beta), device_pointer(C), ldc)
+
     return symm
+
 
 def _Themm(fmt, cty, dtype):
     def hemm(self, side, uplo, m, n, alpha, A, lda, B, ldb, beta, C, ldc):
         fn = getattr(self._api, 'cublas%shemm_v2' % fmt)
         c_alpha = cty(alpha)
         c_beta = cty(beta)
-        fn(self._handle, CUBLAS_SIDE_MAP[side], CUBLAS_FILL_MODE_MAP[uplo], m, n,
+        fn(self._handle, CUBLAS_SIDE_MAP[side], CUBLAS_FILL_MODE_MAP[uplo], m,
+           n,
            byref(c_alpha), device_pointer(A), lda, device_pointer(B), ldb,
            byref(c_beta), device_pointer(C), ldc)
+
     return hemm
+
 
 def _Ttrsm(fmt, cty, dtype):
     def trsm(self, side, uplo, trans, diag, m, n, alpha, A, lda, B, ldb):
@@ -1101,7 +1203,9 @@ def _Ttrsm(fmt, cty, dtype):
         fn(self._handle, CUBLAS_SIDE_MAP[side], CUBLAS_FILL_MODE_MAP[uplo],
            CUBLAS_OP_MAP[trans], CUBLAS_DIAG_MAP[diag], m, n,
            byref(c_alpha), device_pointer(A), lda, device_pointer(B), ldb)
+
     return trsm
+
 
 def _Ttrmm(fmt, cty, dtype):
     def trmm(self, side, uplo, trans, diag, m, n, alpha, A, lda, B, ldb,
@@ -1112,14 +1216,18 @@ def _Ttrmm(fmt, cty, dtype):
            CUBLAS_OP_MAP[trans], CUBLAS_DIAG_MAP[diag], m, n,
            byref(c_alpha), device_pointer(A), lda, device_pointer(B), ldb,
            device_pointer(C), ldc)
+
     return trmm
+
 
 def _Tdgmm(fmt, cty, dtype):
     def dgmm(self, side, m, n, A, lda, x, incx, C, ldc):
         fn = getattr(self._api, 'cublas%sdgmm' % fmt)
         fn(self._handle, CUBLAS_SIDE_MAP[side], m, n, device_pointer(A), lda,
            device_pointer(x), incx, device_pointer(C), ldc)
+
     return dgmm
+
 
 def _Tgeam(fmt, cty, dtype):
     def geam(self, transa, transb, m, n, alpha, A, lda, beta, B, ldb, C, ldc):
@@ -1129,7 +1237,9 @@ def _Tgeam(fmt, cty, dtype):
         fn(self._handle, CUBLAS_OP_MAP[transa], CUBLAS_OP_MAP[transb], m, n,
            byref(c_alpha), device_pointer(A), lda, byref(c_beta),
            device_pointer(B), ldb, device_pointer(C), ldc)
+
     return geam
+
 
 class cuBlas(finalizer.OwnerMixin):
     def __init__(self):
@@ -1143,7 +1253,7 @@ class cuBlas(finalizer.OwnerMixin):
     def _finalize(self, res):
         handle, api = res
         api.cublasDestroy_v2(handle)
-        
+
     @property
     def version(self):
         ver = c_int()
@@ -1157,7 +1267,7 @@ class cuBlas(finalizer.OwnerMixin):
     @stream.setter
     def stream(self, stream):
         self._stream = stream
-        self._api.cublasSetStream_v2(self._handle, self._stream._handle)
+        self._api.cublasSetStream_v2(self._handle, self.stream.handle)
 
     @property
     def pointer_mode(self):

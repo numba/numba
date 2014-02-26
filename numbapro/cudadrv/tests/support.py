@@ -2,25 +2,8 @@ import unittest
 from numbapro import testsupport
 testsupport.set_base(globals())
 
-class CudaTestCase(unittest.TestCase):
-    '''Safe guard all CUDA testcase from memory leak problem.
-    '''
 
-    def setUp(self):
-        from numbapro.cudadrv import driver
-        driver.get_or_create_context()
-        driver.debug_memory = True
-        self._start_alloc = driver.debug_memory_alloc
-        self._start_free = driver.debug_memory_free
-
+class CUDATestCase(unittest.TestCase):
     def tearDown(self):
-        from numbapro.cudadrv import driver
-        driver.flush_pending_free()
-        driver.debug_memory = True
-        alloced = driver.debug_memory_alloc - self._start_alloc
-        freed = driver.debug_memory_free - self._start_free
-        self.assertTrue(alloced - freed <= 1,  # 1 alloc difference for SMM
-                         "Memory leak detected\n"
-                         "alloced: %d freed: %d" % (alloced, freed))
-
-
+        from numbapro.cudadrv.devices import reset
+        reset()

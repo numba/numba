@@ -1,11 +1,12 @@
+from __future__ import print_function, division, absolute_import
+import unittest
 from numbapro.cudadrv import nvvm
 from llvm.core import Module, Type, Builder, InlineAsm
-import support
-#import logging; logging.getLogger().setLevel(1)
+from . import support
 
 
 @support.addtest
-class TestCudaInlineAsm(support.CudaTestCase):
+class TestCudaInlineAsm(support.CUDATestCase):
     def test_inline_rsqrt(self):
         mod = Module.new(__name__)
         fnty = Type.function(Type.void(), [Type.pointer(Type.float())])
@@ -27,7 +28,7 @@ class TestCudaInlineAsm(support.CudaTestCase):
         nvvm.set_cuda_kernel(fn)
         nvvmir = str(mod)
         ptx = nvvm.llvm_to_ptx(nvvmir)
-        print ptx
+        print(ptx)
 
         self.assertTrue('rsqrt.approx.f32' in ptx)
 

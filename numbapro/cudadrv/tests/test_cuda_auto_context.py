@@ -3,7 +3,7 @@ import numpy as np
 import unittest
 from .support import addtest, main
 
-addtest
+@addtest
 class TestCudaAutoContext(unittest.TestCase):
     def test_auto_context(self):
         '''A problem was revealed by a customer that the use cuda.to_device

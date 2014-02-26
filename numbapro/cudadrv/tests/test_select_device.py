@@ -1,13 +1,11 @@
 #
 # Test does not work on some cards.
 #
-
-from numbapro import cuda
-
-import unittest
+from __future__ import print_function, absolute_import, division
 import threading
 import numpy as np
 from . import support
+from numbapro import cuda
 
 def newthread():
     cuda.select_device(0)
@@ -19,13 +17,15 @@ def newthread():
     del stream
     cuda.close()
 
+
 @support.addtest
-class TestSelectDevice(unittest.TestCase):
-    def test(self):
+class TestSelectDevice(support.CUDATestCase):
+    def test_select_device(self):
         for i in range(10):
             t = threading.Thread(target=newthread)
             t.start()
             t.join()
+
 
 if __name__ == '__main__':
     support.main()

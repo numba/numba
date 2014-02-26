@@ -10,16 +10,19 @@ UFuncCore also defines a work-stealing mechanism that allows idle threads
 to steal works from other threads.
 '''
 
-import sys
-
+import ctypes
 import numpy as np
-from llvm.core import (ATTR_NO_ALIAS, Type, CC_X86_STDCALL, Builder,
+from llvm.ee import dylib_add_symbol
+from llvm.core import (ATTR_NO_ALIAS, Type, Builder,
                        LINKAGE_INTERNAL)
 from llvm_cbuilder import CStruct, CDefinition, CExternal, CFunc
 import llvm_cbuilder.shortnames as C
 from numba.npyufunc.ufuncbuilder import UFuncBuilder
-from numba import cgutils
+import os.path
 
+import multiprocessing
+
+NUM_CPU = min(1, multiprocessing.cpu_count())
 
 ENABLE_WORK_STEALING = True
 CHECK_RACE_CONDITION = True
@@ -134,6 +137,13 @@ class ParallelUFunc(CDefinition):
 
         num_thread = self.var(C.int, self.ThreadCount, name='num_thread')
 
+        # Setup variables
+        common = self.var(ContextCommon, name='common')
+        allocsz = self.constant(C.intp, NUM_CPU)
+        workqueues = self.array(WorkQueue, allocsz, name='workqueues')
+        contexts = self.array(Context, allocsz, name='contexts')
+        threads = self.array(ThreadAPI.thread_t, allocsz, name='threads')
+        
         N = dimensions[0]
         ChunkSize = self.var_copy(N / num_thread.cast(N.type))
         ChunkSize_NULL = self.constant_null(ChunkSize.type)
@@ -141,11 +151,6 @@ class ParallelUFunc(CDefinition):
             with ifelse.then():
                 ChunkSize.assign(self.constant(ChunkSize.type, 1))
                 num_thread.assign(N.cast(num_thread.type))
-
-        # Setup variables
-        common = self.var(ContextCommon, name='common')
-        workqueues = self.array(WorkQueue, num_thread, name='workqueues')
-        contexts = self.array(Context, num_thread, name='contexts')
 
         # Initialize ContextCommon
         common.args.assign(args)
@@ -155,7 +160,6 @@ class ParallelUFunc(CDefinition):
         common.workqueues.assign(workqueues.reference())
         common.num_thread.assign(num_thread.cast(C.int))
 
-
         # Populate workqueue for all threads
         self._populate_workqueues(workqueues, N, ChunkSize, num_thread)
 
@@ -163,7 +167,7 @@ class ParallelUFunc(CDefinition):
         self._populate_context(contexts, common, num_thread)
 
         # Dispatch worker threads
-        self._dispatch_worker(worker, contexts,  num_thread)
+        self._dispatch_worker(worker, contexts,  num_thread, threads)
 
         ## DEBUG ONLY ##
         # Check for race condition
@@ -209,56 +213,30 @@ class ParallelUFunc(CDefinition):
             cur_ctxt.completed.assign(
                                     self.constant_null(cur_ctxt.completed.type))
 
-class ParallelUFuncPosixMixin(object):
+class ParallelMixin(object):
     '''ParallelUFunc mixin that implements _dispatch_worker to use pthread.
     '''
-    def _dispatch_worker(self, worker, contexts, num_thread):
-        api = PThreadAPI(self)
-        NULL = self.constant_null(C.void_p)
-
-        threads = self.array(api.pthread_t, num_thread, name='threads')
-
-        # self.debug("launch threads")
-
+    def _dispatch_worker(self, worker, contexts, num_thread, threads):
+        api = ThreadAPI(self)
         with self.for_range(num_thread) as (loop, i):
-            status = api.pthread_create(threads[i].reference(), NULL, worker,
-                                        contexts[i].reference().cast(C.void_p))
-            with self.ifelse(status != self.constant_null(status.type)) as ifelse:
+            arg = contexts[i].reference().cast(C.void_p)
+            threads[i] = status = api.numba_new_thread(worker, arg)
+            # Note: no pointer comparison defined
+            #       must cast to intp
+            is_null = status.cast(C.intp) == self.constant_null(C.intp)
+            with self.ifelse(is_null) as ifelse:
                 with ifelse.then():
                     # self.debug("Error at pthread_create: ", status)
                     self.unreachable()
 
         with self.for_range(num_thread) as (loop, i):
-            status = api.pthread_join(threads[i], NULL)
-            with self.ifelse(status != self.constant_null(status.type)) as ifelse:
+            status = api.numba_join_thread(threads[i])
+            err = status == self.constant_null(status.type)
+            with self.ifelse(err) as ifelse:
                 with ifelse.then():
                     # self.debug("Error at pthread_join: ", status)
                     self.unreachable()
 
-class ParallelUFuncWindowsMixin(object):
-    '''ParallelUFunc mixin that implements _dispatch_worker to use Windows threading.
-    '''
-    def _dispatch_worker(self, worker, contexts, num_thread):
-        api = WinThreadAPI(self)
-        NULL = self.constant_null(C.void_p)
-        lpdword_NULL = self.constant_null(C.pointer(C.int32))
-        zero = self.constant(C.int32, 0)
-        intp_zero = self.constant(C.intp, 0)
-        INFINITE = self.constant(C.int32, 0xFFFFFFFF)
-
-        threads = self.array(api.handle_t, num_thread, name='threads')
-
-        # self.debug("launch threads")
-        # TODO error handling
-
-        with self.for_range(num_thread) as (loop, i):
-            threads[i] = api.CreateThread(NULL, intp_zero, worker,
-                               contexts[i].reference().cast(C.void_p),
-                               zero, lpdword_NULL)
-
-        with self.for_range(num_thread) as (loop, i):
-            api.WaitForSingleObject(threads[i], INFINITE)
-            api.CloseHandle(threads[i])
 
 class UFuncCore(CDefinition):
     '''core work of a ufunc worker thread
@@ -286,6 +264,7 @@ class UFuncCore(CDefinition):
             self._do_work_stealing(common, tid, context.completed) # optional
 
         self.ret()
+
 
     def _do_workqueue(self, common, workqueue, tid, completed):
         '''process local workqueue.
@@ -387,6 +366,7 @@ class SpecializedParallelUFunc(CDefinition):
     def body(self, args, dimensions, steps, data,):
         pufunc = self.depends(self.PUFuncDef)
         core = self.depends(self.CoreDef)
+        #core.function.calling_convention = CC_X86_STDCALL
         to_void_p = lambda x: x.cast(C.void_p)
         pufunc(to_void_p(core), args, dimensions, steps, data,
                inline=True)
@@ -399,43 +379,16 @@ class SpecializedParallelUFunc(CDefinition):
         self.PUFuncDef = pufunc_def
         self.CoreDef = core_def
 
-class PThreadAPI(CExternal):
+class ThreadAPI(CExternal):
     '''external declaration of pthread API
     '''
-    pthread_t = C.void_p
+    thread_t = C.void_p
 
-    pthread_create = Type.function(C.int,
-                                   [C.pointer(pthread_t),  # thread_t
-                                    C.void_p,              # thread attr
-                                    C.void_p,              # function
-                                    C.void_p])             # arg
+    numba_new_thread = Type.function(thread_t,
+                                     [C.void_p,              # function
+                                      C.void_p])             # arg
 
-    pthread_join = Type.function(C.int, [C.void_p, C.void_p])
-
-class WinThreadAPI(CExternal):
-    '''external declaration of pthread API
-    '''
-    _calling_convention_ = CC_X86_STDCALL
-
-    handle_t = C.void_p
-
-    # lpStartAddress is an LPTHREAD_START_ROUTINE, with the form
-    # DWORD ThreadProc (LPVOID lpdwThreadParam )
-    CreateThread = Type.function(handle_t,
-                                   [C.void_p,            # lpThreadAttributes (NULL for default)
-                                    C.intp,              # dwStackSize (0 for default)
-                                    C.void_p,            # lpStartAddress
-                                    C.void_p,            # lpParameter
-                                    C.int32,             # dwCreationFlags (0 for default)
-                                    C.pointer(C.int32)]) # lpThreadId (NULL if not required)
-
-    # Return is WAIT_OBJECT_0 (0x00000000) to indicate the thread exited,
-    # or WAIT_ABANDONED, WAIT_TIMEOUT, WAIT_FAILED for other conditions.
-    WaitForSingleObject = Type.function(C.int32,
-                                    [handle_t, # hHandle
-                                     C.int32])   # dwMilliseconds (INFINITE == 0xFFFFFFFF means wait forever)
-
-    CloseHandle = Type.function(C.int32, [handle_t])
+    numba_join_thread = Type.function(C.int, [thread_t])
 
 
 class UFuncCoreGeneric(UFuncCore):
@@ -482,11 +435,6 @@ class UFuncCoreGeneric(UFuncCore):
         self.WORKER = lfunc
 
 
-if sys.platform == 'win32':
-    ParallelMixin = ParallelUFuncWindowsMixin
-else:
-    ParallelMixin = ParallelUFuncPosixMixin
-
 class ParallelUFuncPlatform(ParallelUFunc, ParallelMixin):
     pass
 
@@ -522,15 +470,30 @@ def wrap_core(ctx, lfunc, signature):
 
 
 def build_ufunc_wrapper(ctx, lfunc, signature):
-    import multiprocessing
-    NUM_CPU = multiprocessing.cpu_count()
     wrapped = wrap_core(ctx, lfunc, signature)
-    def_spuf = SpecializedParallelUFunc(
-                                ParallelUFuncPlatform(num_thread=NUM_CPU),
-                                UFuncCoreGeneric(wrapped))
+
+    dispatcher = ParallelUFuncPlatform(num_thread=NUM_CPU)
+    worker = UFuncCoreGeneric(wrapped)
+    def_spuf = SpecializedParallelUFunc(dispatcher, worker)
 
     func = def_spuf(lfunc.module)
 
     ctx.optimize(lfunc.module)
     return func
 
+def _init():
+    curdir = os.path.dirname(__file__)
+    for ext in ("so", "dylib", "pyd", "dll"):
+        path = os.path.join(curdir, "workqueue.%s" % ext)
+        if os.path.isfile(path):
+            break
+    else:
+        raise RuntimeError
+
+    lib = ctypes.CDLL(path)
+    newthread_addr = ctypes.cast(lib.numba_new_thread, ctypes.c_void_p).value
+    jointhread_addr = ctypes.cast(lib.numba_join_thread, ctypes.c_void_p).value
+    dylib_add_symbol('numba_new_thread', newthread_addr)
+    dylib_add_symbol('numba_join_thread', jointhread_addr)
+
+_init()

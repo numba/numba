@@ -1,12 +1,13 @@
+from __future__ import print_function, division, absolute_import
 from numbapro import cuda
-import support
+from . import support
 from timeit import default_timer as timer
 import numpy as np
 import unittest
 
 REPEAT = 25
 
-class TestPinned(support.CudaTestCase):
+class TestPinned(support.CUDATestCase):
 
     def _template(self, name, A):
         A0 = np.copy(A)
@@ -33,14 +34,14 @@ class TestPinned(support.CudaTestCase):
         with cuda.pinned(A):
             for i in range(REPEAT):
                 total += self._template('pinned', A)
-        print 'pinned', total / REPEAT
+        print('pinned', total / REPEAT)
 
     def test_unpinned(self):
         A = np.arange(2*1024*1024) # 16 MB
         total = 0
         for i in range(REPEAT):
             total += self._template('unpinned', A)
-        print 'unpinned', total / REPEAT
+        print('unpinned', total / REPEAT)
 
 
 if __name__ == '__main__':

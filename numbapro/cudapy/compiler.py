@@ -1,9 +1,10 @@
 import llvm.core as lc
 from numbapro.npm import compiler, types, extending, cgutils
 
-from numbapro.cudadrv import nvvm, driver
+from numbapro.cudadrv import nvvm, devices
 from .execution import CUDAKernel
 from . import ptxlib, libdevice, ptx
+
 
 def _set_flags(debug):
     flags = list(compiler.DEFAULT_FLAGS)
@@ -39,7 +40,7 @@ def generate_kernel_wrapper(lfunc, has_excs):
     if has_excs:
         no_exc = lc.Constant.null(exctype)
         raised = builder.icmp(lc.ICMP_NE, exc, no_exc)
-        
+
         with cgutils.if_then(builder, raised):
             fname_tx = ptx.SREG_MAPPING[ptx._ptx_sreg_tidx]
             fname_ty = ptx.SREG_MAPPING[ptx._ptx_sreg_tidy]
@@ -52,14 +53,14 @@ def generate_kernel_wrapper(lfunc, has_excs):
             fn_tx = cgutils.get_function(builder, fname_tx, li32, ())
             fn_ty = cgutils.get_function(builder, fname_ty, li32, ())
             fn_tz = cgutils.get_function(builder, fname_tz, li32, ())
-            
+
             fn_bx = cgutils.get_function(builder, fname_bx, li32, ())
             fn_by = cgutils.get_function(builder, fname_by, li32, ())
-            
+
             tx = builder.call(fn_tx, ())
             ty = builder.call(fn_ty, ())
             tz = builder.call(fn_tz, ())
-            
+
             bx = builder.call(fn_bx, ())
             by = builder.call(fn_by, ())
 
@@ -115,8 +116,8 @@ def compile_common(func, retty, argtys, flags=compiler.DEFAULT_FLAGS):
     return lmod, lfunc, excs
 
 def to_ptx(lfunc):
-    context = driver.get_or_create_context()
-    cc_major, cc_minor = context.device.COMPUTE_CAPABILITY
+    context = devices.get_context()
+    cc_major, cc_minor = context.device.compute_capability
     arch = nvvm.get_arch_option(cc_major, cc_minor)
     nvvm.fix_data_layout(lfunc.module)
     nvvm.set_cuda_kernel(lfunc)

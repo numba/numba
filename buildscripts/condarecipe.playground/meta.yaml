@@ -1,0 +1,30 @@
+package:
+  name: numbapro
+  version: latest
+
+source:
+  git_url: git@github.com:ContinuumIO/numbapro.git
+  git_tag: playground
+
+requirements:
+  build:
+    - python
+    - numba
+    - numpy
+  run:
+    - python
+    - numpy
+    - numba
+    - llvmpy
+    - cudatoolkit
+
+test:
+  requires:
+    - python
+  imports:
+    - numbapro
+    - numbapro._utils.mviewbuf
+
+about:
+  home:
+  license: proprietary - Continuum Analytics, Inc.

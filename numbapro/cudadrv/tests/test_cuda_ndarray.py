@@ -2,9 +2,10 @@ import numpy as np
 from numbapro.cudadrv import devicearray
 from numbapro import cuda
 import support
+import unittest
 
 @support.addtest
-class TestCudaNDArray(support.CudaTestCase):
+class TestCudaNDArray(unittest.TestCase):
     def test_device_array_interface(self):
         dary = cuda.device_array(shape=100)
         devicearray.verify_cuda_ndarray_interface(dary)

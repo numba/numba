@@ -47,9 +47,7 @@ class TestParallelLowWorkCount(unittest.TestCase):
             else:
                 print("Numba is SLOWER by %fx" % (tnumba/tnumpy))
 
-
-            for expect, got in zip(gold, result):
-                self.assertTrue(abs(got - expect) / (expect + 1e-31) < 1e-6)
+            self.assertTrue(np.allclose(gold, result))
 
         test(np.double)
         test(np.float32)
