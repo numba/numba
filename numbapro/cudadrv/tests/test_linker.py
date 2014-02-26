@@ -1,7 +1,9 @@
+from __future__ import print_function, absolute_import, division
 import os.path
 import numpy as np
 from .support import testcase, main, assertTrue
-from numbapro.cudadrv.old_driver import Linker, require_context
+from numbapro.cudadrv.driver import Linker
+from numbapro.cuda import require_context
 from numbapro import cuda
 
 
@@ -20,10 +22,10 @@ def test_linking():
     bar = cuda.declare_device('bar', 'int32(int32)')
 
     link = os.path.join(os.path.dirname(__file__), 'data', 'jitlink.o')
-    print 'link to:', link
+    print('link to:', link)
 
     if not os.path.isfile(link):
-        print 'test skipped due to missing file'
+        print('test skipped due to missing file')
         return
 
     @cuda.jit('void(int32[:], int32[:])', link=[link])

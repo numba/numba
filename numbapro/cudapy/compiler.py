@@ -1,7 +1,7 @@
 import llvm.core as lc
 from numbapro.npm import compiler, types, extending, cgutils
 
-from numbapro.cudadrv import nvvm
+from numbapro.cudadrv import nvvm, devices
 from .execution import CUDAKernel
 from . import ptxlib, libdevice, ptx
 
@@ -116,8 +116,8 @@ def compile_common(func, retty, argtys, flags=compiler.DEFAULT_FLAGS):
     return lmod, lfunc, excs
 
 def to_ptx(lfunc):
-    context = old_driver.get_or_create_context()
-    cc_major, cc_minor = context.device.COMPUTE_CAPABILITY
+    context = devices.get_context()
+    cc_major, cc_minor = context.device.compute_capability
     arch = nvvm.get_arch_option(cc_major, cc_minor)
     nvvm.fix_data_layout(lfunc.module)
     nvvm.set_cuda_kernel(lfunc)

@@ -28,6 +28,10 @@ class DeadMemoryError(RuntimeError):
     pass
 
 
+class LinkerError(RuntimeError):
+    pass
+
+
 class CudaAPIError(CudaDriverError):
     def __init__(self, code, msg):
         self.code = code
@@ -439,17 +443,20 @@ class Context(object):
 
         driver.cuMemHostAlloc(byref(pointer), bytesize, flags)
         owner = None
-        finalizer = _hostalloc_finalizer(self, pointer)
+
 
         if mapped:
+            finalizer = _hostalloc_finalizer(self, pointer)
             mem = MappedMemory(weakref.proxy(self), owner, pointer,
                                bytesize, finalizer=finalizer)
+
+            self.allocations[mem.handle.value] = mem
+            return mem.own()
         else:
+            finalizer = _pinned_finalizer(self.trashing, pointer)
             mem = PinnedMemory(weakref.proxy(self), owner, pointer, bytesize,
                                finalizer=finalizer)
-
-        self.allocations[mem.handle.value] = mem
-        return mem.own()
+            return mem
 
     def memfree(self, pointer):
         try:
@@ -477,16 +484,19 @@ class Context(object):
 
         driver.cuMemHostRegister(pointer, size, flags)
 
-        finalizer = _pinned_finalizer(self, pointer)
+
         if mapped:
+            finalizer = _mapped_finalizer(self, pointer)
             mem = MappedMemory(weakref.proxy(self), owner, pointer, size,
                                finalizer=finalizer)
+            self.allocations[mem.handle.value] = mem
+            return mem.own()
         else:
             mem = PinnedMemory(weakref.proxy(self), owner, pointer, size,
-                               finalizer=finalizer)
+                               finalizer=_pinned_finalizer(self.trashing,
+                                                           pointer))
+            return mem
 
-        self.allocations[mem.handle.value] = mem
-        return mem.own()
 
     def memunpin(self, pointer):
         raise NotImplementedError
@@ -579,8 +589,15 @@ def _make_mem_finalizer(dtor):
 
 
 _hostalloc_finalizer = _make_mem_finalizer(driver.cuMemFreeHost)
-_pinned_finalizer = _make_mem_finalizer(driver.cuMemHostUnregister)
+_mapped_finalizer = _make_mem_finalizer(driver.cuMemHostUnregister)
 _memory_finalizer = _make_mem_finalizer(driver.cuMemFree)
+
+
+def _pinned_finalizer(trashing, handle):
+    def core():
+        trashing.add_trash(lambda: driver.cuMemHostUnregister(handle))
+
+    return core
 
 
 def _event_finalizer(trashing, handle):
@@ -670,7 +687,7 @@ class MemoryPointer(object):
         return self.device_pointer
 
 
-class MappedMemory(MemoryPointer, mviewbuf.MemAlloc):
+class MappedMemory(MemoryPointer):
     __cuda_memory__ = True
 
     def __init__(self, context, owner, hostpointer, size,
@@ -688,6 +705,9 @@ class MappedMemory(MemoryPointer, mviewbuf.MemAlloc):
         self._buflen_ = self.size
         self._bufptr_ = self.host_pointer.value
 
+    def own(self):
+        return MappedOwnedPointer(weakref.proxy(self))
+
 
 class PinnedMemory(mviewbuf.MemAlloc):
     def __init__(self, context, owner, pointer, size, finalizer=None):
@@ -704,7 +724,6 @@ class PinnedMemory(mviewbuf.MemAlloc):
         self._buflen_ = self.size
         self._bufptr_ = self.host_pointer.value
 
-
     def __del__(self):
         try:
             if self.is_managed and self.is_alive:
@@ -719,7 +738,7 @@ class PinnedMemory(mviewbuf.MemAlloc):
         self.is_alive = False
 
     def own(self):
-        return OwnedPointer(weakref.proxy(self))
+        return self
 
 
 class OwnedPointer(object):
@@ -747,6 +766,10 @@ class OwnedPointer(object):
         """Proxy MemoryPointer methods
         """
         return getattr(self._view, fname)
+
+
+class MappedOwnedPointer(OwnedPointer, mviewbuf.MemAlloc):
+    pass
 
 
 class Stream(object):
@@ -935,6 +958,104 @@ def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, hstream, args):
                           hstream,
                           params,
                           None)
+
+
+FILE_EXTENSION_MAP = {
+    'o': enums.CU_JIT_INPUT_OBJECT,
+    'ptx': enums.CU_JIT_INPUT_PTX,
+    'a': enums.CU_JIT_INPUT_LIBRARY,
+    'cubin': enums.CU_JIT_INPUT_CUBIN,
+    'fatbin': enums.CU_JIT_INPUT_FATBINAR,
+}
+
+
+class Linker(object):
+    def __init__(self):
+        logsz = int(os.environ.get('NUMBAPRO_CUDA_LOG_SIZE', 1024))
+        linkerinfo = (c_char * logsz)()
+        linkererrors = (c_char * logsz)()
+
+        options = {
+            enums.CU_JIT_INFO_LOG_BUFFER: addressof(linkerinfo),
+            enums.CU_JIT_INFO_LOG_BUFFER_SIZE_BYTES: c_void_p(logsz),
+            enums.CU_JIT_ERROR_LOG_BUFFER: addressof(linkererrors),
+            enums.CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES: c_void_p(logsz),
+            enums.CU_JIT_LOG_VERBOSE: c_void_p(1),
+        }
+
+        option_keys = (drvapi.cu_jit_option * len(options))(*options.keys())
+        option_vals = (c_void_p * len(options))(*options.values())
+
+        self.handle = handle = drvapi.cu_link_state()
+        driver.cuLinkCreate(len(options),
+                                     option_keys,
+                                     option_vals,
+                                     byref(self.handle))
+
+        self.finalizer = lambda: driver.cuLinkDestroy(handle)
+
+        self.linker_info_buf = linkerinfo
+        self.linker_errors_buf = linkererrors
+
+        self._keep_alive = [linkerinfo, linkererrors, option_keys, option_vals]
+
+    @property
+    def info_log(self):
+        return self.linker_info_buf.value
+
+    @property
+    def error_log(self):
+        return self.linker_errors_buf.value
+
+    def __del__(self):
+        try:
+            self.finalizer()
+        except:
+            traceback.print_exc()
+
+    def add_ptx(self, ptx, name='<cudapy-ptx>'):
+        ptxbuf = c_char_p(ptx)
+        namebuf = c_char_p(name)
+        self._keep_alive += [ptxbuf, namebuf]
+
+        try:
+            driver.cuLinkAddData(self.handle, enums.CU_JIT_INPUT_PTX,
+                                 ptxbuf, len(ptx), namebuf, 0, None, None)
+        except CudaAPIError as e:
+            raise LinkerError("%s\n%s" % (e, self.error_log))
+
+    def add_file(self, path, kind):
+        pathbuf = c_char_p(path)
+        self._keep_alive.append(pathbuf)
+
+        try:
+            driver.cuLinkAddFile(self.handle, kind, pathbuf, 0, None, None)
+        except CudaAPIError as e:
+            raise LinkerError("%s\n%s" % (e, self.error_log))
+
+    def add_file_guess_ext(self, path):
+        ext = path.rsplit('.', 1)[1]
+        kind = FILE_EXTENSION_MAP[ext]
+        self.add_file(path, kind)
+
+    def complete(self):
+        '''
+        Returns (cubin, size)
+            cubin is a pointer to a internal buffer of cubin owned
+            by the linker; thus, it should be loaded before the linker
+            is destroyed.
+        '''
+        cubin = c_void_p(0)
+        size = c_size_t(0)
+
+        try:
+            driver.cuLinkComplete(self.handle, byref(cubin), byref(size))
+        except CudaAPIError as e:
+            raise LinkerError("%s\n%s" % (e, self.error_log))
+
+        assert size > 0, 'linker returned a zero sized cubin'
+        del self._keep_alive[:]
+        return cubin, size
 
 
 # -----------------------------------------------------------------------------

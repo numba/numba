@@ -1,5 +1,7 @@
+from __future__ import print_function, absolute_import, division
+
 from numbapro import cuda
-from numbapro.cudadrv import old_driver
+from numbapro.cudadrv import driver
 import unittest, threading
 
 from . import support
@@ -9,15 +11,14 @@ class TestResetDevice(unittest.TestCase):
     def test_reset_device(self):
 
         def newthread():
-            drv = old_driver.Driver()
-            devices = range(drv.get_device_count())
-            print 'Devices', devices
+            devices = range(driver.get_device_count())
+            print('Devices', devices)
             for _ in range(2):
                 for d in devices:
                     cuda.select_device(d)
-                    print 'Selected device', d
+                    print('Selected device', d)
                     cuda.close()
-                    print 'Closed device', d
+                    print('Closed device', d)
 
         # Do test on a separate thread so that we don't affect
         # the current context in the main thread.
