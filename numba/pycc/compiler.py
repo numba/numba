@@ -56,6 +56,42 @@ find_args = functools.partial(get_configs, 1)
 find_shared_ending = functools.partial(get_configs, 2)
 
 
+def get_header():
+    import numpy
+    import textwrap
+
+    return textwrap.dedent("""\
+    #include <stdint.h>
+
+    #ifndef HAVE_LONGDOUBLE
+        #define HAVE_LONGDOUBLE %d
+    #endif
+
+    typedef struct {
+        float real;
+        float imag;
+    } complex64;
+
+    typedef struct {
+        double real;
+        double imag;
+    } complex128;
+
+    #if HAVE_LONGDOUBLE
+    typedef struct {
+        long double real;
+        long double imag;
+    } complex256;
+    #endif
+
+    typedef float float32;
+    typedef double float64;
+    #if HAVE_LONGDOUBLE
+    typedef long double float128;
+    #endif
+    """ % hasattr(numpy, 'complex256'))
+
+
 class _Compiler(object):
     """A base class to compile Python modules to a single shared library or
     extension module.
@@ -140,7 +176,7 @@ class _Compiler(object):
         if self.export_python_wrap:
             self._emit_python_wrapper(llvm_module)
 
-        del self.exported_signatures[:]
+        #del self.exported_signatures[:]
         print(llvm_module)
         return llvm_module
 
@@ -168,23 +204,21 @@ class _Compiler(object):
 
     def emit_type(self, tyobj):
         ret_val = str(tyobj)
-        if hasattr(tyobj, 'kind') and tyobj.kind == 'int':
+        if 'int' in ret_val:
             if ret_val.endswith(('8', '16', '32', '64')):
                 ret_val += "_t"
         return ret_val
 
     def emit_header(self, output):
-        from numba.minivect import minitypes
-
         fname, ext = os.path.splitext(output)
         with open(fname + '.h', 'w') as fout:
-            fout.write(minitypes.get_utility())
+            fout.write(get_header())
             fout.write("\n/* Prototypes */\n")
-            for signature in self.exported_signatures.values():
-                name = signature.name
-                restype = self.emit_type(signature.return_type)
+            for export_entry in export_registry:
+                name = export_entry.symbol
+                restype = self.emit_type(export_entry.signature.return_type)
                 args = ", ".join(self.emit_type(argtype)
-                                 for argtype in signature.args)
+                                 for argtype in export_entry.signature.args)
                 fout.write("extern %s %s(%s);\n" % (restype, name, args))
 
     def _emit_method_array(self, llvm_module):
