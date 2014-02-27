@@ -90,7 +90,9 @@ class CPUContext(BaseContext):
         le.dylib_add_symbol("numba.math.srem", _helperlib.get_srem())
         le.dylib_add_symbol("numba.math.udiv", _helperlib.get_udiv())
         le.dylib_add_symbol("numba.math.urem", _helperlib.get_urem())
-        if not le.dylib_address_of_symbol('__fixunsdfdi'):
+        if sys.platform.startswith('win32') and not le.dylib_address_of_symbol('__ftol2'):
+            le.dylib_add_symbol("__ftol2", _helperlib.get_fptoui())
+        elif sys.platform.startswith('linux') and not le.dylib_address_of_symbol('__fixunsdfdi'):
             le.dylib_add_symbol("__fixunsdfdi", _helperlib.get_fptoui())
         # Necessary for Python3
         le.dylib_add_symbol("numba.round", _helperlib.get_round_even())
