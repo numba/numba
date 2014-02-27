@@ -378,7 +378,7 @@ class TestUFuncs(unittest.TestCase):
         self.binary_ufunc_test(ufunc_name, x_operands=x_operands,
                                y_operands=y_operands, flags=flags)
 
-    # unnary ufunc tests
+    # unary ufunc tests
     def test_negative_ufunc(self, flags=enable_pyobj_flags):
         # NumPy ufunc has bug with uint32 as input and int64 as output,
         # so skip uint32 input.
@@ -399,12 +399,12 @@ class TestUFuncs(unittest.TestCase):
     def test_absolute_ufunc_npm(self):
         self.test_absolute_ufunc(flags=no_pyobj_flags)
 
-    def test_rint_ufunc(self):
+    def test_rint_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('rint')
 
     @unittest.expectedFailure
     def test_rint_ufunc_npm(self):
-        self.unary_ufunc_test('rint', flags=no_pyobj_flags)
+        self.test_rint_ufunc(flags=no_pyobj_flags)
 
     def test_sign_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('sign', flags=flags)
@@ -412,202 +412,202 @@ class TestUFuncs(unittest.TestCase):
     def test_sign_ufunc_npm(self):
         self.test_sign_ufunc(flags=no_pyobj_flags)
 
-    def test_conj_ufunc(self):
+    def test_conj_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('conj')
 
     @unittest.expectedFailure
     def test_conj_ufunc_npm(self):
-        self.unary_ufunc_test('conj', flags=no_pyobj_flags)
+        self.test_conj_ufunc(flags=no_pyobj_flags)
 
-    def test_exp_ufunc(self):
+    def test_exp_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('exp')
 
     def test_exp_ufunc_npm(self):
-        self.unary_ufunc_test('exp', flags=no_pyobj_flags)
+        self.test_exp_ufunc(flags=no_pyobj_flags)
 
-    def test_exp2_ufunc(self):
+    def test_exp2_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('exp2')
 
     @unittest.expectedFailure
     def test_exp2_ufunc_npm(self):
-        self.unary_ufunc_test('exp2', flags=no_pyobj_flags)
+        self.test_exp2_ufunc(flags=no_pyobj_flags)
 
-    def test_log_ufunc(self):
+    def test_log_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('log')
 
     @unittest.expectedFailure
     def test_log_ufunc_npm(self):
-        self.unary_ufunc_test('log', flags=no_pyobj_flags)
+        self.test_log_ufunc(flags=no_pyobj_flags)
 
-    def test_log2_ufunc(self):
+    def test_log2_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('log2')
 
     @unittest.expectedFailure
     def test_log2_ufunc_npm(self):
-        self.unary_ufunc_test('log2', flags=no_pyobj_flags)
+        self.test_log2_ufunc(flags=no_pyobj_flags)
 
-    def test_log10_ufunc(self):
+    def test_log10_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('log10')
 
     @unittest.expectedFailure
     def test_log10_ufunc_npm(self):
-        self.unary_ufunc_test('log10', flags=no_pyobj_flags)
+        self.test_log10_ufunc(flags=no_pyobj_flags)
 
-    def test_expm1_ufunc(self):
+    def test_expm1_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('expm1')
 
     @unittest.expectedFailure
     def test_expm1_ufunc_npm(self):
-        self.unary_ufunc_test('expm1', flags=no_pyobj_flags)
+        self.test_expm1_ufunc(flags=no_pyobj_flags)
 
-    def test_log1p_ufunc(self):
+    def test_log1p_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('log1p')
 
     @unittest.expectedFailure
     def test_log1p_ufunc_npm(self):
-        self.unary_ufunc_test('log1p', flags=no_pyobj_flags)
+        self.test_log1p_ufunc(flags=no_pyobj_flags)
 
-    def test_sqrt_ufunc(self):
+    def test_sqrt_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('sqrt')
 
     def test_sqrt_ufunc_npm(self):
-        self.unary_ufunc_test('sqrt', flags=no_pyobj_flags)
+        self.test_sqrt_ufunc(flags=no_pyobj_flags)
 
-    def test_square_ufunc(self):
+    def test_square_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('square')
 
     @unittest.expectedFailure
     def test_square_ufunc_npm(self):
-        self.unary_ufunc_test('square', flags=no_pyobj_flags)
+        self.test_square_ufunc(flags=no_pyobj_flags)
 
-    def test_reciprocal_ufunc(self):
+    def test_reciprocal_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('reciprocal')
 
     @unittest.expectedFailure
     def test_reciprocal_ufunc_npm(self):
-        self.unary_ufunc_test('reciprocal', flags=no_pyobj_flags)
+        self.test_reciprocal_ufunc(flags=no_pyobj_flags)
 
-    def test_sin_ufunc(self):
+    def test_sin_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('sin')
 
     def test_sin_ufunc_npm(self):
-        self.unary_ufunc_test('sin', flags=no_pyobj_flags)
+        self.test_sin_ufunc(flags=no_pyobj_flags)
 
-    def test_cos_ufunc(self):
+    def test_cos_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('cos')
 
     def test_cos_ufunc_npm(self):
-        self.unary_ufunc_test('cos', flags=no_pyobj_flags)
+        self.test_cos_ufunc(flags=no_pyobj_flags)
 
-    def test_tan_ufunc(self):
+    def test_tan_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('tan')
 
     def test_tan_ufunc_npm(self):
-        self.unary_ufunc_test('tan', flags=no_pyobj_flags)
+        self.test_tan_ufunc(flags=no_pyobj_flags)
 
-    def test_arcsin_ufunc(self):
+    def test_arcsin_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('arcsin')
 
     @unittest.expectedFailure
     def test_arcsin_ufunc_npm(self):
-        self.unary_ufunc_test('arcsin', flags=no_pyobj_flags)
+        self.test_arcsin_ufunc(flags=no_pyobj_flags)
 
-    def test_arccos_ufunc(self):
+    def test_arccos_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('arccos')
 
     @unittest.expectedFailure
     def test_arccos_ufunc_npm(self):
-        self.unary_ufunc_test('arccos', flags=no_pyobj_flags)
+        self.test_arccos_ufunc(flags=no_pyobj_flags)
 
-    def test_arctan_ufunc(self):
+    def test_arctan_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('arctan')
 
     @unittest.expectedFailure
     def test_arctan_ufunc_npm(self):
-        self.unary_ufunc_test('arctan', flags=no_pyobj_flags)
+        self.test_arctan_ufunc(flags=no_pyobj_flags)
 
-    def test_sinh_ufunc(self):
+    def test_sinh_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('sinh')
 
     @unittest.expectedFailure
     def test_sinh_ufunc_npm(self):
-        self.unary_ufunc_test('sinh', flags=no_pyobj_flags)
+        self.test_sinh_ufunc(flags=no_pyobj_flags)
 
-    def test_cosh_ufunc(self):
+    def test_cosh_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('cosh')
 
     @unittest.expectedFailure
     def test_cosh_ufunc_npm(self):
-        self.unary_ufunc_test('cosh', flags=no_pyobj_flags)
+        self.test_cosh_ufunc(flags=no_pyobj_flags)
 
-    def test_tanh_ufunc(self):
+    def test_tanh_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('tanh')
 
     @unittest.expectedFailure
     def test_tanh_ufunc_npm(self):
-        self.unary_ufunc_test('tanh', flags=no_pyobj_flags)
+        self.test_tanh_ufunc(flags=no_pyobj_flags)
 
-    def test_arcsinh_ufunc(self):
+    def test_arcsinh_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('arcsinh')
 
     @unittest.expectedFailure
     def test_arcsinh_ufunc_npm(self):
-        self.unary_ufunc_test('arcsinh', flags=no_pyobj_flags)
+        self.test_arcsinh_ufunc(flags=no_pyobj_flags)
 
-    def test_arccosh_ufunc(self):
+    def test_arccosh_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('arccosh')
 
     @unittest.expectedFailure
     def test_arccosh_ufunc_npm(self):
-        self.unary_ufunc_test('arccosh', flags=no_pyobj_flags)
+        self.test_arccosh_ufunc(flags=no_pyobj_flags)
 
-    def test_arctanh_ufunc(self):
+    def test_arctanh_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('arctanh')
 
     @unittest.expectedFailure
     def test_arctanh_ufunc_npm(self):
-        self.unary_ufunc_test('arctanh', flags=no_pyobj_flags)
+        self.test_arctanh_ufunc(flags=no_pyobj_flags)
 
-    def test_deg2rad_ufunc(self):
+    def test_deg2rad_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('deg2rad')
 
     @unittest.expectedFailure
     def test_deg2rad_ufunc_npm(self):
-        self.unary_ufunc_test('deg2rad', flags=no_pyobj_flags)
+        self.test_deg2rad_ufunc(flags=no_pyobj_flags)
 
-    def test_rad2deg_ufunc(self):
+    def test_rad2deg_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('rad2deg')
 
     @unittest.expectedFailure
     def test_rad2deg_ufunc_npm(self):
-        self.unary_ufunc_test('rad2deg', flags=no_pyobj_flags)
+        self.test_rad2deg_ufunc(flags=no_pyobj_flags)
 
     @unittest.skipIf(not hasattr(np, "invertlogical_not"),
                      "invertlogical_not is not available")
-    def test_invertlogical_not_ufunc(self):
+    def test_invertlogical_not_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('invertlogical_not')
 
     @unittest.expectedFailure
     def test_invertlogical_not_ufunc_npm(self):
-        self.unary_ufunc_test('invertlogical_not', flags=no_pyobj_flags)
+        self.test_invertlogical_not_ufunc(flags=no_pyobj_flags)
 
-    def test_floor_ufunc(self):
+    def test_floor_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('floor')
 
     def test_floor_ufunc_npm(self):
-        self.unary_ufunc_test('floor', flags=no_pyobj_flags)
+        self.test_floor_ufunc(flags=no_pyobj_flags)
 
-    def test_ceil_ufunc(self):
+    def test_ceil_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('ceil')
 
     def test_ceil_ufunc_npm(self):
-        self.unary_ufunc_test('ceil', flags=no_pyobj_flags)
+        self.test_ceil_ufunc(flags=no_pyobj_flags)
 
-    def test_trunc_ufunc(self):
+    def test_trunc_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('trunc')
 
     def test_trunc_ufunc_npm(self):
-        self.unary_ufunc_test('trunc', flags=no_pyobj_flags)
+        self.test_trunc_ufunc(flags=no_pyobj_flags)
 
     # binary ufunc tests
     def test_add_ufunc(self):
