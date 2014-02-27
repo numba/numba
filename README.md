@@ -21,7 +21,7 @@ data structures such as those that exist in NumPy.
 Dependencies
 ============
 
-  * LLVM 3.2 or 3.3
+  * LLVM 3.3
   * llvmpy (from llvmpy/llvmpy fork)
   * numpy (version 1.6 or higher)
   * argparse (for pycc in python2.6)
@@ -59,14 +59,14 @@ Custom Python Environments
 
 If you're not using anaconda, you will need LLVM with RTTI enabled:
 
-* Compile LLVM 3.2
+* Compile LLVM 3.3
 
 See https://github.com/llvmpy/llvmpy for the most up-to-date instructions.
 
 ```bash
-    $ wget http://llvm.org/releases/3.2/llvm-3.2.src.tar.gz
-    $ tar zxvf llvm-3.2.src.tar.gz
-    $ cd llvm-3.2.src
+    $ wget http://llvm.org/releases/3.3/llvm-3.3.src.tar.gz
+    $ tar zxvf llvm-3.3.src.tar.gz
+    $ cd llvm-3.3.src
     $ ./configure --enable-optimized --prefix=LLVM_BUILD_DIR
     $ # It is recommended to separate the custom build from the default system
     $ # package.

@@ -11,6 +11,7 @@ Numba
    :titlesonly:
    :maxdepth: 2
 
+   install.rst
    quickstart.rst
    types.rst
    arrays.rst
