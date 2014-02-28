@@ -406,9 +406,11 @@ class TestUFuncs(unittest.TestCase):
                                 np.allclose(result, expected))
 
 
-    def binary_int_ufunc_test(self, name=None, flags=None):
-        self.assertTrue(False)
-
+    def binary_int_ufunc_test(self, name=None, flags=enable_pyobj_flags):
+        self.binary_ufunc_test(name, flags=flags,
+            skip_inputs=[types.float32, types.float64,
+                types.Array(types.float32, 1, 'C'),
+                types.Array(types.float64, 1, 'C')])
 
     # unary ufunc tests
     def test_negative_ufunc(self, flags=enable_pyobj_flags):
@@ -873,6 +875,7 @@ class TestUFuncs(unittest.TestCase):
     @unittest.skipIf(is32bits or iswindows, "Some types are not supported on "
                                        "32-bit "
                                "platform")
+    @unittest.expectedFailure
     def test_ldexp_ufunc(self):
         self.binary_int_ufunc_test('ldexp')
 
