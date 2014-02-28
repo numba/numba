@@ -120,13 +120,25 @@ class Numpy_sign(Numpy_unary_ufunc):
 class Numpy_binary_ufunc(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
-        [vx, wy, out] = args
-        if (isinstance(vx, types.Array) and isinstance(wy, types.Array) and
-                isinstance(out, types.Array)):
-            if vx.dtype != wy.dtype:
-                # TODO handle differing dtypes
-                return
-            return signature(out, vx, wy, out)
+        nargs = len(args)
+        if nargs == 3:
+            [inp1, inp2, out] = args
+            if isinstance(inp1, types.Array) and \
+                    isinstance(inp2, types.Array) and \
+                    isinstance(out, types.Array):
+                return signature(out, inp1, inp2, out)
+            elif inp1 in types.number_domain and \
+                    inp2 in types.number_domain and \
+                    isinstance(out, types.Array):
+                print('JNB:', inp1, inp2, out)
+                return signature(out, inp1, inp2, out)
+        elif nargs == 2:
+            [inp1, inp2] = args
+            if inp1 in types.number_domain and inp2 in types.number_domain:
+                if hasattr(self, "scalar_out_type"):
+                    return signature(self.scalar_out_type, inp1, inp2)
+                else:
+                    return signature(inp1, inp1, inp2)
 
 
 class Numpy_add(Numpy_binary_ufunc):

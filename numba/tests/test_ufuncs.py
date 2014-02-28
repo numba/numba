@@ -312,71 +312,105 @@ class TestUFuncs(unittest.TestCase):
                 self.assertTrue(np.all(result == expected) or
                                 np.allclose(result, expected))
 
-    def binary_ufunc_test(self, ufunc_name, x_operands=None, y_operands=None,
-                          flags=enable_pyobj_flags):
+
+    # TODO: test calling binary ufuncs with mixed input dtypes
+    def binary_ufunc_test(self, ufunc_name, flags=enable_pyobj_flags,
+                         skip_inputs=None, additional_inputs=None,
+                         int_output_type=None, float_output_type=None):
 
         ufunc = globals()[ufunc_name + '_usecase']
-        arraytypes = [types.Array(types.int32, 1, 'C'),
-                      types.Array(types.int64, 1, 'C'),
-                      types.Array(types.float32, 1, 'C'),
-                      types.Array(types.float64, 1, 'C')]
 
-        if x_operands == None:
-            x_operands = [np.arange(-10, 10, dtype='i4'),
-                          np.arange(-10, 10, dtype='i8'),
-                          np.arange(-1, 1, 0.1, dtype='f4'),
-                          np.arange(-1, 1, 0.1, dtype='f8')]
+        inputs = [
+            (0, types.uint32),
+            (1, types.uint32),
+            (-1, types.int32),
+            (0, types.int32),
+            (1, types.int32),
+            (0, types.uint64),
+            (1, types.uint64),
+            (-1, types.int64),
+            (0, types.int64),
+            (1, types.int64),
 
-        if y_operands == None:
-            y_operands = [np.arange(-10, 10, dtype='i4'),
-                          np.arange(-10, 10, dtype='i8'),
-                          np.arange(-1, 1, 0.1, dtype='f4'),
-                          np.arange(-1, 1, 0.1, dtype='f8')]
+            (-0.5, types.float32),
+            (0, types.float32),
+            (0.5, types.float32),
 
-        for arraytype, x_operand, y_operand in zip(arraytypes,
-                                                   x_operands,
-                                                   y_operands):
-            pyfunc = ufunc
+            (-0.5, types.float64),
+            (0, types.float64),
+            (0.5, types.float64),
 
-            numpy_ufunc = getattr(np, ufunc_name)
-            result_dtype = numpy_ufunc(x_operand, y_operand).dtype
+            (np.array([0,1], dtype='u4'), types.Array(types.uint32, 1, 'C')),
+            (np.array([0,1], dtype='u8'), types.Array(types.uint64, 1, 'C')),
+            (np.array([-1,0,1], dtype='i4'), types.Array(types.int32, 1, 'C')),
+            (np.array([-1,0,1], dtype='i8'), types.Array(types.int64, 1, 'C')),
+            (np.array([-0.5, 0.0, 0.5], dtype='f4'), types.Array(types.float32, 1, 'C')),
+            (np.array([-0.5, 0.0, 0.5], dtype='f8'), types.Array(types.float64, 1, 'C'))]
 
-            result_arraytype = types.Array(from_dtype(result_dtype),
-                                           arraytype.ndim, arraytype.layout)
+        if additional_inputs:
+            inputs = inputs + additional_inputs
+ 
+        pyfunc = ufunc
 
-            cr = compile_isolated(pyfunc, (arraytype, arraytype,
-                                           result_arraytype),
+        for input_tuple in inputs:
+
+            input_operand = input_tuple[0]
+            input_type = input_tuple[1]
+
+            if skip_inputs and input_type in skip_inputs:
+                continue
+
+            ty = input_type
+            if isinstance(ty, types.Array):
+                ty = ty.dtype
+
+            if ty in types.signed_domain:
+                if int_output_type:
+                    output_type = types.Array(int_output_type, 1, 'C')
+                else:
+                    output_type = types.Array(types.int64, 1, 'C')
+            elif ty in types.unsigned_domain:
+                if int_output_type:
+                    output_type = types.Array(int_output_type, 1, 'C')
+                else:
+                    output_type = types.Array(types.uint64, 1, 'C')
+            else:
+                if float_output_type:
+                    output_type = types.Array(float_output_type, 1, 'C')
+                else:
+                    output_type = types.Array(types.float64, 1, 'C')
+
+            print(input_type, output_type)
+            cr = compile_isolated(pyfunc, (input_type, input_type, output_type),
                                   flags=flags)
             cfunc = cr.entry_point
 
-            result = np.zeros(x_operand.size, dtype=result_dtype)
-            cfunc(x_operand, y_operand, result)
-            expected = np.zeros(x_operand.size, dtype=result_dtype)
-            ufunc(x_operand, y_operand, expected)
-
+            if isinstance(input_operand, np.ndarray):
+                result = np.zeros(input_operand.size,
+                                  dtype=output_type.dtype.name)
+                expected = np.zeros(input_operand.size,
+                                    dtype=output_type.dtype.name)
+            else:
+                result = np.zeros(1, dtype=output_type.dtype.name)
+                expected = np.zeros(1, dtype=output_type.dtype.name)
+            print(input_operand, result)
+            cfunc(input_operand, input_operand, result)
+            pyfunc(input_operand, input_operand, expected)
+            
             # Need special checks if NaNs are in results
             if np.isnan(expected).any() or np.isnan(result).any():
                 self.assertTrue(np.allclose(np.isnan(result), np.isnan(expected)))
                 if not np.isnan(expected).all() and not np.isnan(result).all():
-                    if result_dtype.kind == 'f':
-                        self.assertTrue(np.allclose(result[np.invert(np.isnan(result))],
-                                         expected[np.invert(np.isnan(expected))]))
-                    else:
-                        self.assertTrue((result[np.invert(np.isnan(result))] ==
-                                         expected[np.invert(np.isnan(expected))]).all())
+                    self.assertTrue(np.allclose(result[np.invert(np.isnan(result))],
+                                     expected[np.invert(np.isnan(expected))]))
             else:
-                if result_dtype.kind == 'f':
-                    self.assertTrue(np.allclose(result, expected))
-                else:
-                    self.assertTrue((result == expected).all())
+                self.assertTrue(np.all(result == expected) or
+                                np.allclose(result, expected))
 
-    def binary_int_ufunc_test(self, ufunc_name, flags=enable_pyobj_flags):
-        x_operands = [np.arange(-10, 10, dtype='i4'),
-                      np.arange(-10, 10, dtype='i8')]
-        y_operands = [np.arange(-10, 10, dtype='i4'),
-                      np.arange(-10, 10, dtype='i8')]
-        self.binary_ufunc_test(ufunc_name, x_operands=x_operands,
-                               y_operands=y_operands, flags=flags)
+
+    def binary_int_ufunc_test(self, name=None, flags=None):
+        self.assertTrue(False)
+
 
     # unary ufunc tests
     def test_negative_ufunc(self, flags=enable_pyobj_flags):
@@ -610,11 +644,11 @@ class TestUFuncs(unittest.TestCase):
         self.test_trunc_ufunc(flags=no_pyobj_flags)
 
     # binary ufunc tests
-    def test_add_ufunc(self):
-        self.binary_ufunc_test('add')
+    def test_add_ufunc(self, flags=enable_pyobj_flags):
+        self.binary_ufunc_test('add', flags=flags)
 
     def test_add_ufunc_npm(self):
-        self.binary_ufunc_test('add', flags=no_pyobj_flags)
+        self.test_add_ufunc(flags=no_pyobj_flags)
 
     def test_subtract_ufunc(self):
         self.binary_ufunc_test('subtract')

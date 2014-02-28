@@ -325,41 +325,74 @@ for ty in types.number_domain:
     register(implement(numpy.sign, ty)(numpy_sign_scalar))
 
 
-def numpy_binary_ufunc(core, divbyzero=False):
+# TODO: handle mixed input types,
+# and handle and one input op as scalar and other input op as array
+def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False):
     def impl(context, builder, sig, args):
-        [tyvx, tywy, tyout] = sig.args
-        [vx, wy, out] = args
-        assert tyvx.dtype == tywy.dtype
-        ndim = tyvx.ndim
+        [tyinp1, tyinp2, tyout] = sig.args
+        [inp1, inp2, out] = args
+        if scalar_inputs:
+            ndim = 1
+        else:
+            ndim = tyinp1.ndim
 
-        xary = context.make_array(tyvx)(context, builder, vx)
-        yary = context.make_array(tywy)(context, builder, wy)
+        if not scalar_inputs:
+            i1ary = context.make_array(tyinp1)(context, builder, inp1)
+            i2ary = context.make_array(tyinp2)(context, builder, inp2)
         oary = context.make_array(tyout)(context, builder, out)
 
+        if scalar_inputs:
+            sig = typing.signature(tyout.dtype, tyinp1, tyinp2)
+        else:
+            sig = typing.signature(tyout.dtype, tyinp1.dtype, tyinp2.dtype)
+
+        fnwork = context.get_function(funckey, sig)
         intpty = context.get_value_type(types.intp)
 
         # TODO handle differing shape by mimicking broadcasting
-        loopshape = cgutils.unpack_tuple(builder, xary.shape, ndim)
+        loopshape = cgutils.unpack_tuple(builder, oary.shape, ndim)
 
-        xyo_shape = [cgutils.unpack_tuple(builder, ary.shape, ndim)
-                     for ary in (xary, yary, oary)]
-        xyo_strides = [cgutils.unpack_tuple(builder, ary.strides, ndim)
-                       for ary in (xary, yary, oary)]
-        xyo_data = [ary.data for ary in (xary, yary, oary)]
-        xyo_layout = [ty.layout for ty in (tyvx, tywy, tyout)]
+        if scalar_inputs:
+            xyo_shape = [cgutils.unpack_tuple(builder, ary.shape, ndim)
+                         for ary in (oary,)]
+            xyo_strides = [cgutils.unpack_tuple(builder, ary.strides, ndim)
+                           for ary in (oary,)]
+            xyo_data = [ary.data for ary in (oary,)]
+            xyo_layout = [ty.layout for ty in (tyout,)]
+        else:
+            xyo_shape = [cgutils.unpack_tuple(builder, ary.shape, ndim)
+                         for ary in (i1ary, i2ary, oary)]
+            xyo_strides = [cgutils.unpack_tuple(builder, ary.strides, ndim)
+                           for ary in (i1ary, i2ary, oary)]
+            xyo_data = [ary.data for ary in (i1ary, i2ary, oary)]
+            xyo_layout = [ty.layout for ty in (tyinp1, tyinp2, tyout)]
 
         with cgutils.loop_nest(builder, loopshape, intp=intpty) as indices:
-            [px, py, po] = [cgutils.get_item_pointer2(builder,
-                                                      data=data, shape=shape,
-                                                      strides=strides,
-                                                      layout=layout,
-                                                      inds=indices)
-                            for data, shape, strides, layout
-                            in zip(xyo_data, xyo_shape, xyo_strides,
-                                   xyo_layout)]
+            if scalar_inputs:
+                [po] = [cgutils.get_item_pointer2(builder,
+                                               data=data, shape=shape,
+                                               strides=strides,
+                                               layout=layout,
+                                               inds=indices)
+                                for data, shape, strides, layout
+                                in zip(xyo_data, xyo_shape, xyo_strides,
+                                       xyo_layout)]
+            else:
+                [px, py, po] = [cgutils.get_item_pointer2(builder,
+                                                          data=data, shape=shape,
+                                                          strides=strides,
+                                                          layout=layout,
+                                                          inds=indices)
+                                for data, shape, strides, layout
+                                in zip(xyo_data, xyo_shape, xyo_strides,
+                                       xyo_layout)]
 
-            x = builder.load(px)
-            y = builder.load(py)
+            if scalar_inputs:
+                x = inp1
+                y = inp2
+            else:
+                x = builder.load(px)
+                y = builder.load(py)
             if divbyzero:
                 # Handle division
                 iszero = cgutils.is_scalar_zero(builder, y)
@@ -386,13 +419,23 @@ def numpy_binary_ufunc(core, divbyzero=False):
                         builder.store(res, po)
                     with orelse:
                         # Normal
-                        res = core(builder, (x, y))
+                        res = fnwork(builder, (x, y))
                         assert res.type == po.type.pointee, \
                                         (str(res.type), str(po.type.pointee))
                         builder.store(res, po)
             else:
                 # Handle other operations
-                res = core(builder, (x, y))
+                if scalar_inputs:
+                    if tyinp1 != tyout.dtype:
+                        tempres = fnwork(builder, [x, y])
+                        res = context.cast(builder, tempres, tyinp1, tyout.dtype)
+                    else:
+                        res = fnwork(builder, (x, y))
+                elif tyinp1.dtype != tyout.dtype:
+                    tempres = fnwork(builder, [x, y])
+                    res = context.cast(builder, tempres, tyinp1.dtype, tyout.dtype)
+                else:
+                    res = fnwork(builder, (x, y))
                 assert res.type == po.type.pointee, (res.type,
                                                      po.type.pointee)
                 builder.store(res, po)
@@ -405,11 +448,16 @@ def numpy_binary_ufunc(core, divbyzero=False):
 @implement(numpy.add, types.Kind(types.Array), types.Kind(types.Array),
            types.Kind(types.Array))
 def numpy_add(context, builder, sig, args):
-    dtype = sig.args[0].dtype
-    coresig = typing.signature(types.Any, dtype, dtype)
-    core = context.get_function("+", coresig)
-    imp = numpy_binary_ufunc(core)
+    imp = numpy_binary_ufunc('+')
     return imp(context, builder, sig, args)
+
+def numpy_add_scalar_inputs(context, builder, sig, args):
+    imp = numpy_binary_ufunc('+', scalar_inputs=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.add, ty, ty,
+             types.Kind(types.Array))(numpy_add_scalar_inputs))
 
 
 @register
