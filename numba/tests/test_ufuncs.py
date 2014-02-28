@@ -333,11 +333,11 @@ class TestUFuncs(unittest.TestCase):
             (1, types.int64),
 
             (-0.5, types.float32),
-            (0, types.float32),
+            (0.0, types.float32),
             (0.5, types.float32),
 
             (-0.5, types.float64),
-            (0, types.float64),
+            (0.0, types.float64),
             (0.5, types.float64),
 
             (np.array([0,1], dtype='u4'), types.Array(types.uint32, 1, 'C')),
@@ -380,7 +380,6 @@ class TestUFuncs(unittest.TestCase):
                 else:
                     output_type = types.Array(types.float64, 1, 'C')
 
-            print(input_type, output_type)
             cr = compile_isolated(pyfunc, (input_type, input_type, output_type),
                                   flags=flags)
             cfunc = cr.entry_point
@@ -393,7 +392,6 @@ class TestUFuncs(unittest.TestCase):
             else:
                 result = np.zeros(1, dtype=output_type.dtype.name)
                 expected = np.zeros(1, dtype=output_type.dtype.name)
-            print(input_operand, result)
             cfunc(input_operand, input_operand, result)
             pyfunc(input_operand, input_operand, expected)
             
@@ -650,23 +648,23 @@ class TestUFuncs(unittest.TestCase):
     def test_add_ufunc_npm(self):
         self.test_add_ufunc(flags=no_pyobj_flags)
 
-    def test_subtract_ufunc(self):
-        self.binary_ufunc_test('subtract')
+    def test_subtract_ufunc(self, flags=enable_pyobj_flags):
+        self.binary_ufunc_test('subtract', flags=flags)
 
     def test_subtract_ufunc_npm(self):
-        self.binary_ufunc_test('subtract', flags=no_pyobj_flags)
+        self.test_subtract_ufunc(flags=no_pyobj_flags)
 
-    def test_multiply_ufunc(self):
-        self.binary_ufunc_test('multiply')
+    def test_multiply_ufunc(self, flags=enable_pyobj_flags):
+        self.binary_ufunc_test('multiply', flags=flags)
 
     def test_multiply_ufunc_npm(self):
-        self.binary_ufunc_test('multiply', flags=no_pyobj_flags)
+        self.test_multiply_ufunc(flags=no_pyobj_flags)
 
-    def test_divide_ufunc(self):
-        self.binary_ufunc_test('divide')
+    def test_divide_ufunc(self, flags=enable_pyobj_flags):
+        self.binary_ufunc_test('divide', flags=flags)
 
     def test_divide_ufunc_npm(self):
-        self.binary_ufunc_test('divide', flags=no_pyobj_flags)
+        self.test_divide_ufunc(flags=no_pyobj_flags)
 
     def test_logaddexp_ufunc(self):
         self.binary_ufunc_test('logaddexp')

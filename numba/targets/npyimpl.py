@@ -327,7 +327,8 @@ for ty in types.number_domain:
 
 # TODO: handle mixed input types,
 # and handle and one input op as scalar and other input op as array
-def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False):
+def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
+                       asfloat=False):
     def impl(context, builder, sig, args):
         [tyinp1, tyinp2, tyout] = sig.args
         [inp1, inp2, out] = args
@@ -400,32 +401,52 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False):
                                                                        orelse):
                     with then:
                         # Divide by zero
-                        if tyout.dtype in types.real_domain:
-                            # If x is float and is 0 also, return Nan; else
+                        if ((scalar_inputs and tyinp2 in types.real_domain) or
+                                (not scalar_inputs and
+                                    tyinp2.dtype in types.real_domain)):
+                            # If y is float and is 0 also, return Nan; else
                             # return Inf
                             outltype = context.get_data_type(tyout.dtype)
                             shouldretnan = cgutils.is_scalar_zero(builder, x)
                             nan = Constant.real(outltype, float("nan"))
                             inf = Constant.real(outltype, float("inf"))
                             res = builder.select(shouldretnan, nan, inf)
-                        elif (tyout.dtype in types.signed_domain and
+                        elif (scalar_inputs and tyout in types.signed_domain and
                                 not numpy_support.int_divbyzero_returns_zero):
-                            res = Constant.int(y.type, 0x1 << (y.type.width-1))
+                            res = Constant.int(tyout, 0x1 << (y.type.width-1))
+                        elif (not scalar_inputs and
+                                tyout.dtype in types.signed_domain and
+                                not numpy_support.int_divbyzero_returns_zero):
+                            res = Constant.int(tyout.dtype, 0x1 << (y.type.width-1))
                         else:
-                            res = Constant.null(y.type)
+                            res = Constant.null(context.get_data_type(tyout.dtype))
 
                         assert res.type == po.type.pointee, \
                                         (str(res.type), str(po.type.pointee))
                         builder.store(res, po)
                     with orelse:
                         # Normal
-                        res = fnwork(builder, (x, y))
+                        tempres = fnwork(builder, (x, y))
+                        if scalar_inputs and tyinp1 in types.real_domain:
+                            res = context.cast(builder, tempres,
+                                               tyinp1, tyout.dtype)
+                        elif (not scalar_inputs and
+                                tyinp1.dtype in types.real_domain):
+                            res = context.cast(builder, tempres,
+                                               tyinp1.dtype, tyout.dtype)
+                        else:
+                            res = context.cast(builder, tempres,
+                                               types.float64, tyout.dtype)
                         assert res.type == po.type.pointee, \
                                         (str(res.type), str(po.type.pointee))
                         builder.store(res, po)
             else:
                 # Handle other operations
-                if scalar_inputs:
+                if asfloat:
+                    tempres = fnwork(builder, [x, y])
+                    res = context.cast(builder, tempres,
+                                       types.float64, tyout.dtype)
+                elif scalar_inputs:
                     if tyinp1 != tyout.dtype:
                         tempres = fnwork(builder, [x, y])
                         res = context.cast(builder, tempres, tyinp1, tyout.dtype)
@@ -463,26 +484,36 @@ for ty in types.number_domain:
 @register
 @implement(numpy.subtract, types.Kind(types.Array), types.Kind(types.Array),
            types.Kind(types.Array))
-def numpy_sub(context, builder, sig, args):
-    dtype = sig.args[0].dtype
-    coresig = typing.signature(types.Any, dtype, dtype)
-    core = context.get_function("-", coresig)
-    imp = numpy_binary_ufunc(core)
+def numpy_subtract(context, builder, sig, args):
+    imp = numpy_binary_ufunc('-')
     return imp(context, builder, sig, args)
+
+def numpy_subtract_scalar_inputs(context, builder, sig, args):
+    imp = numpy_binary_ufunc('-', scalar_inputs=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.subtract, ty, ty,
+             types.Kind(types.Array))(numpy_subtract_scalar_inputs))
 
 
 @register
 @implement(numpy.multiply, types.Kind(types.Array), types.Kind(types.Array),
            types.Kind(types.Array))
 def numpy_multiply(context, builder, sig, args):
-    dtype = sig.args[0].dtype
-    coresig = typing.signature(types.Any, dtype, dtype)
-    core = context.get_function("*", coresig)
-    imp = numpy_binary_ufunc(core)
+    imp = numpy_binary_ufunc('*')
     return imp(context, builder, sig, args)
 
+def numpy_multiply_scalar_inputs(context, builder, sig, args):
+    imp = numpy_binary_ufunc('*', scalar_inputs=True)
+    return imp(context, builder, sig, args)
 
-@register
+for ty in types.number_domain:
+    register(implement(numpy.multiply, ty, ty,
+             types.Kind(types.Array))(numpy_multiply_scalar_inputs))
+
+
+'''@register
 @implement(numpy.divide, types.Kind(types.Array), types.Kind(types.Array),
            types.Kind(types.Array))
 def numpy_divide(context, builder, sig, args):
@@ -503,4 +534,23 @@ def numpy_divide(context, builder, sig, args):
         real_div_impl = context.get_function("/?", isig)
         imp = numpy_binary_ufunc(real_div_impl, divbyzero=True)
 
+    return imp(context, builder, sig, args)'''
+
+
+@register
+@implement(numpy.divide, types.Kind(types.Array), types.Kind(types.Array),
+           types.Kind(types.Array))
+def numpy_divide(context, builder, sig, args):
+    imp = numpy_binary_ufunc('/', asfloat=True, divbyzero=True)
     return imp(context, builder, sig, args)
+
+def numpy_divide_scalar_inputs(context, builder, sig, args):
+    imp = numpy_binary_ufunc('/', scalar_inputs=True, asfloat=True,
+                             divbyzero=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.divide, ty, ty,
+             types.Kind(types.Array))(numpy_divide_scalar_inputs))
+
+

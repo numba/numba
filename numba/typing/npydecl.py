@@ -130,7 +130,6 @@ class Numpy_binary_ufunc(AbstractTemplate):
             elif inp1 in types.number_domain and \
                     inp2 in types.number_domain and \
                     isinstance(out, types.Array):
-                print('JNB:', inp1, inp2, out)
                 return signature(out, inp1, inp2, out)
         elif nargs == 2:
             [inp1, inp2] = args
