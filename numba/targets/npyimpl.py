@@ -413,11 +413,13 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
                             res = builder.select(shouldretnan, nan, inf)
                         elif (scalar_inputs and tyout in types.signed_domain and
                                 not numpy_support.int_divbyzero_returns_zero):
-                            res = Constant.int(tyout, 0x1 << (y.type.width-1))
+                            res = Constant.int(context.get_data_type(tyout),
+                                               0x1 << (y.type.width-1))
                         elif (not scalar_inputs and
                                 tyout.dtype in types.signed_domain and
                                 not numpy_support.int_divbyzero_returns_zero):
-                            res = Constant.int(tyout.dtype, 0x1 << (y.type.width-1))
+                            res = Constant.int(context.get_data_type(tyout.dtype),
+                                               0x1 << (y.type.width-1))
                         else:
                             res = Constant.null(context.get_data_type(tyout.dtype))
 

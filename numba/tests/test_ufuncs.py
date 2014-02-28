@@ -5,6 +5,7 @@ import numpy as np
 from numba.compiler import compile_isolated, Flags
 from numba import types, utils
 from numba.numpy_support import from_dtype
+from numba.config import PYVERSION
 
 is32bits = tuple.__itemsize__ == 4
 iswindows = sys.platform.startswith('win32')
@@ -663,7 +664,17 @@ class TestUFuncs(unittest.TestCase):
         self.test_multiply_ufunc(flags=no_pyobj_flags)
 
     def test_divide_ufunc(self, flags=enable_pyobj_flags):
-        self.binary_ufunc_test('divide', flags=flags)
+        skip_inputs = None
+        # python3 integer division by zero and
+        # storing in 64 bit int produces garbage
+        # instead of 0, so skip
+        if PYVERSION >= (3, 0):
+            skip_inputs = [types.uint32, types.uint64,
+                           types.Array(types.uint32, 1, 'C'),
+                           types.Array(types.int32, 1, 'C'),
+                           types.Array(types.uint64, 1, 'C')]
+        self.binary_ufunc_test('divide', flags=flags,
+            skip_inputs=skip_inputs)
 
     def test_divide_ufunc_npm(self):
         self.test_divide_ufunc(flags=no_pyobj_flags)
