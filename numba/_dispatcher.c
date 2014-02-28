@@ -375,10 +375,10 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
     PyObject *cac;                  /* compile and call function */
 
     /* Shortcut for single definition */
-    if (!self->can_compile && 1 == dispatcher_count(self->dispatcher)){
+    /*if (!self->can_compile && 1 == dispatcher_count(self->dispatcher)){
         fn = self->firstdef;
         return fn(NULL, args, kws);
-    }
+    }*/
 
     argct = PySequence_Fast_GET_SIZE(args);
 
