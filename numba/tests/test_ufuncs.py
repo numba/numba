@@ -555,7 +555,6 @@ class TestUFuncs(unittest.TestCase):
     def test_arctan_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('arctan', flags=flags)
 
-    @unittest.expectedFailure
     def test_arctan_ufunc_npm(self):
         self.test_arctan_ufunc(flags=no_pyobj_flags)
 
