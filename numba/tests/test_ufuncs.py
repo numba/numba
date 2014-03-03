@@ -582,21 +582,18 @@ class TestUFuncs(unittest.TestCase):
     def test_arcsinh_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('arcsinh', flags=flags)
 
-    @unittest.expectedFailure
     def test_arcsinh_ufunc_npm(self):
         self.test_arcsinh_ufunc(flags=no_pyobj_flags)
 
     def test_arccosh_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('arccosh', flags=flags)
 
-    @unittest.expectedFailure
     def test_arccosh_ufunc_npm(self):
         self.test_arccosh_ufunc(flags=no_pyobj_flags)
 
     def test_arctanh_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('arctanh', flags=flags)
 
-    @unittest.expectedFailure
     def test_arctanh_ufunc_npm(self):
         self.test_arctanh_ufunc(flags=no_pyobj_flags)
 

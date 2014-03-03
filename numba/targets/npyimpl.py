@@ -198,6 +198,7 @@ def numpy_tan_scalar(context, builder, sig, args):
 for ty in types.number_domain:
     register(implement(numpy.tan, ty)(numpy_tan_scalar))
 
+# ------------------------------------------------------------------------------
 
 @register
 @implement(numpy.arccos, types.Kind(types.Array), types.Kind(types.Array))
@@ -260,6 +261,70 @@ def numpy_arctan_scalar(context, builder, sig, args):
 for ty in types.number_domain:
     register(implement(numpy.arctan, ty)(numpy_arctan_scalar))
 
+# ------------------------------------------------------------------------------
+
+@register
+@implement(numpy.arccosh, types.Kind(types.Array), types.Kind(types.Array))
+def numpy_arccosh(context, builder, sig, args):
+    imp = numpy_unary_ufunc(math.acosh, asfloat=True)
+    return imp(context, builder, sig, args)
+
+def numpy_arccosh_scalar_input(context, builder, sig, args):
+    imp = numpy_unary_ufunc(math.acosh, asfloat=True, scalar_input=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.arccosh, ty, types.Kind(types.Array))(numpy_arccosh_scalar_input))
+
+def numpy_arccosh_scalar(context, builder, sig, args):
+    imp = numpy_scalar_unary_ufunc(math.acosh, asfloat=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.arccosh, ty)(numpy_arccosh_scalar))
+
+@register
+@implement(numpy.arcsinh, types.Kind(types.Array), types.Kind(types.Array))
+def numpy_arcsinh(context, builder, sig, args):
+    imp = numpy_unary_ufunc(math.asinh, asfloat=True)
+    return imp(context, builder, sig, args)
+
+def numpy_arcsinh_scalar_input(context, builder, sig, args):
+    imp = numpy_unary_ufunc(math.asinh, asfloat=True, scalar_input=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.arcsinh, ty, types.Kind(types.Array))(numpy_arcsinh_scalar_input))
+
+def numpy_arcsinh_scalar(context, builder, sig, args):
+    imp = numpy_scalar_unary_ufunc(math.asinh, asfloat=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.arcsinh, ty)(numpy_arcsinh_scalar))
+
+
+@register
+@implement(numpy.arctanh, types.Kind(types.Array), types.Kind(types.Array))
+def numpy_arctanh(context, builder, sig, args):
+    imp = numpy_unary_ufunc(math.atanh, asfloat=True)
+    return imp(context, builder, sig, args)
+
+def numpy_arctanh_scalar_input(context, builder, sig, args):
+    imp = numpy_unary_ufunc(math.atanh, asfloat=True, scalar_input=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.arctanh, ty, types.Kind(types.Array))(numpy_arctanh_scalar_input))
+
+def numpy_arctanh_scalar(context, builder, sig, args):
+    imp = numpy_scalar_unary_ufunc(math.atanh, asfloat=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.arctanh, ty)(numpy_arctanh_scalar))
+
+# ------------------------------------------------------------------------------
 
 @register
 @implement(numpy.sqrt, types.Kind(types.Array), types.Kind(types.Array))
