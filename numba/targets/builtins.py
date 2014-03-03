@@ -254,6 +254,10 @@ def int_abs_impl(context, builder, sig, args):
     negated = builder.neg(x)
     return builder.select(ltz, negated, x)
 
+def uint_abs_impl(context, builder, sig, args):
+    [x] = args
+    return x
+
 
 def int_print_impl(context, builder, sig, args):
     [x] = args
@@ -330,6 +334,44 @@ def int_invert_impl(context, builder, sig, args):
     return builder.xor(val, Constant.all_ones(val.type))
 
 
+def int_sign_impl(context, builder, sig, args):
+    [x] = args
+    POS = Constant.int(x.type, 1)
+    NEG = Constant.int(x.type, -1)
+    ZERO = Constant.int(x.type, 0)
+
+    cmp_zero = builder.icmp(lc.ICMP_EQ, x, ZERO)
+    cmp_pos = builder.icmp(lc.ICMP_SGT, x, ZERO)
+
+    presult = builder.alloca(x.type)
+
+    bb_zero = cgutils.append_basic_block(builder, ".zero")
+    bb_postest = cgutils.append_basic_block(builder, ".postest")
+    bb_pos = cgutils.append_basic_block(builder, ".pos")
+    bb_neg = cgutils.append_basic_block(builder, ".neg")
+    bb_exit = cgutils.append_basic_block(builder, ".exit")
+
+    builder.cbranch(cmp_zero, bb_zero, bb_postest)
+
+    with cgutils.goto_block(builder, bb_zero):
+        builder.store(ZERO, presult)
+        builder.branch(bb_exit)
+
+    with cgutils.goto_block(builder, bb_postest):
+        builder.cbranch(cmp_pos, bb_pos, bb_neg)
+
+    with cgutils.goto_block(builder, bb_pos):
+        builder.store(POS, presult)
+        builder.branch(bb_exit)
+        
+    with cgutils.goto_block(builder, bb_neg):
+        builder.store(NEG, presult)
+        builder.branch(bb_exit)
+
+    builder.position_at_end(bb_exit)
+    return builder.load(presult)
+
+
 builtin(implement('==', types.boolean, types.boolean)(int_eq_impl))
 builtin(implement('!=', types.boolean, types.boolean)(int_ne_impl))
 builtin(implement('<', types.boolean, types.boolean)(int_ult_impl))
@@ -355,6 +397,7 @@ for ty in types.integer_domain:
     builtin(implement('-', ty)(int_negate_impl))
     builtin(implement(types.neg_type, ty)(int_negate_impl))
     builtin(implement('~', ty)(int_invert_impl))
+    builtin(implement(types.sign_type, ty)(int_sign_impl))
 
 for ty in types.unsigned_domain:
     builtin(implement('/?', ty, ty)(int_udiv_impl))
@@ -368,6 +411,7 @@ for ty in types.unsigned_domain:
     builtin(implement('**', types.float64, ty)(int_upower_impl))
     # logical shift for unsigned
     builtin(implement('>>', ty, types.uint32)(int_lshr_impl))
+    builtin(implement(types.abs_type, ty)(uint_abs_impl))
 
 for ty in types.signed_domain:
     builtin(implement('/?', ty, ty)(int_sdiv_impl))
@@ -597,6 +641,44 @@ def real_negate_impl(context, builder, sig, args):
         return builder.neg(val)
 
 
+def real_sign_impl(context, builder, sig, args):
+    [x] = args
+    POS = Constant.real(x.type, 1)
+    NEG = Constant.real(x.type, -1)
+    ZERO = Constant.real(x.type, 0)
+
+    cmp_zero = builder.fcmp(lc.FCMP_OEQ, x, ZERO)
+    cmp_pos = builder.fcmp(lc.FCMP_OGT, x, ZERO)
+
+    presult = builder.alloca(x.type)
+
+    bb_zero = cgutils.append_basic_block(builder, ".zero")
+    bb_postest = cgutils.append_basic_block(builder, ".postest")
+    bb_pos = cgutils.append_basic_block(builder, ".pos")
+    bb_neg = cgutils.append_basic_block(builder, ".neg")
+    bb_exit = cgutils.append_basic_block(builder, ".exit")
+
+    builder.cbranch(cmp_zero, bb_zero, bb_postest)
+
+    with cgutils.goto_block(builder, bb_zero):
+        builder.store(ZERO, presult)
+        builder.branch(bb_exit)
+
+    with cgutils.goto_block(builder, bb_postest):
+        builder.cbranch(cmp_pos, bb_pos, bb_neg)
+
+    with cgutils.goto_block(builder, bb_pos):
+        builder.store(POS, presult)
+        builder.branch(bb_exit)
+        
+    with cgutils.goto_block(builder, bb_neg):
+        builder.store(NEG, presult)
+        builder.branch(bb_exit)
+
+    builder.position_at_end(bb_exit)
+    return builder.load(presult)
+
+
 for ty in types.real_domain:
     builtin(implement('+', ty, ty)(real_add_impl))
     builtin(implement('-', ty, ty)(real_sub_impl))
@@ -618,6 +700,7 @@ for ty in types.real_domain:
 
     builtin(implement('-', ty)(real_negate_impl))
     builtin(implement(types.neg_type, ty)(real_negate_impl))
+    builtin(implement(types.sign_type, ty)(real_sign_impl))
 
 
 class Complex64(cgutils.Structure):

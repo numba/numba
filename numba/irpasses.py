@@ -47,4 +47,7 @@ class RemoveRedundantAssign(object):
                 bag = tempassign[inst.value.name]
                 if bag[0] == offset - 1:
                     bag.append(offset)
+                else:
+                    # Only apply to use once temp variable
+                    del tempassign[inst.value.name]
 

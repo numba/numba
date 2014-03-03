@@ -8,9 +8,9 @@ from math import pi
 ffi = FFI()
 ffi.cdef('double sin(double x);')
 
-# loads the entire C namespace
-C = ffi.dlopen(None)                     
-c_sin = C.sin
+# loads the entire libm namespace
+libm = ffi.dlopen("m")
+c_sin = libm.sin
 
 @jit(nopython=True)
 def cffi_sin_example(x):

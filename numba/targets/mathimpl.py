@@ -82,15 +82,15 @@ def unary_math_extern(fn, f32extern, f64extern):
 
 
 unary_math_intr(math.fabs, lc.INTR_FABS)
-unary_math_intr(math.sqrt, lc.INTR_SQRT)
+#unary_math_intr(math.sqrt, lc.INTR_SQRT)
 unary_math_intr(math.exp, lc.INTR_EXP)
 unary_math_intr(math.log, lc.INTR_LOG)
 unary_math_intr(math.log10, lc.INTR_LOG10)
 unary_math_intr(math.sin, lc.INTR_SIN)
 unary_math_intr(math.cos, lc.INTR_COS)
-unary_math_intr(math.floor, lc.INTR_FLOOR)
-unary_math_intr(math.ceil, lc.INTR_CEIL)
-unary_math_intr(math.trunc, lc.INTR_TRUNC)
+#unary_math_intr(math.floor, lc.INTR_FLOOR)
+#unary_math_intr(math.ceil, lc.INTR_CEIL)
+#unary_math_intr(math.trunc, lc.INTR_TRUNC)
 unary_math_extern(math.log1p, "log1pf", "log1p")
 if utils.PYVERSION > (2, 6):
     unary_math_extern(math.expm1, "expm1f", "expm1")
@@ -104,6 +104,10 @@ unary_math_extern(math.atanh, "atanhf", "atanh")
 unary_math_extern(math.sinh, "sinhf", "sinh")
 unary_math_extern(math.cosh, "coshf", "cosh")
 unary_math_extern(math.tanh, "tanhf", "tanh")
+unary_math_extern(math.ceil, "ceilf", "ceil")
+unary_math_extern(math.floor, "floorf", "floor")
+unary_math_extern(math.sqrt, "sqrtf", "sqrt")
+unary_math_extern(math.trunc, "truncf", "trunc")
 
 
 @register

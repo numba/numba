@@ -76,6 +76,11 @@ float Numba_roundf_even(float y) {
     return z;
 }
 
+static
+uint64_t Numba_fptoui(double x) {
+    return (uint64_t)x;
+}
+
 
 #define EXPOSE(Fn, Sym) static void* Sym(){return PyLong_FromVoidPtr(&Fn);}
 EXPOSE(Numba_sdiv, get_sdiv)
@@ -86,6 +91,7 @@ EXPOSE(Numba_cpow, get_cpow)
 EXPOSE(Numba_to_complex, get_complex_adaptor)
 EXPOSE(Numba_round_even, get_round_even)
 EXPOSE(Numba_roundf_even, get_roundf_even)
+EXPOSE(Numba_fptoui, get_fptoui)
 #undef EXPOSE
 
 /*
@@ -119,6 +125,7 @@ static PyMethodDef ext_methods[] = {
     declmethod(get_complex_adaptor),
     declmethod(get_round_even),
     declmethod(get_roundf_even),
+    declmethod(get_fptoui),
 
     /* Declare math exposer */
     #define MATH_UNARY(F, R, A) declmethod(get_##F),

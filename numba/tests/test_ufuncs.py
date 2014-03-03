@@ -1,10 +1,12 @@
 from __future__ import print_function
 import sys
+import warnings
 import numba.unittest_support as unittest
 import numpy as np
 from numba.compiler import compile_isolated, Flags
 from numba import types, utils
-from numba.numpy_support import from_dtype
+
+from numba.config import PYVERSION
 
 is32bits = tuple.__itemsize__ == 4
 iswindows = sys.platform.startswith('win32')
@@ -222,38 +224,197 @@ def ldexp_usecase(x, y, result):
 
 class TestUFuncs(unittest.TestCase):
 
-    def unary_ufunc_test(self, ufunc_name, operands=None,
-                         flags=enable_pyobj_flags):
+    def unary_ufunc_test(self, ufunc_name, flags=enable_pyobj_flags,
+                         skip_inputs=None, additional_inputs=None,
+                         int_output_type=None, float_output_type=None):
 
         ufunc = globals()[ufunc_name + '_usecase']
 
-        arraytypes = [types.Array(types.int32, 1, 'C'),
-                      types.Array(types.int64, 1, 'C'),
-                      types.Array(types.float32, 1, 'C'),
-                      types.Array(types.float64, 1, 'C')]
+        inputs = [
+            (0, types.uint32),
+            (1, types.uint32),
+            (-1, types.int32),
+            (0, types.int32),
+            (1, types.int32),
+            (0, types.uint64),
+            (1, types.uint64),
+            (-1, types.int64),
+            (0, types.int64),
+            (1, types.int64),
 
-        if operands == None:
-            operands = [np.arange(-10, 10, dtype='i4'),
-                          np.arange(-10, 10, dtype='i8'),
-                          np.arange(-1, 1, 0.1, dtype='f4'),
-                          np.arange(-1, 1, 0.1, dtype='f8')]
+            (-0.5, types.float32),
+            (0, types.float32),
+            (0.5, types.float32),
 
-        for arraytype, operand in zip(arraytypes, operands):
-            pyfunc = ufunc
+            (-0.5, types.float64),
+            (0, types.float64),
+            (0.5, types.float64),
 
-            numpy_ufunc = getattr(np, ufunc_name)
-            result_dtype = numpy_ufunc(operand).dtype
-            result_arraytype = types.Array(from_dtype(result_dtype),
-                                           arraytype.ndim, arraytype.layout)
+            (np.array([0,1], dtype='u4'), types.Array(types.uint32, 1, 'C')),
+            (np.array([0,1], dtype='u8'), types.Array(types.uint64, 1, 'C')),
+            (np.array([-1,0,1], dtype='i4'), types.Array(types.int32, 1, 'C')),
+            (np.array([-1,0,1], dtype='i8'), types.Array(types.int64, 1, 'C')),
+            (np.array([-0.5, 0.0, 0.5], dtype='f4'), types.Array(types.float32, 1, 'C')),
+            (np.array([-0.5, 0.0, 0.5], dtype='f8'), types.Array(types.float64, 1, 'C'))]
 
-            cr = compile_isolated(pyfunc, (arraytype, result_arraytype),
+        if additional_inputs:
+            inputs = inputs + additional_inputs
+
+        pyfunc = ufunc
+
+        for input_tuple in inputs:
+
+            input_operand = input_tuple[0]
+            input_type = input_tuple[1]
+
+            if skip_inputs and input_type in skip_inputs:
+                continue
+
+            ty = input_type
+            if isinstance(ty, types.Array):
+                ty = ty.dtype
+
+            if ty in types.signed_domain:
+                if int_output_type:
+                    output_type = types.Array(int_output_type, 1, 'C')
+                else:
+                    output_type = types.Array(types.int64, 1, 'C')
+            elif ty in types.unsigned_domain:
+                if int_output_type:
+                    output_type = types.Array(int_output_type, 1, 'C')
+                else:
+                    output_type = types.Array(types.uint64, 1, 'C')
+            else:
+                if float_output_type:
+                    output_type = types.Array(float_output_type, 1, 'C')
+                else:
+                    output_type = types.Array(types.float64, 1, 'C')
+
+            cr = compile_isolated(pyfunc, (input_type, output_type), flags=flags)
+            cfunc = cr.entry_point
+
+            if isinstance(input_operand, np.ndarray):
+                result = np.zeros(input_operand.size,
+                                  dtype=output_type.dtype.name)
+                expected = np.zeros(input_operand.size,
+                                    dtype=output_type.dtype.name)
+            else:
+                result = np.zeros(1, dtype=output_type.dtype.name)
+                expected = np.zeros(1, dtype=output_type.dtype.name)
+
+            invalid_flag = False
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter('always')
+
+                pyfunc(input_operand, expected)
+
+                if (len(w) == 1
+                    and issubclass(w[-1].category, RuntimeWarning)
+                    and str(w[-1].message).startswith("invalid value " \
+                                                      "encountered")):
+                    invalid_flag = True
+
+            cfunc(input_operand, result)
+
+            # Need special checks if NaNs are in results
+            if np.isnan(expected).any() or np.isnan(result).any():
+                self.assertTrue(np.allclose(np.isnan(result), np.isnan(expected)))
+                if not np.isnan(expected).all() and not np.isnan(result).all():
+                    self.assertTrue(np.allclose(result[np.invert(np.isnan(result))],
+                                     expected[np.invert(np.isnan(expected))]))
+            else:
+                match = np.all(result == expected) or np.allclose(result,
+                                                                  expected)
+                if not match:
+                    if invalid_flag:
+                        # Allow output to mismatch for invalid input
+                        print("Output mismatch for invalid input",
+                              input_tuple, result, expected)
+                    else:
+                        self.fail("%s != %s" % (result, expected))
+
+
+    # TODO: test calling binary ufuncs with mixed input dtypes
+    def binary_ufunc_test(self, ufunc_name, flags=enable_pyobj_flags,
+                         skip_inputs=None, additional_inputs=None,
+                         int_output_type=None, float_output_type=None):
+
+        ufunc = globals()[ufunc_name + '_usecase']
+
+        inputs = [
+            (0, types.uint32),
+            (1, types.uint32),
+            (-1, types.int32),
+            (0, types.int32),
+            (1, types.int32),
+            (0, types.uint64),
+            (1, types.uint64),
+            (-1, types.int64),
+            (0, types.int64),
+            (1, types.int64),
+
+            (-0.5, types.float32),
+            (0.0, types.float32),
+            (0.5, types.float32),
+
+            (-0.5, types.float64),
+            (0.0, types.float64),
+            (0.5, types.float64),
+
+            (np.array([0,1], dtype='u4'), types.Array(types.uint32, 1, 'C')),
+            (np.array([0,1], dtype='u8'), types.Array(types.uint64, 1, 'C')),
+            (np.array([-1,0,1], dtype='i4'), types.Array(types.int32, 1, 'C')),
+            (np.array([-1,0,1], dtype='i8'), types.Array(types.int64, 1, 'C')),
+            (np.array([-0.5, 0.0, 0.5], dtype='f4'), types.Array(types.float32, 1, 'C')),
+            (np.array([-0.5, 0.0, 0.5], dtype='f8'), types.Array(types.float64, 1, 'C'))]
+
+        if additional_inputs:
+            inputs = inputs + additional_inputs
+
+        pyfunc = ufunc
+
+        for input_tuple in inputs:
+
+            input_operand = input_tuple[0]
+            input_type = input_tuple[1]
+
+            if skip_inputs and input_type in skip_inputs:
+                continue
+
+            ty = input_type
+            if isinstance(ty, types.Array):
+                ty = ty.dtype
+
+            if ty in types.signed_domain:
+                if int_output_type:
+                    output_type = types.Array(int_output_type, 1, 'C')
+                else:
+                    output_type = types.Array(types.int64, 1, 'C')
+            elif ty in types.unsigned_domain:
+                if int_output_type:
+                    output_type = types.Array(int_output_type, 1, 'C')
+                else:
+                    output_type = types.Array(types.uint64, 1, 'C')
+            else:
+                if float_output_type:
+                    output_type = types.Array(float_output_type, 1, 'C')
+                else:
+                    output_type = types.Array(types.float64, 1, 'C')
+
+            cr = compile_isolated(pyfunc, (input_type, input_type, output_type),
                                   flags=flags)
             cfunc = cr.entry_point
 
-            result = np.zeros(operand.size, dtype=result_dtype)
-            cfunc(operand, result)
-            expected = np.zeros(operand.size, dtype=result_dtype)
-            ufunc(operand, expected)
+            if isinstance(input_operand, np.ndarray):
+                result = np.zeros(input_operand.size,
+                                  dtype=output_type.dtype.name)
+                expected = np.zeros(input_operand.size,
+                                    dtype=output_type.dtype.name)
+            else:
+                result = np.zeros(1, dtype=output_type.dtype.name)
+                expected = np.zeros(1, dtype=output_type.dtype.name)
+            cfunc(input_operand, input_operand, result)
+            pyfunc(input_operand, input_operand, expected)
 
             # Need special checks if NaNs are in results
             if np.isnan(expected).any() or np.isnan(result).any():
@@ -265,320 +426,269 @@ class TestUFuncs(unittest.TestCase):
                 self.assertTrue(np.all(result == expected) or
                                 np.allclose(result, expected))
 
-    def binary_ufunc_test(self, ufunc_name, x_operands=None, y_operands=None,
-                          flags=enable_pyobj_flags):
 
-        ufunc = globals()[ufunc_name + '_usecase']
-        arraytypes = [types.Array(types.int32, 1, 'C'),
-                      types.Array(types.int64, 1, 'C'),
-                      types.Array(types.float32, 1, 'C'),
-                      types.Array(types.float64, 1, 'C')]
+    def binary_int_ufunc_test(self, name=None, flags=enable_pyobj_flags):
+        self.binary_ufunc_test(name, flags=flags,
+            skip_inputs=[types.float32, types.float64,
+                types.Array(types.float32, 1, 'C'),
+                types.Array(types.float64, 1, 'C')])
 
-        if x_operands == None:
-            x_operands = [np.arange(-10, 10, dtype='i4'),
-                          np.arange(-10, 10, dtype='i8'),
-                          np.arange(-1, 1, 0.1, dtype='f4'),
-                          np.arange(-1, 1, 0.1, dtype='f8')]
-
-        if y_operands == None:
-            y_operands = [np.arange(-10, 10, dtype='i4'),
-                          np.arange(-10, 10, dtype='i8'),
-                          np.arange(-1, 1, 0.1, dtype='f4'),
-                          np.arange(-1, 1, 0.1, dtype='f8')]
-
-        for arraytype, x_operand, y_operand in zip(arraytypes,
-                                                   x_operands,
-                                                   y_operands):
-            pyfunc = ufunc
-
-            numpy_ufunc = getattr(np, ufunc_name)
-            result_dtype = numpy_ufunc(x_operand, y_operand).dtype
-
-            result_arraytype = types.Array(from_dtype(result_dtype),
-                                           arraytype.ndim, arraytype.layout)
-
-            cr = compile_isolated(pyfunc, (arraytype, arraytype,
-                                           result_arraytype),
-                                  flags=flags)
-            cfunc = cr.entry_point
-
-            result = np.zeros(x_operand.size, dtype=result_dtype)
-            cfunc(x_operand, y_operand, result)
-            expected = np.zeros(x_operand.size, dtype=result_dtype)
-            ufunc(x_operand, y_operand, expected)
-
-            # Need special checks if NaNs are in results
-            if np.isnan(expected).any() or np.isnan(result).any():
-                self.assertTrue(np.allclose(np.isnan(result), np.isnan(expected)))
-                if not np.isnan(expected).all() and not np.isnan(result).all():
-                    if result_dtype.kind == 'f':
-                        self.assertTrue(np.allclose(result[np.invert(np.isnan(result))],
-                                         expected[np.invert(np.isnan(expected))]))
-                    else:
-                        self.assertTrue((result[np.invert(np.isnan(result))] ==
-                                         expected[np.invert(np.isnan(expected))]).all())
-            else:
-                if result_dtype.kind == 'f':
-                    self.assertTrue(np.allclose(result, expected))
-                else:
-                    self.assertTrue((result == expected).all())
-
-    def binary_int_ufunc_test(self, ufunc_name, flags=enable_pyobj_flags):
-        x_operands = [np.arange(-10, 10, dtype='i4'),
-                      np.arange(-10, 10, dtype='i8')]
-        y_operands = [np.arange(-10, 10, dtype='i4'),
-                      np.arange(-10, 10, dtype='i8')]
-        self.binary_ufunc_test(ufunc_name, x_operands=x_operands,
-                               y_operands=y_operands, flags=flags)
-
-    # unnary ufunc tests
-    def test_negative_ufunc(self):
-        self.unary_ufunc_test('negative')
+    # unary ufunc tests
+    def test_negative_ufunc(self, flags=enable_pyobj_flags):
+        # NumPy ufunc has bug with uint32 as input and int64 as output,
+        # so skip uint32 input.
+        self.unary_ufunc_test('negative', int_output_type=types.int64,
+            skip_inputs=[types.Array(types.uint32, 1, 'C')], flags=flags)
 
     def test_negative_ufunc_npm(self):
-        self.unary_ufunc_test('negative', flags=no_pyobj_flags)
+        self.test_negative_ufunc(flags=no_pyobj_flags)
 
-    def test_absolute_ufunc(self):
-        self.unary_ufunc_test('absolute')
+    def test_absolute_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('absolute', flags=flags,
+            additional_inputs = [(np.iinfo(np.uint32).max, types.uint32),
+                                 (np.iinfo(np.uint64).max, types.uint64),
+                                 (np.finfo(np.float32).min, types.float32),
+                                 (np.finfo(np.float64).min, types.float64)
+                                 ])
 
     def test_absolute_ufunc_npm(self):
-        self.unary_ufunc_test('absolute', flags=no_pyobj_flags)
+        self.test_absolute_ufunc(flags=no_pyobj_flags)
 
-    def test_rint_ufunc(self):
-        self.unary_ufunc_test('rint')
+    def test_rint_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('rint', flags=flags)
 
     @unittest.expectedFailure
     def test_rint_ufunc_npm(self):
-        self.unary_ufunc_test('rint', flags=no_pyobj_flags)
+        self.test_rint_ufunc(flags=no_pyobj_flags)
 
-    def test_sign_ufunc(self):
-        self.unary_ufunc_test('sign')
+    def test_sign_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('sign', flags=flags)
 
-    @unittest.expectedFailure
     def test_sign_ufunc_npm(self):
-        self.unary_ufunc_test('sign', flags=no_pyobj_flags)
+        self.test_sign_ufunc(flags=no_pyobj_flags)
 
-    def test_conj_ufunc(self):
-        self.unary_ufunc_test('conj')
+    def test_conj_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('conj', flags=flags)
 
     @unittest.expectedFailure
     def test_conj_ufunc_npm(self):
-        self.unary_ufunc_test('conj', flags=no_pyobj_flags)
+        self.test_conj_ufunc(flags=no_pyobj_flags)
 
-    def test_exp_ufunc(self):
-        self.unary_ufunc_test('exp')
+    def test_exp_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('exp', flags=flags)
 
     def test_exp_ufunc_npm(self):
-        self.unary_ufunc_test('exp', flags=no_pyobj_flags)
+        self.test_exp_ufunc(flags=no_pyobj_flags)
 
-    def test_exp2_ufunc(self):
-        self.unary_ufunc_test('exp2')
+    def test_exp2_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('exp2', flags=flags)
 
     @unittest.expectedFailure
     def test_exp2_ufunc_npm(self):
-        self.unary_ufunc_test('exp2', flags=no_pyobj_flags)
+        self.test_exp2_ufunc(flags=no_pyobj_flags)
 
-    def test_log_ufunc(self):
-        self.unary_ufunc_test('log')
+    def test_log_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('log', flags=flags)
 
     @unittest.expectedFailure
     def test_log_ufunc_npm(self):
-        self.unary_ufunc_test('log', flags=no_pyobj_flags)
+        self.test_log_ufunc(flags=no_pyobj_flags)
 
-    def test_log2_ufunc(self):
-        self.unary_ufunc_test('log2')
+    def test_log2_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('log2', flags=flags)
 
     @unittest.expectedFailure
     def test_log2_ufunc_npm(self):
-        self.unary_ufunc_test('log2', flags=no_pyobj_flags)
+        self.test_log2_ufunc(flags=no_pyobj_flags)
 
-    def test_log10_ufunc(self):
-        self.unary_ufunc_test('log10')
+    def test_log10_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('log10', flags=flags)
 
     @unittest.expectedFailure
     def test_log10_ufunc_npm(self):
-        self.unary_ufunc_test('log10', flags=no_pyobj_flags)
+        self.test_log10_ufunc(flags=no_pyobj_flags)
 
-    def test_expm1_ufunc(self):
-        self.unary_ufunc_test('expm1')
+    def test_expm1_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('expm1', flags=flags)
 
     @unittest.expectedFailure
     def test_expm1_ufunc_npm(self):
-        self.unary_ufunc_test('expm1', flags=no_pyobj_flags)
+        self.test_expm1_ufunc(flags=no_pyobj_flags)
 
-    def test_log1p_ufunc(self):
-        self.unary_ufunc_test('log1p')
+    def test_log1p_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('log1p', flags=flags)
 
     @unittest.expectedFailure
     def test_log1p_ufunc_npm(self):
-        self.unary_ufunc_test('log1p', flags=no_pyobj_flags)
+        self.test_log1p_ufunc(flags=no_pyobj_flags)
 
-    def test_sqrt_ufunc(self):
-        self.unary_ufunc_test('sqrt')
+    def test_sqrt_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('sqrt', flags=flags)
 
     def test_sqrt_ufunc_npm(self):
-        self.unary_ufunc_test('sqrt', flags=no_pyobj_flags)
+        self.test_sqrt_ufunc(flags=no_pyobj_flags)
 
-    def test_square_ufunc(self):
-        self.unary_ufunc_test('square')
+    def test_square_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('square', flags=flags)
 
     @unittest.expectedFailure
     def test_square_ufunc_npm(self):
-        self.unary_ufunc_test('square', flags=no_pyobj_flags)
+        self.test_square_ufunc(flags=no_pyobj_flags)
 
-    def test_reciprocal_ufunc(self):
-        self.unary_ufunc_test('reciprocal')
+    def test_reciprocal_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('reciprocal', flags=flags)
 
     @unittest.expectedFailure
     def test_reciprocal_ufunc_npm(self):
-        self.unary_ufunc_test('reciprocal', flags=no_pyobj_flags)
+        self.test_reciprocal_ufunc(flags=no_pyobj_flags)
 
-    def test_sin_ufunc(self):
-        self.unary_ufunc_test('sin')
+    def test_sin_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('sin', flags=flags)
 
     def test_sin_ufunc_npm(self):
-        self.unary_ufunc_test('sin', flags=no_pyobj_flags)
+        self.test_sin_ufunc(flags=no_pyobj_flags)
 
-    def test_cos_ufunc(self):
-        self.unary_ufunc_test('cos')
+    def test_cos_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('cos', flags=flags)
 
     def test_cos_ufunc_npm(self):
-        self.unary_ufunc_test('cos', flags=no_pyobj_flags)
+        self.test_cos_ufunc(flags=no_pyobj_flags)
 
-    def test_tan_ufunc(self):
-        self.unary_ufunc_test('tan')
+    def test_tan_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('tan', flags=flags)
 
     def test_tan_ufunc_npm(self):
-        self.unary_ufunc_test('tan', flags=no_pyobj_flags)
+        self.test_tan_ufunc(flags=no_pyobj_flags)
 
-    def test_arcsin_ufunc(self):
-        self.unary_ufunc_test('arcsin')
+    def test_arcsin_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('arcsin', flags=flags)
 
-    @unittest.expectedFailure
     def test_arcsin_ufunc_npm(self):
-        self.unary_ufunc_test('arcsin', flags=no_pyobj_flags)
+        self.test_arcsin_ufunc(flags=no_pyobj_flags)
 
-    def test_arccos_ufunc(self):
-        self.unary_ufunc_test('arccos')
+    def test_arccos_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('arccos', flags=flags)
 
-    @unittest.expectedFailure
     def test_arccos_ufunc_npm(self):
-        self.unary_ufunc_test('arccos', flags=no_pyobj_flags)
+        self.test_arccos_ufunc(flags=no_pyobj_flags)
 
-    def test_arctan_ufunc(self):
-        self.unary_ufunc_test('arctan')
+    def test_arctan_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('arctan', flags=flags)
 
-    @unittest.expectedFailure
     def test_arctan_ufunc_npm(self):
-        self.unary_ufunc_test('arctan', flags=no_pyobj_flags)
+        self.test_arctan_ufunc(flags=no_pyobj_flags)
 
-    def test_sinh_ufunc(self):
-        self.unary_ufunc_test('sinh')
+    def test_sinh_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('sinh', flags=flags)
 
-    @unittest.expectedFailure
     def test_sinh_ufunc_npm(self):
-        self.unary_ufunc_test('sinh', flags=no_pyobj_flags)
+        self.test_sinh_ufunc(flags=no_pyobj_flags)
 
-    def test_cosh_ufunc(self):
-        self.unary_ufunc_test('cosh')
+    def test_cosh_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('cosh', flags=flags)
 
-    @unittest.expectedFailure
     def test_cosh_ufunc_npm(self):
-        self.unary_ufunc_test('cosh', flags=no_pyobj_flags)
+        self.test_cosh_ufunc(flags=no_pyobj_flags)
 
-    def test_tanh_ufunc(self):
-        self.unary_ufunc_test('tanh')
+    def test_tanh_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('tanh', flags=flags)
 
-    @unittest.expectedFailure
     def test_tanh_ufunc_npm(self):
-        self.unary_ufunc_test('tanh', flags=no_pyobj_flags)
+        self.test_tanh_ufunc(flags=no_pyobj_flags)
 
-    def test_arcsinh_ufunc(self):
-        self.unary_ufunc_test('arcsinh')
+    def test_arcsinh_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('arcsinh', flags=flags)
 
-    @unittest.expectedFailure
     def test_arcsinh_ufunc_npm(self):
-        self.unary_ufunc_test('arcsinh', flags=no_pyobj_flags)
+        self.test_arcsinh_ufunc(flags=no_pyobj_flags)
 
-    def test_arccosh_ufunc(self):
-        self.unary_ufunc_test('arccosh')
+    def test_arccosh_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('arccosh', flags=flags)
 
-    @unittest.expectedFailure
     def test_arccosh_ufunc_npm(self):
-        self.unary_ufunc_test('arccosh', flags=no_pyobj_flags)
+        self.test_arccosh_ufunc(flags=no_pyobj_flags)
 
-    def test_arctanh_ufunc(self):
-        self.unary_ufunc_test('arctanh')
+    def test_arctanh_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('arctanh', flags=flags)
 
-    @unittest.expectedFailure
     def test_arctanh_ufunc_npm(self):
-        self.unary_ufunc_test('arctanh', flags=no_pyobj_flags)
+        self.test_arctanh_ufunc(flags=no_pyobj_flags)
 
-    def test_deg2rad_ufunc(self):
-        self.unary_ufunc_test('deg2rad')
+    def test_deg2rad_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('deg2rad', flags=flags)
 
     @unittest.expectedFailure
     def test_deg2rad_ufunc_npm(self):
-        self.unary_ufunc_test('deg2rad', flags=no_pyobj_flags)
+        self.test_deg2rad_ufunc(flags=no_pyobj_flags)
 
-    def test_rad2deg_ufunc(self):
-        self.unary_ufunc_test('rad2deg')
+    def test_rad2deg_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('rad2deg', flags=flags)
 
     @unittest.expectedFailure
     def test_rad2deg_ufunc_npm(self):
-        self.unary_ufunc_test('rad2deg', flags=no_pyobj_flags)
+        self.test_rad2deg_ufunc(flags=no_pyobj_flags)
 
     @unittest.skipIf(not hasattr(np, "invertlogical_not"),
                      "invertlogical_not is not available")
-    def test_invertlogical_not_ufunc(self):
-        self.unary_ufunc_test('invertlogical_not')
+    def test_invertlogical_not_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('invertlogical_not', flags=flags)
 
     @unittest.expectedFailure
     def test_invertlogical_not_ufunc_npm(self):
-        self.unary_ufunc_test('invertlogical_not', flags=no_pyobj_flags)
+        self.test_invertlogical_not_ufunc(flags=no_pyobj_flags)
 
-    def test_floor_ufunc(self):
-        self.unary_ufunc_test('floor')
+    def test_floor_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('floor', flags=flags)
 
     def test_floor_ufunc_npm(self):
-        self.unary_ufunc_test('floor', flags=no_pyobj_flags)
+        self.test_floor_ufunc(flags=no_pyobj_flags)
 
-    def test_ceil_ufunc(self):
-        self.unary_ufunc_test('ceil')
+    def test_ceil_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('ceil', flags=flags)
 
     def test_ceil_ufunc_npm(self):
-        self.unary_ufunc_test('ceil', flags=no_pyobj_flags)
+        self.test_ceil_ufunc(flags=no_pyobj_flags)
 
-    def test_trunc_ufunc(self):
-        self.unary_ufunc_test('trunc')
+    def test_trunc_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('trunc', flags=flags)
 
     def test_trunc_ufunc_npm(self):
-        self.unary_ufunc_test('trunc', flags=no_pyobj_flags)
+        self.test_trunc_ufunc(flags=no_pyobj_flags)
 
     # binary ufunc tests
-    def test_add_ufunc(self):
-        self.binary_ufunc_test('add')
+    def test_add_ufunc(self, flags=enable_pyobj_flags):
+        self.binary_ufunc_test('add', flags=flags)
 
     def test_add_ufunc_npm(self):
-        self.binary_ufunc_test('add', flags=no_pyobj_flags)
+        self.test_add_ufunc(flags=no_pyobj_flags)
 
-    def test_subtract_ufunc(self):
-        self.binary_ufunc_test('subtract')
+    def test_subtract_ufunc(self, flags=enable_pyobj_flags):
+        self.binary_ufunc_test('subtract', flags=flags)
 
     def test_subtract_ufunc_npm(self):
-        self.binary_ufunc_test('subtract', flags=no_pyobj_flags)
+        self.test_subtract_ufunc(flags=no_pyobj_flags)
 
-    def test_multiply_ufunc(self):
-        self.binary_ufunc_test('multiply')
+    def test_multiply_ufunc(self, flags=enable_pyobj_flags):
+        self.binary_ufunc_test('multiply', flags=flags)
 
     def test_multiply_ufunc_npm(self):
-        self.binary_ufunc_test('multiply', flags=no_pyobj_flags)
+        self.test_multiply_ufunc(flags=no_pyobj_flags)
 
-    def test_divide_ufunc(self):
-        self.binary_ufunc_test('divide')
+    def test_divide_ufunc(self, flags=enable_pyobj_flags):
+        skip_inputs = None
+        # python3 integer division by zero and
+        # storing in 64 bit int produces garbage
+        # instead of 0, so skip
+        if PYVERSION >= (3, 0):
+            skip_inputs = [types.uint32, types.uint64,
+                           types.Array(types.uint32, 1, 'C'),
+                           types.Array(types.int32, 1, 'C'),
+                           types.Array(types.uint64, 1, 'C')]
+        self.binary_ufunc_test('divide', flags=flags,
+            skip_inputs=skip_inputs, int_output_type=types.float64)
 
     def test_divide_ufunc_npm(self):
-        self.binary_ufunc_test('divide', flags=no_pyobj_flags)
+        self.test_divide_ufunc(flags=no_pyobj_flags)
 
     def test_logaddexp_ufunc(self):
         self.binary_ufunc_test('logaddexp')
@@ -639,7 +749,6 @@ class TestUFuncs(unittest.TestCase):
     def test_arctan2_ufunc(self):
         self.binary_ufunc_test('arctan2')
 
-    @unittest.expectedFailure
     def test_arctan2_ufunc_npm(self):
         self.binary_ufunc_test('arctan2', flags=no_pyobj_flags)
 
@@ -787,6 +896,7 @@ class TestUFuncs(unittest.TestCase):
     @unittest.skipIf(is32bits or iswindows, "Some types are not supported on "
                                        "32-bit "
                                "platform")
+    @unittest.expectedFailure
     def test_ldexp_ufunc(self):
         self.binary_int_ufunc_test('ldexp')
 
