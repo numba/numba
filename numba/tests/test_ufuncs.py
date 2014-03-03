@@ -1,10 +1,11 @@
 from __future__ import print_function
 import sys
+import warnings
 import numba.unittest_support as unittest
 import numpy as np
 from numba.compiler import compile_isolated, Flags
 from numba import types, utils
-from numba.numpy_support import from_dtype
+
 from numba.config import PYVERSION
 
 is32bits = tuple.__itemsize__ == 4
@@ -258,7 +259,7 @@ class TestUFuncs(unittest.TestCase):
 
         if additional_inputs:
             inputs = inputs + additional_inputs
- 
+
         pyfunc = ufunc
 
         for input_tuple in inputs:
@@ -300,9 +301,21 @@ class TestUFuncs(unittest.TestCase):
             else:
                 result = np.zeros(1, dtype=output_type.dtype.name)
                 expected = np.zeros(1, dtype=output_type.dtype.name)
+
+            invalid_flag = False
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter('always')
+
+                pyfunc(input_operand, expected)
+
+                if (len(w) == 1
+                    and issubclass(w[-1].category, RuntimeWarning)
+                    and str(w[-1].message).startswith("invalid value " \
+                                                      "encountered")):
+                    invalid_flag = True
+
             cfunc(input_operand, result)
-            pyfunc(input_operand, expected)
-            
+
             # Need special checks if NaNs are in results
             if np.isnan(expected).any() or np.isnan(result).any():
                 self.assertTrue(np.allclose(np.isnan(result), np.isnan(expected)))
@@ -310,8 +323,15 @@ class TestUFuncs(unittest.TestCase):
                     self.assertTrue(np.allclose(result[np.invert(np.isnan(result))],
                                      expected[np.invert(np.isnan(expected))]))
             else:
-                self.assertTrue(np.all(result == expected) or
-                                np.allclose(result, expected))
+                match = np.all(result == expected) or np.allclose(result,
+                                                                  expected)
+                if not match:
+                    if invalid_flag:
+                        # Allow output to mismatch for invalid input
+                        print("Output mismatch for invalid input",
+                              input_tuple, result, expected)
+                    else:
+                        self.fail("%s != %s" % (result, expected))
 
 
     # TODO: test calling binary ufuncs with mixed input dtypes
@@ -350,7 +370,7 @@ class TestUFuncs(unittest.TestCase):
 
         if additional_inputs:
             inputs = inputs + additional_inputs
- 
+
         pyfunc = ufunc
 
         for input_tuple in inputs:
@@ -395,7 +415,7 @@ class TestUFuncs(unittest.TestCase):
                 expected = np.zeros(1, dtype=output_type.dtype.name)
             cfunc(input_operand, input_operand, result)
             pyfunc(input_operand, input_operand, expected)
-            
+
             # Need special checks if NaNs are in results
             if np.isnan(expected).any() or np.isnan(result).any():
                 self.assertTrue(np.allclose(np.isnan(result), np.isnan(expected)))
