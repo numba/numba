@@ -543,7 +543,6 @@ class TestUFuncs(unittest.TestCase):
     def test_arcsin_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('arcsin', flags=flags)
 
-    @unittest.expectedFailure
     def test_arcsin_ufunc_npm(self):
         self.test_arcsin_ufunc(flags=no_pyobj_flags)
 

@@ -29,6 +29,9 @@ class NumpyModuleAttribute(AttributeTemplate):
     def resolve_arccos(self, mod):
         return types.Function(Numpy_arccos)
 
+    def resolve_arcsin(self, mod):
+        return types.Function(Numpy_arcsin)
+
     def resolve_add(self, mod):
         return types.Function(Numpy_add)
 
@@ -98,6 +101,10 @@ class Numpy_tan(Numpy_unary_ufunc):
 
 class Numpy_arccos(Numpy_unary_ufunc):
     key = numpy.arccos
+
+
+class Numpy_arcsin(Numpy_unary_ufunc):
+    key = numpy.arcsin
 
 
 class Numpy_exp(Numpy_unary_ufunc):
@@ -170,6 +177,7 @@ builtin_global(numpy.sin, types.Function(Numpy_sin))
 builtin_global(numpy.cos, types.Function(Numpy_cos))
 builtin_global(numpy.tan, types.Function(Numpy_tan))
 builtin_global(numpy.arccos, types.Function(Numpy_arccos))
+builtin_global(numpy.arcsin, types.Function(Numpy_arcsin))
 builtin_global(numpy.add, types.Function(Numpy_add))
 builtin_global(numpy.subtract, types.Function(Numpy_subtract))
 builtin_global(numpy.multiply, types.Function(Numpy_multiply))

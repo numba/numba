@@ -197,6 +197,26 @@ def numpy_arccos_scalar(context, builder, sig, args):
 for ty in types.number_domain:
     register(implement(numpy.arccos, ty)(numpy_arccos_scalar))
 
+@register
+@implement(numpy.arcsin, types.Kind(types.Array), types.Kind(types.Array))
+def numpy_arcsin(context, builder, sig, args):
+    imp = numpy_unary_ufunc(math.asin, asfloat=True)
+    return imp(context, builder, sig, args)
+
+def numpy_arcsin_scalar_input(context, builder, sig, args):
+    imp = numpy_unary_ufunc(math.asin, asfloat=True, scalar_input=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.arcsin, ty, types.Kind(types.Array))(numpy_arcsin_scalar_input))
+
+def numpy_arcsin_scalar(context, builder, sig, args):
+    imp = numpy_scalar_unary_ufunc(math.asin, asfloat=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.arcsin, ty)(numpy_arcsin_scalar))
+
 
 @register
 @implement(numpy.tan, types.Kind(types.Array), types.Kind(types.Array))
