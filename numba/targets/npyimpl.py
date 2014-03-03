@@ -609,7 +609,8 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
                         # Divide by zero
                         if ((scalar_inputs and tyinp2 in types.real_domain) or
                                 (not scalar_inputs and
-                                    tyinp2.dtype in types.real_domain)):
+                                    tyinp2.dtype in types.real_domain) or
+                                not numpy_support.int_divbyzero_returns_zero):
                             # If y is float and is 0 also, return Nan; else
                             # return Inf
                             outltype = context.get_data_type(tyout.dtype)
