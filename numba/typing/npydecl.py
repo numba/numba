@@ -44,6 +44,9 @@ class NumpyModuleAttribute(AttributeTemplate):
     def resolve_arctan(self, mod):
         return types.Function(Numpy_arctan)
 
+    def resolve_arctan2(self, mod):
+        return types.Function(Numpy_arctan2)
+
     def resolve_arccosh(self, mod):
         return types.Function(Numpy_arccosh)
 
@@ -203,6 +206,10 @@ class Numpy_divide(Numpy_binary_ufunc):
     key = numpy.divide
 
 
+class Numpy_arctan2(Numpy_binary_ufunc):
+    key = numpy.arctan2
+
+
 builtin_global(numpy, types.Module(numpy))
 builtin_global(numpy.absolute, types.Function(Numpy_absolute))
 builtin_global(numpy.exp, types.Function(Numpy_exp))
@@ -215,6 +222,7 @@ builtin_global(numpy.tanh, types.Function(Numpy_tanh))
 builtin_global(numpy.arccos, types.Function(Numpy_arccos))
 builtin_global(numpy.arcsin, types.Function(Numpy_arcsin))
 builtin_global(numpy.arctan, types.Function(Numpy_arctan))
+builtin_global(numpy.arctan2, types.Function(Numpy_arctan2))
 builtin_global(numpy.arccosh, types.Function(Numpy_arccosh))
 builtin_global(numpy.arcsinh, types.Function(Numpy_arcsinh))
 builtin_global(numpy.arctanh, types.Function(Numpy_arctanh))

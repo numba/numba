@@ -729,7 +729,6 @@ class TestUFuncs(unittest.TestCase):
     def test_arctan2_ufunc(self):
         self.binary_ufunc_test('arctan2')
 
-    @unittest.expectedFailure
     def test_arctan2_ufunc_npm(self):
         self.binary_ufunc_test('arctan2', flags=no_pyobj_flags)
 

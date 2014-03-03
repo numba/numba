@@ -534,10 +534,13 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
             i2ary = context.make_array(tyinp2)(context, builder, inp2)
         oary = context.make_array(tyout)(context, builder, out)
 
-        if scalar_inputs:
-            sig = typing.signature(tyout.dtype, tyinp1, tyinp2)
+        if asfloat and not divbyzero:
+            sig = typing.signature(types.float64, types.float64, types.float64)
         else:
-            sig = typing.signature(tyout.dtype, tyinp1.dtype, tyinp2.dtype)
+            if scalar_inputs:
+                sig = typing.signature(tyout.dtype, tyinp1, tyinp2)
+            else:
+                sig = typing.signature(tyout.dtype, tyinp1.dtype, tyinp2.dtype)
 
         fnwork = context.get_function(funckey, sig)
         intpty = context.get_value_type(types.intp)
@@ -635,20 +638,30 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
                                         (str(res.type), str(po.type.pointee))
                         builder.store(res, po)
             else:
-                # Handle other operations
+                # Handle non-division operations
                 if asfloat:
-                    tempres = fnwork(builder, [x, y])
+                    if scalar_inputs:
+                        d_x = context.cast(builder, x, tyinp1, types.float64)
+                        d_y = context.cast(builder, y, tyinp2, types.float64)
+                    else:
+                        d_x = context.cast(builder, x, tyinp1.dtype,
+                                           types.float64)
+                        d_y = context.cast(builder, y, tyinp2.dtype,
+                                           types.float64)
+                    tempres = fnwork(builder, [d_x, d_y])
                     res = context.cast(builder, tempres,
                                        types.float64, tyout.dtype)
                 elif scalar_inputs:
                     if tyinp1 != tyout.dtype:
                         tempres = fnwork(builder, [x, y])
-                        res = context.cast(builder, tempres, tyinp1, tyout.dtype)
+                        res = context.cast(builder, tempres, tyinp1,
+                                           tyout.dtype)
                     else:
                         res = fnwork(builder, (x, y))
                 elif tyinp1.dtype != tyout.dtype:
                     tempres = fnwork(builder, [x, y])
-                    res = context.cast(builder, tempres, tyinp1.dtype, tyout.dtype)
+                    res = context.cast(builder, tempres, tyinp1.dtype,
+                                       tyout.dtype)
                 else:
                     res = fnwork(builder, (x, y))
                 assert res.type == po.type.pointee, (res.type,
@@ -747,4 +760,19 @@ for ty in types.number_domain:
     register(implement(numpy.divide, ty, ty,
              types.Kind(types.Array))(numpy_divide_scalar_inputs))
 
+
+@register
+@implement(numpy.arctan2, types.Kind(types.Array), types.Kind(types.Array),
+           types.Kind(types.Array))
+def numpy_arctan2(context, builder, sig, args):
+    imp = numpy_binary_ufunc(math.atan2, asfloat=True)
+    return imp(context, builder, sig, args)
+
+def numpy_arctan2_scalar_inputs(context, builder, sig, args):
+    imp = numpy_binary_ufunc(math.atan2, asfloat=True, scalar_inputs=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.arctan2, ty, ty,
+                       types.Kind(types.Array))(numpy_arctan2_scalar_inputs))
 
