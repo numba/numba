@@ -9,6 +9,13 @@ from .cudapy.ptx import (threadIdx, blockIdx, blockDim, gridDim, syncthreads,
                          shared, local, const, grid, atomic)
 from .cudapy import jit, autojit, declare_device
 
+
+# Temperoary addition
+_profiling = require_context(driver.profiling)
+_profile_start = require_context(driver.profile_start)
+_profile_stop = require_context(driver.profile_stop)
+
+
 # NDarray device helper
 @require_context
 def to_device(ary, stream=0, copy=True, to=None):

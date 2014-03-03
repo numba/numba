@@ -45,6 +45,7 @@ cu_device_ptr = c_size_t        # defined as unsigned int on 32-bit
 cu_stream = c_void_p            # an opaque handle
 cu_event = c_void_p
 cu_link_state = c_void_p
+cu_output_mode = c_int
 
 CUDA_SUCCESS                              = 0
 CUDA_ERROR_INVALID_VALUE                  = 1
@@ -229,7 +230,7 @@ CU_JIT_THREADS_PER_BLOCK = 1
 # Option type: float
 # Applies to: compiler and linker
 
-CU_JIT_WALL_TIME = 2  
+CU_JIT_WALL_TIME = 2
 
 
 # Pointer to a buffer in which to print any log messages
@@ -322,7 +323,7 @@ CU_JIT_LOG_VERBOSE = 12
 CU_JIT_GENERATE_LINE_INFO = 13
 
 
-# Specifies whether to enable caching explicitly (-dlcm) 
+# Specifies whether to enable caching explicitly (-dlcm)
 # Choice is based on supplied ::CUjit_cacheMode_enum.
 # Option type: unsigned int for enumerated type ::CUjit_cacheMode_enum
 # Applies to: compiler only
@@ -422,7 +423,7 @@ class Driver(object):
 
         # CUresult cuDeviceGet(CUdevice *device, int ordinal);
         'cuDeviceGet':          (c_int, POINTER(cu_device), c_int),
-        
+
         # CUresult cuDeviceGetName ( char* name, int  len, CUdevice dev )
         'cuDeviceGetName':      (c_int, c_char_p, c_int, cu_device),
 
@@ -465,7 +466,7 @@ class Driver(object):
         # CUresult cuModuleGetFunction(CUfunction *hfunc, CUmodule hmod,
         #                              const char *name);
         'cuModuleGetFunction':  (c_int, cu_function, cu_module, c_char_p),
-        
+
         # CUresult CUDAAPI cuFuncSetCacheConfig(CUfunction hfunc,
         #                                       CUfunc_cache config);
         'cuFuncSetCacheConfig': (c_int, cu_function, c_uint),
@@ -489,7 +490,7 @@ class Driver(object):
         #                            size_t ByteCount, CUstream hStream);
         'cuMemcpyHtoDAsync':    (c_int, cu_device_ptr, c_void_p, c_size_t,
                                 cu_stream),
-        
+
         # CUresult cuMemcpyHtoD(CUdeviceptr dstDevice, const void *srcHost,
         #                       size_t ByteCount);
         'cuMemcpyDtoD':         (c_int, cu_device_ptr, cu_device_ptr, c_size_t),
@@ -593,7 +594,7 @@ class Driver(object):
 
         #    CUresult cuMemGetAddressRange	(	CUdeviceptr * 	pbase,
         #                                        size_t * 	psize,
-        #                                        CUdeviceptr 	dptr	 
+        #                                        CUdeviceptr 	dptr
         #                                        )
         'cuMemGetAddressRange': (c_int,
                                  POINTER(cu_device_ptr),
@@ -644,6 +645,15 @@ class Driver(object):
         #    cuLinkDestroy(CUlinkState state)
         'cuLinkDestroy': (c_int, cu_link_state),
 
+        # cuProfilerInitialize ( const char* configFile, const char*
+        # outputFile, CUoutput_mode outputMode )
+        # 'cuProfilerInitialize': (c_int, c_char_p, c_char_p, cu_output_mode),
+
+        # cuProfilerStart ( void )
+        'cuProfilerStart': (c_int,),
+
+        # cuProfilerStop ( void )
+        'cuProfilerStop': (c_int,),
 
         # NOTE: this is a dummy function to test if the defer error reporting
         'easteregg': (c_int,),
@@ -794,11 +804,11 @@ class Driver(object):
 
     def create_context(self, device=None):
         '''Create a new context.
-            
-        NOTE: If there is already a context for this module, 
+
+        NOTE: If there is already a context for this module,
               this function will raise Exception.
               We do not support multiple contexts per thread, yet.
-            
+
         device --- [optional] The device object to be used for the new context.
         '''
         if device is None:
@@ -1053,7 +1063,7 @@ class Stream(object):
     def __init__(self):
         self.device = self.driver.current_context().device
         self._handle = cu_stream()
-        
+
         flush_pending_free()
         error = self.driver.cuStreamCreate(byref(self._handle), 0)
         msg = 'Failed to create stream on %s' % self.device
@@ -1152,7 +1162,7 @@ class DeviceMemory(object):
     def _allocate(self, bytesize):
         assert not hasattr(self, '_handle'), "_handle is already defined"
         self._handle = cu_device_ptr()
-        
+
         flush_pending_free()
         error = self.driver.cuMemAlloc(byref(self._handle), bytesize)
         self.driver.check_error(error, 'Failed to allocate memory')
@@ -1184,7 +1194,7 @@ class DeviceView(object):
     @property
     def device_ctypes_pointer(self):
         return self._handle
-    
+
     @property
     def driver(self):
         return Driver()
@@ -1205,7 +1215,7 @@ class PinnedMemory(object):
         self._mapped = mapped
         if mapped:
             flags |= CU_MEMHOSTREGISTER_DEVICEMAP
-        
+
         flush_pending_free()
         error = self.driver.cuMemHostRegister(ptr, size, flags)
         self.driver.check_error(error, 'Failed to pin memory')
@@ -1229,7 +1239,7 @@ class PinnedMemory(object):
     @property
     def device_ctypes_pointer(self):
         return self._devmem
-    
+
     def __del__(self):
         self.device.resource_manager.free_resource(self._pointer,
                                                msg='Failed to unpin memory',
@@ -1270,7 +1280,7 @@ class Module(object):
         option_vals = (c_void_p * len(options))(*options.values())
 
         self._handle = cu_module()
-    
+
         flush_pending_free()
         status = self.driver.cuModuleLoadDataEx(byref(self._handle),
                                                 image,
@@ -1329,7 +1339,7 @@ class Function(object):
 
     def __str__(self):
         return 'CUDA kernel %s on %s' % (self.name, self)
-    
+
     def cache_config(self, prefer_equal=False, prefer_cache=False, prefer_shared=False):
         prefer_equal = prefer_equal or (prefer_cache and prefer_shared)
         if prefer_equal:
@@ -1340,7 +1350,7 @@ class Function(object):
             flag = CU_FUNC_CACHE_PREFER_SHARED
         else:
             flag = CU_FUNC_CACHE_PREFER_NONE
-   
+
         err = self.driver.cuFuncSetCacheConfig(self._handle, flag)
         self.driver.check_error(err, 'Failed to set cache config')
 
@@ -1414,7 +1424,7 @@ class Event(object):
         self.driver.check_error(error, 'Failed to synchronize event')
 
     def wait(self, stream=0):
-        '''All future works submitted to stream will wait util the event 
+        '''All future works submitted to stream will wait util the event
         completes.
         '''
         hstream = stream._handle if stream else 0
@@ -1471,7 +1481,7 @@ class Linker(object):
         self.linker_info_buf = linkerinfo
         self.linker_errors_buf = linkererrors
 
-        self._keep_alive = [linkerinfo, linkererrors, option_keys, option_vals] 
+        self._keep_alive = [linkerinfo, linkererrors, option_keys, option_vals]
 
     @property
     def info_log(self):
@@ -1615,7 +1625,7 @@ def device_pointer_type(devmem):
 def device_extents(devmem):
     """Find the extents (half open begin and end pointer) of the underlying
     device memory allocation.
-    
+
     NOTE: it always returns the extents of the allocation but the extents
     of the device memory view that can be a subsection of the entire allocation.
     """
@@ -1643,7 +1653,7 @@ def device_memory_size(devmem):
 def host_pointer(obj):
     """
     NOTE: The underlying data pointer from the host data buffer is used and
-    it should not be changed until the operation which can be asynchronous 
+    it should not be changed until the operation which can be asynchronous
     completes.
     """
     if isinstance(obj, (int, long)):
@@ -1681,7 +1691,7 @@ def device_ctypes_pointer(obj):
 def is_device_memory(obj):
     """All CUDA memory object is recognized as an instance with the attribute
     "__cuda_memory__" defined and its value evaluated to True.
-    
+
     All CUDA memory object should also define an attribute named
     "device_pointer" which value is an int(or long) object carrying the pointer
     value of the device memory address.  This is not tested in this method.
@@ -1696,7 +1706,7 @@ def require_device_memory(obj):
 
 def device_memory_depends(devmem, *objs):
     """Add dependencies to the device memory.
-    
+
     Mainly used for creating structures that points to other device memory,
     so that the referees are not GC and released.
     """
@@ -1707,7 +1717,7 @@ def device_memory_depends(devmem, *objs):
 def host_to_device(dst, src, size, stream=0):
     """
     NOTE: The underlying data pointer from the host data buffer is used and
-    it should not be changed until the operation which can be asynchronous 
+    it should not be changed until the operation which can be asynchronous
     completes.
     """
     driver = Driver()
@@ -1725,7 +1735,7 @@ def host_to_device(dst, src, size, stream=0):
 def device_to_host(dst, src, size, stream=0):
     """
     NOTE: The underlying data pointer from the host data buffer is used and
-    it should not be changed until the operation which can be asynchronous 
+    it should not be changed until the operation which can be asynchronous
     completes.
     """
     driver = Driver()
@@ -1744,7 +1754,7 @@ def device_to_host(dst, src, size, stream=0):
 def device_to_device(dst, src, size, stream=0):
     """
     NOTE: The underlying data pointer from the host data buffer is used and
-    it should not be changed until the operation which can be asynchronous 
+    it should not be changed until the operation which can be asynchronous
     completes.
     """
     driver = Driver()
@@ -1760,9 +1770,9 @@ def device_to_device(dst, src, size, stream=0):
     driver.check_error(error, "Failed to copy memory D->H")
 
 def device_memset(dst, val, size, stream=0):
-    """Memset on the device.  
+    """Memset on the device.
     If stream is not zero, asynchronous mode is used.
-    
+
     dst: device memory
     val: byte value to be written
     size: number of byte to be written
@@ -1779,3 +1789,27 @@ def device_memset(dst, val, size, stream=0):
 
     error = fn(device_pointer(dst), val, size, *varargs)
     driver.check_error(error, "Failed to memset")
+
+
+def profile_start():
+    driver = Driver()
+    err = driver.cuProfilerStart()
+    driver.check_error(err, "Failed to start profiler")
+
+
+def profile_stop():
+    driver = Driver()
+    err = driver.cuProfilerStop()
+    driver.check_error(err, "Failed to stop profiler")
+
+
+@contextlib.contextmanager
+def profiling():
+    """
+    Experimental profiling context.
+    """
+    profile_start()
+    yield
+    profile_stop()
+
+
