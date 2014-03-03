@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from collections import namedtuple, defaultdict
 from numba import (bytecode, interpreter, typing, typeinfer, lowering,
                    irpasses, utils, config, type_annotations, types, ir,
-                   assume, looplifting)
+                   assume, looplifting, macro)
 from numba.targets import cpu
 
 
@@ -241,6 +241,13 @@ def translate_stage(bytecode):
             print(syn)
 
     interp.verify()
+    macro.expand_macros(interp.blocks)
+
+    if config.DEBUG:
+        interp.dump()
+        for syn in interp.syntax_info:
+            print(syn)
+
     return interp
 
 

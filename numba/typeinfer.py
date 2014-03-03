@@ -321,11 +321,14 @@ class TypeInferer(object):
             calltypes[call] = signature
 
         for call, args, kws in self.usercalls:
-            fnty = typemap[call.func.name]
             args = tuple(typemap[a.name] for a in args)
             assert not kws
-            signature = self.context.resolve_function_type(fnty, args, ())
-            assert signature is not None, (fnty, args)
+            if isinstance(call.func, ir.Intrinsic):
+                signature = call.func.type
+            else:
+                fnty = typemap[call.func.name]
+                signature = self.context.resolve_function_type(fnty, args, ())
+                assert signature is not None, (fnty, args)
             calltypes[call] = signature
 
         for inst in self.setitemcalls:
@@ -477,7 +480,12 @@ class TypeInferer(object):
 
     def typeof_expr(self, inst, target, expr):
         if expr.op == 'call':
-            self.typeof_call(inst, target, expr)
+            if isinstance(expr.func, ir.Intrinsic):
+                restype = expr.func.type.return_type
+                self.typevars[target.name].add_types(restype)
+                self.usercalls.append((inst.value, expr.args, expr.kws))
+            else:
+                self.typeof_call(inst, target, expr)
         elif expr.op in ('getiter', 'iternext', 'iternextsafe', 'itervalid'):
             self.typeof_intrinsic_call(inst, target, expr.op, expr.value)
         elif expr.op == 'binop':

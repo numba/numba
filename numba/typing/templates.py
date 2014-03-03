@@ -177,6 +177,10 @@ class ClassAttrTemplate(AttributeTemplate):
         return self.clsdict[attr]
 
 
+class MacroTemplate(object):
+    pass
+
+
 # -----------------------------------------------------------------------------
 
 BUILTINS = []

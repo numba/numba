@@ -133,6 +133,21 @@ class Module(Type):
         return hash(self.pymod)
 
 
+class Macro(Type):
+    def __init__(self, template):
+        self.template = template
+        cls = type(self)
+        super(Macro, self).__init__("%s(%s)" % (cls.__name__, template))
+
+    def __eq__(self, other):
+        if isinstance(other, Macro):
+            return self.template == other.template
+
+    def __hash__(self):
+        # FIXME maybe this should not be hashable
+        return hash(self.template)
+
+
 class Function(Type):
     def __init__(self, template):
         self.template = template

@@ -296,7 +296,12 @@ class Lower(BaseLower):
             argvals = [self.loadvar(a.name) for a in expr.args]
             argtyps = [self.typeof(a.name) for a in expr.args]
             signature = self.fndesc.calltypes[expr]
-            fnty = self.typeof(expr.func.name)
+
+            if isinstance(expr.func, ir.Intrinsic):
+                fnty = expr.func.name
+            else:
+                fnty = self.typeof(expr.func.name)
+
             castvals = [self.context.cast(self.builder, av, at, ft)
                         for av, at, ft in zip(argvals, argtyps,
                                               signature.args)]

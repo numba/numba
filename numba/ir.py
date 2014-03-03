@@ -277,6 +277,21 @@ class Var(object):
         return self.name.startswith("$")
 
 
+class Intrinsic(object):
+    """
+    For inserting intrinsic node into the IR
+    """
+    def __init__(self, name, type):
+        self.name = name
+        self.type = type
+        self.loc = None
+
+    def __repr__(self):
+        return 'Intrinsic(%s, %s, %s)' % (self.name, self.type, self.loc)
+
+    def __str__(self):
+        return self.name
+
 class Scope(object):
     """
     Attributes

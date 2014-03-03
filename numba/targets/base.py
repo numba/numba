@@ -30,17 +30,16 @@ LTYPEMAP = {
 }
 
 STRUCT_TYPES = {
-    types.complex64:            builtins.Complex64,
-    types.complex128:           builtins.Complex128,
-    types.range_state32_type:   builtins.RangeState32,
-    types.range_iter32_type:    builtins.RangeIter32,
-    types.range_state64_type:   builtins.RangeState64,
-    types.range_iter64_type:    builtins.RangeIter64,
-    types.slice3_type:          builtins.Slice,
+    types.complex64: builtins.Complex64,
+    types.complex128: builtins.Complex128,
+    types.range_state32_type: builtins.RangeState32,
+    types.range_iter32_type: builtins.RangeIter32,
+    types.range_state64_type: builtins.RangeState64,
+    types.range_iter64_type: builtins.RangeIter64,
+    types.slice3_type: builtins.Slice,
 }
 
 Status = namedtuple("Status", ("code", "ok", "err", "exc", "none"))
-
 
 RETCODE_OK = Constant.int_signextend(Type.int(), 0)
 RETCODE_NONE = Constant.int_signextend(Type.int(), -2)
@@ -55,10 +54,10 @@ class Overloads(object):
         for ver in self.versions:
             if ver.signature == sig:
                 return ver
-            # As generic type
+                # As generic type
             if (len(ver.signature.args) == len(sig.args) or
                     (ver.signature.args and
-                     ver.signature.args[-1] == types.VarArg)):
+                             ver.signature.args[-1] == types.VarArg)):
                 match = True
                 for formal, actual in zip(ver.signature.args, sig.args):
                     if formal == types.VarArg:
@@ -83,7 +82,7 @@ class Overloads(object):
             # formal argument is any
             return True
         elif (isinstance(formal, types.Kind) and
-              isinstance(actual, formal.of)):
+                  isinstance(actual, formal.of)):
             # formal argument is a kind and the actual argument
             # is of that kind
             return True
@@ -103,6 +102,7 @@ class BaseContext(object):
     Only POD structure can life across function boundaries by copying the
     data.
     """
+
     def __init__(self, typing_context):
         self.address_size = tuple.__itemsize__ * 8
         self.typing_context = typing_context
@@ -225,7 +225,8 @@ class BaseContext(object):
                 isinstance(ty, types.Module) or
                 isinstance(ty, types.Function) or
                 isinstance(ty, types.Dispatcher) or
-                isinstance(ty, types.Object)):
+                isinstance(ty, types.Object) or
+                isinstance(ty, types.Macro)):
             return Type.pointer(Type.int(8))
 
         elif isinstance(ty, types.CPointer):
@@ -413,7 +414,7 @@ class BaseContext(object):
         fn = cgutils.get_function(builder)
         retptr = fn.args[0]
         assert retval.type == retptr.type.pointee, \
-                    (str(retval.type), str(retptr.type.pointee))
+            (str(retval.type), str(retptr.type.pointee))
         builder.store(retval, retptr)
         builder.ret(RETCODE_OK)
 
@@ -435,9 +436,9 @@ class BaseContext(object):
             return val
 
         elif ((fromty in types.unsigned_domain and
-               toty in types.signed_domain) or
-              (fromty in types.integer_domain and
-               toty in types.unsigned_domain)):
+                       toty in types.signed_domain) or
+                  (fromty in types.integer_domain and
+                           toty in types.unsigned_domain)):
             lfrom = self.get_value_type(fromty)
             lto = self.get_value_type(toty)
             if lfrom.width <= lto.width:
@@ -518,7 +519,7 @@ class BaseContext(object):
 
         elif (isinstance(toty, types.UniTuple) and
                   isinstance(fromty, types.UniTuple) and
-                  len(fromty) == len(toty)):
+                      len(fromty) == len(toty)):
             olditems = cgutils.unpack_tuple(builder, val, len(fromty))
             items = [self.cast(builder, i, fromty.dtype, toty.dtype)
                      for i in olditems]
@@ -689,6 +690,7 @@ class BaseContext(object):
 def _wrap_impl(imp, context, sig):
     def wrapped(builder, args):
         return imp(context, builder, sig, args)
+
     return wrapped
 
 
@@ -696,6 +698,7 @@ class ContextProxy(object):
     """
     Add localized environment for the context of the compiling unit.
     """
+
     def __init__(self, base):
         self.__base = base
         self.metdata = utils.UniqueDict()
