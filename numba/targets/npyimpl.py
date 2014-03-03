@@ -177,6 +177,26 @@ def numpy_cos_scalar(context, builder, sig, args):
 for ty in types.number_domain:
     register(implement(numpy.cos, ty)(numpy_cos_scalar))
 
+@register
+@implement(numpy.arccos, types.Kind(types.Array), types.Kind(types.Array))
+def numpy_arccos(context, builder, sig, args):
+    imp = numpy_unary_ufunc(math.acos, asfloat=True)
+    return imp(context, builder, sig, args)
+
+def numpy_arccos_scalar_input(context, builder, sig, args):
+    imp = numpy_unary_ufunc(math.acos, asfloat=True, scalar_input=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.arccos, ty, types.Kind(types.Array))(numpy_arccos_scalar_input))
+
+def numpy_arccos_scalar(context, builder, sig, args):
+    imp = numpy_scalar_unary_ufunc(math.acos, asfloat=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.arccos, ty)(numpy_arccos_scalar))
+
 
 @register
 @implement(numpy.tan, types.Kind(types.Array), types.Kind(types.Array))
