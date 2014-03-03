@@ -561,21 +561,18 @@ class TestUFuncs(unittest.TestCase):
     def test_sinh_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('sinh', flags=flags)
 
-    @unittest.expectedFailure
     def test_sinh_ufunc_npm(self):
         self.test_sinh_ufunc(flags=no_pyobj_flags)
 
     def test_cosh_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('cosh', flags=flags)
 
-    @unittest.expectedFailure
     def test_cosh_ufunc_npm(self):
         self.test_cosh_ufunc(flags=no_pyobj_flags)
 
     def test_tanh_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('tanh', flags=flags)
 
-    @unittest.expectedFailure
     def test_tanh_ufunc_npm(self):
         self.test_tanh_ufunc(flags=no_pyobj_flags)
 

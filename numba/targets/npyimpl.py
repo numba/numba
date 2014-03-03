@@ -135,6 +135,7 @@ def numpy_exp_scalar(context, builder, sig, args):
 for ty in types.number_domain:
     register(implement(numpy.exp, ty)(numpy_exp_scalar))
 
+# ------------------------------------------------------------------------------
 
 @register
 @implement(numpy.sin, types.Kind(types.Array), types.Kind(types.Array))
@@ -197,6 +198,70 @@ def numpy_tan_scalar(context, builder, sig, args):
 
 for ty in types.number_domain:
     register(implement(numpy.tan, ty)(numpy_tan_scalar))
+
+# ------------------------------------------------------------------------------
+
+@register
+@implement(numpy.sinh, types.Kind(types.Array), types.Kind(types.Array))
+def numpy_sinh(context, builder, sig, args):
+    imp = numpy_unary_ufunc(math.sinh, asfloat=True)
+    return imp(context, builder, sig, args)
+
+def numpy_sinh_scalar_input(context, builder, sig, args):
+    imp = numpy_unary_ufunc(math.sinh, asfloat=True, scalar_input=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.sinh, ty, types.Kind(types.Array))(numpy_sinh_scalar_input))
+
+def numpy_sinh_scalar(context, builder, sig, args):
+    imp = numpy_scalar_unary_ufunc(math.sinh, asfloat=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.sinh, ty)(numpy_sinh_scalar))
+
+
+@register
+@implement(numpy.cosh, types.Kind(types.Array), types.Kind(types.Array))
+def numpy_cosh(context, builder, sig, args):
+    imp = numpy_unary_ufunc(math.cosh, asfloat=True)
+    return imp(context, builder, sig, args)
+
+def numpy_cosh_scalar_input(context, builder, sig, args):
+    imp = numpy_unary_ufunc(math.cosh, asfloat=True, scalar_input=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.cosh, ty, types.Kind(types.Array))(numpy_cosh_scalar_input))
+
+def numpy_cosh_scalar(context, builder, sig, args):
+    imp = numpy_scalar_unary_ufunc(math.cosh, asfloat=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.cosh, ty)(numpy_cosh_scalar))
+
+
+@register
+@implement(numpy.tanh, types.Kind(types.Array), types.Kind(types.Array))
+def numpy_tanh(context, builder, sig, args):
+    imp = numpy_unary_ufunc(math.tanh, asfloat=True)
+    return imp(context, builder, sig, args)
+
+def numpy_tanh_scalar_input(context, builder, sig, args):
+    imp = numpy_unary_ufunc(math.tanh, asfloat=True, scalar_input=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.tanh, ty, types.Kind(types.Array))(numpy_tanh_scalar_input))
+
+def numpy_tanh_scalar(context, builder, sig, args):
+    imp = numpy_scalar_unary_ufunc(math.tanh, asfloat=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.tanh, ty)(numpy_tanh_scalar))
 
 # ------------------------------------------------------------------------------
 
