@@ -529,6 +529,17 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
         else:
             ndim = tyinp1.ndim
 
+        # Temporary hack for __ftol2 llvm bug. Don't allow storing
+        # float results in uint64 array on windows.
+        if scalar_inputs and tyinp1 in types.real_domain and \
+                tyout.dtype is types.uint64 and \
+                sys.platform.startswith('win32'):
+            raise TypeError('Cannot store result in uint64 array')
+        if not scalar_inputs and tyinp1.dtype in types.real_domain and \
+                tyout.dtype is types.uint64 and \
+                sys.platform.startswith('win32'):
+            raise TypeError('Cannot store result in uint64 array')
+
         if not scalar_inputs:
             i1ary = context.make_array(tyinp1)(context, builder, inp1)
             i2ary = context.make_array(tyinp2)(context, builder, inp2)

@@ -665,7 +665,7 @@ class TestUFuncs(unittest.TestCase):
                            types.Array(types.int32, 1, 'C'),
                            types.Array(types.uint64, 1, 'C')]
         self.binary_ufunc_test('divide', flags=flags,
-            skip_inputs=skip_inputs)
+            skip_inputs=skip_inputs, int_output_type=types.float64)
 
     def test_divide_ufunc_npm(self):
         self.test_divide_ufunc(flags=no_pyobj_flags)
