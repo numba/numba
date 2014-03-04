@@ -564,6 +564,9 @@ class PythonAPI(object):
         elif isinstance(typ, types.Array):
             return self.from_native_array(typ, val)
 
+        elif isinstance(typ, types.UniTuple):
+            return self.from_unituple(typ, val)
+
         raise NotImplementedError(typ)
 
     def to_native_array(self, typ, ary):
@@ -589,6 +592,24 @@ class PythonAPI(object):
         parent = nativeary.parent
         self.incref(parent)
         return parent
+    
+    def from_unituple(self, typ, val):
+
+        fnty = Type.function(self.pyobj, [Type.int()])
+        fn = self._get_function(fnty, name='PyTuple_New')
+        tuple_val = self.builder.call(fn,
+            [self.context.get_constant(types.int32, typ.count)])
+
+        fnty = Type.function(Type.int(), [self.pyobj, Type.int(), self.pyobj])
+        setitem_fn = self._get_function(fnty, name='PyTuple_SetItem')
+
+        for i in range(typ.count):
+            item = self.builder.extract_value(val, i)
+            obj = self.from_native_value(item, typ.dtype)
+            index = self.context.get_constant(types.int32, i)
+            self.builder.call(setitem_fn, [tuple_val, index, obj])
+
+        return tuple_val
 
     def numba_array_adaptor(self, ary, ptr):
         voidptr = Type.pointer(Type.int(8))
