@@ -4,10 +4,13 @@ This scripts specifies all PTX special objects.
 import operator
 import numpy
 import llvm.core as lc
+from numba import types as numbatypes
+from numba import ir, typing
 from numbapro.npm import types, macro, symbolic
 from numbapro.cudadrv import nvvm
 from numbapro._utils.mviewbuf import memoryview_get_extents
 from . import nvvmutils
+
 
 class Stub(object):
     '''A stub object to represent special objects which is meaningless
@@ -15,8 +18,10 @@ class Stub(object):
     '''
     _description_ = '<ptx special value>'
     __slots__ = () # don't allocate __dict__
+
     def __new__(cls):
         raise NotImplementedError("%s is not instantiable" % cls)
+
     def __repr__(self):
         return self._description_
 
@@ -24,18 +29,37 @@ class Stub(object):
 # SREG
 
 def _ptx_sreg_tidx(): pass
+
+
 def _ptx_sreg_tidy(): pass
+
+
 def _ptx_sreg_tidz(): pass
 
+
 def _ptx_sreg_ntidx(): pass
+
+
 def _ptx_sreg_ntidy(): pass
+
+
 def _ptx_sreg_ntidz(): pass
 
+
 def _ptx_sreg_ctaidx(): pass
+
+
 def _ptx_sreg_ctaidy(): pass
 
+
 def _ptx_sreg_nctaidx(): pass
+
+
 def _ptx_sreg_nctaidy(): pass
+
+
+
+SREG_SIGNATURE = typing.signature(numbatypes.int32)
 
 
 class threadIdx(Stub):
@@ -43,9 +67,10 @@ class threadIdx(Stub):
     '''
     _description_ = '<threadIdx.{x,y,z}>'
 
-    x = macro.Macro('threadIdx.x', _ptx_sreg_tidx)
-    y = macro.Macro('threadIdx.y', _ptx_sreg_tidy)
-    z = macro.Macro('threadIdx.z', _ptx_sreg_tidz)
+    x = macro.Macro('tid.x', SREG_SIGNATURE)
+    y = macro.Macro('tid.y', SREG_SIGNATURE)
+    z = macro.Macro('tid.z', SREG_SIGNATURE)
+
 
 class blockIdx(Stub):
     '''blockIdx.{x, y}
@@ -55,12 +80,14 @@ class blockIdx(Stub):
     x = macro.Macro('blockIdx.x', _ptx_sreg_ctaidx)
     y = macro.Macro('blockIdx.y', _ptx_sreg_ctaidy)
 
+
 class blockDim(Stub):
     '''blockDim.{x, y, z}
     '''
     x = macro.Macro('blockDim.x', _ptx_sreg_ntidx)
     y = macro.Macro('blockDim.y', _ptx_sreg_ntidy)
     z = macro.Macro('blockDim.z', _ptx_sreg_ntidz)
+
 
 class gridDim(Stub):
     '''gridDim.{x, y}
@@ -69,18 +96,19 @@ class gridDim(Stub):
     x = macro.Macro('gridDim.x', _ptx_sreg_nctaidx)
     y = macro.Macro('gridDim.y', _ptx_sreg_nctaidy)
 
+
 SREG_MAPPING = {
     _ptx_sreg_tidx: 'llvm.nvvm.read.ptx.sreg.tid.x',
     _ptx_sreg_tidy: 'llvm.nvvm.read.ptx.sreg.tid.y',
     _ptx_sreg_tidz: 'llvm.nvvm.read.ptx.sreg.tid.z',
-    
+
     _ptx_sreg_ntidx: 'llvm.nvvm.read.ptx.sreg.ntid.x',
     _ptx_sreg_ntidy: 'llvm.nvvm.read.ptx.sreg.ntid.y',
     _ptx_sreg_ntidz: 'llvm.nvvm.read.ptx.sreg.ntid.z',
-    
+
     _ptx_sreg_ctaidx: 'llvm.nvvm.read.ptx.sreg.ctaid.x',
     _ptx_sreg_ctaidy: 'llvm.nvvm.read.ptx.sreg.ctaid.y',
-    
+
     _ptx_sreg_nctaidx: 'llvm.nvvm.read.ptx.sreg.nctaid.x',
     _ptx_sreg_nctaidy: 'llvm.nvvm.read.ptx.sreg.nctaid.y',
 }
@@ -93,45 +121,42 @@ SREG_TYPE = types.uint32
 
 def _ptx_grid1d(): pass
 
+
 def _ptx_grid2d(): pass
 
-def grid_expand(args):
-    '''grid(ndim)
+
+def grid_expand(ndim):
+    """grid(ndim)
 
     ndim: [int] 1 or 2
-    
+
         if ndim == 1:
             return cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
         elif ndim == 2:
             x = cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
             y = cuda.threadIdx.y + cuda.blockIdx.y * cuda.blockDim.y
             return x, y
-    '''
-    if len(args) != 1:
-        raise ValueError('takes exactly 1 argument')
-    ndim, = args
-
-    try:
-        ndim = symbolic.const_value_from_inst(ndim)
-    except ValueError:
-        raise ValueError('argument must be constant')
-
+    """
     if ndim == 1:
-        return _ptx_grid1d
+        fname = "ptx.grid.1d"
+        restype = numbatypes.int32
     elif ndim == 2:
-        return _ptx_grid2d
+        fname = "ptx.grid.2d"
+        restype = numbatypes.UniTuple(numbatypes.int32, 2)
     else:
         raise ValueError('argument can only be 1 or 2')
 
+    return ir.Intrinsic(fname, typing.signature(restype, numbatypes.intp))
 
-grid = macro.Macro('grid', grid_expand, callable=True)
+
+grid = macro.Macro('ptx.grid', grid_expand, callable=True)
 
 #-------------------------------------------------------------------------------
 # synthreads
 
 class syncthreads(Stub):
-    '''syncthreads() 
-    
+    '''syncthreads()
+
     Synchronizes all threads in the thread block.
     '''
     _description_ = '<syncthread()>'
@@ -151,7 +176,6 @@ def _generic_array(args, symbol_name, addrspace, can_dynsized=False):
     except ValueError:
         raise ValueError('expecting constant value for shape')
     dtype = types.from_numba_type(dtype.value)
-
 
     if isinstance(shape, (tuple, list)):
         shape = shape
@@ -216,6 +240,7 @@ def _generic_array(args, symbol_name, addrspace, can_dynsized=False):
 def shared_array(args):
     return _generic_array(args, 'smem', nvvm.ADDRSPACE_SHARED,
                           can_dynsized=True)
+
 
 class shared(Stub):
     '''shared namespace
@@ -317,9 +342,10 @@ class atomic(Stub):
 
     class add(Stub):
         '''add(ary, idx, val)
-        
+
         Perform atomic ary[idx] += val
         '''
+
 
 __all__ = '''
 threadIdx
