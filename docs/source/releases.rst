@@ -8,6 +8,15 @@
 Release Notes
 ======================
 
+Version 0.12.2
+--------------
+
+Fixes:
+
+* Improved NumPy ufunc support in nopython mode
+* Misc bug fixes
+
+
 Version 0.12.1
 --------------
 
