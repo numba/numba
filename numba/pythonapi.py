@@ -592,24 +592,29 @@ class PythonAPI(object):
         parent = nativeary.parent
         self.incref(parent)
         return parent
-    
+
     def from_unituple(self, typ, val):
-
-        fnty = Type.function(self.pyobj, [Type.int()])
-        fn = self._get_function(fnty, name='PyTuple_New')
-        tuple_val = self.builder.call(fn,
-            [self.context.get_constant(types.int32, typ.count)])
-
-        fnty = Type.function(Type.int(), [self.pyobj, Type.int(), self.pyobj])
-        setitem_fn = self._get_function(fnty, name='PyTuple_SetItem')
+        tuple_val = self.tuple_new(typ.count)
 
         for i in range(typ.count):
             item = self.builder.extract_value(val, i)
             obj = self.from_native_value(item, typ.dtype)
-            index = self.context.get_constant(types.int32, i)
-            self.builder.call(setitem_fn, [tuple_val, index, obj])
-
+            self.tuple_setitem(tuple_val, i, obj)
+            
         return tuple_val
+
+    def tuple_new(self, count):
+        fnty = Type.function(self.pyobj, [Type.int()])
+        fn = self._get_function(fnty, name='PyTuple_New')
+        return self.builder.call(fn, [self.context.get_constant(types.int32,
+                                                                count)])
+
+    def tuple_setitem(self, tuple_val, index, item):
+        fnty = Type.function(Type.int(), [self.pyobj, Type.int(), self.pyobj])
+        setitem_fn = self._get_function(fnty, name='PyTuple_SetItem')
+        index = self.context.get_constant(types.int32, index)
+        self.builder.call(setitem_fn, [tuple_val, index, item])
+
 
     def numba_array_adaptor(self, ary, ptr):
         voidptr = Type.pointer(Type.int(8))
