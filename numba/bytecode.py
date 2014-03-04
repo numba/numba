@@ -7,7 +7,7 @@ import dis
 import sys
 import inspect
 from collections import namedtuple
-from numba import utils
+from numba import utils, targets
 from numba.config import PYVERSION
 
 opcode_info = namedtuple('opcode_info', ['argsize'])
@@ -265,6 +265,8 @@ class CustomByteCode(ByteCodeBase):
 
 class ByteCode(ByteCodeBase):
     def __init__(self, func):
+        if isinstance(func, targets.registry.CPUOverloaded):
+            func = func.py_func
         code = get_code_object(func)
         if not code:
             raise ByteCodeSupportError("%s does not provide its bytecode" %
