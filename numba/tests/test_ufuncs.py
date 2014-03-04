@@ -303,16 +303,17 @@ class TestUFuncs(unittest.TestCase):
                 expected = np.zeros(1, dtype=output_type.dtype.name)
 
             invalid_flag = False
-            with warnings.catch_warnings(record=True) as w:
+            with warnings.catch_warnings(record=True) as warnlist:
                 warnings.simplefilter('always')
 
                 pyfunc(input_operand, expected)
 
-                if (len(w) == 1
-                    and issubclass(w[-1].category, RuntimeWarning)
-                    and str(w[-1].message).startswith("invalid value " \
-                                                      "encountered")):
-                    invalid_flag = True
+                warnmsg = "invalid value encountered"
+                for thiswarn in warnlist:
+
+                    if (issubclass(thiswarn.category, RuntimeWarning)
+                        and str(thiswarn.message).startswith(warnmsg)):
+                        invalid_flag = True
 
             cfunc(input_operand, result)
 
