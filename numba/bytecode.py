@@ -13,6 +13,13 @@ from numba.config import PYVERSION
 opcode_info = namedtuple('opcode_info', ['argsize'])
 
 
+def get_function_object(obj):
+    attr = getattr(obj, "__numba__", None)
+    if attr:
+        return getattr(obj, attr)
+    return obj
+
+
 def get_code_object(obj):
     "Shamelessly borrowed from llpython"
     return getattr(obj, '__code__', getattr(obj, 'func_code', None))
@@ -120,6 +127,7 @@ def _as_opcodes(seq):
         if c is not None:
             lst.append(c)
     return lst
+
 
 BYTECODE_TABLE = _make_bytecode_table()
 
@@ -265,8 +273,7 @@ class CustomByteCode(ByteCodeBase):
 
 class ByteCode(ByteCodeBase):
     def __init__(self, func):
-        if isinstance(func, targets.registry.CPUOverloaded):
-            func = func.py_func
+        func = get_function_object(func)
         code = get_code_object(func)
         if not code:
             raise ByteCodeSupportError("%s does not provide its bytecode" %
