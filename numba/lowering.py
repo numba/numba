@@ -18,9 +18,14 @@ class LoweringError(Exception):
         super(LoweringError, self).__init__("%s\n%s" % (msg, loc.strformat()))
 
 
+def default_mangler(name, argtypes):
+    codedargs = '.'.join(str(a).replace(' ', '_') for a in argtypes)
+    return '.'.join([name, codedargs])
+
+
 class FunctionDescriptor(object):
     def __init__(self, native, pymod, name, doc, blocks, typemap,
-                 restype, calltypes, args, kws):
+                 restype, calltypes, args, kws, mangler=None):
         self.native = native
         self.pymod = pymod
         self.name = name
@@ -33,10 +38,9 @@ class FunctionDescriptor(object):
         self.restype = restype
         # Argument types
         self.argtypes = [self.typemap[a] for a in args]
-
         self.qualified_name = '.'.join([self.pymod.__name__, self.name])
-        codedargs = '.'.join(str(a).replace(' ', '_') for a in self.argtypes)
-        self.mangled_name = '.'.join([self.qualified_name, codedargs])
+        mangler = default_mangler if mangler is None else mangler
+        self.mangled_name = mangler(self.qualified_name, self.argtypes)
 
 
 def _describe(interp):
@@ -49,12 +53,12 @@ def _describe(interp):
     return fname, pymod, doc, args, kws
 
 
-def describe_function(interp, typemap, restype, calltypes):
+def describe_function(interp, typemap, restype, calltypes, mangler):
     fname, pymod, doc, args, kws = _describe(interp)
     native = True
     sortedblocks = utils.SortedMap(utils.dict_iteritems(interp.blocks))
     fd = FunctionDescriptor(native, pymod, fname, doc, sortedblocks,
-                            typemap, restype, calltypes, args, kws)
+                            typemap, restype, calltypes, args, kws, mangler)
     return fd
 
 

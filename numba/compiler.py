@@ -284,7 +284,8 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
 def native_lowering_stage(targetctx, interp, typemap, restype, calltypes,
                           nocompile):
     # Lowering
-    fndesc = lowering.describe_function(interp, typemap, restype, calltypes)
+    fndesc = lowering.describe_function(interp, typemap, restype, calltypes,
+                                        mangler=targetctx.mangler)
 
     lower = lowering.Lower(targetctx, fndesc)
     lower.lower()

@@ -103,6 +103,9 @@ class BaseContext(object):
     data.
     """
 
+    # Use default mangler (no specific requirement)
+    mangler = None
+
     def __init__(self, typing_context):
         self.address_size = tuple.__itemsize__ * 8
         self.typing_context = typing_context
