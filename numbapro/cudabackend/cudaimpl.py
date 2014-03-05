@@ -52,7 +52,7 @@ def ptx_grid1d(context, builder, sig, args):
     [ndim] = args
     tidx = _call_sreg(builder, "tid.x")
     ntidx = _call_sreg(builder, "ntid.x")
-    nctaidx = _call_sreg(builder, "nctaid.x")
+    nctaidx = _call_sreg(builder, "ctaid.x")
 
     res = builder.add(builder.mul(ntidx, nctaidx), tidx)
     return res
