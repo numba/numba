@@ -28,7 +28,7 @@ def impl_attribute(ty, attr, rtype):
     return wrapper
 
 
-def user_function(func, fndesc):
+def user_function(func, fndesc, libs):
     def imp(context, builder, sig, args):
         func = context.declare_function(cgutils.get_module(builder), fndesc)
         status, retval = context.call_function(builder, func, fndesc.restype,
@@ -38,6 +38,7 @@ def user_function(func, fndesc):
         return retval
     imp.signature = signature(fndesc.restype, *fndesc.argtypes)
     imp.key = func
+    imp.libs = tuple(libs)
     return imp
 
 

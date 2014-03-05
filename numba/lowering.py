@@ -326,6 +326,9 @@ class Lower(BaseLower):
                 # Normal function resolution
                 impl = self.context.get_function(fnty, signature)
                 res = impl(self.builder, castvals)
+                libs = getattr(impl, "libs", ())
+                if libs:
+                    self.context.add_libs(libs)
             return self.context.cast(self.builder, res, signature.return_type,
                                      resty)
 

@@ -140,8 +140,8 @@ class BaseContext(object):
         for attr in defns:
             self.attrs[attr.key] = attr
 
-    def insert_user_function(self, func, fndesc):
-        imp = user_function(func, fndesc)
+    def insert_user_function(self, func, fndesc, libs=()):
+        imp = user_function(func, fndesc, libs)
         self.defns[func].append(imp)
 
         baseclses = (typing.templates.ConcreteTemplate,)
@@ -690,11 +690,20 @@ class BaseContext(object):
         return cary._getvalue()
 
 
-def _wrap_impl(imp, context, sig):
-    def wrapped(builder, args):
-        return imp(context, builder, sig, args)
+class _wrap_impl(object):
+    def __init__(self, imp, context, sig):
+        self._imp = imp
+        self._context = context
+        self._sig = sig
 
-    return wrapped
+    def __call__(self, builder, args):
+        return self._imp(self._context, builder, self._sig, args)
+
+    def __getattr__(self, item):
+        return getattr(self._imp, item)
+
+    def __repr__(self):
+        return "<wrapped %s>" % self._imp
 
 
 class ContextProxy(object):
@@ -704,7 +713,11 @@ class ContextProxy(object):
 
     def __init__(self, base):
         self.__base = base
-        self.metdata = utils.UniqueDict()
+        self.metadata = utils.UniqueDict()
+        self.linking = set()
+
+    def add_libs(self, libs):
+        self.linking |= set(libs)
 
     def __getattr__(self, name):
         if not name.startswith('_'):
