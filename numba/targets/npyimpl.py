@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 import numpy
 import math
+import sys
 from llvm.core import Constant, Type
 from numba.utils import PYVERSION
 from numba import typing, types, cgutils
