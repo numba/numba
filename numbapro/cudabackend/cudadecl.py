@@ -5,7 +5,6 @@ from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     signature)
 from numbapro import cuda
 
-
 INTR_FUNCS = []
 INTR_ATTRS = []
 INTR_GLOBALS = []

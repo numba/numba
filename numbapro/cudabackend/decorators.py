@@ -1,7 +1,7 @@
+from __future__ import print_function, absolute_import, division
+from numba import sigutils, types
+from numbapro.cudabackend.compiler import compile_kernel, compile_device
 
-from numba import sigutils, compiler as numba_compiler
-from numba import types
-from numbapro.cudapy.compiler import compile_kernel, compile_device
 
 def jit(restype=None, argtypes=None, device=False, inline=False, bind=True,
         link=[], debug=False, **kws):

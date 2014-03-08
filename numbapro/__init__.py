@@ -6,9 +6,9 @@ import numba
 from numba import *
 from numbapro.decorators import autojit, jit
 from numbapro.vectorizers import vectorize, guvectorize
-from numbapro.cudadrv.initialize import initialize_gpu_target
-initialize_gpu_target()
-del initialize_gpu_target
+# from numbapro.cudadrv.initialize import initialize_gpu_target
+# initialize_gpu_target()
+# del initialize_gpu_target
 
 
 
