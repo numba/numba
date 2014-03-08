@@ -160,8 +160,14 @@ def int_spower_impl(context, builder, sig, args):
         y = builder.trunc(y, Type.int(32))
     elif y.type.width < 32:
         y = builder.sext(y, Type.int(32))
-    powerfn = lc.Function.intrinsic(module, lc.INTR_POWI, [x.type])
-    return builder.call(powerfn, (x, y))
+
+    if context.implement_powi_as_math_call:
+        undersig = typing.signature(sig.return_type, sig.args[0], types.int32)
+        impl = context.get_function(math.pow, undersig)
+        return impl(builder, (x, y))
+    else:
+        powerfn = lc.Function.intrinsic(module, lc.INTR_POWI, [x.type])
+        return builder.call(powerfn, (x, y))
 
 
 def int_upower_impl(context, builder, sig, args):
@@ -171,8 +177,14 @@ def int_upower_impl(context, builder, sig, args):
         y = builder.trunc(y, Type.int(32))
     elif y.type.width < 32:
         y = builder.zext(y, Type.int(32))
-    powerfn = lc.Function.intrinsic(module, lc.INTR_POWI, [x.type])
-    return builder.call(powerfn, (x, y))
+
+    if context.implement_powi_as_math_call:
+        undersig = typing.signature(sig.return_type, sig.args[0], types.int32)
+        impl = context.get_function(math.pow, undersig)
+        return impl(builder, (x, y))
+    else:
+        powerfn = lc.Function.intrinsic(module, lc.INTR_POWI, [x.type])
+        return builder.call(powerfn, (x, y))
 
 
 def int_power_func_body(context, builder, x, y):
@@ -589,8 +601,12 @@ def real_mod_impl(context, builder, sig, args):
 def real_power_impl(context, builder, sig, args):
     x, y = args
     module = cgutils.get_module(builder)
-    fn = lc.Function.intrinsic(module, lc.INTR_POW, [y.type])
-    return builder.call(fn, (x, y))
+    if context.implement_powi_as_math_call:
+        imp = context.get_function(math.pow, sig)
+        return imp(builder, args)
+    else:
+        fn = lc.Function.intrinsic(module, lc.INTR_POW, [y.type])
+        return builder.call(fn, (x, y))
 
 
 def real_lt_impl(context, builder, sig, args):

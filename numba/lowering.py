@@ -24,8 +24,13 @@ def default_mangler(name, argtypes):
 
 
 class FunctionDescriptor(object):
+    __slots__ = ('native', 'pymod', 'name', 'doc', 'blocks', 'typemap',
+                 'calltypes', 'args', 'kws', 'restype', 'argtypes',
+                 'qualified_name', 'mangled_name')
+
     def __init__(self, native, pymod, name, doc, blocks, typemap,
-                 restype, calltypes, args, kws, mangler=None):
+                 restype, calltypes, args, kws, mangler=None, argtypes=None,
+                 qualname=None):
         self.native = native
         self.pymod = pymod
         self.name = name
@@ -37,8 +42,9 @@ class FunctionDescriptor(object):
         self.kws = kws
         self.restype = restype
         # Argument types
-        self.argtypes = [self.typemap[a] for a in args]
-        self.qualified_name = '.'.join([self.pymod.__name__, self.name])
+        self.argtypes = argtypes or [self.typemap[a] for a in args]
+        self.qualified_name = qualname or '.'.join([self.pymod.__name__,
+                                                    self.name])
         mangler = default_mangler if mangler is None else mangler
         self.mangled_name = mangler(self.qualified_name, self.argtypes)
 
@@ -51,6 +57,15 @@ def _describe(interp):
     args = interp.argspec.args
     kws = ()        # TODO
     return fname, pymod, doc, args, kws
+
+
+def describe_external(name, restype, argtypes):
+    args = ["arg%d" % i for i in range(len(argtypes))]
+    fd = FunctionDescriptor(native=True, pymod=None, name=name, doc='',
+                            blocks=None, restype=restype, calltypes=None,
+                            argtypes=argtypes, args=args, kws=None,
+                            typemap=None, qualname=name, mangler=lambda a,x: a)
+    return fd
 
 
 def describe_function(interp, typemap, restype, calltypes, mangler):
@@ -259,6 +274,10 @@ class Lower(BaseLower):
                 return self.context.make_constant_array(self.builder, ty,
                                                         value.value)
 
+            elif isinstance(ty, types.UniTuple):
+                consts = [self.context.get_constant(t, v)
+                          for t, v in zip(ty, value.value)]
+                return cgutils.pack_array(self.builder, consts)
             else:
                 raise NotImplementedError('global', ty)
 
@@ -296,7 +315,7 @@ class Lower(BaseLower):
                                      resty)
 
         elif expr.op == 'call':
-            assert not expr.kws
+
             argvals = [self.loadvar(a.name) for a in expr.args]
             argtyps = [self.typeof(a.name) for a in expr.args]
             signature = self.fndesc.calltypes[expr]
@@ -305,6 +324,7 @@ class Lower(BaseLower):
                 fnty = expr.func.name
                 castvals = expr.func.args
             else:
+                assert not expr.kws, expr.kws
                 fnty = self.typeof(expr.func.name)
 
                 castvals = [self.context.cast(self.builder, av, at, ft)

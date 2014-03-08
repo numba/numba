@@ -106,6 +106,10 @@ class BaseContext(object):
     # Use default mangler (no specific requirement)
     mangler = None
 
+    # Force powi implementation as math.pow call
+    implement_powi_as_math_call = False
+    implement_pow_as_math_call = False
+
     def __init__(self, typing_context):
         self.address_size = tuple.__itemsize__ * 8
         self.typing_context = typing_context

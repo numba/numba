@@ -1,4 +1,5 @@
 from __future__ import print_function, division, absolute_import
+
 try:
     import __builtin__ as builtins
 except ImportError:
@@ -11,6 +12,7 @@ from numba import ir, controlflow, dataflow, utils
 class Interpreter(object):
     """A bytecode interpreter that builds up the IR.
     """
+
     def __init__(self, bytecode):
         self.bytecode = bytecode
         self.scopes = []
@@ -57,7 +59,7 @@ class Interpreter(object):
         # Interpret loop
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
-        # Clean up
+            # Clean up
         self._remove_invalid_syntax_blocks()
 
     def _remove_invalid_syntax_blocks(self):
@@ -73,7 +75,8 @@ class Interpreter(object):
             self._start_new_block(firstinst)
             for offset, kws in self.dfainfo.insts:
                 inst = self.bytecode[offset]
-                self.loc = ir.Loc(filename=self.bytecode.filename, line=inst.lineno)
+                self.loc = ir.Loc(filename=self.bytecode.filename,
+                                  line=inst.lineno)
                 yield inst, kws
 
     def _start_new_block(self, inst):
@@ -84,7 +87,7 @@ class Interpreter(object):
         if oldblock is not None and not oldblock.is_terminated:
             jmp = ir.Jump(inst.offset, loc=self.loc)
             oldblock.append(jmp)
-        # Get DFA block info
+            # Get DFA block info
         self.dfainfo = self.dfa.infos[self.current_block_offset]
         # Insert PHI
         self._insert_phi()
@@ -237,7 +240,7 @@ class Interpreter(object):
         else:
             step = self.get(step)
             sliceinst = ir.Expr.call(self.get(slicevar), (start, stop, step),
-                                     (), loc=self.loc)
+                (), loc=self.loc)
         self.store(value=sliceinst, name=res)
 
     def op_SLICE_0(self, inst, base, res, slicevar, indexvar):
@@ -543,7 +546,7 @@ class Interpreter(object):
 
     def _op_JUMP_IF(self, inst, pred, iftrue):
         brs = {
-            True:  inst.get_jump_target(),
+            True: inst.get_jump_target(),
             False: inst.next,
         }
         truebr = brs[iftrue]
@@ -577,20 +580,20 @@ class Interpreter(object):
         # There is a active syntax block
         if not self.syntax_blocks:
             return
-        # TOS is a Loop instance
+            # TOS is a Loop instance
         loop = self.syntax_blocks[-1]
         if not isinstance(loop, ir.Loop):
             return
-        # Its condition is not defined
+            # Its condition is not defined
         if loop.condition is not None:
             return
-        # One of the branches goes to a POP_BLOCK
+            # One of the branches goes to a POP_BLOCK
         for br in branches:
             if self.block_constains_opname(br, 'POP_BLOCK'):
                 break
         else:
             return
-        # Which is the exit of the loop
+            # Which is the exit of the loop
         if br not in self.cfa.blocks[loop.exit].incoming:
             return
 
