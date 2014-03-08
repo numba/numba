@@ -97,7 +97,8 @@ class CudaGUFuncVectorize(object):
         del argtypes
         del restype
         from numbapro import cuda
-        cudevfn = cuda.jit(sig, device=True, inline=True)(self.pyfunc)
+        cudevfn = cuda.jit(sig,
+                           device=True, inline=True)(self.pyfunc)
 
         dims = [len(x) for x in self.inputsig]
         dims += [len(x) for x in self.outputsig]

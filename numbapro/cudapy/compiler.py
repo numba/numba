@@ -146,39 +146,3 @@ class ExternalDeviceFunction(object):
     def __repr__(self):
         args = (self.name, self.return_type or 'void', self.args)
         return '<cuda external device function %s %s%s>' % args
-
-
-######
-from numba import compiler
-from numbapro.cudabackend import target
-
-
-def compile_cuda(pyfunc, args, debug):
-    # TODO handle debug flag
-    typingctx = target.CUDATypingContext()
-    targetctx = target.CUDATargetContext(typingctx)
-    flags = compiler.Flags()
-    # Do not compile, just lower
-    flags.set('no_compile')
-    # Run compilation pipeline
-    cres = compiler.compile_extra(typingctx=typingctx,
-                                  targetctx=targetctx,
-                                  func=pyfunc,
-                                  args=args,
-                                  return_type=types.void,      # must be void
-                                  flags=flags,
-                                  locals={})
-    # Prepare for NVVM
-    kernel = targetctx.prepare_for_nvvm(cres.llvm_func,
-                                        cres.signature.args)
-    return cres._replace(llvm_func=kernel)
-
-
-def compile_kernel(pyfunc, args, link, debug=False):
-    cres = compile_cuda(pyfunc, args, debug=debug)
-    cukern = CUDAKernel(llvm_module=cres.llvm_module,
-                        name=cres.llvm_func.name,
-                        argtypes=cres.signature.args,
-                        link=link)
-    return cukern
-

@@ -23,6 +23,7 @@ nvvm_program = c_void_p
 # Result code
 nvvm_result = c_int
 
+
 RESULT_CODE_NAMES = '''
 NVVM_SUCCESS
 NVVM_ERROR_OUT_OF_MEMORY
@@ -39,7 +40,6 @@ NVVM_ERROR_COMPILATION
 for i, k in enumerate(RESULT_CODE_NAMES):
     setattr(sys.modules[__name__], k, i)
 
-
 class NVVM(object):
     '''Process-wide singleton.
     '''
@@ -55,18 +55,15 @@ class NVVM(object):
         'nvvmDestroyProgram': (nvvm_result, POINTER(nvvm_program)),
 
         # nvvmResult nvvmAddModuleToProgram(nvvmProgram cu, const char *buffer, size_t size)
-        'nvvmAddModuleToProgram': (
-        nvvm_result, nvvm_program, c_char_p, c_size_t),
+        'nvvmAddModuleToProgram': (nvvm_result, nvvm_program, c_char_p, c_size_t),
 
         # nvvmResult nvvmCompileProgram(nvvmProgram cu, int numOptions,
         #                          const char **options)
-        'nvvmCompileProgram': (
-        nvvm_result, nvvm_program, c_int, POINTER(c_char_p)),
+        'nvvmCompileProgram': (nvvm_result, nvvm_program, c_int, POINTER(c_char_p)),
 
         # nvvmResult nvvmGetCompiledResultSize(nvvmProgram cu,
         #                                      size_t *bufferSizeRet)
-        'nvvmGetCompiledResultSize': (
-        nvvm_result, nvvm_program, POINTER(c_size_t)),
+        'nvvmGetCompiledResultSize': (nvvm_result, nvvm_program, POINTER(c_size_t)),
 
         # nvvmResult nvvmGetCompiledResult(nvvmProgram cu, char *buffer)
         'nvvmGetCompiledResult': (nvvm_result, nvvm_program, c_char_p),
@@ -119,7 +116,6 @@ class NVVM(object):
             else:
                 raise exc
 
-
 class CompilationUnit(finalizer.OwnerMixin):
     def __init__(self):
         self.driver = NVVM()
@@ -140,8 +136,7 @@ class CompilationUnit(finalizer.OwnerMixin):
          - The buffer should contain an NVVM module IR either in the bitcode
            representation (LLVM3.0) or in the text representation.
         '''
-        err = self.driver.nvvmAddModuleToProgram(self._handle, llvmir,
-                                                 len(llvmir))
+        err = self.driver.nvvmAddModuleToProgram(self._handle, llvmir, len(llvmir))
         self.driver.check_error(err, 'Failed to add module')
 
     def compile(self, **options):
@@ -175,7 +170,7 @@ class CompilationUnit(finalizer.OwnerMixin):
          *   - -fma=
          *     - 0 (disable FMA contraction)
          *     - 1 (default, enable FMA contraction)
-         *
+         *        
          '''
 
         # stringify options
@@ -204,7 +199,7 @@ class CompilationUnit(finalizer.OwnerMixin):
         # get result
         reslen = c_size_t()
         err = self.driver.nvvmGetCompiledResultSize(self._handle, byref(reslen))
-
+        
         self._try_error(err, 'Failed to get size of compiled result.')
 
         ptxbuf = (c_char * reslen.value)()
@@ -213,7 +208,7 @@ class CompilationUnit(finalizer.OwnerMixin):
 
         # get log
         self.log = self.get_log()
-
+        
         return ptxbuf[:]
 
     def _try_error(self, err, msg):
@@ -237,17 +232,15 @@ class CompilationUnit(finalizer.OwnerMixin):
 
         return ''
 
-
 data_layout = {
-    32: ('e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-'
-         'f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64'),
-    64: ('e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-'
-         'f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64')}
+32: ('e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-'
+    'f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64'),
+64: ('e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-'
+     'f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64')}
 
 default_data_layout = data_layout[tuple.__itemsize__ * 8]
 
 SUPPORTED_CC = frozenset([(2, 0), (3, 0), (3, 5)])
-
 
 def get_arch_option(major, minor):
     if major == 2:
@@ -263,17 +256,14 @@ def get_arch_option(major, minor):
     arch = 'compute_%d%d' % (major, minor)
     return arch
 
-
 MISSING_LIBDEVICE_MSG = '''
-Please define environment variable NUMBAPRO_LIBDEVICE=/path/to/libdevice
+Please define environment variable NUMBAPRO_LIBDEVICE=/path/to/libdevice 
 /path/to/libdevice -- is the path to the directory containing the libdevice.*.bc
 files in the installation of CUDA.  (requires CUDA >=5.5)
 '''
 
-
 class LibDevice(object):
     _cache_ = {}
-
     def __init__(self, arch):
         '''
         arch --- must be result from get_arch_option()
@@ -285,7 +275,6 @@ class LibDevice(object):
     def get(self):
         return self.bc
 
-
 def llvm_to_ptx(llvmir, **opts):
     cu = CompilationUnit()
     libdevice = LibDevice(arch=opts.get('arch', 'compute_20'))
@@ -296,7 +285,6 @@ def llvm_to_ptx(llvmir, **opts):
 
 re_fnattr_ref = re.compile('#\d+')
 re_fnattr_def = re.compile('attributes\s+(#\d+)\s*=\s*{((?:\s*\w+)+)\s*}')
-
 
 def llvm33_to_32_ir(ir):
     '''rewrite function attributes in the IR
@@ -320,7 +308,6 @@ def llvm33_to_32_ir(ir):
 
 def set_cuda_kernel(lfunc):
     from llvm.core import MetaData, MetaDataString, Constant, Type
-
     m = lfunc.module
 
     ops = lfunc, MetaDataString.get(m, "kernel"), Constant.int(Type.int(), 1)
@@ -328,7 +315,6 @@ def set_cuda_kernel(lfunc):
 
     nmd = m.get_or_insert_named_metadata('nvvm.annotations')
     nmd.add(md)
-
 
 def fix_data_layout(module):
     module.data_layout = default_data_layout

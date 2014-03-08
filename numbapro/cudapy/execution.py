@@ -1,7 +1,7 @@
 import copy
 import ctypes
-from numba import types
-from numbapro.cudadrv import devicearray, driver, nvvm
+from numbapro.npm import types
+from numbapro.cudadrv import devicearray, driver
 from numbapro.cudadrv.autotune import AutoTuner
 from numbapro.cudadrv.devices import get_context
 
@@ -63,120 +63,6 @@ class CUDAKernelBase(object):
 
 
 class CUDAKernel(CUDAKernelBase):
-    def __init__(self, llvm_module, name, argtypes, link=()):
-        super(CUDAKernel, self).__init__()
-        self.entry_name = name
-        self.argument_types = tuple(argtypes)
-        self._linking = tuple(link)
-        self._ptxmap = {}
-        self._funcmap = {}
-        self._llvmir = str(llvm_module)
-
-    def __call__(self, *args, **kwargs):
-        assert not kwargs
-        self._kernel_call(args=args,
-                          griddim=self.griddim,
-                          blockdim=self.blockdim,
-                          stream=self.stream,
-                          sharedmem=self.sharedmem)
-
-    def bind(self):
-        """
-        Force binding to current CUDA context
-        """
-        self._get_cufunction()
-
-    def _get_ptx(self):
-        """
-        Get or compile PTX for the current activate context
-
-        Uses compute capability as key for cache.
-        """
-        cuctx = get_context()
-        device = cuctx.device
-        cc = device.compute_capability
-        ptx = self._ptxmap.get(cc)
-        if ptx is None:
-            arch = nvvm.get_arch_option(*cc)
-            ptx = nvvm.llvm_to_ptx(self._llvmir, opt=3, arch=arch)
-            self._ptxmap[cc] = ptx
-        return ptx
-
-    def _get_cufunction(self):
-        """
-        Get or compile CUDA function for the current active context
-
-        Uses device ID as key for cache.
-        """
-        cuctx = get_context()
-        device = cuctx.device
-        cufunc = self._funcmap.get(device.id)
-        if cufunc is None:
-            ptx = self._get_ptx()
-            module = cuctx.create_module_ptx(ptx)
-            cufunc = module.get_function(self.entry_name)
-            self._funcmap[device.id] = cufunc
-        return cufunc
-
-    def _kernel_call(self, args, griddim, blockdim, stream=0, sharedmem=0):
-        # Prepare kernel
-        cufunc = self._get_cufunction()
-        # Prepare arguments
-        retr = []                       # hold functors for writeback
-        args = [self._prepare_args(t, v, stream, retr)
-                for t, v in zip(self.argument_types, args)]
-
-        # XXX
-        # # allocate space for exception
-        # if self.excs:
-        #     ctx = get_context()
-        #     excsize = ctypes.sizeof(ctypes.c_int32) * 6
-        #     excmem = ctx.memalloc(excsize)
-        #     driver.device_memset(excmem, 0, excsize)
-        #     args.append(excmem.device_ctypes_pointer)
-
-        # Configure kernel
-        cu_func = cufunc.configure(griddim, blockdim,
-                                             stream=stream,
-                                             sharedmem=sharedmem)
-        # invoke kernel
-        cu_func(*args)
-
-        # XXX
-        # # check exceptions
-        # if self.excs:
-        #     exchost = (ctypes.c_int32 * 6)()
-        #     driver.device_to_host(ctypes.addressof(exchost), excmem,
-        #                           excsize)
-        #     if exchost[0] != 0:
-        #         raise CUDARuntimeError(self.excs[exchost[0]].exc, *exchost[1:])
-
-        # retrieve auto converted arrays
-        for wb in retr:
-            wb()
-
-    def _prepare_args(self, ty, val, stream, retr):
-        if isinstance(ty, types.Array):
-            devary, conv = devicearray.auto_device(val, stream=stream)
-            if conv:
-                retr.append(lambda: devary.copy_to_host(val, stream=stream))
-            return devary.as_cuda_arg()
-        elif isinstance(ty, types.Complex):
-            raise NotImplementedError
-            ctx = get_context()
-            size = ctypes.sizeof(ty.desc.ctype_value())
-            dmem = ctx.memalloc(size)
-            cval = ty.desc.ctype_value()(val)
-            driver.host_to_device(dmem, ctypes.addressof(cval), size,
-                                  stream=stream)
-            return dmem
-        else:
-            raise NotImplementedError
-            return ty.ctype_pack_argument(val)
-
-
-
-class _CUDAKernel(CUDAKernelBase):
     """A callable object representing a CUDA kernel.
     """
 

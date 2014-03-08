@@ -3,6 +3,11 @@ import numpy as np
 
 from .cudadrv import initialize as _initialize
 from .cudadrv import devicearray, autotune, devices, driver
+# Re export
+from .cudapy.ptx import (threadIdx, blockIdx, blockDim, gridDim, syncthreads,
+                         shared, local, const, grid, atomic)
+from .cudapy import jit, autojit, declare_device
+
 
 # NDarray device helper
 
@@ -283,7 +288,3 @@ def detect():
 #
 is_available = _initialize.initialize()
 
-# Re export
-from .cudapy.ptx import (threadIdx, blockIdx, blockDim, gridDim, syncthreads,
-                         shared, local, const, grid, atomic)
-from .cudapy import jit, autojit, declare_device
