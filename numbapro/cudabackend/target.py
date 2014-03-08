@@ -3,8 +3,8 @@ import re
 from llvm.core import Type, Builder, LINKAGE_INTERNAL, inline_function
 from numba import typing, types
 from numba.targets.base import BaseContext
+from numba.targets.options import TargetOptions
 from numbapro.cudadrv import nvvm
-
 
 # -----------------------------------------------------------------------------
 # Typing
@@ -13,6 +13,7 @@ from numbapro.cudadrv import nvvm
 class CUDATypingContext(typing.Context):
     def __init__(self):
         from . import cudadecl
+
         super(CUDATypingContext, self).__init__()
         # Load CUDA intrinsics
         for ftcls in cudadecl.INTR_FUNCS:
@@ -35,16 +36,7 @@ class CUDATargetContext(BaseContext):
 
         self.insert_func_defn(cudaimpl.FUNCTIONS)
 
-    def mangler(self, name, argtypes):
-        def repl(m):
-            ch = m.group(0)
-            return "_%X_" % ord(ch)
-
-        qualified = name + '.' + '.'.join(str(a) for a in argtypes)
-        mangled = VALID_CHARS.sub(repl, qualified)
-        return mangled
-
-    def prepare_cuda_kernel(self, func, argtypes):
+    def prepare_for_nvvm(self, func, argtypes):
         # Adapt to CUDA LLVM
         module = func.module
         func.linkage = LINKAGE_INTERNAL
@@ -61,7 +53,8 @@ class CUDATargetContext(BaseContext):
         module = func.module
         argtys = self.get_arguments(func.type.pointee)
         fnty = Type.function(Type.void(), argtys)
-        wrapfn = module.add_function(fnty, name="cudaPy_" + func.name)
+        wrapname = self.mangle_name("cudaPy." + func.name)
+        wrapfn = module.add_function(fnty, name=wrapname)
         builder = Builder.new(wrapfn.append_basic_block(''))
 
         callargs = []
@@ -81,7 +74,15 @@ class CUDATargetContext(BaseContext):
         module.verify()
         return wrapfn
 
-    def link_dependencies(self, module, depends):
-        for lib in depends:
-            module.link_in(lib, preserve=True)
+    def mangle_name(self, name):
+        def repl(m):
+            ch = m.group(0)
+            return "_%X_" % ord(ch)
 
+        mangled = VALID_CHARS.sub(repl, name)
+        print(mangled)
+        return mangled
+
+
+class CPUTargetOptions(TargetOptions):
+    OPTIONS = {}
