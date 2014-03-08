@@ -3,9 +3,7 @@ from __future__ import print_function, absolute_import
 from numba import typing
 from numba.targets.base import BaseContext
 from numba.targets.options import TargetOptions
-from . import cudadecl
-from . import cudaimpl
-
+from .import intrinsics
 
 # -----------------------------------------------------------------------------
 # Typing
@@ -15,11 +13,11 @@ class CUDATypingContext(typing.Context):
     def __init__(self):
         super(CUDATypingContext, self).__init__()
         # Load CUDA intrinsics
-        for ftcls in cudadecl.INTR_FUNCS:
+        for ftcls in intrinsics.INTR_FUNCS:
             self.insert_function(ftcls(self))
-        for ftcls in cudadecl.INTR_ATTRS:
+        for ftcls in intrinsics.INTR_ATTRS:
             self.insert_attributes(ftcls(self))
-        for gv, gty in cudadecl.INTR_GLOBALS:
+        for gv, gty in intrinsics.INTR_GLOBALS:
             self.insert_global(gv, gty)
 
 
@@ -28,10 +26,9 @@ class CUDATypingContext(typing.Context):
 
 class CUDATargetContext(BaseContext):
     def init(self):
-        self.insert_func_defn(cudaimpl.FUNCTIONS)
+        pass
 
     def get_executable(self, func, fndesc):
-        print(func)
         raise NotImplementedError
 
 
