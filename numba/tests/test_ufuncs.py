@@ -5,8 +5,8 @@ import numba.unittest_support as unittest
 import numpy as np
 from numba.compiler import compile_isolated, Flags
 from numba import types, utils
-
 from numba.config import PYVERSION
+import itertools
 
 is32bits = tuple.__itemsize__ == 4
 iswindows = sys.platform.startswith('win32')
@@ -335,7 +335,6 @@ class TestUFuncs(unittest.TestCase):
                         self.fail("%s != %s" % (result, expected))
 
 
-    # TODO: test calling binary ufuncs with mixed input dtypes
     def binary_ufunc_test(self, ufunc_name, flags=enable_pyobj_flags,
                          skip_inputs=None, additional_inputs=None,
                          int_output_type=None, float_output_type=None):
@@ -930,6 +929,100 @@ class TestUFuncs(unittest.TestCase):
         print(utils.benchmark(bm_python, maxsec=.1))
         print(utils.benchmark(bm_numba, maxsec=.1))
         assert np.allclose(control, result)
+
+    def binary_ufunc_mixed_types_test(self, ufunc_name, flags=enable_pyobj_flags):
+        
+        ufunc = globals()[ufunc_name + '_usecase']
+
+        inputs1 = [
+            (1, types.uint32),
+            (-1, types.int32),
+
+            (1, types.uint64),
+            (-1, types.int64),
+
+            (0.5, types.float32),
+            (0.5, types.float64),
+
+            (np.array([0, 1], dtype='u4'), types.Array(types.uint32, 1, 'C')),
+            (np.array([-1, 1], dtype='i4'), types.Array(types.int32, 1, 'C')),
+            (np.array([0, 1], dtype='u8'), types.Array(types.uint64, 1, 'C')),
+            (np.array([-1, 1], dtype='i8'), types.Array(types.int64, 1, 'C')),
+            (np.array([-0.5, 0.5], dtype='f4'), types.Array(types.float32, 1, 'C')),
+            (np.array([-0.5, 0.5], dtype='f8'), types.Array(types.float64, 1, 'C'))]
+
+        inputs2 = inputs1
+
+        output_types = [types.Array(types.int32, 1, 'C'),
+                        types.Array(types.int64, 1, 'C'),
+                        types.Array(types.float32, 1, 'C'),
+                        types.Array(types.float64, 1, 'C')]
+
+        pyfunc = ufunc
+
+        for input1, input2, output_type in itertools.product(inputs1, inputs2, output_types):
+
+            input1_operand = input1[0]
+            input1_type = input1[1]
+ 
+            input2_operand = input2[0]
+            input2_type = input2[1]
+
+            # Skip division by unsigned int because of NumPy bugs
+            if ufunc_name == 'divide' and (input2_type == types.Array(types.uint32, 1, 'C') or 
+                    input2_type == types.Array(types.uint64, 1, 'C')):
+                continue
+
+            # Skip some subtraction tests because of NumPy bugs
+            if ufunc_name == 'subtract' and input1_type == types.Array(types.uint32, 1, 'C') and \
+                    input2_type == types.uint32 and types.Array(types.int64, 1, 'C'):
+                continue
+            if ufunc_name == 'subtract' and input1_type == types.Array(types.uint32, 1, 'C') and \
+                    input2_type == types.uint64 and types.Array(types.int64, 1, 'C'):
+                continue
+
+            if ((isinstance(input1_type, types.Array) or
+                    isinstance(input2_type, types.Array)) and
+                    not isinstance(output_type, types.Array)):
+                continue
+
+            cr = compile_isolated(pyfunc, (input1_type, input2_type, output_type),
+                                  flags=flags)
+            cfunc = cr.entry_point
+
+            if isinstance(input1_operand, np.ndarray):
+                result = np.zeros(input1_operand.size,
+                                  dtype=output_type.dtype.name)
+                expected = np.zeros(input1_operand.size,
+                                    dtype=output_type.dtype.name)
+            elif isinstance(input2_operand, np.ndarray):
+                result = np.zeros(input2_operand.size,
+                                  dtype=output_type.dtype.name)
+                expected = np.zeros(input2_operand.size,
+                                    dtype=output_type.dtype.name)
+            else:
+                result = np.zeros(1, dtype=output_type.dtype.name)
+                expected = np.zeros(1, dtype=output_type.dtype.name)
+
+            cfunc(input1_operand, input2_operand, result)
+            pyfunc(input1_operand, input2_operand, expected)
+
+            # Need special checks if NaNs are in results
+            if np.isnan(expected).any() or np.isnan(result).any():
+                self.assertTrue(np.allclose(np.isnan(result), np.isnan(expected)))
+                if not np.isnan(expected).all() and not np.isnan(result).all():
+                    self.assertTrue(np.allclose(result[np.invert(np.isnan(result))],
+                                     expected[np.invert(np.isnan(expected))]))
+            else:
+                self.assertTrue(np.all(result == expected) or
+                                np.allclose(result, expected))
+
+    @unittest.skip('Mixed types tests take a long time, so run manually.')
+    def test_mixed_types(self):
+        self.binary_ufunc_mixed_types_test('add', flags=no_pyobj_flags)
+        self.binary_ufunc_mixed_types_test('subtract', flags=no_pyobj_flags)
+        self.binary_ufunc_mixed_types_test('multiply', flags=no_pyobj_flags)
+        self.binary_ufunc_mixed_types_test('divide', flags=no_pyobj_flags)
 
 if __name__ == '__main__':
     unittest.main()

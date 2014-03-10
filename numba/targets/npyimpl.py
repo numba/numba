@@ -7,6 +7,7 @@ from numba.utils import PYVERSION
 from numba import typing, types, cgutils
 from numba.targets.imputils import implement
 from numba import numpy_support
+import itertools
 
 functions = []
 
@@ -525,82 +526,116 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
     def impl(context, builder, sig, args):
         [tyinp1, tyinp2, tyout] = sig.args
         [inp1, inp2, out] = args
-        if scalar_inputs:
-            ndim = 1
+
+        if isinstance(tyinp1, types.Array):
+            scalar_inp1 = False
+            scalar_tyinp1 = tyinp1.dtype
+            inp1_ndim = tyinp1.ndim
+        elif tyinp1 in types.number_domain:
+            scalar_inp1 = True
+            scalar_tyinp1 = tyinp1
+            inp1_ndim = 1
         else:
-            ndim = tyinp1.ndim
+            raise TypeError('unknown type for first operand')
+
+        if isinstance(tyinp2, types.Array):
+            scalar_inp2 = False
+            scalar_tyinp2 = tyinp2.dtype
+            inp2_ndim = tyinp2.ndim
+        elif tyinp2 in types.number_domain:
+            scalar_inp2 = True
+            scalar_tyinp2 = tyinp2
+            inp2_ndim = 1
+        else:
+            raise TypeError('unknown type for second operand')
+
+        out_ndim = tyout.ndim
+
+        if asfloat:
+            promote_type = types.float64
+        elif scalar_tyinp1 in types.real_domain or \
+                scalar_tyinp2 in types.real_domain:
+            promote_type = types.float64
+        elif scalar_tyinp1 in types.signed_domain or \
+                scalar_tyinp2 in types.signed_domain:
+            promote_type = types.int64
+        else:
+            promote_type = types.uint64
+
+        if promote_type == types.float64:
+            result_type = types.float64
+        elif promote_type == types.int64:
+            result_type = types.int64
+        else:
+            result_type = types.uint64
 
         # Temporary hack for __ftol2 llvm bug. Don't allow storing
         # float results in uint64 array on windows.
-        if scalar_inputs and tyinp1 in types.real_domain and \
+        if result_type in types.real_domain and \
                 tyout.dtype is types.uint64 and \
                 sys.platform.startswith('win32'):
             raise TypeError('Cannot store result in uint64 array')
-        if not scalar_inputs and tyinp1.dtype in types.real_domain and \
-                tyout.dtype is types.uint64 and \
-                sys.platform.startswith('win32'):
-            raise TypeError('Cannot store result in uint64 array')
+        
+        sig = typing.signature(result_type, promote_type, promote_type)
 
-        if not scalar_inputs:
+        if not scalar_inp1:
             i1ary = context.make_array(tyinp1)(context, builder, inp1)
+        if not scalar_inp2:
             i2ary = context.make_array(tyinp2)(context, builder, inp2)
         oary = context.make_array(tyout)(context, builder, out)
-
-        if asfloat and not divbyzero:
-            sig = typing.signature(types.float64, types.float64, types.float64)
-        else:
-            if scalar_inputs:
-                sig = typing.signature(tyout.dtype, tyinp1, tyinp2)
-            else:
-                sig = typing.signature(tyout.dtype, tyinp1.dtype, tyinp2.dtype)
 
         fnwork = context.get_function(funckey, sig)
         intpty = context.get_value_type(types.intp)
 
         # TODO handle differing shape by mimicking broadcasting
-        loopshape = cgutils.unpack_tuple(builder, oary.shape, ndim)
+        loopshape = cgutils.unpack_tuple(builder, oary.shape, out_ndim)
 
-        if scalar_inputs:
-            xyo_shape = [cgutils.unpack_tuple(builder, ary.shape, ndim)
-                         for ary in (oary,)]
-            xyo_strides = [cgutils.unpack_tuple(builder, ary.strides, ndim)
-                           for ary in (oary,)]
-            xyo_data = [ary.data for ary in (oary,)]
-            xyo_layout = [ty.layout for ty in (tyout,)]
-        else:
-            xyo_shape = [cgutils.unpack_tuple(builder, ary.shape, ndim)
-                         for ary in (i1ary, i2ary, oary)]
-            xyo_strides = [cgutils.unpack_tuple(builder, ary.strides, ndim)
-                           for ary in (i1ary, i2ary, oary)]
-            xyo_data = [ary.data for ary in (i1ary, i2ary, oary)]
-            xyo_layout = [ty.layout for ty in (tyinp1, tyinp2, tyout)]
+        if not scalar_inp1:
+            inp1_shape = cgutils.unpack_tuple(builder, i1ary.shape, inp1_ndim)
+            inp1_strides = cgutils.unpack_tuple(builder, i1ary.strides, inp1_ndim)
+            inp1_data = i1ary.data
+            inp1_layout = tyinp1.layout
+        if not scalar_inp2:
+            inp2_shape = cgutils.unpack_tuple(builder, i2ary.shape, inp2_ndim)
+            inp2_strides = cgutils.unpack_tuple(builder, i2ary.strides, inp2_ndim)
+            inp2_data = i2ary.data
+            inp2_layout = tyinp2.layout
+        out_shape = cgutils.unpack_tuple(builder, oary.shape, out_ndim)
+        out_strides = cgutils.unpack_tuple(builder, oary.strides, out_ndim)
+        out_data = oary.data
+        out_layout = tyout.layout
 
         with cgutils.loop_nest(builder, loopshape, intp=intpty) as indices:
-            if scalar_inputs:
-                [po] = [cgutils.get_item_pointer2(builder,
-                                               data=data, shape=shape,
-                                               strides=strides,
-                                               layout=layout,
-                                               inds=indices)
-                                for data, shape, strides, layout
-                                in zip(xyo_data, xyo_shape, xyo_strides,
-                                       xyo_layout)]
-            else:
-                [px, py, po] = [cgutils.get_item_pointer2(builder,
-                                                          data=data, shape=shape,
-                                                          strides=strides,
-                                                          layout=layout,
-                                                          inds=indices)
-                                for data, shape, strides, layout
-                                in zip(xyo_data, xyo_shape, xyo_strides,
-                                       xyo_layout)]
-
-            if scalar_inputs:
+            
+            if scalar_inp1:
                 x = inp1
+            else:
+                px = cgutils.get_item_pointer2(builder,
+                                               data=inp1_data,
+                                               shape=inp1_shape,
+                                               strides=inp1_strides,
+                                               layout=inp1_layout,
+                                               inds=indices)
+                x = builder.load(px)
+
+            if scalar_inp2:
                 y = inp2
             else:
-                x = builder.load(px)
+                py = cgutils.get_item_pointer2(builder,
+                                               data=inp2_data,
+                                               shape=inp2_shape,
+                                               strides=inp2_strides,
+                                               layout=inp2_layout,
+                                               inds=indices)
                 y = builder.load(py)
+
+            po = cgutils.get_item_pointer2(builder,
+                                           data=out_data,
+                                           shape=out_shape,
+                                           strides=out_strides,
+                                           layout=out_layout,
+                                           inds=indices)
+
             if divbyzero:
                 # Handle division
                 iszero = cgutils.is_scalar_zero(builder, y)
@@ -608,24 +643,19 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
                                                                        orelse):
                     with then:
                         # Divide by zero
-                        if ((scalar_inputs and tyinp2 in types.real_domain) or
-                                (not scalar_inputs and
-                                    tyinp2.dtype in types.real_domain) or
-                                not numpy_support.int_divbyzero_returns_zero):
+                        if (scalar_tyinp1 in types.real_domain or
+                                scalar_tyinp2 in types.real_domain) or \
+                                not numpy_support.int_divbyzero_returns_zero:
                             # If y is float and is 0 also, return Nan; else
                             # return Inf
-                            outltype = context.get_data_type(tyout.dtype)
+                            outltype = context.get_data_type(result_type)
                             shouldretnan = cgutils.is_scalar_zero(builder, x)
                             nan = Constant.real(outltype, float("nan"))
                             inf = Constant.real(outltype, float("inf"))
-                            res = builder.select(shouldretnan, nan, inf)
-                        elif (scalar_inputs and tyout in types.signed_domain and
-                                not numpy_support.int_divbyzero_returns_zero):
-                            res = Constant.int(context.get_data_type(tyout),
-                                               0x1 << (y.type.width-1))
-                        elif (not scalar_inputs and
-                                tyout.dtype in types.signed_domain and
-                                not numpy_support.int_divbyzero_returns_zero):
+                            tempres = builder.select(shouldretnan, nan, inf)
+                            res = context.cast(builder, tempres, result_type, tyout.dtype)
+                        elif tyout.dtype in types.signed_domain and \
+                                not numpy_support.int_divbyzero_returns_zero:
                             res = Constant.int(context.get_data_type(tyout.dtype),
                                                0x1 << (y.type.width-1))
                         else:
@@ -636,47 +666,21 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
                         builder.store(res, po)
                     with orelse:
                         # Normal
-                        tempres = fnwork(builder, (x, y))
-                        if scalar_inputs and tyinp1 in types.real_domain:
-                            res = context.cast(builder, tempres,
-                                               tyinp1, tyout.dtype)
-                        elif (not scalar_inputs and
-                                tyinp1.dtype in types.real_domain):
-                            res = context.cast(builder, tempres,
-                                               tyinp1.dtype, tyout.dtype)
-                        else:
-                            res = context.cast(builder, tempres,
-                                               types.float64, tyout.dtype)
-                        assert res.type == po.type.pointee, \
-                                        (str(res.type), str(po.type.pointee))
+                        d_x = context.cast(builder, x, scalar_tyinp1, promote_type)
+                        d_y = context.cast(builder, y, scalar_tyinp2, promote_type)
+                        tempres = fnwork(builder, [d_x, d_y])
+                        res = context.cast(builder, tempres, result_type, tyout.dtype)
+
+                        assert res.type == po.type.pointee, (res.type,
+                                                             po.type.pointee)
                         builder.store(res, po)
             else:
                 # Handle non-division operations
-                if asfloat:
-                    if scalar_inputs:
-                        d_x = context.cast(builder, x, tyinp1, types.float64)
-                        d_y = context.cast(builder, y, tyinp2, types.float64)
-                    else:
-                        d_x = context.cast(builder, x, tyinp1.dtype,
-                                           types.float64)
-                        d_y = context.cast(builder, y, tyinp2.dtype,
-                                           types.float64)
-                    tempres = fnwork(builder, [d_x, d_y])
-                    res = context.cast(builder, tempres,
-                                       types.float64, tyout.dtype)
-                elif scalar_inputs:
-                    if tyinp1 != tyout.dtype:
-                        tempres = fnwork(builder, [x, y])
-                        res = context.cast(builder, tempres, tyinp1,
-                                           tyout.dtype)
-                    else:
-                        res = fnwork(builder, (x, y))
-                elif tyinp1.dtype != tyout.dtype:
-                    tempres = fnwork(builder, [x, y])
-                    res = context.cast(builder, tempres, tyinp1.dtype,
-                                       tyout.dtype)
-                else:
-                    res = fnwork(builder, (x, y))
+                d_x = context.cast(builder, x, scalar_tyinp1, promote_type)
+                d_y = context.cast(builder, y, scalar_tyinp2, promote_type)
+                tempres = fnwork(builder, [d_x, d_y])
+                res = context.cast(builder, tempres, result_type, tyout.dtype)
+
                 assert res.type == po.type.pointee, (res.type,
                                                      po.type.pointee)
                 builder.store(res, po)
@@ -697,7 +701,13 @@ def numpy_add_scalar_inputs(context, builder, sig, args):
     return imp(context, builder, sig, args)
 
 for ty in types.number_domain:
-    register(implement(numpy.add, ty, ty,
+    register(implement(numpy.add, ty, types.Kind(types.Array),
+             types.Kind(types.Array))(numpy_add_scalar_inputs))
+    register(implement(numpy.add, types.Kind(types.Array), ty,
+             types.Kind(types.Array))(numpy_add_scalar_inputs))
+
+for ty1, ty2 in itertools.product(types.number_domain, types.number_domain):
+    register(implement(numpy.add, ty1, ty2,
              types.Kind(types.Array))(numpy_add_scalar_inputs))
 
 
@@ -712,8 +722,18 @@ def numpy_subtract_scalar_inputs(context, builder, sig, args):
     imp = numpy_binary_ufunc('-', scalar_inputs=True)
     return imp(context, builder, sig, args)
 
+for ty1, ty2 in itertools.product(types.number_domain, types.number_domain):
+    register(implement(numpy.subtract, ty1, ty2,
+             types.Kind(types.Array))(numpy_subtract_scalar_inputs))
+
 for ty in types.number_domain:
-    register(implement(numpy.subtract, ty, ty,
+    register(implement(numpy.subtract, ty, types.Kind(types.Array),
+             types.Kind(types.Array))(numpy_subtract_scalar_inputs))
+    register(implement(numpy.subtract, types.Kind(types.Array), ty,
+             types.Kind(types.Array))(numpy_subtract_scalar_inputs))
+
+for ty1, ty2 in itertools.product(types.number_domain, types.number_domain):
+    register(implement(numpy.subtract, ty1, ty2,
              types.Kind(types.Array))(numpy_subtract_scalar_inputs))
 
 
@@ -728,8 +748,18 @@ def numpy_multiply_scalar_inputs(context, builder, sig, args):
     imp = numpy_binary_ufunc('*', scalar_inputs=True)
     return imp(context, builder, sig, args)
 
+for ty1, ty2 in itertools.product(types.number_domain, types.number_domain):
+    register(implement(numpy.multiply, ty1, ty2,
+             types.Kind(types.Array))(numpy_multiply_scalar_inputs))
+
 for ty in types.number_domain:
-    register(implement(numpy.multiply, ty, ty,
+    register(implement(numpy.multiply, ty, types.Kind(types.Array),
+             types.Kind(types.Array))(numpy_multiply_scalar_inputs))
+    register(implement(numpy.multiply, types.Kind(types.Array), ty,
+             types.Kind(types.Array))(numpy_multiply_scalar_inputs))
+
+for ty1, ty2 in itertools.product(types.number_domain, types.number_domain):
+    register(implement(numpy.multiply, ty1, ty2,
              types.Kind(types.Array))(numpy_multiply_scalar_inputs))
 
 
@@ -770,7 +800,13 @@ def numpy_divide_scalar_inputs(context, builder, sig, args):
     return imp(context, builder, sig, args)
 
 for ty in types.number_domain:
-    register(implement(numpy.divide, ty, ty,
+    register(implement(numpy.divide, ty, types.Kind(types.Array),
+             types.Kind(types.Array))(numpy_divide_scalar_inputs))
+    register(implement(numpy.divide, types.Kind(types.Array), ty,
+             types.Kind(types.Array))(numpy_divide_scalar_inputs))
+
+for ty1, ty2 in itertools.product(types.number_domain, types.number_domain):
+    register(implement(numpy.divide, ty1, ty2,
              types.Kind(types.Array))(numpy_divide_scalar_inputs))
 
 
