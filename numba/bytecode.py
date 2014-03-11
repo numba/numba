@@ -7,10 +7,22 @@ import dis
 import sys
 import inspect
 from collections import namedtuple
-from numba import utils
+from numba import utils, targets
 from numba.config import PYVERSION
 
 opcode_info = namedtuple('opcode_info', ['argsize'])
+
+
+def get_function_object(obj):
+    """
+    Objects that wraps function should provide a "__numba__" magic attribute
+    that contains a name of an attribute that contains the actual python
+    function object.
+    """
+    attr = getattr(obj, "__numba__", None)
+    if attr:
+        return getattr(obj, attr)
+    return obj
 
 
 def get_code_object(obj):
@@ -120,6 +132,7 @@ def _as_opcodes(seq):
         if c is not None:
             lst.append(c)
     return lst
+
 
 BYTECODE_TABLE = _make_bytecode_table()
 
@@ -265,6 +278,7 @@ class CustomByteCode(ByteCodeBase):
 
 class ByteCode(ByteCodeBase):
     def __init__(self, func):
+        func = get_function_object(func)
         code = get_code_object(func)
         if not code:
             raise ByteCodeSupportError("%s does not provide its bytecode" %

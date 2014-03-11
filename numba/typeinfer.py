@@ -66,8 +66,14 @@ class TypeVar(object):
         assert nbefore <= nafter, "Must grow monotonically"
 
     def lock(self, typ):
-        self.typeset = set([typ])
-        self.locked = True
+        if self.locked:
+            [expect] = list(self.typeset)
+            if self.context.type_compatibility(typ, expect) is None:
+                raise TypingError("No convertsion from %s to %s for "
+                                  "'%s'" % (typ, expect, self.var))
+        else:
+            self.typeset = set([typ])
+            self.locked = True
 
     def union(self, other):
         self.add_types(*other.typeset)

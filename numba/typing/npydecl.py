@@ -173,13 +173,9 @@ class Numpy_binary_ufunc(AbstractTemplate):
         nargs = len(args)
         if nargs == 3:
             [inp1, inp2, out] = args
-            if isinstance(inp1, types.Array) and \
-                    isinstance(inp2, types.Array) and \
-                    isinstance(out, types.Array):
-                return signature(out, inp1, inp2, out)
-            elif inp1 in types.number_domain and \
-                    inp2 in types.number_domain and \
-                    isinstance(out, types.Array):
+            if isinstance(out, types.Array) and \
+                    (isinstance(inp1, types.Array) or inp1 in types.number_domain) or \
+                    (isinstance(inp2, types.Array) or inp2 in types.number_domain):
                 return signature(out, inp1, inp2, out)
         elif nargs == 2:
             [inp1, inp2] = args

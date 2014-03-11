@@ -15,7 +15,7 @@ class Overloaded(_dispatcher.Dispatcher):
     """
     Abstract class. Subclass should define targetdescr class attribute.
     """
-    # __numba__ = compile
+    __numba__ = "py_func"
 
     def __init__(self, py_func, locals={}, targetoptions={}):
         self.tm = default_type_manager
