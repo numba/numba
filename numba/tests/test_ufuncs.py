@@ -1020,6 +1020,76 @@ class TestUFuncs(unittest.TestCase):
         self.binary_ufunc_mixed_types_test('multiply', flags=no_pyobj_flags)
         self.binary_ufunc_mixed_types_test('divide', flags=no_pyobj_flags)
 
+
+    def test_broadcasting(self):
+
+        # Test unary ufunc
+        pyfunc = negative_usecase
+
+        input_operands = [
+            np.arange(3, dtype='i8'),
+            np.arange(3, dtype='i8').reshape(3,1),
+            np.arange(3, dtype='i8').reshape(1,3),
+            np.arange(3, dtype='i8').reshape(3,1),
+            np.arange(3, dtype='i8').reshape(1,3),
+            np.arange(3*3, dtype='i8').reshape(3,3)]
+
+        output_operands = [
+            np.zeros(3*3, dtype='i8').reshape(3,3),
+            np.zeros(3*3, dtype='i8').reshape(3,3),
+            np.zeros(3*3, dtype='i8').reshape(3,3),
+            np.zeros(3*3*3, dtype='i8').reshape(3,3,3),
+            np.zeros(3*3*3, dtype='i8').reshape(3,3,3),
+            np.zeros(3*3*3, dtype='i8').reshape(3,3,3)]
+
+        for x, result in zip(input_operands, output_operands):
+
+            input_type = types.Array(types.uint64, x.ndim, 'C')
+            output_type = types.Array(types.int64, result.ndim, 'C')
+
+            cr = compile_isolated(pyfunc, (input_type, output_type),
+                                  flags=no_pyobj_flags)
+            cfunc = cr.entry_point
+            
+            expected = np.zeros(result.shape, dtype=result.dtype)
+            np.negative(x, expected)
+
+            cfunc(x, result)
+            self.assertTrue(np.all(result == expected))
+
+        # Test binary ufunc
+        pyfunc = add_usecase
+
+        input1_operands = [
+            np.arange(3, dtype='u8'),
+            np.arange(3*3, dtype='u8').reshape(3,3),
+            np.arange(3*3*3, dtype='u8').reshape(3,3,3),
+            np.arange(3, dtype='u8').reshape(3,1),
+            np.arange(3, dtype='u8').reshape(1,3),
+            np.arange(3, dtype='u8').reshape(3,1,1),
+            np.arange(3*3, dtype='u8').reshape(3,3,1),
+            np.arange(3*3, dtype='u8').reshape(3,1,3),
+            np.arange(3*3, dtype='u8').reshape(1,3,3)]
+
+        input2_operands = input1_operands
+
+        for x, y in itertools.product(input1_operands, input2_operands):
+            
+            input1_type = types.Array(types.uint64, x.ndim, 'C')
+            input2_type = types.Array(types.uint64, y.ndim, 'C')
+            output_type = types.Array(types.uint64, max(x.ndim, y.ndim), 'C')
+
+            cr = compile_isolated(pyfunc, (input1_type, input2_type, output_type),
+                                  flags=no_pyobj_flags)
+            cfunc = cr.entry_point
+
+            expected = np.add(x, y)
+            result = np.zeros(expected.shape, dtype='u8')
+
+            cfunc(x, y, result)
+            self.assertTrue(np.all(result == expected))
+
+
 if __name__ == '__main__':
     unittest.main()
 
