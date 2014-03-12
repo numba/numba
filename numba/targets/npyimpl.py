@@ -17,6 +17,42 @@ def register(f):
     return f
 
 
+class npy:
+    """This will be used as an index of the npy_* functions"""
+    pass
+
+def unary_npy_math_extern(fn, f64extern):
+    setattr(npy, fn, f64extern)
+    fn_sym = eval("npy."+fn)
+    @register
+    @implement(fn_sym, types.int64)
+    def s64impl(context, builder, sig, args):
+        [val] = args
+        fpval = builder.sitofp(val, Type.double())
+        sig = signature(types.float64, types.float64)
+        return f64impl(context, builder, sig, [fpval])
+
+    @register
+    @implement(fn_sym, types.uint64)
+    def u64impl(context, builder, sig, args):
+        [val] = args
+        fpval = builder.uitofp(val, Type.double())
+        sig = signature(types.float64, types.float64)
+        return f64impl(context, builder, sig, [fpval])
+
+    @register
+    @implement(fn_sym, types.float64)
+    def f64impl(context, builder, sig, args):
+        [val] = args
+        mod = cgutils.get_module(builder)
+        fnty = Type.function(Type.double(), [Type.double()])
+        fn = mod.get_or_insert_function(fnty, name=f64extern)
+        return builder.call(fn, (val,))
+
+
+unary_npy_math_extern("exp2", "numba.numpy.math.exp2")
+
+
 def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
     def impl(context, builder, sig, args):
         [tyinp, tyout] = sig.args
@@ -136,6 +172,31 @@ def numpy_exp_scalar(context, builder, sig, args):
 
 for ty in types.number_domain:
     register(implement(numpy.exp, ty)(numpy_exp_scalar))
+
+@register
+@implement(numpy.exp2, types.Kind(types.Array), types.Kind(types.Array))
+def numpy_exp2(context, builder, sig, args):
+    imp = numpy_unary_ufunc(npy.exp2, asfloat=True)
+    return imp(context, builder, sig, args)
+
+def numpy_exp2_scalar_input(context, builder, sig, args):
+    imp = numpy_unary_ufunc(npy.exp2, asfloat=True, scalar_input=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.exp2, ty,
+                       types.Kind(types.Array)
+                       )(numpy_exp2_scalar_input))
+
+
+def numpy_exp2_scalar(context, builder, sig, args):
+    imp = numpy_scalar_unary_ufunc(npy.exp2, asfloat=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.exp2, ty)(numpy_exp_scalar))
+
+
 
 # ------------------------------------------------------------------------------
 

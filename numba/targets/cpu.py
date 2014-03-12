@@ -21,7 +21,6 @@ def _windows_symbol_hacks_32bits():
         assert ftol
         le.dylib_add_symbol("_ftol2", ftol)
 
-
 class CPUContext(BaseContext):
     def init(self):
         self.execmodule = lc.Module.new("numba.exec")
@@ -37,6 +36,7 @@ class CPUContext(BaseContext):
 
         # map math functions
         self.map_math_functions()
+        self.map_numpy_math_functions()
 
         # Add target specific implementations
         self.insert_func_defn(mathimpl.functions)
@@ -45,7 +45,8 @@ class CPUContext(BaseContext):
     def build_pass_manager(self):
         if config.OPT == 3:
             # This uses the same passes for clang -O3
-            pms = lp.build_pass_managers(tm=self.tm, opt=3, loop_vectorize=True,
+            pms = lp.build_pass_managers(tm=self.tm, opt=3,
+                                         loop_vectorize=True,
                                          fpm=False)
             return pms.pm
         else:
@@ -113,6 +114,44 @@ class CPUContext(BaseContext):
                 imp = getattr(_helperlib, "get_%s" % fname)
                 le.dylib_add_symbol(fname, imp())
                 self.cmath_provider[fname] = 'indirect'
+
+    def map_numpy_math_functions(self):
+        # add the symbols for numpy math to the execution environment.
+
+        # These symbols seem to be defined in the umath dylib (may be
+        # present in other libs linked with numpy as well)
+        # This may not work if the symbols are stripped and we may want
+        # to build a dynamic library exporting these symbols instead of
+        # relying in the ones in umath.
+
+        # the current method will likely pollute a lot the namespace of
+        # the execution environment
+        import numpy.core.umath as npy_umath
+        le.dylib_import_library(npy_umath.__file__)
+        symbols = [ "sin", "cos", "tan", "sinh", "cosh", "tanh",
+                    "asin", "acos", "atan", "aexp", "alog", "asqrt",
+                    "afabs",
+                    "log", "log10", "exp", "sqrt",
+                    "fabs", "ceil", "fmod", "floor",
+                    "expm1", "log1p", "hypot", "acosh", "asinh", "atanh",
+                    "rint", "trunc", "exp2", "log2",
+                    "atan2", "pow", "modf", "copysign", "nextafter",
+                    "spacing",
+                    #non-standard but in npy_math
+                    "deg2rad", "rad2deg", "logaddexp", "logaddexp2",
+                    ]
+
+            # convenience: remap symbols with a 'numpy.math' scope.
+        for fname in symbols:
+            try:
+                func = le.dylib_address_of_symbol("npy_"+fname)
+                assert(func)
+                name = "numba.numpy.math."+fname
+                le.dylib_add_symbol(name, func)
+            except Exception, e:
+                pass
+
+
 
     def dynamic_map_function(self, func):
         name, ptr = self.native_funcs[func]

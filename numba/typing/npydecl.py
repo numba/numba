@@ -14,6 +14,9 @@ class NumpyModuleAttribute(AttributeTemplate):
     def resolve_exp(self, mod):
         return types.Function(Numpy_exp)
 
+    def resolve_exp2(self, mod):
+        return types.Function(Numpy_exp2)
+
     def resolve_sqrt(self, mod):
         return types.Function(Numpy_sqrt)
 
@@ -145,7 +148,8 @@ class Numpy_arctanh(Numpy_unary_ufunc):
 
 class Numpy_exp(Numpy_unary_ufunc):
     key = numpy.exp
-
+class Numpy_exp2(Numpy_unary_ufunc):
+    key = numpy.exp2
 
 class Numpy_negative(Numpy_unary_ufunc):
     key = numpy.negative
@@ -209,6 +213,7 @@ class Numpy_arctan2(Numpy_binary_ufunc):
 builtin_global(numpy, types.Module(numpy))
 builtin_global(numpy.absolute, types.Function(Numpy_absolute))
 builtin_global(numpy.exp, types.Function(Numpy_exp))
+builtin_global(numpy.exp2, types.Function(Numpy_exp2))
 builtin_global(numpy.sin, types.Function(Numpy_sin))
 builtin_global(numpy.cos, types.Function(Numpy_cos))
 builtin_global(numpy.tan, types.Function(Numpy_tan))
