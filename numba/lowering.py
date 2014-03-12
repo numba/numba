@@ -303,12 +303,13 @@ class Lower(BaseLower):
 
             if isinstance(expr.func, ir.Intrinsic):
                 fnty = expr.func.name
+                castvals = expr.func.args
             else:
                 fnty = self.typeof(expr.func.name)
 
-            castvals = [self.context.cast(self.builder, av, at, ft)
-                        for av, at, ft in zip(argvals, argtyps,
-                                              signature.args)]
+                castvals = [self.context.cast(self.builder, av, at, ft)
+                            for av, at, ft in zip(argvals, argtyps,
+                                                  signature.args)]
 
             if isinstance(fnty, types.Method):
                 # Method of objects are handled differently

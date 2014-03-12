@@ -63,7 +63,7 @@ def expand_macros_in_block(constants, block):
                     if isinstance(value, Macro):
                         macro = value
                         if not macro.callable:
-                            intr = ir.Intrinsic(macro.name, macro.func)
+                            intr = ir.Intrinsic(macro.name, macro.func, args=())
                             inst.value = ir.Expr.call(func=intr, args=(),
                                                       kws=(), loc=rhs.loc)
 

@@ -281,16 +281,18 @@ class Intrinsic(object):
     """
     For inserting intrinsic node into the IR
     """
-    def __init__(self, name, type):
+    def __init__(self, name, type, args):
         self.name = name
         self.type = type
         self.loc = None
+        self.args = args
 
     def __repr__(self):
         return 'Intrinsic(%s, %s, %s)' % (self.name, self.type, self.loc)
 
     def __str__(self):
         return self.name
+
 
 class Scope(object):
     """
