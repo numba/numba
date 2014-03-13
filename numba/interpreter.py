@@ -475,7 +475,7 @@ class Interpreter(object):
     def op_INPLACE_ADD(self, inst, lhs, rhs, res):
         self._inplace_binop('+', lhs, rhs, res)
 
-    def op_INPLACE_SUBSTRACT(self, inst, lhs, rhs, res):
+    def op_INPLACE_SUBTRACT(self, inst, lhs, rhs, res):
         self._inplace_binop('-', lhs, rhs, res)
 
     def op_INPLACE_MULTIPLY(self, inst, lhs, rhs, res):
