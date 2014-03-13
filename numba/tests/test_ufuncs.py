@@ -931,27 +931,17 @@ class TestUFuncs(unittest.TestCase):
         ufunc = globals()[ufunc_name + '_usecase']
 
         inputs1 = [
-            (1, types.uint32),
-            (-1, types.int32),
-
             (1, types.uint64),
             (-1, types.int64),
-
-            (0.5, types.float32),
             (0.5, types.float64),
 
-            (np.array([0, 1], dtype='u4'), types.Array(types.uint32, 1, 'C')),
-            (np.array([-1, 1], dtype='i4'), types.Array(types.int32, 1, 'C')),
             (np.array([0, 1], dtype='u8'), types.Array(types.uint64, 1, 'C')),
             (np.array([-1, 1], dtype='i8'), types.Array(types.int64, 1, 'C')),
-            (np.array([-0.5, 0.5], dtype='f4'), types.Array(types.float32, 1, 'C')),
             (np.array([-0.5, 0.5], dtype='f8'), types.Array(types.float64, 1, 'C'))]
 
         inputs2 = inputs1
 
-        output_types = [types.Array(types.int32, 1, 'C'),
-                        types.Array(types.int64, 1, 'C'),
-                        types.Array(types.float32, 1, 'C'),
+        output_types = [types.Array(types.int64, 1, 'C'),
                         types.Array(types.float64, 1, 'C')]
 
         pyfunc = ufunc
@@ -1013,11 +1003,7 @@ class TestUFuncs(unittest.TestCase):
                 self.assertTrue(np.all(result == expected) or
                                 np.allclose(result, expected))
 
-    @unittest.skip('Mixed types tests take a long time, so run manually.')
     def test_mixed_types(self):
-        self.binary_ufunc_mixed_types_test('add', flags=no_pyobj_flags)
-        self.binary_ufunc_mixed_types_test('subtract', flags=no_pyobj_flags)
-        self.binary_ufunc_mixed_types_test('multiply', flags=no_pyobj_flags)
         self.binary_ufunc_mixed_types_test('divide', flags=no_pyobj_flags)
 
 
