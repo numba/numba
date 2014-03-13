@@ -148,7 +148,7 @@ class CPUContext(BaseContext):
                 assert(func)
                 name = "numba.numpy.math."+fname
                 le.dylib_add_symbol(name, func)
-            except Exception, e:
+            except Exception as e:
                 pass
 
 
