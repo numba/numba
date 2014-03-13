@@ -53,6 +53,7 @@ def unary_npy_math_extern(fn):
 
 unary_npy_math_extern("exp2")
 unary_npy_math_extern("log")
+unary_npy_math_extern("log2")
 
 def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
     def impl(context, builder, sig, args):
@@ -221,6 +222,30 @@ def numpy_log_scalar(context, builder, sig, args):
 
 for ty in types.number_domain:
     register(implement(numpy.log, ty)(numpy_exp_scalar))
+
+
+@register
+@implement(numpy.log2, types.Kind(types.Array), types.Kind(types.Array))
+def numpy_log2(context, builder, sig, args):
+    imp = numpy_unary_ufunc(npy.log2, asfloat=True)
+    return imp(context, builder, sig, args)
+
+def numpy_log2_scalar_input(context, builder, sig, args):
+    imp = numpy_unary_ufunc(npy.log2, asfloat=True, scalar_input=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.log2, ty,
+                       types.Kind(types.Array)
+                       )(numpy_log2_scalar_input))
+
+
+def numpy_log2_scalar(context, builder, sig, args):
+    imp = numpy_scalar_unary_ufunc(npy.log2, asfloat=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.log2, ty)(numpy_exp_scalar))
 
 
 

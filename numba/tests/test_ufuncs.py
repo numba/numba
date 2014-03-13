@@ -495,7 +495,6 @@ class TestUFuncs(unittest.TestCase):
     def test_log2_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('log2', flags=flags)
 
-    @unittest.expectedFailure
     def test_log2_ufunc_npm(self):
         self.test_log2_ufunc(flags=no_pyobj_flags)
 
