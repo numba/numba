@@ -501,7 +501,6 @@ class TestUFuncs(unittest.TestCase):
     def test_log10_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('log10', flags=flags)
 
-    @unittest.expectedFailure
     def test_log10_ufunc_npm(self):
         self.test_log10_ufunc(flags=no_pyobj_flags)
 

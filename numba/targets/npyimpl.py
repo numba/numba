@@ -54,6 +54,7 @@ def unary_npy_math_extern(fn):
 unary_npy_math_extern("exp2")
 unary_npy_math_extern("log")
 unary_npy_math_extern("log2")
+unary_npy_math_extern("log10")
 
 def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
     def impl(context, builder, sig, args):
@@ -197,7 +198,7 @@ def numpy_exp2_scalar(context, builder, sig, args):
     return imp(context, builder, sig, args)
 
 for ty in types.number_domain:
-    register(implement(numpy.exp2, ty)(numpy_exp_scalar))
+    register(implement(numpy.exp2, ty)(numpy_exp2_scalar))
 
 
 @register
@@ -221,7 +222,7 @@ def numpy_log_scalar(context, builder, sig, args):
     return imp(context, builder, sig, args)
 
 for ty in types.number_domain:
-    register(implement(numpy.log, ty)(numpy_exp_scalar))
+    register(implement(numpy.log, ty)(numpy_log_scalar))
 
 
 @register
@@ -245,11 +246,35 @@ def numpy_log2_scalar(context, builder, sig, args):
     return imp(context, builder, sig, args)
 
 for ty in types.number_domain:
-    register(implement(numpy.log2, ty)(numpy_exp_scalar))
+    register(implement(numpy.log2, ty)(numpy_log2_scalar))
 
+
+@register
+@implement(numpy.log10, types.Kind(types.Array), types.Kind(types.Array))
+def numpy_log10(context, builder, sig, args):
+    imp = numpy_unary_ufunc(npy.log10, asfloat=True)
+    return imp(context, builder, sig, args)
+
+def numpy_log10_scalar_input(context, builder, sig, args):
+    imp = numpy_unary_ufunc(npy.log10, asfloat=True, scalar_input=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.log10, ty,
+                       types.Kind(types.Array)
+                       )(numpy_log10_scalar_input))
+
+
+def numpy_log10_scalar(context, builder, sig, args):
+    imp = numpy_scalar_unary_ufunc(npy.log10, asfloat=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.log10, ty)(numpy_log10_scalar))
 
 
 # ------------------------------------------------------------------------------
+
 
 @register
 @implement(numpy.sin, types.Kind(types.Array), types.Kind(types.Array))
@@ -313,7 +338,9 @@ def numpy_tan_scalar(context, builder, sig, args):
 for ty in types.number_domain:
     register(implement(numpy.tan, ty)(numpy_tan_scalar))
 
+
 # ------------------------------------------------------------------------------
+
 
 @register
 @implement(numpy.sinh, types.Kind(types.Array), types.Kind(types.Array))
