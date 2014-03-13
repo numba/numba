@@ -1,10 +1,14 @@
 import math
 from numba import types, utils
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
-                                    builtin_global, builtin, signature)
+                                    signature, Registry)
+
+registry = Registry()
+builtin_attr = registry.register_attr
+builtin_global = registry.register_global
 
 
-@builtin
+@builtin_attr
 class MathModuleAttribute(AttributeTemplate):
     key = types.Module(math)
 

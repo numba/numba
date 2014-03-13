@@ -5,8 +5,8 @@ from llvm.core import Type, Constant
 import numpy
 from numba import types, utils, cgutils, typing
 from numba.pythonapi import PythonAPI
-from numba.targets.imputils import (user_function, python_attr_impl, BUILTINS,
-                                    BUILTIN_ATTRS)
+from numba.targets.imputils import (user_function, python_attr_impl,
+                                    builtin_registry)
 from numba.targets import builtins
 
 
@@ -114,8 +114,8 @@ class BaseContext(object):
         self.attrs = utils.UniqueDict()
         self.users = utils.UniqueDict()
 
-        self.insert_func_defn(BUILTINS)
-        self.insert_attr_defn(BUILTIN_ATTRS)
+        self.insert_func_defn(builtin_registry.functions)
+        self.insert_attr_defn(builtin_registry.attributes)
 
         # Initialize
         self.init()

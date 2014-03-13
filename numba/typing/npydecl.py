@@ -1,10 +1,14 @@
 import numpy
 from numba import types
 from numba.typing.templates import (AttributeTemplate, AbstractTemplate,
-                                    builtin_global, builtin, signature)
+                                    Registry, signature)
+
+registry = Registry()
+builtin_global = registry.register_global
+builtin_attr = registry.register_attr
 
 
-@builtin
+@builtin_attr
 class NumpyModuleAttribute(AttributeTemplate):
     key = types.Module(numpy)
 
@@ -83,6 +87,7 @@ class NumpyModuleAttribute(AttributeTemplate):
     def resolve_sign(self, mod):
         return types.Function(Numpy_sign)
 
+
 class Numpy_unary_ufunc(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
@@ -113,32 +118,48 @@ class Numpy_absolute(Numpy_unary_ufunc):
 
 class Numpy_sin(Numpy_unary_ufunc):
     key = numpy.sin
+
+
 class Numpy_cos(Numpy_unary_ufunc):
     key = numpy.cos
+
+
 class Numpy_tan(Numpy_unary_ufunc):
     key = numpy.tan
 
 
 class Numpy_sinh(Numpy_unary_ufunc):
     key = numpy.sinh
+
+
 class Numpy_cosh(Numpy_unary_ufunc):
     key = numpy.cosh
+
+
 class Numpy_tanh(Numpy_unary_ufunc):
     key = numpy.tanh
 
 
 class Numpy_arccos(Numpy_unary_ufunc):
     key = numpy.arccos
+
+
 class Numpy_arcsin(Numpy_unary_ufunc):
     key = numpy.arcsin
+
+
 class Numpy_arctan(Numpy_unary_ufunc):
     key = numpy.arctan
 
 
 class Numpy_arccosh(Numpy_unary_ufunc):
     key = numpy.arccosh
+
+
 class Numpy_arcsinh(Numpy_unary_ufunc):
     key = numpy.arcsinh
+
+
 class Numpy_arctanh(Numpy_unary_ufunc):
     key = numpy.arctanh
 
@@ -178,7 +199,7 @@ class Numpy_binary_ufunc(AbstractTemplate):
                     isinstance(out, types.Array):
                 return signature(out, inp1, inp2, out)
             elif inp1 in types.number_domain and \
-                    inp2 in types.number_domain and \
+                            inp2 in types.number_domain and \
                     isinstance(out, types.Array):
                 return signature(out, inp1, inp2, out)
         elif nargs == 2:

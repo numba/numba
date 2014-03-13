@@ -102,7 +102,7 @@ def resolve_overload(context, key, cases, args, kws):
             else:
                 ratings.append(rate.astuple())
                 candids.append(case)
-    # Find the best case
+                # Find the best case
     ordered = sorted(zip(ratings, candids), key=lambda i: i[0])
     if ordered:
         if len(ordered) > 1:
@@ -181,20 +181,29 @@ class MacroTemplate(object):
     pass
 
 
-# -----------------------------------------------------------------------------
+# -----------------------------
 
-BUILTINS = []
-BUILTIN_ATTRS = []
-BUILTIN_GLOBALS = []
+class Registry(object):
+    def __init__(self):
+        self.functions = []
+        self.attributes = []
+        self.globals = []
+
+    def register(self, item):
+        assert issubclass(item, FunctionTemplate)
+        self.functions.append(item)
+        return item
+
+    def register_attr(self, item):
+        assert issubclass(item, AttributeTemplate)
+        self.attributes.append(item)
+        return item
+
+    def register_global(self, v, t):
+        self.globals.append((v, t))
 
 
-def builtin(template):
-    if issubclass(template, AttributeTemplate):
-        BUILTIN_ATTRS.append(template)
-    else:
-        BUILTINS.append(template)
-    return template
-
-
-def builtin_global(v, t):
-    BUILTIN_GLOBALS.append((v, t))
+builtin_registry = Registry()
+builtin = builtin_registry.register
+builtin_attr = builtin_registry.register_attr
+builtin_global = builtin_registry.register_global

@@ -1,18 +1,13 @@
 from __future__ import print_function, division, absolute_import
 import numpy
 import math
-from llvm.core import Constant, Type
-from numba.utils import PYVERSION
+from llvm.core import Constant
 from numba import typing, types, cgutils
-from numba.targets.imputils import implement
+from numba.targets.imputils import implement, Registry
 from numba import numpy_support
 
-functions = []
-
-
-def register(f):
-    functions.append(f)
-    return f
+registry = Registry()
+register = registry.register
 
 
 def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
@@ -79,10 +74,10 @@ def numpy_scalar_unary_ufunc(funckey, asfloat=True):
         [tyinp] = sig.args
         tyout = sig.return_type
         [inp] = args
-            
+
         if asfloat:
             sig = typing.signature(types.float64, types.float64)
-        
+
         fnwork = context.get_function(funckey, sig)
         if asfloat:
             inp = context.cast(builder, inp, tyinp, types.float64)
