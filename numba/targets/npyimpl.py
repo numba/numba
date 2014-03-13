@@ -21,8 +21,8 @@ class npy:
     """This will be used as an index of the npy_* functions"""
     pass
 
-def unary_npy_math_extern(fn, f64extern):
-    setattr(npy, fn, f64extern)
+def unary_npy_math_extern(fn):
+    setattr(npy, fn, fn)
     fn_sym = eval("npy."+fn)
     @register
     @implement(fn_sym, types.int64)
@@ -40,18 +40,19 @@ def unary_npy_math_extern(fn, f64extern):
         sig = signature(types.float64, types.float64)
         return f64impl(context, builder, sig, [fpval])
 
+    n = "numba.numpy.math." + fn
     @register
     @implement(fn_sym, types.float64)
     def f64impl(context, builder, sig, args):
         [val] = args
         mod = cgutils.get_module(builder)
         fnty = Type.function(Type.double(), [Type.double()])
-        fn = mod.get_or_insert_function(fnty, name=f64extern)
+        fn = mod.get_or_insert_function(fnty, name=n)
         return builder.call(fn, (val,))
 
 
-unary_npy_math_extern("exp2", "numba.numpy.math.exp2")
-
+unary_npy_math_extern("exp2")
+unary_npy_math_extern("log")
 
 def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
     def impl(context, builder, sig, args):
@@ -173,6 +174,7 @@ def numpy_exp_scalar(context, builder, sig, args):
 for ty in types.number_domain:
     register(implement(numpy.exp, ty)(numpy_exp_scalar))
 
+
 @register
 @implement(numpy.exp2, types.Kind(types.Array), types.Kind(types.Array))
 def numpy_exp2(context, builder, sig, args):
@@ -195,6 +197,30 @@ def numpy_exp2_scalar(context, builder, sig, args):
 
 for ty in types.number_domain:
     register(implement(numpy.exp2, ty)(numpy_exp_scalar))
+
+
+@register
+@implement(numpy.log, types.Kind(types.Array), types.Kind(types.Array))
+def numpy_log(context, builder, sig, args):
+    imp = numpy_unary_ufunc(npy.log, asfloat=True)
+    return imp(context, builder, sig, args)
+
+def numpy_log_scalar_input(context, builder, sig, args):
+    imp = numpy_unary_ufunc(npy.log, asfloat=True, scalar_input=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.log, ty,
+                       types.Kind(types.Array)
+                       )(numpy_log_scalar_input))
+
+
+def numpy_log_scalar(context, builder, sig, args):
+    imp = numpy_scalar_unary_ufunc(npy.log, asfloat=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.log, ty)(numpy_exp_scalar))
 
 
 
