@@ -507,7 +507,6 @@ class TestUFuncs(unittest.TestCase):
     def test_expm1_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('expm1', flags=flags)
 
-    @unittest.expectedFailure
     def test_expm1_ufunc_npm(self):
         self.test_expm1_ufunc(flags=no_pyobj_flags)
 

@@ -52,6 +52,7 @@ def unary_npy_math_extern(fn):
 
 
 unary_npy_math_extern("exp2")
+unary_npy_math_extern("expm1")
 unary_npy_math_extern("log")
 unary_npy_math_extern("log2")
 unary_npy_math_extern("log10")
@@ -263,6 +264,30 @@ def numpy_exp2_scalar(context, builder, sig, args):
 
 for ty in types.number_domain:
     register(implement(numpy.exp2, ty)(numpy_exp2_scalar))
+
+
+@register
+@implement(numpy.expm1, types.Kind(types.Array), types.Kind(types.Array))
+def numpy_expm1(context, builder, sig, args):
+    imp = numpy_unary_ufunc(npy.expm1, asfloat=True)
+    return imp(context, builder, sig, args)
+
+def numpy_expm1_scalar_input(context, builder, sig, args):
+    imp = numpy_unary_ufunc(npy.expm1, asfloat=True, scalar_input=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.expm1, ty,
+                       types.Kind(types.Array)
+                       )(numpy_expm1_scalar_input))
+
+
+def numpy_expm1_scalar(context, builder, sig, args):
+    imp = numpy_scalar_unary_ufunc(npy.expm1, asfloat=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.expm1, ty)(numpy_expm1_scalar))
 
 
 @register

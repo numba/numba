@@ -17,6 +17,9 @@ class NumpyModuleAttribute(AttributeTemplate):
     def resolve_exp2(self, mod):
         return types.Function(Numpy_exp2)
 
+    def resolve_expm1(self, mod):
+        return types.Function(Numpy_expm1)
+
     def resolve_log(self, mod):
         return types.Function(Numpy_log)
 
@@ -159,6 +162,9 @@ class Numpy_exp(Numpy_unary_ufunc):
     key = numpy.exp
 class Numpy_exp2(Numpy_unary_ufunc):
     key = numpy.exp2
+class Numpy_expm1(Numpy_unary_ufunc):
+    key = numpy.expm1
+
 class Numpy_log(Numpy_unary_ufunc):
     key = numpy.log
 class Numpy_log2(Numpy_unary_ufunc):
@@ -229,6 +235,7 @@ builtin_global(numpy, types.Module(numpy))
 builtin_global(numpy.absolute, types.Function(Numpy_absolute))
 builtin_global(numpy.exp, types.Function(Numpy_exp))
 builtin_global(numpy.exp2, types.Function(Numpy_exp2))
+builtin_global(numpy.expm1, types.Function(Numpy_expm1))
 builtin_global(numpy.log, types.Function(Numpy_log))
 builtin_global(numpy.log2, types.Function(Numpy_log2))
 builtin_global(numpy.log10, types.Function(Numpy_log10))
