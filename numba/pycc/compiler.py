@@ -121,6 +121,12 @@ class _Compiler(object):
         self.module_name = module_name
         self.export_python_wrap = False
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, traceback):
+        del self.exported_signatures[:]
+
     def _emit_python_wrapper(self, llvm_module):
         """Emit generated Python wrapper and extension module code.
         """
@@ -176,7 +182,6 @@ class _Compiler(object):
         if self.export_python_wrap:
             self._emit_python_wrapper(llvm_module)
 
-        #del self.exported_signatures[:]
         print(llvm_module)
         return llvm_module
 
