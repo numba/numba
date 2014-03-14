@@ -211,9 +211,11 @@ def register_unary_ufunc(ufunc, operator, asfloat=False):
         imp = numpy_scalar_unary_ufunc(operator, asfloat)
         return imp(context, builder, sig, args)
 
-    register(implement(ufunc, types.Kind(types.Array), types.Kind(types.Array))(unary_ufunc))
+    register(implement(ufunc, types.Kind(types.Array),
+        types.Kind(types.Array))(unary_ufunc))
     for ty in types.number_domain:
-        register(implement(ufunc, ty, types.Kind(types.Array))(unary_ufunc_scalar_input))
+        register(implement(ufunc, ty,
+            types.Kind(types.Array))(unary_ufunc_scalar_input))
     for ty in types.number_domain:
         register(implement(ufunc, ty)(scalar_unary_ufunc))
 
@@ -245,8 +247,6 @@ register_unary_ufunc(numpy.floor, math.floor, asfloat=True)
 register_unary_ufunc(numpy.ceil, math.ceil, asfloat=True)
 register_unary_ufunc(numpy.trunc, math.trunc, asfloat=True)
 register_unary_ufunc(numpy.sign, types.sign_type)
-
-
 
 
 def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
@@ -356,7 +356,8 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
             def build_increment_blocks(inp_indices, inp_shape, inp_ndim, inp_num):
                 bb_inc_inp_index = [cgutils.append_basic_block(builder,
                     '.inc_inp{0}_index{1}'.format(inp_num, str(i))) for i in range(inp_ndim)]
-                bb_end_inc_index = cgutils.append_basic_block(builder, '.end_inc{0}_index'.format(inp_num))
+                bb_end_inc_index = cgutils.append_basic_block(builder,
+                                       '.end_inc{0}_index'.format(inp_num))
 
                 builder.branch(bb_inc_inp_index[0])
                 for i in range(inp_ndim):
@@ -427,7 +428,8 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
                             nan = Constant.real(outltype, float("nan"))
                             inf = Constant.real(outltype, float("inf"))
                             tempres = builder.select(shouldretnan, nan, inf)
-                            res = context.cast(builder, tempres, result_type, tyout.dtype)
+                            res = context.cast(builder, tempres, result_type,
+                                               tyout.dtype)
                         elif tyout.dtype in types.signed_domain and \
                                 not numpy_support.int_divbyzero_returns_zero:
                             res = Constant.int(context.get_data_type(tyout.dtype),
@@ -463,139 +465,31 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
     return impl
 
 
-@register
-@implement(numpy.add, types.Kind(types.Array), types.Kind(types.Array),
-           types.Kind(types.Array))
-def numpy_add(context, builder, sig, args):
-    imp = numpy_binary_ufunc('+')
-    return imp(context, builder, sig, args)
+def register_binary_ufunc(ufunc, operator, asfloat=False, divbyzero=False):
 
-def numpy_add_scalar_inputs(context, builder, sig, args):
-    imp = numpy_binary_ufunc('+', scalar_inputs=True)
-    return imp(context, builder, sig, args)
+    def binary_ufunc(context, builder, sig, args):
+        imp = numpy_binary_ufunc(operator, asfloat=asfloat, divbyzero=divbyzero)
+        return imp(context, builder, sig, args)
 
-for ty in types.number_domain:
-    register(implement(numpy.add, ty, types.Kind(types.Array),
-             types.Kind(types.Array))(numpy_add_scalar_inputs))
-    register(implement(numpy.add, types.Kind(types.Array), ty,
-             types.Kind(types.Array))(numpy_add_scalar_inputs))
+    def binary_ufunc_scalar_inputs(context, builder, sig, args):
+        imp = numpy_binary_ufunc(operator, scalar_inputs=True, asfloat=asfloat,
+                                 divbyzero=divbyzero)
+        return imp(context, builder, sig, args)
 
-for ty1, ty2 in itertools.product(types.number_domain, types.number_domain):
-    register(implement(numpy.add, ty1, ty2,
-             types.Kind(types.Array))(numpy_add_scalar_inputs))
+    register(implement(ufunc, types.Kind(types.Array), types.Kind(types.Array),
+        types.Kind(types.Array))(binary_ufunc))
+    for ty in types.number_domain:
+        register(implement(ufunc, ty, types.Kind(types.Array),
+            types.Kind(types.Array))(binary_ufunc_scalar_inputs))
+        register(implement(ufunc, types.Kind(types.Array), ty,
+            types.Kind(types.Array))(binary_ufunc_scalar_inputs))
+    for ty1, ty2 in itertools.product(types.number_domain, types.number_domain):
+        register(implement(ufunc, ty1, ty2,
+            types.Kind(types.Array))(binary_ufunc_scalar_inputs))
 
-
-@register
-@implement(numpy.subtract, types.Kind(types.Array), types.Kind(types.Array),
-           types.Kind(types.Array))
-def numpy_subtract(context, builder, sig, args):
-    imp = numpy_binary_ufunc('-')
-    return imp(context, builder, sig, args)
-
-def numpy_subtract_scalar_inputs(context, builder, sig, args):
-    imp = numpy_binary_ufunc('-', scalar_inputs=True)
-    return imp(context, builder, sig, args)
-
-for ty1, ty2 in itertools.product(types.number_domain, types.number_domain):
-    register(implement(numpy.subtract, ty1, ty2,
-             types.Kind(types.Array))(numpy_subtract_scalar_inputs))
-
-for ty in types.number_domain:
-    register(implement(numpy.subtract, ty, types.Kind(types.Array),
-             types.Kind(types.Array))(numpy_subtract_scalar_inputs))
-    register(implement(numpy.subtract, types.Kind(types.Array), ty,
-             types.Kind(types.Array))(numpy_subtract_scalar_inputs))
-
-for ty1, ty2 in itertools.product(types.number_domain, types.number_domain):
-    register(implement(numpy.subtract, ty1, ty2,
-             types.Kind(types.Array))(numpy_subtract_scalar_inputs))
-
-
-@register
-@implement(numpy.multiply, types.Kind(types.Array), types.Kind(types.Array),
-           types.Kind(types.Array))
-def numpy_multiply(context, builder, sig, args):
-    imp = numpy_binary_ufunc('*')
-    return imp(context, builder, sig, args)
-
-def numpy_multiply_scalar_inputs(context, builder, sig, args):
-    imp = numpy_binary_ufunc('*', scalar_inputs=True)
-    return imp(context, builder, sig, args)
-
-for ty1, ty2 in itertools.product(types.number_domain, types.number_domain):
-    register(implement(numpy.multiply, ty1, ty2,
-             types.Kind(types.Array))(numpy_multiply_scalar_inputs))
-
-for ty in types.number_domain:
-    register(implement(numpy.multiply, ty, types.Kind(types.Array),
-             types.Kind(types.Array))(numpy_multiply_scalar_inputs))
-    register(implement(numpy.multiply, types.Kind(types.Array), ty,
-             types.Kind(types.Array))(numpy_multiply_scalar_inputs))
-
-for ty1, ty2 in itertools.product(types.number_domain, types.number_domain):
-    register(implement(numpy.multiply, ty1, ty2,
-             types.Kind(types.Array))(numpy_multiply_scalar_inputs))
-
-
-'''@register
-@implement(numpy.divide, types.Kind(types.Array), types.Kind(types.Array),
-           types.Kind(types.Array))
-def numpy_divide(context, builder, sig, args):
-    dtype = sig.args[0].dtype
-    odtype = sig.return_type.dtype
-    isig = typing.signature(odtype, dtype, dtype)
-    if dtype in types.signed_domain:
-        if PYVERSION >= (3, 0):
-            real_div_impl = context.get_function("/", isig)
-            imp = numpy_binary_ufunc(real_div_impl, divbyzero=True)
-        else:
-            int_sdiv_impl = context.get_function("/?", isig)
-            imp = numpy_binary_ufunc(int_sdiv_impl, divbyzero=True)
-    elif dtype in types.unsigned_domain:
-        int_udiv_impl = context.get_function("/?", isig)
-        imp = numpy_binary_ufunc(int_udiv_impl, divbyzero=True)
-    else:
-        real_div_impl = context.get_function("/?", isig)
-        imp = numpy_binary_ufunc(real_div_impl, divbyzero=True)
-
-    return imp(context, builder, sig, args)'''
-
-
-@register
-@implement(numpy.divide, types.Kind(types.Array), types.Kind(types.Array),
-           types.Kind(types.Array))
-def numpy_divide(context, builder, sig, args):
-    imp = numpy_binary_ufunc('/', asfloat=True, divbyzero=True)
-    return imp(context, builder, sig, args)
-
-def numpy_divide_scalar_inputs(context, builder, sig, args):
-    imp = numpy_binary_ufunc('/', scalar_inputs=True, asfloat=True,
-                             divbyzero=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.divide, ty, types.Kind(types.Array),
-             types.Kind(types.Array))(numpy_divide_scalar_inputs))
-    register(implement(numpy.divide, types.Kind(types.Array), ty,
-             types.Kind(types.Array))(numpy_divide_scalar_inputs))
-
-for ty1, ty2 in itertools.product(types.number_domain, types.number_domain):
-    register(implement(numpy.divide, ty1, ty2,
-             types.Kind(types.Array))(numpy_divide_scalar_inputs))
-
-
-@register
-@implement(numpy.arctan2, types.Kind(types.Array), types.Kind(types.Array),
-           types.Kind(types.Array))
-def numpy_arctan2(context, builder, sig, args):
-    imp = numpy_binary_ufunc(math.atan2, asfloat=True)
-    return imp(context, builder, sig, args)
-
-def numpy_arctan2_scalar_inputs(context, builder, sig, args):
-    imp = numpy_binary_ufunc(math.atan2, asfloat=True, scalar_inputs=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.arctan2, ty, ty,
-                       types.Kind(types.Array))(numpy_arctan2_scalar_inputs))
+register_binary_ufunc(numpy.add, '+')
+register_binary_ufunc(numpy.subtract, '-')
+register_binary_ufunc(numpy.multiply, '*')
+register_binary_ufunc(numpy.divide, '/', asfloat=True, divbyzero=True)
+register_binary_ufunc(numpy.arctan2, math.atan2, asfloat=True)
 
