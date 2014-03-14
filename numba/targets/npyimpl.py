@@ -897,11 +897,6 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
         ZERO = Constant.int(Type.int(64), 0)
         ONE = Constant.int(Type.int(64), 1)
 
-        #print_int_fnty = Type.function(Type.void(), [Type.int(64)])
-        #print_int_fn = cgutils.get_module(builder).get_or_insert_function(print_int_fnty, name="numba.print_int")
-        #inp1_shape = [ONE, inp1_shape[0]]
-        #builder.call(print_int_fn, [inp1_shape[1]])
-
         inp1_indices = None
         if not scalar_inp1:
             inp1_indices = []
