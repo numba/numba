@@ -29,7 +29,7 @@ def unary_npy_math_extern(fn):
     def s64impl(context, builder, sig, args):
         [val] = args
         fpval = builder.sitofp(val, Type.double())
-        sig = signature(types.float64, types.float64)
+        sig = typing.signature(types.float64, types.float64)
         return f64impl(context, builder, sig, [fpval])
 
     @register
@@ -37,7 +37,7 @@ def unary_npy_math_extern(fn):
     def u64impl(context, builder, sig, args):
         [val] = args
         fpval = builder.uitofp(val, Type.double())
-        sig = signature(types.float64, types.float64)
+        sig = typing.signature(types.float64, types.float64)
         return f64impl(context, builder, sig, [fpval])
 
     n = "numba.numpy.math." + fn
@@ -52,6 +52,7 @@ def unary_npy_math_extern(fn):
 
 _externs = [ "exp2", "expm1", "log", "log2", "log10", "log1p", "deg2rad", "rad2deg" ] 
 map(unary_npy_math_extern, _externs)
+
 
 def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
     def impl(context, builder, sig, args):
@@ -196,626 +197,56 @@ def numpy_scalar_unary_ufunc(funckey, asfloat=True):
     return impl
 
 
-@register
-@implement(numpy.absolute, types.Kind(types.Array), types.Kind(types.Array))
-def numpy_absolute(context, builder, sig, args):
-    imp = numpy_unary_ufunc(types.abs_type)
-    return imp(context, builder, sig, args)
+def register_unary_ufunc(ufunc, operator, asfloat=False):
+
+    def unary_ufunc(context, builder, sig, args):
+        imp = numpy_unary_ufunc(operator, asfloat=asfloat)
+        return imp(context, builder, sig, args)
+
+    def unary_ufunc_scalar_input(context, builder, sig, args):
+        imp = numpy_unary_ufunc(operator, scalar_input=True, asfloat=asfloat)
+        return imp(context, builder, sig, args)
+
+    def scalar_unary_ufunc(context, builder, sig, args):
+        imp = numpy_scalar_unary_ufunc(operator, asfloat)
+        return imp(context, builder, sig, args)
+
+    register(implement(ufunc, types.Kind(types.Array), types.Kind(types.Array))(unary_ufunc))
+    for ty in types.number_domain:
+        register(implement(ufunc, ty, types.Kind(types.Array))(unary_ufunc_scalar_input))
+    for ty in types.number_domain:
+        register(implement(ufunc, ty)(scalar_unary_ufunc))
+
+register_unary_ufunc(numpy.absolute, types.abs_type)
+register_unary_ufunc(numpy.exp, math.exp, asfloat=True)
+register_unary_ufunc(numpy.exp2, npy.exp2, asfloat=True)
+register_unary_ufunc(numpy.expm1, npy.expm1, asfloat=True)
+register_unary_ufunc(numpy.log, npy.log, asfloat=True)
+register_unary_ufunc(numpy.log2, npy.log2, asfloat=True)
+register_unary_ufunc(numpy.log10, npy.log10, asfloat=True)
+register_unary_ufunc(numpy.log1p, npy.log1p, asfloat=True)
+register_unary_ufunc(numpy.deg2rad, npy.deg2rad, asfloat=True)
+register_unary_ufunc(numpy.rad2deg, npy.rad2deg, asfloat=True)
+register_unary_ufunc(numpy.sin, math.sin, asfloat=True)
+register_unary_ufunc(numpy.cos, math.cos, asfloat=True)
+register_unary_ufunc(numpy.tan, math.tan, asfloat=True)
+register_unary_ufunc(numpy.sinh, math.sinh, asfloat=True)
+register_unary_ufunc(numpy.cosh, math.cosh, asfloat=True)
+register_unary_ufunc(numpy.tanh, math.tanh, asfloat=True)
+register_unary_ufunc(numpy.arcsin, math.asin, asfloat=True)
+register_unary_ufunc(numpy.arccos, math.acos, asfloat=True)
+register_unary_ufunc(numpy.arctan, math.atan, asfloat=True)
+register_unary_ufunc(numpy.arcsinh, math.asinh, asfloat=True)
+register_unary_ufunc(numpy.arccosh, math.acosh, asfloat=True)
+register_unary_ufunc(numpy.arctanh, math.atanh, asfloat=True)
+register_unary_ufunc(numpy.sqrt, math.sqrt, asfloat=True)
+register_unary_ufunc(numpy.negative, types.neg_type)
+register_unary_ufunc(numpy.floor, math.floor, asfloat=True)
+register_unary_ufunc(numpy.ceil, math.ceil, asfloat=True)
+register_unary_ufunc(numpy.trunc, math.trunc, asfloat=True)
+register_unary_ufunc(numpy.sign, types.sign_type)
 
-def numpy_absolute_scalar_input(context, builder, sig, args):
-    imp = numpy_unary_ufunc(types.abs_type, scalar_input=True)
-    return imp(context, builder, sig, args)
 
-for ty in types.number_domain:
-    register(implement(numpy.absolute, ty, types.Kind(types.Array))(numpy_absolute_scalar_input))
-
-def numpy_absolute_scalar(context, builder, sig, args):
-    imp = numpy_scalar_unary_ufunc(types.abs_type)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.absolute, ty)(numpy_absolute_scalar))
-
-
-@register
-@implement(numpy.exp, types.Kind(types.Array), types.Kind(types.Array))
-def numpy_exp(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.exp, asfloat=True)
-    return imp(context, builder, sig, args)
-
-def numpy_exp_scalar_input(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.exp, asfloat=True, scalar_input=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.exp, ty, types.Kind(types.Array))(numpy_exp_scalar_input))
-
-def numpy_exp_scalar(context, builder, sig, args):
-    imp = numpy_scalar_unary_ufunc(math.exp, asfloat=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.exp, ty)(numpy_exp_scalar))
-
-
-@register
-@implement(numpy.exp2, types.Kind(types.Array), types.Kind(types.Array))
-def numpy_exp2(context, builder, sig, args):
-    imp = numpy_unary_ufunc(npy.exp2, asfloat=True)
-    return imp(context, builder, sig, args)
-
-def numpy_exp2_scalar_input(context, builder, sig, args):
-    imp = numpy_unary_ufunc(npy.exp2, asfloat=True, scalar_input=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.exp2, ty,
-                       types.Kind(types.Array)
-                       )(numpy_exp2_scalar_input))
-
-
-def numpy_exp2_scalar(context, builder, sig, args):
-    imp = numpy_scalar_unary_ufunc(npy.exp2, asfloat=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.exp2, ty)(numpy_exp2_scalar))
-
-
-@register
-@implement(numpy.expm1, types.Kind(types.Array), types.Kind(types.Array))
-def numpy_expm1(context, builder, sig, args):
-    imp = numpy_unary_ufunc(npy.expm1, asfloat=True)
-    return imp(context, builder, sig, args)
-
-def numpy_expm1_scalar_input(context, builder, sig, args):
-    imp = numpy_unary_ufunc(npy.expm1, asfloat=True, scalar_input=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.expm1, ty,
-                       types.Kind(types.Array)
-                       )(numpy_expm1_scalar_input))
-
-
-def numpy_expm1_scalar(context, builder, sig, args):
-    imp = numpy_scalar_unary_ufunc(npy.expm1, asfloat=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.expm1, ty)(numpy_expm1_scalar))
-
-
-@register
-@implement(numpy.log, types.Kind(types.Array), types.Kind(types.Array))
-def numpy_log(context, builder, sig, args):
-    imp = numpy_unary_ufunc(npy.log, asfloat=True)
-    return imp(context, builder, sig, args)
-
-def numpy_log_scalar_input(context, builder, sig, args):
-    imp = numpy_unary_ufunc(npy.log, asfloat=True, scalar_input=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.log, ty,
-                       types.Kind(types.Array)
-                       )(numpy_log_scalar_input))
-
-
-def numpy_log_scalar(context, builder, sig, args):
-    imp = numpy_scalar_unary_ufunc(npy.log, asfloat=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.log, ty)(numpy_log_scalar))
-
-
-@register
-@implement(numpy.log2, types.Kind(types.Array), types.Kind(types.Array))
-def numpy_log2(context, builder, sig, args):
-    imp = numpy_unary_ufunc(npy.log2, asfloat=True)
-    return imp(context, builder, sig, args)
-
-def numpy_log2_scalar_input(context, builder, sig, args):
-    imp = numpy_unary_ufunc(npy.log2, asfloat=True, scalar_input=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.log2, ty,
-                       types.Kind(types.Array)
-                       )(numpy_log2_scalar_input))
-
-
-def numpy_log2_scalar(context, builder, sig, args):
-    imp = numpy_scalar_unary_ufunc(npy.log2, asfloat=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.log2, ty)(numpy_log2_scalar))
-
-
-@register
-@implement(numpy.log10, types.Kind(types.Array), types.Kind(types.Array))
-def numpy_log10(context, builder, sig, args):
-    imp = numpy_unary_ufunc(npy.log10, asfloat=True)
-    return imp(context, builder, sig, args)
-
-def numpy_log10_scalar_input(context, builder, sig, args):
-    imp = numpy_unary_ufunc(npy.log10, asfloat=True, scalar_input=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.log10, ty,
-                       types.Kind(types.Array)
-                       )(numpy_log10_scalar_input))
-
-
-def numpy_log10_scalar(context, builder, sig, args):
-    imp = numpy_scalar_unary_ufunc(npy.log10, asfloat=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.log10, ty)(numpy_log10_scalar))
-
-
-@register
-@implement(numpy.log1p, types.Kind(types.Array), types.Kind(types.Array))
-def numpy_log1p(context, builder, sig, args):
-    imp = numpy_unary_ufunc(npy.log1p, asfloat=True)
-    return imp(context, builder, sig, args)
-
-def numpy_log1p_scalar_input(context, builder, sig, args):
-    imp = numpy_unary_ufunc(npy.log1p, asfloat=True, scalar_input=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.log1p, ty,
-                       types.Kind(types.Array)
-                       )(numpy_log1p_scalar_input))
-
-
-def numpy_log1p_scalar(context, builder, sig, args):
-    imp = numpy_scalar_unary_ufunc(npy.log1p, asfloat=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.log1p, ty)(numpy_log1p_scalar))
-
-
-# ------------------------------------------------------------------------------
-
-
-@register
-@implement(numpy.deg2rad, types.Kind(types.Array), types.Kind(types.Array))
-def numpy_deg2rad(context, builder, sig, args):
-    imp = numpy_unary_ufunc(npy.deg2rad, asfloat=True)
-    return imp(context, builder, sig, args)
-
-def numpy_deg2rad_scalar_input(context, builder, sig, args):
-    imp = numpy_unary_ufunc(npy.deg2rad, asfloat=True, scalar_input=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.deg2rad, ty,
-                       types.Kind(types.Array)
-                       )(numpy_deg2rad_scalar_input))
-
-
-def numpy_deg2rad_scalar(context, builder, sig, args):
-    imp = numpy_scalar_unary_ufunc(npy.deg2rad, asfloat=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.deg2rad, ty)(numpy_deg2rad_scalar))
-
-
-@register
-@implement(numpy.rad2deg, types.Kind(types.Array), types.Kind(types.Array))
-def numpy_rad2deg(context, builder, sig, args):
-    imp = numpy_unary_ufunc(npy.rad2deg, asfloat=True)
-    return imp(context, builder, sig, args)
-
-def numpy_rad2deg_scalar_input(context, builder, sig, args):
-    imp = numpy_unary_ufunc(npy.rad2deg, asfloat=True, scalar_input=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.rad2deg, ty,
-                       types.Kind(types.Array)
-                       )(numpy_rad2deg_scalar_input))
-
-
-def numpy_rad2deg_scalar(context, builder, sig, args):
-    imp = numpy_scalar_unary_ufunc(npy.rad2deg, asfloat=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.rad2deg, ty)(numpy_rad2deg_scalar))
-
-
-# ------------------------------------------------------------------------------
-
-
-@register
-@implement(numpy.sin, types.Kind(types.Array), types.Kind(types.Array))
-def numpy_sin(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.sin, asfloat=True)
-    return imp(context, builder, sig, args)
-
-def numpy_sin_scalar_input(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.sin, asfloat=True, scalar_input=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.sin, ty, types.Kind(types.Array))(numpy_sin_scalar_input))
-
-def numpy_sin_scalar(context, builder, sig, args):
-    imp = numpy_scalar_unary_ufunc(math.sin, asfloat=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.sin, ty)(numpy_sin_scalar))
-
-
-@register
-@implement(numpy.cos, types.Kind(types.Array), types.Kind(types.Array))
-def numpy_cos(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.cos, asfloat=True)
-    return imp(context, builder, sig, args)
-
-def numpy_cos_scalar_input(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.cos, asfloat=True, scalar_input=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.cos, ty, types.Kind(types.Array))(numpy_cos_scalar_input))
-
-def numpy_cos_scalar(context, builder, sig, args):
-    imp = numpy_scalar_unary_ufunc(math.cos, asfloat=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.cos, ty)(numpy_cos_scalar))
-
-
-@register
-@implement(numpy.tan, types.Kind(types.Array), types.Kind(types.Array))
-def numpy_tan(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.tan, asfloat=True)
-    return imp(context, builder, sig, args)
-
-def numpy_tan_scalar_input(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.tan, asfloat=True, scalar_input=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.tan, ty, types.Kind(types.Array))(numpy_tan_scalar_input))
-
-def numpy_tan_scalar(context, builder, sig, args):
-    imp = numpy_scalar_unary_ufunc(math.tan, asfloat=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.tan, ty)(numpy_tan_scalar))
-
-
-# ------------------------------------------------------------------------------
-
-
-@register
-@implement(numpy.sinh, types.Kind(types.Array), types.Kind(types.Array))
-def numpy_sinh(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.sinh, asfloat=True)
-    return imp(context, builder, sig, args)
-
-def numpy_sinh_scalar_input(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.sinh, asfloat=True, scalar_input=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.sinh, ty, types.Kind(types.Array))(numpy_sinh_scalar_input))
-
-def numpy_sinh_scalar(context, builder, sig, args):
-    imp = numpy_scalar_unary_ufunc(math.sinh, asfloat=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.sinh, ty)(numpy_sinh_scalar))
-
-
-@register
-@implement(numpy.cosh, types.Kind(types.Array), types.Kind(types.Array))
-def numpy_cosh(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.cosh, asfloat=True)
-    return imp(context, builder, sig, args)
-
-def numpy_cosh_scalar_input(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.cosh, asfloat=True, scalar_input=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.cosh, ty, types.Kind(types.Array))(numpy_cosh_scalar_input))
-
-def numpy_cosh_scalar(context, builder, sig, args):
-    imp = numpy_scalar_unary_ufunc(math.cosh, asfloat=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.cosh, ty)(numpy_cosh_scalar))
-
-
-@register
-@implement(numpy.tanh, types.Kind(types.Array), types.Kind(types.Array))
-def numpy_tanh(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.tanh, asfloat=True)
-    return imp(context, builder, sig, args)
-
-def numpy_tanh_scalar_input(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.tanh, asfloat=True, scalar_input=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.tanh, ty, types.Kind(types.Array))(numpy_tanh_scalar_input))
-
-def numpy_tanh_scalar(context, builder, sig, args):
-    imp = numpy_scalar_unary_ufunc(math.tanh, asfloat=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.tanh, ty)(numpy_tanh_scalar))
-
-# ------------------------------------------------------------------------------
-
-@register
-@implement(numpy.arccos, types.Kind(types.Array), types.Kind(types.Array))
-def numpy_arccos(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.acos, asfloat=True)
-    return imp(context, builder, sig, args)
-
-def numpy_arccos_scalar_input(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.acos, asfloat=True, scalar_input=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.arccos, ty, types.Kind(types.Array))(numpy_arccos_scalar_input))
-
-def numpy_arccos_scalar(context, builder, sig, args):
-    imp = numpy_scalar_unary_ufunc(math.acos, asfloat=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.arccos, ty)(numpy_arccos_scalar))
-
-@register
-@implement(numpy.arcsin, types.Kind(types.Array), types.Kind(types.Array))
-def numpy_arcsin(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.asin, asfloat=True)
-    return imp(context, builder, sig, args)
-
-def numpy_arcsin_scalar_input(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.asin, asfloat=True, scalar_input=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.arcsin, ty, types.Kind(types.Array))(numpy_arcsin_scalar_input))
-
-def numpy_arcsin_scalar(context, builder, sig, args):
-    imp = numpy_scalar_unary_ufunc(math.asin, asfloat=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.arcsin, ty)(numpy_arcsin_scalar))
-
-
-@register
-@implement(numpy.arctan, types.Kind(types.Array), types.Kind(types.Array))
-def numpy_arctan(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.atan, asfloat=True)
-    return imp(context, builder, sig, args)
-
-def numpy_arctan_scalar_input(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.atan, asfloat=True, scalar_input=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.arctan, ty, types.Kind(types.Array))(numpy_arctan_scalar_input))
-
-def numpy_arctan_scalar(context, builder, sig, args):
-    imp = numpy_scalar_unary_ufunc(math.atan, asfloat=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.arctan, ty)(numpy_arctan_scalar))
-
-# ------------------------------------------------------------------------------
-
-@register
-@implement(numpy.arccosh, types.Kind(types.Array), types.Kind(types.Array))
-def numpy_arccosh(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.acosh, asfloat=True)
-    return imp(context, builder, sig, args)
-
-def numpy_arccosh_scalar_input(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.acosh, asfloat=True, scalar_input=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.arccosh, ty, types.Kind(types.Array))(numpy_arccosh_scalar_input))
-
-def numpy_arccosh_scalar(context, builder, sig, args):
-    imp = numpy_scalar_unary_ufunc(math.acosh, asfloat=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.arccosh, ty)(numpy_arccosh_scalar))
-
-@register
-@implement(numpy.arcsinh, types.Kind(types.Array), types.Kind(types.Array))
-def numpy_arcsinh(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.asinh, asfloat=True)
-    return imp(context, builder, sig, args)
-
-def numpy_arcsinh_scalar_input(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.asinh, asfloat=True, scalar_input=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.arcsinh, ty, types.Kind(types.Array))(numpy_arcsinh_scalar_input))
-
-def numpy_arcsinh_scalar(context, builder, sig, args):
-    imp = numpy_scalar_unary_ufunc(math.asinh, asfloat=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.arcsinh, ty)(numpy_arcsinh_scalar))
-
-
-@register
-@implement(numpy.arctanh, types.Kind(types.Array), types.Kind(types.Array))
-def numpy_arctanh(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.atanh, asfloat=True)
-    return imp(context, builder, sig, args)
-
-def numpy_arctanh_scalar_input(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.atanh, asfloat=True, scalar_input=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.arctanh, ty, types.Kind(types.Array))(numpy_arctanh_scalar_input))
-
-def numpy_arctanh_scalar(context, builder, sig, args):
-    imp = numpy_scalar_unary_ufunc(math.atanh, asfloat=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.arctanh, ty)(numpy_arctanh_scalar))
-
-# ------------------------------------------------------------------------------
-
-@register
-@implement(numpy.sqrt, types.Kind(types.Array), types.Kind(types.Array))
-def numpy_sqrt(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.sqrt, asfloat=True)
-    return imp(context, builder, sig, args)
-
-def numpy_sqrt_scalar_input(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.sqrt, asfloat=True, scalar_input=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.sqrt, ty, types.Kind(types.Array))(numpy_sqrt_scalar_input))
-
-def numpy_sqrt_scalar(context, builder, sig, args):
-    imp = numpy_scalar_unary_ufunc(math.sqrt, asfloat=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.sqrt, ty)(numpy_sqrt_scalar))
-
-
-@register
-@implement(numpy.negative, types.Kind(types.Array), types.Kind(types.Array))
-def numpy_negative(context, builder, sig, args):
-    imp = numpy_unary_ufunc(types.neg_type)
-    return imp(context, builder, sig, args)
-
-def numpy_negative_scalar_input(context, builder, sig, args):
-    imp = numpy_unary_ufunc(types.neg_type, scalar_input=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.negative, ty, types.Kind(types.Array))(numpy_negative_scalar_input))
-
-def numpy_negative_scalar(context, builder, sig, args):
-    imp = numpy_scalar_unary_ufunc(types.neg_type)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.negative, ty)(numpy_negative_scalar))
-
-
-@register
-@implement(numpy.floor, types.Kind(types.Array), types.Kind(types.Array))
-def numpy_floor(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.floor, asfloat=True)
-    return imp(context, builder, sig, args)
-
-def numpy_floor_scalar_input(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.floor, scalar_input=True, asfloat=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.floor, ty, types.Kind(types.Array))(numpy_floor_scalar_input))
-
-def numpy_floor_scalar(context, builder, sig, args):
-    imp = numpy_scalar_unary_ufunc(math.floor, asfloat=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.floor, ty)(numpy_floor_scalar))
-
-
-@register
-@implement(numpy.ceil, types.Kind(types.Array), types.Kind(types.Array))
-def numpy_ceil(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.ceil, asfloat=True)
-    return imp(context, builder, sig, args)
-
-def numpy_ceil_scalar_input(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.ceil, scalar_input=True, asfloat=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.ceil, ty, types.Kind(types.Array))(numpy_ceil_scalar_input))
-
-def numpy_ceil_scalar(context, builder, sig, args):
-    imp = numpy_scalar_unary_ufunc(math.ceil, asfloat=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.ceil, ty)(numpy_ceil_scalar))
-
-
-@register
-@implement(numpy.trunc, types.Kind(types.Array), types.Kind(types.Array))
-def numpy_trunc(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.trunc, asfloat=True)
-    return imp(context, builder, sig, args)
-
-def numpy_trunc_scalar_input(context, builder, sig, args):
-    imp = numpy_unary_ufunc(math.trunc, scalar_input=True, asfloat=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.trunc, ty, types.Kind(types.Array))(numpy_trunc_scalar_input))
-
-def numpy_trunc_scalar(context, builder, sig, args):
-    imp = numpy_scalar_unary_ufunc(math.trunc, asfloat=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.trunc, ty)(numpy_trunc_scalar))
-
-
-@register
-@implement(numpy.sign, types.Kind(types.Array), types.Kind(types.Array))
-def numpy_sign(context, builder, sig, args):
-    imp = numpy_unary_ufunc(types.sign_type)
-    return imp(context, builder, sig, args)
-
-def numpy_sign_scalar_input(context, builder, sig, args):
-    imp = numpy_unary_ufunc(types.sign_type, scalar_input=True)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.sign, ty, types.Kind(types.Array))(numpy_sign_scalar_input))
-
-def numpy_sign_scalar(context, builder, sig, args):
-    imp = numpy_scalar_unary_ufunc(types.sign_type)
-    return imp(context, builder, sig, args)
-
-for ty in types.number_domain:
-    register(implement(numpy.sign, ty)(numpy_sign_scalar))
 
 
 def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
