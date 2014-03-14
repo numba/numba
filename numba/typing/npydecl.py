@@ -29,6 +29,9 @@ class NumpyModuleAttribute(AttributeTemplate):
     def resolve_log10(self, mod):
         return types.Function(Numpy_log10)
 
+    def resolve_log1p(self, mod):
+        return types.Function(Numpy_log1p)
+
     def resolve_sqrt(self, mod):
         return types.Function(Numpy_sqrt)
 
@@ -171,6 +174,8 @@ class Numpy_log2(Numpy_unary_ufunc):
     key = numpy.log2
 class Numpy_log10(Numpy_unary_ufunc):
     key = numpy.log10
+class Numpy_log1p(Numpy_unary_ufunc):
+    key = numpy.log1p
 
 class Numpy_negative(Numpy_unary_ufunc):
     key = numpy.negative
@@ -239,6 +244,7 @@ builtin_global(numpy.expm1, types.Function(Numpy_expm1))
 builtin_global(numpy.log, types.Function(Numpy_log))
 builtin_global(numpy.log2, types.Function(Numpy_log2))
 builtin_global(numpy.log10, types.Function(Numpy_log10))
+builtin_global(numpy.log1p, types.Function(Numpy_log1p))
 builtin_global(numpy.sin, types.Function(Numpy_sin))
 builtin_global(numpy.cos, types.Function(Numpy_cos))
 builtin_global(numpy.tan, types.Function(Numpy_tan))
