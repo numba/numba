@@ -74,6 +74,12 @@ class NumpyModuleAttribute(AttributeTemplate):
     def resolve_arctanh(self, mod):
         return types.Function(Numpy_arctanh)
 
+    def resolve_deg2rad(self, mod):
+        return types.Function(Numpy_deg2rad)
+
+    def resolve_rad2deg(self, mod):
+        return types.Function(Numpy_rad2deg)
+
     def resolve_add(self, mod):
         return types.Function(Numpy_add)
 
@@ -177,6 +183,11 @@ class Numpy_log10(Numpy_unary_ufunc):
 class Numpy_log1p(Numpy_unary_ufunc):
     key = numpy.log1p
 
+class Numpy_deg2rad(Numpy_unary_ufunc):
+    key = numpy.deg2rad
+class Numpy_rad2deg(Numpy_unary_ufunc):
+    key = numpy.rad2deg
+
 class Numpy_negative(Numpy_unary_ufunc):
     key = numpy.negative
 
@@ -258,6 +269,8 @@ builtin_global(numpy.arctan2, types.Function(Numpy_arctan2))
 builtin_global(numpy.arccosh, types.Function(Numpy_arccosh))
 builtin_global(numpy.arcsinh, types.Function(Numpy_arcsinh))
 builtin_global(numpy.arctanh, types.Function(Numpy_arctanh))
+builtin_global(numpy.deg2rad, types.Function(Numpy_deg2rad))
+builtin_global(numpy.rad2deg, types.Function(Numpy_rad2deg))
 builtin_global(numpy.add, types.Function(Numpy_add))
 builtin_global(numpy.subtract, types.Function(Numpy_subtract))
 builtin_global(numpy.multiply, types.Function(Numpy_multiply))

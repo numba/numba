@@ -50,13 +50,8 @@ def unary_npy_math_extern(fn):
         fn = mod.get_or_insert_function(fnty, name=n)
         return builder.call(fn, (val,))
 
-
-unary_npy_math_extern("exp2")
-unary_npy_math_extern("expm1")
-unary_npy_math_extern("log")
-unary_npy_math_extern("log2")
-unary_npy_math_extern("log10")
-unary_npy_math_extern("log1p")
+_externs = [ "exp2", "expm1", "log", "log2", "log10", "log1p", "deg2rad", "rad2deg" ] 
+map(unary_npy_math_extern, _externs)
 
 def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
     def impl(context, builder, sig, args):
@@ -385,6 +380,57 @@ def numpy_log1p_scalar(context, builder, sig, args):
 
 for ty in types.number_domain:
     register(implement(numpy.log1p, ty)(numpy_log1p_scalar))
+
+
+# ------------------------------------------------------------------------------
+
+
+@register
+@implement(numpy.deg2rad, types.Kind(types.Array), types.Kind(types.Array))
+def numpy_deg2rad(context, builder, sig, args):
+    imp = numpy_unary_ufunc(npy.deg2rad, asfloat=True)
+    return imp(context, builder, sig, args)
+
+def numpy_deg2rad_scalar_input(context, builder, sig, args):
+    imp = numpy_unary_ufunc(npy.deg2rad, asfloat=True, scalar_input=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.deg2rad, ty,
+                       types.Kind(types.Array)
+                       )(numpy_deg2rad_scalar_input))
+
+
+def numpy_deg2rad_scalar(context, builder, sig, args):
+    imp = numpy_scalar_unary_ufunc(npy.deg2rad, asfloat=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.deg2rad, ty)(numpy_deg2rad_scalar))
+
+
+@register
+@implement(numpy.rad2deg, types.Kind(types.Array), types.Kind(types.Array))
+def numpy_rad2deg(context, builder, sig, args):
+    imp = numpy_unary_ufunc(npy.rad2deg, asfloat=True)
+    return imp(context, builder, sig, args)
+
+def numpy_rad2deg_scalar_input(context, builder, sig, args):
+    imp = numpy_unary_ufunc(npy.rad2deg, asfloat=True, scalar_input=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.rad2deg, ty,
+                       types.Kind(types.Array)
+                       )(numpy_rad2deg_scalar_input))
+
+
+def numpy_rad2deg_scalar(context, builder, sig, args):
+    imp = numpy_scalar_unary_ufunc(npy.rad2deg, asfloat=True)
+    return imp(context, builder, sig, args)
+
+for ty in types.number_domain:
+    register(implement(numpy.rad2deg, ty)(numpy_rad2deg_scalar))
 
 
 # ------------------------------------------------------------------------------

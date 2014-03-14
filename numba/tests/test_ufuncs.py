@@ -611,14 +611,12 @@ class TestUFuncs(unittest.TestCase):
     def test_deg2rad_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('deg2rad', flags=flags)
 
-    @unittest.expectedFailure
     def test_deg2rad_ufunc_npm(self):
         self.test_deg2rad_ufunc(flags=no_pyobj_flags)
 
     def test_rad2deg_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('rad2deg', flags=flags)
 
-    @unittest.expectedFailure
     def test_rad2deg_ufunc_npm(self):
         self.test_rad2deg_ufunc(flags=no_pyobj_flags)
 
