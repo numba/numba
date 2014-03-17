@@ -1,11 +1,12 @@
-'''
+"""
 This scripts specifies all PTX special objects.
-'''
+"""
+from __future__ import absolute_import
 import operator
 import numpy
 import llvm.core as lc
+from numba.cuda.cudadrv import nvvm
 from numbapro.npm import types, macro, symbolic
-from numbapro.cudadrv import nvvm
 from numbapro._utils.mviewbuf import memoryview_get_extents
 from . import nvvmutils
 

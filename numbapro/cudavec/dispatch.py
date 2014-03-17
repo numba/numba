@@ -1,6 +1,7 @@
+from __future__ import absolute_import
 import math
 import numpy as np
-from numbapro.cudadrv import devicearray
+from numba.cuda.cudadrv import devicearray
 
 
 class CudaUFuncDispatcher(object):

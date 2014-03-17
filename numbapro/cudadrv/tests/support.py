@@ -5,5 +5,5 @@ testsupport.set_base(globals())
 
 class CUDATestCase(unittest.TestCase):
     def tearDown(self):
-        from numbapro.cudadrv.devices import reset
+        from numba.cuda.cudadrv.devices import reset
         reset()

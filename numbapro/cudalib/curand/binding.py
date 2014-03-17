@@ -1,9 +1,10 @@
+from __future__ import absolute_import
 import numpy as np
 from ctypes import (c_float, c_int, c_void_p, POINTER, byref, cast, c_ulonglong,
                     c_uint, c_double, c_size_t)
 
-from numbapro.cudadrv.drvapi import cu_stream
-from numbapro.cudadrv.driver import device_pointer, host_pointer
+from numba.cuda.cudadrv.drvapi import cu_stream
+from numba.cuda.cudadrv.driver import device_pointer
 from numbapro.cudalib.libutils import Lib, ctype_function
 from numbapro._utils import finalizer
 

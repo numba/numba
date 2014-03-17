@@ -1,11 +1,12 @@
+from __future__ import absolute_import
 import llvm.core as lc
-from numbapro.cudadrv import nvvm
+from numba.cuda.cudadrv import nvvm
 
 
 def insert_addrspace_conv(lmod, elemtype, addrspace):
     addrspacename = {
-        nvvm.ADDRSPACE_SHARED:   'shared',
-        nvvm.ADDRSPACE_LOCAL:    'local',
+        nvvm.ADDRSPACE_SHARED: 'shared',
+        nvvm.ADDRSPACE_LOCAL: 'local',
         nvvm.ADDRSPACE_CONSTANT: 'constant',
     }[addrspace]
     tyname = str(elemtype)
