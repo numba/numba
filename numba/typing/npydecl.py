@@ -9,9 +9,6 @@ class NumpyModuleAttribute(AttributeTemplate):
     # note: many unary ufuncs are added later on, using setattr
     key = types.Module(numpy)
 
-    def resolve_sqrt(self, mod):
-        return types.Function(Numpy_sqrt)
-
     def resolve_arctan2(self, mod):
         return types.Function(Numpy_arctan2)
 
@@ -51,27 +48,25 @@ def _numpy_unary_ufunc(name):
     the_key = eval("numpy."+name) # obtain the appropriate symbol for the key.
     class typing_class(Numpy_unary_ufunc):
         key = the_key
+        scalar_out_type = types.float64
 
     # Add the resolve method to NumpyModuleAttribute
     setattr(NumpyModuleAttribute, "resolve_"+name, lambda s, m: types.Function(typing_class))
     builtin_global(the_key, types.Function(typing_class))
 
 
-#register for funcs
+# list of unary ufuncs to register
 _autoregister_unary_ufuncs = [ 
     "sin", "cos", "tan", "arcsin", "arccos", "arctan",
     "sinh", "cosh", "tanh", "arcsinh", "arccosh", "arctanh",
     "exp", "exp2", "expm1",
     "log", "log2", "log10", "log1p",
     "absolute", "negative", "floor", "ceil", "trunc", "sign",
+    "sqrt",
     "deg2rad", "rad2deg"]
 for func in _autoregister_unary_ufuncs:
     _numpy_unary_ufunc(func)
 del(_autoregister_unary_ufuncs)
-
-class Numpy_sqrt(Numpy_unary_ufunc):
-    key = numpy.sqrt
-    scalar_out_type = types.float64
 
 
 class Numpy_binary_ufunc(AbstractTemplate):
