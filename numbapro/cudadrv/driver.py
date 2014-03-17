@@ -462,7 +462,6 @@ class Context(object):
         driver.cuMemHostAlloc(byref(pointer), bytesize, flags)
         owner = None
 
-
         if mapped:
             finalizer = _hostalloc_finalizer(self, pointer)
             mem = MappedMemory(weakref.proxy(self), owner, pointer,
@@ -501,7 +500,6 @@ class Context(object):
             flags |= enums.CU_MEMHOSTREGISTER_DEVICEMAP
 
         driver.cuMemHostRegister(pointer, size, flags)
-
 
         if mapped:
             finalizer = _mapped_finalizer(self, pointer)
@@ -616,6 +614,7 @@ def _pinnedalloc_finalizer(trashing, handle):
         trashing.add_trash(lambda: driver.cuMemFreeHost(handle))
 
     return core
+
 
 def _pinned_finalizer(trashing, handle):
     def core():
@@ -1017,9 +1016,9 @@ class Linker(object):
 
         self.handle = handle = drvapi.cu_link_state()
         driver.cuLinkCreate(len(options),
-                                     option_keys,
-                                     option_vals,
-                                     byref(self.handle))
+                            option_keys,
+                            option_vals,
+                            byref(self.handle))
 
         self.finalizer = lambda: driver.cuLinkDestroy(handle)
 
@@ -1046,7 +1045,6 @@ class Linker(object):
         ptxbuf = c_char_p(ptx)
         namebuf = c_char_p(name)
         self._keep_alive += [ptxbuf, namebuf]
-
         try:
             driver.cuLinkAddData(self.handle, enums.CU_JIT_INPUT_PTX,
                                  ptxbuf, len(ptx), namebuf, 0, None, None)

@@ -1159,7 +1159,7 @@ class DeviceMemory(object):
         flush_pending_free()
         error = self.driver.cuMemAlloc(byref(self._handle), bytesize)
         self.driver.check_error(error, 'Failed to allocate memory')
-        self.device.resource_manager.add_memory(self._handle.value,
+        self.device.resource_manager.add_memory(self._handle.value
                                                 self.driver.cuMemFree)
         self.bytesize = bytesize
 
