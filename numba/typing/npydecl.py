@@ -1,10 +1,14 @@
 import numpy
 from numba import types
 from numba.typing.templates import (AttributeTemplate, AbstractTemplate,
-                                    builtin_global, builtin, signature)
+                                    Registry, signature)
+
+registry = Registry()
+builtin_global = registry.register_global
+builtin_attr = registry.register_attr
 
 
-@builtin
+@builtin_attr
 class NumpyModuleAttribute(AttributeTemplate):
     # note: many unary ufuncs are added later on, using setattr
     key = types.Module(numpy)
@@ -23,6 +27,7 @@ class NumpyModuleAttribute(AttributeTemplate):
 
     def resolve_divide(self, mod):
         return types.Function(Numpy_divide)
+
 
 
 class Numpy_unary_ufunc(AbstractTemplate):
@@ -56,7 +61,7 @@ def _numpy_unary_ufunc(name):
 
 
 # list of unary ufuncs to register
-_autoregister_unary_ufuncs = [ 
+_autoregister_unary_ufuncs = [
     "sin", "cos", "tan", "arcsin", "arccos", "arctan",
     "sinh", "cosh", "tanh", "arcsinh", "arccosh", "arctanh",
     "exp", "exp2", "expm1",
@@ -67,6 +72,7 @@ _autoregister_unary_ufuncs = [
 for func in _autoregister_unary_ufuncs:
     _numpy_unary_ufunc(func)
 del(_autoregister_unary_ufuncs)
+
 
 
 class Numpy_binary_ufunc(AbstractTemplate):

@@ -3,18 +3,13 @@ import numpy
 import math
 import sys
 from llvm.core import Constant, Type, ICMP_UGT
-from numba.utils import PYVERSION
 from numba import typing, types, cgutils
-from numba.targets.imputils import implement
+from numba.targets.imputils import implement, Registry
 from numba import numpy_support
 import itertools
 
-functions = []
-
-
-def register(f):
-    functions.append(f)
-    return f
+registry = Registry()
+register = registry.register
 
 
 class npy:

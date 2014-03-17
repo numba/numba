@@ -3,8 +3,7 @@ from numba import types
 from numba.utils import PYVERSION
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     AbstractTemplate, builtin_global, builtin,
-                                    signature)
-
+                                    builtin_attr, signature)
 
 builtin_global(range, types.range_type)
 if PYVERSION < (3, 0):
@@ -191,6 +190,7 @@ class BinOpTrueDiv(ConcreteTemplate):
         signature(types.complex128, types.complex128, types.complex128),
 
     ]
+
 
 @builtin
 class BinOpFloorDiv(ConcreteTemplate):
@@ -429,8 +429,8 @@ def normalize_index(index):
     elif isinstance(index, types.Tuple):
         for ty in index:
             if (ty not in types.integer_domain and
-                ty not in types.real_domain and
-                ty != types.slice3_type):
+                        ty not in types.real_domain and
+                        ty != types.slice3_type):
                 return
         return index
 
@@ -517,7 +517,7 @@ class LenArray(AbstractTemplate):
 
 #-------------------------------------------------------------------------------
 
-@builtin
+@builtin_attr
 class ArrayAttribute(AttributeTemplate):
     key = types.Array
 
@@ -529,7 +529,9 @@ class ArrayAttribute(AttributeTemplate):
 
     def resolve_ndim(self, ary):
         return types.intp
-    #
+
+        #
+
     # def resolve_flatten(self, ary):
     #     return types.Method(Array_flatten, ary)
 
@@ -562,7 +564,6 @@ class CmpOpEqArray(AbstractTemplate):
 
 #-------------------------------------------------------------------------------
 class ComplexAttribute(AttributeTemplate):
-
     def resolve_real(self, ty):
         return self.innertype
 
@@ -570,20 +571,20 @@ class ComplexAttribute(AttributeTemplate):
         return self.innertype
 
 
-@builtin
+@builtin_attr
 class Complex64Attribute(ComplexAttribute):
     key = types.complex64
     innertype = types.float32
 
 
-@builtin
+@builtin_attr
 class Complex128Attribute(ComplexAttribute):
     key = types.complex128
     innertype = types.float64
 
 #-------------------------------------------------------------------------------
 
-@builtin
+@builtin_attr
 class NumbaTypesModuleAttribute(AttributeTemplate):
     key = types.Module(types)
 

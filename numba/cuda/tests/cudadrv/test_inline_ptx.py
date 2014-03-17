@@ -1,0 +1,33 @@
+from __future__ import print_function, division, absolute_import
+from llvm.core import Module, Type, Builder, InlineAsm
+from numba.cuda.cudadrv import nvvm
+from numba.cuda.testing import unittest, CUDATestCase
+
+
+class TestCudaInlineAsm(CUDATestCase):
+    def test_inline_rsqrt(self):
+        mod = Module.new(__name__)
+        fnty = Type.function(Type.void(), [Type.pointer(Type.float())])
+        fn = mod.add_function(fnty, 'cu_rsqrt')
+        bldr = Builder.new(fn.append_basic_block('entry'))
+
+        rsqrt_approx_fnty = Type.function(Type.float(), [Type.float()])
+        inlineasm = InlineAsm.get(rsqrt_approx_fnty,
+                                  'rsqrt.approx.f32 $0, $1;',
+                                  '=f,f', side_effect=True)
+        val = bldr.load(fn.args[0])
+        res = bldr.call(inlineasm, [val])
+
+        bldr.store(res, fn.args[0])
+        bldr.ret_void()
+
+        # generate ptx
+        nvvm.fix_data_layout(mod)
+        nvvm.set_cuda_kernel(fn)
+        nvvmir = str(mod)
+        ptx = nvvm.llvm_to_ptx(nvvmir)
+        self.assertTrue('rsqrt.approx.f32' in str(ptx))
+
+
+if __name__ == '__main__':
+    unittest.main()

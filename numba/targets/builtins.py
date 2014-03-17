@@ -14,10 +14,10 @@ def make_array(ty):
     nd = ty.ndim
 
     class ArrayTemplate(cgutils.Structure):
-        _fields = [('data',    types.CPointer(dtype)),
-                   ('shape',   types.UniTuple(types.intp, nd)),
+        _fields = [('data', types.CPointer(dtype)),
+                   ('shape', types.UniTuple(types.intp, nd)),
                    ('strides', types.UniTuple(types.intp, nd)),
-                   ('parent',  types.pyobject),]
+                   ('parent', types.pyobject), ]
 
     return ArrayTemplate
 
@@ -134,6 +134,7 @@ def int_sfloordiv_impl(context, builder, sig, args):
     cgutils.guard_zero(context, builder, y)
     return builder.sdiv(x, y)
 
+
 def int_ufloordiv_impl(context, builder, sig, args):
     x, y = args
     cgutils.guard_zero(context, builder, y)
@@ -159,8 +160,14 @@ def int_spower_impl(context, builder, sig, args):
         y = builder.trunc(y, Type.int(32))
     elif y.type.width < 32:
         y = builder.sext(y, Type.int(32))
-    powerfn = lc.Function.intrinsic(module, lc.INTR_POWI, [x.type])
-    return builder.call(powerfn, (x, y))
+
+    if context.implement_powi_as_math_call:
+        undersig = typing.signature(sig.return_type, sig.args[0], types.int32)
+        impl = context.get_function(math.pow, undersig)
+        return impl(builder, (x, y))
+    else:
+        powerfn = lc.Function.intrinsic(module, lc.INTR_POWI, [x.type])
+        return builder.call(powerfn, (x, y))
 
 
 def int_upower_impl(context, builder, sig, args):
@@ -170,8 +177,14 @@ def int_upower_impl(context, builder, sig, args):
         y = builder.trunc(y, Type.int(32))
     elif y.type.width < 32:
         y = builder.zext(y, Type.int(32))
-    powerfn = lc.Function.intrinsic(module, lc.INTR_POWI, [x.type])
-    return builder.call(powerfn, (x, y))
+
+    if context.implement_powi_as_math_call:
+        undersig = typing.signature(sig.return_type, sig.args[0], types.int32)
+        impl = context.get_function(math.pow, undersig)
+        return impl(builder, (x, y))
+    else:
+        powerfn = lc.Function.intrinsic(module, lc.INTR_POWI, [x.type])
+        return builder.call(powerfn, (x, y))
 
 
 def int_power_func_body(context, builder, x, y):
@@ -239,6 +252,7 @@ def int_ugt_impl(context, builder, sig, args):
 def int_uge_impl(context, builder, sig, args):
     return builder.icmp(lc.ICMP_UGE, *args)
 
+
 def int_eq_impl(context, builder, sig, args):
     return builder.icmp(lc.ICMP_EQ, *args)
 
@@ -253,6 +267,7 @@ def int_abs_impl(context, builder, sig, args):
     ltz = builder.icmp(lc.ICMP_SLT, x, ZERO)
     negated = builder.neg(x)
     return builder.select(ltz, negated, x)
+
 
 def uint_abs_impl(context, builder, sig, args):
     [x] = args
@@ -363,7 +378,7 @@ def int_sign_impl(context, builder, sig, args):
     with cgutils.goto_block(builder, bb_pos):
         builder.store(POS, presult)
         builder.branch(bb_exit)
-        
+
     with cgutils.goto_block(builder, bb_neg):
         builder.store(NEG, presult)
         builder.branch(bb_exit)
@@ -586,8 +601,12 @@ def real_mod_impl(context, builder, sig, args):
 def real_power_impl(context, builder, sig, args):
     x, y = args
     module = cgutils.get_module(builder)
-    fn = lc.Function.intrinsic(module, lc.INTR_POW, [y.type])
-    return builder.call(fn, (x, y))
+    if context.implement_powi_as_math_call:
+        imp = context.get_function(math.pow, sig)
+        return imp(builder, args)
+    else:
+        fn = lc.Function.intrinsic(module, lc.INTR_POW, [y.type])
+        return builder.call(fn, (x, y))
 
 
 def real_lt_impl(context, builder, sig, args):
@@ -670,7 +689,7 @@ def real_sign_impl(context, builder, sig, args):
     with cgutils.goto_block(builder, bb_pos):
         builder.store(POS, presult)
         builder.branch(bb_exit)
-        
+
     with cgutils.goto_block(builder, bb_neg):
         builder.store(NEG, presult)
         builder.branch(bb_exit)
@@ -915,6 +934,7 @@ def number_not_impl(context, builder, sig, args):
     istrue = context.cast(builder, val, typ, sig.return_type)
     return builder.not_(istrue)
 
+
 def number_as_bool_impl(context, builder, sig, args):
     [typ] = sig.args
     [val] = args
@@ -933,7 +953,7 @@ builtin(implement('not', types.boolean)(number_not_impl))
 class Slice(cgutils.Structure):
     _fields = [('start', types.intp),
                ('stop', types.intp),
-               ('step', types.intp),]
+               ('step', types.intp), ]
 
 
 @builtin
@@ -1002,6 +1022,7 @@ def slice0_empty_impl(context, builder, sig, args):
 
     return slice3._getvalue()
 
+
 @builtin
 @implement(types.slice_type, types.none, types.none)
 def slice0_none_none_impl(context, builder, sig, args):
@@ -1012,34 +1033,35 @@ def slice0_none_none_impl(context, builder, sig, args):
 
 class RangeState32(cgutils.Structure):
     _fields = [('start', types.int32),
-               ('stop',  types.int32),
-               ('step',  types.int32)]
+               ('stop', types.int32),
+               ('step', types.int32)]
 
 
 class RangeIter32(cgutils.Structure):
-    _fields = [('iter',  types.CPointer(types.int32)),
-               ('stop',  types.int32),
-               ('step',  types.int32),
+    _fields = [('iter', types.CPointer(types.int32)),
+               ('stop', types.int32),
+               ('step', types.int32),
                ('count', types.CPointer(types.int32))]
 
 
 class RangeState64(cgutils.Structure):
     _fields = [('start', types.int64),
-               ('stop',  types.int64),
-               ('step',  types.int64)]
+               ('stop', types.int64),
+               ('step', types.int64)]
 
 
 class RangeIter64(cgutils.Structure):
-    _fields = [('iter',  types.CPointer(types.int64)),
-               ('stop',  types.int64),
-               ('step',  types.int64),
+    _fields = [('iter', types.CPointer(types.int64)),
+               ('stop', types.int64),
+               ('step', types.int64),
                ('count', types.CPointer(types.int64))]
 
 
 def make_unituple_iter(tupiter):
     class UniTupleIter(cgutils.Structure):
-        _fields = [('index',  types.CPointer(types.intp)),
-                   ('tuple',  tupiter.unituple,)]
+        _fields = [('index', types.CPointer(types.intp)),
+                   ('tuple', tupiter.unituple,)]
+
     return UniTupleIter
 
 
@@ -1160,7 +1182,6 @@ def itervalid_range32_impl(context, builder, sig, args):
     zero = context.get_constant(types.int32, 0)
     gt = builder.icmp(lc.ICMP_SGE, builder.load(iterobj.count), zero)
     return gt
-
 
 
 @builtin
@@ -1368,7 +1389,7 @@ def getitem_array1d_slice(context, builder, sig, args):
     retary.shape = cgutils.pack_array(builder, [shape])
 
     stride = cgutils.get_strides_from_slice(builder, aryty.ndim, ary.strides,
-                                             slicestruct, 0)
+                                            slicestruct, 0)
     retary.strides = cgutils.pack_array(builder, [stride])
     retary.data = dataptr
 
@@ -1512,6 +1533,7 @@ def setitem_array_unituple(context, builder, sig, args):
                                    wraparound=True)
     context.pack_value(builder, aryty.dtype, val, ptr)
 
+
 @builtin
 @implement('setitem', types.Kind(types.Array),
            types.Kind(types.Tuple), types.Any)
@@ -1529,8 +1551,6 @@ def setitem_array_tuple(context, builder, sig, args):
     ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
                                    wraparound=True)
     context.pack_value(builder, aryty.dtype, val, ptr)
-
-
 
 
 @builtin
@@ -1607,6 +1627,7 @@ def caster(restype):
         [val] = args
         [valty] = sig.args
         return context.cast(builder, val, valty, restype)
+
     return _cast
 
 
@@ -1678,6 +1699,7 @@ def min_impl(context, builder, sig, args):
     resty, resval = reduce(domax, typvals)
     return resval
 
+
 @builtin
 @implement(round, types.float32)
 def round_impl_f32(context, builder, sig, args):
@@ -1689,6 +1711,7 @@ def round_impl_f32(context, builder, sig, args):
         fn = module.get_or_insert_function(fnty, name="roundf")
     assert fn.is_declaration
     return builder.call(fn, args)
+
 
 @builtin
 @implement(round, types.float64)
@@ -1739,3 +1762,16 @@ def complex_impl(context, builder, sig, args):
     cmplx.real = real
     cmplx.imag = imag
     return cmplx._getvalue()
+
+# -----------------------------------------------------------------------------
+
+@builtin_attr
+@impl_attribute(types.Module(math), "pi", types.float64)
+def math_pi_impl(context, builder, typ, value):
+    return context.get_constant(types.float64, math.pi)
+
+
+@builtin_attr
+@impl_attribute(types.Module(math), "e", types.float64)
+def math_e_impl(context, builder, typ, value):
+    return context.get_constant(types.float64, math.e)

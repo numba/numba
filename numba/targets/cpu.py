@@ -39,8 +39,8 @@ class CPUContext(BaseContext):
         self.map_numpy_math_functions()
 
         # Add target specific implementations
-        self.insert_func_defn(mathimpl.functions)
-        self.insert_func_defn(npyimpl.functions)
+        self.insert_func_defn(mathimpl.registry.functions)
+        self.insert_func_defn(npyimpl.registry.functions)
 
     def build_pass_manager(self):
         if config.OPT == 3:

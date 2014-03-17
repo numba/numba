@@ -1,0 +1,141 @@
+from __future__ import absolute_import, print_function, division
+
+from llvm.core import Module, Type, Builder
+from numba.cuda.cudadrv.nvvm import (NVVM, CompilationUnit, llvm_to_ptx,
+                                     set_cuda_kernel, fix_data_layout,
+                                     get_arch_option)
+from ctypes import c_size_t, c_uint64, sizeof
+from numba.cuda.testing import unittest, CUDATestCase
+
+is64bit = sizeof(c_size_t) == sizeof(c_uint64)
+
+
+class TestNvvmDriver(unittest.TestCase):
+    def get_ptx(self):
+        nvvm = NVVM()
+        print(nvvm.get_version())
+
+        if is64bit:
+            return gpu64
+        else:
+            return gpu32
+
+    def test_nvvm_compile(self):
+        nvvmir = self.get_ptx()
+        cu = CompilationUnit()
+
+        cu.add_module(nvvmir.encode('utf8'))
+        ptx = cu.compile().decode('utf8')
+        print(ptx)
+        self.assertTrue('simple' in ptx)
+        self.assertTrue('ave' in ptx)
+        print(cu.log)
+
+    def test_nvvm_compile_simple(self):
+        nvvmir = self.get_ptx()
+        ptx = llvm_to_ptx(nvvmir).decode('utf8')
+        print(ptx)
+        self.assertTrue('simple' in ptx)
+        self.assertTrue('ave' in ptx)
+
+    def test_nvvm_from_llvm(self):
+        m = Module.new("test_nvvm_from_llvm")
+        fty = Type.function(Type.void(), [Type.int()])
+        kernel = m.add_function(fty, name='mycudakernel')
+        bldr = Builder.new(kernel.append_basic_block('entry'))
+        bldr.ret_void()
+        print(m)
+        set_cuda_kernel(kernel)
+
+        fix_data_layout(m)
+        ptx = llvm_to_ptx(str(m)).decode('utf8')
+        print(ptx)
+        self.assertTrue('mycudakernel' in ptx)
+        if is64bit:
+            self.assertTrue('.address_size 64' in ptx)
+        else:
+            self.assertTrue('.address_size 32' in ptx)
+
+
+class TestArchOption(unittest.TestCase):
+    def test_get_arch_option(self):
+        self.assertTrue(get_arch_option(2, 0) == 'compute_20')
+        self.assertTrue(get_arch_option(2, 1) == 'compute_20')
+        self.assertTrue(get_arch_option(3, 0) == 'compute_30')
+        self.assertTrue(get_arch_option(3, 3) == 'compute_30')
+        self.assertTrue(get_arch_option(3, 4) == 'compute_30')
+        self.assertTrue(get_arch_option(3, 5) == 'compute_35')
+        self.assertTrue(get_arch_option(3, 6) == 'compute_35')
+
+
+gpu64 = '''
+target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64"
+
+define i32 @ave(i32 %a, i32 %b) {
+entry:
+%add = add nsw i32 %a, %b
+%div = sdiv i32 %add, 2
+ret i32 %div
+}
+
+define void @simple(i32* %data) {
+entry:
+%0 = call i32 @llvm.nvvm.read.ptx.sreg.ctaid.x()
+%1 = call i32 @llvm.nvvm.read.ptx.sreg.ntid.x()
+%mul = mul i32 %0, %1
+%2 = call i32 @llvm.nvvm.read.ptx.sreg.tid.x()
+%add = add i32 %mul, %2
+%call = call i32 @ave(i32 %add, i32 %add)
+%idxprom = sext i32 %add to i64
+%arrayidx = getelementptr inbounds i32* %data, i64 %idxprom
+store i32 %call, i32* %arrayidx, align 4
+ret void
+}
+
+declare i32 @llvm.nvvm.read.ptx.sreg.ctaid.x() nounwind readnone
+
+declare i32 @llvm.nvvm.read.ptx.sreg.ntid.x() nounwind readnone
+
+declare i32 @llvm.nvvm.read.ptx.sreg.tid.x() nounwind readnone
+
+!nvvm.annotations = !{!1}
+!1 = metadata !{void (i32*)* @simple, metadata !"kernel", i32 1}
+'''
+
+gpu32 = '''
+target datalayout = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64"
+
+define i32 @ave(i32 %a, i32 %b) {
+entry:
+%add = add nsw i32 %a, %b
+%div = sdiv i32 %add, 2
+ret i32 %div
+}
+
+define void @simple(i32* %data) {
+entry:
+%0 = call i32 @llvm.nvvm.read.ptx.sreg.ctaid.x()
+%1 = call i32 @llvm.nvvm.read.ptx.sreg.ntid.x()
+%mul = mul i32 %0, %1
+%2 = call i32 @llvm.nvvm.read.ptx.sreg.tid.x()
+%add = add i32 %mul, %2
+%call = call i32 @ave(i32 %add, i32 %add)
+%idxprom = sext i32 %add to i64
+%arrayidx = getelementptr inbounds i32* %data, i64 %idxprom
+store i32 %call, i32* %arrayidx, align 4
+ret void
+}
+
+declare i32 @llvm.nvvm.read.ptx.sreg.ctaid.x() nounwind readnone
+
+declare i32 @llvm.nvvm.read.ptx.sreg.ntid.x() nounwind readnone
+
+declare i32 @llvm.nvvm.read.ptx.sreg.tid.x() nounwind readnone
+
+!nvvm.annotations = !{!1}
+!1 = metadata !{void (i32*)* @simple, metadata !"kernel", i32 1}
+
+'''
+
+if __name__ == '__main__':
+    unittest.main()

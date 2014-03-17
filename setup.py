@@ -57,9 +57,11 @@ ext_npyufunc_ufunc = Extension(name="numba.npyufunc._internal",
                                depends=["numba/npyufunc/_internal.h",
                                         "numba/_pymodule.h"])
 
+ext_mviewbuf = Extension(name='numba.mviewbuf',
+                         sources=['numba/mviewbuf.c'])
 
 ext_modules = [ext_dynfunc, ext_numpyadapt, ext_dispatcher, ext_helperlib,
-               ext_typeconv, ext_npyufunc_ufunc]
+               ext_typeconv, ext_npyufunc_ufunc, ext_mviewbuf]
 
 packages = [
     "numba",
@@ -69,6 +71,12 @@ packages = [
     "numba.typeconv",
     "numba.npyufunc",
     "numba.pycc",
+    "numba.servicelib",
+    "numba.cuda",
+    "numba.cuda.cudadrv",
+    "numba.cuda.tests",
+    "numba.cuda.tests.cudadrv",
+    "numba.cuda.tests.cudapy",
 ]
 
 setup(name='numba',
