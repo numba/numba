@@ -50,8 +50,9 @@ def unary_npy_math_extern(fn):
         fn = mod.get_or_insert_function(fnty, name=n)
         return builder.call(fn, (val,))
 
-_externs = [ "exp2", "expm1", "log", "log2", "log10", "log1p", "deg2rad", "rad2deg" ] 
-map(unary_npy_math_extern, _externs)
+_externs = [ "exp2", "expm1", "log", "log2", "log10", "log1p", "deg2rad", "rad2deg" ]
+for x in _externs:
+    unary_npy_math_extern(x)
 
 
 def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
@@ -69,7 +70,7 @@ def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
             inp_ndim = 1
         else:
             raise TypeError('unknown type for input operand')
-        
+
         out_ndim = tyout.ndim
 
         if asfloat:
@@ -112,14 +113,14 @@ def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
                 x = builder.alloca(Type.int(64))
                 builder.store(ZERO, x)
                 inp_indices.append(x)
-        
+
         loopshape = cgutils.unpack_tuple(builder, oary.shape, out_ndim)
 
         with cgutils.loop_nest(builder, loopshape, intp=intpty) as indices:
 
             # Increment input indices.
             # Since the output dimensions are already being incremented,
-            # we'll use that to set the input indices. In order to 
+            # we'll use that to set the input indices. In order to
             # handle broadcasting, any input dimension of size 1 won't be
             # incremented.
             if not scalar_inp:
@@ -182,10 +183,10 @@ def numpy_scalar_unary_ufunc(funckey, asfloat=True):
         [tyinp] = sig.args
         tyout = sig.return_type
         [inp] = args
-            
+
         if asfloat:
             sig = typing.signature(types.float64, types.float64)
-        
+
         fnwork = context.get_function(funckey, sig)
         if asfloat:
             inp = context.cast(builder, inp, tyinp, types.float64)
@@ -298,7 +299,7 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
                 tyout.dtype is types.uint64 and \
                 sys.platform.startswith('win32'):
             raise TypeError('Cannot store result in uint64 array')
-        
+
         sig = typing.signature(result_type, promote_type, promote_type)
 
         if not scalar_inp1:
@@ -335,7 +336,7 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
                 x = builder.alloca(Type.int(64))
                 builder.store(ZERO, x)
                 inp1_indices.append(x)
-        
+
         inp2_indices = None
         if not scalar_inp2:
             inp2_indices = []
@@ -343,14 +344,14 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
                 x = builder.alloca(Type.int(64))
                 builder.store(ZERO, x)
                 inp2_indices.append(x)
-        
+
         loopshape = cgutils.unpack_tuple(builder, oary.shape, out_ndim)
-        
+
         with cgutils.loop_nest(builder, loopshape, intp=intpty) as indices:
 
             # Increment input indices.
             # Since the output dimensions are already being incremented,
-            # we'll use that to set the input indices. In order to 
+            # we'll use that to set the input indices. In order to
             # handle broadcasting, any input dimension of size 1 won't be
             # incremented.
             def build_increment_blocks(inp_indices, inp_shape, inp_ndim, inp_num):
