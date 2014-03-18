@@ -142,6 +142,82 @@ def _init_libcusparse():
 
 libcusparse = _init_libcusparse()
 
+DIAGTYPE = (CUSPARSE_DIAG_TYPE_NON_UNIT,
+            CUSPARSE_DIAG_TYPE_UNIT)
+
+DIAGTYPECHAR = ('N', 'U')
+
+FILLMODE = (CUSPARSE_FILL_MODE_LOWER,
+            CUSPARSE_FILL_MODE_UPPER)
+
+FILLMODECHAR = ('L', 'U')
+
+MATRIXTYPE = (CUSPARSE_MATRIX_TYPE_GENERAL,
+              CUSPARSE_MATRIX_TYPE_SYMMETRIC,
+              CUSPARSE_MATRIX_TYPE_HERMITIAN,
+              CUSPARSE_MATRIX_TYPE_TRIANGULAR)
+
+MATRIXTYPECHAR = ('G', 'S', 'H', 'T')
+
+
+class MatDescr(finalizer.OwnerMixin):
+    def __init__(self, api, handle):
+        self._api = api
+        self._handle = handle
+        self._finalizer_track((self._handle, self._api))
+
+    @classmethod
+    def _finalize(cls, res):
+        handle, api = res
+        api.cusparseDestroyMatDescr(handle)
+
+    @property
+    def diagtype(self):
+        return DIAGTYPECHAR[self._api.cusparseGetMatDiagType(self._handle)]
+
+    @diagtype.setter
+    def diagtype(self, val):
+        self._api.cusparseSetMatDiagType(self._handle,
+                                         DIAGTYPECHAR.index(val))
+
+    @property
+    def fillmode(self):
+        return FILLMODECHAR[self._api.cusparseGetMatFillMode(self._handle)]
+
+    @fillmode.setter
+    def fillmode(self, val):
+        return self._api.cusparseSetMatFillMode(self._handle,
+                                                FILLMODECHAR.index(val))
+
+    @property
+    def indexbase(self):
+        return self._api.cusparseGetMatIndexBase(self._handle)
+
+    @indexbase.setter
+    def indexbase(self, val):
+        return self._api.cusparseSetMatIndexBase(self._handle, val)
+
+    @property
+    def matrixtype(self):
+        return MATRIXTYPECHAR[self._api.cusparseGetMatType(self._handle)]
+
+    @matrixtype.setter
+    def matrixtype(self, val):
+        return self._api.cusparseSetMatType(self._handle,
+                                            MATRIXTYPECHAR.index(val))
+
+
+class SolveAnalysisInfo(finalizer.OwnerMixin):
+    def __init__(self, api, handle):
+        self._api = api
+        self._handle = handle
+        self._finalizer_track((self._handle, self._api))
+
+    @classmethod
+    def _finalize(cls, res):
+        handle, api = res
+        api.cusparseDestroySolveAnalysisInfo(handle)
+
 
 class _cuSparse(finalizer.OwnerMixin):
     def __init__(self):
@@ -157,6 +233,16 @@ class _cuSparse(finalizer.OwnerMixin):
         self._stream = 0
         # Default to host pointer
         self.use_host_pointer()
+
+    def matdescr(self):
+        handle = cusparseMatDescr_t()
+        self._api.cusparseCreateMatDescr(byref(handle))
+        return MatDescr(self._api, handle)
+
+    def solve_analysis_info(self):
+        handle = cusparseSolveAnalysisInfo_t()
+        self._api.cusparseCreateSolveAnalysisInfo(byref(handle))
+        return SolveAnalysisInfo(self._api, handle)
 
     @classmethod
     def _finalize(cls, res):
@@ -287,37 +373,37 @@ def _prepare_array(self, val):
 
 def _prepare_hybpartition(self, val):
     if val == 'A':
-        return CUSPARSE_HYB_PARTITION_AUTO
+        return CUSPARSE_HYB_PARTITION_AUTO, None
     elif val == 'U':
-        return CUSPARSE_HYB_PARTITION_USER
+        return CUSPARSE_HYB_PARTITION_USER, None
     elif val == 'M':
-        return CUSPARSE_HYB_PARTITION_MAX
+        return CUSPARSE_HYB_PARTITION_MAX, None
     else:
         raise ValueError("Partition flag must be either 'A', 'U' or 'M'")
 
 
 def _prepare_direction_flag(self, val):
     if val == 'R':
-        return CUSPARSE_DIRECTION_ROW
+        return CUSPARSE_DIRECTION_ROW, None
     elif val == 'C':
-        return CUSPARSE_DIRECTION_COLUMN
+        return CUSPARSE_DIRECTION_COLUMN, None
     else:
         raise ValueError("Direction flag must be either 'R' or 'C'")
 
 
 def _prepare_operation_flag(self, val):
     if val == 'N':
-        return CUSPARSE_OPERATION_NON_TRANSPOSE
+        return CUSPARSE_OPERATION_NON_TRANSPOSE, None
     elif val == 'T':
-        return CUSPARSE_OPERATION_TRANSPOSE
+        return CUSPARSE_OPERATION_TRANSPOSE, None
     elif val == 'C':
-        return CUSPARSE_OPERATION_CONJUGATE_TRANSPOSE
+        return CUSPARSE_OPERATION_CONJUGATE_TRANSPOSE, None
     else:
         raise ValueError("Operation flag must be either 'N', 'T' or 'C'")
 
 
 def _prepare_matdescr(self, val):
-    raise NotImplementedError
+    return val._handle, None
 
 
 def _prepare_hybmat(self, val):
@@ -326,15 +412,15 @@ def _prepare_hybmat(self, val):
 
 def _prepare_action(self, val):
     if val == 'N':
-        return CUSPARSE_ACTION_NUMERIC
+        return CUSPARSE_ACTION_NUMERIC, None
     elif val == 'S':
-        return CUSPARSE_ACTION_SYMBOLIC
+        return CUSPARSE_ACTION_SYMBOLIC, None
     else:
         raise ValueError("Action must be either 'N' or 'S'")
 
 
 def _prepare_solveinfo(self, val):
-    raise NotImplementedError
+    return val._handle, None
 
 
 def _prepare_scalar(self, val):
@@ -441,6 +527,7 @@ class _bsrxmv(_api_function):
     prepare_alpha = _prepare_scalar
     prepare_beta = _prepare_scalar
 
+    prepare_bsrValA = _prepare_array
     prepare_bsrMaskPtrA = _prepare_array
     prepare_bsrRowPtrA = _prepare_array
     prepare_bsrEndPtrA = _prepare_array
@@ -452,7 +539,24 @@ class _bsrxmv(_api_function):
     prepare_descrA = _prepare_matdescr
 
 
-Sbsrxmv = Dbsrxmv = Cbsrxmv = Zbsrxmv = _bsrxmv
+class Sbsrxmv(_bsrxmv):
+    __slots__ = ()
+    T = c_float
+
+
+class Dbsrxmv(_bsrxmv):
+    __slots__ = ()
+    T = c_double
+
+
+class Cbsrxmv(_bsrxmv):
+    __slots__ = ()
+    T = c_complex
+
+
+class Zbsrxmv(_bsrxmv):
+    __slots__ = ()
+    T = c_double_complex
 
 
 class _csc2dense(_api_function):
@@ -772,8 +876,20 @@ class _csrsv_solve_v2(_api_function):
     prepare_y = _prepare_array
 
 
-Scsrsv_solve_v2 = Dcsrsv_solve_v2 = _csrsv_solve_v2
-Ccsrsv_solve_v2 = Zcsrsv_solve_v2 = _csrsv_solve_v2
+class Scsrsv_solve_v2(_csrsv_solve_v2):
+    T = c_float
+
+
+class Dcsrsv_solve_v2(_csrsv_solve_v2):
+    T = c_double
+
+
+class Ccsrsv_solve_v2(_csrsv_solve_v2):
+    T = c_complex
+
+
+class Zcsrsv_solve_v2(_csrsv_solve_v2):
+    T = c_double_complex
 
 
 class _dense2csc(_api_function):

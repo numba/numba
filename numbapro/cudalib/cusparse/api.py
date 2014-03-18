@@ -1,9 +1,10 @@
 from __future__ import print_function, absolute_import, division
 from contextlib import contextmanager
 import numpy as np
+import scipy.sparse as ss
+from numbapro import cuda
 from .binding import (cuSparse, CUSPARSE_INDEX_BASE_ZERO,
                       CUSPARSE_INDEX_BASE_ONE)
-from numbapro import cuda
 
 dtype_to_char = {
     np.dtype(np.float32): 'S',
@@ -69,89 +70,209 @@ class Sparse(object):
         fn = "%s%s" % (ch, fname)
         return getattr(self.api, fn)
 
-    def axpyi(self, alpha, xval, xind, y):
-        _sentry_ndim(1, xval=xval, xind=xval, y=y)
-        _sentry_dtype(np.int32, xind=xind)
-        _sentry_dtype(xval.dtype, y=y)
-        fn = self._get_api("axpyi", xval.dtype)
-        nnz = xval.size
-        with _readonly(xval, xind) as [dxval, dxind]:
+    def matdescr(self, indexbase=None, diagtype='N', fillmode='L',
+                 matrixtype='G'):
+        descr = self.api.matdescr()
+        descr.indexbase = self.idxbase if indexbase is None else indexbase
+        descr.diagtype = diagtype
+        descr.fillmode = fillmode
+        descr.matrixtype = matrixtype
+        return descr
+
+    # ------------------------------------------------------------------------
+    # Level 1 API
+
+    def axpyi(self, alpha, xVal, xInd, y):
+        _sentry_ndim(1, xVal=xVal, xInd=xVal, y=y)
+        _sentry_dtype(np.int32, xInd=xInd)
+        _sentry_dtype(xVal.dtype, y=y)
+        fn = self._get_api("axpyi", xVal.dtype)
+        nnz = xVal.size
+        with _readonly(xVal, xInd) as [dxval, dxind]:
             with _readwrite(y) as [dy]:
                 fn(nnz=nnz, alpha=alpha, xVal=dxval, xInd=dxind, y=dy,
                    idxBase=self.idxbase)
         return y
 
-    def doti(self, xval, xind, y):
-        _sentry_ndim(1, xval=xval, xind=xind, y=y)
-        _sentry_dtype(np.int32, xind=xind)
-        _sentry_dtype(xval.dtype, y=y)
-        fn = self._get_api("doti", xval.dtype)
-        nnz = xval.size
-        with _readonly(xval, xind) as [dxval, dxind]:
+    def doti(self, xVal, xInd, y):
+        _sentry_ndim(1, xVal=xVal, xInd=xInd, y=y)
+        _sentry_dtype(np.int32, xInd=xInd)
+        _sentry_dtype(xVal.dtype, y=y)
+        fn = self._get_api("doti", xVal.dtype)
+        nnz = xVal.size
+        with _readonly(xVal, xInd) as [dxval, dxind]:
             with _readwrite(y) as [dy]:
                 result = fn(nnz=nnz, xVal=dxval, xInd=dxind, y=dy,
                             idxBase=self.idxbase)
         return result
 
-    def dotci(self, xval, xind, y):
-        _sentry_ndim(1, xval=xval, xind=xind, y=y)
-        _sentry_dtype(np.int32, xind=xind)
-        _sentry_dtype(xval.dtype, y=y)
-        fn = self._get_api("dotci", xval.dtype)
-        nnz = xval.size
-        with _readonly(xval, xind) as [dxval, dxind]:
+    def dotci(self, xVal, xInd, y):
+        _sentry_ndim(1, xVal=xVal, xInd=xInd, y=y)
+        _sentry_dtype(np.int32, xInd=xInd)
+        _sentry_dtype(xVal.dtype, y=y)
+        fn = self._get_api("dotci", xVal.dtype)
+        nnz = xVal.size
+        with _readonly(xVal, xInd) as [dxval, dxind]:
             with _readwrite(y) as [dy]:
                 result = fn(nnz=nnz, xVal=dxval, xInd=dxind, y=dy,
                             idxBase=self.idxbase)
         return result
 
-    def gthr(self, y, xval, xind):
-        _sentry_ndim(1, xval=xval, xind=xind, y=y)
-        _sentry_dtype(np.int32, xind=xind)
-        _sentry_dtype(xval.dtype, y=y)
-        fn = self._get_api("gthr", xval.dtype)
-        nnz = xval.size
-        with _readonly(y, xind) as [dy, dxind]:
-            with _readwrite(xval) as [dxval]:
+    def gthr(self, y, xVal, xInd):
+        _sentry_ndim(1, xVal=xVal, xInd=xInd, y=y)
+        _sentry_dtype(np.int32, xInd=xInd)
+        _sentry_dtype(xVal.dtype, y=y)
+        fn = self._get_api("gthr", xVal.dtype)
+        nnz = xVal.size
+        with _readonly(y, xInd) as [dy, dxind]:
+            with _readwrite(xVal) as [dxval]:
                 fn(nnz=nnz, xVal=dxval, xInd=dxind, y=dy, idxBase=self.idxbase)
 
-    def gthrz(self, y, xval, xind):
-        _sentry_ndim(1, xval=xval, xind=xind, y=y)
-        _sentry_dtype(np.int32, xind=xind)
-        _sentry_dtype(xval.dtype, y=y)
-        fn = self._get_api("gthrz", xval.dtype)
-        nnz = xval.size
-        with _readonly(xind) as [dxind]:
-            with _readwrite(y, xval) as [dy, dxval]:
+    def gthrz(self, y, xVal, xInd):
+        _sentry_ndim(1, xVal=xVal, xInd=xInd, y=y)
+        _sentry_dtype(np.int32, xInd=xInd)
+        _sentry_dtype(xVal.dtype, y=y)
+        fn = self._get_api("gthrz", xVal.dtype)
+        nnz = xVal.size
+        with _readonly(xInd) as [dxind]:
+            with _readwrite(y, xVal) as [dy, dxval]:
                 fn(nnz=nnz, xVal=dxval, xInd=dxind, y=dy, idxBase=self.idxbase)
 
-    def roti(self, xval, xind, y, c, s):
-        _sentry_ndim(1, xval=xval, xind=xind, y=y)
-        _sentry_dtype(np.int32, xind=xind)
-        _sentry_dtype(xval.dtype, y=y)
-        fn = self._get_api("roti", xval.dtype)
-        nnz = xval.size
-        with _readonly(xind) as [dxind]:
-            with _readwrite(y, xval) as [dy, dxval]:
+    def roti(self, xVal, xInd, y, c, s):
+        _sentry_ndim(1, xVal=xVal, xInd=xInd, y=y)
+        _sentry_dtype(np.int32, xInd=xInd)
+        _sentry_dtype(xVal.dtype, y=y)
+        fn = self._get_api("roti", xVal.dtype)
+        nnz = xVal.size
+        with _readonly(xInd) as [dxind]:
+            with _readwrite(y, xVal) as [dy, dxval]:
                 fn(nnz=nnz, xVal=dxval, xInd=dxind, y=dy, c=c, s=s,
                    idxBase=self.idxbase)
 
-    def sctr(self, xval, xind, y):
-        _sentry_ndim(1, xval=xval, xind=xind, y=y)
-        _sentry_dtype(np.int32, xind=xind)
-        _sentry_dtype(xval.dtype, y=y)
-        fn = self._get_api("sctr", xval.dtype)
-        nnz = xval.size
-        with _readonly(xval, xind) as [dxval, dxind]:
+    def sctr(self, xVal, xInd, y):
+        _sentry_ndim(1, xVal=xVal, xInd=xInd, y=y)
+        _sentry_dtype(np.int32, xInd=xInd)
+        _sentry_dtype(xVal.dtype, y=y)
+        fn = self._get_api("sctr", xVal.dtype)
+        nnz = xVal.size
+        with _readonly(xVal, xInd) as [dxval, dxind]:
             with _readwrite(y) as [dy]:
                 fn(nnz=nnz, xVal=dxval, xInd=dxind, y=dy, idxBase=self.idxbase)
 
+    # ------------------------------------------------------------------------
+    # Level 2 API
 
-def coo_matrix(ary):
-    """
-    Args
-    -----
-    - ary [np.ndarray]
-        Host array
+    def bsrmv_matrix(self, dir, trans, alpha, descr, bsrmat, x, beta, y):
+        bsrVal = bsrmat.data
+        bsrRowPtr = bsrmat.indptr
+        bsrColInd = bsrmat.indices
+        nnzb = bsrColInd.size
+        m, n = bsrmat.shape
+        blockDim, blockDim1 = bsrmat.blocksize
+        assert blockDim == blockDim1
 
-    """
+        mb = (m + blockDim - 1) // blockDim
+        nb = (n + blockDim - 1) // blockDim
+
+        self.bsrmv(dir, trans, mb, nb, nnzb, alpha, descr, bsrVal,
+                   bsrRowPtr, bsrColInd, blockDim, x, beta, y)
+
+    def bsrmv(self, dir, trans, mb, nb, nnzb, alpha, descr, bsrVal,
+              bsrRowPtr, bsrColInd, blockDim, x, beta, y):
+        _sentry_ndim(1, x=x, y=y)
+        _sentry_dtype(bsrVal.dtype, x=x, y=y)
+        fn = self._get_api("bsrmv", bsrVal.dtype)
+
+        with _readonly(bsrVal, bsrRowPtr, bsrColInd, x) \
+            as [dbsrVal, dbsrRowPtr, dbsrColInd, dx]:
+            with _readwrite(y) as [dy]:
+                fn(dirA=dir, transA=trans, mb=mb, nb=nb, nnzb=nnzb,
+                   alpha=alpha, descrA=descr, bsrValA=dbsrVal,
+                   bsrRowPtrA=dbsrRowPtr, bsrColIndA=dbsrColInd,
+                   blockDim=blockDim, x=dx, beta=beta, y=dy)
+
+    def bsrxmv(self, dir, trans, sizeOfMask, mb, nb, nnzb, alpha, descr,
+               bsrVal, bsrMaskPtr, bsrRowPtr, bsrEndPtr, bsrColInd, blockDim,
+               x, beta, y):
+        _sentry_ndim(1, x=x, y=y)
+        _sentry_dtype(bsrVal.dtype, x=x, y=y)
+        fn = self._get_api("bsrxmv", bsrVal.dtype)
+
+        with _readonly(bsrVal, bsrRowPtr, bsrColInd, bsrMaskPtr, bsrEndPtr, x) \
+            as [dbsrVal, dbsrRowPtr, dbsrColInd, dbsrMaskPtr, dbsrEndPtr, dx]:
+            with _readwrite(y) as [dy]:
+                fn(dirA=dir, transA=trans, sizeOfMask=sizeOfMask,
+                   mb=mb, nb=nb, nnzb=nnzb, alpha=alpha, descrA=descr,
+                   bsrValA=dbsrVal, bsrRowPtrA=dbsrRowPtr,
+                   bsrColIndA=dbsrColInd, bsrMaskPtrA=dbsrMaskPtr,
+                   bsrEndPtrA=dbsrEndPtr, blockDim=blockDim, x=dx, beta=beta,
+                   y=dy)
+
+    def csrmv(self, trans, m, n, nnz, alpha, descr, csrVal, csrRowPtr,
+              csrColInd, x, beta, y):
+        _sentry_ndim(1, x=x, y=y)
+        _sentry_dtype(csrVal.dtype, x=x, y=y)
+        fn = self._get_api("csrmv", csrVal.dtype)
+        with _readonly(csrVal, csrRowPtr, csrColInd, x) \
+            as [dcsrVal, dcsrRowPtr, dcsrColInd, dx]:
+            with _readwrite(y) as [dy]:
+                fn(transA=trans, m=m, n=n, nnz=nnz,
+                   alpha=alpha, descrA=descr, csrValA=dcsrVal,
+                   csrRowPtrA=dcsrRowPtr, csrColIndA=dcsrColInd, x=dx,
+                   beta=beta, y=dy)
+
+    def csrsv_analysis(self, trans, m, nnz, descr, csrVal, csrRowPtr,
+                       csrColInd):
+        """
+        Returns
+        -------
+        SolveAnalysisInfo
+        """
+        fn = self._get_api("csrsv_analysis", csrVal.dtype)
+        info = self.api.solve_analysis_info()
+        with _readonly(csrVal, csrRowPtr, csrColInd) \
+            as [dcsrVal, dcsrRowPtr, dcsrColInd]:
+            fn(transA=trans, m=m, nnz=nnz, descrA=descr, csrValA=dcsrVal,
+               csrRowPtrA=dcsrRowPtr, csrColIndA=dcsrColInd, info=info)
+        return info
+
+    def csrsv_solve(self, trans, m, alpha, descr, csrVal, csrRowPtr,
+                    csrColInd, info, x, y):
+        _sentry_ndim(1, x=x, y=y)
+        _sentry_dtype(csrVal.dtype, x=x, y=y)
+        fn = self._get_api("csrsv_solve", csrVal.dtype)
+        with _readonly(csrVal, csrRowPtr, csrColInd, x) \
+            as [dcsrVal, dcsrRowPtr, dcsrColInd, dx]:
+            with _readwrite(y) as [dy]:
+                fn(transA=trans, m=m, alpha=alpha, descrA=descr,
+                   csrValA=dcsrVal, csrRowPtrA=dcsrRowPtr,
+                   csrColIndA=dcsrColInd, info=info, x=dx, y=dy)
+
+    hybmv = NotImplemented
+    hybmv_analysis = NotImplemented
+    hybmv_solve = NotImplemented
+
+# ------------------------------------------------------------------------
+# Matrix Ctors
+
+def bsr_matrix(*args, **kws):
+    mat = ss.bsr_matrix(*args, **kws)
+    return BSRCudaMatrix(mat)
+
+
+class BSRCudaMatrix(object):
+    def __init__(self, bsrmat, stream=0):
+        self.dtype = bsrmat.dtype
+        self.shape = bsrmat.shape
+        self.ndim = bsrmat.ndim
+        self.nnz = bsrmat.nnz
+        self.data = cuda.to_device(bsrmat.data, stream=stream)
+        self.indices = cuda.to_device(bsrmat.indices, stream=stream)
+        self.indptr = cuda.to_device(bsrmat.indptr, stream=stream)
+        self.blocksize = bsrmat.blocksize
+
+    def copy_to_host(self, stream=0):
+        data = self.data.copy_to_host(stream=stream)
+        indices = self.indices.copy_to_host(stream=stream)
+        indptr = self.indptr.copy_to_host(stream=stream)
+        return ss.bsr_matrix((data, indices, indptr))
