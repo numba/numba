@@ -342,7 +342,9 @@ def _prepare_scalar(self, val):
     return byref(v), v
 
 
-_prepare_scalar_out = _prepare_scalar
+def _prepare_scalar_out(self, val):
+    v = self.T()
+    return byref(v), v
 
 
 class _axpyi_v2(_api_function):
@@ -817,7 +819,7 @@ class _dotci(_api_function):
     prepare_resultDevHostPtr = _prepare_scalar_out
 
     def return_value(self, *args):
-        return args[self.argnames.index('resultDevHostPtr')]
+        return args[self.argnames.index('resultDevHostPtr')].value
 
     def set_defaults(self):
         super(_dotci, self).set_defaults()
@@ -839,10 +841,27 @@ class _doti(_api_function):
     prepare_resultDevHostPtr = _prepare_scalar_out
 
     def return_value(self, *args):
-        return args[self.argnames.index('resultDevHostPtr')]
+        return args[self.argnames.index('resultDevHostPtr')].value
+
+    def set_defaults(self):
+        super(_doti, self).set_defaults()
+        self.defaults['resultDevHostPtr'] = 0
 
 
-Sdoti = Ddoti = Cdoti = Zdoti = _doti
+class Sdoti(_doti):
+    T = c_float
+
+
+class Ddoti(_doti):
+    T = c_double
+
+
+class Cdoti(_doti):
+    T = c_complex
+
+
+class Zdoti(_doti):
+    T = c_double_complex
 
 
 class _gthr(_api_function):
@@ -969,7 +988,7 @@ class _nnz(_api_function):
     prepare_nnzTotalDevHostPtr = _prepare_scalar_out
 
     def return_value(self, *args):
-        return args[self.argnames.index('nnzTotalDevHostPtr')]
+        return args[self.argnames.index('nnzTotalDevHostPtr')].value
 
 
 Snnz = Dnnz = Cnnz = Znnz = _nnz
@@ -988,11 +1007,16 @@ class _roti_v2(_api_function):
     prepare_xVal = _prepare_array
     prepare_xInd = _prepare_array
     prepare_y = _prepare_array
-    prepare_c = _prepare_array
-    prepare_s = _prepare_array
+    prepare_c = _prepare_scalar
+    prepare_s = _prepare_scalar
 
 
-Sroti_v2 = Droti_v2 = _roti_v2
+class Sroti_v2(_roti_v2):
+    T = c_float
+
+
+class Droti_v2(_roti_v2):
+    T = c_double
 
 
 class Xcoo2csr(_api_function):
@@ -1015,7 +1039,7 @@ class Xcsr2bsrNnz(_api_function):
     prepare_nnzTotalDevHostPtr = _prepare_scalar_out
 
     def return_value(self, *args):
-        return args[self.argnames.index('nnzTotalDevHostPtr')]
+        return args[self.argnames.index('nnzTotalDevHostPtr')].value
 
 
 class XcsrgeamNnz(_api_function):
@@ -1032,7 +1056,7 @@ class XcsrgeamNnz(_api_function):
     prepare_nnzTotalDevHostPtr = _prepare_scalar_out
 
     def return_value(self, *args):
-        return args[self.argnames.index('nnzTotalDevHostPtr')]
+        return args[self.argnames.index('nnzTotalDevHostPtr')].value
 
 
 class XcsrgemmNnz(_api_function):

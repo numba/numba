@@ -2,6 +2,7 @@ from __future__ import absolute_import, print_function, division
 from ctypes import c_float, c_double, Structure
 
 
+
 class c_complex(Structure):
     _fields_ = [('real', c_float), ('imag', c_float)]
 
@@ -9,6 +10,10 @@ class c_complex(Structure):
         if isinstance(real, complex):
             real, imag = real.real, real.imag
         super(c_complex, self).__init__(real, imag)
+
+    @property
+    def value(self):
+        return complex(self.real, self.imag)
 
 
 class c_double_complex(Structure):
@@ -18,3 +23,8 @@ class c_double_complex(Structure):
         if isinstance(real, complex):
             real, imag = real.real, real.imag
         super(c_double_complex, self).__init__(real, imag)
+
+    @property
+    def value(self):
+        return complex(self.real, self.imag)
+

@@ -6,6 +6,7 @@ from numba.cuda.cudadrv.drvapi import cu_stream
 from numba.cuda.cudadrv.driver import device_pointer, host_pointer
 from numbapro.cudalib.libutils import Lib, ctype_function
 from numbapro._utils import finalizer
+from numbapro.cudalib.cctypes import c_double_complex, c_complex
 
 INV_STATUS = dict(
     CUBLAS_STATUS_SUCCESS=0,
@@ -699,24 +700,6 @@ class libcublas(Lib):
     cublasDgeam = cublasSgeam
     cublasCgeam = cublasSgeam
     cublasZgeam = cublasSgeam
-
-
-class c_complex(Structure):
-    _fields_ = [('real', c_float), ('imag', c_float)]
-
-    def __init__(self, real=0, imag=0):
-        if isinstance(real, complex):
-            real, imag = real.real, real.imag
-        super(c_complex, self).__init__(real, imag)
-
-
-class c_double_complex(Structure):
-    _fields_ = [('real', c_double), ('imag', c_double)]
-
-    def __init__(self, real=0, imag=0):
-        if isinstance(real, complex):
-            real, imag = real.real, real.imag
-        super(c_double_complex, self).__init__(real, imag)
 
 
 def _return_scalar(result):

@@ -81,6 +81,71 @@ class Sparse(object):
                    idxBase=self.idxbase)
         return y
 
+    def doti(self, xval, xind, y):
+        _sentry_ndim(1, xval=xval, xind=xind, y=y)
+        _sentry_dtype(np.int32, xind=xind)
+        _sentry_dtype(xval.dtype, y=y)
+        fn = self._get_api("doti", xval.dtype)
+        nnz = xval.size
+        with _readonly(xval, xind) as [dxval, dxind]:
+            with _readwrite(y) as [dy]:
+                result = fn(nnz=nnz, xVal=dxval, xInd=dxind, y=dy,
+                            idxBase=self.idxbase)
+        return result
+
+    def dotci(self, xval, xind, y):
+        _sentry_ndim(1, xval=xval, xind=xind, y=y)
+        _sentry_dtype(np.int32, xind=xind)
+        _sentry_dtype(xval.dtype, y=y)
+        fn = self._get_api("dotci", xval.dtype)
+        nnz = xval.size
+        with _readonly(xval, xind) as [dxval, dxind]:
+            with _readwrite(y) as [dy]:
+                result = fn(nnz=nnz, xVal=dxval, xInd=dxind, y=dy,
+                            idxBase=self.idxbase)
+        return result
+
+    def gthr(self, y, xval, xind):
+        _sentry_ndim(1, xval=xval, xind=xind, y=y)
+        _sentry_dtype(np.int32, xind=xind)
+        _sentry_dtype(xval.dtype, y=y)
+        fn = self._get_api("gthr", xval.dtype)
+        nnz = xval.size
+        with _readonly(y, xind) as [dy, dxind]:
+            with _readwrite(xval) as [dxval]:
+                fn(nnz=nnz, xVal=dxval, xInd=dxind, y=dy, idxBase=self.idxbase)
+
+    def gthrz(self, y, xval, xind):
+        _sentry_ndim(1, xval=xval, xind=xind, y=y)
+        _sentry_dtype(np.int32, xind=xind)
+        _sentry_dtype(xval.dtype, y=y)
+        fn = self._get_api("gthrz", xval.dtype)
+        nnz = xval.size
+        with _readonly(xind) as [dxind]:
+            with _readwrite(y, xval) as [dy, dxval]:
+                fn(nnz=nnz, xVal=dxval, xInd=dxind, y=dy, idxBase=self.idxbase)
+
+    def roti(self, xval, xind, y, c, s):
+        _sentry_ndim(1, xval=xval, xind=xind, y=y)
+        _sentry_dtype(np.int32, xind=xind)
+        _sentry_dtype(xval.dtype, y=y)
+        fn = self._get_api("roti", xval.dtype)
+        nnz = xval.size
+        with _readonly(xind) as [dxind]:
+            with _readwrite(y, xval) as [dy, dxval]:
+                fn(nnz=nnz, xVal=dxval, xInd=dxind, y=dy, c=c, s=s,
+                   idxBase=self.idxbase)
+
+    def sctr(self, xval, xind, y):
+        _sentry_ndim(1, xval=xval, xind=xind, y=y)
+        _sentry_dtype(np.int32, xind=xind)
+        _sentry_dtype(xval.dtype, y=y)
+        fn = self._get_api("sctr", xval.dtype)
+        nnz = xval.size
+        with _readonly(xval, xind) as [dxval, dxind]:
+            with _readwrite(y) as [dy]:
+                fn(nnz=nnz, xVal=dxval, xInd=dxind, y=dy, idxBase=self.idxbase)
+
 
 def coo_matrix(ary):
     """
