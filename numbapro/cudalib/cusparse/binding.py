@@ -1,11 +1,10 @@
 from __future__ import print_function, absolute_import, division
 
-import numpy as np
-from ctypes import c_float, c_double, byref, c_int, Structure, c_void_p, POINTER
+from ctypes import c_float, c_double, byref, c_int, c_void_p, POINTER
 
+from numba.cuda.cudadrv.drvapi import cu_stream
+from numba.cuda.cudadrv.driver import device_pointer
 from numbapro.cudalib.libutils import Lib, ctype_function
-from numbapro.cudadrv.drvapi import cu_stream
-from numbapro.cudadrv.driver import device_pointer, host_pointer
 from numbapro._utils import finalizer
 from numbapro.cudalib.cctypes import c_complex, c_double_complex
 
@@ -111,7 +110,8 @@ def _get_type(k):
         return _c_types[k]
     except KeyError:
         if k[-1] == '*':
-            return POINTER(_get_type(k[:-1]))
+            return c_void_p
+            #return POINTER(_get_type(k[:-1]))
         raise
 
 
@@ -217,6 +217,7 @@ def _flatten_args(args, kws, argnames, defaults):
     if kws:
         raise TypeError("function has no keyword arguments: %s" %
                         tuple(kws.keys()))
+    return values
 
 
 def _make_docstring(name, decl):
@@ -232,6 +233,10 @@ def _make_docstring(name, decl):
         doc.append("%s: %s" % (a, t))
 
     return '\n'.join(doc)
+
+
+def _dummy_preparer(val):
+    return val, None
 
 
 class _api_function(object):
@@ -250,15 +255,17 @@ class _api_function(object):
                 meth = getattr(self, pname)
                 preparers.append(meth)
             else:
-                preparers.append(None)
+                preparers.append(_dummy_preparer)
 
         self.preparers = tuple(preparers)
 
     def __call__(self, *args, **kws):
         args = _flatten_args(args, kws, self.argnames, self.defaults)
-        rargs = [pre(val) for pre, val in zip(self.preparers, args) if pre]
+        rargs = [pre(val) for pre, val in zip(self.preparers, args)]
         actual, hold = zip(*rargs)
-        self.fn(*args)
+        # for k, v in zip(self.argnames, actual):
+        #     print(k, v)
+        self.fn(*actual)
         return self.return_value(*hold)
 
     def set_defaults(self):
@@ -343,7 +350,7 @@ class _axpyi_v2(_api_function):
 
     prepare_alpha = _prepare_scalar
     prepare_xVal = _prepare_array
-    prepare_xInt = _prepare_array
+    prepare_xInd = _prepare_array
     prepare_y = _prepare_array
 
 
@@ -1043,20 +1050,21 @@ class XcsrgemmNnz(_api_function):
 
 
 def _init_api_function(name, decl):
+    lib = libcusparse()
     mangled = mangle(name)
     for k in globals().keys():
         if mangled.endswith(k):
             base = globals()[k]
             break
     else:
-        print("missing", name)
+        # print("missing", name)
         raise NotImplementedError(name)
-        return mangled, None
+        # return mangled, None
 
     docs = _make_docstring(name, decl)
     cls = _make_api_function(name, base)
 
-    fn = getattr(libcusparse, name)
+    fn = getattr(lib, name)
 
     obj = cls(fn, decl)
 
