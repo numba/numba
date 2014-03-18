@@ -273,6 +273,10 @@ class Lower(BaseLower):
             elif isinstance(ty, types.Array):
                 return self.context.make_constant_array(self.builder, ty,
                                                         value.value)
+            
+            elif self.context.is_struct_type(ty):
+                return self.context.get_constant_struct(self.builder, ty,
+                                                        value.value)
 
             elif isinstance(ty, types.UniTuple):
                 consts = [self.context.get_constant(t, v)
