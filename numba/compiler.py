@@ -260,13 +260,14 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
 
     infer = typeinfer.TypeInferer(typingctx, interp.blocks)
 
-    # Seed argument types
-    for arg, ty in zip(interp.argspec.args, args):
-        infer.seed_type(arg, ty)
-
     # Seed return type
+    # needs to be seeded before args, to ensure locking return type first
     if return_type is not None:
         infer.seed_return(return_type)
+
+    # Seed argument types
+    for arg, ty in zip(interp.argspec.args, args):
+	infer.seed_type(arg, ty)
 
     # Seed local types
     for k, v in locals.items():
