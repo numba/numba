@@ -1,9 +1,10 @@
+from __future__ import absolute_import
 import copy
 import ctypes
+from numba.cuda.cudadrv import devicearray, driver
+from numba.cuda.cudadrv.devices import get_context
 from numbapro.npm import types
-from numbapro.cudadrv import devicearray, driver
 from numbapro.cudadrv.autotune import AutoTuner
-from numbapro.cudadrv.devices import get_context
 
 
 class CUDARuntimeError(RuntimeError):

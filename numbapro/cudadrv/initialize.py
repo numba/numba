@@ -1,9 +1,10 @@
+from __future__ import absolute_import
 from numba.targets.descriptors import TargetDescriptor
 from numba.targets.options import TargetOptions
 from numba.targets.registry import target_registry
 from numba.npyufunc import Vectorize, GUVectorize
-from .error import CudaSupportError, NvvmSupportError
-from .devices import init_gpus
+from numba.cuda.cudadrv.error import CudaSupportError, NvvmSupportError
+from numba.cuda.cudadrv.devices import init_gpus
 #
 # Public
 #
@@ -115,7 +116,7 @@ def _init_driver():
 
 
 def _init_nvvm():
-    from .nvvm import NVVM
+    from numba.cuda.cudadrv.nvvm import NVVM
 
     NVVM() # raises NvvmSupportError
 

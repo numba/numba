@@ -1,9 +1,10 @@
+from __future__ import absolute_import
 import numpy as np
 from ctypes import c_float, c_double, byref, c_int, Structure, c_void_p, POINTER
 
+from numba.cuda.cudadrv.drvapi import cu_stream
+from numba.cuda.cudadrv.driver import device_pointer, host_pointer
 from numbapro.cudalib.libutils import Lib, ctype_function
-from numbapro.cudadrv.drvapi import cu_stream
-from numbapro.cudadrv.driver import device_pointer, host_pointer
 from numbapro._utils import finalizer
 
 INV_STATUS = dict(

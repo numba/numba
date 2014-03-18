@@ -1,4 +1,5 @@
-from numbapro.cudadrv.libs import open_cudalib
+from __future__ import absolute_import
+from numba.cuda.cudadrv.libs import open_cudalib
 
 class ctype_function(object):
     def __init__(self, restype=None, *argtypes):

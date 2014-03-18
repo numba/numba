@@ -37,8 +37,8 @@ def test():
         failfast(numbapro.vectorizers.tests.support.run(**cfg))
 
         print 'cuda libraries locator'.center(80, '-')
-        import numbapro.cudadrv.libs
-        failfast(numbapro.cudadrv.libs.test())
+        import numba.cuda.cudadrv.libs
+        failfast(numba.cuda.cudadrv.libs.test())
 
         if numbapro.cuda.is_available:
             print 'cudadrv'.center(80, '-')
@@ -70,7 +70,7 @@ def test():
 
 
 def check_cuda():
-    from numbapro.cudadrv import libs
+    from numba.cuda.cudadrv import libs
     from numbapro import cuda
     ok = True
 

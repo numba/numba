@@ -1,11 +1,12 @@
-'''
+"""
 This scripts specifies all PTX special objects.
-'''
+"""
+from __future__ import absolute_import
 import operator
 import numpy
 import llvm.core as lc
+from numba.cuda.cudadrv import nvvm
 from numbapro.npm import types, macro, symbolic
-from numbapro.cudadrv import nvvm
 from numbapro._utils.mviewbuf import memoryview_get_extents
 from . import nvvmutils
 
@@ -73,14 +74,14 @@ SREG_MAPPING = {
     _ptx_sreg_tidx: 'llvm.nvvm.read.ptx.sreg.tid.x',
     _ptx_sreg_tidy: 'llvm.nvvm.read.ptx.sreg.tid.y',
     _ptx_sreg_tidz: 'llvm.nvvm.read.ptx.sreg.tid.z',
-    
+
     _ptx_sreg_ntidx: 'llvm.nvvm.read.ptx.sreg.ntid.x',
     _ptx_sreg_ntidy: 'llvm.nvvm.read.ptx.sreg.ntid.y',
     _ptx_sreg_ntidz: 'llvm.nvvm.read.ptx.sreg.ntid.z',
-    
+
     _ptx_sreg_ctaidx: 'llvm.nvvm.read.ptx.sreg.ctaid.x',
     _ptx_sreg_ctaidy: 'llvm.nvvm.read.ptx.sreg.ctaid.y',
-    
+
     _ptx_sreg_nctaidx: 'llvm.nvvm.read.ptx.sreg.nctaid.x',
     _ptx_sreg_nctaidy: 'llvm.nvvm.read.ptx.sreg.nctaid.y',
 }
@@ -99,7 +100,7 @@ def grid_expand(args):
     '''grid(ndim)
 
     ndim: [int] 1 or 2
-    
+
         if ndim == 1:
             return cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
         elif ndim == 2:
@@ -130,8 +131,8 @@ grid = macro.Macro('grid', grid_expand, callable=True)
 # synthreads
 
 class syncthreads(Stub):
-    '''syncthreads() 
-    
+    '''syncthreads()
+
     Synchronizes all threads in the thread block.
     '''
     _description_ = '<syncthread()>'
@@ -203,7 +204,6 @@ def _generic_array(args, symbol_name, addrspace, can_dynsized=False):
         ary = lc.Constant.struct([lc.Constant.null(data.type), cshape,
                                   cstrides])
         ary = builder.insert_value(ary, data, 0)
-
         return ary
 
     impl.codegen = True
@@ -317,7 +317,7 @@ class atomic(Stub):
 
     class add(Stub):
         '''add(ary, idx, val)
-        
+
         Perform atomic ary[idx] += val
         '''
 

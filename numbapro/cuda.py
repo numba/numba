@@ -1,8 +1,10 @@
+from __future__ import absolute_import
 import contextlib
 import numpy as np
-
+from numba.cuda.cudadrv import devicearray, devices, driver
 from .cudadrv import initialize as _initialize
-from .cudadrv import devicearray, autotune, devices, driver
+from .cudadrv import autotune
+
 # Re export
 from .cudapy.ptx import (threadIdx, blockIdx, blockDim, gridDim, syncthreads,
                          shared, local, const, grid, atomic)

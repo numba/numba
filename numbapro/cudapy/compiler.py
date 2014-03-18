@@ -1,7 +1,7 @@
+from __future__ import absolute_import
 import llvm.core as lc
+from numba.cuda.cudadrv import nvvm, devices
 from numbapro.npm import compiler, types, extending, cgutils
-
-from numbapro.cudadrv import nvvm, devices
 from .execution import CUDAKernel
 from . import ptxlib, libdevice, ptx
 
@@ -12,6 +12,7 @@ def _set_flags(debug):
         flags.append('no-exceptions')
     return flags
 
+
 def compile_kernel(func, argtys, debug=False):
     lmod, lfunc, excs = compile_common(func, types.void, argtys,
                                        flags=_set_flags(debug))
@@ -19,6 +20,7 @@ def compile_kernel(func, argtys, debug=False):
     wrapper = generate_kernel_wrapper(lfunc, bool(excs))
     cudakernel = CUDAKernel(wrapper.name, to_ptx(wrapper), argtys, excs)
     return cudakernel
+
 
 def generate_kernel_wrapper(lfunc, has_excs):
     fname = '_cudapy_wrapper_' + lfunc.name
@@ -85,12 +87,14 @@ def generate_kernel_wrapper(lfunc, has_excs):
     lfunc.add_attribute(lc.ATTR_ALWAYS_INLINE)
     return wrapper
 
+
 def compile_device(func, retty, argtys, inline=False, debug=False):
     lmod, lfunc, excs = compile_common(func, retty, argtys,
                                        flags=_set_flags(debug))
     if inline:
         lfunc.add_attribute(lc.ATTR_ALWAYS_INLINE)
     return DeviceFunction(func, lmod, lfunc, retty, argtys, excs)
+
 
 def declare_device_function(name, retty, argtys):
     lmod = lc.Module.new('extern-%s' % name)
@@ -101,19 +105,23 @@ def declare_device_function(name, retty, argtys):
     edf = ExternalDeviceFunction(name, lmod, lfunc, retty, argtys)
     return edf
 
+
 def get_cudapy_context():
     libs = compiler.get_builtin_context()
     extending.extends(libs, ptxlib.extensions)
     extending.extends(libs, libdevice.extensions)
     return libs
 
+
 global_cudapy_libs = get_cudapy_context()
+
 
 def compile_common(func, retty, argtys, flags=compiler.DEFAULT_FLAGS):
     libs = global_cudapy_libs
     lmod, lfunc, excs = compiler.compile_common(func, retty, argtys, libs=libs,
                                                 flags=flags)
     return lmod, lfunc, excs
+
 
 def to_ptx(lfunc):
     context = devices.get_context()
@@ -123,6 +131,7 @@ def to_ptx(lfunc):
     nvvm.set_cuda_kernel(lfunc)
     ptx = nvvm.llvm_to_ptx(str(lfunc.module), opt=3, arch=arch)
     return ptx
+
 
 class DeviceFunction(object):
     def __init__(self, func, lmod, lfunc, retty, argtys, excs):
@@ -135,6 +144,7 @@ class DeviceFunction(object):
     def __repr__(self):
         args = (self.return_type or 'void', self.args)
         return '<cuda device function %s%s>' % args
+
 
 class ExternalDeviceFunction(object):
     def __init__(self, name, lmod, lfunc, retty, argtys):
