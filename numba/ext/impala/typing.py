@@ -302,6 +302,26 @@ class LenStringVal(ConcreteTemplate):
     cases = [signature(types.int32, StringVal)]
 
 
+class GetItemStringVal(ConcreteTemplate):
+    key = "getitem"
+    cases = [signature(types.uint8, StringVal, types.int64)]
+
+
+class EqPointerUint8(ConcreteTemplate):
+    key = '=='
+    cases = [signature(types.boolean, types.CPointer(types.uint8), types.CPointer(types.uint8))]
+
+
+class EqStringVal(ConcreteTemplate):
+    key = '=='
+    cases = [signature(types.boolean, StringVal, StringVal)]
+
+
+class StringValToInt16(ConcreteTemplate):
+    key = 'StringValToInt16'
+    cases = [signature(types.int16, StringVal)]
+
+
 class BinOpIs(ConcreteTemplate):
     key = 'is'
     cases = [signature(types.int8, AnyVal, types.none)]
@@ -315,8 +335,8 @@ def _register_impala_numeric_type_conversions(base):
     numba_all = numba_integral + numba_float
     all_numeric = impala_all + numba_all
 
-    # first, all numeric types can cast to all others
-    for a, b in itertools.product(all_numeric, all_numeric):
+    # first, all Impala numeric types can cast to all others
+    for a, b in itertools.product(impala_all, all_numeric):
 	base.tm.set_unsafe_convert(a, b)
 	base.tm.set_unsafe_convert(b, a)
 
@@ -365,11 +385,15 @@ def _register_impala_numeric_type_conversions(base):
     for a in impala_all:
 	base.tm.set_safe_convert(types.none, a)
 
+def _register_impala_string_type_conversions(base):
+    base.tm.set_unsafe_convert(types.CPointer(types.uint8), types.Dummy('void*'))
+
 
 def impala_typing_context():
     base = typing.Context()
 
     _register_impala_numeric_type_conversions(base)
+    _register_impala_string_type_conversions(base)
 
     base.insert_function(BinOpIs(base))
 
@@ -413,5 +437,9 @@ def impala_typing_context():
     base.insert_attributes(StringValValueAttr(base))
     base.insert_attributes(StringValTypeAttr(base))
     base.insert_function(LenStringVal(base))
+    base.insert_function(EqStringVal(base))
+    base.insert_function(GetItemStringVal(base))
+    base.insert_function(EqPointerUint8(base))
+    base.insert_global(StringValToInt16, types.Function(StringValToInt16))
 
     return base

@@ -441,6 +441,16 @@ def is_neg_int(builder, val):
     return builder.icmp(lc.ICMP_SLT, val, get_null_value(val.type))
 
 
+def inbound_gep(builder, ptr, *inds):
+    idx = []
+    for i in inds:
+	if isinstance(i, int):
+	    ind = Constant.int(Type.int(32), i)
+	else:
+	    ind = i
+	idx.append(ind)
+    return builder.gep(ptr, idx, inbounds=True)
+
 # ------------------------------------------------------------------------------
 # Debug
 

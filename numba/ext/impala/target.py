@@ -6,10 +6,10 @@ from numba import types, cgutils, config
 from numba.targets.base import BaseContext
 from numba.targets.imputils import implement, impl_attribute
 from .typing import (FunctionContext, AnyVal, BooleanVal, BooleanValType,
-		     TinyIntVal, TinyIntValType, SmallIntVal, SmallIntValType,
-		     IntVal, IntValType, BigIntVal, BigIntValType, FloatVal,
-		     FloatValType, DoubleVal, DoubleValType, StringVal,
-		     StringValType)
+	     TinyIntVal, TinyIntValType, SmallIntVal, SmallIntValType,
+	     IntVal, IntValType, BigIntVal, BigIntValType, FloatVal,
+	     FloatValType, DoubleVal, DoubleValType, StringVal,
+	     StringValType)
 
 class AnyValStruct(cgutils.Structure):
     _fields = [('is_null', types.boolean)]
@@ -96,7 +96,7 @@ def booleanval_ctor(context, builder, sig, args):
 
 class TinyIntValStruct(cgutils.Structure):
     _fields = [('parent',  AnyVal),
-	       ('val',     types.int8),]
+	   ('val',     types.int8),]
 
 
 @impl_attribute(TinyIntVal, "is_null", types.boolean)
@@ -141,7 +141,7 @@ def tinyintval_ctor(context, builder, sig, args):
 
 class SmallIntValStruct(cgutils.Structure):
     _fields = [('parent',  AnyVal),
-	       ('val',     types.int16),]
+	   ('val',     types.int16),]
 
 
 @impl_attribute(SmallIntVal, "is_null", types.boolean)
@@ -186,7 +186,7 @@ def smallintval_ctor(context, builder, sig, args):
 
 class IntValStruct(cgutils.Structure):
     _fields = [('parent',  AnyVal),
-	       ('val',     types.int32),]
+	   ('val',     types.int32),]
 
 
 @impl_attribute(IntVal, "is_null", types.boolean)
@@ -231,7 +231,7 @@ def intval_ctor(context, builder, sig, args):
 
 class BigIntValStruct(cgutils.Structure):
     _fields = [('parent',  AnyVal),
-	       ('val',     types.int64),]
+	   ('val',     types.int64),]
 
 
 @impl_attribute(BigIntVal, "is_null", types.boolean)
@@ -276,7 +276,7 @@ def bigintval_ctor(context, builder, sig, args):
 
 class FloatValStruct(cgutils.Structure):
     _fields = [('parent',  AnyVal),
-	       ('val',     types.float32),]
+	   ('val',     types.float32),]
 
 
 @impl_attribute(FloatVal, "is_null", types.boolean)
@@ -321,7 +321,7 @@ def floatval_ctor(context, builder, sig, args):
 
 class DoubleValStruct(cgutils.Structure):
     _fields = [('parent',  AnyVal),
-	       ('val',     types.float64),]
+	   ('val',     types.float64),]
 
 
 @impl_attribute(DoubleVal, "is_null", types.boolean)
@@ -366,8 +366,8 @@ def doubleval_ctor(context, builder, sig, args):
 
 class StringValStruct(cgutils.Structure):
     _fields = [('parent',  AnyVal),
-	   ('len',     types.int32),
-	   ('ptr',     types.CPointer(types.uint8))]
+	       ('len',     types.int32),
+	       ('ptr',     types.CPointer(types.uint8))]
 
 
 @impl_attribute(StringVal, "is_null", types.boolean)
@@ -410,6 +410,62 @@ def len_stringval(context, builder, sig, args):
     val = StringValStruct(context, builder, value=s)
     return val.len
 
+@implement("==", StringVal, StringVal)
+def eq_stringval(context, builder, sig, args):
+    [s1, s2] = args
+    # TODO
+
+@implement("==", types.CPointer(types.uint8), types.CPointer(types.uint8))
+def eq_pointeruint8(context, builder, sig, args):
+    [p1, p2] = args
+    return builder.icmp(lc.ICMP_EQ, p1, p2)
+
+@implement("getitem", StringVal, types.int64)
+def getitem_stringval(context, builder, sig, args):
+    [s, i] = args
+    # TODO: check that the requested element is within the allocated String
+    val = StringValStruct(context, builder, value=s)
+    dataptr = cgutils.inbound_gep(builder, val.ptr, i)
+    # THIS IS INCORRECT.  We must actually allocate some memory by calling the StringVal constructor
+    elt = StringValStruct(context, builder)
+    _set_is_null(builder, elt, cgutils.false_bit)
+    iv.val
+    return builder.load(dataptr)
+
+    # vt = self.get_value_type(ty)
+    # tmp = cgutils.alloca_once(builder, vt)
+    # dataptr = cgutils.inbound_gep(builder, ptr, 0, 0)
+    # builder.store(dataptr, cgutils.inbound_gep(builder, tmp, 0, 0))
+    # return builder.load(tmp)
+
+    # def inbound_gep(builder, ptr, *inds):
+    #     idx = []
+    #     for i in inds:
+    #         if isinstance(i, int):
+    #             ind = Constant.int(Type.int(32), i)
+    #         else:
+    #             ind = i
+    #         idx.append(ind)
+    #     return builder.gep(ptr, idx, inbounds=True)
+
+    # %val = getelementptr inbounds %"struct.impala_udf::IntVal"* %arg2, i64 0, i32 1
+    # %0 = load i32* %val, align 4, !tbaa !4
+    # %idxprom = sext i32 %0 to i64
+    # %ptr = getelementptr inbounds %"struct.impala_udf::StringVal"* %arg1, i64 0, i32 2
+    # %1 = load i8** %ptr, align 8, !tbaa !5
+    # %arrayidx = getelementptr inbounds i8* %1, i64 %idxprom
+    # %2 = load i8* %arrayidx, align 1, !tbaa !1
+    # ret i8 %2
+
+
+@implement('StringValToInt16', StringVal)
+def stringval_to_int16(context, builder, sig, args):
+    # TODO: insert test so that StringVal must have len=1
+    [s] = args
+    iv = StringValStruct(context, builder, value=s)
+    dataptr = cgutils.inbound_gep(builder, iv.ptr, 0)
+    return builder.load(dataptr)
+
 
 @implement(StringValType, types.CPointer(types.uint8), types.int32)
 def stringval_ctor1(context, builder, sig, args):
@@ -451,7 +507,7 @@ TYPE_LAYOUT = {
 
 class ImpalaTargetContext(BaseContext):
     _impala_types = (AnyVal, BooleanVal, TinyIntVal, SmallIntVal, IntVal,
-		BigIntVal, FloatVal, DoubleVal, StringVal)
+		     BigIntVal, FloatVal, DoubleVal, StringVal)
     def init(self):
 	self.tm = le.TargetMachine.new()
 	self.insert_attr_defn([booleanval_is_null, booleanval_val, booleanval_null,
@@ -465,14 +521,14 @@ class ImpalaTargetContext(BaseContext):
 	self.insert_func_defn([booleanval_ctor, tinyintval_ctor,
 			       smallintval_ctor, intval_ctor, bigintval_ctor,
 			       floatval_ctor, doubleval_ctor, stringval_ctor1,
-			       len_stringval, isnone_anyval])
+			       len_stringval, isnone_anyval, getitem_stringval, stringval_to_int16, eq_pointeruint8])
 	self.optimizer = self.build_pass_manager()
 
 	# once per context
 	self._fnctximpltype = lc.Type.opaque("FunctionContextImpl")
 	fnctxbody = [lc.Type.pointer(self._fnctximpltype)]
 	self._fnctxtype = lc.Type.struct(fnctxbody,
-					name="class.impala_udf::FunctionContext")
+					 name="class.impala_udf::FunctionContext")
 
     def cast(self, builder, val, fromty, toty):
 	if config.DEBUG:
@@ -519,7 +575,7 @@ class ImpalaTargetContext(BaseContext):
 
 	# no way fromty is a *Val starting here
 	if toty == BooleanVal:
-	    val = super(ImpalaTargetContext, self).cast(builder, val, fromty, types.boolean)
+	    val = super(ImpalaTargetContext, self).cast(builder, val, fromty, types.int8)
 	    iv = BooleanValStruct(self, builder)
 	    _set_is_null(builder, iv, cgutils.false_bit)
 	    _set_val(builder, iv, val)
@@ -572,7 +628,7 @@ class ImpalaTargetContext(BaseContext):
 	elif ty == BooleanVal:
 	    iv = BooleanValStruct(self, builder)
 	    _set_is_null(builder, iv, cgutils.false_bit)
-	    iv.val = lc.Constant.int(lc.Type.int(1), val)
+	    iv.val = lc.Constant.int(lc.Type.int(8), val)
 	    return iv._getvalue()
 	elif ty == TinyIntVal:
 	    iv = TinyIntValStruct(self, builder)
@@ -605,7 +661,7 @@ class ImpalaTargetContext(BaseContext):
 	    iv.val = lc.Constant.real(lc.Type.double(), val)
 	    return iv._getvalue()
 	else:
-	    super(ImpalaTargetContext, self).get_constant_struct(builder, ty, val)
+	    return super(ImpalaTargetContext, self).get_constant_struct(builder, ty, val)
 
     def get_data_type(self, ty):
 	if ty in TYPE_LAYOUT:
@@ -617,7 +673,7 @@ class ImpalaTargetContext(BaseContext):
 
     def build_pass_manager(self):
 	pms = lp.build_pass_managers(tm=self.tm, opt=3, loop_vectorize=True,
-				     fpm=False)
+			 fpm=False)
 	return pms.pm
 
     def finalize(self, func, restype, argtypes):
@@ -645,17 +701,17 @@ class ABIHandling(object):
 	self.argtypes = argtypes
 
     def build_wrapper(self, wrappername):
-	abi_restype = self.get_abi_return_type(self.restype)
+	abi_restype = self.get_abi_return_type(self.restype).pointee # should always ret pointer type
 	abi_argtypes = [self.get_abi_argument_type(a)
-			for a in self.argtypes]
+		for a in self.argtypes]
 	fnty = lc.Type.function(abi_restype, abi_argtypes)
 	wrapper = self.func.module.add_function(fnty, name=wrappername)
 
 	builder = lc.Builder.new(wrapper.append_basic_block(''))
 	status, res = self.context.call_function(builder, self.func,
-						 self.restype,
-						 self.argtypes,
-						 wrapper.args)
+			     self.restype,
+			     self.argtypes,
+			     wrapper.args)
 	# FIXME ignoring error in function for now
 	cres = self.convert_abi_return(builder, self.restype, res)
 	builder.ret(cres)
@@ -707,8 +763,8 @@ class ABIHandling(object):
 	    iv = BigIntValStruct(self.context, builder, value=val)
 	    is_null = builder.zext(_get_is_null(builder, iv), lc.Type.int(8))
 	    asstructi8i64 = builder.insert_value(lc.Constant.undef(lc.Type.struct([lc.Type.int(8), lc.Type.int(64)])),
-						 is_null,
-						 0)
+			     is_null,
+			     0)
 	    asstructi8i64 = builder.insert_value(asstructi8i64, iv.val, 1)
 	    return asstructi8i64
 	elif ty == FloatVal:
@@ -727,8 +783,8 @@ class ABIHandling(object):
 	    iv = DoubleValStruct(self.context, builder, value=val)
 	    is_null = builder.zext(_get_is_null(builder, iv), lc.Type.int(8))
 	    asstructi8double = builder.insert_value(lc.Constant.undef(lc.Type.struct([lc.Type.int(8), lc.Type.double()])),
-						    is_null,
-						    0)
+				is_null,
+				0)
 	    asstructi8double = builder.insert_value(asstructi8double, iv.val, 1)
 	    return asstructi8double
 	elif ty == StringVal:
@@ -740,8 +796,8 @@ class ABIHandling(object):
 	    asint64 = builder.shl(len_, lc.Constant.int(lc.Type.int(64), 32))
 	    asint64 = builder.or_(asint64, is_null)
 	    asstructi64i8p = builder.insert_value(lc.Constant.undef(lc.Type.struct([lc.Type.int(64), lc.Type.pointer(lc.Type.int(8))])),
-			      asint64,
-			      0)
+		      asint64,
+		      0)
 	    asstructi64i8p = builder.insert_value(asstructi64i8p, iv.ptr, 1)
 	    return asstructi64i8p
 	else:
@@ -750,24 +806,23 @@ class ABIHandling(object):
     def get_abi_return_type(self, ty):
 	# FIXME only work on x86-64 + gcc
 	if ty == BooleanVal:
-	    return lc.Type.int(16)
+	    return lc.Type.pointer(lc.Type.int(16))
 	elif ty == TinyIntVal:
-	    return lc.Type.int(16)
+	    return lc.Type.pointer(lc.Type.int(16))
 	elif ty == SmallIntVal:
-	    return lc.Type.int(32)
+	    return lc.Type.pointer(lc.Type.int(32))
 	elif ty == IntVal:
-	    return lc.Type.int(64)
+	    return lc.Type.pointer(lc.Type.int(64))
 	elif ty == BigIntVal:
-	    return lc.Type.struct([lc.Type.int(8), lc.Type.int(64)])
+	    return lc.Type.pointer(lc.Type.struct([lc.Type.int(8), lc.Type.int(64)]))
 	elif ty == FloatVal:
-	    return lc.Type.int(64)
+	    return lc.Type.pointer(lc.Type.int(64))
 	elif ty == DoubleVal:
-	    return lc.Type.struct([lc.Type.int(8), lc.Type.double()])
+	    return lc.Type.pointer(lc.Type.struct([lc.Type.int(8), lc.Type.double()]))
 	elif ty == StringVal:
-	    return lc.Type.struct([lc.Type.int(64), lc.Type.pointer(lc.Type.int(8))])
+	    return lc.Type.pointer(lc.Type.struct([lc.Type.int(64), lc.Type.pointer(lc.Type.int(8))]))
 	else:
 	    return self.context.get_return_type(ty)
-	return self.context.get_return_type(ty)
 
     def get_abi_argument_type(self, ty):
 	return self.context.get_argument_type(ty)
