@@ -278,6 +278,11 @@ class Lower(BaseLower):
                 consts = [self.context.get_constant(t, v)
                           for t, v in zip(ty, value.value)]
                 return cgutils.pack_array(self.builder, consts)
+
+            elif self.context.is_struct_type(ty):
+                return self.context.get_constant_struct(self.builder, ty,
+                        value.value)
+
             else:
                 raise NotImplementedError('global', ty)
 
