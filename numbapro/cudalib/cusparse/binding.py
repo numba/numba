@@ -848,7 +848,20 @@ class _csrsm_solve(_api_function):
     prepare_y = _prepare_array
 
 
-Scsrsm_solve = Dcsrsm_solve = Ccsrsm_solve = Zcsrsm_solve = _csrsm_solve
+class Scsrsm_solve(_csrsm_solve):
+    T = c_float
+
+
+class Dcsrsm_solve(_csrsm_solve):
+    T = c_double
+
+
+class Ccsrsm_solve(_csrsm_solve):
+    T = c_complex
+
+
+class Zcsrsm_solve(_csrsm_solve):
+    T = c_double_complex
 
 
 class _csrsv_analysis_v2(_api_function):

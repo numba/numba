@@ -252,8 +252,59 @@ class Sparse(object):
     hybmv_analysis = NotImplemented
     hybmv_solve = NotImplemented
 
+    # ------------------------------------------------------------------------
+    # Level 3 API
+
+    def csrmm(self, transA, m, n, k, nnz, alpha, descrA, csrValA, csrRowPtrA,
+              csrColIndA, B, ldb, beta, C, ldc):
+        _sentry_dtype(csrValA.dtype, B=B, C=C)
+        fn = self._get_api("csrmm", csrValA.dtype)
+        with _readonly(csrValA, csrRowPtrA, csrColIndA, B) \
+            as [dcsrValA, dcsrRowPtrA, dcsrColIndA, dB]:
+            with _readwrite(C) as [dC]:
+                fn(transA=transA, m=m, n=n, k=k, nnz=nnz, alpha=alpha,
+                   descrA=descrA, csrValA=dcsrValA, csrRowPtrA=dcsrRowPtrA,
+                   csrColIndA=dcsrColIndA, B=dB, ldb=ldb, beta=beta, C=dC,
+                   ldc=ldc)
+
+    def csrmm2(self, transA, transB, m, n, k, nnz, alpha, descrA, csrValA,
+               csrRowPtrA, csrColIndA, B, ldb, beta, C, ldc):
+        _sentry_dtype(csrValA.dtype, B=B, C=C)
+        fn = self._get_api("csrmm2", csrValA.dtype)
+        with _readonly(csrValA, csrRowPtrA, csrColIndA, B) \
+            as [dcsrValA, dcsrRowPtrA, dcsrColIndA, dB]:
+            with _readwrite(C) as [dC]:
+                fn(transa=transA, transb=transB, m=m, n=n, k=k, nnz=nnz,
+                   alpha=alpha,
+                   descrA=descrA, csrValA=dcsrValA, csrRowPtrA=dcsrRowPtrA,
+                   csrColIndA=dcsrColIndA, B=dB, ldb=ldb, beta=beta, C=dC,
+                   ldc=ldc)
+
+    def csrsm_analysis(self, transA, m, nnz, descrA, csrValA, csrRowPtrA,
+                       csrColIndA):
+        fn = self._get_api("csrsm_analysis", csrValA.dtype)
+        info = self.api.solve_analysis_info()
+        with _readonly(csrValA, csrRowPtrA, csrColIndA) \
+            as [dcsrValA, dcsrRowPtrA, dcsrColIndA]:
+            fn(transA=transA, m=m, nnz=nnz, descrA=descrA, csrValA=dcsrValA,
+               csrRowPtrA=dcsrRowPtrA, csrColIndA=dcsrColIndA, info=info)
+        return info
+
+    def csrsm_solve(self, transA, m, n, alpha, descrA, csrValA, csrRowPtrA,
+                    csrColIndA, info, X, ldx, Y, ldy):
+        fn = self._get_api("csrsm_solve", csrValA.dtype)
+        with _readonly(csrValA, csrRowPtrA, csrColIndA, X) \
+            as [dcsrValA, dcsrRowPtrA, dcsrColIndA, dX]:
+            with _readwrite(Y) as [dY]:
+                fn(transA=transA, m=m, n=n, alpha=alpha, descrA=descrA,
+                   csrValA=dcsrValA, csrRowPtrA=dcsrRowPtrA,
+                   csrColIndA=dcsrColIndA, info=info, x=dX, ldx=ldx, y=dY,
+                   ldy=ldy)
+
+
 # ------------------------------------------------------------------------
 # Matrix Ctors
+
 
 def bsr_matrix(*args, **kws):
     mat = ss.bsr_matrix(*args, **kws)

@@ -239,6 +239,86 @@ class TestCuSparseLevel2(unittest.TestCase):
             pass
 
 
+@addtest
+class TestCuSparseLevel3(unittest.TestCase):
+    def setUp(self):
+        self.cus = cusparse.Sparse()
+
+    def test_Scsrmm(self):
+        """
+        Just exercise the codepath
+        """
+        dtype = np.float32
+
+        descrA = self.cus.matdescr()
+        B = C = csrValA = np.zeros(10, dtype=dtype)
+        csrColIndA = np.zeros(10, dtype=np.int32)
+        csrRowPtrA = np.zeros(10, dtype=np.int32)
+        ldb = 1
+        ldc = 1
+        m = 1
+        n = 1
+        k = 1
+        nnz = 1
+        alpha = 1
+        beta = 1
+        transA = 'N'
+        self.cus.csrmm(transA, m, n, k, nnz, alpha, descrA, csrValA,
+                       csrRowPtrA, csrColIndA, B, ldb, beta, C, ldc)
+
+    def test_Ccsrmm(self):
+        """
+        Just exercise the codepath
+        """
+        dtype = np.complex64
+
+        descrA = self.cus.matdescr()
+        B = C = csrValA = np.zeros(10, dtype=dtype)
+        csrColIndA = np.zeros(10, dtype=np.int32)
+        csrRowPtrA = np.zeros(10, dtype=np.int32)
+        ldb = 1
+        ldc = 1
+        m = 1
+        n = 1
+        k = 1
+        nnz = 1
+        alpha = 1
+        beta = 1
+        transA = transB = 'N'
+        try:
+            self.cus.csrmm2(transA, transB, m, n, k, nnz, alpha, descrA,
+                            csrValA,
+                            csrRowPtrA, csrColIndA, B, ldb, beta, C, ldc)
+        except CuSparseError:
+            pass
+
+
+    def test_Scsrsm(self):
+        """
+        Just exercise the codepath
+        """
+        dtype = np.float32
+
+        descrA = self.cus.matdescr()
+        X = Y = csrValA = np.zeros(10, dtype=dtype)
+        csrColIndA = np.zeros(10, dtype=np.int32)
+        csrRowPtrA = np.zeros(10, dtype=np.int32)
+        m = 1
+        n = 1
+        nnz = 1
+        transA = 'N'
+        # try:
+        info = self.cus.csrsm_analysis(transA, m, nnz, descrA, csrValA,
+                                       csrRowPtrA, csrColIndA)
+        # except CuSparseError:
+        #     pass
+        alpha = 1
+        ldx = 1
+        ldy = 1
+        self.cus.csrsm_solve(transA, m, n, alpha, descrA, csrValA,
+                             csrRowPtrA, csrColIndA, info, X, ldx, Y, ldy)
+
+
 if __name__ == '__main__':
     main()
 
