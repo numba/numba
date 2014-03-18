@@ -1172,6 +1172,7 @@ class Xcsr2bsrNnz(_api_function):
 
 
 class XcsrgeamNnz(_api_function):
+    T = c_int
     prepare_descrA = _prepare_matdescr
 
     prepare_csrRowPtrA = _prepare_array

@@ -301,6 +301,80 @@ class Sparse(object):
                    csrColIndA=dcsrColIndA, info=info, x=dX, ldx=ldx, y=dY,
                    ldy=ldy)
 
+    def XcsrgeamNnz(self, m, n, descrA, nnzA, csrRowPtrA, csrColIndA, descrB,
+                    nnzB, csrRowPtrB, csrColIndB, descrC, csrRowPtrC):
+        """
+        Returns
+        -------
+        nnzC
+        """
+        fn = self.api.XcsrgeamNnz
+        with _readonly(csrRowPtrA, csrColIndA, csrRowPtrB, csrColIndB) \
+            as (dcsrRowPtrA, dcsrColIndA, dcsrRowPtrB, dcsrColIndB):
+            with _readwrite(csrRowPtrC) as [dcsrRowPtrC]:
+                nnzC = fn(m=m, n=n, descrA=descrA, nnzA=nnzA,
+                          csrRowPtrA=dcsrRowPtrA,
+                          csrColIndA=dcsrColIndA, descrB=descrB, nnzB=nnzB,
+                          csrRowPtrB=dcsrRowPtrB, csrColIndB=dcsrColIndB,
+                          descrC=descrC, csrRowPtrC=dcsrRowPtrC,
+                          nnzTotalDevHostPtr=0)
+        return nnzC
+
+    def csrgeam(self, m, n, alpha, descrA, nnzA, csrValA, csrRowPtrA,
+                csrColIndA, beta, descrB, nnzB, csrValB, csrRowPtrB,
+                csrColIndB, descrC, csrValC, csrRowPtrC, csrColIndC):
+        fn = self._get_api("csrgeam", csrValA.dtype)
+        with _readonly(csrValA, csrRowPtrA, csrColIndA, csrValB, csrRowPtrB,
+                       csrColIndB, csrRowPtrC) \
+            as [dcsrValA, dcsrRowPtrA, dcsrColIndA, dcsrValB, dcsrRowPtrB,
+                dcsrColIndB, dcsrRowPtrC]:
+            with _readwrite(csrValC, csrColIndC) as [dcsrValC, dcsrColIndC]:
+                fn(m=m, n=n, alpha=alpha, descrA=descrA, nnzA=nnzA,
+                   csrValA=dcsrValA, csrRowPtrA=dcsrRowPtrA,
+                   csrColIndA=dcsrColIndA, csrValB=dcsrValB,
+                   descrB=descrB, nnzB=nnzB, beta=beta,
+                   csrRowPtrB=dcsrRowPtrB, csrColIndB=dcsrColIndB,
+                   descrC=descrC, csrValC=dcsrValC,
+                   csrRowPtrC=dcsrRowPtrC, csrColIndC=dcsrColIndC)
+
+
+    def XcsrgemmNnz(self, transA, transB, m, n, k, descrA, nnzA, csrRowPtrA,
+                    csrColIndA, descrB, nnzB, csrRowPtrB, csrColIndB, descrC,
+                    csrRowPtrC):
+        """
+        Returns
+        -------
+        nnzC
+        """
+        fn = self.api.XcsrgemmNnz
+        with _readonly(csrRowPtrA, csrColIndA, csrRowPtrB, csrColIndB) \
+            as (dcsrRowPtrA, dcsrColIndA, dcsrRowPtrB, dcsrColIndB):
+            with _readwrite(csrRowPtrC) as [dcsrRowPtrC]:
+                nnzC = fn(transA=transA, transB=transB, k=k, m=m, n=n,
+                          descrA=descrA, nnzA=nnzA,
+                          csrRowPtrA=dcsrRowPtrA,
+                          csrColIndA=dcsrColIndA, descrB=descrB, nnzB=nnzB,
+                          csrRowPtrB=dcsrRowPtrB, csrColIndB=dcsrColIndB,
+                          descrC=descrC, csrRowPtrC=dcsrRowPtrC,
+                          nnzTotalDevHostPtr=0)
+        return nnzC
+
+    def csrgemm(self, transA, transB, m, n, k, descrA, nnzA, csrValA,
+                csrRowPtrA, csrColIndA, descrB, nnzB, csrValB, csrRowPtrB,
+                csrColIndB, descrC, csrValC, csrRowPtrC, csrColIndC):
+        fn = self._get_api("csrgemm", csrValA.dtype)
+        with _readonly(csrValA, csrRowPtrA, csrColIndA, csrValB, csrRowPtrB,
+                       csrColIndB, csrRowPtrC) \
+            as [dcsrValA, dcsrRowPtrA, dcsrColIndA, dcsrValB, dcsrRowPtrB,
+                dcsrColIndB, dcsrRowPtrC]:
+            with _readwrite(csrValC, csrColIndC) as [dcsrValC, dcsrColIndC]:
+                fn(transA=transA, transB=transB, m=m, n=n, k=k, descrA=descrA,
+                   nnzA=nnzA, csrValA=dcsrValA, csrRowPtrA=dcsrRowPtrA,
+                   csrColIndA=dcsrColIndA, csrValB=dcsrValB,
+                   descrB=descrB, nnzB=nnzB,
+                   csrRowPtrB=dcsrRowPtrB, csrColIndB=dcsrColIndB,
+                   descrC=descrC, csrValC=dcsrValC,
+                   csrRowPtrC=dcsrRowPtrC, csrColIndC=dcsrColIndC)
 
 # ------------------------------------------------------------------------
 # Matrix Ctors

@@ -292,7 +292,6 @@ class TestCuSparseLevel3(unittest.TestCase):
         except CuSparseError:
             pass
 
-
     def test_Scsrsm(self):
         """
         Just exercise the codepath
@@ -317,6 +316,83 @@ class TestCuSparseLevel3(unittest.TestCase):
         ldy = 1
         self.cus.csrsm_solve(transA, m, n, alpha, descrA, csrValA,
                              csrRowPtrA, csrColIndA, info, X, ldx, Y, ldy)
+
+
+@addtest
+class TestCuSparseExtra(unittest.TestCase):
+    def setUp(self):
+        self.cus = cusparse.Sparse()
+
+    def test_XcsrgeamNnz(self):
+        """
+        Just exercise the codepath
+        """
+        m = n = 1
+        nnzA = 1
+        nnzB = 1
+        descrA = descrB = descrC = self.cus.matdescr()
+        csrColIndA = csrColIndB = np.zeros(10, dtype=np.int32)
+        csrRowPtrA = csrRowPtrB = csrRowPtrC = np.zeros(10, dtype=np.int32)
+        nnzC = self.cus.XcsrgeamNnz(m, n, descrA, nnzA, csrRowPtrA, csrColIndA,
+                                    descrB, nnzB, csrRowPtrB, csrColIndB,
+                                    descrC,
+                                    csrRowPtrC)
+        self.assertTrue(isinstance(nnzC, int))
+
+    def test_Scsrgeam(self):
+        """
+        Just exercise the codepath
+        """
+        dtype = np.float32
+        m = n = 1
+        nnzA = 1
+        nnzB = 1
+        alpha = beta = 1
+        csrValA = csrValB = csrValC = np.zeros(10, dtype=dtype)
+        descrA = descrB = descrC = self.cus.matdescr()
+        csrColIndA = csrColIndB = csrColIndC = np.zeros(10, dtype=np.int32)
+        csrRowPtrA = csrRowPtrB = csrRowPtrC = np.zeros(10, dtype=np.int32)
+        self.cus.csrgeam(m, n, alpha, descrA, nnzA, csrValA, csrRowPtrA,
+                         csrColIndA, beta, descrB, nnzB, csrValB,
+                         csrRowPtrB, csrColIndB, descrC, csrValC,
+                         csrRowPtrC, csrColIndC)
+
+
+    def XcsrgemmNnz(self):
+        """
+        Just exercise the codepath
+        """
+        m = n = k = 1
+        nnzA = 1
+        nnzB = 1
+        descrA = descrB = descrC = self.cus.matdescr()
+        csrColIndA = csrColIndB = np.zeros(10, dtype=np.int32)
+        csrRowPtrA = csrRowPtrB = csrRowPtrC = np.zeros(10, dtype=np.int32)
+        transA = transB = 'N'
+        nnzC = self.cus.XcsrgemmNnz(transA, transB, m, n, k, descrA, nnzA,
+                                    csrRowPtrA,
+                                    csrColIndA, descrB, nnzB, csrRowPtrB,
+                                    csrColIndB, descrC,
+                                    csrRowPtrC)
+        self.assertTrue(isinstance(nnzC, int))
+
+    def test_Scsrgemm(self):
+        """
+        Just exercise the codepath
+        """
+        dtype = np.float32
+        m = n = k = 0
+        transA = transB = 'N'
+        nnzA = 0
+        nnzB = 0
+        csrValA = csrValB = csrValC = np.zeros(10, dtype=dtype)
+        descrA = descrB = descrC = self.cus.matdescr()
+        csrColIndA = csrColIndB = csrColIndC = np.zeros(10, dtype=np.int32)
+        csrRowPtrA = csrRowPtrB = csrRowPtrC = np.zeros(10, dtype=np.int32)
+        self.cus.csrgemm(transA, transB, m, n, k, descrA, nnzA, csrValA,
+                         csrRowPtrA, csrColIndA, descrB, nnzB, csrValB,
+                         csrRowPtrB,
+                         csrColIndB, descrC, csrValC, csrRowPtrC, csrColIndC)
 
 
 if __name__ == '__main__':
