@@ -86,6 +86,7 @@ if ffi is not None:
         # ffi.typeof('long double') :         longdouble,
         ffi.typeof('char *') :              types.voidptr,
         ffi.typeof('void *') :              types.voidptr,
+        ffi.typeof('uint8_t *') :           types.CPointer(types.uint8),
         ffi.typeof('ssize_t') :             types.intp,
         ffi.typeof('size_t') :              types.uintp,
     }
