@@ -79,6 +79,13 @@ def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
 
         result_type = promote_type
 
+        # Temporary hack for __ftol2 llvm bug. Don't allow storing
+        # float results in uint64 array on windows.
+        if result_type in types.real_domain and \
+                tyout.dtype is types.uint64 and \
+                sys.platform.startswith('win32'):
+            raise TypeError('Cannot store result in uint64 array')
+
         sig = typing.signature(result_type, promote_type)
 
         if not scalar_inp:
