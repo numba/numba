@@ -11,6 +11,7 @@ class DataFlowAnalysis(object):
     This is necessary to resolve blocks that propagates stack value.
     This would allow the use of `and` and `or` and python2.6 jumps.
     """
+
     def __init__(self, cfa):
         self.cfa = cfa
         self.bytecode = cfa.bytecode
@@ -295,6 +296,56 @@ class DataFlowAnalysis(object):
         info.append(inst, base=tos2, start=tos1, stop=tos, res=res,
                     slicevar=slicevar, indexvar=indexvar)
         info.push(res)
+
+    def op_STORE_SLICE_0(self, info, inst):
+        """
+        TOS[:] = TOS1
+        """
+        tos = info.pop()
+        value = info.pop()
+        slicevar = info.make_temp()
+        indexvar = info.make_temp()
+        info.append(inst, base=tos, value=value, slicevar=slicevar,
+                    indexvar=indexvar)
+
+    def op_STORE_SLICE_1(self, info, inst):
+        """
+        TOS1[TOS:] = TOS2
+        """
+        tos = info.pop()
+        tos1 = info.pop()
+        value = info.pop()
+        slicevar = info.make_temp()
+        indexvar = info.make_temp()
+        nonevar = info.make_temp()
+        info.append(inst, base=tos1, start=tos, slicevar=slicevar,
+                    value=value, indexvar=indexvar, nonevar=nonevar)
+
+    def op_STORE_SLICE_2(self, info, inst):
+        """
+        TOS1[:TOS] = TOS2
+        """
+        tos = info.pop()
+        tos1 = info.pop()
+        value = info.pop()
+        slicevar = info.make_temp()
+        indexvar = info.make_temp()
+        nonevar = info.make_temp()
+        info.append(inst, base=tos1, stop=tos, value=value, slicevar=slicevar,
+                    indexvar=indexvar, nonevar=nonevar)
+
+    def op_STORE_SLICE_3(self, info, inst):
+        """
+        TOS2[TOS1:TOS] = TOS3
+        """
+        tos = info.pop()
+        tos1 = info.pop()
+        tos2 = info.pop()
+        value = info.pop()
+        slicevar = info.make_temp()
+        indexvar = info.make_temp()
+        info.append(inst, base=tos2, start=tos1, stop=tos, value=value,
+                    slicevar=slicevar, indexvar=indexvar)
 
     def op_BUILD_SLICE(self, info, inst):
         """

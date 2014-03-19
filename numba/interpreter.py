@@ -306,6 +306,75 @@ class Interpreter(object):
         expr = ir.Expr.getitem(base, self.get(indexvar), loc=self.loc)
         self.store(value=expr, name=res)
 
+    def op_STORE_SLICE_0(self, inst, base, value, slicevar, indexvar):
+        base = self.get(base)
+
+        slicegv = ir.Global("slice", slice, loc=self.loc)
+        self.store(value=slicegv, name=slicevar)
+
+        index = ir.Expr.call(self.get(slicevar), (), (), loc=self.loc)
+        self.store(value=index, name=indexvar)
+
+        stmt = ir.SetItem(base, self.get(indexvar), self.get(value),
+                          loc=self.loc)
+        self.current_block.append(stmt)
+
+    def op_STORE_SLICE_1(self, inst, base, start, nonevar, value, slicevar,
+                         indexvar):
+        base = self.get(base)
+        start = self.get(start)
+
+        nonegv = ir.Const(None, loc=self.loc)
+        self.store(value=nonegv, name=nonevar)
+        none = self.get(nonevar)
+
+        slicegv = ir.Global("slice", slice, loc=self.loc)
+        self.store(value=slicegv, name=slicevar)
+
+        index = ir.Expr.call(self.get(slicevar), (start, none), (),
+                             loc=self.loc)
+        self.store(value=index, name=indexvar)
+
+        stmt = ir.SetItem(base, self.get(indexvar), self.get(value),
+                          loc=self.loc)
+        self.current_block.append(stmt)
+
+    def op_STORE_SLICE_2(self, inst, base, nonevar, stop, value, slicevar,
+                         indexvar):
+        base = self.get(base)
+        stop = self.get(stop)
+
+        nonegv = ir.Const(None, loc=self.loc)
+        self.store(value=nonegv, name=nonevar)
+        none = self.get(nonevar)
+
+        slicegv = ir.Global("slice", slice, loc=self.loc)
+        self.store(value=slicegv, name=slicevar)
+
+        index = ir.Expr.call(self.get(slicevar), (none, stop,), (),
+                             loc=self.loc)
+        self.store(value=index, name=indexvar)
+
+        stmt = ir.SetItem(base, self.get(indexvar), self.get(value),
+                          loc=self.loc)
+        self.current_block.append(stmt)
+
+    def op_STORE_SLICE_3(self, inst, base, start, stop, value, slicevar,
+                         indexvar):
+        base = self.get(base)
+        start = self.get(start)
+        stop = self.get(stop)
+
+        slicegv = ir.Global("slice", slice, loc=self.loc)
+        self.store(value=slicegv, name=slicevar)
+
+        index = ir.Expr.call(self.get(slicevar), (start, stop), (),
+                             loc=self.loc)
+        self.store(value=index, name=indexvar)
+        stmt = ir.SetItem(base, self.get(indexvar), self.get(value),
+                          loc=self.loc)
+        self.current_block.append(stmt)
+
     def op_STORE_FAST(self, inst, value):
         dstname = self.code_locals[inst.arg]
         value = self.get(value)

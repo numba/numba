@@ -56,6 +56,10 @@ def _make_bytecode_table():
             ('SLICE+1', 0),
             ('SLICE+2', 0),
             ('SLICE+3', 0),
+            ('STORE_SLICE+0', 0),
+            ('STORE_SLICE+1', 0),
+            ('STORE_SLICE+2', 0),
+            ('STORE_SLICE+3', 0),
         ]
     elif sys.version_info[0] == 3:
         version_specific += [
