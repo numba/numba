@@ -98,14 +98,14 @@ def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
         out_data = oary.data
         out_layout = tyout.layout
 
-        ZERO = Constant.int(Type.int(64), 0)
-        ONE = Constant.int(Type.int(64), 1)
+        ZERO = Constant.int(Type.int(intpty.width), 0)
+        ONE = Constant.int(Type.int(intpty.width), 1)
 
         inp_indices = None
         if not scalar_inp:
             inp_indices = []
             for i in range(inp_ndim):
-                x = builder.alloca(Type.int(64))
+                x = builder.alloca(Type.int(intpty.width))
                 builder.store(ZERO, x)
                 inp_indices.append(x)
 
@@ -321,14 +321,14 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
         out_data = oary.data
         out_layout = tyout.layout
 
-        ZERO = Constant.int(Type.int(64), 0)
-        ONE = Constant.int(Type.int(64), 1)
+        ZERO = Constant.int(Type.int(intpty.width), 0)
+        ONE = Constant.int(Type.int(intpty.width), 1)
 
         inp1_indices = None
         if not scalar_inp1:
             inp1_indices = []
             for i in range(inp1_ndim):
-                x = builder.alloca(Type.int(64))
+                x = builder.alloca(Type.int(intpty.width))
                 builder.store(ZERO, x)
                 inp1_indices.append(x)
 
@@ -336,7 +336,7 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
         if not scalar_inp2:
             inp2_indices = []
             for i in range(inp2_ndim):
-                x = builder.alloca(Type.int(64))
+                x = builder.alloca(Type.int(intpty.width))
                 builder.store(ZERO, x)
                 inp2_indices.append(x)
 
