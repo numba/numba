@@ -78,6 +78,15 @@ class Type(object):
 
 
 class Integer(Type):
+    def __init__(self, *args, **kws):
+        super(Integer, self).__init__(*args, **kws)
+        # Determine bitwidth
+        for prefix in ('int', 'uint'):
+            if self.name.startswith(prefix):
+                bitwidth = int(self.name[len(prefix):])
+        self.bitwidth = bitwidth
+        self.signed = self.name.startswith('int')
+
     def cast_python_value(self, value):
         return getattr(numpy, self.name)(value)
 
