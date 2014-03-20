@@ -1,40 +1,41 @@
+from __future__ import absolute_import
 import numpy as np
 from ctypes import (c_float, c_int, c_void_p, POINTER, byref, cast, c_ulonglong,
                     c_uint, c_double, c_size_t)
 
-
-from numbapro.cudadrv.driver import cu_stream, device_pointer
+from numba.cuda.cudadrv.drvapi import cu_stream
+from numba.cuda.cudadrv.driver import device_pointer
 from numbapro.cudalib.libutils import Lib, ctype_function
 from numbapro._utils import finalizer
 
 # enum curandStatus
 STATUS = {
-    0   : ('CURAND_STATUS_SUCCESS',
-           'No errors'),
-    100 : ('CURAND_STATUS_VERSION_MISMATCH',
-           'Header file and linked library version do not match'),
-    101 : ('CURAND_STATUS_NOT_INITIALIZED',
-           'Generator not initialized'),
-    102 : ('CURAND_STATUS_ALLOCATION_FAILED',
-           'Memory allocation failed'),
-    103 : ('CURAND_STATUS_TYPE_ERROR',
-           'Generator is wrong type'),
-    104 : ('CURAND_STATUS_OUT_OF_RANGE',
-           'Argument out of range'),
-    105 : ('CURAND_STATUS_LENGTH_NOT_MULTIPLE',
-           'Length requested is not a multple of dimension'),
-    106 : ('CURAND_STATUS_DOUBLE_PRECISION_REQUIRED',
-           'GPU does not have double precision required by MRG32k3a'),
-    201 : ('CURAND_STATUS_LAUNCH_FAILURE',
-           'Kernel launch failure'),
-    202 : ('CURAND_STATUS_PREEXISTING_FAILURE',
-           'Preexisting failure on library entry'),
-    203 : ('CURAND_STATUS_INITIALIZATION_FAILED',
-           'Initialization of CUDA failed'),
-    204 : ('CURAND_STATUS_ARCH_MISMATCH',
-           'Architecture mismatch, GPU does not support requested feature'),
-    999 : ('CURAND_STATUS_INTERNAL_ERROR',
-           'Internal library error'),
+    0: ('CURAND_STATUS_SUCCESS',
+        'No errors'),
+    100: ('CURAND_STATUS_VERSION_MISMATCH',
+          'Header file and linked library version do not match'),
+    101: ('CURAND_STATUS_NOT_INITIALIZED',
+          'Generator not initialized'),
+    102: ('CURAND_STATUS_ALLOCATION_FAILED',
+          'Memory allocation failed'),
+    103: ('CURAND_STATUS_TYPE_ERROR',
+          'Generator is wrong type'),
+    104: ('CURAND_STATUS_OUT_OF_RANGE',
+          'Argument out of range'),
+    105: ('CURAND_STATUS_LENGTH_NOT_MULTIPLE',
+          'Length requested is not a multple of dimension'),
+    106: ('CURAND_STATUS_DOUBLE_PRECISION_REQUIRED',
+          'GPU does not have double precision required by MRG32k3a'),
+    201: ('CURAND_STATUS_LAUNCH_FAILURE',
+          'Kernel launch failure'),
+    202: ('CURAND_STATUS_PREEXISTING_FAILURE',
+          'Preexisting failure on library entry'),
+    203: ('CURAND_STATUS_INITIALIZATION_FAILED',
+          'Initialization of CUDA failed'),
+    204: ('CURAND_STATUS_ARCH_MISMATCH',
+          'Architecture mismatch, GPU does not support requested feature'),
+    999: ('CURAND_STATUS_INTERNAL_ERROR',
+          'Internal library error'),
 }
 curandStatus_t = c_int
 
@@ -61,7 +62,7 @@ CURAND_RNG_QUASI_SOBOL64 = 203
 CURAND_RNG_QUASI_SCRAMBLED_SOBOL64 = 204
 curandRngType_t = c_int
 
-# enum curandOrdering 
+# enum curandOrdering
 ## Best ordering for pseudorandom results
 CURAND_ORDERING_PSEUDO_BEST = 100
 ## Specific default 4096 thread sequence for pseudorandom results
@@ -106,13 +107,14 @@ CURAND_DEFINITION = 12
 CURAND_POISSON = 13
 curandMethod_t = c_int
 
-
 curandGenerator_t = c_void_p
 p_curandGenerator_t = POINTER(curandGenerator_t)
+
 
 class CuRandError(Exception):
     def __init__(self, code):
         super(CuRandError, self).__init__(STATUS[code])
+
 
 class libcurand(Lib):
     lib = 'curand'
@@ -127,13 +129,13 @@ class libcurand(Lib):
     curandGetVersion = ctype_function(curandStatus_t, POINTER(c_int))
 
     curandCreateGenerator = ctype_function(
-                                   curandStatus_t,
-                                   p_curandGenerator_t, # generator reference
-                                   curandRngType_t)     # rng_type
+        curandStatus_t,
+        p_curandGenerator_t, # generator reference
+        curandRngType_t)     # rng_type
 
     curandDestroyGenerator = ctype_function(
-                                    curandStatus_t,
-                                    curandGenerator_t)
+        curandStatus_t,
+        curandGenerator_t)
 
     curandSetStream = ctype_function(curandStatus_t,
                                      cu_stream)
@@ -143,14 +145,14 @@ class libcurand(Lib):
                                               c_ulonglong)
 
     curandSetPseudoRandomGeneratorSeed = ctype_function(
-                                            curandStatus_t,
-                                            curandGenerator_t,
-                                            c_ulonglong)
+        curandStatus_t,
+        curandGenerator_t,
+        c_ulonglong)
 
     curandSetQuasiRandomGeneratorDimensions = ctype_function(
-                                                     curandStatus_t,
-                                                     curandGenerator_t,
-                                                     c_uint)
+        curandStatus_t,
+        curandGenerator_t,
+        c_uint)
 
     curandGenerate = ctype_function(curandStatus_t,
                                     curandGenerator_t,
@@ -178,18 +180,18 @@ class libcurand(Lib):
                                           c_float)
 
     curandGenerateNormalDouble = ctype_function(curandStatus_t,
-                                          curandGenerator_t,
-                                          POINTER(c_double),
-                                          c_size_t,
-                                          c_double,
-                                          c_double)
+                                                curandGenerator_t,
+                                                POINTER(c_double),
+                                                c_size_t,
+                                                c_double,
+                                                c_double)
 
     curandGenerateLogNormal = ctype_function(curandStatus_t,
-                                          curandGenerator_t,
-                                          POINTER(c_float),
-                                          c_size_t,
-                                          c_float,
-                                          c_float)
+                                             curandGenerator_t,
+                                             POINTER(c_float),
+                                             c_size_t,
+                                             c_float,
+                                             c_float)
 
     curandGenerateLogNormalDouble = ctype_function(curandStatus_t,
                                                    curandGenerator_t,
@@ -198,12 +200,12 @@ class libcurand(Lib):
                                                    c_double,
                                                    c_double)
 
-
     curandGeneratePoisson = ctype_function(curandStatus_t,
                                            curandGenerator_t,
                                            POINTER(c_uint),
                                            c_size_t,
                                            c_double)
+
 
 class Generator(finalizer.OwnerMixin):
     def __init__(self, rng_type=CURAND_RNG_TEST):
@@ -218,7 +220,7 @@ class Generator(finalizer.OwnerMixin):
         api.curandDestroyGenerator(handle)
 
     def set_stream(self, stream):
-        return self._api.curandSetStream(self._handle, stream._handle)
+        return self._api.curandSetStream(self._handle, stream.handle)
 
     def set_offset(self, offset):
         return self._api.curandSetGeneratorOffset(self._handle, offset)
@@ -254,9 +256,9 @@ class Generator(finalizer.OwnerMixin):
 
     def generate_log_normal(self, devout, num, mean, stddev):
         fn, ptr = self.__float_or_double(
-                                     devout,
-                                     self._api.curandGenerateLogNormal,
-                                     self._api.curandGenerateLogNormalDouble)
+            devout,
+            self._api.curandGenerateLogNormal,
+            self._api.curandGenerateLogNormalDouble)
         return fn(self._handle, ptr, num, mean, stddev)
 
     def generate_poisson(self, devout, num, lmbd):

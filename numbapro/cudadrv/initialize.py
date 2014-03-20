@@ -1,9 +1,10 @@
+from __future__ import absolute_import
 from numba.targets.descriptors import TargetDescriptor
 from numba.targets.options import TargetOptions
 from numba.targets.registry import target_registry
 from numba.npyufunc import Vectorize, GUVectorize
-from .error import CudaSupportError, NvvmSupportError
-
+from numba.cuda.cudadrv.error import CudaSupportError, NvvmSupportError
+from numba.cuda.cudadrv.devices import init_gpus
 #
 # Public
 #
@@ -71,6 +72,7 @@ class CUDADispatcher(object):
         options = self.targetoptions.copy()
         options.update(targetoptions)
         from numbapro.cudapy import jit
+
         kernel = jit(sig, **options)(self.py_func)
         self._compiled = kernel
         if hasattr(kernel, "_npm_context_"):
@@ -80,6 +82,7 @@ class CUDADispatcher(object):
     def compiled(self):
         if self._compiled is None:
             from numbapro.cudapy import autojit
+
             self._compiled = autojit(self.py_func, **self.targetoptions)
         return self._compiled
 
@@ -109,17 +112,18 @@ def CUDAPoison(*args, **kws):
 
 
 def _init_driver():
-    from .driver import Driver
-    Driver() # raises CudaSupportError
+    init_gpus() # raises CudaSupportError
 
 
 def _init_nvvm():
-    from .nvvm import NVVM
+    from numba.cuda.cudadrv.nvvm import NVVM
+
     NVVM() # raises NvvmSupportError
 
 
 def _init_numba_jit_registry():
     from numbapro.cudavec.vectorizers import CudaVectorize, CudaGUFuncVectorize
+
     target_registry['gpu'] = CUDADispatcher
     Vectorize.target_registry['gpu'] = CudaVectorize
     GUVectorize.target_registry['gpu'] = CudaGUFuncVectorize

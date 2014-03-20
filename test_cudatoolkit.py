@@ -3,9 +3,9 @@ Simple testing script for library finder
 
 """
 
-from __future__ import print_function
+from __future__ import absolute_import, print_function
 import os
-from numbapro.cudadrv import libs
+from numba.cuda.cudadrv import libs
 
 basedir = '/Users/sklam/dev/cudatoolkit/5.5v1'
 platforms = [
@@ -14,7 +14,7 @@ platforms = [
     ('osx', 'darwin'),
     ('win32', 'win32'),
     ('win64', 'win32'),
-    ]
+]
 
 for dir, plat in platforms:
     libdir = os.path.join(basedir, dir)
