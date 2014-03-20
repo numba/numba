@@ -395,6 +395,78 @@ class TestCuSparseExtra(unittest.TestCase):
                          csrColIndB, descrC, csrValC, csrRowPtrC, csrColIndC)
 
 
+@addtest
+class TestCuSparseExtra(unittest.TestCase):
+    def setUp(self):
+        """
+        Just exercise the codepath
+        """
+        self.cus = cusparse.Sparse()
+
+    def test_Scsric0(self):
+        dtype = np.float32
+
+        m = 0
+        trans = 'N'
+        descr = self.cus.matdescr()
+        csrValM = np.zeros(10, dtype=dtype)
+        csrColIndA = csrRowPtrA = np.zeros(10, dtype=np.int32)
+        info = self.cus.api.solve_analysis_info()
+        try:
+            self.cus.csric0(trans, m, descr, csrValM, csrRowPtrA,
+                            csrColIndA, info)
+        except CuSparseError:
+            pass
+
+    def test_Scsrilu0(self):
+        dtype = np.float32
+
+        m = 0
+        trans = 'N'
+        descr = self.cus.matdescr()
+        csrValM = np.zeros(10, dtype=dtype)
+        csrColIndA = csrRowPtrA = np.zeros(10, dtype=np.int32)
+        info = self.cus.api.solve_analysis_info()
+        try:
+            self.cus.csrilu0(trans, m, descr, csrValM, csrRowPtrA,
+                             csrColIndA, info)
+        except CuSparseError:
+            pass
+
+    def test_Sgtsv(self):
+        dtype = np.float32
+
+        m = n = ldb = 1
+        dl = d = du = B = np.zeros(10, dtype=dtype)
+        csrColIndA = csrRowPtrA = np.zeros(10, dtype=np.int32)
+        try:
+            self.cus.gtsv(m, n, dl, d, du, B, ldb)
+        except CuSparseError:
+            pass
+
+    def test_Sgtsv_nopivot(self):
+        dtype = np.float32
+
+        m = n = ldb = 1
+        dl = d = du = B = np.zeros(10, dtype=dtype)
+        csrColIndA = csrRowPtrA = np.zeros(10, dtype=np.int32)
+        try:
+            self.cus.gtsv_nopivot(m, n, dl, d, du, B, ldb)
+        except CuSparseError:
+            pass
+
+    def test_SgtsvStridedBatch(self):
+        dtype = np.float32
+
+        m = 1
+        dl = d = du = x = np.zeros(10, dtype=dtype)
+        csrColIndA = csrRowPtrA = np.zeros(10, dtype=np.int32)
+        batchCount = batchStride = 0
+        try:
+            self.cus.gtsvStridedBatch(m, dl, d, du, x, batchCount, batchStride)
+        except CuSparseError:
+            pass
+
 if __name__ == '__main__':
     main()
 

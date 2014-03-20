@@ -301,6 +301,9 @@ class Sparse(object):
                    csrColIndA=dcsrColIndA, info=info, x=dX, ldx=ldx, y=dY,
                    ldy=ldy)
 
+    # ------------------------------------------------------------------------
+    # Extra API
+
     def XcsrgeamNnz(self, m, n, descrA, nnzA, csrRowPtrA, csrColIndA, descrB,
                     nnzB, csrRowPtrB, csrColIndB, descrC, csrRowPtrC):
         """
@@ -375,6 +378,45 @@ class Sparse(object):
                    csrRowPtrB=dcsrRowPtrB, csrColIndB=dcsrColIndB,
                    descrC=descrC, csrValC=dcsrValC,
                    csrRowPtrC=dcsrRowPtrC, csrColIndC=dcsrColIndC)
+
+    # ------------------------------------------------------------------------
+    # Preconditioners
+
+    def csric0(self, trans, m, descr, csrValM, csrRowPtrA, csrColIndA, info):
+        fn = self._get_api("csric0", csrValM.dtype)
+        with _readonly(csrRowPtrA, csrColIndA) as [dcsrRowPtrA, dcsrColIndA]:
+            with _readwrite(csrValM) as [dcsrValM]:
+                fn(trans=trans, m=m, descrA=descr,
+                   csrValA_ValM=dcsrValM, csrRowPtrA=dcsrRowPtrA,
+                   csrColIndA=dcsrColIndA, info=info)
+
+    def csrilu0(self, trans, m, descr, csrValM, csrRowPtrA, csrColIndA, info):
+        fn = self._get_api("csrilu0", csrValM.dtype)
+        with _readonly(csrRowPtrA, csrColIndA) as [dcsrRowPtrA, dcsrColIndA]:
+            with _readwrite(csrValM) as [dcsrValM]:
+                fn(trans=trans, m=m, descrA=descr,
+                   csrValA_ValM=dcsrValM, csrRowPtrA=dcsrRowPtrA,
+                   csrColIndA=dcsrColIndA, info=info)
+
+    def gtsv(self, m, n, dl, d, du, B, ldb):
+        fn = self._get_api("gtsv", B.dtype)
+        with _readonly(dl, d, du) as [ddl, dd, ddu]:
+            with _readwrite(B) as [dB]:
+                fn(m=m, n=n, dl=ddl, d=dd, du=ddu, B=dB, ldb=ldb)
+
+    def gtsv_nopivot(self, m, n, dl, d, du, B, ldb):
+        fn = self._get_api("gtsv_nopivot", B.dtype)
+        with _readonly(dl, d, du) as [ddl, dd, ddu]:
+            with _readwrite(B) as [dB]:
+                fn(m=m, n=n, dl=ddl, d=dd, du=ddu, B=dB, ldb=ldb)
+
+    def gtsvStridedBatch(self, m, dl, d, du, x, batchCount, batchStride):
+        fn = self._get_api("gtsvStridedBatch", x.dtype)
+        with _readonly(dl, d, du) as [ddl, dd, ddu]:
+            with _readwrite(x) as [dx]:
+                fn(m=m, dl=ddl, d=dd, du=ddu, x=dx,
+                   batchCount=batchCount, batchStride=batchStride)
+
 
 # ------------------------------------------------------------------------
 # Matrix Ctors

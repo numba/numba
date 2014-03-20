@@ -723,7 +723,7 @@ Scsric0 = Dcsric0 = Ccsric0 = Zcsric0 = _csric0
 
 
 class _csrilu0(_api_function):
-    prepare_trans = _prepare_solveinfo
+    prepare_trans = _prepare_operation_flag
     prepare_descrA = _prepare_matdescr
     prepare_csrValA_ValM = _prepare_array
     prepare_csrRowPtrA = _prepare_array
