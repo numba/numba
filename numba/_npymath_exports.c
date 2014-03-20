@@ -7,17 +7,24 @@
 
 
 #include "_pymodule.h"
-
+#include <numpy/npy_math.h>
 
 struct npy_math_entry {
     const char* name;
     void* func;
 };
 
-struct npy_math_entry exports[] = {
-    { "test", (void*) 42 }
-};
 
+#define NPYMATH_SYMBOL(name, func) { "numba.npymath."name, (void*) func }
+struct npy_math_entry exports[] = {
+    NPYMATH_SYMBOL("sin", npy_sin),
+    NPYMATH_SYMBOL("cos", npy_cos),
+    NPYMATH_SYMBOL("tan", npy_tan),
+    NPYMATH_SYMBOL("sinh", npy_sinh),
+    NPYMATH_SYMBOL("cosh", npy_cosh),
+    NPYMATH_SYMBOL("tanh", npy_tanh)
+};
+#undef NPY_MATH_SYMBOL
 
 PyObject*
 create_symbol_list()
@@ -28,8 +35,9 @@ create_symbol_list()
      */
     size_t count = sizeof(exports) / sizeof(exports[0]);
     PyObject* pylist = PyList_New(count);
+    size_t i;
 
-    for (size_t i = 0; i < count; ++i) {
+    for (i = 0; i < count; ++i) {
         /* create the tuple */
         PyObject* tuple = Py_BuildValue("(s,l)", exports[i].name, exports[i].func);
         PyList_SET_ITEM(pylist, i, tuple);

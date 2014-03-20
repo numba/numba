@@ -128,8 +128,7 @@ class CPUContext(BaseContext):
         # the execution environment
         import numpy.core.umath as npy_umath
         le.dylib_import_library(npy_umath.__file__)
-        symbols = [ "sin", "cos", "tan", "sinh", "cosh", "tanh",
-                    "asin", "acos", "atan", "aexp", "alog", "asqrt",
+        symbols = [ "asin", "acos", "atan", "aexp", "alog", "asqrt",
                     "afabs",
                     "log", "log10", "exp", "sqrt",
                     "fabs", "ceil", "fmod", "floor",
@@ -151,6 +150,9 @@ class CPUContext(BaseContext):
             except Exception as e:
                 pass
 
+        import numba._npymath_exports as npymath
+        for sym in npymath.symbols:
+            le.dylib_add_symbol(*sym)
 
 
     def dynamic_map_function(self, func):
