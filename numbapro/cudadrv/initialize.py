@@ -3,8 +3,7 @@ from numba.targets.descriptors import TargetDescriptor
 from numba.targets.options import TargetOptions
 from numba.targets.registry import target_registry
 from numba.npyufunc import Vectorize, GUVectorize
-from numba.cuda.cudadrv.error import CudaSupportError, NvvmSupportError
-from numba.cuda.cudadrv.devices import init_gpus
+
 #
 # Public
 #
@@ -24,6 +23,7 @@ def initialize():
         return _is_initialize
     global last_error
     try:
+        from numba.cuda.cudadrv.error import CudaSupportError, NvvmSupportError
         _init_driver()
         _init_nvvm()
         _is_initialize = True
@@ -40,6 +40,7 @@ def initialize():
 
 def ensure_cuda_support():
     if not initialize():
+        from numba.cuda.cudadrv.error import CudaSupportError
         raise CudaSupportError("CUDA not supported")
 
 #
@@ -112,6 +113,7 @@ def CUDAPoison(*args, **kws):
 
 
 def _init_driver():
+    from numba.cuda.cudadrv.devices import init_gpus
     init_gpus() # raises CudaSupportError
 
 
