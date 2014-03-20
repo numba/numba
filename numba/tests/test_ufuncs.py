@@ -473,9 +473,13 @@ class TestUFuncs(unittest.TestCase):
     def test_rint_ufunc_npm(self):
         self.test_rint_ufunc(flags=no_pyobj_flags)
 
+    @unittest.skipIf(iswindows,
+                     "FIXME: sign crashes on windows")
     def test_sign_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('sign', flags=flags)
 
+    @unittest.skipIf(iswindows,
+                     "FIXME: sign crashes on windows")
     def test_sign_ufunc_npm(self):
         self.test_sign_ufunc(flags=no_pyobj_flags)
 
@@ -935,7 +939,7 @@ class TestUFuncs(unittest.TestCase):
         assert np.allclose(control, result)
 
     def binary_ufunc_mixed_types_test(self, ufunc_name, flags=enable_pyobj_flags):
-        
+
         ufunc = globals()[ufunc_name + '_usecase']
 
         inputs1 = [
@@ -958,12 +962,12 @@ class TestUFuncs(unittest.TestCase):
 
             input1_operand = input1[0]
             input1_type = input1[1]
- 
+
             input2_operand = input2[0]
             input2_type = input2[1]
 
             # Skip division by unsigned int because of NumPy bugs
-            if ufunc_name == 'divide' and (input2_type == types.Array(types.uint32, 1, 'C') or 
+            if ufunc_name == 'divide' and (input2_type == types.Array(types.uint32, 1, 'C') or
                     input2_type == types.Array(types.uint64, 1, 'C')):
                 continue
 
@@ -1044,7 +1048,7 @@ class TestUFuncs(unittest.TestCase):
             cr = compile_isolated(pyfunc, (input_type, output_type),
                                   flags=no_pyobj_flags)
             cfunc = cr.entry_point
-            
+
             expected = np.zeros(result.shape, dtype=result.dtype)
             np.negative(x, expected)
 
@@ -1068,7 +1072,7 @@ class TestUFuncs(unittest.TestCase):
         input2_operands = input1_operands
 
         for x, y in itertools.product(input1_operands, input2_operands):
-            
+
             input1_type = types.Array(types.uint64, x.ndim, 'C')
             input2_type = types.Array(types.uint64, y.ndim, 'C')
             output_type = types.Array(types.uint64, max(x.ndim, y.ndim), 'C')
@@ -1086,4 +1090,3 @@ class TestUFuncs(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-

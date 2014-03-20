@@ -117,39 +117,6 @@ class CPUContext(BaseContext):
 
     def map_numpy_math_functions(self):
         # add the symbols for numpy math to the execution environment.
-
-        # These symbols seem to be defined in the umath dylib (may be
-        # present in other libs linked with numpy as well)
-        # This may not work if the symbols are stripped and we may want
-        # to build a dynamic library exporting these symbols instead of
-        # relying in the ones in umath.
-
-        # the current method will likely pollute a lot the namespace of
-        # the execution environment
-        import numpy.core.umath as npy_umath
-        le.dylib_import_library(npy_umath.__file__)
-        symbols = [ "asin", "acos", "atan", "aexp", "alog", "asqrt",
-                    "afabs",
-                    "log", "log10", "exp", "sqrt",
-                    "fabs", "ceil", "fmod", "floor",
-                    "expm1", "log1p", "hypot", "acosh", "asinh", "atanh",
-                    "rint", "trunc", "exp2", "log2",
-                    "atan2", "pow", "modf", "copysign", "nextafter",
-                    "spacing",
-                    #non-standard but in npy_math
-                    "deg2rad", "rad2deg", "logaddexp", "logaddexp2",
-                    ]
-
-            # convenience: remap symbols with a 'numpy.math' scope.
-        for fname in symbols:
-            try:
-                func = le.dylib_address_of_symbol("npy_"+fname)
-                assert(func)
-                name = "numba.numpy.math."+fname
-                le.dylib_add_symbol(name, func)
-            except Exception as e:
-                pass
-
         import numba._npymath_exports as npymath
         for sym in npymath.symbols:
             le.dylib_add_symbol(*sym)

@@ -15,14 +15,41 @@ struct npy_math_entry {
 };
 
 
-#define NPYMATH_SYMBOL(name, func) { "numba.npymath."name, (void*) func }
+#define NPYMATH_SYMBOL(name) { "numba.npymath." #name, (void*) npy_##name }
 struct npy_math_entry exports[] = {
-    NPYMATH_SYMBOL("sin", npy_sin),
-    NPYMATH_SYMBOL("cos", npy_cos),
-    NPYMATH_SYMBOL("tan", npy_tan),
-    NPYMATH_SYMBOL("sinh", npy_sinh),
-    NPYMATH_SYMBOL("cosh", npy_cosh),
-    NPYMATH_SYMBOL("tanh", npy_tanh)
+    NPYMATH_SYMBOL(sin),
+    NPYMATH_SYMBOL(cos),
+    NPYMATH_SYMBOL(tan),
+    NPYMATH_SYMBOL(asin),
+    NPYMATH_SYMBOL(acos),
+    NPYMATH_SYMBOL(atan),
+
+    NPYMATH_SYMBOL(sinh),
+    NPYMATH_SYMBOL(cosh),
+    NPYMATH_SYMBOL(tanh),
+    NPYMATH_SYMBOL(asinh),
+    NPYMATH_SYMBOL(acosh),
+    NPYMATH_SYMBOL(atanh),
+
+    NPYMATH_SYMBOL(exp),
+    NPYMATH_SYMBOL(exp2),
+    NPYMATH_SYMBOL(expm1),
+
+    NPYMATH_SYMBOL(log),
+    NPYMATH_SYMBOL(log2),
+    NPYMATH_SYMBOL(log10),
+    NPYMATH_SYMBOL(log1p),
+
+    NPYMATH_SYMBOL(floor),
+    NPYMATH_SYMBOL(ceil),
+    NPYMATH_SYMBOL(trunc),
+
+    NPYMATH_SYMBOL(sqrt),
+
+    NPYMATH_SYMBOL(deg2rad),
+    NPYMATH_SYMBOL(rad2deg),
+
+    NPYMATH_SYMBOL(atan2)
 };
 #undef NPY_MATH_SYMBOL
 

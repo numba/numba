@@ -35,7 +35,7 @@ def unary_npy_math_extern(fn):
         sig = typing.signature(types.float64, types.float64)
         return f64impl(context, builder, sig, [fpval])
 
-    n = "numba.numpy.math." + fn
+    n = "numba.npymath." + fn
     @register
     @implement(fn_sym, types.float64)
     def f64impl(context, builder, sig, args):
@@ -222,7 +222,6 @@ def register_unary_ufunc(ufunc, operator, asfloat=False):
     for ty in types.number_domain:
         register(implement(ufunc, ty)(scalar_unary_ufunc))
 
-register_unary_ufunc(numpy.absolute, types.abs_type)
 register_unary_ufunc(numpy.exp, math.exp, asfloat=True)
 register_unary_ufunc(numpy.exp2, npy.exp2, asfloat=True)
 register_unary_ufunc(numpy.expm1, npy.expm1, asfloat=True)
@@ -245,11 +244,13 @@ register_unary_ufunc(numpy.arcsinh, math.asinh, asfloat=True)
 register_unary_ufunc(numpy.arccosh, math.acosh, asfloat=True)
 register_unary_ufunc(numpy.arctanh, math.atanh, asfloat=True)
 register_unary_ufunc(numpy.sqrt, math.sqrt, asfloat=True)
-register_unary_ufunc(numpy.negative, types.neg_type)
 register_unary_ufunc(numpy.floor, math.floor, asfloat=True)
 register_unary_ufunc(numpy.ceil, math.ceil, asfloat=True)
 register_unary_ufunc(numpy.trunc, math.trunc, asfloat=True)
+
+register_unary_ufunc(numpy.absolute, types.abs_type)
 register_unary_ufunc(numpy.sign, types.sign_type)
+register_unary_ufunc(numpy.negative, types.neg_type)
 
 
 def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,

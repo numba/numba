@@ -74,7 +74,6 @@ for func in _autoregister_unary_ufuncs:
 del(_autoregister_unary_ufuncs)
 
 
-
 class Numpy_binary_ufunc(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
