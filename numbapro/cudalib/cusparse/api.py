@@ -417,14 +417,147 @@ class Sparse(object):
                 fn(m=m, dl=ddl, d=dd, du=ddu, x=dx,
                    batchCount=batchCount, batchStride=batchStride)
 
+    # ------------------------------------------------------------------------
+    # Format Conversion
+
+    def bsr2csr(self, dirA, mb, nb, descrA, bsrValA, bsrRowPtrA, bsrColIndA,
+                blockDim, descrC, csrValC, csrRowPtrC, csrColIndC):
+        fn = self._get_api('bsr2csr', bsrValA.dtype)
+        with _readonly(bsrValA, bsrRowPtrA, bsrColIndA) as [dbsrValA,
+                                                            dbsrRowPtrA,
+                                                            dbsrColIndA]:
+            with _readwrite(csrValC, csrRowPtrC, csrColIndC) as [dcsrValC,
+                                                                 dcsrRowPtrC,
+                                                                 dcsrColIndC]:
+                fn(dirA=dirA, mb=mb, nb=nb, descrA=descrA, bsrValA=dbsrValA,
+                   bsrRowPtrA=dbsrRowPtrA, bsrColIndA=dbsrColIndA,
+                   blockDim=blockDim, descrC=descrC, csrValC=dcsrValC,
+                   csrRowPtrC=dcsrRowPtrC, csrColIndC=dcsrColIndC)
+
+    def Xcoo2csr(self, cooRowInd, nnz, m, csrRowPtr):
+        fn = self.api.Xcoo2csr
+        with _readonly(cooRowInd) as [dcooRowInd]:
+            with _readwrite(csrRowPtr) as [dcsrRowPtr]:
+                fn(cooRowInd=dcooRowInd, nnz=nnz, m=m, csrRowPtr=dcsrRowPtr,
+                   idxBase=self.idxbase)
+
+    def csc2dense(self, m, n, descrA, cscValA, cscRowIndA, cscColPtrA, A, lda):
+        fn = self._get_api('csc2dense', cscValA.dtype)
+        with _readonly(cscValA, cscRowIndA, cscColPtrA) as [dcscValA,
+                                                            dcscRowIndA,
+                                                            dcscColPtrA]:
+            with _readwrite(A) as [dA]:
+                fn(m=m, n=n, descrA=descrA, cscValA=dcscValA,
+                   cscRowIndA=dcscRowIndA, cscColPtrA=dcscColPtrA, A=dA,
+                   lda=lda)
+
+    csc2hyb = NotImplemented
+
+    def Xcsr2bsrNnz(self, dirA, m, n, descrA, csrRowPtrA, csrColIndA,
+                    blockDim, descrC, bsrRowPtrC):
+        fn = self.api.Xcsr2bsrNnz
+        with _readonly(csrRowPtrA, csrColIndA, bsrRowPtrC) as [dcsrRowPtrA,
+                                                               dcsrColIndA,
+                                                               dbsrRowPtrC]:
+            nnz = fn(dirA=dirA, m=m, n=n, descrA=descrA,
+                     csrRowPtrA=dcsrRowPtrA,
+                     csrColIndA=dcsrColIndA,
+                     blockDim=blockDim,
+                     descrC=descrC, bsrRowPtrC=dbsrRowPtrC,
+                     nnzTotalDevHostPtr=0)
+        return nnz
+
+    def csr2bsr(self, dirA, m, n, descrA, csrValA, csrRowPtrA, csrColIndA,
+                blockDim, descrC, bsrValC, bsrRowPtrC, bsrColIndC):
+        fn = self._get_api('csr2bsr', csrValA.dtype)
+        with _readonly(csrValA, csrRowPtrA, csrColIndA) as [dcsrValA,
+                                                            dcsrRowPtrA,
+                                                            dcsrColIndA]:
+            with _readwrite(bsrValC, bsrRowPtrC, bsrColIndC) as [dbsrValC,
+                                                                 dbsrRowPtrC,
+                                                                 dbsrColIndC]:
+                nnz = fn(dirA=dirA, m=m, n=n, descrA=descrA, csrValA=dcsrValA,
+                         csrRowPtrA=dcsrRowPtrA, csrColIndA=dcsrColIndA,
+                         blockDim=blockDim, descrC=descrC, bsrValC=dbsrValC,
+                         bsrRowPtrC=dbsrRowPtrC, bsrColIndC=dbsrColIndC)
+        return nnz
+
+    def Xcsr2coo(self, csrRowPtr, nnz, m, cooRowInd):
+        fn = self.api.Xcsr2coo
+        with _readonly(csrRowPtr) as [dcsrRowPtr]:
+            with _readwrite(cooRowInd) as [dcooRowInd]:
+                fn(csrRowPtr=dcsrRowPtr, nnz=nnz, m=m, cooRowInd=dcooRowInd,
+                   idxBase=self.idxbase)
+
+    def csr2csc(self, m, n, nnz, csrVal, csrRowPtr, csrColInd, cscVal,
+                cscRowInd, cscColPtr, copyValues):
+        fn = self._get_api('csr2csc', csrVal.dtype)
+        with _readonly(csrVal, csrRowPtr, csrColInd) as [dcsrVal, dcsrRowPtr,
+                                                         dcsrColInd]:
+            with _readwrite(cscVal, cscRowInd, cscColPtr) as [dcscVal,
+                                                              dcscRowInd,
+                                                              dcscColPtr]:
+                fn(m=m, n=n, nnz=nnz, csrVal=dcsrVal, csrRowPtr=dcsrRowPtr,
+                   csrColInd=dcsrColInd, cscVal=dcscVal, cscRowInd=dcscRowInd,
+                   cscColPtr=dcscColPtr, copyValues=copyValues,
+                   idxBase=self.idxbase)
+
+    def csr2dense(self, m, n, descrA, csrValA, csrRowPtrA, csrColIndA, A, lda):
+        fn = self._get_api('csr2dense', csrValA.dtype)
+        with _readonly(csrValA, csrRowPtrA, csrColIndA) as [dcsrValA,
+                                                            dcsrRowPtrA,
+                                                            dcsrColIndA]:
+            with _readwrite(A) as [dA]:
+                fn(m=m, n=n, descrA=descrA, csrValA=dcsrValA,
+                   csrRowPtrA=dcsrRowPtrA, csrColIndA=dcsrColIndA, A=dA,
+                   lda=lda)
+
+    csr2hyb = NotImplemented
+
+    def dense2csc(self, m, n, descrA, A, lda, nnzPerCol, cscValA, cscRowIndA,
+                  cscColPtrA):
+        fn = self._get_api('dense2csc', cscValA.dtype)
+        with _readonly(A) as [dA]:
+            with _readwrite(cscValA, cscRowIndA, cscColPtrA) as [dcscValA,
+                                                                 dcscRowIndA,
+                                                                 dcscColPtrA]:
+                fn(m=m, n=n, descrA=descrA, A=dA, lda=lda,
+                   nnzPerCol=nnzPerCol, cscValA=dcscValA,
+                   cscRowIndA=dcscRowIndA,
+                   cscColPtrA=dcscColPtrA)
+
+    def dense2csr(self, m, n, descrA, A, lda, nnzPerRow, csrValA,
+                  csrRowPtrA, csrColIndA):
+        """
+        Returns
+        -------
+        nnzTotalDevHostPtr
+        """
+        fn = self._get_api('dense2csr', A.dtype)
+        with _readonly(A) as [dA]:
+            with _readwrite(csrValA, csrRowPtrA, csrColIndA) as [dcsrValA,
+                                                                 dcsrRowPtrA,
+                                                                 dcsrColIndA]:
+                fn(m=m, n=n, descrA=descrA, A=dA, lda=lda,
+                   nnzPerRow=nnzPerRow, csrValA=dcsrValA,
+                   csrRowPtrA=dcsrRowPtrA, csrColIndA=dcsrColIndA)
+
+    dense2hyb = NotImplemented
+    hyb2csc = NotImplemented
+    hyb2csr = NotImplemented
+    hyb2dense = NotImplemented
+
+    def nnz(self, dirA, m, n, descrA, A, lda, nnzPerRowCol):
+        fn = self._get_api('nnz', A.dtype)
+        with _readonly(A) as [dA]:
+            with _readwrite(nnzPerRowCol) as [dnnzPerRowCol]:
+                nnzTotal = fn(dirA=dirA, m=m, n=n, descrA=descrA, A=dA,
+                              nnzPerRowCol=dnnzPerRowCol, lda=lda,
+                              nnzTotalDevHostPtr=0)
+        return nnzTotal
 
 # ------------------------------------------------------------------------
 # Matrix Ctors
-
-
-def bsr_matrix(*args, **kws):
-    mat = ss.bsr_matrix(*args, **kws)
-    return BSRCudaMatrix(mat)
 
 
 class BSRCudaMatrix(object):
@@ -443,3 +576,9 @@ class BSRCudaMatrix(object):
         indices = self.indices.copy_to_host(stream=stream)
         indptr = self.indptr.copy_to_host(stream=stream)
         return ss.bsr_matrix((data, indices, indptr))
+
+
+def bsr_matrix(*args, **kws):
+    mat = ss.bsr_matrix(*args, **kws)
+    return BSRCudaMatrix(mat)
+

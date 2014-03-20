@@ -5,12 +5,16 @@ from .support import addtest, main
 from numbapro.cudalib import cusparse
 from numbapro.cudalib.cusparse.binding import CuSparseError
 from numbapro import cuda
+from numba.cuda.cudadrv.driver import CudaAPIError
 
 
 @addtest
 class TestCuSparseLevel1(unittest.TestCase):
     def setUp(self):
         self.cus = cusparse.Sparse()
+
+    def tearDown(self):
+        del self.cus
 
     def generic_test_axpyi(self, dtype):
         alpha = 2
@@ -398,12 +402,12 @@ class TestCuSparseExtra(unittest.TestCase):
 @addtest
 class TestCuSparseExtra(unittest.TestCase):
     def setUp(self):
-        """
-        Just exercise the codepath
-        """
         self.cus = cusparse.Sparse()
 
     def test_Scsric0(self):
+        """
+        Just exercise the codepath
+        """
         dtype = np.float32
 
         m = 0
@@ -419,6 +423,9 @@ class TestCuSparseExtra(unittest.TestCase):
             pass
 
     def test_Scsrilu0(self):
+        """
+        Just exercise the codepath
+        """
         dtype = np.float32
 
         m = 0
@@ -434,38 +441,182 @@ class TestCuSparseExtra(unittest.TestCase):
             pass
 
     def test_Sgtsv(self):
+        """
+        Just exercise the codepath
+        """
         dtype = np.float32
 
         m = n = ldb = 1
         dl = d = du = B = np.zeros(10, dtype=dtype)
-        csrColIndA = csrRowPtrA = np.zeros(10, dtype=np.int32)
         try:
             self.cus.gtsv(m, n, dl, d, du, B, ldb)
         except CuSparseError:
             pass
 
     def test_Sgtsv_nopivot(self):
+        """
+        Just exercise the codepath
+        """
         dtype = np.float32
 
         m = n = ldb = 1
         dl = d = du = B = np.zeros(10, dtype=dtype)
-        csrColIndA = csrRowPtrA = np.zeros(10, dtype=np.int32)
         try:
             self.cus.gtsv_nopivot(m, n, dl, d, du, B, ldb)
         except CuSparseError:
             pass
 
     def test_SgtsvStridedBatch(self):
+        """
+        Just exercise the codepath
+        """
         dtype = np.float32
 
         m = 1
         dl = d = du = x = np.zeros(10, dtype=dtype)
-        csrColIndA = csrRowPtrA = np.zeros(10, dtype=np.int32)
         batchCount = batchStride = 0
         try:
             self.cus.gtsvStridedBatch(m, dl, d, du, x, batchCount, batchStride)
         except CuSparseError:
             pass
+
+
+
+class TestCuSparseExtra(unittest.TestCase):
+    """
+    These test can corrupt the CUDA context making the remaining test fails
+    """
+    def setUp(self):
+        self.cus = cusparse.Sparse()
+
+    def tearDown(self):
+        del self.cus
+
+    def test_Sbsr2csr(self):
+        dtype = np.dtype('float32')
+
+        dirA = 'C'
+        mb = nb = 0
+        descrA = self.cus.matdescr()
+        descrC = self.cus.matdescr()
+        bsrValA = csrValC = np.zeros(10, dtype=dtype)
+        bsrRowPtrA = bsrColIndA = np.zeros(10, dtype=np.int32)
+        csrRowPtrC = csrColIndC = np.zeros(10, dtype=np.int32)
+        blockDim = 1
+        self.cus.bsr2csr(dirA, mb, nb, descrA, bsrValA, bsrRowPtrA,
+                         bsrColIndA, blockDim, descrC, csrValC,
+                         csrRowPtrC, csrColIndC)
+
+    def test_Xcoo2csr(self):
+        nnz = 1
+        m = 1
+        csrRowPtr = np.zeros(20, dtype=np.int32)
+        cooRowInd = np.zeros(20, dtype=np.int32)
+        try:
+            self.cus.Xcoo2csr(cooRowInd, nnz, m, csrRowPtr)
+        except CudaAPIError:
+            pass
+
+    def test_Scsc2dense(self):
+        m = n = 1
+        lda = 1
+        descrA = self.cus.matdescr()
+        cscValA = np.zeros(10, dtype=np.float32)
+        cscRowIndA = cscColPtrA = A = np.zeros(10, dtype=np.int32)
+        self.cus.csc2dense(m, n, descrA, cscValA, cscRowIndA, cscColPtrA, A,
+                           lda)
+
+    def test_Xcsr2bsrNnz(self):
+        dirA = 'C'
+        m = n = 1
+        blockDim = 1
+        descrC = descrA = self.cus.matdescr()
+        bsrRowPtrC = csrRowPtrA = csrColIndA = np.zeros(10, dtype=np.int32)
+        self.cus.Xcsr2bsrNnz(dirA, m, n, descrA, csrRowPtrA, csrColIndA,
+                             blockDim, descrC, bsrRowPtrC)
+
+    def test_Scsr2bsr(self):
+        dtype = np.float32
+
+        dirA = 'C'
+        m = n = 1
+        blockDim = 1
+        descrC = descrA = self.cus.matdescr()
+        csrValA = bsrColIndC = bsrValC = np.zeros(10, dtype=dtype)
+        bsrRowPtrC = csrRowPtrA = csrColIndA = np.zeros(10, dtype=np.int32)
+        self.cus.csr2bsr(dirA, m, n, descrA, csrValA, csrRowPtrA, csrColIndA,
+                         blockDim, descrC, bsrValC, bsrRowPtrC, bsrColIndC)
+
+    def test_Xcsr2coo(self):
+        nnz = m = 1
+        csrRowPtr = cooRowInd = np.zeros(10, dtype=np.int32)
+        self.cus.Xcsr2coo(csrRowPtr, nnz, m, cooRowInd)
+
+    def test_Scsr2csc(self):
+        dtype = np.float32
+        m = n = nnz = 1
+        csrVal = cscVal = np.zeros(10, dtype=dtype)
+        csrRowPtr = csrColInd = np.zeros(10, dtype=np.int32)
+        cscRowInd = cscColPtr = np.zeros(10, dtype=np.int32)
+        copyValues = 'N'
+        self.cus.csr2csc(m, n, nnz, csrVal, csrRowPtr, csrColInd, cscVal,
+                         cscRowInd, cscColPtr, copyValues)
+
+    def test_Scsr2dense(self):
+        dtype = np.float32
+
+        m = n = 1
+        lda = 1
+        descrA = self.cus.matdescr()
+        A = csrValA = np.zeros(10, dtype=dtype)
+        csrRowPtrA = csrColIndA = np.zeros(10, np.int32)
+        self.cus.csr2dense(m, n, descrA, csrValA, csrRowPtrA, csrColIndA, A,
+                           lda)
+
+    def test_Sdense2csc(self):
+        dtype = np.float32
+
+        m = n = 1
+        lda = 1
+        nnzPerCol = 0
+        descrA = self.cus.matdescr()
+        A = np.zeros(10, dtype=dtype)
+        cscValA = np.zeros(10, dtype=dtype)
+        cscRowIndA = np.zeros(10, np.int32)
+        cscColPtrA = np.zeros(10, np.int32)
+        try:
+            self.cus.dense2csc(m, n, descrA, A, lda, nnzPerCol, cscValA,
+                               cscRowIndA, cscColPtrA)
+        except CuSparseError:
+            pass
+
+
+    def test_Sdense2csr(self):
+        dtype = np.float32
+
+        m = n = 0
+        lda = 1
+        nnzPerRow = 0
+        descrA = self.cus.matdescr()
+        A = np.zeros(10, dtype=dtype)
+        csrValA = np.zeros(10, dtype=dtype)
+        csrRowPtrA = csrColIndA = np.zeros(10, np.int32)
+        try:
+            self.cus.dense2csr(m, n, descrA, A, lda, nnzPerRow, csrValA,
+                               csrRowPtrA, csrColIndA)
+        except CuSparseError:
+            pass
+
+    def test_Snnz(self):
+        dtype = np.float32
+        dirA = 'C'
+        m = n = 1
+        lda = 1
+        descrA = self.cus.matdescr()
+        A = np.zeros(10, dtype=dtype)
+        nnzPerRowColumn = np.zeros(10, np.int32)
+        self.cus.nnz(dirA, m, n, descrA, A, lda, nnzPerRowColumn)
+
 
 if __name__ == '__main__':
     main()

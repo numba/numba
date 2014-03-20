@@ -615,14 +615,14 @@ Scsr2bsr = Dcsr2bsr = Ccsr2bsr = Zcsr2bsr = _csr2bsr
 class _csr2csc_v2(_api_function):
     __slots__ = ()
 
-    csrVal = _prepare_array
-    csrRowPtr = _prepare_array
-    csrColInd = _prepare_array
-    cscVal = _prepare_array
-    cscRowInd = _prepare_array
-    cscColPtr = _prepare_array
+    prepare_csrVal = _prepare_array
+    prepare_csrRowPtr = _prepare_array
+    prepare_csrColInd = _prepare_array
+    prepare_cscVal = _prepare_array
+    prepare_cscRowInd = _prepare_array
+    prepare_cscColPtr = _prepare_array
 
-    copyValues = _prepare_action
+    prepare_copyValues = _prepare_action
 
 
 Scsr2csc_v2 = Dcsr2csc_v2 = Ccsr2csc_v2 = Zcsr2csc_v2 = _csr2csc_v2
@@ -908,7 +908,6 @@ class Zcsrsv_solve_v2(_csrsv_solve_v2):
 class _dense2csc(_api_function):
     prepare_descrA = _prepare_matdescr
     prepare_A = _prepare_array
-    prepare_nnzPerCol = _prepare_array
     prepare_cscValA = _prepare_array
     prepare_cscRowIndA = _prepare_array
     prepare_cscColPtrA = _prepare_array
@@ -920,7 +919,7 @@ Sdense2csc = Ddense2csc = Cdense2csc = Zdense2csc = _dense2csc
 class _dense2csr(_api_function):
     prepare_descrA = _prepare_matdescr
     prepare_A = _prepare_array
-    prepare_nnzPerRow = _prepare_array
+
     prepare_csrValA = _prepare_array
     prepare_csrRowPtrA = _prepare_array
     prepare_csrColIndA = _prepare_array
@@ -1110,6 +1109,7 @@ Shybsv_solve = Dhybsv_solve = Chybsv_solve = Zhybsv_solve = _hybsv_solve
 
 
 class _nnz(_api_function):
+    T = c_int
     prepare_dirA = _prepare_direction_flag
     prepare_descrA = _prepare_matdescr
     prepare_A = _prepare_array
@@ -1154,16 +1154,17 @@ class Xcoo2csr(_api_function):
 
 
 class Xcsr2coo(_api_function):
-    csrRowPtr = _prepare_array
-    cooRowInd = _prepare_array
+    prepare_csrRowPtr = _prepare_array
+    prepare_cooRowInd = _prepare_array
 
 
 class Xcsr2bsrNnz(_api_function):
+    T = c_int
     prepare_dirA = _prepare_direction_flag
     prepare_descrA = _prepare_matdescr
     prepare_csrRowPtrA = _prepare_array
     prepare_csrColIndA = _prepare_array
-    prepare_descrC = _prepare_array
+    prepare_descrC = _prepare_matdescr
     prepare_bsrRowPtrC = _prepare_array
     prepare_nnzTotalDevHostPtr = _prepare_scalar_out
 
