@@ -481,7 +481,6 @@ class TestCuSparseExtra(unittest.TestCase):
             pass
 
 
-
 class TestCuSparseExtra(unittest.TestCase):
     """
     These test can corrupt the CUDA context making the remaining test fails

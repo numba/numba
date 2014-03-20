@@ -560,25 +560,44 @@ class Sparse(object):
 # Matrix Ctors
 
 
-class BSRCudaMatrix(object):
-    def __init__(self, bsrmat, stream=0):
-        self.dtype = bsrmat.dtype
-        self.shape = bsrmat.shape
-        self.ndim = bsrmat.ndim
-        self.nnz = bsrmat.nnz
-        self.data = cuda.to_device(bsrmat.data, stream=stream)
-        self.indices = cuda.to_device(bsrmat.indices, stream=stream)
-        self.indptr = cuda.to_device(bsrmat.indptr, stream=stream)
-        self.blocksize = bsrmat.blocksize
+class CudaSparseMatrix(object):
+    def __init__(self, matrix, stream=0):
+        self.dtype = matrix.dtype
+        self.shape = matrix.shape
+        self.ndim = matrix.ndim
+        self.nnz = matrix.nnz
+        self.data = cuda.to_device(matrix.data, stream=stream)
+        self.indices = cuda.to_device(matrix.indices, stream=stream)
+        self.indptr = cuda.to_device(matrix.indptr, stream=stream)
+        self.blocksize = matrix.blocksize
 
     def copy_to_host(self, stream=0):
         data = self.data.copy_to_host(stream=stream)
         indices = self.indices.copy_to_host(stream=stream)
         indptr = self.indptr.copy_to_host(stream=stream)
-        return ss.bsr_matrix((data, indices, indptr))
+        return self.host_constructor((data, indices, indptr))
+
+
+class CudaBSRMatrix(CudaSparseMatrix):
+    host_constructor = ss.bsr_matrix
+
+
+class CudaCSCMatrix(CudaSparseMatrix):
+    host_constructor = ss.csc_matrix
+
+
+class CudaCSRMatrix(CudaSparseMatrix):
+    host_constructor = ss.csr_matrix
 
 
 def bsr_matrix(*args, **kws):
     mat = ss.bsr_matrix(*args, **kws)
-    return BSRCudaMatrix(mat)
+    return CudaBSRMatrix(mat)
 
+def csc_matrix(*args, **kws):
+    mat = ss.csc_matrix(*args, **kws)
+    return CudaCSCMatrix(mat)
+
+def csr_matrix(*args, **kws):
+    mat = ss.csr_matrix(*args, **kws)
+    return CudaCSRMatrix(mat)
