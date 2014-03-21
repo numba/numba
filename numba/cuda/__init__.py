@@ -3,9 +3,14 @@ from __future__ import print_function, absolute_import, division
 # Re export
 from .stubs import (threadIdx, blockIdx, blockDim, gridDim, syncthreads,
                     shared, local, const, grid, atomic)
-
-from .decorators import jit, autojit, declare_device
-from .api import *
+from .cudadrv.error import CudaSupportError
+try:
+    from .decorators import jit, autojit, declare_device
+except CudaSupportError:
+    is_available = False
+else:
+    is_available = True
+    from .api import *
 
 
 def test():

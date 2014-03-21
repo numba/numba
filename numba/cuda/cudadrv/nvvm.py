@@ -88,9 +88,8 @@ class NVVM(object):
                 inst.driver = open_cudalib('nvvm', ccc=True)
             except OSError as e:
                 cls.__INSTANCE = None
-                errmsg = ("libNVVM cannot be found. "
-                          "Try setting environment variable NUMBAPRO_NVVM "
-                          "with the path of the libNVVM shared library.\n%s")
+                errmsg = ("libNVVM cannot be found. Do `conda install "
+                          "cudatoolkit`")
                 raise NvvmSupportError(errmsg % e)
 
             # Find & populate functions

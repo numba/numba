@@ -53,6 +53,10 @@ class CudaAPIError(CudaDriverError):
 
 def find_driver():
     envpath = os.environ.get('NUMBAPRO_CUDA_DRIVER', None)
+    if envpath == '0':
+        # Force fail
+        _raise_driver_not_found()
+
     if envpath is not None:
         try:
             envpath = os.path.abspath(envpath)
