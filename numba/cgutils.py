@@ -465,3 +465,24 @@ class VerboseProxy(object):
 
             return wrapped
         return fn
+
+def printf(builder, format_string, *values):
+
+    str_const = Constant.stringz(format_string)
+    global_str_const = get_module(builder).add_global_variable(str_const.type, '')
+    global_str_const.initializer = str_const
+
+    idx = [Constant.int(Type.int(32), 0), Constant.int(Type.int(32), 0)]
+    str_addr = global_str_const.gep(idx)
+
+    args = []
+    for v in values:
+        if isinstance(v, int):
+            args.append(Constant.int(Type.int(), v))
+        elif isinstance(v, float):
+            args.append(Constant.real(Type.double(), v))
+
+    functype = Type.function(Type.int(32), [Type.pointer(Type.int(8))], True)
+    fn = get_module(builder).add_function(functype, 'printf')
+    builder.call(fn, [str_addr] + args)
+

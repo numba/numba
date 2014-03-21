@@ -5,8 +5,8 @@ import numba.unittest_support as unittest
 import numpy as np
 from numba.compiler import compile_isolated, Flags
 from numba import types, utils
-
 from numba.config import PYVERSION
+import itertools
 
 is32bits = tuple.__itemsize__ == 4
 iswindows = sys.platform.startswith('win32')
@@ -290,6 +290,12 @@ class TestUFuncs(unittest.TestCase):
                 else:
                     output_type = types.Array(types.float64, 1, 'C')
 
+            # Due to __ftol2 llvm bug, skip testing uint64 output on windows.
+            # (llvm translates fptoui call to ftol2 call on windows which
+            # causes a crash later.
+            if iswindows and output_type.dtype is types.uint64:
+                continue
+
             cr = compile_isolated(pyfunc, (input_type, output_type), flags=flags)
             cfunc = cr.entry_point
 
@@ -303,16 +309,17 @@ class TestUFuncs(unittest.TestCase):
                 expected = np.zeros(1, dtype=output_type.dtype.name)
 
             invalid_flag = False
-            with warnings.catch_warnings(record=True) as w:
+            with warnings.catch_warnings(record=True) as warnlist:
                 warnings.simplefilter('always')
 
                 pyfunc(input_operand, expected)
 
-                if (len(w) == 1
-                    and issubclass(w[-1].category, RuntimeWarning)
-                    and str(w[-1].message).startswith("invalid value " \
-                                                      "encountered")):
-                    invalid_flag = True
+                warnmsg = "invalid value encountered"
+                for thiswarn in warnlist:
+
+                    if (issubclass(thiswarn.category, RuntimeWarning)
+                        and str(thiswarn.message).startswith(warnmsg)):
+                        invalid_flag = True
 
             cfunc(input_operand, result)
 
@@ -334,7 +341,6 @@ class TestUFuncs(unittest.TestCase):
                         self.fail("%s != %s" % (result, expected))
 
 
-    # TODO: test calling binary ufuncs with mixed input dtypes
     def binary_ufunc_test(self, ufunc_name, flags=enable_pyobj_flags,
                          skip_inputs=None, additional_inputs=None,
                          int_output_type=None, float_output_type=None):
@@ -400,6 +406,12 @@ class TestUFuncs(unittest.TestCase):
                     output_type = types.Array(float_output_type, 1, 'C')
                 else:
                     output_type = types.Array(types.float64, 1, 'C')
+
+            # Due to __ftol2 llvm bug, skip testing uint64 output on windows.
+            # (llvm translates fptoui call to ftol2 call on windows which
+            # causes a crash later.
+            if iswindows and output_type.dtype is types.uint64:
+                continue
 
             cr = compile_isolated(pyfunc, (input_type, input_type, output_type),
                                   flags=flags)
@@ -483,42 +495,36 @@ class TestUFuncs(unittest.TestCase):
     def test_exp2_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('exp2', flags=flags)
 
-    @unittest.expectedFailure
     def test_exp2_ufunc_npm(self):
         self.test_exp2_ufunc(flags=no_pyobj_flags)
 
     def test_log_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('log', flags=flags)
 
-    @unittest.expectedFailure
     def test_log_ufunc_npm(self):
         self.test_log_ufunc(flags=no_pyobj_flags)
 
     def test_log2_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('log2', flags=flags)
 
-    @unittest.expectedFailure
     def test_log2_ufunc_npm(self):
         self.test_log2_ufunc(flags=no_pyobj_flags)
 
     def test_log10_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('log10', flags=flags)
 
-    @unittest.expectedFailure
     def test_log10_ufunc_npm(self):
         self.test_log10_ufunc(flags=no_pyobj_flags)
 
     def test_expm1_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('expm1', flags=flags)
 
-    @unittest.expectedFailure
     def test_expm1_ufunc_npm(self):
         self.test_expm1_ufunc(flags=no_pyobj_flags)
 
     def test_log1p_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('log1p', flags=flags)
 
-    @unittest.expectedFailure
     def test_log1p_ufunc_npm(self):
         self.test_log1p_ufunc(flags=no_pyobj_flags)
 
@@ -617,14 +623,12 @@ class TestUFuncs(unittest.TestCase):
     def test_deg2rad_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('deg2rad', flags=flags)
 
-    @unittest.expectedFailure
     def test_deg2rad_ufunc_npm(self):
         self.test_deg2rad_ufunc(flags=no_pyobj_flags)
 
     def test_rad2deg_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('rad2deg', flags=flags)
 
-    @unittest.expectedFailure
     def test_rad2deg_ufunc_npm(self):
         self.test_rad2deg_ufunc(flags=no_pyobj_flags)
 
@@ -930,6 +934,155 @@ class TestUFuncs(unittest.TestCase):
         print(utils.benchmark(bm_numba, maxsec=.1))
         assert np.allclose(control, result)
 
+    def binary_ufunc_mixed_types_test(self, ufunc_name, flags=enable_pyobj_flags):
+
+        ufunc = globals()[ufunc_name + '_usecase']
+
+        inputs1 = [
+            (1, types.uint64),
+            (-1, types.int64),
+            (0.5, types.float64),
+
+            (np.array([0, 1], dtype='u8'), types.Array(types.uint64, 1, 'C')),
+            (np.array([-1, 1], dtype='i8'), types.Array(types.int64, 1, 'C')),
+            (np.array([-0.5, 0.5], dtype='f8'), types.Array(types.float64, 1, 'C'))]
+
+        inputs2 = inputs1
+
+        output_types = [types.Array(types.int64, 1, 'C'),
+                        types.Array(types.float64, 1, 'C')]
+
+        pyfunc = ufunc
+
+        for input1, input2, output_type in itertools.product(inputs1, inputs2, output_types):
+
+            input1_operand = input1[0]
+            input1_type = input1[1]
+
+            input2_operand = input2[0]
+            input2_type = input2[1]
+
+            # Skip division by unsigned int because of NumPy bugs
+            if ufunc_name == 'divide' and (input2_type == types.Array(types.uint32, 1, 'C') or
+                    input2_type == types.Array(types.uint64, 1, 'C')):
+                continue
+
+            # Skip some subtraction tests because of NumPy bugs
+            if ufunc_name == 'subtract' and input1_type == types.Array(types.uint32, 1, 'C') and \
+                    input2_type == types.uint32 and types.Array(types.int64, 1, 'C'):
+                continue
+            if ufunc_name == 'subtract' and input1_type == types.Array(types.uint32, 1, 'C') and \
+                    input2_type == types.uint64 and types.Array(types.int64, 1, 'C'):
+                continue
+
+            if ((isinstance(input1_type, types.Array) or
+                    isinstance(input2_type, types.Array)) and
+                    not isinstance(output_type, types.Array)):
+                continue
+
+            cr = compile_isolated(pyfunc, (input1_type, input2_type, output_type),
+                                  flags=flags)
+            cfunc = cr.entry_point
+
+            if isinstance(input1_operand, np.ndarray):
+                result = np.zeros(input1_operand.size,
+                                  dtype=output_type.dtype.name)
+                expected = np.zeros(input1_operand.size,
+                                    dtype=output_type.dtype.name)
+            elif isinstance(input2_operand, np.ndarray):
+                result = np.zeros(input2_operand.size,
+                                  dtype=output_type.dtype.name)
+                expected = np.zeros(input2_operand.size,
+                                    dtype=output_type.dtype.name)
+            else:
+                result = np.zeros(1, dtype=output_type.dtype.name)
+                expected = np.zeros(1, dtype=output_type.dtype.name)
+
+            cfunc(input1_operand, input2_operand, result)
+            pyfunc(input1_operand, input2_operand, expected)
+
+            # Need special checks if NaNs are in results
+            if np.isnan(expected).any() or np.isnan(result).any():
+                self.assertTrue(np.allclose(np.isnan(result), np.isnan(expected)))
+                if not np.isnan(expected).all() and not np.isnan(result).all():
+                    self.assertTrue(np.allclose(result[np.invert(np.isnan(result))],
+                                     expected[np.invert(np.isnan(expected))]))
+            else:
+                self.assertTrue(np.all(result == expected) or
+                                np.allclose(result, expected))
+
+    def test_mixed_types(self):
+        self.binary_ufunc_mixed_types_test('divide', flags=no_pyobj_flags)
+
+
+    def test_broadcasting(self):
+
+        # Test unary ufunc
+        pyfunc = negative_usecase
+
+        input_operands = [
+            np.arange(3, dtype='i8'),
+            np.arange(3, dtype='i8').reshape(3,1),
+            np.arange(3, dtype='i8').reshape(1,3),
+            np.arange(3, dtype='i8').reshape(3,1),
+            np.arange(3, dtype='i8').reshape(1,3),
+            np.arange(3*3, dtype='i8').reshape(3,3)]
+
+        output_operands = [
+            np.zeros(3*3, dtype='i8').reshape(3,3),
+            np.zeros(3*3, dtype='i8').reshape(3,3),
+            np.zeros(3*3, dtype='i8').reshape(3,3),
+            np.zeros(3*3*3, dtype='i8').reshape(3,3,3),
+            np.zeros(3*3*3, dtype='i8').reshape(3,3,3),
+            np.zeros(3*3*3, dtype='i8').reshape(3,3,3)]
+
+        for x, result in zip(input_operands, output_operands):
+
+            input_type = types.Array(types.uint64, x.ndim, 'C')
+            output_type = types.Array(types.int64, result.ndim, 'C')
+
+            cr = compile_isolated(pyfunc, (input_type, output_type),
+                                  flags=no_pyobj_flags)
+            cfunc = cr.entry_point
+
+            expected = np.zeros(result.shape, dtype=result.dtype)
+            np.negative(x, expected)
+
+            cfunc(x, result)
+            self.assertTrue(np.all(result == expected))
+
+        # Test binary ufunc
+        pyfunc = add_usecase
+
+        input1_operands = [
+            np.arange(3, dtype='u8'),
+            np.arange(3*3, dtype='u8').reshape(3,3),
+            np.arange(3*3*3, dtype='u8').reshape(3,3,3),
+            np.arange(3, dtype='u8').reshape(3,1),
+            np.arange(3, dtype='u8').reshape(1,3),
+            np.arange(3, dtype='u8').reshape(3,1,1),
+            np.arange(3*3, dtype='u8').reshape(3,3,1),
+            np.arange(3*3, dtype='u8').reshape(3,1,3),
+            np.arange(3*3, dtype='u8').reshape(1,3,3)]
+
+        input2_operands = input1_operands
+
+        for x, y in itertools.product(input1_operands, input2_operands):
+
+            input1_type = types.Array(types.uint64, x.ndim, 'C')
+            input2_type = types.Array(types.uint64, y.ndim, 'C')
+            output_type = types.Array(types.uint64, max(x.ndim, y.ndim), 'C')
+
+            cr = compile_isolated(pyfunc, (input1_type, input2_type, output_type),
+                                  flags=no_pyobj_flags)
+            cfunc = cr.entry_point
+
+            expected = np.add(x, y)
+            result = np.zeros(expected.shape, dtype='u8')
+
+            cfunc(x, y, result)
+            self.assertTrue(np.all(result == expected))
+
+
 if __name__ == '__main__':
     unittest.main()
-

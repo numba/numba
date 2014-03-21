@@ -6,17 +6,13 @@ from __future__ import print_function, absolute_import, division
 import math
 import llvm.core as lc
 from llvm.core import Type
-from numba.targets.imputils import implement, impl_attribute, builtin_attr
+from numba.targets.imputils import implement, Registry
 from numba import types, cgutils, utils
 from numba.typing import signature
 
 
-functions = []
-
-
-def register(f):
-    functions.append(f)
-    return f
+registry = Registry()
+register = registry.register
 
 
 def unary_math_int_impl(fn, f64impl):
@@ -307,15 +303,3 @@ def degrees_f32_impl(context, builder, sig, args):
     return builder.fdiv(builder.fmul(x, full), twopi)
 
 unary_math_int_impl(math.degrees, degrees_f64_impl)
-
-# -----------------------------------------------------------------------------
-
-@builtin_attr
-@impl_attribute(types.Module(math), "pi", types.float64)
-def math_pi_impl(context, builder, typ, value):
-    return context.get_constant(types.float64, math.pi)
-
-@builtin_attr
-@impl_attribute(types.Module(math), "e", types.float64)
-def math_e_impl(context, builder, typ, value):
-    return context.get_constant(types.float64, math.e)

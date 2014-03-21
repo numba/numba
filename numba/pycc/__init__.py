@@ -60,22 +60,22 @@ def main(args=None):
     logger.debug('args.output --> %s', args.output)
 
     logger.debug('inputs --> %s', args.inputs)
-    compiler = Compiler(args.inputs, module_name=module_name)
-    if args.llvm:
-        logger.debug('emit llvm')
-        compiler.write_llvm_bitcode(args.output, wrap=args.python)
-    elif args.olibs:
-        logger.debug('emit object file')
-        compiler.write_native_object(args.output, wrap=args.python)
-    else:
-        logger.debug('emit shared library')
-        logger.debug('write to temporary object file %s', tempfile.gettempdir())
-        temp_obj = (tempfile.gettempdir() + os.sep +
-                    os.path.basename(args.output) + '.o')
-        compiler.write_native_object(temp_obj, wrap=args.python)
-        cmdargs = (find_linker(),) + find_args() + ('-o', args.output, temp_obj)
-        subprocess.check_call(cmdargs)
-        os.remove(temp_obj)
+    with Compiler(args.inputs, module_name=module_name) as compiler:
+        if args.llvm:
+            logger.debug('emit llvm')
+            compiler.write_llvm_bitcode(args.output, wrap=args.python)
+        elif args.olibs:
+            logger.debug('emit object file')
+            compiler.write_native_object(args.output, wrap=args.python)
+        else:
+            logger.debug('emit shared library')
+            logger.debug('write to temporary object file %s', tempfile.gettempdir())
+            temp_obj = (tempfile.gettempdir() + os.sep +
+                        os.path.basename(args.output) + '.o')
+            compiler.write_native_object(temp_obj, wrap=args.python)
+            cmdargs = (find_linker(),) + find_args() + ('-o', args.output, temp_obj)
+            subprocess.check_call(cmdargs)
+            os.remove(temp_obj)
 
-    if args.header:
-        compiler.emit_header(args.output)
+        if args.header:
+            compiler.emit_header(args.output)

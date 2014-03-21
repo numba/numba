@@ -66,8 +66,14 @@ class TypeVar(object):
         assert nbefore <= nafter, "Must grow monotonically"
 
     def lock(self, typ):
-        self.typeset = set([typ])
-        self.locked = True
+        if self.locked:
+            [expect] = list(self.typeset)
+            if self.context.type_compatibility(typ, expect) is None:
+                raise TypingError("No convertsion from %s to %s for "
+                                  "'%s'" % (typ, expect, self.var))
+        else:
+            self.typeset = set([typ])
+            self.locked = True
 
     def union(self, other):
         self.add_types(*other.typeset)
@@ -321,11 +327,15 @@ class TypeInferer(object):
             calltypes[call] = signature
 
         for call, args, kws in self.usercalls:
-            fnty = typemap[call.func.name]
             args = tuple(typemap[a.name] for a in args)
-            assert not kws
-            signature = self.context.resolve_function_type(fnty, args, ())
-            assert signature is not None, (fnty, args)
+
+            if isinstance(call.func, ir.Intrinsic):
+                signature = call.func.type
+            else:
+                assert not kws
+                fnty = typemap[call.func.name]
+                signature = self.context.resolve_function_type(fnty, args, ())
+                assert signature is not None, (fnty, args)
             calltypes[call] = signature
 
         for inst in self.setitemcalls:
@@ -426,26 +436,38 @@ class TypeInferer(object):
             gvty = self.context.get_global_type(gvar.value)
             self.typevars[target.name].lock(gvty)
             self.assumed_immutables.add(inst)
-        if gvar.name == 'slice' and gvar.value is slice:
+
+        elif gvar.name == 'slice' and gvar.value is slice:
             gvty = self.context.get_global_type(gvar.value)
             self.typevars[target.name].lock(gvty)
             self.assumed_immutables.add(inst)
         elif gvar.name == 'len' and gvar.value is len:
+
             gvty = self.context.get_global_type(gvar.value)
             self.typevars[target.name].lock(gvty)
             self.assumed_immutables.add(inst)
+
         elif gvar.name in ('True', 'False'):
             assert gvar.value in (True, False)
             self.typevars[target.name].lock(types.boolean)
             self.assumed_immutables.add(inst)
+
+        elif (isinstance(gvar.value, tuple) and
+              all(isinstance(x, int) for x in gvar.value)):
+            gvty = self.context.get_number_type(gvar.value[0])
+            self.typevars[target.name].lock(types.UniTuple(gvty, 2))
+            self.assumed_immutables.add(inst)
+
         elif isinstance(gvar.value, (int, float)):
             gvty = self.context.get_number_type(gvar.value)
             self.typevars[target.name].lock(gvty)
             self.assumed_immutables.add(inst)
+
         elif numpy_support.is_arrayscalar(gvar.value):
             gvty = numpy_support.map_arrayscalar_type(gvar.value)
             self.typevars[target.name].lock(gvty)
             self.assumed_immutables.add(inst)
+
         elif numpy_support.is_array(gvar.value):
             ary = gvar.value
             dtype = numpy_support.from_dtype(ary.dtype)
@@ -453,15 +475,18 @@ class TypeInferer(object):
             gvty = types.Array(dtype, ary.ndim, 'C')
             self.typevars[target.name].lock(gvty)
             self.assumed_immutables.add(inst)
+
         elif ctypes_utils.is_ctypes_funcptr(gvar.value):
             cfnptr = gvar.value
             fnty = ctypes_utils.make_function_type(cfnptr)
             self.typevars[target.name].lock(fnty)
             self.assumed_immutables.add(inst)
+
         elif cffi_support.SUPPORTED and cffi_support.is_cffi_func(gvar.value):
             fnty = cffi_support.make_function_type(gvar.value)
             self.typevars[target.name].lock(fnty)
             self.assumed_immutables.add(inst)
+
         else:
             try:
                 gvty = self.context.get_global_type(gvar.value)
@@ -477,7 +502,12 @@ class TypeInferer(object):
 
     def typeof_expr(self, inst, target, expr):
         if expr.op == 'call':
-            self.typeof_call(inst, target, expr)
+            if isinstance(expr.func, ir.Intrinsic):
+                restype = expr.func.type.return_type
+                self.typevars[target.name].add_types(restype)
+                self.usercalls.append((inst.value, expr.args, expr.kws))
+            else:
+                self.typeof_call(inst, target, expr)
         elif expr.op in ('getiter', 'iternext', 'iternextsafe', 'itervalid'):
             self.typeof_intrinsic_call(inst, target, expr.op, expr.value)
         elif expr.op == 'binop':

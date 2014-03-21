@@ -24,7 +24,13 @@ public:
         if (0 == ovct) {
             return NULL;
         }
-        matches = tm->selectOverload(sig, &overloads[0], selected, argct, ovct);
+        if (overloads.size() > 0) {
+            matches = tm->selectOverload(sig, &overloads[0], selected, argct,
+                                         ovct);
+        } else if (argct == 0){
+            matches = 1;
+            selected = 0;
+        }
         if (matches == 1){
             return functions[selected];
         }
