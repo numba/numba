@@ -379,11 +379,20 @@ class Sparse(object):
                    descrC=descrC, csrValC=dcsrValC,
                    csrRowPtrC=dcsrRowPtrC, csrColIndC=dcsrColIndC)
 
-    def csrgemm_matrix(self, transA, transB, descrA, matA, descrB, matB,
-                       descrC):
+    def csrgemm_ez(self, matA, matB, transA='N', transB='N', descrA=None,
+                       descrB=None, descrC=None):
         """
-        Returns a csr matrix of the matrix product.
+        Returns a csr matrix of the matrix product (matA * matB).
+
+        Notes
+        -----
+        Calls XcsrgemmNnz and csrgemm
         """
+        tmpdescr = self.matdescr()
+        descrA = descrA or tmpdescr
+        descrB = descrB or tmpdescr
+        descrC = descrC or tmpdescr
+
         dtype = matA.dtype
         m, ka = matA.shape
         kb, n = matB.shape
