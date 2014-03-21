@@ -62,11 +62,12 @@ create_symbol_list()
      */
     size_t count = sizeof(exports) / sizeof(exports[0]);
     PyObject* pylist = PyList_New(count);
+    const char* bv_format = sizeof(long) < sizeof(void*)?"(s,L)":"(s,l)";
     size_t i;
 
     for (i = 0; i < count; ++i) {
         /* create the tuple */
-        PyObject* tuple = Py_BuildValue("(s,L)", exports[i].name,
+        PyObject* tuple = Py_BuildValue(bv_format, exports[i].name,
                                         exports[i].func);
         PyList_SET_ITEM(pylist, i, tuple);
     }
