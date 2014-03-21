@@ -1191,6 +1191,7 @@ class XcsrgeamNnz(_api_function):
 
 
 class XcsrgemmNnz(_api_function):
+    T = c_int
     prepare_transA = _prepare_operation_flag
     prepare_transB = _prepare_operation_flag
     prepare_descrA = _prepare_matdescr
@@ -1202,6 +1203,9 @@ class XcsrgemmNnz(_api_function):
     prepare_descrC = _prepare_matdescr
     prepare_csrRowPtrC = _prepare_array
     prepare_nnzTotalDevHostPtr = _prepare_scalar_out
+
+    def return_value(self, *args):
+        return args[self.argnames.index('nnzTotalDevHostPtr')].value
 
 
 def _init_api_function(name, decl):
