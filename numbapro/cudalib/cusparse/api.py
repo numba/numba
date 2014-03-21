@@ -569,7 +569,6 @@ class CudaSparseMatrix(object):
         self.data = cuda.to_device(matrix.data, stream=stream)
         self.indices = cuda.to_device(matrix.indices, stream=stream)
         self.indptr = cuda.to_device(matrix.indptr, stream=stream)
-        self.blocksize = matrix.blocksize
 
     def copy_to_host(self, stream=0):
         data = self.data.copy_to_host(stream=stream)
@@ -580,6 +579,10 @@ class CudaSparseMatrix(object):
 
 class CudaBSRMatrix(CudaSparseMatrix):
     host_constructor = ss.bsr_matrix
+
+    def __init__(self, matrix, stream=0):
+        super(CudaBSRMatrix, self).__init__(matrix, stream=stream)
+        self.blocksize = matrix.blocksize
 
 
 class CudaCSCMatrix(CudaSparseMatrix):
