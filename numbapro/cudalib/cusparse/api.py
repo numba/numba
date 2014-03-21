@@ -384,6 +384,8 @@ class Sparse(object):
         """
         Returns a csr matrix of the matrix product (matA * matB).
 
+        Raises ValueError if the result is entirely zero.
+
         Notes
         -----
         Calls XcsrgemmNnz and csrgemm
@@ -404,6 +406,9 @@ class Sparse(object):
         nnz = self.XcsrgemmNnz(transA, transB, m, n, k, descrA, matA.nnz,
                                matA.indptr, matA.indices, descrB, matB.nnz,
                                matB.indptr, matB.indices, descrC, indptrC)
+
+        if nnz == 0:
+            return ValueError("result is entirely zero")
 
         dataC = cuda.device_array(nnz, dtype=dtype)
         indicesC = cuda.device_array(nnz, dtype='int32')
