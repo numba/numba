@@ -66,7 +66,8 @@ create_symbol_list()
 
     for (i = 0; i < count; ++i) {
         /* create the tuple */
-        PyObject* tuple = Py_BuildValue("(s,l)", exports[i].name, exports[i].func);
+        PyObject* tuple = Py_BuildValue("(s,L)", exports[i].name,
+                                        exports[i].func);
         PyList_SET_ITEM(pylist, i, tuple);
     }
 
