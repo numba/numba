@@ -473,13 +473,9 @@ class TestUFuncs(unittest.TestCase):
     def test_rint_ufunc_npm(self):
         self.test_rint_ufunc(flags=no_pyobj_flags)
 
-    @unittest.skipIf(iswindows,
-                     "FIXME: sign crashes on windows")
     def test_sign_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('sign', flags=flags)
 
-    @unittest.skipIf(iswindows,
-                     "FIXME: sign crashes on windows")
     def test_sign_ufunc_npm(self):
         self.test_sign_ufunc(flags=no_pyobj_flags)
 
