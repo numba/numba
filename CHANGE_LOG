@@ -1,13 +1,15 @@
 Version 0.13
 ------------
 
-Feature:
+Features:
+
 * Opensourcing NumbaPro CUDA python support in `numba.cuda`
 * Add support for ufunc array broadcasting
 * Add support for mixed input types for ufuncs
 * Add support for returning tuple from jitted function
 
 Fixes:
+
 * Fix store slice bytecode handling for Python2
 * Fix inplace subtract
 * Fix pycc so that correct header is emitted

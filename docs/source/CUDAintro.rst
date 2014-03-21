@@ -6,7 +6,7 @@ CUDA Programming Introduction
 
 Numba now contains preliminary support for CUDA programming. Numba will
 eventually provide multiple entry points for programmers of different levels
-of expertise on CUDA. For now, NumbaPro provides a Python dialect
+of expertise on CUDA. For now, Numba provides a Python dialect
 for low-level programming on the CUDA hardware. It provides full control over
 the hardware for fine tunning the performance of CUDA kernels.
 
