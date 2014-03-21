@@ -408,7 +408,7 @@ class Sparse(object):
                                matB.indptr, matB.indices, descrC, indptrC)
 
         if nnz == 0:
-            return ValueError("result is entirely zero")
+            raise ValueError("result is entirely zero")
 
         dataC = cuda.device_array(nnz, dtype=dtype)
         indicesC = cuda.device_array(nnz, dtype='int32')
