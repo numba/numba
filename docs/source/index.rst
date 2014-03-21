@@ -33,6 +33,16 @@ Numba
 
    interface_c.rst
 
+**CUDA API (experimental)**
+
+.. toctree::
+   :maxdepth: 1
+
+   CUDAintro.rst
+   CUDAJit.rst
+   CUDADevice.rst
+   CUDASupport.rst
+
 **Misc**
 
 .. toctree::
