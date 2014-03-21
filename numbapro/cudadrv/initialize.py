@@ -24,6 +24,7 @@ def initialize():
     global last_error
     try:
         from numba.cuda.cudadrv.error import CudaSupportError, NvvmSupportError
+
         _init_driver()
         _init_nvvm()
         _is_initialize = True
@@ -41,6 +42,7 @@ def initialize():
 def ensure_cuda_support():
     if not initialize():
         from numba.cuda.cudadrv.error import CudaSupportError
+
         raise CudaSupportError("CUDA not supported")
 
 #
@@ -114,6 +116,7 @@ def CUDAPoison(*args, **kws):
 
 def _init_driver():
     from numba.cuda.cudadrv.devices import init_gpus
+
     init_gpus() # raises CudaSupportError
 
 
@@ -124,15 +127,20 @@ def _init_nvvm():
 
 
 def _init_numba_jit_registry():
-    from numbapro.cudavec.vectorizers import CudaVectorize, CudaGUFuncVectorize
-
-    target_registry['gpu'] = CUDADispatcher
-    Vectorize.target_registry['gpu'] = CudaVectorize
-    GUVectorize.target_registry['gpu'] = CudaGUFuncVectorize
+    try:
+        from numba.cuda.cudadrv.error import CudaSupportError
+        from numbapro.cudavec.vectorizers import CudaVectorize, CudaGUFuncVectorize
+    except CudaSupportError:
+        pass
+    else:
+        target_registry['gpu'] = CUDADispatcher
+        Vectorize.target_registry['gpu'] = CudaVectorize
+        GUVectorize.target_registry['gpu'] = CudaGUFuncVectorize
 
 
 def _init_poison_jit_registry():
-    del target_registry['gpu']
-    del Vectorize.target_registry['gpu']
-    del GUVectorize.target_registry['gpu']
+    pass
+    # del target_registry['gpu']
+    # del Vectorize.target_registry['gpu']
+    # del GUVectorize.target_registry['gpu']
 
