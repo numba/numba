@@ -379,6 +379,34 @@ class Sparse(object):
                    descrC=descrC, csrValC=dcsrValC,
                    csrRowPtrC=dcsrRowPtrC, csrColIndC=dcsrColIndC)
 
+    def csrgemm_matrix(self, transA, transB, descrA, matA, descrB, matB,
+                       descrC):
+        """
+        Returns a csr matrix of the matrix product.
+        """
+        dtype = matA.dtype
+        m, ka = matA.shape
+        kb, n = matB.shape
+        if ka != kb:
+            raise ValueError("incompatible matrices")
+        k = ka
+
+        indptrC = cuda.device_array(m + 1, dtype='int32')
+        nnz = self.XcsrgemmNnz(transA, transB, m, n, k, descrA, matA.nnz,
+                               matA.indptr, matA.indices, descrB, matB.nnz,
+                               matB.indptr, matB.indices, descrC, indptrC)
+
+        dataC = cuda.device_array(nnz, dtype=dtype)
+        indicesC = cuda.device_array(nnz, dtype='int32')
+        self.csrgemm(transA, transB, m, n, k, descrA, matA.nnz, matA.data,
+                     matA.indptr, matA.indices, descrB, matB.nnz, matB.data,
+                     matB.indptr, matB.indices, descrC, dataC, indptrC,
+                     indicesC)
+
+        return CudaCSRMatrix().from_attributes(data=dataC, indices=indicesC,
+                                               indptr=indptrC, shape=(m, n),
+                                               dtype=dtype, nnz=nnz)
+
     # ------------------------------------------------------------------------
     # Preconditioners
 
@@ -556,19 +584,31 @@ class Sparse(object):
                               nnzTotalDevHostPtr=0)
         return nnzTotal
 
+
 # ------------------------------------------------------------------------
 # Matrix Ctors
 
-
 class CudaSparseMatrix(object):
-    def __init__(self, matrix, stream=0):
-        self.dtype = matrix.dtype
-        self.shape = matrix.shape
-        self.ndim = matrix.ndim
-        self.nnz = matrix.nnz
-        self.data = cuda.to_device(matrix.data, stream=stream)
-        self.indices = cuda.to_device(matrix.indices, stream=stream)
-        self.indptr = cuda.to_device(matrix.indptr, stream=stream)
+    def from_host_matrix(self, matrix, stream=0):
+        dtype = matrix.dtype
+        shape = matrix.shape
+        nnz = matrix.nnz
+        data = cuda.to_device(matrix.data, stream=stream)
+        indices = cuda.to_device(matrix.indices, stream=stream)
+        indptr = cuda.to_device(matrix.indptr, stream=stream)
+        self.from_attributes(dtype=dtype, shape=shape, nnz=nnz, data=data,
+                             indices=indices, indptr=indptr)
+        return self
+
+    def from_attributes(self, dtype, shape, nnz, data, indices, indptr):
+        self.dtype = dtype
+        self.shape = shape
+        self.ndim = len(shape)
+        self.nnz = nnz
+        self.data = data
+        self.indices = indices
+        self.indptr = indptr
+        return self
 
     def copy_to_host(self, stream=0):
         data = self.data.copy_to_host(stream=stream)
@@ -580,9 +620,10 @@ class CudaSparseMatrix(object):
 class CudaBSRMatrix(CudaSparseMatrix):
     host_constructor = ss.bsr_matrix
 
-    def __init__(self, matrix, stream=0):
-        super(CudaBSRMatrix, self).__init__(matrix, stream=stream)
+    def from_host_matrix(self, matrix, stream=0):
+        super(CudaBSRMatrix, self).from_host_matrix(matrix, stream=stream)
         self.blocksize = matrix.blocksize
+        return self
 
 
 class CudaCSCMatrix(CudaSparseMatrix):
@@ -595,12 +636,14 @@ class CudaCSRMatrix(CudaSparseMatrix):
 
 def bsr_matrix(*args, **kws):
     mat = ss.bsr_matrix(*args, **kws)
-    return CudaBSRMatrix(mat)
+    return CudaBSRMatrix().from_host_matrix(mat)
+
 
 def csc_matrix(*args, **kws):
     mat = ss.csc_matrix(*args, **kws)
-    return CudaCSCMatrix(mat)
+    return CudaCSCMatrix().from_host_matrix(mat)
+
 
 def csr_matrix(*args, **kws):
     mat = ss.csr_matrix(*args, **kws)
-    return CudaCSRMatrix(mat)
+    return CudaCSRMatrix().from_host_matrix(mat)

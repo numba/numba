@@ -689,8 +689,8 @@ class Zcsrgeam(_csrgeam):
 
 
 class _csrgemm(_api_function):
-    prepare_transA = _prepare_action
-    prepare_transB = _prepare_action
+    prepare_transA = _prepare_operation_flag
+    prepare_transB = _prepare_operation_flag
     prepare_descrA = _prepare_matdescr
 
     prepare_csrValA = _prepare_array
@@ -735,8 +735,8 @@ Scsrilu0 = Dcsrilu0 = Ccsrilu0 = Zcsrilu0 = _csrilu0
 
 
 class _csrmm2(_api_function):
-    prepare_transa = _prepare_action
-    prepare_transb = _prepare_action
+    prepare_transa = _prepare_operation_flag
+    prepare_transb = _prepare_operation_flag
 
     prepare_alpha = _prepare_scalar
     prepare_beta = _prepare_scalar
@@ -878,7 +878,7 @@ Ccsrsv_analysis_v2 = Zcsrsv_analysis_v2 = _csrsv_analysis_v2
 
 
 class _csrsv_solve_v2(_api_function):
-    prepare_transA = _prepare_action
+    prepare_transA = _prepare_operation_flag
     prepare_alpha = _prepare_scalar
     prepare_descrA = _prepare_matdescr
     prepare_csrValA = _prepare_array
