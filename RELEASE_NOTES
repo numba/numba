@@ -1,3 +1,13 @@
+Version (0.14.0)
+================
+Features:
+* Add cuSparse API
+* Improve CUDA driver and resource management
+* Some of CUDA-python language feature is now opensourced as numba.cuda
+
+Fixes:
+* New CUDA driver system prevents freezing OSX on kernel launch error
+
 Version (0.13.2)
 ================
 * Fix problem with numpy 18 array scalar contiguousness
