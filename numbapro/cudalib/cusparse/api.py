@@ -623,7 +623,7 @@ class CudaSparseMatrix(object):
         data = self.data.copy_to_host(stream=stream)
         indices = self.indices.copy_to_host(stream=stream)
         indptr = self.indptr.copy_to_host(stream=stream)
-        return self.host_constructor((data, indices, indptr))
+        return self.host_constructor((data, indices, indptr), shape=self.shape)
 
 
 class CudaBSRMatrix(CudaSparseMatrix):
