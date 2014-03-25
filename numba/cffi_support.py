@@ -85,6 +85,7 @@ if ffi is not None:
         ffi.typeof('double') :              types.double,
         # ffi.typeof('long double') :         longdouble,
         ffi.typeof('char *') :              types.voidptr,
+        ffi.typeof('void *') :              types.voidptr,
         ffi.typeof('ssize_t') :             types.intp,
         ffi.typeof('size_t') :              types.uintp,
     }
