@@ -88,5 +88,6 @@ if ffi is not None:
         ffi.typeof('void *') :              types.voidptr,
         ffi.typeof('ssize_t') :             types.intp,
         ffi.typeof('size_t') :              types.uintp,
+        ffi.typeof('void') :                types.void,
     }
 
