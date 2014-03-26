@@ -20,8 +20,6 @@ class UDF(object):
 	self.signature = signature
 	self.name = pyfunc.__name__
 
-	import ipdb
-	ipdb.set_trace()
 	args, return_type = sigutils.normalize_signature(signature)
 	flags = Flags()
 	flags.set('no_compile')
