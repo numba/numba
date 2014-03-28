@@ -2,7 +2,7 @@ from __future__ import print_function, division, absolute_import
 import itertools
 from numba import typing, types
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
-				    signature)
+                                    signature)
 
 FunctionContext = types.OpaqueType('class.impala_udf::FunctionContext')
 
@@ -25,26 +25,26 @@ class BooleanValValueAttr(AttributeTemplate):
     key = BooleanVal
 
     def resolve_is_null(self, val):
-	"""
-	BooleanVal::is_null
-	"""
-	return types.boolean
+        """
+        BooleanVal::is_null
+        """
+        return types.boolean
 
     def resolve_val(self, val):
-	"""
-	BooleanVal::val
-	"""
-	return types.int8
+        """
+        BooleanVal::val
+        """
+        return types.int8
 
 
 class BooleanValTypeAttr(AttributeTemplate):
     key = BooleanValType
 
     def resolve_null(self, typ):
-	"""
-	BooleanVal::null
-	"""
-	return BooleanVal
+        """
+        BooleanVal::null
+        """
+        return BooleanVal
 
 
 TinyIntVal = ImpalaValue('TinyIntVal')
@@ -60,26 +60,26 @@ class TinyIntValValueAttr(AttributeTemplate):
     key = TinyIntVal
 
     def resolve_is_null(self, val):
-	"""
-	TinyIntVal::is_null
-	"""
-	return types.boolean
+        """
+        TinyIntVal::is_null
+        """
+        return types.boolean
 
     def resolve_val(self, val):
-	"""
-	TinyIntVal::val
-	"""
-	return types.int8
+        """
+        TinyIntVal::val
+        """
+        return types.int8
 
 
 class TinyIntValTypeAttr(AttributeTemplate):
     key = TinyIntValType
 
     def resolve_null(self, typ):
-	"""
-	TinyIntVal::null
-	"""
-	return TinyIntVal
+        """
+        TinyIntVal::null
+        """
+        return TinyIntVal
 
 SmallIntVal = ImpalaValue('SmallIntVal')
 SmallIntValType = types.Dummy('SmallIntValType')
@@ -94,26 +94,26 @@ class SmallIntValValueAttr(AttributeTemplate):
     key = SmallIntVal
 
     def resolve_is_null(self, val):
-	"""
-	SmallIntVal::is_null
-	"""
-	return types.boolean
+        """
+        SmallIntVal::is_null
+        """
+        return types.boolean
 
     def resolve_val(self, val):
-	"""
-	SmallIntVal::val
-	"""
-	return types.int16
+        """
+        SmallIntVal::val
+        """
+        return types.int16
 
 
 class SmallIntValTypeAttr(AttributeTemplate):
     key = SmallIntValType
 
     def resolve_null(self, typ):
-	"""
-	SmallIntVal::null
-	"""
-	return SmallIntVal
+        """
+        SmallIntVal::null
+        """
+        return SmallIntVal
 
 
 IntVal = ImpalaValue('IntVal')
@@ -129,26 +129,26 @@ class IntValValueAttr(AttributeTemplate):
     key = IntVal
 
     def resolve_is_null(self, val):
-	"""
-	IntVal::is_null
-	"""
-	return types.boolean
+        """
+        IntVal::is_null
+        """
+        return types.boolean
 
     def resolve_val(self, val):
-	"""
-	IntVal::val
-	"""
-	return types.int32
+        """
+        IntVal::val
+        """
+        return types.int32
 
 
 class IntValTypeAttr(AttributeTemplate):
     key = IntValType
 
     def resolve_null(self, typ):
-	"""
-	IntVal::null
-	"""
-	return IntVal
+        """
+        IntVal::null
+        """
+        return IntVal
 
 
 BigIntVal = ImpalaValue('BigIntVal')
@@ -164,26 +164,26 @@ class BigIntValValueAttr(AttributeTemplate):
     key = BigIntVal
 
     def resolve_is_null(self, val):
-	"""
-	BigIntVal::is_null
-	"""
-	return types.boolean
+        """
+        BigIntVal::is_null
+        """
+        return types.boolean
 
     def resolve_val(self, val):
-	"""
-	BigIntVal::val
-	"""
-	return types.int64
+        """
+        BigIntVal::val
+        """
+        return types.int64
 
 
 class BigIntValTypeAttr(AttributeTemplate):
     key = BigIntValType
 
     def resolve_null(self, typ):
-	"""
-	BigIntVal::null
-	"""
-	return BigIntVal
+        """
+        BigIntVal::null
+        """
+        return BigIntVal
 
 
 FloatVal = ImpalaValue('FloatVal')
@@ -199,26 +199,26 @@ class FloatValValueAttr(AttributeTemplate):
     key = FloatVal
 
     def resolve_is_null(self, val):
-	"""
-	FloatVal::is_null
-	"""
-	return types.boolean
+        """
+        FloatVal::is_null
+        """
+        return types.boolean
 
     def resolve_val(self, val):
-	"""
-	FloatVal::val
-	"""
-	return types.float32
+        """
+        FloatVal::val
+        """
+        return types.float32
 
 
 class FloatValTypeAttr(AttributeTemplate):
     key = FloatValType
 
     def resolve_null(self, typ):
-	"""
-	FloatVal::null
-	"""
-	return FloatVal
+        """
+        FloatVal::null
+        """
+        return FloatVal
 
 
 DoubleVal = ImpalaValue('DoubleVal')
@@ -234,26 +234,26 @@ class DoubleValValueAttr(AttributeTemplate):
     key = DoubleVal
 
     def resolve_is_null(self, val):
-	"""
-	DoubleVal::is_null
-	"""
-	return types.boolean
+        """
+        DoubleVal::is_null
+        """
+        return types.boolean
 
     def resolve_val(self, val):
-	"""
-	DoubleVal::val
-	"""
-	return types.float64
+        """
+        DoubleVal::val
+        """
+        return types.float64
 
 
 class DoubleValTypeAttr(AttributeTemplate):
     key = DoubleValType
 
     def resolve_null(self, typ):
-	"""
-	DoubleVal::null
-	"""
-	return DoubleVal
+        """
+        DoubleVal::null
+        """
+        return DoubleVal
 
 
 StringVal = ImpalaValue('StringVal')
@@ -269,32 +269,32 @@ class StringValValueAttr(AttributeTemplate):
     key = StringVal
 
     def resolve_is_null(self, val):
-	"""
-	StringVal::is_null
-	"""
-	return types.boolean
+        """
+        StringVal::is_null
+        """
+        return types.boolean
 
     def resolve_len(self, val):
-	"""
-	StringVal::len
-	"""
-	return types.int32
+        """
+        StringVal::len
+        """
+        return types.int32
 
     def resolve_ptr(self, val):
-	"""
-	StringVal::ptr
-	"""
-	return types.CPointer(types.uint8)
+        """
+        StringVal::ptr
+        """
+        return types.CPointer(types.uint8)
 
 
 class StringValTypeAttr(AttributeTemplate):
     key = StringValType
 
     def resolve_null(self, typ):
-	"""
-	StringVal::null
-	"""
-	return StringVal
+        """
+        StringVal::null
+        """
+        return StringVal
 
 
 class LenStringVal(ConcreteTemplate):
@@ -337,53 +337,53 @@ def _register_impala_numeric_type_conversions(base):
 
     # first, all Impala numeric types can cast to all others
     for a, b in itertools.product(impala_all, all_numeric):
-	base.tm.set_unsafe_convert(a, b)
-	base.tm.set_unsafe_convert(b, a)
+        base.tm.set_unsafe_convert(a, b)
+        base.tm.set_unsafe_convert(b, a)
 
     # match Numba-Impala types
     for a, b in zip(impala_all, numba_all):
-	# base.tm.set_safe_convert(a, b)
-	# base.tm.set_safe_convert(b, a)
-	base.tm.set_unsafe_convert(a, b)
-	base.tm.set_promote(b, a)
+        # base.tm.set_safe_convert(a, b)
+        # base.tm.set_safe_convert(b, a)
+        base.tm.set_unsafe_convert(a, b)
+        base.tm.set_promote(b, a)
 
     # set up promotions
     for i in range(len(impala_integral)):
-	for j in range(i + 1, len(numba_integral)):
-	    base.tm.set_promote(impala_integral[i], numba_integral[j])
-	    base.tm.set_promote(numba_integral[i], impala_integral[j])
-	    base.tm.set_promote(impala_integral[i], impala_integral[j])
+        for j in range(i + 1, len(numba_integral)):
+            base.tm.set_promote(impala_integral[i], numba_integral[j])
+            base.tm.set_promote(numba_integral[i], impala_integral[j])
+            base.tm.set_promote(impala_integral[i], impala_integral[j])
     for i in range(len(impala_float)):
-	for j in range(i + 1, len(numba_float)):
-	    base.tm.set_promote(impala_float[i], numba_float[j])
-	    base.tm.set_promote(numba_float[i], impala_float[j])
-	    base.tm.set_promote(impala_float[i], impala_float[j])
+        for j in range(i + 1, len(numba_float)):
+            base.tm.set_promote(impala_float[i], numba_float[j])
+            base.tm.set_promote(numba_float[i], impala_float[j])
+            base.tm.set_promote(impala_float[i], impala_float[j])
 
     # boolean safely promotes to everything
     for b in impala_all:
-	base.tm.set_promote(types.boolean, b)
+        base.tm.set_promote(types.boolean, b)
     for b in all_numeric:
-	base.tm.set_promote(BooleanVal, b)
+        base.tm.set_promote(BooleanVal, b)
 
     # int to float conversions
     for a in impala_integral[:-2]:
-	base.tm.set_safe_convert(a, types.float32)
-	base.tm.set_safe_convert(a, types.float64)
-	base.tm.set_safe_convert(a, FloatVal)
-	base.tm.set_safe_convert(a, DoubleVal)
+        base.tm.set_safe_convert(a, types.float32)
+        base.tm.set_safe_convert(a, types.float64)
+        base.tm.set_safe_convert(a, FloatVal)
+        base.tm.set_safe_convert(a, DoubleVal)
     for a in numba_integral[:-2]:
-	base.tm.set_safe_convert(a, FloatVal)
-	base.tm.set_safe_convert(a, DoubleVal)
+        base.tm.set_safe_convert(a, FloatVal)
+        base.tm.set_safe_convert(a, DoubleVal)
     base.tm.set_safe_convert(impala_integral[-2], types.float64)
     base.tm.set_safe_convert(impala_integral[-2], DoubleVal)
     base.tm.set_safe_convert(numba_integral[-2], DoubleVal)
 
     # *Val to AnyVal
     for a in impala_all:
-	base.tm.set_unsafe_convert(a, AnyVal)
+        base.tm.set_unsafe_convert(a, AnyVal)
 
     for a in impala_all:
-	base.tm.set_safe_convert(types.none, a)
+        base.tm.set_safe_convert(types.none, a)
 
 def _register_impala_string_type_conversions(base):
     base.tm.set_unsafe_convert(types.CPointer(types.uint8), types.Dummy('void*'))
