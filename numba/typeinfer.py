@@ -487,6 +487,12 @@ class TypeInferer(object):
             self.typevars[target.name].lock(fnty)
             self.assumed_immutables.add(inst)
 
+        elif (cffi_support.SUPPORTED and
+                isinstance(gvar.value, cffi_support.ExternCFunction)):
+            fnty = gvar.value
+            self.typevars[target.name].lock(fnty)
+            self.assumed_immutables.add(inst)
+
         else:
             try:
                 gvty = self.context.get_global_type(gvar.value)

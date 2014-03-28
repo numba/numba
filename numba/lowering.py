@@ -2,7 +2,8 @@ from __future__ import print_function, division, absolute_import
 from collections import defaultdict
 from llvm.core import Type, Builder, Module
 import llvm.core as lc
-from numba import ir, types, cgutils, utils, config
+from numba import ir, types, cgutils, utils, config, cffi_support
+from numba.targets import imputils
 
 
 try:
@@ -347,6 +348,12 @@ class Lower(BaseLower):
                 pointer = fnty.funcptr
                 res = self.context.call_function_pointer(self.builder, pointer,
                                                          signature, castvals)
+            
+            elif isinstance(fnty, cffi_support.ExternCFunction):
+                fndesc = describe_external(fnty.symbol, fnty.restype, fnty.argtypes)
+                self.context.insert_extern_c_function(fnty.symbol, fndesc)
+                impl = self.context.get_function(fnty, signature)
+                res = impl(self.builder, castvals)
 
             else:
                 # Normal function resolution

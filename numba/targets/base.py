@@ -6,7 +6,7 @@ import numpy
 from numba import types, utils, cgutils, typing
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, python_attr_impl,
-                                    builtin_registry)
+                                    builtin_registry, extern_c_function)
 from numba.targets import builtins
 
 
@@ -153,6 +153,15 @@ class BaseContext(object):
         name = "CallTemplate(%s)" % fndesc.mangled_name
         self.users[func] = type(name, baseclses, glbls)
 
+    def insert_extern_c_function(self, func, fndesc, libs=()):
+        imp = extern_c_function(func, fndesc, libs)
+        self.defns[func].append(imp)
+
+        baseclses = (typing.templates.ConcreteTemplate,)
+        glbls = dict(key=func, cases=[imp.signature])
+        name = "CallTemplate(%s)" % fndesc.mangled_name
+        self.users[func] = type(name, baseclses, glbls)
+
     def insert_class(self, cls, attrs):
         clsty = types.Object(cls)
         for name, vtype in utils.dict_iteritems(attrs):
@@ -180,6 +189,14 @@ class BaseContext(object):
         resptr = self.get_return_type(fndesc.restype)
         fnty = Type.function(Type.int(), [resptr] + argtypes)
         return fnty
+    
+    def get_extern_c_function_type(self, fndesc):
+        argtypes = [self.get_argument_type(aty)
+                    for aty in fndesc.argtypes]
+        # don't wrap in pointer
+        restype = self.get_argument_type(fndesc.restype)
+        fnty = Type.function(restype, argtypes)
+        return fnty
 
     def declare_function(self, module, fndesc):
         fnty = self.get_function_type(fndesc)
@@ -188,6 +205,14 @@ class BaseContext(object):
         for ak, av in zip(fndesc.args, self.get_arguments(fn)):
             av.name = "arg.%s" % ak
         fn.args[0] = ".ret"
+        return fn
+    
+    def declare_extern_c_function(self, module, fndesc):
+        fnty = self.get_extern_c_function_type(fndesc)
+        fn = module.get_or_insert_function(fnty, name=fndesc.mangled_name)
+        assert fn.is_declaration
+        for ak, av in zip(fndesc.args, self.get_arguments(fn)):
+            av.name = "arg.%s" % ak
         return fn
 
     def insert_const_string(self, mod, string):
@@ -568,6 +593,12 @@ class BaseContext(object):
         code = builder.call(callee, realargs)
         status = self.get_return_status(builder, code)
         return status, builder.load(retval)
+    
+    def call_extern_c_function(self, builder, callee, argtys, args):
+        args = [self.get_value_as_argument(builder, ty, arg)
+                for ty, arg in zip(argtys, args)]
+        retval = builder.call(callee, args)
+        return retval
 
     def get_return_status(self, builder, code):
         norm = builder.icmp(lc.ICMP_EQ, code, RETCODE_OK)
