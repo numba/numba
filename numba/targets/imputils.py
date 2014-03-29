@@ -47,18 +47,6 @@ def user_function(func, fndesc, libs):
     return imp
 
 
-def extern_c_function(func, fndesc, libs):
-    def imp(context, builder, sig, args):
-        func = context.declare_extern_c_function(cgutils.get_module(builder), fndesc)
-        retval = context.call_extern_c_function(builder, func, fndesc.argtypes, args)
-        return retval
-
-    imp.signature = signature(fndesc.restype, *fndesc.argtypes)
-    imp.key = func
-    imp.libs = tuple(libs)
-    return imp
-
-
 def python_attr_impl(cls, attr, atyp):
     @impl_attribute(cls, attr, atyp)
     def imp(context, builder, typ, value):

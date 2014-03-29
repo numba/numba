@@ -6,7 +6,6 @@ obtaining the pointer and numba signature.
 from __future__ import print_function, division, absolute_import
 
 from numba import types, typing
-from numba.targets import imputils
 
 try:
     import cffi
@@ -23,10 +22,6 @@ def is_cffi_func(obj):
         return ffi.typeof(obj).kind == 'function'
     except TypeError:
         return False
-
-def is_raw_function_type(obj):
-    """Check whether the obj is a CFFI RawFunctionType"""
-    return isinstance(obj, cffi.model.RawFunctionType)
 
 def get_pointer(cffi_func):
     """
@@ -62,16 +57,6 @@ def make_function_type(cffi_func):
     cases = [signature]
     template = typing.make_concrete_template("CFFIFuncPtr", cffi_func, cases)
     result = types.FunctionPointer(template, get_pointer(cffi_func))
-    return result
-
-
-def from_raw_function_type(rft):
-    restype = type_map[rft.result.build_backend_type(ffi, None)]
-    argtypes = [type_map[arg.build_backend_type(ffi, None)] for arg in rft.args]
-    signature = typing.signature(restype, *argtypes)
-    cases = [signature]
-    template = typing.make_concrete_template("CFFIFunc", rft, cases)
-    result = types.Function(template)
     return result
 
 

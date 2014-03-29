@@ -6,7 +6,7 @@ import numpy
 from numba import types, utils, cgutils, typing
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, python_attr_impl,
-                                    builtin_registry, extern_c_function)
+                                    builtin_registry)
 from numba.targets import builtins
 
 
@@ -153,15 +153,6 @@ class BaseContext(object):
         name = "CallTemplate(%s)" % fndesc.mangled_name
         self.users[func] = type(name, baseclses, glbls)
 
-    def insert_extern_c_function(self, func, fndesc, libs=()):
-        imp = extern_c_function(func, fndesc, libs)
-        self.defns[func].append(imp)
-
-        baseclses = (typing.templates.ConcreteTemplate,)
-        glbls = dict(key=func, cases=[imp.signature])
-        name = "CallTemplate(%s)" % fndesc.mangled_name
-        self.users[func] = type(name, baseclses, glbls)
-
     def insert_class(self, cls, attrs):
         clsty = types.Object(cls)
         for name, vtype in utils.dict_iteritems(attrs):
@@ -189,7 +180,7 @@ class BaseContext(object):
         resptr = self.get_return_type(fndesc.restype)
         fnty = Type.function(Type.int(), [resptr] + argtypes)
         return fnty
-    
+
     def get_extern_c_function_type(self, fndesc):
         argtypes = [self.get_argument_type(aty)
                     for aty in fndesc.argtypes]
@@ -206,7 +197,7 @@ class BaseContext(object):
             av.name = "arg.%s" % ak
         fn.args[0] = ".ret"
         return fn
-    
+
     def declare_extern_c_function(self, module, fndesc):
         fnty = self.get_extern_c_function_type(fndesc)
         fn = module.get_or_insert_function(fnty, name=fndesc.mangled_name)
