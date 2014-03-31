@@ -494,8 +494,10 @@ char = _make_signed(numpy.byte)
 uchar = byte = _make_unsigned(numpy.byte)
 short = _make_signed(numpy.short)
 ushort = _make_unsigned(numpy.short)
-int_ = _make_signed(numpy.intc)
-uint = _make_unsigned(numpy.intc)
+int_ = _make_signed(numpy.int_)
+uint = _make_unsigned(numpy.int_)
+intc = _make_signed(numpy.intc) # C-compat int
+uintc = _make_signed(numpy.uintc) # C-compat uint
 long_ = _make_signed(numpy.long)
 ulong = _make_unsigned(numpy.long)
 longlong = _make_signed(numpy.longlong)
