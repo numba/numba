@@ -1,12 +1,39 @@
+from __future__ import absolute_import, print_function
+
 import numpy
-from numba import types
-from numba.typing.templates import (AttributeTemplate, AbstractTemplate,
+from .. import types
+from .templates import (AttributeTemplate, AbstractTemplate,
                                     Registry, signature)
 
 registry = Registry()
 builtin_global = registry.register_global
 builtin_attr = registry.register_attr
 
+
+_typemap = {
+    '?': types.bool_,
+    'b': types.int8,
+    'B': types.uint8,
+    'h': types.short,
+    'H': types.ushort,
+    'i': types.int32, # should be C int
+    'I': types.uint32, # should be C unsigned int
+    'l': types.long_,
+    'L': types.ulong,
+    'q': types.longlong,
+    'Q': types.ulonglong,
+
+    'f': types.float_,
+    'd': types.double,
+#    'g': types.longdouble,
+    'F': types.complex64,  # cfloat
+    'D': types.complex128, # cdouble
+#   'G': types.clongdouble
+    'O': types.pyobject,
+    'M': types.pyobject
+}
+
+_inv_typemap = { v: k  for k,v in _typemap.iteritems() }
 
 @builtin_attr
 class NumpyModuleAttribute(AttributeTemplate):
@@ -29,31 +56,42 @@ class NumpyModuleAttribute(AttributeTemplate):
         return types.Function(Numpy_divide)
 
 
-
-class Numpy_unary_ufunc(AbstractTemplate):
+class Numpy_rules_ufunc(AbstractTemplate):
     def generic(self, args, kws):
-        assert not kws
-        nargs = len(args)
-        if nargs == 2:
-            [inp, out] = args
-            if isinstance(inp, types.Array) and isinstance(out, types.Array):
-                return signature(out, inp, out)
-            elif inp in types.number_domain and isinstance(out, types.Array):
-                return signature(out, inp, out)
-        elif nargs == 1:
-            [inp] = args
-            if inp in types.number_domain:
-                if hasattr(self, "scalar_out_type"):
-                    return signature(self.scalar_out_type, inp)
-                else:
-                    return signature(inp, inp)
+        assert(self.key.nout == 1) # this function assumes only one output
+
+        if len(args) > self.key.nin:
+            # more args than inputs... assume everything is typed :)
+            assert(len(args) == self.key.nargs)
+            
+            return signature(args[-1], *args)
+
+        # else... we must look for the kernel to use, the actual loop that
+        # will be used, using NumPy's logic:
+        assert(len(args) == self.key.nin)
+        letter_arg_types = [ _inv_typemap[x.dtype if isinstance(x, types.Array) else x] for x in args ]
+
+        for candidate in self.key.types:
+            if numpy.alltrue([numpy.can_cast(*x) 
+                              for x in zip(letter_arg_types,
+                                           candidate[0:self.key.nin])]):
+                #found!
+                array_arg = [isinstance(a, types.Array) for a in args]
+                out = _typemap[candidate[-1]]
+                if any(array_arg):
+                    ndims = max(*[a.ndim if isinstance(a, types.Array) else 0 for a in args])
+                    out = types.Array(out, ndims, 'A')
+                return signature(out, *args)
+
+        # At this point if we don't have a candidate, we are out of luck. NumPy won't know
+        # how to eval this!
+        raise TypingError("can't resolve ufunc {0} for types {1}".format(key.__name__, args))
 
 
-def _numpy_unary_ufunc(name):
+def _numpy_ufunc(name):
     the_key = eval("numpy."+name) # obtain the appropriate symbol for the key.
-    class typing_class(Numpy_unary_ufunc):
+    class typing_class(Numpy_rules_ufunc):
         key = the_key
-        scalar_out_type = types.float64
 
     # Add the resolve method to NumpyModuleAttribute
     setattr(NumpyModuleAttribute, "resolve_"+name, lambda s, m: types.Function(typing_class))
@@ -61,63 +99,19 @@ def _numpy_unary_ufunc(name):
 
 
 # list of unary ufuncs to register
-_autoregister_unary_ufuncs = [
+_autoregister_ufuncs = [
     "sin", "cos", "tan", "arcsin", "arccos", "arctan",
     "sinh", "cosh", "tanh", "arcsinh", "arccosh", "arctanh",
     "exp", "exp2", "expm1",
     "log", "log2", "log10", "log1p",
     "absolute", "negative", "floor", "ceil", "trunc", "sign",
     "sqrt",
-    "deg2rad", "rad2deg"]
-for func in _autoregister_unary_ufuncs:
-    _numpy_unary_ufunc(func)
-del(_autoregister_unary_ufuncs)
-
-
-class Numpy_binary_ufunc(AbstractTemplate):
-    def generic(self, args, kws):
-        assert not kws
-        nargs = len(args)
-        if nargs == 3:
-            [inp1, inp2, out] = args
-            if isinstance(out, types.Array) and \
-                    (isinstance(inp1, types.Array) or inp1 in types.number_domain) or \
-                    (isinstance(inp2, types.Array) or inp2 in types.number_domain):
-                return signature(out, inp1, inp2, out)
-        elif nargs == 2:
-            [inp1, inp2] = args
-            if inp1 in types.number_domain and inp2 in types.number_domain:
-                if hasattr(self, "scalar_out_type"):
-                    return signature(self.scalar_out_type, inp1, inp2)
-                else:
-                    return signature(inp1, inp1, inp2)
-
-
-class Numpy_add(Numpy_binary_ufunc):
-    key = numpy.add
-
-
-class Numpy_subtract(Numpy_binary_ufunc):
-    key = numpy.subtract
-
-
-class Numpy_multiply(Numpy_binary_ufunc):
-    key = numpy.multiply
-
-
-class Numpy_divide(Numpy_binary_ufunc):
-    key = numpy.divide
-
-
-class Numpy_arctan2(Numpy_binary_ufunc):
-    key = numpy.arctan2
+    "deg2rad", "rad2deg",
+    "add", "subtract", "multiply", "divide",
+    "arctan2"]
+for func in _autoregister_ufuncs:
+    _numpy_ufunc(func)
+del(_autoregister_ufuncs)
 
 
 builtin_global(numpy, types.Module(numpy))
-builtin_global(numpy.arctan2, types.Function(Numpy_arctan2))
-builtin_global(numpy.add, types.Function(Numpy_add))
-builtin_global(numpy.subtract, types.Function(Numpy_subtract))
-builtin_global(numpy.multiply, types.Function(Numpy_multiply))
-builtin_global(numpy.divide, types.Function(Numpy_divide))
-
-
