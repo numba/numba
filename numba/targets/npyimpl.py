@@ -41,7 +41,10 @@ def unary_npy_math_extern(fn):
             return ref_impl(context, builder, sig, [cast_val])
 
 
-_externs = [ "exp2", "expm1", "log", "log2", "log10", "log1p", "deg2rad", "rad2deg" ]
+_externs = [ "exp", "exp2", "expm1", "log", "log2", "log10", "log1p", "deg2rad", "rad2deg",
+             "sin", "cos", "tan", "sinh", "cosh", "tanh",
+             "asin", "acos", "atan", "asinh", "acosh", "atanh",
+             "sqrt", "floor", "ceil", "trunc" ]
 for x in _externs:
     unary_npy_math_extern(x)
 
@@ -218,7 +221,7 @@ def register_unary_ufunc(ufunc, operator, asfloat=False):
     for ty in types.number_domain:
         register(implement(ufunc, ty)(scalar_unary_ufunc))
 
-register_unary_ufunc(numpy.exp, math.exp, asfloat=True)
+register_unary_ufunc(numpy.exp, npy.exp, asfloat=True)
 register_unary_ufunc(numpy.exp2, npy.exp2, asfloat=True)
 register_unary_ufunc(numpy.expm1, npy.expm1, asfloat=True)
 register_unary_ufunc(numpy.log, npy.log, asfloat=True)
@@ -227,22 +230,22 @@ register_unary_ufunc(numpy.log10, npy.log10, asfloat=True)
 register_unary_ufunc(numpy.log1p, npy.log1p, asfloat=True)
 register_unary_ufunc(numpy.deg2rad, npy.deg2rad, asfloat=True)
 register_unary_ufunc(numpy.rad2deg, npy.rad2deg, asfloat=True)
-register_unary_ufunc(numpy.sin, math.sin, asfloat=True)
-register_unary_ufunc(numpy.cos, math.cos, asfloat=True)
-register_unary_ufunc(numpy.tan, math.tan, asfloat=True)
-register_unary_ufunc(numpy.sinh, math.sinh, asfloat=True)
-register_unary_ufunc(numpy.cosh, math.cosh, asfloat=True)
-register_unary_ufunc(numpy.tanh, math.tanh, asfloat=True)
-register_unary_ufunc(numpy.arcsin, math.asin, asfloat=True)
-register_unary_ufunc(numpy.arccos, math.acos, asfloat=True)
-register_unary_ufunc(numpy.arctan, math.atan, asfloat=True)
-register_unary_ufunc(numpy.arcsinh, math.asinh, asfloat=True)
-register_unary_ufunc(numpy.arccosh, math.acosh, asfloat=True)
-register_unary_ufunc(numpy.arctanh, math.atanh, asfloat=True)
-register_unary_ufunc(numpy.sqrt, math.sqrt, asfloat=True)
-register_unary_ufunc(numpy.floor, math.floor, asfloat=True)
-register_unary_ufunc(numpy.ceil, math.ceil, asfloat=True)
-register_unary_ufunc(numpy.trunc, math.trunc, asfloat=True)
+register_unary_ufunc(numpy.sin, npy.sin, asfloat=True)
+register_unary_ufunc(numpy.cos, npy.cos, asfloat=True)
+register_unary_ufunc(numpy.tan, npy.tan, asfloat=True)
+register_unary_ufunc(numpy.sinh, npy.sinh, asfloat=True)
+register_unary_ufunc(numpy.cosh, npy.cosh, asfloat=True)
+register_unary_ufunc(numpy.tanh, npy.tanh, asfloat=True)
+register_unary_ufunc(numpy.arcsin, npy.asin, asfloat=True)
+register_unary_ufunc(numpy.arccos, npy.acos, asfloat=True)
+register_unary_ufunc(numpy.arctan, npy.atan, asfloat=True)
+register_unary_ufunc(numpy.arcsinh, npy.asinh, asfloat=True)
+register_unary_ufunc(numpy.arccosh, npy.acosh, asfloat=True)
+register_unary_ufunc(numpy.arctanh, npy.atanh, asfloat=True)
+register_unary_ufunc(numpy.sqrt, npy.sqrt, asfloat=True)
+register_unary_ufunc(numpy.floor, npy.floor, asfloat=True)
+register_unary_ufunc(numpy.ceil, npy.ceil, asfloat=True)
+register_unary_ufunc(numpy.trunc, npy.trunc, asfloat=True)
 
 register_unary_ufunc(numpy.absolute, types.abs_type)
 register_unary_ufunc(numpy.sign, types.sign_type)
