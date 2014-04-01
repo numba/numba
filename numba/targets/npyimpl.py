@@ -16,34 +16,30 @@ class npy:
     """This will be used as an index of the npy_* functions"""
     pass
 
+
+
 def unary_npy_math_extern(fn):
     setattr(npy, fn, fn)
     fn_sym = eval("npy."+fn)
-    @register
-    @implement(fn_sym, types.int64)
-    def s64impl(context, builder, sig, args):
-        [val] = args
-        fpval = builder.sitofp(val, Type.double())
-        sig = typing.signature(types.float64, types.float64)
-        return f64impl(context, builder, sig, [fpval])
-
-    @register
-    @implement(fn_sym, types.uint64)
-    def u64impl(context, builder, sig, args):
-        [val] = args
-        fpval = builder.uitofp(val, Type.double())
-        sig = typing.signature(types.float64, types.float64)
-        return f64impl(context, builder, sig, [fpval])
 
     n = "numba.npymath." + fn
-    @register
-    @implement(fn_sym, types.float64)
-    def f64impl(context, builder, sig, args):
+    def ref_impl(context, builder, sig, args):
         [val] = args
         mod = cgutils.get_module(builder)
         fnty = Type.function(Type.double(), [Type.double()])
         fn = mod.get_or_insert_function(fnty, name=n)
         return builder.call(fn, (val,))
+
+    ty_dst = types.float64
+    for ty_src in [types.int64, types.uint64, types.float64]:
+        @register
+        @implement(fn_sym, ty_src)
+        def _impl(context, builder, sig, args):
+            [val] = args
+            cast_val = val if ty_dst == ty_src else context.cast(builder, val, ty_src, ty_dst)
+            sig = typing.signature(ty_dst, ty_dst)
+            return ref_impl(context, builder, sig, [cast_val])
+
 
 _externs = [ "exp2", "expm1", "log", "log2", "log10", "log1p", "deg2rad", "rad2deg" ]
 for x in _externs:
