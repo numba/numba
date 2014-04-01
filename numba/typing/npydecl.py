@@ -33,7 +33,7 @@ _typemap = {
     'M': types.pyobject
 }
 
-_inv_typemap = { v: k  for k,v in _typemap.iteritems() }
+_inv_typemap = { v: k  for k,v in _typemap.items() }
 
 @builtin_attr
 class NumpyModuleAttribute(AttributeTemplate):
