@@ -386,7 +386,8 @@ def _register_impala_numeric_type_conversions(base):
         base.tm.set_safe_convert(types.none, a)
 
 def _register_impala_string_type_conversions(base):
-    base.tm.set_unsafe_convert(types.CPointer(types.uint8), types.Dummy('void*'))
+    # base.tm.set_unsafe_convert(types.CPointer(types.uint8), types.Dummy('void*'))
+    base.tm.set_safe_convert(types.string, StringVal)
 
 
 def impala_typing_context():

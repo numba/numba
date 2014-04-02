@@ -2,7 +2,7 @@ from __future__ import print_function, division, absolute_import
 import llvm.core as lc
 import llvm.passes as lp
 import llvm.ee as le
-from numba import types, cgutils, config
+from numba import types, cgutils, config, lowering
 from numba.targets.base import BaseContext
 from numba.targets.imputils import implement, impl_attribute
 from .typing import (FunctionContext, AnyVal, BooleanVal, BooleanValType,
@@ -412,7 +412,12 @@ def len_stringval(context, builder, sig, args):
 
 @implement("==", StringVal, StringVal)
 def eq_stringval(context, builder, sig, args):
+    import ipdb
+    ipdb.set_trace()
     [s1, s2] = args
+    sv1 = StringValStruct(context, builder, value=s1)
+    sv2 = StringValStruct(context, builder, value=s2)
+    pass
     # TODO
 
 @implement("==", types.CPointer(types.uint8), types.CPointer(types.uint8))
@@ -470,7 +475,7 @@ def stringval_to_int16(context, builder, sig, args):
 @implement(StringValType, types.CPointer(types.uint8), types.int32)
 def stringval_ctor1(context, builder, sig, args):
     """
-    StringVal(uint8*, int32)
+    StringVal(uint8_t* ptr, int32 len)
     """
     [x, y] = args
     iv = StringValStruct(context, builder)
@@ -479,8 +484,39 @@ def stringval_ctor1(context, builder, sig, args):
     iv.len = y
     return iv._getvalue()
 
-# @implement(StringValType, types.CPointer(FunctionContext), types.int32)
+@implement(StringValType, types.string)
+def stringval_ctor2(context, builder, sig, args):
+    """
+    StringVal(types.string)
+    """
+    import ipdb
+    ipdb.set_trace()
+    [x] = args
+    iv = StringValStruct(context, builder)
+    _set_is_null(builder, iv, cgutils.false_bit)
+    fndesc = lowering.describe_external('strlen', types.uintp, [types.CPointer(types.char)])
+    func = context.declare_extern_c_function(cgutils.get_module(builder), fndesc)
+    strlen_x = context.call_extern_c_function(builder, func, fndesc.argtypes, [x])
+    len_x = builder.trunc(strlen_x, lc.Type.int(32))
+    iv.len = len_x
+    iv.ptr = x
+    return iv._getvalue()
+
+
+# @implement(StringValType, types.CPointer(types.char))
 # def stringval_ctor2(context, builder, sig, args):
+#     """
+#     StringVal(const char* ptr)
+#     """
+#     [x, y] = args
+#     iv = StringValStruct(context, builder)
+#     _set_is_null(builder, iv, cgutils.false_bit)
+#     iv.ptr = x
+#     iv.len = y
+#     return iv._getvalue()
+
+# @implement(StringValType, types.CPointer(FunctionContext), types.int32)
+# def stringval_ctor3(context, builder, sig, args):
 #     """
 #     StringVal(FunctionContext*, int32)
 #     """
@@ -520,8 +556,8 @@ class ImpalaTargetContext(BaseContext):
                                stringval_is_null, stringval_len, stringval_ptr, stringval_null])
         self.insert_func_defn([booleanval_ctor, tinyintval_ctor,
                                smallintval_ctor, intval_ctor, bigintval_ctor,
-                               floatval_ctor, doubleval_ctor, stringval_ctor1,
-                               len_stringval, isnone_anyval, getitem_stringval, stringval_to_int16, eq_pointeruint8])
+                               floatval_ctor, doubleval_ctor, stringval_ctor1, stringval_ctor2,
+                               len_stringval, isnone_anyval, getitem_stringval, stringval_to_int16, eq_pointeruint8, eq_stringval])
         self.optimizer = self.build_pass_manager()
 
         # once per context
@@ -536,6 +572,9 @@ class ImpalaTargetContext(BaseContext):
 
         if fromty not in self._impala_types and toty not in self._impala_types:
             return super(ImpalaTargetContext, self).cast(builder, val, fromty, toty)
+
+        if fromty == toty:
+            return val
 
         # handle NULLs and Nones
         if fromty == types.none and toty in self._impala_types:
@@ -605,8 +644,8 @@ class ImpalaTargetContext(BaseContext):
             _set_val(builder, iv, val)
             return iv._getvalue()
         if toty == FloatVal:
-            iv = FloatValStruct(self, builder)
             val = super(ImpalaTargetContext, self).cast(builder, val, fromty, types.float32)
+            iv = FloatValStruct(self, builder)
             _set_is_null(builder, iv, cgutils.false_bit)
             _set_val(builder, iv, val)
             return iv._getvalue()
@@ -616,8 +655,20 @@ class ImpalaTargetContext(BaseContext):
             _set_is_null(builder, iv, cgutils.false_bit)
             _set_val(builder, iv, val)
             return iv._getvalue()
+        if toty == StringVal:
+            return stringval_ctor2(self, builder, None, [val])
 
         return super(ImpalaTargetContext, self).cast(builder, val, fromty, toty)
+
+    def get_constant_string(self, builder, ty, val):
+        assert ty == types.string
+        literal = lc.Constant.stringz(val)
+        gv = cgutils.get_module(builder).add_global_variable(literal.type, 'str_literal')
+        gv.linkage = lc.LINKAGE_PRIVATE
+        gv.initializer = literal
+        gv.global_constant = True
+        # gep gets pointer to first element of the constant byte array
+        return gv.gep([lc.Constant.int(lc.Type.int(32), 0)] * 2)
 
     def get_constant_struct(self, builder, ty, val):
         # override for converting literals to *Vals, incl. None
@@ -659,6 +710,12 @@ class ImpalaTargetContext(BaseContext):
             iv = DoubleValStruct(self, builder)
             _set_is_null(builder, iv, cgutils.false_bit)
             iv.val = lc.Constant.real(lc.Type.double(), val)
+            return iv._getvalue()
+        elif ty == StringVal:
+            iv = StringValStruct(self, builder)
+            _set_is_null(builder, iv, cgutils.false_bit)
+            iv.len = lc.Constant.int(lc.Type.int(32), len(val))
+            iv.ptr = self.get_constant_string(builder, types.string, val)
             return iv._getvalue()
         else:
             return super(ImpalaTargetContext, self).get_constant_struct(builder, ty, val)
