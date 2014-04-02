@@ -37,11 +37,13 @@ class TestImpala(unittest.TestCase):
         def fn(context, x):
             return x + 1
     
+    @unittest.skip("passthrough numba bug #409")
     def test_numba_to_impala_pass_through(self):
         @udf(BigIntVal(FunctionContext, int32))
         def fn(context, x):
             return x
     
+    @unittest.skip("passthrough numba bug #409")
     def test_impala_to_numba_pass_through(self):
         @udf(int64(FunctionContext, IntVal))
         def fn(context, x):
