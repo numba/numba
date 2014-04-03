@@ -229,6 +229,7 @@ def get_current_device():
 
 def list_devices():
     "List all CUDA devices"
+    devices.init_gpus()
     return devices.gpus
 
 
@@ -245,17 +246,17 @@ def _auto_device(ary, stream=0, copy=True):
 
 
 def detect():
-    '''Detect hardware support
-    '''
+    """Detect hardware support
+    """
     devlist = list_devices()
     print('Found %d CUDA devices' % len(devlist))
     supported_count = 0
     for dev in devlist:
         attrs = []
-        cc = dev.attributes['COMPUTE_CAPABILITY']
+        cc = dev.compute_capability
         attrs += [('compute capability', '%d.%d' % cc)]
-        attrs += [('pci device id', dev.attributes['PCI_DEVICE_ID'])]
-        attrs += [('pci bus id', dev.attributes['PCI_BUS_ID'])]
+        attrs += [('pci device id', dev.PCI_DEVICE_ID)]
+        attrs += [('pci bus id', dev.PCI_BUS_ID)]
         if cc < (2, 0):
             support = '[NOT SUPPORTED: CC < 2.0]'
         else:
