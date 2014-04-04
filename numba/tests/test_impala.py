@@ -15,7 +15,7 @@ class TestImpala(unittest.TestCase):
             else:
                 return False
     
-    def test_numerical_literals(self):
+    def test_numeric_literals(self):
         @udf(BigIntVal(FunctionContext, SmallIntVal))
         def fn(context, a):
             if a is None:
@@ -67,9 +67,9 @@ class TestImpala(unittest.TestCase):
         def test_string_eq(context, a, b):
             if a.is_null != b.is_null:
                 return False
-            if a.is_null:
+            if a is None:
                 return True
-            if a.len != b.len:
+            if len(a) != b.len:
                 return False
             if a.ptr == b.ptr:
                 return True
@@ -84,6 +84,14 @@ class TestImpala(unittest.TestCase):
             c = memcmp(a.ptr, a.ptr, a.len) == 0
             d = memcmp(a.ptr, b.ptr, a.len) == 0
             return c or d
+    
+    def test_return_two_str_literals(self):
+        @udf(StringVal(FunctionContext, IntVal))
+        def fn(context, a):
+            if a > 5:
+                return "foo"
+            else:
+                return "bar"
 
 
 
