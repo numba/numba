@@ -31,6 +31,7 @@ class UDF(object):
                     args)
         self.llvm_func = llvm_func
         self.llvm_module = llvm_func.module
+        self.llvm_module.link_in(impala_targets.precompiled_module)
 
 impala_typing = impala_typing_context()
 impala_targets = ImpalaTargetContext(impala_typing)

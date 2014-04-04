@@ -125,8 +125,6 @@ def StringVal_ctor(context, builder, sig, args):
     return iv._getvalue()
 
 
-
-
 # *Val attributes
 
 def _is_null_attr_factory(Struct, Val):
@@ -204,12 +202,17 @@ def eq_ptr_impl(context, builder, sig, args):
 @implement("==", StringVal, StringVal)
 def eq_stringval(context, builder, sig, args):
     module = cgutils.get_module(builder)
+    precomp_func = context.precompiled_fns['EqStringValImpl']
+    func = module.get_or_insert_function(precomp_func.type.pointee, precomp_func.name)
     [s1, s2] = args
-    sv1 = StringValStruct(context, builder, value=s1)
-    sv2 = StringValStruct(context, builder, value=s2)
-    # module.
-    pass
-    # TODO
+    tmp1 = cgutils.alloca_once(builder, s1.type)
+    tmp2 = cgutils.alloca_once(builder, s2.type)
+    builder.store(s1, tmp1)
+    builder.store(s2, tmp2)
+    cs1 = builder.bitcast(tmp1, func.args[0].type)
+    cs2 = builder.bitcast(tmp2, func.args[1].type)
+    result = builder.call(func, [cs1, cs2])
+    return result
 
 
 TYPE_LAYOUT = {
@@ -234,12 +237,29 @@ class ImpalaTargetContext(BaseContext):
         self.insert_func_defn(_functions)
         self.insert_attr_defn(_attributes)
         self.optimizer = self.build_pass_manager()
+        self._load_precompiled()
 
         # once per context
         self._fnctximpltype = lc.Type.opaque("FunctionContextImpl")
         fnctxbody = [lc.Type.pointer(self._fnctximpltype)]
         self._fnctxtype = lc.Type.struct(fnctxbody,
                                          name="class.impala_udf::FunctionContext")
+
+    def _get_precompiled_function(self, name):
+        fns = [fn for fn in self.precompiled_module.functions if name in fn.name]
+        assert len(fns) == 1
+        return fns[0]
+
+    def _load_precompiled(self):
+        # TODO: find a way to precompile as part of build and point accordingly
+        with open("/Users/laserson/repos/numba/numba/ext/impala/impala-precompiled.bc", "rb") as ip:
+            self.precompiled_module = lc.Module.from_bitcode(ip)
+        mangled_names = [fn.name for fn in self.precompiled_module.functions]
+        self.precompiled_fns = {}
+        
+        name = 'EqStringValImpl'
+        self.precompiled_fns[name] = self._get_precompiled_function(name)
+
 
     def cast(self, builder, val, fromty, toty):
         if config.DEBUG:
