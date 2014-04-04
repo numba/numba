@@ -353,9 +353,9 @@ class Lower(BaseLower):
             
             elif isinstance(fnty, cffi_support.ExternCFunction):
                 fndesc = describe_external(fnty.symbol, fnty.restype, fnty.argtypes)
-                func = self.context.declare_extern_c_function(
+                func = self.context.declare_external_function(
                         cgutils.get_module(self.builder), fndesc)
-                res = self.context.call_extern_c_function(self.builder, func, fndesc.argtypes, castvals)
+                res = self.context.call_external_function(self.builder, func, fndesc.argtypes, castvals)
 
             else:
                 # Normal function resolution

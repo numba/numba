@@ -181,7 +181,7 @@ class BaseContext(object):
         fnty = Type.function(Type.int(), [resptr] + argtypes)
         return fnty
 
-    def get_extern_c_function_type(self, fndesc):
+    def get_external_function_type(self, fndesc):
         argtypes = [self.get_argument_type(aty)
                     for aty in fndesc.argtypes]
         # don't wrap in pointer
@@ -198,11 +198,11 @@ class BaseContext(object):
         fn.args[0] = ".ret"
         return fn
 
-    def declare_extern_c_function(self, module, fndesc):
-        fnty = self.get_extern_c_function_type(fndesc)
+    def declare_external_function(self, module, fndesc):
+        fnty = self.get_external_function_type(fndesc)
         fn = module.get_or_insert_function(fnty, name=fndesc.mangled_name)
         assert fn.is_declaration
-        for ak, av in zip(fndesc.args, self.get_arguments(fn)):
+        for ak, av in zip(fndesc.args, fn.args):
             av.name = "arg.%s" % ak
         return fn
 
@@ -585,7 +585,7 @@ class BaseContext(object):
         status = self.get_return_status(builder, code)
         return status, builder.load(retval)
     
-    def call_extern_c_function(self, builder, callee, argtys, args):
+    def call_extern_function(self, builder, callee, argtys, args):
         args = [self.get_value_as_argument(builder, ty, arg)
                 for ty, arg in zip(argtys, args)]
         retval = builder.call(callee, args)
