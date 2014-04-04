@@ -585,7 +585,7 @@ class BaseContext(object):
         status = self.get_return_status(builder, code)
         return status, builder.load(retval)
     
-    def call_extern_function(self, builder, callee, argtys, args):
+    def call_external_function(self, builder, callee, argtys, args):
         args = [self.get_value_as_argument(builder, ty, arg)
                 for ty, arg in zip(argtys, args)]
         retval = builder.call(callee, args)
