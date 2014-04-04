@@ -11,42 +11,41 @@ from .typing import (FunctionContext, AnyVal, BooleanVal, BooleanValType,
                      FloatValType, DoubleVal, DoubleValType, StringVal,
                      StringValType)
 
-class AnyValStruct(cgutils.Structure):
-    _fields = [('is_null', types.boolean)]
+
+_functions = []
+_attributes = []
+
+def register_function(func):
+    _functions.append(func)
+    return func
+
+def register_attribute(attr):
+    _attributes.append(attr)
+    return attr
 
 
-@implement('is', AnyVal, types.none)
-def isnone_anyval(context, builder, sig, args):
-    [x, y] = args
-    val = AnyValStruct(context, builder, value=x)
-    return val.is_null
+# struct access utils
 
+# these are necessary because cgutils.Structure assumes no nested types;
+# the gep needs a (0, 0, 0) offset
 
 def _get_is_null_pointer(builder, val):
     ptr = cgutils.inbound_gep(builder, val._getpointer(), 0, 0, 0)
     return ptr
 
-
 def _get_is_null(builder, val):
     byte = builder.load(_get_is_null_pointer(builder, val))
     return builder.trunc(byte, lc.Type.int(1))
-
 
 def _set_is_null(builder, val, is_null):
     byte = builder.zext(is_null, lc.Type.int(8))
     builder.store(byte, _get_is_null_pointer(builder, val))
 
 
-def _get_val_pointer(builder, val):
-    ptr = cgutils.inbound_gep(builder, val._getpointer(), 0, 1)
-    return ptr
+# struct impls
 
-def _get_val(builder, val):
-    raw_val = builder.load(_get_val_pointer(builder, val))
-    return raw_val
-
-def _set_val(builder, val, to):
-    builder.store(to, _get_val_pointer(builder, val))
+class AnyValStruct(cgutils.Structure):
+    _fields = [('is_null', types.boolean)]
 
 
 class BooleanValStruct(cgutils.Structure):
@@ -54,89 +53,9 @@ class BooleanValStruct(cgutils.Structure):
                ('val',     types.int8),]
 
 
-@impl_attribute(BooleanVal, "is_null", types.boolean)
-def booleanval_is_null(context, builder, typ, value):
-    """
-    BooleanVal::is_null
-    """
-    iv = BooleanValStruct(context, builder, value=value)
-    is_null = _get_is_null(builder, iv)
-    return is_null
-
-@impl_attribute(BooleanVal, "val", types.int8)
-def booleanval_val(context, builder, typ, value):
-    """
-    BooleanVal::val
-    """
-    iv = BooleanValStruct(context, builder, value=value)
-    return iv.val
-
-
-@impl_attribute(BooleanValType, "null", BooleanVal)
-def booleanval_null(context, builder, typ, value):
-    """
-    BooleanVal::null
-    """
-    iv = BooleanValStruct(context, builder)
-    _set_is_null(builder, iv, cgutils.true_bit)
-    return iv._getvalue()
-
-
-@implement(BooleanValType, types.int8)
-def booleanval_ctor(context, builder, sig, args):
-    """
-    BooleanVal(int8)
-    """
-    [x] = args
-    iv = BooleanValStruct(context, builder)
-    _set_is_null(builder, iv, cgutils.false_bit)
-    iv.val = x
-    return iv._getvalue()
-
-
 class TinyIntValStruct(cgutils.Structure):
     _fields = [('parent',  AnyVal),
                ('val',     types.int8),]
-
-
-@impl_attribute(TinyIntVal, "is_null", types.boolean)
-def tinyintval_is_null(context, builder, typ, value):
-    """
-    TinyIntVal::is_null
-    """
-    iv = TinyIntValStruct(context, builder, value=value)
-    is_null = _get_is_null(builder, iv)
-    return is_null
-
-@impl_attribute(TinyIntVal, "val", types.int8)
-def tinyintval_val(context, builder, typ, value):
-    """
-    TinyIntVal::val
-    """
-    iv = TinyIntValStruct(context, builder, value=value)
-    return iv.val
-
-
-@impl_attribute(TinyIntValType, "null", TinyIntVal)
-def tinyintval_null(context, builder, typ, value):
-    """
-    TinyIntVal::null
-    """
-    iv = TinyIntValStruct(context, builder)
-    _set_is_null(builder, iv, cgutils.true_bit)
-    return iv._getvalue()
-
-
-@implement(TinyIntValType, types.int8)
-def tinyintval_ctor(context, builder, sig, args):
-    """
-    TinyIntVal(int8)
-    """
-    [x] = args
-    iv = TinyIntValStruct(context, builder)
-    _set_is_null(builder, iv, cgutils.false_bit)
-    iv.val = x
-    return iv._getvalue()
 
 
 class SmallIntValStruct(cgutils.Structure):
@@ -144,89 +63,9 @@ class SmallIntValStruct(cgutils.Structure):
                ('val',     types.int16),]
 
 
-@impl_attribute(SmallIntVal, "is_null", types.boolean)
-def smallintval_is_null(context, builder, typ, value):
-    """
-    SmallIntVal::is_null
-    """
-    iv = SmallIntValStruct(context, builder, value=value)
-    is_null = _get_is_null(builder, iv)
-    return is_null
-
-@impl_attribute(SmallIntVal, "val", types.int16)
-def smallintval_val(context, builder, typ, value):
-    """
-    SmallIntVal::val
-    """
-    iv = SmallIntValStruct(context, builder, value=value)
-    return iv.val
-
-
-@impl_attribute(SmallIntValType, "null", SmallIntVal)
-def smallintval_null(context, builder, typ, value):
-    """
-    SmallIntVal::null
-    """
-    iv = SmallIntValStruct(context, builder)
-    _set_is_null(builder, iv, cgutils.true_bit)
-    return iv._getvalue()
-
-
-@implement(SmallIntValType, types.int16)
-def smallintval_ctor(context, builder, sig, args):
-    """
-    SmallIntVal(int16)
-    """
-    [x] = args
-    iv = SmallIntValStruct(context, builder)
-    _set_is_null(builder, iv, cgutils.false_bit)
-    iv.val = x
-    return iv._getvalue()
-
-
 class IntValStruct(cgutils.Structure):
     _fields = [('parent',  AnyVal),
                ('val',     types.int32),]
-
-
-@impl_attribute(IntVal, "is_null", types.boolean)
-def intval_is_null(context, builder, typ, value):
-    """
-    IntVal::is_null
-    """
-    iv = IntValStruct(context, builder, value=value)
-    is_null = _get_is_null(builder, iv)
-    return is_null
-
-@impl_attribute(IntVal, "val", types.int32)
-def intval_val(context, builder, typ, value):
-    """
-    IntVal::val
-    """
-    iv = IntValStruct(context, builder, value=value)
-    return iv.val
-
-
-@impl_attribute(IntValType, "null", IntVal)
-def intval_null(context, builder, typ, value):
-    """
-    IntVal::null
-    """
-    iv = IntValStruct(context, builder)
-    _set_is_null(builder, iv, cgutils.true_bit)
-    return iv._getvalue()
-
-
-@implement(IntValType, types.int32)
-def intval_ctor(context, builder, sig, args):
-    """
-    IntVal(int32)
-    """
-    [x] = args
-    iv = IntValStruct(context, builder)
-    _set_is_null(builder, iv, cgutils.false_bit)
-    iv.val = x
-    return iv._getvalue()
 
 
 class BigIntValStruct(cgutils.Structure):
@@ -234,134 +73,14 @@ class BigIntValStruct(cgutils.Structure):
                ('val',     types.int64),]
 
 
-@impl_attribute(BigIntVal, "is_null", types.boolean)
-def bigintval_is_null(context, builder, typ, value):
-    """
-    BigIntVal::is_null
-    """
-    iv = BigIntValStruct(context, builder, value=value)
-    is_null = _get_is_null(builder, iv)
-    return is_null
-
-@impl_attribute(BigIntVal, "val", types.int64)
-def bigintval_val(context, builder, typ, value):
-    """
-    BigIntVal::val
-    """
-    iv = BigIntValStruct(context, builder, value=value)
-    return iv.val
-
-
-@impl_attribute(BigIntValType, "null", BigIntVal)
-def bigintval_null(context, builder, typ, value):
-    """
-    BigIntVal::null
-    """
-    iv = BigIntValStruct(context, builder)
-    _set_is_null(builder, iv, cgutils.true_bit)
-    return iv._getvalue()
-
-
-@implement(BigIntValType, types.int64)
-def bigintval_ctor(context, builder, sig, args):
-    """
-    BigIntVal(int64)
-    """
-    [x] = args
-    iv = BigIntValStruct(context, builder)
-    _set_is_null(builder, iv, cgutils.false_bit)
-    iv.val = x
-    return iv._getvalue()
-
-
 class FloatValStruct(cgutils.Structure):
     _fields = [('parent',  AnyVal),
                ('val',     types.float32),]
 
 
-@impl_attribute(FloatVal, "is_null", types.boolean)
-def floatval_is_null(context, builder, typ, value):
-    """
-    FloatVal::is_null
-    """
-    iv = FloatValStruct(context, builder, value=value)
-    is_null = _get_is_null(builder, iv)
-    return is_null
-
-@impl_attribute(FloatVal, "val", types.float32)
-def floatval_val(context, builder, typ, value):
-    """
-    FloatVal::val
-    """
-    iv = FloatValStruct(context, builder, value=value)
-    return iv.val
-
-
-@impl_attribute(FloatValType, "null", FloatVal)
-def floatval_null(context, builder, typ, value):
-    """
-    FloatVal::null
-    """
-    iv = FloatValStruct(context, builder)
-    _set_is_null(builder, iv, cgutils.true_bit)
-    return iv._getvalue()
-
-
-@implement(FloatValType, types.float32)
-def floatval_ctor(context, builder, sig, args):
-    """
-    FloatVal(float32)
-    """
-    [x] = args
-    iv = FloatValStruct(context, builder)
-    _set_is_null(builder, iv, cgutils.false_bit)
-    iv.val = x
-    return iv._getvalue()
-
-
 class DoubleValStruct(cgutils.Structure):
     _fields = [('parent',  AnyVal),
                ('val',     types.float64),]
-
-
-@impl_attribute(DoubleVal, "is_null", types.boolean)
-def doubleval_is_null(context, builder, typ, value):
-    """
-    DoubleVal::is_null
-    """
-    iv = DoubleValStruct(context, builder, value=value)
-    is_null = _get_is_null(builder, iv)
-    return is_null
-
-@impl_attribute(DoubleVal, "val", types.float64)
-def doubleval_val(context, builder, typ, value):
-    """
-    DoubleVal::val
-    """
-    iv = DoubleValStruct(context, builder, value=value)
-    return iv.val
-
-
-@impl_attribute(DoubleValType, "null", DoubleVal)
-def doubleval_null(context, builder, typ, value):
-    """
-    DoubleVal::null
-    """
-    iv = DoubleValStruct(context, builder)
-    _set_is_null(builder, iv, cgutils.true_bit)
-    return iv._getvalue()
-
-
-@implement(DoubleValType, types.float64)
-def doubleval_ctor(context, builder, sig, args):
-    """
-    DoubleVal(float64)
-    """
-    [x] = args
-    iv = DoubleValStruct(context, builder)
-    _set_is_null(builder, iv, cgutils.false_bit)
-    iv.val = x
-    return iv._getvalue()
 
 
 class StringValStruct(cgutils.Structure):
@@ -370,162 +89,127 @@ class StringValStruct(cgutils.Structure):
                ('ptr',     types.CPointer(types.uint8))]
 
 
-@impl_attribute(StringVal, "is_null", types.boolean)
-def stringval_is_null(context, builder, typ, value):
-    """
-    StringVal::is_null
-    """
-    iv = StringValStruct(context, builder, value=value)
-    is_null = _get_is_null(builder, iv)
-    return is_null
+# ctor impls
 
-@impl_attribute(StringVal, "len", types.int32)
-def stringval_len(context, builder, typ, value):
-    """
-    StringVal::len
-    """
-    iv = StringValStruct(context, builder, value=value)
-    return iv.len
+def _ctor_factory(Struct, Type, *input_args):
+    @implement(Type, *input_args)
+    def Val_ctor(context, builder, sig, args):
+        [x] = args
+        v = Struct(context, builder)
+        _set_is_null(builder, v, cgutils.false_bit)
+        v.val = x
+        return v._getvalue()
+    return register_function(Val_ctor)
 
-@impl_attribute(StringVal, "ptr", types.CPointer(types.uint8))
-def stringval_ptr(context, builder, typ, value):
-    """
-    StringVal::ptr
-    """
-    iv = StringValStruct(context, builder, value=value)
-    return iv.ptr
+BooleanVal_ctor = _ctor_factory(BooleanValStruct, BooleanValType, types.int8)
+TinyIntVal_ctor = _ctor_factory(TinyIntValStruct, TinyIntValType, types.int8)
+SmallIntVal_ctor = _ctor_factory(SmallIntValStruct, SmallIntValType, types.int16)
+IntVal_ctor = _ctor_factory(IntValStruct, IntValType, types.int32)
+BigIntVal_ctor = _ctor_factory(BigIntValStruct, BigIntValType, types.int64)
+FloatVal_ctor = _ctor_factory(FloatValStruct, FloatValType, types.float32)
+DoubleVal_ctor = _ctor_factory(DoubleValStruct, DoubleValType, types.float64)
 
-@impl_attribute(StringValType, "null", StringVal)
-def stringval_null(context, builder, typ, value):
-    """
-    StringVal::null
-    """
-    iv = StringValStruct(context, builder)
-    _set_is_null(builder, iv, cgutils.true_bit)
-    return iv._getvalue()
-
-@implement(types.len_type, StringVal)
-def len_stringval(context, builder, sig, args):
-    [s] = args
-    val = StringValStruct(context, builder, value=s)
-    return val.len
-
-@implement("==", StringVal, StringVal)
-def eq_stringval(context, builder, sig, args):
-    import ipdb
-    ipdb.set_trace()
-    [s1, s2] = args
-    sv1 = StringValStruct(context, builder, value=s1)
-    sv2 = StringValStruct(context, builder, value=s2)
-    pass
-    # TODO
-
-@implement("==", types.CPointer(types.uint8), types.CPointer(types.uint8))
-def eq_pointeruint8(context, builder, sig, args):
-    [p1, p2] = args
-    return builder.icmp(lc.ICMP_EQ, p1, p2)
-
-@implement("getitem", StringVal, types.int64)
-def getitem_stringval(context, builder, sig, args):
-    [s, i] = args
-    # TODO: check that the requested element is within the allocated String
-    val = StringValStruct(context, builder, value=s)
-    dataptr = cgutils.inbound_gep(builder, val.ptr, i)
-    # THIS IS INCORRECT.  We must actually allocate some memory by calling the StringVal constructor
-    elt = StringValStruct(context, builder)
-    _set_is_null(builder, elt, cgutils.false_bit)
-    iv.val
-    return builder.load(dataptr)
-
-    # vt = self.get_value_type(ty)
-    # tmp = cgutils.alloca_once(builder, vt)
-    # dataptr = cgutils.inbound_gep(builder, ptr, 0, 0)
-    # builder.store(dataptr, cgutils.inbound_gep(builder, tmp, 0, 0))
-    # return builder.load(tmp)
-
-    # def inbound_gep(builder, ptr, *inds):
-    #     idx = []
-    #     for i in inds:
-    #         if isinstance(i, int):
-    #             ind = Constant.int(Type.int(32), i)
-    #         else:
-    #             ind = i
-    #         idx.append(ind)
-    #     return builder.gep(ptr, idx, inbounds=True)
-
-    # %val = getelementptr inbounds %"struct.impala_udf::IntVal"* %arg2, i64 0, i32 1
-    # %0 = load i32* %val, align 4, !tbaa !4
-    # %idxprom = sext i32 %0 to i64
-    # %ptr = getelementptr inbounds %"struct.impala_udf::StringVal"* %arg1, i64 0, i32 2
-    # %1 = load i8** %ptr, align 8, !tbaa !5
-    # %arrayidx = getelementptr inbounds i8* %1, i64 %idxprom
-    # %2 = load i8* %arrayidx, align 1, !tbaa !1
-    # ret i8 %2
-
-
-@implement('StringValToInt16', StringVal)
-def stringval_to_int16(context, builder, sig, args):
-    # TODO: insert test so that StringVal must have len=1
-    [s] = args
-    iv = StringValStruct(context, builder, value=s)
-    dataptr = cgutils.inbound_gep(builder, iv.ptr, 0)
-    return builder.load(dataptr)
-
-
-@implement(StringValType, types.CPointer(types.uint8), types.int32)
-def stringval_ctor1(context, builder, sig, args):
-    """
-    StringVal(uint8_t* ptr, int32 len)
-    """
-    [x, y] = args
-    iv = StringValStruct(context, builder)
-    _set_is_null(builder, iv, cgutils.false_bit)
-    iv.ptr = x
-    iv.len = y
-    return iv._getvalue()
-
+@register_function
 @implement(StringValType, types.string)
-def stringval_ctor2(context, builder, sig, args):
-    """
-    StringVal(types.string)
-    """
-    import ipdb
-    ipdb.set_trace()
+def StringVal_ctor(context, builder, sig, args):
+    """StringVal(types.string)"""
     [x] = args
     iv = StringValStruct(context, builder)
     _set_is_null(builder, iv, cgutils.false_bit)
     fndesc = lowering.describe_external('strlen', types.uintp, [types.CPointer(types.char)])
-    func = context.declare_extern_c_function(cgutils.get_module(builder), fndesc)
-    strlen_x = context.call_extern_c_function(builder, func, fndesc.argtypes, [x])
+    func = context.declare_external_function(cgutils.get_module(builder), fndesc)
+    strlen_x = context.call_external_function(builder, func, fndesc.argtypes, [x])
     len_x = builder.trunc(strlen_x, lc.Type.int(32))
     iv.len = len_x
     iv.ptr = x
     return iv._getvalue()
 
 
-# @implement(StringValType, types.CPointer(types.char))
-# def stringval_ctor2(context, builder, sig, args):
-#     """
-#     StringVal(const char* ptr)
-#     """
-#     [x, y] = args
-#     iv = StringValStruct(context, builder)
-#     _set_is_null(builder, iv, cgutils.false_bit)
-#     iv.ptr = x
-#     iv.len = y
-#     return iv._getvalue()
 
-# @implement(StringValType, types.CPointer(FunctionContext), types.int32)
-# def stringval_ctor3(context, builder, sig, args):
-#     """
-#     StringVal(FunctionContext*, int32)
-#     """
-#     [x, y] = args
-#     iv = StringValStruct(context, builder)
-#     _set_is_null(builder, iv, cgutils.false_bit)
-#     iv.ptr = x.
-#     iv.len = y
-#     return iv._getvalue()
+
+# *Val attributes
+
+def _is_null_attr_factory(Struct, Val):
+    @impl_attribute(Val, "is_null", types.boolean)
+    def Val_is_null(context, builder, typ, value):
+        v = Struct(context, builder, value=value)
+        is_null = _get_is_null(builder, v)
+        return is_null
+    return register_attribute(Val_is_null)
+
+def _val_attr_factory(Struct, Val, retty):
+    @impl_attribute(Val, "val", retty)
+    def Val_val(context, builder, typ, value):
+        v = Struct(context, builder, value=value)
+        return v.val
+    return register_attribute(Val_val)
+
+# *Val.is_null
+BooleanVal_is_null = _is_null_attr_factory(BooleanValStruct, BooleanVal)
+TinyIntVal_is_null = _is_null_attr_factory(TinyIntValStruct, TinyIntVal)
+SmallIntVal_is_null = _is_null_attr_factory(SmallIntValStruct, SmallIntVal)
+IntVal_is_null = _is_null_attr_factory(IntValStruct, IntVal)
+BigIntVal_is_null = _is_null_attr_factory(BigIntValStruct, BigIntVal)
+FloatVal_is_null = _is_null_attr_factory(FloatValStruct, FloatVal)
+DoubleVal_is_null = _is_null_attr_factory(DoubleValStruct, DoubleVal)
+StringVal_is_null = _is_null_attr_factory(StringValStruct, StringVal)
+
+# *Val.val
+BooleanVal_val = _val_attr_factory(BooleanValStruct, BooleanVal, types.int8)
+TinyIntVal_val = _val_attr_factory(TinyIntValStruct, TinyIntVal, types.int8)
+SmallIntVal_val = _val_attr_factory(SmallIntValStruct, SmallIntVal, types.int16)
+IntVal_val = _val_attr_factory(IntValStruct, IntVal, types.int32)
+BigIntVal_val = _val_attr_factory(BigIntValStruct, BigIntVal, types.int64)
+FloatVal_val = _val_attr_factory(FloatValStruct, FloatVal, types.float32)
+DoubleVal_val = _val_attr_factory(DoubleValStruct, DoubleVal, types.float64)
+
+@register_attribute
+@impl_attribute(StringVal, "len", types.int32)
+def StringVal_len(context, builder, typ, value):
+    """StringVal::len"""
+    iv = StringValStruct(context, builder, value=value)
+    return iv.len
+
+@register_attribute
+@impl_attribute(StringVal, "ptr", types.CPointer(types.uint8))
+def StringVal_ptr(context, builder, typ, value):
+    """StringVal::ptr"""
+    iv = StringValStruct(context, builder, value=value)
+    return iv.ptr
+
+
+# impl "builtins"
+
+@register_function
+@implement('is', AnyVal, types.none)
+def is_none_impl(context, builder, sig, args):
+    [x, y] = args
+    val = AnyValStruct(context, builder, value=x)
+    return val.is_null
+
+@register_function
+@implement(types.len_type, StringVal)
+def len_stringval_impl(context, builder, sig, args):
+    [s] = args
+    val = StringValStruct(context, builder, value=s)
+    return val.len
+
+@register_function
+@implement("==", types.CPointer(types.uint8), types.CPointer(types.uint8))
+def eq_ptr_impl(context, builder, sig, args):
+    [p1, p2] = args
+    return builder.icmp(lc.ICMP_EQ, p1, p2)
+
+@register_function
+@implement("==", StringVal, StringVal)
+def eq_stringval(context, builder, sig, args):
+    module = cgutils.get_module(builder)
+    [s1, s2] = args
+    sv1 = StringValStruct(context, builder, value=s1)
+    sv2 = StringValStruct(context, builder, value=s2)
+    # module.
+    pass
+    # TODO
 
 
 TYPE_LAYOUT = {
@@ -546,18 +230,9 @@ class ImpalaTargetContext(BaseContext):
                      BigIntVal, FloatVal, DoubleVal, StringVal)
     def init(self):
         self.tm = le.TargetMachine.new()
-        self.insert_attr_defn([booleanval_is_null, booleanval_val, booleanval_null,
-                               tinyintval_is_null, tinyintval_val, tinyintval_null,
-                               smallintval_is_null, smallintval_val, smallintval_null,
-                               intval_is_null, intval_val, intval_null,
-                               bigintval_is_null, bigintval_val, bigintval_null,
-                               floatval_is_null, floatval_val, floatval_null,
-                               doubleval_is_null, doubleval_val, doubleval_null,
-                               stringval_is_null, stringval_len, stringval_ptr, stringval_null])
-        self.insert_func_defn([booleanval_ctor, tinyintval_ctor,
-                               smallintval_ctor, intval_ctor, bigintval_ctor,
-                               floatval_ctor, doubleval_ctor, stringval_ctor1, stringval_ctor2,
-                               len_stringval, isnone_anyval, getitem_stringval, stringval_to_int16, eq_pointeruint8, eq_stringval])
+        # insert registered impls
+        self.insert_func_defn(_functions)
+        self.insert_attr_defn(_attributes)
         self.optimizer = self.build_pass_manager()
 
         # once per context
@@ -591,70 +266,49 @@ class ImpalaTargetContext(BaseContext):
             return iv2._getvalue()
 
         if fromty == BooleanVal:
-            raw_val = _get_val(builder, BooleanValStruct(self, builder, val))
-            return self.cast(builder, raw_val, types.boolean, toty)
+            v = BooleanValStruct(self, builder, val)
+            return self.cast(builder, v.val, types.boolean, toty)
         if fromty == TinyIntVal:
-            raw_val = _get_val(builder, TinyIntValStruct(self, builder, val))
-            return self.cast(builder, raw_val, types.int8, toty)
+            v = TinyIntValStruct(self, builder, val)
+            return self.cast(builder, v.val, types.int8, toty)
         if fromty == SmallIntVal:
-            raw_val = _get_val(builder, SmallIntValStruct(self, builder, val))
-            return self.cast(builder, raw_val, types.int16, toty)
+            v = SmallIntValStruct(self, builder, val)
+            return self.cast(builder, v.val, types.int16, toty)
         if fromty == IntVal:
-            raw_val = _get_val(builder, IntValStruct(self, builder, val))
-            return self.cast(builder, raw_val, types.int32, toty)
+            v = IntValStruct(self, builder, val)
+            return self.cast(builder, v.val, types.int32, toty)
         if fromty == BigIntVal:
-            raw_val = _get_val(builder, BigIntValStruct(self, builder, val))
-            return self.cast(builder, raw_val, types.int64, toty)
+            v = BigIntValStruct(self, builder, val)
+            return self.cast(builder, v.val, types.int64, toty)
         if fromty == FloatVal:
-            raw_val = _get_val(builder, FloatValStruct(self, builder, val))
-            return self.cast(builder, raw_val, types.float32, toty)
+            v = FloatValStruct(self, builder, val)
+            return self.cast(builder, v.val, types.float32, toty)
         if fromty == DoubleVal:
-            raw_val = _get_val(builder, DoubleValStruct(self, builder, val))
-            return self.cast(builder, raw_val, types.float64, toty)
+            v = DoubleValStruct(self, builder, val)
+            return self.cast(builder, v.val, types.float64, toty)
 
         # no way fromty is a *Val starting here
         if toty == BooleanVal:
             val = super(ImpalaTargetContext, self).cast(builder, val, fromty, types.int8)
-            iv = BooleanValStruct(self, builder)
-            _set_is_null(builder, iv, cgutils.false_bit)
-            _set_val(builder, iv, val)
-            return iv._getvalue()
+            return BooleanVal_ctor(self, builder, None, [val])
         if toty == TinyIntVal:
             val = super(ImpalaTargetContext, self).cast(builder, val, fromty, types.int8)
-            iv = TinyIntValStruct(self, builder)
-            _set_is_null(builder, iv, cgutils.false_bit)
-            _set_val(builder, iv, val)
-            return iv._getvalue()
+            return TinyIntVal_ctor(self, builder, None, [val])
         if toty == SmallIntVal:
             val = super(ImpalaTargetContext, self).cast(builder, val, fromty, types.int16)
-            iv = SmallIntValStruct(self, builder)
-            _set_is_null(builder, iv, cgutils.false_bit)
-            _set_val(builder, iv, val)
-            return iv._getvalue()
+            return SmallIntVal_ctor(self, builder, None, [val])
         if toty == IntVal:
             val = super(ImpalaTargetContext, self).cast(builder, val, fromty, types.int32)
-            iv = IntValStruct(self, builder)
-            _set_is_null(builder, iv, cgutils.false_bit)
-            _set_val(builder, iv, val)
-            return iv._getvalue()
+            return IntVal_ctor(self, builder, None, [val])
         if toty == BigIntVal:
             val = super(ImpalaTargetContext, self).cast(builder, val, fromty, types.int64)
-            iv = BigIntValStruct(self, builder)
-            _set_is_null(builder, iv, cgutils.false_bit)
-            _set_val(builder, iv, val)
-            return iv._getvalue()
+            return BigIntVal_ctor(self, builder, None, [val])
         if toty == FloatVal:
             val = super(ImpalaTargetContext, self).cast(builder, val, fromty, types.float32)
-            iv = FloatValStruct(self, builder)
-            _set_is_null(builder, iv, cgutils.false_bit)
-            _set_val(builder, iv, val)
-            return iv._getvalue()
+            return FloatVal_ctor(self, builder, None, [val])
         if toty == DoubleVal:
             val = super(ImpalaTargetContext, self).cast(builder, val, fromty, types.float64)
-            iv = DoubleValStruct(self, builder)
-            _set_is_null(builder, iv, cgutils.false_bit)
-            _set_val(builder, iv, val)
-            return iv._getvalue()
+            return DoubleVal_ctor(self, builder, None, [val])
         if toty == StringVal:
             return stringval_ctor2(self, builder, None, [val])
 

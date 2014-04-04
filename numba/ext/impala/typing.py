@@ -4,8 +4,26 @@ from numba import typing, types
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     signature)
 
-FunctionContext = types.OpaqueType('class.impala_udf::FunctionContext')
 
+_globals = []
+_functions = []
+_attributes = []
+
+def register_global(gv, gty):
+    _globals.append((gv, gty))
+
+def register_function(func):
+    _functions.append(func)
+    return func
+
+def register_attribute(attr):
+    _attributes.append(attr)
+    return attr
+
+
+# Impala types
+
+FunctionContext = types.OpaqueType('class.impala_udf::FunctionContext')
 
 class ImpalaValue(types.Type):
     pass
@@ -14,317 +32,128 @@ AnyVal = ImpalaValue('AnyVal')
 
 BooleanVal = ImpalaValue('BooleanVal')
 BooleanValType = types.Dummy('BooleanValType')
-
-
-class BooleanValCtor(ConcreteTemplate):
-    key = BooleanValType
-    cases = [signature(BooleanVal, types.int8)]
-
-
-class BooleanValValueAttr(AttributeTemplate):
-    key = BooleanVal
-
-    def resolve_is_null(self, val):
-        """
-        BooleanVal::is_null
-        """
-        return types.boolean
-
-    def resolve_val(self, val):
-        """
-        BooleanVal::val
-        """
-        return types.int8
-
-
-class BooleanValTypeAttr(AttributeTemplate):
-    key = BooleanValType
-
-    def resolve_null(self, typ):
-        """
-        BooleanVal::null
-        """
-        return BooleanVal
-
+register_global(BooleanVal, BooleanValType)
 
 TinyIntVal = ImpalaValue('TinyIntVal')
 TinyIntValType = types.Dummy('TinyIntValType')
-
-
-class TinyIntValCtor(ConcreteTemplate):
-    key = TinyIntValType
-    cases = [signature(TinyIntVal, types.int8)]
-
-
-class TinyIntValValueAttr(AttributeTemplate):
-    key = TinyIntVal
-
-    def resolve_is_null(self, val):
-        """
-        TinyIntVal::is_null
-        """
-        return types.boolean
-
-    def resolve_val(self, val):
-        """
-        TinyIntVal::val
-        """
-        return types.int8
-
-
-class TinyIntValTypeAttr(AttributeTemplate):
-    key = TinyIntValType
-
-    def resolve_null(self, typ):
-        """
-        TinyIntVal::null
-        """
-        return TinyIntVal
+register_global(TinyIntVal, TinyIntValType)
 
 SmallIntVal = ImpalaValue('SmallIntVal')
 SmallIntValType = types.Dummy('SmallIntValType')
-
-
-class SmallIntValCtor(ConcreteTemplate):
-    key = SmallIntValType
-    cases = [signature(SmallIntVal, types.int16)]
-
-
-class SmallIntValValueAttr(AttributeTemplate):
-    key = SmallIntVal
-
-    def resolve_is_null(self, val):
-        """
-        SmallIntVal::is_null
-        """
-        return types.boolean
-
-    def resolve_val(self, val):
-        """
-        SmallIntVal::val
-        """
-        return types.int16
-
-
-class SmallIntValTypeAttr(AttributeTemplate):
-    key = SmallIntValType
-
-    def resolve_null(self, typ):
-        """
-        SmallIntVal::null
-        """
-        return SmallIntVal
-
+register_global(SmallIntVal, SmallIntValType)
 
 IntVal = ImpalaValue('IntVal')
 IntValType = types.Dummy('IntValType')
-
-
-class IntValCtor(ConcreteTemplate):
-    key = IntValType
-    cases = [signature(IntVal, types.int32)]
-
-
-class IntValValueAttr(AttributeTemplate):
-    key = IntVal
-
-    def resolve_is_null(self, val):
-        """
-        IntVal::is_null
-        """
-        return types.boolean
-
-    def resolve_val(self, val):
-        """
-        IntVal::val
-        """
-        return types.int32
-
-
-class IntValTypeAttr(AttributeTemplate):
-    key = IntValType
-
-    def resolve_null(self, typ):
-        """
-        IntVal::null
-        """
-        return IntVal
-
+register_global(IntVal, IntValType)
 
 BigIntVal = ImpalaValue('BigIntVal')
 BigIntValType = types.Dummy('BigIntValType')
-
-
-class BigIntValCtor(ConcreteTemplate):
-    key = BigIntValType
-    cases = [signature(BigIntVal, types.int64)]
-
-
-class BigIntValValueAttr(AttributeTemplate):
-    key = BigIntVal
-
-    def resolve_is_null(self, val):
-        """
-        BigIntVal::is_null
-        """
-        return types.boolean
-
-    def resolve_val(self, val):
-        """
-        BigIntVal::val
-        """
-        return types.int64
-
-
-class BigIntValTypeAttr(AttributeTemplate):
-    key = BigIntValType
-
-    def resolve_null(self, typ):
-        """
-        BigIntVal::null
-        """
-        return BigIntVal
-
+register_global(BigIntVal, BigIntValType)
 
 FloatVal = ImpalaValue('FloatVal')
 FloatValType = types.Dummy('FloatValType')
-
-
-class FloatValCtor(ConcreteTemplate):
-    key = FloatValType
-    cases = [signature(FloatVal, types.float32)]
-
-
-class FloatValValueAttr(AttributeTemplate):
-    key = FloatVal
-
-    def resolve_is_null(self, val):
-        """
-        FloatVal::is_null
-        """
-        return types.boolean
-
-    def resolve_val(self, val):
-        """
-        FloatVal::val
-        """
-        return types.float32
-
-
-class FloatValTypeAttr(AttributeTemplate):
-    key = FloatValType
-
-    def resolve_null(self, typ):
-        """
-        FloatVal::null
-        """
-        return FloatVal
-
+register_global(FloatVal, FloatValType)
 
 DoubleVal = ImpalaValue('DoubleVal')
 DoubleValType = types.Dummy('DoubleValType')
-
-
-class DoubleValCtor(ConcreteTemplate):
-    key = DoubleValType
-    cases = [signature(DoubleVal, types.float64)]
-
-
-class DoubleValValueAttr(AttributeTemplate):
-    key = DoubleVal
-
-    def resolve_is_null(self, val):
-        """
-        DoubleVal::is_null
-        """
-        return types.boolean
-
-    def resolve_val(self, val):
-        """
-        DoubleVal::val
-        """
-        return types.float64
-
-
-class DoubleValTypeAttr(AttributeTemplate):
-    key = DoubleValType
-
-    def resolve_null(self, typ):
-        """
-        DoubleVal::null
-        """
-        return DoubleVal
-
+register_global(DoubleVal, DoubleValType)
 
 StringVal = ImpalaValue('StringVal')
 StringValType = types.Dummy('StringValType')
+register_global(StringVal, StringValType)
 
 
-class StringValCtor(ConcreteTemplate):
-    key = StringValType
-    cases = [signature(StringVal, types.CPointer(types.uint8), types.int32)]
+# *Val ctors
+
+def _ctor_factory(Val, ValType, argty):
+    class ValCtor(ConcreteTemplate):
+        key = ValType
+        cases = [signature(Val, argty)]
+    return register_function(ValCtor)
+
+BooleanValCtor = _ctor_factory(BooleanVal, BooleanValType, types.int8)
+TinyIntValCtor = _ctor_factory(TinyIntVal, TinyIntValType, types.int8)
+SmallIntValCtor = _ctor_factory(SmallIntVal, SmallIntValType, types.int16)
+IntValCtor = _ctor_factory(IntVal, IntValType, types.int32)
+BigIntValCtor = _ctor_factory(BigIntVal, BigIntValType, types.int64)
+FloatValCtor = _ctor_factory(FloatVal, FloatValType, types.float32)
+DoubleValCtor = _ctor_factory(DoubleVal, DoubleValType, types.float64)
+StringValCtor = _ctor_factory(StringVal, StringValType, types.CPointer(types.char))
 
 
-class StringValValueAttr(AttributeTemplate):
+# *Val attributes
+
+def _attr_factory(Val, ValType, retty):
+    class ValAttr(AttributeTemplate):
+        key = Val
+        
+        def resolve_is_null(self, val):
+            """*Val::is_null"""
+            return types.boolean
+        
+        def resolve_val(self, val):
+            """*Val::val"""
+            return retty
+    return register_attribute(ValAttr)
+
+BooleanValAttr = _attr_factory(BooleanVal, BooleanValType, types.int8)
+TinyIntValAttr = _attr_factory(TinyIntVal, TinyIntValType, types.int8)
+SmallIntValAttr = _attr_factory(SmallIntVal, SmallIntValType, types.int16)
+IntValAttr = _attr_factory(IntVal, IntValType, types.int32)
+BigIntValAttr = _attr_factory(BigIntVal, BigIntValType, types.int64)
+FloatValAttr = _attr_factory(FloatVal, FloatValType, types.float32)
+DoubleValAttr = _attr_factory(DoubleVal, DoubleValType, types.float64)
+
+@register_attribute
+class StringValAttr(AttributeTemplate):
     key = StringVal
 
     def resolve_is_null(self, val):
-        """
-        StringVal::is_null
-        """
+        """StringVal::is_null"""
         return types.boolean
 
     def resolve_len(self, val):
-        """
-        StringVal::len
-        """
+        """StringVal::len"""
         return types.int32
 
     def resolve_ptr(self, val):
-        """
-        StringVal::ptr
-        """
+        """StringVal::ptr"""
         return types.CPointer(types.uint8)
 
 
-class StringValTypeAttr(AttributeTemplate):
-    key = StringValType
+# register "builtins"
 
-    def resolve_null(self, typ):
-        """
-        StringVal::null
-        """
-        return StringVal
-
-
+@register_function
 class LenStringVal(ConcreteTemplate):
     key = types.len_type
     cases = [signature(types.int32, StringVal)]
 
 
+@register_function
+class CmpOpEqPtr(ConcreteTemplate):
+    key = '=='
+    cases = [signature(types.boolean, types.CPointer(types.uint8), types.CPointer(types.uint8))]
+
+
+@register_function
+class CmpOpEqStringVal(ConcreteTemplate):
+    key = '=='
+    cases = [signature(types.boolean, StringVal, StringVal)]
+
+
+@register_function
+class BinOpIs(ConcreteTemplate):
+    key = 'is'
+    cases = [signature(types.int8, AnyVal, types.none)]
+
+
+@register_function
 class GetItemStringVal(ConcreteTemplate):
     key = "getitem"
     cases = [signature(types.uint8, StringVal, types.int64)]
 
 
-class EqPointerUint8(ConcreteTemplate):
-    key = '=='
-    cases = [signature(types.boolean, types.CPointer(types.uint8), types.CPointer(types.uint8))]
-
-
-class EqStringVal(ConcreteTemplate):
-    key = '=='
-    cases = [signature(types.boolean, StringVal, StringVal)]
-
-
-class StringValToInt16(ConcreteTemplate):
-    key = 'StringValToInt16'
-    cases = [signature(types.int16, StringVal)]
-
-
-class BinOpIs(ConcreteTemplate):
-    key = 'is'
-    cases = [signature(types.int8, AnyVal, types.none)]
+# type conversions
 
 def _register_impala_numeric_type_conversions(base):
     impala_integral = (BooleanVal, TinyIntVal, SmallIntVal, IntVal, BigIntVal)
@@ -378,69 +207,36 @@ def _register_impala_numeric_type_conversions(base):
     base.tm.set_safe_convert(impala_integral[-2], DoubleVal)
     base.tm.set_safe_convert(numba_integral[-2], DoubleVal)
 
-    # *Val to AnyVal
+    # *Val to AnyVal (numeric)
     for a in impala_all:
         base.tm.set_unsafe_convert(a, AnyVal)
 
     for a in impala_all:
         base.tm.set_safe_convert(types.none, a)
 
-def _register_impala_string_type_conversions(base):
+def _register_impala_other_type_conversions(base):
     # base.tm.set_unsafe_convert(types.CPointer(types.uint8), types.Dummy('void*'))
     base.tm.set_safe_convert(types.string, StringVal)
+    base.tm.set_unsafe_convert(StringVal, AnyVal)
+    base.tm.set_safe_convert(types.none, StringVal)
+    base.tm.set_safe_convert(types.none, AnyVal)
 
+
+# the Impala typing context
 
 def impala_typing_context():
     base = typing.Context()
 
     _register_impala_numeric_type_conversions(base)
-    _register_impala_string_type_conversions(base)
+    _register_impala_other_type_conversions(base)
 
-    base.insert_function(BinOpIs(base))
-
-    base.insert_global(BooleanVal, BooleanValType)
-    base.insert_function(BooleanValCtor(base))
-    base.insert_attributes(BooleanValValueAttr(base))
-    base.insert_attributes(BooleanValTypeAttr(base))
-
-    base.insert_global(TinyIntVal, TinyIntValType)
-    base.insert_function(TinyIntValCtor(base))
-    base.insert_attributes(TinyIntValValueAttr(base))
-    base.insert_attributes(TinyIntValTypeAttr(base))
-
-    base.insert_global(SmallIntVal, SmallIntValType)
-    base.insert_function(SmallIntValCtor(base))
-    base.insert_attributes(SmallIntValValueAttr(base))
-    base.insert_attributes(SmallIntValTypeAttr(base))
-
-    base.insert_global(IntVal, IntValType)
-    base.insert_function(IntValCtor(base))
-    base.insert_attributes(IntValValueAttr(base))
-    base.insert_attributes(IntValTypeAttr(base))
-
-    base.insert_global(BigIntVal, BigIntValType)
-    base.insert_function(BigIntValCtor(base))
-    base.insert_attributes(BigIntValValueAttr(base))
-    base.insert_attributes(BigIntValTypeAttr(base))
-
-    base.insert_global(FloatVal, FloatValType)
-    base.insert_function(FloatValCtor(base))
-    base.insert_attributes(FloatValValueAttr(base))
-    base.insert_attributes(FloatValTypeAttr(base))
-
-    base.insert_global(DoubleVal, DoubleValType)
-    base.insert_function(DoubleValCtor(base))
-    base.insert_attributes(DoubleValValueAttr(base))
-    base.insert_attributes(DoubleValTypeAttr(base))
-
-    base.insert_global(StringVal, StringValType)
-    base.insert_function(StringValCtor(base))
-    base.insert_attributes(StringValValueAttr(base))
-    base.insert_attributes(StringValTypeAttr(base))
-    base.insert_function(LenStringVal(base))
-    base.insert_function(EqStringVal(base))
-    base.insert_function(GetItemStringVal(base))
-    base.insert_function(EqPointerUint8(base))
-    base.insert_global(StringValToInt16, types.Function(StringValToInt16))
+    for (gv, gty) in _globals:
+        base.insert_global(gv, gty)
+    
+    for func in _functions:
+        base.insert_function(func(base))
+    
+    for attr in _attributes:
+        base.insert_attributes(attr(base))
 
     return base
