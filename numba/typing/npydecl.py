@@ -5,35 +5,12 @@ from .. import types
 from .templates import (AttributeTemplate, AbstractTemplate,
                                     Registry, signature)
 
+# this will be factored out...
+from ..numpy_support import (_typemap, _inv_typemap)
+
 registry = Registry()
 builtin_global = registry.register_global
 builtin_attr = registry.register_attr
-
-
-_typemap = {
-    '?': types.bool_,
-    'b': types.int8,
-    'B': types.uint8,
-    'h': types.short,
-    'H': types.ushort,
-    'i': types.int32, # should be C int
-    'I': types.uint32, # should be C unsigned int
-    'l': types.long_,
-    'L': types.ulong,
-    'q': types.longlong,
-    'Q': types.ulonglong,
-
-    'f': types.float_,
-    'd': types.double,
-#    'g': types.longdouble,
-    'F': types.complex64,  # cfloat
-    'D': types.complex128, # cdouble
-#   'G': types.clongdouble
-    'O': types.pyobject,
-    'M': types.pyobject
-}
-
-_inv_typemap = { v: k  for k,v in _typemap.items() }
 
 @builtin_attr
 class NumpyModuleAttribute(AttributeTemplate):
