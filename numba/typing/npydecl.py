@@ -5,8 +5,9 @@ from .. import types
 from .templates import (AttributeTemplate, AbstractTemplate,
                                     Registry, signature)
 
-# this will be factored out...
-from ..numpy_support import (_typemap, _inv_typemap)
+from ..numpy_support import (ufunc_find_matching_loop,
+                             numba_types_to_numpy_letter_types,
+                             numpy_letter_types_to_numba_types)
 
 registry = Registry()
 builtin_global = registry.register_global
@@ -46,19 +47,21 @@ class Numpy_rules_ufunc(AbstractTemplate):
         # else... we must look for the kernel to use, the actual loop that
         # will be used, using NumPy's logic:
         assert(len(args) == self.key.nin)
-        letter_arg_types = [ _inv_typemap[x.dtype if isinstance(x, types.Array) else x] for x in args ]
+        base_types = [x.dtype if isintance(x, types.Array) else x for x in args]
+        letter_arg_types = numba_types_to_numpy_letter_types(base_types)
 
-        for candidate in self.key.types:
-            if numpy.alltrue([numpy.can_cast(*x) 
-                              for x in zip(letter_arg_types,
-                                           candidate[0:self.key.nin])]):
-                #found!
-                array_arg = [isinstance(a, types.Array) for a in args]
-                out = _typemap[candidate[-1]]
-                if any(array_arg):
-                    ndims = max(*[a.ndim if isinstance(a, types.Array) else 0 for a in args])
-                    out = types.Array(out, ndims, 'A')
-                return signature(out, *args)
+        ufunc_loop = ufunc_find_matching_loop(self.key, letter_arg_types)
+        if ufunc_loop is not None:
+            # a result was found so...
+            array_arg = [isinstance(a, types.Array) for a in args]
+            # base out type will be based on the ufunc result type (last letter)
+            out = numpy_letter_types_to_numba_types(ufunc_loop[-self.key.nout:])
+            if any(array_arg):
+                # if any argument was an array, the result will be an array
+                ndims = max(*[a.ndim if isinstance(a, types.Array) else 0 for a in args])
+                out = [types.Array(x, ndims, 'A') for x in out] 
+            out.extend(args)
+            return signature(out)
 
         # At this point if we don't have a candidate, we are out of luck. NumPy won't know
         # how to eval this!
