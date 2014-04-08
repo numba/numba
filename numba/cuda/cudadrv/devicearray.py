@@ -265,7 +265,6 @@ class DeviceNDArray(DeviceNDArrayBase):
             raise NotImplementedError("reshaping non-contiguous array requires"
                                       "autojitting a special kernel to complete")
 
-
     def ravel(self, order='C', stream=0):
         if order not in 'CFA':
             raise ValueError('order not C|F|A')
@@ -281,6 +280,94 @@ class DeviceNDArray(DeviceNDArrayBase):
         else:
             raise NotImplementedError("this ravel operation requires "
                                       "autojitting a special kernel to complete")
+
+    def __getitem__(self, index):
+        def is_tuple_of_ints(x):
+            if isinstance(x, tuple):
+                return all(isinstance(i, int) for i in x)
+            return False
+
+        if isinstance(index, int):
+            return self._getitem_index(index)
+        elif is_tuple_of_ints(index):
+            return self._getitem_index(*index)
+        elif isinstance(index, tuple):
+            return self._getitem_slice(*index)
+        else:
+            return self._getitem_slice(index)
+
+    def _getitem_index(self, *indices):
+        if len(indices) < self.ndim:
+            self._getitem_slice(*indices)
+        if len(indices) > self.ndim:
+            raise TypeError("too many indices")
+        indices = _normalize_indices(indices, self.shape)
+        offset = (np.array(indices) * np.array(self.strides)).sum()
+        itemsize = self.dtype.itemsize
+        new_data = self.gpu_data.view(offset, offset + itemsize)
+        hostary = np.empty(1, dtype=self.dtype)
+        _driver.device_to_host(dst=hostary, src=new_data, size=itemsize)
+        return hostary[0]
+
+    def _getitem_slice(self, *slices):
+        slices = [_make_slice(sl) for sl in slices]
+        slices = _normalize_slices(slices, self.shape)
+        bounds = [_compute_slice_offsets(sl.start, sl.stop, shp)
+                  for sl, shp in zip(slices, self.shape)]
+        indices = [s for s, e in bounds]
+        ends = [e for s, e in bounds]
+        offset = (np.array(indices) * np.array(self.strides)).sum()
+        endoffset = (np.array(ends) * np.array(self.strides)).sum()
+        shapes = [e - s for s, e in bounds]
+        strides = [(st if sl.step is None else sl.step)
+                   for sl, st in zip(slices, self.strides)]
+        new_data = self.gpu_data.view(offset, endoffset)
+        return type(self)(shape=shapes, strides=strides,
+                          dtype=self.dtype, gpu_data=new_data)
+
+
+def _compute_slice_offsets(start, stop, shape):
+    assert start is not None or stop is not None
+
+    if start is None:
+        start = 0
+    if stop is None:
+        stop = shape
+    return start, stop
+
+
+def _normalize_indices(indices, shape):
+    return [_normalize_index(i, s) for i, s in zip(indices, shape)]
+
+
+def _normalize_index(index, shape):
+    index = (shape + index if index < 0 else index)
+    if index >= shape:
+        raise IndexError("out of bound")
+    return index
+
+
+def _normalize_bound(index, shape):
+    index = (shape + index if index < 0 else index)
+    return min(index, shape)
+
+
+def _normalize_slices(slices, shape):
+    out = []
+    for sl, sh in zip(slices, shape):
+        start, stop, step = sl.start, sl.stop, sl.step
+        if start is not None:
+            start = _normalize_bound(start, sh)
+        if stop is not None:
+            stop = _normalize_bound(stop, sh)
+        out.append(slice(start, stop, step))
+    return out
+
+
+def _make_slice(val):
+    if isinstance(val, slice):
+        return val
+    return slice(val, val + 1)
 
 
 class MappedNDArray(DeviceNDArrayBase, np.ndarray):
