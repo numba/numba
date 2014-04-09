@@ -215,12 +215,12 @@ class Array(object):
                 outershape = self.shape[:-1]
 
             if innerdim.is_contiguous(self.itemsize):
-                oslen = [xrange(s) for s in outershape]
+                oslen = [range(s) for s in outershape]
                 for indices in itertools.product(*oslen):
                     base = compute_index(indices, outerdims)
                     yield base + innerdim.start, base + innerdim.stop
             else:
-                oslen = [xrange(s) for s in self.shape]
+                oslen = [range(s) for s in self.shape]
                 for indices in itertools.product(*oslen):
                     offset = compute_index(indices, self.dims)
                     yield offset, offset + self.itemsize
