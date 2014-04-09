@@ -6,12 +6,11 @@ strides, dtype and size attributes similar to a NumPy ndarray.
 from __future__ import print_function, absolute_import, division
 import warnings
 import math
-import operator
 import numpy as np
-from functools import reduce
 from .ndarray import ndarray_device_allocate_head, ndarray_populate_head
 from . import driver as _driver
 from . import devices
+from numba import dummyarray
 
 try:
     long
@@ -72,6 +71,8 @@ class DeviceNDArrayBase(object):
         self.ndim = len(shape)
         if len(strides) != self.ndim:
             raise ValueError('strides not match ndim')
+        self._dummy = dummyarray.Array.from_desc(0, shape, strides,
+                                                 dtype.itemsize)
         self.shape = tuple(shape)
         self.strides = tuple(strides)
         self.dtype = np.dtype(dtype)
@@ -109,7 +110,8 @@ class DeviceNDArrayBase(object):
 
     @property
     def device_ctypes_pointer(self):
-        "Returns the ctypes pointer to the GPU data buffer"
+        """Returns the ctypes pointer to the GPU data buffer
+        """
         return self.gpu_data.device_ctypes_pointer
 
     def copy_to_device(self, ary, stream=0):
@@ -165,10 +167,10 @@ class DeviceNDArrayBase(object):
         self.copy_to_host(self.__writeback, stream=stream)
 
     def split(self, section, stream=0):
-        '''Split the array into equal partition of the `section` size.
+        """Split the array into equal partition of the `section` size.
         If the array cannot be equally divided, the last section will be
         smaller.
-        '''
+        """
         if self.ndim != 1:
             raise ValueError("only support 1d array")
         if self.strides[0] != self.dtype.itemsize:
@@ -194,183 +196,57 @@ class DeviceNDArrayBase(object):
 
 
 class DeviceNDArray(DeviceNDArrayBase):
-    def _yields_f_strides_by_shape(self, shape=None):
-        """yields the f-contigous strides
-        """
-        shape = self.shape if shape is None else shape
-        itemsize = self.dtype.itemsize
-        yield itemsize
-        sum = 1
-        for s in shape[:-1]:
-            sum *= s
-            yield sum * itemsize
+    def is_f_contiguous(self):
+        return self._dummy.is_f_contig
 
-    def _yields_c_strides_by_shape(self, shape=None):
-        '''yields the c-contigous strides in
-        '''
-        shape = self.shape if shape is None else shape
-        itemsize = self.dtype.itemsize
-
-        def gen():
-            yield itemsize
-            sum = 1
-            for s in reversed(shape[1:]):
-                sum *= s
-                yield sum * itemsize
-
-        for i in reversed(list(gen())):
-            yield i
-
-    def is_f_contigous(self):
-        return all(i == j for i, j in
-                   zip(self._yields_f_strides_by_shape(), self.strides))
-
-    def is_c_contigous(self):
-        return all(i == j for i, j in
-                   zip(self._yields_c_strides_by_shape(),
-                       self.strides))
+    def is_c_contiguous(self):
+        return self._dummy.is_c_contig
 
     def reshape(self, *newshape, **kws):
-        '''reshape(self, *newshape, order='C'):
+        """reshape(self, *newshape, order='C'):
 
         Reshape the array and keeping the original data
-        '''
-        order = kws.pop('order', 'C')
-        if kws:
-            raise TypeError('unknown keyword arguments %s' % kws.keys())
-        if order not in 'CFA':
-            raise ValueError('order not C|F|A')
-            # compute new array size
-        if len(newshape) > 1:
-            newsize = reduce(operator.mul, newshape)
-        else:
-            (newsize,) = newshape
-        if newsize != self.size:
-            raise ValueError("reshape changes the size of the array")
-        elif self.is_f_contigous() or self.is_c_contigous():
-            if order == 'A':
-                order = 'F' if self.is_f_contigous() else 'C'
-            if order == 'C':
-                newstrides = list(self._yields_c_strides_by_shape(newshape))
-            elif order == 'F':
-                newstrides = list(self._yields_f_strides_by_shape(newshape))
-            else:
-                assert False, 'unreachable'
+        """
+        newarr, extents = self._dummy.reshape(*newshape, **kws)
+        cls = type(self)
 
-            ret = DeviceNDArray(shape=newshape, strides=newstrides,
-                                dtype=self.dtype, gpu_data=self.gpu_data)
-
-            return ret
+        if extents == [self._dummy.extent]:
+            return cls(shape=newarr.shape, strides=newarr.strides,
+                       dtype=self.dtype, gpu_data=self.gpu_data)
         else:
-            raise NotImplementedError("reshaping non-contiguous array requires"
-                                      "autojitting a special kernel to complete")
+            raise NotImplementedError("operation requires copying")
 
     def ravel(self, order='C', stream=0):
-        if order not in 'CFA':
-            raise ValueError('order not C|F|A')
-        elif self.ndim == 1:
-            return DeviceNDArray(shape=self.shape, strides=self.strides,
-                                 dtype=self.dtype, gpu_data=self.gpu_data)
-        elif (order == 'C' and self.is_c_contigous() or
-                          order == 'F' and self.is_f_contigous()):
-            # just flatten it
-            return DeviceNDArray(shape=self.size, strides=self.dtype.itemsize,
-                                 dtype=self.dtype, gpu_data=self.gpu_data,
-                                 stream=stream)
+        cls = type(self)
+        newarr, extents = self._dummy.ravel(order=order)
+
+        if extents == [self._dummy.extent]:
+            return cls(shape=newarr.shape, strides=newarr.strides,
+                       dtype=self.dtype, gpu_data=self.gpu_data,
+                       gpu_head=self.gpu_head, stream=stream)
+
         else:
-            raise NotImplementedError("this ravel operation requires "
-                                      "autojitting a special kernel to complete")
+            raise NotImplementedError("operation requires copying")
 
-    def __getitem__(self, index):
-        def is_tuple_of_ints(x):
-            if isinstance(x, tuple):
-                return all(isinstance(i, int) for i in x)
-            return False
+    def __getitem__(self, item):
+        arr = self._dummy.__getitem__(item)
+        extents = list(arr.iter_contiguous_extent())
+        cls = type(self)
+        if len(extents) == 1:
+            newdata = self.gpu_data.view(*extents[0])
 
-        if isinstance(index, int):
-            return self._getitem_index(index)
-        elif is_tuple_of_ints(index):
-            return self._getitem_index(*index)
-        elif isinstance(index, tuple):
-            return self._getitem_slice(*index)
+            if dummyarray.is_element_indexing(item, self.ndim):
+                hostary = np.empty(1, dtype=self.dtype)
+                _driver.device_to_host(dst=hostary, src=newdata,
+                                       size=self._dummy.itemsize)
+                return hostary[0]
+            else:
+                return cls(shape=arr.shape, strides=arr.strides,
+                           dtype=self.dtype, gpu_data=newdata)
         else:
-            return self._getitem_slice(index)
-
-    def _getitem_index(self, *indices):
-        if len(indices) < self.ndim:
-            self._getitem_slice(*indices)
-        if len(indices) > self.ndim:
-            raise TypeError("too many indices")
-        indices = _normalize_indices(indices, self.shape)
-        offset = (np.array(indices) * np.array(self.strides)).sum()
-        itemsize = self.dtype.itemsize
-        new_data = self.gpu_data.view(offset, offset + itemsize)
-        hostary = np.empty(1, dtype=self.dtype)
-        _driver.device_to_host(dst=hostary, src=new_data, size=itemsize)
-        return hostary[0]
-
-    def _getitem_slice(self, *slices):
-        slices = [_make_slice(sl) for sl in slices]
-        slices = _normalize_slices(slices, self.shape)
-        bounds = [_compute_slice_offsets(sl.start, sl.stop, shp)
-                  for sl, shp in zip(slices, self.shape)]
-        indices = [s for s, e in bounds]
-        lastindices = [e - 1 for s, e in bounds]
-        itemsize = self.dtype.itemsize
-        strides_arr = np.array(self.strides)
-        offset = (np.array(indices) * strides_arr).sum()
-        endoffset = (np.array(lastindices) * strides_arr).sum() + itemsize
-        shapes = [e - s for s, e in bounds]
-        strides = [(st if sl.step is None else sl.step)
-                   for sl, st in zip(slices, self.strides)]
-        new_data = self.gpu_data.view(offset, endoffset)
-        arr = type(self)(shape=shapes, strides=strides, dtype=self.dtype,
-                         gpu_data=new_data)
-        return arr
-
-
-def _compute_slice_offsets(start, stop, shape):
-    assert start is not None or stop is not None
-
-    if start is None:
-        start = 0
-    if stop is None:
-        stop = shape
-    return start, stop
-
-
-def _normalize_indices(indices, shape):
-    return [_normalize_index(i, s) for i, s in zip(indices, shape)]
-
-
-def _normalize_index(index, shape):
-    index = (shape + index if index < 0 else index)
-    if index >= shape:
-        raise IndexError("out of bound")
-    return index
-
-
-def _normalize_bound(index, shape):
-    index = (shape + index if index < 0 else index)
-    return min(index, shape)
-
-
-def _normalize_slices(slices, shape):
-    out = []
-    for sl, sh in zip(slices, shape):
-        start, stop, step = sl.start, sl.stop, sl.step
-        if start is not None:
-            start = _normalize_bound(start, sh)
-        if stop is not None:
-            stop = _normalize_bound(stop, sh)
-        out.append(slice(start, stop, step))
-    return out
-
-
-def _make_slice(val):
-    if isinstance(val, slice):
-        return val
-    return slice(val, val + 1)
+            newdata = self.gpu_data.view(*arr.extent)
+            return cls(shape=arr.shape, strides=arr.strides,
+                       dtype=self.dtype, gpu_data=newdata)
 
 
 class MappedNDArray(DeviceNDArrayBase, np.ndarray):

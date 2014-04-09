@@ -48,7 +48,6 @@ class CudaArraySlicing(unittest.TestCase):
                 self.assertEqual(expect.shape, sliced.shape)
                 self.assertEqual(expect.strides, sliced.strides)
                 got = sliced.copy_to_host()
-
                 self.assertTrue(np.all(expect == got))
 
 

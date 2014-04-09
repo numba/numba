@@ -11,10 +11,10 @@ class TestArrayAttr(unittest.TestCase):
 
         dcary = cuda.to_device(cary)
         dfary = cuda.to_device(fary)
-        self.assertTrue(dcary.is_c_contigous())
-        self.assertTrue(not dfary.is_c_contigous())
-        self.assertTrue(not dcary.is_f_contigous())
-        self.assertTrue(dfary.is_f_contigous())
+        self.assertTrue(dcary.is_c_contiguous())
+        self.assertTrue(not dfary.is_c_contiguous())
+        self.assertTrue(not dcary.is_f_contiguous())
+        self.assertTrue(dfary.is_f_contiguous())
 
     def test_contigous_3d(self):
         ary = np.arange(20)
@@ -23,10 +23,10 @@ class TestArrayAttr(unittest.TestCase):
 
         dcary = cuda.to_device(cary)
         dfary = cuda.to_device(fary)
-        self.assertTrue(dcary.is_c_contigous())
-        self.assertTrue(not dfary.is_c_contigous())
-        self.assertTrue(not dcary.is_f_contigous())
-        self.assertTrue(dfary.is_f_contigous())
+        self.assertTrue(dcary.is_c_contiguous())
+        self.assertTrue(not dfary.is_c_contiguous())
+        self.assertTrue(not dcary.is_f_contiguous())
+        self.assertTrue(dfary.is_f_contiguous())
 
     def test_contigous_4d(self):
         ary = np.arange(60)
@@ -35,10 +35,10 @@ class TestArrayAttr(unittest.TestCase):
 
         dcary = cuda.to_device(cary)
         dfary = cuda.to_device(fary)
-        self.assertTrue(dcary.is_c_contigous())
-        self.assertTrue(not dfary.is_c_contigous())
-        self.assertTrue(not dcary.is_f_contigous())
-        self.assertTrue(dfary.is_f_contigous())
+        self.assertTrue(dcary.is_c_contiguous())
+        self.assertTrue(not dfary.is_c_contiguous())
+        self.assertTrue(not dcary.is_f_contiguous())
+        self.assertTrue(dfary.is_f_contiguous())
 
     def test_ravel_c(self):
         ary = np.arange(60)

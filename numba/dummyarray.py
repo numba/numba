@@ -1,6 +1,11 @@
 from __future__ import print_function, division
 import itertools
+import functools
+import operator
 import numpy
+from collections import namedtuple
+
+Extent = namedtuple("Extent", ["begin", "end"])
 
 
 class Dim(object):
@@ -163,7 +168,7 @@ class Array(object):
         lastidx = [s - 1 for s in self.shape]
         start = compute_index(firstidx, self.dims)
         stop = compute_index(lastidx, self.dims) + self.itemsize
-        return start, stop
+        return Extent(start, stop)
 
     def __repr__(self):
         return '<Array dims=%s itemsize=%s>' % (self.dims, self.itemsize)
@@ -219,3 +224,98 @@ class Array(object):
                 for indices in itertools.product(*oslen):
                     offset = compute_index(indices, self.dims)
                     yield offset, offset + self.itemsize
+
+    def reshape(self, *newshape, **kws):
+        order = kws.pop('order', 'C')
+        if kws:
+            raise TypeError('unknown keyword arguments %s' % kws.keys())
+        if order not in 'CFA':
+            raise ValueError('order not C|F|A')
+
+        newsize = functools.reduce(operator.mul, newshape, 1)
+
+        if order == 'A':
+            order = 'F' if self.is_f_contig else 'C'
+
+        if newsize != self.size:
+            raise ValueError("reshape changes the size of the array")
+
+        elif self.is_c_contig or self.is_f_contig:
+            if order == 'C':
+                newstrides = list(iter_strides_c_contig(self, newshape))
+            elif order == 'F':
+                newstrides = list(iter_strides_f_contig(self, newshape))
+            else:
+                raise AssertionError("unreachable")
+
+            ret = self.from_desc(self.extent.begin, shape=newshape,
+                                 strides=newstrides, itemsize=self.itemsize)
+
+            return ret, list(self.iter_contiguous_extent())
+        else:
+            raise NotImplementedError("reshape on non-contiguous array")
+
+    def ravel(self, order='C'):
+        if order not in 'CFA':
+            raise ValueError('order not C|F|A')
+
+        if self.ndim <= 1:
+            return self
+
+        elif (order == 'C' and self.is_c_contig or
+                          order == 'F' and self.is_f_contig):
+            newshape = (self.size,)
+            newstrides = (self.itemsize,)
+            arr = self.from_desc(self.extent.begin, newshape, newstrides,
+                                 self.itemsize)
+            return arr, list(self.iter_contiguous_extent())
+
+        else:
+            raise NotImplementedError("ravel on non-contiguous array")
+
+
+def iter_strides_f_contig(arr, shape=None):
+    """yields the f-contigous strides
+    """
+    assert arr.is_f_contig
+    shape = arr.shape if shape is None else shape
+    itemsize = arr.itemsize
+    yield itemsize
+    sum = 1
+    for s in shape[:-1]:
+        sum *= s
+        yield sum * itemsize
+
+
+def iter_strides_c_contig(arr, shape=None):
+    """yields the c-contigous strides
+    """
+    assert arr.is_c_contig
+    shape = arr.shape if shape is None else shape
+    itemsize = arr.itemsize
+
+    def gen():
+        yield itemsize
+        sum = 1
+        for s in reversed(shape[1:]):
+            sum *= s
+            yield sum * itemsize
+
+    for i in reversed(list(gen())):
+        yield i
+
+
+def is_element_indexing(item, ndim):
+    if isinstance(item, slice):
+        return False
+
+    elif isinstance(item, tuple):
+        if len(item) == ndim:
+            if not any(isinstance(it, slice) for it in item):
+                return True
+
+    else:
+        return True
+
+    return False
+
