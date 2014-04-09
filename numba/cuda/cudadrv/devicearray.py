@@ -315,15 +315,18 @@ class DeviceNDArray(DeviceNDArrayBase):
         bounds = [_compute_slice_offsets(sl.start, sl.stop, shp)
                   for sl, shp in zip(slices, self.shape)]
         indices = [s for s, e in bounds]
-        ends = [e for s, e in bounds]
-        offset = (np.array(indices) * np.array(self.strides)).sum()
-        endoffset = (np.array(ends) * np.array(self.strides)).sum()
+        lastindices = [e - 1 for s, e in bounds]
+        itemsize = self.dtype.itemsize
+        strides_arr = np.array(self.strides)
+        offset = (np.array(indices) * strides_arr).sum()
+        endoffset = (np.array(lastindices) * strides_arr).sum() + itemsize
         shapes = [e - s for s, e in bounds]
         strides = [(st if sl.step is None else sl.step)
                    for sl, st in zip(slices, self.strides)]
         new_data = self.gpu_data.view(offset, endoffset)
-        return type(self)(shape=shapes, strides=strides,
-                          dtype=self.dtype, gpu_data=new_data)
+        arr = type(self)(shape=shapes, strides=strides, dtype=self.dtype,
+                         gpu_data=new_data)
+        return arr
 
 
 def _compute_slice_offsets(start, stop, shape):
