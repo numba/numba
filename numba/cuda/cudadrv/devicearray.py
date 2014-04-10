@@ -7,7 +7,7 @@ from __future__ import print_function, absolute_import, division
 import warnings
 import math
 import numpy as np
-from .ndarray import ndarray_device_allocate_head, ndarray_populate_head
+from .ndarray import (ndarray_populate_head, ArrayHeaderManager)
 from . import driver as _driver
 from . import devices
 from numba import dummyarray
@@ -54,15 +54,23 @@ class DeviceNDArrayBase(object):
     def __init__(self, shape, strides, dtype, stream=0, writeback=None,
                  gpu_head=None, gpu_data=None):
         """
-        Arguments
+        Args
+        ----
 
-        shape: array shape.
-        strides: array strides.
-        dtype: data type as numpy.dtype.
-        stream: cuda stream.
-        writeback: Deprecated.
-        gpu_head: user provided device memory for the ndarray head structure
-        gpu_data: user provided device memory for the ndarray data buffer
+        shape
+            array shape.
+        strides
+            array strides.
+        dtype
+            data type as numpy.dtype.
+        stream
+            cuda stream.
+        writeback
+            Deprecated.
+        gpu_head
+            user provided device memory for the ndarray head structure
+        gpu_data
+            user provided device memory for the ndarray data buffer
         """
         if isinstance(shape, (int, long)):
             shape = (shape,)
@@ -86,8 +94,10 @@ class DeviceNDArrayBase(object):
         else:
             self.alloc_size = _driver.device_memory_size(gpu_data)
 
+        self.gpu_mem = ArrayHeaderManager(devices.get_context())
+
         if gpu_head is None:
-            gpu_head = ndarray_device_allocate_head(self.ndim)
+            gpu_head = self.gpu_mem.allocate(self.ndim)
             ndarray_populate_head(gpu_head, gpu_data, self.shape,
                                   self.strides, stream=stream)
         self.gpu_head = gpu_head
@@ -95,18 +105,11 @@ class DeviceNDArrayBase(object):
 
         self.__writeback = writeback # should deprecate the use of this
 
-        # define the array interface to work with numpy
-        #
-        # XXX: problem with data being accessed.
-        #      is NULL pointer alright?
-        #
-        #        self.__array_interface__ = {
-        #            'shape'     : self.shape,
-        #            'typestr'   : self.dtype.str,
-        #            'data'      : (0, True),
-        #            'version'   : 3,
-        #        }
-
+    def __del__(self):
+        try:
+            self.gpu_mem.free(self.gpu_head)
+        except:
+            pass
 
     @property
     def device_ctypes_pointer(self):
@@ -183,11 +186,11 @@ class DeviceNDArrayBase(object):
             end = min(begin + section, self.size)
             shape = (end - begin,)
             gpu_data = self.gpu_data.view(begin * itemsize, end * itemsize)
-            gpu_head = ndarray_device_allocate_head(1)
-            ndarray_populate_head(gpu_head, gpu_data, shape, strides,
-                                  stream=stream)
+            # gpu_head = _allocate_head(1)
+            # ndarray_populate_head(gpu_head, gpu_data, shape, strides,
+            #                       stream=stream)
             yield DeviceNDArray(shape, strides, dtype=self.dtype, stream=stream,
-                                gpu_head=gpu_head, gpu_data=gpu_data)
+                                gpu_data=gpu_data)
 
     def as_cuda_arg(self):
         """Returns a device memory object that is used as the argument.
@@ -251,13 +254,20 @@ class DeviceNDArray(DeviceNDArrayBase):
 
 class MappedNDArray(DeviceNDArrayBase, np.ndarray):
     def device_setup(self, gpu_data, stream=0):
-        gpu_head = ndarray_device_allocate_head(self.ndim)
+        self.gpu_mem = ArrayHeaderManager(devices.get_context())
 
+        gpu_head = self.gpu_mem.allocate(self.ndim)
         ndarray_populate_head(gpu_head, gpu_data, self.shape,
                               self.strides, stream=stream)
 
         self.gpu_data = gpu_data
         self.gpu_head = gpu_head
+
+    def __del__(self):
+        try:
+            self.gpu_mem.free(self.gpu_head)
+        except:
+            pass
 
 
 def from_array_like(ary, stream=0, gpu_head=None, gpu_data=None):
