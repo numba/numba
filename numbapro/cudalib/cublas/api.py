@@ -90,7 +90,7 @@ def _auto_l2_functions(fname, tnames, argfmt, extras):
 
 class Blas(object):
     '''All BLAS subprograms are available under the Blas object.
-    
+
     :param stream: Optional. A CUDA Stream.
     '''
     @cuda.require_context
@@ -102,6 +102,10 @@ class Blas(object):
     @property
     def stream(self):
         return self._cublas.stream
+
+    @stream.setter
+    def stream(self, stream):
+        self._cublas.stream = stream
 
     @contextmanager
     def _auto(self, *arys):
@@ -134,7 +138,7 @@ class Blas(object):
                 rsvl = rsvl[k]
             except KeyError:
                 raise TypeError(k)
-    
+
         return getattr(self._cublas, rsvl)
 
     def nrm2(self, x):
@@ -265,10 +269,10 @@ class Blas(object):
     def rotg(self, a, b):
         '''Compute the given rotation matrix given a column vector (a, b).
         Returns r, z, c, s.
-        
+
         r --- r = a ** 2 + b ** 2
         z --- Use to recover c and s.
-              if abs(z) < 1: 
+              if abs(z) < 1:
                   c, s = 1 - z ** 2, z
               elif abs(z) == 1:
                   c, s = 0, 1
@@ -291,7 +295,7 @@ class Blas(object):
         '''Applies the modified Givens transformation.
 
         x, y = h11 * x + h12 * y, h21 * x + h22 * y
-        
+
         param --- [flag, h11, h21, h12, h22]
 
         Refer to cuBLAS documentation for detail.
@@ -309,9 +313,9 @@ class Blas(object):
 
     def rotmg(self, d1, d2, x1, y1):
         '''Constructs the modified Givens transformation.
-        
+
         Returns param that is usable in rotm.
-        
+
         Refer to cuBLAS documentation for detail.
         '''
         d1, d2, x1, y1 = map(np.asarray, [d1, d2, x1, y1])
@@ -335,7 +339,7 @@ class Blas(object):
     trmv = _auto_l2_functions('trmv', 'SDCZ',
                               'uplo, trans, diag, n, A:r, x:w',
                               'lda, incx')
-    
+
     tbmv = _auto_l2_functions('tbmv', 'SDCZ',
                               'uplo, trans, diag, n, k, A:r, x:w',
                               'lda, incx')
@@ -367,7 +371,7 @@ class Blas(object):
     sbmv = _auto_l2_functions('sbmv', 'SDCZ',
                               'uplo, n, k, alpha, A:r, x:r, beta, y:w',
                               'lda, incx, incy')
-    
+
     hbmv = _auto_l2_functions('hbmv', 'CZ',
                               'uplo, n, k, alpha, A:r, x:r, beta, y:w',
                               'lda, incx, incy')
@@ -407,7 +411,7 @@ class Blas(object):
     syr2 = _auto_l2_functions('syr2', 'SDCZ',
                               'uplo, n, alpha, x:r, y:r, A:w',
                               'incx, incy, lda')
-    
+
     her2 = _auto_l2_functions('her2', 'CZ',
                               'uplo, n, alpha, x:r, y:r, A:w',
                               'incx, incy, lda')
@@ -433,11 +437,11 @@ class Blas(object):
     herk = _auto_l2_functions('herk', 'CZ',
                               'uplo, trans, n, k, alpha, A:r, beta, C:w',
                               'lda, ldc')
-    
+
     symm = _auto_l2_functions('symm', 'SDCZ',
                               'side, uplo, m, n, alpha, A:r, B:r, beta, C:w',
                               'lda, ldb, ldc')
-    
+
     hemm = _auto_l2_functions('hemm', 'CZ',
                               'side, uplo, m, n, alpha, A:r, B:r, beta, C:w',
                               'lda, ldb, ldc')

@@ -65,6 +65,14 @@ class Sparse(object):
         self.idxbase = (CUSPARSE_INDEX_BASE_ZERO,
                         CUSPARSE_INDEX_BASE_ONE)[idxbase]
 
+    @property
+    def stream(self):
+        return self.api.stream
+
+    @stream.setter
+    def stream(self, stream):
+        self.api.stream = stream
+
     def _get_api(self, fname, dtype):
         ch = dtype_to_char[np.dtype(dtype)]
         fn = "%s%s" % (ch, fname)
