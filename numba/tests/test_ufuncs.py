@@ -26,14 +26,11 @@ def _make_binary_ufunc_usecase(ufunc_name):
     exec("def fn(x, y, out):\n    np.{0}(x, y, out)".format(ufunc_name))
     return fn
 
-class TestUFuncs(unittest.TestCase):
-    def unary_ufunc_test(self, ufunc_name, flags=enable_pyobj_flags,
-                         skip_inputs=None, additional_inputs=None,
-                         int_output_type=None, float_output_type=None):
-        ufunc = _make_unary_ufunc_usecase(ufunc_name)
-        #ufunc = globals()[ufunc_name + '_usecase']
 
-        inputs = [
+class TestUFuncs(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.inputs =  [
             (0, types.uint32),
             (1, types.uint32),
             (-1, types.int32),
@@ -46,11 +43,11 @@ class TestUFuncs(unittest.TestCase):
             (1, types.int64),
 
             (-0.5, types.float32),
-            (0, types.float32),
+            (0.0, types.float32),
             (0.5, types.float32),
 
             (-0.5, types.float64),
-            (0, types.float64),
+            (0.0, types.float64),
             (0.5, types.float64),
 
             (np.array([0,1], dtype='u4'), types.Array(types.uint32, 1, 'C')),
@@ -60,8 +57,17 @@ class TestUFuncs(unittest.TestCase):
             (np.array([-0.5, 0.0, 0.5], dtype='f4'), types.Array(types.float32, 1, 'C')),
             (np.array([-0.5, 0.0, 0.5], dtype='f8'), types.Array(types.float64, 1, 'C'))]
 
-        if additional_inputs:
-            inputs = inputs + additional_inputs
+    @classmethod
+    def tearDownClass(cls):
+        del(cls.inputs)
+
+    def unary_ufunc_test(self, ufunc_name, flags=enable_pyobj_flags,
+                         skip_inputs=[], additional_inputs=[],
+                         int_output_type=None, float_output_type=None):
+        ufunc = _make_unary_ufunc_usecase(ufunc_name)
+
+        inputs = list(self.inputs)
+        inputs.extend(additional_inputs)
 
         pyfunc = ufunc
 
@@ -70,7 +76,7 @@ class TestUFuncs(unittest.TestCase):
             input_operand = input_tuple[0]
             input_type = input_tuple[1]
 
-            if skip_inputs and input_type in skip_inputs:
+            if input_type in skip_inputs:
                 continue
 
             ty = input_type
@@ -145,42 +151,13 @@ class TestUFuncs(unittest.TestCase):
 
 
     def binary_ufunc_test(self, ufunc_name, flags=enable_pyobj_flags,
-                         skip_inputs=None, additional_inputs=None,
+                         skip_inputs=[], additional_inputs=[],
                          int_output_type=None, float_output_type=None):
 
         ufunc = _make_binary_ufunc_usecase(ufunc_name)
 #        ufunc = globals()[ufunc_name + '_usecase']
 
-        inputs = [
-            (0, types.uint32),
-            (1, types.uint32),
-            (-1, types.int32),
-            (0, types.int32),
-            (1, types.int32),
-            (0, types.uint64),
-            (1, types.uint64),
-            (-1, types.int64),
-            (0, types.int64),
-            (1, types.int64),
-
-            (-0.5, types.float32),
-            (0.0, types.float32),
-            (0.5, types.float32),
-
-            (-0.5, types.float64),
-            (0.0, types.float64),
-            (0.5, types.float64),
-
-            (np.array([0,1], dtype='u4'), types.Array(types.uint32, 1, 'C')),
-            (np.array([0,1], dtype='u8'), types.Array(types.uint64, 1, 'C')),
-            (np.array([-1,0,1], dtype='i4'), types.Array(types.int32, 1, 'C')),
-            (np.array([-1,0,1], dtype='i8'), types.Array(types.int64, 1, 'C')),
-            (np.array([-0.5, 0.0, 0.5], dtype='f4'), types.Array(types.float32, 1, 'C')),
-            (np.array([-0.5, 0.0, 0.5], dtype='f8'), types.Array(types.float64, 1, 'C'))]
-
-        if additional_inputs:
-            inputs = inputs + additional_inputs
-
+        inputs = list(self.inputs) + additional_inputs
         pyfunc = ufunc
 
         for input_tuple in inputs:
@@ -188,7 +165,7 @@ class TestUFuncs(unittest.TestCase):
             input_operand = input_tuple[0]
             input_type = input_tuple[1]
 
-            if skip_inputs and input_type in skip_inputs:
+            if input_type in skip_inputs:
                 continue
 
             ty = input_type
@@ -483,7 +460,7 @@ class TestUFuncs(unittest.TestCase):
         self.test_multiply_ufunc(flags=no_pyobj_flags)
 
     def test_divide_ufunc(self, flags=enable_pyobj_flags):
-        skip_inputs = None
+        skip_inputs = []
         # python3 integer division by zero and
         # storing in 64 bit int produces garbage
         # instead of 0, so skip
