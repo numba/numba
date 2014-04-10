@@ -186,9 +186,6 @@ class DeviceNDArrayBase(object):
             end = min(begin + section, self.size)
             shape = (end - begin,)
             gpu_data = self.gpu_data.view(begin * itemsize, end * itemsize)
-            # gpu_head = _allocate_head(1)
-            # ndarray_populate_head(gpu_head, gpu_data, shape, strides,
-            #                       stream=stream)
             yield DeviceNDArray(shape, strides, dtype=self.dtype, stream=stream,
                                 gpu_data=gpu_data)
 
@@ -253,6 +250,10 @@ class DeviceNDArray(DeviceNDArrayBase):
 
 
 class MappedNDArray(DeviceNDArrayBase, np.ndarray):
+    """
+    A host array that uses CUDA mapped memory.
+    """
+
     def device_setup(self, gpu_data, stream=0):
         self.gpu_mem = ArrayHeaderManager(devices.get_context())
 
@@ -279,17 +280,23 @@ def from_array_like(ary, stream=0, gpu_head=None, gpu_data=None):
                          gpu_data=gpu_data)
 
 
+errmsg_contiguous_buffer = ("Array contains non-contiguous buffer and cannot "
+                            "be transferred as a single memory region. Please "
+                            "ensure contiguous buffer with numpy "
+                            ".ascontiguousarray()")
+
+
+def sentry_contiguous(ary):
+    if not ary.flags['C_CONTIGUOUS'] and not ary.flags['F_CONTIGUOUS']:
+        if ary.ndim != 1 or ary.shape[0] != 1 or ary.strides[0] != 0:
+            raise ValueError(errmsg_contiguous_buffer)
+
+
 def auto_device(ary, stream=0, copy=True):
     if _driver.is_device_memory(ary):
         return ary, False
     else:
-        if not ary.flags['C_CONTIGUOUS'] and not ary.flags['F_CONTIGUOUS']:
-            if ary.ndim != 1 or ary.shape[0] != 1 or ary.strides[0] != 0:
-                raise ValueError(
-                    "Array contains non-contiguous buffer and cannot "
-                    "be transferred as a single memory region.  "
-                    "Please ensure contiguous buffer with numpy"
-                    ".ascontiguousarray()")
+        sentry_contiguous(ary)
         devarray = from_array_like(ary, stream=stream)
         if copy:
             devarray.copy_to_device(ary, stream=stream)

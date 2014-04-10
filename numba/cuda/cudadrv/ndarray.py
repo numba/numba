@@ -17,6 +17,9 @@ class ArrayHeaderManager(object):
     When run out of preallocated space, it automatically fallback to regular
     allocation.
     """
+
+    # Caches associated contexts
+    #    There is one array header manager per context.
     context_map = {}
 
     # The number of preallocated array head
@@ -68,6 +71,8 @@ class ArrayHeaderManager(object):
 
 
 def make_array_ctype(ndim):
+    """Create a array header type for a given dimension.
+    """
     c_intp = ctypes.c_ssize_t
 
     class c_array(ctypes.Structure):
@@ -87,6 +92,9 @@ def _allocate_head(nd):
 
 
 def ndarray_device_allocate_data(ary):
+    """
+    Allocate gpu data buffer
+    """
     datasize = driver.host_memory_size(ary)
     # allocate
     gpu_data = devices.get_context().memalloc(datasize)
@@ -94,6 +102,9 @@ def ndarray_device_allocate_data(ary):
 
 
 def ndarray_populate_head(gpu_head, gpu_data, shape, strides, stream=0):
+    """
+    Populate the array header
+    """
     nd = len(shape)
     assert nd > 0, "0 or negative dimension"
 
