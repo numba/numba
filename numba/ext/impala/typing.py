@@ -2,7 +2,7 @@ from __future__ import print_function, division, absolute_import
 import itertools
 from numba import typing, types
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
-                                    signature)
+                                    AbstractTemplate, signature)
 
 
 _globals = []
@@ -148,9 +148,25 @@ class BinOpIs(ConcreteTemplate):
 
 
 @register_function
+class BinOpFormat(AbstractTemplate):
+    key = '%'
+    
+    def generic(self, args, kws):
+        assert not kws
+        # TODO: check that args are proper types;
+        #       impl using C++
+
+
+@register_function
 class GetItemStringVal(ConcreteTemplate):
     key = "getitem"
-    cases = [signature(types.uint8, StringVal, types.int64)]
+    cases = [signature(StringVal, StringVal, types.intc)]
+
+
+@register_function
+class BinOpAddStringVal(ConcreteTemplate):
+    key = "+"
+    cases = [signature(StringVal, StringVal, StringVal)]
 
 
 # type conversions

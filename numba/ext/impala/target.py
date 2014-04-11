@@ -178,6 +178,12 @@ def StringVal_ptr(context, builder, typ, value):
 
 # impl "builtins"
 
+def _conv_numba_struct_to_clang(builder, numba_arg, clang_arg_type):
+    stack_var = cgutils.alloca_once(builder, numba_arg.type)
+    builder.store(numba_arg, stack_var)
+    clang_arg = builder.bitcast(stack_var, clang_arg_type)
+    return clang_arg
+
 @register_function
 @implement('is', AnyVal, types.none)
 def is_none_impl(context, builder, sig, args):
@@ -202,17 +208,40 @@ def eq_ptr_impl(context, builder, sig, args):
 @implement("==", StringVal, StringVal)
 def eq_stringval(context, builder, sig, args):
     module = cgutils.get_module(builder)
-    precomp_func = context.precompiled_fns['EqStringValImpl']
+    precomp_func = context.precompiled_fns["EqStringValImpl"]
     func = module.get_or_insert_function(precomp_func.type.pointee, precomp_func.name)
     [s1, s2] = args
-    tmp1 = cgutils.alloca_once(builder, s1.type)
-    tmp2 = cgutils.alloca_once(builder, s2.type)
-    builder.store(s1, tmp1)
-    builder.store(s2, tmp2)
-    cs1 = builder.bitcast(tmp1, func.args[0].type)
-    cs2 = builder.bitcast(tmp2, func.args[1].type)
+    cs1 = _conv_numba_struct_to_clang(builder, s1, func.args[0].type)
+    cs2 = _conv_numba_struct_to_clang(builder, s2, func.args[1].type)
     result = builder.call(func, [cs1, cs2])
-    return result
+    return result # ret bool so no need to raise type
+    
+@register_function
+@implement("getitem", StringVal, types.intc)
+def getitem_stringval(context, builder, sig, args):
+    module = cgutils.get_module(builder)
+    precomp_func = context.precompiled_fns["GetItemStringValImpl"]
+    func = module.get_or_insert_function(precomp_func.type.pointee, precomp_func.name)
+    [s, i] = args
+    cs = _conv_numba_struct_to_clang(builder, s, func.args[0].type)
+    result = builder.call(func, [cs, i])
+    return _raise_return_type(context, builder, StringVal, result)
+
+@register_function
+@implement("+", StringVal, StringVal)
+def add_stringval(context, builder, sig, args):
+    import ipdb
+    ipdb.set_trace()
+    module = cgutils.get_module(builder)
+    precomp_func = context.precompiled_fns["AddStringValImpl"]
+    func = module.get_or_insert_function(precomp_func.type.pointee, precomp_func.name)
+    fnctx_arg = context.get_arguments(cgutils.get_function(builder))[0]
+    cfnctx_arg = builder.bitcast(fnctx_arg, func.args[0].type)
+    [s1, s2] = args
+    cs1 = _conv_numba_struct_to_clang(builder, s1, func.args[1].type)
+    cs2 = _conv_numba_struct_to_clang(builder, s2, func.args[2].type)
+    result = builder.call(func, [cfnctx_arg, cs1, cs2])
+    return _raise_return_type(context, builder, StringVal, result)
 
 
 TYPE_LAYOUT = {
@@ -254,12 +283,17 @@ class ImpalaTargetContext(BaseContext):
         # TODO: find a way to precompile as part of build and point accordingly
         with open("/Users/laserson/repos/numba/numba/ext/impala/impala-precompiled.bc", "rb") as ip:
             self.precompiled_module = lc.Module.from_bitcode(ip)
-        mangled_names = [fn.name for fn in self.precompiled_module.functions]
+        
         self.precompiled_fns = {}
         
-        name = 'EqStringValImpl'
+        name = "EqStringValImpl"
         self.precompiled_fns[name] = self._get_precompiled_function(name)
-
+        
+        name = "GetItemStringValImpl"
+        self.precompiled_fns[name] = self._get_precompiled_function(name)
+        
+        name = "AddStringValImpl"
+        self.precompiled_fns[name] = self._get_precompiled_function(name)
 
     def cast(self, builder, val, fromty, toty):
         if config.DEBUG:
@@ -330,7 +364,7 @@ class ImpalaTargetContext(BaseContext):
             val = super(ImpalaTargetContext, self).cast(builder, val, fromty, types.float64)
             return DoubleVal_ctor(self, builder, None, [val])
         if toty == StringVal:
-            return stringval_ctor2(self, builder, None, [val])
+            return StringVal_ctor(self, builder, None, [val])
 
         return super(ImpalaTargetContext, self).cast(builder, val, fromty, toty)
 
@@ -389,7 +423,9 @@ class ImpalaTargetContext(BaseContext):
             return super(ImpalaTargetContext, self).get_data_type(ty)
 
     def build_pass_manager(self):
-        pms = lp.build_pass_managers(tm=self.tm, opt=3, loop_vectorize=True,
+        opt = 0 # let Impala optimize
+        # opt = 3 # optimize ourselves
+        pms = lp.build_pass_managers(tm=self.tm, opt=opt, loop_vectorize=True,
                                      fpm=False)
         return pms.pm
 
@@ -428,95 +464,9 @@ class ABIHandling(object):
         status, res = self.context.call_function(builder, self.func, self.restype,
                                                  self.argtypes, wrapper.args)
         # FIXME ignoring error in function for now
-        cres = self.convert_abi_return(builder, self.restype, res)
+        cres = _lower_return_type(self.context, builder, self.restype, res)
         builder.ret(cres)
         return wrapper
-
-    def convert_abi_return(self, builder, ty, val):
-        """
-        Convert value to fit ABI requirement
-        """
-        if ty == BooleanVal:
-            # Pack structure into int16
-            # Endian specific
-            iv = BooleanValStruct(self.context, builder, value=val)
-            lower = builder.zext(_get_is_null(builder, iv), lc.Type.int(16))
-            upper = builder.zext(iv.val, lc.Type.int(16))
-            asint16 = builder.shl(upper, lc.Constant.int(lc.Type.int(16), 8))
-            asint16 = builder.or_(asint16, lower)
-            return asint16
-        elif ty == TinyIntVal:
-            # Pack structure into int16
-            # Endian specific
-            iv = TinyIntValStruct(self.context, builder, value=val)
-            lower = builder.zext(_get_is_null(builder, iv), lc.Type.int(16))
-            upper = builder.zext(iv.val, lc.Type.int(16))
-            asint16 = builder.shl(upper, lc.Constant.int(lc.Type.int(16), 8))
-            asint16 = builder.or_(asint16, lower)
-            return asint16
-        elif ty == SmallIntVal:
-            # Pack structure into int32
-            # Endian specific
-            iv = SmallIntValStruct(self.context, builder, value=val)
-            lower = builder.zext(_get_is_null(builder, iv), lc.Type.int(32))
-            upper = builder.zext(iv.val, lc.Type.int(32))
-            asint32 = builder.shl(upper, lc.Constant.int(lc.Type.int(32), 16))
-            asint32 = builder.or_(asint32, lower)
-            return asint32
-        elif ty == IntVal:
-            # Pack structure into int64
-            # Endian specific
-            iv = IntValStruct(self.context, builder, value=val)
-            lower = builder.zext(_get_is_null(builder, iv), lc.Type.int(64))
-            upper = builder.zext(iv.val, lc.Type.int(64))
-            asint64 = builder.shl(upper, lc.Constant.int(lc.Type.int(64), 32))
-            asint64 = builder.or_(asint64, lower)
-            return asint64
-        elif ty == BigIntVal:
-            # Pack structure into { int8, int64 }
-            # Endian specific
-            iv = BigIntValStruct(self.context, builder, value=val)
-            is_null = builder.zext(_get_is_null(builder, iv), lc.Type.int(8))
-            asstructi8i64 = builder.insert_value(lc.Constant.undef(lc.Type.struct([lc.Type.int(8), lc.Type.int(64)])),
-                                                 is_null,
-                                                 0)
-            asstructi8i64 = builder.insert_value(asstructi8i64, iv.val, 1)
-            return asstructi8i64
-        elif ty == FloatVal:
-            # Pack structure into int64
-            # Endian specific
-            iv = FloatValStruct(self.context, builder, value=val)
-            lower = builder.zext(_get_is_null(builder, iv), lc.Type.int(64))
-            asint32 = builder.bitcast(iv.val, lc.Type.int(32))
-            upper = builder.zext(asint32, lc.Type.int(64))
-            asint64 = builder.shl(upper, lc.Constant.int(lc.Type.int(64), 32))
-            asint64 = builder.or_(asint64, lower)
-            return asint64
-        elif ty == DoubleVal:
-            # Pack structure into { int8, double }
-            # Endian specific
-            iv = DoubleValStruct(self.context, builder, value=val)
-            is_null = builder.zext(_get_is_null(builder, iv), lc.Type.int(8))
-            asstructi8double = builder.insert_value(lc.Constant.undef(lc.Type.struct([lc.Type.int(8), lc.Type.double()])),
-                                                    is_null,
-                                                    0)
-            asstructi8double = builder.insert_value(asstructi8double, iv.val, 1)
-            return asstructi8double
-        elif ty == StringVal:
-            # Pack structure into { int64, int8* }
-            # Endian specific
-            iv = StringValStruct(self.context, builder, value=val)
-            is_null = builder.zext(_get_is_null(builder, iv), lc.Type.int(64))
-            len_ = builder.zext(iv.len, lc.Type.int(64))
-            asint64 = builder.shl(len_, lc.Constant.int(lc.Type.int(64), 32))
-            asint64 = builder.or_(asint64, is_null)
-            asstructi64i8p = builder.insert_value(lc.Constant.undef(lc.Type.struct([lc.Type.int(64), lc.Type.pointer(lc.Type.int(8))])),
-                                                  asint64,
-                                                  0)
-            asstructi64i8p = builder.insert_value(asstructi64i8p, iv.ptr, 1)
-            return asstructi64i8p
-        else:
-            return val
 
     def get_abi_return_type(self, ty):
         # FIXME only work on x86-64 + gcc
@@ -541,3 +491,151 @@ class ABIHandling(object):
 
     def get_abi_argument_type(self, ty):
         return self.context.get_argument_type(ty)
+
+
+def _lower_return_type(context, builder, ty, val):
+    """
+    Convert value to fit ABI requirement
+    """
+    if ty == BooleanVal:
+        # Pack structure into int16
+        # Endian specific
+        iv = BooleanValStruct(context, builder, value=val)
+        lower = builder.zext(_get_is_null(builder, iv), lc.Type.int(16))
+        upper = builder.zext(iv.val, lc.Type.int(16))
+        asint16 = builder.shl(upper, lc.Constant.int(lc.Type.int(16), 8))
+        asint16 = builder.or_(asint16, lower)
+        return asint16
+    elif ty == TinyIntVal:
+        # Pack structure into int16
+        # Endian specific
+        iv = TinyIntValStruct(context, builder, value=val)
+        lower = builder.zext(_get_is_null(builder, iv), lc.Type.int(16))
+        upper = builder.zext(iv.val, lc.Type.int(16))
+        asint16 = builder.shl(upper, lc.Constant.int(lc.Type.int(16), 8))
+        asint16 = builder.or_(asint16, lower)
+        return asint16
+    elif ty == SmallIntVal:
+        # Pack structure into int32
+        # Endian specific
+        iv = SmallIntValStruct(context, builder, value=val)
+        lower = builder.zext(_get_is_null(builder, iv), lc.Type.int(32))
+        upper = builder.zext(iv.val, lc.Type.int(32))
+        asint32 = builder.shl(upper, lc.Constant.int(lc.Type.int(32), 16))
+        asint32 = builder.or_(asint32, lower)
+        return asint32
+    elif ty == IntVal:
+        # Pack structure into int64
+        # Endian specific
+        iv = IntValStruct(context, builder, value=val)
+        lower = builder.zext(_get_is_null(builder, iv), lc.Type.int(64))
+        upper = builder.zext(iv.val, lc.Type.int(64))
+        asint64 = builder.shl(upper, lc.Constant.int(lc.Type.int(64), 32))
+        asint64 = builder.or_(asint64, lower)
+        return asint64
+    elif ty == BigIntVal:
+        # Pack structure into { int8, int64 }
+        # Endian specific
+        iv = BigIntValStruct(context, builder, value=val)
+        is_null = builder.zext(_get_is_null(builder, iv), lc.Type.int(8))
+        asstructi8i64 = builder.insert_value(lc.Constant.undef(lc.Type.struct([lc.Type.int(8), lc.Type.int(64)])),
+                                             is_null,
+                                             0)
+        asstructi8i64 = builder.insert_value(asstructi8i64, iv.val, 1)
+        return asstructi8i64
+    elif ty == FloatVal:
+        # Pack structure into int64
+        # Endian specific
+        iv = FloatValStruct(context, builder, value=val)
+        lower = builder.zext(_get_is_null(builder, iv), lc.Type.int(64))
+        asint32 = builder.bitcast(iv.val, lc.Type.int(32))
+        upper = builder.zext(asint32, lc.Type.int(64))
+        asint64 = builder.shl(upper, lc.Constant.int(lc.Type.int(64), 32))
+        asint64 = builder.or_(asint64, lower)
+        return asint64
+    elif ty == DoubleVal:
+        # Pack structure into { int8, double }
+        # Endian specific
+        iv = DoubleValStruct(context, builder, value=val)
+        is_null = builder.zext(_get_is_null(builder, iv), lc.Type.int(8))
+        asstructi8double = builder.insert_value(lc.Constant.undef(lc.Type.struct([lc.Type.int(8), lc.Type.double()])),
+                                                is_null,
+                                                0)
+        asstructi8double = builder.insert_value(asstructi8double, iv.val, 1)
+        return asstructi8double
+    elif ty == StringVal:
+        # Pack structure into { int64, int8* }
+        # Endian specific
+        iv = StringValStruct(context, builder, value=val)
+        is_null = builder.zext(_get_is_null(builder, iv), lc.Type.int(64))
+        len_ = builder.zext(iv.len, lc.Type.int(64))
+        asint64 = builder.shl(len_, lc.Constant.int(lc.Type.int(64), 32))
+        asint64 = builder.or_(asint64, is_null)
+        asstructi64i8p = builder.insert_value(lc.Constant.undef(lc.Type.struct([lc.Type.int(64), lc.Type.pointer(lc.Type.int(8))])),
+                                              asint64,
+                                              0)
+        asstructi64i8p = builder.insert_value(asstructi64i8p, iv.ptr, 1)
+        return asstructi64i8p
+    else:
+        return val
+
+def _raise_return_type(context, builder, ty, val):
+    if ty == BooleanVal:
+        bv = BooleanValStruct(context, builder)
+        is_null = builder.trunc(val, lc.Type.int(8))
+        _set_is_null(builder, bv, is_null)
+        shifted = builder.lshr(val, lc.Constant.int(lc.Type.int(16), 8))
+        bv.val = builder.trunc(shifted, lc.Type.int(8))
+        return bv._getvalue()
+    elif ty == TinyIntVal:
+        tiv = TinyIntValStruct(context, builder)
+        is_null = builder.trunc(val, lc.Type.int(8))
+        _set_is_null(builder, tiv, is_null)
+        shifted = builder.lshr(val, lc.Constant.int(lc.Type.int(16), 8))
+        tiv.val = builder.trunc(shifted, lc.Type.int(8))
+        return tiv._getvalue()
+    elif ty == SmallIntVal:
+        siv = SmallIntValStruct(context, builder)
+        is_null = builder.trunc(val, lc.Type.int(8))
+        _set_is_null(builder, siv, is_null)
+        shifted = builder.lshr(val, lc.Constant.int(lc.Type.int(32), 16))
+        siv.val = builder.trunc(shifted, lc.Type.int(16))
+        return siv._getvalue()
+    elif ty == IntVal:
+        iv = IntValStruct(context, builder)
+        is_null = builder.trunc(val, lc.Type.int(8))
+        _set_is_null(builder, iv, is_null)
+        shifted = builder.lshr(val, lc.Constant.int(lc.Type.int(64), 32))
+        iv.val = builder.trunc(shifted, lc.Type.int(32))
+        return iv._getvalue()
+    elif ty == BigIntVal:
+        biv = BigIntValStruct(context, builder)
+        is_null = builder.extract_value(val, 0)
+        _set_is_null(builder, biv, is_null)
+        biv.val = builder.extract_value(val, 1)
+        return biv._getvalue()
+    elif ty == FloatVal:
+        fv = FloatValStruct(context, builder)
+        is_null = builder.trunc(val, lc.Type.int(8))
+        _set_is_null(builder, fv, is_null)
+        shifted = builder.lshr(val, lc.Constant.int(lc.Type.int(64), 32))
+        truncated = builder.trunc(shifted, lc.Type.int(32))
+        fv.val = builder.bitcast(truncated, lc.Type.float())
+        return fv._getvalue()
+    elif ty == DoubleVal:
+        dv = DoubleValStruct(context, builder)
+        is_null = builder.extract_value(val, 0)
+        _set_is_null(builder, dv, is_null)
+        dv.val = builder.extract_value(val, 1)
+        return dv._getvalue()
+    elif ty == StringVal:
+        sv = StringValStruct(context, builder)
+        packed = builder.extract_value(val, 0)
+        is_null = builder.trunc(packed, lc.Type.int(8))
+        _set_is_null(builder, sv, is_null)
+        shifted = builder.lshr(packed, lc.Constant.int(lc.Type.int(64), 32))
+        sv.len = builder.trunc(shifted, lc.Type.int(32))
+        sv.ptr = builder.extract_value(val, 1)
+        return sv._getvalue()
+    else:
+        return val
