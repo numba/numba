@@ -274,6 +274,14 @@ class TrashService(servicelib.Service):
             cb = self.trash.pop()
             cb()
 
+    @contextlib.contextmanager
+    def defer_cleanup(self):
+        orig = self.enabled
+        self.enabled = False
+        yield
+        self.enabled = orig
+        self.service()
+
 
 def _build_reverse_device_attrs():
     prefix = "CU_DEVICE_ATTRIBUTE_"
