@@ -20,17 +20,13 @@ StringVal GetItemStringValImpl(const StringVal& s, int i) {
 }
 
 StringVal AddStringValImpl(FunctionContext* context, const StringVal& s1, const StringVal& s2) {
-    // int len1 = 0;
-    // int len2 = 0;
-    // if (!s1.is_null) len1 = s1.len;
-    // if (!s2.is_null) len2 = s2.len;
-    int len1 = s1.len;
-    int len2 = s2.len;
+    int len1 = 0;
+    int len2 = 0;
+    if (!s1.is_null) len1 = s1.len;
+    if (!s2.is_null) len2 = s2.len;
     StringVal retval(context, len1 + len2);
-    // if (len1 > 0) memcpy(retval.ptr, s1.ptr, len1);
-    // if (len2 > 0) memcpy(retval.ptr + len1, s2.ptr, len2);
-    memcpy(retval.ptr, s1.ptr, len1);
-    memcpy(retval.ptr + len1, s2.ptr, len2);
+    if (len1 > 0) memcpy(retval.ptr, s1.ptr, len1);
+    if (len2 > 0) memcpy(retval.ptr + len1, s2.ptr, len2);
     return retval;
 }
 

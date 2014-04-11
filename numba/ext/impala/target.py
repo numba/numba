@@ -230,8 +230,6 @@ def getitem_stringval(context, builder, sig, args):
 @register_function
 @implement("+", StringVal, StringVal)
 def add_stringval(context, builder, sig, args):
-    import ipdb
-    ipdb.set_trace()
     module = cgutils.get_module(builder)
     precomp_func = context.precompiled_fns["AddStringValImpl"]
     func = module.get_or_insert_function(precomp_func.type.pointee, precomp_func.name)
