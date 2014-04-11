@@ -1,4 +1,5 @@
 from __future__ import print_function, division, absolute_import
+import llvm.core as lc
 from numba.compiler import compile_extra, Flags
 from numba import sigutils
 from numba.typing.templates import signature
@@ -30,8 +31,10 @@ class UDF(object):
         llvm_func = impala_targets.finalize(self._cres.llvm_func, return_type,
                     args)
         self.llvm_func = llvm_func
-        self.llvm_module = llvm_func.module
-        self.llvm_module.link_in(impala_targets.precompiled_module)
+        numba_module = llvm_func.module
+        self.llvm_module = lc.Module.new(self.name)
+        self.llvm_module.link_in(numba_module)
+        self.llvm_module.link_in(impala_targets.precompiled_module, preserve=True)
 
 impala_typing = impala_typing_context()
 impala_targets = ImpalaTargetContext(impala_typing)
