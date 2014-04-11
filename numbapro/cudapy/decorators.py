@@ -222,6 +222,8 @@ class AutoJitCUDAKernel(CUDAKernelBase):
 
 
 FROM_DTYPE = {
+    numpy.dtype('bool'): types.boolean,
+
     numpy.dtype('int8'): types.int8,
     numpy.dtype('int16'): types.int16,
     numpy.dtype('int32'): types.int32,

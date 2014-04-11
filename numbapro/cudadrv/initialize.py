@@ -1,146 +1,44 @@
-from __future__ import absolute_import
-from numba.targets.descriptors import TargetDescriptor
-from numba.targets.options import TargetOptions
+from __future__ import absolute_import, print_function
 from numba.targets.registry import target_registry
 from numba.npyufunc import Vectorize, GUVectorize
 
-#
-# Public
-#
-last_error = None
 
 _is_initialize = False
 
 
 def initialize_gpu_target():
-    _init_numba_jit_registry()
-
-
-def initialize():
-    "Safe to run multiple times"
     global _is_initialize
-    if _is_initialize:
-        return _is_initialize
-    global last_error
-    try:
-        from numba.cuda.cudadrv.error import CudaSupportError, NvvmSupportError
-
-        _init_driver()
-        _init_nvvm()
-        _is_initialize = True
-        return True
-    except CudaSupportError, e:
-        last_error = e
-        _init_poison_jit_registry()
-        return False
-    except NvvmSupportError, e:
-        last_error = e
-        _init_poison_jit_registry()
-        return False
+    _init_numba_jit_registry()
+    _is_initialize = True
 
 
 def ensure_cuda_support():
-    if not initialize():
-        from numba.cuda.cudadrv.error import CudaSupportError
+    if not _is_initialize:
+        from numba.cuda import cuda_error
 
-        raise CudaSupportError("CUDA not supported")
-
-#
-# Privates
-#
+        raise cuda_error
 
 
-class CUDATargetOptions(TargetOptions):
-    OPTIONS = {}
+def init_jit():
+    from numbapro.cudapy.dispatcher import CUDADispatcher
+
+    return CUDADispatcher
 
 
-class CUDATarget(TargetDescriptor):
-    options = CUDATargetOptions
+def init_vectorize():
+    from numbapro.cudavec.vectorizers import CudaVectorize
+
+    return CudaVectorize
 
 
-class CUDADispatcher(object):
-    targetdescr = CUDATarget
+def init_guvectorize():
+    from numbapro.cudavec.vectorizers import CudaGUFuncVectorize
 
-    def __init__(self, py_func, locals={}, targetoptions={}):
-        assert not locals
-        ensure_cuda_support()
-        self.py_func = py_func
-        self.targetoptions = targetoptions
-        self.doc = py_func.__doc__
-        self._compiled = None
-
-    def compile(self, sig, locals={}, **targetoptions):
-        assert self._compiled is None
-        assert not locals
-        options = self.targetoptions.copy()
-        options.update(targetoptions)
-        from numbapro.cudapy import jit
-
-        kernel = jit(sig, **options)(self.py_func)
-        self._compiled = kernel
-        if hasattr(kernel, "_npm_context_"):
-            self._npm_context_ = kernel._npm_context_
-
-    @property
-    def compiled(self):
-        if self._compiled is None:
-            from numbapro.cudapy import autojit
-
-            self._compiled = autojit(self.py_func, **self.targetoptions)
-        return self._compiled
-
-    def __call__(self, *args, **kws):
-        return self.compiled(*args, **kws)
-
-    def disable_compile(self, val=True):
-        """Disable the compilation of new signatures at call time.
-        """
-        # Do nothing
-        pass
-
-    def configure(self, *args, **kws):
-        return self.compiled.configure(*args, **kws)
-
-    def __getitem__(self, *args):
-        return self.compiled.__getitem__(*args)
-
-    def __getattr__(self, key):
-        return getattr(self.compiled, key)
-
-
-def CUDAPoison(*args, **kws):
-    if last_error:
-        raise last_error
-    raise RuntimeError("CUDA devices are not available")
-
-
-def _init_driver():
-    from numba.cuda.cudadrv.devices import init_gpus
-
-    init_gpus() # raises CudaSupportError
-
-
-def _init_nvvm():
-    from numba.cuda.cudadrv.nvvm import NVVM
-
-    NVVM() # raises NvvmSupportError
+    return CudaGUFuncVectorize
 
 
 def _init_numba_jit_registry():
-    try:
-        from numba.cuda.cudadrv.error import CudaSupportError
-        from numbapro.cudavec.vectorizers import CudaVectorize, CudaGUFuncVectorize
-    except CudaSupportError:
-        pass
-    else:
-        target_registry['gpu'] = CUDADispatcher
-        Vectorize.target_registry['gpu'] = CudaVectorize
-        GUVectorize.target_registry['gpu'] = CudaGUFuncVectorize
-
-
-def _init_poison_jit_registry():
-    pass
-    # del target_registry['gpu']
-    # del Vectorize.target_registry['gpu']
-    # del GUVectorize.target_registry['gpu']
+    target_registry.ondemand['gpu'] = init_jit
+    Vectorize.target_registry.ondemand['gpu'] = init_vectorize
+    GUVectorize.target_registry.ondemand['gpu'] = init_guvectorize
 

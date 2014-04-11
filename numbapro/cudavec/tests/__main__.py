@@ -1,3 +1,3 @@
 if __name__ == '__main__':
     from .support import run
-    run(buffer=True, verbosity=1)
+    run(buffer=True, verbosity=3)
