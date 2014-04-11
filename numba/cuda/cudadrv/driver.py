@@ -57,6 +57,21 @@ def find_driver():
         # Force fail
         _raise_driver_not_found()
 
+    # Determine DLL type
+    if sys.platform == 'win32':
+        dlloader = ctypes.WinDLL
+        dldir = ['\\windows\\system32']
+        dlname = 'nvcuda.dll'
+    elif sys.platform == 'darwin':
+        dlloader = ctypes.CDLL
+        dldir = ['/usr/local/cuda/lib']
+        dlname = 'libcuda.dylib'
+    else:
+        # Assume to be *nix like
+        dlloader = ctypes.CDLL
+        dldir = ['/usr/lib', '/usr/lib64']
+        dlname = 'libcuda.so'
+
     if envpath is not None:
         try:
             envpath = os.path.abspath(envpath)
@@ -69,21 +84,6 @@ def find_driver():
                              ".dll/.dylib or the driver" % envpath)
         candidates = [envpath]
     else:
-        # Determine DLL type
-        if sys.platform == 'win32':
-            dlloader = ctypes.WinDLL
-            dldir = ['\\windows\\system32']
-            dlname = 'nvcuda.dll'
-        elif sys.platform == 'darwin':
-            dlloader = ctypes.CDLL
-            dldir = ['/usr/local/cuda/lib']
-            dlname = 'libcuda.dylib'
-        else:
-            # Assume to be *nix like
-            dlloader = ctypes.CDLL
-            dldir = ['/usr/lib', '/usr/lib64']
-            dlname = 'libcuda.so'
-
         # First search for the name in the default library path.
         # If that is not found, try the specific path.
         candidates = [dlname] + [os.path.join(x, dlname) for x in dldir]
@@ -143,6 +143,10 @@ def _build_reverse_error_map():
 
 ERROR_MAP = _build_reverse_error_map()
 
+MISSING_FUNCTION_ERRMSG = """driver missing function: %s.
+Requires CUDA 5.5 or above.
+"""
+
 
 class Driver(object):
     """
@@ -157,6 +161,7 @@ class Driver(object):
         else:
             obj = object.__new__(cls)
             obj.lib = find_driver()
+            # Initialize driver
             obj.cuInit(0)
             cls._singleton = obj
         return obj
@@ -172,11 +177,8 @@ class Driver(object):
             raise AttributeError(fname)
         restype = proto[0]
         argtypes = proto[1:]
-        try:
-            # Try newer API
-            libfn = getattr(self.lib, fname + "_v2")
-        except AttributeError:
-            libfn = getattr(self.lib, fname)
+
+        libfn = self._find_api(fname)
         libfn.restype = restype
         libfn.argtypes = argtypes
 
@@ -187,6 +189,27 @@ class Driver(object):
 
         setattr(self, fname, safe_cuda_api_call)
         return safe_cuda_api_call
+
+    def _find_api(self, fname):
+        # Try version 2
+        try:
+            return getattr(self.lib, fname + "_v2")
+        except AttributeError:
+            pass
+
+        # Try regular
+        try:
+            return getattr(self.lib, fname)
+        except AttributeError:
+            pass
+
+        # Not found.
+        # Delay missing function error to use
+        def absent_function(*args, **kws):
+            raise CudaDriverError(MISSING_FUNCTION_ERRMSG % fname)
+
+        setattr(self, fname, absent_function)
+        return absent_function
 
     def _check_error(self, fname, retcode):
         if retcode != enums.CUDA_SUCCESS:

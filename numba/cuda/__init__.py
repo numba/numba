@@ -4,10 +4,14 @@ from __future__ import print_function, absolute_import, division
 from .stubs import (threadIdx, blockIdx, blockDim, gridDim, syncthreads,
                     shared, local, const, grid, atomic)
 from .cudadrv.error import CudaSupportError
+
+cuda_error = None
+
 try:
     from .decorators import jit, autojit, declare_device
-except CudaSupportError:
+except CudaSupportError as e:
     is_available = False
+    cuda_error = e
 else:
     is_available = True
     from .api import *
