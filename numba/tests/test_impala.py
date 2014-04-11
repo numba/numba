@@ -64,7 +64,7 @@ class TestImpala(unittest.TestCase):
         memcmp = cffi_support.ExternCFunction('memcmp', 'int memcmp ( const uint8_t * ptr1, const uint8_t * ptr2, size_t num )')
 
         @udf(BooleanVal(FunctionContext, StringVal, StringVal))
-        def test_string_eq(context, a, b):
+        def fn(context, a, b):
             if a.is_null != b.is_null:
                 return False
             if a is None:
@@ -92,6 +92,32 @@ class TestImpala(unittest.TestCase):
                 return "foo"
             else:
                 return "bar"
+    
+    def test_string_eq(self):
+        @udf(BooleanVal(FunctionContext, StringVal))
+        def fn(context, a):
+            if a == "foo":
+                return True
+            elif a == "bar":
+                return False
+            else:
+                return None
+    
+    def test_return_string_literal(self):
+        @udf(StringVal(FunctionContext, StringVal))
+        def fn(context, a):
+            return "foo"
+    
+    def test_return_empty_string(self):
+        @udf(StringVal(FunctionContext, StringVal))
+        def fn(context, a):
+            return ""
+
+    def test_string_len(self):
+        @udf(IntVal(FunctionContext, StringVal))
+        def fn(context, a):
+            return len(a)
+
 
 
 
