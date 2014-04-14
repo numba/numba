@@ -1,4 +1,6 @@
+import sys
 import numba
 if not numba.test():
-    raise RuntimeError("Test failed")
+    print("Test failed")
+    sys.exit(1)
 print('numba.__version__: %s' % numba.__version__)
