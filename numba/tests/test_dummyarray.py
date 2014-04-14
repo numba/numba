@@ -1,3 +1,4 @@
+from __future__ import print_function
 import numba.unittest_support as unittest
 import itertools
 import numpy as np
@@ -9,9 +10,13 @@ class TestSlicing(unittest.TestCase):
         attrs = 'C_CONTIGUOUS', 'F_CONTIGUOUS'
         for attr in attrs:
             if arr.flags[attr] != nparr.flags[attr]:
-                print(arr.shape, nparr.shape)
-                self.fail("contiguous flag mismatch:\ngot=%s\nexpect=%s" %
-                          (arr.flags, nparr.flags))
+                if arr.size == 0 and nparr.size == 0:
+                    # numpy <=1.7 bug that some empty array are contiguous and
+                    # some are not
+                    pass
+                else:
+                    self.fail("contiguous flag mismatch:\ngot=%s\nexpect=%s" %
+                              (arr.flags, nparr.flags))
 
     #### 1D
 
@@ -81,16 +86,16 @@ class TestSlicing(unittest.TestCase):
         for x in xx:
             expect = nparr[:x]
             got = arr[:x]
-            self.assertSameContig(got, expect)
             self.assertEqual(got.shape, expect.shape)
             self.assertEqual(got.strides, expect.strides)
+            self.assertSameContig(got, expect)
 
         for x, y in itertools.product(xx, xx):
             expect = nparr[:x, :y]
             got = arr[:x, :y]
-            self.assertSameContig(got, expect)
             self.assertEqual(got.shape, expect.shape)
             self.assertEqual(got.strides, expect.strides)
+            self.assertSameContig(got, expect)
 
     def test_slice2_2d(self):
         nparr = np.empty((4, 5))
