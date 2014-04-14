@@ -9,15 +9,20 @@ from . import templates
 from . import builtins, mathdecl, npydecl
 
 
-class Context(object):
+class BaseContext(object):
     """A typing context for storing function typing constrain template.
     """
+
     def __init__(self):
         self.functions = defaultdict(list)
         self.attributes = {}
         self.globals = utils.UniqueDict()
         self.tm = rules.default_type_manager
         self._load_builtins()
+        self.init()
+
+    def init(self):
+        pass
 
     def get_number_type(self, num):
         if isinstance(num, int):
@@ -87,11 +92,14 @@ class Context(object):
         return self.globals[gv]
 
     def _load_builtins(self):
-        for ftcls in templates.BUILTINS:
+        self.install(templates.builtin_registry)
+
+    def install(self, registry):
+        for ftcls in registry.functions:
             self.insert_function(ftcls(self))
-        for ftcls in templates.BUILTIN_ATTRS:
+        for ftcls in registry.attributes:
             self.insert_attributes(ftcls(self))
-        for gv, gty in templates.BUILTIN_GLOBALS:
+        for gv, gty in registry.globals:
             self.insert_global(gv, gty)
 
     def insert_global(self, gv, gty):
@@ -150,7 +158,7 @@ class Context(object):
             return 'exact'
         elif (isinstance(fromty, types.UniTuple) and
                   isinstance(toty, types.UniTuple) and
-                  len(fromty) == len(toty)):
+                      len(fromty) == len(toty)):
             return self.type_compatibility(fromty.dtype, toty.dtype)
         return self.tm.check_compatible(fromty, toty)
 
@@ -182,6 +190,12 @@ class Context(object):
             return getattr(types, str(sel))
         else:
             raise Exception("type_compatibility returned %s" % d)
+
+
+class Context(BaseContext):
+    def init(self):
+        self.install(mathdecl.registry)
+        self.install(npydecl.registry)
 
 
 def new_method(fn, sig):

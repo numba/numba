@@ -40,6 +40,9 @@ class TargetOptions(object):
         if kws.pop("forceobj", False) == True:
             flags.set("force_pyobject")
 
+        if kws.pop('looplift', True) == True:
+            flags.set("enable_looplift")
+
         if kws:
             # Unread options?
             raise NameError("Unrecognized options: %s" % kws.keys())

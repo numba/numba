@@ -1,22 +1,23 @@
 from __future__ import print_function, division, absolute_import
+
 try:
     import __builtin__ as builtins
 except ImportError:
     import builtins
 import sys
 import dis
-import inspect
 from numba import ir, controlflow, dataflow, utils
 
 
 class Interpreter(object):
     """A bytecode interpreter that builds up the IR.
     """
+
     def __init__(self, bytecode):
         self.bytecode = bytecode
         self.scopes = []
         self.loc = ir.Loc(filename=bytecode.filename, line=1)
-        self.argspec = inspect.getargspec(self.bytecode.func)
+        self.argspec = bytecode.argspec
         # Control flow analysis
         self.cfa = controlflow.ControlFlowAnalysis(bytecode)
         self.cfa.run()
@@ -50,14 +51,15 @@ class Interpreter(object):
             scope.define(name=arg, loc=self.loc)
 
     def interpret(self):
+        firstblk = min(self.cfa.blocks.keys())
         self.loc = ir.Loc(filename=self.bytecode.filename,
-                          line=self.bytecode[0].lineno)
+                          line=self.bytecode[firstblk].lineno)
         self.scopes.append(ir.Scope(parent=self.current_scope, loc=self.loc))
         self._fill_args_into_scope(self.current_scope)
         # Interpret loop
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
-        # Clean up
+            # Clean up
         self._remove_invalid_syntax_blocks()
 
     def _remove_invalid_syntax_blocks(self):
@@ -73,7 +75,8 @@ class Interpreter(object):
             self._start_new_block(firstinst)
             for offset, kws in self.dfainfo.insts:
                 inst = self.bytecode[offset]
-                self.loc = ir.Loc(filename=self.bytecode.filename, line=inst.lineno)
+                self.loc = ir.Loc(filename=self.bytecode.filename,
+                                  line=inst.lineno)
                 yield inst, kws
 
     def _start_new_block(self, inst):
@@ -84,7 +87,7 @@ class Interpreter(object):
         if oldblock is not None and not oldblock.is_terminated:
             jmp = ir.Jump(inst.offset, loc=self.loc)
             oldblock.append(jmp)
-        # Get DFA block info
+            # Get DFA block info
         self.dfainfo = self.dfa.infos[self.current_block_offset]
         # Insert PHI
         self._insert_phi()
@@ -136,15 +139,15 @@ class Interpreter(object):
 
     @property
     def code_consts(self):
-        return self.bytecode.code.co_consts
+        return self.bytecode.co_consts
 
     @property
     def code_locals(self):
-        return self.bytecode.code.co_varnames
+        return self.bytecode.co_varnames
 
     @property
     def code_names(self):
-        return self.bytecode.code.co_names
+        return self.bytecode.co_names
 
     def _dispatch(self, inst, kws):
         assert self.current_block is not None
@@ -237,17 +240,140 @@ class Interpreter(object):
         else:
             step = self.get(step)
             sliceinst = ir.Expr.call(self.get(slicevar), (start, stop, step),
-                                     (), loc=self.loc)
+                (), loc=self.loc)
         self.store(value=sliceinst, name=res)
 
-    def op_SLICE_3(self, inst, base, start, stop, res):
+    def op_SLICE_0(self, inst, base, res, slicevar, indexvar):
+        base = self.get(base)
+
+        slicegv = ir.Global("slice", slice, loc=self.loc)
+        self.store(value=slicegv, name=slicevar)
+
+        index = ir.Expr.call(self.get(slicevar), (), (), loc=self.loc)
+        self.store(value=index, name=indexvar)
+
+        expr = ir.Expr.getitem(base, self.get(indexvar), loc=self.loc)
+        self.store(value=expr, name=res)
+
+    def op_SLICE_1(self, inst, base, start, nonevar, res, slicevar, indexvar):
+        base = self.get(base)
+        start = self.get(start)
+
+        nonegv = ir.Const(None, loc=self.loc)
+        self.store(value=nonegv, name=nonevar)
+        none = self.get(nonevar)
+
+        slicegv = ir.Global("slice", slice, loc=self.loc)
+        self.store(value=slicegv, name=slicevar)
+
+        index = ir.Expr.call(self.get(slicevar), (start, none), (),
+                             loc=self.loc)
+        self.store(value=index, name=indexvar)
+
+        expr = ir.Expr.getitem(base, self.get(indexvar), loc=self.loc)
+        self.store(value=expr, name=res)
+
+    def op_SLICE_2(self, inst, base, nonevar, stop, res, slicevar, indexvar):
+        base = self.get(base)
+        stop = self.get(stop)
+
+        nonegv = ir.Const(None, loc=self.loc)
+        self.store(value=nonegv, name=nonevar)
+        none = self.get(nonevar)
+
+        slicegv = ir.Global("slice", slice, loc=self.loc)
+        self.store(value=slicegv, name=slicevar)
+
+        index = ir.Expr.call(self.get(slicevar), (none, stop,), (),
+                             loc=self.loc)
+        self.store(value=index, name=indexvar)
+
+        expr = ir.Expr.getitem(base, self.get(indexvar), loc=self.loc)
+        self.store(value=expr, name=res)
+
+    def op_SLICE_3(self, inst, base, start, stop, res, slicevar, indexvar):
         base = self.get(base)
         start = self.get(start)
         stop = self.get(stop)
 
-        expr = ir.Expr.getslice(target=base, start=start, stop=stop,
-                                loc=self.loc)
+        slicegv = ir.Global("slice", slice, loc=self.loc)
+        self.store(value=slicegv, name=slicevar)
+
+        index = ir.Expr.call(self.get(slicevar), (start, stop), (),
+                             loc=self.loc)
+        self.store(value=index, name=indexvar)
+
+        expr = ir.Expr.getitem(base, self.get(indexvar), loc=self.loc)
         self.store(value=expr, name=res)
+
+    def op_STORE_SLICE_0(self, inst, base, value, slicevar, indexvar):
+        base = self.get(base)
+
+        slicegv = ir.Global("slice", slice, loc=self.loc)
+        self.store(value=slicegv, name=slicevar)
+
+        index = ir.Expr.call(self.get(slicevar), (), (), loc=self.loc)
+        self.store(value=index, name=indexvar)
+
+        stmt = ir.SetItem(base, self.get(indexvar), self.get(value),
+                          loc=self.loc)
+        self.current_block.append(stmt)
+
+    def op_STORE_SLICE_1(self, inst, base, start, nonevar, value, slicevar,
+                         indexvar):
+        base = self.get(base)
+        start = self.get(start)
+
+        nonegv = ir.Const(None, loc=self.loc)
+        self.store(value=nonegv, name=nonevar)
+        none = self.get(nonevar)
+
+        slicegv = ir.Global("slice", slice, loc=self.loc)
+        self.store(value=slicegv, name=slicevar)
+
+        index = ir.Expr.call(self.get(slicevar), (start, none), (),
+                             loc=self.loc)
+        self.store(value=index, name=indexvar)
+
+        stmt = ir.SetItem(base, self.get(indexvar), self.get(value),
+                          loc=self.loc)
+        self.current_block.append(stmt)
+
+    def op_STORE_SLICE_2(self, inst, base, nonevar, stop, value, slicevar,
+                         indexvar):
+        base = self.get(base)
+        stop = self.get(stop)
+
+        nonegv = ir.Const(None, loc=self.loc)
+        self.store(value=nonegv, name=nonevar)
+        none = self.get(nonevar)
+
+        slicegv = ir.Global("slice", slice, loc=self.loc)
+        self.store(value=slicegv, name=slicevar)
+
+        index = ir.Expr.call(self.get(slicevar), (none, stop,), (),
+                             loc=self.loc)
+        self.store(value=index, name=indexvar)
+
+        stmt = ir.SetItem(base, self.get(indexvar), self.get(value),
+                          loc=self.loc)
+        self.current_block.append(stmt)
+
+    def op_STORE_SLICE_3(self, inst, base, start, stop, value, slicevar,
+                         indexvar):
+        base = self.get(base)
+        start = self.get(start)
+        stop = self.get(stop)
+
+        slicegv = ir.Global("slice", slice, loc=self.loc)
+        self.store(value=slicegv, name=slicevar)
+
+        index = ir.Expr.call(self.get(slicevar), (start, stop), (),
+                             loc=self.loc)
+        self.store(value=index, name=indexvar)
+        stmt = ir.SetItem(base, self.get(indexvar), self.get(value),
+                          loc=self.loc)
+        self.current_block.append(stmt)
 
     def op_STORE_FAST(self, inst, value):
         dstname = self.code_locals[inst.arg]
@@ -328,7 +454,7 @@ class Interpreter(object):
 
         # Conditional jump
         br = ir.Branch(cond=self.get(pred), truebr=inst.next,
-                       falsebr=self.syntax_blocks[-1].exit,
+                       falsebr=inst.get_jump_target(),
                        loc=self.loc)
         self.current_block.append(br)
 
@@ -495,7 +621,7 @@ class Interpreter(object):
 
     def _op_JUMP_IF(self, inst, pred, iftrue):
         brs = {
-            True:  inst.get_jump_target(),
+            True: inst.get_jump_target(),
             False: inst.next,
         }
         truebr = brs[iftrue]
@@ -529,20 +655,20 @@ class Interpreter(object):
         # There is a active syntax block
         if not self.syntax_blocks:
             return
-        # TOS is a Loop instance
+            # TOS is a Loop instance
         loop = self.syntax_blocks[-1]
         if not isinstance(loop, ir.Loop):
             return
-        # Its condition is not defined
+            # Its condition is not defined
         if loop.condition is not None:
             return
-        # One of the branches goes to a POP_BLOCK
+            # One of the branches goes to a POP_BLOCK
         for br in branches:
             if self.block_constains_opname(br, 'POP_BLOCK'):
                 break
         else:
             return
-        # Which is the exit of the loop
+            # Which is the exit of the loop
         if br not in self.cfa.blocks[loop.exit].incoming:
             return
 

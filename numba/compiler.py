@@ -4,12 +4,13 @@ from contextlib import contextmanager
 from collections import namedtuple, defaultdict
 from numba import (bytecode, interpreter, typing, typeinfer, lowering,
                    irpasses, utils, config, type_annotations, types, ir,
-                   assume)
+                   assume, looplifting, macro)
 from numba.targets import cpu
 
 
 class Flags(utils.ConfigOptions):
-    OPTIONS = frozenset(['enable_pyobject',
+    OPTIONS = frozenset(['enable_looplift',
+                         'enable_pyobject',
                          'force_pyobject',
                          'no_compile'])
 
@@ -26,7 +27,9 @@ CR_FIELDS = ["typing_context",
              "llvm_module",
              "llvm_func",
              "signature",
-             "objectmode",]
+             "objectmode",
+             "lifted",
+             "fndesc"]
 
 
 CompileResult = namedtuple("CompileResult", CR_FIELDS)
@@ -82,8 +85,16 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
     - return_type
         Use ``None`` to indicate
     """
-    # Translate to IR
-    interp = translate_stage(func)
+    bc = bytecode.ByteCode(func=func)
+    if config.DEBUG:
+        print(bc.dump())
+    return compile_bytecode(typingctx, targetctx, bc, args,
+                            return_type, flags, locals)
+
+
+def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
+                     locals, lifted=()):
+    interp = translate_stage(bc)
     nargs = len(interp.argspec.args)
     if len(args) > nargs:
         raise TypeError("Too many argument types")
@@ -93,7 +104,7 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
     status.fail_reason = None
     status.use_python_mode = flags.force_pyobject
 
-    localctx = targetctx.localized()
+    targetctx = targetctx.localized()
 
     if not status.use_python_mode:
         with _fallback_context(status):
@@ -107,11 +118,31 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
 
         if not status.use_python_mode:
             with _fallback_context(status):
-                legalize_return_type(return_type, interp, localctx)
+                legalize_return_type(return_type, interp, targetctx)
+
+    if status.use_python_mode and flags.enable_looplift:
+        assert not lifted
+        # Try loop lifting
+        entry, loops = looplifting.lift_loop(bc)
+        if not loops:
+            # No extracted loops
+            pass
+        else:
+            loopflags = flags.copy()
+            # Do not recursively loop lift
+            loopflags.unset('enable_looplift')
+            loopdisp = looplifting.bind(loops, typingctx, targetctx, locals,
+                                        loopflags)
+            lifted = tuple(loopdisp)
+            cres = compile_bytecode(typingctx, targetctx, entry, args,
+                                    return_type, loopflags, locals,
+                                    lifted=lifted)
+            return cres._replace(lifted=lifted)
 
     if status.use_python_mode:
-        func, fnptr, lmod, lfunc = py_lowering_stage(localctx, interp,
-                                                     flags.no_compile)
+        # Object mode compilation
+        func, fnptr, lmod, lfunc, fndesc = py_lowering_stage(targetctx, interp,
+                                                             flags.no_compile)
         typemap = defaultdict(lambda: types.pyobject)
         calltypes = defaultdict(lambda: types.pyobject)
 
@@ -121,15 +152,22 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
             # append missing
             args = tuple(args) + (types.pyobject,) * (nargs - len(args))
     else:
-        func, fnptr, lmod, lfunc = native_lowering_stage(localctx, interp,
-                                                         typemap,
-                                                         return_type,
-                                                         calltypes,
-                                                         flags.no_compile)
+        # Native mode compilation
+        func, fnptr, lmod, lfunc, fndesc = native_lowering_stage(targetctx,
+                                                                 interp,
+                                                                 typemap,
+                                                                 return_type,
+                                                                 calltypes,
+                                                                 flags.no_compile)
 
     type_annotation = type_annotations.TypeAnnotation(interp=interp,
                                                       typemap=typemap,
-                                                      calltypes=calltypes)
+                                                      calltypes=calltypes,
+                                                      lifted=lifted)
+    if config.ANNOTATE:
+        print("ANNOTATION".center(80, '-'))
+        print(type_annotation)
+        print('=' * 80)
 
     signature = typing.signature(return_type, *args)
 
@@ -143,7 +181,9 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
                         llvm_func=lfunc,
                         llvm_module=lmod,
                         signature=signature,
-                        objectmode=status.use_python_mode)
+                        objectmode=status.use_python_mode,
+                        lifted=lifted,
+                        fndesc=fndesc,)
     return cr
 
 
@@ -191,15 +231,11 @@ def legalize_return_type(return_type, interp, targetctx):
                               "function as argument")
 
     # Legalized; tag return handling
-    targetctx.metdata['return.array'] = 'arg'
+    targetctx.metadata['return.array'] = 'arg'
 
 
-def translate_stage(func):
-    bc = bytecode.ByteCode(func=func)
-    if config.DEBUG:
-        print(bc.dump())
-
-    interp = interpreter.Interpreter(bytecode=bc)
+def translate_stage(bytecode):
+    interp = interpreter.Interpreter(bytecode=bytecode)
     interp.interpret()
 
     if config.DEBUG:
@@ -208,6 +244,13 @@ def translate_stage(func):
             print(syn)
 
     interp.verify()
+    macro.expand_macros(interp.blocks)
+
+    if config.DEBUG:
+        interp.dump()
+        for syn in interp.syntax_info:
+            print(syn)
+
     return interp
 
 
@@ -217,13 +260,14 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
 
     infer = typeinfer.TypeInferer(typingctx, interp.blocks)
 
-    # Seed argument types
-    for arg, ty in zip(interp.argspec.args, args):
-        infer.seed_type(arg, ty)
-
     # Seed return type
+    # needs to be seeded before args, to ensure locking return type first
     if return_type is not None:
         infer.seed_return(return_type)
+
+    # Seed argument types
+    for arg, ty in zip(interp.argspec.args, args):
+    	infer.seed_type(arg, ty)
 
     # Seed local types
     for k, v in locals.items():
@@ -244,20 +288,21 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
 def native_lowering_stage(targetctx, interp, typemap, restype, calltypes,
                           nocompile):
     # Lowering
-    fndesc = lowering.describe_function(interp, typemap, restype, calltypes)
+    fndesc = lowering.describe_function(interp, typemap, restype, calltypes,
+                                        mangler=targetctx.mangler)
 
     lower = lowering.Lower(targetctx, fndesc)
     lower.lower()
 
     if nocompile:
-        return None, 0, lower.module, lower.function
+        return None, 0, lower.module, lower.function, fndesc
     else:
         # Prepare for execution
         cfunc, fnptr = targetctx.get_executable(lower.function, fndesc)
 
         targetctx.insert_user_function(cfunc, fndesc)
 
-        return cfunc, fnptr, lower.module, lower.function
+        return cfunc, fnptr, lower.module, lower.function, fndesc
 
 
 def py_lowering_stage(targetctx, interp, nocompile):
@@ -268,14 +313,11 @@ def py_lowering_stage(targetctx, interp, nocompile):
     lower = lowering.PyLower(targetctx, fndesc)
     lower.lower()
 
-    if config.DEBUG:
-        print(lower.module)
-
     if nocompile:
-        return None, 0, lower.module, lower.function
+        return None, 0, lower.module, lower.function, fndesc
     else:
         cfunc, fnptr = targetctx.get_executable(lower.function, fndesc)
-        return cfunc, fnptr, lower.module, lower.function
+        return cfunc, fnptr, lower.module, lower.function, fndesc
 
 
 def ir_optimize_for_py_stage(interp):

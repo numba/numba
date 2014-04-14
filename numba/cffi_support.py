@@ -23,7 +23,6 @@ def is_cffi_func(obj):
     except TypeError:
         return False
 
-
 def get_pointer(cffi_func):
     """
     Get a pointer to the underlying function for a CFFI function as an
@@ -61,30 +60,47 @@ def make_function_type(cffi_func):
     return result
 
 
+class ExternCFunction(types.Function):
+    
+    def __init__(self, symbol, cstring):
+        """Parse C function declaration/signature"""
+        self.symbol = symbol
+        parser = cffi.cparser.Parser()
+        rft = parser.parse_type(cstring) # "RawFunctionType"
+        self.restype = type_map[rft.result.build_backend_type(ffi, None)]
+        self.argtypes = [type_map[arg.build_backend_type(ffi, None)] for arg in rft.args]
+        signature = typing.signature(self.restype, *self.argtypes)
+        cases = [signature]
+        template = typing.make_concrete_template('ExternCFunction', self.symbol, cases)
+        super(ExternCFunction, self).__init__(template)
+
+
 if ffi is not None:
     type_map = {
         ffi.typeof('char') :                types.int8,
         ffi.typeof('short') :               types.short,
-        ffi.typeof('int') :                 types.int_,
+        ffi.typeof('int') :                 types.intc,
         ffi.typeof('long') :                types.long_,
         ffi.typeof('long long') :           types.longlong,
         ffi.typeof('unsigned char') :       types.uchar,
         ffi.typeof('unsigned short') :      types.ushort,
-        ffi.typeof('unsigned int') :        types.uint,
+        ffi.typeof('unsigned int') :        types.uintc,
         ffi.typeof('unsigned long') :       types.ulong,
         ffi.typeof('unsigned long long') :  types.ulonglong,
         ffi.typeof('int8_t') :              types.char,
         ffi.typeof('uint8_t') :             types.uchar,
         ffi.typeof('int16_t') :             types.short,
         ffi.typeof('uint16_t') :            types.ushort,
-        ffi.typeof('int32_t') :             types.int_,
-        ffi.typeof('uint32_t') :            types.uint,
+        ffi.typeof('int32_t') :             types.intc,
+        ffi.typeof('uint32_t') :            types.uintc,
         ffi.typeof('int64_t') :             types.longlong,
         ffi.typeof('uint64_t') :            types.ulonglong,
         ffi.typeof('float') :               types.float_,
         ffi.typeof('double') :              types.double,
         # ffi.typeof('long double') :         longdouble,
         ffi.typeof('char *') :              types.voidptr,
+        ffi.typeof('void *') :              types.voidptr,
+        ffi.typeof('uint8_t *') :           types.CPointer(types.uint8),
         ffi.typeof('ssize_t') :             types.intp,
         ffi.typeof('size_t') :              types.uintp,
     }

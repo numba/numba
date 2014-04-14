@@ -62,6 +62,7 @@ class Structure(object):
         def iterator():
             for field, _ in self._fields:
                 yield getattr(self, field)
+
         return iter(iterator())
 
 
@@ -347,6 +348,7 @@ def get_item_pointer2(builder, data, shape, strides, layout, inds,
                 steps.append(last)
         else:
             raise Exception("unreachable")
+
         # Compute index
         loc = Constant.int(intp, 0)
         for i, s in zip(indices, steps):
@@ -362,6 +364,28 @@ def get_item_pointer2(builder, data, shape, strides, layout, inds,
         where = builder.add(base, offset)
         ptr = builder.inttoptr(where, data.type)
         return ptr
+
+
+def normalize_slice(builder, slice, length):
+    """
+    Clip stop
+    """
+    stop = slice.stop
+    doclip = builder.icmp(lc.ICMP_SGT, stop, length)
+    slice.stop = builder.select(doclip, length, stop)
+
+
+def get_range_from_slice(builder, slicestruct):
+    diff = builder.sub(slicestruct.stop, slicestruct.start)
+    length = builder.sdiv(diff, slicestruct.step)
+    is_neg = is_neg_int(builder, length)
+    length = builder.select(is_neg, get_null_value(length.type), length)
+    return length
+
+
+def get_strides_from_slice(builder, ndim, strides, slice, ax):
+    oldstrides = unpack_tuple(builder, strides, ndim)
+    return builder.mul(slice.step, oldstrides[ax])
 
 
 class MetadataKeyStore(object):
@@ -440,6 +464,10 @@ def init_record_by_ptr(builder, ltyp, ptr):
     return tmp
 
 
+def is_neg_int(builder, val):
+    return builder.icmp(lc.ICMP_SLT, val, get_null_value(val.type))
+
+
 def inbound_gep(builder, ptr, *inds):
     idx = []
     for i in inds:
@@ -461,6 +489,7 @@ def gep(builder, ptr, *inds):
         idx.append(ind)
     return builder.gep(ptr, idx)
 
+
 # ------------------------------------------------------------------------------
 # Debug
 
@@ -468,6 +497,7 @@ class VerboseProxy(object):
     """
     Use to wrap llvm.core.Builder to track where segfault happens
     """
+
     def __init__(self, obj):
         self.__obj = obj
 
@@ -476,6 +506,7 @@ class VerboseProxy(object):
         if callable(fn):
             def wrapped(*args, **kws):
                 import traceback
+
                 traceback.print_stack()
                 print(key, args, kws)
                 try:
@@ -485,4 +516,25 @@ class VerboseProxy(object):
 
             return wrapped
         return fn
+
+
+def printf(builder, format_string, *values):
+    str_const = Constant.stringz(format_string)
+    global_str_const = get_module(builder).add_global_variable(str_const.type,
+                                                               '')
+    global_str_const.initializer = str_const
+
+    idx = [Constant.int(Type.int(32), 0), Constant.int(Type.int(32), 0)]
+    str_addr = global_str_const.gep(idx)
+
+    args = []
+    for v in values:
+        if isinstance(v, int):
+            args.append(Constant.int(Type.int(), v))
+        elif isinstance(v, float):
+            args.append(Constant.real(Type.double(), v))
+
+    functype = Type.function(Type.int(32), [Type.pointer(Type.int(8))], True)
+    fn = get_module(builder).add_function(functype, 'printf')
+    builder.call(fn, [str_addr] + args)
 

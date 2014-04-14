@@ -1,27 +1,20 @@
 import numpy
 from numba import types
 from numba.typing.templates import (AttributeTemplate, AbstractTemplate,
-                                    builtin_global, builtin, signature)
+                                    Registry, signature)
+
+registry = Registry()
+builtin_global = registry.register_global
+builtin_attr = registry.register_attr
 
 
-@builtin
+@builtin_attr
 class NumpyModuleAttribute(AttributeTemplate):
+    # note: many unary ufuncs are added later on, using setattr
     key = types.Module(numpy)
 
-    def resolve_absolute(self, mod):
-        return types.Function(Numpy_absolute)
-
-    def resolve_exp(self, mod):
-        return types.Function(Numpy_exp)
-
-    def resolve_sin(self, mod):
-        return types.Function(Numpy_sin)
-
-    def resolve_cos(self, mod):
-        return types.Function(Numpy_cos)
-
-    def resolve_tan(self, mod):
-        return types.Function(Numpy_tan)
+    def resolve_arctan2(self, mod):
+        return types.Function(Numpy_arctan2)
 
     def resolve_add(self, mod):
         return types.Function(Numpy_add)
@@ -36,47 +29,68 @@ class NumpyModuleAttribute(AttributeTemplate):
         return types.Function(Numpy_divide)
 
 
+
 class Numpy_unary_ufunc(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
-        [inp, out] = args
-        if isinstance(inp, types.Array) and isinstance(out, types.Array):
-            if inp.dtype != out.dtype:
-                # TODO handle differing dtypes
-                return
-            return signature(out, inp, out)
+        nargs = len(args)
+        if nargs == 2:
+            [inp, out] = args
+            if isinstance(inp, types.Array) and isinstance(out, types.Array):
+                return signature(out, inp, out)
+            elif inp in types.number_domain and isinstance(out, types.Array):
+                return signature(out, inp, out)
+        elif nargs == 1:
+            [inp] = args
+            if inp in types.number_domain:
+                if hasattr(self, "scalar_out_type"):
+                    return signature(self.scalar_out_type, inp)
+                else:
+                    return signature(inp, inp)
 
 
-class Numpy_absolute(Numpy_unary_ufunc):
-    key = numpy.absolute
+def _numpy_unary_ufunc(name):
+    the_key = eval("numpy."+name) # obtain the appropriate symbol for the key.
+    class typing_class(Numpy_unary_ufunc):
+        key = the_key
+        scalar_out_type = types.float64
+
+    # Add the resolve method to NumpyModuleAttribute
+    setattr(NumpyModuleAttribute, "resolve_"+name, lambda s, m: types.Function(typing_class))
+    builtin_global(the_key, types.Function(typing_class))
 
 
-class Numpy_sin(Numpy_unary_ufunc):
-    key = numpy.sin
-
-
-class Numpy_cos(Numpy_unary_ufunc):
-    key = numpy.cos
-
-
-class Numpy_tan(Numpy_unary_ufunc):
-    key = numpy.tan
-
-
-class Numpy_exp(Numpy_unary_ufunc):
-    key = numpy.exp
+# list of unary ufuncs to register
+_autoregister_unary_ufuncs = [
+    "sin", "cos", "tan", "arcsin", "arccos", "arctan",
+    "sinh", "cosh", "tanh", "arcsinh", "arccosh", "arctanh",
+    "exp", "exp2", "expm1",
+    "log", "log2", "log10", "log1p",
+    "absolute", "negative", "floor", "ceil", "trunc", "sign",
+    "sqrt",
+    "deg2rad", "rad2deg"]
+for func in _autoregister_unary_ufuncs:
+    _numpy_unary_ufunc(func)
+del(_autoregister_unary_ufuncs)
 
 
 class Numpy_binary_ufunc(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
-        [vx, wy, out] = args
-        if (isinstance(vx, types.Array) and isinstance(wy, types.Array) and
-                isinstance(out, types.Array)):
-            if vx.dtype != wy.dtype or vx.dtype != out.dtype:
-                # TODO handle differing dtypes
-                return
-            return signature(out, vx, wy, out)
+        nargs = len(args)
+        if nargs == 3:
+            [inp1, inp2, out] = args
+            if isinstance(out, types.Array) and \
+                    (isinstance(inp1, types.Array) or inp1 in types.number_domain) or \
+                    (isinstance(inp2, types.Array) or inp2 in types.number_domain):
+                return signature(out, inp1, inp2, out)
+        elif nargs == 2:
+            [inp1, inp2] = args
+            if inp1 in types.number_domain and inp2 in types.number_domain:
+                if hasattr(self, "scalar_out_type"):
+                    return signature(self.scalar_out_type, inp1, inp2)
+                else:
+                    return signature(inp1, inp1, inp2)
 
 
 class Numpy_add(Numpy_binary_ufunc):
@@ -95,12 +109,12 @@ class Numpy_divide(Numpy_binary_ufunc):
     key = numpy.divide
 
 
+class Numpy_arctan2(Numpy_binary_ufunc):
+    key = numpy.arctan2
+
+
 builtin_global(numpy, types.Module(numpy))
-builtin_global(numpy.absolute, types.Function(Numpy_absolute))
-builtin_global(numpy.exp, types.Function(Numpy_exp))
-builtin_global(numpy.sin, types.Function(Numpy_sin))
-builtin_global(numpy.cos, types.Function(Numpy_cos))
-builtin_global(numpy.tan, types.Function(Numpy_tan))
+builtin_global(numpy.arctan2, types.Function(Numpy_arctan2))
 builtin_global(numpy.add, types.Function(Numpy_add))
 builtin_global(numpy.subtract, types.Function(Numpy_subtract))
 builtin_global(numpy.multiply, types.Function(Numpy_multiply))

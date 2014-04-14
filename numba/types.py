@@ -13,6 +13,7 @@ def _autoincr():
     assert n <= 2 ** 32, "Limited to 4billion types"
     return n
 
+
 _typecache = defaultdict(_autoincr)
 
 
@@ -76,15 +77,26 @@ class Type(object):
     __iter__ = NotImplemented
     cast_python_value = NotImplemented
 
+
 class OpaqueType(Type):
     """
     To deal with externally defined literal types
     """
+
     def __init__(self, name):
         super(OpaqueType, self).__init__(name)
 
 
 class Integer(Type):
+    def __init__(self, *args, **kws):
+        super(Integer, self).__init__(*args, **kws)
+        # Determine bitwidth
+        for prefix in ('int', 'uint'):
+            if self.name.startswith(prefix):
+                bitwidth = int(self.name[len(prefix):])
+        self.bitwidth = bitwidth
+        self.signed = self.name.startswith('int')
+
     def cast_python_value(self, value):
         return getattr(numpy, self.name)(value)
 
@@ -138,6 +150,21 @@ class Module(Type):
 
     def __hash__(self):
         return hash(self.pymod)
+
+
+class Macro(Type):
+    def __init__(self, template):
+        self.template = template
+        cls = type(self)
+        super(Macro, self).__init__("%s(%s)" % (cls.__name__, template))
+
+    def __eq__(self, other):
+        if isinstance(other, Macro):
+            return self.template == other.template
+
+    def __hash__(self):
+        # FIXME maybe this should not be hashable
+        return hash(self.template)
 
 
 class Function(Type):
@@ -489,15 +516,17 @@ len_type = Dummy('len')
 range_type = Dummy('range')
 slice_type = Dummy('slice')
 abs_type = Dummy('abs')
+neg_type = Dummy('neg')
 print_type = Dummy('print')
 print_item_type = Dummy('print-item')
+sign_type = Dummy('sign')
 
 range_state32_type = Type('range_state32')
 range_state64_type = Type('range_state64')
 range_iter32_type = Type('range_iter32')
 range_iter64_type = Type('range_iter64')
 
-slice2_type = Type('slice2_type')
+# slice2_type = Type('slice2_type')
 slice3_type = Type('slice3_type')
 
 signed_domain = frozenset([int8, int16, int32, int64])
@@ -529,7 +558,6 @@ float_ = float32
 double = float64
 void = none
 
-
 _make_signed = lambda x: globals()["int%d" % (numpy.dtype(x).itemsize * 8)]
 _make_unsigned = lambda x: globals()["uint%d" % (numpy.dtype(x).itemsize * 8)]
 
@@ -539,11 +567,12 @@ short = _make_signed(numpy.short)
 ushort = _make_unsigned(numpy.short)
 int_ = _make_signed(numpy.int_)
 uint = _make_unsigned(numpy.int_)
+intc = _make_signed(numpy.intc)
+uintc = _make_unsigned(numpy.uintc)
 long_ = _make_signed(numpy.long)
 ulong = _make_unsigned(numpy.long)
 longlong = _make_signed(numpy.longlong)
 ulonglong = _make_unsigned(numpy.longlong)
-
 
 __all__ = '''
 int8

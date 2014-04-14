@@ -259,6 +259,10 @@ float m_roundf(float x) {
     }
 }
 
+/* Map to double version directly */
+float m_atan2f(float y, float x) {
+    return atan2(y, x);
+}
 
 
 #define FLOATVER(Fn) float Fn##f(float x) { return (float)Fn(x); }

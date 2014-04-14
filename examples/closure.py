@@ -10,8 +10,9 @@ from __future__ import print_function, division, absolute_import
 from numba import autojit, jit, float_
 from numpy import linspace
 
-@autojit
+@jit
 def generate_power_func(n):
+    
     @jit(float_(float_))
     def nth_power(x):
         return x ** n

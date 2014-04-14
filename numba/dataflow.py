@@ -11,6 +11,7 @@ class DataFlowAnalysis(object):
     This is necessary to resolve blocks that propagates stack value.
     This would allow the use of `and` and `or` and python2.6 jumps.
     """
+
     def __init__(self, cfa):
         self.cfa = cfa
         self.bytecode = cfa.bytecode
@@ -44,6 +45,11 @@ class DataFlowAnalysis(object):
         for val in reversed(stack):
             info.push(val)
 
+    def op_DUP_TOP(self, info, inst):
+        tos = info.pop()
+        info.push(tos)
+        info.push(tos)
+
     def op_DUP_TOPX(self, info, inst):
         count = inst.arg
         assert 1 <= count <= 5, "Invalid DUP_TOPX count"
@@ -66,6 +72,16 @@ class DataFlowAnalysis(object):
         second = info.pop()
         third = info.pop()
         info.push(first)
+        info.push(third)
+        info.push(second)
+
+    def op_ROT_FOUR(self, info, inst):
+        first = info.pop()
+        second = info.pop()
+        third = info.pop()
+        forth = info.pop()
+        info.push(first)
+        info.push(forth)
         info.push(third)
         info.push(second)
 
@@ -105,7 +121,7 @@ class DataFlowAnalysis(object):
         info.append(inst, value=value)
 
     def op_LOAD_FAST(self, info, inst):
-        name = self.bytecode.code.co_varnames[inst.arg]
+        name = self.bytecode.co_varnames[inst.arg]
         info.push(name)
 
     def op_LOAD_CONST(self, info, inst):
@@ -234,6 +250,46 @@ class DataFlowAnalysis(object):
     op_BINARY_OR = _binaryop
     op_BINARY_XOR = _binaryop
 
+    def op_SLICE_0(self, info, inst):
+        """
+        TOS = TOS[:]
+        """
+        tos = info.pop()
+        res = info.make_temp()
+        slicevar = info.make_temp()
+        indexvar = info.make_temp()
+        info.append(inst, base=tos, res=res, slicevar=slicevar,
+                    indexvar=indexvar)
+        info.push(res)
+
+    def op_SLICE_1(self, info, inst):
+        """
+        TOS = TOS1[TOS:]
+        """
+        tos = info.pop()
+        tos1 = info.pop()
+        res = info.make_temp()
+        slicevar = info.make_temp()
+        indexvar = info.make_temp()
+        nonevar = info.make_temp()
+        info.append(inst, base=tos1, start=tos, res=res, slicevar=slicevar,
+                    indexvar=indexvar, nonevar=nonevar)
+        info.push(res)
+
+    def op_SLICE_2(self, info, inst):
+        """
+        TOS = TOS1[:TOS]
+        """
+        tos = info.pop()
+        tos1 = info.pop()
+        res = info.make_temp()
+        slicevar = info.make_temp()
+        indexvar = info.make_temp()
+        nonevar = info.make_temp()
+        info.append(inst, base=tos1, stop=tos, res=res, slicevar=slicevar,
+                    indexvar=indexvar, nonevar=nonevar)
+        info.push(res)
+
     def op_SLICE_3(self, info, inst):
         """
         TOS = TOS2[TOS1:TOS]
@@ -242,8 +298,61 @@ class DataFlowAnalysis(object):
         tos1 = info.pop()
         tos2 = info.pop()
         res = info.make_temp()
-        info.append(inst, base=tos2, start=tos1, stop=tos, res=res)
+        slicevar = info.make_temp()
+        indexvar = info.make_temp()
+        info.append(inst, base=tos2, start=tos1, stop=tos, res=res,
+                    slicevar=slicevar, indexvar=indexvar)
         info.push(res)
+
+    def op_STORE_SLICE_0(self, info, inst):
+        """
+        TOS[:] = TOS1
+        """
+        tos = info.pop()
+        value = info.pop()
+        slicevar = info.make_temp()
+        indexvar = info.make_temp()
+        info.append(inst, base=tos, value=value, slicevar=slicevar,
+                    indexvar=indexvar)
+
+    def op_STORE_SLICE_1(self, info, inst):
+        """
+        TOS1[TOS:] = TOS2
+        """
+        tos = info.pop()
+        tos1 = info.pop()
+        value = info.pop()
+        slicevar = info.make_temp()
+        indexvar = info.make_temp()
+        nonevar = info.make_temp()
+        info.append(inst, base=tos1, start=tos, slicevar=slicevar,
+                    value=value, indexvar=indexvar, nonevar=nonevar)
+
+    def op_STORE_SLICE_2(self, info, inst):
+        """
+        TOS1[:TOS] = TOS2
+        """
+        tos = info.pop()
+        tos1 = info.pop()
+        value = info.pop()
+        slicevar = info.make_temp()
+        indexvar = info.make_temp()
+        nonevar = info.make_temp()
+        info.append(inst, base=tos1, stop=tos, value=value, slicevar=slicevar,
+                    indexvar=indexvar, nonevar=nonevar)
+
+    def op_STORE_SLICE_3(self, info, inst):
+        """
+        TOS2[TOS1:TOS] = TOS3
+        """
+        tos = info.pop()
+        tos1 = info.pop()
+        tos2 = info.pop()
+        value = info.pop()
+        slicevar = info.make_temp()
+        indexvar = info.make_temp()
+        info.append(inst, base=tos2, start=tos1, stop=tos, value=value,
+                    slicevar=slicevar, indexvar=indexvar)
 
     def op_BUILD_SLICE(self, info, inst):
         """

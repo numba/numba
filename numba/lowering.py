@@ -1,9 +1,8 @@
 from __future__ import print_function, division, absolute_import
-import inspect
 from collections import defaultdict
 from llvm.core import Type, Builder, Module
 import llvm.core as lc
-from numba import ir, types, cgutils, utils, config
+from numba import ir, types, cgutils, utils, config, cffi_support
 
 
 try:
@@ -19,9 +18,19 @@ class LoweringError(Exception):
         super(LoweringError, self).__init__("%s\n%s" % (msg, loc.strformat()))
 
 
+def default_mangler(name, argtypes):
+    codedargs = '.'.join(str(a).replace(' ', '_') for a in argtypes)
+    return '.'.join([name, codedargs])
+
+
 class FunctionDescriptor(object):
+    __slots__ = ('native', 'pymod', 'name', 'doc', 'blocks', 'typemap',
+                 'calltypes', 'args', 'kws', 'restype', 'argtypes',
+                 'qualified_name', 'mangled_name')
+
     def __init__(self, native, pymod, name, doc, blocks, typemap,
-                 restype, calltypes, args, kws):
+                 restype, calltypes, args, kws, mangler=None, argtypes=None,
+                 qualname=None):
         self.native = native
         self.pymod = pymod
         self.name = name
@@ -33,29 +42,38 @@ class FunctionDescriptor(object):
         self.kws = kws
         self.restype = restype
         # Argument types
-        self.argtypes = [self.typemap[a] for a in args]
-
-        self.qualified_name = '.'.join([self.pymod.__name__, self.name])
-        codedargs = '.'.join(str(a).replace(' ', '_') for a in self.argtypes)
-        self.mangled_name = '.'.join([self.qualified_name, codedargs])
+        self.argtypes = argtypes or [self.typemap[a] for a in args]
+        self.qualified_name = qualname or '.'.join([self.pymod.__name__,
+                                                    self.name])
+        mangler = default_mangler if mangler is None else mangler
+        self.mangled_name = mangler(self.qualified_name, self.argtypes)
 
 
 def _describe(interp):
     func = interp.bytecode.func
-    fname = func.__name__
-    pymod = inspect.getmodule(func)
+    fname = interp.bytecode.func_name
+    pymod = interp.bytecode.module
     doc = func.__doc__ or ''
     args = interp.argspec.args
     kws = ()        # TODO
     return fname, pymod, doc, args, kws
 
 
-def describe_function(interp, typemap, restype, calltypes):
+def describe_external(name, restype, argtypes):
+    args = ["arg%d" % i for i in range(len(argtypes))]
+    fd = FunctionDescriptor(native=True, pymod=None, name=name, doc='',
+                            blocks=None, restype=restype, calltypes=None,
+                            argtypes=argtypes, args=args, kws=None,
+                            typemap=None, qualname=name, mangler=lambda a,x: a)
+    return fd
+
+
+def describe_function(interp, typemap, restype, calltypes, mangler):
     fname, pymod, doc, args, kws = _describe(interp)
     native = True
     sortedblocks = utils.SortedMap(utils.dict_iteritems(interp.blocks))
     fd = FunctionDescriptor(native, pymod, fname, doc, sortedblocks,
-                            typemap, restype, calltypes, args, kws)
+                            typemap, restype, calltypes, args, kws, mangler)
     return fd
 
 
@@ -90,11 +108,12 @@ class BaseLower(object):
         self.function = context.declare_function(self.module, fndesc)
         self.entry_block = self.function.append_basic_block('entry')
         self.builder = Builder.new(self.entry_block)
-        # self.builder = cgutils.VerboseProxy(Builder.new(self.entry_block))
+        # self.builder = cgutils.VerboseProxy(self.builder)
 
         # Internal states
         self.blkmap = {}
         self.varmap = {}
+        self.firstblk = min(self.fndesc.blocks.keys())
 
         # Subclass initialization
         self.init()
@@ -128,10 +147,12 @@ class BaseLower(object):
         self.post_lower()
         # Close entry block
         self.builder.position_at_end(self.entry_block)
-        self.builder.branch(self.blkmap[0])
+        self.builder.branch(self.blkmap[self.firstblk])
 
-        if config.DEBUG:
+        if config.DUMP_LLVM:
+            print(("LLVM DUMP %s" % self.fndesc.qualified_name).center(80,'-'))
             print(self.module)
+            print('=' * 80)
         self.module.verify()
 
     def init_argument(self, arg):
@@ -241,6 +262,9 @@ class Lower(BaseLower):
             if self.context.is_struct_type(ty):
                 const = self.context.get_constant_struct(self.builder, ty,
                                                          value.value)
+            elif ty == types.string:
+                const = self.context.get_constant_string(self.builder, ty,
+                                                         value.value)
             else:
                 const = self.context.get_constant(ty, value.value)
             return const
@@ -269,6 +293,15 @@ class Lower(BaseLower):
             elif isinstance(ty, types.Array):
                 return self.context.make_constant_array(self.builder, ty,
                                                         value.value)
+
+            elif isinstance(ty, types.UniTuple):
+                consts = [self.context.get_constant(t, v)
+                          for t, v in zip(ty, value.value)]
+                return cgutils.pack_array(self.builder, consts)
+
+            elif self.context.is_struct_type(ty):
+                return self.context.get_constant_struct(self.builder, ty,
+                        value.value)
 
             else:
                 raise NotImplementedError('global', ty)
@@ -307,14 +340,21 @@ class Lower(BaseLower):
                                      resty)
 
         elif expr.op == 'call':
-            assert not expr.kws
+
             argvals = [self.loadvar(a.name) for a in expr.args]
             argtyps = [self.typeof(a.name) for a in expr.args]
             signature = self.fndesc.calltypes[expr]
-            fnty = self.typeof(expr.func.name)
-            castvals = [self.context.cast(self.builder, av, at, ft)
-                        for av, at, ft in zip(argvals, argtyps,
-                                              signature.args)]
+
+            if isinstance(expr.func, ir.Intrinsic):
+                fnty = expr.func.name
+                castvals = expr.func.args
+            else:
+                assert not expr.kws, expr.kws
+                fnty = self.typeof(expr.func.name)
+
+                castvals = [self.context.cast(self.builder, av, at, ft)
+                            for av, at, ft in zip(argvals, argtyps,
+                                                  signature.args)]
 
             if isinstance(fnty, types.Method):
                 # Method of objects are handled differently
@@ -328,10 +368,19 @@ class Lower(BaseLower):
                 res = self.context.call_function_pointer(self.builder, pointer,
                                                          signature, castvals)
 
+            elif isinstance(fnty, cffi_support.ExternCFunction):
+                fndesc = describe_external(fnty.symbol, fnty.restype, fnty.argtypes)
+                func = self.context.declare_external_function(
+                        cgutils.get_module(self.builder), fndesc)
+                res = self.context.call_external_function(self.builder, func, fndesc.argtypes, castvals)
+
             else:
                 # Normal function resolution
                 impl = self.context.get_function(fnty, signature)
                 res = impl(self.builder, castvals)
+                libs = getattr(impl, "libs", ())
+                if libs:
+                    self.context.add_libs(libs)
             return self.context.cast(self.builder, res, signature.return_type,
                                      resty)
 

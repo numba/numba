@@ -19,8 +19,8 @@ class PyCallWrapper(object):
         wrapper = self.module.add_function(fnty, name=wrapname)
 
         builder = Builder.new(wrapper.append_basic_block('entry'))
-        # builder = cgutils.VerboseProxy(
-        #                 Builder.new(wrapper.append_basic_block('entry')))
+
+        # builder = cgutils.VerboseProxy(builder)
 
         _, args, kws = wrapper.args
 

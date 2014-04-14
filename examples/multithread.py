@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 Example of multithreading by releasing the GIL through ctypes.
 """

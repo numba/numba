@@ -5,65 +5,51 @@
 Numba
 =====
 
-Documentation for numba
-------------------------
-
-**Contents:**
+**User Guide**
 
 .. toctree::
    :titlesonly:
    :maxdepth: 2
 
-   userguide.rst
+   quickstart.rst
    types.rst
-   pythonstuff.rst
    arrays.rst
-   prange.rst
+   ufuncs.rst
+   examples.rst
 
-**Interfacing with native code:**
-
-.. toctree::
-   :maxdepth: 2
-
-   interface_c.rst
-
-**Language Specification:**
+**Tutorials**
 
 .. toctree::
    :maxdepth: 1
 
-   spec.rst
+   tutorial_firststeps.rst
+   tutorial_types.rst
 
-**Misc:**
+**Interfacing with native code**
+
+.. toctree::
+   :maxdepth: 1
+
+   interface_c.rst
+
+**Misc**
 
 .. toctree::
    :titlesonly:
    :maxdepth: 2
 
    pycc.rst
-   annotate.rst
-   type_inference.rst
-
-**Examples:**
-
-.. toctree::
-   :titlesonly:
-   :maxdepth: 2
-
-   doctest.rst
-   examples.rst
-
-**Releases:**
-
-.. toctree::
-   :titlesonly:
-   :maxdepth: 2
-
+   debugging.rst
    releases.rst
 
-Developer Documentation
-------------------------
+**Language Specification (outdated)**
 
+.. toctree::
+   :maxdepth: 1
+
+   spec.rst
+
+**Developer Documentation (outdated)**
 
 .. toctree::
    :titlesonly:
@@ -76,8 +62,7 @@ Developer Documentation
    modules/modules.rst
 
 
-Indices and tables
-------------------------
+**Indices and tables**
 
 * :ref:`genindex`
 * :ref:`modindex`

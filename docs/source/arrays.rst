@@ -1,294 +1,252 @@
-.. _arrays:
-
 ******
 Arrays
 ******
 
-Numba has support for fast indexing and understands NumPy arrays and infers
-types for various calls of the NumPy API.
+Support for NumPy arrays is a key focus of Numba development and is currently
+undergoing extensive refactorization and improvement. Most capabilities of NumPy
+arrays are supported by Numba in object mode, and a few features are supported in
+nopython mode too (with much more to come).
+
+A few noteworthy limitations of arrays at this time:
+
+* Arrays can be passed in to a function in nopython mode, but not returned.
+  Arrays can only be returned in object mode.
+* New arrays can only be created in object mode.
+* Currently there are no bounds checking for array indexing and slicing,
+  although negative indices will wrap around correctly.
+* NumPy array ufunc support in nopython node is incomplete at this time. Most
+  if not all ufuncs should work in object mode though.
+* Array slicing only works in object mode.
+
+Array Creation & Loop-Jitting
+------------------------------
+
+NumPy array creation is not supported in nopython mode. Numba mitigates this by
+automatically trying to jit loops in nopython mode. This allows for array
+creation at the top of a function while still getting almost all the performance
+of nopython mode. For example, the following simple function::
 
+    # compiled in object mode
+    @jit
+    def sum(x, y):
+        array = np.arange(x * y).reshape(x, y)
+        sum = 0
+        for i in range(x):
+            for j in range(y):
+                sum += array[i, j]
+        return sum
+
+looks like the equivalent of the following after being compiled by Numba::
 
-**Limitations**:
+    # compiled in nopython mode
+    @njit
+    def jitted_loop(array, x, y):
+        sum = 0
+        for i in range(x):
+            for j in range(y):
+                sum += array[i, j]
+        return sum
 
-Unfortunately, there are a few pitfalls. We hope to resolve these in the
-future, and to document them in the meantime:
+    # compiled in object mode
+    @jit
+    def sum(x, y):
+        array = np.arange(x * y).reshape(x, y)
+        return jitted_loop(array, x, y)
 
-=============================   =============================
-Operation                       Example
-=============================   =============================
-Boundschecking                  ``array[N]``, with N < 0 or N > array.shape[0]
+Another consequence of array creation being restricted to object mode is that 
+NumPy ufuncs that return the result as a new array are not allowed in nopython
+mode. Fortunately we can declare an output array at the top of our function and
+pass that in to the ufunc to store our result. For example, the following::
 
-Wraparound                      ``array[-1]``
+    @jit
+    def foo():
+        # initialize stuff
 
-=============================   =============================
+        # slow loop in object mode
+        for i in range(x):
+            result = np.multiply(a, b)
 
+should be rewritten like the following to take advantage of loop jitting::
 
-Array Expressions
-=================
+    @jit
+    def foo():
+        # initialize stuff
 
-.. toctree::
-      :maxdepth: 2
+        # create output array
+        result = np.zeros(a.size)
 
-Numba implements array expressions which provide a single pass
-over the data with a fused expression. It also implements native slicing
-and stack-allocated NumPy array views, which means slicing is very fast compared
-to slicing in Python. It also means one can now slice an array in
-a ``nopython`` context. Lets try a diffusion in numba with loops and with
-array expressions::
+        # jitted loop in nopython mode
+        for i in range(x):
+            np.multiply(a, b, result)
 
-    from numba import *
-    import numpy as np
 
-    mu = 0.1
-    Lx, Ly = 101, 101
-    N = 1000
+Loop Jitting Constraints
+-------------------------
 
-    @autojit
-    def diffuse_loops(iter_num):
-        u = np.zeros((Lx, Ly), dtype=np.float64)
-        temp_u = np.zeros_like(u)
-        temp_u[Lx / 2, Ly / 2] = 1000.0
+The current loop-jitting mechanism is very conservative.  A loop must satisfy
+a set of constraints for loop-jitting to trigger. These constraints will be
+relaxed in further development.
 
-        for n in range(iter_num):
-            for i in range(1, Lx - 1):
-                for j in range(1, Ly - 1):
-                    u[i, j] = mu * (temp_u[i + 1, j] + temp_u[i - 1, j] +
-                                    temp_u[i, j + 1] + temp_u[i, j - 1] -
-                                    4 * temp_u[i, j])
+Currently, a loop is rejected if:
 
-            temp = u
-            u = temp_u
-            temp_u = temp
+* the loop contains return statements;
+* the loop binds a value to a variable that is read outside of the loop.
 
-        return u
+The following is rejected due to a return statement in the loop::
 
-    @autojit
-    def diffuse_array_expressions(iter_num):
-        u = np.zeros((Lx, Ly), dtype=np.float64)
-        temp_u = np.zeros_like(u)
-        temp_u[Lx / 2, Ly / 2] = 1000.0
+    @jit
+    def foo(n):
+        result = np.zeros(n)
 
-        for i in range(iter_num):
-            u[1:-1, 1:-1] = mu * (temp_u[2:, 1:-1] + temp_u[:-2, 1:-1] +
-                                  temp_u[1:-1, 2:] + temp_u[1:-1, :-2] -
-                                  4 * temp_u[1:-1, 1:-1])
+        # Rejected loop-jitting candidate
+        for i in range(n):
+            result[i] = i   # setitem is accepted
+            if i > 10:
+                return      # return is not accepted
 
-            temp = u
-            u = temp_u
-            temp_u = temp
+        return result
 
-        return u
+The following is rejected due to an assigning to a variable read outside of
+the loop::
 
-.. NOTE:: Correct handling of overlapping memory between the left-hand and
-          right-hand side of expressions is not supported yet.
+    @jit
+    def foo(n):
+        result = np.zeros(n)
 
-Broadcasting
-------------
-Array expressions also support broadcasting, raising an error if shapes do not match::
+        x = 1
+        # Rejected loop-jitting candidate
+        for i in range(n):
+            x = result[i]           # assign to variable 'x'
 
-    @autojit
-    def matrix_vector(M, v):
-        return np.sum(M * v, axis=1)
+        result += x                 # reading variable 'x'
+        return result
 
-    M = np.arange(90).reshape(9, 10)
-    v = np.arange(10)
-    print matrix_vector(M, v)
-    print np.dot(M, v)
 
-Prints::
+The following is accepted::
 
-    [ 285  735 1185 1635 2085 2535 2985 3435 3885]
-    [ 285  735 1185 1635 2085 2535 2985 3435 3885]
+    @jit
+    def foo(n):
+        result = np.zeros(n)
+        x = 1
+        # Accepted loop-jitting candidate
+        for i in range(n):
+            x = 2
+        x = 3               # 'x' is only written to
 
-Calling the function with incompatible shapes gives the following::
+        return result
 
-    In [0]: matrix_vector(M, np.arange(8))
-    ---------------------------------------------------------------------------
-    ValueError                                Traceback (most recent call last)
-        ...
-    ValueError: Shape mismatch while broadcasting
 
-.. NOTE:: Errors raised in a nopython context print an error message and abort the
-          program.
+The following is accepted::
 
-New Arrays
-----------
-Expressions not containing a left-hand side automatically create a new array::
+    @jit
+    def foo(n):
+        result = np.zeros(n)
+        x = 1
+        # Accepted loop-jitting candidate
+        for i in range(n):
+            result[i] = x
 
-    @autojit
-    def square(a):
-        return a * a
+        return result
 
-    print square(np.arange(10)) # array([ 0,  1,  4,  9, 16, 25, 36, 49, 64, 81])
+User can inspect the loop-jitting by running `foo.inspect_types()`::
 
-Allocating new arrays is however not support yet in nopython mode::
+    foo (int32,) -> pyobject
+    --------------------------------------------------------------------------------
+    # File: somefile.py
+    # --- LINE 1 ---
 
-    @autojit(nopython=True)
-    def square(a):
-        return a * a
+    @jit
 
-    print square(np.arange(10)) # NumbaError: 1:0: Cannot allocate new memory in nopython context
+    # --- LINE 2 ---
 
-Math
-----
-All NumPy math functions supported on scalars is also supported for
-arrays. This includes most unary ufuncs::
+    def foo(n):
 
-    @autojit
-    def tan(a):
-        return np.sin(a) / np.cos(a)
+        # --- LINE 3 ---
+        # label 0
+        #   $0.1 = global(numpy: <module 'numpy' from '.../numpy/__init__.py'>)
+          :: pyobject
+        #   $0.2 = getattr(value=$0.1, attr=zeros)  :: pyobject
+        #   result = call $0.2(n, )  :: pyobject
 
-Universal Functions (ufuncs)
-============================
+        result = numpy.zeros(n)
 
-Numba's vectorize allows Numba functions taking scalar input arguments to be used as
-NumPy ufuncs (see http://docs.scipy.org/doc/numpy/reference/ufuncs.html).
+        # --- LINE 4 ---
+        #   x = const(<class 'int'>, 1)  :: pyobject
 
-For the example codes we will assume the user has run the following import::
+        x = 1
 
-    from numba.vectorize import Vectorize, vectorize
+        # --- LINE 5 ---
+        #   jump 58
+        # label 58
+        #   $58.1 = global(foo__numba__loop21__: LiftedLoop(<function foo at 0x107781710>))  :: pyobject
+        #   $58.2 = call $58.1(n, result, x, )  :: pyobject
+        #   jump 54
 
-ufunc Definition
------------------
-Ufunc arguments are scalars of a NumPy array. Function definitions can be arbitrary
-mathematical expressions.
+        for i in range(n):
 
-::
+            # --- LINE 6 ---
 
-	def my_ufunc(a, b):
-		return a+b+sqrt(a*cos(b))
+            result[i] = x
 
-Compilation requires type information.  Numba assumes no knowledge of type when building native
-ufuncs.  We must therefore define argument and return dtypes for the defined ufunc.  We can add
-many and various dtypes for a given BasicVectorize ufuncs, using Numba types, to create different
-versions of the code depending on the inputs.
+        # --- LINE 7 ---
+        # label 54
+        #   return result
 
-::
+        return result
 
-	v = Vectorize(my_ufunc)
-	v.add(restype=int32, argtypes=[int32, int32])
-	v.add(restype=uint32, argtypes=[uint32, uint32])
-	v.add(restype=f4, argtypes=[f4, f4])
-	v.add(restype=f8, argtypes=[f8, f8])
+    # The function contains lifted loops
+    # Loop at line 5
+    # Has 1 overloads
+    # File: somefile.py
+    # --- LINE 1 ---
 
-Above we are using signed and unsigned 32-bit ints, a float **f4**, and a double **f8**.
+    @jit
 
-To compile our ufunc we issue the following command
+    # --- LINE 2 ---
 
-::
+    def foo(n):
 
-	basic_ufunc = v.build_ufunc()
+        # --- LINE 3 ---
 
-*bv.build_ufunc()* returns a python callable list of functions which are compiled by Numba.  *This work is normally accomplished by* `PyUFunc_FromFuncAndData <http://docs.scipy.org/doc/numpy/user/c-info.ufunc-tutorial.html>`_ and Numba takes care of it.* We've now registered a set of overload functions ready be used as NumPy ufuncs.
+        result = numpy.zeros(n)
 
-Lastly, we call basic_ufunc with two NumPy array as arguments
+        # --- LINE 4 ---
 
-::
+        x = 1
 
-	data = np.array(np.random.random(100))
-	result = basic_ufunc(data, data)
+        # --- LINE 5 ---
+        # label 34
+        #   $34.1 = iternext(value=$21.3)  :: int32
+        #   $34.2 = itervalid(value=$21.3)  :: bool
+        #   branch $34.2, 37, 53
+        # label 21
+        #   $21.1 = global(range: <class 'range'>)  :: range
+        #   $21.2 = call $21.1(n, )  :: (int32,) -> range_state32
+        #   $21.3 = getiter(value=$21.2)  :: range_iter32
+        #   jump 34
+        # label 37
+        #   $37.1 = $34.1  :: int32
+        #   i = $37.1  :: int32
 
-Since we defined a binary ufunc, we can use the various ufunc methods such as ``reduce``, ``accumulate``,
-etc::
+        for i in range(n):
 
-    data = np.array(np.arange(100), dtype=np.int32)
-    print basic_ufunc.reduce(data)
-    print basic_ufunc.accumulate(data)
+            # --- LINE 6 ---
+            # label 53
+            #   del $21.3
+            #   jump 54
+            # label 54
+            #   $54.1 = const(<class 'NoneType'>, None)  :: none
+            #   return $54.1
+            #   result[i] = x  :: (array(float64, 1d, C), int64, float64) -> none
+            #   jump 34
 
+            result[i] = x
 
-Building ufuncs using @vectorize
---------------------------------
+        # --- LINE 7 ---
 
-An alternative syntax is available through the use of the `vectorize` decorator::
+        return result
 
-    from numba import float32, float64
-    from numba.vectorize import vectorize
-    import math
 
-    pi = math.pi
 
-    @vectorize([float32(float32), float64(float64)], target='cpu')
-    def sinc(x):
-        if x == 0.0:
-            return 1.0
-        else:
-            return math.sin(x*pi)/(pi*x)
-
-The `vectorize` decorator takes a list of function signature and an optional `target` keyword argument (default to 'cpu').  The example above generate a `sinc` ufunc that is overloaded to accept float and double.  This syntax replaces calls to `Vectorize.add` and `Vectorize.build_ufunc`.
-
-
-Generalized Ufuncs
-==================
-
-The ``numba.vectorize`` module also provides support for generalized ufuncs.
-Traditional ufuncs perfom element-wise operations, whereas generalized ufuncs operate on entire
-sub-arrays. Unlike other Numba Vectorize classes, the GUVectorize constructor takes
-an additional signature which specifies the shapes of the inner arrays we want to operate on.
-
-Imports
--------
-
-::
-
-    from numba import float32, float64, int32
-    from numba.vectorize import GUVectorize
-    import numpy as np
-
-Generalized ufunc Definition
-----------------------------
-
-GUVectorize ufunc arguments are vectors of a NumPy array.  Function definitions can be arbitrary
-expressions.
-
-::
-
-    def matmulcore(A, B, C):
-        m, n = A.shape
-        n, p = B.shape
-        for i in range(m):
-            for j in range(p):
-                C[i, j] = 0
-                for k in range(n):
-                    C[i, j] += A[i, k] * B[k, j]
-
-Compilation requires type information. Numba assumes no knowledge of type when building native
-ufuncs. We must therefore define argument and return dtypes for the defined ufunc. We can add
-as many dtypes as we need, which do not need to be uniform, i.e. we can specify a gufunc
-taking an array of ints and an array of doubles while producing an array of complex numbers.
-The ``gufunc`` will dispatch to the right implementation depending on the argument types.
-
-We can define our gufunc as follows:
-
-::
-
-    gufunc = GUVectorize(matmulcore, '(m,n),(n,p)->(m,p)')
-    gufunc.add(argtypes=[float32[:,:], float32[:,:], float32[:,:]])
-    gufunc.add(argtypes=[float64[:,:], float64[:,:], float64[:,:]])
-    gufunc.add(argtypes=[int32[:,:], int32[:,:], int32[:,:]])
-
-Above we are using a float **float32**, a double **float64**, and a signed **32-bit int**.  The
-GUVectorize calls `PyDynUFunc_FromFuncAndDataAndSignature
-<http://scipy-lectures.github.com/advanced/advanced_numpy/index.html#generalized-ufuncs>`_ which
-requires a the signature: *(m,n),(n,p)->(m,p)* in the constructor.  This signature defines the *"core
-dimensions"* of the generalized ufunc.
-
-We can compile the ufunc as follows:
-
-::
-
-    gufunc = gufunc.build_ufunc()
-
-We can now use the gufunc with two NumPy matrices:
-
-::
-
-    matrix_ct = 10
-    A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2, 4)
-    B = np.arange(matrix_ct * 4 * 5, dtype=np.float32).reshape(matrix_ct, 4, 5)
-    C = gufunc(A, B)
-
-
-Notice that we don't have a third argument in the gufunc call but the generalized ufunc definition
-above has three arguments. The last argument of the generalized ufunc is the output, which is
-automatically allocated with the shape specified in the signature.
+    ================================================================================
 

@@ -15,7 +15,7 @@ class Overloaded(_dispatcher.Dispatcher):
     """
     Abstract class. Subclass should define targetdescr class attribute.
     """
-    __numba__ = compile
+    __numba__ = "py_func"
 
     def __init__(self, py_func, locals={}, targetoptions={}):
         self.tm = default_type_manager
@@ -96,7 +96,6 @@ class Overloaded(_dispatcher.Dispatcher):
             typingctx = glctx.typing_context
             targetctx = glctx.target_context
 
-
             args, return_type = sigutils.normalize_signature(sig)
 
             # Don't recompile if signature already exist.
@@ -168,7 +167,7 @@ def typeof_pyval(val):
     # The following are handled in the C version for exact type match
     # So test these later
     elif isinstance(val, INT_TYPES):
-        return types.int32
+        return types.int64
 
     elif isinstance(val, float):
         return types.float64
@@ -183,6 +182,56 @@ def typeof_pyval(val):
     # Other object
     else:
         return types.pyobject
+
+
+class LiftedLoop(Overloaded):
+    def __init__(self, bytecode, typingctx, targetctx, locals, flags):
+        self.tm = default_type_manager
+
+        argspec = bytecode.argspec
+        argct = len(argspec.args)
+
+        _dispatcher.Dispatcher.__init__(self, self.tm.get_pointer(), argct)
+
+        self.bytecode = bytecode
+        self.typingctx = typingctx
+        self.targetctx = targetctx
+        self.locals = locals
+        self.flags = flags
+
+        self.py_func = bytecode.func
+        self.overloads = {}
+        self.fallback = None
+
+        self.doc = self.py_func.__doc__
+        self._compiling = False
+
+    def compile(self, sig):
+        with self._compile_lock():
+            # FIXME this is mostly duplicated from Overloaded
+            flags = self.flags
+            args, return_type = sigutils.normalize_signature(sig)
+
+            # Don't recompile if signature already exist.
+            existing = self.overloads.get(tuple(args))
+            if existing is not None:
+                return existing.entry_point
+
+            assert not flags.enable_looplift, "Enable looplift flags is on"
+            cres = compiler.compile_bytecode(typingctx=self.typingctx,
+                                             targetctx=self.targetctx,
+                                             bc=self.bytecode,
+                                             args=args,
+                                             return_type=return_type,
+                                             flags=flags,
+                                             locals=self.locals)
+
+            # Check typing error if object mode is used
+            if cres.typing_error is not None and not flags.enable_pyobject:
+                raise cres.typing_error
+
+            self.add_overload(cres)
+            return cres.entry_point
 
 
 # Initialize dispatcher

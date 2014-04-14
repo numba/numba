@@ -66,6 +66,20 @@ def for_loop_usecase8(x, y):
         result += 1
     return result
 
+def for_loop_usecase9(x, y):
+    z = 0
+    for i in range(x):
+        x = 0
+        for j in range(x):
+            if j == x / 2:
+                z += j
+                break
+        else:
+            z += y
+
+    return z
+
+
 def while_loop_usecase1(x, y):
     result = 0
     i = 0
@@ -228,6 +242,9 @@ class TestFlowControl(unittest.TestCase):
 
     def test_for_loop8(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase8, [0, 1], [0, 2, 10], flags=flags)
+
+    def test_for_loop9(self, flags=enable_pyobj_flags):
+        self.run_test(for_loop_usecase9, [0, 1], [0, 2, 10], flags=flags)
 
     def test_for_loop8_npm(self):
         self.test_for_loop8(flags=no_pyobj_flags)

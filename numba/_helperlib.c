@@ -194,6 +194,11 @@ float Numba_roundf_even(float y) {
     return z;
 }
 
+static
+uint64_t Numba_fptoui(double x) {
+    return (uint64_t)x;
+}
+
 
 #define EXPOSE(Fn, Sym) static void* Sym(){return PyLong_FromVoidPtr(&Fn);}
 EXPOSE(Numba_sdiv, get_sdiv)
@@ -206,6 +211,7 @@ EXPOSE(Numba_extract_record_data, get_extract_record_data)
 EXPOSE(Numba_recreate_record, get_recreate_record)
 EXPOSE(Numba_round_even, get_round_even)
 EXPOSE(Numba_roundf_even, get_roundf_even)
+EXPOSE(Numba_fptoui, get_fptoui)
 #undef EXPOSE
 
 /*
@@ -223,7 +229,8 @@ Expose all math functions
 */
 #define MATH_UNARY(F, R, A) static void* get_##F() \
                             { return PyLong_FromVoidPtr(&Numba_##F);}
-#define MATH_BINARY(F, R, A, B) MATH_UNARY(F, R, A)
+#define MATH_BINARY(F, R, A, B) static void* get_##F() \
+                            { return PyLong_FromVoidPtr(&Numba_##F);}
     #include "mathnames.inc"
 #undef MATH_UNARY
 #undef MATH_BINARY
@@ -240,10 +247,11 @@ static PyMethodDef ext_methods[] = {
     declmethod(get_recreate_record),
     declmethod(get_round_even),
     declmethod(get_roundf_even),
+    declmethod(get_fptoui),
 
     /* Declare math exposer */
     #define MATH_UNARY(F, R, A) declmethod(get_##F),
-    #define MATH_BINARY(F, R, A, B) MATH_UNARY(F, R, A)
+    #define MATH_BINARY(F, R, A, B) declmethod(get_##F),
         #include "mathnames.inc"
     #undef MATH_UNARY
     #undef MATH_BINARY

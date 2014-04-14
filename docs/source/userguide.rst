@@ -17,7 +17,7 @@ on the fly::
 To make the above example work for any compatible input types automatically,
 we can create a function that specializes automatically::
 
-    @autojit
+    @jit
     def sum1d(my_array):
         ...
 
@@ -28,30 +28,32 @@ in the ``numba`` namespace. These types
 can be further used to specify arrays in a similar manner to Cython's
 memoryviews.
 
-==========  ===================
-Type Name   Result Type
-==========  ===================
-float\_     float32
-double      float64
-longdouble  float128
+==========  =====  ===================
+Type Name   Alias  Result Type
+==========  =====  ===================
+boolean     b1     uint8 (char)
+bool\_      b1     uint8 (char)
 
-char        signed char
-int8        int8 (char)
-int16       int16
-int32       int32
-int64       int64
+byte        u1     unsigned char
+uint8       u1     uint8 (char)
+uint16      u2     uint16
+uint32      u4     uint32
+uint64      u8     uint64
 
-complex64   float complex
-complex128  double complex
-complex256  long double complex
-==========  ===================
+char        i1     signed char
+int8        i1     int8 (char)
+int16       i2     int16
+int32       i4     int32
+int64       i8     int64
 
-Unsigned integer counterparts are available under the name ``uint8``
-etc.   Also, short-names are available with the style '<char>N' where
-char is 'b', 'i', 'u', 'f', and 'c' for boolean, integer, unsigned,
-float and complex types respectively with 'N' indicating the number of
-bytes in the type.    Thus, f8 is equivalent to float64, and c16 is
-equivalent to double complex.
+float\_     f4     float32
+float32     f4     float32
+double      f8     float64
+float64     f8     float64
+
+complex64   c8     float complex
+complex128  c16    double complex
+==========  =====  ===================
 
 Native platform-dependent types are also available under names such as
 ``int_``, ``short``, ``ulonglong``, etc.
@@ -59,22 +61,25 @@ Native platform-dependent types are also available under names such as
 Types are names that can be imported from the numba namespace.
 Alternatively, they can be specified in strings in the jit decorator. 
 
-The jit decorator can take keyword arguments: restype, and argtypes to
-specify the function signature.  Alternatively, the signature can be
+The function signature of the function to compile can be
 expressed by passing a single argument to jit either as a string as
 shown above or directly (assuming the type names have been imported
 from the numba module)::
 
    from numba import f8, jit
 
+   @jit('f8(f8[:])')
+   def sum(arr):
+       ...
+
    @jit(f8(f8[:]))
    def sum(arr):
        ...
 
-Notice how the argument types are passed in as arguments to the return
-type treated as a python function.    Previously, this same syntax was
-used but embedded in a string which avoids having to import f8 from
-numba directly.
+In the first example, the argument and return types are embedded in a
+string which avoids having to import f8 from numba.
+In the second example, the argument types are passed in as
+arguments to the return type treated as a python function. 
 
 Specifying Arrays
 -----------------

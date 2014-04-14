@@ -21,7 +21,6 @@ def _windows_symbol_hacks_32bits():
         assert ftol
         le.dylib_add_symbol("_ftol2", ftol)
 
-
 class CPUContext(BaseContext):
     def init(self):
         self.execmodule = lc.Module.new("numba.exec")
@@ -37,15 +36,17 @@ class CPUContext(BaseContext):
 
         # map math functions
         self.map_math_functions()
+        self.map_numpy_math_functions()
 
         # Add target specific implementations
-        self.insert_func_defn(mathimpl.functions)
-        self.insert_func_defn(npyimpl.functions)
+        self.insert_func_defn(mathimpl.registry.functions)
+        self.insert_func_defn(npyimpl.registry.functions)
 
     def build_pass_manager(self):
         if config.OPT == 3:
             # This uses the same passes for clang -O3
-            pms = lp.build_pass_managers(tm=self.tm, opt=3, loop_vectorize=True,
+            pms = lp.build_pass_managers(tm=self.tm, opt=3,
+                                         loop_vectorize=True,
                                          fpm=False)
             return pms.pm
         else:
@@ -90,6 +91,10 @@ class CPUContext(BaseContext):
         le.dylib_add_symbol("numba.math.srem", _helperlib.get_srem())
         le.dylib_add_symbol("numba.math.udiv", _helperlib.get_udiv())
         le.dylib_add_symbol("numba.math.urem", _helperlib.get_urem())
+        if sys.platform.startswith('win32') and not le.dylib_address_of_symbol('__ftol2'):
+            le.dylib_add_symbol("__ftol2", _helperlib.get_fptoui())
+        elif sys.platform.startswith('linux') and not le.dylib_address_of_symbol('__fixunsdfdi'):
+            le.dylib_add_symbol("__fixunsdfdi", _helperlib.get_fptoui())
         # Necessary for Python3
         le.dylib_add_symbol("numba.round", _helperlib.get_round_even())
         le.dylib_add_symbol("numba.roundf", _helperlib.get_roundf_even())
@@ -109,6 +114,13 @@ class CPUContext(BaseContext):
                 imp = getattr(_helperlib, "get_%s" % fname)
                 le.dylib_add_symbol(fname, imp())
                 self.cmath_provider[fname] = 'indirect'
+
+    def map_numpy_math_functions(self):
+        # add the symbols for numpy math to the execution environment.
+        import numba._npymath_exports as npymath
+        for sym in npymath.symbols:
+            le.dylib_add_symbol(*sym)
+
 
     def dynamic_map_function(self, func):
         name, ptr = self.native_funcs[func]
@@ -146,9 +158,17 @@ class CPUContext(BaseContext):
         wrapper, api = PyCallWrapper(self, func.module, func, fndesc).build()
         self.optimize(func.module)
 
-        if config.DEBUG:
+        if config.DUMP_OPTIMIZED:
+            print(("OPTIMIZED DUMP %s" %
+                   fndesc.qualified_name).center(80,'-'))
             print(func.module)
+            print('=' * 80)
+
+        if config.DUMP_ASSEMBLY:
+            print(("ASSEMBLY %s" %
+                   fndesc.qualified_name).center(80, '-'))
             print(self.tm.emit_assembly(func.module))
+            print('=' * 80)
 
         # Map module.__dict__
         le.dylib_add_symbol(".pymodule.dict." + fndesc.pymod.__name__,

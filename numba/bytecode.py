@@ -5,11 +5,24 @@ From NumbaPro
 from __future__ import print_function, division, absolute_import
 import dis
 import sys
+import inspect
 from collections import namedtuple
-from numba import utils
+from numba import utils, targets
 from numba.config import PYVERSION
 
 opcode_info = namedtuple('opcode_info', ['argsize'])
+
+
+def get_function_object(obj):
+    """
+    Objects that wraps function should provide a "__numba__" magic attribute
+    that contains a name of an attribute that contains the actual python
+    function object.
+    """
+    attr = getattr(obj, "__numba__", None)
+    if attr:
+        return getattr(obj, attr)
+    return obj
 
 
 def get_code_object(obj):
@@ -43,6 +56,10 @@ def _make_bytecode_table():
             ('SLICE+1', 0),
             ('SLICE+2', 0),
             ('SLICE+3', 0),
+            ('STORE_SLICE+0', 0),
+            ('STORE_SLICE+1', 0),
+            ('STORE_SLICE+2', 0),
+            ('STORE_SLICE+3', 0),
         ]
     elif sys.version_info[0] == 3:
         version_specific += [
@@ -121,6 +138,7 @@ def _as_opcodes(seq):
             lst.append(c)
     return lst
 
+
 BYTECODE_TABLE = _make_bytecode_table()
 
 JREL_OPS = frozenset(dis.hasjrel)
@@ -151,6 +169,10 @@ class ByteCodeInst(object):
         self.opname = dis.opname[opcode]
         self.arg = arg
         self.lineno = -1  # unknown line number
+
+    @classmethod
+    def get(cls, offset, opname, arg):
+        return cls(offset, dis.opmap[opname], arg)
 
     @property
     def is_jump(self):
@@ -217,40 +239,23 @@ class ByteCodeSupportError(Exception):
     pass
 
 
-class ByteCode(object):
-    def __init__(self, func):
+class ByteCodeBase(object):
+    __slots__ = 'func', 'func_name', 'argspec', 'filename', 'co_names', \
+                'co_varnames', 'co_consts', 'table', 'labels'
+
+    def __init__(self, func, func_name, argspec, filename, co_names,
+                 co_varnames, co_consts, table, labels):
         self.func = func
-        self.code = get_code_object(func)
-        self.filename = self.code.co_filename
-
-        # Do basic checking on support for the given bytecode
-        if not self.code:
-            raise ByteCodeSupportError("%s does not provide its bytecode" %
-                                       func)
-        if self.code.co_freevars:
-            raise ByteCodeSupportError("does not support freevars")
-        if self.code.co_cellvars:
-            raise ByteCodeSupportError("does not support cellvars")
-
-        self.table = utils.SortedMap(ByteCodeIter(self.code))
-
-        labels = set(dis.findlabels(self.code.co_code))
-        labels.add(0)
-        self.labels = list(sorted(labels))
-        self._mark_lineno()
-
-    def _mark_lineno(self):
-        '''Fill the lineno info for all bytecode inst
-        '''
-        for offset, lineno in dis.findlinestarts(self.code):
-            if offset in self.table:
-                self.table[offset].lineno = lineno
-        known = -1
-        for inst in self:
-            if inst.lineno >= 0:
-                known = inst.lineno
-            else:
-                inst.lineno = known
+        self.module = inspect.getmodule(func)
+        self.func_name = func_name
+        self.argspec = argspec
+        self.filename = filename
+        self.co_names = co_names
+        self.co_varnames = co_varnames
+        self.co_consts = co_consts
+        self.table = table
+        self.labels = labels
+        self.firstlineno = min(inst.lineno for inst in self.table.values())
 
     def __iter__(self):
         return utils.dict_itervalues(self.table)
@@ -270,4 +275,50 @@ class ByteCode(object):
 
         return '\n'.join('%s %10d\t%s' % ((label_marker(i),) + i)
                          for i in utils.dict_iteritems(self.table))
+
+
+class CustomByteCode(ByteCodeBase):
+    pass
+
+
+class ByteCode(ByteCodeBase):
+    def __init__(self, func):
+        func = get_function_object(func)
+        code = get_code_object(func)
+        if not code:
+            raise ByteCodeSupportError("%s does not provide its bytecode" %
+                                       func)
+        if code.co_freevars:
+            raise ByteCodeSupportError("does not support freevars")
+        if code.co_cellvars:
+            raise ByteCodeSupportError("does not support cellvars")
+
+        table = utils.SortedMap(ByteCodeIter(code))
+        labels = set(dis.findlabels(code.co_code))
+        labels.add(0)
+
+        self._mark_lineno(table, code)
+        super(ByteCode, self).__init__(func=func,
+                                       func_name=func.__name__,
+                                       argspec=inspect.getargspec(func),
+                                       filename=code.co_filename,
+                                       co_names=code.co_names,
+                                       co_varnames=code.co_varnames,
+                                       co_consts=code.co_consts,
+                                       table=table,
+                                       labels=list(sorted(labels)))
+
+    @classmethod
+    def _mark_lineno(cls, table, code):
+        '''Fill the lineno info for all bytecode inst
+        '''
+        for offset, lineno in dis.findlinestarts(code):
+            if offset in table:
+                table[offset].lineno = lineno
+        known = -1
+        for inst in table.values():
+            if inst.lineno >= 0:
+                known = inst.lineno
+            else:
+                inst.lineno = known
 

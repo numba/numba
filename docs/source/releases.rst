@@ -8,6 +8,141 @@
 Release Notes
 ======================
 
+Version 0.12.1
+--------------
+
+This version fixed many regressions reported by user for the 0.12 release.
+This release contains a new loop-lifting mechanism that specializes certains
+loop patterns for nopython mode compilation.  This avoid direct support
+for heap-allocating and other very dynamic operations.
+
+Improvements:
+
+* Add loop-lifting--jit-ing loops in nopython for object mode code. This allows
+  functions to allocate NumPy arrays and use Python objects, while the tight
+  loops in the function can still be compiled in nopython mode. Any arrays that
+  the tight loop uses should be created before the loop is entered.
+
+Fixes:
+
+* Add support for majority of "math" module functions
+* Fix for...else handling
+* Add support for builtin round()
+* Fix tenary if...else support
+* Revive "numba" script
+* Fix problems with some boolean expressions
+* Add support for more NumPy ufuncs 
+
+
+Version 0.12
+------------
+
+Version 0.12 contains a big refactor of the compiler. The main objective for
+this refactor was to simplify the code base to create a better foundation for
+further work. A secondary objective was to improve the worst case performance
+to ensure that compiled functions in object mode never run slower than pure
+Python code (this was a problem in several cases with the old code base). This
+refactor is still a work in progress and further testing is needed.
+
+Main improvements:
+
+* Major refactor of compiler for performance and maintenance reasons
+* Better fallback to object mode when native mode fails
+* Improved worst case performance in object mode
+
+The public interface of numba has been slightly changed. The idea is to
+make it cleaner and more rational:
+
+* jit decorator has been modified, so that it can be called without a signature.
+  When called without a signature, it behaves as the old autojit. Autojit
+  has been deprecated in favour of this approach.
+* Jitted functions can now be overloaded.
+* Added a "njit" decorator that behaves like "jit" decorator with nopython=True.
+* The numba.vectorize namespace is gone. The vectorize decorator will
+  be in the main numba namespace.
+* Added a guvectorize decorator in the main numba namespace. It is
+  similiar to numba.vectorize, but takes a dimension signature. It
+  generates gufuncs. This is a replacement for the GUVectorize gufunc
+  factory which has been deprecated.
+
+Main regressions (will be fixed in a future release):
+
+* Creating new NumPy arrays is not supported in nopython mode
+* Returning NumPy arrays is not supported in nopython mode
+* NumPy array slicing is not supported in nopython mode
+* lists and tuples are not supported in nopython mode
+* string, datetime, cdecimal, and struct types are not implemented yet
+* Extension types (classes) are not supported in nopython mode
+* Closures are not supported
+* Raise keyword is not supported
+* Recursion is not support in nopython mode
+
+Version 0.11
+------------
+* Experimental support for NumPy datetime type
+
+Version 0.10
+------------
+* Annotation tool (./bin/numba --annotate --fancy) (thanks to Jay Bourque)
+* Open sourced prange
+* Support for raise statement
+* Pluggable array representation
+* Support for enumerate and zip (thanks to Eugene Toder)
+* Better string formatting support (thanks to Eugene Toder)
+* Builtins min(), max() and bool() (thanks to Eugene Toder)
+* Fix some code reloading issues (thanks to Björn Linse)
+* Recognize NumPy scalar objects (thanks to Björn Linse)
+
+
+Version 0.9
+-----------
+* Improved math support
+* Open sourced generalized ufuncs
+* Improved array expressions
+
+Version 0.8
+-----------
+* Support for autojit classes
+    * Inheritance not yet supported
+* Python 3 support for pycc
+* Allow retrieval of ctypes function wrapper
+    * And hence support retrieval of a pointer to the function
+* Fixed a memory leak of array slicing views
+
+Version 0.7.2
+-------------
+* Official Python 3 support (python 3.2 and 3.3)
+* Support for intrinsics and instructions
+* Various bug fixes (see https://github.com/numba/numba/issues?milestone=7&state=closed)
+
+Version 0.7.1
+-------------
+* Various bug fixes
+
+Version 0.7
+-----------
+* Open sourced single-threaded ufunc vectorizer
+* Open sourced NumPy array expression compilation
+* Open sourced fast NumPy array slicing
+* Experimental Python 3 support
+* Support for typed containers
+    * typed lists and tuples
+* Support for iteration over objects
+* Support object comparisons
+* Preliminary CFFI support
+    * Jit calls to CFFI functions (passed into autojit functions)
+    * TODO: Recognize ffi_lib.my_func attributes
+* Improved support for ctypes
+* Allow declaring extension attribute types as through class attributes
+* Support for type casting in Python
+    * Get the same semantics with or without numba compilation
+* Support for recursion
+    * For jit methods and extension classes
+* Allow jit functions as C callbacks
+* Friendlier error reporting
+* Internal improvements
+* A variety of bug fixes
+
 Version 0.6.1
 --------------
 * Support for bitwise operations

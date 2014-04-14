@@ -5,8 +5,8 @@ from llvm.core import Type, Constant
 import numpy
 from numba import types, utils, cgutils, typing, numpy_support
 from numba.pythonapi import PythonAPI
-from numba.targets.imputils import (user_function, python_attr_impl, BUILTINS,
-                                    BUILTIN_ATTRS, impl_attribute)
+from numba.targets.imputils import (user_function, python_attr_impl,
+                                    builtin_registry, impl_attribute)
 from numba.targets import builtins
 
 
@@ -30,17 +30,16 @@ LTYPEMAP = {
 }
 
 STRUCT_TYPES = {
-    types.complex64:            builtins.Complex64,
-    types.complex128:           builtins.Complex128,
-    types.range_state32_type:   builtins.RangeState32,
-    types.range_iter32_type:    builtins.RangeIter32,
-    types.range_state64_type:   builtins.RangeState64,
-    types.range_iter64_type:    builtins.RangeIter64,
-    types.slice3_type:          builtins.Slice,
+    types.complex64: builtins.Complex64,
+    types.complex128: builtins.Complex128,
+    types.range_state32_type: builtins.RangeState32,
+    types.range_iter32_type: builtins.RangeIter32,
+    types.range_state64_type: builtins.RangeState64,
+    types.range_iter64_type: builtins.RangeIter64,
+    types.slice3_type: builtins.Slice,
 }
 
 Status = namedtuple("Status", ("code", "ok", "err", "exc", "none"))
-
 
 RETCODE_OK = Constant.int_signextend(Type.int(), 0)
 RETCODE_NONE = Constant.int_signextend(Type.int(), -2)
@@ -58,8 +57,8 @@ class Overloads(object):
 
             # As generic type
             nargs_matches = len(ver.signature.args) == len(sig.args)
-            varargs_matches = (ver.signature.args[-1] == types.VarArg and
-                               len(ver.signature.args) - 1 <= len(sig.args))
+            varargs_matches = (ver.signature.args and
+                               ver.signature.args[-1] == types.VarArg)
             if nargs_matches or varargs_matches:
                 match = True
                 for formal, actual in zip(ver.signature.args, sig.args):
@@ -85,7 +84,7 @@ class Overloads(object):
             # formal argument is any
             return True
         elif (isinstance(formal, types.Kind) and
-              isinstance(actual, formal.of)):
+                  isinstance(actual, formal.of)):
             # formal argument is a kind and the actual argument
             # is of that kind
             return True
@@ -105,15 +104,24 @@ class BaseContext(object):
     Only POD structure can life across function boundaries by copying the
     data.
     """
+
+    # Use default mangler (no specific requirement)
+    mangler = None
+
+    # Force powi implementation as math.pow call
+    implement_powi_as_math_call = False
+    implement_pow_as_math_call = False
+
     def __init__(self, typing_context):
+        self.address_size = tuple.__itemsize__ * 8
         self.typing_context = typing_context
 
         self.defns = defaultdict(Overloads)
         self.attrs = utils.UniqueDict()
         self.users = utils.UniqueDict()
 
-        self.insert_func_defn(BUILTINS)
-        self.insert_attr_defn(BUILTIN_ATTRS)
+        self.insert_func_defn(builtin_registry.functions)
+        self.insert_attr_defn(builtin_registry.attributes)
 
         # Initialize
         self.init()
@@ -138,8 +146,8 @@ class BaseContext(object):
         for attr in defns:
             self.attrs[attr.key] = attr
 
-    def insert_user_function(self, func, fndesc):
-        imp = user_function(func, fndesc)
+    def insert_user_function(self, func, fndesc, libs=()):
+        imp = user_function(func, fndesc, libs)
         self.defns[func].append(imp)
 
         baseclses = (typing.templates.ConcreteTemplate,)
@@ -175,6 +183,14 @@ class BaseContext(object):
         fnty = Type.function(Type.int(), [resptr] + argtypes)
         return fnty
 
+    def get_external_function_type(self, fndesc):
+        argtypes = [self.get_argument_type(aty)
+                    for aty in fndesc.argtypes]
+        # don't wrap in pointer
+        restype = self.get_argument_type(fndesc.restype)
+        fnty = Type.function(restype, argtypes)
+        return fnty
+
     def declare_function(self, module, fndesc):
         fnty = self.get_function_type(fndesc)
         fn = module.get_or_insert_function(fnty, name=fndesc.mangled_name)
@@ -182,6 +198,14 @@ class BaseContext(object):
         for ak, av in zip(fndesc.args, self.get_arguments(fn)):
             av.name = "arg.%s" % ak
         fn.args[0] = ".ret"
+        return fn
+
+    def declare_external_function(self, module, fndesc):
+        fnty = self.get_external_function_type(fndesc)
+        fn = module.get_or_insert_function(fnty, name=fndesc.mangled_name)
+        assert fn.is_declaration
+        for ak, av in zip(fndesc.args, fn.args):
+            av.name = "arg.%s" % ak
         return fn
 
     def insert_const_string(self, mod, string):
@@ -226,7 +250,8 @@ class BaseContext(object):
                 isinstance(ty, types.Module) or
                 isinstance(ty, types.Function) or
                 isinstance(ty, types.Dispatcher) or
-                isinstance(ty, types.Object)):
+                isinstance(ty, types.Object) or
+                isinstance(ty, types.Macro)):
             return Type.pointer(Type.int(8))
 
         elif isinstance(ty, types.CPointer):
@@ -291,6 +316,8 @@ class BaseContext(object):
             builder.store(databuf, casted)
             return
 
+        if ty == types.boolean:
+            value = cgutils.as_bool_byte(builder, value)
         assert value.type == ptr.type.pointee
         builder.store(value, ptr)
 
@@ -306,7 +333,11 @@ class BaseContext(object):
             return builder.load(tmp)
 
         assert cgutils.is_pointer(ptr.type)
-        return builder.load(ptr)
+        value = builder.load(ptr)
+        if ty == types.boolean:
+            return builder.trunc(value, Type.int(1))
+        else:
+            return value
 
     def is_struct_type(self, ty):
         return cgutils.is_struct(self.get_data_type(ty))
@@ -470,7 +501,7 @@ class BaseContext(object):
         fn = cgutils.get_function(builder)
         retptr = fn.args[0]
         assert retval.type == retptr.type.pointee, \
-                    (str(retval.type), str(retptr.type.pointee))
+            (str(retval.type), str(retptr.type.pointee))
         builder.store(retval, retptr)
         builder.ret(RETCODE_OK)
 
@@ -492,9 +523,9 @@ class BaseContext(object):
             return val
 
         elif ((fromty in types.unsigned_domain and
-               toty in types.signed_domain) or
-              (fromty in types.integer_domain and
-               toty in types.unsigned_domain)):
+                       toty in types.signed_domain) or
+                  (fromty in types.integer_domain and
+                           toty in types.unsigned_domain)):
             lfrom = self.get_value_type(fromty)
             lto = self.get_value_type(toty)
             if lfrom.width <= lto.width:
@@ -575,7 +606,7 @@ class BaseContext(object):
 
         elif (isinstance(toty, types.UniTuple) and
                   isinstance(fromty, types.UniTuple) and
-                  len(fromty) == len(toty)):
+                      len(fromty) == len(toty)):
             olditems = cgutils.unpack_tuple(builder, val, len(fromty))
             items = [self.cast(builder, i, fromty.dtype, toty.dtype)
                      for i in olditems]
@@ -617,6 +648,12 @@ class BaseContext(object):
         code = builder.call(callee, realargs)
         status = self.get_return_status(builder, code)
         return status, builder.load(retval)
+
+    def call_external_function(self, builder, callee, argtys, args):
+        args = [self.get_value_as_argument(builder, ty, arg)
+                for ty, arg in zip(argtys, args)]
+        retval = builder.call(callee, args)
+        return retval
 
     def get_return_status(self, builder, code):
         norm = builder.icmp(lc.ICMP_EQ, code, RETCODE_OK)
@@ -743,19 +780,34 @@ class BaseContext(object):
         return cary._getvalue()
 
 
-def _wrap_impl(imp, context, sig):
-    def wrapped(builder, args):
-        return imp(context, builder, sig, args)
-    return wrapped
+class _wrap_impl(object):
+    def __init__(self, imp, context, sig):
+        self._imp = imp
+        self._context = context
+        self._sig = sig
+
+    def __call__(self, builder, args):
+        return self._imp(self._context, builder, self._sig, args)
+
+    def __getattr__(self, item):
+        return getattr(self._imp, item)
+
+    def __repr__(self):
+        return "<wrapped %s>" % self._imp
 
 
 class ContextProxy(object):
     """
     Add localized environment for the context of the compiling unit.
     """
+
     def __init__(self, base):
         self.__base = base
-        self.metdata = utils.UniqueDict()
+        self.metadata = utils.UniqueDict()
+        self.linking = set()
+
+    def add_libs(self, libs):
+        self.linking |= set(libs)
 
     def __getattr__(self, name):
         if not name.startswith('_'):

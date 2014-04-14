@@ -135,4 +135,6 @@ def j0(x):
     return p * SQ2OPI / math.sqrt(x)
 
 
-        
+x = np.arange(10000, dtype='i8')
+y = np.arange(10000, dtype='i8')
+print(sum(x, y))

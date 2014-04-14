@@ -3,8 +3,7 @@ from numba import types
 from numba.utils import PYVERSION
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     AbstractTemplate, builtin_global, builtin,
-                                    signature)
-
+                                    builtin_attr, signature)
 
 builtin_global(range, types.range_type)
 if PYVERSION < (3, 0):
@@ -54,7 +53,11 @@ class Abs(ConcreteTemplate):
 class Slice(ConcreteTemplate):
     key = types.slice_type
     cases = [
-        signature(types.slice2_type, types.intp, types.intp),
+        signature(types.slice3_type),
+        signature(types.slice3_type, types.none, types.none),
+        signature(types.slice3_type, types.none, types.intp),
+        signature(types.slice3_type, types.intp, types.none),
+        signature(types.slice3_type, types.intp, types.intp),
         signature(types.slice3_type, types.intp, types.intp, types.intp),
     ]
 
@@ -207,6 +210,7 @@ class BinOpTrueDiv(ConcreteTemplate):
 
     ]
 
+
 @builtin
 class BinOpFloorDiv(ConcreteTemplate):
     key = "//"
@@ -305,6 +309,8 @@ class BitwiseInvert(ConcreteTemplate):
     key = "~"
 
     cases = [
+        signature(types.int8, types.boolean),
+
         signature(types.uint8, types.uint8),
         signature(types.uint16, types.uint16),
         signature(types.uint32, types.uint32),
@@ -341,6 +347,8 @@ class UnaryOp(ConcreteTemplate):
 class UnaryNot(UnaryOp):
     key = "not"
     cases = [
+        signature(types.boolean, types.boolean),
+
         signature(types.boolean, types.uint8),
         signature(types.boolean, types.uint16),
         signature(types.boolean, types.uint32),
@@ -381,25 +389,10 @@ class UnaryNegate(UnaryOp):
     ]
 
 
-@builtin
-class UnaryInvert(ConcreteTemplate):
-    key = "~"
-
-    cases = [
-        signature(types.uintp, types.uint8),
-        signature(types.uintp, types.uint16),
-        signature(types.uintp, types.uint32),
-        signature(types.uint64, types.uint64),
-
-        signature(types.intp, types.int8),
-        signature(types.intp, types.int16),
-        signature(types.intp, types.int32),
-        signature(types.int64, types.int64),
-    ]
-
-
 class CmpOp(ConcreteTemplate):
     cases = [
+        signature(types.boolean, types.boolean, types.boolean),
+
         signature(types.boolean, types.uint8, types.uint8),
         signature(types.boolean, types.uint16, types.uint16),
         signature(types.boolean, types.uint32, types.uint32),
@@ -447,19 +440,24 @@ class CmpOpNe(CmpOp):
 
 def normalize_index(index):
     if isinstance(index, types.UniTuple):
-        return types.UniTuple(types.intp, index.count)
+        if index.dtype in types.integer_domain:
+            return types.UniTuple(types.intp, len(index))
+        elif index.dtype == types.slice3_type:
+            return index
 
     elif isinstance(index, types.Tuple):
         for ty in index:
-            if ty not in types.integer_domain:
+            if (ty not in types.integer_domain and
+                        ty not in types.real_domain and
+                        ty != types.slice3_type):
                 return
         return index
 
     elif index == types.slice3_type:
         return types.slice3_type
 
-    elif index == types.slice2_type:
-        return types.slice2_type
+    # elif index == types.slice2_type:
+    #     return types.slice2_type
 
     else:
         return types.intp
@@ -486,21 +484,31 @@ class GetItemArray(AbstractTemplate):
             return
 
         idx = normalize_index(idx)
-        if idx in (types.slice2_type, types.slice3_type):
+        if not idx:
+            return
+
+        if idx == types.slice3_type: #(types.slice2_type, types.slice3_type):
             res = ary.copy(layout='A')
-        elif isinstance(idx, types.UniTuple):
+        elif isinstance(idx, (types.UniTuple, types.Tuple)):
             if ary.ndim > len(idx):
                 return
             elif ary.ndim < len(idx):
                 return
+            elif any(i == types.slice3_type for i in idx):
+                ndim = ary.ndim
+                for i in idx:
+                    if i != types.slice3_type:
+                        ndim -= 1
+                res = ary.copy(ndim=ndim, layout='A')
             else:
                 res = ary.dtype
         elif idx == types.intp:
             if ary.ndim != 1:
                 return
             res = ary.dtype
+
         else:
-            raise Exception("unreachable")
+            raise Exception("unreachable: index type of %s" % idx)
 
         return signature(res, ary, idx)
 
@@ -528,7 +536,7 @@ class LenArray(AbstractTemplate):
 
 #-------------------------------------------------------------------------------
 
-@builtin
+@builtin_attr
 class ArrayAttribute(AttributeTemplate):
     key = types.Array
 
@@ -540,7 +548,9 @@ class ArrayAttribute(AttributeTemplate):
 
     def resolve_ndim(self, ary):
         return types.intp
-    #
+
+        #
+
     # def resolve_flatten(self, ary):
     #     return types.Method(Array_flatten, ary)
 
@@ -579,7 +589,6 @@ class CmpOpEqArray(AbstractTemplate):
 
 #-------------------------------------------------------------------------------
 class ComplexAttribute(AttributeTemplate):
-
     def resolve_real(self, ty):
         return self.innertype
 
@@ -587,20 +596,20 @@ class ComplexAttribute(AttributeTemplate):
         return self.innertype
 
 
-@builtin
+@builtin_attr
 class Complex64Attribute(ComplexAttribute):
     key = types.complex64
     innertype = types.float32
 
 
-@builtin
+@builtin_attr
 class Complex128Attribute(ComplexAttribute):
     key = types.complex128
     innertype = types.float64
 
 #-------------------------------------------------------------------------------
 
-@builtin
+@builtin_attr
 class NumbaTypesModuleAttribute(AttributeTemplate):
     key = types.Module(types)
 

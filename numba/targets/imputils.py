@@ -10,9 +10,11 @@ def implement(func, *argtys):
         def res(context, builder, sig, args):
             ret = impl(context, builder, sig, args)
             return ret
+
         res.signature = signature(types.Any, *argtys)
         res.key = func
         return res
+
     return wrapper
 
 
@@ -22,8 +24,11 @@ def impl_attribute(ty, attr, rtype):
         def res(context, builder, typ, value, attr):
             ret = impl(context, builder, typ, value)
             return ret
+
+        res.return_type = rtype
         res.key = (ty, attr)
         return res
+
     return wrapper
 
 
@@ -33,12 +38,14 @@ def impl_attribute_generic(ty):
         def res(context, builder, typ, value, attr):
             ret = impl(context, builder, typ, value, attr)
             return ret
+
         res.key = (ty, None)
         return res
+
     return wrapper
 
 
-def user_function(func, fndesc):
+def user_function(func, fndesc, libs):
     def imp(context, builder, sig, args):
         func = context.declare_function(cgutils.get_module(builder), fndesc)
         status, retval = context.call_function(builder, func, fndesc.restype,
@@ -46,8 +53,10 @@ def user_function(func, fndesc):
         with cgutils.if_unlikely(builder, status.err):
             context.return_errcode_propagate(builder, status.code)
         return retval
+
     imp.signature = signature(fndesc.restype, *fndesc.argtypes)
     imp.key = func
+    imp.libs = tuple(libs)
     return imp
 
 
@@ -65,21 +74,25 @@ def python_attr_impl(cls, attr, atyp):
             nativevalue = api.to_native_value(aval, atyp)
             api.decref(aval)
             return nativevalue
+
     return imp
 
 
-#-------------------------------------------------------------------------------
+class Registry(object):
+    def __init__(self):
+        self.functions = []
+        self.attributes = []
 
-BUILTINS = []
-BUILTIN_ATTRS = []
+    def register(self, item):
+        self.functions.append(item)
+        return item
+
+    def register_attr(self, item):
+        self.attributes.append(item)
+        return item
 
 
-def builtin(impl):
-    BUILTINS.append(impl)
-    return impl
-
-
-def builtin_attr(impl):
-    BUILTIN_ATTRS.append(impl)
-    return impl
+builtin_registry = Registry()
+builtin = builtin_registry.register
+builtin_attr = builtin_registry.register_attr
 

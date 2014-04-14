@@ -38,8 +38,15 @@ class Loc(object):
             return "%s (%s)" % (self.filename, self.line)
 
     def strformat(self):
-        relpath = os.path.relpath(self.filename)
-        return 'File "%s", line %d' % (relpath, self.line)
+        try:
+            # Try to get a relative path
+            path = os.path.relpath(self.filename)
+        except ValueError:
+            # Fallback to absolute path if error occured in getting the
+            # relative path.
+            # This may happen on windows if the drive is different
+            path = os.path.abspath(self.filename)
+        return 'File "%s", line %d' % (path, self.line)
 
 
 class VarMap(object):
@@ -140,11 +147,6 @@ class Expr(object):
     def getitem(cls, target, index, loc):
         op = 'getitem'
         return cls(op=op, loc=loc, target=target, index=index)
-
-    @classmethod
-    def getslice(cls, target, start, stop, loc):
-        op = 'getslice'
-        return cls(op=op, loc=loc, target=target, start=start, stop=stop)
 
     def __repr__(self):
         if self.op == 'call':
@@ -284,6 +286,23 @@ class Var(object):
     @property
     def is_temp(self):
         return self.name.startswith("$")
+
+
+class Intrinsic(object):
+    """
+    For inserting intrinsic node into the IR
+    """
+    def __init__(self, name, type, args):
+        self.name = name
+        self.type = type
+        self.loc = None
+        self.args = args
+
+    def __repr__(self):
+        return 'Intrinsic(%s, %s, %s)' % (self.name, self.type, self.loc)
+
+    def __str__(self):
+        return self.name
 
 
 class Scope(object):

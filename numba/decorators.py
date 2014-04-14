@@ -112,9 +112,10 @@ def jit(signature_or_function=None, argtypes=None, restype=None, locals={},
         dispatcher = registry.target_registry[target]
         dispatcher = dispatcher(py_func=pyfunc, locals=locals,
                                 targetoptions=targetoptions)
-        # Compile a pure object mode
-        if target == 'cpu' and not targetoptions.get('nopython', False):
-            dispatcher.compile((), locals=locals, forceobj=True)
+        # NOTE This affects import time for large function
+        # # Compile a pure object mode
+        # if target == 'cpu' and not targetoptions.get('nopython', False):
+        #     dispatcher.compile((), locals=locals, forceobj=True)
         return dispatcher
 
 

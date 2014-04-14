@@ -1,8 +1,12 @@
 from __future__ import print_function, division, absolute_import
 from numba import unittest_support as unittest
 from numba.special import typeof
-from numba import types
+from numba import vectorize, types, jit
 import numpy
+
+
+def dummy(x):
+    return x
 
 
 class TestDispatcher(unittest.TestCase):
@@ -11,6 +15,21 @@ class TestDispatcher(unittest.TestCase):
         self.assertEqual(typeof(numpy.uint16(1)), types.uint16)
         self.assertEqual(typeof(numpy.float64(1)), types.float64)
         self.assertEqual(typeof(numpy.complex128(1)), types.complex128)
+
+
+    def test_numba_interface(self):
+        """
+        Check that vectorize can accept a decorated object.
+        """
+        vectorize('f8(f8)')(jit(dummy))
+
+    def test_no_argument(self):
+        @jit
+        def foo():
+            return 1
+
+        # Just make sure this doesn't crash
+        foo()
 
 
 if __name__ == '__main__':

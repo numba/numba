@@ -2,6 +2,7 @@
 Define typing templates
 """
 from __future__ import print_function, division, absolute_import
+from numba import types
 
 
 class Signature(object):
@@ -102,21 +103,75 @@ def resolve_overload(context, key, cases, args, kws):
             else:
                 ratings.append(rate.astuple())
                 candids.append(case)
+
     # Find the best case
     ordered = sorted(zip(ratings, candids), key=lambda i: i[0])
     if ordered:
         if len(ordered) > 1:
             (first, case1), (second, case2) = ordered[:2]
+            # Ambiguous overloading
             if first == second:
                 ambiguous = []
                 for rate, case in ordered:
                     if rate == first:
-                        ambiguous.append(str(case))
-                args = (key, args, '\n'.join(ambiguous))
+                        ambiguous.append(case)
+
+                # Try to resolve promotion
+                # TODO: need to match this to the C overloading dispatcher
+                resolvable = resolve_ambiguous_promotions(context, ambiguous,
+                                                          args)
+                if resolvable:
+                    return resolvable
+
+                # Failed to resolve promotion
+                args = (key, args, '\n'.join(map(str, ambiguous)))
                 msg = "Ambiguous overloading for %s %s\n%s" % args
                 raise TypeError(msg)
 
         return ordered[0][1]
+
+
+class UnsafePromotionError(Exception):
+    pass
+
+
+def safe_promotion(actual, formal):
+    """
+    Allow integer to be casted to the nearest integer
+    """
+    # Integers?
+    if actual in types.integer_domain and formal in types.integer_domain:
+        # Same signedness?
+        if actual.signed == formal.signed:
+            # Score by their distance
+            return formal.bitwidth - actual.bitwidth
+    raise UnsafePromotionError(actual, formal)
+
+
+def resolve_ambiguous_promotions(context, cases, args):
+    ratings = []
+    for case in cases:
+        try:
+            rate = _safe_promote_case(context, case, args)
+        except UnsafePromotionError:
+            # Ignore error
+            pass
+        else:
+            ratings.append((rate, case))
+
+    _, bestcase = min(ratings)
+    return bestcase
+
+
+def _safe_promote_case(context, case, args):
+    rate = 0
+    for actual, formal in zip(args, case.args):
+        by = context.type_compatibility(actual, formal)
+        if by == 'promote':
+            rate += safe_promotion(actual, formal)
+        else:
+            raise UnsafePromotionError(actual, formal)
+    return rate
 
 
 class FunctionTemplate(object):
@@ -183,20 +238,33 @@ class ClassAttrTemplate(AttributeTemplate):
         return self.clsdict[attr]
 
 
-# -----------------------------------------------------------------------------
-
-BUILTINS = []
-BUILTIN_ATTRS = []
-BUILTIN_GLOBALS = []
+class MacroTemplate(object):
+    pass
 
 
-def builtin(template):
-    if issubclass(template, AttributeTemplate):
-        BUILTIN_ATTRS.append(template)
-    else:
-        BUILTINS.append(template)
-    return template
+# -----------------------------
+
+class Registry(object):
+    def __init__(self):
+        self.functions = []
+        self.attributes = []
+        self.globals = []
+
+    def register(self, item):
+        assert issubclass(item, FunctionTemplate)
+        self.functions.append(item)
+        return item
+
+    def register_attr(self, item):
+        assert issubclass(item, AttributeTemplate)
+        self.attributes.append(item)
+        return item
+
+    def register_global(self, v, t):
+        self.globals.append((v, t))
 
 
-def builtin_global(v, t):
-    BUILTIN_GLOBALS.append((v, t))
+builtin_registry = Registry()
+builtin = builtin_registry.register
+builtin_attr = builtin_registry.register_attr
+builtin_global = builtin_registry.register_global
