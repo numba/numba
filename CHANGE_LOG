@@ -1,3 +1,14 @@
+Version 0.13.1
+--------------
+
+Features:
+* Initial support for CUDA array slicing
+
+Fixes:
+* Indirectly fixes numbapro when the system has a incompatible CUDA driver
+* Fix numba.cuda.detect
+* Export numba.intp and numba.intc
+
 Version 0.13
 ------------
 
