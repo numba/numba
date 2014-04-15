@@ -1,6 +1,5 @@
+import sys
 import numbapro
-
-
-assert numbapro.test()
-
+if not numbapro.test():
+    sys.exit(1)
 print('numbapro.__version__: %s' % numbapro.__version__)
