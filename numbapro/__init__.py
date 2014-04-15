@@ -40,6 +40,8 @@ def test():
         import numba.cuda.cudadrv.libs
         failfast(numba.cuda.cudadrv.libs.test())
 
+        check_cuda()
+
         if numbapro.cuda.is_available:
             print 'cudadrv'.center(80, '-')
             import numbapro.cudadrv.tests.support
@@ -70,6 +72,12 @@ def test():
 
 
 def check_cuda():
+    from numba.cuda import is_available, cuda_error
+    if not is_available:
+        print("CUDA is not available")
+        print(cuda_error)
+        return
+
     from numba.cuda.cudadrv import libs
     from numbapro import cuda
     ok = True
