@@ -496,4 +496,5 @@ register_binary_ufunc(numpy.subtract, '-')
 register_binary_ufunc(numpy.multiply, '*')
 register_binary_ufunc(numpy.divide, '/', asfloat=True, divbyzero=True)
 register_binary_ufunc(numpy.arctan2, math.atan2, asfloat=True)
+register_binary_ufunc(numpy.power, '**', asfloat=True)
 

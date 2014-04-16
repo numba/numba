@@ -28,6 +28,9 @@ class NumpyModuleAttribute(AttributeTemplate):
     def resolve_divide(self, mod):
         return types.Function(Numpy_divide)
 
+    def resolve_power(self, mod):
+        return types.Function(Numpy_power)
+
 
 
 class Numpy_unary_ufunc(AbstractTemplate):
@@ -112,6 +115,9 @@ class Numpy_divide(Numpy_binary_ufunc):
 class Numpy_arctan2(Numpy_binary_ufunc):
     key = numpy.arctan2
 
+class Numpy_power(Numpy_binary_ufunc):
+    key = numpy.power
+
 
 builtin_global(numpy, types.Module(numpy))
 builtin_global(numpy.arctan2, types.Function(Numpy_arctan2))
@@ -119,5 +125,6 @@ builtin_global(numpy.add, types.Function(Numpy_add))
 builtin_global(numpy.subtract, types.Function(Numpy_subtract))
 builtin_global(numpy.multiply, types.Function(Numpy_multiply))
 builtin_global(numpy.divide, types.Function(Numpy_divide))
+builtin_global(numpy.power, types.Function(Numpy_power))
 
 
