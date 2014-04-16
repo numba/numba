@@ -6,7 +6,7 @@ from numba import types, utils
 from numba.typeconv import rules
 from . import templates
 # Initialize declarations
-from . import builtins, mathdecl, npydecl
+from . import builtins, mathdecl, npydecl, operatordecl
 
 
 class BaseContext(object):
@@ -187,6 +187,7 @@ class Context(BaseContext):
     def init(self):
         self.install(mathdecl.registry)
         self.install(npydecl.registry)
+        self.install(operatordecl.registry)
 
 
 def new_method(fn, sig):

@@ -9,7 +9,7 @@ from numba import _dynfunc, _helperlib, config
 from numba.callwrapper import PyCallWrapper
 from .base import BaseContext
 from numba import utils
-from numba.targets import intrinsics, mathimpl, npyimpl
+from numba.targets import intrinsics, mathimpl, npyimpl, operatorimpl
 from .options import TargetOptions
 
 
@@ -41,6 +41,7 @@ class CPUContext(BaseContext):
         # Add target specific implementations
         self.insert_func_defn(mathimpl.registry.functions)
         self.insert_func_defn(npyimpl.registry.functions)
+        self.insert_func_defn(operatorimpl.registry.functions)
 
     def build_pass_manager(self):
         if config.OPT == 3:
