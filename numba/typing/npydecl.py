@@ -47,7 +47,7 @@ class Numpy_rules_ufunc(AbstractTemplate):
         # else... we must look for the kernel to use, the actual loop that
         # will be used, using NumPy's logic:
         assert(len(args) == self.key.nin)
-        base_types = [x.dtype if isintance(x, types.Array) else x for x in args]
+        base_types = [x.dtype if isinstance(x, types.Array) else x for x in args]
         letter_arg_types = numba_types_to_numpy_letter_types(base_types)
 
         ufunc_loop = ufunc_find_matching_loop(self.key, letter_arg_types)
@@ -73,6 +73,7 @@ def _numpy_ufunc(name):
     class typing_class(Numpy_rules_ufunc):
         key = the_key
 
+    typing_class.__name__ = "resolve_{0}".format(name)
     # Add the resolve method to NumpyModuleAttribute
     setattr(NumpyModuleAttribute, "resolve_"+name, lambda s, m: types.Function(typing_class))
     builtin_global(the_key, types.Function(typing_class))

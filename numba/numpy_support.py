@@ -86,10 +86,10 @@ _typemap = {
 _inv_typemap = { v: k  for k,v in _typemap.items() }
 
 def numba_types_to_numpy_letter_types(numba_type_seq):
-    return [_inv_type_map[x] for x in numba_type_seq]
+    return [_inv_typemap[x] for x in numba_type_seq]
 
 def numpy_letter_types_to_numba_types(numpy_letter_types_seq):
-    return [_type_map[x] for x in numpy_letter_types_seq]
+    return [_typemap[x] for x in numpy_letter_types_seq]
 
 def ufunc_find_matching_loop(ufunc, op_dtypes):
     assert(isinstance(ufunc, numpy.ufunc))
