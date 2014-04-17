@@ -46,7 +46,7 @@ class Numpy_rules_ufunc(AbstractTemplate):
                 ndims = max(*[a.ndim if isinstance(a, types.Array) else 0 for a in args])
                 out = [types.Array(x, ndims, 'A') for x in out] 
             out.extend(args)
-            return signature(out)
+            return signature(*out)
 
         # At this point if we don't have a candidate, we are out of luck. NumPy won't know
         # how to eval this!
