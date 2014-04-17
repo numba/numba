@@ -18,21 +18,6 @@ class NumpyModuleAttribute(AttributeTemplate):
     # note: many unary ufuncs are added later on, using setattr
     key = types.Module(numpy)
 
-    def resolve_arctan2(self, mod):
-        return types.Function(Numpy_arctan2)
-
-    def resolve_add(self, mod):
-        return types.Function(Numpy_add)
-
-    def resolve_subtract(self, mod):
-        return types.Function(Numpy_subtract)
-
-    def resolve_multiply(self, mod):
-        return types.Function(Numpy_multiply)
-
-    def resolve_divide(self, mod):
-        return types.Function(Numpy_divide)
-
 
 class Numpy_rules_ufunc(AbstractTemplate):
     def generic(self, args, kws):
