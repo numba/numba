@@ -245,6 +245,9 @@ class Lower(BaseLower):
             if self.context.is_struct_type(ty):
                 const = self.context.get_constant_struct(self.builder, ty,
                                                          value.value)
+            elif ty == types.string:
+                const = self.context.get_constant_string(self.builder, ty,
+                                                         value.value)
             else:
                 const = self.context.get_constant(ty, value.value)
             return const
