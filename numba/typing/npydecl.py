@@ -89,7 +89,7 @@ _autoregister_ufuncs = [
     "sqrt",
     "deg2rad", "rad2deg",
     "add", "subtract", "multiply", "divide",
-    "arctan2"]
+    "arctan2", "power"]
 for func in _autoregister_ufuncs:
     _numpy_ufunc(func)
 del(_autoregister_ufuncs)

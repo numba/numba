@@ -272,6 +272,13 @@ def detect():
     return supported_count > 0
 
 
+@contextlib.contextmanager
+def defer_cleanup():
+    tserv = get_current_device().trashing
+    with tserv.defer_cleanup:
+        yield
+
+
 # TODO
 # Temporary entry-point to debug a failure for nvidia profiling tools to
 # record any kind of events.  Manually invocation of _profile_stop seems to be

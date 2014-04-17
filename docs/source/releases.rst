@@ -8,6 +8,33 @@
 Release Notes
 ======================
 
+Version 0.13
+------------
+
+Features:
+
+* Opensourcing NumbaPro CUDA python support in `numba.cuda`
+* Add support for ufunc array broadcasting
+* Add support for mixed input types for ufuncs
+* Add support for returning tuple from jitted function
+
+Fixes:
+
+* Fix store slice bytecode handling for Python2
+* Fix inplace subtract
+* Fix pycc so that correct header is emitted
+* Allow vectorize to work on functions with jit decorator
+
+
+Version 0.12.2
+--------------
+
+Fixes:
+
+* Improved NumPy ufunc support in nopython mode
+* Misc bug fixes
+
+
 Version 0.12.1
 --------------
 
@@ -31,7 +58,7 @@ Fixes:
 * Fix tenary if...else support
 * Revive "numba" script
 * Fix problems with some boolean expressions
-* Add support for more NumPy ufuncs 
+* Add support for more NumPy ufuncs
 
 
 Version 0.12
@@ -192,7 +219,7 @@ Version 0.3
 * Added support for extension types (numba classes) (see examples/numbaclasses.py)
 * Added support for general Python code (use nopython to raise an error if Python C-API is used to avoid unexpected slowness because of lack of implementation defaulting to generic Python)
 * Fixed many bugs
-* Added support to detect math operations. 
+* Added support to detect math operations.
 * Added with python and with nopython contexts
 * Added more examples
 
@@ -204,6 +231,6 @@ Version 0.2
 * Added an ast approach to compilation
 * Removed d, f, i, b from numba namespace (use f8, f4, i4, b1)
 * Changed function to autojit2
-* Added autojit function to decorate calls to the function and use types of the variable to create compiled versions. 
+* Added autojit function to decorate calls to the function and use types of the variable to create compiled versions.
 * changed keyword arguments to jit and autojit functions to restype and argtypes to be consistent with ctypes module.
 * Added pycc -- a python to shared library compiler

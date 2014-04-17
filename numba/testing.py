@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 import sys
+import contextlib
 
 if sys.version_info[0] >= 3:
     from io import StringIO
@@ -70,7 +71,8 @@ def multitest():
             print(out)
             errct += 1
         else:
-            print('.', end='', flush=True)
+            print('.', end='')
+            sys.stdout.flush()
 
     print()
     if errct == 0:
@@ -84,7 +86,7 @@ def multitest():
 def _multiruntest(suite):
     import numba.unittest_support as unittest
     stream = StringIO()
-    with stream:
+    with contextlib.closing(stream):
         runner = unittest.TextTestRunner(descriptions=False, verbosity=3,
                                          buffer=True, stream=stream)
         result = runner.run(suite)

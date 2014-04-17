@@ -4,6 +4,7 @@ Expose top-level symbols that are safe for import *
 from __future__ import print_function, division, absolute_import
 from . import testing, decorators
 from ._version import get_versions
+from . import special, types
 # Re-export typeof
 from .special import *
 from .pycc.decorators import export, exportmany
@@ -25,3 +26,13 @@ from .npyufunc import vectorize, guvectorize
 
 # Re-export test entrypoint
 test = testing.test
+
+__all__ = """
+jit
+autojit
+njit
+vectorize
+guvectorize
+export
+exportmany
+""".split() + types.__all__ + special.__all__

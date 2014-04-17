@@ -513,6 +513,8 @@ uint8
 uint16
 uint32
 uint64
+intp
+intc
 boolean
 float32
 float64
