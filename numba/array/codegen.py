@@ -19,6 +19,16 @@ class CodeGen(Case):
             self.state['input_types'].append(str(array_data.dtype))
         return var_str
 
+    @of('VariableDataNode(name)')
+    def variable_data_node(self, name):
+        data = self.state['variables'][name]
+        var_str = 'x' + str(id(data))
+        self.state['inputs'].append(data)
+        self.state['input_names'].append(var_str)
+        self.state['input_types'].append(str(data.dtype))
+        self.state['variable_found'] = True
+        return var_str
+
     @of('ScalarConstantNode(value)')
     def scalar_constant(self, value):
         return str(value)
@@ -33,14 +43,12 @@ class CodeGen(Case):
             CodeGen(rhs, state=self.state) + ')'
 
 
-def build(array):
-    inputs = []
-    input_names = []
-    input_types = []
-    operations = CodeGen(array.array_node, state={'inputs':inputs,
-                                                  'input_names':input_names,
-                                                  'input_types':input_types})
-    return operations, inputs, input_names, input_types
+def build(array, state):
+    state['inputs'] = []
+    state['input_names'] = []
+    state['input_types'] = []
+    operations = CodeGen(array.array_node, state=state)
+    return operations, state['inputs'], state['input_names'], state['input_types']
 
 
 def run(operations, inputs, input_names, input_types):

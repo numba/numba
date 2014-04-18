@@ -19,6 +19,11 @@ class Repr(Case):
         level = self.state['level']
         return '{0}array_data: {1}\n'.format(get_indent(level), str(array_data))
 
+    @of('VariableDataNode(name)')
+    def variable_data_node(self, name):
+        level = self.state['level']
+        return '{0}variable_data: {1}\n'.format(get_indent(level), name)
+
     @of('ScalarConstantNode(value)')
     def scalar_constant(self, value):
         level = self.state['level']
