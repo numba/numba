@@ -10,7 +10,6 @@ from repr_ import Repr
 from nodes import *
 
 
-
 def unary_op(op, op_str):
 
     def wrapper(func):
@@ -39,22 +38,35 @@ def binary_op(op, op_str):
 
 class Array(object):
 
-    def __init__(self, data=None):
+    def __init__(self, data=None, name=None):
         if isinstance(data, np.ndarray):
             data = ArrayDataNode(array_data=data)
         self._ref = weakref.ref(self)
-        self.array_node = ArrayNode(data=data, owners=set([self._ref]))
+        if data is None:
+            self.array_node = VariableDataNode(name=name)
+        else:
+            self.array_node = ArrayNode(data=data, owners=set([self._ref]))
 
     def __del__(self):
-        self.array_node.owners.discard(self._ref)
+        if isinstance(self.array_node, ArrayNode):
+            self.array_node.owners.discard(self._ref)
 
-    def eval(self, python=False):
+    def eval(self, **kwargs):
+        python = kwargs.get('python', False)
+        
+        expected_args = ['python']
+        variables = dict([(key,value) for key,value in kwargs.items() if key not in expected_args])
+        state = {'variables':variables, 'variable_found':False}
+
         if not isinstance(self.array_node.data, ArrayDataNode):
             if python:
-                data = Value(self.array_node)
+                data = Value(self.array_node, state=state)
             else:
-                data = codegen.run(*codegen.build(self))
-            self.array_node.data = ArrayDataNode(data)
+                data = codegen.run(*codegen.build(self, state))
+            if not state['variable_found']:
+                self.array_node.data = ArrayDataNode(array_data=data)
+            else:
+                return data
         return self.array_node.data.array_data
 
     def __str__(self):
