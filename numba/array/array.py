@@ -1,4 +1,5 @@
 import numpy as np
+from numba import jit
 import operator
 import math
 import weakref
@@ -99,6 +100,29 @@ class Array(object):
                                     owners=set(self._ref))
 
 
+def reduce_(func, operand, initial):
+    array = operand.eval()
+
+    cfunc = jit(func)
+    
+    @jit
+    def reduce_loop(cfunc, array):
+        total = 0
+        for i in range(array.shape[0]):
+            total = cfunc(total, array[i])
+        return total
+
+    return reduce_loop(cfunc, array)
+
+
+def create_reduce_func(op, initial):
+    
+    def reduce_wrapper(operand):
+        return reduce_(op, operand, initial)
+
+    return reduce_wrapper
+
+
 @unary_op(abs, 'abs')
 def abs_(operand):
     pass
@@ -106,4 +130,11 @@ def abs_(operand):
 @unary_op(math.log, 'math.log')
 def log(operand):
     pass
+
+@binary_op(operator.add, 'operator.add')
+def add(op1, op2):
+    pass
+
+add.reduce = create_reduce_func(lambda x,y: x + y, 0)
+
 

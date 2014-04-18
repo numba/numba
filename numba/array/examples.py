@@ -1,4 +1,4 @@
-from array import Array, abs_
+from array import Array, abs_, add, reduce_
 import numpy as np
 
 
@@ -18,20 +18,17 @@ def simple_example():
     print result.__repr__()
 
 
-'''def reduce_example():
+def reduce_example():
 
     a1 = Array(data=np.arange(10))
     a2 = Array(data=np.arange(10))
 
     result = a1 + a2
 
-    print result.__repr__()
-
     # force eval
-    add.reduce(result)
+    total = add.reduce(result)
 
-    print result.__repr__()
-    print result'''
+    print total
 
 
 '''def deferred_data_example():
@@ -65,7 +62,7 @@ def python_mode_example():
 
 if __name__ == '__main__':
     simple_example()
-    #reduce_example()
+    reduce_example()
     #deferred_data_example
     #python_mode_example()
 
