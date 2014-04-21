@@ -243,13 +243,17 @@ class Interpreter(object):
                 (), loc=self.loc)
         self.store(value=sliceinst, name=res)
 
-    def op_SLICE_0(self, inst, base, res, slicevar, indexvar):
+    def op_SLICE_0(self, inst, base, res, slicevar, indexvar, nonevar):
         base = self.get(base)
 
         slicegv = ir.Global("slice", slice, loc=self.loc)
         self.store(value=slicegv, name=slicevar)
 
-        index = ir.Expr.call(self.get(slicevar), (), (), loc=self.loc)
+        nonegv = ir.Const(None, loc=self.loc)
+        self.store(value=nonegv, name=nonevar)
+        none = self.get(nonevar)
+
+        index = ir.Expr.call(self.get(slicevar), (none, none), (), loc=self.loc)
         self.store(value=index, name=indexvar)
 
         expr = ir.Expr.getitem(base, self.get(indexvar), loc=self.loc)
@@ -306,13 +310,17 @@ class Interpreter(object):
         expr = ir.Expr.getitem(base, self.get(indexvar), loc=self.loc)
         self.store(value=expr, name=res)
 
-    def op_STORE_SLICE_0(self, inst, base, value, slicevar, indexvar):
+    def op_STORE_SLICE_0(self, inst, base, value, slicevar, indexvar, nonevar):
         base = self.get(base)
 
         slicegv = ir.Global("slice", slice, loc=self.loc)
         self.store(value=slicegv, name=slicevar)
 
-        index = ir.Expr.call(self.get(slicevar), (), (), loc=self.loc)
+        nonegv = ir.Const(None, loc=self.loc)
+        self.store(value=nonegv, name=nonevar)
+        none = self.get(nonevar)
+
+        index = ir.Expr.call(self.get(slicevar), (none, none), (), loc=self.loc)
         self.store(value=index, name=indexvar)
 
         stmt = ir.SetItem(base, self.get(indexvar), self.get(value),

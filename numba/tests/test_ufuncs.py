@@ -725,7 +725,6 @@ class TestUFuncs(unittest.TestCase):
     def test_power_ufunc(self):
         self.binary_ufunc_test('power')
 
-    @unittest.expectedFailure
     def test_power_ufunc_npm(self):
         self.binary_ufunc_test('power', flags=no_pyobj_flags)
 

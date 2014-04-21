@@ -258,8 +258,9 @@ class DataFlowAnalysis(object):
         res = info.make_temp()
         slicevar = info.make_temp()
         indexvar = info.make_temp()
+        nonevar = info.make_temp()
         info.append(inst, base=tos, res=res, slicevar=slicevar,
-                    indexvar=indexvar)
+                    indexvar=indexvar, nonevar=nonevar)
         info.push(res)
 
     def op_SLICE_1(self, info, inst):
@@ -312,8 +313,9 @@ class DataFlowAnalysis(object):
         value = info.pop()
         slicevar = info.make_temp()
         indexvar = info.make_temp()
+        nonevar = info.make_temp()
         info.append(inst, base=tos, value=value, slicevar=slicevar,
-                    indexvar=indexvar)
+                    indexvar=indexvar, nonevar=nonevar)
 
     def op_STORE_SLICE_1(self, info, inst):
         """

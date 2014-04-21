@@ -55,7 +55,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'numba'
-copyright = u'2012-2013, Continuum Analytics'
+copyright = u'2012-2014, Continuum Analytics'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -198,7 +198,7 @@ latex_elements = {
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
   ('index', 'numba.tex', u'numba Documentation',
-   u'Mahadevan R (2008-2010), Continuum Analytics (2012)', 'manual'),
+   u'Continuum Analytics (2012)', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -228,7 +228,7 @@ latex_documents = [
 # (source start file, name, description, authors, manual section).
 man_pages = [
     ('index', 'numba', u'numba Documentation',
-     [u'Mahadevan R (2008-2010), Continuum Analytics (2012)'], 1)
+     [u'Continuum Analytics (2012)'], 1)
 ]
 
 # If true, show URL addresses after external links.
@@ -242,7 +242,7 @@ man_pages = [
 #  dir menu entry, description, category)
 texinfo_documents = [
   ('index', 'numba', u'numba Documentation',
-   u'Mahadevan R (2008-2010), Continuum Analytics (2012)', 'numba', 'One line description of project.',
+   u'Continuum Analytics (2012)', 'numba', 'One line description of project.',
    'Miscellaneous'),
 ]
 

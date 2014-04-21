@@ -1,11 +1,11 @@
 from __future__ import print_function, division, absolute_import
 from .ufuncbuilder import UFuncBuilder, GUFuncBuilder
 
-from numba import utils
+from numba.targets.registry import TargetRegistry
 
 
 class Vectorize(object):
-    target_registry = utils.UniqueDict({'cpu': UFuncBuilder})
+    target_registry = TargetRegistry({'cpu': UFuncBuilder})
 
     def __new__(cls, func, **kws):
         target = kws.pop('target', 'cpu')
@@ -18,7 +18,7 @@ class Vectorize(object):
 
 
 class GUVectorize(object):
-    target_registry = utils.UniqueDict({'cpu': GUFuncBuilder})
+    target_registry = TargetRegistry({'cpu': GUFuncBuilder})
 
     def __new__(cls, func, signature, **kws):
         target = kws.pop('target', 'cpu')
@@ -67,6 +67,7 @@ def vectorize(ftylist, **kws):
         for fty in ftylist:
             vec.add(fty)
         return vec.build_ufunc()
+
     return wrap
 
 
@@ -116,6 +117,7 @@ def guvectorize(ftylist, signature, **kws):
         for fty in ftylist:
             guvec.add(fty)
         return guvec.build_ufunc()
+
     return wrap
 
 

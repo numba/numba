@@ -1,5 +1,6 @@
 from __future__ import print_function
 from collections import namedtuple, defaultdict
+from types import BuiltinFunctionType, MethodType
 import llvm.core as lc
 from llvm.core import Type, Constant
 import numpy
@@ -417,7 +418,10 @@ class BaseContext(object):
     def get_function(self, fn, sig):
         if isinstance(fn, types.Function):
             key = fn.template.key
-            overloads = self.defns[key]
+            if isinstance(key, MethodType):
+                overloads = self.defns[key.im_func]
+            else:
+                overloads = self.defns[key]
         elif isinstance(fn, types.Dispatcher):
             key = fn.overloaded.get_overload(sig.args)
             overloads = self.defns[key]

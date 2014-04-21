@@ -89,7 +89,7 @@ class NVVM(object):
             except OSError as e:
                 cls.__INSTANCE = None
                 errmsg = ("libNVVM cannot be found. Do `conda install "
-                          "cudatoolkit`")
+                          "cudatoolkit`:\n%s")
                 raise NvvmSupportError(errmsg % e)
 
             # Find & populate functions

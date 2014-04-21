@@ -11,6 +11,7 @@ Numba
    :titlesonly:
    :maxdepth: 2
 
+   install.rst
    quickstart.rst
    types.rst
    arrays.rst
@@ -31,6 +32,16 @@ Numba
    :maxdepth: 1
 
    interface_c.rst
+
+**CUDA API (experimental)**
+
+.. toctree::
+   :maxdepth: 1
+
+   CUDAintro.rst
+   CUDAJit.rst
+   CUDADevice.rst
+   CUDASupport.rst
 
 **Misc**
 

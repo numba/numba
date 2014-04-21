@@ -29,6 +29,12 @@ def compile_cuda(pyfunc, return_type, args, debug):
 
     # Linking depending libraries
     targetctx.link_dependencies(cres.llvm_module, cres.target_context.linking)
+
+    # Fix global naming
+    for gv in cres.llvm_module.global_variables:
+        if '.' in gv.name:
+            gv.name = gv.name.replace('.', '_')
+
     return cres
 
 
