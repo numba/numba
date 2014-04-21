@@ -102,6 +102,9 @@ class MathModuleAttribute(AttributeTemplate):
     def resolve_hypot(self, mod):
         return types.Function(Math_hypot)
 
+    def resolve_pow(self, mod):
+        return types.Function(Math_pow)
+
 
 class Math_unary(ConcreteTemplate):
     cases = [
@@ -249,6 +252,16 @@ class Math_isinf(ConcreteTemplate):
     ]
 
 
+class Math_pow(ConcreteTemplate):
+    key = math.pow
+    cases = [
+        signature(types.float64, types.float64, types.int64),
+        signature(types.float64, types.float64, types.uint64),
+        signature(types.float32, types.float32, types.float32),
+        signature(types.float64, types.float64, types.float64),
+    ]
+
+
 builtin_global(math, types.Module(math))
 builtin_global(math.fabs, types.Function(Math_fabs))
 builtin_global(math.exp, types.Function(Math_exp))
@@ -279,3 +292,4 @@ builtin_global(math.isnan, types.Function(Math_isnan))
 builtin_global(math.isinf, types.Function(Math_isinf))
 builtin_global(math.degrees, types.Function(Math_degrees))
 builtin_global(math.radians, types.Function(Math_radians))
+builtin_global(math.pow, types.Function(Math_pow))
