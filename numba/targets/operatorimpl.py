@@ -1,10 +1,7 @@
 import operator
-import llvm.core as lc
-from llvm.core import Type
 from numba.targets.imputils import implement, Registry
 from numba.targets import builtins
-from numba import types, cgutils, utils
-from numba.typing import signature
+from numba import types, utils
 
 registry = Registry()
 register = registry.register
@@ -24,7 +21,8 @@ for ty in types.integer_domain:
     register(implement(operator.invert, ty)(builtins.int_invert_impl))
 
 for ty in types.unsigned_domain:
-    register(implement(operator.div, ty, ty)(builtins.int_udiv_impl))
+    if not utils.IS_PY3:
+        register(implement(operator.div, ty, ty)(builtins.int_udiv_impl))
     register(implement(operator.floordiv, ty, ty)(builtins.int_ufloordiv_impl))
     register(implement(operator.truediv, ty, ty)(builtins.int_utruediv_impl))
     register(implement(operator.mod, ty, ty)(builtins.int_urem_impl))
@@ -36,7 +34,8 @@ for ty in types.unsigned_domain:
     register(implement(operator.rshift, ty, ty)(builtins.int_lshr_impl))
 
 for ty in types.signed_domain:
-    register(implement(operator.div, ty, ty)(builtins.int_sdiv_impl))
+    if not utils.IS_PY3:
+        register(implement(operator.div, ty, ty)(builtins.int_sdiv_impl))
     register(implement(operator.floordiv, ty, ty)(builtins.int_sfloordiv_impl))
     register(implement(operator.truediv, ty, ty)(builtins.int_struediv_impl))
     register(implement(operator.mod, ty, ty)(builtins.int_srem_impl))
@@ -51,7 +50,8 @@ for ty in types.real_domain:
     register(implement(operator.add, ty, ty)(builtins.real_add_impl))
     register(implement(operator.sub, ty, ty)(builtins.real_sub_impl))
     register(implement(operator.mul, ty, ty)(builtins.real_mul_impl))
-    register(implement(operator.div, ty, ty)(builtins.real_div_impl))
+    if not utils.IS_PY3:
+        register(implement(operator.div, ty, ty)(builtins.real_div_impl))
     register(implement(operator.truediv, ty, ty)(builtins.real_div_impl))
     register(implement(operator.mod, ty, ty)(builtins.real_mod_impl))
     register(implement(operator.pow, ty, ty)(builtins.real_power_impl))

@@ -1,5 +1,6 @@
 import operator
-from numba import types, utils
+from numba import types
+from numba import utils
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     signature, Registry)
 
@@ -44,6 +45,9 @@ binary_operators = ['add', 'sub', 'mul', 'div', 'floordiv', 'truediv', 'mod', 'p
     'eq', 'ne', 'lt', 'le', 'gt', 'ge', 'and_', 'or_', 'xor',
     'lshift', 'rshift']
 
+if utils.IS_PY3:
+    binary_operators.remove('div')
+    
 for op in binary_operators:
     op_type = type('Operator_' + op, (Operator_binary,), {'key':getattr(operator, op)})
     setattr(OperatorModuleAttribute, 'resolve_' + op,  create_resolve_method(op_type))
