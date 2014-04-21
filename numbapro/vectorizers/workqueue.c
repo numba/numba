@@ -91,9 +91,16 @@ int numba_join_thread(void *thread)
 #endif
 
 
-/* A fake module entry point */
-
 MOD_INIT(workqueue) {
-    puts("I am not really a C extension");
-    return MOD_ERROR_VAL;
+    PyObject *m;
+    MOD_DEF(m, "workqueue", "No docs", NULL)
+    if (m == NULL)
+        return MOD_ERROR_VAL;
+
+    PyObject_SetAttrString(m, "new_thread_fnptr",
+                           PyLong_FromVoidPtr(&numba_new_thread));
+    PyObject_SetAttrString(m, "join_thread_fnptr",
+                           PyLong_FromVoidPtr(&numba_join_thread));
+
+    return MOD_SUCCESS_VAL(m);
 }
