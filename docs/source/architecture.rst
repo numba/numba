@@ -43,12 +43,12 @@ provides a target context that describes the target-specific lowering.
 Targets
 =======
 
-Each target implementation has two context:
+Each target implementation has two contexts:
 
-* a type context
+* a typing context
 * a codegen context
 
-The type context is equivalent to a C header file.
+The typing context is equivalent to a C header file.
 The codegen context is equivalent to a C source file.
 This allows the same typing rules to be shared across multiple targets,
 while each of them has a different implementation.
