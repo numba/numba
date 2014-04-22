@@ -9,6 +9,7 @@ from llvm.core import Type
 from numba.targets.imputils import implement, Registry
 from numba import types, cgutils, utils
 from numba.typing import signature
+from . import builtins
 
 
 registry = Registry()
@@ -303,3 +304,13 @@ def degrees_f32_impl(context, builder, sig, args):
     return builder.fdiv(builder.fmul(x, full), twopi)
 
 unary_math_int_impl(math.degrees, degrees_f64_impl)
+
+# -----------------------------------------------------------------------------
+
+for ty in types.unsigned_domain:
+    register(implement(math.pow, types.float64, ty)(builtins.int_upower_impl))
+for ty in types.signed_domain:
+    register(implement(math.pow, types.float64, ty)(builtins.int_spower_impl))
+for ty in types.real_domain:
+    register(implement(math.pow, ty, ty)(builtins.real_power_impl))
+

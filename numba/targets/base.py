@@ -1,5 +1,6 @@
 from __future__ import print_function
 from collections import namedtuple, defaultdict
+from types import BuiltinFunctionType, MethodType
 import llvm.core as lc
 from llvm.core import Type, Constant
 import numpy
@@ -181,6 +182,14 @@ class BaseContext(object):
         fnty = Type.function(Type.int(), [resptr] + argtypes)
         return fnty
 
+    def get_external_function_type(self, fndesc):
+        argtypes = [self.get_argument_type(aty)
+                    for aty in fndesc.argtypes]
+        # don't wrap in pointer
+        restype = self.get_argument_type(fndesc.restype)
+        fnty = Type.function(restype, argtypes)
+        return fnty
+
     def declare_function(self, module, fndesc):
         fnty = self.get_function_type(fndesc)
         fn = module.get_or_insert_function(fnty, name=fndesc.mangled_name)
@@ -188,6 +197,14 @@ class BaseContext(object):
         for ak, av in zip(fndesc.args, self.get_arguments(fn)):
             av.name = "arg.%s" % ak
         fn.args[0] = ".ret"
+        return fn
+
+    def declare_external_function(self, module, fndesc):
+        fnty = self.get_external_function_type(fndesc)
+        fn = module.get_or_insert_function(fnty, name=fndesc.mangled_name)
+        assert fn.is_declaration
+        for ak, av in zip(fndesc.args, fn.args):
+            av.name = "arg.%s" % ak
         return fn
 
     def insert_const_string(self, mod, string):
@@ -351,7 +368,10 @@ class BaseContext(object):
     def get_function(self, fn, sig):
         if isinstance(fn, types.Function):
             key = fn.template.key
-            overloads = self.defns[key]
+            if isinstance(key, MethodType):
+                overloads = self.defns[key.im_func]
+            else:
+                overloads = self.defns[key]
         elif isinstance(fn, types.Dispatcher):
             key = fn.overloaded.get_overload(sig.args)
             overloads = self.defns[key]
@@ -568,6 +588,12 @@ class BaseContext(object):
         code = builder.call(callee, realargs)
         status = self.get_return_status(builder, code)
         return status, builder.load(retval)
+
+    def call_external_function(self, builder, callee, argtys, args):
+        args = [self.get_value_as_argument(builder, ty, arg)
+                for ty, arg in zip(argtys, args)]
+        retval = builder.call(callee, args)
+        return retval
 
     def get_return_status(self, builder, code):
         norm = builder.icmp(lc.ICMP_EQ, code, RETCODE_OK)
