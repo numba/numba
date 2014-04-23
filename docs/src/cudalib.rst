@@ -58,7 +58,7 @@ See `NVIDIA cuFFT <http://docs.nvidia.com/cuda/cufft/index.html>`_.
 
 
 .. note::  cuFFT only supports FFT operations on numpy.float32, numpy float64,
-           numpy.complex32, numpy.complex64 with C-contiguous datalayout.
+           numpy.complex64, numpy.complex128 with C-contiguous datalayout.
 
 
 Forward FFT
