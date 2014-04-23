@@ -83,7 +83,7 @@ _typemap = {
     'M': types.pyobject
 }
 
-_inv_typemap = { v: k  for k,v in _typemap.items() }
+_inv_typemap = dict((v,k) for (k,v) in _typemap.items());
 
 def numba_types_to_numpy_letter_types(numba_type_seq):
     return [_inv_typemap[x] for x in numba_type_seq]
