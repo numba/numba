@@ -66,8 +66,8 @@ _typemap = {
     'B': types.uint8,
     'h': types.short,
     'H': types.ushort,
-    'i': types.int32, # should be C int
-    'I': types.uint32, # should be C unsigned int
+    'i': types.intc,
+    'I': types.uintc,
     'l': types.long_,
     'L': types.ulong,
     'q': types.longlong,
