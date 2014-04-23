@@ -17,6 +17,10 @@ Noflags = Flags()
 def slicing_1d_usecase(a, start, stop, step):
     return a[start:stop:step]
 
+def slicing_1d_usecase_set(a, b, start, stop, step):
+    a[start:stop:step] = b
+    return a
+
 def slicing_1d_usecase2(a, start, stop, step):
     b = a[start:stop:step]
     total = 0
@@ -125,6 +129,27 @@ class TestIndexing(unittest.TestCase):
         Return of arbitrary array is not supported yet
         """
         self.test_1d_slicing(flags=Noflags)
+
+    def test_1d_slicing_set(self, flags=enable_pyobj_flags):
+        pyfunc = slicing_1d_usecase_set
+        arraytype = types.Array(types.int32, 1, 'C')
+        argtys = (arraytype, arraytype, types.int32, types.int32, types.int32)
+        cr = compile_isolated(pyfunc, argtys, flags=flags)
+        cfunc = cr.entry_point
+
+        arg = np.arange(10, dtype='i4')
+        for test in ((0, 10, 1), (2,3,1), (10,0,1), (0,10,-1), (0,10,2)):
+            pyleft = pyfunc(np.zeros(10, dtype='i4'), arg[slice(*test)], *test)
+            cleft = cfunc(np.zeros(10, dtype='i4'), arg[slice(*test)], *test)
+            self.assertTrue((pyleft == cleft).all())
+
+    @unittest.expectedFailure
+    def test_1d_slicing_set_npm(self):
+        """
+        TypingError: Cannot resolve setitem: array(int32, 1d, C)[slice3_type] = ...
+        setitem on slices not yet supported.
+        """
+        self.test_1d_slicing_set(flags=Noflags)
 
     def test_1d_slicing2(self, flags=enable_pyobj_flags):
         pyfunc = slicing_1d_usecase2
