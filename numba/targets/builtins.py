@@ -4,7 +4,7 @@ import math
 from functools import reduce
 from numba import types, typing, cgutils, utils
 from numba.targets.imputils import (builtin, builtin_attr, implement,
-                                    impl_attribute)
+                                    impl_attribute, impl_attribute_generic)
 
 #-------------------------------------------------------------------------------
 
@@ -402,7 +402,7 @@ for ty in types.integer_domain:
     builtin(implement('==', ty, ty)(int_eq_impl))
     builtin(implement('!=', ty, ty)(int_ne_impl))
 
-    builtin(implement(types.print_type, ty)(int_print_impl))
+    builtin(implement(types.print_item_type, ty)(int_print_impl))
     builtin(implement('<<', ty, types.uint32)(int_shl_impl))
 
     builtin(implement('&', ty, ty)(int_and_impl))
@@ -715,7 +715,7 @@ for ty in types.real_domain:
     builtin(implement('>=', ty, ty)(real_ge_impl))
 
     builtin(implement(types.abs_type, ty)(real_abs_impl))
-    builtin(implement(types.print_type, ty)(real_print_impl))
+    builtin(implement(types.print_item_type, ty)(real_print_impl))
 
     builtin(implement('-', ty)(real_negate_impl))
     builtin(implement(types.neg_type, ty)(real_negate_impl))
@@ -1618,6 +1618,36 @@ def array_size(context, builder, typ, value):
     return reduce(builder.mul, dims[1:], dims[0])
 
 
+@builtin_attr
+@impl_attribute_generic(types.Array)
+def array_record_getattr(context, builder, typ, value, attr):
+    arrayty = make_array(typ)
+    array = arrayty(context, builder, value)
+
+    rectype = typ.dtype
+    dtype = rectype.typeof(attr)
+    offset = rectype.offset(attr)
+
+    resty = types.Array(dtype, ndim=typ.ndim, layout='A')
+
+    raryty = make_array(resty)
+
+    rary = raryty(context, builder)
+    rary.shape = array.shape
+
+    constoffset = context.get_constant(types.intp, offset)
+    unpackedstrides = cgutils.unpack_tuple(builder, array.strides, typ.ndim)
+    newstrides = [builder.add(s, constoffset) for s in unpackedstrides]
+
+    rary.strides = array.strides
+
+    llintp = context.get_value_type(types.intp)
+    newdata = builder.add(builder.ptrtoint(array.data, llintp), constoffset)
+    newdataptr = builder.inttoptr(newdata, rary.data.type)
+    rary.data = newdataptr
+
+    return rary._getvalue()
+
 #-------------------------------------------------------------------------------
 
 
@@ -1763,6 +1793,39 @@ def complex_impl(context, builder, sig, args):
     cmplx.imag = imag
     return cmplx._getvalue()
 
+#-------------------------------------------------------------------------------
+
+@builtin
+@implement(types.print_item_type, types.Kind(types.CharSeq))
+def print_charseq(context, builder, sig, args):
+    [x] = args
+    py = context.get_python_api(builder)
+    xp = cgutils.alloca_once(builder, x.type)
+    builder.store(x, xp)
+    byteptr = builder.bitcast(xp, Type.pointer(Type.int(8)))
+    size = context.get_constant(types.intp, x.type.elements[0].count)
+    cstr = py.bytes_from_string_and_size(byteptr, size)
+    py.print_object(cstr)
+    py.decref(cstr)
+    return context.get_dummy_value()
+
+#-------------------------------------------------------------------------------
+
+@builtin
+@implement(types.print_type, types.VarArg)
+def print_varargs(context, builder, sig, args):
+    py = context.get_python_api(builder)
+    for i, (argtype, argval) in enumerate(zip(sig.args, args)):
+        signature = typing.signature(types.none, argtype)
+        imp = context.get_function(types.print_item_type, signature)
+        imp(builder, [argval])
+        if i == len(args) - 1:
+            py.print_string('\n')
+        else:
+            py.print_string(' ')
+
+    return context.get_dummy_value()
+
 # -----------------------------------------------------------------------------
 
 @builtin_attr
@@ -1775,3 +1838,4 @@ def math_pi_impl(context, builder, typ, value):
 @impl_attribute(types.Module(math), "e", types.float64)
 def math_e_impl(context, builder, typ, value):
     return context.get_constant(types.float64, math.e)
+

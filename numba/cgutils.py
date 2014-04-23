@@ -62,6 +62,7 @@ class Structure(object):
         def iterator():
             for field, _ in self._fields:
                 yield getattr(self, field)
+
         return iter(iterator())
 
 
@@ -347,6 +348,7 @@ def get_item_pointer2(builder, data, shape, strides, layout, inds,
                 steps.append(last)
         else:
             raise Exception("unreachable")
+
         # Compute index
         loc = Constant.int(intp, 0)
         for i, s in zip(indices, steps):
@@ -437,8 +439,55 @@ def is_struct_ptr(ltyp):
     return is_pointer(ltyp) and is_struct(ltyp.pointee)
 
 
+def get_record_member(builder, record, offset, typ):
+    pdata = get_record_data(builder, record)
+    pval = inbound_gep(builder, pdata, 0, offset)
+    assert not is_pointer(pval.type.pointee)
+    return builder.bitcast(pval, Type.pointer(typ))
+
+
+def get_record_data(builder, record):
+    return builder.extract_value(record, 0)
+
+
+def set_record_data(builder, record, buf):
+    pdata = inbound_gep(builder, record, 0, 0)
+    assert pdata.type.pointee == buf.type
+    builder.store(buf, pdata)
+
+
+def init_record_by_ptr(builder, ltyp, ptr):
+    tmp = alloca_once(builder, ltyp)
+    pdata = ltyp.elements[0]
+    buf = builder.bitcast(ptr, pdata)
+    set_record_data(builder, tmp, buf)
+    return tmp
+
+
 def is_neg_int(builder, val):
     return builder.icmp(lc.ICMP_SLT, val, get_null_value(val.type))
+
+
+def inbound_gep(builder, ptr, *inds):
+    idx = []
+    for i in inds:
+        if isinstance(i, int):
+            ind = Constant.int(Type.int(32), i)
+        else:
+            ind = i
+        idx.append(ind)
+    return builder.gep(ptr, idx, inbounds=True)
+
+
+def gep(builder, ptr, *inds):
+    idx = []
+    for i in inds:
+        if isinstance(i, int):
+            ind = Constant.int(Type.int(64), i)
+        else:
+            ind = i
+        idx.append(ind)
+    return builder.gep(ptr, idx)
 
 
 # ------------------------------------------------------------------------------
@@ -448,6 +497,7 @@ class VerboseProxy(object):
     """
     Use to wrap llvm.core.Builder to track where segfault happens
     """
+
     def __init__(self, obj):
         self.__obj = obj
 
@@ -456,6 +506,7 @@ class VerboseProxy(object):
         if callable(fn):
             def wrapped(*args, **kws):
                 import traceback
+
                 traceback.print_stack()
                 print(key, args, kws)
                 try:
@@ -466,10 +517,11 @@ class VerboseProxy(object):
             return wrapped
         return fn
 
-def printf(builder, format_string, *values):
 
+def printf(builder, format_string, *values):
     str_const = Constant.stringz(format_string)
-    global_str_const = get_module(builder).add_global_variable(str_const.type, '')
+    global_str_const = get_module(builder).add_global_variable(str_const.type,
+                                                               '')
     global_str_const.initializer = str_const
 
     idx = [Constant.int(Type.int(32), 0), Constant.int(Type.int(32), 0)]

@@ -13,6 +13,7 @@ def _autoincr():
     assert n <= 2 ** 32, "Limited to 4billion types"
     return n
 
+
 _typecache = defaultdict(_autoincr)
 
 
@@ -75,6 +76,15 @@ class Type(object):
 
     __iter__ = NotImplemented
     cast_python_value = NotImplemented
+
+
+class OpaqueType(Type):
+    """
+    To deal with externally defined literal types
+    """
+
+    def __init__(self, name):
+        super(OpaqueType, self).__init__(name)
 
 
 class Integer(Type):
@@ -209,6 +219,67 @@ class Method(Function):
 
     def __hash__(self):
         return hash((self.template.__name__, self.this))
+
+
+class CharSeq(Type):
+    def __init__(self, count):
+        self.count = count
+        name = "[char x %d]" % count
+        super(CharSeq, self).__init__(name, param=True)
+
+    def __eq__(self, other):
+        if isinstance(other, CharSeq):
+            return self.count == other.count
+
+    def __hash__(self):
+        return hash(self.name)
+
+
+class UnicodeCharSeq(Type):
+    def __init__(self, count):
+        self.count = count
+        name = "[unichr x %d]" % count
+        super(UnicodeCharSeq, self).__init__(name, param=True)
+
+    def __eq__(self, other):
+        if isinstance(other, UnicodeCharSeq):
+            return self.count == other.count
+
+    def __hash__(self):
+        return hash(self.name)
+
+
+class Record(Type):
+    def __init__(self, id, fields, size, align, dtype):
+        self.id = id
+        self.fields = fields.copy()
+        self.size = size
+        self.align = align
+        self.dtype = dtype
+        name = 'Record(%s)' % id
+        super(Record, self).__init__(name)
+
+    def __eq__(self, other):
+        if isinstance(other, Record):
+            return (self.id == other.id and
+                    self.size == other.size and
+                    self.align == other.align)
+
+    def __hash__(self):
+        return hash(self.name)
+
+    def __len__(self):
+        return len(self.fields)
+
+    def offset(self, key):
+        return self.fields[key][1]
+
+    def typeof(self, key):
+        return self.fields[key][0]
+
+    @property
+    def members(self):
+        return [(f, t) for f, (t, _) in self.fields.items()]
 
 
 class Array(Type):
@@ -447,6 +518,7 @@ slice_type = Dummy('slice')
 abs_type = Dummy('abs')
 neg_type = Dummy('neg')
 print_type = Dummy('print')
+print_item_type = Dummy('print-item')
 sign_type = Dummy('sign')
 
 range_state32_type = Type('range_state32')
@@ -486,7 +558,6 @@ float_ = float32
 double = float64
 void = none
 
-
 _make_signed = lambda x: globals()["int%d" % (numpy.dtype(x).itemsize * 8)]
 _make_unsigned = lambda x: globals()["uint%d" % (numpy.dtype(x).itemsize * 8)]
 
@@ -502,7 +573,6 @@ long_ = _make_signed(numpy.long)
 ulong = _make_unsigned(numpy.long)
 longlong = _make_signed(numpy.longlong)
 ulonglong = _make_unsigned(numpy.longlong)
-
 
 __all__ = '''
 int8

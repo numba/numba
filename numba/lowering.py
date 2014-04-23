@@ -2,7 +2,7 @@ from __future__ import print_function, division, absolute_import
 from collections import defaultdict
 from llvm.core import Type, Builder, Module
 import llvm.core as lc
-from numba import ir, types, cgutils, utils, config
+from numba import ir, types, cgutils, utils, config, cffi_support
 
 
 try:
@@ -236,6 +236,23 @@ class Lower(BaseLower):
         elif isinstance(inst, ir.Del):
             pass
 
+        elif isinstance(inst, ir.SetAttr):
+            target = self.loadvar(inst.target.name)
+            value = self.loadvar(inst.value.name)
+            signature = self.fndesc.calltypes[inst]
+
+            targetty = self.typeof(inst.target.name)
+            valuety = self.typeof(inst.value.name)
+            assert signature is not None
+            assert signature.args[0] == targetty
+            impl = self.context.get_setattr(inst.attr, signature)
+
+            # Convert argument to match
+            value = self.context.cast(self.builder, value, valuety,
+                                      signature.args[1])
+
+            return impl(self.builder, (target, value))
+
         else:
             raise NotImplementedError(type(inst))
 
@@ -285,6 +302,11 @@ class Lower(BaseLower):
                 consts = [self.context.get_constant(t, v)
                           for t, v in zip(ty, value.value)]
                 return cgutils.pack_array(self.builder, consts)
+
+            elif self.context.is_struct_type(ty):
+                return self.context.get_constant_struct(self.builder, ty,
+                        value.value)
+
             else:
                 raise NotImplementedError('global', ty)
 
@@ -350,6 +372,12 @@ class Lower(BaseLower):
                 res = self.context.call_function_pointer(self.builder, pointer,
                                                          signature, castvals)
 
+            elif isinstance(fnty, cffi_support.ExternCFunction):
+                fndesc = describe_external(fnty.symbol, fnty.restype, fnty.argtypes)
+                func = self.context.declare_external_function(
+                        cgutils.get_module(self.builder), fndesc)
+                res = self.context.call_external_function(self.builder, func, fndesc.argtypes, castvals)
+
             else:
                 # Normal function resolution
                 impl = self.context.get_function(fnty, signature)
@@ -379,10 +407,7 @@ class Lower(BaseLower):
                 # ignore the attribute
                 res = self.context.get_dummy_value()
             else:
-                res = impl(self.context, self.builder, ty, val)
-                if not isinstance(impl.return_type, types.Kind):
-                    res = self.context.cast(self.builder, res, impl.return_type,
-                                            resty)
+                res = impl(self.context, self.builder, ty, val, expr.attr)
             return res
 
         elif expr.op == "getitem":
@@ -643,7 +668,7 @@ class PyLower(BaseLower):
 
     def lower_const(self, const):
         if isinstance(const, str):
-            ret = self.pyapi.string_from_string_and_size(const)
+            ret = self.pyapi.string_from_constant_string(const)
             self.check_error(ret)
             return ret
         elif isinstance(const, complex):

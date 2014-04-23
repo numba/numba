@@ -55,6 +55,124 @@ int Numba_to_complex(PyObject* obj, Py_complex *out) {
     return 1;
 }
 
+/* Minimum PyBufferObject structure to hack inside it */
+typedef struct {
+    PyObject_HEAD
+    PyObject *b_base;
+    void *b_ptr;
+    Py_ssize_t b_size;
+    Py_ssize_t b_offset;
+}  PyBufferObject_Hack;
+
+/*
+Get data address of record data buffer
+*/
+static
+void* Numba_extract_record_data(PyObject *recordobj) {
+    PyObject *attrdata;
+    void *ptr;
+    Py_buffer buf;
+
+    attrdata = PyObject_GetAttrString(recordobj, "data");
+    if (!attrdata) return NULL;
+
+    if (-1 == PyObject_GetBuffer(attrdata, &buf, 0)){
+        #if PY_MAJOR_VERSION >= 3
+            return NULL;
+        #else
+            /* HACK!!! */
+            /* In Python 2.6, it will report no buffer interface for record
+               even though it should */
+            PyBufferObject_Hack *hack;
+            hack = (PyBufferObject_Hack*) attrdata;
+
+            if (hack->b_base == NULL) {
+                ptr = hack->b_ptr;
+            } else {
+                PyBufferProcs *bp;
+                readbufferproc proc = NULL;
+
+                bp = hack->b_base->ob_type->tp_as_buffer;
+                /* FIXME Ignoring any flag.  Just give me the pointer */
+                proc = (readbufferproc)bp->bf_getreadbuffer;
+                if ((*proc)(hack->b_base, 0, &ptr) <= 0) {
+                    return NULL;
+                }
+                ptr = (char*)ptr + hack->b_offset;
+            }
+        #endif
+    } else {
+        ptr = buf.buf;
+    }
+    Py_DECREF(attrdata);
+    return ptr;
+}
+
+static
+PyObject* Numba_recreate_record(void *pdata, int size, PyObject *dtype){
+    /*
+    import numpy
+    buffer = memoryview(pdata, size)
+    aryobj = numpy.array(buffer, dtype=(numpy.record, dtype))
+    return aryobj[0]
+    */
+    PyObject *buffer = NULL;
+    PyObject *numpy = NULL;
+    PyObject *numpy_array = NULL;
+    PyObject *numpy_record = NULL;
+    PyObject *aryobj = NULL;
+    PyObject *args = NULL;
+    PyObject *kwargs = NULL;
+    PyObject *dtypearg = NULL;
+    PyObject *record = NULL;
+    PyObject *index = NULL;
+
+#if PY_MAJOR_VERSION >= 3
+    buffer = PyMemoryView_FromMemory(pdata, size, PyBUF_WRITE);
+#else
+    buffer = PyBuffer_FromMemory(pdata, size);
+#endif
+    if (!buffer) goto CLEANUP;
+
+    numpy = PyImport_ImportModuleNoBlock("numpy");
+    if (!numpy) goto CLEANUP;
+
+    numpy_array = PyObject_GetAttrString(numpy, "array");
+    if (!numpy_array) goto CLEANUP;
+
+    numpy_record = PyObject_GetAttrString(numpy, "record");
+    if (!numpy_record) goto CLEANUP;
+
+    args = Py_BuildValue("([O])", buffer);
+    if (!args) goto CLEANUP;
+
+    dtypearg = Py_BuildValue("(OO)", numpy_record, dtype);
+    if (!dtypearg) goto CLEANUP;
+
+    kwargs = Py_BuildValue("{sO}", "dtype", dtypearg);
+    if (!kwargs) goto CLEANUP;
+
+    aryobj = PyObject_Call(numpy_array, args, kwargs);
+    if (!aryobj) goto CLEANUP;
+
+    index = Py_BuildValue("i", 0);
+    if (!index) goto CLEANUP;
+
+    record = PyObject_GetItem(aryobj, index);
+
+CLEANUP:
+    Py_DECREF(numpy);
+    Py_DECREF(numpy_array);
+    Py_DECREF(numpy_record);
+    Py_DECREF(aryobj);
+    Py_DECREF(args);
+    Py_DECREF(kwargs);
+    Py_DECREF(dtypearg);
+    Py_DECREF(buffer);
+    Py_DECREF(index);
+
+    return record;
+}
 
 static
 double Numba_round_even(double y) {
@@ -89,6 +207,8 @@ EXPOSE(Numba_udiv, get_udiv)
 EXPOSE(Numba_urem, get_urem)
 EXPOSE(Numba_cpow, get_cpow)
 EXPOSE(Numba_to_complex, get_complex_adaptor)
+EXPOSE(Numba_extract_record_data, get_extract_record_data)
+EXPOSE(Numba_recreate_record, get_recreate_record)
 EXPOSE(Numba_round_even, get_round_even)
 EXPOSE(Numba_roundf_even, get_roundf_even)
 EXPOSE(Numba_fptoui, get_fptoui)
@@ -123,6 +243,8 @@ static PyMethodDef ext_methods[] = {
     declmethod(get_urem),
     declmethod(get_cpow),
     declmethod(get_complex_adaptor),
+    declmethod(get_extract_record_data),
+    declmethod(get_recreate_record),
     declmethod(get_round_even),
     declmethod(get_roundf_even),
     declmethod(get_fptoui),

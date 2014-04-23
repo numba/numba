@@ -388,6 +388,12 @@ class Interpreter(object):
         value = self.get(value)
         self.store(value=value, name=dstname)
 
+    def op_STORE_ATTR(self, inst, target, value):
+        attr = self.code_names[inst.arg]
+        sa = ir.SetAttr(target=self.get(target), value=self.get(value),
+                        attr=attr, loc=self.loc)
+        self.current_block.append(sa)
+
     def op_LOAD_ATTR(self, inst, item, res):
         item = self.get(item)
         attr = self.code_names[inst.arg]

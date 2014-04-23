@@ -115,6 +115,7 @@ def _make_bytecode_table():
                     ('ROT_THREE', 0),
                     ('ROT_TWO', 0),
                     ('SETUP_LOOP', 2),
+                    ('STORE_ATTR', 2),
                     ('STORE_FAST', 2),
                     #    ('STORE_ATTR', 2), # not supported
                     ('STORE_SUBSCR', 0),
