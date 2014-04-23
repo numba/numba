@@ -16,38 +16,29 @@ class npy:
     """This will be used as an index of the npy_* functions"""
     pass
 
+
+
 def unary_npy_math_extern(fn):
     setattr(npy, fn, fn)
     fn_sym = eval("npy."+fn)
-    @register
-    @implement(fn_sym, types.int64)
-    def s64impl(context, builder, sig, args):
-        [val] = args
-        fpval = builder.sitofp(val, Type.double())
-        sig = typing.signature(types.float64, types.float64)
-        return f64impl(context, builder, sig, [fpval])
-
-    @register
-    @implement(fn_sym, types.uint64)
-    def u64impl(context, builder, sig, args):
-        [val] = args
-        fpval = builder.uitofp(val, Type.double())
-        sig = typing.signature(types.float64, types.float64)
-        return f64impl(context, builder, sig, [fpval])
 
     n = "numba.npymath." + fn
-    @register
-    @implement(fn_sym, types.float64)
-    def f64impl(context, builder, sig, args):
+    def ref_impl(context, builder, sig, args):
         [val] = args
         mod = cgutils.get_module(builder)
         fnty = Type.function(Type.double(), [Type.double()])
         fn = mod.get_or_insert_function(fnty, name=n)
         return builder.call(fn, (val,))
 
-_externs = [ "exp2", "expm1", "log", "log2", "log10", "log1p", "deg2rad", "rad2deg" ]
-for x in _externs:
-    unary_npy_math_extern(x)
+    ty_dst = types.float64
+    for ty_src in [types.int64, types.uint64, types.float64]:
+        @register
+        @implement(fn_sym, ty_src)
+        def _impl(context, builder, sig, args):
+            [val] = args
+            cast_val = val if ty_dst == ty_src else context.cast(builder, val, ty_src, ty_dst)
+            sig = typing.signature(ty_dst, ty_dst)
+            return ref_impl(context, builder, sig, [cast_val])
 
 
 def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
@@ -222,31 +213,45 @@ def register_unary_ufunc(ufunc, operator, asfloat=False):
     for ty in types.number_domain:
         register(implement(ufunc, ty)(scalar_unary_ufunc))
 
-register_unary_ufunc(numpy.exp, math.exp, asfloat=True)
-register_unary_ufunc(numpy.exp2, npy.exp2, asfloat=True)
-register_unary_ufunc(numpy.expm1, npy.expm1, asfloat=True)
-register_unary_ufunc(numpy.log, npy.log, asfloat=True)
-register_unary_ufunc(numpy.log2, npy.log2, asfloat=True)
-register_unary_ufunc(numpy.log10, npy.log10, asfloat=True)
-register_unary_ufunc(numpy.log1p, npy.log1p, asfloat=True)
-register_unary_ufunc(numpy.deg2rad, npy.deg2rad, asfloat=True)
-register_unary_ufunc(numpy.rad2deg, npy.rad2deg, asfloat=True)
-register_unary_ufunc(numpy.sin, math.sin, asfloat=True)
-register_unary_ufunc(numpy.cos, math.cos, asfloat=True)
-register_unary_ufunc(numpy.tan, math.tan, asfloat=True)
-register_unary_ufunc(numpy.sinh, math.sinh, asfloat=True)
-register_unary_ufunc(numpy.cosh, math.cosh, asfloat=True)
-register_unary_ufunc(numpy.tanh, math.tanh, asfloat=True)
-register_unary_ufunc(numpy.arcsin, math.asin, asfloat=True)
-register_unary_ufunc(numpy.arccos, math.acos, asfloat=True)
-register_unary_ufunc(numpy.arctan, math.atan, asfloat=True)
-register_unary_ufunc(numpy.arcsinh, math.asinh, asfloat=True)
-register_unary_ufunc(numpy.arccosh, math.acosh, asfloat=True)
-register_unary_ufunc(numpy.arctanh, math.atanh, asfloat=True)
-register_unary_ufunc(numpy.sqrt, math.sqrt, asfloat=True)
-register_unary_ufunc(numpy.floor, math.floor, asfloat=True)
-register_unary_ufunc(numpy.ceil, math.ceil, asfloat=True)
-register_unary_ufunc(numpy.trunc, math.trunc, asfloat=True)
+
+
+# _externs will be used to register ufuncs.
+# each tuple contains the ufunc to be translated. That ufunc will be converted to
+# an equivalent loop that calls the function in the npymath support module (registered
+# as external function as "numba.npymath."+func
+_externs = [
+    (numpy.exp, "exp"),
+    (numpy.exp2, "exp2"),
+    (numpy.expm1, "expm1"),
+    (numpy.log, "log"),
+    (numpy.log2, "log2"),
+    (numpy.log10, "log10"),
+    (numpy.log1p, "log1p"),
+    (numpy.deg2rad, "deg2rad"),
+    (numpy.rad2deg, "rad2deg"),
+    (numpy.sin, "sin"),
+    (numpy.cos, "cos"),
+    (numpy.tan, "tan"),
+    (numpy.sinh, "sinh"),
+    (numpy.cosh, "cosh"),
+    (numpy.tanh, "tanh"),
+    (numpy.arcsin, "asin"),
+    (numpy.arccos, "acos"),
+    (numpy.arctan, "atan"),
+    (numpy.arcsinh, "asinh"),
+    (numpy.arccosh, "acosh"),
+    (numpy.arctanh, "atanh"),
+    (numpy.sqrt, "sqrt"),
+    (numpy.floor, "floor"),
+    (numpy.ceil, "ceil"),
+    (numpy.trunc, "trunc") ]
+
+
+for x in _externs:
+    unary_npy_math_extern(x[1])
+    func = eval("npy." + x[1])
+    register_unary_ufunc(x[0], func, asfloat = True)
+
 
 register_unary_ufunc(numpy.absolute, types.abs_type)
 register_unary_ufunc(numpy.sign, types.sign_type)
