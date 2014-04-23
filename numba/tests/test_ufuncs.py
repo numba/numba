@@ -33,9 +33,9 @@ def _make_binary_ufunc_usecase(ufunc_name):
 
 
 class TestUFuncs(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.inputs =  [
+
+    def setUp(self):
+        self.inputs = [
             (0, types.uint32),
             (1, types.uint32),
             (-1, types.int32),
@@ -61,10 +61,6 @@ class TestUFuncs(unittest.TestCase):
             (np.array([-1,0,1], dtype='i8'), types.Array(types.int64, 1, 'C')),
             (np.array([-0.5, 0.0, 0.5], dtype='f4'), types.Array(types.float32, 1, 'C')),
             (np.array([-0.5, 0.0, 0.5], dtype='f8'), types.Array(types.float64, 1, 'C'))]
-
-    @classmethod
-    def tearDownClass(cls):
-        del(cls.inputs)
 
     def unary_ufunc_test(self, ufunc_name, flags=enable_pyobj_flags,
                          skip_inputs=[], additional_inputs=[],
