@@ -16,14 +16,19 @@ enable_pyobj_flags.set("enable_pyobject")
 
 no_pyobj_flags = Flags()
 
-
 def _make_unary_ufunc_usecase(ufunc_name):
-    exec("def fn(x, out):\n    np.{0}(x,out)".format(ufunc_name))
+    ldict = {}
+    exec("def fn(x,out):\n    np.{0}(x,out)".format(ufunc_name), globals(), ldict)
+    fn = ldict["fn"]
+    fn.__name__ = "{0}_usecase".format(ufunc_name)
     return fn
 
 
 def _make_binary_ufunc_usecase(ufunc_name):
-    exec("def fn(x, y, out):\n    np.{0}(x, y, out)".format(ufunc_name))
+    ldict = {}
+    exec("def fn(x,y,out):\n    np.{0}(x,y,out)".format(ufunc_name), globals(), ldict);
+    fn = ldict['fn']
+    fn.__name__ = "{0}_usecase".format(ufunc_name)
     return fn
 
 
