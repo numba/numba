@@ -29,16 +29,18 @@ class Repr(Case):
         level = self.state['level']
         return '{0}value: {1}\n'.format(get_indent(level), str(value))
 
-    @of('UnaryOperation(operand, op, op_str)')
-    def unary_operation(self, operand, op, op_str):
+    @of('UnaryOperation(operand, op_str)')
+    def unary_operation(self, operand, op_str):
         level = self.state['level']
-        return '{0}UnaryOperation: \n{1}\n'.format(get_indent(level),
+        return '{0}UnaryOperation: {1}\n{2}\n'.format(get_indent(level),
+            op_str,
             Repr(operand, state={'level':level+1}))
 
-    @of('BinaryOperation(lhs, rhs, op, op_str)')
-    def binary_operation(self, lhs, rhs, op, op_str):
+    @of('BinaryOperation(lhs, rhs, op_str)')
+    def binary_operation(self, lhs, rhs, op_str):
         level = self.state['level']
-        return '{0}BinaryOperation: \n{1}\n{2}\n'.format(get_indent(level),
+        return '{0}BinaryOperation: {1}\n{2}\n{3}\n'.format(get_indent(level),
+            op_str,
             Repr(lhs, state={'level':level+1}),
             Repr(rhs, state={'level':level+1}))
 

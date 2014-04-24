@@ -1,19 +1,20 @@
 from array import Array, abs_, add, reduce_
 import numpy as np
+from timeit import repeat
+from numba import vectorize
 
 
 def simple_example():
 
-    a1 = Array(data=np.arange(10))
-    a2 = Array(data=np.arange(10))
-    a3 = Array(data=np.arange(10))
+    a1 = Array(data=np.arange(10000000, dtype='f8'))
+    a2 = Array(data=np.arange(10000000, dtype='f8'))
 
-    result = a1 + a2 + a3
+    result = a1 + a2 + a1*2 + a2*3
 
     print result.__repr__()
 
     # force eval
-    print result
+    result.eval()
 
     print result.__repr__()
 
@@ -57,9 +58,33 @@ def python_mode_example():
     print result.eval(python=True)
 
 
-if __name__ == '__main__':
-    simple_example()
-    reduce_example()
-    deferred_data_example()
-    python_mode_example()
+def slice_example():
 
+    a1 = Array(data=np.arange(10))
+    a2 = Array(data=np.arange(10))
+
+    result = a1 + a2
+    print result.__repr__()
+
+    result = result[0:5] + result[5:]
+    print result.eval(debug=False)
+
+
+def assignment_example():
+
+    a1 = Array(data=np.arange(20))
+    a2 = Array(data=np.arange(10))
+
+    a1 = a1 + a1
+    a1[0:10] = a2 * a2
+
+    print a1
+
+
+if __name__ == '__main__':
+    #simple_example()
+    #reduce_example()
+    #deferred_data_example()
+    #python_mode_example()
+    #slice_example()
+    assignment_example()
