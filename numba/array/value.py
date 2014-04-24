@@ -1,5 +1,6 @@
 from pyalge import Case, of
 from nodes import *
+import operator
 
 
 class Value(Case):
@@ -16,13 +17,13 @@ class Value(Case):
     def scalar_constant(self, value):
         return value
 
-    @of('UnaryOperation(operand, op, op_str)')
-    def unary_operation(self, operand, op, op_str):
-        return op(Value(operand))
+    @of('UnaryOperation(operand, op_str)')
+    def unary_operation(self, operand, op_str):
+        return eval(op_str)(Value(operand))
 
-    @of('BinaryOperation(lhs, rhs, op, op_str)')
-    def binary_operation(self, lhs, rhs, op, op_str):
-        return op(Value(lhs), Value(rhs))
+    @of('BinaryOperation(lhs, rhs, op_str)')
+    def binary_operation(self, lhs, rhs, op_str):
+        return eval(op_str)(Value(lhs), Value(rhs))
 
     @of('ArrayAssignOperation(operand, key, value)')
     def array_assign_operation(self, operand, key, value):

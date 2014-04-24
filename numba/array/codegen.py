@@ -33,15 +33,14 @@ class CodeGen(Case):
     def scalar_constant(self, value):
         return str(value)
 
-    @of('UnaryOperation(operand, op, op_str)')
-    def unary_operation(self, operand, op, op_str):
+    @of('UnaryOperation(operand, op_str)')
+    def unary_operation(self, operand, op_str):
         return op_str + '(' + CodeGen(operand, state=self.state) + ')'
 
-    @of('BinaryOperation(lhs, rhs, op, op_str)')
-    def binary_operation(self, lhs, rhs, op, op_str):
+    @of('BinaryOperation(lhs, rhs, op_str)')
+    def binary_operation(self, lhs, rhs, op_str):
         return op_str + '(' + CodeGen(lhs, state=self.state) + ',' + \
             CodeGen(rhs, state=self.state) + ')'
-
 
 def build(array, state):
     state['inputs'] = []
@@ -63,6 +62,23 @@ def foo({0}):
 
     foo = globals()['foo']
 
-    ufunc = vectorize('(' + ','.join(input_types) + ')')(foo)
+    if len(input_types) > 1:
+        ufunc = vectorize('(' + ','.join(input_types) + ')')(foo)
+    else:
+        ufunc = vectorize('(' + input_types[0] + ',)')(foo)
     return ufunc(*inputs)
     
+def dump(operations, inputs, input_names, input_types):
+    ufunc_str = '''
+def foo({0}):
+    return {1}
+'''.format(','.join(input_names), operations)
+
+    if len(input_types) > 1:
+        decorator =  '@decorator(' + ','.join(input_types) + ')'
+    else:
+        decorator =  '@decorator(' + input_types[0] + ',)'
+        
+    return decorator + ufunc_str
+    
+
