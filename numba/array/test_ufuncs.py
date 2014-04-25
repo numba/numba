@@ -32,25 +32,6 @@ class TestUFuncs(unittest.TestCase):
         self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
 
 
-    def test_binary_operator(self):
-
-        a = numbarray.arange(10)
-        result = a + a
-        expected = np.arange(10) + np.arange(10)
-
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
-
-        result = a + 1
-        expected = np.add(np.arange(10), 1)
-
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
-
-        result = 1 + a
-        expected = np.add(1, np.arange(10))
-
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
-
-
 if __name__ == '__main__':
     unittest.main()
 
