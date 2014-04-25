@@ -160,18 +160,6 @@ def create_reduce_func(operation, initial_value):
     return reduce_wrapper
 
 
-@unary_op('abs')
-def abs_(operand):
-    pass
-
-@unary_op('math.log')
-def log(operand):
-    pass
-
-@binary_op('operator.add')
-def add(operand1, operand2):
-    pass
-
-add.reduce = create_reduce_func(lambda x,y: x+y, 0)
+#add.reduce = create_reduce_func(lambda x,y: x+y, 0)
 
 
