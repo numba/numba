@@ -66,8 +66,9 @@ class Array(object):
 
         if not isinstance(self.array_node.data, ArrayDataNode):
             if debug:
-                return codegen.dump(*codegen.build(self, state))
-            elif python:
+                print codegen.dump(*codegen.build(self, state))
+
+            if python:
                 data = Value(self.array_node, state=state)
             else:
                 data = codegen.run(*codegen.build(self, state))
@@ -134,16 +135,6 @@ class Array(object):
         data = self.eval()
         data[key] = value.eval()
         return Array(data=data)
-
-
-Array_methods = ['min', 'max', 'any', 'all']
-
-for method in Array_methods:
-    def create_method_template(method):
-        def method_template(self, *args, **kwargs):
-            return getattr(self.eval(), method)(*args, **kwargs)
-        return method_template
-    setattr(Array, method, create_method_template(method))
 
 
 def reduce_(func, operand, initial_value):

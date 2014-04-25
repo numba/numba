@@ -68,6 +68,7 @@ def foo({0}):
         ufunc = vectorize('(' + input_types[0] + ',)')(foo)
     return ufunc(*inputs)
     
+
 def dump(operations, inputs, input_names, input_types):
     ufunc_str = '''
 def foo({0}):
@@ -75,9 +76,9 @@ def foo({0}):
 '''.format(','.join(input_names), operations)
 
     if len(input_types) > 1:
-        decorator =  '@decorator(' + ','.join(input_types) + ')'
+        decorator =  "@decorator(['(" + ','.join(input_types) + ")']"
     else:
-        decorator =  '@decorator(' + input_types[0] + ',)'
+        decorator =  "@decorator(['(" + input_types[0] + ",)']"
         
     return decorator + ufunc_str
     
