@@ -11,35 +11,6 @@ from nodes import *
 from numba.config import PYVERSION
 
 
-# Wrapper for unary functions so that calling unary function
-# will return Array object to user instead of UnaryOperation node
-def unary_op(op_str):
-
-    def wrapper(func):
-        def impl(self):
-            return Array(data=UnaryOperation(self.array_node, op_str))
-
-        return impl
-
-    return wrapper
-
-
-# Wrapper for binary functions so that calling binary function
-# will return Array object to user instead of BinaryOperation node.
-def binary_op(op_str):
-
-    def wrapper(func):
-        def impl(self, other):
-            if isinstance(other, Array):
-                other = other.array_node
-            else:
-                other = ScalarNode(other)
-            return Array(data=BinaryOperation(self.array_node, other, op_str))
-        return impl
-
-    return wrapper
-
-
 class Array(object):
 
     def __init__(self, data=None, name=None):
@@ -89,6 +60,10 @@ class Array(object):
 
     def __radd__(self, other):
         return ufuncs.add(self, other)
+
+    def __iadd__(self, other):
+        self.array_node = ufuncs.add(self, other).array_node
+        return self
 
     def __sub__(self, other):
         return ufuncs.subtract(self, other)
