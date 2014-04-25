@@ -33,7 +33,7 @@ def binary_op(op_str):
             if isinstance(other, Array):
                 other = other.array_node
             else:
-                other = ScalarConstantNode(other)
+                other = ScalarNode(other)
             return Array(data=BinaryOperation(self.array_node, other, op_str))
         return impl
 
@@ -56,9 +56,9 @@ class Array(object):
             self.array_node.owners.discard(self._ref)
 
     def eval(self, **kwargs):
-        expected_args = ['python', 'debug']
+        expected_args = ['use_python', 'debug']
 
-        python = kwargs.get('python', False)
+        python = kwargs.get('use_python', False)
         debug = kwargs.get('debug', False)
         
         variables = dict([(key,value) for key,value in kwargs.items() if key not in expected_args])
@@ -84,49 +84,33 @@ class Array(object):
     def __repr__(self):
         return Repr(self.array_node, state={'level':0})
 
-    @binary_op('operator.add')
     def __add__(self, other):
-        pass
+        return ufuncs.add(self, other)
 
-    @binary_op('operator.sub')
+    def __radd__(self, other):
+        return ufuncs.add(self, other)
+
     def __sub__(self, other):
-        pass
+        return ufuncs.subtract(self, other)
 
-    @binary_op('operator.mul')
+    def __rsub__(self, other):
+        return ufuncs.subtract(self, other)
+
     def __mul__(self, other):
-        pass
+        return ufuncs.multiply(self, other)
 
-    @binary_op('operator.truediv' if PYVERSION >= (3, 0) else 'operator.div')
+    def __rmul__(self, other):
+        return ufuncs.multiply(self, other)
+
+    '''@binary_op('operator.truediv' if PYVERSION >= (3, 0) else 'operator.div')
     def __div__(self, other):
-        pass
+        return create_binary_op('operator.add')(self, other)'''
 
-    @binary_op('operator.lt')
-    def __lt__(self, other):
-        pass
-
-    @binary_op('operator.le')
-    def __le__(self, other):
-        pass
-
-    @binary_op('operator.gt')
-    def __gt__(self, other):
-        pass
-
-    @binary_op('operator.ge')
-    def __ge__(self, other):
-        pass
-
-    @binary_op('operator.eq')
-    def __eq__(self, other):
-        pass
-
-    @binary_op('operator.ne')
-    def __ne__(self, other):
-        pass
-
-    @binary_op('operator.pow')
     def __pow__(self, other):
-        pass
+        return ufuncs.power(self, other)
+
+    def __rpow__(self, other):
+        return ufuncs.power(self, other)
 
     def __getitem__(self, other):
         return Array(data=self.eval()[other])
@@ -162,4 +146,4 @@ def create_reduce_func(operation, initial_value):
 
 #add.reduce = create_reduce_func(lambda x,y: x+y, 0)
 
-
+import ufuncs
