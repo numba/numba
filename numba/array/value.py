@@ -13,8 +13,8 @@ class Value(Case):
     def array_data_node(self, array_data):
         return array_data
 
-    @of('ScalarConstantNode(value)')
-    def scalar_constant(self, value):
+    @of('ScalarNode(value)')
+    def scalar_node(self, value):
         return value
 
     @of('UnaryOperation(operand, op_str)')

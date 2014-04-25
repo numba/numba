@@ -29,8 +29,8 @@ class CodeGen(Case):
         self.state['variable_found'] = True
         return var_str
 
-    @of('ScalarConstantNode(value)')
-    def scalar_constant(self, value):
+    @of('ScalarNode(value)')
+    def scalar_node(self, value):
         return str(value)
 
     @of('UnaryOperation(operand, op_str)')

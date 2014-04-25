@@ -24,10 +24,10 @@ class Repr(Case):
         level = self.state['level']
         return '{0}variable_data: {1}\n'.format(get_indent(level), name)
 
-    @of('ScalarConstantNode(value)')
-    def scalar_constant(self, value):
+    @of('ScalarNode(value)')
+    def scalar_node(self, value):
         level = self.state['level']
-        return '{0}value: {1}\n'.format(get_indent(level), str(value))
+        return '{0}ScalarNode: {1}\n'.format(get_indent(level), str(value))
 
     @of('UnaryOperation(operand, op_str)')
     def unary_operation(self, operand, op_str):

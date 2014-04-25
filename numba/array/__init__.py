@@ -6,4 +6,4 @@ from functions import amin, amax, nanmin, nanmax, ptp, \
     nanstd, nanvar, corrcoef, correlate, cov, histogram, \
     histogram2d, histogramdd, bincount, digitize
 
-from ufuncs import abs, add, log
+from ufuncs import add, multiply
