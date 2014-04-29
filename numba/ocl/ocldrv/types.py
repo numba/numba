@@ -35,5 +35,6 @@ cl_mem = ctypes.c_void_p
 # The ones below may need to be tweaked per platform (looked up on include files)
 cl_bitfield = cl_ulong
 cl_command_queue_properties = cl_bitfield
+cl_device_type = cl_bitfield
 cl_mem_flags = cl_bitfield
 cl_bool = cl_uint # this probably can change from platform to platform

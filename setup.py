@@ -88,6 +88,8 @@ packages = [
     "numba.cuda.tests",
     "numba.cuda.tests.cudadrv",
     "numba.cuda.tests.cudapy",
+    "numba.ocl",
+    "numba.ocl.ocldrv",
     "numba.ext",
     "numba.ext.impala",
 ]
