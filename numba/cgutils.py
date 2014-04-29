@@ -271,46 +271,11 @@ def unpack_tuple(builder, tup, count):
 
 
 def get_item_pointer(builder, aryty, ary, inds, wraparound=False):
-    if wraparound:
-        # Wraparound
-        shapes = unpack_tuple(builder, ary.shape, count=aryty.ndim)
-        indices = []
-        for ind, dimlen in zip(inds, shapes):
-            ZERO = Constant.null(ind.type)
-            negative = builder.icmp(lc.ICMP_SLT, ind, ZERO)
-            wrapped = builder.add(dimlen, ind)
-            selected = builder.select(negative, wrapped, ind)
-            indices.append(selected)
-    else:
-        indices = inds
-    del inds
-    intp = indices[0].type
-    # Indexing code
-    if aryty.layout == 'C':
-        # C contiguous
-        shapes = unpack_tuple(builder, ary.shape, count=aryty.ndim)
-        steps = []
-        for i in range(len(shapes)):
-            last = Constant.int(intp, 1)
-            for j in shapes[i + 1:]:
-                last = builder.mul(last, j)
-            steps.append(last)
-
-        loc = Constant.int(intp, 0)
-        for i, s in zip(indices, steps):
-            tmp = builder.mul(i, s)
-            loc = builder.add(loc, tmp)
-        ptr = builder.gep(ary.data, [loc])
-        return ptr
-    else:
-        # Any layout
-        strides = unpack_tuple(builder, ary.strides, count=aryty.ndim)
-        dimoffs = [builder.mul(s, i) for s, i in zip(strides, indices)]
-        offset = functools.reduce(builder.add, dimoffs)
-        base = builder.ptrtoint(ary.data, offset.type)
-        where = builder.add(base, offset)
-        ptr = builder.inttoptr(where, ary.data.type)
-        return ptr
+    shapes = unpack_tuple(builder, ary.shape, count=aryty.ndim)
+    strides = unpack_tuple(builder, ary.strides, count=aryty.ndim)
+    return get_item_pointer2(builder, data=ary.data, shape=shapes,
+                             strides=strides, layout=aryty.layout, inds=inds,
+                             wraparound=wraparound)
 
 
 def get_item_pointer2(builder, data, shape, strides, layout, inds,
