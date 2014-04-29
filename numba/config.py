@@ -41,3 +41,6 @@ ANNOTATE = _readenv("NUMBA_DUMP_ANNOTATION", int, 0)
 # Python version in (major, minor) tuple
 PYVERSION = sys.version_info[:2]
 
+# Disable CUDA support
+DISABLE_CUDA = _readenv("NUMBA_DISABLE_CUDA", int, 0)
+

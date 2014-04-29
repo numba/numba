@@ -1,11 +1,11 @@
 from __future__ import print_function, absolute_import, division
-import functools
 
 # Re export
 from .stubs import (threadIdx, blockIdx, blockDim, gridDim, syncthreads,
                     shared, local, const, grid, atomic)
 from .cudadrv.error import CudaSupportError
-
+from . import initialize
+from numba import config
 
 def dummy(*args, **kws):
     """A dummy function to allow import of CUDA functions even if the CUDA
@@ -39,11 +39,16 @@ defer_cleanup
 """
 
 try:
+    if config.DISABLE_CUDA:
+        raise CudaSupportError("CUDA support is disabled")
+
     from .decorators import jit, autojit, declare_device
     from .api import *
 
     is_available = True
     cuda_error = None
+    initialize.initialize_all()
+
 except CudaSupportError as e:
     is_available = False
     cuda_error = e
