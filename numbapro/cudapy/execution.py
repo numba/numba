@@ -19,8 +19,8 @@ class CUDARuntimeError(RuntimeError):
 
 
 class CUDAKernelBase(object):
-    '''Define interface for configurable kernels
-    '''
+    """Define interface for configurable kernels
+    """
 
     def __init__(self):
         self.griddim = (1, 1)
@@ -30,6 +30,20 @@ class CUDAKernelBase(object):
 
     def copy(self):
         return copy.copy(self)
+
+    def forall(self, ntasks, tpb=128, stream=0, sharedmem=0):
+        """
+        Returns a configured kernel for 1D kernel of given number of tasks
+        ``ntasks``.
+
+        This assumes that:
+        - the kernel 1-to-1 maps global thread id ``cuda.grid(1)`` to tasks.
+        - the kernel must check if the thread id is valid.
+
+        """
+        tpbm1 = tpb - 1
+        blkct = (ntasks + tpbm1) // tpb
+        return self.configure(blkct, tpb, stream=stream, sharedmem=sharedmem)
 
     def configure(self, griddim, blockdim, stream=0, sharedmem=0):
         if not isinstance(griddim, (tuple, list)):
