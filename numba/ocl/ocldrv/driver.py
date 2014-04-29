@@ -87,7 +87,7 @@ class Driver(object):
 
     def __init__(self):
         count = cl_uint()
-        self.clGetPlatformIDs(4096, None, ctypes.byref(count))
+        self.clGetPlatformIDs(0, None, ctypes.byref(count))
         platforms = (ctypes.c_void_p * count.value) ()
         self.clGetPlatformIDs(count, platforms, None)
         self.platforms = [Platform(x, self) for x in platforms]
@@ -149,19 +149,127 @@ class Platform(object):
     def __init__(self, platform_id, driver):
         def get_info(param_name):
             sz = ctypes.c_size_t()
-            driver.clGetPlatformInfo(platform_id, param_name, 0, None, ctypes.byref(sz))
+            try:
+                driver.clGetPlatformInfo(platform_id, param_name, 0, None, ctypes.byref(sz))
+            except OpenCLAPIError:
+                return None
             ret_val = (ctypes.c_char * sz.value)()
             driver.clGetPlatformInfo(platform_id, param_name, sz, ctypes.byref(ret_val), None)
             return ret_val.value
 
+        self.platform_id = platform_id
         self.profile = get_info(enums.CL_PLATFORM_PROFILE)
         self.version = get_info(enums.CL_PLATFORM_VERSION)
         self.name = get_info(enums.CL_PLATFORM_NAME)
         self.vendor = get_info(enums.CL_PLATFORM_VENDOR)
         self.extensions = get_info(enums.CL_PLATFORM_EXTENSIONS).split()
 
+        device_count = cl_uint()
+        driver.clGetDeviceIDs(platform_id, enums.CL_DEVICE_TYPE_ALL, 0, None, ctypes.byref(device_count))
+        devices = (cl_device_id * device_count.value)()
+        driver.clGetDeviceIDs(platform_id, enums.CL_DEVICE_TYPE_ALL, device_count, devices, None)
+        self.devices = [Device(x, self, driver) for x in devices]
+
     def __repr__(self):
         return "<OpenCL Platform name:{0} vendor:{1} profile:{2} version:{3}>".format(self.name, self.vendor, self.profile, self.version)
+
+
+# Device class #################################################################
+class Device(object):
+    """
+    The device represents a computing device.
+    """
+    def __init__(self, device_id, platform_id, driver):
+        def get_string_info(param_name):
+            sz = ctypes.c_size_t()
+            try:
+                driver.clGetDeviceInfo(device_id, param_name, 0, None, ctypes.byref(sz))
+            except OpenCLAPIError:
+                return None
+            ret_val = (ctypes.c_char * sz.value)()
+            driver.clGetDeviceInfo(device_id, param_name, sz, ret_val, None)
+            return ret_val.value
+
+        def get_info(param_name, param_type, count = 1):
+            ret_val = (param_type * count)()
+            try:
+                driver.clGetDeviceInfo(device_id, param_name, ctypes.sizeof(param_type), ret_val, None)
+            except OpenCLAPIError:
+                return None
+            if count == 1:
+                return ret_val[0]
+            else:
+                return [x.value for x in ret_val]
+    
+        self.platform_id = platform_id
+        self.device_id = device_id
+        self.name = get_string_info(enums.CL_DEVICE_NAME)
+        self.profile = get_string_info(enums.CL_DEVICE_PROFILE)
+        self.type = get_info(enums.CL_DEVICE_TYPE, cl_device_type)
+        self.vendor = get_string_info(enums.CL_DEVICE_VENDOR)
+        self.vendor_id = get_info(enums.CL_DEVICE_VENDOR_ID, cl_uint)
+        self.version = get_string_info(enums.CL_DEVICE_VERSION)
+        self.driver_version = get_string_info(enums.CL_DRIVER_VERSION)
+        self.address_bits = get_info(enums.CL_DEVICE_ADDRESS_BITS, cl_uint)
+        self.available = get_info(enums.CL_DEVICE_AVAILABLE, cl_bool)
+        self.compiler_available = get_info(enums.CL_DEVICE_COMPILER_AVAILABLE, cl_bool)
+        self.double_fp_config = get_info(enums.CL_DEVICE_DOUBLE_FP_CONFIG, cl_device_fp_config)
+        self.endian_little = get_info(enums.CL_DEVICE_ENDIAN_LITTLE, cl_bool)
+        self.error_correction_support = get_info(enums.CL_DEVICE_ERROR_CORRECTION_SUPPORT, cl_bool)
+        self.execution_capabilities = get_info(enums.CL_DEVICE_EXECUTION_CAPABILITIES, cl_device_exec_capabilities)
+        self.extensions = get_string_info(enums.CL_DEVICE_EXTENSIONS).split()
+        self.global_mem_cache_size = get_info(enums.CL_DEVICE_GLOBAL_MEM_CACHE_SIZE, cl_ulong)
+        self.global_mem_cache_type = get_info(enums.CL_DEVICE_GLOBAL_MEM_CACHE_TYPE, cl_device_mem_cache_type)
+        self.global_mem_cacheline_size = get_info(enums.CL_DEVICE_GLOBAL_MEM_CACHELINE_SIZE, cl_uint)
+        self.global_mem_size = get_info(enums.CL_DEVICE_GLOBAL_MEM_SIZE, cl_ulong)
+        self.half_fp_config = get_info(enums.CL_DEVICE_HALF_FP_CONFIG, cl_device_fp_config)
+        self.image_support = get_info(enums.CL_DEVICE_IMAGE_SUPPORT, cl_bool)
+        self.image2d_max_height = get_info(enums.CL_DEVICE_IMAGE2D_MAX_HEIGHT, ctypes.c_size_t)
+        self.image2d_max_width = get_info(enums.CL_DEVICE_IMAGE2D_MAX_WIDTH, ctypes.c_size_t)
+        self.image3d_max_depth = get_info(enums.CL_DEVICE_IMAGE3D_MAX_DEPTH, ctypes.c_size_t)
+        self.image3d_max_height = get_info(enums.CL_DEVICE_IMAGE3D_MAX_HEIGHT, ctypes.c_size_t)
+        self.image3d_max_width = get_info(enums.CL_DEVICE_IMAGE3D_MAX_WIDTH, ctypes.c_size_t)
+        self.local_mem_size = get_info(enums.CL_DEVICE_LOCAL_MEM_SIZE, cl_ulong)
+        self.local_mem_type = get_info(enums.CL_DEVICE_LOCAL_MEM_TYPE, cl_device_local_mem_type)
+        self.max_clock_frequency = get_info(enums.CL_DEVICE_MAX_CLOCK_FREQUENCY, cl_uint)
+        self.max_compute_units = get_info(enums.CL_DEVICE_MAX_COMPUTE_UNITS, cl_uint)
+        self.max_constant_args = get_info(enums.CL_DEVICE_MAX_CONSTANT_ARGS, cl_uint)
+        self.max_constant_buffer_size = get_info(enums.CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE, cl_ulong)
+        self.max_mem_alloc_size = get_info(enums.CL_DEVICE_MAX_MEM_ALLOC_SIZE, cl_ulong)
+        self.max_parameter_size = get_info(enums.CL_DEVICE_MAX_PARAMETER_SIZE, ctypes.c_size_t)
+        self.max_read_image_args = get_info(enums.CL_DEVICE_MAX_READ_IMAGE_ARGS, cl_uint)
+        self.max_samplers = get_info(enums.CL_DEVICE_MAX_SAMPLERS, cl_uint)
+        self.max_work_group_size = get_info(enums.CL_DEVICE_MAX_WORK_GROUP_SIZE, ctypes.c_size_t)
+        self.max_work_item_dimensions = get_info(enums.CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS, cl_uint)
+        self.max_work_item_sizes = get_info(enums.CL_DEVICE_MAX_WORK_ITEM_SIZES, ctypes.c_size_t, count=self.max_work_item_dimensions)
+        self.max_write_image_args = get_info(enums.CL_DEVICE_MAX_WRITE_IMAGE_ARGS, cl_uint)
+        self.mem_base_addr_align = get_info(enums.CL_DEVICE_MEM_BASE_ADDR_ALIGN, cl_uint)
+        self.min_data_type_align_size = get_info(enums.CL_DEVICE_MIN_DATA_TYPE_ALIGN_SIZE, cl_uint)
+        self.preferred_vector_width_char = get_info(enums.CL_DEVICE_PREFERRED_VECTOR_WIDTH_CHAR, cl_uint)
+        self.preferred_vector_width_short = get_info(enums.CL_DEVICE_PREFERRED_VECTOR_WIDTH_SHORT, cl_uint)
+        self.preferred_vector_width_int = get_info(enums.CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT, cl_uint)
+        self.preferred_vector_width_long = get_info(enums.CL_DEVICE_PREFERRED_VECTOR_WIDTH_LONG, cl_uint)
+        self.preferred_vector_width_float = get_info(enums.CL_DEVICE_PREFERRED_VECTOR_WIDTH_FLOAT, cl_uint)
+        self.preferred_vector_width_double = get_info(enums.CL_DEVICE_PREFERRED_VECTOR_WIDTH_DOUBLE, cl_uint)
+        self.profiling_timer_resolution = get_info(enums.CL_DEVICE_PROFILING_TIMER_RESOLUTION, ctypes.c_size_t)
+        self.queue_properties = get_info(enums.CL_DEVICE_QUEUE_PROPERTIES, cl_command_queue_properties)
+        self.single_fp_config = get_info(enums.CL_DEVICE_SINGLE_FP_CONFIG, cl_device_fp_config)
+
+    @property
+    def type_str(self):
+        types = []
+        if self.type & enums.CL_DEVICE_TYPE_CPU:
+            types.append('CPU')
+        if self.type & enums.CL_DEVICE_TYPE_GPU:
+            types.append('GPU')
+        if self.type & enums.CL_DEVICE_TYPE_ACCELERATOR:
+            types.append('ACCELERATOR')
+        if self.type & enums.CL_DEVICE_TYPE_CUSTOM:
+            types.append('CUSTOM')
+        return ' + '.join(types)
+
+    def __repr__(self):
+        return "<OpenCL device name:{0} type:{1} profile:{2}>".format(self.name, self.type_str, self.profile)
 
 
 # Exception classes ############################################################

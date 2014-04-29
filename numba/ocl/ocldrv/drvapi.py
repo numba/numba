@@ -32,6 +32,7 @@ API_PROTOTYPES = {
     'clGetPlatformIDs': (cl_int, cl_uint, ptr(cl_platform_id), ptr(cl_uint), 0),
     'clGetPlatformInfo': (cl_int, cl_platform_id, cl_platform_info, c_size_t, c_void_p, ptr(c_size_t), 0),
     'clGetDeviceIDs': (cl_int, cl_platform_id, cl_device_type, cl_uint, ptr(cl_device_id), ptr(cl_uint), 0),
+    'clGetDeviceInfo': (cl_int, cl_device_id, cl_device_info, c_size_t, c_void_p, ptr(c_size_t), 0),
     'clCreateContext': (cl_context, c_void_p, cl_uint, ptr(cl_device_id), c_void_p, ptr(cl_int), -1),
     'clRetainContext': (cl_int, cl_context, 0),
     'clReleaseContext': (cl_int, cl_context, 0),
