@@ -5,7 +5,7 @@ from numba import cffi_support, boolean, int32, int64
 try:
     from numba.ext.impala import (udf, FunctionContext, BooleanVal, SmallIntVal,
                                   IntVal, BigIntVal, StringVal)
-except OSError as e:
+except IOError as e:
     skip_reason = str(e)
     has_impala = False
 else:
