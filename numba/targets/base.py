@@ -1,6 +1,7 @@
 from __future__ import print_function
 from collections import namedtuple, defaultdict
-from types import BuiltinFunctionType, MethodType
+import copy
+from types import MethodType
 import llvm.core as lc
 from llvm.core import Type, Constant
 import numpy
@@ -137,7 +138,10 @@ class BaseContext(object):
         """
         Returns a localized context that contains extra environment information
         """
-        return ContextProxy(self)
+        obj = copy.copy(self)
+        obj.metadata = utils.UniqueDict()
+        obj.linking = set()
+        return obj
 
     def insert_func_defn(self, defns):
         for defn in defns:
@@ -783,6 +787,9 @@ class BaseContext(object):
         cary.strides = cstrides
         return cary._getvalue()
 
+    def add_libs(self, libs):
+        self.linking |= set(libs)
+
 
 class _wrap_impl(object):
     def __init__(self, imp, context, sig):
@@ -799,22 +806,3 @@ class _wrap_impl(object):
     def __repr__(self):
         return "<wrapped %s>" % self._imp
 
-
-class ContextProxy(object):
-    """
-    Add localized environment for the context of the compiling unit.
-    """
-
-    def __init__(self, base):
-        self.__base = base
-        self.metadata = utils.UniqueDict()
-        self.linking = set()
-
-    def add_libs(self, libs):
-        self.linking |= set(libs)
-
-    def __getattr__(self, name):
-        if not name.startswith('_'):
-            return getattr(self.__base, name)
-        else:
-            return super(ContextProxy, self).__getattr__(name)

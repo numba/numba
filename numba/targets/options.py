@@ -37,11 +37,20 @@ class TargetOptions(object):
         if kws.pop('nopython', False) == False:
             flags.set("enable_pyobject")
 
-        if kws.pop("forceobj", False) == True:
+        if kws.pop("forceobj", False):
             flags.set("force_pyobject")
 
-        if kws.pop('looplift', True) == True:
+        if kws.pop('looplift', True):
             flags.set("enable_looplift")
+
+        if kws.pop('wraparound', True) == False:
+            flags.set("no_wraparound")
+
+        if kws.pop('boundcheck', False):
+            flags.set("boundcheck")
+
+        if kws.pop('debug', False):
+            flags.set("boundcheck")
 
         if kws:
             # Unread options?

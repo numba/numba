@@ -12,7 +12,9 @@ class Flags(utils.ConfigOptions):
     OPTIONS = frozenset(['enable_looplift',
                          'enable_pyobject',
                          'force_pyobject',
-                         'no_compile'])
+                         'no_compile',
+                         'no_wraparound',
+                         "boundcheck"])
 
 
 DEFAULT_FLAGS = Flags()
@@ -105,6 +107,7 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
     status.use_python_mode = flags.force_pyobject
 
     targetctx = targetctx.localized()
+    targetctx.metadata['wraparound'] = not flags.no_wraparound
 
     if not status.use_python_mode:
         with _fallback_context(status):

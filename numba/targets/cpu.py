@@ -208,6 +208,9 @@ class CPUTargetOptions(TargetOptions):
     OPTIONS = {
         "nopython": bool,
         "forceobj": bool,
+        "looplift": bool,
+        "wraparound": bool,
+        "boundcheck": bool,
     }
 
 
