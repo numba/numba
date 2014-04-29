@@ -37,4 +37,5 @@ cl_bitfield = cl_ulong
 cl_command_queue_properties = cl_bitfield
 cl_device_type = cl_bitfield
 cl_mem_flags = cl_bitfield
+cl_platform_info = cl_uint
 cl_bool = cl_uint # this probably can change from platform to platform

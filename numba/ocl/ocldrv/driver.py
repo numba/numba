@@ -10,6 +10,7 @@ from ... import utils
 from . import drvapi, enums
 from .types import *
 
+import weakref
 import functools
 import ctypes
 import os
@@ -85,7 +86,11 @@ class Driver(object):
         return obj
 
     def __init__(self):
-        self.devices = utils.UniqueDict()
+        count = cl_uint()
+        self.clGetPlatformIDs(4096, None, ctypes.byref(count))
+        platforms = (ctypes.c_void_p * count.value) ()
+        self.clGetPlatformIDs(count, platforms, None)
+        self.platforms = [Platform(x, self) for x in platforms]
 
     def __getattr__(self, fname):
         # this implements lazy binding of functions
@@ -134,15 +139,30 @@ class Driver(object):
 
         return absent_function
 
-    def get_platform_count():
-        count = cl_uint()
-        self.clGetPlatformIDs(4096, None, ctypes.byref(count))
-        return count.value
 
+# Platform class ###############################################################
+class Platform(object):
+    """
+    The Platform represents possible different implementations of OpenCL in a
+    host.
+    """
+    def __init__(self, platform_id, driver):
+        def get_info(param_name):
+            sz = ctypes.c_size_t()
+            driver.clGetPlatformInfo(platform_id, param_name, 0, None, ctypes.byref(sz))
+            ret_val = (ctypes.c_char * sz.value)()
+            driver.clGetPlatformInfo(platform_id, param_name, sz, ctypes.byref(ret_val), None)
+            return ret_val.value
 
+        self.profile = get_info(enums.CL_PLATFORM_PROFILE)
+        self.version = get_info(enums.CL_PLATFORM_VERSION)
+        self.name = get_info(enums.CL_PLATFORM_NAME)
+        self.vendor = get_info(enums.CL_PLATFORM_VENDOR)
+        self.extensions = get_info(enums.CL_PLATFORM_EXTENSIONS).split()
 
-# The Driver ###################################################################
-driver = Driver()
+    def __repr__(self):
+        return "<OpenCL Platform name:{0} vendor:{1} profile:{2} version:{3}>".format(self.name, self.vendor, self.profile, self.version)
+
 
 # Exception classes ############################################################
 class OpenCLSupportError(Exception):
@@ -194,3 +214,7 @@ def _raise_opencl_error(fname, errcode):
     e.fname = fname
     e.code = errcode
     raise e
+
+
+# The Driver ###################################################################
+driver = Driver()
