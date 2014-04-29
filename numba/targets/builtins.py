@@ -5,7 +5,7 @@ from functools import reduce
 from numba import types, typing, cgutils, utils
 from numba.targets.imputils import (builtin, builtin_attr, implement,
                                     impl_attribute, impl_attribute_generic)
-
+from numba.targets import errcode
 #-------------------------------------------------------------------------------
 
 
@@ -1116,7 +1116,7 @@ def getiter_range_generic(context, builder, iterobj, start, stop, step):
 
     with cgutils.if_unlikely(builder, zero_step):
         # step shouldn't be zero
-        context.return_errcode(builder, 1)
+        context.return_errcode(builder, errcode.ASSERTION_ERROR)
 
     with cgutils.ifelse(builder, sign_differs) as (then, orelse):
         with then:
@@ -1324,8 +1324,7 @@ def getitem_unituple(context, builder, sig, args):
     switch = builder.switch(idx, bbelse, n=tupty.count)
 
     with cgutils.goto_block(builder, bbelse):
-        # TODO: propagate exception to
-        context.return_errcode(builder, 1)
+        context.return_errcode(builder, errcode.OUT_OF_BOUND_ERROR)
 
     lrtty = context.get_value_type(tupty.dtype)
     with cgutils.goto_block(builder, bbend):
