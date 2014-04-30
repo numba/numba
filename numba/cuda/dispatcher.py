@@ -27,7 +27,6 @@ class CUDADispatcher(object):
         assert not locals
         options = self.targetoptions.copy()
         options.update(targetoptions)
-
         kernel = jit(sig, **options)(self.py_func)
         self._compiled = kernel
         if hasattr(kernel, "_npm_context_"):

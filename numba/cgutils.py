@@ -3,7 +3,7 @@ from contextlib import contextmanager
 import functools
 from llvm.core import Constant, Type
 import llvm.core as lc
-from numba.targets import errcode
+from . import errcode
 
 
 true_bit = Constant.int(Type.int(1), 1)

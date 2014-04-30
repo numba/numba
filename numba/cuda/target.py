@@ -1,9 +1,11 @@
 from __future__ import print_function, absolute_import
 import re
-from llvm.core import Type, Builder, LINKAGE_INTERNAL, inline_function
-from numba import typing, types
+from llvm.core import (Type, Builder, LINKAGE_INTERNAL, inline_function,
+                       Constant, ICMP_EQ)
+from numba import typing, types, cgutils
 from numba.targets.base import BaseContext
 from .cudadrv import nvvm
+from .cudaimpl import call_sreg
 
 
 # -----------------------------------------------------------------------------
@@ -61,6 +63,20 @@ class CUDATargetContext(BaseContext):
         wrapfn = module.add_function(fnty, name="cudaPy_" + func.name)
         builder = Builder.new(wrapfn.append_basic_block(''))
 
+        # Define error handling variables
+        def define_error_gv(postfix):
+            gv = module.add_global_variable(Type.int(),
+                                            name=wrapfn.name + postfix)
+            gv.initializer = Constant.null(gv.type.pointee)
+            return gv
+
+        gv_exc = define_error_gv("__errcode__")
+        gv_tid = []
+        gv_ctaid = []
+        for i in 'xyz':
+            gv_tid.append(define_error_gv("__tid%s__" % i))
+            gv_ctaid.append(define_error_gv("__ctaid%s__" % i))
+
         callargs = []
         for at, av in zip(argtypes, wrapfn.args):
             av = self.get_argument_value(builder, at, av)
@@ -68,10 +84,33 @@ class CUDATargetContext(BaseContext):
 
         status, _ = self.call_function(builder, func, types.void, argtypes,
                                        callargs)
-        # TODO handle status
+
+        # Check error status
+        with cgutils.if_likely(builder, status.ok):
+            builder.ret_void()
+
+        with cgutils.ifthen(builder, builder.not_(status.exc)):
+            # User exception raised
+            old = Constant.null(gv_exc.type.pointee)
+
+            # Use atomic cmpxchg to prevent rewriting the error status
+            # Only the first error is recorded
+            xchg = builder.atomic_cmpxchg(gv_exc, old, status.code,
+                                          "monotonic")
+            changed = builder.icmp(ICMP_EQ, xchg, old)
+
+            # If the xchange is successful, save the thread ID.
+            with cgutils.ifthen(builder, changed):
+                for dim, ptr, in zip("xyz", gv_tid):
+                    val = call_sreg(builder, "tid." + dim)
+                    builder.store(val, ptr)
+
+                for dim, ptr, in zip("xyz", gv_ctaid):
+                    val = call_sreg(builder, "ctaid." + dim)
+                    builder.store(val, ptr)
 
         builder.ret_void()
-        del builder
+
         # force inline
         inline_function(status.code)
 

@@ -62,11 +62,12 @@ class PyCallWrapper(object):
             builder.ret(retval)
 
         with cgutils.ifthen(builder, builder.not_(status.exc)):
+            # !ok && !exc
             # User exception raised
             # TODO we will just raise a RuntimeError for now.
             api.raise_native_error("error in native function: %s" %
                                    self.fndesc.mangled_name)
-
+        # !ok && exc
         builder.ret(api.get_null_object())
 
     def make_const_string(self, string):

@@ -949,6 +949,13 @@ class Module(object):
                                    name.encode('utf8'))
         return Function(weakref.proxy(self), handle, name)
 
+    def get_global_symbol(self, name):
+        ptr = drvapi.cu_device_ptr()
+        size = drvapi.c_size_t()
+        driver.cuModuleGetGlobal(byref(ptr), byref(size), self.handle,
+                                 name.encode('utf8'))
+        return MemoryPointer(self.context, ptr, size), size.value
+
 
 class Function(object):
     griddim = 1, 1, 1
@@ -1096,6 +1103,7 @@ class Linker(object):
             driver.cuLinkAddData(self.handle, enums.CU_JIT_INPUT_PTX,
                                  ptxbuf, len(ptx), namebuf, 0, None, None)
         except CudaAPIError as e:
+            print(ptx)
             raise LinkerError("%s\n%s" % (e, self.error_log))
 
     def add_file(self, path, kind):

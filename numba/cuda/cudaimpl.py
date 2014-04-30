@@ -34,7 +34,7 @@ SREG_MAPPING = {
 }
 
 
-def _call_sreg(builder, name):
+def call_sreg(builder, name):
     module = cgutils.get_module(builder)
     fnty = Type.function(Type.int(), ())
     fn = module.get_or_insert_function(fnty, name=SREG_MAPPING[name])
@@ -47,9 +47,9 @@ def _call_sreg(builder, name):
 @implement('ptx.grid.1d', types.intp)
 def ptx_grid1d(context, builder, sig, args):
     assert len(args) == 1
-    tidx = _call_sreg(builder, "tid.x")
-    ntidx = _call_sreg(builder, "ntid.x")
-    nctaidx = _call_sreg(builder, "ctaid.x")
+    tidx = call_sreg(builder, "tid.x")
+    ntidx = call_sreg(builder, "ntid.x")
+    nctaidx = call_sreg(builder, "ctaid.x")
 
     res = builder.add(builder.mul(ntidx, nctaidx), tidx)
     return res
@@ -59,13 +59,13 @@ def ptx_grid1d(context, builder, sig, args):
 @implement('ptx.grid.2d', types.intp)
 def ptx_grid2d(context, builder, sig, args):
     assert len(args) == 1
-    tidx = _call_sreg(builder, "tid.x")
-    ntidx = _call_sreg(builder, "ntid.x")
-    nctaidx = _call_sreg(builder, "ctaid.x")
+    tidx = call_sreg(builder, "tid.x")
+    ntidx = call_sreg(builder, "ntid.x")
+    nctaidx = call_sreg(builder, "ctaid.x")
 
-    tidy = _call_sreg(builder, "tid.y")
-    ntidy = _call_sreg(builder, "ntid.y")
-    nctaidy = _call_sreg(builder, "ctaid.y")
+    tidy = call_sreg(builder, "tid.y")
+    ntidy = call_sreg(builder, "ntid.y")
+    nctaidy = call_sreg(builder, "ctaid.y")
 
     r1 = builder.add(builder.mul(ntidx, nctaidx), tidx)
     r2 = builder.add(builder.mul(ntidy, nctaidy), tidy)
@@ -77,7 +77,7 @@ def ptx_grid2d(context, builder, sig, args):
 def ptx_sreg_template(sreg):
     def ptx_sreg_impl(context, builder, sig, args):
         assert not args
-        return _call_sreg(builder, sreg)
+        return call_sreg(builder, sreg)
 
     return ptx_sreg_impl
 

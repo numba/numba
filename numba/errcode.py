@@ -18,3 +18,14 @@ OUT_OF_BOUND_ERROR = enum()
 
 # Count number of error
 ERROR_COUNT = enum() - FIRST_ERROR
+
+
+def _build_errtable():
+    table = {}
+    for k, v in globals().items():
+        if isinstance(v, int):
+            table[v] = k
+    return table
+
+error_names = _build_errtable()
+

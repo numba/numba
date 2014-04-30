@@ -6,6 +6,8 @@ from .stubs import (threadIdx, blockIdx, blockDim, gridDim, syncthreads,
 from .cudadrv.error import CudaSupportError
 from . import initialize
 from numba import config
+from .errors import KernelRuntimeError
+
 
 def dummy(*args, **kws):
     """A dummy function to allow import of CUDA functions even if the CUDA
@@ -36,6 +38,7 @@ list_devices
 close
 detect
 defer_cleanup
+KernelRuntimeError
 """
 
 try:

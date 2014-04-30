@@ -1,11 +1,14 @@
-from llvm.core import Type, Constant
-import llvm.core as lc
 import math
 from functools import reduce
+
+from llvm.core import Type, Constant
+import llvm.core as lc
+
+from numba import errcode
 from numba import types, typing, cgutils, utils
 from numba.targets.imputils import (builtin, builtin_attr, implement,
                                     impl_attribute, impl_attribute_generic)
-from numba.targets import errcode
+
 #-------------------------------------------------------------------------------
 
 

@@ -1,11 +1,12 @@
 from __future__ import absolute_import, print_function
 import copy
 import ctypes
-from numba import compiler, types
+from numba import compiler, types, errcode
 from numba.typing.templates import ConcreteTemplate
 from numba import typing, lowering, dispatcher
 from .cudadrv.devices import get_context
 from .cudadrv import nvvm, devicearray, driver
+from .errors import KernelRuntimeError
 
 
 def compile_cuda(pyfunc, return_type, args, debug):
@@ -46,7 +47,8 @@ def compile_kernel(pyfunc, args, link, debug=False):
     cukern = CUDAKernel(llvm_module=cres.llvm_module,
                         name=cres.llvm_func.name,
                         argtypes=cres.signature.args,
-                        link=link)
+                        link=link,
+                        debug=debug)
     return cukern
 
 
@@ -92,17 +94,6 @@ class ExternFunction(object):
     def __init__(self, name, sig):
         self.name = name
         self.sig = sig
-
-
-class CUDARuntimeError(RuntimeError):
-    def __init__(self, exc, tx, ty, tz, bx, by):
-        self.tid = tx, ty, tz
-        self.ctaid = bx, by
-        self.exc = exc
-        t = ("An exception was raised in thread=%s block=%s\n"
-             "\t%s: %s")
-        msg = t % (self.tid, self.ctaid, type(self.exc).__name__, self.exc)
-        super(CUDARuntimeError, self).__init__(msg)
 
 
 class CUDAKernelBase(object):
@@ -211,13 +202,14 @@ class CachedCUFunction(object):
 
 
 class CUDAKernel(CUDAKernelBase):
-    def __init__(self, llvm_module, name, argtypes, link=()):
+    def __init__(self, llvm_module, name, argtypes, link=(), debug=False):
         super(CUDAKernel, self).__init__()
         self.entry_name = name
         self.argument_types = tuple(argtypes)
         self.linking = tuple(link)
         ptx = CachedPTX(str(llvm_module))
         self._func = CachedCUFunction(self.entry_name, ptx, link)
+        self.debug = debug
 
     def __call__(self, *args, **kwargs):
         assert not kwargs
@@ -240,6 +232,14 @@ class CUDAKernel(CUDAKernelBase):
     def _kernel_call(self, args, griddim, blockdim, stream=0, sharedmem=0):
         # Prepare kernel
         cufunc = self._func.get()
+
+        if self.debug:
+            excname = cufunc.name + "__errcode__"
+            excmem, excsz = cufunc.module.get_global_symbol(excname)
+            assert excsz == ctypes.sizeof(ctypes.c_int)
+            excval = ctypes.c_int()
+            excmem.memset(0, stream=stream)
+
         # Prepare arguments
         retr = []                       # hold functors for writeback
         args = [self._prepare_args(t, v, stream, retr)
@@ -251,6 +251,26 @@ class CUDAKernel(CUDAKernelBase):
                                    sharedmem=sharedmem)
         # invoke kernel
         cu_func(*args)
+
+        if self.debug:
+            driver.device_to_host(ctypes.addressof(excval), excmem, excsz)
+            if excval.value != 0:
+                # Error occurred
+                def load_symbol(name):
+                    mem, sz = cufunc.module.get_global_symbol("%s__%s__" %
+                                                              (cufunc.name,
+                                                               name))
+                    val = ctypes.c_int()
+                    driver.device_to_host(ctypes.addressof(val), mem, sz)
+                    return val.value
+
+                tid = [load_symbol("tid" + i) for i in 'zyx']
+                ctaid = [load_symbol("ctaid" + i) for i in 'zyx']
+                code = excval.value
+                raise KernelRuntimeError("code=%d reason=%s" %
+                                         (code, errcode.error_names[code]),
+                                         tid=tid,
+                                         ctaid=ctaid)
 
         # retrieve auto converted arrays
         for wb in retr:
@@ -322,17 +342,19 @@ class Complex128(Complex):
 
 
 class AutoJitCUDAKernel(CUDAKernelBase):
-    def __init__(self, func, bind):
+    def __init__(self, func, bind, targetoptions):
         super(AutoJitCUDAKernel, self).__init__()
         self.py_func = func
         self.bind = bind
         self.definitions = {}
+        self.targetoptions = targetoptions
 
     def __call__(self, *args):
         argtypes = tuple([dispatcher.typeof_pyval(a) for a in args])
         kernel = self.definitions.get(argtypes)
         if kernel is None:
-            kernel = compile_kernel(self.py_func, argtypes, link=())
+            kernel = compile_kernel(self.py_func, argtypes, link=(),
+                                    **self.targetoptions)
             self.definitions[argtypes] = kernel
             if self.bind:
                 kernel.bind()
