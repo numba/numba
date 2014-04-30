@@ -86,11 +86,19 @@ class Driver(object):
         return obj
 
     def __init__(self):
+        pass
+
+    def _populate_platforms(self):
         count = cl_uint()
         self.clGetPlatformIDs(0, None, ctypes.byref(count))
         platforms = (ctypes.c_void_p * count.value) ()
         self.clGetPlatformIDs(count, platforms, None)
-        self.platforms = [Platform(x, self) for x in platforms]
+        self._platforms = [Platform(x) for x in platforms]
+
+
+    @property
+    def platforms(self):
+        return self._platforms[:]
 
     def __getattr__(self, fname):
         # this implements lazy binding of functions
@@ -117,10 +125,11 @@ class Driver(object):
             @_ctypes_func_wraps(libfn)
             def safe_ocl_api_call(*args):
                 retcode = cl_int()
-                new_args = args.copy()
-                new_args.append(ctypes.byref(retcode))
-                if retcode != enums.CL_SUCCESS:
+                new_args = args + (ctypes.byref(retcode),)
+                rv = libfn(*new_args)
+                if retcode.value != enums.CL_SUCCESS:
                     _raise_opencl_error(fname, retcode)
+                return rv
 
             safe_ocl_api_call.argtypes = safe_ocl_api_call.argtypes[:-1]
             return safe_ocl_api_call
@@ -140,13 +149,32 @@ class Driver(object):
         return absent_function
 
 
+    def create_context(self, platform=None, devices=None):
+        """
+        Create an opencl context. By default, it will create the context in the
+        first platform, using all the devices in that platform.
+        """
+        if platform is None:
+            platform = self.platforms[0]
+
+        if devices is None:
+            devices = platform.devices # all of the platform devices is a good default?
+
+        _properties = (cl_context_properties*3)(enums.CL_CONTEXT_PLATFORM, platform.id, 0)
+        _devices = (cl_device_id*len(devices))(*[dev.id for dev in devices])
+        ctxt = driver.clCreateContext(_properties, len(devices), _devices, None, None)
+        rv = Context(ctxt)
+        driver.clReleaseContext(ctxt)
+        return Context(ctxt)
+
+
 # Platform class ###############################################################
 class Platform(object):
     """
     The Platform represents possible different implementations of OpenCL in a
     host.
     """
-    def __init__(self, platform_id, driver):
+    def __init__(self, platform_id):
         def get_info(param_name):
             sz = ctypes.c_size_t()
             try:
@@ -157,7 +185,7 @@ class Platform(object):
             driver.clGetPlatformInfo(platform_id, param_name, sz, ctypes.byref(ret_val), None)
             return ret_val.value
 
-        self.platform_id = platform_id
+        self.id = platform_id
         self.profile = get_info(enums.CL_PLATFORM_PROFILE)
         self.version = get_info(enums.CL_PLATFORM_VERSION)
         self.name = get_info(enums.CL_PLATFORM_NAME)
@@ -168,7 +196,11 @@ class Platform(object):
         driver.clGetDeviceIDs(platform_id, enums.CL_DEVICE_TYPE_ALL, 0, None, ctypes.byref(device_count))
         devices = (cl_device_id * device_count.value)()
         driver.clGetDeviceIDs(platform_id, enums.CL_DEVICE_TYPE_ALL, device_count, devices, None)
-        self.devices = [Device(x, self, driver) for x in devices]
+        self._devices = [Device(x, self, driver) for x in devices]
+
+    @property
+    def devices(self):
+        return self._devices[:]
 
     def __repr__(self):
         return "<OpenCL Platform name:{0} vendor:{1} profile:{2} version:{3}>".format(self.name, self.vendor, self.profile, self.version)
@@ -202,7 +234,7 @@ class Device(object):
                 return [x.value for x in ret_val]
     
         self.platform_id = platform_id
-        self.device_id = device_id
+        self.id = device_id
         self.name = get_string_info(enums.CL_DEVICE_NAME)
         self.profile = get_string_info(enums.CL_DEVICE_PROFILE)
         self.type = get_info(enums.CL_DEVICE_TYPE, cl_device_type)
@@ -269,17 +301,78 @@ class Device(object):
         return ' + '.join(types)
 
     def __repr__(self):
-        return "<OpenCL device name:{0} type:{1} profile:{2}>".format(self.name, self.type_str, self.profile)
+        return "<OpenCL device id:{3} name:{0} type:{1} profile:{2}>".format(self.name, self.type_str, self.profile, self.id)
+
+    def __hash__(self):
+        return hash(self.id)
+
+    def __eq__(self, other):
+        return isinstance(other, Device) and (self.id == other.id)
+
+    def __ne__(self, other):
+        return not (self == other)
+
+    
+
+# Context class ################################################################
+class Context(object):
+    """
+    An OpenCL context resource.
+
+    The Context is the major workhorse in resource management. Memobjects, queues,
+    events, programs are aggregated in a Context.
+    It acts as a factory of all those resources.
+    """
+    def __init__(self, id):
+        driver.clRetainContext(id)
+        self.id = id
+
+    def __del__(self):
+        driver.clReleaseContext(self.id)
+
+    def create_buffer(self, size, flags=enums.CL_MEM_READ_WRITE, host_ptr=None):
+        mem = driver.clCreateBuffer(self.id, flags, size, host_ptr)
+        return Memory(mem)
+    
+# Memory class #################################################################
+class Memory(object):
+    """
+    An OpenCL memory object (cl_mem)
+
+    This is a light-weight proxy object. It will retain the id on creation and
+    release on its destruction. This means having one live Memory object will
+    prevent the cl_mem object from being destroyed. It is possible to have
+    many Memory objects for the same cl_mem object. This should not be an
+    issue.
+    Two different Memory objects pointing to the same cl_mem will be evaluated
+    equal and will share a common hash.
+    """
+
+    def __init__(self, cl_mem_id):
+        driver.clRetainMemObject(cl_mem_id)
+        self.id = cl_mem_id
+
+    def __del__(self):
+        """release the id reference"""
+        driver.clReleaseMemObject(self.id)
+        
+        
+
 
 
 # Exception classes ############################################################
 class OpenCLSupportError(Exception):
+    """The underlying OpenCL library does not support a feature. This includes
+    OpenCL availability itself.
+    """
     pass
 
 class OpenCLDriverError(Exception):
+    """A problem with the OpenCL Python driver code"""
     pass
 
 class OpenCLAPIError(Exception):
+    """Incorrect usage of OpenCL API"""
     pass
 
 # Error messages ###############################################################
@@ -323,6 +416,21 @@ def _raise_opencl_error(fname, errcode):
     e.code = errcode
     raise e
 
+NUMBA_USAGE_ERRMSG = """
+Incorrect use of numba Python OpenCL driver:
+{0}
+
+This may error may be caused by access to reserved parts of the driver.
+"""
+
+def _raise_usage_error(msg):
+    """
+    An error caused by a bad usage pattern in the code or by the user accessing
+    internals he should not be messing around
+    """
+    e = OpenCLAPIError(NUMBA_USAGE_ERRMSG.format(msg))
+  
 
 # The Driver ###################################################################
 driver = Driver()
+driver._populate_platforms()

@@ -11,6 +11,12 @@ from __future__ import print_function, absolute_import, division
 
 import ctypes
 
+if ctypes.sizeof(ctypes.c_void_p) == ctypes.sizeof(ctypes.c_int32):
+    c_intptr_t = ctypes.c_int32
+else:
+    assert (ctypes.sizeof(ctypes.c_void_p) == ctypes.sizeof(ctypes.c_int64))
+    c_intptr_t = ctypes.c_int64
+
 cl_char = ctypes.c_int8 # signed two's complement 8-bit integer
 cl_uchar = ctypes.c_uint8 # unsigned 8-bit integer
 cl_short = ctypes.c_int16 # signed two's complement 16-bit integer
@@ -43,4 +49,6 @@ cl_device_fp_config = cl_bitfield
 cl_device_exec_capabilities = cl_bitfield
 cl_device_mem_cache_type = cl_uint
 cl_device_local_mem_type = cl_uint
+cl_context_properties = c_intptr_t
+
 cl_bool = cl_uint # this probably can change from platform to platform

@@ -9,6 +9,9 @@ from __future__ import print_function, absolute_import, division
 # Error Codes
 CL_SUCCESS                                    = 0
 
+# cl_context_properties
+CL_CONTEXT_PLATFORM                           = 0x1084
+
 # Device Types
 CL_DEVICE_TYPE_DEFAULT                        = 1<<0
 CL_DEVICE_TYPE_CPU                            = 1<<1
@@ -101,3 +104,14 @@ CL_DEVICE_PREFERRED_INTEROP_USER_SYNC         = 0x1048
 CL_DEVICE_PRINTF_BUFFER_SIZE                  = 0x1049
 CL_DEVICE_IMAGE_PITCH_ALIGNMENT               = 0x104A
 CL_DEVICE_IMAGE_BASE_ADDRESS_ALIGNMENT        = 0x104B
+
+#cl_mem_flags
+CL_MEM_READ_WRITE                             = (1 << 0)
+CL_MEM_WRITE_ONLY                             = (1 << 1)
+CL_MEM_READ_ONLY                              = (1 << 2)
+CL_MEM_USE_HOST_PTR                           = (1 << 3)
+CL_MEM_ALLOC_HOST_PTR                         = (1 << 4)
+CL_MEM_COPY_HOST_PTR                          = (1 << 5)
+CL_MEM_HOST_WRITE_ONLY                        = (1 << 7)
+CL_MEM_HOST_READ_ONLY                         = (1 << 8)
+CL_MEM_HOST_NO_ACCESS                         = (1 << 9)
