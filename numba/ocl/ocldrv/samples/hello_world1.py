@@ -9,7 +9,7 @@ from numba.ocl.ocldrv.driver import driver as cl
 MEM_SIZE=128
 out = (ctypes.c_char*MEM_SIZE)()
 
-opencl_program = """
+opencl_program = b"""
 __kernel void hello(__global char* string)
 {
     string[0] = 'H';
@@ -36,7 +36,7 @@ q = ctxt.create_command_queue(use_device)
 mem = ctxt.create_buffer(MEM_SIZE)
 program = ctxt.create_program_from_source(opencl_program)
 program.build()
-kernel = program.create_kernel("hello")
+kernel = program.create_kernel(b"hello")
 kernel.set_arg(0, mem)
 q.enqueue_task(kernel)
 q.enqueue_read_buffer(mem, 0, MEM_SIZE, out)
