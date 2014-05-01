@@ -168,6 +168,29 @@ class Driver(object):
         return Context(ctxt)
 
 
+class OpenCLWrapper(object):
+    """
+    A base class for OpenCL wrapper objects.
+    Identity will be based on their OpenCL id.
+    subclasses must implement _retain and _release methods appropriate for their id
+    """
+    def __init__(self, id):
+        self.id = id
+        self._retain()
+
+    def __del__(self):
+        self._release()
+
+    def __eq__(self, other):
+        return (self.__class__ == other.__class__) and (self.id == other.id)
+
+    def __ne__(self, other):
+        return not (self == other)
+
+    def __hash__(self):
+        return hash(self.id)
+
+
 # Platform class ###############################################################
 class Platform(object):
     """
@@ -315,7 +338,7 @@ class Device(object):
     
 
 # Context class ################################################################
-class Context(object):
+class Context(OpenCLWrapper):
     """
     An OpenCL context resource.
 
@@ -323,19 +346,34 @@ class Context(object):
     events, programs are aggregated in a Context.
     It acts as a factory of all those resources.
     """
-    def __init__(self, id):
-        driver.clRetainContext(id)
-        self.id = id
+    def _retain(self):
+        driver.clRetainContext(self.id)
 
-    def __del__(self):
+    def _release(self):
         driver.clReleaseContext(self.id)
 
-    def create_buffer(self, size, flags=enums.CL_MEM_READ_WRITE, host_ptr=None):
-        mem = driver.clCreateBuffer(self.id, flags, size, host_ptr)
+    def create_buffer(self, size_in_bytes, flags=enums.CL_MEM_READ_WRITE, host_ptr=None):
+        mem = driver.clCreateBuffer(self.id, flags, size_in_bytes, host_ptr)
         return Memory(mem)
+
+    def create_program_from_source(self, source):
+        source = ctypes.create_string_buffer(source)
+        ptr = ctypes.c_char_p(ctypes.addressof(source))
+        program = driver.clCreateProgramWithSource(self.id, 1, ctypes.byref(ptr), None)
+        return Program(program)
+
+    def create_command_queue(self, device, out_of_order=False, profiling=False):
+        flags = 0
+        if out_of_order:
+            flags |= enums.CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE
+        if profiling:
+            flags |= enums.CL_QUEUE_PROFILING_ENABLE
+
+        return CommandQueue(driver.clCreateCommandQueue(self.id, device.id, flags))
+
     
 # Memory class #################################################################
-class Memory(object):
+class Memory(OpenCLWrapper):
     """
     An OpenCL memory object (cl_mem)
 
@@ -347,17 +385,123 @@ class Memory(object):
     Two different Memory objects pointing to the same cl_mem will be evaluated
     equal and will share a common hash.
     """
+    def _retain(self):
+        driver.clRetainMemObject(self.id)
 
-    def __init__(self, cl_mem_id):
-        driver.clRetainMemObject(cl_mem_id)
-        self.id = cl_mem_id
-
-    def __del__(self):
-        """release the id reference"""
+    def _release(self):
         driver.clReleaseMemObject(self.id)
-        
+
+
+# CommandQueue class ###########################################################
+class CommandQueue(OpenCLWrapper):
+    """
+    An OpenCL command queue. Any OpenCL operation on OpenCL objects such as
+    memory, program and kernel objects are performed using a command-queue.
+    A queue is an ordered set of operations (commands). The order in the queue
+    acts as a means of synchronization. Operations in different queues are
+    independent.
+    """
+    def _retain(self):
+        driver.clRetainCommandQueue(self.id)
+
+    def _release(self):
+        driver.clReleaseCommandQueue(self.id)
+
+    def flush(self):
+        driver.clFlush(self.id)
+
+    def finish(self):
+        driver.clFinish(self.id)
+
+    def enqueue_task(self, kernel, wait_list=None, event=None):
+        """
+        Enqueue a task for execution.
+        - wait_list: a list of events to wait for
+        - event: an event used to identify this execution
+        """
+        if wait_list is not None:
+            # must be a list of Events
+            num_events_in_wait_list = len(wait_list)
+            event_wait_list = (cl_event * num_events_in_wait_list)(*[e.id for e in wait_list])
+        else:
+            num_events_in_wait_list = 0
+            event_wait_list = None
+
+        if event is not None:
+            event = (cl_event * 1)(event.id)
+
+        driver.clEnqueueTask(self.id, kernel.id, num_events_in_wait_list, event_wait_list, event)
+
+
+    def enqueue_read_buffer(self, buff, offset, bc, dst_ptr, blocking=True, wait_list=None, event=None):
+        if wait_list is not None:
+            # must be a list of Events
+            num_events_in_wait_list = len(wait_list)
+            event_wait_list = (cl_event * num_events_in_wait_list)(*[e.id for e in wait_list])
+        else:
+            num_events_in_wait_list = 0
+            event_wait_list = None
+
+        if event is not None:
+            event = (cl_event * 1)(event.id)
+        driver.clEnqueueReadBuffer(self.id, buff.id, blocking, offset, bc, dst_ptr,
+                                   num_events_in_wait_list, event_wait_list, event)
         
 
+# Program class ################################################################
+class Program(OpenCLWrapper):
+    """
+    An OpenCL program consists of a set of kernels identified by the __kernel
+    qualifier in the program source.
+    """
+    def _retain(self):
+        driver.clRetainProgram(self.id)
+
+    def _release(self):
+        driver.clReleaseProgram(self.id)
+
+    def build(self, devices=None, options=None):
+        if options is not None:
+            options = ctypes.create_string_buffer(options)
+
+        if devices is not None:
+            num_devices = len(devices)
+            devices = (cl_device_id * num_devices)(*[dev.id for dev in devices])
+        else:
+            num_devices = 0
+        driver.clBuildProgram(self.id, num_devices, devices, options, None, None)
+
+    def create_kernel(self, name):
+        name = ctypes.create_string_buffer(name)
+        return Kernel(driver.clCreateKernel(self.id, name))
+
+
+# Kernel class #################################################################
+class Kernel(OpenCLWrapper):
+    def _retain(self):
+        driver.clRetainKernel(self.id)
+
+    def _release(self):
+        driver.clReleaseKernel(self.id)
+
+    def set_arg(self, arg_number, value):
+        if isinstance(value, (Memory,)):
+            arg_value = ctypes.byref(cl_mem(value.id))
+            arg_size = ctypes.sizeof(cl_mem)
+        else:
+            arg_value = None
+            arg_size = 0
+
+        driver.clSetKernelArg(self.id, arg_number, arg_size, arg_value)
+
+
+# Event class ##################################################################
+class Event(OpenCLWrapper):
+    def _retain(self):
+        driver.clRetainEvent(self.id)
+
+    def _release(self):
+        driver.clReleaseEvent(self.id)
 
 
 # Exception classes ############################################################
@@ -404,9 +548,8 @@ def _raise_bad_env_path(path, extra=None):
         error_message += extra
     raise ValueError(error_message)
 
-
-def _raise_opencl_driver_error(msg, function):
-    e = OpenCLDriverError(msg.format(function))
+def _raise_opencl_driver_error(msg, *args):
+    e = OpenCLDriverError(msg.format(*args))
     e.fname = function
     raise e
 
@@ -429,7 +572,10 @@ def _raise_usage_error(msg):
     internals he should not be messing around
     """
     e = OpenCLAPIError(NUMBA_USAGE_ERRMSG.format(msg))
-  
+
+
+def _raise_unimplemented_error():
+    _raise_opencl_driver_error("unimplemented")
 
 # The Driver ###################################################################
 driver = Driver()

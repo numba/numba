@@ -6,18 +6,26 @@ Note that this may be platform dependent (!)
 from __future__ import print_function, absolute_import, division
 
 
+# booleans
+CL_TRUE                                       = 1
+CL_FALSE                                      = 0
+
 # Error Codes
 CL_SUCCESS                                    = 0
+
+# cl_coomand_queue_properties
+CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE        = (1 << 0)
+CL_QUEUE_PROFILING_ENABLE                     = (1 << 1)
 
 # cl_context_properties
 CL_CONTEXT_PLATFORM                           = 0x1084
 
 # Device Types
-CL_DEVICE_TYPE_DEFAULT                        = 1<<0
-CL_DEVICE_TYPE_CPU                            = 1<<1
-CL_DEVICE_TYPE_GPU                            = 1<<2
-CL_DEVICE_TYPE_ACCELERATOR                    = 1<<3
-CL_DEVICE_TYPE_CUSTOM                         = 1<<4
+CL_DEVICE_TYPE_DEFAULT                        = (1 << 0)
+CL_DEVICE_TYPE_CPU                            = (1 << 1)
+CL_DEVICE_TYPE_GPU                            = (1 << 2)
+CL_DEVICE_TYPE_ACCELERATOR                    = (1 << 3)
+CL_DEVICE_TYPE_CUSTOM                         = (1 << 4)
 CL_DEVICE_TYPE_ALL                            = 0xffffffff
 
 # cl_platform_info
