@@ -88,7 +88,7 @@ def test_calc_occupancy():
     assertTrue(autotuner.best() == 128)
 
 
-    
+
 if __name__ == '__main__':
     main()
 

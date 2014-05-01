@@ -39,13 +39,13 @@ class RNG(object):
 class PRNG(RNG):
     '''cuRAND pseudo random number generator
 
-    :param rndtype: Algorithm type.  All possible values are listed as 
+    :param rndtype: Algorithm type.  All possible values are listed as
                     class attributes of this class, e.g. TEST, DEFAULT,
                     XORWOW, MRG32K3A, MTGP32.
     :param seed: Seed for the RNG.
     :param offset: Offset to the random number stream.
     :param stream: CUDA stream.
-    
+
     Example:
 
     >>> from numbapro.cudalib import curand
@@ -149,9 +149,9 @@ class PRNG(RNG):
 
 class QRNG(RNG):
     '''cuRAND quasi random number generator
-        
-    :param rndtype: Algorithm type.  
-                    Also control output data type.  
+
+    :param rndtype: Algorithm type.
+                    Also control output data type.
                     All possible values are listed as class
                     attributes of this class, e.g. TEST, DEFAULT, SOBOL32,
                     SCRAMBLED_SOBOL32, SOBOL64, SCRAMABLED_SOBOL64.
@@ -192,7 +192,7 @@ class QRNG(RNG):
 
     def generate(self, ary, size=None):
         """Generate quasi random number in ary.
-            
+
         :param ary: Numpy array or cuda device array.
 
         :param size: Number of samples;
@@ -238,7 +238,7 @@ def uniform(size, dtype=np.float, device=False):
     :param size: Number of samples.
     :param dtype: np.float32 or np.float64.
     :param device: Set to True to return a device array instead or numpy array.
-    
+
     :returns: A numpy array or a device array.
 
     >>> from numbapro.cudalib import curand
@@ -273,7 +273,7 @@ def normal(mean, sigma, size, dtype=np.float, device=False):
     array([...])
 
     .. seealso:: :py:meth:`PRNG.normal`
-    
+
     '''
     ary = np.empty(size, dtype=dtype)
     devary = cuda.to_device(ary, copy=False)
@@ -288,7 +288,7 @@ def normal(mean, sigma, size, dtype=np.float, device=False):
 def lognormal(mean, sigma, size, dtype=np.float, device=False):
     '''Generate floating point random number sampled
     from a log-normal distribution.
-    
+
     :param mean: Center point of the distribution.
     :param sigma: Standard deviation of the distribution.
     :param size: Number of samples.
@@ -299,9 +299,9 @@ def lognormal(mean, sigma, size, dtype=np.float, device=False):
     >>> from numbapro.cudalib import curand
     >>> curand.lognormal(mean=0, sigma=1, size=10)
     array([...])
-            
+
     .. seealso:: :py:meth:`PRNG.lognormal`
-    
+
     '''
     ary = np.empty(size, dtype=dtype)
     devary = cuda.to_device(ary, copy=False)
@@ -321,7 +321,7 @@ def poisson(lmbd, size, device=False):
     :param size:  Number of samples
     :param device: Set to True to return a device array instead or ndarray.
     :returns: A numpy array or a device array.
-    
+
     >>> from numbapro.cudalib import curand
     >>> curand.poisson(lmbd=1, size=10)
     array([...], dtype=uint32)
@@ -340,13 +340,13 @@ def poisson(lmbd, size, device=False):
 
 def quasi(size, bits=32, nd=1, device=False):
     '''Generate quasi random number using SOBOL{bits} RNG type.
-        
+
     :param size: Number of samples.
     :param bits: Bit length of output element; e.g. 32 or 64.
     :param nd: Number of dimension .
     :param device: Set to True to return a device array instead or ndarray.
     :returns: A numpy array or a device array.
-    
+
     >>> from numbapro.cudalib import curand
     >>> curand.quasi(10)
     array([...], dtype=uint32)

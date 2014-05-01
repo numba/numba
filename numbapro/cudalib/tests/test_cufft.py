@@ -278,7 +278,7 @@ class TestCuFFTAPI(unittest.TestCase):
 
         fft_inplace(x)
         ifft_inplace(x)
-        
+
         self.assertTrue( np.allclose(x / N, x0, atol=1e-6) )
 
     def test_fft_1d_roundtrip_double_2(self):
@@ -289,7 +289,7 @@ class TestCuFFTAPI(unittest.TestCase):
 
         fft_inplace(x)
         ifft_inplace(x)
-        
+
         self.assertTrue( np.allclose(x / N, x0, atol=1e-6) )
 
 
@@ -303,7 +303,7 @@ class TestCuFFTAPI(unittest.TestCase):
 
         fft_inplace(x)
         ifft_inplace(x)
-        
+
         self.assertTrue( np.allclose(x / N, x0, atol=1e-6) )
 
     def test_fft_3d_roundtrip_double(self):
@@ -317,7 +317,7 @@ class TestCuFFTAPI(unittest.TestCase):
 
         fft_inplace(x)
         ifft_inplace(x)
-        
+
         self.assertTrue( np.allclose(x / N, x0, atol=1e-6) )
 
 

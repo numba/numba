@@ -38,7 +38,7 @@ def test_signed_overflow():
         i = e.tid[0]
         assertTrue(int(a[i]) + int(a[i]) > 127)
     else:
-        raise AssertionError('expeating an exception')
+        raise AssertionError('expecting an exception')
 
 @testcase
 def test_signed_overflow2():
@@ -51,7 +51,7 @@ def test_signed_overflow2():
         i = e.tid[0]
         assertTrue(int(a[i]) + int(a[i]) > 127)
     else:
-        raise AssertionError('expeating an exception')
+        raise AssertionError('expecting an exception')
 
 @testcase
 def test_signed_overflow3():
@@ -64,7 +64,7 @@ def test_signed_overflow3():
         i = e.tid[0] + e.ctaid[0] * a.size//2
         assertTrue(int(a[i]) + int(a[i]) > 127)
     else:
-        raise AssertionError('expeating an exception')
+        raise AssertionError('expecting an exception')
 
 
 if __name__ == '__main__':

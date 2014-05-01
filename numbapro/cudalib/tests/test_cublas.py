@@ -222,7 +222,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
         self.assertTrue(np.allclose(x, x0))
         self.assertTrue(np.allclose(y, y0))
-    
+
     def test_Srot(self):
         self.Trot('Srot', np.float32)
 
@@ -300,7 +300,7 @@ class TestCuBlasBinding(unittest.TestCase):
     def Trotmg(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
         d1, d2, x1, y1 = np.random.random(4).tolist()
-        
+
         blas = cuBlas()
         param = getattr(blas, fn)(d1, d2, x1, y1)
 
@@ -451,7 +451,7 @@ class TestCuBlasBinding(unittest.TestCase):
         k = 0
         getattr(blas, fn)(uplo, trans, diag, n, k, dA, lda, dx, inc)
         dx.copy_to_host(x)
-        
+
         self.assertFalse(all(x == x0))
 
     def test_Stbmv(self):
@@ -484,7 +484,7 @@ class TestCuBlasBinding(unittest.TestCase):
         inc = 1
         getattr(blas, fn)(uplo, trans, diag, n, dAP, dx, inc)
         dx.copy_to_host(x)
-        
+
         self.assertFalse(all(x == x0))
 
     def test_Stpmv(self):
@@ -517,7 +517,7 @@ class TestCuBlasBinding(unittest.TestCase):
         inc = 1
         getattr(blas, fn)(uplo, trans, diag, n, dA, lda, dx, inc)
         dx.copy_to_host(x)
-        
+
         self.assertFalse(all(x == x0))
 
     def test_Strsv(self):
@@ -531,7 +531,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def test_Ztrsv(self):
         self.Ttrsv('Ztrsv', np.complex128)
-    
+
     def _Ttpsv(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
         A = np.array([[1, 2, 0],
@@ -550,7 +550,7 @@ class TestCuBlasBinding(unittest.TestCase):
         inc = 1
         getattr(blas, fn)(uplo, trans, diag, n, dA, dx, inc)
         dx.copy_to_host(x)
-        
+
         self.assertFalse(all(x == x0))
 
     def test_Stpsv(self):
@@ -584,7 +584,7 @@ class TestCuBlasBinding(unittest.TestCase):
         inc = 1
         getattr(blas, fn)(uplo, trans, diag, n, k, dA, lda, dx, inc)
         dx.copy_to_host(x)
-        
+
         self.assertFalse(all(x == x0))
 
     def test_Stbsv(self):
@@ -619,7 +619,7 @@ class TestCuBlasBinding(unittest.TestCase):
         incx = incy = 1
         getattr(blas, fn)(uplo, n, alpha, dA, lda, dx, incx, beta, dy, incy)
         dy.copy_to_host(y)
-        
+
         self.assertFalse(all(y == y0))
 
     def test_Ssymv(self):
@@ -663,7 +663,7 @@ class TestCuBlasBinding(unittest.TestCase):
         incx = incy = 1
         getattr(blas, fn)(uplo, n, k, alpha, dA, lda, dx, incx, beta, dy, incy)
         dy.copy_to_host(y)
-        
+
         self.assertFalse(all(y == y0))
 
     def test_Ssbmv(self):
@@ -700,7 +700,7 @@ class TestCuBlasBinding(unittest.TestCase):
         incx = incy = 1
         getattr(blas, fn)(uplo, n, alpha, dAP, dx, incx, beta, dy, incy)
         dy.copy_to_host(y)
-        
+
         self.assertFalse(all(y == y0))
 
     def test_Sspmv(self):
@@ -737,7 +737,7 @@ class TestCuBlasBinding(unittest.TestCase):
         incx = incy = 1
         getattr(blas, fn)(m, n, alpha, dx, incx, dy, incy, dA, lda)
         dA.copy_to_host(A)
-        
+
         self.assertFalse(np.all(A == A0))
 
     def test_Sger(self):
@@ -778,7 +778,7 @@ class TestCuBlasBinding(unittest.TestCase):
         incx = 1
         getattr(blas, fn)(uplo, n, alpha, dx, incx, dA, lda)
         dA.copy_to_host(A)
-        
+
         self.assertFalse(np.all(A == A0))
 
     def test_Ssyr(self):
@@ -812,7 +812,7 @@ class TestCuBlasBinding(unittest.TestCase):
         incx = 1
         getattr(blas, fn)(uplo, n, alpha, dx, incx, dA, lda)
         dA.copy_to_host(A)
-        
+
         self.assertFalse(np.all(A == A0))
 
     def test_Cher(self):
@@ -840,7 +840,7 @@ class TestCuBlasBinding(unittest.TestCase):
         incx = 1
         getattr(blas, fn)(uplo, n, alpha, dx, incx, dAP)
         dAP.copy_to_host(AP)
-        
+
         self.assertFalse(np.all(AP == AP0))
 
     def test_Sspr(self):
@@ -876,7 +876,7 @@ class TestCuBlasBinding(unittest.TestCase):
         incx = incy = 1
         getattr(blas, fn)(uplo, n, alpha, dx, incx, dy, incy, dA, lda)
         dA.copy_to_host(A)
-        
+
         self.assertFalse(np.all(A == A0))
 
     _Ther2 = _Tsyr2
@@ -920,7 +920,7 @@ class TestCuBlasBinding(unittest.TestCase):
         incx = incy = 1
         getattr(blas, fn)(uplo, n, alpha, dx, incx, dy, incy, dA)
         dA.copy_to_host(A)
-        
+
         self.assertFalse(np.all(A == A0))
 
     _Thpr2 = _Tspr2
@@ -968,7 +968,7 @@ class TestCuBlasBinding(unittest.TestCase):
         getattr(blas, fn)(transa, transb, m, n, k, alpha, dA, lda, dB, ldb,
                           beta, dC, ldc)
         dC.copy_to_host(C)
-        
+
         self.assertFalse(np.all(C == C0))
 
     def test_Sgemm(self):
@@ -1010,7 +1010,7 @@ class TestCuBlasBinding(unittest.TestCase):
         C0 = C.copy()
         getattr(blas, fn)(uplo, trans, n, k, alpha, dA, lda, beta, dC, ldc)
         dC.copy_to_host(C)
-        
+
         self.assertFalse(np.all(C == C0))
 
     def test_Ssyrk(self):
@@ -1063,7 +1063,7 @@ class TestCuBlasBinding(unittest.TestCase):
         getattr(blas, fn)(side, uplo, m, n, alpha, dA, lda, dB, ldb, beta, dC,
                           ldc)
         dC.copy_to_host(C)
-        
+
         self.assertFalse(np.all(C == C0))
 
     def test_Ssymm(self):
@@ -1074,7 +1074,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def test_Csymm(self):
         self._Tsymm('Csymm', np.complex64)
-    
+
     def test_Zsymm(self):
         self._Tsymm('Zsymm', np.complex128)
 
@@ -1082,7 +1082,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def test_Chemm(self):
         self._Themm('Chemm', np.complex64)
-    
+
     def test_Zhemm(self):
         self._Themm('Zhemm', np.complex128)
 
@@ -1110,18 +1110,18 @@ class TestCuBlasBinding(unittest.TestCase):
         getattr(blas, fn)(side, uplo, trans, diag, m, n, alpha, dA, lda, dB,
                           ldb)
         dB.copy_to_host(B)
-        
+
         self.assertFalse(np.all(B == B0))
 
     def test_Strsm(self):
         self._Ttrsm('Strsm', np.float32)
-    
+
     def test_Dtrsm(self):
         self._Ttrsm('Dtrsm', np.float64)
 
     def test_Ctrsm(self):
         self._Ttrsm('Ctrsm', np.complex64)
-    
+
     def test_Ztrsm(self):
         self._Ttrsm('Ztrsm', np.complex128)
 
@@ -1156,7 +1156,7 @@ class TestCuBlasBinding(unittest.TestCase):
         getattr(blas, fn)(side, uplo, trans, diag, m, n, alpha, dA, lda, dB,
                           ldb, dC, ldc)
         dC.copy_to_host(C)
-        
+
         self.assertFalse(np.all(C == C0))
 
     def test_Strmm(self):
@@ -1167,7 +1167,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def test_Ctrmm(self):
         self._Ttrmm('Ctrmm', np.complex64)
-    
+
     def test_Ztrmm(self):
         self._Ttrmm('Ztrmm', np.complex128)
 
@@ -1196,7 +1196,7 @@ class TestCuBlasBinding(unittest.TestCase):
         incx = 1
         getattr(blas, fn)(side, m, n, dA, lda, dx, incx, dC, ldc)
         dC.copy_to_host(C)
-        
+
         self.assertFalse(np.all(C == C0))
 
     def test_Sdgmm(self):
@@ -1207,7 +1207,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def test_Cdgmm(self):
         self._Tdgmm('Cdgmm', np.complex64)
-    
+
     def test_Zdgmm(self):
         self._Tdgmm('Zdgmm', np.complex128)
 
@@ -1242,7 +1242,7 @@ class TestCuBlasBinding(unittest.TestCase):
         getattr(blas, fn)(transa, transb, m, n, alpha, dA, lda, beta, dB,
                           ldb, dC, ldc)
         dC.copy_to_host(C)
-        
+
         self.assertFalse(np.all(C == C0))
 
     def test_Sgeam(self):
@@ -1253,7 +1253,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def test_Cgeam(self):
         self._Tgeam('Cgeam', np.complex64)
-    
+
     def test_Zgeam(self):
         self._Tgeam('Zgeam', np.complex128)
 
@@ -1264,7 +1264,7 @@ class TestCuBlasAPI(unittest.TestCase):
     def setUp(self):
         from numbapro.cudalib.cublas import Blas
         self.blas = Blas()
-        
+
 
     def Tnrm2(self, fn, dtype):
         x = np.random.random(10).astype(dtype)
@@ -1362,7 +1362,7 @@ class TestCuBlasAPI(unittest.TestCase):
         self.Tasum(self.blas.asum, np.float64)
         self.Tasum(self.blas.asum, np.complex64)
         self.Tasum(self.blas.asum, np.complex128)
-    
+
     def Trot(self, fn, dtype):
         x = np.random.random(10).astype(dtype)
         y = np.random.random(10).astype(dtype)
@@ -1424,7 +1424,7 @@ class TestCuBlasAPI(unittest.TestCase):
 
     def Trotmg(self, fn, dtype):
         d1, d2, x1, y1 = np.random.random(4).tolist()
-        
+
         param = fn(d1, d2, x1, y1)
 
         flag, h11, h21, h12, h22 = param.tolist()
@@ -1464,7 +1464,7 @@ class TestCuBlasAPI(unittest.TestCase):
         dtypes = np.complex64, np.complex128
         for dt in dtypes:
             test(fn, dt)
-    
+
     def Tgbmv(self, fn, dtype):
         kl = 0
         ku = 0
@@ -1483,7 +1483,7 @@ class TestCuBlasAPI(unittest.TestCase):
 
     def test_gbmv(self):
         self._test_all(self.Tgbmv, self.blas.gbmv)
-    
+
     def Tgemv(self, fn, dtype):
         alpha = 1.
         beta = 0.

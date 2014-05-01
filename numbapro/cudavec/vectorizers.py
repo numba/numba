@@ -7,7 +7,6 @@ import llvm.core as lc
 from numbapro.npm import types, cgutils, aryutils
 from numbapro.cudapy.execution import CUDAKernel
 from numbapro.cudapy import ptx, compiler
-from numbapro.cudadrv.initialize import ensure_cuda_support
 from . import dispatch
 
 vectorizer_stager_source = '''
@@ -23,7 +22,6 @@ def to_dtype(ty):
 class CudaVectorize(object):
     def __init__(self, func, targetoptions={}):
         assert not targetoptions
-        ensure_cuda_support()
         self.pyfunc = func
         self.kernelmap = {} # { arg_dtype: (return_dtype), cudakernel }
 
@@ -77,7 +75,6 @@ class CudaGUFuncVectorize(object):
 
     def __init__(self, func, sig, targetoptions={}):
         assert not targetoptions
-        ensure_cuda_support()
         self.pyfunc = func
         self.signature = sig
         self.inputsig, self.outputsig = parse_signature(self.signature)

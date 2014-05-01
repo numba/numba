@@ -36,7 +36,7 @@ class FFTPlan(object):
     @_cuda.require_context
     def __init__(self, shape, itype, otype, batch=1, stream=0,
                  mode=MODE_DEFAULT):
-        
+
         itype = np.dtype(itype)
         otype = np.dtype(otype)
 
@@ -106,12 +106,12 @@ class FFTPlan(object):
 
     def forward(self, ary, out=None):
         '''Perform forward FFT
-        
+
         :param ary: Input array
         :param out: Optional output array
-        
+
         :returns: The output array or a new numpy array is `out` is None.
-        
+
         .. note:: If `ary` is `out`, an inplace operation is performed.
         '''
         if self.direction not in ('both', 'forward'):
@@ -124,12 +124,12 @@ class FFTPlan(object):
 
     def inverse(self, ary, out=None):
         '''Perform inverse FFT
-        
+
         :param ary: Input array
         :param out: Optional output array
-        
+
         :returns: The output array or a new numpy array is `out` is None.
-        
+
         .. note: If `ary` is `out`, an inplace operation is performed.
         '''
         if self.direction not in ('both', 'inverse'):
@@ -146,7 +146,7 @@ class FFTPlan(object):
 
 def fft(ary, out, stream=None):
     '''Perform forward FFT on `ary` and output to `out`.
-    
+
     out --- can be a numpy array or a GPU device array with 1 <= ndim <= 3
     stream --- a CUDA stream
     '''
@@ -156,7 +156,7 @@ def fft(ary, out, stream=None):
 
 def ifft(ary, out, stream=None):
     '''Perform inverse FFT on `ary` and output to `out`.
-    
+
     out --- can be a numpy array or a GPU device array with 1 <= ndim <= 3
     stream --- a CUDA stream
     '''
@@ -166,7 +166,7 @@ def ifft(ary, out, stream=None):
 
 def fft_inplace(ary, stream=None):
     '''Perform inplace forward FFT. `ary` must have complex dtype.
-    
+
     out --- can be a numpy array or a GPU device array with 1 <= ndim <= 3
     stream --- a CUDA stream
     '''
@@ -179,7 +179,7 @@ def fft_inplace(ary, stream=None):
 
 def ifft_inplace(ary, stream=None):
     '''Perform inplace inverse FFT. `ary` must have complex dtype.
-    
+
     out --- can be a numpy array or a GPU device array with 1 <= ndim <= 3
     stream --- a CUDA stream
     '''
