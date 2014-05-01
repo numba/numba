@@ -475,8 +475,8 @@ class TypeInferer(object):
             gvty = self.context.get_global_type(gvar.value)
             self.typevars[target.name].lock(gvty)
             self.assumed_immutables.add(inst)
-        elif gvar.name == 'len' and gvar.value is len:
 
+        elif gvar.name == 'len' and gvar.value is len:
             gvty = self.context.get_global_type(gvar.value)
             self.typevars[target.name].lock(gvty)
             self.assumed_immutables.add(inst)
@@ -484,6 +484,11 @@ class TypeInferer(object):
         elif gvar.name in ('True', 'False'):
             assert gvar.value in (True, False)
             self.typevars[target.name].lock(types.boolean)
+            self.assumed_immutables.add(inst)
+
+        elif gvar.name == 'None':
+            assert gvar.value is None
+            self.typevars[target.name].lock(types.none)
             self.assumed_immutables.add(inst)
 
         elif (isinstance(gvar.value, tuple) and
