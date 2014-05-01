@@ -123,3 +123,11 @@ CL_MEM_COPY_HOST_PTR                          = (1 << 5)
 CL_MEM_HOST_WRITE_ONLY                        = (1 << 7)
 CL_MEM_HOST_READ_ONLY                         = (1 << 8)
 CL_MEM_HOST_NO_ACCESS                         = (1 << 9)
+
+# cl_kernel_work_group_info
+CL_KERNEL_WORK_GROUP_SIZE                     = 0x11B0
+CL_KERNEL_COMPILE_WORK_GROUP_SIZE             = 0x11B1
+CL_KERNEL_LOCAL_MEM_SIZE                      = 0x11B2
+CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE  = 0x11B3
+CL_KERNEL_PRIVATE_MEM_SIZE                    = 0x11B4
+CL_KERNEL_GLOBAL_WORK_SIZE                    = 0x11B5

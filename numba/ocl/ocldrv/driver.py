@@ -414,11 +414,11 @@ class CommandQueue(OpenCLWrapper):
     def finish(self):
         driver.clFinish(self.id)
 
-    def enqueue_task(self, kernel, wait_list=None, event=None):
+    def enqueue_task(self, kernel, wait_list=None, wants_event=False):
         """
         Enqueue a task for execution.
         - wait_list: a list of events to wait for
-        - event: an event used to identify this execution
+        - wants_event: if True, return an event for synchronization with this command.
         """
         if wait_list is not None:
             # must be a list of Events
@@ -428,13 +428,40 @@ class CommandQueue(OpenCLWrapper):
             num_events_in_wait_list = 0
             event_wait_list = None
 
-        if event is not None:
-            event = (cl_event * 1)(event.id)
+        event = (cl_event * 1)() if wants_event else None
 
         driver.clEnqueueTask(self.id, kernel.id, num_events_in_wait_list, event_wait_list, event)
+        if wants_event:
+            return event[0]
 
+    def enqueue_nd_range_kernel(self, kernel, nd, global_work_size, local_work_size,
+                                wait_list=None, wants_event = False):
+        """
+        enqueue a n-dimensional range kernel
+        - nd : number of dimensions
+        - global_work_size : a list/tuple of nd elements with the global work shape
+        - local_work_size : a list/tuple of nd elements with the local work shape
+        - wait_list: a list of events to wait for
+        - wants_event: if True, return an event for synchronization with this command
+        """
+        if wait_list is not None:
+            num_events_in_wait_list = len(wait_list)
+            event_wait_list = (cl_event * num_events_in_wait_list)(*[e.id for e in wait_list])
+        else:
+            num_events_in_wait_list = 0
+            event_wait_list = None
 
-    def enqueue_read_buffer(self, buff, offset, bc, dst_ptr, blocking=True, wait_list=None, event=None):
+        global_ws = (ctypes.c_size_t*nd)(*global_work_size)
+        local_ws = (ctypes.c_size_t*nd)(*local_work_size)
+        event = (cl_event*1)() if wants_event else None
+        driver.clEnqueueNDRangeKernel(self.id, kernel.id, nd, None, global_ws, local_ws,
+                                      num_events_in_wait_list, event_wait_list, event)
+
+        if wants_event:
+            return event[0]
+
+    def enqueue_read_buffer(self, buff, offset, bc, dst_ptr,
+                            blocking=True, wait_list=None, wants_event=False):
         if wait_list is not None:
             # must be a list of Events
             num_events_in_wait_list = len(wait_list)
@@ -443,11 +470,31 @@ class CommandQueue(OpenCLWrapper):
             num_events_in_wait_list = 0
             event_wait_list = None
 
-        if event is not None:
-            event = (cl_event * 1)(event.id)
+        event = (cl_event * 1)() if wants_event else None
+
         driver.clEnqueueReadBuffer(self.id, buff.id, blocking, offset, bc, dst_ptr,
                                    num_events_in_wait_list, event_wait_list, event)
-        
+
+        if wants_event:
+            return Event(event[0])
+
+
+    def enqueue_write_buffer(self, buff, offset, bc, src_ptr,
+                             blocking=True, wait_list=None, event=False, wants_event=False):
+        if wait_list is not None:
+            num_events_in_wait_list = len(wait_list)
+            event_wait_list = (cl_event * num_events_in_wait_list)(*[e.id for e in wait_list])
+        else:
+            num_events_in_wait_list = 0
+            event_wait_list = None
+
+        event = (cl_event * 1)() if wants_event else None
+        driver.clEnqueueWriteBuffer(self.id, buff.id, blocking, offset, bc, src_ptr,
+                                    num_events_in_wait_list, event_wait_list, event)
+
+        if wants_event:
+            return Event(event[0])
+
 
 # Program class ################################################################
 class Program(OpenCLWrapper):
@@ -489,11 +536,19 @@ class Kernel(OpenCLWrapper):
         if isinstance(value, (Memory,)):
             arg_value = ctypes.byref(cl_mem(value.id))
             arg_size = ctypes.sizeof(cl_mem)
+        elif isinstance(value, int):
+            arg_value = (cl_int *1)(value)
+            arg_size = ctypes.sizeof(arg_value)
         else:
             arg_value = None
             arg_size = 0
 
         driver.clSetKernelArg(self.id, arg_number, arg_size, arg_value)
+
+    def get_work_group_size_for_device(self, device):
+        sz = (ctypes.c_size_t * 1)()
+        driver.clGetKernelWorkGroupInfo(self.id, device.id, enums.CL_KERNEL_WORK_GROUP_SIZE, ctypes.sizeof(sz), sz, None)
+        return sz[0]
 
 
 # Event class ##################################################################

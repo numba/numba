@@ -50,8 +50,11 @@ API_PROTOTYPES = {
     'clRetainKernel': (cl_int, cl_kernel, 0),
     'clReleaseKernel': (cl_int, cl_kernel, 0),
     'clSetKernelArg': (cl_int, cl_kernel, cl_uint, c_size_t, c_void_p, 0),
+    'clGetKernelWorkGroupInfo': (cl_int, cl_kernel, cl_device_id, cl_kernel_work_group_info, c_size_t, c_void_p, ptr(c_size_t), 0),
     'clEnqueueTask': (cl_int, cl_command_queue, cl_kernel, cl_uint, ptr(cl_event), ptr(cl_event), 0),
+    'clEnqueueNDRangeKernel': (cl_int, cl_command_queue, cl_kernel, cl_uint, ptr(c_size_t), ptr(c_size_t), ptr(c_size_t), cl_uint, ptr(cl_event), ptr(cl_event), 0),
     'clEnqueueReadBuffer': (cl_int, cl_command_queue, cl_mem, cl_bool, c_size_t, c_size_t, c_void_p, cl_uint, ptr(cl_event), ptr(cl_event), 0),
+    'clEnqueueWriteBuffer': (cl_int, cl_command_queue, cl_mem, cl_bool, c_size_t, c_size_t, c_void_p, cl_uint, ptr(cl_event), ptr(cl_event), 0),
     'clFlush': (cl_int, cl_command_queue, 0),
     'clFinish': (cl_int, cl_command_queue, 0)
 }
