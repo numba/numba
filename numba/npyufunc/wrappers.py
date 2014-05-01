@@ -1,6 +1,6 @@
 from __future__ import print_function, division, absolute_import
-from llvm.core import Type, Builder
-from numba import types, cgutils
+from llvm.core import Type, Builder, inline_function, LINKAGE_INTERNAL
+from numba import types, cgutils, config
 
 
 def build_ufunc_wrapper(context, func, signature):
@@ -41,10 +41,21 @@ def build_ufunc_wrapper(context, func, signature):
     out = UArrayArg(context, builder, arg_args, arg_steps, len(actual_args),
                     context.get_value_type(signature.return_type))
 
+    # Setup indices
+    offsets = []
+    zero = context.get_constant(types.intp, 0)
+    for _ in arrays:
+        p = cgutils.alloca_once(builder, intp_t)
+        offsets.append(p)
+        builder.store(zero, p)
+    store_offset = cgutils.alloca_once(builder, intp_t)
+    builder.store(zero, store_offset)
+
     # Loop
-    with cgutils.for_range(builder, loopcount, intp=intp_t) as ind:
+    with cgutils.for_range(builder, loopcount, intp=intp_t):
         # Load
-        elems = [ary.load(ind) for ary in arrays]
+        elems = [ary.load_direct(builder.load(off))
+                 for off, ary in zip(offsets, arrays)]
 
         # Compute
         status, retval = context.call_function(builder, func,
@@ -56,9 +67,28 @@ def build_ufunc_wrapper(context, func, signature):
         if out.byref:
             retval = builder.load(retval)
 
-        out.store(retval, ind)
+        out.store_direct(retval, builder.load(store_offset))
+
+        # increment indices
+        for off, ary in zip(offsets, arrays):
+            builder.store(builder.add(builder.load(off), ary.step), off)
+
+        builder.store(builder.add(builder.load(store_offset), out.step),
+                      store_offset)
 
     builder.ret_void()
+    del builder
+
+    # Set core function to internal so that it is not generated
+    func.linkage = LINKAGE_INTERNAL
+    # Force inline of code function
+    inline_function(status.code)
+    # Run optimizer
+    context.optimize(module)
+
+    if config.DUMP_OPTIMIZED:
+        print(module)
+
     return wrapper
 
 
@@ -79,9 +109,13 @@ class UArrayArg(object):
         self.builder = builder
 
     def load(self, ind):
-        intp_t = ind.type
+        offset = self.builder.mul(self.step, ind)
+        return self.load_direct(offset)
+
+    def load_direct(self, offset):
+        intp_t = offset.type
         addr = self.builder.ptrtoint(self.data, intp_t)
-        addr_off = self.builder.add(addr, self.builder.mul(self.step, ind))
+        addr_off = self.builder.add(addr, offset)
         ptr = self.builder.inttoptr(addr_off, self.data.type)
         if self.byref:
             return ptr
@@ -89,12 +123,15 @@ class UArrayArg(object):
             return self.builder.load(ptr)
 
     def store(self, value, ind):
-        addr = self.builder.ptrtoint(self.data, ind.type)
-        addr_off = self.builder.add(addr, self.builder.mul(self.step, ind))
+        offset = self.builder.mul(self.step, ind)
+        self.store_direct(value, offset)
+
+    def store_direct(self, value, offset):
+        addr = self.builder.ptrtoint(self.data, offset.type)
+        addr_off = self.builder.add(addr, offset)
         ptr = self.builder.inttoptr(addr_off, self.data.type)
         assert ptr.type.pointee == value.type
         self.builder.store(value, ptr)
-
 
 def build_gufunc_wrapper(context, func, signature, sin, sout):
     module = func.module
@@ -159,6 +196,16 @@ def build_gufunc_wrapper(context, func, signature, sin, sout):
             a.next(ind)
 
     builder.ret_void()
+
+    # Set core function to internal so that it is not generated
+    func.linkage = LINKAGE_INTERNAL
+    # Force inline of code function
+    inline_function(status.code)
+    # Run optimizer
+    context.optimize(module)
+
+    if config.DUMP_OPTIMIZED:
+        print(module)
 
     wrapper.verify()
     return wrapper
