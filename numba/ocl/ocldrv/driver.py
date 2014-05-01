@@ -13,6 +13,7 @@ from .types import *
 import weakref
 import functools
 import ctypes
+import ctypes.util
 import os
 import sys
 
