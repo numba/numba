@@ -22,6 +22,9 @@ try:
 except NameError:
     long = int
 
+
+_ctypes_array_metaclass = type(type(cl_int*1))
+
 def _ctypes_func_wraps(model):
     def inner(func):
         wrapped = functools.wraps(model)(func)
@@ -532,10 +535,16 @@ class Kernel(OpenCLWrapper):
     def _release(self):
         driver.clReleaseKernel(self.id)
 
+    def set_arg_raw(self, arg_number, ptr, size_in_bytes):
+        driver.clSetKernelArg(self.id, arg_number, size_in_bytes, ptr)
+
     def set_arg(self, arg_number, value):
         if isinstance(value, (Memory,)):
             arg_value = ctypes.byref(cl_mem(value.id))
             arg_size = ctypes.sizeof(cl_mem)
+        elif isinstance(type(value), _ctypes_array_metaclass):
+            arg_value = value
+            arg_size = ctypes.sizeof(arg_value)
         elif isinstance(value, int):
             arg_value = (cl_int *1)(value)
             arg_size = ctypes.sizeof(arg_value)
@@ -543,7 +552,8 @@ class Kernel(OpenCLWrapper):
             arg_value = None
             arg_size = 0
 
-        driver.clSetKernelArg(self.id, arg_number, arg_size, arg_value)
+        self.set_arg_raw(arg_number, arg_value, arg_size)
+
 
     def get_work_group_size_for_device(self, device):
         sz = (ctypes.c_size_t * 1)()
