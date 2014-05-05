@@ -10,6 +10,7 @@ from ... import utils
 from . import drvapi, enums
 from .types import *
 
+from functools import partial
 import weakref
 import functools
 import ctypes
@@ -116,7 +117,7 @@ class Driver(object):
         libfn.argtypes = proto[1:-1]
         error_code_idx = proto[-1]
         if error_code_idx is None:
-            return libfn
+            retval = libfn
         elif error_code_idx == 0:
             @_ctypes_func_wraps(libfn)
             def safe_ocl_api_call(*args):
@@ -124,7 +125,7 @@ class Driver(object):
                 if retcode != enums.CL_SUCCESS:
                     _raise_opencl_error(fname, retcode)
             safe_ocl_api_call.restype = None
-            return safe_ocl_api_call
+            retval =  safe_ocl_api_call
         elif error_code_idx == -1:
             @_ctypes_func_wraps(libfn)
             def safe_ocl_api_call(*args):
@@ -136,9 +137,11 @@ class Driver(object):
                 return rv
 
             safe_ocl_api_call.argtypes = safe_ocl_api_call.argtypes[:-1]
-            return safe_ocl_api_call
+            retval =  safe_ocl_api_call
         else:
             _raise_opencl_driver_error("Invalid prototype for '{0}'.", fname)
+        setattr(self, fname, retval)
+        return retval
 
 
     def _find_api(self, fname):
@@ -172,6 +175,25 @@ class Driver(object):
         return Context(ctxt)
 
 
+# The Driver ###################################################################
+driver = Driver()
+
+
+# OpenCLWrapper ################################################################
+def _get_string_info(func, attr_enum, self):
+    sz = ctypes.c_size_t()
+    func(self.id, attr_enum, 0, None, ctypes.byref(sz))
+    ret_val = (ctypes.c_char*sz.value)()
+    func(self.id, attr_enum, sz, ret_val, None)
+    return ret_val.value
+        
+
+def _get_info(param_type, func, attr_enum, self):
+    ret_val = (param_type * 1)()
+    func(self.id, attr_enum, ctypes.sizeof(ret_val), ret_val, None)
+    return ret_val[0]
+
+
 class OpenCLWrapper(object):
     """
     A base class for OpenCL wrapper objects.
@@ -194,152 +216,162 @@ class OpenCLWrapper(object):
     def __hash__(self):
         return hash(self.id)
 
+    _getter_by_type = {
+        ctypes.c_char_p: _get_string_info,
+        ctypes.c_void_p: partial(_get_info, ctypes.c_void_p),
+        ctypes.c_uint64: partial(_get_info, ctypes.c_uint64),
+        ctypes.c_uint32: partial(_get_info, ctypes.c_uint32),
+    }
+
+    @classmethod
+    def _define_cl_properties(cls):
+        """
+        define cl properties for this class.
+        """
+        func = getattr(driver, cls._cl_info_function)
+        for p in cls._cl_properties.items():
+            getter = cls._getter_by_type[p[1][-1]]
+            getter = partial(getter, func, p[1][0])
+            setattr(cls, p[0], property(getter))
 
 # Platform class ###############################################################
-class Platform(object):
+class Platform(OpenCLWrapper):
     """
     The Platform represents possible different implementations of OpenCL in a
     host.
     """
-    def __init__(self, platform_id):
-        def get_info(param_name):
-            sz = ctypes.c_size_t()
-            try:
-                driver.clGetPlatformInfo(platform_id, param_name, 0, None, ctypes.byref(sz))
-            except OpenCLAPIError:
-                return None
-            ret_val = (ctypes.c_char * sz.value)()
-            driver.clGetPlatformInfo(platform_id, param_name, sz, ctypes.byref(ret_val), None)
-            return ret_val.value
+    def __repr__(self):
+        return "<OpenCL Platform name:{0} vendor:{1} profile:{2} version:{3}>".format(self.name, self.vendor, self.profile, self.version)
 
-        self.id = platform_id
-        self.profile = get_info(enums.CL_PLATFORM_PROFILE)
-        self.version = get_info(enums.CL_PLATFORM_VERSION)
-        self.name = get_info(enums.CL_PLATFORM_NAME)
-        self.vendor = get_info(enums.CL_PLATFORM_VENDOR)
-        self.extensions = get_info(enums.CL_PLATFORM_EXTENSIONS).split()
+    def _retain(self):
+        # It looks like there is no retain/release for platforms
+        pass
+
+    def _release(self):
+        # It looks like there is no retain/release for platforms
+        pass
+
+
+    def __init__(self, platform_id):
+        super(Platform, self).__init__(platform_id)
 
         device_count = cl_uint()
         driver.clGetDeviceIDs(platform_id, enums.CL_DEVICE_TYPE_ALL, 0, None, ctypes.byref(device_count))
         devices = (cl_device_id * device_count.value)()
         driver.clGetDeviceIDs(platform_id, enums.CL_DEVICE_TYPE_ALL, device_count, devices, None)
-        self._devices = [Device(x, self, driver) for x in devices]
+        self._devices = [Device(x) for x in devices]
 
     @property
     def devices(self):
         return self._devices[:]
 
-    def __repr__(self):
-        return "<OpenCL Platform name:{0} vendor:{1} profile:{2} version:{3}>".format(self.name, self.vendor, self.profile, self.version)
+    _cl_properties = {
+        'profile': (enums.CL_PLATFORM_PROFILE, ctypes.c_char_p),
+        'version': (enums.CL_PLATFORM_VERSION, ctypes.c_char_p),
+        'name': (enums.CL_PLATFORM_NAME, ctypes.c_char_p),
+        'vendor': (enums.CL_PLATFORM_VENDOR, ctypes.c_char_p),
+        'extensions': (enums.CL_PLATFORM_EXTENSIONS, ctypes.c_char_p)
+    }
+    _cl_info_function = "clGetPlatformInfo"
+
+
+Platform._define_cl_properties()
 
 
 # Device class #################################################################
-class Device(object):
+class Device(OpenCLWrapper):
     """
     The device represents a computing device.
     """
-    def __init__(self, device_id, platform_id, driver):
-        def get_string_info(param_name):
-            sz = ctypes.c_size_t()
-            try:
-                driver.clGetDeviceInfo(device_id, param_name, 0, None, ctypes.byref(sz))
-            except OpenCLAPIError:
-                return None
-            ret_val = (ctypes.c_char * sz.value)()
-            driver.clGetDeviceInfo(device_id, param_name, sz, ret_val, None)
-            return ret_val.value
+    _cl_properties = {
+        "platform":                      (enums.CL_DEVICE_PLATFORM, cl_platform_id),
+        "name":                          (enums.CL_DEVICE_NAME, ctypes.c_char_p),
+        "profile":                       (enums.CL_DEVICE_PROFILE, ctypes.c_char_p),
+        "type":                          (enums.CL_DEVICE_TYPE, cl_device_type),
+        "vendor":                        (enums.CL_DEVICE_VENDOR, ctypes.c_char_p),
+        "vendor_id":                     (enums.CL_DEVICE_VENDOR_ID, cl_uint),
+        "version":                       (enums.CL_DEVICE_VERSION, ctypes.c_char_p),
+        "driver_version":                (enums.CL_DRIVER_VERSION, ctypes.c_char_p),
+        "address_bits":                  (enums.CL_DEVICE_ADDRESS_BITS, cl_uint),
+        "available":                     (enums.CL_DEVICE_AVAILABLE, cl_bool),
+        "compiler_available":            (enums.CL_DEVICE_COMPILER_AVAILABLE, cl_bool),
+        "double_fp_config":              (enums.CL_DEVICE_DOUBLE_FP_CONFIG, cl_device_fp_config),
+        "endian_little":                 (enums.CL_DEVICE_ENDIAN_LITTLE, cl_bool),
+        "error_correction_support":      (enums.CL_DEVICE_ERROR_CORRECTION_SUPPORT, cl_bool),
+        "execution_capabilities":        (enums.CL_DEVICE_EXECUTION_CAPABILITIES, cl_device_exec_capabilities),
+        "extensions":                    (enums.CL_DEVICE_EXTENSIONS, ctypes.c_char_p),
+        "global_mem_cache_size":         (enums.CL_DEVICE_GLOBAL_MEM_CACHE_SIZE, cl_ulong),
+        "global_mem_cache_type":         (enums.CL_DEVICE_GLOBAL_MEM_CACHE_TYPE, cl_device_mem_cache_type),
+        "global_mem_cacheline_size":     (enums.CL_DEVICE_GLOBAL_MEM_CACHELINE_SIZE, cl_uint),
+        "global_mem_size":               (enums.CL_DEVICE_GLOBAL_MEM_SIZE, cl_ulong),
+        "half_fp_config":                (enums.CL_DEVICE_HALF_FP_CONFIG, cl_device_fp_config),
+        "image_support":                 (enums.CL_DEVICE_IMAGE_SUPPORT, cl_bool),
+        "image2d_max_height":            (enums.CL_DEVICE_IMAGE2D_MAX_HEIGHT, ctypes.c_size_t),
+        "image2d_max_width":             (enums.CL_DEVICE_IMAGE2D_MAX_WIDTH, ctypes.c_size_t),
+        "image3d_max_depth":             (enums.CL_DEVICE_IMAGE3D_MAX_DEPTH, ctypes.c_size_t),
+        "image3d_max_height":            (enums.CL_DEVICE_IMAGE3D_MAX_HEIGHT, ctypes.c_size_t),
+        "image3d_max_width":             (enums.CL_DEVICE_IMAGE3D_MAX_WIDTH, ctypes.c_size_t),
+        "local_mem_size":                (enums.CL_DEVICE_LOCAL_MEM_SIZE, cl_ulong),
+        "local_mem_type":                (enums.CL_DEVICE_LOCAL_MEM_TYPE, cl_device_local_mem_type),
+        "max_clock_frequency":           (enums.CL_DEVICE_MAX_CLOCK_FREQUENCY, cl_uint),
+        "max_compute_units":             (enums.CL_DEVICE_MAX_COMPUTE_UNITS, cl_uint),
+        "max_constant_args":             (enums.CL_DEVICE_MAX_CONSTANT_ARGS, cl_uint),
+        "max_constant_buffer_size":      (enums.CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE, cl_ulong),
+        "max_mem_alloc_size":            (enums.CL_DEVICE_MAX_MEM_ALLOC_SIZE, cl_ulong),
+        "max_parameter_size":            (enums.CL_DEVICE_MAX_PARAMETER_SIZE, ctypes.c_size_t),
+        "max_read_image_args":           (enums.CL_DEVICE_MAX_READ_IMAGE_ARGS, cl_uint),
+        "max_samplers":                  (enums.CL_DEVICE_MAX_SAMPLERS, cl_uint),
+        "max_work_group_size":           (enums.CL_DEVICE_MAX_WORK_GROUP_SIZE, ctypes.c_size_t),
+        "max_work_item_dimensions":      (enums.CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS, cl_uint),
+#        "max_work_item_sizes":           (enums.CL_DEVICE_MAX_WORK_ITEM_SIZES, ctypes.c_size_t, count=self.max_work_item_dimensions),
+        "max_write_image_args":          (enums.CL_DEVICE_MAX_WRITE_IMAGE_ARGS, cl_uint),
+        "mem_base_addr_align":           (enums.CL_DEVICE_MEM_BASE_ADDR_ALIGN, cl_uint),
+        "min_data_type_align_size":      (enums.CL_DEVICE_MIN_DATA_TYPE_ALIGN_SIZE, cl_uint),
+        "preferred_vector_width_char":   (enums.CL_DEVICE_PREFERRED_VECTOR_WIDTH_CHAR, cl_uint),
+        "preferred_vector_width_short":  (enums.CL_DEVICE_PREFERRED_VECTOR_WIDTH_SHORT, cl_uint),
+        "preferred_vector_width_int":    (enums.CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT, cl_uint),
+        "preferred_vector_width_long":   (enums.CL_DEVICE_PREFERRED_VECTOR_WIDTH_LONG, cl_uint),
+        "preferred_vector_width_float":  (enums.CL_DEVICE_PREFERRED_VECTOR_WIDTH_FLOAT, cl_uint),
+        "preferred_vector_width_double": (enums.CL_DEVICE_PREFERRED_VECTOR_WIDTH_DOUBLE, cl_uint),
+        "profiling_timer_resolution":    (enums.CL_DEVICE_PROFILING_TIMER_RESOLUTION, ctypes.c_size_t),
+        "queue_properties":              (enums.CL_DEVICE_QUEUE_PROPERTIES, cl_command_queue_properties),
+        "single_fp_config":              (enums.CL_DEVICE_SINGLE_FP_CONFIG, cl_device_fp_config),
+    }
+    _cl_info_function = "clGetDeviceInfo"
 
-        def get_info(param_name, param_type, count = 1):
-            ret_val = (param_type * count)()
-            try:
-                driver.clGetDeviceInfo(device_id, param_name, ctypes.sizeof(param_type), ret_val, None)
-            except OpenCLAPIError:
-                return None
-            if count == 1:
-                return ret_val[0]
-            else:
-                return [x.value for x in ret_val]
-    
-        self.platform_id = platform_id
-        self.id = device_id
-        self.name = get_string_info(enums.CL_DEVICE_NAME)
-        self.profile = get_string_info(enums.CL_DEVICE_PROFILE)
-        self.type = get_info(enums.CL_DEVICE_TYPE, cl_device_type)
-        self.vendor = get_string_info(enums.CL_DEVICE_VENDOR)
-        self.vendor_id = get_info(enums.CL_DEVICE_VENDOR_ID, cl_uint)
-        self.version = get_string_info(enums.CL_DEVICE_VERSION)
-        self.driver_version = get_string_info(enums.CL_DRIVER_VERSION)
-        self.address_bits = get_info(enums.CL_DEVICE_ADDRESS_BITS, cl_uint)
-        self.available = get_info(enums.CL_DEVICE_AVAILABLE, cl_bool)
-        self.compiler_available = get_info(enums.CL_DEVICE_COMPILER_AVAILABLE, cl_bool)
-        self.double_fp_config = get_info(enums.CL_DEVICE_DOUBLE_FP_CONFIG, cl_device_fp_config)
-        self.endian_little = get_info(enums.CL_DEVICE_ENDIAN_LITTLE, cl_bool)
-        self.error_correction_support = get_info(enums.CL_DEVICE_ERROR_CORRECTION_SUPPORT, cl_bool)
-        self.execution_capabilities = get_info(enums.CL_DEVICE_EXECUTION_CAPABILITIES, cl_device_exec_capabilities)
-        self.extensions = get_string_info(enums.CL_DEVICE_EXTENSIONS).split()
-        self.global_mem_cache_size = get_info(enums.CL_DEVICE_GLOBAL_MEM_CACHE_SIZE, cl_ulong)
-        self.global_mem_cache_type = get_info(enums.CL_DEVICE_GLOBAL_MEM_CACHE_TYPE, cl_device_mem_cache_type)
-        self.global_mem_cacheline_size = get_info(enums.CL_DEVICE_GLOBAL_MEM_CACHELINE_SIZE, cl_uint)
-        self.global_mem_size = get_info(enums.CL_DEVICE_GLOBAL_MEM_SIZE, cl_ulong)
-        self.half_fp_config = get_info(enums.CL_DEVICE_HALF_FP_CONFIG, cl_device_fp_config)
-        self.image_support = get_info(enums.CL_DEVICE_IMAGE_SUPPORT, cl_bool)
-        self.image2d_max_height = get_info(enums.CL_DEVICE_IMAGE2D_MAX_HEIGHT, ctypes.c_size_t)
-        self.image2d_max_width = get_info(enums.CL_DEVICE_IMAGE2D_MAX_WIDTH, ctypes.c_size_t)
-        self.image3d_max_depth = get_info(enums.CL_DEVICE_IMAGE3D_MAX_DEPTH, ctypes.c_size_t)
-        self.image3d_max_height = get_info(enums.CL_DEVICE_IMAGE3D_MAX_HEIGHT, ctypes.c_size_t)
-        self.image3d_max_width = get_info(enums.CL_DEVICE_IMAGE3D_MAX_WIDTH, ctypes.c_size_t)
-        self.local_mem_size = get_info(enums.CL_DEVICE_LOCAL_MEM_SIZE, cl_ulong)
-        self.local_mem_type = get_info(enums.CL_DEVICE_LOCAL_MEM_TYPE, cl_device_local_mem_type)
-        self.max_clock_frequency = get_info(enums.CL_DEVICE_MAX_CLOCK_FREQUENCY, cl_uint)
-        self.max_compute_units = get_info(enums.CL_DEVICE_MAX_COMPUTE_UNITS, cl_uint)
-        self.max_constant_args = get_info(enums.CL_DEVICE_MAX_CONSTANT_ARGS, cl_uint)
-        self.max_constant_buffer_size = get_info(enums.CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE, cl_ulong)
-        self.max_mem_alloc_size = get_info(enums.CL_DEVICE_MAX_MEM_ALLOC_SIZE, cl_ulong)
-        self.max_parameter_size = get_info(enums.CL_DEVICE_MAX_PARAMETER_SIZE, ctypes.c_size_t)
-        self.max_read_image_args = get_info(enums.CL_DEVICE_MAX_READ_IMAGE_ARGS, cl_uint)
-        self.max_samplers = get_info(enums.CL_DEVICE_MAX_SAMPLERS, cl_uint)
-        self.max_work_group_size = get_info(enums.CL_DEVICE_MAX_WORK_GROUP_SIZE, ctypes.c_size_t)
-        self.max_work_item_dimensions = get_info(enums.CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS, cl_uint)
-        self.max_work_item_sizes = get_info(enums.CL_DEVICE_MAX_WORK_ITEM_SIZES, ctypes.c_size_t, count=self.max_work_item_dimensions)
-        self.max_write_image_args = get_info(enums.CL_DEVICE_MAX_WRITE_IMAGE_ARGS, cl_uint)
-        self.mem_base_addr_align = get_info(enums.CL_DEVICE_MEM_BASE_ADDR_ALIGN, cl_uint)
-        self.min_data_type_align_size = get_info(enums.CL_DEVICE_MIN_DATA_TYPE_ALIGN_SIZE, cl_uint)
-        self.preferred_vector_width_char = get_info(enums.CL_DEVICE_PREFERRED_VECTOR_WIDTH_CHAR, cl_uint)
-        self.preferred_vector_width_short = get_info(enums.CL_DEVICE_PREFERRED_VECTOR_WIDTH_SHORT, cl_uint)
-        self.preferred_vector_width_int = get_info(enums.CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT, cl_uint)
-        self.preferred_vector_width_long = get_info(enums.CL_DEVICE_PREFERRED_VECTOR_WIDTH_LONG, cl_uint)
-        self.preferred_vector_width_float = get_info(enums.CL_DEVICE_PREFERRED_VECTOR_WIDTH_FLOAT, cl_uint)
-        self.preferred_vector_width_double = get_info(enums.CL_DEVICE_PREFERRED_VECTOR_WIDTH_DOUBLE, cl_uint)
-        self.profiling_timer_resolution = get_info(enums.CL_DEVICE_PROFILING_TIMER_RESOLUTION, ctypes.c_size_t)
-        self.queue_properties = get_info(enums.CL_DEVICE_QUEUE_PROPERTIES, cl_command_queue_properties)
-        self.single_fp_config = get_info(enums.CL_DEVICE_SINGLE_FP_CONFIG, cl_device_fp_config)
+    @property
+    def max_work_item_sizes(self):
+        #this property is special, due to the dependency in max_work_items_dimensions
+        dims = self.mask_work_items_dimensions
+        retval = (ctypes.c_size_t * dims)()
+        driver.clGetDeviceInfo(self.id, enums.CL_DEVICE_MAX_WORK_ITEM_SIZES, ctypes.sizeof(retval), retval, None)
+        return [x.value for x in retval]
 
     @property
     def type_str(self):
+        t = self.type
         types = []
-        if self.type & enums.CL_DEVICE_TYPE_CPU:
+        if t & enums.CL_DEVICE_TYPE_CPU:
             types.append('CPU')
-        if self.type & enums.CL_DEVICE_TYPE_GPU:
+        if t & enums.CL_DEVICE_TYPE_GPU:
             types.append('GPU')
-        if self.type & enums.CL_DEVICE_TYPE_ACCELERATOR:
+        if t & enums.CL_DEVICE_TYPE_ACCELERATOR:
             types.append('ACCELERATOR')
-        if self.type & enums.CL_DEVICE_TYPE_CUSTOM:
+        if t & enums.CL_DEVICE_TYPE_CUSTOM:
             types.append('CUSTOM')
         return ' + '.join(types)
 
+    def _retain(self):
+        driver.clRetainDevice(self.id)
+
+    def _release(self):
+        driver.clReleaseDevice(self.id)
+
     def __repr__(self):
-        return "<OpenCL device id:{3} name:{0} type:{1} profile:{2}>".format(self.name, self.type_str, self.profile, self.id)
-
-    def __hash__(self):
-        return hash(self.id)
-
-    def __eq__(self, other):
-        return isinstance(other, Device) and (self.id == other.id)
-
-    def __ne__(self, other):
-        return not (self == other)
-
+        return "<OpenCL device id:{3} name:{0} type:{1} profile:{2}>".format(self.name, self.type_str, self.profile, hex(self.id))
     
+
+Device._define_cl_properties()
 
 # Context class ################################################################
 class Context(OpenCLWrapper):
@@ -643,6 +675,5 @@ def _raise_usage_error(msg):
 def _raise_unimplemented_error():
     _raise_opencl_driver_error("unimplemented")
 
-# The Driver ###################################################################
-driver = Driver()
+# populate the platforms in the driver
 driver._populate_platforms()
