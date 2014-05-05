@@ -23,7 +23,7 @@ except NameError:
     long = int
 
 
-_ctypes_array_metaclass = type(type(cl_int*1))
+_ctypes_array_metaclass = type(cl_int*1)
 
 def _ctypes_func_wraps(model):
     def inner(func):
