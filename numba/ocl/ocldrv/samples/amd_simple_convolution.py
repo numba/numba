@@ -6,7 +6,7 @@ import numpy as np
 from skimage import data, io, filter
 from itertools import product as it_product
 
-opencl_program = """
+opencl_program = b"""
 __kernel void simpleConvolution(__global  float  * output,
                                 __global  float  * input,
                                 __global  float  * mask,
@@ -57,7 +57,11 @@ __kernel void simpleConvolution(__global  float  * output,
 }
 """
 
-input_image = data.moon().astype(np.float32)/255.0
+input_image = data.moon()
+if np.issubdtype(input_image.dtype, np.integer):
+    factor = 1.0/np.iinfo(input_image.dtype).max 
+    input_image = input_image.astype(np.float32) * factor #dequant
+
 print("input image:\n{0}\n".format(input_image))
 output_image = np.empty_like(input_image)
 
@@ -69,16 +73,16 @@ print("Using mask:\n{0}\n".format(mask))
 platform = cl.platforms[0]
 device = platform.devices[-1]
 ctxt = cl.create_context(platform, [device])
-input_buf = ctxt.create_buffer(len(input_image.data))
-output_buf = ctxt.create_buffer(len(output_image.data))
-mask_buf = ctxt.create_buffer(len(mask.data))
+input_buf = ctxt.create_buffer(input_image.nbytes)
+output_buf = ctxt.create_buffer(output_image.nbytes)
+mask_buf = ctxt.create_buffer(mask.nbytes)
 
 program = ctxt.create_program_from_source(opencl_program)
 program.build()
 
 q = ctxt.create_command_queue(device)
-q.enqueue_write_buffer(input_buf, 0, len(input_image.data), input_image.ctypes.data)
-q.enqueue_write_buffer(mask_buf, 0, len(mask.data), mask.ctypes.data)
+q.enqueue_write_buffer(input_buf, 0, input_image.nbytes, input_image.ctypes.data)
+q.enqueue_write_buffer(mask_buf, 0, mask.nbytes, mask.ctypes.data)
 kernel = program.create_kernel(b"simpleConvolution")
 img_dims = (cl_uint*2)(*input_image.shape)
 mask_dims = (cl_uint*2)(*mask.shape)
@@ -93,7 +97,7 @@ global_sz = input_image.shape[0]*input_image.shape[1]
 q.enqueue_nd_range_kernel(kernel, 1, [global_sz], [local_sz])
 q.finish()
 
-q.enqueue_read_buffer(output_buf, 0, len(output_image.data), output_image.ctypes.data)
+q.enqueue_read_buffer(output_buf, 0, output_image.nbytes, output_image.ctypes.data)
 print("output image:\n{0}\n".format(output_image))
 imgplot = io.imshow(output_image)
 io.show()
