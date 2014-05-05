@@ -93,17 +93,17 @@ class Driver(object):
     def __init__(self):
         pass
 
-    def _populate_platforms(self):
-        count = cl_uint()
-        self.clGetPlatformIDs(0, None, ctypes.byref(count))
-        platforms = (ctypes.c_void_p * count.value) ()
-        self.clGetPlatformIDs(count, platforms, None)
-        self._platforms = [Platform(x) for x in platforms]
-
-
     @property
     def platforms(self):
-        return self._platforms[:]
+        count = cl_uint()
+        self.clGetPlatformIDs(0, None, ctypes.byref(count))
+        platforms = (cl_platform_id * count.value)()
+        self.clGetPlatformIDs(count, platforms, None)
+        return [Platform(x) for x in platforms]
+
+    @property
+    def default_platform(self):
+        return self.platforms[0]
 
     def __getattr__(self, fname):
         # this implements lazy binding of functions
@@ -216,6 +216,11 @@ class OpenCLWrapper(object):
     def __hash__(self):
         return hash(self.id)
 
+
+    # add getters on an "as needed" basis
+    # note that the map is based on the underlying ctype and not the
+    # cl_whatever that may be used in _cl_properties.
+    # c_char_p assumes that it is a string.
     _getter_by_type = {
         ctypes.c_char_p: _get_string_info,
         ctypes.c_void_p: partial(_get_info, ctypes.c_void_p),
@@ -251,19 +256,38 @@ class Platform(OpenCLWrapper):
         # It looks like there is no retain/release for platforms
         pass
 
-
-    def __init__(self, platform_id):
-        super(Platform, self).__init__(platform_id)
-
+    def get_devices(self, type_=enums.CL_DEVICE_TYPE_ALL):
         device_count = cl_uint()
-        driver.clGetDeviceIDs(platform_id, enums.CL_DEVICE_TYPE_ALL, 0, None, ctypes.byref(device_count))
+        try:
+            driver.clGetDeviceIDs(self.id, type_, 0, None, ctypes.byref(device_count))
+        except OpenCLAPIError as e:
+            if e.code == enums.CL_DEVICE_NOT_FOUND:
+                return []
+            else:
+                raise
         devices = (cl_device_id * device_count.value)()
-        driver.clGetDeviceIDs(platform_id, enums.CL_DEVICE_TYPE_ALL, device_count, devices, None)
-        self._devices = [Device(x) for x in devices]
+        driver.clGetDeviceIDs(self.id, type_, device_count, devices, None)
+        return [Device(x) for x in devices]
 
     @property
-    def devices(self):
-        return self._devices[:]
+    def cpu_devices(self):
+        return self.get_devices(enums.CL_DEVICE_TYPE_CPU)
+
+    @property
+    def gpu_devices(self):
+        return self.get_devices(enums.CL_DEVICE_TYPE_GPU)
+
+    @property
+    def accelerator_devices(self):
+        return self.get_devices(enums.CL_DEVICE_TYPE_ACCELERATOR)
+
+    @property
+    def default_device(self):
+        return self.get_devices(enums.CL_DEVICE_TYPE_DEFAULT)[0]
+
+    @property
+    def all_devices(self):
+        return self.get_devices()
 
     _cl_properties = {
         'profile': (enums.CL_PLATFORM_PROFILE, ctypes.c_char_p),
@@ -674,6 +698,3 @@ def _raise_usage_error(msg):
 
 def _raise_unimplemented_error():
     _raise_opencl_driver_error("unimplemented")
-
-# populate the platforms in the driver
-driver._populate_platforms()

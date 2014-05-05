@@ -131,3 +131,25 @@ CL_KERNEL_LOCAL_MEM_SIZE                      = 0x11B2
 CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE  = 0x11B3
 CL_KERNEL_PRIVATE_MEM_SIZE                    = 0x11B4
 CL_KERNEL_GLOBAL_WORK_SIZE                    = 0x11B5
+
+# error codes
+CL_SUCCESS                                    =  0   
+CL_DEVICE_NOT_FOUND                           = -1  
+CL_DEVICE_NOT_AVAILABLE                       = -2  
+CL_COMPILER_NOT_AVAILABLE                     = -3  
+CL_MEM_OBJECT_ALLOCATION_FAILURE              = -4  
+CL_OUT_OF_RESOURCES                           = -5  
+CL_OUT_OF_HOST_MEMORY                         = -6  
+CL_PROFILING_INFO_NOT_AVAILABLE               = -7  
+CL_MEM_COPY_OVERLAP                           = -8  
+CL_IMAGE_FORMAT_MISMATCH                      = -9  
+CL_IMAGE_FORMAT_NOT_SUPPORTED                 = -10 
+CL_BUILD_PROGRAM_FAILURE                      = -11 
+CL_MAP_FAILURE                                = -12 
+CL_MISALIGNED_SUB_BUFFER_OFFSET               = -13 
+CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST  = -14
+CL_COMPILE_PROGRAM_FAILURE                    = -15 
+CL_LINKER_NOT_AVAILABLE                       = -16 
+CL_LINK_PROGRAM_FAILURE                       = -17 
+CL_DEVICE_PARTITION_FAILED                    = -18 
+CL_KERNEL_ARG_INFO_NOT_AVAILABLE              = -19 
