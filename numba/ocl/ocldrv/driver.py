@@ -193,6 +193,13 @@ def _get_info(param_type, func, attr_enum, self):
     func(self.id, attr_enum, ctypes.sizeof(ret_val), ret_val, None)
     return ret_val[0]
 
+def _get_array_info(param_type, func, attr_enum, self):
+    sz = ctypes.c_size_t()
+    func(self.id, attr_enum, 0, None, ctypes.byref(sz))
+    count = sz.value // ctypes.sizeof(param_type)
+    ret_val = (param_type*count)()
+    func(self.id, attr_enum, sz, ret_val, None)
+    return list(ret_val)
 
 class OpenCLWrapper(object):
     """
@@ -226,6 +233,7 @@ class OpenCLWrapper(object):
         ctypes.c_void_p: partial(_get_info, ctypes.c_void_p),
         ctypes.c_uint64: partial(_get_info, ctypes.c_uint64),
         ctypes.c_uint32: partial(_get_info, ctypes.c_uint32),
+        ctypes.POINTER(ctypes.c_size_t): partial(_get_array_info, ctypes.c_size_t)
     }
 
     @classmethod
@@ -347,7 +355,7 @@ class Device(OpenCLWrapper):
         "max_samplers":                  (enums.CL_DEVICE_MAX_SAMPLERS, cl_uint),
         "max_work_group_size":           (enums.CL_DEVICE_MAX_WORK_GROUP_SIZE, ctypes.c_size_t),
         "max_work_item_dimensions":      (enums.CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS, cl_uint),
-#        "max_work_item_sizes":           (enums.CL_DEVICE_MAX_WORK_ITEM_SIZES, ctypes.c_size_t, count=self.max_work_item_dimensions),
+        "max_work_item_sizes":           (enums.CL_DEVICE_MAX_WORK_ITEM_SIZES, ctypes.POINTER(ctypes.c_size_t)),
         "max_write_image_args":          (enums.CL_DEVICE_MAX_WRITE_IMAGE_ARGS, cl_uint),
         "mem_base_addr_align":           (enums.CL_DEVICE_MEM_BASE_ADDR_ALIGN, cl_uint),
         "min_data_type_align_size":      (enums.CL_DEVICE_MIN_DATA_TYPE_ALIGN_SIZE, cl_uint),
@@ -362,14 +370,6 @@ class Device(OpenCLWrapper):
         "single_fp_config":              (enums.CL_DEVICE_SINGLE_FP_CONFIG, cl_device_fp_config),
     }
     _cl_info_function = "clGetDeviceInfo"
-
-    @property
-    def max_work_item_sizes(self):
-        #this property is special, due to the dependency in max_work_items_dimensions
-        dims = self.mask_work_items_dimensions
-        retval = (ctypes.c_size_t * dims)()
-        driver.clGetDeviceInfo(self.id, enums.CL_DEVICE_MAX_WORK_ITEM_SIZES, ctypes.sizeof(retval), retval, None)
-        return [x.value for x in retval]
 
     @property
     def type_str(self):
