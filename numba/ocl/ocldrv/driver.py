@@ -70,7 +70,7 @@ def _find_driver():
             _raise_bad_env_path(envpath, str(e))
 
         _raise_driver_error()
-      
+
     return dll
 
 
@@ -186,7 +186,7 @@ def _get_string_info(func, attr_enum, self):
     ret_val = (ctypes.c_char*sz.value)()
     func(self.id, attr_enum, sz, ret_val, None)
     return ret_val.value
-        
+
 
 def _get_info(param_type, func, attr_enum, self):
     ret_val = (param_type * 1)()
@@ -393,7 +393,7 @@ class Device(OpenCLWrapper):
 
     def __repr__(self):
         return "<OpenCL device id:{3} name:{0} type:{1} profile:{2}>".format(self.name, self.type_str, self.profile, hex(self.id))
-    
+
 
 Device._define_cl_properties()
 
@@ -431,7 +431,7 @@ class Context(OpenCLWrapper):
 
         return CommandQueue(driver.clCreateCommandQueue(self.id, device.id, flags))
 
-    
+
 # Memory class #################################################################
 class Memory(OpenCLWrapper):
     """
@@ -676,7 +676,7 @@ def _raise_opencl_driver_error(msg, *args):
     raise e
 
 def _raise_opencl_error(fname, errcode):
-    e = OpenCLAPIError("OpenCL Error when calling '{0}': {1}".format(fname, errcode))
+    e = OpenCLAPIError("OpenCL Error '{0}': {1}".format(fname, _cl_error_name(errcode)))
     e.fname = fname
     e.code = errcode
     raise e
@@ -698,3 +698,76 @@ def _raise_usage_error(msg):
 
 def _raise_unimplemented_error():
     _raise_opencl_driver_error("unimplemented")
+
+# error name formatting
+_cl_error_dict = {}
+_cl_errors = """
+CL_SUCCESS
+CL_DEVICE_NOT_FOUND
+CL_DEVICE_NOT_AVAILABLE
+CL_COMPILER_NOT_AVAILABLE
+CL_MEM_OBJECT_ALLOCATION_FAILURE
+CL_OUT_OF_RESOURCES
+CL_OUT_OF_HOST_MEMORY
+CL_PROFILING_INFO_NOT_AVAILABLE
+CL_MEM_COPY_OVERLAP
+CL_IMAGE_FORMAT_MISMATCH
+CL_IMAGE_FORMAT_NOT_SUPPORTED
+CL_BUILD_PROGRAM_FAILURE
+CL_MAP_FAILURE
+CL_MISALIGNED_SUB_BUFFER_OFFSET
+CL_EXEC_STATUS_ERROR_FOR_EVENTS_IN_WAIT_LIST
+CL_COMPILE_PROGRAM_FAILURE
+CL_LINKER_NOT_AVAILABLE
+CL_LINK_PROGRAM_FAILURE
+CL_DEVICE_PARTITION_FAILED
+CL_KERNEL_ARG_INFO_NOT_AVAILABLE
+CL_INVALID_VALUE
+CL_INVALID_DEVICE_TYPE
+CL_INVALID_PLATFORM
+CL_INVALID_DEVICE
+CL_INVALID_CONTEXT
+CL_INVALID_QUEUE_PROPERTIES
+CL_INVALID_COMMAND_QUEUE
+CL_INVALID_HOST_PTR
+CL_INVALID_MEM_OBJECT
+CL_INVALID_IMAGE_FORMAT_DESCRIPTOR
+CL_INVALID_IMAGE_SIZE
+CL_INVALID_SAMPLER
+CL_INVALID_BINARY
+CL_INVALID_BUILD_OPTIONS
+CL_INVALID_PROGRAM
+CL_INVALID_PROGRAM_EXECUTABLE
+CL_INVALID_KERNEL_NAME
+CL_INVALID_KERNEL_DEFINITION
+CL_INVALID_KERNEL
+CL_INVALID_ARG_INDEX
+CL_INVALID_ARG_VALUE
+CL_INVALID_ARG_SIZE
+CL_INVALID_KERNEL_ARGS
+CL_INVALID_WORK_DIMENSION
+CL_INVALID_WORK_GROUP_SIZE
+CL_INVALID_WORK_ITEM_SIZE
+CL_INVALID_GLOBAL_OFFSET
+CL_INVALID_EVENT_WAIT_LIST
+CL_INVALID_EVENT
+CL_INVALID_OPERATION
+CL_INVALID_GL_OBJECT
+CL_INVALID_BUFFER_SIZE
+CL_INVALID_MIP_LEVEL
+CL_INVALID_GLOBAL_WORK_SIZE
+CL_INVALID_PROPERTY
+CL_INVALID_IMAGE_DESCRIPTOR
+CL_INVALID_COMPILER_OPTIONS
+CL_INVALID_LINKER_OPTIONS
+CL_INVALID_DEVICE_PARTITION_COUNT
+""".split()
+
+for i in _cl_errors:
+    _cl_error_dict[getattr(enums,i)] = i
+
+def _cl_error_name(code):
+    try:
+        return _cl_error_dict[code]
+    except KeyError:
+        return "Unknown OpenCL error (code={0})".format(code)
