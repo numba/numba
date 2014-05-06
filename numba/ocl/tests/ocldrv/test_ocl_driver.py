@@ -70,6 +70,21 @@ __kernel void square(__global float* input, __global float* output, const unsign
         self.q.enqueue_read_buffer(buff_out, 0, self.result.nbytes, self.result.ctypes.data)
         self.assertEqual(np.sum(self.result == self.data*self.data), self.DATA_SIZE)
 
+    def test_ocl_driver_setargs(self):
+        buff_in = self.context.create_buffer(self.data.nbytes)
+        buff_out = self.context.create_buffer(self.result.nbytes)
+        self.q.enqueue_write_buffer(buff_in, 0, self.data.nbytes, self.data.ctypes.data)
+        program = self.context.create_program_from_source(self.opencl_source)
+        program.build()
+        kernel = program.create_kernel(self.kernel_name)
+        kernel.set_args([buff_in, buff_out, self.DATA_SIZE])
+        local_sz = kernel.get_work_group_size_for_device(self.device)
+        global_sz = self.DATA_SIZE
+        self.q.enqueue_nd_range_kernel(kernel, 1, [global_sz], [local_sz])
+        self.q.finish()
+        self.q.enqueue_read_buffer(buff_out, 0, self.result.nbytes, self.result.ctypes.data)
+        self.assertEqual(np.sum(self.result == self.data*self.data), self.DATA_SIZE)
+
 if __name__ == '__main__':
     unittest.main()
 

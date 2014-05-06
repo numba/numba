@@ -45,11 +45,13 @@ cl_device_type = cl_bitfield
 cl_mem_flags = cl_bitfield
 cl_platform_info = cl_uint
 cl_device_info = cl_uint
+cl_mem_info = cl_uint
 cl_device_fp_config = cl_bitfield
 cl_device_exec_capabilities = cl_bitfield
 cl_device_mem_cache_type = cl_uint
 cl_device_local_mem_type = cl_uint
 cl_context_properties = c_intptr_t
 cl_kernel_work_group_info = cl_uint
+cl_mem_object_type = cl_uint
 
 cl_bool = cl_uint # this probably can change from platform to platform

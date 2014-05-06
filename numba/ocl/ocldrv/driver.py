@@ -253,6 +253,15 @@ class Platform(OpenCLWrapper):
     The Platform represents possible different implementations of OpenCL in a
     host.
     """
+    _cl_info_function = "clGetPlatformInfo"
+    _cl_properties = {
+        'profile': (enums.CL_PLATFORM_PROFILE, ctypes.c_char_p),
+        'version': (enums.CL_PLATFORM_VERSION, ctypes.c_char_p),
+        'name': (enums.CL_PLATFORM_NAME, ctypes.c_char_p),
+        'vendor': (enums.CL_PLATFORM_VENDOR, ctypes.c_char_p),
+        'extensions': (enums.CL_PLATFORM_EXTENSIONS, ctypes.c_char_p)
+    }
+
     def __repr__(self):
         return "<OpenCL Platform name:{0} vendor:{1} profile:{2} version:{3}>".format(self.name, self.vendor, self.profile, self.version)
 
@@ -297,15 +306,6 @@ class Platform(OpenCLWrapper):
     def all_devices(self):
         return self.get_devices()
 
-    _cl_properties = {
-        'profile': (enums.CL_PLATFORM_PROFILE, ctypes.c_char_p),
-        'version': (enums.CL_PLATFORM_VERSION, ctypes.c_char_p),
-        'name': (enums.CL_PLATFORM_NAME, ctypes.c_char_p),
-        'vendor': (enums.CL_PLATFORM_VENDOR, ctypes.c_char_p),
-        'extensions': (enums.CL_PLATFORM_EXTENSIONS, ctypes.c_char_p)
-    }
-    _cl_info_function = "clGetPlatformInfo"
-
 
 Platform._define_cl_properties()
 
@@ -315,6 +315,7 @@ class Device(OpenCLWrapper):
     """
     The device represents a computing device.
     """
+    _cl_info_function = "clGetDeviceInfo"
     _cl_properties = {
         "_platform_id":                  (enums.CL_DEVICE_PLATFORM, cl_platform_id),
         "name":                          (enums.CL_DEVICE_NAME, ctypes.c_char_p),
@@ -369,7 +370,6 @@ class Device(OpenCLWrapper):
         "queue_properties":              (enums.CL_DEVICE_QUEUE_PROPERTIES, cl_command_queue_properties),
         "single_fp_config":              (enums.CL_DEVICE_SINGLE_FP_CONFIG, cl_device_fp_config),
     }
-    _cl_info_function = "clGetDeviceInfo"
 
     @property
     def platform(self):
@@ -418,7 +418,7 @@ class Context(OpenCLWrapper):
 
     def create_buffer(self, size_in_bytes, flags=enums.CL_MEM_READ_WRITE, host_ptr=None):
         mem = driver.clCreateBuffer(self.id, flags, size_in_bytes, host_ptr)
-        return Memory(mem)
+        return MemObject(mem)
 
     def create_program_from_source(self, source):
         source = ctypes.create_string_buffer(source)
@@ -437,7 +437,7 @@ class Context(OpenCLWrapper):
 
 
 # Memory class #################################################################
-class Memory(OpenCLWrapper):
+class MemObject(OpenCLWrapper):
     """
     An OpenCL memory object (cl_mem)
 
@@ -449,12 +449,29 @@ class Memory(OpenCLWrapper):
     Two different Memory objects pointing to the same cl_mem will be evaluated
     equal and will share a common hash.
     """
+    _cl_info_function = "clGetMemObjectInfo"
+    _cl_properties = {
+        "type": (enums.CL_MEM_TYPE, cl_mem_object_type),
+        "flags": (enums.CL_MEM_FLAGS, cl_mem_flags),
+        "size": (enums.CL_MEM_SIZE, ctypes.c_size_t),
+        "host_ptr": (enums.CL_MEM_HOST_PTR, ctypes.c_void_p),
+        "map_count": (enums.CL_MEM_MAP_COUNT, cl_uint),
+        "reference_count": (enums.CL_MEM_REFERENCE_COUNT, cl_uint),
+        "_context_id": (enums.CL_MEM_CONTEXT, cl_context),
+    }
+
+    @property
+    def context(self):
+        return Context(self._context_id)
+
     def _retain(self):
         driver.clRetainMemObject(self.id)
 
     def _release(self):
         driver.clReleaseMemObject(self.id)
 
+
+MemObject._define_cl_properties()
 
 # CommandQueue class ###########################################################
 class CommandQueue(OpenCLWrapper):
@@ -586,8 +603,7 @@ class Program(OpenCLWrapper):
         name = ctypes.create_string_buffer(name)
         kern = Kernel(driver.clCreateKernel(self.id, name))
         if args is not None:
-            for idx, val in enumerate(args):
-                kern.set_arg(idx, val)
+            kern.set_args(args)
         return kern
 
 
@@ -603,7 +619,7 @@ class Kernel(OpenCLWrapper):
         driver.clSetKernelArg(self.id, arg_number, size_in_bytes, ptr)
 
     def set_arg(self, arg_number, value):
-        if isinstance(value, (Memory,)):
+        if isinstance(value, (MemObject,)):
             arg_value = ctypes.byref(cl_mem(value.id))
             arg_size = ctypes.sizeof(cl_mem)
         elif isinstance(type(value), _ctypes_array_metaclass):
@@ -618,6 +634,9 @@ class Kernel(OpenCLWrapper):
 
         self.set_arg_raw(arg_number, arg_value, arg_size)
 
+    def set_args(self, args):
+        for idx, val in enumerate(args):
+            self.set_arg(idx, val)
 
     def get_work_group_size_for_device(self, device):
         sz = (ctypes.c_size_t * 1)()
