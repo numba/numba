@@ -560,7 +560,7 @@ class CommandQueue(OpenCLWrapper):
 
 
     def enqueue_write_buffer(self, buff, offset, bc, src_ptr,
-                             blocking=True, wait_list=None, event=False, wants_event=False):
+                             blocking=True, wait_list=None, wants_event=False):
         if wait_list is not None:
             num_events_in_wait_list = len(wait_list)
             event_wait_list = (cl_event * num_events_in_wait_list)(*[e.id for e in wait_list])
@@ -571,6 +571,22 @@ class CommandQueue(OpenCLWrapper):
         event = (cl_event * 1)() if wants_event else None
         driver.clEnqueueWriteBuffer(self.id, buff.id, blocking, offset, bc, src_ptr,
                                     num_events_in_wait_list, event_wait_list, event)
+
+        if wants_event:
+            return Event(event[0])
+
+    def enqueue_copy_buffer(self, src_buff, dst_buff, src_offset, dst_offset, bc,
+                            wait_list=None, wants_event=False):
+        if wait_list is not None:
+            num_events_in_wait_list = len(wait_list)
+            event_wait_list = (cl_event * num_events_in_wait_list)(*[e.id for e in wait_list])
+        else:
+            num_events_in_wait_list = 0
+            event_wait_list = None
+
+        event = (cl_event * 1)() if wants_event else None
+        driver.clEnqueueCopyBuffer(self.id, src_buff.id, dst_buff.id, src_offset, dst_offset, bc,
+                                   num_events_in_wait_list, event_wait_list, event)
 
         if wants_event:
             return Event(event[0])

@@ -58,6 +58,7 @@ API_PROTOTYPES = {
     'clEnqueueNDRangeKernel': (cl_int, cl_command_queue, cl_kernel, cl_uint, ptr(c_size_t), ptr(c_size_t), ptr(c_size_t), cl_uint, ptr(cl_event), ptr(cl_event), 0),
     'clEnqueueReadBuffer': (cl_int, cl_command_queue, cl_mem, cl_bool, c_size_t, c_size_t, c_void_p, cl_uint, ptr(cl_event), ptr(cl_event), 0),
     'clEnqueueWriteBuffer': (cl_int, cl_command_queue, cl_mem, cl_bool, c_size_t, c_size_t, c_void_p, cl_uint, ptr(cl_event), ptr(cl_event), 0),
+    'clEnqueueCopyBuffer': (cl_int, cl_command_queue, cl_mem, cl_mem, c_size_t, c_size_t, c_size_t, cl_uint, ptr(cl_event), ptr(cl_event), 0),
     'clFlush': (cl_int, cl_command_queue, 0),
     'clFinish': (cl_int, cl_command_queue, 0)
 }
