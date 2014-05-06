@@ -316,7 +316,7 @@ class Device(OpenCLWrapper):
     The device represents a computing device.
     """
     _cl_properties = {
-        "platform":                      (enums.CL_DEVICE_PLATFORM, cl_platform_id),
+        "_platform_id":                  (enums.CL_DEVICE_PLATFORM, cl_platform_id),
         "name":                          (enums.CL_DEVICE_NAME, ctypes.c_char_p),
         "profile":                       (enums.CL_DEVICE_PROFILE, ctypes.c_char_p),
         "type":                          (enums.CL_DEVICE_TYPE, cl_device_type),
@@ -370,6 +370,10 @@ class Device(OpenCLWrapper):
         "single_fp_config":              (enums.CL_DEVICE_SINGLE_FP_CONFIG, cl_device_fp_config),
     }
     _cl_info_function = "clGetDeviceInfo"
+
+    @property
+    def platform(self):
+        return Platform(self._platform_id)
 
     @property
     def type_str(self):
@@ -676,7 +680,7 @@ def _raise_opencl_driver_error(msg, *args):
     raise e
 
 def _raise_opencl_error(fname, errcode):
-    e = OpenCLAPIError("OpenCL Error '{0}': {1}".format(fname, _cl_error_name(errcode)))
+    e = OpenCLAPIError("OpenCL Error '{0}': {1}".format(fname, opencl_strerror(errcode)))
     e.fname = fname
     e.code = errcode
     raise e
@@ -766,7 +770,7 @@ CL_INVALID_DEVICE_PARTITION_COUNT
 for i in _cl_errors:
     _cl_error_dict[getattr(enums,i)] = i
 
-def _cl_error_name(code):
+def opencl_strerror(code):
     try:
         return _cl_error_dict[code]
     except KeyError:
