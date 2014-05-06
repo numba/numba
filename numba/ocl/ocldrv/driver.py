@@ -582,9 +582,13 @@ class Program(OpenCLWrapper):
             num_devices = 0
         driver.clBuildProgram(self.id, num_devices, devices, options, None, None)
 
-    def create_kernel(self, name):
+    def create_kernel(self, name, args=None):
         name = ctypes.create_string_buffer(name)
-        return Kernel(driver.clCreateKernel(self.id, name))
+        kern = Kernel(driver.clCreateKernel(self.id, name))
+        if args is not None:
+            for idx, val in enumerate(args):
+                kern.set_arg(idx, val)
+        return kern
 
 
 # Kernel class #################################################################
