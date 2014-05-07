@@ -218,3 +218,9 @@ CL_QUEUE_CONTEXT                              = 0x1090
 CL_QUEUE_DEVICE                               = 0x1091
 CL_QUEUE_REFERENCE_COUNT                      = 0x1092
 CL_QUEUE_PROPERTIES                           = 0x1093
+
+# cl_context_info
+CL_CONTEXT_REFERENCE_COUNT                    = 0x1080
+CL_CONTEXT_DEVICES                            = 0x1081
+CL_CONTEXT_PROPERTIES                         = 0x1082
+CL_CONTEXT_NUM_DEVICES                        = 0x1083

@@ -76,7 +76,7 @@ def _find_driver():
 
 class Driver(object):
     """
-    API functions are lazily bound."
+    API functions are lazily bound.
     """
     _singleton = None
 
@@ -233,7 +233,9 @@ class OpenCLWrapper(object):
         ctypes.c_void_p: partial(_get_info, ctypes.c_void_p),
         ctypes.c_uint64: partial(_get_info, ctypes.c_uint64),
         ctypes.c_uint32: partial(_get_info, ctypes.c_uint32),
-        ctypes.POINTER(ctypes.c_size_t): partial(_get_array_info, ctypes.c_size_t)
+        ctypes.POINTER(ctypes.c_size_t): partial(_get_array_info, ctypes.c_size_t),
+        ctypes.POINTER(ctypes.c_void_p): partial(_get_array_info, ctypes.c_void_p),
+        ctypes.POINTER(ctypes.c_int64): partial(_get_array_info, ctypes.c_int64),
     }
 
     @classmethod
@@ -410,6 +412,26 @@ class Context(OpenCLWrapper):
     events, programs are aggregated in a Context.
     It acts as a factory of all those resources.
     """
+    _cl_info_function = "clGetContextInfo"
+    _cl_properties = {
+        "reference_count": (enums.CL_CONTEXT_REFERENCE_COUNT, cl_uint),
+        "_device_ids": (enums.CL_CONTEXT_DEVICES, ctypes.POINTER(cl_device_id)),
+        "_properties": (enums.CL_CONTEXT_PROPERTIES, ctypes.POINTER(cl_context_properties)),
+    }
+
+    @property
+    def devices(self):
+        return [Device(_id) for _id in self._device_ids]
+
+    @property
+    def platform(self):
+        """may return None in certain cases, which means 'left to implementation'"""
+        p = self._properties
+        for i in range(0,len(p),2):
+            if p[i] == enums.CL_CONTEXT_PLATFORM:
+                return Platform(p[i+1])
+        return None
+
     def _retain(self):
         driver.clRetainContext(self.id)
 
@@ -435,6 +457,8 @@ class Context(OpenCLWrapper):
 
         return CommandQueue(driver.clCreateCommandQueue(self.id, device.id, flags))
 
+
+Context._define_cl_properties()
 
 # Memory class #################################################################
 class MemObject(OpenCLWrapper):

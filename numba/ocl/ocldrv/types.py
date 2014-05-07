@@ -45,6 +45,7 @@ cl_device_type = cl_bitfield
 cl_mem_flags = cl_bitfield
 cl_platform_info = cl_uint
 cl_device_info = cl_uint
+cl_context_info = cl_uint
 cl_mem_info = cl_uint
 cl_device_fp_config = cl_bitfield
 cl_device_exec_capabilities = cl_bitfield

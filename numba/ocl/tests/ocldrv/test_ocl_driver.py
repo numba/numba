@@ -8,6 +8,15 @@ import unittest
 import numpy as np
 
 
+class TestContextProperties(unittest.TestCase):
+    def test_default_properties(self):
+        device = cl.default_platform.default_device
+        context = cl.create_context(device.platform, [device])
+        self.assertEqual(context.devices, [device])
+        self.assertEqual(context.platform, device.platform)
+        self.assertNotEqual(context.reference_count, 0)
+
+
 class TestQueueProperties(unittest.TestCase):
     def setUp(self):
         self.assertTrue(len(cl.default_platform.all_devices) > 0)

@@ -51,6 +51,7 @@ API_PROTOTYPES = {
     'clCreateContext': (cl_context, ptr(cl_context_properties), cl_uint, ptr(cl_device_id), c_void_p, ptr(cl_int), -1),
     'clRetainContext': (cl_int, cl_context, 0),
     'clReleaseContext': (cl_int, cl_context, 0),
+    'clGetContextInfo': (cl_int, cl_context, cl_context_info, c_size_t, c_void_p, ptr(c_size_t), 0),
     'clCreateCommandQueue': (cl_command_queue, cl_context, cl_device_id, cl_command_queue_properties, ptr(cl_int), -1),
     'clRetainCommandQueue': (cl_int, cl_context, 0),
     'clReleaseCommandQueue': (cl_int, cl_command_queue, 0),
