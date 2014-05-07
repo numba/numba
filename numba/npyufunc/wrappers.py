@@ -1,6 +1,62 @@
 from __future__ import print_function, division, absolute_import
-from llvm.core import Type, Builder, inline_function, LINKAGE_INTERNAL
+from llvm.core import (Type, Builder, inline_function, LINKAGE_INTERNAL,
+                       ICMP_EQ, Constant)
 from numba import types, cgutils, config
+
+
+def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
+                           offsets, store_offset, signature):
+    elems = load()
+
+    # Compute
+    status, retval = context.call_function(builder, func,
+                                           signature.return_type,
+                                           signature.args, elems)
+
+    # Ignoring error status and store result
+
+    # Store
+    if out.byref:
+        retval = builder.load(retval)
+
+    store(retval)
+
+    # increment indices
+    for off, ary in zip(offsets, arrays):
+        builder.store(builder.add(builder.load(off), ary.step), off)
+
+    builder.store(builder.add(builder.load(store_offset), out.step),
+                  store_offset)
+
+    return status.code
+
+
+def build_slow_loop_body(context, func, builder, arrays, out, offsets,
+                            store_offset, signature):
+    def load():
+        elems = [ary.load_direct(builder.load(off))
+                 for off, ary in zip(offsets, arrays)]
+        return elems
+
+    def store(retval):
+        out.store_direct(retval, builder.load(store_offset))
+
+    return _build_ufunc_loop_body(load, store, context, func, builder, arrays,
+                                  out, offsets, store_offset, signature)
+
+
+def build_fast_loop_body(context, func, builder, arrays, out, offsets,
+                            store_offset, signature, ind):
+    def load():
+        elems = [ary.load_aligned(ind)
+                 for ary in arrays]
+        return elems
+
+    def store(retval):
+        out.store_aligned(retval, ind)
+
+    return _build_ufunc_loop_body(load, store, context, func, builder, arrays,
+                                  out, offsets, store_offset, signature)
 
 
 def build_ufunc_wrapper(context, func, signature):
@@ -48,33 +104,32 @@ def build_ufunc_wrapper(context, func, signature):
         p = cgutils.alloca_once(builder, intp_t)
         offsets.append(p)
         builder.store(zero, p)
+
     store_offset = cgutils.alloca_once(builder, intp_t)
     builder.store(zero, store_offset)
 
-    # Loop
-    with cgutils.for_range(builder, loopcount, intp=intp_t):
-        # Load
-        elems = [ary.load_direct(builder.load(off))
-                 for off, ary in zip(offsets, arrays)]
+    unit_strided = cgutils.true_bit
+    for ary in arrays:
+        unit_strided = builder.and_(unit_strided, ary.is_unit_strided)
 
-        # Compute
-        status, retval = context.call_function(builder, func,
-                                               signature.return_type,
-                                               signature.args, elems)
-        # Ignoring error status and store result
+    with cgutils.ifelse(builder, unit_strided) as (is_unit_strided,
+                                                   is_strided):
 
-        # Store
-        if out.byref:
-            retval = builder.load(retval)
+        with is_unit_strided:
+            with cgutils.for_range(builder, loopcount, intp=intp_t) as ind:
+                fastloop = build_fast_loop_body(context, func, builder,
+                                                arrays, out, offsets,
+                                                store_offset, signature, ind)
+            builder.ret_void()
 
-        out.store_direct(retval, builder.load(store_offset))
+        with is_strided:
+            # General loop
+            with cgutils.for_range(builder, loopcount, intp=intp_t):
+                slowloop = build_slow_loop_body(context, func, builder,
+                                                arrays, out, offsets,
+                                                store_offset, signature)
 
-        # increment indices
-        for off, ary in zip(offsets, arrays):
-            builder.store(builder.add(builder.load(off), ary.step), off)
-
-        builder.store(builder.add(builder.load(store_offset), out.step),
-                      store_offset)
+            builder.ret_void()
 
     builder.ret_void()
     del builder
@@ -82,8 +137,10 @@ def build_ufunc_wrapper(context, func, signature):
     # Set core function to internal so that it is not generated
     func.linkage = LINKAGE_INTERNAL
     # Force inline of code function
-    inline_function(status.code)
+    inline_function(slowloop)
+    inline_function(fastloop)
     # Run optimizer
+    print(module)
     context.optimize(module)
 
     if config.DUMP_OPTIMIZED:
@@ -102,10 +159,12 @@ class UArrayArg(object):
         else:
             self.byref = False
             self.data = builder.bitcast(builder.load(p), Type.pointer(argtype))
-        # Get step
+            # Get step
         p = builder.gep(steps, [context.get_constant(types.intp, i)])
+        abisize = context.get_constant(types.intp,
+                                       context.get_abi_sizeof(argtype))
         self.step = builder.load(p)
-
+        self.is_unit_strided = builder.icmp(ICMP_EQ, abisize, self.step)
         self.builder = builder
 
     def load(self, ind):
@@ -122,6 +181,10 @@ class UArrayArg(object):
         else:
             return self.builder.load(ptr)
 
+    def load_aligned(self, ind):
+        ptr = self.builder.gep(self.data, [ind])
+        return self.builder.load(ptr)
+
     def store(self, value, ind):
         offset = self.builder.mul(self.step, ind)
         self.store_direct(value, offset)
@@ -132,6 +195,11 @@ class UArrayArg(object):
         ptr = self.builder.inttoptr(addr_off, self.data.type)
         assert ptr.type.pointee == value.type
         self.builder.store(value, ptr)
+
+    def store_aligned(self, value, ind):
+        ptr = self.builder.gep(self.data, [ind])
+        self.builder.store(value, ptr)
+
 
 def build_gufunc_wrapper(context, func, signature, sin, sout):
     module = func.module

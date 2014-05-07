@@ -21,6 +21,7 @@ def _windows_symbol_hacks_32bits():
         assert ftol
         le.dylib_add_symbol("_ftol2", ftol)
 
+
 class CPUContext(BaseContext):
     def init(self):
         self.execmodule = lc.Module.new("numba.exec")
@@ -199,6 +200,9 @@ class CPUContext(BaseContext):
 
         # remove extra refct api calls
         remove_refct_calls(func)
+
+    def get_abi_sizeof(self, lty):
+        return self.engine.target_data.abi_size(lty)
 
 
 # ----------------------------------------------------------------------------

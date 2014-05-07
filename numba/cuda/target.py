@@ -5,7 +5,7 @@ from llvm.core import (Type, Builder, LINKAGE_INTERNAL, inline_function,
 from numba import typing, types, cgutils
 from numba.targets.base import BaseContext
 from .cudadrv import nvvm
-from .cudaimpl import call_sreg
+from . import nvvmutils
 
 
 # -----------------------------------------------------------------------------
@@ -100,13 +100,14 @@ class CUDATargetContext(BaseContext):
             changed = builder.icmp(ICMP_EQ, xchg, old)
 
             # If the xchange is successful, save the thread ID.
+            sreg = nvvmutils.SRegBuilder(builder)
             with cgutils.ifthen(builder, changed):
                 for dim, ptr, in zip("xyz", gv_tid):
-                    val = call_sreg(builder, "tid." + dim)
+                    val = sreg.tid(dim)
                     builder.store(val, ptr)
 
                 for dim, ptr, in zip("xyz", gv_ctaid):
-                    val = call_sreg(builder, "ctaid." + dim)
+                    val = sreg.ctaid(dim)
                     builder.store(val, ptr)
 
         builder.ret_void()

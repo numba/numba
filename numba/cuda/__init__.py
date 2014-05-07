@@ -39,6 +39,7 @@ close
 detect
 defer_cleanup
 KernelRuntimeError
+_auto_device
 """
 
 try:
@@ -47,7 +48,7 @@ try:
 
     from .decorators import jit, autojit, declare_device
     from .api import *
-
+    from .api import _auto_device
     is_available = True
     cuda_error = None
     initialize.initialize_all()
