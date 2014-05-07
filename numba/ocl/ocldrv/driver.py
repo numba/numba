@@ -74,6 +74,15 @@ def _find_driver():
     return dll
 
 
+
+def _event_list_to_ctypes(event_list):
+    assert(event_list)
+    count = len(event_list)
+    events = (cl_event * count)(*[e.id for e in event_list])
+    return count, events
+
+# The Driver ###################################################################
+
 class Driver(object):
     """
     API functions are lazily bound.
@@ -133,7 +142,7 @@ class Driver(object):
                 new_args = args + (ctypes.byref(retcode),)
                 rv = libfn(*new_args)
                 if retcode.value != enums.CL_SUCCESS:
-                    _raise_opencl_error(fname, retcode)
+                    _raise_opencl_error(fname, retcode.value)
                 return rv
 
             safe_ocl_api_call.argtypes = safe_ocl_api_call.argtypes[:-1]
@@ -171,9 +180,12 @@ class Driver(object):
         _devices = (cl_device_id*len(devices))(*[dev.id for dev in devices])
         ctxt = driver.clCreateContext(_properties, len(devices), _devices, None, None)
         rv = Context(ctxt)
-        driver.clReleaseContext(ctxt)
+        self.clReleaseContext(ctxt)
         return Context(ctxt)
 
+    def wait_for_events(self, *events):
+        if events:
+            self.clWaitForEvents(*_event_list_to_ctypes(events))
 
 # The Driver ###################################################################
 driver = Driver()
@@ -233,6 +245,7 @@ class OpenCLWrapper(object):
         ctypes.c_void_p: partial(_get_info, ctypes.c_void_p),
         ctypes.c_uint64: partial(_get_info, ctypes.c_uint64),
         ctypes.c_uint32: partial(_get_info, ctypes.c_uint32),
+        ctypes.c_int32: partial(_get_info, ctypes.c_int32),
         ctypes.POINTER(ctypes.c_size_t): partial(_get_array_info, ctypes.c_size_t),
         ctypes.POINTER(ctypes.c_void_p): partial(_get_array_info, ctypes.c_void_p),
         ctypes.POINTER(ctypes.c_int64): partial(_get_array_info, ctypes.c_int64),
@@ -552,7 +565,7 @@ class CommandQueue(OpenCLWrapper):
 
         driver.clEnqueueTask(self.id, kernel.id, num_events_in_wait_list, event_wait_list, event)
         if wants_event:
-            return event[0]
+            return Event(event[0])
 
     def enqueue_nd_range_kernel(self, kernel, nd, global_work_size, local_work_size,
                                 wait_list=None, wants_event = False):
@@ -578,7 +591,7 @@ class CommandQueue(OpenCLWrapper):
                                       num_events_in_wait_list, event_wait_list, event)
 
         if wants_event:
-            return event[0]
+            return Event(event[0])
 
     def enqueue_read_buffer(self, buff, offset, bc, dst_ptr,
                             blocking=True, wait_list=None, wants_event=False):
@@ -759,12 +772,33 @@ Kernel._define_cl_properties()
 
 # Event class ##################################################################
 class Event(OpenCLWrapper):
+    _cl_info_function = "clGetEventInfo"
+    _cl_properties = {
+        '_context_id': (enums.CL_EVENT_CONTEXT, cl_event),
+        '_command_queue_id': (enums.CL_EVENT_COMMAND_QUEUE, cl_command_queue),
+        'command_type': (enums.CL_EVENT_COMMAND_TYPE, cl_command_type),
+        'execution_status': (enums.CL_EVENT_COMMAND_EXECUTION_STATUS, cl_int),
+        'reference_count': (enums.CL_EVENT_REFERENCE_COUNT, cl_uint),
+    }
+
+    @property
+    def context(self):
+        return Context(self._context_id)
+
+    @property
+    def command_queue(self):
+        return CommandQueue(self._command_queue_id)
+
     def _retain(self):
         driver.clRetainEvent(self.id)
 
     def _release(self):
         driver.clReleaseEvent(self.id)
 
+    def wait(self):
+        driver.wait_for_events(self)
+
+Event._define_cl_properties()
 
 # Exception classes ############################################################
 class OpenCLSupportError(Exception):

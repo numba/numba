@@ -83,5 +83,10 @@ API_PROTOTYPES = {
     'clEnqueueWriteBuffer': (cl_int, cl_command_queue, cl_mem, cl_bool, c_size_t, c_size_t, c_void_p, cl_uint, ptr(cl_event), ptr(cl_event), 0),
     'clEnqueueCopyBuffer': (cl_int, cl_command_queue, cl_mem, cl_mem, c_size_t, c_size_t, c_size_t, cl_uint, ptr(cl_event), ptr(cl_event), 0),
     'clFlush': (cl_int, cl_command_queue, 0),
-    'clFinish': (cl_int, cl_command_queue, 0)
+    'clFinish': (cl_int, cl_command_queue, 0),
+
+    'clWaitForEvents': (cl_int, cl_uint, ptr(cl_event), 0),
+    'clRetainEvent': (cl_int, cl_event, 0),
+    'clReleaseEvent': (cl_int, cl_event, 0),
+    'clGetEventInfo': (cl_int, cl_event, cl_event_info, c_size_t, c_void_p, ptr(c_size_t), 0),
 }

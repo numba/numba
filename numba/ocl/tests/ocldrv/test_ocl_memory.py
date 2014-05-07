@@ -1,7 +1,8 @@
 import numpy as np
 import unittest
-from numba.ocl.ocldrv.driver import driver as cl
-import numba.ocl.ocldrv.driver as driver
+
+from numba.ocl.ocldrv.driver import MemObject
+from numba.ocl.ocldrv import driver as cl
 
 class TestOpenCLMemory(unittest.TestCase):
     def setUp(self):
@@ -15,7 +16,7 @@ class TestOpenCLMemory(unittest.TestCase):
     def test_simple_buffer_creation(self):
         size = 4096
         buf = self.context.create_buffer(size)
-        self.assertIsInstance(buf, driver.MemObject)
+        self.assertIsInstance(buf, MemObject)
         self.assertEqual(buf.size, size)
         self.assertNotEqual(buf.reference_count, 0)
         self.assertEqual(buf.context, self.context) # note: identity will not hold...

@@ -1,6 +1,5 @@
 from __future__ import print_function, absolute_import, division
 
-
 import numba.ocl.ocldrv as ocldrv
 from numba.ocl.ocldrv import driver as cl
 import unittest
@@ -90,10 +89,9 @@ __kernel void square(__global float* input, __global float* output, const unsign
 class TestOpenCLDriver(unittest.TestCase):
     def setUp(self):
         self.assertTrue(len(cl.default_platform.all_devices) > 0)
-        self.device = cl.default_platform.default_device
+        self.device = cl.default_platform.cpu_devices[0]
         self.context = cl.create_context(self.device.platform,
                                          [self.device])
-        self.q = self.context.create_command_queue(self.device)
 
         self.opencl_source = b"""
 __kernel void square(__global float* input, __global float* output, const unsigned int count)
@@ -114,14 +112,14 @@ __kernel void square(__global float* input, __global float* output, const unsign
         del self.DATA_SIZE
         del self.kernel_name
         del self.opencl_source
-        del self.q
         del self.context
         del self.device
 
     def test_ocl_driver_basic(self):
+        q = self.context.create_command_queue(self.device)
         buff_in = self.context.create_buffer(self.data.nbytes)
         buff_out = self.context.create_buffer(self.result.nbytes)
-        self.q.enqueue_write_buffer(buff_in, 0, self.data.nbytes, self.data.ctypes.data)
+        q.enqueue_write_buffer(buff_in, 0, self.data.nbytes, self.data.ctypes.data)
         program = self.context.create_program_from_source(self.opencl_source)
         program.build()
         kernel = program.create_kernel(self.kernel_name)
@@ -130,38 +128,59 @@ __kernel void square(__global float* input, __global float* output, const unsign
         kernel.set_arg(2, self.DATA_SIZE)
         local_sz = kernel.get_work_group_size_for_device(self.device)
         global_sz = self.DATA_SIZE
-        self.q.enqueue_nd_range_kernel(kernel, 1, [global_sz], [local_sz])
-        self.q.finish()
-        self.q.enqueue_read_buffer(buff_out, 0, self.result.nbytes, self.result.ctypes.data)
+        q.enqueue_nd_range_kernel(kernel, 1, [global_sz], [local_sz])
+        q.finish()
+        q.enqueue_read_buffer(buff_out, 0, self.result.nbytes, self.result.ctypes.data)
         self.assertEqual(np.sum(self.result == self.data*self.data), self.DATA_SIZE)
 
     def test_ocl_driver_kernelargs(self):
+        q = self.context.create_command_queue(self.device)
         buff_in = self.context.create_buffer(self.data.nbytes)
         buff_out = self.context.create_buffer(self.result.nbytes)
-        self.q.enqueue_write_buffer(buff_in, 0, self.data.nbytes, self.data.ctypes.data)
+        q.enqueue_write_buffer(buff_in, 0, self.data.nbytes, self.data.ctypes.data)
         program = self.context.create_program_from_source(self.opencl_source)
         program.build()
         kernel = program.create_kernel(self.kernel_name, [buff_in, buff_out, self.DATA_SIZE])
         local_sz = kernel.get_work_group_size_for_device(self.device)
         global_sz = self.DATA_SIZE
-        self.q.enqueue_nd_range_kernel(kernel, 1, [global_sz], [local_sz])
-        self.q.finish()
-        self.q.enqueue_read_buffer(buff_out, 0, self.result.nbytes, self.result.ctypes.data)
+        q.enqueue_nd_range_kernel(kernel, 1, [global_sz], [local_sz])
+        q.finish()
+        q.enqueue_read_buffer(buff_out, 0, self.result.nbytes, self.result.ctypes.data)
         self.assertEqual(np.sum(self.result == self.data*self.data), self.DATA_SIZE)
 
     def test_ocl_driver_setargs(self):
+        q = self.context.create_command_queue(self.device)
         buff_in = self.context.create_buffer(self.data.nbytes)
         buff_out = self.context.create_buffer(self.result.nbytes)
-        self.q.enqueue_write_buffer(buff_in, 0, self.data.nbytes, self.data.ctypes.data)
+        q.enqueue_write_buffer(buff_in, 0, self.data.nbytes, self.data.ctypes.data)
         program = self.context.create_program_from_source(self.opencl_source)
         program.build()
         kernel = program.create_kernel(self.kernel_name)
         kernel.set_args([buff_in, buff_out, self.DATA_SIZE])
         local_sz = kernel.get_work_group_size_for_device(self.device)
         global_sz = self.DATA_SIZE
-        self.q.enqueue_nd_range_kernel(kernel, 1, [global_sz], [local_sz])
-        self.q.finish()
-        self.q.enqueue_read_buffer(buff_out, 0, self.result.nbytes, self.result.ctypes.data)
+        q.enqueue_nd_range_kernel(kernel, 1, [global_sz], [local_sz])
+        q.finish()
+        q.enqueue_read_buffer(buff_out, 0, self.result.nbytes, self.result.ctypes.data)
+        self.assertEqual(np.sum(self.result == self.data*self.data), self.DATA_SIZE)
+
+    def test_ocl_queue_events(self):
+        q = self.context.create_command_queue(self.device)
+        buff_in = self.context.create_buffer(self.data.nbytes)
+        buff_out = self.context.create_buffer(self.result.nbytes)
+        evnt = q.enqueue_write_buffer(buff_in, 0, self.data.nbytes, self.data.ctypes.data,
+                                      blocking=False, wants_event=True)
+        program = self.context.create_program_from_source(self.opencl_source)
+        program.build()
+        kernel = program.create_kernel(self.kernel_name)
+        kernel.set_args([buff_in, buff_out, self.DATA_SIZE])
+        local_sz = kernel.get_work_group_size_for_device(self.device)
+        global_sz = self.DATA_SIZE
+        evnt = q.enqueue_nd_range_kernel(kernel, 1, [global_sz], [local_sz],
+                                         wait_list=[evnt], wants_event=True)
+        evnt = q.enqueue_read_buffer(buff_out, 0, self.result.nbytes, self.result.ctypes.data,
+                                     blocking=False, wait_list=[evnt], wants_event=True)
+        cl.wait_for_events(evnt)
         self.assertEqual(np.sum(self.result == self.data*self.data), self.DATA_SIZE)
 
 if __name__ == '__main__':
