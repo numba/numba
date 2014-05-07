@@ -120,4 +120,7 @@ def _initialize_all():
     GUVectorize.target_registry.ondemand['gpu'] = init_guvectorize
     GUVectorize.target_registry.ondemand['cuda'] = init_guvectorize
 
+_initialize_all()
+del _initialize_all
+
 _initialization_completed = True

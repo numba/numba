@@ -101,6 +101,21 @@ def test_gufunc_stream():
 
     assertTrue(np.allclose(C, Gold))
 
+
+@guvectorize([void(float32[:], float32[:])],
+             '(x)->(x)',
+             target='gpu')
+def copy(A, B):
+    for i in range(B.size):
+        B[i] = A[i]
+
+
+@testcase
+def test_copy():
+    A = np.arange(10, dtype=np.float32) + 1
+    B = copy(A)
+    print(B)
+
 if __name__ == '__main__':
     main()
 

@@ -2,7 +2,7 @@ from __future__ import absolute_import
 import math
 import numpy as np
 from numba.cuda.cudadrv import devicearray
-
+from numba.cuda import get_current_device
 
 class CudaUFuncDispatcher(object):
     """
@@ -102,12 +102,14 @@ class CudaUFuncDispatcher(object):
         # find the fitting function
         result_dtype, cuda_func = self._get_function_by_dtype(dtypes)
 
-        max_threads = min(cuda_func.device.MAX_THREADS_PER_BLOCK,
-                          self.max_blocksize)
+        device_maxthreads = get_current_device().MAX_THREADS_PER_BLOCK
+        max_threads = min(device_maxthreads, self.max_blocksize)
 
         # apply autotune
-        if max_threads == cuda_func.device.MAX_THREADS_PER_BLOCK:
-            max_threads = self._apply_autotuning(cuda_func, max_threads)
+        if max_threads == device_maxthreads:
+            # TODO
+            pass
+            #max_threads = self._apply_autotuning(cuda_func, max_threads)
 
         if has_device_array_arg:
             # Ugly: convert array scalar into zero-strided one element array.
@@ -359,7 +361,7 @@ class CUDAGenerializedUFunc(object):
         return out
 
     def _launch_kernel(self, kernel, nelem, stream, args):
-        max_threads = min(kernel.device.MAX_THREADS_PER_BLOCK,
+        max_threads = min(1024, #kernel.device.MAX_THREADS_PER_BLOCK,
                           self.max_blocksize)
 
         ntid = self._apply_autotuning(kernel, max_threads)
@@ -372,16 +374,18 @@ class CUDAGenerializedUFunc(object):
 
 
     def _apply_autotuning(self, func, max_threads):
-        try:
-            atune = func.autotune
-        except RuntimeError:
-            return max_threads
-        else:
-            max_threads = atune.best()
-
-            if not max_threads:
-                raise Exception("insufficient resources to run kernel "
-                                "at any thread-per-block.")
-
-            return max_threads
+        # TODO
+        return max_threads
+        # try:
+        #     atune = func.autotune
+        # except RuntimeError:
+        #     return max_threads
+        # else:
+        #     max_threads = atune.best()
+        #
+        #     if not max_threads:
+        #         raise Exception("insufficient resources to run kernel "
+        #                         "at any thread-per-block.")
+        #
+        #     return max_threads
 
