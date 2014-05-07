@@ -4,7 +4,7 @@ type definitions for opencl types (mapping to ctypes).
 This is based on:
 https://www.khronos.org/registry/cl/sdk/1.0/docs/man/xhtml/scalarDataTypes.html
 
-And to some point it will be based on 
+And to some point it will be based on data in headers
 """
 
 from __future__ import print_function, absolute_import, division
@@ -38,7 +38,7 @@ cl_event = ctypes.c_void_p
 cl_sampler = ctypes.c_void_p
 cl_mem = ctypes.c_void_p
 
-# The ones below may need to be tweaked per platform (looked up on include files)
+# The ones below may need to be tweaked per platform (looked up on header files)
 cl_bitfield = cl_ulong
 cl_command_queue_properties = cl_bitfield
 cl_device_type = cl_bitfield
@@ -46,6 +46,8 @@ cl_mem_flags = cl_bitfield
 cl_platform_info = cl_uint
 cl_device_info = cl_uint
 cl_context_info = cl_uint
+cl_program_info = cl_uint
+cl_kernel_info = cl_uint
 cl_mem_info = cl_uint
 cl_device_fp_config = cl_bitfield
 cl_device_exec_capabilities = cl_bitfield

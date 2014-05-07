@@ -21,8 +21,8 @@ __kernel void square(__global float* input, __global float* output, const unsign
 data = np.random.random_sample(DATA_SIZE).astype(np.float32)
 results = np.empty_like(data)
 
-platform = cl.platforms[0]
-device = platform.devices[-1]
+platform = cl.default_platform
+device = platform.default_device
 
 ctxt = cl.create_context(platform, [device])
 q = ctxt.create_command_queue(device)

@@ -51,6 +51,42 @@ class TestQueueProperties(unittest.TestCase):
         self.assertEqual(q.properties & ocldrv.CL_QUEUE_PROFILING_ENABLE, 0)
 
 
+class TestProgramProperties(unittest.TestCase):
+    def setUp(self):
+        self.assertTrue(len(cl.default_platform.all_devices) > 0)
+        self.device = cl.default_platform.default_device
+        self.context = cl.create_context(self.device.platform, [self.device])
+
+        self.opencl_source = b"""
+__kernel void square(__global float* input, __global float* output, const unsigned int count)
+{
+    int i = get_global_id(0);
+    if (i < count)
+        output[i] = input[i] * input[i];
+}
+"""
+    def tearDown(self):
+        del self.opencl_source
+        del self.context
+        del self.device
+
+    def test_simple_program(self):
+        program = self.context.create_program_from_source(self.opencl_source)
+        program.build()
+        self.assertEqual(program.kernel_names, [b'square'])
+        self.assertEqual(program.devices, [self.device])
+        self.assertEqual(program.context, self.context)
+        self.assertNotEqual(program.reference_count, 0)
+        self.assertEqual(len(program.devices), len(program.binaries))
+        self.assertEqual(program.source, self.opencl_source)
+
+        kernel = program.create_kernel(b'square')
+        self.assertNotEqual(kernel.reference_count, 0)
+        self.assertEqual(kernel.context, self.context)
+        self.assertEqual(kernel.program, program)
+        self.assertEqual(kernel.num_args, 3)
+
+
 class TestOpenCLDriver(unittest.TestCase):
     def setUp(self):
         self.assertTrue(len(cl.default_platform.all_devices) > 0)

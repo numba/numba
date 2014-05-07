@@ -224,3 +224,22 @@ CL_CONTEXT_REFERENCE_COUNT                    = 0x1080
 CL_CONTEXT_DEVICES                            = 0x1081
 CL_CONTEXT_PROPERTIES                         = 0x1082
 CL_CONTEXT_NUM_DEVICES                        = 0x1083
+
+# cl_program_info
+CL_PROGRAM_REFERENCE_COUNT                    = 0x1160
+CL_PROGRAM_CONTEXT                            = 0x1161
+CL_PROGRAM_NUM_DEVICES                        = 0x1162
+CL_PROGRAM_DEVICES                            = 0x1163
+CL_PROGRAM_SOURCE                             = 0x1164
+CL_PROGRAM_BINARY_SIZES                       = 0x1165
+CL_PROGRAM_BINARIES                           = 0x1166
+CL_PROGRAM_NUM_KERNELS                        = 0x1167
+CL_PROGRAM_KERNEL_NAMES                       = 0x1168
+
+# cl_kernel_info
+CL_KERNEL_FUNCTION_NAME                       = 0x1190
+CL_KERNEL_NUM_ARGS                            = 0x1191
+CL_KERNEL_REFERENCE_COUNT                     = 0x1192
+CL_KERNEL_CONTEXT                             = 0x1193
+CL_KERNEL_PROGRAM                             = 0x1194
+CL_KERNEL_ATTRIBUTES                          = 0x1195

@@ -640,6 +640,38 @@ class Program(OpenCLWrapper):
     An OpenCL program consists of a set of kernels identified by the __kernel
     qualifier in the program source.
     """
+    _cl_info_function = "clGetProgramInfo"
+    _cl_properties = {
+        "reference_count": (enums.CL_PROGRAM_REFERENCE_COUNT, cl_uint),
+        "_context_id": (enums.CL_PROGRAM_CONTEXT, cl_context),
+        "_device_ids": (enums.CL_PROGRAM_DEVICES, ctypes.POINTER(cl_device_id)),
+        "source": (enums.CL_PROGRAM_SOURCE, ctypes.c_char_p),
+        "_kernel_names": (enums.CL_PROGRAM_KERNEL_NAMES, ctypes.c_char_p),
+        "_binary_sizes": (enums.CL_PROGRAM_BINARY_SIZES, ctypes.POINTER(ctypes.c_size_t))
+        #note: access for binaries needs a special pattern not handled by
+        #      autoregister of cl properties
+    }
+
+    @property
+    def context(self):
+        return Context(self._context_id)
+
+    @property
+    def devices(self):
+        return [Device(d) for d in self._device_ids]
+
+    @property
+    def kernel_names(self):
+        return self._kernel_names.split(';')
+
+    @property
+    def binaries(self):
+        sizes = self._binary_sizes
+        results = [(ctypes.c_byte*sz)() for sz in sizes]
+        arg = (ctypes.POINTER(ctypes.c_byte)*len(results))(*results)
+        driver.clGetProgramInfo(self.id, enums.CL_PROGRAM_BINARIES, ctypes.sizeof(arg), arg, None)
+        return results
+
     def _retain(self):
         driver.clRetainProgram(self.id)
 
@@ -664,9 +696,31 @@ class Program(OpenCLWrapper):
             kern.set_args(args)
         return kern
 
+Program._define_cl_properties()
 
 # Kernel class #################################################################
 class Kernel(OpenCLWrapper):
+    """
+    An OpenCL kernel is an entry point to a program, potentially with its args
+    bound. Argument binding is done through this kernel object.
+    """
+    _cl_info_function = "clGetKernelInfo"
+    _cl_properties = {
+        "function_name": (enums.CL_KERNEL_FUNCTION_NAME, ctypes.c_char_p),
+        "num_args": (enums.CL_KERNEL_NUM_ARGS, cl_uint),
+        "_context_id": (enums.CL_KERNEL_CONTEXT, cl_context),
+        "_program_id": (enums.CL_KERNEL_PROGRAM, cl_program),
+        "reference_count": (enums.CL_KERNEL_REFERENCE_COUNT, cl_uint),
+    }
+
+    @property
+    def context(self):
+        return Context(self._context_id)
+
+    @property
+    def program(self):
+        return Program(self._program_id)
+
     def _retain(self):
         driver.clRetainKernel(self.id)
 
@@ -701,6 +755,7 @@ class Kernel(OpenCLWrapper):
         driver.clGetKernelWorkGroupInfo(self.id, device.id, enums.CL_KERNEL_WORK_GROUP_SIZE, ctypes.sizeof(sz), sz, None)
         return sz[0]
 
+Kernel._define_cl_properties()
 
 # Event class ##################################################################
 class Event(OpenCLWrapper):
