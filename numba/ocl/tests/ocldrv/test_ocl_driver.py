@@ -8,6 +8,21 @@ import unittest
 import numpy as np
 
 
+class TestDeviceProperties(unittest.TestCase):
+    def test_device_querying(self):
+        all_devices = cl.default_platform.all_devices
+        self.assertIn(cl.default_platform.default_device, all_devices)
+        for d in cl.default_platform.gpu_devices:
+            self.assertIn(d, all_devices)
+            d.type_str == 'GPU'
+        for d in cl.default_platform.cpu_devices:
+            self.assertIn(d, all_devices)
+            d.type_str == 'CPU'
+        for d in cl.default_platform.accelerator_devices:
+            self.assertIn(d, all_devices)
+            d.type_str == 'ACCELERATOR'
+        self.assertIn(cl.default_platform.default_device, all_devices)
+
 class TestContextProperties(unittest.TestCase):
     def test_default_properties(self):
         device = cl.default_platform.default_device
