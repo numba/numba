@@ -204,7 +204,7 @@ CL_MEM_CONTEXT                                = 0x1106
 CL_MEM_ASSOCIATED_MEMOBJECT                   = 0x1107
 CL_MEM_OFFSET                                 = 0x1108
 
-#cl_mem_object_type
+# cl_mem_object_type
 CL_MEM_OBJECT_BUFFER                          = 0x10F0
 CL_MEM_OBJECT_IMAGE2D                         = 0x10F1
 CL_MEM_OBJECT_IMAGE3D                         = 0x10F2
@@ -212,3 +212,9 @@ CL_MEM_OBJECT_IMAGE2D_ARRAY                   = 0x10F3
 CL_MEM_OBJECT_IMAGE1D                         = 0x10F4
 CL_MEM_OBJECT_IMAGE1D_ARRAY                   = 0x10F5
 CL_MEM_OBJECT_IMAGE1D_BUFFER                  = 0x10F6
+
+# cl_command_queue_info
+CL_QUEUE_CONTEXT                              = 0x1090
+CL_QUEUE_DEVICE                               = 0x1091
+CL_QUEUE_REFERENCE_COUNT                      = 0x1092
+CL_QUEUE_PROPERTIES                           = 0x1093

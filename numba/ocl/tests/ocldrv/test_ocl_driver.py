@@ -1,18 +1,37 @@
-from __future__ import print_function, absolute_import
+from __future__ import print_function, absolute_import, division
 
 
-import numba.ocl.ocldrv.driver as driver
-from numba.ocl.ocldrv.driver import driver as cl
+import numba.ocl.ocldrv as ocldrv
+from numba.ocl.ocldrv import driver as cl
 import unittest
 
 import numpy as np
+
+
+class TestQueueProperties(unittest.TestCase):
+    def setUp(self):
+        self.assertTrue(len(cl.default_platform.all_devices) > 0)
+        self.device = cl.default_platform.default_device
+        self.context = cl.create_context(self.device.platform, [self.device])
+
+    def tearDown(self):
+        del self.context
+        del self.device
+
+    def test_default_properties(self):
+        q = self.context.create_command_queue(self.device)
+        self.assertEqual(q.context, self.context)
+        self.assertEqual(q.device, self.device)
+        self.assertNotEqual(q.reference_count, 0)
+        self.assertEqual(q.properties & ocldrv.CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, 0)
+        self.assertEqual(q.properties & ocldrv.CL_QUEUE_PROFILING_ENABLE, 0)
 
 
 class TestOpenCLDriver(unittest.TestCase):
     def setUp(self):
         self.assertTrue(len(cl.default_platform.all_devices) > 0)
         self.device = cl.default_platform.default_device
-        self.context = cl.create_context(self.device.platform, 
+        self.context = cl.create_context(self.device.platform,
                                          [self.device])
         self.q = self.context.create_command_queue(self.device)
 
@@ -87,4 +106,3 @@ __kernel void square(__global float* input, __global float* output, const unsign
 
 if __name__ == '__main__':
     unittest.main()
-

@@ -482,6 +482,22 @@ class CommandQueue(OpenCLWrapper):
     acts as a means of synchronization. Operations in different queues are
     independent.
     """
+    _cl_info_function = "clGetCommandQueueInfo"
+    _cl_properties = {
+        "_context_id": (enums.CL_QUEUE_CONTEXT, cl_context),
+        "_device_id": (enums.CL_QUEUE_DEVICE, cl_device_id),
+        "reference_count": (enums.CL_QUEUE_REFERENCE_COUNT, cl_uint),
+        "properties": (enums.CL_QUEUE_PROPERTIES, cl_command_queue_properties),
+    }
+
+    @property
+    def context(self):
+        return Context(self._context_id)
+
+    @property
+    def device(self):
+        return Device(self._device_id)
+
     def _retain(self):
         driver.clRetainCommandQueue(self.id)
 
@@ -590,6 +606,8 @@ class CommandQueue(OpenCLWrapper):
 
         if wants_event:
             return Event(event[0])
+
+CommandQueue._define_cl_properties()
 
 
 # Program class ################################################################

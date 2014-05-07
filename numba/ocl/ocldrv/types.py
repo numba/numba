@@ -52,6 +52,7 @@ cl_device_mem_cache_type = cl_uint
 cl_device_local_mem_type = cl_uint
 cl_context_properties = c_intptr_t
 cl_kernel_work_group_info = cl_uint
+cl_command_queue_info = cl_uint
 cl_mem_object_type = cl_uint
 
 cl_bool = cl_uint # this probably can change from platform to platform
