@@ -1,8 +1,10 @@
-from __future__ import absolute_import
+from __future__ import absolute_import, division, print_function
 import math
 import numpy as np
 from numba.cuda.cudadrv import devicearray
 from numba.cuda import get_current_device
+from numba import cuda
+
 
 class CudaUFuncDispatcher(object):
     """
@@ -62,7 +64,7 @@ class CudaUFuncDispatcher(object):
             return max_threads
 
     def __call__(self, *args, **kws):
-        '''
+        """
         *args: numpy arrays or DeviceArrayBase (created by cuda.to_device).
                Cannot mix the two types in one call.
 
@@ -71,9 +73,7 @@ class CudaUFuncDispatcher(object):
             out    -- output array. Can be a numpy array or DeviceArrayBase
                       depending on the input arguments.  Type must match
                       the input arguments.
-        '''
-        from numbapro import cuda
-
+        """
         accepted_kws = 'stream', 'out'
         unknown_kws = [k for k in kws if k not in accepted_kws]
         assert not unknown_kws, ("Unknown keyword args %s" % unknown_kws)
@@ -227,12 +227,10 @@ class CudaUFuncDispatcher(object):
     def _determine_dimensions(self, n, max_thread):
         # determine grid and block dimension
         thread_count = int(min(max_thread, n))
-        block_count = int(math.ceil(float(n) / max_thread))
+        block_count = (n + max_thread - 1) // max_thread
         return block_count, thread_count
 
     def reduce(self, arg, stream=0):
-        from numbapro import cuda
-
         assert len(self.functions.keys()[0]) == 2, "must be a binary ufunc"
         assert arg.ndim == 1, "must use 1d array"
 
@@ -260,7 +258,6 @@ class CudaUFuncDispatcher(object):
 
         return buf[0]
 
-
     def __reduce(self, mem, gpu_mems, stream):
         n = mem.shape[0]
         if n % 2 != 0: # odd?
@@ -273,17 +270,20 @@ class CudaUFuncDispatcher(object):
             gpu_mems.append(out)
             return self(out, thincut, out=out, stream=stream)
         else: # even?
-            left, right = mem.split(n / 2)
+            left, right = mem.split(n // 2)
             # prevent freeing during async mode
             gpu_mems.append(left)
             gpu_mems.append(right)
             # execute the kernel
             self(left, right, out=left, stream=stream)
-            if n / 2 > 1:
+            if n // 2 > 1:
                 return self.__reduce(left, gpu_mems, stream)
             else:
                 return left
 
+@cuda.jit("void(float32[:], float32[:])")
+def haha(a, b):
+    b[0] = 0
 
 class CUDAGenerializedUFunc(object):
     def __init__(self, kernelmap, engine):
@@ -293,7 +293,6 @@ class CUDAGenerializedUFunc(object):
         assert self.engine.nout == 1, "only support single output"
 
     def __call__(self, *args, **kws):
-        from numbapro import cuda
 
         is_device_array = [devicearray.is_cuda_ndarray(a) for a in args]
         if any(is_device_array) != all(is_device_array):
@@ -326,7 +325,6 @@ class CUDAGenerializedUFunc(object):
         else:
             params = list(inputs)
 
-
         # allocate output
         if need_cuda_conv or out is None:
             retval = cuda.device_array(shape=schedule.output_shapes[0],
@@ -336,11 +334,13 @@ class CUDAGenerializedUFunc(object):
 
         # execute
         assert schedule.loopn > 0, "zero looping dimension"
+
         if not schedule.loopdims:
             newparams = [p.reshape(1, *p.shape) for p in params]
             newretval = retval.reshape(1, *retval.shape)
             self._launch_kernel(kernel, schedule.loopn, stream,
                                 newparams + [newretval])
+
         elif len(schedule.loopdims) > 1:
             odim = schedule.loopn
             newparams = [p.reshape(odim, *cs) for p, cs in
@@ -348,8 +348,8 @@ class CUDAGenerializedUFunc(object):
             newretval = retval.reshape(odim, *schedule.oshapes[0])
             self._launch_kernel(kernel, schedule.loopn, stream,
                                 newparams + [newretval])
-        else:
 
+        else:
             self._launch_kernel(kernel, schedule.loopn, stream,
                                 params + [retval])
 
@@ -361,15 +361,10 @@ class CUDAGenerializedUFunc(object):
         return out
 
     def _launch_kernel(self, kernel, nelem, stream, args):
-        max_threads = min(1024, #kernel.device.MAX_THREADS_PER_BLOCK,
+        max_threads = min(cuda.get_current_device().MAX_THREADS_PER_BLOCK,
                           self.max_blocksize)
-
         ntid = self._apply_autotuning(kernel, max_threads)
-        ncta_real = float(nelem) / ntid
-        ncta = int(ncta_real)
-        if ncta < ncta_real:
-            ncta += 1
-
+        ncta = (nelem + ntid - 1) // ntid
         kernel[ncta, ntid, stream](*args)
 
 

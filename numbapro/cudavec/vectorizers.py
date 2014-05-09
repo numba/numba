@@ -3,8 +3,9 @@ import operator
 import warnings
 import numpy
 from numba.npyufunc.sigparse import parse_signature
-from numba import sigutils, types, cgutils
+from numba import sigutils, types, cgutils, cuda
 from numba.cuda import nvvmutils
+from numba.cuda.compiler import CUDAKernel
 import llvm.core as lc
 from . import dispatch
 
@@ -37,7 +38,7 @@ class CudaVectorize(object):
                 sig = restype(*argtypes)
         del argtypes
         del restype
-        from numbapro import cuda
+
         # compile core as device function
         args, return_type = sigutils.normalize_signature(sig)
         sig = return_type(*args)
@@ -68,6 +69,7 @@ class CudaVectorize(object):
     def build_ufunc(self):
         return dispatch.CudaUFuncDispatcher(self.kernelmap)
 
+
 #------------------------------------------------------------------------------
 # Generalized CUDA ufuncs
 
@@ -92,11 +94,8 @@ class CudaGUFuncVectorize(object):
                 sig = restype(*argtypes)
         del argtypes
         del restype
-        from numbapro import cuda
-        from numba.cuda.compiler import CUDAKernel
 
-        cudevfn = cuda.jit(sig,
-                           device=True, inline=True)(self.pyfunc)
+        cudevfn = cuda.jit(sig, device=True, inline=True)(self.pyfunc)
 
         dims = [len(x) for x in self.inputsig]
         dims += [len(x) for x in self.outputsig]
@@ -106,11 +105,10 @@ class CudaGUFuncVectorize(object):
         cres = cudevfn.cres
         wrapper = cres.target_context.prepare_cuda_kernel(lgufunc, outertys)
 
-        kernel = CUDAKernel(llvm_module=lmod,
-                            name=wrapper.name,
-                            argtypes=outertys,
-                            link=(),
-                            debug=False)
+        lmod.verify()
+
+        kernel = CUDAKernel(llvm_module=lmod, name=wrapper.name,
+                            argtypes=outertys, link=(), debug=False)
 
         dtypes = tuple(numpy.dtype(str(t.dtype)) for t in outertys)
         self.kernelmap[tuple(dtypes[:-1])] = dtypes[-1], kernel
@@ -141,9 +139,9 @@ def build_gufunc_stager(devfn, dims):
     # copy a new module
     lmod = lmod.clone()
     lfunc = lmod.get_function_named(lfunc.name)
-
     argtypes = [context.get_argument_type(t) for t in outer_args]
-    fnty = lc.Type.function(lc.Type.int(), argtypes)
+    dummy = lfunc.type.pointee.args[0]
+    fnty = lc.Type.function(lc.Type.int(), [dummy] + argtypes)
     lgufunc = lmod.add_function(fnty, name='gufunc_%s' % lfunc.name)
 
     builder = lc.Builder.new(lgufunc.append_basic_block(''))
@@ -151,10 +149,11 @@ def build_gufunc_stager(devfn, dims):
     # allocate new array with one less dimension
 
     sreg = nvvmutils.SRegBuilder(builder)
-    tid = sreg.getdim('x')
+    tid = context.cast(builder, sreg.getdim('x'), types.int32, types.intp)
 
     arguments = []
-    for aryptr, inner, outer, dim in zip(lgufunc.args, args, outer_args, dims):
+    for aryptr, inner, outer, dim in zip(lgufunc.args[1:], args, outer_args,
+                                         dims):
         arycls = context.make_array(outer)
         ary = arycls(context, builder, builder.load(aryptr))
 
@@ -162,26 +161,23 @@ def build_gufunc_stager(devfn, dims):
         shape = cgutils.unpack_tuple(builder, ary.shape, outer.ndim)
         strides = cgutils.unpack_tuple(builder, ary.strides, outer.ndim)
 
-        if not isinstance(inner, types.Array): # scalar argument
-            ok = builder.icmp(lc.ICMP_SLT, tid, shape[0])
-            zero = context.get_constant(types.intp, 0)
-            index = builder.select(ok, tid, zero)
-            item = cgutils.get_item_pointer(builder, ary, outer.layout,
-                                            [index])
+        is_tid_in_range = builder.icmp(lc.ICMP_SLT, tid, shape[0])
 
-            arguments.append(item._getvalue())
+        if not isinstance(inner, types.Array):      # scalar argument
+            zero = context.get_constant(types.intp, 0)
+            index = builder.select(is_tid_in_range, tid, zero)
+            item = cgutils.get_item_pointer(builder, outer, ary, [index])
+
+            arguments.append(builder.load(item))
         else:
             innerarycls = context.make_array(inner)
-
             item = innerarycls(context, builder)
-            arguments.append(item._getvalue())
-
             slice_data = get_slice_data(builder, data, shape, strides,
                                         outer.layout, tid)
 
             if outer.ndim == 1:
-                one = context.get_context(types.intp, 1)
-                zero = context.get_context(types.intp, 0)
+                one = context.get_constant(types.intp, 1)
+                zero = context.get_constant(types.intp, 0)
                 item.shape = cgutils.pack_array(builder, [one])
                 item.strides = cgutils.pack_array(builder, [zero])
                 item.data = slice_data
@@ -191,11 +187,14 @@ def build_gufunc_stager(devfn, dims):
                 item.strides = cgutils.pack_array(builder, strides[1:])
                 item.data = slice_data
 
-    builder.ret(lc.Constant.int(lc.Type.int(), 0))
-    # status, _ = context.call_function(builder, lfunc, types.void, args,
-    #                                   arguments)
-    # builder.ret(status.code)
+            arguments.append(item._getvalue())
 
+    with cgutils.ifthen(builder, is_tid_in_range):
+        status, _ = context.call_function(builder, lfunc, types.void, args,
+                                          arguments)
+        builder.ret(status.code)
+
+    builder.ret(lc.Constant.int(lc.Type.int(), 0))
     lmod.verify()
     return lmod, lgufunc, outer_args, excs
 
