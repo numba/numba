@@ -451,9 +451,12 @@ class Context(OpenCLWrapper):
     def _release(self):
         driver.clReleaseContext(self.id)
 
-    def create_buffer(self, size_in_bytes, flags=enums.CL_MEM_READ_WRITE, host_ptr=None):
-        mem = driver.clCreateBuffer(self.id, flags, size_in_bytes, host_ptr)
-        return MemObject(mem)
+    def create_buffer(self, size_in_bytes, host_ptr=None, flags=enums.CL_MEM_READ_WRITE):
+        return MemObject(driver.clCreateBuffer(self.id, flags, size_in_bytes, host_ptr))
+
+    def create_buffer_and_copy(self, size_in_bytes, host_ptr, flags=enums.CL_MEM_READ_WRITE):
+        return MemObject(driver.clCreateBuffer(self.id, flags | enums.CL_MEM_COPY_HOST_PTR,
+                                               flags, size_in_bytes, host_ptr))
 
     def create_program_from_source(self, source):
         source = ctypes.create_string_buffer(source)
