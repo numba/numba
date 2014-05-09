@@ -5,6 +5,7 @@ del get_versions
 
 import numba
 from numba import *
+import numbapro._cuda    # import time sideeffect
 from numbapro.decorators import autojit, jit
 from numbapro.vectorizers import vectorize, guvectorize
 
@@ -38,7 +39,7 @@ def test():
 
         check_cuda()
 
-        if numbapro._cuda.is_available:
+        if numbapro.cuda.is_available:
             print('cudadrv'.center(80, '-'))
             import numbapro.cudadrv.tests.support
 
