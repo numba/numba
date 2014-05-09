@@ -1,11 +1,11 @@
 from __future__ import division
 from numbapro import vectorize
-from numba import jit, float32
+from numba import cuda, jit, float32
 import numpy as np
 import unittest
 from .support import addtest, main, assertTrue
 
-@jit(float32(float32, float32, float32), device=True, inline=True, target='gpu')
+@cuda.jit(float32(float32, float32, float32), device=True)
 def cu_device_fn(x, y, z):
     return x ** y / z
 

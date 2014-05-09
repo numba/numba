@@ -227,7 +227,7 @@ class CudaUFuncDispatcher(object):
     def _determine_dimensions(self, n, max_thread):
         # determine grid and block dimension
         thread_count = int(min(max_thread, n))
-        block_count = (n + max_thread - 1) // max_thread
+        block_count = int((n + max_thread - 1) // max_thread)
         return block_count, thread_count
 
     def reduce(self, arg, stream=0):
