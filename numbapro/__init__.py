@@ -22,11 +22,6 @@ def test():
 
         cfg = dict(buffer=True, verbosity=3)
 
-        print('npm'.center(80, '-'))
-        import numbapro.npm.tests.support
-
-        failfast(numbapro.npm.tests.support.run(**cfg))
-
         print('vectorizers'.center(80, '-'))
         import numbapro.vectorizers.tests.support
 

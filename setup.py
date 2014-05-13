@@ -1,5 +1,4 @@
 import os
-from fnmatch import fnmatchcase
 from distutils.core import setup, Extension
 from distutils.util import convert_path
 
@@ -23,9 +22,10 @@ ext_modules = [
     )
 ]
 
+
 def find_packages(rootdir):
     out = []
-    stack=[convert_path(rootdir)]
+    stack = [convert_path(rootdir)]
     while stack:
         where = stack.pop()
         for name in os.listdir(where):
@@ -37,18 +37,19 @@ def find_packages(rootdir):
     print(out)
     return out
 
+
 cmdclass = versioneer.get_cmdclass()
 
 setup(
-    name = "numbapro",
-    version = versioneer.get_version(),
-    author = "Continuum Analytics, Inc.",
-    author_email = "support@continuum.io",
-    url = "http://www.continuum.io",
-    license = "Proprietary",
-    description = "compile Python code",
-    ext_modules = ext_modules,
-    packages = find_packages('numbapro'),
-    cmdclass = cmdclass,
+    name="numbapro",
+    version=versioneer.get_version(),
+    author="Continuum Analytics, Inc.",
+    author_email="support@continuum.io",
+    url="http://www.continuum.io",
+    license="Proprietary",
+    description="compile Python code",
+    ext_modules=ext_modules,
+    packages=find_packages('numbapro'),
+    cmdclass=cmdclass,
 )
 
