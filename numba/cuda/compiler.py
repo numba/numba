@@ -200,6 +200,13 @@ class CachedCUFunction(object):
             self.ccinfos[device.id] = compile_info
         return cufunc
 
+    def get_info(self):
+        self.get()   # trigger compilation
+        cuctx = get_context()
+        device = cuctx.device
+        ci = self.ccinfos[device.id]
+        return ci
+
 
 class CUDAKernel(CUDAKernelBase):
     def __init__(self, llvm_module, name, argtypes, link=(), debug=False):
