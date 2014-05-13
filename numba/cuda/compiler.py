@@ -7,6 +7,7 @@ from numba import typing, lowering, dispatcher
 from .cudadrv.devices import get_context
 from .cudadrv import nvvm, devicearray, driver
 from .errors import KernelRuntimeError
+from .api import get_current_device
 
 
 def compile_cuda(pyfunc, return_type, args, debug):
@@ -235,6 +236,13 @@ class CUDAKernel(CUDAKernelBase):
     @property
     def ptx(self):
         return self._func.ptx.get().decode('utf8')
+
+    @property
+    def device(self):
+        """
+        Get current active context
+        """
+        return get_current_device()
 
     def _kernel_call(self, args, griddim, blockdim, stream=0, sharedmem=0):
         # Prepare kernel
