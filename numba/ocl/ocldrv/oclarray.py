@@ -219,10 +219,12 @@ class OpenCLNDArray(OpenCLNDArrayBase):
         cls = type(self)
 
         if extents == [self._dummy.extent]:
-            return cls(shape=newarr.shape, strides=newarr.strides,
-                       dtype=self.dtype, gpu_data=self.gpu_data)
+            ctxt = self._desc.context
+            cl_desc = _create_ocl_desc(ctxt, newarr.shape, newarr.strides)
+            return cls(newarr.shape, newarr.strides, self.dtype, cl_desc, self._data)
         else:
             raise NotImplementedError("operation requires copying")
+
 
     def ravel(self, order='C', stream=0):
         cls = type(self)
