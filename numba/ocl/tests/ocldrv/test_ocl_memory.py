@@ -2,7 +2,7 @@ import numpy as np
 import unittest
 
 from numba.ocl.ocldrv.driver import MemObject
-from numba.ocl.ocldrv import driver as cl
+from numba.ocl.ocldrv import cl
 
 class TestOpenCLMemory(unittest.TestCase):
     def setUp(self):
