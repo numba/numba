@@ -143,14 +143,14 @@ class OpenCLNDArrayBase(object):
             sz = min(_driver.host_memory_size(ary), self.alloc_size)
             _driver.host_to_device(self, ary, sz, stream=stream)
 
-    def copy_to_host(self, ary=None, stream=0):
+    def copy_to_host(self, ary=None, queue=None):
         """Copy ``self`` to ``ary`` or create a new numpy ndarray
         if ``ary`` is ``None``.
 
         Always returns the host array.
         """
         if ary is None:
-            hostary = np.empty(shape=self.alloc_size, dtype=np.byte)
+            hostary = np.empty(shape=self._data.size, dtype=np.byte)
         else:
             if ary.dtype != self.dtype:
                 raise TypeError('incompatible dtype')
@@ -166,8 +166,16 @@ class OpenCLNDArrayBase(object):
                                 self.strides in scalstrides):
                     raise TypeError('incompatible strides; device %s; host %s' %
                                     (self.strides, ary.strides))
+
+            if ary.nbytes != self._data.size:
+                raise TypeError('buffer sizes do not match: device: {0} host: {1}'.format(self._data.size, ary.nbytes))
             hostary = ary
-        _driver.device_to_host(hostary, self, self.alloc_size, stream=stream)
+
+        if queue is None:
+            ctxt = self._data.context
+            queue = ctxt.create_command_queue(ctxt.devices[0])
+
+        queue.enqueue_read_buffer(self._data, 0, self._data.size, hostary.ctypes.data)
 
         if ary is None:
             hostary = np.ndarray(shape=self.shape, strides=self.strides,
@@ -220,11 +228,14 @@ class OpenCLNDArray(OpenCLNDArrayBase):
         cls = type(self)
         newarr, extents = self._dummy.ravel(order=order)
 
-        if extents == [self._dummy.extent]:
-            return cls(shape=newarr.shape, strides=newarr.strides,
-                       dtype=self.dtype, gpu_data=self.gpu_data,
-                       gpu_head=self.gpu_head, stream=stream)
+        # do not destructively reuse metadata as that will modify the
+        # original array
 
+        if extents == [self._dummy.extent]:
+            ctxt = self._desc.context
+            cl_desc = _create_ocl_desc(ctxt, newarr.shape, newarr.strides)
+            return cls(newarr.shape, newarr.strides, self.dtype,
+                       cl_desc, self._data)
         else:
             raise NotImplementedError("operation requires copying")
 
@@ -278,7 +289,7 @@ def from_array(ary, ctxt):
     """
     if ary.ndim == 0:
         ary = ary.reshape(1)
-    
+
     cl_desc = _create_ocl_desc(ctxt, ary.shape, ary.strides)
     cl_data = ctxt.create_buffer_and_copy(ary.nbytes, ary.ctypes.data)
     return OpenCLNDArray(ary.shape, ary.strides, ary.dtype, cl_desc, cl_data)
@@ -313,4 +324,3 @@ def auto_device(ary, stream=0, copy=True):
         if copy:
             devarray.copy_to_device(ary, stream=stream)
         return devarray, True
-

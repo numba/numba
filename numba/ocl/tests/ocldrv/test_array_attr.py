@@ -55,7 +55,9 @@ class TestArrayAttr(unittest.TestCase):
         ary = np.arange(60)
         reshaped = ary.reshape(2, 5, 2, 3)
         expect = reshaped.ravel(order='C')
-        dary = ocl.to_device(reshaped)
+        ctxt = self.context
+
+        dary = ocl.to_device(ctxt, reshaped)
         dflat = dary.ravel()
         flat = dflat.copy_to_host()
         self.assertTrue(flat.ndim == 1)
@@ -65,7 +67,9 @@ class TestArrayAttr(unittest.TestCase):
         ary = np.arange(60)
         reshaped = np.asfortranarray(ary.reshape(2, 5, 2, 3))
         expect = reshaped.ravel(order='F')
-        dary = ocl.to_device(reshaped)
+        ctxt = self.context
+
+        dary = ocl.to_device(ctxt, reshaped)
         dflat = dary.ravel(order='F')
         flat = dflat.copy_to_host()
         self.assertTrue(flat.ndim == 1)
@@ -74,7 +78,9 @@ class TestArrayAttr(unittest.TestCase):
     def test_reshape_c(self):
         ary = np.arange(10)
         expect = ary.reshape(2, 5)
-        dary = ocl.to_device(ary)
+        ctxt = self.context
+
+        dary = ocl.to_device(ctxt, ary)
         dary_reshaped = dary.reshape(2, 5)
         got = dary_reshaped.copy_to_host()
         self.assertTrue(np.all(expect == got))
@@ -82,7 +88,9 @@ class TestArrayAttr(unittest.TestCase):
     def test_reshape_f(self):
         ary = np.arange(10)
         expect = ary.reshape(2, 5, order='F')
-        dary = ocl.to_device(ary)
+        ctxt = self.context
+
+        dary = ocl.to_device(ctxt, ary)
         dary_reshaped = dary.reshape(2, 5, order='F')
         got = dary_reshaped.copy_to_host()
         self.assertTrue(np.all(expect == got))
