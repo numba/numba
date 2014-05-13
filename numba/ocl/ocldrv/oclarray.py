@@ -15,13 +15,8 @@ from __future__ import print_function, absolute_import, division
 
 from . import MemObject
 from .types import *
-
-import warnings
-import math
+from ... import dummyarray
 import numpy as np
-from .ndarray import (ndarray_populate_head, ArrayHeaderManager)
-from . import devices
-from numba import dummyarray
 
 try:
     long
@@ -29,11 +24,11 @@ except NameError:
     long = int
 
 
-def _is_ocl_ndarray(obj):
+def is_ocl_ndarray(obj):
     "Check if an object is an OpenCL ndarray"
     return getattr(obj, '__ocl_ndarray__', False)
 
-def _require_ocl_ndarray(obj):
+def require_ocl_ndarray(obj):
     "Raises ValueError is is_cuda_ndarray(obj) evaluates False"
     if not _is_ocl_ndarray(obj):
         raise ValueError('require an OpenCL ndarray object')
@@ -55,7 +50,7 @@ def _verify_ocl_ndarray_interface(obj):
 
 
 def _array_desc_ctype(ndims):
-    class c_array(c.types.Structure):
+    class c_array(ctypes.Structure):
         # cl_long (64 bit) used, better be generous
         _fields_ = [('shape', cl_long * ndims),
                     ('strides', cl_long * ndims)]
@@ -67,7 +62,10 @@ def _create_ocl_desc(context, shape, strides):
     desc = _array_desc_ctype(len(shape))()
     desc.shape = shape
     desc.strides = strides
-    buff = context.create_buffer_and_copy(ctypes.sizeof(desc), ctypes.POINTER(desc))
+    sz = ctypes.sizeof(desc)
+    ptr = ctypes.addressof(desc)
+    buff = context.create_buffer_and_copy(sz, ptr)
+    return buff
 
 class OpenCLNDArrayBase(object):
     """
@@ -76,11 +74,14 @@ class OpenCLNDArrayBase(object):
     An Array consists of two different OpenCL buffers:
     - desc: a descriptor for how the array data is organized (shape, strides...)
     - data: the actual data, arranged as described by the array_desc
+
+    This object __init__ must only be used by the functions that are used as
+    constructors, as it is quite low-level.
     """
     __ocl_memory__ = True
     __ocl_ndarray__ = True # There must be a gpu_head and gpu_data attribute
 
-    def __init__(self, shape, strides, dtype, context, ocl_desc=None, ocl_data=None):
+    def __init__(self, shape, strides, dtype, ocl_desc, ocl_data):
         """
         Args
         ----
@@ -90,44 +91,26 @@ class OpenCLNDArrayBase(object):
             array strides.
         dtype
             data type as numpy.dtype.
-        context
-            The OpenCL context in which this array must be defined.
-        gpu_head
+        ocl_desc
             user provided device memory for the ndarray head structure
-        gpu_data
+        ocl_data
             user provided device memory for the ndarray data buffer
         """
-        if isinstance(shape, (int, long)):
-            shape = (shape,)
-        if isinstance(strides, (int, long)):
-            strides = (strides,)
-        ndim = len(shape)
-        if len(strides) != ndim:
-            raise ValueError('strides not match ndim')
-
-        self._dummy = dummyarray.Array.from_desc(0, shape, strides,
-                                                 dtype.itemsize)
-        shape = tuple(shape)
-        strides = tuple(strides)
-        dtype = np.dtype(dtype)
-        size = int(np.prod(self.shape))
-
-        if ocl_data is None:
-            start, end = mviewbuf.memoryview_get_extents_info(shape, strides, ndim, dtype.itemsize)
-            ocl_data = context.create_buffer(end - start)
-
-        if ocl_desc is None:
-            ocl_desc = _create_ocl_desc(context, shape, strides)
-
-        assert(isinstance(ocl_data, MemObject))
+        assert(isinstance(shape, tuple))
+        assert(isinstance(strides, tuple))
+        assert(len(strides) == len(shape))
+        assert(isinstance(dtype, np.dtype))
         assert(isinstance(ocl_desc, MemObject))
-        self.ndim = ndim
+        assert(isinstance(ocl_data, MemObject))
+
+        self.ndim = len(shape)
         self.shape = shape
         self.strides = strides
-        self.size = size
         self.dtype = dtype
         self._desc = ocl_desc
         self._data = ocl_data
+        self._dummy = dummyarray.Array.from_desc(0, shape, strides,
+                                                 dtype.itemsize)
 
     @property
     def alloc_size(self):
@@ -208,11 +191,11 @@ class OpenCLNDArrayBase(object):
             end = min(begin + section, self.size)
             shape = (end - begin,)
             gpu_data = self.gpu_data.view(begin * itemsize, end * itemsize)
-            yield DeviceNDArray(shape, strides, dtype=self.dtype, stream=stream,
+            yield OpenCLNDArray(shape, strides, dtype=self.dtype, stream=stream,
                                 gpu_data=gpu_data)
 
 
-class DeviceNDArray(DeviceNDArrayBase):
+class OpenCLNDArray(OpenCLNDArrayBase):
     def is_f_contiguous(self):
         return self._dummy.is_f_contig
 
@@ -266,7 +249,7 @@ class DeviceNDArray(DeviceNDArrayBase):
                        dtype=self.dtype, gpu_data=newdata)
 
 
-class MappedNDArray(DeviceNDArrayBase, np.ndarray):
+class MappedNDArray(OpenCLNDArrayBase, np.ndarray):
     """
     A host array that uses CUDA mapped memory.
     """
@@ -287,12 +270,24 @@ class MappedNDArray(DeviceNDArrayBase, np.ndarray):
         except:
             pass
 
+# OpenCL array constructors ############################################
+
+def from_array(ary, ctxt):
+    """
+    Create an OpenCLArray object based on Numpy's array 'ary'
+    """
+    if ary.ndim == 0:
+        ary = ary.reshape(1)
+    
+    cl_desc = _create_ocl_desc(ctxt, ary.shape, ary.strides)
+    cl_data = ctxt.create_buffer_and_copy(ary.nbytes, ary.ctypes.data)
+    return OpenCLNDArray(ary.shape, ary.strides, ary.dtype, cl_desc, cl_data)
 
 def from_array_like(ary, stream=0, gpu_head=None, gpu_data=None):
     "Create a DeviceNDArray object that is like ary."
     if ary.ndim == 0:
         ary = ary.reshape(1)
-    return DeviceNDArray(ary.shape, ary.strides, ary.dtype,
+    return OpenCLNDArray(ary.shape, ary.strides, ary.dtype,
                          writeback=ary, stream=stream, gpu_head=gpu_head,
                          gpu_data=gpu_data)
 
