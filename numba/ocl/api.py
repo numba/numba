@@ -14,7 +14,7 @@ except NameError:
 
 # Array to device migration ############################################
 
-def to_device(ary, context_or_queue, copy=True, to=None):
+def to_device(context_or_queue, ary, copy=True, to=None):
     """
     to_device(ary, context_or_queue, copy=True, to=None)
 
@@ -22,13 +22,13 @@ def to_device(ary, context_or_queue, copy=True, to=None):
 
     Parameters
     ----------
+    context_or_queue : An OpenCL context or queue
+        The array will be allocated in that context (or the queue's
+        context if it is a queue).
     ary : array_like
         The shape and datatype of 'ary' define the resulting device
         array. 'ary' may be the source of actual data if 'copy' is
         True
-    context_or_queue : An OpenCL context or queue
-        The array will be allocated in that context (or the queue's
-        context if it is a queue).
     copy : boolean
         whether the contents of 'ary' should be copied to the resulting
         array.

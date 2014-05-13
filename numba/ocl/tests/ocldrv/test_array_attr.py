@@ -16,9 +16,10 @@ class TestArrayAttr(unittest.TestCase):
         ary = np.arange(10)
         cary = ary.reshape(2, 5)
         fary = np.asfortranarray(cary)
+        ctxt = self.context
 
-        dcary = ocl.to_device(cary, self.context)
-        dfary = ocl.to_device(fary, self.context)
+        dcary = ocl.to_device(ctxt, cary)
+        dfary = ocl.to_device(ctxt, fary)
         self.assertTrue(dcary.is_c_contiguous())
         self.assertTrue(not dfary.is_c_contiguous())
         self.assertTrue(not dcary.is_f_contiguous())
@@ -28,9 +29,10 @@ class TestArrayAttr(unittest.TestCase):
         ary = np.arange(20)
         cary = ary.reshape(2, 5, 2)
         fary = np.asfortranarray(cary)
+        ctxt = self.context
 
-        dcary = ocl.to_device(cary, self.context)
-        dfary = ocl.to_device(fary, self.context)
+        dcary = ocl.to_device(ctxt, cary)
+        dfary = ocl.to_device(ctxt, fary)
         self.assertTrue(dcary.is_c_contiguous())
         self.assertTrue(not dfary.is_c_contiguous())
         self.assertTrue(not dcary.is_f_contiguous())
@@ -40,9 +42,10 @@ class TestArrayAttr(unittest.TestCase):
         ary = np.arange(60)
         cary = ary.reshape(2, 5, 2, 3)
         fary = np.asfortranarray(cary)
+        ctxt = self.context
 
-        dcary = ocl.to_device(cary, self.context)
-        dfary = ocl.to_device(fary, self.context)
+        dcary = ocl.to_device(ctxt, cary)
+        dfary = ocl.to_device(ctxt, fary)
         self.assertTrue(dcary.is_c_contiguous())
         self.assertTrue(not dfary.is_c_contiguous())
         self.assertTrue(not dcary.is_f_contiguous())
