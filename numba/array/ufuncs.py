@@ -41,7 +41,7 @@ for name, op in unary_arithmetic_ufuncs.items():
 
 
 binary_arithmetic_ufuncs = {'add':'operator.add', 'subtract':'operator.sub',
-    'multiply':'operator.multiply', 'power':'operator.pow'}
+    'multiply':'operator.mul', 'power':'operator.pow'}
 
 for name, op in binary_arithmetic_ufuncs.items():
     global_dict[name] = create_binary_op(op)

@@ -10,8 +10,7 @@ class Repr(Case):
     @of('ArrayNode(data, owners)')
     def array_node(self, data, owners):
         level = self.state['level']
-        return '{0}ArrayNode (owned={1}): \n{2}'.format(get_indent(level),
-            str(bool(owners)),
+        return '{0}ArrayNode: \n{1}'.format(get_indent(level),
             str(Repr(data, state={'level':level+1})))
 
     @of('ArrayDataNode(array_data)')
