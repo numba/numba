@@ -2,6 +2,7 @@ from pyalge import Case, of
 from nodes import *
 from numba import vectorize
 import operator
+import math
 
 
 class CodeGen(Case):
@@ -76,9 +77,9 @@ def foo({0}):
 '''.format(','.join(input_names), operations)
 
     if len(input_types) > 1:
-        decorator =  "@decorator(['(" + ','.join(input_types) + ")']"
+        decorator =  "@vectorize(['(" + ','.join(input_types) + ")']"
     else:
-        decorator =  "@decorator(['(" + input_types[0] + ",)']"
+        decorator =  "@vectorize(['(" + input_types[0] + ",)']"
         
     return decorator + ufunc_str
     
