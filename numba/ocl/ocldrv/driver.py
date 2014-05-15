@@ -504,7 +504,7 @@ class MemObject(OpenCLWrapper):
     def context(self):
         return Context(self._context_id)
 
-    def create_region(offset, size):
+    def create_region(self, offset, size):
         """
         create a sub-buffer from this memobject at offset 'offset' with size 'size'.
         note that the source memobject can not be a sub-buffer object itself.
@@ -515,7 +515,7 @@ class MemObject(OpenCLWrapper):
         regions.
         """
         params = (ctypes.c_size_t * 2)(offset, size)
-        return MemObject(cl.clCreateSubBuffer(self.id, self.flags,
+        return MemObject(cl.clCreateSubBuffer(self.id, 0,
                                               enums.CL_BUFFER_CREATE_TYPE_REGION, params))
 
     def _retain(self):

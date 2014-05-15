@@ -259,14 +259,13 @@ class OpenCLNDArray(OpenCLNDArrayBase):
                                       hostary.ctypes.data)
                 return hostary[0]
             else:
-                newdata = self.create_region(extents[0], extents[1]-extents[0])
-                return cls(shape=arr.shape, strides=arr.strides,
-                           dtype=self.dtype, gpu_data=newdata)
+                new_desc = _create_ocl_desc(self._data.context, arr.shape, arr.strides)
+                new_data = self._data.create_region(extents[0], extents[1]-extents[0])
+                return cls(arr.shape, arr.strides, self.dtype, new_desc, new_data)
         else:
             new_data = self._data.create_region(arr.extent.begin, arr.extent.end - arr.extent.begin)
-            new_desc = _create_ocl_desc(self.context, array.shape, arr.strides)
-            return cls(arr.shape, arr.strides, self.dtype,
-                       new_desc, new_data)
+            new_desc = _create_ocl_desc(self._data.context, arr.shape, arr.strides)
+            return cls(arr.shape, arr.strides, self.dtype, new_desc, new_data)
 
 
 class MappedNDArray(OpenCLNDArrayBase, np.ndarray):
