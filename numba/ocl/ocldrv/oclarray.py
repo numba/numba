@@ -245,21 +245,28 @@ class OpenCLNDArray(OpenCLNDArrayBase):
         arr = self._dummy.__getitem__(item)
         extents = list(arr.iter_contiguous_extent())
         cls = type(self)
+        # TODO: in opencl it is not possible to create a region from another
+        #       region. There needs to be a way to handle that a getitem from
+        #       a submatrix returned by getitem
         if len(extents) == 1:
-            newdata = self.gpu_data.view(*extents[0])
-
+            # only one dimension...
+            extents = extents[0]
             if dummyarray.is_element_indexing(item, self.ndim):
                 hostary = np.empty(1, dtype=self.dtype)
-                _driver.device_to_host(dst=hostary, src=newdata,
-                                       size=self._dummy.itemsize)
+                ctxt = self._data.context
+                q = ctxt.create_command_queue(ctxt.devices[0])
+                q.enqueue_read_buffer(self._data, extents[0], hostary.nbytes,
+                                      hostary.ctypes.data)
                 return hostary[0]
             else:
+                newdata = self.create_region(extents[0], extents[1]-extents[0])
                 return cls(shape=arr.shape, strides=arr.strides,
                            dtype=self.dtype, gpu_data=newdata)
         else:
-            newdata = self.gpu_data.view(*arr.extent)
-            return cls(shape=arr.shape, strides=arr.strides,
-                       dtype=self.dtype, gpu_data=newdata)
+            new_data = self._data.create_region(arr.extent.begin, arr.extent.end - arr.extent.begin)
+            new_desc = _create_ocl_desc(self.context, array.shape, arr.strides)
+            return cls(arr.shape, arr.strides, self.dtype,
+                       new_desc, new_data)
 
 
 class MappedNDArray(OpenCLNDArrayBase, np.ndarray):

@@ -504,6 +504,20 @@ class MemObject(OpenCLWrapper):
     def context(self):
         return Context(self._context_id)
 
+    def create_region(offset, size):
+        """
+        create a sub-buffer from this memobject at offset 'offset' with size 'size'.
+        note that the source memobject can not be a sub-buffer object itself.
+        Note that in order to pass pointers in OpenCL it has to be done through a memobject,
+        as there is no "device pointers". This allows creating memobjects that reside inside
+        of other memobjects, which is important to handle subarrays, for example.
+        Look into OpenCL clCreateSubBuffer to see important notes about the use of overlapping
+        regions.
+        """
+        params = (ctypes.c_size_t * 2)(offset, size)
+        return MemObject(cl.clCreateSubBuffer(self.id, self.flags,
+                                              enums.CL_BUFFER_CREATE_TYPE_REGION, params))
+
     def _retain(self):
         cl.clRetainMemObject(self.id)
 

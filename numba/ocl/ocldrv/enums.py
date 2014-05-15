@@ -283,3 +283,6 @@ CL_COMPLETE                                   = 0x0
 CL_RUNNING                                    = 0x1
 CL_SUBMITTED                                  = 0x2
 CL_QUEUED                                     = 0x3
+
+# cl_buffer_create_type 
+CL_BUFFER_CREATE_TYPE_REGION                  = 0x1220

@@ -56,9 +56,10 @@ API_PROTOTYPES = {
     'clGetContextInfo': (cl_int, cl_context, cl_context_info, c_size_t, c_void_p, ptr(c_size_t), 0),
 
     'clCreateBuffer': (cl_mem, cl_context, cl_mem_flags, c_size_t, c_void_p, ptr(cl_int), -1),
+    'clCreateSubBuffer': (cl_mem, cl_mem, cl_mem_flags, cl_buffer_create_type, c_void_p, ptr(cl_int), -1),
     'clRetainMemObject': (cl_int, cl_mem, 0),
     'clReleaseMemObject': (cl_int, cl_mem, 0),
-    'clGetMemObjectInfo': (cl_int, cl_mem, cl_mem_info, c_size_t, c_void_p, ptr(c_size_t), -1),
+    'clGetMemObjectInfo': (cl_int, cl_mem, cl_mem_info, c_size_t, c_void_p, ptr(c_size_t), 0),
 
     'clCreateProgramWithSource': (cl_program, cl_context, cl_uint, ptr(c_char_p), ptr(c_size_t), ptr(cl_int), -1),
     'clBuildProgram': (cl_int, cl_program, cl_uint, ptr(cl_device_id), c_char_p, c_void_p, c_void_p, 0),
