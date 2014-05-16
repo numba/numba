@@ -302,14 +302,14 @@ def from_array(ary, ctxt):
     cl_data = ctxt.create_buffer_and_copy(ary.nbytes, ary.ctypes.data)
     return OpenCLNDArray(ary.shape, ary.strides, ary.dtype, cl_desc, cl_data)
 
-def from_array_like(ary, stream=0, gpu_head=None, gpu_data=None):
+def from_array_like(ary, ctxt):
     "Create a DeviceNDArray object that is like ary."
     if ary.ndim == 0:
         ary = ary.reshape(1)
-    return OpenCLNDArray(ary.shape, ary.strides, ary.dtype,
-                         writeback=ary, stream=stream, gpu_head=gpu_head,
-                         gpu_data=gpu_data)
 
+    cl_desc = _create_ocl_desc(ctxt, ary.shape, ary.strides)
+    cl_data = ctxt.create_buffer(ary.nbytes)
+    return OpenCLNDArray(ary.shape, ary.strides, ary.dtype, cl_desc, cl_data)
 
 errmsg_contiguous_buffer = ("Array contains non-contiguous buffer and cannot "
                             "be transferred as a single memory region. Please "

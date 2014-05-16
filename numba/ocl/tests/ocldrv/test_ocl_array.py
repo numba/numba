@@ -27,10 +27,9 @@ class TestOCLNDArray(unittest.TestCase):
         self.assertTrue(dary.ndim == 1)
         oclarray.verify_ocl_ndarray_interface(dary)
 
-    @unittest.skip("todo")
     def test_devicearray_no_copy(self):
         array = np.arange(100, dtype=np.float32)
-        cuda.to_device(array, copy=False)
+        ocl.to_device(self.context, array, copy=False)
 
     @unittest.skip("todo")
     def test_devicearray(self):
