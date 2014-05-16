@@ -10,8 +10,10 @@ class TestOCLNDArray(unittest.TestCase):
     def setUp(self):
         self.context = cl.create_context(cl.default_platform,
                                          [cl.default_platform.default_device])
+        self.queue = self.context.create_command_queue(self.context.devices[0])
 
     def tearDown(self):
+        del self.queue
         del self.context
 
     def test_device_array_interface(self):
@@ -31,13 +33,12 @@ class TestOCLNDArray(unittest.TestCase):
         array = np.arange(100, dtype=np.float32)
         ocl.to_device(self.context, array, copy=False)
 
-    @unittest.skip("todo")
     def test_devicearray(self):
         array = np.arange(100, dtype=np.int32)
         original = array.copy()
-        gpumem = cuda.to_device(array)
+        da = ocl.to_device(self.context, array)
         array[:] = 0
-        gpumem.copy_to_host(array)
+        da.copy_to_host(array, self.queue)
 
         self.assertTrue((array == original).all())
 
