@@ -57,14 +57,13 @@ class TestOCLNDArray(unittest.TestCase):
 
         self.assertTrue(np.all(array == original))
 
-    @unittest.skip("todo")
     def test_devicearray_replace(self):
         N = 100
         array = np.arange(N, dtype=np.int32)
         original = array.copy()
-        gpumem = cuda.to_device(array)
-        cuda.to_device(array * 2, to=gpumem)
-        gpumem.copy_to_host(array)
+        da = ocl.to_device(self.context, array)
+        ocl.to_device(self.context, array * 2, to=da)
+        da.copy_to_host(array, self.queue)
         self.assertTrue((array == original * 2).all())
 
 

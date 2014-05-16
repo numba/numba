@@ -76,9 +76,11 @@ def to_device(context_or_queue, ary, copy=True, to=None):
     else:
         oclarray.require_ocl_ndarray(to)
         devarray = to
+        if copy:
+            devarray.copy_to_device(ary, q)
+        else:
+            pass # does this option make sense?
 
-    if copy:
-        pass
 
     return devarray
 
@@ -123,3 +125,8 @@ def _fill_stride_by_order(shape, dtype, order):
     else:
         raise ValueError('must be either C/F order')
     return tuple(strides)
+
+
+# device memory utils
+def is_device_memory(obj):
+    return getattr(obj, '__ocl_memory__', False)

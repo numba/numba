@@ -17,6 +17,7 @@ from . import MemObject
 from .types import *
 from ... import dummyarray
 import numpy as np
+from . import oclmem
 
 try:
     long
@@ -46,7 +47,6 @@ def verify_ocl_ndarray_interface(obj):
     requires_attr('shape', tuple)
     requires_attr('strides', tuple)
     requires_attr('dtype', np.dtype)
-    #requires_attr('size', (int, long))
 
 
 def _array_desc_ctype(ndims):
@@ -79,7 +79,7 @@ class OpenCLNDArrayBase(object):
     constructors, as it is quite low-level.
     """
     __ocl_memory__ = True
-    __ocl_ndarray__ = True # There must be a gpu_head and gpu_data attribute
+    __ocl_ndarray__ = True # There must be a _desc and a _data attribute
 
     def __init__(self, shape, strides, dtype, ocl_desc, ocl_data):
         """
@@ -117,6 +117,11 @@ class OpenCLNDArrayBase(object):
         return self.data.size
 
     @property
+    def _memobject_(self):
+        """return the main memobject associated to the main memory"""
+        return self._data
+
+    @property
     def data(self):
         return self._data
 
@@ -129,19 +134,22 @@ class OpenCLNDArrayBase(object):
         return self._desc.id, self._data.id
 
 
-    def copy_to_device(self, ary, stream=0):
+    def copy_to_device(self, ary, queue=None):
         """Copy `ary` to `self`.
 
         If `ary` is a CUDA memory, perform a device-to-device transfer.
         Otherwise, perform a a host-to-device transfer.
         """
-        if _driver.is_device_memory(ary):
-            sz = min(_driver.device_memory_size(self),
-                     _driver.device_memory_size(ary))
-            _driver.device_to_device(self, ary, sz, stream=stream)
+        if queue is None:
+            q = self._data.context.create_command_queue(self._data.context.devices[0])
+
+        if oclmem.is_device_memory(ary):
+            sz = min(self._memobject_.size, ary._memobject_.size)
+            q.enqueue_copy_buffer(ary._memobject_, self._memobject_, 0, 0, sz)
         else:
-            sz = min(_driver.host_memory_size(ary), self.alloc_size)
-            _driver.host_to_device(self, ary, sz, stream=stream)
+            sz = min(oclmem.host_memory_size(ary), self._data.size)
+            q.enqueue_write_buffer(self._data, 0, sz, oclmem.host_pointer(ary))
+
 
     def copy_to_host(self, ary=None, queue=None):
         """Copy ``self`` to ``ary`` or create a new numpy ndarray
