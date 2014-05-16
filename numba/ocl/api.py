@@ -5,6 +5,9 @@ API for OpenCL
 from __future__ import print_function, absolute_import, division
 from .ocldrv import oclarray
 from . import ocldrv
+from .ocldrv import oclarray
+from .. import mviewbuf
+import numpy as np
 
 try:
     long
@@ -78,3 +81,45 @@ def to_device(context_or_queue, ary, copy=True, to=None):
         pass
 
     return devarray
+
+
+def device_array(context_or_queue, shape, dtype=np.float, strides=None, order='C'):
+    """device_array(shape, dtype=np.float, strides=None, order='C')
+
+    Allocate and empty device array. Similar to numpy.empty()
+    """
+    assert((strides is None) or (len(strides) == len(shape)))
+    ctxt = context_or_queue if isinstance(context_or_queue, ocldrv.Context) else context_or_queue.context
+    shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype, order)
+    s, e = mviewbuf.memoryview_get_extents_info(shape, strides, len(shape), dtype.itemsize)
+    cl_desc = oclarray._create_ocl_desc(ctxt, shape, strides)
+    cl_data = ctxt.create_buffer(e-s)
+    return oclarray.OpenCLNDArray(shape, strides, dtype, cl_desc, cl_data)
+
+
+def _prepare_shape_strides_dtype(shape, strides, dtype, order):
+    dtype = np.dtype(dtype)
+    if isinstance(shape, (int, long)):
+        shape = (shape,)
+    if isinstance(strides, (int, long)):
+        strides = (strides,)
+    else:
+        if shape == ():
+            shape = (1,)
+        strides = strides or _fill_stride_by_order(shape, dtype, order)
+    return shape, strides, dtype
+
+def _fill_stride_by_order(shape, dtype, order):
+    nd = len(shape)
+    strides = [0] * nd
+    if order == 'C':
+        strides[-1] = dtype.itemsize
+        for d in reversed(range(nd - 1)):
+            strides[d] = strides[d + 1] * shape[d + 1]
+    elif order == 'F':
+        strides[0] = dtype.itemsize
+        for d in range(1, nd):
+            strides[d] = strides[d - 1] * shape[d - 1]
+    else:
+        raise ValueError('must be either C/F order')
+    return tuple(strides)

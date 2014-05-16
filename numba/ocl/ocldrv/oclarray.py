@@ -30,12 +30,12 @@ def is_ocl_ndarray(obj):
 
 def require_ocl_ndarray(obj):
     "Raises ValueError is is_cuda_ndarray(obj) evaluates False"
-    if not _is_ocl_ndarray(obj):
+    if not is_ocl_ndarray(obj):
         raise ValueError('require an OpenCL ndarray object')
 
-def _verify_ocl_ndarray_interface(obj):
+def verify_ocl_ndarray_interface(obj):
     "Verify the OpenCL ndarray interface for an obj"
-    _require_cuda_ndarray(obj)
+    require_ocl_ndarray(obj)
 
     def requires_attr(attr, typ):
         if not hasattr(obj, attr):
@@ -46,7 +46,7 @@ def _verify_ocl_ndarray_interface(obj):
     requires_attr('shape', tuple)
     requires_attr('strides', tuple)
     requires_attr('dtype', np.dtype)
-    requires_attr('size', (int, long))
+    #requires_attr('size', (int, long))
 
 
 def _array_desc_ctype(ndims):
