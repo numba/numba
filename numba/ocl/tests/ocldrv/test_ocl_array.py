@@ -5,7 +5,6 @@ from numba.ocl import oclarray
 import unittest
 import numpy as np
 
-
 class TestOCLNDArray(unittest.TestCase):
     def setUp(self):
         self.context = cl.create_context(cl.default_platform,
@@ -42,13 +41,12 @@ class TestOCLNDArray(unittest.TestCase):
 
         self.assertTrue((array == original).all())
 
-    @unittest.skip("todo")
     def test_devicearray_partition(self):
         N = 100
         array = np.arange(N, dtype=np.int32)
         original = array.copy()
-        gpumem = cuda.to_device(array)
-        left, right = gpumem.split(N // 2)
+        da = ocl.to_device(self.context, array)
+        left, right = da.split(N // 2)
 
         array[:] = 0
 

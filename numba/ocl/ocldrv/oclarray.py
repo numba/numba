@@ -191,16 +191,17 @@ class OpenCLNDArrayBase(object):
             raise ValueError("only support 1d array")
         if self.strides[0] != self.dtype.itemsize:
             raise ValueError("only support unit stride")
-        nsect = int(math.ceil(float(self.size) / section))
+
+        ctxt = self._data.context
         strides = self.strides
         itemsize = self.dtype.itemsize
-        for i in range(nsect):
-            begin = i * section
-            end = min(begin + section, self.size)
+        total = self.shape[0]
+        for begin in range(0, total, section):
+            end = min(begin + section, total)
             shape = (end - begin,)
-            gpu_data = self.gpu_data.view(begin * itemsize, end * itemsize)
-            yield OpenCLNDArray(shape, strides, dtype=self.dtype, stream=stream,
-                                gpu_data=gpu_data)
+            cl_desc = _create_ocl_desc(ctxt, shape, strides)
+            cl_data = self._data.create_region(begin * itemsize, (end-begin) * itemsize)
+            yield OpenCLNDArray(shape, strides, self.dtype, cl_desc, cl_data)
 
 
 class OpenCLNDArray(OpenCLNDArrayBase):
