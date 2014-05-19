@@ -16,6 +16,17 @@ def discover_files(startdir=os.curdir):
                 yield fullpath
 
 
+try:
+    from importlib import import_module
+except ImportError:
+    # Approximative fallback for Python < 2.7
+    def import_module(modulename):
+        module = __import__(modulename)
+        for comp in modulename.split('.')[:-1]:
+            module = getattr(module, comp)
+        return module
+
+
 def discover_modules():
     for fullpath in discover_files():
         path = os.path.relpath(fullpath)
@@ -23,10 +34,7 @@ def discover_modules():
         if ext != '.py':
             continue
         modulename = root.replace(os.path.sep, '.')
-        module = __import__(modulename)
-        for comp in modulename.split('.')[:-1]:
-            module = getattr(module, comp)
-        yield module
+        yield import_module(modulename)
 
 
 def discover():
