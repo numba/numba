@@ -5,7 +5,7 @@ from numba import jit
 from numba.utils import benchmark
 
 
-def jocabi_relax_core(A, Anew):
+def jacobi_relax_core(A, Anew):
     error = 0.0
     n = A.shape[0]
     m = A.shape[1]
@@ -18,8 +18,8 @@ def jocabi_relax_core(A, Anew):
     return error
 
 
-numba_jocabi_relax_core = jit("float64[:,::1], float64[:,::1]", nopython=True)\
-                             (jocabi_relax_core)
+numba_jacobi_relax_core = jit("float64[:,::1], float64[:,::1]", nopython=True)\
+                             (jacobi_relax_core)
 
 
 def run(fn):
@@ -53,11 +53,11 @@ def run(fn):
 
 
 def python_main():
-    run(jocabi_relax_core)
+    run(jacobi_relax_core)
 
 
 def numba_main():
-    run(numba_jocabi_relax_core)
+    run(numba_jacobi_relax_core)
 
 
 if __name__ == '__main__':
