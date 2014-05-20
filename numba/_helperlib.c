@@ -200,7 +200,8 @@ uint64_t Numba_fptoui(double x) {
 }
 
 
-#define EXPOSE(Fn, Sym) static void* Sym(){return PyLong_FromVoidPtr(&Fn);}
+#define EXPOSE(Fn, Sym) static void* Sym(void) \
+                        { return PyLong_FromVoidPtr(&Fn); }
 EXPOSE(Numba_sdiv, get_sdiv)
 EXPOSE(Numba_srem, get_srem)
 EXPOSE(Numba_udiv, get_udiv)
@@ -227,9 +228,9 @@ Define bridge for all math functions
 /*
 Expose all math functions
 */
-#define MATH_UNARY(F, R, A) static void* get_##F() \
+#define MATH_UNARY(F, R, A) static void* get_##F(void) \
                             { return PyLong_FromVoidPtr(&Numba_##F);}
-#define MATH_BINARY(F, R, A, B) static void* get_##F() \
+#define MATH_BINARY(F, R, A, B) static void* get_##F(void) \
                             { return PyLong_FromVoidPtr(&Numba_##F);}
     #include "mathnames.inc"
 #undef MATH_UNARY
