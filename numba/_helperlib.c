@@ -161,15 +161,15 @@ PyObject* Numba_recreate_record(void *pdata, int size, PyObject *dtype){
     record = PyObject_GetItem(aryobj, index);
 
 CLEANUP:
-    Py_DECREF(numpy);
-    Py_DECREF(numpy_array);
-    Py_DECREF(numpy_record);
-    Py_DECREF(aryobj);
-    Py_DECREF(args);
-    Py_DECREF(kwargs);
-    Py_DECREF(dtypearg);
-    Py_DECREF(buffer);
-    Py_DECREF(index);
+    Py_XDECREF(numpy);
+    Py_XDECREF(numpy_array);
+    Py_XDECREF(numpy_record);
+    Py_XDECREF(aryobj);
+    Py_XDECREF(args);
+    Py_XDECREF(kwargs);
+    Py_XDECREF(dtypearg);
+    Py_XDECREF(buffer);
+    Py_XDECREF(index);
 
     return record;
 }
