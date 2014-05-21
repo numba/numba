@@ -71,6 +71,18 @@ For a 2D grid::
     x, y = cuda.grid(2)
     array[x, y] = something(x, y)
 
+Similarly, the total size of the grid in each dimension is frequently used
+as the stride when looping in a kernel, so there is also a shorthand function
+for that calculation.
+
+For a 1D grid::
+
+    xstride = cuda.gridsize(1)  # = cuda.blockDim.x * cuda.gridDim.x
+
+For a 2D grid::
+
+    xstride, ystride = cuda.gridsize(2)  # = cuda.blockDim.x * cuda.gridDim.x, cuda.blockDim.y * cuda.gridDim.y
+
 Memory Transfer
 ---------------
 

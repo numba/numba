@@ -72,6 +72,32 @@ def ptx_grid2d(context, builder, sig, args):
     return cgutils.pack_array(builder, [r1, r2])
 
 
+@register
+@implement('ptx.gridsize.1d', types.intp)
+def ptx_gridsize1d(context, builder, sig, args):
+    assert len(args) == 1
+    ntidx = call_sreg(builder, "ntid.x")
+    nctaidx = call_sreg(builder, "nctaid.x")
+
+    res = builder.mul(ntidx, nctaidx)
+    return res
+
+
+@register
+@implement('ptx.gridsize.2d', types.intp)
+def ptx_gridsize2d(context, builder, sig, args):
+    assert len(args) == 1
+    ntidx = call_sreg(builder, "ntid.x")
+    nctaidx = call_sreg(builder, "nctaid.x")
+
+    ntidy = call_sreg(builder, "ntid.y")
+    nctaidy = call_sreg(builder, "nctaid.y")
+
+    r1 = builder.mul(ntidx, nctaidx)
+    r2 = builder.mul(ntidy, nctaidy)
+    return cgutils.pack_array(builder, [r1, r2])
+
+
 # -----------------------------------------------------------------------------
 
 def ptx_sreg_template(sreg):
