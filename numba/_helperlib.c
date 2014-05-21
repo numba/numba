@@ -127,12 +127,28 @@ PyObject* Numba_recreate_record(void *pdata, int size, PyObject *dtype){
     PyObject *record = NULL;
     PyObject *index = NULL;
 
-#if PY_MAJOR_VERSION >= 3
+#if PY_MAJOR_VERSION >= 3 && PY_MINOR_VERSION >= 4
+    /* Python 3.4+: passing a list of memoryviews to np.array
+       fails with TypeError: expected an object with a buffer interface.
+       Note passing a single memoryview (not list-enclosed) makes it
+       interpreted differently by np.array (in all versions).
+       We incur the cost of copying `size` bytes, hopefully most records
+       aren't too large.
+
+       We're passing a bytes object, we'll get a 0-d array.
+       */
+    buffer = PyBytes_FromStringAndSize(pdata, size);
+    args = Py_BuildValue("(O)", buffer);
+#elif PY_MAJOR_VERSION >= 3
+    /* We're passing a list of memoryviews, we'll get a 1-element 1-d array. */
     buffer = PyMemoryView_FromMemory(pdata, size, PyBUF_WRITE);
+    args = Py_BuildValue("([O])", buffer);
 #else
+    /* We're passing a list of buffer objects, we'll get a 1-element 1-d array. */
     buffer = PyBuffer_FromMemory(pdata, size);
+    args = Py_BuildValue("([O])", buffer);
 #endif
-    if (!buffer) goto CLEANUP;
+    if (!args) goto CLEANUP;
 
     numpy = PyImport_ImportModuleNoBlock("numpy");
     if (!numpy) goto CLEANUP;
@@ -143,9 +159,6 @@ PyObject* Numba_recreate_record(void *pdata, int size, PyObject *dtype){
     numpy_record = PyObject_GetAttrString(numpy, "record");
     if (!numpy_record) goto CLEANUP;
 
-    args = Py_BuildValue("([O])", buffer);
-    if (!args) goto CLEANUP;
-
     dtypearg = Py_BuildValue("(OO)", numpy_record, dtype);
     if (!dtypearg) goto CLEANUP;
 
@@ -155,9 +168,14 @@ PyObject* Numba_recreate_record(void *pdata, int size, PyObject *dtype){
     aryobj = PyObject_Call(numpy_array, args, kwargs);
     if (!aryobj) goto CLEANUP;
 
-    index = Py_BuildValue("i", 0);
+#if PY_MAJOR_VERSION >= 3 && PY_MINOR_VERSION >= 4
+    /* We got a 0-d array: get the underlying scalar */
+    index = PyTuple_New(0);
+#else
+    /* We got a one-element 1-d array: get the single element */
+    index = PyLong_FromLong(0);
+#endif
     if (!index) goto CLEANUP;
-
     record = PyObject_GetItem(aryobj, index);
 
 CLEANUP:
