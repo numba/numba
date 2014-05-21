@@ -112,48 +112,39 @@ static
 PyObject* Numba_recreate_record(void *pdata, int size, PyObject *dtype){
     /*
     import numpy
-    buffer = memoryview(pdata, size)
-    aryobj = numpy.array(buffer, dtype=(numpy.record, dtype))
-    return aryobj[0]
+    buffer = bytearray(pdata, size)
+    aryobj = numpy.ndarray(shape=(),
+                           dtype=(numpy.record, dtype),
+                           buffer=buffer)
+    return aryobj[()]
     */
     PyObject *buffer = NULL;
     PyObject *numpy = NULL;
     PyObject *numpy_array = NULL;
     PyObject *numpy_record = NULL;
     PyObject *aryobj = NULL;
-    PyObject *args = NULL;
-    PyObject *kwargs = NULL;
     PyObject *dtypearg = NULL;
     PyObject *record = NULL;
-    PyObject *index = NULL;
+    PyObject *empty_tuple = NULL;
 
-#if PY_MAJOR_VERSION >= 3 && PY_MINOR_VERSION >= 4
-    /* Python 3.4+: passing a list of memoryviews to np.array
-       fails with TypeError: expected an object with a buffer interface.
-       Note passing a single memoryview (not list-enclosed) makes it
-       interpreted differently by np.array (in all versions).
-       We incur the cost of copying `size` bytes, hopefully most records
-       aren't too large.
+    empty_tuple = PyTuple_New(0);
+    if (!empty_tuple) goto CLEANUP;
 
-       We're passing a bytes object, we'll get a 0-d array.
+    /* Creating a bytearray makes a single copy of the memory region,
+       and the ndarray will be backed by that copy.  It also means that,
+       at the end, the record will keep the bytearray alive (as well as
+       the ndarray, which is probably a more heavy-weight object).
+
+       Another option is passing a memoryview() of the memory region
+       and then call ndarray.copy(). It is probably more costly.
        */
-    buffer = PyBytes_FromStringAndSize(pdata, size);
-    args = Py_BuildValue("(O)", buffer);
-#elif PY_MAJOR_VERSION >= 3
-    /* We're passing a list of memoryviews, we'll get a 1-element 1-d array. */
-    buffer = PyMemoryView_FromMemory(pdata, size, PyBUF_WRITE);
-    args = Py_BuildValue("([O])", buffer);
-#else
-    /* We're passing a list of buffer objects, we'll get a 1-element 1-d array. */
-    buffer = PyBuffer_FromMemory(pdata, size);
-    args = Py_BuildValue("([O])", buffer);
-#endif
-    if (!args) goto CLEANUP;
+    buffer = PyByteArray_FromStringAndSize(pdata, size);
+    if (!buffer) goto CLEANUP;
 
     numpy = PyImport_ImportModuleNoBlock("numpy");
     if (!numpy) goto CLEANUP;
 
-    numpy_array = PyObject_GetAttrString(numpy, "array");
+    numpy_array = PyObject_GetAttrString(numpy, "ndarray");
     if (!numpy_array) goto CLEANUP;
 
     numpy_record = PyObject_GetAttrString(numpy, "record");
@@ -162,32 +153,21 @@ PyObject* Numba_recreate_record(void *pdata, int size, PyObject *dtype){
     dtypearg = Py_BuildValue("(OO)", numpy_record, dtype);
     if (!dtypearg) goto CLEANUP;
 
-    kwargs = Py_BuildValue("{sO}", "dtype", dtypearg);
-    if (!kwargs) goto CLEANUP;
-
-    aryobj = PyObject_Call(numpy_array, args, kwargs);
+    aryobj = PyObject_CallFunctionObjArgs(
+        numpy_array, /* shape = */ empty_tuple, dtypearg, buffer, NULL);
     if (!aryobj) goto CLEANUP;
 
-#if PY_MAJOR_VERSION >= 3 && PY_MINOR_VERSION >= 4
     /* We got a 0-d array: get the underlying scalar */
-    index = PyTuple_New(0);
-#else
-    /* We got a one-element 1-d array: get the single element */
-    index = PyLong_FromLong(0);
-#endif
-    if (!index) goto CLEANUP;
-    record = PyObject_GetItem(aryobj, index);
+    record = PyObject_GetItem(aryobj, empty_tuple);
 
 CLEANUP:
+    Py_XDECREF(empty_tuple);
     Py_XDECREF(numpy);
     Py_XDECREF(numpy_array);
     Py_XDECREF(numpy_record);
     Py_XDECREF(aryobj);
-    Py_XDECREF(args);
-    Py_XDECREF(kwargs);
     Py_XDECREF(dtypearg);
     Py_XDECREF(buffer);
-    Py_XDECREF(index);
 
     return record;
 }
