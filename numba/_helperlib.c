@@ -8,6 +8,8 @@
 #else
     #include <stdint.h>
 #endif
+#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
+#include <numpy/ndarrayobject.h>
 
 
 /* provide 64-bit division function to 32-bit platforms */
@@ -108,86 +110,40 @@ void* Numba_extract_record_data(PyObject *recordobj) {
     return ptr;
 }
 
+/*
+ * Return a record instance with dtype as the record type, and backed
+ * by a copy of the memory area pointed to by (pdata, size).
+ */
 static
-PyObject* Numba_recreate_record(void *pdata, int size, PyObject *dtype){
-    /*
-    import numpy
-    buffer = memoryview(pdata, size)
-    aryobj = numpy.array(buffer, dtype=(numpy.record, dtype))
-    return aryobj[0]
-    */
-    PyObject *buffer = NULL;
+PyObject* Numba_recreate_record(void *pdata, int size, PyObject *dtype) {
     PyObject *numpy = NULL;
-    PyObject *numpy_array = NULL;
     PyObject *numpy_record = NULL;
     PyObject *aryobj = NULL;
-    PyObject *args = NULL;
-    PyObject *kwargs = NULL;
     PyObject *dtypearg = NULL;
     PyObject *record = NULL;
-    PyObject *index = NULL;
-
-#if PY_MAJOR_VERSION >= 3 && PY_MINOR_VERSION >= 4
-    /* Python 3.4+: passing a list of memoryviews to np.array
-       fails with TypeError: expected an object with a buffer interface.
-       Note passing a single memoryview (not list-enclosed) makes it
-       interpreted differently by np.array (in all versions).
-       We incur the cost of copying `size` bytes, hopefully most records
-       aren't too large.
-
-       We're passing a bytes object, we'll get a 0-d array.
-       */
-    buffer = PyBytes_FromStringAndSize(pdata, size);
-    args = Py_BuildValue("(O)", buffer);
-#elif PY_MAJOR_VERSION >= 3
-    /* We're passing a list of memoryviews, we'll get a 1-element 1-d array. */
-    buffer = PyMemoryView_FromMemory(pdata, size, PyBUF_WRITE);
-    args = Py_BuildValue("([O])", buffer);
-#else
-    /* We're passing a list of buffer objects, we'll get a 1-element 1-d array. */
-    buffer = PyBuffer_FromMemory(pdata, size);
-    args = Py_BuildValue("([O])", buffer);
-#endif
-    if (!args) goto CLEANUP;
+    PyArray_Descr *descr = NULL;
 
     numpy = PyImport_ImportModuleNoBlock("numpy");
     if (!numpy) goto CLEANUP;
 
-    numpy_array = PyObject_GetAttrString(numpy, "array");
-    if (!numpy_array) goto CLEANUP;
-
     numpy_record = PyObject_GetAttrString(numpy, "record");
     if (!numpy_record) goto CLEANUP;
 
-    dtypearg = Py_BuildValue("(OO)", numpy_record, dtype);
-    if (!dtypearg) goto CLEANUP;
+    dtypearg = PyTuple_Pack(2, numpy_record, dtype);
+    if (!dtypearg || !PyArray_DescrConverter(dtypearg, &descr))
+        goto CLEANUP;
 
-    kwargs = Py_BuildValue("{sO}", "dtype", dtypearg);
-    if (!kwargs) goto CLEANUP;
-
-    aryobj = PyObject_Call(numpy_array, args, kwargs);
+    /* This steals a reference to descr, so we don't have to DECREF it */
+    aryobj = PyArray_FromString(pdata, size, descr, 1, NULL);
     if (!aryobj) goto CLEANUP;
 
-#if PY_MAJOR_VERSION >= 3 && PY_MINOR_VERSION >= 4
-    /* We got a 0-d array: get the underlying scalar */
-    index = PyTuple_New(0);
-#else
-    /* We got a one-element 1-d array: get the single element */
-    index = PyLong_FromLong(0);
-#endif
-    if (!index) goto CLEANUP;
-    record = PyObject_GetItem(aryobj, index);
+    record = PySequence_GetItem(aryobj, 0);
 
 CLEANUP:
     Py_XDECREF(numpy);
-    Py_XDECREF(numpy_array);
     Py_XDECREF(numpy_record);
     Py_XDECREF(aryobj);
-    Py_XDECREF(args);
-    Py_XDECREF(kwargs);
     Py_XDECREF(dtypearg);
-    Py_XDECREF(buffer);
-    Py_XDECREF(index);
 
     return record;
 }
@@ -284,6 +240,8 @@ MOD_INIT(_helperlib) {
     MOD_DEF(m, "_helperlib", "No docs", ext_methods)
     if (m == NULL)
         return MOD_ERROR_VAL;
+
+    import_array();
 
     return MOD_SUCCESS_VAL(m);
 }
