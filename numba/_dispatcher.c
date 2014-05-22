@@ -187,7 +187,7 @@ static PyObject* TheDispatcherModule = NULL; /* Stolen reference */
 static PyObject* TheTypeOfFunc = NULL;        /* Stolen reference */
 
 static
-PyObject *GetDispatcherModule() {
+PyObject *GetDispatcherModule(void) {
     if(!TheDispatcherModule) {
         TheDispatcherModule = PyImport_ImportModule("numba.dispatcher");
         Py_XDECREF(TheDispatcherModule);
@@ -197,7 +197,7 @@ PyObject *GetDispatcherModule() {
 
 
 static
-PyObject *GetTypeOfFunc() {
+PyObject *GetTypeOfFunc(void) {
     if(!TheTypeOfFunc) {
         TheTypeOfFunc = PyObject_GetAttrString(GetDispatcherModule(),
                                                "typeof_pyval");
@@ -355,7 +355,11 @@ void explain_ambiguous(PyObject *dispatcher, PyObject *args, PyObject *kws) {
         return;
     }
     result = PyObject_Call(callback, args, kws);
-    assert(result == NULL && "_explain_ambiguous must raise an exception");
+    if (result != NULL) {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "_explain_ambiguous must raise an exception");
+        Py_DECREF(result);
+    }
     Py_XDECREF(callback);
 }
 
