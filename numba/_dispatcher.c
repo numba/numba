@@ -183,38 +183,16 @@ Dispatcher_DisableCompile(DispatcherObject *self, PyObject *args)
 //    return PyLong_FromVoidPtr(out);
 //}
 
-static PyObject* TheDispatcherModule = NULL; /* Stolen reference */
-static PyObject* TheTypeOfFunc = NULL;        /* Stolen reference */
+static PyObject *str_typeof_pyval = NULL;
 
 static
-PyObject *GetDispatcherModule(void) {
-    if(!TheDispatcherModule) {
-        TheDispatcherModule = PyImport_ImportModule("numba.dispatcher");
-        Py_XDECREF(TheDispatcherModule);
-    }
-    return TheDispatcherModule;
-}
-
-
-static
-PyObject *GetTypeOfFunc(void) {
-    if(!TheTypeOfFunc) {
-        TheTypeOfFunc = PyObject_GetAttrString(GetDispatcherModule(),
-                                               "typeof_pyval");
-
-        Py_XDECREF(TheTypeOfFunc);
-    }
-    return TheTypeOfFunc;
-}
-
-
-static
-int typecode_fallback(dispatcher_t *dispatcher, PyObject *val) {
+int typecode_fallback(DispatcherObject *dispatcher, PyObject *val) {
     PyObject *tmptype, *tmpcode;
     int typecode;
 
     // Go back to the interpreter
-    tmptype = PyObject_CallFunctionObjArgs(GetTypeOfFunc(), val, NULL);
+    tmptype = PyObject_CallMethodObjArgs((PyObject *) dispatcher,
+                                         str_typeof_pyval, val, NULL);
     if (!tmptype) {
         return -1;
     }
@@ -278,7 +256,7 @@ static int dtype_num_to_typecode(int type_num) {
 
 
 static
-int typecode_ndarray(dispatcher_t *dispatcher, PyArrayObject *ary) {
+int typecode_ndarray(DispatcherObject *dispatcher, PyArrayObject *ary) {
     int typecode;
     int dtype;
     int ndim = PyArray_NDIM(ary);
@@ -311,7 +289,7 @@ FALLBACK:
 }
 
 static
-int typecode_arrayscalar(dispatcher_t *dispatcher, PyObject* aryscalar) {
+int typecode_arrayscalar(DispatcherObject *dispatcher, PyObject* aryscalar) {
     int typecode;
     PyArray_Descr* descr;
     descr = PyArray_DescrFromScalar(aryscalar);
@@ -326,7 +304,7 @@ int typecode_arrayscalar(dispatcher_t *dispatcher, PyObject* aryscalar) {
 
 
 static
-int typecode(dispatcher_t *dispatcher, PyObject *val) {
+int typecode(DispatcherObject *dispatcher, PyObject *val) {
     PyTypeObject *tyobj = val->ob_type;
     if (tyobj == &PyInt_Type || tyobj == &PyLong_Type)
         return tc_intp;
@@ -393,7 +371,7 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
 
     for (i = 0; i < argct; ++i) {
         tmptype = PySequence_Fast_GET_ITEM(args, i);
-        tys[i] = typecode(self->dispatcher, tmptype);
+        tys[i] = typecode(self, tmptype);
         if (tys[i] == -1) goto CLEANUP;
     }
 
@@ -521,6 +499,10 @@ MOD_INIT(_dispatcher) {
 
     /* initialize cached_arycode to all ones (in bits) */
     memset(cached_arycode, 0xFF, sizeof(cached_arycode));
+
+    str_typeof_pyval = PyString_InternFromString("typeof_pyval");
+    if (str_typeof_pyval == NULL)
+        return MOD_ERROR_VAL;
 
     DispatcherType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&DispatcherType) < 0) {

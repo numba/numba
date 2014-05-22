@@ -173,7 +173,7 @@ class local(Stub):
 
 def const_array_like(ndarray):
     fname = "ptx.cmem.arylike"
-    aryty = dispatcher.typeof_pyval(ndarray)
+    aryty = dispatcher.Overloaded.typeof_pyval(ndarray)
     sig = typing.signature(aryty, aryty)
     return ir.Intrinsic(fname, sig, args=[ndarray])
 
