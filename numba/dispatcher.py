@@ -74,8 +74,10 @@ class Overloaded(_dispatcher.Dispatcher):
         if self._compiling:
             raise RuntimeError("Compiler re-entrant")
         self._compiling = True
-        yield
-        self._compiling = False
+        try:
+            yield
+        finally:
+            self._compiling = False
 
     @property
     def is_compiling(self):
