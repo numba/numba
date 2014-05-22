@@ -111,7 +111,7 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
 
     if not status.use_python_mode:
         with _fallback_context(status):
-            legialize_given_types(args, return_type)
+            legalize_given_types(args, return_type)
             # Type inference
             typemap, return_type, calltypes = type_inference_stage(typingctx,
                                                                    interp,
@@ -194,7 +194,7 @@ def _is_nopython_types(t):
     return t != types.pyobject and not isinstance(t, types.Dummy)
 
 
-def legialize_given_types(args, return_type):
+def legalize_given_types(args, return_type):
     # Filter argument types
     for i, a in enumerate(args):
         if not _is_nopython_types(a):
