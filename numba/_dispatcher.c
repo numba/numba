@@ -10,7 +10,7 @@
 
 typedef struct DispatcherObject{
     PyObject_HEAD
-    void *dispatcher;
+    dispatcher_t *dispatcher;
     int can_compile;        /* Can auto compile */
     PyCFunctionWithKeywords firstdef, fallbackdef;
 } DispatcherObject;
@@ -209,7 +209,7 @@ PyObject *GetTypeOfFunc(void) {
 
 
 static
-int typecode_fallback(void *dispatcher, PyObject *val) {
+int typecode_fallback(dispatcher_t *dispatcher, PyObject *val) {
     PyObject *tmptype, *tmpcode;
     int typecode;
 
@@ -278,7 +278,7 @@ static int dtype_num_to_typecode(int type_num) {
 
 
 static
-int typecode_ndarray(void *dispatcher, PyArrayObject *ary) {
+int typecode_ndarray(dispatcher_t *dispatcher, PyArrayObject *ary) {
     int typecode;
     int dtype;
     int ndim = PyArray_NDIM(ary);
@@ -311,7 +311,7 @@ FALLBACK:
 }
 
 static
-int typecode_arrayscalar(void *dispatcher, PyObject* aryscalar) {
+int typecode_arrayscalar(dispatcher_t *dispatcher, PyObject* aryscalar) {
     int typecode;
     PyArray_Descr* descr;
     descr = PyArray_DescrFromScalar(aryscalar);
@@ -326,7 +326,7 @@ int typecode_arrayscalar(void *dispatcher, PyObject* aryscalar) {
 
 
 static
-int typecode(void *dispatcher, PyObject *val) {
+int typecode(dispatcher_t *dispatcher, PyObject *val) {
     PyTypeObject *tyobj = val->ob_type;
     if (tyobj == &PyInt_Type || tyobj == &PyLong_Type)
         return tc_intp;
