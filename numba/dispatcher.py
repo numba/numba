@@ -123,7 +123,7 @@ class Overloaded(_dispatcher.Dispatcher):
 
     def _compile_and_call(self, *args, **kws):
         assert not kws
-        sig = tuple([typeof_pyval(a) for a in args])
+        sig = tuple([self.typeof_pyval(a) for a in args])
         self.jit(sig)
         return self(*args, **kws)
 
@@ -136,54 +136,53 @@ class Overloaded(_dispatcher.Dispatcher):
 
     def _explain_ambiguous(self, *args, **kws):
         assert not kws, "kwargs not handled"
-        args = tuple([typeof_pyval(a) for a in args])
+        args = tuple([self.typeof_pyval(a) for a in args])
         resolve_overload(self.targetdescr.typing_context, self.py_func,
                          tuple(self.overloads.keys()), args, kws)
 
     def __repr__(self):
         return "%s(%s)" % (type(self).__name__, self.py_func)
 
+    @classmethod
+    def typeof_pyval(cls, val):
+        """
+        This is called from numba._dispatcher as a fallback if the native code
+        cannot decide the type.
+        """
+        if isinstance(val, numpy.ndarray):
+            # TODO complete dtype mapping
+            dtype = numpy_support.from_dtype(val.dtype)
+            ndim = val.ndim
+            if ndim == 0:
+                # is array scalar
+                return numpy_support.from_dtype(val.dtype)
+            layout = numpy_support.map_layout(val)
+            aryty = types.Array(dtype, ndim, layout)
+            return aryty
+
+        # The following are handled in the C version for exact type match
+        # So test these later
+        elif isinstance(val, INT_TYPES):
+            return types.int64
+
+        elif isinstance(val, float):
+            return types.float64
+
+        elif isinstance(val, complex):
+            return types.complex128
+
+        elif numpy_support.is_arrayscalar(val):
+            # Array scalar
+            return numpy_support.from_dtype(numpy.dtype(type(val)))
+
+        # Other object
+        else:
+            return types.pyobject
 
 
 INT_TYPES = (int,)
 if PYVERSION < (3, 0):
     INT_TYPES += (long,)
-
-
-def typeof_pyval(val):
-    """
-    This is called from numba._dispatcher as a fallback if the native code
-    cannot decide the type.
-    """
-    if isinstance(val, numpy.ndarray):
-        # TODO complete dtype mapping
-        dtype = numpy_support.from_dtype(val.dtype)
-        ndim = val.ndim
-        if ndim == 0:
-            # is array scalar
-            return numpy_support.from_dtype(val.dtype)
-        layout = numpy_support.map_layout(val)
-        aryty = types.Array(dtype, ndim, layout)
-        return aryty
-
-    # The following are handled in the C version for exact type match
-    # So test these later
-    elif isinstance(val, INT_TYPES):
-        return types.int64
-
-    elif isinstance(val, float):
-        return types.float64
-
-    elif isinstance(val, complex):
-        return types.complex128
-
-    elif numpy_support.is_arrayscalar(val):
-        # Array scalar
-        return numpy_support.from_dtype(numpy.dtype(type(val)))
-
-    # Other object
-    else:
-        return types.pyobject
 
 
 class LiftedLoop(Overloaded):
