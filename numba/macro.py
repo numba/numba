@@ -58,7 +58,7 @@ def expand_macros_in_block(constants, block):
                 # Rewrite get attribute to macro call
                 # Non-calling macro must be triggered by get attribute
                 base = constants.get(rhs.value.name)
-                if base:
+                if base is not None:
                     value = getattr(base, rhs.attr)
                     if isinstance(value, Macro):
                         macro = value
