@@ -528,7 +528,7 @@ class PythonAPI(object):
             return self.to_native_array(typ, obj)
 
         elif isinstance(typ, types.Record):
-            ptr = self.extract_recorddata(obj)
+            ptr = self.extract_record_data(obj)
             with cgutils.if_unlikely(self.builder,
                                      cgutils.is_null(self.builder, ptr)):
                 self.builder.ret(ptr)
@@ -664,7 +664,7 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="NumbaComplexAdaptor")
         return self.builder.call(fn, [cobj, cmplx])
 
-    def extract_recorddata(self, obj):
+    def extract_record_data(self, obj):
         fnty = Type.function(Type.pointer(Type.int(8)), [self.pyobj])
         fn = self._get_function(fnty, name="NumbaExtractRecordData")
         return self.builder.call(fn, [obj])
