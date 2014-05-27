@@ -70,15 +70,14 @@ typedef struct {
 Get data address of record data buffer
 */
 static
-void* Numba_extract_record_data(PyObject *recordobj) {
+void* Numba_extract_record_data(PyObject *recordobj, Py_buffer *pbuf) {
     PyObject *attrdata;
     void *ptr;
-    Py_buffer buf;
 
     attrdata = PyObject_GetAttrString(recordobj, "data");
     if (!attrdata) return NULL;
 
-    if (-1 == PyObject_GetBuffer(attrdata, &buf, 0)){
+    if (-1 == PyObject_GetBuffer(attrdata, pbuf, 0)){
         #if PY_MAJOR_VERSION >= 3
             return NULL;
         #else
@@ -104,7 +103,7 @@ void* Numba_extract_record_data(PyObject *recordobj) {
             }
         #endif
     } else {
-        ptr = buf.buf;
+        ptr = pbuf->buf;
     }
     Py_DECREF(attrdata);
     return ptr;
@@ -173,7 +172,6 @@ uint64_t Numba_fptoui(double x) {
     return (uint64_t)x;
 }
 
-
 #define EXPOSE(Fn, Sym) static void* Sym(void) \
                         { return PyLong_FromVoidPtr(&Fn); }
 EXPOSE(Numba_sdiv, get_sdiv)
@@ -183,6 +181,7 @@ EXPOSE(Numba_urem, get_urem)
 EXPOSE(Numba_cpow, get_cpow)
 EXPOSE(Numba_to_complex, get_complex_adaptor)
 EXPOSE(Numba_extract_record_data, get_extract_record_data)
+EXPOSE(PyBuffer_Release, get_release_record_buffer)
 EXPOSE(Numba_recreate_record, get_recreate_record)
 EXPOSE(Numba_round_even, get_round_even)
 EXPOSE(Numba_roundf_even, get_roundf_even)
@@ -219,6 +218,7 @@ static PyMethodDef ext_methods[] = {
     declmethod(get_cpow),
     declmethod(get_complex_adaptor),
     declmethod(get_extract_record_data),
+    declmethod(get_release_record_buffer),
     declmethod(get_recreate_record),
     declmethod(get_round_even),
     declmethod(get_roundf_even),
@@ -242,6 +242,9 @@ MOD_INIT(_helperlib) {
         return MOD_ERROR_VAL;
 
     import_array();
+
+    PyObject_SetAttrString(m, "py_buffer_size",
+                           PyLong_FromLong(sizeof(Py_buffer)));
 
     return MOD_SUCCESS_VAL(m);
 }
