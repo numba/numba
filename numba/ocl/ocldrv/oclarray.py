@@ -18,6 +18,7 @@ from .types import *
 from ... import dummyarray
 import numpy as np
 from . import oclmem
+from .devices import get_ocl_context, get_context
 
 try:
     long
@@ -57,14 +58,14 @@ def _array_desc_ctype(ndims):
 
     return c_array
 
-def _create_ocl_desc(context, shape, strides):
+def _create_ocl_desc(shape, strides):
     """creates an on-context memory buffer for an array descriptor"""
     desc = _array_desc_ctype(len(shape))()
     desc.shape = shape
     desc.strides = strides
     sz = ctypes.sizeof(desc)
     ptr = ctypes.addressof(desc)
-    buff = context.create_buffer_and_copy(sz, ptr)
+    buff = get_ocl_context().create_buffer_and_copy(sz, ptr)
     return buff
 
 class OpenCLNDArrayBase(object):
@@ -140,8 +141,7 @@ class OpenCLNDArrayBase(object):
         If `ary` is an in-device array, perform a device-to-device transfer.
         Otherwise, perform a a host-to-device transfer.
         """
-        if queue is None:
-            q = self._data.context.create_command_queue(self._data.context.devices[0])
+        q = get_context() if queue is None else queue
 
         if oclmem.is_device_memory(ary):
             sz = min(self._memobject_.size, ary._memobject_.size)
@@ -151,7 +151,7 @@ class OpenCLNDArrayBase(object):
             q.enqueue_write_buffer(self._data, 0, sz, oclmem.host_pointer(ary))
 
 
-    def copy_to_host(self, ary=None, queue=None):
+    def copy_to_host(self, ary=None):
         """Copy ``self`` to ``ary`` or create a new numpy ndarray
         if ``ary`` is ``None``.
 
@@ -179,11 +179,7 @@ class OpenCLNDArrayBase(object):
                 raise TypeError('buffer sizes do not match: device: {0} host: {1}'.format(self._data.size, ary.nbytes))
             hostary = ary
 
-        if queue is None:
-            ctxt = self._data.context
-            queue = ctxt.create_command_queue(ctxt.devices[0])
-
-        queue.enqueue_read_buffer(self._data, 0, self._data.size, hostary.ctypes.data)
+        get_context().enqueue_read_buffer(self._data, 0, self._data.size, hostary.ctypes.data)
 
         if ary is None:
             hostary = np.ndarray(shape=self.shape, strides=self.strides,
@@ -207,7 +203,7 @@ class OpenCLNDArrayBase(object):
         for begin in range(0, total, section):
             end = min(begin + section, total)
             shape = (end - begin,)
-            cl_desc = _create_ocl_desc(ctxt, shape, strides)
+            cl_desc = _create_ocl_desc(shape, strides)
             cl_data = self._data.create_region(begin * itemsize, (end-begin) * itemsize)
             yield OpenCLNDArray(shape, strides, self.dtype, cl_desc, cl_data)
 
@@ -229,7 +225,7 @@ class OpenCLNDArray(OpenCLNDArrayBase):
 
         if extents == [self._dummy.extent]:
             ctxt = self._desc.context
-            cl_desc = _create_ocl_desc(ctxt, newarr.shape, newarr.strides)
+            cl_desc = _create_ocl_desc(newarr.shape, newarr.strides)
             return cls(newarr.shape, newarr.strides, self.dtype, cl_desc, self._data)
         else:
             raise NotImplementedError("operation requires copying")
@@ -244,7 +240,7 @@ class OpenCLNDArray(OpenCLNDArrayBase):
 
         if extents == [self._dummy.extent]:
             ctxt = self._desc.context
-            cl_desc = _create_ocl_desc(ctxt, newarr.shape, newarr.strides)
+            cl_desc = _create_ocl_desc(newarr.shape, newarr.strides)
             return cls(newarr.shape, newarr.strides, self.dtype,
                        cl_desc, self._data)
         else:
@@ -268,12 +264,12 @@ class OpenCLNDArray(OpenCLNDArrayBase):
                                       hostary.ctypes.data)
                 return hostary[0]
             else:
-                new_desc = _create_ocl_desc(self._data.context, arr.shape, arr.strides)
+                new_desc = _create_ocl_desc(arr.shape, arr.strides)
                 new_data = self._data.create_region(extents[0], extents[1]-extents[0])
                 return cls(arr.shape, arr.strides, self.dtype, new_desc, new_data)
         else:
             new_data = self._data.create_region(arr.extent.begin, arr.extent.end - arr.extent.begin)
-            new_desc = _create_ocl_desc(self._data.context, arr.shape, arr.strides)
+            new_desc = _create_ocl_desc(arr.shape, arr.strides)
             return cls(arr.shape, arr.strides, self.dtype, new_desc, new_data)
 
 
@@ -300,24 +296,24 @@ class MappedNDArray(OpenCLNDArrayBase, np.ndarray):
 
 # OpenCL array constructors ############################################
 
-def from_array(ary, ctxt):
+def from_array(ary):
     """
     Create an OpenCLArray object based on Numpy's array 'ary'
     """
     if ary.ndim == 0:
         ary = ary.reshape(1)
 
-    cl_desc = _create_ocl_desc(ctxt, ary.shape, ary.strides)
-    cl_data = ctxt.create_buffer_and_copy(ary.nbytes, ary.ctypes.data)
+    cl_desc = _create_ocl_desc(ary.shape, ary.strides)
+    cl_data = get_ocl_context().create_buffer_and_copy(ary.nbytes, ary.ctypes.data)
     return OpenCLNDArray(ary.shape, ary.strides, ary.dtype, cl_desc, cl_data)
 
-def from_array_like(ary, ctxt):
+def from_array_like(ary):
     "Create a DeviceNDArray object that is like ary."
     if ary.ndim == 0:
         ary = ary.reshape(1)
 
-    cl_desc = _create_ocl_desc(ctxt, ary.shape, ary.strides)
-    cl_data = ctxt.create_buffer(ary.nbytes)
+    cl_desc = _create_ocl_desc(ary.shape, ary.strides)
+    cl_data = get_ocl_context().create_buffer(ary.nbytes)
     return OpenCLNDArray(ary.shape, ary.strides, ary.dtype, cl_desc, cl_data)
 
 errmsg_contiguous_buffer = ("Array contains non-contiguous buffer and cannot "

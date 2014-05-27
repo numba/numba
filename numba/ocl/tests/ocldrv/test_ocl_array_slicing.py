@@ -4,22 +4,15 @@ from numba.ocl.ocldrv import cl
 import unittest
 
 class TestOpenCLArrayIndexing(unittest.TestCase):
-    def setUp(self):
-        self.context = cl.create_context(cl.default_platform,
-                                         [cl.default_platform.default_device])
-
-    def tearDown(self):
-        del self.context
-
     def test_index_1d(self):
         arr = np.arange(10)
-        darr = ocl.to_device(self.context, arr)
+        darr = ocl.to_device(arr)
         for i in range(arr.size):
             self.assertEqual(arr[i], darr[i])
 
     def test_index_2d(self):
         arr = np.arange(9).reshape(3, 3)
-        darr = ocl.to_device(self.context, arr)
+        darr = ocl.to_device(arr)
 
         for i in range(arr.shape[0]):
             for j in range(arr.shape[1]):
@@ -27,7 +20,7 @@ class TestOpenCLArrayIndexing(unittest.TestCase):
 
     def test_index_3d(self):
         arr = np.arange(3 ** 3).reshape(3, 3, 3)
-        darr = ocl.to_device(self.context, arr)
+        darr = ocl.to_device(arr)
 
         for i in range(arr.shape[0]):
             for j in range(arr.shape[1]):
@@ -36,16 +29,9 @@ class TestOpenCLArrayIndexing(unittest.TestCase):
 
 
 class TestOpenCLArraySlicing(unittest.TestCase):
-    def setUp(self):
-        self.context = cl.create_context(cl.default_platform,
-                                         [cl.default_platform.default_device])
-
-    def tearDown(self):
-        del self.context
-
     def test_prefix_1d(self):
         arr = np.arange(5)
-        darr = ocl.to_device(self.context, arr)
+        darr = ocl.to_device(arr)
         for i in range(arr.size):
             expect = arr[i:]
             got = darr[i:].copy_to_host()
@@ -53,7 +39,7 @@ class TestOpenCLArraySlicing(unittest.TestCase):
 
     def test_prefix_2d(self):
         arr = np.arange(3 ** 2).reshape(3, 3)
-        darr = ocl.to_device(self.context, arr)
+        darr = ocl.to_device(arr)
         for i in range(arr.shape[0]):
             for j in range(arr.shape[1]):
                 expect = arr[i:, j:]

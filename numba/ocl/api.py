@@ -13,6 +13,7 @@ from __future__ import print_function, absolute_import, division
 from . import ocldrv
 from .ocldrv import oclarray, oclmem, devices
 from .. import mviewbuf
+from .ocldrv.devices import get_ocl_context
 import numpy as np
 import contextlib
 
@@ -20,6 +21,9 @@ try:
     long
 except NameError:
     long = int
+
+require_context = devices.require_context
+current_context = devices.get_context
 
 # Array to device migration ############################################
 
@@ -75,31 +79,30 @@ def to_device(ary, stream=None, copy=True, to=None):
 
     if to is None:
         if copy:
-            devarray = oclarray.from_array(ary, ctxt)
+            devarray = oclarray.from_array(ary)
         else:
-            devarray = oclarray.from_array_like(ary, ctxt)
+            devarray = oclarray.from_array_like(ary)
     else:
         # to is specified, just copy the array
         assert copy
         oclarray.require_ocl_ndarray(to)
         devarray = to
         if copy:
-            devarray.copy_to_device(ary, queue=current_queue())
+            devarray.copy_to_device(ary, queue=ctxt)
 
     return devarray
 
 
-def device_array(context_or_queue, shape, dtype=np.float, strides=None, order='C'):
+def device_array(shape, dtype=np.float, strides=None, order='C'):
     """device_array(shape, dtype=np.float, strides=None, order='C')
 
     Allocate and empty device array. Similar to numpy.empty()
     """
     assert((strides is None) or (len(strides) == len(shape)))
-    ctxt = context_or_queue if isinstance(context_or_queue, ocldrv.Context) else context_or_queue.context
     shape, strides, dtype = _prepare_shape_strides_dtype(shape, strides, dtype, order)
     s, e = mviewbuf.memoryview_get_extents_info(shape, strides, len(shape), dtype.itemsize)
-    cl_desc = oclarray._create_ocl_desc(ctxt, shape, strides)
-    cl_data = ctxt.create_buffer(e-s)
+    cl_desc = oclarray._create_ocl_desc(shape, strides)
+    cl_data = get_ocl_context().create_buffer(e-s)
     return oclarray.OpenCLNDArray(shape, strides, dtype, cl_desc, cl_data)
 
 

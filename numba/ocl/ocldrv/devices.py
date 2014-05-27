@@ -9,13 +9,16 @@ import functools
 import weakref
 
 platform = None
+_ocl_context = None
+_gpustack = None
 gpus = []
 
-def init_gpus():
+def _init_gpus():
     """
     Populates global "gpus" as a list of GPU objects
+    This can be seen as a lazy constructor for the module
     """
-    global platform, gpus
+    global platform, gpus, _ocl_context, _gpustack
 
     if gpus:
         assert len(gpus)
@@ -24,10 +27,26 @@ def init_gpus():
     if platform is None:
         platform = cl.default_platform
 
-    for idx, dev in enumerate(platform.all_devices):
+    _gpustack = servicelib.TLStack()
+    all_devs = platform.all_devices
+    _ocl_context = cl.create_context(platform, all_devs)
+
+    for idx, dev in enumerate(all_devs):
         gpu = GPU(dev)
         gpus.append(gpu)
         globals()['gpu{0}'.format(idx)] = gpu
+
+def _cleanup_gpus():
+    """
+    Destructor for the module
+    """
+    global gpus, platform, _ocl_context, _gpustack
+    for idx in range(len(gpus)):
+        del globals()['gpu{0}'.format(idx)]
+    gpus = None
+    _ocl_context = None
+    _gpustack = None
+    platform = None
 
 
 class GPU(object):
@@ -55,8 +74,16 @@ class GPU(object):
 
     @property
     def context(self):
+        """
+        In OpenCL this context is actually a queue associated to this
+        device
+        """
         if self._context is None:
-            self._context = self._gpu.create_context()
+            try:
+                self._context = _ocl_context.create_command_queue(self._gpu)
+            except AttributeError as e:
+                print (e)
+
         return self._context
 
     def push(self):
@@ -80,21 +107,26 @@ class GPU(object):
             self._context.reset()
             self._context = None
 
+def get_ocl_context():
+    _init_gpus()
+    return _ocl_context
+
 def get_gpu(i):
-    init_gpus()
+    _init_gpus()
     return gpus[i]
 
-_gpu_stack = servicelib.TLStack()
+
 
 def get_context(devnum=0):
+    _init_gpus()
     if not _gpustack:
-        _gpustack.push(get_gpu(devnumb).context)
+        _gpustack.push(get_gpu(devnum).context)
 
     return _gpustack.top
 
 def require_context(fn):
     @functools.wraps(fn)
-    def _require_cuda_context(*args, **kws):
+    def _require_ocl_context(*args, **kws):
         get_context()
         return fn(*args, **kws)
 
@@ -113,11 +145,5 @@ def reset():
 #
 # this seems a lighter weight to using weakproxies.
 import atexit
-def _cleanup():
-    global gpus, platform
-    for idx, _ in enumerate(platform.all_devices):
-        del globals()['gpu{0}'.format(idx)]
-    gpus = None
-    platform = None
 
-atexit.register(_cleanup)
+atexit.register(_cleanup_gpus) #register destructor

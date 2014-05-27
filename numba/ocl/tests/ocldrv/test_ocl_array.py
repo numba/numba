@@ -6,38 +6,29 @@ import unittest
 import numpy as np
 
 class TestOCLNDArray(unittest.TestCase):
-    def setUp(self):
-        self.context = cl.create_context(cl.default_platform,
-                                         [cl.default_platform.default_device])
-        self.queue = self.context.create_command_queue(self.context.devices[0])
-
-    def tearDown(self):
-        del self.queue
-        del self.context
-
     def test_device_array_interface(self):
-        dary = ocl.device_array(self.context, shape=100)
+        dary = ocl.device_array(shape=100)
         oclarray.verify_ocl_ndarray_interface(dary)
 
         ary = np.empty(100)
-        dary = ocl.to_device(self.context, ary)
+        dary = ocl.to_device(ary)
         oclarray.verify_ocl_ndarray_interface(dary)
 
         ary = np.asarray(1.234)
-        dary = ocl.to_device(self.context, ary)
+        dary = ocl.to_device(ary)
         self.assertTrue(dary.ndim == 1)
         oclarray.verify_ocl_ndarray_interface(dary)
 
     def test_devicearray_no_copy(self):
         array = np.arange(100, dtype=np.float32)
-        ocl.to_device(self.context, array, copy=False)
+        ocl.to_device(array, copy=False)
 
     def test_devicearray(self):
         array = np.arange(100, dtype=np.int32)
         original = array.copy()
-        da = ocl.to_device(self.context, array)
+        da = ocl.to_device(array)
         array[:] = 0
-        da.copy_to_host(array, self.queue)
+        da.copy_to_host(array)
 
         self.assertTrue((array == original).all())
 
@@ -45,7 +36,7 @@ class TestOCLNDArray(unittest.TestCase):
         N = 100
         array = np.arange(N, dtype=np.int32)
         original = array.copy()
-        da = ocl.to_device(self.context, array)
+        da = ocl.to_device(array)
         left, right = da.split(N // 2)
 
         array[:] = 0
@@ -61,9 +52,9 @@ class TestOCLNDArray(unittest.TestCase):
         N = 100
         array = np.arange(N, dtype=np.int32)
         original = array.copy()
-        da = ocl.to_device(self.context, array)
-        ocl.to_device(self.context, array * 2, to=da)
-        da.copy_to_host(array, self.queue)
+        da = ocl.to_device(array)
+        ocl.to_device(array * 2, to=da)
+        da.copy_to_host(array)
         self.assertTrue((array == original * 2).all())
 
 

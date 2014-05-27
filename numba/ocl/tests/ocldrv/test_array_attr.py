@@ -4,22 +4,13 @@ from numba.ocl.ocldrv import cl
 import unittest
 
 class TestArrayAttr(unittest.TestCase):
-    def setUp(self):
-        self.context = cl.create_context(cl.default_platform, 
-                                         [cl.default_platform.default_device])
-
-    def tearDown(self):
-        del(self.context)
-
-
     def test_contigous_2d(self):
         ary = np.arange(10)
         cary = ary.reshape(2, 5)
         fary = np.asfortranarray(cary)
-        ctxt = self.context
 
-        dcary = ocl.to_device(ctxt, cary)
-        dfary = ocl.to_device(ctxt, fary)
+        dcary = ocl.to_device(cary)
+        dfary = ocl.to_device(fary)
         self.assertTrue(dcary.is_c_contiguous())
         self.assertTrue(not dfary.is_c_contiguous())
         self.assertTrue(not dcary.is_f_contiguous())
@@ -29,10 +20,9 @@ class TestArrayAttr(unittest.TestCase):
         ary = np.arange(20)
         cary = ary.reshape(2, 5, 2)
         fary = np.asfortranarray(cary)
-        ctxt = self.context
 
-        dcary = ocl.to_device(ctxt, cary)
-        dfary = ocl.to_device(ctxt, fary)
+        dcary = ocl.to_device(cary)
+        dfary = ocl.to_device(fary)
         self.assertTrue(dcary.is_c_contiguous())
         self.assertTrue(not dfary.is_c_contiguous())
         self.assertTrue(not dcary.is_f_contiguous())
@@ -42,10 +32,9 @@ class TestArrayAttr(unittest.TestCase):
         ary = np.arange(60)
         cary = ary.reshape(2, 5, 2, 3)
         fary = np.asfortranarray(cary)
-        ctxt = self.context
 
-        dcary = ocl.to_device(ctxt, cary)
-        dfary = ocl.to_device(ctxt, fary)
+        dcary = ocl.to_device(cary)
+        dfary = ocl.to_device(fary)
         self.assertTrue(dcary.is_c_contiguous())
         self.assertTrue(not dfary.is_c_contiguous())
         self.assertTrue(not dcary.is_f_contiguous())
@@ -55,9 +44,8 @@ class TestArrayAttr(unittest.TestCase):
         ary = np.arange(60)
         reshaped = ary.reshape(2, 5, 2, 3)
         expect = reshaped.ravel(order='C')
-        ctxt = self.context
 
-        dary = ocl.to_device(ctxt, reshaped)
+        dary = ocl.to_device(reshaped)
         dflat = dary.ravel()
         flat = dflat.copy_to_host()
         self.assertTrue(flat.ndim == 1)
@@ -67,9 +55,8 @@ class TestArrayAttr(unittest.TestCase):
         ary = np.arange(60)
         reshaped = np.asfortranarray(ary.reshape(2, 5, 2, 3))
         expect = reshaped.ravel(order='F')
-        ctxt = self.context
 
-        dary = ocl.to_device(ctxt, reshaped)
+        dary = ocl.to_device(reshaped)
         dflat = dary.ravel(order='F')
         flat = dflat.copy_to_host()
         self.assertTrue(flat.ndim == 1)
@@ -78,9 +65,8 @@ class TestArrayAttr(unittest.TestCase):
     def test_reshape_c(self):
         ary = np.arange(10)
         expect = ary.reshape(2, 5)
-        ctxt = self.context
 
-        dary = ocl.to_device(ctxt, ary)
+        dary = ocl.to_device(ary)
         dary_reshaped = dary.reshape(2, 5)
         got = dary_reshaped.copy_to_host()
         self.assertTrue(np.all(expect == got))
@@ -88,9 +74,8 @@ class TestArrayAttr(unittest.TestCase):
     def test_reshape_f(self):
         ary = np.arange(10)
         expect = ary.reshape(2, 5, order='F')
-        ctxt = self.context
 
-        dary = ocl.to_device(ctxt, ary)
+        dary = ocl.to_device(ary)
         dary_reshaped = dary.reshape(2, 5, order='F')
         got = dary_reshaped.copy_to_host()
         self.assertTrue(np.all(expect == got))
