@@ -70,7 +70,7 @@ Numba
 
    spec.rst
 
-**Developer Documentation (outedated Numba <0.11)**
+**Developer Documentation (outdated Numba <0.11)**
 
 .. toctree::
    :titlesonly:
