@@ -158,7 +158,7 @@ def get_current_device():
     return current_context().device
 
 def list_devices():
-    devices.init_gpus()
+    devices._init_gpus()
     return devices.gpus
 
 def close():
@@ -173,7 +173,7 @@ def detect():
         attrs.append(('profile', dev.profile))
         attrs.append(('type', dev.type_str))
         attrs.append(('vendor', dev.vendor))
-        attrs.append(('vendor id', dev.vendor_id))
+        attrs.append(('vendor id', hex(dev.vendor_id)))
 
         # TODO: all supported? 
         support = '[SUPPORTED]'
