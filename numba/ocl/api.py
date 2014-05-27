@@ -1,37 +1,43 @@
 """
 API for OpenCL
+
+This aims to be compatible with the cuda one. It will reuse
+the naming convention used in the CUDA api, even if it mismatches
+the OpenCL one.
+
+For example:
+ - stream keyword for CommandQueues
 """
 
 from __future__ import print_function, absolute_import, division
-from .ocldrv import oclarray
 from . import ocldrv
-from .ocldrv import oclarray
+from .ocldrv import oclarray, oclmem, devices
 from .. import mviewbuf
 import numpy as np
+import contextlib
 
 try:
     long
 except NameError:
     long = int
 
-
 # Array to device migration ############################################
 
-def to_device(context_or_queue, ary, copy=True, to=None):
+def to_device(ary, stream=None, copy=True, to=None):
     """
-    to_device(ary, context_or_queue, copy=True, to=None)
+    to_device(ary, queue=None, copy=True, to=None)
 
     Allocate and transfer a NumPy ndarray in an OpenCL context.
 
     Parameters
     ----------
-    context_or_queue : An OpenCL context or queue
-        The array will be allocated in that context (or the queue's
-        context if it is a queue).
     ary : array_like
         The shape and datatype of 'ary' define the resulting device
         array. 'ary' may be the source of actual data if 'copy' is
         True
+    stream: CommandQueue
+        The CommandQueue in which the transfer is to be performed. This
+        implies async operation
     copy : boolean
         whether the contents of 'ary' should be copied to the resulting
         array.
@@ -60,13 +66,12 @@ def to_device(context_or_queue, ary, copy=True, to=None):
     Examples
     --------
     """
-    assert(isinstance(context_or_queue, (ocldrv.Context, ocldrv.CommandQueue)))
-    if isinstance(context_or_queue, ocldrv.CommandQueue):
-        ctxt = context_or_queue.context
-        q = context_or_queue
+    assert stream is None or isinstance(stream, ocldrv.CommandQueue)
+
+    if stream:
+        ctxt = stream.context
     else:
-        ctxt = context_or_queue
-        q = None
+        ctxt = current_context()
 
     if to is None:
         if copy:
@@ -74,13 +79,12 @@ def to_device(context_or_queue, ary, copy=True, to=None):
         else:
             devarray = oclarray.from_array_like(ary, ctxt)
     else:
+        # to is specified, just copy the array
+        assert copy
         oclarray.require_ocl_ndarray(to)
         devarray = to
         if copy:
-            devarray.copy_to_device(ary, q)
-        else:
-            pass # does this option make sense?
-
+            devarray.copy_to_device(ary, queue=current_queue())
 
     return devarray
 
@@ -130,3 +134,57 @@ def _fill_stride_by_order(shape, dtype, order):
 # device memory utils
 def is_device_memory(obj):
     return getattr(obj, '__ocl_memory__', False)
+
+
+# Device selection
+
+def select_device(device_id):
+    """Creates a new OpenCL context with the selected device.
+    The context is associated with the current thread.
+    Numba currently allows only one context per thread.
+
+    return a device instance.
+
+    Raises exception on error.
+    """
+    context = devices.get_context(device_id)
+    return context.device
+
+def get_current_device():
+    "Get active device associated with the current thread"
+    return current_context().device
+
+def list_devices():
+    devices.init_gpus()
+    return devices.gpus
+
+def close():
+    devices.reset()
+
+def detect():
+    devlist = list_devices()
+    print('Found {0} OpenCL devices'.format(len(devlist)))
+    supported_count = 0
+    for dev in devlist:
+        attrs = []
+        attrs.append(('profile', dev.profile))
+        attrs.append(('type', dev.type_str))
+        attrs.append(('vendor', dev.vendor))
+        attrs.append(('vendor id', dev.vendor_id))
+
+        # TODO: all supported? 
+        support = '[SUPPORTED]'
+        supported_count += 1
+
+        print("device '{0}' {1}".format(dev.name, support))
+        for key, val in attrs:
+            print('{0:>40} {1}'.format(key, val))
+
+    print ('Summary:\n{0} of {1} devices supported'.format(supported_count, len(devlist)))
+    return supported_count > 0
+
+
+@contextlib.contextmanager
+def defer_cleanup():
+    # compat only right now... no trashing service in opencl
+    yield

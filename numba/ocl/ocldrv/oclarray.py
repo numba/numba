@@ -137,7 +137,7 @@ class OpenCLNDArrayBase(object):
     def copy_to_device(self, ary, queue=None):
         """Copy `ary` to `self`.
 
-        If `ary` is a CUDA memory, perform a device-to-device transfer.
+        If `ary` is an in-device array, perform a device-to-device transfer.
         Otherwise, perform a a host-to-device transfer.
         """
         if queue is None:
