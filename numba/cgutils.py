@@ -12,6 +12,13 @@ true_byte = Constant.int(Type.int(8), 1)
 false_byte = Constant.int(Type.int(8), 0)
 
 
+def _block_terminator(bb):
+    # XXX: replace this with bb.terminator when llvmpy 0.12.6 (or 0.13) is
+    # released.
+    inst = bb._ptr.getTerminator()
+    return lc._make_value(inst) if inst is not None else None
+
+
 def as_bool_byte(builder, value):
     return builder.zext(value, Type.int(8))
 
@@ -82,8 +89,9 @@ def append_basic_block(builder, name=''):
 @contextmanager
 def goto_block(builder, bb):
     bbold = builder.basic_block
-    if bb.instructions and bb.instructions[-1].is_terminator:
-        builder.position_before(bb.instructions[-1])
+    term = _block_terminator(bb)
+    if term is not None:
+        builder.position_before(term)
     else:
         builder.position_at_end(bb)
     yield
@@ -104,8 +112,7 @@ def alloca_once(builder, ty, name=''):
 
 def terminate(builder, bbend):
     bb = builder.basic_block
-    instr = bb.instructions
-    if not instr or not instr[-1].is_terminator:
+    if _block_terminator(bb) is None:
         builder.branch(bbend)
 
 
