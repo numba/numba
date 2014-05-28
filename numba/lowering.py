@@ -11,6 +11,8 @@ except ImportError:
     import __builtin__ as builtins
 
 
+_function_cache = defaultdict(lambda: defaultdict(int))
+
 class LoweringError(Exception):
     def __init__(self, msg, loc):
         self.msg = msg
@@ -43,19 +45,46 @@ class FunctionDescriptor(object):
         self.restype = restype
         # Argument types
         self.argtypes = argtypes or [self.typemap[a] for a in args]
-        self.qualified_name = qualname or '.'.join([self.pymod.__name__,
-                                                    self.name])
+        if not qualname and self.pymod is None:
+            self.qualified_name = '.'.join(["<dynamic>", self.name])
+        else:
+            self.qualified_name = qualname or '.'.join([self.pymod.__name__,
+                                                        self.name])
         mangler = default_mangler if mangler is None else mangler
         self.mangled_name = mangler(self.qualified_name, self.argtypes)
 
 
 def _describe(interp):
+    """
+    Returns
+    -------
+    fname, pymod, doc, args, kws
+
+    ``fname`` must be a unique name in ``pymod``.
+    ``pymod`` can be None if the function is generated dynamically; thus,
+    does not below to any Python module.
+    """
     func = interp.bytecode.func
     fname = interp.bytecode.func_name
     pymod = interp.bytecode.module
     doc = func.__doc__ or ''
     args = interp.argspec.args
     kws = ()        # TODO
+
+    if pymod is None:
+        # For dynamically generate function,
+        # add the function id to the name to create unique name
+        fname = "%s$%d" % (fname, id(func))
+    else:
+        # For top-level function or closure,
+        # keep track of the version in case of duplicated name in the same
+        # module.
+        modcache = _function_cache[pymod]
+        nver = modcache[fname]
+        modcache[fname] += 1
+        # Always append a number at the end
+        fname = "%s$%d" % (fname, nver)
+
     return fname, pymod, doc, args, kws
 
 

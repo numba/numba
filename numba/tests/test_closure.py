@@ -11,12 +11,34 @@ class TestClosure(unittest.TestCase):
             return x + Y
 
         c_add_Y = jit('i4(i4)', nopython=True)(add_Y)
-        self.assertEquals(c_add_Y(1), 11)
+        self.assertEqual(c_add_Y(1), 11)
 
         # Like globals in Numba, the value of the closure is captured
         # at time of JIT
         Y = 12  # should not affect function
-        self.assertEquals(c_add_Y(1), 11)
+        self.assertEqual(c_add_Y(1), 11)
+
+    def test_rejitting_closure(self):
+        Y = 10
+
+        def add_Y(x):
+            return x + Y
+
+        c_add_Y = jit('i4(i4)', nopython=True)(add_Y)
+        self.assertEqual(c_add_Y(1), 11)
+
+        # Like globals in Numba, the value of the closure is captured
+        # at time of JIT
+        Y = 12  # should not affect function
+        self.assertEqual(c_add_Y(1), 11)
+
+        # Redo the jit
+        c_add_Y_2 = jit('i4(i4)', nopython=True)(add_Y)
+        self.assertEqual(c_add_Y_2(1), 13)
+        Y = 13  # should not affect function
+        self.assertEqual(c_add_Y_2(1), 13)
+
+        self.assertEqual(c_add_Y(1), 11)  # Test first function again
 
     def test_jit_multiple_closure_variables(self):
         Y = 10
@@ -26,7 +48,7 @@ class TestClosure(unittest.TestCase):
             return (x + Y) * Z
 
         c_add_Y_mult_Z = jit('i4(i4)', nopython=True)(add_Y_mult_Z)
-        self.assertEquals(c_add_Y_mult_Z(1), 22)
+        self.assertEqual(c_add_Y_mult_Z(1), 22)
 
     def test_jit_inner_function(self):
         @jit('i4(i4)', nopython=True)
@@ -38,7 +60,7 @@ class TestClosure(unittest.TestCase):
 
         c_do_math = jit('i4(i4)', nopython=True)(do_math)
 
-        self.assertEquals(c_do_math(1), 50)
+        self.assertEqual(c_do_math(1), 50)
 
 
 if __name__ == '__main__':
