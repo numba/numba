@@ -16,8 +16,6 @@ except ImportError:
     import __builtin__ as builtins
 
 
-_function_cache = defaultdict(lambda: defaultdict(int))
-
 class LoweringError(Exception):
     def __init__(self, msg, loc):
         self.msg = msg
