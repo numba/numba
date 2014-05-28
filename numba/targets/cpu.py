@@ -172,15 +172,15 @@ class CPUContext(BaseContext):
             print('=' * 80)
 
         # Map module.__dict__
-        le.dylib_add_symbol(".pymodule.dict." + fndesc.module_name,
+        le.dylib_add_symbol(".pymodule.dict." + fndesc.modname,
                             id(fndesc.globals))
 
         # Code gen
         self.engine.add_module(func.module)
         baseptr = self.engine.get_pointer_to_function(func)
         fnptr = self.engine.get_pointer_to_function(wrapper)
-        cfunc = _dynfunc.make_function(fndesc.pymod, fndesc.name, fndesc.doc,
-                                       fnptr)
+        cfunc = _dynfunc.make_function(fndesc.lookup_module(), fndesc.name,
+                                       fndesc.doc, fnptr)
 
         if fndesc.native:
             self.native_funcs[cfunc] = fndesc.mangled_name, baseptr

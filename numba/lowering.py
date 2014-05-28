@@ -1,7 +1,12 @@
 from __future__ import print_function, division, absolute_import
+
 from collections import defaultdict
+import sys
+from types import ModuleType
+
 from llvm.core import Type, Builder, Module
 import llvm.core as lc
+
 from numba import ir, types, cgutils, utils, config, cffi_support
 
 
@@ -25,18 +30,23 @@ def default_mangler(name, argtypes):
     return '.'.join([name, codedargs])
 
 
-class FunctionDescriptor(object):
-    __slots__ = ('native', 'pymod', 'name', 'doc', 'blocks', 'typemap',
-                 'calltypes', 'args', 'kws', 'restype', 'argtypes',
-                 'qualified_name', 'mangled_name', 'module_name', 'globals')
+# A dummy module for dynamically-generated functions
+_dynamic_modname = '<dynamic>'
+_dynamic_module = ModuleType(_dynamic_modname)
 
-    def __init__(self, native, pymod, globals, name, doc, blocks, typemap,
-                 restype, calltypes, args, kws, mangler=None, argtypes=None,
-                 qualname=None):
+
+class FunctionDescriptor(object):
+    __slots__ = ('native', 'modname', 'name', 'doc', 'blocks', 'typemap',
+                 'calltypes', 'args', 'kws', 'restype', 'argtypes',
+                 'qualified_name', 'mangled_name', 'globals')
+
+    def __init__(self, native, modname, name, doc, blocks, typemap,
+                 restype, calltypes, args, kws, mangler=None,
+                 argtypes=None, qualname=None, globals=None):
         self.native = native
-        self.pymod = pymod
-        self.globals = globals
+        self.modname = modname
         self.name = name
+        self.globals = globals
         self.doc = doc
         self.blocks = blocks
         self.typemap = typemap
@@ -46,21 +56,28 @@ class FunctionDescriptor(object):
         self.restype = restype
         # Argument types
         self.argtypes = argtypes or [self.typemap[a] for a in args]
-        if self.pymod is None:
-            self.module_name = '<dynamic>'
-        else:
-            self.module_name = self.pymod.__name__
-        self.qualified_name = qualname or '.'.join([self.module_name,
+        self.qualified_name = qualname or '.'.join([self.modname,
                                                     self.name])
         mangler = default_mangler if mangler is None else mangler
         self.mangled_name = mangler(self.qualified_name, self.argtypes)
+
+    def lookup_module(self):
+        """
+        Return the module in which this function is supposed to exist.
+        This may be a dummy module if the function was dynamically
+        generated.
+        """
+        if self.modname == _dynamic_modname:
+            return _dynamic_module
+        else:
+            return sys.modules[self.modname]
 
 
 def _describe(interp):
     """
     Returns
     -------
-    fname, pymod, doc, args, kws, globals
+    fname, modname, doc, args, kws, globals
 
     ``fname`` must be a unique name in ``pymod``.
     ``pymod`` can be None if the function is generated dynamically; thus,
@@ -68,61 +85,56 @@ def _describe(interp):
     """
     func = interp.bytecode.func
     fname = interp.bytecode.func_name
-    pymod = interp.bytecode.module
-    glbldict = func.__globals__
+    qualname = getattr(func, '__qualname__', fname)
+    modname = func.__module__
     doc = func.__doc__ or ''
     args = interp.argspec.args
     kws = ()        # TODO
 
-    if pymod is None:
-        # For dynamically generate function,
-        # add the function id to the name to create unique name
-        fname = "%s$%d" % (fname, id(func))
+    if modname is None:
+        # For dynamically generated functions (e.g. compile()),
+        # add the function id to the name to create a unique name.
+        fname = "%s$%d" % (qualname, id(func))
+        modname = _dynamic_modname
     else:
-        # For top-level function or closure,
-        # keep track of the version in case of duplicated name in the same
-        # module.
-
+        # For a top-level function or closure, make sure to disambiguate
+        # the function name.
         # TODO avoid unnecessary recompilation of the same function
-        modcache = _function_cache[pymod]
-        nver = modcache[fname]
-        modcache[fname] += 1
-        # Always append a number at the end
-        fname = "%s$%d" % (fname, nver)
+        fname = "%s$%d" % (qualname, func.__code__.co_firstlineno)
 
-    return fname, pymod, doc, args, kws, glbldict
+    return fname, modname, doc, args, kws, func.__globals__
 
 
 def describe_external(name, restype, argtypes):
     args = ["arg%d" % i for i in range(len(argtypes))]
-    fd = FunctionDescriptor(native=True, pymod=None, globals={},
-                            name=name, doc='', blocks=None, restype=restype,
-                            calltypes=None, argtypes=argtypes, args=args,
-                            kws=None, typemap=None, qualname=name,
-                            mangler=lambda a,x: a)
+    fd = FunctionDescriptor(native=True, modname=None, globals={}, name=name,
+                            doc='', blocks=None, restype=restype,
+                            calltypes=None, argtypes=argtypes, args=args, kws=None,
+                            typemap=None, qualname=name, mangler=lambda a,x: a)
     return fd
 
 
 def describe_function(interp, typemap, restype, calltypes, mangler):
-    fname, pymod, doc, args, kws, glbldict = _describe(interp)
+    fname, modname, doc, args, kws, func_globals = _describe(interp)
     native = True
     sortedblocks = utils.SortedMap(utils.dict_iteritems(interp.blocks))
-    fd = FunctionDescriptor(native, pymod, glbldict, fname, doc, sortedblocks,
+    fd = FunctionDescriptor(native, modname, fname, doc, sortedblocks,
                             typemap, restype, calltypes, args, kws,
-                            mangler=mangler)
+                            mangler=mangler, globals=func_globals)
     return fd
 
 
 def describe_pyfunction(interp):
-    fname, pymod, doc, args, kws, glbldict = _describe(interp)
+    fname, modname, doc, args, kws, func_globals = _describe(interp)
     defdict = lambda: defaultdict(lambda: types.pyobject)
     typemap = defdict()
     restype = types.pyobject
     calltypes = defdict()
     native = False
     sortedblocks = utils.SortedMap(utils.dict_iteritems(interp.blocks))
-    fd = FunctionDescriptor(native, pymod, glbldict, fname, doc, sortedblocks,
-                            typemap, restype,  calltypes, args, kws)
+    fd = FunctionDescriptor(native, modname, fname, doc, sortedblocks,
+                            typemap, restype,  calltypes, args, kws,
+                            globals=func_globals)
     return fd
 
 
@@ -138,7 +150,7 @@ class BaseLower(object):
 
         # Install metadata
         md_pymod = cgutils.MetadataKeyStore(self.module, "python.module")
-        md_pymod.set(fndesc.module_name)
+        md_pymod.set(fndesc.modname)
 
         # Setup function
         self.function = context.declare_function(self.module, fndesc)
