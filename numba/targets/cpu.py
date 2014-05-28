@@ -172,8 +172,8 @@ class CPUContext(BaseContext):
             print('=' * 80)
 
         # Map module.__dict__
-        le.dylib_add_symbol(".pymodule.dict." + fndesc.pymod.__name__,
-                            id(fndesc.pymod.__dict__))
+        le.dylib_add_symbol(".pymodule.dict." + fndesc.module_name,
+                            id(fndesc.globals))
 
         # Code gen
         self.engine.add_module(func.module)

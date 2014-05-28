@@ -28,13 +28,14 @@ def default_mangler(name, argtypes):
 class FunctionDescriptor(object):
     __slots__ = ('native', 'pymod', 'name', 'doc', 'blocks', 'typemap',
                  'calltypes', 'args', 'kws', 'restype', 'argtypes',
-                 'qualified_name', 'mangled_name')
+                 'qualified_name', 'mangled_name', 'module_name', 'globals')
 
-    def __init__(self, native, pymod, name, doc, blocks, typemap,
+    def __init__(self, native, pymod, globals, name, doc, blocks, typemap,
                  restype, calltypes, args, kws, mangler=None, argtypes=None,
                  qualname=None):
         self.native = native
         self.pymod = pymod
+        self.globals = globals
         self.name = name
         self.doc = doc
         self.blocks = blocks
@@ -45,11 +46,12 @@ class FunctionDescriptor(object):
         self.restype = restype
         # Argument types
         self.argtypes = argtypes or [self.typemap[a] for a in args]
-        if not qualname and self.pymod is None:
-            self.qualified_name = '.'.join(["<dynamic>", self.name])
+        if self.pymod is None:
+            self.module_name = '<dynamic>'
         else:
-            self.qualified_name = qualname or '.'.join([self.pymod.__name__,
-                                                        self.name])
+            self.module_name = self.pymod.__name__
+        self.qualified_name = qualname or '.'.join([self.module_name,
+                                                    self.name])
         mangler = default_mangler if mangler is None else mangler
         self.mangled_name = mangler(self.qualified_name, self.argtypes)
 
@@ -58,7 +60,7 @@ def _describe(interp):
     """
     Returns
     -------
-    fname, pymod, doc, args, kws
+    fname, pymod, doc, args, kws, globals
 
     ``fname`` must be a unique name in ``pymod``.
     ``pymod`` can be None if the function is generated dynamically; thus,
@@ -67,6 +69,7 @@ def _describe(interp):
     func = interp.bytecode.func
     fname = interp.bytecode.func_name
     pymod = interp.bytecode.module
+    glbldict = func.__globals__
     doc = func.__doc__ or ''
     args = interp.argspec.args
     kws = ()        # TODO
@@ -79,42 +82,46 @@ def _describe(interp):
         # For top-level function or closure,
         # keep track of the version in case of duplicated name in the same
         # module.
+
+        # TODO avoid unnecessary recompilation of the same function
         modcache = _function_cache[pymod]
         nver = modcache[fname]
         modcache[fname] += 1
         # Always append a number at the end
         fname = "%s$%d" % (fname, nver)
 
-    return fname, pymod, doc, args, kws
+    return fname, pymod, doc, args, kws, glbldict
 
 
 def describe_external(name, restype, argtypes):
     args = ["arg%d" % i for i in range(len(argtypes))]
-    fd = FunctionDescriptor(native=True, pymod=None, name=name, doc='',
-                            blocks=None, restype=restype, calltypes=None,
-                            argtypes=argtypes, args=args, kws=None,
-                            typemap=None, qualname=name, mangler=lambda a,x: a)
+    fd = FunctionDescriptor(native=True, pymod=None, globals={},
+                            name=name, doc='', blocks=None, restype=restype,
+                            calltypes=None, argtypes=argtypes, args=args,
+                            kws=None, typemap=None, qualname=name,
+                            mangler=lambda a,x: a)
     return fd
 
 
 def describe_function(interp, typemap, restype, calltypes, mangler):
-    fname, pymod, doc, args, kws = _describe(interp)
+    fname, pymod, doc, args, kws, glbldict = _describe(interp)
     native = True
     sortedblocks = utils.SortedMap(utils.dict_iteritems(interp.blocks))
-    fd = FunctionDescriptor(native, pymod, fname, doc, sortedblocks,
-                            typemap, restype, calltypes, args, kws, mangler)
+    fd = FunctionDescriptor(native, pymod, glbldict, fname, doc, sortedblocks,
+                            typemap, restype, calltypes, args, kws,
+                            mangler=mangler)
     return fd
 
 
 def describe_pyfunction(interp):
-    fname, pymod, doc, args, kws = _describe(interp)
+    fname, pymod, doc, args, kws, glbldict = _describe(interp)
     defdict = lambda: defaultdict(lambda: types.pyobject)
     typemap = defdict()
     restype = types.pyobject
     calltypes = defdict()
     native = False
     sortedblocks = utils.SortedMap(utils.dict_iteritems(interp.blocks))
-    fd = FunctionDescriptor(native, pymod, fname, doc, sortedblocks,
+    fd = FunctionDescriptor(native, pymod, glbldict, fname, doc, sortedblocks,
                             typemap, restype,  calltypes, args, kws)
     return fd
 
@@ -131,7 +138,7 @@ class BaseLower(object):
 
         # Install metadata
         md_pymod = cgutils.MetadataKeyStore(self.module, "python.module")
-        md_pymod.set(fndesc.pymod.__name__)
+        md_pymod.set(fndesc.module_name)
 
         # Setup function
         self.function = context.declare_function(self.module, fndesc)
