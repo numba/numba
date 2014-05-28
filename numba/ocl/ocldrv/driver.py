@@ -692,7 +692,7 @@ class Program(OpenCLWrapper):
 
     @property
     def kernel_names(self):
-        return self._kernel_names.split(';')
+        return self._kernel_names.decode().split(';')
 
     @property
     def binaries(self):

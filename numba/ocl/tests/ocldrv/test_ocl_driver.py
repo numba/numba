@@ -72,7 +72,7 @@ __kernel void square(__global float* input, __global float* output, const unsign
     def test_simple_program(self):
         program = self.context.create_program_from_source(self.opencl_source)
         program.build()
-        self.assertEqual(program.kernel_names, [b'square'])
+        self.assertEqual(program.kernel_names, ['square'])
         self.assertEqual(program.devices, [self.device])
         self.assertEqual(program.context, self.context)
         self.assertNotEqual(program.reference_count, 0)
