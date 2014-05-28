@@ -472,6 +472,12 @@ class PythonAPI(object):
             dummy_py_buffer_type = Type.int(_helperlib.py_buffer_size * 8)
             # Allocate the Py_buffer
             py_buffer = cgutils.alloca_once(self.builder, dummy_py_buffer_type)
+
+            # Zero-fill the py_buffer. where the obj field in Py_buffer is NULL
+            # PyBuffer_Release has no effect.
+            zeroed_buffer = lc.Constant.null(dummy_py_buffer_type)
+            self.builder.store(zeroed_buffer, py_buffer)
+
             buf_as_voidptr = self.builder.bitcast(py_buffer, self.voidptr)
             ptr = self.extract_record_data(obj, buf_as_voidptr)
 
@@ -482,15 +488,8 @@ class PythonAPI(object):
             ltyp = self.context.get_value_type(typ)
             val = cgutils.init_record_by_ptr(self.builder, ltyp, ptr)
 
-            if PYVERSION == (2, 6):
-                # NOTE
-                # This is due to a hack used in _helperlib.c and the lack of
-                # support for the buffer protocol for numpy.record in py2.6
-                def dtor():
-                    pass
-            else:
-                def dtor():
-                    self.release_record_buffer(buf_as_voidptr)
+            def dtor():
+                self.release_record_buffer(buf_as_voidptr)
 
         else:
             val = self.to_native_value(obj, typ)
