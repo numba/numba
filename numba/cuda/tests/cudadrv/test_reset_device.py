@@ -1,5 +1,6 @@
 from __future__ import print_function, absolute_import, division
-import threading
+
+from numba.test_utils import InOtherThread
 from numba import cuda
 from numba.cuda.cudadrv.driver import driver
 from numba.cuda.testing import unittest, CUDATestCase
@@ -20,9 +21,7 @@ class TestResetDevice(CUDATestCase):
 
         # Do test on a separate thread so that we don't affect
         # the current context in the main thread.
-        t = threading.Thread(target=newthread)
-        t.start()
-        t.join()
+        InOtherThread(newthread).return_value
 
 
 if __name__ == '__main__':
