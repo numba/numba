@@ -133,6 +133,12 @@ class Interpreter(object):
         except KeyError:
             return getattr(builtins, name, ir.UNDEFINED)
 
+    def get_closure_value(self, index):
+        """
+        Get a value from the cell contained in this function's closure.
+        """
+        return self.bytecode.func.__closure__[index].cell_contents
+
     @property
     def current_scope(self):
         return self.scopes[-1]
@@ -148,6 +154,10 @@ class Interpreter(object):
     @property
     def code_names(self):
         return self.bytecode.co_names
+
+    @property
+    def code_freevars(self):
+        return self.bytecode.co_freevars
 
     def _dispatch(self, inst, kws):
         assert self.current_block is not None
@@ -408,6 +418,13 @@ class Interpreter(object):
     def op_LOAD_GLOBAL(self, inst, res):
         name = self.code_names[inst.arg]
         value = self.get_global_value(name)
+        gl = ir.Global(name, value, loc=self.loc)
+        self.store(gl, res)
+
+    def op_LOAD_DEREF(self, inst, res):
+        name = self.code_freevars[inst.arg]
+        value = self.get_closure_value(inst.arg)
+        # closure values are treated like globals
         gl = ir.Global(name, value, loc=self.loc)
         self.store(gl, res)
 
