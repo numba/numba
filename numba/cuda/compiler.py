@@ -78,8 +78,8 @@ def declare_device_function(name, restype, argtypes):
         key = extfn
         cases = [sig]
 
-    fndesc = lowering.describe_external(name=name, restype=restype,
-                                        argtypes=argtypes)
+    fndesc = lowering.ExternalFunctionDescriptor(
+        name=name, restype=restype, argtypes=argtypes)
     typingctx.insert_user_function(extfn, device_function_template)
     targetctx.insert_user_function(extfn, fndesc)
     return extfn

@@ -34,17 +34,18 @@ _dynamic_module = ModuleType(_dynamic_modname)
 
 
 class FunctionDescriptor(object):
-    __slots__ = ('native', 'modname', 'name', 'doc', 'blocks', 'typemap',
+    __slots__ = ('native', 'modname', 'qualname', 'doc', 'blocks', 'typemap',
                  'calltypes', 'args', 'kws', 'restype', 'argtypes',
-                 'qualified_name', 'mangled_name', 'globals')
+                 'mangled_name', 'unique_name', 'globals')
 
-    def __init__(self, native, modname, name, doc, blocks, typemap,
-                 restype, calltypes, args, kws, mangler=None,
-                 argtypes=None, qualname=None, globals=None):
+    def __init__(self, native, modname, qualname, unique_name, doc, blocks,
+                 typemap, restype, calltypes, args, kws, mangler=None,
+                 argtypes=None, globals=None):
         self.native = native
         self.modname = modname
-        self.name = name
-        self.globals = globals
+        self.qualname = qualname
+        self.unique_name = unique_name
+        self.globals = globals if globals is not None else {}
         self.doc = doc
         self.blocks = blocks
         self.typemap = typemap
@@ -54,10 +55,8 @@ class FunctionDescriptor(object):
         self.restype = restype
         # Argument types
         self.argtypes = argtypes or [self.typemap[a] for a in args]
-        self.qualified_name = qualname or '.'.join([self.modname,
-                                                    self.name])
         mangler = default_mangler if mangler is None else mangler
-        self.mangled_name = mangler(self.qualified_name, self.argtypes)
+        self.mangled_name = mangler(self.qualname, self.argtypes)
 
     def lookup_module(self):
         """
@@ -70,70 +69,92 @@ class FunctionDescriptor(object):
         else:
             return sys.modules[self.modname]
 
+    def __repr__(self):
+        return "<function descriptor %r>" % (self.unique_name)
 
-def _describe(interp):
+    @classmethod
+    def _get_function_info(cls, interp):
+        """
+        Returns
+        -------
+        qualname, unique_name, modname, doc, args, kws, globals
+
+        ``unique_name`` must be a unique name in ``pymod``.
+        """
+        func = interp.bytecode.func
+        qualname = getattr(func, '__qualname__', interp.bytecode.func_name)
+        modname = func.__module__
+        doc = func.__doc__ or ''
+        args = interp.argspec.args
+        kws = ()        # TODO
+
+        if modname is None:
+            # For dynamically generated functions (e.g. compile()),
+            # add the function id to the name to create a unique name.
+            unique_name = "%s$%d" % (qualname, id(func))
+            modname = _dynamic_modname
+        else:
+            # For a top-level function or closure, make sure to disambiguate
+            # the function name.
+            # TODO avoid unnecessary recompilation of the same function
+            unique_name = "%s$%d" % (qualname, func.__code__.co_firstlineno)
+
+        return qualname, unique_name, modname, doc, args, kws, func.__globals__
+
+    @classmethod
+    def _from_python_function(cls, interp, typemap, restype, calltypes,
+                              native, mangler=None):
+        (qualname, unique_name, modname, doc, args, kws, func_globals
+         )= cls._get_function_info(interp)
+        sortedblocks = utils.SortedMap(utils.dict_iteritems(interp.blocks))
+        self = cls(native, modname, qualname, unique_name, doc,
+                   sortedblocks, typemap, restype, calltypes,
+                   args, kws, mangler=mangler, globals=func_globals)
+        return self
+
+
+class PythonFunctionDescriptor(FunctionDescriptor):
+    __slots__ = ()
+
+    @classmethod
+    def from_specialized_function(cls, interp, typemap, restype, calltypes,
+                                  mangler):
+        """
+        Build a FunctionDescriptor for a specialized Python function.
+        """
+        return cls._from_python_function(interp, typemap, restype, calltypes,
+                                         native=True, mangler=mangler)
+
+    @classmethod
+    def from_object_mode_function(cls, interp):
+        """
+        Build a FunctionDescriptor for a Python function to be compiled
+        and executed in object mode.
+        """
+        typemap = defaultdict(lambda: types.pyobject)
+        calltypes = typemap.copy()
+        restype = types.pyobject
+        return cls._from_python_function(interp, typemap, restype, calltypes,
+                                         native=False)
+
+
+class ExternalFunctionDescriptor(FunctionDescriptor):
     """
-    Returns
-    -------
-    fname, modname, doc, args, kws, globals
-
-    ``fname`` must be a unique name in ``pymod``.
-    ``pymod`` can be None if the function is generated dynamically; thus,
-    does not below to any Python module.
+    A FunctionDescriptor subclass for opaque external functions
+    (e.g. raw C functions).
     """
-    func = interp.bytecode.func
-    fname = interp.bytecode.func_name
-    qualname = getattr(func, '__qualname__', fname)
-    modname = func.__module__
-    doc = func.__doc__ or ''
-    args = interp.argspec.args
-    kws = ()        # TODO
+    __slots__ = ()
 
-    if modname is None:
-        # For dynamically generated functions (e.g. compile()),
-        # add the function id to the name to create a unique name.
-        fname = "%s$%d" % (qualname, id(func))
-        modname = _dynamic_modname
-    else:
-        # For a top-level function or closure, make sure to disambiguate
-        # the function name.
-        # TODO avoid unnecessary recompilation of the same function
-        fname = "%s$%d" % (qualname, func.__code__.co_firstlineno)
+    # XXX unused?
 
-    return fname, modname, doc, args, kws, func.__globals__
-
-
-def describe_external(name, restype, argtypes):
-    args = ["arg%d" % i for i in range(len(argtypes))]
-    fd = FunctionDescriptor(native=True, modname=None, globals={}, name=name,
-                            doc='', blocks=None, restype=restype,
-                            calltypes=None, argtypes=argtypes, args=args, kws=None,
-                            typemap=None, qualname=name, mangler=lambda a,x: a)
-    return fd
-
-
-def describe_function(interp, typemap, restype, calltypes, mangler):
-    fname, modname, doc, args, kws, func_globals = _describe(interp)
-    native = True
-    sortedblocks = utils.SortedMap(utils.dict_iteritems(interp.blocks))
-    fd = FunctionDescriptor(native, modname, fname, doc, sortedblocks,
-                            typemap, restype, calltypes, args, kws,
-                            mangler=mangler, globals=func_globals)
-    return fd
-
-
-def describe_pyfunction(interp):
-    fname, modname, doc, args, kws, func_globals = _describe(interp)
-    defdict = lambda: defaultdict(lambda: types.pyobject)
-    typemap = defdict()
-    restype = types.pyobject
-    calltypes = defdict()
-    native = False
-    sortedblocks = utils.SortedMap(utils.dict_iteritems(interp.blocks))
-    fd = FunctionDescriptor(native, modname, fname, doc, sortedblocks,
-                            typemap, restype,  calltypes, args, kws,
-                            globals=func_globals)
-    return fd
+    def __new__(cls, name, restype, argtypes):
+        args = ["arg%d" % i for i in range(len(argtypes))]
+        self = cls(native=True, modname=None, qualname=name,
+                   unique_name=name, globals={},
+                   doc='', blocks=None, restype=restype,
+                   calltypes=None, argtypes=argtypes, args=args, kws=None,
+                   typemap=None, mangler=lambda a, x: a)
+        return self
 
 
 class BaseLower(object):
@@ -144,7 +165,7 @@ class BaseLower(object):
         self.context = context
         self.fndesc = fndesc
         # Initialize LLVM
-        self.module = Module.new("module.%s" % self.fndesc.name)
+        self.module = Module.new("module.%s" % self.fndesc.unique_name)
 
         # Install metadata
         md_pymod = cgutils.MetadataKeyStore(self.module, "python.module")
@@ -196,7 +217,7 @@ class BaseLower(object):
         self.builder.branch(self.blkmap[self.firstblk])
 
         if config.DUMP_LLVM:
-            print(("LLVM DUMP %s" % self.fndesc.qualified_name).center(80,'-'))
+            print(("LLVM DUMP %s" % self.fndesc).center(80,'-'))
             print(self.module)
             print('=' * 80)
         self.module.verify()
@@ -413,13 +434,15 @@ class Lower(BaseLower):
                                                      signature, castvals)
 
             elif isinstance(fnty, types.FunctionPointer):
-                # Handle function pointer)
+                # Handle function pointer
                 pointer = fnty.funcptr
                 res = self.context.call_function_pointer(self.builder, pointer,
                                                          signature, castvals)
 
             elif isinstance(fnty, cffi_support.ExternCFunction):
-                fndesc = describe_external(fnty.symbol, fnty.restype, fnty.argtypes)
+                # XXX unused?
+                fndesc = ExternalFunctionDescriptor(
+                    fnty.symbol, fnty.restype, fnty.argtypes)
                 func = self.context.declare_external_function(
                         cgutils.get_module(self.builder), fndesc)
                 res = self.context.call_external_function(self.builder, func, fndesc.argtypes, castvals)
