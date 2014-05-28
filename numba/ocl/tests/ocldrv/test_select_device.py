@@ -1,10 +1,7 @@
-#
-# Test does not work on some cards.
-#
 from __future__ import print_function, absolute_import, division
+
 from numba.test_utils import InOtherThread
 from numba import ocl
-import threading
 import numpy as np
 import unittest
 

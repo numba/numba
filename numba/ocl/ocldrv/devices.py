@@ -103,9 +103,7 @@ class GPU(object):
         _gpustack.pop()
 
     def reset(self):
-        if self._context:
-            self._context.reset()
-            self._context = None
+        self._context = None
 
 def get_ocl_context():
     _init_gpus()
