@@ -50,11 +50,12 @@ class Overloaded(_dispatcher.Dispatcher):
         self._disable_compile(int(val))
 
     def add_overload(self, cres):
-        sig = [a._code for a in cres.signature.args]
+        args = tuple(cres.signature.args)
+        sig = [a._code for a in args]
         self._insert(sig, cres.entry_point_addr, cres.objectmode)
         if cres.objectmode:
             self.fallback = cres.entry_point
-        self.overloads[cres.signature] = cres
+        self.overloads[args] = cres
 
         # Add native function for correct typing the code generation
         typing = cres.typing_context

@@ -20,8 +20,6 @@ class Signature(object):
         if isinstance(other, Signature):
             return (self.args == other.args and
                     self.recvr == other.recvr)
-        elif isinstance(other, tuple):
-            return (self.args == other)
 
     def __ne__(self, other):
         return not (self == other)
