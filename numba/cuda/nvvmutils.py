@@ -3,6 +3,13 @@ import llvm.core as lc
 from .cudadrv import nvvm
 
 
+def declare_atomic_add_float32(lmod):
+    fname = 'llvm.nvvm.atomic.load.add.f32.p0f32'
+    fnty = lc.Type.function(lc.Type.float(),
+        (lc.Type.pointer(lc.Type.float(), 0), lc.Type.float()))
+    return lmod.get_or_insert_function(fnty, name=fname)
+
+
 def insert_addrspace_conv(lmod, elemtype, addrspace):
     addrspacename = {
         nvvm.ADDRSPACE_SHARED: 'shared',
