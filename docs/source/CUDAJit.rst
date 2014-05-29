@@ -138,7 +138,7 @@ Shared Memory
 
 For maximum performance, a CUDA kernel needs to use shared memory for manual caching of data.  CUDA JIT supports the use of ``cuda.shared.array(shape, dtype)`` for specifying an NumPy-array-like object inside a kernel.
 
-For example:::
+For example::
 
 
     bpg = 50
@@ -234,3 +234,21 @@ Synchronization Primitives
 
 We currently support ``cuda.syncthreads()`` only.  It is the same as ``__syncthreads()`` in CUDA-C.
 
+
+Atomic Operations
+-----------------
+
+Numba supports atomic addition on ``uint32`` and ``float32`` arrays in shared
+or global memory.  These are accessed via the 
+``cuda.atomic.add(array, index, value)`` function::
+
+
+    @cuda.jit('void(uint32[:], uint32[:])')
+    def fill_bins(indices, bin_counts):
+        offset = cuda.grid(1)
+        stride = cuda.gridDim.x * cuda.blockDim.x
+
+        for i in range(offset, indices.shape[0], stride):
+            cuda.atomic.add(bin_counts, indices[i], 1)
+
+A tuple can be used for the index argument if the array is multidimensional.
