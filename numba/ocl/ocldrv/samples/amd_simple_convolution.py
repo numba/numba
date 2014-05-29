@@ -1,6 +1,6 @@
 # sample based on Simple Convolution (AMD) sample
 
-from numba.ocl.ocldrv.driver import driver as cl
+from numba.ocl.ocldrv import cl
 from numba.ocl.ocldrv.types import *
 import numpy as np
 from skimage import data, io, filter
@@ -14,52 +14,52 @@ __kernel void simpleConvolution(__global  float  * output,
                                 const     uint2  maskDimensions)
 {
     uint tid   = get_global_id(0);
-    
+
     uint width  = inputDimensions.x;
     uint height = inputDimensions.y;
-    
+
     uint x      = tid%width;
     uint y      = tid/width;
-    
+
     uint maskWidth  = maskDimensions.x;
     uint maskHeight = maskDimensions.y;
-    
+
     uint vstep = (maskWidth  -1)/2;
     uint hstep = (maskHeight -1)/2;
-    
+
     /*
      * find the left, right, top and bottom indices such that
      * the indices do not go beyond image boundaires
      */
     uint left    = (x           <  vstep) ? 0         : (x - vstep);
-    uint right   = ((x + vstep) >= width) ? width - 1 : (x + vstep); 
+    uint right   = ((x + vstep) >= width) ? width - 1 : (x + vstep);
     uint top     = (y           <  hstep) ? 0         : (y - hstep);
-    uint bottom  = ((y + hstep) >= height)? height - 1: (y + hstep); 
-    
+    uint bottom  = ((y + hstep) >= height)? height - 1: (y + hstep);
+
     /*
      * initializing wighted sum value
      */
     float sumFX = 0;
-  
+
     for(uint i = left; i <= right; ++i)
-        for(uint j = top ; j <= bottom; ++j)    
+        for(uint j = top ; j <= bottom; ++j)
         {
             /*
              * performing wighted sum within the mask boundaries
              */
             uint maskIndex = (j - (y - hstep)) * maskWidth  + (i - (x - vstep));
             uint index     = j                 * width      + i;
-            
+
             sumFX += (input[index] * mask[maskIndex]);
         }
-        
+
     output[tid] = clamp(sumFX,0.0f,1.0f);
 }
 """
 
 input_image = data.moon()
 if np.issubdtype(input_image.dtype, np.integer):
-    factor = 1.0/np.iinfo(input_image.dtype).max 
+    factor = 1.0/np.iinfo(input_image.dtype).max
     input_image = input_image.astype(np.float32) * factor #dequant
 
 print("input image:\n{0}\n".format(input_image))
@@ -71,7 +71,7 @@ mask = np.array([60.0/25.0 - (abs(x-2) + abs(y-2)) for x,y in it_product(range(5
 print("Using mask:\n{0}\n".format(mask))
 
 platform = cl.platforms[0]
-device = platform.devices[-1]
+device = platform.all_devices[-1]
 ctxt = cl.create_context(platform, [device])
 input_buf = ctxt.create_buffer(input_image.nbytes)
 output_buf = ctxt.create_buffer(output_image.nbytes)
