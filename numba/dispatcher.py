@@ -28,7 +28,6 @@ class Overloaded(_dispatcher.Dispatcher):
         self.py_func = py_func
         self.func_code = get_code_object(py_func)
         self.overloads = {}
-        self.fallback = None
 
         self.targetoptions = targetoptions
         self.locals = locals
@@ -53,8 +52,6 @@ class Overloaded(_dispatcher.Dispatcher):
         args = tuple(cres.signature.args)
         sig = [a._code for a in args]
         self._insert(sig, cres.entry_point_addr, cres.objectmode)
-        if cres.objectmode:
-            self.fallback = cres.entry_point
         self.overloads[args] = cres
 
         # Add native function for correct typing the code generation
@@ -203,7 +200,6 @@ class LiftedLoop(Overloaded):
 
         self.py_func = bytecode.func
         self.overloads = {}
-        self.fallback = None
 
         self.doc = self.py_func.__doc__
         self._compiling = False
