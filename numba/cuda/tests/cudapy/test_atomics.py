@@ -113,14 +113,14 @@ class TestCudaAtomics(unittest.TestCase):
     def test_atomic_add_float_2(self):
         ary = np.random.randint(0, 32, size=32).astype(np.float32).reshape(4, 8)
         orig = ary.copy()
-        cuda_atomic_add2 = cuda.jit('void(float32[:,:])')(atomic_add2)
+        cuda_atomic_add2 = cuda.jit('void(float32[:,:])')(atomic_add_float_2)
         cuda_atomic_add2[1, (4, 8)](ary)
         self.assertTrue(np.all(ary == orig + 1))
 
     def test_atomic_add_float_3(self):
         ary = np.random.randint(0, 32, size=32).astype(np.float32).reshape(4, 8)
         orig = ary.copy()
-        cuda_atomic_add3 = cuda.jit('void(float32[:,:])')(atomic_add3)
+        cuda_atomic_add3 = cuda.jit('void(float32[:,:])')(atomic_add_float_3)
         cuda_atomic_add3[1, (4, 8)](ary)
 
         self.assertTrue(np.all(ary == orig + 1))
