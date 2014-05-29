@@ -150,13 +150,14 @@ class OpenCLNDArrayBase(object):
         Otherwise, perform a a host-to-device transfer.
         """
         q = get_context() if queue is None else queue
-        assert self.offset == 0
+
         if oclmem.is_device_memory(ary):
-            sz = min(self._memobject_.size, ary._memobject_.size)
-            q.enqueue_copy_buffer(ary._memobject_, self._memobject_, 0, 0, sz)
+            sz = min(self.nbytes, ary.nbytes)
+            q.enqueue_copy_buffer(ary._memobject_, self._memobject_,
+                                  ary.offset, self.offset, sz)
         else:
-            sz = min(oclmem.host_memory_size(ary), self._data.size)
-            q.enqueue_write_buffer(self._data, 0, sz, oclmem.host_pointer(ary))
+            sz = min(oclmem.host_memory_size(ary), self.nbytes)
+            q.enqueue_write_buffer(self._data, self.offset, sz, oclmem.host_pointer(ary))
 
 
     def copy_to_host(self, ary=None):
