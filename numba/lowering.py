@@ -145,16 +145,13 @@ class ExternalFunctionDescriptor(FunctionDescriptor):
     """
     __slots__ = ()
 
-    # XXX unused?
-
-    def __new__(cls, name, restype, argtypes):
+    def __init__(self, name, restype, argtypes):
         args = ["arg%d" % i for i in range(len(argtypes))]
-        self = cls(native=True, modname=None, qualname=name,
-                   unique_name=name, globals={},
-                   doc='', blocks=None, restype=restype,
-                   calltypes=None, argtypes=argtypes, args=args, kws=None,
-                   typemap=None, mangler=lambda a, x: a)
-        return self
+        super(ExternalFunctionDescriptor, self).__init__(native=True,
+                modname=None, qualname=name, unique_name=name, doc='',
+                blocks=None, typemap=None, restype=restype, calltypes=None,
+                args=args, kws=None, mangler=lambda a, x: a, argtypes=argtypes,
+                globals={})
 
 
 class BaseLower(object):
