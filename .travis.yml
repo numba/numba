@@ -30,6 +30,8 @@ before_install:
   # and are not specific to using Miniconda
   - sudo rm -rf /dev/shm
   - sudo ln -s /run/shm /dev/shm
+  # Install boost for impyla
+  - if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then sudo apt-get install libboost-all-dev; fi
 
 install:
     # Install llvmpy
@@ -39,12 +41,17 @@ install:
     - python setup.py build_ext -q
     # Install numba
     - python setup.py install -q >/dev/null
+    # Install impyla
+    - if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then export LLVM_CONFIG=$(which llvm-config); fi
+    - if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then cd $HOME ; git clone https://github.com/cloudera/impyla.git -q; fi
+    - if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then cd impyla ; git checkout udf ; make ; python setup.py install; fi
 
-script: cd ~; python -c "import sys;import numba;sys.exit(0 if numba.test() else 1)"
+script:
+    - cd ~ ; python -c "import sys;import numba;sys.exit(0 if numba.test() else 1)"
+    - if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then python $HOME/impyla/tests/test_impala.py; fi
 
 notifications:
   email: false
   flowdock: "cb7bc57e58b3d42f77685f93211c03ab"
   on_success: "change"
   on_failure: "always" # "change"
-
