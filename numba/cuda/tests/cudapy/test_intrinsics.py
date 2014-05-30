@@ -33,6 +33,21 @@ def simple_grid2d(ary):
     ary[i, j] = i + j
 
 
+def simple_gridsize1d(ary):
+    i = cuda.grid(1)
+    x = cuda.gridsize(1)
+    if i == 0:
+        ary[0] = x
+
+
+def simple_gridsize2d(ary):
+    i, j = cuda.grid(2)
+    x, y = cuda.gridsize(2)
+    if i == 0 and j == 0:
+        ary[0] = x
+        ary[1] = y
+
+
 def intrinsic_forloop_step(c):
     startX, startY = cuda.grid(2)
     gridX = cuda.gridDim.x * cuda.blockDim.x
@@ -100,6 +115,23 @@ class TestCudaIntrinsic(unittest.TestCase):
                 exp[i, j] = i + j
 
         self.assertTrue(np.all(ary == exp))
+
+    def test_simple_gridsize1d(self):
+        compiled = cuda.jit("void(int32[::1])")(simple_gridsize1d)
+        ntid, nctaid = 3, 7
+        ary = np.zeros(1, dtype=np.int32)
+        compiled[nctaid, ntid](ary)
+        self.assertEqual(ary[0], nctaid * ntid)
+
+    def test_simple_gridsize2d(self):
+        compiled = cuda.jit("void(int32[::1])")(simple_gridsize2d)
+        ntid = (4, 3)
+        nctaid = (5, 6)
+        ary = np.zeros(2, dtype=np.int32)
+        compiled[nctaid, ntid](ary)
+
+        self.assertEqual(ary[0], nctaid[0] * ntid[0])
+        self.assertEqual(ary[1], nctaid[1] * ntid[1])
 
     def test_intrinsic_forloop_step(self):
         compiled = cuda.jit("void(float32[:,::1])")(intrinsic_forloop_step)
