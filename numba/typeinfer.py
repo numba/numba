@@ -245,7 +245,7 @@ class TypeVarMap(dict):
 
     def __getitem__(self, name):
         if name not in self:
-            self[name] = TypeVar(self.context, name)
+            self[name] = TypeVar(self.context, name.split('.', 1)[0])
         return super(TypeVarMap, self).__getitem__(name)
 
     def __setitem__(self, name, value):
@@ -288,12 +288,10 @@ class TypeInferer(object):
     def seed_return(self, typ):
         """Seeding of return value is optional.
         """
-        # self.return_type = typ
         for blk in utils.dict_itervalues(self.blocks):
             inst = blk.terminator
             if isinstance(inst, ir.Return):
                 self.typevars[inst.value.name].lock(typ)
-                # self.typevars[inst.value.name].lock()
 
     def build_constrain(self):
         for blk in utils.dict_itervalues(self.blocks):

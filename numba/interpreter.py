@@ -69,10 +69,20 @@ class Interpreter(object):
         for b in utils.dict_itervalues(self.blocks):
             b.verify()
 
+    def init_first_block(self):
+        # Duplicate arguments so that these values can be casted into different
+        # types.
+        for aname in self.argspec.args:
+            aval = self.get(aname)
+            self.store(aval, aname)
+
     def _iter_inst(self):
-        for block in self.cfa.iterliveblocks():
+        for blkct, block in enumerate(self.cfa.iterliveblocks()):
             firstinst = self.bytecode[block.body[0]]
             self._start_new_block(firstinst)
+            if blkct == 0:
+                # Is first block
+                self.init_first_block()
             for offset, kws in self.dfainfo.insts:
                 inst = self.bytecode[offset]
                 self.loc = ir.Loc(filename=self.bytecode.filename,
@@ -121,7 +131,6 @@ class Interpreter(object):
                     self.blocks[ib].insert_before_terminator(stmt)
 
                 self.store(target, phivar)
-
 
     def get_global_value(self, name):
         """
