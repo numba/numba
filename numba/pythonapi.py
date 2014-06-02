@@ -230,6 +230,11 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyNumber_Negative")
         return self.builder.call(fn, (obj,))
 
+    def number_positive(self, obj):
+        fnty = Type.function(self.pyobj, [self.pyobj])
+        fn = self._get_function(fnty, name="PyNumber_Positive")
+        return self.builder.call(fn, (obj,))
+
     def number_float(self, val):
         fnty = Type.function(self.pyobj, [self.pyobj])
         fn = self._get_function(fnty, name="PyNumber_Float")
