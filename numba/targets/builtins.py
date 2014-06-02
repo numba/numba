@@ -345,6 +345,12 @@ def int_negate_impl(context, builder, sig, args):
         return builder.neg(val)
 
 
+def int_positive_impl(context, builder, sig, args):
+    [typ] = sig.args
+    [val] = args
+    return context.cast(builder, val, typ, sig.return_type)
+
+
 def int_invert_impl(context, builder, sig, args):
     [typ] = sig.args
     [val] = args
@@ -413,6 +419,7 @@ for ty in types.integer_domain:
     builtin(implement('^', ty, ty)(int_xor_impl))
 
     builtin(implement('-', ty)(int_negate_impl))
+    builtin(implement('+', ty)(int_positive_impl))
     builtin(implement(types.neg_type, ty)(int_negate_impl))
     builtin(implement('~', ty)(int_invert_impl))
     builtin(implement(types.sign_type, ty)(int_sign_impl))

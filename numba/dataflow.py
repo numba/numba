@@ -213,6 +213,7 @@ class DataFlowAnalysis(object):
         info.push(res)
 
     op_UNARY_NEGATIVE = _unaryop
+    op_UNARY_POSITIVE = _unaryop
     op_UNARY_NOT = _unaryop
     op_UNARY_INVERT = _unaryop
 

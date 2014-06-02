@@ -527,6 +527,11 @@ class Interpreter(object):
         expr = ir.Expr.unary('-', value=value, loc=self.loc)
         return self.store(expr, res)
 
+    def op_UNARY_POSITIVE(self, inst, value, res):
+        value = self.get(value)
+        expr = ir.Expr.unary('+', value=value, loc=self.loc)
+        return self.store(expr, res)
+
     def op_UNARY_INVERT(self, inst, value, res):
         value = self.get(value)
         expr = ir.Expr.unary('~', value=value, loc=self.loc)

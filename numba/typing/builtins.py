@@ -389,6 +389,28 @@ class UnaryNegate(UnaryOp):
     ]
 
 
+@builtin
+class UnaryPositive(UnaryOp):
+    key = "+"
+    cases = [
+        signature(types.uintp, types.uint8),
+        signature(types.uintp, types.uint16),
+        signature(types.uintp, types.uint32),
+        signature(types.uint64, types.uint64),
+
+        signature(types.intp, types.int8),
+        signature(types.intp, types.int16),
+        signature(types.intp, types.int32),
+        signature(types.int64, types.int64),
+
+        signature(types.float32, types.float32),
+        signature(types.float64, types.float64),
+
+        signature(types.complex64, types.complex64),
+        signature(types.complex128, types.complex128),
+    ]
+
+
 class CmpOp(ConcreteTemplate):
     cases = [
         signature(types.boolean, types.boolean, types.boolean),
