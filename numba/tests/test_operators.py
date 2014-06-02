@@ -58,6 +58,9 @@ def not_usecase(x):
 def negate_usecase(x):
     return -x
 
+def unary_positive_usecase(x):
+    return +x
+
 class TestOperators(unittest.TestCase):
 
     def run_test_ints(self, pyfunc, x_operands, y_operands, types_list,
@@ -1001,6 +1004,7 @@ class TestOperators(unittest.TestCase):
             types.int32,
             types.int64,
             types.float32,
+            types.float64,
             types.complex128,
         ]
         values = [
@@ -1008,6 +1012,7 @@ class TestOperators(unittest.TestCase):
             2,
             3,
             1.2,
+            2.4,
             3.4j,
         ]
         for ty, val in zip(argtys, values):
@@ -1017,6 +1022,44 @@ class TestOperators(unittest.TestCase):
 
     def test_negate(self):
         pyfunc = negate_usecase
+        values = [
+            1,
+            2,
+            3,
+            1.2,
+            3.4j,
+        ]
+        cres = compile_isolated(pyfunc, (), flags=enable_pyobj_flags)
+        cfunc = cres.entry_point
+        for val in values:
+            self.assertEqual(pyfunc(val), cfunc(val))
+
+    def test_unary_positive_npm(self):
+        pyfunc = unary_positive_usecase
+        # test native mode
+        argtys = [
+            types.int8,
+            types.int32,
+            types.int64,
+            types.float32,
+            types.float64,
+            types.complex128,
+        ]
+        values = [
+            1,
+            2,
+            3,
+            1.2,
+            2.4,
+            3.4j,
+        ]
+        for ty, val in zip(argtys, values):
+            cres = compile_isolated(pyfunc, [ty])
+            cfunc = cres.entry_point
+            self.assertAlmostEqual(pyfunc(val), cfunc(val))
+
+    def test_unary_positive(self):
+        pyfunc = unary_positive_usecase
         values = [
             1,
             2,

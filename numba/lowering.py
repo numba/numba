@@ -639,6 +639,8 @@ class PyLower(BaseLower):
             value = self.loadvar(expr.value.name)
             if expr.fn == '-':
                 res = self.pyapi.number_negative(value)
+            elif expr.fn == '+':
+                res = self.pyapi.number_positive(value)
             elif expr.fn == 'not':
                 res = self.pyapi.object_not(value)
                 negone = lc.Constant.int_signextend(Type.int(), -1)
