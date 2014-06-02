@@ -28,7 +28,6 @@ class Overloaded(_dispatcher.Dispatcher):
         self.py_func = py_func
         self.func_code = get_code_object(py_func)
         self.overloads = {}
-        self.fallback = None
 
         self.targetoptions = targetoptions
         self.locals = locals
@@ -50,11 +49,10 @@ class Overloaded(_dispatcher.Dispatcher):
         self._disable_compile(int(val))
 
     def add_overload(self, cres):
-        sig = [a._code for a in cres.signature.args]
+        args = tuple(cres.signature.args)
+        sig = [a._code for a in args]
         self._insert(sig, cres.entry_point_addr, cres.objectmode)
-        if cres.objectmode:
-            self.fallback = cres.entry_point
-        self.overloads[cres.signature] = cres
+        self.overloads[args] = cres
 
         # Add native function for correct typing the code generation
         typing = cres.typing_context
@@ -74,8 +72,10 @@ class Overloaded(_dispatcher.Dispatcher):
         if self._compiling:
             raise RuntimeError("Compiler re-entrant")
         self._compiling = True
-        yield
-        self._compiling = False
+        try:
+            yield
+        finally:
+            self._compiling = False
 
     @property
     def is_compiling(self):
@@ -121,7 +121,7 @@ class Overloaded(_dispatcher.Dispatcher):
 
     def _compile_and_call(self, *args, **kws):
         assert not kws
-        sig = tuple([typeof_pyval(a) for a in args])
+        sig = tuple([self.typeof_pyval(a) for a in args])
         self.jit(sig)
         return self(*args, **kws)
 
@@ -134,54 +134,53 @@ class Overloaded(_dispatcher.Dispatcher):
 
     def _explain_ambiguous(self, *args, **kws):
         assert not kws, "kwargs not handled"
-        args = tuple([typeof_pyval(a) for a in args])
+        args = tuple([self.typeof_pyval(a) for a in args])
         resolve_overload(self.targetdescr.typing_context, self.py_func,
                          tuple(self.overloads.keys()), args, kws)
 
     def __repr__(self):
         return "%s(%s)" % (type(self).__name__, self.py_func)
 
+    @classmethod
+    def typeof_pyval(cls, val):
+        """
+        This is called from numba._dispatcher as a fallback if the native code
+        cannot decide the type.
+        """
+        if isinstance(val, numpy.ndarray):
+            # TODO complete dtype mapping
+            dtype = numpy_support.from_dtype(val.dtype)
+            ndim = val.ndim
+            if ndim == 0:
+                # is array scalar
+                return numpy_support.from_dtype(val.dtype)
+            layout = numpy_support.map_layout(val)
+            aryty = types.Array(dtype, ndim, layout)
+            return aryty
+
+        # The following are handled in the C version for exact type match
+        # So test these later
+        elif isinstance(val, INT_TYPES):
+            return types.int64
+
+        elif isinstance(val, float):
+            return types.float64
+
+        elif isinstance(val, complex):
+            return types.complex128
+
+        elif numpy_support.is_arrayscalar(val):
+            # Array scalar
+            return numpy_support.from_dtype(numpy.dtype(type(val)))
+
+        # Other object
+        else:
+            return types.pyobject
 
 
 INT_TYPES = (int,)
 if PYVERSION < (3, 0):
     INT_TYPES += (long,)
-
-
-def typeof_pyval(val):
-    """
-    This is called from numba._dispatcher as a fallback if the native code
-    cannot decide the type.
-    """
-    if isinstance(val, numpy.ndarray):
-        # TODO complete dtype mapping
-        dtype = numpy_support.from_dtype(val.dtype)
-        ndim = val.ndim
-        if ndim == 0:
-            # is array scalar
-            return numpy_support.from_dtype(val.dtype)
-        layout = numpy_support.map_layout(val)
-        aryty = types.Array(dtype, ndim, layout)
-        return aryty
-
-    # The following are handled in the C version for exact type match
-    # So test these later
-    elif isinstance(val, INT_TYPES):
-        return types.int64
-
-    elif isinstance(val, float):
-        return types.float64
-
-    elif isinstance(val, complex):
-        return types.complex128
-
-    elif numpy_support.is_arrayscalar(val):
-        # Array scalar
-        return numpy_support.from_dtype(numpy.dtype(type(val)))
-
-    # Other object
-    else:
-        return types.pyobject
 
 
 class LiftedLoop(Overloaded):
@@ -201,7 +200,6 @@ class LiftedLoop(Overloaded):
 
         self.py_func = bytecode.func
         self.overloads = {}
-        self.fallback = None
 
         self.doc = self.py_func.__doc__
         self._compiling = False

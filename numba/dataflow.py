@@ -134,6 +134,11 @@ class DataFlowAnalysis(object):
         info.append(inst, res=res)
         info.push(res)
 
+    def op_LOAD_DEREF(self, info, inst):
+        res = info.make_temp()
+        info.append(inst, res=res)
+        info.push(res)
+
     def op_LOAD_ATTR(self, info, inst):
         item = info.pop()
         res = info.make_temp()
@@ -208,6 +213,7 @@ class DataFlowAnalysis(object):
         info.push(res)
 
     op_UNARY_NEGATIVE = _unaryop
+    op_UNARY_POSITIVE = _unaryop
     op_UNARY_NOT = _unaryop
     op_UNARY_INVERT = _unaryop
 

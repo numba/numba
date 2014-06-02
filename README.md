@@ -103,6 +103,10 @@ or simply
           may mean that source files do not get cythonized and may result in an
           error during installation.
 
+If you want to enable CUDA support, you will need CUDA Toolkit 5.5+ (which contains 
+``libnvvm``). After installing the Toolkit, you might have to specify a few 
+environment variables according to http://numba.pydata.org/numba-doc/0.13/CUDASupport.html
+
 Documentation
 =============
 

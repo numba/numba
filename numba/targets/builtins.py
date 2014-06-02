@@ -345,6 +345,12 @@ def int_negate_impl(context, builder, sig, args):
         return builder.neg(val)
 
 
+def int_positive_impl(context, builder, sig, args):
+    [typ] = sig.args
+    [val] = args
+    return context.cast(builder, val, typ, sig.return_type)
+
+
 def int_invert_impl(context, builder, sig, args):
     [typ] = sig.args
     [val] = args
@@ -413,6 +419,7 @@ for ty in types.integer_domain:
     builtin(implement('^', ty, ty)(int_xor_impl))
 
     builtin(implement('-', ty)(int_negate_impl))
+    builtin(implement('+', ty)(int_positive_impl))
     builtin(implement(types.neg_type, ty)(int_negate_impl))
     builtin(implement('~', ty)(int_invert_impl))
     builtin(implement(types.sign_type, ty)(int_sign_impl))
@@ -663,6 +670,12 @@ def real_negate_impl(context, builder, sig, args):
         return builder.neg(val)
 
 
+def real_positive_impl(context, builder, sig, args):
+    [typ] = sig.args
+    [val] = args
+    return context.cast(builder, val, typ, sig.return_type)
+
+
 def real_sign_impl(context, builder, sig, args):
     [x] = args
     POS = Constant.real(x.type, 1)
@@ -721,6 +734,7 @@ for ty in types.real_domain:
     builtin(implement(types.print_item_type, ty)(real_print_impl))
 
     builtin(implement('-', ty)(real_negate_impl))
+    builtin(implement('+', ty)(real_positive_impl))
     builtin(implement(types.neg_type, ty)(real_negate_impl))
     builtin(implement(types.sign_type, ty)(real_sign_impl))
 
@@ -917,6 +931,11 @@ def complex_negate_impl(context, builder, sig, args):
     return res._getvalue()
 
 
+def complex_positive_impl(context, builder, sig, args):
+    [val] = args
+    return val
+
+
 for ty, cls in zip([types.complex64, types.complex128],
                    [Complex64, Complex128]):
     builtin(implement("+", ty, ty)(complex_add_impl))
@@ -925,6 +944,7 @@ for ty, cls in zip([types.complex64, types.complex128],
     builtin(implement("/?", ty, ty)(complex_div_impl))
     builtin(implement("/", ty, ty)(complex_div_impl))
     builtin(implement("-", ty)(complex_negate_impl))
+    builtin(implement("+", ty)(complex_positive_impl))
     # Complex modulo is deprecated in python3
 
 

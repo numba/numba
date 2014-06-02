@@ -26,9 +26,12 @@ def fix_python_api():
     le.dylib_add_symbol("NumbaNativeError", id(NativeError))
     le.dylib_add_symbol("NumbaExtractRecordData",
                         _helperlib.get_extract_record_data())
+    le.dylib_add_symbol("NumbaReleaseRecordBuffer",
+                        _helperlib.get_release_record_buffer())
     le.dylib_add_symbol("NumbaRecreateRecord",
                         _helperlib.get_recreate_record())
     le.dylib_add_symbol("PyExc_NameError", id(NameError))
+
 
 
 class PythonAPI(object):
@@ -43,6 +46,7 @@ class PythonAPI(object):
         self.module = builder.basic_block.function.module
         # Initialize types
         self.pyobj = self.context.get_argument_type(types.pyobject)
+        self.voidptr = Type.pointer(Type.int(8))
         self.long = Type.int(ctypes.sizeof(ctypes.c_long) * 8)
         self.ulonglong = Type.int(ctypes.sizeof(ctypes.c_ulonglong) * 8)
         self.longlong = self.ulonglong
@@ -224,6 +228,11 @@ class PythonAPI(object):
     def number_negative(self, obj):
         fnty = Type.function(self.pyobj, [self.pyobj])
         fn = self._get_function(fnty, name="PyNumber_Negative")
+        return self.builder.call(fn, (obj,))
+
+    def number_positive(self, obj):
+        fnty = Type.function(self.pyobj, [self.pyobj])
+        fn = self._get_function(fnty, name="PyNumber_Positive")
         return self.builder.call(fn, (obj,))
 
     def number_float(self, val):
@@ -463,7 +472,37 @@ class PythonAPI(object):
         return dictobj
 
     def to_native_arg(self, obj, typ):
-        return self.to_native_value(obj, typ)
+        if isinstance(typ, types.Record):
+            # Generate a dummy integer type that has the size of Py_buffer
+            dummy_py_buffer_type = Type.int(_helperlib.py_buffer_size * 8)
+            # Allocate the Py_buffer
+            py_buffer = cgutils.alloca_once(self.builder, dummy_py_buffer_type)
+
+            # Zero-fill the py_buffer. where the obj field in Py_buffer is NULL
+            # PyBuffer_Release has no effect.
+            zeroed_buffer = lc.Constant.null(dummy_py_buffer_type)
+            self.builder.store(zeroed_buffer, py_buffer)
+
+            buf_as_voidptr = self.builder.bitcast(py_buffer, self.voidptr)
+            ptr = self.extract_record_data(obj, buf_as_voidptr)
+
+            with cgutils.if_unlikely(self.builder,
+                                     cgutils.is_null(self.builder, ptr)):
+                self.builder.ret(ptr)
+
+            ltyp = self.context.get_value_type(typ)
+            val = cgutils.init_record_by_ptr(self.builder, ltyp, ptr)
+
+            def dtor():
+                self.release_record_buffer(buf_as_voidptr)
+
+        else:
+            val = self.to_native_value(obj, typ)
+
+            def dtor():
+                pass
+
+        return val, dtor
 
     def to_native_value(self, obj, typ):
         if isinstance(typ, types.Object) or typ == types.pyobject:
@@ -527,14 +566,6 @@ class PythonAPI(object):
         elif isinstance(typ, types.Array):
             return self.to_native_array(typ, obj)
 
-        elif isinstance(typ, types.Record):
-            ptr = self.extract_recorddata(obj)
-            with cgutils.if_unlikely(self.builder,
-                                     cgutils.is_null(self.builder, ptr)):
-                self.builder.ret(ptr)
-            ltyp = self.context.get_value_type(typ)
-            return cgutils.init_record_by_ptr(self.builder, ltyp, ptr)
-
         raise NotImplementedError(typ)
 
     def from_native_return(self, val, typ):
@@ -586,7 +617,7 @@ class PythonAPI(object):
 
         elif isinstance(typ, types.Array):
             return self.from_native_array(typ, val)
-        
+
         elif isinstance(typ, types.Record):
             # Note we will create a copy of the record
             # This is the only safe way.
@@ -635,7 +666,7 @@ class PythonAPI(object):
             item = self.builder.extract_value(val, i)
             obj = self.from_native_value(item, typ.dtype)
             self.tuple_setitem(tuple_val, i, obj)
-            
+
         return tuple_val
 
     def tuple_new(self, count):
@@ -650,7 +681,6 @@ class PythonAPI(object):
         index = self.context.get_constant(types.int32, index)
         self.builder.call(setitem_fn, [tuple_val, index, item])
 
-
     def numba_array_adaptor(self, ary, ptr):
         voidptr = Type.pointer(Type.int(8))
         fnty = Type.function(Type.int(), [self.pyobj, voidptr])
@@ -664,10 +694,16 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="NumbaComplexAdaptor")
         return self.builder.call(fn, [cobj, cmplx])
 
-    def extract_recorddata(self, obj):
-        fnty = Type.function(Type.pointer(Type.int(8)), [self.pyobj])
+    def extract_record_data(self, obj, pbuf):
+        fnty = Type.function(self.voidptr, [self.pyobj,
+                                                         self.voidptr])
         fn = self._get_function(fnty, name="NumbaExtractRecordData")
-        return self.builder.call(fn, [obj])
+        return self.builder.call(fn, [obj, pbuf])
+
+    def release_record_buffer(self, pbuf):
+        fnty = Type.function(Type.void(), [self.voidptr])
+        fn = self._get_function(fnty, name="NumbaReleaseRecordBuffer")
+        return self.builder.call(fn, [pbuf])
 
     def recreate_record(self, pdata, size, dtypeaddr):
         fnty = Type.function(self.pyobj, [Type.pointer(Type.int(8)),

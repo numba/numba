@@ -79,8 +79,8 @@ def declare_device_function(name, restype, argtypes):
         key = extfn
         cases = [sig]
 
-    fndesc = lowering.describe_external(name=name, restype=restype,
-                                        argtypes=argtypes)
+    fndesc = lowering.ExternalFunctionDescriptor(
+        name=name, restype=restype, argtypes=argtypes)
     typingctx.insert_user_function(extfn, device_function_template)
     targetctx.insert_user_function(extfn, fndesc)
     return extfn
@@ -365,7 +365,7 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         self.targetoptions = targetoptions
 
     def __call__(self, *args):
-        argtypes = tuple([dispatcher.typeof_pyval(a) for a in args])
+        argtypes = tuple([dispatcher.Overloaded.typeof_pyval(a) for a in args])
         kernel = self.definitions.get(argtypes)
         if kernel is None:
             kernel = compile_kernel(self.py_func, argtypes, link=(),

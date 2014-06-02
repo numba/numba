@@ -161,27 +161,26 @@ class CPUContext(BaseContext):
         self.optimize(func.module)
 
         if config.DUMP_OPTIMIZED:
-            print(("OPTIMIZED DUMP %s" %
-                   fndesc.qualified_name).center(80,'-'))
+            print(("OPTIMIZED DUMP %s" % fndesc).center(80,'-'))
             print(func.module)
             print('=' * 80)
 
         if config.DUMP_ASSEMBLY:
-            print(("ASSEMBLY %s" %
-                   fndesc.qualified_name).center(80, '-'))
+            print(("ASSEMBLY %s" % fndesc).center(80, '-'))
             print(self.tm.emit_assembly(func.module))
             print('=' * 80)
 
         # Map module.__dict__
-        le.dylib_add_symbol(".pymodule.dict." + fndesc.pymod.__name__,
-                            id(fndesc.pymod.__dict__))
+        le.dylib_add_symbol(".pymodule.dict." + fndesc.modname,
+                            id(fndesc.globals))
 
         # Code gen
         self.engine.add_module(func.module)
         baseptr = self.engine.get_pointer_to_function(func)
         fnptr = self.engine.get_pointer_to_function(wrapper)
-        cfunc = _dynfunc.make_function(fndesc.pymod, fndesc.name, fndesc.doc,
-                                       fnptr)
+        cfunc = _dynfunc.make_function(fndesc.lookup_module(),
+                                       fndesc.qualname.split('.')[-1],
+                                       fndesc.doc, fnptr)
 
         if fndesc.native:
             self.native_funcs[cfunc] = fndesc.mangled_name, baseptr

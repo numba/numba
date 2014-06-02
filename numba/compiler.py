@@ -111,7 +111,7 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
 
     if not status.use_python_mode:
         with _fallback_context(status):
-            legialize_given_types(args, return_type)
+            legalize_given_types(args, return_type)
             # Type inference
             typemap, return_type, calltypes = type_inference_stage(typingctx,
                                                                    interp,
@@ -194,7 +194,7 @@ def _is_nopython_types(t):
     return t != types.pyobject and not isinstance(t, types.Dummy)
 
 
-def legialize_given_types(args, return_type):
+def legalize_given_types(args, return_type):
     # Filter argument types
     for i, a in enumerate(args):
         if not _is_nopython_types(a):
@@ -228,8 +228,12 @@ def legalize_return_type(return_type, interp, targetctx):
     # FIXME: In the future, we can return an array that is either a dynamically
     #        allocated array or an array that is passed as argument.  This
     #        must be statically resolvable.
+
+    # The return value must be the first modification of the value.
+    arguments = frozenset("%s.1" % arg for arg in interp.argspec.args)
+
     for ret in retstmts:
-        if ret.value.name not in interp.argspec.args:
+        if ret.value.name not in arguments:
             raise ValueError("Only accept returning of array passed into the "
                               "function as argument")
 
@@ -263,14 +267,13 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
 
     infer = typeinfer.TypeInferer(typingctx, interp.blocks)
 
-    # Seed return type
-    # needs to be seeded before args, to ensure locking return type first
-    if return_type is not None:
-        infer.seed_return(return_type)
-
     # Seed argument types
     for arg, ty in zip(interp.argspec.args, args):
     	infer.seed_type(arg, ty)
+
+    # Seed return type
+    if return_type is not None:
+        infer.seed_return(return_type)
 
     # Seed local types
     for k, v in locals.items():
@@ -291,8 +294,8 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
 def native_lowering_stage(targetctx, interp, typemap, restype, calltypes,
                           nocompile):
     # Lowering
-    fndesc = lowering.describe_function(interp, typemap, restype, calltypes,
-                                        mangler=targetctx.mangler)
+    fndesc = lowering.PythonFunctionDescriptor.from_specialized_function(
+        interp, typemap, restype, calltypes, mangler=targetctx.mangler)
 
     lower = lowering.Lower(targetctx, fndesc)
     lower.lower()
@@ -312,7 +315,7 @@ def py_lowering_stage(targetctx, interp, nocompile):
     # Optimize for python code
     ir_optimize_for_py_stage(interp)
 
-    fndesc = lowering.describe_pyfunction(interp)
+    fndesc = lowering.PythonFunctionDescriptor.from_object_mode_function(interp)
     lower = lowering.PyLower(targetctx, fndesc)
     lower.lower()
 

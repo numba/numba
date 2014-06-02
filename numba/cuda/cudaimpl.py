@@ -29,6 +29,32 @@ def ptx_grid2d(context, builder, sig, args):
     return cgutils.pack_array(builder, [r1, r2])
 
 
+@register
+@implement('ptx.gridsize.1d', types.intp)
+def ptx_gridsize1d(context, builder, sig, args):
+    assert len(args) == 1
+    ntidx = call_sreg(builder, "ntid.x")
+    nctaidx = call_sreg(builder, "nctaid.x")
+
+    res = builder.mul(ntidx, nctaidx)
+    return res
+
+
+@register
+@implement('ptx.gridsize.2d', types.intp)
+def ptx_gridsize2d(context, builder, sig, args):
+    assert len(args) == 1
+    ntidx = call_sreg(builder, "ntid.x")
+    nctaidx = call_sreg(builder, "nctaid.x")
+
+    ntidy = call_sreg(builder, "ntid.y")
+    nctaidy = call_sreg(builder, "nctaid.y")
+
+    r1 = builder.mul(ntidx, nctaidx)
+    r2 = builder.mul(ntidy, nctaidy)
+    return cgutils.pack_array(builder, [r1, r2])
+
+
 # -----------------------------------------------------------------------------
 
 def ptx_sreg_template(sreg):
@@ -166,7 +192,12 @@ def ptx_atomic_add_intp(context, builder, sig, args):
 
     lary = context.make_array(aryty)(context, builder, ary)
     ptr = cgutils.get_item_pointer(builder, aryty, lary, [ind])
-    return builder.atomic_rmw('add', ptr, val, 'monotonic')
+
+    if aryty.dtype == types.float32:
+        lmod = cgutils.get_module(builder)
+        return builder.call(nvvmutils.declare_atomic_add_float32(lmod), (ptr, val))
+    else:
+        return builder.atomic_rmw('add', ptr, val, 'monotonic')
 
 
 @register
@@ -190,7 +221,12 @@ def ptx_atomic_add_unituple(context, builder, sig, args):
 
     lary = context.make_array(aryty)(context, builder, ary)
     ptr = cgutils.get_item_pointer(builder, aryty, lary, indices)
-    return builder.atomic_rmw('add', ptr, val, 'monotonic')
+
+    if aryty.dtype == types.float32:
+        lmod = cgutils.get_module(builder)
+        return builder.call(nvvmutils.declare_atomic_add_float32(lmod), (ptr, val))
+    else:
+        return builder.atomic_rmw('add', ptr, val, 'monotonic')
 
 
 @register
@@ -214,7 +250,12 @@ def ptx_atomic_add_tuple(context, builder, sig, args):
 
     lary = context.make_array(aryty)(context, builder, ary)
     ptr = cgutils.get_item_pointer(builder, aryty, lary, indices)
-    return builder.atomic_rmw('add', ptr, val, 'monotonic')
+
+    if aryty.dtype == types.float32:
+        lmod = cgutils.get_module(builder)
+        return builder.call(nvvmutils.declare_atomic_add_float32(lmod), (ptr, val))
+    else:
+        return builder.atomic_rmw('add', ptr, val, 'monotonic')
 
 
 # -----------------------------------------------------------------------------

@@ -69,7 +69,7 @@ class TypeVar(object):
         if self.locked:
             [expect] = list(self.typeset)
             if self.context.type_compatibility(typ, expect) is None:
-                raise TypingError("No convertsion from %s to %s for "
+                raise TypingError("No conversion from %s to %s for "
                                   "'%s'" % (typ, expect, self.var))
         else:
             self.typeset = set([typ])
@@ -245,7 +245,7 @@ class TypeVarMap(dict):
 
     def __getitem__(self, name):
         if name not in self:
-            self[name] = TypeVar(self.context, name)
+            self[name] = TypeVar(self.context, name.split('.', 1)[0])
         return super(TypeVarMap, self).__getitem__(name)
 
     def __setitem__(self, name, value):
@@ -288,12 +288,10 @@ class TypeInferer(object):
     def seed_return(self, typ):
         """Seeding of return value is optional.
         """
-        # self.return_type = typ
         for blk in utils.dict_itervalues(self.blocks):
             inst = blk.terminator
             if isinstance(inst, ir.Return):
                 self.typevars[inst.value.name].lock(typ)
-                # self.typevars[inst.value.name].lock()
 
     def build_constrain(self):
         for blk in utils.dict_itervalues(self.blocks):
@@ -475,8 +473,8 @@ class TypeInferer(object):
             gvty = self.context.get_global_type(gvar.value)
             self.typevars[target.name].lock(gvty)
             self.assumed_immutables.add(inst)
-        elif gvar.name == 'len' and gvar.value is len:
 
+        elif gvar.name == 'len' and gvar.value is len:
             gvty = self.context.get_global_type(gvar.value)
             self.typevars[target.name].lock(gvty)
             self.assumed_immutables.add(inst)
@@ -484,6 +482,11 @@ class TypeInferer(object):
         elif gvar.name in ('True', 'False'):
             assert gvar.value in (True, False)
             self.typevars[target.name].lock(types.boolean)
+            self.assumed_immutables.add(inst)
+
+        elif gvar.name == 'None':
+            assert gvar.value is None
+            self.typevars[target.name].lock(types.none)
             self.assumed_immutables.add(inst)
 
         elif (isinstance(gvar.value, tuple) and
