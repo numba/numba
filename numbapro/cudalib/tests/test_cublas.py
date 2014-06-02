@@ -1,15 +1,15 @@
 from __future__ import print_function, absolute_import, division
 import numpy as np
-import unittest
-from .support import addtest, main
-
+from numbapro.testsupport import unittest
 from numbapro import cuda
 
-@addtest
+
 class TestCuBlasBinding(unittest.TestCase):
     def test_lib(self):
         from numbapro.cudalib.cublas.binding import (cuBlas,
-                          CUBLAS_POINTER_MODE_HOST, CUBLAS_ATOMICS_NOT_ALLOWED)
+                                                     CUBLAS_POINTER_MODE_HOST,
+                                                     CUBLAS_ATOMICS_NOT_ALLOWED)
+
         stream = cuda.stream()
         blas = cuBlas()
         print(blas.version)
@@ -22,6 +22,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def Tnrm2(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         x = np.random.random(10).astype(dtype)
         d_x = cuda.to_device(x)
 
@@ -44,6 +45,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def Tdot(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         x = np.random.random(10).astype(dtype)
         y = np.random.random(10).astype(dtype)
         d_x = cuda.to_device(x)
@@ -77,6 +79,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def Tscal(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         alpha = 1.234
         x = np.random.random(10).astype(dtype)
         x0 = x.copy()
@@ -109,6 +112,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def Taxpy(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         alpha = 1.234
         x = np.random.random(10).astype(dtype)
         y = np.random.random(10).astype(dtype)
@@ -138,6 +142,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def Itamax(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         x = np.random.random(10).astype(dtype)
 
         d_x = cuda.to_device(x)
@@ -160,6 +165,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def Itamin(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         x = np.random.random(10).astype(dtype)
 
         d_x = cuda.to_device(x)
@@ -182,6 +188,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def Tasum(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         x = np.random.random(10).astype(dtype)
 
         d_x = cuda.to_device(x)
@@ -204,6 +211,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def Trot(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         x = np.random.random(10).astype(dtype)
         y = np.random.random(10).astype(dtype)
         angle = 1.342
@@ -244,11 +252,12 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def Trotg(self, fn):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         a, b = np.random.random(), np.random.random()
         blas = cuBlas()
         r, z, c, s = getattr(blas, fn)(a, b)
 
-        rot = np.array([[c,           s],
+        rot = np.array([[c, s],
                         [-np.conj(s), c]])
         vec = np.array([[a],
                         [b]])
@@ -271,6 +280,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def Trotm(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         x = np.random.random(10).astype(dtype)
         y = np.random.random(10).astype(dtype)
 
@@ -300,6 +310,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def Trotmg(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         d1, d2, x1, y1 = np.random.random(4).tolist()
 
         blas = cuBlas()
@@ -336,6 +347,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def Tgbmv(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         blas = cuBlas()
         kl = 0
         ku = 0
@@ -370,6 +382,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def Tgemv(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         blas = cuBlas()
         alpha = 1.
         beta = 0.
@@ -402,6 +415,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def Ttrmv(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         blas = cuBlas()
         uplo = 'U'
         trans = 'N'
@@ -434,6 +448,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def Ttbmv(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         A = np.array([[1, 2, 0],
                       [0, 3, 0],
                       [1, 0, 1]], order='F', dtype=dtype)
@@ -469,9 +484,10 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def Ttpmv(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         AP = np.array([[1, 2, 0],
-                      [0, 3, 0],
-                      [1, 0, 1]], order='F', dtype=dtype)
+                       [0, 3, 0],
+                       [1, 0, 1]], order='F', dtype=dtype)
         x = np.array([1, 2, 3], dtype=dtype)
         dAP = cuda.to_device(AP)
         dx = cuda.to_device(x)
@@ -502,6 +518,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def Ttrsv(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         A = np.array([[1, 2, 0],
                       [0, 3, 0],
                       [1, 0, 1]], order='F', dtype=dtype)
@@ -535,6 +552,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def _Ttpsv(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         A = np.array([[1, 2, 0],
                       [0, 3, 0],
                       [1, 0, 1]], order='F', dtype=dtype)
@@ -568,6 +586,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def _Ttbsv(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         A = np.array([[1, 2, 0],
                       [0, 3, 0],
                       [1, 0, 1]], order='F', dtype=dtype)
@@ -602,6 +621,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def _Tsymv(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         A = np.array([[1, 2, 0],
                       [0, 3, 0],
                       [1, 0, 1]], order='F', dtype=dtype)
@@ -645,6 +665,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def _Tsbmv(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         A = np.array([[1, 2, 0],
                       [0, 3, 0],
                       [1, 0, 1]], order='F', dtype=dtype)
@@ -683,9 +704,10 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def _Tspmv(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         AP = np.array([[1, 2, 0],
-                      [0, 3, 0],
-                      [1, 0, 1]], order='F', dtype=dtype)
+                       [0, 3, 0],
+                       [1, 0, 1]], order='F', dtype=dtype)
         x = np.array([1, 2, 3], dtype=dtype)
         y = np.array([8, 2, 3], dtype=dtype)
         dAP = cuda.to_device(AP)
@@ -720,6 +742,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def _Tger(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         A = np.array([[1, 2, 0],
                       [0, 3, 0],
                       [1, 0, 1]], order='F', dtype=dtype)
@@ -762,6 +785,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def _Tsyr(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         A = np.array([[1, 2, 0],
                       [0, 3, 0],
                       [1, 0, 1]], order='F', dtype=dtype)
@@ -796,6 +820,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def _Ther(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         A = np.array([[1, 2, 0],
                       [0, 3, 0],
                       [1, 0, 1]], order='F', dtype=dtype)
@@ -824,9 +849,10 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def _Tspr(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         AP = np.array([[1, 2, 0],
-                      [0, 3, 0],
-                      [1, 0, 1]], order='F', dtype=dtype)
+                       [0, 3, 0],
+                       [1, 0, 1]], order='F', dtype=dtype)
         x = np.array([1, 2, 3], dtype=dtype)
 
         dAP = cuda.to_device(AP)
@@ -858,6 +884,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def _Tsyr2(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         A = np.array([[1, 2, 0],
                       [0, 3, 0],
                       [1, 0, 1]], order='F', dtype=dtype)
@@ -902,6 +929,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def _Tspr2(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         A = np.array([[1, 2, 0],
                       [0, 3, 0],
                       [1, 0, 1]], order='F', dtype=dtype)
@@ -942,6 +970,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def _Tgemm(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         A = np.array([[1, 2, 0],
                       [0, 3, 0],
                       [1, 0, 1]], order='F', dtype=dtype)
@@ -988,6 +1017,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def _Tsyrk(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         A = np.array([[1, 2, 0],
                       [0, 3, 0],
                       [1, 0, 1]], order='F', dtype=dtype)
@@ -1036,6 +1066,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def _Tsymm(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         A = np.array([[1, 2, 0],
                       [0, 3, 0],
                       [1, 0, 1]], order='F', dtype=dtype)
@@ -1055,7 +1086,7 @@ class TestCuBlasBinding(unittest.TestCase):
         beta = .34
 
         side = 'L'
-        uplo =  'U'
+        uplo = 'U'
 
         blas = cuBlas()
 
@@ -1089,6 +1120,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def _Ttrsm(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         A = np.array([[1, 2, 0],
                       [0, 3, 0],
                       [1, 0, 1]], order='F', dtype=dtype)
@@ -1100,7 +1132,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
         alpha = 1.2
         side = 'L'
-        uplo =  'U'
+        uplo = 'U'
         trans = 'N'
         diag = False
 
@@ -1128,6 +1160,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def _Ttrmm(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         A = np.array([[1, 2, 0],
                       [0, 3, 0],
                       [1, 0, 1]], order='F', dtype=dtype)
@@ -1146,7 +1179,7 @@ class TestCuBlasBinding(unittest.TestCase):
         alpha = 1.2
 
         side = 'L'
-        uplo =  'U'
+        uplo = 'U'
         trans = 'N'
         diag = False
 
@@ -1175,6 +1208,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def _Tdgmm(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         A = np.array([[1, 2, 0],
                       [0, 3, 0],
                       [1, 0, 1]], order='F', dtype=dtype)
@@ -1215,6 +1249,7 @@ class TestCuBlasBinding(unittest.TestCase):
 
     def _Tgeam(self, fn, dtype):
         from numbapro.cudalib.cublas.binding import cuBlas
+
         A = np.array([[1, 2, 0],
                       [0, 3, 0],
                       [1, 0, 1]], order='F', dtype=dtype)
@@ -1259,11 +1294,10 @@ class TestCuBlasBinding(unittest.TestCase):
         self._Tgeam('Zgeam', np.complex128)
 
 
-
-@addtest
 class TestCuBlasAPI(unittest.TestCase):
     def setUp(self):
         from numbapro.cudalib.cublas import Blas
+
         self.blas = Blas()
 
 
@@ -1311,8 +1345,8 @@ class TestCuBlasAPI(unittest.TestCase):
     def test_scal(self):
         self.Tscal(self.blas.scal, np.float32, 1.234)
         self.Tscal(self.blas.scal, np.float64, 1.234)
-        self.Tscal(self.blas.scal, np.complex64, 1.234+5j)
-        self.Tscal(self.blas.scal, np.complex128, 1.234+5j)
+        self.Tscal(self.blas.scal, np.complex64, 1.234 + 5j)
+        self.Tscal(self.blas.scal, np.complex128, 1.234 + 5j)
         self.Tscal(self.blas.scal, np.complex64, 1.234)
         self.Tscal(self.blas.scal, np.complex128, 1.234)
 
@@ -1389,7 +1423,7 @@ class TestCuBlasAPI(unittest.TestCase):
                 np.array(np.random.random(), dtype=dt2))
         r, z, c, s = fn(a, b)
 
-        rot = np.array([[c,           s],
+        rot = np.array([[c, s],
                         [-np.conj(s), c]])
         vec = np.array([[a],
                         [b]])
@@ -1538,8 +1572,8 @@ class TestCuBlasAPI(unittest.TestCase):
 
     def Ttpmv(self, fn, dtype):
         AP = np.array([[1, 2, 0],
-                      [0, 3, 0],
-                      [1, 0, 1]], order='F', dtype=dtype)
+                       [0, 3, 0],
+                       [1, 0, 1]], order='F', dtype=dtype)
         x = np.array([1, 2, 3], dtype=dtype)
 
         uplo = 'U'
@@ -1651,8 +1685,8 @@ class TestCuBlasAPI(unittest.TestCase):
 
     def Tspmv(self, fn, dtype):
         AP = np.array([[1, 2, 0],
-                      [0, 3, 0],
-                      [1, 0, 1]], order='F', dtype=dtype)
+                       [0, 3, 0],
+                       [1, 0, 1]], order='F', dtype=dtype)
         x = np.array([1, 2, 3], dtype=dtype)
         y = np.array([8, 2, 3], dtype=dtype)
         alpha = 1.2
@@ -1725,8 +1759,8 @@ class TestCuBlasAPI(unittest.TestCase):
 
     def Tspr(self, fn, dtype):
         AP = np.array([[1, 2, 0],
-                      [0, 3, 0],
-                      [1, 0, 1]], order='F', dtype=dtype)
+                       [0, 3, 0],
+                       [1, 0, 1]], order='F', dtype=dtype)
         x = np.array([1, 2, 3], dtype=dtype)
         alpha = 1.2
         uplo = 'U'
@@ -1816,7 +1850,6 @@ class TestCuBlasAPI(unittest.TestCase):
                       [0, 3, 0],
                       [1, 0, 1]], order='F', dtype=dtype)
 
-
         C = np.array([[0, 9, 0],
                       [0, 1, 1],
                       [0, 0, 1]], order='F', dtype=dtype)
@@ -1851,7 +1884,7 @@ class TestCuBlasAPI(unittest.TestCase):
         alpha = 1.2
         beta = .34
         side = 'L'
-        uplo =  'U'
+        uplo = 'U'
         m = n = 3
         C0 = C.copy()
         fn(side, uplo, m, n, alpha, A, B, beta, C)
@@ -1874,7 +1907,7 @@ class TestCuBlasAPI(unittest.TestCase):
                       [1, 4, 1]], order='F', dtype=dtype)
         alpha = 1.2
         side = 'L'
-        uplo =  'U'
+        uplo = 'U'
         trans = 'N'
         diag = False
         m = n = 3
@@ -1898,7 +1931,7 @@ class TestCuBlasAPI(unittest.TestCase):
                       [0, 0, 1]], order='F', dtype=dtype)
         alpha = 1.2
         side = 'L'
-        uplo =  'U'
+        uplo = 'U'
         trans = 'N'
         diag = False
         m = n = 3
@@ -1950,6 +1983,7 @@ class TestCuBlasAPI(unittest.TestCase):
     def test_geam(self):
         self._test_all(self.Tgeam, self.blas.geam)
 
+
 if __name__ == '__main__':
-    main()
+    unittest.main()
 

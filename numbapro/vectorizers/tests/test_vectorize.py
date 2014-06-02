@@ -1,13 +1,16 @@
+from __future__ import absolute_import, print_function, division
+from numbapro.testsupport import unittest
 import numpy as np
 from numba import int32, uint32, float32, float64
 from numbapro import vectorize
 from timeit import default_timer as time
-from .support import testcase, main, assertTrue
+
 
 def vector_add(a, b):
     return a + b
 
-def template_vectorize(target):
+
+def template_vectorize(self, target):
     # build basic native code ufunc
     sig = [int32(int32, int32),
            uint32(uint32, uint32),
@@ -35,28 +38,28 @@ def template_vectorize(target):
         print("Numba time: %fs" % tnumba)
 
         if tnumba < tnumpy:
-            print("Numba is FASTER by %fx" % (tnumpy/tnumba))
+            print("Numba is FASTER by %fx" % (tnumpy / tnumba))
         else:
-            print("Numba is SLOWER by %fx" % (tnumba/tnumpy))
+            print("Numba is SLOWER by %fx" % (tnumba / tnumpy))
 
-        assertTrue(np.allclose(gold, result))
+        self.assertTrue(np.allclose(gold, result))
 
     test(np.double)
     test(np.float32)
     test(np.int32)
     test(np.uint32)
 
-@testcase
-def test_basic_vectorize():
-    template_vectorize('cpu')
 
-@testcase
-def test_parallel_vectorize():
-    template_vectorize('parallel')
+class TestVectorize(unittest.TestCase):
+    def test_basic_vectorize(self):
+        template_vectorize(self, 'cpu')
 
-@testcase
-def test_stream_vectorize():
-    template_vectorize('stream')
+    def test_parallel_vectorize(self):
+        template_vectorize(self, 'parallel')
+
+    def test_stream_vectorize(self):
+        template_vectorize(self, 'stream')
+
 
 if __name__ == '__main__':
-    main()
+    unittest.main()

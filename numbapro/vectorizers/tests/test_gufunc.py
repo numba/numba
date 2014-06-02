@@ -1,9 +1,11 @@
+from __future__ import absolute_import, print_function, division
+from numbapro.testsupport import unittest
 from numba.decorators import jit
-from numba import float32, float_
+from numba import float32
 import numpy as np
 import numpy.core.umath_tests as ut
 from numbapro.vectorizers import GUVectorize
-from .support import testcase, main, assertTrue
+
 
 def matmulcore(A, B, C):
     m, n = A.shape
@@ -14,23 +16,28 @@ def matmulcore(A, B, C):
             for k in range(n):
                 C[i, j] += A[i, k] * B[k, j]
 
-@testcase
-def test_numba():
-    jit_matmulcore = jit(argtypes=[float32[:,:], float32[:,:], float32[:,:]])(matmulcore)
 
-    A = np.arange(16, dtype=np.float32).reshape(4, 4)
-    B = np.arange(16, dtype=np.float32).reshape(4, 4)
-    C = np.zeros(16, dtype=np.float32).reshape(4, 4)
-    Gold = np.matrix(A) * np.matrix(B)
+class TestGUFunc(unittest.TestCase):
+    def test_numba(self):
+        jit_matmulcore = jit(
+            argtypes=[float32[:, :], float32[:, :], float32[:, :]])(matmulcore)
 
-    jit_matmulcore(A, B, C)
+        A = np.arange(16, dtype=np.float32).reshape(4, 4)
+        B = np.arange(16, dtype=np.float32).reshape(4, 4)
+        C = np.zeros(16, dtype=np.float32).reshape(4, 4)
+        Gold = np.matrix(A) * np.matrix(B)
 
-    if (C != Gold).any():
-        raise ValueError
+        jit_matmulcore(A, B, C)
 
-def _test_gufunc(target):
+        self.assertTrue((C == Gold).all())
+
+    def test_gufunc(self):
+        _test_gufunc(self, 'cpu')
+
+
+def _test_gufunc(self, target):
     gufunc = GUVectorize(matmulcore, '(m,n),(n,p)->(m,p)', target=target)
-    gufunc.add(argtypes=[float32[:,:], float32[:,:], float32[:,:]])
+    gufunc.add(argtypes=[float32[:, :], float32[:, :], float32[:, :]])
     gufunc = gufunc.build_ufunc()
 
     matrix_ct = 1001 # an odd number to test thread/block division in CUDA
@@ -40,7 +47,7 @@ def _test_gufunc(target):
     C = gufunc(A, B)
     Gold = ut.matrix_multiply(A, B)
 
-    assertTrue(np.allclose(C, Gold))
+    self.assertTrue(np.allclose(C, Gold))
 
 #
 ### test gufuncs
@@ -72,12 +79,6 @@ def _test_gufunc(target):
 #         print(Gold)
 #         raise ValueError
 
-@testcase
-def test_gufunc():
-    _test_gufunc('cpu')
-
-
-
 if __name__ == '__main__':
-    main()
+    unittest.main()
 

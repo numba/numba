@@ -23,9 +23,9 @@ def test():
         cfg = dict(buffer=True, verbosity=3)
 
         print('vectorizers'.center(80, '-'))
-        import numbapro.vectorizers.tests.support
+        import numbapro.vectorizers.tests
 
-        failfast(numbapro.vectorizers.tests.support.run(**cfg))
+        failfast(numbapro.vectorizers.tests.test(**cfg))
 
         print('cuda libraries locator'.center(80, '-'))
         import numba.cuda.cudadrv.libs
@@ -36,24 +36,24 @@ def test():
 
         if numbapro.cuda.is_available:
             print('cudadrv'.center(80, '-'))
-            import numbapro.cudadrv.tests.support
+            import numbapro.cudadrv.tests
 
-            failfast(numbapro.cudadrv.tests.support.run(**cfg))
+            failfast(numbapro.cudadrv.tests.test(**cfg))
 
             print('cudalib'.center(80, '-'))
-            import numbapro.cudalib.tests.support
+            import numbapro.cudalib.tests
 
-            failfast(numbapro.cudalib.tests.support.run(**cfg))
+            failfast(numbapro.cudalib.tests.test(**cfg))
 
             print('cudapy'.center(80, '-'))
-            import numbapro.cudapy.tests.support
+            import numbapro.cudapy.tests
 
-            failfast(numbapro.cudapy.tests.support.run(**cfg))
+            failfast(numbapro.cudapy.tests.test(**cfg))
 
             print('cudavec'.center(80, '-'))
-            import numbapro.cudavec.tests.support
+            import numbapro.cudavec.tests
 
-            failfast(numbapro.cudavec.tests.support.run(**cfg))
+            failfast(numbapro.cudavec.tests.test(**cfg))
 
         else:
             print('skipped cuda tests')

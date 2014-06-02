@@ -231,7 +231,8 @@ class CudaUFuncDispatcher(object):
         return block_count, thread_count
 
     def reduce(self, arg, stream=0):
-        assert len(self.functions.keys()[0]) == 2, "must be a binary ufunc"
+        assert len(list(self.functions.keys())[0]) == 2, "must be a binary " \
+                                                         "ufunc"
         assert arg.ndim == 1, "must use 1d array"
 
         n = arg.shape[0]

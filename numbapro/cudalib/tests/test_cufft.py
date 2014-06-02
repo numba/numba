@@ -1,10 +1,9 @@
+from __future__ import print_function, absolute_import, division
 import numpy as np
-import unittest
-from .support import addtest, main
-
+from numbapro.testsupport import unittest
 from numbapro import cuda
 
-@addtest
+
 class TestCuFFTLib(unittest.TestCase):
     def test_lib(self):
         from numbapro.cudalib.cufft.binding import libcufft
@@ -12,7 +11,7 @@ class TestCuFFTLib(unittest.TestCase):
         print('cufft version %d' % cufft.version)
         self.assertNotEqual(libcufft().version, 0)
 
-@addtest
+
 class TestCuFFTPlan(unittest.TestCase):
     def test_plan1d(self):
         from numbapro.cudalib.cufft.binding import Plan, CUFFT_C2C
@@ -100,7 +99,7 @@ class TestCuFFTPlan(unittest.TestCase):
         d_xf_gpu.copy_to_host(xf_gpu)
         self.assertTrue(np.allclose(xf[:, :, 0:rowsize//2+1], xf_gpu, atol=1e-6))
 
-@addtest
+
 class TestCuFFTAPI(unittest.TestCase):
     def test_fft_1d_single(self):
         from numbapro.cudalib.cufft import fft
@@ -137,7 +136,6 @@ class TestCuFFTAPI(unittest.TestCase):
 
         self.assertTrue( np.allclose(xf[:, 0:N1/2+1], xf_gpu, atol=1e-6) )
 
-
     def test_fft_2d_double(self):
         from numbapro.cudalib.cufft import fft
         N2 = 2
@@ -150,7 +148,6 @@ class TestCuFFTAPI(unittest.TestCase):
         fft(x, xf_gpu)
 
         self.assertTrue( np.allclose(xf[:, 0:N1/2+1], xf_gpu, atol=1e-6) )
-
 
     def test_fft_3d_single(self):
         from numbapro.cudalib.cufft import fft
@@ -322,5 +319,5 @@ class TestCuFFTAPI(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    main()
+    unittest.main()
 

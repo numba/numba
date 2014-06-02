@@ -1,9 +1,10 @@
-from .support import addtest, main
+from __future__ import absolute_import, print_function, division
+from numbapro.testsupport import unittest
 from numbapro import guvectorize
 from numba import void, float32
 import numpy as np
 import numpy.core.umath_tests as ut
-import unittest
+
 
 def matmulcore(A, B, C):
     m, n = A.shape
@@ -14,7 +15,7 @@ def matmulcore(A, B, C):
             for k in range(n):
                 C[i, j] += A[i, k] * B[k, j]
 
-@addtest
+
 class TestVectorizeDecor(unittest.TestCase):
 
     def test_cpu_guvectorize(self):
@@ -35,4 +36,4 @@ class TestVectorizeDecor(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    main()
+    unittest.main()

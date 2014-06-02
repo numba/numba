@@ -1,13 +1,26 @@
 from __future__ import print_function, absolute_import
 import operator
 import warnings
+from functools import reduce
 import numpy
 from numba.npyufunc.sigparse import parse_signature
 from numba import sigutils, types, cgutils, cuda
 from numba.cuda import nvvmutils
 from numba.cuda.compiler import CUDAKernel
+from numba.utils import IS_PY3
 import llvm.core as lc
 from . import dispatch
+
+if IS_PY3:
+    def _exec(codestr, glbls):
+        exec(codestr, glbls)
+else:
+    eval(compile("""
+def _exec(codestr, glbls):
+    exec codestr in glbls
+""",
+         "<_exec>", "exec"))
+
 
 vectorizer_stager_source = '''
 def __vectorized_%(name)s(%(args)s, __out__):
@@ -53,11 +66,11 @@ class CudaVectorize(object):
                     args=', '.join(args),
                     argitems=', '.join('%s[__tid__]' % i for i in args))
         kernelsource = vectorizer_stager_source % fmts
-        glbl = self.pyfunc.func_globals
+        glbl = self.pyfunc.__globals__
         glbl.update({'__cuda__': cuda,
                      '__core__': cudevfn})
-        # exec kernelsource in glbl
-        exec(kernelsource, glbl)
+
+        _exec(kernelsource, glbl)
 
         stager = glbl['__vectorized_%s' % funcname]
         kargs = [a[:] for a in list(sig.args) + [sig.return_type]]

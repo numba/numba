@@ -1,24 +1,23 @@
-from __future__ import division
+from __future__ import absolute_import, print_function, division
 from numbapro import vectorize
-from numba import cuda, jit, float32
+from numba import cuda, float32
 import numpy as np
-import unittest
-from .support import addtest, main, assertTrue
+from numbapro.testsupport import unittest
+
 
 @cuda.jit(float32(float32, float32, float32), device=True)
 def cu_device_fn(x, y, z):
     return x ** y / z
 
+
 def cu_ufunc(x, y, z):
     return cu_device_fn(x, y, z)
 
-@addtest
+
 class TestCudaVectorizeDeviceCall(unittest.TestCase):
-
     def test_cuda_vectorize_device_call(self):
-
-        ufunc = vectorize([float32(float32, float32, float32)], target='gpu')(cu_ufunc)
-
+        ufunc = vectorize([float32(float32, float32, float32)], target='gpu')(
+            cu_ufunc)
 
         N = 100
 
@@ -30,7 +29,8 @@ class TestCudaVectorizeDeviceCall(unittest.TestCase):
 
         gold = (X ** Y) / Z
 
-        assertTrue(np.allclose(out, gold))
+        self.assertTrue(np.allclose(out, gold))
+
 
 if __name__ == '__main__':
-    main()
+    unittest.main()

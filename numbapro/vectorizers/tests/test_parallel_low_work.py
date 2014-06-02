@@ -1,18 +1,18 @@
-'''
+"""
 There was a deadlock problem when work count is smaller than number of threads.
-'''
-from __future__ import division
+"""
+from __future__ import absolute_import, print_function, division
+from numbapro.testsupport import unittest
 import numpy as np
 from numba import float32, float64, int32, uint32
 from numbapro.vectorizers import Vectorize
 from timeit import default_timer as time
-import unittest
-from .support import addtest, main
+
 
 def vector_add(a, b):
     return a + b
 
-@addtest
+
 class TestParallelLowWorkCount(unittest.TestCase):
     def test_low_workcount(self):
         # build parallel native code ufunc
@@ -43,9 +43,9 @@ class TestParallelLowWorkCount(unittest.TestCase):
             print("Numba time: %fs" % tnumba)
 
             if tnumba < tnumpy:
-                print("Numba is FASTER by %fx" % (tnumpy/tnumba))
+                print("Numba is FASTER by %fx" % (tnumpy / tnumba))
             else:
-                print("Numba is SLOWER by %fx" % (tnumba/tnumpy))
+                print("Numba is SLOWER by %fx" % (tnumba / tnumpy))
 
             self.assertTrue(np.allclose(gold, result))
 
@@ -54,5 +54,6 @@ class TestParallelLowWorkCount(unittest.TestCase):
         test(np.int32)
         test(np.uint32)
 
+
 if __name__ == '__main__':
-    main()
+    unittest.main()

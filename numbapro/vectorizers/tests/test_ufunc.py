@@ -1,8 +1,8 @@
-import unittest
+from __future__ import absolute_import, print_function, division
+from numbapro.testsupport import unittest
 import numpy as np
 from numba import float32
 from numbapro.vectorizers import Vectorize
-from .support import addtest, main, assertTrue
 
 dtype = np.float32
 a = np.arange(80, dtype=dtype).reshape(8, 10)
@@ -10,11 +10,14 @@ b = a.copy()
 c = a.copy(order='F')
 d = np.arange(16 * 20, dtype=dtype).reshape(16, 20)[::2, ::2]
 
+
 def add(a, b):
     return a + b
 
+
 def add_multiple_args(a, b, c, d):
     return a + b + c + d
+
 
 def gufunc_add(a, b):
     result = 0.0
@@ -29,6 +32,7 @@ def ufunc_reduce(ufunc, arg):
         arg = ufunc.reduce(arg)
     return arg
 
+
 vectorizers = [
     Vectorize,
     # ParallelVectorize,
@@ -37,7 +41,7 @@ vectorizers = [
     # GUFuncVectorize,
 ]
 
-@addtest
+
 class TestUFuncs(unittest.TestCase):
     def _test_ufunc_attributes(self, cls, a, b, *args):
         "Test ufunc attributes"
@@ -46,19 +50,20 @@ class TestUFuncs(unittest.TestCase):
         ufunc = vectorizer.build_ufunc()
 
         info = (cls, a.ndim)
-        assertTrue(np.all(ufunc(a, b) == a + b), info)
-        assertTrue(ufunc_reduce(ufunc, a) == np.sum(a), info)
-        assertTrue(np.all(ufunc.accumulate(a) == np.add.accumulate(a)), info)
-        assertTrue(np.all(ufunc.outer(a, b) == np.add.outer(a, b)), info)
+        self.assertTrue(np.all(ufunc(a, b) == a + b), info)
+        self.assertTrue(ufunc_reduce(ufunc, a) == np.sum(a), info)
+        self.assertTrue(np.all(ufunc.accumulate(a) == np.add.accumulate(a)), info)
+        self.assertTrue(np.all(ufunc.outer(a, b) == np.add.outer(a, b)), info)
 
     def _test_broadcasting(self, cls, a, b, c, d):
         "Test multiple args"
         vectorizer = cls(add_multiple_args)
-        vectorizer.add(restype=float32, argtypes=[float32, float32, float32, float32])
+        vectorizer.add(restype=float32,
+                       argtypes=[float32, float32, float32, float32])
         ufunc = vectorizer.build_ufunc()
 
         info = (cls, a.shape)
-        assertTrue(np.all(ufunc(a, b, c, d) == a + b + c + d), info)
+        self.assertTrue(np.all(ufunc(a, b, c, d) == a + b + c + d), info)
 
     def test_ufunc_attributes(self):
         for v in vectorizers: # 1D
@@ -67,7 +72,7 @@ class TestUFuncs(unittest.TestCase):
             self._test_ufunc_attributes(v, a, b)
         for v in vectorizers: # 3D
             self._test_ufunc_attributes(v, a[:, np.newaxis, :],
-                                           b[np.newaxis, :, :])
+                                        b[np.newaxis, :, :])
 
     def test_broadcasting(self):
         for v in vectorizers: # 1D
@@ -76,7 +81,7 @@ class TestUFuncs(unittest.TestCase):
             self._test_broadcasting(v, a, b, c, d)
         for v in vectorizers: # 3D
             self._test_broadcasting(v, a[:, np.newaxis, :], b[np.newaxis, :, :],
-                                       c[:, np.newaxis, :], d[np.newaxis, :, :])
+                                    c[:, np.newaxis, :], d[np.newaxis, :, :])
 
     def test_implicit_broadcasting(self):
         for v in vectorizers:
@@ -85,8 +90,8 @@ class TestUFuncs(unittest.TestCase):
             ufunc = vectorizer.build_ufunc()
 
             broadcasting_b = b[np.newaxis, :, np.newaxis, np.newaxis, :]
-            assertTrue(np.all(ufunc(a, broadcasting_b) == a + broadcasting_b))
+            self.assertTrue(np.all(ufunc(a, broadcasting_b) == a + broadcasting_b))
 
 
 if __name__ == '__main__':
-    main()
+    unittest.main()
