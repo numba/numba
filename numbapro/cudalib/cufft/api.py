@@ -5,7 +5,7 @@ from numbapro import cuda as _cuda
 def _prepare_types(pairs):
     return dict((tuple(map(np.dtype, k)),
                  getattr(_cufft, 'CUFFT_' + v))
-                for k, v in pairs.iteritems())
+                for k, v in pairs.items())
 
 class FFTPlan(object):
     '''

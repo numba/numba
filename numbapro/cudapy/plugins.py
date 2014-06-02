@@ -13,6 +13,7 @@ def autotune(self):
     if has_autotune:
         return self._autotune
     else:
+        help(self._func)
         cinfo = self._func.get_info()
         at = AutoTuner.parse(self.entry_name, cinfo,
                              cc=self.device.compute_capability)

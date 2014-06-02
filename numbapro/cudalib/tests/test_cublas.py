@@ -1,3 +1,4 @@
+from __future__ import print_function, absolute_import, division
 import numpy as np
 import unittest
 from .support import addtest, main
@@ -11,7 +12,7 @@ class TestCuBlasBinding(unittest.TestCase):
                           CUBLAS_POINTER_MODE_HOST, CUBLAS_ATOMICS_NOT_ALLOWED)
         stream = cuda.stream()
         blas = cuBlas()
-        print blas.version
+        print(blas.version)
         blas.stream = stream
         self.assertTrue(blas.stream is stream)
         blas.pointer_mode = CUBLAS_POINTER_MODE_HOST
@@ -1551,7 +1552,6 @@ class TestCuBlasAPI(unittest.TestCase):
 
     def test_tpmv(self):
         self._test_all(self.Ttpmv, self.blas.tpmv)
-
 
     def Ttrsv(self, fn, dtype):
         A = np.array([[1, 2, 0],

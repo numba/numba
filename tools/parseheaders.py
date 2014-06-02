@@ -93,7 +93,7 @@ class DeclParser(object):
     def next_token(self):
         while True:
             try:
-                tok = self.tokenizer.next()
+                tok = next(self.tokenizer)
             except EOS:
                 tok = Token(text=None, kind='EOS')
 

@@ -1,10 +1,11 @@
+from __future__ import print_function, absolute_import, division
 from contextlib import contextmanager
 import numpy as np
 from .binding import cuBlas
 from numbapro import cuda
 
 def _dtype_vtable(table):
-    return dict((np.dtype(k), v) for k, v in table.iteritems())
+    return dict((np.dtype(k), v) for k, v in table.items())
 
 def _sel_complex(real, imag):
     return {float: real,
@@ -18,7 +19,7 @@ def _auto_l2_functions(fname, tnames, argfmt, extras):
     writebacks = set()
     readonlys = set()
     arglist = []
-    extras = map(lambda s: s.lstrip().rstrip(), extras.split(','))
+    extras = [s.lstrip().rstrip() for s in  extras.split(',')]
     dtypemap = {
         np.dtype(np.float32): 'S',
         np.dtype(np.float64): 'D',
@@ -48,7 +49,7 @@ def _auto_l2_functions(fname, tnames, argfmt, extras):
                 kws[a] = kws[a[-1].upper()].shape[0]
             elif a.startswith('inc') and len(a) == 4:
                 ary = kws[a[-1]]
-                kws[a] = ary.strides[0] / ary.dtype.itemsize
+                kws[a] = ary.strides[0] // ary.dtype.itemsize
             else:
                 assert False, 'unreachable'
 

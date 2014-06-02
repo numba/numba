@@ -11,11 +11,6 @@ versioneer.parentdir_prefix = 'numbapro-'
 
 ext_modules = [
     Extension(
-        name='numbapro._utils.mviewbuf',
-        sources=['numbapro/_utils/mviewbuf.c'],
-        # extra_compile_args = ['-pedantic', '-ansi'], # for checking C90
-    ),
-    Extension(
         name='numbapro.vectorizers.workqueue',
         sources=['numbapro/vectorizers/workqueue.c'],
         depends=['numbapro/vectorizers/workqueue.h'],

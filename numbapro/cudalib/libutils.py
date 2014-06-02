@@ -15,7 +15,7 @@ class Lib(object):
         if cls.__singleton is None:
             try:
                 dll = open_cudalib(cls.lib)
-            except OSError, e:
+            except OSError as e:
                 raise Exception("Cannot open library for %s:\n%s" % (cls.lib,
                                                                      e))
             # Create new instance

@@ -1,5 +1,6 @@
 import numbapro
 import unittest, os, sys, logging
+
 try:
     from collections import OrderedDict
 except ImportError:
@@ -7,8 +8,8 @@ except ImportError:
 
 logging.basicConfig()
 
-class TestSupport(object):
 
+class TestSupport(object):
     def __init__(self, basefile):
         self.basefile = basefile
         self.tests = OrderedDict()
@@ -64,7 +65,7 @@ class TestSupport(object):
 
         package_base = os.path.dirname(numbapro.__file__)
         assert basedir.startswith(package_base), \
-                    "not relative sub-directory to base"
+            "not relative sub-directory to base"
         base = basedir[len(package_base) + 1:]
         base = base.rsplit('.', 1)[0].replace(os.path.sep, '.')
 
@@ -77,12 +78,12 @@ class TestSupport(object):
         kws: depends on version of python
             2.6: verbosity[int], descriptions[bool], stream[file]
             2.7: + buffer[bool]
-            
+
         NOTE: for use to run the entire test suite.
         '''
         self.discover()
         suite = self.get_test_suite()
-        
+
         if sys.version_info[:2] <= (2, 6):
             kws.pop('buffer', None) # remove unsupported kw
         runner = unittest.TextTestRunner(**kws)

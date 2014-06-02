@@ -1,4 +1,4 @@
-set MVC=numbapro\_utils\mviewbuf.c
+set MVC=numbapro\vectorizers\workqueue.c
 
 
 

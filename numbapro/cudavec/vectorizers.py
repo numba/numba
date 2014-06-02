@@ -56,7 +56,8 @@ class CudaVectorize(object):
         glbl = self.pyfunc.func_globals
         glbl.update({'__cuda__': cuda,
                      '__core__': cudevfn})
-        exec kernelsource in glbl
+        # exec kernelsource in glbl
+        exec(kernelsource, glbl)
 
         stager = glbl['__vectorized_%s' % funcname]
         kargs = [a[:] for a in list(sig.args) + [sig.return_type]]

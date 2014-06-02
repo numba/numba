@@ -2,27 +2,38 @@
 - Parse jit compile info
 - Compute warp occupany histogram
 """
-from __future__ import division
+from __future__ import division, absolute_import, print_function
 import math
 import re
 
-SMEM48K = 48 * 2**10
+SMEM48K = 48 * 2 ** 10
 
 #------------------------------------------------------------------------------
 # autotuning
 
 
-def _cmp_occupancy(a, b):
-    """prefer greater occupancy but less thread-per-block
-    """
-    ao, at = a
-    bo, bt = b
-    if ao < bo:
-        return -1
-    elif ao > bo:
-        return 1
-    else:
-        return -1 * at.__cmp__(bt)
+class OccupancyThreadKey(object):
+    def __init__(self, item):
+        self.occupancy, self.threads = item
+        self.comparison = self.occupancy, 1 / self.threads
+
+    def __lt__(self, other):
+        return self.comparison < other.comparison
+
+    def __eq__(self, other):
+        return self.comparison == other.comparison
+
+    def __ne__(self, other):
+        return self.comparison != other.comparison
+
+    def __gt__(self, other):
+        return self.comparison > other.comparison
+
+    def __le__(self, other):
+        return self.comparison <= other.comparison
+
+    def __ge__(self, other):
+        return self.comparison >= other.comparison
 
 
 class AutoTuner(object):
@@ -48,9 +59,9 @@ class AutoTuner(object):
         self.dynsmem = dynsmem
         self._table = warp_occupancy(info=usage, cc=cc, smem_config=smem_config)
         self._by_occupancy = list(reversed(sorted(((occup, tpb)
-                                                    for tpb, (occup, factor)
-                                                    in self.table.iteritems()),
-                                                 cmp=_cmp_occupancy)))
+                                                   for tpb, (occup, factor)
+                                                   in self.table.items()),
+                                                  key=OccupancyThreadKey)))
 
     @property
     def table(self):
@@ -110,7 +121,7 @@ class AutoTuner(object):
             if occ > 0:
                 bin.append((occ, tpb))
         if bin:
-            return sorted(bin, cmp=_cmp_occupancy)[-1][1]
+            return sorted(bin, key=OccupancyThreadKey)[-1][1]
 
 
 #------------------------------------------------------------------------------
@@ -118,40 +129,39 @@ class AutoTuner(object):
 
 LIMITS_CC_20 = {
     'thread_per_warp': 32,
-    'warp_per_sm'    : 48,
-    'thread_per_sm'  : 1536,
-    'block_per_sm'   : 8,
-    'registers'      : 32768,
-    'reg_alloc_unit' : 64,
-    'reg_alloc_gran' : 'warp',
-    'reg_per_thread' : 63,
-    'smem_per_sm'    : 49152,
+    'warp_per_sm': 48,
+    'thread_per_sm': 1536,
+    'block_per_sm': 8,
+    'registers': 32768,
+    'reg_alloc_unit': 64,
+    'reg_alloc_gran': 'warp',
+    'reg_per_thread': 63,
+    'smem_per_sm': 49152,
     'smem_alloc_unit': 128,
     'warp_alloc_gran': 2,
-    'max_block_size' : 1024,
+    'max_block_size': 1024,
 }
-
 
 LIMITS_CC_21 = LIMITS_CC_20
 
 LIMITS_CC_30 = {
     'thread_per_warp': 32,
-    'warp_per_sm'    : 64,
-    'thread_per_sm'  : 2048,
-    'block_per_sm'   : 16,
-    'registers'      : 65535,
-    'reg_alloc_unit' : 256,
-    'reg_alloc_gran' : 'warp',
-    'reg_per_thread' : 63,
-    'smem_per_sm'    : 49152,
+    'warp_per_sm': 64,
+    'thread_per_sm': 2048,
+    'block_per_sm': 16,
+    'registers': 65535,
+    'reg_alloc_unit': 256,
+    'reg_alloc_gran': 'warp',
+    'reg_per_thread': 63,
+    'smem_per_sm': 49152,
     'smem_alloc_unit': 256,
     'warp_alloc_gran': 4,
-    'max_block_size' : 1024,
+    'max_block_size': 1024,
 }
 
 LIMITS_CC_35 = LIMITS_CC_30.copy()
 LIMITS_CC_35.update({
-    'reg_per_thread' : 255,
+    'reg_per_thread': 255,
 })
 
 PHYSICAL_LIMITS = {
@@ -165,8 +175,10 @@ PHYSICAL_LIMITS = {
 def ceil(x, s=1):
     return s * math.ceil(x / s)
 
+
 def floor(x, s=1):
     return s * math.floor(x / s)
+
 
 def warp_occupancy(info, cc, smem_config=SMEM48K):
     """Returns a dictionary of {threadperblock: occupancy, factor}
@@ -192,9 +204,10 @@ def warp_occupancy(info, cc, smem_config=SMEM48K):
             ret[tpb] = result
     return ret
 
+
 def compute_warp_occupancy(tpb, reg, smem, smem_config, limits):
     assert limits['reg_alloc_gran'] == 'warp', \
-                "assume warp register allocation granularity"
+        "assume warp register allocation granularity"
     limit_block_per_sm = limits['block_per_sm']
     limit_warp_per_sm = limits['warp_per_sm']
     limit_thread_per_warp = limits['thread_per_warp']
@@ -213,8 +226,8 @@ def compute_warp_occupancy(tpb, reg, smem, smem_config, limits):
 
     # allocated resource
     limit_blocks_due_to_warps = min(limit_block_per_sm,
-                                    floor(limit_warp_per_sm / my_warp_per_block))
-
+                                    floor(
+                                        limit_warp_per_sm / my_warp_per_block))
 
     c39 = floor(limit_total_regs / ceil(my_reg_count * limit_thread_per_warp,
                                         reg_alloc_unit),
@@ -243,7 +256,6 @@ def compute_warp_occupancy(tpb, reg, smem, smem_config, limits):
     else:
         factor = 'smem'
 
-
     active_warps_per_sm = active_block_per_sm * my_warp_per_block
     #active_threads_per_sm = active_warps_per_sm * limit_thread_per_warp
 
@@ -261,11 +273,12 @@ def _sw(s):
 def _regex(s):
     return re.compile(_sw(s), re.I)
 
-RE_LEAD     = _regex(r'^(?:ptxas )?info : Function properties for ')
-RE_REG      = _regex(r'used (?P<num>\d+) registers')
-RE_STACK    = _regex(r'(?P<num>\d+) (?:bytes )?stack')
-RE_SHARED   = _regex(r'(?P<num>\d+) bytes smem')
-RE_LOCAL    = _regex(r'(?P<num>\d+) bytes lmem')
+
+RE_LEAD = _regex(r'^(?:ptxas )?info : Function properties for ')
+RE_REG = _regex(r'used (?P<num>\d+) registers')
+RE_STACK = _regex(r'(?P<num>\d+) (?:bytes )?stack')
+RE_SHARED = _regex(r'(?P<num>\d+) bytes smem')
+RE_LOCAL = _regex(r'(?P<num>\d+) bytes lmem')
 
 
 def parse_compile_info(text):
@@ -284,7 +297,8 @@ def gen_parse_compile_info(text):
 
     """
     lines = text.splitlines()
-    readline = iter(lines).next
+    it = iter(lines)
+    readline = lambda: next(it)
 
     try:
         ln = readline()
@@ -294,7 +308,7 @@ def gen_parse_compile_info(text):
                 # not a lead line; continue
                 ln = readline()
                 continue
-            # start parsing information
+                # start parsing information
             remaining = ln[len(m.group(0)):]
             # function name
             fname = parse_function_name(remaining)
@@ -333,10 +347,10 @@ def parse_resources(text):
     Returns (key, value) tuple on successful parse;
             otherwise, None
     """
-    relst = [('reg',    RE_REG),
-             ('stack',  RE_STACK),
+    relst = [('reg', RE_REG),
+             ('stack', RE_STACK),
              ('shared', RE_SHARED),
-             ('local',  RE_LOCAL)]
+             ('local', RE_LOCAL)]
     for resname, regex in relst:
         m = regex.search(text)
         if m:

@@ -90,6 +90,7 @@ int numba_join_thread(void *thread)
 
 #endif
 
+/*MARK1*/
 
 MOD_INIT(workqueue) {
     PyObject *m;
@@ -97,6 +98,7 @@ MOD_INIT(workqueue) {
     if (m == NULL)
         return MOD_ERROR_VAL;
 
+    /*MARK2*/
     PyObject_SetAttrString(m, "new_thread_fnptr",
                            PyLong_FromVoidPtr(&numba_new_thread));
     PyObject_SetAttrString(m, "join_thread_fnptr",
