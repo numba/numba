@@ -48,7 +48,8 @@ def compile_kernel(pyfunc, args, link, debug=False):
                         name=cres.llvm_func.name,
                         argtypes=cres.signature.args,
                         link=link,
-                        debug=debug)
+                        debug=debug,
+                        exceptions=cres.target_context.exceptions)
     return cukern
 
 
@@ -202,7 +203,8 @@ class CachedCUFunction(object):
 
 
 class CUDAKernel(CUDAKernelBase):
-    def __init__(self, llvm_module, name, argtypes, link=(), debug=False):
+    def __init__(self, llvm_module, name, argtypes, link=(), debug=False,
+                 exceptions={}):
         super(CUDAKernel, self).__init__()
         self.entry_name = name
         self.argument_types = tuple(argtypes)
@@ -210,6 +212,7 @@ class CUDAKernel(CUDAKernelBase):
         ptx = CachedPTX(str(llvm_module))
         self._func = CachedCUFunction(self.entry_name, ptx, link)
         self.debug = debug
+        self.exceptions = exceptions
 
     def __call__(self, *args, **kwargs):
         assert not kwargs
@@ -267,10 +270,14 @@ class CUDAKernel(CUDAKernelBase):
                 tid = [load_symbol("tid" + i) for i in 'zyx']
                 ctaid = [load_symbol("ctaid" + i) for i in 'zyx']
                 code = excval.value
-                raise KernelRuntimeError("code=%d reason=%s" %
-                                         (code, errcode.error_names[code]),
-                                         tid=tid,
-                                         ctaid=ctaid)
+                builtinerr = errcode.error_names.get(code)
+                if builtinerr is not None:
+                    raise KernelRuntimeError("code=%d reason=%s" %
+                                             (code, builtinerr), tid=tid,
+                                             ctaid=ctaid)
+                else:
+                    exccls = self.exceptions[code]
+                    raise exccls("tid=%s ctaid=%s" % (tid, ctaid))
 
         # retrieve auto converted arrays
         for wb in retr:

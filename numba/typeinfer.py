@@ -386,9 +386,11 @@ class TypeInferer(object):
                 return types.Optional(unified)
             else:
                 return types.none
-        else:
+        elif rettypes:
             unified = self.context.unify_types(*rettypes)
             return unified
+        else:
+            return types.none
 
     def get_state_token(self):
         """The algorithm is monotonic.  It can only grow the typesets.
@@ -405,6 +407,8 @@ class TypeInferer(object):
         elif isinstance(inst, ir.SetAttr):
             self.typeof_setattr(inst)
         elif isinstance(inst, (ir.Jump, ir.Branch, ir.Return, ir.Del)):
+            pass
+        elif isinstance(inst, ir.Raise):
             pass
         else:
             raise NotImplementedError(inst)
@@ -528,6 +532,11 @@ class TypeInferer(object):
                 isinstance(gvar.value, cffi_support.ExternCFunction)):
             fnty = gvar.value
             self.typevars[target.name].lock(fnty)
+            self.assumed_immutables.add(inst)
+
+        elif type(gvar.value) is type and issubclass(gvar.value,
+                                                     BaseException):
+            self.typevars[target.name].lock(types.exception_type)
             self.assumed_immutables.add(inst)
 
         else:

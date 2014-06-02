@@ -520,6 +520,7 @@ neg_type = Dummy('neg')
 print_type = Dummy('print')
 print_item_type = Dummy('print-item')
 sign_type = Dummy('sign')
+exception_type = Dummy('exception')
 
 range_state32_type = Type('range_state32')
 range_state64_type = Type('range_state64')

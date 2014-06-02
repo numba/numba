@@ -317,6 +317,10 @@ class Lower(BaseLower):
 
             return impl(self.builder, (target, value))
 
+        elif isinstance(inst, ir.Raise):
+            excid = self.context.add_exception(inst.exception)
+            self.context.return_user_exc(self.builder, excid)
+
         else:
             raise NotImplementedError(type(inst))
 
