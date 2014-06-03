@@ -317,6 +317,10 @@ class Lower(BaseLower):
 
             return impl(self.builder, (target, value))
 
+        elif isinstance(inst, ir.Raise):
+            excid = self.context.add_exception(inst.exception)
+            self.context.return_user_exc(self.builder, excid)
+
         else:
             raise NotImplementedError(type(inst))
 
@@ -600,6 +604,10 @@ class PyLower(BaseLower):
         elif isinstance(inst, ir.Del):
             obj = self.loadvar(inst.value)
             self.decref(obj)
+
+        elif isinstance(inst, ir.Raise):
+            self.pyapi.raise_exception(inst.exception, inst.exception)
+            self.return_exception_raised()
 
         else:
             raise NotImplementedError(type(inst), inst)

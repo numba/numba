@@ -438,6 +438,12 @@ class DataFlowAnalysis(object):
         else:
             info.append(inst)
 
+    def op_RAISE_VARARGS(self, info, inst):
+        if inst.arg != 1:
+            raise ValueError("Multiple argument raise is not supported.")
+        exc = info.pop()
+        info.append(inst, exc=exc)
+
     def _ignored(self, info, inst):
         pass
 

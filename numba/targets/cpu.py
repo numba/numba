@@ -158,7 +158,8 @@ class CPUContext(BaseContext):
         return cfunc, fnptr
 
     def prepare_for_call(self, func, fndesc):
-        wrapper, api = PyCallWrapper(self, func.module, func, fndesc).build()
+        wrapper, api = PyCallWrapper(self, func.module, func, fndesc,
+                                     exceptions=self.exceptions).build()
         self.optimize(func.module)
 
         if config.DUMP_OPTIMIZED:

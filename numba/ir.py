@@ -196,6 +196,17 @@ class Del(Stmt):
         return "del %s" % self.value
 
 
+class Raise(Stmt):
+    is_terminator = True
+
+    def __init__(self, exception, loc):
+        self.exception = exception
+        self.loc = loc
+
+    def __str__(self):
+        return "raise %s" % self.exception
+
+
 class Return(Stmt):
     is_terminator = True
 
@@ -292,6 +303,7 @@ class Intrinsic(object):
     """
     For inserting intrinsic node into the IR
     """
+
     def __init__(self, name, type, args):
         self.name = name
         self.type = type
