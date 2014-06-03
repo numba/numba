@@ -29,13 +29,6 @@ def insert_addrspace_conv(lmod, elemtype, addrspace):
     return lmod.get_or_insert_function(s2g_fnty, s2g_name)
 
 
-def declare_vprint(lmod):
-    voidptrty = lc.Type.pointer(lc.Type.int(8))
-    vprintfty = lc.Type.function(lc.Type.int(), [voidptrty, voidptrty])
-    vprintf = lmod.get_or_insert_function(vprintfty, "vprintf")
-    return vprintf
-
-
 def declare_string(builder, value):
     lmod = builder.basic_block.function.module
     cval = lc.Constant.stringz(value)

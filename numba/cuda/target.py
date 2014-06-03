@@ -131,3 +131,33 @@ class CUDATargetContext(BaseContext):
 
         a = self.make_array(typ)(self, builder)
         return a._getvalue()
+
+    def insert_string_const_addrspace(self, builder, string):
+        """
+        Insert a constant string in the constant addresspace and return a
+        generic i8 pointer to the data.
+
+        This function attempts to deduplicate.
+        """
+        lmod = builder.basic_block.function.module
+        text = Constant.stringz(string)
+        name = "__conststring__.%s" % string
+        charty = Type.int(8)
+
+        for gv in lmod.global_variables:
+            if gv.name == name and gv.type.pointee == text.type:
+                break
+        else:
+            gl = lmod.add_global_variable(text.type, name=name,
+                                          addrspace=nvvm.ADDRSPACE_CONSTANT)
+            gl.linkage = LINKAGE_INTERNAL
+            gl.global_constant = True
+            gl.initializer = text
+
+            constcharptrty = Type.pointer(charty, nvvm.ADDRSPACE_CONSTANT)
+            charptr = builder.bitcast(gl, constcharptrty)
+
+        conv = nvvmutils.insert_addrspace_conv(lmod, charty,
+                                               nvvm.ADDRSPACE_CONSTANT)
+        return builder.call(conv, [charptr])
+
