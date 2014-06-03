@@ -6,5 +6,7 @@ from functions import amin, amax, nanmin, nanmax, ptp, \
     nanstd, nanvar, corrcoef, correlate, cov, histogram, \
     histogram2d, histogramdd, bincount, digitize
 
-from ufuncs import add, multiply, sin, cos, tan, arcsin, arccos, arctan
+from ufuncs import add, multiply, division, sin, cos, tan, arcsin, arccos, arctan, hypot, arctan2, degrees
+
+from constants import pi, e
 
