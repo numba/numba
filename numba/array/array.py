@@ -31,7 +31,7 @@ class Array(object):
 
         python = kwargs.get('use_python', False)
         debug = kwargs.get('debug', False)
-        
+
         variables = dict([(key,value) for key,value in kwargs.items() if key not in expected_args])
         state = {'variables':variables, 'variable_found':False}
 
@@ -100,7 +100,7 @@ def reduce_(func, operand, initial_value):
     array = operand.eval()
 
     cfunc = jit(func)
-    
+
     @jit
     def reduce_loop(cfunc, array, initial_value):
         total = 0
@@ -112,7 +112,7 @@ def reduce_(func, operand, initial_value):
 
 
 def create_reduce_func(operation, initial_value):
-    
+
     def reduce_wrapper(operand):
         return reduce_(operation, operand, initial_value)
 
