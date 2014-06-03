@@ -1,3 +1,4 @@
+#from __future__ import division
 from nodes import UnaryOperation, BinaryOperation, ScalarNode
 from array import Array
 
@@ -24,15 +25,21 @@ def create_binary_op(op_str):
 
 global_dict = globals()
 
+# moved hypot and arctan2 to binary trig funcs
 unary_trig_ufuncs = {'sin':'math.sin', 'cos':'math.cos', 'tan':'math.tan',
     'arcsin':'math.asin', 'arccos':'math.acos', 'arctan':'math.atan',
-    'hypot':'math.hypot', 'arctan2':'math.atan2', 'degrees':'math.degrees',
+    'degrees':'math.degrees',
     'radians':'math.radians', 'sinh':'math.sinh', 'cosh':'math.cosh',
     'tanh':'math.tanh', 'arcsinh':'math.asinh', 'arccosh':'math.acosh',
     'arctanh':'math.atanh'}
 
 for name, op in unary_trig_ufuncs.items():
     global_dict[name] = create_unary_op(op)
+
+binary_trig_ufuncs = {'hypot':'math.hypot', 'arctan2':'math.atan2'}
+
+for name, op in binary_trig_ufuncs.items():
+    global_dict[name] = create_binary_op(op)
 
 unary_arithmetic_ufuncs = {'negative':'operator.neg'}
 
@@ -41,7 +48,7 @@ for name, op in unary_arithmetic_ufuncs.items():
 
 
 binary_arithmetic_ufuncs = {'add':'operator.add', 'subtract':'operator.sub',
-    'multiply':'operator.mul', 'power':'operator.pow'}
+        'multiply':'operator.mul', 'power':'operator.pow', 'division':'operator.div', 'floor_division':'operator.floordiv'}
 
 for name, op in binary_arithmetic_ufuncs.items():
     global_dict[name] = create_binary_op(op)
