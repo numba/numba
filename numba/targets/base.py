@@ -5,7 +5,7 @@ from types import MethodType
 import llvm.core as lc
 from llvm.core import Type, Constant
 import numpy
-from numba import types, utils, cgutils, typing, numpy_support
+from numba import types, utils, cgutils, typing, numpy_support, errcode
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, python_attr_impl,
                                     builtin_registry, impl_attribute)
@@ -141,6 +141,7 @@ class BaseContext(object):
         obj = copy.copy(self)
         obj.metadata = utils.UniqueDict()
         obj.linking = set()
+        obj.exceptions = {}
         return obj
 
     def insert_func_defn(self, defns):
@@ -526,6 +527,10 @@ class BaseContext(object):
     def return_exc(self, builder):
         builder.ret(RETCODE_EXC)
 
+    def return_user_exc(self, builder, code):
+        assert code > 0
+        builder.ret(Constant.int(Type.int(), code))
+
     def cast(self, builder, val, fromty, toty):
         if fromty == toty or toty == types.Any or isinstance(toty, types.Kind):
             return val
@@ -789,6 +794,11 @@ class BaseContext(object):
 
     def add_libs(self, libs):
         self.linking |= set(libs)
+
+    def add_exception(self, exc):
+        n = len(self.exceptions) + errcode.ERROR_COUNT
+        self.exceptions[n] = exc
+        return n
 
 
 class _wrap_impl(object):

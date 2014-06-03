@@ -40,6 +40,7 @@ class Interpreter(object):
         self.syntax_blocks = []
         self.dfainfo = None
         self._block_actions = {}
+        self.constants = {}
 
     def _fill_global_scope(self, scope):
         """TODO
@@ -429,6 +430,7 @@ class Interpreter(object):
         value = self.get_global_value(name)
         gl = ir.Global(name, value, loc=self.loc)
         self.store(gl, res)
+        self.constants[res] = value
 
     def op_LOAD_DEREF(self, inst, res):
         name = self.code_freevars[inst.arg]
@@ -688,6 +690,10 @@ class Interpreter(object):
 
     def op_JUMP_IF_TRUE_OR_POP(self, inst, pred):
         self._op_JUMP_IF(inst, pred=pred, iftrue=True)
+
+    def op_RAISE_VARARGS(self, inst, exc):
+        stmt = ir.Raise(exception=self.constants[exc], loc=self.loc)
+        self.current_block.append(stmt)
 
     def _determine_while_condition(self, branches):
         assert branches

@@ -162,8 +162,8 @@ class BaseContext(object):
             return self.type_compatibility(fromty.dtype, toty.dtype)
         return self.tm.check_compatible(fromty, toty)
 
-    def unify_types(self, *types):
-        return functools.reduce(self.unify_pairs, types)
+    def unify_types(self, *typelist):
+        return functools.reduce(self.unify_pairs, typelist)
 
     def unify_pairs(self, first, second):
         """
