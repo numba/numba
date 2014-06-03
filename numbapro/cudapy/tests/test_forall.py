@@ -11,6 +11,7 @@ def foo(x):
         x[i] += 1
 
 
+@unittest.skip
 class TestForAll(unittest.TestCase):
     def test_forall(self):
         arr = numpy.arange(11)
