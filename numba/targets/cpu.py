@@ -46,9 +46,9 @@ class CPUContext(BaseContext):
         self.insert_func_defn(printimpl.registry.functions)
 
     def build_pass_manager(self):
-        if config.OPT == 3:
+        if 0 < config.OPT <= 3:
             # This uses the same passes for clang -O3
-            pms = lp.build_pass_managers(tm=self.tm, opt=3,
+            pms = lp.build_pass_managers(tm=self.tm, opt=config.OPT,
                                          loop_vectorize=True,
                                          fpm=False)
             return pms.pm
@@ -83,7 +83,6 @@ class CPUContext(BaseContext):
             globalopt
             globaldce
             '''.split()
-
             for p in passes:
                 pm.add(lp.Pass.new(p))
             return pm
@@ -123,7 +122,6 @@ class CPUContext(BaseContext):
         import numba._npymath_exports as npymath
         for sym in npymath.symbols:
             le.dylib_add_symbol(*sym)
-
 
     def dynamic_map_function(self, func):
         name, ptr = self.native_funcs[func]

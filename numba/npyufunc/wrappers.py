@@ -140,7 +140,6 @@ def build_ufunc_wrapper(context, func, signature):
     inline_function(slowloop)
     inline_function(fastloop)
     # Run optimizer
-    print(module)
     context.optimize(module)
 
     if config.DUMP_OPTIMIZED:
