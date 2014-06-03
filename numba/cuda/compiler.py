@@ -365,6 +365,11 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         self.targetoptions = targetoptions
 
     def __call__(self, *args):
+        kernel = self.specialize(*args)
+        cfg = kernel[self.griddim, self.blockdim, self.stream, self.sharedmem]
+        cfg(*args)
+
+    def specialize(self, *args):
         argtypes = tuple([dispatcher.Overloaded.typeof_pyval(a) for a in args])
         kernel = self.definitions.get(argtypes)
         if kernel is None:
@@ -373,6 +378,4 @@ class AutoJitCUDAKernel(CUDAKernelBase):
             self.definitions[argtypes] = kernel
             if self.bind:
                 kernel.bind()
-
-        cfg = kernel[self.griddim, self.blockdim, self.stream, self.sharedmem]
-        cfg(*args)
+        return kernel
