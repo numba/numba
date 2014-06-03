@@ -9,27 +9,7 @@ def cuadd(a, b):
     a[i] += b[i]
 
 
-class MyError(Exception):
-    pass
-
-
-def cuusererr():
-    raise MyError
-
-
-class TestExceptions(unittest.TestCase):
-    def test_no_error(self):
-        jitted = cuda.jit('void(int32[:], int32[:])', debug=True)(cuadd)
-        a = numpy.array(list(reversed(range(128))), dtype=numpy.int32)
-        jitted[1, a.size](a, a)
-
-    def test_user_error(self):
-        jitted = cuda.jit('void()', debug=True)(cuusererr)
-        try:
-            jitted()
-        except RuntimeError as e:
-            self.assertTrue(issubclass(e.exc, MyError))
-
+class TestArithErrors(unittest.TestCase):
     @unittest.expectedFailure
     def test_signed_overflow(self):
         jitted = cuda.jit('void(int8[:], int8[:])', debug=True)(cuadd)
@@ -55,7 +35,7 @@ class TestExceptions(unittest.TestCase):
             self.assertTrue(int(a[i]) + int(a[i]) > 127)
         else:
             raise AssertionError('expecting an exception')
-
+        
     @unittest.expectedFailure
     def test_signed_overflow3(self):
         jitted = cuda.jit('void(int8[:], int8[:])', debug=True)(cuadd)
