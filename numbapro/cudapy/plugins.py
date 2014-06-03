@@ -3,7 +3,12 @@ from functools import reduce
 import operator
 from numbapro.cudadrv.autotune import AutoTuner
 from numba.cuda.compiler import CUDAKernel
+from numba.cuda.descriptor import CUDATargetDesc
+from . import printimpl
 
+# Extend target features
+
+CUDATargetDesc.targetctx.insert_func_defn(printimpl.registry.functions)
 
 # Extend CUDAKernel class
 
