@@ -1,3 +1,4 @@
+#from __future__ import division
 import numpy as np
 from numba import jit
 import operator
@@ -9,7 +10,6 @@ from value import Value
 from repr_ import Repr
 from nodes import *
 from numba.config import PYVERSION
-
 
 class Array(object):
 
@@ -80,6 +80,15 @@ class Array(object):
     '''@binary_op('operator.truediv' if PYVERSION >= (3, 0) else 'operator.div')
     def __div__(self, other):
         return create_binary_op('operator.add')(self, other)'''
+    
+    def __div__(self, other):
+        return ufuncs.division(self, other)
+
+    def __truediv__(self, other):
+        return ufuncs.division(self, other)
+
+    def __floordiv__(self, other):
+        return ufuncs.floor_division(self, other)
 
     def __pow__(self, other):
         return ufuncs.power(self, other)
