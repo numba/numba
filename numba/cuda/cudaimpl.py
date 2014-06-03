@@ -33,8 +33,8 @@ def ptx_grid2d(context, builder, sig, args):
 @implement('ptx.gridsize.1d', types.intp)
 def ptx_gridsize1d(context, builder, sig, args):
     assert len(args) == 1
-    ntidx = call_sreg(builder, "ntid.x")
-    nctaidx = call_sreg(builder, "nctaid.x")
+    ntidx = nvvmutils.call_sreg(builder, "ntid.x")
+    nctaidx = nvvmutils.call_sreg(builder, "nctaid.x")
 
     res = builder.mul(ntidx, nctaidx)
     return res
@@ -44,11 +44,11 @@ def ptx_gridsize1d(context, builder, sig, args):
 @implement('ptx.gridsize.2d', types.intp)
 def ptx_gridsize2d(context, builder, sig, args):
     assert len(args) == 1
-    ntidx = call_sreg(builder, "ntid.x")
-    nctaidx = call_sreg(builder, "nctaid.x")
+    ntidx = nvvmutils.call_sreg(builder, "ntid.x")
+    nctaidx = nvvmutils.call_sreg(builder, "nctaid.x")
 
-    ntidy = call_sreg(builder, "ntid.y")
-    nctaidy = call_sreg(builder, "nctaid.y")
+    ntidy = nvvmutils.call_sreg(builder, "ntid.y")
+    nctaidy = nvvmutils.call_sreg(builder, "nctaid.y")
 
     r1 = builder.mul(ntidx, nctaidx)
     r2 = builder.mul(ntidy, nctaidy)
