@@ -20,7 +20,6 @@ class TestUserExc(unittest.TestCase):
         except MyError as e:
             print(e)
 
-
 if __name__ == '__main__':
     unittest.main()
 

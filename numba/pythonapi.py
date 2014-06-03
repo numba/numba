@@ -104,6 +104,11 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyErr_SetString")
         return self.builder.call(fn, (exctype, msg))
 
+    def err_set_object(self, exctype, excval):
+        fnty = Type.function(Type.void(), [self.pyobj, self.pyobj])
+        fn = self._get_function(fnty, name="PyErr_SetObject")
+        return self.builder.call(fn, (exctype, excval))
+
     def import_module_noblock(self, modname):
         fnty = Type.function(self.pyobj, [self.cstring])
         fn = self._get_function(fnty, name="PyImport_ImportModuleNoBlock")
@@ -729,6 +734,12 @@ class PythonAPI(object):
     def raise_native_error(self, msg):
         cstr = self.context.insert_const_string(self.module, msg)
         self.err_set_string(self.native_error_type, cstr)
+
+    def raise_exception(self, exctype, excval):
+        exctypeaddr = self.context.get_constant(types.intp, id(exctype))
+        excvaladdr = self.context.get_constant(types.intp, id(excval))
+        self.err_set_object(exctypeaddr.inttoptr(self.pyobj),
+                            excvaladdr.inttoptr(self.pyobj))
 
     @property
     def native_error_type(self):

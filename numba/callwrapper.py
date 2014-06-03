@@ -5,11 +5,12 @@ from numba import types, cgutils
 
 
 class PyCallWrapper(object):
-    def __init__(self, context, module, func, fndesc):
+    def __init__(self, context, module, func, fndesc, exceptions):
         self.context = context
         self.module = module
         self.func = func
         self.fndesc = fndesc
+        self.exceptions = exceptions
 
     def build(self):
         wrapname = "wrapper.%s" % self.func.name
@@ -72,11 +73,30 @@ class PyCallWrapper(object):
         with cgutils.ifthen(builder, builder.not_(status.exc)):
             # !ok && !exc
             # User exception raised
-            # TODO we will just raise a RuntimeError for now.
-            api.raise_native_error("error in native function: %s" %
-                                   self.fndesc.mangled_name)
+            self.make_exception_switch(api, builder, status.code)
+
         # !ok && exc
         builder.ret(api.get_null_object())
+
+    def make_exception_switch(self, api, builder, code):
+        """Handle user defined exceptions.
+        Build a switch to check which exception class was raised.
+        """
+        nexc = len(self.exceptions)
+        elseblk = cgutils.append_basic_block(builder,
+                                             ".invalid.user.exception")
+        swt = builder.switch(code, elseblk, n=nexc)
+        for num, exc in self.exceptions.items():
+            bb = cgutils.append_basic_block(builder,
+                                            ".user.exception.%d" % num)
+            swt.add_case(Constant.int(code.type, num), bb)
+            builder.position_at_end(bb)
+            api.raise_exception(exc, exc)
+            builder.ret(api.get_null_object())
+
+        builder.position_at_end(elseblk)
+        msg = "error in native function: %s" % self.fndesc.mangled_name
+        api.raise_native_error(msg)
 
     def make_const_string(self, string):
         return self.context.insert_const_string(self.module, string)

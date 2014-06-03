@@ -43,7 +43,6 @@ STRUCT_TYPES = {
 
 Status = namedtuple("Status", ("code", "ok", "err", "exc", "none"))
 
-RETCODE_USEREXC = Constant.int_signextend(Type.int(), 1)
 RETCODE_OK = Constant.int_signextend(Type.int(), 0)
 RETCODE_NONE = Constant.int_signextend(Type.int(), -2)
 RETCODE_EXC = Constant.int_signextend(Type.int(), -1)

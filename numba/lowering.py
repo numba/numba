@@ -605,6 +605,10 @@ class PyLower(BaseLower):
             obj = self.loadvar(inst.value)
             self.decref(obj)
 
+        elif isinstance(inst, ir.Raise):
+            self.pyapi.raise_exception(inst.exception, inst.exception)
+            self.return_exception_raised()
+
         else:
             raise NotImplementedError(type(inst), inst)
 
