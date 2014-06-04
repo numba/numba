@@ -3,7 +3,7 @@ import numba.array as numbarray
 import numpy as np
 from numba.config import PYVERSION
 
-use_python = True
+use_python = False
 
 
 class TestUFuncs(unittest.TestCase):

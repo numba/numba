@@ -4,6 +4,7 @@ from numba import vectorize
 import operator
 import math
 import sys
+import numpy
 
 
 # IEEE-754 guarantees that 17 decimal digits are enough to represent any

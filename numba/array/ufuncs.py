@@ -18,6 +18,9 @@ def create_binary_op(op_str):
                 raise TypeError('Invalid type ({0})for binary operation'.format(type(operand)))
         operand1 = parse_operand(operand1)
         operand2 = parse_operand(operand2)
+        if isinstance(operand1, ScalarNode) and isinstance(operand2, ScalarNode):
+            scalar = Array(data=BinaryOperation(operand1, operand2, op_str)).eval(use_python=True)
+            return Array(data=ScalarNode(scalar))
         return Array(data=BinaryOperation(operand1, operand2, op_str))
     return binary_op
 

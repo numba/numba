@@ -35,6 +35,9 @@ class Array(object):
         variables = dict([(key,value) for key,value in kwargs.items() if key not in expected_args])
         state = {'variables':variables, 'variable_found':False}
 
+        if isinstance(self.array_node.data, ScalarNode):
+            return Value(self.array_node, state=state)
+
         if not isinstance(self.array_node.data, ArrayDataNode):
             if debug:
                 print codegen.dump(*codegen.build(self, state))
