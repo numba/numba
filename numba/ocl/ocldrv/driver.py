@@ -108,7 +108,7 @@ class Driver(object):
         self.clGetPlatformIDs(0, None, ctypes.byref(count))
         platforms = (cl_platform_id * count.value)()
         self.clGetPlatformIDs(count, platforms, None)
-        return [Platform(x) for x in platforms]
+        return [Platform(x, False) for x in platforms]
 
     @property
     def default_platform(self):
@@ -178,10 +178,8 @@ class Driver(object):
 
         _properties = (cl_context_properties*3)(enums.CL_CONTEXT_PLATFORM, platform.id, 0)
         _devices = (cl_device_id*len(devices))(*[dev.id for dev in devices])
-        ctxt = self.clCreateContext(_properties, len(devices), _devices, None, None)
-        rv = Context(ctxt)
-        self.clReleaseContext(ctxt)
-        return Context(ctxt)
+        return Context(self.clCreateContext(_properties, len(devices), _devices, None, None),
+                       False)
 
     def wait_for_events(self, *events):
         if events:
@@ -213,15 +211,17 @@ def _get_array_info(param_type, func, attr_enum, self):
     func(self.id, attr_enum, sz, ret_val, None)
     return list(ret_val)
 
+
 class OpenCLWrapper(object):
     """
     A base class for OpenCL wrapper objects.
     Identity will be based on their OpenCL id.
     subclasses must implement _retain and _release methods appropriate for their id
     """
-    def __init__(self, id):
+    def __init__(self, id, retain=True):
         self.id = id
-        self._retain()
+        if retain:
+            self._retain()
 
     def __del__(self):
         self._release()
@@ -383,6 +383,7 @@ class Device(OpenCLWrapper):
         "preferred_vector_width_double": (enums.CL_DEVICE_PREFERRED_VECTOR_WIDTH_DOUBLE, cl_uint),
         "profiling_timer_resolution":    (enums.CL_DEVICE_PROFILING_TIMER_RESOLUTION, ctypes.c_size_t),
         "queue_properties":              (enums.CL_DEVICE_QUEUE_PROPERTIES, cl_command_queue_properties),
+        "reference_count":               (enums.CL_DEVICE_REFERENCE_COUNT, cl_uint),
         "single_fp_config":              (enums.CL_DEVICE_SINGLE_FP_CONFIG, cl_device_fp_config),
     }
 
@@ -452,17 +453,18 @@ class Context(OpenCLWrapper):
         cl.clReleaseContext(self.id)
 
     def create_buffer(self, size_in_bytes, host_ptr=None, flags=enums.CL_MEM_READ_WRITE):
-        return MemObject(cl.clCreateBuffer(self.id, flags, size_in_bytes, host_ptr))
+        return MemObject(cl.clCreateBuffer(self.id, flags, size_in_bytes, host_ptr),
+                         False)
 
     def create_buffer_and_copy(self, size_in_bytes, host_ptr, flags=enums.CL_MEM_READ_WRITE):
         return MemObject(cl.clCreateBuffer(self.id, flags | enums.CL_MEM_COPY_HOST_PTR,
-                                           size_in_bytes, host_ptr))
+                                           size_in_bytes, host_ptr), False)
 
     def create_program_from_source(self, source):
         source = ctypes.create_string_buffer(source)
         ptr = ctypes.c_char_p(ctypes.addressof(source))
         program = cl.clCreateProgramWithSource(self.id, 1, ctypes.byref(ptr), None)
-        return Program(program)
+        return Program(program, False)
 
     def create_command_queue(self, device, out_of_order=False, profiling=False):
         flags = 0
@@ -471,7 +473,7 @@ class Context(OpenCLWrapper):
         if profiling:
             flags |= enums.CL_QUEUE_PROFILING_ENABLE
 
-        return CommandQueue(cl.clCreateCommandQueue(self.id, device.id, flags))
+        return CommandQueue(cl.clCreateCommandQueue(self.id, device.id, flags), False)
 
 
 Context._define_cl_properties()
@@ -516,7 +518,8 @@ class MemObject(OpenCLWrapper):
         """
         params = (ctypes.c_size_t * 2)(offset, size)
         return MemObject(cl.clCreateSubBuffer(self.id, 0,
-                                              enums.CL_BUFFER_CREATE_TYPE_REGION, params))
+                                              enums.CL_BUFFER_CREATE_TYPE_REGION, params),
+                         False)
 
     def _retain(self):
         cl.clRetainMemObject(self.id)
@@ -582,7 +585,7 @@ class CommandQueue(OpenCLWrapper):
 
         cl.clEnqueueTask(self.id, kernel.id, num_events_in_wait_list, event_wait_list, event)
         if wants_event:
-            return Event(event[0])
+            return Event(event[0], False)
 
     def enqueue_nd_range_kernel(self, kernel, nd, global_work_size, local_work_size,
                                 wait_list=None, wants_event = False):
@@ -608,7 +611,7 @@ class CommandQueue(OpenCLWrapper):
                                       num_events_in_wait_list, event_wait_list, event)
 
         if wants_event:
-            return Event(event[0])
+            return Event(event[0], False)
 
     def enqueue_read_buffer(self, buff, offset, bc, dst_ptr,
                             blocking=True, wait_list=None, wants_event=False):
@@ -626,7 +629,7 @@ class CommandQueue(OpenCLWrapper):
                                    num_events_in_wait_list, event_wait_list, event)
 
         if wants_event:
-            return Event(event[0])
+            return Event(event[0], False)
 
 
     def enqueue_write_buffer(self, buff, offset, bc, src_ptr,
@@ -643,7 +646,7 @@ class CommandQueue(OpenCLWrapper):
                                 num_events_in_wait_list, event_wait_list, event)
 
         if wants_event:
-            return Event(event[0])
+            return Event(event[0], False)
 
     def enqueue_copy_buffer(self, src_buff, dst_buff, src_offset, dst_offset, bc,
                             wait_list=None, wants_event=False):
@@ -659,7 +662,7 @@ class CommandQueue(OpenCLWrapper):
                                num_events_in_wait_list, event_wait_list, event)
 
         if wants_event:
-            return Event(event[0])
+            return Event(event[0], False)
 
 CommandQueue._define_cl_properties()
 
@@ -721,7 +724,7 @@ class Program(OpenCLWrapper):
 
     def create_kernel(self, name, args=None):
         name = ctypes.create_string_buffer(name)
-        kern = Kernel(cl.clCreateKernel(self.id, name))
+        kern = Kernel(cl.clCreateKernel(self.id, name), False)
         if args is not None:
             kern.set_args(args)
         return kern
