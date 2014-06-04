@@ -90,6 +90,9 @@ class Array(object):
     def __floordiv__(self, other):
         return ufuncs.floor_division(self, other)
 
+    def __neg__(self):
+        return ufuncs.negative(self)
+
     def __pow__(self, other):
         return ufuncs.power(self, other)
 
