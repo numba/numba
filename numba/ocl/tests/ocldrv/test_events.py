@@ -1,7 +1,7 @@
 from __future__ import absolute_import, print_function
 import numpy as np
 from numba import ocl
-import unittest
+import numba.unittest_support as unittest
 
 
 class TestOpenCLEvent(unittest.TestCase):

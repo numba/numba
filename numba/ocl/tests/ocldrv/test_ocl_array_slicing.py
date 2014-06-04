@@ -1,7 +1,7 @@
 import numpy as np
 from numba import ocl
 from numba.ocl.ocldrv import cl
-import unittest
+import numba.unittest_support as unittest
 
 class TestOpenCLArrayIndexing(unittest.TestCase):
     def test_index_1d(self):

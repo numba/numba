@@ -3,7 +3,7 @@ from __future__ import print_function, absolute_import, division
 from numba.test_utils import InOtherThread
 from numba import ocl
 import numpy as np
-import unittest
+import numba.unittest_support as unittest
 
 class TestSelectDevice(unittest.TestCase):
     @unittest.skip('not yet implemented')

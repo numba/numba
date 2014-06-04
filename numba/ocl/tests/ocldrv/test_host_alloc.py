@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 import numpy as np
 from numba import ocl
-import unittest
+import numba.unittest_support as unittest
 
 
 class TestHostAlloc(unittest.TestCase):

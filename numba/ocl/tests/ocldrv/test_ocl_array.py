@@ -2,7 +2,7 @@ import numpy as np
 from numba import ocl
 from numba.ocl.ocldrv import cl
 from numba.ocl import oclarray
-import unittest
+import numba.unittest_support as unittest
 import numpy as np
 
 class TestOCLNDArray(unittest.TestCase):

@@ -1,5 +1,5 @@
 import numpy as np
-import unittest
+import numba.unittest_support as unittest
 
 from numba.ocl.ocldrv.driver import MemObject
 from numba.ocl.ocldrv import cl

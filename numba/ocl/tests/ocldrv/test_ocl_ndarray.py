@@ -1,7 +1,7 @@
 import numpy as np
 from numba.ocl.ocldrv.oclarray import verify_ocl_ndarray_interface
 from numba import ocl
-import unittest
+import numba.unittest_support as unittest
 
 
 class TestOpenCLNDArray(unittest.TestCase):

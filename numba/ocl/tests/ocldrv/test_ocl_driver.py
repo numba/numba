@@ -2,7 +2,7 @@ from __future__ import print_function, absolute_import, division
 
 import numba.ocl.ocldrv as ocldrv
 from numba.ocl.ocldrv import cl
-import unittest
+import numba.unittest_support as unittest
 
 import numpy as np
 

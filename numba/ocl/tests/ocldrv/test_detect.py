@@ -1,6 +1,6 @@
 from __future__ import absolute_import, print_function
 from numba import ocl
-import unittest
+import numba.unittest_support as unittest
 
 
 class TestCudaDetect(unittest.TestCase):
