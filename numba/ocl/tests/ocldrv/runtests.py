@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 from numba.testing import discover_tests, run_tests
+import sys
 
 
 def test():
@@ -8,4 +9,4 @@ def test():
 
 
 if __name__ == '__main__':
-    test()
+    sys.exit(0 if test() else 1)
