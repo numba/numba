@@ -3,7 +3,13 @@ from nodes import *
 from numba import vectorize
 import operator
 import math
+import sys
 
+
+# IEEE-754 guarantees that 17 decimal digits are enough to represent any
+# double value in a string representation and convert back to original
+# representation without loss of information.
+FLOAT_EXACT_FMT = "%.17g"
 
 class CodeGen(Case):
 
@@ -32,7 +38,11 @@ class CodeGen(Case):
 
     @of('ScalarNode(value)')
     def scalar_node(self, value):
-        return str(value)
+        text = str(value)
+        if isinstance(value, float) and type(value)(text) != text:
+            return FLOAT_EXACT_FMT % value
+        else:
+            return text
 
     @of('UnaryOperation(operand, op_str)')
     def unary_operation(self, operand, op_str):
@@ -68,7 +78,7 @@ def foo({0}):
     else:
         ufunc = vectorize('(' + input_types[0] + ',)')(foo)
     return ufunc(*inputs)
-    
+
 
 def dump(operations, inputs, input_names, input_types):
     ufunc_str = '''
@@ -80,7 +90,5 @@ def foo({0}):
         decorator =  "@vectorize(['(" + ','.join(input_types) + ")']"
     else:
         decorator =  "@vectorize(['(" + input_types[0] + ",)']"
-        
-    return decorator + ufunc_str
-    
 
+    return decorator + ufunc_str
