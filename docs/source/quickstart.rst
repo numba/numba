@@ -19,12 +19,12 @@ with performance comparable to a compiled function written in C (assuming best
 case scenario; more on that later). To compile for specific input types, we
 can tell Numba what those input types are::
 
-    @jit('f8(f8)')
+    @jit('f8(f8,f8)')
     def sum(x, y):
         return x + y
 
 The string above passed to the jit decorator tells Numba the return type is an
-8 byte float, and the single argument passed in is also an 8 byte float. The
+8 byte float, and the two arguments passed in are also 8 byte floats. The
 string takes the form 'returntype(arg1type, arg2type, ...)'.
 
 One of the main features of Numba is it's support for NumPy arrays. The
