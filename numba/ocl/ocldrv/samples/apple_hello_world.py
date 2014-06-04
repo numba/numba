@@ -3,7 +3,7 @@
 # Original C source code can be seen at:
 # https://developer.apple.com/library/mac/samplecode/OpenCL_Hello_World_Example/Listings/hello_c.html
 
-from numba.ocl.ocldrv.driver import driver as cl
+from numba.ocl.ocldrv.driver import cl
 import numpy as np
 
 

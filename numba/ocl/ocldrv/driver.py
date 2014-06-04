@@ -174,7 +174,8 @@ class Driver(object):
             platform = self.platforms[0]
 
         if devices is None:
-            devices = platform.devices # all of the platform devices is a good default?
+            # all of the platform devices is a good default?
+            devices = platform.all_devices
 
         _properties = (cl_context_properties*3)(enums.CL_CONTEXT_PLATFORM, platform.id, 0)
         _devices = (cl_device_id*len(devices))(*[dev.id for dev in devices])

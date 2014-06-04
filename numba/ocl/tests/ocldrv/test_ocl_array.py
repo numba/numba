@@ -57,6 +57,15 @@ class TestOCLNDArray(unittest.TestCase):
         da.copy_to_host(array)
         self.assertTrue((array == original * 2).all())
 
+    def test_devicearray_copy_to_device(self):
+        N = 10
+        ary_arange = np.arange(N, dtype=np.int32)
+        ary_zeros = np.empty_like(ary_arange)
+        da = ocl.to_device(ary_arange)
+        db = ocl.to_device(ary_zeros)
+        db.copy_to_device(da)
+        db.copy_to_host(ary_zeros)
+        self.assertTrue((ary_arange == ary_zeros).all())
 
 if __name__ == '__main__':
     unittest.main()

@@ -82,7 +82,8 @@ class OpenCLNDArrayBase(object):
     __ocl_memory__ = True
     __ocl_ndarray__ = True # There must be a _desc and a _data attribute
 
-    def __init__(self, shape, strides, dtype, ocl_desc, ocl_data):
+    def __init__(self, shape, strides, dtype, ocl_desc, ocl_data, offset=0,
+                 nbytes=None):
         """
         Args
         ----
@@ -96,6 +97,11 @@ class OpenCLNDArrayBase(object):
             user provided device memory for the ndarray head structure
         ocl_data
             user provided device memory for the ndarray data buffer
+            this may not be the actual start of the array
+        offset
+            offset to the ocl_data that points to the start of the array
+        nbytes
+            the byte size of the array; can be smaller than the buffer size
         """
         assert(isinstance(shape, tuple))
         assert(isinstance(strides, tuple))
@@ -110,6 +116,8 @@ class OpenCLNDArrayBase(object):
         self.dtype = dtype
         self._desc = ocl_desc
         self._data = ocl_data
+        self.offset = offset
+        self.nbytes = nbytes or ocl_data.size
         self._dummy = dummyarray.Array.from_desc(0, shape, strides,
                                                  dtype.itemsize)
 
@@ -132,7 +140,7 @@ class OpenCLNDArrayBase(object):
 
     @property
     def ocl_arg(self):
-        return self._desc.id, self._data.id
+        return self._desc.id, self._data.id, self.offset
 
 
     def copy_to_device(self, ary, queue=None):
@@ -144,11 +152,12 @@ class OpenCLNDArrayBase(object):
         q = get_context() if queue is None else queue
 
         if oclmem.is_device_memory(ary):
-            sz = min(self._memobject_.size, ary._memobject_.size)
-            q.enqueue_copy_buffer(ary._memobject_, self._memobject_, 0, 0, sz)
+            sz = min(self.nbytes, ary.nbytes)
+            q.enqueue_copy_buffer(ary._memobject_, self._memobject_,
+                                  ary.offset, self.offset, sz)
         else:
-            sz = min(oclmem.host_memory_size(ary), self._data.size)
-            q.enqueue_write_buffer(self._data, 0, sz, oclmem.host_pointer(ary))
+            sz = min(oclmem.host_memory_size(ary), self.nbytes)
+            q.enqueue_write_buffer(self._data, self.offset, sz, oclmem.host_pointer(ary))
 
 
     def copy_to_host(self, ary=None):
@@ -158,7 +167,7 @@ class OpenCLNDArrayBase(object):
         Always returns the host array.
         """
         if ary is None:
-            hostary = np.empty(shape=self._data.size, dtype=np.byte)
+            hostary = np.empty(shape=self.nbytes, dtype=np.byte)
         else:
             if ary.dtype != self.dtype:
                 raise TypeError('incompatible dtype')
@@ -175,11 +184,11 @@ class OpenCLNDArrayBase(object):
                     raise TypeError('incompatible strides; device %s; host %s' %
                                     (self.strides, ary.strides))
 
-            if ary.nbytes != self._data.size:
-                raise TypeError('buffer sizes do not match: device: {0} host: {1}'.format(self._data.size, ary.nbytes))
+            if ary.nbytes != self.nbytes:
+                raise TypeError('buffer sizes do not match: device: {0} host: {1}'.format(self.nbytes, ary.nbytes))
             hostary = ary
 
-        get_context().enqueue_read_buffer(self._data, 0, self._data.size, hostary.ctypes.data)
+        get_context().enqueue_read_buffer(self._data, self.offset, self.nbytes, hostary.ctypes.data)
 
         if ary is None:
             hostary = np.ndarray(shape=self.shape, strides=self.strides,
@@ -204,8 +213,9 @@ class OpenCLNDArrayBase(object):
             end = min(begin + section, total)
             shape = (end - begin,)
             cl_desc = _create_ocl_desc(shape, strides)
-            cl_data = self._data.create_region(begin * itemsize, (end-begin) * itemsize)
-            yield OpenCLNDArray(shape, strides, self.dtype, cl_desc, cl_data)
+            yield OpenCLNDArray(shape, strides, self.dtype, cl_desc, self._data,
+                                offset=begin * itemsize,
+                                nbytes=(end - begin) * itemsize)
 
 
 class OpenCLNDArray(OpenCLNDArrayBase):
@@ -226,7 +236,7 @@ class OpenCLNDArray(OpenCLNDArrayBase):
         if extents == [self._dummy.extent]:
             ctxt = self._desc.context
             cl_desc = _create_ocl_desc(newarr.shape, newarr.strides)
-            return cls(newarr.shape, newarr.strides, self.dtype, cl_desc, self._data)
+            return cls(newarr.shape, newarr.strides, self.dtype, cl_desc, self._data, offset=self.offset)
         else:
             raise NotImplementedError("operation requires copying")
 
@@ -242,7 +252,7 @@ class OpenCLNDArray(OpenCLNDArrayBase):
             ctxt = self._desc.context
             cl_desc = _create_ocl_desc(newarr.shape, newarr.strides)
             return cls(newarr.shape, newarr.strides, self.dtype,
-                       cl_desc, self._data)
+                       cl_desc, self._data, offset=self.offset)
         else:
             raise NotImplementedError("operation requires copying")
 
@@ -265,12 +275,14 @@ class OpenCLNDArray(OpenCLNDArrayBase):
                 return hostary[0]
             else:
                 new_desc = _create_ocl_desc(arr.shape, arr.strides)
-                new_data = self._data.create_region(extents[0], extents[1]-extents[0])
-                return cls(arr.shape, arr.strides, self.dtype, new_desc, new_data)
+                begin, end = extents
+                return cls(arr.shape, arr.strides, self.dtype, new_desc, self._data,
+                           offset=self.offset + begin, nbytes=end - begin)
         else:
-            new_data = self._data.create_region(arr.extent.begin, arr.extent.end - arr.extent.begin)
             new_desc = _create_ocl_desc(arr.shape, arr.strides)
-            return cls(arr.shape, arr.strides, self.dtype, new_desc, new_data)
+            return cls(arr.shape, arr.strides, self.dtype, new_desc, self._data,
+                       offset=self.offset + arr.extent.begin,
+                       nbytes=arr.extent.end - arr.extent.begin)
 
 
 class MappedNDArray(OpenCLNDArrayBase, np.ndarray):

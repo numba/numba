@@ -3,7 +3,7 @@
 #
 
 import ctypes
-from numba.ocl.ocldrv.driver import driver as cl
+from numba.ocl.ocldrv.driver import cl
 
 
 MEM_SIZE=128
@@ -30,7 +30,7 @@ __kernel void hello(__global char* string)
 """
 
 ctxt = cl.create_context()
-use_device = cl.platforms[-1].devices[-1]
+use_device = cl.platforms[-1].all_devices[-1]
 print("Using device:\n{0}".format(use_device))
 q = ctxt.create_command_queue(use_device)
 mem = ctxt.create_buffer(MEM_SIZE)
