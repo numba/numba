@@ -39,6 +39,10 @@ close
 detect
 defer_cleanup
 KernelRuntimeError
+_auto_device
+_profiling
+_profile_start
+_profile_stop
 """
 
 try:
@@ -47,6 +51,7 @@ try:
 
     from .decorators import jit, autojit, declare_device
     from .api import *
+    from .api import _auto_device, _profiling, _profile_start, _profile_stop
 
     is_available = True
     cuda_error = None

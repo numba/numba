@@ -795,11 +795,14 @@ class BaseContext(object):
     def add_libs(self, libs):
         self.linking |= set(libs)
 
+    def get_abi_sizeof(self, lty):
+        raise NotImplementedError
+
     def add_exception(self, exc):
         n = len(self.exceptions) + errcode.ERROR_COUNT
         self.exceptions[n] = exc
         return n
-
+    
 
 class _wrap_impl(object):
     def __init__(self, imp, context, sig):

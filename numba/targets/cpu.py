@@ -9,7 +9,7 @@ from numba import _dynfunc, _helperlib, config
 from numba.callwrapper import PyCallWrapper
 from .base import BaseContext
 from numba import utils
-from numba.targets import intrinsics, mathimpl, npyimpl, operatorimpl
+from numba.targets import intrinsics, mathimpl, npyimpl, operatorimpl, printimpl
 from .options import TargetOptions
 
 
@@ -20,6 +20,7 @@ def _windows_symbol_hacks_32bits():
         ftol = le.dylib_address_of_symbol("_ftol")
         assert ftol
         le.dylib_add_symbol("_ftol2", ftol)
+
 
 class CPUContext(BaseContext):
     def init(self):
@@ -42,11 +43,12 @@ class CPUContext(BaseContext):
         self.insert_func_defn(mathimpl.registry.functions)
         self.insert_func_defn(npyimpl.registry.functions)
         self.insert_func_defn(operatorimpl.registry.functions)
+        self.insert_func_defn(printimpl.registry.functions)
 
     def build_pass_manager(self):
-        if config.OPT == 3:
+        if 0 < config.OPT <= 3:
             # This uses the same passes for clang -O3
-            pms = lp.build_pass_managers(tm=self.tm, opt=3,
+            pms = lp.build_pass_managers(tm=self.tm, opt=config.OPT,
                                          loop_vectorize=True,
                                          fpm=False)
             return pms.pm
@@ -81,7 +83,6 @@ class CPUContext(BaseContext):
             globalopt
             globaldce
             '''.split()
-
             for p in passes:
                 pm.add(lp.Pass.new(p))
             return pm
@@ -121,7 +122,6 @@ class CPUContext(BaseContext):
         import numba._npymath_exports as npymath
         for sym in npymath.symbols:
             le.dylib_add_symbol(*sym)
-
 
     def dynamic_map_function(self, func):
         name, ptr = self.native_funcs[func]
@@ -199,6 +199,9 @@ class CPUContext(BaseContext):
 
         # remove extra refct api calls
         remove_refct_calls(func)
+
+    def get_abi_sizeof(self, lty):
+        return self.engine.target_data.abi_size(lty)
 
 
 # ----------------------------------------------------------------------------

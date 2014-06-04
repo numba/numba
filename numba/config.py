@@ -3,6 +3,7 @@ import sys
 import os
 import warnings
 
+
 def _readenv(name, ctor, default):
     try:
         res = os.environ[name]
@@ -24,7 +25,7 @@ DEBUG = _readenv("NUMBA_DEBUG", int, 0)
 DEBUG_JIT = _readenv("NUMBA_DEBUG_JIT", int, 0)
 
 # Optimization level
-OPT = _readenv("NUMBA_OPT", int, 0)
+OPT = _readenv("NUMBA_OPT", int, 3)
 
 # Force dump of LLVM IR
 DUMP_LLVM = _readenv("NUMBA_DUMP_LLVM", int, DEBUG)

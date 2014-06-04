@@ -1344,15 +1344,11 @@ def device_memset(dst, val, size, stream=0):
 
 
 def profile_start():
-    driver = Driver()
-    err = driver.cuProfilerStart()
-    driver.check_error(err, "Failed to start profiler")
+    driver.cuProfilerStart()
 
 
 def profile_stop():
-    driver = Driver()
-    err = driver.cuProfilerStop()
-    driver.check_error(err, "Failed to stop profiler")
+    driver.cuProfilerStop()
 
 
 @contextlib.contextmanager

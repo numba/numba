@@ -7,6 +7,7 @@ from numba import typing, lowering, dispatcher
 from .cudadrv.devices import get_context
 from .cudadrv import nvvm, devicearray, driver
 from .errors import KernelRuntimeError
+from .api import get_current_device
 
 
 def compile_cuda(pyfunc, return_type, args, debug):
@@ -201,6 +202,13 @@ class CachedCUFunction(object):
             self.ccinfos[device.id] = compile_info
         return cufunc
 
+    def get_info(self):
+        self.get()   # trigger compilation
+        cuctx = get_context()
+        device = cuctx.device
+        ci = self.ccinfos[device.id]
+        return ci
+
 
 class CUDAKernel(CUDAKernelBase):
     def __init__(self, llvm_module, name, argtypes, link=(), debug=False,
@@ -231,6 +239,13 @@ class CUDAKernel(CUDAKernelBase):
     @property
     def ptx(self):
         return self._func.ptx.get().decode('utf8')
+
+    @property
+    def device(self):
+        """
+        Get current active context
+        """
+        return get_current_device()
 
     def _kernel_call(self, args, griddim, blockdim, stream=0, sharedmem=0):
         # Prepare kernel
@@ -357,6 +372,11 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         self.targetoptions = targetoptions
 
     def __call__(self, *args):
+        kernel = self.specialize(*args)
+        cfg = kernel[self.griddim, self.blockdim, self.stream, self.sharedmem]
+        cfg(*args)
+
+    def specialize(self, *args):
         argtypes = tuple([dispatcher.Overloaded.typeof_pyval(a) for a in args])
         kernel = self.definitions.get(argtypes)
         if kernel is None:
@@ -365,6 +385,4 @@ class AutoJitCUDAKernel(CUDAKernelBase):
             self.definitions[argtypes] = kernel
             if self.bind:
                 kernel.bind()
-
-        cfg = kernel[self.griddim, self.blockdim, self.stream, self.sharedmem]
-        cfg(*args)
+        return kernel
