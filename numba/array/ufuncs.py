@@ -25,13 +25,13 @@ def create_binary_op(op_str):
 
 global_dict = globals()
 
+# to make the groupings like numpy mathematical functions documentaton separated
+# the hyperbolic trig from regular trig functions 
 # moved hypot and arctan2 to binary trig funcs
 unary_trig_ufuncs = {'sin':'math.sin', 'cos':'math.cos', 'tan':'math.tan',
     'arcsin':'math.asin', 'arccos':'math.acos', 'arctan':'math.atan',
-    'degrees':'math.degrees',
-    'radians':'math.radians', 'sinh':'math.sinh', 'cosh':'math.cosh',
-    'tanh':'math.tanh', 'arcsinh':'math.asinh', 'arccosh':'math.acosh',
-    'arctanh':'math.atanh'}
+    'degrees':'math.degrees' ,'deg2rad':'math.radians', 'rad2deg':'math.degrees',
+    'radians':'math.radians'}
 
 for name, op in unary_trig_ufuncs.items():
     global_dict[name] = create_unary_op(op)
@@ -40,6 +40,36 @@ binary_trig_ufuncs = {'hypot':'math.hypot', 'arctan2':'math.atan2'}
 
 for name, op in binary_trig_ufuncs.items():
     global_dict[name] = create_binary_op(op)
+
+unary_hyperbolic_ufuncs = {'sinh':'math.sinh', 'cosh':'math.cosh',
+    'tanh':'math.tanh', 'arcsinh':'math.asinh', 'arccosh':'math.acosh',
+    'arctanh':'math.atanh'}
+
+for name, op in unary_hyperbolic_ufuncs.items():
+    global_dict[name] = create_unary_op(op)
+
+# todo -- rint, around, round, fix (these are functions, not ufuncs according to numpy doc)
+unary_rounding_ufuncs = {'floor':'math.floor', 'ceil':'math.ceil', 'trunc':'math.trunc'}
+
+for name, op in unary_rounding_ufuncs.items():
+    global_dict[name] = create_unary_op(op)
+
+#todo -- exp2, log2, logaddep, logaddexp2
+unary_exps_logs_ufuncs = {'exp':'math.exp', 'expm1':'math.expm1', 'log':'math.log', 'log10':'math.log10', 
+        'log1p':'math.log1p'}
+
+for name, op in unary_exps_logs_ufuncs.items():
+    global_dict[name] = create_unary_op(op)
+
+
+# todo -- currently frexp fails and ldexp is a binary op
+#unary_floating_point_ufuncs = {'frexp':'math.frexp', 'ldexp':'math.ldexp'}
+#
+#for name, op in unary_floating_point_ufuncs.items():
+#    global_dict[name] = create_unary_op(op)
+#
+
+
 
 unary_arithmetic_ufuncs = {'negative':'operator.neg'}
 

@@ -1,4 +1,3 @@
-from nodes import ScalarNode
 from math import pi, e
 
 global_dict = globals()
