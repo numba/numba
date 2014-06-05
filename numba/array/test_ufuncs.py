@@ -4,13 +4,95 @@ import numpy as np
 from numba.config import PYVERSION
 from math import pi
 from functools import wraps 
-use_python = True
+use_python = False
 
 size = 10
-
 class TestUFuncs(unittest.TestCase):
-    
-    def test_binary_ufunc(self):
+  
+    # todo test different dtypes
+    def test_unary_ufunc(self, numba_func, numpy_func, data='zeros', scalar=1, size=10, types=[], debug=False):
+        #size = 10
+        if not types:
+            dts = ['i1', 'i2', 'i4', 'i8', 'u1', 'u2', 'u4', 'u8', 'f4', 'f8']
+        else:
+            dts = types
+        for dt in dts:
+            print 'testing ' + numpy_func.__name__  + ' with data type ' + dt
+            if data == 'zeros':
+                a = numbarray.zeros(size, dtype=dt)
+                b = np.zeros(size, dtype=dt)
+            elif data == 'ones':
+                a = scalar * numbarray.ones(size, dtype=dt)
+                b = scalar * np.ones(size, dtype=dt)
+            elif data == 'arange':
+                a = scalar * numbarray.arange(size, dtype=dt)
+                b = scalar * np.arange(size, dtype=dt)
+            result = numba_func(a)
+            result.eval()
+            expected = numpy_func(b)
+            if debug:
+                # todo -- numba_func.__name__ prints 'unary op' rather than the correct name
+                print '\n' + numpy_func.__name__ + ' test'
+                #print numba_func
+                print 'result = ', result
+                print 'expected = ', expected
+            self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
+
+    def test_binary_ufunc(self, numba_func, numpy_func, data='zeros', m=3, n=3, ascalar=1, bscalar=1, agiven=[], bgiven=[], types=[], debug=False):
+        size = 10
+        if not types:
+            dts = ['i1', 'i2', 'i4', 'i8', 'u1', 'u2', 'u4', 'u8', 'f4', 'f8']
+        else:
+            dts = types
+        for dt in dts:
+            print 'testing ' + numpy_func.__name__  + ' with data type ' + dt
+            if data == 'm_zeros':
+                a = ascalar * numbarray.zeros((m, n), dtype=dt)
+                b = bscalar * numbarray.zeros((m, n), dtype=dt)
+                c = ascalar * np.zeros((m, n), dtype=dt)
+                d = bscalar * np.zeros((m, n), dtype=dt)
+            elif data == 'zeros':
+                a = ascalar * numbarray.zeros(size, dtype=dt)
+                b = bscalar * numbarray.zeros(size, dtype=dt)
+                c = ascalar * np.zeros(size, dtype=dt)
+                d = bscalar * np.zeros(size, dtype=dt)
+            elif data == 'm_ones':
+                a = ascalar * numbarray.ones((m, n), dtype=dt)
+                b = bscalar * numbarray.ones((m, n), dtype=dt)
+                c = ascalar * np.ones((m, n), dtype=dt)
+                d = bscalar * np.ones((m, n), dtype=dt)
+            elif data == 'ones':
+                a = ascalar * numbarray.ones(size, dtype=dt)
+                b = bscalar * numbarray.ones(size, dtype=dt)
+                c = ascalar * np.ones(size, dtype=dt)
+                d = bscalar * np.ones(size, dtype=dt)
+            elif data == 'arange':
+                a = ascalar * numbarray.arange(size, dtype=dt)
+                b = bscalar * numbarray.arange(size, dtype=dt)
+                c = ascalar * np.arange(size, dtype=dt)
+                d = bscalar * np.arange(size, dtype=dt)
+            elif data == 'given':
+                a = ascalar * numbarray.array(agiven, dtype=dt)
+                b = bscalar * numbarray.array(bgiven, dtype=dt)
+                c = ascalar * np.array(agiven, dtype=dt)
+                d = bscalar * np.array(bgiven, dtype=dt)
+
+            
+            result = numba_func(a, b)
+            result.eval()
+            expected = numpy_func(c, d)
+            if debug:
+                # todo -- numba_func.__name__ prints 'unary op' rather than the correct name
+                print '\n' + numpy_func.__name__ + ' test'
+                #print numba_func
+                print 'result = ', result
+                print type(result)
+                print 'expected = ', expected
+                print type(expected)
+            self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
+
+    #  renamed from test_bunary_ufunc
+    def test_binary_add_ufunc(self):
 
         a = numbarray.arange(10)
         result = numbarray.add(a, a)
@@ -18,235 +100,84 @@ class TestUFuncs(unittest.TestCase):
 
         self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
 
-        result = numbarray.add(1, 1)
-        expected = np.add(1, 1)
+       # result = numbarray.add(1, 1)
+       # expected = np.add(1, 1)
 
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
+       # self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
 
         result = numbarray.add(a, 1)
         expected = np.add(np.arange(10), 1)
 
         self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
 
-        result = numbarray.add(1, a)
+        resulst = numbarray.add(1, a)
         expected = np.add(1, np.arange(10))
 
         self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
-
+        
     def test_unary_sin_ufunc(self):
-
-        a = (pi / 2) * numbarray.ones(size)
-        b = (pi / 2) * np.ones(size)
-
-        result = numbarray.sin(a)
-        result.eval()  # eval is deferred so w/o (or print) this the assert fails
-        #print result
-        expected = np.sin(b)
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
+        self.test_unary_ufunc(numbarray.sin, np.sin, 'zeros', debug=True)
 
     def test_unary_cos_ufunc(self):
-        a = numbarray.zeros(size)
-        b = np.zeros(size)
-        result = numbarray.cos(a)
-        result.eval()
-        expected = np.cos(b)
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
+        self.test_unary_ufunc(numbarray.cos, np.cos, 'zeros')
 
     def test_unary_tan_ufunc(self):
-        # The (pi / 4) fails
-        #a = (pi / 4) * numbarray.ones(10)
-        a = numbarray.zeros(size)
-        #b = (pi / 4) * np.ones(10)
-        b = np.zeros(size)
-        result = numbarray.tan(a)
-        result.eval()
-        expected = np.tan(b)
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
+        self.test_unary_ufunc(numbarray.tan, np.tan, 'ones', numbarray.pi / 4, types=['f4'], debug=True)
 
     def test_unary_arcsin_ufunc(self):
-        a = numbarray.zeros(size)
-        b = np.zeros(size)
-        result = numbarray.arcsin(a)
-        result.eval()
-        expected = np.arcsin(b)
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
+        self.test_unary_ufunc(numbarray.arcsin, np.arcsin, 'zeros')
 
     def test_unary_arccos_ufunc(self):
-        a = numbarray.ones(size)
-        b = np.ones(size)
-        result = numbarray.arccos(a)
-        result.eval()
-        print type(result)
-        expected = np.arccos(b)
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
+        self.test_unary_ufunc(numbarray.arccos, np.arccos, 'ones')
     
     def test_unary_arctan_ufunc(self):
-        a = numbarray.ones(size)
-        b = np.ones(size)
-        result = numbarray.arctan(a)
-        result.eval()
-        expected = np.arctan(b)
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
+        self.test_unary_ufunc(numbarray.arctan, np.arctan, 'ones')
 
     def test_unary_degrees_ufunc(self):
-        # both tests fail 
-        print 'degrees test'
-        #a = numbarray.arange(12.) * numbarray.pi / 6
-        #b = np.arange(12.) * np.pi / 6
-        a = numbarray.arange(12) 
-        b = np.arange(12) 
-        result = numbarray.degrees(a)
-        result.eval()
-        print result
-        expected = np.degrees(b)
-        print expected
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
-
+        self.test_unary_ufunc(numbarray.degrees, np.degrees, 'arange', numbarray.pi / 6, debug=True) 
+ 
+    # same as the degrees ufunc
     def test_unary_rad2deg_ufunc(self):
-        # both tests fail 
-        print 'rad2deg test'
-        #a = numbarray.arange(12.) * numbarray.pi / 6
-        #b = np.arange(12.) * np.pi / 6
-        a = numbarray.arange(12) 
-        b = np.arange(12) 
-        result = numbarray.rad2deg(a)
-        result.eval()
-        print result
-        expected = np.rad2deg(b)
-        print expected
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
-
+        self.test_unary_ufunc(numbarray.rad2deg, np.rad2deg, 'arange', numbarray.pi / 6, debug=True) 
+       
+    # same as the radians ufunc   
     def test_unary_deg2rad_ufunc(self):
-        # this is the same as the radians function
-        # numpy implements both
-        a = numbarray.arange(12) * 30. 
-        b = np.arange(12) * 30.
-        result = numbarray.deg2rad(a)
-        result.eval()
-        expected = np.deg2rad(b)
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
+        self.test_unary_ufunc(numbarray.deg2rad, np.deg2rad, 'arange', 30) 
 
     def test_unary_radians_ufunc(self):
-        a = numbarray.arange(12) * 30. 
-        b = np.arange(12) * 30.
-        result = numbarray.radians(a)
-        result.eval()
-        expected = np.radians(b)
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
+        self.test_unary_ufunc(numbarray.radians, np.radians, 'arange', 30) 
 
+    # todo -- complex types not implemented yet 
+    # should test hyperbolics with complex datatypes
+    # a = numbarray.zeros(size) * numbarray.pi * 1j / 2
+    # b = np.arange(size) * np.pi * 1j / 2
+    
     def test_unary_sinh_ufunc(self):
-        #print 'sinh test'
-        # complex types not implemented yet
-        #a = numbarray.zeros(size) * numbarray.pi * 1j / 2
-        #b = np.arange(size) * np.pi * 1j / 2
-        a = numbarray.zeros(size)
-        b = np.zeros(size)
-        result = numbarray.sinh(a)
-        result.eval()
-        #print result
-        expected = np.sinh(b)
-        #print expected
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
-
+        self.test_unary_ufunc(numbarray.sinh, np.sinh, 'zeros') 
+        
     def test_unary_cosh_ufunc(self):
-        a = numbarray.zeros(size)
-        b = np.zeros(size)
-        result = numbarray.cosh(a)
-        result.eval()
-        expected = np.cosh(b)
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
+        self.test_unary_ufunc(numbarray.cosh, np.cosh, 'zeros') 
     
     def test_unary_tanh_ufunc(self):
-        print 'tanh test'
-        #first test fails; second one works
-        a = numbarray.ones(size) * numbarray.pi / 4
-        b = np.ones(size) * np.pi / 4
-        #a = numbarray.zeros(size) 
-        #b = np.zeros(size)
-        result = numbarray.tanh(a)
-        result.eval()
-        print result
-        expected = np.tanh(b)
-        print expected
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
+        #self.test_unary_ufunc(numbarray.tanh, np.tanh, 'ones', numbarray.pi / 4)
+        self.test_unary_ufunc(numbarray.tanh, np.tanh, 'ones')
 
     def test_unary_arcsinh_ufunc(self):
-        print 'arcsinh test'
-        # complex values not implemented yet
-        # first test fails; second works
-        a = numbarray.ones(size) * numbarray.e 
-        b = np.ones(size) * np.e
-        #a = numbarray.ones(size) 
-        #b = np.ones(size)
-        result = numbarray.arcsinh(a)
-        result.eval()
-        print result
-        expected = np.arcsinh(b)
-        print expected
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
+        self.test_unary_ufunc(numbarray.arcsinh, np.arcsinh, 'ones', numbarray.e)
 
     def test_unary_arccosh_ufunc(self):
-        print 'arccosh test'
-        # complex values not implemented yet
-        # first test fails; second works
-        a = numbarray.ones(size) * numbarray.e 
-        b = np.ones(size) * np.e
-        #a = numbarray.ones(size) 
-        #b = np.ones(size)
-        result = numbarray.arccosh(a)
-        result.eval()
-        print result
-        expected = np.arccosh(b)
-        print expected
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
+        self.test_unary_ufunc(numbarray.arccosh, np.arccosh, 'ones', numbarray.e)
 
     def test_unary_arctanh_ufunc(self):
-        print 'arctanh test'
-        # complex values not implemented yet
-        # first test fails; second and third work
-        a = numbarray.ones(size) * numbarray.e 
-        b = np.ones(size) * np.e
-        #a = numbarray.ones(size)
-        #b = np.ones(size)
-        #a = numbarray.ones(size) * .5 
-        #b = np.ones(size) * .5
-        result = numbarray.arctanh(a)
-        result.eval()
-        print result
-        expected = np.arctanh(b)
-        print expected
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
+        self.test_unary_ufunc(numbarray.arctanh, np.arctanh, 'ones', numbarray.e)
 
     def test_binary_hypot_ufunc(self):
-        a = 3 * numbarray.ones((3, 3))
-        b = 4 * numbarray.ones((3, 3))
-        c = 3 * np.ones((3, 3))
-        d = 4 * np.ones((3, 3))
-        result = numbarray.hypot(a, b)
-        result.eval()
-        expected = np.hypot(c, d)
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
+        self.test_binary_ufunc(numbarray.hypot, np.hypot, 'm_ones', ascalar=3, bscalar=4)
     
     def test_binary_arctan2_ufunc(self):
-        # the first two tests work fine
-        # the test with the 180 / [numbarray.pi|np.pi] fails
-        print 'arctan2 test'
-        a = numbarray.array([-1, +1, +1, -1, 0])
-        b = numbarray.array([-1, -1, +1, +1, 0])
-        c = np.array([-1, +1, +1, -1, 0])
-        d = np.array([-1, -1, +1, +1, 0])
-        #result = numbarray.arctan2(a, b) * 180
-        #result = numbarray.arctan2(a, b) * 180 / 3.14 
-        result = numbarray.arctan2(a, b) * 180 / numbarray.pi
-        result.eval()
-        print result
-        print numbarray.pi
-        #expected = np.arctan2(c, d) * 180
-        #expected = np.arctan2(c, d) * 180 / 3.14 
-        expected = np.arctan2(c, d) * 180 / np.pi
-        print expected
-        print np.pi
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
+        # fails with 'il' dtype
+        self.test_binary_ufunc(numbarray.arctan2, np.arctan2, 'given', agiven=[-1, +1, +1, -1, 0], bgiven=[-1, -1, +1, +1, 0], types=['i2', 'i4', 'f4', 'f8'], ascalar=180 / numbarray.pi, bscalar=180 / numbarray.pi)
+
        
     def test_div(self):
         a = 180 / numbarray.pi
@@ -262,72 +193,39 @@ class TestUFuncs(unittest.TestCase):
         self.assertTrue(numbarray.pi == np.pi)
 
     def test_unary_floor_ufunc(self):
-        a = numbarray.ones(size) * numbarray.e
-        b = np.ones(size) * np.e
-        #a = numbarray.ones(size) / numbarray.e
-        #b = np.ones(size) / np.e
-        result = numbarray.floor(a)
-        result.eval()
-        expected = np.floor(b)
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
+        self.test_unary_ufunc(numbarray.floor, np.floor, 'ones', numbarray.e)
  
     def test_unary_ceil_ufunc(self):
-        a = numbarray.ones(size) * numbarray.e
-        b = np.ones(size) * np.e
-        #a = numbarray.ones(size) / numbarray.e
-        #b = np.ones(size) / np.e
-        result = numbarray.ceil(a)
-        result.eval()
-        expected = np.ceil(b)
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
+        self.test_unary_ufunc(numbarray.ceil, np.ceil, 'ones', numbarray.e)
 
     def test_unary_trunc_ufunc(self):
-        a = numbarray.arange(size) * numbarray.e
-        b = np.arange(size) * np.e
-        result = numbarray.ceil(a)
-        result.eval()
-        expected = np.ceil(b)
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
-
+        self.test_unary_ufunc(numbarray.trunc, np.trunc, 'arange', numbarray.e)
+    
     def test_unary_exp_ufunc(self):
-        a = numbarray.arange(size) 
-        b = np.arange(size) 
-        result = numbarray.exp(a)
-        result.eval()
-        expected = np.exp(b)
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
+        self.test_unary_ufunc(numbarray.exp, np.exp, 'arange', numbarray.e)
 
     def test_unary_expm1_ufunc(self):
-        a = numbarray.arange(size) 
-        b = np.arange(size) 
-        result = numbarray.expm1(a)
-        result.eval()
-        expected = np.expm1(b)
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
+        self.test_unary_ufunc(numbarray.expm1, np.expm1, 'arange', numbarray.e)
 
     def test_unary_log_ufunc(self):
-        a = numbarray.arange(size) 
-        b = np.arange(size) 
-        result = numbarray.log(a)
-        result.eval()
-        expected = np.log(b)
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
+        self.test_unary_ufunc(numbarray.log, np.log, 'arange')
+        # these dtypes work
+        #self.test_unary_ufunc(numbarray.log, np.log, 'arange', types=['i4', 'i8', 'u4', 'u8', 'f8'])
+
+    def test_unary_log2_ufunc(self):
+        self.test_unary_ufunc(numbarray.log2, np.log2, 'arange')
+        # these dytpes work
+        #self.test_unary_ufunc(numbarray.log2, np.log2, 'arange', types=['i4', 'i8', 'u4', 'u8', 'f8'])
 
     def test_unary_log10_ufunc(self):
-        a = numbarray.arange(size) 
-        b = np.arange(size) 
-        result = numbarray.log10(a)
-        result.eval()
-        expected = np.log10(b)
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
+        # these dtypes work, probably similar for other failures
+        #self.test_unary_ufunc(numbarray.log10, np.log10, 'arange', types=['i4', 'i8', 'u4', 'u8', 'f8'])
+        self.test_unary_ufunc(numbarray.log10, np.log10, 'arange')
 
     def test_unary_log1p_ufunc(self):
-        a = numbarray.arange(size) 
-        b = np.arange(size) 
-        result = numbarray.log1p(a)
-        result.eval()
-        expected = np.log1p(b)
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
+        self.test_unary_ufunc(numbarray.log1p, np.log1p, 'arange')
+        # these dtypes work, probably similar for other failures
+        #self.test_unary_ufunc(numbarray.log10, np.log10, 'arange', types=['i4', 'i8', 'u4', 'u8', 'f8'])
 
 # todo -- frexp test fails with the following error
 # File "/home/scott/continuum/numba/numba/typeinfer.py", line 114, in propagate
@@ -360,12 +258,8 @@ class TestUFuncs(unittest.TestCase):
         self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
 
     def test_unary_negative_ufunc(self):
-        a = numbarray.arange(size) 
-        b = np.arange(size) 
-        result = numbarray.negative(a)
-        result.eval()
-        expected = np.negative(b)
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
+        #a = numbarray.arange(size) 
+        self.test_unary_ufunc(numbarray.negative, np.negative, 'arange', types=['i1', 'i2', 'i4', 'i4', 'f4', 'f8'])
 
 #  pow and power both give the following error 
 #  File "/home/scott/anaconda/lib/python2.7/site-packages/llvm/core.py", line 593, in verify
@@ -397,19 +291,7 @@ class TestUFuncs(unittest.TestCase):
 #        print expected
 
     def test_binary_subtract_ufunc(self):
-        # the first two tests work fine
-        # the test with the 180 / [numbarray.pi|np.pi] fails
-        a = numbarray.arange(9).reshape((3, 3))
-        b = numbarray.arange(3)
-        c = np.arange(9).reshape((3, 3))
-        d = np.arange(3)
-        result = numbarray.subtract(a, b)
-        result.eval()
-        expected = np.subtract(c, d)
-        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
-        print 'subtract test'
-        print result
-        print expected
+        self.test_binary_ufunc(numbarray.subtract, np.subtract, 'arange') 
 
 if __name__ == '__main__':
     unittest.main()

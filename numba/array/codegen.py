@@ -63,6 +63,7 @@ def build(array, state):
 
 def run(operations, inputs, input_names, input_types):
     ufunc_str = '''
+import numpy   
 def foo({0}):
     return {1}
 '''.format(','.join(input_names), operations)
