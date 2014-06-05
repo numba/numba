@@ -20,22 +20,22 @@ class CodeGen(Case):
 
     @of('ArrayDataNode(array_data)')
     def array_data_node(self, array_data):
-        var_str = 'x' + str(id(array_data))
-        if not var_str in self.state['input_names']:
+        in_str = 'in' + str(len(self.state['inputs']))
+        if not in_str in self.state['input_names']:
             self.state['inputs'].append(array_data)
-            self.state['input_names'].append(var_str)
+            self.state['input_names'].append(in_str)
             self.state['input_types'].append(str(array_data.dtype))
-        return var_str
+        return in_str
 
     @of('VariableDataNode(name)')
     def variable_data_node(self, name):
         data = self.state['variables'][name]
-        var_str = 'x' + str(id(data))
+        in_str = 'in' + str(len(self.state['inputs']))
         self.state['inputs'].append(data)
-        self.state['input_names'].append(var_str)
+        self.state['input_names'].append(in_str)
         self.state['input_types'].append(str(data.dtype))
         self.state['variable_found'] = True
-        return var_str
+        return in_str
 
     @of('ScalarNode(value)')
     def scalar_node(self, value):
@@ -47,51 +47,51 @@ class CodeGen(Case):
 
     @of('UnaryOperation(operand, op_str)')
     def unary_operation(self, operand, op_str):
-        return op_str + '(' + CodeGen(operand, state=self.state) + ')'
+        operand_var = CodeGen(operand, state=self.state)
+        temp_var = 'temp' + str(len(self.state['vectorize_body']))
+        self.state['vectorize+_body'].append('{0} = {1}({2})'.format(temp_var, op_str, operand_var))
+        return temp_var
 
     @of('BinaryOperation(lhs, rhs, op_str)')
     def binary_operation(self, lhs, rhs, op_str):
-        return op_str + '(' + CodeGen(lhs, state=self.state) + ',' + \
-            CodeGen(rhs, state=self.state) + ')'
+        lhs_var = CodeGen(lhs, state=self.state)
+        rhs_var = CodeGen(rhs, state=self.state)
+        temp_var = 'temp' + str(len(self.state['vectorize_body']))
+        self.state['vectorize_body'].append('{0} = {1}({2}, {3})'.format(temp_var, op_str, lhs_var, rhs_var))
+        return temp_var
+
 
 def build(array, state):
     state['inputs'] = []
     state['input_names'] = []
     state['input_types'] = []
-    operations = CodeGen(array.array_node, state=state)
-    return operations, state['inputs'], state['input_names'], state['input_types']
+    state['vectorize_body'] = []
+    output_var = CodeGen(array.array_node, state=state)
+    return state['inputs'], state['input_names'], state['input_types'], state['vectorize_body'], output_var
 
 
-def run(operations, inputs, input_names, input_types):
-    ufunc_str = '''
-def foo({0}):
-    return {1}
-'''.format(','.join(input_names), operations)
+vectorize_template = ('def foo({0}):\n'
+                      '    {1}\n'
+                      '    return {2}\n')
+
+
+def run(inputs, input_names, input_types, vectorize_body, output_var):
+
+    ufunc_str = vectorize_template.format(','.join(input_names),
+                                          '\n    '.join(vectorize_body),
+                                          output_var)
 
     code = compile(ufunc_str, '<string>', 'exec')
-
     exec(code, globals())
-
     foo = globals()['foo']
 
-    if len(input_types) > 1:
-        ufunc = vectorize('(' + ','.join(input_types) + ')')(foo)
-    else:
-        ufunc = vectorize('(' + input_types[0] + ',)')(foo)
+    ufunc = vectorize('({0},)'.format(','.join(input_types)))(foo)
     return ufunc(*inputs)
 
 
-def dump(operations, inputs, input_names, input_types):
-    ufunc_str = '''
-def foo({0}):
-    return {1}
-'''.format(','.join(input_names), operations)
-
-    if len(input_types) > 1:
-        decorator =  "@vectorize(['(" + ','.join(input_types) + ")']"
-    else:
-        decorator =  "@vectorize(['(" + input_types[0] + ",)']"
-
-    return decorator + ufunc_str
-
+def dump(inputs, input_names, input_types, vectorize_body, output_var):
+    vectorize_str = vectorize_template.format(','.join(input_names),
+                                              '\n    '.join(vectorize_body),
+                                              output_var)
+    return '@vectorize(["({0},)"])\n'.format(','.join(input_types)) + vectorize_str
 
