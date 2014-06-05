@@ -69,7 +69,7 @@ class TypeVar(object):
         if self.locked:
             [expect] = list(self.typeset)
             if self.context.type_compatibility(typ, expect) is None:
-                raise TypingError("No convertsion from %s to %s for "
+                raise TypingError("No conversion from %s to %s for "
                                   "'%s'" % (typ, expect, self.var))
         else:
             self.typeset = set([typ])
@@ -221,13 +221,31 @@ class SetItemConstrain(object):
                                   (ty, it, vt), loc=self.loc)
 
 
+class SetAttrConstrain(object):
+    def __init__(self, target, attr, value, loc):
+        self.target = target
+        self.attr = attr
+        self.value = value
+        self.loc = loc
+
+    def __call__(self, context, typevars):
+        targettys = typevars[self.target.name].get()
+        valtys = typevars[self.value.name].get()
+
+        for ty, vt in itertools.product(targettys, valtys):
+            if not context.resolve_setattr(target=ty, attr=self.attr,
+                                           value=vt):
+                raise TypingError("Cannot resolve setattr: (%s).%s = %s" %
+                                  (ty, self.attr, vt), loc=self.loc)
+
+
 class TypeVarMap(dict):
     def set_context(self, context):
         self.context = context
 
     def __getitem__(self, name):
         if name not in self:
-            self[name] = TypeVar(self.context, name)
+            self[name] = TypeVar(self.context, name.split('.', 1)[0])
         return super(TypeVarMap, self).__getitem__(name)
 
     def __setitem__(self, name, value):
@@ -256,6 +274,7 @@ class TypeInferer(object):
         self.usercalls = []
         self.intrcalls = []
         self.setitemcalls = []
+        self.setattrcalls = []
 
     def dump(self):
         print('---- type variables ----')
@@ -269,12 +288,10 @@ class TypeInferer(object):
     def seed_return(self, typ):
         """Seeding of return value is optional.
         """
-        # self.return_type = typ
         for blk in utils.dict_itervalues(self.blocks):
             inst = blk.terminator
             if isinstance(inst, ir.Return):
                 self.typevars[inst.value.name].lock(typ)
-                # self.typevars[inst.value.name].lock()
 
     def build_constrain(self):
         for blk in utils.dict_itervalues(self.blocks):
@@ -345,6 +362,13 @@ class TypeInferer(object):
             signature = self.context.resolve_setitem(target, index, value)
             calltypes[inst] = signature
 
+        for inst in self.setattrcalls:
+            target = typemap[inst.target.name]
+            attr = inst.attr
+            value = typemap[inst.value.name]
+            signature = self.context.resolve_setattr(target, attr, value)
+            calltypes[inst] = signature
+
         return calltypes
 
     def get_return_type(self, typemap):
@@ -362,9 +386,11 @@ class TypeInferer(object):
                 return types.Optional(unified)
             else:
                 return types.none
-        else:
+        elif rettypes:
             unified = self.context.unify_types(*rettypes)
             return unified
+        else:
+            return types.none
 
     def get_state_token(self):
         """The algorithm is monotonic.  It can only grow the typesets.
@@ -378,7 +404,11 @@ class TypeInferer(object):
             self.typeof_assign(inst)
         elif isinstance(inst, ir.SetItem):
             self.typeof_setitem(inst)
+        elif isinstance(inst, ir.SetAttr):
+            self.typeof_setattr(inst)
         elif isinstance(inst, (ir.Jump, ir.Branch, ir.Return, ir.Del)):
+            pass
+        elif isinstance(inst, ir.Raise):
             pass
         else:
             raise NotImplementedError(inst)
@@ -388,6 +418,12 @@ class TypeInferer(object):
                                      value=inst.value, loc=inst.loc)
         self.constrains.append(constrain)
         self.setitemcalls.append(inst)
+
+    def typeof_setattr(self, inst):
+        constrain = SetAttrConstrain(target=inst.target, attr=inst.attr,
+                                     value=inst.value, loc=inst.loc)
+        self.constrains.append(constrain)
+        self.setattrcalls.append(inst)
 
     def typeof_assign(self, inst):
         value = inst.value
@@ -411,8 +447,8 @@ class TypeInferer(object):
             self.typevars[target.name].lock(ty)
         elif const is None:
             self.typevars[target.name].lock(types.none)
-        # elif isinstance(const, str):
-        #     self.typevars[target.name].lock(types.string)
+        elif isinstance(const, str):
+            self.typevars[target.name].lock(types.string)
         elif isinstance(const, complex):
             self.typevars[target.name].lock(types.complex128)
         elif isinstance(const, tuple):
@@ -441,8 +477,8 @@ class TypeInferer(object):
             gvty = self.context.get_global_type(gvar.value)
             self.typevars[target.name].lock(gvty)
             self.assumed_immutables.add(inst)
-        elif gvar.name == 'len' and gvar.value is len:
 
+        elif gvar.name == 'len' and gvar.value is len:
             gvty = self.context.get_global_type(gvar.value)
             self.typevars[target.name].lock(gvty)
             self.assumed_immutables.add(inst)
@@ -450,6 +486,11 @@ class TypeInferer(object):
         elif gvar.name in ('True', 'False'):
             assert gvar.value in (True, False)
             self.typevars[target.name].lock(types.boolean)
+            self.assumed_immutables.add(inst)
+
+        elif gvar.name == 'None':
+            assert gvar.value is None
+            self.typevars[target.name].lock(types.none)
             self.assumed_immutables.add(inst)
 
         elif (isinstance(gvar.value, tuple) and
@@ -485,6 +526,17 @@ class TypeInferer(object):
         elif cffi_support.SUPPORTED and cffi_support.is_cffi_func(gvar.value):
             fnty = cffi_support.make_function_type(gvar.value)
             self.typevars[target.name].lock(fnty)
+            self.assumed_immutables.add(inst)
+
+        elif (cffi_support.SUPPORTED and
+                isinstance(gvar.value, cffi_support.ExternCFunction)):
+            fnty = gvar.value
+            self.typevars[target.name].lock(fnty)
+            self.assumed_immutables.add(inst)
+
+        elif type(gvar.value) is type and issubclass(gvar.value,
+                                                     BaseException):
+            self.typevars[target.name].lock(types.exception_type)
             self.assumed_immutables.add(inst)
 
         else:

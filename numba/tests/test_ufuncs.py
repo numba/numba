@@ -16,221 +16,26 @@ enable_pyobj_flags.set("enable_pyobject")
 
 no_pyobj_flags = Flags()
 
-
-# unary ufuncs
-def negative_usecase(x, result):
-    np.negative(x, result)
-
-def absolute_usecase(x, result):
-    np.absolute(x, result)
-
-def rint_usecase(x, result):
-    np.rint(x, result)
-
-def sign_usecase(x, result):
-    np.sign(x, result)
-
-def conj_usecase(x, result):
-    np.conj(x, result)
-
-def exp_usecase(x, result):
-    np.exp(x, result)
-
-def exp2_usecase(x, result):
-    np.exp2(x, result)
-
-def log_usecase(x, result):
-    np.log(x, result)
-
-def log2_usecase(x, result):
-    np.log2(x, result)
-
-def log10_usecase(x, result):
-    np.log10(x, result)
-
-def expm1_usecase(x, result):
-    np.expm1(x, result)
-
-def log1p_usecase(x, result):
-    np.log1p(x, result)
-
-def sqrt_usecase(x, result):
-    np.sqrt(x, result)
-
-def square_usecase(x, result):
-    np.square(x, result)
-
-def reciprocal_usecase(x, result):
-    np.reciprocal(x, result)
-
-def sin_usecase(x, result):
-    np.sin(x, result)
-
-def cos_usecase(x, result):
-    np.cos(x, result)
-
-def tan_usecase(x, result):
-    np.tan(x, result)
-
-def arcsin_usecase(x, result):
-    np.arcsin(x, result)
-
-def arccos_usecase(x, result):
-    np.arccos(x, result)
-
-def arctan_usecase(x, result):
-    np.arctan(x, result)
-
-def sinh_usecase(x, result):
-    np.sinh(x, result)
-
-def cosh_usecase(x, result):
-    np.cosh(x, result)
-
-def tanh_usecase(x, result):
-    np.tanh(x, result)
-
-def arcsinh_usecase(x, result):
-    np.arcsinh(x, result)
-
-def arccosh_usecase(x, result):
-    np.arccosh(x, result)
-
-def arctanh_usecase(x, result):
-    np.arctanh(x, result)
-
-def deg2rad_usecase(x, result):
-    np.deg2rad(x, result)
-
-def rad2deg_usecase(x, result):
-    np.rad2deg(x, result)
-
-def invertlogical_not_usecase(x, result):
-    np.invertlogical_not(x, result)
-
-def floor_usecase(x, result):
-    np.floor(x, result)
-
-def ceil_usecase(x, result):
-    np.ceil(x, result)
-
-def trunc_usecase(x, result):
-    np.trunc(x, result)
-
-
-# binary ufuncs
-def add_usecase(x, y, result):
-    np.add(x, y, result)
-
-def subtract_usecase(x, y, result):
-    np.subtract(x, y, result)
-
-def multiply_usecase(x, y, result):
-    np.multiply(x, y, result)
-
-def divide_usecase(x, y, result):
-    np.divide(x, y, result)
-
-def logaddexp_usecase(x, y, result):
-    np.logaddexp(x, y, result)
-
-def logaddexp2_usecase(x, y, result):
-    np.logaddexp2(x, y, result)
-
-def true_divide_usecase(x, y, result):
-    np.true_divide(x, y, result)
-
-def floor_divide_usecase(x, y, result):
-    np.floor_divide(x, y, result)
-
-def power_usecase(x, y, result):
-    np.power(x, y, result)
-
-def remainder_usecase(x, y, result):
-    np.remainder(x, y, result)
-
-def mod_usecase(x, y, result):
-    np.mod(x, y, result)
-
-def fmod_usecase(x, y, result):
-    np.fmod(x, y, result)
-
-def arctan2_usecase(x, y, result):
-    np.arctan2(x, y, result)
-
-def hypot_usecase(x, y, result):
-    np.hypot(x, y, result)
-
-def bitwise_and_usecase(x, y, result):
-    np.bitwise_and(x, y, result)
-
-def bitwise_or_usecase(x, y, result):
-    np.bitwise_or(x, y, result)
-
-def bitwise_xor_usecase(x, y, result):
-    np.bitwise_xor(x, y, result)
-
-def left_shift_usecase(x, y, result):
-    np.left_shift(x, y, result)
-
-def right_shift_usecase(x, y, result):
-    np.right_shift(x, y, result)
-
-def greater_usecase(x, y, result):
-    np.greater(x, y, result)
-
-def greater_equal_usecase(x, y, result):
-    np.greater_equal(x, y, result)
-
-def less_usecase(x, y, result):
-    np.less(x, y, result)
-
-def less_equal_usecase(x, y, result):
-    np.less_equal(x, y, result)
-
-def not_equal_usecase(x, y, result):
-    np.not_equal(x, y, result)
-
-def equal_usecase(x, y, result):
-    np.equal(x, y, result)
-
-def logical_and_usecase(x, y, result):
-    np.logical_and(x, y, result)
-
-def logical_or_usecase(x, y, result):
-    np.logical_or(x, y, result)
-
-def logical_xor_usecase(x, y, result):
-    np.logical_xor(x, y, result)
-
-def maximum_usecase(x, y, result):
-    np.maximum(x, y, result)
-
-def minimum_usecase(x, y, result):
-    np.minimum(x, y, result)
-
-def fmax_usecase(x, y, result):
-    np.fmax(x, y, result)
-
-def fmin_usecase(x, y, result):
-    np.fmin(x, y, result)
-
-def copysign_usecase(x, y, result):
-    np.copysign(x, y, result)
-
-def ldexp_usecase(x, y, result):
-    np.ldexp(x, y, result)
+def _make_unary_ufunc_usecase(ufunc_name):
+    ldict = {}
+    exec("def fn(x,out):\n    np.{0}(x,out)".format(ufunc_name), globals(), ldict)
+    fn = ldict["fn"]
+    fn.__name__ = "{0}_usecase".format(ufunc_name)
+    return fn
+
+
+def _make_binary_ufunc_usecase(ufunc_name):
+    ldict = {}
+    exec("def fn(x,y,out):\n    np.{0}(x,y,out)".format(ufunc_name), globals(), ldict);
+    fn = ldict['fn']
+    fn.__name__ = "{0}_usecase".format(ufunc_name)
+    return fn
 
 
 class TestUFuncs(unittest.TestCase):
 
-    def unary_ufunc_test(self, ufunc_name, flags=enable_pyobj_flags,
-                         skip_inputs=None, additional_inputs=None,
-                         int_output_type=None, float_output_type=None):
-
-        ufunc = globals()[ufunc_name + '_usecase']
-
-        inputs = [
+    def setUp(self):
+        self.inputs = [
             (0, types.uint32),
             (1, types.uint32),
             (-1, types.int32),
@@ -243,11 +48,11 @@ class TestUFuncs(unittest.TestCase):
             (1, types.int64),
 
             (-0.5, types.float32),
-            (0, types.float32),
+            (0.0, types.float32),
             (0.5, types.float32),
 
             (-0.5, types.float64),
-            (0, types.float64),
+            (0.0, types.float64),
             (0.5, types.float64),
 
             (np.array([0,1], dtype='u4'), types.Array(types.uint32, 1, 'C')),
@@ -257,8 +62,13 @@ class TestUFuncs(unittest.TestCase):
             (np.array([-0.5, 0.0, 0.5], dtype='f4'), types.Array(types.float32, 1, 'C')),
             (np.array([-0.5, 0.0, 0.5], dtype='f8'), types.Array(types.float64, 1, 'C'))]
 
-        if additional_inputs:
-            inputs = inputs + additional_inputs
+    def unary_ufunc_test(self, ufunc_name, flags=enable_pyobj_flags,
+                         skip_inputs=[], additional_inputs=[],
+                         int_output_type=None, float_output_type=None):
+        ufunc = _make_unary_ufunc_usecase(ufunc_name)
+
+        inputs = list(self.inputs)
+        inputs.extend(additional_inputs)
 
         pyfunc = ufunc
 
@@ -267,7 +77,7 @@ class TestUFuncs(unittest.TestCase):
             input_operand = input_tuple[0]
             input_type = input_tuple[1]
 
-            if skip_inputs and input_type in skip_inputs:
+            if input_type in skip_inputs:
                 continue
 
             ty = input_type
@@ -342,41 +152,13 @@ class TestUFuncs(unittest.TestCase):
 
 
     def binary_ufunc_test(self, ufunc_name, flags=enable_pyobj_flags,
-                         skip_inputs=None, additional_inputs=None,
+                         skip_inputs=[], additional_inputs=[],
                          int_output_type=None, float_output_type=None):
 
-        ufunc = globals()[ufunc_name + '_usecase']
+        ufunc = _make_binary_ufunc_usecase(ufunc_name)
+#        ufunc = globals()[ufunc_name + '_usecase']
 
-        inputs = [
-            (0, types.uint32),
-            (1, types.uint32),
-            (-1, types.int32),
-            (0, types.int32),
-            (1, types.int32),
-            (0, types.uint64),
-            (1, types.uint64),
-            (-1, types.int64),
-            (0, types.int64),
-            (1, types.int64),
-
-            (-0.5, types.float32),
-            (0.0, types.float32),
-            (0.5, types.float32),
-
-            (-0.5, types.float64),
-            (0.0, types.float64),
-            (0.5, types.float64),
-
-            (np.array([0,1], dtype='u4'), types.Array(types.uint32, 1, 'C')),
-            (np.array([0,1], dtype='u8'), types.Array(types.uint64, 1, 'C')),
-            (np.array([-1,0,1], dtype='i4'), types.Array(types.int32, 1, 'C')),
-            (np.array([-1,0,1], dtype='i8'), types.Array(types.int64, 1, 'C')),
-            (np.array([-0.5, 0.0, 0.5], dtype='f4'), types.Array(types.float32, 1, 'C')),
-            (np.array([-0.5, 0.0, 0.5], dtype='f8'), types.Array(types.float64, 1, 'C'))]
-
-        if additional_inputs:
-            inputs = inputs + additional_inputs
-
+        inputs = list(self.inputs) + additional_inputs
         pyfunc = ufunc
 
         for input_tuple in inputs:
@@ -384,7 +166,7 @@ class TestUFuncs(unittest.TestCase):
             input_operand = input_tuple[0]
             input_type = input_tuple[1]
 
-            if skip_inputs and input_type in skip_inputs:
+            if input_type in skip_inputs:
                 continue
 
             ty = input_type
@@ -679,7 +461,7 @@ class TestUFuncs(unittest.TestCase):
         self.test_multiply_ufunc(flags=no_pyobj_flags)
 
     def test_divide_ufunc(self, flags=enable_pyobj_flags):
-        skip_inputs = None
+        skip_inputs = []
         # python3 integer division by zero and
         # storing in 64 bit int produces garbage
         # instead of 0, so skip
@@ -725,7 +507,6 @@ class TestUFuncs(unittest.TestCase):
     def test_power_ufunc(self):
         self.binary_ufunc_test('power')
 
-    @unittest.expectedFailure
     def test_power_ufunc_npm(self):
         self.binary_ufunc_test('power', flags=no_pyobj_flags)
 
@@ -913,7 +694,7 @@ class TestUFuncs(unittest.TestCase):
 
     def test_binary_ufunc_performance(self):
 
-        pyfunc = add_usecase
+        pyfunc = _make_binary_ufunc_usecase('add')
         arraytype = types.Array(types.float32, 1, 'C')
         cr = compile_isolated(pyfunc, (arraytype, arraytype, arraytype))
         cfunc = cr.entry_point
@@ -935,8 +716,8 @@ class TestUFuncs(unittest.TestCase):
         assert np.allclose(control, result)
 
     def binary_ufunc_mixed_types_test(self, ufunc_name, flags=enable_pyobj_flags):
-
-        ufunc = globals()[ufunc_name + '_usecase']
+        ufunc = _make_binary_ufunc_usecase(ufunc_name)
+        #ufunc = globals()[ufunc_name + '_usecase']
 
         inputs1 = [
             (1, types.uint64),
@@ -1018,7 +799,7 @@ class TestUFuncs(unittest.TestCase):
     def test_broadcasting(self):
 
         # Test unary ufunc
-        pyfunc = negative_usecase
+        pyfunc = _make_unary_ufunc_usecase('negative')
 
         input_operands = [
             np.arange(3, dtype='i8'),
@@ -1052,7 +833,7 @@ class TestUFuncs(unittest.TestCase):
             self.assertTrue(np.all(result == expected))
 
         # Test binary ufunc
-        pyfunc = add_usecase
+        pyfunc = _make_binary_ufunc_usecase('add')
 
         input1_operands = [
             np.arange(3, dtype='u8'),

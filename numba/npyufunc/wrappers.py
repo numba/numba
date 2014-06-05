@@ -1,6 +1,62 @@
 from __future__ import print_function, division, absolute_import
-from llvm.core import Type, Builder
-from numba import types, cgutils
+from llvm.core import (Type, Builder, inline_function, LINKAGE_INTERNAL,
+                       ICMP_EQ, Constant)
+from numba import types, cgutils, config
+
+
+def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
+                           offsets, store_offset, signature):
+    elems = load()
+
+    # Compute
+    status, retval = context.call_function(builder, func,
+                                           signature.return_type,
+                                           signature.args, elems)
+
+    # Ignoring error status and store result
+
+    # Store
+    if out.byref:
+        retval = builder.load(retval)
+
+    store(retval)
+
+    # increment indices
+    for off, ary in zip(offsets, arrays):
+        builder.store(builder.add(builder.load(off), ary.step), off)
+
+    builder.store(builder.add(builder.load(store_offset), out.step),
+                  store_offset)
+
+    return status.code
+
+
+def build_slow_loop_body(context, func, builder, arrays, out, offsets,
+                            store_offset, signature):
+    def load():
+        elems = [ary.load_direct(builder.load(off))
+                 for off, ary in zip(offsets, arrays)]
+        return elems
+
+    def store(retval):
+        out.store_direct(retval, builder.load(store_offset))
+
+    return _build_ufunc_loop_body(load, store, context, func, builder, arrays,
+                                  out, offsets, store_offset, signature)
+
+
+def build_fast_loop_body(context, func, builder, arrays, out, offsets,
+                            store_offset, signature, ind):
+    def load():
+        elems = [ary.load_aligned(ind)
+                 for ary in arrays]
+        return elems
+
+    def store(retval):
+        out.store_aligned(retval, ind)
+
+    return _build_ufunc_loop_body(load, store, context, func, builder, arrays,
+                                  out, offsets, store_offset, signature)
 
 
 def build_ufunc_wrapper(context, func, signature):
@@ -41,24 +97,54 @@ def build_ufunc_wrapper(context, func, signature):
     out = UArrayArg(context, builder, arg_args, arg_steps, len(actual_args),
                     context.get_value_type(signature.return_type))
 
-    # Loop
-    with cgutils.for_range(builder, loopcount, intp=intp_t) as ind:
-        # Load
-        elems = [ary.load(ind) for ary in arrays]
+    # Setup indices
+    offsets = []
+    zero = context.get_constant(types.intp, 0)
+    for _ in arrays:
+        p = cgutils.alloca_once(builder, intp_t)
+        offsets.append(p)
+        builder.store(zero, p)
 
-        # Compute
-        status, retval = context.call_function(builder, func,
-                                               signature.return_type,
-                                               signature.args, elems)
-        # Ignoring error status and store result
+    store_offset = cgutils.alloca_once(builder, intp_t)
+    builder.store(zero, store_offset)
 
-        # Store
-        if out.byref:
-            retval = builder.load(retval)
+    unit_strided = cgutils.true_bit
+    for ary in arrays:
+        unit_strided = builder.and_(unit_strided, ary.is_unit_strided)
 
-        out.store(retval, ind)
+    with cgutils.ifelse(builder, unit_strided) as (is_unit_strided,
+                                                   is_strided):
+
+        with is_unit_strided:
+            with cgutils.for_range(builder, loopcount, intp=intp_t) as ind:
+                fastloop = build_fast_loop_body(context, func, builder,
+                                                arrays, out, offsets,
+                                                store_offset, signature, ind)
+            builder.ret_void()
+
+        with is_strided:
+            # General loop
+            with cgutils.for_range(builder, loopcount, intp=intp_t):
+                slowloop = build_slow_loop_body(context, func, builder,
+                                                arrays, out, offsets,
+                                                store_offset, signature)
+
+            builder.ret_void()
 
     builder.ret_void()
+    del builder
+
+    # Set core function to internal so that it is not generated
+    func.linkage = LINKAGE_INTERNAL
+    # Force inline of code function
+    inline_function(slowloop)
+    inline_function(fastloop)
+    # Run optimizer
+    context.optimize(module)
+
+    if config.DUMP_OPTIMIZED:
+        print(module)
+
     return wrapper
 
 
@@ -72,27 +158,45 @@ class UArrayArg(object):
         else:
             self.byref = False
             self.data = builder.bitcast(builder.load(p), Type.pointer(argtype))
-        # Get step
+            # Get step
         p = builder.gep(steps, [context.get_constant(types.intp, i)])
+        abisize = context.get_constant(types.intp,
+                                       context.get_abi_sizeof(argtype))
         self.step = builder.load(p)
-
+        self.is_unit_strided = builder.icmp(ICMP_EQ, abisize, self.step)
         self.builder = builder
 
     def load(self, ind):
-        intp_t = ind.type
+        offset = self.builder.mul(self.step, ind)
+        return self.load_direct(offset)
+
+    def load_direct(self, offset):
+        intp_t = offset.type
         addr = self.builder.ptrtoint(self.data, intp_t)
-        addr_off = self.builder.add(addr, self.builder.mul(self.step, ind))
+        addr_off = self.builder.add(addr, offset)
         ptr = self.builder.inttoptr(addr_off, self.data.type)
         if self.byref:
             return ptr
         else:
             return self.builder.load(ptr)
 
+    def load_aligned(self, ind):
+        ptr = self.builder.gep(self.data, [ind])
+        return self.builder.load(ptr)
+
     def store(self, value, ind):
-        addr = self.builder.ptrtoint(self.data, ind.type)
-        addr_off = self.builder.add(addr, self.builder.mul(self.step, ind))
+        offset = self.builder.mul(self.step, ind)
+        self.store_direct(value, offset)
+
+    def store_direct(self, value, offset):
+        addr = self.builder.ptrtoint(self.data, offset.type)
+        addr_off = self.builder.add(addr, offset)
         ptr = self.builder.inttoptr(addr_off, self.data.type)
         assert ptr.type.pointee == value.type
+        self.builder.store(value, ptr)
+
+    def store_aligned(self, value, ind):
+        ptr = self.builder.gep(self.data, [ind])
         self.builder.store(value, ptr)
 
 
@@ -159,6 +263,16 @@ def build_gufunc_wrapper(context, func, signature, sin, sout):
             a.next(ind)
 
     builder.ret_void()
+
+    # Set core function to internal so that it is not generated
+    func.linkage = LINKAGE_INTERNAL
+    # Force inline of code function
+    inline_function(status.code)
+    # Run optimizer
+    context.optimize(module)
+
+    if config.DUMP_OPTIMIZED:
+        print(module)
 
     wrapper.verify()
     return wrapper

@@ -1,10 +1,12 @@
 from __future__ import print_function, absolute_import, division
-import functools
 
 # Re export
 from .stubs import (threadIdx, blockIdx, blockDim, gridDim, syncthreads,
-                    shared, local, const, grid, atomic)
+                    shared, local, const, grid, gridsize, atomic)
 from .cudadrv.error import CudaSupportError
+from . import initialize
+from numba import config
+from .errors import KernelRuntimeError
 
 
 def dummy(*args, **kws):
@@ -36,14 +38,25 @@ list_devices
 close
 detect
 defer_cleanup
+KernelRuntimeError
+_auto_device
+_profiling
+_profile_start
+_profile_stop
 """
 
 try:
+    if config.DISABLE_CUDA:
+        raise CudaSupportError("CUDA support is disabled")
+
     from .decorators import jit, autojit, declare_device
     from .api import *
+    from .api import _auto_device, _profiling, _profile_start, _profile_stop
 
     is_available = True
     cuda_error = None
+    initialize.initialize_all()
+
 except CudaSupportError as e:
     is_available = False
     cuda_error = e

@@ -1,8 +1,13 @@
 from __future__ import print_function, division, absolute_import
+
 from collections import defaultdict
+import sys
+from types import ModuleType
+
 from llvm.core import Type, Builder, Module
 import llvm.core as lc
-from numba import ir, types, cgutils, utils, config
+
+from numba import ir, types, cgutils, utils, config, cffi_support
 
 
 try:
@@ -23,17 +28,24 @@ def default_mangler(name, argtypes):
     return '.'.join([name, codedargs])
 
 
-class FunctionDescriptor(object):
-    __slots__ = ('native', 'pymod', 'name', 'doc', 'blocks', 'typemap',
-                 'calltypes', 'args', 'kws', 'restype', 'argtypes',
-                 'qualified_name', 'mangled_name')
+# A dummy module for dynamically-generated functions
+_dynamic_modname = '<dynamic>'
+_dynamic_module = ModuleType(_dynamic_modname)
 
-    def __init__(self, native, pymod, name, doc, blocks, typemap,
-                 restype, calltypes, args, kws, mangler=None, argtypes=None,
-                 qualname=None):
+
+class FunctionDescriptor(object):
+    __slots__ = ('native', 'modname', 'qualname', 'doc', 'blocks', 'typemap',
+                 'calltypes', 'args', 'kws', 'restype', 'argtypes',
+                 'mangled_name', 'unique_name', 'globals')
+
+    def __init__(self, native, modname, qualname, unique_name, doc, blocks,
+                 typemap, restype, calltypes, args, kws, mangler=None,
+                 argtypes=None, globals=None):
         self.native = native
-        self.pymod = pymod
-        self.name = name
+        self.modname = modname
+        self.qualname = qualname
+        self.unique_name = unique_name
+        self.globals = globals if globals is not None else {}
         self.doc = doc
         self.blocks = blocks
         self.typemap = typemap
@@ -43,51 +55,103 @@ class FunctionDescriptor(object):
         self.restype = restype
         # Argument types
         self.argtypes = argtypes or [self.typemap[a] for a in args]
-        self.qualified_name = qualname or '.'.join([self.pymod.__name__,
-                                                    self.name])
         mangler = default_mangler if mangler is None else mangler
-        self.mangled_name = mangler(self.qualified_name, self.argtypes)
+        self.mangled_name = mangler(self.qualname, self.argtypes)
+
+    def lookup_module(self):
+        """
+        Return the module in which this function is supposed to exist.
+        This may be a dummy module if the function was dynamically
+        generated.
+        """
+        if self.modname == _dynamic_modname:
+            return _dynamic_module
+        else:
+            return sys.modules[self.modname]
+
+    def __repr__(self):
+        return "<function descriptor %r>" % (self.unique_name)
+
+    @classmethod
+    def _get_function_info(cls, interp):
+        """
+        Returns
+        -------
+        qualname, unique_name, modname, doc, args, kws, globals
+
+        ``unique_name`` must be a unique name in ``pymod``.
+        """
+        func = interp.bytecode.func
+        qualname = getattr(func, '__qualname__', interp.bytecode.func_name)
+        modname = func.__module__
+        doc = func.__doc__ or ''
+        args = interp.argspec.args
+        kws = ()        # TODO
+
+        if modname is None:
+            # For dynamically generated functions (e.g. compile()),
+            # add the function id to the name to create a unique name.
+            unique_name = "%s$%d" % (qualname, id(func))
+            modname = _dynamic_modname
+        else:
+            # For a top-level function or closure, make sure to disambiguate
+            # the function name.
+            # TODO avoid unnecessary recompilation of the same function
+            unique_name = "%s$%d" % (qualname, func.__code__.co_firstlineno)
+
+        return qualname, unique_name, modname, doc, args, kws, func.__globals__
+
+    @classmethod
+    def _from_python_function(cls, interp, typemap, restype, calltypes,
+                              native, mangler=None):
+        (qualname, unique_name, modname, doc, args, kws, func_globals
+         )= cls._get_function_info(interp)
+        sortedblocks = utils.SortedMap(utils.dict_iteritems(interp.blocks))
+        self = cls(native, modname, qualname, unique_name, doc,
+                   sortedblocks, typemap, restype, calltypes,
+                   args, kws, mangler=mangler, globals=func_globals)
+        return self
 
 
-def _describe(interp):
-    func = interp.bytecode.func
-    fname = interp.bytecode.func_name
-    pymod = interp.bytecode.module
-    doc = func.__doc__ or ''
-    args = interp.argspec.args
-    kws = ()        # TODO
-    return fname, pymod, doc, args, kws
+class PythonFunctionDescriptor(FunctionDescriptor):
+    __slots__ = ()
+
+    @classmethod
+    def from_specialized_function(cls, interp, typemap, restype, calltypes,
+                                  mangler):
+        """
+        Build a FunctionDescriptor for a specialized Python function.
+        """
+        return cls._from_python_function(interp, typemap, restype, calltypes,
+                                         native=True, mangler=mangler)
+
+    @classmethod
+    def from_object_mode_function(cls, interp):
+        """
+        Build a FunctionDescriptor for a Python function to be compiled
+        and executed in object mode.
+        """
+        typemap = defaultdict(lambda: types.pyobject)
+        calltypes = typemap.copy()
+        restype = types.pyobject
+        return cls._from_python_function(interp, typemap, restype, calltypes,
+                                         native=False)
 
 
-def describe_external(name, restype, argtypes):
-    args = ["arg%d" % i for i in range(len(argtypes))]
-    fd = FunctionDescriptor(native=True, pymod=None, name=name, doc='',
-                            blocks=None, restype=restype, calltypes=None,
-                            argtypes=argtypes, args=args, kws=None,
-                            typemap=None, qualname=name, mangler=lambda a,x: a)
-    return fd
+class ExternalFunctionDescriptor(FunctionDescriptor):
+    """
+    A FunctionDescriptor subclass for opaque external functions
+    (e.g. raw C functions).
+    """
+    __slots__ = ()
 
-
-def describe_function(interp, typemap, restype, calltypes, mangler):
-    fname, pymod, doc, args, kws = _describe(interp)
-    native = True
-    sortedblocks = utils.SortedMap(utils.dict_iteritems(interp.blocks))
-    fd = FunctionDescriptor(native, pymod, fname, doc, sortedblocks,
-                            typemap, restype, calltypes, args, kws, mangler)
-    return fd
-
-
-def describe_pyfunction(interp):
-    fname, pymod, doc, args, kws = _describe(interp)
-    defdict = lambda: defaultdict(lambda: types.pyobject)
-    typemap = defdict()
-    restype = types.pyobject
-    calltypes = defdict()
-    native = False
-    sortedblocks = utils.SortedMap(utils.dict_iteritems(interp.blocks))
-    fd = FunctionDescriptor(native, pymod, fname, doc, sortedblocks,
-                            typemap, restype,  calltypes, args, kws)
-    return fd
+    def __init__(self, name, restype, argtypes):
+        args = ["arg%d" % i for i in range(len(argtypes))]
+        super(ExternalFunctionDescriptor, self).__init__(native=True,
+                modname=None, qualname=name, unique_name=name, doc='',
+                blocks=None, typemap=None, restype=restype, calltypes=None,
+                args=args, kws=None, mangler=lambda a, x: a, argtypes=argtypes,
+                globals={})
 
 
 class BaseLower(object):
@@ -98,11 +162,11 @@ class BaseLower(object):
         self.context = context
         self.fndesc = fndesc
         # Initialize LLVM
-        self.module = Module.new("module.%s" % self.fndesc.name)
+        self.module = Module.new("module.%s" % self.fndesc.unique_name)
 
         # Install metadata
         md_pymod = cgutils.MetadataKeyStore(self.module, "python.module")
-        md_pymod.set(fndesc.pymod.__name__)
+        md_pymod.set(fndesc.modname)
 
         # Setup function
         self.function = context.declare_function(self.module, fndesc)
@@ -150,7 +214,7 @@ class BaseLower(object):
         self.builder.branch(self.blkmap[self.firstblk])
 
         if config.DUMP_LLVM:
-            print(("LLVM DUMP %s" % self.fndesc.qualified_name).center(80,'-'))
+            print(("LLVM DUMP %s" % self.fndesc).center(80,'-'))
             print(self.module)
             print('=' * 80)
         self.module.verify()
@@ -236,6 +300,27 @@ class Lower(BaseLower):
         elif isinstance(inst, ir.Del):
             pass
 
+        elif isinstance(inst, ir.SetAttr):
+            target = self.loadvar(inst.target.name)
+            value = self.loadvar(inst.value.name)
+            signature = self.fndesc.calltypes[inst]
+
+            targetty = self.typeof(inst.target.name)
+            valuety = self.typeof(inst.value.name)
+            assert signature is not None
+            assert signature.args[0] == targetty
+            impl = self.context.get_setattr(inst.attr, signature)
+
+            # Convert argument to match
+            value = self.context.cast(self.builder, value, valuety,
+                                      signature.args[1])
+
+            return impl(self.builder, (target, value))
+
+        elif isinstance(inst, ir.Raise):
+            excid = self.context.add_exception(inst.exception)
+            self.context.return_user_exc(self.builder, excid)
+
         else:
             raise NotImplementedError(type(inst))
 
@@ -244,6 +329,9 @@ class Lower(BaseLower):
         if isinstance(value, ir.Const):
             if self.context.is_struct_type(ty):
                 const = self.context.get_constant_struct(self.builder, ty,
+                                                         value.value)
+            elif ty == types.string:
+                const = self.context.get_constant_string(self.builder, ty,
                                                          value.value)
             else:
                 const = self.context.get_constant(ty, value.value)
@@ -282,6 +370,11 @@ class Lower(BaseLower):
                 consts = [self.context.get_constant(t, v)
                           for t, v in zip(ty, value.value)]
                 return cgutils.pack_array(self.builder, consts)
+
+            elif self.context.is_struct_type(ty):
+                return self.context.get_constant_struct(self.builder, ty,
+                        value.value)
+
             else:
                 raise NotImplementedError('global', ty)
 
@@ -342,10 +435,18 @@ class Lower(BaseLower):
                                                      signature, castvals)
 
             elif isinstance(fnty, types.FunctionPointer):
-                # Handle function pointer)
+                # Handle function pointer
                 pointer = fnty.funcptr
                 res = self.context.call_function_pointer(self.builder, pointer,
                                                          signature, castvals)
+
+            elif isinstance(fnty, cffi_support.ExternCFunction):
+                # XXX unused?
+                fndesc = ExternalFunctionDescriptor(
+                    fnty.symbol, fnty.restype, fnty.argtypes)
+                func = self.context.declare_external_function(
+                        cgutils.get_module(self.builder), fndesc)
+                res = self.context.call_external_function(self.builder, func, fndesc.argtypes, castvals)
 
             else:
                 # Normal function resolution
@@ -376,10 +477,7 @@ class Lower(BaseLower):
                 # ignore the attribute
                 res = self.context.get_dummy_value()
             else:
-                res = impl(self.context, self.builder, ty, val)
-                if not isinstance(impl.return_type, types.Kind):
-                    res = self.context.cast(self.builder, res, impl.return_type,
-                                            resty)
+                res = impl(self.context, self.builder, ty, val, expr.attr)
             return res
 
         elif expr.op == "getitem":
@@ -507,6 +605,10 @@ class PyLower(BaseLower):
             obj = self.loadvar(inst.value)
             self.decref(obj)
 
+        elif isinstance(inst, ir.Raise):
+            self.pyapi.raise_exception(inst.exception, inst.exception)
+            self.return_exception_raised()
+
         else:
             raise NotImplementedError(type(inst), inst)
 
@@ -545,6 +647,8 @@ class PyLower(BaseLower):
             value = self.loadvar(expr.value.name)
             if expr.fn == '-':
                 res = self.pyapi.number_negative(value)
+            elif expr.fn == '+':
+                res = self.pyapi.number_positive(value)
             elif expr.fn == 'not':
                 res = self.pyapi.object_not(value)
                 negone = lc.Constant.int_signextend(Type.int(), -1)
@@ -640,7 +744,7 @@ class PyLower(BaseLower):
 
     def lower_const(self, const):
         if isinstance(const, str):
-            ret = self.pyapi.string_from_string_and_size(const)
+            ret = self.pyapi.string_from_constant_string(const)
             self.check_error(ret)
             return ret
         elif isinstance(const, complex):

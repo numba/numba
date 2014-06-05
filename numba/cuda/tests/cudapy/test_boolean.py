@@ -4,7 +4,7 @@ from numba.cuda.testing import unittest
 from numba import cuda
 
 
-def boolean_test(A, vertial):
+def boolean_func(A, vertial):
     if vertial:
         A[0] = 123
     else:
@@ -13,7 +13,7 @@ def boolean_test(A, vertial):
 
 class TestCudaBoolean(unittest.TestCase):
     def test_boolean(self):
-        func = cuda.jit('void(float64[:], bool_)')(boolean_test)
+        func = cuda.jit('void(float64[:], bool_)')(boolean_func)
         A = np.array([0], dtype='float64')
         func(A, True)
         self.assertTrue(A[0] == 123)

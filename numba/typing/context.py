@@ -6,7 +6,7 @@ from numba import types, utils
 from numba.typeconv import rules
 from . import templates
 # Initialize declarations
-from . import builtins, mathdecl, npydecl
+from . import builtins, mathdecl, npydecl, operatordecl
 
 
 class BaseContext(object):
@@ -64,6 +64,9 @@ class BaseContext(object):
                 return res
 
     def resolve_getattr(self, value, attr):
+        if isinstance(value, types.Record):
+            return value.typeof(attr)
+
         try:
             attrinfo = self.attributes[value]
         except KeyError:
@@ -78,6 +81,12 @@ class BaseContext(object):
         args = target, index, value
         kws = ()
         return self.resolve_function_type("setitem", args, kws)
+
+    def resolve_setattr(self, target, attr, value):
+        if isinstance(target, types.Record):
+            expectedty = target.typeof(attr)
+            if self.type_compatibility(value, expectedty) is not None:
+                return templates.signature(types.void, target, value)
 
     def get_global_type(self, gv):
         return self.globals[gv]
@@ -153,8 +162,8 @@ class BaseContext(object):
             return self.type_compatibility(fromty.dtype, toty.dtype)
         return self.tm.check_compatible(fromty, toty)
 
-    def unify_types(self, *types):
-        return functools.reduce(self.unify_pairs, types)
+    def unify_types(self, *typelist):
+        return functools.reduce(self.unify_pairs, typelist)
 
     def unify_pairs(self, first, second):
         """
@@ -187,6 +196,7 @@ class Context(BaseContext):
     def init(self):
         self.install(mathdecl.registry)
         self.install(npydecl.registry)
+        self.install(operatordecl.registry)
 
 
 def new_method(fn, sig):

@@ -23,6 +23,25 @@ class Print(ConcreteTemplate):
 
 
 @builtin
+class PrintOthers(AbstractTemplate):
+    key = types.print_type
+
+    def accepted_types(self, ty):
+        if ty in types.integer_domain or ty in types.real_domain:
+            return True
+
+        if isinstance(ty, types.CharSeq):
+            return True
+
+    def generic(self, args, kws):
+        assert not kws, "kwargs to print is not supported."
+        for a in args:
+            if not self.accepted_types(a):
+                raise TypeError("Type %s is not printable." % a)
+        return signature(types.none, *args)
+
+
+@builtin
 class Abs(ConcreteTemplate):
     key = types.abs_type
     intcases = [signature(ty, ty) for ty in types.signed_domain]
@@ -370,6 +389,28 @@ class UnaryNegate(UnaryOp):
     ]
 
 
+@builtin
+class UnaryPositive(UnaryOp):
+    key = "+"
+    cases = [
+        signature(types.uintp, types.uint8),
+        signature(types.uintp, types.uint16),
+        signature(types.uintp, types.uint32),
+        signature(types.uint64, types.uint64),
+
+        signature(types.intp, types.int8),
+        signature(types.intp, types.int16),
+        signature(types.intp, types.int32),
+        signature(types.int64, types.int64),
+
+        signature(types.float32, types.float32),
+        signature(types.float64, types.float64),
+
+        signature(types.complex64, types.complex64),
+        signature(types.complex128, types.complex128),
+    ]
+
+
 class CmpOp(ConcreteTemplate):
     cases = [
         signature(types.boolean, types.boolean, types.boolean),
@@ -537,6 +578,12 @@ class ArrayAttribute(AttributeTemplate):
 
     def resolve_size(self, ary):
         return types.intp
+
+    def generic_resolve(self, ary, attr):
+        if isinstance(ary.dtype, types.Record):
+            if attr in ary.dtype.fields:
+                return types.Array(ary.dtype.typeof(attr), ndim=ary.ndim,
+                                   layout='A')
 
 
 class Array_flatten(AbstractTemplate):

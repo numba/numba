@@ -14,6 +14,7 @@ def get_lib_dir():
 
 
 DLLNAMEMAP = {
+    'linux': r'lib%(name)s\.so\.%(ver)s$',
     'linux2': r'lib%(name)s\.so\.%(ver)s$',
     'darwin': r'lib%(name)s\.%(ver)s\.dylib$',
     'win32': r'%(name)s%(ver)s\.dll$',

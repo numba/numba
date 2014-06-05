@@ -142,6 +142,8 @@ def gamma(x):
 def lgamma(x):
     return math.lgamma(x)
 
+def pow(x, y):
+    return math.pow(x, y)
 
 class TestMathLib(unittest.TestCase):
 
@@ -530,6 +532,22 @@ class TestMathLib(unittest.TestCase):
     def test_lgamma_npm(self):
         self.test_lgamma(flags=no_pyobj_flags)
 
+    def test_pow(self, flags=enable_pyobj_flags):
+        pyfunc = pow
+        x_types = [types.int16, types.int32, types.int64,
+                   types.uint16, types.uint32, types.uint64,
+                   types.float32, types.float64]
+        x_values = [-2, -1, -2, 2, 1, 2, .1, .2]
+
+        for ty, xy in zip(x_types, x_values):
+            cres = compile_isolated(pyfunc, (ty, ty), flags=flags)
+            cfunc = cres.entry_point
+            x = xy
+            y = x * 2
+            self.assertAlmostEqual(pyfunc(x, y), cfunc(x, y))
+
+    def test_pow_npm(self):
+        self.test_pow(flags=no_pyobj_flags)
 
 if __name__ == '__main__':
     unittest.main()

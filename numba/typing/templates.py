@@ -20,8 +20,6 @@ class Signature(object):
         if isinstance(other, Signature):
             return (self.args == other.args and
                     self.recvr == other.recvr)
-        elif isinstance(other, tuple):
-            return (self.args == other)
 
     def __ne__(self, other):
         return not (self == other)
@@ -217,9 +215,15 @@ class AttributeTemplate(object):
     def resolve(self, value, attr):
         fn = getattr(self, "resolve_%s" % attr, None)
         if fn is None:
-            raise NameError("Attribute '%s' of %s is not typed" % (attr,
-                                                                   value))
-        return fn(value)
+            fn = self.generic_resolve
+            if fn is NotImplemented:
+                raise NotImplementedError(value, attr)
+            else:
+                return fn(value, attr)
+        else:
+            return fn(value)
+
+    generic_resolve = NotImplemented
 
 
 class ClassAttrTemplate(AttributeTemplate):

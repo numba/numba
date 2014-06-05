@@ -9,7 +9,7 @@ from numba import _dynfunc, _helperlib, config
 from numba.callwrapper import PyCallWrapper
 from .base import BaseContext
 from numba import utils
-from numba.targets import intrinsics, mathimpl, npyimpl
+from numba.targets import intrinsics, mathimpl, npyimpl, operatorimpl, printimpl
 from .options import TargetOptions
 
 
@@ -20,6 +20,7 @@ def _windows_symbol_hacks_32bits():
         ftol = le.dylib_address_of_symbol("_ftol")
         assert ftol
         le.dylib_add_symbol("_ftol2", ftol)
+
 
 class CPUContext(BaseContext):
     def init(self):
@@ -41,11 +42,13 @@ class CPUContext(BaseContext):
         # Add target specific implementations
         self.insert_func_defn(mathimpl.registry.functions)
         self.insert_func_defn(npyimpl.registry.functions)
+        self.insert_func_defn(operatorimpl.registry.functions)
+        self.insert_func_defn(printimpl.registry.functions)
 
     def build_pass_manager(self):
-        if config.OPT == 3:
+        if 0 < config.OPT <= 3:
             # This uses the same passes for clang -O3
-            pms = lp.build_pass_managers(tm=self.tm, opt=3,
+            pms = lp.build_pass_managers(tm=self.tm, opt=config.OPT,
                                          loop_vectorize=True,
                                          fpm=False)
             return pms.pm
@@ -80,7 +83,6 @@ class CPUContext(BaseContext):
             globalopt
             globaldce
             '''.split()
-
             for p in passes:
                 pm.add(lp.Pass.new(p))
             return pm
@@ -121,7 +123,6 @@ class CPUContext(BaseContext):
         for sym in npymath.symbols:
             le.dylib_add_symbol(*sym)
 
-
     def dynamic_map_function(self, func):
         name, ptr = self.native_funcs[func]
         le.dylib_add_symbol(name, ptr)
@@ -155,31 +156,31 @@ class CPUContext(BaseContext):
         return cfunc, fnptr
 
     def prepare_for_call(self, func, fndesc):
-        wrapper, api = PyCallWrapper(self, func.module, func, fndesc).build()
+        wrapper, api = PyCallWrapper(self, func.module, func, fndesc,
+                                     exceptions=self.exceptions).build()
         self.optimize(func.module)
 
         if config.DUMP_OPTIMIZED:
-            print(("OPTIMIZED DUMP %s" %
-                   fndesc.qualified_name).center(80,'-'))
+            print(("OPTIMIZED DUMP %s" % fndesc).center(80,'-'))
             print(func.module)
             print('=' * 80)
 
         if config.DUMP_ASSEMBLY:
-            print(("ASSEMBLY %s" %
-                   fndesc.qualified_name).center(80, '-'))
+            print(("ASSEMBLY %s" % fndesc).center(80, '-'))
             print(self.tm.emit_assembly(func.module))
             print('=' * 80)
 
         # Map module.__dict__
-        le.dylib_add_symbol(".pymodule.dict." + fndesc.pymod.__name__,
-                            id(fndesc.pymod.__dict__))
+        le.dylib_add_symbol(".pymodule.dict." + fndesc.modname,
+                            id(fndesc.globals))
 
         # Code gen
         self.engine.add_module(func.module)
         baseptr = self.engine.get_pointer_to_function(func)
         fnptr = self.engine.get_pointer_to_function(wrapper)
-        cfunc = _dynfunc.make_function(fndesc.pymod, fndesc.name, fndesc.doc,
-                                       fnptr)
+        cfunc = _dynfunc.make_function(fndesc.lookup_module(),
+                                       fndesc.qualname.split('.')[-1],
+                                       fndesc.doc, fnptr)
 
         if fndesc.native:
             self.native_funcs[cfunc] = fndesc.mangled_name, baseptr
@@ -199,6 +200,9 @@ class CPUContext(BaseContext):
         # remove extra refct api calls
         remove_refct_calls(func)
 
+    def get_abi_sizeof(self, lty):
+        return self.engine.target_data.abi_size(lty)
+
 
 # ----------------------------------------------------------------------------
 # TargetOptions
@@ -207,6 +211,9 @@ class CPUTargetOptions(TargetOptions):
     OPTIONS = {
         "nopython": bool,
         "forceobj": bool,
+        "looplift": bool,
+        "wraparound": bool,
+        "boundcheck": bool,
     }
 
 

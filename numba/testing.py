@@ -20,7 +20,7 @@ def discover_tests(startdir):
 
 
 def run_tests(suite, descriptions=True, verbosity=2, buffer=True,
-              failfast=True):
+              failfast=False):
     import numba.unittest_support as unittest
 
     runner = unittest.TextTestRunner(descriptions=descriptions,

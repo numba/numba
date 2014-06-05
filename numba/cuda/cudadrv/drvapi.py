@@ -74,6 +74,11 @@ API_PROTOTYPES = {
 #                              const char *name);
 'cuModuleGetFunction':  (c_int, cu_function, cu_module, c_char_p),
 
+# CUresult cuModuleGetGlobal ( CUdeviceptr* dptr, size_t* bytes, CUmodule
+#                              hmod, const char* name )
+'cuModuleGetGlobal': (c_int, POINTER(cu_device_ptr), POINTER(c_size_t),
+                      cu_module, c_char_p),
+
 # CUresult CUDAAPI cuFuncSetCacheConfig(CUfunction hfunc,
 #                                       CUfunc_cache config);
 'cuFuncSetCacheConfig': (c_int, cu_function, c_uint),

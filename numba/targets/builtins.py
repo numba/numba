@@ -1,10 +1,14 @@
-from llvm.core import Type, Constant
-import llvm.core as lc
+from __future__ import print_function, absolute_import, division
 import math
 from functools import reduce
+
+from llvm.core import Type, Constant
+import llvm.core as lc
+
+from numba import errcode
 from numba import types, typing, cgutils, utils
 from numba.targets.imputils import (builtin, builtin_attr, implement,
-                                    impl_attribute)
+                                    impl_attribute, impl_attribute_generic)
 
 #-------------------------------------------------------------------------------
 
@@ -274,16 +278,6 @@ def uint_abs_impl(context, builder, sig, args):
     return x
 
 
-def int_print_impl(context, builder, sig, args):
-    [x] = args
-    py = context.get_python_api(builder)
-    szval = context.cast(builder, x, sig.args[0], types.intp)
-    intobj = py.long_from_ssize_t(szval)
-    py.print_object(intobj)
-    py.decref(intobj)
-    return context.get_dummy_value()
-
-
 def int_shl_impl(context, builder, sig, args):
     [valty, amtty] = sig.args
     [val, amt] = args
@@ -340,6 +334,12 @@ def int_negate_impl(context, builder, sig, args):
         return builder.fsub(context.get_constant(sig.return_type, 0), val)
     else:
         return builder.neg(val)
+
+
+def int_positive_impl(context, builder, sig, args):
+    [typ] = sig.args
+    [val] = args
+    return context.cast(builder, val, typ, sig.return_type)
 
 
 def int_invert_impl(context, builder, sig, args):
@@ -402,7 +402,6 @@ for ty in types.integer_domain:
     builtin(implement('==', ty, ty)(int_eq_impl))
     builtin(implement('!=', ty, ty)(int_ne_impl))
 
-    builtin(implement(types.print_type, ty)(int_print_impl))
     builtin(implement('<<', ty, types.uint32)(int_shl_impl))
 
     builtin(implement('&', ty, ty)(int_and_impl))
@@ -410,6 +409,7 @@ for ty in types.integer_domain:
     builtin(implement('^', ty, ty)(int_xor_impl))
 
     builtin(implement('-', ty)(int_negate_impl))
+    builtin(implement('+', ty)(int_positive_impl))
     builtin(implement(types.neg_type, ty)(int_negate_impl))
     builtin(implement('~', ty)(int_invert_impl))
     builtin(implement(types.sign_type, ty)(int_sign_impl))
@@ -639,17 +639,6 @@ def real_abs_impl(context, builder, sig, args):
     impl = context.get_function(math.fabs, sig)
     return impl(builder, args)
 
-
-def real_print_impl(context, builder, sig, args):
-    [x] = args
-    py = context.get_python_api(builder)
-    szval = context.cast(builder, x, sig.args[0], types.float64)
-    intobj = py.float_from_double(szval)
-    py.print_object(intobj)
-    py.decref(intobj)
-    return context.get_dummy_value()
-
-
 def real_negate_impl(context, builder, sig, args):
     [typ] = sig.args
     [val] = args
@@ -658,6 +647,12 @@ def real_negate_impl(context, builder, sig, args):
         return builder.fsub(context.get_constant(sig.return_type, 0), val)
     else:
         return builder.neg(val)
+
+
+def real_positive_impl(context, builder, sig, args):
+    [typ] = sig.args
+    [val] = args
+    return context.cast(builder, val, typ, sig.return_type)
 
 
 def real_sign_impl(context, builder, sig, args):
@@ -715,9 +710,9 @@ for ty in types.real_domain:
     builtin(implement('>=', ty, ty)(real_ge_impl))
 
     builtin(implement(types.abs_type, ty)(real_abs_impl))
-    builtin(implement(types.print_type, ty)(real_print_impl))
 
     builtin(implement('-', ty)(real_negate_impl))
+    builtin(implement('+', ty)(real_positive_impl))
     builtin(implement(types.neg_type, ty)(real_negate_impl))
     builtin(implement(types.sign_type, ty)(real_sign_impl))
 
@@ -914,6 +909,11 @@ def complex_negate_impl(context, builder, sig, args):
     return res._getvalue()
 
 
+def complex_positive_impl(context, builder, sig, args):
+    [val] = args
+    return val
+
+
 for ty, cls in zip([types.complex64, types.complex128],
                    [Complex64, Complex128]):
     builtin(implement("+", ty, ty)(complex_add_impl))
@@ -922,6 +922,7 @@ for ty, cls in zip([types.complex64, types.complex128],
     builtin(implement("/?", ty, ty)(complex_div_impl))
     builtin(implement("/", ty, ty)(complex_div_impl))
     builtin(implement("-", ty)(complex_negate_impl))
+    builtin(implement("+", ty)(complex_positive_impl))
     # Complex modulo is deprecated in python3
 
 
@@ -1116,7 +1117,7 @@ def getiter_range_generic(context, builder, iterobj, start, stop, step):
 
     with cgutils.if_unlikely(builder, zero_step):
         # step shouldn't be zero
-        context.return_errcode(builder, 1)
+        context.return_errcode(builder, errcode.ASSERTION_ERROR)
 
     with cgutils.ifelse(builder, sign_differs) as (then, orelse):
         with then:
@@ -1324,8 +1325,7 @@ def getitem_unituple(context, builder, sig, args):
     switch = builder.switch(idx, bbelse, n=tupty.count)
 
     with cgutils.goto_block(builder, bbelse):
-        # TODO: propagate exception to
-        context.return_errcode(builder, 1)
+        context.return_errcode(builder, errcode.OUT_OF_BOUND_ERROR)
 
     lrtty = context.get_value_type(tupty.dtype)
     with cgutils.goto_block(builder, bbend):
@@ -1356,7 +1356,8 @@ def getitem_array1d_intp(context, builder, sig, args):
 
     arystty = make_array(aryty)
     ary = arystty(context, builder, ary)
-    ptr = cgutils.get_item_pointer(builder, aryty, ary, [idx], wraparound=True)
+    ptr = cgutils.get_item_pointer(builder, aryty, ary, [idx],
+                                   wraparound=context.metadata['wraparound'])
     return context.unpack_value(builder, aryty.dtype, ptr)
 
 
@@ -1380,7 +1381,7 @@ def getitem_array1d_slice(context, builder, sig, args):
 
     dataptr = cgutils.get_item_pointer(builder, aryty, ary,
                                        [slicestruct.start],
-                                       wraparound=True)
+                                       wraparound=context.metadata['wraparound'])
 
     retstty = make_array(sig.return_type)
     retary = retstty(context, builder)
@@ -1416,7 +1417,7 @@ def getitem_array_unituple(context, builder, sig, args):
             cgutils.normalize_slice(builder, sl, sh)
         indices = [sl.start for sl in slices]
         dataptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                           wraparound=True)
+                                           wraparound=context.metadata['wraparound'])
         # Build array
         retstty = make_array(sig.return_type)
         retary = retstty(context, builder)
@@ -1437,9 +1438,8 @@ def getitem_array_unituple(context, builder, sig, args):
         indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
         indices = [context.cast(builder, i, t, types.intp)
                    for t, i in zip(idxty, indices)]
-        # TODO warparound flag
         ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                       wraparound=True)
+                                       wraparound=context.metadata['wraparound'])
 
         return context.unpack_value(builder, aryty.dtype, ptr)
 
@@ -1477,7 +1477,7 @@ def getitem_array_tuple(context, builder, sig, args):
                 start.append(ind)
 
         dataptr = cgutils.get_item_pointer(builder, aryty, ary, start,
-                                           wraparound=True)
+                                           wraparound=context.metadata['wraparound'])
         # Build array
         retstty = make_array(sig.return_type)
         retary = retstty(context, builder)
@@ -1490,9 +1490,8 @@ def getitem_array_tuple(context, builder, sig, args):
         indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
         indices = [context.cast(builder, i, t, types.intp)
                    for t, i in zip(idxty, indices)]
-        # TODO warparound flag
         ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                       wraparound=True)
+                                       wraparound=context.metadata['wraparound'])
 
         return context.unpack_value(builder, aryty.dtype, ptr)
 
@@ -1508,7 +1507,7 @@ def setitem_array1d(context, builder, sig, args):
     ary = arystty(context, builder, ary)
 
     ptr = cgutils.get_item_pointer(builder, aryty, ary, [idx],
-                                   wraparound=True)
+                                   wraparound=context.metadata['wraparound'])
 
     val = context.cast(builder, val, valty, aryty.dtype)
 
@@ -1530,7 +1529,7 @@ def setitem_array_unituple(context, builder, sig, args):
     indices = [context.cast(builder, i, t, types.intp)
                for t, i in zip(idxty, indices)]
     ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                   wraparound=True)
+                                   wraparound=context.metadata['wraparound'])
     context.pack_value(builder, aryty.dtype, val, ptr)
 
 
@@ -1549,7 +1548,7 @@ def setitem_array_tuple(context, builder, sig, args):
     indices = [context.cast(builder, i, t, types.intp)
                for t, i in zip(idxty, indices)]
     ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                   wraparound=True)
+                                   wraparound=context.metadata['wraparound'])
     context.pack_value(builder, aryty.dtype, val, ptr)
 
 
@@ -1568,7 +1567,7 @@ def setitem_array_tuple(context, builder, sig, args):
     indices = [context.cast(builder, i, t, types.intp)
                for t, i in zip(idxty, indices)]
     ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                   wraparound=True)
+                                   wraparound=context.metadata['wraparound'])
 
     context.pack_value(builder, aryty.dtype, val, ptr)
 
@@ -1617,6 +1616,36 @@ def array_size(context, builder, typ, value):
     dims = cgutils.unpack_tuple(builder, array.shape, typ.ndim)
     return reduce(builder.mul, dims[1:], dims[0])
 
+
+@builtin_attr
+@impl_attribute_generic(types.Array)
+def array_record_getattr(context, builder, typ, value, attr):
+    arrayty = make_array(typ)
+    array = arrayty(context, builder, value)
+
+    rectype = typ.dtype
+    dtype = rectype.typeof(attr)
+    offset = rectype.offset(attr)
+
+    resty = types.Array(dtype, ndim=typ.ndim, layout='A')
+
+    raryty = make_array(resty)
+
+    rary = raryty(context, builder)
+    rary.shape = array.shape
+
+    constoffset = context.get_constant(types.intp, offset)
+    unpackedstrides = cgutils.unpack_tuple(builder, array.strides, typ.ndim)
+    newstrides = [builder.add(s, constoffset) for s in unpackedstrides]
+
+    rary.strides = array.strides
+
+    llintp = context.get_value_type(types.intp)
+    newdata = builder.add(builder.ptrtoint(array.data, llintp), constoffset)
+    newdataptr = builder.inttoptr(newdata, rary.data.type)
+    rary.data = newdataptr
+
+    return rary._getvalue()
 
 #-------------------------------------------------------------------------------
 
@@ -1775,3 +1804,4 @@ def math_pi_impl(context, builder, typ, value):
 @impl_attribute(types.Module(math), "e", types.float64)
 def math_e_impl(context, builder, typ, value):
     return context.get_constant(types.float64, math.e)
+

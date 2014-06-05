@@ -3,12 +3,20 @@ from contextlib import contextmanager
 import functools
 from llvm.core import Constant, Type
 import llvm.core as lc
+from . import errcode
 
 
 true_bit = Constant.int(Type.int(1), 1)
 false_bit = Constant.int(Type.int(1), 0)
 true_byte = Constant.int(Type.int(8), 1)
 false_byte = Constant.int(Type.int(8), 0)
+
+
+def _block_terminator(bb):
+    # XXX: replace this with bb.terminator when llvmpy 0.12.6 (or 0.13) is
+    # released.
+    inst = bb._ptr.getTerminator()
+    return lc._make_value(inst) if inst is not None else None
 
 
 def as_bool_byte(builder, value):
@@ -62,6 +70,7 @@ class Structure(object):
         def iterator():
             for field, _ in self._fields:
                 yield getattr(self, field)
+
         return iter(iterator())
 
 
@@ -80,8 +89,9 @@ def append_basic_block(builder, name=''):
 @contextmanager
 def goto_block(builder, bb):
     bbold = builder.basic_block
-    if bb.instructions and bb.instructions[-1].is_terminator:
-        builder.position_before(bb.instructions[-1])
+    term = _block_terminator(bb)
+    if term is not None:
+        builder.position_before(term)
     else:
         builder.position_at_end(bb)
     yield
@@ -102,8 +112,7 @@ def alloca_once(builder, ty, name=''):
 
 def terminate(builder, bbend):
     bb = builder.basic_block
-    instr = bb.instructions
-    if not instr or not instr[-1].is_terminator:
+    if _block_terminator(bb) is None:
         builder.branch(bbend)
 
 
@@ -270,46 +279,11 @@ def unpack_tuple(builder, tup, count):
 
 
 def get_item_pointer(builder, aryty, ary, inds, wraparound=False):
-    if wraparound:
-        # Wraparound
-        shapes = unpack_tuple(builder, ary.shape, count=aryty.ndim)
-        indices = []
-        for ind, dimlen in zip(inds, shapes):
-            ZERO = Constant.null(ind.type)
-            negative = builder.icmp(lc.ICMP_SLT, ind, ZERO)
-            wrapped = builder.add(dimlen, ind)
-            selected = builder.select(negative, wrapped, ind)
-            indices.append(selected)
-    else:
-        indices = inds
-    del inds
-    intp = indices[0].type
-    # Indexing code
-    if aryty.layout == 'C':
-        # C contiguous
-        shapes = unpack_tuple(builder, ary.shape, count=aryty.ndim)
-        steps = []
-        for i in range(len(shapes)):
-            last = Constant.int(intp, 1)
-            for j in shapes[i + 1:]:
-                last = builder.mul(last, j)
-            steps.append(last)
-
-        loc = Constant.int(intp, 0)
-        for i, s in zip(indices, steps):
-            tmp = builder.mul(i, s)
-            loc = builder.add(loc, tmp)
-        ptr = builder.gep(ary.data, [loc])
-        return ptr
-    else:
-        # Any layout
-        strides = unpack_tuple(builder, ary.strides, count=aryty.ndim)
-        dimoffs = [builder.mul(s, i) for s, i in zip(strides, indices)]
-        offset = functools.reduce(builder.add, dimoffs)
-        base = builder.ptrtoint(ary.data, offset.type)
-        where = builder.add(base, offset)
-        ptr = builder.inttoptr(where, ary.data.type)
-        return ptr
+    shapes = unpack_tuple(builder, ary.shape, count=aryty.ndim)
+    strides = unpack_tuple(builder, ary.strides, count=aryty.ndim)
+    return get_item_pointer2(builder, data=ary.data, shape=shapes,
+                             strides=strides, layout=aryty.layout, inds=inds,
+                             wraparound=wraparound)
 
 
 def get_item_pointer2(builder, data, shape, strides, layout, inds,
@@ -347,6 +321,7 @@ def get_item_pointer2(builder, data, shape, strides, layout, inds,
                 steps.append(last)
         else:
             raise Exception("unreachable")
+
         # Compute index
         loc = Constant.int(intp, 0)
         for i, s in zip(indices, steps):
@@ -419,7 +394,7 @@ def is_scalar_zero(builder, value):
 
 def guard_null(context, builder, value):
     with if_unlikely(builder, is_scalar_zero(builder, value)):
-        context.return_errcode(builder, 1)
+        context.return_errcode(builder, errcode.ASSERTION_ERROR)
 
 
 guard_zero = guard_null
@@ -437,8 +412,55 @@ def is_struct_ptr(ltyp):
     return is_pointer(ltyp) and is_struct(ltyp.pointee)
 
 
+def get_record_member(builder, record, offset, typ):
+    pdata = get_record_data(builder, record)
+    pval = inbound_gep(builder, pdata, 0, offset)
+    assert not is_pointer(pval.type.pointee)
+    return builder.bitcast(pval, Type.pointer(typ))
+
+
+def get_record_data(builder, record):
+    return builder.extract_value(record, 0)
+
+
+def set_record_data(builder, record, buf):
+    pdata = inbound_gep(builder, record, 0, 0)
+    assert pdata.type.pointee == buf.type
+    builder.store(buf, pdata)
+
+
+def init_record_by_ptr(builder, ltyp, ptr):
+    tmp = alloca_once(builder, ltyp)
+    pdata = ltyp.elements[0]
+    buf = builder.bitcast(ptr, pdata)
+    set_record_data(builder, tmp, buf)
+    return tmp
+
+
 def is_neg_int(builder, val):
     return builder.icmp(lc.ICMP_SLT, val, get_null_value(val.type))
+
+
+def inbound_gep(builder, ptr, *inds):
+    idx = []
+    for i in inds:
+        if isinstance(i, int):
+            ind = Constant.int(Type.int(32), i)
+        else:
+            ind = i
+        idx.append(ind)
+    return builder.gep(ptr, idx, inbounds=True)
+
+
+def gep(builder, ptr, *inds):
+    idx = []
+    for i in inds:
+        if isinstance(i, int):
+            ind = Constant.int(Type.int(64), i)
+        else:
+            ind = i
+        idx.append(ind)
+    return builder.gep(ptr, idx)
 
 
 # ------------------------------------------------------------------------------
@@ -448,6 +470,7 @@ class VerboseProxy(object):
     """
     Use to wrap llvm.core.Builder to track where segfault happens
     """
+
     def __init__(self, obj):
         self.__obj = obj
 
@@ -456,6 +479,7 @@ class VerboseProxy(object):
         if callable(fn):
             def wrapped(*args, **kws):
                 import traceback
+
                 traceback.print_stack()
                 print(key, args, kws)
                 try:
@@ -466,10 +490,11 @@ class VerboseProxy(object):
             return wrapped
         return fn
 
-def printf(builder, format_string, *values):
 
+def printf(builder, format_string, *values):
     str_const = Constant.stringz(format_string)
-    global_str_const = get_module(builder).add_global_variable(str_const.type, '')
+    global_str_const = get_module(builder).add_global_variable(str_const.type,
+                                                               '')
     global_str_const.initializer = str_const
 
     idx = [Constant.int(Type.int(32), 0), Constant.int(Type.int(32), 0)]

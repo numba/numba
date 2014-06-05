@@ -176,6 +176,17 @@ class SetItem(Stmt):
         return '%s[%s] = %s' % (self.target, self.index, self.value)
 
 
+class SetAttr(Stmt):
+    def __init__(self, target, attr, value, loc):
+        self.target = target
+        self.attr = attr
+        self.value = value
+        self.loc = loc
+
+    def __repr__(self):
+        return '(%s).%s = %s' % (self.target, self.attr, self.value)
+
+
 class Del(Stmt):
     def __init__(self, value, loc):
         self.value = value
@@ -183,6 +194,17 @@ class Del(Stmt):
 
     def __str__(self):
         return "del %s" % self.value
+
+
+class Raise(Stmt):
+    is_terminator = True
+
+    def __init__(self, exception, loc):
+        self.exception = exception
+        self.loc = loc
+
+    def __str__(self):
+        return "raise %s" % self.exception
 
 
 class Return(Stmt):
@@ -281,6 +303,7 @@ class Intrinsic(object):
     """
     For inserting intrinsic node into the IR
     """
+
     def __init__(self, name, type, args):
         self.name = name
         self.type = type

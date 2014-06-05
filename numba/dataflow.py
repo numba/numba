@@ -55,6 +55,9 @@ class DataFlowAnalysis(object):
         assert 1 <= count <= 5, "Invalid DUP_TOPX count"
         self.dup_topx(info, count)
 
+    def op_DUP_TOP(self, info, inst):
+        self.dup_topx(info, count=1)
+
     def op_DUP_TOP_TWO(self, info, inst):
         self.dup_topx(info, count=2)
 
@@ -108,6 +111,11 @@ class DataFlowAnalysis(object):
     def op_POP_TOP(self, info, inst):
         info.pop()
 
+    def op_STORE_ATTR(self, info, inst):
+        target = info.pop()
+        value = info.pop()
+        info.append(inst, target=target, value=value)
+
     def op_STORE_FAST(self, info, inst):
         value = info.pop()
         info.append(inst, value=value)
@@ -122,6 +130,11 @@ class DataFlowAnalysis(object):
         info.push(res)
 
     def op_LOAD_GLOBAL(self, info, inst):
+        res = info.make_temp()
+        info.append(inst, res=res)
+        info.push(res)
+
+    def op_LOAD_DEREF(self, info, inst):
         res = info.make_temp()
         info.append(inst, res=res)
         info.push(res)
@@ -187,7 +200,6 @@ class DataFlowAnalysis(object):
         printvar = info.make_temp()
         res = info.make_temp()
         info.append(inst, item=item, printvar=printvar, res=res)
-        info.push(item)
 
     def op_PRINT_NEWLINE(self, info, inst):
         printvar = info.make_temp()
@@ -201,6 +213,7 @@ class DataFlowAnalysis(object):
         info.push(res)
 
     op_UNARY_NEGATIVE = _unaryop
+    op_UNARY_POSITIVE = _unaryop
     op_UNARY_NOT = _unaryop
     op_UNARY_INVERT = _unaryop
 
@@ -424,6 +437,12 @@ class DataFlowAnalysis(object):
             info.append(inst, delitem=block.iterator)
         else:
             info.append(inst)
+
+    def op_RAISE_VARARGS(self, info, inst):
+        if inst.arg != 1:
+            raise ValueError("Multiple argument raise is not supported.")
+        exc = info.pop()
+        info.append(inst, exc=exc)
 
     def _ignored(self, info, inst):
         pass
