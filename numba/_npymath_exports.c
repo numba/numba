@@ -49,7 +49,12 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL(deg2rad),
     NPYMATH_SYMBOL(rad2deg),
 
-    NPYMATH_SYMBOL(atan2)
+    NPYMATH_SYMBOL(atan2),
+
+    NPYMATH_SYMBOL(rint),
+    NPYMATH_SYMBOL(fabs),
+    NPYMATH_SYMBOL(logaddexp)
+
 };
 #undef NPY_MATH_SYMBOL
 

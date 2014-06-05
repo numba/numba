@@ -203,9 +203,15 @@ class TestUFuncs(unittest.TestCase):
     def test_unary_trunc_ufunc(self):
         self.unary_ufunc_test(numbarray.trunc, np.trunc, 'arange', numbarray.e)
     
+    def test_unary_rint_ufunc(self):
+        self.unary_ufunc_test(numbarray.rint, np.rint, 'arange', numbarray.e)
+    
     def test_unary_exp_ufunc(self):
         self.unary_ufunc_test(numbarray.exp, np.exp, 'arange', numbarray.e)
 
+    def test_unary_exp2_ufunc(self):
+        self.unary_ufunc_test(numbarray.exp2, np.exp2, 'arange', numbarray.e)
+ 
     def test_unary_expm1_ufunc(self):
         self.unary_ufunc_test(numbarray.expm1, np.expm1, 'arange', numbarray.e)
 
@@ -228,6 +234,10 @@ class TestUFuncs(unittest.TestCase):
         self.unary_ufunc_test(numbarray.log1p, np.log1p, 'arange')
         # these dtypes work, probably similar for other failures
         #self.unary_ufunc_test(numbarray.log10, np.log10, 'arange', types=['i4', 'i8', 'u4', 'u8', 'f8'])
+
+    def test_binary_logaddexp_ufunc(self):
+        self.binary_ufunc_test(numbarray.logaddexp, np.logaddexp, 'arange')
+
 
 # todo -- frexp test fails with the following error
 # File "/home/scott/continuum/numba/numba/typeinfer.py", line 114, in propagate
@@ -260,8 +270,18 @@ class TestUFuncs(unittest.TestCase):
         self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
 
     def test_unary_negative_ufunc(self):
-        #a = numbarray.arange(size) 
         self.unary_ufunc_test(numbarray.negative, np.negative, 'arange', types=['i1', 'i2', 'i4', 'i4', 'f4', 'f8'])
+    
+    def test_unary_sign_ufunc(self):
+        self.unary_ufunc_test(numbarray.sign, np.sign, 'ones') 
+
+    def test_unary_sqrt_ufunc(self):
+        self.unary_ufunc_test(numbarray.sqrt, np.sqrt, 'arange')
+        # these tests work
+        #self.unary_ufunc_test(numbarray.sqrt, np.sqrt, 'arange', types=['i4', 'i8', 'u4', 'u8', 'f8']) 
+
+    def test_unary_fabs_ufunc(self):
+        self.unary_ufunc_test(numbarray.fabs, np.fabs, 'arange', scalar=-1)
 
 #  pow and power both give the following error 
 #  File "/home/scott/anaconda/lib/python2.7/site-packages/llvm/core.py", line 593, in verify
