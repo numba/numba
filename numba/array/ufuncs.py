@@ -1,7 +1,7 @@
 #from __future__ import division
 from nodes import UnaryOperation, BinaryOperation, ScalarNode
 from array import Array
-
+import numba._npymath_exports as nbmath
 
 def create_unary_op(op_str):
     def unary_op(operand):
@@ -56,7 +56,7 @@ for name, op in unary_rounding_ufuncs.items():
 
 #todo -- exp2, log2, logaddep, logaddexp2
 unary_exps_logs_ufuncs = {'exp':'math.exp', 'expm1':'math.expm1', 'log':'math.log', 'log10':'math.log10', 
-        'log1p':'math.log1p'}
+        'log1p':'math.log1p', 'log2':'numpy.log2'}
 
 for name, op in unary_exps_logs_ufuncs.items():
     global_dict[name] = create_unary_op(op)

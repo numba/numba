@@ -95,6 +95,7 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
 def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
                      locals, lifted=()):
     interp = translate_stage(bc)
+    #interp.dump()  # added for debug 
     nargs = len(interp.argspec.args)
     if len(args) > nargs:
         raise TypeError("Too many argument types")
