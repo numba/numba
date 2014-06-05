@@ -14,7 +14,7 @@ def simple_example():
     print result.__repr__()
 
     # force eval
-    result.eval()
+    result.eval(debug=True)
 
     print result.__repr__()
 
@@ -27,7 +27,7 @@ def reduce_example():
     result = a1 + a2
 
     # force eval
-    total = numbarray.add.reduce(result)
+    total = numbarray.reduce_(lambda x,y: x+y, result, 0)
 
     print total
 
@@ -44,8 +44,8 @@ def deferred_data_example():
     # force eval with concrete data
     print result.eval(a1=np.arange(10, dtype='i8'), a2=np.arange(10, dtype='i8'))
     
-    # force eval with concrete data
-    print result.eval(a1=np.arange(10, dtype='f8'), a2=np.arange(10, dtype='f8'))
+    # force eval with different concrete data
+    print result.eval(a1=np.arange(20, dtype='f8'), a2=np.arange(20, dtype='f8'))
     
 
 def python_mode_example():

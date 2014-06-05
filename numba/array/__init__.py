@@ -1,4 +1,4 @@
-from array import Array
+from array import Array, reduce_
 from functions import array, empty, eye, identity, ones, zeros, \
     arange, linspace, logspace, meshgrid
 from functions import amin, amax, nanmin, nanmax, ptp, \

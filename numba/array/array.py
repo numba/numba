@@ -1,6 +1,5 @@
 import numpy as np
 from numba import jit
-import operator
 import math
 import weakref
 from pyalge import datatype
@@ -113,15 +112,5 @@ def reduce_(func, operand, initial_value):
 
     return reduce_loop(cfunc, array, initial_value)
 
-
-def create_reduce_func(operation, initial_value):
-    
-    def reduce_wrapper(operand):
-        return reduce_(operation, operand, initial_value)
-
-    return reduce_wrapper
-
-
-#add.reduce = create_reduce_func(lambda x,y: x+y, 0)
 
 import ufuncs

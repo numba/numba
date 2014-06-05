@@ -1,5 +1,5 @@
 from nodes import UnaryOperation, BinaryOperation, ScalarNode
-from array import Array
+from array import Array, reduce_
 
 
 def create_unary_op(op_str):
