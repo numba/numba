@@ -21,9 +21,10 @@ requirements:
 test:
   requires:
     - python
+    - scipy
   imports:
     - numbapro
-    - numbapro._utils.mviewbuf
+    - numbapro.vectorizers.workqueue
 
 about:
   home:

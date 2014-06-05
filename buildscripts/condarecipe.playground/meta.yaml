@@ -23,7 +23,7 @@ test:
     - python
   imports:
     - numbapro
-    - numbapro._utils.mviewbuf
+    - numbapro.vectorizers.workqueue
 
 about:
   home:
