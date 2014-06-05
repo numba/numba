@@ -49,18 +49,30 @@ for name, op in unary_hyperbolic_ufuncs.items():
     global_dict[name] = create_unary_op(op)
 
 # todo -- rint, around, round, fix (these are functions, not ufuncs according to numpy doc)
-unary_rounding_ufuncs = {'floor':'math.floor', 'ceil':'math.ceil', 'trunc':'math.trunc'}
+unary_rounding_ufuncs = {'floor':'math.floor', 'ceil':'math.ceil', 'trunc':'math.trunc', 'rint':'numpy.rint'}
 
 for name, op in unary_rounding_ufuncs.items():
     global_dict[name] = create_unary_op(op)
 
-#todo -- exp2, log2, logaddep, logaddexp2
-unary_exps_logs_ufuncs = {'exp':'math.exp', 'expm1':'math.expm1', 'log':'math.log', 'log10':'math.log10', 
-        'log1p':'math.log1p', 'log2':'numpy.log2'}
+#todo --  logaddep, logaddexp2
+unary_exps_logs_ufuncs = {'exp':'math.exp', 'exp2':'numpy.exp2', 'expm1':'math.expm1', 'log':'math.log', 'log10':'math.log10', 'log1p':'math.log1p', 'log2':'numpy.log2'}
 
 for name, op in unary_exps_logs_ufuncs.items():
     global_dict[name] = create_unary_op(op)
 
+# todo logaddexp does not work
+# need to add binary_ufunc capability to numba
+binary_exps_logs_ufuncs = {'logaddexp':'numpy.logaddexp'}
+
+for name, op in binary_exps_logs_ufuncs.items():
+    global_dict[name] = create_binary_op(op)
+
+
+# todo -- sign is broken
+unary_misc_ufuncs = {'sqrt':'math.sqrt', 'fabs':'numpy.fabs'}
+
+for name, op in unary_misc_ufuncs.items():
+    global_dict[name] = create_unary_op(op)
 
 # todo -- currently frexp fails and ldexp is a binary op
 #unary_floating_point_ufuncs = {'frexp':'math.frexp', 'ldexp':'math.ldexp'}
