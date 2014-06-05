@@ -79,9 +79,11 @@ class Array(object):
     def __rmul__(self, other):
         return ufuncs.multiply(self, other)
 
-    '''@binary_op('operator.truediv' if PYVERSION >= (3, 0) else 'operator.div')
     def __div__(self, other):
-        return create_binary_op('operator.add')(self, other)'''
+        return ufuncs.divide(self, other)
+
+    def __rdiv__(self, other):
+        return ufuncs.divide(self, other)
 
     def __pow__(self, other):
         return ufuncs.power(self, other)

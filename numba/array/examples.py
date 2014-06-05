@@ -67,7 +67,7 @@ def slice_example():
     print result.__repr__()
 
     result = result[0:5] + result[5:]
-    print result.eval(debug=False)
+    print result.eval(debug=True)
 
 
 def assignment_example():
@@ -81,6 +81,16 @@ def assignment_example():
     print a1
 
 
+def where_example():
+
+    a1 = numbarray.Array(data=np.array([1,2,3]))
+    a2 = numbarray.Array(data=np.array([4,5,6]))
+    cond = numbarray.Array(data=np.array([True,False,True]))
+
+    result = numbarray.where(cond, a1, a2)
+    print result.eval(debug=True);
+
+
 if __name__ == '__main__':
     simple_example()
     #reduce_example()
@@ -88,3 +98,4 @@ if __name__ == '__main__':
     #python_mode_example()
     #slice_example()
     #assignment_example()
+    #where_example()

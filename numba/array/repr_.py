@@ -50,3 +50,12 @@ class Repr(Case):
             Repr(key, state={'level':level+1}),
             Repr(value, state={'level':level+1}))
 
+    @of('WhereOperation(cond, left, right)')
+    def where_operation(self, cond, left, right):
+        level = self.state['level']
+        return '{0}WhereOperation: \n{1}\n{2}\n{3}\n'.format(get_indent(level),
+            Repr(cond, state={'level':level+1}),
+            Repr(left, state={'level':level+1}),
+            Repr(right, state={'level':level+1}))
+
+
