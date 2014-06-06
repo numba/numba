@@ -4,6 +4,7 @@ import numpy as np
 from numba.config import PYVERSION
 from math import pi
 from functools import wraps 
+#from numba.types import integer_domain, real_domain
 use_python = False
 
 class TestUFuncs(unittest.TestCase):
@@ -13,7 +14,9 @@ class TestUFuncs(unittest.TestCase):
         #size = 10
         if not types:
             # 'f2' datatype fails 
-            dts = ['i1', 'i2', 'i4', 'i8', 'u1', 'u2', 'u4', 'u8', 'f4', 'f8']
+            dts = [ 'i4', 'i8', 'u4', 'u8', 'f4', 'f8']
+            # todo incorporate with numba/types.py
+            #dts = integer_domain | real_domain 
         else:
             dts = types
         print
@@ -29,7 +32,7 @@ class TestUFuncs(unittest.TestCase):
                 a = scalar * numbarray.arange(size, dtype=dt)
                 b = scalar * np.arange(size, dtype=dt)
             result = numba_func(a)
-            result.eval()
+            result = result.eval()
             expected = numpy_func(b)
             if debug:
                 # todo -- numba_func.__name__ prints 'unary op' rather than the correct name
@@ -37,11 +40,11 @@ class TestUFuncs(unittest.TestCase):
                 #print numba_func
                 print 'result = ', result
                 print 'expected = ', expected
-            self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
+            self.assertTrue(np.allclose(result, expected))
 
     def binary_ufunc_test(self, numba_func, numpy_func, data='zeros', m=3, n=3, ascalar=1, bscalar=1, agiven=[], bgiven=[], size=10, types=[], debug=False):
         if not types:
-            dts = ['i1', 'i2', 'i4', 'i8', 'u1', 'u2', 'u4', 'u8', 'f4', 'f8']
+            dts = ['i4', 'i8', 'u4', 'u8', 'f4', 'f8']
         else:
             dts = types
         print 
@@ -80,7 +83,7 @@ class TestUFuncs(unittest.TestCase):
 
             
             result = numba_func(a, b)
-            result.eval()
+            result = result.eval()
             expected = numpy_func(c, d)
             if debug:
                 # todo -- numba_func.__name__ prints 'unary op' rather than the correct name
@@ -90,7 +93,7 @@ class TestUFuncs(unittest.TestCase):
                 print type(result)
                 print 'expected = ', expected
                 print type(expected)
-            self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
+            self.assertTrue(np.allclose(result, expected))
 
     #  renamed from test_bunary_ufunc
     def test_binary_add_ufunc(self):
