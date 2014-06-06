@@ -72,7 +72,7 @@ for name, op in binary_exps_logs_ufuncs.items():
 
 
 # todo -- sign is broken
-unary_misc_ufuncs = {'sqrt':'math.sqrt', 'fabs':'numpy.fabs'}
+unary_misc_ufuncs = {'sqrt':'math.sqrt', 'fabs':'numpy.fabs', 'abs':'numpy.abs'}
 
 for name, op in unary_misc_ufuncs.items():
     global_dict[name] = create_unary_op(op)
@@ -98,3 +98,7 @@ binary_arithmetic_ufuncs = {'add':'operator.add', 'subtract':'operator.sub',
 for name, op in binary_arithmetic_ufuncs.items():
     global_dict[name] = create_binary_op(op)
 
+comparison_ufuncs = {'greater':'numpy.greater'}
+
+for name, op in comparison_ufuncs.items():
+    global_dict[name] = create_binary_op(op)

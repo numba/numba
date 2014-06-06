@@ -82,10 +82,19 @@ class Array(object):
     def __div__(self, other):
         return ufuncs.division(self, other)
 
+    def __rdiv__(self, other):
+        return ufuncs.division(self, other)
+
     def __truediv__(self, other):
         return ufuncs.division(self, other)
 
+    def __rtruediv__(self, other):
+        return ufuncs.division(self, other)
+
     def __floordiv__(self, other):
+        return ufuncs.floor_division(self, other)
+
+    def __rfloordiv__(self, other):
         return ufuncs.floor_division(self, other)
 
     def __neg__(self):
@@ -104,6 +113,14 @@ class Array(object):
         data = self.eval()
         data[key] = value.eval()
         return Array(data=data)
+
+    def __gt__(self, other):
+        return ufuncs.greater(self, other)
+
+    def sum(self, *args, **kwargs):
+        result = self.eval(debug=False)
+        sum_result = result.sum()
+        return sum_result
 
 
 def reduce_(func, operand, initial_value):

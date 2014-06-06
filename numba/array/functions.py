@@ -18,12 +18,12 @@ for method in array_creation_methods:
 
 
 # All of the following methods force the deferred array to be evaluated
-array_statistics_methods = ['amin', 'amax', 'nanmin', 'nanmax', 'ptp',
+array_reduce_methods = ['amin', 'amax', 'nanmin', 'nanmax', 'ptp',
     'percentile', 'median', 'average', 'mean', 'std', 'var', 'nanmean',
     'nanstd', 'nanvar', 'corrcoef', 'correlate', 'cov', 'histogram',
-    'histogram2d', 'histogramdd', 'bincount', 'digitize']
+    'histogram2d', 'histogramdd', 'bincount', 'digitize', 'sum']
 
-for method in array_statistics_methods:
+for method in array_reduce_methods:
     def create_method_template(method):
         def method_template(*args, **kwargs):
             deferred_array = args[0]
