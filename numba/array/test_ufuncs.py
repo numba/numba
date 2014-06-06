@@ -12,6 +12,7 @@ class TestUFuncs(unittest.TestCase):
     def unary_ufunc_test(self, numba_func, numpy_func, data='zeros', scalar=1, size=10, types=[], debug=False):
         #size = 10
         if not types:
+            # 'f2' datatype fails 
             dts = ['i1', 'i2', 'i4', 'i8', 'u1', 'u2', 'u4', 'u8', 'f4', 'f8']
         else:
             dts = types
