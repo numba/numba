@@ -1,6 +1,7 @@
 from pyalge import Case, of
 from nodes import *
 import operator
+import numpy as np
 
 
 class Value(Case):
@@ -29,3 +30,8 @@ class Value(Case):
     def array_assign_operation(self, operand, key, value):
         operator.setitem(Value(operand), key, Value(value))
         return Value(operand)
+
+    @of('WhereOperation(cond, left, right)')
+    def where_operation(self, cond, left, right):
+        return np.where(Value(cond), Value(left), Value(right))
+

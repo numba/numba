@@ -1,7 +1,6 @@
 #from __future__ import division
 import numpy as np
 from numba import jit
-import operator
 import math
 import weakref
 from pyalge import datatype
@@ -34,6 +33,9 @@ class Array(object):
 
         variables = dict([(key,value) for key,value in kwargs.items() if key not in expected_args])
         state = {'variables':variables, 'variable_found':False}
+
+        if isinstance(self.array_node.data, ScalarNode):
+            return Value(self.array_node, state=state)
 
         if not isinstance(self.array_node.data, ArrayDataNode):
             if debug:
@@ -77,21 +79,11 @@ class Array(object):
     def __rmul__(self, other):
         return ufuncs.multiply(self, other)
 
-    '''@binary_op('operator.truediv' if PYVERSION >= (3, 0) else 'operator.div')
     def __div__(self, other):
-        return create_binary_op('operator.add')(self, other)'''
-    
-    def __div__(self, other):
-        return ufuncs.division(self, other)
+        return ufuncs.divide(self, other)
 
-    def __truediv__(self, other):
-        return ufuncs.division(self, other)
-
-    def __floordiv__(self, other):
-        return ufuncs.floor_division(self, other)
-
-    def __neg__(self):
-        return ufuncs.negative(self)
+    def __rdiv__(self, other):
+        return ufuncs.divide(self, other)
 
     def __pow__(self, other):
         return ufuncs.power(self, other)
@@ -122,15 +114,5 @@ def reduce_(func, operand, initial_value):
 
     return reduce_loop(cfunc, array, initial_value)
 
-
-def create_reduce_func(operation, initial_value):
-
-    def reduce_wrapper(operand):
-        return reduce_(operation, operand, initial_value)
-
-    return reduce_wrapper
-
-
-#add.reduce = create_reduce_func(lambda x,y: x+y, 0)
 
 import ufuncs

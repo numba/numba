@@ -1,7 +1,8 @@
 #from __future__ import division
 from nodes import UnaryOperation, BinaryOperation, ScalarNode
-from array import Array
 import numba._npymath_exports as nbmath
+from array import Array, reduce_
+
 
 def create_unary_op(op_str):
     def unary_op(operand):
@@ -19,6 +20,9 @@ def create_binary_op(op_str):
                 raise TypeError('Invalid type ({0})for binary operation'.format(type(operand)))
         operand1 = parse_operand(operand1)
         operand2 = parse_operand(operand2)
+        if isinstance(operand1, ScalarNode) and isinstance(operand2, ScalarNode):
+            scalar = Array(data=BinaryOperation(operand1, operand2, op_str)).eval(use_python=True)
+            return Array(data=ScalarNode(scalar))
         return Array(data=BinaryOperation(operand1, operand2, op_str))
     return binary_op
 
@@ -90,7 +94,7 @@ for name, op in unary_arithmetic_ufuncs.items():
 
 
 binary_arithmetic_ufuncs = {'add':'operator.add', 'subtract':'operator.sub',
-        'multiply':'operator.mul', 'power':'operator.pow', 'division':'operator.div', 'floor_division':'operator.floordiv'}
+    'multiply':'operator.mul', 'divide':'operator.div', 'power':'operator.pow'}
 
 for name, op in binary_arithmetic_ufuncs.items():
     global_dict[name] = create_binary_op(op)

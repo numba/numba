@@ -14,7 +14,7 @@ def simple_example():
     print result.__repr__()
 
     # force eval
-    result.eval()
+    result.eval(debug=True)
 
     print result.__repr__()
 
@@ -27,7 +27,7 @@ def reduce_example():
     result = a1 + a2
 
     # force eval
-    total = numbarray.add.reduce(result)
+    total = numbarray.reduce_(lambda x,y: x+y, result, 0)
 
     print total
 
@@ -43,10 +43,10 @@ def deferred_data_example():
 
     # force eval with concrete data
     print result.eval(a1=np.arange(10, dtype='i8'), a2=np.arange(10, dtype='i8'))
-
-    # force eval with concrete data
-    print result.eval(a1=np.arange(10, dtype='f8'), a2=np.arange(10, dtype='f8'))
-
+    
+    # force eval with different concrete data
+    print result.eval(a1=np.arange(20, dtype='f8'), a2=np.arange(20, dtype='f8'))
+    
 
 def python_mode_example():
 
@@ -67,7 +67,7 @@ def slice_example():
     print result.__repr__()
 
     result = result[0:5] + result[5:]
-    print result.eval(debug=False)
+    print result.eval(debug=True)
 
 
 def assignment_example():
@@ -81,6 +81,16 @@ def assignment_example():
     print a1
 
 
+def where_example():
+
+    a1 = numbarray.Array(data=np.array([1,2,3]))
+    a2 = numbarray.Array(data=np.array([4,5,6]))
+    cond = numbarray.Array(data=np.array([True,False,True]))
+
+    result = numbarray.where(cond, a1, a2)
+    print result.eval(debug=True);
+
+
 if __name__ == '__main__':
     simple_example()
     #reduce_example()
@@ -88,3 +98,4 @@ if __name__ == '__main__':
     #python_mode_example()
     #slice_example()
     #assignment_example()
+    #where_example()

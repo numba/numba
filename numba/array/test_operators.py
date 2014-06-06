@@ -40,8 +40,8 @@ class TestOperators(unittest.TestCase):
         a1 += 1
         expected1 = a1 + a1
 
-        self.assertTrue(np.all(x.eval(use_python=use_python, debug=True) == expected))
-        self.assertTrue(np.all(x1.eval(use_python=use_python, debug=True) == expected1))
+        self.assertTrue(np.all(x.eval(use_python=use_python) == expected))
+        self.assertTrue(np.all(x1.eval(use_python=use_python) == expected1))
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,5 +1,6 @@
 from array import Array
 import numpy as np
+from nodes import WhereOperation
 
 import sys as sys
 api = sys.modules[__name__]
@@ -30,4 +31,9 @@ for method in array_statistics_methods:
         return method_template
     setattr(api, method, create_method_template(method))
 
+
+def where(cond, left, right):
+    return Array(data=WhereOperation(cond.array_node,
+                                     left.array_node,
+                                     right.array_node))
 

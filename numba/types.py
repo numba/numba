@@ -421,7 +421,7 @@ string = Dummy('str')
 # Can only pass it around
 voidptr = Dummy('void*')
 
-boolean = bool_ = Type('bool')
+boolean = bool_ = Type('bool_')
 
 byte = uint8 = Integer('uint8')
 uint16 = Integer('uint16')
