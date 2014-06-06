@@ -1,3 +1,9 @@
+Version (0.14.2)
+================
+* Unify numba.cuda and numbapro.cuda backend
+* Enable Python 3 support
+* Fixes workqueue module import for embedded python usecase
+
 Version (0.14.1)
 ================
 Fixes:
