@@ -1,3 +1,4 @@
+#from __future__ import division
 import numpy as np
 from numba import jit
 import math
@@ -8,7 +9,6 @@ from value import Value
 from repr_ import Repr
 from nodes import *
 from numba.config import PYVERSION
-
 
 class Array(object):
 
@@ -30,7 +30,7 @@ class Array(object):
 
         python = kwargs.get('use_python', False)
         debug = kwargs.get('debug', False)
-        
+
         variables = dict([(key,value) for key,value in kwargs.items() if key not in expected_args])
         state = {'variables':variables, 'variable_found':False}
 
@@ -80,10 +80,16 @@ class Array(object):
         return ufuncs.multiply(self, other)
 
     def __div__(self, other):
-        return ufuncs.divide(self, other)
+        return ufuncs.division(self, other)
 
-    def __rdiv__(self, other):
-        return ufuncs.divide(self, other)
+    def __truediv__(self, other):
+        return ufuncs.division(self, other)
+
+    def __floordiv__(self, other):
+        return ufuncs.floor_division(self, other)
+
+    def __neg__(self):
+        return ufuncs.negative(self)
 
     def __pow__(self, other):
         return ufuncs.power(self, other)
@@ -104,7 +110,7 @@ def reduce_(func, operand, initial_value):
     array = operand.eval()
 
     cfunc = jit(func)
-    
+
     @jit
     def reduce_loop(cfunc, array, initial_value):
         total = 0

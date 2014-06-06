@@ -6,8 +6,8 @@ from numba import vectorize
 
 def simple_example():
 
-    a1 = numbarray.Array(data=np.arange(10000000, dtype='f8'))
-    a2 = numbarray.Array(data=np.arange(10000000, dtype='f8'))
+    a1 = numbarray.Array(data=np.arange(100, dtype='f8'))
+    a2 = numbarray.Array(data=np.arange(100, dtype='f8'))
 
     result = a1 + a2 + a1*2 + a2*3
 

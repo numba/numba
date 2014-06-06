@@ -49,7 +49,7 @@ class CodeGen(Case):
     def unary_operation(self, operand, op_str):
         operand_var = CodeGen(operand, state=self.state)
         temp_var = 'temp' + str(len(self.state['vectorize_body']))
-        self.state['vectorize+_body'].append('{0} = {1}({2})'.format(temp_var, op_str, operand_var))
+        self.state['vectorize_body'].append('{0} = {1}({2})'.format(temp_var, op_str, operand_var))
         return temp_var
 
     @of('BinaryOperation(lhs, rhs, op_str)')
@@ -106,4 +106,4 @@ def dump(inputs, input_names, input_types, vectorize_body, output_var):
                                               '\n    '.join(vectorize_body),
                                               output_var)
     return '@vectorize(["({0},)"])\n'.format(','.join(input_types)) + vectorize_str
-
+    return decorator + ufunc_str

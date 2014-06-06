@@ -45,7 +45,7 @@ def unary_npy_math_extern(fn):
         fn = mod.get_or_insert_function(fnty, name=n)
         return builder.call(fn, (val,))
 
-_externs = [ "exp2", "expm1", "log", "log2", "log10", "log1p", "deg2rad", "rad2deg" ]
+_externs = [ "exp2", "expm1", "log", "log2", "log10", "log1p", "deg2rad", "rad2deg", "rint", "fabs" ]
 for x in _externs:
     unary_npy_math_extern(x)
 
@@ -252,6 +252,8 @@ register_unary_ufunc(numpy.absolute, types.abs_type)
 register_unary_ufunc(numpy.sign, types.sign_type)
 register_unary_ufunc(numpy.negative, types.neg_type)
 
+register_unary_ufunc(numpy.rint, npy.rint, asfloat=True)
+register_unary_ufunc(numpy.fabs, npy.fabs, asfloat=True)
 
 def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
                        asfloat=False):
@@ -497,4 +499,4 @@ register_binary_ufunc(numpy.multiply, '*')
 register_binary_ufunc(numpy.divide, '/', asfloat=True, divbyzero=True)
 register_binary_ufunc(numpy.arctan2, math.atan2, asfloat=True)
 register_binary_ufunc(numpy.power, '**', asfloat=True)
-
+#register_binary_ufunc(numpy.logaddexp, npy.logaddexp, asfloat=True)

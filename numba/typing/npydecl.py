@@ -71,7 +71,7 @@ _autoregister_unary_ufuncs = [
     "log", "log2", "log10", "log1p",
     "absolute", "negative", "floor", "ceil", "trunc", "sign",
     "sqrt",
-    "deg2rad", "rad2deg"]
+    "deg2rad", "rad2deg", "rint", "fabs"]
 for func in _autoregister_unary_ufuncs:
     _numpy_unary_ufunc(func)
 del(_autoregister_unary_ufuncs)
