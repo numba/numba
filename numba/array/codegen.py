@@ -46,7 +46,10 @@ class CodeGen(Case):
 
     @of('UnaryOperation(operand, op_str)')
     def unary_operation(self, operand, op_str):
-        return op_str + '(' + CodeGen(operand, state=self.state) + ')'
+        operand_var = CodeGen(operand, state=self.state)
+        temp_var = 'temp' + str(len(self.state['vectorize_body']))
+        self.state['vectorize_body'].append('{0} = {1}({2})'.format(temp_var, op_str, operand_var))
+        return temp_var
 
     @of('BinaryOperation(lhs, rhs, op_str)')
     def binary_operation(self, lhs, rhs, op_str):
