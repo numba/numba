@@ -1,5 +1,6 @@
 #from __future__ import division
 from nodes import UnaryOperation, BinaryOperation, ScalarNode
+import numba._npymath_exports as nbmath
 from array import Array, reduce_
 
 
