@@ -1,4 +1,7 @@
 from numbapro import cuda
+import numbapro.cudapy  # import time sideeffect
+from numba.cuda.cudadrv.driver import FuncAttr
+
 
 
 def calc_occupancy(cc, reg, smem=0, smem_config=None):
