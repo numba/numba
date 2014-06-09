@@ -23,6 +23,7 @@ import warnings
 from ctypes import (c_int, byref, c_size_t, c_char, c_char_p, addressof,
                     c_void_p, c_float)
 import contextlib
+from collections import namedtuple
 from numba import utils, servicelib, mviewbuf
 from .error import CudaSupportError, CudaDriverError
 from .drvapi import API_PROTOTYPES
@@ -957,6 +958,10 @@ class Module(object):
         return MemoryPointer(self.context, ptr, size), size.value
 
 
+FuncAttr = namedtuple("FuncAttr", ["regs", "shared", "local", "const",
+                                   "maxthreads"])
+
+
 class Function(object):
     griddim = 1, 1, 1
     blockdim = 1, 1, 1
@@ -967,6 +972,7 @@ class Function(object):
         self.module = module
         self.handle = handle
         self.name = name
+        self.attrs = self._read_func_attr_all()
 
     def __repr__(self):
         return "<CUDA function %s>" % self.name
@@ -1016,6 +1022,24 @@ class Function(object):
     @property
     def device(self):
         return self.module.context.device
+
+    def _read_func_attr(self, attrid):
+        """
+        Read CUfunction attributes
+        """
+        retval = c_int()
+        driver.cuFuncGetAttribute(byref(retval), attrid, self.handle)
+        return retval.value
+
+    def _read_func_attr_all(self):
+        nregs = self._read_func_attr(enums.CU_FUNC_ATTRIBUTE_NUM_REGS)
+        cmem = self._read_func_attr(enums.CU_FUNC_ATTRIBUTE_CONST_SIZE_BYTES)
+        lmem = self._read_func_attr(enums.CU_FUNC_ATTRIBUTE_LOCAL_SIZE_BYTES)
+        smem = self._read_func_attr(enums.CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES)
+        maxtpb = self._read_func_attr(
+            enums.CU_FUNC_ATTRIBUTE_MAX_THREADS_PER_BLOCK)
+        return FuncAttr(regs=nregs, const=cmem, local=lmem, shared=smem,
+                        maxthreads=maxtpb)
 
 
 def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, hstream, args):
