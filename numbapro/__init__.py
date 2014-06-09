@@ -9,7 +9,6 @@ import numbapro._cuda    # import time sideeffect
 from numbapro.decorators import autojit, jit
 from numbapro.vectorizers import vectorize, guvectorize
 
-
 def test():
     from numbapro import cuda
 

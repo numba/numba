@@ -25,10 +25,9 @@ def calc_occupancy(cc, reg, smem=0, smem_config=None):
     """
     from .cudadrv import autotune
 
-    usage = {}
-    usage['reg'] = reg
-    usage['shared'] = smem
-    at = autotune.AutoTuner(cc=cc, usage=usage, smem_config=smem_config)
+    usage = FuncAttr(regs=reg, shared=smem, local=0, const=0,
+                     maxthreads=cuda.get_current_device().MAX_THREADS_PER_BLOCK)
+    at = autotune.AutoTuner(cc=cc, info=usage, smem_config=smem_config)
     return at
 
 # Install extensions

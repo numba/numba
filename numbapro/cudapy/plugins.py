@@ -18,14 +18,13 @@ class CompilationInfoUnavailable(RuntimeError):
 
 
 def autotune(self):
-    has_autotune = (hasattr(self, '_autotune') and
-                    self._autotune.dynsmem == self.sharedmem)
-    if has_autotune:
+    has_autotune = hasattr(self, '_autotune')
+    if has_autotune and self._autotune.dynsmem == self.sharedmem:
         return self._autotune
     else:
-        cinfo = self._func.get_info()
-        at = AutoTuner.parse(self.entry_name, cinfo,
-                             cc=self.device.compute_capability)
+        # Get CUDA Function
+        cufunc = self._func.get()
+        at = AutoTuner(info=cufunc.attrs, cc=cufunc.device.compute_capability)
         if at is None:
             raise CompilationInfoUnavailable(
                 "driver does not report compiliation info")
