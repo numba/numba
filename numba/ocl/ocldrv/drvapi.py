@@ -10,7 +10,7 @@ Error handling: Unlike CUDA that is highly regular, error codes
 maybe in different places for different functions. Typically this
 will be:
 - return value, for functions that would otherwise return void.
-- last argument, by reference, for functions where there is a 
+- last argument, by reference, for functions where there is a
   clear return value (for example, "create" functions return the
   created object and have as last argument an optional pointer to
   cl_int to save any error code).
@@ -62,9 +62,12 @@ API_PROTOTYPES = {
     'clGetMemObjectInfo': (cl_int, cl_mem, cl_mem_info, c_size_t, c_void_p, ptr(c_size_t), 0),
 
     'clCreateProgramWithSource': (cl_program, cl_context, cl_uint, ptr(c_char_p), ptr(c_size_t), ptr(cl_int), -1),
+    'clCreateProgramWithBinary': (cl_program, cl_context, cl_uint,
+                                  ptr(cl_device_id), ptr(c_size_t),
+                                  ptr(c_void_p), ptr(cl_int), -1),
     'clBuildProgram': (cl_int, cl_program, cl_uint, ptr(cl_device_id), c_char_p, c_void_p, c_void_p, 0),
-    'clRetainProgram': (cl_int, cl_program, 0), 
-    'clReleaseProgram': (cl_int, cl_program, 0), 
+    'clRetainProgram': (cl_int, cl_program, 0),
+    'clReleaseProgram': (cl_int, cl_program, 0),
     'clGetProgramInfo': (cl_int, cl_program, cl_program_info, c_size_t, c_void_p, ptr(c_size_t), 0),
 
     'clCreateKernel': (cl_kernel, cl_program, c_char_p, ptr(cl_int), -1),

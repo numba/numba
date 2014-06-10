@@ -467,6 +467,19 @@ class Context(OpenCLWrapper):
         program = cl.clCreateProgramWithSource(self.id, 1, ctypes.byref(ptr), None)
         return Program(program, False)
 
+    def create_program_from_binary(self, binary):
+        devs = self._device_ids
+        numdevs = len(devs)
+        bin_lens = [len(binary)] * numdevs
+        binary = ctypes.create_string_buffer(binary, len(binary))
+        binary_ptrs = [ctypes.addressof(binary)] * numdevs
+        binaries = (ctypes.c_void_p * numdevs)(*binary_ptrs)
+        device_list = (cl_device_id * numdevs)(*devs)
+        lengths = (ctypes.c_size_t * numdevs)(*bin_lens)
+        program = cl.clCreateProgramWithBinary(self.id, numdevs, device_list,
+                                               lengths, binaries, None)
+        return Program(program)
+
     def create_command_queue(self, device, out_of_order=False, profiling=False):
         flags = 0
         if out_of_order:
