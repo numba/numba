@@ -1,6 +1,10 @@
 import sys
 import os
 import numba
+import subprocess
+
+subprocess.check_call("conda install --yes pip".split())
+subprocess.check_call("pip install xmlrunner".split())
 
 workspace = os.environ.get('WORKSPACE', '')    # jenkins environment variable
 
