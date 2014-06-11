@@ -9,7 +9,14 @@ if workspace:
 else:
     xmloutput = None
 
-print("xmloutput ", xmloutput )
+try:
+    import xmlrunner
+except ImportError:
+    # Disable xmloutput if xmlrunner is not available
+    xmloutput = None
+
+print("xmloutput ", xmloutput)
+
 if not numba.test(xmloutput=xmloutput):
     print("Test failed")
     sys.exit(1)
