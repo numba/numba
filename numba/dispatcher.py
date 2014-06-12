@@ -18,6 +18,16 @@ class Overloaded(_dispatcher.Dispatcher):
     __numba__ = "py_func"
 
     def __init__(self, py_func, locals={}, targetoptions={}):
+        """
+        Parameters
+        ----------
+        py_func: function object to be compiled
+        locals: dict, optional
+            Mapping of local variable names to Numba types.  Used to override
+            the types deduced by the type inference engine.
+        targetoptions: dict, optional
+            Target-specific config options.
+        """
         self.tm = default_type_manager
 
         argspec = inspect.getargspec(py_func)
@@ -27,11 +37,12 @@ class Overloaded(_dispatcher.Dispatcher):
 
         self.py_func = py_func
         self.func_code = get_code_object(py_func)
+        self.__code__ = self.func_code  # python 3
         self.overloads = {}
 
         self.targetoptions = targetoptions
         self.locals = locals
-        self.doc = py_func.__doc__
+        self.__doc__ = py_func.__doc__
         self._compiling = False
 
         self.targetdescr.typing_context.insert_overloaded(self)
