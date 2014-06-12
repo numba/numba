@@ -2,4 +2,6 @@
 *.o
 *.so
 *.dylib
+*.pyd
+*.pdb
 build
