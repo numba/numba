@@ -5,3 +5,6 @@
 *.pyd
 *.pdb
 build
+docs/_build/
+docs/source/modules/
+
