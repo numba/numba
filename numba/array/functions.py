@@ -18,7 +18,7 @@ for method in array_creation_methods:
 
 
 # All of the following methods force the deferred array to be evaluated
-array_reduce_methods = ['amin', 'amax', 'nanmin', 'nanmax', 'ptp',
+array_reduce_methods = ['amin', 'amax', 'nanmin', 'nanmax', 'ptp', 'max',
     'percentile', 'median', 'average', 'mean', 'std', 'var', 'nanmean',
     'nanstd', 'nanvar', 'corrcoef', 'correlate', 'cov', 'histogram',
     'histogram2d', 'histogramdd', 'bincount', 'digitize', 'sum']
