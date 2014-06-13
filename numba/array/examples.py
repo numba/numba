@@ -42,7 +42,7 @@ def deferred_data_example():
     print result.__repr__()
 
     # force eval with concrete data
-    print result.eval(a1=np.arange(10, dtype='i8'), a2=np.arange(10, dtype='i8'))
+    print result.eval(a1=np.arange(10, dtype='f8'), a2=np.arange(10, dtype='f8'))
     
     # force eval with different concrete data
     print result.eval(a1=np.arange(20, dtype='f8'), a2=np.arange(20, dtype='f8'))
@@ -92,9 +92,9 @@ def where_example():
 
 
 if __name__ == '__main__':
-    simple_example()
+    #simple_example()
     #reduce_example()
-    #deferred_data_example()
+    deferred_data_example()
     #python_mode_example()
     #slice_example()
     #assignment_example()

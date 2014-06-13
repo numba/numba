@@ -21,6 +21,10 @@ class Array(object):
         else:
             self.array_node = ArrayNode(data=data, owners=set([self._ref]))
 
+        self.vectorize_ufunc = None
+        self.vectorize_ufunc_argnames = []
+        self.vectorize_ufunc_args = []
+
     def __del__(self):
         if isinstance(self.array_node, ArrayNode):
             self.array_node.owners.discard(self._ref)
@@ -38,17 +42,27 @@ class Array(object):
             return Value(self.array_node, state=state)
 
         if not isinstance(self.array_node.data, ArrayDataNode):
-            if debug:
-                print codegen.dump(*codegen.build(self, state))
+            if self.vectorize_ufunc is not None:
+                args = []
+                for argname in self.vectorize_ufunc_argnames:
+                    args.append(kwargs.get(argname))
+                return self.vectorize_ufunc(*args)
+            else:
+                if python:
+                    data = Value(self.array_node, state=state)
+                else:
+                    build_data = codegen.build(self, state)
+                    if debug:
+                        print codegen.dump(*build_data)
+                    ufunc, data = codegen.run(*build_data)
+                    self.vectorize_ufunc = ufunc
 
-            if python:
-                data = Value(self.array_node, state=state)
-            else:
-                data = codegen.run(*codegen.build(self, state))
-            if not state['variable_found']:
+                if state['variable_found']:
+                    self.vectorize_ufunc_argnames = build_data[2]
+                    return data
+
                 self.array_node.data = ArrayDataNode(array_data=data)
-            else:
-                return data
+
         return self.array_node.data.array_data
 
     def __str__(self):

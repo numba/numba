@@ -77,13 +77,14 @@ class CodeGen(Case):
 
     @of('VariableDataNode(name)')
     def variable_data_node(self, name):
-        data = self.state['variables'][name]
-        in_str = 'in' + str(len(self.state['inputs']))
-        self.state['inputs'].append(data)
-        self.state['input_names'].append(in_str)
-        self.state['input_types'].append(str(typeof(data).dtype))
-        self.state['variable_found'] = True
-        return in_str
+        if name not in self.state['input_names']:
+            data = self.state['variables'][name]
+            self.state['inputs'].append(data)
+            self.state['input_names'].append(name)
+            self.state['input_types'].append(str(typeof(data).dtype))
+            self.state['variable_found'] = True
+            self.state['variable_names'].append(name)
+        return name
 
     @of('ScalarNode(value)')
     def scalar_node(self, value):
@@ -134,8 +135,9 @@ def build(array, state):
     state['input_names'] = []
     state['input_types'] = []
     state['vectorize_body'] = []
+    state['variable_names'] = []
     output_var = CodeGen(array.array_node, state=state)
-    return (state['inputs'], state['input_names'],
+    return (state['inputs'], state['input_names'], state['variable_names'],
             state['input_types'], state['vectorize_body'], output_var)
 
 
@@ -144,7 +146,7 @@ vectorize_template = ('def foo({0}):\n'
                       '    return {2}\n')
 
 
-def run(inputs, input_names, input_types, vectorize_body, output_var):
+def run(inputs, input_names, variable_names, input_types, vectorize_body, output_var):
 
     ufunc_str = vectorize_template.format(','.join(input_names),
                                           '\n    '.join(vectorize_body),
@@ -155,10 +157,10 @@ def run(inputs, input_names, input_types, vectorize_body, output_var):
     foo = globals()['foo']
 
     ufunc = vectorize('({0},)'.format(','.join(input_types)))(foo)
-    return ufunc(*inputs)
+    return ufunc, ufunc(*inputs)
 
 
-def dump(inputs, input_names, input_types, vectorize_body, output_var):
+def dump(inputs, input_names, variable_names, input_types, vectorize_body, output_var):
     vectorize_str = vectorize_template.format(','.join(input_names),
                                               '\n    '.join(vectorize_body),
                                               output_var)
