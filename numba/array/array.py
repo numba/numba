@@ -61,7 +61,7 @@ class Array(object):
         return ufuncs.add(self, other)
 
     def __radd__(self, other):
-        return ufuncs.add(self, other)
+        return ufuncs.add(other, self)
 
     def __iadd__(self, other):
         self.array_node = ufuncs.add(self, other).array_node
@@ -71,31 +71,31 @@ class Array(object):
         return ufuncs.subtract(self, other)
 
     def __rsub__(self, other):
-        return ufuncs.subtract(self, other)
+        return ufuncs.subtract(other, self)
 
     def __mul__(self, other):
         return ufuncs.multiply(self, other)
 
     def __rmul__(self, other):
-        return ufuncs.multiply(self, other)
+        return ufuncs.multiply(other, self)
 
     def __div__(self, other):
         return ufuncs.division(self, other)
 
     def __rdiv__(self, other):
-        return ufuncs.division(self, other)
+        return ufuncs.division(other, self)
 
     def __truediv__(self, other):
         return ufuncs.division(self, other)
 
     def __rtruediv__(self, other):
-        return ufuncs.division(self, other)
+        return ufuncs.division(other, self)
 
     def __floordiv__(self, other):
         return ufuncs.floor_division(self, other)
 
     def __rfloordiv__(self, other):
-        return ufuncs.floor_division(self, other)
+        return ufuncs.floor_division(other, self)
 
     def __neg__(self):
         return ufuncs.negative(self)
@@ -104,10 +104,11 @@ class Array(object):
         return ufuncs.power(self, other)
 
     def __rpow__(self, other):
-        return ufuncs.power(self, other)
+        return ufuncs.power(other, self)
 
     def __getitem__(self, other):
-        return Array(data=self.eval()[other])
+        data = self.eval()
+        return Array(data=np.array([data[other]]))
 
     def __setitem__(self, key, value):
         data = self.eval()
