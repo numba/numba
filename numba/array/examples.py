@@ -33,19 +33,35 @@ def reduce_example():
 
 
 def deferred_data_example():
-
+    
+    # build array expression with two variable arrays whose data
+    # will be specified later
     a1 = numbarray.Array(name='a1')
     a2 = numbarray.Array(name='a2')
-
     result = a1 + a2
 
     print result.__repr__()
 
     # force eval with concrete data
     print result.eval(a1=np.arange(10, dtype='f8'), a2=np.arange(10, dtype='f8'))
+
+    print result.__repr__()
     
     # force eval with different concrete data
-    print result.eval(a1=np.arange(20, dtype='f8'), a2=np.arange(20, dtype='f8'))
+    print result.eval(a1=np.ones(20), a2=np.ones(20))
+
+    # build array expression with one variable array and one concrete array
+    a1 = numbarray.Array(name='a1')
+    a2 = numbarray.arange(10)
+    result = a1 + a2
+
+    print result.__repr__()
+
+    # force eval with concrete data
+    print result.eval(a1=np.arange(10, dtype='f8'))
+    
+    # force eval with different concrete data
+    print result.eval(a1=np.ones(10, dtype='f8'))
     
 
 def python_mode_example():

@@ -53,7 +53,7 @@ class Value(Case):
 
     @of('ArrayNode(data, owners)')
     def array_node(self, data, owners):
-        return Value(data)
+        return Value(data, state=self.state)
 
     @of('ArrayDataNode(array_data)')
     def array_data_node(self, array_data):
@@ -62,6 +62,12 @@ class Value(Case):
     @of('ScalarNode(value)')
     def scalar_node(self, value):
         return value
+
+    @of('VariableDataNode(name)')
+    def variable_data_node(self, name):
+        if name not in self.state['variables'].keys():
+            raise MissingArgumentError(name)
+        return self.state['variables'][name]
 
     @of('UnaryOperation(operand, op_str)')
     def unary_operation(self, operand, op_str):
@@ -80,3 +86,9 @@ class Value(Case):
     def where_operation(self, cond, left, right):
         return numpy.where(Value(cond), Value(left), Value(right))
 
+    @of('UFuncNode(ufunc, args)')
+    def ufunc_node(self, ufunc, args):
+        new_args = []
+        for arg in args:
+            new_args.append(Value(arg, state=self.state))
+        return ufunc(*new_args)

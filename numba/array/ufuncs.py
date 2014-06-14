@@ -1,11 +1,18 @@
 #from __future__ import division
-from nodes import UnaryOperation, BinaryOperation, ScalarNode
+from nodes import UnaryOperation, BinaryOperation, ScalarNode, ArrayDataNode
 from array import Array, reduce_
+import numpy
 
 
 def create_unary_op(op_str):
     def unary_op(operand):
-        return Array(data=UnaryOperation(operand.array_node, op_str))
+        if isinstance(operand, Array):
+            return Array(data=UnaryOperation(operand.array_node, op_str))
+        # JNB: do for binary ufuncs too
+        elif isinstance(operand, numpy.ndarray):
+            return Array(data=ArrayDataNode(array_data=getattr(numpy, op_str)(operand)))
+        else:
+            return Array(data=ScalarNode(getattr(numpy, op_str)(operand)))
     return unary_op
 
 def create_binary_op(op_str):

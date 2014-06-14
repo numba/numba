@@ -58,4 +58,10 @@ class Repr(Case):
             Repr(left, state={'level':level+1}),
             Repr(right, state={'level':level+1}))
 
-
+    @of('UFuncNode(ufunc, args)')
+    def ufunc_node(self, ufunc, args):
+        level = self.state['level']
+        ufunc_str = '{0}UFuncNode: \n'.format(get_indent(level))
+        for arg in args:
+            ufunc_str = '{0}{1}\n'.format(ufunc_str, Repr(arg, state={'level':level+1}))
+        return ufunc_str

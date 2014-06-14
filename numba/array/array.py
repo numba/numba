@@ -21,10 +21,6 @@ class Array(object):
         else:
             self.array_node = ArrayNode(data=data, owners=set([self._ref]))
 
-        self.vectorize_ufunc = None
-        self.vectorize_ufunc_argnames = []
-        self.vectorize_ufunc_args = []
-
     def __del__(self):
         if isinstance(self.array_node, ArrayNode):
             self.array_node.owners.discard(self._ref)
@@ -35,35 +31,54 @@ class Array(object):
         python = kwargs.get('use_python', False)
         debug = kwargs.get('debug', False)
 
-        variables = dict([(key,value) for key,value in kwargs.items() if key not in expected_args])
-        state = {'variables':variables, 'variable_found':False}
+        # dict for state data when parsing expression graph
+        state = {}
 
+        # When parsing the array expression graph, and a variable array node
+        # is found, the corresponding concrete array in variables dict will
+        # be used in vectorize function.
+        variables = dict([(key,value) for key,value in kwargs.items() if key not in expected_args])
+        state['variables'] = variables
+
+        # If a variable array node is found when parsing expression graph,
+        # this will be set to True
+        state['variable_found'] = False
+
+        # JNB: cases where vectorize function is not needed?
         if isinstance(self.array_node.data, ScalarNode):
             return Value(self.array_node, state=state)
-
-        if not isinstance(self.array_node.data, ArrayDataNode):
-            if self.vectorize_ufunc is not None:
-                args = []
-                for argname in self.vectorize_ufunc_argnames:
-                    args.append(kwargs.get(argname))
-                return self.vectorize_ufunc(*args)
-            else:
-                if python:
-                    data = Value(self.array_node, state=state)
+        elif isinstance(self.array_node.data, ArrayDataNode):
+            return self.array_node.data.array_data
+        elif isinstance(self.array_node.data, UFuncNode):
+            return Value(self.array_node, state=state)
+        elif python:
+            return Value(self.array_node, state=state)
+            
+        # JNB: rename state variable to build_data
+        # JNB: combine codegen build, dump, and run functions with state data
+        # into Builder class
+        codegen.build(self, state)
+        if debug:
+            # JNB: import __future__
+            print codegen.dump(state)
+        result = codegen.run(state)
+        
+        # If variable arrays exist, save compiled vectorize function and
+        # input args as new expression graph, so we can call it again with
+        # different input data for variable arrays.
+        if state['variable_found']:
+            args = []
+            for i, name in enumerate(state['input_names']):
+                if name in state['variable_names']:
+                    args.append(VariableDataNode(name=name))
                 else:
-                    build_data = codegen.build(self, state)
-                    if debug:
-                        print codegen.dump(*build_data)
-                    ufunc, data = codegen.run(*build_data)
-                    self.vectorize_ufunc = ufunc
+                    args.append(ArrayDataNode(array_data=state['inputs'][i]))
+            self.array_node.data = UFuncNode(ufunc=state['ufunc'], args=args)
+            return result
 
-                if state['variable_found']:
-                    self.vectorize_ufunc_argnames = build_data[2]
-                    return data
+        self.array_node.data = ArrayDataNode(array_data=result)
+        return result
 
-                self.array_node.data = ArrayDataNode(array_data=data)
-
-        return self.array_node.data.array_data
 
     def __str__(self):
         return str(self.eval())
@@ -122,7 +137,7 @@ class Array(object):
 
     def __getitem__(self, other):
         data = self.eval()
-        return Array(data=np.array([data[other]]))
+        return Array(data=np.array(data[other]))
 
     def __setitem__(self, key, value):
         data = self.eval()

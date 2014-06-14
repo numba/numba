@@ -57,6 +57,15 @@ op_implementation = {
 }
 
 
+class MissingArgumentError(Exception):
+
+    def __init__(self, arg_name):
+        self.arg_name = arg_name
+
+    def __str__(self):
+        return '{0} argument was not specified'.format(self.arg_name)
+
+
 class CodeGen(Case):
 
     @of('ArrayNode(data, owners)')
@@ -77,12 +86,14 @@ class CodeGen(Case):
 
     @of('VariableDataNode(name)')
     def variable_data_node(self, name):
+        self.state['variable_found'] = True
+        if name not in self.state['variables'].keys():
+            raise MissingArgumentError(name)
         if name not in self.state['input_names']:
             data = self.state['variables'][name]
-            self.state['inputs'].append(data)
             self.state['input_names'].append(name)
+            self.state['inputs'].append(data)
             self.state['input_types'].append(str(typeof(data).dtype))
-            self.state['variable_found'] = True
             self.state['variable_names'].append(name)
         return name
 
@@ -137,8 +148,9 @@ def build(array, state):
     state['vectorize_body'] = []
     state['variable_names'] = []
     output_var = CodeGen(array.array_node, state=state)
-    return (state['inputs'], state['input_names'], state['variable_names'],
-            state['input_types'], state['vectorize_body'], output_var)
+    #return (state['inputs'], state['input_names'], state['variable_names'],
+    #        state['input_types'], state['vectorize_body'], output_var)
+    state['output_var'] = output_var
 
 
 vectorize_template = ('def foo({0}):\n'
@@ -146,23 +158,28 @@ vectorize_template = ('def foo({0}):\n'
                       '    return {2}\n')
 
 
-def run(inputs, input_names, variable_names, input_types, vectorize_body, output_var):
+#def run(inputs, input_names, variable_names, input_types, vectorize_body, output_var):
+def run(state):
 
-    ufunc_str = vectorize_template.format(','.join(input_names),
-                                          '\n    '.join(vectorize_body),
-                                          output_var)
+    ufunc_str = vectorize_template.format(','.join(state['input_names']),
+                                          '\n    '.join(state['vectorize_body']),
+                                          state['output_var'])
 
     code = compile(ufunc_str, '<string>', 'exec')
+    # JNB: better way to build globals?
     exec(code, globals())
     foo = globals()['foo']
 
-    ufunc = vectorize('({0},)'.format(','.join(input_types)))(foo)
-    return ufunc, ufunc(*inputs)
+    print('JNB: run() vectorize')
+    ufunc = vectorize('({0},)'.format(','.join(state['input_types'])))(foo)
+    state['ufunc'] = ufunc
+    return ufunc(*state['inputs'])
 
 
-def dump(inputs, input_names, variable_names, input_types, vectorize_body, output_var):
-    vectorize_str = vectorize_template.format(','.join(input_names),
-                                              '\n    '.join(vectorize_body),
-                                              output_var)
-    return '@vectorize(["({0},)"])\n'.format(','.join(input_types)) + vectorize_str
+#def dump(inputs, input_names, variable_names, input_types, vectorize_body, output_var):
+def dump(state):
+    vectorize_str = vectorize_template.format(','.join(state['input_names']),
+                                              '\n    '.join(state['vectorize_body']),
+                                              state['output_var'])
+    return '@vectorize(["({0},)"])\n'.format(','.join(state['input_types'])) + vectorize_str
     return decorator + ufunc_str
