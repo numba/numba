@@ -11,6 +11,25 @@
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/ndarrayobject.h>
 
+/* Generate correct kind of integer type (int, long) on Python 2, and long
+   on Python 3 */
+static
+PyObject *Numba_pyint_or_pylong_from_longlong(long long val) {
+#if PY_MAJOR_VERSION < 3
+    if (val >= LONG_MIN && val <= LONG_MAX)
+        return PyInt_FromLong((long) val);
+#endif
+    return PyLong_FromLongLong(val);
+}
+
+static
+PyObject *Numba_pyint_or_pylong_from_ulonglong(unsigned long long val) {
+#if PY_MAJOR_VERSION < 3
+    if (val >= LONG_MIN && val <= LONG_MAX)
+        return PyInt_FromLong((long) val);
+#endif
+    return PyLong_FromUnsignedLongLong(val);
+}
 
 /* provide 64-bit division function to 32-bit platforms */
 static
@@ -174,6 +193,8 @@ uint64_t Numba_fptoui(double x) {
 
 #define EXPOSE(Fn, Sym) static void* Sym(void) \
                         { return PyLong_FromVoidPtr(&Fn); }
+EXPOSE(Numba_pyint_or_pylong_from_longlong, get_pyint_or_pylong_from_longlong)
+EXPOSE(Numba_pyint_or_pylong_from_ulonglong, get_pyint_or_pylong_from_ulonglong)
 EXPOSE(Numba_sdiv, get_sdiv)
 EXPOSE(Numba_srem, get_srem)
 EXPOSE(Numba_udiv, get_udiv)
@@ -211,6 +232,8 @@ Expose all math functions
 
 static PyMethodDef ext_methods[] = {
 #define declmethod(func) { #func , ( PyCFunction )func , METH_VARARGS , NULL }
+    declmethod(get_pyint_or_pylong_from_longlong),
+    declmethod(get_pyint_or_pylong_from_ulonglong),
     declmethod(get_sdiv),
     declmethod(get_srem),
     declmethod(get_udiv),

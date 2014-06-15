@@ -30,8 +30,11 @@ def fix_python_api():
                         _helperlib.get_release_record_buffer())
     le.dylib_add_symbol("NumbaRecreateRecord",
                         _helperlib.get_recreate_record())
+    le.dylib_add_symbol("NumbaPyIntOrPyLongFromLongLong",
+                        _helperlib.get_pyint_or_pylong_from_longlong())
+    le.dylib_add_symbol("NumbaPyIntOrPyLongFromUnsignedLongLong",
+                        _helperlib.get_pyint_or_pylong_from_ulonglong())
     le.dylib_add_symbol("PyExc_NameError", id(NameError))
-
 
 
 class PythonAPI(object):
@@ -162,13 +165,21 @@ class PythonAPI(object):
         return self.builder.call(fn, [numobj])
 
     def long_from_ulonglong(self, numobj):
+        '''Return LLVM call to convert native long long to PyLong object.
+
+        On Python 2, this will convert to PyInt if in the necessary range.
+        '''
         fnty = Type.function(self.pyobj, [self.ulonglong])
-        fn = self._get_function(fnty, name="PyLong_FromUnsignedLongLong")
+        fn = self._get_function(fnty, name="NumbaPyIntOrPyLongFromUnsignedLongLong")
         return self.builder.call(fn, [numobj])
 
     def long_from_longlong(self, numobj):
+        '''Return LLVM call to convert native unsigned long long to PyLong object.
+
+        On Python 2, this will convert to PyInt if in the necessary range.
+        '''
         fnty = Type.function(self.pyobj, [self.ulonglong])
-        fn = self._get_function(fnty, name="PyLong_FromLongLong")
+        fn = self._get_function(fnty, name="NumbaPyIntOrPyLongFromLongLong")
         return self.builder.call(fn, [numobj])
 
     def _get_number_operator(self, name):
