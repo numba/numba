@@ -75,7 +75,7 @@ class Interpreter(object):
         # types.
         for aname in self.argspec.args:
             aval = self.get(aname)
-            self.store(aval, aname)
+            self.store(aval, aname, redefine=True)
 
     def _iter_inst(self):
         for blkct, block in enumerate(self.cfa.iterliveblocks()):
@@ -187,8 +187,8 @@ class Interpreter(object):
 
     # --- Scope operations ---
 
-    def store(self, value, name):
-        if self.current_block_offset in self.cfa.backbone:
+    def store(self, value, name, redefine=False):
+        if redefine or self.current_block_offset in self.cfa.backbone:
             target = self.current_scope.redefine(name, loc=self.loc)
         else:
             target = self.current_scope.get_or_define(name, loc=self.loc)
