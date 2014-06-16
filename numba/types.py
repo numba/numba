@@ -482,6 +482,17 @@ class Optional(Type):
         return hash(self.type)
 
 
+# Utils
+
+def is_int_tuple(x):
+    if isinstance(x, Tuple):
+        return all(i in integer_domain for i in x.items)
+    elif isinstance(x, UniTuple):
+        return x.dtype in integer_domain
+
+# Short names
+
+
 pyobject = Type('pyobject')
 none = Dummy('none')
 Any = Dummy('any')

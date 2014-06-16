@@ -628,6 +628,16 @@ class BaseContext(object):
                 tup = builder.insert_value(tup, val, idx)
             return tup
 
+        elif (types.is_int_tuple(toty) and types.is_int_tuple(fromty) and
+                len(toty) == len(fromty)):
+            olditems = cgutils.unpack_tuple(builder, val, len(fromty))
+            items = [self.cast(builder, i, t, toty.dtype)
+                     for i, t in zip(olditems, fromty.items)]
+            tup = self.get_constant_undef(toty)
+            for idx, val in enumerate(items):
+                tup = builder.insert_value(tup, val, idx)
+            return tup
+
         elif toty == types.boolean:
             return self.is_true(builder, fromty, val)
 
@@ -802,7 +812,7 @@ class BaseContext(object):
         n = len(self.exceptions) + errcode.ERROR_COUNT
         self.exceptions[n] = exc
         return n
-    
+
 
 class _wrap_impl(object):
     def __init__(self, imp, context, sig):

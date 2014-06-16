@@ -152,14 +152,20 @@ class BaseContext(object):
     def type_compatibility(self, fromty, toty):
         """
         Returns None or a string describing the conversion e.g. exact, promote,
-        unsafe, safe
+        unsafe, safe, tuple-coerce
         """
         if fromty == toty:
             return 'exact'
+
         elif (isinstance(fromty, types.UniTuple) and
                   isinstance(toty, types.UniTuple) and
                       len(fromty) == len(toty)):
             return self.type_compatibility(fromty.dtype, toty.dtype)
+
+        elif (types.is_int_tuple(fromty) and types.is_int_tuple(toty) and
+                      len(fromty) == len(toty)):
+            return 'int-tuple-coerce'
+
         return self.tm.check_compatible(fromty, toty)
 
     def unify_types(self, *typelist):
@@ -188,6 +194,8 @@ class BaseContext(object):
             sel = numpy.promote_types(a, b)
             # Convert NumPy dtype back to Numba types
             return getattr(types, str(sel))
+        elif d in 'int-tuple-coerce':
+            return types.UniTuple(dtype=types.intp, count=len(first))
         else:
             raise Exception("type_compatibility returned %s" % d)
 

@@ -30,6 +30,21 @@ class TestArgRetCasting(unittest.TestCase):
             self.fail("Should complain about array casting to float32")
 
 
+class TestTupleUnify(unittest.TestCase):
+    def test_int_tuple_unify(self):
+        """
+        Test issue #493
+        """
+        def foo(an_int32, an_int64):
+            a = an_int32, an_int32
+            while True:  # infinite loop
+                a = an_int32, an_int64
+            return a
+
+        args = (types.int32, types.int64)
+        # Check if compilation is successful
+        cres = compile_isolated(foo, args)
+
 
 if __name__ == '__main__':
     unittest.main()
