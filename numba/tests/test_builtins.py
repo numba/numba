@@ -1,7 +1,7 @@
 from __future__ import print_function
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import types, utils
+from numba import typeinfer, types, utils
 import itertools
 import functools
 
@@ -66,6 +66,10 @@ def hex_usecase(x):
 
 def int_usecase(x, base):
     return int(x, base=base)
+
+def locals_usecase(x):
+    y = 5
+    return locals()['y']
 
 def long_usecase(x, base):
     return long(x, base=base)
@@ -322,6 +326,14 @@ class TestBuiltins(unittest.TestCase):
     @unittest.expectedFailure
     def test_int_npm(self):
         self.test_int(flags=no_pyobj_flags)
+
+    def test_locals(self, flags=enable_pyobj_flags):
+        pyfunc = locals_usecase
+        with self.assertRaises(typeinfer.ForbiddenConstruct):
+            cr = compile_isolated(pyfunc, (types.int64,), flags=flags)
+
+    def test_locals_npm(self):
+        self.test_locals(flags=no_pyobj_flags)
 
     @unittest.skipIf(utils.IS_PY3, "long is not available as global is Py3")
     def test_long(self, flags=enable_pyobj_flags):
