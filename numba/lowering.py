@@ -23,6 +23,10 @@ class LoweringError(Exception):
         super(LoweringError, self).__init__("%s\n%s" % (msg, loc.strformat()))
 
 
+class ForbiddenConstruct(LoweringError):
+    pass
+
+
 def default_mangler(name, argtypes):
     codedargs = '.'.join(str(a).replace(' ', '_') for a in argtypes)
     return '.'.join([name, codedargs])
@@ -178,6 +182,7 @@ class BaseLower(object):
         self.blkmap = {}
         self.varmap = {}
         self.firstblk = min(self.fndesc.blocks.keys())
+        self.loc = -1
 
         # Subclass initialization
         self.init()
@@ -224,6 +229,7 @@ class BaseLower(object):
 
     def lower_block(self, block):
         for inst in block.body:
+            self.loc = inst.loc
             try:
                 self.lower_inst(inst)
             except LoweringError:
@@ -783,6 +789,10 @@ class PyLower(BaseLower):
         moddict = self.pyapi.get_module_dict()
         obj = self.pyapi.dict_getitem_string(moddict, name)
         self.incref(obj)  # obj is borrowed
+
+        if value is locals:
+            raise ForbiddenConstruct("builtins locals() is not supported",
+                                     loc=self.loc)
 
         if hasattr(builtins, name):
             obj_is_null = self.is_null(obj)

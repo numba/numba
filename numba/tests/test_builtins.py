@@ -1,12 +1,15 @@
 from __future__ import print_function
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import typeinfer, types, utils
+from numba import typeinfer, lowering, types, utils
 import itertools
 import functools
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
+
+forceobj_flags = Flags()
+forceobj_flags.set("force_pyobject")
 
 no_pyobj_flags = Flags()
 
@@ -117,7 +120,7 @@ class TestBuiltins(unittest.TestCase):
         cfunc = cr.entry_point
         for x in [-1, 0, 1]:
             self.assertEqual(cfunc(x), pyfunc(x))
-    
+
         cr = compile_isolated(pyfunc, (types.float32,), flags=flags)
         cfunc = cr.entry_point
         for x in [-1.1, 0.0, 1.1]:
@@ -125,7 +128,7 @@ class TestBuiltins(unittest.TestCase):
 
     def test_abs_npm(self):
         self.test_abs(flags=no_pyobj_flags)
-    
+
     def test_all(self, flags=enable_pyobj_flags):
         pyfunc = all_usecase
 
@@ -135,11 +138,11 @@ class TestBuiltins(unittest.TestCase):
         y_operands = [-1, 0, 1, None]
         for x, y in itertools.product(x_operands, y_operands):
             self.assertEqual(cfunc(x, y), pyfunc(x, y))
-        
+
     @unittest.expectedFailure
     def test_all_npm(self):
         self.test_all(flags=no_pyobj_flags)
-    
+
     def test_any(self, flags=enable_pyobj_flags):
         pyfunc = any_usecase
 
@@ -149,11 +152,11 @@ class TestBuiltins(unittest.TestCase):
         y_operands = [-1, 0, 1, None]
         for x, y in itertools.product(x_operands, y_operands):
             self.assertEqual(cfunc(x, y), pyfunc(x, y))
-        
+
     @unittest.expectedFailure
     def test_any_npm(self):
         self.test_any(flags=no_pyobj_flags)
-    
+
     def test_bool(self, flags=enable_pyobj_flags):
         pyfunc = bool_usecase
 
@@ -200,7 +203,7 @@ class TestBuiltins(unittest.TestCase):
 
         cr = compile_isolated(pyfunc, (types.int32, types.int32), flags=flags)
         cfunc = cr.entry_point
-        
+
         x_operands = [-1, 0, 1]
         y_operands = [-1, 0, 1]
         for x, y in itertools.product(x_operands, y_operands):
@@ -216,7 +219,7 @@ class TestBuiltins(unittest.TestCase):
 
         cr = compile_isolated(pyfunc, (types.int32, types.int32), flags=flags)
         cfunc = cr.entry_point
-        
+
         x_operands = [-1, 0, 1]
         y_operands = [-1, 0, 1]
         for x, y in itertools.product(x_operands, y_operands):
@@ -276,7 +279,7 @@ class TestBuiltins(unittest.TestCase):
     def test_format(self, flags=enable_pyobj_flags):
         pyfunc = format_usecase
 
-        cr = compile_isolated(pyfunc, (types.string,types.int32,), flags=flags)
+        cr = compile_isolated(pyfunc, (types.string, types.int32,), flags=flags)
         cfunc = cr.entry_point
         x = '{0}'
         for y in [-1, 0, 1]:
@@ -329,8 +332,15 @@ class TestBuiltins(unittest.TestCase):
 
     def test_locals(self, flags=enable_pyobj_flags):
         pyfunc = locals_usecase
-        with self.assertRaises(typeinfer.ForbiddenConstruct):
-            cr = compile_isolated(pyfunc, (types.int64,), flags=flags)
+        if flags is no_pyobj_flags:
+            with self.assertRaises(typeinfer.ForbiddenConstruct):
+                cr = compile_isolated(pyfunc, (types.int64,), flags=flags)
+        else:
+            with self.assertRaises(lowering.ForbiddenConstruct):
+                cr = compile_isolated(pyfunc, (types.int64,), flags=flags)
+
+    def test_locals_forceobj(self):
+        self.test_locals(flags=forceobj_flags)
 
     def test_locals_npm(self):
         self.test_locals(flags=no_pyobj_flags)
@@ -373,7 +383,7 @@ class TestBuiltins(unittest.TestCase):
         pyfunc = max_usecase1
         cr = compile_isolated(pyfunc, (types.int32, types.int32), flags=flags)
         cfunc = cr.entry_point
-        
+
         x_operands = [-1, 0, 1]
         y_operands = [-1, 0, 1]
         for x, y in itertools.product(x_operands, y_operands):
@@ -400,7 +410,7 @@ class TestBuiltins(unittest.TestCase):
         pyfunc = min_usecase1
         cr = compile_isolated(pyfunc, (types.int32, types.int32), flags=flags)
         cfunc = cr.entry_point
-        
+
         x_operands = [-1, 0, 1]
         y_operands = [-1, 0, 1]
         for x, y in itertools.product(x_operands, y_operands):

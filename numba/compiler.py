@@ -72,8 +72,6 @@ class _CompileStatus(object):
 def _fallback_context(status):
     try:
         yield
-    except typeinfer.ForbiddenConstruct:
-        raise
     except Exception as e:
         if not status.can_fallback:
             raise
