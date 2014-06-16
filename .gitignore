@@ -4,7 +4,9 @@
 *.dylib
 *.pyd
 *.pdb
-build
+build/
 docs/_build/
 docs/source/modules/
+dist/
+*.egg-info
 
