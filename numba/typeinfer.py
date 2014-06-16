@@ -39,12 +39,6 @@ class TypingError(Exception):
             super(TypingError, self).__init__("%s" % (msg,))
 
 
-class ForbiddenConstruct(TypingError):
-    """
-    A construct was used that is forbidden even in pyobject mode.
-    """
-
-
 class TypeVar(object):
     def __init__(self, context, var):
         self.context = context
