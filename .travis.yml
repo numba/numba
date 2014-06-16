@@ -9,8 +9,8 @@ python:
 
 branches:
   only:
-    #- master
-    - devel
+    - master
+    #- devel
     #- release
     #- devpatches
 
