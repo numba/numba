@@ -1,4 +1,4 @@
-include *.md *.py *.txt *.asdl CHANGE_LOG AUTHORS
+include README.md setup.py runtests.py versioneer.py CHANGE_LOG AUTHORS LICENSE
 recursive-include docs *.ipynb *.txt *.py Makefile *.rstls
 prune docs/_build
 prune docs/gh-pages

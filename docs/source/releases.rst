@@ -8,6 +8,34 @@
 Release Notes
 ======================
 
+Version 0.13.2
+--------------
+
+Features:
+
+* @vectorize ufunc now can generate SIMD fast path for unit strided array
+* Added cuda.gridsize
+* Added preliminary exception handling (raise exception class)
+
+Fixes:
+
+* UNARY_POSITIVE
+* Handling of closures and dynamically generated functions
+* Global None value
+
+Version 0.13.1
+--------------
+
+Features:
+
+* Initial support for CUDA array slicing
+
+Fixes:
+
+* Indirectly fixes numbapro when the system has a incompatible CUDA driver
+* Fix numba.cuda.detect
+* Export numba.intp and numba.intc
+
 Version 0.13
 ------------
 
