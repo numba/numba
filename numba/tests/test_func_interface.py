@@ -1,7 +1,6 @@
 from __future__ import print_function
 import numba.unittest_support as unittest
 from numba import jit
-import sys
 
 
 class TestFuncInterface(unittest.TestCase):
@@ -37,10 +36,8 @@ class TestFuncInterface(unittest.TestCase):
             return x + y
 
         c_add = jit(add)
-        if sys.version_info[0] >= 3:
-            self.assertEqual(c_add.__code__, add.__code__)
-        else:
-            self.assertEqual(c_add.func_code, add.func_code)
+        self.assertEqual(c_add.__code__, add.__code__)
+        self.assertEqual(c_add.func_code, add.__code__)
 
 
 if __name__ == '__main__':

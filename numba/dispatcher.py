@@ -2,7 +2,6 @@ from __future__ import print_function, division, absolute_import
 import inspect
 import contextlib
 import numpy
-import sys
 import functools
 from numba.config import PYVERSION
 from numba import _dispatcher, compiler, utils
@@ -40,12 +39,10 @@ class Overloaded(_dispatcher.Dispatcher):
         self.py_func = py_func
         functools.update_wrapper(self, py_func)
 
-        # other parts of Numba assume the Python 2 name for code object
-        # so we assign it specifically
+        # other parts of Numba assume the old Python 2 name for code object
         self.func_code = get_code_object(py_func)
-        # but if we are in Python 3, there is a different name for the code object
-        if sys.version_info[0] >= 3:
-            self.__code__ = self.func_code
+        # but newer python uses a different name
+        self.__code__ = self.func_code
 
         self.overloads = {}
 
