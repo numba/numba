@@ -26,6 +26,13 @@ Numba
    tutorial_firststeps.rst
    tutorial_types.rst
 
+**NumPy support**
+
+.. toctree::
+   :maxdepth: 1
+	      
+   numpy_support.rst
+
 **Interfacing with native code**
 
 .. toctree::
