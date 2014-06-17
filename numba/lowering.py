@@ -508,7 +508,7 @@ class Lower(BaseLower):
                         for val, toty, fromty in zip(itemvals, resty, itemtys)]
             tup = self.context.get_constant_undef(resty)
             for i in range(len(castvals)):
-                tup = self.builder.insert_value(tup, itemvals[i], i)
+                tup = self.builder.insert_value(tup, castvals[i], i)
             return tup
 
         raise NotImplementedError(expr)
