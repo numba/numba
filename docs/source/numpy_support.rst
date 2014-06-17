@@ -19,7 +19,16 @@ Supported ufuncs
 
 One objective on *numba* is having all the standard ufuncs in NumPy understood by numba. When a supported ufunc is found when compiling a function, *numba* maps the ufunc to equivalent native code. This allows the use of those ufuncs in *numba* code that gets compiled in no-python mode.
 
+Limitations
+-----------
+
+Right now support for ufuncs is quite limited in no-python mode. Meaning that only a selection of the ufuncs work in no-python mode.
+
+Also, in its current implementation ufuncs working on array will only compile in no-python mode if the output array is explicit. Note that this limitation does not apply when applied to scalars 
+
+
 Following is a list of the different *NumPy* ufuncs that *numba* is aware of, sorted in the same way as in the *NumPy* documentation.
+
 
 Math operations
 ---------------
