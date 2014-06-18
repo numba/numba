@@ -175,7 +175,7 @@ class Overloaded(_dispatcher.Dispatcher):
 
         # Other object
         else:
-            return types.pyobject
+            return getattr(val, "_numba_type_", types.pyobject)
 
 
 INT_TYPES = (int,)
