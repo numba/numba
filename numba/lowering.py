@@ -38,7 +38,7 @@ _dynamic_module = ModuleType(_dynamic_modname)
 
 # Issue #475: locals() is unsupported as calling it naively would give
 # out wrong results.
-_unsupported_builtins = { locals }
+_unsupported_builtins = set([locals])
 
 
 class FunctionDescriptor(object):
