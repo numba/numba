@@ -103,22 +103,31 @@ def auto_attributes(module, typemap, register):
 
     Args
     -----
+    module
+        python module
+
     typemap
         A mapping of python type to numba type
+
+    register
+        a function to register a attribute implementation
     """
 
     def attr_impl(valty, val):
         def core(context, builder, typ, value):
+            # builder, typ, value are unused here
             return context.get_constant(valty, val)
 
         return core
 
-    attrs = dict([(at, getattr(module, at)) for at in dir(module)])
-    for name, val in attrs.items():
+    nbmod = types.Module(module)
+
+    for name in dir(module):
+        val = getattr(module, name)
         vty = type(val)
 
         if vty in typemap:
             valty = typemap[vty]   # get numba type
 
-            register(impl_attribute(types.Module(module), name, valty)(
+            register(impl_attribute(nbmod, name, valty)(
                 attr_impl(valty, val)))

@@ -15,7 +15,6 @@ registry = Registry()
 builtin_global = registry.register_global
 builtin_attr = registry.register_attr
 
-Empty = object()
 
 @builtin_attr
 class NumpyModuleAttribute(AttributeTemplate):
@@ -23,22 +22,15 @@ class NumpyModuleAttribute(AttributeTemplate):
     key = types.Module(numpy)
 
     def generic_resolve(self, value, attr):
-        atval = getattr(numpy, attr, Empty)
-        if atval is Empty:
-            # Reject missing attribute
-            raise AttributeError("numpy does not have attribute '%s'" % attr)
+        atval = getattr(numpy, attr)
 
-        elif isinstance(atval, (int, longint, float, complex)):
-            # Treat NumPy module scalars as constants
-            if isinstance(atval, (int, longint)):
-                return types.intp
-            elif isinstance(atval, float):
-                return types.float64
-            elif isinstance(atval, complex):
-                return types.complex128
-            else:
-                raise AssertionError('unreachable')
-
+        # Treat NumPy module scalars as constants
+        if isinstance(atval, (int, longint)):
+            return types.intp
+        elif isinstance(atval, float):
+            return types.float64
+        elif isinstance(atval, complex):
+            return types.complex128
         else:
             raise NotImplementedError("numpy.%s  is not recognized by numba, "
                                       "yet" % attr)
