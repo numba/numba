@@ -46,7 +46,7 @@ class TestArray(TestCase):
 
     def test_create_arrays_npm(self):
         with self.assertTypingError():
-            self.test_create_arrays(flags=Noflags)
+            self.test_create_arrays(flags=no_pyobj_flags)
 
     def test_create_empty_array(self, flags=enable_pyobj_flags):
         pyfunc = create_empty_array
@@ -59,7 +59,7 @@ class TestArray(TestCase):
 
     def test_create_empty_array_npm(self):
         with self.assertTypingError():
-            self.test_create_empty_array(flags=Noflags)
+            self.test_create_empty_array(flags=no_pyobj_flags)
 
     def test_create_arange(self, flags=enable_pyobj_flags):
         pyfunc = create_arange
@@ -72,7 +72,7 @@ class TestArray(TestCase):
         
     def test_create_arange_npm(self):
         with self.assertTypingError():
-            self.test_create_arange(flags=Noflags)
+            self.test_create_arange(flags=no_pyobj_flags)
 
     def test_create_empty(self, flags=enable_pyobj_flags):
         pyfunc = create_empty
@@ -86,7 +86,7 @@ class TestArray(TestCase):
 
     def test_create_empty_npm(self):
         with self.assertTypingError():
-            self.test_create_empty(flags=Noflags)
+            self.test_create_empty(flags=no_pyobj_flags)
 
     def test_create_ones(self, flags=enable_pyobj_flags):
         pyfunc = create_ones
@@ -99,7 +99,7 @@ class TestArray(TestCase):
 
     def test_create_ones_npm(self):
         with self.assertTypingError():
-            self.test_create_ones(flags=Noflags)
+            self.test_create_ones(flags=no_pyobj_flags)
 
     def test_create_zeros(self, flags=enable_pyobj_flags):
         pyfunc = create_zeros
@@ -112,7 +112,7 @@ class TestArray(TestCase):
 
     def test_create_zeros_npm(self):
         with self.assertTypingError():
-            self.test_create_zeros(flags=Noflags)
+            self.test_create_zeros(flags=no_pyobj_flags)
 
 
 if __name__ == '__main__':
