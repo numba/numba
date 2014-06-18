@@ -19,6 +19,7 @@ class NumpyModuleAttribute(AttributeTemplate):
     key = types.Module(numpy)
 
 
+
 class Numpy_rules_ufunc(AbstractTemplate):
     def generic(self, args, kws):
         assert(self.key.nout == 1) # this function assumes only one output
@@ -26,7 +27,7 @@ class Numpy_rules_ufunc(AbstractTemplate):
         if len(args) > self.key.nin:
             # more args than inputs... assume everything is typed :)
             assert(len(args) == self.key.nargs)
-            
+
             return signature(args[-1], *args)
 
         # else... we must look for the kernel to use, the actual loop that
@@ -44,13 +45,15 @@ class Numpy_rules_ufunc(AbstractTemplate):
             if any(array_arg):
                 # if any argument was an array, the result will be an array
                 ndims = max(*[a.ndim if isinstance(a, types.Array) else 0 for a in args])
-                out = [types.Array(x, ndims, 'A') for x in out] 
+                out = [types.Array(x, ndims, 'A') for x in out]
             out.extend(args)
             return signature(*out)
 
         # At this point if we don't have a candidate, we are out of luck. NumPy won't know
         # how to eval this!
-        raise TypingError("can't resolve ufunc {0} for types {1}".format(key.__name__, args))
+        fmt = "can't resolve ufunc {0} for types {1}"
+        msg = fmt.format(self.key.__name__, args)
+        raise NotImplementedError(msg)
 
 
 def _numpy_ufunc(name):
