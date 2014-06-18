@@ -332,16 +332,13 @@ class TestBuiltins(unittest.TestCase):
 
     def test_locals(self, flags=enable_pyobj_flags):
         pyfunc = locals_usecase
-        if flags is no_pyobj_flags:
-            with self.assertRaises(typeinfer.ForbiddenConstruct):
-                cr = compile_isolated(pyfunc, (types.int64,), flags=flags)
-        else:
-            with self.assertRaises(lowering.ForbiddenConstruct):
-                cr = compile_isolated(pyfunc, (types.int64,), flags=flags)
+        with self.assertRaises(lowering.ForbiddenConstruct):
+            cr = compile_isolated(pyfunc, (types.int64,), flags=flags)
 
     def test_locals_forceobj(self):
         self.test_locals(flags=forceobj_flags)
 
+    @unittest.expectedFailure
     def test_locals_npm(self):
         self.test_locals(flags=no_pyobj_flags)
 

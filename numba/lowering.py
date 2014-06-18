@@ -36,6 +36,10 @@ def default_mangler(name, argtypes):
 _dynamic_modname = '<dynamic>'
 _dynamic_module = ModuleType(_dynamic_modname)
 
+# Issue #475: locals() is unsupported as calling it naively would give
+# out wrong results.
+_unsupported_builtins = set([locals])
+
 
 class FunctionDescriptor(object):
     __slots__ = ('native', 'modname', 'qualname', 'doc', 'blocks', 'typemap',
@@ -790,9 +794,9 @@ class PyLower(BaseLower):
         obj = self.pyapi.dict_getitem_string(moddict, name)
         self.incref(obj)  # obj is borrowed
 
-        if value is locals:
-            raise ForbiddenConstruct("builtins locals() is not supported",
-                                     loc=self.loc)
+        if value in _unsupported_builtins:
+            raise ForbiddenConstruct("builtins %s() is not supported"
+                                     % name, loc=self.loc)
 
         if hasattr(builtins, name):
             obj_is_null = self.is_null(obj)

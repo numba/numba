@@ -870,19 +870,3 @@ builtin_global(bool, types.Function(Bool))
 builtin_global(int, types.Function(Int))
 builtin_global(float, types.Function(Float))
 builtin_global(complex, types.Function(Complex))
-
-
-#------------------------------------------------------------------------------
-
-
-class Locals(AbstractTemplate):
-    key = locals
-
-    def generic(self, args, kws):
-        # Issue #475: locals() gives wrong result when compiled naively
-        # in object mode, raise an error instead.
-        from numba import typeinfer
-        raise typeinfer.ForbiddenConstruct("locals() unsupported")
-
-
-builtin_global(locals, types.Function(Locals))
