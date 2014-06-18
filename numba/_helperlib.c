@@ -44,9 +44,27 @@ void Numba_cpow(Py_complex *a, Py_complex *b, Py_complex *c) {
 static
 int Numba_to_complex(PyObject* obj, Py_complex *out) {
     PyObject* fobj;
+    PyArray_Descr *dtype;
+    double val[2];
+    
+    // Convert from python complex or numpy complex128
     if (PyComplex_Check(obj)) {
         out->real = PyComplex_RealAsDouble(obj);
         out->imag = PyComplex_ImagAsDouble(obj);
+    }
+    // Convert from numpy complex64
+    else if (PyArray_IsScalar(obj, ComplexFloating)) {
+        dtype = PyArray_DescrFromScalar(obj);
+        if (dtype == NULL) {
+            return 0;
+        }
+        if (PyArray_CastScalarDirect(obj, dtype, &val[0], NPY_CDOUBLE) < 0) {
+            Py_DECREF(dtype);
+            return 0;
+        }
+        out->real = val[0];
+        out->imag = val[1];
+        Py_DECREF(dtype);
     } else {
         fobj = PyNumber_Float(obj);
         if (!fobj) return 0;
