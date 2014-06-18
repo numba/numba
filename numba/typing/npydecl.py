@@ -9,15 +9,39 @@ from ..numpy_support import (ufunc_find_matching_loop,
                              numba_types_to_numpy_letter_types,
                              numpy_letter_types_to_numba_types)
 
+from numba.utils import longint
+
 registry = Registry()
 builtin_global = registry.register_global
 builtin_attr = registry.register_attr
+
+Empty = object()
 
 @builtin_attr
 class NumpyModuleAttribute(AttributeTemplate):
     # note: many unary ufuncs are added later on, using setattr
     key = types.Module(numpy)
 
+    def generic_resolve(self, value, attr):
+        atval = getattr(numpy, attr, Empty)
+        if atval is Empty:
+            # Reject missing attribute
+            raise AttributeError("numpy does not have attribute '%s'" % attr)
+
+        elif isinstance(atval, (int, longint, float, complex)):
+            # Treat NumPy module scalars as constants
+            if isinstance(atval, (int, longint)):
+                return types.intp
+            elif isinstance(atval, float):
+                return types.float64
+            elif isinstance(atval, complex):
+                return types.complex128
+            else:
+                raise AssertionError('unreachable')
+
+        else:
+            raise NotImplementedError("numpy.%s  is not recognized by numba, "
+                                      "yet" % attr)
 
 
 class Numpy_rules_ufunc(AbstractTemplate):

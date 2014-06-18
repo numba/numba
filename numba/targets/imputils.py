@@ -96,3 +96,29 @@ builtin_registry = Registry()
 builtin = builtin_registry.register
 builtin_attr = builtin_registry.register_attr
 
+
+def auto_attributes(module, typemap, register):
+    """
+    Automatically generate attribute function for a module
+
+    Args
+    -----
+    typemap
+        A mapping of python type to numba type
+    """
+
+    def attr_impl(valty, val):
+        def core(context, builder, typ, value):
+            return context.get_constant(valty, val)
+
+        return core
+
+    attrs = dict([(at, getattr(module, at)) for at in dir(module)])
+    for name, val in attrs.items():
+        vty = type(val)
+
+        if vty in typemap:
+            valty = typemap[vty]   # get numba type
+
+            register(impl_attribute(types.Module(module), name, valty)(
+                attr_impl(valty, val)))

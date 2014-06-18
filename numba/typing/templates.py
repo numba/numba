@@ -217,7 +217,9 @@ class AttributeTemplate(object):
         if fn is None:
             fn = self.generic_resolve
             if fn is NotImplemented:
-                raise NotImplementedError(value, attr)
+                raise NotImplementedError("Attribute '%s' not "
+                                          "recognized inside %s" % (attr,
+                                                                    value))
             else:
                 return fn(value, attr)
         else:

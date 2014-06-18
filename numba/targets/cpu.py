@@ -42,6 +42,7 @@ class CPUContext(BaseContext):
         # Add target specific implementations
         self.insert_func_defn(mathimpl.registry.functions)
         self.insert_func_defn(npyimpl.registry.functions)
+        self.insert_attr_defn(npyimpl.registry.attributes)
         self.insert_func_defn(operatorimpl.registry.functions)
         self.insert_func_defn(printimpl.registry.functions)
 
