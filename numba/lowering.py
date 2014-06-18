@@ -8,7 +8,7 @@ from llvm.core import Type, Builder, Module
 import llvm.core as lc
 
 from numba import ir, types, cgutils, utils, config, cffi_support
-
+from numba.errors import LoweringError, ForbiddenConstruct
 
 try:
     import builtins
@@ -16,15 +16,6 @@ except ImportError:
     import __builtin__ as builtins
 
 
-class LoweringError(Exception):
-    def __init__(self, msg, loc):
-        self.msg = msg
-        self.loc = loc
-        super(LoweringError, self).__init__("%s\n%s" % (msg, loc.strformat()))
-
-
-class ForbiddenConstruct(LoweringError):
-    pass
 
 
 def default_mangler(name, argtypes):

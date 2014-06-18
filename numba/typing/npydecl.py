@@ -10,6 +10,7 @@ from ..numpy_support import (ufunc_find_matching_loop,
                              numpy_letter_types_to_numba_types)
 
 from numba.utils import longint
+from numba.errors import TypingError
 
 registry = Registry()
 builtin_global = registry.register_global
@@ -69,7 +70,7 @@ class Numpy_rules_ufunc(AbstractTemplate):
         # how to eval this!
         fmt = "can't resolve ufunc {0} for types {1}"
         msg = fmt.format(self.key.__name__, args)
-        raise NotImplementedError(msg)
+        raise TypingError(msg)
 
 
 def _numpy_ufunc(name):
