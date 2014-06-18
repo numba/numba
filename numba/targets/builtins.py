@@ -1776,10 +1776,14 @@ def float_impl(context, builder, sig, args):
 @implement(complex, types.VarArg)
 def complex_impl(context, builder, sig, args):
     if len(sig.args) == 1:
-        [realty] = sig.args
-        [real] = args
-        real = context.cast(builder, real, realty, types.float64)
-        imag = context.get_constant(types.float64, 0)
+        [argty] = sig.args
+        [arg] = args
+        if isinstance(argty, types.Complex):
+            # Cast Complex* to Complex128
+            return context.cast(builder, arg, argty, types.complex128)
+        else:
+            real = context.cast(builder, arg, argty, types.float64)
+            imag = context.get_constant(types.float64, 0)
 
     elif len(sig.args) == 2:
         [realty, imagty] = sig.args
