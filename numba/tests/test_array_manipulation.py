@@ -1,9 +1,11 @@
 from __future__ import print_function
-import numba.unittest_support as unittest
 import numpy as np
+
 from numba.compiler import compile_isolated, Flags
 from numba import types, utils
-from numba.tests import usecases
+import numba.unittest_support as unittest
+from . import usecases
+from .support import TestCase
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -37,7 +39,7 @@ def add_axis2(a, expected):
     return a[np.newaxis,:].shape == expected.shape
 
 
-class TestArrayManipulation(unittest.TestCase):
+class TestArrayManipulation(TestCase):
 
     def test_reshape_array(self, flags=enable_pyobj_flags):
         pyfunc = reshape_array
@@ -51,9 +53,9 @@ class TestArrayManipulation(unittest.TestCase):
         expected = np.arange(9).reshape(3, 3)
         self.assertTrue(cfunc(a, expected))
 
-    @unittest.expectedFailure
     def test_reshape_array_npm(self):
-        self.test_reshape_array(flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.test_reshape_array(flags=no_pyobj_flags)
 
     def test_flatten_array(self, flags=enable_pyobj_flags):
         pyfunc = flatten_array
@@ -67,9 +69,9 @@ class TestArrayManipulation(unittest.TestCase):
         expected = np.arange(9).reshape(3, 3).flatten()
         self.assertTrue(cfunc(a, expected))
 
-    @unittest.expectedFailure
     def test_flatten_array_npm(self):
-        self.test_flatten_array(flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.test_flatten_array(flags=no_pyobj_flags)
 
     def test_ravel_array(self, flags=enable_pyobj_flags):
         pyfunc = ravel_array
@@ -83,9 +85,9 @@ class TestArrayManipulation(unittest.TestCase):
         expected = np.arange(9).reshape(3, 3).ravel()
         self.assertTrue(cfunc(a, expected))
 
-    @unittest.expectedFailure
     def test_ravel_array_npm(self):
-        self.test_ravel_array(flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.test_ravel_array(flags=no_pyobj_flags)
 
     def test_transpose_array(self, flags=enable_pyobj_flags):
         pyfunc = transpose_array
@@ -99,9 +101,9 @@ class TestArrayManipulation(unittest.TestCase):
         expected = np.arange(9).reshape(3, 3).transpose()
         self.assertTrue(cfunc(a, expected))
 
-    @unittest.expectedFailure
     def test_transpose_array_npm(self):
-        self.test_transpose_array(flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.test_transpose_array(flags=no_pyobj_flags)
 
     def test_squeeze_array(self, flags=enable_pyobj_flags):
         pyfunc = squeeze_array
@@ -115,9 +117,9 @@ class TestArrayManipulation(unittest.TestCase):
         expected = np.arange(2*1*3*1*4).reshape(2,1,3,1,4).squeeze()
         self.assertTrue(cfunc(a, expected))
 
-    @unittest.expectedFailure
     def test_squeeze_array_npm(self):
-        self.test_squeeze_array(flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.test_squeeze_array(flags=no_pyobj_flags)
 
     def test_convert_array(self, flags=enable_pyobj_flags):
         pyfunc = convert_array
@@ -131,9 +133,9 @@ class TestArrayManipulation(unittest.TestCase):
         expected = np.arange(9, dtype='f4')
         self.assertTrue(cfunc(a, expected))
 
-    @unittest.expectedFailure
     def test_convert_array_npm(self):
-        self.test_convert_array(flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.test_convert_array(flags=no_pyobj_flags)
 
     def test_add_axis1(self, flags=enable_pyobj_flags):
         pyfunc = add_axis1
@@ -147,9 +149,9 @@ class TestArrayManipulation(unittest.TestCase):
         expected = np.arange(9).reshape(1,3,3)
         self.assertTrue(cfunc(a, expected))
 
-    @unittest.expectedFailure
     def test_add_axis1_npm(self):
-        self.test_add_axis1(flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.test_add_axis1(flags=no_pyobj_flags)
 
     def test_add_axis2(self, flags=enable_pyobj_flags):
         pyfunc = add_axis2
@@ -163,9 +165,9 @@ class TestArrayManipulation(unittest.TestCase):
         expected = np.arange(9).reshape(1,3,3)
         self.assertTrue(cfunc(a, expected))
 
-    @unittest.expectedFailure
     def test_add_axis2_npm(self):
-        self.test_add_axis2(flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.test_add_axis2(flags=no_pyobj_flags)
 
 if __name__ == '__main__':
     unittest.main()
