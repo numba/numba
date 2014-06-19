@@ -1236,34 +1236,6 @@ class TestOperators(unittest.TestCase):
         for val in values:
             self.assertEqual(pyfunc(val), cfunc(val))
 
-    def test_sub_floats(self, flags=enable_pyobj_flags):
-
-        pyfunc = sub_usecase
-
-        x_operands = [-1.1, 0.0, 1.1]
-        y_operands = [-1.1, 0.0, 1.1]
-
-        types_list = [(types.float32, types.float32),
-                      (types.float64, types.float64)]
-
-        self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
-                             flags=flags)
-
-    def test_sub_floats_array(self, flags=enable_pyobj_flags):
-
-        pyfunc = sub_usecase
-
-        array = np.arange(-1, 1, 0.1, dtype=np.float32)
-
-        x_operands = [array]
-        y_operands = [array]
-
-        arraytype = types.Array(types.float32, 1, 'C')
-        types_list = [(arraytype, arraytype)]
-
-        self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
-                           flags=flags)
-
 
 if __name__ == '__main__':
     unittest.main()
