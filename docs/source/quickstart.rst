@@ -14,7 +14,7 @@ compile::
         return x + y
 
 The very basic example above is compiled for any compatible input types
-automatically when the sum1d function is called. The result is a new function
+automatically when the sum function is called. The result is a new function
 with performance comparable to a compiled function written in C (assuming best
 case scenario; more on that later). To compile for specific input types, we
 can tell Numba what those input types are::
