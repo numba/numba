@@ -2,9 +2,9 @@
 Quick Start
 ***********
 
-Numba compiles Python code to LLVM IR which can be natively executed at
-runtime much faster than pure Python code. The first step to using Numba is
-becoming familiar with the jit decorator, which tells Numba which functions to
+Numba compiles Python code to LLVM IR which can be natively executed at runtime
+much faster than pure Python code. The first step to using Numba is becoming
+familiar with the ``jit`` decorator, which tells Numba which functions to
 compile::
 
     from numba import jit
@@ -14,7 +14,7 @@ compile::
         return x + y
 
 The very basic example above is compiled for any compatible input types
-automatically when the sum function is called. The result is a new function
+automatically when the ``sum`` function is called. The result is a new function
 with performance comparable to a compiled function written in C (assuming best
 case scenario; more on that later). To compile for specific input types, we
 can tell Numba what those input types are::
@@ -23,9 +23,9 @@ can tell Numba what those input types are::
     def sum(x, y):
         return x + y
 
-The string above passed to the jit decorator tells Numba the return type is an
+The string above passed to the ``jit`` decorator tells Numba the return type is an
 8 byte float, and the two arguments passed in are also 8 byte floats. The
-string takes the form 'returntype(arg1type, arg2type, ...)'.
+string takes the form ``returntype(arg1type, arg2type, ...)``.
 
 One of the main features of Numba is it's support for NumPy arrays. The
 following example shows how a function can be compiled that takes a NumPy array
@@ -39,12 +39,13 @@ of floats as an input::
         return sum
 
 There are two main things to notice in the example above. The input argument is
-specified by the string 'f8[:]', which means a 1d array of 8 byte floats. A
-2d array would be specified as 'f8[:, :]', a 3d array as 'f8[:, :, :]', and so
-on. The other thing to take note of is the array indexing and shape method call,
-and the fact that we're iterating over a NumPy array using Python. Normally
-this would be terribly slow and would be cause for writing a NumPy ufunc in C,
-but the performance of the code above is the same as NumPy's sum method.
+specified by the string ``f8[:]``, which means a 1d array of 8 byte floats. A
+2d array would be specified as ``f8[:, :]``, a 3d array as ``f8[:, :, :]``, and
+so on. The other thing to take note of is the array indexing and shape method
+call, and the fact that we're iterating over a NumPy array using Python.
+Normally this would be terribly slow and would be cause for writing a NumPy
+ufunc in C, but the performance of the code above is the same as NumPy's
+``sum`` method.
 
 Numba can also infer the array type automatically like other elementary types::
 
@@ -101,15 +102,15 @@ Numba attempts to compile everything down to LLVM IR, but in some cases this
 isn't (yet) possible. If Numba can't infer the type of a variable or doesn't
 support a particular data type, it falls back to using Python objects. This is
 of course much slower. If you're having performance issues and suspect Python
-objects are to blame, you can use the nopython flag to force Numba to abort
+objects are to blame, you can use the ``nopython`` flag to force Numba to abort
 if it can't avoid using Python objects::
 
     @jit(nopython=True):
     def sum1d(array):
         ...
 
-Another useful debugging tool is Numba's new inspect_types method. This can be
-called for any Numba compiled function to get a listing of the Numba IR
+Another useful debugging tool is Numba's new ``inspect_types`` method. This can
+be called for any Numba compiled function to get a listing of the Numba IR
 generated from the Python code as well as the inferred types of each variable::
 
     >>> sum1d.inspect_types()
