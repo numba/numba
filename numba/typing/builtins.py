@@ -411,7 +411,7 @@ class UnaryPositive(UnaryOp):
     ]
 
 
-class CmpOp(ConcreteTemplate):
+class OrderedCmpOp(ConcreteTemplate):
     cases = [
         signature(types.boolean, types.boolean, types.boolean),
 
@@ -430,33 +430,40 @@ class CmpOp(ConcreteTemplate):
     ]
 
 
+class UnorderedCmpOp(ConcreteTemplate):
+    cases = OrderedCmpOp.cases + [
+        signature(types.boolean, types.complex64, types.complex64),
+        signature(types.boolean, types.complex128, types.complex128),
+    ]
+
+
 @builtin
-class CmpOpLt(CmpOp):
+class CmpOpLt(OrderedCmpOp):
     key = '<'
 
 
 @builtin
-class CmpOpLe(CmpOp):
+class CmpOpLe(OrderedCmpOp):
     key = '<='
 
 
 @builtin
-class CmpOpGt(CmpOp):
+class CmpOpGt(OrderedCmpOp):
     key = '>'
 
 
 @builtin
-class CmpOpGe(CmpOp):
+class CmpOpGe(OrderedCmpOp):
     key = '>='
 
 
 @builtin
-class CmpOpEq(CmpOp):
+class CmpOpEq(UnorderedCmpOp):
     key = '=='
 
 
 @builtin
-class CmpOpNe(CmpOp):
+class CmpOpNe(UnorderedCmpOp):
     key = '!='
 
 

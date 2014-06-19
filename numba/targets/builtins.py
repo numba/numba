@@ -914,6 +914,28 @@ def complex_positive_impl(context, builder, sig, args):
     return val
 
 
+def complex_eq_impl(context, builder, sig, args):
+    [cx, cy] = args
+    complexClass = context.make_complex(sig.args[0])
+    x = complexClass(context, builder, value=cx)
+    y = complexClass(context, builder, value=cy)
+
+    reals_are_eq = builder.fcmp(lc.FCMP_OEQ, x.real, y.real)
+    imags_are_eq = builder.fcmp(lc.FCMP_OEQ, x.imag, y.imag)
+    return builder.and_(reals_are_eq, imags_are_eq)
+
+
+def complex_ne_impl(context, builder, sig, args):
+    [cx, cy] = args
+    complexClass = context.make_complex(sig.args[0])
+    x = complexClass(context, builder, value=cx)
+    y = complexClass(context, builder, value=cy)
+
+    reals_are_ne = builder.fcmp(lc.FCMP_UNE, x.real, y.real)
+    imags_are_ne = builder.fcmp(lc.FCMP_UNE, x.imag, y.imag)
+    return builder.or_(reals_are_ne, imags_are_ne)
+
+
 for ty, cls in zip([types.complex64, types.complex128],
                    [Complex64, Complex128]):
     builtin(implement("+", ty, ty)(complex_add_impl))
@@ -924,6 +946,9 @@ for ty, cls in zip([types.complex64, types.complex128],
     builtin(implement("-", ty)(complex_negate_impl))
     builtin(implement("+", ty)(complex_positive_impl))
     # Complex modulo is deprecated in python3
+
+    builtin(implement('==', ty, ty)(complex_eq_impl))
+    builtin(implement('!=', ty, ty)(complex_ne_impl))
 
 
 #------------------------------------------------------------------------------

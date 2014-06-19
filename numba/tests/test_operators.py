@@ -1,11 +1,15 @@
 from __future__ import print_function
-import numba.unittest_support as unittest
+
+import itertools
+import warnings
+
 import numpy as np
+
 from numba.compiler import compile_isolated, Flags
 from numba import types, typeinfer
 from numba.config import PYVERSION
 from numba.tests.true_div_usecase import truediv_usecase
-import itertools
+import numba.unittest_support as unittest
 
 Noflags = Flags()
 
@@ -61,6 +65,25 @@ def negate_usecase(x):
 def unary_positive_usecase(x):
     return +x
 
+def lt_usecase(x, y):
+    return x < y
+
+def le_usecase(x, y):
+    return x <= y
+
+def gt_usecase(x, y):
+    return x > y
+
+def ge_usecase(x, y):
+    return x >= y
+
+def eq_usecase(x, y):
+    return x == y
+
+def ne_usecase(x, y):
+    return x != y
+
+
 class TestOperators(unittest.TestCase):
 
     def run_test_ints(self, pyfunc, x_operands, y_operands, types_list,
@@ -79,6 +102,147 @@ class TestOperators(unittest.TestCase):
             cfunc = cr.entry_point
             for x, y in itertools.product(x_operands, y_operands):
                 self.assertTrue(np.allclose(pyfunc(x, y), cfunc(x, y)))
+
+    def coerce_operand(self, op, numba_type):
+        if hasattr(op, "dtype"):
+            return numba_type.cast_python_value(op)
+        elif numba_type in types.unsigned_domain:
+            return abs(int(op.real))
+        elif numba_type in types.integer_domain:
+            return int(op.real)
+        elif numba_type in types.real_domain:
+            return float(op.real)
+        else:
+            return op
+
+    def run_test_scalar_compare(self, pyfunc, flags=enable_pyobj_flags,
+                                ordered=True):
+        ops = self.compare_scalar_operands
+        types_list = self.compare_types
+        if not ordered:
+            types_list = types_list + self.compare_unordered_types
+        for typ in types_list:
+            cr = compile_isolated(pyfunc, (typ, typ), flags=flags)
+            cfunc = cr.entry_point
+            for x, y in itertools.product(ops, ops):
+                x = self.coerce_operand(x, typ)
+                y = self.coerce_operand(y, typ)
+                expected = pyfunc(x, y)
+                got = cfunc(x, y)
+                # Scalar ops => scalar result
+                self.assertIs(type(got), type(expected))
+                self.assertEqual(got, expected,
+                                 "mismatch with %r (%r, %r)"
+                                 % (typ, x, y))
+
+    def run_test_array_compare(self, pyfunc, flags=enable_pyobj_flags,
+                               ordered=True):
+        ops = np.array(self.compare_scalar_operands)
+        types_list = self.compare_types
+        if not ordered:
+            types_list = types_list + self.compare_unordered_types
+        for typ in types_list:
+            array_type = types.Array(typ, 1, 'C')
+            cr = compile_isolated(pyfunc, (array_type, array_type),
+                                  flags=flags)
+            cfunc = cr.entry_point
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore', np.ComplexWarning)
+                arr = typ.cast_python_value(ops)
+            for i in range(len(arr)):
+                x = arr
+                y = np.concatenate((arr[i:], arr[:i]))
+                expected = pyfunc(x, y)
+                got = cfunc(x, y)
+                # Array ops => array result
+                self.assertEqual(got.dtype, expected.dtype)
+                self.assertTrue(np.all(got == expected),
+                                "mismatch with %r (%r, %r): %r != %r"
+                                % (typ, x, y, got, expected))
+
+    compare_scalar_operands = [-0.5, -1.0 + 1j, -1.0 + 2j, -0.5 + 1j, 1.5]
+    compare_types = [types.int32, types.int64,
+                     types.uint32, types.uint64,
+                     types.float32, types.float64]
+    compare_unordered_types = [types.complex64, types.complex128]
+
+    def test_lt_scalar(self, flags=enable_pyobj_flags):
+        self.run_test_scalar_compare(lt_usecase, flags)
+
+    def test_lt_scalar_npm(self):
+        self.test_lt_scalar(flags=Noflags)
+
+    def test_le_scalar(self, flags=enable_pyobj_flags):
+        self.run_test_scalar_compare(le_usecase, flags)
+
+    def test_le_scalar_npm(self):
+        self.test_le_scalar(flags=Noflags)
+
+    def test_gt_scalar(self, flags=enable_pyobj_flags):
+        self.run_test_scalar_compare(gt_usecase, flags)
+
+    def test_gt_scalar_npm(self):
+        self.test_gt_scalar(flags=Noflags)
+
+    def test_ge_scalar(self, flags=enable_pyobj_flags):
+        self.run_test_scalar_compare(ge_usecase, flags)
+
+    def test_ge_scalar_npm(self):
+        self.test_ge_scalar(flags=Noflags)
+
+    def test_eq_scalar(self, flags=enable_pyobj_flags):
+        self.run_test_scalar_compare(eq_usecase, flags, ordered=False)
+
+    def test_eq_scalar_npm(self):
+        self.test_eq_scalar(flags=Noflags)
+
+    def test_ne_scalar(self, flags=enable_pyobj_flags):
+        self.run_test_scalar_compare(ne_usecase, flags, ordered=False)
+
+    def test_ne_scalar_npm(self):
+        self.test_ne_scalar(flags=Noflags)
+
+    def test_eq_array(self, flags=enable_pyobj_flags):
+        self.run_test_array_compare(eq_usecase, flags, ordered=False)
+
+    @unittest.expectedFailure
+    def test_eq_array_npm(self):
+        self.test_eq_array(flags=Noflags)
+
+    def test_ne_array(self, flags=enable_pyobj_flags):
+        self.run_test_array_compare(ne_usecase, flags, ordered=False)
+
+    @unittest.expectedFailure
+    def test_ne_array_npm(self):
+        self.test_ne_array(flags=Noflags)
+
+    def test_lt_array(self, flags=enable_pyobj_flags):
+        self.run_test_array_compare(lt_usecase, flags)
+
+    @unittest.expectedFailure
+    def test_lt_array_npm(self):
+        self.test_lt_array(flags=Noflags)
+
+    def test_le_array(self, flags=enable_pyobj_flags):
+        self.run_test_array_compare(le_usecase, flags)
+
+    @unittest.expectedFailure
+    def test_le_array_npm(self):
+        self.test_le_array(flags=Noflags)
+
+    def test_gt_array(self, flags=enable_pyobj_flags):
+        self.run_test_array_compare(gt_usecase, flags)
+
+    @unittest.expectedFailure
+    def test_gt_array_npm(self):
+        self.test_gt_array(flags=Noflags)
+
+    def test_ge_array(self, flags=enable_pyobj_flags):
+        self.run_test_array_compare(ge_usecase, flags)
+
+    @unittest.expectedFailure
+    def test_ge_array_npm(self):
+        self.test_ge_array(flags=Noflags)
 
     def test_add_ints(self, flags=enable_pyobj_flags):
 
@@ -1071,6 +1235,34 @@ class TestOperators(unittest.TestCase):
         cfunc = cres.entry_point
         for val in values:
             self.assertEqual(pyfunc(val), cfunc(val))
+
+    def test_sub_floats(self, flags=enable_pyobj_flags):
+
+        pyfunc = sub_usecase
+
+        x_operands = [-1.1, 0.0, 1.1]
+        y_operands = [-1.1, 0.0, 1.1]
+
+        types_list = [(types.float32, types.float32),
+                      (types.float64, types.float64)]
+
+        self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
+                             flags=flags)
+
+    def test_sub_floats_array(self, flags=enable_pyobj_flags):
+
+        pyfunc = sub_usecase
+
+        array = np.arange(-1, 1, 0.1, dtype=np.float32)
+
+        x_operands = [array]
+        y_operands = [array]
+
+        arraytype = types.Array(types.float32, 1, 'C')
+        types_list = [(arraytype, arraytype)]
+
+        self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
+                           flags=flags)
 
 
 if __name__ == '__main__':
