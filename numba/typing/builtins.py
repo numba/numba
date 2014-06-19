@@ -44,9 +44,11 @@ class PrintOthers(AbstractTemplate):
 @builtin
 class Abs(ConcreteTemplate):
     key = types.abs_type
-    intcases = [signature(ty, ty) for ty in types.signed_domain]
-    realcases = [signature(ty, ty) for ty in types.real_domain]
-    cases = intcases + realcases
+    int_cases = [signature(ty, ty) for ty in types.signed_domain]
+    real_cases = [signature(ty, ty) for ty in types.real_domain]
+    complex_cases = [signature(ty.underlying_float, ty)
+                     for ty in types.complex_domain]
+    cases = int_cases + real_cases + complex_cases
 
 
 @builtin
