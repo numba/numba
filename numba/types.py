@@ -4,7 +4,10 @@ the targets to choose their representation.
 """
 from __future__ import print_function, division, absolute_import
 from collections import defaultdict
+
 import numpy
+
+from .utils import total_ordering
 
 
 def _autoincr():
@@ -37,7 +40,7 @@ class Type(object):
         return hash(self.name)
 
     def __eq__(self, other):
-        return self.name == other.name
+        return self.__class__ is other.__class__ and self.name == other.name
 
     def __ne__(self, other):
         return not (self == other)
@@ -87,6 +90,7 @@ class OpaqueType(Type):
         super(OpaqueType, self).__init__(name)
 
 
+@total_ordering
 class Integer(Type):
     def __init__(self, *args, **kws):
         super(Integer, self).__init__(*args, **kws)
@@ -100,16 +104,48 @@ class Integer(Type):
     def cast_python_value(self, value):
         return getattr(numpy, self.name)(value)
 
+    def __lt__(self, other):
+        if self.__class__ is not other.__class__:
+            return NotImplemented
+        if self.signed != other.signed:
+            return NotImplemented
+        return self.bitwidth < other.bitwidth
 
+
+@total_ordering
 class Float(Type):
+    def __init__(self, *args, **kws):
+        super(Float, self).__init__(*args, **kws)
+        # Determine bitwidth
+        assert self.name.startswith('float')
+        bitwidth = int(self.name[5:])
+        self.bitwidth = bitwidth
+
     def cast_python_value(self, value):
         return getattr(numpy, self.name)(value)
 
+    def __lt__(self, other):
+        if self.__class__ is not other.__class__:
+            return NotImplemented
+        return self.bitwidth < other.bitwidth
 
+
+@total_ordering
 class Complex(Type):
+    def __init__(self, *args, **kws):
+        super(Complex, self).__init__(*args, **kws)
+        # Determine bitwidth
+        assert self.name.startswith('complex')
+        bitwidth = int(self.name[7:])
+        self.bitwidth = bitwidth
+
     def cast_python_value(self, value):
         return getattr(numpy, self.name)(value)
 
+    def __lt__(self, other):
+        if self.__class__ is not other.__class__:
+            return NotImplemented
+        return self.bitwidth < other.bitwidth
 
 class Prototype(Type):
     def __init__(self, args, return_type):
