@@ -168,5 +168,5 @@ generated from the Python code as well as the inferred types of each variable::
 
         return sum
 
-For get a better feel of what numba can do, see :ref:`Examples <examples>`.
+For get a better feel of what Numba can do, see :ref:`Examples <examples>`.
 
