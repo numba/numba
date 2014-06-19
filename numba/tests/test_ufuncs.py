@@ -7,9 +7,10 @@ import warnings
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from numba import types, utils
+from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
+from numba import types, typing, utils
 from numba.config import PYVERSION
+from numba.targets import cpu
 from .support import TestCase
 
 is32bits = tuple.__itemsize__ == 4
@@ -34,6 +35,32 @@ def _make_binary_ufunc_usecase(ufunc_name):
     fn = ldict['fn']
     fn.__name__ = "{0}_usecase".format(ufunc_name)
     return fn
+
+
+class CompilationCache(object):
+    """
+    A cache of compilation results for various signatures and flags.
+    This makes the tests significantly faster (or less slow).
+    """
+
+    def __init__(self):
+        self.typingctx = typing.Context()
+        self.targetctx = cpu.CPUContext(self.typingctx)
+        self.cr_cache = {}
+
+    def compile(self, func, args, return_type=None, flags=DEFAULT_FLAGS):
+        """
+        Compile the function or retrieve an already compiled result
+        from the cache.
+        """
+        cache_key = (func, args, return_type, flags)
+        try:
+            cr = self.cr_cache[cache_key]
+        except KeyError:
+            cr = compile_extra(self.typingctx, self.targetctx, func,
+                               args, return_type, flags, locals={})
+            self.cr_cache[cache_key] = cr
+        return cr
 
 
 class TestUFuncs(TestCase):
@@ -64,7 +91,9 @@ class TestUFuncs(TestCase):
             (np.array([-1,0,1], dtype='i4'), types.Array(types.int32, 1, 'C')),
             (np.array([-1,0,1], dtype='i8'), types.Array(types.int64, 1, 'C')),
             (np.array([-0.5, 0.0, 0.5], dtype='f4'), types.Array(types.float32, 1, 'C')),
-            (np.array([-0.5, 0.0, 0.5], dtype='f8'), types.Array(types.float64, 1, 'C'))]
+            (np.array([-0.5, 0.0, 0.5], dtype='f8'), types.Array(types.float64, 1, 'C')),
+            ]
+        self.cache = CompilationCache()
 
     def unary_ufunc_test(self, ufunc_name, flags=enable_pyobj_flags,
                          skip_inputs=[], additional_inputs=[],
@@ -110,7 +139,8 @@ class TestUFuncs(TestCase):
             if iswindows and output_type.dtype is types.uint64:
                 continue
 
-            cr = compile_isolated(pyfunc, (input_type, output_type), flags=flags)
+            cr = self.cache.compile(pyfunc, (input_type, output_type),
+                                    flags=flags)
             cfunc = cr.entry_point
 
             if isinstance(input_operand, np.ndarray):
@@ -199,8 +229,8 @@ class TestUFuncs(TestCase):
             if iswindows and output_type.dtype is types.uint64:
                 continue
 
-            cr = compile_isolated(pyfunc, (input_type, input_type, output_type),
-                                  flags=flags)
+            cr = self.cache.compile(pyfunc, (input_type, input_type, output_type),
+                                    flags=flags)
             cfunc = cr.entry_point
 
             if isinstance(input_operand, np.ndarray):
@@ -765,8 +795,9 @@ class TestUFuncs(TestCase):
                     not isinstance(output_type, types.Array)):
                 continue
 
-            cr = compile_isolated(pyfunc, (input1_type, input2_type, output_type),
-                                  flags=flags)
+            cr = self.cache.compile(pyfunc,
+                                    (input1_type, input2_type, output_type),
+                                    flags=flags)
             cfunc = cr.entry_point
 
             if isinstance(input1_operand, np.ndarray):
@@ -826,8 +857,8 @@ class TestUFuncs(TestCase):
             input_type = types.Array(types.uint64, x.ndim, 'C')
             output_type = types.Array(types.int64, result.ndim, 'C')
 
-            cr = compile_isolated(pyfunc, (input_type, output_type),
-                                  flags=no_pyobj_flags)
+            cr = self.cache.compile(pyfunc, (input_type, output_type),
+                                    flags=no_pyobj_flags)
             cfunc = cr.entry_point
 
             expected = np.zeros(result.shape, dtype=result.dtype)
@@ -858,8 +889,8 @@ class TestUFuncs(TestCase):
             input2_type = types.Array(types.uint64, y.ndim, 'C')
             output_type = types.Array(types.uint64, max(x.ndim, y.ndim), 'C')
 
-            cr = compile_isolated(pyfunc, (input1_type, input2_type, output_type),
-                                  flags=no_pyobj_flags)
+            cr = self.cache.compile(pyfunc, (input1_type, input2_type, output_type),
+                                    flags=no_pyobj_flags)
             cfunc = cr.entry_point
 
             expected = np.add(x, y)
