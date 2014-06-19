@@ -50,7 +50,7 @@ ufunc in C, but the performance of the code above is the same as NumPy's
 Numba can also infer the array type automatically like other elementary types::
 
     @jit
-    def sum1d(array)
+    def sum1d(array):
         ...
 
 Numba's elementary built in types in are summarized in the table below and can
