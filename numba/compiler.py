@@ -234,8 +234,8 @@ def legalize_return_type(return_type, interp, targetctx):
 
     for ret in retstmts:
         if ret.value.name not in arguments:
-            raise ValueError("Only accept returning of array passed into the "
-                              "function as argument")
+            raise TypeError("Only accept returning of array passed into the "
+                            "function as argument")
 
     # Legalized; tag return handling
     targetctx.metadata['return.array'] = 'arg'

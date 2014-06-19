@@ -1,8 +1,11 @@
 from __future__ import print_function
+
+import itertools
+
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import types
-import itertools
+from .support import TestCase
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -160,7 +163,7 @@ def ternary_ifelse_usecase1(x, y):
     return True if x > y else False
 
 
-class TestFlowControl(unittest.TestCase):
+class TestFlowControl(TestCase):
 
     def run_test(self, pyfunc, x_operands, y_operands,
                  flags=enable_pyobj_flags):
@@ -201,9 +204,9 @@ class TestFlowControl(unittest.TestCase):
         self.run_test(for_loop_usecase2, [-10, 0, 10], [-10, 0, 10],
                       flags=flags)
 
-    @unittest.expectedFailure
     def test_for_loop2_npm(self):
-        self.test_for_loop2(flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.test_for_loop2(flags=no_pyobj_flags)
 
     def test_for_loop3(self, flags=enable_pyobj_flags):
         """
@@ -212,9 +215,9 @@ class TestFlowControl(unittest.TestCase):
         self.run_test(for_loop_usecase3, [1], [2],
                       flags=flags)
 
-    @unittest.expectedFailure
     def test_for_loop3_npm(self):
-        self.test_for_loop3(flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.test_for_loop3(flags=no_pyobj_flags)
 
     def test_for_loop4(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase4, [10], [10], flags=flags)

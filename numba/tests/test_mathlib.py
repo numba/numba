@@ -4,6 +4,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags, utils
 from numba import types
+from .support import TestCase
 
 PY27_AND_ABOVE = utils.PYVERSION > (2, 6)
 
@@ -145,7 +146,7 @@ def lgamma(x):
 def pow(x, y):
     return math.pow(x, y)
 
-class TestMathLib(unittest.TestCase):
+class TestMathLib(TestCase):
 
     def run_unary(self, pyfunc, x_types, x_values, flags=enable_pyobj_flags,
                   places=6):
@@ -486,9 +487,9 @@ class TestMathLib(unittest.TestCase):
         self.run_unary(pyfunc, x_types, x_values, flags)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
-    @unittest.expectedFailure
     def test_erf_npm(self):
-        self.test_erf(flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.test_erf(flags=no_pyobj_flags)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_erfc(self, flags=enable_pyobj_flags):
@@ -500,9 +501,9 @@ class TestMathLib(unittest.TestCase):
         self.run_unary(pyfunc, x_types, x_values, flags)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
-    @unittest.expectedFailure
     def test_erfc_npm(self):
-        self.test_erfc(flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.test_erfc(flags=no_pyobj_flags)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_gamma(self, flags=enable_pyobj_flags):
@@ -514,9 +515,9 @@ class TestMathLib(unittest.TestCase):
         self.run_unary(pyfunc, x_types, x_values, flags)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
-    @unittest.expectedFailure
     def test_gamma_npm(self):
-        self.test_gamma(flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.test_gamma(flags=no_pyobj_flags)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_lgamma(self, flags=enable_pyobj_flags):
@@ -528,9 +529,9 @@ class TestMathLib(unittest.TestCase):
         self.run_unary(pyfunc, x_types, x_values, flags)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
-    @unittest.expectedFailure
     def test_lgamma_npm(self):
-        self.test_lgamma(flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.test_lgamma(flags=no_pyobj_flags)
 
     def test_pow(self, flags=enable_pyobj_flags):
         pyfunc = pow
