@@ -4,6 +4,7 @@ import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import types, utils
 from numba.tests import usecases
+from .support import TestCase
 import math
 import numpy as np
 
@@ -87,74 +88,74 @@ def list_reverse(l):
     return l
 
 
-class TestLists(unittest.TestCase):
-    @unittest.expectedFailure
+class TestLists(TestCase):
+
     def test_identity_func(self):
         pyfunc = identity_func
-        cr = compile_isolated(pyfunc, (types.Dummy('list'),))
-        cfunc = cr.entry_point
-        l = range(10)
-        self.assertEqual(cfunc(l), pyfunc(l))
+        with self.assertTypingError():
+            cr = compile_isolated(pyfunc, (types.Dummy('list'),))
+            cfunc = cr.entry_point
+            l = range(10)
+            self.assertEqual(cfunc(l), pyfunc(l))
 
-    @unittest.expectedFailure
     def test_create_list(self):
         pyfunc = create_list
-        cr = compile_isolated(pyfunc, (types.int32, types.int32, types.int32))
-        cfunc = cr.entry_point
-        self.assertEqual(cfunc(1, 2, 3), pyfunc(1, 2, 3))
+        with self.assertTypingError():
+            cr = compile_isolated(pyfunc, (types.int32, types.int32, types.int32))
+            cfunc = cr.entry_point
+            self.assertEqual(cfunc(1, 2, 3), pyfunc(1, 2, 3))
 
-    @unittest.expectedFailure
     def test_create_nested_list(self):
         pyfunc = create_nested_list
-        cr = compile_isolated(pyfunc, (types.int32, types.int32, types.int32,
-            types.int32, types.int32, types.int32))
-        cfunc = cr.entry_point
-        self.assertEqual(cfunc(1, 2, 3, 4, 5, 6), pyfunc(1, 2, 3, 4, 5, 6))
+        with self.assertTypingError():
+            cr = compile_isolated(pyfunc, (types.int32, types.int32, types.int32,
+                types.int32, types.int32, types.int32))
+            cfunc = cr.entry_point
+            self.assertEqual(cfunc(1, 2, 3, 4, 5, 6), pyfunc(1, 2, 3, 4, 5, 6))
 
-    @unittest.expectedFailure
     def test_get_list_item(self):
         pyfunc = get_list_item
-        cr = compile_isolated(pyfunc, (types.int32, types.int32, types.int32))
-        cfunc = cr.entry_point
-        self.assertEqual(cfunc(1,2,3), pyfunc(1,2,3))
+        with self.assertTypingError():
+            cr = compile_isolated(pyfunc, (types.int32, types.int32, types.int32))
+            cfunc = cr.entry_point
+            self.assertEqual(cfunc(1,2,3), pyfunc(1,2,3))
 
-    @unittest.expectedFailure
     def test_get_list_slice(self):
         pyfunc = get_list_slice
-        cr = compile_isolated(pyfunc, (types.Dummy('list'),
-            types.int32, types.int32, types.int32))
-        cfunc = cr.entry_point
-        l = range(10)
-        self.assertEqual(cfunc(l, 0, 10, 2), pyfunc(l, 0, 10, 2))
+        with self.assertTypingError():
+            cr = compile_isolated(pyfunc, (types.Dummy('list'),
+                types.int32, types.int32, types.int32))
+            cfunc = cr.entry_point
+            l = range(10)
+            self.assertEqual(cfunc(l, 0, 10, 2), pyfunc(l, 0, 10, 2))
 
-    @unittest.expectedFailure
     def test_set_list_item(self):
         pyfunc = set_list_item
-        cr = compile_isolated(pyfunc, (types.Dummy('list'),
-            types.int32, types.int32))
-        cfunc = cr.entry_point
-        l = range(10)
-        self.assertEqual(cfunc(l, 0, 999), pyfunc(l, 0, 999))
+        with self.assertTypingError():
+            cr = compile_isolated(pyfunc, (types.Dummy('list'),
+                types.int32, types.int32))
+            cfunc = cr.entry_point
+            l = range(10)
+            self.assertEqual(cfunc(l, 0, 999), pyfunc(l, 0, 999))
 
-    @unittest.expectedFailure
     def test_set_list_slice(self):
         pyfunc = set_list_slice
-        cr = compile_isolated(pyfunc, (types.Dummy('list'),
-            types.int32, types.int32, types.int32, types.int32))
-        cfunc = cr.entry_point
-        l = range(10)
-        x = [999, 999, 999, 999, 999]
-        self.assertEqual(cfunc(l, 0, 10, 2, x), pyfunc(l, 0, 10, 2, x))
+        with self.assertTypingError():
+            cr = compile_isolated(pyfunc, (types.Dummy('list'),
+                types.int32, types.int32, types.int32, types.int32))
+            cfunc = cr.entry_point
+            l = range(10)
+            x = [999, 999, 999, 999, 999]
+            self.assertEqual(cfunc(l, 0, 10, 2, x), pyfunc(l, 0, 10, 2, x))
 
-    @unittest.expectedFailure
     def test_get_list_len(self):
         pyfunc = get_list_len
-        cr = compile_isolated(pyfunc, (types.Dummy('list'),))
-        cfunc = cr.entry_point
-        l = range(10)
-        self.assertEqual(cfunc(l), pyfunc(l))
+        with self.assertTypingError():
+            cr = compile_isolated(pyfunc, (types.Dummy('list'),))
+            cfunc = cr.entry_point
+            l = range(10)
+            self.assertEqual(cfunc(l), pyfunc(l))
 
-    @unittest.expectedFailure
     def test_list_comprehension(self):
         list_tests = [list_comprehension1,
                       list_comprehension2,
@@ -163,84 +164,85 @@ class TestLists(unittest.TestCase):
 
         for test in list_tests:
             pyfunc = test
-            cr = compile_isolated(pyfunc, ())
-            cfunc = cr.entry_point
-            self.assertEqual(cfunc(), pyfunc())
+            with self.assertTypingError():
+                cr = compile_isolated(pyfunc, ())
+                cfunc = cr.entry_point
+                self.assertEqual(cfunc(), pyfunc())
 
-    @unittest.expectedFailure
     def test_list_append(self):
         pyfunc = list_append
-        cr = compile_isolated(pyfunc, (types.Dummy('list'), types.int32))
-        cfunc = cr.entry_point
-        l = range(10)
-        self.assertEqual(cfunc(l, 10), pyfunc(l, 10))
+        with self.assertTypingError():
+            cr = compile_isolated(pyfunc, (types.Dummy('list'), types.int32))
+            cfunc = cr.entry_point
+            l = range(10)
+            self.assertEqual(cfunc(l, 10), pyfunc(l, 10))
 
-    @unittest.expectedFailure
     def test_list_extend(self):
         pyfunc = list_extend
-        cr = compile_isolated(pyfunc, (types.Dummy('list'),
-            types.Dummy('list')))
-        cfunc = cr.entry_point
-        l1 = range(10)
-        l2 = range(10)
-        self.assertEqual(cfunc(l1, l2), pyfunc(l1, l2))
+        with self.assertTypingError():
+            cr = compile_isolated(pyfunc, (types.Dummy('list'),
+                types.Dummy('list')))
+            cfunc = cr.entry_point
+            l1 = range(10)
+            l2 = range(10)
+            self.assertEqual(cfunc(l1, l2), pyfunc(l1, l2))
 
-    @unittest.expectedFailure
     def test_list_insert(self):
         pyfunc = list_insert
-        cr = compile_isolated(pyfunc, (types.Dummy('list'),
-            types.int32, types.int32))
-        cfunc = cr.entry_point
-        l = range(10)
-        self.assertEqual(cfunc(l, 0, 999), pyfunc(l, 0, 999))
+        with self.assertTypingError():
+            cr = compile_isolated(pyfunc, (types.Dummy('list'),
+                types.int32, types.int32))
+            cfunc = cr.entry_point
+            l = range(10)
+            self.assertEqual(cfunc(l, 0, 999), pyfunc(l, 0, 999))
 
-    @unittest.expectedFailure
     def test_list_remove(self):
         pyfunc = list_remove
-        cr = compile_isolated(pyfunc, (types.Dummy('list'), types.int32))
-        cfunc = cr.entry_point
-        l = range(10)
-        self.assertEqual(cfunc(l, 1), pyfunc(l, 1))
+        with self.assertTypingError():
+            cr = compile_isolated(pyfunc, (types.Dummy('list'), types.int32))
+            cfunc = cr.entry_point
+            l = range(10)
+            self.assertEqual(cfunc(l, 1), pyfunc(l, 1))
 
-    @unittest.expectedFailure
     def test_list_pop(self):
         pyfunc = list_pop
-        cr = compile_isolated(pyfunc, (types.Dummy('list'),))
-        cfunc = cr.entry_point
-        l = range(10)
-        self.assertEqual(cfunc(l), pyfunc(l))
+        with self.assertTypingError():
+            cr = compile_isolated(pyfunc, (types.Dummy('list'),))
+            cfunc = cr.entry_point
+            l = range(10)
+            self.assertEqual(cfunc(l), pyfunc(l))
 
-    @unittest.expectedFailure
     def test_list_index(self):
         pyfunc = list_index
-        cr = compile_isolated(pyfunc, (types.Dummy('list'), types.int32))
-        cfunc = cr.entry_point
-        l = range(10)
-        self.assertEqual(cfunc(l, 1), pyfunc(l, 1))
+        with self.assertTypingError():
+            cr = compile_isolated(pyfunc, (types.Dummy('list'), types.int32))
+            cfunc = cr.entry_point
+            l = range(10)
+            self.assertEqual(cfunc(l, 1), pyfunc(l, 1))
 
-    @unittest.expectedFailure
     def test_list_count(self):
         pyfunc = list_count
-        cr = compile_isolated(pyfunc, (types.Dummy('list'), types.int32))
-        cfunc = cr.entry_point
-        l = [1,1,2,1]
-        self.assertEqual(cfunc(l, 1), pyfunc(l, 1))
+        with self.assertTypingError():
+            cr = compile_isolated(pyfunc, (types.Dummy('list'), types.int32))
+            cfunc = cr.entry_point
+            l = [1,1,2,1]
+            self.assertEqual(cfunc(l, 1), pyfunc(l, 1))
 
-    @unittest.expectedFailure
     def test_list_sort(self):
         pyfunc = list_sort
-        cr = compile_isolated(pyfunc, (types.Dummy('list'),))
-        cfunc = cr.entry_point
-        l = np.random.randint(10, size=10)
-        self.assertEqual(cfunc(l), pyfunc(l))
+        with self.assertTypingError():
+            cr = compile_isolated(pyfunc, (types.Dummy('list'),))
+            cfunc = cr.entry_point
+            l = np.random.randint(10, size=10)
+            self.assertEqual(cfunc(l), pyfunc(l))
 
-    @unittest.expectedFailure
     def test_list_reverse(self):
         pyfunc = list_reverse
-        cr = compile_isolated(pyfunc, (types.Dummy('list'),))
-        cfunc = cr.entry_point
-        l = range(10)
-        self.assertEqual(cfunc(l), pyfunc(l))
+        with self.assertTypingError():
+            cr = compile_isolated(pyfunc, (types.Dummy('list'),))
+            cfunc = cr.entry_point
+            l = range(10)
+            self.assertEqual(cfunc(l), pyfunc(l))
 
 
 if __name__ == '__main__':

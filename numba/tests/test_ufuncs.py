@@ -1,12 +1,16 @@
 from __future__ import print_function
+
+import itertools
 import sys
 import warnings
-import numba.unittest_support as unittest
+
 import numpy as np
+
+import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import types, utils
 from numba.config import PYVERSION
-import itertools
+from .support import TestCase
 
 is32bits = tuple.__itemsize__ == 4
 iswindows = sys.platform.startswith('win32')
@@ -32,7 +36,7 @@ def _make_binary_ufunc_usecase(ufunc_name):
     return fn
 
 
-class TestUFuncs(unittest.TestCase):
+class TestUFuncs(TestCase):
 
     def setUp(self):
         self.inputs = [
@@ -251,9 +255,9 @@ class TestUFuncs(unittest.TestCase):
     def test_rint_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('rint', flags=flags)
 
-    @unittest.expectedFailure
     def test_rint_ufunc_npm(self):
-        self.test_rint_ufunc(flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.test_rint_ufunc(flags=no_pyobj_flags)
 
     def test_sign_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('sign', flags=flags)
@@ -264,9 +268,9 @@ class TestUFuncs(unittest.TestCase):
     def test_conj_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('conj', flags=flags)
 
-    @unittest.expectedFailure
     def test_conj_ufunc_npm(self):
-        self.test_conj_ufunc(flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.test_conj_ufunc(flags=no_pyobj_flags)
 
     def test_exp_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('exp', flags=flags)
@@ -319,16 +323,16 @@ class TestUFuncs(unittest.TestCase):
     def test_square_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('square', flags=flags)
 
-    @unittest.expectedFailure
     def test_square_ufunc_npm(self):
-        self.test_square_ufunc(flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.test_square_ufunc(flags=no_pyobj_flags)
 
     def test_reciprocal_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('reciprocal', flags=flags)
 
-    @unittest.expectedFailure
     def test_reciprocal_ufunc_npm(self):
-        self.test_reciprocal_ufunc(flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.test_reciprocal_ufunc(flags=no_pyobj_flags)
 
     def test_sin_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('sin', flags=flags)
@@ -419,9 +423,9 @@ class TestUFuncs(unittest.TestCase):
     def test_invertlogical_not_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('invertlogical_not', flags=flags)
 
-    @unittest.expectedFailure
     def test_invertlogical_not_ufunc_npm(self):
-        self.test_invertlogical_not_ufunc(flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.test_invertlogical_not_ufunc(flags=no_pyobj_flags)
 
     def test_floor_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('floor', flags=flags)
@@ -479,30 +483,30 @@ class TestUFuncs(unittest.TestCase):
     def test_logaddexp_ufunc(self):
         self.binary_ufunc_test('logaddexp')
 
-    @unittest.expectedFailure
     def test_logaddexp_ufunc_npm(self):
-        self.binary_ufunc_test('logaddexp', flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.binary_ufunc_test('logaddexp', flags=no_pyobj_flags)
 
     def test_logaddexp2_ufunc(self):
         self.binary_ufunc_test('logaddexp2')
 
-    @unittest.expectedFailure
     def test_logaddexp2_ufunc_npm(self):
-        self.binary_ufunc_test('logaddexp2', flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.binary_ufunc_test('logaddexp2', flags=no_pyobj_flags)
 
     def test_true_divide_ufunc(self):
         self.binary_ufunc_test('true_divide')
 
-    @unittest.expectedFailure
     def test_true_divide_ufunc_npm(self):
-        self.binary_ufunc_test('true_divide', flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.binary_ufunc_test('true_divide', flags=no_pyobj_flags)
 
     def test_floor_divide_ufunc(self):
         self.binary_ufunc_test('floor_divide')
 
-    @unittest.expectedFailure
     def test_floor_divide_ufunc_npm(self):
-        self.binary_ufunc_test('floor_divide', flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.binary_ufunc_test('floor_divide', flags=no_pyobj_flags)
 
     def test_power_ufunc(self):
         self.binary_ufunc_test('power')
@@ -513,23 +517,23 @@ class TestUFuncs(unittest.TestCase):
     def test_remainder_ufunc(self):
         self.binary_ufunc_test('remainder')
 
-    @unittest.expectedFailure
     def test_remainder_ufunc_npm(self):
-        self.binary_ufunc_test('remainder', flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.binary_ufunc_test('remainder', flags=no_pyobj_flags)
 
     def test_mod_ufunc(self):
         self.binary_ufunc_test('mod')
 
-    @unittest.expectedFailure
     def test_mod_ufunc_npm(self):
-        self.binary_ufunc_test('mod', flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.binary_ufunc_test('mod', flags=no_pyobj_flags)
 
     def test_fmod_ufunc(self):
         self.binary_ufunc_test('fmod')
 
-    @unittest.expectedFailure
     def test_fmod_ufunc_npm(self):
-        self.binary_ufunc_test('fmod', flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.binary_ufunc_test('fmod', flags=no_pyobj_flags)
 
     def test_arctan2_ufunc(self):
         self.binary_ufunc_test('arctan2')
@@ -540,157 +544,157 @@ class TestUFuncs(unittest.TestCase):
     def test_hypot_ufunc(self):
         self.binary_ufunc_test('hypot')
 
-    @unittest.expectedFailure
     def test_hypot_ufunc_npm(self):
-        self.binary_ufunc_test('hypot', flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.binary_ufunc_test('hypot', flags=no_pyobj_flags)
 
     def test_bitwise_and_ufunc(self):
         self.binary_int_ufunc_test('bitwise_and')
 
-    @unittest.expectedFailure
     def test_bitwise_and_ufunc_npm(self):
-        self.binary_int_ufunc_test('bitwise_and', flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.binary_int_ufunc_test('bitwise_and', flags=no_pyobj_flags)
 
     def test_bitwise_or_ufunc(self):
         self.binary_int_ufunc_test('bitwise_or')
 
-    @unittest.expectedFailure
     def test_bitwise_or_ufunc_npm(self):
-        self.binary_int_ufunc_test('bitwise_or', flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.binary_int_ufunc_test('bitwise_or', flags=no_pyobj_flags)
 
     def test_bitwise_xor_ufunc(self):
         self.binary_int_ufunc_test('bitwise_xor')
 
-    @unittest.expectedFailure
     def test_bitwise_xor_ufunc_npm(self):
-        self.binary_int_ufunc_test('bitwise_xor', flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.binary_int_ufunc_test('bitwise_xor', flags=no_pyobj_flags)
 
     def test_left_shift_ufunc(self):
         self.binary_int_ufunc_test('left_shift')
 
-    @unittest.expectedFailure
     def test_left_shift_ufunc_npm(self):
-        self.binary_int_ufunc_test('left_shift', flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.binary_int_ufunc_test('left_shift', flags=no_pyobj_flags)
 
     def test_right_shift_ufunc(self):
         self.binary_int_ufunc_test('right_shift')
 
-    @unittest.expectedFailure
     def test_right_shift_ufunc_npm(self):
-        self.binary_int_ufunc_test('right_shift', flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.binary_int_ufunc_test('right_shift', flags=no_pyobj_flags)
 
     def test_greater_ufunc(self):
         self.binary_ufunc_test('greater')
 
-    @unittest.expectedFailure
     def test_greater_ufunc_npm(self):
-        self.binary_ufunc_test('greater', flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.binary_ufunc_test('greater', flags=no_pyobj_flags)
 
     def test_greater_equal_ufunc(self):
         self.binary_ufunc_test('greater_equal')
 
-    @unittest.expectedFailure
     def test_greater_equal_ufunc_npm(self):
-        self.binary_ufunc_test('greater_equal', flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.binary_ufunc_test('greater_equal', flags=no_pyobj_flags)
 
     def test_less_ufunc(self):
         self.binary_ufunc_test('less')
 
-    @unittest.expectedFailure
     def test_less_ufunc_npm(self):
-        self.binary_ufunc_test('less', flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.binary_ufunc_test('less', flags=no_pyobj_flags)
 
     def test_less_equal_ufunc(self):
         self.binary_ufunc_test('less_equal')
 
-    @unittest.expectedFailure
     def test_less_equal_ufunc_npm(self):
-        self.binary_ufunc_test('less_equal', flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.binary_ufunc_test('less_equal', flags=no_pyobj_flags)
 
     def test_not_equal_ufunc(self):
         self.binary_ufunc_test('not_equal')
 
-    @unittest.expectedFailure
     def test_not_equal_ufunc_npm(self):
-        self.binary_ufunc_test('not_equal', flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.binary_ufunc_test('not_equal', flags=no_pyobj_flags)
 
     def test_equal_ufunc(self):
         self.binary_ufunc_test('equal')
 
-    @unittest.expectedFailure
     def test_equal_ufunc_npm(self):
-        self.binary_ufunc_test('equal', flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.binary_ufunc_test('equal', flags=no_pyobj_flags)
 
     def test_logical_and_ufunc(self):
         self.binary_ufunc_test('logical_and')
 
-    @unittest.expectedFailure
     def test_logical_and_ufunc_npm(self):
-        self.binary_ufunc_test('logical_and', flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.binary_ufunc_test('logical_and', flags=no_pyobj_flags)
 
     def test_logical_or_ufunc(self):
         self.binary_ufunc_test('logical_or')
 
-    @unittest.expectedFailure
     def test_logical_or_ufunc_npm(self):
-        self.binary_ufunc_test('logical_or', flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.binary_ufunc_test('logical_or', flags=no_pyobj_flags)
 
     def test_logical_xor_ufunc(self):
         self.binary_ufunc_test('logical_xor')
 
-    @unittest.expectedFailure
     def test_logical_xor_ufunc_npm(self):
-        self.binary_ufunc_test('logical_xor', flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.binary_ufunc_test('logical_xor', flags=no_pyobj_flags)
 
     def test_maximum_ufunc(self):
         self.binary_ufunc_test('maximum')
 
-    @unittest.expectedFailure
     def test_maximum_ufunc_npm(self):
-        self.binary_ufunc_test('maximum', flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.binary_ufunc_test('maximum', flags=no_pyobj_flags)
 
     def test_minimum_ufunc(self):
         self.binary_ufunc_test('minimum')
 
-    @unittest.expectedFailure
     def test_minimum_ufunc_npm(self):
-        self.binary_ufunc_test('minimum', flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.binary_ufunc_test('minimum', flags=no_pyobj_flags)
 
     def test_fmax_ufunc(self):
         self.binary_ufunc_test('fmax')
 
-    @unittest.expectedFailure
     def test_fmax_ufunc_npm(self):
-        self.binary_ufunc_test('fmax', flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.binary_ufunc_test('fmax', flags=no_pyobj_flags)
 
     def test_fmin_ufunc(self):
         self.binary_ufunc_test('fmin')
 
-    @unittest.expectedFailure
     def test_fmin_ufunc_npm(self):
-        self.binary_ufunc_test('fmin', flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.binary_ufunc_test('fmin', flags=no_pyobj_flags)
 
     def test_copysign_ufunc(self):
         self.binary_ufunc_test('copysign')
 
-    @unittest.expectedFailure
     def test_copysign_ufunc_npm(self):
-        self.binary_ufunc_test('copysign', flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.binary_ufunc_test('copysign', flags=no_pyobj_flags)
 
     # FIXME
     @unittest.skipIf(is32bits or iswindows, "Some types are not supported on "
                                        "32-bit "
                                "platform")
-    @unittest.expectedFailure
     def test_ldexp_ufunc(self):
-        self.binary_int_ufunc_test('ldexp')
+        with self.assertTypingError():
+            self.binary_int_ufunc_test('ldexp')
 
     # FIXME
     @unittest.skipIf(is32bits or iswindows,
                      "Some types are not supported on 32-bit platform")
-    @unittest.expectedFailure
     def test_ldexp_ufunc_npm(self):
-        self.binary_int_ufunc_test('ldexp', flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.binary_int_ufunc_test('ldexp', flags=no_pyobj_flags)
 
     def test_binary_ufunc_performance(self):
 

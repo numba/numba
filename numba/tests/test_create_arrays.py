@@ -4,6 +4,7 @@ import numpy as np
 from numba.compiler import compile_isolated, Flags
 from numba import types, utils
 from numba.tests import usecases
+from .support import TestCase
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -32,7 +33,7 @@ def create_zeros(control):
     return (np.zeros(10) == control).all()
 
 
-class TestArray(unittest.TestCase):
+class TestArray(TestCase):
 
     def test_create_arrays(self, flags=enable_pyobj_flags):
         pyfunc = create_array
@@ -43,9 +44,9 @@ class TestArray(unittest.TestCase):
         control = np.array([1,2,3])
         self.assertTrue(cfunc(control))
 
-    @unittest.expectedFailure
     def test_create_arrays_npm(self):
-        self.test_create_arrays(flags=Noflags)
+        with self.assertTypingError():
+            self.test_create_arrays(flags=no_pyobj_flags)
 
     def test_create_empty_array(self, flags=enable_pyobj_flags):
         pyfunc = create_empty_array
@@ -56,9 +57,9 @@ class TestArray(unittest.TestCase):
         control = np.array([])
         self.assertTrue(cfunc(control))
 
-    @unittest.expectedFailure
     def test_create_empty_array_npm(self):
-        self.test_create_empty_array(flags=Noflags)
+        with self.assertTypingError():
+            self.test_create_empty_array(flags=no_pyobj_flags)
 
     def test_create_arange(self, flags=enable_pyobj_flags):
         pyfunc = create_arange
@@ -69,9 +70,9 @@ class TestArray(unittest.TestCase):
         control = np.arange(10)
         self.assertTrue(cfunc(control))
         
-    @unittest.expectedFailure
     def test_create_arange_npm(self):
-        self.test_create_arange(flags=Noflags)
+        with self.assertTypingError():
+            self.test_create_arange(flags=no_pyobj_flags)
 
     def test_create_empty(self, flags=enable_pyobj_flags):
         pyfunc = create_empty
@@ -83,9 +84,9 @@ class TestArray(unittest.TestCase):
         control = np.empty(10)
         self.assertTrue(cfunc(control))
 
-    @unittest.expectedFailure
     def test_create_empty_npm(self):
-        self.test_create_empty(flags=Noflags)
+        with self.assertTypingError():
+            self.test_create_empty(flags=no_pyobj_flags)
 
     def test_create_ones(self, flags=enable_pyobj_flags):
         pyfunc = create_ones
@@ -96,9 +97,9 @@ class TestArray(unittest.TestCase):
         control = np.ones(10)
         self.assertTrue(cfunc(control))
 
-    @unittest.expectedFailure
     def test_create_ones_npm(self):
-        self.test_create_ones(flags=Noflags)
+        with self.assertTypingError():
+            self.test_create_ones(flags=no_pyobj_flags)
 
     def test_create_zeros(self, flags=enable_pyobj_flags):
         pyfunc = create_zeros
@@ -109,9 +110,9 @@ class TestArray(unittest.TestCase):
         control = np.zeros(10)
         self.assertTrue(cfunc(control))
 
-    @unittest.expectedFailure
     def test_create_zeros_npm(self):
-        self.test_create_zeros(flags=Noflags)
+        with self.assertTypingError():
+            self.test_create_zeros(flags=no_pyobj_flags)
 
 
 if __name__ == '__main__':
