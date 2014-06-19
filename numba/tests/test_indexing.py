@@ -4,6 +4,7 @@ import numpy as np
 from numba.compiler import compile_isolated, Flags
 from numba import types, utils
 from numba.tests import usecases
+from .support import TestCase
 
 import decimal
 
@@ -112,7 +113,7 @@ def slicing_2d_usecase_set(a, b, start, stop, step, start2, stop2, step2):
     return a
 
 
-class TestIndexing(unittest.TestCase):
+class TestIndexing(TestCase):
 
     def test_1d_slicing(self, flags=enable_pyobj_flags):
         pyfunc = slicing_1d_usecase
@@ -128,12 +129,12 @@ class TestIndexing(unittest.TestCase):
         self.assertTrue((pyfunc(a, 0, 10, -1) == cfunc(a, 0, 10, -1)).all())
         self.assertTrue((pyfunc(a, 0, 10, 2) == cfunc(a, 0, 10, 2)).all())
 
-    @unittest.expectedFailure
     def test_1d_slicing_npm(self):
         """
         Return of arbitrary array is not supported yet
         """
-        self.test_1d_slicing(flags=Noflags)
+        with self.assertTypingError():
+            self.test_1d_slicing(flags=Noflags)
 
     def test_1d_slicing2(self, flags=enable_pyobj_flags):
         pyfunc = slicing_1d_usecase2
@@ -297,9 +298,9 @@ class TestIndexing(unittest.TestCase):
         self.assertTrue((pyfunc(a, 0, 10, 2, 0, 10, 2) ==
                          cfunc(a, 0, 10, 2, 0, 10, 2)).all())
 
-    @unittest.expectedFailure
     def test_2d_slicing_npm(self):
-        self.test_2d_slicing(flags=Noflags)
+        with self.assertTypingError():
+            self.test_2d_slicing(flags=Noflags)
 
     def test_2d_slicing2(self, flags=enable_pyobj_flags):
         # C layout
@@ -480,9 +481,9 @@ class TestIndexing(unittest.TestCase):
         self.assertTrue((pyfunc(a, -1) == cfunc(a, -1)).all())
 
 
-    @unittest.expectedFailure
     def test_integer_indexing_1d_for_2d(self):
-        self.test_integer_indexing_1d_for_2d(flags=Noflags)
+        with self.assertTypingError():
+            self.test_integer_indexing_1d_for_2d(flags=Noflags)
 
     def test_2d_integer_indexing(self, flags=enable_pyobj_flags):
         # C layout
@@ -540,9 +541,9 @@ class TestIndexing(unittest.TestCase):
         a = np.arange(100, dtype='i4').reshape(10, 10)
         self.assertTrue((pyfunc(a) == cfunc(a)).all())
 
-    @unittest.expectedFailure
     def test_ellipse_npm(self):
-        self.test_ellipse(flags=Noflags)
+        with self.assertTypingError():
+            self.test_ellipse(flags=Noflags)
 
     def test_none_index(self, flags=enable_pyobj_flags):
         pyfunc = none_index_usecase
@@ -554,9 +555,9 @@ class TestIndexing(unittest.TestCase):
         a = np.arange(100, dtype='i4').reshape(10, 10)
         self.assertTrue((pyfunc(a) == cfunc(a)).all())
 
-    @unittest.expectedFailure
     def test_none_index_npm(self):
-        self.test_none_index(flags=Noflags)
+        with self.assertTypingError():
+            self.test_none_index(flags=Noflags)
 
     def test_fancy_index(self, flags=enable_pyobj_flags):
         pyfunc = fancy_index_usecase
@@ -575,9 +576,9 @@ class TestIndexing(unittest.TestCase):
         index = np.array([-1], dtype='i4')
         self.assertTrue((pyfunc(a, index) == cfunc(a, index)).all())
 
-    @unittest.expectedFailure
     def test_fancy_index_npm(self):
-        self.test_fancy_index(flags=Noflags)
+        with self.assertTypingError():
+            self.test_fancy_index(flags=Noflags)
 
     def test_boolean_indexing(self, flags=enable_pyobj_flags):
         pyfunc = boolean_indexing_usecase
@@ -590,9 +591,9 @@ class TestIndexing(unittest.TestCase):
         mask = np.array([True, False, True])
         self.assertTrue((pyfunc(a, mask) == cfunc(a, mask)).all())
 
-    @unittest.expectedFailure
     def test_boolean_indexing_npm(self):
-        self.test_boolean_indexing(flags=Noflags)
+        with self.assertTypingError():
+            self.test_boolean_indexing(flags=Noflags)
 
     def test_conversion_setitem(self, flags=enable_pyobj_flags):
         """ this used to work, and was used in one of the tutorials """
@@ -623,13 +624,13 @@ class TestIndexing(unittest.TestCase):
             cleft = cfunc(np.zeros_like(arg), arg[slice(*test)], *test)
             self.assertTrue((pyleft == cleft).all())
 
-    @unittest.expectedFailure
     def test_1d_slicing_set_npm(self):
         """
         TypingError: Cannot resolve setitem: array(int32, 1d, C)[slice3_type] = ...
         setitem on slices not yet supported.
         """
-        self.test_1d_slicing_set(flags=Noflags)
+        with self.assertTypingError():
+            self.test_1d_slicing_set(flags=Noflags)
 
     def test_2d_slicing_set(self, flags=enable_pyobj_flags):
         pyfunc = slicing_2d_usecase_set
@@ -652,15 +653,13 @@ class TestIndexing(unittest.TestCase):
             cleft = cfunc(np.zeros_like(arg), arg[slice(*test[0:3]), slice(*test[3:6])], *test)
             self.assertTrue((pyleft == cleft).all())
 
-    @unittest.expectedFailure
     def test_2d_slicing_set_npm(self):
         """
         TypingError: TypingError: Cannot resolve setitem: array(int32, 2d, C)[(slice3_type x 2)] = array(int32, 2d, C)
         setitem on slices not yet supported.
         """
-        self.test_2d_slicing_set(flags=Noflags)
-
-
+        with self.assertTypingError():
+            self.test_2d_slicing_set(flags=Noflags)
 
 
 if __name__ == '__main__':

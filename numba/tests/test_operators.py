@@ -1,11 +1,15 @@
 from __future__ import print_function
-import numba.unittest_support as unittest
+
+import itertools
+
 import numpy as np
+
+import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import types, typeinfer
 from numba.config import PYVERSION
+from .support import TestCase
 from numba.tests.true_div_usecase import truediv_usecase
-import itertools
 
 Noflags = Flags()
 
@@ -61,7 +65,7 @@ def negate_usecase(x):
 def unary_positive_usecase(x):
     return +x
 
-class TestOperators(unittest.TestCase):
+class TestOperators(TestCase):
 
     def run_test_ints(self, pyfunc, x_operands, y_operands, types_list,
                       flags=enable_pyobj_flags):
@@ -121,9 +125,9 @@ class TestOperators(unittest.TestCase):
     def test_add_ints_npm(self):
         self.test_add_ints(flags=Noflags)
 
-    @unittest.expectedFailure
     def test_add_ints_array_npm(self):
-        self.test_add_ints_array(flags=Noflags)
+        with self.assertTypingError():
+            self.test_add_ints_array(flags=Noflags)
 
     def test_add_floats(self, flags=enable_pyobj_flags):
 
@@ -155,9 +159,9 @@ class TestOperators(unittest.TestCase):
         self.test_add_floats(flags=Noflags)
 
 
-    @unittest.expectedFailure
     def test_add_floats_array_npm(self):
-        self.test_add_floats_array(flags=Noflags)
+        with self.assertTypingError():
+            self.test_add_floats_array(flags=Noflags)
 
     def test_sub_ints(self, flags=enable_pyobj_flags):
 
@@ -201,9 +205,9 @@ class TestOperators(unittest.TestCase):
     def test_sub_ints_npm(self):
         self.test_sub_ints(flags=Noflags)
 
-    @unittest.expectedFailure
     def test_sub_ints_array_npm(self):
-        self.test_sub_ints_array(flags=Noflags)
+        with self.assertTypingError():
+            self.test_sub_ints_array(flags=Noflags)
 
     def test_sub_floats(self, flags=enable_pyobj_flags):
 
@@ -236,9 +240,9 @@ class TestOperators(unittest.TestCase):
     def test_sub_floats_npm(self):
         self.test_sub_floats(flags=Noflags)
 
-    @unittest.expectedFailure
     def test_sub_floats_array_npm(self):
-        self.test_sub_floats_array(flags=Noflags)
+        with self.assertTypingError():
+            self.test_sub_floats_array(flags=Noflags)
 
     def test_mul_ints(self, flags=enable_pyobj_flags):
 
@@ -281,9 +285,9 @@ class TestOperators(unittest.TestCase):
     def test_mul_ints_npm(self):
         self.test_mul_ints(flags=Noflags)
 
-    @unittest.expectedFailure
     def test_mul_ints_array_npm(self):
-        self.test_mul_ints_array(flags=Noflags)
+        with self.assertTypingError():
+            self.test_mul_ints_array(flags=Noflags)
 
     def test_mul_floats(self, flags=enable_pyobj_flags):
 
@@ -315,9 +319,9 @@ class TestOperators(unittest.TestCase):
     def test_mul_floats_npm(self):
         self.test_mul_floats(flags=Noflags)
 
-    @unittest.expectedFailure
     def test_mul_floats_array_npm(self):
-        self.test_mul_floats_array(flags=Noflags)
+        with self.assertTypingError():
+            self.test_mul_floats_array(flags=Noflags)
 
     def test_div_ints(self, flags=enable_pyobj_flags):
         if PYVERSION >= (3, 0):
@@ -361,9 +365,9 @@ class TestOperators(unittest.TestCase):
     def test_div_ints_npm(self):
         self.test_div_ints(flags=Noflags)
 
-    @unittest.expectedFailure
     def test_div_ints_array_npm(self):
-        self.test_div_ints_array(flags=Noflags)
+        with self.assertTypingError():
+            self.test_div_ints_array(flags=Noflags)
 
     def test_div_floats(self, flags=enable_pyobj_flags):
 
@@ -397,9 +401,9 @@ class TestOperators(unittest.TestCase):
     def test_div_floats_npm(self):
         self.test_div_floats(flags=Noflags)
 
-    @unittest.expectedFailure
     def test_div_floats_array_npm(self):
-        self.test_div_floats_array(flags=Noflags)
+        with self.assertTypingError():
+            self.test_div_floats_array(flags=Noflags)
 
     def test_truediv_ints(self, flags=enable_pyobj_flags):
         pyfunc = truediv_usecase
@@ -490,9 +494,9 @@ class TestOperators(unittest.TestCase):
     def test_mod_ints_npm(self):
         self.test_mod_ints(flags=Noflags)
 
-    @unittest.expectedFailure
     def test_mod_ints_array_npm(self):
-        self.test_mod_ints_array(flags=Noflags)
+        with self.assertTypingError():
+            self.test_mod_ints_array(flags=Noflags)
 
     def test_mod_floats(self, flags=enable_pyobj_flags):
 
@@ -525,9 +529,9 @@ class TestOperators(unittest.TestCase):
     def test_mod_floats_npm(self):
         self.test_mod_floats(flags=Noflags)
 
-    @unittest.expectedFailure
     def test_mod_floats_array_npm(self):
-        self.test_mod_floats_array(flags=Noflags)
+        with self.assertTypingError():
+            self.test_mod_floats_array(flags=Noflags)
 
     def test_pow_ints(self, flags=enable_pyobj_flags):
 
@@ -570,9 +574,9 @@ class TestOperators(unittest.TestCase):
     def test_pow_ints_npm(self):
         self.test_pow_ints(flags=Noflags)
 
-    @unittest.expectedFailure
     def test_pow_ints_array_npm(self):
-        self.test_pow_ints_array(flags=Noflags)
+        with self.assertTypingError():
+            self.test_pow_ints_array(flags=Noflags)
 
     def test_pow_floats(self, flags=enable_pyobj_flags):
 
@@ -629,9 +633,9 @@ class TestOperators(unittest.TestCase):
     def test_pow_floats_npm(self):
         self.test_pow_floats(flags=Noflags)
 
-    @unittest.expectedFailure
     def test_pow_floats_array_npm(self):
-        self.test_pow_floats_array(flags=Noflags)
+        with self.assertTypingError():
+            self.test_pow_floats_array(flags=Noflags)
 
     def test_add_complex(self, flags=enable_pyobj_flags):
         pyfunc = add_usecase
