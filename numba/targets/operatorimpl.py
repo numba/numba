@@ -63,3 +63,6 @@ for ty in types.real_domain:
     register(implement(operator.ge, ty, ty)(builtins.real_ge_impl))
     register(implement(operator.neg, ty)(builtins.real_negate_impl))
 
+for ty in types.complex_domain:
+    register(implement(operator.eq, ty, ty)(builtins.complex_eq_impl))
+    register(implement(operator.ne, ty, ty)(builtins.complex_ne_impl))
