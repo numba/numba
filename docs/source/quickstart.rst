@@ -105,7 +105,7 @@ of course much slower. If you're having performance issues and suspect Python
 objects are to blame, you can use the ``nopython`` flag to force Numba to abort
 if it can't avoid using Python objects::
 
-    @jit(nopython=True):
+    @jit(nopython=True)
     def sum1d(array):
         ...
 
