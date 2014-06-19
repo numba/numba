@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 import inspect
 import contextlib
 import numpy
+import functools
 from numba.config import PYVERSION
 from numba import _dispatcher, compiler, utils
 from numba.typeconv.rules import default_type_manager
@@ -18,6 +19,16 @@ class Overloaded(_dispatcher.Dispatcher):
     __numba__ = "py_func"
 
     def __init__(self, py_func, locals={}, targetoptions={}):
+        """
+        Parameters
+        ----------
+        py_func: function object to be compiled
+        locals: dict, optional
+            Mapping of local variable names to Numba types.  Used to override
+            the types deduced by the type inference engine.
+        targetoptions: dict, optional
+            Target-specific config options.
+        """
         self.tm = default_type_manager
 
         argspec = inspect.getargspec(py_func)
@@ -26,12 +37,17 @@ class Overloaded(_dispatcher.Dispatcher):
         super(Overloaded, self).__init__(self.tm.get_pointer(), argct)
 
         self.py_func = py_func
+        functools.update_wrapper(self, py_func)
+
+        # other parts of Numba assume the old Python 2 name for code object
         self.func_code = get_code_object(py_func)
+        # but newer python uses a different name
+        self.__code__ = self.func_code
+
         self.overloads = {}
 
         self.targetoptions = targetoptions
         self.locals = locals
-        self.doc = py_func.__doc__
         self._compiling = False
 
         self.targetdescr.typing_context.insert_overloaded(self)
