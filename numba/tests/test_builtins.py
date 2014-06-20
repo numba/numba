@@ -127,6 +127,16 @@ class TestBuiltins(TestCase):
         for x in [-1.1, 0.0, 1.1]:
             self.assertAlmostEqual(cfunc(x), pyfunc(x))
 
+        complex_values = [-1.1 + 0.5j, 0.0 + 0j, 1.1 + 3j]
+        cr = compile_isolated(pyfunc, (types.complex64,), flags=flags)
+        cfunc = cr.entry_point
+        for x in complex_values:
+            self.assertAlmostEqual(cfunc(x), pyfunc(x), places=6)
+        cr = compile_isolated(pyfunc, (types.complex128,), flags=flags)
+        cfunc = cr.entry_point
+        for x in complex_values:
+            self.assertAlmostEqual(cfunc(x), pyfunc(x), places=15)
+
     def test_abs_npm(self):
         self.test_abs(flags=no_pyobj_flags)
 
