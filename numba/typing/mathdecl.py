@@ -212,12 +212,26 @@ class Math_atanh(Math_unary):
     key = math.atanh
 
 
-class Math_floor(Math_converter):
-    key = math.floor
+
+# math.floor and math.ceil return float on 2.x, int on 3.x
+if utils.PYVERSION > (3, 0):
+
+    class Math_floor(Math_converter):
+        key = math.floor
 
 
-class Math_ceil(Math_converter):
-    key = math.ceil
+    class Math_ceil(Math_converter):
+        key = math.ceil
+
+
+else:
+
+    class Math_floor(Math_unary):
+        key = math.floor
+
+
+    class Math_ceil(Math_unary):
+        key = math.ceil
 
 
 class Math_trunc(Math_converter):

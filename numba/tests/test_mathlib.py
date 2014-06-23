@@ -161,7 +161,7 @@ class TestMathLib(TestCase):
             got = cfunc(vx)
             expected = pyfunc(vx)
             self.assertAlmostEqual(got, expected, places=places)
-            if isinstance(got, float):
+            if isinstance(expected, float):
                 self.assertIsInstance(got, float)
             else:
                 self.assertIsInstance(got, INT_TYPES)
