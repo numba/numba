@@ -207,7 +207,9 @@ int typecode_fallback(DispatcherObject *dispatcher, PyObject *val) {
 
 
 #define N_DTYPES 12
-static int cached_arycode[3][3][N_DTYPES];
+#define N_NDIM 5    /* Fast path for up to 5D array */
+#define N_LAYOUT 3
+static int cached_arycode[N_NDIM][N_LAYOUT][N_DTYPES];
 
 static int dtype_num_to_typecode(int type_num) {
     int dtype;
@@ -261,8 +263,8 @@ int typecode_ndarray(DispatcherObject *dispatcher, PyArrayObject *ary) {
     int dtype;
     int ndim = PyArray_NDIM(ary);
     int layout = 0;
-    
-    if (ndim <= 0 || ndim > 3) goto FALLBACK;
+
+    if (ndim <= 0 || ndim > N_NDIM) goto FALLBACK;
 
     if (PyArray_ISFARRAY(ary)) {
         layout = 1;
@@ -273,8 +275,8 @@ int typecode_ndarray(DispatcherObject *dispatcher, PyArrayObject *ary) {
     dtype = dtype_num_to_typecode(PyArray_TYPE(ary));
     if (dtype == -1) goto FALLBACK;
 
-    assert(layout < 3);
-    assert(ndim <= 3);
+    assert(layout < N_LAYOUT);
+    assert(ndim <= N_NDIM);
     assert(dtype < N_DTYPES);
 
     typecode = cached_arycode[ndim - 1][layout][dtype];
