@@ -8,6 +8,9 @@ from .support import TestCase
 
 PY27_AND_ABOVE = utils.PYVERSION > (2, 6)
 
+INT_TYPES = (int,)
+if utils.PYVERSION < (3, 0):
+    INT_TYPES += (long,)
 
 
 enable_pyobj_flags = Flags()
@@ -143,8 +146,10 @@ def gamma(x):
 def lgamma(x):
     return math.lgamma(x)
 
+
 def pow(x, y):
     return math.pow(x, y)
+
 
 class TestMathLib(TestCase):
 
@@ -153,7 +158,13 @@ class TestMathLib(TestCase):
         for tx, vx in zip(x_types, x_values):
             cr = compile_isolated(pyfunc, [tx], flags=flags)
             cfunc = cr.entry_point
-            self.assertAlmostEqual(cfunc(vx), pyfunc(vx), places=places)
+            got = cfunc(vx)
+            expected = pyfunc(vx)
+            self.assertAlmostEqual(got, expected, places=places)
+            if isinstance(got, float):
+                self.assertIsInstance(got, float)
+            else:
+                self.assertIsInstance(got, INT_TYPES)
 
     def test_sin(self, flags=enable_pyobj_flags):
         pyfunc = sin

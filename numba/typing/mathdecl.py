@@ -115,6 +115,16 @@ class Math_unary(ConcreteTemplate):
     ]
 
 
+class Math_converter(ConcreteTemplate):
+    cases = [
+        signature(types.intp, types.intp),
+        signature(types.int64, types.int64),
+        signature(types.uint64, types.uint64),
+        signature(types.int64, types.float32),
+        signature(types.int64, types.float64),
+    ]
+
+
 class Math_fabs(Math_unary):
     key = math.fabs
 
@@ -202,15 +212,15 @@ class Math_atanh(Math_unary):
     key = math.atanh
 
 
-class Math_floor(Math_unary):
+class Math_floor(Math_converter):
     key = math.floor
 
 
-class Math_ceil(Math_unary):
+class Math_ceil(Math_converter):
     key = math.ceil
 
 
-class Math_trunc(Math_unary):
+class Math_trunc(Math_converter):
     key = math.trunc
 
 

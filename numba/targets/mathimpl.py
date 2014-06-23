@@ -56,26 +56,30 @@ def unary_math_intr(fn, intrcode):
     unary_math_int_impl(fn, f64impl)
 
 
-def unary_math_extern(fn, f32extern, f64extern):
-    @register
-    @implement(fn, types.float32)
-    def f32impl(context, builder, sig, args):
-        [val] = args
-        mod = cgutils.get_module(builder)
-        fnty = Type.function(Type.float(), [Type.float()])
-        fn = mod.get_or_insert_function(fnty, name=f32extern)
-        return builder.call(fn, (val,))
+def unary_math_extern(fn, f32extern, f64extern, restype=None):
 
-    @register
-    @implement(fn, types.float64)
-    def f64impl(context, builder, sig, args):
-        [val] = args
-        mod = cgutils.get_module(builder)
-        fnty = Type.function(Type.double(), [Type.double()])
-        fn = mod.get_or_insert_function(fnty, name=f64extern)
-        return builder.call(fn, (val,))
+    def float_input_impl(extern_func, input_type):
+        def implementer(context, builder, sig, args):
+            [val] = args
+            mod = cgutils.get_module(builder)
+            lty = context.get_value_type(input_type)
+            fnty = Type.function(lty, [lty])
+            fn = mod.get_or_insert_function(fnty, name=extern_func)
+            res = builder.call(fn, (val,))
+            if restype is None:
+                return res
+            else:
+                return context.cast(builder, res, input_type,
+                                    restype)
 
-    unary_math_int_impl(fn, f64impl)
+        return implementer
+
+    register(implement(fn, types.float32)
+             (float_input_impl(f32extern, types.float32)))
+    register(implement(fn, types.float64)
+             (float_input_impl(f64extern, types.float64)))
+
+    unary_math_int_impl(fn, float_input_impl(f64extern, types.float64))
 
 
 unary_math_intr(math.fabs, lc.INTR_FABS)
@@ -101,10 +105,10 @@ unary_math_extern(math.atanh, "atanhf", "atanh")
 unary_math_extern(math.sinh, "sinhf", "sinh")
 unary_math_extern(math.cosh, "coshf", "cosh")
 unary_math_extern(math.tanh, "tanhf", "tanh")
-unary_math_extern(math.ceil, "ceilf", "ceil")
-unary_math_extern(math.floor, "floorf", "floor")
+unary_math_extern(math.ceil, "ceilf", "ceil", types.int64)
+unary_math_extern(math.floor, "floorf", "floor", types.int64)
 unary_math_extern(math.sqrt, "sqrtf", "sqrt")
-unary_math_extern(math.trunc, "truncf", "trunc")
+unary_math_extern(math.trunc, "truncf", "trunc", types.int64)
 
 
 @register
