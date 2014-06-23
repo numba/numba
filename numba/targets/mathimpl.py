@@ -105,7 +105,6 @@ unary_math_extern(math.atanh, "atanhf", "atanh")
 unary_math_extern(math.sinh, "sinhf", "sinh")
 unary_math_extern(math.cosh, "coshf", "cosh")
 unary_math_extern(math.tanh, "tanhf", "tanh")
-unary_math_extern(math.expm1, "expm1f", "expm1")
 # math.floor and math.ceil return float on 2.x, int on 3.x
 if utils.PYVERSION > (3, 0):
     unary_math_extern(math.ceil, "ceilf", "ceil", types.int64)
