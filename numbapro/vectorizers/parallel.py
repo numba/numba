@@ -22,6 +22,8 @@ NUM_CPU = max(1, multiprocessing.cpu_count())
 
 class ParallelUFuncBuilder(ufuncbuilder.UFuncBuilder):
     def build(self, cres):
+        _launch_threads()
+
         # Buider wrapper for ufunc entry point
         ctx = cres.target_context
         signature = cres.signature
@@ -42,10 +44,33 @@ def build_ufunc_wrapper(ctx, lfunc, signature):
 
 
 def build_ufunc_kernel(ctx, innerfunc, sig):
+    """Wrap the original CPU ufunc with a parallel dispatcher.
+
+    Args
+    ----
+    ctx
+        numba's codegen context
+
+    innerfunc
+        llvm function of the original CPU ufunc
+
+    sig
+        type signature of the ufunc
+
+    Details
+    -------
+
+    Generate a function of the following signature:
+
+    void ufunc_kernel(char **args, npy_intp *dimensions, npy_intp* steps,
+                      void* data)
+
+    Divide the work equally across all threads and let the last thread take all
+    the left over.
+
 
     """
-    char **args, npy_intp *dimensions, npy_intp* steps, void* data
-    """
+    # Declare types and function
     byte_t = lc.Type.int(8)
     byte_ptr_t = lc.Type.pointer(byte_t)
 
@@ -57,10 +82,12 @@ def build_ufunc_kernel(ctx, innerfunc, sig):
 
     bb_entry = lfunc.append_basic_block('')
 
+    # Function body starts
     builder = lc.Builder.new(bb_entry)
 
     args, dimensions, steps, data = lfunc.args
 
+    # Distribute work
     total = builder.load(dimensions)
     ncpu = lc.Constant.int(total.type, NUM_CPU)
 
@@ -74,19 +101,23 @@ def build_ufunc_kernel(ctx, innerfunc, sig):
         count_list.append(space)
 
         if i == NUM_CPU - 1:
+            # Last thread takes all leftover
             builder.store(remain, space)
         else:
             builder.store(count, space)
             remain = builder.sub(remain, count)
 
+    # Array count is input signature plus 1 (due to output array)
     array_count = len(sig.args) + 1
 
+    # Get the increment step for each array
     steps_list = []
     for i in range(array_count):
         ptr = builder.gep(steps, [lc.Constant.int(lc.Type.int(), i)])
         step = builder.load(ptr)
         steps_list.append(step)
 
+    # Get the array argument set for each thread
     args_list = []
     for i in range(NUM_CPU):
         space = builder.alloca(byte_ptr_t,
@@ -94,6 +125,7 @@ def build_ufunc_kernel(ctx, innerfunc, sig):
         args_list.append(space)
 
         for j in range(array_count):
+            # For each array, compute subarray pointer
             dst = builder.gep(space, [lc.Constant.int(lc.Type.int(), j)])
             src = builder.gep(args, [lc.Constant.int(lc.Type.int(), j)])
 
@@ -105,6 +137,7 @@ def build_ufunc_kernel(ctx, innerfunc, sig):
 
             builder.store(addr, dst)
 
+    # Declare external functions
     add_task_ty = lc.Type.function(lc.Type.void(), [byte_ptr_t] * 5)
     empty_fnty = lc.Type.function(lc.Type.void(), ())
     add_task = mod.get_or_insert_function(add_task_ty, name='numba_add_task')
@@ -112,17 +145,18 @@ def build_ufunc_kernel(ctx, innerfunc, sig):
                                              name='numba_synchronize')
     ready = mod.get_or_insert_function(empty_fnty, name='numba_ready')
 
+    # Add tasks for queue; one per thread
     as_void_ptr = lambda arg: builder.bitcast(arg, byte_ptr_t)
 
     for each_args, each_dims in zip(args_list, count_list):
-        # builder.call(innerfunc, [each_args, each_dims, steps, data])
-        innerargs = [as_void_ptr(x)
-                     for x
+        innerargs = [as_void_ptr(x) for x
                      in [innerfunc, each_args, each_dims, steps, data]]
 
         builder.call(add_task, innerargs)
 
+    # Signal worker that we are ready
     builder.call(ready, ())
+    # Wait for workers
     builder.call(synchronize, ())
 
     builder.ret_void()
@@ -136,6 +170,10 @@ class _ProtectEngineDestroy(object):
         self.engine = engine
 
     def __del__(self):
+        """
+        We need to set the CAS function to NULL to prevent the worker threads to
+        execute this function as LLVM is releasing the memory of the function.
+        """
         self.set_cas(0)
 
 
@@ -143,6 +181,11 @@ _keepalive = []
 
 
 def _make_cas_function():
+    """
+    Generate a compare-and-swap function for portability sake.
+    """
+
+    # Generate IR
     mod = lc.Module.new("generate-cas")
     llint = lc.Type.int()
     llintp = lc.Type.pointer(llint)
@@ -154,34 +197,43 @@ def _make_cas_function():
     out = builder.atomic_cmpxchg(ptr, old, repl, ordering='monotonic')
     builder.ret(out)
 
+    # Verify
     mod.verify()
 
+    # Build
     engine = le.EngineBuilder.new(mod).opt(3).create()
     ptr = engine.get_pointer_to_function(fn)
 
+    # Keep engine alive
     _keepalive.append(engine)
     return engine, ptr
 
 
+def _launch_threads():
+    """
+    Initialize work queues and workers
+    """
+    from . import workqueue as lib
+    from ctypes import CFUNCTYPE, c_int
+
+    launch_threads = CFUNCTYPE(None, c_int)(lib.launch_threads)
+    launch_threads(NUM_CPU)
+
+
 def _init():
     from . import workqueue as lib
-    from ctypes import CFUNCTYPE, c_int, c_void_p
+    from ctypes import CFUNCTYPE, c_void_p
 
-    le.dylib_add_symbol('numba_new_thread', lib.new_thread_fnptr)
-    le.dylib_add_symbol('numba_join_thread', lib.join_thread_fnptr)
     le.dylib_add_symbol('numba_add_task', lib.add_task)
     le.dylib_add_symbol('numba_synchronize', lib.synchronize)
     le.dylib_add_symbol('numba_ready', lib.ready)
 
-    launch_threads = CFUNCTYPE(None, c_int)(lib.launch_threads)
     set_cas = CFUNCTYPE(None, c_void_p)(lib.set_cas)
 
     engine, cas_ptr = _make_cas_function()
     set_cas(c_void_p(cas_ptr))
-    launch_threads(NUM_CPU)
 
     _keepalive.append(_ProtectEngineDestroy(set_cas, engine))
-
 
 
 _init()

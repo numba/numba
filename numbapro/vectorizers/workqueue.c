@@ -1,3 +1,14 @@
+/*
+Implement parallel vectorize workqueue.
+
+This keeps a set of worker threads running all the time.
+They wait and spin on a task queue for jobs.
+
+**WARNING**
+This module is not thread-safe.  Adding task to queue is not protected from
+race condition.
+*/
+
 #ifdef _MSC_VER
     /* Windows */
     #include <windows.h>
@@ -15,24 +26,18 @@
 #include "workqueue.h"
 #include "../_pymodule.h"
 
-enum QUEUE_STATE {
-    IDLE = 0, READY, RUNNING, DONE
-};
-
-void take_a_nap(int usec);
-
-typedef int cas_function_t(volatile int *ptr, int old, int val);
 static cas_function_t *cas = NULL;
 
 void cas_wait(volatile int *ptr, const int old, const int repl) {
     int out = repl;
 
     while (1) {
-        if (cas) {
+        if (cas) { /* protect against CAS function being released by LLVM during
+                      interpreter teardown. */
             out = cas(ptr, old, repl);
             if (out == old) return;
         }
-        take_a_nap(1);
+        take_a_nap(1); /* 1us nap */
     }
 }
 
@@ -46,6 +51,7 @@ thread_pointer numba_new_thread(void *worker, void *arg)
     pthread_attr_t attr;
     pthread_t th;
 
+    /* Create detached threads */
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 
@@ -59,6 +65,7 @@ thread_pointer numba_new_thread(void *worker, void *arg)
     return (thread_pointer)th;
 }
 
+/* Unused?
 int numba_join_thread(thread_pointer thread)
 {
     int status;
@@ -66,6 +73,7 @@ int numba_join_thread(thread_pointer thread)
     status = pthread_join(th, NULL);
     return status == 0;
 }
+*/
 
 void take_a_nap(int usec) {
     usleep(usec);
@@ -116,12 +124,21 @@ thread_pointer numba_new_thread(void *worker, void *arg)
     return (thread_pointer)handle;
 }
 
+/* Unused?
 int numba_join_thread(thread_pointer thread)
 {
     uintptr_t handle = (uintptr_t)thread;
     WaitForSingleObject(handle, INFINITE);
 	CloseHandle(handle);
 	return 1;
+}
+*/
+
+void take_a_nap(int usec) {
+    /* MS does not have usec resolution sleep function.
+    Sleeping for zero second will yield this thread.
+    */
+    Sleep(0);
 }
 
 
@@ -180,7 +197,6 @@ void thread_worker(void *arg) {
     }
 }
 
-static
 void launch_threads(int count) {
     if ( !queues ) {
         /* If queues are not yet allocated,
@@ -188,7 +204,7 @@ void launch_threads(int count) {
        int i;
        size_t sz = sizeof(Queue) * count;
 
-       queues = malloc(sz);
+       queues = malloc(sz);     /* this memory will leak */
        memset(queues, 0, sz);
        queue_count = count;
 
@@ -198,21 +214,6 @@ void launch_threads(int count) {
     }
 }
 
-/*
-static
-void lock_queues() {
-    lock(&queue_lock);
-    queue_pivot = 0;
-}
-
-static
-void unlock_queues() {
-    unlock(&queue_lock);
-}
-*/
-
-
-static
 void synchronize() {
     int i;
     for (i = 0; i < queue_count; ++i) {
@@ -220,7 +221,6 @@ void synchronize() {
     }
 }
 
-static
 void ready() {
     int i;
     for (i = 0; i < queue_count; ++i) {
@@ -238,10 +238,7 @@ MOD_INIT(workqueue) {
         return MOD_ERROR_VAL;
 
     /*MARK2*/
-    PyObject_SetAttrString(m, "new_thread_fnptr",
-                           PyLong_FromVoidPtr(&numba_new_thread));
-    PyObject_SetAttrString(m, "join_thread_fnptr",
-                           PyLong_FromVoidPtr(&numba_join_thread));
+
     PyObject_SetAttrString(m, "set_cas",
                            PyLong_FromVoidPtr(&set_cas));
     PyObject_SetAttrString(m, "launch_threads",
