@@ -790,7 +790,7 @@ def complex128_power_impl(context, builder, sig, args):
     with cgutils.ifelse(builder, b_is_two) as (then, otherwise):
         with then:
             # Lower as multiplication
-            res = complex_mult_impl(context, builder, sig, (ca, ca))
+            res = complex_mul_impl(context, builder, sig, (ca, ca))
             cres = Complex128(context, builder, value=res)
             c.real = cres.real
             c.imag = cres.imag
@@ -834,7 +834,7 @@ def complex_sub_impl(context, builder, sig, args):
     return z._getvalue()
 
 
-def complex_mult_impl(context, builder, sig, args):
+def complex_mul_impl(context, builder, sig, args):
     """
     (a+bi)(c+di)=(ac-bd)+i(ad+bc)
     """
@@ -952,7 +952,7 @@ for ty, cls in zip([types.complex64, types.complex128],
                    [Complex64, Complex128]):
     builtin(implement("+", ty, ty)(complex_add_impl))
     builtin(implement("-", ty, ty)(complex_sub_impl))
-    builtin(implement("*", ty, ty)(complex_mult_impl))
+    builtin(implement("*", ty, ty)(complex_mul_impl))
     builtin(implement("/?", ty, ty)(complex_div_impl))
     builtin(implement("/", ty, ty)(complex_div_impl))
     builtin(implement("-", ty)(complex_negate_impl))

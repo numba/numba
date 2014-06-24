@@ -4,6 +4,7 @@ Assorted utilities for use in tests.
 
 import contextlib
 
+from numba.lowering import LoweringError
 from numba.typeinfer import TypingError
 import numba.unittest_support as unittest
 
@@ -17,6 +18,6 @@ class TestCase(unittest.TestCase):
         compiling in nopython mode.
         """
         with self.assertRaises(
-            (TypingError, TypeError, NotImplementedError)) as cm:
+            (LoweringError, TypingError, TypeError, NotImplementedError)) as cm:
             yield cm
 
