@@ -97,6 +97,7 @@ void* Numba_extract_record_data(PyObject *recordobj, Py_buffer *pbuf) {
 
     if (-1 == PyObject_GetBuffer(attrdata, pbuf, 0)){
         #if PY_MAJOR_VERSION >= 3
+            Py_DECREF(attrdata);
             return NULL;
         #else
             /* HACK!!! */
@@ -115,6 +116,7 @@ void* Numba_extract_record_data(PyObject *recordobj, Py_buffer *pbuf) {
                 /* FIXME Ignoring any flag.  Just give me the pointer */
                 proc = (readbufferproc)bp->bf_getreadbuffer;
                 if ((*proc)(hack->b_base, 0, &ptr) <= 0) {
+                    Py_DECREF(attrdata);
                     return NULL;
                 }
                 ptr = (char*)ptr + hack->b_offset;
