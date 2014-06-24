@@ -185,6 +185,8 @@ if IS_PY3:
     def longint(v):
         return int(v)
 
+    unicode = str
+
 else:
     def dict_iteritems(d):
         return d.iteritems()
@@ -206,6 +208,8 @@ else:
 
     def longint(v):
         return long(v)
+
+    unicode = unicode
 
 
 # Backported from Python 3.4

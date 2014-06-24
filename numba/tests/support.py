@@ -27,7 +27,7 @@ class TestCase(unittest.TestCase):
             (LoweringError, TypingError, TypeError, NotImplementedError)) as cm:
             yield cm
 
-    _exact_typesets = [(bool,), INT_TYPES, (str,)]
+    _exact_typesets = [(bool,), INT_TYPES, (str,), (utils.unicode),]
     _approx_typesets = [(float,), (complex,)]
 
     def assertPreciseEqual(self, first, second, prec='exact', msg=None):
