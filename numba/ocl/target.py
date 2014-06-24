@@ -60,6 +60,7 @@ class OCLTargetContext(BaseContext):
     def generate_kernel_wrapper(self, func, argtypes):
         module = func.module
 
+        # Adapt arguments
         adapted = [ArgAdaptor(self, a) for a in argtypes]
         adapted_argtys = [a.adapted_types for a in adapted]
         flattened = tuple(itertools.chain(*adapted_argtys))
@@ -74,14 +75,14 @@ class OCLTargetContext(BaseContext):
             callargs.append(value)
             argoffset += used
 
-        # status, _ = self.call_function(builder, func, types.void, argtypes,
-        #                                callargs)
+        status, _ = self.call_function(builder, func, types.void, argtypes,
+                                       callargs)
         # TODO handle status
 
         builder.ret_void()
         del builder
         # force inline
-        # lc.inline_function(status.code)
+        lc.inline_function(status.code)
 
         module.verify()
         return wrapfn
@@ -112,6 +113,8 @@ class ArgAdaptor(object):
         self.adapted_types = tuple(adapt_argument(ctx, self.type))
 
     def pack(self, builder, args):
+        """Pack arguments to match Numba's calling convention
+        """
         if isinstance(self.type, types.Array):
             arycls = self.ctx.make_array(self.type)
             ary = arycls(self.ctx, builder)
