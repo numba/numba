@@ -187,10 +187,7 @@ class BinOpFloorDiv(ConcreteTemplate):
              for op in sorted(types.signed_domain)]
     cases += [signature(op, op, op)
               for op in sorted(types.unsigned_domain)]
-    cases += [
-        signature(types.int32, types.float32, types.float32),
-        signature(types.int64, types.float64, types.float64),
-    ]
+    cases += [signature(op, op, op) for op in sorted(types.real_domain)]
 
 
 @builtin
