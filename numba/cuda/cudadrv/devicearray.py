@@ -113,6 +113,10 @@ class DeviceNDArrayBase(object):
 
     @property
     def _numba_type_(self):
+        """
+        Magic attribute expected by Numba to get the numba type that
+        represents this object.
+        """
         dtype = numpy_support.from_dtype(self.dtype)
         return types.Array(dtype, self.ndim, 'A')
 
