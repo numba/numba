@@ -257,6 +257,12 @@ class TestUFuncs(TestCase):
                                 np.allclose(result, expected))
 
 
+    def unary_int_ufunc_test(self, name=None, flags=enable_pyobj_flags):
+        self.unary_ufunc_test(name, flags=flags,
+            skip_inputs=[types.float32, types.float64,
+                types.Array(types.float32, 1, 'C'),
+                types.Array(types.float64, 1, 'C')])
+
     def binary_int_ufunc_test(self, name=None, flags=enable_pyobj_flags):
         self.binary_ufunc_test(name, flags=flags,
             skip_inputs=[types.float32, types.float64,
@@ -570,7 +576,6 @@ class TestUFuncs(TestCase):
         with self.assertTypingError():
             self.test_invertlogical_not_ufunc(flags=no_pyobj_flags)
 
-
     def test_bitwise_and_ufunc(self):
         self.binary_int_ufunc_test('bitwise_and')
 
@@ -592,10 +597,9 @@ class TestUFuncs(TestCase):
         with self.assertTypingError():
             self.binary_int_ufunc_test('bitwise_xor', flags=no_pyobj_flags)
 
-    @_unimplemented
     def test_invert_ufunc(self, flags=enable_pyobj_flags):
         self.assertEqual(np.invert, np.bitwise_not)
-        self.unary_ufunc_test('invert', flags=flags)
+        self.unary_int_ufunc_test('invert', flags=flags)
 
     @_unimplemented
     def test_invert_ufunc_npm(self):
