@@ -42,7 +42,7 @@ void Numba_cpow(Py_complex *a, Py_complex *b, Py_complex *c) {
 
 
 static
-int Numba_to_complex(PyObject* obj, Py_complex *out) {
+int Numba_complex_adaptor(PyObject* obj, Py_complex *out) {
     PyObject* fobj;
     PyArray_Descr *dtype;
     double val[2];
@@ -192,21 +192,11 @@ uint64_t Numba_fptoui(double x) {
     return (uint64_t)x;
 }
 
-#define EXPOSE(Fn, Sym) static void* Sym(void) \
-                        { return PyLong_FromVoidPtr(&Fn); }
-EXPOSE(Numba_sdiv, get_sdiv)
-EXPOSE(Numba_srem, get_srem)
-EXPOSE(Numba_udiv, get_udiv)
-EXPOSE(Numba_urem, get_urem)
-EXPOSE(Numba_cpow, get_cpow)
-EXPOSE(Numba_to_complex, get_complex_adaptor)
-EXPOSE(Numba_extract_record_data, get_extract_record_data)
-EXPOSE(PyBuffer_Release, get_release_record_buffer)
-EXPOSE(Numba_recreate_record, get_recreate_record)
-EXPOSE(Numba_round_even, get_round_even)
-EXPOSE(Numba_roundf_even, get_roundf_even)
-EXPOSE(Numba_fptoui, get_fptoui)
-#undef EXPOSE
+static
+void Numba_release_record_buffer(Py_buffer *buf)
+{
+    PyBuffer_Release(buf);
+}
 
 /*
 Define bridge for all math functions
@@ -219,39 +209,53 @@ Define bridge for all math functions
 #undef MATH_BINARY
 
 /*
-Expose all math functions
+Expose all functions
 */
-#define MATH_UNARY(F, R, A) static void* get_##F(void) \
-                            { return PyLong_FromVoidPtr(&Numba_##F);}
-#define MATH_BINARY(F, R, A, B) static void* get_##F(void) \
-                            { return PyLong_FromVoidPtr(&Numba_##F);}
+
+static PyObject *
+build_c_helpers_dict(void)
+{
+    PyObject *dct = PyDict_New();
+    if (dct == NULL)
+        goto error;
+
+#define declmethod(func) do {                          \
+    PyObject *val = PyLong_FromVoidPtr(&Numba_##func); \
+    if (val == NULL) goto error;                       \
+    if (PyDict_SetItemString(dct, #func, val)) {       \
+        Py_DECREF(val);                                \
+        goto error;                                    \
+    }                                                  \
+    Py_DECREF(val);                                    \
+} while (0)
+
+    declmethod(sdiv);
+    declmethod(srem);
+    declmethod(udiv);
+    declmethod(urem);
+    declmethod(cpow);
+    declmethod(complex_adaptor);
+    declmethod(extract_record_data);
+    declmethod(release_record_buffer);
+    declmethod(recreate_record);
+    declmethod(round_even);
+    declmethod(roundf_even);
+    declmethod(fptoui);
+#define MATH_UNARY(F, R, A) declmethod(F);
+#define MATH_BINARY(F, R, A, B) declmethod(F);
     #include "mathnames.inc"
 #undef MATH_UNARY
 #undef MATH_BINARY
 
-static PyMethodDef ext_methods[] = {
-#define declmethod(func) { #func , ( PyCFunction )func , METH_VARARGS , NULL }
-    declmethod(get_sdiv),
-    declmethod(get_srem),
-    declmethod(get_udiv),
-    declmethod(get_urem),
-    declmethod(get_cpow),
-    declmethod(get_complex_adaptor),
-    declmethod(get_extract_record_data),
-    declmethod(get_release_record_buffer),
-    declmethod(get_recreate_record),
-    declmethod(get_round_even),
-    declmethod(get_roundf_even),
-    declmethod(get_fptoui),
-
-    /* Declare math exposer */
-    #define MATH_UNARY(F, R, A) declmethod(get_##F),
-    #define MATH_BINARY(F, R, A, B) declmethod(get_##F),
-        #include "mathnames.inc"
-    #undef MATH_UNARY
-    #undef MATH_BINARY
-    { NULL },
 #undef declmethod
+    return dct;
+error:
+    Py_XDECREF(dct);
+    return NULL;
+}
+
+static PyMethodDef ext_methods[] = {
+    { NULL },
 };
 
 
@@ -263,8 +267,9 @@ MOD_INIT(_helperlib) {
 
     import_array();
 
-    PyObject_SetAttrString(m, "py_buffer_size",
-                           PyLong_FromLong(sizeof(Py_buffer)));
+    PyModule_AddObject(m, "py_buffer_size",
+                       PyLong_FromLong(sizeof(Py_buffer)));
+    PyModule_AddObject(m, "c_helpers", build_c_helpers_dict());
 
     return MOD_SUCCESS_VAL(m);
 }
