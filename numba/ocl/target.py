@@ -5,6 +5,7 @@ import llvm.core as lc
 from llvmpy.api import llvm
 from numba import typing, types
 from numba.targets.base import BaseContext
+from numba.targets import builtins
 
 # -----------------------------------------------------------------------------
 # Typing
@@ -66,7 +67,13 @@ class OCLTargetContext(BaseContext):
         wrapfn = module.add_function(fnty, name="oclPy_" + func.name)
         builder = lc.Builder.new(wrapfn.append_basic_block(''))
 
-        #
+        callargs = []
+        argoffset = 0
+        for aa in adapted:
+            value, used = aa.pack(builder, wrapfn.args[argoffset:])
+            callargs.append(value)
+            argoffset += used
+
         # status, _ = self.call_function(builder, func, types.void, argtypes,
         #                                callargs)
         # TODO handle status
@@ -94,12 +101,31 @@ class OCLTargetContext(BaseContext):
         # return a._getvalue()
         raise NotImplementedError
 
+    def make_array(self, typ):
+        return builtins.make_array(typ, addrspace=SPIR_GLOBAL_ADDRSPACE)
+
 
 class ArgAdaptor(object):
     def __init__(self, ctx, typ):
         self.ctx = ctx
         self.type = typ
         self.adapted_types = tuple(adapt_argument(ctx, self.type))
+
+    def pack(self, builder, args):
+        if isinstance(self.type, types.Array):
+            arycls = self.ctx.make_array(self.type)
+            ary = arycls(self.ctx, builder)
+            ary.data = args[0]
+            base = 1
+            shape = []
+            for i in range(self.type.ndim):
+                shape.append(args[base + i])
+            base += self.type.ndim
+            strides = []
+            for i in range(self.type.ndim):
+                strides.append(args[base + i])
+            base += self.type.ndim
+            return ary._getvalue(), base
 
 
 def adapt_argument(ctx, ty):
@@ -139,6 +165,9 @@ def set_ocl_kernel(fn):
     - Add metadata
     """
     mod = fn.module
+
+    # Set nounwind
+    fn.add_attribute(lc.ATTR_NO_UNWIND)
 
     # Set SPIR kernel calling convention
     fn.calling_convention = llvm.CallingConv.ID.SPIR_KERNEL

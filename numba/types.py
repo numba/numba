@@ -441,8 +441,9 @@ class Tuple(Type):
 
 
 class CPointer(Type):
-    def __init__(self, dtype):
+    def __init__(self, dtype, addrspace=0):
         self.dtype = dtype
+        self.addrspace = addrspace
         name = "*%s" % dtype
         super(CPointer, self).__init__(name, param=True)
 

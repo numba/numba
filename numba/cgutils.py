@@ -18,6 +18,7 @@ def as_bool_byte(builder, value):
 class Structure(object):
     def __init__(self, context, builder, value=None, ref=None):
         self._type = context.get_struct_type(self)
+        print(self._type, value)
         self._builder = builder
         if ref is None:
             self._value = alloca_once(builder, self._type)
