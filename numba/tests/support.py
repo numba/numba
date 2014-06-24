@@ -34,6 +34,15 @@ class TestCase(unittest.TestCase):
         """
         Test that two scalars have similar types and are equal up to
         a computed precision.
+        If the scalars are instances of exact types or if *prec* is
+        'exact', they are compared exactly.
+        If the scalars are instances of inexact types (float, complex)
+        and *prec* is not 'exact', then the number of significant bits
+        is computed according to the value of *prec*: 53 bits if *prec*
+        is 'double', 24 bits if *prec* is single.
+
+        Any value of *prec* other than 'exact', 'single' or 'double'
+        will raise an error.
         """
         for tp in self._exact_typesets:
             # One or another could be the expected, the other the actual;
