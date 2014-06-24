@@ -599,6 +599,13 @@ def real_mod_impl(context, builder, sig, args):
     return rem
 
 
+def real_floordiv_impl(context, builder, sig, args):
+    x, y = args
+    cgutils.guard_zero(context, builder, y)
+    quot, _ = real_divmod(context, builder, x, y)
+    return quot
+
+
 def real_power_impl(context, builder, sig, args):
     x, y = args
     module = cgutils.get_module(builder)
@@ -699,6 +706,7 @@ for ty in types.real_domain:
     builtin(implement('-', ty, ty)(real_sub_impl))
     builtin(implement('*', ty, ty)(real_mul_impl))
     builtin(implement('/?', ty, ty)(real_div_impl))
+    builtin(implement('//', ty, ty)(real_floordiv_impl))
     builtin(implement('/', ty, ty)(real_div_impl))
     builtin(implement('%', ty, ty)(real_mod_impl))
     builtin(implement('**', ty, ty)(real_power_impl))

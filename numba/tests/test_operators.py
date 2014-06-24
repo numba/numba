@@ -732,23 +732,20 @@ class TestOperators(TestCase):
     def test_truediv_floats_npm(self):
         self.test_truediv_floats(flags=Noflags)
 
-    if 0:
-        # Floor division isn't implement for floats. These tests used to
-        # pass mistakingly because of a typo in floordiv_usecase()
-        def test_floordiv_floats(self, flags=enable_pyobj_flags):
-            pyfunc = self.op.floordiv_usecase
+    def test_floordiv_floats(self, flags=enable_pyobj_flags):
+        pyfunc = self.op.floordiv_usecase
 
-            x_operands = [-111.111, 0.0, 2.2]
-            y_operands = [-2.2, 1.0, 111.111]
+        x_operands = [-111.111, 0.0, 2.2]
+        y_operands = [-2.2, 1.0, 111.111]
 
-            types_list = [(types.float32, types.float32),
-                          (types.float64, types.float64)]
+        types_list = [(types.float32, types.float32),
+                      (types.float64, types.float64)]
 
-            self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
-                                 flags=flags)
+        self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
+                             flags=flags)
 
-        def test_floordiv_floats_npm(self):
-            self.test_floordiv_floats(flags=Noflags)
+    def test_floordiv_floats_npm(self):
+        self.test_floordiv_floats(flags=Noflags)
 
     def test_mod_ints(self, flags=enable_pyobj_flags):
 

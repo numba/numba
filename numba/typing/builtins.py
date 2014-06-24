@@ -227,8 +227,8 @@ class BinOpFloorDiv(ConcreteTemplate):
         signature(types.uint32, types.uint32, types.uint32),
         signature(types.uint64, types.uint64, types.uint64),
 
-        signature(types.int32, types.float32, types.float32),
-        signature(types.int64, types.float64, types.float64),
+        signature(types.float32, types.float32, types.float32),
+        signature(types.float64, types.float64, types.float64),
     ]
 
 

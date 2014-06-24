@@ -1,3 +1,7 @@
+"""
+Definition of implementations for the `operator` module.
+"""
+
 import operator
 from numba.targets.imputils import implement, Registry
 from numba.targets import builtins
@@ -54,6 +58,7 @@ for ty in types.real_domain:
     register(implement(operator.mul, ty, ty)(builtins.real_mul_impl))
     if not utils.IS_PY3:
         register(implement(operator.div, ty, ty)(builtins.real_div_impl))
+    register(implement(operator.floordiv, ty, ty)(builtins.real_floordiv_impl))
     register(implement(operator.truediv, ty, ty)(builtins.real_div_impl))
     register(implement(operator.mod, ty, ty)(builtins.real_mod_impl))
     register(implement(operator.pow, ty, ty)(builtins.real_power_impl))
