@@ -130,7 +130,7 @@ Comparison functions
  logical_and         Yes          No
  logical_or          Yes          No
  logical_xor         Yes          No
- logical_not         No           No
+ logical_not         Yes          No
  maximum             Yes          No
  minimim             Yes          No
  fmax                Yes          No

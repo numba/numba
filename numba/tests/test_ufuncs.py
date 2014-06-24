@@ -686,9 +686,8 @@ class TestUFuncs(TestCase):
             self.binary_ufunc_test('logical_xor', flags=no_pyobj_flags)
 
     #logical_not support should be coming soon
-    @_unimplemented
     def test_logical_not_ufunc(self):
-        self.unary_ufunc_test('logical_not', flags=no_pyobj_flags)
+        self.unary_ufunc_test('logical_not')
 
     @_unimplemented
     def test_logical_not_ufunc_npm(self):
