@@ -10,441 +10,17 @@ UFuncCore also defines a work-stealing mechanism that allows idle threads
 to steal works from other threads.
 """
 from __future__ import print_function, absolute_import
-import numpy as np
-from llvm.ee import dylib_add_symbol
-from llvm.core import (ATTR_NO_ALIAS, Type, Builder,
-                       LINKAGE_INTERNAL)
-from llvm_cbuilder import CStruct, CDefinition, CExternal, CFunc
-import llvm_cbuilder.shortnames as C
-from numba.npyufunc.ufuncbuilder import UFuncBuilder
 import multiprocessing
+import numpy as np
+import llvm.core as lc
+import llvm.ee as le
+from numba.npyufunc import ufuncbuilder
+from numba import types
 
-NUM_CPU = min(1, multiprocessing.cpu_count())
+NUM_CPU = max(1, multiprocessing.cpu_count())
 
-ENABLE_WORK_STEALING = True
-CHECK_RACE_CONDITION = True
 
-# Granularity controls how many works are removed by the workqueue each time.
-# Applies to normal and stealing mode.
-# Too small and there will be too many cache synchronization.
-GRANULARITY = 256
-
-
-class WorkQueue(CStruct):
-    '''structure for workqueue for parallel-ufunc.
-    '''
-
-    _fields_ = [
-        ('next', C.intp), # next index of work item
-        ('last', C.intp), # last index of work item (exlusive)
-        ('lock', C.int), # for locking the workqueue
-    ]
-
-
-    def Lock(self):
-        '''inline the lock procedure.
-        '''
-        if ENABLE_WORK_STEALING:
-            with self.parent.loop() as loop:
-                with loop.condition() as setcond:
-                    unlocked = self.parent.constant(self.lock.type, 0)
-                    locked = self.parent.constant(self.lock.type, 1)
-
-                    res = self.lock.reference().atomic_cmpxchg(unlocked, locked,
-                                                               ordering='acquire')  #acquire
-                    setcond(res != unlocked)
-
-                with loop.body():
-                    pass
-
-    def Unlock(self):
-        '''inline the unlock procedure.
-        '''
-        if ENABLE_WORK_STEALING:
-            unlocked = self.parent.constant(self.lock.type, 0)
-            locked = self.parent.constant(self.lock.type, 1)
-
-            res = self.lock.reference().atomic_cmpxchg(locked, unlocked,
-                                                       ordering='release')
-
-            with self.parent.ifelse(res != locked) as ifelse:
-                with ifelse.then():
-                    # This shall kill the program
-                    self.parent.unreachable()
-
-
-class ContextCommon(CStruct):
-    '''structure for thread-shared context information in parallel-ufunc.
-    '''
-    _fields_ = [
-        # loop ufunc args
-        ('args', C.pointer(C.char_p)),
-        ('dimensions', C.pointer(C.intp)),
-        ('steps', C.pointer(C.intp)),
-        ('data', C.void_p),
-        # specifics for work queues
-        #('func',        C.void_p),
-        ('num_thread', C.int),
-        ('workqueues', C.pointer(WorkQueue.llvm_type())),
-    ]
-
-
-class Context(CStruct):
-    '''structure for thread-specific context information in parallel-ufunc.
-    '''
-    _fields_ = [
-        ('common', C.pointer(ContextCommon.llvm_type())),
-        ('id', C.int),
-        ('completed', C.intp),
-    ]
-
-
-class ParallelUFunc(CDefinition):
-    '''the generic parallel vectorize mechanism
-
-    Can be specialized to the maximum number of threads on the platform.
-
-
-    Platform dependent threading function is implemented in
-
-    def _dispatch_worker(self, worker, contexts, num_thread):
-        ...
-
-    which should be implemented in subclass or mixin.
-    '''
-
-    _argtys_ = [
-        ('worker', C.void_p, [ATTR_NO_ALIAS]),
-        ('args', C.pointer(C.char_p), [ATTR_NO_ALIAS]),
-        ('dimensions', C.pointer(C.intp), [ATTR_NO_ALIAS]),
-        ('steps', C.pointer(C.intp), [ATTR_NO_ALIAS]),
-        ('data', C.void_p, [ATTR_NO_ALIAS]),
-    ]
-
-    def specialize(self, num_thread):
-        '''specialize to the maximum # of thread
-        '''
-        self._name_ = 'parallel_ufunc_%d' % num_thread
-        self.ThreadCount = num_thread
-
-    def body(self, worker, args, dimensions, steps, data):
-        # Determine chunksize, initial count of work-items per thread.
-        # If total_work >= num_thread, equally divide the works.
-        # If total_work % num_thread != 0, the last thread does all remaining works.
-        # If total_work < num_thread, each thread does one work,
-        # and set num_thread to total_work
-
-        num_thread = self.var(C.int, self.ThreadCount, name='num_thread')
-
-        # Setup variables
-        common = self.var(ContextCommon, name='common')
-        allocsz = self.constant(C.intp, NUM_CPU)
-        workqueues = self.array(WorkQueue, allocsz, name='workqueues')
-        contexts = self.array(Context, allocsz, name='contexts')
-        threads = self.array(ThreadAPI.thread_t, allocsz, name='threads')
-
-        N = dimensions[0]
-        ChunkSize = self.var_copy(N / num_thread.cast(N.type))
-        ChunkSize_NULL = self.constant_null(ChunkSize.type)
-        with self.ifelse(ChunkSize == ChunkSize_NULL) as ifelse:
-            with ifelse.then():
-                ChunkSize.assign(self.constant(ChunkSize.type, 1))
-                num_thread.assign(N.cast(num_thread.type))
-
-        # Initialize ContextCommon
-        common.args.assign(args)
-        common.dimensions.assign(dimensions)
-        common.steps.assign(steps)
-        common.data.assign(data)
-        common.workqueues.assign(workqueues.reference())
-        common.num_thread.assign(num_thread.cast(C.int))
-
-        # Populate workqueue for all threads
-        self._populate_workqueues(workqueues, N, ChunkSize, num_thread)
-
-        # Populate contexts for all threads
-        self._populate_context(contexts, common, num_thread)
-
-        # Dispatch worker threads
-        self._dispatch_worker(worker, contexts, num_thread, threads)
-
-        ## DEBUG ONLY ##
-        # Check for race condition
-        if CHECK_RACE_CONDITION:
-            total_completed = self.var(C.intp, 0, name='total_completed')
-            with self.for_range(num_thread) as (forloop, t):
-                cur_ctxt = contexts[t].as_struct(Context)
-                total_completed += cur_ctxt.completed
-                # self.debug(cur_ctxt.id, 'completed', cur_ctxt.completed)
-
-            with self.ifelse(total_completed == N) as ifelse:
-                with ifelse.then():
-                    # self.debug("All is well!")
-                    pass # keep quite if all is well
-                with ifelse.otherwise():
-                    self.debug("ERROR: race occurred! Trigger segfault")
-                    self.debug('completed ', total_completed, '/', N)
-                    self.unreachable()
-
-        # Return
-        self.ret()
-
-    def _populate_workqueues(self, workqueues, N, ChunkSize, num_thread):
-        '''loop over all threads and populate the workqueue for each of them.
-        '''
-        ONE = self.constant(num_thread.type, 1)
-        with self.for_range(num_thread) as (loop, i):
-            cur_wq = workqueues[i].as_struct(WorkQueue)
-            cur_wq.next.assign(i.cast(ChunkSize.type) * ChunkSize)
-            cur_wq.last.assign((i + ONE).cast(ChunkSize.type) * ChunkSize)
-            cur_wq.lock.assign(self.constant(C.int, 0))
-            # end loop
-        last_wq = workqueues[num_thread - ONE].as_struct(WorkQueue)
-        last_wq.last.assign(N)
-
-    def _populate_context(self, contexts, common, num_thread):
-        '''loop over all threads and populate contexts for each of them.
-        '''
-        with self.for_range(num_thread) as (loop, i):
-            cur_ctxt = contexts[i].as_struct(Context)
-            cur_ctxt.common.assign(common.reference())
-            cur_ctxt.id.assign(i)
-            cur_ctxt.completed.assign(
-                self.constant_null(cur_ctxt.completed.type))
-
-
-class ParallelMixin(object):
-    '''ParallelUFunc mixin that implements _dispatch_worker to use pthread.
-    '''
-
-    def _dispatch_worker(self, worker, contexts, num_thread, threads):
-        api = ThreadAPI(self)
-        with self.for_range(num_thread) as (loop, i):
-            arg = contexts[i].reference().cast(C.void_p)
-            threads[i] = status = api.numba_new_thread(worker, arg)
-            # Note: no pointer comparison defined
-            #       must cast to intp
-            is_null = status.cast(C.intp) == self.constant_null(C.intp)
-            with self.ifelse(is_null) as ifelse:
-                with ifelse.then():
-                    # self.debug("Error at pthread_create: ", status)
-                    self.unreachable()
-
-        with self.for_range(num_thread) as (loop, i):
-            status = api.numba_join_thread(threads[i])
-            err = status == self.constant_null(status.type)
-            with self.ifelse(err) as ifelse:
-                with ifelse.then():
-                    # self.debug("Error at pthread_join: ", status)
-                    self.unreachable()
-
-
-class UFuncCore(CDefinition):
-    '''core work of a ufunc worker thread
-
-    Subclass to implement UFuncCore._do_work
-
-    Generates the workqueue handling and work stealing and invoke
-    the work function for each work item.
-    '''
-    _name_ = 'ufunc_worker'
-    _argtys_ = [
-        ('context', C.pointer(Context.llvm_type()), [ATTR_NO_ALIAS]),
-    ]
-
-    def body(self, context):
-        context = context.as_struct(Context)
-        common = context.common.as_struct(ContextCommon)
-        tid = context.id
-
-        # self.debug("start thread", tid, "/", common.num_thread)
-        workqueue = common.workqueues[tid].as_struct(WorkQueue)
-
-        self._do_workqueue(common, workqueue, tid, context.completed)
-        if ENABLE_WORK_STEALING:
-            self._do_work_stealing(common, tid, context.completed) # optional
-
-        self.ret()
-
-
-    def _do_workqueue(self, common, workqueue, tid, completed):
-        '''process local workqueue.
-        '''
-        with self.forever() as loop:
-            workqueue.Lock()
-            # Critical section
-            item = self.var_copy(workqueue.next, name='item')
-            AMT = self.min(self.constant(item.type, GRANULARITY),
-                           workqueue.last - workqueue.next)
-
-            workqueue.next += AMT
-            last = self.var_copy(workqueue.last, name='last')
-            # Release
-            workqueue.Unlock()
-
-            with self.ifelse(item >= last) as ifelse:
-                with ifelse.then():
-                    loop.break_loop()
-
-
-            #with self.for_range(AMT) as (loop, offset):
-            self._do_work(common, item, AMT, tid)
-            completed += AMT
-
-    def _do_work_stealing(self, common, tid, completed):
-        '''steal work from other workqueues.
-        '''
-        # self.debug("start work stealing", tid)
-        steal_continue = self.var(C.int, 1)
-        STEAL_STOP = self.constant_null(steal_continue.type)
-
-        # Loop until all workqueues are done.
-        with self.loop() as loop:
-            with loop.condition() as setcond:
-                setcond(steal_continue != STEAL_STOP)
-
-            with loop.body():
-                steal_continue.assign(STEAL_STOP)
-                self._do_work_stealing_innerloop(common, steal_continue, tid,
-                                                 completed)
-
-    def _do_work_stealing_innerloop(self, common, steal_continue, tid,
-                                    completed):
-        '''loop over all other threads and try to steal work.
-        '''
-        with self.for_range(common.num_thread) as (loop, i):
-            with self.ifelse(i != tid) as ifelse:
-                with ifelse.then():
-                    otherqueue = common.workqueues[i].as_struct(WorkQueue)
-                    self._do_work_stealing_check(common, otherqueue,
-                                                 steal_continue, tid,
-                                                 completed)
-
-    def _do_work_stealing_check(self, common, otherqueue, steal_continue, tid,
-                                completed):
-        '''check the workqueue for any remaining work and steal it.
-        '''
-        otherqueue.Lock()
-        # Acquired
-        STEAL_AMT = self.constant(otherqueue.last.type, GRANULARITY)
-        STEAL_CONTINUE = self.constant(steal_continue.type, 1)
-        with self.ifelse(
-                        otherqueue.next <= otherqueue.last - STEAL_AMT) as ifelse:
-            with ifelse.then():
-                otherqueue.last -= STEAL_AMT
-                item = self.var_copy(otherqueue.last)
-
-                otherqueue.Unlock()
-                # Released
-
-                #with self.for_range(STEAL_AMT) as (loop, offset):
-                self._do_work(common, item, STEAL_AMT, tid)
-                completed += STEAL_AMT
-
-                # Mark incomplete thread
-                steal_continue.assign(STEAL_CONTINUE)
-
-            with ifelse.otherwise():
-                otherqueue.Unlock()
-                # Released
-
-    def _do_work(self, common, item, count, tid):
-        '''prepare to call the actual work function
-
-        Implementation depends on number and type of arguments.
-        '''
-        raise NotImplementedError
-
-
-class SpecializedParallelUFunc(CDefinition):
-    '''a generic ufunc that wraps ParallelUFunc, UFuncCore and the workload
-    '''
-    _argtys_ = [
-        ('args', C.pointer(C.char_p), [ATTR_NO_ALIAS]),
-        ('dimensions', C.pointer(C.intp), [ATTR_NO_ALIAS]),
-        ('steps', C.pointer(C.intp), [ATTR_NO_ALIAS]),
-        ('data', C.void_p, [ATTR_NO_ALIAS]),
-    ]
-
-    def body(self, args, dimensions, steps, data, ):
-        pufunc = self.depends(self.PUFuncDef)
-        core = self.depends(self.CoreDef)
-        #core.function.calling_convention = CC_X86_STDCALL
-        to_void_p = lambda x: x.cast(C.void_p)
-        pufunc(to_void_p(core), args, dimensions, steps, data,
-               inline=True)
-        self.ret()
-
-    def specialize(self, pufunc_def, core_def):
-        '''specialize to a combination of ParallelUFunc, UFuncCore and workload
-        '''
-        self._name_ = 'specialized_%s_%s' % (pufunc_def, core_def)
-        self.PUFuncDef = pufunc_def
-        self.CoreDef = core_def
-
-
-class ThreadAPI(CExternal):
-    '''external declaration of pthread API
-    '''
-    thread_t = C.void_p
-
-    numba_new_thread = Type.function(thread_t,
-                                     [C.void_p, # function
-                                      C.void_p])             # arg
-
-    numba_join_thread = Type.function(C.int, [thread_t])
-
-
-class UFuncCoreGeneric(UFuncCore):
-    '''A generic ufunc core worker from LLVM function type
-    '''
-
-    def _do_work(self, common, item, count, tid):
-        '''
-        common :
-        item :
-        tid : for debugging
-        '''
-
-        ufunc_ptr = CFunc(self, self.WORKER)
-        fnty = self.WORKER.type.pointee
-
-        args = common.args
-        steps = common.steps
-
-        arg_ptrs = []
-        arg_steps = []
-        for i in range(len(fnty.args) + 1):
-            arg_ptrs.append(self.var_copy(args[i][item * steps[i]:]))
-            const_step = self.var_copy(steps[i])
-            const_step.invariant = True
-            arg_steps.append(const_step)
-
-        with self.for_range(count) as (loop, item):
-            callargs = []
-            for i, argty in enumerate(fnty.args):
-                casted = arg_ptrs[i].cast(C.pointer(argty))
-                callargs.append(casted.load())
-                arg_ptrs[i].assign(
-                    arg_ptrs[i][arg_steps[i]:]) # increment pointer
-
-            res = ufunc_ptr(*callargs, **dict(inline=True))
-            retval_ptr = arg_ptrs[-1].cast(C.pointer(fnty.return_type))
-            retval_ptr.store(res, nontemporal=True)
-            arg_ptrs[-1].assign(arg_ptrs[-1][arg_steps[-1]:])
-
-    def specialize(self, lfunc):
-        '''specialize to a LLVM function type
-        '''
-        self._name_ = '.'.join([self._name_, lfunc.name])
-        self.WORKER = lfunc
-
-
-class ParallelUFuncPlatform(ParallelUFunc, ParallelMixin):
-    pass
-
-
-class ParallelUFuncBuilder(UFuncBuilder):
+class ParallelUFuncBuilder(ufuncbuilder.UFuncBuilder):
     def build(self, cres):
         # Buider wrapper for ufunc entry point
         ctx = cres.target_context
@@ -458,41 +34,154 @@ class ParallelUFuncBuilder(UFuncBuilder):
         return dtypenums, ptr
 
 
-def wrap_core(ctx, lfunc, signature):
-    module = lfunc.module
-    ofnty = lfunc.type.pointee
-    # FIXME support for record types
-    fnty = Type.function(ofnty.args[0].pointee, ofnty.args[1:])
-    fn = module.add_function(fnty, name=".wrapper")
-    fn.linkage = LINKAGE_INTERNAL
-    builder = Builder.new(fn.append_basic_block(''))
-    status, retval = ctx.call_function(builder, lfunc, signature.return_type,
-                                       signature.args, fn.args)
-    # FIXME ignoring error
-    builder.ret(retval)
-    fn.verify()
-
-    return fn
-
-
 def build_ufunc_wrapper(ctx, lfunc, signature):
-    wrapped = wrap_core(ctx, lfunc, signature)
-
-    dispatcher = ParallelUFuncPlatform(num_thread=NUM_CPU)
-    worker = UFuncCoreGeneric(wrapped)
-    def_spuf = SpecializedParallelUFunc(dispatcher, worker)
-
-    func = def_spuf(lfunc.module)
-
+    innerfunc = ufuncbuilder.build_ufunc_wrapper(ctx, lfunc, signature)
+    lfunc = build_ufunc_kernel(ctx, innerfunc, signature)
     ctx.optimize(lfunc.module)
-    return func
+    return lfunc
+
+
+def build_ufunc_kernel(ctx, innerfunc, sig):
+
+    """
+    char **args, npy_intp *dimensions, npy_intp* steps, void* data
+    """
+    byte_t = lc.Type.int(8)
+    byte_ptr_t = lc.Type.pointer(byte_t)
+
+    intp_t = ctx.get_value_type(types.intp)
+
+    fnty = lc.Type.function(lc.Type.void(), innerfunc.type.pointee.args)
+    mod = innerfunc.module
+    lfunc = mod.add_function(fnty, name=".kernel")
+
+    bb_entry = lfunc.append_basic_block('')
+
+    builder = lc.Builder.new(bb_entry)
+
+    args, dimensions, steps, data = lfunc.args
+
+    total = builder.load(dimensions)
+    ncpu = lc.Constant.int(total.type, NUM_CPU)
+
+    count = builder.udiv(total, ncpu)
+
+    count_list = []
+    remain = total
+
+    for i in range(NUM_CPU):
+        space = builder.alloca(intp_t)
+        count_list.append(space)
+
+        if i == NUM_CPU - 1:
+            builder.store(remain, space)
+        else:
+            builder.store(count, space)
+            remain = builder.sub(remain, count)
+
+    array_count = len(sig.args) + 1
+
+    steps_list = []
+    for i in range(array_count):
+        ptr = builder.gep(steps, [lc.Constant.int(lc.Type.int(), i)])
+        step = builder.load(ptr)
+        steps_list.append(step)
+
+    args_list = []
+    for i in range(NUM_CPU):
+        space = builder.alloca(byte_ptr_t,
+                               size=lc.Constant.int(lc.Type.int(), array_count))
+        args_list.append(space)
+
+        for j in range(array_count):
+            dst = builder.gep(space, [lc.Constant.int(lc.Type.int(), j)])
+            src = builder.gep(args, [lc.Constant.int(lc.Type.int(), j)])
+
+            baseptr = builder.load(src)
+            base = builder.ptrtoint(baseptr, intp_t)
+            multiplier = lc.Constant.int(count.type, i)
+            offset = builder.mul(steps_list[j], builder.mul(count, multiplier))
+            addr = builder.inttoptr(builder.add(base, offset), baseptr.type)
+
+            builder.store(addr, dst)
+
+    add_task_ty = lc.Type.function(lc.Type.void(), [byte_ptr_t] * 5)
+    empty_fnty = lc.Type.function(lc.Type.void(), ())
+    add_task = mod.get_or_insert_function(add_task_ty, name='numba_add_task')
+    synchronize = mod.get_or_insert_function(empty_fnty,
+                                             name='numba_synchronize')
+    ready = mod.get_or_insert_function(empty_fnty, name='numba_ready')
+
+    as_void_ptr = lambda arg: builder.bitcast(arg, byte_ptr_t)
+
+    for each_args, each_dims in zip(args_list, count_list):
+        # builder.call(innerfunc, [each_args, each_dims, steps, data])
+        innerargs = [as_void_ptr(x)
+                     for x
+                     in [innerfunc, each_args, each_dims, steps, data]]
+
+        builder.call(add_task, innerargs)
+
+    builder.call(ready, ())
+    builder.call(synchronize, ())
+
+    builder.ret_void()
+
+    return lfunc
+
+
+class _ProtectEngineDestroy(object):
+    def __init__(self, set_cas, engine):
+        self.set_cas = set_cas
+        self.engine = engine
+
+    def __del__(self):
+        self.set_cas(0)
+
+
+_keepalive = []
+
+
+def _make_cas_function():
+    mod = lc.Module.new("generate-cas")
+    llint = lc.Type.int()
+    llintp = lc.Type.pointer(llint)
+    fnty = lc.Type.function(llint, [llintp, llint, llint])
+    fn = mod.add_function(fnty, name='cas')
+    ptr, old, repl = fn.args
+    bb = fn.append_basic_block('')
+    builder = lc.Builder.new(bb)
+    out = builder.atomic_cmpxchg(ptr, old, repl, ordering='monotonic')
+    builder.ret(out)
+
+    mod.verify()
+
+    engine = le.EngineBuilder.new(mod).opt(3).create()
+    ptr = engine.get_pointer_to_function(fn)
+
+    _keepalive.append(engine)
+    return engine, ptr
 
 
 def _init():
     from . import workqueue as lib
+    from ctypes import CFUNCTYPE, c_int, c_void_p
 
-    dylib_add_symbol('numba_new_thread', lib.new_thread_fnptr)
-    dylib_add_symbol('numba_join_thread', lib.join_thread_fnptr)
+    le.dylib_add_symbol('numba_new_thread', lib.new_thread_fnptr)
+    le.dylib_add_symbol('numba_join_thread', lib.join_thread_fnptr)
+    le.dylib_add_symbol('numba_add_task', lib.add_task)
+    le.dylib_add_symbol('numba_synchronize', lib.synchronize)
+    le.dylib_add_symbol('numba_ready', lib.ready)
+
+    launch_threads = CFUNCTYPE(None, c_int)(lib.launch_threads)
+    set_cas = CFUNCTYPE(None, c_void_p)(lib.set_cas)
+
+    engine, cas_ptr = _make_cas_function()
+    set_cas(c_void_p(cas_ptr))
+    launch_threads(NUM_CPU)
+
+    _keepalive.append(_ProtectEngineDestroy(set_cas, engine))
+
 
 
 _init()

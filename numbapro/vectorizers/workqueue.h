@@ -1,3 +1,5 @@
+typedef struct opaque_thread * thread_pointer;
+
 #ifdef _MSC_VER
     #define DLLEXPORT __declspec(dllexport)
 #else
@@ -5,8 +7,9 @@
 #endif
 
 DLLEXPORT
-void* numba_new_thread(void *worker, void *arg);
+thread_pointer numba_new_thread(void *worker, void *arg);
 
 DLLEXPORT
-int numba_join_thread(void *thread);
+int numba_join_thread(thread_pointer thread);
+
 
