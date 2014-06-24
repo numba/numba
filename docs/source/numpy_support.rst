@@ -24,8 +24,7 @@ Limitations
 
 Right now support for ufuncs is quite limited in no-python mode. Meaning that only a selection of the ufuncs work in no-python mode.
 
-Also, in its current implementation ufuncs working on array will only compile in no-python mode if the output array is explicit. Note that this limitation does not apply when applied to scalars
-
+Also, in its current implementation ufuncs working on arrays will only compile in no-python mode if the output is explicit (the output array is passed as second argument). Note that this limitation does not apply when applied to scalars
 
 Following is a list of the different *NumPy* ufuncs that *numba* is aware of, sorted in the same way as in the *NumPy* documentation.
 
