@@ -51,14 +51,18 @@ class TestNumberCtor(unittest.TestCase):
         pyfunc = docomplex
 
         x_types = [
-            types.int32, types.int64, types.float32, types.float64
+            types.int32, types.int64, types.float32, types.float64,
+            types.complex64, types.complex128,
         ]
-        x_values = [1, 1000, 12.2, 23.4]
+        x_values = [1, 1000, 12.2, 23.4, 1.5-5j, 1-4.75j]
 
         for ty, x in zip(x_types, x_values):
             cres = compile_isolated(pyfunc, [ty])
             cfunc = cres.entry_point
-            self.assertAlmostEqual(pyfunc(x), cfunc(x), places=6)
+            got = cfunc(x)
+            expected = pyfunc(x)
+            self.assertIs(type(got), type(expected))
+            self.assertAlmostEqual(got, expected, places=6)
 
     def test_complex2(self):
         pyfunc = docomplex2

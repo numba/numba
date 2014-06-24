@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 import itertools
+import operator
 import warnings
 
 import numpy as np
@@ -18,86 +19,219 @@ enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
 
 
-def add_usecase(x, y):
-    return x + y
+class LiteralOperatorImpl(object):
 
-def sub_usecase(x, y):
-    return x - y
+    @staticmethod
+    def add_usecase(x, y):
+        return x + y
 
-def mul_usecase(x, y):
-    return x * y
+    @staticmethod
+    def sub_usecase(x, y):
+        return x - y
 
-def div_usecase(x, y):
-    return x / y
+    @staticmethod
+    def mul_usecase(x, y):
+        return x * y
 
-def floordiv_usecase(x, y):
-    return x / y
+    @staticmethod
+    def div_usecase(x, y):
+        return x / y
 
-def mod_usecase(x, y):
-    return x % y
+    @staticmethod
+    def floordiv_usecase(x, y):
+        return x // y
 
-def pow_usecase(x, y):
-    return x ** y
+    truediv_usecase = staticmethod(truediv_usecase)
 
-def bitshift_left_usecase(x, y):
-    return x << y
+    @staticmethod
+    def mod_usecase(x, y):
+        return x % y
 
-def bitshift_right_usecase(x, y):
-    return x >> y
+    @staticmethod
+    def pow_usecase(x, y):
+        return x ** y
 
-def bitwise_and_usecase(x, y):
-    return x & y
+    @staticmethod
+    def bitshift_left_usecase(x, y):
+        return x << y
 
-def bitwise_or_usecase(x, y):
-    return x | y
+    @staticmethod
+    def bitshift_right_usecase(x, y):
+        return x >> y
 
-def bitwise_xor_usecase(x, y):
-    return x ^ y
+    @staticmethod
+    def bitwise_and_usecase(x, y):
+        return x & y
 
-def bitwise_not_usecase(x, y):
-    return ~x
+    @staticmethod
+    def bitwise_or_usecase(x, y):
+        return x | y
 
-def not_usecase(x):
-    return not(x)
+    @staticmethod
+    def bitwise_xor_usecase(x, y):
+        return x ^ y
 
-def negate_usecase(x):
-    return -x
+    @staticmethod
+    def bitwise_not_usecase(x, y):
+        return ~x
 
-def unary_positive_usecase(x):
-    return +x
+    @staticmethod
+    def not_usecase(x):
+        return not(x)
 
-def lt_usecase(x, y):
-    return x < y
+    @staticmethod
+    def negate_usecase(x):
+        return -x
 
-def le_usecase(x, y):
-    return x <= y
+    @staticmethod
+    def unary_positive_usecase(x):
+        return +x
 
-def gt_usecase(x, y):
-    return x > y
+    @staticmethod
+    def lt_usecase(x, y):
+        return x < y
 
-def ge_usecase(x, y):
-    return x >= y
+    @staticmethod
+    def le_usecase(x, y):
+        return x <= y
 
-def eq_usecase(x, y):
-    return x == y
+    @staticmethod
+    def gt_usecase(x, y):
+        return x > y
 
-def ne_usecase(x, y):
-    return x != y
+    @staticmethod
+    def ge_usecase(x, y):
+        return x >= y
+
+    @staticmethod
+    def eq_usecase(x, y):
+        return x == y
+
+    @staticmethod
+    def ne_usecase(x, y):
+        return x != y
+
+
+class FunctionalOperatorImpl(object):
+
+    @staticmethod
+    def add_usecase(x, y):
+        return operator.add(x, y)
+
+    @staticmethod
+    def sub_usecase(x, y):
+        return operator.sub(x, y)
+
+    @staticmethod
+    def mul_usecase(x, y):
+        return operator.mul(x, y)
+
+    if PYVERSION >= (3, 0):
+        div_usecase = NotImplemented
+    else:
+        @staticmethod
+        def div_usecase(x, y):
+            return operator.div(x, y)
+
+    @staticmethod
+    def floordiv_usecase(x, y):
+        return operator.floordiv(x, y)
+
+    @staticmethod
+    def truediv_usecase(x, y):
+        return operator.truediv(x, y)
+
+    @staticmethod
+    def mod_usecase(x, y):
+        return operator.mod(x, y)
+
+    @staticmethod
+    def pow_usecase(x, y):
+        return operator.pow(x, y)
+
+    @staticmethod
+    def bitshift_left_usecase(x, y):
+        return operator.lshift(x, y)
+
+    @staticmethod
+    def bitshift_right_usecase(x, y):
+        return operator.rshift(x, y)
+
+    @staticmethod
+    def bitwise_and_usecase(x, y):
+        return operator.and_(x, y)
+
+    @staticmethod
+    def bitwise_or_usecase(x, y):
+        return operator.or_(x, y)
+
+    @staticmethod
+    def bitwise_xor_usecase(x, y):
+        return operator.xor(x, y)
+
+    @staticmethod
+    def bitwise_not_usecase(x, y):
+        return operator.invert(x)
+
+    @staticmethod
+    def not_usecase(x):
+        return operator.not_(x)
+
+    @staticmethod
+    def negate_usecase(x):
+        return operator.neg(x)
+
+    @staticmethod
+    def unary_positive_usecase(x):
+        return operator.pos(x)
+
+    @staticmethod
+    def lt_usecase(x, y):
+        return operator.lt(x, y)
+
+    @staticmethod
+    def le_usecase(x, y):
+        return operator.le(x, y)
+
+    @staticmethod
+    def gt_usecase(x, y):
+        return operator.gt(x, y)
+
+    @staticmethod
+    def ge_usecase(x, y):
+        return operator.ge(x, y)
+
+    @staticmethod
+    def eq_usecase(x, y):
+        return operator.eq(x, y)
+
+    @staticmethod
+    def ne_usecase(x, y):
+        return operator.ne(x, y)
 
 
 class TestOperators(TestCase):
 
+    op = LiteralOperatorImpl
+
     def run_test_ints(self, pyfunc, x_operands, y_operands, types_list,
                       flags=enable_pyobj_flags):
+        if pyfunc is NotImplemented:
+            self.skipTest("test irrelevant on this version of Python")
         for arg_types in types_list:
             cr = compile_isolated(pyfunc, arg_types, flags=flags)
             cfunc = cr.entry_point
 
             for x, y in itertools.product(x_operands, y_operands):
-                self.assertTrue(np.all(pyfunc(x, y) == cfunc(x, y)))
+                got = cfunc(x, y)
+                expected = pyfunc(x, y)
+                self.assertTrue(np.all(got == expected),
+                                "mismatch: %r != %r" % (got, expected))
 
     def run_test_floats(self, pyfunc, x_operands, y_operands, types_list,
                         flags=enable_pyobj_flags):
+        if pyfunc is NotImplemented:
+            self.skipTest("test irrelevant on this version of Python")
         for arg_types in types_list:
             cr = compile_isolated(pyfunc, arg_types, flags=flags)
             cfunc = cr.entry_point
@@ -168,78 +302,78 @@ class TestOperators(TestCase):
     compare_unordered_types = [types.complex64, types.complex128]
 
     def test_lt_scalar(self, flags=enable_pyobj_flags):
-        self.run_test_scalar_compare(lt_usecase, flags)
+        self.run_test_scalar_compare(self.op.lt_usecase, flags)
 
     def test_lt_scalar_npm(self):
         self.test_lt_scalar(flags=Noflags)
 
     def test_le_scalar(self, flags=enable_pyobj_flags):
-        self.run_test_scalar_compare(le_usecase, flags)
+        self.run_test_scalar_compare(self.op.le_usecase, flags)
 
     def test_le_scalar_npm(self):
         self.test_le_scalar(flags=Noflags)
 
     def test_gt_scalar(self, flags=enable_pyobj_flags):
-        self.run_test_scalar_compare(gt_usecase, flags)
+        self.run_test_scalar_compare(self.op.gt_usecase, flags)
 
     def test_gt_scalar_npm(self):
         self.test_gt_scalar(flags=Noflags)
 
     def test_ge_scalar(self, flags=enable_pyobj_flags):
-        self.run_test_scalar_compare(ge_usecase, flags)
+        self.run_test_scalar_compare(self.op.ge_usecase, flags)
 
     def test_ge_scalar_npm(self):
         self.test_ge_scalar(flags=Noflags)
 
     def test_eq_scalar(self, flags=enable_pyobj_flags):
-        self.run_test_scalar_compare(eq_usecase, flags, ordered=False)
+        self.run_test_scalar_compare(self.op.eq_usecase, flags, ordered=False)
 
     def test_eq_scalar_npm(self):
         self.test_eq_scalar(flags=Noflags)
 
     def test_ne_scalar(self, flags=enable_pyobj_flags):
-        self.run_test_scalar_compare(ne_usecase, flags, ordered=False)
+        self.run_test_scalar_compare(self.op.ne_usecase, flags, ordered=False)
 
     def test_ne_scalar_npm(self):
         self.test_ne_scalar(flags=Noflags)
 
     def test_eq_array(self, flags=enable_pyobj_flags):
-        self.run_test_array_compare(eq_usecase, flags, ordered=False)
+        self.run_test_array_compare(self.op.eq_usecase, flags, ordered=False)
 
     def test_eq_array_npm(self):
         with self.assertTypingError():
             self.test_eq_array(flags=Noflags)
 
     def test_ne_array(self, flags=enable_pyobj_flags):
-        self.run_test_array_compare(ne_usecase, flags, ordered=False)
+        self.run_test_array_compare(self.op.ne_usecase, flags, ordered=False)
 
     def test_ne_array_npm(self):
         with self.assertTypingError():
             self.test_ne_array(flags=Noflags)
 
     def test_lt_array(self, flags=enable_pyobj_flags):
-        self.run_test_array_compare(lt_usecase, flags)
+        self.run_test_array_compare(self.op.lt_usecase, flags)
 
     def test_lt_array_npm(self):
         with self.assertTypingError():
             self.test_lt_array(flags=Noflags)
 
     def test_le_array(self, flags=enable_pyobj_flags):
-        self.run_test_array_compare(le_usecase, flags)
+        self.run_test_array_compare(self.op.le_usecase, flags)
 
     def test_le_array_npm(self):
         with self.assertTypingError():
             self.test_le_array(flags=Noflags)
 
     def test_gt_array(self, flags=enable_pyobj_flags):
-        self.run_test_array_compare(gt_usecase, flags)
+        self.run_test_array_compare(self.op.gt_usecase, flags)
 
     def test_gt_array_npm(self):
         with self.assertTypingError():
             self.test_gt_array(flags=Noflags)
 
     def test_ge_array(self, flags=enable_pyobj_flags):
-        self.run_test_array_compare(ge_usecase, flags)
+        self.run_test_array_compare(self.op.ge_usecase, flags)
 
     def test_ge_array_npm(self):
         with self.assertTypingError():
@@ -247,7 +381,7 @@ class TestOperators(TestCase):
 
     def test_add_ints(self, flags=enable_pyobj_flags):
 
-        pyfunc = add_usecase
+        pyfunc = self.op.add_usecase
 
         x_operands = [-1, 0, 1]
         y_operands = [-1, 0, 1]
@@ -270,7 +404,7 @@ class TestOperators(TestCase):
 
     def test_add_ints_array(self, flags=enable_pyobj_flags):
 
-        pyfunc = add_usecase
+        pyfunc = self.op.add_usecase
 
         array = np.arange(-10, 10, dtype=np.int32)
 
@@ -292,7 +426,7 @@ class TestOperators(TestCase):
 
     def test_add_floats(self, flags=enable_pyobj_flags):
 
-        pyfunc = add_usecase
+        pyfunc = self.op.add_usecase
 
         x_operands = [-1.1, 0.0, 1.1]
         y_operands = [-1.1, 0.0, 1.1]
@@ -304,7 +438,7 @@ class TestOperators(TestCase):
                              flags=flags)
 
     def test_add_floats_array(self, flags=enable_pyobj_flags):
-        pyfunc = add_usecase
+        pyfunc = self.op.add_usecase
         array = np.arange(-1, 1, 0.1, dtype=np.float32)
 
         x_operands = [array]
@@ -326,7 +460,7 @@ class TestOperators(TestCase):
 
     def test_sub_ints(self, flags=enable_pyobj_flags):
 
-        pyfunc = sub_usecase
+        pyfunc = self.op.sub_usecase
 
         x_operands = [-1, 0, 1]
         y_operands = [-1, 0, 1]
@@ -350,7 +484,7 @@ class TestOperators(TestCase):
 
     def test_sub_ints_array(self, flags=enable_pyobj_flags):
 
-        pyfunc = sub_usecase
+        pyfunc = self.op.sub_usecase
 
         array = np.arange(-10, 10, dtype=np.int32)
 
@@ -372,7 +506,7 @@ class TestOperators(TestCase):
 
     def test_sub_floats(self, flags=enable_pyobj_flags):
 
-        pyfunc = sub_usecase
+        pyfunc = self.op.sub_usecase
 
         x_operands = [-1.1, 0.0, 1.1]
         y_operands = [-1.1, 0.0, 1.1]
@@ -385,7 +519,7 @@ class TestOperators(TestCase):
 
     def test_sub_floats_array(self, flags=enable_pyobj_flags):
 
-        pyfunc = sub_usecase
+        pyfunc = self.op.sub_usecase
 
         array = np.arange(-1, 1, 0.1, dtype=np.float32)
 
@@ -407,7 +541,7 @@ class TestOperators(TestCase):
 
     def test_mul_ints(self, flags=enable_pyobj_flags):
 
-        pyfunc = mul_usecase
+        pyfunc = self.op.mul_usecase
 
         x_operands = [-1, 0, 1]
         y_operands = [-1, 0, 1]
@@ -430,7 +564,7 @@ class TestOperators(TestCase):
 
     def test_mul_ints_array(self, flags=enable_pyobj_flags):
 
-        pyfunc = mul_usecase
+        pyfunc = self.op.mul_usecase
 
         array = np.arange(-10, 10, dtype=np.int32)
 
@@ -452,7 +586,7 @@ class TestOperators(TestCase):
 
     def test_mul_floats(self, flags=enable_pyobj_flags):
 
-        pyfunc = mul_usecase
+        pyfunc = self.op.mul_usecase
 
         x_operands = [-111.111, 0.0, 111.111]
         y_operands = [-111.111, 0.0, 111.111]
@@ -465,7 +599,7 @@ class TestOperators(TestCase):
 
     def test_mul_floats_array(self, flags=enable_pyobj_flags):
 
-        pyfunc = mul_usecase
+        pyfunc = self.op.mul_usecase
         array = np.arange(-1, 1, 0.1, dtype=np.float32)
 
         x_operands = [array]
@@ -491,7 +625,7 @@ class TestOperators(TestCase):
         else:
             tester = self.run_test_ints
 
-        pyfunc = div_usecase
+        pyfunc = self.op.div_usecase
 
         x_operands = [-1, 0, 1, 2, 3]
         y_operands = [-3, -2, -1, 1]
@@ -511,7 +645,7 @@ class TestOperators(TestCase):
         tester(pyfunc, x_operands, y_operands, types_list, flags=flags)
 
     def test_div_ints_array(self, flags=enable_pyobj_flags):
-        pyfunc = div_usecase
+        pyfunc = self.op.div_usecase
         array = np.array([-10, -9, -2, -1, 1, 2, 9, 10], dtype=np.int32)
 
         x_operands = [array]
@@ -532,7 +666,7 @@ class TestOperators(TestCase):
 
     def test_div_floats(self, flags=enable_pyobj_flags):
 
-        pyfunc = div_usecase
+        pyfunc = self.op.div_usecase
 
         x_operands = [-111.111, 0.0, 2.2]
         y_operands = [-2.2, 1.0, 111.111]
@@ -545,7 +679,7 @@ class TestOperators(TestCase):
 
     def test_div_floats_array(self, flags=enable_pyobj_flags):
 
-        pyfunc = div_usecase
+        pyfunc = self.op.div_usecase
 
         array = np.concatenate((np.arange(0.1, 1.1, 0.1, dtype=np.float32),
                                np.arange(-1.0, 0.0, 0.1, dtype=np.float32)))
@@ -567,7 +701,7 @@ class TestOperators(TestCase):
             self.test_div_floats_array(flags=Noflags)
 
     def test_truediv_ints(self, flags=enable_pyobj_flags):
-        pyfunc = truediv_usecase
+        pyfunc = self.op.truediv_usecase
 
         x_operands = [0, 1, 2, 3]
         y_operands = [1, 1, 2, 3]
@@ -584,7 +718,7 @@ class TestOperators(TestCase):
         self.test_truediv_ints(flags=Noflags)
 
     def test_truediv_floats(self, flags=enable_pyobj_flags):
-        pyfunc = truediv_usecase
+        pyfunc = self.op.truediv_usecase
 
         x_operands = [-111.111, 0.0, 2.2]
         y_operands = [-2.2, 1.0, 111.111]
@@ -598,24 +732,27 @@ class TestOperators(TestCase):
     def test_truediv_floats_npm(self):
         self.test_truediv_floats(flags=Noflags)
 
-    def test_floordiv_floats(self, flags=enable_pyobj_flags):
-        pyfunc = floordiv_usecase
+    if 0:
+        # Floor division isn't implement for floats. These tests used to
+        # pass mistakingly because of a typo in floordiv_usecase()
+        def test_floordiv_floats(self, flags=enable_pyobj_flags):
+            pyfunc = self.op.floordiv_usecase
 
-        x_operands = [-111.111, 0.0, 2.2]
-        y_operands = [-2.2, 1.0, 111.111]
+            x_operands = [-111.111, 0.0, 2.2]
+            y_operands = [-2.2, 1.0, 111.111]
 
-        types_list = [(types.float32, types.float32),
-                      (types.float64, types.float64)]
+            types_list = [(types.float32, types.float32),
+                          (types.float64, types.float64)]
 
-        self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
-                             flags=flags)
+            self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
+                                 flags=flags)
 
-    def test_floordiv_floats_npm(self):
-        self.test_floordiv_floats(flags=Noflags)
+        def test_floordiv_floats_npm(self):
+            self.test_floordiv_floats(flags=Noflags)
 
     def test_mod_ints(self, flags=enable_pyobj_flags):
 
-        pyfunc = mod_usecase
+        pyfunc = self.op.mod_usecase
 
         x_operands = [-1, 0, 1, 2, 3]
         y_operands = [-3, -2, -1, 1]
@@ -638,7 +775,7 @@ class TestOperators(TestCase):
 
     def test_mod_ints_array(self, flags=enable_pyobj_flags):
 
-        pyfunc = mod_usecase
+        pyfunc = self.op.mod_usecase
 
         array = np.concatenate((np.arange(1, 11, dtype=np.int32),
                                np.arange(-10, 0, dtype=np.int32)))
@@ -661,7 +798,7 @@ class TestOperators(TestCase):
 
     def test_mod_floats(self, flags=enable_pyobj_flags):
 
-        pyfunc = mod_usecase
+        pyfunc = self.op.mod_usecase
 
         x_operands = [-111.111, 0.0, 2.2]
         y_operands = [-2.2, 1.0, 111.111]
@@ -674,7 +811,7 @@ class TestOperators(TestCase):
 
     def test_mod_floats_array(self, flags=enable_pyobj_flags):
 
-        pyfunc = mod_usecase
+        pyfunc = self.op.mod_usecase
 
         array = np.arange(-1, 1, 0.1, dtype=np.float32)
 
@@ -696,7 +833,7 @@ class TestOperators(TestCase):
 
     def test_pow_ints(self, flags=enable_pyobj_flags):
 
-        pyfunc = pow_usecase
+        pyfunc = self.op.pow_usecase
 
         x_operands = [-2, -1, 0, 1, 2]
         y_operands = [0, 1, 2]
@@ -719,7 +856,7 @@ class TestOperators(TestCase):
 
     def test_pow_ints_array(self, flags=enable_pyobj_flags):
 
-        pyfunc = pow_usecase
+        pyfunc = self.op.pow_usecase
 
         array = np.arange(-10, 10, dtype=np.int32)
 
@@ -741,7 +878,7 @@ class TestOperators(TestCase):
 
     def test_pow_floats(self, flags=enable_pyobj_flags):
 
-        pyfunc = pow_usecase
+        pyfunc = self.op.pow_usecase
 
         x_operands = [-222.222, -111.111, 111.111, 222.222]
         y_operands = [-2, -1, 0, 1, 2]
@@ -763,7 +900,7 @@ class TestOperators(TestCase):
 
     def test_pow_floats_array(self, flags=enable_pyobj_flags):
 
-        pyfunc = pow_usecase
+        pyfunc = self.op.pow_usecase
         # NOTE
         # If x is finite negative and y is finite but not an integer,
         # it causes a domain error
@@ -799,7 +936,7 @@ class TestOperators(TestCase):
             self.test_pow_floats_array(flags=Noflags)
 
     def test_add_complex(self, flags=enable_pyobj_flags):
-        pyfunc = add_usecase
+        pyfunc = self.op.add_usecase
 
         x_operands = [1+0j, 1j, -1-1j]
         y_operands = x_operands
@@ -814,7 +951,7 @@ class TestOperators(TestCase):
         self.test_add_complex(flags=Noflags)
 
     def test_sub_complex(self, flags=enable_pyobj_flags):
-        pyfunc = sub_usecase
+        pyfunc = self.op.sub_usecase
 
         x_operands = [1+0j, 1j, -1-1j]
         y_operands = [1, 2, 3]
@@ -829,7 +966,7 @@ class TestOperators(TestCase):
         self.test_sub_complex(flags=Noflags)
 
     def test_mul_complex(self, flags=enable_pyobj_flags):
-        pyfunc = mul_usecase
+        pyfunc = self.op.mul_usecase
 
         x_operands = [1+0j, 1j, -1-1j]
         y_operands = [1, 2, 3]
@@ -844,7 +981,7 @@ class TestOperators(TestCase):
         self.test_mul_complex(flags=Noflags)
 
     def test_div_complex(self, flags=enable_pyobj_flags):
-        pyfunc = div_usecase
+        pyfunc = self.op.div_usecase
 
         x_operands = [1+0j, 1j, -1-1j]
         y_operands = [1, 2, 3]
@@ -859,7 +996,7 @@ class TestOperators(TestCase):
         self.test_div_complex(flags=Noflags)
 
     def test_truediv_complex(self, flags=enable_pyobj_flags):
-        pyfunc = truediv_usecase
+        pyfunc = self.op.truediv_usecase
 
         x_operands = [1+0j, 1j, -1-1j]
         y_operands = [1, 2, 3]
@@ -874,21 +1011,16 @@ class TestOperators(TestCase):
         self.test_truediv_complex(flags=Noflags)
 
     def test_mod_complex(self, flags=enable_pyobj_flags):
-        pyfunc = mod_usecase
-
-        try:
+        pyfunc = self.op.mod_usecase
+        with self.assertTypingError():
             cres = compile_isolated(pyfunc, (types.complex64, types.complex64))
-        except typeinfer.TypingError as e:
-            e.msg.startswith("Undeclared %(complex64, complex64)")
-        else:
-            self.fail("Complex % should trigger an undeclared error")
 
     def test_mod_complex_npm(self):
         self.test_mod_complex(flags=Noflags)
 
     def test_bitshift_left(self, flags=enable_pyobj_flags):
 
-        pyfunc = bitshift_left_usecase
+        pyfunc = self.op.bitshift_left_usecase
 
         x_operands = [0, 1]
         y_operands = [0, 1, 2, 4, 8, 16, 31]
@@ -927,7 +1059,7 @@ class TestOperators(TestCase):
 
     def test_bitshift_right(self, flags=enable_pyobj_flags):
 
-        pyfunc = bitshift_right_usecase
+        pyfunc = self.op.bitshift_right_usecase
 
         x_operands = [0, 1, 2**32 - 1]
         y_operands = [0, 1, 2, 4, 8, 16, 31]
@@ -966,7 +1098,7 @@ class TestOperators(TestCase):
 
     def test_bitwise_and(self, flags=enable_pyobj_flags):
 
-        pyfunc = bitwise_and_usecase
+        pyfunc = self.op.bitwise_and_usecase
 
         x_operands = list(range(0, 8)) + [2**32 - 1]
         y_operands = list(range(0, 8)) + [2**32 - 1]
@@ -1005,7 +1137,7 @@ class TestOperators(TestCase):
 
     def test_bitwise_or(self, flags=enable_pyobj_flags):
 
-        pyfunc = bitwise_or_usecase
+        pyfunc = self.op.bitwise_or_usecase
 
         x_operands = list(range(0, 8)) + [2**32 - 1]
         y_operands = list(range(0, 8)) + [2**32 - 1]
@@ -1044,7 +1176,7 @@ class TestOperators(TestCase):
 
     def test_bitwise_xor(self, flags=enable_pyobj_flags):
 
-        pyfunc = bitwise_xor_usecase
+        pyfunc = self.op.bitwise_xor_usecase
 
         x_operands = list(range(0, 8)) + [2**32 - 1]
         y_operands = list(range(0, 8)) + [2**32 - 1]
@@ -1083,7 +1215,7 @@ class TestOperators(TestCase):
 
     def test_bitwise_not(self, flags=enable_pyobj_flags):
 
-        pyfunc = bitwise_not_usecase
+        pyfunc = self.op.bitwise_not_usecase
 
         x_operands = list(range(0, 8)) + [2**32 - 1]
         x_operands = [np.uint32(x) for x in x_operands]
@@ -1123,7 +1255,7 @@ class TestOperators(TestCase):
         self.test_bitwise_not(flags=Noflags)
 
     def test_not(self):
-        pyfunc = not_usecase
+        pyfunc = self.op.not_usecase
 
         values = [
             1,
@@ -1139,7 +1271,7 @@ class TestOperators(TestCase):
             self.assertEqual(pyfunc(val), cfunc(val))
 
     def test_not_npm(self):
-        pyfunc = not_usecase
+        pyfunc = self.op.not_usecase
         # test native mode
         argtys = [
             types.int8,
@@ -1162,7 +1294,7 @@ class TestOperators(TestCase):
             self.assertEqual(pyfunc(val), cfunc(val))
 
     def test_negate_npm(self):
-        pyfunc = negate_usecase
+        pyfunc = self.op.negate_usecase
         # test native mode
         argtys = [
             types.int8,
@@ -1186,7 +1318,7 @@ class TestOperators(TestCase):
             self.assertAlmostEqual(pyfunc(val), cfunc(val))
 
     def test_negate(self):
-        pyfunc = negate_usecase
+        pyfunc = self.op.negate_usecase
         values = [
             1,
             2,
@@ -1200,7 +1332,7 @@ class TestOperators(TestCase):
             self.assertEqual(pyfunc(val), cfunc(val))
 
     def test_unary_positive_npm(self):
-        pyfunc = unary_positive_usecase
+        pyfunc = self.op.unary_positive_usecase
         # test native mode
         argtys = [
             types.int8,
@@ -1224,7 +1356,7 @@ class TestOperators(TestCase):
             self.assertAlmostEqual(pyfunc(val), cfunc(val))
 
     def test_unary_positive(self):
-        pyfunc = unary_positive_usecase
+        pyfunc = self.op.unary_positive_usecase
         values = [
             1,
             2,
@@ -1236,6 +1368,11 @@ class TestOperators(TestCase):
         cfunc = cres.entry_point
         for val in values:
             self.assertEqual(pyfunc(val), cfunc(val))
+
+
+class TestOperatorModule(TestOperators):
+
+    op = FunctionalOperatorImpl
 
 
 if __name__ == '__main__':
