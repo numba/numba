@@ -88,18 +88,16 @@ class CPUContext(BaseContext):
             return pm
 
     def map_math_functions(self):
-        le.dylib_add_symbol("numba.math.cpow", _helperlib.get_cpow())
-        le.dylib_add_symbol("numba.math.sdiv", _helperlib.get_sdiv())
-        le.dylib_add_symbol("numba.math.srem", _helperlib.get_srem())
-        le.dylib_add_symbol("numba.math.udiv", _helperlib.get_udiv())
-        le.dylib_add_symbol("numba.math.urem", _helperlib.get_urem())
+        c_helpers = _helperlib.c_helpers
+        for name in ['cpow', 'sdiv', 'srem', 'udiv', 'urem']:
+            le.dylib_add_symbol("numba.math.%s" % name, c_helpers[name])
         if sys.platform.startswith('win32') and not le.dylib_address_of_symbol('__ftol2'):
-            le.dylib_add_symbol("__ftol2", _helperlib.get_fptoui())
+            le.dylib_add_symbol("__ftol2", c_helpers["fptoui"])
         elif sys.platform.startswith('linux') and not le.dylib_address_of_symbol('__fixunsdfdi'):
-            le.dylib_add_symbol("__fixunsdfdi", _helperlib.get_fptoui())
+            le.dylib_add_symbol("__fixunsdfdi", c_helpers["fptoui"])
         # Necessary for Python3
-        le.dylib_add_symbol("numba.round", _helperlib.get_round_even())
-        le.dylib_add_symbol("numba.roundf", _helperlib.get_roundf_even())
+        le.dylib_add_symbol("numba.round", c_helpers["round_even"])
+        le.dylib_add_symbol("numba.roundf", c_helpers["roundf_even"])
 
         # windows symbol hacks
         if sys.platform.startswith('win32') and self.is32bit:
@@ -113,8 +111,7 @@ class CPUContext(BaseContext):
             else:
                 # Non-exist
                 # Bind from C code
-                imp = getattr(_helperlib, "get_%s" % fname)
-                le.dylib_add_symbol(fname, imp())
+                le.dylib_add_symbol(fname, c_helpers[fname])
                 self.cmath_provider[fname] = 'indirect'
 
     def map_numpy_math_functions(self):

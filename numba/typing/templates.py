@@ -108,7 +108,10 @@ def resolve_overload(context, key, cases, args, kws):
         if len(ordered) > 1:
             (first, case1), (second, case2) = ordered[:2]
             # Ambiguous overloading
-            if first == second:
+            # NOTE: we can have duplicate overloadings if e.g. some type
+            # aliases were used when declaring the supported signatures
+            # (typical example being "intp" and "int64" on a 64-bit build)
+            if first == second and case1 != case2:
                 ambiguous = []
                 for rate, case in ordered:
                     if rate == first:

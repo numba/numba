@@ -132,8 +132,9 @@ class Float(Type):
 
 @total_ordering
 class Complex(Type):
-    def __init__(self, *args, **kws):
-        super(Complex, self).__init__(*args, **kws)
+    def __init__(self, name, underlying_float, **kwargs):
+        super(Complex, self).__init__(name, **kwargs)
+        self.underlying_float = underlying_float
         # Determine bitwidth
         assert self.name.startswith('complex')
         bitwidth = int(self.name[7:])
@@ -556,8 +557,8 @@ uintp = uint32 if tuple.__itemsize__ == 4 else uint64
 float32 = Float('float32')
 float64 = Float('float64')
 
-complex64 = Complex('complex64')
-complex128 = Complex('complex128')
+complex64 = Complex('complex64', float32)
+complex128 = Complex('complex128', float64)
 
 len_type = Dummy('len')
 range_type = Dummy('range')

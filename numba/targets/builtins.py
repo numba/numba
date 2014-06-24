@@ -9,6 +9,7 @@ from numba import errcode
 from numba import types, typing, cgutils, utils
 from numba.targets.imputils import (builtin, builtin_attr, implement,
                                     impl_attribute, impl_attribute_generic)
+from numba.typing import signature
 
 #-------------------------------------------------------------------------------
 
@@ -730,16 +731,12 @@ class Complex128(cgutils.Structure):
 def get_complex_info(ty):
     if ty == types.complex64:
         cmplxcls = Complex64
-        flty = types.float32
-
     elif ty == types.complex128:
         cmplxcls = Complex128
-        flty = types.float64
-
     else:
         raise TypeError(ty)
 
-    return cmplxcls, flty
+    return cmplxcls, ty.underlying_float
 
 
 @builtin_attr
@@ -793,7 +790,7 @@ def complex128_power_impl(context, builder, sig, args):
     with cgutils.ifelse(builder, b_is_two) as (then, otherwise):
         with then:
             # Lower as multiplication
-            res = complex_mult_impl(context, builder, sig, (ca, ca))
+            res = complex_mul_impl(context, builder, sig, (ca, ca))
             cres = Complex128(context, builder, value=res)
             c.real = cres.real
             c.imag = cres.imag
@@ -837,7 +834,7 @@ def complex_sub_impl(context, builder, sig, args):
     return z._getvalue()
 
 
-def complex_mult_impl(context, builder, sig, args):
+def complex_mul_impl(context, builder, sig, args):
     """
     (a+bi)(c+di)=(ac-bd)+i(ad+bc)
     """
@@ -936,11 +933,26 @@ def complex_ne_impl(context, builder, sig, args):
     return builder.or_(reals_are_ne, imags_are_ne)
 
 
+def complex_abs_impl(context, builder, sig, args):
+    """
+    abs(z) := hypot(z.real, z.imag)
+    """
+    [typ] = sig.args
+    [val] = args
+    cmplxcls = context.make_complex(typ)
+    flty = typ.underlying_float
+    cmplx = cmplxcls(context, builder, val)
+    [x, y] = cmplx.real, cmplx.imag
+    hypotsig = signature(sig.return_type, flty, flty)
+    hypotimp = context.get_function(math.hypot, hypotsig)
+    return hypotimp(builder, [x, y])
+
+
 for ty, cls in zip([types.complex64, types.complex128],
                    [Complex64, Complex128]):
     builtin(implement("+", ty, ty)(complex_add_impl))
     builtin(implement("-", ty, ty)(complex_sub_impl))
-    builtin(implement("*", ty, ty)(complex_mult_impl))
+    builtin(implement("*", ty, ty)(complex_mul_impl))
     builtin(implement("/?", ty, ty)(complex_div_impl))
     builtin(implement("/", ty, ty)(complex_div_impl))
     builtin(implement("-", ty)(complex_negate_impl))
@@ -949,6 +961,8 @@ for ty, cls in zip([types.complex64, types.complex128],
 
     builtin(implement('==', ty, ty)(complex_eq_impl))
     builtin(implement('!=', ty, ty)(complex_ne_impl))
+
+    builtin(implement(types.abs_type, ty)(complex_abs_impl))
 
 
 #------------------------------------------------------------------------------
@@ -1801,10 +1815,14 @@ def float_impl(context, builder, sig, args):
 @implement(complex, types.VarArg)
 def complex_impl(context, builder, sig, args):
     if len(sig.args) == 1:
-        [realty] = sig.args
-        [real] = args
-        real = context.cast(builder, real, realty, types.float64)
-        imag = context.get_constant(types.float64, 0)
+        [argty] = sig.args
+        [arg] = args
+        if isinstance(argty, types.Complex):
+            # Cast Complex* to Complex128
+            return context.cast(builder, arg, argty, types.complex128)
+        else:
+            real = context.cast(builder, arg, argty, types.float64)
+            imag = context.get_constant(types.float64, 0)
 
     elif len(sig.args) == 2:
         [realty, imagty] = sig.args
