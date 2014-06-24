@@ -16,23 +16,40 @@ registry = Registry()
 register = registry.register
 
 
-def unary_math_int_impl(fn, f64impl):
-    @register
-    @implement(fn, types.int64)
-    def s64impl(context, builder, sig, args):
+def _unary_signed_input_wrapper_impl(wrapped_impl):
+    """
+    Return an implementation factory to convert the single signed input
+    argument to a float, then defer to the *wrapped_impl*.
+    """
+    def implementer(context, builder, sig, args):
         [val] = args
         fpval = builder.sitofp(val, Type.double())
         sig = signature(types.float64, types.float64)
-        return f64impl(context, builder, sig, [fpval])
+        return wrapped_impl(context, builder, sig, [fpval])
 
-    @register
-    @implement(fn, types.uint64)
-    def u64impl(context, builder, sig, args):
+    return implementer
+
+def _unary_unsigned_input_wrapper_impl(wrapped_impl):
+    """
+    Return an implementation factory to convert the single unsigned input
+    argument to a float, then defer to the *wrapped_impl*.
+    """
+    def implementer(context, builder, sig, args):
         [val] = args
         fpval = builder.uitofp(val, Type.double())
         sig = signature(types.float64, types.float64)
-        return f64impl(context, builder, sig, [fpval])
+        return wrapped_impl(context, builder, sig, [fpval])
 
+    return implementer
+
+def unary_math_int_impl(fn, f64impl):
+    impl = _unary_signed_input_wrapper_impl(f64impl)
+    register(implement(fn, types.intp)(impl))
+    register(implement(fn, types.int64)(impl))
+
+    impl = _unary_unsigned_input_wrapper_impl(f64impl)
+    register(implement(fn, types.uintp)(impl))
+    register(implement(fn, types.uint64)(impl))
 
 def unary_math_intr(fn, intrcode):
     @register
@@ -56,30 +73,46 @@ def unary_math_intr(fn, intrcode):
     unary_math_int_impl(fn, f64impl)
 
 
-def unary_math_extern(fn, f32extern, f64extern, restype=None):
+def _float_input_unary_math_extern_impl(extern_func, input_type, restype=None):
+    """
+    Return an implementation factory to call unary *extern_func* with the
+    given *input_type* argument.
+    """
+    def implementer(context, builder, sig, args):
+        [val] = args
+        mod = cgutils.get_module(builder)
+        lty = context.get_value_type(input_type)
+        fnty = Type.function(lty, [lty])
+        fn = mod.get_or_insert_function(fnty, name=extern_func)
+        res = builder.call(fn, (val,))
+        if restype is None:
+            return res
+        else:
+            return context.cast(builder, res, input_type,
+                                restype)
 
-    def float_input_impl(extern_func, input_type):
-        def implementer(context, builder, sig, args):
-            [val] = args
-            mod = cgutils.get_module(builder)
-            lty = context.get_value_type(input_type)
-            fnty = Type.function(lty, [lty])
-            fn = mod.get_or_insert_function(fnty, name=extern_func)
-            res = builder.call(fn, (val,))
-            if restype is None:
-                return res
-            else:
-                return context.cast(builder, res, input_type,
-                                    restype)
+    return implementer
 
-        return implementer
-
-    register(implement(fn, types.float32)
-             (float_input_impl(f32extern, types.float32)))
-    register(implement(fn, types.float64)
-             (float_input_impl(f64extern, types.float64)))
-
-    unary_math_int_impl(fn, float_input_impl(f64extern, types.float64))
+def unary_math_extern(fn, f32extern, f64extern, int_restype=False):
+    f_restype = types.int64 if int_restype else None
+    f32impl = _float_input_unary_math_extern_impl(f32extern, types.float32, f_restype)
+    f64impl = _float_input_unary_math_extern_impl(f64extern, types.float64, f_restype)
+    register(implement(fn, types.float32)(f32impl))
+    register(implement(fn, types.float64)(f64impl))
+    
+    if int_restype:
+        # If asked for an integral return type, we choose the input type
+        # as the return type.
+        for input_type in [types.intp, types.int64]:
+            impl = _unary_signed_input_wrapper_impl(
+                _float_input_unary_math_extern_impl(f64extern, types.float64, input_type))
+            register(implement(fn, input_type)(impl))
+        for input_type in [types.uintp, types.uint64]:
+            impl = _unary_unsigned_input_wrapper_impl(
+                _float_input_unary_math_extern_impl(f64extern, types.float64, input_type))
+            register(implement(fn, input_type)(impl))
+    else:
+        unary_math_int_impl(fn, f64impl)
 
 
 unary_math_intr(math.fabs, lc.INTR_FABS)
@@ -107,13 +140,13 @@ unary_math_extern(math.cosh, "coshf", "cosh")
 unary_math_extern(math.tanh, "tanhf", "tanh")
 # math.floor and math.ceil return float on 2.x, int on 3.x
 if utils.PYVERSION > (3, 0):
-    unary_math_extern(math.ceil, "ceilf", "ceil", types.int64)
-    unary_math_extern(math.floor, "floorf", "floor", types.int64)
+    unary_math_extern(math.ceil, "ceilf", "ceil", True)
+    unary_math_extern(math.floor, "floorf", "floor", True)
 else:
     unary_math_extern(math.ceil, "ceilf", "ceil")
     unary_math_extern(math.floor, "floorf", "floor")
 unary_math_extern(math.sqrt, "sqrtf", "sqrt")
-unary_math_extern(math.trunc, "truncf", "trunc", types.int64)
+unary_math_extern(math.trunc, "truncf", "trunc", True)
 
 
 @register
