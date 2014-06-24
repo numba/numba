@@ -24,7 +24,7 @@ Limitations
 
 Right now support for ufuncs is quite limited in no-python mode. Meaning that only a selection of the ufuncs work in no-python mode.
 
-Also, in its current implementation ufuncs working on array will only compile in no-python mode if the output array is explicit. Note that this limitation does not apply when applied to scalars 
+Also, in its current implementation ufuncs working on array will only compile in no-python mode if the output array is explicit. Note that this limitation does not apply when applied to scalars
 
 
 Following is a list of the different *NumPy* ufuncs that *numba* is aware of, sorted in the same way as in the *NumPy* documentation.
@@ -36,25 +36,25 @@ Math operations
 ==============  =============  ===========
     UFUNC                  MODE
 --------------  --------------------------
-    name         python-mode    no-python 
+    name         python-mode    no-python
 ==============  =============  ===========
  add                 Yes          Yes
  subtract            Yes          Yes
  multiply            Yes          Yes
  divide              Yes          Yes
- logaddexp           Yes          No     
- logaddexp2          Yes          No     
- true_divide         Yes          No     
- floor_divide        Yes          No     
+ logaddexp           Yes          No
+ logaddexp2          Yes          No
+ true_divide         Yes          No
+ floor_divide        Yes          No
  negative            Yes          Yes
  power               Yes          Yes
- remainder           Yes          No     
- mod                 Yes          No     
- fmod                Yes          No     
+ remainder           Yes          No
+ mod                 Yes          No
+ fmod                Yes          No
  absolute            Yes          Yes
- rint                Yes          No     
- sign                Yes          Yes 
- conj                Yes          No     
+ rint                Yes          No
+ sign                Yes          Yes
+ conj                Yes          No
  exp                 Yes          Yes
  exp2                Yes          Yes
  log                 Yes          Yes
@@ -63,8 +63,8 @@ Math operations
  expm1               Yes          Yes
  log1p               Yes          Yes
  sqrt                Yes          Yes
- square              Yes          No     
- reciprocal          Yes          No     
+ square              Yes          No
+ reciprocal          Yes          No
 ==============  =============  ===========
 
 
@@ -74,7 +74,7 @@ Trigonometric functions
 ==============  =============  ===========
     UFUNC                  MODE
 --------------  --------------------------
-    name         python-mode    no-python 
+    name         python-mode    no-python
 ==============  =============  ===========
  sin                 Yes          Yes
  cos                 Yes          Yes
@@ -83,7 +83,7 @@ Trigonometric functions
  arccos              Yes          Yes
  arctan              Yes          Yes
  arctan2             Yes          Yes
- hypot               Yes          No     
+ hypot               Yes          No
  sinh                Yes          Yes
  cosh                Yes          Yes
  tanh                Yes          Yes
@@ -101,14 +101,14 @@ Bit-twiddling functions
 ==============  =============  ===========
     UFUNC                  MODE
 --------------  --------------------------
-    name         python-mode    no-python 
+    name         python-mode    no-python
 ==============  =============  ===========
- bitwise_and         Yes          No     
- bitwise_or          Yes          No     
- bitwise_xor         Yes          No     
+ bitwise_and         Yes          No
+ bitwise_or          Yes          No
+ bitwise_xor         Yes          No
  invert              No           No
- left_shift          Yes          No     
- right_shift         Yes          No     
+ left_shift          Yes          No
+ right_shift         Yes          No
 ==============  =============  ===========
 
 
@@ -118,22 +118,22 @@ Comparison functions
 ==============  =============  ===========
     UFUNC                  MODE
 --------------  --------------------------
-    name         python-mode    no-python 
+    name         python-mode    no-python
 ==============  =============  ===========
- greater             Yes          No     
- greater_equal       Yes          No     
- less                Yes          No     
- less_equal          Yes          No     
- not_equal           Yes          No     
- equal               Yes          No     
- logical_and         Yes          No     
- logical_or          Yes          No     
- logical_xor         Yes          No     
+ greater             Yes          No
+ greater_equal       Yes          No
+ less                Yes          No
+ less_equal          Yes          No
+ not_equal           Yes          No
+ equal               Yes          No
+ logical_and         Yes          No
+ logical_or          Yes          No
+ logical_xor         Yes          No
  logical_not         No           No
- maximum             Yes          No     
- minimim             Yes          No     
- fmax                Yes          No     
- fmin                Yes          No     
+ maximum             Yes          No
+ minimim             Yes          No
+ fmax                Yes          No
+ fmin                Yes          No
 ==============  =============  ===========
 
 
@@ -143,24 +143,24 @@ Floating functions
 ==============  =============  ===========
     UFUNC                  MODE
 --------------  --------------------------
-    name         python-mode    no-python 
+    name         python-mode    no-python
 ==============  =============  ===========
- isreal              No           No
- iscomplex           No           No
- isfinite            No           No
- isinf               No           No
- isnan               No           No
- signbit             No           No
- copysign            Yes          No     
- nextafter           No           No
- modf                No           No
- ldexp               Yes*         No     
- frexp               No           No
- fmod                No           No
+ isreal**            No           No
+ iscomplex**         No           No
+ isfinite            Yes          No
+ isinf               Yes          No
+ isnan               Yes          No
+ signbit             Yes          No
+ copysign            Yes          Yes
+ nextafter           Yes          No
+ modf                Yes          No
+ ldexp               Yes*         No
+ frexp               Yes          No
+ fmod                Yes          No
  floor               Yes          Yes
  ceil                Yes          Yes
  trunc               Yes          Yes
 ==============  =============  ===========
 
 \* not supported on windows 32 bit
-
+\** not an ufunc

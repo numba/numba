@@ -21,6 +21,8 @@ enable_pyobj_flags.set("enable_pyobject")
 
 no_pyobj_flags = Flags()
 
+_unimplemented = unittest.expectedFailure
+
 def _make_unary_ufunc_usecase(ufunc_name):
     ldict = {}
     exec("def fn(x,out):\n    np.{0}(x,out)".format(ufunc_name), globals(), ldict)
@@ -590,13 +592,12 @@ class TestUFuncs(TestCase):
         with self.assertTypingError():
             self.binary_int_ufunc_test('bitwise_xor', flags=no_pyobj_flags)
 
-    #invert supports should be coming soon
-    @unittest.expectedFailure
+    @_unimplemented
     def test_invert_ufunc(self, flags=enable_pyobj_flags):
         self.assertEqual(np.invert, np.bitwise_not)
         self.unary_ufunc_test('invert', flags=flags)
 
-    @unittest.expectedFailure
+    @_unimplemented
     def test_invert_ufunc_npm(self):
         self.test_invert_ufunc(flags=no_pyobj_flags)
 
@@ -681,11 +682,11 @@ class TestUFuncs(TestCase):
             self.binary_ufunc_test('logical_xor', flags=no_pyobj_flags)
 
     #logical_not support should be coming soon
-    @unittest.expectedFailure
+    @_unimplemented
     def test_logical_not_ufunc(self):
         self.unary_ufunc_test('logical_not', flags=no_pyobj_flags)
 
-    @unittest.expectedFailure
+    @_unimplemented
     def test_logical_not_ufunc_npm(self):
         self.unary_ufunc_test('logical_not', flags=no_pyobj_flags)
 
@@ -739,15 +740,57 @@ class TestUFuncs(TestCase):
 
     ############################################################################
     # Floating functions
+    def test_isfinite_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('isfinite', flags=flags)
 
-    def test_copysign_ufunc(self):
+    @_unimplemented
+    def test_isfinite_ufunc_npm(self):
+        self.test_isfinite_ufunc(flags=no_pyobj_flags)
+
+    def test_isinf_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('isinf', flags=flags)
+
+    @_unimplemented
+    def test_isinf_ufunc_npm(self):
+        self.test_isinf_ufunc(flags=no_pyobj_flags)
+
+    def test_isnan_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('isnan', flags=flags)
+
+    @_unimplemented
+    def test_isnan_ufunc_npm(self):
+        self.test_isnan_ufunc(flags=no_pyobj_flags)
+
+    def test_signbit_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('signbit', flags=flags)
+
+    @_unimplemented
+    def test_signbit_ufunc_npm(self):
+        self.test_signbit_ufunc(flags=no_pyobj_flags)
+
+    def test_copysign_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test('copysign')
 
     def test_copysign_ufunc_npm(self):
-        with self.assertTypingError():
-            self.binary_ufunc_test('copysign', flags=no_pyobj_flags)
+        self.test_copysign_ufunc(flags=no_pyobj_flags)
 
-    # FIXME
+    def test_nextafter_ufunc(self, flags=enable_pyobj_flags):
+        self.binary_ufunc_test('nextafter', flags=flags)
+
+    @_unimplemented
+    def test_nextafter_ufunc_npm(self):
+        self.test_nextafter_ufunc(flags=no_pyobj_flags)
+
+    def test_modf_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('modf', flags=flags)
+
+    @_unimplemented
+    def test_modf_ufunc_npm(self):
+        self.test_modf_ufunc(flags=no_pyobj_flags)
+
+
+    # FIXME - ldexp does not have homogeneous arguments, so the usual tests won't
+    #         work as they reuse both inputs
     @unittest.skipIf(is32bits or iswindows, "Some types are not supported on "
                                        "32-bit "
                                "platform")
@@ -761,6 +804,38 @@ class TestUFuncs(TestCase):
     def test_ldexp_ufunc_npm(self):
         with self.assertTypingError():
             self.binary_int_ufunc_test('ldexp', flags=no_pyobj_flags)
+
+    def test_frexp_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('frexp', flags=flags)
+
+    @_unimplemented
+    def test_frexp_ufunc_npm(self):
+        self.test_frexp_ufunc(flags=no_pyobj_flags)
+
+    def test_fmod_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('fmod', flags=flags)
+
+    @_unimplemented
+    def test_fmod_ufunc_npm(self):
+        self.test_fmod_ufunc(flags=no_pyobj_flags)
+
+    def test_floor_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('floor', flags=flags)
+
+    def test_floor_ufunc_npm(self):
+        self.test_floor_ufunc(flags=no_pyobj_flags)
+
+    def test_ceil_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('ceil', flags=flags)
+
+    def test_ceil_ufunc_npm(self):
+        self.test_ceil_ufunc(flags=no_pyobj_flags)
+
+    def test_trunc_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('trunc', flags=flags)
+
+    def test_trunc_ufunc_npm(self):
+        self.test_trunc_ufunc(flags=no_pyobj_flags)
 
 
     ############################################################################
