@@ -23,20 +23,12 @@ import itertools
 from numba import ir, types, utils, config, ctypes_utils, cffi_support
 from numba.config import PYVERSION
 from numba import numpy_support
+from numba.errors import TypingError
+
 
 RANGE_ITER_OBJECTS = (builtins.range,)
 if PYVERSION < (3, 0):
     RANGE_ITER_OBJECTS += (builtins.xrange,)
-
-
-class TypingError(Exception):
-    def __init__(self, msg, loc=None):
-        self.msg = msg
-        self.loc = loc
-        if loc:
-            super(TypingError, self).__init__("%s\n%s" % (msg, loc.strformat()))
-        else:
-            super(TypingError, self).__init__("%s" % (msg,))
 
 
 class TypeVar(object):

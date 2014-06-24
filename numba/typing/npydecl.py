@@ -9,14 +9,32 @@ from ..numpy_support import (ufunc_find_matching_loop,
                              numba_types_to_numpy_letter_types,
                              numpy_letter_types_to_numba_types)
 
+from numba.utils import longint
+from numba.errors import TypingError
+
 registry = Registry()
 builtin_global = registry.register_global
 builtin_attr = registry.register_attr
+
 
 @builtin_attr
 class NumpyModuleAttribute(AttributeTemplate):
     # note: many unary ufuncs are added later on, using setattr
     key = types.Module(numpy)
+
+    def generic_resolve(self, value, attr):
+        atval = getattr(numpy, attr)
+
+        # Treat NumPy module scalars as constants
+        if isinstance(atval, (int, longint)):
+            return types.intp
+        elif isinstance(atval, float):
+            return types.float64
+        elif isinstance(atval, complex):
+            return types.complex128
+        else:
+            raise NotImplementedError("numpy.%s  is not recognized by numba, "
+                                      "yet" % attr)
 
 
 class Numpy_rules_ufunc(AbstractTemplate):
@@ -26,7 +44,7 @@ class Numpy_rules_ufunc(AbstractTemplate):
         if len(args) > self.key.nin:
             # more args than inputs... assume everything is typed :)
             assert(len(args) == self.key.nargs)
-            
+
             return signature(args[-1], *args)
 
         # else... we must look for the kernel to use, the actual loop that
@@ -44,13 +62,15 @@ class Numpy_rules_ufunc(AbstractTemplate):
             if any(array_arg):
                 # if any argument was an array, the result will be an array
                 ndims = max(*[a.ndim if isinstance(a, types.Array) else 0 for a in args])
-                out = [types.Array(x, ndims, 'A') for x in out] 
+                out = [types.Array(x, ndims, 'A') for x in out]
             out.extend(args)
             return signature(*out)
 
         # At this point if we don't have a candidate, we are out of luck. NumPy won't know
         # how to eval this!
-        raise TypingError("can't resolve ufunc {0} for types {1}".format(key.__name__, args))
+        fmt = "can't resolve ufunc {0} for types {1}"
+        msg = fmt.format(self.key.__name__, args)
+        raise TypingError(msg)
 
 
 def _numpy_ufunc(name):

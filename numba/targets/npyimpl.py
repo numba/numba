@@ -4,8 +4,9 @@ import math
 import sys
 from llvm.core import Constant, Type, ICMP_UGT
 from numba import typing, types, cgutils
-from numba.targets.imputils import implement, Registry
+from numba.targets.imputils import implement, Registry, auto_attributes
 from numba import numpy_support
+from numba.utils import longint
 import itertools
 
 registry = Registry()
@@ -502,4 +503,14 @@ register_binary_ufunc(numpy.multiply, '*')
 register_binary_ufunc(numpy.divide, '/', asfloat=True, divbyzero=True)
 register_binary_ufunc(numpy.arctan2, math.atan2, asfloat=True)
 register_binary_ufunc(numpy.power, '**', asfloat=True)
+
+
+# Register all numpy scalar attributes
+typemap = {int: types.intp,
+           longint: types.intp,
+           float: types.float64,
+           complex: types.complex128}
+
+auto_attributes(numpy, typemap, registry.register_attr)
+
 
