@@ -207,7 +207,6 @@ class BinOpPower(ConcreteTemplate):
 
 
 class BitwiseShiftOperation(ConcreteTemplate):
-    # XXX types.uintp instead of types.uint32?
     cases = [signature(op, op, types.uint32)
              for op in sorted(types.signed_domain)]
     cases += [signature(op, op, types.uint32)
