@@ -223,10 +223,13 @@ class BaseLower(object):
         self.builder.branch(self.blkmap[self.firstblk])
 
         if config.DUMP_LLVM:
-            print(("LLVM DUMP %s" % self.fndesc).center(80,'-'))
+            print(("LLVM DUMP %s" % self.fndesc).center(80, '-'))
             print(self.module)
             print('=' * 80)
         self.module.verify()
+        # Run function-level optimize to reduce memory usage and improve
+        # module-level optimization
+        self.context.optimize_function(self.function)
 
     def init_argument(self, arg):
         return arg

@@ -816,6 +816,15 @@ class BaseContext(object):
         self.exceptions[n] = exc
         return n
 
+    def optimize_function(self, func):
+        """
+        Perform function-level optimization.
+        This may improve generated code and reduce memory usage.
+
+        Note: This is called at the end of lowering.
+        """
+        pass
+
 
 class _wrap_impl(object):
     def __init__(self, imp, context, sig):
