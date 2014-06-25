@@ -768,7 +768,7 @@ class PyLower(BaseLower):
             ret = self.pyapi.float_from_double(fval)
             self.check_error(ret)
             return ret
-        elif isinstance(const, int):
+        elif isinstance(const, utils.INT_TYPES):
             if utils.bit_length(const) >= 64:
                 raise ValueError("Integer is too big to be lowered")
             ival = self.context.get_constant(types.intp, const)

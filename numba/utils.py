@@ -7,6 +7,11 @@ import numpy
 from numba.config import PYVERSION
 
 
+INT_TYPES = (int,)
+if PYVERSION < (3, 0):
+    INT_TYPES += (long,)
+
+
 class ConfigOptions(object):
     OPTIONS = ()
 
@@ -109,7 +114,10 @@ def runonce(fn):
 
 
 def bit_length(intval):
-    assert isinstance(intval, int)
+    """
+    Return the number of bits necessary to represent integer `intval`.
+    """
+    assert isinstance(intval, INT_TYPES)
     return len(bin(abs(intval))) - 2
 
 
