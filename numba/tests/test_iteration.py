@@ -19,7 +19,6 @@ no_pyobj_flags = Flags()
 def tuple_iter_usecase():
     res = 0
     for i in (1, 2, 99, 3):
-        print(i)
         res += i
     return res
 

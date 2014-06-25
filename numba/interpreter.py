@@ -510,7 +510,6 @@ class Interpreter(object):
         self._block_actions[loop] = mark_as_body
 
     def op_BINARY_SUBSCR(self, inst, target, index, res):
-        print("indexvar =", type(index), type(self.get(index)))
         index = self.get(index)
         target = self.get(target)
         expr = ir.Expr.getitem(target=target, index=index, loc=self.loc)
