@@ -462,6 +462,7 @@ class TestMathLib(TestCase):
                    types.float32, types.float64]
         x_values = [1, 2, 3, 4, 5, 6, .21, .34]
         y_values = [x + 2 for x in x_values]
+        # Issue #563: precision issues with math.hypot() under Windows.
         prec = 'single' if sys.platform == 'win32' else 'exact'
         self.run_binary(pyfunc, x_types, x_values, y_values, prec=prec)
 
