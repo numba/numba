@@ -10,11 +10,6 @@ from numba.typeinfer import TypingError
 import numba.unittest_support as unittest
 
 
-INT_TYPES = (int,)
-if utils.PYVERSION < (3, 0):
-    INT_TYPES += (long,)
-
-
 class TestCase(unittest.TestCase):
 
     @contextlib.contextmanager
@@ -27,7 +22,7 @@ class TestCase(unittest.TestCase):
             (LoweringError, TypingError, TypeError, NotImplementedError)) as cm:
             yield cm
 
-    _exact_typesets = [(bool,), INT_TYPES, (str,), (utils.unicode),]
+    _exact_typesets = [(bool,), utils.INT_TYPES, (str,), (utils.unicode),]
     _approx_typesets = [(float,), (complex,)]
 
     def assertPreciseEqual(self, first, second, prec='exact', msg=None):
