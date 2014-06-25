@@ -8,7 +8,8 @@ import llvm.core as lc
 from numba import errcode
 from numba import types, typing, cgutils, utils
 from numba.targets.imputils import (builtin, builtin_attr, implement,
-                                    impl_attribute, impl_attribute_generic)
+                                    impl_attribute, impl_attribute_generic,
+                                    iterator_impl)
 from numba.typing import signature
 
 #-------------------------------------------------------------------------------
@@ -1079,245 +1080,12 @@ def slice0_none_none_impl(context, builder, sig, args):
     return slice0_empty_impl(context, builder, newsig, ())
 
 
-class RangeState32(cgutils.Structure):
-    _fields = [('start', types.int32),
-               ('stop', types.int32),
-               ('step', types.int32)]
-
-
-class RangeIter32(cgutils.Structure):
-    _fields = [('iter', types.CPointer(types.int32)),
-               ('stop', types.int32),
-               ('step', types.int32),
-               ('count', types.CPointer(types.int32))]
-
-
-class RangeState64(cgutils.Structure):
-    _fields = [('start', types.int64),
-               ('stop', types.int64),
-               ('step', types.int64)]
-
-
-class RangeIter64(cgutils.Structure):
-    _fields = [('iter', types.CPointer(types.int64)),
-               ('stop', types.int64),
-               ('step', types.int64),
-               ('count', types.CPointer(types.int64))]
-
-
 def make_unituple_iter(tupiter):
     class UniTupleIter(cgutils.Structure):
         _fields = [('index', types.CPointer(types.intp)),
                    ('tuple', tupiter.unituple,)]
 
     return UniTupleIter
-
-
-@builtin
-@implement(types.range_type, types.int32)
-def range1_32_impl(context, builder, sig, args):
-    [stop] = args
-    state = RangeState32(context, builder)
-
-    state.start = context.get_constant(types.int32, 0)
-    state.stop = stop
-    state.step = context.get_constant(types.int32, 1)
-
-    return state._getvalue()
-
-
-@builtin
-@implement(types.range_type, types.int32, types.int32)
-def range2_32_impl(context, builder, sig, args):
-    start, stop = args
-    state = RangeState32(context, builder)
-
-    state.start = start
-    state.stop = stop
-    state.step = context.get_constant(types.int32, 1)
-
-    return state._getvalue()
-
-
-@builtin
-@implement(types.range_type, types.int32, types.int32, types.int32)
-def range3_32_impl(context, builder, sig, args):
-    [start, stop, step] = args
-    state = RangeState32(context, builder)
-
-    state.start = start
-    state.stop = stop
-    state.step = step
-
-    return state._getvalue()
-
-
-def getiter_range_generic(context, builder, iterobj, start, stop, step):
-    diff = builder.sub(stop, start)
-    intty = start.type
-    zero = Constant.int(intty, 0)
-    one = Constant.int(intty, 1)
-    pos_diff = builder.icmp(lc.ICMP_SGT, diff, zero)
-    pos_step = builder.icmp(lc.ICMP_SGT, step, zero)
-    sign_differs = builder.xor(pos_diff, pos_step)
-    zero_step = builder.icmp(lc.ICMP_EQ, step, zero)
-
-    with cgutils.if_unlikely(builder, zero_step):
-        # step shouldn't be zero
-        context.return_errcode(builder, errcode.ASSERTION_ERROR)
-
-    with cgutils.ifelse(builder, sign_differs) as (then, orelse):
-        with then:
-            builder.store(zero, iterobj.count)
-
-        with orelse:
-            rem = builder.srem(diff, step)
-            uneven = builder.icmp(lc.ICMP_SGT, rem, zero)
-            newcount = builder.add(builder.sdiv(diff, step),
-                                   builder.select(uneven, one, zero))
-            builder.store(newcount, iterobj.count)
-
-    return iterobj._getvalue()
-
-
-@builtin
-@implement('getiter', types.range_state32_type)
-def getiter_range32_impl(context, builder, sig, args):
-    (value,) = args
-    state = RangeState32(context, builder, value)
-    iterobj = RangeIter32(context, builder)
-
-    start = state.start
-    stop = state.stop
-    step = state.step
-
-    startptr = cgutils.alloca_once(builder, start.type)
-    builder.store(start, startptr)
-
-    countptr = cgutils.alloca_once(builder, start.type)
-
-    iterobj.iter = startptr
-    iterobj.stop = stop
-    iterobj.step = step
-    iterobj.count = countptr
-
-    return getiter_range_generic(context, builder, iterobj, start, stop, step)
-
-
-@builtin
-@implement('iternext', types.range_iter32_type)
-def iternext_range32_impl(context, builder, sig, args):
-    (value,) = args
-    iterobj = RangeIter32(context, builder, value)
-
-    res = builder.load(iterobj.iter)
-    one = context.get_constant(types.int32, 1)
-
-    countptr = iterobj.count
-    builder.store(builder.sub(builder.load(countptr), one), countptr)
-
-    builder.store(builder.add(res, iterobj.step), iterobj.iter)
-
-    return res
-
-
-@builtin
-@implement('itervalid', types.range_iter32_type)
-def itervalid_range32_impl(context, builder, sig, args):
-    (value,) = args
-    iterobj = RangeIter32(context, builder, value)
-
-    zero = context.get_constant(types.int32, 0)
-    gt = builder.icmp(lc.ICMP_SGE, builder.load(iterobj.count), zero)
-    return gt
-
-
-@builtin
-@implement(types.range_type, types.int64)
-def range1_64_impl(context, builder, sig, args):
-    (stop,) = args
-    state = RangeState64(context, builder)
-
-    state.start = context.get_constant(types.int64, 0)
-    state.stop = stop
-    state.step = context.get_constant(types.int64, 1)
-
-    return state._getvalue()
-
-
-@builtin
-@implement(types.range_type, types.int64, types.int64)
-def range2_64_impl(context, builder, sig, args):
-    start, stop = args
-    state = RangeState64(context, builder)
-
-    state.start = start
-    state.stop = stop
-    state.step = context.get_constant(types.int64, 1)
-
-    return state._getvalue()
-
-
-@builtin
-@implement(types.range_type, types.int64, types.int64, types.int64)
-def range3_64_impl(context, builder, sig, args):
-    [start, stop, step] = args
-    state = RangeState64(context, builder)
-
-    state.start = start
-    state.stop = stop
-    state.step = step
-
-    return state._getvalue()
-
-
-@builtin
-@implement('getiter', types.range_state64_type)
-def getiter_range64_impl(context, builder, sig, args):
-    (value,) = args
-    state = RangeState64(context, builder, value)
-    iterobj = RangeIter64(context, builder)
-
-    start = state.start
-    stop = state.stop
-    step = state.step
-
-    startptr = cgutils.alloca_once(builder, start.type)
-    builder.store(start, startptr)
-
-    countptr = cgutils.alloca_once(builder, start.type)
-
-    iterobj.iter = startptr
-    iterobj.stop = stop
-    iterobj.step = step
-    iterobj.count = countptr
-
-    return getiter_range_generic(context, builder, iterobj, start, stop, step)
-
-
-@builtin
-@implement('iternext', types.range_iter64_type)
-def iternext_range64_impl(context, builder, sig, args):
-    (value,) = args
-    iterobj = RangeIter64(context, builder, value)
-
-    res = builder.load(iterobj.iter)
-    one = context.get_constant(types.int64, 1)
-    builder.store(builder.sub(builder.load(iterobj.count), one), iterobj.count)
-    builder.store(builder.add(res, iterobj.step), iterobj.iter)
-
-    return res
-
-
-@builtin
-@implement('itervalid', types.range_iter64_type)
-def itervalid_range64_impl(context, builder, sig, args):
-    (value,) = args
-    iterobj = RangeIter64(context, builder, value)
-
-    zero = context.get_constant(types.int64, 0)
-    gt = builder.icmp(lc.ICMP_SGE, builder.load(iterobj.count), zero)
-    return gt
 
 
 @builtin
@@ -1340,8 +1108,8 @@ def getiter_unituple(context, builder, sig, args):
 
 
 @builtin
-@implement('iternextsafe', types.Kind(types.UniTupleIter))
-def iternextsafe_unituple(context, builder, sig, args):
+@implement('iternext', types.Kind(types.UniTupleIter))
+def iternext_unituple(context, builder, sig, args):
     [tupiterty] = sig.args
     [tupiter] = args
 
@@ -1351,7 +1119,6 @@ def iternextsafe_unituple(context, builder, sig, args):
     idxptr = iterval.index
     idx = builder.load(idxptr)
 
-    # TODO lack out-of-bound check
     getitem_sig = typing.signature(sig.return_type, tupiterty.unituple,
                                    types.intp)
     res = getitem_unituple(context, builder, getitem_sig, [tup, idx])
@@ -1359,6 +1126,22 @@ def iternextsafe_unituple(context, builder, sig, args):
     nidx = builder.add(idx, context.get_constant(types.intp, 1))
     builder.store(nidx, iterval.index)
     return res
+
+
+@builtin
+@implement('itervalid', types.Kind(types.UniTupleIter))
+def itervalid_unituple(context, builder, sig, args):
+    [tupiterty] = sig.args
+    [tupiter] = args
+
+    tupitercls = context.make_unituple_iter(tupiterty)
+    iterval = tupitercls(context, builder, value=tupiter)
+    tup = iterval.tuple
+    idxptr = iterval.index
+    idx = builder.load(idxptr)
+    count = context.get_constant(types.intp, tupiterty.unituple.count)
+
+    return builder.icmp(lc.ICMP_SLE, idx, count)
 
 
 @builtin
@@ -1386,6 +1169,12 @@ def getitem_unituple(context, builder, sig, args):
             value = builder.extract_value(tup, i)
             builder.branch(bbend)
             phinode.add_incoming(value, bbi)
+
+    # HACK: make __getitem__(tup, len(tup)) return tup[-1], to
+    # circumvent code generation bug where iternext is emitted before
+    # itervalid (see interpreter.py).
+    ki = context.get_constant(types.intp, tupty.count)
+    switch.add_case(ki, bbi)
 
     builder.position_at_end(bbend)
     return phinode

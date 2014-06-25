@@ -7,7 +7,7 @@ from types import ModuleType
 from llvm.core import Type, Builder, Module
 import llvm.core as lc
 
-from numba import ir, types, cgutils, utils, config, cffi_support
+from numba import ir, types, cgutils, utils, config, cffi_support, typing
 
 
 try:
@@ -468,7 +468,7 @@ class Lower(BaseLower):
             return self.context.cast(self.builder, res, signature.return_type,
                                      resty)
 
-        elif expr.op in ('getiter', 'iternext', 'itervalid', 'iternextsafe'):
+        elif expr.op in ('getiter', 'iternext', 'itervalid'):
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
             signature = self.fndesc.calltypes[expr]
@@ -478,6 +478,19 @@ class Lower(BaseLower):
             res = impl(self.builder, (castval,))
             return self.context.cast(self.builder, res, signature.return_type,
                                     resty)
+
+        elif expr.op == 'exhaust_iter':
+            val = self.loadvar(expr.value.name)
+            ty = self.typeof(expr.value.name)
+            itemty = ty.yield_type
+            tup = self.context.get_constant_undef(resty)
+            iternext_sig = typing.signature(itemty, ty)
+            iternext_impl = self.context.get_function('iternext',
+                                                      iternext_sig)
+            for i in range(expr.count):
+                res = iternext_impl(self.builder, (val,))
+                tup = self.builder.insert_value(tup, res, i)
+            return tup
 
         elif expr.op == "getattr":
             val = self.loadvar(expr.value.name)
@@ -717,18 +730,17 @@ class PyLower(BaseLower):
             item = self.pyapi.iter_next(iterobj)
             self.set_iter_valid(iterstate, item)
             return item
-        elif expr.op == 'iternextsafe':
-            iterstate = self.loadvar(expr.value.name)
-            iterobj, _ = self.unpack_iter(iterstate)
-            item = self.pyapi.iter_next(iterobj)
-            # TODO need to add exception
-            self.check_error(item)
-            self.set_iter_valid(iterstate, item)
-            return item
         elif expr.op == 'itervalid':
             iterstate = self.loadvar(expr.value.name)
             _, valid = self.unpack_iter(iterstate)
             return self.builder.trunc(valid, Type.int(1))
+        elif expr.op == 'exhaust_iter':
+            iterstate = self.loadvar(expr.value.name)
+            iterobj, _ = self.unpack_iter(iterstate)
+            tup = self.pyapi.sequence_tuple(iterobj)
+            self.check_error(tup)
+            # TODO check tuple size
+            return tup
         elif expr.op == 'getitem':
             target = self.loadvar(expr.target.name)
             index = self.loadvar(expr.index.name)

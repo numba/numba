@@ -87,10 +87,13 @@ class DataFlowAnalysis(object):
 
     def op_UNPACK_SEQUENCE(self, info, inst):
         count = inst.arg
-        sequence = info.pop()
+        iterable = info.pop()
         stores = [info.make_temp() for _ in range(count)]
+        indices = [info.make_temp() for _ in range(count)]
         iterobj = info.make_temp()
-        info.append(inst, sequence=sequence, stores=stores, iterobj=iterobj)
+        tupleobj = info.make_temp()
+        info.append(inst, iterable=iterable, stores=stores, indices=indices,
+                    iterobj=iterobj, tupleobj=tupleobj)
         for st in reversed(stores):
             info.push(st)
 

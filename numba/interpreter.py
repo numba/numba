@@ -237,15 +237,23 @@ class Interpreter(object):
         call = ir.Expr.call(self.get(printvar), (), (), loc=self.loc)
         self.store(value=call, name=res)
 
-    def op_UNPACK_SEQUENCE(self, inst, sequence, stores, iterobj):
-        sequence = self.get(sequence)
-        getiter = ir.Expr.getiter(value=sequence, loc=self.loc)
-        self.store(value=getiter, name=iterobj)
+    def op_UNPACK_SEQUENCE(self, inst, iterable, stores, indices,
+                           iterobj, tupleobj):
+        count = len(stores)
+        iterator = ir.Expr.getiter(value=self.get(iterable), loc=self.loc)
+        self.store(name=iterobj, value=iterator)
+        # Exhaust the iterator into a tuple-like object
+        tup = ir.Expr.exhaust_iter(value=self.get(iterobj), loc=self.loc,
+                                   count=count)
+        self.store(name=tupleobj, value=tup)
 
-        for st in stores:
-            iternext = ir.Expr.iternextsafe(value=self.get(iterobj),
-                                            loc=self.loc)
-            self.store(value=iternext, name=st)
+        # then index the tuple-like object to extract the values
+        for i, (indexobj, st) in enumerate(zip(indices, stores)):
+            index = ir.Const(i, loc=self.loc)
+            self.store(name=indexobj, value=index)
+            expr = ir.Expr.getitem(target=self.get(tupleobj),
+                                   index=self.get(indexobj), loc=self.loc)
+            self.store(expr, st)
 
     def op_BUILD_SLICE(self, inst, start, stop, step, res, slicevar):
         start = self.get(start)
@@ -482,6 +490,7 @@ class Interpreter(object):
 
         # Emit code
         val = self.get(iterator)
+        # FIXME itervalid must be called before iternext
         iternext = ir.Expr.iternext(value=val, loc=self.loc)
         self.store(iternext, indval)
 
@@ -501,6 +510,7 @@ class Interpreter(object):
         self._block_actions[loop] = mark_as_body
 
     def op_BINARY_SUBSCR(self, inst, target, index, res):
+        print("indexvar =", type(index), type(self.get(index)))
         index = self.get(index)
         target = self.get(target)
         expr = ir.Expr.getitem(target=target, index=index, loc=self.loc)

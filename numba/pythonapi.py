@@ -331,6 +331,11 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PySequence_GetSlice")
         return self.builder.call(fn, (obj, start, stop))
 
+    def sequence_tuple(self, obj):
+        fnty = Type.function(self.pyobj, [self.pyobj])
+        fn = self._get_function(fnty, name="PySequence_Tuple")
+        return self.builder.call(fn, [obj])
+
     def string_as_string(self, strobj):
         fnty = Type.function(self.cstring, [self.pyobj])
         if PYVERSION >= (3, 0):

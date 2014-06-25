@@ -9,7 +9,7 @@ from numba import types, utils, cgutils, typing, numpy_support, errcode
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, python_attr_impl,
                                     builtin_registry, impl_attribute)
-from numba.targets import builtins
+from numba.targets import builtins, rangeobj
 
 
 LTYPEMAP = {
@@ -34,10 +34,10 @@ LTYPEMAP = {
 STRUCT_TYPES = {
     types.complex64: builtins.Complex64,
     types.complex128: builtins.Complex128,
-    types.range_state32_type: builtins.RangeState32,
-    types.range_iter32_type: builtins.RangeIter32,
-    types.range_state64_type: builtins.RangeState64,
-    types.range_iter64_type: builtins.RangeIter64,
+    types.range_state32_type: rangeobj.RangeState32,
+    types.range_iter32_type: rangeobj.RangeIter32,
+    types.range_state64_type: rangeobj.RangeState64,
+    types.range_iter64_type: rangeobj.RangeIter64,
     types.slice3_type: builtins.Slice,
 }
 
