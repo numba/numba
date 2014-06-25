@@ -50,6 +50,7 @@ Math operations
  remainder           Yes          No
  mod                 Yes          No
  fmod                Yes          No
+ abs                 Yes          Yes
  absolute            Yes          Yes
  rint                Yes          No
  sign                Yes          Yes
@@ -64,6 +65,7 @@ Math operations
  sqrt                Yes          Yes
  square              Yes          No
  reciprocal          Yes          No
+ conjugate           No           No
 ==============  =============  ===========
 
 
@@ -91,6 +93,8 @@ Trigonometric functions
  arctanh             Yes          Yes
  deg2rad             Yes          Yes
  rad2deg             Yes          Yes
+ degrees             No           No
+ radians             No           No
 ==============  =============  ===========
 
 
@@ -131,7 +135,7 @@ Comparison functions
  logical_xor         Yes          No
  logical_not         Yes          No
  maximum             Yes          No
- minimim             Yes          No
+ minimum             Yes          No
  fmax                Yes          No
  fmin                Yes          No
 ==============  =============  ===========
@@ -145,8 +149,6 @@ Floating functions
 --------------  --------------------------
     name         python-mode    no-python
 ==============  =============  ===========
- isreal**            No           No
- iscomplex**         No           No
  isfinite            Yes          No
  isinf               Yes          No
  isnan               Yes          No
@@ -156,11 +158,10 @@ Floating functions
  modf                Yes          No
  ldexp               Yes*         No
  frexp               Yes          No
- fmod                Yes          No
  floor               Yes          Yes
  ceil                Yes          Yes
  trunc               Yes          Yes
+ spacing             No           No
 ==============  =============  ===========
 
 \* not supported on windows 32 bit
-\** not an ufunc

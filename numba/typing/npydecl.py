@@ -1,6 +1,7 @@
 from __future__ import absolute_import, print_function
 
 import numpy
+import itertools
 from .. import types
 from .templates import (AttributeTemplate, AbstractTemplate,
                                     Registry, signature)
@@ -65,19 +66,77 @@ def _numpy_ufunc(name):
 
 
 # list of unary ufuncs to register
-_autoregister_ufuncs = [
-    "sin", "cos", "tan", "arcsin", "arccos", "arctan",
-    "sinh", "cosh", "tanh", "arcsinh", "arccosh", "arctanh",
-    "exp", "exp2", "expm1",
-    "log", "log2", "log10", "log1p",
-    "absolute", "negative", "floor", "ceil", "trunc", "sign",
-    "sqrt",
-    "deg2rad", "rad2deg",
-    "add", "subtract", "multiply", "divide",
-    "arctan2", "power"]
-for func in _autoregister_ufuncs:
-    _numpy_ufunc(func)
-del(_autoregister_ufuncs)
+
+# The following operations are aliases to other ufunc. As in numba compilation functions
+# are resolved using the translated function object and not the name, only one of the aliases
+# needs to be registered.
+#
+# mod -> remainder
+# abs -> absolute
+# bitwise_not -> invert
+#
+# The following functions, although stated as equivalent, use different underlying ufunc
+# objects, so we need to register *both*
+#
+# degrees -> rad2deg
+# radians -> deg2rad
+_math_operations = [ "add", "subtract", "multiply", "divide",
+                     "logaddexp", "logaddexp2", "true_divide",
+                     "floor_divide", "negative", "power", 
+                     "remainder", "fmod", "absolute",
+                     "rint", "sign", "conj", "exp", "exp2",
+                     "log", "log2", "log10", "expm1", "log1p",
+                     "sqrt", "square", "reciprocal" ]
+
+_trigonometric_functions = [ "sin", "cos", "tan", "arcsin",
+                             "arccos", "arctan", "arctan2",
+                             "hypot", "sinh", "cosh", "tanh",
+                             "arcsinh", "arccosh", "arctanh",
+                             "deg2rad", "rad2deg", "degrees",
+                             "radians" ]
+
+_bit_twiddling_functions = ["bitwise_and", "bitwise_or",
+                            "bitwise_xor", "invert", 
+                            "left_shift", "right_shift" ]
+
+_comparison_functions = [ "greater", "greater_equal", "less",
+                          "less_equal", "not_equal", "equal",
+                          "logical_and", "logical_or",
+                          "logical_xor", "logical_not",
+                          "maximum", "minimum", "fmax", "fmin" ]
+
+_floating_functions = [ "isfinite", "isinf", "isnan", "signbit",
+                        "copysign", "nextafter", "modf", "ldexp",
+                        "frexp", "floor", "ceil", "trunc",
+                        "spacing" ]
+
+
+# This is a set of the ufuncs that are not yet supported by Lowering. In order
+# to trigger no-python mode we must not register them until their Lowering is
+# implemented.
+#
+# It also works as a nice TODO list for ufunc support :)
+_unsupported = { numpy.true_divide, numpy.square, numpy.spacing, numpy.signbit,
+                 numpy.rint, numpy.right_shift, numpy.remainder, numpy.reciprocal,
+                 numpy.radians, numpy.not_equal, numpy.minimum, numpy.maximum,
+                 numpy.logical_xor, numpy.logical_or, numpy.logical_not,
+                 numpy.logical_and, numpy.logaddexp, numpy.logaddexp2,  numpy.less,
+                 numpy.less_equal, numpy.left_shift, numpy.isnan, numpy.isinf,
+                 numpy.isfinite, numpy.invert, numpy.hypot, numpy.greater,
+                 numpy.greater_equal, numpy.fmod, numpy.fmin, numpy.fmax,
+                 numpy.floor_divide, numpy.equal, numpy.degrees, numpy.copysign,
+                 numpy.reciprocal, numpy.conjugate, numpy.bitwise_xor,
+                 numpy.bitwise_or, numpy.bitwise_and, numpy.abs}
+
+for func in itertools.chain(_math_operations, _trigonometric_functions,
+                            _bit_twiddling_functions, _comparison_functions,
+                            _floating_functions):
+    if not getattr(numpy, func) in _unsupported:
+        _numpy_ufunc(func)
+
+
+del _math_operations, _trigonometric_functions, _bit_twiddling_functions
+del _comparison_functions, _floating_functions, _unsupported
 
 
 builtin_global(numpy, types.Module(numpy))
