@@ -7,17 +7,18 @@ from numba import typing, types
 from numba.targets.base import BaseContext
 from numba.targets import builtins
 
+CC_SPIR_KERNEL = llvm.CallingConv.ID.SPIR_KERNEL
+CC_SPIR_FUNC = llvm.CallingConv.ID.SPIR_FUNC
+
 # -----------------------------------------------------------------------------
 # Typing
 
 
 class OCLTypingContext(typing.BaseContext):
     def init(self):
-        pass
-        # from . import cudadecl, cudamath
-        #
-        # self.install(cudadecl.registry)
-        # self.install(cudamath.registry)
+        from . import ocldecl
+
+        self.install(ocldecl.registry)
 
 # -----------------------------------------------------------------------------
 # Implementation
@@ -29,11 +30,9 @@ class OCLTargetContext(BaseContext):
     implement_powi_as_math_call = True
 
     def init(self):
-        # from . import cudaimpl, libdevice
-        #
-        # self.insert_func_defn(cudaimpl.registry.functions)
-        # self.insert_func_defn(libdevice.registry.functions)
-        pass
+        from . import oclimpl
+
+        self.insert_func_defn(oclimpl.registry.functions)
 
     def mangler(self, name, argtypes):
         def repl(m):
@@ -173,7 +172,7 @@ def set_ocl_kernel(fn):
     fn.add_attribute(lc.ATTR_NO_UNWIND)
 
     # Set SPIR kernel calling convention
-    fn.calling_convention = llvm.CallingConv.ID.SPIR_KERNEL
+    fn.calling_convention = CC_SPIR_KERNEL
 
     # Mark kernels
     ocl_kernels = mod.get_or_insert_named_metadata("opencl.kernels")

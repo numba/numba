@@ -1,6 +1,6 @@
 from __future__ import print_function, absolute_import, division
 
-
+from .stubs import (get_global_id, get_local_id)
 from .ocldrv.error import OpenCLSupportError
 
 _exported = """

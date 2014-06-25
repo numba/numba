@@ -74,9 +74,6 @@ class OCLKernelBase(object):
 
         size = max(len(global_size), len(local_size))
 
-        if size >= 3:
-            raise ValueError("Kernel global/local dimension must atmost 3D")
-
         _ensure_size_or_append(global_size, size)
         _ensure_size_or_append(local_size, size)
 
