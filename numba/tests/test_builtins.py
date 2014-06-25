@@ -120,22 +120,22 @@ class TestBuiltins(TestCase):
         cr = compile_isolated(pyfunc, (types.int32,), flags=flags)
         cfunc = cr.entry_point
         for x in [-1, 0, 1]:
-            self.assertEqual(cfunc(x), pyfunc(x))
+            self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
         cr = compile_isolated(pyfunc, (types.float32,), flags=flags)
         cfunc = cr.entry_point
         for x in [-1.1, 0.0, 1.1]:
-            self.assertAlmostEqual(cfunc(x), pyfunc(x))
+            self.assertPreciseEqual(cfunc(x), pyfunc(x), prec='single')
 
         complex_values = [-1.1 + 0.5j, 0.0 + 0j, 1.1 + 3j]
         cr = compile_isolated(pyfunc, (types.complex64,), flags=flags)
         cfunc = cr.entry_point
         for x in complex_values:
-            self.assertAlmostEqual(cfunc(x), pyfunc(x), places=6)
+            self.assertPreciseEqual(cfunc(x), pyfunc(x), prec='single')
         cr = compile_isolated(pyfunc, (types.complex128,), flags=flags)
         cfunc = cr.entry_point
         for x in complex_values:
-            self.assertAlmostEqual(cfunc(x), pyfunc(x), places=15)
+            self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
     def test_abs_npm(self):
         self.test_abs(flags=no_pyobj_flags)
@@ -148,7 +148,7 @@ class TestBuiltins(TestCase):
         x_operands = [-1, 0, 1, None]
         y_operands = [-1, 0, 1, None]
         for x, y in itertools.product(x_operands, y_operands):
-            self.assertEqual(cfunc(x, y), pyfunc(x, y))
+            self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
     def test_all_npm(self):
         with self.assertTypingError():
@@ -162,7 +162,7 @@ class TestBuiltins(TestCase):
         x_operands = [-1, 0, 1, None]
         y_operands = [-1, 0, 1, None]
         for x, y in itertools.product(x_operands, y_operands):
-            self.assertEqual(cfunc(x, y), pyfunc(x, y))
+            self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
     def test_any_npm(self):
         with self.assertTypingError():
@@ -174,7 +174,7 @@ class TestBuiltins(TestCase):
         cr = compile_isolated(pyfunc, (types.int32,), flags=flags)
         cfunc = cr.entry_point
         for x in [-1, 0, 1]:
-            self.assertEqual(cfunc(x), pyfunc(x))
+            self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
     def test_bool_npm(self):
         self.test_bool(flags=no_pyobj_flags)
@@ -185,12 +185,12 @@ class TestBuiltins(TestCase):
         cr = compile_isolated(pyfunc, (types.string,), flags=flags)
         cfunc = cr.entry_point
         for x in ['x', '']:
-            self.assertEqual(cfunc(x), pyfunc(x))
+            self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
         cr = compile_isolated(pyfunc, (types.Dummy('list'),), flags=flags)
         cfunc = cr.entry_point
         for x in [[1], []]:
-            self.assertEqual(cfunc(x), pyfunc(x))
+            self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
     def test_bool_nonnumber_npm(self):
         with self.assertTypingError():
@@ -202,7 +202,7 @@ class TestBuiltins(TestCase):
         cr = compile_isolated(pyfunc, (types.int32,), flags=flags)
         cfunc = cr.entry_point
         for x in range(256):
-            self.assertEqual(cfunc(x), pyfunc(x))
+            self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
     def test_chr_npm(self):
         with self.assertTypingError():
@@ -218,7 +218,7 @@ class TestBuiltins(TestCase):
         x_operands = [-1, 0, 1]
         y_operands = [-1, 0, 1]
         for x, y in itertools.product(x_operands, y_operands):
-            self.assertEqual(cfunc(x, y), pyfunc(x, y))
+            self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
     @unittest.skipIf(utils.IS_PY3, "cmp not available as global is Py3")
     def test_cmp_npm(self):
@@ -234,7 +234,7 @@ class TestBuiltins(TestCase):
         x_operands = [-1, 0, 1]
         y_operands = [-1, 0, 1]
         for x, y in itertools.product(x_operands, y_operands):
-            self.assertEqual(cfunc(x, y), pyfunc(x, y))
+            self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
     def test_complex_npm(self):
         self.test_complex(flags=no_pyobj_flags)
@@ -243,7 +243,7 @@ class TestBuiltins(TestCase):
         pyfunc = enumerate_usecase
         cr = compile_isolated(pyfunc, (), flags=flags)
         cfunc = cr.entry_point
-        self.assertEqual(cfunc(), pyfunc())
+        self.assertPreciseEqual(cfunc(), pyfunc())
 
     def test_enumerate_npm(self):
         with self.assertTypingError():
@@ -271,17 +271,17 @@ class TestBuiltins(TestCase):
         cr = compile_isolated(pyfunc, (types.int32,), flags=flags)
         cfunc = cr.entry_point
         for x in [-1, 0, 1]:
-            self.assertAlmostEqual(cfunc(x), pyfunc(x))
+            self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
         cr = compile_isolated(pyfunc, (types.float32,), flags=flags)
         cfunc = cr.entry_point
         for x in [-1.1, 0.0, 1.1]:
-            self.assertAlmostEqual(cfunc(x), pyfunc(x))
+            self.assertPreciseEqual(cfunc(x), pyfunc(x), prec='single')
 
         cr = compile_isolated(pyfunc, (types.string,), flags=flags)
         cfunc = cr.entry_point
         for x in ['-1.1', '0.0', '1.1']:
-            self.assertAlmostEqual(cfunc(x), pyfunc(x))
+            self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
     def test_float_npm(self):
         with self.assertTypingError():
@@ -294,21 +294,21 @@ class TestBuiltins(TestCase):
         cfunc = cr.entry_point
         x = '{0}'
         for y in [-1, 0, 1]:
-            self.assertAlmostEqual(cfunc(x, y), pyfunc(x, y))
+            self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
         cr = compile_isolated(pyfunc, (types.string,
                                        types.float32,), flags=flags)
         cfunc = cr.entry_point
         x = '{0}'
         for y in [-1.1, 0.0, 1.1]:
-            self.assertAlmostEqual(cfunc(x, y), pyfunc(x, y))
+            self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
         cr = compile_isolated(pyfunc, (types.string,
                                        types.string,), flags=flags)
         cfunc = cr.entry_point
         x = '{0}'
         for y in ['a', 'b', 'c']:
-            self.assertAlmostEqual(cfunc(x, y), pyfunc(x, y))
+            self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
     def test_format_npm(self):
         with self.assertTypingError():
@@ -320,7 +320,7 @@ class TestBuiltins(TestCase):
         cr = compile_isolated(pyfunc, (types.int32,), flags=flags)
         cfunc = cr.entry_point
         for x in [-1, 0, 1]:
-            self.assertEqual(cfunc(x), pyfunc(x))
+            self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
     def test_hex_npm(self):
         with self.assertTypingError():
@@ -335,7 +335,7 @@ class TestBuiltins(TestCase):
         x_operands = ['-1', '0', '1', '10']
         y_operands = [2, 8, 10, 16]
         for x, y in itertools.product(x_operands, y_operands):
-            self.assertEqual(cfunc(x, y), pyfunc(x, y))
+            self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
     def test_int_npm(self):
         with self.assertTypingError():
@@ -363,7 +363,7 @@ class TestBuiltins(TestCase):
         x_operands = ['-1', '0', '1', '10']
         y_operands = [2, 8, 10, 16]
         for x, y in itertools.product(x_operands, y_operands):
-            self.assertEqual(cfunc(x, y), pyfunc(x, y))
+            self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
     @unittest.skipIf(utils.IS_PY3, "cmp not available as global is Py3")
     def test_long_npm(self):
@@ -395,7 +395,7 @@ class TestBuiltins(TestCase):
         x_operands = [-1, 0, 1]
         y_operands = [-1, 0, 1]
         for x, y in itertools.product(x_operands, y_operands):
-            self.assertEqual(cfunc(x, y), pyfunc(x, y))
+            self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
     def test_max_2(self, flags=enable_pyobj_flags):
         pyfunc = max_usecase2
@@ -405,7 +405,7 @@ class TestBuiltins(TestCase):
         x_operands = [-1, 0, 1]
         y_operands = [-1, 0, 1]
         for x, y in itertools.product(x_operands, y_operands):
-            self.assertEqual(cfunc(x, y), pyfunc(x, y))
+            self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
     def test_max_npm_1(self):
         self.test_max_1(flags=no_pyobj_flags)
@@ -422,7 +422,7 @@ class TestBuiltins(TestCase):
         x_operands = [-1, 0, 1]
         y_operands = [-1, 0, 1]
         for x, y in itertools.product(x_operands, y_operands):
-            self.assertEqual(cfunc(x, y), pyfunc(x, y))
+            self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
     def test_min_2(self, flags=enable_pyobj_flags):
         pyfunc = min_usecase2
@@ -432,7 +432,7 @@ class TestBuiltins(TestCase):
         x_operands = [-1, 0, 1]
         y_operands = [-1, 0, 1]
         for x, y in itertools.product(x_operands, y_operands):
-            self.assertEqual(cfunc(x, y), pyfunc(x, y))
+            self.assertPreciseEqual(cfunc(x, y), pyfunc(x, y))
 
     def test_min_npm_1(self):
         self.test_min_1(flags=no_pyobj_flags)
@@ -447,7 +447,7 @@ class TestBuiltins(TestCase):
         cr = compile_isolated(pyfunc, (types.int32,), flags=flags)
         cfunc = cr.entry_point
         for x in [-8, -1, 0, 1, 8]:
-            self.assertEqual(cfunc(x), pyfunc(x))
+            self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
     def test_oct_npm(self):
         with self.assertTypingError():
@@ -459,7 +459,7 @@ class TestBuiltins(TestCase):
         cr = compile_isolated(pyfunc, (types.string,), flags=flags)
         cfunc = cr.entry_point
         for x in ['a', u'\u2020']:
-            self.assertEqual(cfunc(x), pyfunc(x))
+            self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
     def test_ord_npm(self):
         with self.assertTypingError():
@@ -475,13 +475,13 @@ class TestBuiltins(TestCase):
         reduce_func = lambda x, y: x + y
 
         x = range(10)
-        self.assertEqual(cfunc(reduce_func, x), pyfunc(reduce_func, x))
+        self.assertPreciseEqual(cfunc(reduce_func, x), pyfunc(reduce_func, x))
 
         x = [x + x/10.0 for x in range(10)]
-        self.assertEqual(cfunc(reduce_func, x), pyfunc(reduce_func, x))
+        self.assertPreciseEqual(cfunc(reduce_func, x), pyfunc(reduce_func, x))
 
         x = [complex(x, x) for x in range(10)]
-        self.assertEqual(cfunc(reduce_func, x), pyfunc(reduce_func, x))
+        self.assertPreciseEqual(cfunc(reduce_func, x), pyfunc(reduce_func, x))
 
     def test_reduce_npm(self):
         with self.assertTypingError():
@@ -493,6 +493,7 @@ class TestBuiltins(TestCase):
         cr = compile_isolated(pyfunc, (types.float64,), flags=flags)
         cfunc = cr.entry_point
         for x in [-0.5, -0.1, 0.0, 0.1, 0.5, 1.5, 5.0]:
+            # XXX round() doesn't return the right type under Python 3
             self.assertEqual(cfunc(x), pyfunc(x))
 
     def test_round_npm(self):
@@ -505,13 +506,13 @@ class TestBuiltins(TestCase):
         cfunc = cr.entry_point
 
         x = range(10)
-        self.assertEqual(cfunc(x), pyfunc(x))
+        self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
         x = [x + x/10.0 for x in range(10)]
-        self.assertEqual(cfunc(x), pyfunc(x))
+        self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
         x = [complex(x, x) for x in range(10)]
-        self.assertEqual(cfunc(x), pyfunc(x))
+        self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
     def test_sum_npm(self):
         with self.assertTypingError():
@@ -524,7 +525,7 @@ class TestBuiltins(TestCase):
         cr = compile_isolated(pyfunc, (types.int32,), flags=flags)
         cfunc = cr.entry_point
         for x in range(0, 1000, 10):
-            self.assertEqual(cfunc(x), pyfunc(x))
+            self.assertPreciseEqual(cfunc(x), pyfunc(x))
 
     @unittest.skipIf(utils.IS_PY3, "cmp not available as global is Py3")
     def test_unichr_npm(self):
