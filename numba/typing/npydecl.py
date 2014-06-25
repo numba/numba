@@ -116,17 +116,17 @@ _floating_functions = [ "isfinite", "isinf", "isnan", "signbit",
 # implemented.
 #
 # It also works as a nice TODO list for ufunc support :)
-_unsupported = { numpy.true_divide, numpy.square, numpy.spacing, numpy.signbit,
-                 numpy.rint, numpy.right_shift, numpy.remainder, numpy.reciprocal,
-                 numpy.radians, numpy.not_equal, numpy.minimum, numpy.maximum,
-                 numpy.logical_xor, numpy.logical_or, numpy.logical_not,
-                 numpy.logical_and, numpy.logaddexp, numpy.logaddexp2,  numpy.less,
-                 numpy.less_equal, numpy.left_shift, numpy.isnan, numpy.isinf,
-                 numpy.isfinite, numpy.invert, numpy.hypot, numpy.greater,
-                 numpy.greater_equal, numpy.fmod, numpy.fmin, numpy.fmax,
-                 numpy.floor_divide, numpy.equal, numpy.degrees, numpy.copysign,
-                 numpy.reciprocal, numpy.conjugate, numpy.bitwise_xor,
-                 numpy.bitwise_or, numpy.bitwise_and, numpy.abs}
+_unsupported = set([ numpy.true_divide, numpy.square, numpy.spacing, numpy.signbit,
+                     numpy.rint, numpy.right_shift, numpy.remainder, numpy.reciprocal,
+                     numpy.radians, numpy.not_equal, numpy.minimum, numpy.maximum,
+                     numpy.logical_xor, numpy.logical_or, numpy.logical_not,
+                     numpy.logical_and, numpy.logaddexp, numpy.logaddexp2,  numpy.less,
+                     numpy.less_equal, numpy.left_shift, numpy.isnan, numpy.isinf,
+                     numpy.isfinite, numpy.invert, numpy.hypot, numpy.greater,
+                     numpy.greater_equal, numpy.fmod, numpy.fmin, numpy.fmax,
+                     numpy.floor_divide, numpy.equal, numpy.degrees, numpy.copysign,
+                     numpy.reciprocal, numpy.conjugate, numpy.bitwise_xor,
+                     numpy.bitwise_or, numpy.bitwise_and, numpy.abs ])
 
 for func in itertools.chain(_math_operations, _trigonometric_functions,
                             _bit_twiddling_functions, _comparison_functions,
