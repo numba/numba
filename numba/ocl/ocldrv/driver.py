@@ -788,8 +788,9 @@ class Kernel(OpenCLWrapper):
             arg_value = (cl_int *1)(value)
             arg_size = ctypes.sizeof(arg_value)
         else:
-            arg_value = None
-            arg_size = 0
+            # Assume ctypes
+            arg_value = ctypes.addressof(value)
+            arg_size = ctypes.sizeof(value)
 
         self.set_arg_raw(arg_number, arg_value, arg_size)
 
