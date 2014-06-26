@@ -385,6 +385,11 @@ class PythonAPI(object):
         args.extend(items)
         return self.builder.call(fn, args)
 
+    def tuple_size(self, tup):
+        fnty = Type.function(self.py_ssize_t, [self.pyobj])
+        fn = self._get_function(fnty, name="PyTuple_Size")
+        return self.builder.call(fn, [tup])
+
     def list_new(self, szval):
         fnty = Type.function(self.pyobj, [self.py_ssize_t])
         fn = self._get_function(fnty, name="PyList_New")

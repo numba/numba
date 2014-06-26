@@ -484,12 +484,27 @@ class Lower(BaseLower):
             ty = self.typeof(expr.value.name)
             itemty = ty.yield_type
             tup = self.context.get_constant_undef(resty)
+            itervalid_sig = typing.signature(types.boolean, ty)
             iternext_sig = typing.signature(itemty, ty)
+            itervalid_impl = self.context.get_function('itervalid',
+                                                       itervalid_sig)
             iternext_impl = self.context.get_function('iternext',
                                                       iternext_sig)
+            excid = self.context.add_exception(ValueError)
             for i in range(expr.count):
                 res = iternext_impl(self.builder, (val,))
+                is_exhausted = self.builder.not_(
+                    itervalid_impl(self.builder, (val,)))
+                with cgutils.if_unlikely(self.builder, is_exhausted):
+                    self.context.return_user_exc(self.builder, excid)
                 tup = self.builder.insert_value(tup, res, i)
+            # HACK workaround issue #569 bogus FOR_ITER implementation:
+            # we need to call iternext() once more before itervalid()
+            # gives the right result.
+            iternext_impl(self.builder, (val,))
+            with cgutils.if_unlikely(self.builder,
+                                     itervalid_impl(self.builder, (val,))):
+                self.context.return_user_exc(self.builder, excid)
             return tup
 
         elif expr.op == "getattr":
@@ -739,7 +754,14 @@ class PyLower(BaseLower):
             iterobj, _ = self.unpack_iter(iterstate)
             tup = self.pyapi.sequence_tuple(iterobj)
             self.check_error(tup)
-            # TODO check tuple size
+            # Check tuple size is as expected
+            tup_size = self.pyapi.tuple_size(tup)
+            expected_size = self.context.get_constant(types.intp, expr.count)
+            has_wrong_size = self.builder.icmp(lc.ICMP_NE,
+                                               tup_size, expected_size)
+            with cgutils.if_unlikely(self.builder, has_wrong_size):
+                excid = self.context.add_exception(ValueError)
+                self.context.return_user_exc(self.builder, excid)
             return tup
         elif expr.op == 'getitem':
             target = self.loadvar(expr.target.name)
