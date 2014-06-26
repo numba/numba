@@ -303,7 +303,6 @@ class TestUFuncs(TestCase):
         self.test_multiply_ufunc(flags=no_pyobj_flags)
 
     def test_divide_ufunc(self, flags=enable_pyobj_flags):
-        skip_inputs = []
         int_out_type = None
         # python3 integer division by zero and
         # storing in 64 bit int produces garbage
@@ -322,8 +321,7 @@ class TestUFuncs(TestCase):
         if PYVERSION >= (3, 0):
             int_out_type = types.float64
 
-        self.binary_ufunc_test('divide', flags=flags,
-                               skip_inputs=skip_inputs, int_output_type=int_out_type)
+        self.binary_ufunc_test('divide', flags=flags, int_output_type=int_out_type)
 
     def test_divide_ufunc_npm(self):
         self.test_divide_ufunc(flags=no_pyobj_flags)
@@ -347,9 +345,7 @@ class TestUFuncs(TestCase):
         # storing in 64 bit int produces garbage
         # instead of 0, so skip (note that in python3 true divide
         # and divide are the same ufunc)
-        skip_inputs = []
-        self.binary_ufunc_test('true_divide', flags=flags,
-                               skip_inputs=skip_inputs, int_output_type=types.float64)
+        self.binary_ufunc_test('true_divide', flags=flags, int_output_type=types.float64)
 
     def test_true_divide_ufunc_npm(self):
         self.test_true_divide_ufunc(flags=no_pyobj_flags)
