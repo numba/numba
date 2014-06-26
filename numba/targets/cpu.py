@@ -139,6 +139,8 @@ class CPUContext(BaseContext):
             callable function address
 
         """
+        func.module.target = self.tm.triple
+
         if self.is32bit:
             dmf = intrinsics.DivmodFixer()
             dmf.run(func.module)
@@ -200,6 +202,15 @@ class CPUContext(BaseContext):
     def get_abi_sizeof(self, lty):
         return self.engine.target_data.abi_size(lty)
 
+    def optimize_function(self, func):
+        """Run O1 function passes
+        """
+        pms = lp.build_pass_managers(tm=self.tm, opt=1, pm=False,
+                                     mod=func.module)
+        fpm = pms.fpm
+        fpm.initialize()
+        fpm.run(func)
+        fpm.finalize()
 
 # ----------------------------------------------------------------------------
 # TargetOptions

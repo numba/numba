@@ -2,6 +2,7 @@ from __future__ import print_function, absolute_import
 import re
 from llvm.core import (Type, Builder, LINKAGE_INTERNAL, inline_function,
                        Constant, ICMP_EQ)
+import llvm.passes as lp
 from numba import typing, types, cgutils
 from numba.targets.base import BaseContext
 from .cudadrv import nvvm
@@ -161,3 +162,13 @@ class CUDATargetContext(BaseContext):
                                                nvvm.ADDRSPACE_CONSTANT)
         return builder.call(conv, [charptr])
 
+    def optimize_function(self, func):
+        """Run O1 function passes
+        """
+        fpm = lp.FunctionPassManager.new(func.module)
+
+        lp.PassManagerBuilder.new().populate(fpm)
+
+        fpm.initialize()
+        fpm.run(func)
+        fpm.finalize()
