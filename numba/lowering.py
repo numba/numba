@@ -231,6 +231,12 @@ class BaseLower(object):
         # module-level optimization
         self.context.optimize_function(self.function)
 
+        if config.NUMBA_DUMP_FUNC_OPT:
+            print(("LLVM FUNCTION OPTIMIZED DUMP %s" %
+                   self.fndesc).center(80, '-'))
+            print(self.module)
+            print('=' * 80)
+
     def init_argument(self, arg):
         return arg
 
