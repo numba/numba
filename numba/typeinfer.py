@@ -145,6 +145,21 @@ class BuildTupleConstrain(object):
             oset.add_types(tup)
 
 
+class ExhaustIterConstrain(object):
+
+    def __init__(self, target, count, iterator, loc):
+        self.target = target
+        self.count = count
+        self.iterator = iterator
+        self.loc = loc
+
+    def __call__(self, context, typevars):
+        oset = typevars[self.target]
+        for tp in typevars[self.iterator.name].get():
+            oset.add_types(types.UniTuple(dtype=tp.yield_type,
+                                          count=self.count))
+
+
 class CallConstrain(object):
     """Constrain for calling functions.
     Perform case analysis foreach combinations of argument types.
@@ -561,8 +576,13 @@ class TypeInferer(object):
                 self.usercalls.append((inst.value, expr.args, expr.kws))
             else:
                 self.typeof_call(inst, target, expr)
-        elif expr.op in ('getiter', 'iternext', 'iternextsafe', 'itervalid'):
+        elif expr.op in ('getiter', 'iternext', 'itervalid'):
             self.typeof_intrinsic_call(inst, target, expr.op, expr.value)
+        elif expr.op == 'exhaust_iter':
+            constrain = ExhaustIterConstrain(target.name, count=expr.count,
+                                             iterator=expr.value,
+                                             loc=expr.loc)
+            self.constrains.append(constrain)
         elif expr.op == 'binop':
             self.typeof_intrinsic_call(inst, target, expr.fn, expr.lhs, expr.rhs)
         elif expr.op == 'unary':

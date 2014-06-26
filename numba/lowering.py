@@ -7,7 +7,7 @@ from types import ModuleType
 from llvm.core import Type, Builder, Module
 import llvm.core as lc
 
-from numba import ir, types, cgutils, utils, config, cffi_support
+from numba import ir, types, cgutils, utils, config, cffi_support, typing
 
 
 try:
@@ -477,7 +477,7 @@ class Lower(BaseLower):
             return self.context.cast(self.builder, res, signature.return_type,
                                      resty)
 
-        elif expr.op in ('getiter', 'iternext', 'itervalid', 'iternextsafe'):
+        elif expr.op in ('getiter', 'iternext', 'itervalid'):
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
             signature = self.fndesc.calltypes[expr]
@@ -487,6 +487,34 @@ class Lower(BaseLower):
             res = impl(self.builder, (castval,))
             return self.context.cast(self.builder, res, signature.return_type,
                                     resty)
+
+        elif expr.op == 'exhaust_iter':
+            val = self.loadvar(expr.value.name)
+            ty = self.typeof(expr.value.name)
+            itemty = ty.yield_type
+            tup = self.context.get_constant_undef(resty)
+            itervalid_sig = typing.signature(types.boolean, ty)
+            iternext_sig = typing.signature(itemty, ty)
+            itervalid_impl = self.context.get_function('itervalid',
+                                                       itervalid_sig)
+            iternext_impl = self.context.get_function('iternext',
+                                                      iternext_sig)
+            excid = self.context.add_exception(ValueError)
+            for i in range(expr.count):
+                res = iternext_impl(self.builder, (val,))
+                is_exhausted = self.builder.not_(
+                    itervalid_impl(self.builder, (val,)))
+                with cgutils.if_unlikely(self.builder, is_exhausted):
+                    self.context.return_user_exc(self.builder, excid)
+                tup = self.builder.insert_value(tup, res, i)
+            # HACK workaround issue #569 bogus FOR_ITER implementation:
+            # we need to call iternext() once more before itervalid()
+            # gives the right result.
+            iternext_impl(self.builder, (val,))
+            with cgutils.if_unlikely(self.builder,
+                                     itervalid_impl(self.builder, (val,))):
+                self.context.return_user_exc(self.builder, excid)
+            return tup
 
         elif expr.op == "getattr":
             val = self.loadvar(expr.value.name)
@@ -726,18 +754,24 @@ class PyLower(BaseLower):
             item = self.pyapi.iter_next(iterobj)
             self.set_iter_valid(iterstate, item)
             return item
-        elif expr.op == 'iternextsafe':
-            iterstate = self.loadvar(expr.value.name)
-            iterobj, _ = self.unpack_iter(iterstate)
-            item = self.pyapi.iter_next(iterobj)
-            # TODO need to add exception
-            self.check_error(item)
-            self.set_iter_valid(iterstate, item)
-            return item
         elif expr.op == 'itervalid':
             iterstate = self.loadvar(expr.value.name)
             _, valid = self.unpack_iter(iterstate)
             return self.builder.trunc(valid, Type.int(1))
+        elif expr.op == 'exhaust_iter':
+            iterstate = self.loadvar(expr.value.name)
+            iterobj, _ = self.unpack_iter(iterstate)
+            tup = self.pyapi.sequence_tuple(iterobj)
+            self.check_error(tup)
+            # Check tuple size is as expected
+            tup_size = self.pyapi.tuple_size(tup)
+            expected_size = self.context.get_constant(types.intp, expr.count)
+            has_wrong_size = self.builder.icmp(lc.ICMP_NE,
+                                               tup_size, expected_size)
+            with cgutils.if_unlikely(self.builder, has_wrong_size):
+                excid = self.context.add_exception(ValueError)
+                self.context.return_user_exc(self.builder, excid)
+            return tup
         elif expr.op == 'getitem':
             target = self.loadvar(expr.target.name)
             index = self.loadvar(expr.index.name)

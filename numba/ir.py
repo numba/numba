@@ -129,14 +129,14 @@ class Expr(object):
         return cls(op=op, loc=loc, value=value)
 
     @classmethod
-    def iternextsafe(cls, value, loc):
-        op = 'iternextsafe'
-        return cls(op=op, loc=loc, value=value)
-
-    @classmethod
     def itervalid(cls, value, loc):
         op = 'itervalid'
         return cls(op=op, loc=loc, value=value)
+
+    @classmethod
+    def exhaust_iter(cls, value, count, loc):
+        op = 'exhaust_iter'
+        return cls(op=op, loc=loc, value=value, count=count)
 
     @classmethod
     def getattr(cls, value, attr, loc):

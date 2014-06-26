@@ -83,52 +83,36 @@ class Range(ConcreteTemplate):
 
 
 @builtin
-class GetIter(ConcreteTemplate):
-    key = "getiter"
-    cases = [
-        signature(types.range_iter32_type, types.range_state32_type),
-        signature(types.range_iter64_type, types.range_state64_type),
-    ]
-
-
-@builtin
-class GetIterUniTuple(AbstractTemplate):
+class GetIter(AbstractTemplate):
     key = "getiter"
 
     def generic(self, args, kws):
         assert not kws
-        [tup] = args
-        if isinstance(tup, types.UniTuple):
-            return signature(types.UniTupleIter(tup), tup)
+        [obj] = args
+        if isinstance(obj, types.IterableType):
+            return signature(obj.iterator_type, obj)
 
 
 @builtin
-class IterNext(ConcreteTemplate):
+class IterNext(AbstractTemplate):
     key = "iternext"
-    cases = [
-        signature(types.int32, types.range_iter32_type),
-        signature(types.int64, types.range_iter64_type),
-    ]
-
-
-@builtin
-class IterNextSafe(AbstractTemplate):
-    key = "iternextsafe"
 
     def generic(self, args, kws):
         assert not kws
-        [tupiter] = args
-        if isinstance(tupiter, types.UniTupleIter):
-            return signature(tupiter.unituple.dtype, tupiter)
+        [it] = args
+        if isinstance(it, types.IteratorType):
+            return signature(it.yield_type, it)
 
 
 @builtin
-class IterValid(ConcreteTemplate):
+class IterValid(AbstractTemplate):
     key = "itervalid"
-    cases = [
-        signature(types.boolean, types.range_iter32_type),
-        signature(types.boolean, types.range_iter64_type),
-    ]
+
+    def generic(self, args, kws):
+        assert not kws
+        [it] = args
+        if isinstance(it, types.IteratorType):
+            return signature(types.boolean, it)
 
 
 class BinOp(ConcreteTemplate):

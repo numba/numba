@@ -258,6 +258,48 @@ class Method(Function):
         return hash((self.template.__name__, self.this))
 
 
+class IterableType(Type):
+    """
+    Base class for iterable types.
+    Derived classes should implement the *iterator_type* attribute.
+    """
+
+
+class SimpleIterableType(IterableType):
+
+    def __init__(self, name, iterator_type):
+        self.iterator_type = iterator_type
+        super(SimpleIterableType, self).__init__(name, param=True)
+
+    def __eq__(self, other):
+        if isinstance(other, SimpleIterableType):
+            return self.name == other.name
+
+    def __hash__(self):
+        return hash(self.name)
+
+
+class IteratorType(Type):
+    """
+    Base class for all iterator types.
+    Derived classes should implement the *yield_type* attribute.
+    """
+
+
+class SimpleIteratorType(IteratorType):
+
+    def __init__(self, name, yield_type):
+        self.yield_type = yield_type
+        super(SimpleIteratorType, self).__init__(name, param=True)
+
+    def __eq__(self, other):
+        if isinstance(other, SimpleIteratorType):
+            return self.name == other.name
+
+    def __hash__(self):
+        return hash(self.name)
+
+
 class CharSeq(Type):
     def __init__(self, count):
         self.count = count
@@ -402,12 +444,14 @@ class Array(Type):
         return self.layout in 'CF'
 
 
-class UniTuple(Type):
+class UniTuple(IterableType):
+
     def __init__(self, dtype, count):
         self.dtype = dtype
         self.count = count
         name = "(%s x %d)" % (dtype, count)
         super(UniTuple, self).__init__(name, param=True)
+        self.iterator_type = UniTupleIter(self)
 
     def getitem(self, ind):
         if isinstance(ind, UniTuple):
@@ -436,9 +480,11 @@ class UniTuple(Type):
         return hash((self.dtype, self.count))
 
 
-class UniTupleIter(Type):
+class UniTupleIter(IteratorType):
+
     def __init__(self, unituple):
         self.unituple = unituple
+        self.yield_type = unituple.dtype
         name = 'iter(%s)' % unituple
         super(UniTupleIter, self).__init__(name, param=True)
 
@@ -570,10 +616,10 @@ print_item_type = Dummy('print-item')
 sign_type = Dummy('sign')
 exception_type = Dummy('exception')
 
-range_state32_type = Type('range_state32')
-range_state64_type = Type('range_state64')
-range_iter32_type = Type('range_iter32')
-range_iter64_type = Type('range_iter64')
+range_iter32_type = SimpleIteratorType('range_iter32', int32)
+range_iter64_type = SimpleIteratorType('range_iter64', int64)
+range_state32_type = SimpleIterableType('range_state32', range_iter32_type)
+range_state64_type = SimpleIterableType('range_state64', range_iter64_type)
 
 # slice2_type = Type('slice2_type')
 slice3_type = Type('slice3_type')
