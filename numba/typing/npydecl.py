@@ -54,39 +54,16 @@ class Numpy_rules_ufunc(AbstractTemplate):
         raise TypingError("can't resolve ufunc {0} for types {1}".format(key.__name__, args))
 
 
-def _numpy_ufunc(name):
-    the_key = eval("numpy."+name) # obtain the appropriate symbol for the key.
-    class typing_class(Numpy_rules_ufunc):
-        key = the_key
-
-    typing_class.__name__ = "resolve_{0}".format(name)
-    # Add the resolve method to NumpyModuleAttribute
-    setattr(NumpyModuleAttribute, "resolve_"+name, lambda s, m: types.Function(typing_class))
-    builtin_global(the_key, types.Function(typing_class))
-
-
 # list of unary ufuncs to register
 
-# The following operations are aliases to other ufunc. As in numba compilation functions
-# are resolved using the translated function object and not the name, only one of the aliases
-# needs to be registered.
-#
-# mod -> remainder
-# abs -> absolute
-# bitwise_not -> invert
-#
-# The following functions, although stated as equivalent, use different underlying ufunc
-# objects, so we need to register *both*
-#
-# degrees -> rad2deg
-# radians -> deg2rad
-_math_operations = [ "add", "subtract", "multiply", "divide",
+_math_operations = [ "add", "subtract", "multiply",
                      "logaddexp", "logaddexp2", "true_divide",
                      "floor_divide", "negative", "power", 
                      "remainder", "fmod", "absolute",
                      "rint", "sign", "conj", "exp", "exp2",
                      "log", "log2", "log10", "expm1", "log1p",
-                     "sqrt", "square", "reciprocal" ]
+                     "sqrt", "square", "reciprocal",
+                     "divide", "mod", "abs" ]
 
 _trigonometric_functions = [ "sin", "cos", "tan", "arcsin",
                              "arccos", "arctan", "arctan2",
@@ -97,7 +74,8 @@ _trigonometric_functions = [ "sin", "cos", "tan", "arcsin",
 
 _bit_twiddling_functions = ["bitwise_and", "bitwise_or",
                             "bitwise_xor", "invert", 
-                            "left_shift", "right_shift" ]
+                            "left_shift", "right_shift",
+                            "bitwise_not" ]
 
 _comparison_functions = [ "greater", "greater_equal", "less",
                           "less_equal", "not_equal", "equal",
@@ -116,7 +94,7 @@ _floating_functions = [ "isfinite", "isinf", "isnan", "signbit",
 # implemented.
 #
 # It also works as a nice TODO list for ufunc support :)
-_unsupported = set([ numpy.true_divide, numpy.square, numpy.spacing, numpy.signbit,
+_unsupported = set([ numpy.square, numpy.spacing, numpy.signbit,
                      numpy.rint, numpy.right_shift, numpy.remainder, numpy.reciprocal,
                      numpy.radians, numpy.not_equal, numpy.minimum, numpy.maximum,
                      numpy.logical_xor, numpy.logical_or, numpy.logical_not,
@@ -128,6 +106,29 @@ _unsupported = set([ numpy.true_divide, numpy.square, numpy.spacing, numpy.signb
                      numpy.reciprocal, numpy.conjugate, numpy.bitwise_xor,
                      numpy.bitwise_or, numpy.bitwise_and, numpy.abs ])
 
+# a list of ufuncs that are in fact aliases of other ufuncs. They need to insert the
+# resolve method, but not register the ufunc itself
+_aliases = set(["bitwise_not", "mod", "abs"])
+
+#in python3 numpy.divide is mapped to numpy.true_divide
+if numpy.divide == numpy.true_divide:
+    _aliases.add("divide")
+
+
+
+def _numpy_ufunc(name):
+    the_key = eval("numpy."+name) # obtain the appropriate symbol for the key.
+    class typing_class(Numpy_rules_ufunc):
+        key = the_key
+
+    typing_class.__name__ = "resolve_{0}".format(name)
+    # Add the resolve method to NumpyModuleAttribute
+    setattr(NumpyModuleAttribute, "resolve_"+name, lambda s, m: types.Function(typing_class))
+
+    if not name in _aliases:
+        builtin_global(the_key, types.Function(typing_class))
+
+
 for func in itertools.chain(_math_operations, _trigonometric_functions,
                             _bit_twiddling_functions, _comparison_functions,
                             _floating_functions):
@@ -137,6 +138,6 @@ for func in itertools.chain(_math_operations, _trigonometric_functions,
 
 del _math_operations, _trigonometric_functions, _bit_twiddling_functions
 del _comparison_functions, _floating_functions, _unsupported
-
+del _aliases, _numpy_ufunc
 
 builtin_global(numpy, types.Module(numpy))

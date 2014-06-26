@@ -304,16 +304,26 @@ class TestUFuncs(TestCase):
 
     def test_divide_ufunc(self, flags=enable_pyobj_flags):
         skip_inputs = []
+        int_out_type = None
         # python3 integer division by zero and
         # storing in 64 bit int produces garbage
         # instead of 0, so skip
+        # As a note... the "garbage" for int32 happens to
+        # be 0x80000000. This is likely caused by converting
+        # the floating point infinity to integer, as the oneliner:
+        # np.array(np.inf).astype(np.int32)
+        # seems to produce the same "garbage". Note that numpy
+        # seems to generate that same "garbage" under the same
+        # conditions, so this may be an issue with this test
+        # itself.
+
+        # Bear in mind that in python3 divide IS true_divide
+        # so the out type for int types will be a double
         if PYVERSION >= (3, 0):
-            skip_inputs = [types.uint32, types.uint64,
-                           types.Array(types.uint32, 1, 'C'),
-                           types.Array(types.int32, 1, 'C'),
-                           types.Array(types.uint64, 1, 'C')]
+            int_out_type = types.float64
+
         self.binary_ufunc_test('divide', flags=flags,
-            skip_inputs=skip_inputs, int_output_type=types.float64)
+                               skip_inputs=skip_inputs, int_output_type=int_out_type)
 
     def test_divide_ufunc_npm(self):
         self.test_divide_ufunc(flags=no_pyobj_flags)
@@ -333,9 +343,14 @@ class TestUFuncs(TestCase):
         self.binary_ufunc_test('logaddexp2', flags=no_pyobj_flags)
 
     def test_true_divide_ufunc(self, flags=enable_pyobj_flags):
-        self.binary_ufunc_test('true_divide', flags=flags)
+        # python3 integer division by zero and
+        # storing in 64 bit int produces garbage
+        # instead of 0, so skip (note that in python3 true divide
+        # and divide are the same ufunc)
+        skip_inputs = []
+        self.binary_ufunc_test('true_divide', flags=flags,
+                               skip_inputs=skip_inputs, int_output_type=types.float64)
 
-    @_unimplemented
     def test_true_divide_ufunc_npm(self):
         self.test_true_divide_ufunc(flags=no_pyobj_flags)
 
