@@ -13,68 +13,42 @@ class OperatorModuleAttribute(AttributeTemplate):
     key = types.Module(operator)
 
 class TruthOperator(ConcreteTemplate):
-    cases = [
-        signature(types.bool_, types.int64),
-        signature(types.bool_, types.uint64),
-        signature(types.bool_, types.float32),
-        signature(types.bool_, types.float64),
-        signature(types.bool_, types.complex64),
-        signature(types.bool_, types.complex128),
-    ]
+    cases = [signature(types.boolean, op) for op in sorted(types.signed_domain)]
+    cases += [signature(types.boolean, op) for op in sorted(types.unsigned_domain)]
+    cases += [signature(types.boolean, op) for op in sorted(types.real_domain)]
+    cases += [signature(types.boolean, op) for op in sorted(types.complex_domain)]
 
 class UnaryOperator(ConcreteTemplate):
-    cases = [
-        # Required for operator.invert to work correctly on 32-bit ints
-        # (otherwise a 64-bit result with 32 high 1s would be returned)
-        signature(types.int32, types.int32),
-        signature(types.uint32, types.uint32),
-        signature(types.int64, types.int64),
-        signature(types.uint64, types.uint64),
-        signature(types.float32, types.float32),
-        signature(types.float64, types.float64),
-        signature(types.complex64, types.complex64),
-        signature(types.complex128, types.complex128),
-    ]
+    cases = [signature(op, op) for op in sorted(types.signed_domain)]
+    cases += [signature(op, op) for op in sorted(types.unsigned_domain)]
+    cases += [signature(op, op) for op in sorted(types.real_domain)]
+    cases += [signature(op, op) for op in sorted(types.complex_domain)]
 
 class BinaryOperator(ConcreteTemplate):
-    cases = [
-        signature(types.int64, types.int64, types.int64),
-        signature(types.uint64, types.uint64, types.uint64),
-        signature(types.float32, types.float32, types.float32),
-        signature(types.float64, types.float64, types.float64),
-        signature(types.complex64, types.complex64, types.complex64),
-        signature(types.complex128, types.complex128, types.complex128),
-    ]
+    cases = [signature(op, op, op) for op in sorted(types.signed_domain)]
+    cases += [signature(op, op, op) for op in sorted(types.unsigned_domain)]
+    cases += [signature(op, op, op) for op in sorted(types.real_domain)]
+    cases += [signature(op, op, op) for op in sorted(types.complex_domain)]
 
 class TruedivOperator(ConcreteTemplate):
-    cases = [
-        signature(types.float64, types.int64, types.int64),
-        signature(types.float64, types.uint64, types.uint64),
-        signature(types.float32, types.float32, types.float32),
-        signature(types.float64, types.float64, types.float64),
-        signature(types.complex64, types.complex64, types.complex64),
-        signature(types.complex128, types.complex128, types.complex128),
-    ]
+    cases = [signature(types.float64, op, op) for op in sorted(types.signed_domain)]
+    cases += [signature(types.float64, op, op) for op in sorted(types.unsigned_domain)]
+    cases += [signature(op, op, op) for op in sorted(types.real_domain)]
+    cases += [signature(op, op, op) for op in sorted(types.complex_domain)]
 
 class PowerOperator(ConcreteTemplate):
-    cases = [
-        signature(types.float64, types.float64, types.int64),
-        signature(types.float64, types.float64, types.uint64),
-        signature(types.float32, types.float32, types.float32),
-        signature(types.float64, types.float64, types.float64),
-        signature(types.complex64, types.complex64, types.complex64),
-        signature(types.complex128, types.complex128, types.complex128),
-    ]
+    cases = [signature(types.float64, types.float64, op)
+             for op in sorted(types.signed_domain)]
+    cases += [signature(types.float64, types.float64, op)
+              for op in sorted(types.unsigned_domain)]
+    cases += [signature(op, op, op) for op in sorted(types.real_domain)]
+    cases += [signature(op, op, op) for op in sorted(types.complex_domain)]
 
 class ComparisonOperator(ConcreteTemplate):
-    cases = [
-        signature(types.bool_, types.int64, types.int64),
-        signature(types.bool_, types.uint64, types.uint64),
-        signature(types.bool_, types.float32, types.float32),
-        signature(types.bool_, types.float64, types.float64),
-        signature(types.bool_, types.complex64, types.complex64),
-        signature(types.bool_, types.complex128, types.complex128),
-    ]
+    cases = [signature(types.boolean, op, op) for op in sorted(types.signed_domain)]
+    cases += [signature(types.boolean, op, op) for op in sorted(types.unsigned_domain)]
+    cases += [signature(types.boolean, op, op) for op in sorted(types.real_domain)]
+    cases += [signature(types.boolean, op, op) for op in sorted(types.complex_domain)]
 
 
 def create_resolve_method(op):
