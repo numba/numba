@@ -1,12 +1,16 @@
 from __future__ import print_function, division, absolute_import
+
 import numpy
 import math
 import sys
-from llvm.core import Constant, Type, ICMP_UGT
-from numba import typing, types, cgutils
-from numba.targets.imputils import implement, Registry
-from numba import numpy_support
 import itertools
+
+from llvm.core import Constant, Type, ICMP_UGT
+
+
+from .imputils import implement, Registry
+from .. import typing, types, cgutils, numpy_support
+from ..config import PYVERSION
 
 registry = Registry()
 register = registry.register
@@ -259,7 +263,7 @@ register_unary_ufunc(numpy.negative, types.neg_type)
 
 
 def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
-                       asfloat=False):
+                       asfloat=False, true_divide=False):
     def impl(context, builder, sig, args):
         [tyinp1, tyinp2, tyout] = sig.args
         [inp1, inp2, out] = args
@@ -427,9 +431,10 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
                                                                        orelse):
                     with then:
                         # Divide by zero
-                        if (scalar_tyinp1 in types.real_domain or
-                                scalar_tyinp2 in types.real_domain) or \
-                                not numpy_support.int_divbyzero_returns_zero:
+                        if ((scalar_tyinp1 in types.real_domain or
+                                scalar_tyinp2 in types.real_domain) or 
+                                not numpy_support.int_divbyzero_returns_zero) or \
+                                true_divide:
                             # If y is float and is 0 also, return Nan; else
                             # return Inf
                             outltype = context.get_data_type(result_type)
@@ -474,15 +479,16 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
     return impl
 
 
-def register_binary_ufunc(ufunc, operator, asfloat=False, divbyzero=False):
+def register_binary_ufunc(ufunc, operator, asfloat=False, divbyzero=False, true_divide=False):
 
     def binary_ufunc(context, builder, sig, args):
-        imp = numpy_binary_ufunc(operator, asfloat=asfloat, divbyzero=divbyzero)
+        imp = numpy_binary_ufunc(operator, asfloat=asfloat,
+                                 divbyzero=divbyzero, true_divide=true_divide)
         return imp(context, builder, sig, args)
 
     def binary_ufunc_scalar_inputs(context, builder, sig, args):
         imp = numpy_binary_ufunc(operator, scalar_inputs=True, asfloat=asfloat,
-                                 divbyzero=divbyzero)
+                                 divbyzero=divbyzero, true_divide=true_divide)
         return imp(context, builder, sig, args)
 
     register(implement(ufunc, types.Kind(types.Array), types.Kind(types.Array),
@@ -499,7 +505,10 @@ def register_binary_ufunc(ufunc, operator, asfloat=False, divbyzero=False):
 register_binary_ufunc(numpy.add, '+')
 register_binary_ufunc(numpy.subtract, '-')
 register_binary_ufunc(numpy.multiply, '*')
-register_binary_ufunc(numpy.divide, '/', asfloat=True, divbyzero=True)
+if not PYVERSION >= (3, 0):
+    register_binary_ufunc(numpy.divide, '/', divbyzero=True, asfloat=True)
+register_binary_ufunc(numpy.floor_divide, '//', divbyzero=True)
+register_binary_ufunc(numpy.true_divide, '/', asfloat=True, divbyzero=True, true_divide=True)
 register_binary_ufunc(numpy.arctan2, math.atan2, asfloat=True)
 register_binary_ufunc(numpy.power, '**', asfloat=True)
 

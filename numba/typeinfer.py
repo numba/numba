@@ -457,7 +457,7 @@ class TypeInferer(object):
     def typeof_const(self, inst, target, const):
         if const is True or const is False:
             self.typevars[target.name].lock(types.boolean)
-        elif isinstance(const, (int, float)):
+        elif isinstance(const, utils.INT_TYPES + (float,)):
             ty = self.context.get_number_type(const)
             self.typevars[target.name].lock(ty)
         elif const is None:
@@ -498,6 +498,7 @@ class TypeInferer(object):
             self.typevars[target.name].lock(gvty)
             self.assumed_immutables.add(inst)
 
+        # XXX this is all duplicated from/in typeof_const
         elif gvar.name in ('True', 'False'):
             assert gvar.value in (True, False)
             self.typevars[target.name].lock(types.boolean)
@@ -514,7 +515,7 @@ class TypeInferer(object):
             self.typevars[target.name].lock(types.UniTuple(gvty, 2))
             self.assumed_immutables.add(inst)
 
-        elif isinstance(gvar.value, (int, float)):
+        elif isinstance(gvar.value, utils.INT_TYPES + (float,)):
             gvty = self.context.get_number_type(gvar.value)
             self.typevars[target.name].lock(gvty)
             self.assumed_immutables.add(inst)

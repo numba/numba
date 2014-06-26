@@ -388,6 +388,9 @@ class BaseContext(object):
         elif ty in types.signed_domain:
             return Constant.int_signextend(lty, val)
 
+        elif ty in types.unsigned_domain:
+            return Constant.int(lty, val)
+
         elif ty in types.real_domain:
             return Constant.real(lty, val)
 
