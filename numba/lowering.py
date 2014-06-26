@@ -663,8 +663,7 @@ class PyLower(BaseLower):
             self.builder.branch(target)
 
         elif isinstance(inst, ir.Del):
-            obj = self.loadvar(inst.value)
-            self.decref(obj)
+            self.delvar(inst.value)
 
         elif isinstance(inst, ir.Raise):
             self.pyapi.raise_exception(inst.exception, inst.exception)
@@ -956,6 +955,10 @@ class PyLower(BaseLower):
     def loadvar(self, name):
         ptr = self.getvar(name)
         return self.builder.load(ptr)
+
+    def delvar(self, name):
+        ptr = self.varmap.pop(name)
+        self.decref(ptr)
 
     def storevar(self, value, name):
         """

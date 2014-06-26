@@ -20,8 +20,8 @@ def loop_nest_3(x, y):
     n = 0
     for i in range(x):
         for j in range(y):
-            #for k in range(x+y):
-                n += i * j
+            for k in range(x+y):
+                n += 1
 
     return n
 
