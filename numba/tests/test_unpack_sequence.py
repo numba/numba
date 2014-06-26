@@ -65,7 +65,7 @@ class TestUnpack(TestCase):
         l = [1, 2, 3]
         self.assertEqual(cfunc(l), pyfunc(l))
 
-    def test_unpack_shape(self, flags=enable_pyobj_flags):
+    def test_unpack_shape(self, flags=force_pyobj_flags):
         pyfunc = unpack_shape
         cr = compile_isolated(pyfunc, [types.Array(dtype=types.int32,
                                                         ndim=3,
@@ -78,7 +78,7 @@ class TestUnpack(TestCase):
     def test_unpack_shape_npm(self):
         self.test_unpack_shape(flags=no_pyobj_flags)
 
-    def test_unpack_range(self, flags=enable_pyobj_flags):
+    def test_unpack_range(self, flags=force_pyobj_flags):
         pyfunc = unpack_range
         cr = compile_isolated(pyfunc, (), flags=flags)
         cfunc = cr.entry_point
@@ -87,7 +87,7 @@ class TestUnpack(TestCase):
     def test_unpack_range_npm(self):
         self.test_unpack_range(flags=no_pyobj_flags)
 
-    def test_unpack_tuple(self, flags=enable_pyobj_flags):
+    def test_unpack_tuple(self, flags=force_pyobj_flags):
         pyfunc = unpack_tuple
         cr = compile_isolated(pyfunc, (), flags=flags)
         cfunc = cr.entry_point
