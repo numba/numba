@@ -93,6 +93,10 @@ class GetIter(AbstractTemplate):
             return signature(obj.iterator_type, obj)
 
 
+def _iternext_pair_result(yield_type):
+    return types.Pair(yield_type, types.boolean)
+
+
 @builtin
 class IterNext(AbstractTemplate):
     key = "iternext"
@@ -101,18 +105,29 @@ class IterNext(AbstractTemplate):
         assert not kws
         [it] = args
         if isinstance(it, types.IteratorType):
-            return signature(it.yield_type, it)
+            return signature(types.Pair(it.yield_type, types.boolean), it)
 
 
 @builtin
-class IterValid(AbstractTemplate):
-    key = "itervalid"
+class PairFirst(AbstractTemplate):
+    key = "pair_first"
 
     def generic(self, args, kws):
         assert not kws
-        [it] = args
-        if isinstance(it, types.IteratorType):
-            return signature(types.boolean, it)
+        [pair] = args
+        if isinstance(pair, types.Pair):
+            return signature(pair.first_type, pair)
+
+
+@builtin
+class PairSecond(AbstractTemplate):
+    key = "pair_second"
+
+    def generic(self, args, kws):
+        assert not kws
+        [pair] = args
+        if isinstance(pair, types.Pair):
+            return signature(pair.second_type, pair)
 
 
 class BinOp(ConcreteTemplate):

@@ -6,7 +6,8 @@ import llvm.core as lc
 
 from numba import errcode
 from numba import types, typing, cgutils
-from numba.targets.imputils import builtin, implement, iterator_impl
+from numba.targets.imputils import (builtin, implement, iterator_impl,
+                                    iternext_impl)
 
 
 def make_range(range_state_type, range_iter_type, int_type):
@@ -122,17 +123,14 @@ def make_range(range_state_type, range_iter_type, int_type):
             res = builder.load(self.iter)
             one = context.get_constant(int_type, 1)
 
+            zero = context.get_constant(int_type, 0)
+            is_valid = builder.icmp(lc.ICMP_SGT, builder.load(self.count), zero)
+
             countptr = self.count
             builder.store(builder.sub(builder.load(countptr), one), countptr)
-
             builder.store(builder.add(res, self.step), self.iter)
 
-            return res
-
-        def itervalid(self, context, builder):
-            zero = context.get_constant(int_type, 0)
-            gt = builder.icmp(lc.ICMP_SGE, builder.load(self.count), zero)
-            return gt
+            return res, is_valid
 
     return RangeState, RangeIter
 

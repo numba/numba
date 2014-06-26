@@ -477,7 +477,21 @@ class Lower(BaseLower):
             return self.context.cast(self.builder, res, signature.return_type,
                                      resty)
 
-        elif expr.op in ('getiter', 'iternext', 'itervalid'):
+        elif expr.op == 'pair_first':
+            val = self.loadvar(expr.value.name)
+            ty = self.typeof(expr.value.name)
+            item = self.context.pair_first(self.builder, val, ty)
+            return self.context.get_argument_value(self.builder,
+                                                   ty.first_type, item)
+
+        elif expr.op == 'pair_second':
+            val = self.loadvar(expr.value.name)
+            ty = self.typeof(expr.value.name)
+            item = self.context.pair_second(self.builder, val, ty)
+            return self.context.get_argument_value(self.builder,
+                                                   ty.second_type, item)
+
+        elif expr.op in ('getiter', 'iternext'):
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
             signature = self.fndesc.calltypes[expr]
@@ -486,33 +500,33 @@ class Lower(BaseLower):
             castval = self.context.cast(self.builder, val, ty, fty)
             res = impl(self.builder, (castval,))
             return self.context.cast(self.builder, res, signature.return_type,
-                                    resty)
+                                     resty)
 
         elif expr.op == 'exhaust_iter':
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
             itemty = ty.yield_type
             tup = self.context.get_constant_undef(resty)
-            itervalid_sig = typing.signature(types.boolean, ty)
-            iternext_sig = typing.signature(itemty, ty)
-            itervalid_impl = self.context.get_function('itervalid',
-                                                       itervalid_sig)
+            pairty = types.Pair(itemty, types.boolean)
+            iternext_sig = typing.signature(pairty, ty)
             iternext_impl = self.context.get_function('iternext',
                                                       iternext_sig)
             excid = self.context.add_exception(ValueError)
             for i in range(expr.count):
-                res = iternext_impl(self.builder, (val,))
-                is_exhausted = self.builder.not_(
-                    itervalid_impl(self.builder, (val,)))
-                with cgutils.if_unlikely(self.builder, is_exhausted):
+                pair = iternext_impl(self.builder, (val,))
+                is_valid = self.context.pair_second(self.builder,
+                                                    pair, pairty)
+                with cgutils.if_unlikely(self.builder,
+                                         self.builder.not_(is_valid)):
                     self.context.return_user_exc(self.builder, excid)
-                tup = self.builder.insert_value(tup, res, i)
-            # HACK workaround issue #569 bogus FOR_ITER implementation:
-            # we need to call iternext() once more before itervalid()
-            # gives the right result.
-            iternext_impl(self.builder, (val,))
-            with cgutils.if_unlikely(self.builder,
-                                     itervalid_impl(self.builder, (val,))):
+                item = self.context.pair_first(self.builder,
+                                               pair, pairty)
+                tup = self.builder.insert_value(tup, item, i)
+
+            pair = iternext_impl(self.builder, (val,))
+            is_valid = self.context.pair_second(self.builder,
+                                                pair, pairty)
+            with cgutils.if_unlikely(self.builder, is_valid):
                 self.context.return_user_exc(self.builder, excid)
             return tup
 
@@ -746,21 +760,33 @@ class PyLower(BaseLower):
             obj = self.loadvar(expr.value.name)
             res = self.pyapi.object_getiter(obj)
             self.check_error(res)
-            self.storevar(res, '$iter$' + expr.value.name)
-            return self.pack_iter(res)
+            #self.storevar(res, '$iter$' + expr.value.name)
+            return res
         elif expr.op == 'iternext':
-            iterstate = self.loadvar(expr.value.name)
-            iterobj, valid = self.unpack_iter(iterstate)
+            iterobj = self.loadvar(expr.value.name)
             item = self.pyapi.iter_next(iterobj)
-            self.set_iter_valid(iterstate, item)
-            return item
-        elif expr.op == 'itervalid':
-            iterstate = self.loadvar(expr.value.name)
-            _, valid = self.unpack_iter(iterstate)
-            return self.builder.trunc(valid, Type.int(1))
+            is_valid = cgutils.is_not_null(self.builder, item)
+            pair = self.pyapi.tuple_new(2)
+            with cgutils.ifelse(self.builder, is_valid) as (then, otherwise):
+                with then:
+                    self.pyapi.tuple_setitem(pair, 0, item)
+                with otherwise:
+                    self.check_occurred()
+                    self.pyapi.tuple_setitem(pair, 0, self.pyapi.make_none())
+            self.pyapi.tuple_setitem(pair, 1, self.pyapi.bool_from_bool(is_valid))
+            return pair
+        elif expr.op == 'pair_first':
+            pair = self.loadvar(expr.value.name)
+            first = self.pyapi.tuple_getitem(pair, 0)
+            self.incref(first)
+            return first
+        elif expr.op == 'pair_second':
+            pair = self.loadvar(expr.value.name)
+            second = self.pyapi.tuple_getitem(pair, 1)
+            self.incref(second)
+            return second
         elif expr.op == 'exhaust_iter':
-            iterstate = self.loadvar(expr.value.name)
-            iterobj, _ = self.unpack_iter(iterstate)
+            iterobj = self.loadvar(expr.value.name)
             tup = self.pyapi.sequence_tuple(iterobj)
             self.check_error(tup)
             # Check tuple size is as expected
@@ -899,25 +925,6 @@ class PyLower(BaseLower):
 
         return builtin
 
-    def pack_iter(self, obj):
-        iterstate = PyIterState(self.context, self.builder)
-        iterstate.iterator = obj
-        iterstate.valid = cgutils.true_byte
-        return iterstate._getpointer()
-
-    def unpack_iter(self, state):
-        iterstate = PyIterState(self.context, self.builder, ref=state)
-        return tuple(iterstate)
-
-    def set_iter_valid(self, state, item):
-        iterstate = PyIterState(self.context, self.builder, ref=state)
-        iterstate.valid = cgutils.as_bool_byte(self.builder,
-                                               cgutils.is_not_null(self.builder,
-                                                                   item))
-
-        with cgutils.if_unlikely(self.builder, self.is_null(item)):
-            self.check_occurred()
-
     def check_occurred(self):
         err_occurred = cgutils.is_not_null(self.builder,
                                            self.pyapi.err_occurred())
@@ -989,29 +996,11 @@ class PyLower(BaseLower):
         """
         This is allow to be called on non pyobject pointer, in which case
         no code is inserted.
-
-        If the value is a PyIterState, it unpack the structure and decref
-        the iterator.
         """
         lpyobj = self.context.get_value_type(types.pyobject)
 
         if value.type.kind == lc.TYPE_POINTER:
             if value.type != lpyobj:
                 pass
-                #raise AssertionError(value.type)
-                # # Handle PyIterState
-                # not_null = cgutils.is_not_null(self.builder, value)
-                # with cgutils.if_likely(self.builder, not_null):
-                #     iterstate = PyIterState(self.context, self.builder,
-                #                             value=value)
-                #     value = iterstate.iterator
-                #     self.pyapi.decref(value)
             else:
                 self.pyapi.decref(value)
-
-
-class PyIterState(cgutils.Structure):
-    _fields = [
-        ("iterator", types.pyobject),
-        ("valid",    types.boolean),
-    ]

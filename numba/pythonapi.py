@@ -279,6 +279,10 @@ class PythonAPI(object):
         lopid = self.context.get_constant(types.int32, opid)
         return self.builder.call(fn, (lhs, rhs, lopid))
 
+    def bool_from_bool(self, bval):
+        longval = self.builder.zext(bval, self.long)
+        return self.bool_from_long(longval)
+
     def bool_from_long(self, ival):
         fnty = Type.function(self.pyobj, [self.long])
         fn = self._get_function(fnty, name="PyBool_FromLong")
@@ -692,6 +696,9 @@ class PythonAPI(object):
                                                                 count)])
 
     def tuple_setitem(self, tuple_val, index, item):
+        """
+        Steals a reference to `item`.
+        """
         fnty = Type.function(Type.int(), [self.pyobj, Type.int(), self.pyobj])
         setitem_fn = self._get_function(fnty, name='PyTuple_SetItem')
         index = self.context.get_constant(types.int32, index)

@@ -83,22 +83,30 @@ def iterator_impl(iterable_type, iterator_type):
     def wrapper(cls):
         # These are unbound methods
         iternext = cls.iternext
-        itervalid = cls.itervalid
 
+        @iternext_impl
         def iternext_wrapper(context, builder, sig, args):
             (value,) = args
             iterobj = cls(context, builder, value)
             return iternext(iterobj, context, builder)
 
-        def itervalid_wrapper(context, builder, sig, args):
-            (value,) = args
-            iterobj = cls(context, builder, value)
-            return itervalid(iterobj, context, builder)
-
         builtin(implement('iternext', iterator_type)(iternext_wrapper))
-        builtin(implement('itervalid', iterator_type)(itervalid_wrapper))
         return cls
 
+    return wrapper
+
+
+def iternext_impl(func):
+    from .builtins import make_pair
+
+    def wrapper(context, builder, sig, args):
+        item, valid = func(context, builder, sig, args)
+        pair_type = sig.return_type
+        cls = make_pair(pair_type.first_type, pair_type.second_type)
+        pairobj = cls(context, builder)
+        pairobj.first = item
+        pairobj.second = context.get_return_value(builder, types.boolean, valid)
+        return pairobj._getvalue()
     return wrapper
 
 

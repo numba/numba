@@ -160,6 +160,38 @@ class ExhaustIterConstrain(object):
                                           count=self.count))
 
 
+class PairFirstConstrain(object):
+
+    def __init__(self, target, pair, loc):
+        self.target = target
+        self.pair = pair
+        self.loc = loc
+
+    def __call__(self, context, typevars):
+        oset = typevars[self.target]
+        for tp in typevars[self.pair.name].get():
+            if not isinstance(tp, types.Pair):
+                # XXX is this an error?
+                continue
+            oset.add_types(tp.first_type)
+
+
+class PairSecondConstrain(object):
+
+    def __init__(self, target, pair, loc):
+        self.target = target
+        self.pair = pair
+        self.loc = loc
+
+    def __call__(self, context, typevars):
+        oset = typevars[self.target]
+        for tp in typevars[self.pair.name].get():
+            if not isinstance(tp, types.Pair):
+                # XXX is this an error?
+                continue
+            oset.add_types(tp.second_type)
+
+
 class CallConstrain(object):
     """Constrain for calling functions.
     Perform case analysis foreach combinations of argument types.
@@ -576,12 +608,20 @@ class TypeInferer(object):
                 self.usercalls.append((inst.value, expr.args, expr.kws))
             else:
                 self.typeof_call(inst, target, expr)
-        elif expr.op in ('getiter', 'iternext', 'itervalid'):
+        elif expr.op in ('getiter', 'iternext'):
             self.typeof_intrinsic_call(inst, target, expr.op, expr.value)
         elif expr.op == 'exhaust_iter':
             constrain = ExhaustIterConstrain(target.name, count=expr.count,
                                              iterator=expr.value,
                                              loc=expr.loc)
+            self.constrains.append(constrain)
+        elif expr.op == 'pair_first':
+            constrain = PairFirstConstrain(target.name, pair=expr.value,
+                                           loc=expr.loc)
+            self.constrains.append(constrain)
+        elif expr.op == 'pair_second':
+            constrain = PairSecondConstrain(target.name, pair=expr.value,
+                                            loc=expr.loc)
             self.constrains.append(constrain)
         elif expr.op == 'binop':
             self.typeof_intrinsic_call(inst, target, expr.fn, expr.lhs, expr.rhs)
