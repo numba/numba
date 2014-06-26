@@ -1,6 +1,7 @@
 from __future__ import absolute_import, print_function
 
 import numpy
+import itertools
 from .. import types
 from .templates import (AttributeTemplate, AbstractTemplate,
                                     Registry, signature)
@@ -53,6 +54,68 @@ class Numpy_rules_ufunc(AbstractTemplate):
         raise TypingError("can't resolve ufunc {0} for types {1}".format(key.__name__, args))
 
 
+# list of unary ufuncs to register
+
+_math_operations = [ "add", "subtract", "multiply",
+                     "logaddexp", "logaddexp2", "true_divide",
+                     "floor_divide", "negative", "power", 
+                     "remainder", "fmod", "absolute",
+                     "rint", "sign", "conj", "exp", "exp2",
+                     "log", "log2", "log10", "expm1", "log1p",
+                     "sqrt", "square", "reciprocal",
+                     "divide", "mod", "abs" ]
+
+_trigonometric_functions = [ "sin", "cos", "tan", "arcsin",
+                             "arccos", "arctan", "arctan2",
+                             "hypot", "sinh", "cosh", "tanh",
+                             "arcsinh", "arccosh", "arctanh",
+                             "deg2rad", "rad2deg", "degrees",
+                             "radians" ]
+
+_bit_twiddling_functions = ["bitwise_and", "bitwise_or",
+                            "bitwise_xor", "invert", 
+                            "left_shift", "right_shift",
+                            "bitwise_not" ]
+
+_comparison_functions = [ "greater", "greater_equal", "less",
+                          "less_equal", "not_equal", "equal",
+                          "logical_and", "logical_or",
+                          "logical_xor", "logical_not",
+                          "maximum", "minimum", "fmax", "fmin" ]
+
+_floating_functions = [ "isfinite", "isinf", "isnan", "signbit",
+                        "copysign", "nextafter", "modf", "ldexp",
+                        "frexp", "floor", "ceil", "trunc",
+                        "spacing" ]
+
+
+# This is a set of the ufuncs that are not yet supported by Lowering. In order
+# to trigger no-python mode we must not register them until their Lowering is
+# implemented.
+#
+# It also works as a nice TODO list for ufunc support :)
+_unsupported = set([ numpy.square, numpy.spacing, numpy.signbit,
+                     numpy.rint, numpy.right_shift, numpy.remainder, numpy.reciprocal,
+                     numpy.radians, numpy.not_equal, numpy.minimum, numpy.maximum,
+                     numpy.logical_xor, numpy.logical_or, numpy.logical_not,
+                     numpy.logical_and, numpy.logaddexp, numpy.logaddexp2,  numpy.less,
+                     numpy.less_equal, numpy.left_shift, numpy.isnan, numpy.isinf,
+                     numpy.isfinite, numpy.invert, numpy.hypot, numpy.greater,
+                     numpy.greater_equal, numpy.fmod, numpy.fmin, numpy.fmax,
+                     numpy.floor_divide, numpy.equal, numpy.degrees, numpy.copysign,
+                     numpy.reciprocal, numpy.conjugate, numpy.bitwise_xor,
+                     numpy.bitwise_or, numpy.bitwise_and, numpy.abs ])
+
+# a list of ufuncs that are in fact aliases of other ufuncs. They need to insert the
+# resolve method, but not register the ufunc itself
+_aliases = set(["bitwise_not", "mod", "abs"])
+
+#in python3 numpy.divide is mapped to numpy.true_divide
+if numpy.divide == numpy.true_divide:
+    _aliases.add("divide")
+
+
+
 def _numpy_ufunc(name):
     the_key = eval("numpy."+name) # obtain the appropriate symbol for the key.
     class typing_class(Numpy_rules_ufunc):
@@ -61,23 +124,20 @@ def _numpy_ufunc(name):
     typing_class.__name__ = "resolve_{0}".format(name)
     # Add the resolve method to NumpyModuleAttribute
     setattr(NumpyModuleAttribute, "resolve_"+name, lambda s, m: types.Function(typing_class))
-    builtin_global(the_key, types.Function(typing_class))
+
+    if not name in _aliases:
+        builtin_global(the_key, types.Function(typing_class))
 
 
-# list of unary ufuncs to register
-_autoregister_ufuncs = [
-    "sin", "cos", "tan", "arcsin", "arccos", "arctan",
-    "sinh", "cosh", "tanh", "arcsinh", "arccosh", "arctanh",
-    "exp", "exp2", "expm1",
-    "log", "log2", "log10", "log1p",
-    "absolute", "negative", "floor", "ceil", "trunc", "sign",
-    "sqrt",
-    "deg2rad", "rad2deg",
-    "add", "subtract", "multiply", "divide",
-    "arctan2", "power"]
-for func in _autoregister_ufuncs:
-    _numpy_ufunc(func)
-del(_autoregister_ufuncs)
+for func in itertools.chain(_math_operations, _trigonometric_functions,
+                            _bit_twiddling_functions, _comparison_functions,
+                            _floating_functions):
+    if not getattr(numpy, func) in _unsupported:
+        _numpy_ufunc(func)
 
+
+del _math_operations, _trigonometric_functions, _bit_twiddling_functions
+del _comparison_functions, _floating_functions, _unsupported
+del _aliases, _numpy_ufunc
 
 builtin_global(numpy, types.Module(numpy))
