@@ -22,6 +22,15 @@ class npy:
 
 
 
+def _decompose_type(ty, where='input operand'):
+    if isinstance(ty, types.Array):
+        return (False, ty.dtype, ty.ndim)
+    elif ty in types.number_domain:
+        return (True, ty, 1)
+    else:
+        raise TypeError('unknown type for {0}'.format(where))
+
+
 def unary_npy_math_extern(fn):
     setattr(npy, fn, fn)
     fn_sym = eval("npy."+fn)
@@ -50,16 +59,7 @@ def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
         [tyinp, tyout] = sig.args
         [inp, out] = args
 
-        if isinstance(tyinp, types.Array):
-            scalar_inp = False
-            scalar_tyinp = tyinp.dtype
-            inp_ndim = tyinp.ndim
-        elif tyinp in types.number_domain:
-            scalar_inp = True
-            scalar_tyinp = tyinp
-            inp_ndim = 1
-        else:
-            raise TypeError('unknown type for input operand')
+        scalar_inp, scalar_tyinp, inp_ndim = _decompose_type(tyinp)
 
         out_ndim = tyout.ndim
 
@@ -261,23 +261,14 @@ register_unary_ufunc(numpy.absolute, types.abs_type)
 register_unary_ufunc(numpy.sign, types.sign_type)
 register_unary_ufunc(numpy.negative, types.neg_type)
 
-
 def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
                        asfloat=False, true_divide=False):
     def impl(context, builder, sig, args):
         [tyinp1, tyinp2, tyout] = sig.args
         [inp1, inp2, out] = args
 
-        if isinstance(tyinp1, types.Array):
-            scalar_inp1 = False
-            scalar_tyinp1 = tyinp1.dtype
-            inp1_ndim = tyinp1.ndim
-        elif tyinp1 in types.number_domain:
-            scalar_inp1 = True
-            scalar_tyinp1 = tyinp1
-            inp1_ndim = 1
-        else:
-            raise TypeError('unknown type for first input operand')
+        scalar_inp1, scalar_tyinp1, inp1_ndim = _decompose_type(tyinp1, where='first input operand')
+        scalar_inp2, scalar_tyinp2, inp2_ndim = _decompose_type(tyinp2, where='second input operand')
 
         if isinstance(tyinp2, types.Array):
             scalar_inp2 = False
