@@ -759,7 +759,6 @@ class PyLower(BaseLower):
             obj = self.loadvar(expr.value.name)
             res = self.pyapi.object_getiter(obj)
             self.check_error(res)
-            #self.storevar(res, '$iter$' + expr.value.name)
             return res
         elif expr.op == 'iternext':
             iterobj = self.loadvar(expr.value.name)

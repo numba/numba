@@ -1170,11 +1170,6 @@ def getitem_unituple(context, builder, sig, args):
             builder.branch(bbend)
             phinode.add_incoming(value, bbi)
 
-    ## HACK: make __getitem__(tup, len(tup)) return tup[-1], to
-    ## circumvent code generation bug where iternext is emitted before
-    ## itervalid (issue #569).
-    #ki = context.get_constant(types.intp, tupty.count)
-    #switch.add_case(ki, bbi)
     builder.position_at_end(bbend)
     return phinode
 

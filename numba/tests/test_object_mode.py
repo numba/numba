@@ -21,7 +21,7 @@ def loop_nest_3(x, y):
     for i in range(x):
         for j in range(y):
             for k in range(x+y):
-                n += 1
+                n += i * j
 
     return n
 

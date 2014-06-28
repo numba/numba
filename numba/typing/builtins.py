@@ -93,10 +93,6 @@ class GetIter(AbstractTemplate):
             return signature(obj.iterator_type, obj)
 
 
-def _iternext_pair_result(yield_type):
-    return types.Pair(yield_type, types.boolean)
-
-
 @builtin
 class IterNext(AbstractTemplate):
     key = "iternext"
