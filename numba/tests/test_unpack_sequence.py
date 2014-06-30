@@ -57,7 +57,7 @@ def unpack_tuple_too_large():
 
 
 def unpack_heterogenous_tuple():
-    a, b, c = (1, 2.5, 3)
+    a, b, c = (1, 2.5, 3j)
     return a + b + c
 
 
