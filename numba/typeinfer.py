@@ -454,34 +454,47 @@ class TypeInferer(object):
         else:
             raise NotImplementedError(type(value), value)
 
-    def typeof_const(self, inst, target, const):
-        if const is True or const is False:
-            self.typevars[target.name].lock(types.boolean)
-        elif isinstance(const, utils.INT_TYPES + (float,)):
-            ty = self.context.get_number_type(const)
-            self.typevars[target.name].lock(ty)
-        elif const is None:
-            self.typevars[target.name].lock(types.none)
-        elif isinstance(const, str):
-            self.typevars[target.name].lock(types.string)
-        elif isinstance(const, complex):
-            self.typevars[target.name].lock(types.complex128)
-        elif isinstance(const, tuple):
-            tys = []
-            for elem in const:
-                if isinstance(elem, int):
-                    tys.append(types.intp)
-
-            if all(t == types.intp for t in tys):
-                typ = types.UniTuple(types.intp, len(tys))
+    def resolve_value_type(self, inst, val):
+        """
+        Resolve the type of a simple Python value, such as can be
+        represented by literals.
+        """
+        if val is True or val is False:
+            return types.boolean
+        elif isinstance(val, utils.INT_TYPES + (float,)):
+            return self.context.get_number_type(val)
+        elif val is None:
+            return types.none
+        elif isinstance(val, str):
+            return types.string
+        elif isinstance(val, complex):
+            return types.complex128
+        elif isinstance(val, tuple):
+            tys = [self.resolve_value_type(inst, v) for v in val]
+            distinct_types = set(tys)
+            if len(distinct_types) == 1:
+                return types.UniTuple(tys[0], len(tys))
             else:
-                typ = types.Tuple(tys)
-            self.typevars[target.name].lock(typ)
+                return types.Tuple(tys)
         else:
-            msg = "Unknown constant of type %s" % (const,)
+            msg = "Unsupported Python value %r" % (val,)
             raise TypingError(msg, loc=inst.loc)
 
+    def typeof_const(self, inst, target, const):
+        self.typevars[target.name].lock(self.resolve_value_type(inst, const))
+
     def typeof_global(self, inst, target, gvar):
+        try:
+            # Is it a supported value type?
+            typ = self.resolve_value_type(inst, gvar.value)
+        except TypingError:
+            # Fallback on other cases below
+            pass
+        else:
+            self.typevars[target.name].lock(typ)
+            self.assumed_immutables.add(inst)
+            return
+
         if (gvar.name in ('range', 'xrange') and
                     gvar.value in RANGE_ITER_OBJECTS):
             gvty = self.context.get_global_type(gvar.value)
@@ -495,28 +508,6 @@ class TypeInferer(object):
 
         elif gvar.name == 'len' and gvar.value is len:
             gvty = self.context.get_global_type(gvar.value)
-            self.typevars[target.name].lock(gvty)
-            self.assumed_immutables.add(inst)
-
-        # XXX this is all duplicated from/in typeof_const
-        elif gvar.name in ('True', 'False'):
-            assert gvar.value in (True, False)
-            self.typevars[target.name].lock(types.boolean)
-            self.assumed_immutables.add(inst)
-
-        elif gvar.name == 'None':
-            assert gvar.value is None
-            self.typevars[target.name].lock(types.none)
-            self.assumed_immutables.add(inst)
-
-        elif (isinstance(gvar.value, tuple) and
-              all(isinstance(x, int) for x in gvar.value)):
-            gvty = self.context.get_number_type(gvar.value[0])
-            self.typevars[target.name].lock(types.UniTuple(gvty, 2))
-            self.assumed_immutables.add(inst)
-
-        elif isinstance(gvar.value, utils.INT_TYPES + (float,)):
-            gvty = self.context.get_number_type(gvar.value)
             self.typevars[target.name].lock(gvty)
             self.assumed_immutables.add(inst)
 
