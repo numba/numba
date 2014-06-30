@@ -1,9 +1,5 @@
 from __future__ import print_function, absolute_import, division
-from functools import reduce
-import operator
 from llvm.core import Type
-import llvm.core as lc
-import llvm.ee as le
 from numba.targets.imputils import implement, Registry
 from numba import cgutils
 from numba import types
@@ -42,5 +38,24 @@ def get_global_id_impl(context, builder, sig, args):
 def get_local_id_impl(context, builder, sig, args):
     [dim] = args
     get_local_id = _declare_function(context, builder, 'get_local_id', sig,
-                                      ['unsigned int'])
+                                     ['unsigned int'])
     return builder.call(get_local_id, [dim])
+
+
+@register
+@implement(stubs.get_global_size, types.uint32)
+def get_global_size_impl(context, builder, sig, args):
+    [dim] = args
+    get_global_size = _declare_function(context, builder, 'get_global_size',
+                                        sig, ['unsigned int'])
+    return builder.call(get_global_size, [dim])
+
+
+@register
+@implement(stubs.get_local_size, types.uint32)
+def get_local_size_impl(context, builder, sig, args):
+    [dim] = args
+    get_local_size = _declare_function(context, builder, 'get_local_size',
+                                        sig, ['unsigned int'])
+    return builder.call(get_local_size, [dim])
+

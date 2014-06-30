@@ -17,9 +17,22 @@ class Ocl_get_global_id(ConcreteTemplate):
     key = ocl.get_global_id
     cases = [signature(types.uintp, types.uint32)]
 
+
 @intrinsic
 class Ocl_get_local_id(ConcreteTemplate):
     key = ocl.get_local_id
+    cases = [signature(types.uintp, types.uint32)]
+
+
+@intrinsic
+class Ocl_get_global_size(ConcreteTemplate):
+    key = ocl.get_global_size
+    cases = [signature(types.uintp, types.uint32)]
+
+
+@intrinsic
+class Ocl_get_local_size(ConcreteTemplate):
+    key = ocl.get_local_size
     cases = [signature(types.uintp, types.uint32)]
 
 
@@ -32,6 +45,12 @@ class OclModuleTemplate(AttributeTemplate):
 
     def resolve_get_local_id(self, mod):
         return types.Function(Ocl_get_local_id)
+
+    def resolve_get_global_size(self, mod):
+        return types.Function(Ocl_get_global_size)
+
+    def resolve_get_local_size(self, mod):
+        return types.Function(Ocl_get_local_size)
 
 
 intrinsic_global(ocl, types.Module(ocl))

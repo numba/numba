@@ -33,10 +33,10 @@ class TestCompiler(unittest.TestCase):
         data = np.zeros(10, dtype='int32')
 
         dev_data = ocl.to_device(data)
-        kern[10, 1](dev_data)
+        kern[data.size, 1](dev_data)
         dev_data.copy_to_host(data)
 
-        print(data)
+        self.assertTrue(np.all(data == 1 + np.arange(data.size)))
 
     def test_get_local_id(self):
         def pyfunc(x):
@@ -49,11 +49,28 @@ class TestCompiler(unittest.TestCase):
         data = np.zeros(10, dtype='int32')
 
         dev_data = ocl.to_device(data)
-        kern[10, 10](dev_data)
+        kern[data.size, 32](dev_data)
         dev_data.copy_to_host(data)
 
-        print(data)
+        self.assertTrue(np.all(data == 1 + np.arange(data.size)))
 
+    def test_get_global_size(self):
+        def pyfunc(x):
+            i = ocl.get_global_id(0)
+            n = ocl.get_global_size(0)
+            m = ocl.get_local_size(0)
+            x[i] = n * m
+
+        argtys = [types.Array(types.int32, 1, 'C')]
+        kern = compiler.compile_kernel(pyfunc, argtys)
+
+        data = np.zeros(32, dtype='int32')
+
+        dev_data = ocl.to_device(data)
+        kern[data.size, data.size](dev_data)
+        dev_data.copy_to_host(data)
+
+        self.assertTrue(np.all(data == data.size ** 2))
 
 if __name__ == '__main__':
     unittest.main()
