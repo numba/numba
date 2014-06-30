@@ -4,6 +4,7 @@ import numpy
 import math
 import sys
 import itertools
+from collections import namedtuple
 
 from llvm.core import Constant, Type, ICMP_UGT
 
@@ -49,6 +50,18 @@ def _default_promotion_for_type(ty):
     return promote_type
 
 
+
+class _ArrayHelper(namedtuple('_ArrayHelper', ('ary', 'shape', 'strides', 'data', 'layout'))):
+    pass
+
+def _prepare_array(ctxt, bld, inp, tyinp, ndim):
+    """code that setups the array"""
+    ary     = ctxt.make_array(tyinp)(ctxt, bld, inp)
+    shape   = cgutils.unpack_tuple(bld, ary.shape, ndim)
+    strides = cgutils.unpack_tuple(bld, ary.strides, ndim)
+    return _ArrayHelper(ary, shape, strides, ary.data, tyinp.layout)
+
+
 def unary_npy_math_extern(fn):
     setattr(npy, fn, fn)
     fn_sym = eval("npy."+fn)
@@ -92,22 +105,11 @@ def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
 
         sig = typing.signature(result_type, promote_type)
 
-        if not scalar_inp:
-            iary = context.make_array(tyinp)(context, builder, inp)
-        oary = context.make_array(tyout)(context, builder, out)
+        iary = None if scalar_inp else _prepare_array(context, builder, inp, tyinp, inp_ndim) 
+        oary = _prepare_array(context, builder, out, tyout, out_ndim)
 
         fnwork = context.get_function(funckey, sig)
         intpty = context.get_value_type(types.intp)
-
-        if not scalar_inp:
-            inp_shape = cgutils.unpack_tuple(builder, iary.shape, inp_ndim)
-            inp_strides = cgutils.unpack_tuple(builder, iary.strides, inp_ndim)
-            inp_data = iary.data
-            inp_layout = tyinp.layout
-        out_shape = cgutils.unpack_tuple(builder, oary.shape, out_ndim)
-        out_strides = cgutils.unpack_tuple(builder, oary.strides, out_ndim)
-        out_data = oary.data
-        out_layout = tyout.layout
 
         ZERO = Constant.int(Type.int(intpty.width), 0)
         ONE = Constant.int(Type.int(intpty.width), 1)
@@ -120,7 +122,7 @@ def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
                 builder.store(ZERO, x)
                 inp_indices.append(x)
 
-        loopshape = cgutils.unpack_tuple(builder, oary.shape, out_ndim)
+        loopshape = oary.shape
 
         with cgutils.loop_nest(builder, loopshape, intp=intpty) as indices:
 
@@ -129,7 +131,7 @@ def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
             # we'll use that to set the input indices. In order to
             # handle broadcasting, any input dimension of size 1 won't be
             # incremented.
-            if not scalar_inp:
+            if iary is not None:
                 bb_inc_inp_index = [cgutils.append_basic_block(builder,
                     '.inc_inp_index' + str(i)) for i in range(inp_ndim)]
                 bb_end_inc_index = cgutils.append_basic_block(builder, '.end_inc_index')
@@ -139,7 +141,7 @@ def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
                         # If the shape of this dimension is 1, then leave the
                         # index at 0 so that this dimension is broadcasted over
                         # the corresponding output dimension.
-                        cond = builder.icmp(ICMP_UGT, inp_shape[i], ONE)
+                        cond = builder.icmp(ICMP_UGT, iary.shape[i], ONE)
                         with cgutils.ifthen(builder, cond):
                             # If number of input dimensions is less than output
                             # dimensions, the input shape is right justified so
@@ -159,20 +161,20 @@ def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
 
                 inds = [builder.load(index) for index in inp_indices]
                 px = cgutils.get_item_pointer2(builder,
-                                               data=inp_data,
-                                               shape=inp_shape,
-                                               strides=inp_strides,
-                                               layout=inp_layout,
+                                               data=iary.data,
+                                               shape=iary.shape,
+                                               strides=iary.strides,
+                                               layout=iary.layout,
                                                inds=inds)
                 x = builder.load(px)
             else:
                 x = inp
 
             po = cgutils.get_item_pointer2(builder,
-                                           data=out_data,
-                                           shape=out_shape,
-                                           strides=out_strides,
-                                           layout=out_layout,
+                                           data=oary.data,
+                                           shape=oary.shape,
+                                           strides=oary.strides,
+                                           layout=oary.layout,
                                            inds=indices)
 
             d_x = context.cast(builder, x, scalar_tyinp, promote_type)
