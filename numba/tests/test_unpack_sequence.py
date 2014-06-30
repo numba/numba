@@ -61,6 +61,11 @@ def unpack_heterogenous_tuple():
     return a + b + c
 
 
+def unpack_nested_heterogenous_tuple():
+    a, (b, c) = (1, (2.5, 3j))
+    return a + b + c
+
+
 class TestUnpack(TestCase):
 
     def test_unpack_list(self):
@@ -109,6 +114,15 @@ class TestUnpack(TestCase):
 
     def test_unpack_heterogenous_tuple_npm(self):
         self.test_unpack_heterogenous_tuple(flags=no_pyobj_flags)
+
+    def test_unpack_nested_heterogenous_tuple(self, flags=force_pyobj_flags):
+        pyfunc = unpack_nested_heterogenous_tuple
+        cr = compile_isolated(pyfunc, (), flags=flags)
+        cfunc = cr.entry_point
+        self.assertPreciseEqual(cfunc(), pyfunc())
+
+    def test_unpack_nested_heterogenous_tuple_npm(self):
+        self.test_unpack_nested_heterogenous_tuple(flags=no_pyobj_flags)
 
     def check_unpack_error(self, pyfunc, flags=force_pyobj_flags):
         cr = compile_isolated(pyfunc, (), flags=flags)
