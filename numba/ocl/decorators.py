@@ -1,6 +1,6 @@
 from __future__ import print_function, absolute_import, division
 from numba import sigutils, types
-from .compiler import compile_kernel
+from .compiler import compile_kernel, compile_device
 
 
 def jit(restype=None, argtypes=None, device=False, **kws):

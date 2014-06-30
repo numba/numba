@@ -56,6 +56,11 @@ class OCLTargetContext(BaseContext):
 
         return wrapper
 
+    def mark_ocl_device(self, func):
+        # Adapt to SPIR
+        module = func.module
+        func.calling_convention = CC_SPIR_FUNC
+
     def generate_kernel_wrapper(self, func, argtypes):
         module = func.module
 
@@ -87,9 +92,8 @@ class OCLTargetContext(BaseContext):
         return wrapfn
 
     def link_dependencies(self, module, depends):
-        # for lib in depends:
-        #     module.link_in(lib, preserve=True)
-        raise NotImplementedError
+        for lib in depends:
+            module.link_in(lib, preserve=True)
 
     def make_constant_array(self, builder, typ, ary):
         """

@@ -1,6 +1,7 @@
 from __future__ import print_function, absolute_import
 import copy
 import ctypes
+from numba.typing.templates import ConcreteTemplate
 from numba import types, compiler
 
 
@@ -23,6 +24,9 @@ def compile_ocl(pyfunc, return_type, args, debug):
                                   flags=flags,
                                   locals={})
 
+    # Linking depending libraries
+    targetctx.link_dependencies(cres.llvm_module, cres.target_context.linking)
+
     # Fix global naming
     for gv in cres.llvm_module.global_variables:
         if '.' in gv.name:
@@ -43,6 +47,27 @@ def compile_kernel(pyfunc, args, debug=False):
                      name=cres.llvm_func.name,
                      argtypes=cres.signature.args)
     return kern
+
+
+def compile_device(pyfunc, return_type, args, debug=False):
+    _sentry_array_layout(args)
+    cres = compile_ocl(pyfunc, return_type, args, debug=debug)
+    cres.target_context.mark_ocl_device(cres.llvm_func)
+    devfn = DeviceFunction(cres)
+
+    class device_function_template(ConcreteTemplate):
+        key = devfn
+        cases = [cres.signature]
+
+    cres.typing_context.insert_user_function(devfn, device_function_template)
+    libs = [cres.llvm_module]
+    cres.target_context.insert_user_function(devfn, cres.fndesc, libs)
+    return devfn
+
+
+class DeviceFunction(object):
+    def __init__(self, cres):
+        self.cres = cres
 
 
 def _sentry_array_layout(args):
