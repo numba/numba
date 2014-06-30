@@ -14,6 +14,7 @@ from . import ocldrv
 from .ocldrv import oclarray, oclmem, devices
 from .. import mviewbuf
 from .ocldrv.devices import get_ocl_context
+from .decorators import jit
 import numpy as np
 import contextlib
 
@@ -175,7 +176,7 @@ def detect():
         attrs.append(('vendor', dev.vendor))
         attrs.append(('vendor id', hex(dev.vendor_id)))
 
-        # TODO: all supported? 
+        # TODO: all supported?
         support = '[SUPPORTED]'
         supported_count += 1
 

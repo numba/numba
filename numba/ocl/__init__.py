@@ -6,6 +6,7 @@ from .ocldrv.error import OpenCLSupportError
 
 _exported = """
 to_device
+jit
 """
 
 def _dummy(*args, **kws):

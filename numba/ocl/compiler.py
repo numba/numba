@@ -32,6 +32,8 @@ def compile_ocl(pyfunc, return_type, args, debug):
 
 
 def compile_kernel(pyfunc, args, debug=False):
+    _sentry_array_layout(args)
+
     cres = compile_ocl(pyfunc, types.void, args, debug=debug)
     kernel = cres.target_context.prepare_ocl_kernel(cres.llvm_func,
                                                     cres.signature.args)
@@ -41,6 +43,14 @@ def compile_kernel(pyfunc, args, debug=False):
                      name=cres.llvm_func.name,
                      argtypes=cres.signature.args)
     return kern
+
+
+def _sentry_array_layout(args):
+    for i, a in enumerate(args):
+        if isinstance(a, types.Array) and a.layout == 'A':
+            raise TypeError("Invalid array layout type for arg #%d\n"
+                            "Only accept C or F contiguous array due to "
+                            "the lack pointer arithmetic in OpenCL" % (i + 1,))
 
 
 def _ensure_list(val):
@@ -174,8 +184,35 @@ def _unbox(val, ty):
     elif ty in types.integer_domain:
         return INTEGER_TYPE_MAP[ty](val)
 
+    elif ty in types.real_domain:
+        return REAL_TYPE_MAP[ty](val)
+
+    elif ty in types.complex_domain:
+        return COMPLEX_TYPE_MAP[ty](val)
+
     raise NotImplementedError(ty)
 
+
+def make_complex_ctypes(element):
+    class BaseComplex(ctypes.Structure):
+        _fields = [
+            ('real', element),
+            ('imag', element),
+        ]
+
+        def __init__(self, real_or_cmpl=0, imag=0):
+            if isinstance(real_or_cmpl, float):
+                self.real = real_or_cmpl
+                self.imag = imag
+            else:
+                self.real = real_or_cmpl.real
+                self.imag = real_or_cmpl.imag
+
+    return BaseComplex
+
+
+Complex = make_complex_ctypes(ctypes.c_float)
+DoubleComplex = make_complex_ctypes(ctypes.c_double)
 
 INTEGER_TYPE_MAP = {
     types.int8: ctypes.c_int8,
@@ -188,7 +225,15 @@ INTEGER_TYPE_MAP = {
     types.uint64: ctypes.c_uint64,
 }
 
+REAL_TYPE_MAP = {
+    types.float32: ctypes.c_float,
+    types.float64: ctypes.c_double,
+}
 
+COMPLEX_TYPE_MAP = {
+    types.complex64: Complex,
+    types.complex128: DoubleComplex,
+}
 
 
 
