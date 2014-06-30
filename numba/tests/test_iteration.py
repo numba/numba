@@ -28,6 +28,14 @@ def float_tuple_iter_usecase():
         res += i
     return res
 
+def tuple_tuple_iter_usecase():
+    # Recursively homogenous tuple type
+    res = 0.0
+    for i in ((1.5, 2.0), (99.3, 3.4), (1.8, 2.5)):
+        for j in i:
+            res += j
+        res = res * 2
+    return res
 
 
 class IterationTest(TestCase):
@@ -36,14 +44,16 @@ class IterationTest(TestCase):
         pyfunc = int_tuple_iter_usecase
         cr = compile_isolated(pyfunc, (), flags=flags)
         cfunc = cr.entry_point
-        self.assertPreciseEqual(cfunc(), pyfunc())
+        expected = pyfunc()
+        self.assertPreciseEqual(cfunc(), expected)
 
     def test_int_tuple_iter_npm(self):
         self.test_int_tuple_iter(flags=no_pyobj_flags)
 
+    # Type inference on tuples used to be hardcoded for ints, check
+    # that it works for other types.
+
     def test_float_tuple_iter(self, flags=force_pyobj_flags):
-        # Type inference on tuples used to be hardcoded for ints, check
-        # that it works for other types.
         pyfunc = float_tuple_iter_usecase
         cr = compile_isolated(pyfunc, (), flags=flags)
         cfunc = cr.entry_point
@@ -51,6 +61,15 @@ class IterationTest(TestCase):
 
     def test_float_tuple_iter_npm(self):
         self.test_float_tuple_iter(flags=no_pyobj_flags)
+
+    def test_tuple_tuple_iter(self, flags=force_pyobj_flags):
+        pyfunc = tuple_tuple_iter_usecase
+        cr = compile_isolated(pyfunc, (), flags=flags)
+        cfunc = cr.entry_point
+        self.assertPreciseEqual(cfunc(), pyfunc())
+
+    def test_tuple_tuple_iter_npm(self):
+        self.test_tuple_tuple_iter(flags=no_pyobj_flags)
 
 
 if __name__ == '__main__':
