@@ -1,3 +1,7 @@
+"""
+Utilities to simplify the boilerplate for native lowering.
+"""
+
 from __future__ import print_function, absolute_import, division
 import functools
 from numba.typing import signature

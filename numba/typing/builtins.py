@@ -106,6 +106,9 @@ class IterNext(AbstractTemplate):
 
 @builtin
 class PairFirst(AbstractTemplate):
+    """
+    Given a heterogenous pair, return the first element.
+    """
     key = "pair_first"
 
     def generic(self, args, kws):
@@ -117,6 +120,9 @@ class PairFirst(AbstractTemplate):
 
 @builtin
 class PairSecond(AbstractTemplate):
+    """
+    Given a heterogenous pair, return the second element.
+    """
     key = "pair_second"
 
     def generic(self, args, kws):

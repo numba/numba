@@ -280,6 +280,9 @@ class PythonAPI(object):
         return self.builder.call(fn, (lhs, rhs, lopid))
 
     def bool_from_bool(self, bval):
+        """
+        Get a Python bool from a LLVM boolean.
+        """
         longval = self.builder.zext(bval, self.long)
         return self.bool_from_long(longval)
 

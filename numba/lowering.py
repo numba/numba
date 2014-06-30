@@ -512,6 +512,7 @@ class Lower(BaseLower):
             iternext_impl = self.context.get_function('iternext',
                                                       iternext_sig)
             excid = self.context.add_exception(ValueError)
+            # We call iternext() as many times as desired (`expr.count`).
             for i in range(expr.count):
                 pair = iternext_impl(self.builder, (val,))
                 is_valid = self.context.pair_second(self.builder,
@@ -523,6 +524,8 @@ class Lower(BaseLower):
                                                pair, pairty)
                 tup = self.builder.insert_value(tup, item, i)
 
+            # Call iternext() once more to check that the iterator
+            # is exhausted.
             pair = iternext_impl(self.builder, (val,))
             is_valid = self.context.pair_second(self.builder,
                                                 pair, pairty)
@@ -770,6 +773,8 @@ class PyLower(BaseLower):
                     self.pyapi.tuple_setitem(pair, 0, item)
                 with otherwise:
                     self.check_occurred()
+                    # Make the tuple valid by inserting None as dummy
+                    # iteration "result" (it will be ignored).
                     self.pyapi.tuple_setitem(pair, 0, self.pyapi.make_none())
             self.pyapi.tuple_setitem(pair, 1, self.pyapi.bool_from_bool(is_valid))
             return pair
@@ -956,6 +961,10 @@ class PyLower(BaseLower):
         return self.builder.load(ptr)
 
     def delvar(self, name):
+        """
+        Delete the variable slot with the given name. This will decref
+        the corresponding Python object.
+        """
         ptr = self.varmap.pop(name)
         self.decref(ptr)
 

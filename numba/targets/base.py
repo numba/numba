@@ -539,11 +539,17 @@ class BaseContext(object):
         builder.ret(Constant.int(Type.int(), code))
 
     def pair_first(self, builder, val, ty):
+        """
+        Extract the first element of a heterogenous pair.
+        """
         paircls = self.make_pair(ty.first_type, ty.second_type)
         pair = paircls(self, builder, value=val)
         return self.get_argument_value(builder, ty.first_type, pair.first)
 
     def pair_second(self, builder, val, ty):
+        """
+        Extract the second element of a heterogenous pair.
+        """
         paircls = self.make_pair(ty.first_type, ty.second_type)
         pair = paircls(self, builder, value=val)
         return self.get_argument_value(builder, ty.second_type, pair.second)
@@ -778,6 +784,9 @@ class BaseContext(object):
         return builtins.make_unituple_iter(typ)
 
     def make_pair(self, first_type, second_type):
+        """
+        Create a heterogenous pair class parametered for the given types.
+        """
         return builtins.make_pair(first_type, second_type)
 
     def make_constant_array(self, builder, typ, ary):
