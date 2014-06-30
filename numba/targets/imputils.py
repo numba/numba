@@ -85,10 +85,10 @@ def iterator_impl(iterable_type, iterator_type):
         iternext = cls.iternext
 
         @iternext_impl
-        def iternext_wrapper(context, builder, sig, args):
+        def iternext_wrapper(context, builder, sig, args, pair):
             (value,) = args
             iterobj = cls(context, builder, value)
-            return iternext(iterobj, context, builder)
+            return iternext(iterobj, context, builder, pair)
 
         builtin(implement('iternext', iterator_type)(iternext_wrapper))
         return cls
@@ -100,12 +100,10 @@ def iternext_impl(func):
     from .builtins import make_pair
 
     def wrapper(context, builder, sig, args):
-        item, valid = func(context, builder, sig, args)
         pair_type = sig.return_type
         cls = make_pair(pair_type.first_type, pair_type.second_type)
         pairobj = cls(context, builder)
-        pairobj.first = item
-        pairobj.second = context.get_return_value(builder, types.boolean, valid)
+        func(context, builder, sig, args, pairobj)
         return pairobj._getvalue()
     return wrapper
 

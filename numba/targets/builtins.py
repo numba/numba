@@ -1118,7 +1118,7 @@ def getiter_unituple(context, builder, sig, args):
 @builtin
 @implement('iternext', types.Kind(types.UniTupleIter))
 @iternext_impl
-def iternext_unituple(context, builder, sig, args):
+def iternext_unituple(context, builder, sig, args, pair):
     [tupiterty] = sig.args
     [tupiter] = args
 
@@ -1128,20 +1128,16 @@ def iternext_unituple(context, builder, sig, args):
     idxptr = iterval.index
     idx = builder.load(idxptr)
     count = context.get_constant(types.intp, tupiterty.unituple.count)
-    is_valid = builder.icmp(lc.ICMP_SLT, idx, count)
 
-    # Lazy trick: if the iterator is exhausted, we fetch item #0
-    # (to avoid an out-of-bounds read)
-    idx = builder.select(is_valid, idx, context.get_constant(types.intp, 0))
+    pair.second = is_valid = builder.icmp(lc.ICMP_SLT, idx, count)
+
     getitem_sig = typing.signature(sig.return_type, tupiterty.unituple,
                                    types.intp)
-    res = getitem_unituple(context, builder, getitem_sig, [tup, idx])
 
     with cgutils.ifthen(builder, is_valid):
+        pair.first = getitem_unituple(context, builder, getitem_sig, [tup, idx])
         nidx = builder.add(idx, context.get_constant(types.intp, 1))
         builder.store(nidx, iterval.index)
-
-    return res, is_valid
 
 
 @builtin

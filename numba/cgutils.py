@@ -19,6 +19,7 @@ def as_bool_byte(builder, value):
 class Structure(object):
     def __init__(self, context, builder, value=None, ref=None):
         self._type = context.get_struct_type(self)
+        self._context = context
         self._builder = builder
         if ref is None:
             self._value = alloca_once(builder, self._type)
@@ -32,9 +33,11 @@ class Structure(object):
             self._value = ref
 
         self._fdmap = {}
+        self._typemap = {}
         base = Constant.int(Type.int(), 0)
-        for i, (k, _) in enumerate(self._fields):
+        for i, (k, tp) in enumerate(self._fields):
             self._fdmap[k] = (base, Constant.int(Type.int(), i))
+            self._typemap[k] = tp
 
     def __getattr__(self, field):
         if not field.startswith('_'):
@@ -49,6 +52,8 @@ class Structure(object):
             return super(Structure, self).__setattr__(field, value)
         offset = self._fdmap[field]
         ptr = self._builder.gep(self._value, offset)
+        value = self._context.get_return_value(self._builder,
+                                               self._typemap[field], value)
         assert ptr.type.pointee == value.type, (str(ptr.type.pointee),
                                                 str(value.type))
         self._builder.store(value, ptr)
