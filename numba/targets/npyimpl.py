@@ -296,29 +296,12 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
 
         sig = typing.signature(result_type, promote_type, promote_type)
 
-        if not scalar_inp1:
-            i1ary = context.make_array(tyinp1)(context, builder, inp1)
-        if not scalar_inp2:
-            i2ary = context.make_array(tyinp2)(context, builder, inp2)
-        oary = context.make_array(tyout)(context, builder, out)
+        i1ary = None if scalar_inp1 else _prepare_array(context, builder, inp1, tyinp1, inp1_ndim) 
+        i2ary = None if scalar_inp2 else _prepare_array(context, builder, inp2, tyinp2, inp2_ndim) 
+        oary = _prepare_array(context, builder, out, tyout, out_ndim)
 
         fnwork = context.get_function(funckey, sig)
         intpty = context.get_value_type(types.intp)
-
-        if not scalar_inp1:
-            inp1_shape = cgutils.unpack_tuple(builder, i1ary.shape, inp1_ndim)
-            inp1_strides = cgutils.unpack_tuple(builder, i1ary.strides, inp1_ndim)
-            inp1_data = i1ary.data
-            inp1_layout = tyinp1.layout
-        if not scalar_inp2:
-            inp2_shape = cgutils.unpack_tuple(builder, i2ary.shape, inp2_ndim)
-            inp2_strides = cgutils.unpack_tuple(builder, i2ary.strides, inp2_ndim)
-            inp2_data = i2ary.data
-            inp2_layout = tyinp2.layout
-        out_shape = cgutils.unpack_tuple(builder, oary.shape, out_ndim)
-        out_strides = cgutils.unpack_tuple(builder, oary.strides, out_ndim)
-        out_data = oary.data
-        out_layout = tyout.layout
 
         ZERO = Constant.int(Type.int(intpty.width), 0)
         ONE = Constant.int(Type.int(intpty.width), 1)
@@ -339,7 +322,7 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
                 builder.store(ZERO, x)
                 inp2_indices.append(x)
 
-        loopshape = cgutils.unpack_tuple(builder, oary.shape, out_ndim)
+        loopshape = oary.shape
 
         with cgutils.loop_nest(builder, loopshape, intp=intpty) as indices:
 
@@ -348,11 +331,11 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
             # we'll use that to set the input indices. In order to
             # handle broadcasting, any input dimension of size 1 won't be
             # incremented.
-            def build_increment_blocks(inp_indices, inp_shape, inp_ndim, inp_num):
+            def build_increment_blocks(inp, inp_indices, inp_ndim, op_idx):
                 bb_inc_inp_index = [cgutils.append_basic_block(builder,
-                    '.inc_inp{0}_index{1}'.format(inp_num, str(i))) for i in range(inp_ndim)]
+                                                               '.inc_inp{0}_index{1}'.format(op_idx, str(i))) for i in range(inp_ndim)]
                 bb_end_inc_index = cgutils.append_basic_block(builder,
-                                       '.end_inc{0}_index'.format(inp_num))
+                                                              '.end_inc{0}_index'.format(op_idx))
 
                 builder.branch(bb_inc_inp_index[0])
                 for i in range(inp_ndim):
@@ -360,7 +343,7 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
                         # If the shape of this dimension is 1, then leave the
                         # index at 0 so that this dimension is broadcasted over
                         # the corresponding input and output dimensions.
-                        cond = builder.icmp(ICMP_UGT, inp_shape[i], ONE)
+                        cond = builder.icmp(ICMP_UGT, inp.shape[i], ONE)
                         with cgutils.ifthen(builder, cond):
                             builder.store(indices[out_ndim-inp_ndim+i], inp_indices[i])
                         if i + 1 == inp_ndim:
@@ -370,40 +353,40 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
 
                 builder.position_at_end(bb_end_inc_index)
 
-            if not scalar_inp1:
-                build_increment_blocks(inp1_indices, inp1_shape, inp1_ndim, '1')
-            if not scalar_inp2:
-                build_increment_blocks(inp2_indices, inp2_shape, inp2_ndim, '2')
+            if i1ary is not None:
+                build_increment_blocks(i1ary, inp1_indices, inp1_ndim, '1')
+            if i2ary is not None:
+                build_increment_blocks(i2ary, inp2_indices, inp2_ndim, '2')
 
-            if scalar_inp1:
+            if i1ary is None:
                 x = inp1
             else:
                 inds = [builder.load(index) for index in inp1_indices]
                 px = cgutils.get_item_pointer2(builder,
-                                               data=inp1_data,
-                                               shape=inp1_shape,
-                                               strides=inp1_strides,
-                                               layout=inp1_layout,
+                                               data=i1ary.data,
+                                               shape=i1ary.shape,
+                                               strides=i1ary.strides,
+                                               layout=i1ary.layout,
                                                inds=inds)
                 x = builder.load(px)
 
-            if scalar_inp2:
+            if i2ary is None:
                 y = inp2
             else:
                 inds = [builder.load(index) for index in inp2_indices]
                 py = cgutils.get_item_pointer2(builder,
-                                               data=inp2_data,
-                                               shape=inp2_shape,
-                                               strides=inp2_strides,
-                                               layout=inp2_layout,
+                                               data=i2ary.data,
+                                               shape=i2ary.shape,
+                                               strides=i2ary.strides,
+                                               layout=i2ary.layout,
                                                inds=inds)
                 y = builder.load(py)
 
             po = cgutils.get_item_pointer2(builder,
-                                           data=out_data,
-                                           shape=out_shape,
-                                           strides=out_strides,
-                                           layout=out_layout,
+                                           data=oary.data,
+                                           shape=oary.shape,
+                                           strides=oary.strides,
+                                           layout=oary.layout,
                                            inds=indices)
 
             if divbyzero:
