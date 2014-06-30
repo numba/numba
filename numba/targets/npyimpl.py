@@ -23,12 +23,30 @@ class npy:
 
 
 def _decompose_type(ty, where='input operand'):
+    """analyzes the type ty, returning a triplet containing:
+    a boolean indicating if it is a scalar (at 0).
+    the associated scalar type (at 1).
+    the number of dimensions of the type (at 2).
+    """
     if isinstance(ty, types.Array):
         return (False, ty.dtype, ty.ndim)
     elif ty in types.number_domain:
         return (True, ty, 1)
     else:
         raise TypeError('unknown type for {0}'.format(where))
+
+
+def _default_promotion_for_type(ty):
+    """returns the default type to be used when generating code
+    associated to the type ty."""
+    if ty in types.real_domain:
+        promote_type = types.float64
+    elif ty in types.signed_domain:
+        promote_type = types.int64
+    else:
+        promote_type = types.uint64
+
+    return promote_type
 
 
 def unary_npy_math_extern(fn):
@@ -62,16 +80,7 @@ def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
         scalar_inp, scalar_tyinp, inp_ndim = _decompose_type(tyinp)
 
         out_ndim = tyout.ndim
-
-        if asfloat:
-            promote_type = types.float64
-        elif scalar_tyinp in types.real_domain:
-            promote_type = types.float64
-        elif scalar_tyinp in types.signed_domain:
-            promote_type = types.int64
-        else:
-            promote_type = types.uint64
-
+        promote_type = types.float64 if asfloat else _default_promotion_for_type(scalar_tyinp)
         result_type = promote_type
 
         # Temporary hack for __ftol2 llvm bug. Don't allow storing
@@ -270,30 +279,10 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
         scalar_inp1, scalar_tyinp1, inp1_ndim = _decompose_type(tyinp1, where='first input operand')
         scalar_inp2, scalar_tyinp2, inp2_ndim = _decompose_type(tyinp2, where='second input operand')
 
-        if isinstance(tyinp2, types.Array):
-            scalar_inp2 = False
-            scalar_tyinp2 = tyinp2.dtype
-            inp2_ndim = tyinp2.ndim
-        elif tyinp2 in types.number_domain:
-            scalar_inp2 = True
-            scalar_tyinp2 = tyinp2
-            inp2_ndim = 1
-        else:
-            raise TypeError('unknown type for second input operand')
-
         out_ndim = tyout.ndim
 
-        if asfloat:
-            promote_type = types.float64
-        elif scalar_tyinp1 in types.real_domain or \
-                scalar_tyinp2 in types.real_domain:
-            promote_type = types.float64
-        elif scalar_tyinp1 in types.signed_domain or \
-                scalar_tyinp2 in types.signed_domain:
-            promote_type = types.int64
-        else:
-            promote_type = types.uint64
-
+        # based only on the first operand?
+        promote_type = types.float64 if asfloat else _default_promotion_for_type(scalar_tyinp1)
         result_type = promote_type
 
         # Temporary hack for __ftol2 llvm bug. Don't allow storing
