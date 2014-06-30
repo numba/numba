@@ -6,8 +6,7 @@ import llvm.core as lc
 
 from numba import errcode
 from numba import types, typing, cgutils
-from numba.targets.imputils import (builtin, implement, iterator_impl,
-                                    iternext_impl)
+from numba.targets.imputils import builtin, implement, iterator_impl
 
 
 def make_range(range_state_type, range_iter_type, int_type):
