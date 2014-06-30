@@ -49,7 +49,7 @@ class TestCompiler(unittest.TestCase):
         data = np.zeros(10, dtype='int32')
 
         dev_data = ocl.to_device(data)
-        kern[data.size, 32](dev_data)
+        kern[1, 32](dev_data)
         dev_data.copy_to_host(data)
 
         self.assertTrue(np.all(data == 1 + np.arange(data.size)))
@@ -67,7 +67,8 @@ class TestCompiler(unittest.TestCase):
         data = np.zeros(32, dtype='int32')
 
         dev_data = ocl.to_device(data)
-        kern[data.size, data.size](dev_data)
+        kern.configure(data.size)(dev_data)
+        # kern[1, data.size](dev_data)
         dev_data.copy_to_host(data)
 
         self.assertTrue(np.all(data == data.size ** 2))

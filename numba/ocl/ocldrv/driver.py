@@ -619,7 +619,8 @@ class CommandQueue(OpenCLWrapper):
             event_wait_list = None
 
         global_ws = (ctypes.c_size_t*nd)(*global_work_size)
-        local_ws = (ctypes.c_size_t*nd)(*local_work_size)
+        local_ws = ((ctypes.c_size_t*nd)(*local_work_size)
+                    if local_work_size is not None else local_work_size)
         event = (cl_event*1)() if wants_event else None
         cl.clEnqueueNDRangeKernel(self.id, kernel.id, nd, None, global_ws, local_ws,
                                       num_events_in_wait_list, event_wait_list, event)

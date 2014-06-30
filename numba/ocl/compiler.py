@@ -62,36 +62,57 @@ class OCLKernelBase(object):
 
     def __init__(self):
         self.global_size = (1,)
-        self.local_size = (1,)
+        self.local_size = None
         self.stream = None
 
     def copy(self):
         return copy.copy(self)
 
-    def configure(self, global_size, local_size, stream=None):
+    def configure(self, global_size, local_size=None, stream=None):
+        """Configure the OpenCL kernel
+
+        local_size can be None
+        """
         global_size = _ensure_list(global_size)
-        local_size = _ensure_list(local_size)
 
-        size = max(len(global_size), len(local_size))
-
-        _ensure_size_or_append(global_size, size)
-        _ensure_size_or_append(local_size, size)
+        if local_size is not None:
+            local_size = _ensure_list(local_size)
+            size = max(len(global_size), len(local_size))
+            _ensure_size_or_append(global_size, size)
+            _ensure_size_or_append(local_size, size)
 
         clone = self.copy()
         clone.global_size = tuple(global_size)
-        clone.local_size = tuple(local_size)
+        clone.local_size = tuple(local_size) if local_size else None
         clone.stream = stream
 
         return clone
 
     def __getitem__(self, args):
-        return self.configure(*args)
+        """Mimick CUDA python's square-bracket notation for configuration.
+        This assumes a the argument to be:
+
+            `griddim, blockdim, stream`
+
+        The blockdim maps directly to local_size.
+        The actual global_size is computed by multiplying the local_size to
+        griddim.
+        """
+        griddim = _ensure_list(args[0])
+        blockdim = _ensure_list(args[1])
+        size = max(len(griddim), len(blockdim))
+        _ensure_size_or_append(griddim, size)
+        _ensure_size_or_append(blockdim, size)
+        # Compute global_size
+        gs = [g * l for g, l in zip(griddim, blockdim)]
+        return self.configure(gs, blockdim, *args[2:])
 
 
 class OCLKernel(OCLKernelBase):
     """
     A OpenCL kernel object
     """
+
     def __init__(self, llvm_module, name, argtypes):
         super(OCLKernel, self).__init__()
         self.llvm_module = llvm_module
