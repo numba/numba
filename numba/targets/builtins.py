@@ -1089,6 +1089,8 @@ def make_pair(first_type, second_type):
 
 
 def make_unituple_iter(tupiter):
+    unituple = tupiter.unituple
+
     class UniTupleIter(cgutils.Structure):
         _fields = [('index', types.CPointer(types.intp)),
                    ('tuple', tupiter.unituple,)]
@@ -1115,10 +1117,14 @@ def getiter_unituple(context, builder, sig, args):
     return iterval._getvalue()
 
 
+# Unfortunately, we can't make decorate UniTupleIter with iterator_impl
+# as it would register the iternext() method too late. It really has to
+# be registered at module import time, not while compiling.
+
 @builtin
 @implement('iternext', types.Kind(types.UniTupleIter))
 @iternext_impl
-def iternext_unituple(context, builder, sig, args, pair):
+def iternext_unituple(context, builder, sig, args, result):
     [tupiterty] = sig.args
     [tupiter] = args
 
@@ -1129,13 +1135,13 @@ def iternext_unituple(context, builder, sig, args, pair):
     idx = builder.load(idxptr)
     count = context.get_constant(types.intp, tupiterty.unituple.count)
 
-    pair.second = is_valid = builder.icmp(lc.ICMP_SLT, idx, count)
-
-    getitem_sig = typing.signature(sig.return_type, tupiterty.unituple,
-                                   types.intp)
+    is_valid = builder.icmp(lc.ICMP_SLT, idx, count)
+    result.set_valid(is_valid)
 
     with cgutils.ifthen(builder, is_valid):
-        pair.first = getitem_unituple(context, builder, getitem_sig, [tup, idx])
+        getitem_sig = typing.signature(sig.return_type, tupiterty.unituple,
+                                       types.intp)
+        result.yield_(getitem_unituple(context, builder, getitem_sig, [tup, idx]))
         nidx = builder.add(idx, context.get_constant(types.intp, 1))
         builder.store(nidx, iterval.index)
 

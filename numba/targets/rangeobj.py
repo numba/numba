@@ -119,20 +119,20 @@ def make_range(range_state_type, range_iter_type, int_type):
 
             return self
 
-        def iternext(self, context, builder, pair):
+        def iternext(self, context, builder, result):
             zero = context.get_constant(int_type, 0)
             countptr = self.count
             count = builder.load(countptr)
             is_valid = builder.icmp(lc.ICMP_SGT, count, zero)
-            pair.second = is_valid
+            result.set_valid(is_valid)
 
             with cgutils.ifthen(builder, is_valid):
-                res = builder.load(self.iter)
-                pair.first = res
+                value = builder.load(self.iter)
+                result.yield_(value)
                 one = context.get_constant(int_type, 1)
 
                 builder.store(builder.sub(count, one), countptr)
-                builder.store(builder.add(res, self.step), self.iter)
+                builder.store(builder.add(value, self.step), self.iter)
 
     return RangeState, RangeIter
 

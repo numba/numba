@@ -79,16 +79,20 @@ def python_attr_impl(cls, attr, atyp):
 
 
 def iterator_impl(iterable_type, iterator_type):
+    """
+    Decorator a given class as implementing *iterator_type*
+    (by providing an `iternext()` method).
+    """
 
     def wrapper(cls):
         # These are unbound methods
         iternext = cls.iternext
 
         @iternext_impl
-        def iternext_wrapper(context, builder, sig, args, pair):
+        def iternext_wrapper(context, builder, sig, args, result):
             (value,) = args
             iterobj = cls(context, builder, value)
-            return iternext(iterobj, context, builder, pair)
+            return iternext(iterobj, context, builder, result)
 
         builtin(implement('iternext', iterator_type)(iternext_wrapper))
         return cls
@@ -96,14 +100,57 @@ def iterator_impl(iterable_type, iterator_type):
     return wrapper
 
 
+class _IternextResult(object):
+    """
+    A result wrapper for iteration, passed by iternext_impl() into the
+    wrapped function.
+    """
+    __slots__ = ('_context', '_builder', '_pairobj')
+
+    def __init__(self, context, builder, pairobj):
+        self._context = context
+        self._builder = builder
+        self._pairobj = pairobj
+
+    def set_exhausted(self):
+        """
+        Mark the iterator as exhausted.
+        """
+        self._pairobj.second = self._builder.get_constant(types.boolean, False)
+
+    def set_valid(self, is_valid=True):
+        """
+        Mark the iterator as valid according to *is_valid* (which must
+        be either a Python boolean or a LLVM inst).
+        """
+        if is_valid in (False, True):
+            is_valid = self._builder.get_constant(types.boolean, is_valid)
+        self._pairobj.second = is_valid
+
+    def yield_(self, value):
+        """
+        Mark the iterator as yielding the given *value* (a LLVM inst).
+        """
+        self._pairobj.first = value
+
+
 def iternext_impl(func):
+    """
+    Wrap the given iternext() implementation so that it gets passed
+    an _IternextResult() object easing the returning of the iternext()
+    result pair.
+
+    The wrapped function will be called with the following signature:
+        (context, builder, sig, args, iternext_result)
+    """
     from .builtins import make_pair
 
     def wrapper(context, builder, sig, args):
         pair_type = sig.return_type
         cls = make_pair(pair_type.first_type, pair_type.second_type)
         pairobj = cls(context, builder)
-        func(context, builder, sig, args, pairobj)
+        func(context, builder, sig, args,
+             _IternextResult(context, builder, pairobj))
         return pairobj._getvalue()
     return wrapper
 
