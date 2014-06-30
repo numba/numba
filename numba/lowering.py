@@ -558,8 +558,12 @@ class Lower(BaseLower):
             baseval = self.loadvar(expr.value.name)
             indexval = self.context.get_constant(types.intp, expr.index)
             if cgutils.is_struct(baseval.type):
+                # Statically extract the given element from the structure
+                # (structures aren't dynamically indexable).
                 return self.builder.extract_value(baseval, expr.index)
             else:
+                # Fall back on the generic getitem() implementation
+                # for this type.
                 signature = typing.signature(resty,
                                              self.typeof(expr.value.name),
                                              types.intp)

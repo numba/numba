@@ -237,8 +237,7 @@ class Interpreter(object):
         call = ir.Expr.call(self.get(printvar), (), (), loc=self.loc)
         self.store(value=call, name=res)
 
-    def op_UNPACK_SEQUENCE(self, inst, iterable, stores, indices,
-                           iterobj, tupleobj):
+    def op_UNPACK_SEQUENCE(self, inst, iterable, stores, tupleobj):
         count = len(stores)
         # Exhaust the iterable into a tuple-like object
         tup = ir.Expr.exhaust_iter(value=self.get(iterable), loc=self.loc,
@@ -246,7 +245,7 @@ class Interpreter(object):
         self.store(name=tupleobj, value=tup)
 
         # then index the tuple-like object to extract the values
-        for i, (indexobj, st) in enumerate(zip(indices, stores)):
+        for i, st in enumerate(stores):
             expr = ir.Expr.static_getitem(self.get(tupleobj),
                                           index=i, loc=self.loc)
             self.store(expr, st)
