@@ -505,16 +505,25 @@ class Lower(BaseLower):
         elif expr.op == 'exhaust_iter':
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
-            itemty = ty.yield_type
+            # If we already have a tuple, don't do anything
+            # (heterogenous tuples are not iterable in native mode)
+            if isinstance(ty, types.Tuple):
+                return val
+
+            itemty = ty.iterator_type.yield_type
             tup = self.context.get_constant_undef(resty)
             pairty = types.Pair(itemty, types.boolean)
-            iternext_sig = typing.signature(pairty, ty)
+            getiter_sig = typing.signature(ty.iterator_type, ty)
+            getiter_impl = self.context.get_function('getiter',
+                                                     getiter_sig)
+            iternext_sig = typing.signature(pairty, ty.iterator_type)
             iternext_impl = self.context.get_function('iternext',
                                                       iternext_sig)
+            iterobj = getiter_impl(self.builder, (val,))
             excid = self.context.add_exception(ValueError)
             # We call iternext() as many times as desired (`expr.count`).
             for i in range(expr.count):
-                pair = iternext_impl(self.builder, (val,))
+                pair = iternext_impl(self.builder, (iterobj,))
                 is_valid = self.context.pair_second(self.builder,
                                                     pair, pairty)
                 with cgutils.if_unlikely(self.builder,
@@ -526,11 +535,12 @@ class Lower(BaseLower):
 
             # Call iternext() once more to check that the iterator
             # is exhausted.
-            pair = iternext_impl(self.builder, (val,))
+            pair = iternext_impl(self.builder, (iterobj,))
             is_valid = self.context.pair_second(self.builder,
                                                 pair, pairty)
             with cgutils.if_unlikely(self.builder, is_valid):
                 self.context.return_user_exc(self.builder, excid)
+
             return tup
 
         elif expr.op == "getattr":
@@ -544,13 +554,28 @@ class Lower(BaseLower):
                 res = impl(self.context, self.builder, ty, val, expr.attr)
             return res
 
+        elif expr.op == "static_getitem":
+            baseval = self.loadvar(expr.value.name)
+            indexval = self.context.get_constant(types.intp, expr.index)
+            if cgutils.is_struct(baseval.type):
+                return self.builder.extract_value(baseval, expr.index)
+            else:
+                signature = typing.signature(resty,
+                                             self.typeof(expr.value.name),
+                                             types.intp)
+                impl = self.context.get_function("getitem", signature)
+                argvals = (baseval, indexval)
+                res = impl(self.builder, argvals)
+                return self.context.cast(self.builder, res, signature.return_type,
+                                         resty)
+
         elif expr.op == "getitem":
-            baseval = self.loadvar(expr.target.name)
+            baseval = self.loadvar(expr.value.name)
             indexval = self.loadvar(expr.index.name)
             signature = self.fndesc.calltypes[expr]
             impl = self.context.get_function("getitem", signature)
             argvals = (baseval, indexval)
-            argtyps = (self.typeof(expr.target.name),
+            argtyps = (self.typeof(expr.value.name),
                        self.typeof(expr.index.name))
             castvals = [self.context.cast(self.builder, av, at, ft)
                         for av, at, ft in zip(argvals, argtyps,
@@ -802,9 +827,18 @@ class PyLower(BaseLower):
                 self.context.return_user_exc(self.builder, excid)
             return tup
         elif expr.op == 'getitem':
-            target = self.loadvar(expr.target.name)
+            value = self.loadvar(expr.value.name)
             index = self.loadvar(expr.index.name)
-            res = self.pyapi.object_getitem(target, index)
+            res = self.pyapi.object_getitem(value, index)
+            self.check_error(res)
+            return res
+        elif expr.op == 'static_getitem':
+            value = self.loadvar(expr.value.name)
+            index = self.context.get_constant(types.intp, expr.index)
+            indexobj = self.pyapi.long_from_ssize_t(index)
+            self.check_error(indexobj)
+            res = self.pyapi.object_getitem(value, indexobj)
+            self.decref(indexobj)
             self.check_error(res)
             return res
         elif expr.op == 'getslice':

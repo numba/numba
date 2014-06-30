@@ -240,19 +240,15 @@ class Interpreter(object):
     def op_UNPACK_SEQUENCE(self, inst, iterable, stores, indices,
                            iterobj, tupleobj):
         count = len(stores)
-        iterator = ir.Expr.getiter(value=self.get(iterable), loc=self.loc)
-        self.store(name=iterobj, value=iterator)
-        # Exhaust the iterator into a tuple-like object
-        tup = ir.Expr.exhaust_iter(value=self.get(iterobj), loc=self.loc,
+        # Exhaust the iterable into a tuple-like object
+        tup = ir.Expr.exhaust_iter(value=self.get(iterable), loc=self.loc,
                                    count=count)
         self.store(name=tupleobj, value=tup)
 
         # then index the tuple-like object to extract the values
         for i, (indexobj, st) in enumerate(zip(indices, stores)):
-            index = ir.Const(i, loc=self.loc)
-            self.store(name=indexobj, value=index)
-            expr = ir.Expr.getitem(target=self.get(tupleobj),
-                                   index=self.get(indexobj), loc=self.loc)
+            expr = ir.Expr.static_getitem(self.get(tupleobj),
+                                          index=i, loc=self.loc)
             self.store(expr, st)
 
     def op_BUILD_SLICE(self, inst, start, stop, step, res, slicevar):
@@ -515,7 +511,7 @@ class Interpreter(object):
     def op_BINARY_SUBSCR(self, inst, target, index, res):
         index = self.get(index)
         target = self.get(target)
-        expr = ir.Expr.getitem(target=target, index=index, loc=self.loc)
+        expr = ir.Expr.getitem(target, index=index, loc=self.loc)
         self.store(expr, res)
 
     def op_STORE_SUBSCR(self, inst, target, index, value):

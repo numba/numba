@@ -149,9 +149,14 @@ class Expr(object):
         return cls(op=op, loc=loc, value=value, attr=attr)
 
     @classmethod
-    def getitem(cls, target, index, loc):
+    def getitem(cls, value, index, loc):
         op = 'getitem'
-        return cls(op=op, loc=loc, target=target, index=index)
+        return cls(op=op, loc=loc, value=value, index=index)
+
+    @classmethod
+    def static_getitem(cls, value, index, loc):
+        op = 'static_getitem'
+        return cls(op=op, loc=loc, value=value, index=index)
 
     def __repr__(self):
         if self.op == 'call':

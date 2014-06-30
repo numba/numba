@@ -374,6 +374,11 @@ class BaseContext(object):
             gv.global_constant = True
             return builder.load(gv)
 
+        elif isinstance(ty, types.Tuple):
+            consts = [self.get_constant(ty.types[i], v)
+                      for i, v in enumerate(val)]
+            return Constant.struct(consts)
+
         else:
             raise NotImplementedError(ty)
 
@@ -655,7 +660,7 @@ class BaseContext(object):
                 len(toty) == len(fromty)):
             olditems = cgutils.unpack_tuple(builder, val, len(fromty))
             items = [self.cast(builder, i, t, toty.dtype)
-                     for i, t in zip(olditems, fromty.items)]
+                     for i, t in zip(olditems, fromty.types)]
             tup = self.get_constant_undef(toty)
             for idx, val in enumerate(items):
                 tup = builder.insert_value(tup, val, idx)

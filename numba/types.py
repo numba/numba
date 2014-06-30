@@ -517,30 +517,30 @@ class UniTupleIter(IteratorType):
 
 
 class Tuple(Type):
-    def __init__(self, items):
-        self.items = items
-        self.count = len(items)
-        name = "(%s)" % ', '.join(str(i) for i in items)
+    def __init__(self, types):
+        self.types = tuple(types)
+        self.count = len(self.types)
+        name = "(%s)" % ', '.join(str(i) for i in self.types)
         super(Tuple, self).__init__(name, param=True)
 
     def __getitem__(self, i):
         """
         Return element at position i
         """
-        return self.items[i]
+        return self.types[i]
 
     def __len__(self):
-        return len(self.items)
+        return len(self.types)
 
     def __eq__(self, other):
         if isinstance(other, Tuple):
-            return self.items == other.items
+            return self.types == other.types
 
     def __hash__(self):
-        return hash(self.items)
+        return hash(self.types)
 
     def __iter__(self):
-        return iter(self.items)
+        return iter(self.types)
 
 
 class CPointer(Type):
@@ -589,9 +589,11 @@ class Optional(Type):
 
 def is_int_tuple(x):
     if isinstance(x, Tuple):
-        return all(i in integer_domain for i in x.items)
+        return all(i in integer_domain for i in x.types)
     elif isinstance(x, UniTuple):
         return x.dtype in integer_domain
+    else:
+        return False
 
 # Short names
 
