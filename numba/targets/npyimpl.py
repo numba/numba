@@ -50,17 +50,47 @@ def _default_promotion_for_type(ty):
     return promote_type
 
 
+class _IndexingHelper(namedtuple('_IndexingHelper', ('array', 'indices'))):
+    def update_indices(self, loop_indices, name):
+        bld = self.array.builder
+        intpty = self.array.context.get_value_type(types.intp)
+        ONE = Constant.int(Type.int(intpty.width), 1)
+
+        indices = loop_indices[len(loop_indices) - len(self.indices):]
+        bb_index = [cgutils.append_basic_block(bld, '.inc_inp{0}_index{1}'.format(name, str(i))) for i in range(self.array.ndim)]
+        bb_index.append(cgutils.append_basic_block(bld, 'end_inc{0}_index'.format(name)))
+        bld.branch(bb_index[0])
+        for i in range(self.array.ndim):
+            with cgutils.goto_block(bld, bb_index[i]):
+                cond = bld.icmp(ICMP_UGT, self.array.shape[i], ONE)
+                with cgutils.ifthen(bld, cond):
+                    bld.store(indices[i], self.indices[i])
+                bld.branch(bb_index[i+1])
+        bld.position_at_end(bb_index[-1])
+
+    def dereference(self):
+        bld = self.array.builder
+        inds = [bld.load(index) for index in self.indices]
+        px = cgutils.get_item_pointer2(bld,
+                                       data=self.array.data,
+                                       shape=self.array.shape,
+                                       strides=self.array.strides,
+                                       layout=self.array.layout,
+                                       inds=inds)
+        return  bld.load(px)
+
 
 class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary', 'shape', 'strides', 'data', 'layout', 'ndim'))):
-    def create_iter_indices(self, idx_type):
-        ZERO = Constant.int(Type.int(idx_type.width), 0)
+    def create_iter_indices(self):
+        intpty = self.context.get_value_type(types.intp)
+        ZERO = Constant.int(Type.int(intpty.width), 0)
 
         indices = []
         for i in range(self.ndim):
-            x = self.builder.alloca(Type.int(idx_type.width))
+            x = self.builder.alloca(Type.int(intpty.width))
             self.builder.store(ZERO, x)
             indices.append(x)
-        return indices
+        return _IndexingHelper(self, indices)
 
 
 def _prepare_array(ctxt, bld, inp, tyinp, ndim):
@@ -119,55 +149,14 @@ def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
         fnwork = context.get_function(funckey, sig)
         intpty = context.get_value_type(types.intp)
 
-        inp_indices = iary.create_iter_indices(intpty) if iary else None
+        inp_indices = iary.create_iter_indices() if iary else None
 
-        ONE = Constant.int(Type.int(intpty.width), 1)
         loopshape = oary.shape
         with cgutils.loop_nest(builder, loopshape, intp=intpty) as indices:
+            if inp_indices is not None:
+                inp_indices.update_indices(indices, '')
 
-            # Increment input indices.
-            # Since the output dimensions are already being incremented,
-            # we'll use that to set the input indices. In order to
-            # handle broadcasting, any input dimension of size 1 won't be
-            # incremented.
-            if iary is not None:
-                bb_inc_inp_index = [cgutils.append_basic_block(builder,
-                    '.inc_inp_index' + str(i)) for i in range(iary.ndim)]
-                bb_end_inc_index = cgutils.append_basic_block(builder, '.end_inc_index')
-                builder.branch(bb_inc_inp_index[0])
-                for i in range(iary.ndim):
-                    with cgutils.goto_block(builder, bb_inc_inp_index[i]):
-                        # If the shape of this dimension is 1, then leave the
-                        # index at 0 so that this dimension is broadcasted over
-                        # the corresponding output dimension.
-                        cond = builder.icmp(ICMP_UGT, iary.shape[i], ONE)
-                        with cgutils.ifthen(builder, cond):
-                            # If number of input dimensions is less than output
-                            # dimensions, the input shape is right justified so
-                            # that last dimension of input shape corresponds to
-                            # last dimension of output shape. Therefore, index
-                            # output dimension starting at offset of diff of
-                            # input and output dimension count.
-                            builder.store(indices[oary.ndim-iary.ndim+i], inp_indices[i])
-                        # We have to check if this is last dimension and add
-                        # appropriate block terminator before beginning next
-                        # loop.
-                        if i + 1 == iary.ndim:
-                            builder.branch(bb_end_inc_index)
-                        else:
-                            builder.branch(bb_inc_inp_index[i+1])
-                builder.position_at_end(bb_end_inc_index)
-
-                inds = [builder.load(index) for index in inp_indices]
-                px = cgutils.get_item_pointer2(builder,
-                                               data=iary.data,
-                                               shape=iary.shape,
-                                               strides=iary.strides,
-                                               layout=iary.layout,
-                                               inds=inds)
-                x = builder.load(px)
-            else:
-                x = inp
+            x = inp_indices.dereference() if inp_indices else inp
 
             po = cgutils.get_item_pointer2(builder,
                                            data=oary.data,
@@ -300,68 +289,18 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
         fnwork = context.get_function(funckey, sig)
         intpty = context.get_value_type(types.intp)
 
-        inp1_indices = i1ary.create_iter_indices(intpty) if i1ary else None
-        inp2_indices = i2ary.create_iter_indices(intpty) if i2ary else None
+        inp1_indices = i1ary.create_iter_indices() if i1ary else None
+        inp2_indices = i2ary.create_iter_indices() if i2ary else None
 
         loopshape = oary.shape
-        ONE = Constant.int(Type.int(intpty.width), 1)
         with cgutils.loop_nest(builder, loopshape, intp=intpty) as indices:
+            if inp1_indices is not None:
+                inp1_indices.update_indices(indices, '1')
+            if inp2_indices is not None:
+                inp2_indices.update_indices(indices, '2')
 
-            # Increment input indices.
-            # Since the output dimensions are already being incremented,
-            # we'll use that to set the input indices. In order to
-            # handle broadcasting, any input dimension of size 1 won't be
-            # incremented.
-            def build_increment_blocks(inp, inp_indices, inp_ndim, op_idx):
-                bb_inc_inp_index = [cgutils.append_basic_block(builder,
-                                                               '.inc_inp{0}_index{1}'.format(op_idx, str(i))) for i in range(inp_ndim)]
-                bb_end_inc_index = cgutils.append_basic_block(builder,
-                                                              '.end_inc{0}_index'.format(op_idx))
-
-                builder.branch(bb_inc_inp_index[0])
-                for i in range(inp_ndim):
-                    with cgutils.goto_block(builder, bb_inc_inp_index[i]):
-                        # If the shape of this dimension is 1, then leave the
-                        # index at 0 so that this dimension is broadcasted over
-                        # the corresponding input and output dimensions.
-                        cond = builder.icmp(ICMP_UGT, inp.shape[i], ONE)
-                        with cgutils.ifthen(builder, cond):
-                            builder.store(indices[oary.ndim-inp.ndim+i], inp_indices[i])
-                        if i + 1 == inp_ndim:
-                            builder.branch(bb_end_inc_index)
-                        else:
-                            builder.branch(bb_inc_inp_index[i+1])
-
-                builder.position_at_end(bb_end_inc_index)
-
-            if i1ary is not None:
-                build_increment_blocks(i1ary, inp1_indices, i1ary.ndim, '1')
-            if i2ary is not None:
-                build_increment_blocks(i2ary, inp2_indices, i2ary.ndim, '2')
-
-            if i1ary is None:
-                x = inp1
-            else:
-                inds = [builder.load(index) for index in inp1_indices]
-                px = cgutils.get_item_pointer2(builder,
-                                               data=i1ary.data,
-                                               shape=i1ary.shape,
-                                               strides=i1ary.strides,
-                                               layout=i1ary.layout,
-                                               inds=inds)
-                x = builder.load(px)
-
-            if i2ary is None:
-                y = inp2
-            else:
-                inds = [builder.load(index) for index in inp2_indices]
-                py = cgutils.get_item_pointer2(builder,
-                                               data=i2ary.data,
-                                               shape=i2ary.shape,
-                                               strides=i2ary.strides,
-                                               layout=i2ary.layout,
-                                               inds=inds)
-                y = builder.load(py)
+            x = inp1_indices.dereference() if inp1_indices else inp1
+            y = inp2_indices.dereference() if inp2_indices else inp2
 
             po = cgutils.get_item_pointer2(builder,
                                            data=oary.data,
