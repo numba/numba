@@ -51,15 +51,24 @@ def _default_promotion_for_type(ty):
 
 
 
-class _ArrayHelper(namedtuple('_ArrayHelper', ('ary', 'shape', 'strides', 'data', 'layout'))):
-    pass
+class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary', 'shape', 'strides', 'data', 'layout', 'ndim'))):
+    def create_iter_indices(self, idx_type):
+        ZERO = Constant.int(Type.int(idx_type.width), 0)
+
+        indices = []
+        for i in range(self.ndim):
+            x = self.builder.alloca(Type.int(idx_type.width))
+            self.builder.store(ZERO, x)
+            indices.append(x)
+        return indices
+
 
 def _prepare_array(ctxt, bld, inp, tyinp, ndim):
     """code that setups the array"""
     ary     = ctxt.make_array(tyinp)(ctxt, bld, inp)
     shape   = cgutils.unpack_tuple(bld, ary.shape, ndim)
     strides = cgutils.unpack_tuple(bld, ary.strides, ndim)
-    return _ArrayHelper(ary, shape, strides, ary.data, tyinp.layout)
+    return _ArrayHelper(ctxt, bld, ary, shape, strides, ary.data, tyinp.layout, ndim)
 
 
 def unary_npy_math_extern(fn):
@@ -92,7 +101,6 @@ def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
 
         scalar_inp, scalar_tyinp, inp_ndim = _decompose_type(tyinp)
 
-        out_ndim = tyout.ndim
         promote_type = types.float64 if asfloat else _default_promotion_for_type(scalar_tyinp)
         result_type = promote_type
 
@@ -106,24 +114,15 @@ def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
         sig = typing.signature(result_type, promote_type)
 
         iary = None if scalar_inp else _prepare_array(context, builder, inp, tyinp, inp_ndim) 
-        oary = _prepare_array(context, builder, out, tyout, out_ndim)
+        oary = _prepare_array(context, builder, out, tyout, tyout.ndim)
 
         fnwork = context.get_function(funckey, sig)
         intpty = context.get_value_type(types.intp)
 
-        ZERO = Constant.int(Type.int(intpty.width), 0)
+        inp_indices = iary.create_iter_indices(intpty) if iary else None
+
         ONE = Constant.int(Type.int(intpty.width), 1)
-
-        inp_indices = None
-        if not scalar_inp:
-            inp_indices = []
-            for i in range(inp_ndim):
-                x = builder.alloca(Type.int(intpty.width))
-                builder.store(ZERO, x)
-                inp_indices.append(x)
-
         loopshape = oary.shape
-
         with cgutils.loop_nest(builder, loopshape, intp=intpty) as indices:
 
             # Increment input indices.
@@ -133,10 +132,10 @@ def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
             # incremented.
             if iary is not None:
                 bb_inc_inp_index = [cgutils.append_basic_block(builder,
-                    '.inc_inp_index' + str(i)) for i in range(inp_ndim)]
+                    '.inc_inp_index' + str(i)) for i in range(iary.ndim)]
                 bb_end_inc_index = cgutils.append_basic_block(builder, '.end_inc_index')
                 builder.branch(bb_inc_inp_index[0])
-                for i in range(inp_ndim):
+                for i in range(iary.ndim):
                     with cgutils.goto_block(builder, bb_inc_inp_index[i]):
                         # If the shape of this dimension is 1, then leave the
                         # index at 0 so that this dimension is broadcasted over
@@ -149,11 +148,11 @@ def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
                             # last dimension of output shape. Therefore, index
                             # output dimension starting at offset of diff of
                             # input and output dimension count.
-                            builder.store(indices[out_ndim-inp_ndim+i], inp_indices[i])
+                            builder.store(indices[oary.ndim-iary.ndim+i], inp_indices[i])
                         # We have to check if this is last dimension and add
                         # appropriate block terminator before beginning next
                         # loop.
-                        if i + 1 == inp_ndim:
+                        if i + 1 == iary.ndim:
                             builder.branch(bb_end_inc_index)
                         else:
                             builder.branch(bb_inc_inp_index[i+1])
@@ -281,8 +280,6 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
         scalar_inp1, scalar_tyinp1, inp1_ndim = _decompose_type(tyinp1, where='first input operand')
         scalar_inp2, scalar_tyinp2, inp2_ndim = _decompose_type(tyinp2, where='second input operand')
 
-        out_ndim = tyout.ndim
-
         # based only on the first operand?
         promote_type = types.float64 if asfloat else _default_promotion_for_type(scalar_tyinp1)
         result_type = promote_type
@@ -298,32 +295,16 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
 
         i1ary = None if scalar_inp1 else _prepare_array(context, builder, inp1, tyinp1, inp1_ndim) 
         i2ary = None if scalar_inp2 else _prepare_array(context, builder, inp2, tyinp2, inp2_ndim) 
-        oary = _prepare_array(context, builder, out, tyout, out_ndim)
+        oary = _prepare_array(context, builder, out, tyout, tyout.ndim)
 
         fnwork = context.get_function(funckey, sig)
         intpty = context.get_value_type(types.intp)
 
-        ZERO = Constant.int(Type.int(intpty.width), 0)
-        ONE = Constant.int(Type.int(intpty.width), 1)
-
-        inp1_indices = None
-        if not scalar_inp1:
-            inp1_indices = []
-            for i in range(inp1_ndim):
-                x = builder.alloca(Type.int(intpty.width))
-                builder.store(ZERO, x)
-                inp1_indices.append(x)
-
-        inp2_indices = None
-        if not scalar_inp2:
-            inp2_indices = []
-            for i in range(inp2_ndim):
-                x = builder.alloca(Type.int(intpty.width))
-                builder.store(ZERO, x)
-                inp2_indices.append(x)
+        inp1_indices = i1ary.create_iter_indices(intpty) if i1ary else None
+        inp2_indices = i2ary.create_iter_indices(intpty) if i2ary else None
 
         loopshape = oary.shape
-
+        ONE = Constant.int(Type.int(intpty.width), 1)
         with cgutils.loop_nest(builder, loopshape, intp=intpty) as indices:
 
             # Increment input indices.
@@ -345,7 +326,7 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
                         # the corresponding input and output dimensions.
                         cond = builder.icmp(ICMP_UGT, inp.shape[i], ONE)
                         with cgutils.ifthen(builder, cond):
-                            builder.store(indices[out_ndim-inp_ndim+i], inp_indices[i])
+                            builder.store(indices[oary.ndim-inp.ndim+i], inp_indices[i])
                         if i + 1 == inp_ndim:
                             builder.branch(bb_end_inc_index)
                         else:
@@ -354,9 +335,9 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
                 builder.position_at_end(bb_end_inc_index)
 
             if i1ary is not None:
-                build_increment_blocks(i1ary, inp1_indices, inp1_ndim, '1')
+                build_increment_blocks(i1ary, inp1_indices, i1ary.ndim, '1')
             if i2ary is not None:
-                build_increment_blocks(i2ary, inp2_indices, inp2_ndim, '2')
+                build_increment_blocks(i2ary, inp2_indices, i2ary.ndim, '2')
 
             if i1ary is None:
                 x = inp1
