@@ -292,7 +292,7 @@ class SimpleIterableType(IterableType):
         super(SimpleIterableType, self).__init__(name, param=True)
 
     def __eq__(self, other):
-        if isinstance(other, SimpleIterableType):
+        if other.__class__ is self.__class__:
             return self.name == other.name
 
     def __hash__(self):
@@ -317,11 +317,18 @@ class SimpleIteratorType(IteratorType):
         super(SimpleIteratorType, self).__init__(name, param=True)
 
     def __eq__(self, other):
-        if isinstance(other, SimpleIteratorType):
+        if other.__class__ is self.__class__:
             return self.name == other.name
 
     def __hash__(self):
         return hash(self.name)
+
+
+class RangeType(SimpleIterableType):
+    pass
+
+class RangeIteratorType(SimpleIteratorType):
+    pass
 
 
 class EnumerateType(IteratorType):
@@ -662,10 +669,10 @@ print_item_type = Dummy('print-item')
 sign_type = Dummy('sign')
 exception_type = Dummy('exception')
 
-range_iter32_type = SimpleIteratorType('range_iter32', int32)
-range_iter64_type = SimpleIteratorType('range_iter64', int64)
-range_state32_type = SimpleIterableType('range_state32', range_iter32_type)
-range_state64_type = SimpleIterableType('range_state64', range_iter64_type)
+range_iter32_type = RangeIteratorType('range_iter32', int32)
+range_iter64_type = RangeIteratorType('range_iter64', int64)
+range_state32_type = RangeType('range_state32', range_iter32_type)
+range_state64_type = RangeType('range_state64', range_iter64_type)
 
 # slice2_type = Type('slice2_type')
 slice3_type = Type('slice3_type')

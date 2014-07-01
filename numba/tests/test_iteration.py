@@ -93,10 +93,7 @@ class IterationTest(TestCase):
         self.run_nullary_func(nested_enumerate_usecase, flags)
 
     def test_nested_enumerate_npm(self):
-        # This fails because of a limitation in representation of nested
-        # structure objects.
-        with self.assertTypingError():
-            self.test_nested_enumerate(flags=no_pyobj_flags)
+        self.test_nested_enumerate(flags=no_pyobj_flags)
 
 
 if __name__ == '__main__':

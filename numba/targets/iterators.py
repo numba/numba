@@ -6,7 +6,8 @@ from llvm.core import Type, Constant
 
 from numba import errcode
 from numba import types, typing, cgutils
-from numba.targets.imputils import builtin, implement, iternext_impl, call_iternext
+from numba.targets.imputils import (
+    builtin, implement, iternext_impl, call_iternext, struct_factory)
 
 
 @builtin
@@ -19,11 +20,16 @@ def iterator_getiter(context, builder, sig, args):
 #-------------------------------------------------------------------------------
 # builtin `enumerate` implementation
 
-def make_enumerate_cls(source_iterator):
+@struct_factory(types.EnumerateType)
+def make_enumerate_cls(enum_type):
+    """
+    Return the Structure representation of the given *enum_type* (an
+    instance of types.EnumerateType).
+    """
 
     class Enumerate(cgutils.Structure):
         _fields = [('count', types.CPointer(types.intp)),
-                   ('iter', source_iterator)]
+                   ('iter', enum_type.source_type)]
 
     return Enumerate
 
@@ -37,7 +43,7 @@ def make_enumerate_object(context, builder, sig, args):
     getiter_impl = context.get_function('getiter', getiter_sig)
     iterobj = getiter_impl(builder, (src,))
 
-    enumcls = make_enumerate_cls(srcty.iterator_type)
+    enumcls = make_enumerate_cls(sig.return_type)
     enum = enumcls(context, builder)
 
     zero = context.get_constant(types.intp, 0)
@@ -56,7 +62,7 @@ def iternext_enumerate(context, builder, sig, args, result):
     [enumty] = sig.args
     [enum] = args
 
-    enumcls = make_enumerate_cls(enumty.source_type)
+    enumcls = make_enumerate_cls(enumty)
     enum = enumcls(context, builder, value=enum)
 
     count = builder.load(enum.count)

@@ -8,7 +8,8 @@ import numpy
 from numba import types, utils, cgutils, typing, numpy_support, errcode
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, python_attr_impl,
-                                    builtin_registry, impl_attribute)
+                                    builtin_registry, impl_attribute,
+                                    struct_registry)
 from numba.targets import builtins, iterators, rangeobj
 
 
@@ -34,10 +35,6 @@ LTYPEMAP = {
 STRUCT_TYPES = {
     types.complex64: builtins.Complex64,
     types.complex128: builtins.Complex128,
-    types.range_state32_type: rangeobj.RangeState32,
-    types.range_iter32_type: rangeobj.RangeIter32,
-    types.range_state64_type: rangeobj.RangeState64,
-    types.range_iter64_type: rangeobj.RangeIter64,
     types.slice3_type: builtins.Slice,
 }
 
@@ -278,10 +275,6 @@ class BaseContext(object):
             dtys = [self.get_value_type(t) for t in ty]
             return Type.struct(dtys)
 
-        elif isinstance(ty, types.UniTupleIter):
-            stty = self.get_struct_type(self.make_unituple_iter(ty))
-            return stty
-
         elif isinstance(ty, types.Record):
             # Record are represented as byte array
             return Type.struct([Type.array(Type.int(8), ty.size)])
@@ -297,7 +290,15 @@ class BaseContext(object):
         elif ty in STRUCT_TYPES:
             return self.get_struct_type(STRUCT_TYPES[ty])
 
-        elif isinstance(ty, types.Pair):
+        else:
+            try:
+                impl = struct_registry.match(ty)
+            except KeyError:
+                pass
+            else:
+                return self.get_struct_type(impl(ty))
+
+        if isinstance(ty, types.Pair):
             pairty = self.make_pair(ty.first_type, ty.second_type)
             return self.get_struct_type(pairty)
 
@@ -790,9 +791,6 @@ class BaseContext(object):
     def make_complex(self, typ):
         cls, _ = builtins.get_complex_info(typ)
         return cls
-
-    def make_unituple_iter(self, typ):
-        return builtins.make_unituple_iter(typ)
 
     def make_pair(self, first_type, second_type):
         """
