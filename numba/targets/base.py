@@ -297,6 +297,10 @@ class BaseContext(object):
         elif ty in STRUCT_TYPES:
             return self.get_struct_type(STRUCT_TYPES[ty])
 
+        elif isinstance(ty, types.Pair):
+            pairty = self.make_pair(ty.first_type, ty.second_type)
+            return self.get_struct_type(pairty)
+
         else:
             return LTYPEMAP[ty]
 
@@ -534,6 +538,22 @@ class BaseContext(object):
         assert code > 0
         builder.ret(Constant.int(Type.int(), code))
 
+    def pair_first(self, builder, val, ty):
+        """
+        Extract the first element of a heterogenous pair.
+        """
+        paircls = self.make_pair(ty.first_type, ty.second_type)
+        pair = paircls(self, builder, value=val)
+        return self.get_argument_value(builder, ty.first_type, pair.first)
+
+    def pair_second(self, builder, val, ty):
+        """
+        Extract the second element of a heterogenous pair.
+        """
+        paircls = self.make_pair(ty.first_type, ty.second_type)
+        pair = paircls(self, builder, value=val)
+        return self.get_argument_value(builder, ty.second_type, pair.second)
+
     def cast(self, builder, val, fromty, toty):
         if fromty == toty or toty == types.Any or isinstance(toty, types.Kind):
             return val
@@ -762,6 +782,12 @@ class BaseContext(object):
 
     def make_unituple_iter(self, typ):
         return builtins.make_unituple_iter(typ)
+
+    def make_pair(self, first_type, second_type):
+        """
+        Create a heterogenous pair class parametered for the given types.
+        """
+        return builtins.make_pair(first_type, second_type)
 
     def make_constant_array(self, builder, typ, ary):
         assert typ.layout == 'C'                # assumed in typeinfer.py

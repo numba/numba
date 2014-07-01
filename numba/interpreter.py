@@ -478,7 +478,7 @@ class Interpreter(object):
         expr = ir.Expr.getiter(value=self.get(value), loc=self.loc)
         self.store(expr, res)
 
-    def op_FOR_ITER(self, inst, iterator, indval, pred):
+    def op_FOR_ITER(self, inst, iterator, pair, indval, pred):
         """
         Assign new block other this instruction.
         """
@@ -490,12 +490,15 @@ class Interpreter(object):
 
         # Emit code
         val = self.get(iterator)
-        # FIXME itervalid must be called before iternext
-        iternext = ir.Expr.iternext(value=val, loc=self.loc)
+
+        pairval = ir.Expr.iternext(value=val, loc=self.loc)
+        self.store(pairval, pair)
+
+        iternext = ir.Expr.pair_first(value=self.get(pair), loc=self.loc)
         self.store(iternext, indval)
 
-        itervalid = ir.Expr.itervalid(value=val, loc=self.loc)
-        self.store(itervalid, pred)
+        isvalid = ir.Expr.pair_second(value=self.get(pair), loc=self.loc)
+        self.store(isvalid, pred)
 
         # Conditional jump
         br = ir.Branch(cond=self.get(pred), truebr=inst.next,

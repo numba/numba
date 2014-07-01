@@ -9,7 +9,7 @@ from numba import errcode
 from numba import types, typing, cgutils, utils
 from numba.targets.imputils import (builtin, builtin_attr, implement,
                                     impl_attribute, impl_attribute_generic,
-                                    iterator_impl)
+                                    iterator_impl, iternext_impl)
 from numba.typing import signature
 
 #-------------------------------------------------------------------------------
@@ -1080,7 +1080,17 @@ def slice0_none_none_impl(context, builder, sig, args):
     return slice0_empty_impl(context, builder, newsig, ())
 
 
+def make_pair(first_type, second_type):
+    class Pair(cgutils.Structure):
+        _fields = [('first', first_type),
+                   ('second', second_type)]
+
+    return Pair
+
+
 def make_unituple_iter(tupiter):
+    unituple = tupiter.unituple
+
     class UniTupleIter(cgutils.Structure):
         _fields = [('index', types.CPointer(types.intp)),
                    ('tuple', tupiter.unituple,)]
@@ -1107,30 +1117,14 @@ def getiter_unituple(context, builder, sig, args):
     return iterval._getvalue()
 
 
+# Unfortunately, we can't make decorate UniTupleIter with iterator_impl
+# as it would register the iternext() method too late. It really has to
+# be registered at module import time, not while compiling.
+
 @builtin
 @implement('iternext', types.Kind(types.UniTupleIter))
-def iternext_unituple(context, builder, sig, args):
-    [tupiterty] = sig.args
-    [tupiter] = args
-
-    tupitercls = context.make_unituple_iter(tupiterty)
-    iterval = tupitercls(context, builder, value=tupiter)
-    tup = iterval.tuple
-    idxptr = iterval.index
-    idx = builder.load(idxptr)
-
-    getitem_sig = typing.signature(sig.return_type, tupiterty.unituple,
-                                   types.intp)
-    res = getitem_unituple(context, builder, getitem_sig, [tup, idx])
-
-    nidx = builder.add(idx, context.get_constant(types.intp, 1))
-    builder.store(nidx, iterval.index)
-    return res
-
-
-@builtin
-@implement('itervalid', types.Kind(types.UniTupleIter))
-def itervalid_unituple(context, builder, sig, args):
+@iternext_impl
+def iternext_unituple(context, builder, sig, args, result):
     [tupiterty] = sig.args
     [tupiter] = args
 
@@ -1141,7 +1135,15 @@ def itervalid_unituple(context, builder, sig, args):
     idx = builder.load(idxptr)
     count = context.get_constant(types.intp, tupiterty.unituple.count)
 
-    return builder.icmp(lc.ICMP_SLE, idx, count)
+    is_valid = builder.icmp(lc.ICMP_SLT, idx, count)
+    result.set_valid(is_valid)
+
+    with cgutils.ifthen(builder, is_valid):
+        getitem_sig = typing.signature(sig.return_type, tupiterty.unituple,
+                                       types.intp)
+        result.yield_(getitem_unituple(context, builder, getitem_sig, [tup, idx]))
+        nidx = builder.add(idx, context.get_constant(types.intp, 1))
+        builder.store(nidx, iterval.index)
 
 
 @builtin
@@ -1169,12 +1171,6 @@ def getitem_unituple(context, builder, sig, args):
             value = builder.extract_value(tup, i)
             builder.branch(bbend)
             phinode.add_incoming(value, bbi)
-
-    # HACK: make __getitem__(tup, len(tup)) return tup[-1], to
-    # circumvent code generation bug where iternext is emitted before
-    # itervalid (issue #569).
-    ki = context.get_constant(types.intp, tupty.count)
-    switch.add_case(ki, bbi)
 
     builder.position_at_end(bbend)
     return phinode
