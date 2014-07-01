@@ -50,7 +50,24 @@ def _default_promotion_for_type(ty):
     return promote_type
 
 
-class _IndexingHelper(namedtuple('_IndexingHelper', ('array', 'indices'))):
+class _ScalarIndexingHelper(object):
+    def update_indices(self, loop_indices, name):
+        pass
+
+    def as_values(self):
+        pass
+
+class _ScalarHelper(namedtuple('_ScalarHelper', ('context', 'builder', 'val', 'base_type'))):
+    def create_iter_indices(self):
+        return _ScalarIndexingHelper()
+
+    def load_effective_address(self, indices):
+        raise LoweringError('Can not get effective address of a scalar')
+
+    def load_data(self, indices):
+        return self.val
+
+class _ArrayIndexingHelper(namedtuple('_ArrayIndexingHelper', ('array', 'indices'))):
     def update_indices(self, loop_indices, name):
         bld = self.array.builder
         intpty = self.array.context.get_value_type(types.intp)
@@ -76,8 +93,7 @@ class _IndexingHelper(namedtuple('_IndexingHelper', ('array', 'indices'))):
         return [bld.load(index) for index in self.indices]
 
 
-
-class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary', 'shape', 'strides', 'data', 'layout', 'ndim'))):
+class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary', 'shape', 'strides', 'data', 'layout', 'base_type', 'ndim'))):
     def create_iter_indices(self):
         intpty = self.context.get_value_type(types.intp)
         ZERO = Constant.int(Type.int(intpty.width), 0)
@@ -87,7 +103,7 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary', 'sha
             x = self.builder.alloca(Type.int(intpty.width))
             self.builder.store(ZERO, x)
             indices.append(x)
-        return _IndexingHelper(self, indices)
+        return _ArrayIndexingHelper(self, indices)
 
     def load_effective_address(self, indices):
         return cgutils.get_item_pointer2(self.builder,
@@ -101,12 +117,16 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary', 'sha
         return self.builder.load(self.load_effective_address(indices))
 
 
+def _prepare_scalar(ctxt, bld, inp, tyinp):
+    return _ScalarHelper(ctxt, bld, inp, tyinp)
+
+
 def _prepare_array(ctxt, bld, inp, tyinp, ndim):
     """code that setups the array"""
     ary     = ctxt.make_array(tyinp)(ctxt, bld, inp)
     shape   = cgutils.unpack_tuple(bld, ary.shape, ndim)
     strides = cgutils.unpack_tuple(bld, ary.strides, ndim)
-    return _ArrayHelper(ctxt, bld, ary, shape, strides, ary.data, tyinp.layout, ndim)
+    return _ArrayHelper(ctxt, bld, ary, shape, strides, ary.data, tyinp.layout, tyinp.dtype, ndim)
 
 
 def unary_npy_math_extern(fn):
@@ -142,6 +162,9 @@ def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
         promote_type = types.float64 if asfloat else _default_promotion_for_type(scalar_tyinp)
         result_type = promote_type
 
+        iary = _prepare_scalar(context, builder, inp, tyinp) if scalar_inp else _prepare_array(context, builder, inp, tyinp, inp_ndim)
+        oary = _prepare_array(context, builder, out, tyout, tyout.ndim)
+
         # Temporary hack for __ftol2 llvm bug. Don't allow storing
         # float results in uint64 array on windows.
         if result_type in types.real_domain and \
@@ -149,22 +172,18 @@ def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
                 sys.platform.startswith('win32'):
             raise TypeError('Cannot store result in uint64 array')
 
-        sig = typing.signature(result_type, promote_type)
 
-        iary = None if scalar_inp else _prepare_array(context, builder, inp, tyinp, inp_ndim)
-        oary = _prepare_array(context, builder, out, tyout, tyout.ndim)
-
+        sig    = typing.signature(result_type, promote_type)
         fnwork = context.get_function(funckey, sig)
         intpty = context.get_value_type(types.intp)
 
-        inp_indices = iary.create_iter_indices() if iary else None
+        inp_indices = iary.create_iter_indices()
 
         loopshape = oary.shape
         with cgutils.loop_nest(builder, loopshape, intp=intpty) as indices:
-            if inp_indices is not None:
-                inp_indices.update_indices(indices, '')
+            inp_indices.update_indices(indices, '')
 
-            x = iary.load_data(inp_indices.as_values()) if iary else inp
+            x = iary.load_data(inp_indices.as_values())
             po = oary.load_effective_address(indices)
 
             d_x = context.cast(builder, x, scalar_tyinp, promote_type)
@@ -284,8 +303,8 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
 
         sig = typing.signature(result_type, promote_type, promote_type)
 
-        i1ary = None if scalar_inp1 else _prepare_array(context, builder, inp1, tyinp1, inp1_ndim)
-        i2ary = None if scalar_inp2 else _prepare_array(context, builder, inp2, tyinp2, inp2_ndim)
+        i1ary = _prepare_scalar(context, builder, inp1, tyinp1) if scalar_inp1 else _prepare_array(context, builder, inp1, tyinp1, inp1_ndim)
+        i2ary = _prepare_scalar(context, builder, inp2, tyinp2) if scalar_inp2 else _prepare_array(context, builder, inp2, tyinp2, inp2_ndim)
         oary = _prepare_array(context, builder, out, tyout, tyout.ndim)
 
         fnwork = context.get_function(funckey, sig)
@@ -296,13 +315,11 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
 
         loopshape = oary.shape
         with cgutils.loop_nest(builder, loopshape, intp=intpty) as indices:
-            if inp1_indices is not None:
-                inp1_indices.update_indices(indices, '1')
-            if inp2_indices is not None:
-                inp2_indices.update_indices(indices, '2')
+            inp1_indices.update_indices(indices, '1')
+            inp2_indices.update_indices(indices, '2')
 
-            x = i1ary.load_data(inp1_indices.as_values()) if i1ary else inp1
-            y = i2ary.load_data(inp2_indices.as_values()) if i2ary else inp2
+            x = i1ary.load_data(inp1_indices.as_values())
+            y = i2ary.load_data(inp2_indices.as_values())
 
             po = oary.load_effective_address(indices)
 
