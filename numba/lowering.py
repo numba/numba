@@ -346,15 +346,8 @@ class Lower(BaseLower):
     def lower_assign(self, ty, inst):
         value = inst.value
         if isinstance(value, ir.Const):
-            if self.context.is_struct_type(ty):
-                const = self.context.get_constant_struct(self.builder, ty,
-                                                         value.value)
-            elif ty == types.string:
-                const = self.context.get_constant_string(self.builder, ty,
-                                                         value.value)
-            else:
-                const = self.context.get_constant(ty, value.value)
-            return const
+            return self.context.get_constant_generic(self.builder, ty,
+                                                     value.value)
 
         elif isinstance(value, ir.Expr):
             return self.lower_expr(ty, value)
@@ -371,30 +364,13 @@ class Lower(BaseLower):
                     isinstance(ty, types.Dispatcher)):
                 return self.context.get_dummy_value()
 
-            elif ty == types.boolean:
-                return self.context.get_constant(ty, value.value)
-
             elif isinstance(ty, types.Array):
                 return self.context.make_constant_array(self.builder, ty,
                                                         value.value)
 
-            elif self.context.is_struct_type(ty):
-                return self.context.get_constant_struct(self.builder, ty,
-                                                        value.value)
-
-            elif ty in types.number_domain:
-                return self.context.get_constant(ty, value.value)
-
-            elif isinstance(ty, types.UniTuple):
-                consts = [self.context.get_constant(t, v)
-                          for t, v in zip(ty, value.value)]
-                return cgutils.pack_array(self.builder, consts)
-
-            elif self.context.is_struct_type(ty):
-                return self.context.get_constant_struct(self.builder, ty,
-                        value.value)
-
             else:
+                return self.context.get_constant_generic(self.builder, ty,
+                                                         value.value)
                 raise NotImplementedError('global', ty)
 
         else:
@@ -505,8 +481,8 @@ class Lower(BaseLower):
         elif expr.op == 'exhaust_iter':
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
-            # If we already have a tuple, don't do anything
-            # (heterogenous tuples are not iterable in native mode)
+            # If we have a heterogenous tuple, we needn't do anything,
+            # and we can't iterate over it anyway.
             if isinstance(ty, types.Tuple):
                 return val
 
