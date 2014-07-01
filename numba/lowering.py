@@ -576,8 +576,6 @@ class Lower(BaseLower):
         raise NotImplementedError(expr)
 
     def getvar(self, name):
-        if name not in self.varmap:
-            self.varmap[name] = self.alloca(name, self.typeof(name))
         return self.varmap[name]
 
     def loadvar(self, name):
