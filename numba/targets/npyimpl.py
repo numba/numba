@@ -68,6 +68,14 @@ class _IndexingHelper(namedtuple('_IndexingHelper', ('array', 'indices'))):
                 bld.branch(bb_index[i+1])
         bld.position_at_end(bb_index[-1])
 
+    def as_values(self):
+        """The indexing helper is built using alloca for each value, so it actually contains pointers
+        to the actual indices to load. Note that update_indices assumes the same. This method returns
+        the indices as values"""
+        bld=self.array.builder
+        return [bld.load(index) for index in self.indices]
+
+
 
 class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary', 'shape', 'strides', 'data', 'layout', 'ndim'))):
     def create_iter_indices(self):
@@ -90,8 +98,7 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary', 'sha
                                          inds=indices)
 
     def load_data(self, indices):
-        inds = [self.builder.load(index) for index in indices]
-        return self.builder.load(self.load_effective_address(inds))
+        return self.builder.load(self.load_effective_address(indices))
 
 
 def _prepare_array(ctxt, bld, inp, tyinp, ndim):
@@ -157,7 +164,7 @@ def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
             if inp_indices is not None:
                 inp_indices.update_indices(indices, '')
 
-            x = iary.load_data(inp_indices.indices) if iary else inp
+            x = iary.load_data(inp_indices.as_values()) if iary else inp
             po = oary.load_effective_address(indices)
 
             d_x = context.cast(builder, x, scalar_tyinp, promote_type)
@@ -294,8 +301,8 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
             if inp2_indices is not None:
                 inp2_indices.update_indices(indices, '2')
 
-            x = i1ary.load_data(inp1_indices.indices) if i1ary else inp1
-            y = i2ary.load_data(inp2_indices.indices) if i2ary else inp2
+            x = i1ary.load_data(inp1_indices.as_values()) if i1ary else inp1
+            y = i2ary.load_data(inp2_indices.as_values()) if i2ary else inp2
 
             po = oary.load_effective_address(indices)
 
