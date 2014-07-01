@@ -127,16 +127,6 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyObject_Call")
         return self.builder.call(fn, (callee, args, kws))
 
-    def long_from_long(self, ival):
-        fnty = Type.function(self.pyobj, [self.long])
-        fn = self._get_function(fnty, name="PyLong_FromLong")
-        return self.builder.call(fn, [ival])
-
-    def long_from_ssize_t(self, ival):
-        fnty = Type.function(self.pyobj, [self.py_ssize_t])
-        fn = self._get_function(fnty, name="PyLong_FromSsize_t")
-        return self.builder.call(fn, [ival])
-
     def float_from_double(self, fval):
         fnty = Type.function(self.pyobj, [self.double])
         fn = self._get_function(fnty, name="PyFloat_FromDouble")
@@ -162,15 +152,58 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyLong_AsLongLong")
         return self.builder.call(fn, [numobj])
 
-    def long_from_ulonglong(self, numobj):
-        fnty = Type.function(self.pyobj, [self.ulonglong])
-        fn = self._get_function(fnty, name="PyLong_FromUnsignedLongLong")
-        return self.builder.call(fn, [numobj])
+    def _long_from_native_int(self, ival, func_name, native_int_type,
+                              signed):
+        fnty = Type.function(self.pyobj, [native_int_type])
+        fn = self._get_function(fnty, name=func_name)
+        resptr = cgutils.alloca_once(self.builder, self.pyobj)
 
-    def long_from_longlong(self, numobj):
-        fnty = Type.function(self.pyobj, [self.ulonglong])
-        fn = self._get_function(fnty, name="PyLong_FromLongLong")
-        return self.builder.call(fn, [numobj])
+        if PYVERSION < (3, 0):
+            # Under Python 2, we try to return a PyInt object whenever
+            # the given number fits in a C long.
+            pyint_fnty = Type.function(self.pyobj, [self.long])
+            pyint_fn = self._get_function(pyint_fnty, name="PyInt_FromLong")
+            long_max = Constant.int(native_int_type, _helperlib.long_max)
+            if signed:
+                long_min = Constant.int(native_int_type, _helperlib.long_min)
+                use_pyint = self.builder.and_(
+                    self.builder.icmp(lc.ICMP_SGE, ival, long_min),
+                    self.builder.icmp(lc.ICMP_SLE, ival, long_max),
+                    )
+            else:
+                use_pyint = self.builder.icmp(lc.ICMP_ULE, ival, long_max)
+
+            with cgutils.ifelse(self.builder, use_pyint) as (then, otherwise):
+                with then:
+                    self.builder.store(self.builder.call(pyint_fn, [ival]), resptr)
+                with otherwise:
+                    self.builder.store(self.builder.call(fn, [ival]), resptr)
+        else:
+            fn = self._get_function(fnty, name=func_name)
+            self.builder.store(self.builder.call(fn, [ival]), resptr)
+
+        return self.builder.load(resptr)
+
+    def long_from_long(self, ival):
+        if PYVERSION < (3, 0):
+            func_name = "PyInt_FromLong"
+        else:
+            func_name = "PyLong_FromLong"
+        fnty = Type.function(self.pyobj, [self.long])
+        fn = self._get_function(fnty, name=func_name)
+        return self.builder.call(fn, [ival])
+
+    def long_from_ssize_t(self, ival):
+        return self._long_from_native_int(ival, "PyLong_FromSsize_t",
+                                          self.py_ssize_t, signed=True)
+
+    def long_from_longlong(self, ival):
+        return self._long_from_native_int(ival, "PyLong_FromLongLong",
+                                          self.longlong, signed=True)
+
+    def long_from_ulonglong(self, ival):
+        return self._long_from_native_int(ival, "PyLong_FromUnsignedLongLong",
+                                          self.ulonglong, signed=False)
 
     def _get_number_operator(self, name):
         fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj])

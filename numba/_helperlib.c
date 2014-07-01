@@ -270,6 +270,8 @@ MOD_INIT(_helperlib) {
     PyModule_AddObject(m, "py_buffer_size",
                        PyLong_FromLong(sizeof(Py_buffer)));
     PyModule_AddObject(m, "c_helpers", build_c_helpers_dict());
+    PyModule_AddIntConstant(m, "long_min", LONG_MIN);
+    PyModule_AddIntConstant(m, "long_max", LONG_MAX);
 
     return MOD_SUCCESS_VAL(m);
 }
