@@ -69,8 +69,4 @@ def iternext_enumerate(context, builder, sig, args, result):
 
     with cgutils.ifthen(builder, is_valid):
         srcval = srcres.yielded_value()
-        struct_type = Type.struct([count.type, srcval.type])
-        struct_val = Constant.undef(struct_type)
-        struct_val = builder.insert_value(struct_val, count, 0)
-        struct_val = builder.insert_value(struct_val, srcval, 1)
-        result.yield_(struct_val)
+        result.yield_(cgutils.make_anonymous_struct(builder, [count, srcval]))
