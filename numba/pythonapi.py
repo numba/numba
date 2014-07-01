@@ -175,9 +175,12 @@ class PythonAPI(object):
 
             with cgutils.ifelse(self.builder, use_pyint) as (then, otherwise):
                 with then:
-                    self.builder.store(self.builder.call(pyint_fn, [ival]), resptr)
+                    downcast_ival = self.builder.trunc(ival, self.long)
+                    res = self.builder.call(pyint_fn, [downcast_ival])
+                    self.builder.store(res, resptr)
                 with otherwise:
-                    self.builder.store(self.builder.call(fn, [ival]), resptr)
+                    res = self.builder.call(fn, [ival])
+                    self.builder.store(res, resptr)
         else:
             fn = self._get_function(fnty, name=func_name)
             self.builder.store(self.builder.call(fn, [ival]), resptr)
