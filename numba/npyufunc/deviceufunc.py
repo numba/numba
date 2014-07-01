@@ -84,8 +84,8 @@ class UFuncMechanism(object):
         """Perform numpy ufunc broadcasting
         """
         # Get the biggest shape
-        nds = [a.ndim for a in arys]
-        biggest = np.argmax(nds)
+        tosort = [(a.ndim, a.size, i) for i, a in enumerate(arys)]
+        biggest = max(tosort, key=lambda x: x[:-1])[-1]
         shape = arys[biggest].shape
 
         for i, ary in enumerate(arys):
@@ -105,6 +105,7 @@ class UFuncMechanism(object):
                     arys[i] = self.force_array_layout(strided)
 
             else:
+                print(arys)
                 raise ValueError("arg #%d cannot be broadcasted" % (i + 1))
 
         return arys
@@ -114,6 +115,7 @@ class UFuncMechanism(object):
         Does not call to_device().
         """
         self._fill_arrays()
+        self._fill_argtypes()
         self._resolve_signature()
         arys = self._get_actual_args()
         return self._broadcast(arys)
@@ -159,9 +161,11 @@ class UFuncMechanism(object):
         args = cr.get_arguments()
         resty, func = cr.get_function()
 
+        outshape = args[0].shape
         if args[0].ndim > 1:
             if not cr.SUPPORT_DEVICE_SLICING:
-                raise NotImplementedError("Support 1D array only.")
+                args = [a.ravel() for a in args]
+                #raise NotImplementedError("Support 1D array only.")
             else:
                 raise NotImplementedError
 
@@ -172,7 +176,7 @@ class UFuncMechanism(object):
             if cr.is_device_array(a):
                 devarys.append(a)
             else:
-                dev_a = cr.to_device(a)
+                dev_a = cr.to_device(a, stream=stream)
                 devarys.append(dev_a)
                 all_device = False
 
@@ -180,7 +184,7 @@ class UFuncMechanism(object):
         shape = args[0].shape
         if out is None:
             # No output is provided
-            devout = cr.device_array(shape, resty)
+            devout = cr.device_array(shape, resty, stream=stream)
 
             devarys.extend([devout])
             cr.launch(func, shape[0], stream, devarys)
@@ -188,10 +192,10 @@ class UFuncMechanism(object):
             if all_device:
                 # If all arguments are on device,
                 # Keep output on the device
-                return devout
+                return devout.reshape(outshape)
             else:
                 # Otherwise, transfer output back to host
-                return devout.copy_to_host()
+                return devout.copy_to_host().reshape(outshape)
 
         elif cr.is_device_array(out):
             # If output is provided and it is a device array,
@@ -199,25 +203,25 @@ class UFuncMechanism(object):
             devout = out
             devarys.extend([devout])
             cr.launch(func, shape[0], stream, devarys)
-            return devout
+            return devout.reshape(outshape)
 
         else:
             # If output is provided and it is a host array,
             # Return host array
             assert out.shape == shape
             assert out.dtype == resty
-            devout = cr.device_array(shape, resty)
+            devout = cr.device_array(shape, resty, stream=stream)
             devarys.extend([devout])
             cr.launch(func, shape[0], stream, devarys)
-            return devout.copy_to_host(out)
+            return devout.copy_to_host(out, stream=stream).reshape(outshape)
 
-    def to_device(self, hostary):
+    def to_device(self, hostary, stream):
         """Implement to device transfer
         Override in subclass
         """
         raise NotImplementedError
 
-    def device_array(self, shape, dtype):
+    def device_array(self, shape, dtype, stream):
         """Implements device allocation
         Override in subclass
         """

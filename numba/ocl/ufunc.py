@@ -30,6 +30,7 @@ def _to_dtype(ty):
 class OclVectorize(object):
     """OpenCL ufunc builder
     """
+
     def __init__(self, func, targetoptions={}):
         assert not targetoptions
         self.pyfunc = func
@@ -112,13 +113,13 @@ class OclUFuncMechanism(UFuncMechanism):
     def is_device_array(self, obj):
         return oclarray.is_ocl_ndarray(obj)
 
-    def to_device(self, hostary):
-        return ocl.to_device(hostary)
+    def to_device(self, hostary, stream):
+        return ocl.to_device(hostary, stream=stream)
 
     def launch(self, func, count, stream, args):
         func.configure(count, stream=stream)(*args)
 
-    def device_array(self, shape, dtype):
+    def device_array(self, shape, dtype, stream):
         return ocl.device_array(shape=shape, dtype=dtype)
 
     def force_array_layout(self, ary):
