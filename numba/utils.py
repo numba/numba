@@ -190,8 +190,7 @@ if IS_PY3:
     def func_globals(f):
         return f.__globals__
 
-    def longint(v):
-        return int(v)
+    longint = int
 
     unicode = str
 
@@ -214,8 +213,7 @@ else:
     def func_globals(f):
         return f.func_globals
 
-    def longint(v):
-        return long(v)
+    longint = long
 
     unicode = unicode
 
