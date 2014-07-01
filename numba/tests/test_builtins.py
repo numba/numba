@@ -543,7 +543,7 @@ class TestBuiltins(TestCase):
     def test_zip(self, flags=forceobj_flags):
         self.run_nullary_func(zip_usecase, flags)
 
-    def test_aaa_zip_npm(self):
+    def test_zip_npm(self):
         self.test_zip(flags=no_pyobj_flags)
 
 

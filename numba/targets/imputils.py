@@ -172,6 +172,15 @@ def iternext_impl(func):
     return wrapper
 
 
+def call_getiter(context, builder, iterable_type, val):
+    """
+    Call the `getiter()` implementation for the given *iterable_type*
+    of value *val*, and return the corresponding LLVM inst.
+    """
+    getiter_sig = signature(iterable_type.iterator_type, iterable_type)
+    getiter_impl = context.get_function('getiter', getiter_sig)
+    return getiter_impl(builder, (val,))
+
 
 def call_iternext(context, builder, iterator_type, val):
     """

@@ -7,7 +7,8 @@ from llvm.core import Type, Constant
 from numba import errcode
 from numba import types, typing, cgutils
 from numba.targets.imputils import (
-    builtin, implement, iternext_impl, call_iternext, struct_factory)
+    builtin, implement, iternext_impl, call_iternext, call_getiter,
+    struct_factory)
 
 
 @builtin
@@ -39,9 +40,7 @@ def make_enumerate_object(context, builder, sig, args):
     [srcty] = sig.args
     [src] = args
 
-    getiter_sig = typing.signature(srcty.iterator_type, srcty)
-    getiter_impl = context.get_function('getiter', getiter_sig)
-    iterobj = getiter_impl(builder, (src,))
+    iterobj = call_getiter(context, builder, srcty, src)
 
     enumcls = make_enumerate_cls(sig.return_type)
     enum = enumcls(context, builder)
@@ -105,10 +104,7 @@ def make_zip_object(context, builder, sig, args):
     zipobj = zipcls(context, builder)
 
     for i, (arg, srcty) in enumerate(zip(args, sig.args)):
-        getiter_sig = typing.signature(srcty.iterator_type, srcty)
-        getiter_impl = context.get_function('getiter', getiter_sig)
-        iterobj = getiter_impl(builder, (arg,))
-        zipobj[i] = iterobj
+        zipobj[i] = call_getiter(context, builder, srcty, arg)
 
     return zipobj._getvalue()
 
