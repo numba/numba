@@ -32,6 +32,11 @@ def make_anonymous_struct(builder, values):
 
 
 class Structure(object):
+    """
+    A high-level object wrapping a alloca'ed LLVM structure, including
+    named fields and attribute access.
+    """
+
     def __init__(self, context, builder, value=None, ref=None):
         self._type = context.get_struct_type(self)
         self._context = context
@@ -57,22 +62,34 @@ class Structure(object):
             self._typemap.append(tp)
 
     def __getattr__(self, field):
+        """
+        Load the LLVM value of the named *field*.
+        """
         if not field.startswith('_'):
             return self[self._namemap[field]]
         else:
             raise AttributeError(field)
 
     def __setattr__(self, field, value):
+        """
+        Store the LLVM *value* into the named *field*.
+        """
         if field.startswith('_'):
             return super(Structure, self).__setattr__(field, value)
         self[self._namemap[field]] = value
 
     def __getitem__(self, index):
+        """
+        Load the LLVM value of the field at *index*.
+        """
         offset = self._fdmap[index]
         ptr = self._builder.gep(self._value, offset)
         return self._builder.load(ptr)
 
     def __setitem__(self, index, value):
+        """
+        Store the LLVM *value* into the field at *index*.
+        """
         offset = self._fdmap[index]
         ptr = self._builder.gep(self._value, offset)
         value = self._context.get_return_value(self._builder,
@@ -84,20 +101,24 @@ class Structure(object):
         self._builder.store(value, ptr)
 
     def __len__(self):
+        """
+        Return the number of fields.
+        """
         return len(self._namemap)
 
     def _getpointer(self):
+        """
+        Return the LLVM pointer to the underlying structure.
+        """
         return self._value
 
     def _getvalue(self):
+        """
+        Load and return the value of the underlying LLVM structure.
+        """
         return self._builder.load(self._value)
 
-    def __iter__(self):
-        def iterator():
-            for field, _ in self._fields:
-                yield getattr(self, field)
-
-        return iter(iterator())
+    # __iter__ is derived by Python from __len__ and __getitem__
 
 
 def get_function(builder):
