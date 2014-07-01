@@ -345,7 +345,6 @@ class TypeInferer(object):
 
     def dump(self):
         print('---- type variables ----')
-        print("typevars =", sorted(self.typevars))
         pprint(utils.dict_values(self.typevars))
 
     def seed_type(self, name, typ):
