@@ -174,9 +174,10 @@ class DataFlowAnalysis(object):
     def op_FOR_ITER(self, info, inst):
         loop = self.syntax_blocks[-1]
         iterator = loop.iterator
+        pair = info.make_temp()
         indval = info.make_temp()
         pred = info.make_temp()
-        info.append(inst, iterator=iterator, indval=indval, pred=pred)
+        info.append(inst, iterator=iterator, pair=pair, indval=indval, pred=pred)
         info.push(indval)
 
     def op_CALL_FUNCTION(self, info, inst):

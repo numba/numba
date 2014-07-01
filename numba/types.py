@@ -258,6 +258,26 @@ class Method(Function):
         return hash((self.template.__name__, self.this))
 
 
+class Pair(Type):
+    """
+    A heterogenous pair.
+    """
+
+    def __init__(self, first_type, second_type):
+        self.first_type = first_type
+        self.second_type = second_type
+        name = "pair<%s, %s>" % (first_type, second_type)
+        super(Pair, self).__init__(name=name)
+
+    def __eq__(self, other):
+        if isinstance(other, Pair):
+            return (self.first_type == other.first_type and
+                    self.second_type == other.second_type)
+
+    def __hash__(self):
+        return hash((self.first_type, self.second_type))
+
+
 class IterableType(Type):
     """
     Base class for iterable types.

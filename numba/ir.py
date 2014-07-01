@@ -119,6 +119,16 @@ class Expr(object):
         return cls(op=op, loc=loc, items=items)
 
     @classmethod
+    def pair_first(cls, value, loc):
+        op = 'pair_first'
+        return cls(op=op, loc=loc, value=value)
+
+    @classmethod
+    def pair_second(cls, value, loc):
+        op = 'pair_second'
+        return cls(op=op, loc=loc, value=value)
+
+    @classmethod
     def getiter(cls, value, loc):
         op = 'getiter'
         return cls(op=op, loc=loc, value=value)
@@ -126,11 +136,6 @@ class Expr(object):
     @classmethod
     def iternext(cls, value, loc):
         op = 'iternext'
-        return cls(op=op, loc=loc, value=value)
-
-    @classmethod
-    def itervalid(cls, value, loc):
-        op = 'itervalid'
         return cls(op=op, loc=loc, value=value)
 
     @classmethod
