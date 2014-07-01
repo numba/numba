@@ -371,7 +371,6 @@ class Lower(BaseLower):
             else:
                 return self.context.get_constant_generic(self.builder, ty,
                                                          value.value)
-                raise NotImplementedError('global', ty)
 
         else:
             raise NotImplementedError(type(value), value)
