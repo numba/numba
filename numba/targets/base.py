@@ -352,6 +352,17 @@ class BaseContext(object):
     def is_struct_type(self, ty):
         return cgutils.is_struct(self.get_data_type(ty))
 
+    def get_constant_generic(self, builder, ty, val):
+        """
+        Return a LLVM constant representing value *val* of Numba type *ty*.
+        """
+        if self.is_struct_type(ty):
+            return self.get_constant_struct(builder, ty, val)
+        elif ty == types.string:
+            return self.get_constant_string(builder, ty, val)
+        else:
+            return self.get_constant(ty, val)
+
     def get_constant_struct(self, builder, ty, val):
         assert self.is_struct_type(ty)
         module = cgutils.get_module(builder)
@@ -367,12 +378,12 @@ class BaseContext(object):
             real = self.get_constant(innertype, val.real)
             imag = self.get_constant(innertype, val.imag)
             const = Constant.struct([real, imag])
+            return const
 
-            gv = module.add_global_variable(const.type, name=".const")
-            gv.linkage = lc.LINKAGE_INTERNAL
-            gv.initializer = const
-            gv.global_constant = True
-            return builder.load(gv)
+        elif isinstance(ty, types.Tuple):
+            consts = [self.get_constant_generic(builder, ty.types[i], v)
+                      for i, v in enumerate(val)]
+            return Constant.struct(consts)
 
         else:
             raise NotImplementedError(ty)
@@ -655,7 +666,7 @@ class BaseContext(object):
                 len(toty) == len(fromty)):
             olditems = cgutils.unpack_tuple(builder, val, len(fromty))
             items = [self.cast(builder, i, t, toty.dtype)
-                     for i, t in zip(olditems, fromty.items)]
+                     for i, t in zip(olditems, fromty.types)]
             tup = self.get_constant_undef(toty)
             for idx, val in enumerate(items):
                 tup = builder.insert_value(tup, val, idx)

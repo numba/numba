@@ -89,11 +89,8 @@ class DataFlowAnalysis(object):
         count = inst.arg
         iterable = info.pop()
         stores = [info.make_temp() for _ in range(count)]
-        indices = [info.make_temp() for _ in range(count)]
-        iterobj = info.make_temp()
         tupleobj = info.make_temp()
-        info.append(inst, iterable=iterable, stores=stores, indices=indices,
-                    iterobj=iterobj, tupleobj=tupleobj)
+        info.append(inst, iterable=iterable, stores=stores, tupleobj=tupleobj)
         for st in reversed(stores):
             info.push(st)
 

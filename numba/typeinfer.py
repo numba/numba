@@ -156,8 +156,11 @@ class ExhaustIterConstrain(object):
     def __call__(self, context, typevars):
         oset = typevars[self.target]
         for tp in typevars[self.iterator.name].get():
-            oset.add_types(types.UniTuple(dtype=tp.yield_type,
-                                          count=self.count))
+            if isinstance(tp, types.IterableType):
+                oset.add_types(types.UniTuple(dtype=tp.iterator_type.yield_type,
+                                              count=self.count))
+            elif isinstance(tp, types.Tuple):
+                oset.add_types(tp)
 
 
 class PairFirstConstrain(object):
@@ -190,6 +193,23 @@ class PairSecondConstrain(object):
                 # XXX is this an error?
                 continue
             oset.add_types(tp.second_type)
+
+
+class StaticGetItemConstrain(object):
+
+    def __init__(self, target, value, index, loc):
+        self.target = target
+        self.value = value
+        self.index = index
+        self.loc = loc
+
+    def __call__(self, context, typevars):
+        oset = typevars[self.target]
+        for tp in typevars[self.value.name].get():
+            if isinstance(tp, types.UniTuple):
+                oset.add_types(tp.dtype)
+            elif isinstance(tp, types.Tuple):
+                oset.add_types(tp.types[self.index])
 
 
 class CallConstrain(object):
@@ -618,8 +638,13 @@ class TypeInferer(object):
             self.typeof_intrinsic_call(inst, target, expr.fn, expr.lhs, expr.rhs)
         elif expr.op == 'unary':
             self.typeof_intrinsic_call(inst, target, expr.fn, expr.value)
+        elif expr.op == 'static_getitem':
+            constrain = StaticGetItemConstrain(target.name, value=expr.value,
+                                               index=expr.index,
+                                               loc=expr.loc)
+            self.constrains.append(constrain)
         elif expr.op == 'getitem':
-            self.typeof_intrinsic_call(inst, target, expr.op, expr.target,
+            self.typeof_intrinsic_call(inst, target, expr.op, expr.value,
                                        expr.index)
         elif expr.op == 'getattr':
             constrain = GetAttrConstrain(target.name, attr=expr.attr,
