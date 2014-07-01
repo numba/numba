@@ -68,17 +68,6 @@ class _IndexingHelper(namedtuple('_IndexingHelper', ('array', 'indices'))):
                 bld.branch(bb_index[i+1])
         bld.position_at_end(bb_index[-1])
 
-    def dereference(self):
-        bld = self.array.builder
-        inds = [bld.load(index) for index in self.indices]
-        px = cgutils.get_item_pointer2(bld,
-                                       data=self.array.data,
-                                       shape=self.array.shape,
-                                       strides=self.array.strides,
-                                       layout=self.array.layout,
-                                       inds=inds)
-        return  bld.load(px)
-
 
 class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary', 'shape', 'strides', 'data', 'layout', 'ndim'))):
     def create_iter_indices(self):
@@ -91,6 +80,18 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary', 'sha
             self.builder.store(ZERO, x)
             indices.append(x)
         return _IndexingHelper(self, indices)
+
+    def load_effective_address(self, indices):
+        return cgutils.get_item_pointer2(self.builder,
+                                         data=self.data,
+                                         shape=self.shape,
+                                         strides=self.strides,
+                                         layout=self.layout,
+                                         inds=indices)
+
+    def load_data(self, indices):
+        inds = [self.builder.load(index) for index in indices]
+        return self.builder.load(self.load_effective_address(inds))
 
 
 def _prepare_array(ctxt, bld, inp, tyinp, ndim):
@@ -143,7 +144,7 @@ def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
 
         sig = typing.signature(result_type, promote_type)
 
-        iary = None if scalar_inp else _prepare_array(context, builder, inp, tyinp, inp_ndim) 
+        iary = None if scalar_inp else _prepare_array(context, builder, inp, tyinp, inp_ndim)
         oary = _prepare_array(context, builder, out, tyout, tyout.ndim)
 
         fnwork = context.get_function(funckey, sig)
@@ -156,14 +157,8 @@ def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
             if inp_indices is not None:
                 inp_indices.update_indices(indices, '')
 
-            x = inp_indices.dereference() if inp_indices else inp
-
-            po = cgutils.get_item_pointer2(builder,
-                                           data=oary.data,
-                                           shape=oary.shape,
-                                           strides=oary.strides,
-                                           layout=oary.layout,
-                                           inds=indices)
+            x = iary.load_data(inp_indices.indices) if iary else inp
+            po = oary.load_effective_address(indices)
 
             d_x = context.cast(builder, x, scalar_tyinp, promote_type)
             tempres = fnwork(builder, [d_x])
@@ -282,8 +277,8 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
 
         sig = typing.signature(result_type, promote_type, promote_type)
 
-        i1ary = None if scalar_inp1 else _prepare_array(context, builder, inp1, tyinp1, inp1_ndim) 
-        i2ary = None if scalar_inp2 else _prepare_array(context, builder, inp2, tyinp2, inp2_ndim) 
+        i1ary = None if scalar_inp1 else _prepare_array(context, builder, inp1, tyinp1, inp1_ndim)
+        i2ary = None if scalar_inp2 else _prepare_array(context, builder, inp2, tyinp2, inp2_ndim)
         oary = _prepare_array(context, builder, out, tyout, tyout.ndim)
 
         fnwork = context.get_function(funckey, sig)
@@ -299,15 +294,10 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
             if inp2_indices is not None:
                 inp2_indices.update_indices(indices, '2')
 
-            x = inp1_indices.dereference() if inp1_indices else inp1
-            y = inp2_indices.dereference() if inp2_indices else inp2
+            x = i1ary.load_data(inp1_indices.indices) if i1ary else inp1
+            y = i2ary.load_data(inp2_indices.indices) if i2ary else inp2
 
-            po = cgutils.get_item_pointer2(builder,
-                                           data=oary.data,
-                                           shape=oary.shape,
-                                           strides=oary.strides,
-                                           layout=oary.layout,
-                                           inds=indices)
+            po = oary.load_effective_address(indices)
 
             if divbyzero:
                 # Handle division
@@ -317,7 +307,7 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
                     with then:
                         # Divide by zero
                         if ((scalar_tyinp1 in types.real_domain or
-                                scalar_tyinp2 in types.real_domain) or 
+                                scalar_tyinp2 in types.real_domain) or
                                 not numpy_support.int_divbyzero_returns_zero) or \
                                 true_divide:
                             # If y is float and is 0 also, return Nan; else
@@ -396,4 +386,3 @@ register_binary_ufunc(numpy.floor_divide, '//', divbyzero=True)
 register_binary_ufunc(numpy.true_divide, '/', asfloat=True, divbyzero=True, true_divide=True)
 register_binary_ufunc(numpy.arctan2, math.atan2, asfloat=True)
 register_binary_ufunc(numpy.power, '**', asfloat=True)
-
