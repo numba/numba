@@ -216,8 +216,16 @@ class DeviceNDArray(DeviceNDArrayBase):
 
         Reshape the array and keeping the original data
         """
-        newarr, extents = self._dummy.reshape(*newshape, **kws)
+        if len(newshape) == 1 and isinstance(newshape, (tuple, list)):
+            newshape = newshape[0]
+
         cls = type(self)
+        if newshape == self.shape:
+            # nothing to do
+            return cls(shape=self.shape, strides=self.strides,
+                       dtype=self.dtype, gpu_data=self.gpu_data)
+
+        newarr, extents = self._dummy.reshape(*newshape, **kws)
 
         if extents == [self._dummy.extent]:
             return cls(shape=newarr.shape, strides=newarr.strides,
