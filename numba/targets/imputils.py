@@ -137,6 +137,20 @@ class _IternextResult(object):
         """
         self._pairobj.first = value
 
+    def is_valid(self):
+        """
+        Return whether the iterator is marked valid.
+        """
+        return self._context.get_argument_value(self._builder,
+                                                types.boolean,
+                                                self._pairobj.second)
+
+    def yielded_value(self):
+        """
+        Return the iterator's yielded value, if any.
+        """
+        return self._pairobj.first
+
 
 def iternext_impl(func):
     """
@@ -147,17 +161,31 @@ def iternext_impl(func):
     The wrapped function will be called with the following signature:
         (context, builder, sig, args, iternext_result)
     """
-    from .builtins import make_pair
 
     def wrapper(context, builder, sig, args):
         pair_type = sig.return_type
-        cls = make_pair(pair_type.first_type, pair_type.second_type)
+        cls = context.make_pair(pair_type.first_type, pair_type.second_type)
         pairobj = cls(context, builder)
         func(context, builder, sig, args,
              _IternextResult(context, builder, pairobj))
         return pairobj._getvalue()
     return wrapper
 
+
+
+def call_iternext(context, builder, iterator_type, val):
+    """
+    Call the `iternext()` implementation for the given *iterator_type*
+    of value *val*, and return a convenience _IternextResult() object
+    reflecting the results.
+    """
+    itemty = iterator_type.yield_type
+    pair_type = types.Pair(itemty, types.boolean)
+    paircls = context.make_pair(pair_type.first_type, pair_type.second_type)
+    iternext_sig = signature(pair_type, iterator_type)
+    iternext_impl = context.get_function('iternext', iternext_sig)
+    val = iternext_impl(builder, (val,))
+    return _IternextResult(context, builder, paircls(context, builder, val))
 
 
 class Registry(object):

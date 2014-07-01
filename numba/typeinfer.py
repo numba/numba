@@ -312,7 +312,7 @@ class TypeVarMap(dict):
 
     def __getitem__(self, name):
         if name not in self:
-            self[name] = TypeVar(self.context, name.split('.', 1)[0])
+            self[name] = TypeVar(self.context, name)
         return super(TypeVarMap, self).__getitem__(name)
 
     def __setitem__(self, name, value):
@@ -345,6 +345,7 @@ class TypeInferer(object):
 
     def dump(self):
         print('---- type variables ----')
+        print("typevars =", sorted(self.typevars))
         pprint(utils.dict_values(self.typevars))
 
     def seed_type(self, name, typ):

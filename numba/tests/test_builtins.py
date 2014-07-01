@@ -52,7 +52,7 @@ def complex_usecase(x, y):
 
 def enumerate_usecase():
     result = 0
-    for i, j in enumerate([1,2,3]):
+    for i, j in enumerate((1., 2.5, 3.)):
         result += i * j
     return result
 
@@ -246,8 +246,7 @@ class TestBuiltins(TestCase):
         self.assertPreciseEqual(cfunc(), pyfunc())
 
     def test_enumerate_npm(self):
-        with self.assertTypingError():
-            self.test_enumerate(flags=no_pyobj_flags)
+        self.test_enumerate(flags=no_pyobj_flags)
 
     def test_filter(self, flags=enable_pyobj_flags):
         pyfunc = filter_usecase

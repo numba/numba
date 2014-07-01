@@ -198,15 +198,11 @@ class TestFlowControl(TestCase):
         self.test_for_loop1(flags=no_pyobj_flags)
 
     def test_for_loop2(self, flags=enable_pyobj_flags):
-        """
-        TODO handle enumerate
-        """
         self.run_test(for_loop_usecase2, [-10, 0, 10], [-10, 0, 10],
                       flags=flags)
 
     def test_for_loop2_npm(self):
-        with self.assertTypingError():
-            self.test_for_loop2(flags=no_pyobj_flags)
+        self.test_for_loop2(flags=no_pyobj_flags)
 
     def test_for_loop3(self, flags=enable_pyobj_flags):
         """

@@ -9,7 +9,7 @@ from numba import types, utils, cgutils, typing, numpy_support, errcode
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, python_attr_impl,
                                     builtin_registry, impl_attribute)
-from numba.targets import builtins, rangeobj
+from numba.targets import builtins, iterators, rangeobj
 
 
 LTYPEMAP = {
@@ -489,7 +489,7 @@ class BaseContext(object):
         """
         if ty == types.boolean:
             return builder.trunc(val, self.get_value_type(ty))
-        elif self.is_struct_type(ty):
+        elif cgutils.is_struct_ptr(val.type):
             return builder.load(val)
         return val
 

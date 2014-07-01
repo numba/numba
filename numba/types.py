@@ -299,11 +299,15 @@ class SimpleIterableType(IterableType):
         return hash(self.name)
 
 
-class IteratorType(Type):
+class IteratorType(IterableType):
     """
     Base class for all iterator types.
     Derived classes should implement the *yield_type* attribute.
     """
+
+    def __init__(self, name, **kwargs):
+        self.iterator_type = self
+        super(IteratorType, self).__init__(name, **kwargs)
 
 
 class SimpleIteratorType(IteratorType):
@@ -318,6 +322,26 @@ class SimpleIteratorType(IteratorType):
 
     def __hash__(self):
         return hash(self.name)
+
+
+class EnumerateType(IteratorType):
+    """
+    Type class for `enumerate` objects.
+    Type instances are parametered with the underlying source type.
+    """
+
+    def __init__(self, iterable_type):
+        self.source_type = iterable_type.iterator_type
+        self.yield_type = Tuple([intp, self.source_type.yield_type])
+        name = 'enumerate(%s)' % (self.source_type)
+        super(EnumerateType, self).__init__(name, param=True)
+
+    def __eq__(self, other):
+        if isinstance(other, EnumerateType):
+            return self.source_type == other.source_type
+
+    def __hash__(self):
+        return hash(self.source_type)
 
 
 class CharSeq(Type):
