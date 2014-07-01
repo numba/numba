@@ -120,6 +120,7 @@ class OpenCLNDArrayBase(object):
         self.nbytes = nbytes or ocl_data.size
         self._dummy = dummyarray.Array.from_desc(0, shape, strides,
                                                  dtype.itemsize)
+        self.size = int(np.prod(self.shape))
 
     @property
     def alloc_size(self):
@@ -143,12 +144,13 @@ class OpenCLNDArrayBase(object):
         return self._desc.id, self._data.id, self.offset
 
 
-    def copy_to_device(self, ary, queue=None):
+    def copy_to_device(self, ary, queue=None, stream=None):
         """Copy `ary` to `self`.
 
         If `ary` is an in-device array, perform a device-to-device transfer.
         Otherwise, perform a a host-to-device transfer.
         """
+        queue = queue or stream
         q = get_context() if queue is None else queue
 
         if oclmem.is_device_memory(ary):
@@ -160,7 +162,7 @@ class OpenCLNDArrayBase(object):
             q.enqueue_write_buffer(self._data, self.offset, sz, oclmem.host_pointer(ary))
 
 
-    def copy_to_host(self, ary=None):
+    def copy_to_host(self, ary=None, stream=None):
         """Copy ``self`` to ``ary`` or create a new numpy ndarray
         if ``ary`` is ``None``.
 
@@ -188,7 +190,9 @@ class OpenCLNDArrayBase(object):
                 raise TypeError('buffer sizes do not match: device: {0} host: {1}'.format(self.nbytes, ary.nbytes))
             hostary = ary
 
-        get_context().enqueue_read_buffer(self._data, self.offset, self.nbytes, hostary.ctypes.data)
+        q = get_context() if stream is None else stream
+        q.enqueue_read_buffer(self._data, self.offset, self.nbytes,
+                              hostary.ctypes.data)
 
         if ary is None:
             hostary = np.ndarray(shape=self.shape, strides=self.strides,
@@ -230,16 +234,21 @@ class OpenCLNDArray(OpenCLNDArrayBase):
 
         Reshape the array and keeping the original data
         """
-        newarr, extents = self._dummy.reshape(*newshape, **kws)
-        cls = type(self)
+        if len(newshape) == 1 and isinstance(newshape, (tuple, list)):
+            newshape = newshape[0]
 
+        if newshape == self.shape:
+            return self
+
+        newarr, extents = self._dummy.reshape(*newshape, **kws)
+
+        cls = type(self)
         if extents == [self._dummy.extent]:
             ctxt = self._desc.context
             cl_desc = _create_ocl_desc(newarr.shape, newarr.strides)
             return cls(newarr.shape, newarr.strides, self.dtype, cl_desc, self._data, offset=self.offset)
         else:
             raise NotImplementedError("operation requires copying")
-
 
     def ravel(self, order='C', stream=0):
         cls = type(self)
