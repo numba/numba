@@ -22,21 +22,6 @@ class npy:
     pass
 
 
-
-def _decompose_type(ty, where='input operand'):
-    """analyzes the type ty, returning a triplet containing:
-    a boolean indicating if it is a scalar (at 0).
-    the associated scalar type (at 1).
-    the number of dimensions of the type (at 2).
-    """
-    if isinstance(ty, types.Array):
-        return (False, ty.dtype, ty.ndim)
-    elif ty in types.number_domain:
-        return (True, ty, 1)
-    else:
-        raise TypeError('unknown type for {0}'.format(where))
-
-
 def _default_promotion_for_type(ty):
     """returns the default type to be used when generating code
     associated to the type ty."""
@@ -49,6 +34,17 @@ def _default_promotion_for_type(ty):
 
     return promote_type
 
+########################################################################
+
+# In the way we generate code, ufuncs work with scalar as well as
+# with array arguments. The following helper classes help dealing
+# with scalar and array arguments in a regular way.
+#
+# In short, the classes provide a uniform interface. The interface
+# handles the indexing of as many dimensions as the array may have.
+# For scalars, all indexing is ignored and when the value is read,
+# the scalar is returned. For arrays code for actual indexing is
+# generated and reading performs the appropriate indirection.
 
 class _ScalarIndexingHelper(object):
     def update_indices(self, loop_indices, name):
@@ -56,6 +52,7 @@ class _ScalarIndexingHelper(object):
 
     def as_values(self):
         pass
+
 
 class _ScalarHelper(namedtuple('_ScalarHelper', ('context', 'builder', 'val', 'base_type'))):
     def create_iter_indices(self):
@@ -66,6 +63,7 @@ class _ScalarHelper(namedtuple('_ScalarHelper', ('context', 'builder', 'val', 'b
 
     def load_data(self, indices):
         return self.val
+
 
 class _ArrayIndexingHelper(namedtuple('_ArrayIndexingHelper', ('array', 'indices'))):
     def update_indices(self, loop_indices, name):
@@ -117,39 +115,20 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary', 'sha
         return self.builder.load(self.load_effective_address(indices))
 
 
-def _prepare_scalar(ctxt, bld, inp, tyinp):
-    return _ScalarHelper(ctxt, bld, inp, tyinp)
-
-
-def _prepare_array(ctxt, bld, inp, tyinp, ndim):
-    """code that setups the array"""
-    ary     = ctxt.make_array(tyinp)(ctxt, bld, inp)
-    shape   = cgutils.unpack_tuple(bld, ary.shape, ndim)
-    strides = cgutils.unpack_tuple(bld, ary.strides, ndim)
-    return _ArrayHelper(ctxt, bld, ary, shape, strides, ary.data, tyinp.layout, tyinp.dtype, ndim)
-
-
-def unary_npy_math_extern(fn):
-    setattr(npy, fn, fn)
-    fn_sym = eval("npy."+fn)
-
-    n = "numba.npymath." + fn
-    def ref_impl(context, builder, sig, args):
-        [val] = args
-        mod = cgutils.get_module(builder)
-        fnty = Type.function(Type.double(), [Type.double()])
-        fn = mod.get_or_insert_function(fnty, name=n)
-        return builder.call(fn, (val,))
-
-    ty_dst = types.float64
-    for ty_src in [types.int64, types.uint64, types.float64]:
-        @register
-        @implement(fn_sym, ty_src)
-        def _impl(context, builder, sig, args):
-            [val] = args
-            cast_val = val if ty_dst == ty_src else context.cast(builder, val, ty_src, ty_dst)
-            sig = typing.signature(ty_dst, ty_dst)
-            return ref_impl(context, builder, sig, [cast_val])
+def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
+    """returns an instance of the appropriate Helper (either
+    _ScalarHelper or _ArrayHelper) class to handle the argument.
+    using the polimorphic interface of the Helper classes, scalar
+    and array cases can be handled with the same code"""
+    if isinstance(tyinp, types.Array):
+        ary     = ctxt.make_array(tyinp)(ctxt, bld, inp)
+        shape   = cgutils.unpack_tuple(bld, ary.shape, tyinp.ndim)
+        strides = cgutils.unpack_tuple(bld, ary.strides, tyinp.ndim)
+        return _ArrayHelper(ctxt, bld, ary, shape, strides, ary.data, tyinp.layout, tyinp.dtype, tyinp.ndim)
+    elif tyinp in types.number_domain:
+        return _ScalarHelper(ctxt, bld, inp, tyinp)
+    else:
+        raise TypeError('unknown type for {0}'.format(where))
 
 
 def numpy_unary_ufunc(funckey, asfloat=False):
@@ -157,11 +136,10 @@ def numpy_unary_ufunc(funckey, asfloat=False):
         [tyinp, tyout] = sig.args
         [inp, out] = args
 
-        scalar_inp, scalar_tyinp, inp_ndim = _decompose_type(tyinp)
-        iary = _prepare_scalar(context, builder, inp, tyinp) if scalar_inp else _prepare_array(context, builder, inp, tyinp, inp_ndim)
-        oary = _prepare_array(context, builder, out, tyout, tyout.ndim)
+        iary = _prepare_argument(context, builder, inp, tyinp)
+        oary = _prepare_argument(context, builder, out, tyout)
 
-        promote_type = types.float64 if asfloat else _default_promotion_for_type(scalar_tyinp)
+        promote_type = types.float64 if asfloat else _default_promotion_for_type(iary.base_type)
         result_type = promote_type
 
 
@@ -186,7 +164,7 @@ def numpy_unary_ufunc(funckey, asfloat=False):
             x = iary.load_data(inp_indices.as_values())
             po = oary.load_effective_address(indices)
 
-            d_x = context.cast(builder, x, scalar_tyinp, promote_type)
+            d_x = context.cast(builder, x, iary.base_type, promote_type)
             tempres = fnwork(builder, [d_x])
             res = context.cast(builder, tempres, result_type, tyout.dtype)
             builder.store(res, po)
@@ -267,6 +245,29 @@ _externs = [
     (numpy.trunc, "trunc") ]
 
 
+def unary_npy_math_extern(fn):
+    setattr(npy, fn, fn)
+    fn_sym = eval("npy."+fn)
+
+    n = "numba.npymath." + fn
+    def ref_impl(context, builder, sig, args):
+        [val] = args
+        mod = cgutils.get_module(builder)
+        fnty = Type.function(Type.double(), [Type.double()])
+        fn = mod.get_or_insert_function(fnty, name=n)
+        return builder.call(fn, (val,))
+
+    ty_dst = types.float64
+    for ty_src in [types.int64, types.uint64, types.float64]:
+        @register
+        @implement(fn_sym, ty_src)
+        def _impl(context, builder, sig, args):
+            [val] = args
+            cast_val = val if ty_dst == ty_src else context.cast(builder, val, ty_src, ty_dst)
+            sig = typing.signature(ty_dst, ty_dst)
+            return ref_impl(context, builder, sig, [cast_val])
+
+
 for x in _externs:
     unary_npy_math_extern(x[1])
     func = eval("npy." + x[1])
@@ -282,15 +283,12 @@ def numpy_binary_ufunc(funckey, divbyzero=False, asfloat=False, true_divide=Fals
         [tyinp1, tyinp2, tyout] = sig.args
         [inp1, inp2, out] = args
 
-        scalar_inp1, scalar_tyinp1, inp1_ndim = _decompose_type(tyinp1, where='first input operand')
-        scalar_inp2, scalar_tyinp2, inp2_ndim = _decompose_type(tyinp2, where='second input operand')
-
-        i1ary = _prepare_scalar(context, builder, inp1, tyinp1) if scalar_inp1 else _prepare_array(context, builder, inp1, tyinp1, inp1_ndim)
-        i2ary = _prepare_scalar(context, builder, inp2, tyinp2) if scalar_inp2 else _prepare_array(context, builder, inp2, tyinp2, inp2_ndim)
-        oary = _prepare_array(context, builder, out, tyout, tyout.ndim)
+        i1ary = _prepare_argument(context, builder, inp1, tyinp1)
+        i2ary = _prepare_argument(context, builder, inp2, tyinp2)
+        oary  = _prepare_argument(context, builder, out, tyout)
 
         # based only on the first operand?
-        promote_type = types.float64 if asfloat else _default_promotion_for_type(scalar_tyinp1)
+        promote_type = types.float64 if asfloat else _default_promotion_for_type(i1ary.base_type)
         result_type = promote_type
 
         # Temporary hack for __ftol2 llvm bug. Don't allow storing
@@ -325,8 +323,8 @@ def numpy_binary_ufunc(funckey, divbyzero=False, asfloat=False, true_divide=Fals
                                                                        orelse):
                     with then:
                         # Divide by zero
-                        if ((scalar_tyinp1 in types.real_domain or
-                                scalar_tyinp2 in types.real_domain) or
+                        if ((i1ary.base_type in types.real_domain or
+                                i2ary.base_type in types.real_domain) or
                                 not numpy_support.int_divbyzero_returns_zero) or \
                                 true_divide:
                             # If y is float and is 0 also, return Nan; else
@@ -350,8 +348,8 @@ def numpy_binary_ufunc(funckey, divbyzero=False, asfloat=False, true_divide=Fals
                         builder.store(res, po)
                     with orelse:
                         # Normal
-                        d_x = context.cast(builder, x, scalar_tyinp1, promote_type)
-                        d_y = context.cast(builder, y, scalar_tyinp2, promote_type)
+                        d_x = context.cast(builder, x, i1ary.base_type, promote_type)
+                        d_y = context.cast(builder, y, i2ary.base_type, promote_type)
                         tempres = fnwork(builder, [d_x, d_y])
                         res = context.cast(builder, tempres, result_type, tyout.dtype)
 
@@ -360,8 +358,8 @@ def numpy_binary_ufunc(funckey, divbyzero=False, asfloat=False, true_divide=Fals
                         builder.store(res, po)
             else:
                 # Handle non-division operations
-                d_x = context.cast(builder, x, scalar_tyinp1, promote_type)
-                d_y = context.cast(builder, y, scalar_tyinp2, promote_type)
+                d_x = context.cast(builder, x, i1ary.base_type, promote_type)
+                d_y = context.cast(builder, y, i2ary.base_type, promote_type)
                 tempres = fnwork(builder, [d_x, d_y])
                 res = context.cast(builder, tempres, result_type, tyout.dtype)
 
