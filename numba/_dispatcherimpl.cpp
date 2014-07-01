@@ -5,7 +5,9 @@
 typedef std::vector<Type> TypeTable;
 typedef std::vector<void*> Functions;
 
-class Dispatcher {
+struct _opaque_dispatcher {};
+
+class Dispatcher: public _opaque_dispatcher {
 public:
     Dispatcher(TypeManager *tm, int argct): argct(argct), tm(tm) { }
 
@@ -49,19 +51,19 @@ private:
 
 #include "_dispatcher.h"
 
-void*
+dispatcher_t *
 dispatcher_new(void *tm, int argct){
     return new Dispatcher(static_cast<TypeManager*>(tm), argct);
 }
 
 void
-dispatcher_del(void *obj) {
+dispatcher_del(dispatcher_t *obj) {
     Dispatcher *disp = static_cast<Dispatcher*>(obj);
     delete disp;
 }
 
 void
-dispatcher_add_defn(void *obj, int tys[], void* callable) {
+dispatcher_add_defn(dispatcher_t *obj, int tys[], void* callable) {
     assert(sizeof(int) == sizeof(Type) &&
             "Type should be representable by an int");
 
@@ -71,7 +73,7 @@ dispatcher_add_defn(void *obj, int tys[], void* callable) {
 }
 
 void*
-dispatcher_resolve(void* obj, int sig[], int *count) {
+dispatcher_resolve(dispatcher_t *obj, int sig[], int *count) {
     Dispatcher *disp = static_cast<Dispatcher*>(obj);
     Type *args = reinterpret_cast<Type*>(sig);
     void *callable = disp->resolve(args, *count);
@@ -79,7 +81,7 @@ dispatcher_resolve(void* obj, int sig[], int *count) {
 }
 
 int
-dispatcher_count(void *obj) {
+dispatcher_count(dispatcher_t *obj) {
     Dispatcher *disp = static_cast<Dispatcher*>(obj);
     return disp->count();
 }

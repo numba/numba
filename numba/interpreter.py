@@ -40,6 +40,7 @@ class Interpreter(object):
         self.syntax_blocks = []
         self.dfainfo = None
         self._block_actions = {}
+        self.constants = {}
 
     def _fill_global_scope(self, scope):
         """TODO
@@ -69,10 +70,20 @@ class Interpreter(object):
         for b in utils.dict_itervalues(self.blocks):
             b.verify()
 
+    def init_first_block(self):
+        # Duplicate arguments so that these values can be casted into different
+        # types.
+        for aname in self.argspec.args:
+            aval = self.get(aname)
+            self.store(aval, aname, redefine=True)
+
     def _iter_inst(self):
-        for block in self.cfa.iterliveblocks():
+        for blkct, block in enumerate(self.cfa.iterliveblocks()):
             firstinst = self.bytecode[block.body[0]]
             self._start_new_block(firstinst)
+            if blkct == 0:
+                # Is first block
+                self.init_first_block()
             for offset, kws in self.dfainfo.insts:
                 inst = self.bytecode[offset]
                 self.loc = ir.Loc(filename=self.bytecode.filename,
@@ -122,7 +133,6 @@ class Interpreter(object):
 
                 self.store(target, phivar)
 
-
     def get_global_value(self, name):
         """
         Get a global value from the func_global (first) or
@@ -132,6 +142,12 @@ class Interpreter(object):
             return utils.func_globals(self.bytecode.func)[name]
         except KeyError:
             return getattr(builtins, name, ir.UNDEFINED)
+
+    def get_closure_value(self, index):
+        """
+        Get a value from the cell contained in this function's closure.
+        """
+        return self.bytecode.func.__closure__[index].cell_contents
 
     @property
     def current_scope(self):
@@ -148,6 +164,10 @@ class Interpreter(object):
     @property
     def code_names(self):
         return self.bytecode.co_names
+
+    @property
+    def code_freevars(self):
+        return self.bytecode.co_freevars
 
     def _dispatch(self, inst, kws):
         assert self.current_block is not None
@@ -167,8 +187,8 @@ class Interpreter(object):
 
     # --- Scope operations ---
 
-    def store(self, value, name):
-        if self.current_block_offset in self.cfa.backbone:
+    def store(self, value, name, redefine=False):
+        if redefine or self.current_block_offset in self.cfa.backbone:
             target = self.current_scope.redefine(name, loc=self.loc)
         else:
             target = self.current_scope.get_or_define(name, loc=self.loc)
@@ -217,15 +237,23 @@ class Interpreter(object):
         call = ir.Expr.call(self.get(printvar), (), (), loc=self.loc)
         self.store(value=call, name=res)
 
-    def op_UNPACK_SEQUENCE(self, inst, sequence, stores, iterobj):
-        sequence = self.get(sequence)
-        getiter = ir.Expr.getiter(value=sequence, loc=self.loc)
-        self.store(value=getiter, name=iterobj)
+    def op_UNPACK_SEQUENCE(self, inst, iterable, stores, indices,
+                           iterobj, tupleobj):
+        count = len(stores)
+        iterator = ir.Expr.getiter(value=self.get(iterable), loc=self.loc)
+        self.store(name=iterobj, value=iterator)
+        # Exhaust the iterator into a tuple-like object
+        tup = ir.Expr.exhaust_iter(value=self.get(iterobj), loc=self.loc,
+                                   count=count)
+        self.store(name=tupleobj, value=tup)
 
-        for st in stores:
-            iternext = ir.Expr.iternextsafe(value=self.get(iterobj),
-                                            loc=self.loc)
-            self.store(value=iternext, name=st)
+        # then index the tuple-like object to extract the values
+        for i, (indexobj, st) in enumerate(zip(indices, stores)):
+            index = ir.Const(i, loc=self.loc)
+            self.store(name=indexobj, value=index)
+            expr = ir.Expr.getitem(target=self.get(tupleobj),
+                                   index=self.get(indexobj), loc=self.loc)
+            self.store(expr, st)
 
     def op_BUILD_SLICE(self, inst, start, stop, step, res, slicevar):
         start = self.get(start)
@@ -410,6 +438,14 @@ class Interpreter(object):
         value = self.get_global_value(name)
         gl = ir.Global(name, value, loc=self.loc)
         self.store(gl, res)
+        self.constants[res] = value
+
+    def op_LOAD_DEREF(self, inst, res):
+        name = self.code_freevars[inst.arg]
+        value = self.get_closure_value(inst.arg)
+        # closure values are treated like globals
+        gl = ir.Global(name, value, loc=self.loc)
+        self.store(gl, res)
 
     def op_SETUP_LOOP(self, inst):
         assert self.blocks[inst.offset] is self.current_block
@@ -442,7 +478,7 @@ class Interpreter(object):
         expr = ir.Expr.getiter(value=self.get(value), loc=self.loc)
         self.store(expr, res)
 
-    def op_FOR_ITER(self, inst, iterator, indval, pred):
+    def op_FOR_ITER(self, inst, iterator, pair, indval, pred):
         """
         Assign new block other this instruction.
         """
@@ -454,11 +490,15 @@ class Interpreter(object):
 
         # Emit code
         val = self.get(iterator)
-        iternext = ir.Expr.iternext(value=val, loc=self.loc)
+
+        pairval = ir.Expr.iternext(value=val, loc=self.loc)
+        self.store(pairval, pair)
+
+        iternext = ir.Expr.pair_first(value=self.get(pair), loc=self.loc)
         self.store(iternext, indval)
 
-        itervalid = ir.Expr.itervalid(value=val, loc=self.loc)
-        self.store(itervalid, pred)
+        isvalid = ir.Expr.pair_second(value=self.get(pair), loc=self.loc)
+        self.store(isvalid, pred)
 
         # Conditional jump
         br = ir.Branch(cond=self.get(pred), truebr=inst.next,
@@ -499,6 +539,11 @@ class Interpreter(object):
     def op_UNARY_NEGATIVE(self, inst, value, res):
         value = self.get(value)
         expr = ir.Expr.unary('-', value=value, loc=self.loc)
+        return self.store(expr, res)
+
+    def op_UNARY_POSITIVE(self, inst, value, res):
+        value = self.get(value)
+        expr = ir.Expr.unary('+', value=value, loc=self.loc)
         return self.store(expr, res)
 
     def op_UNARY_INVERT(self, inst, value, res):
@@ -657,6 +702,10 @@ class Interpreter(object):
 
     def op_JUMP_IF_TRUE_OR_POP(self, inst, pred):
         self._op_JUMP_IF(inst, pred=pred, iftrue=True)
+
+    def op_RAISE_VARARGS(self, inst, exc):
+        stmt = ir.Raise(exception=self.constants[exc], loc=self.loc)
+        self.current_block.append(stmt)
 
     def _determine_while_condition(self, branches):
         assert branches

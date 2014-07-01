@@ -61,6 +61,7 @@ def make_function_type(cffi_func):
 
 
 class ExternCFunction(types.Function):
+    # XXX unused?
     
     def __init__(self, symbol, cstring):
         """Parse C function declaration/signature"""

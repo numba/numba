@@ -28,6 +28,8 @@ def open_libdevice(arch):
 
 
 def get_cudalib(lib, platform=None):
+    if lib == 'nvvm' and os.environ.get('NUMBAPRO_NVVM'):
+        return os.environ.get('NUMBAPRO_NVVM')
     libdir = os.environ.get('NUMBAPRO_CUDALIB')
     candidates = find_lib(lib, libdir, platform)
     return max(candidates) if candidates else None

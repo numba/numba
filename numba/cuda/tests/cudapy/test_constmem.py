@@ -1,6 +1,6 @@
 from __future__ import print_function
 import numpy
-from numba import cuda, int32
+from numba import cuda
 from numba.cuda.testing import unittest
 
 

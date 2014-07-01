@@ -87,10 +87,13 @@ class DataFlowAnalysis(object):
 
     def op_UNPACK_SEQUENCE(self, info, inst):
         count = inst.arg
-        sequence = info.pop()
+        iterable = info.pop()
         stores = [info.make_temp() for _ in range(count)]
+        indices = [info.make_temp() for _ in range(count)]
         iterobj = info.make_temp()
-        info.append(inst, sequence=sequence, stores=stores, iterobj=iterobj)
+        tupleobj = info.make_temp()
+        info.append(inst, iterable=iterable, stores=stores, indices=indices,
+                    iterobj=iterobj, tupleobj=tupleobj)
         for st in reversed(stores):
             info.push(st)
 
@@ -134,6 +137,11 @@ class DataFlowAnalysis(object):
         info.append(inst, res=res)
         info.push(res)
 
+    def op_LOAD_DEREF(self, info, inst):
+        res = info.make_temp()
+        info.append(inst, res=res)
+        info.push(res)
+
     def op_LOAD_ATTR(self, info, inst):
         item = info.pop()
         res = info.make_temp()
@@ -166,9 +174,10 @@ class DataFlowAnalysis(object):
     def op_FOR_ITER(self, info, inst):
         loop = self.syntax_blocks[-1]
         iterator = loop.iterator
+        pair = info.make_temp()
         indval = info.make_temp()
         pred = info.make_temp()
-        info.append(inst, iterator=iterator, indval=indval, pred=pred)
+        info.append(inst, iterator=iterator, pair=pair, indval=indval, pred=pred)
         info.push(indval)
 
     def op_CALL_FUNCTION(self, info, inst):
@@ -208,6 +217,7 @@ class DataFlowAnalysis(object):
         info.push(res)
 
     op_UNARY_NEGATIVE = _unaryop
+    op_UNARY_POSITIVE = _unaryop
     op_UNARY_NOT = _unaryop
     op_UNARY_INVERT = _unaryop
 
@@ -431,6 +441,12 @@ class DataFlowAnalysis(object):
             info.append(inst, delitem=block.iterator)
         else:
             info.append(inst)
+
+    def op_RAISE_VARARGS(self, info, inst):
+        if inst.arg != 1:
+            raise ValueError("Multiple argument raise is not supported.")
+        exc = info.pop()
+        info.append(inst, exc=exc)
 
     def _ignored(self, info, inst):
         pass

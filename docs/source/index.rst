@@ -26,6 +26,13 @@ Numba
    tutorial_firststeps.rst
    tutorial_types.rst
 
+**NumPy support**
+
+.. toctree::
+   :maxdepth: 1
+	      
+   numpy_support.rst
+
 **Interfacing with native code**
 
 .. toctree::
@@ -53,20 +60,29 @@ Numba
    debugging.rst
    releases.rst
 
-**Language Specification (outdated)**
 
-.. toctree::
-   :maxdepth: 1
-
-   spec.rst
-
-**Developer Documentation (outdated)**
+**Developer Documentation**
 
 .. toctree::
    :titlesonly:
    :maxdepth: 1
 
    architecture.rst
+   cgutils.rst
+
+**Language Specification (outdated Numba <0.11)**
+
+.. toctree::
+   :maxdepth: 1
+
+   spec.rst
+
+**Developer Documentation (outdated Numba <0.11)**
+
+.. toctree::
+   :titlesonly:
+   :maxdepth: 1
+
    ir.rst
    roadmap.rst
    dev.rst

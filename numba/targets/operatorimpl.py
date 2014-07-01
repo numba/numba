@@ -1,3 +1,7 @@
+"""
+Definition of implementations for the `operator` module.
+"""
+
 import operator
 from numba.targets.imputils import implement, Registry
 from numba.targets import builtins
@@ -18,7 +22,9 @@ for ty in types.integer_domain:
     register(implement(operator.or_, ty, ty)(builtins.int_or_impl))
     register(implement(operator.xor, ty, ty)(builtins.int_xor_impl))
     register(implement(operator.neg, ty)(builtins.int_negate_impl))
+    register(implement(operator.pos, ty)(builtins.int_positive_impl))
     register(implement(operator.invert, ty)(builtins.int_invert_impl))
+    register(implement(operator.not_, ty)(builtins.number_not_impl))
 
 for ty in types.unsigned_domain:
     if not utils.IS_PY3:
@@ -30,7 +36,7 @@ for ty in types.unsigned_domain:
     register(implement(operator.le, ty, ty)(builtins.int_ule_impl))
     register(implement(operator.gt, ty, ty)(builtins.int_ugt_impl))
     register(implement(operator.ge, ty, ty)(builtins.int_uge_impl))
-    register(implement(operator.pow, ty, ty)(builtins.int_upower_impl))
+    register(implement(operator.pow, types.float64, ty)(builtins.int_upower_impl))
     register(implement(operator.rshift, ty, ty)(builtins.int_lshr_impl))
 
 for ty in types.signed_domain:
@@ -43,7 +49,7 @@ for ty in types.signed_domain:
     register(implement(operator.le, ty, ty)(builtins.int_sle_impl))
     register(implement(operator.gt, ty, ty)(builtins.int_sgt_impl))
     register(implement(operator.ge, ty, ty)(builtins.int_sge_impl))
-    register(implement(operator.pow, ty, ty)(builtins.int_spower_impl))
+    register(implement(operator.pow, types.float64, ty)(builtins.int_spower_impl))
     register(implement(operator.rshift, ty, ty)(builtins.int_ashr_impl))
 
 for ty in types.real_domain:
@@ -52,6 +58,7 @@ for ty in types.real_domain:
     register(implement(operator.mul, ty, ty)(builtins.real_mul_impl))
     if not utils.IS_PY3:
         register(implement(operator.div, ty, ty)(builtins.real_div_impl))
+    register(implement(operator.floordiv, ty, ty)(builtins.real_floordiv_impl))
     register(implement(operator.truediv, ty, ty)(builtins.real_div_impl))
     register(implement(operator.mod, ty, ty)(builtins.real_mod_impl))
     register(implement(operator.pow, ty, ty)(builtins.real_power_impl))
@@ -62,4 +69,18 @@ for ty in types.real_domain:
     register(implement(operator.gt, ty, ty)(builtins.real_gt_impl))
     register(implement(operator.ge, ty, ty)(builtins.real_ge_impl))
     register(implement(operator.neg, ty)(builtins.real_negate_impl))
+    register(implement(operator.pos, ty)(builtins.real_positive_impl))
+    register(implement(operator.not_, ty)(builtins.number_not_impl))
 
+for ty in types.complex_domain:
+    register(implement(operator.add, ty, ty)(builtins.complex_add_impl))
+    register(implement(operator.sub, ty, ty)(builtins.complex_sub_impl))
+    register(implement(operator.mul, ty, ty)(builtins.complex_mul_impl))
+    if not utils.IS_PY3:
+        register(implement(operator.div, ty, ty)(builtins.complex_div_impl))
+    register(implement(operator.truediv, ty, ty)(builtins.complex_div_impl))
+    register(implement(operator.eq, ty, ty)(builtins.complex_eq_impl))
+    register(implement(operator.ne, ty, ty)(builtins.complex_ne_impl))
+    register(implement(operator.neg, ty)(builtins.complex_negate_impl))
+    register(implement(operator.pos, ty)(builtins.complex_positive_impl))
+    register(implement(operator.not_, ty)(builtins.number_not_impl))

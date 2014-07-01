@@ -102,11 +102,15 @@ class ControlFlowAnalysis(object):
         # Find backbone
         backbone = set(self.doms[lastblk])
         # Filter out in loop blocks (Assuming no other cyclic control blocks)
+        # This is to unavoid variable defined in loops to be considered as
+        # function scope.
         inloopblocks = set()
+
         for b in self.blocks.keys():
             for s, e in self._loops:
                 if s <= b < e:
                     inloopblocks.add(b)
+
         self.backbone = backbone - inloopblocks
 
     def dead_block_elimin(self):
@@ -185,6 +189,10 @@ class ControlFlowAnalysis(object):
         self._force_new_block = True
 
     def op_RETURN_VALUE(self, inst):
+        self._curblock.terminating = True
+        self._force_new_block = True
+
+    def op_RAISE_VARARGS(self, inst):
         self._curblock.terminating = True
         self._force_new_block = True
 

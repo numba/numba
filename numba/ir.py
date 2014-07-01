@@ -119,6 +119,16 @@ class Expr(object):
         return cls(op=op, loc=loc, items=items)
 
     @classmethod
+    def pair_first(cls, value, loc):
+        op = 'pair_first'
+        return cls(op=op, loc=loc, value=value)
+
+    @classmethod
+    def pair_second(cls, value, loc):
+        op = 'pair_second'
+        return cls(op=op, loc=loc, value=value)
+
+    @classmethod
     def getiter(cls, value, loc):
         op = 'getiter'
         return cls(op=op, loc=loc, value=value)
@@ -129,14 +139,9 @@ class Expr(object):
         return cls(op=op, loc=loc, value=value)
 
     @classmethod
-    def iternextsafe(cls, value, loc):
-        op = 'iternextsafe'
-        return cls(op=op, loc=loc, value=value)
-
-    @classmethod
-    def itervalid(cls, value, loc):
-        op = 'itervalid'
-        return cls(op=op, loc=loc, value=value)
+    def exhaust_iter(cls, value, count, loc):
+        op = 'exhaust_iter'
+        return cls(op=op, loc=loc, value=value, count=count)
 
     @classmethod
     def getattr(cls, value, attr, loc):
@@ -194,6 +199,17 @@ class Del(Stmt):
 
     def __str__(self):
         return "del %s" % self.value
+
+
+class Raise(Stmt):
+    is_terminator = True
+
+    def __init__(self, exception, loc):
+        self.exception = exception
+        self.loc = loc
+
+    def __str__(self):
+        return "raise %s" % self.exception
 
 
 class Return(Stmt):
@@ -292,6 +308,7 @@ class Intrinsic(object):
     """
     For inserting intrinsic node into the IR
     """
+
     def __init__(self, name, type, args):
         self.name = name
         self.type = type

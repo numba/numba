@@ -4,7 +4,10 @@ the targets to choose their representation.
 """
 from __future__ import print_function, division, absolute_import
 from collections import defaultdict
+
 import numpy
+
+from .utils import total_ordering
 
 
 def _autoincr():
@@ -37,7 +40,7 @@ class Type(object):
         return hash(self.name)
 
     def __eq__(self, other):
-        return self.name == other.name
+        return self.__class__ is other.__class__ and self.name == other.name
 
     def __ne__(self, other):
         return not (self == other)
@@ -87,6 +90,7 @@ class OpaqueType(Type):
         super(OpaqueType, self).__init__(name)
 
 
+@total_ordering
 class Integer(Type):
     def __init__(self, *args, **kws):
         super(Integer, self).__init__(*args, **kws)
@@ -100,16 +104,49 @@ class Integer(Type):
     def cast_python_value(self, value):
         return getattr(numpy, self.name)(value)
 
+    def __lt__(self, other):
+        if self.__class__ is not other.__class__:
+            return NotImplemented
+        if self.signed != other.signed:
+            return NotImplemented
+        return self.bitwidth < other.bitwidth
 
+
+@total_ordering
 class Float(Type):
+    def __init__(self, *args, **kws):
+        super(Float, self).__init__(*args, **kws)
+        # Determine bitwidth
+        assert self.name.startswith('float')
+        bitwidth = int(self.name[5:])
+        self.bitwidth = bitwidth
+
     def cast_python_value(self, value):
         return getattr(numpy, self.name)(value)
 
+    def __lt__(self, other):
+        if self.__class__ is not other.__class__:
+            return NotImplemented
+        return self.bitwidth < other.bitwidth
 
+
+@total_ordering
 class Complex(Type):
+    def __init__(self, name, underlying_float, **kwargs):
+        super(Complex, self).__init__(name, **kwargs)
+        self.underlying_float = underlying_float
+        # Determine bitwidth
+        assert self.name.startswith('complex')
+        bitwidth = int(self.name[7:])
+        self.bitwidth = bitwidth
+
     def cast_python_value(self, value):
         return getattr(numpy, self.name)(value)
 
+    def __lt__(self, other):
+        if self.__class__ is not other.__class__:
+            return NotImplemented
+        return self.bitwidth < other.bitwidth
 
 class Prototype(Type):
     def __init__(self, args, return_type):
@@ -219,6 +256,68 @@ class Method(Function):
 
     def __hash__(self):
         return hash((self.template.__name__, self.this))
+
+
+class Pair(Type):
+    """
+    A heterogenous pair.
+    """
+
+    def __init__(self, first_type, second_type):
+        self.first_type = first_type
+        self.second_type = second_type
+        name = "pair<%s, %s>" % (first_type, second_type)
+        super(Pair, self).__init__(name=name)
+
+    def __eq__(self, other):
+        if isinstance(other, Pair):
+            return (self.first_type == other.first_type and
+                    self.second_type == other.second_type)
+
+    def __hash__(self):
+        return hash((self.first_type, self.second_type))
+
+
+class IterableType(Type):
+    """
+    Base class for iterable types.
+    Derived classes should implement the *iterator_type* attribute.
+    """
+
+
+class SimpleIterableType(IterableType):
+
+    def __init__(self, name, iterator_type):
+        self.iterator_type = iterator_type
+        super(SimpleIterableType, self).__init__(name, param=True)
+
+    def __eq__(self, other):
+        if isinstance(other, SimpleIterableType):
+            return self.name == other.name
+
+    def __hash__(self):
+        return hash(self.name)
+
+
+class IteratorType(Type):
+    """
+    Base class for all iterator types.
+    Derived classes should implement the *yield_type* attribute.
+    """
+
+
+class SimpleIteratorType(IteratorType):
+
+    def __init__(self, name, yield_type):
+        self.yield_type = yield_type
+        super(SimpleIteratorType, self).__init__(name, param=True)
+
+    def __eq__(self, other):
+        if isinstance(other, SimpleIteratorType):
+            return self.name == other.name
+
+    def __hash__(self):
+        return hash(self.name)
 
 
 class CharSeq(Type):
@@ -365,12 +464,14 @@ class Array(Type):
         return self.layout in 'CF'
 
 
-class UniTuple(Type):
+class UniTuple(IterableType):
+
     def __init__(self, dtype, count):
         self.dtype = dtype
         self.count = count
         name = "(%s x %d)" % (dtype, count)
         super(UniTuple, self).__init__(name, param=True)
+        self.iterator_type = UniTupleIter(self)
 
     def getitem(self, ind):
         if isinstance(ind, UniTuple):
@@ -399,9 +500,11 @@ class UniTuple(Type):
         return hash((self.dtype, self.count))
 
 
-class UniTupleIter(Type):
+class UniTupleIter(IteratorType):
+
     def __init__(self, unituple):
         self.unituple = unituple
+        self.yield_type = unituple.dtype
         name = 'iter(%s)' % unituple
         super(UniTupleIter, self).__init__(name, param=True)
 
@@ -483,6 +586,17 @@ class Optional(Type):
         return hash(self.type)
 
 
+# Utils
+
+def is_int_tuple(x):
+    if isinstance(x, Tuple):
+        return all(i in integer_domain for i in x.items)
+    elif isinstance(x, UniTuple):
+        return x.dtype in integer_domain
+
+# Short names
+
+
 pyobject = Type('pyobject')
 none = Dummy('none')
 Any = Dummy('any')
@@ -510,8 +624,8 @@ uintp = uint32 if tuple.__itemsize__ == 4 else uint64
 float32 = Float('float32')
 float64 = Float('float64')
 
-complex64 = Complex('complex64')
-complex128 = Complex('complex128')
+complex64 = Complex('complex64', float32)
+complex128 = Complex('complex128', float64)
 
 len_type = Dummy('len')
 range_type = Dummy('range')
@@ -521,11 +635,12 @@ neg_type = Dummy('neg')
 print_type = Dummy('print')
 print_item_type = Dummy('print-item')
 sign_type = Dummy('sign')
+exception_type = Dummy('exception')
 
-range_state32_type = Type('range_state32')
-range_state64_type = Type('range_state64')
-range_iter32_type = Type('range_iter32')
-range_iter64_type = Type('range_iter64')
+range_iter32_type = SimpleIteratorType('range_iter32', int32)
+range_iter64_type = SimpleIteratorType('range_iter64', int64)
+range_state32_type = SimpleIterableType('range_state32', range_iter32_type)
+range_state64_type = SimpleIterableType('range_state64', range_iter64_type)
 
 # slice2_type = Type('slice2_type')
 slice3_type = Type('slice3_type')

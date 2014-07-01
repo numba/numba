@@ -16,6 +16,10 @@ class Cuda_grid(MacroTemplate):
     key = cuda.grid
 
 
+class Cuda_gridsize(MacroTemplate):
+    key = cuda.gridsize
+
+
 class Cuda_threadIdx_x(MacroTemplate):
     key = cuda.threadIdx.x
 
@@ -191,6 +195,9 @@ class CudaModuleTemplate(AttributeTemplate):
     def resolve_grid(self, mod):
         return types.Macro(Cuda_grid)
 
+    def resolve_gridsize(self, mod):
+        return types.Macro(Cuda_gridsize)
+
     def resolve_threadIdx(self, mod):
         return types.Module(cuda.threadIdx)
 
@@ -223,6 +230,7 @@ intrinsic_global(cuda, types.Module(cuda))
 ## Forces the use of the cuda namespace by not recognizing individual the
 ## following as globals.
 # intrinsic_global(cuda.grid, types.Function(Cuda_grid))
+# intrinsic_global(cuda.gridsize, types.Function(Cuda_gridsize))
 # intrinsic_global(cuda.threadIdx, types.Module(cuda.threadIdx))
 # intrinsic_global(cuda.shared, types.Module(cuda.shared))
 # intrinsic_global(cuda.shared.array, types.Function(Cuda_shared_array))

@@ -1,5 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
+import sys
+
 import numpy as np
 from numba import numpy_support, types
 from numba import unittest_support as unittest
@@ -157,6 +159,7 @@ class TestRecordDtype(unittest.TestCase):
         attrs = 'abc'
         valtypes = types.float64, types.int32, types.complex64
         values = 1.23, 123432, 132j
+        old_refcnt = sys.getrefcount(recval)
 
         for attr, valtyp, val in zip(attrs, valtypes, values):
             expected = getattr(recval, attr)
@@ -169,6 +172,10 @@ class TestRecordDtype(unittest.TestCase):
             got = cfunc(recval, val)
             self.assertEqual(expected, got)
             self.assertNotEqual(recval.a, got)
+            del got, expected
+
+        # Check for potential leaks (issue #441)
+        self.assertEqual(sys.getrefcount(recval), old_refcnt)
 
     def test_record_return(self):
         """
@@ -184,11 +191,15 @@ class TestRecordDtype(unittest.TestCase):
         indices = [0, 1, 2]
         for index, attr in zip(indices, attrs):
             ary = self.sample1d.copy()
+            old_refcnt = sys.getrefcount(ary)
             res = cfunc(ary, index)
             self.assertEqual(ary[index], res)
             # Prove that this is a by-value copy
             setattr(res, attr, 0)
             self.assertNotEqual(ary[index], res)
+            del res
+            # Check for potential leaks
+            self.assertEqual(sys.getrefcount(ary), old_refcnt)
 
 
 

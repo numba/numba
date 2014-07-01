@@ -1,8 +1,13 @@
+"""
+Generic helpers for LLVM code generation.
+"""
+
 from __future__ import print_function, division, absolute_import
 from contextlib import contextmanager
 import functools
 from llvm.core import Constant, Type
 import llvm.core as lc
+from . import errcode
 
 
 true_bit = Constant.int(Type.int(1), 1)
@@ -18,6 +23,7 @@ def as_bool_byte(builder, value):
 class Structure(object):
     def __init__(self, context, builder, value=None, ref=None):
         self._type = context.get_struct_type(self)
+        self._context = context
         self._builder = builder
         if ref is None:
             self._value = alloca_once(builder, self._type)
@@ -31,9 +37,11 @@ class Structure(object):
             self._value = ref
 
         self._fdmap = {}
+        self._typemap = {}
         base = Constant.int(Type.int(), 0)
-        for i, (k, _) in enumerate(self._fields):
+        for i, (k, tp) in enumerate(self._fields):
             self._fdmap[k] = (base, Constant.int(Type.int(), i))
+            self._typemap[k] = tp
 
     def __getattr__(self, field):
         if not field.startswith('_'):
@@ -48,6 +56,8 @@ class Structure(object):
             return super(Structure, self).__setattr__(field, value)
         offset = self._fdmap[field]
         ptr = self._builder.gep(self._value, offset)
+        value = self._context.get_return_value(self._builder,
+                                               self._typemap[field], value)
         assert ptr.type.pointee == value.type, (str(ptr.type.pointee),
                                                 str(value.type))
         self._builder.store(value, ptr)
@@ -81,8 +91,9 @@ def append_basic_block(builder, name=''):
 @contextmanager
 def goto_block(builder, bb):
     bbold = builder.basic_block
-    if bb.instructions and bb.instructions[-1].is_terminator:
-        builder.position_before(bb.instructions[-1])
+    term = bb.terminator
+    if term is not None:
+        builder.position_before(term)
     else:
         builder.position_at_end(bb)
     yield
@@ -103,8 +114,7 @@ def alloca_once(builder, ty, name=''):
 
 def terminate(builder, bbend):
     bb = builder.basic_block
-    instr = bb.instructions
-    if not instr or not instr[-1].is_terminator:
+    if bb.terminator is None:
         builder.branch(bbend)
 
 
@@ -271,46 +281,11 @@ def unpack_tuple(builder, tup, count):
 
 
 def get_item_pointer(builder, aryty, ary, inds, wraparound=False):
-    if wraparound:
-        # Wraparound
-        shapes = unpack_tuple(builder, ary.shape, count=aryty.ndim)
-        indices = []
-        for ind, dimlen in zip(inds, shapes):
-            ZERO = Constant.null(ind.type)
-            negative = builder.icmp(lc.ICMP_SLT, ind, ZERO)
-            wrapped = builder.add(dimlen, ind)
-            selected = builder.select(negative, wrapped, ind)
-            indices.append(selected)
-    else:
-        indices = inds
-    del inds
-    intp = indices[0].type
-    # Indexing code
-    if aryty.layout == 'C':
-        # C contiguous
-        shapes = unpack_tuple(builder, ary.shape, count=aryty.ndim)
-        steps = []
-        for i in range(len(shapes)):
-            last = Constant.int(intp, 1)
-            for j in shapes[i + 1:]:
-                last = builder.mul(last, j)
-            steps.append(last)
-
-        loc = Constant.int(intp, 0)
-        for i, s in zip(indices, steps):
-            tmp = builder.mul(i, s)
-            loc = builder.add(loc, tmp)
-        ptr = builder.gep(ary.data, [loc])
-        return ptr
-    else:
-        # Any layout
-        strides = unpack_tuple(builder, ary.strides, count=aryty.ndim)
-        dimoffs = [builder.mul(s, i) for s, i in zip(strides, indices)]
-        offset = functools.reduce(builder.add, dimoffs)
-        base = builder.ptrtoint(ary.data, offset.type)
-        where = builder.add(base, offset)
-        ptr = builder.inttoptr(where, ary.data.type)
-        return ptr
+    shapes = unpack_tuple(builder, ary.shape, count=aryty.ndim)
+    strides = unpack_tuple(builder, ary.strides, count=aryty.ndim)
+    return get_item_pointer2(builder, data=ary.data, shape=shapes,
+                             strides=strides, layout=aryty.layout, inds=inds,
+                             wraparound=wraparound)
 
 
 def get_item_pointer2(builder, data, shape, strides, layout, inds,
@@ -421,7 +396,7 @@ def is_scalar_zero(builder, value):
 
 def guard_null(context, builder, value):
     with if_unlikely(builder, is_scalar_zero(builder, value)):
-        context.return_errcode(builder, 1)
+        context.return_errcode(builder, errcode.ASSERTION_ERROR)
 
 
 guard_zero = guard_null

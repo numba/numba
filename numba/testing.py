@@ -12,6 +12,8 @@ else:
 
 
 def discover_tests(startdir):
+    """Discover test under a directory
+    """
     import numba.unittest_support as unittest
 
     loader = unittest.TestLoader()
@@ -20,19 +22,44 @@ def discover_tests(startdir):
 
 
 def run_tests(suite, descriptions=True, verbosity=2, buffer=True,
-              failfast=False):
+              failfast=False, xmloutput=None):
+    """
+    args
+    ----
+    - descriptions
+    - verbosity
+    - buffer
+    - failfast
+    - xmloutput [str]
+        Path of XML output directory
+    """
     import numba.unittest_support as unittest
-
-    runner = unittest.TextTestRunner(descriptions=descriptions,
-                                     verbosity=verbosity,
-                                     buffer=buffer, failfast=failfast)
+    if xmloutput is not None:
+        import xmlrunner
+        runner = xmlrunner.XMLTestRunner(output=xmloutput)
+    else:
+        runner = unittest.TextTestRunner(descriptions=descriptions,
+                                         verbosity=verbosity,
+                                         buffer=buffer, failfast=failfast)
     result = runner.run(suite)
     return result
 
 
-def test():
+def test(**kwargs):
+    """
+    Run all tests under ``numba.tests``.
+
+    kwargs
+    ------
+    - descriptions
+    - verbosity
+    - buffer
+    - failfast
+    - xmloutput [str]
+        Path of XML output directory
+    """
     suite = discover_tests("numba.tests")
-    return run_tests(suite).wasSuccessful()
+    return run_tests(suite, **kwargs).wasSuccessful()
 
 
 def _flatten_suite(test):
@@ -51,6 +78,8 @@ def _flatten_suite(test):
 def multitest():
     """
     Run tests in multiple processes.
+
+    Use this for running all tests under ``numba.tests`` quickly.
     """
     import numba.unittest_support as unittest
     import multiprocessing as mp

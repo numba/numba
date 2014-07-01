@@ -26,28 +26,26 @@ float m_atan2f(float y, float x);
 
 #ifdef _MSC_VER
 
-/* define asinh acosh atanh for windows */
+/* Define missing (C99) math functions for Windows */
 
-#define asinh m_asinh
-#define asinhf m_asinhf
-#define acosh m_acosh
-#define acoshf m_acoshf
-#define atanh m_atanh
-#define atanhf m_atanhf
+#define asinh(x) m_asinh(x)
+#define asinhf(x) m_asinhf(x)
+#define acosh(x) m_acosh(x)
+#define acoshf(x) m_acoshf(x)
+#define atanh(x) m_atanh(x)
+#define atanhf(x) m_atanhf(x)
 
+#define expm1(x) m_expm1(x)
+#define expm1f(x) m_expm1f(x)
+#define log1p(x) m_log1p(x)
+#define log1pf(x) m_log1pf(x)
 
-#define expm1 m_expm1
-#define expm1f m_expm1f
-#define log1p m_log1p
-#define log1pf m_log1pf
+#define round(x) m_round(x)
+#define roundf(x) m_roundf(x)
+#define trunc(x) m_trunc(x)
+#define truncf(x) m_truncf(x)
 
-#define round m_round
-#define roundf m_roundf
-#define trunc m_trunc
-#define truncf m_truncf
-
-#define atan2f m_atan2f
-/* provide floating point equivalence */
+#define atan2f(x, y) m_atan2f(x, y)
 
 #endif /* _MSC_VER */
 

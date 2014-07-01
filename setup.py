@@ -51,6 +51,7 @@ ext_dispatcher = Extension(name="numba._dispatcher",
                                     "numba/_dispatcher.h"])
 
 ext_helperlib = Extension(name="numba._helperlib",
+                          include_dirs=[numpy.get_include()],
                           sources=["numba/_helperlib.c", "numba/_math_c99.c"],
                           extra_compile_args=CFLAGS,
                           depends=["numba/_pymodule.h",

@@ -1,4 +1,7 @@
 from __future__ import print_function, division, absolute_import
+
+from itertools import product
+
 from numba import types
 from numba.utils import PYVERSION
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
@@ -44,9 +47,11 @@ class PrintOthers(AbstractTemplate):
 @builtin
 class Abs(ConcreteTemplate):
     key = types.abs_type
-    intcases = [signature(ty, ty) for ty in types.signed_domain]
-    realcases = [signature(ty, ty) for ty in types.real_domain]
-    cases = intcases + realcases
+    int_cases = [signature(ty, ty) for ty in types.signed_domain]
+    real_cases = [signature(ty, ty) for ty in types.real_domain]
+    complex_cases = [signature(ty.underlying_float, ty)
+                     for ty in types.complex_domain]
+    cases = int_cases + real_cases + complex_cases
 
 
 @builtin
@@ -78,73 +83,62 @@ class Range(ConcreteTemplate):
 
 
 @builtin
-class GetIter(ConcreteTemplate):
-    key = "getiter"
-    cases = [
-        signature(types.range_iter32_type, types.range_state32_type),
-        signature(types.range_iter64_type, types.range_state64_type),
-    ]
-
-
-@builtin
-class GetIterUniTuple(AbstractTemplate):
+class GetIter(AbstractTemplate):
     key = "getiter"
 
     def generic(self, args, kws):
         assert not kws
-        [tup] = args
-        if isinstance(tup, types.UniTuple):
-            return signature(types.UniTupleIter(tup), tup)
+        [obj] = args
+        if isinstance(obj, types.IterableType):
+            return signature(obj.iterator_type, obj)
 
 
 @builtin
-class IterNext(ConcreteTemplate):
+class IterNext(AbstractTemplate):
     key = "iternext"
-    cases = [
-        signature(types.int32, types.range_iter32_type),
-        signature(types.int64, types.range_iter64_type),
-    ]
-
-
-@builtin
-class IterNextSafe(AbstractTemplate):
-    key = "iternextsafe"
 
     def generic(self, args, kws):
         assert not kws
-        [tupiter] = args
-        if isinstance(tupiter, types.UniTupleIter):
-            return signature(tupiter.unituple.dtype, tupiter)
+        [it] = args
+        if isinstance(it, types.IteratorType):
+            return signature(types.Pair(it.yield_type, types.boolean), it)
 
 
 @builtin
-class IterValid(ConcreteTemplate):
-    key = "itervalid"
-    cases = [
-        signature(types.boolean, types.range_iter32_type),
-        signature(types.boolean, types.range_iter64_type),
-    ]
+class PairFirst(AbstractTemplate):
+    """
+    Given a heterogenous pair, return the first element.
+    """
+    key = "pair_first"
+
+    def generic(self, args, kws):
+        assert not kws
+        [pair] = args
+        if isinstance(pair, types.Pair):
+            return signature(pair.first_type, pair)
+
+
+@builtin
+class PairSecond(AbstractTemplate):
+    """
+    Given a heterogenous pair, return the second element.
+    """
+    key = "pair_second"
+
+    def generic(self, args, kws):
+        assert not kws
+        [pair] = args
+        if isinstance(pair, types.Pair):
+            return signature(pair.second_type, pair)
 
 
 class BinOp(ConcreteTemplate):
-    cases = [
-        signature(types.uintp, types.uint8, types.uint8),
-        signature(types.uintp, types.uint16, types.uint16),
-        signature(types.uintp, types.uint32, types.uint32),
-        signature(types.uint64, types.uint64, types.uint64),
-
-        signature(types.intp, types.int8, types.int8),
-        signature(types.intp, types.int16, types.int16),
-        signature(types.intp, types.int32, types.int32),
-        signature(types.int64, types.int64, types.int64),
-
-        signature(types.float32, types.float32, types.float32),
-        signature(types.float64, types.float64, types.float64),
-
-        signature(types.complex64, types.complex64, types.complex64),
-        signature(types.complex128, types.complex128, types.complex128),
-    ]
-
+    cases = [signature(max(types.intp, op), op, op)
+             for op in sorted(types.signed_domain)]
+    cases += [signature(max(types.uintp, op), op, op)
+              for op in sorted(types.unsigned_domain)]
+    cases += [signature(op, op, op) for op in sorted(types.real_domain)]
+    cases += [signature(op, op, op) for op in sorted(types.complex_domain)]
 
 @builtin
 class BinOpAdd(BinOp):
@@ -169,100 +163,52 @@ class BinOpDiv(BinOp):
 @builtin
 class BinOpMod(ConcreteTemplate):
     key = "%"
-
-    cases = [
-        signature(types.uint8, types.uint8, types.uint8),
-        signature(types.uint16, types.uint16, types.uint16),
-        signature(types.uint32, types.uint32, types.uint32),
-        signature(types.uint64, types.uint64, types.uint64),
-
-        signature(types.int8, types.int8, types.int8),
-        signature(types.int16, types.int16, types.int16),
-        signature(types.int32, types.int32, types.int32),
-        signature(types.int64, types.int64, types.int64),
-
-        signature(types.float32, types.float32, types.float32),
-        signature(types.float64, types.float64, types.float64),
-    ]
+    cases = [signature(op, op, op)
+             for op in sorted(types.signed_domain)]
+    cases += [signature(op, op, op)
+              for op in sorted(types.unsigned_domain)]
+    cases += [signature(op, op, op) for op in sorted(types.real_domain)]
 
 
 @builtin
 class BinOpTrueDiv(ConcreteTemplate):
     key = "/"
-
-    cases = [
-        signature(types.float64, types.uint8, types.uint8),
-        signature(types.float64, types.uint16, types.uint16),
-        signature(types.float64, types.uint32, types.uint32),
-        signature(types.float64, types.uint64, types.uint64),
-
-        signature(types.float64, types.int8, types.int8),
-        signature(types.float64, types.int16, types.int16),
-        signature(types.float64, types.int32, types.int32),
-        signature(types.float64, types.int64, types.int64),
-
-
-        signature(types.float32, types.float32, types.float32),
-        signature(types.float64, types.float64, types.float64),
-
-        signature(types.complex64, types.complex64, types.complex64),
-        signature(types.complex128, types.complex128, types.complex128),
-
-    ]
+    cases = [signature(types.float64, op, op)
+             for op in sorted(types.signed_domain)]
+    cases += [signature(types.float64, op, op)
+              for op in sorted(types.unsigned_domain)]
+    cases += [signature(op, op, op) for op in sorted(types.real_domain)]
+    cases += [signature(op, op, op) for op in sorted(types.complex_domain)]
 
 
 @builtin
 class BinOpFloorDiv(ConcreteTemplate):
     key = "//"
-    cases = [
-        signature(types.int8, types.int8, types.int8),
-        signature(types.int16, types.int16, types.int16),
-        signature(types.int32, types.int32, types.int32),
-        signature(types.int64, types.int64, types.int64),
-
-        signature(types.uint8, types.uint8, types.uint8),
-        signature(types.uint16, types.uint16, types.uint16),
-        signature(types.uint32, types.uint32, types.uint32),
-        signature(types.uint64, types.uint64, types.uint64),
-
-        signature(types.int32, types.float32, types.float32),
-        signature(types.int64, types.float64, types.float64),
-    ]
+    cases = [signature(op, op, op)
+             for op in sorted(types.signed_domain)]
+    cases += [signature(op, op, op)
+              for op in sorted(types.unsigned_domain)]
+    cases += [signature(op, op, op) for op in sorted(types.real_domain)]
 
 
 @builtin
 class BinOpPower(ConcreteTemplate):
     key = "**"
-    cases = [
-        signature(types.float64, types.float64, types.uint8),
-        signature(types.float64, types.float64, types.uint16),
-        signature(types.float64, types.float64, types.uint32),
-        signature(types.float64, types.float64, types.uint64),
-
-        signature(types.float64, types.float64, types.int8),
-        signature(types.float64, types.float64, types.int16),
-        signature(types.float64, types.float64, types.int32),
-        signature(types.float64, types.float64, types.int64),
-        signature(types.float32, types.float32, types.float32),
-        signature(types.float64, types.float64, types.float64),
-
-        signature(types.complex64, types.complex64, types.complex64),
-        signature(types.complex128, types.complex128, types.complex128),
-    ]
+    cases = [signature(types.float64, types.float64, op)
+             for op in sorted(types.signed_domain)]
+    cases += [signature(types.float64, types.float64, op)
+             for op in sorted(types.unsigned_domain)]
+    cases += [signature(op, op, op)
+             for op in sorted(types.real_domain)]
+    cases += [signature(op, op, op)
+             for op in sorted(types.complex_domain)]
 
 
 class BitwiseShiftOperation(ConcreteTemplate):
-    cases = [
-        signature(types.int8, types.int8, types.uint32),
-        signature(types.int16, types.int16, types.uint32),
-        signature(types.int32, types.int32, types.uint32),
-        signature(types.int64, types.int64, types.uint32),
-
-        signature(types.uint8, types.uint8, types.uint32),
-        signature(types.uint16, types.uint16, types.uint32),
-        signature(types.uint32, types.uint32, types.uint32),
-        signature(types.uint64, types.uint64, types.uint32),
-    ]
+    cases = [signature(op, op, types.uint32)
+             for op in sorted(types.signed_domain)]
+    cases += [signature(op, op, types.uint32)
+              for op in sorted(types.unsigned_domain)]
 
 
 @builtin
@@ -276,17 +222,10 @@ class BitwiseRightShift(BitwiseShiftOperation):
 
 
 class BitwiseLogicOperation(BinOp):
-    cases = [
-        signature(types.uintp, types.uint8, types.uint8),
-        signature(types.uintp, types.uint16, types.uint16),
-        signature(types.uintp, types.uint32, types.uint32),
-        signature(types.uint64, types.uint64, types.uint64),
-
-        signature(types.intp, types.int8, types.int8),
-        signature(types.intp, types.int16, types.int16),
-        signature(types.intp, types.int32, types.int32),
-        signature(types.int64, types.int64, types.int64),
-    ]
+    cases = [signature(max(types.intp, op), op, op)
+             for op in sorted(types.signed_domain)]
+    cases += [signature(max(types.uintp, op), op, op)
+              for op in sorted(types.unsigned_domain)]
 
 
 @builtin
@@ -308,133 +247,84 @@ class BitwiseXor(BitwiseLogicOperation):
 class BitwiseInvert(ConcreteTemplate):
     key = "~"
 
-    cases = [
-        signature(types.int8, types.boolean),
-
-        signature(types.uint8, types.uint8),
-        signature(types.uint16, types.uint16),
-        signature(types.uint32, types.uint32),
-        signature(types.uint64, types.uint64),
-
-        signature(types.int8, types.int8),
-        signature(types.int16, types.int16),
-        signature(types.int32, types.int32),
-        signature(types.int64, types.int64),
-    ]
+    cases = [signature(types.int8, types.boolean)]
+    cases += [signature(op, op) for op in sorted(types.signed_domain)]
+    cases += [signature(op, op) for op in sorted(types.unsigned_domain)]
 
 
 class UnaryOp(ConcreteTemplate):
-    cases = [
-        signature(types.uintp, types.uint8),
-        signature(types.uintp, types.uint16),
-        signature(types.uintp, types.uint32),
-        signature(types.uint64, types.uint64),
-
-        signature(types.intp, types.int8),
-        signature(types.intp, types.int16),
-        signature(types.intp, types.int32),
-        signature(types.int64, types.int64),
-
-        signature(types.float32, types.float32),
-        signature(types.float64, types.float64),
-
-        signature(types.complex64, types.complex64),
-        signature(types.complex128, types.complex128),
-    ]
+    cases = [signature(op, op) for op in sorted(types.signed_domain)]
+    cases += [signature(op, op) for op in sorted(types.unsigned_domain)]
+    cases += [signature(op, op) for op in sorted(types.real_domain)]
+    cases += [signature(op, op) for op in sorted(types.complex_domain)]
 
 
 @builtin
 class UnaryNot(UnaryOp):
     key = "not"
-    cases = [
-        signature(types.boolean, types.boolean),
-
-        signature(types.boolean, types.uint8),
-        signature(types.boolean, types.uint16),
-        signature(types.boolean, types.uint32),
-        signature(types.boolean, types.uint64),
-
-        signature(types.boolean, types.int8),
-        signature(types.boolean, types.int16),
-        signature(types.boolean, types.int32),
-        signature(types.boolean, types.int64),
-
-        signature(types.boolean, types.float32),
-        signature(types.boolean, types.float64),
-
-        signature(types.boolean, types.complex64),
-        signature(types.boolean, types.complex128),
-    ]
+    cases = [signature(types.boolean, types.boolean)]
+    cases += [signature(types.boolean, op) for op in sorted(types.signed_domain)]
+    cases += [signature(types.boolean, op) for op in sorted(types.unsigned_domain)]
+    cases += [signature(types.boolean, op) for op in sorted(types.real_domain)]
+    cases += [signature(types.boolean, op) for op in sorted(types.complex_domain)]
 
 
 @builtin
 class UnaryNegate(UnaryOp):
     key = "-"
-    cases = [
-        signature(types.uintp, types.uint8),
-        signature(types.uintp, types.uint16),
-        signature(types.uintp, types.uint32),
-        signature(types.uint64, types.uint64),
-
-        signature(types.intp, types.int8),
-        signature(types.intp, types.int16),
-        signature(types.intp, types.int32),
-        signature(types.int64, types.int64),
-
-        signature(types.float32, types.float32),
-        signature(types.float64, types.float64),
-
-        signature(types.complex64, types.complex64),
-        signature(types.complex128, types.complex128),
-    ]
-
-
-class CmpOp(ConcreteTemplate):
-    cases = [
-        signature(types.boolean, types.boolean, types.boolean),
-
-        signature(types.boolean, types.uint8, types.uint8),
-        signature(types.boolean, types.uint16, types.uint16),
-        signature(types.boolean, types.uint32, types.uint32),
-        signature(types.boolean, types.uint64, types.uint64),
-
-        signature(types.boolean, types.int8, types.int8),
-        signature(types.boolean, types.int16, types.int16),
-        signature(types.boolean, types.int32, types.int32),
-        signature(types.boolean, types.int64, types.int64),
-
-        signature(types.boolean, types.float32, types.float32),
-        signature(types.boolean, types.float64, types.float64),
-    ]
+    cases = [signature(max(types.intp, op), op)
+             for op in sorted(types.signed_domain)]
+    cases += [signature(max(types.uintp, op), op)
+              for op in sorted(types.unsigned_domain)]
+    cases += [signature(op, op) for op in sorted(types.real_domain)]
+    cases += [signature(op, op) for op in sorted(types.complex_domain)]
 
 
 @builtin
-class CmpOpLt(CmpOp):
+class UnaryPositive(UnaryOp):
+    key = "+"
+    cases = UnaryNegate.cases
+
+
+class OrderedCmpOp(ConcreteTemplate):
+    cases = [signature(types.boolean, types.boolean, types.boolean)]
+    cases += [signature(types.boolean, op, op) for op in sorted(types.signed_domain)]
+    cases += [signature(types.boolean, op, op) for op in sorted(types.unsigned_domain)]
+    cases += [signature(types.boolean, op, op) for op in sorted(types.real_domain)]
+
+
+class UnorderedCmpOp(ConcreteTemplate):
+    cases = OrderedCmpOp.cases + [
+        signature(types.boolean, op, op) for op in sorted(types.complex_domain)]
+
+
+@builtin
+class CmpOpLt(OrderedCmpOp):
     key = '<'
 
 
 @builtin
-class CmpOpLe(CmpOp):
+class CmpOpLe(OrderedCmpOp):
     key = '<='
 
 
 @builtin
-class CmpOpGt(CmpOp):
+class CmpOpGt(OrderedCmpOp):
     key = '>'
 
 
 @builtin
-class CmpOpGe(CmpOp):
+class CmpOpGe(OrderedCmpOp):
     key = '>='
 
 
 @builtin
-class CmpOpEq(CmpOp):
+class CmpOpEq(UnorderedCmpOp):
     key = '=='
 
 
 @builtin
-class CmpOpNe(CmpOp):
+class CmpOpNe(UnorderedCmpOp):
     key = '!='
 
 
@@ -848,4 +738,3 @@ builtin_global(bool, types.Function(Bool))
 builtin_global(int, types.Function(Int))
 builtin_global(float, types.Function(Float))
 builtin_global(complex, types.Function(Complex))
-

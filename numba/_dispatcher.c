@@ -10,7 +10,7 @@
 
 typedef struct DispatcherObject{
     PyObject_HEAD
-    void *dispatcher;
+    dispatcher_t *dispatcher;
     int can_compile;        /* Can auto compile */
     PyCFunctionWithKeywords firstdef, fallbackdef;
 } DispatcherObject;
@@ -183,38 +183,16 @@ Dispatcher_DisableCompile(DispatcherObject *self, PyObject *args)
 //    return PyLong_FromVoidPtr(out);
 //}
 
-static PyObject* TheDispatcherModule = NULL; /* Stolen reference */
-static PyObject* TheTypeOfFunc = NULL;        /* Stolen reference */
+static PyObject *str_typeof_pyval = NULL;
 
 static
-PyObject *GetDispatcherModule() {
-    if(!TheDispatcherModule) {
-        TheDispatcherModule = PyImport_ImportModule("numba.dispatcher");
-        Py_XDECREF(TheDispatcherModule);
-    }
-    return TheDispatcherModule;
-}
-
-
-static
-PyObject *GetTypeOfFunc() {
-    if(!TheTypeOfFunc) {
-        TheTypeOfFunc = PyObject_GetAttrString(GetDispatcherModule(),
-                                               "typeof_pyval");
-
-        Py_XDECREF(TheTypeOfFunc);
-    }
-    return TheTypeOfFunc;
-}
-
-
-static
-int typecode_fallback(void *dispatcher, PyObject *val) {
+int typecode_fallback(DispatcherObject *dispatcher, PyObject *val) {
     PyObject *tmptype, *tmpcode;
     int typecode;
 
     // Go back to the interpreter
-    tmptype = PyObject_CallFunctionObjArgs(GetTypeOfFunc(), val, NULL);
+    tmptype = PyObject_CallMethodObjArgs((PyObject *) dispatcher,
+                                         str_typeof_pyval, val, NULL);
     if (!tmptype) {
         return -1;
     }
@@ -229,7 +207,9 @@ int typecode_fallback(void *dispatcher, PyObject *val) {
 
 
 #define N_DTYPES 12
-static int cached_arycode[3][3][N_DTYPES];
+#define N_NDIM 5    /* Fast path for up to 5D array */
+#define N_LAYOUT 3
+static int cached_arycode[N_NDIM][N_LAYOUT][N_DTYPES];
 
 static int dtype_num_to_typecode(int type_num) {
     int dtype;
@@ -278,13 +258,13 @@ static int dtype_num_to_typecode(int type_num) {
 
 
 static
-int typecode_ndarray(void *dispatcher, PyArrayObject *ary) {
+int typecode_ndarray(DispatcherObject *dispatcher, PyArrayObject *ary) {
     int typecode;
     int dtype;
     int ndim = PyArray_NDIM(ary);
     int layout = 0;
-    
-    if (ndim <= 0 || ndim > 3) goto FALLBACK;
+
+    if (ndim <= 0 || ndim > N_NDIM) goto FALLBACK;
 
     if (PyArray_ISFARRAY(ary)) {
         layout = 1;
@@ -295,8 +275,8 @@ int typecode_ndarray(void *dispatcher, PyArrayObject *ary) {
     dtype = dtype_num_to_typecode(PyArray_TYPE(ary));
     if (dtype == -1) goto FALLBACK;
 
-    assert(layout < 3);
-    assert(ndim <= 3);
+    assert(layout < N_LAYOUT);
+    assert(ndim <= N_NDIM);
     assert(dtype < N_DTYPES);
 
     typecode = cached_arycode[ndim - 1][layout][dtype];
@@ -311,7 +291,7 @@ FALLBACK:
 }
 
 static
-int typecode_arrayscalar(void *dispatcher, PyObject* aryscalar) {
+int typecode_arrayscalar(DispatcherObject *dispatcher, PyObject* aryscalar) {
     int typecode;
     PyArray_Descr* descr;
     descr = PyArray_DescrFromScalar(aryscalar);
@@ -326,7 +306,7 @@ int typecode_arrayscalar(void *dispatcher, PyObject* aryscalar) {
 
 
 static
-int typecode(void *dispatcher, PyObject *val) {
+int typecode(DispatcherObject *dispatcher, PyObject *val) {
     PyTypeObject *tyobj = val->ob_type;
     if (tyobj == &PyInt_Type || tyobj == &PyLong_Type)
         return tc_intp;
@@ -355,7 +335,11 @@ void explain_ambiguous(PyObject *dispatcher, PyObject *args, PyObject *kws) {
         return;
     }
     result = PyObject_Call(callback, args, kws);
-    assert(result == NULL && "_explain_ambiguous must raise an exception");
+    if (result != NULL) {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "_explain_ambiguous must raise an exception");
+        Py_DECREF(result);
+    }
     Py_XDECREF(callback);
 }
 
@@ -389,7 +373,7 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
 
     for (i = 0; i < argct; ++i) {
         tmptype = PySequence_Fast_GET_ITEM(args, i);
-        tys[i] = typecode(self->dispatcher, tmptype);
+        tys[i] = typecode(self, tmptype);
         if (tys[i] == -1) goto CLEANUP;
     }
 
@@ -517,6 +501,10 @@ MOD_INIT(_dispatcher) {
 
     /* initialize cached_arycode to all ones (in bits) */
     memset(cached_arycode, 0xFF, sizeof(cached_arycode));
+
+    str_typeof_pyval = PyString_InternFromString("typeof_pyval");
+    if (str_typeof_pyval == NULL)
+        return MOD_ERROR_VAL;
 
     DispatcherType.tp_new = PyType_GenericNew;
     if (PyType_Ready(&DispatcherType) < 0) {

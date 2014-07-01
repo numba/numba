@@ -69,7 +69,7 @@ class TypeVar(object):
         if self.locked:
             [expect] = list(self.typeset)
             if self.context.type_compatibility(typ, expect) is None:
-                raise TypingError("No convertsion from %s to %s for "
+                raise TypingError("No conversion from %s to %s for "
                                   "'%s'" % (typ, expect, self.var))
         else:
             self.typeset = set([typ])
@@ -143,6 +143,53 @@ class BuildTupleConstrain(object):
             else:
                 tup = types.Tuple(vals)
             oset.add_types(tup)
+
+
+class ExhaustIterConstrain(object):
+
+    def __init__(self, target, count, iterator, loc):
+        self.target = target
+        self.count = count
+        self.iterator = iterator
+        self.loc = loc
+
+    def __call__(self, context, typevars):
+        oset = typevars[self.target]
+        for tp in typevars[self.iterator.name].get():
+            oset.add_types(types.UniTuple(dtype=tp.yield_type,
+                                          count=self.count))
+
+
+class PairFirstConstrain(object):
+
+    def __init__(self, target, pair, loc):
+        self.target = target
+        self.pair = pair
+        self.loc = loc
+
+    def __call__(self, context, typevars):
+        oset = typevars[self.target]
+        for tp in typevars[self.pair.name].get():
+            if not isinstance(tp, types.Pair):
+                # XXX is this an error?
+                continue
+            oset.add_types(tp.first_type)
+
+
+class PairSecondConstrain(object):
+
+    def __init__(self, target, pair, loc):
+        self.target = target
+        self.pair = pair
+        self.loc = loc
+
+    def __call__(self, context, typevars):
+        oset = typevars[self.target]
+        for tp in typevars[self.pair.name].get():
+            if not isinstance(tp, types.Pair):
+                # XXX is this an error?
+                continue
+            oset.add_types(tp.second_type)
 
 
 class CallConstrain(object):
@@ -245,7 +292,7 @@ class TypeVarMap(dict):
 
     def __getitem__(self, name):
         if name not in self:
-            self[name] = TypeVar(self.context, name)
+            self[name] = TypeVar(self.context, name.split('.', 1)[0])
         return super(TypeVarMap, self).__getitem__(name)
 
     def __setitem__(self, name, value):
@@ -288,12 +335,10 @@ class TypeInferer(object):
     def seed_return(self, typ):
         """Seeding of return value is optional.
         """
-        # self.return_type = typ
         for blk in utils.dict_itervalues(self.blocks):
             inst = blk.terminator
             if isinstance(inst, ir.Return):
                 self.typevars[inst.value.name].lock(typ)
-                # self.typevars[inst.value.name].lock()
 
     def build_constrain(self):
         for blk in utils.dict_itervalues(self.blocks):
@@ -388,9 +433,11 @@ class TypeInferer(object):
                 return types.Optional(unified)
             else:
                 return types.none
-        else:
+        elif rettypes:
             unified = self.context.unify_types(*rettypes)
             return unified
+        else:
+            return types.none
 
     def get_state_token(self):
         """The algorithm is monotonic.  It can only grow the typesets.
@@ -407,6 +454,8 @@ class TypeInferer(object):
         elif isinstance(inst, ir.SetAttr):
             self.typeof_setattr(inst)
         elif isinstance(inst, (ir.Jump, ir.Branch, ir.Return, ir.Del)):
+            pass
+        elif isinstance(inst, ir.Raise):
             pass
         else:
             raise NotImplementedError(inst)
@@ -437,34 +486,47 @@ class TypeInferer(object):
         else:
             raise NotImplementedError(type(value), value)
 
-    def typeof_const(self, inst, target, const):
-        if const is True or const is False:
-            self.typevars[target.name].lock(types.boolean)
-        elif isinstance(const, (int, float)):
-            ty = self.context.get_number_type(const)
-            self.typevars[target.name].lock(ty)
-        elif const is None:
-            self.typevars[target.name].lock(types.none)
-        elif isinstance(const, str):
-            self.typevars[target.name].lock(types.string)
-        elif isinstance(const, complex):
-            self.typevars[target.name].lock(types.complex128)
-        elif isinstance(const, tuple):
-            tys = []
-            for elem in const:
-                if isinstance(elem, int):
-                    tys.append(types.intp)
-
-            if all(t == types.intp for t in tys):
-                typ = types.UniTuple(types.intp, len(tys))
+    def resolve_value_type(self, inst, val):
+        """
+        Resolve the type of a simple Python value, such as can be
+        represented by literals.
+        """
+        if val is True or val is False:
+            return types.boolean
+        elif isinstance(val, utils.INT_TYPES + (float,)):
+            return self.context.get_number_type(val)
+        elif val is None:
+            return types.none
+        elif isinstance(val, str):
+            return types.string
+        elif isinstance(val, complex):
+            return types.complex128
+        elif isinstance(val, tuple):
+            tys = [self.resolve_value_type(inst, v) for v in val]
+            distinct_types = set(tys)
+            if len(distinct_types) == 1:
+                return types.UniTuple(tys[0], len(tys))
             else:
-                typ = types.Tuple(tys)
-            self.typevars[target.name].lock(typ)
+                return types.Tuple(tys)
         else:
-            msg = "Unknown constant of type %s" % (const,)
+            msg = "Unsupported Python value %r" % (val,)
             raise TypingError(msg, loc=inst.loc)
 
+    def typeof_const(self, inst, target, const):
+        self.typevars[target.name].lock(self.resolve_value_type(inst, const))
+
     def typeof_global(self, inst, target, gvar):
+        try:
+            # Is it a supported value type?
+            typ = self.resolve_value_type(inst, gvar.value)
+        except TypingError:
+            # Fallback on other cases below
+            pass
+        else:
+            self.typevars[target.name].lock(typ)
+            self.assumed_immutables.add(inst)
+            return
+
         if (gvar.name in ('range', 'xrange') and
                     gvar.value in RANGE_ITER_OBJECTS):
             gvty = self.context.get_global_type(gvar.value)
@@ -475,25 +537,9 @@ class TypeInferer(object):
             gvty = self.context.get_global_type(gvar.value)
             self.typevars[target.name].lock(gvty)
             self.assumed_immutables.add(inst)
+
         elif gvar.name == 'len' and gvar.value is len:
-
             gvty = self.context.get_global_type(gvar.value)
-            self.typevars[target.name].lock(gvty)
-            self.assumed_immutables.add(inst)
-
-        elif gvar.name in ('True', 'False'):
-            assert gvar.value in (True, False)
-            self.typevars[target.name].lock(types.boolean)
-            self.assumed_immutables.add(inst)
-
-        elif (isinstance(gvar.value, tuple) and
-              all(isinstance(x, int) for x in gvar.value)):
-            gvty = self.context.get_number_type(gvar.value[0])
-            self.typevars[target.name].lock(types.UniTuple(gvty, 2))
-            self.assumed_immutables.add(inst)
-
-        elif isinstance(gvar.value, (int, float)):
-            gvty = self.context.get_number_type(gvar.value)
             self.typevars[target.name].lock(gvty)
             self.assumed_immutables.add(inst)
 
@@ -527,6 +573,11 @@ class TypeInferer(object):
             self.typevars[target.name].lock(fnty)
             self.assumed_immutables.add(inst)
 
+        elif type(gvar.value) is type and issubclass(gvar.value,
+                                                     BaseException):
+            self.typevars[target.name].lock(types.exception_type)
+            self.assumed_immutables.add(inst)
+
         else:
             try:
                 gvty = self.context.get_global_type(gvar.value)
@@ -548,8 +599,21 @@ class TypeInferer(object):
                 self.usercalls.append((inst.value, expr.args, expr.kws))
             else:
                 self.typeof_call(inst, target, expr)
-        elif expr.op in ('getiter', 'iternext', 'iternextsafe', 'itervalid'):
+        elif expr.op in ('getiter', 'iternext'):
             self.typeof_intrinsic_call(inst, target, expr.op, expr.value)
+        elif expr.op == 'exhaust_iter':
+            constrain = ExhaustIterConstrain(target.name, count=expr.count,
+                                             iterator=expr.value,
+                                             loc=expr.loc)
+            self.constrains.append(constrain)
+        elif expr.op == 'pair_first':
+            constrain = PairFirstConstrain(target.name, pair=expr.value,
+                                           loc=expr.loc)
+            self.constrains.append(constrain)
+        elif expr.op == 'pair_second':
+            constrain = PairSecondConstrain(target.name, pair=expr.value,
+                                            loc=expr.loc)
+            self.constrains.append(constrain)
         elif expr.op == 'binop':
             self.typeof_intrinsic_call(inst, target, expr.fn, expr.lhs, expr.rhs)
         elif expr.op == 'unary':

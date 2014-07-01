@@ -1,8 +1,13 @@
 from __future__ import print_function, division, absolute_import
+
 from collections import defaultdict
+import sys
+from types import ModuleType
+
 from llvm.core import Type, Builder, Module
 import llvm.core as lc
-from numba import ir, types, cgutils, utils, config, cffi_support
+
+from numba import ir, types, cgutils, utils, config, cffi_support, typing
 
 
 try:
@@ -18,22 +23,37 @@ class LoweringError(Exception):
         super(LoweringError, self).__init__("%s\n%s" % (msg, loc.strformat()))
 
 
+class ForbiddenConstruct(LoweringError):
+    pass
+
+
 def default_mangler(name, argtypes):
     codedargs = '.'.join(str(a).replace(' ', '_') for a in argtypes)
     return '.'.join([name, codedargs])
 
 
-class FunctionDescriptor(object):
-    __slots__ = ('native', 'pymod', 'name', 'doc', 'blocks', 'typemap',
-                 'calltypes', 'args', 'kws', 'restype', 'argtypes',
-                 'qualified_name', 'mangled_name')
+# A dummy module for dynamically-generated functions
+_dynamic_modname = '<dynamic>'
+_dynamic_module = ModuleType(_dynamic_modname)
 
-    def __init__(self, native, pymod, name, doc, blocks, typemap,
-                 restype, calltypes, args, kws, mangler=None, argtypes=None,
-                 qualname=None):
+# Issue #475: locals() is unsupported as calling it naively would give
+# out wrong results.
+_unsupported_builtins = set([locals])
+
+
+class FunctionDescriptor(object):
+    __slots__ = ('native', 'modname', 'qualname', 'doc', 'blocks', 'typemap',
+                 'calltypes', 'args', 'kws', 'restype', 'argtypes',
+                 'mangled_name', 'unique_name', 'globals')
+
+    def __init__(self, native, modname, qualname, unique_name, doc, blocks,
+                 typemap, restype, calltypes, args, kws, mangler=None,
+                 argtypes=None, globals=None):
         self.native = native
-        self.pymod = pymod
-        self.name = name
+        self.modname = modname
+        self.qualname = qualname
+        self.unique_name = unique_name
+        self.globals = globals if globals is not None else {}
         self.doc = doc
         self.blocks = blocks
         self.typemap = typemap
@@ -43,51 +63,103 @@ class FunctionDescriptor(object):
         self.restype = restype
         # Argument types
         self.argtypes = argtypes or [self.typemap[a] for a in args]
-        self.qualified_name = qualname or '.'.join([self.pymod.__name__,
-                                                    self.name])
         mangler = default_mangler if mangler is None else mangler
-        self.mangled_name = mangler(self.qualified_name, self.argtypes)
+        self.mangled_name = mangler(self.qualname, self.argtypes)
+
+    def lookup_module(self):
+        """
+        Return the module in which this function is supposed to exist.
+        This may be a dummy module if the function was dynamically
+        generated.
+        """
+        if self.modname == _dynamic_modname:
+            return _dynamic_module
+        else:
+            return sys.modules[self.modname]
+
+    def __repr__(self):
+        return "<function descriptor %r>" % (self.unique_name)
+
+    @classmethod
+    def _get_function_info(cls, interp):
+        """
+        Returns
+        -------
+        qualname, unique_name, modname, doc, args, kws, globals
+
+        ``unique_name`` must be a unique name in ``pymod``.
+        """
+        func = interp.bytecode.func
+        qualname = getattr(func, '__qualname__', interp.bytecode.func_name)
+        modname = func.__module__
+        doc = func.__doc__ or ''
+        args = interp.argspec.args
+        kws = ()        # TODO
+
+        if modname is None:
+            # For dynamically generated functions (e.g. compile()),
+            # add the function id to the name to create a unique name.
+            unique_name = "%s$%d" % (qualname, id(func))
+            modname = _dynamic_modname
+        else:
+            # For a top-level function or closure, make sure to disambiguate
+            # the function name.
+            # TODO avoid unnecessary recompilation of the same function
+            unique_name = "%s$%d" % (qualname, func.__code__.co_firstlineno)
+
+        return qualname, unique_name, modname, doc, args, kws, func.__globals__
+
+    @classmethod
+    def _from_python_function(cls, interp, typemap, restype, calltypes,
+                              native, mangler=None):
+        (qualname, unique_name, modname, doc, args, kws, func_globals
+         )= cls._get_function_info(interp)
+        sortedblocks = utils.SortedMap(utils.dict_iteritems(interp.blocks))
+        self = cls(native, modname, qualname, unique_name, doc,
+                   sortedblocks, typemap, restype, calltypes,
+                   args, kws, mangler=mangler, globals=func_globals)
+        return self
 
 
-def _describe(interp):
-    func = interp.bytecode.func
-    fname = interp.bytecode.func_name
-    pymod = interp.bytecode.module
-    doc = func.__doc__ or ''
-    args = interp.argspec.args
-    kws = ()        # TODO
-    return fname, pymod, doc, args, kws
+class PythonFunctionDescriptor(FunctionDescriptor):
+    __slots__ = ()
+
+    @classmethod
+    def from_specialized_function(cls, interp, typemap, restype, calltypes,
+                                  mangler):
+        """
+        Build a FunctionDescriptor for a specialized Python function.
+        """
+        return cls._from_python_function(interp, typemap, restype, calltypes,
+                                         native=True, mangler=mangler)
+
+    @classmethod
+    def from_object_mode_function(cls, interp):
+        """
+        Build a FunctionDescriptor for a Python function to be compiled
+        and executed in object mode.
+        """
+        typemap = defaultdict(lambda: types.pyobject)
+        calltypes = typemap.copy()
+        restype = types.pyobject
+        return cls._from_python_function(interp, typemap, restype, calltypes,
+                                         native=False)
 
 
-def describe_external(name, restype, argtypes):
-    args = ["arg%d" % i for i in range(len(argtypes))]
-    fd = FunctionDescriptor(native=True, pymod=None, name=name, doc='',
-                            blocks=None, restype=restype, calltypes=None,
-                            argtypes=argtypes, args=args, kws=None,
-                            typemap=None, qualname=name, mangler=lambda a,x: a)
-    return fd
+class ExternalFunctionDescriptor(FunctionDescriptor):
+    """
+    A FunctionDescriptor subclass for opaque external functions
+    (e.g. raw C functions).
+    """
+    __slots__ = ()
 
-
-def describe_function(interp, typemap, restype, calltypes, mangler):
-    fname, pymod, doc, args, kws = _describe(interp)
-    native = True
-    sortedblocks = utils.SortedMap(utils.dict_iteritems(interp.blocks))
-    fd = FunctionDescriptor(native, pymod, fname, doc, sortedblocks,
-                            typemap, restype, calltypes, args, kws, mangler)
-    return fd
-
-
-def describe_pyfunction(interp):
-    fname, pymod, doc, args, kws = _describe(interp)
-    defdict = lambda: defaultdict(lambda: types.pyobject)
-    typemap = defdict()
-    restype = types.pyobject
-    calltypes = defdict()
-    native = False
-    sortedblocks = utils.SortedMap(utils.dict_iteritems(interp.blocks))
-    fd = FunctionDescriptor(native, pymod, fname, doc, sortedblocks,
-                            typemap, restype,  calltypes, args, kws)
-    return fd
+    def __init__(self, name, restype, argtypes):
+        args = ["arg%d" % i for i in range(len(argtypes))]
+        super(ExternalFunctionDescriptor, self).__init__(native=True,
+                modname=None, qualname=name, unique_name=name, doc='',
+                blocks=None, typemap=None, restype=restype, calltypes=None,
+                args=args, kws=None, mangler=lambda a, x: a, argtypes=argtypes,
+                globals={})
 
 
 class BaseLower(object):
@@ -98,11 +170,11 @@ class BaseLower(object):
         self.context = context
         self.fndesc = fndesc
         # Initialize LLVM
-        self.module = Module.new("module.%s" % self.fndesc.name)
+        self.module = Module.new("module.%s" % self.fndesc.unique_name)
 
         # Install metadata
         md_pymod = cgutils.MetadataKeyStore(self.module, "python.module")
-        md_pymod.set(fndesc.pymod.__name__)
+        md_pymod.set(fndesc.modname)
 
         # Setup function
         self.function = context.declare_function(self.module, fndesc)
@@ -114,6 +186,7 @@ class BaseLower(object):
         self.blkmap = {}
         self.varmap = {}
         self.firstblk = min(self.fndesc.blocks.keys())
+        self.loc = -1
 
         # Subclass initialization
         self.init()
@@ -150,16 +223,26 @@ class BaseLower(object):
         self.builder.branch(self.blkmap[self.firstblk])
 
         if config.DUMP_LLVM:
-            print(("LLVM DUMP %s" % self.fndesc.qualified_name).center(80,'-'))
+            print(("LLVM DUMP %s" % self.fndesc).center(80, '-'))
             print(self.module)
             print('=' * 80)
         self.module.verify()
+        # Run function-level optimize to reduce memory usage and improve
+        # module-level optimization
+        self.context.optimize_function(self.function)
+
+        if config.NUMBA_DUMP_FUNC_OPT:
+            print(("LLVM FUNCTION OPTIMIZED DUMP %s" %
+                   self.fndesc).center(80, '-'))
+            print(self.module)
+            print('=' * 80)
 
     def init_argument(self, arg):
         return arg
 
     def lower_block(self, block):
         for inst in block.body:
+            self.loc = inst.loc
             try:
                 self.lower_inst(inst)
             except LoweringError:
@@ -252,6 +335,10 @@ class Lower(BaseLower):
                                       signature.args[1])
 
             return impl(self.builder, (target, value))
+
+        elif isinstance(inst, ir.Raise):
+            excid = self.context.add_exception(inst.exception)
+            self.context.return_user_exc(self.builder, excid)
 
         else:
             raise NotImplementedError(type(inst))
@@ -367,13 +454,15 @@ class Lower(BaseLower):
                                                      signature, castvals)
 
             elif isinstance(fnty, types.FunctionPointer):
-                # Handle function pointer)
+                # Handle function pointer
                 pointer = fnty.funcptr
                 res = self.context.call_function_pointer(self.builder, pointer,
                                                          signature, castvals)
 
             elif isinstance(fnty, cffi_support.ExternCFunction):
-                fndesc = describe_external(fnty.symbol, fnty.restype, fnty.argtypes)
+                # XXX unused?
+                fndesc = ExternalFunctionDescriptor(
+                    fnty.symbol, fnty.restype, fnty.argtypes)
                 func = self.context.declare_external_function(
                         cgutils.get_module(self.builder), fndesc)
                 res = self.context.call_external_function(self.builder, func, fndesc.argtypes, castvals)
@@ -388,7 +477,21 @@ class Lower(BaseLower):
             return self.context.cast(self.builder, res, signature.return_type,
                                      resty)
 
-        elif expr.op in ('getiter', 'iternext', 'itervalid', 'iternextsafe'):
+        elif expr.op == 'pair_first':
+            val = self.loadvar(expr.value.name)
+            ty = self.typeof(expr.value.name)
+            item = self.context.pair_first(self.builder, val, ty)
+            return self.context.get_argument_value(self.builder,
+                                                   ty.first_type, item)
+
+        elif expr.op == 'pair_second':
+            val = self.loadvar(expr.value.name)
+            ty = self.typeof(expr.value.name)
+            item = self.context.pair_second(self.builder, val, ty)
+            return self.context.get_argument_value(self.builder,
+                                                   ty.second_type, item)
+
+        elif expr.op in ('getiter', 'iternext'):
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
             signature = self.fndesc.calltypes[expr]
@@ -397,7 +500,38 @@ class Lower(BaseLower):
             castval = self.context.cast(self.builder, val, ty, fty)
             res = impl(self.builder, (castval,))
             return self.context.cast(self.builder, res, signature.return_type,
-                                    resty)
+                                     resty)
+
+        elif expr.op == 'exhaust_iter':
+            val = self.loadvar(expr.value.name)
+            ty = self.typeof(expr.value.name)
+            itemty = ty.yield_type
+            tup = self.context.get_constant_undef(resty)
+            pairty = types.Pair(itemty, types.boolean)
+            iternext_sig = typing.signature(pairty, ty)
+            iternext_impl = self.context.get_function('iternext',
+                                                      iternext_sig)
+            excid = self.context.add_exception(ValueError)
+            # We call iternext() as many times as desired (`expr.count`).
+            for i in range(expr.count):
+                pair = iternext_impl(self.builder, (val,))
+                is_valid = self.context.pair_second(self.builder,
+                                                    pair, pairty)
+                with cgutils.if_unlikely(self.builder,
+                                         self.builder.not_(is_valid)):
+                    self.context.return_user_exc(self.builder, excid)
+                item = self.context.pair_first(self.builder,
+                                               pair, pairty)
+                tup = self.builder.insert_value(tup, item, i)
+
+            # Call iternext() once more to check that the iterator
+            # is exhausted.
+            pair = iternext_impl(self.builder, (val,))
+            is_valid = self.context.pair_second(self.builder,
+                                                pair, pairty)
+            with cgutils.if_unlikely(self.builder, is_valid):
+                self.context.return_user_exc(self.builder, excid)
+            return tup
 
         elif expr.op == "getattr":
             val = self.loadvar(expr.value.name)
@@ -432,7 +566,7 @@ class Lower(BaseLower):
                         for val, toty, fromty in zip(itemvals, resty, itemtys)]
             tup = self.context.get_constant_undef(resty)
             for i in range(len(castvals)):
-                tup = self.builder.insert_value(tup, itemvals[i], i)
+                tup = self.builder.insert_value(tup, castvals[i], i)
             return tup
 
         raise NotImplementedError(expr)
@@ -532,8 +666,11 @@ class PyLower(BaseLower):
             self.builder.branch(target)
 
         elif isinstance(inst, ir.Del):
-            obj = self.loadvar(inst.value)
-            self.decref(obj)
+            self.delvar(inst.value)
+
+        elif isinstance(inst, ir.Raise):
+            self.pyapi.raise_exception(inst.exception, inst.exception)
+            self.return_exception_raised()
 
         else:
             raise NotImplementedError(type(inst), inst)
@@ -573,6 +710,8 @@ class PyLower(BaseLower):
             value = self.loadvar(expr.value.name)
             if expr.fn == '-':
                 res = self.pyapi.number_negative(value)
+            elif expr.fn == '+':
+                res = self.pyapi.number_positive(value)
             elif expr.fn == 'not':
                 res = self.pyapi.object_not(value)
                 negone = lc.Constant.int_signextend(Type.int(), -1)
@@ -623,26 +762,45 @@ class PyLower(BaseLower):
             obj = self.loadvar(expr.value.name)
             res = self.pyapi.object_getiter(obj)
             self.check_error(res)
-            self.storevar(res, '$iter$' + expr.value.name)
-            return self.pack_iter(res)
+            return res
         elif expr.op == 'iternext':
-            iterstate = self.loadvar(expr.value.name)
-            iterobj, valid = self.unpack_iter(iterstate)
+            iterobj = self.loadvar(expr.value.name)
             item = self.pyapi.iter_next(iterobj)
-            self.set_iter_valid(iterstate, item)
-            return item
-        elif expr.op == 'iternextsafe':
-            iterstate = self.loadvar(expr.value.name)
-            iterobj, _ = self.unpack_iter(iterstate)
-            item = self.pyapi.iter_next(iterobj)
-            # TODO need to add exception
-            self.check_error(item)
-            self.set_iter_valid(iterstate, item)
-            return item
-        elif expr.op == 'itervalid':
-            iterstate = self.loadvar(expr.value.name)
-            _, valid = self.unpack_iter(iterstate)
-            return self.builder.trunc(valid, Type.int(1))
+            is_valid = cgutils.is_not_null(self.builder, item)
+            pair = self.pyapi.tuple_new(2)
+            with cgutils.ifelse(self.builder, is_valid) as (then, otherwise):
+                with then:
+                    self.pyapi.tuple_setitem(pair, 0, item)
+                with otherwise:
+                    self.check_occurred()
+                    # Make the tuple valid by inserting None as dummy
+                    # iteration "result" (it will be ignored).
+                    self.pyapi.tuple_setitem(pair, 0, self.pyapi.make_none())
+            self.pyapi.tuple_setitem(pair, 1, self.pyapi.bool_from_bool(is_valid))
+            return pair
+        elif expr.op == 'pair_first':
+            pair = self.loadvar(expr.value.name)
+            first = self.pyapi.tuple_getitem(pair, 0)
+            self.incref(first)
+            return first
+        elif expr.op == 'pair_second':
+            pair = self.loadvar(expr.value.name)
+            second = self.pyapi.tuple_getitem(pair, 1)
+            self.incref(second)
+            return second
+        elif expr.op == 'exhaust_iter':
+            iterobj = self.loadvar(expr.value.name)
+            tup = self.pyapi.sequence_tuple(iterobj)
+            self.check_error(tup)
+            # Check tuple size is as expected
+            tup_size = self.pyapi.tuple_size(tup)
+            expected_size = self.context.get_constant(types.intp, expr.count)
+            has_wrong_size = self.builder.icmp(lc.ICMP_NE,
+                                               tup_size, expected_size)
+            with cgutils.if_unlikely(self.builder, has_wrong_size):
+                excid = self.context.add_exception(ValueError)
+                self.context.return_user_exc(self.builder, excid)
+            return tup
         elif expr.op == 'getitem':
             target = self.loadvar(expr.target.name)
             index = self.loadvar(expr.index.name)
@@ -682,7 +840,7 @@ class PyLower(BaseLower):
             ret = self.pyapi.float_from_double(fval)
             self.check_error(ret)
             return ret
-        elif isinstance(const, int):
+        elif isinstance(const, utils.INT_TYPES):
             if utils.bit_length(const) >= 64:
                 raise ValueError("Integer is too big to be lowered")
             ival = self.context.get_constant(types.intp, const)
@@ -707,6 +865,10 @@ class PyLower(BaseLower):
         moddict = self.pyapi.get_module_dict()
         obj = self.pyapi.dict_getitem_string(moddict, name)
         self.incref(obj)  # obj is borrowed
+
+        if value in _unsupported_builtins:
+            raise ForbiddenConstruct("builtins %s() is not supported"
+                                     % name, loc=self.loc)
 
         if hasattr(builtins, name):
             obj_is_null = self.is_null(obj)
@@ -766,25 +928,6 @@ class PyLower(BaseLower):
 
         return builtin
 
-    def pack_iter(self, obj):
-        iterstate = PyIterState(self.context, self.builder)
-        iterstate.iterator = obj
-        iterstate.valid = cgutils.true_byte
-        return iterstate._getpointer()
-
-    def unpack_iter(self, state):
-        iterstate = PyIterState(self.context, self.builder, ref=state)
-        return tuple(iterstate)
-
-    def set_iter_valid(self, state, item):
-        iterstate = PyIterState(self.context, self.builder, ref=state)
-        iterstate.valid = cgutils.as_bool_byte(self.builder,
-                                               cgutils.is_not_null(self.builder,
-                                                                   item))
-
-        with cgutils.if_unlikely(self.builder, self.is_null(item)):
-            self.check_occurred()
-
     def check_occurred(self):
         err_occurred = cgutils.is_not_null(self.builder,
                                            self.pyapi.err_occurred())
@@ -816,6 +959,14 @@ class PyLower(BaseLower):
     def loadvar(self, name):
         ptr = self.getvar(name)
         return self.builder.load(ptr)
+
+    def delvar(self, name):
+        """
+        Delete the variable slot with the given name. This will decref
+        the corresponding Python object.
+        """
+        ptr = self.varmap.pop(name)
+        self.decref(ptr)
 
     def storevar(self, value, name):
         """
@@ -856,29 +1007,11 @@ class PyLower(BaseLower):
         """
         This is allow to be called on non pyobject pointer, in which case
         no code is inserted.
-
-        If the value is a PyIterState, it unpack the structure and decref
-        the iterator.
         """
         lpyobj = self.context.get_value_type(types.pyobject)
 
         if value.type.kind == lc.TYPE_POINTER:
             if value.type != lpyobj:
                 pass
-                #raise AssertionError(value.type)
-                # # Handle PyIterState
-                # not_null = cgutils.is_not_null(self.builder, value)
-                # with cgutils.if_likely(self.builder, not_null):
-                #     iterstate = PyIterState(self.context, self.builder,
-                #                             value=value)
-                #     value = iterstate.iterator
-                #     self.pyapi.decref(value)
             else:
                 self.pyapi.decref(value)
-
-
-class PyIterState(cgutils.Structure):
-    _fields = [
-        ("iterator", types.pyobject),
-        ("valid",    types.boolean),
-    ]

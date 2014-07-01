@@ -1,8 +1,9 @@
 from __future__ import print_function
 import itertools
 import numba.unittest_support as unittest
-from numba.compiler import compile_isolated
+from numba.compiler import compile_isolated, Flags
 from numba import types
+import numpy as np
 
 
 def identity(x):
@@ -29,6 +30,8 @@ class TestConversion(unittest.TestCase):
         xs = [1.0j, (1+1j), (-1-1j), (1+0j)]
         for x in xs:
             self.assertEqual(cres.entry_point(x=x), x)
+        for x in np.complex64(xs):
+            self.assertEqual(cres.entry_point(x=x), x)
 
 
         cres = compile_isolated(pyfunc, [types.complex128],
@@ -36,6 +39,8 @@ class TestConversion(unittest.TestCase):
 
         xs = [1.0j, (1+1j), (-1-1j), (1+0j)]
         for x in xs:
+            self.assertEqual(cres.entry_point(x=x), x)
+        for x in np.complex128(xs):
             self.assertEqual(cres.entry_point(x=x), x)
 
     def test_complex_addition(self):
@@ -47,6 +52,9 @@ class TestConversion(unittest.TestCase):
         for x in xs:
             y = x
             self.assertEqual(cres.entry_point(x, y), x + y)
+        for x in np.complex64(xs):
+            y = x
+            self.assertEqual(cres.entry_point(x, y), x + y)
 
 
         cres = compile_isolated(pyfunc, [types.complex128, types.complex128],
@@ -54,6 +62,9 @@ class TestConversion(unittest.TestCase):
 
         xs = [1.0j, (1+1j), (-1-1j), (1+0j)]
         for x in xs:
+            y = x
+            self.assertEqual(cres.entry_point(x, y), x + y)
+        for x in np.complex128(xs):
             y = x
             self.assertEqual(cres.entry_point(x, y), x + y)
 

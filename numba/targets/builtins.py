@@ -1,10 +1,16 @@
-from llvm.core import Type, Constant
-import llvm.core as lc
+from __future__ import print_function, absolute_import, division
 import math
 from functools import reduce
+
+from llvm.core import Type, Constant
+import llvm.core as lc
+
+from numba import errcode
 from numba import types, typing, cgutils, utils
 from numba.targets.imputils import (builtin, builtin_attr, implement,
-                                    impl_attribute, impl_attribute_generic)
+                                    impl_attribute, impl_attribute_generic,
+                                    iterator_impl, iternext_impl)
+from numba.typing import signature
 
 #-------------------------------------------------------------------------------
 
@@ -274,16 +280,6 @@ def uint_abs_impl(context, builder, sig, args):
     return x
 
 
-def int_print_impl(context, builder, sig, args):
-    [x] = args
-    py = context.get_python_api(builder)
-    szval = context.cast(builder, x, sig.args[0], types.intp)
-    intobj = py.long_from_ssize_t(szval)
-    py.print_object(intobj)
-    py.decref(intobj)
-    return context.get_dummy_value()
-
-
 def int_shl_impl(context, builder, sig, args):
     [valty, amtty] = sig.args
     [val, amt] = args
@@ -340,6 +336,12 @@ def int_negate_impl(context, builder, sig, args):
         return builder.fsub(context.get_constant(sig.return_type, 0), val)
     else:
         return builder.neg(val)
+
+
+def int_positive_impl(context, builder, sig, args):
+    [typ] = sig.args
+    [val] = args
+    return context.cast(builder, val, typ, sig.return_type)
 
 
 def int_invert_impl(context, builder, sig, args):
@@ -402,7 +404,6 @@ for ty in types.integer_domain:
     builtin(implement('==', ty, ty)(int_eq_impl))
     builtin(implement('!=', ty, ty)(int_ne_impl))
 
-    builtin(implement(types.print_item_type, ty)(int_print_impl))
     builtin(implement('<<', ty, types.uint32)(int_shl_impl))
 
     builtin(implement('&', ty, ty)(int_and_impl))
@@ -410,6 +411,7 @@ for ty in types.integer_domain:
     builtin(implement('^', ty, ty)(int_xor_impl))
 
     builtin(implement('-', ty)(int_negate_impl))
+    builtin(implement('+', ty)(int_positive_impl))
     builtin(implement(types.neg_type, ty)(int_negate_impl))
     builtin(implement('~', ty)(int_invert_impl))
     builtin(implement(types.sign_type, ty)(int_sign_impl))
@@ -598,6 +600,13 @@ def real_mod_impl(context, builder, sig, args):
     return rem
 
 
+def real_floordiv_impl(context, builder, sig, args):
+    x, y = args
+    cgutils.guard_zero(context, builder, y)
+    quot, _ = real_divmod(context, builder, x, y)
+    return quot
+
+
 def real_power_impl(context, builder, sig, args):
     x, y = args
     module = cgutils.get_module(builder)
@@ -639,17 +648,6 @@ def real_abs_impl(context, builder, sig, args):
     impl = context.get_function(math.fabs, sig)
     return impl(builder, args)
 
-
-def real_print_impl(context, builder, sig, args):
-    [x] = args
-    py = context.get_python_api(builder)
-    szval = context.cast(builder, x, sig.args[0], types.float64)
-    intobj = py.float_from_double(szval)
-    py.print_object(intobj)
-    py.decref(intobj)
-    return context.get_dummy_value()
-
-
 def real_negate_impl(context, builder, sig, args):
     [typ] = sig.args
     [val] = args
@@ -658,6 +656,12 @@ def real_negate_impl(context, builder, sig, args):
         return builder.fsub(context.get_constant(sig.return_type, 0), val)
     else:
         return builder.neg(val)
+
+
+def real_positive_impl(context, builder, sig, args):
+    [typ] = sig.args
+    [val] = args
+    return context.cast(builder, val, typ, sig.return_type)
 
 
 def real_sign_impl(context, builder, sig, args):
@@ -703,6 +707,7 @@ for ty in types.real_domain:
     builtin(implement('-', ty, ty)(real_sub_impl))
     builtin(implement('*', ty, ty)(real_mul_impl))
     builtin(implement('/?', ty, ty)(real_div_impl))
+    builtin(implement('//', ty, ty)(real_floordiv_impl))
     builtin(implement('/', ty, ty)(real_div_impl))
     builtin(implement('%', ty, ty)(real_mod_impl))
     builtin(implement('**', ty, ty)(real_power_impl))
@@ -715,9 +720,9 @@ for ty in types.real_domain:
     builtin(implement('>=', ty, ty)(real_ge_impl))
 
     builtin(implement(types.abs_type, ty)(real_abs_impl))
-    builtin(implement(types.print_item_type, ty)(real_print_impl))
 
     builtin(implement('-', ty)(real_negate_impl))
+    builtin(implement('+', ty)(real_positive_impl))
     builtin(implement(types.neg_type, ty)(real_negate_impl))
     builtin(implement(types.sign_type, ty)(real_sign_impl))
 
@@ -735,16 +740,12 @@ class Complex128(cgutils.Structure):
 def get_complex_info(ty):
     if ty == types.complex64:
         cmplxcls = Complex64
-        flty = types.float32
-
     elif ty == types.complex128:
         cmplxcls = Complex128
-        flty = types.float64
-
     else:
         raise TypeError(ty)
 
-    return cmplxcls, flty
+    return cmplxcls, ty.underlying_float
 
 
 @builtin_attr
@@ -798,7 +799,7 @@ def complex128_power_impl(context, builder, sig, args):
     with cgutils.ifelse(builder, b_is_two) as (then, otherwise):
         with then:
             # Lower as multiplication
-            res = complex_mult_impl(context, builder, sig, (ca, ca))
+            res = complex_mul_impl(context, builder, sig, (ca, ca))
             cres = Complex128(context, builder, value=res)
             c.real = cres.real
             c.imag = cres.imag
@@ -842,7 +843,7 @@ def complex_sub_impl(context, builder, sig, args):
     return z._getvalue()
 
 
-def complex_mult_impl(context, builder, sig, args):
+def complex_mul_impl(context, builder, sig, args):
     """
     (a+bi)(c+di)=(ac-bd)+i(ad+bc)
     """
@@ -914,15 +915,63 @@ def complex_negate_impl(context, builder, sig, args):
     return res._getvalue()
 
 
+def complex_positive_impl(context, builder, sig, args):
+    [val] = args
+    return val
+
+
+def complex_eq_impl(context, builder, sig, args):
+    [cx, cy] = args
+    complexClass = context.make_complex(sig.args[0])
+    x = complexClass(context, builder, value=cx)
+    y = complexClass(context, builder, value=cy)
+
+    reals_are_eq = builder.fcmp(lc.FCMP_OEQ, x.real, y.real)
+    imags_are_eq = builder.fcmp(lc.FCMP_OEQ, x.imag, y.imag)
+    return builder.and_(reals_are_eq, imags_are_eq)
+
+
+def complex_ne_impl(context, builder, sig, args):
+    [cx, cy] = args
+    complexClass = context.make_complex(sig.args[0])
+    x = complexClass(context, builder, value=cx)
+    y = complexClass(context, builder, value=cy)
+
+    reals_are_ne = builder.fcmp(lc.FCMP_UNE, x.real, y.real)
+    imags_are_ne = builder.fcmp(lc.FCMP_UNE, x.imag, y.imag)
+    return builder.or_(reals_are_ne, imags_are_ne)
+
+
+def complex_abs_impl(context, builder, sig, args):
+    """
+    abs(z) := hypot(z.real, z.imag)
+    """
+    [typ] = sig.args
+    [val] = args
+    cmplxcls = context.make_complex(typ)
+    flty = typ.underlying_float
+    cmplx = cmplxcls(context, builder, val)
+    [x, y] = cmplx.real, cmplx.imag
+    hypotsig = signature(sig.return_type, flty, flty)
+    hypotimp = context.get_function(math.hypot, hypotsig)
+    return hypotimp(builder, [x, y])
+
+
 for ty, cls in zip([types.complex64, types.complex128],
                    [Complex64, Complex128]):
     builtin(implement("+", ty, ty)(complex_add_impl))
     builtin(implement("-", ty, ty)(complex_sub_impl))
-    builtin(implement("*", ty, ty)(complex_mult_impl))
+    builtin(implement("*", ty, ty)(complex_mul_impl))
     builtin(implement("/?", ty, ty)(complex_div_impl))
     builtin(implement("/", ty, ty)(complex_div_impl))
     builtin(implement("-", ty)(complex_negate_impl))
+    builtin(implement("+", ty)(complex_positive_impl))
     # Complex modulo is deprecated in python3
+
+    builtin(implement('==', ty, ty)(complex_eq_impl))
+    builtin(implement('!=', ty, ty)(complex_ne_impl))
+
+    builtin(implement(types.abs_type, ty)(complex_abs_impl))
 
 
 #------------------------------------------------------------------------------
@@ -1031,245 +1080,22 @@ def slice0_none_none_impl(context, builder, sig, args):
     return slice0_empty_impl(context, builder, newsig, ())
 
 
-class RangeState32(cgutils.Structure):
-    _fields = [('start', types.int32),
-               ('stop', types.int32),
-               ('step', types.int32)]
+def make_pair(first_type, second_type):
+    class Pair(cgutils.Structure):
+        _fields = [('first', first_type),
+                   ('second', second_type)]
 
-
-class RangeIter32(cgutils.Structure):
-    _fields = [('iter', types.CPointer(types.int32)),
-               ('stop', types.int32),
-               ('step', types.int32),
-               ('count', types.CPointer(types.int32))]
-
-
-class RangeState64(cgutils.Structure):
-    _fields = [('start', types.int64),
-               ('stop', types.int64),
-               ('step', types.int64)]
-
-
-class RangeIter64(cgutils.Structure):
-    _fields = [('iter', types.CPointer(types.int64)),
-               ('stop', types.int64),
-               ('step', types.int64),
-               ('count', types.CPointer(types.int64))]
+    return Pair
 
 
 def make_unituple_iter(tupiter):
+    unituple = tupiter.unituple
+
     class UniTupleIter(cgutils.Structure):
         _fields = [('index', types.CPointer(types.intp)),
                    ('tuple', tupiter.unituple,)]
 
     return UniTupleIter
-
-
-@builtin
-@implement(types.range_type, types.int32)
-def range1_32_impl(context, builder, sig, args):
-    [stop] = args
-    state = RangeState32(context, builder)
-
-    state.start = context.get_constant(types.int32, 0)
-    state.stop = stop
-    state.step = context.get_constant(types.int32, 1)
-
-    return state._getvalue()
-
-
-@builtin
-@implement(types.range_type, types.int32, types.int32)
-def range2_32_impl(context, builder, sig, args):
-    start, stop = args
-    state = RangeState32(context, builder)
-
-    state.start = start
-    state.stop = stop
-    state.step = context.get_constant(types.int32, 1)
-
-    return state._getvalue()
-
-
-@builtin
-@implement(types.range_type, types.int32, types.int32, types.int32)
-def range3_32_impl(context, builder, sig, args):
-    [start, stop, step] = args
-    state = RangeState32(context, builder)
-
-    state.start = start
-    state.stop = stop
-    state.step = step
-
-    return state._getvalue()
-
-
-def getiter_range_generic(context, builder, iterobj, start, stop, step):
-    diff = builder.sub(stop, start)
-    intty = start.type
-    zero = Constant.int(intty, 0)
-    one = Constant.int(intty, 1)
-    pos_diff = builder.icmp(lc.ICMP_SGT, diff, zero)
-    pos_step = builder.icmp(lc.ICMP_SGT, step, zero)
-    sign_differs = builder.xor(pos_diff, pos_step)
-    zero_step = builder.icmp(lc.ICMP_EQ, step, zero)
-
-    with cgutils.if_unlikely(builder, zero_step):
-        # step shouldn't be zero
-        context.return_errcode(builder, 1)
-
-    with cgutils.ifelse(builder, sign_differs) as (then, orelse):
-        with then:
-            builder.store(zero, iterobj.count)
-
-        with orelse:
-            rem = builder.srem(diff, step)
-            uneven = builder.icmp(lc.ICMP_SGT, rem, zero)
-            newcount = builder.add(builder.sdiv(diff, step),
-                                   builder.select(uneven, one, zero))
-            builder.store(newcount, iterobj.count)
-
-    return iterobj._getvalue()
-
-
-@builtin
-@implement('getiter', types.range_state32_type)
-def getiter_range32_impl(context, builder, sig, args):
-    (value,) = args
-    state = RangeState32(context, builder, value)
-    iterobj = RangeIter32(context, builder)
-
-    start = state.start
-    stop = state.stop
-    step = state.step
-
-    startptr = cgutils.alloca_once(builder, start.type)
-    builder.store(start, startptr)
-
-    countptr = cgutils.alloca_once(builder, start.type)
-
-    iterobj.iter = startptr
-    iterobj.stop = stop
-    iterobj.step = step
-    iterobj.count = countptr
-
-    return getiter_range_generic(context, builder, iterobj, start, stop, step)
-
-
-@builtin
-@implement('iternext', types.range_iter32_type)
-def iternext_range32_impl(context, builder, sig, args):
-    (value,) = args
-    iterobj = RangeIter32(context, builder, value)
-
-    res = builder.load(iterobj.iter)
-    one = context.get_constant(types.int32, 1)
-
-    countptr = iterobj.count
-    builder.store(builder.sub(builder.load(countptr), one), countptr)
-
-    builder.store(builder.add(res, iterobj.step), iterobj.iter)
-
-    return res
-
-
-@builtin
-@implement('itervalid', types.range_iter32_type)
-def itervalid_range32_impl(context, builder, sig, args):
-    (value,) = args
-    iterobj = RangeIter32(context, builder, value)
-
-    zero = context.get_constant(types.int32, 0)
-    gt = builder.icmp(lc.ICMP_SGE, builder.load(iterobj.count), zero)
-    return gt
-
-
-@builtin
-@implement(types.range_type, types.int64)
-def range1_64_impl(context, builder, sig, args):
-    (stop,) = args
-    state = RangeState64(context, builder)
-
-    state.start = context.get_constant(types.int64, 0)
-    state.stop = stop
-    state.step = context.get_constant(types.int64, 1)
-
-    return state._getvalue()
-
-
-@builtin
-@implement(types.range_type, types.int64, types.int64)
-def range2_64_impl(context, builder, sig, args):
-    start, stop = args
-    state = RangeState64(context, builder)
-
-    state.start = start
-    state.stop = stop
-    state.step = context.get_constant(types.int64, 1)
-
-    return state._getvalue()
-
-
-@builtin
-@implement(types.range_type, types.int64, types.int64, types.int64)
-def range3_64_impl(context, builder, sig, args):
-    [start, stop, step] = args
-    state = RangeState64(context, builder)
-
-    state.start = start
-    state.stop = stop
-    state.step = step
-
-    return state._getvalue()
-
-
-@builtin
-@implement('getiter', types.range_state64_type)
-def getiter_range64_impl(context, builder, sig, args):
-    (value,) = args
-    state = RangeState64(context, builder, value)
-    iterobj = RangeIter64(context, builder)
-
-    start = state.start
-    stop = state.stop
-    step = state.step
-
-    startptr = cgutils.alloca_once(builder, start.type)
-    builder.store(start, startptr)
-
-    countptr = cgutils.alloca_once(builder, start.type)
-
-    iterobj.iter = startptr
-    iterobj.stop = stop
-    iterobj.step = step
-    iterobj.count = countptr
-
-    return getiter_range_generic(context, builder, iterobj, start, stop, step)
-
-
-@builtin
-@implement('iternext', types.range_iter64_type)
-def iternext_range64_impl(context, builder, sig, args):
-    (value,) = args
-    iterobj = RangeIter64(context, builder, value)
-
-    res = builder.load(iterobj.iter)
-    one = context.get_constant(types.int64, 1)
-    builder.store(builder.sub(builder.load(iterobj.count), one), iterobj.count)
-    builder.store(builder.add(res, iterobj.step), iterobj.iter)
-
-    return res
-
-
-@builtin
-@implement('itervalid', types.range_iter64_type)
-def itervalid_range64_impl(context, builder, sig, args):
-    (value,) = args
-    iterobj = RangeIter64(context, builder, value)
-
-    zero = context.get_constant(types.int64, 0)
-    gt = builder.icmp(lc.ICMP_SGE, builder.load(iterobj.count), zero)
-    return gt
 
 
 @builtin
@@ -1291,9 +1117,14 @@ def getiter_unituple(context, builder, sig, args):
     return iterval._getvalue()
 
 
+# Unfortunately, we can't make decorate UniTupleIter with iterator_impl
+# as it would register the iternext() method too late. It really has to
+# be registered at module import time, not while compiling.
+
 @builtin
-@implement('iternextsafe', types.Kind(types.UniTupleIter))
-def iternextsafe_unituple(context, builder, sig, args):
+@implement('iternext', types.Kind(types.UniTupleIter))
+@iternext_impl
+def iternext_unituple(context, builder, sig, args, result):
     [tupiterty] = sig.args
     [tupiter] = args
 
@@ -1302,15 +1133,17 @@ def iternextsafe_unituple(context, builder, sig, args):
     tup = iterval.tuple
     idxptr = iterval.index
     idx = builder.load(idxptr)
+    count = context.get_constant(types.intp, tupiterty.unituple.count)
 
-    # TODO lack out-of-bound check
-    getitem_sig = typing.signature(sig.return_type, tupiterty.unituple,
-                                   types.intp)
-    res = getitem_unituple(context, builder, getitem_sig, [tup, idx])
+    is_valid = builder.icmp(lc.ICMP_SLT, idx, count)
+    result.set_valid(is_valid)
 
-    nidx = builder.add(idx, context.get_constant(types.intp, 1))
-    builder.store(nidx, iterval.index)
-    return res
+    with cgutils.ifthen(builder, is_valid):
+        getitem_sig = typing.signature(sig.return_type, tupiterty.unituple,
+                                       types.intp)
+        result.yield_(getitem_unituple(context, builder, getitem_sig, [tup, idx]))
+        nidx = builder.add(idx, context.get_constant(types.intp, 1))
+        builder.store(nidx, iterval.index)
 
 
 @builtin
@@ -1324,8 +1157,7 @@ def getitem_unituple(context, builder, sig, args):
     switch = builder.switch(idx, bbelse, n=tupty.count)
 
     with cgutils.goto_block(builder, bbelse):
-        # TODO: propagate exception to
-        context.return_errcode(builder, 1)
+        context.return_errcode(builder, errcode.OUT_OF_BOUND_ERROR)
 
     lrtty = context.get_value_type(tupty.dtype)
     with cgutils.goto_block(builder, bbend):
@@ -1356,7 +1188,8 @@ def getitem_array1d_intp(context, builder, sig, args):
 
     arystty = context.make_array(aryty)
     ary = arystty(context, builder, ary)
-    ptr = cgutils.get_item_pointer(builder, aryty, ary, [idx], wraparound=True)
+    ptr = cgutils.get_item_pointer(builder, aryty, ary, [idx],
+                                   wraparound=context.metadata['wraparound'])
     return context.unpack_value(builder, aryty.dtype, ptr)
 
 
@@ -1380,7 +1213,7 @@ def getitem_array1d_slice(context, builder, sig, args):
 
     dataptr = cgutils.get_item_pointer(builder, aryty, ary,
                                        [slicestruct.start],
-                                       wraparound=True)
+                                       wraparound=context.metadata['wraparound'])
 
     retstty = context.make_array(sig.return_type)
     retary = retstty(context, builder)
@@ -1416,7 +1249,7 @@ def getitem_array_unituple(context, builder, sig, args):
             cgutils.normalize_slice(builder, sl, sh)
         indices = [sl.start for sl in slices]
         dataptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                           wraparound=True)
+                                           wraparound=context.metadata['wraparound'])
         # Build array
         retstty = context.make_array(sig.return_type)
         retary = retstty(context, builder)
@@ -1437,9 +1270,8 @@ def getitem_array_unituple(context, builder, sig, args):
         indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
         indices = [context.cast(builder, i, t, types.intp)
                    for t, i in zip(idxty, indices)]
-        # TODO warparound flag
         ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                       wraparound=True)
+                                       wraparound=context.metadata['wraparound'])
 
         return context.unpack_value(builder, aryty.dtype, ptr)
 
@@ -1477,7 +1309,7 @@ def getitem_array_tuple(context, builder, sig, args):
                 start.append(ind)
 
         dataptr = cgutils.get_item_pointer(builder, aryty, ary, start,
-                                           wraparound=True)
+                                           wraparound=context.metadata['wraparound'])
         # Build array
         retstty = context.make_array(sig.return_type)
         retary = retstty(context, builder)
@@ -1490,9 +1322,8 @@ def getitem_array_tuple(context, builder, sig, args):
         indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
         indices = [context.cast(builder, i, t, types.intp)
                    for t, i in zip(idxty, indices)]
-        # TODO warparound flag
         ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                       wraparound=True)
+                                       wraparound=context.metadata['wraparound'])
 
         return context.unpack_value(builder, aryty.dtype, ptr)
 
@@ -1508,7 +1339,7 @@ def setitem_array1d(context, builder, sig, args):
     ary = arystty(context, builder, ary)
 
     ptr = cgutils.get_item_pointer(builder, aryty, ary, [idx],
-                                   wraparound=True)
+                                   wraparound=context.metadata['wraparound'])
 
     val = context.cast(builder, val, valty, aryty.dtype)
 
@@ -1530,7 +1361,7 @@ def setitem_array_unituple(context, builder, sig, args):
     indices = [context.cast(builder, i, t, types.intp)
                for t, i in zip(idxty, indices)]
     ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                   wraparound=True)
+                                   wraparound=context.metadata['wraparound'])
     context.pack_value(builder, aryty.dtype, val, ptr)
 
 
@@ -1549,7 +1380,7 @@ def setitem_array_tuple(context, builder, sig, args):
     indices = [context.cast(builder, i, t, types.intp)
                for t, i in zip(idxty, indices)]
     ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                   wraparound=True)
+                                   wraparound=context.metadata['wraparound'])
     context.pack_value(builder, aryty.dtype, val, ptr)
 
 
@@ -1568,7 +1399,7 @@ def setitem_array_tuple(context, builder, sig, args):
     indices = [context.cast(builder, i, t, types.intp)
                for t, i in zip(idxty, indices)]
     ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                   wraparound=True)
+                                   wraparound=context.metadata['wraparound'])
 
     context.pack_value(builder, aryty.dtype, val, ptr)
 
@@ -1777,10 +1608,14 @@ def float_impl(context, builder, sig, args):
 @implement(complex, types.VarArg)
 def complex_impl(context, builder, sig, args):
     if len(sig.args) == 1:
-        [realty] = sig.args
-        [real] = args
-        real = context.cast(builder, real, realty, types.float64)
-        imag = context.get_constant(types.float64, 0)
+        [argty] = sig.args
+        [arg] = args
+        if isinstance(argty, types.Complex):
+            # Cast Complex* to Complex128
+            return context.cast(builder, arg, argty, types.complex128)
+        else:
+            real = context.cast(builder, arg, argty, types.float64)
+            imag = context.get_constant(types.float64, 0)
 
     elif len(sig.args) == 2:
         [realty, imagty] = sig.args
@@ -1792,39 +1627,6 @@ def complex_impl(context, builder, sig, args):
     cmplx.real = real
     cmplx.imag = imag
     return cmplx._getvalue()
-
-#-------------------------------------------------------------------------------
-
-@builtin
-@implement(types.print_item_type, types.Kind(types.CharSeq))
-def print_charseq(context, builder, sig, args):
-    [x] = args
-    py = context.get_python_api(builder)
-    xp = cgutils.alloca_once(builder, x.type)
-    builder.store(x, xp)
-    byteptr = builder.bitcast(xp, Type.pointer(Type.int(8)))
-    size = context.get_constant(types.intp, x.type.elements[0].count)
-    cstr = py.bytes_from_string_and_size(byteptr, size)
-    py.print_object(cstr)
-    py.decref(cstr)
-    return context.get_dummy_value()
-
-#-------------------------------------------------------------------------------
-
-@builtin
-@implement(types.print_type, types.VarArg)
-def print_varargs(context, builder, sig, args):
-    py = context.get_python_api(builder)
-    for i, (argtype, argval) in enumerate(zip(sig.args, args)):
-        signature = typing.signature(types.none, argtype)
-        imp = context.get_function(types.print_item_type, signature)
-        imp(builder, [argval])
-        if i == len(args) - 1:
-            py.print_string('\n')
-        else:
-            py.print_string(' ')
-
-    return context.get_dummy_value()
 
 # -----------------------------------------------------------------------------
 

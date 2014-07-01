@@ -3,6 +3,7 @@ import sys
 import os
 import warnings
 
+
 def _readenv(name, ctor, default):
     try:
         res = os.environ[name]
@@ -24,10 +25,13 @@ DEBUG = _readenv("NUMBA_DEBUG", int, 0)
 DEBUG_JIT = _readenv("NUMBA_DEBUG_JIT", int, 0)
 
 # Optimization level
-OPT = _readenv("NUMBA_OPT", int, 0)
+OPT = _readenv("NUMBA_OPT", int, 3)
 
 # Force dump of LLVM IR
 DUMP_LLVM = _readenv("NUMBA_DUMP_LLVM", int, DEBUG)
+
+# Force dump of Function optimized LLVM IR
+NUMBA_DUMP_FUNC_OPT = _readenv("NUMBA_DUMP_FUNC_OPT", int, DEBUG)
 
 # Force dump of Optimized LLVM IR
 DUMP_OPTIMIZED = _readenv("NUMBA_DUMP_OPTIMIZED", int, DEBUG)
@@ -40,4 +44,7 @@ ANNOTATE = _readenv("NUMBA_DUMP_ANNOTATION", int, 0)
 
 # Python version in (major, minor) tuple
 PYVERSION = sys.version_info[:2]
+
+# Disable CUDA support
+DISABLE_CUDA = _readenv("NUMBA_DISABLE_CUDA", int, 0)
 

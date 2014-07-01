@@ -1,14 +1,15 @@
 from __future__ import print_function
 from collections import namedtuple, defaultdict
-from types import BuiltinFunctionType, MethodType
+import copy
+from types import MethodType
 import llvm.core as lc
 from llvm.core import Type, Constant
 import numpy
-from numba import types, utils, cgutils, typing, numpy_support
+from numba import types, utils, cgutils, typing, numpy_support, errcode
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, python_attr_impl,
                                     builtin_registry, impl_attribute)
-from numba.targets import builtins
+from numba.targets import builtins, rangeobj
 
 
 LTYPEMAP = {
@@ -33,10 +34,10 @@ LTYPEMAP = {
 STRUCT_TYPES = {
     types.complex64: builtins.Complex64,
     types.complex128: builtins.Complex128,
-    types.range_state32_type: builtins.RangeState32,
-    types.range_iter32_type: builtins.RangeIter32,
-    types.range_state64_type: builtins.RangeState64,
-    types.range_iter64_type: builtins.RangeIter64,
+    types.range_state32_type: rangeobj.RangeState32,
+    types.range_iter32_type: rangeobj.RangeIter32,
+    types.range_state64_type: rangeobj.RangeState64,
+    types.range_iter64_type: rangeobj.RangeIter64,
     types.slice3_type: builtins.Slice,
 }
 
@@ -137,7 +138,11 @@ class BaseContext(object):
         """
         Returns a localized context that contains extra environment information
         """
-        return ContextProxy(self)
+        obj = copy.copy(self)
+        obj.metadata = utils.UniqueDict()
+        obj.linking = set()
+        obj.exceptions = {}
+        return obj
 
     def insert_func_defn(self, defns):
         for defn in defns:
@@ -292,6 +297,10 @@ class BaseContext(object):
         elif ty in STRUCT_TYPES:
             return self.get_struct_type(STRUCT_TYPES[ty])
 
+        elif isinstance(ty, types.Pair):
+            pairty = self.make_pair(ty.first_type, ty.second_type)
+            return self.get_struct_type(pairty)
+
         else:
             return LTYPEMAP[ty]
 
@@ -382,6 +391,9 @@ class BaseContext(object):
 
         elif ty in types.signed_domain:
             return Constant.int_signextend(lty, val)
+
+        elif ty in types.unsigned_domain:
+            return Constant.int(lty, val)
 
         elif ty in types.real_domain:
             return Constant.real(lty, val)
@@ -522,6 +534,26 @@ class BaseContext(object):
     def return_exc(self, builder):
         builder.ret(RETCODE_EXC)
 
+    def return_user_exc(self, builder, code):
+        assert code > 0
+        builder.ret(Constant.int(Type.int(), code))
+
+    def pair_first(self, builder, val, ty):
+        """
+        Extract the first element of a heterogenous pair.
+        """
+        paircls = self.make_pair(ty.first_type, ty.second_type)
+        pair = paircls(self, builder, value=val)
+        return self.get_argument_value(builder, ty.first_type, pair.first)
+
+    def pair_second(self, builder, val, ty):
+        """
+        Extract the second element of a heterogenous pair.
+        """
+        paircls = self.make_pair(ty.first_type, ty.second_type)
+        pair = paircls(self, builder, value=val)
+        return self.get_argument_value(builder, ty.second_type, pair.second)
+
     def cast(self, builder, val, fromty, toty):
         if fromty == toty or toty == types.Any or isinstance(toty, types.Kind):
             return val
@@ -614,6 +646,16 @@ class BaseContext(object):
             olditems = cgutils.unpack_tuple(builder, val, len(fromty))
             items = [self.cast(builder, i, fromty.dtype, toty.dtype)
                      for i in olditems]
+            tup = self.get_constant_undef(toty)
+            for idx, val in enumerate(items):
+                tup = builder.insert_value(tup, val, idx)
+            return tup
+
+        elif (types.is_int_tuple(toty) and types.is_int_tuple(fromty) and
+                len(toty) == len(fromty)):
+            olditems = cgutils.unpack_tuple(builder, val, len(fromty))
+            items = [self.cast(builder, i, t, toty.dtype)
+                     for i, t in zip(olditems, fromty.items)]
             tup = self.get_constant_undef(toty)
             for idx, val in enumerate(items):
                 tup = builder.insert_value(tup, val, idx)
@@ -741,6 +783,12 @@ class BaseContext(object):
     def make_unituple_iter(self, typ):
         return builtins.make_unituple_iter(typ)
 
+    def make_pair(self, first_type, second_type):
+        """
+        Create a heterogenous pair class parametered for the given types.
+        """
+        return builtins.make_pair(first_type, second_type)
+
     def make_constant_array(self, builder, typ, ary):
         assert typ.layout == 'C'                # assumed in typeinfer.py
         ary = numpy.ascontiguousarray(ary)
@@ -783,6 +831,26 @@ class BaseContext(object):
         cary.strides = cstrides
         return cary._getvalue()
 
+    def add_libs(self, libs):
+        self.linking |= set(libs)
+
+    def get_abi_sizeof(self, lty):
+        raise NotImplementedError
+
+    def add_exception(self, exc):
+        n = len(self.exceptions) + errcode.ERROR_COUNT
+        self.exceptions[n] = exc
+        return n
+
+    def optimize_function(self, func):
+        """
+        Perform function-level optimization.
+        This may improve generated code and reduce memory usage.
+
+        Note: This is called at the end of lowering.
+        """
+        pass
+
 
 class _wrap_impl(object):
     def __init__(self, imp, context, sig):
@@ -799,22 +867,3 @@ class _wrap_impl(object):
     def __repr__(self):
         return "<wrapped %s>" % self._imp
 
-
-class ContextProxy(object):
-    """
-    Add localized environment for the context of the compiling unit.
-    """
-
-    def __init__(self, base):
-        self.__base = base
-        self.metadata = utils.UniqueDict()
-        self.linking = set()
-
-    def add_libs(self, libs):
-        self.linking |= set(libs)
-
-    def __getattr__(self, name):
-        if not name.startswith('_'):
-            return getattr(self.__base, name)
-        else:
-            return super(ContextProxy, self).__getattr__(name)

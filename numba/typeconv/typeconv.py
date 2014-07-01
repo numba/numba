@@ -14,17 +14,17 @@ class TypeManager(object):
     def check_compatible(self, fromty, toty):
         return _typeconv.check_compatible(self._ptr, fromty._code, toty._code)
 
-    def set_compatbile(self, fromty, toty, by):
+    def set_compatible(self, fromty, toty, by):
         _typeconv.set_compatible(self._ptr, fromty._code, toty._code, by)
 
     def set_promote(self, fromty, toty):
-        self.set_compatbile(fromty, toty, ord("p"))
+        self.set_compatible(fromty, toty, ord("p"))
 
     def set_unsafe_convert(self, fromty, toty):
-        self.set_compatbile(fromty, toty, ord("u"))
+        self.set_compatible(fromty, toty, ord("u"))
 
     def set_safe_convert(self, fromty, toty):
-        self.set_compatbile(fromty, toty, ord("s"))
+        self.set_compatible(fromty, toty, ord("s"))
 
     def get_pointer(self):
         return _typeconv.get_pointer(self._ptr)

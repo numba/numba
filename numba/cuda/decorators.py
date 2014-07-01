@@ -122,7 +122,7 @@ def autojit(func, **kws):
     In the above code, a version of foo with the signature
     "void(int32[:], float32[:])" is compiled.
     """
-    return AutoJitCUDAKernel(func, bind=True)
+    return AutoJitCUDAKernel(func, bind=True, targetoptions=kws)
 
 
 def declare_device(name, restype=None, argtypes=None):

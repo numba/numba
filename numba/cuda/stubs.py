@@ -101,6 +101,36 @@ def grid_expand(ndim):
 grid = macro.Macro('ptx.grid', grid_expand, callable=True)
 
 #-------------------------------------------------------------------------------
+# Gridsize Macro
+
+def gridsize_expand(ndim):
+    """gridsize(ndim)
+
+    ndim: [int] 1 or 2
+
+        if ndim == 1:
+            return cuda.blockDim.x * cuda.gridDim.x
+        elif ndim == 2:
+            x = cuda.blockDim.x * cuda.gridDim.x
+            y = cuda.blockDim.y * cuda.gridDim.y
+            return x, y
+    """
+    if ndim == 1:
+        fname = "ptx.gridsize.1d"
+        restype = types.int32
+    elif ndim == 2:
+        fname = "ptx.gridsize.2d"
+        restype = types.UniTuple(types.int32, 2)
+    else:
+        raise ValueError('argument can only be 1 or 2')
+
+    return ir.Intrinsic(fname, typing.signature(restype, types.intp),
+                        args=[ndim])
+
+
+gridsize = macro.Macro('ptx.gridsize', gridsize_expand, callable=True)
+
+#-------------------------------------------------------------------------------
 # synthreads
 
 class syncthreads(Stub):
@@ -173,7 +203,7 @@ class local(Stub):
 
 def const_array_like(ndarray):
     fname = "ptx.cmem.arylike"
-    aryty = dispatcher.typeof_pyval(ndarray)
+    aryty = dispatcher.Overloaded.typeof_pyval(ndarray)
     sig = typing.signature(aryty, aryty)
     return ir.Intrinsic(fname, sig, args=[ndarray])
 
