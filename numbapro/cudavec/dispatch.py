@@ -282,9 +282,6 @@ class CudaUFuncDispatcher(object):
             else:
                 return left
 
-@cuda.jit("void(float32[:], float32[:])")
-def haha(a, b):
-    b[0] = 0
 
 class CUDAGenerializedUFunc(object):
     def __init__(self, kernelmap, engine):
