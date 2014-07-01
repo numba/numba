@@ -117,6 +117,24 @@ def zip_usecase():
         result += i * j
     return result
 
+def zip_0_usecase():
+    result = 0
+    for i in zip():
+        result += 1
+    return result
+
+def zip_1_usecase():
+    result = 0
+    for i, in zip((1, 2)):
+        result += i
+    return result
+
+def zip_3_usecase():
+    result = 0
+    for i, j, k in zip((1, 2), (3, 4, 5), (6.7, 8.9)):
+        result += i * j * k
+    return result
+
 
 class TestBuiltins(TestCase):
 
@@ -545,6 +563,24 @@ class TestBuiltins(TestCase):
 
     def test_zip_npm(self):
         self.test_zip(flags=no_pyobj_flags)
+
+    def test_zip_1(self, flags=forceobj_flags):
+        self.run_nullary_func(zip_1_usecase, flags)
+
+    def test_zip_1_npm(self):
+        self.test_zip_1(flags=no_pyobj_flags)
+
+    def test_zip_3(self, flags=forceobj_flags):
+        self.run_nullary_func(zip_3_usecase, flags)
+
+    def test_zip_3_npm(self):
+        self.test_zip_3(flags=no_pyobj_flags)
+
+    def test_zip_0(self, flags=forceobj_flags):
+        self.run_nullary_func(zip_0_usecase, flags)
+
+    def test_zip_0_npm(self):
+        self.test_zip_0(flags=no_pyobj_flags)
 
 
 if __name__ == '__main__':

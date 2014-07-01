@@ -118,6 +118,11 @@ def iternext_zip(context, builder, sig, args, result):
     zipcls = make_zip_cls(zip_type)
     zipobj = zipcls(context, builder, value=zipobj)
 
+    if len(zipobj) == 0:
+        # zip() is an empty iterator
+        result.set_exhausted()
+        return
+
     is_valid = context.get_constant(types.boolean, True)
     values = []
 

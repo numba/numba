@@ -120,7 +120,7 @@ class _IternextResult(object):
         """
         Mark the iterator as exhausted.
         """
-        self._pairobj.second = self._builder.get_constant(types.boolean, False)
+        self._pairobj.second = self._context.get_constant(types.boolean, False)
 
     def set_valid(self, is_valid=True):
         """
@@ -128,7 +128,7 @@ class _IternextResult(object):
         be either a Python boolean or a LLVM inst).
         """
         if is_valid in (False, True):
-            is_valid = self._builder.get_constant(types.boolean, is_valid)
+            is_valid = self._context.get_constant(types.boolean, is_valid)
         self._pairobj.second = is_valid
 
     def yield_(self, value):
