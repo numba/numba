@@ -351,6 +351,26 @@ class EnumerateType(IteratorType):
         return hash(self.source_type)
 
 
+class ZipType(IteratorType):
+    """
+    Type class for `zip` objects.
+    Type instances are parametered with the underlying source types.
+    """
+
+    def __init__(self, iterable_types):
+        self.source_types = tuple(tp.iterator_type for tp in iterable_types)
+        self.yield_type = Tuple(tp.yield_type for tp in self.source_types)
+        name = 'zip(%s)' % ', '.join(str(tp) for tp in self.source_types)
+        super(ZipType, self).__init__(name, param=True)
+
+    def __eq__(self, other):
+        if isinstance(other, ZipType):
+            return self.source_types == other.source_types
+
+    def __hash__(self):
+        return hash(self.source_types)
+
+
 class CharSeq(Type):
     def __init__(self, count):
         self.count = count

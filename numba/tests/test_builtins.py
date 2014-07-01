@@ -111,8 +111,20 @@ def sum_usecase(x):
 def unichr_usecase(x):
     return unichr(x)
 
+def zip_usecase():
+    result = 0
+    for i, j in zip((1, 2, 3), (4.5, 6.7)):
+        result += i * j
+    return result
+
 
 class TestBuiltins(TestCase):
+
+    def run_nullary_func(self, pyfunc, flags):
+        cr = compile_isolated(pyfunc, (), flags=flags)
+        cfunc = cr.entry_point
+        expected = pyfunc()
+        self.assertPreciseEqual(cfunc(), expected)
 
     def test_abs(self, flags=enable_pyobj_flags):
         pyfunc = abs_usecase
@@ -240,10 +252,7 @@ class TestBuiltins(TestCase):
         self.test_complex(flags=no_pyobj_flags)
 
     def test_enumerate(self, flags=enable_pyobj_flags):
-        pyfunc = enumerate_usecase
-        cr = compile_isolated(pyfunc, (), flags=flags)
-        cfunc = cr.entry_point
-        self.assertPreciseEqual(cfunc(), pyfunc())
+        self.run_nullary_func(enumerate_usecase, flags)
 
     def test_enumerate_npm(self):
         self.test_enumerate(flags=no_pyobj_flags)
@@ -530,6 +539,12 @@ class TestBuiltins(TestCase):
     def test_unichr_npm(self):
         with self.assertTypingError():
             self.test_unichr(flags=no_pyobj_flags)
+
+    def test_zip(self, flags=forceobj_flags):
+        self.run_nullary_func(zip_usecase, flags)
+
+    def test_aaa_zip_npm(self):
+        self.test_zip(flags=no_pyobj_flags)
 
 
 if __name__ == '__main__':

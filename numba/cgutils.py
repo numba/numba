@@ -47,31 +47,44 @@ class Structure(object):
             assert self._type == ref.type.pointee
             self._value = ref
 
-        self._fdmap = {}
-        self._typemap = {}
+        self._namemap = {}
+        self._fdmap = []
+        self._typemap = []
         base = Constant.int(Type.int(), 0)
         for i, (k, tp) in enumerate(self._fields):
-            self._fdmap[k] = (base, Constant.int(Type.int(), i))
-            self._typemap[k] = tp
+            self._namemap[k] = i
+            self._fdmap.append((base, Constant.int(Type.int(), i)))
+            self._typemap.append(tp)
 
     def __getattr__(self, field):
         if not field.startswith('_'):
-            offset = self._fdmap[field]
-            ptr = self._builder.gep(self._value, offset)
-            return self._builder.load(ptr)
+            return self[self._namemap[field]]
         else:
             raise AttributeError(field)
 
     def __setattr__(self, field, value):
         if field.startswith('_'):
             return super(Structure, self).__setattr__(field, value)
-        offset = self._fdmap[field]
+        self[self._namemap[field]] = value
+
+    def __getitem__(self, index):
+        offset = self._fdmap[index]
+        ptr = self._builder.gep(self._value, offset)
+        return self._builder.load(ptr)
+
+    def __setitem__(self, index, value):
+        offset = self._fdmap[index]
         ptr = self._builder.gep(self._value, offset)
         value = self._context.get_return_value(self._builder,
-                                               self._typemap[field], value)
-        assert ptr.type.pointee == value.type, (str(ptr.type.pointee),
-                                                str(value.type))
+                                               self._typemap[index], value)
+        if ptr.type.pointee != value.type:
+            raise AssertionError("Type mismatch: __setitem__(%d, ...) "
+                                 "expected %r but got %r"
+                                 % (index, str(ptr.type.pointee), str(value.type)))
         self._builder.store(value, ptr)
+
+    def __len__(self):
+        return len(self._namemap)
 
     def _getpointer(self):
         return self._value

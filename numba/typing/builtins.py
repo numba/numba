@@ -755,3 +755,17 @@ class Enumerate(AbstractTemplate):
 
 
 builtin_global(enumerate, types.Function(Enumerate))
+
+
+@builtin
+class Zip(AbstractTemplate):
+    key = zip
+
+    def generic(self, args, kws):
+        assert not kws
+        if all(isinstance(it, types.IterableType) for it in args):
+            zip_type = types.ZipType(args)
+            return signature(zip_type, *args)
+
+
+builtin_global(zip, types.Function(Zip))
