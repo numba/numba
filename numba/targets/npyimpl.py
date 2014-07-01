@@ -152,18 +152,18 @@ def unary_npy_math_extern(fn):
             return ref_impl(context, builder, sig, [cast_val])
 
 
-def numpy_unary_ufunc(funckey, asfloat=False, scalar_input=False):
+def numpy_unary_ufunc(funckey, asfloat=False):
     def impl(context, builder, sig, args):
         [tyinp, tyout] = sig.args
         [inp, out] = args
 
         scalar_inp, scalar_tyinp, inp_ndim = _decompose_type(tyinp)
+        iary = _prepare_scalar(context, builder, inp, tyinp) if scalar_inp else _prepare_array(context, builder, inp, tyinp, inp_ndim)
+        oary = _prepare_array(context, builder, out, tyout, tyout.ndim)
 
         promote_type = types.float64 if asfloat else _default_promotion_for_type(scalar_tyinp)
         result_type = promote_type
 
-        iary = _prepare_scalar(context, builder, inp, tyinp) if scalar_inp else _prepare_array(context, builder, inp, tyinp, inp_ndim)
-        oary = _prepare_array(context, builder, out, tyout, tyout.ndim)
 
         # Temporary hack for __ftol2 llvm bug. Don't allow storing
         # float results in uint64 array on windows.
@@ -221,10 +221,6 @@ def register_unary_ufunc(ufunc, operator, asfloat=False):
         imp = numpy_unary_ufunc(operator, asfloat=asfloat)
         return imp(context, builder, sig, args)
 
-    def unary_ufunc_scalar_input(context, builder, sig, args):
-        imp = numpy_unary_ufunc(operator, scalar_input=True, asfloat=asfloat)
-        return imp(context, builder, sig, args)
-
     def scalar_unary_ufunc(context, builder, sig, args):
         imp = numpy_scalar_unary_ufunc(operator, asfloat)
         return imp(context, builder, sig, args)
@@ -233,7 +229,7 @@ def register_unary_ufunc(ufunc, operator, asfloat=False):
         types.Kind(types.Array))(unary_ufunc))
     for ty in types.number_domain:
         register(implement(ufunc, ty,
-            types.Kind(types.Array))(unary_ufunc_scalar_input))
+            types.Kind(types.Array))(unary_ufunc))
     for ty in types.number_domain:
         register(implement(ufunc, ty)(scalar_unary_ufunc))
 
@@ -281,14 +277,17 @@ register_unary_ufunc(numpy.absolute, types.abs_type)
 register_unary_ufunc(numpy.sign, types.sign_type)
 register_unary_ufunc(numpy.negative, types.neg_type)
 
-def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
-                       asfloat=False, true_divide=False):
+def numpy_binary_ufunc(funckey, divbyzero=False, asfloat=False, true_divide=False):
     def impl(context, builder, sig, args):
         [tyinp1, tyinp2, tyout] = sig.args
         [inp1, inp2, out] = args
 
         scalar_inp1, scalar_tyinp1, inp1_ndim = _decompose_type(tyinp1, where='first input operand')
         scalar_inp2, scalar_tyinp2, inp2_ndim = _decompose_type(tyinp2, where='second input operand')
+
+        i1ary = _prepare_scalar(context, builder, inp1, tyinp1) if scalar_inp1 else _prepare_array(context, builder, inp1, tyinp1, inp1_ndim)
+        i2ary = _prepare_scalar(context, builder, inp2, tyinp2) if scalar_inp2 else _prepare_array(context, builder, inp2, tyinp2, inp2_ndim)
+        oary = _prepare_array(context, builder, out, tyout, tyout.ndim)
 
         # based only on the first operand?
         promote_type = types.float64 if asfloat else _default_promotion_for_type(scalar_tyinp1)
@@ -303,9 +302,6 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
 
         sig = typing.signature(result_type, promote_type, promote_type)
 
-        i1ary = _prepare_scalar(context, builder, inp1, tyinp1) if scalar_inp1 else _prepare_array(context, builder, inp1, tyinp1, inp1_ndim)
-        i2ary = _prepare_scalar(context, builder, inp2, tyinp2) if scalar_inp2 else _prepare_array(context, builder, inp2, tyinp2, inp2_ndim)
-        oary = _prepare_array(context, builder, out, tyout, tyout.ndim)
 
         fnwork = context.get_function(funckey, sig)
         intpty = context.get_value_type(types.intp)
@@ -320,7 +316,6 @@ def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
 
             x = i1ary.load_data(inp1_indices.as_values())
             y = i2ary.load_data(inp2_indices.as_values())
-
             po = oary.load_effective_address(indices)
 
             if divbyzero:
@@ -385,21 +380,16 @@ def register_binary_ufunc(ufunc, operator, asfloat=False, divbyzero=False, true_
                                  divbyzero=divbyzero, true_divide=true_divide)
         return imp(context, builder, sig, args)
 
-    def binary_ufunc_scalar_inputs(context, builder, sig, args):
-        imp = numpy_binary_ufunc(operator, scalar_inputs=True, asfloat=asfloat,
-                                 divbyzero=divbyzero, true_divide=true_divide)
-        return imp(context, builder, sig, args)
-
     register(implement(ufunc, types.Kind(types.Array), types.Kind(types.Array),
         types.Kind(types.Array))(binary_ufunc))
     for ty in types.number_domain:
         register(implement(ufunc, ty, types.Kind(types.Array),
-            types.Kind(types.Array))(binary_ufunc_scalar_inputs))
+            types.Kind(types.Array))(binary_ufunc))
         register(implement(ufunc, types.Kind(types.Array), ty,
-            types.Kind(types.Array))(binary_ufunc_scalar_inputs))
+            types.Kind(types.Array))(binary_ufunc))
     for ty1, ty2 in itertools.product(types.number_domain, types.number_domain):
         register(implement(ufunc, ty1, ty2,
-            types.Kind(types.Array))(binary_ufunc_scalar_inputs))
+            types.Kind(types.Array))(binary_ufunc))
 
 register_binary_ufunc(numpy.add, '+')
 register_binary_ufunc(numpy.subtract, '-')
