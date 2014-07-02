@@ -1,7 +1,10 @@
 from __future__ import print_function, division, absolute_import
+
+import collections
 from pprint import pprint
-from numba import utils
 import warnings
+
+from numba import utils
 
 
 class DataFlowAnalysis(object):
@@ -15,6 +18,7 @@ class DataFlowAnalysis(object):
     def __init__(self, cfa):
         self.cfa = cfa
         self.bytecode = cfa.bytecode
+        # { block offset -> BlockInfo }
         self.infos = {}
         self.syntax_blocks = []
 
@@ -23,7 +27,13 @@ class DataFlowAnalysis(object):
             self.infos[blk.offset] = self.run_on_block(blk)
 
     def run_on_block(self, blk):
-        info = BlockInfo(blk.offset)
+        # By nature of Python bytecode, there will be no incoming
+        # variables from subsequent blocks.  This is an easy way
+        # of breaking the potential circularity of the problem.
+        incoming_blocks  = [self.infos[i] for i in
+                            self.cfa.blocks[blk.offset].incoming
+                            if i < blk.offset]
+        info = BlockInfo(blk.offset, incoming_blocks)
         for offset in blk:
             inst = self.bytecode[offset]
             self.dispatch(info, inst)
@@ -457,13 +467,22 @@ class LoopBlock(object):
 
 
 class BlockInfo(object):
-    def __init__(self, offset):
+    def __init__(self, offset, incoming_blocks):
         self.offset = offset
+        # The list of incoming BlockInfo objects (obtained by control
+        # flow analysis).
+        self.incoming_blocks = incoming_blocks
         self.stack = []
+        # The list of incoming variables (phis) used by this block.
         self.incomings = []
+        # { var name -> { outgoing phis for subsequent blocks } }
+        self.outgoings = collections.defaultdict(set)
         self.insts = []
         self.tempct = 0
         self._term = None
+
+    def __repr__(self):
+        return "<%s at offset %d>" % (self.__class__.__name__, self.offset)
 
     def dump(self):
         print("offset", self.offset, "{")
@@ -474,23 +493,52 @@ class BlockInfo(object):
         pprint(self.insts)
         print("}")
 
-    def make_temp(self):
+    def make_temp(self, prefix=''):
         self.tempct += 1
-        name = '$%d.%d' % (self.offset, self.tempct)
+        name = '$%s%d.%d' % (prefix, self.offset, self.tempct)
         return name
 
     def push(self, val):
         self.stack.append(val)
 
     def pop(self):
-        # TODO: lingering incoming values
         if not self.stack:
-            assert not self.insts
-            ret = self.make_temp()
-            self.incomings.append(ret)
+            return self.make_incoming()
         else:
-            ret = self.stack.pop()
+            return self.stack.pop()
+
+    def make_incoming(self):
+        """
+        Create an incoming variable (due to not enough values being
+        available on our stack) and request its assignment from our
+        incoming blocks' own stack.
+        """
+        assert self.incoming_blocks
+        ret = self.make_temp('phi')
+        self.incomings.append(ret)
+        for ib in self.incoming_blocks:
+            ib.request_outgoing(ret, len(self.incomings))
         return ret
+
+    def request_outgoing(self, phiname, index):
+        """
+        Request the assignment of the variable at stack offset *index*
+        (from the top of stack, starting 1) to the variable *phiname*.
+        """
+        stack_len = len(self.stack)
+        if index > stack_len:
+            # Not enough items on this stack, recursively forward request
+            # to our incoming blocks.
+            assert self.incoming_blocks
+            for ib in self.incoming_blocks:
+                ib.request_outgoing(phiname, index - stack_len)
+        else:
+            assert index > 0
+            ret = self.stack[-index]
+            # Note: we use a set to avoid duplicate assignments for the
+            # same phi (typical case being a diamond-like block flow
+            # structure).
+            self.outgoings[ret].add(phiname)
 
     @property
     def tos(self):
