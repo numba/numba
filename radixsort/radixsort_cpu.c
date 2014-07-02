@@ -53,16 +53,22 @@ int main() {
 
 	count_occurence(data, freq, count);
 	scan(freq, offset);
-	//final_pos(data, offset, indices, count);
-	//scatter(data, indices, output, count);
+	final_pos(data, offset, indices, count);
+	scatter(data, indices, output, count);
 
 	puts("offset");
 	for(unsigned i=0; i<BITS; ++i) {
 		printf("[%u] = %u\n", i, offset[i]);
 	}
 
-	// puts("output");
-	// for(unsigned i=0; i<count; ++i) {
-	// 	printf("[%u] = %u\n", i, output[i]);
-	// }
+
+	puts("indices");
+	for(unsigned i=0; i<count; ++i) {
+		printf("[%u] = %u\n", i, indices[i]);
+	}
+
+	puts("output");
+	for(unsigned i=0; i<count; ++i) {
+		printf("[%u] = %u\n", i, output[i]);
+	}
 }
