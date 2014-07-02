@@ -66,7 +66,19 @@ def unpack_nested_heterogenous_tuple():
     return a + b + c
 
 
+def chained_unpack_assign1(x, y):
+    # Used to fail in object mode (issue #580)
+    a = (b, c) = (x, y)
+    (d, e) = a
+    return d + e + b + c
+
+
 class TestUnpack(TestCase):
+
+    def run_nullary_func(self, pyfunc, flags):
+        cr = compile_isolated(pyfunc, (), flags=flags)
+        cfunc = cr.entry_point
+        self.assertPreciseEqual(cfunc(), pyfunc())
 
     def test_unpack_list(self):
         pyfunc = unpack_list
@@ -89,40 +101,39 @@ class TestUnpack(TestCase):
         self.test_unpack_shape(flags=no_pyobj_flags)
 
     def test_unpack_range(self, flags=force_pyobj_flags):
-        pyfunc = unpack_range
-        cr = compile_isolated(pyfunc, (), flags=flags)
-        cfunc = cr.entry_point
-        self.assertPreciseEqual(cfunc(), pyfunc())
+        self.run_nullary_func(unpack_range, flags)
 
     def test_unpack_range_npm(self):
         self.test_unpack_range(flags=no_pyobj_flags)
 
     def test_unpack_tuple(self, flags=force_pyobj_flags):
-        pyfunc = unpack_tuple
-        cr = compile_isolated(pyfunc, (), flags=flags)
-        cfunc = cr.entry_point
-        self.assertPreciseEqual(cfunc(), pyfunc())
+        self.run_nullary_func(unpack_tuple, flags)
 
     def test_unpack_tuple_npm(self):
         self.test_unpack_tuple(flags=no_pyobj_flags)
 
     def test_unpack_heterogenous_tuple(self, flags=force_pyobj_flags):
-        pyfunc = unpack_heterogenous_tuple
-        cr = compile_isolated(pyfunc, (), flags=flags)
-        cfunc = cr.entry_point
-        self.assertPreciseEqual(cfunc(), pyfunc())
+        self.run_nullary_func(unpack_heterogenous_tuple, flags)
 
     def test_unpack_heterogenous_tuple_npm(self):
         self.test_unpack_heterogenous_tuple(flags=no_pyobj_flags)
 
     def test_unpack_nested_heterogenous_tuple(self, flags=force_pyobj_flags):
-        pyfunc = unpack_nested_heterogenous_tuple
-        cr = compile_isolated(pyfunc, (), flags=flags)
-        cfunc = cr.entry_point
-        self.assertPreciseEqual(cfunc(), pyfunc())
+        self.run_nullary_func(unpack_nested_heterogenous_tuple, flags)
 
     def test_unpack_nested_heterogenous_tuple_npm(self):
         self.test_unpack_nested_heterogenous_tuple(flags=no_pyobj_flags)
+
+    def test_chained_unpack_assign(self, flags=force_pyobj_flags):
+        pyfunc = chained_unpack_assign1
+        cr = compile_isolated(pyfunc, [types.int32, types.int32],
+                              flags=flags)
+        cfunc = cr.entry_point
+        args = (4, 5)
+        self.assertPreciseEqual(cfunc(*args), pyfunc(*args))
+
+    def test_chained_unpack_assign_npm(self):
+        self.test_chained_unpack_assign(flags=no_pyobj_flags)
 
     def check_unpack_error(self, pyfunc, flags=force_pyobj_flags):
         cr = compile_isolated(pyfunc, (), flags=flags)

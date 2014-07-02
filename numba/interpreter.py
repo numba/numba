@@ -411,6 +411,13 @@ class Interpreter(object):
         value = self.get(value)
         self.store(value=value, name=dstname)
 
+    def op_DUP_TOPX(self, inst, orig, duped):
+        for src, dst in zip(orig, duped):
+            self.store(value=self.get(src), name=dst)
+
+    op_DUP_TOP = op_DUP_TOPX
+    op_DUP_TOP_TWO = op_DUP_TOPX
+
     def op_STORE_ATTR(self, inst, target, value):
         attr = self.code_names[inst.arg]
         sa = ir.SetAttr(target=self.get(target), value=self.get(value),

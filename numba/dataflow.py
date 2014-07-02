@@ -38,28 +38,28 @@ class DataFlowAnalysis(object):
         fn = getattr(self, fname)
         fn(info, inst)
 
-    def dup_topx(self, info, count):
-        stack = [info.pop() for _ in range(count)]
-        for val in reversed(stack):
+    def dup_topx(self, info, inst, count):
+        orig = [info.pop() for _ in range(count)]
+        orig.reverse()
+        # We need to actually create new temporaries if we want the
+        # IR optimization pass to work correctly (see issue #580)
+        duped = [info.make_temp() for _ in range(count)]
+        info.append(inst, orig=orig, duped=duped)
+        for val in orig:
             info.push(val)
-        for val in reversed(stack):
+        for val in duped:
             info.push(val)
-
-    def op_DUP_TOP(self, info, inst):
-        tos = info.pop()
-        info.push(tos)
-        info.push(tos)
 
     def op_DUP_TOPX(self, info, inst):
         count = inst.arg
         assert 1 <= count <= 5, "Invalid DUP_TOPX count"
-        self.dup_topx(info, count)
+        self.dup_topx(info, inst, count)
 
     def op_DUP_TOP(self, info, inst):
-        self.dup_topx(info, count=1)
+        self.dup_topx(info, inst, count=1)
 
     def op_DUP_TOP_TWO(self, info, inst):
-        self.dup_topx(info, count=2)
+        self.dup_topx(info, inst, count=2)
 
     def op_ROT_TWO(self, info, inst):
         first = info.pop()
