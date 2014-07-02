@@ -473,10 +473,9 @@ class BlockInfo(object):
         # flow analysis).
         self.incoming_blocks = incoming_blocks
         self.stack = []
-        # The list of incoming variables (phis) used by this block.
-        self.incomings = []
-        # { var name -> { outgoing phis for subsequent blocks } }
-        self.outgoings = collections.defaultdict(set)
+        # Outgoing variables from this block:
+        #  { outgoing block -> [ (phiname, varname) tuples ] }
+        self.outgoings = collections.defaultdict(list)
         self.insts = []
         self.tempct = 0
         self._term = None
@@ -489,7 +488,6 @@ class BlockInfo(object):
         print("  stack: ", end='')
         pprint(self.stack)
         print("  incomings: ", end='')
-        pprint(self.incomings)
         pprint(self.insts)
         print("}")
 
@@ -511,34 +509,35 @@ class BlockInfo(object):
         """
         Create an incoming variable (due to not enough values being
         available on our stack) and request its assignment from our
-        incoming blocks' own stack.
+        incoming blocks' own stacks.
         """
         assert self.incoming_blocks
         ret = self.make_temp('phi')
-        self.incomings.append(ret)
         for ib in self.incoming_blocks:
-            ib.request_outgoing(ret, len(self.incomings))
+            ib.request_outgoing(self, ret)
         return ret
 
-    def request_outgoing(self, phiname, index):
+    def request_outgoing(self, outgoing_block, phiname):
         """
-        Request the assignment of the variable at stack offset *index*
-        (from the top of stack, starting 1) to the variable *phiname*.
+        Request the assignment of the next available stack variable
+        for block *outgoing_block* with target name *phiname*.
         """
         stack_len = len(self.stack)
-        if index > stack_len:
+        phis = self.outgoings[outgoing_block]
+        # If phiname was already requested, ignore this new request
+        # (can happen with a diamond-shaped block flow structure).
+        if any(phi == phiname for phi, _ in phis):
+            return
+        n_phi = len(phis)
+        if n_phi >= stack_len:
             # Not enough items on this stack, recursively forward request
             # to our incoming blocks.
-            assert self.incoming_blocks
+            varname = self.make_incoming()
             for ib in self.incoming_blocks:
-                ib.request_outgoing(phiname, index - stack_len)
+                ib.request_outgoing(outgoing_block, phiname)
         else:
-            assert index > 0
-            ret = self.stack[-index]
-            # Note: we use a set to avoid duplicate assignments for the
-            # same phi (typical case being a diamond-like block flow
-            # structure).
-            self.outgoings[ret].add(phiname)
+            varname = self.stack[-n_phi - 1]
+        phis.append((phiname, varname))
 
     @property
     def tos(self):

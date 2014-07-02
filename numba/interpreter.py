@@ -113,11 +113,11 @@ class Interpreter(object):
         Add assignments to forward requested outgoing values
         to subsequent blocks.
         """
-        for var, phis in self.dfainfo.outgoings.items():
-            for phiname in phis:
+        for phis in self.dfainfo.outgoings.values():
+            for phiname, varname in phis:
                 target = self.current_scope.get_or_define(phiname,
                                                           loc=self.loc)
-                stmt = ir.Assign(value=self.get(var), target=target,
+                stmt = ir.Assign(value=self.get(varname), target=target,
                                  loc=self.loc)
                 if not self.current_block.is_terminated:
                     self.current_block.append(stmt)
