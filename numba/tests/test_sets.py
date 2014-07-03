@@ -32,7 +32,7 @@ class SetTestCase(TestCase):
         pyfunc = build_set_usecase(1, 2.0, 3j, 2)
         self.run_nullary_func(pyfunc, flags=flags)
         # Check that items are inserted in the right order (here the
-        # result will be {2.0}, not {2})
+        # result will be {2}, not {2.0})
         pyfunc = build_set_usecase(2.0, 2)
         got, expected = self.run_nullary_func(pyfunc, flags=flags)
         self.assertIs(type(got.pop()), type(expected.pop()))
