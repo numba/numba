@@ -43,6 +43,11 @@ def var_propagate3(a, b):
     return c
 
 
+def var_propagate4(a, b):
+    c = 5 + (a - 1 and b + 1) or (a + 1 and b - 1)
+    return c
+
+
 
 class TestDataFlow(TestCase):
 
@@ -86,6 +91,21 @@ class TestDataFlow(TestCase):
     def test_var_propagate3(self):
         self.run_propagate_func(var_propagate3, (2, 3))
         self.run_propagate_func(var_propagate3, (3, 2))
+        self.run_propagate_func(var_propagate3, (2, 0))
+        self.run_propagate_func(var_propagate3, (-1, 0))
+        self.run_propagate_func(var_propagate3, (0, 2))
+        self.run_propagate_func(var_propagate3, (0, -1))
+
+    def test_var_propagate4(self):
+        self.run_propagate_func(var_propagate3, (1, 1))
+        self.run_propagate_func(var_propagate3, (1, 0))
+        self.run_propagate_func(var_propagate3, (1, -1))
+        self.run_propagate_func(var_propagate3, (0, 1))
+        self.run_propagate_func(var_propagate3, (0, 0))
+        self.run_propagate_func(var_propagate3, (0, -1))
+        self.run_propagate_func(var_propagate3, (-1, 1))
+        self.run_propagate_func(var_propagate3, (-1, 0))
+        self.run_propagate_func(var_propagate3, (-1, -1))
 
 
 if __name__ == '__main__':
