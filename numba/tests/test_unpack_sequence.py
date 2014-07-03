@@ -75,11 +75,6 @@ def chained_unpack_assign1(x, y):
 
 class TestUnpack(TestCase):
 
-    def run_nullary_func(self, pyfunc, flags):
-        cr = compile_isolated(pyfunc, (), flags=flags)
-        cfunc = cr.entry_point
-        self.assertPreciseEqual(cfunc(), pyfunc())
-
     def test_unpack_list(self):
         pyfunc = unpack_list
         cr = compile_isolated(pyfunc, (), flags=enable_pyobj_flags)

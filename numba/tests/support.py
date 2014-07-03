@@ -6,10 +6,21 @@ import contextlib
 
 from numba import types, typing, utils
 from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
+from numba import types, utils
+from numba.compiler import compile_isolated, Flags
 from numba.lowering import LoweringError
 from numba.targets import cpu
 from numba.typeinfer import TypingError
 import numba.unittest_support as unittest
+
+
+enable_pyobj_flags = Flags()
+enable_pyobj_flags.set("enable_pyobject")
+
+force_pyobj_flags = Flags()
+force_pyobj_flags.set("force_pyobject")
+
+no_pyobj_flags = Flags()
 
 
 class CompilationCache(object):
@@ -83,8 +94,10 @@ class TestCase(unittest.TestCase):
                     exact_comparison = False
                     break
             else:
-                self.fail("unsupported types: %r and %r"
-                          % (type(first), type(second)))
+                # Assume these are non-numeric types: we will fall back
+                # on regular unittest comparison.
+                self.assertIs(first.__class__, second.__class__)
+                exact_comparison = True
 
         if not exact_comparison and prec != 'exact':
             if prec == 'single':
@@ -97,3 +110,17 @@ class TestCase(unittest.TestCase):
             self.assertAlmostEqual(first, second, delta=delta, msg=msg)
         else:
             self.assertEqual(first, second, msg=msg)
+
+    def run_nullary_func(self, pyfunc, flags):
+        """
+        Compile the 0-argument *pyfunc* with the given *flags*, and check
+        it returns the same result as the pure Python function.
+        The got and expected results are returned.
+        """
+        cr = compile_isolated(pyfunc, (), flags=flags)
+        cfunc = cr.entry_point
+        expected = pyfunc()
+        got = cfunc()
+        self.assertPreciseEqual(got, expected)
+        return got, expected
+

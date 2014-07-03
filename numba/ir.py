@@ -119,6 +119,16 @@ class Expr(object):
         return cls(op=op, loc=loc, items=items)
 
     @classmethod
+    def build_set(cls, items, loc):
+        op = 'build_set'
+        return cls(op=op, loc=loc, items=items)
+
+    @classmethod
+    def build_map(cls, size, loc):
+        op = 'build_map'
+        return cls(op=op, loc=loc, size=size)
+
+    @classmethod
     def pair_first(cls, value, loc):
         op = 'pair_first'
         return cls(op=op, loc=loc, value=value)
@@ -195,6 +205,17 @@ class SetAttr(Stmt):
 
     def __repr__(self):
         return '(%s).%s = %s' % (self.target, self.attr, self.value)
+
+
+class StoreMap(Stmt):
+    def __init__(self, dct, key, value, loc):
+        self.dct = dct
+        self.key = key
+        self.value = value
+        self.loc = loc
+
+    def __repr__(self):
+        return '%s[%s] = %s' % (self.dct, self.key, self.value)
 
 
 class Del(Stmt):
