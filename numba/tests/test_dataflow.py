@@ -97,15 +97,15 @@ class TestDataFlow(TestCase):
         self.run_propagate_func(var_propagate3, (0, -1))
 
     def test_var_propagate4(self):
-        self.run_propagate_func(var_propagate3, (1, 1))
-        self.run_propagate_func(var_propagate3, (1, 0))
-        self.run_propagate_func(var_propagate3, (1, -1))
-        self.run_propagate_func(var_propagate3, (0, 1))
-        self.run_propagate_func(var_propagate3, (0, 0))
-        self.run_propagate_func(var_propagate3, (0, -1))
-        self.run_propagate_func(var_propagate3, (-1, 1))
-        self.run_propagate_func(var_propagate3, (-1, 0))
-        self.run_propagate_func(var_propagate3, (-1, -1))
+        self.run_propagate_func(var_propagate4, (1, 1))
+        self.run_propagate_func(var_propagate4, (1, 0))
+        self.run_propagate_func(var_propagate4, (1, -1))
+        self.run_propagate_func(var_propagate4, (0, 1))
+        self.run_propagate_func(var_propagate4, (0, 0))
+        self.run_propagate_func(var_propagate4, (0, -1))
+        self.run_propagate_func(var_propagate4, (-1, 1))
+        self.run_propagate_func(var_propagate4, (-1, 0))
+        self.run_propagate_func(var_propagate4, (-1, -1))
 
 
 if __name__ == '__main__':
