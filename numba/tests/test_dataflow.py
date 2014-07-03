@@ -4,7 +4,7 @@ import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba.utils import PYVERSION
 from numba import types
-from .support import TestCase
+from .support import TestCase, CompilationCache
 
 
 enable_pyobj_flags = Flags()
@@ -46,6 +46,9 @@ def var_propagate3(a, b):
 
 class TestDataFlow(TestCase):
 
+    def setUp(self):
+        self.cache = CompilationCache()
+
     def test_assignments(self, flags=force_pyobj_flags):
         pyfunc = assignments
         cr = compile_isolated(pyfunc, (types.int32,), flags=flags)
@@ -67,8 +70,8 @@ class TestDataFlow(TestCase):
     # compilation to succeed, hence the no_pyobj_flags in the following tests.
 
     def run_propagate_func(self, pyfunc, args):
-        cr = compile_isolated(pyfunc, (types.int32, types.int32),
-                              flags=no_pyobj_flags)
+        cr = self.cache.compile(pyfunc, (types.int32, types.int32),
+                                flags=no_pyobj_flags)
         cfunc = cr.entry_point
         self.assertPreciseEqual(cfunc(*args), pyfunc(*args))
 
