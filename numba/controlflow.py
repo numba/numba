@@ -67,6 +67,14 @@ class ControlFlowAnalysis(object):
             if i in self.liveblocks:
                 yield self.blocks[i]
 
+    def incoming_blocks(self, block):
+        """
+        Return incoming blocks for *block*.
+        """
+        for i in block.incoming:
+            if i in self.liveblocks:
+                yield self.blocks[i]
+
     def run(self):
         for inst in self._iter_inst():
             fname = "op_%s" % inst.opname

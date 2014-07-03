@@ -85,10 +85,7 @@ class TestDataFlow(TestCase):
 
     def test_var_propagate3(self):
         self.run_propagate_func(var_propagate3, (2, 3))
-        if PYVERSION < (2, 7):
-            # FIXME this one fails on 2.7+
-            # (mishandling of JUMP_IF_{TRUE,FALSE}_OR_POP's stack effect)
-            self.run_propagate_func(var_propagate3, (3, 2))
+        self.run_propagate_func(var_propagate3, (3, 2))
 
 
 if __name__ == '__main__':

@@ -113,19 +113,18 @@ class Interpreter(object):
         Add assignments to forward requested outgoing values
         to subsequent blocks.
         """
-        for phis in self.dfainfo.outgoings.values():
-            for phiname, varname in phis:
-                if varname is None:
-                    # The phi isn't actually used, ignore.
-                    continue
-                target = self.current_scope.get_or_define(phiname,
-                                                          loc=self.loc)
-                stmt = ir.Assign(value=self.get(varname), target=target,
-                                 loc=self.loc)
-                if not self.current_block.is_terminated:
-                    self.current_block.append(stmt)
-                else:
-                    self.current_block.insert_before_terminator(stmt)
+        for phiname, varname in self.dfainfo.outgoing_phis.items():
+            if varname is None:
+                # The phi isn't actually used, ignore.
+                continue
+            target = self.current_scope.get_or_define(phiname,
+                                                      loc=self.loc)
+            stmt = ir.Assign(value=self.get(varname), target=target,
+                             loc=self.loc)
+            if not self.current_block.is_terminated:
+                self.current_block.append(stmt)
+            else:
+                self.current_block.insert_before_terminator(stmt)
 
     def get_global_value(self, name):
         """
