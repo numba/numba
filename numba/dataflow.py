@@ -119,7 +119,7 @@ class DataFlowAnalysis(object):
         info.push(lst)
 
     def op_POP_TOP(self, info, inst):
-        info.pop()
+        info.pop(discard=True)
 
     def op_STORE_ATTR(self, info, inst):
         target = info.pop()
@@ -499,28 +499,40 @@ class BlockInfo(object):
     def push(self, val):
         self.stack.append(val)
 
-    def pop(self):
+    def pop(self, discard=False):
+        """
+        Pop a variable from the stack, or request it from incoming blocks if
+        the stack is empty.
+        If *discard* is true, the variable isn't meant to be used anymore,
+        which allows reducing the number of temporaries created.
+        """
         if not self.stack:
-            return self.make_incoming()
+            return self.make_incoming(discard)
         else:
             return self.stack.pop()
 
-    def make_incoming(self):
+    def make_incoming(self, discard=False):
         """
         Create an incoming variable (due to not enough values being
         available on our stack) and request its assignment from our
         incoming blocks' own stacks.
+
+        If *discard* is true, the variable is created but no assignment
+        is made.
         """
         assert self.incoming_blocks
         ret = self.make_temp('phi')
         for ib in self.incoming_blocks:
-            ib.request_outgoing(self, ret)
+            ib.request_outgoing(self, ret, discard)
         return ret
 
-    def request_outgoing(self, outgoing_block, phiname):
+    def request_outgoing(self, outgoing_block, phiname, discard=False):
         """
         Request the assignment of the next available stack variable
         for block *outgoing_block* with target name *phiname*.
+
+        If *discard* is true, no assignment is made but the stack
+        variable is still marked as used.
         """
         stack_len = len(self.stack)
         phis = self.outgoings[outgoing_block]
@@ -534,10 +546,10 @@ class BlockInfo(object):
             # to our incoming blocks.
             varname = self.make_incoming()
             for ib in self.incoming_blocks:
-                ib.request_outgoing(outgoing_block, phiname)
+                ib.request_outgoing(self, varname, discard)
         else:
             varname = self.stack[-n_phi - 1]
-        phis.append((phiname, varname))
+        phis.append((phiname, None if discard else varname))
 
     @property
     def tos(self):

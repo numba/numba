@@ -12,6 +12,8 @@ enable_pyobj_flags.set("enable_pyobject")
 force_pyobj_flags = Flags()
 force_pyobj_flags.set("force_pyobject")
 
+no_pyobj_flags = Flags()
+
 
 def assignments(a):
     b = c = str(a)
@@ -55,17 +57,21 @@ class TestDataFlow(TestCase):
             cfunc("a")
 
     def test_var_propagate1(self):
+        # The dataflow analysis must be good enough for native mode
+        # compilation to succeed, hence the no_pyobj_flags.
         pyfunc = var_propagate1
         cr = compile_isolated(pyfunc, (types.int32, types.int32),
-                              flags=enable_pyobj_flags)
+                              flags=no_pyobj_flags)
         cfunc = cr.entry_point
         args = (2, 3)
         self.assertPreciseEqual(cfunc(*args), pyfunc(*args))
 
     def test_var_propagate2(self):
+        # The dataflow analysis must be good enough for native mode
+        # compilation to succeed, hence the no_pyobj_flags.
         pyfunc = var_propagate2
         cr = compile_isolated(pyfunc, (types.int32, types.int32),
-                              flags=enable_pyobj_flags)
+                              flags=no_pyobj_flags)
         cfunc = cr.entry_point
         args = (2, 3)
         self.assertPreciseEqual(cfunc(*args), pyfunc(*args))

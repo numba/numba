@@ -115,6 +115,9 @@ class Interpreter(object):
         """
         for phis in self.dfainfo.outgoings.values():
             for phiname, varname in phis:
+                if varname is None:
+                    # The phi isn't actually used, ignore.
+                    continue
                 target = self.current_scope.get_or_define(phiname,
                                                           loc=self.loc)
                 stmt = ir.Assign(value=self.get(varname), target=target,
