@@ -1,7 +1,10 @@
 from __future__ import print_function, division, absolute_import
+
+import collections
 from pprint import pprint
-from numba import utils
 import warnings
+
+from numba import utils
 
 
 class DataFlowAnalysis(object):
@@ -15,6 +18,7 @@ class DataFlowAnalysis(object):
     def __init__(self, cfa):
         self.cfa = cfa
         self.bytecode = cfa.bytecode
+        # { block offset -> BlockInfo }
         self.infos = {}
         self.syntax_blocks = []
 
@@ -23,7 +27,13 @@ class DataFlowAnalysis(object):
             self.infos[blk.offset] = self.run_on_block(blk)
 
     def run_on_block(self, blk):
-        info = BlockInfo(blk.offset)
+        # By nature of Python bytecode, there will be no incoming
+        # variables from subsequent blocks.  This is an easy way
+        # of breaking the potential circularity of the problem.
+        incoming_blocks  = [self.infos[i] for i in
+                            self.cfa.blocks[blk.offset].incoming
+                            if i < blk.offset]
+        info = BlockInfo(blk.offset, incoming_blocks)
         for offset in blk:
             inst = self.bytecode[offset]
             self.dispatch(info, inst)
@@ -109,7 +119,7 @@ class DataFlowAnalysis(object):
         info.push(lst)
 
     def op_POP_TOP(self, info, inst):
-        info.pop()
+        info.pop(discard=True)
 
     def op_STORE_ATTR(self, info, inst):
         target = info.pop()
@@ -125,7 +135,7 @@ class DataFlowAnalysis(object):
         info.push(name)
 
     def op_LOAD_CONST(self, info, inst):
-        res = info.make_temp()
+        res = info.make_temp('const')
         info.append(inst, res=res)
         info.push(res)
 
@@ -409,6 +419,7 @@ class DataFlowAnalysis(object):
         info.append(inst, pred=pred)
         info.terminator = inst
 
+    # XXX these are broken, since the stack effect depends on the predicate
     op_JUMP_IF_FALSE_OR_POP = op_JUMP_IF_FALSE
     op_JUMP_IF_TRUE_OR_POP = op_JUMP_IF_TRUE
 
@@ -457,40 +468,90 @@ class LoopBlock(object):
 
 
 class BlockInfo(object):
-    def __init__(self, offset):
+    def __init__(self, offset, incoming_blocks):
         self.offset = offset
+        # The list of incoming BlockInfo objects (obtained by control
+        # flow analysis).
+        self.incoming_blocks = incoming_blocks
         self.stack = []
-        self.incomings = []
+        # Outgoing variables from this block:
+        #  { outgoing block -> [ (phiname, varname) tuples ] }
+        self.outgoings = collections.defaultdict(list)
         self.insts = []
         self.tempct = 0
         self._term = None
+
+    def __repr__(self):
+        return "<%s at offset %d>" % (self.__class__.__name__, self.offset)
 
     def dump(self):
         print("offset", self.offset, "{")
         print("  stack: ", end='')
         pprint(self.stack)
         print("  incomings: ", end='')
-        pprint(self.incomings)
         pprint(self.insts)
         print("}")
 
-    def make_temp(self):
+    def make_temp(self, prefix=''):
         self.tempct += 1
-        name = '$%d.%d' % (self.offset, self.tempct)
+        name = '$%s%d.%d' % (prefix, self.offset, self.tempct)
         return name
 
     def push(self, val):
         self.stack.append(val)
 
-    def pop(self):
-        # TODO: lingering incoming values
+    def pop(self, discard=False):
+        """
+        Pop a variable from the stack, or request it from incoming blocks if
+        the stack is empty.
+        If *discard* is true, the variable isn't meant to be used anymore,
+        which allows reducing the number of temporaries created.
+        """
         if not self.stack:
-            assert not self.insts
-            ret = self.make_temp()
-            self.incomings.append(ret)
+            return self.make_incoming(discard)
         else:
-            ret = self.stack.pop()
+            return self.stack.pop()
+
+    def make_incoming(self, discard=False):
+        """
+        Create an incoming variable (due to not enough values being
+        available on our stack) and request its assignment from our
+        incoming blocks' own stacks.
+
+        If *discard* is true, the variable is created but no assignment
+        is made.
+        """
+        assert self.incoming_blocks
+        ret = self.make_temp('phi')
+        for ib in self.incoming_blocks:
+            ib.request_outgoing(self, ret, discard)
         return ret
+
+    def request_outgoing(self, outgoing_block, phiname, discard=False):
+        """
+        Request the assignment of the next available stack variable
+        for block *outgoing_block* with target name *phiname*.
+
+        If *discard* is true, no assignment is made but the stack
+        variable is still marked as used.
+        """
+        stack_len = len(self.stack)
+        phis = self.outgoings[outgoing_block]
+        # If phiname was already requested, ignore this new request
+        # (can happen with a diamond-shaped block flow structure).
+        if any(phi == phiname for phi, _ in phis):
+            return
+        n_phi = len(phis)
+        if n_phi >= stack_len:
+            # Not enough items on this stack, recursively forward request
+            # to our incoming blocks.
+            for ib in self.incoming_blocks:
+                ib.request_outgoing(self, phiname, discard)
+        else:
+            varname = self.stack[-n_phi - 1]
+            if discard:
+                varname = None
+            phis.append((phiname, None if discard else varname))
 
     @property
     def tos(self):
