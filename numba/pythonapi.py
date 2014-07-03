@@ -447,6 +447,18 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyList_SetItem")
         return self.builder.call(fn, [seq, idx, val])
 
+    def set_new(self, iterable=None):
+        if iterable is None:
+            iterable = self.get_null_object()
+        fnty = Type.function(self.pyobj, [self.pyobj])
+        fn = self._get_function(fnty, name="PySet_New")
+        return self.builder.call(fn, [iterable])
+
+    def set_add(self, set, value):
+        fnty = Type.function(Type.int(), [self.pyobj, self.pyobj])
+        fn = self._get_function(fnty, name="PySet_Add")
+        return self.builder.call(fn, [set, value])
+
     def dict_new(self, presize=0):
         if presize == 0:
             fnty = Type.function(self.pyobj, ())

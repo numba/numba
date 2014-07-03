@@ -119,6 +119,11 @@ class Expr(object):
         return cls(op=op, loc=loc, items=items)
 
     @classmethod
+    def build_set(cls, items, loc):
+        op = 'build_set'
+        return cls(op=op, loc=loc, items=items)
+
+    @classmethod
     def build_map(cls, size, loc):
         op = 'build_map'
         return cls(op=op, loc=loc, size=size)

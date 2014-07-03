@@ -39,6 +39,7 @@ def _make_bytecode_table():
 
     elif sys.version_info[:2] >= (2, 7):  # python 2.7+
         version_specific = [
+            ('BUILD_SET', 2),
             ('POP_JUMP_IF_FALSE', 2),
             ('POP_JUMP_IF_TRUE', 2),
             ('JUMP_IF_TRUE_OR_POP', 2),

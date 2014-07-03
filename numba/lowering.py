@@ -767,6 +767,14 @@ class PyLower(BaseLower):
             res = self.pyapi.dict_new(expr.size)
             self.check_error(res)
             return res
+        elif expr.op == 'build_set':
+            items = [self.loadvar(it.name) for it in expr.items]
+            res = self.pyapi.set_new()
+            self.check_error(res)
+            for it in items:
+                ok = self.pyapi.set_add(res, it)
+                self.check_int_status(ok)
+            return res
         elif expr.op == 'getiter':
             obj = self.loadvar(expr.value.name)
             res = self.pyapi.object_getiter(obj)

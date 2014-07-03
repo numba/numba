@@ -113,6 +113,13 @@ class DataFlowAnalysis(object):
         info.append(inst, size=inst.arg, res=dct)
         info.push(dct)
 
+    def op_BUILD_SET(self, info, inst):
+        count = inst.arg
+        items = [info.pop() for _ in range(count)]
+        res = info.make_temp()
+        info.append(inst, items=items, res=res)
+        info.push(res)
+
     def op_POP_TOP(self, info, inst):
         info.pop()
 

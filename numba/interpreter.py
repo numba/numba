@@ -538,6 +538,11 @@ class Interpreter(object):
                                   loc=self.loc)
         self.store(expr, res)
 
+    def op_BUILD_SET(self, inst, items, res):
+        expr = ir.Expr.build_set(items=[self.get(x) for x in items],
+                                 loc=self.loc)
+        self.store(expr, res)
+
     def op_BUILD_MAP(self, inst, size, res):
         expr = ir.Expr.build_map(size=size, loc=self.loc)
         self.store(expr, res)

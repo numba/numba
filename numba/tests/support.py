@@ -5,10 +5,19 @@ Assorted utilities for use in tests.
 import contextlib
 
 from numba import types, utils
-from numba.compiler import compile_isolated
+from numba.compiler import compile_isolated, Flags
 from numba.lowering import LoweringError
 from numba.typeinfer import TypingError
 import numba.unittest_support as unittest
+
+
+enable_pyobj_flags = Flags()
+enable_pyobj_flags.set("enable_pyobject")
+
+force_pyobj_flags = Flags()
+force_pyobj_flags.set("force_pyobject")
+
+no_pyobj_flags = Flags()
 
 
 class TestCase(unittest.TestCase):
@@ -77,8 +86,12 @@ class TestCase(unittest.TestCase):
         """
         Compile the 0-argument *pyfunc* with the given *flags*, and check
         it returns the same result as the pure Python function.
+        The got and expected results are returned.
         """
         cr = compile_isolated(pyfunc, (), flags=flags)
         cfunc = cr.entry_point
-        self.assertPreciseEqual(cfunc(), pyfunc())
+        expected = pyfunc()
+        got = cfunc()
+        self.assertPreciseEqual(got, expected)
+        return got, expected
 
