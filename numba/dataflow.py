@@ -27,19 +27,22 @@ class DataFlowAnalysis(object):
             self.infos[blk.offset] = self.run_on_block(blk)
 
     def run_on_block(self, blk):
-        # By nature of Python bytecode, there will be no incoming
-        # variables from subsequent blocks.  This is an easy way
-        # of breaking the potential circularity of the problem.
-        incoming_blocks = [self.infos[ib.offset] for ib in
-                           self.cfa.incoming_blocks(blk)
-                           if ib.offset < blk.offset]
+        incoming_blocks = []
         info = BlockInfo(blk.offset, incoming_blocks)
 
-        # Compute stack offset at block entry
-        for ib in incoming_blocks:
+        for ib, pops in self.cfa.incoming_blocks(blk):
+            # By nature of Python bytecode, there will be no incoming
+            # variables from subsequent blocks.  This is an easy way
+            # of breaking the potential circularity of the problem.
+            if ib.offset >= blk.offset:
+                continue
+            ib = self.infos[ib.offset]
+            incoming_blocks.append(ib)
+
+            # Compute stack offset at block entry
             # The stack effect of our predecessors should be known
             assert ib.stack_offset is not None, ib
-            new_offset = ib.stack_offset + ib.stack_effect
+            new_offset = ib.stack_offset + ib.stack_effect - pops
             if new_offset < 0:
                 raise RuntimeError("computed negative stack offset for %s"
                                    % blk)
@@ -439,7 +442,6 @@ class DataFlowAnalysis(object):
         info.append(inst, pred=pred)
         info.terminator = inst
 
-    # XXX these are broken, since the stack effect depends on the predicate
     op_JUMP_IF_FALSE_OR_POP = op_JUMP_IF_FALSE
     op_JUMP_IF_TRUE_OR_POP = op_JUMP_IF_TRUE
 

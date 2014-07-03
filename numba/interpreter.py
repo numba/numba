@@ -721,7 +721,7 @@ class Interpreter(object):
         else:
             return
             # Which is the exit of the loop
-        if br not in self.cfa.blocks[loop.exit].incoming:
+        if br not in self.cfa.blocks[loop.exit].incoming_jumps:
             return
 
         # Therefore, current block is a while loop condition
