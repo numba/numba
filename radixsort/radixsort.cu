@@ -1,3 +1,5 @@
+// compile with: nvcc -arch=sm_30 radixsort.cu -I./cub
+
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -96,6 +98,8 @@ gpu_scan(unsigned freq[])
 
 /*
 Compute index base on bucket offset and input data.
+
+blocksize >= BUCKETSIZE
 */
 __global__
 void
@@ -196,7 +200,7 @@ scan(unsigned *dev_freq) {
 void
 final_pos(unsigned char *dev_data, unsigned *dev_offset, unsigned *dev_indices,
           unsigned count, unsigned stride, unsigned offset) {
-    gpu_final_pos<<<BUCKETSIZE, 512>>>(dev_data, dev_offset, dev_indices, count,
+    gpu_final_pos<<<BUCKETSIZE, BUCKETSIZE>>>(dev_data, dev_offset, dev_indices, count,
                                        stride, offset);
     ASSERT_CUDA_LAST_ERROR();
 }
@@ -236,7 +240,7 @@ int main() {
     const unsigned count = sizeof(data) / sizeof(data_type);
 
     for(unsigned i=0; i<count; ++i) {
-        data[i] = i;
+        data[i] = count - i - 1;
     }
 
     unsigned data_size = sizeof(data);
@@ -260,16 +264,25 @@ int main() {
     CUDA_SAFE(cudaMemcpy(dev_data, data, data_size, cudaMemcpyHostToDevice));
     //CUDA_SAFE(cudaMemcpy(dev_freq, freq, freq_size, cudaMemcpyHostToDevice));
 
-    radixsort(dev_data, dev_freq, dev_indices, dev_sorted, count, elemsize,
-              1);
+    if (0) {
 
-    CUDA_SAFE(cudaMemcpy(dev_data, dev_sorted, data_size, cudaMemcpyDeviceToDevice));
-    radixsort(dev_data, dev_freq, dev_indices, dev_sorted, 256, elemsize,
-              0);
+        // MSD sort
+        radixsort(dev_data, dev_freq, dev_indices, dev_sorted, count, elemsize,
+                  1);
 
-    CUDA_SAFE(cudaMemcpy(dev_data, dev_sorted, data_size, cudaMemcpyDeviceToDevice));
-    radixsort(dev_data + 4*256, dev_freq, dev_indices, dev_sorted + 4*256, 300 - 256, elemsize,
-              0);
+        CUDA_SAFE(cudaMemcpy(dev_data, dev_sorted, data_size, cudaMemcpyDeviceToDevice));
+        radixsort(dev_data, dev_freq, dev_indices, dev_sorted, 256, elemsize,
+                  0);
+
+        CUDA_SAFE(cudaMemcpy(dev_data, dev_sorted, data_size, cudaMemcpyDeviceToDevice));
+        radixsort(dev_data + 4*256, dev_freq, dev_indices, dev_sorted + 4*256, 300 - 256, elemsize,
+                  0);
+    } else {
+        // LSD sort
+        radixsort(dev_data, dev_freq, dev_indices, dev_sorted, count, elemsize, 0);
+        CUDA_SAFE(cudaMemcpy(dev_data, dev_sorted, data_size, cudaMemcpyDeviceToDevice));
+        radixsort(dev_data, dev_freq, dev_indices, dev_sorted, count, elemsize, 1);
+    }
 
     CUDA_SAFE(cudaMemcpy(freq, dev_freq, freq_size, cudaMemcpyDeviceToHost));
     // CUDA_SAFE(cudaMemcpy(indices, dev_indices, indices_size, cudaMemcpyDeviceToHost));
