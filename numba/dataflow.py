@@ -135,7 +135,7 @@ class DataFlowAnalysis(object):
         info.push(name)
 
     def op_LOAD_CONST(self, info, inst):
-        res = info.make_temp()
+        res = info.make_temp('const')
         info.append(inst, res=res)
         info.push(res)
 
@@ -545,12 +545,13 @@ class BlockInfo(object):
         if n_phi >= stack_len:
             # Not enough items on this stack, recursively forward request
             # to our incoming blocks.
-            varname = self.make_incoming()
             for ib in self.incoming_blocks:
-                ib.request_outgoing(self, varname, discard)
+                ib.request_outgoing(self, phiname, discard)
         else:
             varname = self.stack[-n_phi - 1]
-        phis.append((phiname, None if discard else varname))
+            if discard:
+                varname = None
+            phis.append((phiname, None if discard else varname))
 
     @property
     def tos(self):

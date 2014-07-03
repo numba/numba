@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
+from numba.utils import PYVERSION
 from numba import types
 from .support import TestCase
 
@@ -37,6 +38,12 @@ def var_propagate2(a, b):
     return c
 
 
+def var_propagate3(a, b):
+    c = 5 + (a > b and a or b)
+    return c
+
+
+
 class TestDataFlow(TestCase):
 
     def test_assignments(self, flags=force_pyobj_flags):
@@ -56,25 +63,29 @@ class TestDataFlow(TestCase):
         if flags is force_pyobj_flags:
             cfunc("a")
 
-    def test_var_propagate1(self):
-        # The dataflow analysis must be good enough for native mode
-        # compilation to succeed, hence the no_pyobj_flags.
-        pyfunc = var_propagate1
+    # The dataflow analysis must be good enough for native mode
+    # compilation to succeed, hence the no_pyobj_flags in the following tests.
+
+    def run_propagate_func(self, pyfunc, args):
         cr = compile_isolated(pyfunc, (types.int32, types.int32),
                               flags=no_pyobj_flags)
         cfunc = cr.entry_point
-        args = (2, 3)
         self.assertPreciseEqual(cfunc(*args), pyfunc(*args))
 
+    def test_var_propagate1(self):
+        self.run_propagate_func(var_propagate1, (2, 3))
+        self.run_propagate_func(var_propagate1, (3, 2))
+
     def test_var_propagate2(self):
-        # The dataflow analysis must be good enough for native mode
-        # compilation to succeed, hence the no_pyobj_flags.
-        pyfunc = var_propagate2
-        cr = compile_isolated(pyfunc, (types.int32, types.int32),
-                              flags=no_pyobj_flags)
-        cfunc = cr.entry_point
-        args = (2, 3)
-        self.assertPreciseEqual(cfunc(*args), pyfunc(*args))
+        self.run_propagate_func(var_propagate2, (2, 3))
+        self.run_propagate_func(var_propagate2, (3, 2))
+
+    def test_var_propagate3(self):
+        self.run_propagate_func(var_propagate3, (2, 3))
+        if PYVERSION < (2, 7):
+            # FIXME this one fails on 2.7+
+            # (mishandling of JUMP_IF_{TRUE,FALSE}_OR_POP's stack effect)
+            self.run_propagate_func(var_propagate3, (3, 2))
 
 
 if __name__ == '__main__':
