@@ -447,10 +447,34 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyList_SetItem")
         return self.builder.call(fn, [seq, idx, val])
 
-    def dict_new(self):
-        fnty = Type.function(self.pyobj, ())
-        fn = self._get_function(fnty, name="PyDict_New")
-        return self.builder.call(fn, ())
+    def set_new(self, iterable=None):
+        if iterable is None:
+            iterable = self.get_null_object()
+        fnty = Type.function(self.pyobj, [self.pyobj])
+        fn = self._get_function(fnty, name="PySet_New")
+        return self.builder.call(fn, [iterable])
+
+    def set_add(self, set, value):
+        fnty = Type.function(Type.int(), [self.pyobj, self.pyobj])
+        fn = self._get_function(fnty, name="PySet_Add")
+        return self.builder.call(fn, [set, value])
+
+    def dict_new(self, presize=0):
+        if presize == 0:
+            fnty = Type.function(self.pyobj, ())
+            fn = self._get_function(fnty, name="PyDict_New")
+            return self.builder.call(fn, ())
+        else:
+            fnty = Type.function(self.pyobj, [self.py_ssize_t])
+            fn = self._get_function(fnty, name="_PyDict_NewPresized")
+            return self.builder.call(fn,
+                                     [Constant.int(self.py_ssize_t, presize)])
+
+    def dict_setitem(self, dictobj, nameobj, valobj):
+        fnty = Type.function(Type.int(), (self.pyobj, self.pyobj,
+                                          self.pyobj))
+        fn = self._get_function(fnty, name="PyDict_SetItem")
+        return self.builder.call(fn, (dictobj, nameobj, valobj))
 
     def dict_setitem_string(self, dictobj, name, valobj):
         fnty = Type.function(Type.int(), (self.pyobj, self.cstring,
