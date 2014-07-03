@@ -75,7 +75,7 @@ class ControlFlowAnalysis(object):
 
     def incoming_blocks(self, block):
         """
-        Return incoming blocks for *block*.
+        Yield (incoming block, number of stack pops) pairs for *block*.
         """
         for i, pops in block.incoming_jumps.items():
             if i in self.liveblocks:

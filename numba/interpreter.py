@@ -114,9 +114,6 @@ class Interpreter(object):
         to subsequent blocks.
         """
         for phiname, varname in self.dfainfo.outgoing_phis.items():
-            if varname is None:
-                # The phi isn't actually used, ignore.
-                continue
             target = self.current_scope.get_or_define(phiname,
                                                       loc=self.loc)
             stmt = ir.Assign(value=self.get(varname), target=target,

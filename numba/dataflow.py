@@ -533,34 +533,29 @@ class BlockInfo(object):
         """
         if not self.stack:
             self.stack_offset -= 1
-            return self.make_incoming(discard)
+            if not discard:
+                return self.make_incoming()
         else:
             self.stack_effect -= 1
             return self.stack.pop()
 
-    def make_incoming(self, discard=False):
+    def make_incoming(self):
         """
         Create an incoming variable (due to not enough values being
         available on our stack) and request its assignment from our
         incoming blocks' own stacks.
-
-        If *discard* is true, the variable is created but no assignment
-        is made.
         """
         assert self.incoming_blocks
         ret = self.make_temp('phi')
         for ib in self.incoming_blocks:
             stack_index = self.stack_offset + self.stack_effect
-            ib.request_outgoing(self, ret, stack_index, discard)
+            ib.request_outgoing(self, ret, stack_index)
         return ret
 
-    def request_outgoing(self, outgoing_block, phiname, stack_index, discard=False):
+    def request_outgoing(self, outgoing_block, phiname, stack_index):
         """
         Request the assignment of the next available stack variable
         for block *outgoing_block* with target name *phiname*.
-
-        If *discard* is true, no assignment is made but the stack
-        variable is still marked as used.
         """
         if phiname in self.outgoing_phis:
             # If phiname was already requested, ignore this new request
@@ -569,9 +564,9 @@ class BlockInfo(object):
         if stack_index < self.stack_offset:
             assert self.incoming_blocks
             for ib in self.incoming_blocks:
-                ib.request_outgoing(self, phiname, stack_index, discard)
+                ib.request_outgoing(self, phiname, stack_index)
         else:
-            varname = None if discard else self.stack[stack_index - self.stack_offset]
+            varname = self.stack[stack_index - self.stack_offset]
             self.outgoing_phis[phiname] = varname
 
     @property
