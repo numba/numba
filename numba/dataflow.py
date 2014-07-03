@@ -419,6 +419,7 @@ class DataFlowAnalysis(object):
         info.append(inst, pred=pred)
         info.terminator = inst
 
+    # XXX these are broken, since the stack effect depends on the predicate
     op_JUMP_IF_FALSE_OR_POP = op_JUMP_IF_FALSE
     op_JUMP_IF_TRUE_OR_POP = op_JUMP_IF_TRUE
 
