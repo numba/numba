@@ -83,6 +83,7 @@ def _make_bytecode_table():
                     ('BINARY_RSHIFT', 0),
                     ('BREAK_LOOP', 0),
                     ('BUILD_LIST', 2),
+                    ('BUILD_MAP', 2),
                     ('BUILD_SLICE', 2),
                     ('BUILD_TUPLE', 2),
                     ('CALL_FUNCTION', 2),
@@ -118,7 +119,7 @@ def _make_bytecode_table():
                     ('SETUP_LOOP', 2),
                     ('STORE_ATTR', 2),
                     ('STORE_FAST', 2),
-                    #    ('STORE_ATTR', 2), # not supported
+                    ('STORE_MAP', 0),
                     ('STORE_SUBSCR', 0),
                     ('UNARY_POSITIVE', 0),
                     ('UNARY_NEGATIVE', 0),

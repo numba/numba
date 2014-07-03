@@ -642,10 +642,14 @@ class PyLower(BaseLower):
             index = self.loadvar(inst.index.name)
             value = self.loadvar(inst.value.name)
             ok = self.pyapi.object_setitem(target, index, value)
-            negone = lc.Constant.int_signextend(ok.type, -1)
-            pred = self.builder.icmp(lc.ICMP_EQ, ok, negone)
-            with cgutils.if_unlikely(self.builder, pred):
-                self.return_exception_raised()
+            self.check_int_status(ok)
+
+        elif isinstance(inst, ir.StoreMap):
+            dct = self.loadvar(inst.dct)
+            key = self.loadvar(inst.key)
+            value = self.loadvar(inst.value)
+            ok = self.pyapi.dict_setitem(dct, key, value)
+            self.check_int_status(ok)
 
         elif isinstance(inst, ir.Return):
             retval = self.loadvar(inst.value.name)
@@ -718,10 +722,7 @@ class PyLower(BaseLower):
                 res = self.pyapi.number_positive(value)
             elif expr.fn == 'not':
                 res = self.pyapi.object_not(value)
-                negone = lc.Constant.int_signextend(Type.int(), -1)
-                err = self.builder.icmp(lc.ICMP_EQ, res, negone)
-                with cgutils.if_unlikely(self.builder, err):
-                    self.return_exception_raised()
+                self.check_int_status(res)
 
                 longval = self.builder.zext(res, self.pyapi.long)
                 res = self.pyapi.bool_from_long(longval)
@@ -760,6 +761,10 @@ class PyLower(BaseLower):
         elif expr.op == 'build_list':
             items = [self.loadvar(it.name) for it in expr.items]
             res = self.pyapi.list_pack(items)
+            self.check_error(res)
+            return res
+        elif expr.op == 'build_map':
+            res = self.pyapi.dict_new(expr.size)
             self.check_error(res)
             return res
         elif expr.op == 'getiter':
@@ -953,6 +958,15 @@ class PyLower(BaseLower):
             self.return_exception_raised()
 
         return obj
+
+    def check_int_status(self, num, ok_value=0):
+        """
+        Raise an exception if *num* is smaller than *ok_value*.
+        """
+        ok = lc.Constant.int(num.type, ok_value)
+        pred = self.builder.icmp(lc.ICMP_SLT, num, ok)
+        with cgutils.if_unlikely(self.builder, pred):
+            self.return_exception_raised()
 
     def is_null(self, obj):
         return cgutils.is_null(self.builder, obj)

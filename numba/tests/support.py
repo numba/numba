@@ -5,6 +5,7 @@ Assorted utilities for use in tests.
 import contextlib
 
 from numba import types, utils
+from numba.compiler import compile_isolated
 from numba.lowering import LoweringError
 from numba.typeinfer import TypingError
 import numba.unittest_support as unittest
@@ -55,8 +56,10 @@ class TestCase(unittest.TestCase):
                     exact_comparison = False
                     break
             else:
-                self.fail("unsupported types: %r and %r"
-                          % (type(first), type(second)))
+                # Assume these are non-numeric types: we will fall back
+                # on regular unittest comparison.
+                self.assertIs(first.__class__, second.__class__)
+                exact_comparison = True
 
         if not exact_comparison and prec != 'exact':
             if prec == 'single':
@@ -69,3 +72,13 @@ class TestCase(unittest.TestCase):
             self.assertAlmostEqual(first, second, delta=delta, msg=msg)
         else:
             self.assertEqual(first, second, msg=msg)
+
+    def run_nullary_func(self, pyfunc, flags):
+        """
+        Compile the 0-argument *pyfunc* with the given *flags*, and check
+        it returns the same result as the pure Python function.
+        """
+        cr = compile_isolated(pyfunc, (), flags=flags)
+        cfunc = cr.entry_point
+        self.assertPreciseEqual(cfunc(), pyfunc())
+

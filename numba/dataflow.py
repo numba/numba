@@ -108,6 +108,11 @@ class DataFlowAnalysis(object):
         info.append(inst, items=items, res=lst)
         info.push(lst)
 
+    def op_BUILD_MAP(self, info, inst):
+        dct = info.make_temp()
+        info.append(inst, size=inst.arg, res=dct)
+        info.push(dct)
+
     def op_POP_TOP(self, info, inst):
         info.pop()
 
@@ -119,6 +124,12 @@ class DataFlowAnalysis(object):
     def op_STORE_FAST(self, info, inst):
         value = info.pop()
         info.append(inst, value=value)
+
+    def op_STORE_MAP(self, info, inst):
+        key = info.pop()
+        value = info.pop()
+        dct = info.tos
+        info.append(inst, dct=dct, key=key, value=value)
 
     def op_LOAD_FAST(self, info, inst):
         name = self.bytecode.co_varnames[inst.arg]
