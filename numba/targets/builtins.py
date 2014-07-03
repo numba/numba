@@ -9,7 +9,8 @@ from numba import errcode
 from numba import types, typing, cgutils, utils
 from numba.targets.imputils import (builtin, builtin_attr, implement,
                                     impl_attribute, impl_attribute_generic,
-                                    iterator_impl, iternext_impl)
+                                    iterator_impl, iternext_impl,
+                                    struct_factory)
 from numba.typing import signature
 
 #-------------------------------------------------------------------------------
@@ -1088,7 +1089,12 @@ def make_pair(first_type, second_type):
     return Pair
 
 
+@struct_factory(types.UniTupleIter)
 def make_unituple_iter(tupiter):
+    """
+    Return the Structure representation of the given *tupiter* (an
+    instance of types.UniTupleIter).
+    """
     unituple = tupiter.unituple
 
     class UniTupleIter(cgutils.Structure):
@@ -1104,7 +1110,7 @@ def getiter_unituple(context, builder, sig, args):
     [tupty] = sig.args
     [tup] = args
 
-    tupitercls = context.make_unituple_iter(types.UniTupleIter(tupty))
+    tupitercls = make_unituple_iter(types.UniTupleIter(tupty))
     iterval = tupitercls(context, builder)
 
     index0 = context.get_constant(types.intp, 0)
@@ -1128,7 +1134,7 @@ def iternext_unituple(context, builder, sig, args, result):
     [tupiterty] = sig.args
     [tupiter] = args
 
-    tupitercls = context.make_unituple_iter(tupiterty)
+    tupitercls = make_unituple_iter(tupiterty)
     iterval = tupitercls(context, builder, value=tupiter)
     tup = iterval.tuple
     idxptr = iterval.index

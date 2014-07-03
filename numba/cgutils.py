@@ -20,6 +20,17 @@ def as_bool_byte(builder, value):
     return builder.zext(value, Type.int(8))
 
 
+def make_anonymous_struct(builder, values):
+    """
+    Create an anonymous struct constant containing the given LLVM *values*.
+    """
+    struct_type = Type.struct([v.type for v in values])
+    struct_val = Constant.undef(struct_type)
+    for i, v in enumerate(values):
+        struct_val = builder.insert_value(struct_val, v, i)
+    return struct_val
+
+
 class Structure(object):
     def __init__(self, context, builder, value=None, ref=None):
         self._type = context.get_struct_type(self)
