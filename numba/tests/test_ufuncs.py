@@ -592,14 +592,12 @@ class TestUFuncs(TestCase):
     def test_degrees_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('degrees', flags=flags)
 
-    @_unimplemented
     def test_degrees_ufunc_npm(self):
         self.test_degrees_ufunc(flags=no_pyobj_flags)
 
     def test_radians_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('radians', flags=flags)
 
-    @_unimplemented
     def test_radians_ufunc_npm(self):
         self.test_radians_ufunc(flags=no_pyobj_flags)
 

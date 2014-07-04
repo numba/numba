@@ -289,6 +289,13 @@ for sym, name in _externs:
     func = eval("npy." + name)
     register_unary_ufunc(sym, func, asfloat = True)
 
+# radiams and degrees ufuncs are equivalent to deg2rad and rad2deg resp.
+# register them.
+register_unary_ufunc(numpy.degrees, numpy.rad2deg, asfloat=True)
+register_unary_ufunc(numpy.radians, numpy.deg2rad, asfloat=True)
+
+# the following ufuncs rely on functions that are not based on a function
+# from npymath
 register_unary_ufunc(numpy.absolute, types.abs_type)
 register_unary_ufunc(numpy.sign, types.sign_type)
 register_unary_ufunc(numpy.negative, types.neg_type)
@@ -419,5 +426,3 @@ for sym, name in _externs_2:
     npy_math_extern(name, ty)
     func = eval("npy." + name)
     register_binary_ufunc(sym, func, asfloat = True)
-
-
