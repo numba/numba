@@ -242,37 +242,52 @@ _externs = [
     (numpy.sqrt, "sqrt"),
     (numpy.floor, "floor"),
     (numpy.ceil, "ceil"),
-    (numpy.trunc, "trunc") ]
+    (numpy.trunc, "trunc"),
+]
 
+_externs_2 = [
+    (numpy.logaddexp, "logaddexp"),
+    (numpy.logaddexp2, "logaddexp2"),
+]
 
-def unary_npy_math_extern(fn):
+def npy_math_extern(fn, fnty):
     setattr(npy, fn, fn)
     fn_sym = eval("npy."+fn)
+    fn_arity = len(fnty.args)
 
     n = "numba.npymath." + fn
     def ref_impl(context, builder, sig, args):
-        [val] = args
         mod = cgutils.get_module(builder)
-        fnty = Type.function(Type.double(), [Type.double()])
-        fn = mod.get_or_insert_function(fnty, name=n)
-        return builder.call(fn, (val,))
+        inner_fn = mod.get_or_insert_function(fnty, name=n)
+        return builder.call(inner_fn, args)
 
+    # This registers the function using different combinations of
+    # input types that can be cast to the actual function type.
+    #
+    # Current limitation is that it only does so for homogeneous
+    # source types. Note that it may be a better idea not providing
+    # these specialization and let the ufunc generator functions
+    # insert the appropriate castings before calling.
+    #
+    # TODO:
+    # Either let the function only register the native version without
+    # cast or provide the full range of specializations for functions
+    # with arity > 1.
     ty_dst = types.float64
     for ty_src in [types.int64, types.uint64, types.float64]:
         @register
-        @implement(fn_sym, ty_src)
+        @implement(fn_sym, *[ty_src]*fn_arity)
         def _impl(context, builder, sig, args):
-            [val] = args
-            cast_val = val if ty_dst == ty_src else context.cast(builder, val, ty_src, ty_dst)
-            sig = typing.signature(ty_dst, ty_dst)
-            return ref_impl(context, builder, sig, [cast_val])
+            cast_vals = args if ty_dst == ty_src else [context.cast(builder, val, ty_src, ty_dst) for val in args]
+            sig = typing.signature(*[ty_dst]*(len(cast_vals)+1))
+            return ref_impl(context, builder, sig, cast_vals)
 
 
-for x in _externs:
-    unary_npy_math_extern(x[1])
-    func = eval("npy." + x[1])
-    register_unary_ufunc(x[0], func, asfloat = True)
-
+for sym, name in _externs:
+    ty = Type.function(Type.double(), [Type.double()])
+    npy_math_extern(name, ty)
+    func = eval("npy." + name)
+    register_unary_ufunc(sym, func, asfloat = True)
 
 register_unary_ufunc(numpy.absolute, types.abs_type)
 register_unary_ufunc(numpy.sign, types.sign_type)
@@ -398,3 +413,11 @@ register_binary_ufunc(numpy.floor_divide, '//', divbyzero=True)
 register_binary_ufunc(numpy.true_divide, '/', asfloat=True, divbyzero=True, true_divide=True)
 register_binary_ufunc(numpy.arctan2, math.atan2, asfloat=True)
 register_binary_ufunc(numpy.power, '**', asfloat=True)
+
+for sym, name in _externs_2:
+    ty = Type.function(Type.double(), [Type.double(), Type.double()])
+    npy_math_extern(name, ty)
+    func = eval("npy." + name)
+    register_binary_ufunc(sym, func, asfloat = True)
+
+

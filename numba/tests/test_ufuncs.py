@@ -317,14 +317,12 @@ class TestUFuncs(TestCase):
     def test_logaddexp_ufunc(self):
         self.binary_ufunc_test('logaddexp')
 
-    @_unimplemented
     def test_logaddexp_ufunc_npm(self):
         self.binary_ufunc_test('logaddexp', flags=no_pyobj_flags)
 
     def test_logaddexp2_ufunc(self):
         self.binary_ufunc_test('logaddexp2')
 
-    @_unimplemented
     def test_logaddexp2_ufunc_npm(self):
         self.binary_ufunc_test('logaddexp2', flags=no_pyobj_flags)
 
