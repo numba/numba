@@ -335,7 +335,6 @@ class TestUFuncs(TestCase):
     def test_floor_divide_ufunc(self):
         self.binary_ufunc_test('floor_divide')
 
-    @_unimplemented
     def test_floor_divide_ufunc_npm(self):
         self.binary_ufunc_test('floor_divide', flags=no_pyobj_flags)
 

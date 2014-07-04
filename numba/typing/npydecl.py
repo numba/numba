@@ -102,7 +102,7 @@ _unsupported = set([ numpy.square, numpy.spacing, numpy.signbit,
                      numpy.less_equal, numpy.left_shift, numpy.isnan, numpy.isinf,
                      numpy.isfinite, numpy.invert, numpy.hypot, numpy.greater,
                      numpy.greater_equal, numpy.fmod, numpy.fmin, numpy.fmax,
-                     numpy.floor_divide, numpy.equal, numpy.copysign,
+                     numpy.equal, numpy.copysign,
                      numpy.reciprocal, numpy.conjugate, numpy.bitwise_xor,
                      numpy.bitwise_or, numpy.bitwise_and ])
 

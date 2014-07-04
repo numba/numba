@@ -44,7 +44,7 @@ Math operations
  logaddexp           Yes          Yes
  logaddexp2          Yes          Yes
  true_divide         Yes          Yes
- floor_divide        Yes          No
+ floor_divide        Yes          Yes
  negative            Yes          Yes
  power               Yes          Yes
  remainder           Yes          No
