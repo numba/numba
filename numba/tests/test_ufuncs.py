@@ -383,7 +383,6 @@ class TestUFuncs(TestCase):
                                  (np.finfo(np.float64).min, types.float64)
                                  ])
 
-    @_unimplemented
     def test_abs_ufunc_npm(self):
         self.test_abs_ufunc(flags=no_pyobj_flags)
 
@@ -395,7 +394,6 @@ class TestUFuncs(TestCase):
                                  (np.finfo(np.float64).min, types.float64)
                                  ])
 
-    @_unimplemented
     def test_absolute_ufunc_npm(self):
         self.test_absolute_ufunc(flags=no_pyobj_flags)
 
