@@ -64,6 +64,8 @@ class _ScalarHelper(namedtuple('_ScalarHelper', ('context', 'builder', 'val', 'b
     def load_data(self, indices):
         return self.val
 
+    def store_data(self, indices, val):
+        raise LoweringError('Can not store in a scalar')
 
 class _ArrayIndexingHelper(namedtuple('_ArrayIndexingHelper', ('array', 'indices'))):
     def update_indices(self, loop_indices, name):
@@ -114,6 +116,10 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary', 'sha
     def load_data(self, indices):
         return self.builder.load(self.load_effective_address(indices))
 
+    def store_data(self, indices, value):
+        assert self.context.get_data_type(self.base_type) == value.type
+        self.builder.store(value, self.load_effective_address(indices))
+
 
 def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
     """returns an instance of the appropriate Helper (either
@@ -160,14 +166,12 @@ def numpy_unary_ufunc(funckey, asfloat=False):
         loopshape = oary.shape
         with cgutils.loop_nest(builder, loopshape, intp=intpty) as indices:
             inp_indices.update_indices(indices, '')
-
             x = iary.load_data(inp_indices.as_values())
-            po = oary.load_effective_address(indices)
 
             d_x = context.cast(builder, x, iary.base_type, promote_type)
             tempres = fnwork(builder, [d_x])
             res = context.cast(builder, tempres, result_type, tyout.dtype)
-            builder.store(res, po)
+            oary.store_data(indices, res)
 
         return out
     return impl
@@ -336,7 +340,6 @@ def numpy_binary_ufunc(funckey, divbyzero=False, asfloat=False, true_divide=Fals
 
             x = i1ary.load_data(inp1_indices.as_values())
             y = i2ary.load_data(inp2_indices.as_values())
-            po = oary.load_effective_address(indices)
 
             if divbyzero:
                 # Handle division
@@ -365,30 +368,21 @@ def numpy_binary_ufunc(funckey, divbyzero=False, asfloat=False, true_divide=Fals
                         else:
                             res = Constant.null(context.get_data_type(tyout.dtype))
 
-                        assert res.type == po.type.pointee, \
-                                        (str(res.type), str(po.type.pointee))
-                        builder.store(res, po)
+                        oary.store_data(indices, res)
                     with orelse:
                         # Normal
                         d_x = context.cast(builder, x, i1ary.base_type, promote_type)
                         d_y = context.cast(builder, y, i2ary.base_type, promote_type)
                         tempres = fnwork(builder, [d_x, d_y])
                         res = context.cast(builder, tempres, result_type, tyout.dtype)
-
-                        assert res.type == po.type.pointee, (res.type,
-                                                             po.type.pointee)
-                        builder.store(res, po)
+                        oary.store_data(indices, res)
             else:
                 # Handle non-division operations
                 d_x = context.cast(builder, x, i1ary.base_type, promote_type)
                 d_y = context.cast(builder, y, i2ary.base_type, promote_type)
                 tempres = fnwork(builder, [d_x, d_y])
                 res = context.cast(builder, tempres, result_type, tyout.dtype)
-
-                assert res.type == po.type.pointee, (res.type,
-                                                     po.type.pointee)
-                builder.store(res, po)
-
+                oary.store_data(indices, res)
         return out
     return impl
 
