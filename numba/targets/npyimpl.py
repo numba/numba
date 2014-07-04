@@ -297,94 +297,94 @@ register_unary_ufunc(numpy.absolute, types.abs_type)
 register_unary_ufunc(numpy.sign, types.sign_type)
 register_unary_ufunc(numpy.negative, types.neg_type)
 
-def numpy_binary_ufunc(funckey, divbyzero=False, asfloat=False, true_divide=False):
-    def impl(context, builder, sig, args):
-        [tyinp1, tyinp2, tyout] = sig.args
-        [inp1, inp2, out] = args
+def numpy_binary_ufunc(context, builder, sig, args, funckey, divbyzero=False,
+                       asfloat=False, true_divide=False):
+    [tyinp1, tyinp2, tyout] = sig.args
+    [inp1, inp2, out] = args
 
-        i1ary = _prepare_argument(context, builder, inp1, tyinp1)
-        i2ary = _prepare_argument(context, builder, inp2, tyinp2)
-        oary  = _prepare_argument(context, builder, out, tyout)
+    i1ary = _prepare_argument(context, builder, inp1, tyinp1)
+    i2ary = _prepare_argument(context, builder, inp2, tyinp2)
+    oary  = _prepare_argument(context, builder, out, tyout)
 
-        # based only on the first operand?
-        promote_type = types.float64 if asfloat else _default_promotion_for_type(i1ary.base_type)
-        result_type = promote_type
+    # based only on the first operand?
+    promote_type = types.float64 if asfloat else _default_promotion_for_type(i1ary.base_type)
+    result_type = promote_type
 
-        # Temporary hack for __ftol2 llvm bug. Don't allow storing
-        # float results in uint64 array on windows.
-        if result_type in types.real_domain and \
-                tyout.dtype is types.uint64 and \
-                sys.platform.startswith('win32'):
-            raise TypeError('Cannot store result in uint64 array')
+    # Temporary hack for __ftol2 llvm bug. Don't allow storing
+    # float results in uint64 array on windows.
+    if result_type in types.real_domain and \
+            tyout.dtype is types.uint64 and \
+            sys.platform.startswith('win32'):
+        raise TypeError('Cannot store result in uint64 array')
 
-        sig = typing.signature(result_type, promote_type, promote_type)
+    sig = typing.signature(result_type, promote_type, promote_type)
 
-        fnwork = context.get_function(funckey, sig)
-        intpty = context.get_value_type(types.intp)
+    fnwork = context.get_function(funckey, sig)
+    intpty = context.get_value_type(types.intp)
 
-        inp1_indices = i1ary.create_iter_indices() if i1ary else None
-        inp2_indices = i2ary.create_iter_indices() if i2ary else None
+    inp1_indices = i1ary.create_iter_indices() if i1ary else None
+    inp2_indices = i2ary.create_iter_indices() if i2ary else None
 
-        loopshape = oary.shape
-        with cgutils.loop_nest(builder, loopshape, intp=intpty) as indices:
-            inp1_indices.update_indices(indices, '1')
-            inp2_indices.update_indices(indices, '2')
+    loopshape = oary.shape
+    with cgutils.loop_nest(builder, loopshape, intp=intpty) as indices:
+        inp1_indices.update_indices(indices, '1')
+        inp2_indices.update_indices(indices, '2')
 
-            x = i1ary.load_data(inp1_indices.as_values())
-            y = i2ary.load_data(inp2_indices.as_values())
+        x = i1ary.load_data(inp1_indices.as_values())
+        y = i2ary.load_data(inp2_indices.as_values())
 
-            if divbyzero:
-                # Handle division
-                iszero = cgutils.is_scalar_zero(builder, y)
-                with cgutils.ifelse(builder, iszero, expect=False) as (then,
-                                                                       orelse):
-                    with then:
-                        # Divide by zero
-                        if ((i1ary.base_type in types.real_domain or
-                                i2ary.base_type in types.real_domain) or
-                                not numpy_support.int_divbyzero_returns_zero) or \
-                                true_divide:
-                            # If y is float and is 0 also, return Nan; else
-                            # return Inf
-                            outltype = context.get_data_type(result_type)
-                            shouldretnan = cgutils.is_scalar_zero(builder, x)
-                            nan = Constant.real(outltype, float("nan"))
-                            inf = Constant.real(outltype, float("inf"))
-                            tempres = builder.select(shouldretnan, nan, inf)
-                            res = context.cast(builder, tempres, result_type,
-                                               tyout.dtype)
-                        elif tyout.dtype in types.signed_domain and \
-                                not numpy_support.int_divbyzero_returns_zero:
-                            res = Constant.int(context.get_data_type(tyout.dtype),
-                                               0x1 << (y.type.width-1))
-                        else:
-                            res = Constant.null(context.get_data_type(tyout.dtype))
+        if divbyzero:
+            # Handle division
+            iszero = cgutils.is_scalar_zero(builder, y)
+            with cgutils.ifelse(builder, iszero, expect=False) as (then,
+                                                                   orelse):
+                with then:
+                    # Divide by zero
+                    if ((i1ary.base_type in types.real_domain or
+                            i2ary.base_type in types.real_domain) or
+                            not numpy_support.int_divbyzero_returns_zero) or \
+                            true_divide:
+                        # If y is float and is 0 also, return Nan; else
+                        # return Inf
+                        outltype = context.get_data_type(result_type)
+                        shouldretnan = cgutils.is_scalar_zero(builder, x)
+                        nan = Constant.real(outltype, float("nan"))
+                        inf = Constant.real(outltype, float("inf"))
+                        tempres = builder.select(shouldretnan, nan, inf)
+                        res = context.cast(builder, tempres, result_type,
+                                           tyout.dtype)
+                    elif tyout.dtype in types.signed_domain and \
+                            not numpy_support.int_divbyzero_returns_zero:
+                        res = Constant.int(context.get_data_type(tyout.dtype),
+                                           0x1 << (y.type.width-1))
+                    else:
+                        res = Constant.null(context.get_data_type(tyout.dtype))
 
-                        oary.store_data(indices, res)
-                    with orelse:
-                        # Normal
-                        d_x = context.cast(builder, x, i1ary.base_type, promote_type)
-                        d_y = context.cast(builder, y, i2ary.base_type, promote_type)
-                        tempres = fnwork(builder, [d_x, d_y])
-                        res = context.cast(builder, tempres, result_type, tyout.dtype)
-                        oary.store_data(indices, res)
-            else:
-                # Handle non-division operations
-                d_x = context.cast(builder, x, i1ary.base_type, promote_type)
-                d_y = context.cast(builder, y, i2ary.base_type, promote_type)
-                tempres = fnwork(builder, [d_x, d_y])
-                res = context.cast(builder, tempres, result_type, tyout.dtype)
-                oary.store_data(indices, res)
-        return out
-    return impl
+                    oary.store_data(indices, res)
+                with orelse:
+                    # Normal
+                    d_x = context.cast(builder, x, i1ary.base_type, promote_type)
+                    d_y = context.cast(builder, y, i2ary.base_type, promote_type)
+                    tempres = fnwork(builder, [d_x, d_y])
+                    res = context.cast(builder, tempres, result_type, tyout.dtype)
+                    oary.store_data(indices, res)
+        else:
+            # Handle non-division operations
+            d_x = context.cast(builder, x, i1ary.base_type, promote_type)
+            d_y = context.cast(builder, y, i2ary.base_type, promote_type)
+            tempres = fnwork(builder, [d_x, d_y])
+            res = context.cast(builder, tempres, result_type, tyout.dtype)
+            oary.store_data(indices, res)
+    return out
 
 
-def register_binary_ufunc(ufunc, operator, asfloat=False, divbyzero=False, true_divide=False):
+def register_binary_ufunc(ufunc, operator, asfloat=False, divbyzero=False,
+                          true_divide=False):
 
     def binary_ufunc(context, builder, sig, args):
-        imp = numpy_binary_ufunc(operator, asfloat=asfloat,
-                                 divbyzero=divbyzero, true_divide=true_divide)
-        return imp(context, builder, sig, args)
+        return numpy_binary_ufunc(context, builder, sig, args, operator,
+                                  asfloat=asfloat, divbyzero=divbyzero, 
+                                  true_divide=true_divide)
 
     register(implement(ufunc, types.Kind(types.Array), types.Kind(types.Array),
         types.Kind(types.Array))(binary_ufunc))
@@ -397,6 +397,7 @@ def register_binary_ufunc(ufunc, operator, asfloat=False, divbyzero=False, true_
         register(implement(ufunc, ty1, ty2,
             types.Kind(types.Array))(binary_ufunc))
 
+
 register_binary_ufunc(numpy.add, '+')
 register_binary_ufunc(numpy.subtract, '-')
 register_binary_ufunc(numpy.multiply, '*')
@@ -406,6 +407,7 @@ register_binary_ufunc(numpy.floor_divide, '//', divbyzero=True)
 register_binary_ufunc(numpy.true_divide, '/', asfloat=True, divbyzero=True, true_divide=True)
 register_binary_ufunc(numpy.arctan2, math.atan2, asfloat=True)
 register_binary_ufunc(numpy.power, '**', asfloat=True)
+
 
 for sym, name in _externs_2:
     ty = Type.function(Type.double(), [Type.double(), Type.double()])
