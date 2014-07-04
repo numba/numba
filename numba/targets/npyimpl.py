@@ -137,75 +137,68 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
         raise TypeError('unknown type for {0}'.format(where))
 
 
-def numpy_unary_ufunc(funckey, asfloat=False):
-    def impl(context, builder, sig, args):
-        [tyinp, tyout] = sig.args
-        [inp, out] = args
+def numpy_unary_ufunc(context, builder, sig, args, funckey, asfloat=False):
+    [tyinp, tyout] = sig.args
+    [inp, out] = args
 
-        iary = _prepare_argument(context, builder, inp, tyinp)
-        oary = _prepare_argument(context, builder, out, tyout)
+    iary = _prepare_argument(context, builder, inp, tyinp)
+    oary = _prepare_argument(context, builder, out, tyout)
 
-        promote_type = types.float64 if asfloat else _default_promotion_for_type(iary.base_type)
-        result_type = promote_type
+    promote_type = types.float64 if asfloat else _default_promotion_for_type(iary.base_type)
+    result_type = promote_type
 
-
-        # Temporary hack for __ftol2 llvm bug. Don't allow storing
-        # float results in uint64 array on windows.
-        if result_type in types.real_domain and \
-                tyout.dtype is types.uint64 and \
-                sys.platform.startswith('win32'):
-            raise TypeError('Cannot store result in uint64 array')
+    # Temporary hack for __ftol2 llvm bug. Don't allow storing
+    # float results in uint64 array on windows.
+    if result_type in types.real_domain and \
+       tyout.dtype is types.uint64 and \
+       sys.platform.startswith('win32'):
+        raise TypeError('Cannot store result in uint64 array')
 
 
-        sig    = typing.signature(result_type, promote_type)
-        fnwork = context.get_function(funckey, sig)
-        intpty = context.get_value_type(types.intp)
+    sig    = typing.signature(result_type, promote_type)
+    fnwork = context.get_function(funckey, sig)
+    intpty = context.get_value_type(types.intp)
 
-        inp_indices = iary.create_iter_indices()
+    inp_indices = iary.create_iter_indices()
 
-        loopshape = oary.shape
-        with cgutils.loop_nest(builder, loopshape, intp=intpty) as indices:
-            inp_indices.update_indices(indices, '')
-            x = iary.load_data(inp_indices.as_values())
+    loopshape = oary.shape
+    with cgutils.loop_nest(builder, loopshape, intp=intpty) as indices:
+        inp_indices.update_indices(indices, '')
+        x = iary.load_data(inp_indices.as_values())
 
-            d_x = context.cast(builder, x, iary.base_type, promote_type)
-            tempres = fnwork(builder, [d_x])
-            res = context.cast(builder, tempres, result_type, tyout.dtype)
-            oary.store_data(indices, res)
+        d_x = context.cast(builder, x, iary.base_type, promote_type)
+        tempres = fnwork(builder, [d_x])
+        res = context.cast(builder, tempres, result_type, tyout.dtype)
+        oary.store_data(indices, res)
 
-        return out
-    return impl
+    return out
 
 
-def numpy_scalar_unary_ufunc(funckey, asfloat=True):
-    def impl(context, builder, sig, args):
-        [tyinp] = sig.args
-        tyout = sig.return_type
-        [inp] = args
 
-        if asfloat:
-            sig = typing.signature(types.float64, types.float64)
+def numpy_scalar_unary_ufunc(context, builder, sig, args, funckey, asfloat=True):
+    [tyinp] = sig.args
+    tyout = sig.return_type
+    [inp] = args
 
-        fnwork = context.get_function(funckey, sig)
-        if asfloat:
-            inp = context.cast(builder, inp, tyinp, types.float64)
-        res = fnwork(builder, [inp])
-        if asfloat:
-            res = context.cast(builder, res, types.float64, tyout)
-        return res
+    if asfloat:
+        sig = typing.signature(types.float64, types.float64)
 
-    return impl
+    fnwork = context.get_function(funckey, sig)
+    if asfloat:
+        inp = context.cast(builder, inp, tyinp, types.float64)
+    res = fnwork(builder, [inp])
+    if asfloat:
+        res = context.cast(builder, res, types.float64, tyout)
+    return res
 
 
 def register_unary_ufunc(ufunc, operator, asfloat=False):
 
     def unary_ufunc(context, builder, sig, args):
-        imp = numpy_unary_ufunc(operator, asfloat=asfloat)
-        return imp(context, builder, sig, args)
+        return numpy_unary_ufunc(context, builder, sig, args, operator, asfloat=asfloat)
 
     def scalar_unary_ufunc(context, builder, sig, args):
-        imp = numpy_scalar_unary_ufunc(operator, asfloat)
-        return imp(context, builder, sig, args)
+        return numpy_scalar_unary_ufunc(context, builder, sig, args, operator, asfloat)
 
     register(implement(ufunc, types.Kind(types.Array),
         types.Kind(types.Array))(unary_ufunc))
@@ -325,7 +318,6 @@ def numpy_binary_ufunc(funckey, divbyzero=False, asfloat=False, true_divide=Fals
             raise TypeError('Cannot store result in uint64 array')
 
         sig = typing.signature(result_type, promote_type, promote_type)
-
 
         fnwork = context.get_function(funckey, sig)
         intpty = context.get_value_type(types.intp)
