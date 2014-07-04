@@ -20,7 +20,7 @@ main()
 
 	const unsigned stride = sizeof(data_type);
 
-	unsigned ct_data = 10000;
+	unsigned ct_data = 1000;
 	unsigned sz_data = sizeof(data_type) * ct_data;
 
     const unsigned ct_block = (ct_data + (BUCKET_SIZE-1)) / BUCKET_SIZE;
@@ -62,7 +62,8 @@ main()
 
     // compute
 
-    for (unsigned offset=0; offset < 4; ++offset) {
+    for (unsigned r=0; r < 4; ++r) {
+        unsigned offset = 1;
 
     	cu_build_histogram<<<ct_block, BUCKET_SIZE>>>(
     		dev_data,
@@ -103,25 +104,6 @@ main()
             stride
         );
 
-        // cu_scatter_histogram_naive<<<ct_block, 1>>>(
-        //     dev_data,
-        //     dev_sorted,
-        //     dev_hist,
-        //     dev_bucket_total,
-        //     ct_data,
-        //     stride,
-        //     offset
-        // );
-
-        // cu_scatter_histogram<<<ct_block, BUCKET_SIZE>>>(
-        //     dev_data,
-        //     dev_sorted,
-        //     dev_hist,
-        //     dev_bucket_total,
-        //     ct_data,
-        //     stride,
-        //     offset
-        // );
         ASSERT_CUDA_LAST_ERROR();
 
         cudaMemcpy(dev_data, dev_sorted, sz_data, cudaMemcpyDeviceToDevice);
@@ -129,36 +111,16 @@ main()
     }
     // write back
 
- //    cudaMemcpy(hist, dev_hist, sz_hist, cudaMemcpyDeviceToHost);
- //    ASSERT_CUDA_LAST_ERROR();
-
-
- //    cudaMemcpy(bucket_total, dev_bucket_total, sz_bucket_total,
- //               cudaMemcpyDeviceToHost);
-	// ASSERT_CUDA_LAST_ERROR();
-
     cudaMemcpy(data, dev_sorted, sz_data, cudaMemcpyDeviceToHost);
     ASSERT_CUDA_LAST_ERROR();
 
-    // cout << "hist\n";
-    // for (unsigned i=0; i<BUCKET_SIZE; ++i) {
-    //     for (unsigned j=0; j<ct_block; ++j) {
-    //        cout << "bucket " << i << " block " << j
-    //             << " = " << hist[ct_block * i + j] << '\n';
-    //     }
-    // }
-    // cout << "bucket total\n";
-    // for (unsigned i=0; i<ct_bucket_total; ++i) {
-    //     cout << i << ' ' << bucket_total[i] << '\n';
-    // }
-
     cout << "sorted\n";
     for (unsigned i = 0; i < ct_data; ++i) {
-        // cout << i << ' ' << data[i] << '\n';
-        if(data[i] != i) {
-            cout << "error at i = " << i << " = " << data[i] << endl;
-            exit(1);
-        }
+        cout << i << ' ' << data[i] << '\n';
+        // if(data[i] != i) {
+        //     cout << "error at i = " << i << " = " << data[i] << endl;
+        //     exit(1);
+        // }
     }
 
 
