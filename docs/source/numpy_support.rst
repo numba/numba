@@ -41,9 +41,9 @@ Math operations
  subtract            Yes          Yes
  multiply            Yes          Yes
  divide              Yes          Yes
- logaddexp           Yes          No
- logaddexp2          Yes          No
- true_divide         Yes          No
+ logaddexp           Yes          Yes
+ logaddexp2          Yes          Yes
+ true_divide         Yes          Yes
  floor_divide        Yes          No
  negative            Yes          Yes
  power               Yes          Yes
@@ -65,7 +65,7 @@ Math operations
  sqrt                Yes          Yes
  square              Yes          No
  reciprocal          Yes          No
- conjugate           No           No
+ conjugate           Yes          No
 ==============  =============  ===========
 
 
@@ -93,8 +93,8 @@ Trigonometric functions
  arctanh             Yes          Yes
  deg2rad             Yes          Yes
  rad2deg             Yes          Yes
- degrees             No           No
- radians             No           No
+ degrees             Yes          No
+ radians             Yes          Yes
 ==============  =============  ===========
 
 
@@ -161,7 +161,7 @@ Floating functions
  floor               Yes          Yes
  ceil                Yes          Yes
  trunc               Yes          Yes
- spacing             No           No
+ spacing             Yes          No
 ==============  =============  ===========
 
 \* not supported on windows 32 bit
