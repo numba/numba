@@ -297,6 +297,10 @@ class BaseContext(object):
         elif ty in STRUCT_TYPES:
             return self.get_struct_type(STRUCT_TYPES[ty])
 
+        elif isinstance(ty, types.Pair):
+            pairty = self.make_pair(ty.first_type, ty.second_type)
+            return self.get_struct_type(pairty)
+
         else:
             return LTYPEMAP[ty]
 
@@ -348,6 +352,17 @@ class BaseContext(object):
     def is_struct_type(self, ty):
         return cgutils.is_struct(self.get_data_type(ty))
 
+    def get_constant_generic(self, builder, ty, val):
+        """
+        Return a LLVM constant representing value *val* of Numba type *ty*.
+        """
+        if self.is_struct_type(ty):
+            return self.get_constant_struct(builder, ty, val)
+        elif ty == types.string:
+            return self.get_constant_string(builder, ty, val)
+        else:
+            return self.get_constant(ty, val)
+
     def get_constant_struct(self, builder, ty, val):
         assert self.is_struct_type(ty)
         module = cgutils.get_module(builder)
@@ -363,12 +378,12 @@ class BaseContext(object):
             real = self.get_constant(innertype, val.real)
             imag = self.get_constant(innertype, val.imag)
             const = Constant.struct([real, imag])
+            return const
 
-            gv = module.add_global_variable(const.type, name=".const")
-            gv.linkage = lc.LINKAGE_INTERNAL
-            gv.initializer = const
-            gv.global_constant = True
-            return builder.load(gv)
+        elif isinstance(ty, types.Tuple):
+            consts = [self.get_constant_generic(builder, ty.types[i], v)
+                      for i, v in enumerate(val)]
+            return Constant.struct(consts)
 
         else:
             raise NotImplementedError(ty)
@@ -534,6 +549,22 @@ class BaseContext(object):
         assert code > 0
         builder.ret(Constant.int(Type.int(), code))
 
+    def pair_first(self, builder, val, ty):
+        """
+        Extract the first element of a heterogenous pair.
+        """
+        paircls = self.make_pair(ty.first_type, ty.second_type)
+        pair = paircls(self, builder, value=val)
+        return self.get_argument_value(builder, ty.first_type, pair.first)
+
+    def pair_second(self, builder, val, ty):
+        """
+        Extract the second element of a heterogenous pair.
+        """
+        paircls = self.make_pair(ty.first_type, ty.second_type)
+        pair = paircls(self, builder, value=val)
+        return self.get_argument_value(builder, ty.second_type, pair.second)
+
     def cast(self, builder, val, fromty, toty):
         if fromty == toty or toty == types.Any or isinstance(toty, types.Kind):
             return val
@@ -635,7 +666,7 @@ class BaseContext(object):
                 len(toty) == len(fromty)):
             olditems = cgutils.unpack_tuple(builder, val, len(fromty))
             items = [self.cast(builder, i, t, toty.dtype)
-                     for i, t in zip(olditems, fromty.items)]
+                     for i, t in zip(olditems, fromty.types)]
             tup = self.get_constant_undef(toty)
             for idx, val in enumerate(items):
                 tup = builder.insert_value(tup, val, idx)
@@ -762,6 +793,12 @@ class BaseContext(object):
 
     def make_unituple_iter(self, typ):
         return builtins.make_unituple_iter(typ)
+
+    def make_pair(self, first_type, second_type):
+        """
+        Create a heterogenous pair class parametered for the given types.
+        """
+        return builtins.make_pair(first_type, second_type)
 
     def make_constant_array(self, builder, typ, ary):
         assert typ.layout == 'C'                # assumed in typeinfer.py

@@ -346,15 +346,8 @@ class Lower(BaseLower):
     def lower_assign(self, ty, inst):
         value = inst.value
         if isinstance(value, ir.Const):
-            if self.context.is_struct_type(ty):
-                const = self.context.get_constant_struct(self.builder, ty,
-                                                         value.value)
-            elif ty == types.string:
-                const = self.context.get_constant_string(self.builder, ty,
-                                                         value.value)
-            else:
-                const = self.context.get_constant(ty, value.value)
-            return const
+            return self.context.get_constant_generic(self.builder, ty,
+                                                     value.value)
 
         elif isinstance(value, ir.Expr):
             return self.lower_expr(ty, value)
@@ -371,31 +364,13 @@ class Lower(BaseLower):
                     isinstance(ty, types.Dispatcher)):
                 return self.context.get_dummy_value()
 
-            elif ty == types.boolean:
-                return self.context.get_constant(ty, value.value)
-
             elif isinstance(ty, types.Array):
                 return self.context.make_constant_array(self.builder, ty,
                                                         value.value)
 
-            elif self.context.is_struct_type(ty):
-                return self.context.get_constant_struct(self.builder, ty,
-                                                        value.value)
-
-            elif ty in types.number_domain:
-                return self.context.get_constant(ty, value.value)
-
-            elif isinstance(ty, types.UniTuple):
-                consts = [self.context.get_constant(t, v)
-                          for t, v in zip(ty, value.value)]
-                return cgutils.pack_array(self.builder, consts)
-
-            elif self.context.is_struct_type(ty):
-                return self.context.get_constant_struct(self.builder, ty,
-                        value.value)
-
             else:
-                raise NotImplementedError('global', ty)
+                return self.context.get_constant_generic(self.builder, ty,
+                                                         value.value)
 
         else:
             raise NotImplementedError(type(value), value)
@@ -477,7 +452,21 @@ class Lower(BaseLower):
             return self.context.cast(self.builder, res, signature.return_type,
                                      resty)
 
-        elif expr.op in ('getiter', 'iternext', 'itervalid'):
+        elif expr.op == 'pair_first':
+            val = self.loadvar(expr.value.name)
+            ty = self.typeof(expr.value.name)
+            item = self.context.pair_first(self.builder, val, ty)
+            return self.context.get_argument_value(self.builder,
+                                                   ty.first_type, item)
+
+        elif expr.op == 'pair_second':
+            val = self.loadvar(expr.value.name)
+            ty = self.typeof(expr.value.name)
+            item = self.context.pair_second(self.builder, val, ty)
+            return self.context.get_argument_value(self.builder,
+                                                   ty.second_type, item)
+
+        elif expr.op in ('getiter', 'iternext'):
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
             signature = self.fndesc.calltypes[expr]
@@ -486,34 +475,47 @@ class Lower(BaseLower):
             castval = self.context.cast(self.builder, val, ty, fty)
             res = impl(self.builder, (castval,))
             return self.context.cast(self.builder, res, signature.return_type,
-                                    resty)
+                                     resty)
 
         elif expr.op == 'exhaust_iter':
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
-            itemty = ty.yield_type
+            # If we have a heterogenous tuple, we needn't do anything,
+            # and we can't iterate over it anyway.
+            if isinstance(ty, types.Tuple):
+                return val
+
+            itemty = ty.iterator_type.yield_type
             tup = self.context.get_constant_undef(resty)
-            itervalid_sig = typing.signature(types.boolean, ty)
-            iternext_sig = typing.signature(itemty, ty)
-            itervalid_impl = self.context.get_function('itervalid',
-                                                       itervalid_sig)
+            pairty = types.Pair(itemty, types.boolean)
+            getiter_sig = typing.signature(ty.iterator_type, ty)
+            getiter_impl = self.context.get_function('getiter',
+                                                     getiter_sig)
+            iternext_sig = typing.signature(pairty, ty.iterator_type)
             iternext_impl = self.context.get_function('iternext',
                                                       iternext_sig)
+            iterobj = getiter_impl(self.builder, (val,))
             excid = self.context.add_exception(ValueError)
+            # We call iternext() as many times as desired (`expr.count`).
             for i in range(expr.count):
-                res = iternext_impl(self.builder, (val,))
-                is_exhausted = self.builder.not_(
-                    itervalid_impl(self.builder, (val,)))
-                with cgutils.if_unlikely(self.builder, is_exhausted):
+                pair = iternext_impl(self.builder, (iterobj,))
+                is_valid = self.context.pair_second(self.builder,
+                                                    pair, pairty)
+                with cgutils.if_unlikely(self.builder,
+                                         self.builder.not_(is_valid)):
                     self.context.return_user_exc(self.builder, excid)
-                tup = self.builder.insert_value(tup, res, i)
-            # HACK workaround issue #569 bogus FOR_ITER implementation:
-            # we need to call iternext() once more before itervalid()
-            # gives the right result.
-            iternext_impl(self.builder, (val,))
-            with cgutils.if_unlikely(self.builder,
-                                     itervalid_impl(self.builder, (val,))):
+                item = self.context.pair_first(self.builder,
+                                               pair, pairty)
+                tup = self.builder.insert_value(tup, item, i)
+
+            # Call iternext() once more to check that the iterator
+            # is exhausted.
+            pair = iternext_impl(self.builder, (iterobj,))
+            is_valid = self.context.pair_second(self.builder,
+                                                pair, pairty)
+            with cgutils.if_unlikely(self.builder, is_valid):
                 self.context.return_user_exc(self.builder, excid)
+
             return tup
 
         elif expr.op == "getattr":
@@ -527,13 +529,32 @@ class Lower(BaseLower):
                 res = impl(self.context, self.builder, ty, val, expr.attr)
             return res
 
+        elif expr.op == "static_getitem":
+            baseval = self.loadvar(expr.value.name)
+            indexval = self.context.get_constant(types.intp, expr.index)
+            if cgutils.is_struct(baseval.type):
+                # Statically extract the given element from the structure
+                # (structures aren't dynamically indexable).
+                return self.builder.extract_value(baseval, expr.index)
+            else:
+                # Fall back on the generic getitem() implementation
+                # for this type.
+                signature = typing.signature(resty,
+                                             self.typeof(expr.value.name),
+                                             types.intp)
+                impl = self.context.get_function("getitem", signature)
+                argvals = (baseval, indexval)
+                res = impl(self.builder, argvals)
+                return self.context.cast(self.builder, res, signature.return_type,
+                                         resty)
+
         elif expr.op == "getitem":
-            baseval = self.loadvar(expr.target.name)
+            baseval = self.loadvar(expr.value.name)
             indexval = self.loadvar(expr.index.name)
             signature = self.fndesc.calltypes[expr]
             impl = self.context.get_function("getitem", signature)
             argvals = (baseval, indexval)
-            argtyps = (self.typeof(expr.target.name),
+            argtyps = (self.typeof(expr.value.name),
                        self.typeof(expr.index.name))
             castvals = [self.context.cast(self.builder, av, at, ft)
                         for av, at, ft in zip(argvals, argtyps,
@@ -621,10 +642,14 @@ class PyLower(BaseLower):
             index = self.loadvar(inst.index.name)
             value = self.loadvar(inst.value.name)
             ok = self.pyapi.object_setitem(target, index, value)
-            negone = lc.Constant.int_signextend(ok.type, -1)
-            pred = self.builder.icmp(lc.ICMP_EQ, ok, negone)
-            with cgutils.if_unlikely(self.builder, pred):
-                self.return_exception_raised()
+            self.check_int_status(ok)
+
+        elif isinstance(inst, ir.StoreMap):
+            dct = self.loadvar(inst.dct)
+            key = self.loadvar(inst.key)
+            value = self.loadvar(inst.value)
+            ok = self.pyapi.dict_setitem(dct, key, value)
+            self.check_int_status(ok)
 
         elif isinstance(inst, ir.Return):
             retval = self.loadvar(inst.value.name)
@@ -649,8 +674,7 @@ class PyLower(BaseLower):
             self.builder.branch(target)
 
         elif isinstance(inst, ir.Del):
-            obj = self.loadvar(inst.value)
-            self.decref(obj)
+            self.delvar(inst.value)
 
         elif isinstance(inst, ir.Raise):
             self.pyapi.raise_exception(inst.exception, inst.exception)
@@ -698,10 +722,7 @@ class PyLower(BaseLower):
                 res = self.pyapi.number_positive(value)
             elif expr.fn == 'not':
                 res = self.pyapi.object_not(value)
-                negone = lc.Constant.int_signextend(Type.int(), -1)
-                err = self.builder.icmp(lc.ICMP_EQ, res, negone)
-                with cgutils.if_unlikely(self.builder, err):
-                    self.return_exception_raised()
+                self.check_int_status(res)
 
                 longval = self.builder.zext(res, self.pyapi.long)
                 res = self.pyapi.bool_from_long(longval)
@@ -742,25 +763,50 @@ class PyLower(BaseLower):
             res = self.pyapi.list_pack(items)
             self.check_error(res)
             return res
+        elif expr.op == 'build_map':
+            res = self.pyapi.dict_new(expr.size)
+            self.check_error(res)
+            return res
+        elif expr.op == 'build_set':
+            items = [self.loadvar(it.name) for it in expr.items]
+            res = self.pyapi.set_new()
+            self.check_error(res)
+            for it in items:
+                ok = self.pyapi.set_add(res, it)
+                self.check_int_status(ok)
+            return res
         elif expr.op == 'getiter':
             obj = self.loadvar(expr.value.name)
             res = self.pyapi.object_getiter(obj)
             self.check_error(res)
-            self.storevar(res, '$iter$' + expr.value.name)
-            return self.pack_iter(res)
+            return res
         elif expr.op == 'iternext':
-            iterstate = self.loadvar(expr.value.name)
-            iterobj, valid = self.unpack_iter(iterstate)
+            iterobj = self.loadvar(expr.value.name)
             item = self.pyapi.iter_next(iterobj)
-            self.set_iter_valid(iterstate, item)
-            return item
-        elif expr.op == 'itervalid':
-            iterstate = self.loadvar(expr.value.name)
-            _, valid = self.unpack_iter(iterstate)
-            return self.builder.trunc(valid, Type.int(1))
+            is_valid = cgutils.is_not_null(self.builder, item)
+            pair = self.pyapi.tuple_new(2)
+            with cgutils.ifelse(self.builder, is_valid) as (then, otherwise):
+                with then:
+                    self.pyapi.tuple_setitem(pair, 0, item)
+                with otherwise:
+                    self.check_occurred()
+                    # Make the tuple valid by inserting None as dummy
+                    # iteration "result" (it will be ignored).
+                    self.pyapi.tuple_setitem(pair, 0, self.pyapi.make_none())
+            self.pyapi.tuple_setitem(pair, 1, self.pyapi.bool_from_bool(is_valid))
+            return pair
+        elif expr.op == 'pair_first':
+            pair = self.loadvar(expr.value.name)
+            first = self.pyapi.tuple_getitem(pair, 0)
+            self.incref(first)
+            return first
+        elif expr.op == 'pair_second':
+            pair = self.loadvar(expr.value.name)
+            second = self.pyapi.tuple_getitem(pair, 1)
+            self.incref(second)
+            return second
         elif expr.op == 'exhaust_iter':
-            iterstate = self.loadvar(expr.value.name)
-            iterobj, _ = self.unpack_iter(iterstate)
+            iterobj = self.loadvar(expr.value.name)
             tup = self.pyapi.sequence_tuple(iterobj)
             self.check_error(tup)
             # Check tuple size is as expected
@@ -773,9 +819,18 @@ class PyLower(BaseLower):
                 self.context.return_user_exc(self.builder, excid)
             return tup
         elif expr.op == 'getitem':
-            target = self.loadvar(expr.target.name)
+            value = self.loadvar(expr.value.name)
             index = self.loadvar(expr.index.name)
-            res = self.pyapi.object_getitem(target, index)
+            res = self.pyapi.object_getitem(value, index)
+            self.check_error(res)
+            return res
+        elif expr.op == 'static_getitem':
+            value = self.loadvar(expr.value.name)
+            index = self.context.get_constant(types.intp, expr.index)
+            indexobj = self.pyapi.long_from_ssize_t(index)
+            self.check_error(indexobj)
+            res = self.pyapi.object_getitem(value, indexobj)
+            self.decref(indexobj)
             self.check_error(res)
             return res
         elif expr.op == 'getslice':
@@ -899,25 +954,6 @@ class PyLower(BaseLower):
 
         return builtin
 
-    def pack_iter(self, obj):
-        iterstate = PyIterState(self.context, self.builder)
-        iterstate.iterator = obj
-        iterstate.valid = cgutils.true_byte
-        return iterstate._getpointer()
-
-    def unpack_iter(self, state):
-        iterstate = PyIterState(self.context, self.builder, ref=state)
-        return tuple(iterstate)
-
-    def set_iter_valid(self, state, item):
-        iterstate = PyIterState(self.context, self.builder, ref=state)
-        iterstate.valid = cgutils.as_bool_byte(self.builder,
-                                               cgutils.is_not_null(self.builder,
-                                                                   item))
-
-        with cgutils.if_unlikely(self.builder, self.is_null(item)):
-            self.check_occurred()
-
     def check_occurred(self):
         err_occurred = cgutils.is_not_null(self.builder,
                                            self.pyapi.err_occurred())
@@ -930,6 +966,15 @@ class PyLower(BaseLower):
             self.return_exception_raised()
 
         return obj
+
+    def check_int_status(self, num, ok_value=0):
+        """
+        Raise an exception if *num* is smaller than *ok_value*.
+        """
+        ok = lc.Constant.int(num.type, ok_value)
+        pred = self.builder.icmp(lc.ICMP_SLT, num, ok)
+        with cgutils.if_unlikely(self.builder, pred):
+            self.return_exception_raised()
 
     def is_null(self, obj):
         return cgutils.is_null(self.builder, obj)
@@ -949,6 +994,14 @@ class PyLower(BaseLower):
     def loadvar(self, name):
         ptr = self.getvar(name)
         return self.builder.load(ptr)
+
+    def delvar(self, name):
+        """
+        Delete the variable slot with the given name. This will decref
+        the corresponding Python object.
+        """
+        ptr = self.varmap.pop(name)
+        self.decref(ptr)
 
     def storevar(self, value, name):
         """
@@ -989,29 +1042,11 @@ class PyLower(BaseLower):
         """
         This is allow to be called on non pyobject pointer, in which case
         no code is inserted.
-
-        If the value is a PyIterState, it unpack the structure and decref
-        the iterator.
         """
         lpyobj = self.context.get_value_type(types.pyobject)
 
         if value.type.kind == lc.TYPE_POINTER:
             if value.type != lpyobj:
                 pass
-                #raise AssertionError(value.type)
-                # # Handle PyIterState
-                # not_null = cgutils.is_not_null(self.builder, value)
-                # with cgutils.if_likely(self.builder, not_null):
-                #     iterstate = PyIterState(self.context, self.builder,
-                #                             value=value)
-                #     value = iterstate.iterator
-                #     self.pyapi.decref(value)
             else:
                 self.pyapi.decref(value)
-
-
-class PyIterState(cgutils.Structure):
-    _fields = [
-        ("iterator", types.pyobject),
-        ("valid",    types.boolean),
-    ]

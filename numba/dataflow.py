@@ -38,28 +38,28 @@ class DataFlowAnalysis(object):
         fn = getattr(self, fname)
         fn(info, inst)
 
-    def dup_topx(self, info, count):
-        stack = [info.pop() for _ in range(count)]
-        for val in reversed(stack):
+    def dup_topx(self, info, inst, count):
+        orig = [info.pop() for _ in range(count)]
+        orig.reverse()
+        # We need to actually create new temporaries if we want the
+        # IR optimization pass to work correctly (see issue #580)
+        duped = [info.make_temp() for _ in range(count)]
+        info.append(inst, orig=orig, duped=duped)
+        for val in orig:
             info.push(val)
-        for val in reversed(stack):
+        for val in duped:
             info.push(val)
-
-    def op_DUP_TOP(self, info, inst):
-        tos = info.pop()
-        info.push(tos)
-        info.push(tos)
 
     def op_DUP_TOPX(self, info, inst):
         count = inst.arg
         assert 1 <= count <= 5, "Invalid DUP_TOPX count"
-        self.dup_topx(info, count)
+        self.dup_topx(info, inst, count)
 
     def op_DUP_TOP(self, info, inst):
-        self.dup_topx(info, count=1)
+        self.dup_topx(info, inst, count=1)
 
     def op_DUP_TOP_TWO(self, info, inst):
-        self.dup_topx(info, count=2)
+        self.dup_topx(info, inst, count=2)
 
     def op_ROT_TWO(self, info, inst):
         first = info.pop()
@@ -89,11 +89,8 @@ class DataFlowAnalysis(object):
         count = inst.arg
         iterable = info.pop()
         stores = [info.make_temp() for _ in range(count)]
-        indices = [info.make_temp() for _ in range(count)]
-        iterobj = info.make_temp()
         tupleobj = info.make_temp()
-        info.append(inst, iterable=iterable, stores=stores, indices=indices,
-                    iterobj=iterobj, tupleobj=tupleobj)
+        info.append(inst, iterable=iterable, stores=stores, tupleobj=tupleobj)
         for st in reversed(stores):
             info.push(st)
 
@@ -111,6 +108,18 @@ class DataFlowAnalysis(object):
         info.append(inst, items=items, res=lst)
         info.push(lst)
 
+    def op_BUILD_MAP(self, info, inst):
+        dct = info.make_temp()
+        info.append(inst, size=inst.arg, res=dct)
+        info.push(dct)
+
+    def op_BUILD_SET(self, info, inst):
+        count = inst.arg
+        items = [info.pop() for _ in range(count)]
+        res = info.make_temp()
+        info.append(inst, items=items, res=res)
+        info.push(res)
+
     def op_POP_TOP(self, info, inst):
         info.pop()
 
@@ -122,6 +131,12 @@ class DataFlowAnalysis(object):
     def op_STORE_FAST(self, info, inst):
         value = info.pop()
         info.append(inst, value=value)
+
+    def op_STORE_MAP(self, info, inst):
+        key = info.pop()
+        value = info.pop()
+        dct = info.tos
+        info.append(inst, dct=dct, key=key, value=value)
 
     def op_LOAD_FAST(self, info, inst):
         name = self.bytecode.co_varnames[inst.arg]
@@ -174,9 +189,10 @@ class DataFlowAnalysis(object):
     def op_FOR_ITER(self, info, inst):
         loop = self.syntax_blocks[-1]
         iterator = loop.iterator
+        pair = info.make_temp()
         indval = info.make_temp()
         pred = info.make_temp()
-        info.append(inst, iterator=iterator, indval=indval, pred=pred)
+        info.append(inst, iterator=iterator, pair=pair, indval=indval, pred=pred)
         info.push(indval)
 
     def op_CALL_FUNCTION(self, info, inst):

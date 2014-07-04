@@ -101,18 +101,35 @@ class IterNext(AbstractTemplate):
         assert not kws
         [it] = args
         if isinstance(it, types.IteratorType):
-            return signature(it.yield_type, it)
+            return signature(types.Pair(it.yield_type, types.boolean), it)
 
 
 @builtin
-class IterValid(AbstractTemplate):
-    key = "itervalid"
+class PairFirst(AbstractTemplate):
+    """
+    Given a heterogenous pair, return the first element.
+    """
+    key = "pair_first"
 
     def generic(self, args, kws):
         assert not kws
-        [it] = args
-        if isinstance(it, types.IteratorType):
-            return signature(types.boolean, it)
+        [pair] = args
+        if isinstance(pair, types.Pair):
+            return signature(pair.first_type, pair)
+
+
+@builtin
+class PairSecond(AbstractTemplate):
+    """
+    Given a heterogenous pair, return the second element.
+    """
+    key = "pair_second"
+
+    def generic(self, args, kws):
+        assert not kws
+        [pair] = args
+        if isinstance(pair, types.Pair):
+            return signature(pair.second_type, pair)
 
 
 class BinOp(ConcreteTemplate):

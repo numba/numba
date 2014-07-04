@@ -39,6 +39,7 @@ def _make_bytecode_table():
 
     elif sys.version_info[:2] >= (2, 7):  # python 2.7+
         version_specific = [
+            ('BUILD_SET', 2),
             ('POP_JUMP_IF_FALSE', 2),
             ('POP_JUMP_IF_TRUE', 2),
             ('JUMP_IF_TRUE_OR_POP', 2),
@@ -83,6 +84,7 @@ def _make_bytecode_table():
                     ('BINARY_RSHIFT', 0),
                     ('BREAK_LOOP', 0),
                     ('BUILD_LIST', 2),
+                    ('BUILD_MAP', 2),
                     ('BUILD_SLICE', 2),
                     ('BUILD_TUPLE', 2),
                     ('CALL_FUNCTION', 2),
@@ -118,7 +120,7 @@ def _make_bytecode_table():
                     ('SETUP_LOOP', 2),
                     ('STORE_ATTR', 2),
                     ('STORE_FAST', 2),
-                    #    ('STORE_ATTR', 2), # not supported
+                    ('STORE_MAP', 0),
                     ('STORE_SUBSCR', 0),
                     ('UNARY_POSITIVE', 0),
                     ('UNARY_NEGATIVE', 0),

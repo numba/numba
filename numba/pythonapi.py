@@ -127,16 +127,6 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyObject_Call")
         return self.builder.call(fn, (callee, args, kws))
 
-    def long_from_long(self, ival):
-        fnty = Type.function(self.pyobj, [self.long])
-        fn = self._get_function(fnty, name="PyLong_FromLong")
-        return self.builder.call(fn, [ival])
-
-    def long_from_ssize_t(self, ival):
-        fnty = Type.function(self.pyobj, [self.py_ssize_t])
-        fn = self._get_function(fnty, name="PyLong_FromSsize_t")
-        return self.builder.call(fn, [ival])
-
     def float_from_double(self, fval):
         fnty = Type.function(self.pyobj, [self.double])
         fn = self._get_function(fnty, name="PyFloat_FromDouble")
@@ -162,15 +152,61 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyLong_AsLongLong")
         return self.builder.call(fn, [numobj])
 
-    def long_from_ulonglong(self, numobj):
-        fnty = Type.function(self.pyobj, [self.ulonglong])
-        fn = self._get_function(fnty, name="PyLong_FromUnsignedLongLong")
-        return self.builder.call(fn, [numobj])
+    def _long_from_native_int(self, ival, func_name, native_int_type,
+                              signed):
+        fnty = Type.function(self.pyobj, [native_int_type])
+        fn = self._get_function(fnty, name=func_name)
+        resptr = cgutils.alloca_once(self.builder, self.pyobj)
 
-    def long_from_longlong(self, numobj):
-        fnty = Type.function(self.pyobj, [self.ulonglong])
-        fn = self._get_function(fnty, name="PyLong_FromLongLong")
-        return self.builder.call(fn, [numobj])
+        if PYVERSION < (3, 0):
+            # Under Python 2, we try to return a PyInt object whenever
+            # the given number fits in a C long.
+            pyint_fnty = Type.function(self.pyobj, [self.long])
+            pyint_fn = self._get_function(pyint_fnty, name="PyInt_FromLong")
+            long_max = Constant.int(native_int_type, _helperlib.long_max)
+            if signed:
+                long_min = Constant.int(native_int_type, _helperlib.long_min)
+                use_pyint = self.builder.and_(
+                    self.builder.icmp(lc.ICMP_SGE, ival, long_min),
+                    self.builder.icmp(lc.ICMP_SLE, ival, long_max),
+                    )
+            else:
+                use_pyint = self.builder.icmp(lc.ICMP_ULE, ival, long_max)
+
+            with cgutils.ifelse(self.builder, use_pyint) as (then, otherwise):
+                with then:
+                    downcast_ival = self.builder.trunc(ival, self.long)
+                    res = self.builder.call(pyint_fn, [downcast_ival])
+                    self.builder.store(res, resptr)
+                with otherwise:
+                    res = self.builder.call(fn, [ival])
+                    self.builder.store(res, resptr)
+        else:
+            fn = self._get_function(fnty, name=func_name)
+            self.builder.store(self.builder.call(fn, [ival]), resptr)
+
+        return self.builder.load(resptr)
+
+    def long_from_long(self, ival):
+        if PYVERSION < (3, 0):
+            func_name = "PyInt_FromLong"
+        else:
+            func_name = "PyLong_FromLong"
+        fnty = Type.function(self.pyobj, [self.long])
+        fn = self._get_function(fnty, name=func_name)
+        return self.builder.call(fn, [ival])
+
+    def long_from_ssize_t(self, ival):
+        return self._long_from_native_int(ival, "PyLong_FromSsize_t",
+                                          self.py_ssize_t, signed=True)
+
+    def long_from_longlong(self, ival):
+        return self._long_from_native_int(ival, "PyLong_FromLongLong",
+                                          self.longlong, signed=True)
+
+    def long_from_ulonglong(self, ival):
+        return self._long_from_native_int(ival, "PyLong_FromUnsignedLongLong",
+                                          self.ulonglong, signed=False)
 
     def _get_number_operator(self, name):
         fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj])
@@ -278,6 +314,13 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyObject_RichCompare")
         lopid = self.context.get_constant(types.int32, opid)
         return self.builder.call(fn, (lhs, rhs, lopid))
+
+    def bool_from_bool(self, bval):
+        """
+        Get a Python bool from a LLVM boolean.
+        """
+        longval = self.builder.zext(bval, self.long)
+        return self.bool_from_long(longval)
 
     def bool_from_long(self, ival):
         fnty = Type.function(self.pyobj, [self.long])
@@ -404,10 +447,34 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyList_SetItem")
         return self.builder.call(fn, [seq, idx, val])
 
-    def dict_new(self):
-        fnty = Type.function(self.pyobj, ())
-        fn = self._get_function(fnty, name="PyDict_New")
-        return self.builder.call(fn, ())
+    def set_new(self, iterable=None):
+        if iterable is None:
+            iterable = self.get_null_object()
+        fnty = Type.function(self.pyobj, [self.pyobj])
+        fn = self._get_function(fnty, name="PySet_New")
+        return self.builder.call(fn, [iterable])
+
+    def set_add(self, set, value):
+        fnty = Type.function(Type.int(), [self.pyobj, self.pyobj])
+        fn = self._get_function(fnty, name="PySet_Add")
+        return self.builder.call(fn, [set, value])
+
+    def dict_new(self, presize=0):
+        if presize == 0:
+            fnty = Type.function(self.pyobj, ())
+            fn = self._get_function(fnty, name="PyDict_New")
+            return self.builder.call(fn, ())
+        else:
+            fnty = Type.function(self.pyobj, [self.py_ssize_t])
+            fn = self._get_function(fnty, name="_PyDict_NewPresized")
+            return self.builder.call(fn,
+                                     [Constant.int(self.py_ssize_t, presize)])
+
+    def dict_setitem(self, dictobj, nameobj, valobj):
+        fnty = Type.function(Type.int(), (self.pyobj, self.pyobj,
+                                          self.pyobj))
+        fn = self._get_function(fnty, name="PyDict_SetItem")
+        return self.builder.call(fn, (dictobj, nameobj, valobj))
 
     def dict_setitem_string(self, dictobj, name, valobj):
         fnty = Type.function(Type.int(), (self.pyobj, self.cstring,
@@ -692,6 +759,9 @@ class PythonAPI(object):
                                                                 count)])
 
     def tuple_setitem(self, tuple_val, index, item):
+        """
+        Steals a reference to `item`.
+        """
         fnty = Type.function(Type.int(), [self.pyobj, Type.int(), self.pyobj])
         setitem_fn = self._get_function(fnty, name='PyTuple_SetItem')
         index = self.context.get_constant(types.int32, index)

@@ -119,6 +119,26 @@ class Expr(object):
         return cls(op=op, loc=loc, items=items)
 
     @classmethod
+    def build_set(cls, items, loc):
+        op = 'build_set'
+        return cls(op=op, loc=loc, items=items)
+
+    @classmethod
+    def build_map(cls, size, loc):
+        op = 'build_map'
+        return cls(op=op, loc=loc, size=size)
+
+    @classmethod
+    def pair_first(cls, value, loc):
+        op = 'pair_first'
+        return cls(op=op, loc=loc, value=value)
+
+    @classmethod
+    def pair_second(cls, value, loc):
+        op = 'pair_second'
+        return cls(op=op, loc=loc, value=value)
+
+    @classmethod
     def getiter(cls, value, loc):
         op = 'getiter'
         return cls(op=op, loc=loc, value=value)
@@ -126,11 +146,6 @@ class Expr(object):
     @classmethod
     def iternext(cls, value, loc):
         op = 'iternext'
-        return cls(op=op, loc=loc, value=value)
-
-    @classmethod
-    def itervalid(cls, value, loc):
-        op = 'itervalid'
         return cls(op=op, loc=loc, value=value)
 
     @classmethod
@@ -144,9 +159,14 @@ class Expr(object):
         return cls(op=op, loc=loc, value=value, attr=attr)
 
     @classmethod
-    def getitem(cls, target, index, loc):
+    def getitem(cls, value, index, loc):
         op = 'getitem'
-        return cls(op=op, loc=loc, target=target, index=index)
+        return cls(op=op, loc=loc, value=value, index=index)
+
+    @classmethod
+    def static_getitem(cls, value, index, loc):
+        op = 'static_getitem'
+        return cls(op=op, loc=loc, value=value, index=index)
 
     def __repr__(self):
         if self.op == 'call':
@@ -185,6 +205,17 @@ class SetAttr(Stmt):
 
     def __repr__(self):
         return '(%s).%s = %s' % (self.target, self.attr, self.value)
+
+
+class StoreMap(Stmt):
+    def __init__(self, dct, key, value, loc):
+        self.dct = dct
+        self.key = key
+        self.value = value
+        self.loc = loc
+
+    def __repr__(self):
+        return '%s[%s] = %s' % (self.dct, self.key, self.value)
 
 
 class Del(Stmt):

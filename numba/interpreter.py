@@ -237,22 +237,17 @@ class Interpreter(object):
         call = ir.Expr.call(self.get(printvar), (), (), loc=self.loc)
         self.store(value=call, name=res)
 
-    def op_UNPACK_SEQUENCE(self, inst, iterable, stores, indices,
-                           iterobj, tupleobj):
+    def op_UNPACK_SEQUENCE(self, inst, iterable, stores, tupleobj):
         count = len(stores)
-        iterator = ir.Expr.getiter(value=self.get(iterable), loc=self.loc)
-        self.store(name=iterobj, value=iterator)
-        # Exhaust the iterator into a tuple-like object
-        tup = ir.Expr.exhaust_iter(value=self.get(iterobj), loc=self.loc,
+        # Exhaust the iterable into a tuple-like object
+        tup = ir.Expr.exhaust_iter(value=self.get(iterable), loc=self.loc,
                                    count=count)
         self.store(name=tupleobj, value=tup)
 
         # then index the tuple-like object to extract the values
-        for i, (indexobj, st) in enumerate(zip(indices, stores)):
-            index = ir.Const(i, loc=self.loc)
-            self.store(name=indexobj, value=index)
-            expr = ir.Expr.getitem(target=self.get(tupleobj),
-                                   index=self.get(indexobj), loc=self.loc)
+        for i, st in enumerate(stores):
+            expr = ir.Expr.static_getitem(self.get(tupleobj),
+                                          index=i, loc=self.loc)
             self.store(expr, st)
 
     def op_BUILD_SLICE(self, inst, start, stop, step, res, slicevar):
@@ -416,6 +411,13 @@ class Interpreter(object):
         value = self.get(value)
         self.store(value=value, name=dstname)
 
+    def op_DUP_TOPX(self, inst, orig, duped):
+        for src, dst in zip(orig, duped):
+            self.store(value=self.get(src), name=dst)
+
+    op_DUP_TOP = op_DUP_TOPX
+    op_DUP_TOP_TWO = op_DUP_TOPX
+
     def op_STORE_ATTR(self, inst, target, value):
         attr = self.code_names[inst.arg]
         sa = ir.SetAttr(target=self.get(target), value=self.get(value),
@@ -478,7 +480,7 @@ class Interpreter(object):
         expr = ir.Expr.getiter(value=self.get(value), loc=self.loc)
         self.store(expr, res)
 
-    def op_FOR_ITER(self, inst, iterator, indval, pred):
+    def op_FOR_ITER(self, inst, iterator, pair, indval, pred):
         """
         Assign new block other this instruction.
         """
@@ -490,12 +492,15 @@ class Interpreter(object):
 
         # Emit code
         val = self.get(iterator)
-        # FIXME itervalid must be called before iternext
-        iternext = ir.Expr.iternext(value=val, loc=self.loc)
+
+        pairval = ir.Expr.iternext(value=val, loc=self.loc)
+        self.store(pairval, pair)
+
+        iternext = ir.Expr.pair_first(value=self.get(pair), loc=self.loc)
         self.store(iternext, indval)
 
-        itervalid = ir.Expr.itervalid(value=val, loc=self.loc)
-        self.store(itervalid, pred)
+        isvalid = ir.Expr.pair_second(value=self.get(pair), loc=self.loc)
+        self.store(isvalid, pred)
 
         # Conditional jump
         br = ir.Branch(cond=self.get(pred), truebr=inst.next,
@@ -512,7 +517,7 @@ class Interpreter(object):
     def op_BINARY_SUBSCR(self, inst, target, index, res):
         index = self.get(index)
         target = self.get(target)
-        expr = ir.Expr.getitem(target=target, index=index, loc=self.loc)
+        expr = ir.Expr.getitem(target, index=index, loc=self.loc)
         self.store(expr, res)
 
     def op_STORE_SUBSCR(self, inst, target, index, value):
@@ -532,6 +537,19 @@ class Interpreter(object):
         expr = ir.Expr.build_list(items=[self.get(x) for x in items],
                                   loc=self.loc)
         self.store(expr, res)
+
+    def op_BUILD_SET(self, inst, items, res):
+        expr = ir.Expr.build_set(items=[self.get(x) for x in items],
+                                 loc=self.loc)
+        self.store(expr, res)
+
+    def op_BUILD_MAP(self, inst, size, res):
+        expr = ir.Expr.build_map(size=size, loc=self.loc)
+        self.store(expr, res)
+
+    def op_STORE_MAP(self, inst, dct, key, value):
+        self.current_block.append(
+            ir.StoreMap(dct=dct, key=key, value=value, loc=self.loc))
 
     def op_UNARY_NEGATIVE(self, inst, value, res):
         value = self.get(value)
