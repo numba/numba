@@ -243,6 +243,7 @@ _externs = [
 ]
 
 _externs_2 = [
+    (numpy.arctan2, "atan2"),
     (numpy.logaddexp, "logaddexp"),
     (numpy.logaddexp2, "logaddexp2"),
 ]
@@ -436,6 +437,7 @@ def _op_kernel(op, inner_sig):
 
     return _OperationKernel
 
+
 def register_binary_ufunc(ufunc, operator, asfloat=False, divbyzero=False,
                           true_divide=False):
 
@@ -482,7 +484,6 @@ if not PYVERSION >= (3, 0):
     register_binary_ufunc(numpy.divide, '/', divbyzero=True, asfloat=True)
 register_binary_ufunc(numpy.floor_divide, '//', divbyzero=True)
 register_binary_ufunc(numpy.true_divide, '/', asfloat=True, divbyzero=True, true_divide=True)
-register_binary_ufunc_kernel(numpy.arctan2, math.atan2, _float_binary_sig)
 register_binary_ufunc(numpy.power, '**', asfloat=True)
 
 
@@ -490,4 +491,4 @@ for sym, name in _externs_2:
     ty = Type.function(Type.double(), [Type.double(), Type.double()])
     npy_math_extern(name, ty)
     func = eval("npy." + name)
-    register_binary_ufunc(sym, func, asfloat = True)
+    register_binary_ufunc_kernel(sym, func, _float_binary_sig)
