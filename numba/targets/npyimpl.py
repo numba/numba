@@ -377,6 +377,64 @@ def numpy_binary_ufunc(context, builder, sig, args, funckey, divbyzero=False,
             oary.store_data(indices, res)
     return out
 
+def numpy_binary_ufunc_kernel(context, builder, sig, args, kernel_class):
+    [tyinp1, tyinp2, tyout] = sig.args
+    [inp1, inp2, out] = args
+
+    i1ary = _prepare_argument(context, builder, inp1, tyinp1)
+    i2ary = _prepare_argument(context, builder, inp2, tyinp2)
+    oary  = _prepare_argument(context, builder, out, tyout)
+
+    kernel = kernel_class(context, builder, typing.signature(oary.base_type, i1ary.base_type, i2ary.base_type))
+    intpty = context.get_value_type(types.intp)
+
+    inp1_indices = i1ary.create_iter_indices() if i1ary else None
+    inp2_indices = i2ary.create_iter_indices() if i2ary else None
+
+    loopshape = oary.shape
+    with cgutils.loop_nest(builder, loopshape, intp=intpty) as indices:
+        inp1_indices.update_indices(indices, '1')
+        inp2_indices.update_indices(indices, '2')
+
+        x = i1ary.load_data(inp1_indices.as_values())
+        y = i2ary.load_data(inp2_indices.as_values())
+
+        res = kernel.generate(x,y)
+        oary.store_data(indices, res)
+    return out
+
+
+# Kernels are the code to be executed inside the multidimensional loop.
+class _Kernel(object):
+    pass
+
+
+def _op_kernel(op, inner_sig):
+    class _OperationKernel(_Kernel):
+        def __init__(self, context, builder, outer_sig):
+            """
+            op is the operation
+            outer_sig is the outer type signature (the signature of the ufunc)
+            inner_sig is the inner type signature (the signature of the operation itself)
+            """
+            self.context = context
+            self.builder = builder
+            self.fnwork = context.get_function(op, inner_sig)
+            self.inner_sig = inner_sig
+            self.outer_sig = outer_sig
+
+        def generate(self, *args):
+            #convert args from the ufunc types to the one of the kernel operation
+            cast_args = [self.context.cast(self.builder, val, inty, outy)
+                         for val, inty, outy in zip(args, self.outer_sig.args,
+                                                    self.inner_sig.args)]
+            #perform the operation
+            res = self.fnwork(self.builder, cast_args)
+            #return the result converted to the type of the ufunc operation
+            return self.context.cast(self.builder, res, self.inner_sig.return_type,
+                                     self.outer_sig.return_type)
+
+    return _OperationKernel
 
 def register_binary_ufunc(ufunc, operator, asfloat=False, divbyzero=False,
                           true_divide=False):
@@ -397,6 +455,25 @@ def register_binary_ufunc(ufunc, operator, asfloat=False, divbyzero=False,
         register(implement(ufunc, ty1, ty2,
             types.Kind(types.Array))(binary_ufunc))
 
+def register_binary_ufunc_kernel(ufunc, operator, inner_sig):
+
+    def binary_ufunc(context, builder, sig, args):
+        return numpy_binary_ufunc_kernel(context, builder, sig, args,
+                                         _op_kernel(operator, inner_sig))
+
+    register(implement(ufunc, types.Kind(types.Array), types.Kind(types.Array),
+        types.Kind(types.Array))(binary_ufunc))
+    for ty in types.number_domain:
+        register(implement(ufunc, ty, types.Kind(types.Array),
+            types.Kind(types.Array))(binary_ufunc))
+        register(implement(ufunc, types.Kind(types.Array), ty,
+            types.Kind(types.Array))(binary_ufunc))
+    for ty1, ty2 in itertools.product(types.number_domain, types.number_domain):
+        register(implement(ufunc, ty1, ty2,
+            types.Kind(types.Array))(binary_ufunc))
+
+
+_float_binary_sig = typing.signature(types.float64, types.float64, types.float64)
 
 register_binary_ufunc(numpy.add, '+')
 register_binary_ufunc(numpy.subtract, '-')
@@ -405,7 +482,7 @@ if not PYVERSION >= (3, 0):
     register_binary_ufunc(numpy.divide, '/', divbyzero=True, asfloat=True)
 register_binary_ufunc(numpy.floor_divide, '//', divbyzero=True)
 register_binary_ufunc(numpy.true_divide, '/', asfloat=True, divbyzero=True, true_divide=True)
-register_binary_ufunc(numpy.arctan2, math.atan2, asfloat=True)
+register_binary_ufunc_kernel(numpy.arctan2, math.atan2, _float_binary_sig)
 register_binary_ufunc(numpy.power, '**', asfloat=True)
 
 
