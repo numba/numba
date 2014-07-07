@@ -43,4 +43,6 @@ def test():
         print("Running", name)
         if not udt():
             print("Test failed", name)
+            return False
 
+    return True
