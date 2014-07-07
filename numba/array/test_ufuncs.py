@@ -11,8 +11,12 @@ use_python = False
 class TestUFuncs(unittest.TestCase):
   
     # todo test different dtypes
-    def unary_ufunc_test(self, numba_func, numpy_func, data='zeros', scalar=1,
+    def unary_ufunc_test(self, func_name, data='zeros', scalar=1,
                          size=10, types=[], debug=False):
+
+        numba_func = getattr(numbarray, func_name)
+        numpy_func = getattr(np, func_name)
+
         #size = 10
         if not types:
             # 'f2' datatype fails 
@@ -45,9 +49,13 @@ class TestUFuncs(unittest.TestCase):
                 print('expected = ', expected)
             self.assertTrue(np.allclose(result, expected))
 
-    def binary_ufunc_test(self, numba_func, numpy_func, data='zeros', m=3, n=3,
+    def binary_ufunc_test(self, func_name, data='zeros', m=3, n=3,
                           ascalar=1, bscalar=1, agiven=[], bgiven=[], size=10,
                           types=[], debug=False):
+
+        numba_func = getattr(numbarray, func_name)
+        numpy_func = getattr(np, func_name)
+
         if not types:
             dts = ['i4', 'i8', 'u4', 'u8', 'f4', 'f8']
         else:
@@ -106,39 +114,39 @@ class TestUFuncs(unittest.TestCase):
     #####################
 
     def test_unary_sin_ufunc(self):
-        self.unary_ufunc_test(numbarray.sin, np.sin, 'zeros')
+        self.unary_ufunc_test('sin', 'zeros')
 
     def test_unary_cos_ufunc(self):
-        self.unary_ufunc_test(numbarray.cos, np.cos, 'zeros')
+        self.unary_ufunc_test('cos', 'zeros')
 
     def test_unary_tan_ufunc(self):
         
-        self.unary_ufunc_test(numbarray.tan, np.tan, 'ones', numbarray.pi / 4)
+        self.unary_ufunc_test('tan', 'ones', numbarray.pi / 4)
         #self.unary_ufunc_test(numbarray.tan, np.tan, 'ones', numbarray.pi / 4,
         #                      types=['f4'], debug=True)
 
     def test_unary_arcsin_ufunc(self):
-        self.unary_ufunc_test(numbarray.arcsin, np.arcsin, 'zeros')
+        self.unary_ufunc_test('arcsin', 'zeros')
 
     def test_unary_arccos_ufunc(self):
-        self.unary_ufunc_test(numbarray.arccos, np.arccos, 'ones')
+        self.unary_ufunc_test('arccos', 'ones')
     
     def test_unary_arctan_ufunc(self):
-        self.unary_ufunc_test(numbarray.arctan, np.arctan, 'ones')
+        self.unary_ufunc_test('arctan', 'ones')
 
     def test_unary_degrees_ufunc(self):
-        self.unary_ufunc_test(numbarray.degrees, np.degrees, 'arange', numbarray.pi / 6) 
+        self.unary_ufunc_test('degrees', 'arange', numbarray.pi / 6) 
  
     # same as the degrees ufunc
     def test_unary_rad2deg_ufunc(self):
-        self.unary_ufunc_test(numbarray.rad2deg, np.rad2deg, 'arange', numbarray.pi / 6) 
+        self.unary_ufunc_test('rad2deg', 'arange', numbarray.pi / 6) 
        
     # same as the radians ufunc   
     def test_unary_deg2rad_ufunc(self):
-        self.unary_ufunc_test(numbarray.deg2rad, np.deg2rad, 'arange', 30) 
+        self.unary_ufunc_test('deg2rad', 'arange', 30) 
 
     def test_unary_radians_ufunc(self):
-        self.unary_ufunc_test(numbarray.radians, np.radians, 'arange', 30) 
+        self.unary_ufunc_test('radians', 'arange', 30) 
 
     # todo -- complex types not implemented yet 
     # should test hyperbolics with complex datatypes
@@ -146,23 +154,23 @@ class TestUFuncs(unittest.TestCase):
     # b = np.arange(size) * np.pi * 1j / 2
     
     def test_unary_sinh_ufunc(self):
-        self.unary_ufunc_test(numbarray.sinh, np.sinh, 'zeros') 
+        self.unary_ufunc_test('sinh', 'zeros') 
         
     def test_unary_cosh_ufunc(self):
-        self.unary_ufunc_test(numbarray.cosh, np.cosh, 'zeros') 
+        self.unary_ufunc_test('cosh', 'zeros') 
     
     def test_unary_tanh_ufunc(self):
         #self.unary_ufunc_test(numbarray.tanh, np.tanh, 'ones', numbarray.pi / 4)
-        self.unary_ufunc_test(numbarray.tanh, np.tanh, 'ones')
+        self.unary_ufunc_test('tanh', 'ones')
 
     def test_unary_arcsinh_ufunc(self):
-        self.unary_ufunc_test(numbarray.arcsinh, np.arcsinh, 'ones', numbarray.e)
+        self.unary_ufunc_test('arcsinh', 'ones', numbarray.e)
 
     def test_unary_arccosh_ufunc(self):
-        self.unary_ufunc_test(numbarray.arccosh, np.arccosh, 'ones', numbarray.e)
+        self.unary_ufunc_test('arccosh', 'ones', numbarray.e)
 
     def test_unary_arctanh_ufunc(self):
-        self.unary_ufunc_test(numbarray.arctanh, np.arctanh, 'ones', numbarray.e)
+        self.unary_ufunc_test('arctanh', 'ones', numbarray.e)
 
     def test_div(self):
         a = 180 / numbarray.pi
@@ -178,34 +186,34 @@ class TestUFuncs(unittest.TestCase):
         self.assertTrue(numbarray.pi == np.pi)
 
     def test_unary_floor_ufunc(self):
-        self.unary_ufunc_test(numbarray.floor, np.floor, 'ones', numbarray.e)
+        self.unary_ufunc_test('floor', 'ones', numbarray.e)
  
     def test_unary_ceil_ufunc(self):
-        self.unary_ufunc_test(numbarray.ceil, np.ceil, 'ones', numbarray.e)
+        self.unary_ufunc_test('ceil', 'ones', numbarray.e)
 
     def test_unary_trunc_ufunc(self):
-        self.unary_ufunc_test(numbarray.trunc, np.trunc, 'arange', numbarray.e)
+        self.unary_ufunc_test('trunc', 'arange', numbarray.e)
     
     def test_unary_rint_ufunc(self):
-        self.unary_ufunc_test(numbarray.rint, np.rint, 'arange', numbarray.e)
+        self.unary_ufunc_test('rint', 'arange', numbarray.e)
     
     def test_unary_exp_ufunc(self):
-        self.unary_ufunc_test(numbarray.exp, np.exp, 'arange', numbarray.e)
+        self.unary_ufunc_test('exp', 'arange', numbarray.e)
 
     def test_unary_exp2_ufunc(self):
-        self.unary_ufunc_test(numbarray.exp2, np.exp2, 'arange', numbarray.e)
+        self.unary_ufunc_test('exp2', 'arange', numbarray.e)
  
     def test_unary_expm1_ufunc(self):
-        self.unary_ufunc_test(numbarray.expm1, np.expm1, 'arange', numbarray.e)
+        self.unary_ufunc_test('expm1', 'arange', numbarray.e)
 
     def test_unary_log_ufunc(self):
-        self.unary_ufunc_test(numbarray.log, np.log, 'arange')
+        self.unary_ufunc_test('log', 'arange')
         # these dtypes work
         #self.unary_ufunc_test(numbarray.log, np.log, 'arange',
         #                      types=['i4', 'i8', 'u4', 'u8', 'f8'])
 
     def test_unary_log2_ufunc(self):
-        self.unary_ufunc_test(numbarray.log2, np.log2, 'arange')
+        self.unary_ufunc_test('log2', 'arange')
         # these dytpes work
         #self.unary_ufunc_test(numbarray.log2, np.log2, 'arange',
         #                      types=['i4', 'i8', 'u4', 'u8', 'f8'])
@@ -214,10 +222,10 @@ class TestUFuncs(unittest.TestCase):
         # these dtypes work, probably similar for other failures
         #self.unary_ufunc_test(numbarray.log10, np.log10, 'arange',
         #                      types=['i4', 'i8', 'u4', 'u8', 'f8'])
-        self.unary_ufunc_test(numbarray.log10, np.log10, 'arange')
+        self.unary_ufunc_test('log10', 'arange')
 
     def test_unary_log1p_ufunc(self):
-        self.unary_ufunc_test(numbarray.log1p, np.log1p, 'arange')
+        self.unary_ufunc_test('log1p', 'arange')
         # these dtypes work, probably similar for other failures
         #self.unary_ufunc_test(numbarray.log10, np.log10, 'arange',
         #                      types=['i4', 'i8', 'u4', 'u8', 'f8'])
@@ -254,20 +262,20 @@ class TestUFuncs(unittest.TestCase):
         self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
 
     def test_unary_negative_ufunc(self):
-        self.unary_ufunc_test(numbarray.negative, np.negative, 'arange',
+        self.unary_ufunc_test('negative', 'arange',
                               types=['i1', 'i2', 'i4', 'i4', 'f4', 'f8'])
     
     def test_unary_sign_ufunc(self):
-        self.unary_ufunc_test(numbarray.sign, np.sign, 'ones') 
+        self.unary_ufunc_test('sign', 'ones') 
 
     def test_unary_sqrt_ufunc(self):
-        self.unary_ufunc_test(numbarray.sqrt, np.sqrt, 'arange')
+        self.unary_ufunc_test('sqrt', 'arange')
         # these tests work
         #self.unary_ufunc_test(numbarray.sqrt, np.sqrt, 'arange',
         #                      types=['i4', 'i8', 'u4', 'u8', 'f8']) 
 
     def test_unary_fabs_ufunc(self):
-        self.unary_ufunc_test(numbarray.fabs, np.fabs, 'arange', scalar=-1)
+        self.unary_ufunc_test('fabs', 'arange', scalar=-1)
 
     ######################
     # binary ufunc tests #
@@ -297,7 +305,7 @@ class TestUFuncs(unittest.TestCase):
         self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
 
     def test_binary_subtract_ufunc(self):
-        self.binary_ufunc_test(numbarray.subtract, np.subtract, 'arange') 
+        self.binary_ufunc_test('subtract', 'arange') 
 
 #  pow and power both give the following error 
 #  File "/home/scott/anaconda/lib/python2.7/site-packages/llvm/core.py", line 593, in verify
@@ -329,11 +337,11 @@ class TestUFuncs(unittest.TestCase):
 #        print expected
 
     def test_binary_hypot_ufunc(self):
-        self.binary_ufunc_test(numbarray.hypot, np.hypot, 'm_ones', ascalar=3, bscalar=4)
+        self.binary_ufunc_test('hypot', 'm_ones', ascalar=3, bscalar=4)
     
     def test_binary_arctan2_ufunc(self):
         # fails with 'il' dtype
-        self.binary_ufunc_test(numbarray.arctan2, np.arctan2, 'given',
+        self.binary_ufunc_test('arctan2', 'given',
                                agiven=[-1, +1, +1, -1, 0],
                                bgiven=[-1, -1, +1, +1, 0],
                                types=['i2', 'i4', 'f4', 'f8'],
@@ -341,7 +349,7 @@ class TestUFuncs(unittest.TestCase):
                                bscalar=180 / numbarray.pi)
 
     def test_binary_logaddexp_ufunc(self):
-        self.binary_ufunc_test(numbarray.logaddexp, np.logaddexp, 'arange')
+        self.binary_ufunc_test('logaddexp', 'arange')
 
 
        
