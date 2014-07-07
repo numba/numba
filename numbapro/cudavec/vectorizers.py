@@ -25,7 +25,8 @@ def _exec(codestr, glbls):
 vectorizer_stager_source = '''
 def __vectorized_%(name)s(%(args)s, __out__):
     __tid__ = __cuda__.grid(1)
-    __out__[__tid__] = __core__(%(argitems)s)
+    if __tid__ < __out__.shape[0]:
+        __out__[__tid__] = __core__(%(argitems)s)
 '''
 
 
