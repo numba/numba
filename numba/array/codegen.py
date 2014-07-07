@@ -1,5 +1,6 @@
-from pyalge import Case, of
-from nodes import *
+from __future__ import print_function, absolute_import
+from .pyalge import Case, of
+from .nodes import *
 from numba import vectorize, typeof
 import operator
 import math
@@ -170,7 +171,6 @@ def run(state):
     exec(code, globals())
     foo = globals()['foo']
 
-    print('JNB: run() vectorize')
     ufunc = vectorize('({0},)'.format(','.join(state['input_types'])))(foo)
     state['ufunc'] = ufunc
     return ufunc(*state['inputs'])

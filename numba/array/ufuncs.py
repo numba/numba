@@ -1,6 +1,6 @@
-#from __future__ import division
-from nodes import UnaryOperation, BinaryOperation, ScalarNode, ArrayDataNode
-from array import Array, reduce_
+from __future__ import print_function, absolute_import
+from .nodes import UnaryOperation, BinaryOperation, ScalarNode, ArrayDataNode
+from .array import Array, reduce_
 import numpy
 
 

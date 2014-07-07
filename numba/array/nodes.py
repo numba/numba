@@ -1,4 +1,5 @@
-from pyalge import datatype
+from __future__ import print_function, absolute_import
+from .pyalge import datatype
 
 ArrayNode = datatype('ArrayNode', ['data', 'owners'])
 ArrayDataNode = datatype('ArrayDataNode', ['array_data'])

@@ -1,3 +1,4 @@
+from __future__ import print_function, absolute_import
 import numba.unittest_support as unittest
 import numba.array as numbarray
 import numpy as np
@@ -19,9 +20,9 @@ class TestUFuncs(unittest.TestCase):
             #dts = integer_domain | real_domain 
         else:
             dts = types
-        print
+        print()
         for dt in dts:
-            print 'testing ' + numpy_func.__name__  + ' with data type ' + dt
+            print('testing ' + numpy_func.__name__  + ' with data type ' + dt)
             if data == 'zeros':
                 a = numbarray.zeros(size, dtype=dt)
                 b = np.zeros(size, dtype=dt)
@@ -36,10 +37,10 @@ class TestUFuncs(unittest.TestCase):
             expected = numpy_func(b)
             if debug:
                 # todo -- numba_func.__name__ prints 'unary op' rather than the correct name
-                print '\n' + numpy_func.__name__ + ' test'
+                print('\n' + numpy_func.__name__ + ' test')
                 #print numba_func
-                print 'result = ', result
-                print 'expected = ', expected
+                print('result = ', result)
+                print('expected = ', expected)
             self.assertTrue(np.allclose(result, expected))
 
     def binary_ufunc_test(self, numba_func, numpy_func, data='zeros', m=3, n=3, ascalar=1, bscalar=1, agiven=[], bgiven=[], size=10, types=[], debug=False):
@@ -47,9 +48,9 @@ class TestUFuncs(unittest.TestCase):
             dts = ['i4', 'i8', 'u4', 'u8', 'f4', 'f8']
         else:
             dts = types
-        print 
+        print()
         for dt in dts:
-            print 'testing ' + numpy_func.__name__  + ' with data type ' + dt
+            print('testing ' + numpy_func.__name__  + ' with data type ' + dt)
             if data == 'm_zeros':
                 a = ascalar * numbarray.zeros((m, n), dtype=dt)
                 b = bscalar * numbarray.zeros((m, n), dtype=dt)
@@ -87,12 +88,12 @@ class TestUFuncs(unittest.TestCase):
             expected = numpy_func(c, d)
             if debug:
                 # todo -- numba_func.__name__ prints 'unary op' rather than the correct name
-                print '\n' + numpy_func.__name__ + ' test'
+                print('\n' + numpy_func.__name__ + ' test')
                 #print numba_func
-                print 'result = ', result
-                print type(result)
-                print 'expected = ', expected
-                print type(expected)
+                print('result = ', result)
+                print(type(result))
+                print('expected = ', expected)
+                print(type(expected))
             self.assertTrue(np.allclose(result, expected))
 
     #  renamed from test_bunary_ufunc

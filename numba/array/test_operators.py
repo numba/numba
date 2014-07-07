@@ -1,3 +1,4 @@
+from __future__ import print_function, absolute_import
 import numba.unittest_support as unittest
 import numba.array as numbarray
 import numpy as np

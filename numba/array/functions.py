@@ -1,6 +1,7 @@
-from array import Array
+from __future__ import print_function, absolute_import
+from .array import Array
 import numpy as np
-from nodes import WhereOperation
+from .nodes import WhereOperation
 
 import sys as sys
 api = sys.modules[__name__]

@@ -1,5 +1,6 @@
-from pyalge import Case, of
-from nodes import *
+from __future__ import print_function, absolute_import
+from .pyalge import Case, of
+from .nodes import *
 import operator
 import numpy
 

@@ -1,3 +1,4 @@
+from __future__ import print_function, absolute_import
 from math import pi, e
 
 global_dict = globals()

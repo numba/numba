@@ -1,13 +1,13 @@
-#from __future__ import division
+from __future__ import print_function, absolute_import
 import numpy as np
 from numba import jit
 import math
 import weakref
-from pyalge import datatype
-import codegen
-from value import Value
-from repr_ import Repr
-from nodes import *
+from .pyalge import datatype
+from . import codegen
+from .value import Value
+from .repr_ import Repr
+from .nodes import *
 from numba.config import PYVERSION
 
 class Array(object):
@@ -60,7 +60,7 @@ class Array(object):
         codegen.build(self, state)
         if debug:
             # JNB: import __future__
-            print codegen.dump(state)
+            print(codegen.dump(state))
         result = codegen.run(state)
         
         # If variable arrays exist, save compiled vectorize function and
@@ -168,4 +168,4 @@ def reduce_(func, operand, initial_value):
     return reduce_loop(cfunc, array, initial_value)
 
 
-import ufuncs
+from . import ufuncs
