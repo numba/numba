@@ -21,12 +21,15 @@ All decorators eventually call this function.  It can be broken down into the
 following phrases:
 
 * 1. analyze bytecode
+
     * gather control-flow and data-flow information
+
 * 2. translate into an intermediate representation
 * 3. infer types using local type inference
 * 4a. if (3) succeed, lower to native code (native mode)
 * 4b. otherwise, assume object type for all variables in the lowering
   (object mode)
+
     * may try to extract loops in the function and recursively compile the
       extracted loop. (loop-jitting)
 
