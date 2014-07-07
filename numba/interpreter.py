@@ -89,6 +89,7 @@ class Interpreter(object):
                 self.loc = ir.Loc(filename=self.bytecode.filename,
                                   line=inst.lineno)
                 yield inst, kws
+            self._end_current_block()
 
     def _start_new_block(self, inst):
         self.loc = ir.Loc(filename=self.bytecode.filename, line=inst.lineno)
@@ -100,38 +101,27 @@ class Interpreter(object):
             oldblock.append(jmp)
             # Get DFA block info
         self.dfainfo = self.dfa.infos[self.current_block_offset]
-        # Insert PHI
-        self._insert_phi()
         # Notify listeners for the new block
         for fn in utils.dict_itervalues(self._block_actions):
             fn(self.current_block_offset, self.current_block)
 
-    def _insert_phi(self):
-        if self.dfainfo.incomings:
-            assert len(self.dfainfo.incomings) == 1
-            incomings = self.cfa.blocks[self.current_block_offset].incoming
-            phivar = self.dfainfo.incomings[0]
-            if len(incomings) == 1:
-                ib = utils.iter_next(iter(incomings))
-                lingering = self.dfa.infos[ib].stack
-                assert len(lingering) == 1
-                iv = lingering[0]
-                self.store(self.get(iv), phivar)
+    def _end_current_block(self):
+        self._insert_outgoing_phis()
+
+    def _insert_outgoing_phis(self):
+        """
+        Add assignments to forward requested outgoing values
+        to subsequent blocks.
+        """
+        for phiname, varname in self.dfainfo.outgoing_phis.items():
+            target = self.current_scope.get_or_define(phiname,
+                                                      loc=self.loc)
+            stmt = ir.Assign(value=self.get(varname), target=target,
+                             loc=self.loc)
+            if not self.current_block.is_terminated:
+                self.current_block.append(stmt)
             else:
-                # Invert the PHI node
-                for ib in incomings:
-                    lingering = self.dfa.infos[ib].stack
-                    assert len(lingering) == 1
-                    iv = lingering[0]
-
-                    # Add assignment in incoming block to forward the value
-                    target = self.current_scope.get_or_define('$phi' + phivar,
-                                                              loc=self.loc)
-                    stmt = ir.Assign(value=self.get(iv), target=target,
-                                     loc=self.loc)
-                    self.blocks[ib].insert_before_terminator(stmt)
-
-                self.store(target, phivar)
+                self.current_block.insert_before_terminator(stmt)
 
     def get_global_value(self, name):
         """
@@ -741,7 +731,7 @@ class Interpreter(object):
         else:
             return
             # Which is the exit of the loop
-        if br not in self.cfa.blocks[loop.exit].incoming:
+        if br not in self.cfa.blocks[loop.exit].incoming_jumps:
             return
 
         # Therefore, current block is a while loop condition

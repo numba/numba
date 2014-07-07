@@ -1,7 +1,10 @@
 from __future__ import print_function, division, absolute_import
+
+import collections
 from pprint import pprint
-from numba import utils
 import warnings
+
+from numba import utils
 
 
 class DataFlowAnalysis(object):
@@ -15,15 +18,45 @@ class DataFlowAnalysis(object):
     def __init__(self, cfa):
         self.cfa = cfa
         self.bytecode = cfa.bytecode
+        # { block offset -> BlockInfo }
         self.infos = {}
         self.syntax_blocks = []
 
     def run(self):
-        for blk in self.cfa.iterblocks():
+        for blk in self.cfa.iterliveblocks():
             self.infos[blk.offset] = self.run_on_block(blk)
 
     def run_on_block(self, blk):
-        info = BlockInfo(blk.offset)
+        incoming_blocks = []
+        info = BlockInfo(blk.offset, incoming_blocks)
+
+        for ib, pops in self.cfa.incoming_blocks(blk):
+            # By nature of Python bytecode, there will be no incoming
+            # variables from subsequent blocks.  This is an easy way
+            # of breaking the potential circularity of the problem.
+            if ib.offset >= blk.offset:
+                continue
+            ib = self.infos[ib.offset]
+            incoming_blocks.append(ib)
+
+            # Compute stack offset at block entry
+            # The stack effect of our predecessors should be known
+            assert ib.stack_offset is not None, ib
+            new_offset = ib.stack_offset + ib.stack_effect - pops
+            if new_offset < 0:
+                raise RuntimeError("computed negative stack offset for %s"
+                                   % blk)
+            if info.stack_offset is None:
+                info.stack_offset = new_offset
+            elif info.stack_offset != new_offset:
+                warnings.warn("inconsistent stack offset for %s" % blk,
+                              RuntimeWarning)
+
+        if info.stack_offset is None:
+            # No incoming blocks => assume it's the entry block
+            info.stack_offset = 0
+        info.stack_effect = 0
+
         for offset in blk:
             inst = self.bytecode[offset]
             self.dispatch(info, inst)
@@ -121,7 +154,7 @@ class DataFlowAnalysis(object):
         info.push(res)
 
     def op_POP_TOP(self, info, inst):
-        info.pop()
+        info.pop(discard=True)
 
     def op_STORE_ATTR(self, info, inst):
         target = info.pop()
@@ -143,7 +176,7 @@ class DataFlowAnalysis(object):
         info.push(name)
 
     def op_LOAD_CONST(self, info, inst):
-        res = info.make_temp()
+        res = info.make_temp('const')
         info.append(inst, res=res)
         info.push(res)
 
@@ -475,40 +508,84 @@ class LoopBlock(object):
 
 
 class BlockInfo(object):
-    def __init__(self, offset):
+    def __init__(self, offset, incoming_blocks):
         self.offset = offset
+        # The list of incoming BlockInfo objects (obtained by control
+        # flow analysis).
+        self.incoming_blocks = incoming_blocks
         self.stack = []
-        self.incomings = []
+        # Outgoing variables from this block:
+        #   { outgoing phi name -> var name }
+        self.outgoing_phis = {}
         self.insts = []
         self.tempct = 0
         self._term = None
+        self.stack_offset = None
+        self.stack_effect = 0
+
+    def __repr__(self):
+        return "<%s at offset %d>" % (self.__class__.__name__, self.offset)
 
     def dump(self):
         print("offset", self.offset, "{")
         print("  stack: ", end='')
         pprint(self.stack)
-        print("  incomings: ", end='')
-        pprint(self.incomings)
         pprint(self.insts)
         print("}")
 
-    def make_temp(self):
+    def make_temp(self, prefix=''):
         self.tempct += 1
-        name = '$%d.%d' % (self.offset, self.tempct)
+        name = '$%s%d.%d' % (prefix, self.offset, self.tempct)
         return name
 
     def push(self, val):
+        self.stack_effect += 1
         self.stack.append(val)
 
-    def pop(self):
-        # TODO: lingering incoming values
+    def pop(self, discard=False):
+        """
+        Pop a variable from the stack, or request it from incoming blocks if
+        the stack is empty.
+        If *discard* is true, the variable isn't meant to be used anymore,
+        which allows reducing the number of temporaries created.
+        """
         if not self.stack:
-            assert not self.insts
-            ret = self.make_temp()
-            self.incomings.append(ret)
+            self.stack_offset -= 1
+            if not discard:
+                return self.make_incoming()
         else:
-            ret = self.stack.pop()
+            self.stack_effect -= 1
+            return self.stack.pop()
+
+    def make_incoming(self):
+        """
+        Create an incoming variable (due to not enough values being
+        available on our stack) and request its assignment from our
+        incoming blocks' own stacks.
+        """
+        assert self.incoming_blocks
+        ret = self.make_temp('phi')
+        for ib in self.incoming_blocks:
+            stack_index = self.stack_offset + self.stack_effect
+            ib.request_outgoing(self, ret, stack_index)
         return ret
+
+    def request_outgoing(self, outgoing_block, phiname, stack_index):
+        """
+        Request the assignment of the next available stack variable
+        for block *outgoing_block* with target name *phiname*.
+        """
+        if phiname in self.outgoing_phis:
+            # If phiname was already requested, ignore this new request
+            # (can happen with a diamond-shaped block flow structure).
+            return
+        if stack_index < self.stack_offset:
+            assert self.incoming_blocks
+            for ib in self.incoming_blocks:
+                ib.request_outgoing(self, phiname, stack_index)
+        else:
+            varname = self.stack[stack_index - self.stack_offset]
+            self.outgoing_phis[phiname] = varname
 
     @property
     def tos(self):
