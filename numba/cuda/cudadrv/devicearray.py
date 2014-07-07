@@ -10,7 +10,7 @@ import numpy as np
 from .ndarray import (ndarray_populate_head, ArrayHeaderManager)
 from . import driver as _driver
 from . import devices
-from numba import dummyarray
+from numba import dummyarray, types, numpy_support
 
 try:
     long
@@ -110,6 +110,15 @@ class DeviceNDArrayBase(object):
             self.gpu_mem.free(self.gpu_head)
         except:
             pass
+
+    @property
+    def _numba_type_(self):
+        """
+        Magic attribute expected by Numba to get the numba type that
+        represents this object.
+        """
+        dtype = numpy_support.from_dtype(self.dtype)
+        return types.Array(dtype, self.ndim, 'A')
 
     @property
     def device_ctypes_pointer(self):
