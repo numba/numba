@@ -379,30 +379,29 @@ def numpy_binary_ufunc(context, builder, sig, args, funckey, divbyzero=False,
     return out
 
 def numpy_binary_ufunc_kernel(context, builder, sig, args, kernel_class):
-    [tyinp1, tyinp2, tyout] = sig.args
-    [inp1, inp2, out] = args
-
-    i1ary = _prepare_argument(context, builder, inp1, tyinp1)
-    i2ary = _prepare_argument(context, builder, inp2, tyinp2)
-    oary  = _prepare_argument(context, builder, out, tyout)
-
-    kernel = kernel_class(context, builder, typing.signature(oary.base_type, i1ary.base_type, i2ary.base_type))
+    arguments = [_prepare_argument(context, builder, arg, tyarg)
+                 for arg, tyarg in zip(args, sig.args)]
+    inputs = arguments[0:-1]
+    output = arguments[-1]
+    outer_sig = [a.base_type for a in arguments]
+    #signature expects return type first, while we have it last:
+    outer_sig = outer_sig[-1:] + outer_sig[:-1]
+    outer_sig = typing.signature(*outer_sig)
+    kernel = kernel_class(context, builder, outer_sig)
     intpty = context.get_value_type(types.intp)
 
-    inp1_indices = i1ary.create_iter_indices() if i1ary else None
-    inp2_indices = i2ary.create_iter_indices() if i2ary else None
+    indices = [inp.create_iter_indices() for inp in inputs]
 
-    loopshape = oary.shape
-    with cgutils.loop_nest(builder, loopshape, intp=intpty) as indices:
-        inp1_indices.update_indices(indices, '1')
-        inp2_indices.update_indices(indices, '2')
+    loopshape = output.shape
+    with cgutils.loop_nest(builder, loopshape, intp=intpty) as loop_indices:
+        vals_in = []
+        for i, (index, arg) in enumerate(zip(indices, inputs)):
+            index.update_indices(loop_indices, i)
+            vals_in.append(arg.load_data(index.as_values()))
 
-        x = i1ary.load_data(inp1_indices.as_values())
-        y = i2ary.load_data(inp2_indices.as_values())
-
-        res = kernel.generate(x,y)
-        oary.store_data(indices, res)
-    return out
+        val_out = kernel.generate(*vals_in)
+        output.store_data(loop_indices, val_out)
+    return args[-1]
 
 
 # Kernels are the code to be executed inside the multidimensional loop.
