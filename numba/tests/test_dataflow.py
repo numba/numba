@@ -48,6 +48,10 @@ def var_propagate4(a, b):
     return c
 
 
+# Issue #480
+def chained_compare(a):
+    return 1 < a < 3
+
 
 class TestDataFlow(TestCase):
 
@@ -106,6 +110,16 @@ class TestDataFlow(TestCase):
         self.run_propagate_func(var_propagate4, (-1, 1))
         self.run_propagate_func(var_propagate4, (-1, 0))
         self.run_propagate_func(var_propagate4, (-1, -1))
+
+    def test_chained_compare(self, flags=force_pyobj_flags):
+        pyfunc = chained_compare
+        cr = compile_isolated(pyfunc, (types.int32,), flags=flags)
+        cfunc = cr.entry_point
+        for x in [0, 1, 2, 3, 4]:
+            self.assertPreciseEqual(pyfunc(x), cfunc(x))
+
+    def test_chained_compare_npm(self):
+        self.test_chained_compare(no_pyobj_flags)
 
 
 if __name__ == '__main__':
