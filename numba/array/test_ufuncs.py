@@ -268,6 +268,42 @@ class TestUFuncs(unittest.TestCase):
     def test_unary_fabs_ufunc(self):
         self.unary_ufunc_test('fabs', 'arange', scalar=-1)
 
+    def test_unary_absolute_ufunc(self):
+        self.unary_ufunc_test('absolute', 'arange')
+
+    def test_unary_conj_ufunc(self):
+        self.unary_ufunc_test('conj', 'arange')
+
+    def test_unary_square_ufunc(self):
+        self.unary_ufunc_test('square', 'arange')
+
+    def test_unary_reciprocal_ufunc(self):
+        self.unary_ufunc_test('reciprocal', 'arange')
+
+    def test_unary_invert_ufunc(self):
+        self.unary_ufunc_test('invert', 'arange')
+
+    def test_unary_logical_not_ufunc(self):
+        self.unary_ufunc_test('logical_not', 'arange')
+
+    def test_unary_isinfinite_ufunc(self):
+        self.unary_ufunc_test('isinfinite', 'arange')
+
+    def test_unary_isinf_ufunc(self):
+        self.unary_ufunc_test('isinf', 'arange')
+
+    def test_unary_isnan_ufunc(self):
+        self.unary_ufunc_test('isnan', 'arange')
+
+    def test_unary_signbit_ufunc(self):
+        self.unary_ufunc_test('signbit', 'arange')
+
+    def test_unary_modf_ufunc(self):
+        self.unary_ufunc_test('modf', 'arange')
+
+    def test_unary_frexp_ufunc(self):
+        self.unary_ufunc_test('frexp', 'arange')
+
     ######################
     # binary ufunc tests #
     ######################
@@ -298,34 +334,20 @@ class TestUFuncs(unittest.TestCase):
     def test_binary_subtract_ufunc(self):
         self.binary_ufunc_test('subtract', 'arange') 
 
-#  pow and power both give the following error 
-#  File "/home/scott/anaconda/lib/python2.7/site-packages/llvm/core.py", line 593, in verify
-#      raise llvm.LLVMException(errio.getvalue())
-#  LLVMException: Intrinsic has incorrect return type!
-#  i64 (i64, i32)* @llvm.powi.i64
-#  Broken module found, compilation terminated.
-#
-#    def test_binary_pow_ufunc(self):
-#        a = numbarray.arange(size) 
-#        b = np.arange(size) 
-#        result = a ** 2
-#        result.eval()
-#        expected = b ** 2
-#        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
-#        print 'power test'
-#        print result
-#        print expected
-#
-#    def test_binary_power2_ufunc(self):
-#        a = numbarray.arange(size) 
-#        b = np.arange(size) 
-#        result = numbarray.power(a, 2) 
-#        result.eval()
-#        expected = np.power(b, 2)
-#        self.assertTrue(np.all(result.eval(use_python=use_python) == expected))
-#        print 'pow test'
-#        print result
-#        print expected
+    def test_binary_multiply_ufunc(self):
+        self.binary_ufunc_test('multiply', 'arange')
+
+    def test_binary_divide_ufunc(self):
+        self.binary_ufunc_test('divide', 'arange')
+
+    def test_binary_true_divide_ufunc(self):
+        self.binary_ufunc_test('true_divide', 'arange')
+
+    def test_binary_floor_divide_ufunc(self):
+        self.binary_ufunc_test('floor_divide', 'arange')
+
+    def test_binary_power_ufunc(self):
+        self.binary_ufunc_test('power', 'arange')
 
     def test_binary_hypot_ufunc(self):
         self.binary_ufunc_test('hypot', 'm_ones', ascalar=3, bscalar=4)
@@ -342,7 +364,83 @@ class TestUFuncs(unittest.TestCase):
     def test_binary_logaddexp_ufunc(self):
         self.binary_ufunc_test('logaddexp', 'arange')
 
+    def test_binary_logaddexp2_ufunc(self):
+        self.binary_ufunc_test('logaddexp2', 'arange')
 
+    def test_binary_remainder_ufunc(self):
+        self.binary_ufunc_test('remainder', 'arange')
+
+    def test_binary_mod_ufunc(self):
+        self.binary_ufunc_test('mod', 'arange')
+       
+    def test_binary_fmod_ufunc(self):
+        self.binary_ufunc_test('fmod', 'arange')
+
+    def test_binary_bitwise_and_ufunc(self):
+        self.binary_ufunc_test('bitwise_and', 'arange')
+       
+    def test_binary_bitwise_or_ufunc(self):
+        self.binary_ufunc_test('bitwise_or', 'arange')
+       
+    def test_binary_bitwise_xor_ufunc(self):
+        self.binary_ufunc_test('bitwise_xor', 'arange')
+       
+    def test_binary_left_shift_ufunc(self):
+        self.binary_ufunc_test('left_shift', 'arange')
+       
+    def test_binary_right_shift_ufunc(self):
+        self.binary_ufunc_test('right_shift', 'arange')
+       
+    def test_binary_greater_ufunc(self):
+        self.binary_ufunc_test('greater', 'arange')
+       
+    def test_binary_greater_equal_ufunc(self):
+        self.binary_ufunc_test('greater_equal', 'arange')
+       
+    def test_binary_less_ufunc(self):
+        self.binary_ufunc_test('less', 'arange')
+       
+    def test_binary_less_equal_ufunc(self):
+        self.binary_ufunc_test('less_equal', 'arange')
+       
+    def test_binary_not_equal_ufunc(self):
+        self.binary_ufunc_test('not_equal', 'arange')
+       
+    def test_binary_equal_ufunc(self):
+        self.binary_ufunc_test('equal', 'arange')
+       
+    def test_binary_logical_and_ufunc(self):
+        self.binary_ufunc_test('logical_and', 'arange')
+       
+    def test_binary_logical_or_ufunc(self):
+        self.binary_ufunc_test('logical_or', 'arange')
+       
+    def test_binary_logical_xor_ufunc(self):
+        self.binary_ufunc_test('logical_xor', 'arange')
+       
+    def test_binary_maximum_ufunc(self):
+        self.binary_ufunc_test('maximum', 'arange')
+       
+    def test_binary_minimum_ufunc(self):
+        self.binary_ufunc_test('minimum', 'arange')
+       
+    def test_binary_fmax_ufunc(self):
+        self.binary_ufunc_test('fmax', 'arange')
+       
+    def test_binary_fmin_ufunc(self):
+        self.binary_ufunc_test('fmin', 'arange')
+       
+    def test_binary_copysign_ufunc(self):
+        self.binary_ufunc_test('copysign', 'arange')
+       
+    def test_binary_nextafter_ufunc(self):
+        self.binary_ufunc_test('nextafter', 'arange')
+       
+    def test_binary_ldexp_ufunc(self):
+        self.binary_ufunc_test('ldexp', 'arange')
+       
+    def test_binary_fmod_ufunc(self):
+        self.binary_ufunc_test('fmod', 'arange')
        
 if __name__ == '__main__':
-    unittest.main()
+    unittest.main(verbosity=2)
