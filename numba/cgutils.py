@@ -20,7 +20,23 @@ def as_bool_byte(builder, value):
     return builder.zext(value, Type.int(8))
 
 
+def make_anonymous_struct(builder, values):
+    """
+    Create an anonymous struct constant containing the given LLVM *values*.
+    """
+    struct_type = Type.struct([v.type for v in values])
+    struct_val = Constant.undef(struct_type)
+    for i, v in enumerate(values):
+        struct_val = builder.insert_value(struct_val, v, i)
+    return struct_val
+
+
 class Structure(object):
+    """
+    A high-level object wrapping a alloca'ed LLVM structure, including
+    named fields and attribute access.
+    """
+
     def __init__(self, context, builder, value=None, ref=None):
         self._type = context.get_struct_type(self)
         self._context = context
@@ -36,44 +52,73 @@ class Structure(object):
             assert self._type == ref.type.pointee
             self._value = ref
 
-        self._fdmap = {}
-        self._typemap = {}
+        self._namemap = {}
+        self._fdmap = []
+        self._typemap = []
         base = Constant.int(Type.int(), 0)
         for i, (k, tp) in enumerate(self._fields):
-            self._fdmap[k] = (base, Constant.int(Type.int(), i))
-            self._typemap[k] = tp
+            self._namemap[k] = i
+            self._fdmap.append((base, Constant.int(Type.int(), i)))
+            self._typemap.append(tp)
 
     def __getattr__(self, field):
+        """
+        Load the LLVM value of the named *field*.
+        """
         if not field.startswith('_'):
-            offset = self._fdmap[field]
-            ptr = self._builder.gep(self._value, offset)
-            return self._builder.load(ptr)
+            return self[self._namemap[field]]
         else:
             raise AttributeError(field)
 
     def __setattr__(self, field, value):
+        """
+        Store the LLVM *value* into the named *field*.
+        """
         if field.startswith('_'):
             return super(Structure, self).__setattr__(field, value)
-        offset = self._fdmap[field]
+        self[self._namemap[field]] = value
+
+    def __getitem__(self, index):
+        """
+        Load the LLVM value of the field at *index*.
+        """
+        offset = self._fdmap[index]
+        ptr = self._builder.gep(self._value, offset)
+        return self._builder.load(ptr)
+
+    def __setitem__(self, index, value):
+        """
+        Store the LLVM *value* into the field at *index*.
+        """
+        offset = self._fdmap[index]
         ptr = self._builder.gep(self._value, offset)
         value = self._context.get_return_value(self._builder,
-                                               self._typemap[field], value)
-        assert ptr.type.pointee == value.type, (str(ptr.type.pointee),
-                                                str(value.type))
+                                               self._typemap[index], value)
+        if ptr.type.pointee != value.type:
+            raise AssertionError("Type mismatch: __setitem__(%d, ...) "
+                                 "expected %r but got %r"
+                                 % (index, str(ptr.type.pointee), str(value.type)))
         self._builder.store(value, ptr)
 
+    def __len__(self):
+        """
+        Return the number of fields.
+        """
+        return len(self._namemap)
+
     def _getpointer(self):
+        """
+        Return the LLVM pointer to the underlying structure.
+        """
         return self._value
 
     def _getvalue(self):
+        """
+        Load and return the value of the underlying LLVM structure.
+        """
         return self._builder.load(self._value)
 
-    def __iter__(self):
-        def iterator():
-            for field, _ in self._fields:
-                yield getattr(self, field)
-
-        return iter(iterator())
+    # __iter__ is derived by Python from __len__ and __getitem__
 
 
 def get_function(builder):

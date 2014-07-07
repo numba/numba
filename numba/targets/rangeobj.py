@@ -6,10 +6,29 @@ import llvm.core as lc
 
 from numba import errcode
 from numba import types, typing, cgutils
-from numba.targets.imputils import builtin, implement, iterator_impl
+from numba.targets.imputils import (builtin, implement, iterator_impl,
+                                    struct_factory)
 
 
-def make_range(range_state_type, range_iter_type, int_type):
+@struct_factory(types.RangeIteratorType)
+def make_range_iterator(typ):
+    """
+    Return the Structure representation of the given *typ* (an
+    instance of types.RangeIteratorType).
+    """
+    int_type = typ.yield_type
+
+    class RangeIter(cgutils.Structure):
+
+        _fields = [('iter', types.CPointer(int_type)),
+                   ('stop', int_type),
+                   ('step', int_type),
+                   ('count', types.CPointer(int_type))]
+
+    return RangeIter
+
+
+def make_range_impl(range_state_type, range_iter_type, int_type):
 
     class RangeState(cgutils.Structure):
         _fields = [('start', int_type),
@@ -66,12 +85,7 @@ def make_range(range_state_type, range_iter_type, int_type):
         return RangeIter.from_range_state(context, builder, state)._getvalue()
 
     @iterator_impl(range_state_type, range_iter_type)
-    class RangeIter(cgutils.Structure):
-
-        _fields = [('iter', types.CPointer(int_type)),
-                   ('stop', int_type),
-                   ('step', int_type),
-                   ('count', types.CPointer(int_type))]
+    class RangeIter(make_range_iterator(range_iter_type)):
 
         @classmethod
         def from_range_state(cls, context, builder, state):
@@ -133,10 +147,6 @@ def make_range(range_state_type, range_iter_type, int_type):
                 builder.store(builder.sub(count, one), countptr)
                 builder.store(builder.add(value, self.step), self.iter)
 
-    return RangeState, RangeIter
 
-
-RangeState32, RangeIter32 = make_range(types.range_state32_type,
-                                       types.range_iter32_type, types.int32)
-RangeState64, RangeIter64 = make_range(types.range_state64_type,
-                                       types.range_iter64_type, types.int64)
+make_range_impl(types.range_state32_type, types.range_iter32_type, types.int32)
+make_range_impl(types.range_state64_type, types.range_iter64_type, types.int64)

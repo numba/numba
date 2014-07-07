@@ -120,7 +120,7 @@ class _IternextResult(object):
         """
         Mark the iterator as exhausted.
         """
-        self._pairobj.second = self._builder.get_constant(types.boolean, False)
+        self._pairobj.second = self._context.get_constant(types.boolean, False)
 
     def set_valid(self, is_valid=True):
         """
@@ -128,7 +128,7 @@ class _IternextResult(object):
         be either a Python boolean or a LLVM inst).
         """
         if is_valid in (False, True):
-            is_valid = self._builder.get_constant(types.boolean, is_valid)
+            is_valid = self._context.get_constant(types.boolean, is_valid)
         self._pairobj.second = is_valid
 
     def yield_(self, value):
@@ -136,6 +136,20 @@ class _IternextResult(object):
         Mark the iterator as yielding the given *value* (a LLVM inst).
         """
         self._pairobj.first = value
+
+    def is_valid(self):
+        """
+        Return whether the iterator is marked valid.
+        """
+        return self._context.get_argument_value(self._builder,
+                                                types.boolean,
+                                                self._pairobj.second)
+
+    def yielded_value(self):
+        """
+        Return the iterator's yielded value, if any.
+        """
+        return self._pairobj.first
 
 
 def iternext_impl(func):
@@ -147,17 +161,40 @@ def iternext_impl(func):
     The wrapped function will be called with the following signature:
         (context, builder, sig, args, iternext_result)
     """
-    from .builtins import make_pair
 
     def wrapper(context, builder, sig, args):
         pair_type = sig.return_type
-        cls = make_pair(pair_type.first_type, pair_type.second_type)
+        cls = context.make_pair(pair_type.first_type, pair_type.second_type)
         pairobj = cls(context, builder)
         func(context, builder, sig, args,
              _IternextResult(context, builder, pairobj))
         return pairobj._getvalue()
     return wrapper
 
+
+def call_getiter(context, builder, iterable_type, val):
+    """
+    Call the `getiter()` implementation for the given *iterable_type*
+    of value *val*, and return the corresponding LLVM inst.
+    """
+    getiter_sig = signature(iterable_type.iterator_type, iterable_type)
+    getiter_impl = context.get_function('getiter', getiter_sig)
+    return getiter_impl(builder, (val,))
+
+
+def call_iternext(context, builder, iterator_type, val):
+    """
+    Call the `iternext()` implementation for the given *iterator_type*
+    of value *val*, and return a convenience _IternextResult() object
+    reflecting the results.
+    """
+    itemty = iterator_type.yield_type
+    pair_type = types.Pair(itemty, types.boolean)
+    paircls = context.make_pair(pair_type.first_type, pair_type.second_type)
+    iternext_sig = signature(pair_type, iterator_type)
+    iternext_impl = context.get_function('iternext', iternext_sig)
+    val = iternext_impl(builder, (val,))
+    return _IternextResult(context, builder, paircls(context, builder, val))
 
 
 class Registry(object):
@@ -178,3 +215,33 @@ builtin_registry = Registry()
 builtin = builtin_registry.register
 builtin_attr = builtin_registry.register_attr
 
+
+class _StructRegistry(object):
+    """
+    A registry of factories of cgutils.Structure classes.
+    """
+
+    def __init__(self):
+        self.impls = {}
+
+    def register(self, type_class):
+        """
+        Register a Structure factory function for the given *type_class*
+        (i.e. a subclass of numba.types.Type).
+        """
+        assert issubclass(type_class, types.Type)
+        def decorator(func):
+            self.impls[type_class] = func
+            return func
+        return decorator
+
+    def match(self, typ):
+        """
+        Return the Structure factory function for the given Numba type
+        instance *typ*.
+        """
+        return self.impls[typ.__class__]
+
+
+struct_registry = _StructRegistry()
+struct_factory = struct_registry.register

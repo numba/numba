@@ -37,15 +37,33 @@ def tuple_tuple_iter_usecase():
         res = res * 2
     return res
 
+def enumerate_nested_tuple_usecase():
+    res = 0.0
+    for i, j in enumerate(((1.5, 2.0), (99.3, 3.4), (1.8, 2.5))):
+        for l in j:
+            res += i * l
+        res = res * 2
+    return res
+
+def nested_enumerate_usecase():
+    res = 0.0
+    for i, (j, k) in enumerate(enumerate(((1.5, 2.0), (99.3, 3.4), (1.8, 2.5)))):
+        for l in k:
+            res += i * j * l
+        res = res * 2
+    return res
+
 
 class IterationTest(TestCase):
 
-    def test_int_tuple_iter(self, flags=force_pyobj_flags):
-        pyfunc = int_tuple_iter_usecase
+    def run_nullary_func(self, pyfunc, flags):
         cr = compile_isolated(pyfunc, (), flags=flags)
         cfunc = cr.entry_point
         expected = pyfunc()
         self.assertPreciseEqual(cfunc(), expected)
+
+    def test_int_tuple_iter(self, flags=force_pyobj_flags):
+        self.run_nullary_func(int_tuple_iter_usecase, flags)
 
     def test_int_tuple_iter_npm(self):
         self.test_int_tuple_iter(flags=no_pyobj_flags)
@@ -54,22 +72,28 @@ class IterationTest(TestCase):
     # that it works for other types.
 
     def test_float_tuple_iter(self, flags=force_pyobj_flags):
-        pyfunc = float_tuple_iter_usecase
-        cr = compile_isolated(pyfunc, (), flags=flags)
-        cfunc = cr.entry_point
-        self.assertPreciseEqual(cfunc(), pyfunc())
+        self.run_nullary_func(float_tuple_iter_usecase, flags)
 
     def test_float_tuple_iter_npm(self):
         self.test_float_tuple_iter(flags=no_pyobj_flags)
 
     def test_tuple_tuple_iter(self, flags=force_pyobj_flags):
-        pyfunc = tuple_tuple_iter_usecase
-        cr = compile_isolated(pyfunc, (), flags=flags)
-        cfunc = cr.entry_point
-        self.assertPreciseEqual(cfunc(), pyfunc())
+        self.run_nullary_func(tuple_tuple_iter_usecase, flags)
 
     def test_tuple_tuple_iter_npm(self):
         self.test_tuple_tuple_iter(flags=no_pyobj_flags)
+
+    def test_enumerate_nested_tuple(self, flags=force_pyobj_flags):
+        self.run_nullary_func(enumerate_nested_tuple_usecase, flags)
+
+    def test_enumerate_nested_tuple_npm(self):
+        self.test_enumerate_nested_tuple(flags=no_pyobj_flags)
+
+    def test_nested_enumerate(self, flags=force_pyobj_flags):
+        self.run_nullary_func(nested_enumerate_usecase, flags)
+
+    def test_nested_enumerate_npm(self):
+        self.test_nested_enumerate(flags=no_pyobj_flags)
 
 
 if __name__ == '__main__':
