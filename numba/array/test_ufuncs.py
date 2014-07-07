@@ -14,6 +14,10 @@ class TestUFuncs(unittest.TestCase):
     def unary_ufunc_test(self, func_name, data='zeros', scalar=1,
                          size=10, types=[], debug=False):
 
+        if data not in ['zeros', 'ones', 'arange']:
+            raise ValueError('{0} is not a valid value for data '
+                             'argument'.format(data))
+
         numba_func = getattr(numbarray, func_name)
         numpy_func = getattr(np, func_name)
 
@@ -26,18 +30,14 @@ class TestUFuncs(unittest.TestCase):
         else:
             dts = types
         for dt in dts:
-            if data == 'zeros':
-                a = numbarray.zeros(size, dtype=dt)
-                b = np.zeros(size, dtype=dt)
-            elif data == 'ones':
-                a = scalar * numbarray.ones(size, dtype=dt)
-                b = scalar * np.ones(size, dtype=dt)
-            elif data == 'arange':
-                a = scalar * numbarray.arange(size, dtype=dt)
-                b = scalar * np.arange(size, dtype=dt)
+
+            a = getattr(numbarray, data)(size, dtype=dt)
+            b = getattr(np, data)(size, dtype=dt)
+
             result = numba_func(a)
             result = result.eval()
             expected = numpy_func(b)
+
             if debug:
                 # todo -- numba_func.__name__ prints 'unary op' rather than
                 # the correct name
@@ -47,11 +47,20 @@ class TestUFuncs(unittest.TestCase):
                 #print numba_func
                 print('result = ', result)
                 print('expected = ', expected)
+
             self.assertTrue(np.allclose(result, expected))
 
     def binary_ufunc_test(self, func_name, data='zeros', m=3, n=3,
                           ascalar=1, bscalar=1, agiven=[], bgiven=[], size=10,
                           types=[], debug=False):
+
+        if data not in ['m_zeros', 'zeros', 'm_ones', 'ones', 'arange', 'given']:
+            raise ValueError('{0} is not a valid value for data '
+                             'argument'.format(data))
+
+        if data in ['m_zeros', 'm_ones']:
+            data = data[2:]
+            size = (m, n)
 
         numba_func = getattr(numbarray, func_name)
         numpy_func = getattr(np, func_name)
@@ -61,41 +70,22 @@ class TestUFuncs(unittest.TestCase):
         else:
             dts = types
         for dt in dts:
-            if data == 'm_zeros':
-                a = ascalar * numbarray.zeros((m, n), dtype=dt)
-                b = bscalar * numbarray.zeros((m, n), dtype=dt)
-                c = ascalar * np.zeros((m, n), dtype=dt)
-                d = bscalar * np.zeros((m, n), dtype=dt)
-            elif data == 'zeros':
-                a = ascalar * numbarray.zeros(size, dtype=dt)
-                b = bscalar * numbarray.zeros(size, dtype=dt)
-                c = ascalar * np.zeros(size, dtype=dt)
-                d = bscalar * np.zeros(size, dtype=dt)
-            elif data == 'm_ones':
-                a = ascalar * numbarray.ones((m, n), dtype=dt)
-                b = bscalar * numbarray.ones((m, n), dtype=dt)
-                c = ascalar * np.ones((m, n), dtype=dt)
-                d = bscalar * np.ones((m, n), dtype=dt)
-            elif data == 'ones':
-                a = ascalar * numbarray.ones(size, dtype=dt)
-                b = bscalar * numbarray.ones(size, dtype=dt)
-                c = ascalar * np.ones(size, dtype=dt)
-                d = bscalar * np.ones(size, dtype=dt)
-            elif data == 'arange':
-                a = ascalar * numbarray.arange(size, dtype=dt)
-                b = bscalar * numbarray.arange(size, dtype=dt)
-                c = ascalar * np.arange(size, dtype=dt)
-                d = bscalar * np.arange(size, dtype=dt)
-            elif data == 'given':
-                a = ascalar * numbarray.array(agiven, dtype=dt)
-                b = bscalar * numbarray.array(bgiven, dtype=dt)
-                c = ascalar * np.array(agiven, dtype=dt)
-                d = bscalar * np.array(bgiven, dtype=dt)
 
+            if data == 'given':
+                a = numbarray.array(agiven, dtype=dt)
+                b = numbarray.array(bgiven, dtype=dt)
+                c = numbarray.array(agiven, dtype=dt)
+                d = numbarray.array(bgiven, dtype=dt)
+            else:
+                a = getattr(numbarray, data)(size, dtype=dt)
+                b = getattr(numbarray, data)(size, dtype=dt)
+                c = getattr(np, data)(size, dtype=dt)
+                d = getattr(np, data)(size, dtype=dt)
             
             result = numba_func(a, b)
             result = result.eval()
             expected = numpy_func(c, d)
+
             if debug:
                 print()
                 print('testing ' + numpy_func.__name__  + ' with data type ' + dt)
@@ -107,6 +97,7 @@ class TestUFuncs(unittest.TestCase):
                 print(type(result))
                 print('expected = ', expected)
                 print(type(expected))
+
             self.assertTrue(np.allclose(result, expected))
 
     #####################
