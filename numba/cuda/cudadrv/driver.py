@@ -163,7 +163,10 @@ class Driver(object):
             obj = object.__new__(cls)
             obj.lib = find_driver()
             # Initialize driver
-            obj.cuInit(0)
+            try:
+                obj.cuInit(0)
+            except CudaAPIError as e:
+                raise CudaSupportError("Error at driver init: \n%s:" % e)
             cls._singleton = obj
         return obj
 
