@@ -1,5 +1,5 @@
 from __future__ import print_function
-
+import warnings
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba.utils import PYVERSION
@@ -51,6 +51,16 @@ def var_propagate4(a, b):
 # Issue #480
 def chained_compare(a):
     return 1 < a < 3
+
+
+def stack_effect_error():
+    i = 2
+    c = 1
+    if i == 0:
+        for i in range(2):
+            c = i
+
+    return i + c
 
 
 class TestDataFlow(TestCase):
@@ -120,6 +130,14 @@ class TestDataFlow(TestCase):
 
     def test_chained_compare_npm(self):
         self.test_chained_compare(no_pyobj_flags)
+
+    def test_stack_effect_error(self, flags=force_pyobj_flags):
+        pyfunc = stack_effect_error
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("error")
+            cr = compile_isolated(pyfunc, (), flags=flags)
+
 
 
 if __name__ == '__main__':
