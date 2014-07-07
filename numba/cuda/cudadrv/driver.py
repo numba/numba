@@ -188,13 +188,6 @@ class Driver(object):
         return self.initialization_error is None
 
     def __getattr__(self, fname):
-        if not self.is_initialized:
-            self.initialize()
-
-        if self.initialization_error is not None:
-            raise CudaSupportError("Error at driver init: \n%s:" %
-                                   self.initialization_error)
-
         # First request of a driver API function
         try:
             proto = API_PROTOTYPES[fname]
@@ -203,6 +196,15 @@ class Driver(object):
         restype = proto[0]
         argtypes = proto[1:]
 
+        # Initialize driver
+        if not self.is_initialized:
+            self.initialize()
+
+        if self.initialization_error is not None:
+            raise CudaSupportError("Error at driver init: \n%s:" %
+                                   self.initialization_error)
+
+        # Find function in driver library
         libfn = self._find_api(fname)
         libfn.restype = restype
         libfn.argtypes = argtypes
