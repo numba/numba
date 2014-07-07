@@ -13,10 +13,16 @@ from .api import _auto_device, _profiling, _profile_start, _profile_stop
 
 
 def is_available():
+    """Returns a boolean to indicate the availability of a CUDA GPU.
+
+    This will initialize the driver if it hasn't been initialized.
+    """
     return driver.driver.is_available
 
 
 def cuda_error():
+    """Returns None or an exception if the CUDA driver fails to initialize.
+    """
     return driver.driver.initialization_error
 
 
