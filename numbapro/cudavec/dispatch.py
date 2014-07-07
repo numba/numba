@@ -2,7 +2,7 @@ from __future__ import absolute_import, division, print_function
 import numpy as np
 from numba.cuda.cudadrv import devicearray
 from numba import cuda
-from numba.npyufunc.deviceufunc import UFuncMechanism
+from numbapro.common.deviceufunc import UFuncMechanism
 
 
 class CudaUFuncDispatcher(object):

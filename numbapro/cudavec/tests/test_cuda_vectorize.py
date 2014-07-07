@@ -21,6 +21,12 @@ test_dtypes = np.float32, np.int32
 
 
 class TestCUDAVectorize(unittest.TestCase):
+    def test_scalar(self):
+        a = 1.2
+        b = 2.3
+        c = vector_add(a, b)
+        self.assertEqual(c, a + b)
+
     def test_1d(self):
         # build python ufunc
         np_ufunc = np.add
