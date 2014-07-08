@@ -2,6 +2,7 @@ Version (0.14.3)
 ================
 * CUDA driver is initialized lazily
 * Improved stability of CUDA ufunc machinery
+* Improved stability of parallel ufunc
 
 Version (0.14.2)
 ================
