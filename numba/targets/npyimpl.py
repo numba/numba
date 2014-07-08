@@ -67,6 +67,7 @@ class _ScalarHelper(namedtuple('_ScalarHelper', ('context', 'builder', 'val', 'b
     def store_data(self, indices, val):
         raise LoweringError('Can not store in a scalar')
 
+
 class _ArrayIndexingHelper(namedtuple('_ArrayIndexingHelper', ('array', 'indices'))):
     def update_indices(self, loop_indices, name):
         bld = self.array.builder
@@ -281,23 +282,6 @@ def npy_math_extern(fn, fnty):
             return ref_impl(context, builder, sig, cast_vals)
 
 
-for sym, name in _externs:
-    ty = Type.function(Type.double(), [Type.double()])
-    npy_math_extern(name, ty)
-    func = eval("npy." + name)
-    register_unary_ufunc(sym, func, asfloat = True)
-
-# radiams and degrees ufuncs are equivalent to deg2rad and rad2deg resp.
-# register them.
-register_unary_ufunc(numpy.degrees, numpy.rad2deg, asfloat=True)
-register_unary_ufunc(numpy.radians, numpy.deg2rad, asfloat=True)
-
-# the following ufuncs rely on functions that are not based on a function
-# from npymath
-register_unary_ufunc(numpy.absolute, types.abs_type)
-register_unary_ufunc(numpy.sign, types.sign_type)
-register_unary_ufunc(numpy.negative, types.neg_type)
-
 def numpy_binary_ufunc(context, builder, sig, args, funckey, divbyzero=False,
                        asfloat=False, true_divide=False):
     [tyinp1, tyinp2, tyout] = sig.args
@@ -378,7 +362,8 @@ def numpy_binary_ufunc(context, builder, sig, args, funckey, divbyzero=False,
             oary.store_data(indices, res)
     return out
 
-def numpy_binary_ufunc_kernel(context, builder, sig, args, kernel_class):
+
+def numpy_ufunc_kernel(context, builder, sig, args, kernel_class):
     arguments = [_prepare_argument(context, builder, arg, tyarg)
                  for arg, tyarg in zip(args, sig.args)]
     inputs = arguments[0:-1]
@@ -409,8 +394,8 @@ class _Kernel(object):
     pass
 
 
-def _op_kernel(op, inner_sig):
-    class _OperationKernel(_Kernel):
+def _function_with_cast_kernel(op, inner_sig):
+    class _KernelImpl(_Kernel):
         def __init__(self, context, builder, outer_sig):
             """
             op is the operation
@@ -434,7 +419,29 @@ def _op_kernel(op, inner_sig):
             return self.context.cast(self.builder, res, self.inner_sig.return_type,
                                      self.outer_sig.return_type)
 
-    return _OperationKernel
+    return _KernelImpl
+
+
+def _homogeneous_function(op):
+    """A kernel using an homogeneous inner signature, based on the type of
+    the first argument"""
+    class _KernelImpl(_Kernel):
+        def __init__(self, context, builder, outer_sig):
+            self.context = context
+            self.builder = builder
+            self.promote_type = _default_promotion_for_type(outer_sig.args[0])
+            self.outer_sig = outer_sig
+
+        def generate(self, *args):
+            inner_sig = typing.signature(*([self.promote_type]*(len(self.outer_sig.args)+1)))
+            fn = self.context.get_function(op, inner_sig)
+            cast_args = [self.context.cast(self.builder, val, inty, outty)
+                         for val, inty, outty in zip(args, self.outer_sig.args, inner_sig.args)]
+            res = fn(self.builder, cast_args)
+            return self.context.cast(self.builder, res, self.promote_type,
+                                     self.outer_sig.return_type)
+
+    return _KernelImpl
 
 
 def register_binary_ufunc(ufunc, operator, asfloat=False, divbyzero=False,
@@ -456,11 +463,23 @@ def register_binary_ufunc(ufunc, operator, asfloat=False, divbyzero=False,
         register(implement(ufunc, ty1, ty2,
             types.Kind(types.Array))(binary_ufunc))
 
-def register_binary_ufunc_kernel(ufunc, operator, inner_sig):
 
+def register_unary_ufunc_kernel(ufunc, kernel):
+    def unary_ufunc(context, builder, sig, args):
+        return numpy_ufunc_kernel(context, builder, sig, args, kernel)
+
+    register(implement(ufunc, types.Kind(types.Array),
+        types.Kind(types.Array))(unary_ufunc))
+    for ty in types.number_domain:
+        register(implement(ufunc, ty,
+            types.Kind(types.Array))(unary_ufunc))
+    for ty in types.number_domain:
+        register(implement(ufunc, ty)(unary_ufunc))
+
+
+def register_binary_ufunc_kernel(ufunc, kernel):
     def binary_ufunc(context, builder, sig, args):
-        return numpy_binary_ufunc_kernel(context, builder, sig, args,
-                                         _op_kernel(operator, inner_sig))
+        return numpy_ufunc_kernel(context, builder, sig, args, kernel)
 
     register(implement(ufunc, types.Kind(types.Array), types.Kind(types.Array),
         types.Kind(types.Array))(binary_ufunc))
@@ -474,20 +493,42 @@ def register_binary_ufunc_kernel(ufunc, operator, inner_sig):
             types.Kind(types.Array))(binary_ufunc))
 
 
-_float_binary_sig = typing.signature(types.float64, types.float64, types.float64)
+################################################################################
+# Actual registering of supported ufuncs
 
-register_binary_ufunc(numpy.add, '+')
-register_binary_ufunc(numpy.subtract, '-')
-register_binary_ufunc(numpy.multiply, '*')
+_float_unary_function_type = Type.function(Type.double(), [Type.double()])
+_float_unary_sig = typing.signature(types.float64, types.float64)
+for sym, name in _externs:
+    npy_math_extern(name, _float_unary_function_type)
+    register_unary_ufunc_kernel(sym, _function_with_cast_kernel(getattr(npy, name), _float_unary_sig))
+
+# radians and degrees ufuncs are equivalent to deg2rad and rad2deg resp.
+# register them.
+register_unary_ufunc_kernel(numpy.degrees, _function_with_cast_kernel(npy.rad2deg, _float_unary_sig))
+register_unary_ufunc_kernel(numpy.radians, _function_with_cast_kernel(npy.deg2rad, _float_unary_sig))
+
+register_unary_ufunc_kernel(numpy.absolute, _homogeneous_function(types.abs_type))
+register_unary_ufunc_kernel(numpy.sign, _homogeneous_function(types.sign_type))
+register_unary_ufunc_kernel(numpy.negative, _homogeneous_function(types.neg_type))
+del _float_unary_function_type, _float_unary_sig
+
+# the following ufuncs rely on functions that are not based on a function
+# from npymath
+    
+
+register_binary_ufunc_kernel(numpy.add, _homogeneous_function('+'))
+register_binary_ufunc_kernel(numpy.subtract, _homogeneous_function('-'))
+register_binary_ufunc_kernel(numpy.multiply, _homogeneous_function('*'))
 if not PYVERSION >= (3, 0):
     register_binary_ufunc(numpy.divide, '/', divbyzero=True, asfloat=True)
 register_binary_ufunc(numpy.floor_divide, '//', divbyzero=True)
 register_binary_ufunc(numpy.true_divide, '/', asfloat=True, divbyzero=True, true_divide=True)
 register_binary_ufunc(numpy.power, '**', asfloat=True)
 
-
+_float_binary_function_type = Type.function(Type.double(), [Type.double(), Type.double()])
+_float_binary_sig = typing.signature(types.float64, types.float64, types.float64)
 for sym, name in _externs_2:
-    ty = Type.function(Type.double(), [Type.double(), Type.double()])
-    npy_math_extern(name, ty)
-    func = eval("npy." + name)
-    register_binary_ufunc_kernel(sym, func, _float_binary_sig)
+    npy_math_extern(name, _float_binary_function_type)
+    register_binary_ufunc_kernel(sym, _function_with_cast_kernel(getattr(npy, name), _float_binary_sig))
+
+del _float_binary_function_type, _float_binary_sig
