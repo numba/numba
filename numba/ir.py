@@ -277,6 +277,7 @@ class Assign(Stmt):
     def __init__(self, value, target, loc):
         self.value = value
         self.target = target
+        self.target.predecessor = value # set predecessor
         self.loc = loc
 
     def __str__(self):
@@ -312,12 +313,16 @@ class Var(object):
 
     - loc: Loc
         Definition location
+
+    - predecessor:
+        predecessor of the value
     """
 
     def __init__(self, scope, name, loc):
         self.scope = scope
         self.name = name
         self.loc = loc
+        self.predecessor = None
 
     def __repr__(self):
         return 'Var(%s, %s)' % (self.name, self.loc)
