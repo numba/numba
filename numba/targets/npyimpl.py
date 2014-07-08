@@ -371,7 +371,46 @@ def _homogeneous_function(op):
     return _KernelImpl
 
 
+def _true_division():
+    """A kernel for division. It supports three kinds of division:
+    'true': true division as in python3
+    'floor': regular floor division
+    'plain':
+    """
+    inner_sig = typing.signature(types.float64, types.float64, types.float64)
+    class _KernelImpl(_Kernel):
+        def __init__(self, context, builder, outer_sig):
+            self.context = context
+            self.builder = builder
+            self.outer_sig = outer_sig
+            self.fnwork = context.get_function('/', inner_sig)
 
+        def generate(self,*args):
+            assert len(args) == 2 # numerator and denominator
+            num, den = args
+            iszero = cgutils.is_scalar_zero(self.builder, den)
+            with cgutils.ifelse(self.builder, iszero, expect=False) as (then, orelse):
+                outltype = self.context.get_data_type(types.float64)
+                with then:
+                    shouldretnan = cgutils.is_scalar_zero(self.builder, num)
+                    nan = Constant.real(outltype, float("nan"))
+                    inf = Constant.real(outltype, float("inf"))
+                    res_then = self.builder.select(shouldretnan, nan, inf)
+                    bb_then = self.builder.basic_block
+                with orelse:
+                    cast_args = [self.context.cast(self.builder, val, inty, types.float64)
+                                 for val, inty in zip(args, self.outer_sig.args)]
+                    res_else = self.fnwork(self.builder, cast_args)
+                    bb_else = self.builder.basic_block
+
+            res = self.builder.phi(outltype)
+            res.add_incoming(res_then, bb_then)
+            res.add_incoming(res_else, bb_else)
+
+            return self.context.cast(self.builder, res, types.float64,
+                                     self.outer_sig.return_type)
+
+    return _KernelImpl
 
 ################################################################################
 # Helper functions that register the ufuncs
@@ -381,7 +420,7 @@ def register_binary_ufunc(ufunc, operator, asfloat=False, divbyzero=False,
 
     def binary_ufunc(context, builder, sig, args):
         return numpy_binary_ufunc(context, builder, sig, args, operator,
-                                  asfloat=asfloat, divbyzero=divbyzero, 
+                                  asfloat=asfloat, divbyzero=divbyzero,
                                   true_divide=true_divide)
 
     register(implement(ufunc, types.Kind(types.Array), types.Kind(types.Array),
@@ -456,7 +495,7 @@ register_binary_ufunc_kernel(numpy.multiply, _homogeneous_function('*'))
 if not PYVERSION >= (3, 0):
     register_binary_ufunc(numpy.divide, '/', divbyzero=True, asfloat=True)
 register_binary_ufunc(numpy.floor_divide, '//', divbyzero=True)
-register_binary_ufunc(numpy.true_divide, '/', asfloat=True, divbyzero=True, true_divide=True)
+register_binary_ufunc_kernel(numpy.true_divide, _true_division())
 register_binary_ufunc_kernel(numpy.power, _function_with_cast('**', _float_binary_sig))
 
 for sym, name in _externs_2:
