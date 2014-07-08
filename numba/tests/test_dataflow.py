@@ -1,5 +1,7 @@
 from __future__ import print_function
 
+import warnings
+
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba.utils import PYVERSION
@@ -53,10 +55,35 @@ def chained_compare(a):
     return 1 < a < 3
 
 
+# Issue #591
+def stack_effect_error(x):
+    i = 2
+    c = 1
+    if i == x:
+        for i in range(3):
+            c = i
+    return i + c
+
+
+# Issue #571
+def var_swapping(a, b, c, d, e):
+    a, b = b, a
+    c, d, e = e, c, d
+    a, b, c, d = b, c, d, a
+    return a + b + c + d +e
+
+
 class TestDataFlow(TestCase):
 
     def setUp(self):
         self.cache = CompilationCache()
+        # All tests here should run without warnings
+        self.w_cm = warnings.catch_warnings()
+        self.w_cm.__enter__()
+        warnings.simplefilter("error")
+
+    def tearDown(self):
+        self.w_cm.__exit__(None, None, None)
 
     def test_assignments(self, flags=force_pyobj_flags):
         pyfunc = assignments
@@ -120,6 +147,28 @@ class TestDataFlow(TestCase):
 
     def test_chained_compare_npm(self):
         self.test_chained_compare(no_pyobj_flags)
+
+    def test_stack_effect_error(self, flags=force_pyobj_flags):
+        # Issue #591: POP_BLOCK must undo all stack pushes done inside
+        # the block.
+        pyfunc = stack_effect_error
+        cr = compile_isolated(pyfunc, (types.int32,), flags=flags)
+        cfunc = cr.entry_point
+        for x in (0, 1, 2, 3):
+            self.assertPreciseEqual(pyfunc(x), cfunc(x))
+
+    def test_stack_effect_error_npm(self):
+        self.test_stack_effect_error(no_pyobj_flags)
+
+    def test_var_swapping(self, flags=force_pyobj_flags):
+        pyfunc = var_swapping
+        cr = compile_isolated(pyfunc, (types.int32,) * 5, flags=flags)
+        cfunc = cr.entry_point
+        args = tuple(range(0, 10, 2))
+        self.assertPreciseEqual(pyfunc(*args), cfunc(*args))
+
+    def test_var_swapping_npm(self):
+        self.test_var_swapping(no_pyobj_flags)
 
 
 if __name__ == '__main__':
