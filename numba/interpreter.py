@@ -655,10 +655,10 @@ class Interpreter(object):
         jmp = ir.Jump(inst.get_jump_target(), loc=self.loc)
         self.current_block.append(jmp)
 
-    def op_POP_BLOCK(self, inst, delitem=None):
+    def op_POP_BLOCK(self, inst, delitems=()):
         blk = self.syntax_blocks.pop()
-        if delitem is not None:
-            delete = ir.Del(delitem, loc=self.loc)
+        for item in delitems:
+            delete = ir.Del(item, loc=self.loc)
             self.current_block.append(delete)
         if blk in self._block_actions:
             del self._block_actions[blk]
