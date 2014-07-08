@@ -28,6 +28,7 @@ class Assigner(object):
         # { destination variable name -> source Var object }
         self.dest_to_src = {}
         self.src_invalidate = collections.defaultdict(list)
+        self.unused_dests = set()
 
     def assign(self, srcvar, destvar):
         """
@@ -45,6 +46,7 @@ class Assigner(object):
         if destvar.is_temp:
             self.dest_to_src[destname] = srcvar
             self.src_invalidate[srcname].append(destname)
+            self.unused_dests.add(destname)
         return srcvar
 
     def get_assignment_source(self, destname):
@@ -54,6 +56,7 @@ class Assigner(object):
         """
         if destname in self.dest_to_src:
             return self.dest_to_src[destname]
+        self.unused_dests.discard(destname)
         return None
 
 
@@ -155,7 +158,22 @@ class Interpreter(object):
             fn(self.current_block_offset, self.current_block)
 
     def _end_current_block(self):
+        self._remove_unused_temporaries()
         self._insert_outgoing_phis()
+
+    def _remove_unused_temporaries(self):
+        """
+        Remove assignments to unused temporary variables from the
+        current block.
+        """
+        new_body = []
+        for inst in self.current_block.body:
+            if (isinstance(inst, ir.Assign)
+                and inst.target.is_temp
+                and inst.target.name in self.assigner.unused_dests):
+                continue
+            new_body.append(inst)
+        self.current_block.body = new_body
 
     def _insert_outgoing_phis(self):
         """
@@ -231,16 +249,13 @@ class Interpreter(object):
         Store *value* (a Var instance) into the variable named *name*
         (a str object).
         """
-        #print("store: %r -> %r" % (value, name))
         if redefine or self.current_block_offset in self.cfa.backbone:
             target = self.current_scope.redefine(name, loc=self.loc)
         else:
             target = self.current_scope.get_or_define(name, loc=self.loc)
-        #print("store: %r -> %r" % (value, target))
         if isinstance(value, ir.Var):
             value = self.assigner.assign(value, target)
         stmt = ir.Assign(value=value, target=target, loc=self.loc)
-        #print("  => target = %r" % (target,))
         self.current_block.append(stmt)
 
     # def store_temp(self, value):
