@@ -1389,25 +1389,25 @@ def setitem_array_tuple(context, builder, sig, args):
                                    wraparound=context.metadata['wraparound'])
     context.pack_value(builder, aryty.dtype, val, ptr)
 
-
-@builtin
-@implement('setitem', types.Kind(types.Array),
-           types.Kind(types.Tuple), types.Any)
-def setitem_array_tuple(context, builder, sig, args):
-    aryty, idxty, valty = sig.args
-    ary, idx, val = args
-
-    arystty = make_array(aryty)
-    ary = arystty(context, builder, ary)
-
-    # TODO: other than layout
-    indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
-    indices = [context.cast(builder, i, t, types.intp)
-               for t, i in zip(idxty, indices)]
-    ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                   wraparound=context.metadata['wraparound'])
-
-    context.pack_value(builder, aryty.dtype, val, ptr)
+#this seems to be a copy of the function above
+#@builtin
+#@implement('setitem', types.Kind(types.Array),
+#           types.Kind(types.Tuple), types.Any)
+#def setitem_array_tuple(context, builder, sig, args):
+#    aryty, idxty, valty = sig.args
+#    ary, idx, val = args
+#
+#    arystty = make_array(aryty)
+#    ary = arystty(context, builder, ary)
+#
+#    # TODO: other than layout
+#    indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
+#    indices = [context.cast(builder, i, t, types.intp)
+#               for t, i in zip(idxty, indices)]
+#    ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
+#                                   wraparound=context.metadata['wraparound'])
+#
+#    context.pack_value(builder, aryty.dtype, val, ptr)
 
 
 @builtin
