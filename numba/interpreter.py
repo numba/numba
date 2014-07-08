@@ -4,9 +4,57 @@ try:
     import __builtin__ as builtins
 except ImportError:
     import builtins
-import sys
+import collections
 import dis
+import sys
+
 from numba import ir, controlflow, dataflow, utils
+
+
+class Assigner(object):
+    """
+    This object keeps track of potential assignment simplifications
+    inside a code block.
+    For example `$O.1 = x` followed by `y = $0.1` can be simplified
+    into `y = x`, but it's not possible anymore if we have `x = z`
+    in-between those two instructions.
+
+    NOTE: this is not only an optimization, but is actually necessary
+    due to certain limitations of Numba - such as only accepting the
+    returning of an array passed as function argument.
+    """
+
+    def __init__(self):
+        # { destination variable name -> source Var object }
+        self.dest_to_src = {}
+        self.src_invalidate = collections.defaultdict(list)
+
+    def assign(self, srcvar, destvar):
+        """
+        Assign *srcvar* to *destvar*. Return either *srcvar* or a possible
+        simplified assignment source (earlier assigned to *srcvar*).
+        """
+        srcname = srcvar.name
+        destname = destvar.name
+        if srcname in self.src_invalidate:
+            # Invalidate all previously known simplifications
+            for d in self.src_invalidate.pop(srcname):
+                self.dest_to_src.pop(d)
+        if srcname in self.dest_to_src:
+            srcvar = self.dest_to_src[srcname]
+        if destvar.is_temp:
+            self.dest_to_src[destname] = srcvar
+            self.src_invalidate[srcname].append(destname)
+        return srcvar
+
+    def get_assignment_source(self, destname):
+        """
+        Get a possible assignment source (a ir.Var instance) to replace
+        *destname*, otherwise None.
+        """
+        if destname in self.dest_to_src:
+            return self.dest_to_src[destname]
+        return None
 
 
 class Interpreter(object):
@@ -101,6 +149,7 @@ class Interpreter(object):
             oldblock.append(jmp)
             # Get DFA block info
         self.dfainfo = self.dfa.infos[self.current_block_offset]
+        self.assigner = Assigner()
         # Notify listeners for the new block
         for fn in utils.dict_itervalues(self._block_actions):
             fn(self.current_block_offset, self.current_block)
@@ -178,11 +227,20 @@ class Interpreter(object):
     # --- Scope operations ---
 
     def store(self, value, name, redefine=False):
+        """
+        Store *value* (a Var instance) into the variable named *name*
+        (a str object).
+        """
+        #print("store: %r -> %r" % (value, name))
         if redefine or self.current_block_offset in self.cfa.backbone:
             target = self.current_scope.redefine(name, loc=self.loc)
         else:
             target = self.current_scope.get_or_define(name, loc=self.loc)
+        #print("store: %r -> %r" % (value, target))
+        if isinstance(value, ir.Var):
+            value = self.assigner.assign(value, target)
         stmt = ir.Assign(value=value, target=target, loc=self.loc)
+        #print("  => target = %r" % (target,))
         self.current_block.append(stmt)
 
     # def store_temp(self, value):
@@ -192,7 +250,12 @@ class Interpreter(object):
     #     return target
 
     def get(self, name):
-        return self.current_scope.get(name)
+        # Try to simplify the variable lookup by returning an earlier
+        # variable assigned to *name*.
+        var = self.assigner.get_assignment_source(name)
+        if var is None:
+            var = self.current_scope.get(name)
+        return var
 
     # --- Block operations ---
 
@@ -395,6 +458,10 @@ class Interpreter(object):
         stmt = ir.SetItem(base, self.get(indexvar), self.get(value),
                           loc=self.loc)
         self.current_block.append(stmt)
+
+    def op_LOAD_FAST(self, inst, res):
+        srcname = self.code_locals[inst.arg]
+        self.store(value=self.get(srcname), name=res)
 
     def op_STORE_FAST(self, inst, value):
         dstname = self.code_locals[inst.arg]

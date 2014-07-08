@@ -65,6 +65,14 @@ def stack_effect_error(x):
     return i + c
 
 
+# Issue #571
+def var_swapping(a, b, c, d, e):
+    a, b = b, a
+    c, d, e = e, c, d
+    a, b, c, d = b, c, d, a
+    return a + b + c + d +e
+
+
 class TestDataFlow(TestCase):
 
     def setUp(self):
@@ -151,6 +159,16 @@ class TestDataFlow(TestCase):
 
     def test_stack_effect_error_npm(self):
         self.test_stack_effect_error(no_pyobj_flags)
+
+    def test_var_swapping(self, flags=force_pyobj_flags):
+        pyfunc = var_swapping
+        cr = compile_isolated(pyfunc, (types.int32,) * 5, flags=flags)
+        cfunc = cr.entry_point
+        args = tuple(range(0, 10, 2))
+        self.assertPreciseEqual(pyfunc(*args), cfunc(*args))
+
+    def test_var_swapping_npm(self):
+        self.test_var_swapping(no_pyobj_flags)
 
 
 if __name__ == '__main__':
