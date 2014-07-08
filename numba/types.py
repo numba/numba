@@ -432,7 +432,19 @@ class Record(Type):
         return [(f, t) for f, (t, _) in self.fields.items()]
 
 
-class Array(Type):
+class ArrayIterator(IteratorType):
+
+    def __init__(self, array_type):
+        self.array_type = array_type
+        name = "iter(%s)" % (self.array_type,)
+        if array_type.ndim == 1:
+            self.yield_type = array_type.dtype
+        else:
+            self.yield_type = array_type.copy(ndim=array_type.ndim - 1)
+        super(ArrayIterator, self).__init__(name, param=True)
+
+
+class Array(IterableType):
     __slots__ = 'dtype', 'ndim', 'layout'
 
     # CS and FS are not reserved for inner contig but strided
@@ -451,6 +463,7 @@ class Array(Type):
         self.layout = layout
         name = "array(%s, %sd, %s)" % (dtype, ndim, layout)
         super(Array, self).__init__(name, param=True)
+        self.iterator_type = ArrayIterator(self)
 
         if layout != 'A':
             # Install conversion from non-any layout to any layout

@@ -1182,6 +1182,73 @@ def getitem_unituple(context, builder, sig, args):
     return phinode
 
 
+#-------------------------------------------------------------------------------
+# Array objects
+
+@struct_factory(types.ArrayIterator)
+def make_arrayiter_cls(iterator_type):
+    """
+    Return the Structure representation of the given *iterator_type* (an
+    instance of types.ArrayIteratorType).
+    """
+
+    class ArrayIteratorStruct(cgutils.Structure):
+        _fields = [('index', types.CPointer(types.intp)),
+                   ('array', iterator_type.array_type)]
+
+    return ArrayIteratorStruct
+
+@builtin
+@implement('getiter', types.Kind(types.Array))
+def getiter_array(context, builder, sig, args):
+    [arrayty] = sig.args
+    [array] = args
+
+    iterobj = make_arrayiter_cls(sig.return_type)(context, builder)
+
+    zero = context.get_constant(types.intp, 0)
+    indexptr = cgutils.alloca_once(builder, zero.type)
+    builder.store(zero, indexptr)
+
+    iterobj.index = indexptr
+    iterobj.array = array
+
+    return iterobj._getvalue()
+
+
+def _getitem_array1d(context, builder, arrayty, array, idx):
+    ptr = cgutils.get_item_pointer(builder, arrayty, array, [idx],
+                                   wraparound=context.metadata['wraparound'])
+    return context.unpack_value(builder, arrayty.dtype, ptr)
+
+@builtin
+@implement('iternext', types.Kind(types.ArrayIterator))
+@iternext_impl
+def iternext_array(context, builder, sig, args, result):
+    [iterty] = sig.args
+    [iter] = args
+    arrayty = iterty.array_type
+
+    if arrayty.ndim != 1:
+        # TODO
+        raise NotImplementedError("iterating over %dD array" % arrayty.ndim)
+    if arrayty.dtype not in types.number_domain:
+        raise NotImplementedError("iterating over array of %s" % arrayty.dtype)
+
+    iterobj = make_arrayiter_cls(iterty)(context, builder, value=iter)
+    ary = make_array(arrayty)(context, builder, value=iterobj.array)
+
+    nitems, = cgutils.unpack_tuple(builder, ary.shape, count=1)
+
+    index = builder.load(iterobj.index)
+    is_valid = builder.icmp(lc.ICMP_SLT, index, nitems)
+    result.set_valid(is_valid)
+
+    with cgutils.ifthen(builder, is_valid):
+        result.yield_(_getitem_array1d(context, builder, arrayty, ary, index))
+        nindex = builder.add(index, context.get_constant(types.intp, 1))
+        builder.store(nindex, iterobj.index)
+
 @builtin
 @implement('getitem', types.Kind(types.Array), types.intp)
 def getitem_array1d_intp(context, builder, sig, args):
@@ -1194,10 +1261,7 @@ def getitem_array1d_intp(context, builder, sig, args):
 
     arystty = make_array(aryty)
     ary = arystty(context, builder, ary)
-    ptr = cgutils.get_item_pointer(builder, aryty, ary, [idx],
-                                   wraparound=context.metadata['wraparound'])
-    return context.unpack_value(builder, aryty.dtype, ptr)
-
+    return _getitem_array1d(context, builder, aryty, ary, idx)
 
 @builtin
 @implement('getitem', types.Kind(types.Array), types.slice3_type)
