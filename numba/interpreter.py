@@ -258,12 +258,6 @@ class Interpreter(object):
         stmt = ir.Assign(value=value, target=target, loc=self.loc)
         self.current_block.append(stmt)
 
-    # def store_temp(self, value):
-    #     target = self.current_scope.make_temp(loc=self.loc)
-    #     stmt = ir.Assign(value=value, target=target, loc=self.loc)
-    #     self.current_block.append(stmt)
-    #     return target
-
     def get(self, name):
         # Try to simplify the variable lookup by returning an earlier
         # variable assigned to *name*.
