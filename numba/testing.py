@@ -58,8 +58,18 @@ def test(**kwargs):
     - xmloutput [str]
         Path of XML output directory
     """
+    from numba import cuda
     suite = discover_tests("numba.tests")
-    return run_tests(suite, **kwargs).wasSuccessful()
+    ok = run_tests(suite, **kwargs).wasSuccessful()
+    if ok:
+        if cuda.is_available():
+            print("== Run CUDA tests ==")
+            ok = cuda.test()
+        else:
+            print("== Skipped CUDA tests ==")
+
+    return ok
+
 
 
 def _flatten_suite(test):
