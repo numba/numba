@@ -112,7 +112,7 @@ class IterationTest(TestCase):
     def test_nested_enumerate_npm(self):
         self.test_nested_enumerate(flags=no_pyobj_flags)
 
-    def run_array_1d(self, item_type, arg, flags=force_pyobj_flags):
+    def run_array_1d(self, item_type, arg, flags):
         # Iteration over a 1d numpy array
         pyfunc = scalar_iter_usecase
         cr = compile_isolated(pyfunc, (types.Array(item_type, 1, 'A'),),
@@ -121,13 +121,13 @@ class IterationTest(TestCase):
         self.assertPreciseEqual(cfunc(arg), pyfunc(arg))
 
     def test_array_1d_float(self, flags=force_pyobj_flags):
-        self.run_array_1d(types.float64, np.arange(5.0))
+        self.run_array_1d(types.float64, np.arange(5.0), flags)
 
     def test_array_1d_float_npm(self):
         self.test_array_1d_float(no_pyobj_flags)
 
     def test_array_1d_complex(self, flags=force_pyobj_flags):
-        self.run_array_1d(types.complex128, np.arange(5.0) * 1.0j)
+        self.run_array_1d(types.complex128, np.arange(5.0) * 1.0j, flags)
 
     def test_array_1d_complex_npm(self):
         self.test_array_1d_complex(no_pyobj_flags)
