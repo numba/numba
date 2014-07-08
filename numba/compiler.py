@@ -233,7 +233,8 @@ def legalize_return_type(return_type, interp, targetctx):
     arguments = frozenset("%s.1" % arg for arg in interp.argspec.args)
 
     for ret in retstmts:
-        if ret.value.name not in arguments:
+        pred = ret.value.predecessor
+        if not isinstance(pred, ir.Var) or pred.name not in arguments:
             raise TypeError("Only accept returning of array passed into the "
                             "function as argument")
 

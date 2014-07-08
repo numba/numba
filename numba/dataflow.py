@@ -190,7 +190,9 @@ class DataFlowAnalysis(object):
 
     def op_LOAD_FAST(self, info, inst):
         name = self.bytecode.co_varnames[inst.arg]
-        info.push(name)
+        temp = info.make_temp(prefix=name)
+        info.push(temp)
+        info.append(inst, source=name, store=temp)
 
     def op_LOAD_CONST(self, info, inst):
         res = info.make_temp('const')
@@ -242,7 +244,8 @@ class DataFlowAnalysis(object):
         pair = info.make_temp()
         indval = info.make_temp()
         pred = info.make_temp()
-        info.append(inst, iterator=iterator, pair=pair, indval=indval, pred=pred)
+        info.append(inst, iterator=iterator, pair=pair, indval=indval,
+                    pred=pred)
         info.push(indval)
 
     def op_CALL_FUNCTION(self, info, inst):
@@ -553,7 +556,7 @@ class BlockInfo(object):
 
     def make_temp(self, prefix=''):
         self.tempct += 1
-        name = '$%s%d.%d' % (prefix, self.offset, self.tempct)
+        name = '$%s.%d.%d' % (prefix, self.offset, self.tempct)
         return name
 
     def push(self, val):
