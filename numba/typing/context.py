@@ -181,6 +181,13 @@ class BaseContext(object):
         # TODO: should add an option to reject unsafe type conversion
         d = self.type_compatibility(fromty=first, toty=second)
         if d is None:
+            # Complex is not allowed to downcast implicitly.
+            # Need to try the other direction of implicit cast to find the
+            # most general type of the two.
+            first, second = second, first   # swap operand order
+            d = self.type_compatibility(fromty=first, toty=second)
+
+        if d is None:
             return types.pyobject
         elif d == 'exact':
             # Same type
