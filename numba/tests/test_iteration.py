@@ -116,7 +116,7 @@ class IterationTest(TestCase):
         # Iteration over a 1d numpy array
         pyfunc = scalar_iter_usecase
         cr = compile_isolated(pyfunc, (types.Array(item_type, 1, 'A'),),
-                              flags=flags)
+                              item_type, flags=flags)
         cfunc = cr.entry_point
         self.assertPreciseEqual(cfunc(arg), pyfunc(arg))
 

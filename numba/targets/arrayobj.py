@@ -80,8 +80,6 @@ def iternext_array(context, builder, sig, args, result):
     if arrayty.ndim != 1:
         # TODO
         raise NotImplementedError("iterating over %dD array" % arrayty.ndim)
-    if arrayty.dtype not in types.number_domain:
-        raise NotImplementedError("iterating over array of %s" % arrayty.dtype)
 
     iterobj = make_arrayiter_cls(iterty)(context, builder, value=iter)
     ary = make_array(arrayty)(context, builder, value=iterobj.array)
