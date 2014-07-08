@@ -312,9 +312,6 @@ def native_lowering_stage(targetctx, interp, typemap, restype, calltypes,
 
 
 def py_lowering_stage(targetctx, interp, nocompile):
-    # Optimize for python code
-    ir_optimize_for_py_stage(interp)
-
     fndesc = lowering.PythonFunctionDescriptor.from_object_mode_function(interp)
     lower = lowering.PyLower(targetctx, fndesc)
     lower.lower()
