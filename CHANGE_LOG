@@ -4,7 +4,7 @@ Version 0.13.3
 Features:
 
 * Support for enumerate() and zip() in nopython mode
-* Increased LLVM optimization of JIT functions to -O1, enabling automatic 
+* Increased LLVM optimization of JIT functions to -O1, enabling automatic
   vectorization of compiled code in some cases
 * Iteration over tuples and unpacking of tuples in nopython mode
 * Support for dict and set (Python >= 2.7) literals in object mode
@@ -17,6 +17,7 @@ Fixes:
 * Importing Numba will no longer throw an exception if the CUDA driver is
   present, but cannot be initialized.
 * guvectorize now properly supports functions with scalar arguments.
+* CUDA driver is lazily initialized
 
 Version 0.13.2
 --------------
