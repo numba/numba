@@ -61,6 +61,7 @@ Let's take a very simple sample function to illustrate these concepts:
     def sample_func(n):
         tmp = n + 4;
         return tmp + 3j;
+
 When translating to native code it is needed to provide *type
 information* for every value involved in the sample function. This will
 include:

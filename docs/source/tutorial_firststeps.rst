@@ -47,6 +47,7 @@ NumPy array.
                     tmp = X[i]
                     X[i] = X[i + 1]
                     X[i + 1] = tmp
+
 Now, let's try the function, this way we check that it works. First
 we'll create an array of sorted values and randomly shuffle them:
 
@@ -57,6 +58,7 @@ we'll create an array of sorted values and randomly shuffle them:
     original = np.arange(0.0, 10.0, 0.01, dtype='f4')
     shuffled = original.copy()
     np.random.shuffle(shuffled)
+
 Now we'll create a copy and do our bubble sort on the copy:
 
 .. code:: python
@@ -118,7 +120,7 @@ First, let's start by peeking at the numba.jit string-doc:
 
     print(numba.jit.__doc__)
 
-.. parsed-literal::
+::
 
     jit([signature_or_function, [locals={}, [target='cpu',
                 [**targetoptions]]]])
@@ -187,6 +189,7 @@ So let's make a compiled version of our bubblesort:
 .. code:: python
 
     bubblesort_jit = numba.jit("void(f4[:])")(bubblesort)
+
 At this point, **bubblesort\_jit** contains the compiled function
 -wrapped so that is directly callable from Python- generated from the
 original bubblesort function. Note that there is a fancy parameter
@@ -245,6 +248,7 @@ decorator syntax our sample will look like this:
                     tmp = X[i]
                     X[i] = X[i + 1]
                     X[i + 1] = tmp
+
 Signature
 ---------
 
@@ -420,6 +424,7 @@ can have a huge performance penalty.
     def test(value):
         for i in xrange(len(value)):
             value[i] = i % 100
+
 On the other hand, *test2* fails if we pass the *nopython* keyword:
 
 .. code:: python
@@ -509,8 +514,3 @@ On the other hand, *test2* fails if we pass the *nopython* keyword:
 
     TypingError: Untyped global name 'Decimal'
     File "<ipython-input-19-6038b783c49c>", line 4
-
-
-.. code:: python
-
-    
