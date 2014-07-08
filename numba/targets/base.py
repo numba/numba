@@ -10,7 +10,7 @@ from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, python_attr_impl,
                                     builtin_registry, impl_attribute,
                                     struct_registry)
-from numba.targets import builtins, iterators, rangeobj
+from numba.targets import arrayobj, builtins, iterators, rangeobj
 
 
 LTYPEMAP = {
@@ -786,7 +786,7 @@ class BaseContext(object):
         return PythonAPI(self, builder)
 
     def make_array(self, typ):
-        return builtins.make_array(typ)
+        return arrayobj.make_array(typ)
 
     def make_complex(self, typ):
         cls, _ = builtins.get_complex_info(typ)
