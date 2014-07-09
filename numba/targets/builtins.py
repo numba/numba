@@ -16,15 +16,15 @@ from numba.typing import signature
 #-------------------------------------------------------------------------------
 
 
-def make_array(ty):
+def make_array(ty, addrspace=0):
     dtype = ty.dtype
     nd = ty.ndim
 
     class ArrayTemplate(cgutils.Structure):
-        _fields = [('data', types.CPointer(dtype)),
+        _fields = [('data', types.CPointer(dtype, addrspace=addrspace)),
                    ('shape', types.UniTuple(types.intp, nd)),
                    ('strides', types.UniTuple(types.intp, nd)),
-                   ('parent', types.pyobject), ]
+                   ('parent', types.pyobject),]
 
     return ArrayTemplate
 
@@ -1192,7 +1192,7 @@ def getitem_array1d_intp(context, builder, sig, args):
 
     ary, idx = args
 
-    arystty = make_array(aryty)
+    arystty = context.make_array(aryty)
     ary = arystty(context, builder, ary)
     ptr = cgutils.get_item_pointer(builder, aryty, ary, [idx],
                                    wraparound=context.metadata['wraparound'])
@@ -1209,7 +1209,7 @@ def getitem_array1d_slice(context, builder, sig, args):
 
     ary, idx = args
 
-    arystty = make_array(aryty)
+    arystty = context.make_array(aryty)
     ary = arystty(context, builder, value=ary)
 
     shapes = cgutils.unpack_tuple(builder, ary.shape, aryty.ndim)
@@ -1221,7 +1221,7 @@ def getitem_array1d_slice(context, builder, sig, args):
                                        [slicestruct.start],
                                        wraparound=context.metadata['wraparound'])
 
-    retstty = make_array(sig.return_type)
+    retstty = context.make_array(sig.return_type)
     retary = retstty(context, builder)
 
     shape = cgutils.get_range_from_slice(builder, slicestruct)
@@ -1243,7 +1243,7 @@ def getitem_array_unituple(context, builder, sig, args):
     ary, idx = args
 
     ndim = aryty.ndim
-    arystty = make_array(aryty)
+    arystty = context.make_array(aryty)
     ary = arystty(context, builder, ary)
 
     if idxty.dtype == types.slice3_type:
@@ -1257,7 +1257,7 @@ def getitem_array_unituple(context, builder, sig, args):
         dataptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
                                            wraparound=context.metadata['wraparound'])
         # Build array
-        retstty = make_array(sig.return_type)
+        retstty = context.make_array(sig.return_type)
         retary = retstty(context, builder)
         retary.data = dataptr
         shapes = [cgutils.get_range_from_slice(builder, sl)
@@ -1289,7 +1289,7 @@ def getitem_array_tuple(context, builder, sig, args):
     aryty, idxty = sig.args
     ary, idx = args
 
-    arystty = make_array(aryty)
+    arystty = context.make_array(aryty)
     ary = arystty(context, builder, ary)
 
     ndim = aryty.ndim
@@ -1317,7 +1317,7 @@ def getitem_array_tuple(context, builder, sig, args):
         dataptr = cgutils.get_item_pointer(builder, aryty, ary, start,
                                            wraparound=context.metadata['wraparound'])
         # Build array
-        retstty = make_array(sig.return_type)
+        retstty = context.make_array(sig.return_type)
         retary = retstty(context, builder)
         retary.data = dataptr
         retary.shape = cgutils.pack_array(builder, shapes)
@@ -1341,7 +1341,7 @@ def setitem_array1d(context, builder, sig, args):
     aryty, _, valty = sig.args
     ary, idx, val = args
 
-    arystty = make_array(aryty)
+    arystty = context.make_array(aryty)
     ary = arystty(context, builder, ary)
 
     ptr = cgutils.get_item_pointer(builder, aryty, ary, [idx],
@@ -1359,7 +1359,7 @@ def setitem_array_unituple(context, builder, sig, args):
     aryty, idxty, valty = sig.args
     ary, idx, val = args
 
-    arystty = make_array(aryty)
+    arystty = context.make_array(aryty)
     ary = arystty(context, builder, ary)
 
     # TODO: other than layout
@@ -1378,7 +1378,7 @@ def setitem_array_tuple(context, builder, sig, args):
     aryty, idxty, valty = sig.args
     ary, idx, val = args
 
-    arystty = make_array(aryty)
+    arystty = context.make_array(aryty)
     ary = arystty(context, builder, ary)
 
     # TODO: other than layout
@@ -1397,7 +1397,7 @@ def setitem_array_tuple(context, builder, sig, args):
     aryty, idxty, valty = sig.args
     ary, idx, val = args
 
-    arystty = make_array(aryty)
+    arystty = context.make_array(aryty)
     ary = arystty(context, builder, ary)
 
     # TODO: other than layout
@@ -1415,7 +1415,7 @@ def setitem_array_tuple(context, builder, sig, args):
 def array_len(context, builder, sig, args):
     (aryty,) = sig.args
     (ary,) = args
-    arystty = make_array(aryty)
+    arystty = context.make_array(aryty)
     ary = arystty(context, builder, ary)
     shapeary = ary.shape
     return builder.extract_value(shapeary, 0)
@@ -1427,7 +1427,7 @@ def array_len(context, builder, sig, args):
 @builtin_attr
 @impl_attribute(types.Array, "shape", types.Kind(types.UniTuple))
 def array_shape(context, builder, typ, value):
-    arrayty = make_array(typ)
+    arrayty = context.make_array(typ)
     array = arrayty(context, builder, value)
     return array.shape
 
@@ -1435,7 +1435,7 @@ def array_shape(context, builder, typ, value):
 @builtin_attr
 @impl_attribute(types.Array, "strides", types.Kind(types.UniTuple))
 def array_strides(context, builder, typ, value):
-    arrayty = make_array(typ)
+    arrayty = context.make_array(typ)
     array = arrayty(context, builder, value)
     return array.strides
 
@@ -1449,7 +1449,7 @@ def array_ndim(context, builder, typ, value):
 @builtin_attr
 @impl_attribute(types.Array, "size", types.intp)
 def array_size(context, builder, typ, value):
-    arrayty = make_array(typ)
+    arrayty = context.make_array(typ)
     array = arrayty(context, builder, value)
     dims = cgutils.unpack_tuple(builder, array.shape, typ.ndim)
     return reduce(builder.mul, dims[1:], dims[0])
@@ -1458,7 +1458,7 @@ def array_size(context, builder, typ, value):
 @builtin_attr
 @impl_attribute_generic(types.Array)
 def array_record_getattr(context, builder, typ, value, attr):
-    arrayty = make_array(typ)
+    arrayty = context.make_array(typ)
     array = arrayty(context, builder, value)
 
     rectype = typ.dtype
@@ -1467,7 +1467,7 @@ def array_record_getattr(context, builder, typ, value, attr):
 
     resty = types.Array(dtype, ndim=typ.ndim, layout='A')
 
-    raryty = make_array(resty)
+    raryty = context.make_array(resty)
 
     rary = raryty(context, builder)
     rary.shape = array.shape

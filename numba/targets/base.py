@@ -259,7 +259,7 @@ class BaseContext(object):
 
         elif isinstance(ty, types.CPointer):
             dty = self.get_data_type(ty.dtype)
-            return Type.pointer(dty)
+            return Type.pointer(dty, addr_space=ty.addrspace)
 
         elif isinstance(ty, types.Optional):
             return self.get_data_type(ty.type)

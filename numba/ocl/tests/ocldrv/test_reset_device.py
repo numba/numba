@@ -1,22 +1,19 @@
 from __future__ import print_function, absolute_import, division
 
 from numba.test_utils import InOtherThread
-from numba import cuda
-from numba.cuda.cudadrv.driver import driver
-from numba.cuda.testing import unittest, CUDATestCase
+from numba import ocl
+import numba.unittest_support as unittest
 
-
-class TestResetDevice(CUDATestCase):
+class TestResetDevice(unittest.TestCase):
     def test_reset_device(self):
-
         def newthread():
-            devices = range(driver.get_device_count())
+            devices = range(len(ocl.list_devices()))
             print('Devices', devices)
             for _ in range(2):
                 for d in devices:
-                    cuda.select_device(d)
+                    ocl.select_device(d)
                     print('Selected device', d)
-                    cuda.close()
+                    ocl.close()
                     print('Closed device', d)
 
         # Do test on a separate thread so that we don't affect
