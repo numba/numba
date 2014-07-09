@@ -371,45 +371,71 @@ def _homogeneous_function(op):
     return _KernelImpl
 
 
-def _true_division():
+def _division(operator, legacy_divide=False):
     """A kernel for division. It supports three kinds of division:
-    'true': true division as in python3
-    'floor': regular floor division
-    'plain':
+    operator is either '/' for true_division or '//' for floor_division
+
+    legacy_divide is a special mode needed to implement numpy.divide properly
+    in python2 (using operator='//')
     """
-    inner_sig = typing.signature(types.float64, types.float64, types.float64)
+    assert not legacy_divide or operator=='/'
     class _KernelImpl(_Kernel):
         def __init__(self, context, builder, outer_sig):
             self.context = context
             self.builder = builder
             self.outer_sig = outer_sig
-            self.fnwork = context.get_function('/', inner_sig)
+            self.promote_type = types.float64 if legacy_divide \
+                                else _default_promotion_for_type(outer_sig.return_type)
+            self.any_real = any([arg in types.real_domain for arg in outer_sig.args])
+            inner_sig = typing.signature(self.promote_type, self.promote_type, self.promote_type)
+            self.fnwork = context.get_function(operator, inner_sig)
 
         def generate(self,*args):
             assert len(args) == 2 # numerator and denominator
+            builder=self.builder
+            context=self.context
+            tyinputs = self.outer_sig.args
+            true_divide = operator=='/' and not legacy_divide
+            promote_type = self.promote_type
+            result_type = promote_type
             num, den = args
-            iszero = cgutils.is_scalar_zero(self.builder, den)
-            with cgutils.ifelse(self.builder, iszero, expect=False) as (then, orelse):
-                outltype = self.context.get_data_type(types.float64)
+            tyout = self.outer_sig.return_type
+            tyout_llvm = context.get_data_type(tyout)
+            iszero = cgutils.is_scalar_zero(builder, den)
+            with cgutils.ifelse(builder, iszero, expect=False) as (then,
+                                                                   orelse):
                 with then:
-                    shouldretnan = cgutils.is_scalar_zero(self.builder, num)
-                    nan = Constant.real(outltype, float("nan"))
-                    inf = Constant.real(outltype, float("inf"))
-                    res_then = self.builder.select(shouldretnan, nan, inf)
-                    bb_then = self.builder.basic_block
+                    # Divide by zero
+                    if ((tyinputs[0] in types.real_domain or
+                         tyinputs[1] in types.real_domain) or
+                        not numpy_support.int_divbyzero_returns_zero) or \
+                        true_divide:
+                        # If num is float and is 0 also, return Nan; else
+                        # return Inf
+                        outltype = context.get_data_type(result_type)
+                        shouldretnan = cgutils.is_scalar_zero(builder, num)
+                        nan = Constant.real(outltype, float("nan"))
+                        inf = Constant.real(outltype, float("inf"))
+                        tempres = builder.select(shouldretnan, nan, inf)
+                        res_then = context.cast(builder, tempres, result_type, tyout)
+                    elif tyout in types.signed_domain and \
+                            not numpy_support.int_divbyzero_returns_zero:
+                        res_then = Constant.int(tyout_llvm, 0x1 << (den.type.width-1))
+                    else:
+                        res_then = Constant.null(tyout_llvm)
+                    bb_then = builder.basic_block
                 with orelse:
-                    cast_args = [self.context.cast(self.builder, val, inty, types.float64)
-                                 for val, inty in zip(args, self.outer_sig.args)]
-                    res_else = self.fnwork(self.builder, cast_args)
-                    bb_else = self.builder.basic_block
+                    # Normal
+                    num = context.cast(builder, num, tyinputs[0], promote_type)
+                    den = context.cast(builder, den, tyinputs[1], promote_type)
+                    tempres = self.fnwork(builder, [num, den])
+                    res_else = context.cast(builder, tempres, result_type, tyout)
+                    bb_else = builder.basic_block
 
-            res = self.builder.phi(outltype)
-            res.add_incoming(res_then, bb_then)
-            res.add_incoming(res_else, bb_else)
-
-            return self.context.cast(self.builder, res, types.float64,
-                                     self.outer_sig.return_type)
-
+            out = builder.phi(tyout_llvm)
+            out.add_incoming(res_then, bb_then)
+            out.add_incoming(res_else, bb_else)
+            return out
     return _KernelImpl
 
 ################################################################################
@@ -493,9 +519,9 @@ register_binary_ufunc_kernel(numpy.add, _homogeneous_function('+'))
 register_binary_ufunc_kernel(numpy.subtract, _homogeneous_function('-'))
 register_binary_ufunc_kernel(numpy.multiply, _homogeneous_function('*'))
 if not PYVERSION >= (3, 0):
-    register_binary_ufunc(numpy.divide, '/', divbyzero=True, asfloat=True)
-register_binary_ufunc(numpy.floor_divide, '//', divbyzero=True)
-register_binary_ufunc_kernel(numpy.true_divide, _true_division())
+    register_binary_ufunc_kernel(numpy.divide, _division('/', legacy_divide=True))
+register_binary_ufunc_kernel(numpy.floor_divide, _division('//'))
+register_binary_ufunc_kernel(numpy.true_divide, _division('/'))
 register_binary_ufunc_kernel(numpy.power, _function_with_cast('**', _float_binary_sig))
 
 for sym, name in _externs_2:
