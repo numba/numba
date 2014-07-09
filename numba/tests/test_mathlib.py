@@ -185,7 +185,8 @@ class TestMathLib(TestCase):
     def test_sin_npm(self):
         self.test_sin(flags=no_pyobj_flags)
 
-    @unittest.skipIf(sys.platform == 'win32', "not exactly equal on win32")
+    @unittest.skipIf(sys.platform == 'win32',
+                     "not exactly equal on win32 (issue #597)")
     def test_cos(self, flags=enable_pyobj_flags):
         pyfunc = cos
         x_types = [types.int16, types.int32, types.int64,
@@ -194,7 +195,8 @@ class TestMathLib(TestCase):
         x_values = [-2, -1, -2, 2, 1, 2, .1, .2]
         self.run_unary(pyfunc, x_types, x_values, flags)
 
-    @unittest.skipIf(sys.platform == 'win32', "not exactly equal on win32")
+    @unittest.skipIf(sys.platform == 'win32',
+                     "not exactly equal on win32 (issue #597)")
     def test_cos_npm(self):
         self.test_cos(flags=no_pyobj_flags)
 
