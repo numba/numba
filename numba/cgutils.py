@@ -92,8 +92,9 @@ class Structure(object):
         """
         offset = self._fdmap[index]
         ptr = self._builder.gep(self._value, offset)
-        value = self._context.get_return_value(self._builder,
-                                               self._typemap[index], value)
+        value = self._context.get_struct_member_value(self._builder,
+                                                      self._typemap[index],
+                                                      value)
         if ptr.type.pointee != value.type:
             raise AssertionError("Type mismatch: __setitem__(%d, ...) "
                                  "expected %r but got %r"

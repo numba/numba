@@ -10,7 +10,7 @@ from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, python_attr_impl,
                                     builtin_registry, impl_attribute,
                                     struct_registry)
-from numba.targets import builtins, iterators, rangeobj
+from numba.targets import arrayobj, builtins, iterators, rangeobj
 
 
 LTYPEMAP = {
@@ -245,7 +245,8 @@ class BaseContext(object):
 
     def get_data_type(self, ty):
         """
-        Get a data representation of the type
+        Get a data representation of the type that is safe for storage.
+        Record data are stored as byte array.
 
         Returns None if it is an opaque pointer
         """
@@ -502,9 +503,17 @@ class BaseContext(object):
         if ty is types.boolean:
             r = self.get_return_type(ty).pointee
             return builder.zext(val, r)
-
         else:
             return val
+
+    def get_struct_member_value(self, builder, ty, val):
+        """
+        Local value representation to struct member representation
+        """
+        # Currently same as get_return_value.
+        # TODO: make a "TypeLayout" class that describe the layout at
+        #       different situations for a value of a type.
+        return self.get_return_value(builder, ty, val)
 
     def get_value_as_argument(self, builder, ty, val):
         """Prepare local value representation as argument type representation
@@ -766,8 +775,23 @@ class BaseContext(object):
         cstr = self.insert_const_string(mod, str(text))
         self.print_string(builder, cstr)
 
+    def get_struct_member_type(self, member_type):
+        """
+        Get the LLVM type for struct member of type *member_type*.
+        """
+        # get_struct_type() will:
+        # - represent Records as pointers
+        # - represent everything else as plain data
+        if isinstance(member_type, types.Record):
+            return self.get_value_type(member_type)
+        else:
+            return self.get_data_type(member_type)
+
     def get_struct_type(self, struct):
-        fields = [self.get_data_type(v) for _, v in struct._fields]
+        """
+        Get the LLVM struct type for the given Structure class *struct*.
+        """
+        fields = [self.get_struct_member_type(v) for _, v in struct._fields]
         return Type.struct(fields)
 
     def get_dummy_value(self):
@@ -786,7 +810,7 @@ class BaseContext(object):
         return PythonAPI(self, builder)
 
     def make_array(self, typ):
-        return builtins.make_array(typ)
+        return arrayobj.make_array(typ)
 
     def make_complex(self, typ):
         cls, _ = builtins.get_complex_info(typ)
