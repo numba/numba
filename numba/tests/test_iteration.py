@@ -155,7 +155,7 @@ class IterationTest(TestCase):
     def test_array_1d_record_mutate_npm(self, flags=no_pyobj_flags):
         pyfunc = record_iter_mutate_usecase
         item_type = numpy_support.from_dtype(record_dtype)
-        cr = compile_isolated(pyfunc, (item_type[:],),#(types.Array(item_type, 1, 'A'),),
+        cr = compile_isolated(pyfunc, (types.Array(item_type, 1, 'A'),),
                               flags=flags)
         cfunc = cr.entry_point
         arr = np.recarray(3, dtype=record_dtype)
