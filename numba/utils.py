@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 import collections
 import functools
+import io
 import timeit
 import math
 import numpy
@@ -196,7 +197,11 @@ if IS_PY3:
 
     unicode = str
 
+    StringIO = io.StringIO
+
 else:
+    from cStringIO import StringIO
+
     def dict_iteritems(d):
         return d.iteritems()
 
