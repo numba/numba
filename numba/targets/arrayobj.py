@@ -91,7 +91,8 @@ def iternext_array(context, builder, sig, args, result):
     result.set_valid(is_valid)
 
     with cgutils.ifthen(builder, is_valid):
-        result.yield_(_getitem_array1d(context, builder, arrayty, ary, index))
+        value = _getitem_array1d(context, builder, arrayty, ary, index)
+        result.yield_(value)
         nindex = builder.add(index, context.get_constant(types.intp, 1))
         builder.store(nindex, iterobj.index)
 

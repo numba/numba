@@ -767,7 +767,10 @@ class BaseContext(object):
         self.print_string(builder, cstr)
 
     def get_struct_type(self, struct):
-        fields = [self.get_data_type(v) for _, v in struct._fields]
+        # get_value_type() will:
+        # - represent booleans as int1 (instead of int8)
+        # - represent Records as pointers
+        fields = [self.get_value_type(v) for _, v in struct._fields]
         return Type.struct(fields)
 
     def get_dummy_value(self):

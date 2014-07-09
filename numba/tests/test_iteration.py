@@ -146,8 +146,7 @@ class IterationTest(TestCase):
         self.assertPreciseEqual(cfunc(arr), got)
 
     def test_array_1d_record_npm(self):
-        with self.assertTypingError():
-            self.test_array_1d_record(no_pyobj_flags)
+        self.test_array_1d_record(no_pyobj_flags)
 
 
 if __name__ == '__main__':

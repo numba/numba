@@ -38,6 +38,9 @@ class Structure(object):
     """
 
     def __init__(self, context, builder, value=None, ref=None):
+        # get_struct_type() will:
+        # - represent booleans as int1 (instead of int8)
+        # - represent Records as pointers
         self._type = context.get_struct_type(self)
         self._context = context
         self._builder = builder
@@ -92,8 +95,6 @@ class Structure(object):
         """
         offset = self._fdmap[index]
         ptr = self._builder.gep(self._value, offset)
-        value = self._context.get_return_value(self._builder,
-                                               self._typemap[index], value)
         if ptr.type.pointee != value.type:
             raise AssertionError("Type mismatch: __setitem__(%d, ...) "
                                  "expected %r but got %r"
