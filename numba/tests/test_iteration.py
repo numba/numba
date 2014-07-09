@@ -65,6 +65,10 @@ def record_iter_usecase(iterable):
         res += x.a * x.b
     return res
 
+def record_iter_mutate_usecase(iterable):
+    for x in iterable:
+        x.a = x.a + x.b
+
 
 record_dtype = np.dtype([('a', np.float64),
                          ('b', np.int32),
@@ -147,6 +151,26 @@ class IterationTest(TestCase):
 
     def test_array_1d_record_npm(self):
         self.test_array_1d_record(no_pyobj_flags)
+
+    def test_array_1d_record_mutate_npm(self, flags=no_pyobj_flags):
+        pyfunc = record_iter_mutate_usecase
+        item_type = numpy_support.from_dtype(record_dtype)
+        cr = compile_isolated(pyfunc, (item_type[:],),#(types.Array(item_type, 1, 'A'),),
+                              flags=flags)
+        cfunc = cr.entry_point
+        arr = np.recarray(3, dtype=record_dtype)
+        for i in range(3):
+            arr[i].a = float(i * 2)
+            arr[i].b = i + 2
+        expected = arr.copy()
+        pyfunc(expected)
+        got = arr.copy()
+        cfunc(got)
+
+    # XXX for some reason, this fails in object mode
+    def test_array_1d_record_mutate(self):
+        with self.assertTypingError():
+            self.test_array_1d_record_mutate_npm(flags=force_pyobj_flags)
 
 
 if __name__ == '__main__':
