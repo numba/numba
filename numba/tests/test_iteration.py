@@ -166,6 +166,7 @@ class IterationTest(TestCase):
         pyfunc(expected)
         got = arr.copy()
         cfunc(got)
+        self.assertTrue(np.all(expected == got))
 
     # XXX for some reason, this fails in object mode
     def test_array_1d_record_mutate(self):
