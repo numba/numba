@@ -9,4 +9,6 @@ docs/_build/
 docs/source/modules/
 dist/
 *.egg-info
-
+*.sw[po]
+.idea/
+tags
