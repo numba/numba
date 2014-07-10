@@ -384,8 +384,8 @@ def _division(operator, legacy_divide=False):
             self.context = context
             self.builder = builder
             self.outer_sig = outer_sig
-            self.promote_type = types.float64 if legacy_divide \
-                                else _default_promotion_for_type(outer_sig.return_type)
+            self.promote_type = types.float64 if operator == '/' \
+                                else _default_promotion_for_type(outer_sig.args[1])
             self.any_real = any([arg in types.real_domain for arg in outer_sig.args])
             inner_sig = typing.signature(self.promote_type, self.promote_type, self.promote_type)
             self.fnwork = context.get_function(operator, inner_sig)
@@ -397,13 +397,12 @@ def _division(operator, legacy_divide=False):
             tyinputs = self.outer_sig.args
             true_divide = operator=='/' and not legacy_divide
             promote_type = self.promote_type
-            result_type = promote_type
+            result_type = types.float64 if true_divide else promote_type
             num, den = args
             tyout = self.outer_sig.return_type
             tyout_llvm = context.get_data_type(tyout)
             iszero = cgutils.is_scalar_zero(builder, den)
-            with cgutils.ifelse(builder, iszero, expect=False) as (then,
-                                                                   orelse):
+            with cgutils.ifelse(builder, iszero, expect=False) as (then, orelse):
                 with then:
                     # Divide by zero
                     if ((tyinputs[0] in types.real_domain or
@@ -412,12 +411,12 @@ def _division(operator, legacy_divide=False):
                         true_divide:
                         # If num is float and is 0 also, return Nan; else
                         # return Inf
-                        outltype = context.get_data_type(result_type)
+                        outltype = context.get_data_type(types.float64)
                         shouldretnan = cgutils.is_scalar_zero(builder, num)
                         nan = Constant.real(outltype, float("nan"))
                         inf = Constant.real(outltype, float("inf"))
                         tempres = builder.select(shouldretnan, nan, inf)
-                        res_then = context.cast(builder, tempres, result_type, tyout)
+                        res_then = context.cast(builder, tempres, types.float64, tyout)
                     elif tyout in types.signed_domain and \
                             not numpy_support.int_divbyzero_returns_zero:
                         res_then = Constant.int(tyout_llvm, 0x1 << (den.type.width-1))
@@ -431,7 +430,6 @@ def _division(operator, legacy_divide=False):
                     tempres = self.fnwork(builder, [num, den])
                     res_else = context.cast(builder, tempres, result_type, tyout)
                     bb_else = builder.basic_block
-
             out = builder.phi(tyout_llvm)
             out.add_incoming(res_then, bb_then)
             out.add_incoming(res_else, bb_else)
