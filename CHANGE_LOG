@@ -1,3 +1,8 @@
+
+Fixes:
+
+* vectorize no longer crashes/gives an error when bool_ is used as return type
+
 Version 0.13.3
 --------------
 
