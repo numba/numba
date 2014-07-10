@@ -614,8 +614,9 @@ class Interpreter(object):
         self.store(expr, res)
 
     def op_STORE_MAP(self, inst, dct, key, value):
-        self.current_block.append(
-            ir.StoreMap(dct=dct, key=key, value=value, loc=self.loc))
+        stmt = ir.StoreMap(dct=self.get(dct), key=self.get(key),
+                           value=self.get(value), loc=self.loc)
+        self.current_block.append(stmt)
 
     def op_UNARY_NEGATIVE(self, inst, value, res):
         value = self.get(value)

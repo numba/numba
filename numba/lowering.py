@@ -648,9 +648,9 @@ class PyLower(BaseLower):
             self.check_int_status(ok)
 
         elif isinstance(inst, ir.StoreMap):
-            dct = self.loadvar(inst.dct)
-            key = self.loadvar(inst.key)
-            value = self.loadvar(inst.value)
+            dct = self.loadvar(inst.dct.name)
+            key = self.loadvar(inst.key.name)
+            value = self.loadvar(inst.value.name)
             ok = self.pyapi.dict_setitem(dct, key, value)
             self.check_int_status(ok)
 
