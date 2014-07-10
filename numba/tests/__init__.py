@@ -15,11 +15,28 @@ from numba.utils import PYVERSION
 # (defined in a module named itself "unittest.main"...)
 
 class NumbaTestProgram(unittest.main):
+    """
+    A TestProgram subclass adding a -R option to enable reference leak
+    testing.
+    """
+
     refleak = False
 
+    def __init__(self, *args, **kwargs):
+        self.discovered_suite = kwargs.pop('suite', None)
+        super(NumbaTestProgram, self).__init__(*args, **kwargs)
+
+    def createTests(self):
+        if self.discovered_suite is not None:
+            self.test = self.discovered_suite
+        else:
+            super(NumbaTestProgram, self).createTests()
+
     def _getParentArgParser(self):
+        # NOTE: this hook only exists on Python 3.4+. The option won't be
+        # added in earlier versions.
         parser = super(NumbaTestProgram, self)._getParentArgParser()
-        if PYVERSION >= (3, 4):
+        if self.testRunner is None:
             parser.add_argument('-R', '--refleak', dest='refleak',
                                 action='store_true',
                                 help='Detect reference / memory leaks')
@@ -28,6 +45,9 @@ class NumbaTestProgram(unittest.main):
     def runTests(self):
         if self.refleak:
             self.testRunner = RefleakTestRunner
+            if not hasattr(sys, "gettotalrefcount"):
+                warnings.warn("detecting reference leaks requires a debug build "
+                              "of Python, only memory leaks will be detected")
         super(NumbaTestProgram, self).runTests()
 
 
@@ -45,8 +65,6 @@ def _refleak_cleanup():
     try:
         func2 = sys.gettotalrefcount
     except AttributeError:
-        warnings.warn("detecting reference leaks requires a debug build "
-                      "of Python, only memory leaks will be detected")
         func2 = lambda: 42
 
     # Flush standard output, so that buffered data is sent to the OS and
