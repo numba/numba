@@ -2,6 +2,7 @@
 import numba.unittest_support as unittest
 
 import argparse
+import collections
 import functools
 import gc
 import sys
@@ -74,18 +75,9 @@ def _refleak_cleanup():
             stream.flush()
 
     sys._clear_type_cache()
+    # This also clears the various internal CPython freelists.
     gc.collect()
     return func1(), func2()
-
-def _warm_caches():
-    # char cache
-    s = bytes(range(256))
-    for i in range(256):
-        s[i:i+1]
-    # unicode cache
-    x = [chr(i) for i in range(256)]
-    # int cache
-    x = list(range(-5, 257))
 
 
 class ReferenceLeakError(RuntimeError):
@@ -98,12 +90,18 @@ class RefleakTestResult(runner.TextTestResult):
     repetitions = 6
 
     def _huntLeaks(self, test):
-        _warm_caches()
+        sys.stderr.flush()
+
         repcount = self.repetitions
         nwarmup = self.warmup
         rc_deltas = [0] * repcount
         alloc_deltas = [0] * repcount
-        sys.stderr.flush()
+        # Preallocate ints likely to be stored in rc_deltas and alloc_deltas,
+        # to make sys.getallocatedblocks() less flaky.
+        _int_pool = collections.defaultdict(int)
+        for i in range(-200, 200):
+            _int_pool[i] = i
+
         for i in range(repcount):
             # Use a pristine, silent result object to avoid recursion
             res = result.TestResult()
@@ -112,8 +110,8 @@ class RefleakTestResult(runner.TextTestResult):
             del res
             alloc_after, rc_after = _refleak_cleanup()
             if i >= nwarmup:
-                rc_deltas[i] = rc_after - rc_before
-                alloc_deltas[i] = alloc_after - alloc_before
+                rc_deltas[i] = _int_pool[rc_after - rc_before]
+                alloc_deltas[i] = _int_pool[alloc_after - alloc_before]
             alloc_before, rc_before = alloc_after, rc_after
         return rc_deltas, alloc_deltas
 
