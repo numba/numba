@@ -22,6 +22,8 @@ def fix_python_api():
     c_helpers = _helperlib.c_helpers
     le.dylib_add_symbol("Py_None", ctypes.addressof(_PyNone))
     le.dylib_add_symbol("NumbaArrayAdaptor", _numpyadapt.get_ndarray_adaptor())
+    le.dylib_add_symbol("NumbaNDArrayNew", _numpyadapt.get_ndarray_new())
+
     le.dylib_add_symbol("NumbaComplexAdaptor",
                         c_helpers["complex_adaptor"])
     le.dylib_add_symbol("NumbaNativeError", id(NativeError))

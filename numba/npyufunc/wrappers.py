@@ -1,4 +1,5 @@
 from __future__ import print_function, division, absolute_import
+import numpy as np
 from llvm.core import (Type, Builder, inline_function, LINKAGE_INTERNAL,
                        ICMP_EQ, Constant)
 from numba import types, cgutils, config
@@ -32,7 +33,7 @@ def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
 
 
 def build_slow_loop_body(context, func, builder, arrays, out, offsets,
-                            store_offset, signature):
+                         store_offset, signature):
     def load():
         elems = [ary.load_direct(builder.load(off))
                  for off, ary in zip(offsets, arrays)]
@@ -46,7 +47,7 @@ def build_slow_loop_body(context, func, builder, arrays, out, offsets,
 
 
 def build_fast_loop_body(context, func, builder, arrays, out, offsets,
-                            store_offset, signature, ind):
+                         store_offset, signature, ind):
     def load():
         elems = [ary.load_aligned(ind)
                  for ary in arrays]
@@ -255,9 +256,60 @@ def build_gufunc_wrapper(context, func, signature, sin, sout):
     with cgutils.for_range(builder, loopcount, intp=intp_t) as ind:
         args = [a.array_value for a in arrays]
 
-        status, retval = context.call_function(builder, func,
-                                               signature.return_type,
-                                               signature.args, args)
+        if signature.return_type == types.pyobject:
+            mod = cgutils.get_module(builder)
+
+            # Call to
+            # PyObject* ndarray_new(int nd,
+            #       npy_intp *dims,   /* shape */
+            #       npy_intp *strides,
+            #       void* data,
+            #       int type_num,
+            #       int itemsize)
+            ll_int = context.get_value_type(types.int32)
+            ll_intp = context.get_value_type(types.intp)
+            ll_intp_ptr = Type.pointer(ll_intp)
+            ll_voidptr = context.get_value_type(types.voidptr)
+            ll_pyobj = context.get_value_type(types.pyobject)
+            fnty = Type.function(ll_pyobj, [ll_int, ll_intp_ptr,
+                                            ll_intp_ptr, ll_voidptr,
+                                            ll_int, ll_int])
+
+            fn_array_new = mod.get_or_insert_function(fnty,
+                                                      name="NumbaNDArrayNew")
+
+            ndarray_objects = []
+            for arr, arrtype in zip(args, signature.args):
+                arycls = context.make_array(arrtype)
+
+                array = arycls(context, builder, ref=arr)
+
+                zero = Constant.int(ll_int, 0)
+
+                nd = Constant.int(ll_int, arrtype.ndim)
+                dims = builder.gep(array._get_ptr_by_name('shape'),
+                                   [zero, zero])
+                strides = builder.gep(array._get_ptr_by_name('strides'),
+                                      [zero, zero])
+                data = builder.bitcast(array.data, ll_voidptr)
+                dtype = np.dtype(str(arrtype.dtype))
+                type_num = Constant.int(ll_int, dtype.num)
+                itemsize = Constant.int(ll_int, dtype.itemsize)
+
+                obj = builder.call(fn_array_new, [nd, dims, strides, data,
+                                                  type_num, itemsize])
+                ndarray_objects.append(obj)
+
+            object_sig = [types.pyobject] * len(ndarray_objects)
+            status, retval = context.call_function(builder, func,
+                                                   signature.return_type,
+                                                   object_sig,
+                                                   ndarray_objects)
+        else:
+            status, retval = context.call_function(builder, func,
+                                                   signature.return_type,
+                                                   signature.args, args)
+
         # ignore status
         # ignore retval
 

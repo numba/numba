@@ -61,6 +61,13 @@ class Structure(object):
             self._fdmap.append((base, Constant.int(Type.int(), i)))
             self._typemap.append(tp)
 
+    def _get_ptr_by_index(self, index):
+        ptr = self._builder.gep(self._value, self._fdmap[index])
+        return ptr
+
+    def _get_ptr_by_name(self, attrname):
+        return self._get_ptr_by_index(self._namemap[attrname])
+
     def __getattr__(self, field):
         """
         Load the LLVM value of the named *field*.
@@ -82,16 +89,14 @@ class Structure(object):
         """
         Load the LLVM value of the field at *index*.
         """
-        offset = self._fdmap[index]
-        ptr = self._builder.gep(self._value, offset)
-        return self._builder.load(ptr)
+
+        return self._builder.load(self._get_ptr_by_index(index))
 
     def __setitem__(self, index, value):
         """
         Store the LLVM *value* into the field at *index*.
         """
-        offset = self._fdmap[index]
-        ptr = self._builder.gep(self._value, offset)
+        ptr = self._get_ptr_by_index(index)
         value = self._context.get_struct_member_value(self._builder,
                                                       self._typemap[index],
                                                       value)

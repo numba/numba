@@ -803,6 +803,9 @@ class BaseContext(object):
     def optimize(self, module):
         pass
 
+    def finalize(self, func, fndesc):
+        raise NotImplementedError
+
     def get_executable(self, func, fndesc):
         raise NotImplementedError
 

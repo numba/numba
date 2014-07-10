@@ -127,6 +127,23 @@ class CPUContext(BaseContext):
     def optimize(self, module):
         self.pm.run(module)
 
+    def finalize(self, func, fndesc):
+        func.module.target = self.tm.triple
+
+        if self.is32bit:
+            dmf = intrinsics.DivmodFixer()
+            dmf.run(func.module)
+
+        im = intrinsics.IntrinsicMapping(self)
+        im.run(func.module)
+
+        # Map module.__dict__
+        le.dylib_add_symbol(".pymodule.dict." + fndesc.modname,
+                            id(fndesc.globals))
+
+        if not fndesc.native:
+            self.optimize_pythonapi(func)
+
     def get_executable(self, func, fndesc):
         """
         Returns
@@ -139,19 +156,9 @@ class CPUContext(BaseContext):
             callable function address
 
         """
-        func.module.target = self.tm.triple
-
-        if self.is32bit:
-            dmf = intrinsics.DivmodFixer()
-            dmf.run(func.module)
-
-        im = intrinsics.IntrinsicMapping(self)
-        im.run(func.module)
-
-        if not fndesc.native:
-            self.optimize_pythonapi(func)
-
+        self.finalize(func, fndesc)
         cfunc, fnptr = self.prepare_for_call(func, fndesc)
+
         return cfunc, fnptr
 
     def prepare_for_call(self, func, fndesc):
@@ -168,10 +175,6 @@ class CPUContext(BaseContext):
             print(("ASSEMBLY %s" % fndesc).center(80, '-'))
             print(self.tm.emit_assembly(func.module))
             print('=' * 80)
-
-        # Map module.__dict__
-        le.dylib_add_symbol(".pymodule.dict." + fndesc.modname,
-                            id(fndesc.globals))
 
         # Code gen
         self.engine.add_module(func.module)
