@@ -1334,13 +1334,22 @@ def getitem_array_tuple(context, builder, sig, args):
         return context.unpack_value(builder, aryty.dtype, ptr)
 
 
+def debug_info(obj, name):
+    import inspect
+    print('*' * 50)
+    print('inspect ' + name)
+    insp = inspect.getmembers(obj)
+    for i in insp:
+        print(i)
+    print('*' * 50)    
+
+
 @builtin
 @implement('setitem', types.Kind(types.Array), types.intp,
            types.Any)
 def setitem_array1d(context, builder, sig, args):
     aryty, _, valty = sig.args
     ary, idx, val = args
-
     arystty = make_array(aryty)
     ary = arystty(context, builder, ary)
 
@@ -1388,6 +1397,115 @@ def setitem_array_tuple(context, builder, sig, args):
     ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
                                    wraparound=context.metadata['wraparound'])
     context.pack_value(builder, aryty.dtype, val, ptr)
+
+
+@builtin
+@implement('setitem', types.Kind(types.Array),
+           types.slice3_type, types.Any)
+def setitem_array1d_slice(context, builder, sig, args):
+    # context - numba.targets.cpu.CPUContext object
+    # builder - llvm.core.Builder object
+    # sig - Signature object
+    # sig.args is the tuple of signature e.g. array(int64, 1d, C), slice3_type, int64
+    # args -- llvm.core.Instruction, a tuple of Instructions
+    aryty, idxty, valty = sig.args
+    ary, idx, val = args
+    arystty = make_array(aryty)
+    ary = arystty(context, builder, ary)
+    # TODO: other than layout
+    slicestruct = Slice(context, builder, value=idx)
+    with cgutils.for_range(builder, slicestruct.stop, slicestruct.start.type) as loop_idx:
+        ptr = cgutils.get_item_pointer(builder, aryty, ary,
+                                       [loop_idx],
+                                       wraparound=context.metadata['wraparound'])
+        context.pack_value(builder, aryty.dtype, val, ptr)
+
+#debug version
+#@builtin
+#@implement('setitem', types.Kind(types.Array),
+#           types.slice3_type, types.Any)
+#def setitem_array1d_slice(context, builder, sig, args):
+#    pass
+    # context - numba.targets.cpu.CPUContext object
+    # builder - llvm.core.Builder object
+    # sig - Signature object
+    # sig.args is the tuple of signature e.g. array(int64, 1d, C), slice3_type, int64
+    # args -- llvm.core.Instruction, a tuple of Instructions
+#    aryty, idxty, valty = sig.args
+    #print('aryty = ', aryty)
+    #print('idxtx = ', idxty)
+    #debug_info(context, 'context')
+    #debug_info(builder, 'builder')
+    #debug_info(sig, 'sig')
+    #debug_info(args, 'args')
+    #debug_info(idxty, 'idxty')
+    #print('idxty.getitem = ', idxty.__getitem__(2))
+    #print('idxty.getattr = ', idxty.__getattribute__('start'))
+    #print('valty = ', valty)
+#    ary, idx, val = args
+    # create llvm array
+#    arystty = make_array(aryty)
+#    ary = arystty(context, builder, ary)
+    #debug_info(ary, 'ary')
+    #print('idx = ', idx)
+    #debug_info(idx, 'idx')
+    #print('val = ', val)
+    # TODO: other than layout
+    # count needs to be the slice info, start, stop, step
+    #shapes = cgutils.unpack_tuple(builder, ary.shape, aryty.ndim)
+    #slicestruct = Slice(context, builder, value=idx)
+    #slicestruct = Slice(context, builder)
+   # length = cgutils.normalize_slice(builder, slicestruct, shapes[0])
+    #debug_info(slicestruct, "slicestruct")
+    #print("start = ", slicestruct.start)
+    #print(context.get_constant(types.intp, maxint))
+    #shape = cgutils.get_range_from_slice(builder, slicestruct)
+    #values = (slicestruct.start, slicestruct.stop, slicestruct.step)
+    #debug_info(slicestruct.start, 'start')
+    #debug_info(slicestruct.start.operands, 'operands')
+    #print(slicestruct.start.operands.__getitem__(0))
+    #print('valus = ', values)
+    #print("i failed before here")
+    #indices = cgutils.unpack_tuple_args(builder, idx, count=len(idxty))
+    #indices = [context.cast(builder, i, t, types.intp)
+    #           for t, i in zip(idxty, indices)]
+    #ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
+    #                               wraparound=context.metadata['wraparound'])
+    #context.pack_value(builder, aryty.dtype, val, ptr)
+
+
+#    shapes = cgutils.unpack_tuple(builder, ary.shape, aryty.ndim)
+#    slicestruct = Slice(context, builder, value=idx)
+    #debug_info(slicestruct, "slicestruct")
+    #print('sl.start =  ', slicestruct.start)
+    #print('sl.stop = ',slicestruct.stop)
+    #print(type([slicestruct.start]))
+    #debug_info(slicestruct.start, "slicestruct.start")
+    #cgutils.normalize_slice(builder, slicestruct, shapes[0])
+    #for i in range(3, 7):
+    #length = cgutils.get_range_from_slice(builder, slicestruct)
+
+    #cgutils.for_range(builder, length, 'int64')
+    #ptr = cgutils.get_item_pointer(builder, aryty, ary,
+    #                                   [slicestruct.start],
+    #                                   wraparound=context.metadata['wraparound'])
+    #debug_info(ptr, "ptr")
+    #context.pack_value(builder, aryty.dtype, val, ptr)
+
+    #ptr = cgutils.get_item_pointer(builder, aryty, ary,
+    #                                   [slicestruct.stop],
+    #                                   wraparound=context.metadata['wraparound'])
+    #debug_info(context.pack_value, "packvalue")
+    #context.pack_value(builder, aryty.dtype, val, ptr)
+
+    #indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
+#    indices = [context.cast(builder, i, t, types.intp)
+#               for t, i in zip(idxty, indices)]
+#    ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
+#                                   wraparound=context.metadata['wraparound'])
+#    context.pack_value(builder, aryty.dtype, val, ptr)
+#
+
 
 #this seems to be a copy of the function above
 #@builtin
