@@ -121,3 +121,7 @@ def _multiruntest(suite):
                                          buffer=True, stream=stream)
         result = runner.run(suite)
         return result.wasSuccessful(), stream.getvalue()
+
+
+if __name__ == "__main__":
+    sys.exit(0 if test() else 1)
