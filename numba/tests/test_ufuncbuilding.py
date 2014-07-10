@@ -16,6 +16,17 @@ def guadd(a, b, c):
             c[i, j] = a[i, j] + b[i, j]
 
 
+class Dummy: pass
+
+
+def guadd_obj(a, b, c):
+    Dummy()  # to force object mode
+    x, y = c.shape
+    for i in range(x):
+        for j in range(y):
+            c[i, j] = a[i, j] + b[i, j]
+
+
 class TestUfuncBuilding(unittest.TestCase):
     def test_basic_ufunc(self):
         ufb = UFuncBuilder(add)
@@ -72,6 +83,14 @@ class TestVectorizeDecor(unittest.TestCase):
         a = numpy.arange(10, dtype='int32').reshape(2, 5)
         b = ufunc(a, a)
         self.assertTrue(numpy.all(a + a == b))
+
+    def test_guvectorize_objectmode(self):
+        ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
+                            "(x,y),(x,y)->(x,y)")(guadd_obj)
+        a = numpy.arange(10, dtype='int32').reshape(2, 5)
+        b = ufunc(a, a)
+        self.assertTrue(numpy.all(a + a == b))
+
 
 if __name__ == '__main__':
     unittest.main()
