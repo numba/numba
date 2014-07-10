@@ -93,7 +93,7 @@ Trigonometric functions
  arctanh             Yes          Yes
  deg2rad             Yes          Yes
  rad2deg             Yes          Yes
- degrees             Yes          No
+ degrees             Yes          Yes
  radians             Yes          Yes
 ==============  =============  ===========
 
