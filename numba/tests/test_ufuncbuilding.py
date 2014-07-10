@@ -8,6 +8,8 @@ from numba import vectorize, guvectorize
 def add(a, b):
     return a + b
 
+def equals(a, b):
+    return a == b
 
 def guadd(a, b, c):
     x, y = c.shape
@@ -65,6 +67,12 @@ class TestVectorizeDecor(unittest.TestCase):
         a = numpy.arange(10, dtype='int32')
         b = ufunc(a, a)
         self.assertTrue(numpy.all(a + a == b))
+
+    def test_vectorize_bool_return(self):
+        ufunc = vectorize(['bool_(int32, int32)'])(equals)
+        a = numpy.arange(10, dtype='int32')
+        r = ufunc(a,a)
+        self.assertTrue(numpy.all(r))
 
     def test_guvectorize(self):
         ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
