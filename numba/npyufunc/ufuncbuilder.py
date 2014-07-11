@@ -84,8 +84,9 @@ class UFuncBuilder(object):
                 sig = tuple(argtypes)
             else:
                 sig = restype(*argtypes)
-        # Actual work
-        self.nb_func.compile(sig)
+        # Do compilation
+        # Return CompileResult to test
+        return self.nb_func.compile(sig)
 
     def build_ufunc(self):
         dtypelist = []
@@ -148,6 +149,8 @@ class GUFuncBuilder(object):
 
         if not cres.objectmode and cres.signature.return_type != types.void:
             raise TypeError("gufunc kernel must have void return type")
+
+        return cres
 
     def build_ufunc(self):
         dtypelist = []

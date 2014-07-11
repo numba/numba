@@ -30,8 +30,10 @@ def guadd_obj(a, b, c):
 class TestUfuncBuilding(unittest.TestCase):
     def test_basic_ufunc(self):
         ufb = UFuncBuilder(add)
-        ufb.add("int32(int32, int32)")
-        ufb.add("int64(int64, int64)")
+        cres = ufb.add("int32(int32, int32)")
+        self.assertFalse(cres.objectmode)
+        cres = ufb.add("int64(int64, int64)")
+        self.assertFalse(cres.objectmode)
         ufunc = ufb.build_ufunc()
 
         a = numpy.arange(10, dtype='int32')
@@ -40,7 +42,8 @@ class TestUfuncBuilding(unittest.TestCase):
 
     def test_ufunc_struct(self):
         ufb = UFuncBuilder(add)
-        ufb.add("complex64(complex64, complex64)")
+        cres = ufb.add("complex64(complex64, complex64)")
+        self.assertFalse(cres.objectmode)
         ufunc = ufb.build_ufunc()
 
         a = numpy.arange(10, dtype='complex64') + 1j
@@ -51,7 +54,8 @@ class TestUfuncBuilding(unittest.TestCase):
 class TestGUfuncBuilding(unittest.TestCase):
     def test_basic_gufunc(self):
         gufb = GUFuncBuilder(guadd, "(x, y),(x, y)->(x, y)")
-        gufb.add("void(int32[:,:], int32[:,:], int32[:,:])")
+        cres = gufb.add("void(int32[:,:], int32[:,:], int32[:,:])")
+        self.assertFalse(cres.objectmode)
         ufunc = gufb.build_ufunc()
 
         a = numpy.arange(10, dtype="int32").reshape(2, 5)
@@ -61,7 +65,21 @@ class TestGUfuncBuilding(unittest.TestCase):
 
     def test_gufunc_struct(self):
         gufb = GUFuncBuilder(guadd, "(x, y),(x, y)->(x, y)")
-        gufb.add("void(complex64[:,:], complex64[:,:], complex64[:,:])")
+        cres = gufb.add("void(complex64[:,:], complex64[:,:], complex64[:,:])")
+        self.assertFalse(cres.objectmode)
+        ufunc = gufb.build_ufunc()
+
+        a = numpy.arange(10, dtype="complex64").reshape(2, 5) + 1j
+        b = ufunc(a, a)
+
+        self.assertTrue(numpy.all(a + a == b))
+
+    def test_gufunc_struct_forceobj(self):
+        gufb = GUFuncBuilder(guadd, "(x, y),(x, y)->(x, y)",
+                             targetoptions=dict(forceobj=True))
+        cres = gufb.add("void(complex64[:,:], complex64[:,:], complex64[:,"
+                        ":])")
+        self.assertTrue(cres.objectmode)
         ufunc = gufb.build_ufunc()
 
         a = numpy.arange(10, dtype="complex64").reshape(2, 5) + 1j
