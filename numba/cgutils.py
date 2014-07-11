@@ -564,3 +564,16 @@ def printf(builder, format_string, *values):
     fn = get_module(builder).add_function(functype, 'printf')
     builder.call(fn, [str_addr] + args)
 
+
+def cbranch_or_continue(builder, cond, bbtrue):
+    """
+    Branch conditionally or continue.
+
+    Note: a new block is created and builder is moved to the end of the new
+          block.
+    """
+    fn = get_function(builder)
+    bbcont = fn.append_basic_block('.continue')
+    builder.cbranch(cond, bbtrue, bbcont)
+    builder.position_at_end(bbcont)
+    return bbcont

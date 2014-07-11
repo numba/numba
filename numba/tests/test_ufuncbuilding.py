@@ -27,6 +27,14 @@ def guadd_obj(a, b, c):
             c[i, j] = a[i, j] + b[i, j]
 
 
+class MyException(Exception):
+    pass
+
+
+def guerror(a, b, c):
+    raise MyException
+
+
 class TestUfuncBuilding(unittest.TestCase):
     def test_basic_ufunc(self):
         ufb = UFuncBuilder(add)
@@ -108,6 +116,13 @@ class TestVectorizeDecor(unittest.TestCase):
         a = numpy.arange(10, dtype='int32').reshape(2, 5)
         b = ufunc(a, a)
         self.assertTrue(numpy.all(a + a == b))
+
+    def test_guvectorize_error_in_objectmode(self):
+        ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
+                            "(x,y),(x,y)->(x,y)", forceobj=True)(guerror)
+        a = numpy.arange(10, dtype='int32').reshape(2, 5)
+        with self.assertRaises(MyException):
+            ufunc(a, a)
 
 
 if __name__ == '__main__':

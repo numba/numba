@@ -252,76 +252,39 @@ def build_gufunc_wrapper(context, func, signature, sin, sout):
             step_offset += ary.ndim
         arrays.append(ary)
 
+    bbreturn = cgutils.get_function(builder).append_basic_block('.return')
     # Loop
     with cgutils.for_range(builder, loopcount, intp=intp_t) as ind:
         args = [a.array_value for a in arrays]
 
         if signature.return_type == types.pyobject:
-            mod = cgutils.get_module(builder)
+            innercall, error = _prepare_call_to_object_mode(context, builder,
+                                                            func, signature,
+                                                            args)
 
-            # Call to
-            # PyObject* ndarray_new(int nd,
-            #       npy_intp *dims,   /* shape */
-            #       npy_intp *strides,
-            #       void* data,
-            #       int type_num,
-            #       int itemsize)
-            ll_int = context.get_value_type(types.int32)
-            ll_intp = context.get_value_type(types.intp)
-            ll_intp_ptr = Type.pointer(ll_intp)
-            ll_voidptr = context.get_value_type(types.voidptr)
-            ll_pyobj = context.get_value_type(types.pyobject)
-            fnty = Type.function(ll_pyobj, [ll_int, ll_intp_ptr,
-                                            ll_intp_ptr, ll_voidptr,
-                                            ll_int, ll_int])
-
-            fn_array_new = mod.get_or_insert_function(fnty,
-                                                      name="NumbaNDArrayNew")
-
-            ndarray_objects = []
-            for arr, arrtype in zip(args, signature.args):
-                arycls = context.make_array(arrtype)
-
-                array = arycls(context, builder, ref=arr)
-
-                zero = Constant.int(ll_int, 0)
-
-                nd = Constant.int(ll_int, arrtype.ndim)
-                dims = builder.gep(array._get_ptr_by_name('shape'),
-                                   [zero, zero])
-                strides = builder.gep(array._get_ptr_by_name('strides'),
-                                      [zero, zero])
-                data = builder.bitcast(array.data, ll_voidptr)
-                dtype = np.dtype(str(arrtype.dtype))
-                type_num = Constant.int(ll_int, dtype.num)
-                itemsize = Constant.int(ll_int, dtype.itemsize)
-
-                obj = builder.call(fn_array_new, [nd, dims, strides, data,
-                                                  type_num, itemsize])
-                ndarray_objects.append(obj)
-
-            object_sig = [types.pyobject] * len(ndarray_objects)
-            status, retval = context.call_function(builder, func,
-                                                   signature.return_type,
-                                                   object_sig,
-                                                   ndarray_objects)
         else:
             status, retval = context.call_function(builder, func,
                                                    signature.return_type,
                                                    signature.args, args)
+            innercall = status.code
+            error = status.err
+            del status, retval
 
-        # ignore status
-        # ignore retval
+        # If error, escape
+        cgutils.cbranch_or_continue(builder, error, bbreturn)
 
         for a in arrays:
             a.next(ind)
 
+    builder.branch(bbreturn)
+    builder.position_at_end(bbreturn)
     builder.ret_void()
 
+    module.verify()
     # Set core function to internal so that it is not generated
     func.linkage = LINKAGE_INTERNAL
     # Force inline of code function
-    inline_function(status.code)
+    inline_function(innercall)
     # Run optimizer
     context.optimize(module)
 
@@ -330,6 +293,92 @@ def build_gufunc_wrapper(context, func, signature, sin, sout):
 
     wrapper.verify()
     return wrapper
+
+
+def _prepare_call_to_object_mode(context, builder, func, signature, args):
+    mod = cgutils.get_module(builder)
+
+    thisfunc = cgutils.get_function(builder)
+    bb_core_return = thisfunc.append_basic_block('ufunc.core.return')
+
+    # Call to
+    # PyObject* ndarray_new(int nd,
+    #       npy_intp *dims,   /* shape */
+    #       npy_intp *strides,
+    #       void* data,
+    #       int type_num,
+    #       int itemsize)
+
+    ll_int = context.get_value_type(types.int32)
+    ll_intp = context.get_value_type(types.intp)
+    ll_intp_ptr = Type.pointer(ll_intp)
+    ll_voidptr = context.get_value_type(types.voidptr)
+    ll_pyobj = context.get_value_type(types.pyobject)
+    fnty = Type.function(ll_pyobj, [ll_int, ll_intp_ptr,
+                                    ll_intp_ptr, ll_voidptr,
+                                    ll_int, ll_int])
+
+    fn_array_new = mod.get_or_insert_function(fnty, name="NumbaNDArrayNew")
+
+    # Convert each llarray into pyobject
+    error_pointer = cgutils.alloca_once(builder, Type.int(1), name='error')
+    builder.store(cgutils.true_bit, error_pointer)
+    ndarray_pointers = []
+    ndarray_objects = []
+    for i, (arr, arrtype) in enumerate(zip(args, signature.args)):
+        ptr = cgutils.alloca_once(builder, ll_pyobj)
+        ndarray_pointers.append(ptr)
+
+        builder.store(Constant.null(ll_pyobj), ptr)   # initialize to NULL
+
+        arycls = context.make_array(arrtype)
+        array = arycls(context, builder, ref=arr)
+
+        zero = Constant.int(ll_int, 0)
+
+        # Extract members of the llarray
+        nd = Constant.int(ll_int, arrtype.ndim)
+        dims = builder.gep(array._get_ptr_by_name('shape'), [zero, zero])
+        strides = builder.gep(array._get_ptr_by_name('strides'), [zero, zero])
+        data = builder.bitcast(array.data, ll_voidptr)
+        dtype = np.dtype(str(arrtype.dtype))
+
+        # Prepare other info for reconstruction of the PyArray
+        type_num = Constant.int(ll_int, dtype.num)
+        itemsize = Constant.int(ll_int, dtype.itemsize)
+
+        # Call helper to reconstruct PyArray objects
+        obj = builder.call(fn_array_new, [nd, dims, strides, data,
+                                          type_num, itemsize])
+        builder.store(obj, ptr)
+        ndarray_objects.append(obj)
+
+        # TODO: error checking
+        obj_is_null = cgutils.is_null(builder, obj)
+        builder.store(obj_is_null, error_pointer)
+        cgutils.cbranch_or_continue(builder, obj_is_null, bb_core_return)
+
+    # Call ufunc core function
+    object_sig = [types.pyobject] * len(ndarray_objects)
+    status, retval = context.call_function(builder, func, ll_pyobj, object_sig,
+                                           ndarray_objects)
+    builder.store(status.err, error_pointer)
+
+    pyapi = context.get_python_api(builder)
+
+    # Release returned object
+    pyapi.decref(retval)
+
+    builder.branch(bb_core_return)
+    # At return block
+    builder.position_at_end(bb_core_return)
+
+    # Release argument object
+    for ndary_ptr in ndarray_pointers:
+        pyapi.decref(builder.load(ndary_ptr))
+
+    innercall = status.code
+    return innercall, builder.load(error_pointer)
 
 
 class GUArrayArg(object):
