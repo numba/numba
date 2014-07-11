@@ -38,7 +38,7 @@ class TestUfuncBuilding(unittest.TestCase):
         a = numpy.arange(10, dtype='complex64') + 1j
         b = ufunc(a, a)
         self.assertTrue(numpy.all(a + a == b))
-        self.assertTrue(b.dtype == numpy.dtype('complex64'))
+        self.assertEqual(b.dtype, numpy.dtype('complex64'))
 
 
 class TestGUfuncBuilding(unittest.TestCase):
@@ -51,7 +51,7 @@ class TestGUfuncBuilding(unittest.TestCase):
         b = ufunc(a, a)
 
         self.assertTrue(numpy.all(a + a == b))
-        self.assertTrue(b.dtype == numpy.dtype('int32'))
+        self.assertEqual(b.dtype, numpy.dtype('int32'))
 
 
     def test_gufunc_struct(self):
@@ -63,7 +63,7 @@ class TestGUfuncBuilding(unittest.TestCase):
         b = ufunc(a, a)
 
         self.assertTrue(numpy.all(a + a == b))
-        self.assertTrue(b.dtype == numpy.dtype('complex64'))
+        self.assertEqual(b.dtype, numpy.dtype('complex64'))
 
 
 class TestVectorizeDecor(unittest.TestCase):
@@ -72,14 +72,14 @@ class TestVectorizeDecor(unittest.TestCase):
         a = numpy.arange(10, dtype='int32')
         b = ufunc(a, a)
         self.assertTrue(numpy.all(a + a == b))
-        self.assertTrue(b.dtype == numpy.dtype('int32'))
+        self.assertEqual(b.dtype, numpy.dtype('int32'))
 
     def test_vectorize_bool_return(self):
         ufunc = vectorize(['bool_(int32, int32)'])(equals)
         a = numpy.arange(10, dtype='int32')
         r = ufunc(a,a)
         self.assertTrue(numpy.all(r))
-        self.assertTrue(r.dtype == numpy.dtype('bool_'))
+        self.assertEqual(r.dtype, numpy.dtype('bool_'))
 
     def test_guvectorize(self):
         ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
@@ -87,7 +87,7 @@ class TestVectorizeDecor(unittest.TestCase):
         a = numpy.arange(10, dtype='int32').reshape(2, 5)
         b = ufunc(a, a)
         self.assertTrue(numpy.all(a + a == b))
-        self.assertTrue(b.dtype == numpy.dtype('int32'))
+        self.assertEqual(b.dtype, numpy.dtype('int32'))
 
 if __name__ == '__main__':
     unittest.main()
