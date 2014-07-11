@@ -367,7 +367,8 @@ def _prepare_call_to_object_mode(context, builder, func, signature, args):
     pyapi = context.get_python_api(builder)
 
     # Release returned object
-    pyapi.decref(retval)
+    with cgutils.if_likely(builder, builder.not_(status.err)):
+        pyapi.decref(retval)
 
     builder.branch(bb_core_return)
     # At return block
