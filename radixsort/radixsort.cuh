@@ -7,6 +7,52 @@
 
 enum { BUCKET_SIZE = 256, BUCKET_MASK = 0xff };
 
+extern "C" {
+__global__
+void cu_build_histogram(
+    uint8_t  *data,
+    unsigned *hist,
+    unsigned  stride,
+    unsigned  offset,
+    unsigned  count
+);
+
+__global__
+void
+cu_scan_histogram(
+    unsigned *hist,
+    unsigned *bucket_total,
+    unsigned blockcount
+);
+
+__global__
+void
+cu_compute_indices_uint32 (
+    uint32_t  *data,
+    unsigned  *indices,
+    unsigned *hist,
+    unsigned *bucket_index,
+    unsigned  count,
+    unsigned  offset
+);
+
+__global__
+void
+cu_scan_bucket_index(unsigned *bucket_index);
+
+__global__
+void
+cu_scatter(
+    void     *data,
+    void     *sorted,
+    unsigned *indices,
+    unsigned  count,
+    unsigned  stride
+);
+
+// end extern "C"
+};
+
 /*
 Must
 - blocksize == BUCKET_SIZE
@@ -111,7 +157,7 @@ cu_scan_bucket_index(unsigned *bucket_index)
     bucket_index[threadIdx.x] = data;
 }
 
-
+namespace {
 template<typename Ty>
 struct copy {
     __device__
@@ -159,6 +205,8 @@ struct computer_indices {
     }
 };
 
+// no export
+}
 
 /*
 This naive algorithm is faster than doing scan in the block or using
