@@ -173,13 +173,9 @@ class BaseContext(object):
     def unify_types(self, *typelist):
         # Sort the type list according to bit width before doing
         # pairwise unification (with thanks to aterrel).
-        typelist = list(typelist)
-        def cmp_bitwidth(ob1, ob2):
-            ob1_bw_opt = getattr(ob1, 'bitwidth', ob1)
-            ob2_bw_opt = getattr(ob2, 'bitwidth', ob2)
-            return cmp(ob1_bw_opt, ob2_bw_opt)
-        typelist.sort(cmp_bitwidth)
-        return functools.reduce(self.unify_pairs, typelist)
+        def keyfunc(obj): return getattr(obj, 'bitwidth', hash(obj))
+        return functools.reduce(
+            self.unify_pairs, sorted(typelist, key=keyfunc))
 
     def unify_pairs(self, first, second):
         """
