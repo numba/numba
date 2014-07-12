@@ -141,7 +141,10 @@ class Array(object):
 
     def __setitem__(self, key, value):
         data = self.eval()
-        data[key] = value.eval()
+        if isinstance(value, Array):
+            data[key] = value.eval()
+        else:
+            data[key] = value
         return Array(data=data)
 
     def __gt__(self, other):
