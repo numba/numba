@@ -36,7 +36,7 @@ for ty in types.unsigned_domain:
     register(implement(operator.le, ty, ty)(builtins.int_ule_impl))
     register(implement(operator.gt, ty, ty)(builtins.int_ugt_impl))
     register(implement(operator.ge, ty, ty)(builtins.int_uge_impl))
-    register(implement(operator.pow, ty, ty)(builtins.int_upower_impl))
+    register(implement(operator.pow, types.float64, ty)(builtins.int_upower_impl))
     register(implement(operator.rshift, ty, ty)(builtins.int_lshr_impl))
 
 for ty in types.signed_domain:
@@ -49,7 +49,7 @@ for ty in types.signed_domain:
     register(implement(operator.le, ty, ty)(builtins.int_sle_impl))
     register(implement(operator.gt, ty, ty)(builtins.int_sgt_impl))
     register(implement(operator.ge, ty, ty)(builtins.int_sge_impl))
-    register(implement(operator.pow, ty, ty)(builtins.int_spower_impl))
+    register(implement(operator.pow, types.float64, ty)(builtins.int_spower_impl))
     register(implement(operator.rshift, ty, ty)(builtins.int_ashr_impl))
 
 for ty in types.real_domain:

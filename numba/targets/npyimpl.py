@@ -248,7 +248,10 @@ _externs = [
     (numpy.sqrt, "sqrt"),
     (numpy.floor, "floor"),
     (numpy.ceil, "ceil"),
-    (numpy.trunc, "trunc") ]
+    (numpy.trunc, "trunc"),
+    (numpy.rint, "rint"),
+    (numpy.abs, "abs"),
+    ]
 
 
 for x in _externs:
@@ -261,8 +264,6 @@ register_unary_ufunc(numpy.absolute, types.abs_type)
 register_unary_ufunc(numpy.sign, types.sign_type)
 register_unary_ufunc(numpy.negative, types.neg_type)
 
-register_unary_ufunc(numpy.rint, npy.rint, asfloat=True)
-register_unary_ufunc(numpy.fabs, npy.fabs, asfloat=True)
 
 def numpy_binary_ufunc(funckey, divbyzero=False, scalar_inputs=False,
                        asfloat=False, true_divide=False):

@@ -63,7 +63,7 @@ _math_operations = [ "add", "subtract", "multiply",
                      "rint", "sign", "conj", "exp", "exp2",
                      "log", "log2", "log10", "expm1", "log1p",
                      "sqrt", "square", "reciprocal",
-                     "divide", "mod", "abs" ]
+                     "divide", "mod", "abs", "fabs"]
 
 _trigonometric_functions = [ "sin", "cos", "tan", "arcsin",
                              "arccos", "arctan", "arctan2",
@@ -127,19 +127,6 @@ def _numpy_ufunc(name):
 
     if not name in _aliases:
         builtin_global(the_key, types.Function(typing_class))
-
-# list of unary ufuncs to register
-_autoregister_unary_ufuncs = [
-    "sin", "cos", "tan", "arcsin", "arccos", "arctan",
-    "sinh", "cosh", "tanh", "arcsinh", "arccosh", "arctanh",
-    "exp", "exp2", "expm1",
-    "log", "log2", "log10", "log1p",
-    "absolute", "negative", "floor", "ceil", "trunc", "sign",
-    "sqrt",
-    "deg2rad", "rad2deg", "rint", "fabs"]
-for func in _autoregister_unary_ufuncs:
-    _numpy_unary_ufunc(func)
-del(_autoregister_unary_ufuncs)
 
 
 class Numpy_binary_ufunc(AbstractTemplate):
