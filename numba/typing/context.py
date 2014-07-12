@@ -25,12 +25,14 @@ class BaseContext(object):
         pass
 
     def get_number_type(self, num):
-        if isinstance(num, int):
+        if isinstance(num, utils.INT_TYPES):
             nbits = utils.bit_length(num)
             if nbits < 32:
                 typ = types.int32
             elif nbits < 64:
                 typ = types.int64
+            elif nbits == 64 and num >= 0:
+                typ = types.uint64
             else:
                 raise ValueError("Int value is too large: %s" % num)
             return typ
@@ -64,6 +66,9 @@ class BaseContext(object):
                 return res
 
     def resolve_getattr(self, value, attr):
+        if isinstance(value, types.Record):
+            return value.typeof(attr)
+
         try:
             attrinfo = self.attributes[value]
         except KeyError:
@@ -78,6 +83,12 @@ class BaseContext(object):
         args = target, index, value
         kws = ()
         return self.resolve_function_type("setitem", args, kws)
+
+    def resolve_setattr(self, target, attr, value):
+        if isinstance(target, types.Record):
+            expectedty = target.typeof(attr)
+            if self.type_compatibility(value, expectedty) is not None:
+                return templates.signature(types.void, target, value)
 
     def get_global_type(self, gv):
         return self.globals[gv]
@@ -143,18 +154,24 @@ class BaseContext(object):
     def type_compatibility(self, fromty, toty):
         """
         Returns None or a string describing the conversion e.g. exact, promote,
-        unsafe, safe
+        unsafe, safe, tuple-coerce
         """
         if fromty == toty:
             return 'exact'
+
         elif (isinstance(fromty, types.UniTuple) and
                   isinstance(toty, types.UniTuple) and
                       len(fromty) == len(toty)):
             return self.type_compatibility(fromty.dtype, toty.dtype)
+
+        elif (types.is_int_tuple(fromty) and types.is_int_tuple(toty) and
+                      len(fromty) == len(toty)):
+            return 'int-tuple-coerce'
+
         return self.tm.check_compatible(fromty, toty)
 
-    def unify_types(self, *types):
-        return functools.reduce(self.unify_pairs, types)
+    def unify_types(self, *typelist):
+        return functools.reduce(self.unify_pairs, typelist)
 
     def unify_pairs(self, first, second):
         """
@@ -179,6 +196,8 @@ class BaseContext(object):
             sel = numpy.promote_types(a, b)
             # Convert NumPy dtype back to Numba types
             return getattr(types, str(sel))
+        elif d in 'int-tuple-coerce':
+            return types.UniTuple(dtype=types.intp, count=len(first))
         else:
             raise Exception("type_compatibility returned %s" % d)
 

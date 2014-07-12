@@ -12,7 +12,9 @@ class Flags(utils.ConfigOptions):
     OPTIONS = frozenset(['enable_looplift',
                          'enable_pyobject',
                          'force_pyobject',
-                         'no_compile'])
+                         'no_compile',
+                         'no_wraparound',
+                         "boundcheck"])
 
 
 DEFAULT_FLAGS = Flags()
@@ -106,6 +108,7 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
     status.use_python_mode = flags.force_pyobject
 
     targetctx = targetctx.localized()
+    targetctx.metadata['wraparound'] = not flags.no_wraparound
 
     if not status.use_python_mode:
         with _fallback_context(status):
@@ -226,10 +229,14 @@ def legalize_return_type(return_type, interp, targetctx):
     # FIXME: In the future, we can return an array that is either a dynamically
     #        allocated array or an array that is passed as argument.  This
     #        must be statically resolvable.
+
+    # The return value must be the first modification of the value.
+    arguments = frozenset("%s.1" % arg for arg in interp.argspec.args)
+
     for ret in retstmts:
-        if ret.value.name not in interp.argspec.args:
-            raise ValueError("Only accept returning of array passed into the "
-                              "function as argument")
+        if ret.value.name not in arguments:
+            raise TypeError("Only accept returning of array passed into the "
+                            "function as argument")
 
     # Legalized; tag return handling
     targetctx.metadata['return.array'] = 'arg'
@@ -263,7 +270,7 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
 
     # Seed argument types
     for arg, ty in zip(interp.argspec.args, args):
-        infer.seed_type(arg, ty)
+    	infer.seed_type(arg, ty)
 
     # Seed return type
     if return_type is not None:
@@ -288,8 +295,8 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
 def native_lowering_stage(targetctx, interp, typemap, restype, calltypes,
                           nocompile):
     # Lowering
-    fndesc = lowering.describe_function(interp, typemap, restype, calltypes,
-                                        mangler=targetctx.mangler)
+    fndesc = lowering.PythonFunctionDescriptor.from_specialized_function(
+        interp, typemap, restype, calltypes, mangler=targetctx.mangler)
 
     lower = lowering.Lower(targetctx, fndesc)
     lower.lower()
@@ -306,10 +313,7 @@ def native_lowering_stage(targetctx, interp, typemap, restype, calltypes,
 
 
 def py_lowering_stage(targetctx, interp, nocompile):
-    # Optimize for python code
-    ir_optimize_for_py_stage(interp)
-
-    fndesc = lowering.describe_pyfunction(interp)
+    fndesc = lowering.PythonFunctionDescriptor.from_object_mode_function(interp)
     lower = lowering.PyLower(targetctx, fndesc)
     lower.lower()
 

@@ -1,6 +1,15 @@
 from __future__ import print_function, absolute_import, division
+import itertools
 import llvm.core as lc
 from .cudadrv import nvvm
+from numba import cgutils
+
+
+def declare_atomic_add_float32(lmod):
+    fname = 'llvm.nvvm.atomic.load.add.f32.p0f32'
+    fnty = lc.Type.function(lc.Type.float(),
+        (lc.Type.pointer(lc.Type.float(), 0), lc.Type.float()))
+    return lmod.get_or_insert_function(fnty, name=fname)
 
 
 def insert_addrspace_conv(lmod, elemtype, addrspace):
@@ -20,13 +29,6 @@ def insert_addrspace_conv(lmod, elemtype, addrspace):
     return lmod.get_or_insert_function(s2g_fnty, s2g_name)
 
 
-def declare_vprint(lmod):
-    voidptrty = lc.Type.pointer(lc.Type.int(8))
-    vprintfty = lc.Type.function(lc.Type.int(), [voidptrty, voidptrty])
-    vprintf = lmod.get_or_insert_function(vprintfty, "vprintf")
-    return vprintf
-
-
 def declare_string(builder, value):
     lmod = builder.basic_block.function.module
     cval = lc.Constant.stringz(value)
@@ -42,3 +44,64 @@ def declare_string(builder, value):
 
     conv = insert_addrspace_conv(lmod, charty, nvvm.ADDRSPACE_CONSTANT)
     return builder.call(conv, [charptr])
+
+# -----------------------------------------------------------------------------
+
+SREG_MAPPING = {
+    'tid.x': 'llvm.nvvm.read.ptx.sreg.tid.x',
+    'tid.y': 'llvm.nvvm.read.ptx.sreg.tid.y',
+    'tid.z': 'llvm.nvvm.read.ptx.sreg.tid.z',
+
+    'ntid.x': 'llvm.nvvm.read.ptx.sreg.ntid.x',
+    'ntid.y': 'llvm.nvvm.read.ptx.sreg.ntid.y',
+    'ntid.z': 'llvm.nvvm.read.ptx.sreg.ntid.z',
+
+    'ctaid.x': 'llvm.nvvm.read.ptx.sreg.ctaid.x',
+    'ctaid.y': 'llvm.nvvm.read.ptx.sreg.ctaid.y',
+    'ctaid.z': 'llvm.nvvm.read.ptx.sreg.ctaid.z',
+
+    'nctaid.x': 'llvm.nvvm.read.ptx.sreg.nctaid.x',
+    'nctaid.y': 'llvm.nvvm.read.ptx.sreg.nctaid.y',
+    'nctaid.z': 'llvm.nvvm.read.ptx.sreg.nctaid.z',
+}
+
+
+def call_sreg(builder, name):
+    module = cgutils.get_module(builder)
+    fnty = lc.Type.function(lc.Type.int(), ())
+    fn = module.get_or_insert_function(fnty, name=SREG_MAPPING[name])
+    return builder.call(fn, ())
+
+
+class SRegBuilder(object):
+    def __init__(self, builder):
+        self.builder = builder
+
+    def tid(self, xyz):
+        return call_sreg(self.builder, 'tid.%s' % xyz)
+
+    def ctaid(self, xyz):
+        return call_sreg(self.builder, 'ctaid.%s' % xyz)
+
+    def ntid(self, xyz):
+        return call_sreg(self.builder, 'ntid.%s' % xyz)
+
+    def nctaid(self, xyz):
+        return call_sreg(self.builder, 'nctaid.%s' % xyz)
+
+    def getdim(self, xyz):
+        tid = self.tid(xyz)
+        ntid = self.ntid(xyz)
+        nctaid = self.ctaid(xyz)
+        res = self.builder.add(self.builder.mul(ntid, nctaid), tid)
+        return res
+
+
+def get_global_id(builder, dim):
+    sreg = SRegBuilder(builder)
+    it = (sreg.getdim(xyz) for xyz in 'xyz')
+    seq = list(itertools.islice(it, None, dim))
+    if dim == 1:
+        return seq[0]
+    else:
+        return seq

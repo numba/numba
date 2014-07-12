@@ -4,9 +4,60 @@ try:
     import __builtin__ as builtins
 except ImportError:
     import builtins
-import sys
+import collections
 import dis
+import sys
+
 from numba import ir, controlflow, dataflow, utils
+
+
+class Assigner(object):
+    """
+    This object keeps track of potential assignment simplifications
+    inside a code block.
+    For example `$O.1 = x` followed by `y = $0.1` can be simplified
+    into `y = x`, but it's not possible anymore if we have `x = z`
+    in-between those two instructions.
+
+    NOTE: this is not only an optimization, but is actually necessary
+    due to certain limitations of Numba - such as only accepting the
+    returning of an array passed as function argument.
+    """
+
+    def __init__(self):
+        # { destination variable name -> source Var object }
+        self.dest_to_src = {}
+        self.src_invalidate = collections.defaultdict(list)
+        self.unused_dests = set()
+
+    def assign(self, srcvar, destvar):
+        """
+        Assign *srcvar* to *destvar*. Return either *srcvar* or a possible
+        simplified assignment source (earlier assigned to *srcvar*).
+        """
+        srcname = srcvar.name
+        destname = destvar.name
+        if srcname in self.src_invalidate:
+            # Invalidate all previously known simplifications
+            for d in self.src_invalidate.pop(srcname):
+                self.dest_to_src.pop(d)
+        if srcname in self.dest_to_src:
+            srcvar = self.dest_to_src[srcname]
+        if destvar.is_temp:
+            self.dest_to_src[destname] = srcvar
+            self.src_invalidate[srcname].append(destname)
+            self.unused_dests.add(destname)
+        return srcvar
+
+    def get_assignment_source(self, destname):
+        """
+        Get a possible assignment source (a ir.Var instance) to replace
+        *destname*, otherwise None.
+        """
+        if destname in self.dest_to_src:
+            return self.dest_to_src[destname]
+        self.unused_dests.discard(destname)
+        return None
 
 
 class Interpreter(object):
@@ -40,6 +91,7 @@ class Interpreter(object):
         self.syntax_blocks = []
         self.dfainfo = None
         self._block_actions = {}
+        self.constants = {}
 
     def _fill_global_scope(self, scope):
         """TODO
@@ -69,15 +121,26 @@ class Interpreter(object):
         for b in utils.dict_itervalues(self.blocks):
             b.verify()
 
+    def init_first_block(self):
+        # Duplicate arguments so that these values can be casted into different
+        # types.
+        for aname in self.argspec.args:
+            aval = self.get(aname)
+            self.store(aval, aname, redefine=True)
+
     def _iter_inst(self):
-        for block in self.cfa.iterliveblocks():
+        for blkct, block in enumerate(self.cfa.iterliveblocks()):
             firstinst = self.bytecode[block.body[0]]
             self._start_new_block(firstinst)
+            if blkct == 0:
+                # Is first block
+                self.init_first_block()
             for offset, kws in self.dfainfo.insts:
                 inst = self.bytecode[offset]
                 self.loc = ir.Loc(filename=self.bytecode.filename,
                                   line=inst.lineno)
                 yield inst, kws
+            self._end_current_block()
 
     def _start_new_block(self, inst):
         self.loc = ir.Loc(filename=self.bytecode.filename, line=inst.lineno)
@@ -89,39 +152,43 @@ class Interpreter(object):
             oldblock.append(jmp)
             # Get DFA block info
         self.dfainfo = self.dfa.infos[self.current_block_offset]
-        # Insert PHI
-        self._insert_phi()
+        self.assigner = Assigner()
         # Notify listeners for the new block
         for fn in utils.dict_itervalues(self._block_actions):
             fn(self.current_block_offset, self.current_block)
 
-    def _insert_phi(self):
-        if self.dfainfo.incomings:
-            assert len(self.dfainfo.incomings) == 1
-            incomings = self.cfa.blocks[self.current_block_offset].incoming
-            phivar = self.dfainfo.incomings[0]
-            if len(incomings) == 1:
-                ib = utils.iter_next(iter(incomings))
-                lingering = self.dfa.infos[ib].stack
-                assert len(lingering) == 1
-                iv = lingering[0]
-                self.store(self.get(iv), phivar)
+    def _end_current_block(self):
+        self._remove_unused_temporaries()
+        self._insert_outgoing_phis()
+
+    def _remove_unused_temporaries(self):
+        """
+        Remove assignments to unused temporary variables from the
+        current block.
+        """
+        new_body = []
+        for inst in self.current_block.body:
+            if (isinstance(inst, ir.Assign)
+                and inst.target.is_temp
+                and inst.target.name in self.assigner.unused_dests):
+                continue
+            new_body.append(inst)
+        self.current_block.body = new_body
+
+    def _insert_outgoing_phis(self):
+        """
+        Add assignments to forward requested outgoing values
+        to subsequent blocks.
+        """
+        for phiname, varname in self.dfainfo.outgoing_phis.items():
+            target = self.current_scope.get_or_define(phiname,
+                                                      loc=self.loc)
+            stmt = ir.Assign(value=self.get(varname), target=target,
+                             loc=self.loc)
+            if not self.current_block.is_terminated:
+                self.current_block.append(stmt)
             else:
-                # Invert the PHI node
-                for ib in incomings:
-                    lingering = self.dfa.infos[ib].stack
-                    assert len(lingering) == 1
-                    iv = lingering[0]
-
-                    # Add assignment in incoming block to forward the value
-                    target = self.current_scope.get_or_define('$phi' + phivar,
-                                                              loc=self.loc)
-                    stmt = ir.Assign(value=self.get(iv), target=target,
-                                     loc=self.loc)
-                    self.blocks[ib].insert_before_terminator(stmt)
-
-                self.store(target, phivar)
-
+                self.current_block.insert_before_terminator(stmt)
 
     def get_global_value(self, name):
         """
@@ -132,6 +199,12 @@ class Interpreter(object):
             return utils.func_globals(self.bytecode.func)[name]
         except KeyError:
             return getattr(builtins, name, ir.UNDEFINED)
+
+    def get_closure_value(self, index):
+        """
+        Get a value from the cell contained in this function's closure.
+        """
+        return self.bytecode.func.__closure__[index].cell_contents
 
     @property
     def current_scope(self):
@@ -148,6 +221,10 @@ class Interpreter(object):
     @property
     def code_names(self):
         return self.bytecode.co_names
+
+    @property
+    def code_freevars(self):
+        return self.bytecode.co_freevars
 
     def _dispatch(self, inst, kws):
         assert self.current_block is not None
@@ -167,22 +244,27 @@ class Interpreter(object):
 
     # --- Scope operations ---
 
-    def store(self, value, name):
-        if self.current_block_offset in self.cfa.backbone:
+    def store(self, value, name, redefine=False):
+        """
+        Store *value* (a Var instance) into the variable named *name*
+        (a str object).
+        """
+        if redefine or self.current_block_offset in self.cfa.backbone:
             target = self.current_scope.redefine(name, loc=self.loc)
         else:
             target = self.current_scope.get_or_define(name, loc=self.loc)
+        if isinstance(value, ir.Var):
+            value = self.assigner.assign(value, target)
         stmt = ir.Assign(value=value, target=target, loc=self.loc)
         self.current_block.append(stmt)
 
-    # def store_temp(self, value):
-    #     target = self.current_scope.make_temp(loc=self.loc)
-    #     stmt = ir.Assign(value=value, target=target, loc=self.loc)
-    #     self.current_block.append(stmt)
-    #     return target
-
     def get(self, name):
-        return self.current_scope.get(name)
+        # Try to simplify the variable lookup by returning an earlier
+        # variable assigned to *name*.
+        var = self.assigner.get_assignment_source(name)
+        if var is None:
+            var = self.current_scope.get(name)
+        return var
 
     # --- Block operations ---
 
@@ -217,15 +299,18 @@ class Interpreter(object):
         call = ir.Expr.call(self.get(printvar), (), (), loc=self.loc)
         self.store(value=call, name=res)
 
-    def op_UNPACK_SEQUENCE(self, inst, sequence, stores, iterobj):
-        sequence = self.get(sequence)
-        getiter = ir.Expr.getiter(value=sequence, loc=self.loc)
-        self.store(value=getiter, name=iterobj)
+    def op_UNPACK_SEQUENCE(self, inst, iterable, stores, tupleobj):
+        count = len(stores)
+        # Exhaust the iterable into a tuple-like object
+        tup = ir.Expr.exhaust_iter(value=self.get(iterable), loc=self.loc,
+                                   count=count)
+        self.store(name=tupleobj, value=tup)
 
-        for st in stores:
-            iternext = ir.Expr.iternextsafe(value=self.get(iterobj),
-                                            loc=self.loc)
-            self.store(value=iternext, name=st)
+        # then index the tuple-like object to extract the values
+        for i, st in enumerate(stores):
+            expr = ir.Expr.static_getitem(self.get(tupleobj),
+                                          index=i, loc=self.loc)
+            self.store(expr, st)
 
     def op_BUILD_SLICE(self, inst, start, stop, step, res, slicevar):
         start = self.get(start)
@@ -383,10 +468,27 @@ class Interpreter(object):
                           loc=self.loc)
         self.current_block.append(stmt)
 
+    def op_LOAD_FAST(self, inst, res):
+        srcname = self.code_locals[inst.arg]
+        self.store(value=self.get(srcname), name=res)
+
     def op_STORE_FAST(self, inst, value):
         dstname = self.code_locals[inst.arg]
         value = self.get(value)
         self.store(value=value, name=dstname)
+
+    def op_DUP_TOPX(self, inst, orig, duped):
+        for src, dst in zip(orig, duped):
+            self.store(value=self.get(src), name=dst)
+
+    op_DUP_TOP = op_DUP_TOPX
+    op_DUP_TOP_TWO = op_DUP_TOPX
+
+    def op_STORE_ATTR(self, inst, target, value):
+        attr = self.code_names[inst.arg]
+        sa = ir.SetAttr(target=self.get(target), value=self.get(value),
+                        attr=attr, loc=self.loc)
+        self.current_block.append(sa)
 
     def op_LOAD_ATTR(self, inst, item, res):
         item = self.get(item)
@@ -402,6 +504,14 @@ class Interpreter(object):
     def op_LOAD_GLOBAL(self, inst, res):
         name = self.code_names[inst.arg]
         value = self.get_global_value(name)
+        gl = ir.Global(name, value, loc=self.loc)
+        self.store(gl, res)
+        self.constants[res] = value
+
+    def op_LOAD_DEREF(self, inst, res):
+        name = self.code_freevars[inst.arg]
+        value = self.get_closure_value(inst.arg)
+        # closure values are treated like globals
         gl = ir.Global(name, value, loc=self.loc)
         self.store(gl, res)
 
@@ -436,7 +546,7 @@ class Interpreter(object):
         expr = ir.Expr.getiter(value=self.get(value), loc=self.loc)
         self.store(expr, res)
 
-    def op_FOR_ITER(self, inst, iterator, indval, pred):
+    def op_FOR_ITER(self, inst, iterator, pair, indval, pred):
         """
         Assign new block other this instruction.
         """
@@ -448,11 +558,15 @@ class Interpreter(object):
 
         # Emit code
         val = self.get(iterator)
-        iternext = ir.Expr.iternext(value=val, loc=self.loc)
+
+        pairval = ir.Expr.iternext(value=val, loc=self.loc)
+        self.store(pairval, pair)
+
+        iternext = ir.Expr.pair_first(value=self.get(pair), loc=self.loc)
         self.store(iternext, indval)
 
-        itervalid = ir.Expr.itervalid(value=val, loc=self.loc)
-        self.store(itervalid, pred)
+        isvalid = ir.Expr.pair_second(value=self.get(pair), loc=self.loc)
+        self.store(isvalid, pred)
 
         # Conditional jump
         br = ir.Branch(cond=self.get(pred), truebr=inst.next,
@@ -469,7 +583,7 @@ class Interpreter(object):
     def op_BINARY_SUBSCR(self, inst, target, index, res):
         index = self.get(index)
         target = self.get(target)
-        expr = ir.Expr.getitem(target=target, index=index, loc=self.loc)
+        expr = ir.Expr.getitem(target, index=index, loc=self.loc)
         self.store(expr, res)
 
     def op_STORE_SUBSCR(self, inst, target, index, value):
@@ -490,9 +604,28 @@ class Interpreter(object):
                                   loc=self.loc)
         self.store(expr, res)
 
+    def op_BUILD_SET(self, inst, items, res):
+        expr = ir.Expr.build_set(items=[self.get(x) for x in items],
+                                 loc=self.loc)
+        self.store(expr, res)
+
+    def op_BUILD_MAP(self, inst, size, res):
+        expr = ir.Expr.build_map(size=size, loc=self.loc)
+        self.store(expr, res)
+
+    def op_STORE_MAP(self, inst, dct, key, value):
+        stmt = ir.StoreMap(dct=self.get(dct), key=self.get(key),
+                           value=self.get(value), loc=self.loc)
+        self.current_block.append(stmt)
+
     def op_UNARY_NEGATIVE(self, inst, value, res):
         value = self.get(value)
         expr = ir.Expr.unary('-', value=value, loc=self.loc)
+        return self.store(expr, res)
+
+    def op_UNARY_POSITIVE(self, inst, value, res):
+        value = self.get(value)
+        expr = ir.Expr.unary('+', value=value, loc=self.loc)
         return self.store(expr, res)
 
     def op_UNARY_INVERT(self, inst, value, res):
@@ -599,10 +732,10 @@ class Interpreter(object):
         jmp = ir.Jump(inst.get_jump_target(), loc=self.loc)
         self.current_block.append(jmp)
 
-    def op_POP_BLOCK(self, inst, delitem=None):
+    def op_POP_BLOCK(self, inst, delitems=()):
         blk = self.syntax_blocks.pop()
-        if delitem is not None:
-            delete = ir.Del(delitem, loc=self.loc)
+        for item in delitems:
+            delete = ir.Del(item, loc=self.loc)
             self.current_block.append(delete)
         if blk in self._block_actions:
             del self._block_actions[blk]
@@ -652,6 +785,10 @@ class Interpreter(object):
     def op_JUMP_IF_TRUE_OR_POP(self, inst, pred):
         self._op_JUMP_IF(inst, pred=pred, iftrue=True)
 
+    def op_RAISE_VARARGS(self, inst, exc):
+        stmt = ir.Raise(exception=self.constants[exc], loc=self.loc)
+        self.current_block.append(stmt)
+
     def _determine_while_condition(self, branches):
         assert branches
         # There is a active syntax block
@@ -671,7 +808,7 @@ class Interpreter(object):
         else:
             return
             # Which is the exit of the loop
-        if br not in self.cfa.blocks[loop.exit].incoming:
+        if br not in self.cfa.blocks[loop.exit].incoming_jumps:
             return
 
         # Therefore, current block is a while loop condition

@@ -8,7 +8,10 @@ import subprocess
 import os
 import sys
 
-NPY = '16', '17'
+if '-q' in sys.argv[1:]:
+    NPY = '18',
+else:
+    NPY = '16', '17', '18'
 PY = '26', '27', '33'
 RECIPE_DIR = "./buildscripts/condarecipe.local"
 

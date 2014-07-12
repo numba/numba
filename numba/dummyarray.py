@@ -277,7 +277,6 @@ class Array(object):
 def iter_strides_f_contig(arr, shape=None):
     """yields the f-contigous strides
     """
-    assert arr.is_f_contig
     shape = arr.shape if shape is None else shape
     itemsize = arr.itemsize
     yield itemsize
@@ -290,7 +289,6 @@ def iter_strides_f_contig(arr, shape=None):
 def iter_strides_c_contig(arr, shape=None):
     """yields the c-contigous strides
     """
-    assert arr.is_c_contig
     shape = arr.shape if shape is None else shape
     itemsize = arr.itemsize
 

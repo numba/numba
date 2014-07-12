@@ -23,15 +23,13 @@ import warnings
 from ctypes import (c_int, byref, c_size_t, c_char, c_char_p, addressof,
                     c_void_p, c_float)
 import contextlib
+from collections import namedtuple
 from numba import utils, servicelib, mviewbuf
 from .error import CudaSupportError, CudaDriverError
 from .drvapi import API_PROTOTYPES
 from . import enums, drvapi
-
-try:
-    long
-except NameError:
-    long = int
+from numba import config
+from numba.utils import longint as long
 
 VERBOSE_JIT_LOG = int(os.environ.get('NUMBAPRO_VERBOSE_CU_JIT_LOG', 1))
 MIN_REQUIRED_CC = (2, 0)
@@ -160,14 +158,34 @@ class Driver(object):
             return obj
         else:
             obj = object.__new__(cls)
-            obj.lib = find_driver()
-            # Initialize driver
-            obj.cuInit(0)
             cls._singleton = obj
         return obj
 
     def __init__(self):
         self.devices = utils.UniqueDict()
+        self.is_initialized = False
+        self.initialization_error = None
+        try:
+            if config.DISABLE_CUDA:
+                raise CudaSupportError("CUDA disabled by user")
+            self.lib = find_driver()
+        except CudaSupportError as e:
+            self.is_initialized = True
+            self.initialization_error = e
+
+    def initialize(self):
+        self.is_initialized = True
+        try:
+            self.cuInit(0)
+        except CudaAPIError as e:
+            self.initialization_error = e
+            raise CudaSupportError("Error at driver init: \n%s:" % e)
+
+    @property
+    def is_available(self):
+        if not self.is_initialized:
+            self.initialize()
+        return self.initialization_error is None
 
     def __getattr__(self, fname):
         # First request of a driver API function
@@ -178,6 +196,15 @@ class Driver(object):
         restype = proto[0]
         argtypes = proto[1:]
 
+        # Initialize driver
+        if not self.is_initialized:
+            self.initialize()
+
+        if self.initialization_error is not None:
+            raise CudaSupportError("Error at driver init: \n%s:" %
+                                   self.initialization_error)
+
+        # Find function in driver library
         libfn = self._find_api(fname)
         libfn.restype = restype
         libfn.argtypes = argtypes
@@ -480,6 +507,7 @@ class Context(object):
         self.trashing.service()
         ptr = drvapi.cu_device_ptr()
         driver.cuMemAlloc(byref(ptr), bytesize)
+        _memory_finalizer = _make_mem_finalizer(driver.cuMemFree)
         mem = MemoryPointer(weakref.proxy(self), ptr, bytesize,
                             _memory_finalizer(self, ptr))
         self.allocations[ptr.value] = mem
@@ -501,6 +529,7 @@ class Context(object):
         owner = None
 
         if mapped:
+            _hostalloc_finalizer = _make_mem_finalizer(driver.cuMemFreeHost)
             finalizer = _hostalloc_finalizer(self, pointer)
             mem = MappedMemory(weakref.proxy(self), owner, pointer,
                                bytesize, finalizer=finalizer)
@@ -540,6 +569,7 @@ class Context(object):
         driver.cuMemHostRegister(pointer, size, flags)
 
         if mapped:
+            _mapped_finalizer = _make_mem_finalizer(driver.cuMemHostUnregister)
             finalizer = _mapped_finalizer(self, pointer)
             mem = MappedMemory(weakref.proxy(self), owner, pointer, size,
                                finalizer=finalizer)
@@ -646,11 +676,6 @@ def _make_mem_finalizer(dtor):
         return core
 
     return mem_finalize
-
-
-_hostalloc_finalizer = _make_mem_finalizer(driver.cuMemFreeHost)
-_mapped_finalizer = _make_mem_finalizer(driver.cuMemHostUnregister)
-_memory_finalizer = _make_mem_finalizer(driver.cuMemFree)
 
 
 def _pinnedalloc_finalizer(trashing, handle):
@@ -949,6 +974,17 @@ class Module(object):
                                    name.encode('utf8'))
         return Function(weakref.proxy(self), handle, name)
 
+    def get_global_symbol(self, name):
+        ptr = drvapi.cu_device_ptr()
+        size = drvapi.c_size_t()
+        driver.cuModuleGetGlobal(byref(ptr), byref(size), self.handle,
+                                 name.encode('utf8'))
+        return MemoryPointer(self.context, ptr, size), size.value
+
+
+FuncAttr = namedtuple("FuncAttr", ["regs", "shared", "local", "const",
+                                   "maxthreads"])
+
 
 class Function(object):
     griddim = 1, 1, 1
@@ -960,6 +996,7 @@ class Function(object):
         self.module = module
         self.handle = handle
         self.name = name
+        self.attrs = self._read_func_attr_all()
 
     def __repr__(self):
         return "<CUDA function %s>" % self.name
@@ -1009,6 +1046,24 @@ class Function(object):
     @property
     def device(self):
         return self.module.context.device
+
+    def _read_func_attr(self, attrid):
+        """
+        Read CUfunction attributes
+        """
+        retval = c_int()
+        driver.cuFuncGetAttribute(byref(retval), attrid, self.handle)
+        return retval.value
+
+    def _read_func_attr_all(self):
+        nregs = self._read_func_attr(enums.CU_FUNC_ATTRIBUTE_NUM_REGS)
+        cmem = self._read_func_attr(enums.CU_FUNC_ATTRIBUTE_CONST_SIZE_BYTES)
+        lmem = self._read_func_attr(enums.CU_FUNC_ATTRIBUTE_LOCAL_SIZE_BYTES)
+        smem = self._read_func_attr(enums.CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES)
+        maxtpb = self._read_func_attr(
+            enums.CU_FUNC_ATTRIBUTE_MAX_THREADS_PER_BLOCK)
+        return FuncAttr(regs=nregs, const=cmem, local=lmem, shared=smem,
+                        maxthreads=maxtpb)
 
 
 def launch_kernel(cufunc_handle, griddim, blockdim, sharedmem, hstream, args):
@@ -1096,6 +1151,7 @@ class Linker(object):
             driver.cuLinkAddData(self.handle, enums.CU_JIT_INPUT_PTX,
                                  ptxbuf, len(ptx), namebuf, 0, None, None)
         except CudaAPIError as e:
+            print(ptx)
             raise LinkerError("%s\n%s" % (e, self.error_log))
 
     def add_file(self, path, kind):
@@ -1336,15 +1392,11 @@ def device_memset(dst, val, size, stream=0):
 
 
 def profile_start():
-    driver = Driver()
-    err = driver.cuProfilerStart()
-    driver.check_error(err, "Failed to start profiler")
+    driver.cuProfilerStart()
 
 
 def profile_stop():
-    driver = Driver()
-    err = driver.cuProfilerStop()
-    driver.check_error(err, "Failed to stop profiler")
+    driver.cuProfilerStop()
 
 
 @contextlib.contextmanager

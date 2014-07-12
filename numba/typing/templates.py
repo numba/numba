@@ -20,8 +20,6 @@ class Signature(object):
         if isinstance(other, Signature):
             return (self.args == other.args and
                     self.recvr == other.recvr)
-        elif isinstance(other, tuple):
-            return (self.args == other)
 
     def __ne__(self, other):
         return not (self == other)
@@ -110,7 +108,10 @@ def resolve_overload(context, key, cases, args, kws):
         if len(ordered) > 1:
             (first, case1), (second, case2) = ordered[:2]
             # Ambiguous overloading
-            if first == second:
+            # NOTE: we can have duplicate overloadings if e.g. some type
+            # aliases were used when declaring the supported signatures
+            # (typical example being "intp" and "int64" on a 64-bit build)
+            if first == second and case1 != case2:
                 ambiguous = []
                 for rate, case in ordered:
                     if rate == first:
@@ -217,9 +218,15 @@ class AttributeTemplate(object):
     def resolve(self, value, attr):
         fn = getattr(self, "resolve_%s" % attr, None)
         if fn is None:
-            raise NameError("Attribute '%s' of %s is not typed" % (attr,
-                                                                   value))
-        return fn(value)
+            fn = self.generic_resolve
+            if fn is NotImplemented:
+                raise NotImplementedError(value, attr)
+            else:
+                return fn(value, attr)
+        else:
+            return fn(value)
+
+    generic_resolve = NotImplemented
 
 
 class ClassAttrTemplate(AttributeTemplate):

@@ -1,13 +1,16 @@
 from __future__ import print_function
 from collections import namedtuple, defaultdict
+import copy
+from types import MethodType
 import llvm.core as lc
 from llvm.core import Type, Constant
 import numpy
-from numba import types, utils, cgutils, typing
+from numba import types, utils, cgutils, typing, numpy_support, errcode
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, python_attr_impl,
-                                    builtin_registry)
-from numba.targets import builtins
+                                    builtin_registry, impl_attribute,
+                                    struct_registry)
+from numba.targets import arrayobj, builtins, iterators, rangeobj
 
 
 LTYPEMAP = {
@@ -32,10 +35,6 @@ LTYPEMAP = {
 STRUCT_TYPES = {
     types.complex64: builtins.Complex64,
     types.complex128: builtins.Complex128,
-    types.range_state32_type: builtins.RangeState32,
-    types.range_iter32_type: builtins.RangeIter32,
-    types.range_state64_type: builtins.RangeState64,
-    types.range_iter64_type: builtins.RangeIter64,
     types.slice3_type: builtins.Slice,
 }
 
@@ -51,13 +50,15 @@ class Overloads(object):
         self.versions = []
 
     def find(self, sig):
-        for ver in self.versions:
+        for i, ver in enumerate(self.versions):
             if ver.signature == sig:
                 return ver
-                # As generic type
-            if (len(ver.signature.args) == len(sig.args) or
-                    (ver.signature.args and
-                             ver.signature.args[-1] == types.VarArg)):
+
+            # As generic type
+            nargs_matches = len(ver.signature.args) == len(sig.args)
+            varargs_matches = (ver.signature.args and
+                               ver.signature.args[-1] == types.VarArg)
+            if nargs_matches or varargs_matches:
                 match = True
                 for formal, actual in zip(ver.signature.args, sig.args):
                     if formal == types.VarArg:
@@ -134,7 +135,11 @@ class BaseContext(object):
         """
         Returns a localized context that contains extra environment information
         """
-        return ContextProxy(self)
+        obj = copy.copy(self)
+        obj.metadata = utils.UniqueDict()
+        obj.linking = set()
+        obj.exceptions = {}
+        return obj
 
     def insert_func_defn(self, defns):
         for defn in defns:
@@ -181,6 +186,14 @@ class BaseContext(object):
         fnty = Type.function(Type.int(), [resptr] + argtypes)
         return fnty
 
+    def get_external_function_type(self, fndesc):
+        argtypes = [self.get_argument_type(aty)
+                    for aty in fndesc.argtypes]
+        # don't wrap in pointer
+        restype = self.get_argument_type(fndesc.restype)
+        fnty = Type.function(restype, argtypes)
+        return fnty
+
     def declare_function(self, module, fndesc):
         fnty = self.get_function_type(fndesc)
         fn = module.get_or_insert_function(fnty, name=fndesc.mangled_name)
@@ -188,6 +201,14 @@ class BaseContext(object):
         for ak, av in zip(fndesc.args, self.get_arguments(fn)):
             av.name = "arg.%s" % ak
         fn.args[0] = ".ret"
+        return fn
+
+    def declare_external_function(self, module, fndesc):
+        fnty = self.get_external_function_type(fndesc)
+        fn = module.get_or_insert_function(fnty, name=fndesc.mangled_name)
+        assert fn.is_declaration
+        for ak, av in zip(fndesc.args, fn.args):
+            av.name = "arg.%s" % ak
         return fn
 
     def insert_const_string(self, mod, string):
@@ -208,10 +229,10 @@ class BaseContext(object):
         return func.args[1:]
 
     def get_argument_type(self, ty):
-        if ty is types.boolean:
+        if ty == types.boolean:
             return self.get_data_type(ty)
         elif self.is_struct_type(ty):
-            return Type.pointer(self.get_data_type(ty))
+            return Type.pointer(self.get_value_type(ty))
         else:
             return self.get_value_type(ty)
 
@@ -224,7 +245,8 @@ class BaseContext(object):
 
     def get_data_type(self, ty):
         """
-        Get a data representation of the type
+        Get a data representation of the type that is safe for storage.
+        Record data are stored as byte array.
 
         Returns None if it is an opaque pointer
         """
@@ -254,12 +276,32 @@ class BaseContext(object):
             dtys = [self.get_value_type(t) for t in ty]
             return Type.struct(dtys)
 
-        elif isinstance(ty, types.UniTupleIter):
-            stty = self.get_struct_type(self.make_unituple_iter(ty))
-            return stty
+        elif isinstance(ty, types.Record):
+            # Record are represented as byte array
+            return Type.struct([Type.array(Type.int(8), ty.size)])
+
+        elif isinstance(ty, types.UnicodeCharSeq):
+            charty = Type.int(numpy_support.sizeof_unicode_char * 8)
+            return Type.struct([Type.array(charty, ty.count)])
+
+        elif isinstance(ty, types.CharSeq):
+            charty = Type.int(8)
+            return Type.struct([Type.array(charty, ty.count)])
 
         elif ty in STRUCT_TYPES:
             return self.get_struct_type(STRUCT_TYPES[ty])
+
+        else:
+            try:
+                impl = struct_registry.match(ty)
+            except KeyError:
+                pass
+            else:
+                return self.get_struct_type(impl(ty))
+
+        if isinstance(ty, types.Pair):
+            pairty = self.make_pair(ty.first_type, ty.second_type)
+            return self.get_struct_type(pairty)
 
         else:
             return LTYPEMAP[ty]
@@ -268,11 +310,24 @@ class BaseContext(object):
         if ty == types.boolean:
             return Type.int(1)
         dataty = self.get_data_type(ty)
+
+        if isinstance(ty, types.Record):
+            # Record data are passed by refrence
+            memory = dataty.elements[0]
+            return Type.struct([Type.pointer(memory)])
+
         return dataty
 
     def pack_value(self, builder, ty, value, ptr):
         """Pack data for array storage
         """
+        if isinstance(ty, types.Record):
+            pdata = cgutils.get_record_data(builder, value)
+            databuf = builder.load(pdata)
+            casted = builder.bitcast(ptr, Type.pointer(databuf.type))
+            builder.store(databuf, casted)
+            return
+
         if ty == types.boolean:
             value = cgutils.as_bool_byte(builder, value)
         assert value.type == ptr.type.pointee
@@ -281,6 +336,14 @@ class BaseContext(object):
     def unpack_value(self, builder, ty, ptr):
         """Unpack data from array storage
         """
+
+        if isinstance(ty, types.Record):
+            vt = self.get_value_type(ty)
+            tmp = cgutils.alloca_once(builder, vt)
+            dataptr = cgutils.inbound_gep(builder, ptr, 0, 0)
+            builder.store(dataptr, cgutils.inbound_gep(builder, tmp, 0, 0))
+            return builder.load(tmp)
+
         assert cgutils.is_pointer(ptr.type)
         value = builder.load(ptr)
         if ty == types.boolean:
@@ -290,6 +353,17 @@ class BaseContext(object):
 
     def is_struct_type(self, ty):
         return cgutils.is_struct(self.get_data_type(ty))
+
+    def get_constant_generic(self, builder, ty, val):
+        """
+        Return a LLVM constant representing value *val* of Numba type *ty*.
+        """
+        if self.is_struct_type(ty):
+            return self.get_constant_struct(builder, ty, val)
+        elif ty == types.string:
+            return self.get_constant_string(builder, ty, val)
+        else:
+            return self.get_constant(ty, val)
 
     def get_constant_struct(self, builder, ty, val):
         assert self.is_struct_type(ty)
@@ -306,12 +380,12 @@ class BaseContext(object):
             real = self.get_constant(innertype, val.real)
             imag = self.get_constant(innertype, val.imag)
             const = Constant.struct([real, imag])
+            return const
 
-            gv = module.add_global_variable(const.type, name=".const")
-            gv.linkage = lc.LINKAGE_INTERNAL
-            gv.initializer = const
-            gv.global_constant = True
-            return builder.load(gv)
+        elif isinstance(ty, types.Tuple):
+            consts = [self.get_constant_generic(builder, ty.types[i], v)
+                      for i, v in enumerate(val)]
+            return Constant.struct(consts)
 
         else:
             raise NotImplementedError(ty)
@@ -331,6 +405,9 @@ class BaseContext(object):
         elif ty in types.signed_domain:
             return Constant.int_signextend(lty, val)
 
+        elif ty in types.unsigned_domain:
+            return Constant.int(lty, val)
+
         elif ty in types.real_domain:
             return Constant.real(lty, val)
 
@@ -348,10 +425,28 @@ class BaseContext(object):
         lty = self.get_value_type(ty)
         return Constant.null(lty)
 
+    def get_setattr(self, attr, sig):
+        typ = sig.args[0]
+        if isinstance(typ, types.Record):
+            offset = typ.offset(attr)
+            elemty = typ.typeof(attr)
+
+            def imp(context, builder, sig, args):
+                valty = sig.args[1]
+                [target, val] = args
+                dptr = cgutils.get_record_member(builder, target, offset,
+                                                 self.get_data_type(elemty))
+                self.pack_value(builder, valty, val, dptr)
+
+            return _wrap_impl(imp, self, sig)
+
     def get_function(self, fn, sig):
         if isinstance(fn, types.Function):
             key = fn.template.key
-            overloads = self.defns[key]
+            if isinstance(key, MethodType):
+                overloads = self.defns[key.im_func]
+            else:
+                overloads = self.defns[key]
         elif isinstance(fn, types.Dispatcher):
             key = fn.overloaded.get_overload(sig.args)
             overloads = self.defns[key]
@@ -364,6 +459,17 @@ class BaseContext(object):
             raise Exception("No definition for lowering %s%s" % (key, sig))
 
     def get_attribute(self, val, typ, attr):
+        if isinstance(typ, types.Record):
+            offset = typ.offset(attr)
+            elemty = typ.typeof(attr)
+
+            @impl_attribute(typ, attr, elemty)
+            def imp(context, builder, typ, val):
+                dptr = cgutils.get_record_member(builder, val, offset,
+                                                 self.get_data_type(elemty))
+                return self.unpack_value(builder, elemty, dptr)
+            return imp
+
         key = typ, attr
         try:
             return self.attrs[key]
@@ -372,9 +478,12 @@ class BaseContext(object):
                 return
             elif typ.is_parametric:
                 key = type(typ), attr
-                return self.attrs[key]
-            else:
-                raise
+                if key in self.attrs:
+                    return self.attrs[key]
+                else:
+                    key = type(typ), None
+                    return self.attrs[key]
+            raise
 
     def get_argument_value(self, builder, ty, val):
         """
@@ -382,7 +491,7 @@ class BaseContext(object):
         """
         if ty == types.boolean:
             return builder.trunc(val, self.get_value_type(ty))
-        elif self.is_struct_type(ty):
+        elif cgutils.is_struct_ptr(val.type):
             return builder.load(val)
         return val
 
@@ -394,9 +503,17 @@ class BaseContext(object):
         if ty is types.boolean:
             r = self.get_return_type(ty).pointee
             return builder.zext(val, r)
-
         else:
             return val
+
+    def get_struct_member_value(self, builder, ty, val):
+        """
+        Local value representation to struct member representation
+        """
+        # Currently same as get_return_value.
+        # TODO: make a "TypeLayout" class that describe the layout at
+        #       different situations for a value of a type.
+        return self.get_return_value(builder, ty, val)
 
     def get_value_as_argument(self, builder, ty, val):
         """Prepare local value representation as argument type representation
@@ -437,6 +554,26 @@ class BaseContext(object):
 
     def return_exc(self, builder):
         builder.ret(RETCODE_EXC)
+
+    def return_user_exc(self, builder, code):
+        assert code > 0
+        builder.ret(Constant.int(Type.int(), code))
+
+    def pair_first(self, builder, val, ty):
+        """
+        Extract the first element of a heterogenous pair.
+        """
+        paircls = self.make_pair(ty.first_type, ty.second_type)
+        pair = paircls(self, builder, value=val)
+        return self.get_argument_value(builder, ty.first_type, pair.first)
+
+    def pair_second(self, builder, val, ty):
+        """
+        Extract the second element of a heterogenous pair.
+        """
+        paircls = self.make_pair(ty.first_type, ty.second_type)
+        pair = paircls(self, builder, value=val)
+        return self.get_argument_value(builder, ty.second_type, pair.second)
 
     def cast(self, builder, val, fromty, toty):
         if fromty == toty or toty == types.Any or isinstance(toty, types.Kind):
@@ -535,6 +672,16 @@ class BaseContext(object):
                 tup = builder.insert_value(tup, val, idx)
             return tup
 
+        elif (types.is_int_tuple(toty) and types.is_int_tuple(fromty) and
+                len(toty) == len(fromty)):
+            olditems = cgutils.unpack_tuple(builder, val, len(fromty))
+            items = [self.cast(builder, i, t, toty.dtype)
+                     for i, t in zip(olditems, fromty.types)]
+            tup = self.get_constant_undef(toty)
+            for idx, val in enumerate(items):
+                tup = builder.insert_value(tup, val, idx)
+            return tup
+
         elif toty == types.boolean:
             return self.is_true(builder, fromty, val)
 
@@ -568,6 +715,12 @@ class BaseContext(object):
         code = builder.call(callee, realargs)
         status = self.get_return_status(builder, code)
         return status, builder.load(retval)
+
+    def call_external_function(self, builder, callee, argtys, args):
+        args = [self.get_value_as_argument(builder, ty, arg)
+                for ty, arg in zip(argtys, args)]
+        retval = builder.call(callee, args)
+        return retval
 
     def get_return_status(self, builder, code):
         norm = builder.icmp(lc.ICMP_EQ, code, RETCODE_OK)
@@ -622,8 +775,23 @@ class BaseContext(object):
         cstr = self.insert_const_string(mod, str(text))
         self.print_string(builder, cstr)
 
+    def get_struct_member_type(self, member_type):
+        """
+        Get the LLVM type for struct member of type *member_type*.
+        """
+        # get_struct_type() will:
+        # - represent Records as pointers
+        # - represent everything else as plain data
+        if isinstance(member_type, types.Record):
+            return self.get_value_type(member_type)
+        else:
+            return self.get_data_type(member_type)
+
     def get_struct_type(self, struct):
-        fields = [self.get_data_type(v) for _, v in struct._fields]
+        """
+        Get the LLVM struct type for the given Structure class *struct*.
+        """
+        fields = [self.get_struct_member_type(v) for _, v in struct._fields]
         return Type.struct(fields)
 
     def get_dummy_value(self):
@@ -642,14 +810,17 @@ class BaseContext(object):
         return PythonAPI(self, builder)
 
     def make_array(self, typ):
-        return builtins.make_array(typ)
+        return arrayobj.make_array(typ)
 
     def make_complex(self, typ):
         cls, _ = builtins.get_complex_info(typ)
         return cls
 
-    def make_unituple_iter(self, typ):
-        return builtins.make_unituple_iter(typ)
+    def make_pair(self, first_type, second_type):
+        """
+        Create a heterogenous pair class parametered for the given types.
+        """
+        return builtins.make_pair(first_type, second_type)
 
     def make_constant_array(self, builder, typ, ary):
         assert typ.layout == 'C'                # assumed in typeinfer.py
@@ -693,6 +864,26 @@ class BaseContext(object):
         cary.strides = cstrides
         return cary._getvalue()
 
+    def add_libs(self, libs):
+        self.linking |= set(libs)
+
+    def get_abi_sizeof(self, lty):
+        raise NotImplementedError
+
+    def add_exception(self, exc):
+        n = len(self.exceptions) + errcode.ERROR_COUNT
+        self.exceptions[n] = exc
+        return n
+
+    def optimize_function(self, func):
+        """
+        Perform function-level optimization.
+        This may improve generated code and reduce memory usage.
+
+        Note: This is called at the end of lowering.
+        """
+        pass
+
 
 class _wrap_impl(object):
     def __init__(self, imp, context, sig):
@@ -709,22 +900,3 @@ class _wrap_impl(object):
     def __repr__(self):
         return "<wrapped %s>" % self._imp
 
-
-class ContextProxy(object):
-    """
-    Add localized environment for the context of the compiling unit.
-    """
-
-    def __init__(self, base):
-        self.__base = base
-        self.metadata = utils.UniqueDict()
-        self.linking = set()
-
-    def add_libs(self, libs):
-        self.linking |= set(libs)
-
-    def __getattr__(self, name):
-        if not name.startswith('_'):
-            return getattr(self.__base, name)
-        else:
-            return super(ContextProxy, self).__getattr__(name)

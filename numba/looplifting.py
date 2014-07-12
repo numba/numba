@@ -72,6 +72,7 @@ def lift_loop(bytecode):
                              co_names=outernames,
                              co_varnames=bytecode.co_varnames,
                              co_consts=bytecode.co_consts,
+                             co_freevars=bytecode.co_freevars,
                              table=codetable,
                              labels=outerlabels & set(codetable.keys()))
     return outerbc, lbclist
@@ -171,6 +172,7 @@ def make_loop_bytecode(bytecode, loop, args):
                          co_names=bytecode.co_names,
                          co_varnames=bytecode.co_varnames,
                          co_consts=co_consts,
+                         co_freevars=bytecode.co_freevars,
                          table=codetable,
                          labels=bytecode.labels)
 

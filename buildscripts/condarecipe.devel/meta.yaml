@@ -3,7 +3,7 @@ package:
    version: 99.9.9
 
 source:
-  git_url: git@github.com:numba/numba.git
+  git_url: https://github.com/numba/numba.git
   git_tag: devel
 
 build:

@@ -13,6 +13,7 @@ cu_device_ptr = c_size_t        # defined as unsigned int on 32-bit
 cu_stream = c_void_p            # an opaque handle
 cu_event = c_void_p
 cu_link_state = c_void_p
+cu_function_attribute = c_int
 
 
 API_PROTOTYPES = {
@@ -73,6 +74,11 @@ API_PROTOTYPES = {
 # CUresult cuModuleGetFunction(CUfunction *hfunc, CUmodule hmod,
 #                              const char *name);
 'cuModuleGetFunction':  (c_int, cu_function, cu_module, c_char_p),
+
+# CUresult cuModuleGetGlobal ( CUdeviceptr* dptr, size_t* bytes, CUmodule
+#                              hmod, const char* name )
+'cuModuleGetGlobal': (c_int, POINTER(cu_device_ptr), POINTER(c_size_t),
+                      cu_module, c_char_p),
 
 # CUresult CUDAAPI cuFuncSetCacheConfig(CUfunction hfunc,
 #                                       CUfunc_cache config);
@@ -262,5 +268,10 @@ API_PROTOTYPES = {
 
 # cuProfilerStop ( void )
 'cuProfilerStop': (c_int,),
+
+# CUresult cuFuncGetAttribute ( int* pi, CUfunction_attribute attrib,
+#                              CUfunction hfunc )
+'cuFuncGetAttribute': (c_int,
+                       POINTER(c_int), cu_function_attribute, cu_function),
 
 }

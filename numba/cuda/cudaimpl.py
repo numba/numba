@@ -13,62 +13,45 @@ from . import nvvmutils, stubs
 registry = Registry()
 register = registry.register
 
-# -----------------------------------------------------------------------------
-
-SREG_MAPPING = {
-    'tid.x': 'llvm.nvvm.read.ptx.sreg.tid.x',
-    'tid.y': 'llvm.nvvm.read.ptx.sreg.tid.y',
-    'tid.z': 'llvm.nvvm.read.ptx.sreg.tid.z',
-
-    'ntid.x': 'llvm.nvvm.read.ptx.sreg.ntid.x',
-    'ntid.y': 'llvm.nvvm.read.ptx.sreg.ntid.y',
-    'ntid.z': 'llvm.nvvm.read.ptx.sreg.ntid.z',
-
-    'ctaid.x': 'llvm.nvvm.read.ptx.sreg.ctaid.x',
-    'ctaid.y': 'llvm.nvvm.read.ptx.sreg.ctaid.y',
-    'ctaid.z': 'llvm.nvvm.read.ptx.sreg.ctaid.z',
-
-    'nctaid.x': 'llvm.nvvm.read.ptx.sreg.nctaid.x',
-    'nctaid.y': 'llvm.nvvm.read.ptx.sreg.nctaid.y',
-    'nctaid.z': 'llvm.nvvm.read.ptx.sreg.nctaid.z',
-}
-
-
-def _call_sreg(builder, name):
-    module = cgutils.get_module(builder)
-    fnty = Type.function(Type.int(), ())
-    fn = module.get_or_insert_function(fnty, name=SREG_MAPPING[name])
-    return builder.call(fn, ())
-
-# -----------------------------------------------------------------------------
-
 
 @register
 @implement('ptx.grid.1d', types.intp)
 def ptx_grid1d(context, builder, sig, args):
     assert len(args) == 1
-    tidx = _call_sreg(builder, "tid.x")
-    ntidx = _call_sreg(builder, "ntid.x")
-    nctaidx = _call_sreg(builder, "ctaid.x")
-
-    res = builder.add(builder.mul(ntidx, nctaidx), tidx)
-    return res
+    return nvvmutils.get_global_id(builder, dim=1)
 
 
 @register
 @implement('ptx.grid.2d', types.intp)
 def ptx_grid2d(context, builder, sig, args):
     assert len(args) == 1
-    tidx = _call_sreg(builder, "tid.x")
-    ntidx = _call_sreg(builder, "ntid.x")
-    nctaidx = _call_sreg(builder, "ctaid.x")
+    r1, r2 = nvvmutils.get_global_id(builder, dim=2)
+    return cgutils.pack_array(builder, [r1, r2])
 
-    tidy = _call_sreg(builder, "tid.y")
-    ntidy = _call_sreg(builder, "ntid.y")
-    nctaidy = _call_sreg(builder, "ctaid.y")
 
-    r1 = builder.add(builder.mul(ntidx, nctaidx), tidx)
-    r2 = builder.add(builder.mul(ntidy, nctaidy), tidy)
+@register
+@implement('ptx.gridsize.1d', types.intp)
+def ptx_gridsize1d(context, builder, sig, args):
+    assert len(args) == 1
+    ntidx = nvvmutils.call_sreg(builder, "ntid.x")
+    nctaidx = nvvmutils.call_sreg(builder, "nctaid.x")
+
+    res = builder.mul(ntidx, nctaidx)
+    return res
+
+
+@register
+@implement('ptx.gridsize.2d', types.intp)
+def ptx_gridsize2d(context, builder, sig, args):
+    assert len(args) == 1
+    ntidx = nvvmutils.call_sreg(builder, "ntid.x")
+    nctaidx = nvvmutils.call_sreg(builder, "nctaid.x")
+
+    ntidy = nvvmutils.call_sreg(builder, "ntid.y")
+    nctaidy = nvvmutils.call_sreg(builder, "nctaid.y")
+
+    r1 = builder.mul(ntidx, nctaidx)
+    r2 = builder.mul(ntidy, nctaidy)
     return cgutils.pack_array(builder, [r1, r2])
 
 
@@ -77,13 +60,13 @@ def ptx_grid2d(context, builder, sig, args):
 def ptx_sreg_template(sreg):
     def ptx_sreg_impl(context, builder, sig, args):
         assert not args
-        return _call_sreg(builder, sreg)
+        return nvvmutils.call_sreg(builder, sreg)
 
     return ptx_sreg_impl
 
 
 # Dynamic create all special register
-for sreg in SREG_MAPPING.keys():
+for sreg in nvvmutils.SREG_MAPPING.keys():
     register(implement(sreg)(ptx_sreg_template(sreg)))
 
 
@@ -209,7 +192,12 @@ def ptx_atomic_add_intp(context, builder, sig, args):
 
     lary = context.make_array(aryty)(context, builder, ary)
     ptr = cgutils.get_item_pointer(builder, aryty, lary, [ind])
-    return builder.atomic_rmw('add', ptr, val, 'monotonic')
+
+    if aryty.dtype == types.float32:
+        lmod = cgutils.get_module(builder)
+        return builder.call(nvvmutils.declare_atomic_add_float32(lmod), (ptr, val))
+    else:
+        return builder.atomic_rmw('add', ptr, val, 'monotonic')
 
 
 @register
@@ -233,7 +221,12 @@ def ptx_atomic_add_unituple(context, builder, sig, args):
 
     lary = context.make_array(aryty)(context, builder, ary)
     ptr = cgutils.get_item_pointer(builder, aryty, lary, indices)
-    return builder.atomic_rmw('add', ptr, val, 'monotonic')
+
+    if aryty.dtype == types.float32:
+        lmod = cgutils.get_module(builder)
+        return builder.call(nvvmutils.declare_atomic_add_float32(lmod), (ptr, val))
+    else:
+        return builder.atomic_rmw('add', ptr, val, 'monotonic')
 
 
 @register
@@ -257,7 +250,12 @@ def ptx_atomic_add_tuple(context, builder, sig, args):
 
     lary = context.make_array(aryty)(context, builder, ary)
     ptr = cgutils.get_item_pointer(builder, aryty, lary, indices)
-    return builder.atomic_rmw('add', ptr, val, 'monotonic')
+
+    if aryty.dtype == types.float32:
+        lmod = cgutils.get_module(builder)
+        return builder.call(nvvmutils.declare_atomic_add_float32(lmod), (ptr, val))
+    else:
+        return builder.atomic_rmw('add', ptr, val, 'monotonic')
 
 
 # -----------------------------------------------------------------------------

@@ -1,13 +1,16 @@
 from __future__ import print_function, absolute_import, division
+
 import math
+import sys
+
 import numpy as np
+
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags, utils
 from numba import types
+from .support import TestCase
 
 PY27_AND_ABOVE = utils.PYVERSION > (2, 6)
-
-
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -143,14 +146,33 @@ def lgamma(x):
     return math.lgamma(x)
 
 
-class TestMathLib(unittest.TestCase):
+def pow(x, y):
+    return math.pow(x, y)
+
+
+class TestMathLib(TestCase):
 
     def run_unary(self, pyfunc, x_types, x_values, flags=enable_pyobj_flags,
-                  places=6):
+                  prec='exact'):
         for tx, vx in zip(x_types, x_values):
             cr = compile_isolated(pyfunc, [tx], flags=flags)
             cfunc = cr.entry_point
-            self.assertAlmostEqual(cfunc(vx), pyfunc(vx), places=places)
+            got = cfunc(vx)
+            expected = pyfunc(vx)
+            actual_prec = 'single' if tx is types.float32 else prec
+            msg = 'for input %r' % (vx,)
+            self.assertPreciseEqual(got, expected, prec=actual_prec, msg=msg)
+
+    def run_binary(self, pyfunc, x_types, x_values, y_values,
+                   flags=enable_pyobj_flags, prec='exact'):
+        for ty, x, y in zip(x_types, x_values, y_values):
+            cres = compile_isolated(pyfunc, (ty, ty), flags=flags)
+            cfunc = cres.entry_point
+            got = cfunc(x, y)
+            expected = pyfunc(x, y)
+            actual_prec = 'single' if ty is types.float32 else prec
+            msg = 'for inputs (%r, %r)' % (x, y)
+            self.assertPreciseEqual(got, expected, prec=actual_prec, msg=msg)
 
     def test_sin(self, flags=enable_pyobj_flags):
         pyfunc = sin
@@ -163,6 +185,8 @@ class TestMathLib(unittest.TestCase):
     def test_sin_npm(self):
         self.test_sin(flags=no_pyobj_flags)
 
+    @unittest.skipIf(sys.platform == 'win32',
+                     "not exactly equal on win32 (issue #597)")
     def test_cos(self, flags=enable_pyobj_flags):
         pyfunc = cos
         x_types = [types.int16, types.int32, types.int64,
@@ -171,6 +195,8 @@ class TestMathLib(unittest.TestCase):
         x_values = [-2, -1, -2, 2, 1, 2, .1, .2]
         self.run_unary(pyfunc, x_types, x_values, flags)
 
+    @unittest.skipIf(sys.platform == 'win32',
+                     "not exactly equal on win32 (issue #597)")
     def test_cos_npm(self):
         self.test_cos(flags=no_pyobj_flags)
 
@@ -198,10 +224,13 @@ class TestMathLib(unittest.TestCase):
 
     def test_npy_sqrt(self, flags=enable_pyobj_flags):
         pyfunc = npy_sqrt
-        x_types = [types.int16, types.int32, types.int64,
-                   types.uint16, types.uint32, types.uint64,
-                   types.float32, types.float64]
         x_values = [2, 1, 2, 2, 1, 2, .1, .2]
+        # XXX poor precision for int16 inputs
+        x_types = [types.int16, types.uint16]
+        self.run_unary(pyfunc, x_types, x_values, flags, prec='single')
+        x_types = [types.int32, types.int64,
+                   types.uint32, types.uint64,
+                   types.float32, types.float64]
         self.run_unary(pyfunc, x_types, x_values, flags)
 
     def test_npy_sqrt_npm(self):
@@ -303,13 +332,8 @@ class TestMathLib(unittest.TestCase):
                    types.uint16, types.uint32, types.uint64,
                    types.float32, types.float64]
         x_values = [-2, -1, -2, 2, 1, 2, .1, .2]
-
-        for ty, xy in zip(x_types, x_values):
-            cres = compile_isolated(pyfunc, (ty, ty), flags=flags)
-            cfunc = cres.entry_point
-            x = xy
-            y = x * 2
-            self.assertAlmostEqual(pyfunc(x, y), cfunc(x, y))
+        y_values = [x * 2 for x in x_values]
+        self.run_binary(pyfunc, x_types, x_values, y_values, flags)
 
     def test_atan2_npm(self):
         self.test_atan2(flags=no_pyobj_flags)
@@ -441,13 +465,10 @@ class TestMathLib(unittest.TestCase):
                    types.uint16, types.uint32, types.uint64,
                    types.float32, types.float64]
         x_values = [1, 2, 3, 4, 5, 6, .21, .34]
-
-        for ty, xy in zip(x_types, x_values):
-            x = xy
-            y = xy * 2
-            cres = compile_isolated(pyfunc, (ty, ty), flags=flags)
-            cfunc = cres.entry_point
-            self.assertAlmostEqual(pyfunc(x, y), cfunc(x, y))
+        y_values = [x + 2 for x in x_values]
+        # Issue #563: precision issues with math.hypot() under Windows.
+        prec = 'single' if sys.platform == 'win32' else 'exact'
+        self.run_binary(pyfunc, x_types, x_values, y_values, prec=prec)
 
     def test_hypot_npm(self):
         self.test_hypot(flags=no_pyobj_flags)
@@ -458,7 +479,7 @@ class TestMathLib(unittest.TestCase):
                    types.uint16, types.uint32, types.uint64,
                    types.float32, types.float64]
         x_values = [1, 1, 1, 1, 1, 1, 1., 1.]
-        self.run_unary(pyfunc, x_types, x_values, flags, places=5)
+        self.run_unary(pyfunc, x_types, x_values, flags)
 
     def test_degrees_npm(self):
         self.test_degrees(flags=no_pyobj_flags)
@@ -484,9 +505,9 @@ class TestMathLib(unittest.TestCase):
         self.run_unary(pyfunc, x_types, x_values, flags)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
-    @unittest.expectedFailure
     def test_erf_npm(self):
-        self.test_erf(flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.test_erf(flags=no_pyobj_flags)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_erfc(self, flags=enable_pyobj_flags):
@@ -498,9 +519,9 @@ class TestMathLib(unittest.TestCase):
         self.run_unary(pyfunc, x_types, x_values, flags)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
-    @unittest.expectedFailure
     def test_erfc_npm(self):
-        self.test_erfc(flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.test_erfc(flags=no_pyobj_flags)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_gamma(self, flags=enable_pyobj_flags):
@@ -512,9 +533,9 @@ class TestMathLib(unittest.TestCase):
         self.run_unary(pyfunc, x_types, x_values, flags)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
-    @unittest.expectedFailure
     def test_gamma_npm(self):
-        self.test_gamma(flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.test_gamma(flags=no_pyobj_flags)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
     def test_lgamma(self, flags=enable_pyobj_flags):
@@ -526,10 +547,21 @@ class TestMathLib(unittest.TestCase):
         self.run_unary(pyfunc, x_types, x_values, flags)
 
     @unittest.skipIf(not PY27_AND_ABOVE, "Only support for 2.7+")
-    @unittest.expectedFailure
     def test_lgamma_npm(self):
-        self.test_lgamma(flags=no_pyobj_flags)
+        with self.assertTypingError():
+            self.test_lgamma(flags=no_pyobj_flags)
 
+    def test_pow(self, flags=enable_pyobj_flags):
+        pyfunc = pow
+        x_types = [types.int16, types.int32, types.int64,
+                   types.uint16, types.uint32, types.uint64,
+                   types.float32, types.float64]
+        x_values = [-2, -1, -2, 2, 1, 2, .1, .2]
+        y_values = [x * 2 for x in x_values]
+        self.run_binary(pyfunc, x_types, x_values, y_values, flags)
+
+    def test_pow_npm(self):
+        self.test_pow(flags=no_pyobj_flags)
 
 if __name__ == '__main__':
     unittest.main()

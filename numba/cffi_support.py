@@ -23,7 +23,6 @@ def is_cffi_func(obj):
     except TypeError:
         return False
 
-
 def get_pointer(cffi_func):
     """
     Get a pointer to the underlying function for a CFFI function as an
@@ -61,6 +60,22 @@ def make_function_type(cffi_func):
     return result
 
 
+class ExternCFunction(types.Function):
+    # XXX unused?
+    
+    def __init__(self, symbol, cstring):
+        """Parse C function declaration/signature"""
+        self.symbol = symbol
+        parser = cffi.cparser.Parser()
+        rft = parser.parse_type(cstring) # "RawFunctionType"
+        self.restype = type_map[rft.result.build_backend_type(ffi, None)]
+        self.argtypes = [type_map[arg.build_backend_type(ffi, None)] for arg in rft.args]
+        signature = typing.signature(self.restype, *self.argtypes)
+        cases = [signature]
+        template = typing.make_concrete_template('ExternCFunction', self.symbol, cases)
+        super(ExternCFunction, self).__init__(template)
+
+
 if ffi is not None:
     type_map = {
         ffi.typeof('char') :                types.int8,
@@ -86,6 +101,7 @@ if ffi is not None:
         # ffi.typeof('long double') :         longdouble,
         ffi.typeof('char *') :              types.voidptr,
         ffi.typeof('void *') :              types.voidptr,
+        ffi.typeof('uint8_t *') :           types.CPointer(types.uint8),
         ffi.typeof('ssize_t') :             types.intp,
         ffi.typeof('size_t') :              types.uintp,
         ffi.typeof('void') :                types.void,

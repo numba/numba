@@ -10,7 +10,7 @@ import numpy as np
 from .ndarray import (ndarray_populate_head, ArrayHeaderManager)
 from . import driver as _driver
 from . import devices
-from numba import dummyarray
+from numba import dummyarray, types, numpy_support
 
 try:
     long
@@ -112,6 +112,15 @@ class DeviceNDArrayBase(object):
             pass
 
     @property
+    def _numba_type_(self):
+        """
+        Magic attribute expected by Numba to get the numba type that
+        represents this object.
+        """
+        dtype = numpy_support.from_dtype(self.dtype)
+        return types.Array(dtype, self.ndim, 'A')
+
+    @property
     def device_ctypes_pointer(self):
         """Returns the ctypes pointer to the GPU data buffer
         """
@@ -207,8 +216,16 @@ class DeviceNDArray(DeviceNDArrayBase):
 
         Reshape the array and keeping the original data
         """
-        newarr, extents = self._dummy.reshape(*newshape, **kws)
+        if len(newshape) == 1 and isinstance(newshape, (tuple, list)):
+            newshape = newshape[0]
+
         cls = type(self)
+        if newshape == self.shape:
+            # nothing to do
+            return cls(shape=self.shape, strides=self.strides,
+                       dtype=self.dtype, gpu_data=self.gpu_data)
+
+        newarr, extents = self._dummy.reshape(*newshape, **kws)
 
         if extents == [self._dummy.extent]:
             return cls(shape=newarr.shape, strides=newarr.strides,

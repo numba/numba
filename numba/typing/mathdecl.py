@@ -102,6 +102,9 @@ class MathModuleAttribute(AttributeTemplate):
     def resolve_hypot(self, mod):
         return types.Function(Math_hypot)
 
+    def resolve_pow(self, mod):
+        return types.Function(Math_pow)
+
 
 class Math_unary(ConcreteTemplate):
     cases = [
@@ -109,6 +112,16 @@ class Math_unary(ConcreteTemplate):
         signature(types.float64, types.uint64),
         signature(types.float32, types.float32),
         signature(types.float64, types.float64),
+    ]
+
+
+class Math_converter(ConcreteTemplate):
+    cases = [
+        signature(types.intp, types.intp),
+        signature(types.int64, types.int64),
+        signature(types.uint64, types.uint64),
+        signature(types.int64, types.float32),
+        signature(types.int64, types.float64),
     ]
 
 
@@ -199,15 +212,29 @@ class Math_atanh(Math_unary):
     key = math.atanh
 
 
-class Math_floor(Math_unary):
-    key = math.floor
+
+# math.floor and math.ceil return float on 2.x, int on 3.x
+if utils.PYVERSION > (3, 0):
+
+    class Math_floor(Math_converter):
+        key = math.floor
 
 
-class Math_ceil(Math_unary):
-    key = math.ceil
+    class Math_ceil(Math_converter):
+        key = math.ceil
 
 
-class Math_trunc(Math_unary):
+else:
+
+    class Math_floor(Math_unary):
+        key = math.floor
+
+
+    class Math_ceil(Math_unary):
+        key = math.ceil
+
+
+class Math_trunc(Math_converter):
     key = math.trunc
 
 
@@ -249,6 +276,16 @@ class Math_isinf(ConcreteTemplate):
     ]
 
 
+class Math_pow(ConcreteTemplate):
+    key = math.pow
+    cases = [
+        signature(types.float64, types.float64, types.int64),
+        signature(types.float64, types.float64, types.uint64),
+        signature(types.float32, types.float32, types.float32),
+        signature(types.float64, types.float64, types.float64),
+    ]
+
+
 builtin_global(math, types.Module(math))
 builtin_global(math.fabs, types.Function(Math_fabs))
 builtin_global(math.exp, types.Function(Math_exp))
@@ -279,3 +316,4 @@ builtin_global(math.isnan, types.Function(Math_isnan))
 builtin_global(math.isinf, types.Function(Math_isinf))
 builtin_global(math.degrees, types.Function(Math_degrees))
 builtin_global(math.radians, types.Function(Math_radians))
+builtin_global(math.pow, types.Function(Math_pow))

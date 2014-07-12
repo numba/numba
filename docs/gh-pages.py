@@ -89,7 +89,7 @@ if __name__ == '__main__':
         except CalledProcessError:
             tag = "dev"   # Fallback
             print("Using dev")
-    
+
     startdir = os.getcwdu()
     if not os.path.exists(pages_dir):
         # init the repo
@@ -121,7 +121,7 @@ if __name__ == '__main__':
     try:
         cd(pages_dir)
         status = sh2('git status | head -1')
-        branch = re.match('\# On branch (.*)$', status).group(1)
+        branch = re.match('\#?\w*On branch (.*)$', status).group(1)
         if branch != 'gh-pages':
             e = 'On %r, git branch is %r, MUST be "gh-pages"' % (pages_dir,
                                                                  branch)

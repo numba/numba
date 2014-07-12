@@ -25,6 +25,7 @@
 #if (PY_MAJOR_VERSION >= 3)
     #define PyString_AsString PyUnicode_AsUTF8
     #define PyString_FromString PyUnicode_FromString
+    #define PyString_InternFromString PyUnicode_InternFromString
     #define PyInt_Type PyLong_Type
 #endif
 

@@ -52,7 +52,7 @@ void TCCMap::insert(TypePair key, TypeCompatibleCode val) {
     TCCRecord data;
     data.key = key;
     data.val = val;
-    for (int j = 0; j < bin.size(); ++j) {
+    for (unsigned int j = 0; j < bin.size(); ++j) {
         if (bin[j].key == key) {
             bin[j].val = val;
             return;
@@ -64,7 +64,7 @@ void TCCMap::insert(TypePair key, TypeCompatibleCode val) {
 TypeCompatibleCode TCCMap::find(TypePair key) const {
     unsigned int i = hash(key) % TCCMAP_SIZE;
     const TCCMapBin &bin = records[i];
-    for (int j = 0; j < bin.size(); ++j) {
+    for (unsigned int j = 0; j < bin.size(); ++j) {
         if (bin[j].key == key) {
             return bin[j].val;
         }
@@ -205,7 +205,7 @@ bool Rating::operator < (const Rating &other) const {
     unsigned short that[] = {other.unsafe_convert,
                              other.safe_convert,
                              other.promote};
-    for(int i = 0; i < sizeof(self)/sizeof(unsigned short); ++i) {
+    for (unsigned int i = 0; i < sizeof(self)/sizeof(unsigned short); ++i) {
         if (self[i] < that[i]) return true;
     }
     return false;

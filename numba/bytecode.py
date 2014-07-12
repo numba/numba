@@ -39,6 +39,7 @@ def _make_bytecode_table():
 
     elif sys.version_info[:2] >= (2, 7):  # python 2.7+
         version_specific = [
+            ('BUILD_SET', 2),
             ('POP_JUMP_IF_FALSE', 2),
             ('POP_JUMP_IF_TRUE', 2),
             ('JUMP_IF_TRUE_OR_POP', 2),
@@ -83,6 +84,7 @@ def _make_bytecode_table():
                     ('BINARY_RSHIFT', 0),
                     ('BREAK_LOOP', 0),
                     ('BUILD_LIST', 2),
+                    ('BUILD_MAP', 2),
                     ('BUILD_SLICE', 2),
                     ('BUILD_TUPLE', 2),
                     ('CALL_FUNCTION', 2),
@@ -108,6 +110,7 @@ def _make_bytecode_table():
                     ('LOAD_CONST', 2),
                     ('LOAD_FAST', 2),
                     ('LOAD_GLOBAL', 2),
+                    ('LOAD_DEREF', 2),
                     ('POP_BLOCK', 0),
                     ('POP_TOP', 0),
                     ('RAISE_VARARGS', 2),
@@ -115,8 +118,9 @@ def _make_bytecode_table():
                     ('ROT_THREE', 0),
                     ('ROT_TWO', 0),
                     ('SETUP_LOOP', 2),
+                    ('STORE_ATTR', 2),
                     ('STORE_FAST', 2),
-                    #    ('STORE_ATTR', 2), # not supported
+                    ('STORE_MAP', 0),
                     ('STORE_SUBSCR', 0),
                     ('UNARY_POSITIVE', 0),
                     ('UNARY_NEGATIVE', 0),
@@ -240,10 +244,10 @@ class ByteCodeSupportError(Exception):
 
 class ByteCodeBase(object):
     __slots__ = 'func', 'func_name', 'argspec', 'filename', 'co_names', \
-                'co_varnames', 'co_consts', 'table', 'labels'
+                'co_varnames', 'co_consts', 'co_freevars', 'table', 'labels'
 
     def __init__(self, func, func_name, argspec, filename, co_names,
-                 co_varnames, co_consts, table, labels):
+                 co_varnames, co_consts, co_freevars, table, labels):
         self.func = func
         self.module = inspect.getmodule(func)
         self.func_name = func_name
@@ -252,6 +256,7 @@ class ByteCodeBase(object):
         self.co_names = co_names
         self.co_varnames = co_varnames
         self.co_consts = co_consts
+        self.co_freevars = co_freevars
         self.table = table
         self.labels = labels
         self.firstlineno = min(inst.lineno for inst in self.table.values())
@@ -287,8 +292,6 @@ class ByteCode(ByteCodeBase):
         if not code:
             raise ByteCodeSupportError("%s does not provide its bytecode" %
                                        func)
-        if code.co_freevars:
-            raise ByteCodeSupportError("does not support freevars")
         if code.co_cellvars:
             raise ByteCodeSupportError("does not support cellvars")
 
@@ -304,6 +307,7 @@ class ByteCode(ByteCodeBase):
                                        co_names=code.co_names,
                                        co_varnames=code.co_varnames,
                                        co_consts=code.co_consts,
+                                       co_freevars=code.co_freevars,
                                        table=table,
                                        labels=list(sorted(labels)))
 
