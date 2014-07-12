@@ -78,7 +78,8 @@ class TestUnify(unittest.TestCase):
         for seedval in (1, 2, 1024):
             env['PYTHONHASHSEED'] = str(seedval)
             subproc = subprocess.Popen(
-                ['python', '-c', 'import test_typeinfer as test_mod\n' +
+                ['python', '-c',
+                 'import numba.tests.test_typeinfer as test_mod\n' +
                  'test_mod.TestUnify._actually_test_complex_unify()'],
                 env=env)
             subproc.wait()
@@ -92,14 +93,16 @@ class TestUnify(unittest.TestCase):
             self.assertTrue(all(res[0] == other for other in res[1:]))
 
         for tys in itertools.combinations(types.number_domain, 3):
-            print(tys)
-            res = []
+            res = {}
             for comb in itertools.permutations(tys):
                 unified = ctx.unify_types(*comb)
-                print(comb, '->', unified)
-                res.append(unified)
-            print(res)
-            self.assertTrue(all(res[0] == other for other in res[1:]))
+                res[comb] = unified
+            keys = list(res.keys())
+            first_result = res[keys[0]]
+            for other in keys[1:]:
+                self.assertTrue(first_result == res[other],
+                                '%r != %r (%r)' % (first_result, res[other],
+                                                   other))
 
 
 if __name__ == '__main__':
