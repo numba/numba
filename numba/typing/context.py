@@ -175,7 +175,9 @@ class BaseContext(object):
         # pairwise unification (with thanks to aterrel).
         typelist = list(typelist)
         def cmp_bitwidth(ob1, ob2):
-            return cmp(ob1.bitwidth, ob2.bitwidth)
+            ob1_bw_opt = getattr(ob1, 'bitwidth', ob1)
+            ob2_bw_opt = getattr(ob2, 'bitwidth', ob2)
+            return cmp(ob1_bw_opt, ob2_bw_opt)
         typelist.sort(cmp_bitwidth)
         return functools.reduce(self.unify_pairs, typelist)
 
