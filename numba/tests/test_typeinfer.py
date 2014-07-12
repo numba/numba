@@ -1,4 +1,5 @@
 from __future__ import print_function, division, absolute_import
+import os, sys, subprocess
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
 from numba import types, typeinfer
@@ -44,6 +45,33 @@ class TestTupleUnify(unittest.TestCase):
         args = (types.int32, types.int64)
         # Check if compilation is successful
         cres = compile_isolated(foo, args)
+
+
+class TestBranchUnify(unittest.TestCase):
+    @staticmethod
+    def _actually_test_branch_unify():
+        def f(a):
+            res = 0.
+            for i in range(len(a)):
+                res += a[i]
+            return res
+        args = (types.complex128[:],)
+        cres = compile_isolated(f, args)
+        sys.exit(0)
+    
+    def test_branch_unify(self):
+        """
+        Test issue #599
+        """
+        env = os.environ.copy()
+        for seedval in (1, 2, 1024):
+            env['PYTHONHASHSEED'] = str(seedval)
+            subproc = subprocess.Popen(
+                ['python', '-c', 'import test_typeinfer as test_mod\n' +
+                 'test_mod.TestBranchUnify._actually_test_branch_unify()'],
+                env=env)
+            subproc.wait()
+            self.assertEqual(subproc.returncode, 0, 'Child process failed.')
 
 
 if __name__ == '__main__':
