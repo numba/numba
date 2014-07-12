@@ -79,7 +79,7 @@ class TestUnify(unittest.TestCase):
             env['PYTHONHASHSEED'] = str(seedval)
             subproc = subprocess.Popen(
                 ['python', '-c', 'import test_typeinfer as test_mod\n' +
-                 'test_mod.TestUnify._actually_test_branch_unify()'],
+                 'test_mod.TestUnify._actually_test_complex_unify()'],
                 env=env)
             subproc.wait()
             self.assertEqual(subproc.returncode, 0, 'Child process failed.')
