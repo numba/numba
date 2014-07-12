@@ -176,7 +176,7 @@ class BaseContext(object):
         typelist = list(typelist)
         def cmp_bitwidth(ob1, ob2):
             return cmp(ob1.bitwidth, ob2.bitwidth)
-        typelist.sort(cmp=cmp_bitwidth)
+        typelist.sort(cmp_bitwidth)
         return functools.reduce(self.unify_pairs, typelist)
 
     def unify_pairs(self, first, second):
