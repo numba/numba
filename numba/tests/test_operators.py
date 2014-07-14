@@ -546,6 +546,16 @@ class TestOperators(TestCase):
         self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
                              flags=flags)
 
+    def run_binop_complex(self, pyfunc, flags=enable_pyobj_flags):
+        x_operands = [-1.1 + 0.3j, 0.0 + 0.0j, 1.1j]
+        y_operands = [-1.5 - 0.7j, 0.8j, 2.1 - 2.0j]
+
+        types_list = [(types.complex64, types.complex64),
+                      (types.complex128, types.complex128)]
+
+        self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
+                             flags=flags)
+
     def run_binop_array_ints(self, pyfunc, flags=enable_pyobj_flags):
         array = np.arange(-10, 10, dtype=np.int32)
 
@@ -570,7 +580,17 @@ class TestOperators(TestCase):
         self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
                              flags=flags)
 
-    # + operator
+    def run_binop_array_complex(self, pyfunc, flags=enable_pyobj_flags):
+        array = np.arange(-1, 1, 0.1, dtype=np.complex64) * (1.5 + 0.8j)
+
+        x_operands = [array]
+        y_operands = [array]
+
+        arraytype = types.Array(types.complex64, 1, 'C')
+        types_list = [(arraytype, arraytype)]
+
+        self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
+                             flags=flags)
 
     def generate_binop_tests(ns, usecases, tp_runners, npm_array=False):
         for usecase in usecases:
@@ -603,13 +623,25 @@ class TestOperators(TestCase):
                          ('add', 'iadd', 'sub', 'isub', 'mul', 'imul'),
                          {'ints': 'run_binop_ints',
                           'floats': 'run_binop_floats',
+                          'complex': 'run_binop_complex',
                           'ints_array': 'run_binop_array_ints',
                           'floats_array': 'run_binop_array_floats',
+                          'complex_array': 'run_binop_array_complex',
                           })
 
     generate_binop_tests(locals(),
-                         ('div', 'idiv', 'truediv', 'itruediv',
-                          'floordiv', 'ifloordiv', 'mod', 'imod'),
+                         ('div', 'idiv', 'truediv', 'itruediv'),
+                         {'ints': 'run_binop_ints',
+                          'floats': 'run_binop_floats',
+                          'complex': 'run_binop_complex',
+                          'ints_array': 'run_binop_array_ints',
+                          'floats_array': 'run_binop_array_floats',
+                          'complex_array': 'run_binop_array_complex',
+                          })
+
+    # NOTE: floordiv and mod unsupported for complex numbers
+    generate_binop_tests(locals(),
+                         ('floordiv', 'ifloordiv', 'mod', 'imod'),
                          {'ints': 'run_binop_ints',
                           'floats': 'run_binop_floats',
                           'ints_array': 'run_binop_array_ints',
@@ -695,6 +727,7 @@ class TestOperators(TestCase):
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
+    # XXX power operator is unsupported on complex numbers (see issue #488)
     generate_binop_tests(locals(),
                          ('pow', 'ipow'),
                          {'ints': 'run_pow_ints',
