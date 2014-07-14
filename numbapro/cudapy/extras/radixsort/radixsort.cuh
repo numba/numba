@@ -8,6 +8,7 @@
 enum { BUCKET_SIZE = 256, BUCKET_MASK = 0xff };
 
 extern "C" {
+
 __global__
 void cu_build_histogram(
     uint8_t  *data,
