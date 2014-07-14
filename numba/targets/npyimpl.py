@@ -54,7 +54,16 @@ class _ScalarIndexingHelper(object):
         pass
 
 
-class _ScalarHelper(namedtuple('_ScalarHelper', ('context', 'builder', 'val', 'base_type'))):
+class _ScalarHelper(object):
+    def __init__(self, ctxt, bld, val, ty):
+        self.context = ctxt
+        self.builder = bld
+        self.val = val
+        self.base_type = ty
+        intpty = ctxt.get_value_type(types.intp)
+        self.shape = [Constant.int(intpty, 1)]
+        self._ptr = bld.alloca(ctxt.get_data_type(ty))
+
     def create_iter_indices(self):
         return _ScalarIndexingHelper()
 
@@ -65,7 +74,11 @@ class _ScalarHelper(namedtuple('_ScalarHelper', ('context', 'builder', 'val', 'b
         return self.val
 
     def store_data(self, indices, val):
-        raise LoweringError('Can not store in a scalar')
+        self.builder.store(val, self._ptr)
+
+    @property
+    def return_val(self):
+        return self.builder.load(self._ptr)
 
 
 class _ArrayIndexingHelper(namedtuple('_ArrayIndexingHelper', ('array', 'indices'))):
@@ -94,7 +107,8 @@ class _ArrayIndexingHelper(namedtuple('_ArrayIndexingHelper', ('array', 'indices
         return [bld.load(index) for index in self.indices]
 
 
-class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary', 'shape', 'strides', 'data', 'layout', 'base_type', 'ndim'))):
+class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary', 'shape', 'strides',
+                                               'data', 'layout', 'base_type', 'ndim', 'return_val'))):
     def create_iter_indices(self):
         intpty = self.context.get_value_type(types.intp)
         ZERO = Constant.int(Type.int(intpty.width), 0)
@@ -131,7 +145,8 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
         ary     = ctxt.make_array(tyinp)(ctxt, bld, inp)
         shape   = cgutils.unpack_tuple(bld, ary.shape, tyinp.ndim)
         strides = cgutils.unpack_tuple(bld, ary.strides, tyinp.ndim)
-        return _ArrayHelper(ctxt, bld, ary, shape, strides, ary.data, tyinp.layout, tyinp.dtype, tyinp.ndim)
+        return _ArrayHelper(ctxt, bld, ary, shape, strides, ary.data, tyinp.layout, tyinp.dtype,
+                            tyinp.ndim, inp)
     elif tyinp in types.number_domain:
         return _ScalarHelper(ctxt, bld, inp, tyinp)
     else:
@@ -171,11 +186,18 @@ def npy_math_extern(fn, fnty):
             return ref_impl(context, builder, sig, cast_vals)
 
 
-def numpy_ufunc_kernel(context, builder, sig, args, kernel_class):
+def numpy_ufunc_kernel(context, builder, sig, args, kernel_class, explicit_output=True):
+    if not explicit_output:
+        args.append(Constant.null(context.get_value_type(sig.return_type)))
+        tyargs = sig.args + (sig.return_type,)
+    else:
+        tyargs = sig.args
     arguments = [_prepare_argument(context, builder, arg, tyarg)
-                 for arg, tyarg in zip(args, sig.args)]
+                 for arg, tyarg in zip(args, tyargs)]
+
     inputs = arguments[0:-1]
     output = arguments[-1]
+
     outer_sig = [a.base_type for a in arguments]
     #signature expects return type first, while we have it last:
     outer_sig = outer_sig[-1:] + outer_sig[:-1]
@@ -194,7 +216,7 @@ def numpy_ufunc_kernel(context, builder, sig, args, kernel_class):
 
         val_out = kernel.generate(*vals_in)
         output.store_data(loop_indices, val_out)
-    return args[-1]
+    return arguments[-1].return_val
 
 
 # Kernels are the code to be executed inside the multidimensional loop.
@@ -329,18 +351,24 @@ def register_unary_ufunc_kernel(ufunc, kernel):
     def unary_ufunc(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, kernel)
 
+    def unary_scalar_ufunc(context, builder, sig, args):
+        return numpy_ufunc_kernel(context, builder, sig, args, kernel, explicit_output=False)
+
     register(implement(ufunc, types.Kind(types.Array),
         types.Kind(types.Array))(unary_ufunc))
     for ty in types.number_domain:
         register(implement(ufunc, ty,
             types.Kind(types.Array))(unary_ufunc))
     for ty in types.number_domain:
-        register(implement(ufunc, ty)(unary_ufunc))
+        register(implement(ufunc, ty)(unary_scalar_ufunc))
 
 
 def register_binary_ufunc_kernel(ufunc, kernel):
     def binary_ufunc(context, builder, sig, args):
         return numpy_ufunc_kernel(context, builder, sig, args, kernel)
+
+    def binary_scalar_ufunc(context, builder, sig, args):
+        return numpy_ufunc_kernel(context, builder, sig, args, kernel, explicit_output=False)
 
     register(implement(ufunc, types.Kind(types.Array), types.Kind(types.Array),
         types.Kind(types.Array))(binary_ufunc))
@@ -352,6 +380,7 @@ def register_binary_ufunc_kernel(ufunc, kernel):
     for ty1, ty2 in itertools.product(types.number_domain, types.number_domain):
         register(implement(ufunc, ty1, ty2,
             types.Kind(types.Array))(binary_ufunc))
+        register(implement(ufunc, ty1, ty2)(binary_scalar_ufunc)) # scalar version
 
 
 ################################################################################

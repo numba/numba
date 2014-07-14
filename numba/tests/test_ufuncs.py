@@ -741,7 +741,7 @@ class TestUFuncs(TestCase):
 
     def test_fmax_ufunc(self):
         self.binary_ufunc_test('fmax')
-    
+
     @_unimplemented
     def test_fmax_ufunc_npm(self):
         self.binary_ufunc_test('fmax', flags=no_pyobj_flags)
@@ -1028,6 +1028,70 @@ class TestUFuncs(TestCase):
 
             cfunc(x, y, result)
             self.assertTrue(np.all(result == expected))
+
+
+class TestScalarUFuncs(TestCase):
+    """check the machinery of ufuncs works when the result is an scalar.
+    These are not exahustive because:
+    - the machinery to support this case is the same for all the functions of a
+      given arity.
+    - the result of the inner function itself is already tested in TestUFuncs
+    """
+    def run_ufunc(self, pyfunc, arg_types, arg_values, flags=enable_pyobj_flags):
+
+        for tyargs, args in zip(arg_types, arg_values):
+            cr = compile_isolated(pyfunc, tyargs, flags=flags)
+            cfunc = cr.entry_point
+            got = cfunc(*args)
+            expected = pyfunc(*args)
+            msg = 'for args {0} typed {1}'.format(args, tyargs)
+            if cr.signature.return_type == types.float64:
+                prec='double'
+            elif cr.signature.return_type == types.float32:
+                prec='single'
+            else:
+                prec='exact'
+            self.assertPreciseEqual(got, expected, msg=msg, prec=prec)
+
+
+    def test_scalar_unary_ufunc(self, flags=enable_pyobj_flags):
+        def _func(x):
+            return np.sqrt(x)
+
+        vals = [(2,), (2,), (1,), (2,), (.1,), (.2,)]
+        tys = [(types.int32,), (types.uint32,),
+               (types.int64,), (types.uint64,), (types.float32,), (types.float64,)]
+        self.run_ufunc(_func, tys, vals, flags=flags)
+
+    def test_scalar_unary_ufunc_npm(self):
+        self.test_scalar_unary_ufunc(flags=no_pyobj_flags)
+
+
+    def test_scalar_binary_uniform_ufunc(self, flags=enable_pyobj_flags):
+        def _func(x,y):
+            return np.add(x,y)
+
+        vals = [(2,), (2,), (1,), (2,), (.1,), (.2,)]
+        tys = [(types.int32,), (types.uint32,),
+               (types.int64,), (types.uint64,), (types.float32,), (types.float64,)]
+        self.run_ufunc(_func, zip(tys, tys), zip(vals, vals), flags=flags)
+
+    def test_scalar_binary_uniform_ufuncs_npm(self):
+        self.test_scalar_binary_uniform_ufunc(flags=no_pyobj_flags)
+
+    def test_scalar_binary_mixed_ufunc(self, flags=enable_pyobj_flags):
+        def _func(x,y):
+            return np.add(x,y)
+
+        vals = [(2,), (2,), (1,), (2,), (.1,), (.2,)]
+        tys = [(types.int32,), (types.uint32,),
+               (types.int64,), (types.uint64,), (types.float32,), (types.float64,)]
+        self.run_ufunc(_func, itertools.product(tys, tys), itertools.product(vals, vals),
+                       flags=flags)
+
+    def test_scalar_binary_mixed_ufuncs_npm(self):
+        self.test_scalar_binary_mixed_ufunc(flags=no_pyobj_flags)
+
 
 
 if __name__ == '__main__':
