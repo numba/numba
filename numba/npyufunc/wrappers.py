@@ -14,7 +14,6 @@ def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
                                            signature.args, elems)
 
     # Ignoring error status and store result
-
     # Store
     if out.byref:
         retval = builder.load(retval)
@@ -94,8 +93,8 @@ def build_ufunc_wrapper(context, func, signature):
                                 context.get_argument_type(typ)))
 
     # Prepare output
-    out = UArrayArg(context, builder, arg_args, arg_steps, len(actual_args),
-                    context.get_value_type(signature.return_type))
+    valty = context.get_data_type(signature.return_type)
+    out = UArrayArg(context, builder, arg_args, arg_steps, len(actual_args), valty)
 
     # Setup indices
     offsets = []
