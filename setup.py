@@ -45,7 +45,7 @@ setup(
     description="compile Python code",
     ext_modules=ext_modules,
     packages=find_packages('numbapro'),
-    package_data={'numbapro.cudapy.extras.radixsort': ['*.o']},
+    package_data={'numbapro.cudalib.radixsort': ['*.o']},
     cmdclass=cmdclass,
 
 )
