@@ -52,6 +52,17 @@ class Radixsort(object):
             'cu_scan_bucket_index')
         self.cu_scatter = self.module.get_function('cu_scatter')
 
+        if dtype == np.dtype(np.float32):
+            self.cu_float_to_uint = self.module.get_function('cu_float_to_uint')
+            self.cu_uint_to_float = self.module.get_function('cu_uint_to_float')
+            self.flip_float = True
+        elif dtype == np.dtype(np.float64):
+            self.cu_float_to_uint = self.module.get_function('cu_double_to_uint')
+            self.cu_uint_to_float = self.module.get_function('cu_uint_to_double')
+            self.flip_float = True
+        else:
+            self.flip_float = False
+
     def sort(self, data):
         if data.dtype != self.dtype:
             raise TypeError("Mismatch dtype")
@@ -72,6 +83,14 @@ class Radixsort(object):
         d_bucktotal = cuda.device_array(BUCKET_SIZE, dtype=idx_dtype)
 
         d_data, data_conv = cuda.devicearray.auto_device(data)
+
+        if self.flip_float:
+            cu_float_to_uint = self.cu_float_to_uint.configure((blkcount,),
+                                                               (BUCKET_SIZE,))
+            cu_uint_to_float = self.cu_uint_to_float.configure((blkcount,),
+                                                               (BUCKET_SIZE,))
+
+            cu_float_to_uint(d_data, d_data, c_int(count))
 
         # Configure all kernels
         (build_hist, scan_hist,
@@ -94,6 +113,8 @@ class Radixsort(object):
             # Swap data and sorted
             d_data, d_sorted = d_sorted, d_data
 
+        if self.flip_float:
+            cu_uint_to_float(d_data, d_data, c_int(count))
 
         # Prepare result
         if data_conv:

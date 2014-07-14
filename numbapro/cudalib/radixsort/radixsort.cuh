@@ -10,6 +10,20 @@ enum { BUCKET_SIZE = 256, BUCKET_MASK = 0xff };
 extern "C" {
 
 __global__
+void cu_float_to_uint( uint32_t *in, uint32_t *out, unsigned count );
+
+__global__
+void cu_uint_to_float( uint32_t *in, uint32_t *out, unsigned count );
+
+
+__global__
+void cu_double_to_uint( uint64_t *in, uint64_t *out, unsigned count );
+
+__global__
+void cu_uint_to_double( uint64_t *in, uint64_t *out, unsigned count );
+
+
+__global__
 void cu_build_histogram(
     uint8_t  *data,
     unsigned *hist,
@@ -64,6 +78,55 @@ cu_scatter(
 
 // end extern "C"
 };
+
+/* Reference
+http://stereopsis.com/radix.html
+*/
+
+__global__
+void cu_float_to_uint( uint32_t *in, uint32_t *out, unsigned count )
+{
+    unsigned id = threadIdx.x + blockIdx.x * blockDim.x;
+    if (id >= count ) return;
+
+    uint32_t f = in[id];
+    uint32_t mask = -int32_t(f >> 31) | 0x80000000;
+	out[id] = f ^ mask;
+}
+
+__global__
+void cu_uint_to_float( uint32_t *in, uint32_t *out, unsigned count )
+{
+    unsigned id = threadIdx.x + blockIdx.x * blockDim.x;
+    if (id >= count ) return;
+
+    uint32_t f = in[id];
+	uint32_t mask = ((f >> 31) - 1) | 0x80000000;
+	out[id] = f ^ mask;
+}
+
+__global__
+void cu_double_to_uint( uint64_t *in, uint64_t *out, unsigned count )
+{
+    unsigned id = threadIdx.x + blockIdx.x * blockDim.x;
+    if (id >= count ) return;
+
+    uint64_t f = in[id];
+    uint64_t mask =  -(f >> 63) | 0x8000000000000000ull ;
+    out[id] = f ^ mask;
+}
+
+__global__
+void cu_uint_to_double( uint64_t *in, uint64_t *out, unsigned count )
+{
+    unsigned id = threadIdx.x + blockIdx.x * blockDim.x;
+    if (id >= count ) return;
+
+    uint64_t f = in[id];
+	uint64_t mask = ((f >> 63) - 1) | 0x8000000000000000ull;
+	out[id] = f ^ mask;
+}
+
 
 /*
 Must
