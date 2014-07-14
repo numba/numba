@@ -340,7 +340,8 @@ class TestOperators(TestCase):
                 got = cfunc(x, y)
                 expected = pyfunc(x, y)
                 self.assertTrue(np.all(got == expected),
-                                "mismatch: %r != %r" % (got, expected))
+                                "mismatch for (%r, %r): %r != %r"
+                                % (x, y, got, expected))
 
     def run_test_floats(self, pyfunc, x_operands, y_operands, types_list,
                         flags=enable_pyobj_flags):
@@ -512,7 +513,7 @@ class TestOperators(TestCase):
                            flags=flags)
 
         x_operands = [2, 3]
-        y_operands = [0, 1]
+        y_operands = [1, 2]
 
         types_list = [(types.byte, types.byte),
                       (types.uint32, types.uint32),
@@ -523,7 +524,7 @@ class TestOperators(TestCase):
 
     def run_binop_floats(self, pyfunc, flags=enable_pyobj_flags):
         x_operands = [-1.1, 0.0, 1.1]
-        y_operands = [-1.5, 0.0, 2.1]
+        y_operands = [-1.5, 0.8, 2.1]
 
         types_list = [(types.float32, types.float32),
                       (types.float64, types.float64)]
@@ -551,6 +552,9 @@ class TestOperators(TestCase):
 
     def test_iadd_floats(self, flags=enable_pyobj_flags):
         self.run_binop_floats(self.op.iadd_usecase, flags)
+
+    def test_iadd_floats_npm(self):
+        self.test_iadd_floats(flags=Noflags)
 
     def test_add_ints_array(self, flags=enable_pyobj_flags):
 
@@ -608,6 +612,9 @@ class TestOperators(TestCase):
 
     def test_isub_floats(self, flags=enable_pyobj_flags):
         self.run_binop_floats(self.op.isub_usecase, flags)
+
+    def test_isub_floats_npm(self):
+        self.test_isub_floats(flags=Noflags)
 
     def test_sub_ints_array(self, flags=enable_pyobj_flags):
 
@@ -668,6 +675,9 @@ class TestOperators(TestCase):
     def test_imul_floats(self, flags=enable_pyobj_flags):
         self.run_binop_floats(self.op.imul_usecase, flags)
 
+    def test_imul_floats_npm(self):
+        self.test_imul_floats(flags=Noflags)
+
     def test_mul_ints_array(self, flags=enable_pyobj_flags):
 
         pyfunc = self.op.mul_usecase
@@ -705,9 +715,8 @@ class TestOperators(TestCase):
         with self.assertTypingError():
             self.test_mul_floats_array(flags=Noflags)
 
-    def run_div_ints(self, pyfunc, flags=enable_pyobj_flags):
-        if PYVERSION >= (3, 0):
-            # Due to true division returning float
+    def run_div_ints(self, pyfunc, float_return, flags=enable_pyobj_flags):
+        if float_return:
             tester = self.run_test_floats
         else:
             tester = self.run_test_ints
@@ -730,16 +739,76 @@ class TestOperators(TestCase):
         tester(pyfunc, x_operands, y_operands, types_list, flags=flags)
 
     def test_div_ints(self, flags=enable_pyobj_flags):
-        self.run_div_ints(self.op.div_usecase, flags)
+        self.run_div_ints(self.op.div_usecase, PYVERSION >= (3,), flags)
 
     def test_div_ints_npm(self):
         self.test_div_ints(flags=Noflags)
 
     def test_idiv_ints(self, flags=enable_pyobj_flags):
-        self.run_div_ints(self.op.idiv_usecase, flags)
+        self.run_div_ints(self.op.idiv_usecase, PYVERSION >= (3,), flags)
 
     def test_idiv_ints_npm(self):
         self.test_idiv_ints(flags=Noflags)
+
+    def test_div_floats(self, flags=enable_pyobj_flags):
+        self.run_binop_floats(self.op.div_usecase, flags)
+
+    def test_div_floats_npm(self):
+        self.test_div_floats(flags=Noflags)
+
+    def test_idiv_floats(self, flags=enable_pyobj_flags):
+        self.run_binop_floats(self.op.idiv_usecase, flags)
+
+    def test_idiv_floats_npm(self):
+        self.test_idiv_floats(flags=Noflags)
+
+    def test_truediv_ints(self, flags=enable_pyobj_flags):
+        self.run_div_ints(self.op.truediv_usecase, True, flags)
+
+    def test_truediv_ints_npm(self):
+        self.test_truediv_ints(flags=Noflags)
+
+    def test_itruediv_ints(self, flags=enable_pyobj_flags):
+        self.run_div_ints(self.op.itruediv_usecase, True, flags)
+
+    def test_itruediv_ints_npm(self):
+        self.test_itruediv_ints(flags=Noflags)
+
+    def test_truediv_floats(self, flags=enable_pyobj_flags):
+        self.run_binop_floats(self.op.truediv_usecase, flags)
+
+    def test_truediv_floats_npm(self):
+        self.test_truediv_floats(flags=Noflags)
+
+    def test_itruediv_floats(self, flags=enable_pyobj_flags):
+        self.run_binop_floats(self.op.itruediv_usecase, flags)
+
+    def test_itruediv_floats_npm(self):
+        self.test_itruediv_floats(flags=Noflags)
+
+    def test_floordiv_ints(self, flags=enable_pyobj_flags):
+        self.run_div_ints(self.op.floordiv_usecase, False, flags)
+
+    def test_floordiv_ints_npm(self):
+        self.test_floordiv_ints(flags=Noflags)
+
+    def test_ifloordiv_ints(self, flags=enable_pyobj_flags):
+        self.run_div_ints(self.op.ifloordiv_usecase, False, flags)
+
+    def test_ifloordiv_ints_npm(self):
+        self.test_ifloordiv_ints(flags=Noflags)
+
+    def test_floordiv_floats(self, flags=enable_pyobj_flags):
+        self.run_binop_floats(self.op.floordiv_usecase, flags)
+
+    def test_floordiv_floats_npm(self):
+        self.test_floordiv_floats(flags=Noflags)
+
+    def test_ifloordiv_floats(self, flags=enable_pyobj_flags):
+        self.run_binop_floats(self.op.ifloordiv_usecase, flags)
+
+    def test_ifloordiv_floats_npm(self):
+        self.test_ifloordiv_floats(flags=Noflags)
 
     def test_div_ints_array(self, flags=enable_pyobj_flags):
         pyfunc = self.op.div_usecase
@@ -758,19 +827,6 @@ class TestOperators(TestCase):
         with self.assertTypingError():
             self.test_div_ints_array(flags=Noflags)
 
-    def test_div_floats(self, flags=enable_pyobj_flags):
-
-        pyfunc = self.op.div_usecase
-
-        x_operands = [-111.111, 0.0, 2.2]
-        y_operands = [-2.2, 1.0, 111.111]
-
-        types_list = [(types.float32, types.float32),
-                      (types.float64, types.float64)]
-
-        self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
-                             flags=flags)
-
     def test_div_floats_array(self, flags=enable_pyobj_flags):
 
         pyfunc = self.op.div_usecase
@@ -786,9 +842,6 @@ class TestOperators(TestCase):
 
         self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
-
-    def test_div_floats_npm(self):
-        self.test_div_floats(flags=Noflags)
 
     def test_div_floats_array_npm(self):
         with self.assertTypingError():
