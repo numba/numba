@@ -39,6 +39,17 @@ cu_compute_indices_uint32 (
 
 __global__
 void
+cu_compute_indices_uint64 (
+    uint64_t  *data,
+    unsigned  *indices,
+    unsigned *hist,
+    unsigned *bucket_index,
+    unsigned  count,
+    unsigned  offset
+);
+
+__global__
+void
 cu_scan_bucket_index(unsigned *bucket_index);
 
 __global__
@@ -264,6 +275,22 @@ cu_compute_indices_uint32 (
 )
 {
     computer_indices<uint32_t>::kernel(
+        data, indices, hist, bucket_index, count, offset);
+}
+
+
+__global__
+void
+cu_compute_indices_uint64 (
+    uint64_t  *data,
+    unsigned  *indices,
+    unsigned *hist,
+    unsigned *bucket_index,
+    unsigned  count,
+    unsigned  offset
+)
+{
+    computer_indices<uint64_t>::kernel(
         data, indices, hist, bucket_index, count, offset);
 }
 

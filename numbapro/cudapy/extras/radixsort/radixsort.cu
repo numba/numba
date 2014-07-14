@@ -20,7 +20,7 @@ main()
 
 	const unsigned stride = sizeof(data_type);
 
-	unsigned ct_data = 10000;
+	unsigned ct_data = 258;
 	unsigned sz_data = sizeof(data_type) * ct_data;
 
     const unsigned ct_block = (ct_data + (BUCKET_SIZE-1)) / BUCKET_SIZE;
@@ -37,9 +37,10 @@ main()
 	data_type *data = new data_type[ct_data];
 	unsigned *hist = new unsigned[ct_hist];
     unsigned *bucket_total = new unsigned[ct_bucket_total];
+    unsigned *indices = new unsigned[ct_data];
 
 	for (unsigned i=0; i<ct_data; ++i) {
-		data[i] = ct_data - i - 1;
+		data[i] = i;// ct_data - i - 1;
 	}
 
     uint8_t *dev_data;
@@ -94,6 +95,15 @@ main()
             offset,
             ct_block
         );
+
+        cudaMemcpy(indices, dev_indices, sz_data, cudaMemcpyDeviceToHost);
+    	ASSERT_CUDA_LAST_ERROR();
+    	for (int i=0; i<ct_data; ++i) {
+            cout << " " << indices[i];
+    	}
+    	cout << endl;
+
+
 
         cu_scatter<<<ct_block, BUCKET_SIZE>>>(
             dev_data,
