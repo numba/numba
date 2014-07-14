@@ -72,14 +72,23 @@ for op in truth_operators:
 
 
 binary_operators = ['add', 'sub', 'mul', 'div', 'floordiv', 'mod',
-                    'and_', 'or_', 'xor', 'lshift', 'rshift']
+                    'and_', 'or_', 'xor', 'lshift', 'rshift',
+                    'iadd', 'isub', 'imul', 'idiv', 'ifloordiv', 'imod',
+                    'iand', 'ior', 'ixor', 'ilshift', 'irshift',
+                    ]
 comparison_operators = ['eq', 'ne', 'lt', 'le', 'gt', 'ge']
-truediv_operators = ['truediv']
-power_operators = ['pow']
+truediv_operators = ['truediv', 'itruediv']
+power_operators = ['pow', 'ipow']
 
 if utils.IS_PY3:
     binary_operators.remove('div')
-    
+    binary_operators.remove('idiv')
+
+def register_binop(op):
+    op_type = type('Operator_' + op, (BinaryOperator,), {'key':getattr(operator, op)})
+    setattr(OperatorModuleAttribute, 'resolve_' + op,  create_resolve_method(op_type))
+    builtin_global(getattr(operator, op), types.Function(op_type))
+
 for op in binary_operators:
     op_type = type('Operator_' + op, (BinaryOperator,), {'key':getattr(operator, op)})
     setattr(OperatorModuleAttribute, 'resolve_' + op,  create_resolve_method(op_type))

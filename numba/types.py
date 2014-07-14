@@ -28,6 +28,8 @@ class Type(object):
     """
     __slots__ = '_code', 'name', 'is_parametric'
 
+    mutable = False
+
     def __init__(self, name, param=False):
         self.name = name
         self.is_parametric = param
@@ -372,6 +374,8 @@ class ZipType(IteratorType):
 
 
 class CharSeq(Type):
+    mutable = True
+
     def __init__(self, count):
         self.count = count
         name = "[char x %d]" % count
@@ -386,6 +390,8 @@ class CharSeq(Type):
 
 
 class UnicodeCharSeq(Type):
+    mutable = True
+
     def __init__(self, count):
         self.count = count
         name = "[unichr x %d]" % count
@@ -400,6 +406,8 @@ class UnicodeCharSeq(Type):
 
 
 class Record(Type):
+    mutable = True
+
     def __init__(self, id, fields, size, align, dtype):
         self.id = id
         self.fields = fields.copy()
@@ -446,6 +454,8 @@ class ArrayIterator(IteratorType):
 
 class Array(IterableType):
     __slots__ = 'dtype', 'ndim', 'layout'
+
+    mutable = True
 
     # CS and FS are not reserved for inner contig but strided
     LAYOUTS = frozenset(['C', 'F', 'CS', 'FS', 'A'])
@@ -608,6 +618,8 @@ class Tuple(Type):
 
 
 class CPointer(Type):
+    mutable = True
+
     def __init__(self, dtype):
         self.dtype = dtype
         name = "*%s" % dtype
@@ -622,6 +634,8 @@ class CPointer(Type):
 
 
 class Object(Type):
+    mutable = True
+
     def __init__(self, clsobj):
         self.cls = clsobj
         name = "Object(%s)" % clsobj.__name__
