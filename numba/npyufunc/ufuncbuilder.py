@@ -40,12 +40,6 @@ class UFuncDispatcher(object):
         topt = self.targetoptions.copy()
         topt.update(targetoptions)
 
-        # Disable force nopython
-        #
-        # if topt.get('nopython', True) == False:
-        #     raise TypeError("nopython option must be False")
-        # topt['nopython'] = True
-
         flags = compiler.Flags()
         self.targetdescr.options.parse_as_flags(flags, topt)
         flags.set("no_compile")

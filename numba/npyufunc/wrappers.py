@@ -353,7 +353,6 @@ def _prepare_call_to_object_mode(context, builder, func, signature, args):
         builder.store(obj, ptr)
         ndarray_objects.append(obj)
 
-        # TODO: error checking
         obj_is_null = cgutils.is_null(builder, obj)
         builder.store(obj_is_null, error_pointer)
         cgutils.cbranch_or_continue(builder, obj_is_null, bb_core_return)
@@ -367,8 +366,7 @@ def _prepare_call_to_object_mode(context, builder, func, signature, args):
     pyapi = context.get_python_api(builder)
 
     # Release returned object
-    with cgutils.if_likely(builder, builder.not_(status.err)):
-        pyapi.decref(retval)
+    pyapi.decref(retval)
 
     builder.branch(bb_core_return)
     # At return block

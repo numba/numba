@@ -709,6 +709,8 @@ class BaseContext(object):
     def call_function(self, builder, callee, resty, argtys, args):
         retty = callee.args[0].type.pointee
         retval = cgutils.alloca_once(builder, retty)
+        # initialize return value
+        builder.store(lc.Constant.null(retty), retval)
         args = [self.get_value_as_argument(builder, ty, arg)
                 for ty, arg in zip(argtys, args)]
         realargs = [retval] + list(args)
