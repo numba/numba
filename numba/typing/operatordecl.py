@@ -84,11 +84,6 @@ if utils.IS_PY3:
     binary_operators.remove('div')
     binary_operators.remove('idiv')
 
-def register_binop(op):
-    op_type = type('Operator_' + op, (BinaryOperator,), {'key':getattr(operator, op)})
-    setattr(OperatorModuleAttribute, 'resolve_' + op,  create_resolve_method(op_type))
-    builtin_global(getattr(operator, op), types.Function(op_type))
-
 for op in binary_operators:
     op_type = type('Operator_' + op, (BinaryOperator,), {'key':getattr(operator, op)})
     setattr(OperatorModuleAttribute, 'resolve_' + op,  create_resolve_method(op_type))

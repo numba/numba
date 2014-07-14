@@ -337,7 +337,7 @@ class TestOperators(TestCase):
             cr = compile_isolated(pyfunc, arg_types, flags=flags)
             cfunc = cr.entry_point
             for x, y in itertools.product(x_operands, y_operands):
-                # For inplace ops, we checked that the first operand
+                # For inplace ops, we check that the first operand
                 # was correctly mutated.
                 x_got = copy.copy(x)
                 x_expected = copy.copy(x)
@@ -358,7 +358,7 @@ class TestOperators(TestCase):
             cr = compile_isolated(pyfunc, arg_types, flags=flags)
             cfunc = cr.entry_point
             for x, y in itertools.product(x_operands, y_operands):
-                # For inplace ops, we checked that the first operand
+                # For inplace ops, we check that the first operand
                 # was correctly mutated.
                 x_got = copy.copy(x)
                 x_expected = copy.copy(x)
