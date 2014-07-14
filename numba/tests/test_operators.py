@@ -504,7 +504,7 @@ class TestOperators(TestCase):
 
     def run_binop_ints(self, pyfunc, flags=enable_pyobj_flags):
         x_operands = [-2, 0, 1]
-        y_operands = [-1, 0, 3]
+        y_operands = [-1, 1, 3]
 
         types_list = [(types.int32, types.int32),
                       (types.int64, types.int64)]
@@ -847,75 +847,29 @@ class TestOperators(TestCase):
         with self.assertTypingError():
             self.test_div_floats_array(flags=Noflags)
 
-    def test_truediv_ints(self, flags=enable_pyobj_flags):
-        pyfunc = self.op.truediv_usecase
-
-        x_operands = [0, 1, 2, 3]
-        y_operands = [1, 1, 2, 3]
-
-        types_list = [(types.uint32, types.uint32),
-                      (types.uint64, types.uint64),
-                      (types.int32, types.int32),
-                      (types.int64, types.int64)]
-
-        self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
-                             flags=flags)
-
-    def test_truediv_ints_npm(self):
-        self.test_truediv_ints(flags=Noflags)
-
-    def test_truediv_floats(self, flags=enable_pyobj_flags):
-        pyfunc = self.op.truediv_usecase
-
-        x_operands = [-111.111, 0.0, 2.2]
-        y_operands = [-2.2, 1.0, 111.111]
-
-        types_list = [(types.float32, types.float32),
-                      (types.float64, types.float64)]
-
-        self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
-                             flags=flags)
-
-    def test_truediv_floats_npm(self):
-        self.test_truediv_floats(flags=Noflags)
-
-    def test_floordiv_floats(self, flags=enable_pyobj_flags):
-        pyfunc = self.op.floordiv_usecase
-
-        x_operands = [-111.111, 0.0, 2.2]
-        y_operands = [-2.2, 1.0, 111.111]
-
-        types_list = [(types.float32, types.float32),
-                      (types.float64, types.float64)]
-
-        self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
-                             flags=flags)
-
-    def test_floordiv_floats_npm(self):
-        self.test_floordiv_floats(flags=Noflags)
-
     def test_mod_ints(self, flags=enable_pyobj_flags):
+        self.run_binop_ints(self.op.mod_usecase, flags)
 
-        pyfunc = self.op.mod_usecase
+    def test_mod_ints_npm(self):
+        self.test_mod_ints(flags=Noflags)
 
-        x_operands = [-1, 0, 1, 2, 3]
-        y_operands = [-3, -2, -1, 1]
+    def test_imod_ints(self, flags=enable_pyobj_flags):
+        self.run_binop_ints(self.op.imod_usecase, flags)
 
-        types_list = [(types.int32, types.int32),
-                      (types.int64, types.int64)]
+    def test_imod_ints_npm(self):
+        self.test_imod_ints(flags=Noflags)
 
-        self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
-                           flags=flags)
+    def test_mod_floats(self, flags=enable_pyobj_flags):
+        self.run_binop_floats(self.op.mod_usecase, flags)
 
-        x_operands = [0, 1, 2, 3]
-        y_operands = [1, 2, 3]
+    def test_mod_floats_npm(self):
+        self.test_mod_floats(flags=Noflags)
 
-        types_list = [(types.byte, types.byte),
-                      (types.uint32, types.uint32),
-                      (types.uint64, types.uint64)]
+    def test_imod_floats(self, flags=enable_pyobj_flags):
+        self.run_binop_floats(self.op.imod_usecase, flags)
 
-        self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
-                           flags=flags)
+    def test_imod_floats_npm(self):
+        self.test_imod_floats(flags=Noflags)
 
     def test_mod_ints_array(self, flags=enable_pyobj_flags):
 
@@ -933,25 +887,9 @@ class TestOperators(TestCase):
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
-    def test_mod_ints_npm(self):
-        self.test_mod_ints(flags=Noflags)
-
     def test_mod_ints_array_npm(self):
         with self.assertTypingError():
             self.test_mod_ints_array(flags=Noflags)
-
-    def test_mod_floats(self, flags=enable_pyobj_flags):
-
-        pyfunc = self.op.mod_usecase
-
-        x_operands = [-111.111, 0.0, 2.2]
-        y_operands = [-2.2, 1.0, 111.111]
-
-        types_list = [(types.float32, types.float32),
-                      (types.float64, types.float64)]
-
-        self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
-                             flags=flags)
 
     def test_mod_floats_array(self, flags=enable_pyobj_flags):
 
@@ -968,17 +906,11 @@ class TestOperators(TestCase):
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
-    def test_mod_floats_npm(self):
-        self.test_mod_floats(flags=Noflags)
-
     def test_mod_floats_array_npm(self):
         with self.assertTypingError():
             self.test_mod_floats_array(flags=Noflags)
 
-    def test_pow_ints(self, flags=enable_pyobj_flags):
-
-        pyfunc = self.op.pow_usecase
-
+    def run_pow_ints(self, pyfunc, flags=enable_pyobj_flags):
         x_operands = [-2, -1, 0, 1, 2]
         y_operands = [0, 1, 2]
 
@@ -998,32 +930,7 @@ class TestOperators(TestCase):
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
-    def test_pow_ints_array(self, flags=enable_pyobj_flags):
-
-        pyfunc = self.op.pow_usecase
-
-        array = np.arange(-10, 10, dtype=np.int32)
-
-        x_operands = [array]
-        y_operands = [array]
-
-        arraytype = types.Array(types.int32, 1, 'C')
-        types_list = [(arraytype, arraytype)]
-
-        self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
-                           flags=flags)
-
-    def test_pow_ints_npm(self):
-        self.test_pow_ints(flags=Noflags)
-
-    def test_pow_ints_array_npm(self):
-        with self.assertTypingError():
-            self.test_pow_ints_array(flags=Noflags)
-
-    def test_pow_floats(self, flags=enable_pyobj_flags):
-
-        pyfunc = self.op.pow_usecase
-
+    def run_pow_floats(self, pyfunc, flags=enable_pyobj_flags):
         x_operands = [-222.222, -111.111, 111.111, 222.222]
         y_operands = [-2, -1, 0, 1, 2]
 
@@ -1041,6 +948,49 @@ class TestOperators(TestCase):
 
         self.run_test_floats(pyfunc, x_operands, y_operands, types_list,
                              flags=flags)
+
+    def test_pow_ints(self, flags=enable_pyobj_flags):
+        self.run_pow_ints(self.op.pow_usecase, flags)
+
+    def test_pow_ints_npm(self):
+        self.test_pow_ints(flags=Noflags)
+
+    def test_ipow_ints(self, flags=enable_pyobj_flags):
+        self.run_pow_ints(self.op.ipow_usecase, flags)
+
+    def test_ipow_ints_npm(self):
+        self.test_ipow_ints(flags=Noflags)
+
+    def test_pow_floats(self, flags=enable_pyobj_flags):
+        self.run_pow_floats(self.op.pow_usecase, flags)
+
+    def test_pow_floats_npm(self):
+        self.test_pow_floats(flags=Noflags)
+
+    def test_ipow_floats(self, flags=enable_pyobj_flags):
+        self.run_pow_floats(self.op.ipow_usecase, flags)
+
+    def test_ipow_floats_npm(self):
+        self.test_ipow_floats(flags=Noflags)
+
+    def test_pow_ints_array(self, flags=enable_pyobj_flags):
+
+        pyfunc = self.op.pow_usecase
+
+        array = np.arange(-10, 10, dtype=np.int32)
+
+        x_operands = [array]
+        y_operands = [array]
+
+        arraytype = types.Array(types.int32, 1, 'C')
+        types_list = [(arraytype, arraytype)]
+
+        self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
+                           flags=flags)
+
+    def test_pow_ints_array_npm(self):
+        with self.assertTypingError():
+            self.test_pow_ints_array(flags=Noflags)
 
     def test_pow_floats_array(self, flags=enable_pyobj_flags):
 
@@ -1071,9 +1021,6 @@ class TestOperators(TestCase):
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
-
-    def test_pow_floats_npm(self):
-        self.test_pow_floats(flags=Noflags)
 
     def test_pow_floats_array_npm(self):
         with self.assertTypingError():
@@ -1162,10 +1109,11 @@ class TestOperators(TestCase):
     def test_mod_complex_npm(self):
         self.test_mod_complex(flags=Noflags)
 
-    def test_bitshift_left(self, flags=enable_pyobj_flags):
+        #
+    # Bitwise operators
+    #
 
-        pyfunc = self.op.bitshift_left_usecase
-
+    def run_bitshift_left(self, pyfunc, flags=enable_pyobj_flags):
         x_operands = [0, 1]
         y_operands = [0, 1, 2, 4, 8, 16, 31]
 
@@ -1198,13 +1146,19 @@ class TestOperators(TestCase):
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
+    def test_bitshift_left(self, flags=enable_pyobj_flags):
+        self.run_bitshift_left(self.op.bitshift_left_usecase, flags)
+
     def test_bitshift_left_npm(self):
         self.test_bitshift_left(flags=Noflags)
 
-    def test_bitshift_right(self, flags=enable_pyobj_flags):
+    def test_bitshift_ileft(self, flags=enable_pyobj_flags):
+        self.run_bitshift_left(self.op.bitshift_ileft_usecase, flags)
 
-        pyfunc = self.op.bitshift_right_usecase
+    def test_bitshift_ileft_npm(self):
+        self.test_bitshift_ileft(flags=Noflags)
 
+    def run_bitshift_right(self, pyfunc, flags=enable_pyobj_flags):
         x_operands = [0, 1, 2**32 - 1]
         y_operands = [0, 1, 2, 4, 8, 16, 31]
 
@@ -1237,13 +1191,19 @@ class TestOperators(TestCase):
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
 
+    def test_bitshift_right(self, flags=enable_pyobj_flags):
+        self.run_bitshift_right(self.op.bitshift_right_usecase, flags)
+
     def test_bitshift_right_npm(self):
         self.test_bitshift_right(flags=Noflags)
 
-    def test_bitwise_and(self, flags=enable_pyobj_flags):
+    def test_bitshift_iright(self, flags=enable_pyobj_flags):
+        self.run_bitshift_right(self.op.bitshift_iright_usecase, flags)
 
-        pyfunc = self.op.bitwise_and_usecase
+    def test_bitshift_iright_npm(self):
+        self.test_bitshift_iright(flags=Noflags)
 
+    def run_logical(self, pyfunc, flags=enable_pyobj_flags):
         x_operands = list(range(0, 8)) + [2**32 - 1]
         y_operands = list(range(0, 8)) + [2**32 - 1]
 
@@ -1275,87 +1235,46 @@ class TestOperators(TestCase):
 
         self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
                            flags=flags)
+
+    def test_bitwise_and(self, flags=enable_pyobj_flags):
+        self.run_logical(self.op.bitwise_and_usecase)
 
     def test_bitwise_and_npm(self):
         self.test_bitwise_and(flags=Noflags)
 
+    def test_bitwise_iand(self, flags=enable_pyobj_flags):
+        self.run_logical(self.op.bitwise_iand_usecase)
+
+    def test_bitwise_iand_npm(self):
+        self.test_bitwise_iand(flags=Noflags)
+
     def test_bitwise_or(self, flags=enable_pyobj_flags):
-
-        pyfunc = self.op.bitwise_or_usecase
-
-        x_operands = list(range(0, 8)) + [2**32 - 1]
-        y_operands = list(range(0, 8)) + [2**32 - 1]
-
-        types_list = [(types.uint32, types.uint32)]
-
-        self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
-                           flags=flags)
-
-        x_operands = list(range(0, 8)) + [2**64 - 1]
-        y_operands = list(range(0, 8)) + [2**64 - 1]
-
-        types_list = [(types.uint64, types.uint64)]
-
-        self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
-                           flags=flags)
-
-        x_operands = list(range(-4, 4)) + [-(2**31), 2**31 - 1]
-        y_operands = list(range(-4, 4)) + [-(2**31), 2**31 - 1]
-
-        types_list = [(types.int32, types.int32)]
-
-        self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
-                           flags=flags)
-
-        x_operands = list(range(-4, 4)) + [-(2**63), 2**63 - 1]
-        y_operands = list(range(-4, 4)) + [-(2**63), 2**63 - 1]
-
-        types_list = [(types.int64, types.int64)]
-
-        self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
-                           flags=flags)
+        self.run_logical(self.op.bitwise_or_usecase)
 
     def test_bitwise_or_npm(self):
         self.test_bitwise_or(flags=Noflags)
 
+    def test_bitwise_ior(self, flags=enable_pyobj_flags):
+        self.run_logical(self.op.bitwise_ior_usecase)
+
+    def test_bitwise_ior_npm(self):
+        self.test_bitwise_ior(flags=Noflags)
+
     def test_bitwise_xor(self, flags=enable_pyobj_flags):
-
-        pyfunc = self.op.bitwise_xor_usecase
-
-        x_operands = list(range(0, 8)) + [2**32 - 1]
-        y_operands = list(range(0, 8)) + [2**32 - 1]
-
-        types_list = [(types.uint32, types.uint32)]
-
-        self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
-                           flags=flags)
-
-        x_operands = list(range(0, 8)) + [2**64 - 1]
-        y_operands = list(range(0, 8)) + [2**64 - 1]
-
-        types_list = [(types.uint64, types.uint64)]
-
-        self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
-                           flags=flags)
-
-        x_operands = list(range(-4, 4)) + [-(2**31), 2**31 - 1]
-        y_operands = list(range(-4, 4)) + [-(2**31), 2**31 - 1]
-
-        types_list = [(types.int32, types.int32)]
-
-        self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
-                           flags=flags)
-
-        x_operands = list(range(-4, 4)) + [-(2**63), 2**63 - 1]
-        y_operands = list(range(-4, 4)) + [-(2**63), 2**63 - 1]
-
-        types_list = [(types.int64, types.int64)]
-
-        self.run_test_ints(pyfunc, x_operands, y_operands, types_list,
-                           flags=flags)
+        self.run_logical(self.op.bitwise_xor_usecase)
 
     def test_bitwise_xor_npm(self):
         self.test_bitwise_xor(flags=Noflags)
+
+    def test_bitwise_ixor(self, flags=enable_pyobj_flags):
+        self.run_logical(self.op.bitwise_ixor_usecase)
+
+    def test_bitwise_ixor_npm(self):
+        self.test_bitwise_ixor(flags=Noflags)
+
+    #
+    # Unary operators
+    #
 
     def test_bitwise_not(self, flags=enable_pyobj_flags):
 
