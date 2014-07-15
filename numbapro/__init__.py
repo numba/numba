@@ -19,12 +19,10 @@ def test():
             if not ok:
                 raise Exception('Test Failed')
 
-        cfg = dict(buffer=True, verbosity=3)
-
         print('vectorizers'.center(80, '-'))
         import numbapro.vectorizers.tests
 
-        failfast(numbapro.vectorizers.tests.test(**cfg))
+        failfast(numbapro.vectorizers.tests.test())
 
         print('cuda libraries locator'.center(80, '-'))
         import numba.cuda.cudadrv.libs
@@ -37,22 +35,22 @@ def test():
             print('cudadrv'.center(80, '-'))
             import numbapro.cudadrv.tests
 
-            failfast(numbapro.cudadrv.tests.test(**cfg))
+            failfast(numbapro.cudadrv.tests.test())
 
             print('cudalib'.center(80, '-'))
             import numbapro.cudalib.tests
 
-            failfast(numbapro.cudalib.tests.test(**cfg))
+            failfast(numbapro.cudalib.tests.test())
 
             print('cudapy'.center(80, '-'))
             import numbapro.cudapy.tests
 
-            failfast(numbapro.cudapy.tests.test(**cfg))
+            failfast(numbapro.cudapy.tests.test())
 
             print('cudavec'.center(80, '-'))
             import numbapro.cudavec.tests
 
-            failfast(numbapro.cudavec.tests.test(**cfg))
+            failfast(numbapro.cudavec.tests.test())
 
         else:
             print('skipped cuda tests')
