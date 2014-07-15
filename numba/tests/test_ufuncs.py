@@ -1035,13 +1035,16 @@ class TestScalarUFuncs(TestCase):
             # typed at a lower precision can introduce precision problems. For this
             # reason the argument types must be taken into account.
             if any([t==types.float32 for t in alltypes]):
-                prec='single'
+                places = 7
             elif any([t==types.float64 for t in alltypes]):
-                prec='double'
+                places = 15
             else:
-                prec='exact'
+                places = None
 
-            self.assertPreciseEqual(got, expected, msg=msg, prec=prec)
+            if places is None:
+                self.assertEqual(got, expected, msg=msg)
+            else:
+                self.assertAlmostEqual(got, expected, places=places, msg=msg)
 
 
     def test_scalar_unary_ufunc(self, flags=enable_pyobj_flags):
