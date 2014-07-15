@@ -1024,8 +1024,9 @@ class TestScalarUFuncs(TestCase):
             # to uint64 nor vice-versa, falling back to using the float version.
             # Modify in those cases the expected value (the numpy version does
             # not use typed integers as inputs so its result is an integer)
-            if tyargs in {(types.int32, types.uint64), (types.uint64, types.int32),
-                          (types.int64, types.uint64), (types.uint64, types.int64)}:
+            special = set([(types.int32, types.uint64), (types.uint64, types.int32),
+                           (types.int64, types.uint64), (types.uint64, types.int64)])
+            if tyargs in special:
                 expected = float(expected)
 
             alltypes = cr.signature.args + (cr.signature.return_type,)
