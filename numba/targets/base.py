@@ -8,8 +8,9 @@ import numpy
 from numba import types, utils, cgutils, typing, numpy_support, errcode
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, python_attr_impl,
-                                    builtin_registry, impl_attribute)
-from numba.targets import builtins, rangeobj
+                                    builtin_registry, impl_attribute,
+                                    struct_registry)
+from numba.targets import arrayobj, builtins, iterators, rangeobj
 
 
 LTYPEMAP = {
@@ -34,10 +35,6 @@ LTYPEMAP = {
 STRUCT_TYPES = {
     types.complex64: builtins.Complex64,
     types.complex128: builtins.Complex128,
-    types.range_state32_type: rangeobj.RangeState32,
-    types.range_iter32_type: rangeobj.RangeIter32,
-    types.range_state64_type: rangeobj.RangeState64,
-    types.range_iter64_type: rangeobj.RangeIter64,
     types.slice3_type: builtins.Slice,
 }
 
@@ -248,7 +245,8 @@ class BaseContext(object):
 
     def get_data_type(self, ty):
         """
-        Get a data representation of the type
+        Get a data representation of the type that is safe for storage.
+        Record data are stored as byte array.
 
         Returns None if it is an opaque pointer
         """
@@ -278,10 +276,6 @@ class BaseContext(object):
             dtys = [self.get_value_type(t) for t in ty]
             return Type.struct(dtys)
 
-        elif isinstance(ty, types.UniTupleIter):
-            stty = self.get_struct_type(self.make_unituple_iter(ty))
-            return stty
-
         elif isinstance(ty, types.Record):
             # Record are represented as byte array
             return Type.struct([Type.array(Type.int(8), ty.size)])
@@ -297,7 +291,15 @@ class BaseContext(object):
         elif ty in STRUCT_TYPES:
             return self.get_struct_type(STRUCT_TYPES[ty])
 
-        elif isinstance(ty, types.Pair):
+        else:
+            try:
+                impl = struct_registry.match(ty)
+            except KeyError:
+                pass
+            else:
+                return self.get_struct_type(impl(ty))
+
+        if isinstance(ty, types.Pair):
             pairty = self.make_pair(ty.first_type, ty.second_type)
             return self.get_struct_type(pairty)
 
@@ -489,7 +491,7 @@ class BaseContext(object):
         """
         if ty == types.boolean:
             return builder.trunc(val, self.get_value_type(ty))
-        elif self.is_struct_type(ty):
+        elif cgutils.is_struct_ptr(val.type):
             return builder.load(val)
         return val
 
@@ -501,9 +503,17 @@ class BaseContext(object):
         if ty is types.boolean:
             r = self.get_return_type(ty).pointee
             return builder.zext(val, r)
-
         else:
             return val
+
+    def get_struct_member_value(self, builder, ty, val):
+        """
+        Local value representation to struct member representation
+        """
+        # Currently same as get_return_value.
+        # TODO: make a "TypeLayout" class that describe the layout at
+        #       different situations for a value of a type.
+        return self.get_return_value(builder, ty, val)
 
     def get_value_as_argument(self, builder, ty, val):
         """Prepare local value representation as argument type representation
@@ -765,8 +775,23 @@ class BaseContext(object):
         cstr = self.insert_const_string(mod, str(text))
         self.print_string(builder, cstr)
 
+    def get_struct_member_type(self, member_type):
+        """
+        Get the LLVM type for struct member of type *member_type*.
+        """
+        # get_struct_type() will:
+        # - represent Records as pointers
+        # - represent everything else as plain data
+        if isinstance(member_type, types.Record):
+            return self.get_value_type(member_type)
+        else:
+            return self.get_data_type(member_type)
+
     def get_struct_type(self, struct):
-        fields = [self.get_data_type(v) for _, v in struct._fields]
+        """
+        Get the LLVM struct type for the given Structure class *struct*.
+        """
+        fields = [self.get_struct_member_type(v) for _, v in struct._fields]
         return Type.struct(fields)
 
     def get_dummy_value(self):
@@ -785,14 +810,11 @@ class BaseContext(object):
         return PythonAPI(self, builder)
 
     def make_array(self, typ):
-        return builtins.make_array(typ)
+        return arrayobj.make_array(typ)
 
     def make_complex(self, typ):
         cls, _ = builtins.get_complex_info(typ)
         return cls
-
-    def make_unituple_iter(self, typ):
-        return builtins.make_unituple_iter(typ)
 
     def make_pair(self, first_type, second_type):
         """

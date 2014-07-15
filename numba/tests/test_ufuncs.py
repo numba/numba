@@ -8,12 +8,12 @@ import numpy as np
 import functools
 
 import numba.unittest_support as unittest
-from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
-from numba import types, typing, utils
+from numba.compiler import compile_isolated, Flags, DEFAULT_FLAGS
+from numba import types, utils
 from numba.config import PYVERSION
 from numba.targets import cpu
 from numba.typeinfer import TypingError
-from numba.tests.support import TestCase
+from numba.tests.support import TestCase, CompilationCache
 
 
 is32bits = tuple.__itemsize__ == 4
@@ -49,32 +49,6 @@ def _make_binary_ufunc_usecase(ufunc_name):
     fn = ldict['fn']
     fn.__name__ = "{0}_usecase".format(ufunc_name)
     return fn
-
-
-class CompilationCache(object):
-    """
-    A cache of compilation results for various signatures and flags.
-    This makes the tests significantly faster (or less slow).
-    """
-
-    def __init__(self):
-        self.typingctx = typing.Context()
-        self.targetctx = cpu.CPUContext(self.typingctx)
-        self.cr_cache = {}
-
-    def compile(self, func, args, return_type=None, flags=DEFAULT_FLAGS):
-        """
-        Compile the function or retrieve an already compiled result
-        from the cache.
-        """
-        cache_key = (func, args, return_type, flags)
-        try:
-            cr = self.cr_cache[cache_key]
-        except KeyError:
-            cr = compile_extra(self.typingctx, self.targetctx, func,
-                               args, return_type, flags, locals={})
-            self.cr_cache[cache_key] = cr
-        return cr
 
 
 class TestUFuncs(TestCase):

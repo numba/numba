@@ -312,7 +312,7 @@ class TypeVarMap(dict):
 
     def __getitem__(self, name):
         if name not in self:
-            self[name] = TypeVar(self.context, name.split('.', 1)[0])
+            self[name] = TypeVar(self.context, name)
         return super(TypeVarMap, self).__getitem__(name)
 
     def __setitem__(self, name, value):

@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 import collections
 import functools
+import io
 import timeit
 import math
 import numpy
@@ -45,6 +46,7 @@ class ConfigOptions(object):
 class SortedMap(collections.Mapping):
     """Immutable
     """
+
     def __init__(self, seq):
         self._values = []
         self._index = {}
@@ -109,6 +111,7 @@ def runonce(fn):
             inner._result = res
             inner._ran = True
         return inner._result
+
     inner._ran = False
     return inner
 
@@ -157,7 +160,7 @@ def benchmark(func, maxsec=1):
     best = min(result) / number
     if best >= maxsec:
         return BenchmarkResult(func, result, number)
-    # Scale it up to make it close the maximum time
+        # Scale it up to make it close the maximum time
     max_per_run_time = maxsec / 3 / number
     number = max(max_per_run_time / best / 3, 1)
     # Round to the next power of 10
@@ -190,12 +193,15 @@ if IS_PY3:
     def func_globals(f):
         return f.__globals__
 
-    def longint(v):
-        return int(v)
+    longint = int
 
     unicode = str
 
+    StringIO = io.StringIO
+
 else:
+    from cStringIO import StringIO
+
     def dict_iteritems(d):
         return d.iteritems()
 
@@ -214,8 +220,7 @@ else:
     def func_globals(f):
         return f.func_globals
 
-    def longint(v):
-        return long(v)
+    longint = long
 
     unicode = unicode
 
@@ -232,6 +237,7 @@ def _not_op(op, other):
         return NotImplemented
     return not op_result
 
+
 def _op_or_eq(op, self, other):
     # "a < b or a == b" handles "a <= b"
     # "a > b or a == b" handles "a >= b"
@@ -239,6 +245,7 @@ def _op_or_eq(op, self, other):
     if op_result is NotImplemented:
         return NotImplemented
     return op_result or self == other
+
 
 def _not_op_and_not_eq(op, self, other):
     # "not (a < b or a == b)" handles "a > b"
@@ -250,6 +257,7 @@ def _not_op_and_not_eq(op, self, other):
         return NotImplemented
     return not op_result and self != other
 
+
 def _not_op_or_eq(op, self, other):
     # "not a <= b or a == b" handles "a >= b"
     # "not a >= b or a == b" handles "a <= b"
@@ -257,6 +265,7 @@ def _not_op_or_eq(op, self, other):
     if op_result is NotImplemented:
         return NotImplemented
     return not op_result or self == other
+
 
 def _op_and_not_eq(op, self, other):
     # "a <= b and not a == b" handles "a < b"
@@ -266,26 +275,43 @@ def _op_and_not_eq(op, self, other):
         return NotImplemented
     return op_result and self != other
 
+
 def total_ordering(cls):
     """Class decorator that fills in missing ordering methods"""
     convert = {
-        '__lt__': [('__gt__', lambda self, other: _not_op_and_not_eq(self.__lt__, self, other)),
-                   ('__le__', lambda self, other: _op_or_eq(self.__lt__, self, other)),
+        '__lt__': [('__gt__',
+                    lambda self, other: _not_op_and_not_eq(self.__lt__, self,
+                                                           other)),
+                   ('__le__',
+                    lambda self, other: _op_or_eq(self.__lt__, self, other)),
                    ('__ge__', lambda self, other: _not_op(self.__lt__, other))],
-        '__le__': [('__ge__', lambda self, other: _not_op_or_eq(self.__le__, self, other)),
-                   ('__lt__', lambda self, other: _op_and_not_eq(self.__le__, self, other)),
+        '__le__': [('__ge__',
+                    lambda self, other: _not_op_or_eq(self.__le__, self,
+                                                      other)),
+                   ('__lt__',
+                    lambda self, other: _op_and_not_eq(self.__le__, self,
+                                                       other)),
                    ('__gt__', lambda self, other: _not_op(self.__le__, other))],
-        '__gt__': [('__lt__', lambda self, other: _not_op_and_not_eq(self.__gt__, self, other)),
-                   ('__ge__', lambda self, other: _op_or_eq(self.__gt__, self, other)),
+        '__gt__': [('__lt__',
+                    lambda self, other: _not_op_and_not_eq(self.__gt__, self,
+                                                           other)),
+                   ('__ge__',
+                    lambda self, other: _op_or_eq(self.__gt__, self, other)),
                    ('__le__', lambda self, other: _not_op(self.__gt__, other))],
-        '__ge__': [('__le__', lambda self, other: _not_op_or_eq(self.__ge__, self, other)),
-                   ('__gt__', lambda self, other: _op_and_not_eq(self.__ge__, self, other)),
+        '__ge__': [('__le__',
+                    lambda self, other: _not_op_or_eq(self.__ge__, self,
+                                                      other)),
+                   ('__gt__',
+                    lambda self, other: _op_and_not_eq(self.__ge__, self,
+                                                       other)),
                    ('__lt__', lambda self, other: _not_op(self.__ge__, other))]
     }
     # Find user-defined comparisons (not those inherited from object).
-    roots = [op for op in convert if getattr(cls, op, None) is not getattr(object, op, None)]
+    roots = [op for op in convert if
+             getattr(cls, op, None) is not getattr(object, op, None)]
     if not roots:
-        raise ValueError('must define at least one ordering operation: < > <= >=')
+        raise ValueError(
+            'must define at least one ordering operation: < > <= >=')
     root = max(roots)       # prefer __lt__ to __le__ to __gt__ to __ge__
     for opname, opfunc in convert[root]:
         if opname not in roots:

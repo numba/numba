@@ -28,11 +28,8 @@ from numba import utils, servicelib, mviewbuf
 from .error import CudaSupportError, CudaDriverError
 from .drvapi import API_PROTOTYPES
 from . import enums, drvapi
-
-try:
-    long
-except NameError:
-    long = int
+from numba import config
+from numba.utils import longint as long
 
 VERBOSE_JIT_LOG = int(os.environ.get('NUMBAPRO_VERBOSE_CU_JIT_LOG', 1))
 MIN_REQUIRED_CC = (2, 0)
@@ -161,14 +158,34 @@ class Driver(object):
             return obj
         else:
             obj = object.__new__(cls)
-            obj.lib = find_driver()
-            # Initialize driver
-            obj.cuInit(0)
             cls._singleton = obj
         return obj
 
     def __init__(self):
         self.devices = utils.UniqueDict()
+        self.is_initialized = False
+        self.initialization_error = None
+        try:
+            if config.DISABLE_CUDA:
+                raise CudaSupportError("CUDA disabled by user")
+            self.lib = find_driver()
+        except CudaSupportError as e:
+            self.is_initialized = True
+            self.initialization_error = e
+
+    def initialize(self):
+        self.is_initialized = True
+        try:
+            self.cuInit(0)
+        except CudaAPIError as e:
+            self.initialization_error = e
+            raise CudaSupportError("Error at driver init: \n%s:" % e)
+
+    @property
+    def is_available(self):
+        if not self.is_initialized:
+            self.initialize()
+        return self.initialization_error is None
 
     def __getattr__(self, fname):
         # First request of a driver API function
@@ -179,6 +196,15 @@ class Driver(object):
         restype = proto[0]
         argtypes = proto[1:]
 
+        # Initialize driver
+        if not self.is_initialized:
+            self.initialize()
+
+        if self.initialization_error is not None:
+            raise CudaSupportError("Error at driver init: \n%s:" %
+                                   self.initialization_error)
+
+        # Find function in driver library
         libfn = self._find_api(fname)
         libfn.restype = restype
         libfn.argtypes = argtypes
@@ -481,6 +507,7 @@ class Context(object):
         self.trashing.service()
         ptr = drvapi.cu_device_ptr()
         driver.cuMemAlloc(byref(ptr), bytesize)
+        _memory_finalizer = _make_mem_finalizer(driver.cuMemFree)
         mem = MemoryPointer(weakref.proxy(self), ptr, bytesize,
                             _memory_finalizer(self, ptr))
         self.allocations[ptr.value] = mem
@@ -502,6 +529,7 @@ class Context(object):
         owner = None
 
         if mapped:
+            _hostalloc_finalizer = _make_mem_finalizer(driver.cuMemFreeHost)
             finalizer = _hostalloc_finalizer(self, pointer)
             mem = MappedMemory(weakref.proxy(self), owner, pointer,
                                bytesize, finalizer=finalizer)
@@ -541,6 +569,7 @@ class Context(object):
         driver.cuMemHostRegister(pointer, size, flags)
 
         if mapped:
+            _mapped_finalizer = _make_mem_finalizer(driver.cuMemHostUnregister)
             finalizer = _mapped_finalizer(self, pointer)
             mem = MappedMemory(weakref.proxy(self), owner, pointer, size,
                                finalizer=finalizer)
@@ -647,11 +676,6 @@ def _make_mem_finalizer(dtor):
         return core
 
     return mem_finalize
-
-
-_hostalloc_finalizer = _make_mem_finalizer(driver.cuMemFreeHost)
-_mapped_finalizer = _make_mem_finalizer(driver.cuMemHostUnregister)
-_memory_finalizer = _make_mem_finalizer(driver.cuMemFree)
 
 
 def _pinnedalloc_finalizer(trashing, handle):

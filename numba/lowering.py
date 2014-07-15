@@ -576,8 +576,6 @@ class Lower(BaseLower):
         raise NotImplementedError(expr)
 
     def getvar(self, name):
-        if name not in self.varmap:
-            self.varmap[name] = self.alloca(name, self.typeof(name))
         return self.varmap[name]
 
     def loadvar(self, name):
@@ -585,16 +583,21 @@ class Lower(BaseLower):
         return self.builder.load(ptr)
 
     def storevar(self, value, name):
+        if name not in self.varmap:
+            self.varmap[name] = self.alloca_lltype(name, value.type)
         ptr = self.getvar(name)
         assert value.type == ptr.type.pointee,\
             "store %s to ptr of %s" % (value.type, ptr.type.pointee)
         self.builder.store(value, ptr)
 
     def alloca(self, name, type):
-        ltype = self.context.get_value_type(type)
+        lltype = self.context.get_value_type(type)
+        return self.alloca_lltype(name, lltype)
+
+    def alloca_lltype(self, name, lltype):
         bb = self.builder.basic_block
         self.builder.position_at_end(self.entry_block)
-        ptr = self.builder.alloca(ltype, name=name)
+        ptr = self.builder.alloca(lltype, name=name)
         self.builder.position_at_end(bb)
         return ptr
 
@@ -645,9 +648,9 @@ class PyLower(BaseLower):
             self.check_int_status(ok)
 
         elif isinstance(inst, ir.StoreMap):
-            dct = self.loadvar(inst.dct)
-            key = self.loadvar(inst.key)
-            value = self.loadvar(inst.value)
+            dct = self.loadvar(inst.dct.name)
+            key = self.loadvar(inst.key.name)
+            value = self.loadvar(inst.value.name)
             ok = self.pyapi.dict_setitem(dct, key, value)
             self.check_int_status(ok)
 

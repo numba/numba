@@ -14,7 +14,6 @@ def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
                                            signature.args, elems)
 
     # Ignoring error status and store result
-
     # Store
     if out.byref:
         retval = builder.load(retval)
@@ -94,8 +93,8 @@ def build_ufunc_wrapper(context, func, signature):
                                 context.get_argument_type(typ)))
 
     # Prepare output
-    out = UArrayArg(context, builder, arg_args, arg_steps, len(actual_args),
-                    context.get_value_type(signature.return_type))
+    valty = context.get_data_type(signature.return_type)
+    out = UArrayArg(context, builder, arg_args, arg_steps, len(actual_args), valty)
 
     # Setup indices
     offsets = []
@@ -247,12 +246,14 @@ def build_gufunc_wrapper(context, func, signature, sin, sout):
     for i, (typ, sym) in enumerate(zip(signature.args, sin + sout)):
         ary = GUArrayArg(context, builder, arg_args, arg_dims, arg_steps, i,
                          step_offset, typ, sym, sym_dim)
-        step_offset += ary.ndim
+        if not ary.as_scalar:
+            step_offset += ary.ndim
         arrays.append(ary)
 
     # Loop
     with cgutils.for_range(builder, loopcount, intp=intp_t) as ind:
         args = [a.array_value for a in arrays]
+
         status, retval = context.call_function(builder, func,
                                                signature.return_type,
                                                signature.args, args)
@@ -281,17 +282,25 @@ def build_gufunc_wrapper(context, func, signature, sin, sout):
 class GUArrayArg(object):
     def __init__(self, context, builder, args, dims, steps, i, step_offset,
                  typ, syms, sym_dim):
+
+        self.context = context
+        self.builder = builder
+
         if isinstance(typ, types.Array):
             self.dtype = typ.dtype
         else:
             self.dtype = typ
 
         self.syms = syms
+        self.as_scalar = not syms
 
-        self.ndim = len(syms)
+        if self.as_scalar:
+            self.ndim = 1
+        else:
+            self.ndim = len(syms)
 
-        core_step_ptr = builder.gep(steps, [context.get_constant(types.intp,
-                                                                 i)],
+        core_step_ptr = builder.gep(steps,
+                                    [context.get_constant(types.intp, i)],
                                     name="core.step.ptr")
 
         self.core_step = builder.load(core_step_ptr)
@@ -320,11 +329,15 @@ class GUArrayArg(object):
 
         self.array = arycls(context, builder)
         self.array.data = builder.bitcast(self.data, self.array.data.type)
-        self.array.shape = cgutils.pack_array(builder, self.shape)
-        self.array.strides = cgutils.pack_array(builder, self.strides)
+        if not self.as_scalar:
+            self.array.shape = cgutils.pack_array(builder, self.shape)
+            self.array.strides = cgutils.pack_array(builder, self.strides)
+        else:
+            one = context.get_constant(types.intp, 1)
+            zero = context.get_constant(types.intp, 0)
+            self.array.shape = cgutils.pack_array(builder, [one])
+            self.array.strides = cgutils.pack_array(builder, [zero])
         self.array_value = self.array._getpointer()
-
-        self.builder = builder
 
     def next(self, i):
         intp_t = i.type
@@ -332,3 +345,4 @@ class GUArrayArg(object):
         addr = self.builder.ptrtoint(array_data, intp_t)
         addr_new = self.builder.add(addr, self.core_step)
         self.array.data = self.builder.inttoptr(addr_new, array_data.type)
+

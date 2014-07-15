@@ -1,5 +1,7 @@
 from __future__ import print_function, division, absolute_import
+
 import functools
+
 from numba import utils
 
 
@@ -10,12 +12,16 @@ class CFBlock(object):
     def __init__(self, offset):
         self.offset = offset
         self.body = []
-        self.outgoing = set()
-        self.incoming = set()
+        # A map of jumps to outgoing blocks (successors):
+        #   { offset of outgoing block -> number of stack pops }
+        self.outgoing_jumps = {}
+        # A map of jumps to incoming blocks (predecessors):
+        #   { offset of incoming block -> number of stack pops }
+        self.incoming_jumps = {}
         self.terminating = False
 
     def __repr__(self):
-        args = self.body, self.outgoing, self.incoming
+        args = self.body, sorted(self.outgoing_jumps), sorted(self.incoming_jumps)
         return "block(body: %s, outgoing: %s, incoming: %s)" % args
 
     def __iter__(self):
@@ -67,6 +73,14 @@ class ControlFlowAnalysis(object):
             if i in self.liveblocks:
                 yield self.blocks[i]
 
+    def incoming_blocks(self, block):
+        """
+        Yield (incoming block, number of stack pops) pairs for *block*.
+        """
+        for i, pops in block.incoming_jumps.items():
+            if i in self.liveblocks:
+                yield self.blocks[i], pops
+
     def run(self):
         for inst in self._iter_inst():
             fname = "op_%s" % inst.opname
@@ -79,13 +93,13 @@ class ControlFlowAnalysis(object):
         # Close all blocks
         for cur, nxt in zip(self.blockseq, self.blockseq[1:]):
             blk = self.blocks[cur]
-            if not blk.outgoing and not blk.terminating:
-                blk.outgoing.add(nxt)
+            if not blk.outgoing_jumps and not blk.terminating:
+                blk.outgoing_jumps[nxt] = 0
 
         # Fill incoming
         for b in utils.dict_itervalues(self.blocks):
-            for out in b.outgoing:
-                self.blocks[out].incoming.add(b.offset)
+            for out, pops in b.outgoing_jumps.items():
+                self.blocks[out].incoming_jumps[b.offset] = pops
 
         # Find liveblocks
         self.dead_block_elimin()
@@ -121,7 +135,7 @@ class ControlFlowAnalysis(object):
         while pending:
             cur = pending.pop()
             blk = self.blocks[cur]
-            outgoing = set(blk.outgoing)
+            outgoing = set(blk.outgoing_jumps)
             liveset |= outgoing
             pending |= outgoing - finished
             finished.add(cur)
@@ -129,8 +143,12 @@ class ControlFlowAnalysis(object):
         for offset in liveset:
             self.liveblocks[offset] = self.blocks[offset]
 
-    def jump(self, target):
-        self._curblock.outgoing.add(target)
+    def jump(self, target, pops=0):
+        """
+        Register a jump (conditional or not) to *target* offset.
+        *pops* is the number of stack pops implied by the jump (default 0).
+        """
+        self._curblock.outgoing_jumps[target] = pops
 
     def _iter_inst(self):
         for inst in self.bytecode:
@@ -177,8 +195,14 @@ class ControlFlowAnalysis(object):
     op_POP_JUMP_IF_TRUE = _op_ABSOLUTE_JUMP_IF
     op_JUMP_IF_FALSE = _op_ABSOLUTE_JUMP_IF
     op_JUMP_IF_TRUE = _op_ABSOLUTE_JUMP_IF
-    op_JUMP_IF_FALSE_OR_POP = _op_ABSOLUTE_JUMP_IF
-    op_JUMP_IF_TRUE_OR_POP = _op_ABSOLUTE_JUMP_IF
+
+    def _op_ABSOLUTE_JUMP_OR_POP(self, inst):
+        self.jump(inst.get_jump_target())
+        self.jump(inst.next, pops=1)
+        self._force_new_block = True
+
+    op_JUMP_IF_FALSE_OR_POP = _op_ABSOLUTE_JUMP_OR_POP
+    op_JUMP_IF_TRUE_OR_POP = _op_ABSOLUTE_JUMP_OR_POP
 
     def op_JUMP_ABSOLUTE(self, inst):
         self.jump(inst.get_jump_target())
@@ -221,7 +245,7 @@ def find_dominators(blocks):
         changed = False
         for blk in remainblks:
             d = doms[blk]
-            ps = [doms[p] for p in blocks[blk].incoming if p in doms]
+            ps = [doms[p] for p in blocks[blk].incoming_jumps if p in doms]
             if not ps:
                 p = set()
             else:

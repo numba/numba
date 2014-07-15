@@ -738,3 +738,34 @@ builtin_global(bool, types.Function(Bool))
 builtin_global(int, types.Function(Int))
 builtin_global(float, types.Function(Float))
 builtin_global(complex, types.Function(Complex))
+
+
+#------------------------------------------------------------------------------
+
+@builtin
+class Enumerate(AbstractTemplate):
+    key = enumerate
+
+    def generic(self, args, kws):
+        assert not kws
+        [it] = args
+        if isinstance(it, types.IterableType):
+            enumerate_type = types.EnumerateType(it)
+            return signature(enumerate_type, it)
+
+
+builtin_global(enumerate, types.Function(Enumerate))
+
+
+@builtin
+class Zip(AbstractTemplate):
+    key = zip
+
+    def generic(self, args, kws):
+        assert not kws
+        if all(isinstance(it, types.IterableType) for it in args):
+            zip_type = types.ZipType(args)
+            return signature(zip_type, *args)
+
+
+builtin_global(zip, types.Function(Zip))

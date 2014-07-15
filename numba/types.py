@@ -292,18 +292,22 @@ class SimpleIterableType(IterableType):
         super(SimpleIterableType, self).__init__(name, param=True)
 
     def __eq__(self, other):
-        if isinstance(other, SimpleIterableType):
+        if other.__class__ is self.__class__:
             return self.name == other.name
 
     def __hash__(self):
         return hash(self.name)
 
 
-class IteratorType(Type):
+class IteratorType(IterableType):
     """
     Base class for all iterator types.
     Derived classes should implement the *yield_type* attribute.
     """
+
+    def __init__(self, name, **kwargs):
+        self.iterator_type = self
+        super(IteratorType, self).__init__(name, **kwargs)
 
 
 class SimpleIteratorType(IteratorType):
@@ -313,11 +317,58 @@ class SimpleIteratorType(IteratorType):
         super(SimpleIteratorType, self).__init__(name, param=True)
 
     def __eq__(self, other):
-        if isinstance(other, SimpleIteratorType):
+        if other.__class__ is self.__class__:
             return self.name == other.name
 
     def __hash__(self):
         return hash(self.name)
+
+
+class RangeType(SimpleIterableType):
+    pass
+
+class RangeIteratorType(SimpleIteratorType):
+    pass
+
+
+class EnumerateType(IteratorType):
+    """
+    Type class for `enumerate` objects.
+    Type instances are parametered with the underlying source type.
+    """
+
+    def __init__(self, iterable_type):
+        self.source_type = iterable_type.iterator_type
+        self.yield_type = Tuple([intp, self.source_type.yield_type])
+        name = 'enumerate(%s)' % (self.source_type)
+        super(EnumerateType, self).__init__(name, param=True)
+
+    def __eq__(self, other):
+        if isinstance(other, EnumerateType):
+            return self.source_type == other.source_type
+
+    def __hash__(self):
+        return hash(self.source_type)
+
+
+class ZipType(IteratorType):
+    """
+    Type class for `zip` objects.
+    Type instances are parametered with the underlying source types.
+    """
+
+    def __init__(self, iterable_types):
+        self.source_types = tuple(tp.iterator_type for tp in iterable_types)
+        self.yield_type = Tuple(tp.yield_type for tp in self.source_types)
+        name = 'zip(%s)' % ', '.join(str(tp) for tp in self.source_types)
+        super(ZipType, self).__init__(name, param=True)
+
+    def __eq__(self, other):
+        if isinstance(other, ZipType):
+            return self.source_types == other.source_types
+
+    def __hash__(self):
+        return hash(self.source_types)
 
 
 class CharSeq(Type):
@@ -381,7 +432,19 @@ class Record(Type):
         return [(f, t) for f, (t, _) in self.fields.items()]
 
 
-class Array(Type):
+class ArrayIterator(IteratorType):
+
+    def __init__(self, array_type):
+        self.array_type = array_type
+        name = "iter(%s)" % (self.array_type,)
+        if array_type.ndim == 1:
+            self.yield_type = array_type.dtype
+        else:
+            self.yield_type = array_type.copy(ndim=array_type.ndim - 1)
+        super(ArrayIterator, self).__init__(name, param=True)
+
+
+class Array(IterableType):
     __slots__ = 'dtype', 'ndim', 'layout'
 
     # CS and FS are not reserved for inner contig but strided
@@ -400,6 +463,7 @@ class Array(Type):
         self.layout = layout
         name = "array(%s, %sd, %s)" % (dtype, ndim, layout)
         super(Array, self).__init__(name, param=True)
+        self.iterator_type = ArrayIterator(self)
 
         if layout != 'A':
             # Install conversion from non-any layout to any layout
@@ -638,10 +702,10 @@ print_item_type = Dummy('print-item')
 sign_type = Dummy('sign')
 exception_type = Dummy('exception')
 
-range_iter32_type = SimpleIteratorType('range_iter32', int32)
-range_iter64_type = SimpleIteratorType('range_iter64', int64)
-range_state32_type = SimpleIterableType('range_state32', range_iter32_type)
-range_state64_type = SimpleIterableType('range_state64', range_iter64_type)
+range_iter32_type = RangeIteratorType('range_iter32', int32)
+range_iter64_type = RangeIteratorType('range_iter64', int64)
+range_state32_type = RangeType('range_state32', range_iter32_type)
+range_state64_type = RangeType('range_state64', range_iter64_type)
 
 # slice2_type = Type('slice2_type')
 slice3_type = Type('slice3_type')
