@@ -99,6 +99,11 @@ class Expr(object):
         return cls(op=op, loc=loc, fn=fn, lhs=lhs, rhs=rhs)
 
     @classmethod
+    def inplace_binop(cls, fn, lhs, rhs, loc):
+        op = 'inplace_binop'
+        return cls(op=op, loc=loc, fn=fn, lhs=lhs, rhs=rhs)
+
+    @classmethod
     def unary(cls, fn, value, loc):
         op = 'unary'
         return cls(op=op, loc=loc, fn=fn, value=value)

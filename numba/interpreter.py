@@ -643,6 +643,12 @@ class Interpreter(object):
         expr = ir.Expr.binop(op, lhs=lhs, rhs=rhs, loc=self.loc)
         self.store(expr, res)
 
+    def _inplace_binop(self, op, lhs, rhs, res):
+        lhs = self.get(lhs)
+        rhs = self.get(rhs)
+        expr = ir.Expr.inplace_binop(op, lhs=lhs, rhs=rhs, loc=self.loc)
+        self.store(expr, res)
+
     def op_BINARY_ADD(self, inst, lhs, rhs, res):
         self._binop('+', lhs, rhs, res)
 
@@ -681,8 +687,6 @@ class Interpreter(object):
 
     def op_BINARY_XOR(self, inst, lhs, rhs, res):
         self._binop('^', lhs, rhs, res)
-
-    _inplace_binop = _binop
 
     def op_INPLACE_ADD(self, inst, lhs, rhs, res):
         self._inplace_binop('+', lhs, rhs, res)

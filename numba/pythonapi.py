@@ -213,58 +213,53 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyNumber_%s" % name)
         return fn
 
-    def number_add(self, lhs, rhs):
-        fn = self._get_number_operator("Add")
+    def _call_number_operator(self, name, lhs, rhs, inplace=False):
+        if inplace:
+            name = "InPlace" + name
+        fn = self._get_number_operator(name)
         return self.builder.call(fn, [lhs, rhs])
 
-    def number_subtract(self, lhs, rhs):
-        fn = self._get_number_operator("Subtract")
-        return self.builder.call(fn, [lhs, rhs])
+    def number_add(self, lhs, rhs, inplace=False):
+        return self._call_number_operator("Add", lhs, rhs, inplace=inplace)
 
-    def number_multiply(self, lhs, rhs):
-        fn = self._get_number_operator("Multiply")
-        return self.builder.call(fn, [lhs, rhs])
+    def number_subtract(self, lhs, rhs, inplace=False):
+        return self._call_number_operator("Subtract", lhs, rhs, inplace=inplace)
 
-    def number_divide(self, lhs, rhs):
+    def number_multiply(self, lhs, rhs, inplace=False):
+        return self._call_number_operator("Multiply", lhs, rhs, inplace=inplace)
+
+    def number_divide(self, lhs, rhs, inplace=False):
         assert PYVERSION < (3, 0)
-        fn = self._get_number_operator("Divide")
-        return self.builder.call(fn, [lhs, rhs])
+        return self._call_number_operator("Divide", lhs, rhs, inplace=inplace)
 
-    def number_truedivide(self, lhs, rhs):
-        fn = self._get_number_operator("TrueDivide")
-        return self.builder.call(fn, [lhs, rhs])
+    def number_truedivide(self, lhs, rhs, inplace=False):
+        return self._call_number_operator("TrueDivide", lhs, rhs, inplace=inplace)
 
-    def number_floordivide(self, lhs, rhs):
-        fn = self._get_number_operator("FloorDivide")
-        return self.builder.call(fn, [lhs, rhs])
+    def number_floordivide(self, lhs, rhs, inplace=False):
+        return self._call_number_operator("FloorDivide", lhs, rhs, inplace=inplace)
 
-    def number_remainder(self, lhs, rhs):
-        fn = self._get_number_operator("Remainder")
-        return self.builder.call(fn, [lhs, rhs])
+    def number_remainder(self, lhs, rhs, inplace=False):
+        return self._call_number_operator("Remainder", lhs, rhs, inplace=inplace)
 
-    def number_lshift(self, lhs, rhs):
-        fn = self._get_number_operator("Lshift")
-        return self.builder.call(fn, [lhs, rhs])
+    def number_lshift(self, lhs, rhs, inplace=False):
+        return self._call_number_operator("Lshift", lhs, rhs, inplace=inplace)
 
-    def number_rshift(self, lhs, rhs):
-        fn = self._get_number_operator("Rshift")
-        return self.builder.call(fn, [lhs, rhs])
+    def number_rshift(self, lhs, rhs, inplace=False):
+        return self._call_number_operator("Rshift", lhs, rhs, inplace=inplace)
 
-    def number_and(self, lhs, rhs):
-        fn = self._get_number_operator("And")
-        return self.builder.call(fn, [lhs, rhs])
+    def number_and(self, lhs, rhs, inplace=False):
+        return self._call_number_operator("And", lhs, rhs, inplace=inplace)
 
-    def number_or(self, lhs, rhs):
-        fn = self._get_number_operator("Or")
-        return self.builder.call(fn, [lhs, rhs])
+    def number_or(self, lhs, rhs, inplace=False):
+        return self._call_number_operator("Or", lhs, rhs, inplace=inplace)
 
-    def number_xor(self, lhs, rhs):
-        fn = self._get_number_operator("Xor")
-        return self.builder.call(fn, [lhs, rhs])
+    def number_xor(self, lhs, rhs, inplace=False):
+        return self._call_number_operator("Xor", lhs, rhs, inplace=inplace)
 
-    def number_power(self, lhs, rhs):
+    def number_power(self, lhs, rhs, inplace=False):
         fnty = Type.function(self.pyobj, [self.pyobj] * 3)
-        fn = self._get_function(fnty, "PyNumber_Power")
+        fname = "PyNumber_InPlacePower" if inplace else "PyNumber_Power"
+        fn = self._get_function(fnty, fname)
         return self.builder.call(fn, [lhs, rhs, self.borrow_none()])
 
     def number_negative(self, obj):

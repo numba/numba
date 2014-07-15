@@ -400,7 +400,7 @@ class TypeInferer(object):
     def get_function_types(self, typemap):
         calltypes = utils.UniqueDict()
         for call, args, kws in self.intrcalls:
-            if call.op in ('binop', 'unary'):
+            if call.op in ('inplace_binop', 'binop', 'unary'):
                 fnty = call.fn
             else:
                 fnty = call.op
@@ -635,6 +635,11 @@ class TypeInferer(object):
                                             loc=expr.loc)
             self.constrains.append(constrain)
         elif expr.op == 'binop':
+            self.typeof_intrinsic_call(inst, target, expr.fn, expr.lhs, expr.rhs)
+        elif expr.op == 'inplace_binop':
+            # We assume type constraints for inplace operators to be the
+            # same as for normal operators.  This may have to be refined in
+            # the future.
             self.typeof_intrinsic_call(inst, target, expr.fn, expr.lhs, expr.rhs)
         elif expr.op == 'unary':
             self.typeof_intrinsic_call(inst, target, expr.fn, expr.value)
