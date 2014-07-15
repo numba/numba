@@ -342,7 +342,7 @@ class TestUFuncs(TestCase):
         # NumPy ufunc has bug with uint32 as input and int64 as output,
         # so skip uint32 input.
         self.unary_ufunc_test('negative', int_output_type=types.int64,
-            skip_inputs=[types.Array(types.uint32, 1, 'C')], flags=flags)
+                              skip_inputs=[types.Array(types.uint32, 1, 'C'), types.uint32], flags=flags)
 
     def test_negative_ufunc_npm(self):
         self.test_negative_ufunc(flags=no_pyobj_flags)

@@ -448,9 +448,9 @@ register_unary_ufunc_kernel(numpy.radians, _function_with_cast(npy.deg2rad, _flo
 
 # the following ufuncs rely on functions that are not based on a function
 # from npymath
-register_unary_ufunc_kernel(numpy.absolute, _homogeneous_function(types.abs_type))
-register_unary_ufunc_kernel(numpy.sign, _homogeneous_function(types.sign_type))
-register_unary_ufunc_kernel(numpy.negative, _homogeneous_function(types.neg_type))
+register_unary_ufunc_kernel(numpy.absolute, _homogeneous_function(types.abs_type, numpy.absolute))
+register_unary_ufunc_kernel(numpy.sign, _homogeneous_function(types.sign_type, numpy.sign))
+register_unary_ufunc_kernel(numpy.negative, _homogeneous_function(types.neg_type, numpy.negative))
 
 # for these we mostly rely on code generation for python operators.
 register_binary_ufunc_kernel(numpy.add, _homogeneous_function('+', numpy.add))
