@@ -302,6 +302,25 @@ class Global(object):
         return 'global(%s: %s)' % (self.name, self.value)
 
 
+class FreeVar(object):
+    """
+    A freevar, as loaded by LOAD_DECREF.
+    (i.e. a variable defined in an enclosing non-global scope)
+    """
+
+    def __init__(self, index, name, value, loc):
+        # index inside __code__.co_freevars
+        self.index = index
+        # variable name
+        self.name = name
+        # frozen value
+        self.value = value
+        self.loc = loc
+
+    def __str__(self):
+        return 'global(%s: %s)' % (self.name, self.value)
+
+
 class Var(object):
     """
     Attributes

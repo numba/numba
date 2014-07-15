@@ -357,7 +357,8 @@ class Lower(BaseLower):
             oty = self.typeof(value.name)
             return self.context.cast(self.builder, val, oty, ty)
 
-        elif isinstance(value, ir.Global):
+        # In nopython mode, closure vars are frozen like globals
+        elif isinstance(value, (ir.Global, ir.FreeVar)):
             if (isinstance(ty, types.Dummy) or
                     isinstance(ty, types.Module) or
                     isinstance(ty, types.Function) or
@@ -691,7 +692,11 @@ class PyLower(BaseLower):
         The returned object must have a new reference
         """
         value = inst.value
-        if isinstance(value, ir.Const):
+        # XXX since we don't have access to the __closure__ tuple at
+        # execution time, we must freeze the closure var as a constant,
+        # which limits its possible types (e.g., it can't be
+        # another function, see test_closure.py).
+        if isinstance(value, (ir.Const, ir.FreeVar)):
             return self.lower_const(value.value)
         elif isinstance(value, ir.Var):
             val = self.loadvar(value.name)

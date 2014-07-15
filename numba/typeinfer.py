@@ -499,7 +499,7 @@ class TypeInferer(object):
         elif isinstance(value, ir.Var):
             self.constrains.append(Propagate(dst=inst.target.name,
                                              src=value.name, loc=inst.loc))
-        elif isinstance(value, ir.Global):
+        elif isinstance(value, (ir.Global, ir.FreeVar)):
             self.typeof_global(inst, inst.target, value)
         elif isinstance(value, ir.Expr):
             self.typeof_expr(inst, inst.target, value)
