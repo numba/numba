@@ -1,9 +1,11 @@
-from __future__ import print_function
+from __future__ import print_function, absolute_import
 from collections import defaultdict
 import functools
+import types as pytypes
 import numpy
 from numba import types, utils
 from numba.typeconv import rules
+from numba.special import typeof
 from . import templates
 # Initialize declarations
 from . import builtins, mathdecl, npydecl, operatordecl
@@ -74,6 +76,10 @@ class BaseContext(object):
         except KeyError:
             if value.is_parametric:
                 attrinfo = self.attributes[type(value)]
+            elif isinstance(value, types.Module):
+                attrty = self.resolve_module_constants(value, attr)
+                if attrty is not None:
+                    return attrty
             else:
                 raise
 
@@ -90,8 +96,24 @@ class BaseContext(object):
             if self.type_compatibility(value, expectedty) is not None:
                 return templates.signature(types.void, target, value)
 
+    def resolve_module_constants(self, typ, attr):
+        """Resolve module-level global constants
+        Return None or the attribute type
+        """
+        if isinstance(typ, types.Module):
+            attrval = getattr(typ.pymod, attr)
+            ty = typeof(attrval)
+            if ty in types.number_domain:
+                return ty
+
     def get_global_type(self, gv):
-        return self.globals[gv]
+        try:
+            return self.globals[gv]
+        except KeyError:
+            if isinstance(gv, pytypes.ModuleType):
+                return types.Module(gv)
+            else:
+                raise
 
     def _load_builtins(self):
         self.install(templates.builtin_registry)
