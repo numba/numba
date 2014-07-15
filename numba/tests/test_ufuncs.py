@@ -1038,19 +1038,34 @@ class TestScalarUFuncs(TestCase):
     - the result of the inner function itself is already tested in TestUFuncs
     """
     def run_ufunc(self, pyfunc, arg_types, arg_values, flags=enable_pyobj_flags):
-
         for tyargs, args in zip(arg_types, arg_values):
             cr = compile_isolated(pyfunc, tyargs, flags=flags)
             cfunc = cr.entry_point
             got = cfunc(*args)
             expected = pyfunc(*args)
             msg = 'for args {0} typed {1}'.format(args, tyargs)
-            if cr.signature.return_type == types.float64:
-                prec='double'
-            elif cr.signature.return_type == types.float32:
+
+            # note: due to semantics of ufuncs, thing like adding a int32 to a
+            # uint64 results in doubles (as neither int32 can be cast safely
+            # to uint64 nor vice-versa, falling back to using the float version.
+            # Modify in those cases the expected value (the numpy version does
+            # not use typed integers as inputs so its result is an integer)
+            if tyargs in {(types.int32, types.uint64), (types.uint64, types.int32),
+                          (types.int64, types.uint64), (types.uint64, types.int64)}:
+                expected = float(expected)
+
+            alltypes = cr.signature.args + (cr.signature.return_type,)
+            
+            # select the appropriate precision for comparison: note that an argument
+            # typed at a lower precision can introduce precision problems. For this
+            # reason the argument types must be taken into account.
+            if any([t==types.float32 for t in alltypes]):
                 prec='single'
+            elif any([t==types.float64 for t in alltypes]):
+                prec='double'
             else:
                 prec='exact'
+
             self.assertPreciseEqual(got, expected, msg=msg, prec=prec)
 
 
@@ -1071,9 +1086,9 @@ class TestScalarUFuncs(TestCase):
         def _func(x,y):
             return np.add(x,y)
 
-        vals = [(2,), (2,), (1,), (2,), (.1,), (.2,)]
-        tys = [(types.int32,), (types.uint32,),
-               (types.int64,), (types.uint64,), (types.float32,), (types.float64,)]
+        vals = [2, 2, 1, 2, .1, .2]
+        tys = [types.int32, types.uint32,
+               types.int64, types.uint64, types.float32, types.float64]
         self.run_ufunc(_func, zip(tys, tys), zip(vals, vals), flags=flags)
 
     def test_scalar_binary_uniform_ufuncs_npm(self):
@@ -1083,9 +1098,9 @@ class TestScalarUFuncs(TestCase):
         def _func(x,y):
             return np.add(x,y)
 
-        vals = [(2,), (2,), (1,), (2,), (.1,), (.2,)]
-        tys = [(types.int32,), (types.uint32,),
-               (types.int64,), (types.uint64,), (types.float32,), (types.float64,)]
+        vals = [2, 2, 1, 2, .1, .2]
+        tys = [types.int32, types.uint32,
+               types.int64, types.uint64, types.float32, types.float64]
         self.run_ufunc(_func, itertools.product(tys, tys), itertools.product(vals, vals),
                        flags=flags)
 

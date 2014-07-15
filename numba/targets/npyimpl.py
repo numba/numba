@@ -12,7 +12,9 @@ from llvm.core import Constant, Type, ICMP_UGT
 from .imputils import implement, Registry
 from .. import typing, types, cgutils, numpy_support
 from ..config import PYVERSION
-
+from ..numpy_support import (ufunc_find_matching_loop,
+                             numpy_letter_types_to_numba_types,
+                             numba_types_to_numpy_letter_types)
 registry = Registry()
 register = registry.register
 
@@ -256,24 +258,35 @@ def _function_with_cast(op, inner_sig):
     return _KernelImpl
 
 
-def _homogeneous_function(op):
-    """A kernel using an homogeneous inner signature, based on the type of
-    the first argument. All arguments will be cast to that type and the return
-    type of the operation is assumed to have that type before casting"""
+def _homogeneous_function(op, alias=None):
+    """A function that uses the underlying ufunc loop information to chose an implementation
+    for the operation op. It uses the loop information provided by the ufunc in alias. Alias
+    defaults to the op if not provided.
+    Using the loop information, code is generated that simulates the process of:
+    converting input arguments (outer_sig) to the input arguments specifies by the ufunc
+    selected loop. The operation is performed in the converted arguments, resulting in a
+    value as specified by the selected loop information. Finally, the resulting value is
+    converted to the requested output type (in outer_sig).
+    """
     class _KernelImpl(_Kernel):
         def __init__(self, context, builder, outer_sig):
+            ufunc = alias if alias is not None else op
             self.context = context
             self.builder = builder
-            self.promote_type = _default_promotion_for_type(outer_sig.args[0])
+            letter_arg_types = numba_types_to_numpy_letter_types(outer_sig.args[0:ufunc.nin])
+            self.loop = ufunc_find_matching_loop(ufunc, letter_arg_types)
+            self.loop_in_types = numpy_letter_types_to_numba_types(self.loop[:ufunc.nin])
+            self.loop_out_types = numpy_letter_types_to_numba_types(self.loop[-ufunc.nout:])
+            assert(len(self.loop_out_types) == 1) #other cases not yet supported
             self.outer_sig = outer_sig
 
         def generate(self, *args):
-            inner_sig = typing.signature(*([self.promote_type]*(len(self.outer_sig.args)+1)))
+            inner_sig = typing.signature(self.loop_out_types[0], *self.loop_in_types)
             fn = self.context.get_function(op, inner_sig)
             cast_args = [self.context.cast(self.builder, val, inty, outty)
-                         for val, inty, outty in zip(args, self.outer_sig.args, inner_sig.args)]
+                         for val, inty, outty in zip(args, self.outer_sig.args, self.loop_in_types)]
             res = fn(self.builder, cast_args)
-            return self.context.cast(self.builder, res, self.promote_type,
+            return self.context.cast(self.builder, res, self.loop_out_types[0],
                                      self.outer_sig.return_type)
 
     return _KernelImpl
@@ -440,9 +453,9 @@ register_unary_ufunc_kernel(numpy.sign, _homogeneous_function(types.sign_type))
 register_unary_ufunc_kernel(numpy.negative, _homogeneous_function(types.neg_type))
 
 # for these we mostly rely on code generation for python operators.
-register_binary_ufunc_kernel(numpy.add, _homogeneous_function('+'))
-register_binary_ufunc_kernel(numpy.subtract, _homogeneous_function('-'))
-register_binary_ufunc_kernel(numpy.multiply, _homogeneous_function('*'))
+register_binary_ufunc_kernel(numpy.add, _homogeneous_function('+', numpy.add))
+register_binary_ufunc_kernel(numpy.subtract, _homogeneous_function('-', numpy.subtract))
+register_binary_ufunc_kernel(numpy.multiply, _homogeneous_function('*', numpy.multiply))
 if not PYVERSION >= (3, 0):
     register_binary_ufunc_kernel(numpy.divide, _division('/', legacy_divide=True))
 register_binary_ufunc_kernel(numpy.floor_divide, _division('//'))
