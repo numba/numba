@@ -122,16 +122,8 @@ def int_utruediv_impl(context, builder, sig, args):
     return builder.fdiv(fx, fy)
 
 
-def int_sfloordiv_impl(context, builder, sig, args):
-    x, y = args
-    cgutils.guard_zero(context, builder, y)
-    return builder.sdiv(x, y)
-
-
-def int_ufloordiv_impl(context, builder, sig, args):
-    x, y = args
-    cgutils.guard_zero(context, builder, y)
-    return builder.udiv(x, y)
+int_sfloordiv_impl = int_sdiv_impl
+int_ufloordiv_impl = int_udiv_impl
 
 
 def int_srem_impl(context, builder, sig, args):
