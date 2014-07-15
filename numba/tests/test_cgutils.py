@@ -113,6 +113,5 @@ class StructureTestCase(TestCase):
             inst.b = lc.Constant.real(lc.Type.float(), 4.56)
 
 
-
 if __name__ == '__main__':
     unittest.main()

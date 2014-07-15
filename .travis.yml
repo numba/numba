@@ -47,7 +47,7 @@ install:
     - if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then cd impyla ; git checkout udf ; make ; python setup.py install; fi
 
 script:
-    - cd ~ ; python -c "import sys;import numba;sys.exit(0 if numba.test() else 1)"
+    - cd ~ ; python -m numba.testing -v -b
     - if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then python $HOME/impyla/tests/test_impala.py; fi
 
 notifications:
