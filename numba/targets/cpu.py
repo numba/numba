@@ -151,8 +151,8 @@ class CPUContext(BaseContext):
         if not fndesc.native:
             self.optimize_pythonapi(func)
 
-        cfunc, fnptr = self.prepare_for_call(func, fndesc)
-        return cfunc, fnptr
+        cfunc = self.prepare_for_call(func, fndesc)
+        return cfunc
 
     def prepare_for_call(self, func, fndesc):
         wrapper, api = PyCallWrapper(self, func.module, func, fndesc,
@@ -184,7 +184,7 @@ class CPUContext(BaseContext):
         if fndesc.native:
             self.native_funcs[cfunc] = fndesc.mangled_name, baseptr
 
-        return cfunc, fnptr
+        return cfunc
 
     def optimize_pythonapi(self, func):
         # Simplify the function using

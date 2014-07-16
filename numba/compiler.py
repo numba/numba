@@ -143,7 +143,7 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
 
     if status.use_python_mode:
         # Object mode compilation
-        func, fnptr, lmod, lfunc, fndesc = py_lowering_stage(targetctx, interp,
+        func, lmod, lfunc, fndesc = py_lowering_stage(targetctx, interp,
                                                              flags.no_compile)
         typemap = defaultdict(lambda: types.pyobject)
         calltypes = defaultdict(lambda: types.pyobject)
@@ -155,7 +155,7 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
             args = tuple(args) + (types.pyobject,) * (nargs - len(args))
     else:
         # Native mode compilation
-        func, fnptr, lmod, lfunc, fndesc = native_lowering_stage(targetctx,
+        func, lmod, lfunc, fndesc = native_lowering_stage(targetctx,
                                                                  interp,
                                                                  typemap,
                                                                  return_type,
@@ -299,14 +299,14 @@ def native_lowering_stage(targetctx, interp, typemap, restype, calltypes,
     lower.lower()
 
     if nocompile:
-        return None, 0, lower.module, lower.function, fndesc
+        return None, lower.module, lower.function, fndesc
     else:
         # Prepare for execution
-        cfunc, fnptr = targetctx.get_executable(lower.function, fndesc)
+        cfunc = targetctx.get_executable(lower.function, fndesc)
 
         targetctx.insert_user_function(cfunc, fndesc)
 
-        return cfunc, fnptr, lower.module, lower.function, fndesc
+        return cfunc, lower.module, lower.function, fndesc
 
 
 def py_lowering_stage(targetctx, interp, nocompile):
@@ -315,10 +315,10 @@ def py_lowering_stage(targetctx, interp, nocompile):
     lower.lower()
 
     if nocompile:
-        return None, 0, lower.module, lower.function, fndesc
+        return None, lower.module, lower.function, fndesc
     else:
-        cfunc, fnptr = targetctx.get_executable(lower.function, fndesc)
-        return cfunc, fnptr, lower.module, lower.function, fndesc
+        cfunc = targetctx.get_executable(lower.function, fndesc)
+        return cfunc, lower.module, lower.function, fndesc
 
 
 def ir_optimize_for_py_stage(interp):
