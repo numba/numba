@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 from pprint import pprint
 from contextlib import contextmanager
 from collections import namedtuple, defaultdict
+
 from numba import (bytecode, interpreter, typing, typeinfer, lowering,
                    irpasses, utils, config, type_annotations, types, ir,
                    assume, looplifting, macro)
@@ -9,12 +10,22 @@ from numba.targets import cpu
 
 
 class Flags(utils.ConfigOptions):
-    OPTIONS = frozenset(['enable_looplift',
-                         'enable_pyobject',
-                         'force_pyobject',
-                         'no_compile',
-                         'no_wraparound',
-                         "boundcheck"])
+    # These options are all false by default, but the defaults are
+    # different with the @jit decorator (see targets.options.TargetOptions).
+
+    OPTIONS = frozenset([
+        # Enable loop-lifting
+        'enable_looplift',
+        # Enable pyobject mode (in general)
+        'enable_pyobject',
+        # Enable pyobject mode inside lifted loops
+        'enable_pyobject_looplift',
+        # Force pyobject mode inside the whole function
+        'force_pyobject',
+        'no_compile',
+        'no_wraparound',
+        'boundcheck',
+        ])
 
 
 DEFAULT_FLAGS = Flags()
@@ -74,6 +85,9 @@ def _fallback_context(status):
     except Exception as e:
         if not status.can_fallback:
             raise
+        if utils.PYVERSION >= (3,):
+            # Clear all references attached to the traceback
+            e = e.with_traceback(None)
         status.fail_reason = e
         status.use_python_mode = True
 
@@ -130,16 +144,20 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
             # No extracted loops
             pass
         else:
-            loopflags = flags.copy()
+            outer_flags = flags.copy()
+            loop_flags = flags.copy()
+            if not flags.enable_pyobject_looplift:
+                loop_flags.unset('enable_pyobject')
             # Do not recursively loop lift
-            loopflags.unset('enable_looplift')
+            outer_flags.unset('enable_looplift')
+            loop_flags.unset('enable_looplift')
+
             loopdisp = looplifting.bind(loops, typingctx, targetctx, locals,
-                                        loopflags)
-            lifted = tuple(loopdisp)
+                                        loop_flags)
             cres = compile_bytecode(typingctx, targetctx, entry, args,
-                                    return_type, loopflags, locals,
-                                    lifted=lifted)
-            return cres._replace(lifted=lifted)
+                                    return_type, outer_flags, locals,
+                                    lifted=tuple(loopdisp))
+            return cres
 
     if status.use_python_mode:
         # Object mode compilation

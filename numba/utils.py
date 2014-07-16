@@ -42,6 +42,15 @@ class ConfigOptions(object):
         copy._enabled = set(self._enabled)
         return copy
 
+    def __eq__(self, other):
+        return isinstance(other, ConfigOptions) and other._enabled == self._enabled
+
+    def __ne__(self, other):
+        return not self == other
+
+    def __hash__(self):
+        return hash(tuple(sorted(self._enabled)))
+
 
 class SortedMap(collections.Mapping):
     """Immutable

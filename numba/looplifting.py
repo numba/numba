@@ -20,12 +20,13 @@ def bind_loop(loopbc, typingctx, targetctx, locals, flags):
     disp = getattr(loopbc.module, fname, None)
     if disp is not None:
         if not isinstance(disp, LiftedLoop):
-            raise ValueError("Function %s exist but not a lifted-loop" % fname)
+            raise RuntimeError(
+                "Function %s exists but not a lifted-loop" % fname)
         # Short circuit
-        return disp
-    else:
-        disp = LiftedLoop(loopbc, typingctx, targetctx, locals, flags)
-        setattr(loopbc.module, fname, disp)
+        if disp.flags == flags:
+            return disp
+    disp = LiftedLoop(loopbc, typingctx, targetctx, locals, flags)
+    setattr(loopbc.module, fname, disp)
     return disp
 
 
@@ -155,7 +156,7 @@ def make_loop_bytecode(bytecode, loop, args):
     loop.append(return_value)
 
     # Function name
-    loopfuncname = bytecode.func_name+"__numba__loop%d__" % loop[0].offset
+    loopfuncname = bytecode.func_name + ".__numba__loop%d__" % loop[0].offset
 
     # Argspec
     argspectype = type(bytecode.argspec)

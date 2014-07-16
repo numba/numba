@@ -282,7 +282,10 @@ class ByteCodeBase(object):
 
 
 class CustomByteCode(ByteCodeBase):
-    pass
+    """
+    A simplified ByteCode class, used for hosting inner loops
+    when loop-lifting.
+    """
 
 
 class ByteCode(ByteCodeBase):
