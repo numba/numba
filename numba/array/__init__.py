@@ -11,7 +11,8 @@ from ufuncs import add, multiply, subtract, sin, \
     radians, deg2rad, rad2deg, sinh, cosh, tanh, arcsinh, arccosh, arctanh, \
     floor, ceil, trunc, rint, \
     exp, exp2, expm1, log, log10, log1p, negative, power, log2, logaddexp, \
-    sqrt, fabs, abs, greater
+    sqrt, fabs, abs, greater, square, sign, signbit, reciprocal, modf, \
+    logical_not, isnan, isfinite, isinf, invert, frexp, conj, absolute
 
 from constants import pi, e
 

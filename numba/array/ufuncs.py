@@ -45,7 +45,9 @@ unary_ufuncs = ['sin', 'cos', 'tan', 'arcsin', 'arccos', 'arctan', 'degrees',
                 'deg2rad', 'rad2deg', 'radians', 'sinh', 'cosh', 'tanh',
                 'arcsinh', 'arccosh', 'arctanh', 'floor', 'ceil', 'trunc',
                 'rint', 'exp', 'exp2', 'expm1', 'log', 'log10', 'log1p', 'log2',
-                'sqrt', 'fabs', 'abs', 'negative']
+                'sqrt', 'fabs', 'abs', 'negative', 'square', 'sign', 'signbit',
+                'reciprocal', 'modf', 'logical_not', 'isnan', 'isfinite',
+                'isinf', 'invert', 'frexp', 'conj', 'absolute']
 
 for ufunc in unary_ufuncs:
     global_dict[ufunc] = create_unary_op(ufunc)

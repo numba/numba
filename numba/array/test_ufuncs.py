@@ -286,8 +286,8 @@ class TestUFuncs(unittest.TestCase):
     def test_unary_logical_not_ufunc(self):
         self.unary_ufunc_test('logical_not', 'arange')
 
-    def test_unary_isinfinite_ufunc(self):
-        self.unary_ufunc_test('isinfinite', 'arange')
+    def test_unary_isfinite_ufunc(self):
+        self.unary_ufunc_test('isfinite', 'arange')
 
     def test_unary_isinf_ufunc(self):
         self.unary_ufunc_test('isinf', 'arange')

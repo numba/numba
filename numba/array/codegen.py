@@ -55,6 +55,18 @@ op_implementation = {
     'division':'operator.div',
     'floor_division':'operator.floordiv',
     'greater':'operator.gt',
+    'sign':'numpy.sign',
+    'signbit':'numpy.signbit',
+    'reciprocal':'numpy.reciprocal',
+    'modf':'numpy.modf',
+    'logical_not':'numpy.logical_not',
+    'isnan':'numpy.isnan',
+    'isfinite':'numpy.isfinite',
+    'isinf':'numpy.isinf',
+    'invert':'numpy.invert',
+    'frexp':'numpy.frexp',
+    'conj':'numpy.conj',
+    'absolute':'numpy.absolute',
 }
 
 
@@ -110,9 +122,12 @@ class CodeGen(Case):
     def unary_operation(self, operand, op_str):
         operand_var = CodeGen(operand, state=self.state)
         temp_var = 'temp' + str(len(self.state['vectorize_body']))
-        line = '{0} = {1}({2})'.format(temp_var,
-                                       op_implementation[op_str],
-                                       operand_var)
+        if op_str == 'square':
+            line = '{0} = operator.pow({1}, 2)'.format(temp_var, operand_var)
+        else:
+            line = '{0} = {1}({2})'.format(temp_var,
+                                           op_implementation[op_str],
+                                           operand_var)
         self.state['vectorize_body'].append(line)
         return temp_var
 
