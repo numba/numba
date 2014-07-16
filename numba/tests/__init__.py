@@ -84,6 +84,12 @@ class ReferenceLeakError(RuntimeError):
     pass
 
 
+class IntPool(collections.defaultdict):
+
+    def __missing__(self, key):
+        return key
+
+
 class RefleakTestResult(runner.TextTestResult):
 
     warmup = 3
@@ -98,9 +104,9 @@ class RefleakTestResult(runner.TextTestResult):
         alloc_deltas = [0] * repcount
         # Preallocate ints likely to be stored in rc_deltas and alloc_deltas,
         # to make sys.getallocatedblocks() less flaky.
-        _int_pool = collections.defaultdict(int)
+        _int_pool = IntPool()
         for i in range(-200, 200):
-            _int_pool[i] = i
+            _int_pool[i]
 
         for i in range(repcount):
             # Use a pristine, silent result object to avoid recursion
