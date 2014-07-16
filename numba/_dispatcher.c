@@ -108,16 +108,18 @@ static
 PyObject*
 Dispatcher_Insert(DispatcherObject *self, PyObject *args)
 {
-    PyObject *sigtup, *addrobj;
-    void *addr;
+    PyObject *sigtup, *cfunc;
+    PyCFunction addr;
     int i, sigsz;
     int *sig;
     int objectmode = 0;
 
-    if (!PyArg_ParseTuple(args, "OO|i", &sigtup, &addrobj, &objectmode)) {
+    if (!PyArg_ParseTuple(args, "OO!|i", &sigtup, &PyCFunction_Type,
+                          &cfunc, &objectmode)) {
         return NULL;
     }
-    addr = PyLong_AsVoidPtr(addrobj);
+
+    addr = PyCFunction_GET_FUNCTION(cfunc);
     sigsz = PySequence_Fast_GET_SIZE(sigtup);
     sig = malloc(sigsz * sizeof(int));
 

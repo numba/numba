@@ -67,7 +67,7 @@ class Overloaded(_dispatcher.Dispatcher):
     def add_overload(self, cres):
         args = tuple(cres.signature.args)
         sig = [a._code for a in args]
-        self._insert(sig, cres.entry_point_addr, cres.objectmode)
+        self._insert(sig, cres.entry_point, cres.objectmode)
         self.overloads[args] = cres
 
         # Add native function for correct typing the code generation
