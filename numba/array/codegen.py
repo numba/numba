@@ -13,62 +13,6 @@ import numpy
 # representation without loss of information.
 FLOAT_EXACT_FMT = "%.17g"
 
-op_implementation = {
-    'sin':'math.sin',
-    'cos':'math.cos',
-    'tan':'math.tan',
-    'arcsin':'math.asin',
-    'arccos':'math.acos',
-    'arctan':'math.atan',
-    'degrees':'math.degrees',
-    'deg2rad':'math.radians',
-    'rad2deg':'math.degrees',
-    'radians':'math.radians',
-    'sinh':'math.sinh',
-    'cosh':'math.cosh',
-    'tanh':'math.tanh',
-    'arcsinh':'math.asinh',
-    'arccosh':'math.acosh',
-    'arctanh':'math.atanh',
-    'floor':'math.floor',
-    'ceil':'math.ceil',
-    'trunc':'math.trunc',
-    'rint':'numpy.rint',
-    'exp':'math.exp',
-    'exp2':'numpy.exp2',
-    'expm1':'math.expm1',
-    'log':'math.log',
-    'log10':'math.log10',
-    'log1p':'math.log1p',
-    'log2':'numpy.log2',
-    'sqrt':'math.sqrt',
-    'fabs':'numpy.fabs',
-    'abs':'abs',
-    'negative':'operator.neg',
-    'hypot':'math.hypot',
-    'arctan2':'math.atan2',
-    'logaddexp':'numpy.logaddexp',
-    'add':'operator.add',
-    'subtract':'operator.sub',
-    'multiply':'operator.mul',
-    'power':'operator.pow',
-    'division':'operator.div',
-    'floor_division':'operator.floordiv',
-    'greater':'operator.gt',
-    'sign':'numpy.sign',
-    'signbit':'numpy.signbit',
-    'reciprocal':'numpy.reciprocal',
-    'modf':'numpy.modf',
-    'logical_not':'numpy.logical_not',
-    'isnan':'numpy.isnan',
-    'isfinite':'numpy.isfinite',
-    'isinf':'numpy.isinf',
-    'invert':'numpy.invert',
-    'frexp':'numpy.frexp',
-    'conj':'numpy.conj',
-    'absolute':'numpy.absolute',
-}
-
 
 class MissingArgumentError(Exception):
 
@@ -125,9 +69,9 @@ class CodeGen(Case):
         if op_str == 'square':
             line = '{0} = operator.pow({1}, 2)'.format(temp_var, operand_var)
         else:
-            line = '{0} = {1}({2})'.format(temp_var,
-                                           op_implementation[op_str],
-                                           operand_var)
+            line = '{0} = numpy.{1}({2})'.format(temp_var,
+                                                 op_str,
+                                                 operand_var)
         self.state['vectorize_body'].append(line)
         return temp_var
 
@@ -136,10 +80,10 @@ class CodeGen(Case):
         lhs_var = CodeGen(lhs, state=self.state)
         rhs_var = CodeGen(rhs, state=self.state)
         temp_var = 'temp' + str(len(self.state['vectorize_body']))
-        line = '{0} = {1}({2}, {3})'.format(temp_var,
-                                            op_implementation[op_str],
-                                            lhs_var,
-                                            rhs_var)
+        line = '{0} = numpy.{1}({2}, {3})'.format(temp_var,
+                                                  op_str,
+                                                  lhs_var,
+                                                  rhs_var)
         self.state['vectorize_body'].append(line)
         return temp_var
 

@@ -47,8 +47,8 @@ unary_ufuncs = ['sin', 'cos', 'tan', 'arcsin', 'arccos', 'arctan', 'degrees',
                 'rint', 'exp', 'exp2', 'expm1', 'log', 'log10', 'log1p', 'log2',
                 'sqrt', 'fabs', 'abs', 'negative', 'square', 'sign', 'signbit',
                 'reciprocal', 'modf', 'logical_not', 'isnan', 'isfinite',
-                'isinf', 'invert', 'frexp', 'conj', 'absolute']
-
+                'isinf', 'invert', 'frexp', 'conj', 'absolute'] 
+                
 for ufunc in unary_ufuncs:
     global_dict[ufunc] = create_unary_op(ufunc)
 
@@ -56,7 +56,13 @@ for ufunc in unary_ufuncs:
 # todo logaddexp does not work
 # need to add binary_ufunc capability to numba
 binary_ufuncs = ['hypot', 'arctan2', 'logaddexp', 'add', 'subtract', 'multiply',
-                 'power', 'division', 'floor_division', 'greater']
+                 'power', 'division', 'floor_division', 'greater',
+                 'true_divide', 'right_shift', 'remainder', 'not_equal',
+                 'nextafter', 'mod', 'minimum', 'maximum', 'logical_xor',
+                 'logical_or', 'logical_and', 'logaddexp2', 'less', 'less_equal',
+                 'left_shift', 'ldexp', 'greater_equal', 'fmod', 'fmin', 'fmax',
+                 'floor_divide', 'divide', 'copysign', 'bitwise_xor',
+                 'bitwise_or', 'bitwise_and']
 
 for ufunc in binary_ufuncs:
     global_dict[ufunc] = create_binary_op(ufunc)
