@@ -3,12 +3,13 @@ from collections import defaultdict
 import functools
 import types as pytypes
 import numpy
-from numba import types, utils
+from numba import types
 from numba.typeconv import rules
 from numba.special import typeof
 from . import templates
 # Initialize declarations
 from . import builtins, mathdecl, npydecl, operatordecl
+from numba import numpy_support, utils
 
 
 class BaseContext(object):
@@ -102,9 +103,72 @@ class BaseContext(object):
         """
         if isinstance(typ, types.Module):
             attrval = getattr(typ.pymod, attr)
-            ty = typeof(attrval)
+            ty = self.resolve_value_type(attrval)
             if ty in types.number_domain:
                 return ty
+
+    def resolve_value_type(self, val):
+        """
+        Return the numba type of a Python value
+        Return None if fail to type.
+        """
+        # Local import to get around the cyclic dependency
+        from numba import ctypes_utils, cffi_support
+
+        if val is True or val is False:
+            return types.boolean
+
+        elif isinstance(val, utils.INT_TYPES + (float,)):
+            return self.get_number_type(val)
+
+        elif val is None:
+            return types.none
+
+        elif isinstance(val, str):
+            return types.string
+
+        elif isinstance(val, complex):
+            return types.complex128
+
+        elif isinstance(val, tuple):
+            tys = [self.resolve_value_type(v) for v in val]
+            distinct_types = set(tys)
+            if len(distinct_types) == 1:
+                return types.UniTuple(tys[0], len(tys))
+            else:
+                return types.Tuple(tys)
+
+        elif numpy_support.is_arrayscalar(val):
+            return numpy_support.map_arrayscalar_type(val)
+
+        elif numpy_support.is_array(val):
+            ary = val
+            dtype = numpy_support.from_dtype(ary.dtype)
+            # Force C contiguous
+            return types.Array(dtype, ary.ndim, 'C')
+
+        elif ctypes_utils.is_ctypes_funcptr(val):
+            cfnptr = val
+            return ctypes_utils.make_function_type(cfnptr)
+
+        elif cffi_support.SUPPORTED and cffi_support.is_cffi_func(val):
+            return cffi_support.make_function_type(val)
+
+        elif (cffi_support.SUPPORTED and
+                  isinstance(val, cffi_support.ExternCFunction)):
+            return val
+
+        elif type(val) is type and issubclass(val, BaseException):
+            return types.exception_type
+
+        else:
+            try:
+                # Try to look up target specific typing information
+                return self.get_global_type(val)
+            except KeyError:
+                pass
+
+        return None
 
     def get_global_type(self, gv):
         try:
