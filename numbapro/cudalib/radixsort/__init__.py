@@ -1,5 +1,6 @@
 from __future__ import print_function, absolute_import
 import os
+from collections import namedtuple
 import numpy as np
 from numbapro import cuda
 from ctypes import c_int
@@ -57,19 +58,24 @@ class Radixsort(object):
             self.cu_uint_to_float = self.module.get_function('cu_uint_to_float')
             self.flip_float = True
         elif dtype == np.dtype(np.float64):
-            self.cu_float_to_uint = self.module.get_function('cu_double_to_uint')
-            self.cu_uint_to_float = self.module.get_function('cu_uint_to_double')
+            self.cu_float_to_uint = self.module.get_function(
+                'cu_double_to_uint')
+            self.cu_uint_to_float = self.module.get_function(
+                'cu_uint_to_double')
             self.flip_float = True
         else:
             self.flip_float = False
 
-    def sort(self, data):
+    def _sentry_data(self, data):
         if data.dtype != self.dtype:
             raise TypeError("Mismatch dtype")
         if data.ndim != 1:
             raise ValueError("Can only sort one dimensional data")
         if data.strides[0] != data.dtype.itemsize:
             raise ValueError("Data must be C contiguous")
+
+    def sort(self, data):
+        self._sentry_data(data)
 
         dtype = data.dtype
         idx_dtype = np.dtype(np.uint32)
@@ -93,23 +99,12 @@ class Radixsort(object):
             cu_float_to_uint(d_data, d_data, c_int(count))
 
         # Configure all kernels
-        (build_hist, scan_hist,
-         scan_bucket, indexing, scatter) = self._configure(blkcount)
+        kerns = self._configure(blkcount)
 
         # Sort loop
         for offset in range(stride):
-            build_hist(d_data, d_hist, c_int(stride), c_int(offset),
-                       c_int(count))
-
-            scan_hist(d_hist, d_bucktotal, c_int(blkcount))
-
-            scan_bucket(d_bucktotal)
-
-            indexing(d_data, d_indices, d_hist, d_bucktotal, c_int(count),
-                     c_int(offset))
-
-            scatter(d_data, d_sorted, d_indices, c_int(count), c_int(stride))
-
+            self._sortpass(d_data, d_sorted, d_hist, d_bucktotal, d_indices,
+                           count, stride, offset, blkcount)
             # Swap data and sorted
             d_data, d_sorted = d_sorted, d_data
 
@@ -119,6 +114,116 @@ class Radixsort(object):
         # Prepare result
         if data_conv:
             d_data.copy_to_host(data)
+
+    def select(self, data, seln):
+        """
+        Peform a partial sort to select the first N element after sorting.
+        """
+        self._sentry_data(data)
+
+        dtype = data.dtype
+        idx_dtype = np.dtype(np.uint32)
+        stride = data.strides[0]
+        count = data.size
+        blkcount = self._calc_block_count(count)
+        # Initialize device memory
+        d_indices = cuda.device_array(count, dtype=idx_dtype)
+        d_sorted = cuda.device_array(count, dtype=dtype)
+        d_hist = cuda.device_array(blkcount * BUCKET_SIZE, dtype=idx_dtype)
+        d_bucktotal = cuda.device_array(BUCKET_SIZE, dtype=idx_dtype)
+
+
+        d_data, data_conv = cuda.devicearray.auto_device(data)
+
+        if self.flip_float:
+            cu_float_to_uint = self.cu_float_to_uint.configure((blkcount,),
+                                                               (BUCKET_SIZE,))
+            cu_uint_to_float = self.cu_uint_to_float.configure((blkcount,),
+                                                               (BUCKET_SIZE,))
+
+            cu_float_to_uint(d_data, d_data, c_int(count))
+
+        # Select loop
+        offset = stride - 1   # Start from the MSB
+
+        self._select(d_data, d_sorted, d_hist, d_bucktotal, d_indices, count,
+                     stride, offset, blkcount, seln)
+
+        if self.flip_float:
+            cu_uint_to_float(d_data, d_data, c_int(count))
+
+        # Prepare result
+        if data_conv:
+            d_data.copy_to_host(data)
+
+    def _sortpass(self, d_data, d_sorted, d_hist, d_bucktotal, d_indices,
+                  count, stride, offset, blkcount, h_bucktotal=None):
+
+        kerns = self._configure(blkcount)
+
+        kerns.build_hist(d_data, d_hist, c_int(stride), c_int(offset),
+                         c_int(count))
+
+        kerns.scan_hist(d_hist, d_bucktotal, c_int(blkcount))
+
+        if h_bucktotal is not None:
+            d_bucktotal.copy_to_host(h_bucktotal)
+
+        kerns.scan_bucket(d_bucktotal)
+
+        kerns.indexing(d_data, d_indices, d_hist, d_bucktotal, c_int(count),
+                       c_int(offset))
+
+        kerns.scatter(d_data, d_sorted, d_indices, c_int(count), c_int(stride))
+
+    def _select(self, d_data, d_sorted, d_hist, d_bucktotal, d_indices,
+                count, stride, offset, blkcount, seln):
+
+        old_data = d_data
+        if count == seln:
+            # Do LSB radixsort on the block
+            for offset in range(offset + 1):
+                self._sortpass(d_data, d_sorted, d_hist, d_bucktotal, d_indices,
+                               count, stride, offset, blkcount)
+                # Swap
+                d_data, d_sorted = d_sorted, d_data
+
+            # Reverse last swap
+            d_data, d_sorted = d_sorted, d_data
+            cuda.driver.device_to_device(d_data, d_sorted, d_sorted.alloc_size)
+
+        else:
+            h_bucktotal = np.zeros(d_bucktotal.shape, dtype=d_bucktotal.dtype)
+            self._sortpass(d_data, d_sorted, d_hist, d_bucktotal, d_indices,
+                           count, stride, offset, blkcount, h_bucktotal=h_bucktotal)
+
+            # Copy sorted data
+            cuda.driver.device_to_device(d_data, d_sorted, d_sorted.alloc_size)
+
+            if offset == 0:
+                return
+
+            # Recursively sort each bucket
+            bucktotal = h_bucktotal.tolist()
+
+            total = 0
+            for count in bucktotal:
+                if total >= seln:
+                    break
+
+                begin = total
+                total += count
+                if count > 1:
+                    blkcount = self._calc_block_count(count)
+                    sub_d_data = d_data[begin:begin + count]
+                    sub_d_sorted = d_sorted[begin:begin + count]
+                    cuda.driver.device_to_device(sub_d_data, sub_d_sorted,
+                                                 sub_d_sorted.alloc_size)
+                    self._select(sub_d_data, sub_d_sorted, d_hist, d_bucktotal,
+                                 d_indices, count, stride, offset - 1, blkcount,
+                                 seln=min(count, seln - begin))
+
+
 
     def _calc_block_count(self, count):
         return (count + BUCKET_SIZE - 1) // BUCKET_SIZE
@@ -130,4 +235,11 @@ class Radixsort(object):
         scan_bucket = self.cu_scan_bucket_index.configure((1,), (BUCKET_SIZE,))
         indexing = self.cu_compute_indices.configure((blkcount,), (1,))
         scatter = self.cu_scatter.configure((blkcount,), (BUCKET_SIZE,))
-        return build_hist, scan_hist, scan_bucket, indexing, scatter
+
+        return _select_kernels(build_hist, scan_hist, scan_bucket, indexing,
+                               scatter)
+
+
+_select_kernels = namedtuple("select_kernels",
+                             ['build_hist', 'scan_hist', 'scan_bucket',
+                              'indexing', 'scatter'])
