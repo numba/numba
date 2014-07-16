@@ -1426,9 +1426,9 @@ def setitem_array1d_slice(context, builder, sig, args):
     ZERO = Constant.int(slicestruct.step.type, 0)
     NEG_ONE = Constant.int(slicestruct.start.type, -1)
 
-    b_step_eq_zero = builder.icmp(lc.ICMP_EQ, slicestruct.step, ZERO, name='www')
+    b_step_eq_zero = builder.icmp(lc.ICMP_EQ, slicestruct.step, ZERO)
     # bail if step is 0
-    with cgutils.ifthen(builder, b_step_eq_zero, '_wtf!'): 
+    with cgutils.ifthen(builder, b_step_eq_zero): 
         context.return_errcode(builder, errcode.ASSERTION_ERROR) 
     
     # adjust for negative indices for start
@@ -1436,7 +1436,7 @@ def setitem_array1d_slice(context, builder, sig, args):
     builder.store(slicestruct.start, start)
     b_start_lt_zero = builder.icmp(lc.ICMP_SLT, builder.load(start), ZERO)
     with cgutils.ifthen(builder, b_start_lt_zero): 
-        add = builder.add(builder.load(start), shapes[0], name='add_start_length')
+        add = builder.add(builder.load(start), shapes[0])
         builder.store(add, start)
         
     #step = cgutils.alloca_once(builder, slicestruct.step.type)    
@@ -1477,7 +1477,30 @@ def setitem_array1d_slice(context, builder, sig, args):
         b_step_lt_zero = builder.icmp(lc.ICMP_SLT, slicestruct.step, ZERO)
         cond = builder.select(b_step_lt_zero, builder.sub(shapes[0], ONE), shapes[0])
         builder.store(cond, stop)    
-          
+
+#    with cgutils.for_range_slice(builder, builder.load(start), builder.load(stop), slicestruct.step, slicestruct.start.type) as loop_idx:
+#        ptr = cgutils.get_item_pointer(builder, aryty, ary,
+#                                   [loop_idx],
+#                                   wraparound=context.metadata['wraparound'])
+#        context.pack_value(builder, aryty.dtype, val, ptr)
+ 
+
+    b_step_gt_zero = builder.icmp(lc.ICMP_SGT, slicestruct.step, ZERO)
+    with cgutils.ifelse(builder, b_step_gt_zero) as (then0, otherwise0):
+        with then0:
+            with cgutils.for_range_slice(builder, builder.load(start), builder.load(stop), slicestruct.step, slicestruct.start.type) as loop_idx1:
+                ptr = cgutils.get_item_pointer(builder, aryty, ary,
+                                   [loop_idx1],
+                                   wraparound=context.metadata['wraparound'])
+                context.pack_value(builder, aryty.dtype, val, ptr)
+        with otherwise0:
+            with cgutils.for_range_slice_dec(builder, builder.load(start), builder.load(stop), slicestruct.step, slicestruct.start.type) as loop_idx2:
+                ptr = cgutils.get_item_pointer(builder, aryty, ary,
+                                       [loop_idx2],
+                                       wraparound=context.metadata['wraparound'])
+                context.pack_value(builder, aryty.dtype, val, ptr)
+
+# todo -- remove all this code 
 
 #    b_start_less_stop = builder.icmp(lc.ICMP_SLT, slicestruct.start, slicestruct.stop)
 #    with cgutils.ifelse(builder, b_start_less_stop) as (then0, otherwise0):
@@ -1491,11 +1514,7 @@ def setitem_array1d_slice(context, builder, sig, args):
 #                    b_step_gt_zero = builder.icmp(lc.ICMP_SGT, slicestruct.step, ZERO) 
 #                    with cgutils.ifelse(builder, b_step_gt_zero) as (then2, otherwise2):
 #                        with then2:
-    with cgutils.for_range_slice(builder,builder.load(start), builder.load(stop), slicestruct.step, slicestruct.start.type) as loop_idx:
-        ptr = cgutils.get_item_pointer(builder, aryty, ary,
-                                   [loop_idx],
-                                   wraparound=context.metadata['wraparound'])
-        context.pack_value(builder, aryty.dtype, val, ptr)
+
 #                        #no code gen if step <= 0
 #                        with otherwise2:  # step either zero or negative 
 #                            b_step_eq_zero = builder.icmp(lc.ICMP_EQ, slicestruct.step, ZERO)
