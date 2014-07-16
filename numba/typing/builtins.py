@@ -748,10 +748,13 @@ class Enumerate(AbstractTemplate):
 
     def generic(self, args, kws):
         assert not kws
-        [it] = args
+        it = args[0]
+        if len(args) > 1 and not args[1] in types.integer_domain:
+            raise TypingError("Only integers supported as start value in enumerate")
+
         if isinstance(it, types.IterableType):
             enumerate_type = types.EnumerateType(it)
-            return signature(enumerate_type, it)
+            return signature(enumerate_type, *args)
 
 
 builtin_global(enumerate, types.Function(Enumerate))
