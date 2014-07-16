@@ -209,10 +209,10 @@ def if_likely(builder, pred):
 
 
 @contextmanager
-def ifthen(builder, pred, debug=''):
+def ifthen(builder, pred):
     bb = builder.basic_block
-    bbif = append_basic_block(builder, bb.name + '.if' + debug)
-    bbend = append_basic_block(builder, bb.name + '.endif' + debug)
+    bbif = append_basic_block(builder, bb.name + '.if')
+    bbend = append_basic_block(builder, bb.name + '.endif')
     builder.cbranch(pred, bbif, bbend)
 
     with goto_block(builder, bbif):
