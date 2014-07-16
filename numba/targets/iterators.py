@@ -34,8 +34,10 @@ def make_enumerate_cls(enum_type):
 
     return Enumerate
 
+
 @builtin
 @implement(enumerate, types.Kind(types.IterableType))
+@implement(enumerate, types.Kind(types.IterableType), types.Kind(types.Integer))
 def make_enumerate_object(context, builder, sig, args):
     srcty = sig.args[0]
 
@@ -58,10 +60,6 @@ def make_enumerate_object(context, builder, sig, args):
     enum.iter = iterobj
 
     return enum._getvalue()
-
-builtin(implement(enumerate, types.Kind(types.IterableType))(make_enumerate_object))
-for ty in types.integer_domain:
-    builtin(implement(enumerate, types.Kind(types.IterableType), ty)(make_enumerate_object))
 
 @builtin
 @implement('iternext', types.Kind(types.EnumerateType))
