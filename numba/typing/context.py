@@ -5,12 +5,11 @@ import types as pytypes
 import numpy
 from numba import types
 from numba.typeconv import rules
-from numba.special import typeof
 from . import templates
 # Initialize declarations
 from . import builtins, mathdecl, npydecl, operatordecl
 from numba import numpy_support, utils
-
+from . import ctypes_utils, cffi_utils
 
 class BaseContext(object):
     """A typing context for storing function typing constrain template.
@@ -112,9 +111,6 @@ class BaseContext(object):
         Return the numba type of a Python value
         Return None if fail to type.
         """
-        # Local import to get around the cyclic dependency
-        from numba import ctypes_utils, cffi_support
-
         if val is True or val is False:
             return types.boolean
 
@@ -151,11 +147,11 @@ class BaseContext(object):
             cfnptr = val
             return ctypes_utils.make_function_type(cfnptr)
 
-        elif cffi_support.SUPPORTED and cffi_support.is_cffi_func(val):
-            return cffi_support.make_function_type(val)
+        elif cffi_utils.SUPPORTED and cffi_utils.is_cffi_func(val):
+            return cffi_utils.make_function_type(val)
 
-        elif (cffi_support.SUPPORTED and
-                  isinstance(val, cffi_support.ExternCFunction)):
+        elif (cffi_utils.SUPPORTED and
+                  isinstance(val, cffi_utils.ExternCFunction)):
             return val
 
         elif type(val) is type and issubclass(val, BaseException):
