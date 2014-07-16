@@ -85,7 +85,7 @@ def int_divmod(context, builder, x, y):
     assert x.type == y.type
     xdivy = builder.sdiv(x, y)
     xmody = builder.srem(x, y)  # Intel has divmod instruction
-
+    
     ZERO = Constant.null(y.type)
     ONE = Constant.int(y.type, 1)
 
@@ -1403,24 +1403,152 @@ def setitem_array_tuple(context, builder, sig, args):
 @implement('setitem', types.Kind(types.Array),
            types.slice3_type, types.Any)
 def setitem_array1d_slice(context, builder, sig, args):
+    pass
     # context - numba.targets.cpu.CPUContext object
     # builder - llvm.core.Builder object
     # sig - Signature object
     # sig.args is the tuple of signature e.g. array(int64, 1d, C), slice3_type, int64
     # args -- llvm.core.Instruction, a tuple of Instructions
+    #debug_info(builder, "builder")
+    #debug_info(context, "context")
+    #debug_info(sig, "sig")
+    #debug_info(args, "args")
     aryty, idxty, valty = sig.args
     ary, idx, val = args
     arystty = make_array(aryty)
     ary = arystty(context, builder, ary)
-    # TODO: other than layout
+    shapes = cgutils.unpack_tuple(builder, ary.shape, aryty.ndim)
     slicestruct = Slice(context, builder, value=idx)
-    with cgutils.for_range(builder, slicestruct.stop, slicestruct.start.type) as loop_idx:
+    debug_info(slicestruct.start, "start")
+    # slicestruct fields are all integer types already
+# the logic here follows that of Python's Objects/sliceobject.c
+    
+    ZERO = Constant.int(slicestruct.step.type, 0)
+    NEG_ONE = Constant.int(slicestruct.start.type, -1)
+
+    b_step_eq_zero = builder.icmp(lc.ICMP_EQ, slicestruct.step, ZERO, name='www')
+    # bail if step is 0
+    with cgutils.ifthen(builder, b_step_eq_zero, '_wtf!'): 
+        context.return_errcode(builder, errcode.ASSERTION_ERROR) 
+    
+    # adjust for negative indices for start
+    start = cgutils.alloca_once(builder, slicestruct.start.type) 
+    builder.store(slicestruct.start, start)
+    b_start_lt_zero = builder.icmp(lc.ICMP_SLT, builder.load(start), ZERO)
+    with cgutils.ifthen(builder, b_start_lt_zero): 
+        add = builder.add(builder.load(start), shapes[0], name='add_start_length')
+        builder.store(add, start)
+        
+    #step = cgutils.alloca_once(builder, slicestruct.step.type)    
+    #builder.store(slicestruct.step, step)
+    b_start_lt_zero = builder.icmp(lc.ICMP_SLT, builder.load(start), ZERO)
+    with cgutils.ifthen(builder, b_start_lt_zero):
+        b_step_lt_zero = builder.icmp(lc.ICMP_SLT, slicestruct.step, ZERO)
+        cond = builder.select(b_step_lt_zero, NEG_ONE, ZERO)
+        builder.store(cond, start)    
+    
+    b_start_geq_len = builder.icmp(lc.ICMP_SGE, builder.load(start), shapes[0])
+    ONE = Constant.int(shapes[0].type, 1)
+    with cgutils.ifthen(builder, b_start_geq_len):
+        b_step_lt_zero = builder.icmp(lc.ICMP_SLT, slicestruct.step, ZERO)
+        cond = builder.select(b_step_lt_zero, builder.sub(shapes[0], ONE), shapes[0])
+        builder.store(cond, start)    
+    
+
+    # adjust stop for negative value
+    stop = cgutils.alloca_once(builder, slicestruct.stop.type) 
+    builder.store(slicestruct.stop, stop)
+    b_stop_lt_zero = builder.icmp(lc.ICMP_SLT, builder.load(stop), ZERO)
+    with cgutils.ifthen(builder, b_stop_lt_zero): 
+        add = builder.add(builder.load(stop), shapes[0])
+        builder.store(add, stop)
+        
+    #step = cgutils.alloca_once(builder, slicestruct.step.type)    
+    #builder.store(slicestruct.step, step)
+    b_stop_lt_zero = builder.icmp(lc.ICMP_SLT, builder.load(stop), ZERO)
+    with cgutils.ifthen(builder, b_stop_lt_zero):
+        b_step_lt_zero = builder.icmp(lc.ICMP_SLT, slicestruct.step, ZERO)
+        cond = builder.select(b_step_lt_zero, NEG_ONE, ZERO)
+        builder.store(cond, start)    
+    
+    b_stop_geq_len = builder.icmp(lc.ICMP_SGE, builder.load(stop), shapes[0])
+    ONE = Constant.int(shapes[0].type, 1)
+    with cgutils.ifthen(builder, b_stop_geq_len):
+        b_step_lt_zero = builder.icmp(lc.ICMP_SLT, slicestruct.step, ZERO)
+        cond = builder.select(b_step_lt_zero, builder.sub(shapes[0], ONE), shapes[0])
+        builder.store(cond, stop)    
+          
+
+#    b_start_less_stop = builder.icmp(lc.ICMP_SLT, slicestruct.start, slicestruct.stop)
+#    with cgutils.ifelse(builder, b_start_less_stop) as (then0, otherwise0):
+#        with then0:
+#            # start < stop 
+#            # check that stop <= ndim
+#            b_stop_leq_shape = builder.icmp(lc.ICMP_SLE, slicestruct.stop, shapes[0]) 
+#            with cgutils.ifelse(builder, b_stop_leq_shape) as (then1, otherwise1):
+#                with then1:
+#                    # check that step is > 0
+#                    b_step_gt_zero = builder.icmp(lc.ICMP_SGT, slicestruct.step, ZERO) 
+#                    with cgutils.ifelse(builder, b_step_gt_zero) as (then2, otherwise2):
+#                        with then2:
+    with cgutils.for_range_slice(builder,builder.load(start), builder.load(stop), slicestruct.step, slicestruct.start.type) as loop_idx:
         ptr = cgutils.get_item_pointer(builder, aryty, ary,
-                                       [loop_idx],
-                                       wraparound=context.metadata['wraparound'])
+                                   [loop_idx],
+                                   wraparound=context.metadata['wraparound'])
         context.pack_value(builder, aryty.dtype, val, ptr)
-
-
+#                        #no code gen if step <= 0
+#                        with otherwise2:  # step either zero or negative 
+#                            b_step_eq_zero = builder.icmp(lc.ICMP_EQ, slicestruct.step, ZERO)
+#                            with cgutils.ifelse(builder, b_step_eq_zero) as (then3, otherwise3):
+#                                with then3:
+#                                    context.return_errcode(builder, errcode.ASSERTION_ERROR) 
+#                                with otherwise3:  # ignore negative step
+#                                    context.return_native_none(builder)
+#                with otherwise1: 
+#                    with cgutils.for_range_slice(builder, slicestruct.start, shapes[0], slicestruct.step, slicestruct.start.type) as loop_idx:
+#                        ptr = cgutils.get_item_pointer(builder, aryty, ary,
+#                                       [loop_idx],
+#                                       wraparound=context.metadata['wraparound'])
+#                        context.pack_value(builder, aryty.dtype, val, ptr)
+#        with otherwise0:                    
+#            pass
+#            # start > stop, 
+            # step should be < 0    
+            # check that start <= ndim
+#            b_start_leq_shape = builder.icmp(lc.ICMP_SLE, slicestruct.start, shapes[0]) 
+#            with cgutils.ifelse(builder, b_start_leq_shape) as (then4, otherwise4):
+#                with then4:
+#                    # check that step is > 0
+#                    b_step_gt_zero = builder.icmp(lc.ICMP_SGT, slicestruct.step, ZERO) 
+#                    with cgutils.ifelse(builder, b_step_gt_zero) as (then2, otherwise2):
+#                        with then2:
+#                            with cgutils.for_range_slice(builder, slicestruct.start, slicestruct.stop, slicestruct.step, slicestruct.start.type) as loop_idx:
+#                                ptr = cgutils.get_item_pointer(builder, aryty, ary,
+#                                       [loop_idx],
+#                                       wraparound=context.metadata['wraparound'])
+#                                context.pack_value(builder, aryty.dtype, val, ptr)
+#                        #no code gen if step <= 0
+#                        with otherwise2:  # step either zero or negative 
+#                            b_step_eq_zero = builder.icmp(lc.ICMP_EQ, slicestruct.step, ZERO)
+#                            with cgutils.ifelse(builder, b_step_eq_zero) as (then3, otherwise3):
+#                                with then3:
+#                                    context.return_errcode(builder, errcode.ASSERTION_ERROR) 
+#                                with otherwise3:  # ignore negative step
+#                                    context.return_native_none(builder)
+#                with otherwise4:
+#                    with cgutils.for_range_slice(builder, slicestruct.start, shapes[0], slicestruct.step, slicestruct.start.type) as loop_idx:
+#                        ptr = cgutils.get_item_pointer(builder, aryty, ary,
+#                                       [loop_idx],
+#                                       wraparound=context.metadata['wraparound'])
+#                        context.pack_value(builder, aryty.dtype, val, ptr)
+# 
+#
+#with cgutils.for_range_slice_dec(builder, slicestruct.start, slicestruct.stop, slicestruct.step, slicestruct.start.type) as loop_idx:
+#                ptr = cgutils.get_item_pointer(builder, aryty, ary,
+#                                       [loop_idx],
+#                                       wraparound=context.metadata['wraparound'])
+#                context.pack_value(builder, aryty.dtype, val, ptr)
+# 
 @builtin
 @implement(types.len_type, types.Kind(types.Array))
 def array_len(context, builder, sig, args):
