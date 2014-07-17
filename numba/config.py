@@ -19,12 +19,10 @@ def _readenv(name, ctor, default):
 
 
 # Debug flag to control compiler debug print
-#DEBUG = _readenv("NUMBA_DEBUG", int, 0)
-DEBUG = _readenv("NUMBA_DEBUG", int, 1)
+DEBUG = _readenv("NUMBA_DEBUG", int, 0)
 
 # JIT Debug flag to trigger IR instruction print
-#DEBUG_JIT = _readenv("NUMBA_DEBUG_JIT", int, 0)
-DEBUG_JIT = _readenv("NUMBA_DEBUG_JIT", int, 1)
+DEBUG_JIT = _readenv("NUMBA_DEBUG_JIT", int, 0)
 
 # Optimization level
 OPT = _readenv("NUMBA_OPT", int, 3)
@@ -42,8 +40,7 @@ DUMP_OPTIMIZED = _readenv("NUMBA_DUMP_OPTIMIZED", int, DEBUG)
 DUMP_ASSEMBLY = _readenv("NUMBA_DUMP_ASSEMBLY", int, DEBUG)
 
 # Force dump of type annotation
-#ANNOTATE = _readenv("NUMBA_DUMP_ANNOTATION", int, 0)
-ANNOTATE = _readenv("NUMBA_DUMP_ANNOTATION", int, 1)
+ANNOTATE = _readenv("NUMBA_DUMP_ANNOTATION", int, 0)
 
 # Python version in (major, minor) tuple
 PYVERSION = sys.version_info[:2]

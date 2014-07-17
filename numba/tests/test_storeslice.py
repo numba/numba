@@ -4,6 +4,11 @@ import numpy as np
 from numba.compiler import compile_isolated, Flags
 
 
+
+def setitem(array, start, stop, step, scalar) 
+    array[start:stop:step] = scalar
+
+
 def usecase(obs, nPoints, B, sigB, A, sigA, M, sigM):
     center = nPoints / 2
     print(center)
@@ -27,6 +32,9 @@ class TestStoreSlice(unittest.TestCase):
         print(obs_got, obs_expected)
         self.assertTrue(np.allclose(obs_got, obs_expected))
 
+    def test_array_slice_setitem(self):
+        n = 10
+        x = 
 
 if __name__ == '__main__':
     unittest.main()
