@@ -206,7 +206,7 @@ class Registry(object):
     def register(self, item):
         if hasattr(item, '__wrapped__'):
             self.functions.append(item)
-            self.register(getattr(item, '__wrapped__', None))
+            self.register(item.__wrapped__)
 
         return item
 
