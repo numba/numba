@@ -2,11 +2,11 @@ from __future__ import print_function
 import numba.unittest_support as unittest
 import numpy as np
 from numba.compiler import compile_isolated, Flags
+from numba import types
 
 
-
-def setitem(array, start, stop, step, scalar) 
-    array[start:stop:step] = scalar
+def setitem_slice(a, start, stop, step, scalar): 
+    a[start:stop:step] = scalar
 
 
 def usecase(obs, nPoints, B, sigB, A, sigA, M, sigM):
@@ -34,7 +34,13 @@ class TestStoreSlice(unittest.TestCase):
 
     def test_array_slice_setitem(self):
         n = 10
-        x = 
+        a = np.arange(n)
+        b = np.arange(n)
+        cres = compile_isolated(setitem_slice, (types.int64[:], types.int64, types.int64, types.int64, types.int64))
+        cres.entry_point(a, 2, 6, 1, 7)
+        setitem_array(b, 2, 6, 1, 7)
+        print(a, b)
+        self.assertTrue(np.allclose(a, b))
 
 if __name__ == '__main__':
     unittest.main()
