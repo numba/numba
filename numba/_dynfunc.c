@@ -3,6 +3,11 @@
 #include <string.h>
 
 
+/*
+ * EnvironmentObject hosts data needed for execution of compiled functions.
+ * For now, it is only used in object mode (though it still gets passed
+ * to nopython functions).
+ */
 typedef struct {
     PyObject_HEAD
     PyObject *globals;
@@ -106,10 +111,12 @@ static PyTypeObject EnvironmentType = {
 };
 
 /* A closure object is created for each call to make_function(), and stored
-   as the resulting PyCFunction object's "self" pointer.  This allows
-   proper lifetime management of some dependent data, and can in the
-   future allow the raw function to know about its environment (e.g.
-   the various enclosing lexical scopes).
+   as the resulting PyCFunction object's "self" pointer.  It points to an
+   EnvironmentObject which is constructed during compilation.  This allows
+   for two things:
+       - lifetime management of dependent data (e.g. lifted loop dispatchers)
+       - access to the execution environment by the compiled function
+         (for example the globals module)
    */
 
 typedef struct {
@@ -118,6 +125,8 @@ typedef struct {
        using this closure. */
     PyMethodDef def;
     EnvironmentObject *env;
+    /* We could also store the LLVM module here, to ensure it doesn't
+       get released too early */
 } ClosureObject;
 
 
