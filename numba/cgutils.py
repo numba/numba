@@ -146,6 +146,10 @@ def append_basic_block(builder, name=''):
 
 @contextmanager
 def goto_block(builder, bb):
+    """
+    A context manager which temporarily positions *builder* at the end
+    of basic block *bb* (but before any terminator).
+    """
     bbold = builder.basic_block
     term = bb.terminator
     if term is not None:
@@ -434,14 +438,23 @@ guard_zero = guard_null
 
 
 def is_struct(ltyp):
+    """
+    Whether the LLVM type *typ* is a pointer type.
+    """
     return ltyp.kind == lc.TYPE_STRUCT
 
 
 def is_pointer(ltyp):
+    """
+    Whether the LLVM type *typ* is a struct type.
+    """
     return ltyp.kind == lc.TYPE_POINTER
 
 
 def is_struct_ptr(ltyp):
+    """
+    Whether the LLVM type *typ* is a pointer-to-struct type.
+    """
     return is_pointer(ltyp) and is_struct(ltyp.pointee)
 
 
@@ -500,6 +513,9 @@ def pointer_add(builder, ptr, offset, return_type=None):
     """
     Add an integral *offset* to pointer *ptr*, and return a pointer
     of *return_type* (or, if omitted, the same type as *ptr*).
+
+    Note the computation is done in bytes, and ignores the width of
+    the pointed item type.
     """
     intptr_t = Type.int(utils.MACHINE_BITS)
     intptr = builder.ptrtoint(ptr, intptr_t)
