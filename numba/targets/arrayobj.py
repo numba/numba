@@ -8,6 +8,8 @@ from functools import reduce
 
 import llvm.core as lc
 
+from llvm.core import Type, Constant
+from numba import errcode
 from numba import types, typing, cgutils, utils
 from numba.targets.imputils import (builtin, builtin_attr, implement,
                                     impl_attribute, impl_attribute_generic,
