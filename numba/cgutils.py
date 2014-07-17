@@ -5,9 +5,11 @@ Generic helpers for LLVM code generation.
 from __future__ import print_function, division, absolute_import
 from contextlib import contextmanager
 import functools
+
 from llvm.core import Constant, Type
 import llvm.core as lc
-from . import errcode
+
+from . import errcode, utils
 
 
 true_bit = Constant.int(Type.int(1), 1)
@@ -388,10 +390,7 @@ def get_item_pointer2(builder, data, shape, strides, layout, inds,
         # Any layout
         dimoffs = [builder.mul(s, i) for s, i in zip(strides, indices)]
         offset = functools.reduce(builder.add, dimoffs)
-        base = builder.ptrtoint(data, offset.type)
-        where = builder.add(base, offset)
-        ptr = builder.inttoptr(where, data.type)
-        return ptr
+        return pointer_add(builder, data, offset)
 
 
 def normalize_slice(builder, slice, length):
@@ -414,28 +413,6 @@ def get_range_from_slice(builder, slicestruct):
 def get_strides_from_slice(builder, ndim, strides, slice, ax):
     oldstrides = unpack_tuple(builder, strides, ndim)
     return builder.mul(slice.step, oldstrides[ax])
-
-
-class MetadataKeyStore(object):
-    def __init__(self, module, name):
-        self.module = module
-        self.key = name
-        self.nmd = self.module.get_or_insert_named_metadata("python.module")
-
-    def set(self, value):
-        """
-        Add a string value
-        """
-        md = lc.MetaData.get(self.module,
-                             [lc.MetaDataString.get(self.module, value)])
-        self.nmd.add(md)
-
-    def get(self):
-        """
-        Get string value
-        """
-        node = self.nmd._ptr.getOperand(0)
-        return lc._make_value(node.getOperand(0)).string
 
 
 def is_scalar_zero(builder, value):
@@ -516,6 +493,19 @@ def gep(builder, ptr, *inds):
             ind = i
         idx.append(ind)
     return builder.gep(ptr, idx)
+
+
+def pointer_add(builder, ptr, offset, return_type=None):
+    """
+    Add an integral *offset* to pointer *ptr*, and return a pointer
+    of *return_type* (or, if omitted, the same type as *ptr*).
+    """
+    intptr_t = Type.int(utils.MACHINE_BITS)
+    intptr = builder.ptrtoint(ptr, intptr_t)
+    if isinstance(offset, int):
+        offset = Constant.int(intptr_t, offset)
+    intptr = builder.add(intptr, offset)
+    return builder.inttoptr(intptr, return_type or ptr.type)
 
 
 # ------------------------------------------------------------------------------

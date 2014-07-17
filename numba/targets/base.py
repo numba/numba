@@ -16,9 +16,10 @@ from numba.targets import arrayobj, builtins, iterators, rangeobj
 
 
 GENERIC_POINTER = Type.pointer(Type.int(8))
+PYOBJECT = GENERIC_POINTER
 
 LTYPEMAP = {
-    types.pyobject: GENERIC_POINTER,
+    types.pyobject: PYOBJECT,
 
     types.boolean: Type.int(8),
 
@@ -204,7 +205,7 @@ class BaseContext(object):
         argtypes = [self.get_argument_type(aty)
                     for aty in fndesc.argtypes]
         resptr = self.get_return_type(fndesc.restype)
-        fnty = Type.function(Type.int(), [resptr, GENERIC_POINTER] + argtypes)
+        fnty = Type.function(Type.int(), [resptr, PYOBJECT] + argtypes)
         return fnty
 
     def get_external_function_type(self, fndesc):
@@ -289,7 +290,7 @@ class BaseContext(object):
                 isinstance(ty, types.Dispatcher) or
                 isinstance(ty, types.Object) or
                 isinstance(ty, types.Macro)):
-            return GENERIC_POINTER
+            return PYOBJECT
 
         elif isinstance(ty, types.CPointer):
             dty = self.get_data_type(ty.dtype)
@@ -747,7 +748,7 @@ class BaseContext(object):
         if closure is None:
             # XXX This is dangerous but will work with functions that
             # don't use the environment (e.g. nopython functions).
-            closure = Constant.null(GENERIC_POINTER)
+            closure = Constant.null(PYOBJECT)
         retty = callee.args[0].type.pointee
         retval = cgutils.alloca_once(builder, retty)
         args = [self.get_value_as_argument(builder, ty, arg)
@@ -778,13 +779,11 @@ class BaseContext(object):
         From the pointer *clo* to a _dynfunc.Closure, get a pointer
         to the enclosed _dynfunc.Environment.
         """
-        # XXX factor out pointer arithmetic
-        intp_clo = builder.ptrtoint(clo, Type.int(64))
-        intp_envp = builder.add(intp_clo,
-                                Constant.int(Type.int(64),
-                                             _dynfunc._impl_info['offset_closure_env']))
         # This is a pointer to the env field (a PyObject **)
-        envp = builder.inttoptr(intp_envp, Type.pointer(GENERIC_POINTER))
+        envp = cgutils.pointer_add(builder, clo,
+                                   _dynfunc._impl_info['offset_closure_env'],
+                                   Type.pointer(PYOBJECT)
+                                   )
         return builder.load(envp)
 
     def get_env_body(self, builder, envptr):
@@ -792,12 +791,8 @@ class BaseContext(object):
         From the given *envptr* (a pointer to a _dynfunc.Environment object),
         get a EnvBody allowing structured access to environment fields.
         """
-        # XXX factor out pointer arithmetic
-        intp_env = builder.ptrtoint(envptr, Type.int(64))
-        intp_body = builder.add(intp_env,
-                                Constant.int(Type.int(64),
-                                             _dynfunc._impl_info['offset_env_body']))
-        body_ptr = builder.inttoptr(intp_body, GENERIC_POINTER)
+        body_ptr = cgutils.pointer_add(
+            builder, envptr, _dynfunc._impl_info['offset_env_body'])
         return EnvBody(self, builder, ref=body_ptr, cast_ref=True)
 
     def call_function_pointer(self, builder, funcptr, signature, args):
