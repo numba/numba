@@ -169,10 +169,13 @@ class Overloaded(_dispatcher.Dispatcher):
             ndim = val.ndim
             if ndim == 0:
                 # is array scalar
-                return numpy_support.from_dtype(val.dtype)
+                return dtype
             layout = numpy_support.map_layout(val)
             aryty = types.Array(dtype, ndim, layout)
             return aryty
+
+        elif isinstance(val, numpy.record):
+            return numpy_support.from_dtype(val.dtype)
 
         # The following are handled in the C version for exact type match
         # So test these later

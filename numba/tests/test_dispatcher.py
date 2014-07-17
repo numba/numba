@@ -10,12 +10,12 @@ def dummy(x):
 
 
 class TestDispatcher(unittest.TestCase):
+
     def test_typeof(self):
         self.assertEqual(typeof(numpy.int8(1)), types.int8)
         self.assertEqual(typeof(numpy.uint16(1)), types.uint16)
         self.assertEqual(typeof(numpy.float64(1)), types.float64)
         self.assertEqual(typeof(numpy.complex128(1)), types.complex128)
-
 
     def test_numba_interface(self):
         """
