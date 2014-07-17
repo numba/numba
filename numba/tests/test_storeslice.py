@@ -39,7 +39,8 @@ class TestStoreSlice(unittest.TestCase):
         cres = compile_isolated(setitem_slice, (types.int64[:], types.int64, types.int64, types.int64, types.int64))
         cres.entry_point(a, 2, 6, 1, 7)
         setitem_slice(b, 2, 6, 1, 7)
-        print(a, b)
+        print(a)
+        print(b)
         self.assertTrue(np.allclose(a, b))
 
 if __name__ == '__main__':
