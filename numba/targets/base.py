@@ -751,8 +751,7 @@ class BaseContext(object):
         """
         if env is None:
             # This only works with functions that don't use the environment
-            # (nopython functions), which are the only functions called
-            # using call_function().
+            # (nopython functions).
             env = Constant.null(PYOBJECT)
         retty = callee.args[0].type.pointee
         retval = cgutils.alloca_once(builder, retty)
