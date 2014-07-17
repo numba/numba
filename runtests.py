@@ -4,6 +4,7 @@ from __future__ import print_function, division, absolute_import
 import sys
 import numba.testing as testing
 if '-m' in sys.argv:
+    sys.argv.remove('-m')
     result = testing.multitest()
 else:
     result = testing.test()
