@@ -125,8 +125,8 @@ typedef struct {
        using this closure. */
     PyMethodDef def;
     EnvironmentObject *env;
-    /* We could also store the LLVM module here, to ensure it doesn't
-       get released too early */
+    /* We could also store the LLVM function or engine here, to ensure
+       generated code is kept alive. */
 } ClosureObject;
 
 
