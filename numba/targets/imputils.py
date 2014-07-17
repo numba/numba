@@ -204,9 +204,10 @@ class Registry(object):
         self.attributes = []
 
     def register(self, item):
-        if hasattr(item, '__wrapped__'):
-            self.functions.append(item)
-            self.register(item.__wrapped__)
+        curr_item = item
+        while hasattr(curr_item, '__wrapped__'):
+            self.functions.append(curr_item)
+            curr_item=curr_item.__wrapped__
 
         return item
 
