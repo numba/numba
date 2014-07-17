@@ -8,12 +8,7 @@ from llvm.core import Type, Builder, Module
 import llvm.core as lc
 
 from numba import _dynfunc, ir, types, cgutils, utils, config, cffi_support, typing
-
-
-try:
-    import builtins
-except ImportError:
-    import __builtin__ as builtins
+from numba.utils import builtins
 
 
 class LoweringError(Exception):
@@ -181,7 +176,6 @@ class BaseLower(object):
         self.function = context.declare_function(self.module, fndesc)
         self.entry_block = self.function.append_basic_block('entry')
         self.builder = Builder.new(self.entry_block)
-        # self.builder = cgutils.VerboseProxy(self.builder)
 
         # Internal states
         self.blkmap = {}
@@ -195,10 +189,15 @@ class BaseLower(object):
     def init(self):
         pass
 
-    def post_lower(self):
-        """Called after all blocks are lowered
+    def pre_lower(self):
         """
-        pass
+        Called before lowering all blocks.
+        """
+
+    def post_lower(self):
+        """
+        Called after all blocks are lowered
+        """
 
     def lower(self):
         # Init argument variables
@@ -208,13 +207,16 @@ class BaseLower(object):
             av = self.context.get_argument_value(self.builder, at, av)
             av = self.init_argument(av)
             self.storevar(av, ak)
-        # Store environment argument for later use
-        self.envarg = self.context.get_env_argument(self.function)
-        self.env_body = self.context.get_env_body(self.builder, self.envarg)
+
         # Init blocks
         for offset in self.fndesc.blocks:
             bname = "B%d" % offset
             self.blkmap[offset] = self.function.append_basic_block(bname)
+
+        self.pre_lower()
+        # pre_lower() may have changed the current basic block
+        entry_block_tail = self.builder.basic_block
+
         # Lower all blocks
         for offset, block in self.fndesc.blocks.items():
             bb = self.blkmap[offset]
@@ -222,8 +224,9 @@ class BaseLower(object):
             self.lower_block(block)
 
         self.post_lower()
-        # Close entry block
-        self.builder.position_at_end(self.entry_block)
+
+        # Close tail of entry block
+        self.builder.position_at_end(entry_block_tail)
         self.builder.branch(self.blkmap[self.firstblk])
 
         if config.DUMP_LLVM:
@@ -607,11 +610,8 @@ class Lower(BaseLower):
         return self.alloca_lltype(name, lltype)
 
     def alloca_lltype(self, name, lltype):
-        bb = self.builder.basic_block
-        self.builder.position_at_end(self.entry_block)
-        ptr = self.builder.alloca(lltype, name=name)
-        self.builder.position_at_end(bb)
-        return ptr
+        with cgutils.goto_block(self.builder, self.entry_block):
+            return self.builder.alloca(lltype, name=name)
 
 
 # Map operators to methods on the PythonAPI class
@@ -638,6 +638,17 @@ class PyLower(BaseLower):
 
         # Add error handling block
         self.ehblock = self.function.append_basic_block('error')
+
+    def pre_lower(self):
+        # Store environment argument for later use
+        self.envarg = self.context.get_env_argument(self.function)
+        with cgutils.if_unlikely(self.builder, self.is_null(self.envarg)):
+            self.pyapi.err_set_string(
+                "PyExc_SystemError",
+                "Numba internal error: object mode function called "
+                "without an environment")
+            self.return_exception_raised()
+        self.env_body = self.context.get_env_body(self.builder, self.envarg)
 
     def post_lower(self):
         with cgutils.goto_block(self.builder, self.ehblock):
@@ -1067,11 +1078,9 @@ class PyLower(BaseLower):
         """
         if ltype is None:
             ltype = self.context.get_value_type(types.pyobject)
-        bb = self.builder.basic_block
-        self.builder.position_at_end(self.entry_block)
-        ptr = self.builder.alloca(ltype, name=name)
-        self.builder.store(cgutils.get_null_value(ltype), ptr)
-        self.builder.position_at_end(bb)
+        with cgutils.goto_block(self.builder, self.entry_block):
+            ptr = self.builder.alloca(ltype, name=name)
+            self.builder.store(cgutils.get_null_value(ltype), ptr)
         return ptr
 
     def incref(self, value):

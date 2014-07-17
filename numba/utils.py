@@ -6,6 +6,10 @@ import io
 import timeit
 import math
 import sys
+try:
+    import builtins
+except ImportError:
+    import __builtin__ as builtins
 
 import numpy
 

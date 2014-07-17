@@ -4,6 +4,7 @@ Utilities to simplify the boilerplate for native lowering.
 
 from __future__ import print_function, absolute_import, division
 import functools
+
 from numba.typing import signature
 from numba import cgutils, types
 
@@ -52,8 +53,9 @@ def impl_attribute_generic(ty):
 def user_function(func, fndesc, libs):
     def imp(context, builder, sig, args):
         func = context.declare_function(cgutils.get_module(builder), fndesc)
+        # env=None assumes this is a nopython function
         status, retval = context.call_function(builder, func, fndesc.restype,
-                                               fndesc.argtypes, args)
+                                               fndesc.argtypes, args, env=None)
         with cgutils.if_unlikely(builder, status.err):
             context.return_errcode_propagate(builder, status.code)
         return retval

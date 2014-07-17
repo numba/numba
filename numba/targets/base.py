@@ -61,6 +61,8 @@ class EnvBody(cgutils.Structure):
         ('lifted_loops', types.pyobject),
         ]
 
+_empty_env = _dynfunc.Environment({})
+
 
 class Overloads(object):
     def __init__(self):
@@ -198,7 +200,10 @@ class BaseContext(object):
                  >0 for user error code.
         Return value is passed by reference as the first argument.
         It MUST NOT be used if the function is in nopython mode.
-        Actual arguments starts at the 2nd argument position.
+
+        The 2nd argument is a _dynfunc.Environment object.
+
+        Actual arguments starts at the 3rd argument position.
         Caller is responsible to allocate space for return value.
         """
         argtypes = [self.get_argument_type(aty)
@@ -739,20 +744,21 @@ class BaseContext(object):
             return builder.or_(real_istrue, imag_istrue)
         raise NotImplementedError("is_true", val, typ)
 
-    def call_function(self, builder, callee, resty, argtys, args, closure=None):
+    def call_function(self, builder, callee, resty, argtys, args, env=None):
         """
         Call the Numba-compiled *callee*, using the same calling
         convention as in get_function_type().
         """
-        if closure is None:
-            # XXX This is dangerous but will work with functions that
-            # don't use the environment (e.g. nopython functions).
-            closure = Constant.null(PYOBJECT)
+        if env is None:
+            # This only works with functions that don't use the environment
+            # (nopython functions), which are the only functions called
+            # using call_function().
+            env = Constant.null(PYOBJECT)
         retty = callee.args[0].type.pointee
         retval = cgutils.alloca_once(builder, retty)
         args = [self.get_value_as_argument(builder, ty, arg)
                 for ty, arg in zip(argtys, args)]
-        realargs = [retval, closure] + list(args)
+        realargs = [retval, env] + list(args)
         code = builder.call(callee, realargs)
         status = self.get_return_status(builder, code)
         return status, builder.load(retval)

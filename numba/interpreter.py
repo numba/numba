@@ -1,14 +1,11 @@
 from __future__ import print_function, division, absolute_import
 
-try:
-    import __builtin__ as builtins
-except ImportError:
-    import builtins
 import collections
 import dis
 import sys
 
 from numba import ir, controlflow, dataflow, utils
+from numba.utils import builtins
 
 
 class Assigner(object):
