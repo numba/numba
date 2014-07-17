@@ -83,6 +83,23 @@ class DataFlowAnalysis(object):
         for val in duped:
             info.push(val)
 
+    def add_syntax_block(self, info, block):
+        """
+        Add an inner syntax block.
+        """
+        block.stack_offset = info.stack_offset
+        self.syntax_blocks.append(block)
+
+    def pop_syntax_block(self, info):
+        """
+        Pop the innermost syntax block and revert its stack effect.
+        """
+        block = self.syntax_blocks.pop()
+        assert info.stack_offset >= block.stack_offset
+        while info.stack_offset + info.stack_effect > block.stack_offset:
+            info.pop(discard=True)
+        return block
+
     def op_DUP_TOPX(self, info, inst):
         count = inst.arg
         assert 1 <= count <= 5, "Invalid DUP_TOPX count"
@@ -173,7 +190,9 @@ class DataFlowAnalysis(object):
 
     def op_LOAD_FAST(self, info, inst):
         name = self.bytecode.co_varnames[inst.arg]
-        info.push(name)
+        res = info.make_temp(name)
+        info.append(inst, res=res)
+        info.push(res)
 
     def op_LOAD_CONST(self, info, inst):
         res = info.make_temp('const')
@@ -480,13 +499,13 @@ class DataFlowAnalysis(object):
         info.terminator = inst
 
     def op_SETUP_LOOP(self, info, inst):
-        self.syntax_blocks.append(LoopBlock())
+        self.add_syntax_block(info, LoopBlock())
         info.append(inst)
 
     def op_POP_BLOCK(self, info, inst):
-        block = self.syntax_blocks.pop()
+        block = self.pop_syntax_block(info)
         if isinstance(block, LoopBlock):
-            info.append(inst, delitem=block.iterator)
+            info.append(inst, delitems=[block.iterator])
         else:
             info.append(inst)
 
@@ -501,10 +520,11 @@ class DataFlowAnalysis(object):
 
 
 class LoopBlock(object):
-    __slots__ = 'iterator'
+    __slots__ = ('iterator', 'stack_offset')
 
     def __init__(self):
         self.iterator = None
+        self.stack_offset = None
 
 
 class BlockInfo(object):

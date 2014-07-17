@@ -375,24 +375,32 @@ class Lower(BaseLower):
         else:
             raise NotImplementedError(type(value), value)
 
+    def lower_binop(self, resty, expr):
+        lhs = expr.lhs
+        rhs = expr.rhs
+        lty = self.typeof(lhs.name)
+        rty = self.typeof(rhs.name)
+        lhs = self.loadvar(lhs.name)
+        rhs = self.loadvar(rhs.name)
+        # Get function
+        signature = self.fndesc.calltypes[expr]
+        impl = self.context.get_function(expr.fn, signature)
+        # Convert argument to match
+        lhs = self.context.cast(self.builder, lhs, lty, signature.args[0])
+        rhs = self.context.cast(self.builder, rhs, rty, signature.args[1])
+        res = impl(self.builder, (lhs, rhs))
+        return self.context.cast(self.builder, res, signature.return_type,
+                                 resty)
+
     def lower_expr(self, resty, expr):
         if expr.op == 'binop':
-            lhs = expr.lhs
-            rhs = expr.rhs
-            lty = self.typeof(lhs.name)
-            rty = self.typeof(rhs.name)
-            lhs = self.loadvar(lhs.name)
-            rhs = self.loadvar(rhs.name)
-            # Get function
-            signature = self.fndesc.calltypes[expr]
-            impl = self.context.get_function(expr.fn, signature)
-            # Convert argument to match
-            lhs = self.context.cast(self.builder, lhs, lty, signature.args[0])
-            rhs = self.context.cast(self.builder, rhs, rty, signature.args[1])
-            res = impl(self.builder, (lhs, rhs))
-            return self.context.cast(self.builder, res, signature.return_type,
-                                     resty)
-
+            return self.lower_binop(resty, expr)
+        elif expr.op == 'inplace_binop':
+            lty = self.typeof(expr.lhs.name)
+            if not lty.mutable:
+                # inplace operators on non-mutable types reuse the same
+                # definition as the corresponding copying operators.
+                return self.lower_binop(resty, expr)
         elif expr.op == 'unary':
             val = self.loadvar(expr.value.name)
             typ = self.typeof(expr.value.name)
@@ -602,6 +610,7 @@ class Lower(BaseLower):
         return ptr
 
 
+# Map operators to methods on the PythonAPI class
 PYTHON_OPMAP = {
      '+': "number_add",
      '-': "number_subtract",
@@ -648,9 +657,9 @@ class PyLower(BaseLower):
             self.check_int_status(ok)
 
         elif isinstance(inst, ir.StoreMap):
-            dct = self.loadvar(inst.dct)
-            key = self.loadvar(inst.key)
-            value = self.loadvar(inst.value)
+            dct = self.loadvar(inst.dct.name)
+            key = self.loadvar(inst.key.name)
+            value = self.loadvar(inst.value.name)
             ok = self.pyapi.dict_setitem(dct, key, value)
             self.check_int_status(ok)
 
@@ -704,19 +713,24 @@ class PyLower(BaseLower):
         else:
             raise NotImplementedError(type(value), value)
 
+    def lower_binop(self, expr, inplace=False):
+        lhs = self.loadvar(expr.lhs.name)
+        rhs = self.loadvar(expr.rhs.name)
+        if expr.fn in PYTHON_OPMAP:
+            fname = PYTHON_OPMAP[expr.fn]
+            fn = getattr(self.pyapi, fname)
+            res = fn(lhs, rhs, inplace=inplace)
+        else:
+            # Assumed to be rich comparison
+            res = self.pyapi.object_richcompare(lhs, rhs, expr.fn)
+        self.check_error(res)
+        return res
+
     def lower_expr(self, expr):
         if expr.op == 'binop':
-            lhs = self.loadvar(expr.lhs.name)
-            rhs = self.loadvar(expr.rhs.name)
-            if expr.fn in PYTHON_OPMAP:
-                fname = PYTHON_OPMAP[expr.fn]
-                fn = getattr(self.pyapi, fname)
-                res = fn(lhs, rhs)
-            else:
-                # Assume to be rich comparision
-                res = self.pyapi.object_richcompare(lhs, rhs, expr.fn)
-            self.check_error(res)
-            return res
+            return self.lower_binop(expr, inplace=False)
+        elif expr.op == 'inplace_binop':
+            return self.lower_binop(expr, inplace=True)
         elif expr.op == 'unary':
             value = self.loadvar(expr.value.name)
             if expr.fn == '-':

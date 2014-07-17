@@ -4,9 +4,60 @@ try:
     import __builtin__ as builtins
 except ImportError:
     import builtins
-import sys
+import collections
 import dis
+import sys
+
 from numba import ir, controlflow, dataflow, utils
+
+
+class Assigner(object):
+    """
+    This object keeps track of potential assignment simplifications
+    inside a code block.
+    For example `$O.1 = x` followed by `y = $0.1` can be simplified
+    into `y = x`, but it's not possible anymore if we have `x = z`
+    in-between those two instructions.
+
+    NOTE: this is not only an optimization, but is actually necessary
+    due to certain limitations of Numba - such as only accepting the
+    returning of an array passed as function argument.
+    """
+
+    def __init__(self):
+        # { destination variable name -> source Var object }
+        self.dest_to_src = {}
+        self.src_invalidate = collections.defaultdict(list)
+        self.unused_dests = set()
+
+    def assign(self, srcvar, destvar):
+        """
+        Assign *srcvar* to *destvar*. Return either *srcvar* or a possible
+        simplified assignment source (earlier assigned to *srcvar*).
+        """
+        srcname = srcvar.name
+        destname = destvar.name
+        if srcname in self.src_invalidate:
+            # Invalidate all previously known simplifications
+            for d in self.src_invalidate.pop(srcname):
+                self.dest_to_src.pop(d)
+        if srcname in self.dest_to_src:
+            srcvar = self.dest_to_src[srcname]
+        if destvar.is_temp:
+            self.dest_to_src[destname] = srcvar
+            self.src_invalidate[srcname].append(destname)
+            self.unused_dests.add(destname)
+        return srcvar
+
+    def get_assignment_source(self, destname):
+        """
+        Get a possible assignment source (a ir.Var instance) to replace
+        *destname*, otherwise None.
+        """
+        if destname in self.dest_to_src:
+            return self.dest_to_src[destname]
+        self.unused_dests.discard(destname)
+        return None
 
 
 class Interpreter(object):
@@ -101,12 +152,28 @@ class Interpreter(object):
             oldblock.append(jmp)
             # Get DFA block info
         self.dfainfo = self.dfa.infos[self.current_block_offset]
+        self.assigner = Assigner()
         # Notify listeners for the new block
         for fn in utils.dict_itervalues(self._block_actions):
             fn(self.current_block_offset, self.current_block)
 
     def _end_current_block(self):
+        self._remove_unused_temporaries()
         self._insert_outgoing_phis()
+
+    def _remove_unused_temporaries(self):
+        """
+        Remove assignments to unused temporary variables from the
+        current block.
+        """
+        new_body = []
+        for inst in self.current_block.body:
+            if (isinstance(inst, ir.Assign)
+                and inst.target.is_temp
+                and inst.target.name in self.assigner.unused_dests):
+                continue
+            new_body.append(inst)
+        self.current_block.body = new_body
 
     def _insert_outgoing_phis(self):
         """
@@ -178,21 +245,26 @@ class Interpreter(object):
     # --- Scope operations ---
 
     def store(self, value, name, redefine=False):
+        """
+        Store *value* (a Var instance) into the variable named *name*
+        (a str object).
+        """
         if redefine or self.current_block_offset in self.cfa.backbone:
             target = self.current_scope.redefine(name, loc=self.loc)
         else:
             target = self.current_scope.get_or_define(name, loc=self.loc)
+        if isinstance(value, ir.Var):
+            value = self.assigner.assign(value, target)
         stmt = ir.Assign(value=value, target=target, loc=self.loc)
         self.current_block.append(stmt)
 
-    # def store_temp(self, value):
-    #     target = self.current_scope.make_temp(loc=self.loc)
-    #     stmt = ir.Assign(value=value, target=target, loc=self.loc)
-    #     self.current_block.append(stmt)
-    #     return target
-
     def get(self, name):
-        return self.current_scope.get(name)
+        # Try to simplify the variable lookup by returning an earlier
+        # variable assigned to *name*.
+        var = self.assigner.get_assignment_source(name)
+        if var is None:
+            var = self.current_scope.get(name)
+        return var
 
     # --- Block operations ---
 
@@ -396,6 +468,10 @@ class Interpreter(object):
                           loc=self.loc)
         self.current_block.append(stmt)
 
+    def op_LOAD_FAST(self, inst, res):
+        srcname = self.code_locals[inst.arg]
+        self.store(value=self.get(srcname), name=res)
+
     def op_STORE_FAST(self, inst, value):
         dstname = self.code_locals[inst.arg]
         value = self.get(value)
@@ -538,8 +614,9 @@ class Interpreter(object):
         self.store(expr, res)
 
     def op_STORE_MAP(self, inst, dct, key, value):
-        self.current_block.append(
-            ir.StoreMap(dct=dct, key=key, value=value, loc=self.loc))
+        stmt = ir.StoreMap(dct=self.get(dct), key=self.get(key),
+                           value=self.get(value), loc=self.loc)
+        self.current_block.append(stmt)
 
     def op_UNARY_NEGATIVE(self, inst, value, res):
         value = self.get(value)
@@ -565,6 +642,12 @@ class Interpreter(object):
         lhs = self.get(lhs)
         rhs = self.get(rhs)
         expr = ir.Expr.binop(op, lhs=lhs, rhs=rhs, loc=self.loc)
+        self.store(expr, res)
+
+    def _inplace_binop(self, op, lhs, rhs, res):
+        lhs = self.get(lhs)
+        rhs = self.get(rhs)
+        expr = ir.Expr.inplace_binop(op, lhs=lhs, rhs=rhs, loc=self.loc)
         self.store(expr, res)
 
     def op_BINARY_ADD(self, inst, lhs, rhs, res):
@@ -605,8 +688,6 @@ class Interpreter(object):
 
     def op_BINARY_XOR(self, inst, lhs, rhs, res):
         self._binop('^', lhs, rhs, res)
-
-    _inplace_binop = _binop
 
     def op_INPLACE_ADD(self, inst, lhs, rhs, res):
         self._inplace_binop('+', lhs, rhs, res)
@@ -655,10 +736,10 @@ class Interpreter(object):
         jmp = ir.Jump(inst.get_jump_target(), loc=self.loc)
         self.current_block.append(jmp)
 
-    def op_POP_BLOCK(self, inst, delitem=None):
+    def op_POP_BLOCK(self, inst, delitems=()):
         blk = self.syntax_blocks.pop()
-        if delitem is not None:
-            delete = ir.Del(delitem, loc=self.loc)
+        for item in delitems:
+            delete = ir.Del(item, loc=self.loc)
             self.current_block.append(delete)
         if blk in self._block_actions:
             del self._block_actions[blk]

@@ -13,20 +13,6 @@ from numba.targets.imputils import (builtin, builtin_attr, implement,
                                     struct_factory)
 from numba.typing import signature
 
-#-------------------------------------------------------------------------------
-
-
-def make_array(ty):
-    dtype = ty.dtype
-    nd = ty.ndim
-
-    class ArrayTemplate(cgutils.Structure):
-        _fields = [('data', types.CPointer(dtype)),
-                   ('shape', types.UniTuple(types.intp, nd)),
-                   ('strides', types.UniTuple(types.intp, nd)),
-                   ('parent', types.pyobject), ]
-
-    return ArrayTemplate
 
 #-------------------------------------------------------------------------------
 
@@ -136,16 +122,8 @@ def int_utruediv_impl(context, builder, sig, args):
     return builder.fdiv(fx, fy)
 
 
-def int_sfloordiv_impl(context, builder, sig, args):
-    x, y = args
-    cgutils.guard_zero(context, builder, y)
-    return builder.sdiv(x, y)
-
-
-def int_ufloordiv_impl(context, builder, sig, args):
-    x, y = args
-    cgutils.guard_zero(context, builder, y)
-    return builder.udiv(x, y)
+int_sfloordiv_impl = int_sdiv_impl
+int_ufloordiv_impl = int_udiv_impl
 
 
 def int_srem_impl(context, builder, sig, args):
@@ -1403,11 +1381,6 @@ def setitem_array_tuple(context, builder, sig, args):
 @implement('setitem', types.Kind(types.Array),
            types.slice3_type, types.Any)
 def setitem_array1d_slice(context, builder, sig, args):
-    # context - numba.targets.cpu.CPUContext object
-    # builder - llvm.core.Builder object
-    # sig - Signature object
-    # sig.args is the tuple of signature e.g. array(int64, 1d, C), slice3_type, int64
-    # args -- llvm.core.Instruction, a tuple of Instructions
     aryty, idxty, valty = sig.args
     ary, idx, val = args
     arystty = make_array(aryty)

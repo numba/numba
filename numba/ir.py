@@ -99,6 +99,11 @@ class Expr(object):
         return cls(op=op, loc=loc, fn=fn, lhs=lhs, rhs=rhs)
 
     @classmethod
+    def inplace_binop(cls, fn, lhs, rhs, loc):
+        op = 'inplace_binop'
+        return cls(op=op, loc=loc, fn=fn, lhs=lhs, rhs=rhs)
+
+    @classmethod
     def unary(cls, fn, value, loc):
         op = 'unary'
         return cls(op=op, loc=loc, fn=fn, value=value)
@@ -289,7 +294,7 @@ class Const(object):
         self.loc = loc
 
     def __repr__(self):
-        return 'const(%s, %s)' % (type(self.value), self.value)
+        return 'const(%s, %s)' % (type(self.value).__name__, self.value)
 
 
 class Global(object):
@@ -449,7 +454,7 @@ class Block(object):
 
     def dump(self, file=sys.stdout):
         for inst in self.body:
-            print('  ', inst, file=file)
+            print('   ', inst, file=file)
 
     @property
     def terminator(self):

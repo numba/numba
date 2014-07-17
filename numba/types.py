@@ -28,6 +28,8 @@ class Type(object):
     """
     __slots__ = '_code', 'name', 'is_parametric'
 
+    mutable = False
+
     def __init__(self, name, param=False):
         self.name = name
         self.is_parametric = param
@@ -372,6 +374,8 @@ class ZipType(IteratorType):
 
 
 class CharSeq(Type):
+    mutable = True
+
     def __init__(self, count):
         self.count = count
         name = "[char x %d]" % count
@@ -386,6 +390,8 @@ class CharSeq(Type):
 
 
 class UnicodeCharSeq(Type):
+    mutable = True
+
     def __init__(self, count):
         self.count = count
         name = "[unichr x %d]" % count
@@ -400,6 +406,8 @@ class UnicodeCharSeq(Type):
 
 
 class Record(Type):
+    mutable = True
+
     def __init__(self, id, fields, size, align, dtype):
         self.id = id
         self.fields = fields.copy()
@@ -432,8 +440,22 @@ class Record(Type):
         return [(f, t) for f, (t, _) in self.fields.items()]
 
 
-class Array(Type):
+class ArrayIterator(IteratorType):
+
+    def __init__(self, array_type):
+        self.array_type = array_type
+        name = "iter(%s)" % (self.array_type,)
+        if array_type.ndim == 1:
+            self.yield_type = array_type.dtype
+        else:
+            self.yield_type = array_type.copy(ndim=array_type.ndim - 1)
+        super(ArrayIterator, self).__init__(name, param=True)
+
+
+class Array(IterableType):
     __slots__ = 'dtype', 'ndim', 'layout'
+
+    mutable = True
 
     # CS and FS are not reserved for inner contig but strided
     LAYOUTS = frozenset(['C', 'F', 'CS', 'FS', 'A'])
@@ -451,6 +473,7 @@ class Array(Type):
         self.layout = layout
         name = "array(%s, %sd, %s)" % (dtype, ndim, layout)
         super(Array, self).__init__(name, param=True)
+        self.iterator_type = ArrayIterator(self)
 
         if layout != 'A':
             # Install conversion from non-any layout to any layout
@@ -595,6 +618,8 @@ class Tuple(Type):
 
 
 class CPointer(Type):
+    mutable = True
+
     def __init__(self, dtype):
         self.dtype = dtype
         name = "*%s" % dtype
@@ -609,6 +634,8 @@ class CPointer(Type):
 
 
 class Object(Type):
+    mutable = True
+
     def __init__(self, clsobj):
         self.cls = clsobj
         name = "Object(%s)" % clsobj.__name__
