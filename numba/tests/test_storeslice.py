@@ -32,15 +32,76 @@ class TestStoreSlice(unittest.TestCase):
         print(obs_got, obs_expected)
         self.assertTrue(np.allclose(obs_got, obs_expected))
 
+    @unittest.expectedFailure
     def test_array_slice_setitem(self):
         n = 10
+        cres = compile_isolated(setitem_slice, (types.int64[:], types.int64, types.int64, types.int64, types.int64))
+        
         a = np.arange(n)
         b = np.arange(n)
-        cres = compile_isolated(setitem_slice, (types.int64[:], types.int64, types.int64, types.int64, types.int64))
         cres.entry_point(a, 2, 6, 1, 7)
         setitem_slice(b, 2, 6, 1, 7)
-        print(a)
-        print(b)
+        self.assertTrue(np.allclose(a, b))
+
+        a = np.arange(n)
+        b = np.arange(n)
+        cres.entry_point(a, 2, 6, -1, 7)
+        setitem_slice(b, 2, 6, -1, 7)
+        self.assertTrue(np.allclose(a, b))
+
+        # start < 0, step <= len(a)
+        a = np.arange(n)
+        b = np.arange(n)
+        cres.entry_point(a, -2, len(a), 2, 77)
+        setitem_slice(b, -2, len(a), 2, 77)
+        self.assertTrue(np.allclose(a, b))
+        
+        a = np.arange(n)
+        b = np.arange(n)
+        cres.entry_point(a, -2, len(a) * 2, 2, 77)
+        setitem_slice(b, -2, len(a) * 2, 2, 77)
+        self.assertTrue(np.allclose(a, b))
+
+        a = np.arange(n)
+        b = np.arange(n)
+        cres.entry_point(a, -2, -6, 3, 88)
+        setitem_slice(b, -2, -6, 3, 88)
+        self.assertTrue(np.allclose(a, b))
+        
+        a = np.arange(n)
+        b = np.arange(n)
+        cres.entry_point(a, -2, -6, -3, 9999)
+        setitem_slice(b, -2, -6, -3, 9999)
+        self.assertTrue(np.allclose(a, b))
+ 
+        a = np.arange(n)
+        b = np.arange(n)
+        cres.entry_point(a, -6, -2, 4, 88)
+        setitem_slice(b, -6, -2, 4, 88)
+        self.assertTrue(np.allclose(a, b))
+
+        a = np.arange(n)
+        b = np.arange(n)
+        cres.entry_point(a, -6, -2, -4, 88)
+        setitem_slice(b, -6, -2, -4, 88)
+        self.assertTrue(np.allclose(a, b))
+
+        a = np.arange(n)
+        b = np.arange(n)
+        cres.entry_point(a, 16, 20, 2, 88)
+        setitem_slice(b, 16, 20, 2, 88)
+        self.assertTrue(np.allclose(a, b))
+
+        a = np.arange(n)
+        b = np.arange(n)
+        cres.entry_point(a, 16, 20, -2, 88)
+        setitem_slice(b, 16, 20, -2, 88)
+        self.assertTrue(np.allclose(a, b))
+
+        a = np.arange(n)
+        b = np.arange(n)
+        cres.entry_point(a, 3, 6, 0, 88)
+        setitem_slice(b, 3, 6, 0, 88)
         self.assertTrue(np.allclose(a, b))
 
 if __name__ == '__main__':
