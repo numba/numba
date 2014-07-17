@@ -2,6 +2,9 @@
 
 #include <string.h>
 
+/* NOTE: EnvironmentObject and ClosureObject must be kept in sync with
+ * the definitions in numba/targets/base.py (EnvBody and ClosureBody).
+ */
 
 /*
  * EnvironmentObject hosts data needed for execution of compiled functions.
@@ -290,7 +293,7 @@ MOD_INIT(_dynfunc) {
 
     impl_info = Py_BuildValue(
         "{snsn}",
-        "offset_closure_env", offsetof(ClosureObject, env),
+        "offset_closure_body", offsetof(ClosureObject, env),
         "offset_env_body", offsetof(EnvironmentObject, globals)
         );
     if (impl_info == NULL)

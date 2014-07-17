@@ -52,7 +52,6 @@ RETCODE_EXC = Constant.int_signextend(Type.int(), -1)
 
 # Keep those structures in sync with _dynfunc.c.
 
-# XXX unused?
 class ClosureBody(cgutils.Structure):
     _fields = [('env', types.pyobject)]
 
@@ -779,12 +778,10 @@ class BaseContext(object):
         From the pointer *clo* to a _dynfunc.Closure, get a pointer
         to the enclosed _dynfunc.Environment.
         """
-        # This is a pointer to the env field (a PyObject **)
-        envp = cgutils.pointer_add(builder, clo,
-                                   _dynfunc._impl_info['offset_closure_env'],
-                                   Type.pointer(PYOBJECT)
-                                   )
-        return builder.load(envp)
+        clo_body_ptr = cgutils.pointer_add(
+            builder, clo, _dynfunc._impl_info['offset_closure_body'])
+        clo_body = ClosureBody(self, builder, ref=clo_body_ptr, cast_ref=True)
+        return clo_body.env
 
     def get_env_body(self, builder, envptr):
         """

@@ -52,6 +52,7 @@ class Structure(object):
                 builder.store(value, self._value)
         else:
             assert value is None
+            assert is_pointer(ref.type)
             if self._type != ref.type.pointee:
                 if cast_ref:
                     ref = builder.bitcast(ref, Type.pointer(self._type))
