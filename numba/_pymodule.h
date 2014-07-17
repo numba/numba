@@ -2,6 +2,7 @@
 #define NUMBA_PY_MODULE_H_
 
 #include <Python.h>
+#include <structmember.h>
 
 #if PY_MAJOR_VERSION >= 3
   #define MOD_ERROR_VAL NULL

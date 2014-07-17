@@ -37,7 +37,8 @@ class Structure(object):
     named fields and attribute access.
     """
 
-    def __init__(self, context, builder, value=None, ref=None):
+    # XXX Should this warrant several separate constructors?
+    def __init__(self, context, builder, value=None, ref=None, cast_ref=False):
         self._type = context.get_struct_type(self)
         self._context = context
         self._builder = builder
@@ -49,7 +50,13 @@ class Structure(object):
                 builder.store(value, self._value)
         else:
             assert value is None
-            assert self._type == ref.type.pointee
+            if self._type != ref.type.pointee:
+                if cast_ref:
+                    ref = builder.bitcast(ref, Type.pointer(self._type))
+                else:
+                    raise TypeError(
+                        "mismatching pointer type: got %s, expected %s"
+                        % (ref.type.pointee, self._type))
             self._value = ref
 
         self._namemap = {}

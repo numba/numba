@@ -48,6 +48,7 @@ def reject_npm1(x):
         # Inner uses np.arange() => cannot loop-lift unless
         # enable_pyobject_looplift is enabled.
         a[i] = np.arange(i + 1)[i]
+
     return a
 
 

@@ -7,7 +7,7 @@ from types import ModuleType
 from llvm.core import Type, Builder, Module
 import llvm.core as lc
 
-from numba import ir, types, cgutils, utils, config, cffi_support, typing
+from numba import _dynfunc, ir, types, cgutils, utils, config, cffi_support, typing
 
 
 try:
@@ -90,7 +90,7 @@ class FunctionDescriptor(object):
         ``unique_name`` must be a unique name in ``pymod``.
         """
         func = interp.bytecode.func
-        qualname = getattr(func, '__qualname__', interp.bytecode.func_name)
+        qualname = interp.bytecode.func_qualname
         modname = func.__module__
         doc = func.__doc__ or ''
         args = interp.argspec.args
@@ -172,9 +172,10 @@ class BaseLower(object):
         # Initialize LLVM
         self.module = Module.new("module.%s" % self.fndesc.unique_name)
 
-        # Install metadata
-        md_pymod = cgutils.MetadataKeyStore(self.module, "python.module")
-        md_pymod.set(fndesc.modname)
+        # Python execution environment (will be available to the compiled
+        # function).
+        self.env = _dynfunc.Environment(
+            globals=self.fndesc.lookup_module().__dict__)
 
         # Setup function
         self.function = context.declare_function(self.module, fndesc)
@@ -207,6 +208,9 @@ class BaseLower(object):
             av = self.context.get_argument_value(self.builder, at, av)
             av = self.init_argument(av)
             self.storevar(av, ak)
+        # Store environment argument for later use
+        self.envarg = self.context.get_env_argument(self.function)
+        self.env_body = self.context.get_env_body(self.builder, self.envarg)
         # Init blocks
         for offset in self.fndesc.blocks:
             bname = "B%d" % offset
@@ -868,6 +872,7 @@ class PyLower(BaseLower):
             raise NotImplementedError(expr)
 
     def lower_const(self, const):
+        from numba import dispatcher   # Avoiding toplevel circular imports
         if isinstance(const, str):
             ret = self.pyapi.string_from_constant_string(const)
             self.check_error(ret)
@@ -895,6 +900,13 @@ class PyLower(BaseLower):
             return self.get_builtin_obj("Ellipsis")
         elif const is None:
             return self.pyapi.make_none()
+        elif isinstance(const, dispatcher.LiftedLoop):
+            index = len(self.env.lifted_loops)
+            self.env.lifted_loops.append(const)
+            ret = self.get_lifted_loop(index)
+            self.check_error(ret)
+            return ret
+
         else:
             raise NotImplementedError(type(const))
 
@@ -905,7 +917,7 @@ class PyLower(BaseLower):
             2a) is it a dictionary (for non __main__ module)
             2b) is it a module (for __main__ module)
         """
-        moddict = self.pyapi.get_module_dict()
+        moddict = self.get_module_dict()
         obj = self.pyapi.dict_getitem_string(moddict, name)
         self.incref(obj)  # obj is borrowed
 
@@ -937,10 +949,20 @@ class PyLower(BaseLower):
 
     # -------------------------------------------------------------------------
 
+    def get_module_dict(self):
+        return self.env_body.globals
+
     def get_builtin_obj(self, name):
-        moddict = self.pyapi.get_module_dict()
+        # XXX The builtins dict could be bound into the environment
+        moddict = self.get_module_dict()
         mod = self.pyapi.dict_getitem_string(moddict, "__builtins__")
         return self.builtin_lookup(mod, name)
+
+    def get_lifted_loop(self, index):
+        """
+        Lookup lifted loop number *index* inside the environment body.
+        """
+        return self.pyapi.list_getitem(self.env_body.lifted_loops, index)
 
     def builtin_lookup(self, mod, name):
         """

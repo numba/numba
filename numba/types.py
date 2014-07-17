@@ -7,7 +7,7 @@ from collections import defaultdict
 
 import numpy
 
-from .utils import total_ordering
+from . import utils
 
 
 def _autoincr():
@@ -92,7 +92,7 @@ class OpaqueType(Type):
         super(OpaqueType, self).__init__(name)
 
 
-@total_ordering
+@utils.total_ordering
 class Integer(Type):
     def __init__(self, *args, **kws):
         super(Integer, self).__init__(*args, **kws)
@@ -114,7 +114,7 @@ class Integer(Type):
         return self.bitwidth < other.bitwidth
 
 
-@total_ordering
+@utils.total_ordering
 class Float(Type):
     def __init__(self, *args, **kws):
         super(Float, self).__init__(*args, **kws)
@@ -132,7 +132,7 @@ class Float(Type):
         return self.bitwidth < other.bitwidth
 
 
-@total_ordering
+@utils.total_ordering
 class Complex(Type):
     def __init__(self, name, underlying_float, **kwargs):
         super(Complex, self).__init__(name, **kwargs)
@@ -697,8 +697,8 @@ int8 = Integer('int8')
 int16 = Integer('int16')
 int32 = Integer('int32')
 int64 = Integer('int64')
-intp = int32 if tuple.__itemsize__ == 4 else int64
-uintp = uint32 if tuple.__itemsize__ == 4 else uint64
+intp = int32 if utils.MACHINE_BITS == 32 else int64
+uintp = uint32 if utils.MACHINE_BITS == 32 else uint64
 
 float32 = Float('float32')
 float64 = Float('float64')

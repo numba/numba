@@ -5,7 +5,8 @@ from types import MethodType
 import llvm.core as lc
 from llvm.core import Type, Constant
 import numpy
-from numba import types, utils, cgutils, typing, numpy_support, errcode
+
+from numba import _dynfunc, types, utils, cgutils, typing, numpy_support, errcode
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, python_attr_impl,
                                     builtin_registry, impl_attribute,
@@ -13,8 +14,11 @@ from numba.targets.imputils import (user_function, python_attr_impl,
 from numba.targets import arrayobj, builtins, iterators, rangeobj
 
 
+
+GENERIC_POINTER = Type.pointer(Type.int(8))
+
 LTYPEMAP = {
-    types.pyobject: Type.pointer(Type.int(8)),
+    types.pyobject: GENERIC_POINTER,
 
     types.boolean: Type.int(8),
 
@@ -43,6 +47,19 @@ Status = namedtuple("Status", ("code", "ok", "err", "exc", "none"))
 RETCODE_OK = Constant.int_signextend(Type.int(), 0)
 RETCODE_NONE = Constant.int_signextend(Type.int(), -2)
 RETCODE_EXC = Constant.int_signextend(Type.int(), -1)
+
+
+# Keep those structures in sync with _dynfunc.c.
+
+# XXX unused?
+class ClosureBody(cgutils.Structure):
+    _fields = [('env', types.pyobject)]
+
+class EnvBody(cgutils.Structure):
+    _fields = [
+        ('globals', types.pyobject),
+        ('lifted_loops', types.pyobject),
+        ]
 
 
 class Overloads(object):
@@ -112,7 +129,7 @@ class BaseContext(object):
     implement_pow_as_math_call = False
 
     def __init__(self, typing_context):
-        self.address_size = tuple.__itemsize__ * 8
+        self.address_size = utils.MACHINE_BITS
         self.typing_context = typing_context
 
         self.defns = defaultdict(Overloads)
@@ -169,6 +186,10 @@ class BaseContext(object):
 
     def get_function_type(self, fndesc):
         """
+        Get the implemented Function type for the high-level *fndesc*.
+        Some parameters can be added or shuffled around.
+        This is kept in sync with call_function() and get_arguments().
+
         Calling Convention
         ------------------
         Returns: -2 for return none in native function;
@@ -183,7 +204,7 @@ class BaseContext(object):
         argtypes = [self.get_argument_type(aty)
                     for aty in fndesc.argtypes]
         resptr = self.get_return_type(fndesc.restype)
-        fnty = Type.function(Type.int(), [resptr] + argtypes)
+        fnty = Type.function(Type.int(), [resptr, GENERIC_POINTER] + argtypes)
         return fnty
 
     def get_external_function_type(self, fndesc):
@@ -200,6 +221,7 @@ class BaseContext(object):
         assert fn.is_declaration
         for ak, av in zip(fndesc.args, self.get_arguments(fn)):
             av.name = "arg.%s" % ak
+        self.get_env_argument(fn).name = "env"
         fn.args[0] = ".ret"
         return fn
 
@@ -212,7 +234,7 @@ class BaseContext(object):
         return fn
 
     def insert_const_string(self, mod, string):
-        stringtype = Type.pointer(Type.int(8))
+        stringtype = GENERIC_POINTER
         text = Constant.stringz(string)
         name = ".const.%s" % string
         for gv in mod.global_variables:
@@ -226,7 +248,18 @@ class BaseContext(object):
         return Constant.bitcast(gv, stringtype)
 
     def get_arguments(self, func):
-        return func.args[1:]
+        """
+        Get the Python-level arguments of LLVM *func*.
+        See get_function_type() for the calling convention.
+        """
+        return func.args[2:]
+
+    def get_env_argument(self, func):
+        """
+        Get the environment argument of LLVM *func* (which can be
+        a declaration).
+        """
+        return func.args[1]
 
     def get_argument_type(self, ty):
         if ty == types.boolean:
@@ -256,7 +289,7 @@ class BaseContext(object):
                 isinstance(ty, types.Dispatcher) or
                 isinstance(ty, types.Object) or
                 isinstance(ty, types.Macro)):
-            return Type.pointer(Type.int(8))
+            return GENERIC_POINTER
 
         elif isinstance(ty, types.CPointer):
             dty = self.get_data_type(ty.dtype)
@@ -706,12 +739,20 @@ class BaseContext(object):
             return builder.or_(real_istrue, imag_istrue)
         raise NotImplementedError("is_true", val, typ)
 
-    def call_function(self, builder, callee, resty, argtys, args):
+    def call_function(self, builder, callee, resty, argtys, args, closure=None):
+        """
+        Call the Numba-compiled *callee*, using the same calling
+        convention as in get_function_type().
+        """
+        if closure is None:
+            # XXX This is dangerous but will work with functions that
+            # don't use the environment (e.g. nopython functions).
+            closure = Constant.null(GENERIC_POINTER)
         retty = callee.args[0].type.pointee
         retval = cgutils.alloca_once(builder, retty)
         args = [self.get_value_as_argument(builder, ty, arg)
                 for ty, arg in zip(argtys, args)]
-        realargs = [retval] + list(args)
+        realargs = [retval, closure] + list(args)
         code = builder.call(callee, realargs)
         status = self.get_return_status(builder, code)
         return status, builder.load(retval)
@@ -731,6 +772,33 @@ class BaseContext(object):
 
         status = Status(code=code, ok=ok, err=err, exc=exc, none=none)
         return status
+
+    def get_env_from_closure(self, builder, clo):
+        """
+        From the pointer *clo* to a _dynfunc.Closure, get a pointer
+        to the enclosed _dynfunc.Environment.
+        """
+        # XXX factor out pointer arithmetic
+        intp_clo = builder.ptrtoint(clo, Type.int(64))
+        intp_envp = builder.add(intp_clo,
+                                Constant.int(Type.int(64),
+                                             _dynfunc._impl_info['offset_closure_env']))
+        # This is a pointer to the env field (a PyObject **)
+        envp = builder.inttoptr(intp_envp, Type.pointer(GENERIC_POINTER))
+        return builder.load(envp)
+
+    def get_env_body(self, builder, envptr):
+        """
+        From the given *envptr* (a pointer to a _dynfunc.Environment object),
+        get a EnvBody allowing structured access to environment fields.
+        """
+        # XXX factor out pointer arithmetic
+        intp_env = builder.ptrtoint(envptr, Type.int(64))
+        intp_body = builder.add(intp_env,
+                                Constant.int(Type.int(64),
+                                             _dynfunc._impl_info['offset_env_body']))
+        body_ptr = builder.inttoptr(intp_body, GENERIC_POINTER)
+        return EnvBody(self, builder, ref=body_ptr, cast_ref=True)
 
     def call_function_pointer(self, builder, funcptr, signature, args):
         retty = self.get_value_type(signature.return_type)
@@ -765,7 +833,7 @@ class BaseContext(object):
 
     def print_string(self, builder, text):
         mod = builder.basic_block.function.module
-        cstring = Type.pointer(Type.int(8))
+        cstring = GENERIC_POINTER
         fnty = Type.function(Type.int(), [cstring])
         puts = mod.get_or_insert_function(fnty, "puts")
         return builder.call(puts, [text])
@@ -798,7 +866,7 @@ class BaseContext(object):
         return Constant.null(self.get_dummy_type())
 
     def get_dummy_type(self):
-        return Type.pointer(Type.int(8))
+        return GENERIC_POINTER
 
     def optimize(self, module):
         pass

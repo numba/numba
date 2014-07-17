@@ -1,10 +1,12 @@
 from __future__ import print_function, absolute_import
 
 import sys
+
 import llvm.core as lc
 import llvm.passes as lp
 import llvm.ee as le
 from llvm.workaround import avx_support
+
 from numba import _dynfunc, _helperlib, config
 from numba.callwrapper import PyCallWrapper
 from .base import BaseContext
@@ -33,7 +35,7 @@ class CPUContext(BaseContext):
         self.pm = self.build_pass_manager()
         self.native_funcs = utils.UniqueDict()
         self.cmath_provider = {}
-        self.is32bit = (tuple.__itemsize__ == 4)
+        self.is32bit = (utils.MACHINE_BITS == 32)
 
         # map math functions
         self.map_math_functions()
@@ -127,7 +129,7 @@ class CPUContext(BaseContext):
     def optimize(self, module):
         self.pm.run(module)
 
-    def get_executable(self, func, fndesc):
+    def get_executable(self, func, fndesc, env):
         """
         Returns
         -------
@@ -137,6 +139,8 @@ class CPUContext(BaseContext):
             callable function (Can be None)
         - fnptr
             callable function address
+        - env
+            an execution environment (from _dynfunc)
 
         """
         func.module.target = self.tm.triple
@@ -151,10 +155,10 @@ class CPUContext(BaseContext):
         if not fndesc.native:
             self.optimize_pythonapi(func)
 
-        cfunc = self.prepare_for_call(func, fndesc)
+        cfunc = self.prepare_for_call(func, fndesc, env)
         return cfunc
 
-    def prepare_for_call(self, func, fndesc):
+    def prepare_for_call(self, func, fndesc, env):
         wrapper, api = PyCallWrapper(self, func.module, func, fndesc,
                                      exceptions=self.exceptions).build()
         self.optimize(func.module)
@@ -179,7 +183,7 @@ class CPUContext(BaseContext):
         fnptr = self.engine.get_pointer_to_function(wrapper)
         cfunc = _dynfunc.make_function(fndesc.lookup_module(),
                                        fndesc.qualname.split('.')[-1],
-                                       fndesc.doc, fnptr)
+                                       fndesc.doc, fnptr, env)
 
         if fndesc.native:
             self.native_funcs[cfunc] = fndesc.mangled_name, baseptr

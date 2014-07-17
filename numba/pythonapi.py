@@ -442,6 +442,16 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyList_SetItem")
         return self.builder.call(fn, [seq, idx, val])
 
+    def list_getitem(self, lst, idx):
+        """
+        Returns a borrowed reference.
+        """
+        fnty = Type.function(self.pyobj, [self.pyobj, self.py_ssize_t])
+        fn = self._get_function(fnty, name="PyList_GetItem")
+        if isinstance(idx, int):
+            idx = self.context.get_constant(types.intp, idx)
+        return self.builder.call(fn, [lst, idx])
+
     def set_new(self, iterable=None):
         if iterable is None:
             iterable = self.get_null_object()
@@ -491,6 +501,14 @@ class PythonAPI(object):
         fnty = Type.function(Type.void(), [self.cstring], var_arg=True)
         fn = self._get_function(fnty, name="PySys_WriteStdout")
         return self.builder.call(fn, (fmt,) + args)
+
+    def object_dump(self, obj):
+        """
+        Dump a Python object on C stderr.  For debugging purposes.
+        """
+        fnty = Type.function(Type.void(), [self.pyobj])
+        fn = self._get_function(fnty, name="_PyObject_Dump")
+        return self.builder.call(fn, (obj,))
 
     # ------ utils -----
 
@@ -791,21 +809,6 @@ class PythonAPI(object):
                                           Type.int(), self.pyobj])
         fn = self._get_function(fnty, name="NumbaRecreateRecord")
         return self.builder.call(fn, [pdata, size, dtypeaddr])
-
-    def get_module_dict_symbol(self):
-        md_pymod = cgutils.MetadataKeyStore(self.module, "python.module")
-        pymodname = ".pymodule.dict." + md_pymod.get()
-
-        try:
-            gv = self.module.get_global_variable_named(name=pymodname)
-        except LLVMException:
-            gv = self.module.add_global_variable(self.pyobj.pointee,
-                                                 name=pymodname)
-        return gv
-
-    def get_module_dict(self):
-        return self.get_module_dict_symbol()
-        # return self.builder.load(gv)
 
     def raise_native_error(self, msg):
         cstr = self.context.insert_const_string(self.module, msg)

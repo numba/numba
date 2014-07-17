@@ -3,9 +3,9 @@ from pprint import pprint
 from contextlib import contextmanager
 from collections import namedtuple, defaultdict
 
-from numba import (bytecode, interpreter, typing, typeinfer, lowering,
-                   irpasses, utils, config, type_annotations, types, ir,
-                   assume, looplifting, macro)
+from numba import (bytecode, interpreter, typing, typeinfer,
+                   lowering, irpasses, utils, config, type_annotations,
+                   types, ir, assume, looplifting, macro)
 from numba.targets import cpu
 
 
@@ -138,25 +138,27 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
 
     if status.use_python_mode and flags.enable_looplift:
         assert not lifted
-        # Try loop lifting
-        entry, loops = looplifting.lift_loop(bc)
-        if not loops:
-            # No extracted loops
-            pass
-        else:
-            outer_flags = flags.copy()
-            loop_flags = flags.copy()
-            if not flags.enable_pyobject_looplift:
-                loop_flags.unset('enable_pyobject')
-            # Do not recursively loop lift
-            outer_flags.unset('enable_looplift')
-            loop_flags.unset('enable_looplift')
 
-            loopdisp = looplifting.bind(loops, typingctx, targetctx, locals,
-                                        loop_flags)
+        # Try loop lifting
+        loop_flags = flags.copy()
+        outer_flags = flags.copy()
+        # Do not recursively loop lift
+        outer_flags.unset('enable_looplift')
+        loop_flags.unset('enable_looplift')
+        if not flags.enable_pyobject_looplift:
+            loop_flags.unset('enable_pyobject')
+
+        def dispatcher_factory(loopbc):
+            from . import dispatcher
+            return dispatcher.LiftedLoop(loopbc, typingctx, targetctx,
+                                         locals, loop_flags)
+
+        entry, loops = looplifting.lift_loop(bc, dispatcher_factory)
+        if loops:
+            # Some loops were extracted
             cres = compile_bytecode(typingctx, targetctx, entry, args,
                                     return_type, outer_flags, locals,
-                                    lifted=tuple(loopdisp))
+                                    lifted=tuple(loops))
             return cres
 
     if status.use_python_mode:
@@ -320,7 +322,7 @@ def native_lowering_stage(targetctx, interp, typemap, restype, calltypes,
         return None, lower.module, lower.function, fndesc
     else:
         # Prepare for execution
-        cfunc = targetctx.get_executable(lower.function, fndesc)
+        cfunc = targetctx.get_executable(lower.function, fndesc, lower.env)
 
         targetctx.insert_user_function(cfunc, fndesc)
 
@@ -335,7 +337,7 @@ def py_lowering_stage(targetctx, interp, nocompile):
     if nocompile:
         return None, lower.module, lower.function, fndesc
     else:
-        cfunc = targetctx.get_executable(lower.function, fndesc)
+        cfunc = targetctx.get_executable(lower.function, fndesc, lower.env)
         return cfunc, lower.module, lower.function, fndesc
 
 

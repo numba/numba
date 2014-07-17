@@ -1,36 +1,10 @@
 from __future__ import print_function, division, absolute_import
+
 from numba import utils
 from numba.bytecode import ByteCodeInst, CustomByteCode
 
 
-def bind(loops, typingctx, targetctx, locals, flags):
-    """
-    Install loop dispatchers into the module
-    """
-    disps = []
-    for loopbc in loops:
-        d = bind_loop(loopbc, typingctx, targetctx, locals, flags)
-        disps.append(d)
-    return disps
-
-
-def bind_loop(loopbc, typingctx, targetctx, locals, flags):
-    from numba.dispatcher import LiftedLoop
-    fname = loopbc.func_name
-    disp = getattr(loopbc.module, fname, None)
-    if disp is not None:
-        if not isinstance(disp, LiftedLoop):
-            raise RuntimeError(
-                "Function %s exists but not a lifted-loop" % fname)
-        # Short circuit
-        if disp.flags == flags:
-            return disp
-    disp = LiftedLoop(loopbc, typingctx, targetctx, locals, flags)
-    setattr(loopbc.module, fname, disp)
-    return disp
-
-
-def lift_loop(bytecode):
+def lift_loop(bytecode, dispatcher_factory):
     """Lift the top-level loops.
 
     Returns (outer, loops)
@@ -46,9 +20,10 @@ def lift_loop(bytecode):
     outer_rds, outer_wrs = find_varnames_uses(bytecode, outer)
     outer_wrs |= set(bytecode.argspec.args)
 
-    lbclist = []
+    dispatchers = []
     outerlabels = set(bytecode.labels)
     outernames = list(bytecode.co_names)
+
     for loop in loops:
         args, rets = discover_args_and_returns(bytecode, loop, outer_rds,
                                                outer_wrs)
@@ -61,13 +36,15 @@ def lift_loop(bytecode):
             outer_wrs |= wrs
             outer_rds |= rds
         else:
-            insert_loop_call(bytecode, loop, args, lbclist, outer, outerlabels,
-                             outernames)
+            disp = insert_loop_call(bytecode, loop, args,
+                                    outer, outerlabels, outernames,
+                                    dispatcher_factory)
+            dispatchers.append(disp)
 
     # Build outer bytecode
     codetable = utils.SortedMap((i.offset, i) for i in outer)
     outerbc = CustomByteCode(func=bytecode.func,
-                             func_name=bytecode.func_name,
+                             func_qualname=bytecode.func_qualname,
                              argspec=bytecode.argspec,
                              filename=bytecode.filename,
                              co_names=outernames,
@@ -76,17 +53,22 @@ def lift_loop(bytecode):
                              co_freevars=bytecode.co_freevars,
                              table=codetable,
                              labels=outerlabels & set(codetable.keys()))
-    return outerbc, lbclist
+    return outerbc, dispatchers
 
 
-def insert_loop_call(bytecode, loop, args, lbclist, outer, outerlabels,
-                     outernames):
+def insert_loop_call(bytecode, loop, args,
+                     outer, outerlabels, outernames, dispatcher_factory):
     endloopoffset = loop[-1].next
     # Accepted. Create a bytecode object for the loop
     args = tuple(args)
-    lbc = make_loop_bytecode(bytecode, loop, args)
-    lbclist.append(lbc)
 
+    lbc = make_loop_bytecode(bytecode, loop, args)
+
+    # Generate dispatcher for this inner loop, and append it to the
+    # consts tuple.
+    disp = dispatcher_factory(lbc)
+    disp_idx = len(bytecode.co_consts)
+    bytecode.co_consts += (disp,)
 
     # Insert jump to the end
     jmp = ByteCodeInst.get(loop[0].offset, 'JUMP_ABSOLUTE',
@@ -97,9 +79,7 @@ def insert_loop_call(bytecode, loop, args, lbclist, outer, outerlabels,
     outerlabels.add(outer[-1].next)
 
     # Prepare arguments
-    outernames.append(lbc.func_name)
-    loadfn = ByteCodeInst.get(outer[-1].next, "LOAD_GLOBAL",
-                              outernames.index(lbc.func_name))
+    loadfn = ByteCodeInst.get(outer[-1].next, "LOAD_CONST", disp_idx)
     loadfn.lineno = loop[0].lineno
     insert_instruction(outer, loadfn)
 
@@ -124,6 +104,8 @@ def insert_loop_call(bytecode, loop, args, lbclist, outer, outerlabels,
 
     jmpback.lineno = loop[0].lineno
     insert_instruction(outer, jmpback)
+
+    return disp
 
 
 def insert_instruction(insts, item):
@@ -156,7 +138,7 @@ def make_loop_bytecode(bytecode, loop, args):
     loop.append(return_value)
 
     # Function name
-    loopfuncname = bytecode.func_name + ".__numba__loop%d__" % loop[0].offset
+    loop_qualname = bytecode.func_qualname + ".__numba__loop%d__" % loop[0].offset
 
     # Argspec
     argspectype = type(bytecode.argspec)
@@ -167,7 +149,7 @@ def make_loop_bytecode(bytecode, loop, args):
 
     # Custom bytecode object
     lbc = CustomByteCode(func=bytecode.func,
-                         func_name=loopfuncname,
+                         func_qualname=loop_qualname,
                          argspec=argspec,
                          filename=bytecode.filename,
                          co_names=bytecode.co_names,

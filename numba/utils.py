@@ -1,16 +1,22 @@
 from __future__ import print_function, division, absolute_import
+
 import collections
 import functools
 import io
 import timeit
 import math
+import sys
+
 import numpy
+
 from numba.config import PYVERSION
 
 
 INT_TYPES = (int,)
 if PYVERSION < (3, 0):
     INT_TYPES += (long,)
+
+MACHINE_BITS = tuple.__itemsize__ * 8
 
 
 class ConfigOptions(object):
