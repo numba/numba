@@ -80,6 +80,7 @@ packages = [
     "numba.array",
     "numba.targets",
     "numba.tests",
+    "numba.tests.array",
     "numba.typing",
     "numba.typeconv",
     "numba.npyufunc",
