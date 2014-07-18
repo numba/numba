@@ -3,7 +3,7 @@ import numba.unittest_support as unittest
 import numpy as np
 from numba.compiler import compile_isolated, Flags
 from numba import types
-
+from numba.pythonapi import NativeError
 
 def setitem_slice(a, start, stop, step, scalar): 
     a[start:stop:step] = scalar
@@ -32,7 +32,6 @@ class TestStoreSlice(unittest.TestCase):
         print(obs_got, obs_expected)
         self.assertTrue(np.allclose(obs_got, obs_expected))
 
-    @unittest.expectedFailure
     def test_array_slice_setitem(self):
         n = 10
         cres = compile_isolated(setitem_slice, (types.int64[:], types.int64, types.int64, types.int64, types.int64))
@@ -100,9 +99,11 @@ class TestStoreSlice(unittest.TestCase):
 
         a = np.arange(n)
         b = np.arange(n)
-        cres.entry_point(a, 3, 6, 0, 88)
-        setitem_slice(b, 3, 6, 0, 88)
-        self.assertTrue(np.allclose(a, b))
+
+# for the future
+#        with self.assertRaises(NativeError):
+#            cres.entry_point(a, 3, 6, 0, 88)
+        self.assertRaises(NativeError, cres.entry_point, a, 3, 6, 0, 88)
 
 if __name__ == '__main__':
     unittest.main()
