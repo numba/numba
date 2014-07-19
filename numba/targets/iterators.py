@@ -39,6 +39,7 @@ def make_enumerate_cls(enum_type):
 @implement(enumerate, types.Kind(types.IterableType))
 @implement(enumerate, types.Kind(types.IterableType), types.Kind(types.Integer))
 def make_enumerate_object(context, builder, sig, args):
+    assert len(args) == 1 or len(args) == 2 # enumerate(it) or enumerate(it, start)
     srcty = sig.args[0]
 
     if len(args) == 1:
