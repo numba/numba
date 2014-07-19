@@ -751,6 +751,9 @@ class Enumerate(AbstractTemplate):
         it = args[0]
         if len(args) > 1 and not args[1] in types.integer_domain:
             raise TypingError("Only integers supported as start value in enumerate")
+        elif len(args) > 2:
+            #let python raise its own error
+            enumerate(*args)
 
         if isinstance(it, types.IterableType):
             enumerate_type = types.EnumerateType(it)
