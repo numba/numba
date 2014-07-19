@@ -121,12 +121,6 @@ class TestUFuncs(TestCase):
                 else:
                     output_type = types.Array(types.float64, 1, 'C')
 
-            # Due to __ftol2 llvm bug, skip testing uint64 output on windows.
-            # (llvm translates fptoui call to ftol2 call on windows which
-            # causes a crash later.
-            if iswindows and output_type.dtype is types.uint64:
-                continue
-
             cr = self.cache.compile(pyfunc, (input_type, output_type),
                                     flags=flags)
             cfunc = cr.entry_point
@@ -210,12 +204,6 @@ class TestUFuncs(TestCase):
                     output_type = types.Array(float_output_type, 1, 'C')
                 else:
                     output_type = types.Array(types.float64, 1, 'C')
-
-            # Due to __ftol2 llvm bug, skip testing uint64 output on windows.
-            # (llvm translates fptoui call to ftol2 call on windows which
-            # causes a crash later.
-            if iswindows and output_type.dtype is types.uint64:
-                continue
 
             cr = self.cache.compile(pyfunc, (input_type, input_type, output_type),
                                     flags=flags)
