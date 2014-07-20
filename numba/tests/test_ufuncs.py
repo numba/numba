@@ -1014,6 +1014,19 @@ class TestScalarUFuncs(TestCase):
                            (types.int64, types.uint64), (types.uint64, types.int64)])
             if tyargs in special:
                 expected = float(expected)
+            else:
+                # The numba version of scalar ufuncs return an actual value that
+                # gets converted to a Python type, instead of using NumPy scalars.
+                # although in python 2 NumPy scalars are considered and instance of
+                # the appropriate python type, in python 3 that is no longer the case.
+                # This is why the expected result is casted to the appropriate Python
+                # type (which is actually the expected behavior of the ufunc translation)
+                if np.issubdtype(expected.dtype, np.inexact):
+                    expected = float(expected)
+                elif np.issubdtype(expected.dtype, np.integer):
+                    expected = int(expected)
+                elif np.issubdtype(expected.dtype, np.bool):
+                    expected = bool(expected)
 
             alltypes = cr.signature.args + (cr.signature.return_type,)
             
@@ -1026,7 +1039,7 @@ class TestScalarUFuncs(TestCase):
                 prec='double'
             else:
                 prec='exact'
-            
+
             self.assertPreciseEqual(got, expected, msg=msg, prec=prec)
 
 
