@@ -94,7 +94,6 @@ class TestUFuncs(TestCase):
         pyfunc = ufunc
 
         for input_tuple in inputs:
-
             input_operand = input_tuple[0]
             input_type = input_tuple[1]
 
@@ -178,7 +177,6 @@ class TestUFuncs(TestCase):
         pyfunc = ufunc
 
         for input_tuple in inputs:
-
             input_operand = input_tuple[0]
             input_type = input_tuple[1]
 
@@ -1023,16 +1021,13 @@ class TestScalarUFuncs(TestCase):
             # typed at a lower precision can introduce precision problems. For this
             # reason the argument types must be taken into account.
             if any([t==types.float32 for t in alltypes]):
-                places = 7
+                prec='single'
             elif any([t==types.float64 for t in alltypes]):
-                places = 15
+                prec='double'
             else:
-                places = None
-
-            if places is None:
-                self.assertEqual(got, expected, msg=msg)
-            else:
-                self.assertAlmostEqual(got, expected, places=places, msg=msg)
+                prec='exact'
+            
+            self.assertPreciseEqual(got, expected, msg=msg, prec=prec)
 
 
     def test_scalar_unary_ufunc(self, flags=enable_pyobj_flags):
