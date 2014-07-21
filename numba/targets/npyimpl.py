@@ -484,7 +484,7 @@ _externs = [
     (numpy.ceil, "ceil"),
     (numpy.trunc, "trunc"),
     (numpy.rint, "rint"),
-    (numpy.abs, "fabs"),
+    (numpy.abs, "abs"),
 ]
 
 for sym, name in _externs:
