@@ -31,8 +31,10 @@ def _default_promotion_for_type(ty):
         promote_type = types.float64
     elif ty in types.signed_domain:
         promote_type = types.int64
-    else:
+    elif ty in types.unsigned_domain:
         promote_type = types.uint64
+    else:
+        assert False, "type {0} not supported.".format(ty)
 
     return promote_type
 
@@ -83,15 +85,18 @@ class _ScalarHelper(object):
         return self.builder.load(self._ptr)
 
 
-class _ArrayIndexingHelper(namedtuple('_ArrayIndexingHelper', ('array', 'indices'))):
+class _ArrayIndexingHelper(namedtuple('_ArrayIndexingHelper', 
+                                      ('array', 'indices'))):
     def update_indices(self, loop_indices, name):
         bld = self.array.builder
         intpty = self.array.context.get_value_type(types.intp)
         ONE = Constant.int(Type.int(intpty.width), 1)
 
         indices = loop_indices[len(loop_indices) - len(self.indices):]
-        bb_index = [cgutils.append_basic_block(bld, '.inc_inp{0}_index{1}'.format(name, str(i))) for i in range(self.array.ndim)]
-        bb_index.append(cgutils.append_basic_block(bld, 'end_inc{0}_index'.format(name)))
+        add_bb = cgutils.append_basic_block
+        bb_index = [add_bb(bld, '.inc_inp{0}_index{1}'.format(name, str(i)))
+                    for i in range(self.array.ndim)]
+        bb_index.append(add_bb(bld, 'end_inc{0}_index'.format(name)))
         bld.branch(bb_index[0])
         for i in range(self.array.ndim):
             with cgutils.goto_block(bld, bb_index[i]):
@@ -102,15 +107,20 @@ class _ArrayIndexingHelper(namedtuple('_ArrayIndexingHelper', ('array', 'indices
         bld.position_at_end(bb_index[-1])
 
     def as_values(self):
-        """The indexing helper is built using alloca for each value, so it actually contains pointers
-        to the actual indices to load. Note that update_indices assumes the same. This method returns
-        the indices as values"""
+        """
+        The indexing helper is built using alloca for each value, so it
+        actually contains pointers to the actual indices to load. Note
+        that update_indices assumes the same. This method returns the
+        indices as values
+        """
         bld=self.array.builder
         return [bld.load(index) for index in self.indices]
 
 
-class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary', 'shape', 'strides',
-                                               'data', 'layout', 'base_type', 'ndim', 'return_val'))):
+class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary',
+                                               'shape', 'strides', 'data',
+                                               'layout', 'base_type', 'ndim',
+                                               'return_val'))):
     def create_iter_indices(self):
         intpty = self.context.get_value_type(types.intp)
         ZERO = Constant.int(Type.int(intpty.width), 0)
@@ -147,8 +157,8 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
         ary     = ctxt.make_array(tyinp)(ctxt, bld, inp)
         shape   = cgutils.unpack_tuple(bld, ary.shape, tyinp.ndim)
         strides = cgutils.unpack_tuple(bld, ary.strides, tyinp.ndim)
-        return _ArrayHelper(ctxt, bld, ary, shape, strides, ary.data, tyinp.layout, tyinp.dtype,
-                            tyinp.ndim, inp)
+        return _ArrayHelper(ctxt, bld, ary, shape, strides, ary.data,
+                            tyinp.layout, tyinp.dtype, tyinp.ndim, inp)
     elif tyinp in types.number_domain:
         return _ScalarHelper(ctxt, bld, inp, tyinp)
     else:
@@ -183,12 +193,16 @@ def npy_math_extern(fn, fnty):
         @register
         @implement(fn_sym, *[ty_src]*fn_arity)
         def _impl(context, builder, sig, args):
-            cast_vals = args if ty_dst == ty_src else [context.cast(builder, val, ty_src, ty_dst) for val in args]
+            cast_vals = args
+            if ty_dst != ty_src:
+                cast = context.cast
+                cast_vals = [cast(builder, val, ty_src, ty_dst) for val in args]
             sig = typing.signature(*[ty_dst]*(len(cast_vals)+1))
             return ref_impl(context, builder, sig, cast_vals)
 
 
-def numpy_ufunc_kernel(context, builder, sig, args, kernel_class, explicit_output=True):
+def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,
+                       explicit_output=True):
     if not explicit_output:
         args.append(Constant.null(context.get_value_type(sig.return_type)))
         tyargs = sig.args + (sig.return_type,)
@@ -259,14 +273,17 @@ def _function_with_cast(op, inner_sig):
 
 
 def _homogeneous_function(op, alias=None):
-    """A function that uses the underlying ufunc loop information to chose an implementation
-    for the operation op. It uses the loop information provided by the ufunc in alias. Alias
-    defaults to the op if not provided.
-    Using the loop information, code is generated that simulates the process of:
-    converting input arguments (outer_sig) to the input arguments specifies by the ufunc
-    selected loop. The operation is performed in the converted arguments, resulting in a
-    value as specified by the selected loop information. Finally, the resulting value is
-    converted to the requested output type (in outer_sig).
+    """A function that uses the underlying ufunc loop information to chose
+    an implementation for the operation op. It uses the loop
+    information provided by the ufunc in alias. Alias defaults to the
+    op if not provided.
+
+    Using the loop information, code is generated that simulates the
+    process of: converting input arguments (outer_sig) to the input
+    arguments specifies by the ufunc selected loop. The operation is
+    performed in the converted arguments, resulting in a value as
+    specified by the selected loop information. Finally, the resulting
+    value is converted to the requested output type (in outer_sig).
     """
     class _KernelImpl(_Kernel):
         def __init__(self, context, builder, outer_sig):
