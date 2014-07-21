@@ -11,4 +11,6 @@ docs/source/modules/
 dist/
 htmlcov/
 *.egg-info
-
+*.sw[po]
+.idea/
+tags

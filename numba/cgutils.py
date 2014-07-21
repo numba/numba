@@ -295,6 +295,66 @@ def for_range(builder, count, intp):
 
 
 @contextmanager
+def for_range_slice(builder, start, stop, step, intp):
+    """start """
+    bbcond = append_basic_block(builder, "for.cond")
+    bbbody = append_basic_block(builder, "for.body")
+    bbend = append_basic_block(builder, "for.end")
+
+    bbstart = builder.basic_block
+    builder.branch(bbcond)
+
+    #STEP = Constant.int(intp, 2)
+
+    with goto_block(builder, bbcond):
+        index = builder.phi(intp, name="loop.index")
+        pred = builder.icmp(lc.ICMP_SLT, index, stop)
+        builder.cbranch(pred, bbbody, bbend)
+
+    with goto_block(builder, bbbody):
+        yield index
+        bbbody = builder.basic_block
+        incr = builder.add(index, step)
+        terminate(builder, bbcond)
+
+    index.add_incoming(start, bbstart)
+    index.add_incoming(incr, bbbody)
+
+    builder.position_at_end(bbend)
+
+#decrement version of for loop, start > stop, and step < 0
+# as step < 0 we add rather than sub
+@contextmanager
+def for_range_slice_dec(builder, start, stop, step, intp):
+    """start """
+    bbcond = append_basic_block(builder, "for.cond")
+    bbbody = append_basic_block(builder, "for.body")
+    bbend = append_basic_block(builder, "for.end")
+
+    bbstart = builder.basic_block
+    builder.branch(bbcond)
+
+    #STEP = Constant.int(intp, 2)
+
+    with goto_block(builder, bbcond):
+        index = builder.phi(intp, name="loop.index")
+        pred = builder.icmp(lc.ICMP_SGT, index, stop)
+        builder.cbranch(pred, bbbody, bbend)
+
+    with goto_block(builder, bbbody):
+        yield index
+        bbbody = builder.basic_block
+        incr = builder.add(index, step)
+        terminate(builder, bbcond)
+
+    index.add_incoming(start, bbstart)
+    index.add_incoming(incr, bbbody)
+
+    builder.position_at_end(bbend)
+
+
+
+@contextmanager
 def loop_nest(builder, shape, intp):
     with _loop_nest(builder, shape, intp) as indices:
         assert len(indices) == len(shape)

@@ -1159,7 +1159,6 @@ def getitem_unituple(context, builder, sig, args):
     builder.position_at_end(bbend)
     return phinode
 
-
 #-------------------------------------------------------------------------------
 
 
