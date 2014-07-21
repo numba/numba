@@ -304,14 +304,15 @@ def _is_inherited_from_object(cls, op):
     """
     Whether operator *op* on *cls* is inherited from the root object type.
     """
-    object_op = getattr(object, op)
-    cls_op = getattr(cls, op)
     if PYVERSION >= (3,):
+        object_op = getattr(object, op)
+        cls_op = getattr(cls, op)
         return object_op is cls_op
     else:
         # In 2.x, the inherited operator gets a new descriptor, so identity
-        # doesn't work.
-        return getattr(cls_op, "__objclass__", None) is object_op.__objclass__
+        # doesn't work.  OTOH, dir() doesn't list methods inherited from
+        # object (which it does in 3.x).
+        return op not in dir(cls)
 
 
 def total_ordering(cls):
