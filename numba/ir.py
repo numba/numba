@@ -323,7 +323,7 @@ class FreeVar(object):
         self.loc = loc
 
     def __str__(self):
-        return 'global(%s: %s)' % (self.name, self.value)
+        return 'freevar(%s: %s)' % (self.name, self.value)
 
 
 class Var(object):
