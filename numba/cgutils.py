@@ -295,7 +295,7 @@ def for_range(builder, count, intp):
 
 
 @contextmanager
-def for_range_slice(builder, start, stop, step, intp):
+def for_range_slice(builder, start, stop, step, intp, inc=True):
     """
     Generate LLVM IR for a for-loop based on a slice  
     
@@ -310,22 +310,27 @@ def for_range_slice(builder, start, stop, step, intp):
     step : int
         The step value of the slice
     intp : 
+        The data type
+    inc : boolean
+        A flag to handle the step < 0 case, in which case we decrement the loop
 
     Returns
+    -----------
         None
     """
 
     bbcond = append_basic_block(builder, "for.cond")
     bbbody = append_basic_block(builder, "for.body")
     bbend = append_basic_block(builder, "for.end")
-
     bbstart = builder.basic_block
     builder.branch(bbcond)
 
-
     with goto_block(builder, bbcond):
         index = builder.phi(intp, name="loop.index")
-        pred = builder.icmp(lc.ICMP_SLT, index, stop)
+        if (inc):
+            pred = builder.icmp(lc.ICMP_SLT, index, stop)
+        else:
+            pred = builder.icmp(lc.ICMP_SGT, index, stop)
         builder.cbranch(pred, bbbody, bbend)
 
     with goto_block(builder, bbbody):
@@ -341,34 +346,34 @@ def for_range_slice(builder, start, stop, step, intp):
 
 #decrement version of for loop, start > stop, and step < 0
 # as step < 0 we add rather than sub
-@contextmanager
-def for_range_slice_dec(builder, start, stop, step, intp):
-    """start """
-    bbcond = append_basic_block(builder, "for.cond")
-    bbbody = append_basic_block(builder, "for.body")
-    bbend = append_basic_block(builder, "for.end")
-
-    bbstart = builder.basic_block
-    builder.branch(bbcond)
-
-    #STEP = Constant.int(intp, 2)
-
-    with goto_block(builder, bbcond):
-        index = builder.phi(intp, name="loop.index")
-        pred = builder.icmp(lc.ICMP_SGT, index, stop)
-        builder.cbranch(pred, bbbody, bbend)
-
-    with goto_block(builder, bbbody):
-        yield index
-        bbbody = builder.basic_block
-        incr = builder.add(index, step)
-        terminate(builder, bbcond)
-
-    index.add_incoming(start, bbstart)
-    index.add_incoming(incr, bbbody)
-
-    builder.position_at_end(bbend)
-
+#@contextmanager
+#def for_range_slice_dec(builder, start, stop, step, intp):
+#    """start """
+#    bbcond = append_basic_block(builder, "for.cond")
+#    bbbody = append_basic_block(builder, "for.body")
+#    bbend = append_basic_block(builder, "for.end")
+#
+#    bbstart = builder.basic_block
+#    builder.branch(bbcond)
+#
+#    #STEP = Constant.int(intp, 2)
+#
+#    with goto_block(builder, bbcond):
+#        index = builder.phi(intp, name="loop.index")
+#        pred = builder.icmp(lc.ICMP_SGT, index, stop)
+#        builder.cbranch(pred, bbbody, bbend)
+#
+#    with goto_block(builder, bbbody):
+#        yield index
+#        bbbody = builder.basic_block
+#        incr = builder.add(index, step)
+#        terminate(builder, bbcond)
+#
+#    index.add_incoming(start, bbstart)
+#    index.add_incoming(incr, bbbody)
+#
+#    builder.position_at_end(bbend)
+#
 
 
 @contextmanager

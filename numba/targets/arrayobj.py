@@ -374,7 +374,7 @@ def setitem_array1d_slice(context, builder, sig, args):
                                    wraparound=context.metadata['wraparound'])
                 context.pack_value(builder, aryty.dtype, val, ptr)
         with otherwise0:
-            with cgutils.for_range_slice_dec(builder, builder.load(start), builder.load(stop), slicestruct.step, slicestruct.start.type) as loop_idx2:
+            with cgutils.for_range_slice(builder, builder.load(start), builder.load(stop), slicestruct.step, slicestruct.start.type, inc=False) as loop_idx2:
                 ptr = cgutils.get_item_pointer(builder, aryty, ary,
                                        [loop_idx2],
                                        wraparound=context.metadata['wraparound'])
