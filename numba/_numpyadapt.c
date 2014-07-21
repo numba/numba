@@ -29,7 +29,7 @@ int adapt_ndarray(PyObject *obj, void* arystruct) {
     dataptr = (void**)arystruct;
     dimsptr = (npy_intp*)(dataptr + 1);
     stridesptr = dimsptr + ndim;
-    objectptr = (void **)(stridesptr + ndim);
+    objectptr = stridesptr + ndim;
 
     for (i = 0; i < ndim; ++i) {
         dimsptr[i] = dims[i];
