@@ -35,75 +35,33 @@ class TestStoreSlice(unittest.TestCase):
     def test_array_slice_setitem(self):
         n = 10
         cres = compile_isolated(setitem_slice, (types.int64[:], types.int64, types.int64, types.int64, types.int64))
+        a = np.arange(n, dtype=np.int64)
+        # tuple is (start, stop, step, scalar)
+        tests = ((2, 6, 1, 7),
+                (2, 6, -1, 7),
+                (-2, len(a), 2, 77),
+                (-2, 2 * len(a), 2, 77),
+                (-2, -6, 3, 88),
+                (-2, -6, -3, 9999),
+                (-6, -2, 4, 88),
+                (-6, -2, -4, 88),
+                (16, 20, 2, 88),
+                (16, 20, -2, 88),
+                )
+
+        for start, stop, step, scalar in tests:
+            a = np.arange(n, dtype=np.int64)
+            b = np.arange(n, dtype=np.int64)
+            cres.entry_point(a, start, stop, step, scalar)
+            setitem_slice(b, start, stop, step, scalar)
+            self.assertTrue(np.allclose(a, b))
         
-        a = np.arange(n)
-        b = np.arange(n)
-        cres.entry_point(a, 2, 6, 1, 7)
-        setitem_slice(b, 2, 6, 1, 7)
-        self.assertTrue(np.allclose(a, b))
-
-        a = np.arange(n)
-        b = np.arange(n)
-        cres.entry_point(a, 2, 6, -1, 7)
-        setitem_slice(b, 2, 6, -1, 7)
-        self.assertTrue(np.allclose(a, b))
-
-        # start < 0, step <= len(a)
-        a = np.arange(n)
-        b = np.arange(n)
-        cres.entry_point(a, -2, len(a), 2, 77)
-        setitem_slice(b, -2, len(a), 2, 77)
-        self.assertTrue(np.allclose(a, b))
-        
-        a = np.arange(n)
-        b = np.arange(n)
-        cres.entry_point(a, -2, len(a) * 2, 2, 77)
-        setitem_slice(b, -2, len(a) * 2, 2, 77)
-        self.assertTrue(np.allclose(a, b))
-
-        a = np.arange(n)
-        b = np.arange(n)
-        cres.entry_point(a, -2, -6, 3, 88)
-        setitem_slice(b, -2, -6, 3, 88)
-        self.assertTrue(np.allclose(a, b))
-        
-        a = np.arange(n)
-        b = np.arange(n)
-        cres.entry_point(a, -2, -6, -3, 9999)
-        setitem_slice(b, -2, -6, -3, 9999)
-        self.assertTrue(np.allclose(a, b))
- 
-        a = np.arange(n)
-        b = np.arange(n)
-        cres.entry_point(a, -6, -2, 4, 88)
-        setitem_slice(b, -6, -2, 4, 88)
-        self.assertTrue(np.allclose(a, b))
-
-        a = np.arange(n)
-        b = np.arange(n)
-        cres.entry_point(a, -6, -2, -4, 88)
-        setitem_slice(b, -6, -2, -4, 88)
-        self.assertTrue(np.allclose(a, b))
-
-        a = np.arange(n)
-        b = np.arange(n)
-        cres.entry_point(a, 16, 20, 2, 88)
-        setitem_slice(b, 16, 20, 2, 88)
-        self.assertTrue(np.allclose(a, b))
-
-        a = np.arange(n)
-        b = np.arange(n)
-        cres.entry_point(a, 16, 20, -2, 88)
-        setitem_slice(b, 16, 20, -2, 88)
-        self.assertTrue(np.allclose(a, b))
-
-        a = np.arange(n)
-        b = np.arange(n)
-
-# for the future
-#        with self.assertRaises(NativeError):
-#            cres.entry_point(a, 3, 6, 0, 88)
-        self.assertRaises(NativeError, cres.entry_point, a, 3, 6, 0, 88)
+        #test if step = 0
+        a = np.arange(n, dtype=np.int64)
+        b = np.arange(n, dtype=np.int64)
+        with self.assertRaises(NativeError):
+            cres.entry_point(a, 3, 6, 0, 88)
+   
 
 if __name__ == '__main__':
     unittest.main()
