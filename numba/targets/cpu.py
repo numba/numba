@@ -33,7 +33,7 @@ class ClosureBody(cgutils.Structure):
 class EnvBody(cgutils.Structure):
     _fields = [
         ('globals', types.pyobject),
-        ('lifted_loops', types.pyobject),
+        ('consts', types.pyobject),
     ]
 
 
