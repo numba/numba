@@ -992,7 +992,7 @@ class TestUFuncs(TestCase):
 
 class TestScalarUFuncs(TestCase):
     """check the machinery of ufuncs works when the result is an scalar.
-    These are not exahustive because:
+    These are not exhaustive because:
     - the machinery to support this case is the same for all the functions of a
       given arity.
     - the result of the inner function itself is already tested in TestUFuncs
