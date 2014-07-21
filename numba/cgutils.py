@@ -604,8 +604,8 @@ def printf(builder, format_string, *values):
             args.append(Constant.int(Type.int(), v))
         elif isinstance(v, float):
             args.append(Constant.real(Type.double(), v))
-
+        else:
+            args.append(v)
     functype = Type.function(Type.int(32), [Type.pointer(Type.int(8))], True)
-    fn = get_module(builder).add_function(functype, 'printf')
+    fn = get_module(builder).get_or_insert_function(functype, 'printf')
     builder.call(fn, [str_addr] + args)
-
