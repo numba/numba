@@ -97,7 +97,7 @@ class _ScalarHelper(object):
         return self.builder.load(self._ptr)
 
 
-class _ArrayIndexingHelper(namedtuple('_ArrayIndexingHelper', 
+class _ArrayIndexingHelper(namedtuple('_ArrayIndexingHelper',
                                       ('array', 'indices'))):
     def update_indices(self, loop_indices, name):
         bld = self.array.builder
@@ -266,7 +266,8 @@ def _function_with_cast(op, inner_sig):
             """
             op is the operation
             outer_sig is the outer type signature (the signature of the ufunc)
-            inner_sig is the inner type signature (the signature of the operation itself)
+            inner_sig is the inner type signature (the signature of the
+                      operation itself)
             """
             self.context = context
             self.builder = builder
@@ -275,14 +276,17 @@ def _function_with_cast(op, inner_sig):
             self.outer_sig = outer_sig
 
         def generate(self, *args):
-            # convert args from the ufunc types to the one of the kernel operation
+            # convert args from the ufunc types to the one of the
+            # kernel operation
             cast_args = [self.context.cast(self.builder, val, inty, outy)
                          for val, inty, outy in zip(args, self.outer_sig.args,
                                                     self.inner_sig.args)]
             # perform the operation
             res = self.fnwork(self.builder, cast_args)
-            # return the result converted to the type of the ufunc operation
-            return self.context.cast(self.builder, res, self.inner_sig.return_type,
+            # return the result converted to the type of the ufunc
+            # operation
+            return self.context.cast(self.builder, res,
+                                     self.inner_sig.return_type,
                                      self.outer_sig.return_type)
 
     return _KernelImpl
@@ -306,18 +310,24 @@ def _homogeneous_function(op, alias=None):
             ufunc = alias if alias is not None else op
             self.context = context
             self.builder = builder
-            letter_arg_types = numba_types_to_numpy_letter_types(outer_sig.args[0:ufunc.nin])
+            letter_arg_types = numba_types_to_numpy_letter_types(
+                outer_sig.args[0:ufunc.nin])
             self.loop = ufunc_find_matching_loop(ufunc, letter_arg_types)
-            self.loop_in_types = numpy_letter_types_to_numba_types(self.loop[:ufunc.nin])
-            self.loop_out_types = numpy_letter_types_to_numba_types(self.loop[-ufunc.nout:])
-            assert(len(self.loop_out_types) == 1) #other cases not yet supported
+            self.loop_in_types = numpy_letter_types_to_numba_types(
+                self.loop[:ufunc.nin])
+            self.loop_out_types = numpy_letter_types_to_numba_types(
+                self.loop[-ufunc.nout:])
+            # only one outpt supported for now.
+            assert(len(self.loop_out_types) == 1)
             self.outer_sig = outer_sig
 
         def generate(self, *args):
-            inner_sig = typing.signature(self.loop_out_types[0], *self.loop_in_types)
+            inner_sig = typing.signature(self.loop_out_types[0],
+                                         *self.loop_in_types)
             fn = self.context.get_function(op, inner_sig)
             cast_args = [self.context.cast(self.builder, val, inty, outty)
-                         for val, inty, outty in zip(args, self.outer_sig.args, self.loop_in_types)]
+                         for val, inty, outty in zip(args, self.outer_sig.args,
+                                                     self.loop_in_types)]
             res = fn(self.builder, cast_args)
             return self.context.cast(self.builder, res, self.loop_out_types[0],
                                      self.outer_sig.return_type)
@@ -325,36 +335,36 @@ def _homogeneous_function(op, alias=None):
     return _KernelImpl
 
 
-def _division(operator, legacy_divide=False):
+def _division(ufunc, operator):
     """A kernel for division. It supports three kinds of division:
-    operator is either '/' for true_division or '//' for floor_division
-
-    legacy_divide is a special mode needed to implement numpy.divide properly
-    in python2 (using operator='//')
+    operator is either '/' for true_division, '//' for floor_division
+    or '/?' for python2 legacy divide
     """
-    assert not legacy_divide or operator=='/'
     class _KernelImpl(_Kernel):
         def __init__(self, context, builder, outer_sig):
             self.context = context
             self.builder = builder
+            letter_arg_types = numba_types_to_numpy_letter_types(
+                outer_sig.args[0:ufunc.nin])
+            self.loop = ufunc_find_matching_loop(ufunc, letter_arg_types)
+            self.loop_in_types = numpy_letter_types_to_numba_types(
+                self.loop[:ufunc.nin])
+            self.loop_out_types = numpy_letter_types_to_numba_types(
+                self.loop[-ufunc.nout:])
             self.outer_sig = outer_sig
-            self.promote_type = types.float64 if operator == '/' \
-                                else _default_promotion_for_type(outer_sig.args[1])
-            self.any_real = any([arg in types.real_domain for arg in outer_sig.args])
-            inner_sig = typing.signature(self.promote_type, self.promote_type, self.promote_type)
-            self.fnwork = context.get_function(operator, inner_sig)
 
         def generate(self,*args):
             assert len(args) == 2 # numerator and denominator
             builder=self.builder
             context=self.context
             tyinputs = self.outer_sig.args
-            true_divide = operator=='/' and not legacy_divide
-            promote_type = self.promote_type
-            result_type = types.float64 if true_divide else promote_type
-            num, den = args
             tyout = self.outer_sig.return_type
             tyout_llvm = context.get_data_type(tyout)
+            inner_sig = typing.signature(self.loop_out_types[0],
+                                         *self.loop_in_types)
+            fn = context.get_function(operator, inner_sig)
+            num, den = args
+
             iszero = cgutils.is_scalar_zero(builder, den)
             with cgutils.ifelse(builder, iszero, expect=False) as (then, orelse):
                 with then:
@@ -362,7 +372,7 @@ def _division(operator, legacy_divide=False):
                     if ((tyinputs[0] in types.real_domain or
                          tyinputs[1] in types.real_domain) or
                         not numpy_support.int_divbyzero_returns_zero) or \
-                        true_divide:
+                        operator=='/':
                         # If num is float and is 0 also, return Nan; else
                         # return Inf
                         outltype = context.get_data_type(types.float64)
@@ -370,19 +380,25 @@ def _division(operator, legacy_divide=False):
                         nan = Constant.real(outltype, float("nan"))
                         inf = Constant.real(outltype, float("inf"))
                         tempres = builder.select(shouldretnan, nan, inf)
-                        res_then = context.cast(builder, tempres, types.float64, tyout)
+                        res_then = context.cast(builder, tempres, types.float64,
+                                                tyout)
                     elif tyout in types.signed_domain and \
                             not numpy_support.int_divbyzero_returns_zero:
-                        res_then = Constant.int(tyout_llvm, 0x1 << (den.type.width-1))
+                        res_then = Constant.int(tyout_llvm,
+                                                0x1 << (den.type.width-1))
                     else:
                         res_then = Constant.null(tyout_llvm)
                     bb_then = builder.basic_block
                 with orelse:
                     # Normal
-                    num = context.cast(builder, num, tyinputs[0], promote_type)
-                    den = context.cast(builder, den, tyinputs[1], promote_type)
-                    tempres = self.fnwork(builder, [num, den])
-                    res_else = context.cast(builder, tempres, result_type, tyout)
+                    cast_args = [self.context.cast(self.builder, val, inty,
+                                                   outty)
+                                 for val, inty, outty
+                                 in zip(args, self.outer_sig.args,
+                                        self.loop_in_types)]
+                    tempres = fn(builder, cast_args)
+                    res_else = context.cast(builder, tempres,
+                                            self.loop_out_types[0], tyout)
                     bb_else = builder.basic_block
             out = builder.phi(tyout_llvm)
             out.add_incoming(res_then, bb_then)
@@ -398,7 +414,8 @@ def register_unary_ufunc_kernel(ufunc, kernel):
         return numpy_ufunc_kernel(context, builder, sig, args, kernel)
 
     def unary_scalar_ufunc(context, builder, sig, args):
-        return numpy_ufunc_kernel(context, builder, sig, args, kernel, explicit_output=False)
+        return numpy_ufunc_kernel(context, builder, sig, args, kernel,
+                                  explicit_output=False)
 
     register(implement(ufunc, types.Kind(types.Array),
         types.Kind(types.Array))(unary_ufunc))
@@ -406,7 +423,7 @@ def register_unary_ufunc_kernel(ufunc, kernel):
         register(implement(ufunc, ty,
             types.Kind(types.Array))(unary_ufunc))
     for ty in types.number_domain:
-        register(implement(ufunc, ty)(unary_scalar_ufunc))
+        register(implement(ufunc, ty)(unary_scalar_ufunc)) # scalar
 
 
 def register_binary_ufunc_kernel(ufunc, kernel):
@@ -414,7 +431,8 @@ def register_binary_ufunc_kernel(ufunc, kernel):
         return numpy_ufunc_kernel(context, builder, sig, args, kernel)
 
     def binary_scalar_ufunc(context, builder, sig, args):
-        return numpy_ufunc_kernel(context, builder, sig, args, kernel, explicit_output=False)
+        return numpy_ufunc_kernel(context, builder, sig, args, kernel,
+                                  explicit_output=False)
 
     register(implement(ufunc, types.Kind(types.Array), types.Kind(types.Array),
         types.Kind(types.Array))(binary_ufunc))
@@ -426,16 +444,18 @@ def register_binary_ufunc_kernel(ufunc, kernel):
     for ty1, ty2 in itertools.product(types.number_domain, types.number_domain):
         register(implement(ufunc, ty1, ty2,
             types.Kind(types.Array))(binary_ufunc))
-        register(implement(ufunc, ty1, ty2)(binary_scalar_ufunc)) # scalar version
+        register(implement(ufunc, ty1, ty2)(binary_scalar_ufunc)) # scalar
 
 
 ################################################################################
 # Actual registering of supported ufuncs
 
 _float_unary_function_type = Type.function(Type.double(), [Type.double()])
-_float_binary_function_type = Type.function(Type.double(), [Type.double(), Type.double()])
+_float_binary_function_type = Type.function(Type.double(),
+                                            [Type.double(), Type.double()])
 _float_unary_sig = typing.signature(types.float64, types.float64)
-_float_binary_sig = typing.signature(types.float64, types.float64, types.float64)
+_float_binary_sig = typing.signature(types.float64, types.float64,
+                                     types.float64)
 
 
 # _externs will be used to register ufuncs.
@@ -490,9 +510,9 @@ register_binary_ufunc_kernel(numpy.add, _homogeneous_function('+', numpy.add))
 register_binary_ufunc_kernel(numpy.subtract, _homogeneous_function('-', numpy.subtract))
 register_binary_ufunc_kernel(numpy.multiply, _homogeneous_function('*', numpy.multiply))
 if not PYVERSION >= (3, 0):
-    register_binary_ufunc_kernel(numpy.divide, _division('/', legacy_divide=True))
-register_binary_ufunc_kernel(numpy.floor_divide, _division('//'))
-register_binary_ufunc_kernel(numpy.true_divide, _division('/'))
+    register_binary_ufunc_kernel(numpy.divide, _division(numpy.divide, '/?'))
+register_binary_ufunc_kernel(numpy.floor_divide, _division(numpy.floor_divide, '//'))
+register_binary_ufunc_kernel(numpy.true_divide, _division(numpy.true_divide, '/'))
 register_binary_ufunc_kernel(numpy.power, _function_with_cast('**', _float_binary_sig))
 
 
