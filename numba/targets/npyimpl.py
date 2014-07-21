@@ -108,18 +108,10 @@ class _ArrayIndexingHelper(namedtuple('_ArrayIndexingHelper',
         # the indexed array has (the outer dimensions are broadcast, so
         # ignoring the outer indices produces the desired result.
         indices = loop_indices[len(loop_indices) - len(self.indices):]
-        add_bb = cgutils.append_basic_block
-        bb_index = [add_bb(bld, '.inc_inp{0}_index{1}'.format(name, str(i)))
-                    for i in range(self.array.ndim)]
-        bb_index.append(add_bb(bld, 'end_inc{0}_index'.format(name)))
-        bld.branch(bb_index[0])
-        for i in range(self.array.ndim):
-            with cgutils.goto_block(bld, bb_index[i]):
-                cond = bld.icmp(ICMP_UGT, self.array.shape[i], ONE)
-                with cgutils.ifthen(bld, cond):
-                    bld.store(indices[i], self.indices[i])
-                bld.branch(bb_index[i+1])
-        bld.position_at_end(bb_index[-1])
+        for src, dst, dim in zip(indices, self.indices, self.array.shape):
+            cond = bld.icmp(ICMP_UGT, dim, ONE)
+            with cgutils.ifthen(bld, cond):
+                bld.store(src, dst)
 
     def as_values(self):
         """
