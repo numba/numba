@@ -296,7 +296,25 @@ def for_range(builder, count, intp):
 
 @contextmanager
 def for_range_slice(builder, start, stop, step, intp):
-    """start """
+    """
+    Generate LLVM IR for a for-loop based on a slice  
+    
+    Parameters
+    -------------
+    builder : object
+        Builder object
+    start : int
+        The beginning value of the slice
+    stop : int
+        The end value of the slice
+    step : int
+        The step value of the slice
+    intp : 
+
+    Returns
+        None
+    """
+
     bbcond = append_basic_block(builder, "for.cond")
     bbbody = append_basic_block(builder, "for.body")
     bbend = append_basic_block(builder, "for.end")
@@ -304,7 +322,6 @@ def for_range_slice(builder, start, stop, step, intp):
     bbstart = builder.basic_block
     builder.branch(bbcond)
 
-    #STEP = Constant.int(intp, 2)
 
     with goto_block(builder, bbcond):
         index = builder.phi(intp, name="loop.index")
