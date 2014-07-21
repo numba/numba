@@ -300,6 +300,20 @@ def _op_and_not_eq(op, self, other):
     return op_result and self != other
 
 
+def _is_inherited_from_object(cls, op):
+    """
+    Whether operator *op* on *cls* is inherited from the root object type.
+    """
+    object_op = getattr(object, op)
+    cls_op = getattr(cls, op)
+    if PYVERSION >= (3,):
+        return object_op is cls_op
+    else:
+        # In 2.x, the inherited operator gets a new descriptor, so identity
+        # doesn't work.
+        return getattr(cls_op, "__objclass__", None) is object_op.__objclass__
+
+
 def total_ordering(cls):
     """Class decorator that fills in missing ordering methods"""
     convert = {
@@ -331,8 +345,7 @@ def total_ordering(cls):
                    ('__lt__', lambda self, other: _not_op(self.__ge__, other))]
     }
     # Find user-defined comparisons (not those inherited from object).
-    roots = [op for op in convert if
-             getattr(cls, op, None) is not getattr(object, op, None)]
+    roots = [op for op in convert if not _is_inherited_from_object(cls, op)]
     if not roots:
         raise ValueError(
             'must define at least one ordering operation: < > <= >=')
