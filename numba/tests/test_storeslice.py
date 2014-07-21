@@ -36,7 +36,6 @@ class TestStoreSlice(unittest.TestCase):
         n = 10
         cres = compile_isolated(setitem_slice, (types.int64[:], types.int64, types.int64, types.int64, types.int64))
         a = np.arange(n)
-        b = np.arange(n)     
         START = 0
         STOP = 1
         STEP = 2
