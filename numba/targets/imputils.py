@@ -17,6 +17,7 @@ def implement(func, *argtys):
 
         res.signature = signature(types.Any, *argtys)
         res.key = func
+        res.__wrapped__ = impl
         return res
 
     return wrapper
@@ -203,7 +204,11 @@ class Registry(object):
         self.attributes = []
 
     def register(self, item):
-        self.functions.append(item)
+        curr_item = item
+        while hasattr(curr_item, '__wrapped__'):
+            self.functions.append(curr_item)
+            curr_item=curr_item.__wrapped__
+
         return item
 
     def register_attr(self, item):

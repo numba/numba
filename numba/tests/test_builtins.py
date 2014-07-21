@@ -56,6 +56,12 @@ def enumerate_usecase():
         result += i * j
     return result
 
+def enumerate_start_usecase():
+    result = 0
+    for i, j in enumerate((1., 2.5, 3.), 42):
+        result += i * j
+    return result
+
 def filter_usecase(x, filter_func):
     return filter(filter_func, x)
 
@@ -274,6 +280,12 @@ class TestBuiltins(TestCase):
 
     def test_enumerate_npm(self):
         self.test_enumerate(flags=no_pyobj_flags)
+
+    def test_enumerate_start(self, flags=enable_pyobj_flags):
+        self.run_nullary_func(enumerate_start_usecase, flags)
+
+    def test_enumerate_start_npm(self):
+        self.test_enumerate_start(flags=no_pyobj_flags)
 
     def test_filter(self, flags=enable_pyobj_flags):
         pyfunc = filter_usecase
