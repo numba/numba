@@ -61,8 +61,8 @@ class TestStoreSlice(unittest.TestCase):
             self.assertTrue(np.allclose(a, b))
         
         #test if step = 0
-        a = np.arange(n)
-        b = np.arange(n)
+        a = np.arange(n, dtype=np.int64)
+        b = np.arange(n, dtype=np.int64)
         with self.assertRaises(NativeError):
             cres.entry_point(a, 3, 6, 0, 88)
    
