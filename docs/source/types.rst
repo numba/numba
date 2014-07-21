@@ -78,9 +78,9 @@ code will not compile::
     @jit
     def incompatible_types(arg):
         if arg > 10:
-            x = 1+2j
+            x = "hello"
         else:
-            x = 3.3
+            x = 1
 
         return x        # ERROR! Inconsistent type for x!
 
