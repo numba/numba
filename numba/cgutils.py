@@ -311,7 +311,7 @@ def for_range_slice(builder, start, stop, step, intp, inc=True):
         The step value of the slice
     intp : 
         The data type
-    inc : boolean
+    inc : boolean, optional
         A flag to handle the step < 0 case, in which case we decrement the loop
 
     Returns
