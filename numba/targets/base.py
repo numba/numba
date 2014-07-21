@@ -50,20 +50,6 @@ RETCODE_NONE = Constant.int_signextend(Type.int(), -2)
 RETCODE_EXC = Constant.int_signextend(Type.int(), -1)
 
 
-# Keep those structures in sync with _dynfunc.c.
-
-class ClosureBody(cgutils.Structure):
-    _fields = [('env', types.pyobject)]
-
-class EnvBody(cgutils.Structure):
-    _fields = [
-        ('globals', types.pyobject),
-        ('lifted_loops', types.pyobject),
-        ]
-
-_empty_env = _dynfunc.Environment({})
-
-
 class Overloads(object):
     def __init__(self):
         self.versions = []
@@ -199,17 +185,14 @@ class BaseContext(object):
                   0 for success;
                  >0 for user error code.
         Return value is passed by reference as the first argument.
-        It MUST NOT be used if the function is in nopython mode.
 
-        The 2nd argument is a _dynfunc.Environment object.
-
-        Actual arguments starts at the 3rd argument position.
+        Actual arguments starts at the 2rd argument position.
         Caller is responsible to allocate space for return value.
         """
         argtypes = [self.get_argument_type(aty)
                     for aty in fndesc.argtypes]
         resptr = self.get_return_type(fndesc.restype)
-        fnty = Type.function(Type.int(), [resptr, PYOBJECT] + argtypes)
+        fnty = Type.function(Type.int(), [resptr] + argtypes)
         return fnty
 
     def get_external_function_type(self, fndesc):
@@ -226,7 +209,6 @@ class BaseContext(object):
         assert fn.is_declaration
         for ak, av in zip(fndesc.args, self.get_arguments(fn)):
             av.name = "arg.%s" % ak
-        self.get_env_argument(fn).name = "env"
         fn.args[0] = ".ret"
         return fn
 
@@ -257,14 +239,7 @@ class BaseContext(object):
         Get the Python-level arguments of LLVM *func*.
         See get_function_type() for the calling convention.
         """
-        return func.args[2:]
-
-    def get_env_argument(self, func):
-        """
-        Get the environment argument of LLVM *func* (which can be
-        a declaration).
-        """
-        return func.args[1]
+        return func.args[1:]
 
     def get_argument_type(self, ty):
         if ty == types.boolean:
@@ -749,15 +724,12 @@ class BaseContext(object):
         Call the Numba-compiled *callee*, using the same calling
         convention as in get_function_type().
         """
-        if env is None:
-            # This only works with functions that don't use the environment
-            # (nopython functions).
-            env = Constant.null(PYOBJECT)
+        assert env is None
         retty = callee.args[0].type.pointee
         retval = cgutils.alloca_once(builder, retty)
         args = [self.get_value_as_argument(builder, ty, arg)
                 for ty, arg in zip(argtys, args)]
-        realargs = [retval, env] + list(args)
+        realargs = [retval] + list(args)
         code = builder.call(callee, realargs)
         status = self.get_return_status(builder, code)
         return status, builder.load(retval)
@@ -777,25 +749,6 @@ class BaseContext(object):
 
         status = Status(code=code, ok=ok, err=err, exc=exc, none=none)
         return status
-
-    def get_env_from_closure(self, builder, clo):
-        """
-        From the pointer *clo* to a _dynfunc.Closure, get a pointer
-        to the enclosed _dynfunc.Environment.
-        """
-        clo_body_ptr = cgutils.pointer_add(
-            builder, clo, _dynfunc._impl_info['offset_closure_body'])
-        clo_body = ClosureBody(self, builder, ref=clo_body_ptr, cast_ref=True)
-        return clo_body.env
-
-    def get_env_body(self, builder, envptr):
-        """
-        From the given *envptr* (a pointer to a _dynfunc.Environment object),
-        get a EnvBody allowing structured access to environment fields.
-        """
-        body_ptr = cgutils.pointer_add(
-            builder, envptr, _dynfunc._impl_info['offset_env_body'])
-        return EnvBody(self, builder, ref=body_ptr, cast_ref=True)
 
     def call_function_pointer(self, builder, funcptr, signature, args):
         retty = self.get_value_type(signature.return_type)

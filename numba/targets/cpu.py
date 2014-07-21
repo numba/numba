@@ -9,8 +9,8 @@ from llvm.workaround import avx_support
 
 from numba import _dynfunc, _helperlib, config
 from numba.callwrapper import PyCallWrapper
-from .base import BaseContext
-from numba import utils
+from .base import BaseContext, PYOBJECT
+from numba import utils, cgutils, types
 from numba.targets import intrinsics, mathimpl, npyimpl, operatorimpl, printimpl
 from .options import TargetOptions
 
@@ -24,7 +24,24 @@ def _windows_symbol_hacks_32bits():
         le.dylib_add_symbol("_ftol2", ftol)
 
 
+# Keep those structures in sync with _dynfunc.c.
+
+class ClosureBody(cgutils.Structure):
+    _fields = [('env', types.pyobject)]
+
+
+class EnvBody(cgutils.Structure):
+    _fields = [
+        ('globals', types.pyobject),
+        ('lifted_loops', types.pyobject),
+    ]
+
+
 class CPUContext(BaseContext):
+    """
+    Changes BaseContext calling convention
+    """
+
     def init(self):
         self.execmodule = lc.Module.new("numba.exec")
         eb = le.EngineBuilder.new(self.execmodule).opt(3)
@@ -46,6 +63,97 @@ class CPUContext(BaseContext):
         self.insert_func_defn(npyimpl.registry.functions)
         self.insert_func_defn(operatorimpl.registry.functions)
         self.insert_func_defn(printimpl.registry.functions)
+
+    def get_function_type(self, fndesc):
+        """
+        Get the implemented Function type for the high-level *fndesc*.
+        Some parameters can be added or shuffled around.
+        This is kept in sync with call_function() and get_arguments().
+
+        Calling Convention
+        ------------------
+        (Same return value convention as BaseContext target.)
+        Returns: -2 for return none in native function;
+                 -1 for failure with python exception set;
+                  0 for success;
+                 >0 for user error code.
+        Return value is passed by reference as the first argument.
+
+        The 2nd argument is a _dynfunc.Environment object.
+        It MUST NOT be used if the function is in nopython mode.
+
+        Actual arguments starts at the 3rd argument position.
+        Caller is responsible to allocate space for return value.
+        """
+        argtypes = [self.get_argument_type(aty)
+                    for aty in fndesc.argtypes]
+        resptr = self.get_return_type(fndesc.restype)
+        fnty = lc.Type.function(lc.Type.int(), [resptr, PYOBJECT] + argtypes)
+        return fnty
+
+    def declare_function(self, module, fndesc):
+        """
+        Override parent to handle get_env_argument
+        """
+        fnty = self.get_function_type(fndesc)
+        fn = module.get_or_insert_function(fnty, name=fndesc.mangled_name)
+        assert fn.is_declaration
+        for ak, av in zip(fndesc.args, self.get_arguments(fn)):
+            av.name = "arg.%s" % ak
+        self.get_env_argument(fn).name = "env"
+        fn.args[0] = ".ret"
+        return fn
+
+    def get_arguments(self, func):
+        """Override parent to handle enviroment argument
+        Get the Python-level arguments of LLVM *func*.
+        See get_function_type() for the calling convention.
+        """
+        return func.args[2:]
+
+    def get_env_argument(self, func):
+        """
+        Get the environment argument of LLVM *func* (which can be
+        a declaration).
+        """
+        return func.args[1]
+
+    def call_function(self, builder, callee, resty, argtys, args, env=None):
+        """
+        Call the Numba-compiled *callee*, using the same calling
+        convention as in get_function_type().
+        """
+        if env is None:
+            # This only works with functions that don't use the environment
+            # (nopython functions).
+            env = lc.Constant.null(PYOBJECT)
+        retty = callee.args[0].type.pointee
+        retval = cgutils.alloca_once(builder, retty)
+        args = [self.get_value_as_argument(builder, ty, arg)
+                for ty, arg in zip(argtys, args)]
+        realargs = [retval, env] + list(args)
+        code = builder.call(callee, realargs)
+        status = self.get_return_status(builder, code)
+        return status, builder.load(retval)
+
+    def get_env_from_closure(self, builder, clo):
+        """
+        From the pointer *clo* to a _dynfunc.Closure, get a pointer
+        to the enclosed _dynfunc.Environment.
+        """
+        clo_body_ptr = cgutils.pointer_add(
+            builder, clo, _dynfunc._impl_info['offset_closure_body'])
+        clo_body = ClosureBody(self, builder, ref=clo_body_ptr, cast_ref=True)
+        return clo_body.env
+
+    def get_env_body(self, builder, envptr):
+        """
+        From the given *envptr* (a pointer to a _dynfunc.Environment object),
+        get a EnvBody allowing structured access to environment fields.
+        """
+        body_ptr = cgutils.pointer_add(
+            builder, envptr, _dynfunc._impl_info['offset_env_body'])
+        return EnvBody(self, builder, ref=body_ptr, cast_ref=True)
 
     def build_pass_manager(self):
         if 0 < config.OPT <= 3:
@@ -93,9 +201,11 @@ class CPUContext(BaseContext):
         c_helpers = _helperlib.c_helpers
         for name in ['cpow', 'sdiv', 'srem', 'udiv', 'urem']:
             le.dylib_add_symbol("numba.math.%s" % name, c_helpers[name])
-        if sys.platform.startswith('win32') and not le.dylib_address_of_symbol('__ftol2'):
+        if sys.platform.startswith('win32') and not le.dylib_address_of_symbol(
+                '__ftol2'):
             le.dylib_add_symbol("__ftol2", c_helpers["fptoui"])
-        elif sys.platform.startswith('linux') and not le.dylib_address_of_symbol('__fixunsdfdi'):
+        elif sys.platform.startswith(
+                'linux') and not le.dylib_address_of_symbol('__fixunsdfdi'):
             le.dylib_add_symbol("__fixunsdfdi", c_helpers["fptoui"])
         # Necessary for Python3
         le.dylib_add_symbol("numba.round", c_helpers["round_even"])
@@ -119,6 +229,7 @@ class CPUContext(BaseContext):
     def map_numpy_math_functions(self):
         # add the symbols for numpy math to the execution environment.
         import numba._npymath_exports as npymath
+
         for sym in npymath.symbols:
             le.dylib_add_symbol(*sym)
 
@@ -164,7 +275,7 @@ class CPUContext(BaseContext):
         self.optimize(func.module)
 
         if config.DUMP_OPTIMIZED:
-            print(("OPTIMIZED DUMP %s" % fndesc).center(80,'-'))
+            print(("OPTIMIZED DUMP %s" % fndesc).center(80, '-'))
             print(func.module)
             print('=' * 80)
 
