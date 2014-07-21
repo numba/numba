@@ -473,6 +473,7 @@ class BaseContext(object):
 
     def get_attribute(self, val, typ, attr):
         if isinstance(typ, types.Record):
+            # Implement get attribute for records
             offset = typ.offset(attr)
             elemty = typ.typeof(attr)
 
@@ -488,7 +489,20 @@ class BaseContext(object):
             return self.attrs[key]
         except KeyError:
             if isinstance(typ, types.Module):
-                return
+                # Implement get attribute for module-level globals
+                # NOTE: we are treating them as constants
+                attrty = self.typing_context.resolve_module_constants(typ, attr)
+
+                if attrty is not None:
+                    @impl_attribute(typ, attr, attrty)
+                    def imp(context, builder, typ, val):
+                        val = getattr(typ.pymod, attr)
+                        return context.get_constant(attrty, val)
+
+                    return imp
+                else:
+                    # No implementation
+                    return
             elif typ.is_parametric:
                 key = type(typ), attr
                 if key in self.attrs:

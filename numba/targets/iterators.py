@@ -34,20 +34,28 @@ def make_enumerate_cls(enum_type):
 
     return Enumerate
 
+
 @builtin
 @implement(enumerate, types.Kind(types.IterableType))
+@implement(enumerate, types.Kind(types.IterableType), types.Kind(types.Integer))
 def make_enumerate_object(context, builder, sig, args):
-    [srcty] = sig.args
-    [src] = args
+    assert len(args) == 1 or len(args) == 2 # enumerate(it) or enumerate(it, start)
+    srcty = sig.args[0]
+
+    if len(args) == 1:
+        src = args[0]
+        start_val = context.get_constant(types.intp, 0)
+    elif len(args) == 2:
+        src = args[0]
+        start_val = context.cast(builder, args[1], sig.args[1], types.intp) 
 
     iterobj = call_getiter(context, builder, srcty, src)
 
     enumcls = make_enumerate_cls(sig.return_type)
     enum = enumcls(context, builder)
 
-    zero = context.get_constant(types.intp, 0)
-    countptr = cgutils.alloca_once(builder, zero.type)
-    builder.store(zero, countptr)
+    countptr = cgutils.alloca_once(builder, start_val.type)
+    builder.store(start_val, countptr)
 
     enum.count = countptr
     enum.iter = iterobj

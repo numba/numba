@@ -188,6 +188,11 @@ def benchmark(func, maxsec=1):
     return BenchmarkResult(func, records, number)
 
 
+RANGE_ITER_OBJECTS = (builtins.range,)
+if PYVERSION < (3, 0):
+    RANGE_ITER_OBJECTS += (builtins.xrange,)
+
+
 # Other common python2/3 adaptors
 # Copied from Blaze which borrowed from six
 
