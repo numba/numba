@@ -220,6 +220,9 @@ class AttributeTemplate(object):
         if fn is None:
             fn = self.generic_resolve
             if fn is NotImplemented:
+                attrty = self.context.resolve_module_constants(value, attr)
+                if attrty is not None:
+                    return attrty
                 raise NotImplementedError(value, attr)
             else:
                 return fn(value, attr)

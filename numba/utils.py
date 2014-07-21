@@ -1,4 +1,10 @@
 from __future__ import print_function, division, absolute_import
+
+try:
+    import __builtin__ as builtins
+except ImportError:
+    import builtins
+
 import collections
 import functools
 import io
@@ -167,6 +173,11 @@ def benchmark(func, maxsec=1):
     number = int(10 ** math.ceil(math.log10(number)))
     records = timer.repeat(3, number)
     return BenchmarkResult(func, records, number)
+
+
+RANGE_ITER_OBJECTS = (builtins.range,)
+if PYVERSION < (3, 0):
+    RANGE_ITER_OBJECTS += (builtins.xrange,)
 
 
 # Other common python2/3 adaptors
