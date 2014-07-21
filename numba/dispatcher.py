@@ -1,8 +1,10 @@
 from __future__ import print_function, division, absolute_import
 import inspect
+from collections import namedtuple
 import contextlib
 import numpy
 import functools
+
 from numba.config import PYVERSION
 from numba import _dispatcher, compiler, utils
 from numba.typeconv.rules import default_type_manager
@@ -44,6 +46,7 @@ class Overloaded(_dispatcher.Dispatcher):
         # but newer python uses a different name
         self.__code__ = self.func_code
 
+        # A mapping of signatures to entry points
         self.overloads = {}
 
         self.targetoptions = targetoptions
@@ -57,7 +60,7 @@ class Overloaded(_dispatcher.Dispatcher):
         """
         Returns a list of compiled function signatures.
         """
-        return list(self.overloads.keys())
+        return list(self.overloads)
 
     def disable_compile(self, val=True):
         """Disable the compilation of new signatures at call time.
@@ -67,8 +70,8 @@ class Overloaded(_dispatcher.Dispatcher):
     def add_overload(self, cres):
         args = tuple(cres.signature.args)
         sig = [a._code for a in args]
-        self._insert(sig, cres.entry_point_addr, cres.objectmode)
-        self.overloads[args] = cres
+        self._insert(sig, cres.entry_point, cres.objectmode)
+        self.overloads[args] = cres.entry_point
 
         # Add native function for correct typing the code generation
         typing = cres.typing_context
@@ -81,7 +84,7 @@ class Overloaded(_dispatcher.Dispatcher):
 
     def get_overload(self, sig):
         args, return_type = sigutils.normalize_signature(sig)
-        return self.overloads[tuple(args)].entry_point
+        return self.overloads[tuple(args)]
 
     @contextlib.contextmanager
     def _compile_lock(self):
@@ -117,7 +120,7 @@ class Overloaded(_dispatcher.Dispatcher):
             # Don't recompile if signature already exist.
             existing = self.overloads.get(tuple(args))
             if existing is not None:
-                return existing.entry_point
+                return existing
 
             cres = compiler.compile_extra(typingctx, targetctx, self.py_func,
                                           args=args, return_type=return_type,
@@ -179,7 +182,7 @@ class Overloaded(_dispatcher.Dispatcher):
 
         # The following are handled in the C version for exact type match
         # So test these later
-        elif isinstance(val, INT_TYPES):
+        elif isinstance(val, utils.INT_TYPES):
             return types.int64
 
         elif isinstance(val, float):
@@ -195,11 +198,6 @@ class Overloaded(_dispatcher.Dispatcher):
         # Other object
         else:
             return getattr(val, "_numba_type_", types.pyobject)
-
-
-INT_TYPES = (int,)
-if PYVERSION < (3, 0):
-    INT_TYPES += (long,)
 
 
 class LiftedLoop(Overloaded):

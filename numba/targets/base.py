@@ -5,7 +5,8 @@ from types import MethodType
 import llvm.core as lc
 from llvm.core import Type, Constant
 import numpy
-from numba import types, utils, cgutils, typing, numpy_support, errcode
+
+from numba import _dynfunc, types, utils, cgutils, typing, numpy_support, errcode
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, python_attr_impl,
                                     builtin_registry, impl_attribute,
@@ -13,8 +14,12 @@ from numba.targets.imputils import (user_function, python_attr_impl,
 from numba.targets import arrayobj, builtins, iterators, rangeobj
 
 
+
+GENERIC_POINTER = Type.pointer(Type.int(8))
+PYOBJECT = GENERIC_POINTER
+
 LTYPEMAP = {
-    types.pyobject: Type.pointer(Type.int(8)),
+    types.pyobject: PYOBJECT,
 
     types.boolean: Type.int(8),
 
@@ -112,7 +117,7 @@ class BaseContext(object):
     implement_pow_as_math_call = False
 
     def __init__(self, typing_context):
-        self.address_size = tuple.__itemsize__ * 8
+        self.address_size = utils.MACHINE_BITS
         self.typing_context = typing_context
 
         self.defns = defaultdict(Overloads)
@@ -169,6 +174,10 @@ class BaseContext(object):
 
     def get_function_type(self, fndesc):
         """
+        Get the implemented Function type for the high-level *fndesc*.
+        Some parameters can be added or shuffled around.
+        This is kept in sync with call_function() and get_arguments().
+
         Calling Convention
         ------------------
         Returns: -2 for return none in native function;
@@ -176,8 +185,8 @@ class BaseContext(object):
                   0 for success;
                  >0 for user error code.
         Return value is passed by reference as the first argument.
-        It MUST NOT be used if the function is in nopython mode.
-        Actual arguments starts at the 2nd argument position.
+
+        Actual arguments starts at the 2rd argument position.
         Caller is responsible to allocate space for return value.
         """
         argtypes = [self.get_argument_type(aty)
@@ -212,7 +221,7 @@ class BaseContext(object):
         return fn
 
     def insert_const_string(self, mod, string):
-        stringtype = Type.pointer(Type.int(8))
+        stringtype = GENERIC_POINTER
         text = Constant.stringz(string)
         name = ".const.%s" % string
         for gv in mod.global_variables:
@@ -226,6 +235,10 @@ class BaseContext(object):
         return Constant.bitcast(gv, stringtype)
 
     def get_arguments(self, func):
+        """
+        Get the Python-level arguments of LLVM *func*.
+        See get_function_type() for the calling convention.
+        """
         return func.args[1:]
 
     def get_argument_type(self, ty):
@@ -256,7 +269,7 @@ class BaseContext(object):
                 isinstance(ty, types.Dispatcher) or
                 isinstance(ty, types.Object) or
                 isinstance(ty, types.Macro)):
-            return Type.pointer(Type.int(8))
+            return PYOBJECT
 
         elif isinstance(ty, types.CPointer):
             dty = self.get_data_type(ty.dtype)
@@ -720,7 +733,12 @@ class BaseContext(object):
             return builder.or_(real_istrue, imag_istrue)
         raise NotImplementedError("is_true", val, typ)
 
-    def call_function(self, builder, callee, resty, argtys, args):
+    def call_function(self, builder, callee, resty, argtys, args, env=None):
+        """
+        Call the Numba-compiled *callee*, using the same calling
+        convention as in get_function_type().
+        """
+        assert env is None
         retty = callee.args[0].type.pointee
         retval = cgutils.alloca_once(builder, retty)
         args = [self.get_value_as_argument(builder, ty, arg)
@@ -779,7 +797,7 @@ class BaseContext(object):
 
     def print_string(self, builder, text):
         mod = builder.basic_block.function.module
-        cstring = Type.pointer(Type.int(8))
+        cstring = GENERIC_POINTER
         fnty = Type.function(Type.int(), [cstring])
         puts = mod.get_or_insert_function(fnty, "puts")
         return builder.call(puts, [text])
@@ -812,7 +830,7 @@ class BaseContext(object):
         return Constant.null(self.get_dummy_type())
 
     def get_dummy_type(self):
-        return Type.pointer(Type.int(8))
+        return GENERIC_POINTER
 
     def optimize(self, module):
         pass

@@ -10,9 +10,11 @@
 
 typedef struct DispatcherObject{
     PyObject_HEAD
+    /* Holds borrowed references to PyCFunction objects */
     dispatcher_t *dispatcher;
     int can_compile;        /* Can auto compile */
-    PyCFunctionWithKeywords firstdef, fallbackdef;
+    /* Borrowed references */
+    PyObject *firstdef, *fallbackdef;
 } DispatcherObject;
 
 static int tc_int8;
@@ -108,16 +110,16 @@ static
 PyObject*
 Dispatcher_Insert(DispatcherObject *self, PyObject *args)
 {
-    PyObject *sigtup, *addrobj;
-    void *addr;
+    PyObject *sigtup, *cfunc;
     int i, sigsz;
     int *sig;
     int objectmode = 0;
 
-    if (!PyArg_ParseTuple(args, "OO|i", &sigtup, &addrobj, &objectmode)) {
+    if (!PyArg_ParseTuple(args, "OO!|i", &sigtup, &PyCFunction_Type,
+                          &cfunc, &objectmode)) {
         return NULL;
     }
-    addr = PyLong_AsVoidPtr(addrobj);
+
     sigsz = PySequence_Fast_GET_SIZE(sigtup);
     sig = malloc(sigsz * sizeof(int));
 
@@ -125,15 +127,17 @@ Dispatcher_Insert(DispatcherObject *self, PyObject *args)
         sig[i] = PyLong_AsLong(PySequence_Fast_GET_ITEM(sigtup, i));
     }
 
-    dispatcher_add_defn(self->dispatcher, sig, (void*)addr);
+    /* The reference to cfunc is borrowed; this only works because the
+       derived Python class also stores an (owned) reference to cfunc. */
+    dispatcher_add_defn(self->dispatcher, sig, (void*) cfunc);
 
     /* Add first definition */
     if (!self->firstdef) {
-        self->firstdef = (PyCFunctionWithKeywords)addr;
+        self->firstdef = cfunc;
     }
     /* Add pure python fallback */
     if (!self->fallbackdef && objectmode){
-        self->fallbackdef = (PyCFunctionWithKeywords)addr;
+        self->fallbackdef = cfunc;
     }
 
     free(sig);
@@ -343,6 +347,16 @@ void explain_ambiguous(PyObject *dispatcher, PyObject *args, PyObject *kws) {
     Py_XDECREF(callback);
 }
 
+/* A custom, fast, inlinable version of PyCFunction_Call() */
+static PyObject *
+call_cfunc(PyObject *cfunc, PyObject *args, PyObject *kws)
+{
+    PyCFunctionWithKeywords fn;
+    assert(!PyCFunction_Check(cfunc));
+    assert(PyCFunction_GET_FLAGS(cfunc) == METH_VARARGS | METH_KEYWORDS);
+    fn = (PyCFunctionWithKeywords) PyCFunction_GET_FUNCTION(cfunc);
+    return fn(PyCFunction_GET_SELF(cfunc), args, kws);
+}
 
 static
 PyObject*
@@ -355,7 +369,7 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
     int prealloc[24];
     int matches;
     int old_can_compile;
-    PyCFunctionWithKeywords fn;
+    PyObject *cfunc;
     PyObject *cac;                  /* compile and call function */
 
     /* Shortcut for single definition */
@@ -377,11 +391,10 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
         if (tys[i] == -1) goto CLEANUP;
     }
 
-    fn = (PyCFunctionWithKeywords)dispatcher_resolve(self->dispatcher, tys,
-                                                     &matches);
+    cfunc = dispatcher_resolve(self->dispatcher, tys, &matches);
     if (matches == 1) {
         /* Definition is found */
-        retval = fn(NULL, args, kws);
+        retval = call_cfunc(cfunc, args, kws);
     } else if (matches == 0) {
         /* No matching definition */
         if (self->can_compile) {
@@ -396,7 +409,7 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
             }
         } else if (self->fallbackdef) {
             /* Have object fallback */
-            retval = self->fallbackdef(NULL, args, kws);
+            retval = call_cfunc(self->fallbackdef, args, kws);
         } else {
             /* Raise TypeError */
             PyErr_SetString(PyExc_TypeError, "No matching definition");

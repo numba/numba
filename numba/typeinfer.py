@@ -13,9 +13,18 @@ Constrains push types forward following the dataflow.
 """
 
 from __future__ import print_function, division, absolute_import
+
 from pprint import pprint
 import itertools
-from numba import ir, types, utils, config
+
+from numba import ir, types, utils, config, ctypes_utils, cffi_support
+from numba.config import PYVERSION
+from numba import numpy_support
+from numba.utils import builtins
+
+RANGE_ITER_OBJECTS = (builtins.range,)
+if PYVERSION < (3, 0):
+    RANGE_ITER_OBJECTS += (builtins.xrange,)
 
 
 class TypingError(Exception):
