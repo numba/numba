@@ -36,10 +36,6 @@ class TestStoreSlice(unittest.TestCase):
         n = 10
         cres = compile_isolated(setitem_slice, (types.int64[:], types.int64, types.int64, types.int64, types.int64))
         a = np.arange(n, dtype=np.int64)
-        START = 0
-        STOP = 1
-        STEP = 2
-        SCALAR = 3
         # tuple is (start, stop, step, scalar)
         tests = ((2, 6, 1, 7),
                 (2, 6, -1, 7),
@@ -53,11 +49,11 @@ class TestStoreSlice(unittest.TestCase):
                 (16, 20, -2, 88),
                 )
 
-        for i in range(len(tests)):
+        for start, stop, step, scalar in tests:
             a = np.arange(n, dtype=np.int64)
             b = np.arange(n, dtype=np.int64)
-            cres.entry_point(a, tests[i][START], tests[i][STOP], tests[i][STEP], tests[i][SCALAR])
-            setitem_slice(b, tests[i][START], tests[i][STOP], tests[i][STEP], tests[i][SCALAR])
+            cres.entry_point(a, start, stop, step, scalar)
+            setitem_slice(b, start, stop, step, scalar)
             self.assertTrue(np.allclose(a, b))
         
         #test if step = 0
