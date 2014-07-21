@@ -3,6 +3,7 @@ from llvm.core import Type, Constant
 import llvm.core as lc
 import llvm.ee as le
 from llvm import LLVMException
+
 from numba.config import PYVERSION
 import numba.ctypes_support as ctypes
 from numba import types, utils, cgutils, _numpyadapt, _helperlib, assume
@@ -31,11 +32,18 @@ def fix_python_api():
                         c_helpers["release_record_buffer"])
     le.dylib_add_symbol("NumbaRecreateRecord",
                         c_helpers["recreate_record"])
-    le.dylib_add_symbol("PyExc_NameError", id(NameError))
-
+    # Add all built-in exception classes
+    for obj in utils.builtins.__dict__.values():
+        if isinstance(obj, type) and issubclass(obj, BaseException):
+            le.dylib_add_symbol("PyExc_%s" % (obj.__name__), id(obj))
 
 
 class PythonAPI(object):
+    """
+    Code generation facilities to call into the CPython C API (and related
+    helpers).
+    """
+
     def __init__(self, context, builder):
         """
         Note: Maybe called multiple times when lowering a function
@@ -57,6 +65,10 @@ class PythonAPI(object):
 
     # ------ Python API -----
 
+    #
+    # Basic object API
+    #
+
     def incref(self, obj):
         fnty = Type.function(Type.void(), [self.pyobj])
         fn = self._get_function(fnty, name="Py_IncRef")
@@ -66,6 +78,10 @@ class PythonAPI(object):
         fnty = Type.function(Type.void(), [self.pyobj])
         fn = self._get_function(fnty, name="Py_DecRef")
         self.builder.call(fn, [obj])
+
+    #
+    # Argument unpacking
+    #
 
     def parse_tuple_and_keywords(self, args, kws, fmt, keywords, *objs):
         charptr = Type.pointer(Type.int(8))
@@ -82,13 +98,9 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyArg_ParseTuple")
         return self.builder.call(fn, [args, fmt] + list(objs))
 
-    def dict_getitem_string(self, dic, name):
-        """Returns a borrowed reference
-        """
-        fnty = Type.function(self.pyobj, [self.pyobj, self.cstring])
-        fn = self._get_function(fnty, name="PyDict_GetItemString")
-        cstr = self.context.insert_const_string(self.module, name)
-        return self.builder.call(fn, [dic, cstr])
+    #
+    # Exception handling
+    #
 
     def err_occurred(self):
         fnty = Type.function(self.pyobj, ())
@@ -103,6 +115,10 @@ class PythonAPI(object):
     def err_set_string(self, exctype, msg):
         fnty = Type.function(Type.void(), [self.pyobj, self.cstring])
         fn = self._get_function(fnty, name="PyErr_SetString")
+        if isinstance(exctype, str):
+            exctype = self.get_c_object(exctype)
+        if isinstance(msg, str):
+            msg = self.context.insert_const_string(self.module, msg)
         return self.builder.call(fn, (exctype, msg))
 
     def err_set_object(self, exctype, excval):
@@ -110,22 +126,90 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyErr_SetObject")
         return self.builder.call(fn, (exctype, excval))
 
-    def import_module_noblock(self, modname):
-        fnty = Type.function(self.pyobj, [self.cstring])
-        fn = self._get_function(fnty, name="PyImport_ImportModuleNoBlock")
-        return self.builder.call(fn, [modname])
+    def raise_native_error(self, msg):
+        cstr = self.context.insert_const_string(self.module, msg)
+        self.err_set_string(self.native_error_type, cstr)
 
-    def call_function_objargs(self, callee, objargs):
-        fnty = Type.function(self.pyobj, [self.pyobj], var_arg=True)
-        fn = self._get_function(fnty, name="PyObject_CallFunctionObjArgs")
-        args = [callee] + list(objargs)
-        args.append(self.context.get_constant_null(types.pyobject))
-        return self.builder.call(fn, args)
+    def raise_exception(self, exctype, excval):
+        # XXX This produces non-reusable bitcode: the pointer's value
+        # is specific to this process execution.
+        exctypeaddr = self.context.get_constant(types.intp, id(exctype))
+        excvaladdr = self.context.get_constant(types.intp, id(excval))
+        self.err_set_object(exctypeaddr.inttoptr(self.pyobj),
+                            excvaladdr.inttoptr(self.pyobj))
 
-    def call(self, callee, args, kws):
-        fnty = Type.function(self.pyobj, [self.pyobj] * 3)
-        fn = self._get_function(fnty, name="PyObject_Call")
-        return self.builder.call(fn, (callee, args, kws))
+    def get_c_object(self, name):
+        """
+        Get a Python object through its C-accessible *name*.
+        (e.g. "PyExc_ValueError").
+        """
+        try:
+            gv = self.module.get_global_variable_named(name)
+        except LLVMException:
+            gv = self.module.add_global_variable(self.pyobj.pointee, name)
+        return gv
+
+    @property
+    def native_error_type(self):
+        return self.get_c_object("NumbaNativeError")
+
+    def raise_missing_global_error(self, name):
+        msg = "global name '%s' is not defined" % name
+        cstr = self.context.insert_const_string(self.module, msg)
+        self.err_set_string("PyExc_NameError", cstr)
+
+    #
+    # Concrete dict API
+    #
+
+    def dict_getitem_string(self, dic, name):
+        """Returns a borrowed reference
+        """
+        fnty = Type.function(self.pyobj, [self.pyobj, self.cstring])
+        fn = self._get_function(fnty, name="PyDict_GetItemString")
+        cstr = self.context.insert_const_string(self.module, name)
+        return self.builder.call(fn, [dic, cstr])
+
+    def dict_new(self, presize=0):
+        if presize == 0:
+            fnty = Type.function(self.pyobj, ())
+            fn = self._get_function(fnty, name="PyDict_New")
+            return self.builder.call(fn, ())
+        else:
+            fnty = Type.function(self.pyobj, [self.py_ssize_t])
+            fn = self._get_function(fnty, name="_PyDict_NewPresized")
+            return self.builder.call(fn,
+                                     [Constant.int(self.py_ssize_t, presize)])
+
+    def dict_setitem(self, dictobj, nameobj, valobj):
+        fnty = Type.function(Type.int(), (self.pyobj, self.pyobj,
+                                          self.pyobj))
+        fn = self._get_function(fnty, name="PyDict_SetItem")
+        return self.builder.call(fn, (dictobj, nameobj, valobj))
+
+    def dict_setitem_string(self, dictobj, name, valobj):
+        fnty = Type.function(Type.int(), (self.pyobj, self.cstring,
+                                          self.pyobj))
+        fn = self._get_function(fnty, name="PyDict_SetItemString")
+        cstr = self.context.insert_const_string(self.module, name)
+        return self.builder.call(fn, (dictobj, cstr, valobj))
+
+    def dict_pack(self, keyvalues):
+        """
+        Args
+        -----
+        keyvalues: iterable of (str, llvm.Value of PyObject*)
+        """
+        dictobj = self.dict_new()
+        not_null = cgutils.is_not_null(self.builder, dictobj)
+        with cgutils.if_likely(self.builder, not_null):
+            for k, v in keyvalues:
+                self.dict_setitem_string(dictobj, k, v)
+        return dictobj
+
+    #
+    # Concrete number APIs
+    #
 
     def float_from_double(self, fval):
         fnty = Type.function(self.pyobj, [self.double])
@@ -287,29 +371,6 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyFloat_AsDouble")
         return self.builder.call(fn, [fobj])
 
-    def object_istrue(self, obj):
-        fnty = Type.function(Type.int(), [self.pyobj])
-        fn = self._get_function(fnty, name="PyObject_IsTrue")
-        return self.builder.call(fn, [obj])
-
-    def object_not(self, obj):
-        fnty = Type.function(Type.int(), [self.pyobj])
-        fn = self._get_function(fnty, name="PyObject_Not")
-        return self.builder.call(fn, [obj])
-
-    def object_richcompare(self, lhs, rhs, opstr):
-        """
-        Refer to Python source Include/object.h for macros definition
-        of the opid.
-        """
-        ops = ['<', '<=', '==', '!=', '>', '>=']
-        opid = ops.index(opstr)
-        assert 0 <= opid < len(ops)
-        fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj, Type.int()])
-        fn = self._get_function(fnty, name="PyObject_RichCompare")
-        lopid = self.context.get_constant(types.int32, opid)
-        return self.builder.call(fn, (lhs, rhs, lopid))
-
     def bool_from_bool(self, bval):
         """
         Get a Python bool from a LLVM boolean.
@@ -337,6 +398,146 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyComplex_ImagAsDouble")
         return self.builder.call(fn, [cobj])
 
+    #
+    # List and sequence APIs
+    #
+
+    def sequence_getslice(self, obj, start, stop):
+        fnty = Type.function(self.pyobj, [self.pyobj, self.py_ssize_t,
+                                          self.py_ssize_t])
+        fn = self._get_function(fnty, name="PySequence_GetSlice")
+        return self.builder.call(fn, (obj, start, stop))
+
+    def sequence_tuple(self, obj):
+        fnty = Type.function(self.pyobj, [self.pyobj])
+        fn = self._get_function(fnty, name="PySequence_Tuple")
+        return self.builder.call(fn, [obj])
+
+    def list_new(self, szval):
+        fnty = Type.function(self.pyobj, [self.py_ssize_t])
+        fn = self._get_function(fnty, name="PyList_New")
+        return self.builder.call(fn, [szval])
+
+    def list_setitem(self, seq, idx, val):
+        """
+        Warning: Steals reference to ``val``
+        """
+        fnty = Type.function(Type.int(), [self.pyobj, self.py_ssize_t,
+                                          self.pyobj])
+        fn = self._get_function(fnty, name="PyList_SetItem")
+        return self.builder.call(fn, [seq, idx, val])
+
+    def list_getitem(self, lst, idx):
+        """
+        Returns a borrowed reference.
+        """
+        fnty = Type.function(self.pyobj, [self.pyobj, self.py_ssize_t])
+        fn = self._get_function(fnty, name="PyList_GetItem")
+        if isinstance(idx, int):
+            idx = self.context.get_constant(types.intp, idx)
+        return self.builder.call(fn, [lst, idx])
+
+    #
+    # Concrete tuple API
+    #
+
+    def tuple_getitem(self, tup, idx):
+        """
+        Borrow reference
+        """
+        fnty = Type.function(self.pyobj, [self.pyobj, self.py_ssize_t])
+        fn = self._get_function(fnty, name="PyTuple_GetItem")
+        idx = self.context.get_constant(types.intp, idx)
+        return self.builder.call(fn, [tup, idx])
+
+    def tuple_pack(self, items):
+        fnty = Type.function(self.pyobj, [self.py_ssize_t], var_arg=True)
+        fn = self._get_function(fnty, name="PyTuple_Pack")
+        n = self.context.get_constant(types.intp, len(items))
+        args = [n]
+        args.extend(items)
+        return self.builder.call(fn, args)
+
+    def tuple_size(self, tup):
+        fnty = Type.function(self.py_ssize_t, [self.pyobj])
+        fn = self._get_function(fnty, name="PyTuple_Size")
+        return self.builder.call(fn, [tup])
+
+    def tuple_new(self, count):
+        fnty = Type.function(self.pyobj, [Type.int()])
+        fn = self._get_function(fnty, name='PyTuple_New')
+        return self.builder.call(fn, [self.context.get_constant(types.int32,
+                                                                count)])
+
+    def tuple_setitem(self, tuple_val, index, item):
+        """
+        Steals a reference to `item`.
+        """
+        fnty = Type.function(Type.int(), [self.pyobj, Type.int(), self.pyobj])
+        setitem_fn = self._get_function(fnty, name='PyTuple_SetItem')
+        index = self.context.get_constant(types.int32, index)
+        self.builder.call(setitem_fn, [tuple_val, index, item])
+
+    #
+    # Concrete set API
+    #
+
+    def set_new(self, iterable=None):
+        if iterable is None:
+            iterable = self.get_null_object()
+        fnty = Type.function(self.pyobj, [self.pyobj])
+        fn = self._get_function(fnty, name="PySet_New")
+        return self.builder.call(fn, [iterable])
+
+    def set_add(self, set, value):
+        fnty = Type.function(Type.int(), [self.pyobj, self.pyobj])
+        fn = self._get_function(fnty, name="PySet_Add")
+        return self.builder.call(fn, [set, value])
+
+    #
+    # Other APIs (organize them better!)
+    #
+
+    def import_module_noblock(self, modname):
+        fnty = Type.function(self.pyobj, [self.cstring])
+        fn = self._get_function(fnty, name="PyImport_ImportModuleNoBlock")
+        return self.builder.call(fn, [modname])
+
+    def call_function_objargs(self, callee, objargs):
+        fnty = Type.function(self.pyobj, [self.pyobj], var_arg=True)
+        fn = self._get_function(fnty, name="PyObject_CallFunctionObjArgs")
+        args = [callee] + list(objargs)
+        args.append(self.context.get_constant_null(types.pyobject))
+        return self.builder.call(fn, args)
+
+    def call(self, callee, args, kws):
+        fnty = Type.function(self.pyobj, [self.pyobj] * 3)
+        fn = self._get_function(fnty, name="PyObject_Call")
+        return self.builder.call(fn, (callee, args, kws))
+
+    def object_istrue(self, obj):
+        fnty = Type.function(Type.int(), [self.pyobj])
+        fn = self._get_function(fnty, name="PyObject_IsTrue")
+        return self.builder.call(fn, [obj])
+
+    def object_not(self, obj):
+        fnty = Type.function(Type.int(), [self.pyobj])
+        fn = self._get_function(fnty, name="PyObject_Not")
+        return self.builder.call(fn, [obj])
+
+    def object_richcompare(self, lhs, rhs, opstr):
+        """
+        Refer to Python source Include/object.h for macros definition
+        of the opid.
+        """
+        ops = ['<', '<=', '==', '!=', '>', '>=']
+        opid = ops.index(opstr)
+        assert 0 <= opid < len(ops)
+        fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj, Type.int()])
+        fn = self._get_function(fnty, name="PyObject_RichCompare")
+        lopid = self.context.get_constant(types.int32, opid)
+        return self.builder.call(fn, (lhs, rhs, lopid))
+
     def iter_next(self, iterobj):
         fnty = Type.function(self.pyobj, [self.pyobj])
         fn = self._get_function(fnty, name="PyIter_Next")
@@ -362,17 +563,6 @@ class PythonAPI(object):
         fnty = Type.function(Type.int(), [self.pyobj, self.pyobj, self.pyobj])
         fn = self._get_function(fnty, name="PyObject_SetItem")
         return self.builder.call(fn, (obj, key, val))
-
-    def sequence_getslice(self, obj, start, stop):
-        fnty = Type.function(self.pyobj, [self.pyobj, self.py_ssize_t,
-                                          self.py_ssize_t])
-        fn = self._get_function(fnty, name="PySequence_GetSlice")
-        return self.builder.call(fn, (obj, start, stop))
-
-    def sequence_tuple(self, obj):
-        fnty = Type.function(self.pyobj, [self.pyobj])
-        fn = self._get_function(fnty, name="PySequence_Tuple")
-        return self.builder.call(fn, [obj])
 
     def string_as_string(self, strobj):
         fnty = Type.function(self.cstring, [self.pyobj])
@@ -406,78 +596,6 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyObject_Str")
         return self.builder.call(fn, [obj])
 
-    def tuple_getitem(self, tup, idx):
-        """
-        Borrow reference
-        """
-        fnty = Type.function(self.pyobj, [self.pyobj, self.py_ssize_t])
-        fn = self._get_function(fnty, name="PyTuple_GetItem")
-        idx = self.context.get_constant(types.intp, idx)
-        return self.builder.call(fn, [tup, idx])
-
-    def tuple_pack(self, items):
-        fnty = Type.function(self.pyobj, [self.py_ssize_t], var_arg=True)
-        fn = self._get_function(fnty, name="PyTuple_Pack")
-        n = self.context.get_constant(types.intp, len(items))
-        args = [n]
-        args.extend(items)
-        return self.builder.call(fn, args)
-
-    def tuple_size(self, tup):
-        fnty = Type.function(self.py_ssize_t, [self.pyobj])
-        fn = self._get_function(fnty, name="PyTuple_Size")
-        return self.builder.call(fn, [tup])
-
-    def list_new(self, szval):
-        fnty = Type.function(self.pyobj, [self.py_ssize_t])
-        fn = self._get_function(fnty, name="PyList_New")
-        return self.builder.call(fn, [szval])
-
-    def list_setitem(self, seq, idx, val):
-        """
-        Warning: Steals reference to ``val``
-        """
-        fnty = Type.function(Type.int(), [self.pyobj, self.py_ssize_t,
-                                          self.pyobj])
-        fn = self._get_function(fnty, name="PyList_SetItem")
-        return self.builder.call(fn, [seq, idx, val])
-
-    def set_new(self, iterable=None):
-        if iterable is None:
-            iterable = self.get_null_object()
-        fnty = Type.function(self.pyobj, [self.pyobj])
-        fn = self._get_function(fnty, name="PySet_New")
-        return self.builder.call(fn, [iterable])
-
-    def set_add(self, set, value):
-        fnty = Type.function(Type.int(), [self.pyobj, self.pyobj])
-        fn = self._get_function(fnty, name="PySet_Add")
-        return self.builder.call(fn, [set, value])
-
-    def dict_new(self, presize=0):
-        if presize == 0:
-            fnty = Type.function(self.pyobj, ())
-            fn = self._get_function(fnty, name="PyDict_New")
-            return self.builder.call(fn, ())
-        else:
-            fnty = Type.function(self.pyobj, [self.py_ssize_t])
-            fn = self._get_function(fnty, name="_PyDict_NewPresized")
-            return self.builder.call(fn,
-                                     [Constant.int(self.py_ssize_t, presize)])
-
-    def dict_setitem(self, dictobj, nameobj, valobj):
-        fnty = Type.function(Type.int(), (self.pyobj, self.pyobj,
-                                          self.pyobj))
-        fn = self._get_function(fnty, name="PyDict_SetItem")
-        return self.builder.call(fn, (dictobj, nameobj, valobj))
-
-    def dict_setitem_string(self, dictobj, name, valobj):
-        fnty = Type.function(Type.int(), (self.pyobj, self.cstring,
-                                          self.pyobj))
-        fn = self._get_function(fnty, name="PyDict_SetItemString")
-        cstr = self.context.insert_const_string(self.module, name)
-        return self.builder.call(fn, (dictobj, cstr, valobj))
-
     def make_none(self):
         obj = self._get_object("Py_None")
         self.incref(obj)
@@ -491,6 +609,14 @@ class PythonAPI(object):
         fnty = Type.function(Type.void(), [self.cstring], var_arg=True)
         fn = self._get_function(fnty, name="PySys_WriteStdout")
         return self.builder.call(fn, (fmt,) + args)
+
+    def object_dump(self, obj):
+        """
+        Dump a Python object on C stderr.  For debugging purposes.
+        """
+        fnty = Type.function(Type.void(), [self.pyobj])
+        fn = self._get_function(fnty, name="_PyObject_Dump")
+        return self.builder.call(fn, (obj,))
 
     # ------ utils -----
 
@@ -535,19 +661,6 @@ class PythonAPI(object):
                 self.incref(items[i])
                 self.list_setitem(seq, idx, items[i])
         return seq
-
-    def dict_pack(self, keyvalues):
-        """
-        Args
-        -----
-        keyvalues: iterable of (str, llvm.Value of PyObject*)
-        """
-        dictobj = self.dict_new()
-        not_null = cgutils.is_not_null(self.builder, dictobj)
-        with cgutils.if_likely(self.builder, not_null):
-            for k, v in keyvalues:
-                self.dict_setitem_string(dictobj, k, v)
-        return dictobj
 
     def to_native_arg(self, obj, typ):
         if isinstance(typ, types.Record):
@@ -747,21 +860,6 @@ class PythonAPI(object):
 
         return tuple_val
 
-    def tuple_new(self, count):
-        fnty = Type.function(self.pyobj, [Type.int()])
-        fn = self._get_function(fnty, name='PyTuple_New')
-        return self.builder.call(fn, [self.context.get_constant(types.int32,
-                                                                count)])
-
-    def tuple_setitem(self, tuple_val, index, item):
-        """
-        Steals a reference to `item`.
-        """
-        fnty = Type.function(Type.int(), [self.pyobj, Type.int(), self.pyobj])
-        setitem_fn = self._get_function(fnty, name='PyTuple_SetItem')
-        index = self.context.get_constant(types.int32, index)
-        self.builder.call(setitem_fn, [tuple_val, index, item])
-
     def numba_array_adaptor(self, ary, ptr):
         voidptr = Type.pointer(Type.int(8))
         fnty = Type.function(Type.int(), [self.pyobj, voidptr])
@@ -791,54 +889,6 @@ class PythonAPI(object):
                                           Type.int(), self.pyobj])
         fn = self._get_function(fnty, name="NumbaRecreateRecord")
         return self.builder.call(fn, [pdata, size, dtypeaddr])
-
-    def get_module_dict_symbol(self):
-        md_pymod = cgutils.MetadataKeyStore(self.module, "python.module")
-        pymodname = ".pymodule.dict." + md_pymod.get()
-
-        try:
-            gv = self.module.get_global_variable_named(name=pymodname)
-        except LLVMException:
-            gv = self.module.add_global_variable(self.pyobj.pointee,
-                                                 name=pymodname)
-        return gv
-
-    def get_module_dict(self):
-        return self.get_module_dict_symbol()
-        # return self.builder.load(gv)
-
-    def raise_native_error(self, msg):
-        cstr = self.context.insert_const_string(self.module, msg)
-        self.err_set_string(self.native_error_type, cstr)
-
-    def raise_exception(self, exctype, excval):
-        exctypeaddr = self.context.get_constant(types.intp, id(exctype))
-        excvaladdr = self.context.get_constant(types.intp, id(excval))
-        self.err_set_object(exctypeaddr.inttoptr(self.pyobj),
-                            excvaladdr.inttoptr(self.pyobj))
-
-    @property
-    def native_error_type(self):
-        name = "NumbaNativeError"
-        try:
-            return self.module.get_global_variable_named(name)
-        except LLVMException:
-            return self.module.add_global_variable(self.pyobj.pointee,
-                                                   name=name)
-
-    def raise_missing_global_error(self, name):
-        msg = "global name '%s' is not defined" % name
-        cstr = self.context.insert_const_string(self.module, msg)
-        self.err_set_string(self.name_error_type, cstr)
-
-    @property
-    def name_error_type(self):
-        name = "PyExc_NameError"
-        try:
-            return self.module.get_global_variable_named(name)
-        except LLVMException:
-            return self.module.add_global_variable(self.pyobj.pointee,
-                                                   name=name)
 
     def string_from_constant_string(self, string):
         cstr = self.context.insert_const_string(self.module, string)

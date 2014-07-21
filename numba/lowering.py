@@ -7,13 +7,8 @@ from types import ModuleType
 from llvm.core import Type, Builder, Module
 import llvm.core as lc
 
-from numba import ir, types, cgutils, utils, config, cffi_support, typing
-
-
-try:
-    import builtins
-except ImportError:
-    import __builtin__ as builtins
+from numba import _dynfunc, ir, types, cgutils, utils, config, cffi_support, typing
+from numba.utils import builtins
 
 
 class LoweringError(Exception):
@@ -90,7 +85,7 @@ class FunctionDescriptor(object):
         ``unique_name`` must be a unique name in ``pymod``.
         """
         func = interp.bytecode.func
-        qualname = getattr(func, '__qualname__', interp.bytecode.func_name)
+        qualname = interp.bytecode.func_qualname
         modname = func.__module__
         doc = func.__doc__ or ''
         args = interp.argspec.args
@@ -172,15 +167,15 @@ class BaseLower(object):
         # Initialize LLVM
         self.module = Module.new("module.%s" % self.fndesc.unique_name)
 
-        # Install metadata
-        md_pymod = cgutils.MetadataKeyStore(self.module, "python.module")
-        md_pymod.set(fndesc.modname)
+        # Python execution environment (will be available to the compiled
+        # function).
+        self.env = _dynfunc.Environment(
+            globals=self.fndesc.lookup_module().__dict__)
 
         # Setup function
         self.function = context.declare_function(self.module, fndesc)
         self.entry_block = self.function.append_basic_block('entry')
         self.builder = Builder.new(self.entry_block)
-        # self.builder = cgutils.VerboseProxy(self.builder)
 
         # Internal states
         self.blkmap = {}
@@ -194,10 +189,15 @@ class BaseLower(object):
     def init(self):
         pass
 
-    def post_lower(self):
-        """Called after all blocks are lowered
+    def pre_lower(self):
         """
-        pass
+        Called before lowering all blocks.
+        """
+
+    def post_lower(self):
+        """
+        Called after all blocks are lowered
+        """
 
     def lower(self):
         # Init argument variables
@@ -207,10 +207,16 @@ class BaseLower(object):
             av = self.context.get_argument_value(self.builder, at, av)
             av = self.init_argument(av)
             self.storevar(av, ak)
+
         # Init blocks
         for offset in self.fndesc.blocks:
             bname = "B%d" % offset
             self.blkmap[offset] = self.function.append_basic_block(bname)
+
+        self.pre_lower()
+        # pre_lower() may have changed the current basic block
+        entry_block_tail = self.builder.basic_block
+
         # Lower all blocks
         for offset, block in self.fndesc.blocks.items():
             bb = self.blkmap[offset]
@@ -218,8 +224,9 @@ class BaseLower(object):
             self.lower_block(block)
 
         self.post_lower()
-        # Close entry block
-        self.builder.position_at_end(self.entry_block)
+
+        # Close tail of entry block
+        self.builder.position_at_end(entry_block_tail)
         self.builder.branch(self.blkmap[self.firstblk])
 
         if config.DUMP_LLVM:
@@ -357,7 +364,8 @@ class Lower(BaseLower):
             oty = self.typeof(value.name)
             return self.context.cast(self.builder, val, oty, ty)
 
-        elif isinstance(value, ir.Global):
+        # In nopython mode, closure vars are frozen like globals
+        elif isinstance(value, (ir.Global, ir.FreeVar)):
             if (isinstance(ty, types.Dummy) or
                     isinstance(ty, types.Module) or
                     isinstance(ty, types.Function) or
@@ -603,11 +611,8 @@ class Lower(BaseLower):
         return self.alloca_lltype(name, lltype)
 
     def alloca_lltype(self, name, lltype):
-        bb = self.builder.basic_block
-        self.builder.position_at_end(self.entry_block)
-        ptr = self.builder.alloca(lltype, name=name)
-        self.builder.position_at_end(bb)
-        return ptr
+        with cgutils.goto_block(self.builder, self.entry_block):
+            return self.builder.alloca(lltype, name=name)
 
 
 # Map operators to methods on the PythonAPI class
@@ -634,6 +639,17 @@ class PyLower(BaseLower):
 
         # Add error handling block
         self.ehblock = self.function.append_basic_block('error')
+
+    def pre_lower(self):
+        # Store environment argument for later use
+        self.envarg = self.context.get_env_argument(self.function)
+        with cgutils.if_unlikely(self.builder, self.is_null(self.envarg)):
+            self.pyapi.err_set_string(
+                "PyExc_SystemError",
+                "Numba internal error: object mode function called "
+                "without an environment")
+            self.return_exception_raised()
+        self.env_body = self.context.get_env_body(self.builder, self.envarg)
 
     def post_lower(self):
         with cgutils.goto_block(self.builder, self.ehblock):
@@ -700,7 +716,11 @@ class PyLower(BaseLower):
         The returned object must have a new reference
         """
         value = inst.value
-        if isinstance(value, ir.Const):
+        # XXX since we don't have access to the __closure__ tuple at
+        # execution time, we must freeze the closure var as a constant,
+        # which limits its possible types (e.g., it can't be
+        # another function, see test_closure.py).
+        if isinstance(value, (ir.Const, ir.FreeVar)):
             return self.lower_const(value.value)
         elif isinstance(value, ir.Var):
             val = self.loadvar(value.name)
@@ -868,6 +888,7 @@ class PyLower(BaseLower):
             raise NotImplementedError(expr)
 
     def lower_const(self, const):
+        from numba import dispatcher   # Avoiding toplevel circular imports
         if isinstance(const, str):
             ret = self.pyapi.string_from_constant_string(const)
             self.check_error(ret)
@@ -896,7 +917,13 @@ class PyLower(BaseLower):
         elif const is None:
             return self.pyapi.make_none()
         else:
-            raise NotImplementedError(type(const))
+            # Constants which can't be reconstructed are frozen inside
+            # the environment (e.g. callables, lifted loops).
+            index = len(self.env.consts)
+            self.env.consts.append(const)
+            ret = self.get_env_const(index)
+            self.check_error(ret)
+            return ret
 
     def lower_global(self, name, value):
         """
@@ -905,7 +932,7 @@ class PyLower(BaseLower):
             2a) is it a dictionary (for non __main__ module)
             2b) is it a module (for __main__ module)
         """
-        moddict = self.pyapi.get_module_dict()
+        moddict = self.get_module_dict()
         obj = self.pyapi.dict_getitem_string(moddict, name)
         self.incref(obj)  # obj is borrowed
 
@@ -937,10 +964,20 @@ class PyLower(BaseLower):
 
     # -------------------------------------------------------------------------
 
+    def get_module_dict(self):
+        return self.env_body.globals
+
     def get_builtin_obj(self, name):
-        moddict = self.pyapi.get_module_dict()
+        # XXX The builtins dict could be bound into the environment
+        moddict = self.get_module_dict()
         mod = self.pyapi.dict_getitem_string(moddict, "__builtins__")
         return self.builtin_lookup(mod, name)
+
+    def get_env_const(self, index):
+        """
+        Look up constant number *index* inside the environment body.
+        """
+        return self.pyapi.list_getitem(self.env_body.consts, index)
 
     def builtin_lookup(self, mod, name):
         """
@@ -1045,11 +1082,9 @@ class PyLower(BaseLower):
         """
         if ltype is None:
             ltype = self.context.get_value_type(types.pyobject)
-        bb = self.builder.basic_block
-        self.builder.position_at_end(self.entry_block)
-        ptr = self.builder.alloca(ltype, name=name)
-        self.builder.store(cgutils.get_null_value(ltype), ptr)
-        self.builder.position_at_end(bb)
+        with cgutils.goto_block(self.builder, self.entry_block):
+            ptr = self.builder.alloca(ltype, name=name)
+            self.builder.store(cgutils.get_null_value(ltype), ptr)
         return ptr
 
     def incref(self, value):

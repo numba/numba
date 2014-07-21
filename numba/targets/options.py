@@ -52,6 +52,8 @@ class TargetOptions(object):
         if kws.pop('debug', False):
             flags.set("boundcheck")
 
+        flags.set("enable_pyobject_looplift")
+
         if kws:
             # Unread options?
             raise NameError("Unrecognized options: %s" % kws.keys())

@@ -53,13 +53,13 @@ struct npy_math_entry exports[] = {
 
     NPYMATH_SYMBOL(rint),
     NPYMATH_SYMBOL(fabs),
-    NPYMATH_SYMBOL(logaddexp)
-
+    NPYMATH_SYMBOL(logaddexp),
+    NPYMATH_SYMBOL(logaddexp2)
 };
 #undef NPY_MATH_SYMBOL
 
 PyObject*
-create_symbol_list()
+create_symbol_list(void)
 {
     /*
      * note: reference stealing at its best
@@ -91,5 +91,4 @@ MOD_INIT(_npymath_exports) {
 
     return MOD_SUCCESS_VAL(module);
 }
-
 

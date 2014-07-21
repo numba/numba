@@ -243,14 +243,17 @@ class ByteCodeSupportError(Exception):
 
 
 class ByteCodeBase(object):
-    __slots__ = 'func', 'func_name', 'argspec', 'filename', 'co_names', \
-                'co_varnames', 'co_consts', 'co_freevars', 'table', 'labels'
+    __slots__ = (
+        'func', 'func_name', 'func_qualname', 'argspec', 'filename', 'co_names',
+        'co_varnames', 'co_consts', 'co_freevars', 'table', 'labels',
+        )
 
-    def __init__(self, func, func_name, argspec, filename, co_names,
+    def __init__(self, func, func_qualname, argspec, filename, co_names,
                  co_varnames, co_consts, co_freevars, table, labels):
         self.func = func
         self.module = inspect.getmodule(func)
-        self.func_name = func_name
+        self.func_qualname = func_qualname
+        self.func_name = func_qualname.split('.')[-1]
         self.argspec = argspec
         self.filename = filename
         self.co_names = co_names
@@ -282,7 +285,10 @@ class ByteCodeBase(object):
 
 
 class CustomByteCode(ByteCodeBase):
-    pass
+    """
+    A simplified ByteCode class, used for hosting inner loops
+    when loop-lifting.
+    """
 
 
 class ByteCode(ByteCodeBase):
@@ -299,9 +305,14 @@ class ByteCode(ByteCodeBase):
         labels = set(dis.findlabels(code.co_code))
         labels.add(0)
 
+        try:
+            func_qualname = func.__qualname__
+        except AttributeError:
+            func_qualname = func.__name__
+
         self._mark_lineno(table, code)
         super(ByteCode, self).__init__(func=func,
-                                       func_name=func.__name__,
+                                       func_qualname=func_qualname,
                                        argspec=inspect.getargspec(func),
                                        filename=code.co_filename,
                                        co_names=code.co_names,

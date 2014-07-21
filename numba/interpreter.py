@@ -1,14 +1,11 @@
 from __future__ import print_function, division, absolute_import
 
-try:
-    import __builtin__ as builtins
-except ImportError:
-    import builtins
 import collections
 import dis
 import sys
 
 from numba import ir, controlflow, dataflow, utils
+from numba.utils import builtins
 
 
 class Assigner(object):
@@ -511,8 +508,7 @@ class Interpreter(object):
     def op_LOAD_DEREF(self, inst, res):
         name = self.code_freevars[inst.arg]
         value = self.get_closure_value(inst.arg)
-        # closure values are treated like globals
-        gl = ir.Global(name, value, loc=self.loc)
+        gl = ir.FreeVar(inst.arg, name, value, loc=self.loc)
         self.store(gl, res)
 
     def op_SETUP_LOOP(self, inst):

@@ -1,16 +1,26 @@
 from __future__ import print_function, division, absolute_import
+
 import collections
 import functools
 import io
 import timeit
 import math
+import sys
+try:
+    import builtins
+except ImportError:
+    import __builtin__ as builtins
+
 import numpy
+
 from numba.config import PYVERSION
 
 
 INT_TYPES = (int,)
 if PYVERSION < (3, 0):
     INT_TYPES += (long,)
+
+MACHINE_BITS = tuple.__itemsize__ * 8
 
 
 class ConfigOptions(object):
@@ -41,6 +51,15 @@ class ConfigOptions(object):
         copy = type(self)()
         copy._enabled = set(self._enabled)
         return copy
+
+    def __eq__(self, other):
+        return isinstance(other, ConfigOptions) and other._enabled == self._enabled
+
+    def __ne__(self, other):
+        return not self == other
+
+    def __hash__(self):
+        return hash(tuple(sorted(self._enabled)))
 
 
 class SortedMap(collections.Mapping):
@@ -167,6 +186,11 @@ def benchmark(func, maxsec=1):
     number = int(10 ** math.ceil(math.log10(number)))
     records = timer.repeat(3, number)
     return BenchmarkResult(func, records, number)
+
+
+RANGE_ITER_OBJECTS = (builtins.range,)
+if PYVERSION < (3, 0):
+    RANGE_ITER_OBJECTS += (builtins.xrange,)
 
 
 # Other common python2/3 adaptors

@@ -94,7 +94,6 @@ class TestUFuncs(TestCase):
         pyfunc = ufunc
 
         for input_tuple in inputs:
-
             input_operand = input_tuple[0]
             input_type = input_tuple[1]
 
@@ -120,12 +119,6 @@ class TestUFuncs(TestCase):
                     output_type = types.Array(float_output_type, 1, 'C')
                 else:
                     output_type = types.Array(types.float64, 1, 'C')
-
-            # Due to __ftol2 llvm bug, skip testing uint64 output on windows.
-            # (llvm translates fptoui call to ftol2 call on windows which
-            # causes a crash later.
-            if iswindows and output_type.dtype is types.uint64:
-                continue
 
             cr = self.cache.compile(pyfunc, (input_type, output_type),
                                     flags=flags)
@@ -184,7 +177,6 @@ class TestUFuncs(TestCase):
         pyfunc = ufunc
 
         for input_tuple in inputs:
-
             input_operand = input_tuple[0]
             input_type = input_tuple[1]
 
@@ -210,12 +202,6 @@ class TestUFuncs(TestCase):
                     output_type = types.Array(float_output_type, 1, 'C')
                 else:
                     output_type = types.Array(types.float64, 1, 'C')
-
-            # Due to __ftol2 llvm bug, skip testing uint64 output on windows.
-            # (llvm translates fptoui call to ftol2 call on windows which
-            # causes a crash later.
-            if iswindows and output_type.dtype is types.uint64:
-                continue
 
             cr = self.cache.compile(pyfunc, (input_type, input_type, output_type),
                                     flags=flags)
@@ -291,14 +277,12 @@ class TestUFuncs(TestCase):
     def test_logaddexp_ufunc(self):
         self.binary_ufunc_test('logaddexp')
 
-    @_unimplemented
     def test_logaddexp_ufunc_npm(self):
         self.binary_ufunc_test('logaddexp', flags=no_pyobj_flags)
 
     def test_logaddexp2_ufunc(self):
         self.binary_ufunc_test('logaddexp2')
 
-    @_unimplemented
     def test_logaddexp2_ufunc_npm(self):
         self.binary_ufunc_test('logaddexp2', flags=no_pyobj_flags)
 
@@ -311,7 +295,6 @@ class TestUFuncs(TestCase):
     def test_floor_divide_ufunc(self):
         self.binary_ufunc_test('floor_divide')
 
-    @_unimplemented
     def test_floor_divide_ufunc_npm(self):
         self.binary_ufunc_test('floor_divide', flags=no_pyobj_flags)
 
@@ -319,7 +302,7 @@ class TestUFuncs(TestCase):
         # NumPy ufunc has bug with uint32 as input and int64 as output,
         # so skip uint32 input.
         self.unary_ufunc_test('negative', int_output_type=types.int64,
-            skip_inputs=[types.Array(types.uint32, 1, 'C')], flags=flags)
+                              skip_inputs=[types.Array(types.uint32, 1, 'C'), types.uint32], flags=flags)
 
     def test_negative_ufunc_npm(self):
         self.test_negative_ufunc(flags=no_pyobj_flags)
@@ -359,7 +342,6 @@ class TestUFuncs(TestCase):
                                  (np.finfo(np.float64).min, types.float64)
                                  ])
 
-    @_unimplemented
     def test_abs_ufunc_npm(self):
         self.test_abs_ufunc(flags=no_pyobj_flags)
 
@@ -371,7 +353,6 @@ class TestUFuncs(TestCase):
                                  (np.finfo(np.float64).min, types.float64)
                                  ])
 
-    @_unimplemented
     def test_absolute_ufunc_npm(self):
         self.test_absolute_ufunc(flags=no_pyobj_flags)
 
@@ -568,14 +549,12 @@ class TestUFuncs(TestCase):
     def test_degrees_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('degrees', flags=flags)
 
-    @_unimplemented
     def test_degrees_ufunc_npm(self):
         self.test_degrees_ufunc(flags=no_pyobj_flags)
 
     def test_radians_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('radians', flags=flags)
 
-    @_unimplemented
     def test_radians_ufunc_npm(self):
         self.test_radians_ufunc(flags=no_pyobj_flags)
 
@@ -722,7 +701,7 @@ class TestUFuncs(TestCase):
 
     def test_fmax_ufunc(self):
         self.binary_ufunc_test('fmax')
-    
+
     @_unimplemented
     def test_fmax_ufunc_npm(self):
         self.binary_ufunc_test('fmax', flags=no_pyobj_flags)
@@ -1009,6 +988,99 @@ class TestUFuncs(TestCase):
 
             cfunc(x, y, result)
             self.assertTrue(np.all(result == expected))
+
+
+class TestScalarUFuncs(TestCase):
+    """check the machinery of ufuncs works when the result is an scalar.
+    These are not exhaustive because:
+    - the machinery to support this case is the same for all the functions of a
+      given arity.
+    - the result of the inner function itself is already tested in TestUFuncs
+    """
+    def run_ufunc(self, pyfunc, arg_types, arg_values, flags=enable_pyobj_flags):
+        for tyargs, args in zip(arg_types, arg_values):
+            cr = compile_isolated(pyfunc, tyargs, flags=flags)
+            cfunc = cr.entry_point
+            got = cfunc(*args)
+            expected = pyfunc(*args)
+            msg = 'for args {0} typed {1}'.format(args, tyargs)
+
+            # note: due to semantics of ufuncs, thing like adding a int32 to a
+            # uint64 results in doubles (as neither int32 can be cast safely
+            # to uint64 nor vice-versa, falling back to using the float version.
+            # Modify in those cases the expected value (the numpy version does
+            # not use typed integers as inputs so its result is an integer)
+            special = set([(types.int32, types.uint64), (types.uint64, types.int32),
+                           (types.int64, types.uint64), (types.uint64, types.int64)])
+            if tyargs in special:
+                expected = float(expected)
+            else:
+                # The numba version of scalar ufuncs return an actual value that
+                # gets converted to a Python type, instead of using NumPy scalars.
+                # although in python 2 NumPy scalars are considered and instance of
+                # the appropriate python type, in python 3 that is no longer the case.
+                # This is why the expected result is casted to the appropriate Python
+                # type (which is actually the expected behavior of the ufunc translation)
+                if np.issubdtype(expected.dtype, np.inexact):
+                    expected = float(expected)
+                elif np.issubdtype(expected.dtype, np.integer):
+                    expected = int(expected)
+                elif np.issubdtype(expected.dtype, np.bool):
+                    expected = bool(expected)
+
+            alltypes = cr.signature.args + (cr.signature.return_type,)
+            
+            # select the appropriate precision for comparison: note that an argument
+            # typed at a lower precision can introduce precision problems. For this
+            # reason the argument types must be taken into account.
+            if any([t==types.float32 for t in alltypes]):
+                prec='single'
+            elif any([t==types.float64 for t in alltypes]):
+                prec='double'
+            else:
+                prec='exact'
+
+            self.assertPreciseEqual(got, expected, msg=msg, prec=prec)
+
+
+    def test_scalar_unary_ufunc(self, flags=enable_pyobj_flags):
+        def _func(x):
+            return np.sqrt(x)
+
+        vals = [(2,), (2,), (1,), (2,), (.1,), (.2,)]
+        tys = [(types.int32,), (types.uint32,),
+               (types.int64,), (types.uint64,), (types.float32,), (types.float64,)]
+        self.run_ufunc(_func, tys, vals, flags=flags)
+
+    def test_scalar_unary_ufunc_npm(self):
+        self.test_scalar_unary_ufunc(flags=no_pyobj_flags)
+
+
+    def test_scalar_binary_uniform_ufunc(self, flags=enable_pyobj_flags):
+        def _func(x,y):
+            return np.add(x,y)
+
+        vals = [2, 2, 1, 2, .1, .2]
+        tys = [types.int32, types.uint32,
+               types.int64, types.uint64, types.float32, types.float64]
+        self.run_ufunc(_func, zip(tys, tys), zip(vals, vals), flags=flags)
+
+    def test_scalar_binary_uniform_ufuncs_npm(self):
+        self.test_scalar_binary_uniform_ufunc(flags=no_pyobj_flags)
+
+    def test_scalar_binary_mixed_ufunc(self, flags=enable_pyobj_flags):
+        def _func(x,y):
+            return np.add(x,y)
+
+        vals = [2, 2, 1, 2, .1, .2]
+        tys = [types.int32, types.uint32,
+               types.int64, types.uint64, types.float32, types.float64]
+        self.run_ufunc(_func, itertools.product(tys, tys), itertools.product(vals, vals),
+                       flags=flags)
+
+    def test_scalar_binary_mixed_ufuncs_npm(self):
+        self.test_scalar_binary_mixed_ufunc(flags=no_pyobj_flags)
+
 
 
 if __name__ == '__main__':
