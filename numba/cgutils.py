@@ -341,7 +341,6 @@ def for_range_slice(builder, start, stop, step, intp, inc=True):
 
     index.add_incoming(start, bbstart)
     index.add_incoming(incr, bbbody)
-
     builder.position_at_end(bbend)
 
 #decrement version of for loop, start > stop, and step < 0
