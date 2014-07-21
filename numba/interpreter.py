@@ -508,8 +508,7 @@ class Interpreter(object):
     def op_LOAD_DEREF(self, inst, res):
         name = self.code_freevars[inst.arg]
         value = self.get_closure_value(inst.arg)
-        # closure values are treated like globals
-        gl = ir.Global(name, value, loc=self.loc)
+        gl = ir.FreeVar(inst.arg, name, value, loc=self.loc)
         self.store(gl, res)
 
     def op_SETUP_LOOP(self, inst):
