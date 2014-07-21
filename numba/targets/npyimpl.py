@@ -104,6 +104,9 @@ class _ArrayIndexingHelper(namedtuple('_ArrayIndexingHelper',
         intpty = self.array.context.get_value_type(types.intp)
         ONE = Constant.int(Type.int(intpty.width), 1)
 
+        # we are only interested in as many inner dimensions as dimensions
+        # the indexed array has (the outer dimensions are broadcast, so
+        # ignoring the outer indices produces the desired result.
         indices = loop_indices[len(loop_indices) - len(self.indices):]
         add_bb = cgutils.append_basic_block
         bb_index = [add_bb(bld, '.inc_inp{0}_index{1}'.format(name, str(i)))
