@@ -77,11 +77,7 @@ class TestClosure(unittest.TestCase):
 
         self.assertEqual(c_do_math(1), 50)
 
-    @unittest.expectedFailure
     def test_jit_inner_function(self):
-        # See comment in PyLower.lower_assign for why this doesn't work
-        # (the frozen cell variable is a Dispatcher instance and that
-        #  is not supported as a constant).
         self.run_jit_inner_function(forceobj=True)
 
     def test_jit_inner_function_npm(self):

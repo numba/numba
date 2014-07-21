@@ -14,13 +14,16 @@
 typedef struct {
     PyObject_HEAD
     PyObject *globals;
-    PyObject *lifted_loops;
+    /* Assorted "constants" that are needed at runtime to execute
+       the compiled function.  This can include frozen closure variables,
+       lifted loops, etc. */
+    PyObject *consts;
 } EnvironmentObject;
 
 
 static PyMemberDef env_members[] = {
     {"globals", T_OBJECT, offsetof(EnvironmentObject, globals), READONLY},
-    {"lifted_loops", T_OBJECT, offsetof(EnvironmentObject, lifted_loops), READONLY},
+    {"consts", T_OBJECT, offsetof(EnvironmentObject, consts), READONLY},
     {NULL}  /* Sentinel */
 };
 
@@ -28,7 +31,7 @@ static int
 env_traverse(EnvironmentObject *env, visitproc visit, void *arg)
 {
     Py_VISIT(env->globals);
-    Py_VISIT(env->lifted_loops);
+    Py_VISIT(env->consts);
     return 0;
 }
 
@@ -37,7 +40,7 @@ env_dealloc(EnvironmentObject *env)
 {
     _PyObject_GC_UNTRACK((PyObject *) env);
     Py_DECREF(env->globals);
-    Py_DECREF(env->lifted_loops);
+    Py_DECREF(env->consts);
     Py_TYPE(env)->tp_free((PyObject *) env);
 }
 
@@ -58,8 +61,8 @@ env_new(PyTypeObject* type, PyObject* args, PyObject* kwds)
         return NULL;
     Py_INCREF(globals);
     env->globals = globals;
-    env->lifted_loops = PyList_New(0);
-    if (env->lifted_loops == NULL) {
+    env->consts = PyList_New(0);
+    if (!env->consts) {
         Py_DECREF(env);
         return NULL;
     }

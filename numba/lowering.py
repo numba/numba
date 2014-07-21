@@ -916,15 +916,14 @@ class PyLower(BaseLower):
             return self.get_builtin_obj("Ellipsis")
         elif const is None:
             return self.pyapi.make_none()
-        elif isinstance(const, dispatcher.LiftedLoop):
-            index = len(self.env.lifted_loops)
-            self.env.lifted_loops.append(const)
-            ret = self.get_lifted_loop(index)
+        else:
+            # Constants which can't be reconstructed are frozen inside
+            # the environment (e.g. callables, lifted loops).
+            index = len(self.env.consts)
+            self.env.consts.append(const)
+            ret = self.get_env_const(index)
             self.check_error(ret)
             return ret
-
-        else:
-            raise NotImplementedError(type(const))
 
     def lower_global(self, name, value):
         """
@@ -974,11 +973,11 @@ class PyLower(BaseLower):
         mod = self.pyapi.dict_getitem_string(moddict, "__builtins__")
         return self.builtin_lookup(mod, name)
 
-    def get_lifted_loop(self, index):
+    def get_env_const(self, index):
         """
-        Lookup lifted loop number *index* inside the environment body.
+        Look up constant number *index* inside the environment body.
         """
-        return self.pyapi.list_getitem(self.env_body.lifted_loops, index)
+        return self.pyapi.list_getitem(self.env_body.consts, index)
 
     def builtin_lookup(self, mod, name):
         """
