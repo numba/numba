@@ -59,6 +59,21 @@ class _ScalarIndexingHelper(object):
 
 
 class _ScalarHelper(object):
+    """Helper class to handle scalar arguments (and result).
+    Note that store_data is only used when generating code for
+    a scalar ufunc and to write the output value.
+
+    For loading, the value is directly used without having any
+    kind of indexing nor memory backing it up. This is the use
+    for input arguments.
+
+    For storing, a variable is created in the stack where the
+    value will be written.
+
+    Note that it is not supported (as it is unneeded for our
+    current use-cases) reading back a stored value. This class
+    will always "load" the original value it got at its creation.
+    """
     def __init__(self, ctxt, bld, val, ty):
         self.context = ctxt
         self.builder = bld
@@ -70,9 +85,6 @@ class _ScalarHelper(object):
 
     def create_iter_indices(self):
         return _ScalarIndexingHelper()
-
-    def load_effective_address(self, indices):
-        raise LoweringError('Can not get effective address of a scalar')
 
     def load_data(self, indices):
         return self.val
@@ -121,6 +133,10 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary',
                                                'shape', 'strides', 'data',
                                                'layout', 'base_type', 'ndim',
                                                'return_val'))):
+    """Helper class to handle array arguments/result.
+    It provides methods to generate code loading/storing specific
+    items as well as support code for handling indices.
+    """
     def create_iter_indices(self):
         intpty = self.context.get_value_type(types.intp)
         ZERO = Constant.int(Type.int(intpty.width), 0)
@@ -132,7 +148,7 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary',
             indices.append(x)
         return _ArrayIndexingHelper(self, indices)
 
-    def load_effective_address(self, indices):
+    def _load_effective_address(self, indices):
         return cgutils.get_item_pointer2(self.builder,
                                          data=self.data,
                                          shape=self.shape,
@@ -141,17 +157,17 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary',
                                          inds=indices)
 
     def load_data(self, indices):
-        return self.builder.load(self.load_effective_address(indices))
+        return self.builder.load(self._load_effective_address(indices))
 
     def store_data(self, indices, value):
         assert self.context.get_data_type(self.base_type) == value.type
-        self.builder.store(value, self.load_effective_address(indices))
+        self.builder.store(value, self._load_effective_address(indices))
 
 
 def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
     """returns an instance of the appropriate Helper (either
     _ScalarHelper or _ArrayHelper) class to handle the argument.
-    using the polimorphic interface of the Helper classes, scalar
+    using the polymorphic interface of the Helper classes, scalar
     and array cases can be handled with the same code"""
     if isinstance(tyinp, types.Array):
         ary     = ctxt.make_array(tyinp)(ctxt, bld, inp)
@@ -259,13 +275,13 @@ def _function_with_cast(op, inner_sig):
             self.outer_sig = outer_sig
 
         def generate(self, *args):
-            #convert args from the ufunc types to the one of the kernel operation
+            # convert args from the ufunc types to the one of the kernel operation
             cast_args = [self.context.cast(self.builder, val, inty, outy)
                          for val, inty, outy in zip(args, self.outer_sig.args,
                                                     self.inner_sig.args)]
-            #perform the operation
+            # perform the operation
             res = self.fnwork(self.builder, cast_args)
-            #return the result converted to the type of the ufunc operation
+            # return the result converted to the type of the ufunc operation
             return self.context.cast(self.builder, res, self.inner_sig.return_type,
                                      self.outer_sig.return_type)
 
