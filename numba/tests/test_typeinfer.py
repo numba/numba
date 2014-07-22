@@ -85,24 +85,29 @@ class TestUnify(unittest.TestCase):
             subproc.wait()
             self.assertEqual(subproc.returncode, 0, 'Child process failed.')
 
-    def test_unify_pair(self):
+    def unify_pair_test(self, n):
+        """
+        Test all permutations of N-combinations of numeric types and ensure
+        that the unification matches
+        """
         ctx = typing.Context()
-        for tys in itertools.combinations(types.number_domain, 2):
+        for tys in itertools.combinations(types.number_domain, n):
             res = [ctx.unify_types(*comb)
                    for comb in itertools.permutations(tys)]
+            # All result must be equal
+            first_result = res[0]
             for other in res[1:]:
-                self.assertEqual(res[0], other)
+                self.assertEqual(first_result, other)
 
-        for tys in itertools.combinations(types.number_domain, 3):
-            res = {}
-            for comb in itertools.permutations(tys):
-                unified = ctx.unify_types(*comb)
-                res[comb] = unified
-            keys = list(res.keys())
-            first_result = res[keys[0]]
-            for other in keys[1:]:
-                self.assertEqual(first_result, res[other])
+    def test_unify_pair(self):
+        self.unify_pair_test(2)
+        self.unify_pair_test(3)
 
+    def test_bitwidth_number_types(self):
+        """All numeric types have bitwidth attribute
+        """
+        for ty in types.number_domain:
+            self.assertTrue(hasattr(ty, "bitwidth"))
 
 if __name__ == '__main__':
     unittest.main()

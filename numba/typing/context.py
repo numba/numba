@@ -256,6 +256,9 @@ class BaseContext(object):
         # Sort the type list according to bit width before doing
         # pairwise unification (with thanks to aterrel).
         def keyfunc(obj):
+            """Uses bitwidth to order numeric-types.
+            Fallback to hash() for arbitary ordering.
+            """
             return getattr(obj, 'bitwidth', hash(obj))
         return functools.reduce(
             self.unify_pairs, sorted(typelist, key=keyfunc))
