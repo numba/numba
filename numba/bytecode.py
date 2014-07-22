@@ -89,6 +89,7 @@ def _make_bytecode_table():
                     ('BUILD_TUPLE', 2),
                     ('CALL_FUNCTION', 2),
                     ('COMPARE_OP', 2),
+                    ('DELETE_ATTR', 2),
                     ('DUP_TOP', 0),
                     ('FOR_ITER', 2),
                     ('GET_ITER', 0),
@@ -213,7 +214,7 @@ class ByteCodeIter(object):
         try:
             info = BYTECODE_TABLE[opcode]
         except KeyError:
-            ts = "offset=%d opcode=%x opname=%s"
+            ts = "offset=%d opcode=0x%x opname=%s"
             tv = offset, opcode, dis.opname[opcode]
             raise NotImplementedError(ts % tv)
         if info.argsize:

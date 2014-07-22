@@ -73,6 +73,17 @@ class PyLower(BaseLower):
             ok = self.pyapi.object_setitem(target, index, value)
             self.check_int_status(ok)
 
+        elif isinstance(inst, ir.SetAttr):
+            target = self.loadvar(inst.target.name)
+            value = self.loadvar(inst.value.name)
+            ok = self.pyapi.object_setattr_string(target, inst.attr, value)
+            self.check_int_status(ok)
+
+        elif isinstance(inst, ir.DelAttr):
+            target = self.loadvar(inst.target.name)
+            ok = self.pyapi.object_delattr_string(target, inst.attr)
+            self.check_int_status(ok)
+
         elif isinstance(inst, ir.StoreMap):
             dct = self.loadvar(inst.dct.name)
             key = self.loadvar(inst.key.name)

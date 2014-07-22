@@ -212,6 +212,16 @@ class SetAttr(Stmt):
         return '(%s).%s = %s' % (self.target, self.attr, self.value)
 
 
+class DelAttr(Stmt):
+    def __init__(self, target, attr, loc):
+        self.target = target
+        self.attr = attr
+        self.loc = loc
+
+    def __repr__(self):
+        return 'del (%s).%s' % (self.target, self.attr)
+
+
 class StoreMap(Stmt):
     def __init__(self, dct, key, value, loc):
         self.dct = dct
