@@ -5,6 +5,7 @@ from __future__ import print_function, absolute_import, division
 import sys, logging, re
 from ctypes import (c_void_p, c_int, POINTER, c_char_p, c_size_t, byref,
                     c_char)
+from numba import config
 from .error import NvvmError, NvvmSupportError
 from .libs import open_libdevice, open_cudalib
 
@@ -239,22 +240,38 @@ data_layout = {
 
 default_data_layout = data_layout[tuple.__itemsize__ * 8]
 
-SUPPORTED_CC = frozenset([(2, 0), (3, 0), (3, 5)])
+
+# List of supported compute capability in sorted order
+SUPPORTED_CC = (2, 0), (3, 0), (3, 5)
+
+
+def _find_arch(mycc):
+    for i, cc in enumerate(SUPPORTED_CC):
+        if cc == mycc:
+            # Matches
+            return cc
+        elif cc > mycc:
+            # Exceeded
+            if i == 0:
+                # CC lower than supported
+                raise NvvmSupportError("GPU compute capability %d.%d is "
+                                       "not supported (requires >=2.0)" % mycc)
+            else:
+                # return the previous CC
+                return SUPPORTED_CC[i - 1]
+
+    # CC higher than supported
+    return SUPPORTED_CC[-1]   # Choose the highest
 
 
 def get_arch_option(major, minor):
-    if major == 2:
-        minor = 0
-    if major == 3:
-        if minor < 5:
-            minor = 0
-        else:
-            minor = 5
-    if (major, minor) not in SUPPORTED_CC:
-        raise Exception("compute compability %d.%d is not supported" %
-                        (major, minor))
-    arch = 'compute_%d%d' % (major, minor)
-    return arch
+    """Matches with the closest architecture option
+    """
+    if config.FORCE_CUDA_CC:
+        arch = config.FORCE_CUDA_CC
+    else:
+        arch = _find_arch((major, minor))
+    return 'compute_%d%d' % arch
 
 
 MISSING_LIBDEVICE_MSG = '''
