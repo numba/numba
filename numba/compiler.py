@@ -3,8 +3,8 @@ from pprint import pprint
 from contextlib import contextmanager
 from collections import namedtuple, defaultdict
 
-from numba import (bytecode, interpreter, typing, typeinfer,
-                   lowering, irpasses, utils, config, type_annotations,
+from numba import (bytecode, interpreter, typing, typeinfer, lowering,
+                   objmode, irpasses, utils, config, type_annotations,
                    types, ir, assume, looplifting, macro)
 from numba.targets import cpu
 
@@ -331,7 +331,7 @@ def native_lowering_stage(targetctx, interp, typemap, restype, calltypes,
 
 def py_lowering_stage(targetctx, interp, nocompile):
     fndesc = lowering.PythonFunctionDescriptor.from_object_mode_function(interp)
-    lower = lowering.PyLower(targetctx, fndesc)
+    lower = objmode.PyLower(targetctx, fndesc)
     lower.lower()
 
     if nocompile:
