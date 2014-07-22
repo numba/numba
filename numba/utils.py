@@ -1,16 +1,26 @@
 from __future__ import print_function, division, absolute_import
+
 import collections
 import functools
 import io
 import timeit
 import math
+import sys
+try:
+    import builtins
+except ImportError:
+    import __builtin__ as builtins
+
 import numpy
+
 from numba.config import PYVERSION
 
 
 INT_TYPES = (int,)
 if PYVERSION < (3, 0):
     INT_TYPES += (long,)
+
+MACHINE_BITS = tuple.__itemsize__ * 8
 
 
 class ConfigOptions(object):
@@ -41,6 +51,15 @@ class ConfigOptions(object):
         copy = type(self)()
         copy._enabled = set(self._enabled)
         return copy
+
+    def __eq__(self, other):
+        return isinstance(other, ConfigOptions) and other._enabled == self._enabled
+
+    def __ne__(self, other):
+        return not self == other
+
+    def __hash__(self):
+        return hash(tuple(sorted(self._enabled)))
 
 
 class SortedMap(collections.Mapping):
@@ -169,6 +188,11 @@ def benchmark(func, maxsec=1):
     return BenchmarkResult(func, records, number)
 
 
+RANGE_ITER_OBJECTS = (builtins.range,)
+if PYVERSION < (3, 0):
+    RANGE_ITER_OBJECTS += (builtins.xrange,)
+
+
 # Other common python2/3 adaptors
 # Copied from Blaze which borrowed from six
 
@@ -276,6 +300,21 @@ def _op_and_not_eq(op, self, other):
     return op_result and self != other
 
 
+def _is_inherited_from_object(cls, op):
+    """
+    Whether operator *op* on *cls* is inherited from the root object type.
+    """
+    if PYVERSION >= (3,):
+        object_op = getattr(object, op)
+        cls_op = getattr(cls, op)
+        return object_op is cls_op
+    else:
+        # In 2.x, the inherited operator gets a new descriptor, so identity
+        # doesn't work.  OTOH, dir() doesn't list methods inherited from
+        # object (which it does in 3.x).
+        return op not in dir(cls)
+
+
 def total_ordering(cls):
     """Class decorator that fills in missing ordering methods"""
     convert = {
@@ -307,8 +346,7 @@ def total_ordering(cls):
                    ('__lt__', lambda self, other: _not_op(self.__ge__, other))]
     }
     # Find user-defined comparisons (not those inherited from object).
-    roots = [op for op in convert if
-             getattr(cls, op, None) is not getattr(object, op, None)]
+    roots = [op for op in convert if not _is_inherited_from_object(cls, op)]
     if not roots:
         raise ValueError(
             'must define at least one ordering operation: < > <= >=')

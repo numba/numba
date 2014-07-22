@@ -3,7 +3,7 @@ from __future__ import print_function, division, absolute_import
 import sys
 
 import numpy as np
-from numba import numpy_support, types
+from numba import jit, numpy_support, types
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
 from numba.utils import IS_PY3
@@ -66,6 +66,7 @@ recordtype = np.dtype([('a', np.float64),
 
 
 class TestRecordDtype(unittest.TestCase):
+
     def setUp(self):
         ary = np.recarray(3, dtype=recordtype)
         self.sample1d = ary
@@ -76,6 +77,12 @@ class TestRecordDtype(unittest.TestCase):
             ary[i].b = x
             ary[i].c = x * 1j
             ary[i].d = "%d" % x
+
+    def get_cfunc(self, pyfunc, argspec):
+        # Need to keep a reference to the compile result for the
+        # wrapper function object to remain valid (!)
+        self.__cres = compile_isolated(pyfunc, argspec)
+        return self.__cres.entry_point
 
     def test_from_dtype(self):
         rec = numpy_support.from_dtype(recordtype)
@@ -94,8 +101,7 @@ class TestRecordDtype(unittest.TestCase):
 
     def _test_get_equal(self, pyfunc):
         rec = numpy_support.from_dtype(recordtype)
-        cres = compile_isolated(pyfunc, (rec[:], types.intp))
-        cfunc = cres.entry_point
+        cfunc = self.get_cfunc(pyfunc, (rec[:], types.intp))
         for i in range(self.sample1d.size):
             self.assertEqual(pyfunc(self.sample1d, i), cfunc(self.sample1d, i))
 
@@ -110,8 +116,7 @@ class TestRecordDtype(unittest.TestCase):
 
     def _test_set_equal(self, pyfunc, value, valuetype):
         rec = numpy_support.from_dtype(recordtype)
-        cres = compile_isolated(pyfunc, (rec[:], types.intp, valuetype))
-        cfunc = cres.entry_point
+        cfunc = self.get_cfunc(pyfunc, (rec[:], types.intp, valuetype))
 
         for i in range(self.sample1d.size):
             expect = self.sample1d.copy()
@@ -135,8 +140,7 @@ class TestRecordDtype(unittest.TestCase):
     def test_set_record(self):
         pyfunc = set_record
         rec = numpy_support.from_dtype(recordtype)
-        cres = compile_isolated(pyfunc, (rec[:], types.intp, types.intp))
-        cfunc = cres.entry_point
+        cfunc = self.get_cfunc(pyfunc, (rec[:], types.intp, types.intp))
 
         test_indices = [(0, 1), (1, 2), (0, 2)]
         for i, j in test_indices:
@@ -166,8 +170,7 @@ class TestRecordDtype(unittest.TestCase):
 
             pyfunc = globals()['get_record_' + attr]
             nbrecord = numpy_support.from_dtype(recordtype)
-            cres = compile_isolated(pyfunc, [nbrecord, valtyp])
-            cfunc = cres.entry_point
+            cfunc = self.get_cfunc(pyfunc, (nbrecord, valtyp))
 
             got = cfunc(recval, val)
             self.assertEqual(expected, got)
@@ -184,8 +187,7 @@ class TestRecordDtype(unittest.TestCase):
         """
         pyfunc = record_return
         recty = numpy_support.from_dtype(recordtype)
-        cres = compile_isolated(pyfunc, [recty[:], types.intp])
-        cfunc = cres.entry_point
+        cfunc = self.get_cfunc(pyfunc, (recty[:], types.intp))
 
         attrs = 'abc'
         indices = [0, 1, 2]
@@ -201,6 +203,15 @@ class TestRecordDtype(unittest.TestCase):
             # Check for potential leaks
             self.assertEqual(sys.getrefcount(ary), old_refcnt)
 
+
+class TestRecordDtypeWithDispatcher(TestRecordDtype):
+    """
+    Same as TestRecordDtype, but stressing the Dispatcher's type dispatch
+    mechanism (issue #384).
+    """
+
+    def get_cfunc(self, pyfunc, argspec):
+        return jit(argspec, nopython=True)(pyfunc)
 
 
 if __name__ == '__main__':

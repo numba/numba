@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 import numpy as np
 from llvm.core import (Type, Builder, inline_function, LINKAGE_INTERNAL,
                        ICMP_EQ, Constant)
+
 from numba import types, cgutils, config
 
 
@@ -15,7 +16,6 @@ def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
                                            signature.args, elems)
 
     # Ignoring error status and store result
-
     # Store
     if out.byref:
         retval = builder.load(retval)
@@ -95,8 +95,8 @@ def build_ufunc_wrapper(context, func, signature):
                                 context.get_argument_type(typ)))
 
     # Prepare output
-    out = UArrayArg(context, builder, arg_args, arg_steps, len(actual_args),
-                    context.get_value_type(signature.return_type))
+    valty = context.get_data_type(signature.return_type)
+    out = UArrayArg(context, builder, arg_args, arg_steps, len(actual_args), valty)
 
     # Setup indices
     offsets = []
@@ -172,10 +172,7 @@ class UArrayArg(object):
         return self.load_direct(offset)
 
     def load_direct(self, offset):
-        intp_t = offset.type
-        addr = self.builder.ptrtoint(self.data, intp_t)
-        addr_off = self.builder.add(addr, offset)
-        ptr = self.builder.inttoptr(addr_off, self.data.type)
+        ptr = cgutils.pointer_add(self.builder, self.data, offset)
         if self.byref:
             return ptr
         else:
@@ -190,9 +187,7 @@ class UArrayArg(object):
         self.store_direct(value, offset)
 
     def store_direct(self, value, offset):
-        addr = self.builder.ptrtoint(self.data, offset.type)
-        addr_off = self.builder.add(addr, offset)
-        ptr = self.builder.inttoptr(addr_off, self.data.type)
+        ptr = cgutils.pointer_add(self.builder, self.data, offset)
         assert ptr.type.pointee == value.type
         self.builder.store(value, ptr)
 
@@ -441,9 +436,6 @@ class GUArrayArg(object):
         self.array_value = self.array._getpointer()
 
     def next(self, i):
-        intp_t = i.type
-        array_data = self.array.data
-        addr = self.builder.ptrtoint(array_data, intp_t)
-        addr_new = self.builder.add(addr, self.core_step)
-        self.array.data = self.builder.inttoptr(addr_new, array_data.type)
+        self.array.data = cgutils.pointer_add(self.builder,
+                                              self.array.data, self.core_step)
 

@@ -89,8 +89,6 @@ packages = [
     "numba.cuda.tests",
     "numba.cuda.tests.cudadrv",
     "numba.cuda.tests.cudapy",
-    "numba.ext",
-    "numba.ext.impala",
 ]
 
 setup(name='numba',

@@ -20,7 +20,6 @@ class DataFlowAnalysis(object):
         self.bytecode = cfa.bytecode
         # { block offset -> BlockInfo }
         self.infos = {}
-        self.syntax_blocks = []
 
     def run(self):
         for blk in self.cfa.iterliveblocks():
@@ -52,9 +51,18 @@ class DataFlowAnalysis(object):
                 warnings.warn("inconsistent stack offset for %s" % blk,
                               RuntimeWarning)
 
+            # Compute syntax blocks at block entry
+            assert ib.syntax_blocks is not None, ib
+            if info.syntax_blocks is None:
+                info.syntax_blocks = ib.syntax_blocks[:]
+            elif info.syntax_blocks != ib.syntax_blocks:
+                warnings.warn("inconsistent entry syntax blocks for %s" % blk,
+                              RuntimeWarning)
+
         if info.stack_offset is None:
             # No incoming blocks => assume it's the entry block
             info.stack_offset = 0
+            info.syntax_blocks = []
         info.stack_effect = 0
 
         for offset in blk:
@@ -88,13 +96,13 @@ class DataFlowAnalysis(object):
         Add an inner syntax block.
         """
         block.stack_offset = info.stack_offset
-        self.syntax_blocks.append(block)
+        info.syntax_blocks.append(block)
 
     def pop_syntax_block(self, info):
         """
         Pop the innermost syntax block and revert its stack effect.
         """
-        block = self.syntax_blocks.pop()
+        block = info.syntax_blocks.pop()
         assert info.stack_offset >= block.stack_offset
         while info.stack_offset + info.stack_effect > block.stack_offset:
             info.pop(discard=True)
@@ -178,6 +186,10 @@ class DataFlowAnalysis(object):
         value = info.pop()
         info.append(inst, target=target, value=value)
 
+    def op_DELETE_ATTR(self, info, inst):
+        target = info.pop()
+        info.append(inst, target=target)
+
     def op_STORE_FAST(self, info, inst):
         value = info.pop()
         info.append(inst, value=value)
@@ -233,13 +245,13 @@ class DataFlowAnalysis(object):
         res = info.make_temp()
         info.append(inst, value=value, res=res)
         info.push(res)
-        if self.syntax_blocks:
-            loop = self.syntax_blocks[-1]
+        if info.syntax_blocks:
+            loop = info.syntax_blocks[-1]
             if isinstance(loop, LoopBlock) and loop.iterator is None:
                 loop.iterator = res
 
     def op_FOR_ITER(self, info, inst):
-        loop = self.syntax_blocks[-1]
+        loop = info.syntax_blocks[-1]
         iterator = loop.iterator
         pair = info.make_temp()
         indval = info.make_temp()
@@ -491,6 +503,7 @@ class DataFlowAnalysis(object):
         info.terminator = inst
 
     def op_BREAK_LOOP(self, info, inst):
+        self.pop_syntax_block(info)
         info.append(inst)
         info.terminator = inst
 
@@ -542,6 +555,7 @@ class BlockInfo(object):
         self._term = None
         self.stack_offset = None
         self.stack_effect = 0
+        self.syntax_blocks = None
 
     def __repr__(self):
         return "<%s at offset %d>" % (self.__class__.__name__, self.offset)

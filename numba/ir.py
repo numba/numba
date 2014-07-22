@@ -99,6 +99,11 @@ class Expr(object):
         return cls(op=op, loc=loc, fn=fn, lhs=lhs, rhs=rhs)
 
     @classmethod
+    def inplace_binop(cls, fn, lhs, rhs, loc):
+        op = 'inplace_binop'
+        return cls(op=op, loc=loc, fn=fn, lhs=lhs, rhs=rhs)
+
+    @classmethod
     def unary(cls, fn, value, loc):
         op = 'unary'
         return cls(op=op, loc=loc, fn=fn, value=value)
@@ -207,6 +212,16 @@ class SetAttr(Stmt):
         return '(%s).%s = %s' % (self.target, self.attr, self.value)
 
 
+class DelAttr(Stmt):
+    def __init__(self, target, attr, loc):
+        self.target = target
+        self.attr = attr
+        self.loc = loc
+
+    def __repr__(self):
+        return 'del (%s).%s' % (self.target, self.attr)
+
+
 class StoreMap(Stmt):
     def __init__(self, dct, key, value, loc):
         self.dct = dct
@@ -300,6 +315,25 @@ class Global(object):
 
     def __str__(self):
         return 'global(%s: %s)' % (self.name, self.value)
+
+
+class FreeVar(object):
+    """
+    A freevar, as loaded by LOAD_DECREF.
+    (i.e. a variable defined in an enclosing non-global scope)
+    """
+
+    def __init__(self, index, name, value, loc):
+        # index inside __code__.co_freevars
+        self.index = index
+        # variable name
+        self.name = name
+        # frozen value
+        self.value = value
+        self.loc = loc
+
+    def __str__(self):
+        return 'freevar(%s: %s)' % (self.name, self.value)
 
 
 class Var(object):

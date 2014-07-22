@@ -168,10 +168,8 @@ class IterationTest(TestCase):
         cfunc(got)
         self.assertTrue(np.all(expected == got))
 
-    # XXX for some reason, this fails in object mode
     def test_array_1d_record_mutate(self):
-        with self.assertTypingError():
-            self.test_array_1d_record_mutate_npm(flags=force_pyobj_flags)
+        self.test_array_1d_record_mutate_npm(flags=force_pyobj_flags)
 
 
 if __name__ == '__main__':
