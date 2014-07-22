@@ -138,11 +138,14 @@ class Overloaded(_dispatcher.Dispatcher):
         """
         return self.compile(sig, **kws)
 
-    def _compile_and_call(self, *args, **kws):
+    def _compile_for_args(self, *args, **kws):
+        """
+        For internal use.  Compile a specialized version of the function
+        for the given *args* and *kws*, and return the resulting callable.
+        """
         assert not kws
         sig = tuple([self.typeof_pyval(a) for a in args])
-        self.jit(sig)
-        return self(*args, **kws)
+        return self.jit(sig)
 
     def inspect_types(self):
         for ver, res in utils.dict_iteritems(self.overloads):
