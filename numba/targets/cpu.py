@@ -128,6 +128,13 @@ class CPUContext(BaseContext):
         self.pm.run(module)
 
     def finalize(self, func, fndesc):
+        """Finalize the compilation.  Called by get_executable().
+
+        - Rewrite intrinsics
+        - Fix div & rem instructions on 32bit platform
+        - Bind module dictionary
+        - Optimize python API calls
+        """
         func.module.target = self.tm.triple
 
         if self.is32bit:

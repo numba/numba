@@ -806,6 +806,9 @@ class BaseContext(object):
         pass
 
     def finalize(self, func, fndesc):
+        """Perform any necessary work to complete the compilation.
+        An implementation of get_executable() should call finalize().
+        """
         raise NotImplementedError
 
     def get_executable(self, func, fndesc):
