@@ -370,7 +370,6 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
     int matches;
     int old_can_compile;
     PyObject *cfunc;
-    PyObject *cac;                  /* compile and call function */
 
     /* Shortcut for single definition */
     /*if (!self->can_compile && 1 == dispatcher_count(self->dispatcher)){
@@ -399,13 +398,21 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
         /* No matching definition */
         if (self->can_compile) {
             /* Compile a new one */
-            cac = PyObject_GetAttrString((PyObject*)self, "_compile_and_call");
-            if (cac) {
-                old_can_compile = self->can_compile;
-                self->can_compile = 0;
-                retval = PyObject_Call(cac, args, kws);
-                self->can_compile = old_can_compile;
-                Py_DECREF(cac);
+            PyObject *cfa;
+            cfa = PyObject_GetAttrString((PyObject*)self, "_compile_for_args");
+            if (cfa == NULL)
+                goto CLEANUP;
+            old_can_compile = self->can_compile;
+            self->can_compile = 0;
+            /* NOTE: we call the compiled function ourselves instead of
+               letting the Python derived class do it.  This is for proper
+               behaviour of globals() in jitted functions (issue #476). */
+            cfunc = PyObject_Call(cfa, args, kws);
+            self->can_compile = old_can_compile;
+            Py_DECREF(cfa);
+            if (cfunc != NULL) {
+                retval = call_cfunc(cfunc, args, kws);
+                Py_DECREF(cfunc);
             }
         } else if (self->fallbackdef) {
             /* Have object fallback */

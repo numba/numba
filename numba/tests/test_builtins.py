@@ -1,10 +1,12 @@
 from __future__ import print_function
-import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from numba import typeinfer, lowering, types, utils
-from .support import TestCase
+
 import itertools
 import functools
+
+import numba.unittest_support as unittest
+from numba.compiler import compile_isolated, Flags
+from numba import jit, typeinfer, lowering, types, utils
+from .support import TestCase
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -70,6 +72,9 @@ def float_usecase(x):
 
 def format_usecase(x, y):
     return x.format(y)
+
+def globals_usecase():
+    return globals()
 
 def hex_usecase(x):
     return hex(x)
@@ -351,6 +356,29 @@ class TestBuiltins(TestCase):
     def test_format_npm(self):
         with self.assertTypingError():
             self.test_format(flags=no_pyobj_flags)
+
+    def test_globals(self, flags=enable_pyobj_flags):
+        pyfunc = globals_usecase
+        cr = compile_isolated(pyfunc, (), flags=flags)
+        cfunc = cr.entry_point
+        g = cfunc()
+        self.assertIs(g, globals())
+
+    def test_globals_npm(self):
+        with self.assertTypingError():
+            self.test_globals(flags=no_pyobj_flags)
+
+    def test_globals_jit(self, **jit_flags):
+        # Issue #416: weird behaviour of globals() in combination with
+        # the @jit decorator.
+        pyfunc = globals_usecase
+        jitted = jit(**jit_flags)(pyfunc)
+        self.assertIs(jitted(), globals())
+        self.assertIs(jitted(), globals())
+
+    def test_globals_jit_npm(self):
+        with self.assertTypingError():
+            self.test_globals_jit(nopython=True)
 
     def test_hex(self, flags=enable_pyobj_flags):
         pyfunc = hex_usecase

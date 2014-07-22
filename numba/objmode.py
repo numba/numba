@@ -117,10 +117,6 @@ class PyLower(BaseLower):
         The returned object must have a new reference
         """
         value = inst.value
-        # XXX since we don't have access to the __closure__ tuple at
-        # execution time, we must freeze the closure var as a constant,
-        # which limits its possible types (e.g., it can't be
-        # another function, see test_closure.py).
         if isinstance(value, (ir.Const, ir.FreeVar)):
             return self.lower_const(value.value)
         elif isinstance(value, ir.Var):
