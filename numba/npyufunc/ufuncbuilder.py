@@ -127,7 +127,6 @@ class GUFuncBuilder(object):
         self.signature = signature
         self.sin, self.sout = parse_signature(signature)
         self.targetoptions = targetoptions
-        self._envs = []
 
     def add(self, sig=None, argtypes=None, restype=None):
         # Handle argtypes
@@ -150,12 +149,14 @@ class GUFuncBuilder(object):
     def build_ufunc(self):
         dtypelist = []
         ptrlist = []
+        keepalive = []
+
         if not self.nb_func:
             raise TypeError("No definition")
 
         for sig, cres in self.nb_func.overloads.items():
             dtypenums, ptr, env = self.build(cres)
-            self._envs.append(env)   # keep env object alive
+            keepalive.append(env)   # keep env object alive
             dtypelist.append(dtypenums)
             ptrlist.append(utils.longint(ptr))
         datlist = [None] * len(ptrlist)
@@ -163,9 +164,9 @@ class GUFuncBuilder(object):
         inct = len(self.sin)
         outct = len(self.sout)
 
+        # Pass envs to fromfuncsig to bind to the lifetime of the ufunc object
         ufunc = _internal.fromfuncsig(ptrlist, dtypelist, inct, outct, datlist,
-                                      self.signature)
-
+                                      self.signature, keepalive)
         return ufunc
 
     def build(self, cres):
