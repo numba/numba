@@ -64,6 +64,15 @@ def stack_effect_error(x):
             c = i
     return i + c
 
+# Some more issues with stack effect and blocks
+def for_break(n, x):
+    for i in range(n):
+        n = 0
+        if i == x:
+            break
+    else:
+        n = i
+    return i, n
 
 # Issue #571
 def var_swapping(a, b, c, d, e):
@@ -169,6 +178,17 @@ class TestDataFlow(TestCase):
 
     def test_var_swapping_npm(self):
         self.test_var_swapping(no_pyobj_flags)
+
+    def test_for_break(self, flags=force_pyobj_flags):
+        # BREAK_LOOP must unwind the current inner syntax block.
+        pyfunc = for_break
+        cr = compile_isolated(pyfunc, (types.int32, types.int32), flags=flags)
+        cfunc = cr.entry_point
+        for (n, x) in [(4, 2), (4, 6)]:
+            self.assertPreciseEqual(pyfunc(n, x), cfunc(n, x))
+
+    def test_for_break_npm(self):
+        self.test_for_break(no_pyobj_flags)
 
 
 if __name__ == '__main__':
