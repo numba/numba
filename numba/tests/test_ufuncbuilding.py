@@ -133,6 +133,7 @@ class TestVectorizeDecor(unittest.TestCase):
         b = ufunc(a, a)
         self.assertTrue(numpy.all(a + a == b))
 
+    @unittest.skip
     def test_guvectorize_error_in_objectmode(self):
         ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
                             "(x,y),(x,y)->(x,y)", forceobj=True)(guerror)
