@@ -127,6 +127,7 @@ class GUFuncBuilder(object):
         self.signature = signature
         self.sin, self.sout = parse_signature(signature)
         self.targetoptions = targetoptions
+        self._envs = []
 
     def add(self, sig=None, argtypes=None, restype=None):
         # Handle argtypes
@@ -153,7 +154,8 @@ class GUFuncBuilder(object):
             raise TypeError("No definition")
 
         for sig, cres in self.nb_func.overloads.items():
-            dtypenums, ptr = self.build(cres)
+            dtypenums, ptr, env = self.build(cres)
+            self._envs.append(env)   # keep env object alive
             dtypelist.append(dtypenums)
             ptrlist.append(utils.longint(ptr))
         datlist = [None] * len(ptrlist)
@@ -167,11 +169,16 @@ class GUFuncBuilder(object):
         return ufunc
 
     def build(self, cres):
+        """
+        Returns (dtype numbers, function ptr, EnviornmentObject)
+        """
         # Buider wrapper for ufunc entry point
         ctx = cres.target_context
         signature = cres.signature
-        wrapper = build_gufunc_wrapper(ctx, cres.llvm_func, signature,
-                                       self.sin, self.sout)
+        wrapper, env = build_gufunc_wrapper(ctx, cres.llvm_func, signature,
+                                            self.sin, self.sout,
+                                            fndesc=cres.fndesc)
+
         ctx.finalize(wrapper, cres.fndesc)
         ctx.engine.add_module(wrapper.module)
         ptr = ctx.engine.get_pointer_to_function(wrapper)
@@ -183,5 +190,5 @@ class GUFuncBuilder(object):
             else:
                 ty = a
             dtypenums.append(np.dtype(ty.name).num)
-        return dtypenums, ptr
+        return dtypenums, ptr, env
 

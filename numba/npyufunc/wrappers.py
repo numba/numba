@@ -4,7 +4,7 @@ from llvm.core import (Type, Builder, inline_function, LINKAGE_INTERNAL,
                        ICMP_EQ, Constant)
 
 from numba import types, cgutils, config
-
+from numba import _dynfunc
 
 def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
                            offsets, store_offset, signature):
@@ -196,7 +196,7 @@ class UArrayArg(object):
         self.builder.store(value, ptr)
 
 
-def build_gufunc_wrapper(context, func, signature, sin, sout):
+def build_gufunc_wrapper(context, func, signature, sin, sout, fndesc):
     module = func.module
 
     byte_t = Type.int(8)
@@ -253,14 +253,18 @@ def build_gufunc_wrapper(context, func, signature, sin, sout):
         args = [a.array_value for a in arrays]
 
         if signature.return_type == types.pyobject:
-            innercall, error = _prepare_call_to_object_mode(context, builder,
-                                                            func, signature,
-                                                            args)
+            innercall, error, env = _prepare_call_to_object_mode(context,
+                                                                 builder,
+                                                                 func,
+                                                                 signature,
+                                                                 args,
+                                                                 fndesc=fndesc)
 
         else:
             status, retval = context.call_function(builder, func,
                                                    signature.return_type,
                                                    signature.args, args)
+            env = None
             innercall = status.code
             error = status.err
             del status, retval
@@ -287,10 +291,11 @@ def build_gufunc_wrapper(context, func, signature, sin, sout):
         print(module)
 
     wrapper.verify()
-    return wrapper
+    return wrapper, env
 
 
-def _prepare_call_to_object_mode(context, builder, func, signature, args):
+def _prepare_call_to_object_mode(context, builder, func, signature, args,
+                                 fndesc):
     mod = cgutils.get_module(builder)
 
     thisfunc = cgutils.get_function(builder)
@@ -354,8 +359,13 @@ def _prepare_call_to_object_mode(context, builder, func, signature, args):
 
     # Call ufunc core function
     object_sig = [types.pyobject] * len(ndarray_objects)
+
+    # Create an environment object for the function
+    env = _dynfunc.Environment(globals=fndesc.lookup_module().__dict__)
+    envptr = Constant.int(ll_intp, id(env)).inttoptr(ll_pyobj)
+
     status, retval = context.call_function(builder, func, ll_pyobj, object_sig,
-                                           ndarray_objects)
+                                           ndarray_objects, env=envptr)
     builder.store(status.err, error_pointer)
 
     pyapi = context.get_python_api(builder)
@@ -372,7 +382,7 @@ def _prepare_call_to_object_mode(context, builder, func, signature, args):
         pyapi.decref(builder.load(ndary_ptr))
 
     innercall = status.code
-    return innercall, builder.load(error_pointer)
+    return innercall, builder.load(error_pointer), env
 
 
 class GUArrayArg(object):
