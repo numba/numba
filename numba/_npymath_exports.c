@@ -54,7 +54,7 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL(atan2),
 
     NPYMATH_SYMBOL(logaddexp),
-    NPYMATH_SYMBOL(logaddexp2)
+    NPYMATH_SYMBOL(logaddexp2),
 
     /* complex functions */
     NPYMATH_SYMBOL(cabs),
