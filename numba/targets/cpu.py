@@ -129,6 +129,9 @@ class CPUContext(BaseContext):
             env = lc.Constant.null(PYOBJECT)
         retty = callee.args[0].type.pointee
         retval = cgutils.alloca_once(builder, retty)
+        # initialize return value to zeros
+        builder.store(lc.Constant.null(retty), retval)
+
         args = [self.get_value_as_argument(builder, ty, arg)
                 for ty, arg in zip(argtys, args)]
         realargs = [retval, env] + list(args)
