@@ -996,10 +996,15 @@ class TestScalarUFuncs(TestCase):
     - the machinery to support this case is the same for all the functions of a
       given arity.
     - the result of the inner function itself is already tested in TestUFuncs
+
+    This class tests regular uses. A subclass tests the no python backend.
     """
-    def run_ufunc(self, pyfunc, arg_types, arg_values, flags=enable_pyobj_flags):
+
+    _compile_flags = enable_pyobj_flags
+
+    def run_ufunc(self, pyfunc, arg_types, arg_values):
         for tyargs, args in zip(arg_types, arg_values):
-            cr = compile_isolated(pyfunc, tyargs, flags=flags)
+            cr = compile_isolated(pyfunc, tyargs, flags=self._compile_flags)
             cfunc = cr.entry_point
             got = cfunc(*args)
             expected = pyfunc(*args)
@@ -1043,30 +1048,26 @@ class TestScalarUFuncs(TestCase):
             self.assertPreciseEqual(got, expected, msg=msg, prec=prec)
 
 
-    def test_scalar_unary_ufunc(self, flags=enable_pyobj_flags):
+    def test_scalar_unary_ufunc(self):
         def _func(x):
             return np.sqrt(x)
 
         vals = [(2,), (2,), (1,), (2,), (.1,), (.2,)]
         tys = [(types.int32,), (types.uint32,),
-               (types.int64,), (types.uint64,), (types.float32,), (types.float64,)]
-        self.run_ufunc(_func, tys, vals, flags=flags)
-
-    def test_scalar_unary_ufunc_npm(self):
-        self.test_scalar_unary_ufunc(flags=no_pyobj_flags)
+               (types.int64,), (types.uint64,),
+               (types.float32,), (types.float64,)]
+        self.run_ufunc(_func, tys, vals)
 
 
-    def test_scalar_binary_uniform_ufunc(self, flags=enable_pyobj_flags):
+    def test_scalar_binary_uniform_ufunc(self):
         def _func(x,y):
             return np.add(x,y)
 
         vals = [2, 2, 1, 2, .1, .2]
         tys = [types.int32, types.uint32,
                types.int64, types.uint64, types.float32, types.float64]
-        self.run_ufunc(_func, zip(tys, tys), zip(vals, vals), flags=flags)
+        self.run_ufunc(_func, zip(tys, tys), zip(vals, vals))
 
-    def test_scalar_binary_uniform_ufuncs_npm(self):
-        self.test_scalar_binary_uniform_ufunc(flags=no_pyobj_flags)
 
     def test_scalar_binary_mixed_ufunc(self, flags=enable_pyobj_flags):
         def _func(x,y):
@@ -1074,13 +1075,15 @@ class TestScalarUFuncs(TestCase):
 
         vals = [2, 2, 1, 2, .1, .2]
         tys = [types.int32, types.uint32,
-               types.int64, types.uint64, types.float32, types.float64]
-        self.run_ufunc(_func, itertools.product(tys, tys), itertools.product(vals, vals),
-                       flags=flags)
+               types.int64, types.uint64,
+               types.float32, types.float64]
+        self.run_ufunc(_func, itertools.product(tys, tys), 
+                       itertools.product(vals, vals))
 
-    def test_scalar_binary_mixed_ufuncs_npm(self):
-        self.test_scalar_binary_mixed_ufunc(flags=no_pyobj_flags)
 
+class TestScalarUFuncsNoPython(TestScalarUFuncs):
+    """Same tests as TestScalarUFuncs, but forcing no python mode"""
+    _compile_flags = no_pyobj_flags
 
 
 if __name__ == '__main__':
