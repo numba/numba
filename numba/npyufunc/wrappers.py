@@ -301,6 +301,10 @@ def _prepare_call_to_object_mode(context, builder, func, signature, args,
     thisfunc = cgutils.get_function(builder)
     bb_core_return = thisfunc.append_basic_block('ufunc.core.return')
 
+    pyapi = context.get_python_api(builder)
+    # Acquire the GIL
+    gil = pyapi.gil_ensure()
+
     # Call to
     # PyObject* ndarray_new(int nd,
     #       npy_intp *dims,   /* shape */
@@ -368,8 +372,6 @@ def _prepare_call_to_object_mode(context, builder, func, signature, args,
                                            ndarray_objects, env=envptr)
     builder.store(status.err, error_pointer)
 
-    pyapi = context.get_python_api(builder)
-
     # Release returned object
     pyapi.decref(retval)
 
@@ -381,6 +383,7 @@ def _prepare_call_to_object_mode(context, builder, func, signature, args,
     for ndary_ptr in ndarray_pointers:
         pyapi.decref(builder.load(ndary_ptr))
 
+    pyapi.gil_release(gil)
     innercall = status.code
     return innercall, builder.load(error_pointer), env
 

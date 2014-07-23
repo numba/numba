@@ -198,6 +198,17 @@ void Numba_release_record_buffer(Py_buffer *buf)
     PyBuffer_Release(buf);
 }
 
+
+static
+void Numba_gil_ensure(PyGILState_STATE *state) {
+    *state = PyGILState_Ensure();
+}
+
+static
+void Numba_gil_release(PyGILState_STATE *state) {
+    PyGILState_Release(*state);
+}
+
 /*
 Define bridge for all math functions
 */
@@ -241,6 +252,8 @@ build_c_helpers_dict(void)
     declmethod(round_even);
     declmethod(roundf_even);
     declmethod(fptoui);
+    declmethod(gil_ensure);
+    declmethod(gil_release);
 #define MATH_UNARY(F, R, A) declmethod(F);
 #define MATH_BINARY(F, R, A, B) declmethod(F);
     #include "mathnames.inc"
@@ -272,6 +285,9 @@ MOD_INIT(_helperlib) {
     PyModule_AddObject(m, "c_helpers", build_c_helpers_dict());
     PyModule_AddIntConstant(m, "long_min", LONG_MIN);
     PyModule_AddIntConstant(m, "long_max", LONG_MAX);
+
+    PyModule_AddObject(m, "py_gil_state_size",
+                       PyLong_FromLong(sizeof(PyGILState_STATE)));
 
     return MOD_SUCCESS_VAL(m);
 }
