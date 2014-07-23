@@ -508,7 +508,7 @@ class PythonAPI(object):
 
     def gil_ensure(self):
         """
-        Ensure the GIL is accquired.
+        Ensure the GIL is acquired.
         The returned value must be consumed by gil_release().
         """
         gilptrty = Type.pointer(self.gil_state)
@@ -520,7 +520,7 @@ class PythonAPI(object):
 
     def gil_release(self, gil):
         """
-        Release the accquired GIL by gil_ensure().
+        Release the acquired GIL by gil_ensure().
         Must be pair with a gil_ensure().
         """
         gilptrty = Type.pointer(self.gil_state)
