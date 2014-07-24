@@ -5,12 +5,11 @@ class TestLlvmVersion(unittest.TestCase):
 
     def test_llvm_version(self):
         import llvm
-
-        llvm.__version__ = '0.13.1'
         import numba
+        self.assertTrue(numba.__version__)
 
         with self.assertRaises(SystemExit):
-            llvm.__version__ = '0.9.6'
+            llvm.__version__ = '0.12.5' # llvm has to be >= 12.6 
             reload(numba)
         
 
