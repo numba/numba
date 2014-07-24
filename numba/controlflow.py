@@ -323,7 +323,8 @@ class CFGraph(object):
         for src, dest in self._back_edges:
             # The destination of the back edge is the loop header
             header = dest
-            # Build up the loop body from the back edge's source node.
+            # Build up the loop body from the back edge's source node,
+            # up to the source header.
             body = set([header])
             queue = [src]
             while queue:
@@ -331,11 +332,14 @@ class CFGraph(object):
                 if n not in body:
                     body.add(n)
                     queue.extend(self._preds[n])
+            # There can be several back edges to a given loop header;
+            # if so, merge the resulting body fragments.
             if header in bodies:
                 bodies[header].update(body)
             else:
                 bodies[header] = body
 
+        # Create a Loop object for each header.
         loops = {}
         for header, body in bodies.items():
             entries = set()
@@ -347,6 +351,7 @@ class CFGraph(object):
             loops[header] = loop
         self._loops = loops
 
+        # Compute the loops to which each node belongs.
         in_loops = dict((n, []) for n in self._nodes)
         # Sort loops from longest to shortest
         # This ensures that outer loops will come before inner loops
