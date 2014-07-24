@@ -554,6 +554,17 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyObject_GetAttrString")
         return self.builder.call(fn, [obj, cstr])
 
+    def object_setattr_string(self, obj, attr, val):
+        cstr = self.context.insert_const_string(self.module, attr)
+        fnty = Type.function(Type.int(), [self.pyobj, self.cstring, self.pyobj])
+        fn = self._get_function(fnty, name="PyObject_SetAttrString")
+        return self.builder.call(fn, [obj, cstr, val])
+
+    def object_delattr_string(self, obj, attr):
+        # PyObject_DelAttrString() is actually a C macro calling
+        # PyObject_SetAttrString() with value == NULL.
+        return self.object_setattr_string(obj, attr, self.get_null_object())
+
     def object_getitem(self, obj, key):
         fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj])
         fn = self._get_function(fnty, name="PyObject_GetItem")

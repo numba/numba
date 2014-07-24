@@ -253,7 +253,15 @@ class BaseContext(object):
         return self.tm.check_compatible(fromty, toty)
 
     def unify_types(self, *typelist):
-        return functools.reduce(self.unify_pairs, typelist)
+        # Sort the type list according to bit width before doing
+        # pairwise unification (with thanks to aterrel).
+        def keyfunc(obj):
+            """Uses bitwidth to order numeric-types.
+            Fallback to hash() for arbitary ordering.
+            """
+            return getattr(obj, 'bitwidth', hash(obj))
+        return functools.reduce(
+            self.unify_pairs, sorted(typelist, key=keyfunc))
 
     def unify_pairs(self, first, second):
         """
@@ -262,6 +270,13 @@ class BaseContext(object):
         """
         # TODO: should add an option to reject unsafe type conversion
         d = self.type_compatibility(fromty=first, toty=second)
+        if d is None:
+            # Complex is not allowed to downcast implicitly.
+            # Need to try the other direction of implicit cast to find the
+            # most general type of the two.
+            first, second = second, first   # swap operand order
+            d = self.type_compatibility(fromty=first, toty=second)
+
         if d is None:
             return types.pyobject
         elif d == 'exact':

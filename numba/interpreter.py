@@ -487,6 +487,11 @@ class Interpreter(object):
                         attr=attr, loc=self.loc)
         self.current_block.append(sa)
 
+    def op_DELETE_ATTR(self, inst, target):
+        attr = self.code_names[inst.arg]
+        sa = ir.DelAttr(target=self.get(target), attr=attr, loc=self.loc)
+        self.current_block.append(sa)
+
     def op_LOAD_ATTR(self, inst, item, res):
         item = self.get(item)
         attr = self.code_names[inst.arg]

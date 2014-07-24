@@ -186,6 +186,10 @@ class DataFlowAnalysis(object):
         value = info.pop()
         info.append(inst, target=target, value=value)
 
+    def op_DELETE_ATTR(self, info, inst):
+        target = info.pop()
+        info.append(inst, target=target)
+
     def op_STORE_FAST(self, info, inst):
         value = info.pop()
         info.append(inst, value=value)
