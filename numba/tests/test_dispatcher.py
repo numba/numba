@@ -3,7 +3,6 @@ from numba import unittest_support as unittest
 from numba.special import typeof
 from numba import vectorize, types, jit
 import numpy
-import sys
 
 def dummy(x):
     return x

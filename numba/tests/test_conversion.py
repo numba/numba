@@ -4,7 +4,7 @@ import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import types
 import numpy as np
-
+import sys
 
 def identity(x):
     return x
