@@ -39,3 +39,13 @@ export
 exportmany
 cuda
 """.split() + types.__all__ + special.__all__
+
+import llvm
+llvm_ver = llvm.__version__.split('.')
+
+if (int(llvm_ver[1]), int(llvm_ver[2])) >= (12, 6):
+    pass
+else:
+    print("Numba requires at least version 12.6 of llvm. Please update your version of llvm.")
+    raise SystemExit(-1) 
+
