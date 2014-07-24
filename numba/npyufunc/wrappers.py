@@ -6,6 +6,7 @@ from llvm.core import (Type, Builder, inline_function, LINKAGE_INTERNAL,
 from numba import types, cgutils, config
 from numba import _dynfunc
 
+
 def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
                            offsets, store_offset, signature):
     elems = load()
@@ -96,7 +97,8 @@ def build_ufunc_wrapper(context, func, signature):
 
     # Prepare output
     valty = context.get_data_type(signature.return_type)
-    out = UArrayArg(context, builder, arg_args, arg_steps, len(actual_args), valty)
+    out = UArrayArg(context, builder, arg_args, arg_steps, len(actual_args),
+                    valty)
 
     # Setup indices
     offsets = []
@@ -196,120 +198,152 @@ class UArrayArg(object):
         self.builder.store(value, ptr)
 
 
-def build_gufunc_wrapper(context, func, signature, sin, sout, fndesc):
-    module = func.module
+class _GufuncWrapper(object):
+    def __init__(self, context, func, signature, sin, sout, fndesc):
+        self.context = context
+        self.func = func
+        self.signature = signature
+        self.sin = sin
+        self.sout = sout
+        self.fndesc = fndesc
+        self.is_objectmode = self.signature.return_type == types.pyobject
+        self.env = None
 
-    byte_t = Type.int(8)
-    byte_ptr_t = Type.pointer(byte_t)
-    byte_ptr_ptr_t = Type.pointer(byte_ptr_t)
-    intp_t = context.get_value_type(types.intp)
-    intp_ptr_t = Type.pointer(intp_t)
+    def build(self):
+        module = self.func.module
 
-    fnty = Type.function(Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
-                                       intp_ptr_t, byte_ptr_t])
+        byte_t = Type.int(8)
+        byte_ptr_t = Type.pointer(byte_t)
+        byte_ptr_ptr_t = Type.pointer(byte_ptr_t)
+        intp_t = self.context.get_value_type(types.intp)
+        intp_ptr_t = Type.pointer(intp_t)
 
-    wrapper = module.add_function(fnty, "__gufunc__." + func.name)
-    arg_args, arg_dims, arg_steps, arg_data = wrapper.args
-    arg_args.name = "args"
-    arg_dims.name = "dims"
-    arg_steps.name = "steps"
-    arg_data.name = "data"
+        fnty = Type.function(Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
+                                           intp_ptr_t, byte_ptr_t])
 
-    builder = Builder.new(wrapper.append_basic_block("entry"))
-    loopcount = builder.load(arg_dims, name="loopcount")
+        wrapper = module.add_function(fnty, "__gufunc__." + self.func.name)
+        arg_args, arg_dims, arg_steps, arg_data = wrapper.args
+        arg_args.name = "args"
+        arg_dims.name = "dims"
+        arg_steps.name = "steps"
+        arg_data.name = "data"
 
-    # Unpack shapes
-    unique_syms = set()
-    for grp in (sin, sout):
-        for syms in grp:
-            unique_syms |= set(syms)
+        builder = Builder.new(wrapper.append_basic_block("entry"))
+        loopcount = builder.load(arg_dims, name="loopcount")
 
-    sym_map = {}
-    for syms in sin:
-        for s in syms:
-            if s not in sym_map:
-                sym_map[s] = len(sym_map)
+        # Unpack shapes
+        unique_syms = set()
+        for grp in (self.sin, self.sout):
+            for syms in grp:
+                unique_syms |= set(syms)
 
-    sym_dim = {}
-    for s, i in sym_map.items():
-        sym_dim[s] = builder.load(builder.gep(arg_dims,
-                                              [context.get_constant(types.intp,
-                                                                    i + 1)]))
+        sym_map = {}
+        for syms in self.sin:
+            for s in syms:
+                if s not in sym_map:
+                    sym_map[s] = len(sym_map)
 
-    # Prepare inputs
-    arrays = []
-    step_offset = len(sin) + len(sout)
-    for i, (typ, sym) in enumerate(zip(signature.args, sin + sout)):
-        ary = GUArrayArg(context, builder, arg_args, arg_dims, arg_steps, i,
-                         step_offset, typ, sym, sym_dim)
-        if not ary.as_scalar:
-            step_offset += ary.ndim
-        arrays.append(ary)
+        sym_dim = {}
+        for s, i in sym_map.items():
+            sym_dim[s] = builder.load(builder.gep(arg_dims,
+                                                  [self.context.get_constant(
+                                                      types.intp,
+                                                      i + 1)]))
 
-    bbreturn = cgutils.get_function(builder).append_basic_block('.return')
+        # Prepare inputs
+        arrays = []
+        step_offset = len(self.sin) + len(self.sout)
+        for i, (typ, sym) in enumerate(zip(self.signature.args,
+                                           self.sin + self.sout)):
+            ary = GUArrayArg(self.context, builder, arg_args, arg_dims,
+                             arg_steps, i, step_offset, typ, sym, sym_dim)
+            if not ary.as_scalar:
+                step_offset += ary.ndim
+            arrays.append(ary)
 
-    is_objectmode = signature.return_type == types.pyobject
+        bbreturn = cgutils.get_function(builder).append_basic_block('.return')
 
-    if is_objectmode:
+        # Prologue
+        self.gen_prologue(builder)
+
+        # Loop
+        with cgutils.for_range(builder, loopcount, intp=intp_t) as ind:
+            args = [a.array_value for a in arrays]
+            innercall, error = self.gen_loop_body(builder, args)
+            # If error, escape
+            cgutils.cbranch_or_continue(builder, error, bbreturn)
+
+            for a in arrays:
+                a.next(ind)
+
+        builder.branch(bbreturn)
+        builder.position_at_end(bbreturn)
+
+        # Epilogue
+        self.gen_epilogue(builder)
+
+        builder.ret_void()
+
+        module.verify()
+        # Set core function to internal so that it is not generated
+        self.func.linkage = LINKAGE_INTERNAL
+        # Force inline of code function
+        inline_function(innercall)
+        # Run optimizer
+        self.context.optimize(module)
+
+        if config.DUMP_OPTIMIZED:
+            print(module)
+
+        wrapper.verify()
+        return wrapper, self.env
+
+    def gen_loop_body(self, builder, args):
+        status, retval = self.context.call_function(builder, self.func,
+                                                    self.signature.return_type,
+                                                    self.signature.args, args)
+        innercall = status.code
+        error = status.err
+        return innercall, error
+
+    def gen_prologue(self, builder):
+        pass        # Do nothing
+
+    def gen_epilogue(self, builder):
+        pass        # Do nothing
+
+
+class _GufuncObjectWrapper(_GufuncWrapper):
+    def gen_loop_body(self, builder, args):
+        innercall, error = _prepare_call_to_object_mode(self.context,
+                                                        builder, self.func,
+                                                        self.signature,
+                                                        args, env=self.envptr)
+        return innercall, error
+
+    def gen_prologue(self, builder):
         # Create an environment object for the function
-        env = _dynfunc.Environment(globals=fndesc.lookup_module().__dict__)
+        moduledict = self.fndesc.lookup_module().__dict__
+        self.env = _dynfunc.Environment(globals=moduledict)
 
-        ll_intp = context.get_value_type(types.intp)
-        ll_pyobj = context.get_value_type(types.pyobject)
-        envptr = Constant.int(ll_intp, id(env)).inttoptr(ll_pyobj)
+        ll_intp = self.context.get_value_type(types.intp)
+        ll_pyobj = self.context.get_value_type(types.pyobject)
+        self.envptr = Constant.int(ll_intp, id(self.env)).inttoptr(ll_pyobj)
 
         # Acquire the GIL
-        pyapi = context.get_python_api(builder)
-        gil = pyapi.gil_ensure()
-    else:
-        # No environment object for nopython mode
-        env = None
+        self.pyapi = self.context.get_python_api(builder)
+        self.gil = self.pyapi.gil_ensure()
 
-    # Loop
-    with cgutils.for_range(builder, loopcount, intp=intp_t) as ind:
-        args = [a.array_value for a in arrays]
-
-        if is_objectmode:
-            innercall, error = _prepare_call_to_object_mode(context, builder,
-                                                            func, signature,
-                                                            args, env=envptr)
-
-        else:
-            status, retval = context.call_function(builder, func,
-                                                   signature.return_type,
-                                                   signature.args, args)
-            env = None
-            innercall = status.code
-            error = status.err
-            del status, retval
-
-        # If error, escape
-        cgutils.cbranch_or_continue(builder, error, bbreturn)
-
-        for a in arrays:
-            a.next(ind)
-
-    builder.branch(bbreturn)
-    builder.position_at_end(bbreturn)
-    if is_objectmode:
+    def gen_epilogue(self, builder):
         # Release GIL
-        pyapi.gil_release(gil)
+        self.pyapi.gil_release(self.gil)
 
-    builder.ret_void()
 
-    module.verify()
-    # Set core function to internal so that it is not generated
-    func.linkage = LINKAGE_INTERNAL
-    # Force inline of code function
-    inline_function(innercall)
-    # Run optimizer
-    context.optimize(module)
-
-    if config.DUMP_OPTIMIZED:
-        print(module)
-
-    wrapper.verify()
-    return wrapper, env
+def build_gufunc_wrapper(context, func, signature, sin, sout, fndesc):
+    wrapcls = (_GufuncObjectWrapper
+               if signature.return_type == types.pyobject
+               else _GufuncWrapper)
+    return wrapcls(context, func, signature, sin, sout, fndesc).build()
 
 
 def _prepare_call_to_object_mode(context, builder, func, signature, args,
