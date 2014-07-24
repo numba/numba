@@ -31,21 +31,5 @@ class TestDispatcher(unittest.TestCase):
         # Just make sure this doesn't crash
         foo()
     
-    # test when a function parameters are jitted as unsigned types
-    # when the function is called with negative parameters the Python error 
-    # that it generates is correctly handled -- a Python error is returned to the user
-    # For more info, see the comment in Include/longobject.h for _PyArray_AsByteArray 
-    # which PyLong_AsUnsignedLongLong calls
-    def test_negative_to_unsigned(self):
-        def f(x):
-            return x
-        # TypeError is for 2.6
-        if sys.version_info >= (2, 7):
-            with self.assertRaises(OverflowError):
-                jit('uintp(uintp)', nopython=True)(f)(-5)
-        else:
-            with self.assertRaises(TypeError):
-                jit('uintp(uintp)', nopython=True)(f)(-5)
-
 if __name__ == '__main__':
     unittest.main()
