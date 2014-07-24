@@ -9,7 +9,7 @@ class TestLlvmVersion(unittest.TestCase):
         self.assertTrue(numba.__version__)
 
         with self.assertRaises(SystemExit):
-            llvm.__version__ = '0.12.5' # llvm has to be >= 12.6 
+            llvm.__version__ = '0.12.5' # llvmpy has to be >= 12.6 
             reload(numba)
         
 
