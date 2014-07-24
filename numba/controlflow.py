@@ -20,12 +20,6 @@ class CFBlock(object):
         # A map of jumps to incoming blocks (predecessors):
         #   { offset of incoming block -> number of stack pops }
         self.incoming_jumps = {}
-        # A list of descendent blocks offsets, in topological order
-        self.descendents = []
-        # A list of descendent merge points (a subsequence of self.descendents)
-        self.merge_points = []
-        # Whether the block is in a loop
-        self.in_loop = False
         self.terminating = False
 
     def __repr__(self):
