@@ -41,7 +41,9 @@ cuda
 """.split() + types.__all__ + special.__all__
 
 import llvm
-llvm_ver = llvm.__version__.split('.')
+# git builds append a dash and some other stuff after the version '0.12.6'
+llvm_ver = llvm.__version__.split('-') 
+llvm_ver = llvm_ver[0].split('.')
 if (int(llvm_ver[0]), int(llvm_ver[1]), int(llvm_ver[2])) >= (0, 12, 6):
     pass
 else:
