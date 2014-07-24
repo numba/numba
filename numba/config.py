@@ -24,8 +24,20 @@ DEBUG = _readenv("NUMBA_DEBUG", int, 0)
 # JIT Debug flag to trigger IR instruction print
 DEBUG_JIT = _readenv("NUMBA_DEBUG_JIT", int, 0)
 
+# Enable debugging of front-end operation (up to and including IR generation)
+DEBUG_FRONTEND = _readenv("NUMBA_DEBUG_FRONTEND", int, 0)
+
 # Optimization level
 OPT = _readenv("NUMBA_OPT", int, 3)
+
+# Force dump of Python bytecode
+DUMP_BYTECODE = _readenv("NUMBA_DUMP_BYTECODE", int, DEBUG_FRONTEND)
+
+# Force dump of control flow graph
+DUMP_CFG = _readenv("NUMBA_DUMP_CFG", int, DEBUG_FRONTEND)
+
+# Force dump of Numba IR
+DUMP_IR = _readenv("NUMBA_DUMP_IR", int, DEBUG_FRONTEND)
 
 # Force dump of LLVM IR
 DUMP_LLVM = _readenv("NUMBA_DUMP_LLVM", int, DEBUG)

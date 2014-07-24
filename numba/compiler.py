@@ -101,7 +101,7 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
         Use ``None`` to indicate
     """
     bc = bytecode.ByteCode(func=func)
-    if config.DEBUG:
+    if config.DUMP_BYTECODE:
         print(bc.dump())
     return compile_bytecode(typingctx, targetctx, bc, args,
                             return_type, flags, locals)
@@ -261,6 +261,10 @@ def legalize_return_type(return_type, interp, targetctx):
 
 def translate_stage(bytecode):
     interp = interpreter.Interpreter(bytecode=bytecode)
+
+    if config.DUMP_CFG:
+        interp.cfa.dump()
+
     interp.interpret()
 
     if config.DEBUG:
@@ -271,7 +275,7 @@ def translate_stage(bytecode):
     interp.verify()
     macro.expand_macros(interp.blocks)
 
-    if config.DEBUG:
+    if config.DUMP_IR:
         interp.dump()
         for syn in interp.syntax_info:
             print(syn)
