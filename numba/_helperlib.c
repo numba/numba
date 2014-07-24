@@ -46,7 +46,7 @@ int Numba_complex_adaptor(PyObject* obj, Py_complex *out) {
     PyObject* fobj;
     PyArray_Descr *dtype;
     double val[2];
-    
+
     // Convert from python complex or numpy complex128
     if (PyComplex_Check(obj)) {
         out->real = PyComplex_RealAsDouble(obj);
@@ -280,14 +280,11 @@ MOD_INIT(_helperlib) {
 
     import_array();
 
-    PyModule_AddObject(m, "py_buffer_size",
-                       PyLong_FromLong(sizeof(Py_buffer)));
     PyModule_AddObject(m, "c_helpers", build_c_helpers_dict());
     PyModule_AddIntConstant(m, "long_min", LONG_MIN);
     PyModule_AddIntConstant(m, "long_max", LONG_MAX);
-
-    PyModule_AddObject(m, "py_gil_state_size",
-                       PyLong_FromLong(sizeof(PyGILState_STATE)));
+    PyModule_AddIntConstant(m, "py_buffer_size", sizeof(Py_buffer));
+    PyModule_AddIntConstant(m, "py_gil_state_size", sizeof(PyGILState_STATE));
 
     return MOD_SUCCESS_VAL(m);
 }

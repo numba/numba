@@ -225,11 +225,10 @@ def build_gufunc_wrapper(context, func, signature, sin, sout, fndesc):
             unique_syms |= set(syms)
 
     sym_map = {}
-    for grp in (sin, sout):
-        for syms in sin:
-            for s in syms:
-                if s not in sym_map:
-                    sym_map[s] = len(sym_map)
+    for syms in sin:
+        for s in syms:
+            if s not in sym_map:
+                sym_map[s] = len(sym_map)
 
     sym_dim = {}
     for s, i in sym_map.items():
@@ -248,17 +247,32 @@ def build_gufunc_wrapper(context, func, signature, sin, sout, fndesc):
         arrays.append(ary)
 
     bbreturn = cgutils.get_function(builder).append_basic_block('.return')
+
+    is_objectmode = signature.return_type == types.pyobject
+
+    if is_objectmode:
+        # Create an environment object for the function
+        env = _dynfunc.Environment(globals=fndesc.lookup_module().__dict__)
+
+        ll_intp = context.get_value_type(types.intp)
+        ll_pyobj = context.get_value_type(types.pyobject)
+        envptr = Constant.int(ll_intp, id(env)).inttoptr(ll_pyobj)
+
+        # Acquire the GIL
+        pyapi = context.get_python_api(builder)
+        gil = pyapi.gil_ensure()
+    else:
+        # No environment object for nopython mode
+        env = None
+
     # Loop
     with cgutils.for_range(builder, loopcount, intp=intp_t) as ind:
         args = [a.array_value for a in arrays]
 
-        if signature.return_type == types.pyobject:
-            innercall, error, env = _prepare_call_to_object_mode(context,
-                                                                 builder,
-                                                                 func,
-                                                                 signature,
-                                                                 args,
-                                                                 fndesc=fndesc)
+        if is_objectmode:
+            innercall, error = _prepare_call_to_object_mode(context, builder,
+                                                            func, signature,
+                                                            args, env=envptr)
 
         else:
             status, retval = context.call_function(builder, func,
@@ -277,6 +291,10 @@ def build_gufunc_wrapper(context, func, signature, sin, sout, fndesc):
 
     builder.branch(bbreturn)
     builder.position_at_end(bbreturn)
+    if is_objectmode:
+        # Release GIL
+        pyapi.gil_release(gil)
+
     builder.ret_void()
 
     module.verify()
@@ -295,15 +313,13 @@ def build_gufunc_wrapper(context, func, signature, sin, sout, fndesc):
 
 
 def _prepare_call_to_object_mode(context, builder, func, signature, args,
-                                 fndesc):
+                                 env):
     mod = cgutils.get_module(builder)
 
     thisfunc = cgutils.get_function(builder)
     bb_core_return = thisfunc.append_basic_block('ufunc.core.return')
 
     pyapi = context.get_python_api(builder)
-    # Acquire the GIL
-    gil = pyapi.gil_ensure()
 
     # Call to
     # PyObject* ndarray_new(int nd,
@@ -364,12 +380,8 @@ def _prepare_call_to_object_mode(context, builder, func, signature, args,
     # Call ufunc core function
     object_sig = [types.pyobject] * len(ndarray_objects)
 
-    # Create an environment object for the function
-    env = _dynfunc.Environment(globals=fndesc.lookup_module().__dict__)
-    envptr = Constant.int(ll_intp, id(env)).inttoptr(ll_pyobj)
-
     status, retval = context.call_function(builder, func, ll_pyobj, object_sig,
-                                           ndarray_objects, env=envptr)
+                                           ndarray_objects, env=env)
     builder.store(status.err, error_pointer)
 
     # Release returned object
@@ -383,9 +395,8 @@ def _prepare_call_to_object_mode(context, builder, func, signature, args,
     for ndary_ptr in ndarray_pointers:
         pyapi.decref(builder.load(ndary_ptr))
 
-    pyapi.gil_release(gil)
     innercall = status.code
-    return innercall, builder.load(error_pointer), env
+    return innercall, builder.load(error_pointer)
 
 
 class GUArrayArg(object):
