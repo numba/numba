@@ -40,7 +40,7 @@ class TestDispatcher(unittest.TestCase):
         def f(x):
             return x
         # TypeError is for 2.6
-        if sys.version_info >= (2, 7)
+        if sys.version_info >= (2, 7):
             with self.assertRaises(OverflowError):
                 jit('uintp(uintp)', nopython=True)(f)(-5)
         else:
