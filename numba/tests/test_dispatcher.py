@@ -27,9 +27,20 @@ class TestDispatcher(unittest.TestCase):
         @jit
         def foo():
             return 1
-
+        
         # Just make sure this doesn't crash
         foo()
+    
+    # test when a function parameters are jitted as unsigned types
+    # when the function is called with negative parameters the Python error 
+    # that it generates is correctly handled -- a Python error is returned to the user
+    # For more info, see the comment in Include/longobject.h _PyArray_AsByteArray 
+    # which is called from PyLong_AsUnsignedLongLong 
+    def test_negative_to_unsigned(self):
+        def f(x):
+            return x
+        with self.assertRaises(OverflowError):
+            jit('uintp(uintp)', nopython=True)(f)(-5)
 
 
 if __name__ == '__main__':
