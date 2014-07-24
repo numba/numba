@@ -42,10 +42,9 @@ cuda
 
 import llvm
 llvm_ver = llvm.__version__.split('.')
-
-if (int(llvm_ver[1]), int(llvm_ver[2])) >= (12, 6):
+if (int(llvm_ver[0]), int(llvm_ver[1]), int(llvm_ver[2])) >= (0, 12, 6):
     pass
 else:
-    print("Numba requires at least version 12.6 of llvm. Please update your version of llvm.")
+    print("Numba requires at least version 0.12.6 of llvmpy.\nPlease update your version of llvmpy.")
     raise SystemExit(-1) 
 
