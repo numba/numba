@@ -17,7 +17,7 @@ class TestLlvmVersion(unittest.TestCase):
         
             with self.assertRaises(SystemExit):
                 llvm.__version__ = '0.12.5' # llvmpy has to be >= 0.12.6 
-                reload(numba)
+                imp.reload(numba)
         else: 
             #git version check
             llvm.__version = '0.12.6-10-g92584ed'
