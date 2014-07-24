@@ -6,7 +6,6 @@ import llvm.core as lc
 from numba import types, cgutils
 
 
-
 class PyCallWrapper(object):
     def __init__(self, context, module, func, fndesc, exceptions):
         self.context = context
@@ -61,6 +60,13 @@ class PyCallWrapper(object):
             val, dtor = api.to_native_arg(builder.load(obj), ty)
             innerargs.append(val)
             cleanups.append(dtor)
+      
+        # check for Python C-API Error
+        error_check = api.err_occurred()
+        NULL = cgutils.get_null_value(error_check.type)
+        err_happened = builder.icmp(lc.ICMP_NE, error_check, NULL)
+        with cgutils.if_unlikely(builder, err_happened):
+            builder.ret(NULL)
 
         # The wrapped function doesn't take a full closure, only
         # the Environment object.
@@ -70,13 +76,11 @@ class PyCallWrapper(object):
                                                  self.fndesc.restype,
                                                  self.fndesc.argtypes,
                                                  innerargs, env)
-
         # Do clean up
         for dtor in cleanups:
             dtor()
 
         # Determine return status
-
         with cgutils.if_likely(builder, status.ok):
             with cgutils.ifthen(builder, status.none):
                 api.return_none()
