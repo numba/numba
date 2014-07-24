@@ -415,28 +415,6 @@ class ControlFlowAnalysis(object):
             if i in self.liveblocks:
                 yield self.blocks[i], pops
 
-    def outgoing_blocks(self, block):
-        """
-        Yield (outgoing block, number of stack pops) pairs for *block*.
-        """
-        for i, pops in block.outgoing_jumps.items():
-            if i in self.liveblocks:
-                yield self.blocks[i], pops
-
-    def get_block(self, index):
-        """
-        Get the block starting at bytecode *index*.
-        """
-        return self.blocks[index]
-
-    def _find_common_ordered(self, left, right):
-        if len(left) > len(right):
-            left, right = right, left
-        if not left:
-            return []
-        right = set(right)
-        return [i for i in left if i in right]
-
     def dump(self, file=None):
         self.graph.dump(file=None)
 
