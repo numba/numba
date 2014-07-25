@@ -3,9 +3,9 @@ from __future__ import absolute_import, print_function, division
 from llvm.core import Module, Type, Builder
 from numba.cuda.cudadrv.nvvm import (NVVM, CompilationUnit, llvm_to_ptx,
                                      set_cuda_kernel, fix_data_layout,
-                                     get_arch_option)
+                                     get_arch_option, SUPPORTED_CC)
 from ctypes import c_size_t, c_uint64, sizeof
-from numba.cuda.testing import unittest, CUDATestCase
+from numba.cuda.testing import unittest
 
 is64bit = sizeof(c_size_t) == sizeof(c_uint64)
 
@@ -59,13 +59,15 @@ class TestNvvmDriver(unittest.TestCase):
 
 class TestArchOption(unittest.TestCase):
     def test_get_arch_option(self):
-        self.assertTrue(get_arch_option(2, 0) == 'compute_20')
-        self.assertTrue(get_arch_option(2, 1) == 'compute_20')
-        self.assertTrue(get_arch_option(3, 0) == 'compute_30')
-        self.assertTrue(get_arch_option(3, 3) == 'compute_30')
-        self.assertTrue(get_arch_option(3, 4) == 'compute_30')
-        self.assertTrue(get_arch_option(3, 5) == 'compute_35')
-        self.assertTrue(get_arch_option(3, 6) == 'compute_35')
+        self.assertEqual(get_arch_option(2, 0), 'compute_20')
+        self.assertEqual(get_arch_option(2, 1), 'compute_20')
+        self.assertEqual(get_arch_option(3, 0), 'compute_30')
+        self.assertEqual(get_arch_option(3, 3), 'compute_30')
+        self.assertEqual(get_arch_option(3, 4), 'compute_30')
+        self.assertEqual(get_arch_option(3, 5), 'compute_35')
+        self.assertEqual(get_arch_option(3, 6), 'compute_35')
+        self.assertEqual(get_arch_option(1000, 0),
+                         'compute_%d%d' % SUPPORTED_CC[-1])
 
 
 gpu64 = '''
