@@ -41,12 +41,14 @@ cuda
 """.split() + types.__all__ + special.__all__
 
 import llvm
-# git builds append a dash and some other stuff after the version '0.12.6'
+# git/travis builds append a dash and some other stuff after the version
+# For example, '0.12.6-10-g77645ed' 
 llvm_ver = llvm.__version__.split('-') 
 llvm_ver = llvm_ver[0].split('.')
 if (int(llvm_ver[0]), int(llvm_ver[1]), int(llvm_ver[2])) >= (0, 12, 6):
     pass
 else:
+    import sys
     print("Numba requires at least version 0.12.6 of llvmpy.\nPlease update your version of llvmpy.")
-    raise SystemExit(-1) 
+    sys.exit()
 
