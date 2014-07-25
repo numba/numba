@@ -58,15 +58,15 @@ class PyCallWrapper(object):
             #api.context.debug_print(builder, "%s -> %s" % (obj, ty))
             #api.print_object(builder.load(obj))
             val, dtor = api.to_native_arg(builder.load(obj), ty)
+            # check for Python C-API Error
+            error_check = api.err_occurred()
+            NULL = cgutils.get_null_value(error_check.type)
+            err_happened = builder.icmp(lc.ICMP_NE, error_check, NULL)
+            with cgutils.if_unlikely(builder, err_happened):
+                builder.ret(NULL)
             innerargs.append(val)
             cleanups.append(dtor)
-      
-        # check for Python C-API Error
-        error_check = api.err_occurred()
-        NULL = cgutils.get_null_value(error_check.type)
-        err_happened = builder.icmp(lc.ICMP_NE, error_check, NULL)
-        with cgutils.if_unlikely(builder, err_happened):
-            builder.ret(NULL)
+
 
         # The wrapped function doesn't take a full closure, only
         # the Environment object.
