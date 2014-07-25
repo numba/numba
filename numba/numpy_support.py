@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 import numpy
 import re
-from numba import types, config
+from . import types, config
 
 version = tuple(map(int, numpy.__version__.split('.')[:2]))
 int_divbyzero_returns_zero = config.PYVERSION <= (3, 0)
@@ -123,8 +123,9 @@ _inv_typemap = dict((v,k) for (k,v) in _typemap.items());
 def numba_types_to_numpy_letter_types(numba_type_seq):
     return [_inv_typemap[x] for x in numba_type_seq]
 
+
 def numpy_letter_types_to_numba_types(numpy_letter_types_seq):
-    return [_typemap[x] for x in numpy_letter_types_seq]
+    return [_typemap.get(x) for x in numpy_letter_types_seq]
 
 def ufunc_find_matching_loop(ufunc, op_dtypes):
     assert(isinstance(ufunc, numpy.ufunc))
