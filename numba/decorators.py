@@ -3,8 +3,8 @@ Contains function decorators and target_registry
 """
 from __future__ import print_function, division, absolute_import
 import warnings
-from numba import sigutils
-from numba.targets import registry
+from . import sigutils
+from .targets import registry
 
 # -----------------------------------------------------------------------------
 # Decorators
