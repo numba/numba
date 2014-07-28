@@ -49,6 +49,9 @@ class Overloaded(_dispatcher.Dispatcher):
         # A mapping of signatures to entry points
         self.overloads = {}
 
+        # A mapping of signatures to compile results
+        self._compileinfos = {}
+
         self.targetoptions = targetoptions
         self.locals = locals
         self._compiling = False
@@ -72,6 +75,7 @@ class Overloaded(_dispatcher.Dispatcher):
         sig = [a._code for a in args]
         self._insert(sig, cres.entry_point, cres.objectmode)
         self.overloads[args] = cres.entry_point
+        self._compileinfos[args] = cres
 
         # Add native function for correct typing the code generation
         typing = cres.typing_context
@@ -148,7 +152,7 @@ class Overloaded(_dispatcher.Dispatcher):
         return self.jit(sig)
 
     def inspect_types(self):
-        for ver, res in utils.dict_iteritems(self.overloads):
+        for ver, res in utils.dict_iteritems(self._compileinfos):
             print("%s %s" % (self.py_func.__name__, ver))
             print('-' * 80)
             print(res.type_annotation)
@@ -220,6 +224,7 @@ class LiftedLoop(Overloaded):
 
         self.py_func = bytecode.func
         self.overloads = {}
+        self._compileinfos = {}
 
         self.doc = self.py_func.__doc__
         self._compiling = False
