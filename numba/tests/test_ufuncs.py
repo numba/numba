@@ -51,6 +51,12 @@ def _make_binary_ufunc_usecase(ufunc_name):
     return fn
 
 
+def _as_dtype_value(tyargs, args):
+    """Convert python values into numpy scalar objects.
+    """
+    return [np.dtype(str(ty)).type(val) for ty, val in zip(tyargs, args)]
+
+
 class TestUFuncs(TestCase):
 
     def setUp(self):
@@ -1002,7 +1008,8 @@ class TestScalarUFuncs(TestCase):
             cr = compile_isolated(pyfunc, tyargs, flags=flags)
             cfunc = cr.entry_point
             got = cfunc(*args)
-            expected = pyfunc(*args)
+            expected = pyfunc(*_as_dtype_value(tyargs, args))
+
             msg = 'for args {0} typed {1}'.format(args, tyargs)
 
             # note: due to semantics of ufuncs, thing like adding a int32 to a
@@ -1029,7 +1036,7 @@ class TestScalarUFuncs(TestCase):
                     expected = bool(expected)
 
             alltypes = cr.signature.args + (cr.signature.return_type,)
-            
+
             # select the appropriate precision for comparison: note that an argument
             # typed at a lower precision can introduce precision problems. For this
             # reason the argument types must be taken into account.

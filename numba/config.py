@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 import sys
 import os
+import re
 import warnings
 
 
@@ -60,3 +61,17 @@ PYVERSION = sys.version_info[:2]
 # Disable CUDA support
 DISABLE_CUDA = _readenv("NUMBA_DISABLE_CUDA", int, 0)
 
+# Force CUDA compute capability
+def _force_cc(text):
+    if not text:
+        return None
+    else:
+        m = re.match(r'(\d+)\.(\d+)', text)
+        if not m:
+            raise ValueError("NUMBA_FORCE_CUDA_CC must be specified as a "
+                             "string of \"major.minor\" where major "
+                             "and minor are decimals")
+        grp = m.groups()
+        return int(grp[0]), int(grp[1])
+
+FORCE_CUDA_CC = _readenv("NUMBA_FORCE_CUDA_CC", _force_cc, None)

@@ -8,13 +8,37 @@
 Release Notes
 ======================
 
+Version 0.13.4
+--------------
+
+Features:
+
+* Setting and deleting attributes in object mode
+* Added documentation of supported and currently unsupported numpy ufuncs
+* Assignment to 1-D numpy array slices
+* Closure variables and functions can be used in object mode
+* All numeric global values in modules can be used as constants in JIT
+  compiled code
+* Support for the start argument in enumerate()
+* Inplace arithmetic operations (+=, -=, etc.)
+* Direct iteration over a 1D numpy array (e.g. "for x in array: ...") 
+  in nopython mode
+
+Fixes:
+
+* Support for NVIDIA compute capability 5.0 devices (such as the GTX 750)
+* Vectorize no longer crashes/gives an error when bool\_ is used as return type
+* Return the correct dictionary when globals() is used in JIT functions
+* Fix crash bug when creating dictionary literals in object 
+* Report more informative error message on import if llvmpy is too old
+
 Version 0.13.3
 --------------
 
 Features:
 
 * Support for enumerate() and zip() in nopython mode
-* Increased LLVM optimization of JIT functions to -O1, enabling automatic 
+* Increased LLVM optimization of JIT functions to -O1, enabling automatic
   vectorization of compiled code in some cases
 * Iteration over tuples and unpacking of tuples in nopython mode
 * Support for dict and set (Python >= 2.7) literals in object mode
@@ -27,6 +51,7 @@ Fixes:
 * Importing Numba will no longer throw an exception if the CUDA driver is
   present, but cannot be initialized.
 * guvectorize now properly supports functions with scalar arguments.
+* CUDA driver is lazily initialized
 
 Version 0.13.2
 --------------

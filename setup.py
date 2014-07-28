@@ -1,4 +1,5 @@
 from distutils.core import setup, Extension
+import sys
 import os
 import numpy
 import numpy.distutils.misc_util as np_misc
@@ -21,6 +22,12 @@ if os.environ.get("NUMBA_GCC_FLAGS"):
     CFLAGS = GCCFLAGS
 else:
     CFLAGS = []
+
+
+if sys.platform == 'darwin' and sys.version_info[:2] == (2, 6):
+    cpp_link_args = ['-lstdc++']
+else:
+    cpp_link_args = []
 
 npymath_info = np_misc.get_info('npymath')
 
@@ -48,7 +55,8 @@ ext_dispatcher = Extension(name="numba._dispatcher",
                                     'numba/_dispatcherimpl.cpp',
                                     'numba/typeconv/typeconv.cpp'],
                            depends=["numba/_pymodule.h",
-                                    "numba/_dispatcher.h"])
+                                    "numba/_dispatcher.h"],
+                           extra_link_args=cpp_link_args)
 
 ext_helperlib = Extension(name="numba._helperlib",
                           include_dirs=[numpy.get_include()],
@@ -61,7 +69,8 @@ ext_helperlib = Extension(name="numba._helperlib",
 ext_typeconv = Extension(name="numba.typeconv._typeconv",
                          sources=["numba/typeconv/typeconv.cpp",
                                   "numba/typeconv/_typeconv.cpp"],
-                         depends=["numba/_pymodule.h"])
+                         depends=["numba/_pymodule.h"],
+                         extra_link_args=cpp_link_args)
 
 ext_npyufunc_ufunc = Extension(name="numba.npyufunc._internal",
                                sources=["numba/npyufunc/_internal.c"],
