@@ -82,7 +82,6 @@ class Interpreter(object):
         self.syntax_info = []
 
         # Temp states during interpretation
-
         self.current_block = None
         self.current_block_offset = None
         self.syntax_blocks = []
@@ -108,11 +107,103 @@ class Interpreter(object):
         # Interpret loop
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
-            # Clean up
+        # Clean up
         self._remove_invalid_syntax_blocks()
+        self._insert_var_dels()
 
     def _remove_invalid_syntax_blocks(self):
         self.syntax_info = [syn for syn in self.syntax_info if syn.valid()]
+
+    def _insert_var_dels(self):
+        # { var name -> { block offset -> stmt of last use } }
+        var_use = collections.defaultdict(dict)
+        cfg = self.cfa.graph
+
+        for offset, ir_block in self.blocks.items():
+            for stmt in ir_block.body:
+                for var_name in stmt.list_vars():
+                    if stmt.is_terminator and not isinstance(stmt, ir.Return):
+                        # Move the "last use" at the beginning of successor
+                        # blocks.
+                        for succ, _ in cfg.successors(offset):
+                            var_use[var_name.name].setdefault(succ, None)
+                    else:
+                        var_use[var_name.name][offset] = stmt
+        for name in sorted(var_use):
+            self._compute_var_disposal(name, var_use[name])
+
+    def _compute_var_disposal(self, var_name, use_map):
+        #print("use for %r -> %s" % (var_name, use_map))
+        cfg = self.cfa.graph
+
+        # Compute a set of blocks where we want the variable to be
+        # kept alive.
+        live_points = set()
+
+        # Find the loops the variable is used in
+        loops = set()
+        enclosing_loops = None
+        for block in use_map:
+            block_loops = cfg.in_loops(block)
+            loops.update(block_loops)
+            if enclosing_loops is None:
+                enclosing_loops = set(block_loops)
+            else:
+                enclosing_loops.intersection_update(block_loops)
+
+        spanned_loops = loops - enclosing_loops
+
+        for loop in spanned_loops:
+            # As there are blocks outside the loop, the variable must be
+            # kept alive accross loop iterations => we only consider
+            # loop exit points.
+            # (otherwise it means the variable is *defined* inside the loop
+            #  and need not be kept alive accross iterations)
+            live_points.update(loop.exits)
+
+        for block in use_map:
+            #block_loops = cfg.in_loops(block)
+            #if not block_loops or block_loops[-1] not in spanned_loops:
+            live_points.add(block)
+
+        #print("live points for %r -> %s" % (var_name, live_points))
+
+        # Now compute a set of *exclusive* blocks covering all paths
+        # stemming from the live points. This ensures that each variable
+        # is del'ed at most once per possible code path.
+        tails = set()
+        # We use the todo list as a stack, so we really iterate in
+        # reverse topo order.
+        todo = list(cfg.topo_sort(live_points))
+        seen = set()
+        while todo:
+            b = todo.pop()
+            if b in seen:
+                continue
+            seen.add(b)
+            block_loops = cfg.in_loops(b)
+            if block_loops and block_loops[0] in spanned_loops:
+                continue
+            if cfg.descendents(b) & tails:
+                for succ, _ in cfg.successors(b):
+                    if succ not in tails:
+                        todo.append(succ)
+            else:
+                tails.add(b)
+        #print("tails for %r -> %s" % (var_name, tails))
+
+        # We can now insert the Del statements
+        for b in tails:
+            # Either this is an original use point and we will insert after
+            # that statement, or it's a computed one and we will insert
+            # at the beginning of the block.
+            stmt = use_map.get(b)
+            ir_block = self.blocks[b]
+            if stmt is None:
+                ir_block.prepend(ir.Del(var_name, loc=ir_block.loc))
+            else:
+                if not isinstance(stmt, ir.Return):
+                    ir_block.insert_after(ir.Del(var_name, loc=stmt.loc), stmt)
 
     def verify(self):
         for b in utils.dict_itervalues(self.blocks):
@@ -236,7 +327,7 @@ class Interpreter(object):
     def dump(self, file=None):
         file = file or sys.stdout
         for offset, block in sorted(self.blocks.items()):
-            print('label %d:' % offset, file=file)
+            print('label %d:' % (offset,), file=file)
             block.dump(file=file)
 
     # --- Scope operations ---
@@ -256,6 +347,10 @@ class Interpreter(object):
         self.current_block.append(stmt)
 
     def get(self, name):
+        """
+        Get the variable (a Var instance) with the given *name*.
+        This must be called each and every time a variable is used.
+        """
         # Try to simplify the variable lookup by returning an earlier
         # variable assigned to *name*.
         var = self.assigner.get_assignment_source(name)

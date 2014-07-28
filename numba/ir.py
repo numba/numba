@@ -81,11 +81,38 @@ class VarMap(object):
         return self._con.iterkeys()
 
 
-class Stmt(object):
+class Inst(object):
+
+    def list_vars(self):
+        raise NotImplementedError
+
+    def _rec_list_vars(self, val):
+        if isinstance(val, Var):
+            return [val]
+        elif isinstance(val, Inst):
+            return val.list_vars()
+        elif isinstance(val, (list, tuple)):
+            lst = []
+            for v in val:
+                lst.extend(self._rec_list_vars(v))
+            return lst
+        elif isinstance(val, dict):
+            lst = []
+            for v in val.values():
+                lst.extend(self._rec_list_vars(v))
+            return lst
+        else:
+            return []
+
+
+class Stmt(Inst):
     is_terminator = False
 
+    def list_vars(self):
+        return self._rec_list_vars(self.__dict__)
 
-class Expr(object):
+
+class Expr(Inst):
     def __init__(self, op, loc, **kws):
         self.op = op
         self.loc = loc
@@ -185,9 +212,10 @@ class Expr(object):
             return '%s(%s)' % (self.op, ', '.join(args))
 
     def list_vars(self):
-        for v in self._kws.values():
-            if isinstance(v, Var):
-                return v
+        return self._rec_list_vars(self._kws)
+
+    #def list_vars(self):
+        #return [v for v in self._kws.values() if isinstance(v, Var)]
 
 
 class SetItem(Stmt):
@@ -473,6 +501,10 @@ class Block(object):
         self.body = []
         self.loc = loc
 
+    def prepend(self, inst):
+        assert isinstance(inst, Stmt)
+        self.body.insert(0, inst)
+
     def append(self, inst):
         assert isinstance(inst, Stmt)
         self.body.append(inst)
@@ -483,7 +515,8 @@ class Block(object):
 
     def dump(self, file=sys.stdout):
         for inst in self.body:
-            print('   ', inst, file=file)
+            print('   %-40s %s' % (inst, [str(v) for v in inst.list_vars()]),
+                  file=file)
 
     @property
     def terminator(self):
@@ -501,6 +534,13 @@ class Block(object):
             if inst.is_terminator:
                 raise VerificationError("Terminator before the last "
                                         "instruction")
+
+    def insert_after(self, stmt, other):
+        """
+        Insert *stmt* after *other*.
+        """
+        index = self.body.index(other)
+        self.body.insert(index + 1, stmt)
 
     def insert_before_terminator(self, stmt):
         assert isinstance(stmt, Stmt)

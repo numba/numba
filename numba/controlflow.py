@@ -30,7 +30,16 @@ class CFBlock(object):
         return iter(self.body)
 
 
-Loop = collections.namedtuple("Loop", ("entries", "exits", "header", "body"))
+class Loop(
+    collections.namedtuple("Loop", ("entries", "exits", "header", "body"))):
+
+    __slots__ = ()
+
+    def __eq__(self, other):
+        return isinstance(other, Loop) and other.header == self.header
+
+    def __hash__(self):
+        return hash(self.header)
 
 
 class CFGraph(object):
@@ -68,7 +77,7 @@ class CFGraph(object):
         Yield (node, data) pairs representing the successors of node *src*.
         (*data* will be None if no data was specified when adding the edge)
         """
-        for dest in self._succs:
+        for dest in self._succs[src]:
             yield dest, self._edge_data[src, dest]
 
     def predecessors(self, dest):
@@ -76,7 +85,7 @@ class CFGraph(object):
         Yield (node, data) pairs representing the predecessors of node *dest*.
         (*data* will be None if no data was specified when adding the edge)
         """
-        for src in self._preds:
+        for src in self._preds[dest]:
             yield src, self._edge_data[src, dest]
 
     def set_entry_point(self, node):
@@ -97,6 +106,8 @@ class CFGraph(object):
         self._find_exit_points()
         self._find_dominators()
         self._find_back_edges()
+        self._find_topo_order()
+        self._find_descendents()
         self._find_loops()
         self._find_post_dominators()
 
@@ -118,6 +129,9 @@ class CFGraph(object):
         through P.
         """
         return self._post_doms
+
+    def descendents(self, node):
+        return self._descs[node]
 
     def exit_points(self):
         """
@@ -159,6 +173,22 @@ class CFGraph(object):
         Return the set of live nodes.
         """
         return self._nodes
+
+    def topo_order(self):
+        """
+        Return the sequence of nodes in topological order (ignoring back
+        edges).
+        """
+        return self._topo_order
+
+    def topo_sort(self, nodes, reverse=False):
+        nodes = set(nodes)
+        it = self._topo_order
+        if reverse:
+            it = reversed(it)
+        for n in it:
+            if n in nodes:
+                yield n
 
     def dump(self, file=None):
         """
@@ -314,6 +344,34 @@ class CFGraph(object):
             assert len(back) <= 1
             back_edges.update((src, dest) for dest in back)
         self._back_edges = back_edges
+
+    def _find_topo_order(self):
+        succs = self._succs
+        back_edges = self._back_edges
+        post_order = []
+        seen = set()
+
+        def _dfs_rec(node):
+            if node not in seen:
+                seen.add(node)
+                for dest in succs[node]:
+                    if (node, dest) not in back_edges:
+                        _dfs_rec(dest)
+                post_order.append(node)
+
+        _dfs_rec(self._entry_point)
+        post_order.reverse()
+        self._topo_order = post_order
+
+    def _find_descendents(self):
+        descs = {}
+        for node in reversed(self._topo_order):
+            descs[node] = node_descs = set()
+            for succ in self._succs[node]:
+                if (node, succ) not in self._back_edges:
+                    node_descs.add(succ)
+                    node_descs.update(descs[succ])
+        self._descs = descs
 
     def _find_loops(self):
         """
