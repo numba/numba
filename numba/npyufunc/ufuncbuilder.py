@@ -16,6 +16,7 @@ from numba.targets import registry
 class UFuncTargetOptions(TargetOptions):
     OPTIONS = {
         "nopython" : bool,
+        "forceobj" : bool,
     }
 
 
@@ -39,13 +40,12 @@ class UFuncDispatcher(object):
         topt = self.targetoptions.copy()
         topt.update(targetoptions)
 
-        if topt.get('nopython', True) == False:
-            raise TypeError("nopython option must be False")
-        topt['nopython'] = True
-
         flags = compiler.Flags()
-        flags.set("no_compile")
         self.targetdescr.options.parse_as_flags(flags, topt)
+        flags.set("no_compile")
+        # Disable loop lifting
+        # The feature requires a real python function
+        flags.unset("enable_looplift")
 
         typingctx = self.targetdescr.typing_context
         targetctx = self.targetdescr.target_context
@@ -78,8 +78,9 @@ class UFuncBuilder(object):
                 sig = tuple(argtypes)
             else:
                 sig = restype(*argtypes)
-        # Actual work
-        self.nb_func.compile(sig)
+        # Do compilation
+        # Return CompileResult to test
+        return self.nb_func.compile(sig)
 
     def build_ufunc(self):
         dtypelist = []
@@ -109,6 +110,7 @@ class UFuncBuilder(object):
         ctx = cres.target_context
         signature = cres.signature
         wrapper = build_ufunc_wrapper(ctx, cres.llvm_func, signature)
+        ctx.finalize(wrapper, cres.fndesc)
         ctx.engine.add_module(wrapper.module)
         ptr = ctx.engine.get_pointer_to_function(wrapper)
         # Get dtypes
@@ -138,17 +140,23 @@ class GUFuncBuilder(object):
                 sig = restype(*argtypes)
         # Actual work begins
         cres = self.nb_func.compile(sig, **self.targetoptions)
-        if cres.signature.return_type != types.void:
+
+        if not cres.objectmode and cres.signature.return_type != types.void:
             raise TypeError("gufunc kernel must have void return type")
+
+        return cres
 
     def build_ufunc(self):
         dtypelist = []
         ptrlist = []
+        keepalive = []
+
         if not self.nb_func:
             raise TypeError("No definition")
 
         for sig, cres in self.nb_func.overloads.items():
-            dtypenums, ptr = self.build(cres)
+            dtypenums, ptr, env = self.build(cres)
+            keepalive.append(env)   # keep env object alive
             dtypelist.append(dtypenums)
             ptrlist.append(utils.longint(ptr))
         datlist = [None] * len(ptrlist)
@@ -156,17 +164,23 @@ class GUFuncBuilder(object):
         inct = len(self.sin)
         outct = len(self.sout)
 
+        # Pass envs to fromfuncsig to bind to the lifetime of the ufunc object
         ufunc = _internal.fromfuncsig(ptrlist, dtypelist, inct, outct, datlist,
-                                      self.signature)
-
+                                      self.signature, keepalive)
         return ufunc
 
     def build(self, cres):
+        """
+        Returns (dtype numbers, function ptr, EnviornmentObject)
+        """
         # Buider wrapper for ufunc entry point
         ctx = cres.target_context
         signature = cres.signature
-        wrapper = build_gufunc_wrapper(ctx, cres.llvm_func, signature,
-                                       self.sin, self.sout)
+        wrapper, env = build_gufunc_wrapper(ctx, cres.llvm_func, signature,
+                                            self.sin, self.sout,
+                                            fndesc=cres.fndesc)
+
+        ctx.finalize(wrapper, cres.fndesc)
         ctx.engine.add_module(wrapper.module)
         ptr = ctx.engine.get_pointer_to_function(wrapper)
         # Get dtypes
@@ -177,5 +191,5 @@ class GUFuncBuilder(object):
             else:
                 ty = a
             dtypenums.append(np.dtype(ty.name).num)
-        return dtypenums, ptr
+        return dtypenums, ptr, env
 
