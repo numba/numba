@@ -5,7 +5,7 @@ Features:
 
 * Setting and deleting attributes in object mode
 * Added documentation of supported and currently unsupported numpy ufuncs
-* Assignment to numpy array slices
+* Assignment to 1-D numpy array slices
 * Closure variables and functions can be used in object mode
 * All numeric global values in modules can be used as constants in JIT
   compiled code
