@@ -52,7 +52,7 @@ Math operations
  fmod                Yes          No
  abs                 Yes          Yes
  absolute            Yes          Yes
- rint                Yes          No
+ rint                Yes          Yes
  sign                Yes          Yes
  conj                Yes          No
  exp                 Yes          Yes

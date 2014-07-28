@@ -365,7 +365,6 @@ class TestUFuncs(TestCase):
     def test_rint_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('rint', flags=flags)
 
-    @_unimplemented
     def test_rint_ufunc_npm(self):
         self.test_rint_ufunc(flags=no_pyobj_flags)
 
