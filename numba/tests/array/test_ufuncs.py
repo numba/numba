@@ -74,8 +74,8 @@ class TestUFuncs(unittest.TestCase):
             if data == 'given':
                 a = numbarray.array(agiven, dtype=dt)
                 b = numbarray.array(bgiven, dtype=dt)
-                c = numbarray.array(agiven, dtype=dt)
-                d = numbarray.array(bgiven, dtype=dt)
+                c = np.array(agiven, dtype=dt)
+                d = np.array(bgiven, dtype=dt)
             else:
                 a = getattr(numbarray, data)(size, dtype=dt)
                 b = getattr(numbarray, data)(size, dtype=dt)
