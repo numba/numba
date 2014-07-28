@@ -95,6 +95,15 @@ def map_layout(val):
 #
 # return value - the full identifier of the loop. f.e: 'dd->d' or None if no matching
 #                loop is found.
+
+# mapping from numpy letter dtypes to the associate numba type. Not all
+# dtypes are supported. Notable unsupported types right now are:
+# 'O' - object
+# 'g' - long double
+# 'G' - long complex double
+# 'm' - timedelta64
+# 'M' - datetime64
+# 'e' - float16
 _typemap = {
     '?': types.bool_,
     'b': types.int8,
@@ -110,18 +119,17 @@ _typemap = {
 
     'f': types.float_,
     'd': types.double,
-#    'g': types.longdouble,
     'F': types.complex64,  # cfloat
     'D': types.complex128, # cdouble
-#   'G': types.clongdouble
-    'O': types.pyobject,
-    'M': types.pyobject
 }
 
 _inv_typemap = dict((v,k) for (k,v) in _typemap.items());
 
+def supported_letter_types():
+    return _typemap.keys()
+
 def numba_types_to_numpy_letter_types(numba_type_seq):
-    return [_inv_typemap[x] for x in numba_type_seq]
+    return [_inv_typemap.get(x) for x in numba_type_seq]
 
 
 def numpy_letter_types_to_numba_types(numpy_letter_types_seq):

@@ -8,7 +8,8 @@ from .templates import (AttributeTemplate, AbstractTemplate,
 
 from ..numpy_support import (ufunc_find_matching_loop,
                              numba_types_to_numpy_letter_types,
-                             numpy_letter_types_to_numba_types)
+                             numpy_letter_types_to_numba_types,
+                             supported_letter_types)
 
 registry = Registry()
 builtin_global = registry.register_global
@@ -22,26 +23,34 @@ class NumpyModuleAttribute(AttributeTemplate):
 
 class Numpy_rules_ufunc(AbstractTemplate):
     def generic(self, args, kws):
-        assert(self.key.nout == 1) # this function assumes only one output
+        ufunc = self.key
+        assert(ufunc.nout == 1) # this function assumes only one output
 
-        if len(args) > self.key.nin:
+        if len(args) > ufunc.nin:
             # more args than inputs... assume everything is typed :)
-            assert(len(args) == self.key.nargs)
+            assert(len(args) == ufunc.nargs)
             
             return signature(args[-1], *args)
 
         # else... we must look for the kernel to use, the actual loop that
         # will be used, using NumPy's logic:
-        assert(len(args) == self.key.nin)
+        assert(len(args) == ufunc.nin)
         base_types = [x.dtype if isinstance(x, types.Array) else x for x in args]
         letter_arg_types = numba_types_to_numpy_letter_types(base_types)
 
-        ufunc_loop = ufunc_find_matching_loop(self.key, letter_arg_types)
+        ufunc_loop = ufunc_find_matching_loop(ufunc, letter_arg_types)
+        ufunc_loop_types = ufunc_loop[:ufunc.nin] + ufunc_loop[-ufunc.nout:]
+        print('ufunc_loop: {0}'.format(ufunc_loop))
+        supported_types = supported_letter_types()
+        if any((t not in supported_types for t in ufunc_loop_types)):
+            msg = "ufunc '{0}' using the loop '{1}' not supported in this mode"
+            raise TypingError(msg.format(key.__name__, ufunc_loop))
+
         if ufunc_loop is not None:
             # a result was found so...
             array_arg = [isinstance(a, types.Array) for a in args]
             # base out type will be based on the ufunc result type (last letter)
-            out = numpy_letter_types_to_numba_types(ufunc_loop[-self.key.nout:])
+            out = numpy_letter_types_to_numba_types(ufunc_loop[-ufunc.nout:])
             if any(array_arg):
                 # if any argument was an array, the result will be an array
                 ndims = max(*[a.ndim if isinstance(a, types.Array) else 0 for a in args])
