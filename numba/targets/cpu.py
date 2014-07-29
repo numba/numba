@@ -162,7 +162,7 @@ class CPUContext(BaseContext):
         if 0 < config.OPT <= 3:
             # This uses the same passes for clang -O3
             pms = lp.build_pass_managers(tm=self.tm, opt=config.OPT,
-                                         loop_vectorize=True,
+                                         loop_vectorize=config.LOOP_VECTORIZE,
                                          fpm=False)
             return pms.pm
         else:
