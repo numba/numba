@@ -1,7 +1,6 @@
 from __future__ import print_function
 
 import itertools
-import random
 
 import numba.unittest_support as unittest
 from numba.controlflow import CFGraph, Loop
@@ -587,7 +586,7 @@ class TestCFGraph(TestCase):
                           expected)
             self.assertIn(list(g.topo_sort(nodes[::-1], reverse=True))[::-1],
                           expected)
-            random.shuffle(nodes)
+            self.random.shuffle(nodes)
             self.assertIn(list(g.topo_sort(nodes)), expected)
             self.assertIn(list(g.topo_sort(nodes, reverse=True))[::-1],
                           expected)
