@@ -55,6 +55,10 @@ class PyCallWrapper(object):
         # set up switch for error processing of function arguments
         with cgutils.goto_block(builder, builder.basic_block): 
             elseblk = cgutils.append_basic_block(builder, ".return.switch.elseblk.on.error")
+            # build the elseblk of the switch statement 
+            # code should never reach here -- keeping llvm ir happy
+            builder.position_at_end(elseblk)
+            builder.ret(api.get_null_object())
             swt_val = cgutils.alloca_once(builder, Type.int(32))
             swtblk = cgutils.append_basic_block(builder, ".switch.on.error")
             with cgutils.goto_block(builder, swtblk): 
@@ -72,13 +76,9 @@ class PyCallWrapper(object):
             # prev and cur are references to keep track of which block to branch to
             if arg_count == 0:
                 with cgutils.goto_block(builder, elseblk): 
-                    # build the elseblk of the switch statement 
-                    # code should never reach here -- keeping llvm ir happy
-                    builder.position_at_end(elseblk)
-                    builder.ret(api.get_null_object())
-                bb = cgutils.append_basic_block(builder, "switch.arg.error.%d" % arg_count)
-                cur = bb
-                swt.add_case(Constant.int(Type.int(32), arg_count), bb)
+                    bb = cgutils.append_basic_block(builder, "switch.arg.error.%d" % arg_count)
+                    cur = bb
+                    swt.add_case(Constant.int(Type.int(32), arg_count), bb)
             else:
                 prev = cur  # keep a reference to the previous arg.error block
                 bb = cgutils.append_basic_block(builder, "switch.arg.error.%d" % arg_count)
