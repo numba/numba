@@ -56,13 +56,12 @@ for ufunc in unary_ufuncs:
 # todo logaddexp does not work
 # need to add binary_ufunc capability to numba
 binary_ufuncs = ['hypot', 'arctan2', 'logaddexp', 'add', 'subtract', 'multiply',
-                 'power', 'division', 'floor_division', 'greater',
+                 'power', 'divide', 'floor_divide', 'greater',
                  'true_divide', 'right_shift', 'remainder', 'not_equal',
                  'nextafter', 'mod', 'minimum', 'maximum', 'logical_xor',
                  'logical_or', 'logical_and', 'logaddexp2', 'less', 'less_equal',
                  'left_shift', 'ldexp', 'greater_equal', 'fmod', 'fmin', 'fmax',
-                 'floor_divide', 'divide', 'copysign', 'bitwise_xor',
-                 'bitwise_or', 'bitwise_and']
+                 'copysign', 'bitwise_xor', 'bitwise_or', 'bitwise_and']
 
 for ufunc in binary_ufuncs:
     global_dict[ufunc] = create_binary_op(ufunc)

@@ -72,7 +72,7 @@ def python_mode_example():
 
     result = a1 + a2
 
-    print(result.eval(python=True))
+    print(result.eval(use_python=True))
 
 
 def slice_example():
@@ -109,10 +109,10 @@ def where_example():
 
 
 if __name__ == '__main__':
-    #simple_example()
-    #reduce_example()
+    simple_example()
+    reduce_example()
     deferred_data_example()
-    #python_mode_example()
-    #slice_example()
-    #assignment_example()
-    #where_example()
+    python_mode_example()
+    slice_example()
+    assignment_example()
+    where_example()

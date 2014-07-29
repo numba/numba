@@ -109,22 +109,22 @@ class Array(object):
         return ufuncs.multiply(other, self)
 
     def __div__(self, other):
-        return ufuncs.division(self, other)
+        return ufuncs.divide(self, other)
 
     def __rdiv__(self, other):
-        return ufuncs.division(other, self)
+        return ufuncs.divide(other, self)
 
     def __truediv__(self, other):
-        return ufuncs.division(self, other)
+        return ufuncs.true_divide(self, other)
 
     def __rtruediv__(self, other):
-        return ufuncs.division(other, self)
+        return ufuncs.true_divide(other, self)
 
     def __floordiv__(self, other):
-        return ufuncs.floor_division(self, other)
+        return ufuncs.floor_divide(self, other)
 
     def __rfloordiv__(self, other):
-        return ufuncs.floor_division(other, self)
+        return ufuncs.floor_divide(other, self)
 
     def __neg__(self):
         return ufuncs.negative(self)
