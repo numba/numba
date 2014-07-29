@@ -135,7 +135,7 @@ class TestConversion(unittest.TestCase):
                 for a, b, c in test_fail_args:
                     cfunc(a, b, c) 
 
-    # test switch logic with records as function parameters
+    # test switch logic of callwraper.py:build_wrapper() with records as function parameters
     def test_multiple_args_records(self): 
         pyfunc = foobar
 
@@ -171,7 +171,7 @@ class TestConversion(unittest.TestCase):
                 for a, b, c in test_fail_args:
                     cfunc(a, b, c) 
 
-    # test switch logic with no parameters
+    # test switch logic of callwraper.py:build_wrapper() with no function parameters
     def test_with_no_parameters(self):
         def f():
             pass 
