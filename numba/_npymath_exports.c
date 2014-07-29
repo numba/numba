@@ -54,7 +54,8 @@ struct npy_math_entry exports[] = {
 
     NPYMATH_SYMBOL(logaddexp),
     NPYMATH_SYMBOL(logaddexp2),
-    NPYMATH_SYMBOL(rint)
+    NPYMATH_SYMBOL(rint),
+    NPYMATH_SYMBOL(fabs)
 
 };
 #undef NPY_MATH_SYMBOL

@@ -63,7 +63,7 @@ _math_operations = [ "add", "subtract", "multiply",
                      "rint", "sign", "conj", "exp", "exp2",
                      "log", "log2", "log10", "expm1", "log1p",
                      "sqrt", "square", "reciprocal",
-                     "divide", "mod", "abs" ]
+                     "divide", "mod", "abs", "fabs" ]
 
 _trigonometric_functions = [ "sin", "cos", "tan", "arcsin",
                              "arccos", "arctan", "arctan2",

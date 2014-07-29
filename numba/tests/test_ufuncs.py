@@ -362,6 +362,12 @@ class TestUFuncs(TestCase):
     def test_absolute_ufunc_npm(self):
         self.test_absolute_ufunc(flags=no_pyobj_flags)
 
+    def test_fabs_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('fabs', flags=flags)
+
+    def test_fabs_ufunc_npm(self):
+        self.test_fabs_ufunc(flags=no_pyobj_flags)
+
     def test_rint_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('rint', flags=flags)
 
