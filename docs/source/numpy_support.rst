@@ -85,7 +85,7 @@ Trigonometric functions
  arccos              Yes          Yes
  arctan              Yes          Yes
  arctan2             Yes          Yes
- hypot               Yes          No
+ hypot               Yes          Yes
  sinh                Yes          Yes
  cosh                Yes          Yes
  tanh                Yes          Yes
