@@ -512,8 +512,8 @@ class Block(object):
 
     def dump(self, file=sys.stdout):
         for inst in self.body:
-            print('    %-40s %s' % (inst, [str(v) for v in inst.list_vars()]),
-                  file=file)
+            inst_vars = sorted(str(v) for v in inst.list_vars())
+            print('    %-40s %s' % (inst, inst_vars), file=file)
 
     @property
     def terminator(self):
