@@ -2,7 +2,7 @@ from __future__ import print_function
 import itertools
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import types
+from numba import types, jit
 import numpy as np
 import sys
 
@@ -13,9 +13,11 @@ def identity(x):
 def addition(x, y):
     return x + y
 
-
 def equality(x, y):
     return x == y
+
+def foobar(x, y, z):
+    return x
 
 
 class TestConversion(unittest.TestCase):
@@ -116,6 +118,24 @@ class TestConversion(unittest.TestCase):
         else:
             with self.assertRaises(TypeError):
                 jit('uintp(uintp)', nopython=True)(f)(-5)
+
+    # test that the switch logic in callwraper.py:build_wrapper() works for more than one argument
+    # and when it occurs in different positions    
+    def test_multiple_args_negative_to_unsigned(self): 
+        pyfunc = foobar
+        cres = compile_isolated(pyfunc, [types.uint64, types.uint64, types.uint64],
+                                return_type=types.uint64)
+        cfunc = cres.entry_point
+        test_fail_args = ((-1, 0, 1), (0, -1, 1), (0, 1, -1))
+        # TypeError is for 2.6
+        if sys.version_info >= (2, 7):
+            with self.assertRaises(OverflowError):
+                for a, b, c in test_fail_args:
+                    cfunc(a, b, c) 
+        else:
+            with self.assertRaises(TypeError):
+                for a, b, c in test_fail_args:
+                    cfunc(a, b, c) 
 
 
 if __name__ == '__main__':
