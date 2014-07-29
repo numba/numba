@@ -92,15 +92,12 @@ class PyCallWrapper(object):
                     builder.ret(api.get_null_object())
                 else:
                     builder.branch(prev)
-            # store arg count into value to switch on
+            # store arg count into value to switch on if there is an error
             builder.store(Constant.int(Type.int(32), arg_count), swt_val)
             
             # check for Python C-API Error
             error_check = api.err_occurred()
-            
-            # return NULL on error
             err_happened = builder.icmp(lc.ICMP_NE, error_check, api.get_null_object())
-            
             # if error occurs -- clean up -- goto switch block
             with cgutils.if_unlikely(builder, err_happened):
                 builder.branch(swtblk)
