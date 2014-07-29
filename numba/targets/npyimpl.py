@@ -81,7 +81,7 @@ class _ScalarHelper(object):
         self.base_type = ty
         intpty = ctxt.get_value_type(types.intp)
         self.shape = [Constant.int(intpty, 1)]
-        self._ptr = bld.alloca(ctxt.get_data_type(ty))
+        self._ptr = cgutils.alloca_once(bld, ctxt.get_data_type(ty))
 
     def create_iter_indices(self):
         return _ScalarIndexingHelper()
@@ -138,7 +138,7 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary',
 
         indices = []
         for i in range(self.ndim):
-            x = self.builder.alloca(Type.int(intpty.width))
+            x = cgutils.alloca_once(self.builder, Type.int(intpty.width))
             self.builder.store(ZERO, x)
             indices.append(x)
         return _ArrayIndexingHelper(self, indices)

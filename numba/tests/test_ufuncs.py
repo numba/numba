@@ -8,10 +8,10 @@ import numpy as np
 import functools
 
 import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags, DEFAULT_FLAGS
+from numba.compiler import compile_isolated, Flags
 from numba import types, utils
+from numba import vectorize
 from numba.config import PYVERSION
-from numba.targets import cpu
 from numba.typeinfer import TypingError
 from numba.tests.support import TestCase, CompilationCache
 
@@ -1088,6 +1088,17 @@ class TestScalarUFuncs(TestCase):
     def test_scalar_binary_mixed_ufuncs_npm(self):
         self.test_scalar_binary_mixed_ufunc(flags=no_pyobj_flags)
 
+
+class TestUfuncIssues(TestCase):
+    def test_issue_651(self):
+        # Exercise the code path to make sure this does not fail
+        @vectorize(["(float64,float64)"])
+        def foo(x1, x2):
+            return np.add(x1, x2) + np.add(x1, x2)
+
+        a = np.arange(10, dtype='f8')
+        b = np.arange(10, dtype='f8')
+        self.assertTrue(np.all(foo(a, b) == (a + b) + (a + b)))
 
 
 if __name__ == '__main__':
