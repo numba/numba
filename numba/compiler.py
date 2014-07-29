@@ -3,8 +3,8 @@ from pprint import pprint
 from contextlib import contextmanager
 from collections import namedtuple, defaultdict
 
-from numba import (bytecode, interpreter, typing, typeinfer,
-                   lowering, irpasses, utils, config, type_annotations,
+from numba import (bytecode, interpreter, typing, typeinfer, lowering,
+                   objmode, irpasses, utils, config, type_annotations,
                    types, ir, assume, looplifting, macro)
 from numba.targets import cpu
 
@@ -101,7 +101,7 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
         Use ``None`` to indicate
     """
     bc = bytecode.ByteCode(func=func)
-    if config.DEBUG:
+    if config.DUMP_BYTECODE:
         print(bc.dump())
     return compile_bytecode(typingctx, targetctx, bc, args,
                             return_type, flags, locals)
@@ -262,6 +262,10 @@ def legalize_return_type(return_type, interp, targetctx):
 
 def translate_stage(bytecode):
     interp = interpreter.Interpreter(bytecode=bytecode)
+
+    if config.DUMP_CFG:
+        interp.cfa.dump()
+
     interp.interpret()
 
     if config.DEBUG:
@@ -272,7 +276,7 @@ def translate_stage(bytecode):
     interp.verify()
     macro.expand_macros(interp.blocks)
 
-    if config.DEBUG:
+    if config.DUMP_IR:
         interp.dump()
         for syn in interp.syntax_info:
             print(syn)
@@ -332,7 +336,7 @@ def native_lowering_stage(targetctx, interp, typemap, restype, calltypes,
 
 def py_lowering_stage(targetctx, interp, nocompile):
     fndesc = lowering.PythonFunctionDescriptor.from_object_mode_function(interp)
-    lower = lowering.PyLower(targetctx, fndesc)
+    lower = objmode.PyLower(targetctx, fndesc)
     lower.lower()
 
     if nocompile:

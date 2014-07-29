@@ -3,6 +3,7 @@ from __future__ import print_function
 import itertools
 
 import numba.unittest_support as unittest
+from numba.controlflow import CFGraph, Loop
 from numba.compiler import compile_isolated, Flags
 from numba import types
 from .support import TestCase
@@ -80,6 +81,15 @@ def for_loop_usecase9(x, y):
         else:
             z += y
 
+    return z
+
+def for_loop_usecase10(x, y):
+    for i in range(x):
+        if i == y:
+            z = y
+            break
+    else:
+        z = i * 2
     return z
 
 
@@ -242,11 +252,17 @@ class TestFlowControl(TestCase):
     def test_for_loop8(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase8, [0, 1], [0, 2, 10], flags=flags)
 
+    def test_for_loop8_npm(self):
+        self.test_for_loop8(flags=no_pyobj_flags)
+
     def test_for_loop9(self, flags=enable_pyobj_flags):
         self.run_test(for_loop_usecase9, [0, 1], [0, 2, 10], flags=flags)
 
-    def test_for_loop8_npm(self):
-        self.test_for_loop8(flags=no_pyobj_flags)
+    def test_for_loop10(self, flags=enable_pyobj_flags):
+        self.run_test(for_loop_usecase10, [5], [2, 7], flags=flags)
+
+    def test_for_loop10_npm(self):
+        self.test_for_loop10(flags=no_pyobj_flags)
 
     def test_while_loop1(self, flags=enable_pyobj_flags):
         self.run_test(while_loop_usecase1, [10], [0], flags=flags)
@@ -308,6 +324,441 @@ class TestFlowControl(TestCase):
 
     def test_ternary_ifelse1_npm(self):
         self.test_ternary_ifelse1(flags=no_pyobj_flags)
+
+
+class TestCFGraph(TestCase):
+    """
+    Test the numba.controlflow.CFGraph class.
+    """
+
+    def from_adj_list(self, d, entry_point=0):
+        """
+        Build a CFGraph class from a dict of adjacency lists.
+        """
+        g = CFGraph()
+        # Need to add all nodes before adding edges
+        for node in d:
+            g.add_node(node)
+        for node, dests in d.items():
+            for dest in dests:
+                g.add_edge(node, dest)
+        return g
+
+    def loopless1(self):
+        """
+        A simple CFG corresponding to the following code structure:
+
+            c = (... if ... else ...) + ...
+            return b + c
+        """
+        g = self.from_adj_list({0: [18, 12], 12: [21], 18: [21], 21: []})
+        g.set_entry_point(0)
+        g.process()
+        return g
+
+    def loopless1_dead_nodes(self):
+        """
+        Same as loopless1(), but with added dead blocks (some of them
+        in a loop).
+        """
+        g = self.from_adj_list(
+            {0: [18, 12],
+             12: [21],
+             18: [21],
+             21: [],
+             91: [12, 0],
+             92: [91, 93],
+             93: [92],
+             94: [],
+             })
+        g.set_entry_point(0)
+        g.process()
+        return g
+
+    def loopless2(self):
+        """
+        A loopless CFG corresponding to the following code structure:
+
+            c = (... if ... else ...) + ...
+            if c:
+                return ...
+            else:
+                return ...
+
+        Note there are two exit points, and the entry point has been
+        changed to a non-zero value.
+        """
+        g = self.from_adj_list(
+            {99: [18, 12], 12: [21], 18: [21], 21: [42, 34], 34: [], 42: []})
+        g.set_entry_point(99)
+        g.process()
+        return g
+
+    def multiple_loops(self):
+        """
+        A CFG with multiple nested loops:
+
+            for y in b:
+                for x in a:
+                    # This loop has two back edges
+                    if b:
+                        continue
+                    else:
+                        continue
+            for z in c:
+                if z:
+                    return ...
+        """
+        g = self.from_adj_list(
+            {0: [7],
+             7: [10, 60],
+             10: [13],
+             13: [20],
+             20: [56, 23],
+             23: [32, 44],
+             32: [20],
+             44: [20],
+             56: [57],
+             57: [7],
+             60: [61],
+             61: [68],
+             68: [87, 71],
+             71: [80, 68],
+             80: [],
+             87: [88],
+             88: []}
+            )
+        g.set_entry_point(0)
+        g.process()
+        return g
+
+    def multiple_exits(self):
+        """
+        A CFG with three loop exits, one of which is also a function
+        exit point, and another function exit point:
+
+            for x in a:
+                if a:
+                    return b
+                elif b:
+                    break
+            return c
+        """
+        g = self.from_adj_list(
+            {0: [7],
+             7: [10, 36],
+             10: [19, 23],
+             19: [],
+             23: [29, 7],
+             29: [37],
+             36: [37],
+             37: []
+             })
+        g.set_entry_point(0)
+        g.process()
+        return g
+
+    def infinite_loop1(self):
+        """
+        A CFG with a infinite loop and an alternate exit point:
+
+            if c:
+                return
+            while True:
+                if a:
+                    ...
+                else:
+                    ...
+        """
+        g = self.from_adj_list(
+            {0: [10, 6], 6: [], 10: [13], 13: [26, 19], 19: [13], 26: [13]})
+        g.set_entry_point(0)
+        g.process()
+        return g
+
+    def infinite_loop2(self):
+        """
+        A CFG with no exit point at all:
+
+            while True:
+                if a:
+                    ...
+                else:
+                    ...
+        """
+        g = self.from_adj_list({0: [3], 3: [16, 9], 9: [3], 16: [3]})
+        g.set_entry_point(0)
+        g.process()
+        return g
+
+    def test_exit_points(self):
+        g = self.loopless1()
+        self.assertEqual(sorted(g.exit_points()), [21])
+        g = self.loopless1_dead_nodes()
+        self.assertEqual(sorted(g.exit_points()), [21])
+        g = self.loopless2()
+        self.assertEqual(sorted(g.exit_points()), [34, 42])
+        g = self.multiple_loops()
+        self.assertEqual(sorted(g.exit_points()), [80, 88])
+        g = self.infinite_loop1()
+        self.assertEqual(sorted(g.exit_points()), [6])
+        g = self.infinite_loop2()
+        self.assertEqual(sorted(g.exit_points()), [])
+        g = self.multiple_exits()
+        self.assertEqual(sorted(g.exit_points()), [19, 37])
+
+    def test_dead_nodes(self):
+        g = self.loopless1()
+        self.assertEqual(len(g.dead_nodes()), 0)
+        self.assertEqual(sorted(g.nodes()),
+                         [0, 12, 18, 21])
+        g = self.loopless2()
+        self.assertEqual(len(g.dead_nodes()), 0)
+        self.assertEqual(sorted(g.nodes()),
+                         [12, 18, 21, 34, 42, 99])
+        g = self.multiple_loops()
+        self.assertEqual(len(g.dead_nodes()), 0)
+        g = self.infinite_loop1()
+        self.assertEqual(len(g.dead_nodes()), 0)
+        g = self.multiple_exits()
+        self.assertEqual(len(g.dead_nodes()), 0)
+        # Only this example has dead nodes
+        g = self.loopless1_dead_nodes()
+        self.assertEqual(sorted(g.dead_nodes()),
+                         [91, 92, 93, 94])
+        self.assertEqual(sorted(g.nodes()),
+                         [0, 12, 18, 21])
+
+    def check_dominators(self, got, expected):
+        self.assertEqual(sorted(got), sorted(expected))
+        for node in sorted(got):
+            self.assertEqual(sorted(got[node]), sorted(expected[node]),
+                             "mismatch for %r" % (node,))
+
+    def test_dominators_loopless(self):
+        def eq_(d, l):
+            self.assertEqual(sorted(doms[d]), l)
+        for g in [self.loopless1(), self.loopless1_dead_nodes()]:
+            doms = g.dominators()
+            eq_(0, [0])
+            eq_(12, [0, 12])
+            eq_(18, [0, 18])
+            eq_(21, [0, 21])
+        g = self.loopless2()
+        doms = g.dominators()
+        eq_(99, [99])
+        eq_(12, [12, 99])
+        eq_(18, [18, 99])
+        eq_(21, [21, 99])
+        eq_(34, [21, 34, 99])
+        eq_(42, [21, 42, 99])
+
+    def test_dominators_loops(self):
+        g = self.multiple_exits()
+        doms = g.dominators()
+        self.check_dominators(doms,
+            {0: [0],
+             7: [0, 7],
+             10: [0, 7, 10],
+             19: [0, 7, 10, 19],
+             23: [0, 7, 10, 23],
+             29: [0, 7, 10, 23, 29],
+             36: [0, 7, 36],
+             37: [0, 7, 37],
+             })
+        g = self.multiple_loops()
+        doms = g.dominators()
+        self.check_dominators(doms,
+            {0: [0],
+             7: [0, 7],
+             10: [0, 10, 7],
+             13: [0, 10, 13, 7],
+             20: [0, 10, 20, 13, 7],
+             23: [0, 20, 23, 7, 10, 13],
+             32: [32, 0, 20, 23, 7, 10, 13],
+             44: [0, 20, 23, 7, 10, 44, 13],
+             56: [0, 20, 7, 56, 10, 13],
+             57: [0, 20, 7, 56, 57, 10, 13],
+             60: [0, 60, 7],
+             61: [0, 60, 61, 7],
+             68: [0, 68, 60, 61, 7],
+             71: [0, 68, 71, 7, 60, 61],
+             80: [80, 0, 68, 71, 7, 60, 61],
+             87: [0, 68, 87, 7, 60, 61],
+             88: [0, 68, 87, 88, 7, 60, 61]
+             })
+        g = self.infinite_loop1()
+        doms = g.dominators()
+        self.check_dominators(doms,
+            {0: [0],
+             6: [0, 6],
+             10: [0, 10],
+             13: [0, 10, 13],
+             19: [0, 10, 19, 13],
+             26: [0, 10, 13, 26],
+             })
+
+    def test_post_dominators_loopless(self):
+        def eq_(d, l):
+            self.assertEqual(sorted(doms[d]), l)
+        for g in [self.loopless1(), self.loopless1_dead_nodes()]:
+            doms = g.post_dominators()
+            eq_(0, [0, 21])
+            eq_(12, [12, 21])
+            eq_(18, [18, 21])
+            eq_(21, [21])
+        g = self.loopless2()
+        doms = g.post_dominators()
+        eq_(34, [34])
+        eq_(42, [42])
+        eq_(21, [21])
+        eq_(18, [18, 21])
+        eq_(12, [12, 21])
+        eq_(99, [21, 99])
+
+    def test_post_dominators_loops(self):
+        g = self.multiple_exits()
+        doms = g.post_dominators()
+        self.check_dominators(doms,
+            {0: [0, 7],
+             7: [7],
+             10: [10],
+             19: [19],
+             23: [23],
+             29: [29, 37],
+             36: [36, 37],
+             37: [37],
+            })
+        g = self.multiple_loops()
+        doms = g.post_dominators()
+        self.check_dominators(doms,
+            {0: [0, 60, 68, 61, 7],
+             7: [60, 68, 61, 7],
+             10: [68, 7, 10, 13, 20, 56, 57, 60, 61],
+             13: [68, 7, 13, 20, 56, 57, 60, 61],
+             20: [20, 68, 7, 56, 57, 60, 61],
+             23: [68, 7, 20, 23, 56, 57, 60, 61],
+             32: [32, 68, 7, 20, 56, 57, 60, 61],
+             44: [68, 7, 44, 20, 56, 57, 60, 61],
+             56: [68, 7, 56, 57, 60, 61],
+             57: [57, 60, 68, 61, 7],
+             60: [60, 68, 61],
+             61: [68, 61],
+             68: [68],
+             71: [71],
+             80: [80],
+             87: [88, 87],
+             88: [88]
+             })
+
+    def test_post_dominators_infinite_loops(self):
+        # Post-dominators with infinite loops need special care
+        # (the ordinary algorithm won't work).
+        g = self.infinite_loop1()
+        doms = g.post_dominators()
+        self.check_dominators(doms,
+            {0: [0],
+             6: [6],
+             10: [10, 13],
+             13: [13],
+             19: [19],
+             26: [26],
+             })
+        g = self.infinite_loop2()
+        doms = g.post_dominators()
+        self.check_dominators(doms,
+            {0: [0, 3],
+             3: [3],
+             9: [9],
+             16: [16],
+             })
+
+    def test_backbone_loopless(self):
+        for g in [self.loopless1(), self.loopless1_dead_nodes()]:
+            self.assertEqual(sorted(g.backbone()), [0, 21])
+        g = self.loopless2()
+        self.assertEqual(sorted(g.backbone()), [21, 99])
+
+    def test_backbone_loops(self):
+        g = self.multiple_loops()
+        self.assertEqual(sorted(g.backbone()), [0, 7, 60, 61, 68])
+        g = self.infinite_loop1()
+        self.assertEqual(sorted(g.backbone()), [0])
+        g = self.infinite_loop2()
+        self.assertEqual(sorted(g.backbone()), [0, 3])
+
+    def test_loops(self):
+        for g in [self.loopless1(), self.loopless1_dead_nodes(),
+                  self.loopless2()]:
+            self.assertEqual(len(g.loops()), 0)
+
+        g = self.multiple_loops()
+        # Loop headers
+        self.assertEqual(sorted(g.loops()), [7, 20, 68])
+        outer1 = g.loops()[7]
+        inner1 = g.loops()[20]
+        outer2 = g.loops()[68]
+        self.assertEqual(outer1.header, 7)
+        self.assertEqual(sorted(outer1.entries), [0])
+        self.assertEqual(sorted(outer1.exits), [60])
+        self.assertEqual(sorted(outer1.body),
+                         [7, 10, 13, 20, 23, 32, 44, 56, 57])
+        self.assertEqual(inner1.header, 20)
+        self.assertEqual(sorted(inner1.entries), [13])
+        self.assertEqual(sorted(inner1.exits), [56])
+        self.assertEqual(sorted(inner1.body), [20, 23, 32, 44])
+        self.assertEqual(outer2.header, 68)
+        self.assertEqual(sorted(outer2.entries), [61])
+        self.assertEqual(sorted(outer2.exits), [80, 87])
+        self.assertEqual(sorted(outer2.body), [68, 71])
+        for node in [0, 60, 61, 80, 87, 88]:
+            self.assertEqual(g.in_loops(node), [])
+        for node in [7, 10, 13, 56, 57]:
+            self.assertEqual(g.in_loops(node), [outer1])
+        for node in [20, 23, 32, 44]:
+            self.assertEqual(g.in_loops(node), [inner1, outer1])
+        for node in [68, 71]:
+            self.assertEqual(g.in_loops(node), [outer2])
+
+        g = self.infinite_loop1()
+        # Loop headers
+        self.assertEqual(sorted(g.loops()), [13])
+        loop = g.loops()[13]
+        self.assertEqual(loop.header, 13)
+        self.assertEqual(sorted(loop.entries), [10])
+        self.assertEqual(sorted(loop.exits), [])
+        self.assertEqual(sorted(loop.body), [13, 19, 26])
+        for node in [0, 6, 10]:
+            self.assertEqual(g.in_loops(node), [])
+        for node in [13, 19, 26]:
+            self.assertEqual(g.in_loops(node), [loop])
+
+        g = self.infinite_loop2()
+        # Loop headers
+        self.assertEqual(sorted(g.loops()), [3])
+        loop = g.loops()[3]
+        self.assertEqual(loop.header, 3)
+        self.assertEqual(sorted(loop.entries), [0])
+        self.assertEqual(sorted(loop.exits), [])
+        self.assertEqual(sorted(loop.body), [3, 9, 16])
+        for node in [0]:
+            self.assertEqual(g.in_loops(node), [])
+        for node in [3, 9, 16]:
+            self.assertEqual(g.in_loops(node), [loop])
+
+        g = self.multiple_exits()
+        # Loop headers
+        self.assertEqual(sorted(g.loops()), [7])
+        loop = g.loops()[7]
+        self.assertEqual(loop.header, 7)
+        self.assertEqual(sorted(loop.entries), [0])
+        self.assertEqual(sorted(loop.exits), [19, 29, 36])
+        self.assertEqual(sorted(loop.body), [7, 10, 23])
+        for node in [0, 19, 29, 36]:
+            self.assertEqual(g.in_loops(node), [])
+        for node in [7, 10, 23]:
+            self.assertEqual(g.in_loops(node), [loop])
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

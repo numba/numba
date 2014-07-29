@@ -23,6 +23,8 @@ def fix_python_api():
     c_helpers = _helperlib.c_helpers
     le.dylib_add_symbol("Py_None", ctypes.addressof(_PyNone))
     le.dylib_add_symbol("NumbaArrayAdaptor", _numpyadapt.get_ndarray_adaptor())
+    le.dylib_add_symbol("NumbaNDArrayNew", _numpyadapt.get_ndarray_new())
+
     le.dylib_add_symbol("NumbaComplexAdaptor",
                         c_helpers["complex_adaptor"])
     le.dylib_add_symbol("NumbaNativeError", id(NativeError))
@@ -32,6 +34,11 @@ def fix_python_api():
                         c_helpers["release_record_buffer"])
     le.dylib_add_symbol("NumbaRecreateRecord",
                         c_helpers["recreate_record"])
+
+    le.dylib_add_symbol("NumbaGILEnsure",
+                        c_helpers["gil_ensure"])
+    le.dylib_add_symbol("NumbaGILRelease",
+                        c_helpers["gil_release"])
     # Add all built-in exception classes
     for obj in utils.builtins.__dict__.values():
         if isinstance(obj, type) and issubclass(obj, BaseException):
@@ -62,6 +69,7 @@ class PythonAPI(object):
         self.double = Type.double()
         self.py_ssize_t = self.context.get_value_type(types.intp)
         self.cstring = Type.pointer(Type.int(8))
+        self.gil_state = Type.int(_helperlib.py_gil_state_size * 8)
 
     # ------ Python API -----
 
@@ -495,6 +503,32 @@ class PythonAPI(object):
         return self.builder.call(fn, [set, value])
 
     #
+    # GIL APIs
+    #
+
+    def gil_ensure(self):
+        """
+        Ensure the GIL is acquired.
+        The returned value must be consumed by gil_release().
+        """
+        gilptrty = Type.pointer(self.gil_state)
+        fnty = Type.function(Type.void(), [gilptrty])
+        fn = self._get_function(fnty, "NumbaGILEnsure")
+        gilptr = cgutils.alloca_once(self.builder, self.gil_state)
+        self.builder.call(fn, [gilptr])
+        return gilptr
+
+    def gil_release(self, gil):
+        """
+        Release the acquired GIL by gil_ensure().
+        Must be pair with a gil_ensure().
+        """
+        gilptrty = Type.pointer(self.gil_state)
+        fnty = Type.function(Type.void(), [gilptrty])
+        fn = self._get_function(fnty, "NumbaGILRelease")
+        return self.builder.call(fn, [gil])
+
+    #
     # Other APIs (organize them better!)
     #
 
@@ -553,6 +587,17 @@ class PythonAPI(object):
         fnty = Type.function(self.pyobj, [self.pyobj, self.cstring])
         fn = self._get_function(fnty, name="PyObject_GetAttrString")
         return self.builder.call(fn, [obj, cstr])
+
+    def object_setattr_string(self, obj, attr, val):
+        cstr = self.context.insert_const_string(self.module, attr)
+        fnty = Type.function(Type.int(), [self.pyobj, self.cstring, self.pyobj])
+        fn = self._get_function(fnty, name="PyObject_SetAttrString")
+        return self.builder.call(fn, [obj, cstr, val])
+
+    def object_delattr_string(self, obj, attr):
+        # PyObject_DelAttrString() is actually a C macro calling
+        # PyObject_SetAttrString() with value == NULL.
+        return self.object_setattr_string(obj, attr, self.get_null_object())
 
     def object_getitem(self, obj, key):
         fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj])
