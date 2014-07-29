@@ -130,7 +130,7 @@ def run(state):
     exec(code, globals())
     foo = globals()['foo']
 
-    ufunc = vectorize('({0},)'.format(','.join(state['input_types'])))(foo)
+    ufunc = vectorize('({0},)'.format(','.join(state['input_types'])), nopython=True)(foo)
     state['ufunc'] = ufunc
     return ufunc(*state['inputs'])
 
