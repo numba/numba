@@ -36,5 +36,6 @@ for method in array_reduce_methods:
 def where(cond, left, right):
     return Array(data=WhereOperation(cond.array_node,
                                      left.array_node,
-                                     right.array_node))
+                                     right.array_node,
+                                     depth=max(left._depth, right._depth)))
 

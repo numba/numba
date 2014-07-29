@@ -115,4 +115,4 @@ if __name__ == '__main__':
     python_mode_example()
     slice_example()
     assignment_example()
-    where_example()
+    #where_example()

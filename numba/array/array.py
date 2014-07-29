@@ -3,7 +3,7 @@ import numpy as np
 from numba import jit
 import math
 import weakref
-from .pyalge import datatype
+from .pyalge import datatype, Case
 from . import codegen
 from .value import Value
 from .repr_ import Repr
@@ -14,12 +14,27 @@ class Array(object):
 
     def __init__(self, data=None, name=None):
         if isinstance(data, np.ndarray):
-            data = ArrayDataNode(array_data=data)
+            data = ArrayDataNode(array_data=data, depth=0)
+            self._depth = 0
+        elif data is not None:
+            self._depth = data.depth
+        else:
+            self._depth = 0
+
         self._ref = weakref.ref(self)
         if data is None:
-            self.array_node = VariableDataNode(name=name)
+            self.array_node = VariableDataNode(name=name, depth=0)
         else:
-            self.array_node = ArrayNode(data=data, owners=set([self._ref]))
+            self.array_node = ArrayNode(data=data,
+                                        owners=set([self._ref]),
+                                        depth=data.depth + 1)
+
+        # Avoid maximum recursion errors and creating gigantic trees in memory
+        if self._depth > 50:
+            result = self.eval(debug=True)
+            self.array_node = ArrayNode(data=result,
+                                        owners=set([self._ref]),
+                                        depth=0)
 
     def __del__(self):
         if isinstance(self.array_node, ArrayNode):
@@ -70,13 +85,26 @@ class Array(object):
             args = []
             for i, name in enumerate(state['input_names']):
                 if name in state['variable_names']:
-                    args.append(VariableDataNode(name=name))
+                    args.append(VariableDataNode(name=name, depth=0))
                 else:
-                    args.append(ArrayDataNode(array_data=state['inputs'][i]))
-            self.array_node.data = UFuncNode(ufunc=state['ufunc'], args=args)
+                    array_data = state['inputs'][i]
+                    if isinstance(array_data, Case):
+                        depth = array_data.depth
+                    else:
+                        depth = 0
+                    args.append(ArrayDataNode(array_data=state['inputs'][i],
+                                              depth=depth))
+            depths = [arg.depth for arg in args if isinstance(arg, Case)]
+            if len(depths) == 0:
+                max_depth = 0
+            else:
+                max_depth = max(depths)
+            self.array_node.data = UFuncNode(ufunc=state['ufunc'],
+                                             args=args,
+                                             depth=max_depth + 1)
             return result
 
-        self.array_node.data = ArrayDataNode(array_data=result)
+        self.array_node.data = ArrayDataNode(array_data=result, depth=0)
         return result
 
 

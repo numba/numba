@@ -7,12 +7,13 @@ import numpy
 def create_unary_op(op_str):
     def unary_op(operand):
         if isinstance(operand, Array):
-            return Array(data=UnaryOperation(operand.array_node, op_str))
+            depth = max(operand1.depth, operand2.depth)
+            return Array(data=UnaryOperation(operand.array_node, op_str, depth))
         # JNB: do for binary ufuncs too
         elif isinstance(operand, numpy.ndarray):
-            return Array(data=ArrayDataNode(array_data=getattr(numpy, op_str)(operand)))
+            return Array(data=ArrayDataNode(getattr(numpy, op_str)(operand), 0))
         else:
-            return Array(data=ScalarNode(getattr(numpy, op_str)(operand)))
+            return Array(data=ScalarNode(getattr(numpy, op_str)(operand), 0))
     return unary_op
 
 def create_binary_op(op_str):
@@ -21,15 +22,18 @@ def create_binary_op(op_str):
             if isinstance(operand, Array):
                 return operand.array_node
             elif isinstance(operand, (int, long, float)):
-                return ScalarNode(operand)
+                return ScalarNode(operand, 0)
             else:
                 raise TypeError('Invalid type ({0})for binary operation'.format(type(operand)))
         operand1 = parse_operand(operand1)
         operand2 = parse_operand(operand2)
         if isinstance(operand1, ScalarNode) and isinstance(operand2, ScalarNode):
-            scalar = Array(data=BinaryOperation(operand1, operand2, op_str)).eval(use_python=True)
+            depth = max(operand1.depth, operand2.depth)
+            temp_array = Array(data=BinaryOperation(operand1, operand2, op_str, depth))
+            scalar = scalar.eval(use_python=True)
             return Array(data=ScalarNode(scalar))
-        return Array(data=BinaryOperation(operand1, operand2, op_str))
+        depth = max(operand1.depth, operand2.depth)
+        return Array(data=BinaryOperation(operand1, operand2, op_str, depth))
     return binary_op
 
 

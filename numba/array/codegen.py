@@ -25,12 +25,12 @@ class MissingArgumentError(Exception):
 
 class CodeGen(Case):
 
-    @of('ArrayNode(data, owners)')
-    def array(self, data, owners):
+    @of('ArrayNode(data, owners, depth)')
+    def array(self, data, owners, depth):
         return CodeGen(data, state=self.state)
 
-    @of('ArrayDataNode(array_data)')
-    def array_data_node(self, array_data):
+    @of('ArrayDataNode(array_data, depth)')
+    def array_data_node(self, array_data, depth):
         input_ids = [id(x) for x in self.state['inputs']]
         if id(array_data) in input_ids:
             in_str = self.state['input_names'][input_ids.index(id(array_data))]
@@ -41,8 +41,8 @@ class CodeGen(Case):
             self.state['input_types'].append(str(typeof(array_data).dtype))
         return in_str
 
-    @of('VariableDataNode(name)')
-    def variable_data_node(self, name):
+    @of('VariableDataNode(name, depth)')
+    def variable_data_node(self, name, depth):
         self.state['variable_found'] = True
         if name not in self.state['variables'].keys():
             raise MissingArgumentError(name)
@@ -54,16 +54,16 @@ class CodeGen(Case):
             self.state['variable_names'].append(name)
         return name
 
-    @of('ScalarNode(value)')
-    def scalar_node(self, value):
+    @of('ScalarNode(value, depth)')
+    def scalar_node(self, value, depth):
         text = str(value)
         if isinstance(value, float) and type(value)(text) != text:
             return FLOAT_EXACT_FMT % value
         else:
             return text
 
-    @of('UnaryOperation(operand, op_str)')
-    def unary_operation(self, operand, op_str):
+    @of('UnaryOperation(operand, op_str, depth)')
+    def unary_operation(self, operand, op_str, depth):
         operand_var = CodeGen(operand, state=self.state)
         temp_var = 'temp' + str(len(self.state['vectorize_body']))
         if op_str == 'square':
@@ -75,8 +75,8 @@ class CodeGen(Case):
         self.state['vectorize_body'].append(line)
         return temp_var
 
-    @of('BinaryOperation(lhs, rhs, op_str)')
-    def binary_operation(self, lhs, rhs, op_str):
+    @of('BinaryOperation(lhs, rhs, op_str, depth)')
+    def binary_operation(self, lhs, rhs, op_str, depth):
         lhs_var = CodeGen(lhs, state=self.state)
         rhs_var = CodeGen(rhs, state=self.state)
         temp_var = 'temp' + str(len(self.state['vectorize_body']))
@@ -87,8 +87,8 @@ class CodeGen(Case):
         self.state['vectorize_body'].append(line)
         return temp_var
 
-    @of('WhereOperation(cond, left, right)')
-    def where_operation(self, cond, left, right):
+    @of('WhereOperation(cond, left, right, depth)')
+    def where_operation(self, cond, left, right, depth):
         cond_var = CodeGen(cond, state=self.state)
         left_var = CodeGen(left, state=self.state)
         right_var = CodeGen(right, state=self.state)
