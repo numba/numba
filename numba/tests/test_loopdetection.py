@@ -12,7 +12,6 @@ def interpret(func):
     interp.interpret()
     interp.dump()
 
-    interp.verify()
     return interp
 
 

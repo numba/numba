@@ -270,7 +270,6 @@ def translate_stage(bytecode):
     if config.DEBUG:
         interp.dump()
 
-    interp.verify()
     macro.expand_macros(interp.blocks)
 
     if config.DUMP_IR:

@@ -214,9 +214,6 @@ class Expr(Inst):
     def list_vars(self):
         return self._rec_list_vars(self._kws)
 
-    #def list_vars(self):
-        #return [v for v in self._kws.values() if isinstance(v, Var)]
-
 
 class SetItem(Stmt):
     def __init__(self, target, index, value, loc):
@@ -549,35 +546,15 @@ class Block(object):
 
 
 class Loop(object):
-    __slots__ = "entry", "condition", "body", "exit"
+    __slots__ = "entry", "exit"
 
-    def __init__(self, entry, exit, condition=None):
+    def __init__(self, entry, exit):
         self.entry = entry
-        self.condition = condition
-        self.body = []
         self.exit = exit
 
-    def valid(self):
-        try:
-            self.verify()
-        except VerificationError:
-            return False
-        else:
-            return True
-
-    def verify(self):
-        if self.entry is None:
-            raise VerificationError("Missing entry block")
-        if self.condition is None:
-            raise VerificationError("Missing condition block")
-        if self.exit is None:
-            raise VerificationError("Missing exit block")
-        if not self.body:
-            raise VerificationError("Missing body block")
-
     def __repr__(self):
-        args = self.entry, self.condition, self.body, self.exit
-        return "Loop(entry=%s, condition=%s, body=%s, exit=%s)" % args
+        args = self.entry, self.exit
+        return "Loop(entry=%s, exit=%s)" % args
 
 
 # A stub for undefined global reference

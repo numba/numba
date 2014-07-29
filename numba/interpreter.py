@@ -85,7 +85,6 @@ class Interpreter(object):
         self.current_block_offset = None
         self.syntax_blocks = []
         self.dfainfo = None
-        self._block_actions = {}
         self.constants = {}
 
     def _fill_global_scope(self, scope):
@@ -200,10 +199,6 @@ class Interpreter(object):
                 if not isinstance(stmt, ir.Return):
                     ir_block.insert_after(ir.Del(var_name, loc=stmt.loc), stmt)
 
-    def verify(self):
-        for b in utils.dict_itervalues(self.blocks):
-            b.verify()
-
     def init_first_block(self):
         # Duplicate arguments so that these values can be casted into different
         # types.
@@ -233,12 +228,9 @@ class Interpreter(object):
         if oldblock is not None and not oldblock.is_terminated:
             jmp = ir.Jump(inst.offset, loc=self.loc)
             oldblock.append(jmp)
-            # Get DFA block info
+        # Get DFA block info
         self.dfainfo = self.dfa.infos[self.current_block_offset]
         self.assigner = Assigner()
-        # Notify listeners for the new block
-        for fn in utils.dict_itervalues(self._block_actions):
-            fn(self.current_block_offset, self.current_block)
 
     def _end_current_block(self):
         self._remove_unused_temporaries()
@@ -344,7 +336,6 @@ class Interpreter(object):
     def get(self, name):
         """
         Get the variable (a Var instance) with the given *name*.
-        This must be called each and every time a variable is used.
         """
         # Try to simplify the variable lookup by returning an earlier
         # variable assigned to *name*.
@@ -642,10 +633,6 @@ class Interpreter(object):
         """
         assert inst.offset in self.blocks, "FOR_ITER must be block head"
 
-        # Mark this block as the loop condition
-        loop = self.syntax_blocks[-1]
-        loop.condition = self.current_block_offset
-
         # Emit code
         val = self.get(iterator)
 
@@ -663,12 +650,6 @@ class Interpreter(object):
                        falsebr=inst.get_jump_target(),
                        loc=self.loc)
         self.current_block.append(br)
-
-        # Add event listener to mark the following blocks as loop body
-        def mark_as_body(offset, block):
-            loop.body.append(offset)
-
-        self._block_actions[loop] = mark_as_body
 
     def op_BINARY_SUBSCR(self, inst, target, index, res):
         index = self.get(index)
@@ -826,13 +807,8 @@ class Interpreter(object):
         jmp = ir.Jump(inst.get_jump_target(), loc=self.loc)
         self.current_block.append(jmp)
 
-    def op_POP_BLOCK(self, inst, delitems=()):
-        blk = self.syntax_blocks.pop()
-        for item in delitems:
-            delete = ir.Del(item, loc=self.loc)
-            self.current_block.append(delete)
-        if blk in self._block_actions:
-            del self._block_actions[blk]
+    def op_POP_BLOCK(self, inst):
+        self.syntax_blocks.pop()
 
     def op_RETURN_VALUE(self, inst, retval):
         ret = ir.Return(self.get(retval), loc=self.loc)
@@ -858,8 +834,6 @@ class Interpreter(object):
         bra = ir.Branch(cond=self.get(pred), truebr=truebr, falsebr=falsebr,
                         loc=self.loc)
         self.current_block.append(bra)
-        # In a while loop?
-        self._determine_while_condition((truebr, falsebr))
 
     def op_JUMP_IF_FALSE(self, inst, pred):
         self._op_JUMP_IF(inst, pred=pred, iftrue=False)
@@ -882,33 +856,3 @@ class Interpreter(object):
     def op_RAISE_VARARGS(self, inst, exc):
         stmt = ir.Raise(exception=self.constants[exc], loc=self.loc)
         self.current_block.append(stmt)
-
-    def _determine_while_condition(self, branches):
-        assert branches
-        # There is a active syntax block
-        if not self.syntax_blocks:
-            return
-            # TOS is a Loop instance
-        loop = self.syntax_blocks[-1]
-        if not isinstance(loop, ir.Loop):
-            return
-            # Its condition is not defined
-        if loop.condition is not None:
-            return
-            # One of the branches goes to a POP_BLOCK
-        for br in branches:
-            if self.block_constains_opname(br, 'POP_BLOCK'):
-                break
-        else:
-            return
-            # Which is the exit of the loop
-        if br not in self.cfa.blocks[loop.exit].incoming_jumps:
-            return
-
-        # Therefore, current block is a while loop condition
-        loop.condition = self.current_block_offset
-        # Add event listener to mark the following blocks as loop body
-        def mark_as_body(offset, block):
-            loop.body.append(offset)
-
-        self._block_actions[loop] = mark_as_body
