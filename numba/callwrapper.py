@@ -52,21 +52,62 @@ class PyCallWrapper(object):
         with cgutils.if_unlikely(builder, pred):
             builder.ret(api.get_null_object())
 
+        # set up switch for error processing of function arguments
+        with cgutils.goto_block(builder, builder.basic_block): 
+            elseblk = cgutils.append_basic_block(builder, ".return.switch.elseblk.on.error")
+            swt_val = cgutils.alloca_once(builder, Type.int(32))
+            swtblk = cgutils.append_basic_block(builder, ".switch.on.error")
+            with cgutils.goto_block(builder, swtblk): 
+                swt = builder.switch(builder.load(swt_val), elseblk, nargs)
+
         innerargs = []
         cleanups = []
+        arg_count = 0  # how many function arguments have been processed
         for obj, ty in zip(objs, self.fndesc.argtypes):
             #api.context.debug_print(builder, "%s -> %s" % (obj, ty))
             #api.print_object(builder.load(obj))
             val, dtor = api.to_native_arg(builder.load(obj), ty)
+            
+            # add to the switch each time through the loop 
+            # prev and cur are references to keep track of which block to branch to
+            if arg_count == 0:
+                with cgutils.goto_block(builder, elseblk): 
+                    # build the elseblk of the switch statement 
+                    # code should never reach here -- keeping llvm ir happy
+                    builder.position_at_end(elseblk)
+                    builder.ret(api.get_null_object())
+                bb = cgutils.append_basic_block(builder, "switch.arg.error.%d" % arg_count)
+                cur = bb
+                swt.add_case(Constant.int(Type.int(32), arg_count), bb)
+            else:
+                prev = cur  # keep a reference to the previous arg.error block
+                bb = cgutils.append_basic_block(builder, "switch.arg.error.%d" % arg_count)
+                cur = bb
+                swt.add_case(Constant.int(Type.int(32), arg_count), bb)
+            
+            # write the error block  
+            with cgutils.goto_block(builder, cur):
+                dtor()
+                if arg_count == 0:  # every switch block should fall through to here
+                    builder.ret(api.get_null_object())
+                else:
+                    builder.branch(prev)
+            # store arg count into value to switch on
+            builder.store(Constant.int(Type.int(32), arg_count), swt_val)
+            
             # check for Python C-API Error
             error_check = api.err_occurred()
-            NULL = cgutils.get_null_value(error_check.type)
-            err_happened = builder.icmp(lc.ICMP_NE, error_check, NULL)
+            
+            # return NULL on error
+            err_happened = builder.icmp(lc.ICMP_NE, error_check, api.get_null_object())
+            
+            # if error occurs -- clean up -- goto switch block
             with cgutils.if_unlikely(builder, err_happened):
-                builder.ret(NULL)
+                builder.branch(swtblk)
+
             innerargs.append(val)
             cleanups.append(dtor)
-
+            arg_count += 1
 
         # The wrapped function doesn't take a full closure, only
         # the Environment object.
@@ -79,7 +120,7 @@ class PyCallWrapper(object):
         # Do clean up
         for dtor in cleanups:
             dtor()
-
+ 
         # Determine return status
         with cgutils.if_likely(builder, status.ok):
             with cgutils.ifthen(builder, status.none):
@@ -88,21 +129,26 @@ class PyCallWrapper(object):
             retval = api.from_native_return(res, self.fndesc.restype)
             builder.ret(retval)
 
-        with cgutils.ifthen(builder, builder.not_(status.exc)):
-            # !ok && !exc
-            # User exception raised
-            self.make_exception_switch(api, builder, status.code)
+#        with cgutils.ifthen(builder, builder.not_(status.exc)):
+#            # !ok && !exc
+#            # User exception raised
+#            self.make_exception_switch(api, builder, status.code)
 
         # !ok && exc
         builder.ret(api.get_null_object())
+
+        builder.basic_block.function.viewCFG()
+        print('-' * 20)
+        print(self.module)
+        print('-' * 20)
+
 
     def make_exception_switch(self, api, builder, code):
         """Handle user defined exceptions.
         Build a switch to check which exception class was raised.
         """
         nexc = len(self.exceptions)
-        elseblk = cgutils.append_basic_block(builder,
-                                             ".invalid.user.exception")
+        elseblk = cgutils.append_basic_block(builder, ".invalid.user.exception")
         swt = builder.switch(code, elseblk, n=nexc)
         for num, exc in self.exceptions.items():
             bb = cgutils.append_basic_block(builder,
