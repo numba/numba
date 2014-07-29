@@ -1111,8 +1111,6 @@ class TestLoopTypes(TestCase):
     #   types don't try lowering in nopython mode and fail instead of falling back to
     #   object mode.
 
-    _skip_types = ''
-
     def _compile(self, func, ty_args, ty_retval):
         tyctx = typing.Context()
         ctx = cpu.CPUContext(tyctx)
@@ -1120,44 +1118,77 @@ class TestLoopTypes(TestCase):
                            self._compile_flags, locals={})
         return cr
 
+    def _check_loop(self, fn, ufunc, loop):
+        # the letter types for the args
+        letter_types = loop[:ufunc.nin] + loop[-ufunc.nout:]
+
+        # ignore the loops containing an object argument. They will always
+        # fail in no python mode. Usually the last loop in ufuncs is an all
+        # object fallback
+        if getattr(self, '_supported_types'):
+            if any(l not in self._supported_types for l in letter_types):
+                return
+
+        arg_nbty = numpy_letter_types_to_numba_types(letter_types)
+        arg_nbty = [types.Array(t, 1, 'C') for t in arg_nbty]
+        arg_dty = [np.dtype(l) for l in letter_types]
+        cr = self._compile(fn, arg_nbty, None);
+
+        # now create some really silly arguments and call the generate functions.
+        # The result is checked against the result given by NumPy, but the point
+        # of the test is making sure there is no compilation error.
+        # 2 seems like a nice "no special case argument"
+
+        # use days for timedelta64 and datetime64
+        letter_types = re.sub(r'[mM]', r'D', letter_types)
+        args1 = [np.array((2,), dtype=l) for l in letter_types]
+        args2 = [np.array((2,), dtype=l) for l in letter_types]
+
+        cr.entry_point(*args1)
+        fn(*args2)
+
+        for i in range(ufunc.nout):
+            self.assertPreciseEqual(args1[-i], args2[-i])        
+
+
     def _check_ufunc_loops(self, ufunc):
         fn = _make_ufunc_usecase(ufunc)
+        _failed_loops = []
         for loop in ufunc.types:
-            # the letter types for the args
-            letter_types = loop[:ufunc.nin] + loop[-ufunc.nout:]
+            try:
+                self._check_loop(fn, ufunc, loop)
+            except Exception as e:
+                _failed_loops.append('{0}:{1}'.format(loop, str(e)))
 
-            # ignore the loops containing an object argument. They will always
-            # fail in no python mode. Usually the last loop in ufuncs is an all
-            # object fallback
-            if any(l in letter_types for l in self._skip_types):
-                continue
-
-            arg_nbty = [numpy_letter_types_to_numba_types(l)[:] for l in letter_types]
-            arg_dty = [np.dtype(l) for l in letter_types]
-            cr = self._compile(fn, arg_nbty, None);
-
-            # now create some really silly arguments and call the generate functions.
-            # The result is checked against the result given by NumPy, but the point
-            # of the test is making sure there is no compilation error.
-            # 2 seems like a nice "no special case argument"
-
-            # use days for timedelta64 and datetime64
-            letter_types = re.sub(r'[mM]', r'D', letter_types)
-            args1 = [np.array((2,), dtype=l) for l in letter_types]
-            args2 = [np.array((2,), dtype=l) for l in letter_types]
-
-            cr.entry_point(*args1)
-            fn(*args2)
-
-            for i in range(ufunc.nout):
-                self.assertPreciseEqual(args1[-i], args2[-i])
+        return _failed_loops
 
     def test_ufunc_loops(self):
+        failed_ufuncs = []
+        failed_loops_count = 0
         for ufunc in self._ufuncs:
-            self._check_ufunc_loops(ufunc)
+            failed_loops = self._check_ufunc_loops(ufunc)
+            if failed_loops:
+                failed_loops_count += len(failed_loops)
+                msg = 'ufunc {0} failed in loops:\n{1}\n\t'.format(
+                    ufunc.__name__,
+                    '\n\t'.join(failed_loops))
+                failed_ufuncs.append(msg)
 
-#class TestLoopTypesNoPython(TestLoopTypes):
-#    _compile_flags = no_pyobj_flags
+        if failed_ufuncs:
+            msg = 'Failed {0} ufuncs, {1} loops:\n{2}'.format(
+                len(failed_ufuncs), failed_loops_count,
+                '\n'.join(failed_ufuncs))
+
+            self.assertFalse(failed_ufuncs, msg=msg)
+            
+                
+
+class TestLoopTypesNoPython(TestLoopTypes):
+    _compile_flags = no_pyobj_flags
+
+    # supported types are integral (signed and unsgined) as well as float and double
+    # support for bool (?), complex64(F) and complex128(D) should be coming soon.
+    _supported_types = 'bBhHiIlLqQfd'
 
 if __name__ == '__main__':
     unittest.main()
