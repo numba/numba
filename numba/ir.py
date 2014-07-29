@@ -82,11 +82,20 @@ class VarMap(object):
 
 
 class Inst(object):
+    """
+    Base class for all IR instructions.
+    """
 
     def list_vars(self):
+        """
+        List the variables used (read or written) by the instruction.
+        """
         raise NotImplementedError
 
     def _rec_list_vars(self, val):
+        """
+        A recursive helper used to implement list_vars() in subclasses.
+        """
         if isinstance(val, Var):
             return [val]
         elif isinstance(val, Inst):
@@ -106,6 +115,10 @@ class Inst(object):
 
 
 class Stmt(Inst):
+    """
+    Base class for IR statements (instructions which can appear on their
+    own in a Block).
+    """
     is_terminator = False
 
     def list_vars(self):
@@ -113,6 +126,11 @@ class Stmt(Inst):
 
 
 class Expr(Inst):
+    """
+    An IR expression (an instruction which can only be part of a larger
+    statement).
+    """
+
     def __init__(self, op, loc, **kws):
         self.op = op
         self.loc = loc

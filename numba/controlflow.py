@@ -32,8 +32,16 @@ class CFBlock(object):
 
 class Loop(
     collections.namedtuple("Loop", ("entries", "exits", "header", "body"))):
+    """
+    A control flow loop, as detected by a CFGraph object.
+    """
 
     __slots__ = ()
+
+    # The loop header is enough to detect that two loops are really
+    # the same, assuming they belong to the same graph.
+    # (note: in practice, only one loop instance is created per graph
+    #  loop, so identity would be fine)
 
     def __eq__(self, other):
         return isinstance(other, Loop) and other.header == self.header
@@ -131,6 +139,10 @@ class CFGraph(object):
         return self._post_doms
 
     def descendents(self, node):
+        """
+        Return the set of descendents of the given *node*, in topological
+        order (ignoring back edges).
+        """
         return self._descs[node]
 
     def exit_points(self):
