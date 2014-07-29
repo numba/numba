@@ -2,13 +2,13 @@ from __future__ import print_function
 import itertools
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import types, jit
+from numba import types, jit, numpy_support
+
 import numpy as np
 import sys
 
 def identity(x):
     return x
-
 
 def addition(x, y):
     return x + y
@@ -18,7 +18,6 @@ def equality(x, y):
 
 def foobar(x, y, z):
     return x
-
 
 class TestConversion(unittest.TestCase):
     """
@@ -34,7 +33,6 @@ class TestConversion(unittest.TestCase):
             self.assertEqual(cres.entry_point(x=x), x)
         for x in np.complex64(xs):
             self.assertEqual(cres.entry_point(x=x), x)
-
 
         cres = compile_isolated(pyfunc, [types.complex128],
                                 return_type=types.complex128)
@@ -119,14 +117,50 @@ class TestConversion(unittest.TestCase):
             with self.assertRaises(TypeError):
                 jit('uintp(uintp)', nopython=True)(f)(-5)
 
-    # test that the switch logic in callwraper.py:build_wrapper() works for more than one argument
-    # and when it occurs in different positions    
+    # test the switch logic in callwraper.py:build_wrapper() works for more than one argument
+    # and where the error occurs 
     def test_multiple_args_negative_to_unsigned(self): 
         pyfunc = foobar
         cres = compile_isolated(pyfunc, [types.uint64, types.uint64, types.uint64],
                                 return_type=types.uint64)
         cfunc = cres.entry_point
         test_fail_args = ((-1, 0, 1), (0, -1, 1), (0, 1, -1))
+        # TypeError is for 2.6
+        if sys.version_info >= (2, 7):
+            with self.assertRaises(OverflowError):
+                for a, b, c in test_fail_args:
+                    cfunc(a, b, c) 
+        else:
+            with self.assertRaises(TypeError):
+                for a, b, c in test_fail_args:
+                    cfunc(a, b, c) 
+
+    # test with records as function parameters
+    def test_multiple_args_records(self): 
+        pyfunc = foobar
+
+        mystruct_dt = np.dtype([('p', np.float64),
+                           ('row', np.float64),
+                           ('col', np.float64)])
+        mystruct = numpy_support.from_dtype(mystruct_dt)
+
+        cres = compile_isolated(pyfunc, [mystruct[:], types.uint64, types.uint64],
+                return_type=mystruct[:])
+        cfunc = cres.entry_point
+
+        st1 = np.recarray(3, dtype=mystruct_dt)
+        st2 = np.recarray(3, dtype=mystruct_dt)
+
+        st1.p = np.arange(st1.size) + 1
+        st1.row = np.arange(st1.size) + 1
+        st1.col = np.arange(st1.size) + 1
+
+        st2.p = np.arange(st2.size) + 1
+        st2.row = np.arange(st2.size) + 1
+        st2.col = np.arange(st2.size) + 1
+
+        test_fail_args = ((st1, -1, st2), (st1, st2, -1))
+        
         # TypeError is for 2.6
         if sys.version_info >= (2, 7):
             with self.assertRaises(OverflowError):
