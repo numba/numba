@@ -102,7 +102,7 @@ class TestConversion(unittest.TestCase):
             self.assertEqual(pyfunc(xs, ys), cfunc(xs, ys))
 
     # test when a function parameters are jitted as unsigned types
-    # when the function is called with negative parameters the Python error 
+    # the function is called with negative parameters the Python error 
     # that it generates is correctly handled -- a Python error is returned to the user
     # For more info, see the comment in Include/longobject.h for _PyArray_AsByteArray 
     # which PyLong_AsUnsignedLongLong calls
@@ -135,7 +135,7 @@ class TestConversion(unittest.TestCase):
                 for a, b, c in test_fail_args:
                     cfunc(a, b, c) 
 
-    # test with records as function parameters
+    # test switch logic with records as function parameters
     def test_multiple_args_records(self): 
         pyfunc = foobar
 
@@ -170,6 +170,12 @@ class TestConversion(unittest.TestCase):
             with self.assertRaises(TypeError):
                 for a, b, c in test_fail_args:
                     cfunc(a, b, c) 
+
+    # test switch logic with no parameters
+    def test_with_no_parameters(self):
+        def f():
+            pass 
+        self.assertEqual(f(), jit('()', nopython=True)(f)())
 
 
 if __name__ == '__main__':
