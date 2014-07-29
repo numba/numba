@@ -349,13 +349,22 @@ class TestUFuncs(unittest.TestCase):
         self.binary_ufunc_test('multiply', 'arange')
 
     def test_binary_divide_ufunc(self):
-        self.binary_ufunc_test('divide', 'arange')
+        # Avoid divide by zero NaN
+        self.binary_ufunc_test('divide', 'given',
+                               agiven=np.arange(10),
+                               bgiven=np.arange(10) + 1)
 
     def test_binary_true_divide_ufunc(self):
-        self.binary_ufunc_test('true_divide', 'arange')
+        # Avoid divide by zero NaN
+        self.binary_ufunc_test('true_divide', 'given',
+                               agiven=np.arange(10),
+                               bgiven=np.arange(10) + 1)
 
     def test_binary_floor_divide_ufunc(self):
-        self.binary_ufunc_test('floor_divide', 'arange')
+        # Avoid divide by zero NaN
+        self.binary_ufunc_test('floor_divide', 'given',
+                               agiven=np.arange(10),
+                               bgiven=np.arange(10) + 1)
 
     def test_binary_power_ufunc(self):
         self.binary_ufunc_test('power', 'arange')
@@ -475,6 +484,6 @@ class TestUFuncs(unittest.TestCase):
     def test_binary_ldexp_ufunc(self):
         self.binary_ufunc_test('ldexp', 'arange')
        
-              
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
