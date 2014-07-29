@@ -606,5 +606,4 @@ class Lower(BaseLower):
         return self.alloca_lltype(name, lltype)
 
     def alloca_lltype(self, name, lltype):
-        with cgutils.goto_block(self.builder, self.entry_block):
-            return self.builder.alloca(lltype, name=name)
+        return cgutils.alloca_once(self.builder, lltype, name=name)
