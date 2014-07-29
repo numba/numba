@@ -269,16 +269,12 @@ def translate_stage(bytecode):
 
     if config.DEBUG:
         interp.dump()
-        for syn in interp.syntax_info:
-            print(syn)
 
     interp.verify()
     macro.expand_macros(interp.blocks)
 
     if config.DUMP_IR:
         interp.dump()
-        for syn in interp.syntax_info:
-            print(syn)
 
     return interp
 

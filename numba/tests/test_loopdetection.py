@@ -12,33 +12,35 @@ def interpret(func):
     interp.interpret()
     interp.dump()
 
-    for syn in interp.syntax_info:
-        print(syn)
-
     interp.verify()
     return interp
 
 
 class TestLoopDetection(unittest.TestCase):
+
+    def assertLoops(self, interp, expected):
+        cfg = interp.cfa.graph
+        self.assertEqual(len(cfg.loops()), expected)
+
     def test_sum1d(self):
         interp = interpret(usecases.sum1d)
-        self.assertTrue(len(interp.syntax_info) == 1)
+        self.assertLoops(interp, 1)
 
     def test_sum2d(self):
         interp = interpret(usecases.sum2d)
-        self.assertTrue(len(interp.syntax_info) == 2)
+        self.assertLoops(interp, 2)
 
     def test_while_count(self):
         interp = interpret(usecases.while_count)
-        self.assertTrue(len(interp.syntax_info) == 1)
+        self.assertLoops(interp, 1)
 
     def test_copy_arrays(self):
         interp = interpret(usecases.copy_arrays)
-        self.assertTrue(len(interp.syntax_info) == 1)
+        self.assertLoops(interp, 1)
 
     def test_andor(self):
         interp = interpret(usecases.andor)
-        self.assertTrue(len(interp.syntax_info) == 0)
+        self.assertLoops(interp, 0)
 
 
 if __name__ == '__main__':

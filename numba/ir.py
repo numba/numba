@@ -515,7 +515,7 @@ class Block(object):
 
     def dump(self, file=sys.stdout):
         for inst in self.body:
-            print('   %-40s %s' % (inst, [str(v) for v in inst.list_vars()]),
+            print('    %-40s %s' % (inst, [str(v) for v in inst.list_vars()]),
                   file=file)
 
     @property

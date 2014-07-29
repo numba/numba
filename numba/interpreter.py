@@ -79,7 +79,6 @@ class Interpreter(object):
 
         # { inst offset : ir.Block }
         self.blocks = {}
-        self.syntax_info = []
 
         # Temp states during interpretation
         self.current_block = None
@@ -108,11 +107,7 @@ class Interpreter(object):
         for inst, kws in self._iter_inst():
             self._dispatch(inst, kws)
         # Clean up
-        self._remove_invalid_syntax_blocks()
         self._insert_var_dels()
-
-    def _remove_invalid_syntax_blocks(self):
-        self.syntax_info = [syn for syn in self.syntax_info if syn.valid()]
 
     def _insert_var_dels(self):
         # { var name -> { block offset -> stmt of last use } }
@@ -615,7 +610,6 @@ class Interpreter(object):
         assert self.blocks[inst.offset] is self.current_block
         loop = ir.Loop(inst.offset, exit=(inst.next + inst.arg))
         self.syntax_blocks.append(loop)
-        self.syntax_info.append(loop)
 
     def op_CALL_FUNCTION(self, inst, func, args, kws, res):
         func = self.get(func)
