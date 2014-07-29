@@ -133,7 +133,6 @@ class PyCallWrapper(object):
 
         # !ok && exc
         builder.ret(api.get_null_object())
-        builder.basic_block.function.viewCFG()
 
 
     def make_exception_switch(self, api, builder, code):
