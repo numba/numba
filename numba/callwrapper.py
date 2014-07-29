@@ -126,18 +126,14 @@ class PyCallWrapper(object):
             retval = api.from_native_return(res, self.fndesc.restype)
             builder.ret(retval)
 
-#        with cgutils.ifthen(builder, builder.not_(status.exc)):
-#            # !ok && !exc
-#            # User exception raised
-#            self.make_exception_switch(api, builder, status.code)
+        with cgutils.ifthen(builder, builder.not_(status.exc)):
+            # !ok && !exc
+            # User exception raised
+            self.make_exception_switch(api, builder, status.code)
 
         # !ok && exc
         builder.ret(api.get_null_object())
-
         builder.basic_block.function.viewCFG()
-        print('-' * 20)
-        print(self.module)
-        print('-' * 20)
 
 
     def make_exception_switch(self, api, builder, code):
