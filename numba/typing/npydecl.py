@@ -40,7 +40,6 @@ class Numpy_rules_ufunc(AbstractTemplate):
 
         ufunc_loop = ufunc_find_matching_loop(ufunc, letter_arg_types)
         ufunc_loop_types = ufunc_loop[:ufunc.nin] + ufunc_loop[-ufunc.nout:]
-        print('ufunc_loop: {0}'.format(ufunc_loop))
         supported_types = supported_letter_types()
         if any((t not in supported_types for t in ufunc_loop_types)):
             msg = "ufunc '{0}' using the loop '{1}' not supported in this mode"
