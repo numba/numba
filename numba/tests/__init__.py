@@ -112,7 +112,12 @@ class RefleakTestResult(runner.TextTestResult):
             # Use a pristine, silent result object to avoid recursion
             res = result.TestResult()
             test.run(res)
-            assert res.wasSuccessful()
+            # Poorly-written tests may fail when run several times.
+            # In this case, abort the refleak run and report the failure.
+            if not res.wasSuccessful():
+                self.failures.extend(res.failures)
+                self.errors.extend(res.errors)
+                raise AssertionError
             del res
             alloc_after, rc_after = _refleak_cleanup()
             if i >= nwarmup:
@@ -122,7 +127,12 @@ class RefleakTestResult(runner.TextTestResult):
         return rc_deltas, alloc_deltas
 
     def addSuccess(self, test):
-        rc_deltas, alloc_deltas = self._huntLeaks(test)
+        try:
+            rc_deltas, alloc_deltas = self._huntLeaks(test)
+        except AssertionError:
+            # Test failed when repeated
+            assert not self.wasSuccessful()
+            return
 
         # These checkers return False on success, True on failure
         def check_rc_deltas(deltas):
