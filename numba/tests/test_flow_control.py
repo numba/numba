@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 import itertools
+import random
 
 import numba.unittest_support as unittest
 from numba.controlflow import CFGraph, Loop
@@ -577,6 +578,28 @@ class TestCFGraph(TestCase):
         self.assertIn(g.topo_order(),
                       ([0, 6, 10, 13, 19, 26], [0, 6, 10, 13, 26, 19],
                        [0, 10, 13, 19, 26, 6], [0, 10, 13, 26, 19, 6]))
+
+    def test_topo_sort(self):
+        def check_topo_sort(nodes, expected):
+            self.assertIn(list(g.topo_sort(nodes)), expected)
+            self.assertIn(list(g.topo_sort(nodes[::-1])), expected)
+            self.assertIn(list(g.topo_sort(nodes, reverse=True))[::-1],
+                          expected)
+            self.assertIn(list(g.topo_sort(nodes[::-1], reverse=True))[::-1],
+                          expected)
+            random.shuffle(nodes)
+            self.assertIn(list(g.topo_sort(nodes)), expected)
+            self.assertIn(list(g.topo_sort(nodes, reverse=True))[::-1],
+                          expected)
+
+        g = self.loopless2()
+        check_topo_sort([21, 99, 12, 34], ([99, 12, 21, 34],))
+        # NOTE: topo_sort() is not stable
+        check_topo_sort([18, 12, 42, 99],
+                        ([99, 12, 18, 42], [99, 18, 12, 42]))
+        g = self.multiple_exits()
+        check_topo_sort([19, 10, 7, 36],
+                        ([7, 10, 19, 36], [7, 10, 36, 19], [7, 36, 10, 19]))
 
     def check_dominators(self, got, expected):
         self.assertEqual(sorted(got), sorted(expected))

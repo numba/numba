@@ -182,6 +182,10 @@ class CFGraph(object):
         return self._topo_order
 
     def topo_sort(self, nodes, reverse=False):
+        """
+        Iterate over the *nodes* in topological order (ignoring back edges).
+        The sort isn't guaranteed to be stable.
+        """
         nodes = set(nodes)
         it = self._topo_order
         if reverse:
