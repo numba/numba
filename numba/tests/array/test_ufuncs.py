@@ -168,7 +168,7 @@ class TestUFuncs(unittest.TestCase):
         b = 180 / np.pi
         self.assertTrue(a == b)
 
-    def test_floor_division(self):
+    def test_floor_divide(self):
         a = 180 // numbarray.pi
         b = 180 // np.pi
         self.assertTrue(a == b)
