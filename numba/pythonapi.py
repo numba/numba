@@ -23,6 +23,8 @@ def fix_python_api():
     c_helpers = _helperlib.c_helpers
     le.dylib_add_symbol("Py_None", ctypes.addressof(_PyNone))
     le.dylib_add_symbol("NumbaArrayAdaptor", _numpyadapt.get_ndarray_adaptor())
+    le.dylib_add_symbol("NumbaNDArrayNew", _numpyadapt.get_ndarray_new())
+
     le.dylib_add_symbol("NumbaComplexAdaptor",
                         c_helpers["complex_adaptor"])
     le.dylib_add_symbol("NumbaNativeError", id(NativeError))
@@ -32,6 +34,11 @@ def fix_python_api():
                         c_helpers["release_record_buffer"])
     le.dylib_add_symbol("NumbaRecreateRecord",
                         c_helpers["recreate_record"])
+
+    le.dylib_add_symbol("NumbaGILEnsure",
+                        c_helpers["gil_ensure"])
+    le.dylib_add_symbol("NumbaGILRelease",
+                        c_helpers["gil_release"])
     # Add all built-in exception classes
     for obj in utils.builtins.__dict__.values():
         if isinstance(obj, type) and issubclass(obj, BaseException):
@@ -62,6 +69,7 @@ class PythonAPI(object):
         self.double = Type.double()
         self.py_ssize_t = self.context.get_value_type(types.intp)
         self.cstring = Type.pointer(Type.int(8))
+        self.gil_state = Type.int(_helperlib.py_gil_state_size * 8)
 
     # ------ Python API -----
 
@@ -493,6 +501,32 @@ class PythonAPI(object):
         fnty = Type.function(Type.int(), [self.pyobj, self.pyobj])
         fn = self._get_function(fnty, name="PySet_Add")
         return self.builder.call(fn, [set, value])
+
+    #
+    # GIL APIs
+    #
+
+    def gil_ensure(self):
+        """
+        Ensure the GIL is acquired.
+        The returned value must be consumed by gil_release().
+        """
+        gilptrty = Type.pointer(self.gil_state)
+        fnty = Type.function(Type.void(), [gilptrty])
+        fn = self._get_function(fnty, "NumbaGILEnsure")
+        gilptr = cgutils.alloca_once(self.builder, self.gil_state)
+        self.builder.call(fn, [gilptr])
+        return gilptr
+
+    def gil_release(self, gil):
+        """
+        Release the acquired GIL by gil_ensure().
+        Must be pair with a gil_ensure().
+        """
+        gilptrty = Type.pointer(self.gil_state)
+        fnty = Type.function(Type.void(), [gilptrty])
+        fn = self._get_function(fnty, "NumbaGILRelease")
+        return self.builder.call(fn, [gil])
 
     #
     # Other APIs (organize them better!)

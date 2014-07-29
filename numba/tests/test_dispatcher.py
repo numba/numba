@@ -30,5 +30,17 @@ class TestDispatcher(unittest.TestCase):
         # Just make sure this doesn't crash
         foo()
     
+
+    def test_inspect_types(self):
+        @jit
+        def foo(a, b):
+            return a + b
+
+        foo(1, 2)
+        # Exercise the method
+        foo.inspect_types()
+
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -95,36 +95,12 @@ def map_layout(val):
 #
 # return value - the full identifier of the loop. f.e: 'dd->d' or None if no matching
 #                loop is found.
-_typemap = {
-    '?': types.bool_,
-    'b': types.int8,
-    'B': types.uint8,
-    'h': types.short,
-    'H': types.ushort,
-    'i': types.intc,
-    'I': types.uintc,
-    'l': types.long_,
-    'L': types.ulong,
-    'q': types.longlong,
-    'Q': types.ulonglong,
-
-    'f': types.float_,
-    'd': types.double,
-#    'g': types.longdouble,
-    'F': types.complex64,  # cfloat
-    'D': types.complex128, # cdouble
-#   'G': types.clongdouble
-    'O': types.pyobject,
-    'M': types.pyobject
-}
-
-_inv_typemap = dict((v,k) for (k,v) in _typemap.items());
 
 def numba_types_to_numpy_letter_types(numba_type_seq):
-    return [_inv_typemap[x] for x in numba_type_seq]
+    return [numpy.dtype(str(x)).char for x in numba_type_seq]
 
 def numpy_letter_types_to_numba_types(numpy_letter_types_seq):
-    return [_typemap[x] for x in numpy_letter_types_seq]
+    return [from_dtype(numpy.dtype(x)) for x in numpy_letter_types_seq]
 
 def ufunc_find_matching_loop(ufunc, op_dtypes):
     assert(isinstance(ufunc, numpy.ufunc))

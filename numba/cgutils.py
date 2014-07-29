@@ -71,6 +71,13 @@ class Structure(object):
             self._fdmap.append((base, Constant.int(Type.int(), i)))
             self._typemap.append(tp)
 
+    def _get_ptr_by_index(self, index):
+        ptr = self._builder.gep(self._value, self._fdmap[index])
+        return ptr
+
+    def _get_ptr_by_name(self, attrname):
+        return self._get_ptr_by_index(self._namemap[attrname])
+
     def __getattr__(self, field):
         """
         Load the LLVM value of the named *field*.
@@ -92,16 +99,14 @@ class Structure(object):
         """
         Load the LLVM value of the field at *index*.
         """
-        offset = self._fdmap[index]
-        ptr = self._builder.gep(self._value, offset)
-        return self._builder.load(ptr)
+
+        return self._builder.load(self._get_ptr_by_index(index))
 
     def __setitem__(self, index, value):
         """
         Store the LLVM *value* into the field at *index*.
         """
-        offset = self._fdmap[index]
-        ptr = self._builder.gep(self._value, offset)
+        ptr = self._get_ptr_by_index(index)
         value = self._context.get_struct_member_value(self._builder,
                                                       self._typemap[index],
                                                       value)
@@ -311,8 +316,8 @@ def for_range(builder, count, intp):
 @contextmanager
 def for_range_slice(builder, start, stop, step, intp, inc=True):
     """
-    Generate LLVM IR for a for-loop based on a slice  
-    
+    Generate LLVM IR for a for-loop based on a slice
+
     Parameters
     -------------
     builder : object
@@ -323,7 +328,7 @@ def for_range_slice(builder, start, stop, step, intp, inc=True):
         The end value of the slice
     step : int
         The step value of the slice
-    intp : 
+    intp :
         The data type
     inc : boolean, optional
         A flag to handle the step < 0 case, in which case we decrement the loop
@@ -623,3 +628,17 @@ def printf(builder, format_string, *values):
     functype = Type.function(Type.int(32), [Type.pointer(Type.int(8))], True)
     fn = get_module(builder).get_or_insert_function(functype, 'printf')
     builder.call(fn, [str_addr] + args)
+
+
+def cbranch_or_continue(builder, cond, bbtrue):
+    """
+    Branch conditionally or continue.
+
+    Note: a new block is created and builder is moved to the end of the new
+          block.
+    """
+    fn = get_function(builder)
+    bbcont = fn.append_basic_block('.continue')
+    builder.cbranch(cond, bbtrue, bbcont)
+    builder.position_at_end(bbcont)
+    return bbcont
