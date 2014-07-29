@@ -499,7 +499,6 @@ class TestUFuncs(TestCase):
     def test_hypot_ufunc(self):
         self.binary_ufunc_test('hypot')
 
-    @_unimplemented
     def test_hypot_ufunc_npm(self):
         self.binary_ufunc_test('hypot', flags=no_pyobj_flags)
 

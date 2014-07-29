@@ -516,6 +516,7 @@ _externs_2 = [
     (numpy.arctan2, "atan2"),
     (numpy.logaddexp, "logaddexp"),
     (numpy.logaddexp2, "logaddexp2"),
+    (numpy.hypot, "hypot"),
 ]
 
 for sym, name in _externs_2:
