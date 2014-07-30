@@ -78,4 +78,6 @@ def main(args=None):
             os.remove(temp_obj)
 
         if args.header:
-            compiler.emit_header(args.output)
+            print('*********')
+            print('WARNING: pycc --header has been disabled in this release due to a known issue')
+            #compiler.emit_header(args.output)
