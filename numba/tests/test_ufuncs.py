@@ -1016,7 +1016,6 @@ class TestScalarUFuncs(TestCase):
 
     def run_ufunc(self, pyfunc, arg_types, arg_values):
         for tyargs, args in zip(arg_types, arg_values):
-            print(pyfunc, tyargs, args)
             cr = compile_isolated(pyfunc, tyargs, flags=self._compile_flags)
             cfunc = cr.entry_point
             got = cfunc(*args)
@@ -1103,13 +1102,24 @@ class TestLoopTypes(TestCase):
     """This class tests that for the desired set of ufuncs, the loops defined in
     the numpy are generated and look like they work."""
 
-    _ufuncs = [np.add, np.subtract, np.multiply, np.divide ]
+    _ufuncs = [np.add, np.subtract, np.multiply, np.divide, np.logaddexp,
+               np.logaddexp2, np.true_divide, np.floor_divide, np.negative,
+               np.power, np.remainder, np.mod, np.fmod, np.abs, np.absolute,
+               np.rint, np.sign, np.conj, np.exp, np.exp2, np.log, np.log2,
+               np.log10, np.expm1, np.log1p, np.sqrt, np.square, np.reciprocal,
+               np.conjugate, np.sin, np.cos, np.tan, np.arcsin, np.arccos,
+               np.arctan, np.arctan2, np.hypot, np.sinh, np.cosh, np.tanh,
+               np.arcsinh, np.arccosh, np.arctanh, np.deg2rad, np.rad2deg,
+               np.degrees, np.radians, np.bitwise_and, np.bitwise_or,
+               np.bitwise_xor, np.bitwise_not, np.invert, np.left_shift,
+               np.right_shift, np.greater, np.greater_equal, np.less,
+               np.less_equal, np.not_equal, np.equal, np.logical_and,
+               np.logical_or, np.logical_xor, np.logical_not, np.maximum,
+               np.minimum, np.fmax, np.fmin, np.isfinite, np.isinf, np.isnan,
+               np.signbit, np.copysign, np.nextafter, np.modf, np.ldexp,
+               np.frexp, np.floor, np.ceil, np.trunc, np.spacing ]
     _compile_flags = enable_pyobj_flags
-
-    # ignore loop types:
-    # - In object mode all the loops should work, so this test checks that unsupported
-    #   types don't try lowering in nopython mode and fail instead of falling back to
-    #   object mode.
+    _skip_types='O'
 
     def _compile(self, func, ty_args, ty_retval):
         tyctx = typing.Context()
@@ -1125,9 +1135,11 @@ class TestLoopTypes(TestCase):
         # ignore the loops containing an object argument. They will always
         # fail in no python mode. Usually the last loop in ufuncs is an all
         # object fallback
-        if getattr(self, '_supported_types'):
-            if any(l not in self._supported_types for l in letter_types):
-                return
+        supported_types = getattr(self, '_supported_types', [])
+        skip_types = getattr(self, 'skip_types', [])
+        if any(l not in supported_types or l in skip_types 
+               for l in letter_types):
+            return
 
         arg_nbty = numpy_letter_types_to_numba_types(letter_types)
         arg_nbty = [types.Array(t, 1, 'C') for t in arg_nbty]
@@ -1158,7 +1170,9 @@ class TestLoopTypes(TestCase):
             try:
                 self._check_loop(fn, ufunc, loop)
             except Exception as e:
-                _failed_loops.append('{0}:{1}'.format(loop, str(e)))
+                _failed_loops.append('{2} {0}:{1}'.format(loop, str(e),
+                                                          ufunc.__name__))
+                raise
 
         return _failed_loops
 
@@ -1169,7 +1183,7 @@ class TestLoopTypes(TestCase):
             failed_loops = self._check_ufunc_loops(ufunc)
             if failed_loops:
                 failed_loops_count += len(failed_loops)
-                msg = 'ufunc {0} failed in loops:\n{1}\n\t'.format(
+                msg = 'ufunc {0} failed in loops:\n\t{1}\n\t'.format(
                     ufunc.__name__,
                     '\n\t'.join(failed_loops))
                 failed_ufuncs.append(msg)
@@ -1185,6 +1199,17 @@ class TestLoopTypes(TestCase):
 
 class TestLoopTypesNoPython(TestLoopTypes):
     _compile_flags = no_pyobj_flags
+
+    _ufuncs = [np.add, np.subtract, np.multiply, np.divide, np.logaddexp,
+               np.logaddexp2, np.true_divide, np.floor_divide, np.negative,
+               np.power, np.abs, np.absolute,
+               np.sign, np.exp, np.exp2, np.log, np.log2,
+               np.log10, np.expm1, np.log1p, np.sqrt,
+               np.sin, np.cos, np.tan, np.arcsin, np.arccos,
+               np.arctan, np.arctan2, np.sinh, np.cosh, np.tanh,
+               np.arcsinh, np.arccosh, np.arctanh, np.deg2rad, np.rad2deg,
+               np.degrees, np.radians,
+               np.floor, np.ceil, np.trunc]
 
     # supported types are integral (signed and unsgined) as well as float and double
     # support for bool (?), complex64(F) and complex128(D) should be coming soon.

@@ -104,8 +104,11 @@ def map_layout(val):
 # 'm' - timedelta64
 # 'M' - datetime64
 # 'e' - float16
+# '?' - bool
+# 'F' - complex float (float32)
+# 'D' - complex double (float64)
 _typemap = {
-    '?': types.bool_,
+#    '?': types.bool_,
     'b': types.int8,
     'B': types.uint8,
     'h': types.short,
@@ -119,8 +122,8 @@ _typemap = {
 
     'f': types.float_,
     'd': types.double,
-    'F': types.complex64,  # cfloat
-    'D': types.complex128, # cdouble
+#    'F': types.complex64,  # cfloat
+#    'D': types.complex128, # cdouble
 }
 
 _inv_typemap = dict((v,k) for (k,v) in _typemap.items());
@@ -130,7 +133,6 @@ def supported_letter_types():
 
 def numba_types_to_numpy_letter_types(numba_type_seq):
     return [_inv_typemap.get(x) for x in numba_type_seq]
-
 
 def numpy_letter_types_to_numba_types(numpy_letter_types_seq):
     return [_typemap.get(x) for x in numpy_letter_types_seq]
