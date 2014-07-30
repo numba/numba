@@ -46,11 +46,13 @@ class _DummyIterator(_Dummy):
         self.count += 1
         return _Dummy(self.recorder, "%s#%s" % (self.name, self.count))
 
+    next = __next__
+
 
 class RefRecorder(object):
 
     def __init__(self):
-        self._disposed = []
+        self._events = []
         self._wrs = {}
 
     def make_dummy(self, name):
@@ -64,7 +66,7 @@ class RefRecorder(object):
 
     def _on_disposal(self, wr):
         name = self._wrs.pop(wr)
-        self._disposed.append(name)
+        self._events.append(name)
 
     @property
     def alive(self):
@@ -76,9 +78,8 @@ class RefRecorder(object):
         return objs
 
     @property
-    def disposed(self):
-        return self._disposed
-
+    def recorded(self):
+        return self._events
 
 
 def simple_usecase1(rec):
@@ -98,9 +99,9 @@ def simple_usecase2(rec):
     return y
 
 def looping_usecase1(rec):
-    a = rec.make_dummy('a')
-    b = rec.make_dummy('b')
-    c = rec.make_dummy('c')
+    a = rec('a')
+    b = rec('b')
+    c = rec('c')
     x = b
     for y in a:
         x = x + y
@@ -108,42 +109,49 @@ def looping_usecase1(rec):
     return x
 
 
-
 class TestObjLifetime(TestCase):
+    """
+    Test lifetime of Python objects inside jit-compiled functions.
+    """
 
     def compile(self, pyfunc):
         cr = compile_isolated(pyfunc, (), flags=forceobj_flags)
         self.__cres = cr
         return cr.entry_point
 
-    def assertDisposalOrder(self, rec, expected):
+    def compile_and_record(self, pyfunc):
+        rec = RefRecorder()
+        cr = compile_isolated(pyfunc, (), flags=forceobj_flags)
+        cr.entry_point(rec)
+        return rec
+
+    def assertRecordOrder(self, rec, expected):
+        """
+        Check that the *expected* markers occur in that order in *rec*'s
+        recorded events.
+        """
         actual = []
-        for d in rec.disposed:
+        recorded = rec.recorded
+        for d in recorded:
             if d in expected:
                 actual.append(d)
-        self.assertEqual(actual, expected, rec.disposed)
+        self.assertEqual(actual, expected, recorded)
 
     def test_simple1(self):
-        cfunc = self.compile(simple_usecase1)
-        rec = RefRecorder()
-        cfunc(rec)
+        rec = self.compile_and_record(simple_usecase1)
         self.assertFalse(rec.alive)
-        self.assertDisposalOrder(rec, ['a', 'b', 'b + c', 'b + c + b + c'])
-        self.assertDisposalOrder(rec, ['a', 'c', 'b + c', 'b + c + b + c'])
+        self.assertRecordOrder(rec, ['a', 'b', 'b + c', 'b + c + b + c'])
+        self.assertRecordOrder(rec, ['a', 'c', 'b + c', 'b + c + b + c'])
 
     def test_simple2(self):
-        cfunc = self.compile(simple_usecase2)
-        rec = RefRecorder()
-        cfunc(rec)
+        rec = self.compile_and_record(simple_usecase2)
         self.assertFalse(rec.alive)
-        self.assertDisposalOrder(rec, ['b', 'a'])
+        self.assertRecordOrder(rec, ['b', 'a'])
 
     def test_looping1(self):
-        cfunc = self.compile(looping_usecase1)
-        rec = RefRecorder()
-        cfunc(rec)
+        rec = self.compile_and_record(looping_usecase1)
         self.assertFalse(rec.alive)
-        self.assertDisposalOrder(rec, ['a', 'b', 'c'])
+        self.assertRecordOrder(rec, ['a', 'b', 'c'])
 
 
 if __name__ == "__main__":
