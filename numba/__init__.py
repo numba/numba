@@ -65,6 +65,6 @@ def _sentry_llvm_version():
             raise ImportError(msg)
     else:
         # Not matching?
-        warnings.warns("llvmpy version format not recognized!")
+        warnings.warn("llvmpy version format not recognized!")
 
 _sentry_llvm_version()
