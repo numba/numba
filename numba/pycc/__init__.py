@@ -7,6 +7,7 @@ import os
 import logging
 import subprocess
 import tempfile
+import sys
 
 from .compiler import Compiler, find_shared_ending, find_args, find_linker
 
@@ -59,6 +60,10 @@ def main(args=None):
         args.output = input_base + get_ending(args)
     logger.debug('args.output --> %s', args.output)
 
+    if args.header:
+        print('ERROR: pycc --header has been disabled in this release due to a known issue')
+        sys.exit(1)
+
     logger.debug('inputs --> %s', args.inputs)
     with Compiler(args.inputs, module_name=module_name) as compiler:
         if args.llvm:
@@ -76,8 +81,3 @@ def main(args=None):
             cmdargs = (find_linker(),) + find_args() + ('-o', args.output, temp_obj)
             subprocess.check_call(cmdargs)
             os.remove(temp_obj)
-
-        if args.header:
-            print('*********')
-            print('WARNING: pycc --header has been disabled in this release due to a known issue')
-            #compiler.emit_header(args.output)
