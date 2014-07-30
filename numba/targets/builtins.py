@@ -173,8 +173,8 @@ def int_upower_impl(context, builder, sig, args):
 
 
 def int_power_func_body(context, builder, x, y):
-    pcounter = builder.alloca(y.type)
-    presult = builder.alloca(x.type)
+    pcounter = cgutils.alloca_once(builder, y.type)
+    presult = cgutils.alloca_once(builder, x.type)
     result = Constant.int(x.type, 1)
     counter = y
     builder.store(counter, pcounter)
@@ -339,7 +339,7 @@ def int_sign_impl(context, builder, sig, args):
     cmp_zero = builder.icmp(lc.ICMP_EQ, x, ZERO)
     cmp_pos = builder.icmp(lc.ICMP_SGT, x, ZERO)
 
-    presult = builder.alloca(x.type)
+    presult = cgutils.alloca_once(builder, x.type)
 
     bb_zero = cgutils.append_basic_block(builder, ".zero")
     bb_postest = cgutils.append_basic_block(builder, ".postest")
@@ -509,9 +509,9 @@ def real_divmod_func_body(context, builder, vx, wx):
     #     }
     #     return Py_BuildValue("(dd)", floordiv, mod);
     # }
-    pmod = builder.alloca(vx.type)
-    pdiv = builder.alloca(vx.type)
-    pfloordiv = builder.alloca(vx.type)
+    pmod = cgutils.alloca_once(builder, vx.type)
+    pdiv = cgutils.alloca_once(builder, vx.type)
+    pfloordiv = cgutils.alloca_once(builder, vx.type)
 
     mod = builder.frem(vx, wx)
     div = builder.fdiv(builder.fsub(vx, mod), wx)
@@ -652,7 +652,7 @@ def real_sign_impl(context, builder, sig, args):
     cmp_zero = builder.fcmp(lc.FCMP_OEQ, x, ZERO)
     cmp_pos = builder.fcmp(lc.FCMP_OGT, x, ZERO)
 
-    presult = builder.alloca(x.type)
+    presult = cgutils.alloca_once(builder, x.type)
 
     bb_zero = cgutils.append_basic_block(builder, ".zero")
     bb_postest = cgutils.append_basic_block(builder, ".postest")

@@ -8,10 +8,10 @@ import numpy as np
 import functools
 
 import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags, DEFAULT_FLAGS
+from numba.compiler import compile_isolated, Flags
 from numba import types, utils
+from numba import vectorize
 from numba.config import PYVERSION
-from numba.targets import cpu
 from numba.typeinfer import TypingError
 from numba.tests.support import TestCase, CompilationCache
 
@@ -362,10 +362,15 @@ class TestUFuncs(TestCase):
     def test_absolute_ufunc_npm(self):
         self.test_absolute_ufunc(flags=no_pyobj_flags)
 
+    def test_fabs_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test('fabs', flags=flags)
+
+    def test_fabs_ufunc_npm(self):
+        self.test_fabs_ufunc(flags=no_pyobj_flags)
+
     def test_rint_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test('rint', flags=flags)
 
-    @_unimplemented
     def test_rint_ufunc_npm(self):
         self.test_rint_ufunc(flags=no_pyobj_flags)
 
@@ -500,7 +505,6 @@ class TestUFuncs(TestCase):
     def test_hypot_ufunc(self):
         self.binary_ufunc_test('hypot')
 
-    @_unimplemented
     def test_hypot_ufunc_npm(self):
         self.binary_ufunc_test('hypot', flags=no_pyobj_flags)
 
@@ -1088,6 +1092,17 @@ class TestScalarUFuncs(TestCase):
     def test_scalar_binary_mixed_ufuncs_npm(self):
         self.test_scalar_binary_mixed_ufunc(flags=no_pyobj_flags)
 
+
+class TestUfuncIssues(TestCase):
+    def test_issue_651(self):
+        # Exercise the code path to make sure this does not fail
+        @vectorize(["(float64,float64)"])
+        def foo(x1, x2):
+            return np.add(x1, x2) + np.add(x1, x2)
+
+        a = np.arange(10, dtype='f8')
+        b = np.arange(10, dtype='f8')
+        self.assertTrue(np.all(foo(a, b) == (a + b) + (a + b)))
 
 
 if __name__ == '__main__':

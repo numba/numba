@@ -352,7 +352,7 @@ static PyObject *
 call_cfunc(PyObject *cfunc, PyObject *args, PyObject *kws)
 {
     PyCFunctionWithKeywords fn;
-    assert(!PyCFunction_Check(cfunc));
+    assert(PyCFunction_Check(cfunc));
     assert(PyCFunction_GET_FLAGS(cfunc) == METH_VARARGS | METH_KEYWORDS);
     fn = (PyCFunctionWithKeywords) PyCFunction_GET_FUNCTION(cfunc);
     return fn(PyCFunction_GET_SELF(cfunc), args, kws);
