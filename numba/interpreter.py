@@ -127,7 +127,6 @@ class Interpreter(object):
             self._compute_var_disposal(name, var_use[name])
 
     def _compute_var_disposal(self, var_name, use_map):
-        #print("use for %r -> %s" % (var_name, use_map))
         cfg = self.cfa.graph
 
         # Compute a set of blocks where we want the variable to be
@@ -156,11 +155,7 @@ class Interpreter(object):
             live_points.update(loop.exits)
 
         for block in use_map:
-            #block_loops = cfg.in_loops(block)
-            #if not block_loops or block_loops[-1] not in spanned_loops:
             live_points.add(block)
-
-        #print("live points for %r -> %s" % (var_name, live_points))
 
         # Now compute a set of *exclusive* blocks covering all paths
         # stemming from the live points. This ensures that each variable
@@ -176,7 +171,7 @@ class Interpreter(object):
                 continue
             seen.add(b)
             block_loops = cfg.in_loops(b)
-            if block_loops and block_loops[0] in spanned_loops:
+            if block_loops and block_loops[0] not in enclosing_loops:
                 continue
             if cfg.descendents(b) & tails:
                 for succ, _ in cfg.successors(b):
@@ -184,7 +179,6 @@ class Interpreter(object):
                         todo.append(succ)
             else:
                 tails.add(b)
-        #print("tails for %r -> %s" % (var_name, tails))
 
         # We can now insert the Del statements
         for b in tails:
