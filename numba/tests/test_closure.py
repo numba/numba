@@ -92,7 +92,7 @@ class TestClosure(unittest.TestCase):
         # collected (see issue #458).
         wrs = [weakref.ref(obj) for obj in
                (mult_10, c_mult_10, do_math, c_do_math)]
-        del (mult_10, c_mult_10, do_math, c_do_math)
+        obj = mult_10 = c_mult_10 = do_math = c_do_math = None
         gc.collect()
         self.assertEqual([w() for w in wrs], [None] * 4)
 
