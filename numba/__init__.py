@@ -47,7 +47,6 @@ def _sentry_llvm_version():
     """
     Make sure we meet min llvmpy version
     """
-    import sys
     import warnings
     import llvm
     min_version = (0, 12, 6)
@@ -59,9 +58,11 @@ def _sentry_llvm_version():
     if m:
         ver = tuple(map(int, m.groups()))
         if ver < min_version:
-            print("Numba requires at least version %d.%d.%d of llvmpy"
-                  ".\nPlease update your version of llvmpy." % min_version)
-            sys.exit()
+            msg = ("Numba requires at least version %d.%d.%d of llvmpy.\n"
+                   "Installed version is %s.\n"
+                   "Please update llvmpy." %
+                   (min_version + (llvm.__version__,)))
+            raise ImportError(msg)
     else:
         # Not matching?
         warnings.warns("llvmpy version format not recognized!")
