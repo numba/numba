@@ -177,6 +177,5 @@ class TestConversion(unittest.TestCase):
             pass 
         self.assertEqual(f(), jit('()', nopython=True)(f)())
 
-
 if __name__ == '__main__':
     unittest.main()
