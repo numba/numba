@@ -32,20 +32,18 @@ _dynamic_module = ModuleType(_dynamic_modname)
 
 
 class FunctionDescriptor(object):
-    __slots__ = ('native', 'modname', 'qualname', 'doc', 'blocks', 'typemap',
+    __slots__ = ('native', 'modname', 'qualname', 'doc', 'typemap',
                  'calltypes', 'args', 'kws', 'restype', 'argtypes',
-                 'mangled_name', 'unique_name', 'globals')
+                 'mangled_name', 'unique_name')
 
-    def __init__(self, native, modname, qualname, unique_name, doc, blocks,
+    def __init__(self, native, modname, qualname, unique_name, doc,
                  typemap, restype, calltypes, args, kws, mangler=None,
-                 argtypes=None, globals=None):
+                 argtypes=None):
         self.native = native
         self.modname = modname
         self.qualname = qualname
         self.unique_name = unique_name
-        self.globals = globals if globals is not None else {}
         self.doc = doc
-        self.blocks = blocks
         self.typemap = typemap
         self.calltypes = calltypes
         self.args = args
@@ -97,17 +95,16 @@ class FunctionDescriptor(object):
             # TODO avoid unnecessary recompilation of the same function
             unique_name = "%s$%d" % (qualname, func.__code__.co_firstlineno)
 
-        return qualname, unique_name, modname, doc, args, kws, func.__globals__
+        return qualname, unique_name, modname, doc, args, kws
 
     @classmethod
     def _from_python_function(cls, interp, typemap, restype, calltypes,
                               native, mangler=None):
-        (qualname, unique_name, modname, doc, args, kws, func_globals
+        (qualname, unique_name, modname, doc, args, kws,
          )= cls._get_function_info(interp)
-        sortedblocks = utils.SortedMap(utils.dict_iteritems(interp.blocks))
         self = cls(native, modname, qualname, unique_name, doc,
-                   sortedblocks, typemap, restype, calltypes,
-                   args, kws, mangler=mangler, globals=func_globals)
+                   typemap, restype, calltypes,
+                   args, kws, mangler=mangler)
         return self
 
 
@@ -156,9 +153,11 @@ class BaseLower(object):
     """
     Lower IR to LLVM
     """
-    def __init__(self, context, fndesc):
+    def __init__(self, context, fndesc, interp):
         self.context = context
         self.fndesc = fndesc
+        self.blocks = utils.SortedMap(utils.dict_iteritems(interp.blocks))
+
         # Initialize LLVM
         self.module = Module.new("module.%s" % self.fndesc.unique_name)
 
@@ -175,7 +174,7 @@ class BaseLower(object):
         # Internal states
         self.blkmap = {}
         self.varmap = {}
-        self.firstblk = min(self.fndesc.blocks.keys())
+        self.firstblk = min(self.blocks.keys())
         self.loc = -1
 
         # Subclass initialization
@@ -204,7 +203,7 @@ class BaseLower(object):
             self.storevar(av, ak)
 
         # Init blocks
-        for offset in self.fndesc.blocks:
+        for offset in self.blocks:
             bname = "B%d" % offset
             self.blkmap[offset] = self.function.append_basic_block(bname)
 
@@ -213,7 +212,7 @@ class BaseLower(object):
         entry_block_tail = self.builder.basic_block
 
         # Lower all blocks
-        for offset, block in self.fndesc.blocks.items():
+        for offset, block in self.blocks.items():
             bb = self.blkmap[offset]
             self.builder.position_at_end(bb)
             self.lower_block(block)

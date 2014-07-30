@@ -319,7 +319,7 @@ def native_lowering_stage(targetctx, interp, typemap, restype, calltypes,
     fndesc = lowering.PythonFunctionDescriptor.from_specialized_function(
         interp, typemap, restype, calltypes, mangler=targetctx.mangler)
 
-    lower = lowering.Lower(targetctx, fndesc)
+    lower = lowering.Lower(targetctx, fndesc, interp)
     lower.lower()
 
     if nocompile:
@@ -335,7 +335,7 @@ def native_lowering_stage(targetctx, interp, typemap, restype, calltypes,
 
 def py_lowering_stage(targetctx, interp, nocompile):
     fndesc = lowering.PythonFunctionDescriptor.from_object_mode_function(interp)
-    lower = objmode.PyLower(targetctx, fndesc)
+    lower = objmode.PyLower(targetctx, fndesc, interp)
     lower.lower()
 
     if nocompile:

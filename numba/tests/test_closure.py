@@ -1,6 +1,8 @@
 from __future__ import print_function
 
+import gc
 import sys
+import weakref
 
 import numba.unittest_support as unittest
 from numba import jit
@@ -72,11 +74,11 @@ class TestClosure(unittest.TestCase):
         def mult_10(a):
             return a * 10
 
-        mult_10 = jit('i4(i4)', **jitargs)(mult_10)
-        mult_10.disable_compile()
+        c_mult_10 = jit('i4(i4)', **jitargs)(mult_10)
+        c_mult_10.disable_compile()
 
         def do_math(x):
-            return mult_10(x + 4)
+            return c_mult_10(x + 4)
 
         c_do_math = jit('i4(i4)', **jitargs)(do_math)
         c_do_math.disable_compile()
@@ -85,6 +87,14 @@ class TestClosure(unittest.TestCase):
         self.assertEqual(c_do_math(1), 50)
         self.assertEqual(old_refcts,
                          (sys.getrefcount(c_do_math), sys.getrefcount(mult_10)))
+
+        # Check that both compiled functions and Python functions are
+        # collected (see issue #458).
+        wrs = [weakref.ref(obj) for obj in
+               (mult_10, c_mult_10, do_math, c_do_math)]
+        del (mult_10, c_mult_10, do_math, c_do_math)
+        gc.collect()
+        self.assertEqual([w() for w in wrs], [None] * 4)
 
     def test_jit_inner_function(self):
         self.run_jit_inner_function(forceobj=True)
