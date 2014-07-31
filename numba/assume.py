@@ -11,5 +11,3 @@ description of the assumption.  Code that makes the assumption should
 
 return_argument_array_only = '''Only array passed into the function as
 argument can be returned'''
-
-

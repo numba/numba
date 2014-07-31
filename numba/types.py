@@ -1,6 +1,13 @@
 """
-These type objects do not have a fixed machine representation.  It is up to
+Type objects that do not have a fixed machine representation.  It is up to
 the targets to choose their representation.
+
+Classes
+    Type
+    Integer
+    Float
+
+
 """
 from __future__ import print_function, division, absolute_import
 from collections import defaultdict
@@ -13,7 +20,7 @@ from . import utils
 def _autoincr():
     n = len(_typecache)
     # 4 billion types should be enough, right?
-    assert n <= 2 ** 32, "Limited to 4billion types"
+    assert n <= 2 ** 32, "Limited to 4 billion types"
     return n
 
 
@@ -25,6 +32,14 @@ class Type(object):
     The default behavior is to provide equality through `name` attribute.
     Two types are equal if there `name` are equal.
     Subclass can refine this behavior.
+
+    A number of instances are predefined:
+
+    Booleans, evaluate to True or False
+    ---------------
+    boolean
+    b1, same as numpy boolean.
+    bool_, same as numpy boolean.
     """
     __slots__ = '_code', 'name', 'is_parametric'
 
@@ -94,6 +109,64 @@ class OpaqueType(Type):
 
 @utils.total_ordering
 class Integer(Type):
+    """
+    Defines an Integer type to a specific bit width.
+
+    A number of Intger types (instances) are already defined for convenience. 
+    Integer types are defined in terms of bits or in terms of bytes as in Numpy.
+    
+    unsigned types, bit versions
+    ----------------
+    byte, an 8-bit unsigned integer.
+    uint8, an 8-bit unsigned integer.
+    uint16, a 16-bit unsigned integer.
+    uint32, a 32-bit unsigned integer.
+    uint64, a 64-bit unsigned integer.
+    
+    signed types, bit versions
+    ----------------
+    int8, an 8-bit signed ingeger.
+    int16, a 16-bit signed integer.
+    int32, a 32-bit signed integer.
+    int64, a 64-bit signed integer.
+
+    unsigned types, byte versions
+    ----------------
+    u1, a 1-byte unsigned integer.
+    u2, a 2-byte unsigned integer.
+    u4, a 4-byte unsigned integer.
+    u8, a 8-byte unsigned integer.
+    
+    signed types, byte versions
+    ----------------
+    i1, a 1-byte signed ingeger.
+    i2, a 2-byte signed integer.
+    i4, a 4-byte signed integer.
+    i8, a 8-byte signed integer.
+
+    convenience types
+    These types automatically use the width of the machine.
+    ----------------
+    intp, signed 32- or 64-bit integer depending on the machine width. 
+    uintp, unsigned 32- or 64-bit integer depending on the machine width.
+
+    numpy integer types
+    These types create numpy dtypes. They all take a parmeter n. For example, b = char(17).
+    ----------------
+    byte(n), an unsigned numpy byte (8-bits).
+    char(n), signed numpy byte (8-bits). 
+    uchar(n), an unsigned numpy byte (8-bits).
+    short(n), signed numpy short (16-bits).
+    ushort(n), unsigned numpy short (16-bits).
+    int_(n), signed C long, either 32- or 64-bit wide depending on the machine.
+    intc(n), signed C int (32-bits).
+    uintc(n), unsigned C int (32-bits)  
+    long_(n), signed numpy long, size depends on machine width
+    ulong(n), unsigned numpy long, size depends on machine width
+    longlong(n), signed numpy longlong, size depends on machine width
+    ulonglong(n), unsigned numpy longlong, size depends on machine width
+    """
+    
     def __init__(self, *args, **kws):
         super(Integer, self).__init__(*args, **kws)
         # Determine bitwidth
@@ -116,6 +189,26 @@ class Integer(Type):
 
 @utils.total_ordering
 class Float(Type):
+    """
+    Defines Floating Point types.
+
+    For convenience, a number of instances have already been defined.
+
+    32 bit floating point types
+    Single precision float: sign bit, 8 bits exponent, 23 bits mantissa
+    -----------------------
+    f4, a 4-byte float
+    float32, a 32-bit float
+    float_, a 4-byte float
+
+    64 bit precision floating point types
+    Double precision float: sign bit, 11 bits exponent, 52 bits mantissa
+    -----------------------
+    float64, a 64-bit float
+    f8, an 8-byte float
+
+    """
+
     def __init__(self, *args, **kws):
         super(Float, self).__init__(*args, **kws)
         # Determine bitwidth
@@ -134,6 +227,21 @@ class Float(Type):
 
 @utils.total_ordering
 class Complex(Type):
+    """
+    Defines Complex types a + bi (a + bj)
+
+    Complex64 types (two 32-bit, single precision values)
+    ----------------
+    complex64
+    c8
+
+    Complex128 types (two 64-bit, double precision values)
+    ----------------
+    complex128
+    c16
+
+    """
+
     def __init__(self, name, underlying_float, **kwargs):
         super(Complex, self).__init__(name, **kwargs)
         self.underlying_float = underlying_float
@@ -160,8 +268,14 @@ class Prototype(Type):
 
 class Dummy(Type):
     """
-    For type that does not really have a representation and is compatible
-    with a void*.
+    For types that do not really have a representation and are compatible
+    with void *.
+
+    For convenience, a number of Dummy types (instances) have already been defined:
+
+    none
+    void
+
     """
 
 

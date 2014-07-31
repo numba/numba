@@ -6,7 +6,6 @@ from . import testing, decorators
 from ._version import get_versions
 from . import special, types, config
 from .llvm_version import _sentry_llvm_version
-#import re
 
 # Re-export typeof
 from .special import *
@@ -34,6 +33,7 @@ from . import cuda
 
 # Check for minimum llvmpy version
 _sentry_llvm_version()
+
 
 __all__ = """
 jit
