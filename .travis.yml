@@ -22,7 +22,7 @@ before_install:
   - export PATH=/home/travis/anaconda/bin:$PATH
   - conda update --yes conda
   # Setup environment
-  - conda create -n travisci --yes python=${TRAVIS_PYTHON_VERSION:0:3} llvm numpy
+  - conda create -n travisci --yes python=${TRAVIS_PYTHON_VERSION:0:3} llvm numpy cffi
   - source activate travisci
   # Install unittest2 for Python 2
   - if [ ${TRAVIS_PYTHON_VERSION:0:3} == "2.6" ]; then conda install --yes unittest2 argparse; fi
