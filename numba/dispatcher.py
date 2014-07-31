@@ -16,6 +16,12 @@ from numba.bytecode import get_code_object
 
 
 class _OverloadedBase(_dispatcher.Dispatcher):
+    """
+    Common base class for dispatcher Implementations.
+    """
+
+    __numba__ = "py_func"
+
     def __init__(self, arg_count, py_func):
         self.tm = default_type_manager
         _dispatcher.Dispatcher.__init__(self, self.tm.get_pointer(), arg_count)
@@ -36,45 +42,7 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         self.doc = py_func.__doc__
         self._compiling = False
 
-
-class Overloaded(_OverloadedBase):
-    """
-    Abstract class. Subclass should define targetdescr class attribute.
-    """
-    __numba__ = "py_func"
-
-    def __init__(self, py_func, locals={}, targetoptions={}):
-        """
-        Parameters
-        ----------
-        py_func: function object to be compiled
-        locals: dict, optional
-            Mapping of local variable names to Numba types.  Used to override
-            the types deduced by the type inference engine.
-        targetoptions: dict, optional
-            Target-specific config options.
-        """
-        argspec = inspect.getargspec(py_func)
-        argct = len(argspec.args)
-
-        _OverloadedBase.__init__(self, argct, py_func)
-
-        functools.update_wrapper(self, py_func)
-
-        # A mapping of signatures to entry points
-        self.overloads = {}
-        # A mapping of signatures to types.Function objects
-        self._function_types = {}
-
-        # A mapping of signatures to compile results
-        self._compileinfos = {}
-
-        self.targetoptions = targetoptions
-        self.locals = locals
-
         self._finalizer = self._make_finalizer()
-
-        self.targetdescr.typing_context.insert_overloaded(self)
 
     def _make_finalizer(self):
         """
@@ -82,7 +50,7 @@ class Overloaded(_OverloadedBase):
         related compiled functions.
         """
         overloads = self.overloads
-        targetctx = self.targetdescr.target_context
+        targetctx = self.targetctx
         def finalizer():
             # This function must *not* hold any reference to self:
             # we take care to bind the necessary objects in the closure.
@@ -158,39 +126,6 @@ class Overloaded(_OverloadedBase):
     def is_compiling(self):
         return self._compiling
 
-    def compile(self, sig, locals={}, **targetoptions):
-        with self._compile_lock():
-            locs = self.locals.copy()
-            locs.update(locals)
-
-            topt = self.targetoptions.copy()
-            topt.update(targetoptions)
-
-            flags = compiler.Flags()
-            self.targetdescr.options.parse_as_flags(flags, topt)
-
-            glctx = self.targetdescr
-            typingctx = glctx.typing_context
-            targetctx = glctx.target_context
-
-            args, return_type = sigutils.normalize_signature(sig)
-
-            # Don't recompile if signature already exist.
-            existing = self.overloads.get(tuple(args))
-            if existing is not None:
-                return existing
-
-            cres = compiler.compile_extra(typingctx, targetctx, self.py_func,
-                                          args=args, return_type=return_type,
-                                          flags=flags, locals=locs)
-
-            # Check typing error if object mode is used
-            if cres.typing_error is not None and not flags.enable_pyobject:
-                raise cres.typing_error
-
-            self.add_overload(cres)
-            return cres.entry_point
-
     def jit(self, sig, **kws):
         """Alias of compile(sig, **kws)
         """
@@ -215,7 +150,7 @@ class Overloaded(_OverloadedBase):
     def _explain_ambiguous(self, *args, **kws):
         assert not kws, "kwargs not handled"
         args = tuple([self.typeof_pyval(a) for a in args])
-        resolve_overload(self.targetdescr.typing_context, self.py_func,
+        resolve_overload(self.typingctx, self.py_func,
                          tuple(self.overloads.keys()), args, kws)
 
     def __repr__(self):
@@ -261,15 +196,85 @@ class Overloaded(_OverloadedBase):
             return getattr(val, "_numba_type_", types.pyobject)
 
 
-class LiftedLoop(Overloaded):
+class Overloaded(_OverloadedBase):
+    """
+    Implementation of user-facing dispatcher objects (i.e. created using
+    the @jit decorator).
+    This is an abstract base class. Subclasses should define the targetdescr
+    class attribute.
+    """
+
+    def __init__(self, py_func, locals={}, targetoptions={}):
+        """
+        Parameters
+        ----------
+        py_func: function object to be compiled
+        locals: dict, optional
+            Mapping of local variable names to Numba types.  Used to override
+            the types deduced by the type inference engine.
+        targetoptions: dict, optional
+            Target-specific config options.
+        """
+        self.typingctx = self.targetdescr.typing_context
+        self.targetctx = self.targetdescr.target_context
+
+        argspec = inspect.getargspec(py_func)
+        argct = len(argspec.args)
+
+        _OverloadedBase.__init__(self, argct, py_func)
+
+        functools.update_wrapper(self, py_func)
+
+        self.targetoptions = targetoptions
+        self.locals = locals
+
+        self.typingctx.insert_overloaded(self)
+
+    def compile(self, sig, locals={}, **targetoptions):
+        with self._compile_lock():
+            locs = self.locals.copy()
+            locs.update(locals)
+
+            topt = self.targetoptions.copy()
+            topt.update(targetoptions)
+
+            flags = compiler.Flags()
+            self.targetdescr.options.parse_as_flags(flags, topt)
+
+            args, return_type = sigutils.normalize_signature(sig)
+
+            # Don't recompile if signature already exist.
+            existing = self.overloads.get(tuple(args))
+            if existing is not None:
+                return existing
+
+            cres = compiler.compile_extra(self.typingctx, self.targetctx,
+                                          self.py_func,
+                                          args=args, return_type=return_type,
+                                          flags=flags, locals=locs)
+
+            # Check typing error if object mode is used
+            if cres.typing_error is not None and not flags.enable_pyobject:
+                raise cres.typing_error
+
+            self.add_overload(cres)
+            return cres.entry_point
+
+
+class LiftedLoop(_OverloadedBase):
+    """
+    Implementation of the hidden dispatcher objects used for lifted loop
+    (a lifted loop is really compiled as a separate function).
+    """
+
     def __init__(self, bytecode, typingctx, targetctx, locals, flags):
+        self.typingctx = typingctx
+        self.targetctx = targetctx
+
         argspec = bytecode.argspec
         argct = len(argspec.args)
 
         _OverloadedBase.__init__(self, argct, bytecode.func)
-
-        self.typingctx = typingctx
-        self.targetctx = targetctx
 
         self.locals = locals
         self.flags = flags
