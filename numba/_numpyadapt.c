@@ -3,6 +3,10 @@
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/ndarrayobject.h>
 
+#ifndef NPY_ARRAY_BEHAVED
+    #define NPY_ARRAY_BEHAVED NPY_BEHAVED
+#endif
+
 static
 int adapt_ndarray(PyObject *obj, void* arystruct) {
     PyArrayObject *ndary;

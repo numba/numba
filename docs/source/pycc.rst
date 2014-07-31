@@ -24,6 +24,10 @@ linked against any other program.  This is **not** a Python extension.
 You would have to use ctypes to load the code that is created.
 Multiple files may be given to compile them simultaneously into a
 shared library. Options exist to compile to native object files
-instead of a shared library, to emit LLVM code or to generate a C
-header file with function prototypes. For more information on the
+instead of a shared library and to emit LLVM code. For more information on the
 available command line options, see ``pycc -h``.
+
+.. warning::
+
+    C header generation has been disabled in this release due to an incorrect
+    implementation.  The feature will return in a future release of Numba.

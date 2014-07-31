@@ -31,6 +31,8 @@ Fixes:
 * Return the correct dictionary when globals() is used in JIT functions
 * Fix crash bug when creating dictionary literals in object 
 * Report more informative error message on import if llvmpy is too old
+* Temporarily disable pycc --header, which generates incorrect function
+  signatures.
 
 Version 0.13.3
 --------------
