@@ -341,4 +341,3 @@ def new_method(fn, sig):
     ft = templates.make_concrete_template(name, fn, [sig])
     return types.Method(ft, this=sig.recvr)
 
-
