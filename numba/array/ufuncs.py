@@ -7,7 +7,7 @@ import numpy
 def create_unary_op(op_str):
     def unary_op(operand):
         if isinstance(operand, Array):
-            depth = max(operand1.depth, operand2.depth)
+            depth = operand.array_node.depth
             return Array(data=UnaryOperation(operand.array_node, op_str, depth))
         # JNB: do for binary ufuncs too
         elif isinstance(operand, numpy.ndarray):
