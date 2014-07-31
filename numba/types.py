@@ -3,10 +3,11 @@ Type objects that do not have a fixed machine representation.  It is up to
 the targets to choose their representation.
 
 Classes
-    Type
-    Integer
-    Float
-
+    Type, base class for Numba's type system. 
+        Integer, the integer type
+        Float, floating-point type
+        Complex, comple number type
+        Dummy, types that defy easy categorization
 
 """
 from __future__ import print_function, division, absolute_import
@@ -29,6 +30,8 @@ _typecache = defaultdict(_autoincr)
 
 class Type(object):
     """
+    The base class of all numpy types.
+
     The default behavior is to provide equality through `name` attribute.
     Two types are equal if there `name` are equal.
     Subclass can refine this behavior.
@@ -117,7 +120,6 @@ class Integer(Type):
     
     unsigned types, bit versions
     ----------------
-    byte, an 8-bit unsigned integer.
     uint8, an 8-bit unsigned integer.
     uint16, a 16-bit unsigned integer.
     uint32, a 32-bit unsigned integer.
