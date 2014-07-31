@@ -238,7 +238,7 @@ class WeakType(Type):
     def _get_object(self):
         obj = self._wr()
         if obj is None:
-            raise weakref.ReferenceError("underlying object has vanished")
+            raise ReferenceError("underlying object has vanished")
         return obj
 
     def __eq__(self, other):
