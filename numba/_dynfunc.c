@@ -131,6 +131,7 @@ typedef struct {
        using this closure. */
     PyMethodDef def;
     EnvironmentObject *env;
+    PyObject *weakreflist;
     /* We could also store the LLVM function or engine here, to ensure
        generated code is kept alive. */
 } ClosureObject;
@@ -147,6 +148,8 @@ static void
 closure_dealloc(ClosureObject *clo)
 {
     _PyObject_GC_UNTRACK((PyObject *) clo);
+    if (clo->weakreflist != NULL)
+        PyObject_ClearWeakRefs((PyObject *) clo);
     PyObject_Free((void *) clo->def.ml_name);
     PyObject_Free((void *) clo->def.ml_doc);
     Py_XDECREF(clo->env);
@@ -183,7 +186,7 @@ static PyTypeObject ClosureType = {
     (traverseproc) closure_traverse, /* tp_traverse */
     0,                         /* tp_clear */
     0,                         /* tp_richcompare */
-    0,                         /* tp_weaklistoffset */
+    offsetof(ClosureObject, weakreflist), /* tp_weaklistoffset */
     0,                         /* tp_iter */
     0,                         /* tp_iternext */
     0,                         /* tp_methods */
