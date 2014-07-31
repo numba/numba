@@ -3,6 +3,8 @@ from .array import Array
 import numpy as np
 from .nodes import WhereOperation
 
+python_max = max # max gets replaced by the array max method down below
+
 import sys as sys
 api = sys.modules[__name__]
 
@@ -37,5 +39,5 @@ def where(cond, left, right):
     return Array(data=WhereOperation(cond.array_node,
                                      left.array_node,
                                      right.array_node,
-                                     depth=max(left._depth, right._depth)))
+                                     depth=python_max(left._depth, right._depth)))
 
