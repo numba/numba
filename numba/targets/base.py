@@ -169,6 +169,14 @@ class BaseContext(object):
             imp = python_attr_impl(clsty, name, vtype)
             self.attrs[imp.key] = imp
 
+    def remove_user_function(self, func):
+        """
+        Remove user function *func*.
+        KeyError is raised if the function isn't known to us.
+        """
+        del self.users[func]
+        del self.defns[func]
+
     def get_user_function(self, func):
         return self.users[func]
 

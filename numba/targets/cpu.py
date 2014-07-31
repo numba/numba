@@ -240,6 +240,14 @@ class CPUContext(BaseContext):
         name, ptr = self.native_funcs[func]
         le.dylib_add_symbol(name, ptr)
 
+    def remove_native_function(self, func):
+        """
+        Remove internal references to nonpython mode function *func*.
+        KeyError is raised if the function isn't known to us.
+        """
+        name, ptr = self.native_funcs.pop(func)
+        le.dylib_add_symbol(name, 0)
+
     def optimize(self, module):
         self.pm.run(module)
 

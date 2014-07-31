@@ -8,13 +8,36 @@ import functools
 from numba.config import PYVERSION
 from numba import _dispatcher, compiler, utils
 from numba.typeconv.rules import default_type_manager
+from numba import typing
 from numba.typing.templates import resolve_overload
 from numba import types, sigutils
 from numba import numpy_support
 from numba.bytecode import get_code_object
 
 
-class Overloaded(_dispatcher.Dispatcher):
+class _OverloadedBase(_dispatcher.Dispatcher):
+    def __init__(self, arg_count, py_func):
+        self.tm = default_type_manager
+        _dispatcher.Dispatcher.__init__(self, self.tm.get_pointer(), arg_count)
+
+        # A mapping of signatures to entry points
+        self.overloads = {}
+        # A mapping of signatures to types.Function objects
+        self._function_types = {}
+        # A mapping of signatures to compile results
+        self._compileinfos = {}
+
+        self.py_func = py_func
+        # other parts of Numba assume the old Python 2 name for code object
+        self.func_code = get_code_object(py_func)
+        # but newer python uses a different name
+        self.__code__ = self.func_code
+
+        self.doc = py_func.__doc__
+        self._compiling = False
+
+
+class Overloaded(_OverloadedBase):
     """
     Abstract class. Subclass should define targetdescr class attribute.
     """
@@ -31,32 +54,46 @@ class Overloaded(_dispatcher.Dispatcher):
         targetoptions: dict, optional
             Target-specific config options.
         """
-        self.tm = default_type_manager
-
         argspec = inspect.getargspec(py_func)
         argct = len(argspec.args)
 
-        super(Overloaded, self).__init__(self.tm.get_pointer(), argct)
+        _OverloadedBase.__init__(self, argct, py_func)
 
-        self.py_func = py_func
         functools.update_wrapper(self, py_func)
-
-        # other parts of Numba assume the old Python 2 name for code object
-        self.func_code = get_code_object(py_func)
-        # but newer python uses a different name
-        self.__code__ = self.func_code
 
         # A mapping of signatures to entry points
         self.overloads = {}
+        # A mapping of signatures to types.Function objects
+        self._function_types = {}
 
         # A mapping of signatures to compile results
         self._compileinfos = {}
 
         self.targetoptions = targetoptions
         self.locals = locals
-        self._compiling = False
+
+        self._finalizer = self._make_finalizer()
 
         self.targetdescr.typing_context.insert_overloaded(self)
+
+    def _make_finalizer(self):
+        """
+        Return a finalizer function that will release references to
+        related compiled functions.
+        """
+        overloads = self.overloads
+        targetctx = self.targetdescr.target_context
+        def finalizer():
+            # This function must *not* hold any reference to self:
+            # we take care to bind the necessary objects in the closure.
+            for func in overloads.values():
+                try:
+                    targetctx.remove_user_function(func)
+                    targetctx.remove_native_function(func)
+                except KeyError:
+                    # Not a native function (object mode presumably)
+                    pass
+        return finalizer
 
     @property
     def signatures(self):
@@ -78,13 +115,30 @@ class Overloaded(_dispatcher.Dispatcher):
         self._compileinfos[args] = cres
 
         # Add native function for correct typing the code generation
-        typing = cres.typing_context
         target = cres.target_context
         cfunc = cres.entry_point
         if cfunc in target.native_funcs:
             target.dynamic_map_function(cfunc)
-            calltemplate = target.get_user_function(cfunc)
-            typing.insert_user_function(cfunc, calltemplate)
+            # Create function type for typing
+            func_name = cres.fndesc.mangled_name
+            name = "CallTemplate(%s)" % cres.fndesc.mangled_name
+            # The `key` isn't really used except for diagnosis here,
+            # so avoid keeping a reference to `cfunc`.
+            call_template = typing.make_concrete_template(
+                name, key=func_name, signatures=[cres.signature])
+            self._function_types[args] = call_template
+
+    def get_call_template(self, args, kws):
+        """
+        Get a typing.ConcreteTemplate for this dispatcher and the given *args*
+        and *kws*.  This allows to resolve the return type.
+        """
+        if kws:
+            raise TypeError("kwargs not supported")
+        # Ensure an overload is available, but avoid compiler re-entrance
+        if not self.is_compiling:
+            self.compile(tuple(args))
+        return self._function_types[args]
 
     def get_overload(self, sig):
         args, return_type = sigutils.normalize_signature(sig)
@@ -209,25 +263,17 @@ class Overloaded(_dispatcher.Dispatcher):
 
 class LiftedLoop(Overloaded):
     def __init__(self, bytecode, typingctx, targetctx, locals, flags):
-        self.tm = default_type_manager
-
         argspec = bytecode.argspec
         argct = len(argspec.args)
 
-        _dispatcher.Dispatcher.__init__(self, self.tm.get_pointer(), argct)
+        _OverloadedBase.__init__(self, argct, bytecode.func)
 
-        self.bytecode = bytecode
         self.typingctx = typingctx
         self.targetctx = targetctx
+
         self.locals = locals
         self.flags = flags
-
-        self.py_func = bytecode.func
-        self.overloads = {}
-        self._compileinfos = {}
-
-        self.doc = self.py_func.__doc__
-        self._compiling = False
+        self.bytecode = bytecode
 
     def compile(self, sig):
         with self._compile_lock():

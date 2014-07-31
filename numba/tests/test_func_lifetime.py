@@ -29,15 +29,28 @@ class TestFuncLifetime(TestCase):
     """
     # NOTE: there's a test for closure lifetime in test_closure
 
+    def get_impl(self, dispatcher):
+        """
+        Get the single implementation (a C function object) of a dispatcher.
+        """
+        self.assertEqual(len(dispatcher.overloads), 1)
+        return list(dispatcher.overloads.values())[0]
+
     def check_local_func_lifetime(self, **jitargs):
         def f(x):
             return x + 1
 
-        c_f = jit(**jitargs)(f)
+        c_f = jit('int32(int32)', **jitargs)(f)
         self.assertPreciseEqual(c_f(1), 2)
 
-        refs = [weakref.ref(obj) for obj in (f, c_f)]
-        obj = f = c_f = None
+        cfunc = self.get_impl(c_f)
+
+        # Since we can't take a weakref to a C function object
+        # (see http://bugs.python.org/issue22116), ensure it's
+        # collected by taking a weakref to its __self__ instead
+        # (a _dynfunc._Closure object).
+        refs = [weakref.ref(obj) for obj in (f, c_f, cfunc.__self__)]
+        obj = f = c_f = cfunc = None
         gc.collect()
         self.assertEqual([wr() for wr in refs], [None] * len(refs))
 
@@ -51,10 +64,13 @@ class TestFuncLifetime(TestCase):
         c_f = jit(**jitargs)(global_usecase1)
         self.assertPreciseEqual(c_f(1), 2)
 
+        cfunc = self.get_impl(c_f)
+
         wr = weakref.ref(c_f)
-        c_f = None
+        refs = [weakref.ref(obj) for obj in (c_f, cfunc.__self__)]
+        obj = c_f = cfunc = None
         gc.collect()
-        self.assertIs(wr(), None)
+        self.assertEqual([wr() for wr in refs], [None] * len(refs))
 
     def test_global_func_lifetime(self):
         self.check_global_func_lifetime(forceobj=True)
