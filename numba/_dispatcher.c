@@ -16,6 +16,7 @@ typedef struct DispatcherObject{
     /* Borrowed references */
     PyObject *firstdef, *fallbackdef;
     /* An optional finalizer callable */
+    /* NOTE: perhaps we can backport weakref.finalize() from 3.4 instead? */
     PyObject *finalizer;
 } DispatcherObject;
 
