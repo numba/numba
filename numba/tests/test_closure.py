@@ -10,13 +10,6 @@ from numba import jit
 
 class TestClosure(unittest.TestCase):
 
-    def get_impl(self, dispatcher):
-        """
-        Get the single implementation (a C function object) of a dispatcher.
-        """
-        self.assertEqual(len(dispatcher.overloads), 1, dispatcher.overloads)
-        return list(dispatcher.overloads.values())[0]
-
     def run_jit_closure_variable(self, **jitargs):
         Y = 10
 
@@ -90,21 +83,10 @@ class TestClosure(unittest.TestCase):
         c_do_math = jit('intp(intp)', **jitargs)(do_math)
         c_do_math.disable_compile()
 
-        old_refcts = sys.getrefcount(c_do_math), sys.getrefcount(mult_10)
+        old_refcts = sys.getrefcount(c_do_math), sys.getrefcount(c_mult_10)
         self.assertEqual(c_do_math(1), 50)
         self.assertEqual(old_refcts,
-                         (sys.getrefcount(c_do_math), sys.getrefcount(mult_10)))
-
-        # Check that both compiled functions and Python functions are
-        # collected (see issue #458, also test_func_lifetime.py).
-        wrs = [weakref.ref(obj) for obj in
-               (mult_10, c_mult_10, do_math, c_do_math,
-                self.get_impl(c_mult_10).__self__,
-                self.get_impl(c_do_math).__self__,
-                )]
-        obj = mult_10 = c_mult_10 = do_math = c_do_math = None
-        gc.collect()
-        self.assertEqual([w() for w in wrs], [None] * len(wrs))
+                         (sys.getrefcount(c_do_math), sys.getrefcount(c_mult_10)))
 
     def test_jit_inner_function(self):
         self.run_jit_inner_function(forceobj=True)
