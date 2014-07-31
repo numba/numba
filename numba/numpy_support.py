@@ -108,7 +108,7 @@ def map_layout(val):
 # 'F' - complex float (float32)
 # 'D' - complex double (float64)
 _typemap = {
-#    '?': types.bool_,
+    '?': types.bool_,
     'b': types.int8,
     'B': types.uint8,
     'h': types.short,

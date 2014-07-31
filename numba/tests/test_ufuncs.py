@@ -1212,8 +1212,8 @@ class TestLoopTypesNoPython(TestLoopTypes):
                np.floor, np.ceil, np.trunc]
 
     # supported types are integral (signed and unsgined) as well as float and double
-    # support for bool (?), complex64(F) and complex128(D) should be coming soon.
-    _supported_types = 'bBhHiIlLqQfd'
+    # support for complex64(F) and complex128(D) should be coming soon.
+    _supported_types = '?bBhHiIlLqQfd'
 
 if __name__ == '__main__':
     unittest.main()
