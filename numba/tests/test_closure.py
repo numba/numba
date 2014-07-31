@@ -1,4 +1,7 @@
 from __future__ import print_function
+
+import sys
+
 import numba.unittest_support as unittest
 from numba import jit
 
@@ -66,16 +69,22 @@ class TestClosure(unittest.TestCase):
         self.run_jit_multiple_closure_variables(nopython=True)
 
     def run_jit_inner_function(self, **jitargs):
-        @jit('i4(i4)', **jitargs)
         def mult_10(a):
             return a * 10
+
+        mult_10 = jit('i4(i4)', **jitargs)(mult_10)
+        mult_10.disable_compile()
 
         def do_math(x):
             return mult_10(x + 4)
 
         c_do_math = jit('i4(i4)', **jitargs)(do_math)
+        c_do_math.disable_compile()
 
+        old_refcts = sys.getrefcount(c_do_math), sys.getrefcount(mult_10)
         self.assertEqual(c_do_math(1), 50)
+        self.assertEqual(old_refcts,
+                         (sys.getrefcount(c_do_math), sys.getrefcount(mult_10)))
 
     def test_jit_inner_function(self):
         self.run_jit_inner_function(forceobj=True)

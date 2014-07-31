@@ -3,9 +3,12 @@ import numba.unittest_support as unittest
 
 import argparse
 import collections
+import cProfile
 import functools
 import gc
+import os
 import sys
+import time
 import warnings
 from unittest import result, runner
 
@@ -17,11 +20,15 @@ from numba.utils import PYVERSION
 
 class NumbaTestProgram(unittest.main):
     """
-    A TestProgram subclass adding a -R option to enable reference leak
-    testing.
+    A TestProgram subclass adding the following options:
+    * a -R option to enable reference leak detection
+    * a --profile option to enable profiling of the test run
+
+    Currently the options are only added in 3.4+.
     """
 
     refleak = False
+    profile = False
 
     def __init__(self, *args, **kwargs):
         self.discovered_suite = kwargs.pop('suite', None)
@@ -34,13 +41,17 @@ class NumbaTestProgram(unittest.main):
             super(NumbaTestProgram, self).createTests()
 
     def _getParentArgParser(self):
-        # NOTE: this hook only exists on Python 3.4+. The option won't be
-        # added in earlier versions.
+        # NOTE: this hook only exists on Python 3.4+. The options won't be
+        # added in earlier versions (which use optparse - 3.3 - or getopt()
+        # - 2.x).
         parser = super(NumbaTestProgram, self)._getParentArgParser()
         if self.testRunner is None:
             parser.add_argument('-R', '--refleak', dest='refleak',
                                 action='store_true',
                                 help='Detect reference / memory leaks')
+        parser.add_argument('--profile', dest='profile',
+                            action='store_true',
+                            help='Profile the test run')
         return parser
 
     def runTests(self):
@@ -49,7 +60,24 @@ class NumbaTestProgram(unittest.main):
             if not hasattr(sys, "gettotalrefcount"):
                 warnings.warn("detecting reference leaks requires a debug build "
                               "of Python, only memory leaks will be detected")
-        super(NumbaTestProgram, self).runTests()
+
+        def run_tests_real():
+            super(NumbaTestProgram, self).runTests()
+
+        if self.profile:
+            filename = os.path.splitext(
+                os.path.basename(sys.modules['__main__'].__file__)
+                )[0] + '.prof'
+            p = cProfile.Profile(timer=time.perf_counter)  # 3.3+
+            p.enable()
+            try:
+                p.runcall(run_tests_real)
+            finally:
+                p.disable()
+                print("Writing test profile data into %r" % (filename,))
+                p.dump_stats(filename)
+        else:
+            run_tests_real()
 
 
 # Monkey-patch unittest so that individual test modules get our custom
@@ -112,7 +140,12 @@ class RefleakTestResult(runner.TextTestResult):
             # Use a pristine, silent result object to avoid recursion
             res = result.TestResult()
             test.run(res)
-            assert res.wasSuccessful()
+            # Poorly-written tests may fail when run several times.
+            # In this case, abort the refleak run and report the failure.
+            if not res.wasSuccessful():
+                self.failures.extend(res.failures)
+                self.errors.extend(res.errors)
+                raise AssertionError
             del res
             alloc_after, rc_after = _refleak_cleanup()
             if i >= nwarmup:
@@ -122,7 +155,12 @@ class RefleakTestResult(runner.TextTestResult):
         return rc_deltas, alloc_deltas
 
     def addSuccess(self, test):
-        rc_deltas, alloc_deltas = self._huntLeaks(test)
+        try:
+            rc_deltas, alloc_deltas = self._huntLeaks(test)
+        except AssertionError:
+            # Test failed when repeated
+            assert not self.wasSuccessful()
+            return
 
         # These checkers return False on success, True on failure
         def check_rc_deltas(deltas):

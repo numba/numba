@@ -4,6 +4,10 @@ import os
 import re
 import warnings
 
+IS_WIN32 = sys.platform.startswith('win32')
+MACHINE_BITS = tuple.__itemsize__ * 8
+IS_32BITS = MACHINE_BITS == 32
+
 
 def _readenv(name, ctor, default):
     try:
@@ -25,8 +29,20 @@ DEBUG = _readenv("NUMBA_DEBUG", int, 0)
 # JIT Debug flag to trigger IR instruction print
 DEBUG_JIT = _readenv("NUMBA_DEBUG_JIT", int, 0)
 
+# Enable debugging of front-end operation (up to and including IR generation)
+DEBUG_FRONTEND = _readenv("NUMBA_DEBUG_FRONTEND", int, 0)
+
 # Optimization level
 OPT = _readenv("NUMBA_OPT", int, 3)
+
+# Force dump of Python bytecode
+DUMP_BYTECODE = _readenv("NUMBA_DUMP_BYTECODE", int, DEBUG_FRONTEND)
+
+# Force dump of control flow graph
+DUMP_CFG = _readenv("NUMBA_DUMP_CFG", int, DEBUG_FRONTEND)
+
+# Force dump of Numba IR
+DUMP_IR = _readenv("NUMBA_DUMP_IR", int, DEBUG_FRONTEND)
 
 # Force dump of LLVM IR
 DUMP_LLVM = _readenv("NUMBA_DUMP_LLVM", int, DEBUG)
@@ -36,6 +52,11 @@ NUMBA_DUMP_FUNC_OPT = _readenv("NUMBA_DUMP_FUNC_OPT", int, DEBUG)
 
 # Force dump of Optimized LLVM IR
 DUMP_OPTIMIZED = _readenv("NUMBA_DUMP_OPTIMIZED", int, DEBUG)
+
+# Force disable loop vectorize
+# Loop vectorizer is disabled on 32-bit win32 due to a bug (#649)
+LOOP_VECTORIZE = _readenv("NUMBA_LOOP_VECTORIZE", int,
+                          not (IS_WIN32 and IS_32BITS))
 
 # Force dump of generated assembly
 DUMP_ASSEMBLY = _readenv("NUMBA_DUMP_ASSEMBLY", int, DEBUG)
@@ -61,5 +82,6 @@ def _force_cc(text):
                              "and minor are decimals")
         grp = m.groups()
         return int(grp[0]), int(grp[1])
+
 
 FORCE_CUDA_CC = _readenv("NUMBA_FORCE_CUDA_CC", _force_cc, None)

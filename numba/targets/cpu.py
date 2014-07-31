@@ -129,6 +129,9 @@ class CPUContext(BaseContext):
             env = lc.Constant.null(PYOBJECT)
         retty = callee.args[0].type.pointee
         retval = cgutils.alloca_once(builder, retty)
+        # initialize return value to zeros
+        builder.store(lc.Constant.null(retty), retval)
+
         args = [self.get_value_as_argument(builder, ty, arg)
                 for ty, arg in zip(argtys, args)]
         realargs = [retval, env] + list(args)
@@ -159,7 +162,7 @@ class CPUContext(BaseContext):
         if 0 < config.OPT <= 3:
             # This uses the same passes for clang -O3
             pms = lp.build_pass_managers(tm=self.tm, opt=config.OPT,
-                                         loop_vectorize=True,
+                                         loop_vectorize=config.LOOP_VECTORIZE,
                                          fpm=False)
             return pms.pm
         else:
@@ -240,19 +243,12 @@ class CPUContext(BaseContext):
     def optimize(self, module):
         self.pm.run(module)
 
-    def get_executable(self, func, fndesc, env):
-        """
-        Returns
-        -------
-        (cfunc, fnptr)
+    def finalize(self, func, fndesc):
+        """Finalize the compilation.  Called by get_executable().
 
-        - cfunc
-            callable function (Can be None)
-        - fnptr
-            callable function address
-        - env
-            an execution environment (from _dynfunc)
-
+        - Rewrite intrinsics
+        - Fix div & rem instructions on 32bit platform
+        - Optimize python API calls
         """
         func.module.target = self.tm.triple
 
@@ -266,6 +262,20 @@ class CPUContext(BaseContext):
         if not fndesc.native:
             self.optimize_pythonapi(func)
 
+    def get_executable(self, func, fndesc, env):
+        """
+        Returns
+        -------
+        (cfunc, fnptr)
+
+        - cfunc
+            callable function (Can be None)
+        - fnptr
+            callable function address
+        - env
+            an execution environment (from _dynfunc)
+        """
+        self.finalize(func, fndesc)
         cfunc = self.prepare_for_call(func, fndesc, env)
         return cfunc
 
@@ -283,10 +293,6 @@ class CPUContext(BaseContext):
             print(("ASSEMBLY %s" % fndesc).center(80, '-'))
             print(self.tm.emit_assembly(func.module))
             print('=' * 80)
-
-        # Map module.__dict__
-        le.dylib_add_symbol(".pymodule.dict." + fndesc.modname,
-                            id(fndesc.globals))
 
         # Code gen
         self.engine.add_module(func.module)

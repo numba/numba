@@ -741,6 +741,8 @@ class BaseContext(object):
         assert env is None
         retty = callee.args[0].type.pointee
         retval = cgutils.alloca_once(builder, retty)
+        # initialize return value
+        builder.store(lc.Constant.null(retty), retval)
         args = [self.get_value_as_argument(builder, ty, arg)
                 for ty, arg in zip(argtys, args)]
         realargs = [retval] + list(args)
@@ -834,6 +836,12 @@ class BaseContext(object):
 
     def optimize(self, module):
         pass
+
+    def finalize(self, func, fndesc):
+        """Perform any necessary work to complete the compilation.
+        An implementation of get_executable() should call finalize().
+        """
+        raise NotImplementedError
 
     def get_executable(self, func, fndesc):
         raise NotImplementedError

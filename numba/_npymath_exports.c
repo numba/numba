@@ -32,6 +32,7 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL(asinh),
     NPYMATH_SYMBOL(acosh),
     NPYMATH_SYMBOL(atanh),
+    NPYMATH_SYMBOL(hypot),
 
     NPYMATH_SYMBOL(exp),
     NPYMATH_SYMBOL(exp2),
@@ -55,6 +56,9 @@ struct npy_math_entry exports[] = {
 
     NPYMATH_SYMBOL(logaddexp),
     NPYMATH_SYMBOL(logaddexp2),
+    NPYMATH_SYMBOL(rint),
+    NPYMATH_SYMBOL(fabs),
+
 
     /* complex functions */
     NPYMATH_SYMBOL(cabs),

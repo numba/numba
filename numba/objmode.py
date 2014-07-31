@@ -331,6 +331,7 @@ class PyLower(BaseLower):
             self.env.consts.append(const)
             ret = self.get_env_const(index)
             self.check_error(ret)
+            self.incref(ret)
             return ret
 
     def lower_global(self, name, value):
@@ -384,6 +385,7 @@ class PyLower(BaseLower):
     def get_env_const(self, index):
         """
         Look up constant number *index* inside the environment body.
+        A borrowed reference is returned.
         """
         return self.pyapi.list_getitem(self.env_body.consts, index)
 

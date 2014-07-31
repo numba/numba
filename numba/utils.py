@@ -13,14 +13,12 @@ except ImportError:
 
 import numpy
 
-from numba.config import PYVERSION
+from numba.config import PYVERSION, MACHINE_BITS
 
 
 INT_TYPES = (int,)
 if PYVERSION < (3, 0):
     INT_TYPES += (long,)
-
-MACHINE_BITS = tuple.__itemsize__ * 8
 
 
 class ConfigOptions(object):

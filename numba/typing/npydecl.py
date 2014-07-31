@@ -105,7 +105,7 @@ _math_operations = [ "add", "subtract", "multiply",
                      "rint", "sign", "conj", "exp", "exp2",
                      "log", "log2", "log10", "expm1", "log1p",
                      "sqrt", "square", "reciprocal",
-                     "divide", "mod", "abs" ]
+                     "divide", "mod", "abs", "fabs" ]
 
 _trigonometric_functions = [ "sin", "cos", "tan", "arcsin",
                              "arccos", "arctan", "arctan2",
@@ -137,15 +137,15 @@ _floating_functions = [ "isfinite", "isinf", "isnan", "signbit",
 #
 # It also works as a nice TODO list for ufunc support :)
 _unsupported = set([ numpy.square, numpy.spacing, numpy.signbit,
-                     numpy.rint, numpy.right_shift, numpy.remainder, numpy.reciprocal,
+                     numpy.right_shift, numpy.remainder, numpy.reciprocal,
                      numpy.not_equal, numpy.minimum, numpy.maximum,
                      numpy.logical_xor, numpy.logical_or, numpy.logical_not,
                      numpy.logical_and, numpy.less,
                      numpy.less_equal, numpy.left_shift, numpy.isnan, numpy.isinf,
-                     numpy.isfinite, numpy.invert, numpy.hypot, numpy.greater,
+                     numpy.isfinite, numpy.invert, numpy.greater,
                      numpy.greater_equal, numpy.fmod, numpy.fmin, numpy.fmax,
                      numpy.equal, numpy.copysign,
-                     numpy.reciprocal, numpy.conjugate, numpy.bitwise_xor,
+                     numpy.conjugate, numpy.bitwise_xor,
                      numpy.bitwise_or, numpy.bitwise_and ])
 
 # a list of ufuncs that are in fact aliases of other ufuncs. They need to insert the

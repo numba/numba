@@ -96,46 +96,25 @@ def map_layout(val):
 # return value - the full identifier of the loop. f.e: 'dd->d' or None if no matching
 #                loop is found.
 
-# mapping from numpy letter dtypes to the associate numba type. Not all
-# dtypes are supported. Notable unsupported types right now are:
-# 'O' - object
-# 'g' - long double
-# 'G' - long complex double
-# 'm' - timedelta64
-# 'M' - datetime64
-# 'e' - float16
-# '?' - bool
-# 'F' - complex float (float32)
-# 'D' - complex double (float64)
-_typemap = {
-    '?': types.bool_,
-    'b': types.int8,
-    'B': types.uint8,
-    'h': types.short,
-    'H': types.ushort,
-    'i': types.intc,
-    'I': types.uintc,
-    'l': types.long_,
-    'L': types.ulong,
-    'q': types.longlong,
-    'Q': types.ulonglong,
-
-    'f': types.float_,
-    'd': types.double,
-#    'F': types.complex64,  # cfloat
-#    'D': types.complex128, # cdouble
-}
-
-_inv_typemap = dict((v,k) for (k,v) in _typemap.items());
-
 def supported_letter_types():
-    return _typemap.keys()
+    """the supported dtypes in letter form. Notable exceptions are:
+    'O' - object
+    'g' - long double
+    'G' - long complex double
+    'm' - timedelta64
+    'M' - datetime64
+    'e' - float16
+    'F' - complex float (float32)
+    'D' - complex double (float64)
+    """
+    return '?bBhHiIlLqQfd'
 
 def numba_types_to_numpy_letter_types(numba_type_seq):
-    return [_inv_typemap.get(x) for x in numba_type_seq]
+    letter_type = [numpy.dtype(str(x)).char for x in numba_type_seq]
+    return [l if l in supported_letter_types() else None for l in letter_type]
 
 def numpy_letter_types_to_numba_types(numpy_letter_types_seq):
-    return [_typemap.get(x) for x in numpy_letter_types_seq]
+    return [from_dtype(numpy.dtype(x)) for x in numpy_letter_types_seq]
 
 def ufunc_find_matching_loop(ufunc, op_dtypes):
     assert(isinstance(ufunc, numpy.ufunc))

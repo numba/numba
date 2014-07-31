@@ -11,10 +11,11 @@ import numba.unittest_support as unittest
 from numba import types, typing, utils
 from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
 from numba.numpy_support import numpy_letter_types_to_numba_types
+from numba import vectorize
 from numba.config import PYVERSION
-from numba.targets import cpu
 from numba.typeinfer import TypingError
 from numba.tests.support import TestCase, CompilationCache
+from numba.targets import cpu
 import re
 
 is32bits = tuple.__itemsize__ == 4
@@ -62,6 +63,12 @@ def _make_binary_ufunc_usecase(ufunc):
     fn = ldict['fn']
     fn.__name__ = "{0}_usecase".format(ufunc_name)
     return fn
+
+
+def _as_dtype_value(tyargs, args):
+    """Convert python values into numpy scalar objects.
+    """
+    return [np.dtype(str(ty)).type(val) for ty, val in zip(tyargs, args)]
 
 
 class TestUFuncs(TestCase):
@@ -369,10 +376,15 @@ class TestUFuncs(TestCase):
     def test_absolute_ufunc_npm(self):
         self.test_absolute_ufunc(flags=no_pyobj_flags)
 
+    def test_fabs_ufunc(self, flags=enable_pyobj_flags):
+        self.unary_ufunc_test(np.fabs, flags=flags)
+
+    def test_fabs_ufunc_npm(self):
+        self.test_fabs_ufunc(flags=no_pyobj_flags)
+
     def test_rint_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.rint, flags=flags)
 
-    @_unimplemented
     def test_rint_ufunc_npm(self):
         self.test_rint_ufunc(flags=no_pyobj_flags)
 
@@ -507,7 +519,6 @@ class TestUFuncs(TestCase):
     def test_hypot_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test(np.hypot)
 
-    @_unimplemented
     def test_hypot_ufunc_npm(self):
         self.test_hypot_ufunc(flags=no_pyobj_flags)
 
@@ -1019,7 +1030,8 @@ class TestScalarUFuncs(TestCase):
             cr = compile_isolated(pyfunc, tyargs, flags=self._compile_flags)
             cfunc = cr.entry_point
             got = cfunc(*args)
-            expected = pyfunc(*args)
+            expected = pyfunc(*_as_dtype_value(tyargs, args))
+
             msg = 'for args {0} typed {1}'.format(args, tyargs)
 
             # note: due to semantics of ufuncs, thing like adding a int32 to a
@@ -1096,6 +1108,17 @@ class TestScalarUFuncs(TestCase):
 class TestScalarUFuncsNoPython(TestScalarUFuncs):
     """Same tests as TestScalarUFuncs, but forcing no python mode"""
     _compile_flags = no_pyobj_flags
+
+class TestUfuncIssues(TestCase):
+    def test_issue_651(self):
+        # Exercise the code path to make sure this does not fail
+        @vectorize(["(float64,float64)"])
+        def foo(x1, x2):
+            return np.add(x1, x2) + np.add(x1, x2)
+
+        a = np.arange(10, dtype='f8')
+        b = np.arange(10, dtype='f8')
+        self.assertTrue(np.all(foo(a, b) == (a + b) + (a + b)))
 
 
 class TestLoopTypes(TestCase):
