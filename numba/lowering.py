@@ -144,9 +144,9 @@ class ExternalFunctionDescriptor(FunctionDescriptor):
         args = ["arg%d" % i for i in range(len(argtypes))]
         super(ExternalFunctionDescriptor, self).__init__(native=True,
                 modname=None, qualname=name, unique_name=name, doc='',
-                blocks=None, typemap=None, restype=restype, calltypes=None,
-                args=args, kws=None, mangler=lambda a, x: a, argtypes=argtypes,
-                globals={})
+                typemap=None, restype=restype, calltypes=None,
+                args=args, kws=None, mangler=lambda a, x: a,
+                argtypes=argtypes)
 
 
 class BaseLower(object):
