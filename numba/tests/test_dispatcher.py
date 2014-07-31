@@ -4,12 +4,12 @@ from numba.special import typeof
 from numba import vectorize, types, jit
 import numpy
 
+
 def dummy(x):
     return x
 
 
 class TestDispatcher(unittest.TestCase):
-
     def test_typeof(self):
         self.assertEqual(typeof(numpy.int8(1)), types.int8)
         self.assertEqual(typeof(numpy.uint16(1)), types.uint16)
@@ -26,10 +26,10 @@ class TestDispatcher(unittest.TestCase):
         @jit
         def foo():
             return 1
-        
+
         # Just make sure this doesn't crash
         foo()
-    
+
 
     def test_inspect_types(self):
         @jit
@@ -39,7 +39,6 @@ class TestDispatcher(unittest.TestCase):
         foo(1, 2)
         # Exercise the method
         foo.inspect_types()
-
 
 
 if __name__ == '__main__':
