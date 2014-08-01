@@ -91,13 +91,24 @@ Dispatcher_traverse(DispatcherObject *self, visitproc visit, void *arg)
 static void
 Dispatcher_dealloc(DispatcherObject *self)
 {
+    PyObject *type, *value, *traceback; /* For temp storage of exception */
+
     if (self->finalizer != NULL) {
+        /*
+        PyObject_CallObject will fail if we enter with an exception set
+        So we will temporarily save the exception and restore it after the
+        call.
+        */
+        PyErr_Fetch(&type, &value, &traceback);
         PyObject *res = PyObject_CallObject(self->finalizer, NULL);
-        if (res != NULL)
+        if (res != NULL) {
             Py_DECREF(res);
-        else
+        } else {
             PyErr_WriteUnraisable(self->finalizer);
+        }
         Py_DECREF(self->finalizer);
+        /* Restore the exception */
+        PyErr_Restore(type, value, traceback);
     }
     dispatcher_del(self->dispatcher);
     Py_TYPE(self)->tp_free((PyObject*)self);
