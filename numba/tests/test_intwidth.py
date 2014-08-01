@@ -1,7 +1,7 @@
+import numba.unittest_support as unittest
 
 import math
 import sys
-import unittest
 
 from numba import jit, utils
 from .support import TestCase
