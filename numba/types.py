@@ -3,7 +3,7 @@ Type objects that do not have a fixed machine representation.  It is up to
 the targets to choose their representation.
 
 Classes
-    Type, base class for Numba's type system. 
+    Type, base class for numba's type system. 
         Integer, the integer type
         Float, floating-point type
         Complex, comple number type
@@ -30,7 +30,7 @@ _typecache = defaultdict(_autoincr)
 
 class Type(object):
     """
-    The base class of all numpy types.
+    The base class of all numba types.
 
     The default behavior is to provide equality through `name` attribute.
     Two types are equal if there `name` are equal.
