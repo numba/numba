@@ -139,6 +139,14 @@ class Overloaded(_dispatcher.Dispatcher):
 
     def jit(self, sig, **kws):
         """Alias of compile(sig, **kws)
+
+        Args:
+            sig: tuple of function arguments converted to numba types 
+            **kws -- keyword arguments
+        
+        Returns:
+            the compiled function
+
         """
         return self.compile(sig, **kws)
 
@@ -170,7 +178,7 @@ class Overloaded(_dispatcher.Dispatcher):
     @classmethod
     def typeof_pyval(cls, val):
         """
-        This is called from numba._dispatcher as a fallback if the native code
+        Determine the argument types. This is called from numba._dispatcher as a fallback if the native code
         cannot decide the type.
         """
         if isinstance(val, numpy.ndarray):
