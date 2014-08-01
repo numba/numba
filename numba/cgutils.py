@@ -643,5 +643,3 @@ def cbranch_or_continue(builder, cond, bbtrue):
     builder.position_at_end(bbcont)
     return bbcont
 
-__all__ = """
-""".split()
