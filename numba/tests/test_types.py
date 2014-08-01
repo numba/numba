@@ -4,9 +4,16 @@ Tests for numba.types.
 
 from __future__ import print_function, absolute_import
 
+import gc
+import weakref
+
 from numba.utils import IS_PY3
 from numba import types
 from numba import unittest_support as unittest
+
+
+class Dummy(object):
+    pass
 
 
 class TestTypeNames(unittest.TestCase):
@@ -56,6 +63,52 @@ class TestTypeNames(unittest.TestCase):
                 types.int8 <= types.float32
             with self.assertRaises(TypeError):
                 types.float64 <= types.complex128
+
+    def test_weaktype(self):
+        d = Dummy()
+        e = Dummy()
+        a = types.Dispatcher(d)
+        b = types.Dispatcher(d)
+        c = types.Dispatcher(e)
+        self.assertIs(a.overloaded, d)
+        self.assertIs(b.overloaded, d)
+        self.assertIs(c.overloaded, e)
+        # Equality of alive references
+        self.assertTrue(a == b)
+        self.assertFalse(a != b)
+        self.assertTrue(a != c)
+        self.assertFalse(a == c)
+        z = types.int8
+        self.assertFalse(a == z)
+        self.assertFalse(b == z)
+        self.assertFalse(c == z)
+        self.assertTrue(a != z)
+        self.assertTrue(b != z)
+        self.assertTrue(c != z)
+        # Hashing and mappings
+        s = set([a, b, c])
+        self.assertEqual(len(s), 2)
+        self.assertIn(a, s)
+        self.assertIn(b, s)
+        self.assertIn(c, s)
+        # Kill the references
+        d = e = None
+        gc.collect()
+        with self.assertRaises(ReferenceError):
+            a.overloaded
+        with self.assertRaises(ReferenceError):
+            b.overloaded
+        with self.assertRaises(ReferenceError):
+            c.overloaded
+        # Dead references are always unequal
+        self.assertFalse(a == b)
+        self.assertFalse(a == c)
+        self.assertFalse(b == c)
+        self.assertFalse(a == z)
+        self.assertTrue(a != b)
+        self.assertTrue(a != c)
+        self.assertTrue(b != c)
+        self.assertTrue(a != z)
 
 
 if __name__ == '__main__':

@@ -128,3 +128,4 @@ setup(name='numba',
       license="BSD",
       cmdclass=cmdclass,
       **setup_args)
+
