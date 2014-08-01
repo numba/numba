@@ -10,7 +10,6 @@ def dummy(x):
 
 
 class TestDispatcher(unittest.TestCase):
-
     def test_typeof(self):
         self.assertEqual(typeof(numpy.int8(1)), types.int8)
         self.assertEqual(typeof(numpy.uint16(1)), types.uint16)
@@ -31,6 +30,7 @@ class TestDispatcher(unittest.TestCase):
         # Just make sure this doesn't crash
         foo()
 
+
     def test_inspect_types(self):
         @jit
         def foo(a, b):
@@ -39,7 +39,6 @@ class TestDispatcher(unittest.TestCase):
         foo(1, 2)
         # Exercise the method
         foo.inspect_types()
-
 
 
 if __name__ == '__main__':

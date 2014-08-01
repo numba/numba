@@ -104,6 +104,10 @@ void* Numba_extract_record_data(PyObject *recordobj, Py_buffer *pbuf) {
             /* In Python 2.6, it will report no buffer interface for record
                even though it should */
             PyBufferObject_Hack *hack;
+
+            /* Clear the error */
+            PyErr_Clear();
+
             hack = (PyBufferObject_Hack*) attrdata;
 
             if (hack->b_base == NULL) {
