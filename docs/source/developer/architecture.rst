@@ -169,9 +169,10 @@ target context selected for compilation.  The default target context is
 the "cpu" context, defined in ``numba.targets.cpu``.
 
 The LLVM IR can be displayed by setting the ``NUMBA_DUMP_LLVM`` environment
-variable to 1.  For the "cpu" context, our ``add()`` example would look like::
+variable to 1.  For the "cpu" context, our ``add()`` example would look like:
 
-    --------------------LLVM DUMP <function descriptor 'add$3'>---------------------
+.. code-block:: llvm
+
     ; ModuleID = 'module.add$3'
 
     define i32 @add.int64.int64(i64*, i8* %env, i64 %arg.a, i64 %arg.b) {
@@ -199,12 +200,11 @@ variable to 1.  For the "cpu" context, our ``add()`` example would look like::
       ret i32 0
     }
 
-    ================================================================================
-
 The post-optimization LLVM IR can be output by setting ``NUMBA_DUMP_FUNC_OPT``
-to 1.  The optimizer shortens the code generated above quite significantly::
+to 1.  The optimizer shortens the code generated above quite significantly:
 
-    -----------LLVM FUNCTION OPTIMIZED DUMP <function descriptor 'add$3'>-----------
+.. code-block:: llvm
+
     ; ModuleID = 'module.add$3'
 
     define i32 @add.int64.int64(i64*, i8* %env, i64 %arg.a, i64 %arg.b) {
@@ -214,8 +214,6 @@ to 1.  The optimizer shortens the code generated above quite significantly::
       ret i32 0
     }
 
-    ================================================================================
-
 Stage 4b: Generate Object Mode LLVM IR
 --------------------------------------
 
@@ -223,9 +221,10 @@ If type inference fails to find Numba types for all values inside a function,
 the function will be compiled in object mode.  The generated LLVM will be
 significantly longer, as the compiled code will need to make calls to the
 Python C-API to perform basically all operations.  The optimized LLVM
-for our example ``add()`` function is::
+for our example ``add()`` function is:
 
-    -----------LLVM FUNCTION OPTIMIZED DUMP <function descriptor 'add$3'>-----------
+.. code-block:: llvm
+
     ; ModuleID = 'module.add$3'
 
     @PyExc_SystemError = external global i8
@@ -287,8 +286,6 @@ for our example ``add()`` function is::
     declare i8* @PyNumber_Add(i8*, i8*)
 
     !0 = metadata !{metadata !"branch_weights", i32 1, i32 99}
-
-    ================================================================================
 
 The careful reader might notice a lot of unnecessary calls to ``Py_IncRef``
 and ``Py_DecRef`` in the generated code.  A special pass is run after the 
