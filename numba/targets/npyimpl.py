@@ -15,6 +15,8 @@ from ..config import PYVERSION
 from ..numpy_support import (ufunc_find_matching_loop,
                              numpy_letter_types_to_numba_types,
                              numba_types_to_numpy_letter_types)
+from .ufunc_db import ufunc_db
+
 registry = Registry()
 register = registry.register
 
@@ -287,12 +289,14 @@ def _function_with_cast(op, inner_sig):
     return _KernelImpl
 
 
-def _dict_of_kernels_function(ufunc, dict_of_kernels):
+def _ufunc_db_function(ufunc):
     """Use the ufunc loop type information to select the code generation
     function from the table provided by the dict_of_kernels. The dict
     of kernels maps the loop identifier to a function with the following
     signature: (context, builder, signature, args).
     """
+    assert ufunc in ufunc_db
+    _loop_dict = ufunc_db[ufunc]
 
     class _KernelImpl(_Kernel):
         def __init__(self, context, builder, outer_sig):
@@ -303,7 +307,7 @@ def _dict_of_kernels_function(ufunc, dict_of_kernels):
             loop = ufunc_find_matching_loop(ufunc, letter_arg_types)
             letter_inner_sig = loop[-ufunc.nout:] + loop[:ufunc.nin]
             inner_sig_types = numpy_letter_types_to_numba_types(letter_inner_sig)
-            self.fn = dict_of_kernels.get(loop, None)
+            self.fn = _loop_dict.get(loop, None)
             self.inner_sig = typing.signature(*inner_sig_types)
             self.outer_sig = outer_sig
 
@@ -497,90 +501,6 @@ _float_unary_sig = typing.signature(types.float64, types.float64)
 _float_binary_sig = typing.signature(types.float64, types.float64,
                                      types.float64)
 
-_neg_loop_dict = {
-    '?->?': builtins.number_not_impl,
-    'b->b': builtins.int_negate_impl,
-    'B->B': builtins.int_negate_impl,
-    'h->h': builtins.int_negate_impl,
-    'H->H': builtins.int_negate_impl,
-    'i->i': builtins.int_negate_impl,
-    'I->I': builtins.int_negate_impl,
-    'l->l': builtins.int_negate_impl,
-    'L->L': builtins.int_negate_impl,
-    'q->q': builtins.int_negate_impl,
-    'Q->Q': builtins.int_negate_impl,
-    'f->f': builtins.real_negate_impl,
-    'd->d': builtins.real_negate_impl,
-}
-
-_abs_loop_dict = {
-    '?->?': builtins.int_abs_impl,
-    'b->b': builtins.int_abs_impl,
-    'B->B': builtins.uint_abs_impl,
-    'h->h': builtins.int_abs_impl,
-    'H->H': builtins.uint_abs_impl,
-    'i->i': builtins.int_abs_impl,
-    'I->I': builtins.uint_abs_impl,
-    'l->l': builtins.int_abs_impl,
-    'L->L': builtins.uint_abs_impl,
-    'q->q': builtins.int_abs_impl,
-    'Q->Q': builtins.uint_abs_impl,
-    'f->f': builtins.real_abs_impl,
-    'd->d': builtins.real_abs_impl,
-}
-
-
-_add_loop_dict = {
-    '??->?': builtins.int_or_impl,
-    'bb->b': builtins.int_add_impl,
-    'BB->B': builtins.int_add_impl,
-    'hh->h': builtins.int_add_impl,
-    'HH->H': builtins.int_add_impl,
-    'ii->i': builtins.int_add_impl,
-    'II->I': builtins.int_add_impl,
-    'll->l': builtins.int_add_impl,
-    'LL->L': builtins.int_add_impl,
-    'qq->q': builtins.int_add_impl,
-    'QQ->Q': builtins.int_add_impl,
-    'ff->f': builtins.real_add_impl,
-    'dd->d': builtins.real_add_impl,
-}
-
-_sub_loop_dict = {
-    '??->?': builtins.int_xor_impl,
-    'bb->b': builtins.int_sub_impl,
-    'BB->B': builtins.int_sub_impl,
-    'hh->h': builtins.int_sub_impl,
-    'HH->H': builtins.int_sub_impl,
-    'ii->i': builtins.int_sub_impl,
-    'II->I': builtins.int_sub_impl,
-    'll->l': builtins.int_sub_impl,
-    'LL->L': builtins.int_sub_impl,
-    'qq->q': builtins.int_sub_impl,
-    'QQ->Q': builtins.int_sub_impl,
-    'ff->f': builtins.real_sub_impl,
-    'dd->d': builtins.real_sub_impl,
-}
-
-_mul_loop_dict = {
-    '??->?': builtins.int_and_impl,
-    'bb->b': builtins.int_mul_impl,
-    'BB->B': builtins.int_mul_impl,
-    'hh->h': builtins.int_mul_impl,
-    'HH->H': builtins.int_mul_impl,
-    'ii->i': builtins.int_mul_impl,
-    'II->I': builtins.int_mul_impl,
-    'll->l': builtins.int_mul_impl,
-    'LL->L': builtins.int_mul_impl,
-    'qq->q': builtins.int_mul_impl,
-    'QQ->Q': builtins.int_mul_impl,
-    'ff->f': builtins.real_mul_impl,
-    'dd->d': builtins.real_mul_impl,
-}
-
-
-
-
 # _externs will be used to register ufuncs.
 # each tuple contains the ufunc to be translated. That ufunc will be converted to
 # an equivalent loop that calls the function in the npymath support module (registered
@@ -626,14 +546,14 @@ register_unary_ufunc_kernel(numpy.radians, _function_with_cast(npy.deg2rad, _flo
 
 # the following ufuncs rely on functions that are not based on a function
 # from npymath
-register_unary_ufunc_kernel(numpy.absolute, _dict_of_kernels_function(numpy.absolute, _abs_loop_dict))
+register_unary_ufunc_kernel(numpy.absolute, _ufunc_db_function(numpy.absolute))
 register_unary_ufunc_kernel(numpy.sign, _homogeneous_function(types.sign_type, numpy.sign))
-register_unary_ufunc_kernel(numpy.negative, _dict_of_kernels_function(numpy.negative, _neg_loop_dict))
+register_unary_ufunc_kernel(numpy.negative, _ufunc_db_function(numpy.negative))
 
 # for these we mostly rely on code generation for python operators.
-register_binary_ufunc_kernel(numpy.add, _dict_of_kernels_function(numpy.add, _add_loop_dict))
-register_binary_ufunc_kernel(numpy.subtract, _dict_of_kernels_function(numpy.subtract, _sub_loop_dict))
-register_binary_ufunc_kernel(numpy.multiply, _dict_of_kernels_function(numpy.multiply, _mul_loop_dict))
+register_binary_ufunc_kernel(numpy.add, _ufunc_db_function(numpy.add))
+register_binary_ufunc_kernel(numpy.subtract, _ufunc_db_function(numpy.subtract))
+register_binary_ufunc_kernel(numpy.multiply, _ufunc_db_function(numpy.multiply))
 if not PYVERSION >= (3, 0):
     register_binary_ufunc_kernel(numpy.divide, _division(numpy.divide, '/?'))
 register_binary_ufunc_kernel(numpy.floor_divide, _division(numpy.floor_divide, '//'))
