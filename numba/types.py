@@ -116,44 +116,44 @@ class Integer(Type):
     Defines an Integer type to a specific bit width.
 
     A number of Intger types (instances) are already defined for convenience. 
-    Integer types are defined in terms of bits or in terms of bytes as in Numpy.
+    Integer types are defined in terms of bits or in terms of bytes as in numpy.
     
     unsigned types, bit versions
     ----------------
-    uint8, an 8-bit unsigned integer.
-    uint16, a 16-bit unsigned integer.
-    uint32, a 32-bit unsigned integer.
-    uint64, a 64-bit unsigned integer.
+    uint8, an 8-bit unsigned integer
+    uint16, a 16-bit unsigned integer
+    uint32, a 32-bit unsigned integer
+    uint64, a 64-bit unsigned integer
     
     signed types, bit versions
     ----------------
-    int8, an 8-bit signed ingeger.
-    int16, a 16-bit signed integer.
-    int32, a 32-bit signed integer.
-    int64, a 64-bit signed integer.
+    int8, an 8-bit signed ingeger
+    int16, a 16-bit signed integer
+    int32, a 32-bit signed integer
+    int64, a 64-bit signed integer
 
     unsigned types, byte versions
     ----------------
-    u1, a 1-byte unsigned integer.
-    u2, a 2-byte unsigned integer.
-    u4, a 4-byte unsigned integer.
-    u8, a 8-byte unsigned integer.
+    u1, a 1-byte unsigned integer
+    u2, a 2-byte unsigned integer
+    u4, a 4-byte unsigned integer
+    u8, a 8-byte unsigned integer
     
     signed types, byte versions
     ----------------
-    i1, a 1-byte signed ingeger.
-    i2, a 2-byte signed integer.
-    i4, a 4-byte signed integer.
-    i8, a 8-byte signed integer.
+    i1, a 1-byte signed ingeger
+    i2, a 2-byte signed integer
+    i4, a 4-byte signed integer
+    i8, a 8-byte signed integer
 
     convenience types
     These types automatically use the width of the machine.
     ----------------
-    intp, signed 32- or 64-bit integer depending on the machine width. 
-    uintp, unsigned 32- or 64-bit integer depending on the machine width.
+    intp, signed 32- or 64-bit integer depending on the machine width 
+    uintp, unsigned 32- or 64-bit integer depending on the machine width
 
     numpy integer types
-    These types create numpy dtypes. They all take a parmeter n. For example, b = char(17).
+    These types create numpy dtypes. They all take a parmeter n. For example, b = char(17)
     ----------------
     byte(n), an unsigned numpy byte (8-bits).
     char(n), signed numpy byte (8-bits). 
@@ -232,15 +232,15 @@ class Complex(Type):
     """
     Defines Complex types a + bi (a + bj)
 
-    Complex64 types (two 32-bit, single precision values)
+    real and imaginary types are 32-bit, single precision values
     ----------------
-    complex64
-    c8
+    complex6i4, two 32-bit floats
+    c8, two 4-byte floats
 
-    Complex128 types (two 64-bit, double precision values)
+    real and imaginary types are 64-bit, double precision values
     ----------------
-    complex128
-    c16
+    complex128, two 64-bit floats
+    c16, two 8 byte floats
 
     """
 
@@ -260,6 +260,7 @@ class Complex(Type):
             return NotImplemented
         return self.bitwidth < other.bitwidth
 
+
 class Prototype(Type):
     def __init__(self, args, return_type):
         self.args = args
@@ -274,10 +275,9 @@ class Dummy(Type):
     with void *.
 
     For convenience, a number of Dummy types (instances) have already been defined:
-
+    ------------------
     none
     void
-
     """
 
 
