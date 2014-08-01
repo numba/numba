@@ -19,7 +19,7 @@ from numba import dispatcher
 
 class CPUTarget(TargetDescriptor):
     """
-    Sets the options, and typing and target context for a given CPU
+    Sets the options, typing and target context for a given CPU
     """
     options = cpu.CPUTargetOptions
     typing_context = typing.Context()
