@@ -414,6 +414,11 @@ def _division(ufunc, operator):
                         shouldretnan = cgutils.is_scalar_zero(builder, num)
                         nan = Constant.real(outltype, float("nan"))
                         inf = Constant.real(outltype, float("inf"))
+                        if tyinputs[0] not in types.unsigned_domain:
+                            neginf = Constant.real(outltype, -float("inf"))
+                            is_num_negative = cgutils.is_scalar_neg(builder, num)
+                            inf = builder.select(is_num_negative, neginf, inf)
+
                         tempres = builder.select(shouldretnan, nan, inf)
                         res_then = context.cast(builder, tempres, types.float64,
                                                 tyout)
