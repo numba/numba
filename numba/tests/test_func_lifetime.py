@@ -87,14 +87,11 @@ class TestFuncLifetime(TestCase):
         c_f = jit(**jitargs)(global_usecase2)
         self.assertPreciseEqual(c_f(), 6)
 
-        # XXX global_obj will survive, perhaps because of buggy code
-        # generation.
         refs = [weakref.ref(obj) for obj in (c_f, global_obj)]
         obj = c_f = global_obj = None
         gc.collect()
         self.assertEqual([wr() for wr in refs], [None] * len(refs))
 
-    @unittest.expectedFailure
     def test_global_obj_lifetime(self):
         self.check_global_obj_lifetime(forceobj=True)
 
