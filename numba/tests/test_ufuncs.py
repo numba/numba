@@ -9,7 +9,7 @@ import functools
 
 import numba.unittest_support as unittest
 from numba import types, typing, utils
-from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
+from numba.compiler import compile_isolated, Flags, DEFAULT_FLAGS
 from numba.numpy_support import numpy_letter_types_to_numba_types
 from numba import vectorize
 from numba.config import PYVERSION
@@ -1144,13 +1144,6 @@ class TestLoopTypes(TestCase):
     _compile_flags = enable_pyobj_flags
     _skip_types='O'
 
-    def _compile(self, func, ty_args, ty_retval):
-        tyctx = typing.Context()
-        ctx = cpu.CPUContext(tyctx)
-        cr = compile_extra(tyctx, ctx, func, ty_args, ty_retval,
-                           self._compile_flags, locals={})
-        return cr
-
     def _check_loop(self, fn, ufunc, loop):
         # the letter types for the args
         letter_types = loop[:ufunc.nin] + loop[-ufunc.nout:]
@@ -1167,7 +1160,7 @@ class TestLoopTypes(TestCase):
         arg_nbty = numpy_letter_types_to_numba_types(letter_types)
         arg_nbty = [types.Array(t, 1, 'C') for t in arg_nbty]
         arg_dty = [np.dtype(l) for l in letter_types]
-        cr = self._compile(fn, arg_nbty, None);
+        cr = compile_isolated(fn, arg_nbty, flags=self._compile_flags);
 
         # now create some really silly arguments and call the generate functions.
         # The result is checked against the result given by NumPy, but the point
