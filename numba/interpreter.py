@@ -109,6 +109,10 @@ class Interpreter(object):
         self._insert_var_dels()
 
     def _insert_var_dels(self):
+        """
+        Insert ir.Del statements where necessary for the various
+        variables defined within the IR.
+        """
         # { var name -> { block offset -> stmt of last use } }
         var_use = collections.defaultdict(dict)
         cfg = self.cfa.graph
@@ -123,10 +127,35 @@ class Interpreter(object):
                             var_use[var_name.name].setdefault(succ, None)
                     else:
                         var_use[var_name.name][offset] = stmt
+
         for name in sorted(var_use):
-            self._compute_var_disposal(name, var_use[name])
+            var_use_map = var_use[name]
+            blocks = self._compute_var_disposal(name, var_use_map)
+            self._patch_var_disposal(name, var_use_map, blocks)
+
+    def _patch_var_disposal(self, var_name, use_map, disposal_blocks):
+        """
+        Insert ir.Del statements into each of the *disposal_blocks*
+        for variable *var_name*, at the appropriate points in the blocks.
+        """
+        for b in disposal_blocks:
+            # Either this is an original use point and we will insert after
+            # that statement, or it's a computed one and we will insert
+            # at the beginning of the block.
+            stmt = use_map.get(b)
+            ir_block = self.blocks[b]
+            if stmt is None:
+                ir_block.prepend(ir.Del(var_name, loc=ir_block.loc))
+            else:
+                # If the variable is used in a Return statement, we
+                # don't insert anything.
+                if not isinstance(stmt, ir.Return):
+                    ir_block.insert_after(ir.Del(var_name, loc=stmt.loc), stmt)
 
     def _compute_var_disposal(self, var_name, use_map):
+        """
+        Compute a set of blocks in which *var_name* should be disposed of.
+        """
         cfg = self.cfa.graph
 
         # Compute a set of blocks where we want the variable to be
@@ -180,18 +209,7 @@ class Interpreter(object):
             else:
                 tails.add(b)
 
-        # We can now insert the Del statements
-        for b in tails:
-            # Either this is an original use point and we will insert after
-            # that statement, or it's a computed one and we will insert
-            # at the beginning of the block.
-            stmt = use_map.get(b)
-            ir_block = self.blocks[b]
-            if stmt is None:
-                ir_block.prepend(ir.Del(var_name, loc=ir_block.loc))
-            else:
-                if not isinstance(stmt, ir.Return):
-                    ir_block.insert_after(ir.Del(var_name, loc=stmt.loc), stmt)
+        return tails
 
     def init_first_block(self):
         # Duplicate arguments so that these values can be casted into different
