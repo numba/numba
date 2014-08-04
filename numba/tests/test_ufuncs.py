@@ -1206,7 +1206,6 @@ class TestLoopTypes(TestCase):
             except Exception as e:
                 _failed_loops.append('{2} {0}:{1}'.format(loop, str(e),
                                                           ufunc.__name__))
-                raise
 
         return _failed_loops
 
@@ -1227,7 +1226,7 @@ class TestLoopTypes(TestCase):
                 len(failed_ufuncs), failed_loops_count,
                 '\n'.join(failed_ufuncs))
 
-            self.assertFalse(failed_ufuncs, msg=msg)
+            self.fail(msg=msg)
             
                 
 
