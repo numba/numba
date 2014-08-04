@@ -68,6 +68,7 @@ struct Rating{
 
     Rating();
     void bad();
+    void reset();
 
     bool operator < (const Rating &other) const;
     bool operator == (const Rating &other) const;
@@ -93,11 +94,11 @@ public:
 	    Number of matches
 	*/
 	int selectOverload(Type sig[], Type ovsigs[], int &selected, int sigsz,
-	                   int ovct) const;
+	                   int ovct, bool allow_unsafe) const;
 
 private:
 	int _selectOverload(Type sig[], Type ovsigs[], int &selected, int sigsz,
-	                    int ovct, Rating ratings[]) const;
+	                    int ovct, bool allow_unsafe, Rating ratings[]) const;
 
 	TCCMap tccmap;
 };

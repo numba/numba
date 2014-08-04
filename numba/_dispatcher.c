@@ -419,7 +419,10 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
         if (tys[i] == -1) goto CLEANUP;
     }
 
-    cfunc = dispatcher_resolve(self->dispatcher, tys, &matches);
+    /* We only allow unsafe conversions if compilation of new specializations
+       has been disabled. */
+    cfunc = dispatcher_resolve(self->dispatcher, tys, &matches,
+                               !self->can_compile);
     if (matches == 1) {
         /* Definition is found */
         retval = call_cfunc(cfunc, args, kws);
