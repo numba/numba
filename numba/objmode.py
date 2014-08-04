@@ -368,7 +368,6 @@ class PyLower(BaseLower):
                 self.pyapi.raise_missing_global_error(name)
                 self.return_exception_raised()
 
-        self.incref(retval)
         return retval
 
     # -------------------------------------------------------------------------
@@ -394,7 +393,8 @@ class PyLower(BaseLower):
         Args
         ----
         mod:
-            The __builtins__ dictionary or module
+            The __builtins__ dictionary or module, as looked up in
+            a module's globals.
         name: str
             The object to lookup
         """
