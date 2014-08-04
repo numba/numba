@@ -104,8 +104,8 @@ def supported_letter_types():
     'm' - timedelta64
     'M' - datetime64
     'e' - float16
-    'F' - complex float (float32)
-    'D' - complex double (float64)
+    'F' - complex float (complex64, made of two floats)
+    'D' - complex double (complex128, made of two doubles)
     """
     return '?bBhHiIlLqQfd'
 
