@@ -1244,7 +1244,7 @@ class TestLoopTypesNoPython(TestLoopTypes):
                np.degrees, np.radians,
                np.floor, np.ceil, np.trunc]
 
-    # supported types are integral (signed and unsgined) as well as float and double
+    # supported types are integral (signed and unsigned) as well as float and double
     # support for complex64(F) and complex128(D) should be coming soon.
     _supported_types = '?bBhHiIlLqQfd'
 
