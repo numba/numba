@@ -3,7 +3,7 @@ import re
 import itertools
 import llvm.core as lc
 from llvmpy.api import llvm
-from numba import typing, types
+from numba import typing, types, cgutils
 from numba.targets.base import BaseContext
 from numba.targets import builtins
 
@@ -131,6 +131,8 @@ class ArgAdaptor(object):
             for i in range(self.type.ndim):
                 strides.append(args[base + i])
             base += self.type.ndim
+            ary.shape = cgutils.pack_array(builder, shape)
+            ary.strides = cgutils.pack_array(builder, strides)
             return ary._getvalue(), base
 
 

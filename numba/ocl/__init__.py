@@ -20,7 +20,7 @@ def _dummy(*args, **kws):
 try:
     from .api import *
 
-    is_availabe = True
+    is_available = True
     ocl_error = None
 except OpenCLSupportError as e:
     is_available = False
@@ -36,9 +36,10 @@ def test():
         raise ocl_error
 
     from .tests.ocldrv.runtests import test as test_ocl_drv
+    from .tests.oclpy.runtests import test as test_ocl_py
 
-    testseq = [("ocldrv", test_ocldrv),
-    ]
+    testseq = [("ocldrv", test_ocl_drv),
+               ("oclpy", test_ocl_py)]
 
     for name, udt in testseq:
         print("Running ", name)

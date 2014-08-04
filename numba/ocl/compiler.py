@@ -36,8 +36,6 @@ def compile_ocl(pyfunc, return_type, args, debug):
 
 
 def compile_kernel(pyfunc, args, debug=False):
-    _sentry_array_layout(args)
-
     cres = compile_ocl(pyfunc, types.void, args, debug=debug)
     kernel = cres.target_context.prepare_ocl_kernel(cres.llvm_func,
                                                     cres.signature.args)
@@ -50,7 +48,6 @@ def compile_kernel(pyfunc, args, debug=False):
 
 
 def compile_device(pyfunc, return_type, args, debug=False):
-    _sentry_array_layout(args)
     cres = compile_ocl(pyfunc, return_type, args, debug=debug)
     cres.target_context.mark_ocl_device(cres.llvm_func)
     devfn = DeviceFunction(cres)
@@ -68,14 +65,6 @@ def compile_device(pyfunc, return_type, args, debug=False):
 class DeviceFunction(object):
     def __init__(self, cres):
         self.cres = cres
-
-
-def _sentry_array_layout(args):
-    for i, a in enumerate(args):
-        if isinstance(a, types.Array) and a.layout == 'A':
-            raise TypeError("Invalid array layout type for arg #%d\n"
-                            "Only accept C or F contiguous array due to "
-                            "the lack pointer arithmetic in OpenCL" % (i + 1,))
 
 
 def _ensure_list(val):
