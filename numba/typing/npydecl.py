@@ -72,8 +72,8 @@ class Numpy_rules_ufunc(AbstractTemplate):
             [ty.dtype for ty in explicit_outputs]))
 
         # Numpy will happily use unsafe conversions (although it will actually warn)
-        if not all ((numpy.can_cast(ty1, ty2, 'unsafe') for ty1, ty2 in 
-                     zip(explicit_outputs_np, ufunc_loop_types[-nout]))):
+        if not all ((numpy.can_cast(fromty, toty, 'unsafe') for fromty, toty in
+                     zip(ufunc_loop_types[-nout], explicit_outputs_np))):
             msg = "ufunc '{0}' can't cast result to explicit result type"
             raise TypingError(msg=msg.format(ufunc.__name__))
 
