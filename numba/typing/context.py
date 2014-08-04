@@ -1,15 +1,16 @@
-from __future__ import print_function, absolute_import
+from __future__ import print_function, absolute_import, division
+
+# Initialize declarations
+from . import (templates, builtins, mathdecl, npydecl, operatordecl,
+               ctypes_utils, cffi_utils)
+
+from .. import types, typeconv, utils, numpy_support
+
+import numpy
 from collections import defaultdict
 import functools
 import types as pytypes
-import numpy
-from numba import types
-from numba.typeconv import rules
-from . import templates
-# Initialize declarations
-from . import builtins, mathdecl, npydecl, operatordecl
-from numba import numpy_support, utils
-from . import ctypes_utils, cffi_utils
+
 
 class BaseContext(object):
     """A typing context for storing function typing constrain template.
@@ -19,7 +20,7 @@ class BaseContext(object):
         self.functions = defaultdict(list)
         self.attributes = {}
         self.globals = utils.UniqueDict()
-        self.tm = rules.default_type_manager
+        self.tm = typeconv.rules.default_type_manager
         self._load_builtins()
         self.init()
 
