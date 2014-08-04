@@ -91,6 +91,7 @@ Dispatcher_traverse(DispatcherObject *self, visitproc visit, void *arg)
 static void
 Dispatcher_dealloc(DispatcherObject *self)
 {
+    PyObject *res;
     PyObject *type, *value, *traceback; /* For temp storage of exception */
 
     if (self->finalizer != NULL) {
@@ -100,7 +101,7 @@ Dispatcher_dealloc(DispatcherObject *self)
         call.
         */
         PyErr_Fetch(&type, &value, &traceback);
-        PyObject *res = PyObject_CallObject(self->finalizer, NULL);
+        res = PyObject_CallObject(self->finalizer, NULL);
         if (res != NULL) {
             Py_DECREF(res);
         } else {
