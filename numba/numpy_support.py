@@ -1,7 +1,10 @@
 from __future__ import print_function, division, absolute_import
+
+from . import types, config
+from .targets import ufunc_db
+
 import numpy
 import re
-from . import types, config
 
 version = tuple(map(int, numpy.__version__.split('.')[:2]))
 int_divbyzero_returns_zero = config.PYVERSION <= (3, 0)
@@ -119,8 +122,7 @@ def supported_ufunc_loop(ufunc, loop):
 
         # note that as of now not all ufuncs have an entry in the
         # ufunc_db
-        from .targets.ufunc_db import ufunc_db
-        supported_loop = loop in ufunc_db[ufunc]
+        supported_loop = loop in ufunc_db.ufunc_db[ufunc]
     except KeyError:
         # for ufuncs not in ufunc_db, base the decision of whether the
         # loop is supported on its types

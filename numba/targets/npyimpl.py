@@ -295,8 +295,6 @@ def _ufunc_db_function(ufunc):
     of kernels maps the loop identifier to a function with the following
     signature: (context, builder, signature, args).
     """
-    assert ufunc in ufunc_db
-    _loop_dict = ufunc_db[ufunc]
 
     class _KernelImpl(_Kernel):
         def __init__(self, context, builder, outer_sig):
@@ -307,7 +305,7 @@ def _ufunc_db_function(ufunc):
             loop = ufunc_find_matching_loop(ufunc, letter_arg_types)
             letter_inner_sig = loop[-ufunc.nout:] + loop[:ufunc.nin]
             inner_sig_types = numpy_letter_types_to_numba_types(letter_inner_sig)
-            self.fn = _loop_dict.get(loop, None)
+            self.fn = ufunc_db[ufunc].get(loop, None)
             self.inner_sig = typing.signature(*inner_sig_types)
             self.outer_sig = outer_sig
 
