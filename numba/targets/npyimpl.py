@@ -250,7 +250,27 @@ def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,
 
 # Kernels are the code to be executed inside the multidimensional loop.
 class _Kernel(object):
-    pass
+    def __init__(self, context, builder, outer_sig):
+        self.context = context
+        self.builder = builder
+        self.outer_sig = outer_sig
+
+    def cast(self, val, fromty, toty):
+        """Numpy implements some different cast semantics that are different
+        from standard Python (for example, it does allow casting from
+        complex to float. This function acts as a patched cast to take
+        that into account.
+        """
+        if fromty in types.complex_domain and toty not in types.complex_domain:
+            # attempt conversion of the real part to the specified type.
+            # note that NumPy issues a warning in this kind of conversions
+            newty = fromty.underlying_float
+            attr = self.context.get_attribute(val, fromty, 'real')
+            val = attr(self.context, self.builder, fromty, val, 'real')
+            fromty = newty
+            # let the regular cast do the rest...
+
+        return self.context.cast(self.builder, val, fromty, toty)
 
 
 def _function_with_cast(op, inner_sig):
@@ -266,25 +286,22 @@ def _function_with_cast(op, inner_sig):
             inner_sig is the inner type signature (the signature of the
                       operation itself)
             """
-            self.context = context
-            self.builder = builder
+            super(_KernelImpl, self).__init__(context, builder, outer_sig)
             self.fnwork = context.get_function(op, inner_sig)
             self.inner_sig = inner_sig
-            self.outer_sig = outer_sig
 
         def generate(self, *args):
             # convert args from the ufunc types to the one of the
             # kernel operation
-            cast_args = [self.context.cast(self.builder, val, inty, outy)
+            cast_args = [self.cast(val, inty, outy)
                          for val, inty, outy in zip(args, self.outer_sig.args,
                                                     self.inner_sig.args)]
             # perform the operation
             res = self.fnwork(self.builder, cast_args)
             # return the result converted to the type of the ufunc
             # operation
-            return self.context.cast(self.builder, res,
-                                     self.inner_sig.return_type,
-                                     self.outer_sig.return_type)
+            return self.cast(res, self.inner_sig.return_type,
+                             self.outer_sig.return_type)
 
     return _KernelImpl
 
@@ -298,8 +315,7 @@ def _ufunc_db_function(ufunc):
 
     class _KernelImpl(_Kernel):
         def __init__(self, context, builder, outer_sig):
-            self.context = context
-            self.builder = builder
+            super(_KernelImpl, self).__init__(context, builder, outer_sig)
             letter_arg_types = numba_types_to_numpy_letter_types(
                 outer_sig.args[0:ufunc.nin])
             loop = ufunc_find_matching_loop(ufunc, letter_arg_types)
@@ -307,24 +323,20 @@ def _ufunc_db_function(ufunc):
             inner_sig_types = numpy_letter_types_to_numba_types(letter_inner_sig)
             self.fn = ufunc_db[ufunc].get(loop, None)
             self.inner_sig = typing.signature(*inner_sig_types)
-            self.outer_sig = outer_sig
 
             if self.fn is None:
                 msg = "Don't know how to lower ufunc '{0}' for loop '{1}'"
                 raise LoweringError(msg.format(ufunc.__name__, loop))
 
         def generate(self, *args):
-            ctx = self.context
-            bld = self.builder
             isig = self.inner_sig
             osig = self.outer_sig
 
-            cast_args = [ctx.cast(bld, val, inty, outty)
+            cast_args = [self.cast(val, inty, outty)
                          for val, inty, outty in zip(args, osig.args,
                                                      isig.args)]
-            res = self.fn(ctx, bld, isig, cast_args)
-            return self.context.cast(bld, res, isig.return_type,
-                                     osig.return_type)
+            res = self.fn(self.context, self.builder, isig, cast_args)
+            return self.cast(res, isig.return_type, osig.return_type)
 
     return _KernelImpl
 
@@ -344,9 +356,8 @@ def _homogeneous_function(op, alias=None):
     """
     class _KernelImpl(_Kernel):
         def __init__(self, context, builder, outer_sig):
+            super(_KernelImpl, self).__init__(context, builder, outer_sig)
             ufunc = alias if alias is not None else op
-            self.context = context
-            self.builder = builder
             letter_arg_types = numba_types_to_numpy_letter_types(
                 outer_sig.args[0:ufunc.nin])
             self.loop = ufunc_find_matching_loop(ufunc, letter_arg_types)
@@ -356,18 +367,17 @@ def _homogeneous_function(op, alias=None):
                 self.loop[-ufunc.nout:])
             # only one output supported for now.
             assert(len(self.loop_out_types) == 1)
-            self.outer_sig = outer_sig
 
         def generate(self, *args):
             inner_sig = typing.signature(self.loop_out_types[0],
                                          *self.loop_in_types)
             fn = self.context.get_function(op, inner_sig)
-            cast_args = [self.context.cast(self.builder, val, inty, outty)
+            cast_args = [self.cast(val, inty, outty)
                          for val, inty, outty in zip(args, self.outer_sig.args,
                                                      self.loop_in_types)]
             res = fn(self.builder, cast_args)
-            return self.context.cast(self.builder, res, self.loop_out_types[0],
-                                     self.outer_sig.return_type)
+            return self.cast(res, self.loop_out_types[0],
+                             self.outer_sig.return_type)
 
     return _KernelImpl
 
@@ -379,8 +389,8 @@ def _division(ufunc, operator):
     """
     class _KernelImpl(_Kernel):
         def __init__(self, context, builder, outer_sig):
-            self.context = context
-            self.builder = builder
+            super(_KernelImpl, self).__init__(context, builder, outer_sig)
+
             letter_arg_types = numba_types_to_numpy_letter_types(
                 outer_sig.args[0:ufunc.nin])
             self.loop = ufunc_find_matching_loop(ufunc, letter_arg_types)
@@ -388,7 +398,6 @@ def _division(ufunc, operator):
                 self.loop[:ufunc.nin])
             self.loop_out_types = numpy_letter_types_to_numba_types(
                 self.loop[-ufunc.nout:])
-            self.outer_sig = outer_sig
 
         def generate(self,*args):
             assert len(args) == 2 # numerator and denominator
@@ -422,8 +431,7 @@ def _division(ufunc, operator):
                             inf = builder.select(is_num_negative, neginf, inf)
 
                         tempres = builder.select(shouldretnan, nan, inf)
-                        res_then = context.cast(builder, tempres, types.float64,
-                                                tyout)
+                        res_then = self.cast(tempres, types.float64, tyout)
                     elif tyout in types.signed_domain and \
                             not numpy_support.int_divbyzero_returns_zero:
                         res_then = Constant.int(tyout_llvm,
@@ -433,14 +441,12 @@ def _division(ufunc, operator):
                     bb_then = builder.basic_block
                 with orelse:
                     # Normal
-                    cast_args = [self.context.cast(self.builder, val, inty,
-                                                   outty)
+                    cast_args = [self.cast(val, inty, outty)
                                  for val, inty, outty
                                  in zip(args, self.outer_sig.args,
                                         self.loop_in_types)]
                     tempres = fn(builder, cast_args)
-                    res_else = context.cast(builder, tempres,
-                                            self.loop_out_types[0], tyout)
+                    res_else = self.cast(tempres, self.loop_out_types[0], tyout)
                     bb_else = builder.basic_block
             out = builder.phi(tyout_llvm)
             out.add_incoming(res_then, bb_then)

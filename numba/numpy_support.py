@@ -107,10 +107,8 @@ def supported_letter_types():
     'm' - timedelta64
     'M' - datetime64
     'e' - float16
-    'F' - complex float (float32)
-    'D' - complex double (float64)
     """
-    return '?bBhHiIlLqQfd'
+    return '?bBhHiIlLqQfdFD'
 
 
 def supported_ufunc_loop(ufunc, loop):

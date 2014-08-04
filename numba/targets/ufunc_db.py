@@ -41,6 +41,8 @@ def _fill_ufunc_db(ufunc_db):
         'Q->Q': builtins.int_negate_impl,
         'f->f': builtins.real_negate_impl,
         'd->d': builtins.real_negate_impl,
+        'F->F': builtins.complex_negate_impl,
+        'D->D': builtins.complex_negate_impl,
     }
 
     ufunc_db[np.absolute] = {
