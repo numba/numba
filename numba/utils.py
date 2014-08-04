@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import atexit
 import collections
 import functools
 import io
@@ -19,6 +20,26 @@ from numba.config import PYVERSION, MACHINE_BITS
 INT_TYPES = (int,)
 if PYVERSION < (3, 0):
     INT_TYPES += (long,)
+
+
+_shutting_down = False
+
+def _at_shutdown():
+    global _shutting_down
+    _shutting_down = True
+
+atexit.register(_at_shutdown)
+
+def shutting_down():
+    """
+    Whether the interpreter is currently shutting down.
+    For use in finalizers, __del__ methods, and similar; it is advised
+    to early bind this function rather than look it up when calling it,
+    since at shutdown module globals may be cleared.
+    """
+    # At shutdown, the attribute may have been cleared or set to None.
+    v = globals().get('_shutting_down')
+    return v is True or v is None
 
 
 class ConfigOptions(object):
