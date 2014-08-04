@@ -1122,8 +1122,26 @@ class TestUfuncIssues(TestCase):
 
 
 class TestLoopTypes(TestCase):
-    """This class tests that for the desired set of ufuncs, the loops defined in
-    the numpy are generated and look like they work."""
+    """Test code generation for the different loop types defined by ufunc.
+    This test relies on class variables to configure the test. Subclasses
+    of this class can just override some of these variables to check other
+    ufuncs in a different compilation context. The variables supported are:
+
+    _funcs: the ufuncs to test
+    _compile_flags: compilation flags to use (to force nopython mode)
+    _skip_types: letter types that force skipping the loop when testing
+                 if present in the NumPy ufunc signature.
+    _supported_types: only test loops where all the types in the loop
+                      signature are in this collection. If unset, all.
+
+    Note that both, _skip_types and _supported_types must be met for a loop
+    to be tested.
+
+    The NumPy ufunc signature has a form like 'ff->f' (for a binary ufunc
+    loop taking 2 floats and resulting in a float). In a NumPy ufunc object
+    you can get a list of supported signatures by accessing the attribute
+    'types'.
+    """
 
     _ufuncs = [np.add, np.subtract, np.multiply, np.divide, np.logaddexp,
                np.logaddexp2, np.true_divide, np.floor_divide, np.negative,
