@@ -109,6 +109,30 @@ def supported_letter_types():
     """
     return '?bBhHiIlLqQfd'
 
+
+def supported_ufunc_loop(ufunc, loop):
+    """returns whether the loop for the ufunc is supported -in nopython-
+    """
+    try:
+        # check if the loop has a codegen description in the
+        # ufunc_db. If so, we can proceed.
+
+        # note that as of now not all ufuncs have an entry in the
+        # ufunc_db
+        from .targets.ufunc_db import ufunc_db
+        supported_loop = loop in ufunc_db[ufunc]
+    except KeyError:
+        # for ufuncs not in ufunc_db, base the decision of whether the
+        # loop is supported on its types
+        loop_types = loop[:ufunc.nin] + loop[-ufunc.nout:]
+        supported_types = supported_letter_types()
+        # check if all the types involved in the ufunc loop are
+        # supported in this mode
+        supported_loop =  all((t in supported_types for t in loop_types))
+
+    return supported_loop
+
+
 def numba_types_to_numpy_letter_types(numba_type_seq):
     letter_type = [numpy.dtype(str(x)).char for x in numba_type_seq]
     return [l if l in supported_letter_types() else None for l in letter_type]
@@ -143,4 +167,3 @@ def from_struct_dtype(dtype):
     align = dtype.alignment
 
     return types.Record(str(dtype.descr), fields, size, align, dtype)
-

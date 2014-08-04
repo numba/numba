@@ -9,7 +9,7 @@ from .templates import (AttributeTemplate, AbstractTemplate,
 from ..numpy_support import (ufunc_find_matching_loop,
                              numba_types_to_numpy_letter_types,
                              numpy_letter_types_to_numba_types,
-                             supported_letter_types)
+                             supported_ufunc_loop)
 
 from ..typeinfer import TypingError
 
@@ -60,10 +60,7 @@ class Numpy_rules_ufunc(AbstractTemplate):
         if ufunc_loop is None:
             TypingError("can't resolve ufunc {0} for types {1}".format(ufunc.__name__, args))
 
-        ufunc_loop_types = ufunc_loop[:ufunc.nin] + ufunc_loop[-ufunc.nout:]
-        supported_types = supported_letter_types()
-        # check if all the types involved in the ufunc loop are supported in this mode
-        if any((t not in supported_types for t in ufunc_loop_types)):
+        if not supported_ufunc_loop(ufunc, ufunc_loop):
             msg = "ufunc '{0}' using the loop '{1}' not supported in this mode"
             raise TypingError(msg=msg.format(ufunc.__name__, ufunc_loop))
 
@@ -73,7 +70,7 @@ class Numpy_rules_ufunc(AbstractTemplate):
 
         # Numpy will happily use unsafe conversions (although it will actually warn)
         if not all ((numpy.can_cast(ty1, ty2, 'unsafe') for ty1, ty2 in 
-                     zip(explicit_outputs_np, ufunc_loop_types[-nout]))):
+                     zip(explicit_outputs_np, ufunc_loop[-nout]))):
             msg = "ufunc '{0}' can't cast result to explicit result type"
             raise TypingError(msg=msg.format(ufunc.__name__))
 
@@ -82,7 +79,7 @@ class Numpy_rules_ufunc(AbstractTemplate):
         # by the selected NumPy loop
         out = list(explicit_outputs)
         if nout > len(explicit_outputs):
-            implicit_letter_types = ufunc_loop_types[len(explicit_outputs)-nout:]
+            implicit_letter_types = ufunc_loop[len(explicit_outputs)-nout:]
             implicit_out_types = numpy_letter_types_to_numba_types(implicit_letter_types)
             if ndims:
                 implicit_out_types = [types.Array(t, ndims, 'A') for t in implicit_out_types]
