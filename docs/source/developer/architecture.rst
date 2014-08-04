@@ -51,7 +51,7 @@ generate much shorter and more efficient code that manipulates the data
 natively without any calls into the Python C API.  When code has been compiled
 for specific data types so that the function body no longer relies on the
 Python runtime, we say the function has been compiled in **nopython mode**.
-Numeric code compiled in nopython mode is can be hundreds of times faster
+Numeric code compiled in nopython mode can be hundreds of times faster
 than the original Python. 
 
 Contexts
@@ -63,9 +63,9 @@ these different applications, Numba uses a *typing context* and a *target
 context*.
 
 A typing context is used in the compiler frontend to perform type inference on
-values in the function.  The same typing context can be used for many
-architectures because for nearly all cases, typing inference is
-hardware-independent.
+values in the function.  Similar typing contexts could be used for many
+architectures because for nearly all cases, typing inference is hardware-independent.
+However, Numba currently has a different typing context for each target.
 
 A target context is used to generate the specific instruction sequence
 required to operate on the Numba types identified during type inference.
@@ -77,8 +77,8 @@ Compiler Stages
 ===============
 
 The ``@jit`` decorator in Numba ultimately calls
-``numba.compiler.compile_extra()`` which compiles the function in a multi-
-stage process, described below.
+``numba.compiler.compile_extra()`` which compiles the Python function in a
+multi-stage process, described below.
 
 Stage 1: Analyze Bytecode
 -------------------------
@@ -86,9 +86,100 @@ Stage 1: Analyze Bytecode
 At the start of compilation, the function bytecode is passed to an instance of
 the Numba interpreter (``numba.interpreter``).  The interpreter object
 analyzes the bytecode to find the control flow graph (``numba.controlflow``).
-Then the results of the control flow graph are passed to the data flow
-analysis (``numba.dataflow``) that traces how values get pushed and popped off
-the Python interpreter stack for different code paths.
+The control flow graph describes the ways that execution can move from one
+block to the next inside the function as a result of loops and branches.
+
+The data flow analysis (``numba.dataflow``) takes the control flow graph and
+traces how values get pushed and popped off the Python interpreter stack for
+different code paths.  This is important to understand the lifetimes of
+variables on the stack, which are needed in Stage 2.
+
+If you set the environment variable ``NUMBA_DUMP_CFG`` to 1, Numba will dump
+the results of the control flow graph analysis to the screen.  Our ``add()``
+example is pretty boring, since there is only one statement block::
+
+    CFG adjacency lists:
+    {0: []}
+    CFG dominators:
+    {0: set([0])}
+    CFG post-dominators:
+    {0: set([0])}
+    CFG back edges: []
+    CFG loops:
+    {}
+    CFG node-to-loops:
+    {0: []}
+
+A function with more complex flow control will have a more interesting
+control flow graph.  This function::
+
+    def doloops(n):
+        acc = 0
+        for i in range(n):
+            acc += 1
+            if n == 10:
+                break
+        return acc
+
+compiles to this bytecode::
+
+      9           0 LOAD_CONST               1 (0)
+                  3 STORE_FAST               1 (acc)
+
+     10           6 SETUP_LOOP              46 (to 55)
+                  9 LOAD_GLOBAL              0 (range)
+                 12 LOAD_FAST                0 (n)
+                 15 CALL_FUNCTION            1
+                 18 GET_ITER
+            >>   19 FOR_ITER                32 (to 54)
+                 22 STORE_FAST               2 (i)
+
+     11          25 LOAD_FAST                1 (acc)
+                 28 LOAD_CONST               2 (1)
+                 31 INPLACE_ADD
+                 32 STORE_FAST               1 (acc)
+
+     12          35 LOAD_FAST                0 (n)
+                 38 LOAD_CONST               3 (10)
+                 41 COMPARE_OP               2 (==)
+                 44 POP_JUMP_IF_FALSE       19
+
+     13          47 BREAK_LOOP
+                 48 JUMP_ABSOLUTE           19
+                 51 JUMP_ABSOLUTE           19
+            >>   54 POP_BLOCK
+
+     14     >>   55 LOAD_FAST                1 (acc)
+                 58 RETURN_VALUE
+
+The corresponding CFG for this bytecode is::
+
+    CFG adjacency lists:
+    {0: [6], 6: [19], 19: [54, 22], 22: [19, 47], 47: [55], 54: [55], 55: []}
+    CFG dominators:
+    {0: set([0]),
+     6: set([0, 6]),
+     19: set([0, 6, 19]),
+     22: set([0, 6, 19, 22]),
+     47: set([0, 6, 19, 22, 47]),
+     54: set([0, 6, 19, 54]),
+     55: set([0, 6, 19, 55])}
+    CFG post-dominators:
+    {0: set([0, 6, 19, 55]),
+     6: set([6, 19, 55]),
+     19: set([19, 55]),
+     22: set([22, 55]),
+     47: set([47, 55]),
+     54: set([54, 55]),
+     55: set([55])}
+    CFG back edges: [(22, 19)]
+    CFG loops:
+    {19: Loop(entries=set([6]), exits=set([54, 47]), header=19, body=set([19, 22]))}
+    CFG node-to-loops:
+    {0: [], 6: [], 19: [19], 22: [19], 47: [], 54: [], 55: []}
+
+The numbers in the CFG refer to the bytecode offsets shown just to the left
+of the opcode names above.
 
 Stage 2: Generate the Numba IR
 ------------------------------
@@ -99,10 +190,10 @@ intermediate representation.  This translation process changes the function
 from a stack machine representation (used by the Python interpreter) to a 
 register machine representation (used by LLVM).
 
-Although the IR is stored in memory as a tree of nested objects, it can be
-serialized to a string for debugging.  If you set the environment variable
+Although the IR is stored in memory as a tree of objects, it can be serialized
+to a string for debugging.  If you set the environment variable
 ``NUMBA_DUMP_IR`` equal to 1, the Numba IR will be dumped to the screen.  For
-the ``add()`` function described above, the Numba IR is::
+the ``add()`` function described above, the Numba IR looks like::
 
     label 0:
         a.1 = a
@@ -157,11 +248,11 @@ Stage 4a: Generate No-Python LLVM IR
 ------------------------------------
 
 If type inference succeeds in finding a Numba type for every intermediate
-variable, then specialized native code can (potentially) be generated.  This
+variable, then Numba can (potentially) generate specialized native code.  This
 process is called *lowering*.  The Numba IR tree is translated into LLVM IR by
-using helper classes from `llvmpy <http://www.llvmpy.org/>`_.  The 
-machine-generated LLVM IR can seem unnecessarily verbose, but the LLVM 
-toolchain is able to optimize it quite easily into compact, efficient code.
+using helper classes from `llvmpy <http://www.llvmpy.org/>`_.  The  machine-
+generated LLVM IR can seem unnecessarily verbose, but the LLVM  toolchain is
+able to optimize it quite easily into compact, efficient code.
 
 The basic lowering algorithm is generic, but the specifics of how particular
 Numba IR nodes are translated to LLVM instructions is handled by the
@@ -220,8 +311,8 @@ Stage 4b: Generate Object Mode LLVM IR
 If type inference fails to find Numba types for all values inside a function,
 the function will be compiled in object mode.  The generated LLVM will be
 significantly longer, as the compiled code will need to make calls to the
-Python C-API to perform basically all operations.  The optimized LLVM
-for our example ``add()`` function is:
+`Python C API <https://docs.python.org/3/c-api/>`_ to perform basically all
+operations.  The optimized LLVM for our example ``add()`` function is:
 
 .. code-block:: llvm
 
@@ -307,4 +398,135 @@ by the LLVM JIT compiler and the machine code is loaded into memory.  A Python
 wrapper is also created (defined in ``numba.dispatcher.Overloaded``) which can
 do the dynamic dispatch to the correct version of the compiled function if
 multiple type specializations were generated (for example, for both
-``float32`` and ``float64``).
+``float32`` and ``float64`` versions of the same function).
+
+The machine assembly code generated by LLVM can be dumped to the screen by
+setting the ``NUMBA_DUMP_ASSEMBLY`` environment variable to 1:
+
+.. code-block:: gas
+
+      .section  __TEXT,__text,regular,pure_instructions
+      .globl  _add.int64.int64
+      .align  4, 0x90
+    _add.int64.int64:
+      addq  %rcx, %rdx
+      movq  %rdx, (%rdi)
+      xorl  %eax, %eax
+      ret
+
+
+The assembly output will also include the generated wrapper function that
+translates the Python arguments to native data types.
+
+.. code-block:: gas
+
+      .globl  _wrapper.add.int64.int64
+      .align  4, 0x90
+    _wrapper.add.int64.int64:
+      .cfi_startproc
+      pushq %rbp
+    Ltmp7:
+      .cfi_def_cfa_offset 16
+      pushq %r15
+    Ltmp8:
+      .cfi_def_cfa_offset 24
+      pushq %r14
+    Ltmp9:
+      .cfi_def_cfa_offset 32
+      pushq %r13
+    Ltmp10:
+      .cfi_def_cfa_offset 40
+      pushq %r12
+    Ltmp11:
+      .cfi_def_cfa_offset 48
+      pushq %rbx
+    Ltmp12:
+      .cfi_def_cfa_offset 56
+      subq  $24, %rsp
+    Ltmp13:
+      .cfi_def_cfa_offset 80
+    Ltmp14:
+      .cfi_offset %rbx, -56
+    Ltmp15:
+      .cfi_offset %r12, -48
+    Ltmp16:
+      .cfi_offset %r13, -40
+    Ltmp17:
+      .cfi_offset %r14, -32
+    Ltmp18:
+      .cfi_offset %r15, -24
+    Ltmp19:
+      .cfi_offset %rbp, -16
+      leaq  16(%rsp), %r8
+      leaq  8(%rsp), %r9
+      movabsq $_PyArg_ParseTupleAndKeywords, %rbp
+      movq  %rsi, %rdi
+      movq  %rdx, %rsi
+      movabsq $_.const.OO, %rdx
+      movabsq $_.kwlist, %rcx
+      xorb  %al, %al
+      callq *%rbp
+      xorl  %r15d, %r15d
+      testl %eax, %eax
+      je  LBB1_4
+      movq  16(%rsp), %rdi
+      movabsq $_PyNumber_Long, %rax
+      callq *%rax
+      movq  %rax, %rbx
+      movabsq $_PyLong_AsLongLong, %r12
+      movq  %rbx, %rdi
+      callq *%r12
+      movq  %rax, %r14
+      movabsq $_Py_DecRef, %rbp
+      movq  %rbx, %rdi
+      callq *%rbp
+      movabsq $_PyErr_Occurred, %r13
+      callq *%r13
+      testq %rax, %rax
+      jne LBB1_4
+      movq  8(%rsp), %rdi
+      movabsq $_PyNumber_Long, %rax
+      callq *%rax
+      movq  %rax, %rbx
+      movq  %rbx, %rdi
+      callq *%r12
+      movq  %rax, %r12
+      movq  %rbx, %rdi
+      callq *%rbp
+      callq *%r13
+      testq %rax, %rax
+      jne LBB1_4
+      addq  %r14, %r12
+      movabsq $_PyInt_FromLong, %rax
+      movq  %r12, %rdi
+      callq *%rax
+      movq  %rax, %r15
+    LBB1_4:
+      movq  %r15, %rax
+      addq  $24, %rsp
+      popq  %rbx
+      popq  %r12
+      popq  %r13
+      popq  %r14
+      popq  %r15
+      popq  %rbp
+      ret
+      .cfi_endproc
+
+      .section  __TEXT,__const
+    _.const.a:
+      .asciz   "a"
+
+    _.const.b:
+      .asciz   "b"
+
+      .section  __DATA,__const
+      .align  4
+    _.kwlist:
+      .quad _.const.a
+      .quad _.const.b
+      .quad 0
+
+      .section  __TEXT,__const
+    _.const.OO:
+      .asciz   "OO"
