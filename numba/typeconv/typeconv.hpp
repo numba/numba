@@ -68,7 +68,6 @@ struct Rating{
 
     Rating();
     void bad();
-    void reset();
 
     bool operator < (const Rating &other) const;
     bool operator == (const Rating &other) const;
