@@ -39,7 +39,7 @@ class Numpy_rules_ufunc(AbstractTemplate):
         assert len(args) >= nin and len(args) <= nargs
 
         arg_ndims = [a.ndim if isinstance(a, types.Array) else 0 for a in args]
-        ndims = arg_ndims[0] if len(arg_ndims) < 2 else max(*arg_ndims)
+        ndims = max(arg_ndims)
 
         # explicit outputs must be arrays (no explicit scalar return values supported)
         explicit_outputs = args[nin:]
