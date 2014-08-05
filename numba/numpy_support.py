@@ -113,10 +113,17 @@ def numba_types_to_numpy_letter_types(numba_type_seq):
     letter_type = [numpy.dtype(str(x)).char for x in numba_type_seq]
     return [l if l in supported_letter_types() else None for l in letter_type]
 
-def supported_ufunc_loop(ufunc, loop):
-    """returns whether the loop for the ufunc is supported -in nopython-
+def supported_ufunc_loop(ufunc, loop_signature):
+    """returns whether the ufunc with the loop signature 'loop_signature'
+    is supported -in nopython-
+
+    ufunc - the ufunc
+
+    loop_signature - the signature string for the loop, as found in
+                     the ufunc 'types' attribute (something like 'ff->f')
     """
-    loop_types = loop[:ufunc.nin] + loop[-ufunc.nout:]
+    assert loop_signature in ufunc.types
+    loop_types = loop_signature[:ufunc.nin] + loop_signature[-ufunc.nout:]
     supported_types = supported_letter_types()
     return all((t in supported_types for t in loop_types))
 
