@@ -14,7 +14,9 @@ from . import utils
 
 # Some types are dynamically-created (e.g. Dispatcher), we shouldn't
 # keep a strong reference to them.
-_typecache = weakref.WeakKeyDictionary()
+_typecache = defaultdict(set)
+
+_immortal_types = []
 
 
 class Type(object):
@@ -27,25 +29,48 @@ class Type(object):
     _next_code = itertools.count()
 
     mutable = False
+    # Set to True if the type instances must be immortal.
+    immortal = False
 
-    def __init__(self, name, param=False):
+    def __new__(cls, *args, **kwargs):
+        self = object.__new__(cls)
+        self._init(*args, **kwargs)
+        return self
+
+    def _init(self, name, param=False):
         self.name = name
         self.is_parametric = param
-        try:
-            self._code = _typecache[self]
-        except KeyError:
-            self._code = _typecache[self] = next(Type._next_code)
+        key = self.key
+        refs = _typecache[self.key]
+        if refs:
+            self._code = next(iter(refs))()._code
+        else:
+            self._code = next(Type._next_code)
             # 4 billion types should be enough, right?
             assert self._code < 2 ** 32, "Limited to 4 billion types"
+            if self.immortal:
+                _immortal_types.append(self)
+
+        def _on_disposal(wr, _typecache=_typecache):
+            refs = _typecache[key]
+            refs.discard(wr)
+            if not refs:
+                del _typecache[key]
+
+        refs.add(weakref.ref(self, _on_disposal))
+
+    @property
+    def key(self):
+        return self.name
 
     def __repr__(self):
         return self.name
 
     def __hash__(self):
-        return hash(self.name)
+        return hash(self.key)
 
     def __eq__(self, other):
-        return self.__class__ is other.__class__ and self.name == other.name
+        return self.__class__ is other.__class__ and self.key == other.key
 
     def __ne__(self, other):
         return not (self == other)
@@ -91,14 +116,14 @@ class OpaqueType(Type):
     To deal with externally defined literal types
     """
 
-    def __init__(self, name):
-        super(OpaqueType, self).__init__(name)
+    def _init(self, name):
+        super(OpaqueType, self)._init(name)
 
 
 @utils.total_ordering
 class Integer(Type):
-    def __init__(self, *args, **kws):
-        super(Integer, self).__init__(*args, **kws)
+    def _init(self, *args, **kws):
+        super(Integer, self)._init(*args, **kws)
         # Determine bitwidth
         for prefix in ('int', 'uint'):
             if self.name.startswith(prefix):
@@ -119,8 +144,8 @@ class Integer(Type):
 
 @utils.total_ordering
 class Float(Type):
-    def __init__(self, *args, **kws):
-        super(Float, self).__init__(*args, **kws)
+    def _init(self, *args, **kws):
+        super(Float, self)._init(*args, **kws)
         # Determine bitwidth
         assert self.name.startswith('float')
         bitwidth = int(self.name[5:])
@@ -137,8 +162,8 @@ class Float(Type):
 
 @utils.total_ordering
 class Complex(Type):
-    def __init__(self, name, underlying_float, **kwargs):
-        super(Complex, self).__init__(name, **kwargs)
+    def _init(self, name, underlying_float, **kwargs):
+        super(Complex, self)._init(name, **kwargs)
         self.underlying_float = underlying_float
         # Determine bitwidth
         assert self.name.startswith('complex')
@@ -154,11 +179,11 @@ class Complex(Type):
         return self.bitwidth < other.bitwidth
 
 class Prototype(Type):
-    def __init__(self, args, return_type):
+    def _init(self, args, return_type):
         self.args = args
         self.return_type = return_type
         name = "%s(%s)" % (return_type, ', '.join(str(a) for a in args))
-        super(Prototype, self).__init__(name=name)
+        super(Prototype, self)._init(name=name)
 
 
 class Dummy(Type):
@@ -169,60 +194,76 @@ class Dummy(Type):
 
 
 class Kind(Type):
-    def __init__(self, of):
+    def _init(self, of):
         self.of = of
-        super(Kind, self).__init__("kind(%s)" % of)
+        super(Kind, self)._init("kind(%s)" % of)
 
-    def __eq__(self, other):
-        if isinstance(other, Kind):
-            return self.of == other.of
+    @property
+    def key(self):
+        return self.of
 
-    def __hash__(self):
-        return hash(self.of)
+    #def __eq__(self, other):
+        #if isinstance(other, Kind):
+            #return self.of == other.of
+
+    #def __hash__(self):
+        #return hash(self.of)
 
 
 class Module(Type):
-    def __init__(self, pymod):
+    def _init(self, pymod):
         self.pymod = pymod
-        super(Module, self).__init__("Module(%s)" % pymod)
+        super(Module, self)._init("Module(%s)" % pymod)
 
-    def __eq__(self, other):
-        if isinstance(other, Module):
-            return self.pymod == other.pymod
+    @property
+    def key(self):
+        return self.pymod
 
-    def __hash__(self):
-        return hash(self.pymod)
+    #def __eq__(self, other):
+        #if isinstance(other, Module):
+            #return self.pymod == other.pymod
+
+    #def __hash__(self):
+        #return hash(self.pymod)
 
 
 class Macro(Type):
-    def __init__(self, template):
+    def _init(self, template):
         self.template = template
         cls = type(self)
-        super(Macro, self).__init__("%s(%s)" % (cls.__name__, template))
+        super(Macro, self)._init("%s(%s)" % (cls.__name__, template))
 
-    def __eq__(self, other):
-        if isinstance(other, Macro):
-            return self.template == other.template
+    @property
+    def key(self):
+        return self.template
 
-    def __hash__(self):
-        # FIXME maybe this should not be hashable
-        return hash(self.template)
+    #def __eq__(self, other):
+        #if isinstance(other, Macro):
+            #return self.template == other.template
+
+    #def __hash__(self):
+        ## FIXME maybe this should not be hashable
+        #return hash(self.template)
 
 
 class Function(Type):
-    def __init__(self, template):
+    def _init(self, template):
         self.template = template
         cls = type(self)
         # TODO template is mutable.  Should use different naming scheme
-        super(Function, self).__init__("%s(%s)" % (cls.__name__, template))
+        super(Function, self)._init("%s(%s)" % (cls.__name__, template))
 
-    def __eq__(self, other):
-        if isinstance(other, Function):
-            return self.template == other.template
+    @property
+    def key(self):
+        return self.template
 
-    def __hash__(self):
-        # FIXME maybe this should not be hashable
-        return hash(self.template)
+    #def __eq__(self, other):
+        #if isinstance(other, Function):
+            #return self.template == other.template
+
+    #def __hash__(self):
+        ## FIXME maybe this should not be hashable
+        #return hash(self.template)
 
     def extend(self, template):
         self.template.cases.extend(template.cases)
@@ -243,23 +284,30 @@ class WeakType(Type):
             raise ReferenceError("underlying object has vanished")
         return obj
 
+    @property
+    def key(self):
+        return self._wr
+
     def __eq__(self, other):
         if type(self) is type(other):
             obj = self._wr()
             return obj is not None and obj is other._wr()
 
-    def __ne__(self, other):
-        return not (self == other)
-
     def __hash__(self):
-        return hash(self._wr)
+        return Type.__hash__(self)
+
+    #def __ne__(self, other):
+        #return not (self == other)
+
+    #def __hash__(self):
+        #return hash(self._wr)
 
 
 class Dispatcher(WeakType):
 
-    def __init__(self, overloaded):
+    def _init(self, overloaded):
         self._store_object(overloaded)
-        super(Dispatcher, self).__init__("Dispatcher(%s)" % overloaded)
+        super(Dispatcher, self)._init("Dispatcher(%s)" % overloaded)
 
     @property
     def overloaded(self):
@@ -270,25 +318,29 @@ class Dispatcher(WeakType):
 
 
 class FunctionPointer(Function):
-    def __init__(self, template, funcptr):
+    def _init(self, template, funcptr):
         self.funcptr = funcptr
-        super(FunctionPointer, self).__init__(template)
+        super(FunctionPointer, self)._init(template)
 
 
 class Method(Function):
-    def __init__(self, template, this):
+    def _init(self, template, this):
         self.this = this
         newcls = type(template.__name__ + '.' + str(this), (template,),
                       dict(this=this))
-        super(Method, self).__init__(newcls)
+        super(Method, self)._init(newcls)
 
-    def __eq__(self, other):
-        if isinstance(other, Method):
-            return (self.template.__name__ == other.template.__name__ and
-                    self.this == other.this)
+    @property
+    def key(self):
+        return (self.template.__name__, self.this)
 
-    def __hash__(self):
-        return hash((self.template.__name__, self.this))
+    #def __eq__(self, other):
+        #if isinstance(other, Method):
+            #return (self.template.__name__ == other.template.__name__ and
+                    #self.this == other.this)
+
+    #def __hash__(self):
+        #return hash((self.template.__name__, self.this))
 
 
 class Pair(Type):
@@ -296,19 +348,23 @@ class Pair(Type):
     A heterogenous pair.
     """
 
-    def __init__(self, first_type, second_type):
+    def _init(self, first_type, second_type):
         self.first_type = first_type
         self.second_type = second_type
         name = "pair<%s, %s>" % (first_type, second_type)
-        super(Pair, self).__init__(name=name)
+        super(Pair, self)._init(name=name)
 
-    def __eq__(self, other):
-        if isinstance(other, Pair):
-            return (self.first_type == other.first_type and
-                    self.second_type == other.second_type)
+    @property
+    def key(self):
+        return self.first_type, self.second_type
 
-    def __hash__(self):
-        return hash((self.first_type, self.second_type))
+    #def __eq__(self, other):
+        #if isinstance(other, Pair):
+            #return (self.first_type == other.first_type and
+                    #self.second_type == other.second_type)
+
+    #def __hash__(self):
+        #return hash((self.first_type, self.second_type))
 
 
 class IterableType(Type):
@@ -320,16 +376,16 @@ class IterableType(Type):
 
 class SimpleIterableType(IterableType):
 
-    def __init__(self, name, iterator_type):
+    def _init(self, name, iterator_type):
         self.iterator_type = iterator_type
-        super(SimpleIterableType, self).__init__(name, param=True)
+        super(SimpleIterableType, self)._init(name, param=True)
 
-    def __eq__(self, other):
-        if other.__class__ is self.__class__:
-            return self.name == other.name
+    #def __eq__(self, other):
+        #if other.__class__ is self.__class__:
+            #return self.name == other.name
 
-    def __hash__(self):
-        return hash(self.name)
+    #def __hash__(self):
+        #return hash(self.name)
 
 
 class IteratorType(IterableType):
@@ -338,23 +394,23 @@ class IteratorType(IterableType):
     Derived classes should implement the *yield_type* attribute.
     """
 
-    def __init__(self, name, **kwargs):
+    def _init(self, name, **kwargs):
         self.iterator_type = self
-        super(IteratorType, self).__init__(name, **kwargs)
+        super(IteratorType, self)._init(name, **kwargs)
 
 
 class SimpleIteratorType(IteratorType):
 
-    def __init__(self, name, yield_type):
+    def _init(self, name, yield_type):
         self.yield_type = yield_type
-        super(SimpleIteratorType, self).__init__(name, param=True)
+        super(SimpleIteratorType, self)._init(name, param=True)
 
-    def __eq__(self, other):
-        if other.__class__ is self.__class__:
-            return self.name == other.name
+    #def __eq__(self, other):
+        #if other.__class__ is self.__class__:
+            #return self.name == other.name
 
-    def __hash__(self):
-        return hash(self.name)
+    #def __hash__(self):
+        #return hash(self.name)
 
 
 class RangeType(SimpleIterableType):
@@ -370,18 +426,22 @@ class EnumerateType(IteratorType):
     Type instances are parametered with the underlying source type.
     """
 
-    def __init__(self, iterable_type):
+    def _init(self, iterable_type):
         self.source_type = iterable_type.iterator_type
         self.yield_type = Tuple([intp, self.source_type.yield_type])
         name = 'enumerate(%s)' % (self.source_type)
-        super(EnumerateType, self).__init__(name, param=True)
+        super(EnumerateType, self)._init(name, param=True)
 
-    def __eq__(self, other):
-        if isinstance(other, EnumerateType):
-            return self.source_type == other.source_type
+    @property
+    def key(self):
+        return self.source_type
 
-    def __hash__(self):
-        return hash(self.source_type)
+    #def __eq__(self, other):
+        #if isinstance(other, EnumerateType):
+            #return self.source_type == other.source_type
+
+    #def __hash__(self):
+        #return hash(self.source_type)
 
 
 class ZipType(IteratorType):
@@ -390,72 +450,88 @@ class ZipType(IteratorType):
     Type instances are parametered with the underlying source types.
     """
 
-    def __init__(self, iterable_types):
+    def _init(self, iterable_types):
         self.source_types = tuple(tp.iterator_type for tp in iterable_types)
         self.yield_type = Tuple(tp.yield_type for tp in self.source_types)
         name = 'zip(%s)' % ', '.join(str(tp) for tp in self.source_types)
-        super(ZipType, self).__init__(name, param=True)
+        super(ZipType, self)._init(name, param=True)
 
-    def __eq__(self, other):
-        if isinstance(other, ZipType):
-            return self.source_types == other.source_types
+    @property
+    def key(self):
+        return self.source_types
 
-    def __hash__(self):
-        return hash(self.source_types)
+    #def __eq__(self, other):
+        #if isinstance(other, ZipType):
+            #return self.source_types == other.source_types
+
+    #def __hash__(self):
+        #return hash(self.source_types)
 
 
 class CharSeq(Type):
     mutable = True
 
-    def __init__(self, count):
+    def _init(self, count):
         self.count = count
         name = "[char x %d]" % count
-        super(CharSeq, self).__init__(name, param=True)
+        super(CharSeq, self)._init(name, param=True)
 
-    def __eq__(self, other):
-        if isinstance(other, CharSeq):
-            return self.count == other.count
+    @property
+    def key(self):
+        return self.count
 
-    def __hash__(self):
-        return hash(self.name)
+    #def __eq__(self, other):
+        #if isinstance(other, CharSeq):
+            #return self.count == other.count
+
+    #def __hash__(self):
+        #return hash(self.name)
 
 
 class UnicodeCharSeq(Type):
     mutable = True
 
-    def __init__(self, count):
+    def _init(self, count):
         self.count = count
         name = "[unichr x %d]" % count
-        super(UnicodeCharSeq, self).__init__(name, param=True)
+        super(UnicodeCharSeq, self)._init(name, param=True)
 
-    def __eq__(self, other):
-        if isinstance(other, UnicodeCharSeq):
-            return self.count == other.count
+    @property
+    def key(self):
+        return self.count
 
-    def __hash__(self):
-        return hash(self.name)
+    #def __eq__(self, other):
+        #if isinstance(other, UnicodeCharSeq):
+            #return self.count == other.count
+
+    #def __hash__(self):
+        #return hash(self.name)
 
 
 class Record(Type):
     mutable = True
 
-    def __init__(self, id, fields, size, align, dtype):
+    def _init(self, id, fields, size, align, dtype):
         self.id = id
         self.fields = fields.copy()
         self.size = size
         self.align = align
         self.dtype = dtype
         name = 'Record(%s)' % id
-        super(Record, self).__init__(name)
+        super(Record, self)._init(name)
 
-    def __eq__(self, other):
-        if isinstance(other, Record):
-            return (self.id == other.id and
-                    self.size == other.size and
-                    self.align == other.align)
+    @property
+    def key(self):
+        return (self.id, self.size, self.align)
 
-    def __hash__(self):
-        return hash(self.name)
+    #def __eq__(self, other):
+        #if isinstance(other, Record):
+            #return (self.id == other.id and
+                    #self.size == other.size and
+                    #self.align == other.align)
+
+    #def __hash__(self):
+        #return hash(self.name)
 
     def __len__(self):
         return len(self.fields)
@@ -473,25 +549,28 @@ class Record(Type):
 
 class ArrayIterator(IteratorType):
 
-    def __init__(self, array_type):
+    def _init(self, array_type):
         self.array_type = array_type
         name = "iter(%s)" % (self.array_type,)
         if array_type.ndim == 1:
             self.yield_type = array_type.dtype
         else:
             self.yield_type = array_type.copy(ndim=array_type.ndim - 1)
-        super(ArrayIterator, self).__init__(name, param=True)
+        super(ArrayIterator, self)._init(name, param=True)
 
 
 class Array(IterableType):
     __slots__ = 'dtype', 'ndim', 'layout'
 
     mutable = True
+    # We must keep those immortal for the typecode cache in _dispatcher.c
+    # to remain in sync.
+    immortal = True
 
     # CS and FS are not reserved for inner contig but strided
     LAYOUTS = frozenset(['C', 'F', 'CS', 'FS', 'A'])
 
-    def __init__(self, dtype, ndim, layout):
+    def _init(self, dtype, ndim, layout):
         from numba.typeconv.rules import default_type_manager as tm
 
         if isinstance(dtype, Array):
@@ -503,13 +582,14 @@ class Array(IterableType):
         self.ndim = ndim
         self.layout = layout
         name = "array(%s, %sd, %s)" % (dtype, ndim, layout)
-        super(Array, self).__init__(name, param=True)
+        super(Array, self)._init(name, param=True)
         self.iterator_type = ArrayIterator(self)
 
         if layout != 'A':
             # Install conversion from non-any layout to any layout
             ary_any = Array(dtype, ndim, 'A')
             tm.set_safe_convert(self, ary_any)
+            self._ary_any = ary_any
 
     def copy(self, dtype=None, ndim=None, layout=None):
         if dtype is None:
@@ -546,15 +626,18 @@ class Array(IterableType):
         """
         return intp, self.dtype
 
-    def __eq__(self, other):
-        if isinstance(other, Array):
-            return (self.dtype == other.dtype and
-                    self.ndim == other.ndim and
-                    self.layout == other.layout)
+    @property
+    def key(self):
+        return self.dtype, self.ndim, self.layout
 
-    def __hash__(self):
-        return hash((self.dtype, self.ndim, self.layout))
+    #def __eq__(self, other):
+        #if isinstance(other, Array):
+            #return (self.dtype == other.dtype and
+                    #self.ndim == other.ndim and
+                    #self.layout == other.layout)
 
+    #def __hash__(self):
+        #return hash((self.dtype, self.ndim, self.layout))
 
     @property
     def is_c_contig(self):
@@ -571,11 +654,11 @@ class Array(IterableType):
 
 class UniTuple(IterableType):
 
-    def __init__(self, dtype, count):
+    def _init(self, dtype, count):
         self.dtype = dtype
         self.count = count
         name = "(%s x %d)" % (dtype, count)
-        super(UniTuple, self).__init__(name, param=True)
+        super(UniTuple, self)._init(name, param=True)
         self.iterator_type = UniTupleIter(self)
 
     def getitem(self, ind):
@@ -597,36 +680,44 @@ class UniTuple(IterableType):
     def __len__(self):
         return self.count
 
-    def __eq__(self, other):
-        if isinstance(other, UniTuple):
-            return self.dtype == other.dtype and self.count == other.count
+    @property
+    def key(self):
+        return self.dtype, self.count
 
-    def __hash__(self):
-        return hash((self.dtype, self.count))
+    #def __eq__(self, other):
+        #if isinstance(other, UniTuple):
+            #return self.dtype == other.dtype and self.count == other.count
+
+    #def __hash__(self):
+        #return hash((self.dtype, self.count))
 
 
 class UniTupleIter(IteratorType):
 
-    def __init__(self, unituple):
+    def _init(self, unituple):
         self.unituple = unituple
         self.yield_type = unituple.dtype
         name = 'iter(%s)' % unituple
-        super(UniTupleIter, self).__init__(name, param=True)
+        super(UniTupleIter, self)._init(name, param=True)
 
-    def __eq__(self, other):
-        if isinstance(other, UniTupleIter):
-            return self.unituple == other.unituple
+    @property
+    def key(self):
+        return self.unituple
 
-    def __hash__(self):
-        return hash(self.unituple)
+    #def __eq__(self, other):
+        #if isinstance(other, UniTupleIter):
+            #return self.unituple == other.unituple
+
+    #def __hash__(self):
+        #return hash(self.unituple)
 
 
 class Tuple(Type):
-    def __init__(self, types):
+    def _init(self, types):
         self.types = tuple(types)
         self.count = len(self.types)
         name = "(%s)" % ', '.join(str(i) for i in self.types)
-        super(Tuple, self).__init__(name, param=True)
+        super(Tuple, self)._init(name, param=True)
 
     def __getitem__(self, i):
         """
@@ -637,12 +728,16 @@ class Tuple(Type):
     def __len__(self):
         return len(self.types)
 
-    def __eq__(self, other):
-        if isinstance(other, Tuple):
-            return self.types == other.types
+    @property
+    def key(self):
+        return self.types
 
-    def __hash__(self):
-        return hash(self.types)
+    #def __eq__(self, other):
+        #if isinstance(other, Tuple):
+            #return self.types == other.types
+
+    #def __hash__(self):
+        #return hash(self.types)
 
     def __iter__(self):
         return iter(self.types)
@@ -651,47 +746,59 @@ class Tuple(Type):
 class CPointer(Type):
     mutable = True
 
-    def __init__(self, dtype):
+    def _init(self, dtype):
         self.dtype = dtype
         name = "*%s" % dtype
-        super(CPointer, self).__init__(name, param=True)
+        super(CPointer, self)._init(name, param=True)
 
-    def __eq__(self, other):
-        if isinstance(other, CPointer):
-            return self.dtype == other.dtype
+    @property
+    def key(self):
+        return self.dtype
 
-    def __hash__(self):
-        return hash(self.dtype)
+    #def __eq__(self, other):
+        #if isinstance(other, CPointer):
+            #return self.dtype == other.dtype
+
+    #def __hash__(self):
+        #return hash(self.dtype)
 
 
 class Object(Type):
     mutable = True
 
-    def __init__(self, clsobj):
+    def _init(self, clsobj):
         self.cls = clsobj
         name = "Object(%s)" % clsobj.__name__
-        super(Object, self).__init__(name, param=True)
+        super(Object, self)._init(name, param=True)
 
-    def __eq__(self, other):
-        if isinstance(other, Object):
-            return self.cls == other.cls
+    @property
+    def key(self):
+        return self.cls
 
-    def __hash__(self):
-        return hash(self.cls)
+    #def __eq__(self, other):
+        #if isinstance(other, Object):
+            #return self.cls == other.cls
+
+    #def __hash__(self):
+        #return hash(self.cls)
 
 
 class Optional(Type):
-    def __init__(self, typ):
+    def _init(self, typ):
         self.type = typ
         name = "?%s" % typ
-        super(Optional, self).__init__(name, param=True)
+        super(Optional, self)._init(name, param=True)
 
-    def __eq__(self, other):
-        if isinstance(other, Optional):
-            return self.type == other.type
+    @property
+    def key(self):
+        return self.type
 
-    def __hash__(self):
-        return hash(self.type)
+    #def __eq__(self, other):
+        #if isinstance(other, Optional):
+            #return self.type == other.type
+
+    #def __hash__(self):
+        #return hash(self.type)
 
 
 # Utils
