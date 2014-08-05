@@ -5,20 +5,16 @@ the targets to choose their representation.
 from __future__ import print_function, division, absolute_import
 from collections import defaultdict
 
+import itertools
 import numpy
 import weakref
 
 from . import utils
 
 
-def _autoincr():
-    n = len(_typecache)
-    # 4 billion types should be enough, right?
-    assert n <= 2 ** 32, "Limited to 4billion types"
-    return n
-
-
-_typecache = defaultdict(_autoincr)
+# Some types are dynamically-created (e.g. Dispatcher), we shouldn't
+# keep a strong reference to them.
+_typecache = weakref.WeakKeyDictionary()
 
 
 class Type(object):
@@ -27,14 +23,20 @@ class Type(object):
     Two types are equal if there `name` are equal.
     Subclass can refine this behavior.
     """
-    __slots__ = '_code', 'name', 'is_parametric'
+    __slots__ = ('_code', 'name', 'is_parametric', '__weakref__')
+    _next_code = itertools.count()
 
     mutable = False
 
     def __init__(self, name, param=False):
         self.name = name
         self.is_parametric = param
-        self._code = _typecache[self]
+        try:
+            self._code = _typecache[self]
+        except KeyError:
+            self._code = _typecache[self] = next(Type._next_code)
+            # 4 billion types should be enough, right?
+            assert self._code < 2 ** 32, "Limited to 4 billion types"
 
     def __repr__(self):
         return self.name
