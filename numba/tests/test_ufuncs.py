@@ -1186,9 +1186,10 @@ class TestLoopTypes(TestCase):
         # 2 seems like a nice "no special case argument"
 
         # use days for timedelta64 and datetime64
-        letter_types = re.sub(r'[mM]', r'D', letter_types)
-        args1 = [np.array((2,), dtype=l) for l in letter_types]
-        args2 = [np.array((2,), dtype=l) for l in letter_types]
+        repl = { 'm': 'm8[d]', 'M': 'M8[D]' }
+        arg_types = [repl.get(t, t) for t in letter_types]
+        args1 = [np.array((2,), dtype=l) for l in arg_types]
+        args2 = [np.array((2,), dtype=l) for l in arg_types]
 
         cr.entry_point(*args1)
         fn(*args2)
