@@ -55,7 +55,7 @@ class TestCase(unittest.TestCase):
     # Use as `self.random.<method name>`
     @utils.cached_property
     def random(self):
-        return np.random.RandomState(bytearray(b"some constant seed"))
+        return np.random.RandomState(42)
 
     @contextlib.contextmanager
     def assertTypingError(self):
