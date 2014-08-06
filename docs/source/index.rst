@@ -67,8 +67,9 @@ Numba
    :titlesonly:
    :maxdepth: 1
 
-   architecture.rst
-   cgutils.rst
+   developer/contributing.rst
+   developer/architecture.rst
+   developer/cgutils.rst
 
 **Indices and tables**
 

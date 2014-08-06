@@ -6,10 +6,10 @@ class TypeManager(object):
     def __init__(self):
         self._ptr = _typeconv.new_type_manager()
 
-    def select_overload(self, sig, overloads):
+    def select_overload(self, sig, overloads, allow_unsafe):
         sig = [t._code for t in sig]
         overloads = [[t._code for t in s] for s in overloads ]
-        return _typeconv.select_overload(self._ptr, sig, overloads)
+        return _typeconv.select_overload(self._ptr, sig, overloads, allow_unsafe)
 
     def check_compatible(self, fromty, toty):
         return _typeconv.check_compatible(self._ptr, fromty._code, toty._code)
