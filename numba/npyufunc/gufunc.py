@@ -2,8 +2,8 @@ from . import ufuncbuilder
 
 from numba import llvm_types
 
-from llvm_cbuilder import CFuncRef, CStruct, CDefinition
-from llvm_cbuilder import shortnames as C
+
+
 
 from numba.codegen.llvmcontext import LLVMContextManager
 from numba.vectorize import _internal

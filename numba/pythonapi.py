@@ -1,8 +1,8 @@
 from __future__ import print_function, division, absolute_import
-from llvm.core import Type, Constant
-import llvm.core as lc
-import llvm.ee as le
-from llvm import LLVMException
+
+import llvmlite.llvmpy.core as lc
+import llvmlite.llvmpy.ee as le
+
 
 from numba.config import PYVERSION
 import numba.ctypes_support as ctypes
@@ -62,14 +62,14 @@ class PythonAPI(object):
         self.module = builder.basic_block.function.module
         # Initialize types
         self.pyobj = self.context.get_argument_type(types.pyobject)
-        self.voidptr = Type.pointer(Type.int(8))
-        self.long = Type.int(ctypes.sizeof(ctypes.c_long) * 8)
-        self.ulonglong = Type.int(ctypes.sizeof(ctypes.c_ulonglong) * 8)
+        self.voidptr = lc.Type.pointer(lc.Type.int(8))
+        self.long = lc.Type.int(ctypes.sizeof(ctypes.c_long) * 8)
+        self.ulonglong = lc.Type.int(ctypes.sizeof(ctypes.c_ulonglong) * 8)
         self.longlong = self.ulonglong
-        self.double = Type.double()
+        self.double = lc.Type.double()
         self.py_ssize_t = self.context.get_value_type(types.intp)
-        self.cstring = Type.pointer(Type.int(8))
-        self.gil_state = Type.int(_helperlib.py_gil_state_size * 8)
+        self.cstring = lc.Type.pointer(lc.Type.int(8))
+        self.gil_state = lc.Type.int(_helperlib.py_gil_state_size * 8)
 
     # ------ Python API -----
 
@@ -78,12 +78,12 @@ class PythonAPI(object):
     #
 
     def incref(self, obj):
-        fnty = Type.function(Type.void(), [self.pyobj])
+        fnty = lc.Type.function(lc.Type.void(), [self.pyobj])
         fn = self._get_function(fnty, name="Py_IncRef")
         self.builder.call(fn, [obj])
 
     def decref(self, obj):
-        fnty = Type.function(Type.void(), [self.pyobj])
+        fnty = lc.Type.function(lc.Type.void(), [self.pyobj])
         fn = self._get_function(fnty, name="Py_DecRef")
         self.builder.call(fn, [obj])
 
@@ -92,17 +92,17 @@ class PythonAPI(object):
     #
 
     def parse_tuple_and_keywords(self, args, kws, fmt, keywords, *objs):
-        charptr = Type.pointer(Type.int(8))
-        charptrary = Type.pointer(charptr)
+        charptr = lc.Type.pointer(lc.Type.int(8))
+        charptrary = lc.Type.pointer(charptr)
         argtypes = [self.pyobj, self.pyobj, charptr, charptrary]
-        fnty = Type.function(Type.int(), argtypes, var_arg=True)
+        fnty = lc.Type.function(lc.Type.int(), argtypes, var_arg=True)
         fn = self._get_function(fnty, name="PyArg_ParseTupleAndKeywords")
         return self.builder.call(fn, [args, kws, fmt, keywords] + list(objs))
 
     def parse_tuple(self, args, fmt, *objs):
-        charptr = Type.pointer(Type.int(8))
+        charptr = lc.Type.pointer(lc.Type.int(8))
         argtypes = [self.pyobj, charptr]
-        fnty = Type.function(Type.int(), argtypes, var_arg=True)
+        fnty = lc.Type.function(lc.Type.int(), argtypes, var_arg=True)
         fn = self._get_function(fnty, name="PyArg_ParseTuple")
         return self.builder.call(fn, [args, fmt] + list(objs))
 
@@ -111,17 +111,17 @@ class PythonAPI(object):
     #
 
     def err_occurred(self):
-        fnty = Type.function(self.pyobj, ())
+        fnty = lc.Type.function(self.pyobj, ())
         fn = self._get_function(fnty, name="PyErr_Occurred")
         return self.builder.call(fn, ())
 
     def err_clear(self):
-        fnty = Type.function(Type.void(), ())
+        fnty = lc.Type.function(lc.Type.void(), ())
         fn = self._get_function(fnty, name="PyErr_Clear")
         return self.builder.call(fn, ())
 
     def err_set_string(self, exctype, msg):
-        fnty = Type.function(Type.void(), [self.pyobj, self.cstring])
+        fnty = lc.Type.function(lc.Type.void(), [self.pyobj, self.cstring])
         fn = self._get_function(fnty, name="PyErr_SetString")
         if isinstance(exctype, str):
             exctype = self.get_c_object(exctype)
@@ -130,7 +130,7 @@ class PythonAPI(object):
         return self.builder.call(fn, (exctype, msg))
 
     def err_set_object(self, exctype, excval):
-        fnty = Type.function(Type.void(), [self.pyobj, self.pyobj])
+        fnty = lc.Type.function(lc.Type.void(), [self.pyobj, self.pyobj])
         fn = self._get_function(fnty, name="PyErr_SetObject")
         return self.builder.call(fn, (exctype, excval))
 
@@ -153,7 +153,7 @@ class PythonAPI(object):
         """
         try:
             gv = self.module.get_global_variable_named(name)
-        except LLVMException:
+        except lc.LLVMException:
             gv = self.module.add_global_variable(self.pyobj.pointee, name)
         return gv
 
@@ -173,30 +173,30 @@ class PythonAPI(object):
     def dict_getitem_string(self, dic, name):
         """Returns a borrowed reference
         """
-        fnty = Type.function(self.pyobj, [self.pyobj, self.cstring])
+        fnty = lc.Type.function(self.pyobj, [self.pyobj, self.cstring])
         fn = self._get_function(fnty, name="PyDict_GetItemString")
         cstr = self.context.insert_const_string(self.module, name)
         return self.builder.call(fn, [dic, cstr])
 
     def dict_new(self, presize=0):
         if presize == 0:
-            fnty = Type.function(self.pyobj, ())
+            fnty = lc.Type.function(self.pyobj, ())
             fn = self._get_function(fnty, name="PyDict_New")
             return self.builder.call(fn, ())
         else:
-            fnty = Type.function(self.pyobj, [self.py_ssize_t])
+            fnty = lc.Type.function(self.pyobj, [self.py_ssize_t])
             fn = self._get_function(fnty, name="_PyDict_NewPresized")
             return self.builder.call(fn,
-                                     [Constant.int(self.py_ssize_t, presize)])
+                                     [lc.Constant.int(self.py_ssize_t, presize)])
 
     def dict_setitem(self, dictobj, nameobj, valobj):
-        fnty = Type.function(Type.int(), (self.pyobj, self.pyobj,
+        fnty = lc.Type.function(lc.Type.int(), (self.pyobj, self.pyobj,
                                           self.pyobj))
         fn = self._get_function(fnty, name="PyDict_SetItem")
         return self.builder.call(fn, (dictobj, nameobj, valobj))
 
     def dict_setitem_string(self, dictobj, name, valobj):
-        fnty = Type.function(Type.int(), (self.pyobj, self.cstring,
+        fnty = lc.Type.function(lc.Type.int(), (self.pyobj, self.cstring,
                                           self.pyobj))
         fn = self._get_function(fnty, name="PyDict_SetItemString")
         cstr = self.context.insert_const_string(self.module, name)
@@ -220,44 +220,44 @@ class PythonAPI(object):
     #
 
     def float_from_double(self, fval):
-        fnty = Type.function(self.pyobj, [self.double])
+        fnty = lc.Type.function(self.pyobj, [self.double])
         fn = self._get_function(fnty, name="PyFloat_FromDouble")
         return self.builder.call(fn, [fval])
 
     def number_as_ssize_t(self, numobj):
-        fnty = Type.function(self.py_ssize_t, [self.pyobj])
+        fnty = lc.Type.function(self.py_ssize_t, [self.pyobj])
         fn = self._get_function(fnty, name="PyNumber_AsSsize_t")
         return self.builder.call(fn, [numobj])
 
     def number_long(self, numobj):
-        fnty = Type.function(self.pyobj, [self.pyobj])
+        fnty = lc.Type.function(self.pyobj, [self.pyobj])
         fn = self._get_function(fnty, name="PyNumber_Long")
         return self.builder.call(fn, [numobj])
 
     def long_as_ulonglong(self, numobj):
-        fnty = Type.function(self.ulonglong, [self.pyobj])
+        fnty = lc.Type.function(self.ulonglong, [self.pyobj])
         fn = self._get_function(fnty, name="PyLong_AsUnsignedLongLong")
         return self.builder.call(fn, [numobj])
 
     def long_as_longlong(self, numobj):
-        fnty = Type.function(self.ulonglong, [self.pyobj])
+        fnty = lc.Type.function(self.ulonglong, [self.pyobj])
         fn = self._get_function(fnty, name="PyLong_AsLongLong")
         return self.builder.call(fn, [numobj])
 
     def _long_from_native_int(self, ival, func_name, native_int_type,
                               signed):
-        fnty = Type.function(self.pyobj, [native_int_type])
+        fnty = lc.Type.function(self.pyobj, [native_int_type])
         fn = self._get_function(fnty, name=func_name)
         resptr = cgutils.alloca_once(self.builder, self.pyobj)
 
         if PYVERSION < (3, 0):
             # Under Python 2, we try to return a PyInt object whenever
             # the given number fits in a C long.
-            pyint_fnty = Type.function(self.pyobj, [self.long])
+            pyint_fnty = lc.Type.function(self.pyobj, [self.long])
             pyint_fn = self._get_function(pyint_fnty, name="PyInt_FromLong")
-            long_max = Constant.int(native_int_type, _helperlib.long_max)
+            long_max = lc.Constant.int(native_int_type, _helperlib.long_max)
             if signed:
-                long_min = Constant.int(native_int_type, _helperlib.long_min)
+                long_min = lc.Constant.int(native_int_type, _helperlib.long_min)
                 use_pyint = self.builder.and_(
                     self.builder.icmp(lc.ICMP_SGE, ival, long_min),
                     self.builder.icmp(lc.ICMP_SLE, ival, long_max),
@@ -284,7 +284,7 @@ class PythonAPI(object):
             func_name = "PyInt_FromLong"
         else:
             func_name = "PyLong_FromLong"
-        fnty = Type.function(self.pyobj, [self.long])
+        fnty = lc.Type.function(self.pyobj, [self.long])
         fn = self._get_function(fnty, name=func_name)
         return self.builder.call(fn, [ival])
 
@@ -301,7 +301,7 @@ class PythonAPI(object):
                                           self.ulonglong, signed=False)
 
     def _get_number_operator(self, name):
-        fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj])
+        fnty = lc.Type.function(self.pyobj, [self.pyobj, self.pyobj])
         fn = self._get_function(fnty, name="PyNumber_%s" % name)
         return fn
 
@@ -349,33 +349,33 @@ class PythonAPI(object):
         return self._call_number_operator("Xor", lhs, rhs, inplace=inplace)
 
     def number_power(self, lhs, rhs, inplace=False):
-        fnty = Type.function(self.pyobj, [self.pyobj] * 3)
+        fnty = lc.Type.function(self.pyobj, [self.pyobj] * 3)
         fname = "PyNumber_InPlacePower" if inplace else "PyNumber_Power"
         fn = self._get_function(fnty, fname)
         return self.builder.call(fn, [lhs, rhs, self.borrow_none()])
 
     def number_negative(self, obj):
-        fnty = Type.function(self.pyobj, [self.pyobj])
+        fnty = lc.Type.function(self.pyobj, [self.pyobj])
         fn = self._get_function(fnty, name="PyNumber_Negative")
         return self.builder.call(fn, (obj,))
 
     def number_positive(self, obj):
-        fnty = Type.function(self.pyobj, [self.pyobj])
+        fnty = lc.Type.function(self.pyobj, [self.pyobj])
         fn = self._get_function(fnty, name="PyNumber_Positive")
         return self.builder.call(fn, (obj,))
 
     def number_float(self, val):
-        fnty = Type.function(self.pyobj, [self.pyobj])
+        fnty = lc.Type.function(self.pyobj, [self.pyobj])
         fn = self._get_function(fnty, name="PyNumber_Float")
         return self.builder.call(fn, [val])
 
     def number_invert(self, obj):
-        fnty = Type.function(self.pyobj, [self.pyobj])
+        fnty = lc.Type.function(self.pyobj, [self.pyobj])
         fn = self._get_function(fnty, name="PyNumber_Invert")
         return self.builder.call(fn, (obj,))
 
     def float_as_double(self, fobj):
-        fnty = Type.function(self.double, [self.pyobj])
+        fnty = lc.Type.function(self.double, [self.pyobj])
         fn = self._get_function(fnty, name="PyFloat_AsDouble")
         return self.builder.call(fn, [fobj])
 
@@ -387,22 +387,22 @@ class PythonAPI(object):
         return self.bool_from_long(longval)
 
     def bool_from_long(self, ival):
-        fnty = Type.function(self.pyobj, [self.long])
+        fnty = lc.Type.function(self.pyobj, [self.long])
         fn = self._get_function(fnty, name="PyBool_FromLong")
         return self.builder.call(fn, [ival])
 
     def complex_from_doubles(self, realval, imagval):
-        fnty = Type.function(self.pyobj, [Type.double(), Type.double()])
+        fnty = lc.Type.function(self.pyobj, [lc.Type.double(), lc.Type.double()])
         fn = self._get_function(fnty, name="PyComplex_FromDoubles")
         return self.builder.call(fn, [realval, imagval])
 
     def complex_real_as_double(self, cobj):
-        fnty = Type.function(Type.double(), [self.pyobj])
+        fnty = lc.Type.function(lc.Type.double(), [self.pyobj])
         fn = self._get_function(fnty, name="PyComplex_RealAsDouble")
         return self.builder.call(fn, [cobj])
 
     def complex_imag_as_double(self, cobj):
-        fnty = Type.function(Type.double(), [self.pyobj])
+        fnty = lc.Type.function(lc.Type.double(), [self.pyobj])
         fn = self._get_function(fnty, name="PyComplex_ImagAsDouble")
         return self.builder.call(fn, [cobj])
 
@@ -411,18 +411,18 @@ class PythonAPI(object):
     #
 
     def sequence_getslice(self, obj, start, stop):
-        fnty = Type.function(self.pyobj, [self.pyobj, self.py_ssize_t,
+        fnty = lc.Type.function(self.pyobj, [self.pyobj, self.py_ssize_t,
                                           self.py_ssize_t])
         fn = self._get_function(fnty, name="PySequence_GetSlice")
         return self.builder.call(fn, (obj, start, stop))
 
     def sequence_tuple(self, obj):
-        fnty = Type.function(self.pyobj, [self.pyobj])
+        fnty = lc.Type.function(self.pyobj, [self.pyobj])
         fn = self._get_function(fnty, name="PySequence_Tuple")
         return self.builder.call(fn, [obj])
 
     def list_new(self, szval):
-        fnty = Type.function(self.pyobj, [self.py_ssize_t])
+        fnty = lc.Type.function(self.pyobj, [self.py_ssize_t])
         fn = self._get_function(fnty, name="PyList_New")
         return self.builder.call(fn, [szval])
 
@@ -430,7 +430,7 @@ class PythonAPI(object):
         """
         Warning: Steals reference to ``val``
         """
-        fnty = Type.function(Type.int(), [self.pyobj, self.py_ssize_t,
+        fnty = lc.Type.function(lc.Type.int(), [self.pyobj, self.py_ssize_t,
                                           self.pyobj])
         fn = self._get_function(fnty, name="PyList_SetItem")
         return self.builder.call(fn, [seq, idx, val])
@@ -439,7 +439,7 @@ class PythonAPI(object):
         """
         Returns a borrowed reference.
         """
-        fnty = Type.function(self.pyobj, [self.pyobj, self.py_ssize_t])
+        fnty = lc.Type.function(self.pyobj, [self.pyobj, self.py_ssize_t])
         fn = self._get_function(fnty, name="PyList_GetItem")
         if isinstance(idx, int):
             idx = self.context.get_constant(types.intp, idx)
@@ -453,13 +453,13 @@ class PythonAPI(object):
         """
         Borrow reference
         """
-        fnty = Type.function(self.pyobj, [self.pyobj, self.py_ssize_t])
+        fnty = lc.Type.function(self.pyobj, [self.pyobj, self.py_ssize_t])
         fn = self._get_function(fnty, name="PyTuple_GetItem")
         idx = self.context.get_constant(types.intp, idx)
         return self.builder.call(fn, [tup, idx])
 
     def tuple_pack(self, items):
-        fnty = Type.function(self.pyobj, [self.py_ssize_t], var_arg=True)
+        fnty = lc.Type.function(self.pyobj, [self.py_ssize_t], var_arg=True)
         fn = self._get_function(fnty, name="PyTuple_Pack")
         n = self.context.get_constant(types.intp, len(items))
         args = [n]
@@ -467,12 +467,12 @@ class PythonAPI(object):
         return self.builder.call(fn, args)
 
     def tuple_size(self, tup):
-        fnty = Type.function(self.py_ssize_t, [self.pyobj])
+        fnty = lc.Type.function(self.py_ssize_t, [self.pyobj])
         fn = self._get_function(fnty, name="PyTuple_Size")
         return self.builder.call(fn, [tup])
 
     def tuple_new(self, count):
-        fnty = Type.function(self.pyobj, [Type.int()])
+        fnty = lc.Type.function(self.pyobj, [lc.Type.int()])
         fn = self._get_function(fnty, name='PyTuple_New')
         return self.builder.call(fn, [self.context.get_constant(types.int32,
                                                                 count)])
@@ -481,7 +481,7 @@ class PythonAPI(object):
         """
         Steals a reference to `item`.
         """
-        fnty = Type.function(Type.int(), [self.pyobj, Type.int(), self.pyobj])
+        fnty = lc.Type.function(lc.Type.int(), [self.pyobj, lc.Type.int(), self.pyobj])
         setitem_fn = self._get_function(fnty, name='PyTuple_SetItem')
         index = self.context.get_constant(types.int32, index)
         self.builder.call(setitem_fn, [tuple_val, index, item])
@@ -493,12 +493,12 @@ class PythonAPI(object):
     def set_new(self, iterable=None):
         if iterable is None:
             iterable = self.get_null_object()
-        fnty = Type.function(self.pyobj, [self.pyobj])
+        fnty = lc.Type.function(self.pyobj, [self.pyobj])
         fn = self._get_function(fnty, name="PySet_New")
         return self.builder.call(fn, [iterable])
 
     def set_add(self, set, value):
-        fnty = Type.function(Type.int(), [self.pyobj, self.pyobj])
+        fnty = lc.Type.function(lc.Type.int(), [self.pyobj, self.pyobj])
         fn = self._get_function(fnty, name="PySet_Add")
         return self.builder.call(fn, [set, value])
 
@@ -511,8 +511,8 @@ class PythonAPI(object):
         Ensure the GIL is acquired.
         The returned value must be consumed by gil_release().
         """
-        gilptrty = Type.pointer(self.gil_state)
-        fnty = Type.function(Type.void(), [gilptrty])
+        gilptrty = lc.Type.pointer(self.gil_state)
+        fnty = lc.Type.function(lc.Type.void(), [gilptrty])
         fn = self._get_function(fnty, "NumbaGILEnsure")
         gilptr = cgutils.alloca_once(self.builder, self.gil_state)
         self.builder.call(fn, [gilptr])
@@ -523,8 +523,8 @@ class PythonAPI(object):
         Release the acquired GIL by gil_ensure().
         Must be pair with a gil_ensure().
         """
-        gilptrty = Type.pointer(self.gil_state)
-        fnty = Type.function(Type.void(), [gilptrty])
+        gilptrty = lc.Type.pointer(self.gil_state)
+        fnty = lc.Type.function(lc.Type.void(), [gilptrty])
         fn = self._get_function(fnty, "NumbaGILRelease")
         return self.builder.call(fn, [gil])
 
@@ -533,29 +533,29 @@ class PythonAPI(object):
     #
 
     def import_module_noblock(self, modname):
-        fnty = Type.function(self.pyobj, [self.cstring])
+        fnty = lc.Type.function(self.pyobj, [self.cstring])
         fn = self._get_function(fnty, name="PyImport_ImportModuleNoBlock")
         return self.builder.call(fn, [modname])
 
     def call_function_objargs(self, callee, objargs):
-        fnty = Type.function(self.pyobj, [self.pyobj], var_arg=True)
+        fnty = lc.Type.function(self.pyobj, [self.pyobj], var_arg=True)
         fn = self._get_function(fnty, name="PyObject_CallFunctionObjArgs")
         args = [callee] + list(objargs)
         args.append(self.context.get_constant_null(types.pyobject))
         return self.builder.call(fn, args)
 
     def call(self, callee, args, kws):
-        fnty = Type.function(self.pyobj, [self.pyobj] * 3)
+        fnty = lc.Type.function(self.pyobj, [self.pyobj] * 3)
         fn = self._get_function(fnty, name="PyObject_Call")
         return self.builder.call(fn, (callee, args, kws))
 
     def object_istrue(self, obj):
-        fnty = Type.function(Type.int(), [self.pyobj])
+        fnty = lc.Type.function(lc.Type.int(), [self.pyobj])
         fn = self._get_function(fnty, name="PyObject_IsTrue")
         return self.builder.call(fn, [obj])
 
     def object_not(self, obj):
-        fnty = Type.function(Type.int(), [self.pyobj])
+        fnty = lc.Type.function(lc.Type.int(), [self.pyobj])
         fn = self._get_function(fnty, name="PyObject_Not")
         return self.builder.call(fn, [obj])
 
@@ -567,30 +567,30 @@ class PythonAPI(object):
         ops = ['<', '<=', '==', '!=', '>', '>=']
         opid = ops.index(opstr)
         assert 0 <= opid < len(ops)
-        fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj, Type.int()])
+        fnty = lc.Type.function(self.pyobj, [self.pyobj, self.pyobj, lc.Type.int()])
         fn = self._get_function(fnty, name="PyObject_RichCompare")
         lopid = self.context.get_constant(types.int32, opid)
         return self.builder.call(fn, (lhs, rhs, lopid))
 
     def iter_next(self, iterobj):
-        fnty = Type.function(self.pyobj, [self.pyobj])
+        fnty = lc.Type.function(self.pyobj, [self.pyobj])
         fn = self._get_function(fnty, name="PyIter_Next")
         return self.builder.call(fn, [iterobj])
 
     def object_getiter(self, obj):
-        fnty = Type.function(self.pyobj, [self.pyobj])
+        fnty = lc.Type.function(self.pyobj, [self.pyobj])
         fn = self._get_function(fnty, name="PyObject_GetIter")
         return self.builder.call(fn, [obj])
 
     def object_getattr_string(self, obj, attr):
         cstr = self.context.insert_const_string(self.module, attr)
-        fnty = Type.function(self.pyobj, [self.pyobj, self.cstring])
+        fnty = lc.Type.function(self.pyobj, [self.pyobj, self.cstring])
         fn = self._get_function(fnty, name="PyObject_GetAttrString")
         return self.builder.call(fn, [obj, cstr])
 
     def object_setattr_string(self, obj, attr, val):
         cstr = self.context.insert_const_string(self.module, attr)
-        fnty = Type.function(Type.int(), [self.pyobj, self.cstring, self.pyobj])
+        fnty = lc.Type.function(lc.Type.int(), [self.pyobj, self.cstring, self.pyobj])
         fn = self._get_function(fnty, name="PyObject_SetAttrString")
         return self.builder.call(fn, [obj, cstr, val])
 
@@ -600,17 +600,17 @@ class PythonAPI(object):
         return self.object_setattr_string(obj, attr, self.get_null_object())
 
     def object_getitem(self, obj, key):
-        fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj])
+        fnty = lc.Type.function(self.pyobj, [self.pyobj, self.pyobj])
         fn = self._get_function(fnty, name="PyObject_GetItem")
         return self.builder.call(fn, (obj, key))
 
     def object_setitem(self, obj, key, val):
-        fnty = Type.function(Type.int(), [self.pyobj, self.pyobj, self.pyobj])
+        fnty = lc.Type.function(lc.Type.int(), [self.pyobj, self.pyobj, self.pyobj])
         fn = self._get_function(fnty, name="PyObject_SetItem")
         return self.builder.call(fn, (obj, key, val))
 
     def string_as_string(self, strobj):
-        fnty = Type.function(self.cstring, [self.pyobj])
+        fnty = lc.Type.function(self.cstring, [self.pyobj])
         if PYVERSION >= (3, 0):
             fname = "PyUnicode_AsUTF8"
         else:
@@ -619,7 +619,7 @@ class PythonAPI(object):
         return self.builder.call(fn, [strobj])
 
     def string_from_string_and_size(self, string, size):
-        fnty = Type.function(self.pyobj, [self.cstring, self.py_ssize_t])
+        fnty = lc.Type.function(self.pyobj, [self.cstring, self.py_ssize_t])
         if PYVERSION >= (3, 0):
             fname = "PyUnicode_FromStringAndSize"
         else:
@@ -628,7 +628,7 @@ class PythonAPI(object):
         return self.builder.call(fn, [string, size])
 
     def bytes_from_string_and_size(self, string, size):
-        fnty = Type.function(self.pyobj, [self.cstring, self.py_ssize_t])
+        fnty = lc.Type.function(self.pyobj, [self.cstring, self.py_ssize_t])
         if PYVERSION >= (3, 0):
             fname = "PyBytes_FromStringAndSize"
         else:
@@ -637,7 +637,7 @@ class PythonAPI(object):
         return self.builder.call(fn, [string, size])
 
     def object_str(self, obj):
-        fnty = Type.function(self.pyobj, [self.pyobj])
+        fnty = lc.Type.function(self.pyobj, [self.pyobj])
         fn = self._get_function(fnty, name="PyObject_Str")
         return self.builder.call(fn, [obj])
 
@@ -651,7 +651,7 @@ class PythonAPI(object):
         return obj
 
     def sys_write_stdout(self, fmt, *args):
-        fnty = Type.function(Type.void(), [self.cstring], var_arg=True)
+        fnty = lc.Type.function(lc.Type.void(), [self.cstring], var_arg=True)
         fn = self._get_function(fnty, name="PySys_WriteStdout")
         return self.builder.call(fn, (fmt,) + args)
 
@@ -659,7 +659,7 @@ class PythonAPI(object):
         """
         Dump a Python object on C stderr.  For debugging purposes.
         """
-        fnty = Type.function(Type.void(), [self.pyobj])
+        fnty = lc.Type.function(lc.Type.void(), [self.pyobj])
         fn = self._get_function(fnty, name="_PyObject_Dump")
         return self.builder.call(fn, (obj,))
 
@@ -668,7 +668,7 @@ class PythonAPI(object):
     def _get_object(self, name):
         try:
             gv = self.module.get_global_variable_named(name)
-        except LLVMException:
+        except lc.LLVMException:
             gv = self.module.add_global_variable(self.pyobj, name)
         return self.builder.load(gv)
 
@@ -690,7 +690,7 @@ class PythonAPI(object):
         self.sys_write_stdout(fmt)
 
     def get_null_object(self):
-        return Constant.null(self.pyobj)
+        return lc.Constant.null(self.pyobj)
 
     def return_none(self):
         none = self.make_none()
@@ -710,13 +710,13 @@ class PythonAPI(object):
     def to_native_arg(self, obj, typ):
         if isinstance(typ, types.Record):
             # Generate a dummy integer type that has the size of Py_buffer
-            dummy_py_buffer_type = Type.int(_helperlib.py_buffer_size * 8)
+            dummy_py_buffer_type = lc.Type.int(_helperlib.py_buffer_size * 8)
             # Allocate the Py_buffer
             py_buffer = cgutils.alloca_once(self.builder, dummy_py_buffer_type)
 
             # Zero-fill the py_buffer. where the obj field in Py_buffer is NULL
             # PyBuffer_Release has no effect.
-            zeroed_buffer = lc.Constant.null(dummy_py_buffer_type)
+            zeroed_buffer = lc.lc.Constant.null(dummy_py_buffer_type)
             self.builder.store(zeroed_buffer, py_buffer)
 
             buf_as_voidptr = self.builder.bitcast(py_buffer, self.voidptr)
@@ -746,7 +746,7 @@ class PythonAPI(object):
 
         elif typ == types.boolean:
             istrue = self.object_istrue(obj)
-            zero = Constant.null(istrue.type)
+            zero = lc.Constant.null(istrue.type)
             return self.builder.icmp(lc.ICMP_NE, istrue, zero)
 
         elif typ in types.unsigned_domain:
@@ -858,11 +858,11 @@ class PythonAPI(object):
             # Note we will create a copy of the record
             # This is the only safe way.
             pdata = cgutils.get_record_data(self.builder, val)
-            size = Constant.int(Type.int(), pdata.type.pointee.count)
-            ptr = self.builder.bitcast(pdata, Type.pointer(Type.int(8)))
+            size = lc.Constant.int(lc.Type.int(), pdata.type.pointee.count)
+            ptr = self.builder.bitcast(pdata, lc.Type.pointer(lc.Type.int(8)))
             # Note: this will only work for CPU mode
             #       The following requires access to python object
-            dtype_addr = Constant.int(self.py_ssize_t, id(typ.dtype))
+            dtype_addr = lc.Constant.int(self.py_ssize_t, id(typ.dtype))
             dtypeobj = dtype_addr.inttoptr(self.pyobj)
             return self.recreate_record(ptr, size, dtypeobj)
 
@@ -875,7 +875,7 @@ class PythonAPI(object):
         # TODO check matching dtype.
         #      currently, mismatching dtype will still work and causes
         #      potential memory corruption
-        voidptr = Type.pointer(Type.int(8))
+        voidptr = lc.Type.pointer(lc.Type.int(8))
         nativearycls = self.context.make_array(typ)
         nativeary = nativearycls(self.context, self.builder)
         aryptr = nativeary._getpointer()
@@ -906,32 +906,32 @@ class PythonAPI(object):
         return tuple_val
 
     def numba_array_adaptor(self, ary, ptr):
-        voidptr = Type.pointer(Type.int(8))
-        fnty = Type.function(Type.int(), [self.pyobj, voidptr])
+        voidptr = lc.Type.pointer(lc.Type.int(8))
+        fnty = lc.Type.function(lc.Type.int(), [self.pyobj, voidptr])
         fn = self._get_function(fnty, name="NumbaArrayAdaptor")
         fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
         fn.args[1].add_attribute(lc.ATTR_NO_CAPTURE)
         return self.builder.call(fn, (ary, ptr))
 
     def complex_adaptor(self, cobj, cmplx):
-        fnty = Type.function(Type.int(), [self.pyobj, cmplx.type])
+        fnty = lc.Type.function(lc.Type.int(), [self.pyobj, cmplx.type])
         fn = self._get_function(fnty, name="NumbaComplexAdaptor")
         return self.builder.call(fn, [cobj, cmplx])
 
     def extract_record_data(self, obj, pbuf):
-        fnty = Type.function(self.voidptr, [self.pyobj,
+        fnty = lc.Type.function(self.voidptr, [self.pyobj,
                                                          self.voidptr])
         fn = self._get_function(fnty, name="NumbaExtractRecordData")
         return self.builder.call(fn, [obj, pbuf])
 
     def release_record_buffer(self, pbuf):
-        fnty = Type.function(Type.void(), [self.voidptr])
+        fnty = lc.Type.function(lc.Type.void(), [self.voidptr])
         fn = self._get_function(fnty, name="NumbaReleaseRecordBuffer")
         return self.builder.call(fn, [pbuf])
 
     def recreate_record(self, pdata, size, dtypeaddr):
-        fnty = Type.function(self.pyobj, [Type.pointer(Type.int(8)),
-                                          Type.int(), self.pyobj])
+        fnty = lc.Type.function(self.pyobj, [lc.Type.pointer(lc.Type.int(8)),
+                                          lc.Type.int(), self.pyobj])
         fn = self._get_function(fnty, name="NumbaRecreateRecord")
         return self.builder.call(fn, [pdata, size, dtypeaddr])
 

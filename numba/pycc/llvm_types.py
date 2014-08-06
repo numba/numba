@@ -1,7 +1,8 @@
 import sys
 import ctypes
 import struct as struct_
-from llvm.core import Type, Constant
+from llvmlite.llvmpy.core import Type, Constant
+
 
 _trace_refs_ = hasattr(sys, 'getobjects')
 _plat_bits = struct_.calcsize('@P') * 8

@@ -6,9 +6,9 @@ import os
 import sys
 import functools
 
-import llvm.core as lc
-import llvm.ee as le
-import llvm.passes as lp
+import llvmlite.llvmpy.core as lc
+import llvmlite.llvmpy.ee as le
+import llvmlite.llvmpy.passes as lp
 
 from numba import cgutils
 from numba.utils import IS_PY3

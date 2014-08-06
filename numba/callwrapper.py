@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
-from llvm.core import Type, Builder, Constant
-import llvm.core as lc
+
+import llvmlite.llvmpy.core as lc
 
 from numba import types, cgutils
 
@@ -23,7 +23,7 @@ class _ArgManager(object):
 
         self.swtblk = cgutils.append_basic_block(self.builder, ".arg.err")
         with cgutils.goto_block(self.builder, self.swtblk):
-            self.swt_val = cgutils.alloca_once(self.builder, Type.int(32))
+            self.swt_val = cgutils.alloca_once(self.builder, lc.Type.int(32))
             self.swt = self.builder.switch(self.builder.load(self.swt_val),
                                            self.elseblk, nargs)
 
@@ -43,14 +43,14 @@ class _ArgManager(object):
             bb = cgutils.append_basic_block(self.builder,
                                             "arg%d.err" % self.arg_count)
             self.cur = bb
-            self.swt.add_case(Constant.int(Type.int(32), self.arg_count), bb)
+            self.swt.add_case(lc.Constant.int(lc.Type.int(32), self.arg_count), bb)
         else:
             # keep a reference to the previous arg.error block
             self.prev = self.cur
             bb = cgutils.append_basic_block(self.builder,
                                             "arg%d.error" % self.arg_count)
             self.cur = bb
-            self.swt.add_case(Constant.int(Type.int(32), self.arg_count), bb)
+            self.swt.add_case(lc.Constant.int(lc.Type.int(32), self.arg_count), bb)
 
         # write the error block
         with cgutils.goto_block(self.builder, self.cur):
@@ -58,7 +58,7 @@ class _ArgManager(object):
             self.builder.branch(self.prev)
 
         # store arg count into value to switch on if there is an error
-        self.builder.store(Constant.int(Type.int(32), self.arg_count),
+        self.builder.store(lc.Constant.int(lc.Type.int(32), self.arg_count),
                            self.swt_val)
 
         # check for Python C-API Error
@@ -93,10 +93,10 @@ class PyCallWrapper(object):
         # This is the signature of PyCFunctionWithKeywords
         # (see CPython's methodobject.h)
         pyobj = self.context.get_argument_type(types.pyobject)
-        wrapty = Type.function(pyobj, [pyobj, pyobj, pyobj])
+        wrapty = lc.Type.function(pyobj, [pyobj, pyobj, pyobj])
         wrapper = self.module.add_function(wrapty, name=wrapname)
 
-        builder = Builder.new(wrapper.append_basic_block('entry'))
+        builder = lc.Builder.new(wrapper.append_basic_block('entry'))
 
         # - `closure` will receive the `self` pointer stored in the
         #   PyCFunction object (see _dynfunc.c)
@@ -110,7 +110,7 @@ class PyCallWrapper(object):
         api = self.context.get_python_api(builder)
         self.build_wrapper(api, builder, closure, args, kws)
 
-        wrapper.verify()
+        wrapper.module.verify()
         return wrapper, api
 
     def build_wrapper(self, api, builder, closure, args, kws):
@@ -121,7 +121,7 @@ class PyCallWrapper(object):
         objs = [api.alloca_obj() for _ in range(nargs)]
         parseok = api.parse_tuple_and_keywords(args, kws, fmt, keywords, *objs)
 
-        pred = builder.icmp(lc.ICMP_EQ, parseok, Constant.null(parseok.type))
+        pred = builder.icmp(lc.ICMP_EQ, parseok, lc.Constant.null(parseok.type))
         with cgutils.if_unlikely(builder, pred):
             builder.ret(api.get_null_object())
 
@@ -170,7 +170,7 @@ class PyCallWrapper(object):
         for num, exc in self.exceptions.items():
             bb = cgutils.append_basic_block(builder,
                                             ".user.exception.%d" % num)
-            swt.add_case(Constant.int(code.type, num), bb)
+            swt.add_case(lc.Constant.int(code.type, num), bb)
             builder.position_at_end(bb)
             api.raise_exception(exc, exc)
             builder.ret(api.get_null_object())
@@ -184,18 +184,18 @@ class PyCallWrapper(object):
 
     def make_keywords(self, kws):
         strings = []
-        stringtype = Type.pointer(Type.int(8))
+        stringtype = lc.Type.pointer(lc.Type.int(8))
         for k in kws:
             strings.append(self.make_const_string(k))
 
-        strings.append(Constant.null(stringtype))
+        strings.append(lc.Constant.null(stringtype))
 
-        kwlist = Constant.array(stringtype, strings)
+        kwlist = lc.Constant.array(stringtype, strings)
 
         gv = self.module.add_global_variable(kwlist.type, name=".kwlist")
         gv.global_constant = True
         gv.initializer = kwlist
         gv.linkage = lc.LINKAGE_INTERNAL
 
-        return Constant.bitcast(gv, Type.pointer(stringtype))
+        return lc.Constant.bitcast(gv, lc.Type.pointer(stringtype))
 

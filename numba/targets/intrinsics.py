@@ -2,7 +2,7 @@
 LLVM pass that converts intrinsic into other math calls
 """
 from __future__ import print_function, absolute_import
-import llvm.core as lc
+import llvmlite.llvmpy.core as lc
 
 
 class DivmodFixer(object):
@@ -15,7 +15,7 @@ class DivmodFixer(object):
     def run(self, module):
         for func in module.functions:
             self.run_on_func(func)
-        
+
     def run_on_func(self, func):
         to_replace = []
         for bb in func.basic_blocks:

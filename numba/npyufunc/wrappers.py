@@ -1,8 +1,5 @@
 from __future__ import print_function, division, absolute_import
 import numpy as np
-from llvm.core import (Type, Builder, inline_function, LINKAGE_INTERNAL,
-                       ICMP_EQ, Constant)
-
 from numba import types, cgutils, config
 from numba import _dynfunc
 

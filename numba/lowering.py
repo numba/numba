@@ -4,8 +4,8 @@ from collections import defaultdict
 import sys
 from types import ModuleType
 
-from llvm.core import Type, Builder, Module
-import llvm.core as lc
+
+import llvmlite.llvmpy.core as lc
 
 from numba import _dynfunc, ir, types, cgutils, utils, config, cffi_support, typing
 
@@ -159,7 +159,7 @@ class BaseLower(object):
         self.blocks = utils.SortedMap(utils.dict_iteritems(interp.blocks))
 
         # Initialize LLVM
-        self.module = Module.new("module.%s" % self.fndesc.unique_name)
+        self.module = lc.Module.new("module.%s" % self.fndesc.unique_name)
 
         # Python execution environment (will be available to the compiled
         # function).
@@ -169,7 +169,7 @@ class BaseLower(object):
         # Setup function
         self.function = context.declare_function(self.module, fndesc)
         self.entry_block = self.function.append_basic_block('entry')
-        self.builder = Builder.new(self.entry_block)
+        self.builder = lc.Builder.new(self.entry_block)
 
         # Internal states
         self.blkmap = {}
@@ -272,7 +272,7 @@ class Lower(BaseLower):
 
             condty = self.typeof(inst.cond.name)
             pred = self.context.cast(self.builder, cond, condty, types.boolean)
-            assert pred.type == Type.int(1), ("cond is not i1: %s" % pred.type)
+            assert pred.type == lc.Type.int(1), ("cond is not i1: %s" % pred.type)
             self.builder.cbranch(pred, tr, fl)
 
         elif isinstance(inst, ir.Jump):
@@ -361,7 +361,7 @@ class Lower(BaseLower):
         # In nopython mode, closure vars are frozen like globals
         elif isinstance(value, (ir.Global, ir.FreeVar)):
             if (isinstance(ty, types.Dummy) or
-                    isinstance(ty, types.Module) or
+                    isinstance(ty, types.lc.Module) or
                     isinstance(ty, types.Function) or
                     isinstance(ty, types.Dispatcher)):
                 return self.context.get_dummy_value()

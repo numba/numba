@@ -2,10 +2,11 @@ from __future__ import print_function, absolute_import
 
 import sys
 
-import llvm.core as lc
-import llvm.passes as lp
-import llvm.ee as le
-from llvm.workaround import avx_support
+import llvmlite.llvmpy.core as lc
+import llvmlite.llvmpy.passes as lp
+import llvmlite.llvmpy.ee as le
+from llvmlite.llvmpy import avx_support
+
 
 from numba import _dynfunc, _helperlib, config
 from numba.callwrapper import PyCallWrapper
@@ -101,7 +102,7 @@ class CPUContext(BaseContext):
         for ak, av in zip(fndesc.args, self.get_arguments(fn)):
             av.name = "arg.%s" % ak
         self.get_env_argument(fn).name = "env"
-        fn.args[0] = ".ret"
+        fn.args[0].name = ".ret"
         return fn
 
     def get_arguments(self, func):
@@ -264,8 +265,8 @@ class CPUContext(BaseContext):
             dmf = intrinsics.DivmodFixer()
             dmf.run(func.module)
 
-        im = intrinsics.IntrinsicMapping(self)
-        im.run(func.module)
+        # im = intrinsics.IntrinsicMapping(self)
+        # im.run(func.module)
 
         if not fndesc.native:
             self.optimize_pythonapi(func)

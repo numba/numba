@@ -5,7 +5,7 @@ import ctypes
 import struct
 import sys
 
-import llvm.core as lc
+import llvmlite.llvmpy.core as lc
 import numpy as np
 
 import numba.unittest_support as unittest

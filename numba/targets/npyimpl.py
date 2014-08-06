@@ -6,7 +6,7 @@ import sys
 import itertools
 from collections import namedtuple
 
-from llvm.core import Constant, Type, ICMP_UGT
+import llvmlite.llvmpy.core as lc
 
 
 from .imputils import implement, Registry
@@ -102,7 +102,7 @@ class _ArrayIndexingHelper(namedtuple('_ArrayIndexingHelper',
     def update_indices(self, loop_indices, name):
         bld = self.array.builder
         intpty = self.array.context.get_value_type(types.intp)
-        ONE = Constant.int(Type.int(intpty.width), 1)
+        ONE = Constant.int(lc.Type.int(intpty.width), 1)
 
         # we are only interested in as many inner dimensions as dimensions
         # the indexed array has (the outer dimensions are broadcast, so
@@ -134,11 +134,11 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary',
     """
     def create_iter_indices(self):
         intpty = self.context.get_value_type(types.intp)
-        ZERO = Constant.int(Type.int(intpty.width), 0)
+        ZERO = Constant.int(lc.Type.int(intpty.width), 0)
 
         indices = []
         for i in range(self.ndim):
-            x = cgutils.alloca_once(self.builder, Type.int(intpty.width))
+            x = cgutils.alloca_once(self.builder, lc.Type.int(intpty.width))
             self.builder.store(ZERO, x)
             indices.append(x)
         return _ArrayIndexingHelper(self, indices)
@@ -445,9 +445,9 @@ def register_binary_ufunc_kernel(ufunc, kernel):
 ################################################################################
 # Actual registering of supported ufuncs
 
-_float_unary_function_type = Type.function(Type.double(), [Type.double()])
-_float_binary_function_type = Type.function(Type.double(),
-                                            [Type.double(), Type.double()])
+_float_unary_function_type = lc.Type.function(lc.Type.double(), [lc.Type.double()])
+_float_binary_function_type = lc.Type.function(lc.Type.double(),
+                                            [lc.Type.double(), lc.Type.double()])
 _float_unary_sig = typing.signature(types.float64, types.float64)
 _float_binary_sig = typing.signature(types.float64, types.float64,
                                      types.float64)

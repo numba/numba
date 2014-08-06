@@ -6,9 +6,9 @@ from __future__ import print_function, absolute_import, division
 
 from functools import reduce
 
-import llvm.core as lc
+import llvmlite.llvmpy.core as lc
 
-from llvm.core import Type, Constant
+
 from numba import errcode
 from numba import types, typing, cgutils, utils
 from numba.targets.imputils import (builtin, builtin_attr, implement,
@@ -314,7 +314,7 @@ def setitem_array1d_slice(context, builder, sig, args):
     ary = arystty(context, builder, ary)
     shapes = cgutils.unpack_tuple(builder, ary.shape, aryty.ndim)
     slicestruct = Slice(context, builder, value=idx)
-    
+
     # the logic here follows that of Python's Objects/sliceobject.c
     # in particular PySlice_GetIndicesEx function
     ZERO = Constant.int(slicestruct.step.type, 0)
@@ -322,50 +322,50 @@ def setitem_array1d_slice(context, builder, sig, args):
 
     b_step_eq_zero = builder.icmp(lc.ICMP_EQ, slicestruct.step, ZERO)
     # bail if step is 0
-    with cgutils.ifthen(builder, b_step_eq_zero): 
-        context.return_errcode(builder, errcode.ASSERTION_ERROR) 
-    
+    with cgutils.ifthen(builder, b_step_eq_zero):
+        context.return_errcode(builder, errcode.ASSERTION_ERROR)
+
     # adjust for negative indices for start
-    start = cgutils.alloca_once(builder, slicestruct.start.type) 
+    start = cgutils.alloca_once(builder, slicestruct.start.type)
     builder.store(slicestruct.start, start)
     b_start_lt_zero = builder.icmp(lc.ICMP_SLT, builder.load(start), ZERO)
-    with cgutils.ifthen(builder, b_start_lt_zero): 
+    with cgutils.ifthen(builder, b_start_lt_zero):
         add = builder.add(builder.load(start), shapes[0])
         builder.store(add, start)
-        
+
     b_start_lt_zero = builder.icmp(lc.ICMP_SLT, builder.load(start), ZERO)
     with cgutils.ifthen(builder, b_start_lt_zero):
         b_step_lt_zero = builder.icmp(lc.ICMP_SLT, slicestruct.step, ZERO)
         cond = builder.select(b_step_lt_zero, NEG_ONE, ZERO)
-        builder.store(cond, start)    
-    
+        builder.store(cond, start)
+
     b_start_geq_len = builder.icmp(lc.ICMP_SGE, builder.load(start), shapes[0])
     ONE = Constant.int(shapes[0].type, 1)
     with cgutils.ifthen(builder, b_start_geq_len):
         b_step_lt_zero = builder.icmp(lc.ICMP_SLT, slicestruct.step, ZERO)
         cond = builder.select(b_step_lt_zero, builder.sub(shapes[0], ONE), shapes[0])
-        builder.store(cond, start)    
-    
+        builder.store(cond, start)
+
     # adjust stop for negative value
-    stop = cgutils.alloca_once(builder, slicestruct.stop.type) 
+    stop = cgutils.alloca_once(builder, slicestruct.stop.type)
     builder.store(slicestruct.stop, stop)
     b_stop_lt_zero = builder.icmp(lc.ICMP_SLT, builder.load(stop), ZERO)
-    with cgutils.ifthen(builder, b_stop_lt_zero): 
+    with cgutils.ifthen(builder, b_stop_lt_zero):
         add = builder.add(builder.load(stop), shapes[0])
         builder.store(add, stop)
-        
+
     b_stop_lt_zero = builder.icmp(lc.ICMP_SLT, builder.load(stop), ZERO)
     with cgutils.ifthen(builder, b_stop_lt_zero):
         b_step_lt_zero = builder.icmp(lc.ICMP_SLT, slicestruct.step, ZERO)
         cond = builder.select(b_step_lt_zero, NEG_ONE, ZERO)
-        builder.store(cond, start)    
-    
+        builder.store(cond, start)
+
     b_stop_geq_len = builder.icmp(lc.ICMP_SGE, builder.load(stop), shapes[0])
     ONE = Constant.int(shapes[0].type, 1)
     with cgutils.ifthen(builder, b_stop_geq_len):
         b_step_lt_zero = builder.icmp(lc.ICMP_SLT, slicestruct.step, ZERO)
         cond = builder.select(b_step_lt_zero, builder.sub(shapes[0], ONE), shapes[0])
-        builder.store(cond, stop)    
+        builder.store(cond, stop)
 
     b_step_gt_zero = builder.icmp(lc.ICMP_SGT, slicestruct.step, ZERO)
     with cgutils.ifelse(builder, b_step_gt_zero) as (then0, otherwise0):

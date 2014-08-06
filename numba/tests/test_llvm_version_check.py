@@ -6,7 +6,7 @@ import sys
 from numba import unittest_support as unittest
 
 
-class TestLlvmVersion(unittest.TestCase):
+class _TestLlvmVersion(unittest.TestCase):
 
     def test_llvm_version(self):
         # test the system its running on

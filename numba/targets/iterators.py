@@ -2,7 +2,7 @@
 Implementation of various iterable and iterator types.
 """
 
-from llvm.core import Type, Constant
+
 
 from numba import errcode
 from numba import types, typing, cgutils
@@ -47,7 +47,7 @@ def make_enumerate_object(context, builder, sig, args):
         start_val = context.get_constant(types.intp, 0)
     elif len(args) == 2:
         src = args[0]
-        start_val = context.cast(builder, args[1], sig.args[1], types.intp) 
+        start_val = context.cast(builder, args[1], sig.args[1], types.intp)
 
     iterobj = call_getiter(context, builder, srcty, src)
 

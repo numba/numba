@@ -6,28 +6,27 @@ from __future__ import print_function, division, absolute_import
 from contextlib import contextmanager
 import functools
 
-from llvm.core import Constant, Type
-import llvm.core as lc
+import llvmlite.llvmpy.core as lc
 
 from . import errcode, utils
 
 
-true_bit = Constant.int(Type.int(1), 1)
-false_bit = Constant.int(Type.int(1), 0)
-true_byte = Constant.int(Type.int(8), 1)
-false_byte = Constant.int(Type.int(8), 0)
+true_bit = lc.Constant.int(lc.Type.int(1), 1)
+false_bit = lc.Constant.int(lc.Type.int(1), 0)
+true_byte = lc.Constant.int(lc.Type.int(8), 1)
+false_byte = lc.Constant.int(lc.Type.int(8), 0)
 
 
 def as_bool_byte(builder, value):
-    return builder.zext(value, Type.int(8))
+    return builder.zext(value, lc.Type.int(8))
 
 
 def make_anonymous_struct(builder, values):
     """
     Create an anonymous struct constant containing the given LLVM *values*.
     """
-    struct_type = Type.struct([v.type for v in values])
-    struct_val = Constant.undef(struct_type)
+    struct_type = lc.Type.struct([v.type for v in values])
+    struct_val = lc.Constant.undef(struct_type)
     for i, v in enumerate(values):
         struct_val = builder.insert_value(struct_val, v, i)
     return struct_val
@@ -55,7 +54,7 @@ class Structure(object):
             assert is_pointer(ref.type)
             if self._type != ref.type.pointee:
                 if cast_ref:
-                    ref = builder.bitcast(ref, Type.pointer(self._type))
+                    ref = builder.bitcast(ref, lc.Type.pointer(self._type))
                 else:
                     raise TypeError(
                         "mismatching pointer type: got %s, expected %s"
@@ -65,10 +64,10 @@ class Structure(object):
         self._namemap = {}
         self._fdmap = []
         self._typemap = []
-        base = Constant.int(Type.int(), 0)
+        base = lc.Constant.int(lc.Type.int(), 0)
         for i, (k, tp) in enumerate(self._fields):
             self._namemap[k] = i
-            self._fdmap.append((base, Constant.int(Type.int(), i)))
+            self._fdmap.append((base, lc.Constant.int(lc.Type.int(), i)))
             self._typemap.append(tp)
 
     def _get_ptr_by_index(self, index):
@@ -111,7 +110,7 @@ class Structure(object):
                                                       self._typemap[index],
                                                       value)
         if ptr.type.pointee != value.type:
-            raise AssertionError("Type mismatch: __setitem__(%d, ...) "
+            raise AssertionError("lc.Type mismatch: __setitem__(%d, ...) "
                                  "expected %r but got %r"
                                  % (index, str(ptr.type.pointee), str(value.type)))
         self._builder.store(value, ptr)
@@ -184,7 +183,7 @@ def terminate(builder, bbend):
 
 
 def get_null_value(ltype):
-    return Constant.null(ltype)
+    return lc.Constant.null(ltype)
 
 
 def is_null(builder, val):
@@ -202,10 +201,12 @@ is_false = is_null
 
 
 def set_branch_weight(builder, brinst, trueweight, falseweight):
+    return
+    # XXX
     module = get_module(builder)
     mdid = lc.MetaDataString.get(module, "branch_weights")
-    trueweight = lc.Constant.int(Type.int(), trueweight)
-    falseweight = lc.Constant.int(Type.int(), falseweight)
+    trueweight = lc.lc.Constant.int(lc.Type.int(), trueweight)
+    falseweight = lc.lc.Constant.int(lc.Type.int(), falseweight)
     md = lc.MetaData.get(module, [mdid, trueweight, falseweight])
     brinst.set_metadata("prof", md)
 
@@ -284,7 +285,7 @@ class IfBranchObj(object):
 
 @contextmanager
 def for_range(builder, count, intp):
-    start = Constant.int(intp, 0)
+    start = lc.Constant.int(intp, 0)
     stop = count
 
     bbcond = append_basic_block(builder, "for.cond")
@@ -294,7 +295,7 @@ def for_range(builder, count, intp):
     bbstart = builder.basic_block
     builder.branch(bbcond)
 
-    ONE = Constant.int(intp, 1)
+    ONE = lc.Constant.int(intp, 1)
 
     with goto_block(builder, bbcond):
         index = builder.phi(intp, name="loop.index")
@@ -383,7 +384,7 @@ def _loop_nest(builder, shape, intp):
 def pack_array(builder, values):
     n = len(values)
     ty = values[0].type
-    ary = Constant.undef(Type.array(ty, n))
+    ary = lc.Constant.undef(lc.Type.array(ty, n))
     for i, v in enumerate(values):
         ary = builder.insert_value(ary, v, i)
     return ary
@@ -409,7 +410,7 @@ def get_item_pointer2(builder, data, shape, strides, layout, inds,
         # Wraparound
         indices = []
         for ind, dimlen in zip(inds, shape):
-            ZERO = Constant.null(ind.type)
+            ZERO = lc.Constant.null(ind.type)
             negative = builder.icmp(lc.ICMP_SLT, ind, ZERO)
             wrapped = builder.add(dimlen, ind)
             selected = builder.select(negative, wrapped, ind)
@@ -425,14 +426,14 @@ def get_item_pointer2(builder, data, shape, strides, layout, inds,
         if layout == 'C':
             # C contiguous
             for i in range(len(shape)):
-                last = Constant.int(intp, 1)
+                last = lc.Constant.int(intp, 1)
                 for j in shape[i + 1:]:
                     last = builder.mul(last, j)
                 steps.append(last)
         elif layout == 'F':
             # F contiguous
             for i in range(len(shape)):
-                last = Constant.int(intp, 1)
+                last = lc.Constant.int(intp, 1)
                 for j in shape[:i]:
                     last = builder.mul(last, j)
                 steps.append(last)
@@ -440,7 +441,7 @@ def get_item_pointer2(builder, data, shape, strides, layout, inds,
             raise Exception("unreachable")
 
         # Compute index
-        loc = Constant.int(intp, 0)
+        loc = lc.Constant.int(intp, 0)
         for i, s in zip(indices, steps):
             tmp = builder.mul(i, s)
             loc = builder.add(loc, tmp)
@@ -476,8 +477,8 @@ def get_strides_from_slice(builder, ndim, strides, slice, ax):
 
 
 def is_scalar_zero(builder, value):
-    nullval = Constant.null(value.type)
-    if value.type in (Type.float(), Type.double()):
+    nullval = lc.Constant.null(value.type)
+    if value.type in (lc.Type.float(), lc.Type.double()):
         isnull = builder.fcmp(lc.FCMP_OEQ, nullval, value)
     else:
         isnull = builder.icmp(lc.ICMP_EQ, nullval, value)
@@ -517,7 +518,7 @@ def get_record_member(builder, record, offset, typ):
     pdata = get_record_data(builder, record)
     pval = inbound_gep(builder, pdata, 0, offset)
     assert not is_pointer(pval.type.pointee)
-    return builder.bitcast(pval, Type.pointer(typ))
+    return builder.bitcast(pval, lc.Type.pointer(typ))
 
 
 def get_record_data(builder, record):
@@ -546,7 +547,7 @@ def inbound_gep(builder, ptr, *inds):
     idx = []
     for i in inds:
         if isinstance(i, int):
-            ind = Constant.int(Type.int(32), i)
+            ind = lc.Constant.int(lc.Type.int(32), i)
         else:
             ind = i
         idx.append(ind)
@@ -557,7 +558,7 @@ def gep(builder, ptr, *inds):
     idx = []
     for i in inds:
         if isinstance(i, int):
-            ind = Constant.int(Type.int(64), i)
+            ind = lc.Constant.int(lc.Type.int(64), i)
         else:
             ind = i
         idx.append(ind)
@@ -572,10 +573,10 @@ def pointer_add(builder, ptr, offset, return_type=None):
     Note the computation is done in bytes, and ignores the width of
     the pointed item type.
     """
-    intptr_t = Type.int(utils.MACHINE_BITS)
+    intptr_t = lc.Type.int(utils.MACHINE_BITS)
     intptr = builder.ptrtoint(ptr, intptr_t)
     if isinstance(offset, int):
-        offset = Constant.int(intptr_t, offset)
+        offset = lc.Constant.int(intptr_t, offset)
     intptr = builder.add(intptr, offset)
     return builder.inttoptr(intptr, return_type or ptr.type)
 
@@ -609,23 +610,23 @@ class VerboseProxy(object):
 
 
 def printf(builder, format_string, *values):
-    str_const = Constant.stringz(format_string)
+    str_const = lc.Constant.stringz(format_string)
     global_str_const = get_module(builder).add_global_variable(str_const.type,
                                                                '')
     global_str_const.initializer = str_const
 
-    idx = [Constant.int(Type.int(32), 0), Constant.int(Type.int(32), 0)]
+    idx = [lc.Constant.int(lc.Type.int(32), 0), lc.Constant.int(lc.Type.int(32), 0)]
     str_addr = global_str_const.gep(idx)
 
     args = []
     for v in values:
         if isinstance(v, int):
-            args.append(Constant.int(Type.int(), v))
+            args.append(lc.Constant.int(lc.Type.int(), v))
         elif isinstance(v, float):
-            args.append(Constant.real(Type.double(), v))
+            args.append(lc.Constant.real(lc.Type.double(), v))
         else:
             args.append(v)
-    functype = Type.function(Type.int(32), [Type.pointer(Type.int(8))], True)
+    functype = lc.Type.function(lc.Type.int(32), [lc.Type.pointer(lc.Type.int(8))], True)
     fn = get_module(builder).get_or_insert_function(functype, 'printf')
     builder.call(fn, [str_addr] + args)
 

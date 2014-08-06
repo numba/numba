@@ -1,8 +1,7 @@
 from __future__ import print_function, absolute_import
 import re
-from llvm.core import (Type, Builder, LINKAGE_INTERNAL, inline_function,
-                       Constant, ICMP_EQ)
-import llvm.passes as lp
+
+import llvmlite.llvmpy.passes as lp
 from numba import typing, types, cgutils
 from numba.targets.base import BaseContext
 from .cudadrv import nvvm

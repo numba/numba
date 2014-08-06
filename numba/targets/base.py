@@ -2,8 +2,8 @@ from __future__ import print_function
 from collections import namedtuple, defaultdict
 import copy
 from types import MethodType
-import llvm.core as lc
-from llvm.core import Type, Constant
+import llvmlite.llvmpy.core as lc
+
 import numpy
 
 from numba import _dynfunc, types, utils, cgutils, typing, numpy_support, errcode
@@ -15,26 +15,26 @@ from numba.targets import arrayobj, builtins, iterators, rangeobj
 
 
 
-GENERIC_POINTER = Type.pointer(Type.int(8))
+GENERIC_POINTER = lc.Type.pointer(lc.Type.int(8))
 PYOBJECT = GENERIC_POINTER
 
 LTYPEMAP = {
     types.pyobject: PYOBJECT,
 
-    types.boolean: Type.int(8),
+    types.boolean: lc.Type.int(8),
 
-    types.uint8: Type.int(8),
-    types.uint16: Type.int(16),
-    types.uint32: Type.int(32),
-    types.uint64: Type.int(64),
+    types.uint8: lc.Type.int(8),
+    types.uint16: lc.Type.int(16),
+    types.uint32: lc.Type.int(32),
+    types.uint64: lc.Type.int(64),
 
-    types.int8: Type.int(8),
-    types.int16: Type.int(16),
-    types.int32: Type.int(32),
-    types.int64: Type.int(64),
+    types.int8: lc.Type.int(8),
+    types.int16: lc.Type.int(16),
+    types.int32: lc.Type.int(32),
+    types.int64: lc.Type.int(64),
 
-    types.float32: Type.float(),
-    types.float64: Type.double(),
+    types.float32: lc.Type.float(),
+    types.float64: lc.Type.double(),
 }
 
 STRUCT_TYPES = {
@@ -45,9 +45,9 @@ STRUCT_TYPES = {
 
 Status = namedtuple("Status", ("code", "ok", "err", "exc", "none"))
 
-RETCODE_OK = Constant.int_signextend(Type.int(), 0)
-RETCODE_NONE = Constant.int_signextend(Type.int(), -2)
-RETCODE_EXC = Constant.int_signextend(Type.int(), -1)
+RETCODE_OK = lc.Constant.int_signextend(lc.Type.int(), 0)
+RETCODE_NONE = lc.Constant.int_signextend(lc.Type.int(), -2)
+RETCODE_EXC = lc.Constant.int_signextend(lc.Type.int(), -1)
 
 
 class Overloads(object):
@@ -200,7 +200,7 @@ class BaseContext(object):
         argtypes = [self.get_argument_type(aty)
                     for aty in fndesc.argtypes]
         resptr = self.get_return_type(fndesc.restype)
-        fnty = Type.function(Type.int(), [resptr] + argtypes)
+        fnty = lc.Type.function(lc.Type.int(), [resptr] + argtypes)
         return fnty
 
     def get_external_function_type(self, fndesc):
@@ -208,7 +208,7 @@ class BaseContext(object):
                     for aty in fndesc.argtypes]
         # don't wrap in pointer
         restype = self.get_argument_type(fndesc.restype)
-        fnty = Type.function(restype, argtypes)
+        fnty = lc.Type.function(restype, argtypes)
         return fnty
 
     def declare_function(self, module, fndesc):
@@ -230,7 +230,7 @@ class BaseContext(object):
 
     def insert_const_string(self, mod, string):
         stringtype = GENERIC_POINTER
-        text = Constant.stringz(string)
+        text = lc.Constant.stringz(string)
         name = ".const.%s" % string
         for gv in mod.global_variables:
             if gv.name == name and gv.type.pointee == text.type:
@@ -240,7 +240,7 @@ class BaseContext(object):
             gv.global_constant = True
             gv.initializer = text
             gv.linkage = lc.LINKAGE_INTERNAL
-        return Constant.bitcast(gv, stringtype)
+        return lc.Constant.bitcast(gv, stringtype)
 
     def get_arguments(self, func):
         """
@@ -253,7 +253,7 @@ class BaseContext(object):
         if ty == types.boolean:
             return self.get_data_type(ty)
         elif self.is_struct_type(ty):
-            return Type.pointer(self.get_value_type(ty))
+            return lc.Type.pointer(self.get_value_type(ty))
         else:
             return self.get_value_type(ty)
 
@@ -262,7 +262,7 @@ class BaseContext(object):
             return self.get_argument_type(ty)
         else:
             argty = self.get_argument_type(ty)
-            return Type.pointer(argty)
+            return lc.Type.pointer(argty)
 
     def get_data_type(self, ty):
         """
@@ -281,7 +281,7 @@ class BaseContext(object):
 
         elif isinstance(ty, types.CPointer):
             dty = self.get_data_type(ty.dtype)
-            return Type.pointer(dty)
+            return lc.Type.pointer(dty)
 
         elif isinstance(ty, types.Optional):
             return self.get_data_type(ty.type)
@@ -291,23 +291,23 @@ class BaseContext(object):
 
         elif isinstance(ty, types.UniTuple):
             dty = self.get_value_type(ty.dtype)
-            return Type.array(dty, ty.count)
+            return lc.Type.array(dty, ty.count)
 
         elif isinstance(ty, types.Tuple):
             dtys = [self.get_value_type(t) for t in ty]
-            return Type.struct(dtys)
+            return lc.Type.struct(dtys)
 
         elif isinstance(ty, types.Record):
             # Record are represented as byte array
-            return Type.struct([Type.array(Type.int(8), ty.size)])
+            return lc.Type.struct([lc.Type.array(lc.Type.int(8), ty.size)])
 
         elif isinstance(ty, types.UnicodeCharSeq):
-            charty = Type.int(numpy_support.sizeof_unicode_char * 8)
-            return Type.struct([Type.array(charty, ty.count)])
+            charty = lc.Type.int(numpy_support.sizeof_unicode_char * 8)
+            return lc.Type.struct([lc.Type.array(charty, ty.count)])
 
         elif isinstance(ty, types.CharSeq):
-            charty = Type.int(8)
-            return Type.struct([Type.array(charty, ty.count)])
+            charty = lc.Type.int(8)
+            return lc.Type.struct([lc.Type.array(charty, ty.count)])
 
         elif ty in STRUCT_TYPES:
             return self.get_struct_type(STRUCT_TYPES[ty])
@@ -329,13 +329,13 @@ class BaseContext(object):
 
     def get_value_type(self, ty):
         if ty == types.boolean:
-            return Type.int(1)
+            return lc.Type.int(1)
         dataty = self.get_data_type(ty)
 
         if isinstance(ty, types.Record):
             # Record data are passed by refrence
             memory = dataty.elements[0]
-            return Type.struct([Type.pointer(memory)])
+            return lc.Type.struct([lc.Type.pointer(memory)])
 
         return dataty
 
@@ -345,7 +345,7 @@ class BaseContext(object):
         if isinstance(ty, types.Record):
             pdata = cgutils.get_record_data(builder, value)
             databuf = builder.load(pdata)
-            casted = builder.bitcast(ptr, Type.pointer(databuf.type))
+            casted = builder.bitcast(ptr, lc.Type.pointer(databuf.type))
             builder.store(databuf, casted)
             return
 
@@ -368,7 +368,7 @@ class BaseContext(object):
         assert cgutils.is_pointer(ptr.type)
         value = builder.load(ptr)
         if ty == types.boolean:
-            return builder.trunc(value, Type.int(1))
+            return builder.trunc(value, lc.Type.int(1))
         else:
             return value
 
@@ -400,13 +400,13 @@ class BaseContext(object):
 
             real = self.get_constant(innertype, val.real)
             imag = self.get_constant(innertype, val.imag)
-            const = Constant.struct([real, imag])
+            const = lc.Constant.struct([real, imag])
             return const
 
         elif isinstance(ty, types.Tuple):
             consts = [self.get_constant_generic(builder, ty.types[i], v)
                       for i, v in enumerate(val)]
-            return Constant.struct(consts)
+            return lc.Constant.struct(consts)
 
         else:
             raise NotImplementedError(ty)
@@ -421,30 +421,30 @@ class BaseContext(object):
             return self.get_dummy_value()
 
         elif ty == types.boolean:
-            return Constant.int(Type.int(1), int(val))
+            return lc.Constant.int(lc.Type.int(1), int(val))
 
         elif ty in types.signed_domain:
-            return Constant.int_signextend(lty, val)
+            return lc.Constant.int_signextend(lty, val)
 
         elif ty in types.unsigned_domain:
-            return Constant.int(lty, val)
+            return lc.Constant.int(lty, val)
 
         elif ty in types.real_domain:
-            return Constant.real(lty, val)
+            return lc.Constant.real(lty, val)
 
         elif isinstance(ty, types.UniTuple):
             consts = [self.get_constant(ty.dtype, v) for v in val]
-            return Constant.array(consts[0].type, consts)
+            return lc.Constant.array(consts[0].type, consts)
 
         raise NotImplementedError(ty)
 
     def get_constant_undef(self, ty):
         lty = self.get_value_type(ty)
-        return Constant.undef(lty)
+        return lc.Constant.undef(lty)
 
     def get_constant_null(self, ty):
         lty = self.get_value_type(ty)
-        return Constant.null(lty)
+        return lc.Constant.null(lty)
 
     def get_setattr(self, attr, sig):
         typ = sig.args[0]
@@ -582,7 +582,7 @@ class BaseContext(object):
 
     def return_errcode(self, builder, code):
         assert code > 0
-        builder.ret(Constant.int(Type.int(), code))
+        builder.ret(lc.Constant.int(lc.Type.int(), code))
 
     def return_errcode_propagate(self, builder, code):
         builder.ret(code)
@@ -592,7 +592,7 @@ class BaseContext(object):
 
     def return_user_exc(self, builder, code):
         assert code > 0
-        builder.ret(Constant.int(Type.int(), code))
+        builder.ret(lc.Constant.int(lc.Type.int(), code))
 
     def pair_first(self, builder, val, ty):
         """
@@ -722,7 +722,7 @@ class BaseContext(object):
 
         elif fromty == types.boolean:
             # first promote to int32
-            asint = builder.zext(val, Type.int())
+            asint = builder.zext(val, lc.Type.int())
             # then promote to number
             return self.cast(builder, asint, types.int32, toty)
 
@@ -730,9 +730,9 @@ class BaseContext(object):
 
     def is_true(self, builder, typ, val):
         if typ in types.integer_domain:
-            return builder.icmp(lc.ICMP_NE, val, Constant.null(val.type))
+            return builder.icmp(lc.ICMP_NE, val, lc.Constant.null(val.type))
         elif typ in types.real_domain:
-            return builder.fcmp(lc.FCMP_ONE, val, Constant.real(val.type, 0))
+            return builder.fcmp(lc.FCMP_ONE, val, lc.Constant.real(val.type, 0))
         elif typ in types.complex_domain:
             cmplx = self.make_complex(typ)(self, builder, val)
             fty = types.float32 if typ == types.complex64 else types.float64
@@ -750,7 +750,7 @@ class BaseContext(object):
         retty = callee.args[0].type.pointee
         retval = cgutils.alloca_once(builder, retty)
         # initialize return value
-        builder.store(lc.Constant.null(retty), retval)
+        builder.store(lc.lc.Constant.null(retty), retval)
         args = [self.get_value_as_argument(builder, ty, arg)
                 for ty, arg in zip(argtys, args)]
         realargs = [retval] + list(args)
@@ -776,8 +776,8 @@ class BaseContext(object):
 
     def call_function_pointer(self, builder, funcptr, signature, args):
         retty = self.get_value_type(signature.return_type)
-        fnty = Type.function(retty, [a.type for a in args])
-        fnptrty = Type.pointer(fnty)
+        fnty = lc.Type.function(retty, [a.type for a in args])
+        fnptrty = lc.Type.pointer(fnty)
         addr = self.get_constant(types.intp, funcptr)
         ptr = builder.inttoptr(addr, fnptrty)
         return builder.call(ptr, args)
@@ -808,7 +808,7 @@ class BaseContext(object):
     def print_string(self, builder, text):
         mod = builder.basic_block.function.module
         cstring = GENERIC_POINTER
-        fnty = Type.function(Type.int(), [cstring])
+        fnty = lc.Type.function(lc.Type.int(), [cstring])
         puts = mod.get_or_insert_function(fnty, "puts")
         return builder.call(puts, [text])
 
@@ -834,10 +834,10 @@ class BaseContext(object):
         Get the LLVM struct type for the given Structure class *struct*.
         """
         fields = [self.get_struct_member_type(v) for _, v in struct._fields]
-        return Type.struct(fields)
+        return lc.Type.struct(fields)
 
     def get_dummy_value(self):
-        return Constant.null(self.get_dummy_type())
+        return lc.Constant.null(self.get_dummy_type())
 
     def get_dummy_type(self):
         return GENERIC_POINTER
@@ -885,7 +885,7 @@ class BaseContext(object):
                   for i in range(flat.size)]
 
         lldtype = values[0].type
-        consts = Constant.array(lldtype, values)
+        consts = lc.Constant.array(lldtype, values)
 
         module = cgutils.get_module(builder)
 
@@ -898,12 +898,12 @@ class BaseContext(object):
         # Handle shape
         llintp = self.get_value_type(types.intp)
         shapevals = [self.get_constant(types.intp, s) for s in ary.shape]
-        cshape = Constant.array(llintp, shapevals)
+        cshape = lc.Constant.array(llintp, shapevals)
 
 
         # Handle strides
         stridevals = [self.get_constant(types.intp, s) for s in ary.strides]
-        cstrides = Constant.array(llintp, stridevals)
+        cstrides = lc.Constant.array(llintp, stridevals)
 
         # Create array structure
         cary = self.make_array(typ)(self, builder)

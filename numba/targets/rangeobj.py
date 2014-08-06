@@ -2,7 +2,7 @@
 Implementation of the range object for fixed-size integers.
 """
 
-import llvm.core as lc
+import llvmlite.llvmpy.core as lc
 
 from numba import errcode
 from numba import types, typing, cgutils

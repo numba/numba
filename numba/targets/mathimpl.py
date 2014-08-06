@@ -4,8 +4,8 @@ Provide math calls that uses intrinsics or libc math functions.
 
 from __future__ import print_function, absolute_import, division
 import math
-import llvm.core as lc
-from llvm.core import Type
+import llvmlite.llvmpy.core as lc
+
 from numba.targets.imputils import implement, Registry
 from numba import types, cgutils, utils
 from numba.typing import signature
@@ -25,9 +25,9 @@ def _unary_int_input_wrapper_impl(wrapped_impl):
         [val] = args
         input_type = sig.args[0]
         if input_type.signed:
-            fpval = builder.sitofp(val, Type.double())
+            fpval = builder.sitofp(val, lc.Type.double())
         else:
-            fpval = builder.uitofp(val, Type.double())
+            fpval = builder.uitofp(val, lc.Type.double())
         sig = signature(types.float64, types.float64)
         return wrapped_impl(context, builder, sig, [fpval])
 
@@ -69,7 +69,7 @@ def _float_input_unary_math_extern_impl(extern_func, input_type, restype=None):
         [val] = args
         mod = cgutils.get_module(builder)
         lty = context.get_value_type(input_type)
-        fnty = Type.function(lty, [lty])
+        fnty = lc.Type.function(lty, [lty])
         fn = mod.get_or_insert_function(fnty, name=extern_func)
         res = builder.call(fn, (val,))
         if restype is None:
@@ -93,7 +93,7 @@ def unary_math_extern(fn, f32extern, f64extern, int_restype=False):
     f64impl = _float_input_unary_math_extern_impl(f64extern, types.float64, f_restype)
     register(implement(fn, types.float32)(f32impl))
     register(implement(fn, types.float64)(f64impl))
-    
+
     if int_restype:
         # If asked for an integral return type, we choose the input type
         # as the return type.
@@ -165,11 +165,11 @@ def isnan_u64_impl(context, builder, sig, args):
     return cgutils.false_bit
 
 
-POS_INF_F32 = lc.Constant.real(Type.float(), float("+inf"))
-NEG_INF_F32 = lc.Constant.real(Type.float(), float("-inf"))
+POS_INF_F32 = lc.Constant.real(lc.Type.float(), float("+inf"))
+NEG_INF_F32 = lc.Constant.real(lc.Type.float(), float("-inf"))
 
-POS_INF_F64 = lc.Constant.real(Type.double(), float("+inf"))
-NEG_INF_F64 = lc.Constant.real(Type.double(), float("-inf"))
+POS_INF_F64 = lc.Constant.real(lc.Type.double(), float("+inf"))
+NEG_INF_F64 = lc.Constant.real(lc.Type.double(), float("-inf"))
 
 
 @register
@@ -209,8 +209,8 @@ def isinf_u64_impl(context, builder, sig, args):
 @implement(math.atan2, types.int64, types.int64)
 def atan2_s64_impl(context, builder, sig, args):
     [y, x] = args
-    y = builder.sitofp(y, Type.double())
-    x = builder.sitofp(x, Type.double())
+    y = builder.sitofp(y, lc.Type.double())
+    x = builder.sitofp(x, lc.Type.double())
     fsig = signature(types.float64, types.float64, types.float64)
     return atan2_f64_impl(context, builder, fsig, (y, x))
 
@@ -218,8 +218,8 @@ def atan2_s64_impl(context, builder, sig, args):
 @implement(math.atan2, types.uint64, types.uint64)
 def atan2_u64_impl(context, builder, sig, args):
     [y, x] = args
-    y = builder.uitofp(y, Type.double())
-    x = builder.uitofp(x, Type.double())
+    y = builder.uitofp(y, lc.Type.double())
+    x = builder.uitofp(x, lc.Type.double())
     fsig = signature(types.float64, types.float64, types.float64)
     return atan2_f64_impl(context, builder, fsig, (y, x))
 
@@ -229,7 +229,7 @@ def atan2_u64_impl(context, builder, sig, args):
 def atan2_f32_impl(context, builder, sig, args):
     assert len(args) == 2
     mod = cgutils.get_module(builder)
-    fnty = Type.function(Type.float(), [Type.float(), Type.float()])
+    fnty = lc.Type.function(lc.Type.float(), [lc.Type.float(), lc.Type.float()])
     fn = mod.get_or_insert_function(fnty, name="atan2f")
     return builder.call(fn, args)
 
@@ -238,7 +238,7 @@ def atan2_f32_impl(context, builder, sig, args):
 def atan2_f64_impl(context, builder, sig, args):
     assert len(args) == 2
     mod = cgutils.get_module(builder)
-    fnty = Type.function(Type.double(), [Type.double(), Type.double()])
+    fnty = lc.Type.function(lc.Type.double(), [lc.Type.double(), lc.Type.double()])
     fn = mod.get_or_insert_function(fnty, name="atan2")
     return builder.call(fn, args)
 
@@ -250,8 +250,8 @@ def atan2_f64_impl(context, builder, sig, args):
 @implement(math.hypot, types.int64, types.int64)
 def hypot_s64_impl(context, builder, sig, args):
     [x, y] = args
-    y = builder.sitofp(y, Type.double())
-    x = builder.sitofp(x, Type.double())
+    y = builder.sitofp(y, lc.Type.double())
+    x = builder.sitofp(x, lc.Type.double())
     fsig = signature(types.float64, types.float64, types.float64)
     return hypot_f64_impl(context, builder, fsig, (x, y))
 
@@ -259,8 +259,8 @@ def hypot_s64_impl(context, builder, sig, args):
 @implement(math.hypot, types.uint64, types.uint64)
 def hypot_u64_impl(context, builder, sig, args):
     [x, y] = args
-    y = builder.sitofp(y, Type.double())
-    x = builder.sitofp(x, Type.double())
+    y = builder.sitofp(y, lc.Type.double())
+    x = builder.sitofp(x, lc.Type.double())
     fsig = signature(types.float64, types.float64, types.float64)
     return hypot_f64_impl(context, builder, fsig, (x, y))
 
