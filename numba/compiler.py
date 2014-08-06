@@ -104,11 +104,12 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
     if config.DUMP_BYTECODE:
         print(bc.dump())
     return compile_bytecode(typingctx, targetctx, bc, args,
-                            return_type, flags, locals)
+                            return_type, flags, locals,
+                            func_name=func.__name__)
 
 
 def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
-                     locals, lifted=()):
+                     locals, lifted=(), func_name="<anonymous>"):
     interp = translate_stage(bc)
     nargs = len(interp.argspec.args)
     if len(args) > nargs:
@@ -132,9 +133,16 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
                                                                    return_type,
                                                                    locals)
 
+        if config.WARNING_LEVEL >= 2 and status.fail_reason is not None:
+            print('(NUMBA WARNING) Function "%s" failed type inference:' % func_name,
+                  status.fail_reason)
+
         if not status.use_python_mode:
             with _fallback_context(status):
                 legalize_return_type(return_type, interp, targetctx)
+            if config.WARNING_LEVEL >= 2 and status.fail_reason is not None:
+                print('(NUMBA WARNING) Function "%s" has invalid return type:' % func_name,
+                      status.fail_reason)
 
     if status.use_python_mode and flags.enable_looplift:
         assert not lifted
@@ -158,7 +166,8 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
             # Some loops were extracted
             cres = compile_bytecode(typingctx, targetctx, entry, args,
                                     return_type, outer_flags, locals,
-                                    lifted=tuple(loops))
+                                    lifted=tuple(loops),
+                                    func_name=func_name)
             return cres
 
     if status.use_python_mode:
@@ -205,6 +214,13 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
                         objectmode=status.use_python_mode,
                         lifted=lifted,
                         fndesc=fndesc,)
+
+    # Warn if compiled function in object mode and force_pyobject not set
+    if status.use_python_mode and not flags.force_pyobject \
+            and config.WARNING_LEVEL >= 1:
+        print('(NUMBA WARNING) Function "%s" was compiled in object mode without forceobj=True.'
+               % func_name)
+
     return cr
 
 

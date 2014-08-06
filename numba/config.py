@@ -22,6 +22,13 @@ def _readenv(name, ctor, default):
                           (name, res), RuntimeWarning)
             return default
 
+# Print warnings to screen about function compilation
+#   0: No warnings
+#   1: Print message whenever a function compiles to object mode without
+#      explicit forceobj=True
+#   2: Print explanation why function compiles to object mode
+#      (usually type inference failure)
+WARNING_LEVEL = _readenv("NUMBA_WARNING_LEVEL", int, 0)
 
 # Debug flag to control compiler debug print
 DEBUG = _readenv("NUMBA_DEBUG", int, 0)
