@@ -246,7 +246,11 @@ class CPUContext(BaseContext):
         KeyError is raised if the function isn't known to us.
         """
         name, ptr = self.native_funcs.pop(func)
-        le.dylib_add_symbol(name, 0)
+        # If the symbol wasn't redefined, NULL it out.
+        # (otherwise, it means the corresponding Python function was
+        #  re-compiled, and the new target is still alive)
+        if le.dylib_address_of_symbol(name) == ptr:
+            le.dylib_add_symbol(name, 0)
 
     def optimize(self, module):
         self.pm.run(module)
