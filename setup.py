@@ -35,12 +35,6 @@ ext_dynfunc = Extension(name='numba._dynfunc', sources=['numba/_dynfunc.c'],
                         extra_compile_args=CFLAGS,
                         depends=["numba/_pymodule.h"])
 
-ext_numpyadapt = Extension(name='numba._numpyadapt',
-                           sources=['numba/_numpyadapt.c'],
-                           include_dirs=[numpy.get_include()],
-                           extra_compile_args=CFLAGS,
-                           depends=["numba/_pymodule.h"])
-
 ext_npymath_exports = Extension(name='numba._npymath_exports',
                                 sources=['numba/_npymath_exports.c'],
                                 include_dirs=npymath_info['include_dirs'],
@@ -81,7 +75,7 @@ ext_npyufunc_ufunc = Extension(name="numba.npyufunc._internal",
 ext_mviewbuf = Extension(name='numba.mviewbuf',
                          sources=['numba/mviewbuf.c'])
 
-ext_modules = [ext_dynfunc, ext_numpyadapt, ext_npymath_exports, ext_dispatcher,
+ext_modules = [ext_dynfunc, ext_npymath_exports, ext_dispatcher,
                ext_helperlib, ext_typeconv, ext_npyufunc_ufunc, ext_mviewbuf]
 
 packages = [

@@ -11,6 +11,11 @@
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/ndarrayobject.h>
 
+/* For Numpy 1.6 */
+#ifndef NPY_ARRAY_BEHAVED
+    #define NPY_ARRAY_BEHAVED NPY_BEHAVED
+#endif
+
 
 /* provide 64-bit division function to 32-bit platforms */
 static
@@ -171,6 +176,65 @@ CLEANUP:
     return record;
 }
 
+/*
+ * Fill in the *arystruct* with information from the Numpy array *obj*.
+ * *arystruct*'s layout is defined in numba.targets.arrayobj (look
+ * for the ArrayTemplate class).
+ */
+
+static
+int Numba_adapt_ndarray(PyObject *obj, void* arystruct) {
+    PyArrayObject *ndary;
+    int ndim;
+    npy_intp *dims;
+    npy_intp *strides;
+    void *data;
+    void **dataptr;
+    void **objectptr;
+    npy_intp *dimsptr;
+    npy_intp *stridesptr;
+    int i;
+
+    if (!PyArray_Check(obj)) {
+        return -1;
+    }
+
+    ndary = (PyArrayObject*)obj;
+    ndim = PyArray_NDIM(ndary);
+    dims = PyArray_DIMS(ndary);
+    strides = PyArray_STRIDES(ndary);
+    data = PyArray_DATA(ndary);
+
+    dataptr = (void**)arystruct;
+    dimsptr = (npy_intp*)(dataptr + 1);
+    stridesptr = dimsptr + ndim;
+    objectptr = stridesptr + ndim;
+
+    for (i = 0; i < ndim; ++i) {
+        dimsptr[i] = dims[i];
+        stridesptr[i] = strides[i];
+    }
+    *dataptr = data;
+    *objectptr = obj;
+
+    return 0;
+}
+
+static
+PyObject* Numba_ndarray_new(int nd,
+                            npy_intp *dims,   /* shape */
+                            npy_intp *strides,
+                            void* data,
+                            int type_num,
+                            int itemsize)
+{
+    PyObject *ndary;
+    int flags = NPY_ARRAY_BEHAVED;
+    ndary = PyArray_New((PyTypeObject*)&PyArray_Type, nd, dims, type_num,
+                       strides, data, 0, flags, NULL);
+    return ndary;
+}
+
 static
 double Numba_round_even(double y) {
     double z = round(y);
@@ -252,6 +316,8 @@ build_c_helpers_dict(void)
     declmethod(complex_adaptor);
     declmethod(extract_record_data);
     declmethod(release_record_buffer);
+    declmethod(adapt_ndarray);
+    declmethod(ndarray_new);
     declmethod(recreate_record);
     declmethod(round_even);
     declmethod(roundf_even);
