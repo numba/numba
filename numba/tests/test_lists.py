@@ -233,7 +233,7 @@ class TestLists(TestCase):
         with self.assertTypingError():
             cr = compile_isolated(pyfunc, (types.Dummy('list'),))
             cfunc = cr.entry_point
-            l = np.random.randint(10, size=10)
+            l = self.random.randint(10, size=10)
             self.assertEqual(cfunc(l), pyfunc(l))
 
     def test_list_reverse(self):
@@ -246,5 +246,5 @@ class TestLists(TestCase):
 
 
 if __name__ == '__main__':
-    unittest.main(buffer=True)
+    unittest.main()
 
