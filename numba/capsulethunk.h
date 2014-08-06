@@ -7,6 +7,10 @@
 #ifndef __CAPSULETHUNK_H
 #define __CAPSULETHUNK_H
 
+#if (    (PY_VERSION_HEX <  0x02070000) \
+     || ((PY_VERSION_HEX >= 0x03000000) \
+      && (PY_VERSION_HEX <  0x03010000)) )
+
 //#define Assert(X) do_assert(!!(X), #X, __FILE__, __LINE__)
 #define Assert(X)
 
@@ -17,10 +21,6 @@ void do_assert(int cond, const char * msg, const char *file, unsigned line){
         exit(1);
     }
 }
-
-#if (    (PY_VERSION_HEX <  0x02070000) \
-     || ((PY_VERSION_HEX >= 0x03000000) \
-      && (PY_VERSION_HEX <  0x03010000)) )
 
 typedef void (*PyCapsule_Destructor)(PyObject *);
 
