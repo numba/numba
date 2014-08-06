@@ -76,7 +76,10 @@ PyObject*
 select_overload(PyObject* self, PyObject* args)
 {
     PyObject *tmcap, *sigtup, *ovsigstup;
-    if (!PyArg_ParseTuple(args, "OOO", &tmcap, &sigtup, &ovsigstup)) {
+    int allow_unsafe;
+
+    if (!PyArg_ParseTuple(args, "OOOi", &tmcap, &sigtup, &ovsigstup,
+                          &allow_unsafe)) {
         return NULL;
     }
 
@@ -105,8 +108,9 @@ select_overload(PyObject* self, PyObject* args)
         }
     }
 
-    int selected;
-    int matches = tm->selectOverload(sig, ovsigs, selected, sigsz, ovsz);
+    int selected = -42;
+    int matches = tm->selectOverload(sig, ovsigs, selected, sigsz, ovsz,
+                                     (bool) allow_unsafe);
 
     delete [] sig;
     delete [] ovsigs;
@@ -116,6 +120,7 @@ select_overload(PyObject* self, PyObject* args)
         return NULL;
     } else if (matches == 0) {
         PyErr_SetString(PyExc_TypeError, "No compatible overload");
+        return NULL;
     }
 
     return PyLong_FromLong(selected);

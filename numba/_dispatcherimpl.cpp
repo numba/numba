@@ -19,7 +19,7 @@ public:
         functions.push_back(callable);
     }
 
-    void* resolve(Type sig[], int &matches) {
+    void* resolve(Type sig[], int &matches, bool allow_unsafe) {
         const int ovct = functions.size();
         int selected;
         matches = 0;
@@ -28,7 +28,7 @@ public:
         }
         if (overloads.size() > 0) {
             matches = tm->selectOverload(sig, &overloads[0], selected, argct,
-                                         ovct);
+                                         ovct, allow_unsafe);
         } else if (argct == 0){
             matches = 1;
             selected = 0;
@@ -73,10 +73,10 @@ dispatcher_add_defn(dispatcher_t *obj, int tys[], void* callable) {
 }
 
 void*
-dispatcher_resolve(dispatcher_t *obj, int sig[], int *count) {
+dispatcher_resolve(dispatcher_t *obj, int sig[], int *count, int allow_unsafe) {
     Dispatcher *disp = static_cast<Dispatcher*>(obj);
     Type *args = reinterpret_cast<Type*>(sig);
-    void *callable = disp->resolve(args, *count);
+    void *callable = disp->resolve(args, *count, (bool) allow_unsafe );
     return callable;
 }
 
