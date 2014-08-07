@@ -3,6 +3,7 @@ import numba.unittest_support as unittest
 
 import argparse
 import collections
+import contextlib
 import cProfile
 import gc
 import os
@@ -303,10 +304,25 @@ class _MinimalRunner(object):
         signals.registerResult(result)
         result.failfast = runner.failfast
         result.buffer = runner.buffer
-        test(result)
+        with self.cleanup_object(test):
+            test(result)
         # HACK as cStringIO.StringIO isn't picklable in 2.x
         result.stream = _FakeStringIO(result.stream.getvalue())
         return _MinimalResult(result)
+
+    @contextlib.contextmanager
+    def cleanup_object(self, test):
+        """
+        A context manager which cleans up unwanted attributes on a test case
+        (or any other object).
+        """
+        vanilla_attrs = set(test.__dict__)
+        try:
+            yield test
+        finally:
+            spurious_attrs = set(test.__dict__) - vanilla_attrs
+            for name in spurious_attrs:
+                del test.__dict__[name]
 
 
 class ParallelTestRunner(runner.TextTestRunner):
