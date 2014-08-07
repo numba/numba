@@ -19,9 +19,9 @@ class TimedeltaBinOp(AbstractTemplate):
         left, right = args
         if not all(isinstance(tp, types.NPTimedelta) for tp in args):
             return
-        if npdatetime.can_cast_timedelta_units(left, right):
+        if npdatetime.can_cast_timedelta_units(left.unit, right.unit):
             return signature(right, left, right)
-        elif npdatetime.can_cast_timedelta_units(right, left):
+        elif npdatetime.can_cast_timedelta_units(right.unit, left.unit):
             return signature(left, left, right)
 
 
