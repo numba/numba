@@ -321,7 +321,6 @@ class _MinimalRunner(object):
             yield test
         finally:
             spurious_attrs = set(test.__dict__) - vanilla_attrs
-            spurious_attrs = ()
             for name in spurious_attrs:
                 del test.__dict__[name]
 
