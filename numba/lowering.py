@@ -6,6 +6,7 @@ from types import ModuleType
 
 
 import llvmlite.llvmpy.core as lc
+import llvmlite.binding as llvm
 
 from numba import _dynfunc, ir, types, cgutils, utils, config, cffi_support, typing
 
@@ -227,7 +228,7 @@ class BaseLower(object):
             print(("LLVM DUMP %s" % self.fndesc).center(80, '-'))
             print(self.module)
             print('=' * 80)
-        self.module.verify()
+
         # Run function-level optimize to reduce memory usage and improve
         # module-level optimization
         self.context.optimize_function(self.function)
@@ -361,7 +362,7 @@ class Lower(BaseLower):
         # In nopython mode, closure vars are frozen like globals
         elif isinstance(value, (ir.Global, ir.FreeVar)):
             if (isinstance(ty, types.Dummy) or
-                    isinstance(ty, types.lc.Module) or
+                    isinstance(ty, types.Module) or
                     isinstance(ty, types.Function) or
                     isinstance(ty, types.Dispatcher)):
                 return self.context.get_dummy_value()

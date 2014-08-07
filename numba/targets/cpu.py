@@ -6,6 +6,7 @@ import llvmlite.llvmpy.core as lc
 import llvmlite.llvmpy.passes as lp
 import llvmlite.llvmpy.ee as le
 from llvmlite.llvmpy import avx_support
+from llvmlite import binding as llvm
 
 
 from numba import _dynfunc, _helperlib, config
@@ -291,11 +292,17 @@ class CPUContext(BaseContext):
     def prepare_for_call(self, func, fndesc, env):
         wrapper, api = PyCallWrapper(self, func.module, func, fndesc,
                                      exceptions=self.exceptions).build()
-        self.optimize(func.module)
+
+        # Convert to real LLVM
+        llmod = llvm.parse_assembly(str(func.module))
+        func = llmod.get_function(func.name)
+        wrapper = llmod.get_function(wrapper.name)
+
+        self.optimize(llmod)
 
         if config.DUMP_OPTIMIZED:
             print(("OPTIMIZED DUMP %s" % fndesc).center(80, '-'))
-            print(func.module)
+            print(llmod)
             print('=' * 80)
 
         if config.DUMP_ASSEMBLY:
@@ -304,9 +311,9 @@ class CPUContext(BaseContext):
             print('=' * 80)
 
         # Code gen
-        self.engine.add_module(func.module)
-        baseptr = self.engine.get_pointer_to_function(func)
-        fnptr = self.engine.get_pointer_to_function(wrapper)
+        self.engine.add_module(llmod)
+        baseptr = self.engine.get_pointer_to_global(func)
+        fnptr = self.engine.get_pointer_to_global(wrapper)
         cfunc = _dynfunc.make_function(fndesc.lookup_module(),
                                        fndesc.qualname.split('.')[-1],
                                        fndesc.doc, fnptr, env)
@@ -327,7 +334,8 @@ class CPUContext(BaseContext):
         fpm.finalize()
 
         # remove extra refct api calls
-        remove_refct_calls(func)
+        ## XXX
+        # remove_refct_calls(func)
 
     def get_abi_sizeof(self, lty):
         return self.engine.target_data.abi_size(lty)
