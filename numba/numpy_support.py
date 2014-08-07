@@ -99,7 +99,16 @@ def is_arrayscalar(val):
 
 
 def map_arrayscalar_type(val):
-    return from_dtype(numpy.dtype(type(val)))
+    if isinstance(val, numpy.generic):
+        # We can't blindly call numpy.dtype() as it loses information
+        # on some types, e.g. datetime64 and timedelta64.
+        dtype = val.dtype
+    else:
+        try:
+            dtype = numpy.dtype(type(val))
+        except TypeError:
+            raise NotImplementedError("no corresponding numpy dtype for %r" % type(val))
+    return from_dtype(dtype)
 
 
 def is_array(val):

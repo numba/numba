@@ -104,10 +104,11 @@ class BaseContext(object):
             if ty in types.number_domain:
                 return ty
 
-    def resolve_value_type(self, val):
+    def resolve_data_type(self, val):
         """
-        Return the numba type of a Python value
-        Return None if fail to type.
+        Return the numba type of a Python value representing data
+        (e.g. a number or an array, but not more sophisticated types
+         such as functions, etc.)
         """
         if val is True or val is False:
             return types.boolean
@@ -132,10 +133,56 @@ class BaseContext(object):
             else:
                 return types.Tuple(tys)
 
-        elif numpy_support.is_arrayscalar(val):
-            return numpy_support.map_arrayscalar_type(val)
+        else:
+            try:
+                return numpy_support.map_arrayscalar_type(val)
+            except NotImplementedError:
+                pass
 
-        elif numpy_support.is_array(val):
+        if numpy_support.is_array(val):
+            ary = val
+            dtype = numpy_support.from_dtype(ary.dtype)
+            # Force C contiguous
+            return types.Array(dtype, ary.ndim, 'C')
+
+        return None
+
+    def resolve_value_type(self, val):
+        """
+        Return the numba type of a Python value
+        Return None if fail to type.
+        """
+        tp = self.resolve_data_type(val)
+        if tp is not None:
+            return tp
+
+        elif isinstance(val, utils.INT_TYPES + (float,)):
+            return self.get_number_type(val)
+
+        elif val is None:
+            return types.none
+
+        elif isinstance(val, str):
+            return types.string
+
+        elif isinstance(val, complex):
+            return types.complex128
+
+        elif isinstance(val, tuple):
+            tys = [self.resolve_value_type(v) for v in val]
+            distinct_types = set(tys)
+            if len(distinct_types) == 1:
+                return types.UniTuple(tys[0], len(tys))
+            else:
+                return types.Tuple(tys)
+
+        else:
+            try:
+                return numpy_support.map_arrayscalar_type(val)
+            except NotImplementedError:
+                pass
+
+        if numpy_support.is_array(val):
             ary = val
             dtype = numpy_support.from_dtype(ary.dtype)
             # Force C contiguous

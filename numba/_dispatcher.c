@@ -32,7 +32,7 @@ static int tc_float32;
 static int tc_float64;
 static int tc_complex64;
 static int tc_complex128;
-static int BAISC_TYPECODES[12];
+static int BASIC_TYPECODES[12];
 
 static int tc_intp;
 
@@ -46,7 +46,7 @@ PyObject* init_types(PyObject *self, PyObject *args)
     #define UNWRAP_TYPE(S)                                              \
         if(!(tmpobj = PyDict_GetItemString(dict, #S))) return NULL;     \
         else {  tc_##S = PyLong_AsLong(tmpobj);                         \
-                BAISC_TYPECODES[index++] = tc_##S;  }
+                BASIC_TYPECODES[index++] = tc_##S;  }
 
     UNWRAP_TYPE(int8)
     UNWRAP_TYPE(int16)
@@ -334,13 +334,16 @@ int typecode_arrayscalar(DispatcherObject *dispatcher, PyObject* aryscalar) {
     Py_DECREF(descr);
     if (typecode == -1)
         return typecode_fallback(dispatcher, aryscalar);
-    return BAISC_TYPECODES[typecode];
+    return BASIC_TYPECODES[typecode];
 }
 
 
 static
 int typecode(DispatcherObject *dispatcher, PyObject *val) {
     PyTypeObject *tyobj = val->ob_type;
+    /* This needs to be kept in sync with Dispatcher.typeof_pyval(),
+     * otherwise funny things may happen.
+     */
     if (tyobj == &PyInt_Type || tyobj == &PyLong_Type)
         return tc_intp;
     else if (tyobj == &PyFloat_Type)

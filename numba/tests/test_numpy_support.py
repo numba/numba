@@ -15,7 +15,7 @@ class TestFromDtype(TestCase):
 
     def test_number_types(self):
         """
-        Test the various scalar number types.
+        Test from_dtype() with the various scalar number types.
         """
         f = numpy_support.from_dtype
 
@@ -64,7 +64,7 @@ class TestFromDtype(TestCase):
 
     def test_string_types(self):
         """
-        Test the character string types.
+        Test from_dtype() with the character string types.
         """
         f = numpy_support.from_dtype
         self.assertEqual(f(np.dtype('S10')), types.CharSeq(10))
@@ -73,7 +73,7 @@ class TestFromDtype(TestCase):
 
     def test_timedelta_types(self):
         """
-        Test the timedelta types.
+        Test from_dtype() with the timedelta types.
         """
         f = numpy_support.from_dtype
         tp = f(np.dtype('m'))
@@ -90,6 +90,60 @@ class TestFromDtype(TestCase):
             self.assertEqual(tp.unit_code, code)
 
 
+class ValueTypingTestBase(object):
+    """
+    Common tests for the typing of values.  Also used by test_special.s
+    """
+
+    def check_number_values(self, func):
+        """
+        Test *func*() with scalar numeric values.
+        """
+        f = func
+        # Standard Python types get inferred by numpy
+        self.assertIn(f(1), (types.int32, types.int64))
+        self.assertIs(f(1.0), types.float64)
+        self.assertIs(f(1.0j), types.complex128)
+        # Numpy scalar types get converted by from_dtype()
+        for name in ('int8', 'uint8', 'int16', 'uint16', 'int32', 'uint32',
+                     'int64', 'uint64', 'intp', 'uintp',
+                     'float32', 'float64', 'complex64', 'complex128'):
+            val = getattr(np, name)()
+            self.assertIs(f(val), getattr(types, name))
+
+    def check_timedelta_values(self, func):
+        """
+        Test *func*() with np.timedelta values.
+        """
+        f = func
+        for unit in [
+            '', 'Y', 'M', 'D', 'h', 'm', 's',
+            'ms', 'us', 'ns', 'ps', 'fs', 'as']:
+            if unit:
+                t = np.timedelta64(3, unit)
+            else:
+                # "generic" timedelta
+                t = np.timedelta64(3)
+            tp = f(t)
+            # This ensures the unit hasn't been lost
+            self.assertEqual(tp, types.NPTimedelta(unit))
+
+
+
+class TestArrayScalars(ValueTypingTestBase, TestCase):
+
+    def test_number_values(self):
+        """
+        Test map_arrayscalar_type() with scalar number values.
+        """
+        self.check_number_values(numpy_support.map_arrayscalar_type)
+
+    def test_timedelta_values(self):
+        """
+        Test map_arrayscalar_type() with np.timedelta values.
+        """
+        self.check_timedelta_values(numpy_support.map_arrayscalar_type)
+
+
 if __name__ == '__main__':
     unittest.main()
-

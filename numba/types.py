@@ -8,26 +8,7 @@ from collections import defaultdict
 import numpy
 import weakref
 
-from . import utils
-
-
-DATETIME_UNITS = {
-    'Y': 0,   # Years
-    'M': 1,   # Months
-    'W': 2,   # Weeks
-    # Yes, there's a gap here
-    'D': 4,   # Days
-    'h': 5,   # Hours
-    'm': 6,   # Minutes
-    's': 7,   # Seconds
-    'ms': 8,  # Milliseconds
-    'us': 9,  # Microseconds
-    'ns': 10, # Nanoseconds
-    'ps': 11, # Picoseconds
-    'fs': 12, # Femtoseconds
-    'as': 13, # Attoseconds
-    '': 14,   # "generic", i.e. unit-less
-}
+from . import npdatetime, utils
 
 
 def _autoincr():
@@ -176,7 +157,7 @@ class NPTimedelta(Type):
     def __init__(self, unit, *args, **kws):
         name = 'timedelta64(%s)' % (unit,)
         self.unit = unit
-        self.unit_code = DATETIME_UNITS[self.unit]
+        self.unit_code = npdatetime.DATETIME_UNITS[self.unit]
         super(NPTimedelta, self).__init__(name, *args, **kws)
 
     def __lt__(self, other):
