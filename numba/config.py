@@ -1,4 +1,5 @@
 from __future__ import print_function, division, absolute_import
+import struct
 import sys
 import os
 import re
@@ -7,6 +8,11 @@ import warnings
 IS_WIN32 = sys.platform.startswith('win32')
 MACHINE_BITS = tuple.__itemsize__ * 8
 IS_32BITS = MACHINE_BITS == 32
+
+NATIVE_ALIGNMENT = {
+    b'\x01\x00': 'little',
+    b'\x00\x01': 'big',
+    }[struct.pack('h', 1)]
 
 
 def _readenv(name, ctor, default):
