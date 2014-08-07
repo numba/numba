@@ -9,6 +9,9 @@ MACHINE_BITS = tuple.__itemsize__ * 8
 IS_32BITS = MACHINE_BITS == 32
 
 
+class NumbaWarning(Warning):
+    pass
+
 def _readenv(name, ctor, default):
     try:
         res = os.environ[name]
@@ -23,12 +26,9 @@ def _readenv(name, ctor, default):
             return default
 
 # Print warnings to screen about function compilation
-#   0: No warnings
-#   1: Print message whenever a function compiles to object mode without
-#      explicit forceobj=True
-#   2: Print explanation why function compiles to object mode
-#      (usually type inference failure)
-WARNING_LEVEL = _readenv("NUMBA_WARNING_LEVEL", int, 0)
+WARNINGS = _readenv("NUMBA_WARNINGS", int, 0)
+if WARNINGS == 0:
+    warnings.simplefilter('ignore', NumbaWarning)
 
 # Debug flag to control compiler debug print
 DEBUG = _readenv("NUMBA_DEBUG", int, 0)

@@ -2,6 +2,8 @@ from __future__ import print_function, division, absolute_import
 from pprint import pprint
 from contextlib import contextmanager
 from collections import namedtuple, defaultdict
+import warnings
+import inspect
 
 from numba import (bytecode, interpreter, typing, typeinfer, lowering,
                    objmode, irpasses, utils, config, type_annotations,
@@ -45,6 +47,29 @@ CR_FIELDS = ["typing_context",
 
 
 CompileResult = namedtuple("CompileResult", CR_FIELDS)
+FunctionAttributes = namedtuple("FunctionAttributes",
+    ['name', 'filename', 'lineno'])
+DEFAULT_FUNCTION_ATTRIBUTES = FunctionAttributes('<anonymous>', '<unknown>', 0)
+
+
+def get_function_attributes(func):
+    name, filename, lineno = DEFAULT_FUNCTION_ATTRIBUTES
+    try:
+        name = func.__name__
+    except AttributeError:
+        pass  # this "function" object isn't really a function
+
+    try:
+        filename = inspect.getsourcefile(func)
+    except TypeError:
+        pass  # built-in function
+
+    try:
+        lines, lineno = inspect.getsourcelines(func)
+    except IOError:
+        pass  # unable to read source code for function
+
+    return FunctionAttributes(name, filename, lineno)
 
 
 def compile_result(**kws):
@@ -103,13 +128,15 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
     bc = bytecode.ByteCode(func=func)
     if config.DUMP_BYTECODE:
         print(bc.dump())
+    func_attr = get_function_attributes(func)
     return compile_bytecode(typingctx, targetctx, bc, args,
                             return_type, flags, locals,
-                            func_name=func.__name__)
+                            func_attr=func_attr)
 
 
 def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
-                     locals, lifted=(), func_name="<anonymous>"):
+                     locals, lifted=(),
+                     func_attr=DEFAULT_FUNCTION_ATTRIBUTES):
     interp = translate_stage(bc)
     nargs = len(interp.argspec.args)
     if len(args) > nargs:
@@ -133,16 +160,20 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
                                                                    return_type,
                                                                    locals)
 
-        if config.WARNING_LEVEL >= 2 and status.fail_reason is not None:
-            print('(NUMBA WARNING) Function "%s" failed type inference:' % func_name,
-                  status.fail_reason)
+        if status.fail_reason is not None:
+            warnings.warn_explicit('Function "%s" failed type inference: %s'
+                          % (func_attr.name, status.fail_reason),
+                          config.NumbaWarning,
+                          func_attr.filename, func_attr.lineno)
 
         if not status.use_python_mode:
             with _fallback_context(status):
                 legalize_return_type(return_type, interp, targetctx)
-            if config.WARNING_LEVEL >= 2 and status.fail_reason is not None:
-                print('(NUMBA WARNING) Function "%s" has invalid return type:' % func_name,
-                      status.fail_reason)
+            if status.fail_reason is not None:
+                warnings.warn_explicit('Function "%s" has invalid return type: %s'
+                                       % (func_attr.name, status.fail_reason),
+                                       config.NumbaWarning,
+                                       func_attr.filename, func_attr.lineno)
 
     if status.use_python_mode and flags.enable_looplift:
         assert not lifted
@@ -216,10 +247,9 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
                         fndesc=fndesc,)
 
     # Warn if compiled function in object mode and force_pyobject not set
-    if status.use_python_mode and not flags.force_pyobject \
-            and config.WARNING_LEVEL >= 1:
-        print('(NUMBA WARNING) Function "%s" was compiled in object mode without forceobj=True.'
-               % func_name)
+    if status.use_python_mode and not flags.force_pyobject:
+        warnings.warn_explicit('Function "%s" was compiled in object mode without forceobj=True.' % func_attr.name,
+            config.NumbaWarning, func_attr.filename, func_attr.lineno)
 
     return cr
 
