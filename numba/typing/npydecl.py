@@ -8,7 +8,10 @@ from .templates import (AttributeTemplate, AbstractTemplate,
 
 from ..numpy_support import (ufunc_find_matching_loop,
                              numba_types_to_numpy_letter_types,
-                             numpy_letter_types_to_numba_types)
+                             numpy_letter_types_to_numba_types,
+                             supported_ufunc_loop)
+
+from ..typeinfer import TypingError
 
 registry = Registry()
 builtin_global = registry.register_global
@@ -22,36 +25,82 @@ class NumpyModuleAttribute(AttributeTemplate):
 
 class Numpy_rules_ufunc(AbstractTemplate):
     def generic(self, args, kws):
-        assert(self.key.nout == 1) # this function assumes only one output
+        ufunc = self.key
+        nin = ufunc.nin
+        nout = ufunc.nout
+        nargs = ufunc.nargs
 
-        if len(args) > self.key.nin:
-            # more args than inputs... assume everything is typed :)
-            assert(len(args) == self.key.nargs)
-            
-            return signature(args[-1], *args)
+        # preconditions
+        assert nargs == nin + nout
 
-        # else... we must look for the kernel to use, the actual loop that
-        # will be used, using NumPy's logic:
-        assert(len(args) == self.key.nin)
+        if nout > 1:
+            msg = "ufunc '{0}': not supported in this mode (more than 1 output)"
+            raise TypingError(msg=msg.format(ufunc.__name__))
+
+        if len(args) < nin:
+            msg = "ufunc '{0}': not enough arguments ({1} found, {2} required)"
+            raise TypingError(msg=msg.format(ufunc.__name__, len(args), nin))
+
+        if len(args) > nargs:
+            msg = "ufunc '{0}': too many arguments ({1} found, {2} maximum)"
+            raise TypingError(msg=msg.format(ufunc.__name__, len(args), nargs))
+
+
+        arg_ndims = [a.ndim if isinstance(a, types.Array) else 0 for a in args]
+        ndims = max(arg_ndims)
+
+        # explicit outputs must be arrays (no explicit scalar return values supported)
+        explicit_outputs = args[nin:]
+
+        # all the explicit outputs must match the number max number of dimensions
+        if not all((d == ndims for d in arg_ndims[nin:])):
+            msg = "ufunc '{0}' called with unsuitable explicit output arrays."
+            raise TypingError(msg=msg.format(ufunc.__name__))
+
+        if not all((isinstance(output, types.Array) for output in explicit_outputs)):
+            msg = "ufunc '{0}' called with an explicit output that is not an array"
+            raise TypingError(msg=msg.format(ufunc.__name__))
+        
+        # find the kernel to use, based only in the input types (as does NumPy)
         base_types = [x.dtype if isinstance(x, types.Array) else x for x in args]
-        letter_arg_types = numba_types_to_numpy_letter_types(base_types)
+        letter_arg_types = numba_types_to_numpy_letter_types(base_types[:nin])
+        ufunc_loop = ufunc_find_matching_loop(ufunc, letter_arg_types)
+        if ufunc_loop is None:
+            TypingError("can't resolve ufunc {0} for types {1}".format(ufunc.__name__, args))
 
-        ufunc_loop = ufunc_find_matching_loop(self.key, letter_arg_types)
-        if ufunc_loop is not None:
-            # a result was found so...
-            array_arg = [isinstance(a, types.Array) for a in args]
-            # base out type will be based on the ufunc result type (last letter)
-            out = numpy_letter_types_to_numba_types(ufunc_loop[-self.key.nout:])
-            if any(array_arg):
-                # if any argument was an array, the result will be an array
-                ndims = max(*[a.ndim if isinstance(a, types.Array) else 0 for a in args])
-                out = [types.Array(x, ndims, 'A') for x in out] 
-            out.extend(args)
-            return signature(*out)
+        # check if all the types involved in the ufunc loop are supported in this mode
+        if not supported_ufunc_loop(ufunc, ufunc_loop):
+            msg = "ufunc '{0}' using the loop '{1}' not supported in this mode"
+            raise TypingError(msg=msg.format(ufunc.__name__, ufunc_loop))
 
-        # At this point if we don't have a candidate, we are out of luck. NumPy won't know
-        # how to eval this!
-        raise TypingError("can't resolve ufunc {0} for types {1}".format(key.__name__, args))
+        # if there is any explicit output type, check that it is valid
+        explicit_outputs_np = ''.join(numba_types_to_numpy_letter_types(
+            [ty.dtype for ty in explicit_outputs]))
+
+        # Numpy will happily use unsafe conversions (although it will actually warn)
+        if not all ((numpy.can_cast(fromty, toty, 'unsafe') for fromty, toty in
+                     zip(ufunc_loop[-nout], explicit_outputs_np))):
+            msg = "ufunc '{0}' can't cast result to explicit result type"
+            raise TypingError(msg=msg.format(ufunc.__name__))
+
+        # a valid loop was found that is compatible. The result of type inference should
+        # be based on the explicit output types, and when not available with the type given
+        # by the selected NumPy loop
+        out = list(explicit_outputs)
+        if nout > len(explicit_outputs):
+            implicit_output_count = nout - len(explicit_outputs)
+            implicit_letter_types = ufunc_loop[-implicit_output_count:]
+            implicit_out_types = numpy_letter_types_to_numba_types(implicit_letter_types)
+            if ndims:
+                implicit_out_types = [types.Array(t, ndims, 'A') for t in implicit_out_types]
+
+            out.extend(implicit_out_types)
+
+        # note: although the previous code should support multiple return values, only one
+        #       is supported as of now (signature may not support more than one).
+        #       there is an check enforcing only one output
+        out.extend(args)
+        return signature(*out)
 
 
 # list of unary ufuncs to register
@@ -113,7 +162,6 @@ _aliases = set(["bitwise_not", "mod", "abs"])
 #in python3 numpy.divide is mapped to numpy.true_divide
 if numpy.divide == numpy.true_divide:
     _aliases.add("divide")
-
 
 
 def _numpy_ufunc(name):

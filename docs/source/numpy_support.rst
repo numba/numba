@@ -154,7 +154,7 @@ Floating functions
  isinf               Yes          No
  isnan               Yes          No
  signbit             Yes          No
- copysign            Yes          Yes
+ copysign            Yes          No
  nextafter           Yes          No
  modf                Yes          No
  ldexp               Yes*         No

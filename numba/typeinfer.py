@@ -19,7 +19,6 @@ import itertools
 
 from numba import ir, types, utils, config, ctypes_utils, cffi_support
 from numba.config import PYVERSION
-from numba import numpy_support
 from numba.utils import builtins
 
 RANGE_ITER_OBJECTS = (builtins.range,)
