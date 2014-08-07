@@ -10,6 +10,7 @@
 #endif
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/ndarrayobject.h>
+#include <numpy/arrayscalars.h>
 
 /* For Numpy 1.6 */
 #ifndef NPY_ARRAY_BEHAVED
@@ -235,6 +236,30 @@ PyObject* Numba_ndarray_new(int nd,
     return ndary;
 }
 
+static npy_int64
+Numba_extract_np_timedelta(PyObject *td)
+{
+    if (!PyArray_IsScalar(td, Timedelta)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "expected a timedelta object");
+        return -1;
+    }
+    return PyArrayScalar_VAL(td, Timedelta);
+}
+
+static PyObject *
+Numba_create_np_timedelta(npy_int64 value, int unit_code)
+{
+    PyTimedeltaScalarObject *obj = (PyTimedeltaScalarObject *)
+        PyArrayScalar_New(Timedelta);
+    if (obj != NULL) {
+        obj->obval = value;
+        obj->obmeta.base = unit_code;
+        obj->obmeta.num = 1;
+    }
+    return (PyObject *) obj;
+}
+
 static
 double Numba_round_even(double y) {
     double z = round(y);
@@ -318,6 +343,8 @@ build_c_helpers_dict(void)
     declmethod(release_record_buffer);
     declmethod(adapt_ndarray);
     declmethod(ndarray_new);
+    declmethod(extract_np_timedelta);
+    declmethod(create_np_timedelta);
     declmethod(recreate_record);
     declmethod(round_even);
     declmethod(roundf_even);

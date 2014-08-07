@@ -35,6 +35,11 @@ def fix_python_api():
     le.dylib_add_symbol("NumbaRecreateRecord",
                         c_helpers["recreate_record"])
 
+    le.dylib_add_symbol("NumbaExtractNPTimedelta",
+                        c_helpers["extract_np_timedelta"])
+    le.dylib_add_symbol("NumbaCreateNPTimedelta",
+                        c_helpers["create_np_timedelta"])
+
     le.dylib_add_symbol("NumbaGILEnsure",
                         c_helpers["gil_ensure"])
     le.dylib_add_symbol("NumbaGILRelease",
@@ -799,6 +804,10 @@ class PythonAPI(object):
             else:
                 return cplx._getvalue()
 
+        elif isinstance(typ, types.NPTimedelta):
+            val = self.extract_np_timedelta(obj)
+            return val
+
         elif isinstance(typ, types.Array):
             return self.to_native_array(typ, obj)
 
@@ -843,6 +852,9 @@ class PythonAPI(object):
             fimag = self.context.cast(self.builder, cval.imag,
                                       types.float32, types.float64)
             return self.complex_from_doubles(freal, fimag)
+
+        elif isinstance(typ, types.NPTimedelta):
+            return self.create_np_timedelta(val, typ.unit_code)
 
         elif typ == types.none:
             ret = self.make_none()
@@ -928,6 +940,17 @@ class PythonAPI(object):
         fnty = Type.function(Type.void(), [self.voidptr])
         fn = self._get_function(fnty, name="NumbaReleaseRecordBuffer")
         return self.builder.call(fn, [pbuf])
+
+    def extract_np_timedelta(self, obj):
+        fnty = Type.function(Type.int(64), [self.pyobj])
+        fn = self._get_function(fnty, name="NumbaExtractNPTimedelta")
+        return self.builder.call(fn, [obj])
+
+    def create_np_timedelta(self, val, unit_code):
+        unit_code = Constant.int(Type.int(), unit_code)
+        fnty = Type.function(self.pyobj, [Type.int(64), Type.int()])
+        fn = self._get_function(fnty, name="NumbaCreateNPTimedelta")
+        return self.builder.call(fn, [val, unit_code])
 
     def recreate_record(self, pdata, size, dtypeaddr):
         fnty = Type.function(self.pyobj, [Type.pointer(Type.int(8)),

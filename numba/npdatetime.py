@@ -1,4 +1,6 @@
 
+import numpy as np
+
 
 DATETIME_UNITS = {
     'Y': 0,   # Years
@@ -18,8 +20,9 @@ DATETIME_UNITS = {
     '': 14,   # "generic", i.e. unit-less
 }
 
+# Numpy's special "Not a Time" value (should be equal to -2**63)
+NAT = np.timedelta64('nat').astype(int)
+
 
 def can_cast_timedelta_units(src, dest):
     return src == dest
-
-

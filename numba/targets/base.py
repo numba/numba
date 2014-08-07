@@ -10,8 +10,8 @@ from numba import _dynfunc, types, utils, cgutils, typing, numpy_support, errcod
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, python_attr_impl,
                                     builtin_registry, impl_attribute,
-                                    struct_registry)
-from numba.targets import arrayobj, builtins, iterators, rangeobj
+                                    struct_registry, type_registry)
+from numba.targets import arrayobj, builtins, iterators, npdatetime, rangeobj
 
 
 
@@ -271,6 +271,13 @@ class BaseContext(object):
 
         Returns None if it is an opaque pointer
         """
+        try:
+            fac = type_registry.match(ty)
+        except KeyError:
+            pass
+        else:
+            return fac(self, ty)
+
         if (isinstance(ty, types.Dummy) or
                 isinstance(ty, types.Module) or
                 isinstance(ty, types.Function) or

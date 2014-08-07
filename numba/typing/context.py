@@ -11,7 +11,7 @@ from numba import types
 from numba.typeconv import rules
 from . import templates
 # Initialize declarations
-from . import builtins, mathdecl, npydecl, operatordecl
+from . import builtins, mathdecl, npdatetime, npydecl, operatordecl
 from numba import numpy_support, utils
 from . import ctypes_utils, cffi_utils
 

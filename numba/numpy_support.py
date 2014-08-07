@@ -26,14 +26,8 @@ FROM_DTYPE = {
     numpy.dtype('complex128'): types.complex128,
 }
 
-# Numpy's special "Not a Time" value (should be equal to -2**63)
-NAT = numpy.timedelta64('nat').astype(int)
-
-
-
 re_typestr = re.compile(r'[<>=\|]([a-z])(\d+)?$', re.I)
 re_datetimestr = re.compile(r'[<>=\|]([mM])8?(\[([a-z]+)\])?$', re.I)
-
 
 sizeof_unicode_char = numpy.dtype('U1').itemsize
 
