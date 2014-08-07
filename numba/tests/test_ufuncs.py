@@ -1171,7 +1171,7 @@ class TestLoopTypes(TestCase):
         # object fallback
         supported_types = getattr(self, '_supported_types', [])
         skip_types = getattr(self, 'skip_types', [])
-        if any(l not in supported_types or l in skip_types 
+        if any(l not in supported_types or l in skip_types
                for l in letter_types):
             return
 
@@ -1195,7 +1195,7 @@ class TestLoopTypes(TestCase):
         fn(*args2)
 
         for i in range(ufunc.nout):
-            self.assertPreciseEqual(args1[-i], args2[-i])        
+            self.assertPreciseEqual(args1[-i], args2[-i])
 
 
     def _check_ufunc_loops(self, ufunc):
@@ -1228,8 +1228,8 @@ class TestLoopTypes(TestCase):
                 '\n'.join(failed_ufuncs))
 
             self.fail(msg=msg)
-            
-                
+
+
 
 class TestLoopTypesNoPython(TestLoopTypes):
     _compile_flags = no_pyobj_flags
@@ -1248,6 +1248,41 @@ class TestLoopTypesNoPython(TestLoopTypes):
     # supported types are integral (signed and unsigned) as well as float and double
     # support for complex64(F) and complex128(D) should be coming soon.
     _supported_types = '?bBhHiIlLqQfd'
+
+
+class TestUFuncBadArgsNoPython(TestCase):
+    _compile_flags = no_pyobj_flags
+
+    def test_missing_args(self):
+        def func(x):
+            """error: np.add requires two args"""
+            result = np.add(x)
+            return result
+
+        self.assertRaises(TypingError, compile_isolated, func, [types.float64],
+                          return_type=types.float64, flags=self._compile_flags)
+
+
+    def test_too_many_args(self):
+        def func(x, out, out2):
+            """error: too many args"""
+            result = np.add(x, x, out, out2)
+            return result
+
+        array_type = types.Array(types.float64, 1, 'C')
+        self.assertRaises(TypingError, compile_isolated, func, [array_type] *3,
+                          return_type=array_type, flags=self._compile_flags)
+
+    def test_no_scalar_result_by_reference(self):
+        def func(x):
+            """error: scalar as a return value is not supported"""
+            y = 0
+            np.add(x, x, y)
+        self.assertRaises(TypingError, compile_isolated, func, [types.float64],
+                          return_type=types.float64, flags=self._compile_flags)
+
+
+
 
 if __name__ == '__main__':
     unittest.main()
