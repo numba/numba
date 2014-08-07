@@ -35,10 +35,12 @@ SCAN_BLOCK_SUM_BLOCK_SIZE = 256
 
 
 class Radixsort(object):
-    def __init__(self, dtype):
+    def __init__(self, dtype, stream=0):
         self.context = cuda.current_context()
         self.cc = self.context.device.compute_capability
         self.dtype = dtype
+        self.stream = stream
+
         itemsize = np.dtype(self.dtype).itemsize
 
         databitsize = itemsize * 8
@@ -58,18 +60,30 @@ class Radixsort(object):
         self.cu_blockwise_sort = self.module.get_function(
             'cu_blockwise_sort_uint{:d}'.format(databitsize))
 
-        if dtype == np.dtype(np.float32):
+        self.flip_sign = False
+        self.flip_float = False
+
+        if dtype == np.dtype(np.int32) or dtype == np.dtype(np.int64):
+            self.cu_sign_fix = self.module.get_function(
+                'cu_sign_fix_uint{:d}'.format(databitsize))
+            self.flip_sign = True
+
+        elif dtype == np.dtype(np.float32):
             self.cu_float_to_uint = self.module.get_function('cu_float_to_uint')
             self.cu_uint_to_float = self.module.get_function('cu_uint_to_float')
             self.flip_float = True
+
         elif dtype == np.dtype(np.float64):
             self.cu_float_to_uint = self.module.get_function(
                 'cu_double_to_uint')
             self.cu_uint_to_float = self.module.get_function(
                 'cu_uint_to_double')
             self.flip_float = True
+
         else:
-            self.flip_float = False
+            if dtype not in [np.dtype(np.uint32), np.dtype(np.uint64)]:
+                raise TypeError("{} is not supported".format(dtype))
+
 
     def _sentry_data(self, data):
         if data.dtype != self.dtype:
@@ -95,10 +109,7 @@ class Radixsort(object):
 
         d_data, data_conv = cuda.devicearray.auto_device(data)
 
-        with self._flipfloat(blkcount, d_data, count):
-            # Configure all kernels
-            kerns = self._configure(blkcount)
-
+        with self._fix_bit_pattern(blkcount, d_data, count):
             # Sort loop
             for offset in range(stride):
                 self._sortpass(d_data, d_sorted, d_hist, d_bucktotal, d_indices,
@@ -108,7 +119,7 @@ class Radixsort(object):
 
         # Prepare result
         if data_conv:
-            d_data.copy_to_host(data)
+            d_data.copy_to_host(data, stream=self.stream)
 
     def select(self, data, seln):
         """
@@ -129,40 +140,35 @@ class Radixsort(object):
 
         d_data, data_conv = cuda.devicearray.auto_device(data)
 
-        if self.flip_float:
-            cu_float_to_uint = self.cu_float_to_uint.configure((blkcount,),
-                                                               (BUCKET_SIZE,))
-            cu_uint_to_float = self.cu_uint_to_float.configure((blkcount,),
-                                                               (BUCKET_SIZE,))
+        with self._fix_bit_pattern(blkcount, d_data, count):
+            # Start from MSB
+            offset = stride - 1
 
-            cu_float_to_uint(d_data, d_data, c_int(count))
+            # Partition into small sub-block that we will finish off with a
+            # subblock sort
+            subblocks = []
+            self._select(d_data, d_sorted, d_hist, d_bucktotal, d_indices,
+                         count,
+                         stride, offset, blkcount, seln, subblocks)
 
-        # Start from MSB
-        offset = stride - 1
-
-        # Partition into small sub-block that we will finish off with a
-        # subblock sort
-        subblocks = []
-        self._select(d_data, d_sorted, d_hist, d_bucktotal, d_indices, count,
-                     stride, offset, blkcount, seln, subblocks)
-
-        # Sort sublocks
-        if subblocks:
-            subblocks = np.array(subblocks, order='F', dtype='uint32')
-            arr_begin = np.ascontiguousarray(subblocks[:, 0])
-            arr_count = np.ascontiguousarray(subblocks[:, 1])
-            self._subblock_sort(d_data, cuda.to_device(arr_begin),
-                                cuda.to_device(arr_count))
-
-        if self.flip_float:
-            cu_uint_to_float(d_data, d_data, c_int(count))
+            # Sort sublocks
+            if subblocks:
+                subblocks = np.array(subblocks, order='F', dtype='uint32')
+                arr_begin = np.ascontiguousarray(subblocks[:, 0])
+                arr_count = np.ascontiguousarray(subblocks[:, 1])
+                self._subblock_sort(d_data,
+                                    cuda.to_device(arr_begin,
+                                                   stream=self.stream),
+                                    cuda.to_device(arr_count,
+                                                   stream=self.stream))
 
         # Prepare result
         if data_conv:
-            d_data.copy_to_host(data)
+            d_data.copy_to_host(data, stream=self.stream)
 
     def _subblock_sort(self, d_data, d_begin, d_count):
-        confed = self.cu_blockwise_sort.configure((d_count.size,), (128,))
+        confed = self.cu_blockwise_sort.configure((d_count.size,), (128,),
+                                                  stream=self.stream)
         confed(d_data, d_begin, d_count)
 
     def _sortpass(self, d_data, d_sorted, d_hist, d_bucktotal, d_indices,
@@ -176,7 +182,7 @@ class Radixsort(object):
         kerns.scan_hist(d_hist, d_bucktotal, c_int(blkcount))
 
         if h_bucktotal is not None:
-            d_bucktotal.copy_to_host(h_bucktotal)
+            d_bucktotal.copy_to_host(h_bucktotal, stream=self.stream)
 
         kerns.scan_bucket(d_bucktotal)
 
@@ -186,36 +192,45 @@ class Radixsort(object):
         kerns.scatter(d_data, d_sorted, d_indices, c_int(count), c_int(stride))
 
     def _select(self, d_data, d_sorted, d_hist, d_bucktotal, d_indices,
-                count, stride, offset, blkcount, seln, subblocks, substart=0):
-
-        h_bucktotal = np.zeros(d_bucktotal.shape, dtype=d_bucktotal.dtype)
+                count, stride, offset, blkcount, seln, subblocks, substart=0,
+                h_bucktotal=None):
+        assert offset >= 0
+        if h_bucktotal is None:
+            h_bucktotal = cuda.pinned_array(d_bucktotal.shape,
+                                            dtype=d_bucktotal.dtype)
 
         # Sort the MSB
         self._sortpass(d_data, d_sorted, d_hist, d_bucktotal, d_indices,
                        count, stride, offset, blkcount, h_bucktotal=h_bucktotal)
 
         # Get bucket total
+        if self.stream:
+            self.stream.synchronize()
         bucktotal = h_bucktotal.tolist()
 
         # Swap buffers
-        cuda.driver.device_to_device(d_data, d_sorted, d_data.alloc_size)
+        # cuda.driver.device_to_device(d_data, d_sorted, d_sorted.alloc_size,
+        #                              stream=self.stream)
+        d_data.copy_to_device(d_sorted)
 
         # Find blocks that are too big and recursively partition it
         threshold = 128
-        begin = substart
+        begin = 0
         for count in bucktotal:
             if count > threshold:
-                # Recursively parition the block
+                # Recursively partition the block
                 sub_blkcount = self._calc_block_count(count)
-                self._select(d_data[begin:begin + count],
-                             d_sorted[begin:begin + count],
+                sub_data = d_data[begin:begin + count]
+                sub_sorted = d_sorted[begin:begin + count]
+                self._select(sub_data,
+                             sub_sorted,
                              d_hist, d_bucktotal, d_indices, count,
                              stride, offset - 1, sub_blkcount,
-                             seln, subblocks, begin)
+                             seln, subblocks, begin, h_bucktotal)
             elif count > 1:
                 # Remember the small subblock
                 # We might sort it later
-                subblocks.append((begin, count))
+                subblocks.append((begin + substart, count))
 
             begin += count
             if begin >= seln:
@@ -225,29 +240,49 @@ class Radixsort(object):
         return (count + BUCKET_SIZE - 1) // BUCKET_SIZE
 
     def _configure(self, blkcount):
-        build_hist = self.cu_build_hist.configure((blkcount,), (BUCKET_SIZE,))
+        build_hist = self.cu_build_hist.configure((blkcount,), (BUCKET_SIZE,),
+                                                  stream=self.stream)
         scan_hist = self.cu_scan_hist.configure((BUCKET_SIZE,),
-                                                (SCAN_BLOCK_SUM_BLOCK_SIZE,))
-        scan_bucket = self.cu_scan_bucket_index.configure((1,), (BUCKET_SIZE,))
-        indexing = self.cu_compute_indices.configure((blkcount,), (1,))
-        scatter = self.cu_scatter.configure((blkcount,), (BUCKET_SIZE,))
+                                                (SCAN_BLOCK_SUM_BLOCK_SIZE,),
+                                                stream=self.stream)
+        scan_bucket = self.cu_scan_bucket_index.configure((1,), (BUCKET_SIZE,),
+                                                          stream=self.stream)
+        indexing = self.cu_compute_indices.configure((blkcount,), (1,),
+                                                     stream=self.stream)
+        scatter = self.cu_scatter.configure((blkcount,), (BUCKET_SIZE,),
+                                            stream=self.stream)
 
         return _select_kernels(build_hist, scan_hist, scan_bucket, indexing,
                                scatter)
 
     @contextmanager
-    def _flipfloat(self, blkcount, d_data, count):
+    def _fix_bit_pattern(self, blkcount, d_data, count):
         if self.flip_float:
             cu_float_to_uint = self.cu_float_to_uint.configure((blkcount,),
-                                                               (BUCKET_SIZE,))
+                                                               (BUCKET_SIZE,),
+                                                               stream=self.stream)
             cu_uint_to_float = self.cu_uint_to_float.configure((blkcount,),
-                                                               (BUCKET_SIZE,))
+                                                               (BUCKET_SIZE,),
+                                                               stream=self.stream)
 
             cu_float_to_uint(d_data, d_data, c_int(count))
 
             yield
 
             cu_uint_to_float(d_data, d_data, c_int(count))
+
+        elif self.flip_sign:
+
+            cu_sign_fix = self.cu_sign_fix.configure((blkcount,),
+                                                     (BUCKET_SIZE,),
+                                                     stream=self.stream)
+
+            cu_sign_fix(d_data, c_int(count))
+
+            yield
+
+            cu_sign_fix(d_data, c_int(count))
+
         else:
             yield
 

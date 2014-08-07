@@ -23,6 +23,11 @@ void cu_double_to_uint( uint64_t *in, uint64_t *out, unsigned count );
 __global__
 void cu_uint_to_double( uint64_t *in, uint64_t *out, unsigned count );
 
+__global__
+void cu_sign_fix_uint32( uint32_t *in, unsigned count );
+
+__global__
+void cu_sign_fix_uint64( uint64_t *in, unsigned count );
 
 __global__
 void cu_build_histogram(
@@ -460,3 +465,29 @@ void cu_blockwise_sort_uint64(uint64_t *data,
     cu_blockwise_sort<uint64_t>::sort(data, begin, count, 0xffffffffffffffffull);
 }
 
+template <class T>
+struct signfix {
+    __device__
+    static void inplace(T &val) {
+        T signbit = ((T)1) << (sizeof(T) * 8 - 1);
+        val ^= signbit;
+    }
+};
+
+__global__
+void cu_sign_fix_uint32( uint32_t *in, unsigned count )
+{
+    unsigned id = threadIdx.x + blockIdx.x * blockDim.x;
+    if (id >= count ) return;
+
+    signfix<uint32_t>::inplace(in[id]);
+}
+
+__global__
+void cu_sign_fix_uint64( uint64_t *in, unsigned count )
+{
+    unsigned id = threadIdx.x + blockIdx.x * blockDim.x;
+    if (id >= count ) return;
+
+    signfix<uint64_t>::inplace(in[id]);
+}
