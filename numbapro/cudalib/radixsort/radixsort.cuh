@@ -1,6 +1,7 @@
 #include <cub/block/block_load.cuh>
 #include <cub/block/block_store.cuh>
 #include <cub/block/block_scan.cuh>
+#include <cub/block/block_radix_sort.cuh>
 
 #define CUDA_SAFE(X) {if((X) != cudaSuccess) {fprintf(stderr, "cuda error: line %d\n", __LINE__); exit(1);}}
 #define ASSERT_CUDA_LAST_ERROR() CUDA_SAFE(cudaPeekAtLastError());
@@ -76,8 +77,17 @@ cu_scatter(
     unsigned  stride
 );
 
-// end extern "C"
-};
+__global__
+void cu_blockwise_sort_uint32(uint32_t *data,
+                              unsigned *begin,
+                              unsigned *count);
+
+__global__
+void cu_blockwise_sort_uint64(uint64_t *data,
+                              unsigned *begin,
+                              unsigned *count);
+
+}; // end extern "C"
 
 /* Reference
 http://stereopsis.com/radix.html
@@ -386,5 +396,67 @@ cu_scatter(
         copy<uint64_t>::as(sorted, data, offset, id);
         break;
     }
+}
+
+template<class T>
+struct cu_blockwise_sort{
+    __device__
+    static void sort(T *data, unsigned *begin, unsigned *count, const T Maximum)
+    {
+        // Specialize for 1D block of 128 threads; 1 data per thread
+        typedef cub::BlockRadixSort<T, 128, 1> BlockRadixSort;
+        __shared__ typename BlockRadixSort::TempStorage temp_storage;
+        unsigned blockoffset = begin[blockIdx.x];
+
+        // Read
+        unsigned localcount = count[blockIdx.x];
+        const bool valid = threadIdx.x < localcount;
+
+        if (localcount == 2) {
+            if (threadIdx.x == 0) {
+                T first = data[blockoffset + 0];
+                T second = data[blockoffset + 1];
+                if (first > second) {
+                    data[blockoffset + 0] = second;
+                    data[blockoffset + 1] = first;
+                }
+            }
+        } else {
+            T key[1];
+            key[0] = Maximum;
+
+            if (valid) {
+                key[0] = data[blockoffset + threadIdx.x];
+            }
+
+            __syncthreads();
+
+            // Sort
+            BlockRadixSort(temp_storage).Sort(key);
+
+            __syncthreads();
+
+            // Write
+            if (valid) {
+                data[blockoffset + threadIdx.x] = key[0];
+            }
+        }
+    }
+};
+
+__global__
+void cu_blockwise_sort_uint32(uint32_t *data,
+                              unsigned *begin,
+                              unsigned *count)
+{
+    cu_blockwise_sort<uint32_t>::sort(data, begin, count, 0xffffffffu);
+}
+
+__global__
+void cu_blockwise_sort_uint64(uint64_t *data,
+                              unsigned *begin,
+                              unsigned *count)
+{
+    cu_blockwise_sort<uint64_t>::sort(data, begin, count, 0xffffffffffffffffull);
 }
 
