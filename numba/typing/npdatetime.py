@@ -29,3 +29,7 @@ class TimedeltaBinOp(AbstractTemplate):
 class TimedeltaBinOpAdd(TimedeltaBinOp):
     key = "+"
 
+@builtin
+class TimedeltaBinOpSub(TimedeltaBinOp):
+    key = "-"
+
