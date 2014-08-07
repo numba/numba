@@ -133,8 +133,7 @@ class DeviceNDArrayBase(object):
         Otherwise, perform a a host-to-device transfer.
         """
         if _driver.is_device_memory(ary):
-            sz = min(_driver.device_memory_size(self),
-                     _driver.device_memory_size(ary))
+            sz = min(self.alloc_size, ary.alloc_size)
             _driver.device_to_device(self, ary, sz, stream=stream)
         else:
             sz = min(_driver.host_memory_size(ary), self.alloc_size)
