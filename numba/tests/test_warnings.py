@@ -61,5 +61,33 @@ class TestBuiltins(unittest.TestCase):
 
             self.assertEqual(len(w), 0)
 
+    def test_loop_lift_warn(self):
+        def do_loop(x):
+            a = []
+            for i in range(x.shape[0]):
+                x[i] *= 2
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter('always', NumbaWarning)
+
+            x = np.ones(4, dtype=np.float32)
+            cfunc = jit(do_loop)
+            cfunc(x)
+
+            self.assertEqual(len(w), 3)
+            # Type inference failure (1st pass)
+            self.assertEqual(w[0].category, NumbaWarning)
+            self.assertIn('type inference', str(w[0].message))
+
+            # Type inference failure (2nd pass, with lifted loops)
+            self.assertEqual(w[1].category, NumbaWarning)
+            self.assertIn('type inference', str(w[1].message))
+
+            # Object mode
+            self.assertEqual(w[2].category, NumbaWarning)
+            self.assertIn('object mode', str(w[2].message))
+            self.assertIn('lifted loops', str(w[2].message))
+
+
 if __name__ == '__main__':
     unittest.main()

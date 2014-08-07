@@ -198,7 +198,7 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
             cres = compile_bytecode(typingctx, targetctx, entry, args,
                                     return_type, outer_flags, locals,
                                     lifted=tuple(loops),
-                                    func_name=func_name)
+                                    func_attr=func_attr)
             return cres
 
     if status.use_python_mode:
@@ -248,8 +248,12 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
 
     # Warn if compiled function in object mode and force_pyobject not set
     if status.use_python_mode and not flags.force_pyobject:
-        warnings.warn_explicit('Function "%s" was compiled in object mode without forceobj=True.' % func_attr.name,
-            config.NumbaWarning, func_attr.filename, func_attr.lineno)
+        if len(lifted) > 0:
+            warn_msg = 'Function "%s" was compiled in object mode without forceobj=True, but has lifted loops.' % func_attr.name,
+        else:
+            warn_msg = 'Function "%s" was compiled in object mode without forceobj=True.' % func_attr.name,
+        warnings.warn_explicit(warn_msg, config.NumbaWarning,
+                               func_attr.filename, func_attr.lineno)
 
     return cr
 
