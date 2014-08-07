@@ -11,6 +11,25 @@ import weakref
 from . import utils
 
 
+DATETIME_UNITS = {
+    'Y': 0,   # Years
+    'M': 1,   # Months
+    'W': 2,   # Weeks
+    # Yes, there's a gap here
+    'D': 4,   # Days
+    'h': 5,   # Hours
+    'm': 6,   # Minutes
+    's': 7,   # Seconds
+    'ms': 8,  # Milliseconds
+    'us': 9,  # Microseconds
+    'ns': 10, # Nanoseconds
+    'ps': 11, # Picoseconds
+    'fs': 12, # Femtoseconds
+    'as': 13, # Attoseconds
+    '': 14,   # "generic", i.e. unit-less
+}
+
+
 def _autoincr():
     n = len(_typecache)
     # 4 billion types should be enough, right?
@@ -150,6 +169,24 @@ class Complex(Type):
         if self.__class__ is not other.__class__:
             return NotImplemented
         return self.bitwidth < other.bitwidth
+
+
+@utils.total_ordering
+class NPTimedelta(Type):
+    def __init__(self, unit, *args, **kws):
+        name = 'timedelta64(%s)' % (unit,)
+        self.unit = unit
+        self.unit_code = DATETIME_UNITS[self.unit]
+        super(NPTimedelta, self).__init__(name, *args, **kws)
+
+    def __lt__(self, other):
+        if self.__class__ is not other.__class__:
+            return NotImplemented
+        # A coarser-grained unit is "smaller", i.e. less precise values
+        # can be represented (but the magnitude of representable values is
+        # also greater...).
+        return self.unit_code < other.unit_code
+
 
 class Prototype(Type):
     def __init__(self, args, return_type):

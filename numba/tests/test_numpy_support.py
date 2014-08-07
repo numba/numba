@@ -71,6 +71,24 @@ class TestFromDtype(TestCase):
         self.assertEqual(f(np.dtype('a11')), types.CharSeq(11))
         self.assertEqual(f(np.dtype('U12')), types.UnicodeCharSeq(12))
 
+    def test_timedelta_types(self):
+        """
+        Test the timedelta types.
+        """
+        f = numpy_support.from_dtype
+        tp = f(np.dtype('m'))
+        self.assertEqual(tp, types.NPTimedelta(''))
+        for code, unit in enumerate(('Y', 'M', 'W')):
+            tp = f(np.dtype('m8[%s]' % unit))
+            self.assertEqual(tp, types.NPTimedelta(unit))
+            self.assertEqual(tp.unit_code, code)
+        for code, unit in enumerate(
+            ('D', 'h', 'm', 's', 'ms', 'us', 'ns', 'ps', 'fs', 'as'),
+            start=4):
+            tp = f(np.dtype('m8[%s]' % unit))
+            self.assertEqual(tp, types.NPTimedelta(unit))
+            self.assertEqual(tp.unit_code, code)
+
 
 if __name__ == '__main__':
     unittest.main()
