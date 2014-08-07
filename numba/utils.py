@@ -30,7 +30,7 @@ def _at_shutdown():
 
 atexit.register(_at_shutdown)
 
-def shutting_down():
+def shutting_down(globals=globals):
     """
     Whether the interpreter is currently shutting down.
     For use in finalizers, __del__ methods, and similar; it is advised
