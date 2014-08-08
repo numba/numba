@@ -53,6 +53,15 @@ DEFAULT_FUNCTION_ATTRIBUTES = FunctionAttributes('<anonymous>', '<unknown>', 0)
 
 
 def get_function_attributes(func):
+    '''
+    Extract the function attributes from a Python function or object with
+    *py_func* attribute, such as CPUOverloaded.
+
+    Returns an instance of FunctionAttributes.
+    '''
+    if hasattr(func, 'py_func'):
+        func = func.py_func  # This is a Overload object
+
     name, filename, lineno = DEFAULT_FUNCTION_ATTRIBUTES
     try:
         name = func.__name__
@@ -60,13 +69,16 @@ def get_function_attributes(func):
         pass  # this "function" object isn't really a function
 
     try:
-        filename = inspect.getsourcefile(func)
+        possible_filename = inspect.getsourcefile(func)
+        # Sometimes getsourcefile returns null
+        if possible_filename is not None:
+            filename = possible_filename
     except TypeError:
-        pass  # built-in function
+        pass  # built-in function, or other object unsupported by inspect
 
     try:
         lines, lineno = inspect.getsourcelines(func)
-    except IOError:
+    except (IOError, TypeError):
         pass  # unable to read source code for function
 
     return FunctionAttributes(name, filename, lineno)
