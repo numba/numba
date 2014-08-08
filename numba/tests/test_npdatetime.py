@@ -31,7 +31,7 @@ class TestModuleHelpers(TestCase):
             self.assertFalse(f(b, a), (a, b))
         for unit in all_units:
             self.assertFalse(f(unit, ''))
-            self.assertFalse(f('', unit))
+            self.assertTrue(f('', unit))
         for unit in all_units + ('',):
             self.assertTrue(f(unit, unit))
 
@@ -50,6 +50,8 @@ class TestModuleHelpers(TestCase):
         f = npdatetime.get_timedelta_conversion_factor
         for unit in all_units + ('',):
             self.assertEqual(f(unit, unit), 1)
+        for unit in all_units:
+            self.assertEqual(f('', unit), 1)
         for a, b in itertools.product(time_units, date_units):
             self.assertIs(f(a, b), None)
             self.assertIs(f(b, a), None)

@@ -65,7 +65,7 @@ def timedelta_add_impl(context, builder, sig, args):
 
 @builtin
 @implement('-', *TIMEDELTA_BINOP_SIG)
-def timedelta_add_impl(context, builder, sig, args):
+def timedelta_sub_impl(context, builder, sig, args):
     [va, vb] = args
     [ta, tb] = sig.args
     ret = alloc_timedelta_result(builder)

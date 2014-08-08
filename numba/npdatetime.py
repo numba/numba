@@ -24,17 +24,28 @@ DATETIME_UNITS = {
 NAT = np.timedelta64('nat').astype(int)
 
 
+# NOTE: numpy has several inconsistent functions for timedelta casting:
+# - can_cast_timedelta64_{metadata,units}() disallows "safe" casting
+#   to and from generic units
+# - cast_timedelta_to_timedelta() allows casting from (but not to)
+#   generic units
+# - compute_datetime_metadata_greatest_common_divisor() allows casting from
+#   generic units (used for promotion)
+
+
 def can_cast_timedelta_units(src, dest):
-    # Mimick numpy's "safe" casting
+    # Mimick numpy's "safe" casting and promotion
     # `dest` must be more precise than `src` and they must be compatible
     # for conversion.
     src = DATETIME_UNITS[src]
     dest = DATETIME_UNITS[dest]
     if src == dest:
         return True
+    if src == 14:
+        return True
     if src > dest:
         return False
-    if src == 14 or dest == 14:
+    if dest == 14:
         # unit-less timedelta64 is not compatible with anything else
         return False
     if src <= 1 and dest > 1:
@@ -65,7 +76,10 @@ def _get_conversion_multiplier(big_unit_code, small_unit_code):
     None is returned if the conversion is not possible through a
     simple integer multiplication.
     """
-    # Mimicks get_datetime_units_factor() in numpy's datetime.c
+    # Mimicks get_datetime_units_factor() in numpy's datetime.c,
+    # with a twist to allow no-op conversion from generic units.
+    if big_unit_code == 14:
+        return 1
     c = big_unit_code
     factor = 1
     while c < small_unit_code:
@@ -80,11 +94,11 @@ def _get_conversion_multiplier(big_unit_code, small_unit_code):
     else:
         return None
 
-def get_timedelta_conversion_factor(big_unit, small_unit):
+def get_timedelta_conversion_factor(src_unit, dest_unit):
     """
     Return an integer multiplier allowing to convert from timedeltas
-    of *big_unit* to *small_unit*.
+    of *src_unit* to *dest_unit*.
     """
-    return _get_conversion_multiplier(DATETIME_UNITS[big_unit],
-                                      DATETIME_UNITS[small_unit])
+    return _get_conversion_multiplier(DATETIME_UNITS[src_unit],
+                                      DATETIME_UNITS[dest_unit])
 
