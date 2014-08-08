@@ -22,7 +22,7 @@ def _normalize_cc(cc):
 def get_libradix_path(bits, cc):
     cc = _normalize_cc(cc)
     fname = 'libradix%d_sm%u%u.ptx' % (bits, cc[0], cc[1])
-    return os.path.join(os.path.dirname(__file__), fname)
+    return os.path.join(os.path.dirname(__file__), 'radixsort_details', fname)
 
 
 def get_libradix_image(cc):
