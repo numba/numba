@@ -34,6 +34,27 @@ BUCKET_SIZE = 256
 SCAN_BLOCK_SUM_BLOCK_SIZE = 256
 
 
+class _TempStorage(object):
+    def __init__(self, data):
+        dtype = data.dtype
+        idx_dtype = np.dtype(np.uint32)
+        self.stride = data.strides[0]
+        self.count = data.size
+        self.blkcount = _calc_block_count(self.count)
+        # Initialize device memory
+        self.d_indices = cuda.device_array(self.count, dtype=idx_dtype)
+        self.d_sorted = cuda.device_array(self.count, dtype=dtype)
+        self.d_hist = cuda.device_array(self.blkcount * BUCKET_SIZE,
+                                        dtype=idx_dtype)
+        self.d_bucktotal = cuda.device_array(BUCKET_SIZE, dtype=idx_dtype)
+
+        self.d_data, self.data_conv = cuda.devicearray.auto_device(data)
+
+
+def _calc_block_count(count):
+    return (count + BUCKET_SIZE - 1) // BUCKET_SIZE
+
+
 class Radixsort(object):
     def __init__(self, dtype, stream=0):
         self.context = cuda.current_context()
@@ -60,6 +81,9 @@ class Radixsort(object):
         self.cu_blockwise_sort = self.module.get_function(
             'cu_blockwise_sort_uint{:d}'.format(databitsize))
 
+        self.cu_invert = self.module.get_function(
+            'cu_invert_uint{:d}'.format(databitsize))
+
         self.flip_sign = False
         self.flip_float = False
 
@@ -84,7 +108,6 @@ class Radixsort(object):
             if dtype not in [np.dtype(np.uint32), np.dtype(np.uint64)]:
                 raise TypeError("{} is not supported".format(dtype))
 
-
     def _sentry_data(self, data):
         if data.dtype != self.dtype:
             raise TypeError("Mismatch dtype")
@@ -93,78 +116,97 @@ class Radixsort(object):
         if data.strides[0] != data.dtype.itemsize:
             raise ValueError("Data must be C contiguous")
 
-    def sort(self, data, reversed=False):
+    def _prepare(self, data):
         self._sentry_data(data)
+        return _TempStorage(data)
 
-        dtype = data.dtype
-        idx_dtype = np.dtype(np.uint32)
-        stride = data.strides[0]
-        count = data.size
-        blkcount = self._calc_block_count(count)
-        # Initialize device memory
-        d_indices = cuda.device_array(count, dtype=idx_dtype)
-        d_sorted = cuda.device_array(count, dtype=dtype)
-        d_hist = cuda.device_array(blkcount * BUCKET_SIZE, dtype=idx_dtype)
-        d_bucktotal = cuda.device_array(BUCKET_SIZE, dtype=idx_dtype)
+    def sort(self, data, reverse=False):
+        """Perform inplace sort on the data.
 
-        d_data, data_conv = cuda.devicearray.auto_device(data)
+        Args
+        ----
+        - data: cpu/gpu array
+        - reverse: bool
+            Optional.  Reverse the order of the sort
 
-        with self._fix_bit_pattern(blkcount, d_data, count):
-            # Sort loop
-            for offset in range(stride):
-                self._sortpass(d_data, d_sorted, d_hist, d_bucktotal, d_indices,
-                               count, stride, offset, blkcount)
-                # Swap data and sorted
-                d_data, d_sorted = d_sorted, d_data
+        """
+        ts = self._prepare(data)
+        with self._filter(reverse, ts):
+            d_data = self._sortloop(ts)
 
         # Prepare result
-        if data_conv:
+        if ts.data_conv:
             d_data.copy_to_host(data, stream=self.stream)
 
-    def select(self, data, seln):
+    def select(self, data, k, reverse=False):
         """
-        Peform a partial sort to select the first N element after sorting.
+        Perform a inplace partial sort to select the first k-element in
+        sorted order.  Only the first k-elements are guaranteed to be
+        valid.
+
+        Args
+        ----
+        - data: cpu/gpu array
+        - k: int
+            Number of elements to select
+        - reverse: bool
+            Optional.  Reverse the order of the sort
         """
-        self._sentry_data(data)
+        ts = self._prepare(data)
 
-        dtype = data.dtype
-        idx_dtype = np.dtype(np.uint32)
-        stride = data.strides[0]
-        count = data.size
-        blkcount = self._calc_block_count(count)
-        # Initialize device memory
-        d_indices = cuda.device_array(count, dtype=idx_dtype)
-        d_sorted = cuda.device_array(count, dtype=dtype)
-        d_hist = cuda.device_array(blkcount * BUCKET_SIZE, dtype=idx_dtype)
-        d_bucktotal = cuda.device_array(BUCKET_SIZE, dtype=idx_dtype)
-
-        d_data, data_conv = cuda.devicearray.auto_device(data)
-
-        with self._fix_bit_pattern(blkcount, d_data, count):
+        with self._filter(reverse, ts):
             # Start from MSB
-            offset = stride - 1
+            offset = ts.stride - 1
 
-            # Partition into small sub-block that we will finish off with a
-            # subblock sort
+            # Partition into small sub-block that we will finish off
+            # with a subblock sort
             subblocks = []
-            self._select(d_data, d_sorted, d_hist, d_bucktotal, d_indices,
-                         count,
-                         stride, offset, blkcount, seln, subblocks)
+            self._select(ts.d_data, ts.d_sorted, ts.d_hist, ts.d_bucktotal,
+                         ts.d_indices, ts.count, ts.stride, offset,
+                         ts.blkcount, k, subblocks)
 
             # Sort sublocks
             if subblocks:
-                subblocks = np.array(subblocks, order='F', dtype='uint32')
+                subblocks = np.array(subblocks, order='F',
+                                     dtype='uint32')
                 arr_begin = np.ascontiguousarray(subblocks[:, 0])
                 arr_count = np.ascontiguousarray(subblocks[:, 1])
-                self._subblock_sort(d_data,
-                                    cuda.to_device(arr_begin,
-                                                   stream=self.stream),
-                                    cuda.to_device(arr_count,
-                                                   stream=self.stream))
+
+                nsb_length = len(subblocks)
+                if nsb_length <= min(ts.d_hist.size, ts.d_bucktotal.size):
+                    # Avoid extra allocation if we can
+                    d_begin = ts.d_hist.slice(0, nsb_length,
+                                              stream=self.stream)
+                    d_count = ts.d_bucktotal.slice(0, nsb_length,
+                                                   stream=self.stream)
+                    d_begin.copy_to_device(arr_begin,
+                                           stream=self.stream)
+                    d_count.copy_to_device(arr_count,
+                                           stream=self.stream)
+                else:
+                    # Allocate new array for the sublock counts
+                    d_begin = cuda.to_device(arr_begin,
+                                             stream=self.stream)
+                    d_count = cuda.to_device(arr_count,
+                                             stream=self.stream)
+
+                self._subblock_sort(ts.d_data, d_begin, d_count)
 
         # Prepare result
-        if data_conv:
-            d_data.copy_to_host(data, stream=self.stream)
+        if ts.data_conv:
+            ts.d_data[:k].copy_to_host(data[:k], stream=self.stream)
+
+    def _sortloop(self, d_data, d_sorted, d_hist, d_bucktotal, d_indices,
+                  count, stride, blkcount):
+        # Sort loop
+        for offset in range(stride):
+            self._sortpass(d_data, d_sorted, d_hist, d_bucktotal,
+                           d_indices, count, stride, offset,
+                           blkcount)
+            # Swap data and sorted
+            d_data, d_sorted = d_sorted, d_data
+
+        return d_data
 
     def _subblock_sort(self, d_data, d_begin, d_count):
         confed = self.cu_blockwise_sort.configure((d_count.size,), (128,),
@@ -172,7 +214,8 @@ class Radixsort(object):
         confed(d_data, d_begin, d_count)
 
     def _sortpass(self, d_data, d_sorted, d_hist, d_bucktotal, d_indices,
-                  count, stride, offset, blkcount, h_bucktotal=None):
+                  count, stride, offset, blkcount, h_bucktotal=None,
+                  evt_bucktotal=None):
 
         kerns = self._configure(blkcount)
 
@@ -183,6 +226,7 @@ class Radixsort(object):
 
         if h_bucktotal is not None:
             d_bucktotal.copy_to_host(h_bucktotal, stream=self.stream)
+            evt_bucktotal.record(self.stream)
 
         kerns.scan_bucket(d_bucktotal)
 
@@ -194,34 +238,39 @@ class Radixsort(object):
     def _select(self, d_data, d_sorted, d_hist, d_bucktotal, d_indices,
                 count, stride, offset, blkcount, seln, subblocks, substart=0,
                 h_bucktotal=None):
-        assert offset >= 0
+        if offset == 0:
+            # We reach here when the data have too many duplication.
+            # Do nothing.
+            return
+
         if h_bucktotal is None:
             h_bucktotal = cuda.pinned_array(d_bucktotal.shape,
                                             dtype=d_bucktotal.dtype)
 
         # Sort the MSB
+        evt = cuda.event()
         self._sortpass(d_data, d_sorted, d_hist, d_bucktotal, d_indices,
-                       count, stride, offset, blkcount, h_bucktotal=h_bucktotal)
-
-        # Get bucket total
-        if self.stream:
-            self.stream.synchronize()
-        bucktotal = h_bucktotal.tolist()
+                       count, stride, offset, blkcount,
+                       h_bucktotal=h_bucktotal, evt_bucktotal=evt)
 
         # Swap buffers
-        # cuda.driver.device_to_device(d_data, d_sorted, d_sorted.alloc_size,
-        #                              stream=self.stream)
-        d_data.copy_to_device(d_sorted)
+        d_data.copy_to_device(d_sorted, stream=self.stream)
+
+        # Get bucket total
+        evt.synchronize()
+        bucktotal = h_bucktotal.tolist()
 
         # Find blocks that are too big and recursively partition it
-        threshold = 128
+        threshold = 128  # depends on CC and resource usage of cu_blockwise_sort
         begin = 0
         for count in bucktotal:
             if count > threshold:
                 # Recursively partition the block
-                sub_blkcount = self._calc_block_count(count)
-                sub_data = d_data[begin:begin + count]
-                sub_sorted = d_sorted[begin:begin + count]
+                sub_blkcount = _calc_block_count(count)
+                sub_data = d_data.slice(begin, begin + count,
+                                        stream=self.stream)
+                sub_sorted = d_sorted.slice(begin, begin + count,
+                                            stream=self.stream)
                 self._select(sub_data,
                              sub_sorted,
                              d_hist, d_bucktotal, d_indices, count,
@@ -235,9 +284,6 @@ class Radixsort(object):
             begin += count
             if begin >= seln:
                 break
-
-    def _calc_block_count(self, count):
-        return (count + BUCKET_SIZE - 1) // BUCKET_SIZE
 
     def _configure(self, blkcount):
         build_hist = self.cu_build_hist.configure((blkcount,), (BUCKET_SIZE,),
@@ -283,6 +329,24 @@ class Radixsort(object):
 
             cu_sign_fix(d_data, c_int(count))
 
+        else:
+            yield
+
+    @contextmanager
+    def _filter(self, reverse, ts):
+        with self.context.trashing.defer_cleanup():
+            with self._fix_bit_pattern(ts.blkcount, ts.d_data, ts.count):
+                with self._inverted(reverse, ts.blkcount, ts.d_data, ts.count):
+                    yield
+
+    @contextmanager
+    def _inverted(self, enabled, blkcount, d_data, count):
+        if enabled:
+            invert = self.cu_invert.configure((blkcount,), (BUCKET_SIZE,),
+                                              stream=self.stream)
+            invert(d_data, c_int(count))
+            yield
+            invert(d_data, c_int(count))
         else:
             yield
 

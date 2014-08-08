@@ -92,6 +92,14 @@ void cu_blockwise_sort_uint64(uint64_t *data,
                               unsigned *begin,
                               unsigned *count);
 
+
+__global__
+void cu_invert_uint32(uint32_t *data, unsigned count);
+
+__global__
+void cu_invert_uint64(uint64_t *data, unsigned count);
+
+
 }; // end extern "C"
 
 /* Reference
@@ -490,4 +498,30 @@ void cu_sign_fix_uint64( uint64_t *in, unsigned count )
     if (id >= count ) return;
 
     signfix<uint64_t>::inplace(in[id]);
+}
+
+template<class T>
+struct inverter {
+    __device__
+    static void inplace(T & val) {
+        val = -val;
+    }
+};
+
+__global__
+void cu_invert_uint32(uint32_t *data, unsigned count)
+{
+    unsigned id = threadIdx.x + blockIdx.x * blockDim.x;
+    if (id >= count ) return;
+
+    inverter<uint32_t>::inplace(data[id]);
+}
+
+__global__
+void cu_invert_uint64(uint64_t *data, unsigned count)
+{
+    unsigned id = threadIdx.x + blockIdx.x * blockDim.x;
+    if (id >= count ) return;
+
+    inverter<uint64_t>::inplace(data[id]);
 }
