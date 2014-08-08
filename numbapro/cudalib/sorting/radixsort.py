@@ -132,7 +132,9 @@ class Radixsort(object):
         """
         ts = self._prepare(data)
         with self._filter(reverse, ts):
-            d_data = self._sortloop(ts)
+            d_data = self._sortloop(ts.d_data, ts.d_sorted, ts.d_hist,
+                                    ts.d_bucktotal, ts.d_indices, ts.count,
+                                    ts.stride, ts.blkcount)
 
         # Prepare result
         if ts.data_conv:
