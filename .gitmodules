@@ -1,0 +1,4 @@
+[submodule "thirdparty/cub"]
+	path = thirdparty/cub
+	url = https://github.com/NVlabs/cub.git
+	branch = 1.3.2

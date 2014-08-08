@@ -1,4 +1,4 @@
-CUB_INCLUDE = -I"../../../../cub"
+CUB_INCLUDE = -I"../../../../thirdparty/cub"
 
 all: libradix64
 
