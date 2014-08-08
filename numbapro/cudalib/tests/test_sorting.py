@@ -18,8 +18,10 @@ class TestRadixSort(unittest.TestCase):
             if reverse:
                 gold = gold[::-1]
             rs = sorting.Radixsort(data.dtype)
-            indices = rs.sort(data, reverse=reverse, getindices=getindices)
-
+            if getindices:
+                indices = rs.argsort(data, reverse=reverse)
+            else:
+                indices = rs.sort(data, reverse=reverse)
             self.assertTrue(np.all(data == gold))
             if getindices:
                 self.assertTrue(np.all(orig[indices] == gold))
@@ -50,8 +52,10 @@ class TestRadixSort(unittest.TestCase):
                 gold = gold[::-1]
             gold = gold[:k]
             rs = sorting.Radixsort(data.dtype)
-            indices = rs.select(data, k=k, reverse=reverse,
-                                getindices=getindices)
+            if getindices:
+                indices = rs.argselect(data, k=k, reverse=reverse)
+            else:
+                indices = rs.select(data, k=k, reverse=reverse)
             data = data[:k]
             self.assertTrue(np.all(data == gold))
             if getindices:

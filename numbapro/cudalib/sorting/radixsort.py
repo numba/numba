@@ -152,7 +152,7 @@ class Radixsort(object):
         self._sentry_data(data)
         return _TempStorage(data)
 
-    def sort(self, data, reverse=False, getindices=True):
+    def sort(self, data, reverse=False, getindices=False):
         """Perform inplace sort on the data.
 
         Args
@@ -192,7 +192,7 @@ class Radixsort(object):
         """
         return self.sort(data, reverse=reverse, getindices=True)
 
-    def select(self, data, k, reverse=False, getindices=True):
+    def select(self, data, k, reverse=False, getindices=False):
         """
         Perform a inplace partial sort to select the first k-element in
         sorted order.  Only the first k-elements are guaranteed to be
@@ -270,7 +270,7 @@ class Radixsort(object):
     def argselect(self, data, k, reverse=False):
         """The same as ``select(..., getindices=True)``
         """
-        return self.argselect(data, k=k, reverse=reverse, getindices=True)
+        return self.select(data, k=k, reverse=reverse, getindices=True)
 
     def _sortloop(self, d_data, d_sorted, d_hist, d_bucktotal, d_indices,
                   count, stride, blkcount, indstore=None):
