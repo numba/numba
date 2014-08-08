@@ -92,6 +92,18 @@ void cu_blockwise_sort_uint64(uint64_t *data,
                               unsigned *begin,
                               unsigned *count);
 
+__global__
+void cu_blockwise_argsort_uint32(uint32_t *data,
+                                 unsigned *index,
+                                 unsigned *begin,
+                                 unsigned *count);
+
+__global__
+void cu_blockwise_argsort_uint64(uint64_t *data,
+                                 unsigned *index,
+                                 unsigned *begin,
+                                 unsigned *count);
+
 
 __global__
 void cu_invert_uint32(uint32_t *data, unsigned count);
@@ -99,6 +111,8 @@ void cu_invert_uint32(uint32_t *data, unsigned count);
 __global__
 void cu_invert_uint64(uint64_t *data, unsigned count);
 
+__global__
+void cu_arange_uint32(uint32_t *data, unsigned count);
 
 }; // end extern "C"
 
@@ -455,6 +469,44 @@ struct cu_blockwise_sort{
             }
         }
     }
+
+    __device__
+    static void argsort(T *data, unsigned *index, unsigned *begin,
+                        unsigned *count, const T Maximum)
+    {
+        // Specialize for 1D block of 128 threads; 1 data per thread
+        typedef cub::BlockRadixSort<T, 128, 1, unsigned> BlockRadixSort;
+        __shared__ typename BlockRadixSort::TempStorage temp_storage;
+        unsigned blockoffset = begin[blockIdx.x];
+
+        // Read
+        unsigned localcount = count[blockIdx.x];
+        const bool valid = threadIdx.x < localcount;
+
+        T key[1];
+        key[0] = Maximum;
+
+        unsigned value[1];
+        value[0] = (unsigned)-1;
+
+        if (valid) {
+            key[0] = data[blockoffset + threadIdx.x];
+            value[0] = index[blockoffset + threadIdx.x];
+        }
+
+        __syncthreads();
+
+        // Sort
+        BlockRadixSort(temp_storage).Sort(key, value);
+
+        __syncthreads();
+
+        // Write
+        if (valid) {
+            data[blockoffset + threadIdx.x] = key[0];
+            index[blockoffset + threadIdx.x] = value[0];
+        }
+    }
 };
 
 __global__
@@ -471,6 +523,29 @@ void cu_blockwise_sort_uint64(uint64_t *data,
                               unsigned *count)
 {
     cu_blockwise_sort<uint64_t>::sort(data, begin, count, 0xffffffffffffffffull);
+}
+
+
+
+__global__
+void cu_blockwise_argsort_uint32(uint32_t *data,
+                                 unsigned *index,
+                                 unsigned *begin,
+                                 unsigned *count)
+{
+    cu_blockwise_sort<uint32_t>::argsort(data, index, begin, count,
+                                         0xffffffffu);
+}
+
+__global__
+void cu_blockwise_argsort_uint64(uint64_t *data,
+                                 unsigned *index,
+                                 unsigned *begin,
+                                 unsigned *count)
+
+{
+    cu_blockwise_sort<uint64_t>::argsort(data, index, begin, count,
+                                         0xffffffffffffffffull);
 }
 
 template <class T>
@@ -525,3 +600,12 @@ void cu_invert_uint64(uint64_t *data, unsigned count)
 
     inverter<uint64_t>::inplace(data[id]);
 }
+
+__global__
+void cu_arange_uint32(uint32_t *data, unsigned count)
+{
+    unsigned id = threadIdx.x + blockIdx.x * blockDim.x;
+    if (id >= count ) return;
+    data[id] = id;
+}
+

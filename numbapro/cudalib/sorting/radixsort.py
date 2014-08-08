@@ -1,7 +1,8 @@
 from __future__ import print_function, absolute_import
 import os
+import copy
 from collections import namedtuple
-from ctypes import c_int
+from ctypes import c_uint
 from contextlib import contextmanager
 import numpy as np
 from numbapro import cuda
@@ -51,6 +52,32 @@ class _TempStorage(object):
         self.d_data, self.data_conv = cuda.devicearray.auto_device(data)
 
 
+class _IndexStorage(object):
+    def __init__(self, count, dtype):
+        self.d_order = cuda.device_array(count, dtype=dtype)
+        self.d_sorted = cuda.device_array(count, dtype=dtype)
+        self.stride = self.d_order.dtype.itemsize
+
+    def swap(self, stream):
+        self.d_sorted, self.d_order = self.d_order, self.d_sorted
+
+    def getresult(self):
+        return self.d_order
+
+
+class _SelectIndexStorage(_IndexStorage):
+    def swap(self, stream):
+        self.d_order.copy_to_device(self.d_sorted, stream=stream)
+
+    def slice(self, start, stop, stream):
+        d_sorted = self.d_sorted.getitem(slice(start, stop), stream=stream)
+        d_order = self.d_order.getitem(slice(start, stop), stream=stream)
+        thecopy = copy.copy(self)
+        thecopy.d_sorted = d_sorted
+        thecopy.d_order = d_order
+        return thecopy
+
+
 def _calc_block_count(count):
     return (count + BUCKET_SIZE - 1) // BUCKET_SIZE
 
@@ -81,8 +108,13 @@ class Radixsort(object):
         self.cu_blockwise_sort = self.module.get_function(
             'cu_blockwise_sort_uint{:d}'.format(databitsize))
 
+        self.cu_blockwise_argsort = self.module.get_function(
+            'cu_blockwise_argsort_uint{:d}'.format(databitsize))
+
         self.cu_invert = self.module.get_function(
             'cu_invert_uint{:d}'.format(databitsize))
+
+        self.cu_index_init = self.module.get_function('cu_arange_uint32')
 
         self.flip_sign = False
         self.flip_float = False
@@ -120,27 +152,47 @@ class Radixsort(object):
         self._sentry_data(data)
         return _TempStorage(data)
 
-    def sort(self, data, reverse=False):
+    def sort(self, data, reverse=False, getindices=True):
         """Perform inplace sort on the data.
 
         Args
         ----
         - data: cpu/gpu array
         - reverse: bool
-            Optional.  Reverse the order of the sort
-
+            Optional.  Set to True to reverse the order of the sort
+        - getindices: bool
+            Optional.  Set to True to return the sorted indices
         """
         ts = self._prepare(data)
+        indstore = None
+
+        if getindices:
+            indstore = _IndexStorage(ts.count, dtype=np.uint32)
+            conf = self.cu_index_init.configure((ts.blkcount,),
+                                                (BUCKET_SIZE,),
+                                                stream=self.stream)
+            conf(indstore.d_order, c_uint(ts.count))
+
         with self._filter(reverse, ts):
             d_data = self._sortloop(ts.d_data, ts.d_sorted, ts.d_hist,
                                     ts.d_bucktotal, ts.d_indices, ts.count,
-                                    ts.stride, ts.blkcount)
+                                    ts.stride, ts.blkcount, indstore)
 
         # Prepare result
         if ts.data_conv:
             d_data.copy_to_host(data, stream=self.stream)
 
-    def select(self, data, k, reverse=False):
+        if indstore:
+            output = indstore.getresult()
+            return (output.copy_to_host(stream=self.stream)
+                    if ts.data_conv else output)
+
+    def argsort(self, data, reverse=False):
+        """The same as ``sort(..., getindices=True)``
+        """
+        return self.sort(data, reverse=reverse, getindices=True)
+
+    def select(self, data, k, reverse=False, getindices=True):
         """
         Perform a inplace partial sort to select the first k-element in
         sorted order.  Only the first k-elements are guaranteed to be
@@ -153,8 +205,18 @@ class Radixsort(object):
             Number of elements to select
         - reverse: bool
             Optional.  Reverse the order of the sort
+        - getindices: bool
+            Optional.  Set to True to return the sorted indices
         """
         ts = self._prepare(data)
+
+        indstore = None
+        if getindices:
+            indstore = _SelectIndexStorage(ts.count, dtype=np.uint32)
+            conf = self.cu_index_init.configure((ts.blkcount,),
+                                                (BUCKET_SIZE,),
+                                                stream=self.stream)
+            conf(indstore.d_order, c_uint(ts.count))
 
         with self._filter(reverse, ts):
             # Start from MSB
@@ -165,22 +227,21 @@ class Radixsort(object):
             subblocks = []
             self._select(ts.d_data, ts.d_sorted, ts.d_hist, ts.d_bucktotal,
                          ts.d_indices, ts.count, ts.stride, offset,
-                         ts.blkcount, k, subblocks)
+                         ts.blkcount, k, subblocks, indstore=indstore)
 
-            # Sort sublocks
+            # Sort sub-blocks
             if subblocks:
-                subblocks = np.array(subblocks, order='F',
-                                     dtype='uint32')
+                subblocks = np.array(subblocks, order='F', dtype=np.uint32)
                 arr_begin = np.ascontiguousarray(subblocks[:, 0])
                 arr_count = np.ascontiguousarray(subblocks[:, 1])
 
                 nsb_length = len(subblocks)
                 if nsb_length <= min(ts.d_hist.size, ts.d_bucktotal.size):
                     # Avoid extra allocation if we can
-                    d_begin = ts.d_hist.slice(0, nsb_length,
-                                              stream=self.stream)
-                    d_count = ts.d_bucktotal.slice(0, nsb_length,
-                                                   stream=self.stream)
+                    d_begin = ts.d_hist.getitem(slice(0, nsb_length),
+                                                stream=self.stream)
+                    d_count = ts.d_bucktotal.getitem(slice(0, nsb_length),
+                                                     stream=self.stream)
                     d_begin.copy_to_device(arr_begin,
                                            stream=self.stream)
                     d_count.copy_to_device(arr_count,
@@ -192,39 +253,61 @@ class Radixsort(object):
                     d_count = cuda.to_device(arr_count,
                                              stream=self.stream)
 
-                self._subblock_sort(ts.d_data, d_begin, d_count)
+                self._subblock_sort(ts.d_data, d_begin, d_count,
+                                    indstore=indstore)
 
         # Prepare result
         if ts.data_conv:
-            ts.d_data[:k].copy_to_host(data[:k], stream=self.stream)
+            sliced = ts.d_data.getitem(slice(0, k), stream=self.stream)
+            sliced.copy_to_host(data[:k], stream=self.stream)
+
+        if indstore:
+            output = indstore.getresult().getitem(slice(0, k),
+                                                  stream=self.stream)
+            return (output.copy_to_host(stream=self.stream)
+                    if ts.data_conv else output)
+
+    def argselect(self, data, k, reverse=False):
+        """The same as ``select(..., getindices=True)``
+        """
+        return self.argselect(data, k=k, reverse=reverse, getindices=True)
 
     def _sortloop(self, d_data, d_sorted, d_hist, d_bucktotal, d_indices,
-                  count, stride, blkcount):
+                  count, stride, blkcount, indstore=None):
         # Sort loop
         for offset in range(stride):
             self._sortpass(d_data, d_sorted, d_hist, d_bucktotal,
                            d_indices, count, stride, offset,
-                           blkcount)
+                           blkcount, indstore=indstore)
             # Swap data and sorted
             d_data, d_sorted = d_sorted, d_data
 
         return d_data
 
-    def _subblock_sort(self, d_data, d_begin, d_count):
-        confed = self.cu_blockwise_sort.configure((d_count.size,), (128,),
-                                                  stream=self.stream)
-        confed(d_data, d_begin, d_count)
+    def _subblock_sort(self, d_data, d_begin, d_count, indstore=None):
+        TPB = 128   # Must match the kernel
+
+        if indstore is not None:
+            confed = self.cu_blockwise_argsort.configure((d_count.size,),
+                                                         (TPB,),
+                                                         stream=self.stream)
+            confed(d_data, indstore.d_order, d_begin, d_count)
+        else:
+            confed = self.cu_blockwise_sort.configure((d_count.size,),
+                                                      (TPB,),
+                                                      stream=self.stream)
+            confed(d_data, d_begin, d_count)
 
     def _sortpass(self, d_data, d_sorted, d_hist, d_bucktotal, d_indices,
                   count, stride, offset, blkcount, h_bucktotal=None,
-                  evt_bucktotal=None):
+                  evt_bucktotal=None, indstore=None):
 
         kerns = self._configure(blkcount)
 
-        kerns.build_hist(d_data, d_hist, c_int(stride), c_int(offset),
-                         c_int(count))
+        kerns.build_hist(d_data, d_hist, c_uint(stride), c_uint(offset),
+                         c_uint(count))
 
-        kerns.scan_hist(d_hist, d_bucktotal, c_int(blkcount))
+        kerns.scan_hist(d_hist, d_bucktotal, c_uint(blkcount))
 
         if h_bucktotal is not None:
             d_bucktotal.copy_to_host(h_bucktotal, stream=self.stream)
@@ -232,14 +315,20 @@ class Radixsort(object):
 
         kerns.scan_bucket(d_bucktotal)
 
-        kerns.indexing(d_data, d_indices, d_hist, d_bucktotal, c_int(count),
-                       c_int(offset))
+        kerns.indexing(d_data, d_indices, d_hist, d_bucktotal, c_uint(count),
+                       c_uint(offset))
 
-        kerns.scatter(d_data, d_sorted, d_indices, c_int(count), c_int(stride))
+        kerns.scatter(d_data, d_sorted, d_indices, c_uint(count),
+                      c_uint(stride))
+        if indstore:
+            # Sort the index table
+            kerns.scatter(indstore.d_order, indstore.d_sorted,
+                          d_indices, c_uint(count), c_uint(indstore.stride))
+            indstore.swap(stream=self.stream)
 
     def _select(self, d_data, d_sorted, d_hist, d_bucktotal, d_indices,
                 count, stride, offset, blkcount, seln, subblocks, substart=0,
-                h_bucktotal=None):
+                h_bucktotal=None, indstore=None):
         if offset == 0:
             # We reach here when the data have too many duplication.
             # Do nothing.
@@ -253,7 +342,8 @@ class Radixsort(object):
         evt = cuda.event()
         self._sortpass(d_data, d_sorted, d_hist, d_bucktotal, d_indices,
                        count, stride, offset, blkcount,
-                       h_bucktotal=h_bucktotal, evt_bucktotal=evt)
+                       h_bucktotal=h_bucktotal, evt_bucktotal=evt,
+                       indstore=indstore)
 
         # Swap buffers
         d_data.copy_to_device(d_sorted, stream=self.stream)
@@ -269,15 +359,22 @@ class Radixsort(object):
             if count > threshold:
                 # Recursively partition the block
                 sub_blkcount = _calc_block_count(count)
-                sub_data = d_data.slice(begin, begin + count,
-                                        stream=self.stream)
-                sub_sorted = d_sorted.slice(begin, begin + count,
-                                            stream=self.stream)
+                sub_data = d_data.getitem(slice(begin, begin + count),
+                                          stream=self.stream)
+                sub_sorted = d_sorted.getitem(slice(begin, begin + count),
+                                              stream=self.stream)
+                if indstore:
+                    subindstore = indstore.slice(begin, begin + count,
+                                                 stream=self.stream)
+                else:
+                    subindstore = None
+
                 self._select(sub_data,
                              sub_sorted,
                              d_hist, d_bucktotal, d_indices, count,
                              stride, offset - 1, sub_blkcount,
-                             seln, subblocks, begin, h_bucktotal)
+                             seln, subblocks, begin, h_bucktotal,
+                             indstore=subindstore)
             elif count > 1:
                 # Remember the small subblock
                 # We might sort it later
@@ -313,11 +410,11 @@ class Radixsort(object):
                                                                (BUCKET_SIZE,),
                                                                stream=self.stream)
 
-            cu_float_to_uint(d_data, d_data, c_int(count))
+            cu_float_to_uint(d_data, d_data, c_uint(count))
 
             yield
 
-            cu_uint_to_float(d_data, d_data, c_int(count))
+            cu_uint_to_float(d_data, d_data, c_uint(count))
 
         elif self.flip_sign:
 
@@ -325,11 +422,11 @@ class Radixsort(object):
                                                      (BUCKET_SIZE,),
                                                      stream=self.stream)
 
-            cu_sign_fix(d_data, c_int(count))
+            cu_sign_fix(d_data, c_uint(count))
 
             yield
 
-            cu_sign_fix(d_data, c_int(count))
+            cu_sign_fix(d_data, c_uint(count))
 
         else:
             yield
@@ -346,9 +443,9 @@ class Radixsort(object):
         if enabled:
             invert = self.cu_invert.configure((blkcount,), (BUCKET_SIZE,),
                                               stream=self.stream)
-            invert(d_data, c_int(count))
+            invert(d_data, c_uint(count))
             yield
-            invert(d_data, c_int(count))
+            invert(d_data, c_uint(count))
         else:
             yield
 
