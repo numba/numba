@@ -1,3 +1,9 @@
+"""
+Helper functions for numpy.timedelta64 and numpy.datetime64.
+For now, multiples-of-units (for example timedeltas expressed in tens
+of seconds) are not supported.
+"""
+
 
 import numpy as np
 
@@ -101,4 +107,54 @@ def get_timedelta_conversion_factor(src_unit, dest_unit):
     """
     return _get_conversion_multiplier(DATETIME_UNITS[src_unit],
                                       DATETIME_UNITS[dest_unit])
+
+def get_datetime_timedelta_conversion(datetime_unit, timedelta_unit):
+    """
+    Compute a possible conversion for combining *datetime_unit* and
+    *timedelta_unit* (presumably for adding or subtracting).
+    Return (result unit, integer datetime multiplier, integer timedelta multiplier).
+    RuntimeError is raised if the combination is impossible.
+    """
+    dt_unit_code = DATETIME_UNITS[datetime_unit]
+    td_unit_code = DATETIME_UNITS[timedelta_unit]
+    if td_unit_code == 14 or dt_unit_code == 14:
+        return datetime_unit, 1, 1
+    if td_unit_code < 2 and dt_unit_code >= 2:
+        # Cannot combine Y or M timedelta64 with a finer-grained datetime64
+        raise RuntimeError("cannot combine datetime64(%r) and timedelta64(%r)"
+                           % (datetime_unit, timedelta_unit))
+    dt_factor, td_factor = 1, 1
+
+    # If years or months, the datetime unit is first scaled to weeks or days,
+    # then conversion continues below.  This is the same algorithm as used
+    # in Numpy's get_datetime_conversion_factor() (src/multiarray/datetime.c):
+    # """Conversions between years/months and other units use
+    # the factor averaged over the 400 year leap year cycle."""
+    if dt_unit_code == 0:
+        if td_unit_code >= 4:
+            dt_factor = 97  + 400 * 365
+            td_factor = 400
+            dt_unit_code = 4
+        elif td_unit_code == 2:
+            dt_factor = 97  + 400 * 365
+            td_factor = 400 * 7
+            dt_unit_code = 2
+    elif dt_unit_code == 1:
+        if td_unit_code >= 4:
+            dt_factor = 97 + 400 * 365
+            td_factor = 400 * 12
+            dt_unit_code = 4
+        elif td_unit_code == 2:
+            dt_factor = 97 + 400 * 365
+            td_factor = 400 * 12 * 7
+            dt_unit_code = 2
+
+    if td_unit_code >= dt_unit_code:
+        factor = _get_conversion_multiplier(dt_unit_code, td_unit_code)
+        assert factor is not None, (dt_unit_code, td_unit_code)
+        return timedelta_unit, dt_factor * factor, td_factor
+    else:
+        factor = _get_conversion_multiplier(td_unit_code, dt_unit_code)
+        assert factor is not None, (dt_unit_code, td_unit_code)
+        return datetime_unit, dt_factor, td_factor * factor
 
