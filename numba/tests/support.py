@@ -105,6 +105,11 @@ class TestCase(unittest.TestCase):
                 self.assertIs(first.__class__, second.__class__)
                 exact_comparison = True
 
+        # If a Numpy scalar, check the dtype is exactly the same too
+        # (necessary for datetime64 and timedelta64).
+        if hasattr(first, 'dtype') and hasattr(second, 'dtype'):
+            self.assertEqual(first.dtype, second.dtype)
+
         if not exact_comparison and prec != 'exact':
             if prec == 'single':
                 k = 2**-24

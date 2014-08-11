@@ -9,7 +9,8 @@ import itertools
 import numpy as np
 
 import numba.unittest_support as unittest
-from numba import config, npdatetime, types
+from numba.typeinfer import TypingError
+from numba import config, jit, npdatetime, types
 from .support import TestCase
 
 
@@ -17,6 +18,13 @@ date_units = ('Y', 'M')
 time_units = ('W', 'D', 'h', 'm', 's', 'ms', 'us', 'ns', 'ps', 'fs', 'as')
 # All except generic ("")
 all_units = date_units + time_units
+
+
+def add_usecase(x, y):
+    return x + y
+
+def sub_usecase(x, y):
+    return x - y
 
 
 class TestModuleHelpers(TestCase):
@@ -70,6 +78,66 @@ class TestModuleHelpers(TestCase):
         self.assertEqual(f('W', 'h'), 24 * 7)
         self.assertEqual(f('W', 'm'), 24 * 7 * 60)
         self.assertEqual(f('W', 'us'), 24 * 7 * 3600 * 1000 * 1000)
+
+
+TD = np.timedelta64
+DT = np.datetime64
+
+
+class TestScalarOperators(TestCase):
+
+    jitargs = dict()
+
+    def jit(self, pyfunc):
+        return jit(**self.jitargs)(pyfunc)
+
+    def test_add(self):
+        f = self.jit(add_usecase)
+        def check(a, b, expected):
+            self.assertPreciseEqual(f(a, b), expected)
+            self.assertPreciseEqual(f(b, a), expected)
+
+        check(TD(1), TD(2), TD(3))
+        check(TD(1, 's'), TD(2, 's'), TD(3, 's'))
+        # Implicit unit promotion
+        check(TD(1), TD(2, 's'), TD(3, 's'))
+        check(TD(1), TD(2, 'ms'), TD(3, 'ms'))
+        check(TD(1, 's'), TD(2, 'us'), TD(1000002, 'us'))
+        check(TD(1, 'W'), TD(2, 'D'), TD(9, 'D'))
+        # NaTs
+        check(TD('NaT'), TD(1), TD('NaT'))
+        check(TD('NaT', 's'), TD(1, 'D'), TD('NaT', 's'))
+        check(TD('NaT', 's'), TD(1, 'ms'), TD('NaT', 'ms'))
+        # Cannot add days and weeks
+        with self.assertRaises((TypeError, TypingError)):
+            f(TD(1, 'M'), TD(1, 'D'))
+
+    def test_sub(self):
+        f = self.jit(sub_usecase)
+        def check(a, b, expected):
+            self.assertPreciseEqual(f(a, b), expected)
+            self.assertPreciseEqual(f(b, a), -expected)
+
+        check(TD(3), TD(2), TD(1))
+        check(TD(3, 's'), TD(2, 's'), TD(1, 's'))
+        # Implicit unit promotion
+        check(TD(3), TD(2, 's'), TD(1, 's'))
+        check(TD(3), TD(2, 'ms'), TD(1, 'ms'))
+        check(TD(3, 's'), TD(2, 'us'), TD(2999998, 'us'))
+        check(TD(1, 'W'), TD(2, 'D'), TD(5, 'D'))
+        # NaTs
+        check(TD('NaT'), TD(1), TD('NaT'))
+        check(TD('NaT', 's'), TD(1, 'D'), TD('NaT', 's'))
+        check(TD('NaT', 's'), TD(1, 'ms'), TD('NaT', 'ms'))
+        # Cannot sub days to weeks
+        with self.assertRaises((TypeError, TypingError)):
+            f(TD(1, 'M'), TD(1, 'D'))
+
+
+class TestScalarOperatorsNoPython(TestScalarOperators):
+
+    jitargs = dict(nopython=True)
+
 
 
 if __name__ == '__main__':
