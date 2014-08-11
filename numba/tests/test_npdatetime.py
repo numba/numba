@@ -196,6 +196,7 @@ class TestScalarOperators(TestCase):
         check(TD(7, 'ms'), TD(3, 'us'), 7000. / 3.)
         check(TD(7), TD(0), float('+inf'))
         check(TD(-7), TD(0), float('-inf'))
+        check(TD(0), TD(0), float('nan'))
         # NaTs
         check(TD('nat'), TD(3), float('nan'))
         check(TD(3), TD('nat'), float('nan'))
