@@ -26,6 +26,9 @@ def add_usecase(x, y):
 def sub_usecase(x, y):
     return x - y
 
+def mul_usecase(x, y):
+    return x * y
+
 
 class TestModuleHelpers(TestCase):
     """
@@ -132,6 +135,17 @@ class TestScalarOperators(TestCase):
         # Cannot sub days to weeks
         with self.assertRaises((TypeError, TypingError)):
             f(TD(1, 'M'), TD(1, 'D'))
+
+    def test_mul(self):
+        f = self.jit(mul_usecase)
+        def check(a, b, expected):
+            self.assertPreciseEqual(f(a, b), expected)
+            self.assertPreciseEqual(f(b, a), expected)
+
+        check(TD(3), 2, TD(6))
+        check(TD(3, 'ps'), 2, TD(6, 'ps'))
+        check(TD('NaT', 'ps'), 2, TD('NaT', 'ps'))
+        check(TD(2**62, 'ps'), 16, TD(0, 'ps'))
 
 
 class TestScalarOperatorsNoPython(TestScalarOperators):

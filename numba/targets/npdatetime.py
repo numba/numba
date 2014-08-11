@@ -75,3 +75,21 @@ def timedelta_sub_impl(context, builder, sig, args):
         builder.store(builder.sub(va, vb), ret)
     return builder.load(ret)
 
+
+def timedelta_times_number(context, builder, td_arg, int_arg):
+    ret = alloc_timedelta_result(builder)
+    with cgutils.if_likely(builder, is_not_nat(builder, td_arg)):
+        builder.store(builder.mul(td_arg, int_arg), ret)
+    return builder.load(ret)
+
+@builtin
+@implement('*', types.Kind(types.NPTimedelta), types.Kind(types.Integer))
+def timedelta_mul_impl(context, builder, sig, args):
+    return timedelta_times_number(context, builder, args[0], args[1])
+
+@builtin
+@implement('*', types.Kind(types.Integer), types.Kind(types.NPTimedelta))
+def timedelta_mul_impl(context, builder, sig, args):
+    return timedelta_times_number(context, builder, args[1], args[0])
+
+
