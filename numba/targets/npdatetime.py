@@ -158,7 +158,6 @@ def timedelta_div_impl(context, builder, sig, args):
 
 
 def implement_equality_operator(py_op, ll_op, default_value):
-
     @builtin
     @implement(py_op, *TIMEDELTA_BINOP_SIG)
     def timedelta_eq_impl(context, builder, sig, args):
@@ -179,6 +178,30 @@ def implement_equality_operator(py_op, ll_op, default_value):
                 builder.store(builder.icmp(ll_op, va, vb), ret)
         return builder.load(ret)
 
-
 implement_equality_operator('==', lc.ICMP_EQ, cgutils.false_bit)
 implement_equality_operator('!=', lc.ICMP_NE, cgutils.true_bit)
+
+
+def implement_ordering_operator(py_op, ll_op):
+    @builtin
+    @implement(py_op, *TIMEDELTA_BINOP_SIG)
+    def timedelta_eq_impl(context, builder, sig, args):
+        [va, vb] = args
+        [ta, tb] = sig.args
+        ret = cgutils.alloca_once(builder, Type.int(1), 'ret')
+        with cgutils.ifelse(builder, are_not_nat(builder, [va, vb])) as (then, otherwise):
+            with then:
+                norm_a, norm_b = normalize_timedeltas(context, builder, va, vb, ta, tb)
+                builder.store(builder.icmp(ll_op, norm_a, norm_b), ret)
+            with otherwise:
+                # No scaling when comparing NaT with something else
+                # (i.e. NaT is <= everything else, since it's the smallest
+                #  int64 value)
+                builder.store(builder.icmp(ll_op, va, vb), ret)
+        return builder.load(ret)
+
+implement_ordering_operator('<', lc.ICMP_SLT)
+implement_ordering_operator('<=', lc.ICMP_SLE)
+implement_ordering_operator('>', lc.ICMP_SGT)
+implement_ordering_operator('>=', lc.ICMP_SGE)
+

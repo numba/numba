@@ -28,6 +28,7 @@ class TimedeltaBinOp(AbstractTemplate):
 class TimedeltaCmpOp(AbstractTemplate):
 
     def generic(self, args, kws):
+        # For equality comparisons, all units are inter-comparable
         left, right = args
         if not all(isinstance(tp, types.NPTimedelta) for tp in args):
             return
@@ -37,6 +38,7 @@ class TimedeltaCmpOp(AbstractTemplate):
 class TimedeltaOrderedCmpOp(AbstractTemplate):
 
     def generic(self, args, kws):
+        # For ordered comparisons, units must be compatible
         left, right = args
         if not all(isinstance(tp, types.NPTimedelta) for tp in args):
             return
@@ -116,3 +118,18 @@ class TimedeltaCmpEq(TimedeltaCmpOp):
 class TimedeltaCmpNe(TimedeltaCmpOp):
     key = '!='
 
+@builtin
+class TimedeltaCmpLt(TimedeltaOrderedCmpOp):
+    key = '<'
+
+@builtin
+class TimedeltaCmpLE(TimedeltaOrderedCmpOp):
+    key = '<='
+
+@builtin
+class TimedeltaCmpGt(TimedeltaOrderedCmpOp):
+    key = '>'
+
+@builtin
+class TimedeltaCmpGE(TimedeltaOrderedCmpOp):
+    key = '>='

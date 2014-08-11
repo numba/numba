@@ -41,6 +41,18 @@ def eq_usecase(x, y):
 def ne_usecase(x, y):
     return x != y
 
+def lt_usecase(x, y):
+    return x < y
+
+def le_usecase(x, y):
+    return x <= y
+
+def gt_usecase(x, y):
+    return x > y
+
+def ge_usecase(x, y):
+    return x >= y
+
 
 class TestModuleHelpers(TestCase):
     """
@@ -256,6 +268,67 @@ class TestScalarOperators(TestCase):
         check(TD(1, 'Y'), TD(366, 'D'), True)
         # ... except when both are NaT!
         check(TD('NaT', 'Y'), TD('NaT', 'D'), False)
+
+    def test_lt_ge(self):
+        lt = self.jit(lt_usecase)
+        ge = self.jit(ge_usecase)
+        def check(a, b, expected):
+            self.assertIs(lt(a, b), expected)
+            self.assertIs(ge(a, b), not expected)
+
+        check(TD(1), TD(2), True)
+        check(TD(1), TD(1), False)
+        check(TD(2), TD(1), False)
+        check(TD(1, 's'), TD(2, 's'), True)
+        check(TD(1, 's'), TD(1, 's'), False)
+        check(TD(2, 's'), TD(1, 's'), False)
+        check(TD(1, 'm'), TD(61, 's'), True)
+        check(TD(1, 'm'), TD(60, 's'), False)
+        # NaTs
+        check(TD('Nat'), TD('Nat'), False)
+        check(TD('Nat', 'ms'), TD('Nat', 's'), False)
+        check(TD('Nat'), TD(-(2**63)+1), True)
+        # Incompatible units => exception raised
+        with self.assertRaises((TypeError, TypingError)):
+            lt(TD(1, 'Y'), TD(365, 'D'))
+        with self.assertRaises((TypeError, TypingError)):
+            ge(TD(1, 'Y'), TD(365, 'D'))
+        # ... even when both are NaT
+        with self.assertRaises((TypeError, TypingError)):
+            lt(TD('NaT', 'Y'), TD('NaT', 'D'))
+        with self.assertRaises((TypeError, TypingError)):
+            ge(TD('NaT', 'Y'), TD('NaT', 'D'))
+
+    def test_le_gt(self):
+        le = self.jit(le_usecase)
+        gt = self.jit(gt_usecase)
+        def check(a, b, expected):
+            self.assertIs(le(a, b), expected)
+            self.assertIs(gt(a, b), not expected)
+
+        check(TD(1), TD(2), True)
+        check(TD(1), TD(1), True)
+        check(TD(2), TD(1), False)
+        check(TD(1, 's'), TD(2, 's'), True)
+        check(TD(1, 's'), TD(1, 's'), True)
+        check(TD(2, 's'), TD(1, 's'), False)
+        check(TD(1, 'm'), TD(61, 's'), True)
+        check(TD(1, 'm'), TD(60, 's'), True)
+        check(TD(1, 'm'), TD(59, 's'), False)
+        # NaTs
+        check(TD('Nat'), TD('Nat'), True)
+        check(TD('Nat', 'ms'), TD('Nat', 's'), True)
+        check(TD('Nat'), TD(-(2**63)+1), True)
+        # Incompatible units => exception raised
+        with self.assertRaises((TypeError, TypingError)):
+            le(TD(1, 'Y'), TD(365, 'D'))
+        with self.assertRaises((TypeError, TypingError)):
+            gt(TD(1, 'Y'), TD(365, 'D'))
+        # ... even when both are NaT
+        with self.assertRaises((TypeError, TypingError)):
+            le(TD('NaT', 'Y'), TD('NaT', 'D'))
+        with self.assertRaises((TypeError, TypingError)):
+            gt(TD('NaT', 'Y'), TD('NaT', 'D'))
 
 
 class TestScalarOperatorsNoPython(TestScalarOperators):
