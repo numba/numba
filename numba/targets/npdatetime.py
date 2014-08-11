@@ -78,6 +78,19 @@ def timedelta_pos_impl(context, builder, sig, args):
     return builder.neg(args[0])
 
 @builtin
+@implement(types.abs_type, types.Kind(types.NPTimedelta))
+def timedelta_abs_impl(context, builder, sig, args):
+    val, = args
+    ret = alloc_timedelta_result(builder)
+    with cgutils.ifelse(builder,
+                        cgutils.is_scalar_neg(builder, val)) as (then, otherwise):
+        with then:
+            builder.store(builder.neg(val), ret)
+        with otherwise:
+            builder.store(val, ret)
+    return builder.load(ret)
+
+@builtin
 @implement('+', *TIMEDELTA_BINOP_SIG)
 def timedelta_add_impl(context, builder, sig, args):
     [va, vb] = args

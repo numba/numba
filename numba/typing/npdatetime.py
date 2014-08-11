@@ -156,3 +156,9 @@ class TimedeltaCmpGt(TimedeltaOrderedCmpOp):
 @builtin
 class TimedeltaCmpGE(TimedeltaOrderedCmpOp):
     key = '>='
+
+
+@builtin
+class TimedeltaAbs(TimedeltaUnaryOp):
+    key = types.abs_type
+

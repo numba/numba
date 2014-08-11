@@ -59,6 +59,9 @@ def pos_usecase(x):
 def neg_usecase(x):
     return -x
 
+def abs_usecase(x):
+    return abs(x)
+
 
 class TestModuleHelpers(TestCase):
     """
@@ -349,9 +352,21 @@ class TestScalarOperators(TestCase):
         check(TD('NaT', 'ms'))
 
     def test_neg(self):
-        pos = self.jit(neg_usecase)
+        neg = self.jit(neg_usecase)
         def check(a):
-            self.assertPreciseEqual(pos(a), -a)
+            self.assertPreciseEqual(neg(a), -a)
+
+        check(TD(3))
+        check(TD(-4))
+        check(TD(3, 'ms'))
+        check(TD(-4, 'ms'))
+        check(TD('NaT'))
+        check(TD('NaT', 'ms'))
+
+    def test_abs(self):
+        f = self.jit(abs_usecase)
+        def check(a):
+            self.assertPreciseEqual(f(a), abs(a))
 
         check(TD(3))
         check(TD(-4))
