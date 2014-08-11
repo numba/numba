@@ -97,9 +97,9 @@ class DeviceNDArrayBase(object):
         self.gpu_mem = ArrayHeaderManager(devices.get_context())
 
         if gpu_head is None:
-            gpu_head = self.gpu_mem.allocate(self.ndim)
-            ndarray_populate_head(gpu_head, gpu_data, self.shape,
-                                  self.strides, stream=stream)
+            gpu_head = ndarray_populate_head(self.gpu_mem, gpu_data,
+                                             self.shape, self.strides,
+                                             stream=stream)
         self.gpu_head = gpu_head
         self.gpu_data = gpu_data
 
@@ -133,8 +133,7 @@ class DeviceNDArrayBase(object):
         Otherwise, perform a a host-to-device transfer.
         """
         if _driver.is_device_memory(ary):
-            sz = min(_driver.device_memory_size(self),
-                     _driver.device_memory_size(ary))
+            sz = min(self.alloc_size, ary.alloc_size)
             _driver.device_to_device(self, ary, sz, stream=stream)
         else:
             sz = min(_driver.host_memory_size(ary), self.alloc_size)
@@ -246,6 +245,14 @@ class DeviceNDArray(DeviceNDArrayBase):
             raise NotImplementedError("operation requires copying")
 
     def __getitem__(self, item):
+        return self._do_getitem(item)
+
+    def getitem(self, item, stream=0):
+        """Do `__getitem__(item)` with CUDA stream
+        """
+        return self._do_getitem(item, stream)
+
+    def _do_getitem(self, item, stream=0):
         arr = self._dummy.__getitem__(item)
         extents = list(arr.iter_contiguous_extent())
         cls = type(self)
@@ -255,15 +262,16 @@ class DeviceNDArray(DeviceNDArrayBase):
             if dummyarray.is_element_indexing(item, self.ndim):
                 hostary = np.empty(1, dtype=self.dtype)
                 _driver.device_to_host(dst=hostary, src=newdata,
-                                       size=self._dummy.itemsize)
+                                       size=self._dummy.itemsize,
+                                       stream=stream)
                 return hostary[0]
             else:
                 return cls(shape=arr.shape, strides=arr.strides,
-                           dtype=self.dtype, gpu_data=newdata)
+                           dtype=self.dtype, gpu_data=newdata, stream=stream)
         else:
             newdata = self.gpu_data.view(*arr.extent)
             return cls(shape=arr.shape, strides=arr.strides,
-                       dtype=self.dtype, gpu_data=newdata)
+                       dtype=self.dtype, gpu_data=newdata, stream=stream)
 
 
 class MappedNDArray(DeviceNDArrayBase, np.ndarray):
@@ -273,11 +281,8 @@ class MappedNDArray(DeviceNDArrayBase, np.ndarray):
 
     def device_setup(self, gpu_data, stream=0):
         self.gpu_mem = ArrayHeaderManager(devices.get_context())
-
-        gpu_head = self.gpu_mem.allocate(self.ndim)
-        ndarray_populate_head(gpu_head, gpu_data, self.shape,
-                              self.strides, stream=stream)
-
+        gpu_head = ndarray_populate_head(self.gpu_mem, gpu_data, self.shape,
+                                         self.strides, stream=stream)
         self.gpu_data = gpu_data
         self.gpu_head = gpu_head
 

@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
 
+import atexit
 import collections
 import functools
 import io
@@ -19,6 +20,26 @@ from numba.config import PYVERSION, MACHINE_BITS
 INT_TYPES = (int,)
 if PYVERSION < (3, 0):
     INT_TYPES += (long,)
+
+
+_shutting_down = False
+
+def _at_shutdown():
+    global _shutting_down
+    _shutting_down = True
+
+atexit.register(_at_shutdown)
+
+def shutting_down(globals=globals):
+    """
+    Whether the interpreter is currently shutting down.
+    For use in finalizers, __del__ methods, and similar; it is advised
+    to early bind this function rather than look it up when calling it,
+    since at shutdown module globals may be cleared.
+    """
+    # At shutdown, the attribute may have been cleared or set to None.
+    v = globals().get('_shutting_down')
+    return v is True or v is None
 
 
 class ConfigOptions(object):
@@ -103,21 +124,26 @@ class UniqueDict(dict):
         super(UniqueDict, self).__setitem__(key, value)
 
 
-# def cache(fn):
-#     @functools.wraps(fn)
-#     def cached_func(self, *args, **kws):
-#         if self in cached_func.cache:
-#             return cached_func.cache[self]
-#         ret = fn(self, *args, **kws)
-#         cached_func.cache[self] = ret
-#         return ret
-#     cached_func.cache = {}
-#     def invalidate(self):
-#         if self in cached_func.cache:
-#             del cached_func.cache[self]
-#     cached_func.invalidate = invalidate
-#
-#     return cached_func
+# Django's cached_property
+# see https://docs.djangoproject.com/en/dev/ref/utils/#django.utils.functional.cached_property
+
+class cached_property(object):
+    """
+    Decorator that converts a method with a single self argument into a
+    property cached on the instance.
+
+    Optional ``name`` argument allows you to make cached properties of other
+    methods. (e.g.  url = cached_property(get_absolute_url, name='url') )
+    """
+    def __init__(self, func, name=None):
+        self.func = func
+        self.name = name or func.__name__
+
+    def __get__(self, instance, type=None):
+        if instance is None:
+            return self
+        res = instance.__dict__[self.name] = self.func(instance)
+        return res
 
 
 def runonce(fn):

@@ -52,7 +52,8 @@ Math operations
  fmod                Yes          No
  abs                 Yes          Yes
  absolute            Yes          Yes
- rint                Yes          No
+ fabs                Yes          Yes
+ rint                Yes          Yes
  sign                Yes          Yes
  conj                Yes          No
  exp                 Yes          Yes
@@ -84,7 +85,7 @@ Trigonometric functions
  arccos              Yes          Yes
  arctan              Yes          Yes
  arctan2             Yes          Yes
- hypot               Yes          No
+ hypot               Yes          Yes
  sinh                Yes          Yes
  cosh                Yes          Yes
  tanh                Yes          Yes
@@ -153,7 +154,7 @@ Floating functions
  isinf               Yes          No
  isnan               Yes          No
  signbit             Yes          No
- copysign            Yes          Yes
+ copysign            Yes          No
  nextafter           Yes          No
  modf                Yes          No
  ldexp               Yes*         No

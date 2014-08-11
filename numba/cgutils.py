@@ -483,6 +483,15 @@ def is_scalar_zero(builder, value):
         isnull = builder.icmp(lc.ICMP_EQ, nullval, value)
     return isnull
 
+def is_scalar_neg(builder, value):
+    """is _value_ negative?. Assumes _value_ is signed"""
+    nullval = Constant.null(value.type)
+    if value.type in (Type.float(), Type.double()):
+        isneg = builder.fcmp(lc.FCMP_OLT, value, nullval)
+    else:
+        isneg = builder.icmp(lc.ICMP_SLT, value, nullval)
+    return isneg
+
 
 def guard_null(context, builder, value):
     with if_unlikely(builder, is_scalar_zero(builder, value)):

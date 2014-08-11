@@ -118,11 +118,12 @@ TypeCompatibleCode TypeManager::isCompatible(Type from, Type to) const {
 
 
 int TypeManager::selectOverload(Type sig[], Type ovsigs[], int &selected,
-                                int sigsz, int ovct) const {
+                                int sigsz, int ovct, bool allow_unsafe) const {
 	int count;
 	if (ovct < 16) {
 		Rating ratings[16];
-		count = _selectOverload(sig, ovsigs, selected, sigsz, ovct, ratings);
+		count = _selectOverload(sig, ovsigs, selected, sigsz, ovct,
+                                        allow_unsafe, ratings);
 	}
 	// Necessary?
     //	else if (ovct < 128) {
@@ -131,14 +132,16 @@ int TypeManager::selectOverload(Type sig[], Type ovsigs[], int &selected,
     //	}
 	else {
 		Rating *ratings = new Rating[ovct];
-		count = _selectOverload(sig, ovsigs, selected, sigsz, ovct, ratings);
+		count = _selectOverload(sig, ovsigs, selected, sigsz, ovct,
+                                        allow_unsafe, ratings);
 		delete [] ratings;
 	}
 	return count;
 }
 
 int TypeManager::_selectOverload(Type sig[], Type ovsigs[], int &selected,
-                                 int sigsz, int ovct, Rating ratings[]) const {
+                                 int sigsz, int ovct, bool allow_unsafe,
+                                 Rating ratings[]) const {
 	// Generate rating table
 	// Use a penalize scheme.
 	int badcount = 0;
@@ -148,7 +151,8 @@ int TypeManager::_selectOverload(Type sig[], Type ovsigs[], int &selected,
 		Rating &rate = ratings[i];
 		for (int j = 0; j < sigsz; ++j) {
 			TypeCompatibleCode tcc = isCompatible(sig[j], entry[j]);
-			if (tcc == TCC_FALSE) {
+			if (tcc == TCC_FALSE ||
+                            (tcc == TCC_CONVERT_UNSAFE && !allow_unsafe)) {
 				rate.bad();
 				++badcount;
 				break; // stop the loop early for incompatbile type
@@ -177,13 +181,14 @@ int TypeManager::_selectOverload(Type sig[], Type ovsigs[], int &selected,
 
 	int matchcount = 0;
 	for (int i = 0; i < ovct; ++i) {
-		if (ratings[i] < best){
-			best = ratings[i];
-			matchcount = 1;
-			selected = i;
-		} else if (ratings[i] == best) {
-			matchcount += 1;
-		}
+            if (ratings[i] < best){
+                best = ratings[i];
+                matchcount = 1;
+                selected = i;
+            }
+            else if (ratings[i] == best) {
+                matchcount += 1;
+            }
 	}
 	return matchcount;
 }
@@ -199,16 +204,15 @@ void Rating::bad() {
 }
 
 bool Rating::operator < (const Rating &other) const {
-    unsigned short self[] = {unsafe_convert,
-                             safe_convert,
-                             promote};
-    unsigned short that[] = {other.unsafe_convert,
-                             other.safe_convert,
-                             other.promote};
-    for (unsigned int i = 0; i < sizeof(self)/sizeof(unsigned short); ++i) {
-        if (self[i] < that[i]) return true;
-    }
-    return false;
+    if (unsafe_convert < other.unsafe_convert)
+        return true;
+    else if (unsafe_convert > other.unsafe_convert)
+        return false;
+    if (safe_convert < other.safe_convert)
+        return true;
+    else if (safe_convert > other.safe_convert)
+        return false;
+    return (promote < other.promote);
 }
 
 bool Rating::operator == (const Rating &other) const {

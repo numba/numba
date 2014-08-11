@@ -2,10 +2,11 @@ from __future__ import print_function
 from numba.ctypes_support import *
 import numpy
 import numba.unittest_support as unittest
-from numba._numpyadapt import get_ndarray_adaptor
+from numba._helperlib import c_helpers
 
 
 class ArrayStruct3D(Structure):
+    # Mimick the structure defined in numba.targets.arrayobj's make_array()
     _fields_ = [
         ("data", c_void_p),
         ("shape", (c_ssize_t * 3)),
@@ -18,7 +19,7 @@ class TestArrayAdaptor(unittest.TestCase):
     def test_array_adaptor(self):
         arystruct = ArrayStruct3D()
 
-        adaptorptr = get_ndarray_adaptor()
+        adaptorptr = c_helpers['adapt_ndarray']
         adaptor = PYFUNCTYPE(c_int, py_object, c_void_p)(adaptorptr)
 
         ary = numpy.arange(60).reshape(2, 3, 10)

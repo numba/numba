@@ -6,7 +6,7 @@ from llvm import LLVMException
 
 from numba.config import PYVERSION
 import numba.ctypes_support as ctypes
-from numba import types, utils, cgutils, _numpyadapt, _helperlib, assume
+from numba import types, utils, cgutils, _helperlib, assume
 
 _PyNone = ctypes.c_ssize_t(id(None))
 
@@ -22,8 +22,8 @@ def fix_python_api():
     """
     c_helpers = _helperlib.c_helpers
     le.dylib_add_symbol("Py_None", ctypes.addressof(_PyNone))
-    le.dylib_add_symbol("NumbaArrayAdaptor", _numpyadapt.get_ndarray_adaptor())
-    le.dylib_add_symbol("NumbaNDArrayNew", _numpyadapt.get_ndarray_new())
+    le.dylib_add_symbol("NumbaArrayAdaptor", c_helpers["adapt_ndarray"])
+    le.dylib_add_symbol("NumbaNDArrayNew", c_helpers["ndarray_new"])
 
     le.dylib_add_symbol("NumbaComplexAdaptor",
                         c_helpers["complex_adaptor"])

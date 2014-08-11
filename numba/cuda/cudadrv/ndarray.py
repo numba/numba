@@ -1,4 +1,5 @@
 from __future__ import print_function, absolute_import, division
+import numpy as np
 import numba.ctypes_support as ctypes
 from . import devices, driver
 
@@ -48,13 +49,16 @@ class ArrayHeaderManager(object):
             mem = self.data.view(offset, offset + self.elemsize)
             self.queue.append(mem)
         self.allocated = set()
+        # A staging buffer to temporary store data for copying
+        buffer = context.memhostalloc(self.elemsize)
+        self.staging = np.ndarray(shape=self.elemsize, dtype=np.byte,
+                                  order='C', buffer=buffer)
 
     def allocate(self, nd):
         arraytype = make_array_ctype(nd)
         sizeof = ctypes.sizeof(arraytype)
-
         # Oversized or insufficient space
-        if sizeof >= self.elemsize or not self.queue:
+        if sizeof > self.elemsize or not self.queue:
             return _allocate_head(nd)
 
         mem = self.queue.pop()
@@ -65,6 +69,16 @@ class ArrayHeaderManager(object):
         if mem in self.allocated:
             self.allocated.discard(mem)
             self.queue.append(mem)
+
+    def write(self, data, to, stream=0):
+        if data.size > self.elemsize:
+            # Cannot use pinned staging memory
+            stage = data
+        else:
+            # Can use pinned staging memory
+            stage = self.staging[:data.size]
+            stage[:] = data
+        driver.host_to_device(to, stage, data.size, stream=stream)
 
     def __repr__(self):
         return "<cuda managed memory %s >" % (self.context.device,)
@@ -101,7 +115,7 @@ def ndarray_device_allocate_data(ary):
     return gpu_data
 
 
-def ndarray_populate_head(gpu_head, gpu_data, shape, strides, stream=0):
+def ndarray_populate_head(gpu_mem, gpu_data, shape, strides, stream=0):
     """
     Populate the array header
     """
@@ -113,6 +127,9 @@ def ndarray_populate_head(gpu_head, gpu_data, shape, strides, stream=0):
                        shape=shape,
                        strides=strides)
 
-    driver.host_to_device(gpu_head, struct, ctypes.sizeof(struct),
-                          stream=stream)
+    gpu_head = gpu_mem.allocate(nd)
+    databytes = np.ndarray(shape=ctypes.sizeof(struct), dtype=np.byte,
+                           buffer=struct)
+    gpu_mem.write(databytes, gpu_head, stream=stream)
     driver.device_memory_depends(gpu_head, gpu_data)
+    return gpu_head

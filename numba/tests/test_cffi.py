@@ -3,7 +3,7 @@ from __future__ import print_function, division, absolute_import
 from numba import unittest_support as unittest
 from numba import cffi_support, types
 from numba.compiler import compile_isolated, Flags
-
+from .support import TestCase
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -26,7 +26,7 @@ def use_cffi_sin(x):
 
 
 @unittest.skipUnless(cffi_support.SUPPORTED, "CFFI not supported")
-class TestCFFI(unittest.TestCase):
+class TestCFFI(TestCase):
 
     def test_cffi_sin_function(self, flags=enable_pyobj_flags):
         signature = cffi_support.map_type(ffi.typeof(c_sin))
@@ -38,7 +38,7 @@ class TestCFFI(unittest.TestCase):
         cfunc = cres.entry_point
 
         for x in [-1.2, -1, 0, 0.1]:
-            self.assertEqual(pyfunc(x), cfunc(x))
+            self.assertPreciseEqual(pyfunc(x), cfunc(x))
 
     def test_cffi_sin_function_npm(self):
         self.test_cffi_sin_function(flags=no_pyobj_flags)

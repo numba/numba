@@ -81,11 +81,56 @@ class VarMap(object):
         return self._con.iterkeys()
 
 
-class Stmt(object):
+class Inst(object):
+    """
+    Base class for all IR instructions.
+    """
+
+    def list_vars(self):
+        """
+        List the variables used (read or written) by the instruction.
+        """
+        raise NotImplementedError
+
+    def _rec_list_vars(self, val):
+        """
+        A recursive helper used to implement list_vars() in subclasses.
+        """
+        if isinstance(val, Var):
+            return [val]
+        elif isinstance(val, Inst):
+            return val.list_vars()
+        elif isinstance(val, (list, tuple)):
+            lst = []
+            for v in val:
+                lst.extend(self._rec_list_vars(v))
+            return lst
+        elif isinstance(val, dict):
+            lst = []
+            for v in val.values():
+                lst.extend(self._rec_list_vars(v))
+            return lst
+        else:
+            return []
+
+
+class Stmt(Inst):
+    """
+    Base class for IR statements (instructions which can appear on their
+    own in a Block).
+    """
     is_terminator = False
 
+    def list_vars(self):
+        return self._rec_list_vars(self.__dict__)
 
-class Expr(object):
+
+class Expr(Inst):
+    """
+    An IR expression (an instruction which can only be part of a larger
+    statement).
+    """
+
     def __init__(self, op, loc, **kws):
         self.op = op
         self.loc = loc
@@ -185,9 +230,7 @@ class Expr(object):
             return '%s(%s)' % (self.op, ', '.join(args))
 
     def list_vars(self):
-        for v in self._kws.values():
-            if isinstance(v, Var):
-                return v
+        return self._rec_list_vars(self._kws)
 
 
 class SetItem(Stmt):
@@ -473,6 +516,10 @@ class Block(object):
         self.body = []
         self.loc = loc
 
+    def prepend(self, inst):
+        assert isinstance(inst, Stmt)
+        self.body.insert(0, inst)
+
     def append(self, inst):
         assert isinstance(inst, Stmt)
         self.body.append(inst)
@@ -483,7 +530,8 @@ class Block(object):
 
     def dump(self, file=sys.stdout):
         for inst in self.body:
-            print('   ', inst, file=file)
+            inst_vars = sorted(str(v) for v in inst.list_vars())
+            print('    %-40s %s' % (inst, inst_vars), file=file)
 
     @property
     def terminator(self):
@@ -502,6 +550,13 @@ class Block(object):
                 raise VerificationError("Terminator before the last "
                                         "instruction")
 
+    def insert_after(self, stmt, other):
+        """
+        Insert *stmt* after *other*.
+        """
+        index = self.body.index(other)
+        self.body.insert(index + 1, stmt)
+
     def insert_before_terminator(self, stmt):
         assert isinstance(stmt, Stmt)
         assert self.is_terminated
@@ -509,35 +564,15 @@ class Block(object):
 
 
 class Loop(object):
-    __slots__ = "entry", "condition", "body", "exit"
+    __slots__ = "entry", "exit"
 
-    def __init__(self, entry, exit, condition=None):
+    def __init__(self, entry, exit):
         self.entry = entry
-        self.condition = condition
-        self.body = []
         self.exit = exit
 
-    def valid(self):
-        try:
-            self.verify()
-        except VerificationError:
-            return False
-        else:
-            return True
-
-    def verify(self):
-        if self.entry is None:
-            raise VerificationError("Missing entry block")
-        if self.condition is None:
-            raise VerificationError("Missing condition block")
-        if self.exit is None:
-            raise VerificationError("Missing exit block")
-        if not self.body:
-            raise VerificationError("Missing body block")
-
     def __repr__(self):
-        args = self.entry, self.condition, self.body, self.exit
-        return "Loop(entry=%s, condition=%s, body=%s, exit=%s)" % args
+        args = self.entry, self.exit
+        return "Loop(entry=%s, exit=%s)" % args
 
 
 # A stub for undefined global reference
