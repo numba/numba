@@ -13,9 +13,24 @@ from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     builtin_attr, signature)
 
 
+class TimedeltaUnaryOp(AbstractTemplate):
+
+    def generic(self, args, kws):
+        if len(args) == 2:
+            # Guard against binary + and -
+            return
+        op, = args
+        if not isinstance(op, types.NPTimedelta):
+            return
+        return signature(op, op)
+
+
 class TimedeltaBinOp(AbstractTemplate):
 
     def generic(self, args, kws):
+        if len(args) == 1:
+            # Guard against unary + and -
+            return
         left, right = args
         if not all(isinstance(tp, types.NPTimedelta) for tp in args):
             return
@@ -85,6 +100,14 @@ class TimedeltaDivOp(AbstractTemplate):
         elif right in types.signed_domain or right in types.real_domain:
             return signature(left, left, right)
 
+
+@builtin
+class TimedeltaUnaryPos(TimedeltaUnaryOp):
+    key = "+"
+
+@builtin
+class TimedeltaUnaryNeg(TimedeltaUnaryOp):
+    key = "-"
 
 @builtin
 class TimedeltaBinAdd(TimedeltaBinOp):

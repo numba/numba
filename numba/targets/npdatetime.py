@@ -16,13 +16,13 @@ from numba.typing import signature
 TIMEDELTA64 = Type.int(64)
 NAT = Constant.int(TIMEDELTA64, npdatetime.NAT)
 
+TIMEDELTA_BINOP_SIG = (types.Kind(types.NPTimedelta),) * 2
+
 
 @type_factory(types.NPTimedelta)
 def llvm_timedelta_type(context, tp):
     return TIMEDELTA64
 
-
-TIMEDELTA_BINOP_SIG = (types.Kind(types.NPTimedelta),) * 2
 
 def scale_timedelta(context, builder, val, srcty, destty):
     """
@@ -64,6 +64,18 @@ def are_not_nat(builder, vals):
         pred = builder.and_(pred, is_not_nat(builder, val))
     return pred
 
+
+# Arithmetic operators on timedelta64
+
+@builtin
+@implement('+', types.Kind(types.NPTimedelta))
+def timedelta_pos_impl(context, builder, sig, args):
+    return args[0]
+
+@builtin
+@implement('-', types.Kind(types.NPTimedelta))
+def timedelta_pos_impl(context, builder, sig, args):
+    return builder.neg(args[0])
 
 @builtin
 @implement('+', *TIMEDELTA_BINOP_SIG)
@@ -140,8 +152,8 @@ def timedelta_div_impl(context, builder, sig, args):
     return builder.load(ret)
 
 @builtin
-@implement('/', types.Kind(types.NPTimedelta), types.Kind(types.NPTimedelta))
-@implement('/?', types.Kind(types.NPTimedelta), types.Kind(types.NPTimedelta))
+@implement('/', *TIMEDELTA_BINOP_SIG)
+@implement('/?', *TIMEDELTA_BINOP_SIG)
 def timedelta_div_impl(context, builder, sig, args):
     [va, vb] = args
     [ta, tb] = sig.args
@@ -156,6 +168,8 @@ def timedelta_div_impl(context, builder, sig, args):
         builder.store(builder.fdiv(va, vb), ret)
     return builder.load(ret)
 
+
+# Comparison operators on timedelta64
 
 def implement_equality_operator(py_op, ll_op, default_value):
     @builtin

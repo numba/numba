@@ -53,6 +53,12 @@ def gt_usecase(x, y):
 def ge_usecase(x, y):
     return x >= y
 
+def pos_usecase(x):
+    return +x
+
+def neg_usecase(x):
+    return -x
+
 
 class TestModuleHelpers(TestCase):
     """
@@ -329,6 +335,30 @@ class TestScalarOperators(TestCase):
             le(TD('NaT', 'Y'), TD('NaT', 'D'))
         with self.assertRaises((TypeError, TypingError)):
             gt(TD('NaT', 'Y'), TD('NaT', 'D'))
+
+    def test_pos(self):
+        pos = self.jit(pos_usecase)
+        def check(a):
+            self.assertPreciseEqual(pos(a), +a)
+
+        check(TD(3))
+        check(TD(-4))
+        check(TD(3, 'ms'))
+        check(TD(-4, 'ms'))
+        check(TD('NaT'))
+        check(TD('NaT', 'ms'))
+
+    def test_neg(self):
+        pos = self.jit(neg_usecase)
+        def check(a):
+            self.assertPreciseEqual(pos(a), -a)
+
+        check(TD(3))
+        check(TD(-4))
+        check(TD(3, 'ms'))
+        check(TD(-4, 'ms'))
+        check(TD('NaT'))
+        check(TD('NaT', 'ms'))
 
 
 class TestScalarOperatorsNoPython(TestScalarOperators):
