@@ -293,33 +293,81 @@ struct computer_indices {
         unsigned  offset
     )
     {
-        enum { BITS = 8 };
+        enum { BITS = 8, BLOCK_SIZE=64, ILP=BUCKET_SIZE/BLOCK_SIZE };
         unsigned block_count = gridDim.x;
         unsigned blkid = blockIdx.x * BUCKET_SIZE;
-        unsigned occurences[BUCKET_SIZE];
+        __shared__ unsigned occurences[BUCKET_SIZE];
 
-        for (unsigned i=0; i<BUCKET_SIZE; ++i) {
-            occurences[i] = 0;
+        typedef cub::BlockLoad<unsigned*, BLOCK_SIZE, ILP,
+                               cub::BLOCK_LOAD_VECTORIZE> LoadOcc;
+        typedef cub::BlockStore<unsigned*, BLOCK_SIZE, ILP,
+                                cub::BLOCK_STORE_VECTORIZE> StoreOcc;
+
+        // Vector load causes load alignment error?
+        // typedef cub::BlockLoad<Ty*, 1, ILP,
+        //                        cub::BLOCK_LOAD_VECTORIZE> LoadData;
+
+        typedef cub::BlockLoad<Ty*, 1, ILP> LoadData;
+        typedef cub::BlockStore<unsigned*, 1, ILP,
+                                cub::BLOCK_STORE_VECTORIZE> StoreIdx;
+
+        __shared__ union {
+            typename LoadOcc::TempStorage load_occ;
+            typename StoreOcc::TempStorage store_occ;
+            typename LoadData::TempStorage load_data;
+            typename StoreIdx::TempStorage store_idx;
+        } temp;
+
+        union {
+            unsigned occ[ILP];
+            Ty data[ILP];
+        } temp_threads;
+
+        LoadOcc(temp.load_occ).Load(bucket_index, temp_threads.occ);
+        __syncthreads();
+
+        StoreOcc(temp.store_occ).Store(occurences, temp_threads.occ);
+        __syncthreads();
+
+        if (threadIdx.x != 0)
+            return;
+        // Block size is now 1
+
+        // ILP optimized loop
+        unsigned restart_from = 0;
+        for (unsigned i=0; i<BUCKET_SIZE; i += ILP, restart_from = i) {
+            unsigned id = blkid + i;
+            if (id + ILP >= count) {
+                break;
+            }
+
+            LoadData(temp.load_data).Load(&data[id], temp_threads.data);
+            unsigned thread_idx[ILP];
+
+            #pragma unroll 4
+            for (unsigned j = 0; j < ILP; ++j) {
+                uint8_t bucket = (temp_threads.data[j] >> (offset * BITS)) & BUCKET_MASK;
+                unsigned histbase = hist[bucket * block_count + blockIdx.x];
+                thread_idx[j] = histbase + occurences[bucket];
+                occurences[bucket] += 1;
+            }
+            StoreIdx(temp.store_idx).Store(&indices[id], thread_idx);
         }
 
-        for (unsigned i=0; i<BUCKET_SIZE; ++i) {
+        // Fallback loop
+        for (unsigned i=restart_from; i<BUCKET_SIZE; ++i) {
             unsigned id = blkid + i;
             if (id >= count) {
                 return;
             }
             uint8_t bucket = (data[id] >> (offset * BITS)) & BUCKET_MASK;
-            unsigned bucketbase = bucket_index[bucket];
             unsigned histbase = hist[bucket * block_count + blockIdx.x];
-            unsigned offset = histbase + bucketbase + occurences[bucket];
+            unsigned idxoff = histbase + occurences[bucket];
             occurences[bucket] += 1;
-
-            indices[id] = offset;
+            indices[id] = idxoff;
         }
     }
 };
-
-// no export
-}
 
 /*
 This naive algorithm is faster than doing scan in the block or using
@@ -329,7 +377,7 @@ Must:
 - gridsize == block count
 - blocksize == 1
 */
-__global__
+__device__
 void
 cu_compute_indices_generic(
     uint8_t  *data,
@@ -362,6 +410,9 @@ cu_compute_indices_generic(
 
         indices[id] = offset;
     }
+}
+
+// no export
 }
 
 __global__
@@ -406,22 +457,22 @@ cu_scatter(
 )
 {
     unsigned id = threadIdx.x + blockIdx.x * blockDim.x;
-    unsigned offset = indices[id];
     if (id >= count)  {
         return;
     }
+    unsigned dstid = indices[id];
     switch(stride){
     case 1:
-        copy<uint8_t>::as(sorted, data, offset, id);
+        copy<uint8_t>::as(sorted, data, dstid, id);
         break;
     case 2:
-        copy<uint16_t>::as(sorted, data, offset, id);
+        copy<uint16_t>::as(sorted, data, dstid, id);
         break;
     case 4:
-        copy<uint32_t>::as(sorted, data, offset, id);
+        copy<uint32_t>::as(sorted, data, dstid, id);
         break;
     case 8:
-        copy<uint64_t>::as(sorted, data, offset, id);
+        copy<uint64_t>::as(sorted, data, dstid, id);
         break;
     }
 }

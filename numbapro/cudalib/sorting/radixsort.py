@@ -393,7 +393,7 @@ class Radixsort(object):
                                                 stream=self.stream)
         scan_bucket = self.cu_scan_bucket_index.configure((1,), (BUCKET_SIZE,),
                                                           stream=self.stream)
-        indexing = self.cu_compute_indices.configure((blkcount,), (1,),
+        indexing = self.cu_compute_indices.configure((blkcount,), (64,),
                                                      stream=self.stream)
         scatter = self.cu_scatter.configure((blkcount,), (BUCKET_SIZE,),
                                             stream=self.stream)
