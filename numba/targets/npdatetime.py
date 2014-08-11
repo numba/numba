@@ -119,8 +119,10 @@ def timedelta_mul_impl(context, builder, sig, args):
 @builtin
 @implement('/', types.Kind(types.NPTimedelta), types.Kind(types.Integer))
 @implement('//', types.Kind(types.NPTimedelta), types.Kind(types.Integer))
+@implement('/?', types.Kind(types.NPTimedelta), types.Kind(types.Integer))
 @implement('/', types.Kind(types.NPTimedelta), types.Kind(types.Float))
 @implement('//', types.Kind(types.NPTimedelta), types.Kind(types.Float))
+@implement('/?', types.Kind(types.NPTimedelta), types.Kind(types.Float))
 def timedelta_div_impl(context, builder, sig, args):
     td_arg, number_arg = args
     number_type = sig.args[1]
