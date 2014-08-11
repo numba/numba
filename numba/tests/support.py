@@ -3,6 +3,7 @@ Assorted utilities for use in tests.
 """
 
 import contextlib
+import math
 
 import numpy as np
 
@@ -109,6 +110,14 @@ class TestCase(unittest.TestCase):
         # (necessary for datetime64 and timedelta64).
         if hasattr(first, 'dtype') and hasattr(second, 'dtype'):
             self.assertEqual(first.dtype, second.dtype)
+
+        try:
+            if math.isnan(first) and math.isnan(second):
+                # The NaNs will compare unequal, skip regular comparison
+                return
+        except TypeError:
+            # Not floats.
+            pass
 
         if not exact_comparison and prec != 'exact':
             if prec == 'single':

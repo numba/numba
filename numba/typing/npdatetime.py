@@ -49,13 +49,16 @@ class TimedeltaDivOp(AbstractTemplate):
     def generic(self, args, kws):
         """
         (timedelta64, {int, float}) -> timedelta64
+        (timedelta64, timedelta64) -> float
         """
         left, right = args
+        if not isinstance(left, types.NPTimedelta):
+            return
+        if isinstance(right, types.NPTimedelta):
+            return signature(types.float64, left, right)
         # Force integer types to convert to signed because it matches
         # timedelta64 semantics better.
-        if right not in types.signed_domain and right not in types.real_domain:
-            return
-        if isinstance(left, types.NPTimedelta):
+        if right in types.signed_domain or right in types.real_domain:
             return signature(left, left, right)
 
 
@@ -72,10 +75,13 @@ class TimedeltaBinMult(TimedeltaMixOp):
     key = "*"
 
 @builtin
-class TimedeltaDiv(TimedeltaDivOp):
+class TimedeltaTrueDiv(TimedeltaDivOp):
     key = "/"
 
 @builtin
 class TimedeltaFloorDiv(TimedeltaDivOp):
     key = "//"
 
+@builtin
+class TimedeltaLegacyDiv(TimedeltaDivOp):
+    key = "/?"

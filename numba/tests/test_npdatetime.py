@@ -184,11 +184,27 @@ class TestScalarOperators(TestCase):
         check(TD(3, 'ps'), float('nan'), TD('NaT', 'ps'))
         check(TD('NaT', 'ps'), float('nan'), TD('NaT', 'ps'))
 
+    def test_homogenous_div(self):
+        div = self.jit(div_usecase)
+        def check(a, b, expected):
+            self.assertPreciseEqual(div(a, b), expected)
+
+        # timedelta64 / timedelta64
+        check(TD(7), TD(3), 7. / 3.)
+        check(TD(7), TD(3, 'ms'), 7. / 3.)
+        check(TD(7, 'us'), TD(3, 'ms'), 7. / 3000.)
+        check(TD(7, 'ms'), TD(3, 'us'), 7000. / 3.)
+        check(TD(7), TD(0), float('+inf'))
+        check(TD(-7), TD(0), float('-inf'))
+        # NaTs
+        check(TD('nat'), TD(3), float('nan'))
+        check(TD(3), TD('nat'), float('nan'))
+        check(TD('nat'), TD(0), float('nan'))
+
 
 class TestScalarOperatorsNoPython(TestScalarOperators):
 
     jitargs = dict(nopython=True)
-
 
 
 if __name__ == '__main__':

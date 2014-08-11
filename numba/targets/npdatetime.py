@@ -123,3 +123,23 @@ def timedelta_div_impl(context, builder, sig, args):
         builder.store(val, ret)
     return builder.load(ret)
 
+@builtin
+@implement('/', types.Kind(types.NPTimedelta), types.Kind(types.NPTimedelta))
+@implement('/?', types.Kind(types.NPTimedelta), types.Kind(types.NPTimedelta))
+def timedelta_div_impl(context, builder, sig, args):
+    [va, vb] = args
+    [ta, tb] = sig.args
+    not_nan = are_not_nat(builder, [va, vb])
+    ll_ret_type = context.get_value_type(sig.return_type)
+    ret = cgutils.alloca_once(builder, ll_ret_type, 'ret')
+    builder.store(Constant.real(ll_ret_type, float('nan')), ret)
+    with cgutils.if_likely(builder, not_nan):
+        if tb.unit < ta.unit:
+            vb = scale_timedelta(context, builder, vb, tb, ta)
+        else:
+            va = scale_timedelta(context, builder, va, ta, tb)
+        va = builder.sitofp(va, ll_ret_type)
+        vb = builder.sitofp(vb, ll_ret_type)
+        builder.store(builder.fdiv(va, vb), ret)
+    return builder.load(ret)
+
