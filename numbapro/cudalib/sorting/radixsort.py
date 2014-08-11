@@ -4,6 +4,7 @@ import copy
 from collections import namedtuple
 from ctypes import c_uint
 from contextlib import contextmanager
+from timeit import default_timer as timer
 import numpy as np
 from numbapro import cuda
 
@@ -453,3 +454,44 @@ class Radixsort(object):
 _select_kernels = namedtuple("select_kernels",
                              ['build_hist', 'scan_hist', 'scan_bucket',
                               'indexing', 'scatter'])
+
+
+def benchmark(dtype=np.float64, count=10 ** 6, getindices=False,
+              reverse=False, seed=None):
+    """Radixsort library benchmark code.
+    """
+    if seed is not None:
+        np.random.seed(seed)
+
+    data = np.random.rand(count).astype(dtype)
+    orig = data.copy()
+    gold = data.copy()
+
+    ts = timer()
+    gold.sort()
+    te = timer()
+    cpu_time = te - ts
+
+    if reverse:
+        gold = gold[::-1]
+
+    rs = Radixsort(data.dtype)
+
+    # Do sort
+    ts = timer()
+    if getindices:
+        indices = rs.argsort(data, reverse=reverse)
+    else:
+        indices = rs.sort(data, reverse=reverse)
+    te = timer()
+    gpu_time = te - ts
+
+    # Check result
+    assert np.all(data == gold)
+
+    if getindices:
+        assert (np.all(orig[indices] == gold))
+    else:
+        assert indices is None
+
+    return cpu_time, gpu_time
