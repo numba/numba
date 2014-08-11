@@ -76,20 +76,50 @@ def timedelta_sub_impl(context, builder, sig, args):
     return builder.load(ret)
 
 
-def timedelta_times_number(context, builder, td_arg, int_arg):
+def timedelta_times_number(context, builder, td_arg, number_arg, number_type):
     ret = alloc_timedelta_result(builder)
     with cgutils.if_likely(builder, is_not_nat(builder, td_arg)):
-        builder.store(builder.mul(td_arg, int_arg), ret)
+        if isinstance(number_type, types.Float):
+            val = builder.sitofp(td_arg, number_arg.type)
+            val = builder.fmul(val, number_arg)
+            val = builder.fptosi(val, TIMEDELTA64)
+        else:
+            val = builder.mul(td_arg, number_arg)
+        builder.store(val, ret)
     return builder.load(ret)
 
 @builtin
 @implement('*', types.Kind(types.NPTimedelta), types.Kind(types.Integer))
+@implement('*', types.Kind(types.NPTimedelta), types.Kind(types.Float))
 def timedelta_mul_impl(context, builder, sig, args):
-    return timedelta_times_number(context, builder, args[0], args[1])
+    return timedelta_times_number(context, builder,
+                                  args[0], args[1], sig.args[1])
 
 @builtin
 @implement('*', types.Kind(types.Integer), types.Kind(types.NPTimedelta))
+@implement('*', types.Kind(types.Float), types.Kind(types.NPTimedelta))
 def timedelta_mul_impl(context, builder, sig, args):
-    return timedelta_times_number(context, builder, args[1], args[0])
+    return timedelta_times_number(context, builder,
+                                  args[1], args[0], sig.args[0])
 
+@builtin
+@implement('/', types.Kind(types.NPTimedelta), types.Kind(types.Integer))
+@implement('//', types.Kind(types.NPTimedelta), types.Kind(types.Integer))
+@implement('/', types.Kind(types.NPTimedelta), types.Kind(types.Float))
+@implement('//', types.Kind(types.NPTimedelta), types.Kind(types.Float))
+def timedelta_div_impl(context, builder, sig, args):
+    td_arg, number_arg = args
+    number_type = sig.args[1]
+    ret = alloc_timedelta_result(builder)
+    ok = builder.and_(is_not_nat(builder, td_arg),
+                      builder.not_(cgutils.is_scalar_zero(builder, number_arg)))
+    with cgutils.if_likely(builder, ok):
+        if isinstance(number_type, types.Float):
+            val = builder.sitofp(td_arg, number_arg.type)
+            val = builder.fdiv(val, number_arg)
+            val = builder.fptosi(val, TIMEDELTA64)
+        else:
+            val = builder.sdiv(td_arg, number_arg)
+        builder.store(val, ret)
+    return builder.load(ret)
 

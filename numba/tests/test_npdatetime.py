@@ -29,6 +29,12 @@ def sub_usecase(x, y):
 def mul_usecase(x, y):
     return x * y
 
+def div_usecase(x, y):
+    return x / y
+
+def floordiv_usecase(x, y):
+    return x // y
+
 
 class TestModuleHelpers(TestCase):
     """
@@ -142,10 +148,41 @@ class TestScalarOperators(TestCase):
             self.assertPreciseEqual(f(a, b), expected)
             self.assertPreciseEqual(f(b, a), expected)
 
+        # int * timedelta64
         check(TD(3), 2, TD(6))
         check(TD(3, 'ps'), 2, TD(6, 'ps'))
         check(TD('NaT', 'ps'), 2, TD('NaT', 'ps'))
+        # float * timedelta64
+        check(TD(7), 1.5, TD(10))
+        check(TD(-7), 1.5, TD(-10))
+        check(TD(7, 'ps'), -1.5, TD(-10, 'ps'))
+        check(TD(-7), -1.5, TD(10))
+        check(TD('NaT', 'ps'), -1.5, TD('NaT', 'ps'))
+        check(TD(7, 'ps'), float('nan'), TD('NaT', 'ps'))
+        # wraparound on overflow
         check(TD(2**62, 'ps'), 16, TD(0, 'ps'))
+
+    def test_div(self):
+        div = self.jit(div_usecase)
+        floordiv = self.jit(floordiv_usecase)
+        def check(a, b, expected):
+            self.assertPreciseEqual(div(a, b), expected)
+            self.assertPreciseEqual(floordiv(a, b), expected)
+
+        # timedelta64 / int
+        check(TD(3), 2, TD(1))
+        check(TD(-3, 'ps'), 2, TD(-1, 'ps'))
+        check(TD('NaT', 'ps'), 2, TD('NaT', 'ps'))
+        check(TD(3, 'ps'), 0, TD('NaT', 'ps'))
+        check(TD('NaT', 'ps'), 0, TD('NaT', 'ps'))
+        # timedelta64 / float
+        check(TD(7), 0.5, TD(14))
+        check(TD(-7, 'ps'), 1.5, TD(-4, 'ps'))
+        check(TD('NaT', 'ps'), 2.5, TD('NaT', 'ps'))
+        check(TD(3, 'ps'), 0.0, TD('NaT', 'ps'))
+        check(TD('NaT', 'ps'), 0.0, TD('NaT', 'ps'))
+        check(TD(3, 'ps'), float('nan'), TD('NaT', 'ps'))
+        check(TD('NaT', 'ps'), float('nan'), TD('NaT', 'ps'))
 
 
 class TestScalarOperatorsNoPython(TestScalarOperators):
