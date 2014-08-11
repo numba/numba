@@ -35,6 +35,12 @@ def div_usecase(x, y):
 def floordiv_usecase(x, y):
     return x // y
 
+def eq_usecase(x, y):
+    return x == y
+
+def ne_usecase(x, y):
+    return x != y
+
 
 class TestModuleHelpers(TestCase):
     """
@@ -117,7 +123,7 @@ class TestScalarOperators(TestCase):
         check(TD('NaT'), TD(1), TD('NaT'))
         check(TD('NaT', 's'), TD(1, 'D'), TD('NaT', 's'))
         check(TD('NaT', 's'), TD(1, 'ms'), TD('NaT', 'ms'))
-        # Cannot add days and weeks
+        # Cannot add days and months
         with self.assertRaises((TypeError, TypingError)):
             f(TD(1, 'M'), TD(1, 'D'))
 
@@ -138,7 +144,7 @@ class TestScalarOperators(TestCase):
         check(TD('NaT'), TD(1), TD('NaT'))
         check(TD('NaT', 's'), TD(1, 'D'), TD('NaT', 's'))
         check(TD('NaT', 's'), TD(1, 'ms'), TD('NaT', 'ms'))
-        # Cannot sub days to weeks
+        # Cannot sub days to months
         with self.assertRaises((TypeError, TypingError)):
             f(TD(1, 'M'), TD(1, 'D'))
 
@@ -201,6 +207,55 @@ class TestScalarOperators(TestCase):
         check(TD('nat'), TD(3), float('nan'))
         check(TD(3), TD('nat'), float('nan'))
         check(TD('nat'), TD(0), float('nan'))
+        # Cannot div months with days
+        with self.assertRaises((TypeError, TypingError)):
+            div(TD(1, 'M'), TD(1, 'D'))
+
+    def test_eq(self):
+        eq = self.jit(eq_usecase)
+        def check(a, b, expected):
+            self.assertIs(eq(a, b), expected)
+            self.assertIs(eq(b, a), expected)
+
+        check(TD(1), TD(2), False)
+        check(TD(1), TD(1), True)
+        check(TD(1, 's'), TD(2, 's'), False)
+        check(TD(1, 's'), TD(1, 's'), True)
+        check(TD(2000, 's'), TD(2, 's'), False)
+        check(TD(2000, 'ms'), TD(2, 's'), True)
+        check(TD(1, 'Y'), TD(12, 'M'), True)
+        # NaTs
+        check(TD('Nat'), TD('Nat'), True)
+        check(TD('Nat', 'ms'), TD('Nat', 's'), True)
+        check(TD('Nat'), TD(1), False)
+        # Incompatible units => timedeltas compare unequal
+        check(TD(1, 'Y'), TD(365, 'D'), False)
+        check(TD(1, 'Y'), TD(366, 'D'), False)
+        # ... except when both are NaT!
+        check(TD('NaT', 'Y'), TD('NaT', 'D'), True)
+
+    def test_ne(self):
+        eq = self.jit(ne_usecase)
+        def check(a, b, expected):
+            self.assertIs(eq(a, b), expected)
+            self.assertIs(eq(b, a), expected)
+
+        check(TD(1), TD(2), True)
+        check(TD(1), TD(1), False)
+        check(TD(1, 's'), TD(2, 's'), True)
+        check(TD(1, 's'), TD(1, 's'), False)
+        check(TD(2000, 's'), TD(2, 's'), True)
+        check(TD(2000, 'ms'), TD(2, 's'), False)
+        check(TD(1, 'Y'), TD(12, 'M'), False)
+        # NaTs
+        check(TD('Nat'), TD('Nat'), False)
+        check(TD('Nat', 'ms'), TD('Nat', 's'), False)
+        check(TD('Nat'), TD(1), True)
+        # Incompatible units => timedeltas compare unequal
+        check(TD(1, 'Y'), TD(365, 'D'), True)
+        check(TD(1, 'Y'), TD(366, 'D'), True)
+        # ... except when both are NaT!
+        check(TD('NaT', 'Y'), TD('NaT', 'D'), False)
 
 
 class TestScalarOperatorsNoPython(TestScalarOperators):

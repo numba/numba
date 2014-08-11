@@ -32,6 +32,20 @@ def scale_timedelta(context, builder, val, srcty, destty):
     factor = npdatetime.get_timedelta_conversion_factor(srcty.unit, destty.unit)
     return builder.mul(Constant.int(TIMEDELTA64, factor), val)
 
+def normalize_timedeltas(context, builder, left, right, leftty, rightty):
+    """
+    Scale either *left* or *right* to the other's unit, in order to have
+    homogenous units.
+    """
+    factor = npdatetime.get_timedelta_conversion_factor(leftty.unit, rightty.unit)
+    if factor is not None:
+        return builder.mul(Constant.int(TIMEDELTA64, factor), left), right
+    factor = npdatetime.get_timedelta_conversion_factor(rightty.unit, leftty.unit)
+    if factor is not None:
+        return left, builder.mul(Constant.int(TIMEDELTA64, factor), right)
+    # Typing should not let this happen, except on == and != operators
+    raise RuntimeError("cannot normalize %r and %r" % (leftty, rightty))
+
 def alloc_timedelta_result(builder, name='ret'):
     """
     Allocate a NaT-initialized timedelta64 result slot.
@@ -134,12 +148,35 @@ def timedelta_div_impl(context, builder, sig, args):
     ret = cgutils.alloca_once(builder, ll_ret_type, 'ret')
     builder.store(Constant.real(ll_ret_type, float('nan')), ret)
     with cgutils.if_likely(builder, not_nan):
-        if tb.unit < ta.unit:
-            vb = scale_timedelta(context, builder, vb, tb, ta)
-        else:
-            va = scale_timedelta(context, builder, va, ta, tb)
+        va, vb = normalize_timedeltas(context, builder, va, vb, ta, tb)
         va = builder.sitofp(va, ll_ret_type)
         vb = builder.sitofp(vb, ll_ret_type)
         builder.store(builder.fdiv(va, vb), ret)
     return builder.load(ret)
 
+
+def implement_equality_operator(py_op, ll_op, default_value):
+
+    @builtin
+    @implement(py_op, *TIMEDELTA_BINOP_SIG)
+    def timedelta_eq_impl(context, builder, sig, args):
+        [va, vb] = args
+        [ta, tb] = sig.args
+        ret = cgutils.alloca_once(builder, Type.int(1), 'ret')
+        with cgutils.ifelse(builder, are_not_nat(builder, [va, vb])) as (then, otherwise):
+            with then:
+                try:
+                    norm_a, norm_b = normalize_timedeltas(context, builder, va, vb, ta, tb)
+                except RuntimeError:
+                    # Cannot normalize units => the values are unequal (except if NaT)
+                    builder.store(default_value, ret)
+                else:
+                    builder.store(builder.icmp(ll_op, norm_a, norm_b), ret)
+            with otherwise:
+                # No scaling when comparing NaTs
+                builder.store(builder.icmp(ll_op, va, vb), ret)
+        return builder.load(ret)
+
+
+implement_equality_operator('==', lc.ICMP_EQ, cgutils.false_bit)
+implement_equality_operator('!=', lc.ICMP_NE, cgutils.true_bit)

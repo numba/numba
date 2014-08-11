@@ -25,6 +25,26 @@ class TimedeltaBinOp(AbstractTemplate):
             return signature(left, left, right)
 
 
+class TimedeltaCmpOp(AbstractTemplate):
+
+    def generic(self, args, kws):
+        left, right = args
+        if not all(isinstance(tp, types.NPTimedelta) for tp in args):
+            return
+        return signature(types.boolean, left, right)
+
+
+class TimedeltaOrderedCmpOp(AbstractTemplate):
+
+    def generic(self, args, kws):
+        left, right = args
+        if not all(isinstance(tp, types.NPTimedelta) for tp in args):
+            return
+        if (npdatetime.can_cast_timedelta_units(left.unit, right.unit) or
+            npdatetime.can_cast_timedelta_units(right.unit, left.unit)):
+            return signature(types.boolean, left, right)
+
+
 class TimedeltaMixOp(AbstractTemplate):
 
     def generic(self, args, kws):
@@ -55,10 +75,12 @@ class TimedeltaDivOp(AbstractTemplate):
         if not isinstance(left, types.NPTimedelta):
             return
         if isinstance(right, types.NPTimedelta):
-            return signature(types.float64, left, right)
+            if (npdatetime.can_cast_timedelta_units(left.unit, right.unit)
+                or npdatetime.can_cast_timedelta_units(right.unit, left.unit)):
+                return signature(types.float64, left, right)
         # Force integer types to convert to signed because it matches
         # timedelta64 semantics better.
-        if right in types.signed_domain or right in types.real_domain:
+        elif right in types.signed_domain or right in types.real_domain:
             return signature(left, left, right)
 
 
@@ -85,3 +107,12 @@ class TimedeltaFloorDiv(TimedeltaDivOp):
 @builtin
 class TimedeltaLegacyDiv(TimedeltaDivOp):
     key = "/?"
+
+@builtin
+class TimedeltaCmpEq(TimedeltaCmpOp):
+    key = '=='
+
+@builtin
+class TimedeltaCmpNe(TimedeltaCmpOp):
+    key = '!='
+
