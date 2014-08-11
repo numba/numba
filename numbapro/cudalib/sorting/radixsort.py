@@ -456,8 +456,8 @@ _select_kernels = namedtuple("select_kernels",
                               'indexing', 'scatter'])
 
 
-def benchmark(dtype=np.float64, count=10 ** 6, getindices=False,
-              reverse=False, seed=None):
+def benchmark_sort(dtype=np.float64, count=10 ** 6, getindices=False,
+                   reverse=False, seed=None):
     """Radixsort library benchmark code.
     """
     if seed is not None:
@@ -491,6 +491,45 @@ def benchmark(dtype=np.float64, count=10 ** 6, getindices=False,
 
     if getindices:
         assert (np.all(orig[indices] == gold))
+    else:
+        assert indices is None
+
+    return cpu_time, gpu_time
+
+
+def benchmark_select(dtype=np.float64, k=10, count=10 ** 6, getindices=False,
+                     reverse=False, seed=None):
+    if seed is not None:
+        np.random.seed(seed)
+
+    data = np.random.rand(count).astype(dtype)
+    orig = data.copy()
+    gold = data.copy()
+
+    ts = timer()
+    gold.sort()
+    te = timer()
+    cpu_time = te - ts
+
+    if reverse:
+        gold = gold[::-1]
+    gold = gold[:k]
+    rs = Radixsort(data.dtype)
+
+    # Do sort
+    ts = timer()
+    if getindices:
+        indices = rs.argselect(data, k=k, reverse=reverse)
+    else:
+        indices = rs.select(data, k=k, reverse=reverse)
+    te = timer()
+    gpu_time = te - ts
+
+    data = data[:k]
+    # check result
+    assert np.all(data == gold)
+    if getindices:
+        assert np.all(orig[indices] == gold)
     else:
         assert indices is None
 

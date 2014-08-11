@@ -2,6 +2,7 @@
 #include <cub/block/block_store.cuh>
 #include <cub/block/block_scan.cuh>
 #include <cub/block/block_radix_sort.cuh>
+#include <stdint.h>
 
 #define CUDA_SAFE(X) {if((X) != cudaSuccess) {fprintf(stderr, "cuda error: line %d\n", __LINE__); exit(1);}}
 #define ASSERT_CUDA_LAST_ERROR() CUDA_SAFE(cudaPeekAtLastError());

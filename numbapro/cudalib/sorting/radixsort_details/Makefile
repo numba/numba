@@ -1,6 +1,6 @@
 CUB_INCLUDE = -I"../../../../thirdparty/cub"
 
-all: libradix64
+all: libradix64 libradix
 
 radixsort.run: radixsort.cu
 	nvcc -O3 -arch=sm_30 -o $@ $+ $(CUB_INCLUDE)
