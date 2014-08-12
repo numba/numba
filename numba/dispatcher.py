@@ -172,7 +172,10 @@ class _OverloadedBase(_dispatcher.Dispatcher):
             # Ensure no autoscaling of integer type, to match the
             # typecode() function _dispatcher.c.
             return types.int64
-        return self.typingctx.resolve_data_type(val)
+        tp = self.typingctx.resolve_data_type(val)
+        if tp is None:
+            tp = types.pyobject
+        return tp
 
 
 class Overloaded(_OverloadedBase):

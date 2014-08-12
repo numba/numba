@@ -231,10 +231,11 @@ int typecode_fallback(DispatcherObject *dispatcher, PyObject *val) {
     }
 
     tmpcode = PyObject_GetAttrString(tmptype, "_code");
+    Py_DECREF(tmptype);
+    if (tmpcode == NULL)
+        return -1;
     typecode = PyLong_AsLong(tmpcode);
-
-    Py_XDECREF(tmpcode);
-    Py_XDECREF(tmptype);
+    Py_DECREF(tmpcode);
     return typecode;
 }
 
