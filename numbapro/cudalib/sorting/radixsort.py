@@ -37,26 +37,38 @@ SCAN_BLOCK_SUM_BLOCK_SIZE = 256
 
 
 class _TempStorage(object):
-    def __init__(self, data):
-        dtype = data.dtype
+    def __init__(self, dtype, count, stream):
+        dtype = np.dtype(dtype)
         idx_dtype = np.dtype(np.uint32)
-        self.stride = data.strides[0]
-        self.count = data.size
+        self.stride = dtype.itemsize
+        self.count = count
         self.blkcount = _calc_block_count(self.count)
         # Initialize device memory
-        self.d_indices = cuda.device_array(self.count, dtype=idx_dtype)
-        self.d_sorted = cuda.device_array(self.count, dtype=dtype)
+        self.d_indices = cuda.device_array(self.count, dtype=idx_dtype,
+                                           stream=stream)
+        self.d_sorted = cuda.device_array(self.count, dtype=dtype,
+                                          stream=stream)
         self.d_hist = cuda.device_array(self.blkcount * BUCKET_SIZE,
-                                        dtype=idx_dtype)
-        self.d_bucktotal = cuda.device_array(BUCKET_SIZE, dtype=idx_dtype)
+                                        dtype=idx_dtype,
+                                        stream=stream)
+        self.d_bucktotal = cuda.device_array(BUCKET_SIZE, dtype=idx_dtype,
+                                             stream=stream)
 
-        self.d_data, self.data_conv = cuda.devicearray.auto_device(data)
+    @contextmanager
+    def prepare_data(self, data, stream):
+        (self.d_data,
+         self.data_conv) = cuda.devicearray.auto_device(data, stream=stream)
+        yield
+        if self.data_conv:
+            self.d_data.copy_to_host(data, stream=stream)
+        del self.d_data
+        del self.data_conv
 
 
 class _IndexStorage(object):
-    def __init__(self, count, dtype):
-        self.d_order = cuda.device_array(count, dtype=dtype)
-        self.d_sorted = cuda.device_array(count, dtype=dtype)
+    def __init__(self, count, dtype, stream):
+        self.d_order = cuda.device_array(count, dtype=dtype, stream=stream)
+        self.d_sorted = cuda.device_array(count, dtype=dtype, stream=stream)
         self.stride = self.d_order.dtype.itemsize
 
     def swap(self, stream):
@@ -77,6 +89,10 @@ class _SelectIndexStorage(_IndexStorage):
         thecopy.d_sorted = d_sorted
         thecopy.d_order = d_order
         return thecopy
+
+
+_select_states = namedtuple("select_states", ["ts", "sis", "hbt"])
+_sort_states = namedtuple("sort_states", ["ts", "sis"])
 
 
 def _calc_block_count(count):
@@ -110,6 +126,7 @@ class Radixsort(object):
 
 
     """
+
     def __init__(self, dtype, stream=0):
         self.context = cuda.current_context()
         self.cc = self.context.device.compute_capability
@@ -175,11 +192,16 @@ class Radixsort(object):
         if data.strides[0] != data.dtype.itemsize:
             raise ValueError("Data must be C contiguous")
 
-    def _prepare(self, data):
-        self._sentry_data(data)
-        return _TempStorage(data)
+    def batch_sort(self, dtype, count, reverse=False, getindices=False):
+        states = self._init_sort_states(dtype, count, self.stream, getindices)
 
-    def sort(self, data, reverse=False, getindices=False):
+        def _next(data):
+            return self.sort(data, reverse=reverse, getindices=getindices,
+                             _states=states)
+
+        return _next
+
+    def sort(self, data, reverse=False, getindices=False, _states=None):
         """Perform inplace sort on the data.
 
         Args
@@ -190,36 +212,73 @@ class Radixsort(object):
         - getindices: bool
             Optional.  Set to True to return the sorted indices
         """
-        ts = self._prepare(data)
-        indstore = None
+        self._sentry_data(data)
+        states = _states or self._init_sort_states(data.dtype, data.size,
+                                                   self.stream, getindices)
+        del _states   # just to avoid typos
 
-        if getindices:
-            indstore = _IndexStorage(ts.count, dtype=np.uint32)
-            conf = self.cu_index_init.configure((ts.blkcount,),
-                                                (BUCKET_SIZE,),
-                                                stream=self.stream)
-            conf(indstore.d_order, c_uint(ts.count))
+        ts = states.ts
+        with ts.prepare_data(data, self.stream):
+            indstore = None
 
-        with self._filter(reverse, ts):
-            d_data = self._sortloop(ts.d_data, ts.d_sorted, ts.d_hist,
-                                    ts.d_bucktotal, ts.d_indices, ts.count,
-                                    ts.stride, ts.blkcount, indstore)
+            if getindices:
+                indstore = states.sis
+                conf = self.cu_index_init.configure((ts.blkcount,),
+                                                    (BUCKET_SIZE,),
+                                                    stream=self.stream)
+                conf(indstore.d_order, c_uint(ts.count))
 
-        # Prepare result
-        if ts.data_conv:
-            d_data.copy_to_host(data, stream=self.stream)
+            with self._filter(reverse, ts):
+                d_data = self._sortloop(ts.d_data, ts.d_sorted, ts.d_hist,
+                                        ts.d_bucktotal, ts.d_indices, ts.count,
+                                        ts.stride, ts.blkcount, indstore)
 
-        if indstore:
-            output = indstore.getresult()
-            return (output.copy_to_host(stream=self.stream)
-                    if ts.data_conv else output)
+            # Prepare result
+            if indstore:
+                output = indstore.getresult()
+                return (output.copy_to_host(stream=self.stream)
+                        if ts.data_conv else output)
 
     def argsort(self, data, reverse=False):
         """The same as ``sort(..., getindices=True)``
         """
         return self.sort(data, reverse=reverse, getindices=True)
 
-    def select(self, data, k, reverse=False, getindices=False):
+    def _init_sort_states(self, dtype, count, stream, getindices):
+        ts = _TempStorage(dtype, count, stream=self.stream)
+        if getindices:
+            sis = _SelectIndexStorage(ts.count, dtype=np.uint32,
+                                      stream=self.stream)
+        else:
+            sis = None
+        return _sort_states(ts=ts, sis=sis)
+
+    def _init_select_states(self, dtype, count, stream, getindices):
+        ts = _TempStorage(dtype, count, stream=self.stream)
+        if getindices:
+            sis = _SelectIndexStorage(ts.count, dtype=np.uint32,
+                                      stream=self.stream)
+        else:
+            sis = None
+        hbt = cuda.pinned_array(ts.d_bucktotal.shape,
+                                dtype=ts.d_bucktotal.dtype)
+        return _select_states(ts=ts, sis=sis, hbt=hbt)
+
+    def batch_select(self, dtype, count, k, reverse=False, getindices=False):
+        states = self._init_select_states(dtype, count, self.stream,
+                                          getindices)
+
+        def _next(data):
+            return self.select(data, k=k, reverse=reverse,
+                               getindices=getindices, _states=states)
+
+        return _next
+
+    def batch_argselect(self, dtype, count, k, reverse=False):
+        return self.batch_select(dtype, count, k, reverse=reverse,
+                                 getindices=True)
+
+    def select(self, data, k, reverse=False, getindices=False, _states=None):
         """
         Perform a inplace partial sort to select the first k-element in
         sorted order.  Only the first k-elements are guaranteed to be
@@ -235,64 +294,68 @@ class Radixsort(object):
         - getindices: bool
             Optional.  Set to True to return the sorted indices
         """
-        ts = self._prepare(data)
+        self._sentry_data(data)
+        states = _states or self._init_select_states(data.dtype, data.size,
+                                                     self.stream, getindices)
+        del _states  # just to prevent typos
 
-        indstore = None
-        if getindices:
-            indstore = _SelectIndexStorage(ts.count, dtype=np.uint32)
-            conf = self.cu_index_init.configure((ts.blkcount,),
-                                                (BUCKET_SIZE,),
-                                                stream=self.stream)
-            conf(indstore.d_order, c_uint(ts.count))
+        ts = states.ts
+        h_bucktotal = states.hbt
 
-        with self._filter(reverse, ts):
-            # Start from MSB
-            offset = ts.stride - 1
+        with ts.prepare_data(data, self.stream):
+            indstore = None
+            if getindices:
+                indstore = states.sis
+                conf = self.cu_index_init.configure((ts.blkcount,),
+                                                    (BUCKET_SIZE,),
+                                                    stream=self.stream)
+                conf(indstore.d_order, c_uint(ts.count))
 
-            # Partition into small sub-block that we will finish off
-            # with a subblock sort
-            subblocks = []
-            self._select(ts.d_data, ts.d_sorted, ts.d_hist, ts.d_bucktotal,
-                         ts.d_indices, ts.count, ts.stride, offset,
-                         ts.blkcount, k, subblocks, indstore=indstore)
+            with self._filter(reverse, ts):
+                # Start from MSB
+                offset = ts.stride - 1
 
-            # Sort sub-blocks
-            if subblocks:
-                subblocks = np.array(subblocks, order='F', dtype=np.uint32)
-                arr_begin = np.ascontiguousarray(subblocks[:, 0])
-                arr_count = np.ascontiguousarray(subblocks[:, 1])
+                # Partition into small sub-block that we will finish off
+                # with a subblock sort
+                subblocks = []
+                self._select(ts.d_data, ts.d_sorted, ts.d_hist, ts.d_bucktotal,
+                             ts.d_indices, ts.count, ts.stride, offset,
+                             ts.blkcount, k, subblocks, indstore=indstore,
+                             h_bucktotal=h_bucktotal)
 
-                nsb_length = len(subblocks)
-                if nsb_length <= min(ts.d_hist.size, ts.d_bucktotal.size):
-                    # Avoid extra allocation if we can
-                    d_begin = ts.d_hist.getitem(slice(0, nsb_length),
-                                                stream=self.stream)
-                    d_count = ts.d_bucktotal.getitem(slice(0, nsb_length),
-                                                     stream=self.stream)
-                    d_begin.copy_to_device(arr_begin,
-                                           stream=self.stream)
-                    d_count.copy_to_device(arr_count,
-                                           stream=self.stream)
-                else:
-                    # Allocate new array for the sublock counts
-                    d_begin = cuda.to_device(arr_begin,
-                                             stream=self.stream)
-                    d_count = cuda.to_device(arr_count,
-                                             stream=self.stream)
+                # Sort sub-blocks
+                if subblocks:
+                    subblocks = np.array(subblocks, order='F', dtype=np.uint32)
+                    arr_begin = np.ascontiguousarray(subblocks[:, 0])
+                    arr_count = np.ascontiguousarray(subblocks[:, 1])
 
-                self._subblock_sort(ts.d_data, d_begin, d_count,
-                                    indstore=indstore)
+                    nsb_length = len(subblocks)
+                    if nsb_length <= min(ts.d_hist.size, ts.d_bucktotal.size):
+                        # Avoid extra allocation if we can
+                        d_begin = ts.d_hist.getitem(slice(0, nsb_length),
+                                                    stream=self.stream)
+                        d_count = ts.d_bucktotal.getitem(slice(0, nsb_length),
+                                                         stream=self.stream)
+                        d_begin.copy_to_device(arr_begin,
+                                               stream=self.stream)
+                        d_count.copy_to_device(arr_count,
+                                               stream=self.stream)
+                    else:
+                        # Allocate new array for the sublock counts
+                        d_begin = cuda.to_device(arr_begin,
+                                                 stream=self.stream)
+                        d_count = cuda.to_device(arr_count,
+                                                 stream=self.stream)
 
-        # Prepare result
-        if ts.data_conv:
-            sliced = ts.d_data.getitem(slice(0, k), stream=self.stream)
-            sliced.copy_to_host(data[:k], stream=self.stream)
+                    self._subblock_sort(ts.d_data, d_begin, d_count,
+                                        indstore=indstore)
 
-        if indstore:
-            output = indstore.getresult().getitem(slice(0, k),
-                                                  stream=self.stream)
-            return (output.copy_to_host(stream=self.stream)
-                    if ts.data_conv else output)
+            # Prepare result
+            if indstore:
+                output = indstore.getresult().getitem(slice(0, k),
+                                                      stream=self.stream)
+                return (output.copy_to_host(stream=self.stream)
+                        if ts.data_conv else output)
 
     def argselect(self, data, k, reverse=False):
         """The same as ``select(..., getindices=True)``
@@ -361,9 +424,7 @@ class Radixsort(object):
             # Do nothing.
             return
 
-        if h_bucktotal is None:
-            h_bucktotal = cuda.pinned_array(d_bucktotal.shape,
-                                            dtype=d_bucktotal.dtype)
+        assert h_bucktotal is not None
 
         # Sort the MSB
         evt = cuda.event()
