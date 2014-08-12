@@ -215,7 +215,7 @@ class DeviceNDArray(DeviceNDArrayBase):
 
         Reshape the array and keeping the original data
         """
-        if len(newshape) == 1 and isinstance(newshape, (tuple, list)):
+        if len(newshape) == 1 and isinstance(newshape[0], (tuple, list)):
             newshape = newshape[0]
 
         cls = type(self)
