@@ -556,6 +556,8 @@ class TestDatetimeArithmetic(TestCase):
             for a, b in itertools.product(dts, dts):
                 self.assertPreciseEqual(sub(a, b), a - b, (a, b))
 
+    # XXX test type unification?
+
 
 class TestDatetimeArithmeticNoPython(TestDatetimeArithmetic):
 

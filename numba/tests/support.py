@@ -107,7 +107,7 @@ class TestCase(unittest.TestCase):
                 exact_comparison = True
 
         # If a Numpy scalar, check the dtype is exactly the same too
-        # (necessary for datetime64 and timedelta64).
+        # (required for datetime64 and timedelta64).
         if hasattr(first, 'dtype') and hasattr(second, 'dtype'):
             self.assertEqual(first.dtype, second.dtype)
 
