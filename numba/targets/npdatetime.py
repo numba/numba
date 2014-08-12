@@ -13,16 +13,36 @@ from numba.targets.imputils import (builtin, builtin_attr, implement,
 from numba.typing import signature
 
 
-TIMEDELTA64 = Type.int(64)
+# datetime64 and timedelta64 use the same internal representation
+DATETIME64 = TIMEDELTA64 = Type.int(64)
 NAT = Constant.int(TIMEDELTA64, npdatetime.NAT)
 
 TIMEDELTA_BINOP_SIG = (types.Kind(types.NPTimedelta),) * 2
 
 
+@type_factory(types.NPDatetime)
+def llvm_datetime_type(context, tp):
+    return DATETIME64
+
 @type_factory(types.NPTimedelta)
 def llvm_timedelta_type(context, tp):
     return TIMEDELTA64
 
+
+def scale_by_constant(builder, val, factor):
+    """
+    Multiply *val* by the constant *factor*.
+    """
+    return builder.mul(val, Constant.int(TIMEDELTA64, factor))
+
+def unscale_by_constant(builder, val, factor):
+    """
+    Divide *val* by the constant *factor*.
+    """
+    return builder.sdiv(val, Constant.int(TIMEDELTA64, factor))
+
+def add_constant(builder, val, const):
+    return builder.add(val, Constant.int(TIMEDELTA64, const))
 
 def scale_timedelta(context, builder, val, srcty, destty):
     """
@@ -30,7 +50,7 @@ def scale_timedelta(context, builder, val, srcty, destty):
     (both numba.types.NPTimedelta instances)
     """
     factor = npdatetime.get_timedelta_conversion_factor(srcty.unit, destty.unit)
-    return builder.mul(Constant.int(TIMEDELTA64, factor), val)
+    return scale_by_constant(builder, val, factor)
 
 def normalize_timedeltas(context, builder, left, right, leftty, rightty):
     """
@@ -39,25 +59,31 @@ def normalize_timedeltas(context, builder, left, right, leftty, rightty):
     """
     factor = npdatetime.get_timedelta_conversion_factor(leftty.unit, rightty.unit)
     if factor is not None:
-        return builder.mul(Constant.int(TIMEDELTA64, factor), left), right
+        return scale_by_constant(builder, left, factor), right
     factor = npdatetime.get_timedelta_conversion_factor(rightty.unit, leftty.unit)
     if factor is not None:
-        return left, builder.mul(Constant.int(TIMEDELTA64, factor), right)
+        return left, scale_by_constant(builder, right, factor)
     # Typing should not let this happen, except on == and != operators
     raise RuntimeError("cannot normalize %r and %r" % (leftty, rightty))
 
 def alloc_timedelta_result(builder, name='ret'):
     """
-    Allocate a NaT-initialized timedelta64 result slot.
+    Allocate a NaT-initialized datetime64 (or timedelta64) result slot.
     """
     ret = cgutils.alloca_once(builder, TIMEDELTA64, name)
     builder.store(NAT, ret)
     return ret
 
 def is_not_nat(builder, val):
+    """
+    Return a predicate which is true if *val* is not NaT.
+    """
     return builder.icmp(lc.ICMP_NE, val, NAT)
 
 def are_not_nat(builder, vals):
+    """
+    Return a predicate which is true if all of *vals* are not NaT.
+    """
     assert len(vals) >= 1
     pred = is_not_nat(builder, vals[0])
     for val in vals[1:]:
@@ -115,7 +141,7 @@ def timedelta_sub_impl(context, builder, sig, args):
     return builder.load(ret)
 
 
-def timedelta_times_number(context, builder, td_arg, number_arg, number_type):
+def _timedelta_times_number(context, builder, td_arg, number_arg, number_type):
     ret = alloc_timedelta_result(builder)
     with cgutils.if_likely(builder, is_not_nat(builder, td_arg)):
         if isinstance(number_type, types.Float):
@@ -131,14 +157,14 @@ def timedelta_times_number(context, builder, td_arg, number_arg, number_type):
 @implement('*', types.Kind(types.NPTimedelta), types.Kind(types.Integer))
 @implement('*', types.Kind(types.NPTimedelta), types.Kind(types.Float))
 def timedelta_mul_impl(context, builder, sig, args):
-    return timedelta_times_number(context, builder,
+    return _timedelta_times_number(context, builder,
                                   args[0], args[1], sig.args[1])
 
 @builtin
 @implement('*', types.Kind(types.Integer), types.Kind(types.NPTimedelta))
 @implement('*', types.Kind(types.Float), types.Kind(types.NPTimedelta))
 def timedelta_mul_impl(context, builder, sig, args):
-    return timedelta_times_number(context, builder,
+    return _timedelta_times_number(context, builder,
                                   args[1], args[0], sig.args[0])
 
 @builtin
@@ -232,3 +258,113 @@ implement_ordering_operator('<=', lc.ICMP_SLE)
 implement_ordering_operator('>', lc.ICMP_SGT)
 implement_ordering_operator('>=', lc.ICMP_SGE)
 
+
+# Arithmetic on datetime64
+
+def is_leap_year(builder, year_val):
+    actual_year = builder.add(year_val, Constant.int(DATETIME64, 1970))
+    # FIXME for correct leap year computation
+    return builder.and_(actual_year, Constant.int(DATETIME64, 3))
+
+def year_to_days(builder, year_val):
+    """
+    Given a year *year_val* (offset to 1970), return the number of days
+    since the 1970 epoch.
+    """
+    # The algorithm below is copied from Numpy's get_datetimestruct_days()
+    # (src/multiarray/datetime.c)
+    ret = cgutils.alloca_once(builder, TIMEDELTA64)
+    # First approximation
+    days = scale_by_constant(builder, year_val, 365)
+    # Adjust for leap years
+    with cgutils.ifelse(builder, cgutils.is_neg_int(builder, year_val)) \
+        as (ifneg, ifpos):
+        with ifpos:
+            # At or after 1970:
+            # 1968 is the closest leap year before 1970.
+            # Exclude the current year, so add 1.
+            from_1968 = add_constant(builder, year_val, 1)
+            # Add one day for each 4 years
+            p_days = builder.add(days,
+                                 unscale_by_constant(builder, from_1968, 4))
+            # 1900 is the closest previous year divisible by 100
+            from_1900 = add_constant(builder, from_1968, 68)
+            # Subtract one day for each 100 years
+            p_days = builder.sub(p_days,
+                                 unscale_by_constant(builder, from_1900, 100))
+            # 1600 is the closest previous year divisible by 400
+            from_1600 = add_constant(builder, from_1900, 300)
+            # Add one day for each 400 years
+            p_days = builder.add(p_days,
+                                 unscale_by_constant(builder, from_1600, 400))
+            builder.store(p_days, ret)
+        with ifneg:
+            # Before 1970:
+            # 1972 is the closest later year after 1970.
+            # Include the current year, so subtract 2.
+            from_1972 = add_constant(builder, year_val, -2)
+            # Subtract one day for each 4 years
+            n_days = builder.add(days,
+                                 unscale_by_constant(builder, from_1972, 4))
+            # 2000 is the closest later year divisible by 100
+            from_2000 = add_constant(builder, from_1972, -28)
+            # Add one day for each 100 years
+            n_days = builder.sub(n_days,
+                                 unscale_by_constant(builder, from_2000, 100))
+            # 2000 is also the closest later year divisible by 400
+            # Subtract one day for each 400 years
+            n_days = builder.add(n_days,
+                                 unscale_by_constant(builder, from_2000, 400))
+            builder.store(n_days, ret)
+    return builder.load(ret)
+
+
+def reduce_datetime_for_unit(builder, dt_val, src_unit, dest_unit):
+    dest_unit_code = npdatetime.DATETIME_UNITS[dest_unit]
+    src_unit_code = npdatetime.DATETIME_UNITS[src_unit]
+    if dest_unit_code < 2 or src_unit_code >= 2:
+        return dt_val, src_unit
+    # Need to compute the day ordinal for *dt_val*
+    assert src_unit_code == 0 # xxx support months
+    year_val = dt_val
+    days_val = year_to_days(builder, year_val)
+    return days_val, 'D'
+
+
+def _datetime_timedelta_arith(ll_op_name):
+    def impl(context, builder, dt_arg, dt_unit,
+             td_arg, td_unit, ret_unit):
+        ret = alloc_timedelta_result(builder)
+        with cgutils.if_likely(builder, are_not_nat(builder, [dt_arg, td_arg])):
+            dt_arg, dt_unit = reduce_datetime_for_unit(builder, dt_arg, dt_unit, ret_unit)
+            dt_factor = npdatetime.get_timedelta_conversion_factor(dt_unit, ret_unit)
+            td_factor = npdatetime.get_timedelta_conversion_factor(td_unit, ret_unit)
+            dt_arg = scale_by_constant(builder, dt_arg, dt_factor)
+            td_arg = scale_by_constant(builder, td_arg, td_factor)
+            ret_val = getattr(builder, ll_op_name)(dt_arg, td_arg)
+            builder.store(ret_val, ret)
+        return builder.load(ret)
+    return impl
+
+_datetime_plus_timedelta = _datetime_timedelta_arith('add')
+_datetime_minus_timedelta = _datetime_timedelta_arith('sub')
+
+@builtin
+@implement('+', types.Kind(types.NPDatetime), types.Kind(types.NPTimedelta))
+def timedelta_add_impl(context, builder, sig, args):
+    dt_arg, td_arg = args
+    dt_type, td_type = sig.args
+    return _datetime_plus_timedelta(context, builder,
+                                    dt_arg, dt_type.unit,
+                                    td_arg, td_type.unit,
+                                    sig.return_type.unit)
+
+@builtin
+@implement('+', types.Kind(types.NPTimedelta), types.Kind(types.NPDatetime))
+def timedelta_add_impl(context, builder, sig, args):
+    td_arg, dt_arg = args
+    td_type, dt_type = sig.args
+    return _datetime_plus_timedelta(context, builder,
+                                    dt_arg, dt_type.unit,
+                                    td_arg, td_type.unit,
+                                    sig.return_type.unit)

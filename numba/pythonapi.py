@@ -35,6 +35,10 @@ def fix_python_api():
     le.dylib_add_symbol("NumbaRecreateRecord",
                         c_helpers["recreate_record"])
 
+    le.dylib_add_symbol("NumbaExtractNPDatetime",
+                        c_helpers["extract_np_datetime"])
+    le.dylib_add_symbol("NumbaCreateNPDatetime",
+                        c_helpers["create_np_datetime"])
     le.dylib_add_symbol("NumbaExtractNPTimedelta",
                         c_helpers["extract_np_timedelta"])
     le.dylib_add_symbol("NumbaCreateNPTimedelta",
@@ -804,6 +808,10 @@ class PythonAPI(object):
             else:
                 return cplx._getvalue()
 
+        elif isinstance(typ, types.NPDatetime):
+            val = self.extract_np_datetime(obj)
+            return val
+
         elif isinstance(typ, types.NPTimedelta):
             val = self.extract_np_timedelta(obj)
             return val
@@ -852,6 +860,9 @@ class PythonAPI(object):
             fimag = self.context.cast(self.builder, cval.imag,
                                       types.float32, types.float64)
             return self.complex_from_doubles(freal, fimag)
+
+        elif isinstance(typ, types.NPDatetime):
+            return self.create_np_datetime(val, typ.unit_code)
 
         elif isinstance(typ, types.NPTimedelta):
             return self.create_np_timedelta(val, typ.unit_code)
@@ -941,10 +952,21 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="NumbaReleaseRecordBuffer")
         return self.builder.call(fn, [pbuf])
 
+    def extract_np_datetime(self, obj):
+        fnty = Type.function(Type.int(64), [self.pyobj])
+        fn = self._get_function(fnty, name="NumbaExtractNPDatetime")
+        return self.builder.call(fn, [obj])
+
     def extract_np_timedelta(self, obj):
         fnty = Type.function(Type.int(64), [self.pyobj])
         fn = self._get_function(fnty, name="NumbaExtractNPTimedelta")
         return self.builder.call(fn, [obj])
+
+    def create_np_datetime(self, val, unit_code):
+        unit_code = Constant.int(Type.int(), unit_code)
+        fnty = Type.function(self.pyobj, [Type.int(64), Type.int()])
+        fn = self._get_function(fnty, name="NumbaCreateNPDatetime")
+        return self.builder.call(fn, [val, unit_code])
 
     def create_np_timedelta(self, val, unit_code):
         unit_code = Constant.int(Type.int(), unit_code)

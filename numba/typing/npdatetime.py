@@ -13,6 +13,8 @@ from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     builtin_attr, signature)
 
 
+# timedelta64-only operations
+
 class TimedeltaUnaryOp(AbstractTemplate):
 
     def generic(self, args, kws):
@@ -162,3 +164,27 @@ class TimedeltaCmpGE(TimedeltaOrderedCmpOp):
 class TimedeltaAbs(TimedeltaUnaryOp):
     key = types.abs_type
 
+
+# datetime64 operations
+
+@builtin
+class DatetimePlusTimedelta(AbstractTemplate):
+    key = '+'
+
+    def generic(self, args, kws):
+        if len(args) == 1:
+            # Guard against unary +
+            return
+        left, right = args
+        if isinstance(right, types.NPTimedelta):
+            dt = left
+            td = right
+        elif isinstance(left, types.NPTimedelta):
+            dt = right
+            td = left
+        else:
+            return
+        if isinstance(dt, types.NPDatetime):
+            unit = npdatetime.combine_datetime_timedelta_units(dt.unit, td.unit)
+            if unit is not None:
+                return signature(types.NPDatetime(unit), left, right)

@@ -237,14 +237,38 @@ PyObject* Numba_ndarray_new(int nd,
 }
 
 static npy_int64
+Numba_extract_np_datetime(PyObject *td)
+{
+    if (!PyArray_IsScalar(td, Datetime)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "expected a numpy.datetime64 object");
+        return -1;
+    }
+    return PyArrayScalar_VAL(td, Timedelta);
+}
+
+static npy_int64
 Numba_extract_np_timedelta(PyObject *td)
 {
     if (!PyArray_IsScalar(td, Timedelta)) {
         PyErr_SetString(PyExc_TypeError,
-                        "expected a timedelta object");
+                        "expected a numpy.timedelta64 object");
         return -1;
     }
     return PyArrayScalar_VAL(td, Timedelta);
+}
+
+static PyObject *
+Numba_create_np_datetime(npy_int64 value, int unit_code)
+{
+    PyDatetimeScalarObject *obj = (PyDatetimeScalarObject *)
+        PyArrayScalar_New(Datetime);
+    if (obj != NULL) {
+        obj->obval = value;
+        obj->obmeta.base = unit_code;
+        obj->obmeta.num = 1;
+    }
+    return (PyObject *) obj;
 }
 
 static PyObject *
@@ -343,6 +367,8 @@ build_c_helpers_dict(void)
     declmethod(release_record_buffer);
     declmethod(adapt_ndarray);
     declmethod(ndarray_new);
+    declmethod(extract_np_datetime);
+    declmethod(create_np_datetime);
     declmethod(extract_np_timedelta);
     declmethod(create_np_timedelta);
     declmethod(recreate_record);

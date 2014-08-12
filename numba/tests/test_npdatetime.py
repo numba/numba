@@ -5,6 +5,7 @@ Test numpy.timedelta64 support.
 from __future__ import print_function
 
 import itertools
+import warnings
 
 import numpy as np
 
@@ -153,6 +154,18 @@ class TestModuleHelpers(TestCase):
         self.assertEqual(f('M', 'W'), ('W', 97 + 400 * 365, 400 * 12 * 7))
         self.assertEqual(f('Y', 's'), ('s', (97 + 400 * 365) *  24 * 3600, 400))
         self.assertEqual(f('M', 's'), ('s', (97 + 400 * 365) *  24 * 3600, 400 * 12))
+
+    def test_combine_datetime_timedelta_units(self):
+        f = npdatetime.combine_datetime_timedelta_units
+        for unit in all_units:
+            self.assertEqual(f(unit, unit), unit)
+            self.assertEqual(f('', unit), unit)
+            self.assertEqual(f(unit, ''), unit)
+        self.assertEqual(f('', ''), '')
+        for dt_unit, td_unit in itertools.product(time_units, date_units):
+            self.assertIs(f(dt_unit, td_unit), None)
+        for dt_unit, td_unit in itertools.product(date_units, time_units):
+            self.assertEqual(f(dt_unit, td_unit), td_unit)
 
 
 TD = np.timedelta64
@@ -416,6 +429,41 @@ class TestTimedeltaArithmetic(TestCase):
 
 
 class TestTimedeltaArithmeticNoPython(TestTimedeltaArithmetic):
+
+    jitargs = dict(nopython=True)
+
+
+class TestDatetimeArithmetic(TestCase):
+
+    jitargs = dict()
+
+    def jit(self, pyfunc):
+        return jit(**self.jitargs)(pyfunc)
+
+    def test_add(self):
+        f = self.jit(add_usecase)
+        def check(a, b, expected):
+            self.assertPreciseEqual(f(a, b), expected)
+            self.assertPreciseEqual(f(b, a), expected)
+            # Did we get it right?
+            with warnings.catch_warnings():
+                warnings.filterwarnings('ignore', category=DeprecationWarning)
+                self.assertPreciseEqual(a + b, expected)
+
+        # This one raises a DeprecationWarning in Numpy
+        check(DT('2014'), TD(2), DT('2016'))
+        check(DT('2014'), TD(2, 'M'), DT('2014-03'))
+        check(DT('2014'), TD(4, 'D'), DT('2014-01-05'))
+        check(DT('2000'), TD(365, 'D'), DT('2000-12-31'))
+        check(DT('2001'), TD(61, 'm'), DT('2001-01-01T01:01Z'))
+        check(DT('2001'), TD(61, 's'), DT('2001-01-01T00:01:01Z'))
+        # XXX Y+W, M+D, W+D...
+        # Cannot add days and months
+        with self.assertRaises((TypeError, TypingError)):
+            f(DT(1, '2014-01-01'), TD(1, 'Y'))
+
+
+class TestDatetimeArithmeticNoPython(TestDatetimeArithmetic):
 
     jitargs = dict(nopython=True)
 
