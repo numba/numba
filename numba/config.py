@@ -26,6 +26,8 @@ def _readenv(name, ctor, default):
             return default
 
 # Print warnings to screen about function compilation
+#   0 = Numba warnings suppressed (default)
+#   1 = All Numba warnings shown
 WARNINGS = _readenv("NUMBA_WARNINGS", int, 0)
 if WARNINGS == 0:
     warnings.simplefilter('ignore', NumbaWarning)
