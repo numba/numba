@@ -6,6 +6,7 @@ strides, dtype and size attributes similar to a NumPy ndarray.
 from __future__ import print_function, absolute_import, division
 import warnings
 import math
+import copy
 import numpy as np
 from .ndarray import (ndarray_populate_head, ArrayHeaderManager)
 from . import driver as _driver
@@ -103,7 +104,13 @@ class DeviceNDArrayBase(object):
         self.gpu_head = gpu_head
         self.gpu_data = gpu_data
 
-        self.__writeback = writeback # should deprecate the use of this
+        self.__writeback = writeback    # should deprecate the use of this
+        self.stream = 0
+
+    def bind(self, stream=0):
+        clone = copy.copy(self)
+        clone.stream = stream
+        return clone
 
     def __del__(self):
         try:
@@ -253,6 +260,8 @@ class DeviceNDArray(DeviceNDArrayBase):
         return self._do_getitem(item, stream)
 
     def _do_getitem(self, item, stream=0):
+        stream = stream or self.stream
+
         arr = self._dummy.__getitem__(item)
         extents = list(arr.iter_contiguous_extent())
         cls = type(self)
