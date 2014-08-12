@@ -354,8 +354,6 @@ def reduce_datetime_for_unit(builder, dt_val, src_unit, dest_unit):
 
     else:
         # Months to days
-        module = cgutils.get_module(builder)
-
         leap_array = cgutils.global_constant(builder, "leap_year_months_acc",
                                              leap_year_months_acc)
         normal_array = cgutils.global_constant(builder, "normal_year_months_acc",
