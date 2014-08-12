@@ -115,6 +115,7 @@ def get_datetime_timedelta_conversion(datetime_unit, timedelta_unit):
     Return (result unit, integer datetime multiplier, integer timedelta multiplier).
     RuntimeError is raised if the combination is impossible.
     """
+    # XXX now unused (I don't know where / how Numpy uses this)
     dt_unit_code = DATETIME_UNITS[datetime_unit]
     td_unit_code = DATETIME_UNITS[timedelta_unit]
     if td_unit_code == 14 or dt_unit_code == 14:

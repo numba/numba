@@ -440,27 +440,77 @@ class TestDatetimeArithmetic(TestCase):
     def jit(self, pyfunc):
         return jit(**self.jitargs)(pyfunc)
 
-    def test_add(self):
-        f = self.jit(add_usecase)
+    def test_add_sub_timedelta(self):
+        """
+        Test `datetime64 + timedelta64` and `datetime64 - timedelta64`.
+        """
+        add = self.jit(add_usecase)
+        sub = self.jit(sub_usecase)
         def check(a, b, expected):
-            self.assertPreciseEqual(f(a, b), expected)
-            self.assertPreciseEqual(f(b, a), expected)
+            self.assertPreciseEqual(add(a, b), expected, (a, b))
+            self.assertPreciseEqual(add(b, a), expected, (a, b))
+            self.assertPreciseEqual(sub(a, -b), expected, (a, b))
             # Did we get it right?
             with warnings.catch_warnings():
                 warnings.filterwarnings('ignore', category=DeprecationWarning)
                 self.assertPreciseEqual(a + b, expected)
 
+        # Y + ...
         # This one raises a DeprecationWarning in Numpy
         check(DT('2014'), TD(2), DT('2016'))
         check(DT('2014'), TD(2, 'M'), DT('2014-03'))
+        check(DT('2014'), TD(3, 'W'), DT('2014-01-16', 'W'))
         check(DT('2014'), TD(4, 'D'), DT('2014-01-05'))
         check(DT('2000'), TD(365, 'D'), DT('2000-12-31'))
         check(DT('2001'), TD(61, 'm'), DT('2001-01-01T01:01Z'))
         check(DT('2001'), TD(61, 's'), DT('2001-01-01T00:01:01Z'))
-        # XXX Y+W, M+D, W+D...
-        # Cannot add days and months
-        with self.assertRaises((TypeError, TypingError)):
-            f(DT(1, '2014-01-01'), TD(1, 'Y'))
+        # M + ...
+        check(DT('2014-02'), TD(2), DT('2014-04'))
+        check(DT('2014-02'), TD(2, 'Y'), DT('2016-02'))
+        check(DT('2014-02'), TD(2, 'M'), DT('2014-04'))
+        check(DT('2014-02'), TD(2, 'D'), DT('2014-02-03'))
+        check(DT('2014-02'), TD(61, 's'), DT('2014-02-01T00:01:01Z'))
+        # W + ...
+        check(DT('2014-01-07', 'W'), TD(2, 'W'), DT('2014-01-16', 'W'))
+        # D + ...
+        check(DT('2014-02-02'), TD(27, 'D'), DT('2014-03-01'))
+        check(DT('2012-02-02'), TD(27, 'D'), DT('2012-02-29'))
+        check(DT('2012-02-02'), TD(2, 'W'), DT('2012-02-16'))
+        check(DT('2014-02-02'), TD(73, 'h'), DT('2014-02-05T01Z'))
+        # s + ...
+        check(DT('2000-01-01T01:02:03Z'), TD(2, 'h'), DT('2000-01-01T03:02:03Z'))
+        check(DT('2000-01-01T01:02:03Z'), TD(2, 'ms'), DT('2000-01-01T01:02:03.002Z'))
+        # More thorough checking with leap years and faraway years
+        for dt_str in ('600', '601', '604', '801',
+                       '1900', '1904', '2200', '2300', '2304',
+                       '2400', '6001'):
+            for dt_suffix in ('', '-01', '-12'):
+                dt = DT(dt_str + dt_suffix)
+                for td in [TD(2, 'D'), TD(100, 'D'), TD(10000, 'D'),
+                           TD(-100, 'D'), TD(-10000, 'D'),
+                           TD(100, 'M'), TD(10000, 'M'),
+                           TD(-100, 'M'), TD(-10000, 'M')]:
+                    self.assertEqual(add(dt, td), dt + td, (dt, td))
+                    self.assertEqual(add(td, dt), dt + td, (dt, td))
+                    self.assertEqual(sub(dt, -td), dt + td, (dt, td))
+
+        # NaTs
+        check(DT('NaT'), TD(2), DT('NaT'))
+        check(DT('NaT', 's'), TD(2), DT('NaT', 's'))
+        check(DT('NaT', 's'), TD(2, 'h'), DT('NaT', 's'))
+        check(DT('NaT', 's'), TD(2, 'ms'), DT('NaT', 'ms'))
+        check(DT('2014'), TD('NaT'), DT('NaT', 'Y'))
+        check(DT('2014'), TD('NaT', 'W'), DT('NaT', 'W'))
+        check(DT('2014-01-01'), TD('NaT', 'W'), DT('NaT', 'D'))
+        check(DT('NaT', 's'), TD('NaT'), DT('NaT', 's'))
+        check(DT('NaT', 's'), TD('NaT', 'ms'), DT('NaT', 'ms'))
+
+        # Cannot add datetime days and timedelta months or years
+        for f in (add, sub):
+            with self.assertRaises((TypeError, TypingError)):
+                f(DT(1, '2014-01-01'), TD(1, 'Y'))
+            with self.assertRaises((TypeError, TypingError)):
+                f(DT(1, '2014-01-01'), TD(1, 'M'))
 
 
 class TestDatetimeArithmeticNoPython(TestDatetimeArithmetic):

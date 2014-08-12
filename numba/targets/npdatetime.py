@@ -42,6 +42,9 @@ def unscale_by_constant(builder, val, factor):
     return builder.sdiv(val, Constant.int(TIMEDELTA64, factor))
 
 def add_constant(builder, val, const):
+    """
+    Add constant *const* to *val*.
+    """
     return builder.add(val, Constant.int(TIMEDELTA64, const))
 
 def scale_timedelta(context, builder, val, srcty, destty):
@@ -90,6 +93,19 @@ def are_not_nat(builder, vals):
         pred = builder.and_(pred, is_not_nat(builder, val))
     return pred
 
+
+def make_constant_array(vals):
+    consts = [Constant.int(TIMEDELTA64, v) for v in vals]
+    return Constant.array(TIMEDELTA64, consts)
+
+normal_year_months = make_constant_array([31, 28, 31, 30, 31, 30,
+                                          31, 31, 30, 31, 30, 31])
+leap_year_months = make_constant_array([31, 29, 31, 30, 31, 30,
+                                        31, 31, 30, 31, 30, 31])
+normal_year_months_acc = make_constant_array(
+    [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334])
+leap_year_months_acc = make_constant_array(
+    [0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335])
 
 # Arithmetic operators on timedelta64
 
@@ -263,8 +279,14 @@ implement_ordering_operator('>=', lc.ICMP_SGE)
 
 def is_leap_year(builder, year_val):
     actual_year = builder.add(year_val, Constant.int(DATETIME64, 1970))
-    # FIXME for correct leap year computation
-    return builder.and_(actual_year, Constant.int(DATETIME64, 3))
+    multiple_of_4 = cgutils.is_null(
+        builder, builder.and_(actual_year, Constant.int(DATETIME64, 3)))
+    not_multiple_of_100 = cgutils.is_not_null(
+        builder, builder.srem(actual_year, Constant.int(DATETIME64, 100)))
+    multiple_of_400 = cgutils.is_null(
+        builder, builder.srem(actual_year, Constant.int(DATETIME64, 400)))
+    return builder.and_(multiple_of_4,
+                        builder.or_(not_multiple_of_100, multiple_of_400))
 
 def year_to_days(builder, year_val):
     """
@@ -278,8 +300,8 @@ def year_to_days(builder, year_val):
     days = scale_by_constant(builder, year_val, 365)
     # Adjust for leap years
     with cgutils.ifelse(builder, cgutils.is_neg_int(builder, year_val)) \
-        as (ifneg, ifpos):
-        with ifpos:
+        as (if_neg, if_pos):
+        with if_pos:
             # At or after 1970:
             # 1968 is the closest leap year before 1970.
             # Exclude the current year, so add 1.
@@ -298,7 +320,7 @@ def year_to_days(builder, year_val):
             p_days = builder.add(p_days,
                                  unscale_by_constant(builder, from_1600, 400))
             builder.store(p_days, ret)
-        with ifneg:
+        with if_neg:
             # Before 1970:
             # 1972 is the closest later year after 1970.
             # Include the current year, so subtract 2.
@@ -325,9 +347,73 @@ def reduce_datetime_for_unit(builder, dt_val, src_unit, dest_unit):
     if dest_unit_code < 2 or src_unit_code >= 2:
         return dt_val, src_unit
     # Need to compute the day ordinal for *dt_val*
-    assert src_unit_code == 0 # xxx support months
-    year_val = dt_val
-    days_val = year_to_days(builder, year_val)
+    if src_unit_code == 0:
+        # Years to days
+        year_val = dt_val
+        days_val = year_to_days(builder, year_val)
+
+    else:
+        # Months to days
+        module = cgutils.get_module(builder)
+
+        leap_array = cgutils.global_constant(builder, "leap_year_months_acc",
+                                             leap_year_months_acc)
+        normal_array = cgutils.global_constant(builder, "normal_year_months_acc",
+                                               normal_year_months_acc)
+
+        year = cgutils.alloca_once(builder, TIMEDELTA64)
+        month = cgutils.alloca_once(builder, TIMEDELTA64)
+        days = cgutils.alloca_once(builder, TIMEDELTA64)
+
+        # First compute year number and month number
+        with cgutils.ifelse(builder, cgutils.is_neg_int(builder, dt_val)
+                            ) as (if_neg, if_pos):
+            with if_pos:
+                # year = dt / 12
+                year_val = unscale_by_constant(builder, dt_val, 12)
+                builder.store(year_val, year)
+                # month = dt % 12
+                month_val = builder.srem(dt_val,
+                                         Constant.int(TIMEDELTA64, 12))
+                builder.store(month_val, month)
+            with if_neg:
+                # Basically, we want Python divmod() semantics but
+                # we must deal with C-like signed division.
+                # year = -1 + (dt + 1) / 12
+                dt_plus_one = add_constant(builder, dt_val, 1)
+                year_val = unscale_by_constant(builder, dt_plus_one, 12)
+                year_val = add_constant(builder, year_val, -1)
+                builder.store(year_val, year)
+                # month = 11 + (dt + 1) % 12
+                month_val = builder.srem(dt_plus_one,
+                                         Constant.int(TIMEDELTA64, 12))
+                month_val = add_constant(builder, month_val, 11)
+                builder.store(month_val, month)
+
+        year_val = builder.load(year)
+        month_val = builder.load(month)
+
+        # Then deduce the number of days
+        with cgutils.ifelse(builder,
+                            is_leap_year(builder, year_val)) as (then, otherwise):
+            with then:
+                addend = builder.load(cgutils.gep(builder, leap_array,
+                                                  0, month_val))
+                builder.store(addend, days)
+                #builder.store(builder.add(days_val, addend), days_ret)
+            with otherwise:
+                addend = builder.load(cgutils.gep(builder, normal_array,
+                                                  0, month_val))
+                builder.store(addend, days)
+                #builder.store(builder.add(days_val, addend), days_ret)
+
+        days_val = year_to_days(builder, year_val)
+        days_val = builder.add(days_val, builder.load(days))
+
+    if dest_unit_code == 2:
+        # Need to scale back to weeks
+        return unscale_by_constant(builder, days_val, 7), 'W'
+
     return days_val, 'D'
 
 
@@ -368,3 +454,13 @@ def timedelta_add_impl(context, builder, sig, args):
                                     dt_arg, dt_type.unit,
                                     td_arg, td_type.unit,
                                     sig.return_type.unit)
+
+@builtin
+@implement('-', types.Kind(types.NPDatetime), types.Kind(types.NPTimedelta))
+def timedelta_sub_impl(context, builder, sig, args):
+    dt_arg, td_arg = args
+    dt_type, td_type = sig.args
+    return _datetime_minus_timedelta(context, builder,
+                                     dt_arg, dt_type.unit,
+                                     td_arg, td_type.unit,
+                                     sig.return_type.unit)

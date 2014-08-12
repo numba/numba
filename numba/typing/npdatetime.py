@@ -188,3 +188,17 @@ class DatetimePlusTimedelta(AbstractTemplate):
             unit = npdatetime.combine_datetime_timedelta_units(dt.unit, td.unit)
             if unit is not None:
                 return signature(types.NPDatetime(unit), left, right)
+
+@builtin
+class DatetimeMinusTimedelta(AbstractTemplate):
+    key = '-'
+
+    def generic(self, args, kws):
+        if len(args) == 1:
+            # Guard against unary -
+            return
+        dt, td = args
+        if isinstance(dt, types.NPDatetime) and isinstance(td, types.NPTimedelta):
+            unit = npdatetime.combine_datetime_timedelta_units(dt.unit, td.unit)
+            if unit is not None:
+                return signature(types.NPDatetime(unit), dt, td)

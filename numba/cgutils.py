@@ -589,6 +589,18 @@ def pointer_add(builder, ptr, offset, return_type=None):
     return builder.inttoptr(intptr, return_type or ptr.type)
 
 
+def global_constant(builder, name, value, linkage=lc.LINKAGE_INTERNAL):
+    """
+    Get or create a (LLVM module-)global constant with *name* or *value*.
+    """
+    module = get_module(builder)
+    data = module.add_global_variable(value.type, name=name)
+    data.linkage = lc.LINKAGE_INTERNAL
+    data.global_constant = True
+    data.initializer = value
+    return data
+
+
 # ------------------------------------------------------------------------------
 # Debug
 
