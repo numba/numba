@@ -93,10 +93,10 @@ def are_not_nat(builder, vals):
         pred = builder.and_(pred, is_not_nat(builder, val))
     return pred
 
-
 def make_constant_array(vals):
     consts = [Constant.int(TIMEDELTA64, v) for v in vals]
     return Constant.array(TIMEDELTA64, consts)
+
 
 normal_year_months = make_constant_array([31, 28, 31, 30, 31, 30,
                                           31, 31, 30, 31, 30, 31])
@@ -361,60 +361,32 @@ def reduce_datetime_for_unit(builder, dt_val, src_unit, dest_unit):
         normal_array = cgutils.global_constant(builder, "normal_year_months_acc",
                                                normal_year_months_acc)
 
-        year = cgutils.alloca_once(builder, TIMEDELTA64)
-        month = cgutils.alloca_once(builder, TIMEDELTA64)
         days = cgutils.alloca_once(builder, TIMEDELTA64)
 
         # First compute year number and month number
-        with cgutils.ifelse(builder, cgutils.is_neg_int(builder, dt_val)
-                            ) as (if_neg, if_pos):
-            with if_pos:
-                # year = dt / 12
-                year_val = unscale_by_constant(builder, dt_val, 12)
-                builder.store(year_val, year)
-                # month = dt % 12
-                month_val = builder.srem(dt_val,
-                                         Constant.int(TIMEDELTA64, 12))
-                builder.store(month_val, month)
-            with if_neg:
-                # Basically, we want Python divmod() semantics but
-                # we must deal with C-like signed division.
-                # year = -1 + (dt + 1) / 12
-                dt_plus_one = add_constant(builder, dt_val, 1)
-                year_val = unscale_by_constant(builder, dt_plus_one, 12)
-                year_val = add_constant(builder, year_val, -1)
-                builder.store(year_val, year)
-                # month = 11 + (dt + 1) % 12
-                month_val = builder.srem(dt_plus_one,
-                                         Constant.int(TIMEDELTA64, 12))
-                month_val = add_constant(builder, month_val, 11)
-                builder.store(month_val, month)
-
-        year_val = builder.load(year)
-        month_val = builder.load(month)
+        year, month = cgutils.divmod_by_constant(builder, dt_val, 12)
 
         # Then deduce the number of days
         with cgutils.ifelse(builder,
-                            is_leap_year(builder, year_val)) as (then, otherwise):
+                            is_leap_year(builder, year)) as (then, otherwise):
             with then:
                 addend = builder.load(cgutils.gep(builder, leap_array,
-                                                  0, month_val))
+                                                  0, month))
                 builder.store(addend, days)
-                #builder.store(builder.add(days_val, addend), days_ret)
             with otherwise:
                 addend = builder.load(cgutils.gep(builder, normal_array,
-                                                  0, month_val))
+                                                  0, month))
                 builder.store(addend, days)
-                #builder.store(builder.add(days_val, addend), days_ret)
 
-        days_val = year_to_days(builder, year_val)
+        days_val = year_to_days(builder, year)
         days_val = builder.add(days_val, builder.load(days))
 
     if dest_unit_code == 2:
         # Need to scale back to weeks
-        return unscale_by_constant(builder, days_val, 7), 'W'
-
-    return days_val, 'D'
+        weeks, _ = cgutils.divmod_by_constant(builder, days_val, 7)
+        return weeks, 'W'
+    else:
+        return days_val, 'D'
 
 
 def _datetime_timedelta_arith(ll_op_name):
@@ -434,6 +406,8 @@ def _datetime_timedelta_arith(ll_op_name):
 
 _datetime_plus_timedelta = _datetime_timedelta_arith('add')
 _datetime_minus_timedelta = _datetime_timedelta_arith('sub')
+
+# datetime64 + timedelta64
 
 @builtin
 @implement('+', types.Kind(types.NPDatetime), types.Kind(types.NPTimedelta))
@@ -455,6 +429,8 @@ def timedelta_add_impl(context, builder, sig, args):
                                     td_arg, td_type.unit,
                                     sig.return_type.unit)
 
+# datetime64 - timedelta64
+
 @builtin
 @implement('-', types.Kind(types.NPDatetime), types.Kind(types.NPTimedelta))
 def timedelta_sub_impl(context, builder, sig, args):
@@ -464,3 +440,25 @@ def timedelta_sub_impl(context, builder, sig, args):
                                      dt_arg, dt_type.unit,
                                      td_arg, td_type.unit,
                                      sig.return_type.unit)
+
+# datetime64 - datetime64
+
+@builtin
+@implement('-', types.Kind(types.NPDatetime), types.Kind(types.NPDatetime))
+def timedelta_sub_impl(context, builder, sig, args):
+    va, vb = args
+    ta, tb = sig.args
+    unit_a = ta.unit
+    unit_b = tb.unit
+    ret_unit = sig.return_type.unit
+    ret = alloc_timedelta_result(builder)
+    with cgutils.if_likely(builder, are_not_nat(builder, [va, vb])):
+        va, unit_a = reduce_datetime_for_unit(builder, va, unit_a, ret_unit)
+        vb, unit_b = reduce_datetime_for_unit(builder, vb, unit_b, ret_unit)
+        va = scale_by_constant(builder, va,
+            npdatetime.get_timedelta_conversion_factor(unit_a, ret_unit))
+        vb = scale_by_constant(builder, vb,
+            npdatetime.get_timedelta_conversion_factor(unit_b, ret_unit))
+        ret_val = builder.sub(va, vb)
+        builder.store(ret_val, ret)
+    return builder.load(ret)

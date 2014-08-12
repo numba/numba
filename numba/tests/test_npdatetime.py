@@ -4,6 +4,7 @@ Test numpy.timedelta64 support.
 
 from __future__ import print_function
 
+import contextlib
 import itertools
 import warnings
 
@@ -440,6 +441,16 @@ class TestDatetimeArithmetic(TestCase):
     def jit(self, pyfunc):
         return jit(**self.jitargs)(pyfunc)
 
+    @contextlib.contextmanager
+    def silence_numpy_warnings(self):
+        # Numpy can raise warnings when combining e.g. a generic timedelta64
+        # with a non-generic datetime64.
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore',
+                                    message='Implicitly casting between incompatible kinds',
+                                    category=DeprecationWarning)
+            yield
+
     def test_add_sub_timedelta(self):
         """
         Test `datetime64 + timedelta64` and `datetime64 - timedelta64`.
@@ -447,12 +458,11 @@ class TestDatetimeArithmetic(TestCase):
         add = self.jit(add_usecase)
         sub = self.jit(sub_usecase)
         def check(a, b, expected):
-            self.assertPreciseEqual(add(a, b), expected, (a, b))
-            self.assertPreciseEqual(add(b, a), expected, (a, b))
-            self.assertPreciseEqual(sub(a, -b), expected, (a, b))
-            # Did we get it right?
-            with warnings.catch_warnings():
-                warnings.filterwarnings('ignore', category=DeprecationWarning)
+            with self.silence_numpy_warnings():
+                self.assertPreciseEqual(add(a, b), expected, (a, b))
+                self.assertPreciseEqual(add(b, a), expected, (a, b))
+                self.assertPreciseEqual(sub(a, -b), expected, (a, b))
+                # Did we get it right?
                 self.assertPreciseEqual(a + b, expected)
 
         # Y + ...
@@ -486,8 +496,11 @@ class TestDatetimeArithmetic(TestCase):
                        '2400', '6001'):
             for dt_suffix in ('', '-01', '-12'):
                 dt = DT(dt_str + dt_suffix)
-                for td in [TD(2, 'D'), TD(100, 'D'), TD(10000, 'D'),
+                for td in [TD(2, 'D'), TD(2, 'W'),
+                           TD(100, 'D'), TD(10000, 'D'),
                            TD(-100, 'D'), TD(-10000, 'D'),
+                           TD(100, 'W'), TD(10000, 'W'),
+                           TD(-100, 'W'), TD(-10000, 'W'),
                            TD(100, 'M'), TD(10000, 'M'),
                            TD(-100, 'M'), TD(-10000, 'M')]:
                     self.assertEqual(add(dt, td), dt + td, (dt, td))
@@ -511,6 +524,37 @@ class TestDatetimeArithmetic(TestCase):
                 f(DT(1, '2014-01-01'), TD(1, 'Y'))
             with self.assertRaises((TypeError, TypingError)):
                 f(DT(1, '2014-01-01'), TD(1, 'M'))
+
+    def test_datetime_difference(self):
+        """
+        Test `datetime64 - datetime64`.
+        """
+        sub = self.jit(sub_usecase)
+        def check(a, b, expected=None):
+            with self.silence_numpy_warnings():
+                self.assertPreciseEqual(sub(a, b), a - b, (a, b))
+                self.assertPreciseEqual(sub(b, a), b - a, (a, b))
+                # Did we get it right?
+                self.assertPreciseEqual(a - b, expected)
+
+        check(DT('2014'), DT('2017'), TD(-3, 'Y'))
+        check(DT('2014-02'), DT('2017-01'), TD(-35, 'M'))
+        check(DT('2014-02-28'), DT('2015-03-01'), TD(-366, 'D'))
+        # NaTs
+        check(DT('NaT'), DT('2000'), TD('NaT', 'Y'))
+        check(DT('NaT', 'M'), DT('2000'), TD('NaT', 'M'))
+        check(DT('NaT', 'M'), DT('2000-01-01'), TD('NaT', 'D'))
+        check(DT('NaT'), DT('NaT'), TD('NaT'))
+        # Test many more values
+        dt_years = ['600', '601', '604', '1968', '1969', '1973',
+                   '2000', '2004', '2005', '2100', '2400', '2401']
+        dt_suffixes = ['', '-01', '-12', '-02-28', '-12-31',
+                       '-01-05T12:30:56Z', '-01-05T12:30:56.008Z']
+        dts = [DT(a + b) for (a, b) in itertools.product(dt_years, dt_suffixes)]
+        dts += [DT(s, 'W') for s in dt_years]
+        with self.silence_numpy_warnings():
+            for a, b in itertools.product(dts, dts):
+                self.assertPreciseEqual(sub(a, b), a - b, (a, b))
 
 
 class TestDatetimeArithmeticNoPython(TestDatetimeArithmetic):
