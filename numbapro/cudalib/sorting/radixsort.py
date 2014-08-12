@@ -201,6 +201,9 @@ class Radixsort(object):
 
         return _next
 
+    def batch_argsort(self, dtype, count, reverse=False):
+        return self.batch_sort(dtype, count, reverse=False, getindices=True)
+
     def sort(self, data, reverse=False, getindices=False, _states=None):
         """Perform inplace sort on the data.
 
