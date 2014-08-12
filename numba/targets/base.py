@@ -236,10 +236,7 @@ class BaseContext(object):
             if gv.name == name and gv.type.pointee == text.type:
                 break
         else:
-            gv = mod.add_global_variable(text.type, name=name)
-            gv.global_constant = True
-            gv.initializer = text
-            gv.linkage = lc.LINKAGE_INTERNAL
+            gv = cgutils.global_constant(mod, name, text)
         return Constant.bitcast(gv, stringtype)
 
     def get_arguments(self, func):
@@ -893,14 +890,7 @@ class BaseContext(object):
 
         lldtype = values[0].type
         consts = Constant.array(lldtype, values)
-
-        module = cgutils.get_module(builder)
-
-        data = module.add_global_variable(consts.type, name=".const.array"
-                                                            ".data")
-        data.linkage = lc.LINKAGE_INTERNAL
-        data.global_constant = True
-        data.initializer = consts
+        data = cgutils.global_constant(builder, ".const.array.data", consts)
 
         # Handle shape
         llintp = self.get_value_type(types.intp)
