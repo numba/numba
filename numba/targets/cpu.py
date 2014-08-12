@@ -39,6 +39,8 @@ class EnvBody(cgutils.Structure):
 
 class CPUContext(BaseContext):
     """
+    Creates the LLVM IR Module and EngineBuilder, and loads C and Numpy functions, and operators for the jitted function.
+    
     Changes BaseContext calling convention
     """
 
@@ -48,6 +50,7 @@ class CPUContext(BaseContext):
         if not avx_support.detect_avx_support():
             eb.mattrs("-avx")
         self.tm = tm = eb.select_target()
+
         self.engine = eb.create(tm)
         self.pm = self.build_pass_manager()
         self.native_funcs = utils.UniqueDict()

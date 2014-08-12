@@ -1,3 +1,12 @@
+"""
+After a function is jitted it becomes an CPUOverloaded object which defines the target (machine) the function is being built for as well as the typing context. 
+
+The target context defines the machine/OS/available functions and operators for the function being compiled. The target_context is of type cpu.CPUContext (numba/targets/cpu.py) which creates the LLVM IR Module and LLVM EngineBuilder, loads functions from the C math and numpy libraries, and operators into the execution environment. 
+
+The typing context defines the type system for numba. numba/typing directory contains a number of files that build the type system. 
+
+"""
+
 from __future__ import print_function, division, absolute_import
 from numba import utils, typing
 from numba.targets import cpu
@@ -9,12 +18,18 @@ from numba import dispatcher
 
 
 class CPUTarget(TargetDescriptor):
+    """
+    Sets the options, typing and target context for a given CPU
+    """
     options = cpu.CPUTargetOptions
     typing_context = typing.Context()
     target_context = cpu.CPUContext(typing_context)
 
 
 class CPUOverloaded(dispatcher.Overloaded):
+    """
+    Jitted functions are CPUOverloaded objects. A wrapper to CPUTarget.
+    """
     targetdescr = CPUTarget()
 
 
