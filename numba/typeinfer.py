@@ -586,9 +586,6 @@ class TypeInferer(object):
                                          value=expr.value, loc=inst.loc,
                                          inst=inst)
             self.constrains.append(constrain)
-        elif expr.op == 'getitem':
-            self.typeof_intrinsic_call(inst, target, expr.op, expr.target,
-                                       expr.index, loc=inst.loc)
         elif expr.op == 'build_tuple':
             constrain = BuildTupleConstrain(target.name, items=expr.items,
                                             loc=inst.loc)
