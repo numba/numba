@@ -214,3 +214,59 @@ Key             Description
 
 In-place operations (like ``a += b``) are assumed to have the same signature
 as the right-hand side of the expanded form (``a = a + b``).
+
+
+Organizing Type Signatures with a Registry
+------------------------------------------
+
+It can be cumbersome to make type information easily portable between targets
+when the templates need to be instantiated with a specific typing context.
+The `numba.typing.templates.Registry` class simplifies this process by collecting
+lists of attribute, global and intrinsic function type signatures that can be
+installed into a typing context all at once.
+
+A common pattern in the Numba code is to collect all the type information for
+a particular package into a module that begins with::
+
+    from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
+                                        signature, Registry)
+
+    registry = Registry()  # A new registry for our new set of types
+    builtin_intrinsic = registry.register
+    builtin_attr = registry.register_attr
+    builtin_global = registry.register_global
+
+Then those three functions are used to queue up the relevant templates.
+The examples from the previous sections could now be written::
+
+    @builtin_attr
+    class IntervalAttributes(AttributeTemplate):
+        key = interval_type
+
+        _attributes = dict(lo=float32, hi=float32)
+
+        def generic_resolve(self, value, attr):
+            print(value, type(value))
+            return self._attributes[attr]
+
+    class ValidIntervalSignature(ConcreteTemplate):
+        key = valid_interval
+        cases = [
+            signature(bool_, interval_type)
+        ]
+    builtin_global(valid_interval, Function(ValidIntervalSignature))
+
+    @builtin_intrinsic
+    class AdditionSignature(ConcreteTemplate):
+        key = '+'
+        cases = [
+            signature(interval_type, interval_type, interval_type)
+        ]
+
+Finally, the contents of the registry can be installed into the typing context::
+
+    from numba.targets.registry import target_registry
+
+    # Assuming the CPU target
+    target = target_registry['cpu']
+    target.targetdescr.typing_context.install(registry)
