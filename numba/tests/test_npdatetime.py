@@ -159,7 +159,7 @@ TD = np.timedelta64
 DT = np.datetime64
 
 
-class TestScalarOperators(TestCase):
+class TestTimedeltaArithmetic(TestCase):
 
     jitargs = dict()
 
@@ -415,7 +415,7 @@ class TestScalarOperators(TestCase):
         check(TD('NaT', 'ms'))
 
 
-class TestScalarOperatorsNoPython(TestScalarOperators):
+class TestTimedeltaArithmeticNoPython(TestTimedeltaArithmetic):
 
     jitargs = dict(nopython=True)
 

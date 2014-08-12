@@ -20,9 +20,15 @@ class TestArrayScalars(ValueTypingTestBase, TestCase):
         """
         self.check_number_values(special.typeof)
 
+    def test_datetime_values(self):
+        """
+        Test special.typeof() with np.timedelta64 values.
+        """
+        self.check_datetime_values(special.typeof)
+
     def test_timedelta_values(self):
         """
-        Test special.typeof() with np.timedelta values.
+        Test special.typeof() with np.timedelta64 values.
         """
         self.check_timedelta_values(special.typeof)
 

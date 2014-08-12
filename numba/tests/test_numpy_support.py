@@ -92,7 +92,7 @@ class TestFromDtype(TestCase):
 
 class ValueTypingTestBase(object):
     """
-    Common tests for the typing of values.  Also used by test_special.s
+    Common tests for the typing of values.  Also used by test_special.
     """
 
     def check_number_values(self, func):
@@ -111,23 +111,31 @@ class ValueTypingTestBase(object):
             val = getattr(np, name)()
             self.assertIs(f(val), getattr(types, name))
 
-    def check_timedelta_values(self, func):
-        """
-        Test *func*() with np.timedelta values.
-        """
+    def _base_check_datetime_values(self, func, np_type, nb_type):
         f = func
         for unit in [
             '', 'Y', 'M', 'D', 'h', 'm', 's',
             'ms', 'us', 'ns', 'ps', 'fs', 'as']:
             if unit:
-                t = np.timedelta64(3, unit)
+                t = np_type(3, unit)
             else:
-                # "generic" timedelta
-                t = np.timedelta64(3)
+                # "generic" datetime / timedelta
+                t = np_type('Nat')
             tp = f(t)
             # This ensures the unit hasn't been lost
-            self.assertEqual(tp, types.NPTimedelta(unit))
+            self.assertEqual(tp, nb_type(unit))
 
+    def check_datetime_values(self, func):
+        """
+        Test *func*() with np.datetime64 values.
+        """
+        self._base_check_datetime_values(func, np.datetime64, types.NPDatetime)
+
+    def check_timedelta_values(self, func):
+        """
+        Test *func*() with np.timedelta64 values.
+        """
+        self._base_check_datetime_values(func, np.timedelta64, types.NPTimedelta)
 
 
 class TestArrayScalars(ValueTypingTestBase, TestCase):
@@ -138,9 +146,15 @@ class TestArrayScalars(ValueTypingTestBase, TestCase):
         """
         self.check_number_values(numpy_support.map_arrayscalar_type)
 
+    def test_datetime_values(self):
+        """
+        Test map_arrayscalar_type() with np.datetime64 values.
+        """
+        self.check_datetime_values(numpy_support.map_arrayscalar_type)
+
     def test_timedelta_values(self):
         """
-        Test map_arrayscalar_type() with np.timedelta values.
+        Test map_arrayscalar_type() with np.timedelta64 values.
         """
         self.check_timedelta_values(numpy_support.map_arrayscalar_type)
 

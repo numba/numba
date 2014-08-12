@@ -66,6 +66,8 @@ def _from_datetime_dtype(dtype):
     unit = groups[2] or ''
     if typecode == 'm':
         return types.NPTimedelta(unit)
+    elif typecode == 'M':
+        return types.NPDatetime(unit)
     else:
         raise NotImplementedError(dtype)
 
@@ -81,7 +83,7 @@ def from_dtype(dtype):
         except KeyError:
             if dtype.char in 'SU':
                 return _from_str_dtype(dtype)
-            if dtype.char in 'm':
+            if dtype.char in 'mM':
                 return _from_datetime_dtype(dtype)
             raise NotImplementedError(dtype)
     else:
