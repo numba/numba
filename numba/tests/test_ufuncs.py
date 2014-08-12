@@ -9,7 +9,7 @@ import functools
 
 import numba.unittest_support as unittest
 from numba import types, typing, utils
-from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
+from numba.compiler import compile_isolated, Flags, DEFAULT_FLAGS
 from numba.numpy_support import numpy_letter_types_to_numba_types
 from numba import vectorize
 from numba.config import PYVERSION
@@ -1122,8 +1122,26 @@ class TestUfuncIssues(TestCase):
 
 
 class TestLoopTypes(TestCase):
-    """This class tests that for the desired set of ufuncs, the loops defined in
-    the numpy are generated and look like they work."""
+    """Test code generation for the different loop types defined by ufunc.
+    This test relies on class variables to configure the test. Subclasses
+    of this class can just override some of these variables to check other
+    ufuncs in a different compilation context. The variables supported are:
+
+    _funcs: the ufuncs to test
+    _compile_flags: compilation flags to use (to force nopython mode)
+    _skip_types: letter types that force skipping the loop when testing
+                 if present in the NumPy ufunc signature.
+    _supported_types: only test loops where all the types in the loop
+                      signature are in this collection. If unset, all.
+
+    Note that both, _skip_types and _supported_types must be met for a loop
+    to be tested.
+
+    The NumPy ufunc signature has a form like 'ff->f' (for a binary ufunc
+    loop taking 2 floats and resulting in a float). In a NumPy ufunc object
+    you can get a list of supported signatures by accessing the attribute
+    'types'.
+    """
 
     _ufuncs = [np.add, np.subtract, np.multiply, np.divide, np.logaddexp,
                np.logaddexp2, np.true_divide, np.floor_divide, np.negative,
@@ -1144,13 +1162,6 @@ class TestLoopTypes(TestCase):
     _compile_flags = enable_pyobj_flags
     _skip_types='O'
 
-    def _compile(self, func, ty_args, ty_retval):
-        tyctx = typing.Context()
-        ctx = cpu.CPUContext(tyctx)
-        cr = compile_extra(tyctx, ctx, func, ty_args, ty_retval,
-                           self._compile_flags, locals={})
-        return cr
-
     def _check_loop(self, fn, ufunc, loop):
         # the letter types for the args
         letter_types = loop[:ufunc.nin] + loop[-ufunc.nout:]
@@ -1160,14 +1171,14 @@ class TestLoopTypes(TestCase):
         # object fallback
         supported_types = getattr(self, '_supported_types', [])
         skip_types = getattr(self, 'skip_types', [])
-        if any(l not in supported_types or l in skip_types 
+        if any(l not in supported_types or l in skip_types
                for l in letter_types):
             return
 
         arg_nbty = numpy_letter_types_to_numba_types(letter_types)
         arg_nbty = [types.Array(t, 1, 'C') for t in arg_nbty]
         arg_dty = [np.dtype(l) for l in letter_types]
-        cr = self._compile(fn, arg_nbty, None);
+        cr = compile_isolated(fn, arg_nbty, flags=self._compile_flags);
 
         # now create some really silly arguments and call the generate functions.
         # The result is checked against the result given by NumPy, but the point
@@ -1175,15 +1186,16 @@ class TestLoopTypes(TestCase):
         # 2 seems like a nice "no special case argument"
 
         # use days for timedelta64 and datetime64
-        letter_types = re.sub(r'[mM]', r'D', letter_types)
-        args1 = [np.array((2,), dtype=l) for l in letter_types]
-        args2 = [np.array((2,), dtype=l) for l in letter_types]
+        repl = { 'm': 'm8[d]', 'M': 'M8[D]' }
+        arg_types = [repl.get(t, t) for t in letter_types]
+        args1 = [np.array((2,), dtype=l) for l in arg_types]
+        args2 = [np.array((2,), dtype=l) for l in arg_types]
 
         cr.entry_point(*args1)
         fn(*args2)
 
         for i in range(ufunc.nout):
-            self.assertPreciseEqual(args1[-i], args2[-i])        
+            self.assertPreciseEqual(args1[-i], args2[-i])
 
 
     def _check_ufunc_loops(self, ufunc):
@@ -1195,7 +1207,6 @@ class TestLoopTypes(TestCase):
             except Exception as e:
                 _failed_loops.append('{2} {0}:{1}'.format(loop, str(e),
                                                           ufunc.__name__))
-                raise
 
         return _failed_loops
 
@@ -1216,9 +1227,9 @@ class TestLoopTypes(TestCase):
                 len(failed_ufuncs), failed_loops_count,
                 '\n'.join(failed_ufuncs))
 
-            self.assertFalse(failed_ufuncs, msg=msg)
-            
-                
+            self.fail(msg=msg)
+
+
 
 class TestLoopTypesNoPython(TestLoopTypes):
     _compile_flags = no_pyobj_flags
@@ -1234,9 +1245,44 @@ class TestLoopTypesNoPython(TestLoopTypes):
                np.degrees, np.radians,
                np.floor, np.ceil, np.trunc]
 
-    # supported types are integral (signed and unsgined) as well as float and double
+    # supported types are integral (signed and unsigned) as well as float and double
     # support for complex64(F) and complex128(D) should be coming soon.
     _supported_types = '?bBhHiIlLqQfd'
+
+
+class TestUFuncBadArgsNoPython(TestCase):
+    _compile_flags = no_pyobj_flags
+
+    def test_missing_args(self):
+        def func(x):
+            """error: np.add requires two args"""
+            result = np.add(x)
+            return result
+
+        self.assertRaises(TypingError, compile_isolated, func, [types.float64],
+                          return_type=types.float64, flags=self._compile_flags)
+
+
+    def test_too_many_args(self):
+        def func(x, out, out2):
+            """error: too many args"""
+            result = np.add(x, x, out, out2)
+            return result
+
+        array_type = types.Array(types.float64, 1, 'C')
+        self.assertRaises(TypingError, compile_isolated, func, [array_type] *3,
+                          return_type=array_type, flags=self._compile_flags)
+
+    def test_no_scalar_result_by_reference(self):
+        def func(x):
+            """error: scalar as a return value is not supported"""
+            y = 0
+            np.add(x, x, y)
+        self.assertRaises(TypingError, compile_isolated, func, [types.float64],
+                          return_type=types.float64, flags=self._compile_flags)
+
+
+
 
 if __name__ == '__main__':
     unittest.main()

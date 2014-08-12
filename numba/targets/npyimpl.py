@@ -309,8 +309,23 @@ def _function_with_cast(op, inner_sig):
 def _ufunc_db_function(ufunc):
     """Use the ufunc loop type information to select the code generation
     function from the table provided by the dict_of_kernels. The dict
-    of kernels maps the loop identifier to a function with the following
-    signature: (context, builder, signature, args).
+    of kernels maps the loop identifier to a function with the
+    following signature: (context, builder, signature, args).
+
+    The loop type information has the form 'AB->C'. The letters to the
+    left of '->' are the input types (specified as NumPy letter
+    types).  The letters to the right of '->' are the output
+    types. There must be 'ufunc.nin' letters to the left of '->', and
+    'ufunc.nout' letters to the right.
+
+    For example, a binary float loop resulting in a float, will have
+    the following signature: 'ff->f'.
+
+    A given ufunc implements many loops. The list of loops implemented
+    for a given ufunc can be accessed using the 'types' attribute in
+    the ufunc object. The NumPy machinery selects the first loop that
+    fits a given calling signature (in our case, what we call the
+    outer_sig). This logic is mimicked by 'ufunc_find_matching_loop'.
     """
 
     class _KernelImpl(_Kernel):
