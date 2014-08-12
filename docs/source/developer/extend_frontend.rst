@@ -2,8 +2,6 @@
 Extending the Numba Frontend
 ============================
 
-.. contents::
-
 Concepts
 ========
 
@@ -14,8 +12,8 @@ values in the function and identify points where types must be coerced.
 Numba Types
 -----------
 
-A Numba type is really a category label for a value that is used by the back-
-end to match appropriate code generators with the values they operate on. All
+A Numba type is really a category label for a value that is used by the back-end
+to match appropriate code generators with the values they operate on. All
 Numba types are instances of classes that inherit from ``numba.types.Type``.
 Numba types can be parameterized (for example, arrays and records), in which
 case their Type classes will take constructor arguments defining the
