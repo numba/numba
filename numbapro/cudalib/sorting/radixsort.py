@@ -84,6 +84,32 @@ def _calc_block_count(count):
 
 
 class Radixsort(object):
+    """Radixsort based GPU sorting ans k-selection algorithm.
+
+    Types
+    -----
+    Array of int32, uint32, int64, uint64, float32, float64 are supported.
+
+    Functions
+    ---------
+    - sort, argsort
+    - select, argselect
+
+    The arg* version turns an index array similar to ``numpy.argsort``.
+
+    Note
+    -----
+    Current implementation is limited to 32-bit due to actual hardware memory
+    capacity.  CUDA GPU is limited to 12GB of RAM.  To sort a 4GB float32
+    array, the algorithm allocates two 4GB of data array for scatter, one 4GB
+    index array and other smaller array for histograms.  The 12GB RAM is not
+    enough for data size of 4 billion payload.  Therefore, 32-bit uint32 is
+    used as indices.  Until a higher capability GPU is available, a 64-bit
+    implementation will not be usable because 64-bit indices will occupy twice
+    as much space.
+
+
+    """
     def __init__(self, dtype, stream=0):
         self.context = cuda.current_context()
         self.cc = self.context.device.compute_capability
