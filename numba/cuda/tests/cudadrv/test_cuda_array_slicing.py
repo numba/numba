@@ -50,6 +50,25 @@ class CudaArraySlicing(unittest.TestCase):
                 got = sliced.copy_to_host()
                 self.assertTrue(np.all(expect == got))
 
+    def test_select_column(self):
+        a = np.arange(25).reshape(5, 5, order='F')
+        da = cuda.to_device(a)
+
+        for i in range(a.shape[1]):
+            self.assertTrue(np.all(da[:, i].copy_to_host() == a[:, i]))
+
+    def test_select_row(self):
+        a = np.arange(25).reshape(5, 5, order='C')
+        da = cuda.to_device(a)
+        for i in range(a.shape[0]):
+            self.assertTrue(np.all(da[i, :].copy_to_host() == a[i, :]))
+
+    def test_prefix_select(self):
+        arr = np.arange(5 ** 2).reshape(5, 5, order='F')
+
+        darr = cuda.to_device(arr)
+        self.assertTrue(np.all(darr[:1, 1].copy_to_host() == arr[:1, 1]))
+
 
 if __name__ == '__main__':
     unittest.main()

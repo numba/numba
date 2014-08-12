@@ -259,7 +259,8 @@ class DeviceNDArray(DeviceNDArrayBase):
         if len(extents) == 1:
             newdata = self.gpu_data.view(*extents[0])
 
-            if dummyarray.is_element_indexing(item, self.ndim):
+            if not arr.is_array:
+                # Element indexing
                 hostary = np.empty(1, dtype=self.dtype)
                 _driver.device_to_host(dst=hostary, src=newdata,
                                        size=self._dummy.itemsize,
