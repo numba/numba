@@ -109,6 +109,9 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
 
 def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
                      locals, lifted=()):
+
+    ### Front-end: Analyze bytecode, generate Numba IR, infer types
+
     interp = translate_stage(bc)
     nargs = len(interp.argspec.args)
     if len(args) > nargs:
@@ -162,14 +165,26 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
             return cres
 
     if status.use_python_mode:
+        # Fallback typing: everything is a python object
+        typemap = defaultdict(lambda: types.pyobject)
+        calltypes = defaultdict(lambda: types.pyobject)
+        return_type = types.pyobject
+
+    type_annotation = type_annotations.TypeAnnotation(interp=interp,
+                                                      typemap=typemap,
+                                                      calltypes=calltypes,
+                                                      lifted=lifted)
+    if config.ANNOTATE:
+        print("ANNOTATION".center(80, '-'))
+        print(type_annotation)
+        print('=' * 80)
+
+    ### Back-end: Generate LLVM IR from Numba IR, compile to machine code
+
+    if status.use_python_mode:
         # Object mode compilation
         func, lmod, lfunc, fndesc = py_lowering_stage(targetctx, interp,
                                                              flags.no_compile)
-        typemap = defaultdict(lambda: types.pyobject)
-        calltypes = defaultdict(lambda: types.pyobject)
-
-        return_type = types.pyobject
-
         if len(args) != nargs:
             # append missing
             args = tuple(args) + (types.pyobject,) * (nargs - len(args))
@@ -181,15 +196,6 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
                                                                  return_type,
                                                                  calltypes,
                                                                  flags.no_compile)
-
-    type_annotation = type_annotations.TypeAnnotation(interp=interp,
-                                                      typemap=typemap,
-                                                      calltypes=calltypes,
-                                                      lifted=lifted)
-    if config.ANNOTATE:
-        print("ANNOTATION".center(80, '-'))
-        print(type_annotation)
-        print('=' * 80)
 
     signature = typing.signature(return_type, *args)
 
