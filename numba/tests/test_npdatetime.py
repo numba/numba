@@ -544,10 +544,12 @@ class TestDatetimeArithmetic(TestCase):
         eq = self.jit(eq_usecase)
         ne = self.jit(ne_usecase)
         def check(a, b, expected):
-            self.assertEqual(eq(a, b), expected, (a, b, expected))
-            self.assertEqual(eq(b, a), expected, (a, b, expected))
-            self.assertEqual(ne(a, b), not expected, (a, b, expected))
-            self.assertEqual(ne(b, a), not expected, (a, b, expected))
+            self.assertPreciseEqual(eq(a, b), expected, (a, b, expected))
+            self.assertPreciseEqual(eq(b, a), expected, (a, b, expected))
+            self.assertPreciseEqual(ne(a, b), not expected, (a, b, expected))
+            self.assertPreciseEqual(ne(b, a), not expected, (a, b, expected))
+            # Did we get it right?
+            self.assertPreciseEqual(a == b, expected)
 
         check(DT('2014'), DT('2017'), False)
         check(DT('2014'), DT('2014-01'), True)
@@ -581,7 +583,7 @@ class TestDatetimeArithmetic(TestCase):
         check(DT('NaT', 'as'), DT('2017'), False)
         check(DT('NaT'), DT('NaT'), True)
         check(DT('NaT', 'Y'), DT('NaT'), True)
-        check(DT('NaT', 'as'), DT('NaT', 'M'), True)
+        check(DT('NaT', 'ms'), DT('NaT', 'M'), True)
 
 
 class TestDatetimeArithmeticNoPython(TestDatetimeArithmetic):
