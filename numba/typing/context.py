@@ -113,7 +113,11 @@ class BaseContext(object):
         if val is True or val is False:
             return types.boolean
 
-        elif isinstance(val, utils.INT_TYPES + (float,)):
+        # Under 2.x, we must guard against numpy scalars (np.intXY
+        # subclasses Python int but get_number_type() wouldn't infer the
+        # right bit width -- perhaps it should?).
+        elif (not isinstance(val, numpy.number)
+              and isinstance(val, utils.INT_TYPES + (float,))):
             return self.get_number_type(val)
 
         elif val is None:
