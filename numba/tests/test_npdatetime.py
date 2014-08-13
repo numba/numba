@@ -540,30 +540,66 @@ class TestDatetimeArithmetic(TestCase):
             for a, b in itertools.product(dts, dts):
                 self.assertPreciseEqual(sub(a, b), a - b, (a, b))
 
-    def test_eq_ne(self):
+    def test_comparisons(self):
+        # Test all datetime comparisons all at once
         eq = self.jit(eq_usecase)
         ne = self.jit(ne_usecase)
-        def check(a, b, expected):
+        lt = self.jit(lt_usecase)
+        le = self.jit(le_usecase)
+        gt = self.jit(gt_usecase)
+        ge = self.jit(ge_usecase)
+
+        def check_eq(a, b, expected):
             self.assertPreciseEqual(eq(a, b), expected, (a, b, expected))
             self.assertPreciseEqual(eq(b, a), expected, (a, b, expected))
             self.assertPreciseEqual(ne(a, b), not expected, (a, b, expected))
             self.assertPreciseEqual(ne(b, a), not expected, (a, b, expected))
+            if expected:
+                # If equal, then equal-ordered comparisons are true
+                self.assertTrue(le(a, b), (a, b))
+                self.assertTrue(ge(a, b), (a, b))
+                self.assertTrue(le(b, a), (a, b))
+                self.assertTrue(ge(b, a), (a, b))
+                # and strictly ordered comparisons are false
+                self.assertFalse(lt(a, b), (a, b))
+                self.assertFalse(gt(a, b), (a, b))
+                self.assertFalse(lt(b, a), (a, b))
+                self.assertFalse(gt(b, a), (a, b))
             # Did we get it right?
             self.assertPreciseEqual(a == b, expected)
 
-        check(DT('2014'), DT('2017'), False)
-        check(DT('2014'), DT('2014-01'), True)
-        check(DT('2014'), DT('2014-01-01'), True)
-        check(DT('2014'), DT('2014-01-01', 'W'), True)
-        check(DT('2014-01'), DT('2014-01-01', 'W'), True)
+        def check_lt(a, b, expected):
+            self.assertPreciseEqual(lt(a, b), expected, (a, b, expected))
+            self.assertPreciseEqual(gt(b, a), expected, (a, b, expected))
+            self.assertPreciseEqual(ge(a, b), not expected, (a, b, expected))
+            self.assertPreciseEqual(le(b, a), not expected, (a, b, expected))
+            if expected:
+                # If true, then values are not equal
+                check_eq(a, b, False)
+            # Did we get it right?
+            self.assertPreciseEqual(a < b, expected)
+
+        check_eq(DT('2014'), DT('2017'), False)
+        check_eq(DT('2014'), DT('2014-01'), True)
+        check_eq(DT('2014'), DT('2014-01-01'), True)
+        check_eq(DT('2014'), DT('2014-01-01', 'W'), True)
+        check_eq(DT('2014-01'), DT('2014-01-01', 'W'), True)
         # Yes, it's not transitive
-        check(DT('2014-01-01'), DT('2014-01-01', 'W'), False)
-        check(DT('2014-01-02'), DT('2014-01-06', 'W'), True)
+        check_eq(DT('2014-01-01'), DT('2014-01-01', 'W'), False)
+        check_eq(DT('2014-01-02'), DT('2014-01-06', 'W'), True)
         # with times
-        check(DT('2014-01-01T00:01:00Z', 's'),
+        check_eq(DT('2014-01-01T00:01:00Z', 's'),
               DT('2014-01-01T00:01Z', 'm'), True)
-        check(DT('2014-01-01T00:01:01Z', 's'),
+        check_eq(DT('2014-01-01T00:01:01Z', 's'),
               DT('2014-01-01T00:01Z', 'm'), False)
+        # NaTs
+        check_lt(DT('NaT'), DT('2017'), True)
+        check_lt(DT('NaT', 'Y'), DT('2017'), True)
+        check_lt(DT('NaT', 'ms'), DT('2017'), True)
+        check_eq(DT('NaT'), DT('NaT'), True)
+        check_eq(DT('NaT', 'Y'), DT('NaT'), True)
+        check_eq(DT('NaT', 'ms'), DT('NaT', 'M'), True)
+
         # Check comparison between various units
         dts = self.datetime_samples()
         for a in dts:
@@ -574,16 +610,9 @@ class TestDatetimeArithmetic(TestCase):
             for unit in units:
                 # Force conversion
                 b = a.astype('M8[%s]' % unit)
-                check(a, b, True)
-                check(a, b + np.timedelta64(1, unit), False)
-                check(a, b - np.timedelta64(1, unit), False)
-        # NaTs
-        check(DT('NaT'), DT('2017'), False)
-        check(DT('NaT', 'Y'), DT('2017'), False)
-        check(DT('NaT', 'as'), DT('2017'), False)
-        check(DT('NaT'), DT('NaT'), True)
-        check(DT('NaT', 'Y'), DT('NaT'), True)
-        check(DT('NaT', 'ms'), DT('NaT', 'M'), True)
+                check_eq(a, b, True)
+                check_lt(a, b + np.timedelta64(1, unit), True)
+                check_lt(b - np.timedelta64(1, unit), a, True)
 
 
 class TestDatetimeArithmeticNoPython(TestDatetimeArithmetic):

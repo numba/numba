@@ -508,3 +508,7 @@ def _implement_datetime_comparison(py_op, ll_op):
 
 _implement_datetime_comparison('==', lc.ICMP_EQ)
 _implement_datetime_comparison('!=', lc.ICMP_NE)
+_implement_datetime_comparison('<', lc.ICMP_SLT)
+_implement_datetime_comparison('<=', lc.ICMP_SLE)
+_implement_datetime_comparison('>', lc.ICMP_SGT)
+_implement_datetime_comparison('>=', lc.ICMP_SGE)
