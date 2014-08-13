@@ -7,6 +7,7 @@ from numba.typeconv import rules
 
 
 class TestTypeConv(unittest.TestCase):
+
     def test_typeconv(self):
         tm = TypeManager()
 
@@ -21,10 +22,15 @@ class TestTypeConv(unittest.TestCase):
         ovs = [
             (i32, i32),
             (f32, f32),
+            (i64, i64),
         ]
 
-        sel = tm.select_overload(sig, ovs)
+        # allow_unsafe = True => a conversion from i32 to f32 is chosen
+        sel = tm.select_overload(sig, ovs, True)
         self.assertEqual(sel, 1)
+        # allow_unsafe = False => no overload available
+        with self.assertRaises(TypeError):
+            sel = tm.select_overload(sig, ovs, False)
 
     def test_default(self):
         tm = rules.default_type_manager
@@ -57,7 +63,35 @@ class TestTypeConv(unittest.TestCase):
             (i32, i32, i32),
             (i64, i64, i64),
         ]
-        print(tm.select_overload(sig, ovs))
+        # The first overload is unsafe, the second is safe => the second
+        # is always chosen, regardless of allow_unsafe.
+        self.assertEqual(tm.select_overload(sig, ovs, True), 1)
+        self.assertEqual(tm.select_overload(sig, ovs, False), 1)
+
+    def test_overload2(self):
+        tm = rules.default_type_manager
+
+        i16 = types.int16
+        i32 = types.int32
+        i64 = types.int64
+
+        sig = (i32, i16, i32)
+        ovs = [
+            # Three promotes
+            (i64, i64, i64),
+            # One promotes, two exact types
+            (i32, i32, i32),
+            # Two unsafe converts, one exact type
+            (i16, i16, i16),
+        ]
+        self.assertEqual(tm.select_overload(sig, ovs, allow_unsafe=False), 1)
+        self.assertEqual(tm.select_overload(sig, ovs, allow_unsafe=True), 1)
+
+        # The same in reverse order
+        ovs.reverse()
+        self.assertEqual(tm.select_overload(sig, ovs, allow_unsafe=False), 1)
+        self.assertEqual(tm.select_overload(sig, ovs, allow_unsafe=True), 1)
+
 
 if __name__ == '__main__':
     unittest.main()

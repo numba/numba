@@ -6,6 +6,7 @@ from __future__ import print_function, division, absolute_import
 from collections import defaultdict
 
 import numpy
+import weakref
 
 from . import utils
 
@@ -225,17 +226,45 @@ class Function(Type):
         self.template.cases.extend(template.cases)
 
 
-class Dispatcher(Type):
-    def __init__(self, overloaded):
-        self.overloaded = overloaded
-        super(Dispatcher, self).__init__("Dispatcher(%s)" % overloaded)
+class WeakType(Type):
+    """
+    Base class for types parametered by a mortal object, to which only
+    a weak reference is kept.
+    """
+
+    def _store_object(self, obj):
+        self._wr = weakref.ref(obj)
+
+    def _get_object(self):
+        obj = self._wr()
+        if obj is None:
+            raise ReferenceError("underlying object has vanished")
+        return obj
 
     def __eq__(self, other):
-        if isinstance(other, Dispatcher):
-            return self.overloaded is other.overloaded
+        if type(self) is type(other):
+            obj = self._wr()
+            return obj is not None and obj is other._wr()
+
+    def __ne__(self, other):
+        return not (self == other)
 
     def __hash__(self):
-        return hash(self.overloaded)
+        return hash(self._wr)
+
+
+class Dispatcher(WeakType):
+
+    def __init__(self, overloaded):
+        self._store_object(overloaded)
+        super(Dispatcher, self).__init__("Dispatcher(%s)" % overloaded)
+
+    @property
+    def overloaded(self):
+        """
+        A strong reference to the underlying Dispatcher instance.
+        """
+        return self._get_object()
 
 
 class FunctionPointer(Function):

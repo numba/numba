@@ -26,6 +26,8 @@ def make_array(array_type):
     dtype = array_type.dtype
     nd = array_type.ndim
 
+    # This structure should be kept in sync with Numba_adapt_ndarray()
+    # in _helperlib.c.
     class ArrayTemplate(cgutils.Structure):
         _fields = [('data', types.CPointer(dtype)),
                    ('shape', types.UniTuple(types.intp, nd)),

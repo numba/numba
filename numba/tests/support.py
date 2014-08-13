@@ -4,10 +4,10 @@ Assorted utilities for use in tests.
 
 import contextlib
 
+import numpy as np
+
 from numba import types, typing, utils
 from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
-from numba import types, utils
-from numba.compiler import compile_isolated, Flags
 from numba.lowering import LoweringError
 from numba.targets import cpu
 from numba.typeinfer import TypingError
@@ -50,6 +50,12 @@ class CompilationCache(object):
 
 
 class TestCase(unittest.TestCase):
+
+    # A random state yielding the same random numbers for any test case.
+    # Use as `self.random.<method name>`
+    @utils.cached_property
+    def random(self):
+        return np.random.RandomState(42)
 
     @contextlib.contextmanager
     def assertTypingError(self):

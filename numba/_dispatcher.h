@@ -17,7 +17,8 @@ void
 dispatcher_add_defn(dispatcher_t *obj, int tys[], void* callable);
 
 void*
-dispatcher_resolve(dispatcher_t *obj, int sig[], int *matches);
+dispatcher_resolve(dispatcher_t *obj, int sig[], int *matches,
+                   int allow_unsafe);
 
 int
 dispatcher_count(dispatcher_t *obj);

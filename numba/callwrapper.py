@@ -6,6 +6,78 @@ import llvm.core as lc
 from numba import types, cgutils
 
 
+class _ArgManager(object):
+    """
+    A utility class to handle argument unboxing and cleanup
+    """
+    def __init__(self, builder, api, nargs):
+        self.builder = builder
+        self.api = api
+        self.arg_count = 0  # how many function arguments have been processed
+        self.cleanups = []
+
+        # set up switch for error processing of function arguments
+        self.elseblk = cgutils.append_basic_block(self.builder, "arg.ok")
+        with cgutils.goto_block(self.builder, self.elseblk):
+            self.builder.ret(self.api.get_null_object())
+
+        self.swtblk = cgutils.append_basic_block(self.builder, ".arg.err")
+        with cgutils.goto_block(self.builder, self.swtblk):
+            self.swt_val = cgutils.alloca_once(self.builder, Type.int(32))
+            self.swt = self.builder.switch(self.builder.load(self.swt_val),
+                                           self.elseblk, nargs)
+
+        self.prev = self.elseblk
+
+    def add_arg(self, obj, ty):
+        """
+        Unbox argument and emit code that handles any error during unboxing
+        """
+        # Unbox argument
+        val, dtor = self.api.to_native_arg(self.builder.load(obj), ty)
+        self.cleanups.append(dtor)
+        # add to the switch each time through the loop
+        # prev and cur are references to keep track of which block to branch to
+
+        if self.arg_count == 0:
+            bb = cgutils.append_basic_block(self.builder,
+                                            "arg%d.err" % self.arg_count)
+            self.cur = bb
+            self.swt.add_case(Constant.int(Type.int(32), self.arg_count), bb)
+        else:
+            # keep a reference to the previous arg.error block
+            self.prev = self.cur
+            bb = cgutils.append_basic_block(self.builder,
+                                            "arg%d.error" % self.arg_count)
+            self.cur = bb
+            self.swt.add_case(Constant.int(Type.int(32), self.arg_count), bb)
+
+        # write the error block
+        with cgutils.goto_block(self.builder, self.cur):
+            dtor()
+            self.builder.branch(self.prev)
+
+        # store arg count into value to switch on if there is an error
+        self.builder.store(Constant.int(Type.int(32), self.arg_count),
+                           self.swt_val)
+
+        # check for Python C-API Error
+        error_check = self.api.err_occurred()
+        err_happened = self.builder.icmp(lc.ICMP_NE, error_check,
+                                         self.api.get_null_object())
+        # if error occurs -- clean up -- goto switch block
+        with cgutils.if_unlikely(self.builder, err_happened):
+            self.builder.branch(self.swtblk)
+
+        self.arg_count += 1
+        return val
+
+    def emit_cleanup(self):
+        """Emit the cleanup code after we are done with the arguments
+        """
+        for dtor in self.cleanups:
+            dtor()
+
 
 class PyCallWrapper(object):
     def __init__(self, context, module, func, fndesc, exceptions):
@@ -53,14 +125,12 @@ class PyCallWrapper(object):
         with cgutils.if_unlikely(builder, pred):
             builder.ret(api.get_null_object())
 
+        argman = _ArgManager(builder, api, nargs)
+
         innerargs = []
-        cleanups = []
         for obj, ty in zip(objs, self.fndesc.argtypes):
-            #api.context.debug_print(builder, "%s -> %s" % (obj, ty))
-            #api.print_object(builder.load(obj))
-            val, dtor = api.to_native_arg(builder.load(obj), ty)
+            val = argman.add_arg(obj, ty)
             innerargs.append(val)
-            cleanups.append(dtor)
 
         # The wrapped function doesn't take a full closure, only
         # the Environment object.
@@ -70,13 +140,10 @@ class PyCallWrapper(object):
                                                  self.fndesc.restype,
                                                  self.fndesc.argtypes,
                                                  innerargs, env)
-
         # Do clean up
-        for dtor in cleanups:
-            dtor()
+        argman.emit_cleanup()
 
         # Determine return status
-
         with cgutils.if_likely(builder, status.ok):
             with cgutils.ifthen(builder, status.none):
                 api.return_none()
@@ -92,13 +159,13 @@ class PyCallWrapper(object):
         # !ok && exc
         builder.ret(api.get_null_object())
 
+
     def make_exception_switch(self, api, builder, code):
         """Handle user defined exceptions.
         Build a switch to check which exception class was raised.
         """
         nexc = len(self.exceptions)
-        elseblk = cgutils.append_basic_block(builder,
-                                             ".invalid.user.exception")
+        elseblk = cgutils.append_basic_block(builder, ".invalid.user.exception")
         swt = builder.switch(code, elseblk, n=nexc)
         for num, exc in self.exceptions.items():
             bb = cgutils.append_basic_block(builder,

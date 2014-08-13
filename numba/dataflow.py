@@ -245,14 +245,9 @@ class DataFlowAnalysis(object):
         res = info.make_temp()
         info.append(inst, value=value, res=res)
         info.push(res)
-        if info.syntax_blocks:
-            loop = info.syntax_blocks[-1]
-            if isinstance(loop, LoopBlock) and loop.iterator is None:
-                loop.iterator = res
 
     def op_FOR_ITER(self, info, inst):
-        loop = info.syntax_blocks[-1]
-        iterator = loop.iterator
+        iterator = info.tos
         pair = info.make_temp()
         indval = info.make_temp()
         pred = info.make_temp()
@@ -517,10 +512,7 @@ class DataFlowAnalysis(object):
 
     def op_POP_BLOCK(self, info, inst):
         block = self.pop_syntax_block(info)
-        if isinstance(block, LoopBlock):
-            info.append(inst, delitems=[block.iterator])
-        else:
-            info.append(inst)
+        info.append(inst)
 
     def op_RAISE_VARARGS(self, info, inst):
         if inst.arg != 1:
@@ -533,10 +525,9 @@ class DataFlowAnalysis(object):
 
 
 class LoopBlock(object):
-    __slots__ = ('iterator', 'stack_offset')
+    __slots__ = ('stack_offset',)
 
     def __init__(self):
-        self.iterator = None
         self.stack_offset = None
 
 

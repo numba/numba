@@ -1,10 +1,14 @@
 from __future__ import print_function
-import numpy as np
+
 import math
-import numba.unittest_support as unittest
 from timeit import default_timer as timer
+
+import numpy as np
+
+import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, compile_extra, Flags
 from numba import types, typing
+from .support import TestCase
 
 
 RISKFREE = 0.02
@@ -117,7 +121,7 @@ def randfloat(rand_var, low, high):
     return (1.0 - rand_var) * low + rand_var * high
 
 
-class TestBlackScholes(unittest.TestCase):
+class TestBlackScholes(TestCase):
     def test_array_expr(self):
         flags = Flags()
         flags.set("enable_pyobject")
@@ -133,9 +137,9 @@ class TestBlackScholes(unittest.TestCase):
         iterations = 10
 
 
-        stockPrice = randfloat(np.random.random(OPT_N), 5.0, 30.0)
-        optionStrike = randfloat(np.random.random(OPT_N), 1.0, 100.0)
-        optionYears = randfloat(np.random.random(OPT_N), 0.25, 10.0)
+        stockPrice = randfloat(self.random.random_sample(OPT_N), 5.0, 30.0)
+        optionStrike = randfloat(self.random.random_sample(OPT_N), 1.0, 100.0)
+        optionYears = randfloat(self.random.random_sample(OPT_N), 0.25, 10.0)
 
         args = stockPrice, optionStrike, optionYears, RISKFREE, VOLATILITY
 
@@ -189,9 +193,9 @@ class TestBlackScholes(unittest.TestCase):
         callResultNumba = np.zeros(OPT_N)
         putResultNumba = np.zeros(OPT_N)
 
-        stockPrice = randfloat(np.random.random(OPT_N), 5.0, 30.0)
-        optionStrike = randfloat(np.random.random(OPT_N), 1.0, 100.0)
-        optionYears = randfloat(np.random.random(OPT_N), 0.25, 10.0)
+        stockPrice = randfloat(self.random.random_sample(OPT_N), 5.0, 30.0)
+        optionStrike = randfloat(self.random.random_sample(OPT_N), 1.0, 100.0)
+        optionYears = randfloat(self.random.random_sample(OPT_N), 0.25, 10.0)
 
         args = stockPrice, optionStrike, optionYears, RISKFREE, VOLATILITY
 

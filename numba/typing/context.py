@@ -1,15 +1,19 @@
-from __future__ import print_function, absolute_import, division
+from __future__ import print_function, absolute_import
 
-# Initialize declarations
-from . import (templates, builtins, mathdecl, npydecl, operatordecl,
-               ctypes_utils, cffi_utils)
-
-from .. import types, typeconv, utils, numpy_support
-
-import numpy
 from collections import defaultdict
 import functools
 import types as pytypes
+import weakref
+
+import numpy
+
+from numba import types
+from numba.typeconv import rules
+from . import templates
+# Initialize declarations
+from . import builtins, mathdecl, npydecl, operatordecl
+from numba import numpy_support, utils
+from . import ctypes_utils, cffi_utils
 
 
 class BaseContext(object):
@@ -19,8 +23,8 @@ class BaseContext(object):
     def __init__(self):
         self.functions = defaultdict(list)
         self.attributes = {}
-        self.globals = utils.UniqueDict()
-        self.tm = typeconv.rules.default_type_manager
+        self._globals = utils.UniqueDict()
+        self.tm = rules.default_type_manager
         self._load_builtins()
         self.init()
 
@@ -49,18 +53,11 @@ class BaseContext(object):
             return func.template(self).apply(args, kws)
 
         if isinstance(func, types.Dispatcher):
-            if kws:
-                raise TypeError("kwargs not supported")
-            if not func.overloaded.is_compiling:
-                # Avoid compiler re-entrant
-                fnobj = func.overloaded.compile(tuple(args))
-            else:
-                try:
-                    fnobj = func.overloaded.get_overload(tuple(args))
-                except KeyError:
-                    return None
-            ty = self.globals[fnobj]
-            return self.resolve_function_type(ty, args, kws)
+            try:
+                template = func.overloaded.get_call_template(args, kws)
+            except KeyError:
+                return None
+            return template(self).apply(args, kws)
 
         defns = self.functions[func]
         for defn in defns:
@@ -169,7 +166,7 @@ class BaseContext(object):
 
     def get_global_type(self, gv):
         try:
-            return self.globals[gv]
+            return self._lookup_global(gv)
         except KeyError:
             if isinstance(gv, pytypes.ModuleType):
                 return types.Module(gv)
@@ -187,8 +184,31 @@ class BaseContext(object):
         for gv, gty in registry.globals:
             self.insert_global(gv, gty)
 
+    def _lookup_global(self, gv):
+        """
+        Look up the registered type for global value *gv*.
+        """
+        try:
+            gv = weakref.ref(gv)
+        except TypeError:
+            pass
+        return self._globals[gv]
+
+    def _insert_global(self, gv, gty):
+        """
+        Register type *gty* for value *gv*.  Only a weak reference
+        to *gv* is kept, if possible.
+        """
+        def on_disposal(wr):
+            self._globals.pop(wr)
+        try:
+            gv = weakref.ref(gv, on_disposal)
+        except TypeError:
+            pass
+        self._globals[gv] = gty
+
     def insert_global(self, gv, gty):
-        self.globals[gv] = gty
+        self._insert_global(gv, gty)
 
     def insert_attributes(self, at):
         key = at.key
@@ -200,7 +220,7 @@ class BaseContext(object):
         self.functions[key].append(ft)
 
     def insert_overloaded(self, overloaded):
-        self.globals[overloaded] = types.Dispatcher(overloaded)
+        self._insert_global(overloaded, types.Dispatcher(overloaded))
 
     def insert_user_function(self, fn, ft):
         """Insert a user function.
@@ -212,7 +232,7 @@ class BaseContext(object):
         - ft:
             function template
         """
-        self.globals[fn] = types.Function(ft)
+        self._insert_global(fn, types.Function(ft))
 
     def extend_user_function(self, fn, ft):
         """ Insert of extend a user function.
@@ -224,10 +244,12 @@ class BaseContext(object):
         - ft:
             function template
         """
-        if fn in self.globals:
-            self.globals[fn].extend(ft)
-        else:
+        try:
+            gty = self._lookup_global(fn)
+        except KeyError:
             self.insert_user_function(fn, ft)
+        else:
+            gty.extend(ft)
 
     def insert_class(self, cls, attrs):
         clsty = types.Object(cls)
@@ -311,5 +333,4 @@ def new_method(fn, sig):
     name = "UserFunction_%s" % fn
     ft = templates.make_concrete_template(name, fn, [sig])
     return types.Method(ft, this=sig.recvr)
-
 

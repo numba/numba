@@ -93,7 +93,7 @@ class PyLower(BaseLower):
 
         elif isinstance(inst, ir.Return):
             retval = self.loadvar(inst.value.name)
-            self.incref(retval)
+            # No need to incref() as the reference is already owned.
             self.cleanup()
             self.context.return_value(self.builder, retval)
 
@@ -368,7 +368,6 @@ class PyLower(BaseLower):
                 self.pyapi.raise_missing_global_error(name)
                 self.return_exception_raised()
 
-        self.incref(retval)
         return retval
 
     # -------------------------------------------------------------------------
@@ -394,7 +393,8 @@ class PyLower(BaseLower):
         Args
         ----
         mod:
-            The __builtins__ dictionary or module
+            The __builtins__ dictionary or module, as looked up in
+            a module's globals.
         name: str
             The object to lookup
         """
@@ -450,13 +450,16 @@ class PyLower(BaseLower):
         self.cleanup()
         self.context.return_exc(self.builder)
 
-    def getvar(self, name, ltype=None):
+    def _getvar(self, name, ltype=None):
         if name not in self.varmap:
             self.varmap[name] = self.alloca(name, ltype=ltype)
         return self.varmap[name]
 
     def loadvar(self, name):
-        ptr = self.getvar(name)
+        """
+        Load the llvm value of the variable named *name*.
+        """
+        ptr = self.varmap[name]
         return self.builder.load(ptr)
 
     def delvar(self, name):
@@ -464,15 +467,19 @@ class PyLower(BaseLower):
         Delete the variable slot with the given name. This will decref
         the corresponding Python object.
         """
-        ptr = self.varmap.pop(name)
-        self.decref(ptr)
+        ptr = self.varmap[name]
+        self.decref(self.builder.load(ptr))
+        # This is a safety guard against double decref's, but really
+        # the IR should be correct and have only one Del per variable
+        # and code path.
+        self.builder.store(cgutils.get_null_value(ptr.type.pointee), ptr)
 
     def storevar(self, value, name):
         """
         Stores a llvm value and allocate stack slot if necessary.
         The llvm value can be of arbitrary type.
         """
-        ptr = self.getvar(name, ltype=value.type)
+        ptr = self._getvar(name, ltype=value.type)
         old = self.builder.load(ptr)
         assert value.type == ptr.type.pointee, (str(value.type),
                                                 str(ptr.type.pointee))
@@ -481,8 +488,8 @@ class PyLower(BaseLower):
         self.decref(old)
 
     def cleanup(self):
-        for var in utils.dict_itervalues(self.varmap):
-            self.decref(self.builder.load(var))
+        # Nothing to do.
+        pass
 
     def alloca(self, name, ltype=None):
         """

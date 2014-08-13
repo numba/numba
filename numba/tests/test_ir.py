@@ -10,21 +10,39 @@ from numba.utils import PYVERSION, StringIO
 def var_swapping(a, b, c, d, e):
     """
     label 0:
-        a.1 = a
-        b.1 = b
-        c.1 = c
-        d.1 = d
-        e.1 = e
-        a.2 = b.1
-        b.2 = a.1
-        c.2 = e.1
-        d.2 = c.1
-        e.2 = d.1
-        $0.8 = a.2 + b.2
-        $0.10 = $0.8 + c.2
-        $0.12 = $0.10 + d.2
-        $0.14 = $0.12 + e.2
-        return $0.14
+        a.1 = a                                  ['a', 'a.1']
+        del a                                    []
+        b.1 = b                                  ['b', 'b.1']
+        del b                                    []
+        c.1 = c                                  ['c', 'c.1']
+        del c                                    []
+        d.1 = d                                  ['d', 'd.1']
+        del d                                    []
+        e.1 = e                                  ['e', 'e.1']
+        del e                                    []
+        a.2 = b.1                                ['a.2', 'b.1']
+        del b.1                                  []
+        b.2 = a.1                                ['a.1', 'b.2']
+        del a.1                                  []
+        c.2 = e.1                                ['c.2', 'e.1']
+        del e.1                                  []
+        d.2 = c.1                                ['c.1', 'd.2']
+        del c.1                                  []
+        e.2 = d.1                                ['d.1', 'e.2']
+        del d.1                                  []
+        $0.8 = a.2 + b.2                         ['$0.8', 'a.2', 'b.2']
+        del b.2                                  []
+        del a.2                                  []
+        $0.10 = $0.8 + c.2                       ['$0.10', '$0.8', 'c.2']
+        del c.2                                  []
+        del $0.8                                 []
+        $0.12 = $0.10 + d.2                      ['$0.10', '$0.12', 'd.2']
+        del d.2                                  []
+        del $0.10                                []
+        $0.14 = $0.12 + e.2                      ['$0.12', '$0.14', 'e.2']
+        del e.2                                  []
+        del $0.12                                []
+        return $0.14                             ['$0.14']
     """
     a, b = b, a
     c, d, e = e, c, d
@@ -33,21 +51,32 @@ def var_swapping(a, b, c, d, e):
 def var_propagate1(a, b):
     """
     label 0:
-        a.1 = a
-        b.1 = b
-        $0.3 = a.1 > b.1
-        branch $0.3, 12, 18
+        a.1 = a                                  ['a', 'a.1']
+        del a                                    []
+        b.1 = b                                  ['b', 'b.1']
+        del b                                    []
+        $0.3 = a.1 > b.1                         ['$0.3', 'a.1', 'b.1']
+        branch $0.3, 12, 18                      ['$0.3']
     label 12:
-        $phi21.2 = a.1
-        jump 21
+        del b.1                                  []
+        del $0.3                                 []
+        $phi21.2 = a.1                           ['$phi21.2', 'a.1']
+        del a.1                                  []
+        jump 21                                  []
     label 18:
-        $phi21.2 = b.1
-        jump 21
+        del a.1                                  []
+        del $0.3                                 []
+        $phi21.2 = b.1                           ['$phi21.2', 'b.1']
+        del b.1                                  []
+        jump 21                                  []
     label 21:
-        $const21.1 = const(int, 5)
-        $21.3 = $phi21.2 + $const21.1
-        c = $21.3
-        return c
+        $const21.1 = const(int, 5)               ['$const21.1']
+        $21.3 = $phi21.2 + $const21.1            ['$21.3', '$const21.1', '$phi21.2']
+        del $phi21.2                             []
+        del $const21.1                           []
+        c = $21.3                                ['$21.3', 'c']
+        del $21.3                                []
+        return c                                 ['c']
     """
     c = (a if a > b else b) + 5
     return c
