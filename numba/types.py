@@ -511,6 +511,7 @@ class Array(IterableType):
         """
         if self.layout != 'A':
             from numba.typeconv.rules import default_type_manager as tm
+            # XXX the conversion is never removed, even the type dies.
             ary_any = Array(self.dtype, self.ndim, 'A')
             tm.set_safe_convert(self, ary_any)
 
