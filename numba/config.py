@@ -15,6 +15,9 @@ NATIVE_ALIGNMENT = {
     }[struct.pack('h', 1)]
 
 
+class NumbaWarning(Warning):
+    pass
+
 def _readenv(name, ctor, default):
     try:
         res = os.environ[name]
@@ -28,6 +31,12 @@ def _readenv(name, ctor, default):
                           (name, res), RuntimeWarning)
             return default
 
+# Print warnings to screen about function compilation
+#   0 = Numba warnings suppressed (default)
+#   1 = All Numba warnings shown
+WARNINGS = _readenv("NUMBA_WARNINGS", int, 0)
+if WARNINGS == 0:
+    warnings.simplefilter('ignore', NumbaWarning)
 
 # Debug flag to control compiler debug print
 DEBUG = _readenv("NUMBA_DEBUG", int, 0)
