@@ -90,29 +90,16 @@ def map_layout(val):
     return layout
 
 
-# NumPy ufunc loop matching logic
-# Finds out the loop that will be used (its complete type signature) when called with
-# the given input types.
-# ufunc - The ufunc we want to check
-# op_dtypes - a string containing the dtypes of the operands using numpy char encoding.
-#
-# return value - the full identifier of the loop. f.e: 'dd->d' or None if no matching
-#                loop is found.
-
-def supported_letter_types():
-    """the supported dtypes in letter form. Notable exceptions are:
-    'O' - object
-    'g' - long double
-    'G' - long complex double
-    'm' - timedelta64
-    'M' - datetime64
-    'e' - float16
-    """
-    return '?bBhHiIlLqQfdFD'
-
-
 def supported_ufunc_loop(ufunc, loop):
     """returns whether the loop for the ufunc is supported -in nopython-
+
+    For ufuncs implemented using the ufunc_db, it is supported if the ufunc_dbc
+    contains a lowering definition for 'loop' in the 'ufunc' entry.
+
+    For other ufuncs, it is type based. The loop will be considered valid if it
+    only contains the following letter types: '?bBhHiIlLqQfd'. Note this is
+    legacy and when implementing new ufuncs the ufunc_db should be preferred,
+    as it allows for a more fine-grained incremental support.
     """
     try:
         # check if the loop has a codegen description in the
@@ -125,7 +112,7 @@ def supported_ufunc_loop(ufunc, loop):
         # for ufuncs not in ufunc_db, base the decision of whether the
         # loop is supported on its types
         loop_types = loop[:ufunc.nin] + loop[-ufunc.nout:]
-        supported_types = supported_letter_types()
+        supported_types = '?bBhHiIlLqQfd'
         # check if all the types involved in the ufunc loop are
         # supported in this mode
         supported_loop =  all((t in supported_types for t in loop_types))
@@ -137,24 +124,21 @@ def numba_types_to_numpy_letter_types(numba_type_seq):
     letter_type = [numpy.dtype(str(x)).char for x in numba_type_seq]
     return [l if l in supported_letter_types() else None for l in letter_type]
 
-def supported_ufunc_loop(ufunc, loop_signature):
-    """returns whether the ufunc with the loop signature 'loop_signature'
-    is supported -in nopython-
-
-    ufunc - the ufunc
-
-    loop_signature - the signature string for the loop, as found in
-                     the ufunc 'types' attribute (something like 'ff->f')
-    """
-    assert loop_signature in ufunc.types
-    loop_types = loop_signature[:ufunc.nin] + loop_signature[-ufunc.nout:]
-    supported_types = supported_letter_types()
-    return all((t in supported_types for t in loop_types))
 
 def numpy_letter_types_to_numba_types(numpy_letter_types_seq):
     return [from_dtype(numpy.dtype(x)) for x in numpy_letter_types_seq]
 
+
 def ufunc_find_matching_loop(ufunc, op_dtypes):
+    """Find the appropriate loop to be used for a ufunc based on the types
+    of the operands
+
+    ufunc        - The ufunc we want to check
+    op_dtypes    - a string containing the dtypes of the operands using
+                   numpy char encoding.
+    return value - the full identifier of the loop. f.e: 'dd->d' or
+                   None if no matching loop is found.
+    """
     assert(isinstance(ufunc, numpy.ufunc))
     assert(len(op_dtypes) == ufunc.nin)
 
