@@ -118,8 +118,8 @@ requires creating a subclass of ``numba.typing.templates.AttributeTemplate``::
     typing_context.insert_attributes(IntervalAttributes(typing_context))
 
 The ``key`` attribute of the template contains the Numba type that needs to be
-matched to use this template.  It can either be an instance of a ``Type`` subclass,
-or the subclass itself, for parametric types.
+matched to use this template.  It can either be an instance of a ``Type``
+subclass, or the subclass itself, for parametric types.
 
 The ``AttributeTemplate`` will first look for a method of the form
 ``resolve_<attribute name>`` to get the type of a specific attribute,
@@ -184,10 +184,10 @@ We need to make a ``ConcreteTemplate`` where the key is the string ``"+"``::
 
 Note that unlike adding a function type signature for a global or attribute,
 ``insert_function()`` takes an instance of the template, not an instance of
-``numba.types.Function``.  Templates with the same key can be inserted, and each
-will be checked for a matching function signatures in the order of insertion.
-This is what allows the same key to be overloaded with different numbers
-of arguments and different argument types.
+``numba.types.Function``.  Templates with the same key can be inserted, and
+each will be checked for a matching function signatures in the order of
+insertion. This is what allows the same key to be overloaded with different
+numbers of arguments and different argument types.
 
 The list of special function keys includes:
 
@@ -232,7 +232,7 @@ a particular package into a module that begins with::
                                         signature, Registry)
 
     registry = Registry()  # A new registry for our new set of types
-    builtin_intrinsic = registry.register
+    builtin = registry.register
     builtin_attr = registry.register_attr
     builtin_global = registry.register_global
 
@@ -256,7 +256,7 @@ The examples from the previous sections could now be written::
         ]
     builtin_global(valid_interval, Function(ValidIntervalSignature))
 
-    @builtin_intrinsic
+    @builtin
     class AdditionSignature(ConcreteTemplate):
         key = '+'
         cases = [
