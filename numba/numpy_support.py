@@ -121,8 +121,7 @@ def supported_ufunc_loop(ufunc, loop):
 
 
 def numba_types_to_numpy_letter_types(numba_type_seq):
-    letter_type = [numpy.dtype(str(x)).char for x in numba_type_seq]
-    return [l if l in supported_letter_types() else None for l in letter_type]
+    return [numpy.dtype(str(x)).char for x in numba_type_seq]
 
 
 def numpy_letter_types_to_numba_types(numpy_letter_types_seq):
