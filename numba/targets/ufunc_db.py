@@ -111,4 +111,6 @@ def _fill_ufunc_db(ufunc_db):
         'QQ->Q': builtins.int_mul_impl,
         'ff->f': builtins.real_mul_impl,
         'dd->d': builtins.real_mul_impl,
+        'FF->F': builtins.complex_mul_impl,
+        'DD->D': builtins.complex_mul_impl,
     }
