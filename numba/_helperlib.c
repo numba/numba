@@ -236,6 +236,9 @@ PyObject* Numba_ndarray_new(int nd,
     return ndary;
 }
 
+/* We use separate functions for datetime64 and timedelta64, to ensure
+ * proper type checking.
+ */
 static npy_int64
 Numba_extract_np_datetime(PyObject *td)
 {

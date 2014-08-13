@@ -170,7 +170,7 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         """
         if isinstance(val, utils.INT_TYPES):
             # Ensure no autoscaling of integer type, to match the
-            # typecode() function _dispatcher.c.
+            # typecode() function in _dispatcher.c.
             return types.int64
         tp = self.typingctx.resolve_data_type(val)
         if tp is None:
