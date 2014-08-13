@@ -4,6 +4,8 @@ Test helper functions from numba.numpy_support.
 
 from __future__ import print_function
 
+import sys
+
 import numpy as np
 
 import numba.unittest_support as unittest
@@ -57,7 +59,7 @@ class TestFromDtype(TestCase):
             self.assertIs(f(np.dtype(name)), getattr(types, name))
 
         # Non-native alignments are unsupported (except for 1-byte types)
-        foreign_align = '>' if config.NATIVE_ALIGNMENT == 'little' else '<'
+        foreign_align = '>' if sys.byteorder == 'little' else '<'
         for letter in 'hHiIlLqQfdFD':
             self.assertRaises(NotImplementedError, f,
                               np.dtype(foreign_align + letter))
