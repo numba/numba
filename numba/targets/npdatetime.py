@@ -77,6 +77,13 @@ def alloc_timedelta_result(builder, name='ret'):
     builder.store(NAT, ret)
     return ret
 
+def alloc_boolean_result(builder, name='ret'):
+    """
+    Allocate an uninitialized boolean result slot.
+    """
+    ret = cgutils.alloca_once(builder, Type.int(1), name)
+    return ret
+
 def is_not_nat(builder, val):
     """
     Return a predicate which is true if *val* is not NaT.
@@ -232,7 +239,7 @@ def implement_equality_operator(py_op, ll_op, default_value):
     def timedelta_eq_impl(context, builder, sig, args):
         [va, vb] = args
         [ta, tb] = sig.args
-        ret = cgutils.alloca_once(builder, Type.int(1), 'ret')
+        ret = alloc_boolean_result(builder)
         with cgutils.ifelse(builder, are_not_nat(builder, [va, vb])) as (then, otherwise):
             with then:
                 try:
@@ -257,7 +264,7 @@ def implement_ordering_operator(py_op, ll_op):
     def timedelta_eq_impl(context, builder, sig, args):
         [va, vb] = args
         [ta, tb] = sig.args
-        ret = cgutils.alloca_once(builder, Type.int(1), 'ret')
+        ret = alloc_boolean_result(builder)
         with cgutils.ifelse(builder, are_not_nat(builder, [va, vb])) as (then, otherwise):
             with then:
                 norm_a, norm_b = normalize_timedeltas(context, builder, va, vb, ta, tb)
@@ -278,6 +285,10 @@ implement_ordering_operator('>=', lc.ICMP_SGE)
 # Arithmetic on datetime64
 
 def is_leap_year(builder, year_val):
+    """
+    Return a predicate indicating whether *year_val* (offset by 1970) is a
+    leap year.
+    """
     actual_year = builder.add(year_val, Constant.int(DATETIME64, 1970))
     multiple_of_4 = cgutils.is_null(
         builder, builder.and_(actual_year, Constant.int(DATETIME64, 3)))
@@ -387,15 +398,25 @@ def reduce_datetime_for_unit(builder, dt_val, src_unit, dest_unit):
         return days_val, 'D'
 
 
+def convert_datetime_for_arith(builder, dt_val, src_unit, dest_unit):
+    """
+    Convert datetime *dt_val* from *src_unit* to *dest_unit*.
+    """
+    # First partial conversion to days or weeks, if necessary.
+    dt_val, dt_unit = reduce_datetime_for_unit(builder, dt_val, src_unit, dest_unit)
+    # Then multiply by the remaining constant factor.
+    dt_factor = npdatetime.get_timedelta_conversion_factor(dt_unit, dest_unit)
+    return scale_by_constant(builder, dt_val, dt_factor)
+
+
 def _datetime_timedelta_arith(ll_op_name):
     def impl(context, builder, dt_arg, dt_unit,
              td_arg, td_unit, ret_unit):
         ret = alloc_timedelta_result(builder)
         with cgutils.if_likely(builder, are_not_nat(builder, [dt_arg, td_arg])):
-            dt_arg, dt_unit = reduce_datetime_for_unit(builder, dt_arg, dt_unit, ret_unit)
-            dt_factor = npdatetime.get_timedelta_conversion_factor(dt_unit, ret_unit)
+            dt_arg = convert_datetime_for_arith(builder, dt_arg,
+                                                dt_unit, ret_unit)
             td_factor = npdatetime.get_timedelta_conversion_factor(td_unit, ret_unit)
-            dt_arg = scale_by_constant(builder, dt_arg, dt_factor)
             td_arg = scale_by_constant(builder, td_arg, td_factor)
             ret_val = getattr(builder, ll_op_name)(dt_arg, td_arg)
             builder.store(ret_val, ret)
@@ -409,7 +430,7 @@ _datetime_minus_timedelta = _datetime_timedelta_arith('sub')
 
 @builtin
 @implement('+', types.Kind(types.NPDatetime), types.Kind(types.NPTimedelta))
-def timedelta_add_impl(context, builder, sig, args):
+def datetime_plus_timedelta(context, builder, sig, args):
     dt_arg, td_arg = args
     dt_type, td_type = sig.args
     return _datetime_plus_timedelta(context, builder,
@@ -419,7 +440,7 @@ def timedelta_add_impl(context, builder, sig, args):
 
 @builtin
 @implement('+', types.Kind(types.NPTimedelta), types.Kind(types.NPDatetime))
-def timedelta_add_impl(context, builder, sig, args):
+def timedelta_plus_datetime(context, builder, sig, args):
     td_arg, dt_arg = args
     td_type, dt_type = sig.args
     return _datetime_plus_timedelta(context, builder,
@@ -431,7 +452,7 @@ def timedelta_add_impl(context, builder, sig, args):
 
 @builtin
 @implement('-', types.Kind(types.NPDatetime), types.Kind(types.NPTimedelta))
-def timedelta_sub_impl(context, builder, sig, args):
+def datetime_minus_timedelta(context, builder, sig, args):
     dt_arg, td_arg = args
     dt_type, td_type = sig.args
     return _datetime_minus_timedelta(context, builder,
@@ -443,7 +464,7 @@ def timedelta_sub_impl(context, builder, sig, args):
 
 @builtin
 @implement('-', types.Kind(types.NPDatetime), types.Kind(types.NPDatetime))
-def timedelta_sub_impl(context, builder, sig, args):
+def datetime_minus_datetime(context, builder, sig, args):
     va, vb = args
     ta, tb = sig.args
     unit_a = ta.unit
@@ -451,12 +472,39 @@ def timedelta_sub_impl(context, builder, sig, args):
     ret_unit = sig.return_type.unit
     ret = alloc_timedelta_result(builder)
     with cgutils.if_likely(builder, are_not_nat(builder, [va, vb])):
-        va, unit_a = reduce_datetime_for_unit(builder, va, unit_a, ret_unit)
-        vb, unit_b = reduce_datetime_for_unit(builder, vb, unit_b, ret_unit)
-        va = scale_by_constant(builder, va,
-            npdatetime.get_timedelta_conversion_factor(unit_a, ret_unit))
-        vb = scale_by_constant(builder, vb,
-            npdatetime.get_timedelta_conversion_factor(unit_b, ret_unit))
+        va = convert_datetime_for_arith(builder, va, unit_a, ret_unit)
+        vb = convert_datetime_for_arith(builder, vb, unit_b, ret_unit)
         ret_val = builder.sub(va, vb)
         builder.store(ret_val, ret)
     return builder.load(ret)
+
+# datetime64 comparisons
+
+def _implement_datetime_comparison(py_op, ll_op):
+
+    @builtin
+    @implement(py_op, types.Kind(types.NPDatetime), types.Kind(types.NPDatetime))
+    def impl(context, builder, sig, args):
+        va, vb = args
+        ta, tb = sig.args
+        unit_a = ta.unit
+        unit_b = tb.unit
+        ret_unit = npdatetime.get_best_unit(unit_a, unit_b)
+        ret = alloc_boolean_result(builder)
+        with cgutils.ifelse(builder,
+                            are_not_nat(builder, [va, vb])) as (then, otherwise):
+            with then:
+                norm_a = convert_datetime_for_arith(builder, va, unit_a, ret_unit)
+                norm_b = convert_datetime_for_arith(builder, vb, unit_b, ret_unit)
+                ret_val = builder.icmp(ll_op, norm_a, norm_b)
+                builder.store(ret_val, ret)
+            with otherwise:
+                # No scaling when comparing NaTs
+                ret_val = builder.icmp(ll_op, va, vb)
+                builder.store(ret_val, ret)
+        return builder.load(ret)
+
+    return impl
+
+_implement_datetime_comparison('==', lc.ICMP_EQ)
+_implement_datetime_comparison('!=', lc.ICMP_NE)

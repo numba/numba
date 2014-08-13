@@ -285,11 +285,14 @@ class TestTimedeltaArithmetic(TestCase):
         with self.assertRaises((TypeError, TypingError)):
             div(TD(1, 'M'), TD(1, 'D'))
 
-    def test_eq(self):
+    def test_eq_ne(self):
         eq = self.jit(eq_usecase)
+        ne = self.jit(ne_usecase)
         def check(a, b, expected):
             self.assertIs(eq(a, b), expected)
             self.assertIs(eq(b, a), expected)
+            self.assertIs(ne(a, b), not expected)
+            self.assertIs(ne(b, a), not expected)
 
         check(TD(1), TD(2), False)
         check(TD(1), TD(1), True)
@@ -307,29 +310,6 @@ class TestTimedeltaArithmetic(TestCase):
         check(TD(1, 'Y'), TD(366, 'D'), False)
         # ... except when both are NaT!
         check(TD('NaT', 'Y'), TD('NaT', 'D'), True)
-
-    def test_ne(self):
-        eq = self.jit(ne_usecase)
-        def check(a, b, expected):
-            self.assertIs(eq(a, b), expected)
-            self.assertIs(eq(b, a), expected)
-
-        check(TD(1), TD(2), True)
-        check(TD(1), TD(1), False)
-        check(TD(1, 's'), TD(2, 's'), True)
-        check(TD(1, 's'), TD(1, 's'), False)
-        check(TD(2000, 's'), TD(2, 's'), True)
-        check(TD(2000, 'ms'), TD(2, 's'), False)
-        check(TD(1, 'Y'), TD(12, 'M'), False)
-        # NaTs
-        check(TD('Nat'), TD('Nat'), False)
-        check(TD('Nat', 'ms'), TD('Nat', 's'), False)
-        check(TD('Nat'), TD(1), True)
-        # Incompatible units => timedeltas compare unequal
-        check(TD(1, 'Y'), TD(365, 'D'), True)
-        check(TD(1, 'Y'), TD(366, 'D'), True)
-        # ... except when both are NaT!
-        check(TD('NaT', 'Y'), TD('NaT', 'D'), False)
 
     def test_lt_ge(self):
         lt = self.jit(lt_usecase)
@@ -525,6 +505,15 @@ class TestDatetimeArithmetic(TestCase):
             with self.assertRaises((TypeError, TypingError)):
                 f(DT(1, '2014-01-01'), TD(1, 'M'))
 
+    def datetime_samples(self):
+        dt_years = ['600', '601', '604', '1968', '1969', '1973',
+                   '2000', '2004', '2005', '2100', '2400', '2401']
+        dt_suffixes = ['', '-01', '-12', '-02-28', '-12-31',
+                       '-01-05T12:30:56Z', '-01-05T12:30:56.008Z']
+        dts = [DT(a + b) for (a, b) in itertools.product(dt_years, dt_suffixes)]
+        dts += [DT(s, 'W') for s in dt_years]
+        return dts
+
     def test_datetime_difference(self):
         """
         Test `datetime64 - datetime64`.
@@ -546,17 +535,53 @@ class TestDatetimeArithmetic(TestCase):
         check(DT('NaT', 'M'), DT('2000-01-01'), TD('NaT', 'D'))
         check(DT('NaT'), DT('NaT'), TD('NaT'))
         # Test many more values
-        dt_years = ['600', '601', '604', '1968', '1969', '1973',
-                   '2000', '2004', '2005', '2100', '2400', '2401']
-        dt_suffixes = ['', '-01', '-12', '-02-28', '-12-31',
-                       '-01-05T12:30:56Z', '-01-05T12:30:56.008Z']
-        dts = [DT(a + b) for (a, b) in itertools.product(dt_years, dt_suffixes)]
-        dts += [DT(s, 'W') for s in dt_years]
         with self.silence_numpy_warnings():
+            dts = self.datetime_samples()
             for a, b in itertools.product(dts, dts):
                 self.assertPreciseEqual(sub(a, b), a - b, (a, b))
 
-    # XXX test type unification?
+    def test_eq_ne(self):
+        eq = self.jit(eq_usecase)
+        ne = self.jit(ne_usecase)
+        def check(a, b, expected):
+            self.assertEqual(eq(a, b), expected, (a, b, expected))
+            self.assertEqual(eq(b, a), expected, (a, b, expected))
+            self.assertEqual(ne(a, b), not expected, (a, b, expected))
+            self.assertEqual(ne(b, a), not expected, (a, b, expected))
+
+        check(DT('2014'), DT('2017'), False)
+        check(DT('2014'), DT('2014-01'), True)
+        check(DT('2014'), DT('2014-01-01'), True)
+        check(DT('2014'), DT('2014-01-01', 'W'), True)
+        check(DT('2014-01'), DT('2014-01-01', 'W'), True)
+        # Yes, it's not transitive
+        check(DT('2014-01-01'), DT('2014-01-01', 'W'), False)
+        check(DT('2014-01-02'), DT('2014-01-06', 'W'), True)
+        # with times
+        check(DT('2014-01-01T00:01:00Z', 's'),
+              DT('2014-01-01T00:01Z', 'm'), True)
+        check(DT('2014-01-01T00:01:01Z', 's'),
+              DT('2014-01-01T00:01Z', 'm'), False)
+        # Check comparison between various units
+        dts = self.datetime_samples()
+        for a in dts:
+            # Take a number of smaller units
+            a_unit = a.dtype.str.split('[')[1][:-1]
+            i = all_units.index(a_unit)
+            units = all_units[i:i+6]
+            for unit in units:
+                # Force conversion
+                b = a.astype('M8[%s]' % unit)
+                check(a, b, True)
+                check(a, b + np.timedelta64(1, unit), False)
+                check(a, b - np.timedelta64(1, unit), False)
+        # NaTs
+        check(DT('NaT'), DT('2017'), False)
+        check(DT('NaT', 'Y'), DT('2017'), False)
+        check(DT('NaT', 'as'), DT('2017'), False)
+        check(DT('NaT'), DT('NaT'), True)
+        check(DT('NaT', 'Y'), DT('NaT'), True)
+        check(DT('NaT', 'as'), DT('NaT', 'M'), True)
 
 
 class TestDatetimeArithmeticNoPython(TestDatetimeArithmetic):

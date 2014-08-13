@@ -217,3 +217,37 @@ class DatetimeMinusDatetime(AbstractTemplate):
             unit = npdatetime.get_best_unit(left.unit, right.unit)
             return signature(types.NPTimedelta(unit), left, right)
 
+
+class DatetimeCmpOp(AbstractTemplate):
+
+    def generic(self, args, kws):
+        # For datetime64 comparisons, all units are inter-comparable
+        left, right = args
+        if not all(isinstance(tp, types.NPDatetime) for tp in args):
+            return
+        return signature(types.boolean, left, right)
+
+
+@builtin
+class DatetimeCmpEq(DatetimeCmpOp):
+    key = '=='
+
+@builtin
+class DatetimeCmpNe(DatetimeCmpOp):
+    key = '!='
+
+@builtin
+class DatetimeCmpLt(DatetimeCmpOp):
+    key = '<'
+
+@builtin
+class DatetimeCmpLE(DatetimeCmpOp):
+    key = '<='
+
+@builtin
+class DatetimeCmpGt(DatetimeCmpOp):
+    key = '>'
+
+@builtin
+class DatetimeCmpGE(DatetimeCmpOp):
+    key = '>='
