@@ -75,6 +75,8 @@ def _fill_ufunc_db(ufunc_db):
         'QQ->Q': builtins.int_add_impl,
         'ff->f': builtins.real_add_impl,
         'dd->d': builtins.real_add_impl,
+        'FF->F': builtins.complex_add_impl,
+        'DD->D': builtins.complex_add_impl,
     }
 
     ufunc_db[np.subtract] = {
