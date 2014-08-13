@@ -105,6 +105,21 @@ void cu_blockwise_argsort_uint64(uint64_t *data,
                                  unsigned *begin,
                                  unsigned *count);
 
+__global__
+void cu_singleblock_argsort_uint32(uint32_t *data,
+                                   unsigned *index,
+                                   unsigned count);
+
+__global__
+void cu_singleblock_argsort_uint64(uint64_t *data,
+                                   unsigned *index,
+                                   unsigned count);
+
+__global__
+void cu_singleblock_sort_uint32(uint32_t *data, unsigned count);
+
+__global__
+void cu_singleblock_sort_uint64(uint64_t *data, unsigned count);
 
 __global__
 void cu_invert_uint32(uint32_t *data, unsigned count);
@@ -561,6 +576,89 @@ struct cu_blockwise_sort{
     }
 };
 
+
+template<class T>
+struct cu_singleblock_sort{
+    __device__
+    static void argsort(T *data, unsigned *index, unsigned count,
+                        const T Maximum)
+    {
+        // Specialize for 1D block of 256 threads; 4 data per thread
+        enum {BLOCK_SIZE = 256, ILP = 4};
+        typedef cub::BlockRadixSort<T, BLOCK_SIZE, ILP, unsigned> BlockRadixSort;
+        __shared__ union {
+            typename BlockRadixSort::TempStorage radixsort;
+        } temp;
+
+        unsigned id = threadIdx.x * ILP;
+
+        T keys[ILP];
+        unsigned values[ILP];
+
+        // Initialize
+        for (unsigned i=0; i<ILP; ++i) {
+            keys[i] = Maximum;
+            values[i] = (unsigned)-1;
+        }
+
+        // Read
+        for (unsigned i=0; i<ILP && id + i < count; ++i) {
+            keys[i] = data[id + i];
+            values[i] = id + i;
+        }
+
+        __syncthreads();
+
+        // Sort
+        BlockRadixSort(temp.radixsort).Sort(keys, values);
+
+        __syncthreads();
+
+        // Write
+        for (unsigned i=0; i<ILP && id + i < count; ++i) {
+            data[id + i] = keys[i];
+            index[id + i] = values[i];
+        }
+    }
+
+    __device__
+    static void sort(T *data, unsigned count,
+                        const T Maximum)
+    {
+        // Specialize for 1D block of 256 threads; 4 data per thread
+        enum {BLOCK_SIZE = 256, ILP = 4};
+        typedef cub::BlockRadixSort<T, BLOCK_SIZE, ILP> BlockRadixSort;
+        __shared__ union {
+            typename BlockRadixSort::TempStorage radixsort;
+        } temp;
+
+        unsigned id = threadIdx.x * ILP;
+
+        T keys[ILP];
+        // Initialize
+        for (unsigned i=0; i<ILP; ++i) {
+            keys[i] = Maximum;
+        }
+
+        // Read
+        for (unsigned i=0; i<ILP && id + i < count; ++i) {
+            keys[i] = data[id + i];
+        }
+
+        __syncthreads();
+
+        // Sort
+        BlockRadixSort(temp.radixsort).Sort(keys);
+
+        __syncthreads();
+
+        // Write
+        for (unsigned i=0; i<ILP && id + i < count; ++i) {
+            data[id + i] = keys[i];
+        }
+    }
+};
+
 __global__
 void cu_blockwise_sort_uint32(uint32_t *data,
                               unsigned *begin,
@@ -599,6 +697,38 @@ void cu_blockwise_argsort_uint64(uint64_t *data,
     cu_blockwise_sort<uint64_t>::argsort(data, index, begin, count,
                                          0xffffffffffffffffull);
 }
+
+__global__
+void cu_singleblock_sort_uint32(uint32_t *data, unsigned count)
+{
+    cu_singleblock_sort<uint32_t>::sort(data, count, 0xffffffffu);
+}
+
+__global__
+void cu_singleblock_sort_uint64(uint64_t *data, unsigned count)
+{
+    cu_singleblock_sort<uint64_t>::sort(data, count, 0xffffffffffffffffull);
+}
+
+
+__global__
+void cu_singleblock_argsort_uint32(uint32_t *data,
+                                   unsigned *index,
+                                   unsigned count)
+{
+    cu_singleblock_sort<uint32_t>::argsort(data, index, count,
+                                              0xffffffffu);
+}
+
+__global__
+void cu_singleblock_argsort_uint64(uint64_t *data,
+                                   unsigned *index,
+                                   unsigned count)
+{
+    cu_singleblock_sort<uint64_t>::argsort(data, index, count,
+                                              0xffffffffffffffffull);
+}
+
 
 template <class T>
 struct signfix {

@@ -1,8 +1,8 @@
 from __future__ import print_function, absolute_import, division
 import numpy as np
 from numbapro.testsupport import unittest
-from numbapro import cuda
 from numbapro.cudalib import sorting
+from numbapro.cudalib.sorting import radixsort
 
 
 class TestRadixSort(unittest.TestCase):
@@ -58,22 +58,25 @@ class TestRadixSort(unittest.TestCase):
                 indices = rs.select(data, k=k, reverse=reverse)
             data = data[:k]
             self.assertTrue(np.all(data == gold))
+            print(data, gold)
             if getindices:
+                print(indices)
+                print(orig[indices])
                 self.assertTrue(np.all(orig[indices] == gold))
             else:
                 self.assertIsNone(indices)
 
     def test_select_float32(self):
-        counts = [1, 2, 10, 13, 31, 73, 100, 101]
-        ks = [1, 1, 3, 5, 10, 60, 99, 101]
+        counts = [1, 2, 10, 13, 31, 73, 100, 101, radixsort.SELECT_THRESHOLD]
+        ks = [1, 1, 3, 5, 10, 60, 99, 101, 1000]
         self._test_select(np.float32, counts, ks)
         self._test_select(np.float32, counts, ks, reverse=True)
         self._test_select(np.float32, counts, ks, reverse=True,
                           getindices=True)
 
     def test_select_float64(self):
-        counts = [1, 2, 10, 13, 31, 73, 100, 101]
-        ks = [1, 1, 3, 5, 10, 60, 99, 101]
+        counts = [1, 2, 10, 13, 31, 73, 100, 101, radixsort.SELECT_THRESHOLD]
+        ks = [1, 1, 3, 5, 10, 60, 99, 101, 1000]
         self._test_select(np.float64, counts, ks)
         self._test_select(np.float64, counts, ks, reverse=True,
                           getindices=True)

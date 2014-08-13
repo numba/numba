@@ -1,6 +1,7 @@
-from __future__ import print_function, absolute_import
+from __future__ import print_function, absolute_import, division
 import os
 import copy
+import math
 from collections import namedtuple
 from ctypes import c_uint
 from contextlib import contextmanager
@@ -95,8 +96,11 @@ _select_states = namedtuple("select_states", ["ts", "sis", "hbt"])
 _sort_states = namedtuple("sort_states", ["ts", "sis"])
 
 
-def _calc_block_count(count):
-    return (count + BUCKET_SIZE - 1) // BUCKET_SIZE
+def _calc_block_count(count, blksize=BUCKET_SIZE):
+    return (count + blksize - 1) // blksize
+
+
+SELECT_THRESHOLD = 10000
 
 
 class Radixsort(object):
@@ -155,6 +159,12 @@ class Radixsort(object):
         self.cu_blockwise_argsort = self.module.get_function(
             'cu_blockwise_argsort_uint{:d}'.format(databitsize))
 
+        self.cu_singleblock_argsort = self.module.get_function(
+            'cu_singleblock_argsort_uint{:d}'.format(databitsize))
+
+        self.cu_singleblock_sort = self.module.get_function(
+            'cu_singleblock_sort_uint{:d}'.format(databitsize))
+
         self.cu_invert = self.module.get_function(
             'cu_invert_uint{:d}'.format(databitsize))
 
@@ -202,7 +212,7 @@ class Radixsort(object):
         return _next
 
     def batch_argsort(self, dtype, count, reverse=False):
-        return self.batch_sort(dtype, count, reverse=False, getindices=True)
+        return self.batch_sort(dtype, count, reverse=reverse, getindices=True)
 
     def sort(self, data, reverse=False, getindices=False, _states=None):
         """Perform inplace sort on the data.
@@ -232,9 +242,10 @@ class Radixsort(object):
                 conf(indstore.d_order, c_uint(ts.count))
 
             with self._filter(reverse, ts):
-                d_data = self._sortloop(ts.d_data, ts.d_sorted, ts.d_hist,
-                                        ts.d_bucktotal, ts.d_indices, ts.count,
-                                        ts.stride, ts.blkcount, indstore)
+                ts.d_data = self._sortloop(ts.d_data, ts.d_sorted, ts.d_hist,
+                                           ts.d_bucktotal, ts.d_indices,
+                                           ts.count, ts.stride, ts.blkcount,
+                                           indstore)
 
             # Prepare result
             if indstore:
@@ -315,43 +326,56 @@ class Radixsort(object):
                 conf(indstore.d_order, c_uint(ts.count))
 
             with self._filter(reverse, ts):
-                # Start from MSB
-                offset = ts.stride - 1
+                if ts.count < SELECT_THRESHOLD:
+                    # Data set too small to use k-selection
+                    # Fallback to sorting
+                    ts.d_data = self._sortloop(ts.d_data, ts.d_sorted,
+                                               ts.d_hist, ts.d_bucktotal,
+                                               ts.d_indices, ts.count,
+                                               ts.stride, ts.blkcount, indstore)
 
-                # Partition into small sub-block that we will finish off
-                # with a subblock sort
-                subblocks = []
-                self._select(ts.d_data, ts.d_sorted, ts.d_hist, ts.d_bucktotal,
-                             ts.d_indices, ts.count, ts.stride, offset,
-                             ts.blkcount, k, subblocks, indstore=indstore,
-                             h_bucktotal=h_bucktotal)
+                else:
+                    # Start from MSB
+                    offset = ts.stride - 1
 
-                # Sort sub-blocks
-                if subblocks:
-                    subblocks = np.array(subblocks, order='F', dtype=np.uint32)
-                    arr_begin = np.ascontiguousarray(subblocks[:, 0])
-                    arr_count = np.ascontiguousarray(subblocks[:, 1])
+                    # Partition into small sub-block that we will finish off
+                    # with a subblock sort
+                    subblocks = []
+                    self._select(ts.d_data, ts.d_sorted, ts.d_hist,
+                                 ts.d_bucktotal,
+                                 ts.d_indices, ts.count, ts.stride, offset,
+                                 ts.blkcount, k, subblocks, indstore=indstore,
+                                 h_bucktotal=h_bucktotal)
 
-                    nsb_length = len(subblocks)
-                    if nsb_length <= min(ts.d_hist.size, ts.d_bucktotal.size):
-                        # Avoid extra allocation if we can
-                        d_begin = ts.d_hist.getitem(slice(0, nsb_length),
-                                                    stream=self.stream)
-                        d_count = ts.d_bucktotal.getitem(slice(0, nsb_length),
-                                                         stream=self.stream)
-                        d_begin.copy_to_device(arr_begin,
-                                               stream=self.stream)
-                        d_count.copy_to_device(arr_count,
-                                               stream=self.stream)
-                    else:
-                        # Allocate new array for the sublock counts
-                        d_begin = cuda.to_device(arr_begin,
-                                                 stream=self.stream)
-                        d_count = cuda.to_device(arr_count,
-                                                 stream=self.stream)
+                    # Sort sub-blocks
+                    if subblocks:
+                        subblocks = np.array(subblocks, order='F',
+                                             dtype=np.uint32)
+                        arr_begin = np.ascontiguousarray(subblocks[:, 0])
+                        arr_count = np.ascontiguousarray(subblocks[:, 1])
 
-                    self._subblock_sort(ts.d_data, d_begin, d_count,
-                                        indstore=indstore)
+                        nsb_length = len(subblocks)
+                        if nsb_length <= min(ts.d_hist.size,
+                                             ts.d_bucktotal.size):
+                            # Avoid extra allocation if we can
+                            d_begin = ts.d_hist.getitem(slice(0, nsb_length),
+                                                        stream=self.stream)
+                            d_count = ts.d_bucktotal.getitem(
+                                slice(0, nsb_length),
+                                stream=self.stream)
+                            d_begin.copy_to_device(arr_begin,
+                                                   stream=self.stream)
+                            d_count.copy_to_device(arr_count,
+                                                   stream=self.stream)
+                        else:
+                            # Allocate new array for the sublock counts
+                            d_begin = cuda.to_device(arr_begin,
+                                                     stream=self.stream)
+                            d_count = cuda.to_device(arr_count,
+                                                     stream=self.stream)
+
+                        self._subblock_sort(ts.d_data, d_begin, d_count,
+                                            indstore=indstore)
 
             # Prepare result
             if indstore:
@@ -367,6 +391,22 @@ class Radixsort(object):
 
     def _sortloop(self, d_data, d_sorted, d_hist, d_bucktotal, d_indices,
                   count, stride, blkcount, indstore=None):
+
+        SORT_THRESHOLD = 256 * 4  # Must match code
+        if count < SORT_THRESHOLD:
+
+            if indstore is not None:
+                conf = self.cu_singleblock_argsort.configure((1,), (256,),
+                                                             stream=self.stream)
+                conf(d_data, indstore.d_order, c_uint(count))
+                return d_data
+
+            else:
+                conf = self.cu_singleblock_sort.configure((1,), (256,),
+                                                          stream=self.stream)
+                conf(d_data, c_uint(count))
+                return d_data
+
         # Sort loop
         for offset in range(stride):
             self._sortpass(d_data, d_sorted, d_hist, d_bucktotal,
@@ -425,8 +465,8 @@ class Radixsort(object):
         if offset == 0:
             # We reach here when the data have too many duplication.
             self._sortpass(d_data, d_sorted, d_hist, d_bucktotal,
-                               d_indices, count, stride, offset,
-                               blkcount, indstore=indstore)
+                           d_indices, count, stride, offset,
+                           blkcount, indstore=indstore)
             d_data.copy_to_device(d_sorted, stream=self.stream)
             return
 
