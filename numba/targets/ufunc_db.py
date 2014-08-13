@@ -7,6 +7,14 @@ loops maps to a function that implements the inner kernel of that ufunc
 from __future__ import print_function, division, absolute_import
 
 
+def np_real_div_impl(context, builder, sig, args):
+    return builder.fdiv(*args)
+
+def np_complex_div_impl(context, builder, sig, args):
+    """extracted form numpy/core/src/umath/loops.c.src,
+    inspired by complex_div_impl"""
+    pass
+
 class UFuncDB(object):
     def __init__(self):
         self.dict = {}
@@ -114,3 +122,21 @@ def _fill_ufunc_db(ufunc_db):
         'FF->F': builtins.complex_mul_impl,
         'DD->D': builtins.complex_mul_impl,
     }
+
+    if np.divide != np.true_divide:
+        ufunc_db[np.divide] = {
+            'bb->b': builtins.int_sdiv_impl,
+            'BB->B': builtins.int_udiv_impl,
+            'hh->h': builtins.int_sdiv_impl,
+            'HH->H': builtins.int_udiv_impl,
+            'ii->i': builtins.int_sdiv_impl,
+            'II->I': builtins.int_udiv_impl,
+            'll->l': builtins.int_sdiv_impl,
+            'LL->L': builtins.int_udiv_impl,
+            'qq->q': builtins.int_sdiv_impl,
+            'QQ->Q': builtins.int_udiv_impl,
+            'ff->f': np_real_div_impl,
+            'dd->d': np_real_div_impl,
+#            'FF->F': np_complex_div_impl,
+#            'DD->D': np_complex_div_impl,
+        }
