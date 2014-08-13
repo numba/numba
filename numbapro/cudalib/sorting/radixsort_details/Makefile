@@ -39,3 +39,6 @@ libradix64_sm20.ptx: libradix.cu
 clean:
 	rm -f radixsort.run radixselect.run
 	rm -f *.ptx
+
+radixsort.so : cubradixsort.cu
+	nvcc $(CUB_INCLUDE) -O3 -arch=sm_30 --shared -o $@ $+
