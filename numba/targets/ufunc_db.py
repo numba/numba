@@ -93,6 +93,8 @@ def _fill_ufunc_db(ufunc_db):
         'QQ->Q': builtins.int_sub_impl,
         'ff->f': builtins.real_sub_impl,
         'dd->d': builtins.real_sub_impl,
+        'FF->F': builtins.complex_sub_impl,
+        'DD->D': builtins.complex_sub_impl,
     }
 
     ufunc_db[np.multiply] = {
