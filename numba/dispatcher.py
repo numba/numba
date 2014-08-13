@@ -147,7 +147,7 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         return self.jit(sig)
 
     def inspect_types(self):
-        for ver, res in utils.dict_iteritems(self._compileinfos):
+        for ver, res in utils.iteritems(self._compileinfos):
             print("%s %s" % (self.py_func.__name__, ver))
             print('-' * 80)
             print(res.type_annotation)

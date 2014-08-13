@@ -348,13 +348,13 @@ class TypeInferer(object):
     def seed_return(self, typ):
         """Seeding of return value is optional.
         """
-        for blk in utils.dict_itervalues(self.blocks):
+        for blk in utils.itervalues(self.blocks):
             inst = blk.terminator
             if isinstance(inst, ir.Return):
                 self.typevars[inst.value.name].lock(typ)
 
     def build_constrain(self):
-        for blk in utils.dict_itervalues(self.blocks):
+        for blk in utils.itervalues(self.blocks):
             for inst in blk.body:
                 self.constrain_statement(inst)
 
@@ -433,7 +433,7 @@ class TypeInferer(object):
 
     def get_return_type(self, typemap):
         rettypes = set()
-        for blk in utils.dict_itervalues(self.blocks):
+        for blk in utils.itervalues(self.blocks):
             term = blk.terminator
             if isinstance(term, ir.Return):
                 rettypes.add(typemap[term.value.name])
@@ -457,7 +457,7 @@ class TypeInferer(object):
         The sum of all lengths of type sets is a cheap and accurate
         description of our progress.
         """
-        return sum(len(tv) for tv in utils.dict_itervalues(self.typevars))
+        return sum(len(tv) for tv in utils.itervalues(self.typevars))
 
     def constrain_statement(self, inst):
         if isinstance(inst, ir.Assign):
