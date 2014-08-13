@@ -333,10 +333,11 @@ def year_to_days(builder, year_val):
             builder.store(p_days, ret)
         with if_neg:
             # Before 1970:
+            # NOTE `year_val` is negative, and so will be `from_1972` and `from_2000`.
             # 1972 is the closest later year after 1970.
             # Include the current year, so subtract 2.
             from_1972 = add_constant(builder, year_val, -2)
-            # Subtract one day for each 4 years
+            # Subtract one day for each 4 years (`from_1972` is negative)
             n_days = builder.add(days,
                                  unscale_by_constant(builder, from_1972, 4))
             # 2000 is the closest later year divisible by 100
