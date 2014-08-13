@@ -171,8 +171,6 @@ class Array(object):
 
         def is_contig(traverse):
             last = next(traverse)
-            if self.extent.end - self.extent.begin == last.size * last.stride:
-                return True
             for dim in traverse:
                 if last.size != 0 and last.size * last.stride != dim.stride:
                     return False
@@ -251,6 +249,9 @@ class Array(object):
                     yield offset, offset + self.itemsize
 
     def reshape(self, *newshape, **kws):
+        oldnd = self.ndim
+        newnd = len(newshape)
+
         if newshape == self.shape:
             return self, None
 
@@ -268,7 +269,7 @@ class Array(object):
         if newsize != self.size:
             raise ValueError("reshape changes the size of the array")
 
-        elif self.is_c_contig or self.is_f_contig:
+        elif newnd == 1 or self.is_c_contig or self.is_f_contig:
             if order == 'C':
                 newstrides = list(iter_strides_c_contig(self, newshape))
             elif order == 'F':
