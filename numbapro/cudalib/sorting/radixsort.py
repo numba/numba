@@ -473,7 +473,6 @@ class Radixsort(object):
             elif count > 1:
                 # Remember the small subblock
                 # We might sort it later
-                print('append"')
                 subblocks.append((begin + substart, count))
 
             begin += count
