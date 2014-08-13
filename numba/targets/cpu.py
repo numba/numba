@@ -247,8 +247,8 @@ class CPUContext(BaseContext):
         """
         name, ptr = self.native_funcs.pop(func)
         # If the symbol wasn't redefined, NULL it out.
-        # (otherwise, it can mean the same function was compiled a
-        #  second time)
+        # (otherwise, it means the corresponding Python function was
+        #  re-compiled, and the new target is still alive)
         if le.dylib_address_of_symbol(name) == ptr:
             le.dylib_add_symbol(name, 0)
 

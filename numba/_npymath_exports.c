@@ -15,7 +15,9 @@ struct npy_math_entry {
 };
 
 
-#define NPYMATH_SYMBOL(name) { "numba.npymath." #name, (void*) npy_##name }
+#define NPYMATH_SYMBOL(name) \
+    { "numba.npymath." #name, (void*) npy_##name }
+
 struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL(sin),
     NPYMATH_SYMBOL(cos),
@@ -55,8 +57,18 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL(logaddexp),
     NPYMATH_SYMBOL(logaddexp2),
     NPYMATH_SYMBOL(rint),
-    NPYMATH_SYMBOL(fabs)
+    NPYMATH_SYMBOL(fabs),
 
+
+    /* complex functions */
+    NPYMATH_SYMBOL(cabs),
+    NPYMATH_SYMBOL(carg),
+    NPYMATH_SYMBOL(cexp),
+    NPYMATH_SYMBOL(clog),
+    NPYMATH_SYMBOL(cpow),
+    NPYMATH_SYMBOL(csqrt),
+    NPYMATH_SYMBOL(ccos),
+    NPYMATH_SYMBOL(csin),
 };
 #undef NPY_MATH_SYMBOL
 

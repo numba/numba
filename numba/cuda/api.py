@@ -186,7 +186,7 @@ def mapped(*arylist, **kws):
     pmlist = []
     stream = kws.get('stream', 0)
     for ary in arylist:
-        pm = current_context.mempin(ary, driver.host_pointer(ary),
+        pm = current_context().mempin(ary, driver.host_pointer(ary),
                                     driver.host_memory_size(ary),
                                     mapped=True)
         pmlist.append(pm)

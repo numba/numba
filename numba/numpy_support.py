@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 import numpy
 import re
-from numba import types, config
+from . import types, config
 
 version = tuple(map(int, numpy.__version__.split('.')[:2]))
 int_divbyzero_returns_zero = config.PYVERSION <= (3, 0)
@@ -96,8 +96,36 @@ def map_layout(val):
 # return value - the full identifier of the loop. f.e: 'dd->d' or None if no matching
 #                loop is found.
 
+def supported_letter_types():
+    """the supported dtypes in letter form. Notable exceptions are:
+    'O' - object
+    'g' - long double
+    'G' - long complex double
+    'm' - timedelta64
+    'M' - datetime64
+    'e' - float16
+    'F' - complex float (complex64, made of two floats)
+    'D' - complex double (complex128, made of two doubles)
+    """
+    return '?bBhHiIlLqQfd'
+
 def numba_types_to_numpy_letter_types(numba_type_seq):
-    return [numpy.dtype(str(x)).char for x in numba_type_seq]
+    letter_type = [numpy.dtype(str(x)).char for x in numba_type_seq]
+    return [l if l in supported_letter_types() else None for l in letter_type]
+
+def supported_ufunc_loop(ufunc, loop_signature):
+    """returns whether the ufunc with the loop signature 'loop_signature'
+    is supported -in nopython-
+
+    ufunc - the ufunc
+
+    loop_signature - the signature string for the loop, as found in
+                     the ufunc 'types' attribute (something like 'ff->f')
+    """
+    assert loop_signature in ufunc.types
+    loop_types = loop_signature[:ufunc.nin] + loop_signature[-ufunc.nout:]
+    supported_types = supported_letter_types()
+    return all((t in supported_types for t in loop_types))
 
 def numpy_letter_types_to_numba_types(numpy_letter_types_seq):
     return [from_dtype(numpy.dtype(x)) for x in numpy_letter_types_seq]

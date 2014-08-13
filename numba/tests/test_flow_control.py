@@ -11,6 +11,9 @@ from .support import TestCase
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
 
+forceobj_flags = Flags()
+forceobj_flags.set("force_pyobject")
+
 no_pyobj_flags = Flags()
 
 
@@ -491,6 +494,13 @@ class TestCFGraph(TestCase):
         g.process()
         return g
 
+    def test_simple_properties(self):
+        g = self.loopless1()
+        self.assertEqual(sorted(g.successors(0)), [(12, None), (18, None)])
+        self.assertEqual(sorted(g.successors(21)), [])
+        self.assertEqual(sorted(g.predecessors(0)), [])
+        self.assertEqual(sorted(g.predecessors(21)), [(12, None), (18, None)])
+
     def test_exit_points(self):
         g = self.loopless1()
         self.assertEqual(sorted(g.exit_points()), [21])
@@ -528,6 +538,67 @@ class TestCFGraph(TestCase):
                          [91, 92, 93, 94])
         self.assertEqual(sorted(g.nodes()),
                          [0, 12, 18, 21])
+
+    def test_descendents(self):
+        g = self.loopless2()
+        d = g.descendents(34)
+        self.assertEqual(sorted(d), [])
+        d = g.descendents(42)
+        self.assertEqual(sorted(d), [])
+        d = g.descendents(21)
+        self.assertEqual(sorted(d), [34, 42])
+        d = g.descendents(99)
+        self.assertEqual(sorted(d), [12, 18, 21, 34, 42])
+        g = self.infinite_loop1()
+        d = g.descendents(26)
+        self.assertEqual(sorted(d), [])
+        d = g.descendents(19)
+        self.assertEqual(sorted(d), [])
+        d = g.descendents(13)
+        self.assertEqual(sorted(d), [19, 26])
+        d = g.descendents(10)
+        self.assertEqual(sorted(d), [13, 19, 26])
+        d = g.descendents(6)
+        self.assertEqual(sorted(d), [])
+        d = g.descendents(0)
+        self.assertEqual(sorted(d), [6, 10, 13, 19, 26])
+
+    def test_topo_order(self):
+        g = self.loopless1()
+        self.assertIn(g.topo_order(),
+                      ([0, 12, 18, 21], [0, 18, 12, 21]))
+        g = self.loopless2()
+        self.assertIn(g.topo_order(),
+                      ([99, 18, 12, 21, 34, 42], [99, 12, 18, 21, 34, 42]))
+        g = self.infinite_loop2()
+        self.assertIn(g.topo_order(),
+                      ([0, 3, 9, 16], [0, 3, 16, 9]))
+        g = self.infinite_loop1()
+        self.assertIn(g.topo_order(),
+                      ([0, 6, 10, 13, 19, 26], [0, 6, 10, 13, 26, 19],
+                       [0, 10, 13, 19, 26, 6], [0, 10, 13, 26, 19, 6]))
+
+    def test_topo_sort(self):
+        def check_topo_sort(nodes, expected):
+            self.assertIn(list(g.topo_sort(nodes)), expected)
+            self.assertIn(list(g.topo_sort(nodes[::-1])), expected)
+            self.assertIn(list(g.topo_sort(nodes, reverse=True))[::-1],
+                          expected)
+            self.assertIn(list(g.topo_sort(nodes[::-1], reverse=True))[::-1],
+                          expected)
+            self.random.shuffle(nodes)
+            self.assertIn(list(g.topo_sort(nodes)), expected)
+            self.assertIn(list(g.topo_sort(nodes, reverse=True))[::-1],
+                          expected)
+
+        g = self.loopless2()
+        check_topo_sort([21, 99, 12, 34], ([99, 12, 21, 34],))
+        # NOTE: topo_sort() is not stable
+        check_topo_sort([18, 12, 42, 99],
+                        ([99, 12, 18, 42], [99, 18, 12, 42]))
+        g = self.multiple_exits()
+        check_topo_sort([19, 10, 7, 36],
+                        ([7, 10, 19, 36], [7, 10, 36, 19], [7, 36, 10, 19]))
 
     def check_dominators(self, got, expected):
         self.assertEqual(sorted(got), sorted(expected))

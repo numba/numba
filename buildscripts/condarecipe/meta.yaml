@@ -6,7 +6,7 @@ source:
   git_url: git@github.com:numba/numba.git
   # git_tag: 0.10.0
 
-build:
+#build:
   #entry_points:
   #  - pycc = numba.pycc:main
 
