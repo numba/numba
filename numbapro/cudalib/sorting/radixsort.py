@@ -424,7 +424,10 @@ class Radixsort(object):
                 h_bucktotal=None, indstore=None):
         if offset == 0:
             # We reach here when the data have too many duplication.
-            # Do nothing.
+            self._sortpass(d_data, d_sorted, d_hist, d_bucktotal,
+                               d_indices, count, stride, offset,
+                               blkcount, indstore=indstore)
+            d_data.copy_to_device(d_sorted, stream=self.stream)
             return
 
         assert h_bucktotal is not None
@@ -444,7 +447,8 @@ class Radixsort(object):
         bucktotal = h_bucktotal.tolist()
 
         # Find blocks that are too big and recursively partition it
-        threshold = 128  # depends on CC and resource usage of cu_blockwise_sort
+        threshold = 128  # depends on CC and resource usage of
+        # cu_blockwise_sort
         begin = 0
         for count in bucktotal:
             if count > threshold:
@@ -469,6 +473,7 @@ class Radixsort(object):
             elif count > 1:
                 # Remember the small subblock
                 # We might sort it later
+                print('append"')
                 subblocks.append((begin + substart, count))
 
             begin += count

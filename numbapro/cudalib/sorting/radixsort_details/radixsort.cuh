@@ -128,7 +128,7 @@ void cu_float_to_uint( uint32_t *in, uint32_t *out, unsigned count )
     if (id >= count ) return;
 
     uint32_t f = in[id];
-    uint32_t mask = -int32_t(f >> 31) | 0x80000000;
+    uint32_t mask = -int32_t(f >> 31) | 0x80000000ul;
 	out[id] = f ^ mask;
 }
 
@@ -139,7 +139,7 @@ void cu_uint_to_float( uint32_t *in, uint32_t *out, unsigned count )
     if (id >= count ) return;
 
     uint32_t f = in[id];
-	uint32_t mask = ((f >> 31) - 1) | 0x80000000;
+	uint32_t mask = ((f >> 31) - 1) | 0x80000000ul;
 	out[id] = f ^ mask;
 }
 
