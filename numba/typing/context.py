@@ -160,38 +160,6 @@ class BaseContext(object):
         if tp is not None:
             return tp
 
-        elif isinstance(val, utils.INT_TYPES + (float,)):
-            return self.get_number_type(val)
-
-        elif val is None:
-            return types.none
-
-        elif isinstance(val, str):
-            return types.string
-
-        elif isinstance(val, complex):
-            return types.complex128
-
-        elif isinstance(val, tuple):
-            tys = [self.resolve_value_type(v) for v in val]
-            distinct_types = set(tys)
-            if len(distinct_types) == 1:
-                return types.UniTuple(tys[0], len(tys))
-            else:
-                return types.Tuple(tys)
-
-        else:
-            try:
-                return numpy_support.map_arrayscalar_type(val)
-            except NotImplementedError:
-                pass
-
-        if numpy_support.is_array(val):
-            ary = val
-            dtype = numpy_support.from_dtype(ary.dtype)
-            # Force C contiguous
-            return types.Array(dtype, ary.ndim, 'C')
-
         elif ctypes_utils.is_ctypes_funcptr(val):
             cfnptr = val
             return ctypes_utils.make_function_type(cfnptr)
