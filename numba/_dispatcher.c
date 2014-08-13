@@ -15,9 +15,6 @@ typedef struct DispatcherObject{
     int can_compile;        /* Can auto compile */
     /* Borrowed references */
     PyObject *firstdef, *fallbackdef;
-    /* An optional finalizer callable */
-    /* NOTE: perhaps we can backport weakref.finalize() from 3.4 instead? */
-    PyObject *finalizer;
 } DispatcherObject;
 
 static int tc_int8;
@@ -81,36 +78,9 @@ PyObject* init_types(PyObject *self, PyObject *args)
     Py_RETURN_NONE;
 }
 
-static int
-Dispatcher_traverse(DispatcherObject *self, visitproc visit, void *arg)
-{
-    Py_VISIT(self->finalizer);
-    return 0;
-}
-
 static void
 Dispatcher_dealloc(DispatcherObject *self)
 {
-    PyObject *res;
-    PyObject *type, *value, *traceback; /* For temp storage of exception */
-
-    if (self->finalizer != NULL) {
-        /*
-        PyObject_CallObject will fail if we enter with an exception set
-        So we will temporarily save the exception and restore it after the
-        call.
-        */
-        PyErr_Fetch(&type, &value, &traceback);
-        res = PyObject_CallObject(self->finalizer, NULL);
-        if (res != NULL) {
-            Py_DECREF(res);
-        } else {
-            PyErr_WriteUnraisable(self->finalizer);
-        }
-        Py_DECREF(self->finalizer);
-        /* Restore the exception */
-        PyErr_Restore(type, value, traceback);
-    }
     dispatcher_del(self->dispatcher);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -131,7 +101,6 @@ Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
     self->can_compile = 1;
     self->firstdef = NULL;
     self->fallbackdef = NULL;
-    self->finalizer = NULL;
     return 0;
 }
 
@@ -467,13 +436,6 @@ CLEANUP:
     return retval;
 }
 
-static PyMemberDef Dispatcher_members[] = {
-    {"_finalizer", T_OBJECT_EX, offsetof(DispatcherObject, finalizer), 0,
-        "An object that will be called on instance deallocation" },
-    {NULL},
-};
-
-
 static PyMethodDef Dispatcher_methods[] = {
     { "_insert", (PyCFunction)Dispatcher_Insert, METH_VARARGS,
       "insert new definition"},
@@ -511,16 +473,16 @@ static PyTypeObject DispatcherType = {
     0,                         /*tp_getattro*/
     0,                         /*tp_setattro*/
     0,                         /*tp_as_buffer*/
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC, /*tp_flags*/
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, /*tp_flags*/
     "Dispatcher object",       /* tp_doc */
-    (traverseproc) Dispatcher_traverse, /* tp_traverse */
+    0,                         /* tp_traverse */
     0,                         /* tp_clear */
     0,                         /* tp_richcompare */
     0,                         /* tp_weaklistoffset */
     0,                         /* tp_iter */
     0,                         /* tp_iternext */
     Dispatcher_methods,        /* tp_methods */
-    Dispatcher_members,        /* tp_members */
+    0,                         /* tp_members */
     0,                         /* tp_getset */
     0,                         /* tp_base */
     0,                         /* tp_dict */

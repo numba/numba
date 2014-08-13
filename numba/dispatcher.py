@@ -42,7 +42,7 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         self.doc = py_func.__doc__
         self._compiling = False
 
-        self._finalizer = self._make_finalizer()
+        utils.finalize(self, self._make_finalizer())
 
     def _make_finalizer(self):
         """
