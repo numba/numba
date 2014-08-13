@@ -620,5 +620,28 @@ class TestDatetimeArithmeticNoPython(TestDatetimeArithmetic):
     jitargs = dict(nopython=True)
 
 
+class TestMetadataScalingFactor(TestCase):
+    """
+    Tests than non-1 scaling factors are not supported in datetime64
+    and timedelta64 dtypes.
+    """
+
+    def test_datetime(self, **jitargs):
+        eq = jit(**jitargs)(eq_usecase)
+        self.assertTrue(eq(DT('2014', '10Y'), DT('2010')))
+
+    def test_datetime_npm(self):
+        with self.assertTypingError():
+            self.test_datetime(nopython=True)
+
+    def test_timedelta(self, **jitargs):
+        eq = jit(**jitargs)(eq_usecase)
+        self.assertTrue(eq(TD(2, '10Y'), TD(20, 'Y')))
+
+    def test_timedelta_npm(self):
+        with self.assertTypingError():
+            self.test_timedelta(nopython=True)
+
+
 if __name__ == '__main__':
     unittest.main()

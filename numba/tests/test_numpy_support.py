@@ -150,13 +150,23 @@ class TestArrayScalars(ValueTypingTestBase, TestCase):
         """
         Test map_arrayscalar_type() with np.datetime64 values.
         """
-        self.check_datetime_values(numpy_support.map_arrayscalar_type)
+        f = numpy_support.map_arrayscalar_type
+        self.check_datetime_values(f)
+        # datetime64s with a non-one factor shouldn't be supported
+        t = np.datetime64('2014', '10Y')
+        with self.assertRaises(NotImplementedError):
+            f(t)
 
     def test_timedelta_values(self):
         """
         Test map_arrayscalar_type() with np.timedelta64 values.
         """
-        self.check_timedelta_values(numpy_support.map_arrayscalar_type)
+        f = numpy_support.map_arrayscalar_type
+        self.check_timedelta_values(f)
+        # timedelta64s with a non-one factor shouldn't be supported
+        t = np.timedelta64(10, '10Y')
+        with self.assertRaises(NotImplementedError):
+            f(t)
 
 
 if __name__ == '__main__':
