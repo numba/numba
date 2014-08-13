@@ -5,18 +5,20 @@ the targets to choose their representation.
 from __future__ import print_function, division, absolute_import
 from collections import defaultdict
 
-import itertools
 import numpy
 import weakref
 
 from . import utils
 
 
-# Some types are dynamically-created (e.g. Dispatcher), we shouldn't
-# keep a strong reference to them.
-_typecache = defaultdict(set)
+def _autoincr():
+    n = len(_typecache)
+    # 4 billion types should be enough, right?
+    assert n <= 2 ** 32, "Limited to 4billion types"
+    return n
 
-_immortal_types = []
+
+_typecache = defaultdict(_autoincr)
 
 
 class Type(object):
@@ -25,39 +27,14 @@ class Type(object):
     Two types are equal if there `name` are equal.
     Subclass can refine this behavior.
     """
-    __slots__ = ('_code', 'name', 'is_parametric', '__weakref__')
-    _next_code = itertools.count()
+    __slots__ = '_code', 'name', 'is_parametric'
 
     mutable = False
-    # Set to True if the type instances must be immortal.
-    immortal = False
 
-    def __new__(cls, *args, **kwargs):
-        self = object.__new__(cls)
-        self._init(*args, **kwargs)
-        return self
-
-    def _init(self, name, param=False):
+    def __init__(self, name, param=False):
         self.name = name
         self.is_parametric = param
-        key = self.key
-        refs = _typecache[self.key]
-        if refs:
-            self._code = next(iter(refs))()._code
-        else:
-            self._code = next(Type._next_code)
-            # 4 billion types should be enough, right?
-            assert self._code < 2 ** 32, "Limited to 4 billion types"
-            if self.immortal:
-                _immortal_types.append(self)
-
-        def _on_disposal(wr, _typecache=_typecache):
-            refs = _typecache[key]
-            refs.discard(wr)
-            if not refs:
-                del _typecache[key]
-
-        refs.add(weakref.ref(self, _on_disposal))
+        self._code = _typecache[self]
 
     @property
     def key(self):
@@ -116,14 +93,14 @@ class OpaqueType(Type):
     To deal with externally defined literal types
     """
 
-    def _init(self, name):
-        super(OpaqueType, self)._init(name)
+    def __init__(self, name):
+        super(OpaqueType, self).__init__(name)
 
 
 @utils.total_ordering
 class Integer(Type):
-    def _init(self, *args, **kws):
-        super(Integer, self)._init(*args, **kws)
+    def __init__(self, *args, **kws):
+        super(Integer, self).__init__(*args, **kws)
         # Determine bitwidth
         for prefix in ('int', 'uint'):
             if self.name.startswith(prefix):
@@ -144,8 +121,8 @@ class Integer(Type):
 
 @utils.total_ordering
 class Float(Type):
-    def _init(self, *args, **kws):
-        super(Float, self)._init(*args, **kws)
+    def __init__(self, *args, **kws):
+        super(Float, self).__init__(*args, **kws)
         # Determine bitwidth
         assert self.name.startswith('float')
         bitwidth = int(self.name[5:])
@@ -162,8 +139,8 @@ class Float(Type):
 
 @utils.total_ordering
 class Complex(Type):
-    def _init(self, name, underlying_float, **kwargs):
-        super(Complex, self)._init(name, **kwargs)
+    def __init__(self, name, underlying_float, **kwargs):
+        super(Complex, self).__init__(name, **kwargs)
         self.underlying_float = underlying_float
         # Determine bitwidth
         assert self.name.startswith('complex')
@@ -179,11 +156,11 @@ class Complex(Type):
         return self.bitwidth < other.bitwidth
 
 class Prototype(Type):
-    def _init(self, args, return_type):
+    def __init__(self, args, return_type):
         self.args = args
         self.return_type = return_type
         name = "%s(%s)" % (return_type, ', '.join(str(a) for a in args))
-        super(Prototype, self)._init(name=name)
+        super(Prototype, self).__init__(name=name)
 
 
 class Dummy(Type):
@@ -194,9 +171,9 @@ class Dummy(Type):
 
 
 class Kind(Type):
-    def _init(self, of):
+    def __init__(self, of):
         self.of = of
-        super(Kind, self)._init("kind(%s)" % of)
+        super(Kind, self).__init__("kind(%s)" % of)
 
     @property
     def key(self):
@@ -211,9 +188,9 @@ class Kind(Type):
 
 
 class Module(Type):
-    def _init(self, pymod):
+    def __init__(self, pymod):
         self.pymod = pymod
-        super(Module, self)._init("Module(%s)" % pymod)
+        super(Module, self).__init__("Module(%s)" % pymod)
 
     @property
     def key(self):
@@ -228,10 +205,10 @@ class Module(Type):
 
 
 class Macro(Type):
-    def _init(self, template):
+    def __init__(self, template):
         self.template = template
         cls = type(self)
-        super(Macro, self)._init("%s(%s)" % (cls.__name__, template))
+        super(Macro, self).__init__("%s(%s)" % (cls.__name__, template))
 
     @property
     def key(self):
@@ -247,11 +224,11 @@ class Macro(Type):
 
 
 class Function(Type):
-    def _init(self, template):
+    def __init__(self, template):
         self.template = template
         cls = type(self)
         # TODO template is mutable.  Should use different naming scheme
-        super(Function, self)._init("%s(%s)" % (cls.__name__, template))
+        super(Function, self).__init__("%s(%s)" % (cls.__name__, template))
 
     @property
     def key(self):
@@ -305,9 +282,9 @@ class WeakType(Type):
 
 class Dispatcher(WeakType):
 
-    def _init(self, overloaded):
+    def __init__(self, overloaded):
         self._store_object(overloaded)
-        super(Dispatcher, self)._init("Dispatcher(%s)" % overloaded)
+        super(Dispatcher, self).__init__("Dispatcher(%s)" % overloaded)
 
     @property
     def overloaded(self):
@@ -318,17 +295,17 @@ class Dispatcher(WeakType):
 
 
 class FunctionPointer(Function):
-    def _init(self, template, funcptr):
+    def __init__(self, template, funcptr):
         self.funcptr = funcptr
-        super(FunctionPointer, self)._init(template)
+        super(FunctionPointer, self).__init__(template)
 
 
 class Method(Function):
-    def _init(self, template, this):
+    def __init__(self, template, this):
         self.this = this
         newcls = type(template.__name__ + '.' + str(this), (template,),
                       dict(this=this))
-        super(Method, self)._init(newcls)
+        super(Method, self).__init__(newcls)
 
     @property
     def key(self):
@@ -348,11 +325,11 @@ class Pair(Type):
     A heterogenous pair.
     """
 
-    def _init(self, first_type, second_type):
+    def __init__(self, first_type, second_type):
         self.first_type = first_type
         self.second_type = second_type
         name = "pair<%s, %s>" % (first_type, second_type)
-        super(Pair, self)._init(name=name)
+        super(Pair, self).__init__(name=name)
 
     @property
     def key(self):
@@ -376,9 +353,9 @@ class IterableType(Type):
 
 class SimpleIterableType(IterableType):
 
-    def _init(self, name, iterator_type):
+    def __init__(self, name, iterator_type):
         self.iterator_type = iterator_type
-        super(SimpleIterableType, self)._init(name, param=True)
+        super(SimpleIterableType, self).__init__(name, param=True)
 
     #def __eq__(self, other):
         #if other.__class__ is self.__class__:
@@ -394,16 +371,16 @@ class IteratorType(IterableType):
     Derived classes should implement the *yield_type* attribute.
     """
 
-    def _init(self, name, **kwargs):
+    def __init__(self, name, **kwargs):
         self.iterator_type = self
-        super(IteratorType, self)._init(name, **kwargs)
+        super(IteratorType, self).__init__(name, **kwargs)
 
 
 class SimpleIteratorType(IteratorType):
 
-    def _init(self, name, yield_type):
+    def __init__(self, name, yield_type):
         self.yield_type = yield_type
-        super(SimpleIteratorType, self)._init(name, param=True)
+        super(SimpleIteratorType, self).__init__(name, param=True)
 
     #def __eq__(self, other):
         #if other.__class__ is self.__class__:
@@ -426,11 +403,11 @@ class EnumerateType(IteratorType):
     Type instances are parametered with the underlying source type.
     """
 
-    def _init(self, iterable_type):
+    def __init__(self, iterable_type):
         self.source_type = iterable_type.iterator_type
         self.yield_type = Tuple([intp, self.source_type.yield_type])
         name = 'enumerate(%s)' % (self.source_type)
-        super(EnumerateType, self)._init(name, param=True)
+        super(EnumerateType, self).__init__(name, param=True)
 
     @property
     def key(self):
@@ -450,11 +427,11 @@ class ZipType(IteratorType):
     Type instances are parametered with the underlying source types.
     """
 
-    def _init(self, iterable_types):
+    def __init__(self, iterable_types):
         self.source_types = tuple(tp.iterator_type for tp in iterable_types)
         self.yield_type = Tuple(tp.yield_type for tp in self.source_types)
         name = 'zip(%s)' % ', '.join(str(tp) for tp in self.source_types)
-        super(ZipType, self)._init(name, param=True)
+        super(ZipType, self).__init__(name, param=True)
 
     @property
     def key(self):
@@ -471,10 +448,10 @@ class ZipType(IteratorType):
 class CharSeq(Type):
     mutable = True
 
-    def _init(self, count):
+    def __init__(self, count):
         self.count = count
         name = "[char x %d]" % count
-        super(CharSeq, self)._init(name, param=True)
+        super(CharSeq, self).__init__(name, param=True)
 
     @property
     def key(self):
@@ -491,10 +468,10 @@ class CharSeq(Type):
 class UnicodeCharSeq(Type):
     mutable = True
 
-    def _init(self, count):
+    def __init__(self, count):
         self.count = count
         name = "[unichr x %d]" % count
-        super(UnicodeCharSeq, self)._init(name, param=True)
+        super(UnicodeCharSeq, self).__init__(name, param=True)
 
     @property
     def key(self):
@@ -511,14 +488,14 @@ class UnicodeCharSeq(Type):
 class Record(Type):
     mutable = True
 
-    def _init(self, id, fields, size, align, dtype):
+    def __init__(self, id, fields, size, align, dtype):
         self.id = id
         self.fields = fields.copy()
         self.size = size
         self.align = align
         self.dtype = dtype
         name = 'Record(%s)' % id
-        super(Record, self)._init(name)
+        super(Record, self).__init__(name)
 
     @property
     def key(self):
@@ -549,14 +526,14 @@ class Record(Type):
 
 class ArrayIterator(IteratorType):
 
-    def _init(self, array_type):
+    def __init__(self, array_type):
         self.array_type = array_type
         name = "iter(%s)" % (self.array_type,)
         if array_type.ndim == 1:
             self.yield_type = array_type.dtype
         else:
             self.yield_type = array_type.copy(ndim=array_type.ndim - 1)
-        super(ArrayIterator, self)._init(name, param=True)
+        super(ArrayIterator, self).__init__(name, param=True)
 
 
 class Array(IterableType):
@@ -570,7 +547,7 @@ class Array(IterableType):
     # CS and FS are not reserved for inner contig but strided
     LAYOUTS = frozenset(['C', 'F', 'CS', 'FS', 'A'])
 
-    def _init(self, dtype, ndim, layout):
+    def __init__(self, dtype, ndim, layout):
         from numba.typeconv.rules import default_type_manager as tm
 
         if isinstance(dtype, Array):
@@ -582,7 +559,7 @@ class Array(IterableType):
         self.ndim = ndim
         self.layout = layout
         name = "array(%s, %sd, %s)" % (dtype, ndim, layout)
-        super(Array, self)._init(name, param=True)
+        super(Array, self).__init__(name, param=True)
         self.iterator_type = ArrayIterator(self)
 
         if layout != 'A':
@@ -654,11 +631,11 @@ class Array(IterableType):
 
 class UniTuple(IterableType):
 
-    def _init(self, dtype, count):
+    def __init__(self, dtype, count):
         self.dtype = dtype
         self.count = count
         name = "(%s x %d)" % (dtype, count)
-        super(UniTuple, self)._init(name, param=True)
+        super(UniTuple, self).__init__(name, param=True)
         self.iterator_type = UniTupleIter(self)
 
     def getitem(self, ind):
@@ -694,11 +671,11 @@ class UniTuple(IterableType):
 
 class UniTupleIter(IteratorType):
 
-    def _init(self, unituple):
+    def __init__(self, unituple):
         self.unituple = unituple
         self.yield_type = unituple.dtype
         name = 'iter(%s)' % unituple
-        super(UniTupleIter, self)._init(name, param=True)
+        super(UniTupleIter, self).__init__(name, param=True)
 
     @property
     def key(self):
@@ -713,11 +690,11 @@ class UniTupleIter(IteratorType):
 
 
 class Tuple(Type):
-    def _init(self, types):
+    def __init__(self, types):
         self.types = tuple(types)
         self.count = len(self.types)
         name = "(%s)" % ', '.join(str(i) for i in self.types)
-        super(Tuple, self)._init(name, param=True)
+        super(Tuple, self).__init__(name, param=True)
 
     def __getitem__(self, i):
         """
@@ -746,10 +723,10 @@ class Tuple(Type):
 class CPointer(Type):
     mutable = True
 
-    def _init(self, dtype):
+    def __init__(self, dtype):
         self.dtype = dtype
         name = "*%s" % dtype
-        super(CPointer, self)._init(name, param=True)
+        super(CPointer, self).__init__(name, param=True)
 
     @property
     def key(self):
@@ -766,10 +743,10 @@ class CPointer(Type):
 class Object(Type):
     mutable = True
 
-    def _init(self, clsobj):
+    def __init__(self, clsobj):
         self.cls = clsobj
         name = "Object(%s)" % clsobj.__name__
-        super(Object, self)._init(name, param=True)
+        super(Object, self).__init__(name, param=True)
 
     @property
     def key(self):
@@ -784,10 +761,10 @@ class Object(Type):
 
 
 class Optional(Type):
-    def _init(self, typ):
+    def __init__(self, typ):
         self.type = typ
         name = "?%s" % typ
-        super(Optional, self)._init(name, param=True)
+        super(Optional, self).__init__(name, param=True)
 
     @property
     def key(self):
