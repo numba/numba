@@ -76,8 +76,8 @@ class Type(object):
 
     def post_init(self):
         """
-        A method used when the instance is fully initialized and has
-        registered typecode in its _code attribute.  Does nothing by
+        A method called when the instance is fully initialized and has
+        a registered typecode in its _code attribute.  Does nothing by
         default, but can be overriden.
         """
 
@@ -485,9 +485,6 @@ class ArrayIterator(IteratorType):
 class Array(IterableType):
 
     mutable = True
-    # We must keep those immortal for the typecode cache in _dispatcher.c
-    # to remain in sync.
-    immortal = True
 
     # CS and FS are not reserved for inner contig but strided
     LAYOUTS = frozenset(['C', 'F', 'CS', 'FS', 'A'])
