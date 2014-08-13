@@ -51,9 +51,9 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         """
         overloads = self.overloads
         targetctx = self.targetctx
-        # Early-bind utils.shutting_down() into the closure variables.
-        from numba.utils import shutting_down
-        def finalizer():
+        # Early-bind utils.shutting_down() into the function's local namespace
+        # (see issue #689)
+        def finalizer(shutting_down=utils.shutting_down):
             # The finalizer may crash at shutdown, skip it (resources
             # will be cleared by the process exiting, anyway).
             if shutting_down():
