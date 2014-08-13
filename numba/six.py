@@ -20,6 +20,9 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+# Numba addition to prevent importing of numba.types as types
+from __future__ import absolute_import
+
 import functools
 import operator
 import sys

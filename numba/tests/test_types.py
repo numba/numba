@@ -110,6 +110,38 @@ class TestTypeNames(unittest.TestCase):
         self.assertTrue(b != c)
         self.assertTrue(a != z)
 
+    def test_interning(self):
+        # Test interning and lifetime of dynamic types.
+        a = types.Dummy('xyzzyx')
+        code = a._code
+        b = types.Dummy('xyzzyx')
+        self.assertIs(b, a)
+        wr = weakref.ref(a)
+        del a
+        gc.collect()
+        c = types.Dummy('xyzzyx')
+        self.assertIs(c, b)
+        # The code is always the same
+        self.assertEqual(c._code, code)
+        del b, c
+        gc.collect()
+        self.assertIs(wr(), None)
+        d = types.Dummy('xyzzyx')
+        # The original code wasn't reused.
+        self.assertNotEqual(d._code, code)
+
+    def test_cache_trimming(self):
+        # Test that the cache doesn't grow in size when types are
+        # created and disposed of.
+        gc.collect()
+        cache_len = len(types._typecache)
+        a = types.Dummy('xyzzyx')
+        b = types.Dummy('foox')
+        self.assertEqual(len(types._typecache), cache_len + 2)
+        del a, b
+        gc.collect()
+        self.assertEqual(len(types._typecache), cache_len)
+
 
 if __name__ == '__main__':
     unittest.main()
