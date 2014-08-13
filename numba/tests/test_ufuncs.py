@@ -1162,6 +1162,30 @@ class TestLoopTypes(TestCase):
     _compile_flags = enable_pyobj_flags
     _skip_types='O'
 
+    def _arg_for_type(self, a_letter_type):
+        """return a suitable array argument for testing the letter type"""
+        if a_letter_type in 'bBhHiIlL':
+            # an integral
+            return np.array((2,), dtype=a_letter_type)
+        elif a_letter_type in '?':
+            # a boolean
+            return np.array((True,), dtype=a_letter_type)
+        elif a_letter_type in 'm':
+            # timedelta64
+            return np.array((2,), dtype='m8[d]')
+        elif a_letter_type in 'M':
+            # datetime64
+            return np.array((2,), dtype='M8[D]')
+        elif a_letter_type in 'fd':
+            # floating point
+            return np.array((1.5,), dtype=a_letter_type)
+        elif a_letter_type in 'FD':
+            # complex
+            return np.array((1. + 1.j,), dtype=a_letter_type)
+        else:
+            return np.array((2,), dtype=a_letter_type)
+
+
     def _check_loop(self, fn, ufunc, loop):
         # the letter types for the args
         letter_types = loop[:ufunc.nin] + loop[-ufunc.nout:]
@@ -1180,16 +1204,8 @@ class TestLoopTypes(TestCase):
         arg_dty = [np.dtype(l) for l in letter_types]
         cr = compile_isolated(fn, arg_nbty, flags=self._compile_flags);
 
-        # now create some really silly arguments and call the generate functions.
-        # The result is checked against the result given by NumPy, but the point
-        # of the test is making sure there is no compilation error.
-        # 2 seems like a nice "no special case argument"
-
-        # use days for timedelta64 and datetime64
-        repl = { 'm': 'm8[d]', 'M': 'M8[D]' }
-        arg_types = [repl.get(t, t) for t in letter_types]
-        args1 = [np.array((2,), dtype=l) for l in arg_types]
-        args2 = [np.array((2,), dtype=l) for l in arg_types]
+        args1 = [self._arg_for_type(lt) for lt in letter_types]
+        args2 = [self._arg_for_type(lt) for lt in letter_types]
 
         cr.entry_point(*args1)
         fn(*args2)
@@ -1250,6 +1266,14 @@ class TestLoopTypesNoPython(TestLoopTypes):
     _supported_types = '?bBhHiIlLqQfd'
 
 
+class TestLoopTypesComplexNoPython(TestLoopTypes):
+    _compile_flags = no_pyobj_flags
+    _ufuncs = [np.negative]
+
+    #test complex types
+    _supported_types = 'FD'
+
+
 class TestUFuncBadArgsNoPython(TestCase):
     _compile_flags = no_pyobj_flags
 
@@ -1280,7 +1304,6 @@ class TestUFuncBadArgsNoPython(TestCase):
             np.add(x, x, y)
         self.assertRaises(TypingError, compile_isolated, func, [types.float64],
                           return_type=types.float64, flags=self._compile_flags)
-
 
 
 
