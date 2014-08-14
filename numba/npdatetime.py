@@ -27,7 +27,7 @@ DATETIME_UNITS = {
 }
 
 # Numpy's special "Not a Time" value (should be equal to -2**63)
-NAT = np.timedelta64('nat').astype(int)
+NAT = np.timedelta64('nat').astype(np.int64)
 
 
 # NOTE: numpy has several inconsistent functions for timedelta casting:
