@@ -1,9 +1,11 @@
 from __future__ import print_function, division, absolute_import
-import inspect
 from collections import namedtuple
 import contextlib
-import numpy
 import functools
+import inspect
+import sys
+
+import numpy
 
 from numba.config import PYVERSION
 from numba import _dispatcher, compiler, utils
@@ -146,12 +148,12 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         sig = tuple([self.typeof_pyval(a) for a in args])
         return self.jit(sig)
 
-    def inspect_types(self):
+    def inspect_types(self, file=sys.stdout):
         for ver, res in utils.dict_iteritems(self._compileinfos):
-            print("%s %s" % (self.py_func.__name__, ver))
-            print('-' * 80)
-            print(res.type_annotation)
-            print('=' * 80)
+            print("%s %s" % (self.py_func.__name__, ver), file=file)
+            print('-' * 80, file=file)
+            print(res.type_annotation, file=file)
+            print('=' * 80, file=file)
 
     def _explain_ambiguous(self, *args, **kws):
         assert not kws, "kwargs not handled"
