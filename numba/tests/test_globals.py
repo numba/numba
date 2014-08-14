@@ -13,10 +13,19 @@ def global_ndarray_func(x):
 
 
 class TestGlobals(unittest.TestCase):
-    def test_global_ndarray(self):
+
+    def check_global_ndarray(self, **jitargs):
         # (see github issue #448)
-        ctestfunc = jit('i4(i4)')(global_ndarray_func)
+        ctestfunc = jit(**jitargs)(global_ndarray_func)
         self.assertEqual(ctestfunc(1), 11)
+
+    def test_global_ndarray(self):
+        # This also checks we can access an unhashable global value
+        # (see issue #697)
+        self.check_global_ndarray(forceobj=True)
+
+    def test_global_ndarray_npm(self):
+        self.check_global_ndarray(nopython=True)
 
 
 if __name__ == '__main__':

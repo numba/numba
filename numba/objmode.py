@@ -345,9 +345,13 @@ class PyLower(BaseLower):
         obj = self.pyapi.dict_getitem_string(moddict, name)
         self.incref(obj)  # obj is borrowed
 
-        if value in _unsupported_builtins:
-            raise ForbiddenConstruct("builtins %s() is not supported"
-                                     % name, loc=self.loc)
+        try:
+            if value in _unsupported_builtins:
+                raise ForbiddenConstruct("builtins %s() is not supported"
+                                         % name, loc=self.loc)
+        except TypeError:
+            # `value` is unhashable, ignore
+            pass
 
         if hasattr(builtins, name):
             obj_is_null = self.is_null(obj)
