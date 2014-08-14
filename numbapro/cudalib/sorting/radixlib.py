@@ -1,8 +1,9 @@
 from ctypes import *
 import os
+from contextlib import contextmanager
 from numba.cuda.cudadrv.driver import device_pointer
 from numba.cuda.cudadrv.drvapi import cu_stream
-from numba.cuda.cudadrv.devicearray import auto_device
+from numba.cuda.cudadrv.devicearray import auto_device, is_cuda_ndarray
 from numba import cuda
 import numpy as np
 
@@ -12,6 +13,7 @@ libpath = os.path.join(os.path.dirname(__file__), 'radixsort_details', libname)
 lib = CDLL(libpath)
 
 _argtypes = [
+    c_void_p, # temp
     c_uint, # count
     c_void_p, # d_key
     c_void_p, # d_key_alt
@@ -33,118 +35,155 @@ _overloads = {
 }
 
 overloads = {}
-for ty, name in _overloads.items():
-    dtype = np.dtype(ty)
-    fn = getattr(lib, "radixsort_{}".format(name))
-    overloads[dtype] = fn
-    fn.argtypes = _argtypes
 
 
-def _radixsortpairs(keys, vals=None, descending=False, stream=0,
-                    begin_bit=0, end_bit=None):
-    assert not vals or vals.dtype == np.dtype(np.uint32)
-    ctx = cuda.current_context()
-
-    keys_alt = ctx.memalloc(keys.alloc_size)
-    if vals is not None:
-        vals_alt = ctx.memalloc(vals.alloc_size)
-
-    count = keys.size
-
-    stream = stream.handle if stream else stream
-    begin_bit = begin_bit
-    end_bit = end_bit or keys.dtype.itemsize * 8
-    descending = int(descending)
-
-    overloads[keys.dtype](
-        c_uint(count),
-        device_pointer(keys),
-        device_pointer(keys_alt),
-        device_pointer(vals) if vals is not None else None,
-        device_pointer(vals_alt) if vals is not None else None,
-        stream,
-        descending,
-        begin_bit,
-        end_bit
-    )
+def _init():
+    for ty, name in _overloads.items():
+        dtype = np.dtype(ty)
+        fn = getattr(lib, "radixsort_{}".format(name))
+        overloads[dtype] = fn
+        fn.argtypes = _argtypes
+        fn.restype = c_void_p
 
 
-def radixsortpairs(keys, vals=None, descending=False, stream=0):
-    d_keys, conv_keys = auto_device(keys, stream=stream)
-    if vals:
-        d_vals, conv_vals = auto_device(vals, stream=stream)
-        _radixsortpairs(d_keys, vals=d_vals, descending=descending,
-                        stream=stream)
-        if conv_vals:
-            vals.copy_to_host(vals, stream=stream)
+_init()
+
+lib.radixsort_cleanup.argtypes = [c_void_p]
+
+
+def _devptr(p):
+    if p is None:
+        return None
     else:
-        _radixsortpairs(d_keys, descending=descending, stream=stream)
-
-    if conv_keys:
-        keys.copy_to_host(keys, stream=stream)
+        return device_pointer(p)
 
 
-def radix_select(keys, k, descending=False, stream=0, retindex=False,
-                 storeidx=None):
-    d_keys, conv_keys = auto_device(keys, stream=stream)
-    if retindex:
-        vals = np.arange(d_keys.size, dtype=np.uint32)
-        d_vals = cuda.to_device(vals, stream=stream)
+@contextmanager
+def _autodevice(ary, stream, firstk=None):
+    if ary is not None:
+        dptr, conv = auto_device(ary, stream=stream)
+        yield dptr
+        if conv:
+            if firstk is None:
+                dptr.copy_to_host(ary, stream=stream)
+            else:
+                dptr.bind(stream)[:firstk].copy_to_host(ary[:firstk],
+                                                        stream=stream)
     else:
-        d_vals = None
-
-    radixsortpairs(d_keys, d_vals, descending=descending, stream=stream)
-
-    if conv_keys:
-        d_keys[:k].copy_to_host(keys[:k], stream=stream)
-        if retindex:
-            return d_vals[:k].copy_to_host(stream=stream)
-    else:
-        if retindex:
-            if storeidx:
-                storeidx.copy_to_device(d_vals[:k], stream=stream)
-            return d_vals[:k]
+        yield None
 
 
-def radix_argselect(keys, k, descending=False, stream=0, storeidx=None):
-    return radix_select(keys, k, descending=descending, stream=stream,
-                        retindex=True, storeidx=storeidx)
+@cuda.autojit
+def _cu_arange(ary, count):
+    i = cuda.grid(1)
+    if i < count:
+        ary[i] = i
 
-#
-# def test():
-#     import numpy as np
-#
-#     keys = np.array(list(reversed(list(range(32 * 10 ** 4)))), dtype=np.float32)
-#     vals = np.arange(keys.size, dtype=np.uint32)
-#
-#     print(keys)
-#     print(vals)
-#
-#     d_keys = cuda.to_device(keys)
-#     # d_vals = cuda.to_device(vals)
-#
-#     radixsortpairs(d_keys) #, d_vals)
-#
-#     print(d_keys.copy_to_host())
-#     # print(d_vals.copy_to_host())
+
+class RadixSort(object):
+    def __init__(self, maxcount, dtype, descending=False, stream=0):
+        self.maxcount = maxcount
+        self.dtype = np.dtype(dtype)
+        self._arysize = self.maxcount * self.dtype.itemsize
+        self.descending = descending
+        self.stream = stream
+        self._sort = overloads[self.dtype]
+        self._cleanup = lib.radixsort_cleanup
+
+        ctx = cuda.current_context()
+        self._temp_keys = ctx.memalloc(self._arysize)
+        self._temp_vals = ctx.memalloc(self._arysize)
+        self._temp = self._call(temp=None, keys=None, vals=None)
+
+    def __del__(self):
+        try:
+            self._cleanup(self._temp)
+        except:
+            pass
+
+    def _call(self, temp, keys, vals, begin_bit=0, end_bit=None):
+        stream = self.stream.handle if self.stream else self.stream
+        begin_bit = begin_bit
+        end_bit = end_bit or self.dtype.itemsize * 8
+        descending = int(self.descending)
+
+        count = self.maxcount
+        if keys:
+            count = keys.size
+
+        return self._sort(
+            temp,
+            c_uint(count),
+            _devptr(keys),
+            _devptr(self._temp_keys),
+            _devptr(vals),
+            _devptr(self._temp_vals),
+            stream,
+            descending,
+            begin_bit,
+            end_bit
+        )
+
+    def _sentry(self, ary):
+        if ary.dtype != self.dtype:
+            raise TypeError("dtype mismatch")
+        if ary.size > self.maxcount:
+            raise ValueError("keys array too long")
+
+    def sort(self, keys, vals=None, begin_bit=0, end_bit=None):
+        self._sentry(keys)
+        with _autodevice(keys, self.stream) as d_keys:
+            with _autodevice(vals, self.stream) as d_vals:
+                self._call(self._temp, keys=d_keys, vals=d_vals,
+                           begin_bit=begin_bit, end_bit=end_bit)
+
+    def select(self, k, keys, vals=None, begin_bit=0, end_bit=None):
+        self._sentry(keys)
+        with _autodevice(keys, self.stream, firstk=k) as d_keys:
+            with _autodevice(vals, self.stream, firstk=k) as d_vals:
+                self._call(self._temp, keys=d_keys, vals=d_vals,
+                           begin_bit=begin_bit, end_bit=end_bit)
+
+    def init_arg(self, size):
+        d_vals = cuda.device_array(size, dtype=np.uint32, stream=self.stream)
+        _cu_arange.forall(d_vals.size, stream=self.stream)(d_vals, size)
+        return d_vals
+
+    def argselect(self, k, keys, begin_bit=0, end_bit=None):
+        d_vals = self.init_arg(keys.size)
+        self.select(k, keys, vals=d_vals, begin_bit=begin_bit, end_bit=end_bit)
+        res = d_vals.bind(self.stream)[:k]
+        if not is_cuda_ndarray(keys):
+            res = res.copy_to_host(stream=self.stream)
+        return res
+
+    def argsort(self, keys, begin_bit=0, end_bit=None):
+        d_vals = self.init_arg(keys.size)
+        self.sort(keys, vals=d_vals, begin_bit=begin_bit, end_bit=end_bit)
+        res = d_vals
+        if not is_cuda_ndarray(keys):
+            res = res.copy_to_host(stream=self.stream)
+        return res
 
 
 def test():
-    keys = np.array(list(reversed(list(range(32 * 10 ** 4)))), dtype=np.float32)
+    keys = np.array(list(reversed(list(range(10 ** 3)))),
+                    dtype=np.float32)
+    orig = keys.copy()
     vals = np.arange(keys.size, dtype=np.uint32)
 
-    print(keys)
-    print(vals)
+    # print(keys)
+    # print(vals)
 
-    d_keys = cuda.to_device(keys)
+    rs = RadixSort(keys.size, dtype=keys.dtype, descending=True)
 
     k = 10
-    d_idx = radix_argselect(d_keys, k=k)
+    vals = rs.argselect(k, keys)
+    print(vals)
 
-    print(d_keys[:k].copy_to_host())
-    idx = d_idx.copy_to_host()
-    print(idx)
-    print(keys[idx])
+    assert np.all(orig.argsort()[::-1][:k] == vals)
+
+    assert np.all(orig == keys)
 
 
 if __name__ == '__main__':
