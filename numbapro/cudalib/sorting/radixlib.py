@@ -95,11 +95,8 @@ class RadixSort(object):
         self._temp_vals = ctx.memalloc(self._arysize)
         self._temp = self._call(temp=None, keys=None, vals=None)
 
-    def __del__(self):
-        try:
-            self._cleanup(self._temp)
-        except:
-            pass
+    def close(self):
+        self._cleanup(self._temp)
 
     def _call(self, temp, keys, vals, begin_bit=0, end_bit=None):
         stream = self.stream.handle if self.stream else self.stream

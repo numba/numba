@@ -41,4 +41,4 @@ clean:
 	rm -f *.ptx
 
 radixsort.so : cubradixsort.cu
-	nvcc $(CUB_INCLUDE) -O3 -arch=sm_30 --shared -o $@ $+
+	nvcc --compiler-options "-fPIC" $(CUB_INCLUDE) -O3 -arch=sm_30 --shared -o $@ $+
