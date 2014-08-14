@@ -1,5 +1,5 @@
 CUB_INCLUDE = -I"../../../../thirdparty/cub"
-MGPU_INCLUDE = -I../../../../thirdparty/moderngpu/include -I../../../../thirdparty/moderngpu/
+MGPU_INCLUDE = -I../../../../thirdparty/moderngpu/include
 FLAG32 = --no-align-double
 CFLAGS = -O3
 

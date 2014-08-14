@@ -1,6 +1,6 @@
 #include <moderngpu.cuh>
 #include <util/mgpucontext.h>
-#include <src/mgpucontext.cu>
+#include "mgpucontext.cu"
 // #include <src/mgpuutil.cpp>
 
 namespace mgpu{
