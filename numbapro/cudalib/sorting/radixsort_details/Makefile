@@ -1,6 +1,17 @@
 CUB_INCLUDE = -I"../../../../thirdparty/cub"
+MGPU_INCLUDE = -I../../../../thirdparty/moderngpu/include -I../../../../thirdparty/moderngpu/
 FLAG32 = --no-align-double
 CFLAGS = -O3
+
+GENCODE_SM20	:= -gencode arch=compute_20,code=sm_20
+GENCODE_SM30	:= -gencode arch=compute_30,code=sm_30
+GENCODE_SM35	:= -gencode arch=compute_35,code=sm_35
+
+GENCODE_FLAGS	:= $(GENCODE_SM20) $(GENCODE_SM35)
+
+mgpusort.so: mgpusort.cu
+	nvcc --compiler-options "-fPIC" $(MGPU_INCLUDE) -O3 -arch=sm_30 --shared -o $@ $+
+
 all: libradix64 libradix32
 
 radixsort.run: radixsort.cu
