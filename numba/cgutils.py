@@ -589,6 +589,52 @@ def pointer_add(builder, ptr, offset, return_type=None):
     return builder.inttoptr(intptr, return_type or ptr.type)
 
 
+def global_constant(builder_or_module, name, value, linkage=lc.LINKAGE_INTERNAL):
+    """
+    Get or create a (LLVM module-)global constant with *name* or *value*.
+    """
+    if isinstance(builder_or_module, lc.Module):
+        module = builder_or_module
+    else:
+        module = get_module(builder_or_module)
+    data = module.add_global_variable(value.type, name=name)
+    data.linkage = lc.LINKAGE_INTERNAL
+    data.global_constant = True
+    data.initializer = value
+    return data
+
+
+def divmod_by_constant(builder, val, divisor):
+    """
+    Compute the (quotient, remainder) of *val* divided by the constant
+    positive *divisor*.  The semantics reflects those of Python integer
+    floor division, rather than C's / LLVM's signed division and modulo.
+    The difference lies with a negative *val*.
+    """
+    assert divisor > 0
+    divisor = Constant.int(val.type, divisor)
+    one = Constant.int(val.type, 1)
+
+    quot = alloca_once(builder, val.type)
+
+    with ifelse(builder, is_neg_int(builder, val)) as (if_neg, if_pos):
+        with if_pos:
+            # quot = val / divisor
+            quot_val = builder.sdiv(val, divisor)
+            builder.store(quot_val, quot)
+        with if_neg:
+            # quot = -1 + (val + 1) / divisor
+            val_plus_one = builder.add(val, one)
+            quot_val = builder.sdiv(val_plus_one, divisor)
+            builder.store(builder.sub(quot_val, one), quot)
+
+    # rem = val - quot * divisor
+    # (should be slightly faster than a separate modulo operation)
+    quot_val = builder.load(quot)
+    rem_val = builder.sub(val, builder.mul(quot_val, divisor))
+    return quot_val, rem_val
+
+
 # ------------------------------------------------------------------------------
 # Debug
 

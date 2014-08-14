@@ -252,3 +252,31 @@ class _StructRegistry(object):
 
 struct_registry = _StructRegistry()
 struct_factory = struct_registry.register
+
+
+class _TypeRegistry(object):
+
+    def __init__(self):
+        self.factories = {}
+
+    def register(self, type_class):
+        """
+        Register a LLVM type factory function for the given *type_class*
+        (i.e. a subclass of numba.types.Type).
+        """
+        assert issubclass(type_class, types.Type)
+        def decorator(func):
+            self.factories[type_class] = func
+            return func
+        return decorator
+
+    def match(self, typ):
+        """
+        Return the LLVM type factory function for the given Numba type
+        instance *typ*.
+        """
+        return self.factories[typ.__class__]
+
+
+type_registry = _TypeRegistry()
+type_factory = type_registry.register
