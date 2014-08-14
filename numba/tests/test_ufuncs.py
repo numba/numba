@@ -1268,7 +1268,7 @@ class TestLoopTypesNoPython(TestLoopTypes):
 
 class TestLoopTypesComplexNoPython(TestLoopTypes):
     _compile_flags = no_pyobj_flags
-    _ufuncs = [np.negative, np.add, np.subtract, np.multiply]
+    _ufuncs = [np.negative, np.add, np.subtract, np.multiply, np.divide]
 
     #test complex types
     _supported_types = 'FD'
