@@ -4,7 +4,7 @@ import numpy
 
 from numba import unittest_support as unittest
 from numba.special import typeof
-from numba import vectorize, types, jit
+from numba import utils, vectorize, types, jit
 from .support import TestCase
 
 
@@ -39,7 +39,7 @@ class TestDispatcher(TestCase):
 
         foo(1, 2)
         # Exercise the method
-        foo.inspect_types()
+        foo.inspect_types(utils.StringIO())
 
     def test_coerce_input_types(self):
         # Issue #486: do not allow unsafe conversions if we can still
