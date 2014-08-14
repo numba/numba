@@ -162,44 +162,20 @@ class _OverloadedBase(_dispatcher.Dispatcher):
     def __repr__(self):
         return "%s(%s)" % (type(self).__name__, self.py_func)
 
-    @classmethod
-    def typeof_pyval(cls, val):
+    def typeof_pyval(self, val):
         """
+        Resolve the Numba type of Python value *val*.
         This is called from numba._dispatcher as a fallback if the native code
         cannot decide the type.
         """
-        if isinstance(val, numpy.ndarray):
-            # TODO complete dtype mapping
-            dtype = numpy_support.from_dtype(val.dtype)
-            ndim = val.ndim
-            if ndim == 0:
-                # is array scalar
-                return dtype
-            layout = numpy_support.map_layout(val)
-            aryty = types.Array(dtype, ndim, layout)
-            return aryty
-
-        elif isinstance(val, numpy.record):
-            return numpy_support.from_dtype(val.dtype)
-
-        # The following are handled in the C version for exact type match
-        # So test these later
-        elif isinstance(val, utils.INT_TYPES):
+        if isinstance(val, utils.INT_TYPES):
+            # Ensure no autoscaling of integer type, to match the
+            # typecode() function in _dispatcher.c.
             return types.int64
-
-        elif isinstance(val, float):
-            return types.float64
-
-        elif isinstance(val, complex):
-            return types.complex128
-
-        elif numpy_support.is_arrayscalar(val):
-            # Array scalar
-            return numpy_support.from_dtype(numpy.dtype(type(val)))
-
-        # Other object
-        else:
-            return getattr(val, "_numba_type_", types.pyobject)
+        tp = self.typingctx.resolve_data_type(val)
+        if tp is None:
+            tp = types.pyobject
+        return tp
 
 
 class Overloaded(_OverloadedBase):
