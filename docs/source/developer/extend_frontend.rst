@@ -2,6 +2,8 @@
 Extending the Numba Frontend
 ============================
 
+.. warning:: The Numba APIs described in this document are not currently guaranteed to be stable.  External packages that rely on these APIs may break with new Numba releases.
+
 Concepts
 ========
 
@@ -12,12 +14,14 @@ values in the function and identify points where types must be coerced.
 Numba Types
 -----------
 
-A Numba type is really a category label for a value that is used by the back-end
-to match appropriate code generators with the values they operate on. All
+A Numba type is really a category label for values that is used by the back-
+end to match appropriate code generators with the values they operate on. All
 Numba types are instances of classes that inherit from ``numba.types.Type``.
 Numba types can be parameterized (for example, arrays and records), in which
 case their Type classes will take constructor arguments defining the
-parameters.
+parameters.  Different instances of a parameterized type usually denote
+distinct types and can trigger different, specialized code generation in the
+backend.
 
 .. note:: In the rest of this document, when we refer to a "type", we mean the Numba type unless we explicitly write "Python type".
 
@@ -45,10 +49,11 @@ Numba needs type signatures for:
   classes, or modules.
 * Global values: Objects (such as functions) accessed from the global 
   namespace.
-* "Intrinsic" functions: Certain Python syntax (like ``a + b``, or 
-  ``iter(o)``) triggers special function calls.  To overload these
-  operations, a type signature for the appropriate function must be
-  registered.
+* Operators and other "implicit" functions: Certain Python syntax 
+  (like ``a + b``, or  ``iter(o)``) triggers special function calls.
+  To overload these operations, a type signature for the appropriate function
+  must be registered.
+* Other entities not described in this document, such as builtin functions.
 
 
 Tasks
@@ -79,12 +84,13 @@ instance of it::
 
     class IntervalType(numba.types.Type):
         def __init__(self):
-            super(IntervalType, self).__init__('Interval')
+            super(IntervalType, self).__init__(name='Interval')
     interval_type = IntervalType()
 
-``interval_type`` can now be used to define types in ``@jit`` decorations::
+``interval_type`` can now be used to declare argument and return types in 
+``@jit`` decorations::
 
-    @jit(bool_(interval_type, numba.types.float32))
+    @jit(numba.types.bool_(interval_type, numba.types.float32))
     def inside(interval, x):
         return interval.lo <= x < interval.hi
 
@@ -133,9 +139,9 @@ access.
 Adding a Function Type Signature
 --------------------------------
 
-In order to use the ``valid_interval`` global function, we need to provide a
-type signature for it.  This is done using a
-``numba.typing.templates.ConcreteTemplate``::
+In order for the Numba type inference engine to recognize the
+``valid_interval`` global function, we need to provide a type signature for
+it.  This is done using a ``numba.typing.templates.ConcreteTemplate``::
 
     from numba.types import bool_, Function
     from numba.targets.registry import target_registry
@@ -161,7 +167,7 @@ the function arguments.  Only positional arguments are supported for function
 types (i.e. no keyword arguments).
 
 
-Overloading an Intrinsic Function
+Overloading Elementary Operations
 ---------------------------------
 
 Suppose we want to add support for a ``+`` operation between two intervals.
@@ -184,10 +190,10 @@ We need to make a ``ConcreteTemplate`` where the key is the string ``"+"``::
 
 Note that unlike adding a function type signature for a global or attribute,
 ``insert_function()`` takes an instance of the template, not an instance of
-``numba.types.Function``.  Templates with the same key can be inserted, and
-each will be checked for a matching function signatures in the order of
-insertion. This is what allows the same key to be overloaded with different
-numbers of arguments and different argument types.
+``numba.types.Function``.  Several templates with the same key can be
+inserted, and each will be checked for a matching function signatures in the
+order of insertion. This is what allows the same key to be overloaded with
+different numbers of arguments and different argument types.
 
 The list of special function keys includes:
 
@@ -212,6 +218,8 @@ Key             Description
 ``getitem``     Get an item (equivalent to ``__getitem__()``)
 ============    ============
 
+These keys come directly from operations in the Numba IR (see :ref:`arch_generate_numba_ir`).
+
 In-place operations (like ``a += b``) are assumed to have the same signature
 as the right-hand side of the expanded form (``a = a + b``).
 
@@ -219,15 +227,16 @@ as the right-hand side of the expanded form (``a = a + b``).
 Organizing Type Signatures with a Registry
 ------------------------------------------
 
-It can be cumbersome to make type information easily portable between targets
-when the templates need to be instantiated with a specific typing context.
-The `numba.typing.templates.Registry` class simplifies this process by collecting
-lists of attribute, global and intrinsic function type signatures that can be
+If you have a lot of type signatures in a module, it can be cumbersome to make
+type information easily portable between targets. The
+``numba.typing.templates.Registry`` class simplifies this process by
+collecting lists of attribute, global and operator type signatures that can be
 installed into a typing context all at once.
 
 A common pattern in the Numba code is to collect all the type information for
 a particular package into a module that begins with::
 
+    from numba.types import bool_, float32
     from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                         signature, Registry)
 
