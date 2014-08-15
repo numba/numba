@@ -104,6 +104,28 @@ class BaseContext(object):
             if ty in types.number_domain:
                 return ty
 
+    def resolve_argument_type(self, val):
+        """
+        Return the numba type of a Python value that is being used
+        as a function argument.  Integer types will all be considered
+        int64, regardless of size.  Numpy arrays will be accepted in
+        "C" or "F" layout.
+
+        Unknown types will be mapped to pyobject.
+        """
+        if isinstance(val, utils.INT_TYPES):
+            # Force all integers to be 64-bit
+            return types.int64
+        elif numpy_support.is_array(val):
+            dtype = numpy_support.from_dtype(val.dtype)
+            layout = numpy_support.map_layout(val)
+            return types.Array(dtype, val.ndim, layout)
+
+        tp = self.resolve_data_type(val)
+        if tp is None:
+            tp = getattr(val, "_numba_type_", types.pyobject)
+        return tp
+
     def resolve_data_type(self, val):
         """
         Return the numba type of a Python value representing data
