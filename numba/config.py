@@ -1,4 +1,5 @@
 from __future__ import print_function, division, absolute_import
+import struct
 import sys
 import os
 import re
@@ -8,6 +9,9 @@ IS_WIN32 = sys.platform.startswith('win32')
 MACHINE_BITS = tuple.__itemsize__ * 8
 IS_32BITS = MACHINE_BITS == 32
 
+
+class NumbaWarning(Warning):
+    pass
 
 def _readenv(name, ctor, default):
     try:
@@ -22,6 +26,12 @@ def _readenv(name, ctor, default):
                           (name, res), RuntimeWarning)
             return default
 
+# Print warnings to screen about function compilation
+#   0 = Numba warnings suppressed (default)
+#   1 = All Numba warnings shown
+WARNINGS = _readenv("NUMBA_WARNINGS", int, 0)
+if WARNINGS == 0:
+    warnings.simplefilter('ignore', NumbaWarning)
 
 # Debug flag to control compiler debug print
 DEBUG = _readenv("NUMBA_DEBUG", int, 0)

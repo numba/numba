@@ -8,7 +8,7 @@ from collections import defaultdict
 import numpy
 import weakref
 
-from . import utils
+from . import npdatetime, utils
 
 
 def _autoincr():
@@ -150,6 +150,36 @@ class Complex(Type):
         if self.__class__ is not other.__class__:
             return NotImplemented
         return self.bitwidth < other.bitwidth
+
+
+class _NPDatetimeBase(Type):
+    """
+    Common base class for numpy.datetime64 and numpy.timedelta64.
+    """
+
+    def __init__(self, unit, *args, **kws):
+        name = '%s(%s)' % (self.type_name, unit)
+        self.unit = unit
+        self.unit_code = npdatetime.DATETIME_UNITS[self.unit]
+        super(_NPDatetimeBase, self).__init__(name, *args, **kws)
+
+    def __lt__(self, other):
+        if self.__class__ is not other.__class__:
+            return NotImplemented
+        # A coarser-grained unit is "smaller", i.e. less precise values
+        # can be represented (but the magnitude of representable values is
+        # also greater...).
+        return self.unit_code < other.unit_code
+
+
+@utils.total_ordering
+class NPTimedelta(_NPDatetimeBase):
+    type_name = 'timedelta64'
+
+@utils.total_ordering
+class NPDatetime(_NPDatetimeBase):
+    type_name = 'datetime64'
+
 
 class Prototype(Type):
     def __init__(self, args, return_type):

@@ -1,16 +1,17 @@
 from __future__ import print_function
+
 import numba.unittest_support as unittest
-from numba import bytecode, interpreter
+from numba import bytecode, interpreter, utils
 from . import usecases
 
 
 def interpret(func):
     bc = bytecode.ByteCode(func=func)
-    print(bc.dump())
+    bc.dump()
 
     interp = interpreter.Interpreter(bytecode=bc)
     interp.interpret()
-    interp.dump()
+    interp.dump(utils.StringIO())
 
     return interp
 

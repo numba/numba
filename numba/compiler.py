@@ -2,6 +2,8 @@ from __future__ import print_function, division, absolute_import
 from pprint import pprint
 from contextlib import contextmanager
 from collections import namedtuple, defaultdict
+import warnings
+import inspect
 
 from numba import (bytecode, interpreter, typing, typeinfer, lowering,
                    objmode, irpasses, utils, config, type_annotations,
@@ -45,6 +47,41 @@ CR_FIELDS = ["typing_context",
 
 
 CompileResult = namedtuple("CompileResult", CR_FIELDS)
+FunctionAttributes = namedtuple("FunctionAttributes",
+    ['name', 'filename', 'lineno'])
+DEFAULT_FUNCTION_ATTRIBUTES = FunctionAttributes('<anonymous>', '<unknown>', 0)
+
+
+def get_function_attributes(func):
+    '''
+    Extract the function attributes from a Python function or object with
+    *py_func* attribute, such as CPUOverloaded.
+
+    Returns an instance of FunctionAttributes.
+    '''
+    if hasattr(func, 'py_func'):
+        func = func.py_func  # This is a Overload object
+
+    name, filename, lineno = DEFAULT_FUNCTION_ATTRIBUTES
+    try:
+        name = func.__name__
+    except AttributeError:
+        pass  # this "function" object isn't really a function
+
+    try:
+        possible_filename = inspect.getsourcefile(func)
+        # Sometimes getsourcefile returns null
+        if possible_filename is not None:
+            filename = possible_filename
+    except TypeError:
+        pass  # built-in function, or other object unsupported by inspect
+
+    try:
+        lines, lineno = inspect.getsourcelines(func)
+    except (IOError, TypeError):
+        pass  # unable to read source code for function
+
+    return FunctionAttributes(name, filename, lineno)
 
 
 def compile_result(**kws):
@@ -103,12 +140,17 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
     bc = bytecode.ByteCode(func=func)
     if config.DUMP_BYTECODE:
         print(bc.dump())
+    func_attr = get_function_attributes(func)
     return compile_bytecode(typingctx, targetctx, bc, args,
-                            return_type, flags, locals)
+                            return_type, flags, locals,
+                            func_attr=func_attr)
 
 
 def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
-                     locals, lifted=()):
+                     locals, lifted=(),
+                     func_attr=DEFAULT_FUNCTION_ATTRIBUTES):
+    ### Front-end: Analyze bytecode, generate Numba IR, infer types
+
     interp = translate_stage(bc)
     nargs = len(interp.argspec.args)
     if len(args) > nargs:
@@ -132,9 +174,20 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
                                                                    return_type,
                                                                    locals)
 
+        if status.fail_reason is not None:
+            warnings.warn_explicit('Function "%s" failed type inference: %s'
+                          % (func_attr.name, status.fail_reason),
+                          config.NumbaWarning,
+                          func_attr.filename, func_attr.lineno)
+
         if not status.use_python_mode:
             with _fallback_context(status):
                 legalize_return_type(return_type, interp, targetctx)
+            if status.fail_reason is not None:
+                warnings.warn_explicit('Function "%s" has invalid return type: %s'
+                                       % (func_attr.name, status.fail_reason),
+                                       config.NumbaWarning,
+                                       func_attr.filename, func_attr.lineno)
 
     if status.use_python_mode and flags.enable_looplift:
         assert not lifted
@@ -158,18 +211,31 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
             # Some loops were extracted
             cres = compile_bytecode(typingctx, targetctx, entry, args,
                                     return_type, outer_flags, locals,
-                                    lifted=tuple(loops))
+                                    lifted=tuple(loops),
+                                    func_attr=func_attr)
             return cres
+
+    if status.use_python_mode:
+        # Fallback typing: everything is a python object
+        typemap = defaultdict(lambda: types.pyobject)
+        calltypes = defaultdict(lambda: types.pyobject)
+        return_type = types.pyobject
+
+    type_annotation = type_annotations.TypeAnnotation(interp=interp,
+                                                      typemap=typemap,
+                                                      calltypes=calltypes,
+                                                      lifted=lifted)
+    if config.ANNOTATE:
+        print("ANNOTATION".center(80, '-'))
+        print(type_annotation)
+        print('=' * 80)
+
+    ### Back-end: Generate LLVM IR from Numba IR, compile to machine code
 
     if status.use_python_mode:
         # Object mode compilation
         func, lmod, lfunc, fndesc = py_lowering_stage(targetctx, interp,
                                                              flags.no_compile)
-        typemap = defaultdict(lambda: types.pyobject)
-        calltypes = defaultdict(lambda: types.pyobject)
-
-        return_type = types.pyobject
-
         if len(args) != nargs:
             # append missing
             args = tuple(args) + (types.pyobject,) * (nargs - len(args))
@@ -181,15 +247,6 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
                                                                  return_type,
                                                                  calltypes,
                                                                  flags.no_compile)
-
-    type_annotation = type_annotations.TypeAnnotation(interp=interp,
-                                                      typemap=typemap,
-                                                      calltypes=calltypes,
-                                                      lifted=lifted)
-    if config.ANNOTATE:
-        print("ANNOTATION".center(80, '-'))
-        print(type_annotation)
-        print('=' * 80)
 
     signature = typing.signature(return_type, *args)
 
@@ -205,6 +262,16 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
                         objectmode=status.use_python_mode,
                         lifted=lifted,
                         fndesc=fndesc,)
+
+    # Warn if compiled function in object mode and force_pyobject not set
+    if status.use_python_mode and not flags.force_pyobject:
+        if len(lifted) > 0:
+            warn_msg = 'Function "%s" was compiled in object mode without forceobj=True, but has lifted loops.' % func_attr.name,
+        else:
+            warn_msg = 'Function "%s" was compiled in object mode without forceobj=True.' % func_attr.name,
+        warnings.warn_explicit(warn_msg, config.NumbaWarning,
+                               func_attr.filename, func_attr.lineno)
+
     return cr
 
 
