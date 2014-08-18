@@ -189,13 +189,6 @@ class PyCallWrapper(object):
             strings.append(self.make_const_string(k))
 
         strings.append(Constant.null(stringtype))
-
         kwlist = Constant.array(stringtype, strings)
-
-        gv = self.module.add_global_variable(kwlist.type, name=".kwlist")
-        gv.global_constant = True
-        gv.initializer = kwlist
-        gv.linkage = lc.LINKAGE_INTERNAL
-
-        return Constant.bitcast(gv, Type.pointer(stringtype))
-
+        kwlist = cgutils.global_constant(self.module, ".kwlist", kwlist)
+        return Constant.bitcast(kwlist, Type.pointer(stringtype))

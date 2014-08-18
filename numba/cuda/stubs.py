@@ -5,7 +5,7 @@ from __future__ import print_function, absolute_import, division
 import operator
 import numpy
 import llvm.core as lc
-from numba import types, ir, typing, macro, dispatcher
+from numba import types, ir, typing, macro
 from .cudadrv import nvvm
 
 
@@ -203,7 +203,10 @@ class local(Stub):
 
 def const_array_like(ndarray):
     fname = "ptx.cmem.arylike"
-    aryty = dispatcher.Overloaded.typeof_pyval(ndarray)
+
+    from .descriptor import CUDATargetDesc
+    aryty = CUDATargetDesc.typingctx.resolve_argument_type(ndarray)
+
     sig = typing.signature(aryty, aryty)
     return ir.Intrinsic(fname, sig, args=[ndarray])
 

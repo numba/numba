@@ -1,10 +1,12 @@
 from __future__ import print_function, division, absolute_import
 
-from . import types, config
+from . import types, config, npdatetime
 from .targets import ufunc_db
 
 import numpy
+
 import re
+
 
 version = tuple(map(int, numpy.__version__.split('.')[:2]))
 int_divbyzero_returns_zero = config.PYVERSION <= (3, 0)
@@ -29,41 +31,66 @@ FROM_DTYPE = {
     numpy.dtype('complex128'): types.complex128,
 }
 
-
-re_typestr = re.compile(r'[<>=\|]([a-z])(\d+)?', re.I)
-
+re_typestr = re.compile(r'[<>=\|]([a-z])(\d+)?$', re.I)
+re_datetimestr = re.compile(r'[<>=\|]([mM])8?(\[([a-z]+)\])?$', re.I)
 
 sizeof_unicode_char = numpy.dtype('U1').itemsize
 
 
+def _from_str_dtype(dtype):
+    m = re_typestr.match(dtype.str)
+    if not m:
+        raise NotImplementedError(dtype)
+    groups = m.groups()
+    typecode = groups[0]
+    if typecode == 'U':
+        # unicode
+        if dtype.byteorder not in '=|':
+            raise NotImplementedError("Does not support non-native "
+                                      "byteorder")
+        count = dtype.itemsize // sizeof_unicode_char
+        assert count == int(groups[1]), "Unicode char size mismatch"
+        return types.UnicodeCharSeq(count)
+
+    elif typecode == 'S':
+        # char
+        count = dtype.itemsize
+        assert count == int(groups[1]), "Char size mismatch"
+        return types.CharSeq(count)
+
+    else:
+        raise NotImplementedError(dtype)
+
+
+def _from_datetime_dtype(dtype):
+    m = re_datetimestr.match(dtype.str)
+    if not m:
+        raise NotImplementedError(dtype)
+    groups = m.groups()
+    typecode = groups[0]
+    unit = groups[2] or ''
+    if typecode == 'm':
+        return types.NPTimedelta(unit)
+    elif typecode == 'M':
+        return types.NPDatetime(unit)
+    else:
+        raise NotImplementedError(dtype)
+
+
 def from_dtype(dtype):
+    """
+    Return a Numba Type instance corresponding to the given Numpy *dtype*.
+    NotImplementedError is raised on unsupported Numpy dtypes.
+    """
     if dtype.fields is None:
         try:
-            basetype = FROM_DTYPE[dtype]
+            return FROM_DTYPE[dtype]
         except KeyError:
-            m = re_typestr.match(dtype.str)
-            if not m:
-                raise NotImplementedError(dtype)
-            groups = m.groups()
-            typecode = groups[0]
-            if typecode == 'U':
-                # unicode
-                if dtype.byteorder not in '=|':
-                    raise NotImplementedError("Does not support non-native "
-                                              "byteorder")
-                count = dtype.itemsize // sizeof_unicode_char
-                assert count == int(groups[1]), "Unicode char size mismatch"
-                return types.UnicodeCharSeq(count)
-
-            elif typecode == 'S':
-                # char
-                count = dtype.itemsize
-                assert count == int(groups[1]), "Char size mismatch"
-                return types.CharSeq(count)
-
+            if dtype.char in 'SU':
+                return _from_str_dtype(dtype)
+            if dtype.char in 'mM' and npdatetime.NPDATETIME_SUPPORTED:
+                return _from_datetime_dtype(dtype)
             raise NotImplementedError(dtype)
-
-        return basetype
     else:
         return from_struct_dtype(dtype)
 
@@ -73,7 +100,16 @@ def is_arrayscalar(val):
 
 
 def map_arrayscalar_type(val):
-    return from_dtype(numpy.dtype(type(val)))
+    if isinstance(val, numpy.generic):
+        # We can't blindly call numpy.dtype() as it loses information
+        # on some types, e.g. datetime64 and timedelta64.
+        dtype = val.dtype
+    else:
+        try:
+            dtype = numpy.dtype(type(val))
+        except TypeError:
+            raise NotImplementedError("no corresponding numpy dtype for %r" % type(val))
+    return from_dtype(dtype)
 
 
 def is_array(val):

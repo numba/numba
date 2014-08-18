@@ -92,6 +92,29 @@ class TestTypeConv(unittest.TestCase):
         self.assertEqual(tm.select_overload(sig, ovs, allow_unsafe=False), 1)
         self.assertEqual(tm.select_overload(sig, ovs, allow_unsafe=True), 1)
 
+    def test_overload3(self):
+        # Promotes should be preferred over safe converts
+        tm = rules.default_type_manager
+
+        i32 = types.int32
+        i64 = types.int64
+        f64 = types.float64
+
+        sig = (i32, i32)
+        ovs = [
+            # Two promotes
+            (i64, i64),
+            # Two safe converts
+            (f64, f64),
+        ]
+        self.assertEqual(tm.select_overload(sig, ovs, allow_unsafe=False), 0)
+        self.assertEqual(tm.select_overload(sig, ovs, allow_unsafe=True), 0)
+
+        # The same in reverse order
+        ovs.reverse()
+        self.assertEqual(tm.select_overload(sig, ovs, allow_unsafe=False), 1)
+        self.assertEqual(tm.select_overload(sig, ovs, allow_unsafe=True), 1)
+
 
 if __name__ == '__main__':
     unittest.main()

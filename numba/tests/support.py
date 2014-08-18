@@ -3,6 +3,7 @@ Assorted utilities for use in tests.
 """
 
 import contextlib
+import math
 
 import numpy as np
 
@@ -21,6 +22,10 @@ force_pyobj_flags = Flags()
 force_pyobj_flags.set("force_pyobject")
 
 no_pyobj_flags = Flags()
+
+
+skip_on_numpy_16 = unittest.skipIf(np.__version__.startswith("1.6."),
+                                   "test requires Numpy 1.7 or later")
 
 
 class CompilationCache(object):
@@ -67,7 +72,7 @@ class TestCase(unittest.TestCase):
             (LoweringError, TypingError, TypeError, NotImplementedError)) as cm:
             yield cm
 
-    _exact_typesets = [(bool,), utils.INT_TYPES, (str,), (utils.unicode),]
+    _exact_typesets = [(bool, np.bool_), utils.INT_TYPES, (str,), (utils.text_type),]
     _approx_typesets = [(float,), (complex,)]
 
     def assertPreciseEqual(self, first, second, prec='exact', msg=None):
@@ -104,6 +109,19 @@ class TestCase(unittest.TestCase):
                 # on regular unittest comparison.
                 self.assertIs(first.__class__, second.__class__)
                 exact_comparison = True
+
+        # If a Numpy scalar, check the dtype is exactly the same too
+        # (required for datetime64 and timedelta64).
+        if hasattr(first, 'dtype') and hasattr(second, 'dtype'):
+            self.assertEqual(first.dtype, second.dtype)
+
+        try:
+            if math.isnan(first) and math.isnan(second):
+                # The NaNs will compare unequal, skip regular comparison
+                return
+        except TypeError:
+            # Not floats.
+            pass
 
         if not exact_comparison and prec != 'exact':
             if prec == 'single':

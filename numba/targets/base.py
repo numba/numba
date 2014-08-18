@@ -10,9 +10,12 @@ from numba import _dynfunc, types, utils, cgutils, typing, numpy_support, errcod
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, python_attr_impl,
                                     builtin_registry, impl_attribute,
-                                    struct_registry)
-from numba.targets import arrayobj, builtins, iterators, rangeobj
-
+                                    struct_registry, type_registry)
+from . import arrayobj, builtins, iterators, rangeobj
+try:
+    from . import npdatetime
+except NotImplementedError:
+    pass
 
 
 GENERIC_POINTER = Type.pointer(Type.int(8))
@@ -165,7 +168,7 @@ class BaseContext(object):
 
     def insert_class(self, cls, attrs):
         clsty = types.Object(cls)
-        for name, vtype in utils.dict_iteritems(attrs):
+        for name, vtype in utils.iteritems(attrs):
             imp = python_attr_impl(clsty, name, vtype)
             self.attrs[imp.key] = imp
 
@@ -236,10 +239,7 @@ class BaseContext(object):
             if gv.name == name and gv.type.pointee == text.type:
                 break
         else:
-            gv = mod.add_global_variable(text.type, name=name)
-            gv.global_constant = True
-            gv.initializer = text
-            gv.linkage = lc.LINKAGE_INTERNAL
+            gv = cgutils.global_constant(mod, name, text)
         return Constant.bitcast(gv, stringtype)
 
     def get_arguments(self, func):
@@ -271,6 +271,13 @@ class BaseContext(object):
 
         Returns None if it is an opaque pointer
         """
+        try:
+            fac = type_registry.match(ty)
+        except KeyError:
+            pass
+        else:
+            return fac(self, ty)
+
         if (isinstance(ty, types.Dummy) or
                 isinstance(ty, types.Module) or
                 isinstance(ty, types.Function) or
@@ -886,14 +893,7 @@ class BaseContext(object):
 
         lldtype = values[0].type
         consts = Constant.array(lldtype, values)
-
-        module = cgutils.get_module(builder)
-
-        data = module.add_global_variable(consts.type, name=".const.array"
-                                                            ".data")
-        data.linkage = lc.LINKAGE_INTERNAL
-        data.global_constant = True
-        data.initializer = consts
+        data = cgutils.global_constant(builder, ".const.array.data", consts)
 
         # Handle shape
         llintp = self.get_value_type(types.intp)

@@ -156,7 +156,7 @@ class BaseLower(object):
     def __init__(self, context, fndesc, interp):
         self.context = context
         self.fndesc = fndesc
-        self.blocks = utils.SortedMap(utils.dict_iteritems(interp.blocks))
+        self.blocks = utils.SortedMap(utils.iteritems(interp.blocks))
 
         # Initialize LLVM
         self.module = Module.new("module.%s" % self.fndesc.unique_name)
