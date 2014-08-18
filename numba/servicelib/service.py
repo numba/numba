@@ -5,7 +5,6 @@ This is implemented as a cooperative concurrent task.
 from __future__ import absolute_import, print_function, division
 
 import functools
-from numba.utils import iter_next
 
 
 class Service(object):
@@ -14,7 +13,7 @@ class Service(object):
         self.enabled = True
         self.arg = arg
         self._task = self.process(self.arg)
-        iter_next(self._task)
+        next(self._task)
 
     def service(self):
         """
@@ -28,7 +27,7 @@ class Service(object):
             try:
                 # Prevent recursion
                 self.enabled = False
-                iter_next(self._task)
+                next(self._task)
             finally:
                 self.enabled = enable
 

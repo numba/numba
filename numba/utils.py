@@ -15,12 +15,18 @@ except ImportError:
 
 import numpy
 
+from .six import *
 from numba.config import PYVERSION, MACHINE_BITS
 
 
-INT_TYPES = (int,)
-if PYVERSION < (3, 0):
-    INT_TYPES += (long,)
+IS_PY3 = PYVERSION >= (3, 0)
+
+if IS_PY3:
+    INT_TYPES = (int,)
+    longint = int
+else:
+    INT_TYPES = (int, long)
+    longint = long
 
 
 _shutting_down = False
@@ -216,62 +222,6 @@ def benchmark(func, maxsec=1):
 RANGE_ITER_OBJECTS = (builtins.range,)
 if PYVERSION < (3, 0):
     RANGE_ITER_OBJECTS += (builtins.xrange,)
-
-
-# Other common python2/3 adaptors
-# Copied from Blaze which borrowed from six
-
-IS_PY3 = PYVERSION >= (3, 0)
-
-if IS_PY3:
-    def dict_iteritems(d):
-        return d.items().__iter__()
-
-    def dict_itervalues(d):
-        return d.values().__iter__()
-
-    def dict_values(d):
-        return list(d.values())
-
-    def dict_keys(d):
-        return list(d.keys())
-
-    def iter_next(it):
-        return it.__next__()
-
-    def func_globals(f):
-        return f.__globals__
-
-    longint = int
-
-    unicode = str
-
-    StringIO = io.StringIO
-
-else:
-    from cStringIO import StringIO
-
-    def dict_iteritems(d):
-        return d.iteritems()
-
-    def dict_itervalues(d):
-        return d.itervalues()
-
-    def dict_values(d):
-        return d.values()
-
-    def dict_keys(d):
-        return d.keys()
-
-    def iter_next(it):
-        return it.next()
-
-    def func_globals(f):
-        return f.func_globals
-
-    longint = long
-
-    unicode = unicode
 
 
 # Backported from Python 3.4: functools.total_ordering()

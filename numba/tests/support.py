@@ -68,7 +68,7 @@ class TestCase(unittest.TestCase):
             (LoweringError, TypingError, TypeError, NotImplementedError)) as cm:
             yield cm
 
-    _exact_typesets = [(bool, np.bool_), utils.INT_TYPES, (str,), (utils.unicode),]
+    _exact_typesets = [(bool, np.bool_), utils.INT_TYPES, (str,), (utils.text_type),]
     _approx_typesets = [(float,), (complex,)]
 
     def assertPreciseEqual(self, first, second, prec='exact', msg=None):
