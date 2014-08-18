@@ -10,7 +10,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba import config, numpy_support, types
-from .support import TestCase
+from .support import TestCase, skip_on_numpy_16
 
 
 class TestFromDtype(TestCase):
@@ -73,6 +73,7 @@ class TestFromDtype(TestCase):
         self.assertEqual(f(np.dtype('a11')), types.CharSeq(11))
         self.assertEqual(f(np.dtype('U12')), types.UnicodeCharSeq(12))
 
+    @skip_on_numpy_16
     def test_timedelta_types(self):
         """
         Test from_dtype() with the timedelta types.
@@ -127,12 +128,14 @@ class ValueTypingTestBase(object):
             # This ensures the unit hasn't been lost
             self.assertEqual(tp, nb_type(unit))
 
+    @skip_on_numpy_16
     def check_datetime_values(self, func):
         """
         Test *func*() with np.datetime64 values.
         """
         self._base_check_datetime_values(func, np.datetime64, types.NPDatetime)
 
+    @skip_on_numpy_16
     def check_timedelta_values(self, func):
         """
         Test *func*() with np.timedelta64 values.

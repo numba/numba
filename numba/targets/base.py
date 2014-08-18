@@ -11,8 +11,11 @@ from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, python_attr_impl,
                                     builtin_registry, impl_attribute,
                                     struct_registry, type_registry)
-from numba.targets import arrayobj, builtins, iterators, npdatetime, rangeobj
-
+from . import arrayobj, builtins, iterators, rangeobj
+try:
+    from . import npdatetime
+except NotImplementedError:
+    pass
 
 
 GENERIC_POINTER = Type.pointer(Type.int(8))

@@ -7,6 +7,9 @@ of seconds) are not supported.
 
 import numpy as np
 
+# Numpy 1.6 has broken datetime64 support
+NPDATETIME_SUPPORTED = not np.__version__.startswith('1.6.')
+
 
 DATETIME_UNITS = {
     'Y': 0,   # Years
@@ -27,8 +30,8 @@ DATETIME_UNITS = {
 }
 
 # Numpy's special "Not a Time" value (should be equal to -2**63)
-NAT = np.timedelta64('nat').astype(np.int64)
-
+if NPDATETIME_SUPPORTED:
+    NAT = np.timedelta64('nat').astype(np.int64)
 
 # NOTE: numpy has several inconsistent functions for timedelta casting:
 # - can_cast_timedelta64_{metadata,units}() disallows "safe" casting
