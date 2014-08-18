@@ -7,7 +7,7 @@ Python builtins
 from __future__ import print_function, absolute_import, division 
 
 
-from .. import cgutils, types
+from .. import cgutils, typing, types
 from llvm import core as lc
 
 #
@@ -175,4 +175,33 @@ def np_int_truediv_impl(context, builder, sig, args):
     return builder.fdiv(num,den)
 
 
-    
+########################################################################    
+# floor div kernels
+
+def np_real_floor_div_impl(context, builder, sig, args):
+    res = np_real_div_impl(context, builder, sig, args)
+    s = typing.signature(sig.return_type, sig.return_type)
+    return np_real_floor_impl(context, builder, s, (res,))
+
+
+def np_complex_floor_div_impl(context, builder, sig, args):
+    pass
+
+
+def np_real_floor_impl(context, builder, sig, args):
+    assert len(args) == 1
+    assert len(sig.args) == 1
+    ty = sig.args[0]
+    assert ty == sig.return_type, "must have homogeneous types"
+    mod = cgutils.get_module(builder)
+    if ty == types.float64:
+        fnty = lc.Type.function(lc.Type.double(), [lc.Type.double()])
+        fn = mod.get_or_insert_function(fnty, name="numba.npymath.floor")
+    elif ty == types.float32:
+        fnty = lc.Type.function(lc.Type.float(), [lc.Type.float()])
+        fn = mod.get_or_insert_function(fnty, name="numba.npymath.floorf")
+    else:
+        raise LoweringError("No floor function for real type {0}".format(str(ty)))
+
+    return builder.call(fn, args)
+

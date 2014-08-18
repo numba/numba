@@ -19,6 +19,7 @@ struct npy_math_entry {
     { "numba.npymath." #name, (void*) npy_##name }
 
 struct npy_math_entry exports[] = {
+    /* double functions */
     NPYMATH_SYMBOL(sin),
     NPYMATH_SYMBOL(cos),
     NPYMATH_SYMBOL(tan),
@@ -59,6 +60,8 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL(rint),
     NPYMATH_SYMBOL(fabs),
 
+    /* double functions */
+    NPYMATH_SYMBOL(floorf),
 
     /* complex functions */
     NPYMATH_SYMBOL(cabs),

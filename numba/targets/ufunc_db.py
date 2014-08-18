@@ -149,3 +149,20 @@ def _fill_ufunc_db(ufunc_db):
         'FF->F': npyfuncs.np_complex_div_impl,
         'DD->D': npyfuncs.np_complex_div_impl,
     }
+
+    ufunc_db[np.floor_divide] = {
+        'bb->b': npyfuncs.np_int_sdiv_impl,
+        'BB->B': npyfuncs.np_int_udiv_impl,
+        'hh->h': npyfuncs.np_int_sdiv_impl,
+        'HH->H': npyfuncs.np_int_udiv_impl,
+        'ii->i': npyfuncs.np_int_sdiv_impl,
+        'II->I': npyfuncs.np_int_udiv_impl,
+        'll->l': npyfuncs.np_int_sdiv_impl,
+        'LL->L': npyfuncs.np_int_udiv_impl,
+        'qq->q': npyfuncs.np_int_sdiv_impl,
+        'QQ->Q': npyfuncs.np_int_udiv_impl,
+        'ff->f': npyfuncs.np_real_floor_div_impl,
+        'dd->d': npyfuncs.np_real_floor_div_impl,
+        'FF->F': npyfuncs.np_complex_floor_div_impl,
+        'DD->D': npyfuncs.np_complex_floor_div_impl,
+    }
