@@ -13,7 +13,7 @@ import numpy as np
 import numba.unittest_support as unittest
 from numba.typeinfer import TypingError
 from numba import config, jit, npdatetime, types
-from .support import TestCase
+from .support import TestCase, skip_on_numpy_16
 
 
 date_units = ('Y', 'M')
@@ -65,6 +65,7 @@ def abs_usecase(x):
     return abs(x)
 
 
+@skip_on_numpy_16
 class TestModuleHelpers(TestCase):
     """
     Test the various helpers in numba.npdatetime.
@@ -173,6 +174,7 @@ TD = np.timedelta64
 DT = np.datetime64
 
 
+@skip_on_numpy_16
 class TestTimedeltaArithmetic(TestCase):
 
     jitargs = dict(forceobj=True)
@@ -409,11 +411,13 @@ class TestTimedeltaArithmetic(TestCase):
         check(TD('NaT', 'ms'))
 
 
+@skip_on_numpy_16
 class TestTimedeltaArithmeticNoPython(TestTimedeltaArithmetic):
 
     jitargs = dict(nopython=True)
 
 
+@skip_on_numpy_16
 class TestDatetimeArithmetic(TestCase):
 
     jitargs = dict(forceobj=True)
@@ -617,11 +621,13 @@ class TestDatetimeArithmetic(TestCase):
                 check_lt(b - np.timedelta64(1, unit), a, True)
 
 
+@skip_on_numpy_16
 class TestDatetimeArithmeticNoPython(TestDatetimeArithmetic):
 
     jitargs = dict(nopython=True)
 
 
+@skip_on_numpy_16
 class TestMetadataScalingFactor(TestCase):
     """
     Tests than non-1 scaling factors are not supported in datetime64

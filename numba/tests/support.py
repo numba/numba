@@ -24,6 +24,10 @@ force_pyobj_flags.set("force_pyobject")
 no_pyobj_flags = Flags()
 
 
+skip_on_numpy_16 = unittest.skipIf(np.__version__.startswith("1.6."),
+                                   "test requires Numpy 1.7 or later")
+
+
 class CompilationCache(object):
     """
     A cache of compilation results for various signatures and flags.
