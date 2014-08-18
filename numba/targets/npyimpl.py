@@ -12,9 +12,9 @@ from . import builtins
 from .imputils import implement, Registry
 from .. import typing, types, cgutils, numpy_support
 from ..config import PYVERSION
-from ..numpy_support import (ufunc_find_matching_loop,
-                             numpy_letter_types_to_numba_types,
-                             numba_types_to_numpy_letter_types)
+from ..numpy_support import ufunc_find_matching_loop
+from .ufunc_db import ufunc_db
+
 registry = Registry()
 register = registry.register
 
@@ -248,7 +248,27 @@ def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,
 
 # Kernels are the code to be executed inside the multidimensional loop.
 class _Kernel(object):
-    pass
+    def __init__(self, context, builder, outer_sig):
+        self.context = context
+        self.builder = builder
+        self.outer_sig = outer_sig
+
+    def cast(self, val, fromty, toty):
+        """Numpy implements some different cast semantics that are different
+        from standard Python (for example, it does allow casting from
+        complex to float. This function acts as a patched cast to take
+        that into account.
+        """
+        if fromty in types.complex_domain and toty not in types.complex_domain:
+            # attempt conversion of the real part to the specified type.
+            # note that NumPy issues a warning in this kind of conversions
+            newty = fromty.underlying_float
+            attr = self.context.get_attribute(val, fromty, 'real')
+            val = attr(self.context, self.builder, fromty, val, 'real')
+            fromty = newty
+            # let the regular cast do the rest...
+
+        return self.context.cast(self.builder, val, fromty, toty)
 
 
 def _function_with_cast(op, inner_sig):
@@ -264,30 +284,27 @@ def _function_with_cast(op, inner_sig):
             inner_sig is the inner type signature (the signature of the
                       operation itself)
             """
-            self.context = context
-            self.builder = builder
+            super(_KernelImpl, self).__init__(context, builder, outer_sig)
             self.fnwork = context.get_function(op, inner_sig)
             self.inner_sig = inner_sig
-            self.outer_sig = outer_sig
 
         def generate(self, *args):
             # convert args from the ufunc types to the one of the
             # kernel operation
-            cast_args = [self.context.cast(self.builder, val, inty, outy)
+            cast_args = [self.cast(val, inty, outy)
                          for val, inty, outy in zip(args, self.outer_sig.args,
                                                     self.inner_sig.args)]
             # perform the operation
             res = self.fnwork(self.builder, cast_args)
             # return the result converted to the type of the ufunc
             # operation
-            return self.context.cast(self.builder, res,
-                                     self.inner_sig.return_type,
-                                     self.outer_sig.return_type)
+            return self.cast(res, self.inner_sig.return_type,
+                             self.outer_sig.return_type)
 
     return _KernelImpl
 
 
-def _dict_of_kernels_function(ufunc, dict_of_kernels):
+def _ufunc_db_function(ufunc):
     """Use the ufunc loop type information to select the code generation
     function from the table provided by the dict_of_kernels. The dict
     of kernels maps the loop identifier to a function with the
@@ -311,33 +328,26 @@ def _dict_of_kernels_function(ufunc, dict_of_kernels):
 
     class _KernelImpl(_Kernel):
         def __init__(self, context, builder, outer_sig):
-            self.context = context
-            self.builder = builder
-            letter_arg_types = numba_types_to_numpy_letter_types(
-                outer_sig.args[0:ufunc.nin])
-            loop = ufunc_find_matching_loop(ufunc, letter_arg_types)
-            letter_inner_sig = loop[-ufunc.nout:] + loop[:ufunc.nin]
-            inner_sig_types = numpy_letter_types_to_numba_types(letter_inner_sig)
-            self.fn = dict_of_kernels.get(loop, None)
-            self.inner_sig = typing.signature(*inner_sig_types)
-            self.outer_sig = outer_sig
+            super(_KernelImpl, self).__init__(context, builder, outer_sig)
+            loop = ufunc_find_matching_loop(
+                ufunc, outer_sig.args + (outer_sig.return_type,))
+            self.fn = ufunc_db[ufunc].get(loop.ufunc_sig)
+            self.inner_sig = typing.signature(
+                *(loop.outputs + loop.inputs))
 
             if self.fn is None:
                 msg = "Don't know how to lower ufunc '{0}' for loop '{1}'"
                 raise NotImplementedError(msg.format(ufunc.__name__, loop))
 
         def generate(self, *args):
-            ctx = self.context
-            bld = self.builder
             isig = self.inner_sig
             osig = self.outer_sig
 
-            cast_args = [ctx.cast(bld, val, inty, outty)
+            cast_args = [self.cast(val, inty, outty)
                          for val, inty, outty in zip(args, osig.args,
                                                      isig.args)]
-            res = self.fn(ctx, bld, isig, cast_args)
-            return self.context.cast(bld, res, isig.return_type,
-                                     osig.return_type)
+            res = self.fn(self.context, self.builder, isig, cast_args)
+            return self.cast(res, isig.return_type, osig.return_type)
 
     return _KernelImpl
 
@@ -357,109 +367,27 @@ def _homogeneous_function(op, alias=None):
     """
     class _KernelImpl(_Kernel):
         def __init__(self, context, builder, outer_sig):
+            super(_KernelImpl, self).__init__(context, builder, outer_sig)
             ufunc = alias if alias is not None else op
-            self.context = context
-            self.builder = builder
-            letter_arg_types = numba_types_to_numpy_letter_types(
-                outer_sig.args[0:ufunc.nin])
-            self.loop = ufunc_find_matching_loop(ufunc, letter_arg_types)
-            self.loop_in_types = numpy_letter_types_to_numba_types(
-                self.loop[:ufunc.nin])
-            self.loop_out_types = numpy_letter_types_to_numba_types(
-                self.loop[-ufunc.nout:])
+
+            self.loop = ufunc_find_matching_loop(
+                ufunc, outer_sig.args + (outer_sig.return_type,))
             # only one output supported for now.
-            assert(len(self.loop_out_types) == 1)
-            self.outer_sig = outer_sig
+            assert(len(self.loop.outputs) == 1)
 
         def generate(self, *args):
-            inner_sig = typing.signature(self.loop_out_types[0],
-                                         *self.loop_in_types)
+            inner_sig = typing.signature(self.loop.outputs[0],
+                                         *self.loop.inputs)
             fn = self.context.get_function(op, inner_sig)
-            cast_args = [self.context.cast(self.builder, val, inty, outty)
+            cast_args = [self.cast(val, inty, outty)
                          for val, inty, outty in zip(args, self.outer_sig.args,
-                                                     self.loop_in_types)]
+                                                     self.loop.inputs)]
             res = fn(self.builder, cast_args)
-            return self.context.cast(self.builder, res, self.loop_out_types[0],
-                                     self.outer_sig.return_type)
+            return self.cast(res, self.loop.outputs[0],
+                             self.outer_sig.return_type)
 
     return _KernelImpl
 
-
-def _division(ufunc, operator):
-    """A kernel for division. It supports three kinds of division:
-    operator is either '/' for true_division, '//' for floor_division
-    or '/?' for python2 legacy divide
-    """
-    class _KernelImpl(_Kernel):
-        def __init__(self, context, builder, outer_sig):
-            self.context = context
-            self.builder = builder
-            letter_arg_types = numba_types_to_numpy_letter_types(
-                outer_sig.args[0:ufunc.nin])
-            self.loop = ufunc_find_matching_loop(ufunc, letter_arg_types)
-            self.loop_in_types = numpy_letter_types_to_numba_types(
-                self.loop[:ufunc.nin])
-            self.loop_out_types = numpy_letter_types_to_numba_types(
-                self.loop[-ufunc.nout:])
-            self.outer_sig = outer_sig
-
-        def generate(self,*args):
-            assert len(args) == 2 # numerator and denominator
-            builder=self.builder
-            context=self.context
-            tyinputs = self.outer_sig.args
-            tyout = self.outer_sig.return_type
-            tyout_llvm = context.get_data_type(tyout)
-            inner_sig = typing.signature(self.loop_out_types[0],
-                                         *self.loop_in_types)
-            fn = context.get_function(operator, inner_sig)
-            num, den = args
-
-            iszero = cgutils.is_scalar_zero(builder, den)
-            with cgutils.ifelse(builder, iszero, expect=False) as (then, orelse):
-                with then:
-                    # Divide by zero
-                    if ((tyinputs[0] in types.real_domain or
-                         tyinputs[1] in types.real_domain) or
-                        not numpy_support.int_divbyzero_returns_zero) or \
-                        operator=='/':
-                        # If num is float and is 0 also, return Nan; else
-                        # return Inf
-                        outltype = context.get_data_type(types.float64)
-                        shouldretnan = cgutils.is_scalar_zero(builder, num)
-                        nan = Constant.real(outltype, float("nan"))
-                        inf = Constant.real(outltype, float("inf"))
-                        if tyinputs[0] not in types.unsigned_domain:
-                            neginf = Constant.real(outltype, -float("inf"))
-                            is_num_negative = cgutils.is_scalar_neg(builder, num)
-                            inf = builder.select(is_num_negative, neginf, inf)
-
-                        tempres = builder.select(shouldretnan, nan, inf)
-                        res_then = context.cast(builder, tempres, types.float64,
-                                                tyout)
-                    elif tyout in types.signed_domain and \
-                            not numpy_support.int_divbyzero_returns_zero:
-                        res_then = Constant.int(tyout_llvm,
-                                                0x1 << (den.type.width-1))
-                    else:
-                        res_then = Constant.null(tyout_llvm)
-                    bb_then = builder.basic_block
-                with orelse:
-                    # Normal
-                    cast_args = [self.context.cast(self.builder, val, inty,
-                                                   outty)
-                                 for val, inty, outty
-                                 in zip(args, self.outer_sig.args,
-                                        self.loop_in_types)]
-                    tempres = fn(builder, cast_args)
-                    res_else = context.cast(builder, tempres,
-                                            self.loop_out_types[0], tyout)
-                    bb_else = builder.basic_block
-            out = builder.phi(tyout_llvm)
-            out.add_incoming(res_then, bb_then)
-            out.add_incoming(res_else, bb_else)
-            return out
-    return _KernelImpl
 
 ################################################################################
 # Helper functions that register the ufuncs
@@ -512,90 +440,6 @@ _float_unary_sig = typing.signature(types.float64, types.float64)
 _float_binary_sig = typing.signature(types.float64, types.float64,
                                      types.float64)
 
-_neg_loop_dict = {
-    '?->?': builtins.number_not_impl,
-    'b->b': builtins.int_negate_impl,
-    'B->B': builtins.int_negate_impl,
-    'h->h': builtins.int_negate_impl,
-    'H->H': builtins.int_negate_impl,
-    'i->i': builtins.int_negate_impl,
-    'I->I': builtins.int_negate_impl,
-    'l->l': builtins.int_negate_impl,
-    'L->L': builtins.int_negate_impl,
-    'q->q': builtins.int_negate_impl,
-    'Q->Q': builtins.int_negate_impl,
-    'f->f': builtins.real_negate_impl,
-    'd->d': builtins.real_negate_impl,
-}
-
-_abs_loop_dict = {
-    '?->?': builtins.int_abs_impl,
-    'b->b': builtins.int_abs_impl,
-    'B->B': builtins.uint_abs_impl,
-    'h->h': builtins.int_abs_impl,
-    'H->H': builtins.uint_abs_impl,
-    'i->i': builtins.int_abs_impl,
-    'I->I': builtins.uint_abs_impl,
-    'l->l': builtins.int_abs_impl,
-    'L->L': builtins.uint_abs_impl,
-    'q->q': builtins.int_abs_impl,
-    'Q->Q': builtins.uint_abs_impl,
-    'f->f': builtins.real_abs_impl,
-    'd->d': builtins.real_abs_impl,
-}
-
-
-_add_loop_dict = {
-    '??->?': builtins.int_or_impl,
-    'bb->b': builtins.int_add_impl,
-    'BB->B': builtins.int_add_impl,
-    'hh->h': builtins.int_add_impl,
-    'HH->H': builtins.int_add_impl,
-    'ii->i': builtins.int_add_impl,
-    'II->I': builtins.int_add_impl,
-    'll->l': builtins.int_add_impl,
-    'LL->L': builtins.int_add_impl,
-    'qq->q': builtins.int_add_impl,
-    'QQ->Q': builtins.int_add_impl,
-    'ff->f': builtins.real_add_impl,
-    'dd->d': builtins.real_add_impl,
-}
-
-_sub_loop_dict = {
-    '??->?': builtins.int_xor_impl,
-    'bb->b': builtins.int_sub_impl,
-    'BB->B': builtins.int_sub_impl,
-    'hh->h': builtins.int_sub_impl,
-    'HH->H': builtins.int_sub_impl,
-    'ii->i': builtins.int_sub_impl,
-    'II->I': builtins.int_sub_impl,
-    'll->l': builtins.int_sub_impl,
-    'LL->L': builtins.int_sub_impl,
-    'qq->q': builtins.int_sub_impl,
-    'QQ->Q': builtins.int_sub_impl,
-    'ff->f': builtins.real_sub_impl,
-    'dd->d': builtins.real_sub_impl,
-}
-
-_mul_loop_dict = {
-    '??->?': builtins.int_and_impl,
-    'bb->b': builtins.int_mul_impl,
-    'BB->B': builtins.int_mul_impl,
-    'hh->h': builtins.int_mul_impl,
-    'HH->H': builtins.int_mul_impl,
-    'ii->i': builtins.int_mul_impl,
-    'II->I': builtins.int_mul_impl,
-    'll->l': builtins.int_mul_impl,
-    'LL->L': builtins.int_mul_impl,
-    'qq->q': builtins.int_mul_impl,
-    'QQ->Q': builtins.int_mul_impl,
-    'ff->f': builtins.real_mul_impl,
-    'dd->d': builtins.real_mul_impl,
-}
-
-
-
-
 # _externs will be used to register ufuncs.
 # each tuple contains the ufunc to be translated. That ufunc will be converted to
 # an equivalent loop that calls the function in the npymath support module (registered
@@ -641,18 +485,18 @@ register_unary_ufunc_kernel(numpy.radians, _function_with_cast(npy.deg2rad, _flo
 
 # the following ufuncs rely on functions that are not based on a function
 # from npymath
-register_unary_ufunc_kernel(numpy.absolute, _dict_of_kernels_function(numpy.absolute, _abs_loop_dict))
+register_unary_ufunc_kernel(numpy.absolute, _ufunc_db_function(numpy.absolute))
 register_unary_ufunc_kernel(numpy.sign, _homogeneous_function(types.sign_type, numpy.sign))
-register_unary_ufunc_kernel(numpy.negative, _dict_of_kernels_function(numpy.negative, _neg_loop_dict))
+register_unary_ufunc_kernel(numpy.negative, _ufunc_db_function(numpy.negative))
 
 # for these we mostly rely on code generation for python operators.
-register_binary_ufunc_kernel(numpy.add, _dict_of_kernels_function(numpy.add, _add_loop_dict))
-register_binary_ufunc_kernel(numpy.subtract, _dict_of_kernels_function(numpy.subtract, _sub_loop_dict))
-register_binary_ufunc_kernel(numpy.multiply, _dict_of_kernels_function(numpy.multiply, _mul_loop_dict))
+register_binary_ufunc_kernel(numpy.add, _ufunc_db_function(numpy.add))
+register_binary_ufunc_kernel(numpy.subtract, _ufunc_db_function(numpy.subtract))
+register_binary_ufunc_kernel(numpy.multiply, _ufunc_db_function(numpy.multiply))
 if not PYVERSION >= (3, 0):
-    register_binary_ufunc_kernel(numpy.divide, _division(numpy.divide, '/?'))
-register_binary_ufunc_kernel(numpy.floor_divide, _division(numpy.floor_divide, '//'))
-register_binary_ufunc_kernel(numpy.true_divide, _division(numpy.true_divide, '/'))
+    register_binary_ufunc_kernel(numpy.divide, _ufunc_db_function(numpy.divide))
+register_binary_ufunc_kernel(numpy.floor_divide, _ufunc_db_function(numpy.floor_divide))
+register_binary_ufunc_kernel(numpy.true_divide, _ufunc_db_function(numpy.true_divide))
 register_binary_ufunc_kernel(numpy.power, _function_with_cast('**', _float_binary_sig))
 
 

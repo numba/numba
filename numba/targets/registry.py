@@ -1,8 +1,8 @@
 from __future__ import print_function, division, absolute_import
-from numba import utils, typing
-from numba.targets import cpu
-from numba.targets.descriptors import TargetDescriptor
-from numba import dispatcher
+
+from . import cpu
+from .descriptors import TargetDescriptor
+from .. import dispatcher, utils, typing
 
 # -----------------------------------------------------------------------------
 # Default CPU target descriptors

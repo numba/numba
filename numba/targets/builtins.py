@@ -1,17 +1,17 @@
 from __future__ import print_function, absolute_import, division
-import math
-from functools import reduce
+
+from .imputils import (builtin, builtin_attr, implement, impl_attribute,
+                       impl_attribute_generic, iterator_impl, iternext_impl,
+                       struct_factory)
+from .. import errcode, types, cgutils, utils
+
+from .. import typing
 
 from llvm.core import Type, Constant
 import llvm.core as lc
+from functools import reduce
+import math
 
-from numba import errcode
-from numba import types, typing, cgutils, utils
-from numba.targets.imputils import (builtin, builtin_attr, implement,
-                                    impl_attribute, impl_attribute_generic,
-                                    iterator_impl, iternext_impl,
-                                    struct_factory)
-from numba.typing import signature
 
 
 #-------------------------------------------------------------------------------
@@ -931,7 +931,7 @@ def complex_abs_impl(context, builder, sig, args):
     flty = typ.underlying_float
     cmplx = cmplxcls(context, builder, val)
     [x, y] = cmplx.real, cmplx.imag
-    hypotsig = signature(sig.return_type, flty, flty)
+    hypotsig = typing.signature(sig.return_type, flty, flty)
     hypotimp = context.get_function(math.hypot, hypotsig)
     return hypotimp(builder, [x, y])
 

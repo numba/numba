@@ -1,10 +1,12 @@
 from __future__ import print_function, division, absolute_import
 
+import collections
 import re
 
 import numpy
 
 from . import types, config, npdatetime
+
 
 version = tuple(map(int, numpy.__version__.split('.')[:2]))
 int_divbyzero_returns_zero = config.PYVERSION <= (3, 0)
@@ -153,60 +155,110 @@ def map_layout(val):
     return layout
 
 
-# NumPy ufunc loop matching logic
-# Finds out the loop that will be used (its complete type signature) when called with
-# the given input types.
-# ufunc - The ufunc we want to check
-# op_dtypes - a string containing the dtypes of the operands using numpy char encoding.
-#
-# return value - the full identifier of the loop. f.e: 'dd->d' or None if no matching
-#                loop is found.
+def supported_ufunc_loop(ufunc, loop):
+    """returns whether the loop for the ufunc is supported -in nopython-
 
-def supported_letter_types():
-    """the supported dtypes in letter form. Notable exceptions are:
-    'O' - object
-    'g' - long double
-    'G' - long complex double
-    'e' - float16
-    'F' - complex float (complex64, made of two floats)
-    'D' - complex double (complex128, made of two doubles)
+    For ufuncs implemented using the ufunc_db, it is supported if the ufunc_dbc
+    contains a lowering definition for 'loop' in the 'ufunc' entry.
+
+    For other ufuncs, it is type based. The loop will be considered valid if it
+    only contains the following letter types: '?bBhHiIlLqQfd'. Note this is
+    legacy and when implementing new ufuncs the ufunc_db should be preferred,
+    as it allows for a more fine-grained incremental support.
     """
-    return '?bBhHiIlLqQfdmM'
+    from .targets import ufunc_db
 
-def numba_types_to_numpy_letter_types(numba_type_seq):
-    # CAUTION: this loses some typing information (e.g. units for datetime64
-    # and timedelta64).
-    letter_type = [as_dtype(x).char for x in numba_type_seq]
-    return [l if l in supported_letter_types() else None for l in letter_type]
+    loop_sig = loop.ufunc_sig
+    try:
+        # check if the loop has a codegen description in the
+        # ufunc_db. If so, we can proceed.
 
-def supported_ufunc_loop(ufunc, loop_signature):
-    """returns whether the ufunc with the loop signature 'loop_signature'
-    is supported -in nopython-
+        # note that as of now not all ufuncs have an entry in the
+        # ufunc_db
+        supported_loop = loop_sig in ufunc_db.ufunc_db[ufunc]
+    except KeyError:
+        # for ufuncs not in ufunc_db, base the decision of whether the
+        # loop is supported on its types
+        loop_types = [x.char for x in loop.numpy_inputs + loop.numpy_outputs]
+        supported_types = '?bBhHiIlLqQfd'
+        # check if all the types involved in the ufunc loop are
+        # supported in this mode
+        supported_loop =  all(t in supported_types for t in loop_types)
 
-    ufunc - the ufunc
+    return supported_loop
 
-    loop_signature - the signature string for the loop, as found in
-                     the ufunc 'types' attribute (something like 'ff->f')
+
+class UFuncLoopSpec(collections.namedtuple('_UFuncLoopSpec',
+                                           ('inputs', 'outputs'))):
+    __slots__ = ()
+
+    @property
+    def ufunc_sig(self):
+        return (
+            "".join(x.char for x in self.numpy_inputs)
+            + "->"
+            + "".join(x.char for x in self.numpy_outputs)
+            )
+
+    @property
+    def numpy_inputs(self):
+        return [as_dtype(x) for x in self.inputs]
+
+    @property
+    def numpy_outputs(self):
+        return [as_dtype(x) for x in self.outputs]
+
+
+def ufunc_find_matching_loop(ufunc, arg_types):
+    """Find the appropriate loop to be used for a ufunc based on the types
+    of the operands
+
+    ufunc        - The ufunc we want to check
+    op_dtypes    - a string containing the dtypes of the operands using
+                   numpy char encoding.
+    return value - the full identifier of the loop. f.e: 'dd->d' or
+                   None if no matching loop is found.
     """
-    assert loop_signature in ufunc.types
-    loop_types = loop_signature[:ufunc.nin] + loop_signature[-ufunc.nout:]
-    supported_types = supported_letter_types()
-    return all((t in supported_types for t in loop_types))
-
-def numpy_letter_types_to_numba_types(numpy_letter_types_seq):
-    return [from_dtype(numpy.dtype(x)) for x in numpy_letter_types_seq]
-
-def ufunc_find_matching_loop(ufunc, op_dtypes):
     assert(isinstance(ufunc, numpy.ufunc))
-    assert(len(op_dtypes) == ufunc.nin)
+
+    # Separate logical input from explicit output arguments
+    input_types = arg_types[:ufunc.nin]
+    output_types = arg_types[ufunc.nin:]
+    assert(len(input_types) == ufunc.nin)
+
+    np_input_types = [as_dtype(x) for x in input_types]
+
+    if any(tp.char in 'mM' for tp in np_input_types):
+        # For datetime64 and timedelta64, we want to retain precise typing
+        # (i.e. the units); therefore we look for an exactly matching spec.
+        np_output_types = [as_dtype(x) for x in output_types]
+        char_sig = (
+            "".join(x.char for x in np_input_types) +
+            "->" + "".join(x.char for x in np_output_types))
+        for candidate in ufunc.types:
+            if candidate.startswith(char_sig):
+                # Found
+                # XXX we should be able to type infer the missing output types
+                assert len(output_types) == ufunc.nout
+                return UFuncLoopSpec(input_types, output_types)
+
+        return None
 
     # In NumPy, the loops are evaluated from first to last. The first one that is viable
     # is the one used. One loop is viable if it is possible to cast every operand to the
     # one expected by the ufunc. Note that the output is not considered in this logic.
     for candidate in ufunc.types:
-        if numpy.alltrue([numpy.can_cast(*x) for x in zip(op_dtypes, candidate[0:ufunc.nin])]):
-            # found
-            return candidate
+        ufunc_inputs = candidate[:ufunc.nin]
+        ufunc_outputs = candidate[-ufunc.nout:]
+        if 'O' in ufunc_inputs:
+            # Skip object arrays
+            continue
+        if all(numpy.can_cast(outer, inner, 'safe')
+               for outer, inner in zip(np_input_types, ufunc_inputs)):
+            # Found
+            inputs = [from_dtype(numpy.dtype(x)) for x in ufunc_inputs]
+            outputs = [from_dtype(numpy.dtype(x)) for x in ufunc_outputs]
+            return UFuncLoopSpec(inputs, outputs)
 
     return None
 
@@ -223,4 +275,3 @@ def from_struct_dtype(dtype):
     align = dtype.alignment
 
     return types.Record(str(dtype.descr), fields, size, align, dtype)
-
