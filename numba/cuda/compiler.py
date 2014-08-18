@@ -3,7 +3,7 @@ import copy
 import ctypes
 from numba import compiler, types, errcode
 from numba.typing.templates import ConcreteTemplate
-from numba import typing, lowering, dispatcher
+from numba import typing, lowering, utils
 from .cudadrv.devices import get_context
 from .cudadrv import nvvm, devicearray, driver
 from .errors import KernelRuntimeError
@@ -371,13 +371,16 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         self.definitions = {}
         self.targetoptions = targetoptions
 
+        from .descriptor import CUDATargetDesc
+        self.typingctx = CUDATargetDesc.typingctx
+
     def __call__(self, *args):
         kernel = self.specialize(*args)
         cfg = kernel[self.griddim, self.blockdim, self.stream, self.sharedmem]
         cfg(*args)
 
     def specialize(self, *args):
-        argtypes = tuple([dispatcher.Overloaded.typeof_pyval(a) for a in args])
+        argtypes = tuple([self.typingctx.resolve_argument_type(a) for a in args])
         kernel = self.definitions.get(argtypes)
         if kernel is None:
             kernel = compile_kernel(self.py_func, argtypes, link=(),
