@@ -71,6 +71,9 @@ def np_int_udiv_impl(context, builder, sig, args):
 
 
 def np_real_div_impl(context, builder, sig, args):
+    num, den = args
+    lltype = num.type
+    assert all(i.type==lltype for i in args), "must have homogeneous types"
     return builder.fdiv(*args)
 
 
@@ -172,13 +175,4 @@ def np_int_truediv_impl(context, builder, sig, args):
     return builder.fdiv(num,den)
 
 
-def np_real_truediv_impl(context, builder, sig, args):
-    # in NumPy, real true_div yields the same type as its inputs
-    num, den = args
-    lltype = num.type
-    assert all(i.type==lltype for i in args), "must have homogeneous types"
-    return builder.fdiv(num, den)
-
-
-def np_complex_truediv_impl(context, builder, sig, args):
-    pass
+    
