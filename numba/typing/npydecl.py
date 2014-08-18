@@ -88,6 +88,7 @@ class Numpy_rules_ufunc(AbstractTemplate):
         # by the selected NumPy loop
         out = list(explicit_outputs)
         if nout > len(explicit_outputs):
+            # XXX this is wrong for datetime64 and timedelta64
             implicit_output_count = nout - len(explicit_outputs)
             implicit_letter_types = ufunc_loop[-implicit_output_count:]
             implicit_out_types = numpy_letter_types_to_numba_types(implicit_letter_types)
