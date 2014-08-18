@@ -10,7 +10,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba import config, numpy_support, types
-from .support import TestCase
+from .support import TestCase, skip_on_numpy_16
 
 
 class TestFromDtype(TestCase):
@@ -80,6 +80,7 @@ class TestFromDtype(TestCase):
         check('a11', types.CharSeq(11))
         check('U12', types.UnicodeCharSeq(12))
 
+    @skip_on_numpy_16
     def check_datetime_types(self, letter, nb_class):
         def check(dtype, numba_type, code):
             tp = numpy_support.from_dtype(dtype)
@@ -90,15 +91,6 @@ class TestFromDtype(TestCase):
 
         # Unit-less ("generic") type
         check(np.dtype(letter), nb_class(''), 14)
-
-        for code, unit in enumerate(('Y', 'M', 'W')):
-            check(np.dtype('%s8[%s]' % (letter, unit)),
-                  nb_class(unit), code)
-        for code, unit in enumerate(
-            ('D', 'h', 'm', 's', 'ms', 'us', 'ns', 'ps', 'fs', 'as'),
-            start=4):
-            check(np.dtype('%s8[%s]' % (letter, unit)),
-                  nb_class(unit), code)
 
     def test_datetime_types(self):
         """
@@ -148,12 +140,14 @@ class ValueTypingTestBase(object):
             # This ensures the unit hasn't been lost
             self.assertEqual(tp, nb_type(unit))
 
+    @skip_on_numpy_16
     def check_datetime_values(self, func):
         """
         Test *func*() with np.datetime64 values.
         """
         self._base_check_datetime_values(func, np.datetime64, types.NPDatetime)
 
+    @skip_on_numpy_16
     def check_timedelta_values(self, func):
         """
         Test *func*() with np.timedelta64 values.

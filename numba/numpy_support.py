@@ -1,7 +1,10 @@
 from __future__ import print_function, division, absolute_import
-import numpy
+
 import re
-from . import types, config
+
+import numpy
+
+from . import types, config, npdatetime
 
 version = tuple(map(int, numpy.__version__.split('.')[:2]))
 int_divbyzero_returns_zero = config.PYVERSION <= (3, 0)
@@ -83,7 +86,7 @@ def from_dtype(dtype):
         except KeyError:
             if dtype.char in 'SU':
                 return _from_str_dtype(dtype)
-            if dtype.char in 'mM':
+            if dtype.char in 'mM' and npdatetime.NPDATETIME_SUPPORTED:
                 return _from_datetime_dtype(dtype)
             raise NotImplementedError(dtype)
     else:
