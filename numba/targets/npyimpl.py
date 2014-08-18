@@ -324,7 +324,7 @@ def _dict_of_kernels_function(ufunc, dict_of_kernels):
 
             if self.fn is None:
                 msg = "Don't know how to lower ufunc '{0}' for loop '{1}'"
-                raise LoweringError(msg.format(ufunc.__name__, loop))
+                raise NotImplementedError(msg.format(ufunc.__name__, loop))
 
         def generate(self, *args):
             ctx = self.context

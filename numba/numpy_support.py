@@ -164,13 +164,11 @@ def supported_letter_types():
     'O' - object
     'g' - long double
     'G' - long complex double
-    'm' - timedelta64
-    'M' - datetime64
     'e' - float16
     'F' - complex float (complex64, made of two floats)
     'D' - complex double (complex128, made of two doubles)
     """
-    return '?bBhHiIlLqQfd'
+    return '?bBhHiIlLqQfdmM'
 
 def numba_types_to_numpy_letter_types(numba_type_seq):
     letter_type = [as_dtype(x).char for x in numba_type_seq]
