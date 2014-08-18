@@ -90,6 +90,35 @@ def from_dtype(dtype):
         return from_struct_dtype(dtype)
 
 
+_as_dtype_letters = {
+    types.NPDatetime: 'M8',
+    types.NPTimedelta: 'm8',
+    types.CharSeq: 'S',
+    types.UnicodeCharSeq: 'U',
+}
+
+def as_dtype(nbtype):
+    """
+    Return a numpy dtype instance corresponding to the given Numba type.
+    NotImplementedError is if no correspondence is known.
+    """
+    if isinstance(nbtype, (types.Complex, types.Integer, types.Float)):
+        return numpy.dtype(str(nbtype))
+    if nbtype is types.bool_:
+        return numpy.dtype('?')
+    if isinstance(nbtype, (types.NPDatetime, types.NPTimedelta)):
+        letter = _as_dtype_letters[type(nbtype)]
+        if nbtype.unit:
+            return numpy.dtype('%s[%s]' % (letter, nbtype.unit))
+        else:
+            return numpy.dtype(letter)
+    if isinstance(nbtype, (types.CharSeq, types.UnicodeCharSeq)):
+        letter = _as_dtype_letters[type(nbtype)]
+        return numpy.dtype('%s%d' % (letter, nbtype.count))
+    raise NotImplementedError("%r cannot be represented as a Numpy dtype"
+                              % (nbtype,))
+
+
 def is_arrayscalar(val):
     return numpy.dtype(type(val)) in FROM_DTYPE
 
@@ -144,7 +173,7 @@ def supported_letter_types():
     return '?bBhHiIlLqQfd'
 
 def numba_types_to_numpy_letter_types(numba_type_seq):
-    letter_type = [numpy.dtype(str(x)).char for x in numba_type_seq]
+    letter_type = [as_dtype(x).char for x in numba_type_seq]
     return [l if l in supported_letter_types() else None for l in letter_type]
 
 def supported_ufunc_loop(ufunc, loop_signature):

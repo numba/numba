@@ -17,14 +17,16 @@ class TestFromDtype(TestCase):
 
     def test_number_types(self):
         """
-        Test from_dtype() with the various scalar number types.
+        Test from_dtype() and as_dtype() with the various scalar number types.
         """
         f = numpy_support.from_dtype
 
         def check(typechar, numba_type):
             # Only native ordering and alignment is supported
-            self.assertIs(f(np.dtype(typechar)), numba_type)
+            dtype = np.dtype(typechar)
+            self.assertIs(f(dtype), numba_type)
             self.assertIs(f(np.dtype('=' + typechar)), numba_type)
+            self.assertEqual(dtype, numpy_support.as_dtype(numba_type))
 
         check('?', types.bool_)
         check('f', types.float32)
@@ -66,30 +68,49 @@ class TestFromDtype(TestCase):
 
     def test_string_types(self):
         """
-        Test from_dtype() with the character string types.
+        Test from_dtype() and as_dtype() with the character string types.
         """
-        f = numpy_support.from_dtype
-        self.assertEqual(f(np.dtype('S10')), types.CharSeq(10))
-        self.assertEqual(f(np.dtype('a11')), types.CharSeq(11))
-        self.assertEqual(f(np.dtype('U12')), types.UnicodeCharSeq(12))
+        def check(typestring, numba_type):
+            # Only native ordering and alignment is supported
+            dtype = np.dtype(typestring)
+            self.assertEqual(numpy_support.from_dtype(dtype), numba_type)
+            self.assertEqual(dtype, numpy_support.as_dtype(numba_type))
 
-    def test_timedelta_types(self):
-        """
-        Test from_dtype() with the timedelta types.
-        """
-        f = numpy_support.from_dtype
-        tp = f(np.dtype('m'))
-        self.assertEqual(tp, types.NPTimedelta(''))
-        for code, unit in enumerate(('Y', 'M', 'W')):
-            tp = f(np.dtype('m8[%s]' % unit))
-            self.assertEqual(tp, types.NPTimedelta(unit))
+        check('S10', types.CharSeq(10))
+        check('a11', types.CharSeq(11))
+        check('U12', types.UnicodeCharSeq(12))
+
+    def check_datetime_types(self, letter, nb_class):
+        def check(dtype, numba_type, code):
+            tp = numpy_support.from_dtype(dtype)
+            self.assertEqual(tp, numba_type)
             self.assertEqual(tp.unit_code, code)
+            self.assertEqual(numpy_support.as_dtype(numba_type), dtype)
+            self.assertEqual(numpy_support.as_dtype(tp), dtype)
+
+        # Unit-less ("generic") type
+        check(np.dtype(letter), nb_class(''), 14)
+
+        for code, unit in enumerate(('Y', 'M', 'W')):
+            check(np.dtype('%s8[%s]' % (letter, unit)),
+                  nb_class(unit), code)
         for code, unit in enumerate(
             ('D', 'h', 'm', 's', 'ms', 'us', 'ns', 'ps', 'fs', 'as'),
             start=4):
-            tp = f(np.dtype('m8[%s]' % unit))
-            self.assertEqual(tp, types.NPTimedelta(unit))
-            self.assertEqual(tp.unit_code, code)
+            check(np.dtype('%s8[%s]' % (letter, unit)),
+                  nb_class(unit), code)
+
+    def test_datetime_types(self):
+        """
+        Test from_dtype() and as_dtype() with the datetime types.
+        """
+        self.check_datetime_types('M', types.NPDatetime)
+
+    def test_timedelta_types(self):
+        """
+        Test from_dtype() and as_dtype() with the timedelta types.
+        """
+        self.check_datetime_types('m', types.NPTimedelta)
 
 
 class ValueTypingTestBase(object):
