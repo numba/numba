@@ -165,7 +165,7 @@ class BaseContext(object):
 
     def insert_class(self, cls, attrs):
         clsty = types.Object(cls)
-        for name, vtype in utils.dict_iteritems(attrs):
+        for name, vtype in utils.iteritems(attrs):
             imp = python_attr_impl(clsty, name, vtype)
             self.attrs[imp.key] = imp
 

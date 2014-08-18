@@ -20,34 +20,17 @@ def fix_python_api():
     """
     Execute once to install special symbols into the LLVM symbol table
     """
-    c_helpers = _helperlib.c_helpers
+
     le.dylib_add_symbol("Py_None", ctypes.addressof(_PyNone))
-    le.dylib_add_symbol("NumbaArrayAdaptor", c_helpers["adapt_ndarray"])
-    le.dylib_add_symbol("NumbaNDArrayNew", c_helpers["ndarray_new"])
+    le.dylib_add_symbol("numba_native_error", id(NativeError))
 
-    le.dylib_add_symbol("NumbaComplexAdaptor",
-                        c_helpers["complex_adaptor"])
-    le.dylib_add_symbol("NumbaNativeError", id(NativeError))
-    le.dylib_add_symbol("NumbaExtractRecordData",
-                        c_helpers["extract_record_data"])
-    le.dylib_add_symbol("NumbaReleaseRecordBuffer",
-                        c_helpers["release_record_buffer"])
-    le.dylib_add_symbol("NumbaRecreateRecord",
-                        c_helpers["recreate_record"])
+    # Add C helper functions
+    c_helpers = _helperlib.c_helpers
+    for py_name in c_helpers:
+        c_name = "numba_" + py_name
+        c_address = c_helpers[py_name]
+        le.dylib_add_symbol(c_name, c_address)
 
-    le.dylib_add_symbol("NumbaExtractNPDatetime",
-                        c_helpers["extract_np_datetime"])
-    le.dylib_add_symbol("NumbaCreateNPDatetime",
-                        c_helpers["create_np_datetime"])
-    le.dylib_add_symbol("NumbaExtractNPTimedelta",
-                        c_helpers["extract_np_timedelta"])
-    le.dylib_add_symbol("NumbaCreateNPTimedelta",
-                        c_helpers["create_np_timedelta"])
-
-    le.dylib_add_symbol("NumbaGILEnsure",
-                        c_helpers["gil_ensure"])
-    le.dylib_add_symbol("NumbaGILRelease",
-                        c_helpers["gil_release"])
     # Add all built-in exception classes
     for obj in utils.builtins.__dict__.values():
         if isinstance(obj, type) and issubclass(obj, BaseException):
@@ -168,7 +151,7 @@ class PythonAPI(object):
 
     @property
     def native_error_type(self):
-        return self.get_c_object("NumbaNativeError")
+        return self.get_c_object("numba_native_error")
 
     def raise_missing_global_error(self, name):
         msg = "global name '%s' is not defined" % name
@@ -522,7 +505,7 @@ class PythonAPI(object):
         """
         gilptrty = Type.pointer(self.gil_state)
         fnty = Type.function(Type.void(), [gilptrty])
-        fn = self._get_function(fnty, "NumbaGILEnsure")
+        fn = self._get_function(fnty, "numba_gil_ensure")
         gilptr = cgutils.alloca_once(self.builder, self.gil_state)
         self.builder.call(fn, [gilptr])
         return gilptr
@@ -534,7 +517,7 @@ class PythonAPI(object):
         """
         gilptrty = Type.pointer(self.gil_state)
         fnty = Type.function(Type.void(), [gilptrty])
-        fn = self._get_function(fnty, "NumbaGILRelease")
+        fn = self._get_function(fnty, "numba_gil_release")
         return self.builder.call(fn, [gil])
 
     #
@@ -931,53 +914,53 @@ class PythonAPI(object):
     def numba_array_adaptor(self, ary, ptr):
         voidptr = Type.pointer(Type.int(8))
         fnty = Type.function(Type.int(), [self.pyobj, voidptr])
-        fn = self._get_function(fnty, name="NumbaArrayAdaptor")
+        fn = self._get_function(fnty, name="numba_adapt_ndarray")
         fn.args[0].add_attribute(lc.ATTR_NO_CAPTURE)
         fn.args[1].add_attribute(lc.ATTR_NO_CAPTURE)
         return self.builder.call(fn, (ary, ptr))
 
     def complex_adaptor(self, cobj, cmplx):
         fnty = Type.function(Type.int(), [self.pyobj, cmplx.type])
-        fn = self._get_function(fnty, name="NumbaComplexAdaptor")
+        fn = self._get_function(fnty, name="numba_complex_adaptor")
         return self.builder.call(fn, [cobj, cmplx])
 
     def extract_record_data(self, obj, pbuf):
         fnty = Type.function(self.voidptr, [self.pyobj,
                                                          self.voidptr])
-        fn = self._get_function(fnty, name="NumbaExtractRecordData")
+        fn = self._get_function(fnty, name="numba_extract_record_data")
         return self.builder.call(fn, [obj, pbuf])
 
     def release_record_buffer(self, pbuf):
         fnty = Type.function(Type.void(), [self.voidptr])
-        fn = self._get_function(fnty, name="NumbaReleaseRecordBuffer")
+        fn = self._get_function(fnty, name="numba_release_record_buffer")
         return self.builder.call(fn, [pbuf])
 
     def extract_np_datetime(self, obj):
         fnty = Type.function(Type.int(64), [self.pyobj])
-        fn = self._get_function(fnty, name="NumbaExtractNPDatetime")
+        fn = self._get_function(fnty, name="numba_extract_np_datetime")
         return self.builder.call(fn, [obj])
 
     def extract_np_timedelta(self, obj):
         fnty = Type.function(Type.int(64), [self.pyobj])
-        fn = self._get_function(fnty, name="NumbaExtractNPTimedelta")
+        fn = self._get_function(fnty, name="numba_extract_np_timedelta")
         return self.builder.call(fn, [obj])
 
     def create_np_datetime(self, val, unit_code):
         unit_code = Constant.int(Type.int(), unit_code)
         fnty = Type.function(self.pyobj, [Type.int(64), Type.int()])
-        fn = self._get_function(fnty, name="NumbaCreateNPDatetime")
+        fn = self._get_function(fnty, name="numba_create_np_datetime")
         return self.builder.call(fn, [val, unit_code])
 
     def create_np_timedelta(self, val, unit_code):
         unit_code = Constant.int(Type.int(), unit_code)
         fnty = Type.function(self.pyobj, [Type.int(64), Type.int()])
-        fn = self._get_function(fnty, name="NumbaCreateNPTimedelta")
+        fn = self._get_function(fnty, name="numba_create_np_timedelta")
         return self.builder.call(fn, [val, unit_code])
 
     def recreate_record(self, pdata, size, dtypeaddr):
         fnty = Type.function(self.pyobj, [Type.pointer(Type.int(8)),
                                           Type.int(), self.pyobj])
-        fn = self._get_function(fnty, name="NumbaRecreateRecord")
+        fn = self._get_function(fnty, name="numba_recreate_record")
         return self.builder.call(fn, [pdata, size, dtypeaddr])
 
     def string_from_constant_string(self, string):

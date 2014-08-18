@@ -372,7 +372,7 @@ def _prepare_call_to_object_mode(context, builder, func, signature, args,
                                     ll_intp_ptr, ll_voidptr,
                                     ll_int, ll_int])
 
-    fn_array_new = mod.get_or_insert_function(fnty, name="NumbaNDArrayNew")
+    fn_array_new = mod.get_or_insert_function(fnty, name="numba_ndarray_new")
 
     # Convert each llarray into pyobject
     error_pointer = cgutils.alloca_once(builder, Type.int(1), name='error')

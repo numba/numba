@@ -228,7 +228,7 @@ class ByteCodeIter(object):
     def read_arg(self, size):
         buf = 0
         for i in range(size):
-            _offset, byte = utils.iter_next(self.iter)
+            _offset, byte = next(self.iter)
             buf |= byte << (8 * i)
         return buf
 
@@ -266,7 +266,7 @@ class ByteCodeBase(object):
         self.firstlineno = min(inst.lineno for inst in self.table.values())
 
     def __iter__(self):
-        return utils.dict_itervalues(self.table)
+        return utils.itervalues(self.table)
 
     def __getitem__(self, offset):
         return self.table[offset]
@@ -282,7 +282,7 @@ class ByteCodeBase(object):
                 return ' '
 
         return '\n'.join('%s %10d\t%s' % ((label_marker(i),) + i)
-                         for i in utils.dict_iteritems(self.table))
+                         for i in utils.iteritems(self.table))
 
 
 class CustomByteCode(ByteCodeBase):

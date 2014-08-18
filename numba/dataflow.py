@@ -71,7 +71,7 @@ class DataFlowAnalysis(object):
         return info
 
     def dump(self):
-        for blk in utils.dict_itervalues(self.infos):
+        for blk in utils.itervalues(self.infos):
             blk.dump()
 
     def dispatch(self, info, inst):
