@@ -120,7 +120,7 @@ def np_complex_div_impl(context, builder, sig, args):
                     builder.store(imag, presult_imag)
                 with inn_otherwise:
                     rat = builder.fdiv(in2i, in2r)
-                    # sc1 = 1.0/(in2r + in2i*rat)
+                    # scl = 1.0/(in2r + in2i*rat)
                     tmp1 = builder.fmul(in2i, rat)
                     tmp2 = builder.fadd(in2r, tmp1)
                     scl = builder.fdiv(ONE, tmp2)
@@ -185,7 +185,52 @@ def np_real_floor_div_impl(context, builder, sig, args):
 
 
 def np_complex_floor_div_impl(context, builder, sig, args):
-    pass
+    # this is based on the complex floor divide in Numpy's loops.c.src
+    float_kind = sig.args[0].underlying_float
+    floor_sig = typing.signature(float_kind, float_kind)
+
+    complexClass = context.make_complex(sig.args[0])
+    in1, in2 = [complexClass(context, builder, value=arg) for arg in args]
+
+    in1r = in1.real
+    in1i = in1.imag
+    in2r = in2.real
+    in2i = in2.imag
+    ftype = in1r.type
+    assert all([i.type==ftype for i in [in1r, in1i, in2r, in2i]]), "mismatched types"
+    presult = cgutils.alloca_once(builder, ftype)
+
+    ZERO = lc.Constant.real(ftype, 0.0)
+    in2r_abs = _fabs(context, builder, in2r)
+    in2i_abs = _fabs(context, builder, in2i)
+    in2r_abs_ge_in2i_abs = builder.fcmp(lc.FCMP_OGE, in2r_abs, in2i_abs)
+
+    with cgutils.ifelse(builder, in2r_abs_ge_in2i_abs) as (then, otherwise):
+        with then:
+            rat = builder.fdiv(in2i, in2r)
+            # result = abs((in1r+in1i*rat)/(in2r + in2i*rat))
+            tmp1 = builder.fmul(in1i, rat)
+            tmp2 = builder.fmul(in2i, rat)
+            tmp3 = builder.fadd(in1r, tmp1)
+            tmp4 = builder.fadd(in2r, tmp2)
+            tmp5 = builder.fdiv(tmp3, tmp4)
+            result = np_real_floor_impl(context, builder, floor_sig, (tmp5,))
+            builder.store(result, presult)
+        with otherwise:
+            rat = builder.fdiv(in2r, in2i)
+            # result = abs((in1r+in1i*rat)/(in2i + in2r*rat))
+            tmp1 = builder.fmul(in1i, rat)
+            tmp2 = builder.fmul(in2r, rat)
+            tmp3 = builder.fadd(in1r, tmp1)
+            tmp4 = builder.fadd(in2i, tmp2)
+            tmp5 = builder.fdiv(tmp3, tmp4)
+            result = np_real_floor_impl(context, builder, floor_sig, (tmp5,))
+            builder.store(result, presult)
+
+    out = complexClass(context, builder)
+    out.real = builder.load(presult)
+    out.imag = ZERO
+    return out._getvalue()
 
 
 def np_real_floor_impl(context, builder, sig, args):
