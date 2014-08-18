@@ -132,3 +132,20 @@ def _fill_ufunc_db(ufunc_db):
             'FF->F': npyfuncs.np_complex_div_impl,
             'DD->D': npyfuncs.np_complex_div_impl,
         }
+
+    ufunc_db[np.true_divide] = {
+        'bb->d': npyfuncs.np_int_truediv_impl,
+        'BB->d': npyfuncs.np_int_truediv_impl,
+        'hh->d': npyfuncs.np_int_truediv_impl,
+        'HH->d': npyfuncs.np_int_truediv_impl,
+        'ii->d': npyfuncs.np_int_truediv_impl,
+        'II->d': npyfuncs.np_int_truediv_impl,
+        'll->d': npyfuncs.np_int_truediv_impl,
+        'LL->d': npyfuncs.np_int_truediv_impl,
+        'qq->d': npyfuncs.np_int_truediv_impl,
+        'QQ->d': npyfuncs.np_int_truediv_impl,
+        'ff->f': npyfuncs.np_real_truediv_impl,
+        'dd->d': npyfuncs.np_real_truediv_impl,
+        'FF->F': npyfuncs.np_complex_truediv_impl,
+        'DD->D': npyfuncs.np_complex_truediv_impl,
+    }

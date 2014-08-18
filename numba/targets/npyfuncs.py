@@ -82,8 +82,8 @@ def _fabs(context, builder, arg):
 
 
 def np_complex_div_impl(context, builder, sig, args):
-    """extracted from numpy/core/src/umath/loops.c.src,
-    inspired by complex_div_impl"""
+    # Extracted from numpy/core/src/umath/loops.c.src,
+    # inspired by complex_div_impl
 
     complexClass = context.make_complex(sig.args[0])
     in1, in2 = [complexClass(context, builder, value=arg) for arg in args]
@@ -153,3 +153,32 @@ def np_complex_div_impl(context, builder, sig, args):
     out.imag = builder.load(presult_imag)
     return out._getvalue()
 
+
+########################################################################
+# true div kernels
+
+def np_int_truediv_impl(context, builder, sig, args):
+    # in NumPy we don't check for 0 denominator... fdiv handles div by
+    # 0 in the way NumPy expects..
+    # integer truediv always yields double
+    num, den = args
+    lltype = num.type
+    assert all(i.type==lltype for i in args), "must have homogeneous types"
+    numty, denty = sig.args
+
+    num = context.cast(builder, num, numty, types.float64)
+    den = context.cast(builder, den, denty, types.float64)
+
+    return builder.fdiv(num,den)
+
+
+def np_real_truediv_impl(context, builder, sig, args):
+    # in NumPy, real true_div yields the same type as its inputs
+    num, den = args
+    lltype = num.type
+    assert all(i.type==lltype for i in args), "must have homogeneous types"
+    return builder.fdiv(num, den)
+
+
+def np_complex_truediv_impl(context, builder, sig, args):
+    pass

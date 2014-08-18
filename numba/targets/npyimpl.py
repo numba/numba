@@ -576,7 +576,7 @@ register_binary_ufunc_kernel(numpy.multiply, _ufunc_db_function(numpy.multiply))
 if not PYVERSION >= (3, 0):
     register_binary_ufunc_kernel(numpy.divide, _ufunc_db_function(numpy.divide))
 register_binary_ufunc_kernel(numpy.floor_divide, _division(numpy.floor_divide, '//'))
-register_binary_ufunc_kernel(numpy.true_divide, _division(numpy.true_divide, '/'))
+register_binary_ufunc_kernel(numpy.true_divide, _ufunc_db_function(numpy.true_divide))
 register_binary_ufunc_kernel(numpy.power, _function_with_cast('**', _float_binary_sig))
 
 
