@@ -56,6 +56,8 @@ class CompilationCache(object):
 
 class TestCase(unittest.TestCase):
 
+    longMessage = True
+
     # A random state yielding the same random numbers for any test case.
     # Use as `self.random.<method name>`
     @utils.cached_property

@@ -1,10 +1,13 @@
 from __future__ import print_function
-import numba.unittest_support as unittest
+
 import itertools
 import numpy as np
+
+import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import types, utils
 from numba.tests import usecases
+from .support import TestCase
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -13,7 +16,8 @@ force_pyobj_flags = Flags()
 force_pyobj_flags.set("force_pyobject")
 
 
-class TestUsecases(unittest.TestCase):
+class TestUsecases(TestCase):
+
     def test_andor(self):
         pyfunc = usecases.andor
         cr = compile_isolated(pyfunc, (types.int32, types.int32))
