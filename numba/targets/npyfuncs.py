@@ -10,9 +10,18 @@ from __future__ import print_function, absolute_import, division
 from .. import cgutils, typing, types
 from llvm import core as lc
 
-#
+########################################################################
 # Division kernels inspired by NumPy loops.c.src code
 #
+# The builtins are not applicable as they rely on a test for zero in the
+# denominator. If it is zero the appropriate exception is raised.
+# In NumPy, a division by zero does not raise an exception, but instead
+# generated a known value. Note that a division by zero in any of the
+# operations of a vector may raise an exception or issue a warning
+# depending on the numpy.seterr configuration. This is not supported
+# right now (and in any case, it won't be handled by these functions
+# either)
+
 def np_int_sdiv_impl(context, builder, sig, args):
     # based on the actual code in NumPy loops.c.src for signed integer types
     num, den = args
@@ -41,7 +50,6 @@ def np_int_sdiv_impl(context, builder, sig, args):
             needs_fixing = builder.and_(not_same_sign, mod_not_zero)
             fix_value = builder.select(needs_fixing, MINUS_ONE, ZERO)
             result_otherwise = builder.add(div, fix_value)
-
     result = builder.phi(lltype)
     result.add_incoming(ZERO, bb_then)
     result.add_incoming(result_otherwise, bb_otherwise)
@@ -71,6 +79,8 @@ def np_int_udiv_impl(context, builder, sig, args):
 
 
 def np_real_div_impl(context, builder, sig, args):
+    # in NumPy real div has the same semantics as an fdiv for generating
+    # NANs, INF and NINF
     num, den = args
     lltype = num.type
     assert all(i.type==lltype for i in args), "must have homogeneous types"
@@ -197,6 +207,11 @@ def np_real_floor_div_impl(context, builder, sig, args):
 
 def np_complex_floor_div_impl(context, builder, sig, args):
     # this is based on the complex floor divide in Numpy's loops.c.src
+    # This is basically a full complex division with a complex floor
+    # applied.
+    # The complex floor seems to be defined as the real floor applied
+    # with the real part and zero in the imaginary part. Fully developed
+    # so it avoids computing anything related to the imaginary result.
     float_kind = sig.args[0].underlying_float
     floor_sig = typing.signature(float_kind, float_kind)
 
