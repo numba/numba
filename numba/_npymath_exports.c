@@ -60,7 +60,7 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL(rint),
     NPYMATH_SYMBOL(fabs),
 
-    /* double functions */
+    /* float functions */
     NPYMATH_SYMBOL(floorf),
 
     /* complex functions */
