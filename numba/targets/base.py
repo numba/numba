@@ -464,7 +464,8 @@ class BaseContext(object):
                 [target, val] = args
                 dptr = cgutils.get_record_member(builder, target, offset,
                                                  self.get_data_type(elemty))
-                self.pack_value(builder, valty, val, dptr)
+                val = context.cast(builder, val, valty, elemty)
+                self.pack_value(builder, elemty, val, dptr)
 
             return _wrap_impl(imp, self, sig)
 

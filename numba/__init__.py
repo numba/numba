@@ -25,11 +25,15 @@ njit = decorators.njit
 # Re export vectorize decorators
 from .npyufunc import vectorize, guvectorize
 
+# Re export from_dtype
+from .numpy_support import from_dtype
+
 # Re-export test entrypoint
 test = testing.test
 
 # Try initialize cuda
 from . import cuda
+
 
 __all__ = """
 jit
@@ -40,6 +44,7 @@ guvectorize
 export
 exportmany
 cuda
+from_dtype
 """.split() + types.__all__ + special.__all__
 
 
