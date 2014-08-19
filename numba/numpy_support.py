@@ -1,16 +1,14 @@
 from __future__ import print_function, division, absolute_import
 
-from . import types, config, npdatetime
-from .targets import ufunc_db
+import re
 
 import numpy
 
-import re
-
+from . import types, config, npdatetime
+from .targets import ufunc_db
 
 version = tuple(map(int, numpy.__version__.split('.')[:2]))
 int_divbyzero_returns_zero = config.PYVERSION <= (3, 0)
-
 
 FROM_DTYPE = {
     numpy.dtype('bool'): types.boolean,
