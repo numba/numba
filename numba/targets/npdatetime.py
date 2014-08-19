@@ -57,6 +57,10 @@ def scale_timedelta(context, builder, val, srcty, destty):
     (both numba.types.NPTimedelta instances)
     """
     factor = npdatetime.get_timedelta_conversion_factor(srcty.unit, destty.unit)
+    if factor is None:
+        # This can happen when using explicit output in a ufunc.
+        raise NotImplementedError("cannot convert timedelta64 from %r to %r"
+                                  % (srcty.unit, destty.unit))
     return scale_by_constant(builder, val, factor)
 
 def normalize_timedeltas(context, builder, left, right, leftty, rightty):
@@ -411,6 +415,10 @@ def convert_datetime_for_arith(builder, dt_val, src_unit, dest_unit):
     dt_val, dt_unit = reduce_datetime_for_unit(builder, dt_val, src_unit, dest_unit)
     # Then multiply by the remaining constant factor.
     dt_factor = npdatetime.get_timedelta_conversion_factor(dt_unit, dest_unit)
+    if dt_factor is None:
+        # This can happen when using explicit output in a ufunc.
+        raise NotImplementedError("cannot convert datetime64 from %r to %r"
+                                  % (src_unit, dest_unit))
     return scale_by_constant(builder, dt_val, dt_factor)
 
 

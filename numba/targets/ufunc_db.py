@@ -101,6 +101,9 @@ def _fill_ufunc_db(ufunc_db):
         'dd->d': builtins.real_sub_impl,
         'FF->F': builtins.complex_sub_impl,
         'DD->D': builtins.complex_sub_impl,
+        'mm->m': npdatetime.timedelta_sub_impl,
+        'Mm->M': npdatetime.datetime_minus_timedelta,
+        'MM->m': npdatetime.datetime_minus_datetime,
     }
 
     ufunc_db[np.multiply] = {
