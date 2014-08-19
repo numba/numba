@@ -68,6 +68,10 @@ class NumbaTestProgram(unittest.main):
             argv.remove('-m')
             self.multiprocess = True
         super(NumbaTestProgram, self).parseArgs(argv)
+        if self.verbosity <= 0:
+            # We aren't interested in informational messages / warnings when
+            # running with '-q'.
+            self.buffer = True
 
     def runTests(self):
         if self.refleak:
