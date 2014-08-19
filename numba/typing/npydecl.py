@@ -63,7 +63,7 @@ class Numpy_rules_ufunc(AbstractTemplate):
         base_types = [x.dtype if isinstance(x, types.Array) else x for x in args]
         ufunc_loop = ufunc_find_matching_loop(ufunc, base_types)
         if ufunc_loop is None:
-            TypingError("can't resolve ufunc {0} for types {1}".format(ufunc.__name__, args))
+            raise TypingError("can't resolve ufunc {0} for types {1}".format(ufunc.__name__, args))
 
         # check if all the types involved in the ufunc loop are supported in this mode
         if not supported_ufunc_loop(ufunc, ufunc_loop):

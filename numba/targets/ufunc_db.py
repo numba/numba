@@ -81,6 +81,8 @@ def _fill_ufunc_db(ufunc_db):
         'FF->F': builtins.complex_add_impl,
         'DD->D': builtins.complex_add_impl,
         'mm->m': npdatetime.timedelta_add_impl,
+        'Mm->M': npdatetime.datetime_plus_timedelta,
+        'mM->M': npdatetime.timedelta_plus_datetime,
     }
 
     ufunc_db[np.subtract] = {
