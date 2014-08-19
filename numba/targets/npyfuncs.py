@@ -214,10 +214,12 @@ def np_complex_floor_div_impl(context, builder, sig, args):
     in2i = in2.imag
     ftype = in1r.type
     assert all([i.type==ftype for i in [in1r, in1i, in2r, in2i]]), "mismatched types"
+
+    ZERO = lc.Constant.real(ftype, 0.0)
+
     out = complexClass(context, builder)
     out.imag = ZERO
 
-    ZERO = lc.Constant.real(ftype, 0.0)
     in2r_abs = _fabs(context, builder, in2r)
     in2i_abs = _fabs(context, builder, in2i)
     in2r_abs_ge_in2i_abs = builder.fcmp(lc.FCMP_OGE, in2r_abs, in2i_abs)
