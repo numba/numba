@@ -87,14 +87,18 @@ def _fabs(context, builder, arg):
 def np_complex_div_impl(context, builder, sig, args):
     # Extracted from numpy/core/src/umath/loops.c.src,
     # inspired by complex_div_impl
+    # variables named coherent with loops.c.src
+    # This is implemented using the approach described in
+    #   R.L. Smith. Algorithm 116: Complex division.
+    #   Communications of the ACM, 5(8):435, 1962
 
     complexClass = context.make_complex(sig.args[0])
     in1, in2 = [complexClass(context, builder, value=arg) for arg in args]
 
-    in1r = in1.real
-    in1i = in1.imag
-    in2r = in2.real
-    in2i = in2.imag
+    in1r = in1.real  # numerator.real
+    in1i = in1.imag  # numerator.imag
+    in2r = in2.real  # denominator.real
+    in2i = in2.imag  # denominator.imag
     ftype = in1r.type
     assert all([i.type==ftype for i in [in1r, in1i, in2r, in2i]]), "mismatched types"
     presult_real = cgutils.alloca_once(builder, ftype)
@@ -102,23 +106,28 @@ def np_complex_div_impl(context, builder, sig, args):
 
     ZERO = lc.Constant.real(ftype, 0.0)
     ONE = lc.Constant.real(ftype, 1.0)
+
+    # if abs(denominator.real) >= abs(denominator.imag)
     in2r_abs = _fabs(context, builder, in2r)
     in2i_abs = _fabs(context, builder, in2i)
-
     in2r_abs_ge_in2i_abs = builder.fcmp(lc.FCMP_OGE, in2r_abs, in2i_abs)
-
     with cgutils.ifelse(builder, in2r_abs_ge_in2i_abs) as (then, otherwise):
         with then:
+            # if abs(denominator.real) == 0 and abs(denominator.imag) == 0
             in2r_is_zero = builder.fcmp(lc.FCMP_OEQ, in2r_abs, ZERO)
             in2i_is_zero = builder.fcmp(lc.FCMP_OEQ, in2i_abs, ZERO)
             in2_is_zero = builder.and_(in2r_is_zero, in2i_is_zero)
             with cgutils.ifelse(builder, in2_is_zero) as (inn_then, inn_otherwise):
                 with inn_then:
+                    # division by 0.
+                    # fdiv generates the appropriate NAN/INF/NINF
                     real = builder.fdiv(in1r, in2r_abs)
                     imag = builder.fdiv(in1i, in2i_abs)
                     builder.store(real, presult_real)
                     builder.store(imag, presult_imag)
                 with inn_otherwise:
+                    # general case for:
+                    # abs(denominator.real) > abs(denominator.imag)
                     rat = builder.fdiv(in2i, in2r)
                     # scl = 1.0/(in2r + in2i*rat)
                     tmp1 = builder.fmul(in2i, rat)
@@ -135,6 +144,8 @@ def np_complex_div_impl(context, builder, sig, args):
                     builder.store(real, presult_real)
                     builder.store(imag, presult_imag)
         with otherwise:
+            # general case for:
+            # abs(denominator.imag) > abs(denominator.real)
             rat = builder.fdiv(in2r, in2i)
             # scl = 1.0/(in2i + in2r*rat)
             tmp1 = builder.fmul(in2r, rat)
