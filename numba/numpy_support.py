@@ -127,7 +127,7 @@ def map_layout(val):
 def supported_ufunc_loop(ufunc, loop):
     """returns whether the loop for the ufunc is supported -in nopython-
 
-    For ufuncs implemented using the ufunc_db, it is supported if the ufunc_dbc
+    For ufuncs implemented using the ufunc_db, it is supported if the ufunc_db
     contains a lowering definition for 'loop' in the 'ufunc' entry.
 
     For other ufuncs, it is type based. The loop will be considered valid if it
@@ -141,7 +141,7 @@ def supported_ufunc_loop(ufunc, loop):
 
         # note that as of now not all ufuncs have an entry in the
         # ufunc_db
-        supported_loop = loop in ufunc_db.ufunc_db[ufunc]
+        supported_loop = loop in ufunc_db.get_ufunc_info(ufunc)
     except KeyError:
         # for ufuncs not in ufunc_db, base the decision of whether the
         # loop is supported on its types

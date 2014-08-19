@@ -8,14 +8,13 @@ from collections import namedtuple
 
 from llvm.core import Constant, Type, ICMP_UGT
 
-from . import builtins
+from . import builtins, ufunc_db
 from .imputils import implement, Registry
 from .. import typing, types, cgutils, numpy_support
 from ..config import PYVERSION
 from ..numpy_support import (ufunc_find_matching_loop,
                              numpy_letter_types_to_numba_types,
                              numba_types_to_numpy_letter_types)
-from .ufunc_db import ufunc_db
 
 registry = Registry()
 register = registry.register
@@ -338,7 +337,7 @@ def _ufunc_db_function(ufunc):
             loop = ufunc_find_matching_loop(ufunc, letter_arg_types)
             letter_inner_sig = loop[-ufunc.nout:] + loop[:ufunc.nin]
             inner_sig_types = numpy_letter_types_to_numba_types(letter_inner_sig)
-            self.fn = ufunc_db[ufunc].get(loop, None)
+            self.fn = ufunc_db.get_ufunc_info(ufunc).get(loop, None)
             self.inner_sig = typing.signature(*inner_sig_types)
 
             if self.fn is None:
