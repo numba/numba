@@ -256,10 +256,12 @@ class _Kernel(object):
         self.outer_sig = outer_sig
 
     def cast(self, val, fromty, toty):
-        """Numpy implements some different cast semantics that are different
-        from standard Python (for example, it does allow casting from
-        complex to float. This function acts as a patched cast to take
-        that into account.
+        """Numpy uses cast semantics that are different from standard Python
+        (for example, it does allow casting from complex to float).
+
+        This method acts as a patch to context.cast so that it allows 
+        complex to real/int casts.
+
         """
         if fromty in types.complex_domain and toty not in types.complex_domain:
             # attempt conversion of the real part to the specified type.
