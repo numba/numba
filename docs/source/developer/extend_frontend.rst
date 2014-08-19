@@ -76,6 +76,37 @@ All of the tasks below will work with an example class and function::
         pass  # This is a stub.  We will implement the function in LLVM
 
 
+Organizing Type Signatures with a Registry
+------------------------------------------
+
+If you have a lot of type signatures in a module, it can be cumbersome to make
+type information easily portable between targets. The
+``numba.typing.templates.Registry`` class simplifies this process by
+collecting lists of attribute, global and operator type signatures that can be
+installed into a typing context all at once.
+
+A common pattern in the Numba code is to collect all the type information for
+a particular package into a module that begins with::
+
+    from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
+                                        signature, Registry)
+
+    registry = Registry()  # A new registry for our new set of types
+    builtin = registry.register
+    builtin_attr = registry.register_attr
+    builtin_global = registry.register_global
+
+Then those three functions are used to record different type signatures in
+the registry (see examples below).  When the registry is fully populated,
+it is installed in the typing context::
+
+    from numba.targets.registry import target_registry
+
+    # Assuming the CPU target
+    target = target_registry['cpu']
+    target.targetdescr.typing_context.install(registry)
+
+
 Creating a New Numba Type
 -------------------------
 
@@ -105,13 +136,9 @@ that ``lo`` and ``hi`` are recognized as returning ``float32`` types.  This
 requires creating a subclass of ``numba.typing.templates.AttributeTemplate``::
 
     from numba.types import float32
-    from numba.targets.registry import target_registry
     from numba.typing.templates import AttributeTemplate
 
-    # Assuming the CPU target
-    target = target_registry['cpu']
-    typing_context = target.targetdescr.typing_context
-
+    @builtin_attr
     class IntervalAttributes(AttributeTemplate):
         key = interval_type
 
@@ -120,8 +147,6 @@ requires creating a subclass of ``numba.typing.templates.AttributeTemplate``::
 
         def generic_resolve(self, value, attr):
             return self._attributes[attr]
-
-    typing_context.insert_attributes(IntervalAttributes(typing_context))
 
 The ``key`` attribute of the template contains the Numba type that needs to be
 matched to use this template.  It can either be an instance of a ``Type``
@@ -157,7 +182,7 @@ it.  This is done using a ``numba.typing.templates.ConcreteTemplate``::
             signature(bool_, interval_type)
         ]
 
-    typing_context.insert_global(valid_interval, Function(ValidIntervalSignature))
+    builtin_global(valid_interval, Function(ValidIntervalSignature))
 
 The ``key`` for looking up the function type is the Python function itself,
 ``valid_interval`` in this example.  The ``cases`` attribute lists all of the
@@ -180,20 +205,17 @@ We need to make a ``ConcreteTemplate`` where the key is the string ``"+"``::
     target = target_registry['cpu']
     typing_context = target.targetdescr.typing_context
 
+    @builtin
     class AdditionSignature(ConcreteTemplate):
         key = '+'
         cases = [
             signature(interval_type, interval_type, interval_type)
         ]
 
-    typing_context.insert_function(AdditionSignature(typing_context))
-
-Note that unlike adding a function type signature for a global or attribute,
-``insert_function()`` takes an instance of the template, not an instance of
-``numba.types.Function``.  Several templates with the same key can be
-inserted, and each will be checked for a matching function signatures in the
-order of insertion. This is what allows the same key to be overloaded with
-different numbers of arguments and different argument types.
+Several templates with the same key can be inserted, and each will be checked
+for a matching function signatures in the order of insertion. This is what
+allows the same key to be overloaded with different numbers of arguments and
+different argument types.
 
 The list of special function keys includes:
 
@@ -224,58 +246,3 @@ In-place operations (like ``a += b``) are assumed to have the same signature
 as the right-hand side of the expanded form (``a = a + b``).
 
 
-Organizing Type Signatures with a Registry
-------------------------------------------
-
-If you have a lot of type signatures in a module, it can be cumbersome to make
-type information easily portable between targets. The
-``numba.typing.templates.Registry`` class simplifies this process by
-collecting lists of attribute, global and operator type signatures that can be
-installed into a typing context all at once.
-
-A common pattern in the Numba code is to collect all the type information for
-a particular package into a module that begins with::
-
-    from numba.types import bool_, float32
-    from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
-                                        signature, Registry)
-
-    registry = Registry()  # A new registry for our new set of types
-    builtin = registry.register
-    builtin_attr = registry.register_attr
-    builtin_global = registry.register_global
-
-Then those three functions are used to queue up the relevant templates.
-The examples from the previous sections could now be written::
-
-    @builtin_attr
-    class IntervalAttributes(AttributeTemplate):
-        key = interval_type
-
-        _attributes = dict(lo=float32, hi=float32)
-
-        def generic_resolve(self, value, attr):
-            print(value, type(value))
-            return self._attributes[attr]
-
-    class ValidIntervalSignature(ConcreteTemplate):
-        key = valid_interval
-        cases = [
-            signature(bool_, interval_type)
-        ]
-    builtin_global(valid_interval, Function(ValidIntervalSignature))
-
-    @builtin
-    class AdditionSignature(ConcreteTemplate):
-        key = '+'
-        cases = [
-            signature(interval_type, interval_type, interval_type)
-        ]
-
-Finally, the contents of the registry can be installed into the typing context::
-
-    from numba.targets.registry import target_registry
-
-    # Assuming the CPU target
-    target = target_registry['cpu']
-    target.targetdescr.typing_context.install(registry)
