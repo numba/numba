@@ -24,7 +24,6 @@ class TestUsecases(unittest.TestCase):
         ys = -1, 0, 1, 9, 10, 11
 
         for args in itertools.product(xs, ys):
-            print("case", args)
             self.assertEqual(pyfunc(*args), cfunc(*args), "args %s" % (args,))
 
     def test_sum1d(self):
@@ -36,8 +35,7 @@ class TestUsecases(unittest.TestCase):
         es = -1, 0, 1, 100, 200
 
         for args in itertools.product(ss, es):
-            print("case", args)
-            self.assertEqual(pyfunc(*args), cfunc(*args))
+            self.assertEqual(pyfunc(*args), cfunc(*args), args)
 
     def test_sum1d_pyobj(self):
         pyfunc = usecases.sum1d
@@ -49,8 +47,7 @@ class TestUsecases(unittest.TestCase):
         es = -1, 0, 1, 100, 200
 
         for args in itertools.product(ss, es):
-            print("case", args)
-            self.assertEqual(pyfunc(*args), cfunc(*args))
+            self.assertEqual(pyfunc(*args), cfunc(*args), args)
 
         args = 0, 500
 
@@ -72,8 +69,7 @@ class TestUsecases(unittest.TestCase):
         es = -1, 0, 1, 100, 200
 
         for args in itertools.product(ss, es):
-            print("case", args)
-            self.assertEqual(pyfunc(*args), cfunc(*args))
+            self.assertEqual(pyfunc(*args), cfunc(*args), args)
 
     def test_while_count(self):
         pyfunc = usecases.while_count
@@ -84,8 +80,7 @@ class TestUsecases(unittest.TestCase):
         es = -1, 0, 1, 100, 200
 
         for args in itertools.product(ss, es):
-            print("case", args)
-            self.assertEqual(pyfunc(*args), cfunc(*args))
+            self.assertEqual(pyfunc(*args), cfunc(*args), args)
 
     def test_copy_arrays(self):
         pyfunc = usecases.copy_arrays
@@ -100,9 +95,8 @@ class TestUsecases(unittest.TestCase):
             b = np.empty_like(a)
             args = a, b
 
-            print("case", args)
             cfunc(*args)
-            self.assertTrue(np.all(a == b))
+            self.assertTrue(np.all(a == b), args)
 
     def test_copy_arrays2d(self):
         pyfunc = usecases.copy_arrays2d
@@ -118,9 +112,8 @@ class TestUsecases(unittest.TestCase):
             b = np.empty_like(a)
             args = a, b
 
-            print("case", args)
             cfunc(*args)
-            self.assertTrue(np.all(a == b))
+            self.assertTrue(np.all(a == b), args)
 
     def test_ifelse1(self):
         self.run_ifelse(usecases.ifelse1)
@@ -140,8 +133,7 @@ class TestUsecases(unittest.TestCase):
 
         for x, y in itertools.product(xs, ys):
             args = x, y
-            print("case", args)
-            self.assertEqual(pyfunc(*args), cfunc(*args))
+            self.assertEqual(pyfunc(*args), cfunc(*args), args)
 
     def test_string_concat(self):
         pyfunc = usecases.string_concat
@@ -154,8 +146,7 @@ class TestUsecases(unittest.TestCase):
 
         for x, y in itertools.product(xs, ys):
             args = x, y
-            print("case", args)
-            self.assertEqual(pyfunc(*args), cfunc(*args))
+            self.assertEqual(pyfunc(*args), cfunc(*args), args)
 
     def test_string_len(self):
         pyfunc = usecases.string_len
@@ -234,8 +225,7 @@ class TestUsecases(unittest.TestCase):
 
         for d in ds:
             args = (d,)
-            print("case", args)
-            self.assertEqual(pyfunc(*args), cfunc(*args))
+            self.assertEqual(pyfunc(*args), cfunc(*args), args)
 
     def test_array_slicing(self):
         pyfunc = usecases.slicing
