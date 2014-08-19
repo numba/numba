@@ -111,8 +111,7 @@ def np_complex_div_impl(context, builder, sig, args):
     in2i = in2.imag  # denominator.imag
     ftype = in1r.type
     assert all([i.type==ftype for i in [in1r, in1i, in2r, in2i]]), "mismatched types"
-    presult_real = cgutils.alloca_once(builder, ftype)
-    presult_imag = cgutils.alloca_once(builder, ftype)
+    out = complexClass(context, builder)
 
     ZERO = lc.Constant.real(ftype, 0.0)
     ONE = lc.Constant.real(ftype, 1.0)
@@ -131,10 +130,8 @@ def np_complex_div_impl(context, builder, sig, args):
                 with inn_then:
                     # division by 0.
                     # fdiv generates the appropriate NAN/INF/NINF
-                    real = builder.fdiv(in1r, in2r_abs)
-                    imag = builder.fdiv(in1i, in2i_abs)
-                    builder.store(real, presult_real)
-                    builder.store(imag, presult_imag)
+                    out.real = builder.fdiv(in1r, in2r_abs)
+                    out.imag = builder.fdiv(in1i, in2i_abs)
                 with inn_otherwise:
                     # general case for:
                     # abs(denominator.real) > abs(denominator.imag)
@@ -149,10 +146,8 @@ def np_complex_div_impl(context, builder, sig, args):
                     tmp4 = builder.fmul(in1r, rat)
                     tmp5 = builder.fadd(in1r, tmp3)
                     tmp6 = builder.fsub(in1i, tmp4)
-                    real = builder.fmul(tmp5, scl)
-                    imag = builder.fmul(tmp6, scl)
-                    builder.store(real, presult_real)
-                    builder.store(imag, presult_imag)
+                    out.real = builder.fmul(tmp5, scl)
+                    out.imag = builder.fmul(tmp6, scl)
         with otherwise:
             # general case for:
             # abs(denominator.imag) > abs(denominator.real)
@@ -167,14 +162,9 @@ def np_complex_div_impl(context, builder, sig, args):
             tmp4 = builder.fmul(in1i, rat)
             tmp5 = builder.fadd(tmp3, in1i)
             tmp6 = builder.fsub(tmp4, in1r)
-            real = builder.fmul(tmp5, scl)
-            imag = builder.fmul(tmp6, scl)
-            builder.store(real, presult_real)
-            builder.store(imag, presult_imag)
+            out.real = builder.fmul(tmp5, scl)
+            out.imag = builder.fmul(tmp6, scl)
 
-    out = complexClass(context, builder)
-    out.real = builder.load(presult_real)
-    out.imag = builder.load(presult_imag)
     return out._getvalue()
 
 
@@ -224,7 +214,8 @@ def np_complex_floor_div_impl(context, builder, sig, args):
     in2i = in2.imag
     ftype = in1r.type
     assert all([i.type==ftype for i in [in1r, in1i, in2r, in2i]]), "mismatched types"
-    presult = cgutils.alloca_once(builder, ftype)
+    out = complexClass(context, builder)
+    out.imag = ZERO
 
     ZERO = lc.Constant.real(ftype, 0.0)
     in2r_abs = _fabs(context, builder, in2r)
@@ -234,28 +225,22 @@ def np_complex_floor_div_impl(context, builder, sig, args):
     with cgutils.ifelse(builder, in2r_abs_ge_in2i_abs) as (then, otherwise):
         with then:
             rat = builder.fdiv(in2i, in2r)
-            # result = abs((in1r+in1i*rat)/(in2r + in2i*rat))
+            # out.real = abs((in1r+in1i*rat)/(in2r + in2i*rat))
             tmp1 = builder.fmul(in1i, rat)
             tmp2 = builder.fmul(in2i, rat)
             tmp3 = builder.fadd(in1r, tmp1)
             tmp4 = builder.fadd(in2r, tmp2)
             tmp5 = builder.fdiv(tmp3, tmp4)
-            result = np_real_floor_impl(context, builder, floor_sig, (tmp5,))
-            builder.store(result, presult)
+            out.real = np_real_floor_impl(context, builder, floor_sig, (tmp5,))
         with otherwise:
             rat = builder.fdiv(in2r, in2i)
-            # result = abs((in1r+in1i*rat)/(in2i + in2r*rat))
+            # out.real = abs((in1r+in1i*rat)/(in2i + in2r*rat))
             tmp1 = builder.fmul(in1i, rat)
             tmp2 = builder.fmul(in2r, rat)
             tmp3 = builder.fadd(in1r, tmp1)
             tmp4 = builder.fadd(in2i, tmp2)
             tmp5 = builder.fdiv(tmp3, tmp4)
-            result = np_real_floor_impl(context, builder, floor_sig, (tmp5,))
-            builder.store(result, presult)
-
-    out = complexClass(context, builder)
-    out.real = builder.load(presult)
-    out.imag = ZERO
+            out.real = np_real_floor_impl(context, builder, floor_sig, (tmp5,))
     return out._getvalue()
 
 
