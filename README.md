@@ -11,7 +11,7 @@ code using NumPy arrays.  Other, less well-typed code will be translated
 to Python C-API calls effectively removing the "interpreter" but not removing
 the dynamic indirection.
 
-Numba is also not a tracing jit.  It *compiles* your code before it gets
+Numba is also not a tracing JIT.  It *compiles* your code before it gets
 run either using run-time type information or type information you provide
 in the decorator.
 
@@ -99,10 +99,6 @@ or simply
 $ pip install numba
 ```
 
-**NOTE:** Make sure you install *distribute* instead of setuptools. Using setuptools
-          may mean that source files do not get cythonized and may result in an
-          error during installation.
-
 If you want to enable CUDA support, you will need CUDA Toolkit 5.5+ (which contains 
 ``libnvvm``). After installing the Toolkit, you might have to specify a few 
 environment variables according to http://numba.pydata.org/numba-doc/0.13/CUDASupport.html
@@ -115,9 +111,12 @@ http://numba.pydata.org/numba-doc/dev/index.html
 Mailing Lists
 =============
 
-Join the numba mailing list numba-users@continuum.io :
+Join the numba mailing list numba-users@continuum.io:
 
 https://groups.google.com/a/continuum.io/d/forum/numba-users
+
+or access it through the Gmane mirror:
+http://news.gmane.org/gmane.comp.python.numba.user
 
 Some old archives are at: http://librelist.com/browser/numba/
 
