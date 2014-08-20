@@ -221,7 +221,6 @@ def ufunc_find_matching_loop(ufunc, arg_types):
     return value - A UFuncLoopSpec identifying the loop, or None
                    if no matching loop is found.
     """
-    assert(isinstance(ufunc, numpy.ufunc))
 
     # Separate logical input from explicit output arguments
     input_types = arg_types[:ufunc.nin]
