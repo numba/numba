@@ -321,9 +321,11 @@ class TypeInferer(object):
     Operates on block that shares the same ir.Scope.
     """
 
-    def __init__(self, context, blocks):
+    def __init__(self, context, blocks, func_name, recur_template):
         self.context = context
         self.blocks = blocks
+        self.func_name = func_name
+        self.recur_template = recur_template
         self.typevars = TypeVarMap()
         self.typevars.set_context(context)
         self.constrains = ConstrainNetwork()
@@ -532,6 +534,12 @@ class TypeInferer(object):
                               loc=inst.loc)
 
     def typeof_global(self, inst, target, gvar):
+        if gvar.name == self.func_name and gvar.value is ir.UNDEFINED:
+            fnty = types.UndefinedFunction(self.recur_template)
+            self.typevars[target.name].lock(fnty)
+            self.assumed_immutables.add(inst)
+            return
+
         typ = self.context.resolve_value_type(gvar.value)
         if typ is not None:
             self.sentry_modified_builtin(inst, gvar)

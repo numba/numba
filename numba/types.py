@@ -295,6 +295,11 @@ class Function(Type):
         self.template.cases.extend(template.cases)
 
 
+class UndefinedFunction(Function):
+    pass
+
+
+
 class WeakType(Type):
     """
     Base class for types parametered by a mortal object, to which only

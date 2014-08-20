@@ -97,7 +97,6 @@ class CPUContext(BaseContext):
         """
         fnty = self.get_function_type(fndesc)
         fn = module.get_or_insert_function(fnty, name=fndesc.mangled_name)
-        assert fn.is_declaration
         for ak, av in zip(fndesc.args, self.get_arguments(fn)):
             av.name = "arg.%s" % ak
         self.get_env_argument(fn).name = "env"
