@@ -227,7 +227,7 @@ def np_complex_floor_div_impl(context, builder, sig, args):
     with cgutils.ifelse(builder, in2r_abs_ge_in2i_abs) as (then, otherwise):
         with then:
             rat = builder.fdiv(in2i, in2r)
-            # out.real = abs((in1r+in1i*rat)/(in2r + in2i*rat))
+            # out.real = floor((in1r+in1i*rat)/(in2r + in2i*rat))
             tmp1 = builder.fmul(in1i, rat)
             tmp2 = builder.fmul(in2i, rat)
             tmp3 = builder.fadd(in1r, tmp1)
@@ -236,10 +236,10 @@ def np_complex_floor_div_impl(context, builder, sig, args):
             out.real = np_real_floor_impl(context, builder, floor_sig, (tmp5,))
         with otherwise:
             rat = builder.fdiv(in2r, in2i)
-            # out.real = abs((in1r+in1i*rat)/(in2i + in2r*rat))
-            tmp1 = builder.fmul(in1i, rat)
+            # out.real = floor((in1i + in1r*rat)/(in2i + in2r*rat))
+            tmp1 = builder.fmul(in1r, rat)
             tmp2 = builder.fmul(in2r, rat)
-            tmp3 = builder.fadd(in1r, tmp1)
+            tmp3 = builder.fadd(in1i, tmp1)
             tmp4 = builder.fadd(in2i, tmp2)
             tmp5 = builder.fdiv(tmp3, tmp4)
             out.real = np_real_floor_impl(context, builder, floor_sig, (tmp5,))
