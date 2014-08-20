@@ -1185,7 +1185,7 @@ class TestLoopTypes(TestCase):
             return np.array([2, 21], dtype='M8[D]')
         elif a_letter_type in 'fd':
             # floating point
-            return np.array([1.5, -1.5], dtype=a_letter_type)
+            return np.array([1.5, -3.5], dtype=a_letter_type)
         elif a_letter_type in 'FD':
             # complex
             return np.array([-1.0j, 1.5 + 1.5j], dtype=a_letter_type)
