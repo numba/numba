@@ -329,6 +329,12 @@ def int_invert_impl(context, builder, sig, args):
     return builder.xor(val, Constant.all_ones(val.type))
 
 
+def bool_invert_impl(context, builder, sig, args):
+    [typ] = sig.args
+    [val] = args
+    return builder.sub(Constant.int(val.type, 1), val)
+
+
 def int_sign_impl(context, builder, sig, args):
     [x] = args
     POS = Constant.int(x.type, 1)
@@ -373,7 +379,7 @@ builtin(implement('<', types.boolean, types.boolean)(int_ult_impl))
 builtin(implement('<=', types.boolean, types.boolean)(int_ule_impl))
 builtin(implement('>', types.boolean, types.boolean)(int_ugt_impl))
 builtin(implement('>=', types.boolean, types.boolean)(int_uge_impl))
-builtin(implement('~', types.boolean)(int_invert_impl))
+builtin(implement('~', types.boolean)(bool_invert_impl))
 
 for ty in types.integer_domain:
     builtin(implement('+', ty, ty)(int_add_impl))

@@ -1166,24 +1166,24 @@ class TestLoopTypes(TestCase):
         """return a suitable array argument for testing the letter type"""
         if a_letter_type in 'bBhHiIlL':
             # an integral
-            return np.array((2,), dtype=a_letter_type)
+            return np.array([2, 3], dtype=a_letter_type)
         elif a_letter_type in '?':
             # a boolean
-            return np.array((True,), dtype=a_letter_type)
+            return np.array([True, False], dtype=a_letter_type)
         elif a_letter_type in 'm':
             # timedelta64
-            return np.array((2,), dtype='m8[d]')
+            return np.array([2, -3], dtype='m8[D]')
         elif a_letter_type in 'M':
             # datetime64
-            return np.array((2,), dtype='M8[D]')
+            return np.array([2, 21], dtype='M8[D]')
         elif a_letter_type in 'fd':
             # floating point
-            return np.array((1.5,), dtype=a_letter_type)
+            return np.array([1.5, -1.5], dtype=a_letter_type)
         elif a_letter_type in 'FD':
             # complex
-            return np.array((1. + 1.j,), dtype=a_letter_type)
+            return np.array([-1.0j, 1.5 + 1.5j], dtype=a_letter_type)
         else:
-            return np.array((2,), dtype=a_letter_type)
+            return np.array([2, 3], dtype=a_letter_type)
 
 
     def _check_loop(self, fn, ufunc, loop):
@@ -1199,18 +1199,31 @@ class TestLoopTypes(TestCase):
                for l in letter_types):
             return
 
+        # if the test case requires some types to be present, skip loops
+        # not involving any of those types.
+        required_types = getattr(self, '_required_types', [])
+        if required_types and not any(l in letter_types
+                                      for l in required_types):
+            return
+
         arg_dty = [np.dtype(l) for l in letter_types]
         arg_nbty = [types.Array(from_dtype(t), 1, 'C') for t in arg_dty]
-        cr = compile_isolated(fn, arg_nbty, flags=self._compile_flags);
+        cr = compile_isolated(fn, arg_nbty, flags=self._compile_flags)
 
-        args1 = [self._arg_for_type(lt) for lt in letter_types]
-        args2 = [self._arg_for_type(lt) for lt in letter_types]
+        c_args = [self._arg_for_type(lt) for lt in letter_types]
+        py_args = [self._arg_for_type(lt) for lt in letter_types]
 
-        cr.entry_point(*args1)
-        fn(*args2)
+        cr.entry_point(*c_args)
+        fn(*py_args)
 
-        for i in range(ufunc.nout):
-            self.assertPreciseEqual(args1[-i], args2[-i])
+        # Check each array (including inputs, to ensure they weren't
+        # mutated).
+        for c_arg, py_arg in zip(c_args, py_args):
+            # XXX should assertPreciseEqual() accept numpy arrays?
+            prec = 'single' if c_arg.dtype.char in 'fF' else 'exact'
+            for c, py in zip(c_arg, py_arg):
+                self.assertPreciseEqual(py, c, prec=prec,
+                    msg="arrays differ: expected %r, got %r" % (py_arg, c_arg))
 
 
     def _check_ufunc_loops(self, ufunc):
@@ -1219,7 +1232,7 @@ class TestLoopTypes(TestCase):
         for loop in ufunc.types:
             try:
                 self._check_loop(fn, ufunc, loop)
-            except Exception as e:
+            except AssertionError as e:
                 _failed_loops.append('{2} {0}:{1}'.format(loop, str(e),
                                                           ufunc.__name__))
 
@@ -1270,8 +1283,28 @@ class TestLoopTypesComplexNoPython(TestLoopTypes):
     _ufuncs = [np.negative, np.add, np.subtract, np.multiply, np.divide,
                np.true_divide, np.floor_divide]
 
-    #test complex types
+    # Test complex types
     _supported_types = 'FD'
+
+
+class TestLoopTypesDatetimeNoPython(TestLoopTypes):
+    _compile_flags = no_pyobj_flags
+    _ufuncs = [np.absolute, np.negative, np.sign,
+               np.add, np.subtract, np.multiply,
+               np.divide, np.true_divide, np.floor_divide]
+
+    # NOTE: the full list of ufuncs supporting datetime64 and timedelta64
+    # types in Numpy is:
+    # ['absolute', 'add', 'equal', 'floor_divide', 'fmax', 'fmin',
+    #  'greater', 'greater_equal', 'less', 'less_equal', 'maximum',
+    #  'minimum', 'multiply', 'negative', 'not_equal', 'sign', 'subtract',
+    #  'true_divide']
+
+    # Test datetime64 and timedelta64 types.
+    _supported_types = 'mMqd'
+    _required_types = 'mM'
+
+    # XXX this should check combinations of units
 
 
 class TestUFuncBadArgsNoPython(TestCase):

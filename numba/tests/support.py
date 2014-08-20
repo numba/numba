@@ -2,6 +2,7 @@
 Assorted utilities for use in tests.
 """
 
+import cmath
 import contextlib
 import math
 
@@ -75,7 +76,7 @@ class TestCase(unittest.TestCase):
             yield cm
 
     _exact_typesets = [(bool, np.bool_), utils.INT_TYPES, (str,), (utils.text_type),]
-    _approx_typesets = [(float,), (complex,)]
+    _approx_typesets = [(float,), (complex,), (np.floating),]
 
     def assertPreciseEqual(self, first, second, prec='exact', msg=None):
         """
@@ -118,7 +119,7 @@ class TestCase(unittest.TestCase):
             self.assertEqual(first.dtype, second.dtype)
 
         try:
-            if math.isnan(first) and math.isnan(second):
+            if cmath.isnan(first) and cmath.isnan(second):
                 # The NaNs will compare unequal, skip regular comparison
                 return
         except TypeError:

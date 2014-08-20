@@ -353,43 +353,6 @@ def _ufunc_db_function(ufunc):
     return _KernelImpl
 
 
-def _homogeneous_function(op, alias=None):
-    """A function that uses the underlying ufunc loop information to chose
-    an implementation for the operation op. It uses the loop
-    information provided by the ufunc in alias. Alias defaults to the
-    op if not provided.
-
-    Using the loop information, code is generated that simulates the
-    process of: converting input arguments (outer_sig) to the input
-    arguments specifies by the ufunc selected loop. The operation is
-    performed in the converted arguments, resulting in a value as
-    specified by the selected loop information. Finally, the resulting
-    value is converted to the requested output type (in outer_sig).
-    """
-    class _KernelImpl(_Kernel):
-        def __init__(self, context, builder, outer_sig):
-            super(_KernelImpl, self).__init__(context, builder, outer_sig)
-            ufunc = alias if alias is not None else op
-
-            self.loop = ufunc_find_matching_loop(
-                ufunc, outer_sig.args + (outer_sig.return_type,))
-            # only one output supported for now.
-            assert(len(self.loop.outputs) == 1)
-
-        def generate(self, *args):
-            inner_sig = typing.signature(self.loop.outputs[0],
-                                         *self.loop.inputs)
-            fn = self.context.get_function(op, inner_sig)
-            cast_args = [self.cast(val, inty, outty)
-                         for val, inty, outty in zip(args, self.outer_sig.args,
-                                                     self.loop.inputs)]
-            res = fn(self.builder, cast_args)
-            return self.cast(res, self.loop.outputs[0],
-                             self.outer_sig.return_type)
-
-    return _KernelImpl
-
-
 ################################################################################
 # Helper functions that register the ufuncs
 
@@ -487,7 +450,7 @@ register_unary_ufunc_kernel(numpy.radians, _function_with_cast(npy.deg2rad, _flo
 # the following ufuncs rely on functions that are not based on a function
 # from npymath
 register_unary_ufunc_kernel(numpy.absolute, _ufunc_db_function(numpy.absolute))
-register_unary_ufunc_kernel(numpy.sign, _homogeneous_function(types.sign_type, numpy.sign))
+register_unary_ufunc_kernel(numpy.sign, _ufunc_db_function(numpy.sign))
 register_unary_ufunc_kernel(numpy.negative, _ufunc_db_function(numpy.negative))
 
 # for these we mostly rely on code generation for python operators.

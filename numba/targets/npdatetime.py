@@ -131,7 +131,7 @@ def timedelta_pos_impl(context, builder, sig, args):
 
 @builtin
 @implement('-', types.Kind(types.NPTimedelta))
-def timedelta_pos_impl(context, builder, sig, args):
+def timedelta_neg_impl(context, builder, sig, args):
     return builder.neg(args[0])
 
 @builtin
@@ -145,6 +145,25 @@ def timedelta_abs_impl(context, builder, sig, args):
             builder.store(builder.neg(val), ret)
         with otherwise:
             builder.store(val, ret)
+    return builder.load(ret)
+
+@builtin
+@implement(types.sign_type, types.Kind(types.NPTimedelta))
+def timedelta_sign_impl(context, builder, sig, args):
+    val, = args
+    ret = alloc_timedelta_result(builder)
+    zero = Constant.int(TIMEDELTA64, 0)
+    with cgutils.ifelse(builder, builder.icmp(lc.ICMP_SGT, val, zero)
+                        ) as (gt_zero, le_zero):
+        with gt_zero:
+            builder.store(Constant.int(TIMEDELTA64, 1), ret)
+        with le_zero:
+            with cgutils.ifelse(builder, builder.icmp(lc.ICMP_EQ, val, zero)
+                                ) as (eq_zero, lt_zero):
+                with eq_zero:
+                    builder.store(Constant.int(TIMEDELTA64, 0), ret)
+                with lt_zero:
+                    builder.store(Constant.int(TIMEDELTA64, -1), ret)
     return builder.load(ret)
 
 @builtin
@@ -187,14 +206,14 @@ def _timedelta_times_number(context, builder, td_arg, number_arg, number_type):
 @builtin
 @implement('*', types.Kind(types.NPTimedelta), types.Kind(types.Integer))
 @implement('*', types.Kind(types.NPTimedelta), types.Kind(types.Float))
-def timedelta_mul_impl(context, builder, sig, args):
+def timedelta_times_number(context, builder, sig, args):
     return _timedelta_times_number(context, builder,
                                   args[0], args[1], sig.args[1])
 
 @builtin
 @implement('*', types.Kind(types.Integer), types.Kind(types.NPTimedelta))
 @implement('*', types.Kind(types.Float), types.Kind(types.NPTimedelta))
-def timedelta_mul_impl(context, builder, sig, args):
+def number_times_timedelta(context, builder, sig, args):
     return _timedelta_times_number(context, builder,
                                   args[1], args[0], sig.args[0])
 
@@ -205,7 +224,7 @@ def timedelta_mul_impl(context, builder, sig, args):
 @implement('/', types.Kind(types.NPTimedelta), types.Kind(types.Float))
 @implement('//', types.Kind(types.NPTimedelta), types.Kind(types.Float))
 @implement('/?', types.Kind(types.NPTimedelta), types.Kind(types.Float))
-def timedelta_div_impl(context, builder, sig, args):
+def timedelta_over_number(context, builder, sig, args):
     td_arg, number_arg = args
     number_type = sig.args[1]
     ret = alloc_timedelta_result(builder)
@@ -224,7 +243,7 @@ def timedelta_div_impl(context, builder, sig, args):
 @builtin
 @implement('/', *TIMEDELTA_BINOP_SIG)
 @implement('/?', *TIMEDELTA_BINOP_SIG)
-def timedelta_div_impl(context, builder, sig, args):
+def timedelta_over_timedelta(context, builder, sig, args):
     [va, vb] = args
     [ta, tb] = sig.args
     not_nan = are_not_nat(builder, [va, vb])
