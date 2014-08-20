@@ -2,33 +2,43 @@
 into numba. It is a database of different ufuncs and how each of its
 loops maps to a function that implements the inner kernel of that ufunc
 (the inner kernel being the per-element function).
+
+Use the function get_ufunc_info to get the information related to the
+ufunc
 """
 
 from __future__ import print_function, division, absolute_import
 
-from . import npdatetime
+import numpy as np
 
 
-class UFuncDB(object):
-    def __init__(self):
-        self.dict = {}
+# this is lazily initialized to avoid circular imports
+_ufunc_db = None
 
-    def __getitem__(self, key):
-        try:
-            return self.dict[key]
-        except KeyError:
-            if not self.dict:
-                _fill_ufunc_db(self.dict)
-                return self.dict[key]
-            else:
-                raise
+def get_ufunc_info(ufunc_key):
+    """get the lowering information for the ufunc with key ufunc_key.
 
-ufunc_db = UFuncDB()
+    The lowering information is a dictionary that maps from a numpy
+    loop string (as given by the ufunc types attribute) to a function
+    that handles code generation for a scalar version of the ufunc
+    (that is, generates the "per element" operation").
+
+    raises a KeyError if the ufunc is not in the ufunc_db
+    """
+    global _ufunc_db
+
+    if _ufunc_db is None:
+        _ufunc_db = {}
+        _fill_ufunc_db(_ufunc_db)
+
+    return _ufunc_db[ufunc_key]
+
 
 def _fill_ufunc_db(ufunc_db):
-    from . import builtins, npyfuncs
-
-    import numpy as np
+    # some of these imports would cause a problem of circular
+    # imports if done at global scope when importing the numba
+    # module.
+    from . import builtins, npdatetime, npyfuncs
 
     ufunc_db[np.negative] = {
         '?->?': builtins.number_not_impl,

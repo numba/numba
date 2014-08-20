@@ -8,12 +8,11 @@ from collections import namedtuple
 
 from llvm.core import Constant, Type, ICMP_UGT
 
-from . import builtins
+from . import builtins, ufunc_db
 from .imputils import implement, Registry
 from .. import typing, types, cgutils, numpy_support
 from ..config import PYVERSION
 from ..numpy_support import ufunc_find_matching_loop
-from .ufunc_db import ufunc_db
 
 registry = Registry()
 register = registry.register
@@ -254,10 +253,12 @@ class _Kernel(object):
         self.outer_sig = outer_sig
 
     def cast(self, val, fromty, toty):
-        """Numpy implements some different cast semantics that are different
-        from standard Python (for example, it does allow casting from
-        complex to float. This function acts as a patched cast to take
-        that into account.
+        """Numpy uses cast semantics that are different from standard Python
+        (for example, it does allow casting from complex to float).
+
+        This method acts as a patch to context.cast so that it allows 
+        complex to real/int casts.
+
         """
         if fromty in types.complex_domain and toty not in types.complex_domain:
             # attempt conversion of the real part to the specified type.
@@ -331,7 +332,7 @@ def _ufunc_db_function(ufunc):
             super(_KernelImpl, self).__init__(context, builder, outer_sig)
             loop = ufunc_find_matching_loop(
                 ufunc, outer_sig.args + (outer_sig.return_type,))
-            self.fn = ufunc_db[ufunc].get(loop.ufunc_sig)
+            self.fn = ufunc_db.get_ufunc_info(ufunc).get(loop.ufunc_sig)
             self.inner_sig = typing.signature(
                 *(loop.outputs + loop.inputs))
 

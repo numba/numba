@@ -11,7 +11,6 @@ def setitem_slice(a, start, stop, step, scalar):
 
 def usecase(obs, nPoints, B, sigB, A, sigA, M, sigM):
     center = nPoints / 2
-    print(center)
     obs[0:center] = np.arange(center)
     obs[center] = 321
     obs[(center + 1):] = np.arange(nPoints - center - 1)
@@ -29,7 +28,6 @@ class TestStoreSlice(unittest.TestCase):
         cres.entry_point(obs_got, n, 10.0, 1.0, 2.0, 3.0, 4.0, 5.0)
         usecase(obs_expected, n, 10.0, 1.0, 2.0, 3.0, 4.0, 5.0)
 
-        print(obs_got, obs_expected)
         self.assertTrue(np.allclose(obs_got, obs_expected))
 
     def test_array_slice_setitem(self):

@@ -1,17 +1,16 @@
 from __future__ import print_function, absolute_import, division
 
-from .imputils import (builtin, builtin_attr, implement, impl_attribute,
-                       impl_attribute_generic, iterator_impl, iternext_impl,
-                       struct_factory)
-from .. import errcode, types, cgutils, utils
 
-from .. import typing
+import math
+from functools import reduce
 
 from llvm.core import Type, Constant
 import llvm.core as lc
-from functools import reduce
-import math
 
+from .imputils import (builtin, builtin_attr, implement, impl_attribute,
+                       impl_attribute_generic, iterator_impl, iternext_impl,
+                       struct_factory)
+from .. import typing, types, cgutils, utils, errcode
 
 
 #-------------------------------------------------------------------------------
