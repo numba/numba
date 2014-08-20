@@ -1120,6 +1120,13 @@ class TestUfuncIssues(TestCase):
         b = np.arange(10, dtype='f8')
         self.assertTrue(np.all(foo(a, b) == (a + b) + (a + b)))
 
+    def test_issue_713(self):
+        def foo(x,y):
+            return np.floor_divide(x,y)
+
+        cr = compile_isolated(foo, [types.complex128, types.complex128])
+        self.assertEqual(foo(1j, 1j), cr.entry_point(1j, 1j))
+
 
 class TestLoopTypes(TestCase):
     """Test code generation for the different loop types defined by ufunc.
