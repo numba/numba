@@ -533,6 +533,8 @@ class TypeInferer(object):
 
     def typeof_global(self, inst, target, gvar):
         typ = self.context.resolve_value_type(gvar.value)
+        if isinstance(typ, types.Array):
+            typ = typ.copy(layout='C')
         if typ is not None:
             self.sentry_modified_builtin(inst, gvar)
             self.typevars[target.name].lock(typ)
