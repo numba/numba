@@ -4,11 +4,9 @@ Utilities to simplify the boilerplate for native lowering.
 
 from __future__ import print_function, absolute_import, division
 
-from .. import cgutils, types
-from .. import typing
-
 import functools
 
+from .. import typing, cgutils, types
 
 def implement(func, *argtys):
     def wrapper(impl):
