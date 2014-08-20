@@ -476,9 +476,24 @@ def get_strides_from_slice(builder, ndim, strides, slice, ax):
 
 
 def is_scalar_zero(builder, value):
+    """
+    Return a predicate representing whether *value* is equal to zero.
+    """
     nullval = Constant.null(value.type)
     if value.type in (Type.float(), Type.double()):
         isnull = builder.fcmp(lc.FCMP_OEQ, nullval, value)
+    else:
+        isnull = builder.icmp(lc.ICMP_EQ, nullval, value)
+    return isnull
+
+def is_scalar_zero_or_nan(builder, value):
+    """
+    Return a predicate representing whether *value* is equal to either zero
+    or NaN.
+    """
+    nullval = Constant.null(value.type)
+    if value.type in (Type.float(), Type.double()):
+        isnull = builder.fcmp(lc.FCMP_UEQ, nullval, value)
     else:
         isnull = builder.icmp(lc.ICMP_EQ, nullval, value)
     return isnull

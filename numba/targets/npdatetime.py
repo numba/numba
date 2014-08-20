@@ -191,7 +191,8 @@ def timedelta_sub_impl(context, builder, sig, args):
     return builder.load(ret)
 
 
-def _timedelta_times_number(context, builder, td_arg, number_arg, number_type):
+def _timedelta_times_number(context, builder, td_arg, td_type,
+                            number_arg, number_type, return_type):
     ret = alloc_timedelta_result(builder)
     with cgutils.if_likely(builder, is_not_nat(builder, td_arg)):
         if isinstance(number_type, types.Float):
@@ -200,6 +201,9 @@ def _timedelta_times_number(context, builder, td_arg, number_arg, number_type):
             val = builder.fptosi(val, TIMEDELTA64)
         else:
             val = builder.mul(td_arg, number_arg)
+        # The scaling is required for ufunc np.multiply() with an explicit
+        # output in a different unit.
+        val = scale_timedelta(context, builder, val, td_type, return_type)
         builder.store(val, ret)
     return builder.load(ret)
 
@@ -208,14 +212,16 @@ def _timedelta_times_number(context, builder, td_arg, number_arg, number_type):
 @implement('*', types.Kind(types.NPTimedelta), types.Kind(types.Float))
 def timedelta_times_number(context, builder, sig, args):
     return _timedelta_times_number(context, builder,
-                                  args[0], args[1], sig.args[1])
+                                   args[0], sig.args[0], args[1], sig.args[1],
+                                   sig.return_type)
 
 @builtin
 @implement('*', types.Kind(types.Integer), types.Kind(types.NPTimedelta))
 @implement('*', types.Kind(types.Float), types.Kind(types.NPTimedelta))
 def number_times_timedelta(context, builder, sig, args):
     return _timedelta_times_number(context, builder,
-                                  args[1], args[0], sig.args[0])
+                                   args[1], sig.args[1], args[0], sig.args[0],
+                                   sig.return_type)
 
 @builtin
 @implement('/', types.Kind(types.NPTimedelta), types.Kind(types.Integer))
@@ -229,14 +235,18 @@ def timedelta_over_number(context, builder, sig, args):
     number_type = sig.args[1]
     ret = alloc_timedelta_result(builder)
     ok = builder.and_(is_not_nat(builder, td_arg),
-                      builder.not_(cgutils.is_scalar_zero(builder, number_arg)))
+                      builder.not_(cgutils.is_scalar_zero_or_nan(builder, number_arg)))
     with cgutils.if_likely(builder, ok):
+        # Denominator is non-zero, non-NaN
         if isinstance(number_type, types.Float):
             val = builder.sitofp(td_arg, number_arg.type)
             val = builder.fdiv(val, number_arg)
             val = builder.fptosi(val, TIMEDELTA64)
         else:
             val = builder.sdiv(td_arg, number_arg)
+        # The scaling is required for ufuncs np.*divide() with an explicit
+        # output in a different unit.
+        val = scale_timedelta(context, builder, val, sig.args[0], sig.return_type)
         builder.store(val, ret)
     return builder.load(ret)
 

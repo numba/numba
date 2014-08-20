@@ -1,11 +1,12 @@
 from __future__ import print_function
 
+import functools
 import itertools
+import re
 import sys
 import warnings
 
 import numpy as np
-import functools
 
 import numba.unittest_support as unittest
 from numba import types, typing, utils
@@ -14,9 +15,10 @@ from numba.numpy_support import from_dtype
 from numba import vectorize
 from numba.config import PYVERSION
 from numba.typeinfer import TypingError
-from numba.tests.support import TestCase, CompilationCache
 from numba.targets import cpu
-import re
+from numba.lowering import LoweringError
+from .support import TestCase, CompilationCache, skip_on_numpy_16
+
 
 is32bits = tuple.__itemsize__ == 4
 iswindows = sys.platform.startswith('win32')
@@ -1173,18 +1175,22 @@ class TestLoopTypes(TestCase):
 
     def _arg_for_type(self, a_letter_type):
         """return a suitable array argument for testing the letter type"""
-        if a_letter_type in 'bBhHiIlL':
+        if a_letter_type in 'bBhHiIlLqQ':
             # an integral
             return np.array([2, 3, 4, 0], dtype=a_letter_type)
         elif a_letter_type in '?':
             # a boolean
             return np.array([True, False, False, True], dtype=a_letter_type)
-        elif a_letter_type in 'm':
+        elif a_letter_type[0] == 'm':
             # timedelta64
-            return np.array([2, -3, 'NaT', 0], dtype='m8[D]')
-        elif a_letter_type in 'M':
+            if len(a_letter_type) == 1:
+                a_letter_type = 'm8[D]'
+            return np.array([2, -3, 'NaT', 0], dtype=a_letter_type)
+        elif a_letter_type[0] == 'M':
             # datetime64
-            return np.array(['Nat', 1, 25, 0], dtype='M8[D]')
+            if len(a_letter_type) == 1:
+                a_letter_type = 'M8[D]'
+            return np.array(['Nat', 1, 25, 0], dtype=a_letter_type)
         elif a_letter_type in 'fd':
             # floating point
             return np.array([1.5, -3.5, 0.0, float('nan')], dtype=a_letter_type)
@@ -1192,8 +1198,7 @@ class TestLoopTypes(TestCase):
             # complex
             return np.array([-1.0j, 1.5 + 1.5j, 1j * float('nan'), 0j], dtype=a_letter_type)
         else:
-            return np.array([2, 3, 4, 0], dtype=a_letter_type)
-
+            raise RuntimeError("type %r not understood" % (a_letter_type,))
 
     def _check_loop(self, fn, ufunc, loop):
         # the letter types for the args
@@ -1215,12 +1220,15 @@ class TestLoopTypes(TestCase):
                                       for l in required_types):
             return
 
-        arg_dty = [np.dtype(l) for l in letter_types]
+        self._check_ufunc_with_dtypes(fn, ufunc, letter_types)
+
+    def _check_ufunc_with_dtypes(self, fn, ufunc, dtypes):
+        arg_dty = [np.dtype(t) for t in dtypes]
         arg_nbty = [types.Array(from_dtype(t), 1, 'C') for t in arg_dty]
         cr = compile_isolated(fn, arg_nbty, flags=self._compile_flags)
 
         # Ensure a good mix of input values
-        c_args = [self._arg_for_type(lt).repeat(2) for lt in letter_types]
+        c_args = [self._arg_for_type(t).repeat(2) for t in dtypes]
         for arr in c_args:
             self.random.shuffle(arr)
         py_args = [a.copy() for a in c_args]
@@ -1298,6 +1306,7 @@ class TestLoopTypesComplexNoPython(TestLoopTypes):
     _supported_types = 'FD'
 
 
+@skip_on_numpy_16
 class TestLoopTypesDatetimeNoPython(TestLoopTypes):
     _compile_flags = no_pyobj_flags
     _ufuncs = [np.absolute, np.negative, np.sign,
@@ -1315,7 +1324,69 @@ class TestLoopTypesDatetimeNoPython(TestLoopTypes):
     _supported_types = 'mMqd'
     _required_types = 'mM'
 
-    # XXX this should check combinations of units
+    # Test various units combinations (TestLoopTypes is only able to test
+    # homogeneous units).
+
+    def test_add(self):
+        ufunc = np.add
+        fn = _make_ufunc_usecase(ufunc)
+        # heterogenous inputs
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8[s]', 'm8[m]', 'm8[s]'])
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8[s]', 'm8[s]'])
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8', 'm8[m]'])
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8', 'm8[m]', 'm8[m]'])
+        # heterogenous inputs, scaled output
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8[s]', 'm8[m]', 'm8[ms]'])
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8[s]', 'm8[ms]'])
+        # Cannot upscale result (Numpy would accept this)
+        with self.assertRaises(LoweringError):
+            self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8[s]', 'm8[m]'])
+
+    def test_subtract(self):
+        ufunc = np.subtract
+        fn = _make_ufunc_usecase(ufunc)
+        # heterogenous inputs
+        self._check_ufunc_with_dtypes(fn, ufunc, ['M8[s]', 'M8[m]', 'm8[s]'])
+        self._check_ufunc_with_dtypes(fn, ufunc, ['M8[m]', 'M8[s]', 'm8[s]'])
+        # heterogenous inputs, scaled output
+        self._check_ufunc_with_dtypes(fn, ufunc, ['M8[s]', 'M8[m]', 'm8[ms]'])
+        self._check_ufunc_with_dtypes(fn, ufunc, ['M8[m]', 'M8[s]', 'm8[ms]'])
+        # Cannot upscale result (Numpy would accept this)
+        with self.assertRaises(LoweringError):
+            self._check_ufunc_with_dtypes(fn, ufunc, ['M8[m]', 'M8[s]', 'm8[m]'])
+
+    def test_multiply(self):
+        ufunc = np.multiply
+        fn = _make_ufunc_usecase(ufunc)
+        # scaled output
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8[s]', 'q', 'm8[us]'])
+        self._check_ufunc_with_dtypes(fn, ufunc, ['q', 'm8[s]', 'm8[us]'])
+        # Cannot upscale result (Numpy would accept this)
+        with self.assertRaises(LoweringError):
+            self._check_ufunc_with_dtypes(fn, ufunc, ['m8[s]', 'q', 'm8[m]'])
+
+    def test_true_divide(self):
+        ufunc = np.true_divide
+        fn = _make_ufunc_usecase(ufunc)
+        # heterogenous inputs
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8[s]', 'd'])
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8[s]', 'm8[m]', 'd'])
+        # scaled output
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'q', 'm8[s]'])
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'd', 'm8[s]'])
+        # Cannot upscale result (Numpy would accept this)
+        with self.assertRaises(LoweringError):
+            self._check_ufunc_with_dtypes(fn, ufunc, ['m8[s]', 'q', 'm8[m]'])
+
+    def test_floor_divide(self):
+        ufunc = np.floor_divide
+        fn = _make_ufunc_usecase(ufunc)
+        # scaled output
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'q', 'm8[s]'])
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'd', 'm8[s]'])
+        # Cannot upscale result (Numpy would accept this)
+        with self.assertRaises(LoweringError):
+            self._check_ufunc_with_dtypes(fn, ufunc, ['m8[s]', 'q', 'm8[m]'])
 
 
 class TestUFuncBadArgsNoPython(TestCase):
