@@ -69,6 +69,7 @@ Numba
 
    developer/contributing.rst
    developer/architecture.rst
+   developer/extend_frontend.rst
    developer/cgutils.rst
 
 **Indices and tables**
