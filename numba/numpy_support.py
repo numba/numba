@@ -195,6 +195,6 @@ def from_struct_dtype(dtype):
         fields[name] = from_dtype(elemdtype), offset
 
     size = dtype.itemsize
-    align = dtype.alignment
+    aligned = dtype.isalignedstruct
 
-    return types.Record(str(dtype.descr), fields, size, align, dtype)
+    return types.Record(str(dtype.descr), fields, size, aligned, dtype)

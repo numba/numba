@@ -472,24 +472,19 @@ class UnicodeCharSeq(Type):
 
 class Record(Type):
     mutable = True
-    # Cache dtype -> weak Record
-    dtype_cache = weakref.WeakValueDictionary()
 
-    def __init__(self, id, fields, size, align, dtype):
+    def __init__(self, id, fields, size, aligned, dtype):
         self.id = id
         self.fields = fields.copy()
         self.size = size
-        self.align = align
+        self.aligned = aligned
         self.dtype = dtype
         name = 'Record(%s)' % id
         super(Record, self).__init__(name)
 
-    def post_init(self):
-        self.dtype_cache[self.dtype] = self
-
     @property
     def key(self):
-        return (self.id, self.size, self.align)
+        return (self.dtype, self.size, self.aligned)
 
     def __len__(self):
         return len(self.fields)

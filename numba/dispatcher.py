@@ -56,7 +56,7 @@ class _OverloadedBase(_dispatcher.Dispatcher):
             # will be cleared by the process exiting, anyway).
             if shutting_down():
                 return
-                # This function must *not* hold any reference to self:
+            # This function must *not* hold any reference to self:
             # we take care to bind the necessary objects in the closure.
             for func in overloads.values():
                 try:
@@ -108,7 +108,7 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         """
         if kws:
             raise TypeError("kwargs not supported")
-            # Ensure an overload is available, but avoid compiler re-entrance
+        # Ensure an overload is available, but avoid compiler re-entrance
         if not self.is_compiling:
             self.compile(tuple(args))
         return self._function_types[args]
@@ -171,10 +171,6 @@ class _OverloadedBase(_dispatcher.Dispatcher):
             # Ensure no autoscaling of integer type, to match the
             # typecode() function in _dispatcher.c.
             return types.int64
-
-        elif isinstance(val, np.recarray):
-            return types.Array(types.Record.dtype_cache[val.dtype],
-                               ndim=val.ndim, layout='A')
 
         tp = self.typingctx.resolve_data_type(val)
         if tp is None:
