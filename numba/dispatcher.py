@@ -4,6 +4,7 @@ import functools
 import inspect
 import sys
 
+import numpy as np
 from numba import _dispatcher, compiler, utils
 from numba.typeconv.rules import default_type_manager
 from numba import typing
@@ -170,6 +171,11 @@ class _OverloadedBase(_dispatcher.Dispatcher):
             # Ensure no autoscaling of integer type, to match the
             # typecode() function in _dispatcher.c.
             return types.int64
+
+        elif isinstance(val, np.recarray):
+            return types.Array(types.Record.dtype_cache[val.dtype],
+                               ndim=val.ndim, layout='A')
+
         tp = self.typingctx.resolve_data_type(val)
         if tp is None:
             tp = types.pyobject
