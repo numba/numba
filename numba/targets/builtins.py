@@ -654,35 +654,23 @@ def real_sign_impl(context, builder, sig, args):
     NEG = Constant.real(x.type, -1)
     ZERO = Constant.real(x.type, 0)
 
-    cmp_zero = builder.fcmp(lc.FCMP_OEQ, x, ZERO)
-    cmp_pos = builder.fcmp(lc.FCMP_OGT, x, ZERO)
-
     presult = cgutils.alloca_once(builder, x.type)
 
-    bb_zero = cgutils.append_basic_block(builder, ".zero")
-    bb_postest = cgutils.append_basic_block(builder, ".postest")
-    bb_pos = cgutils.append_basic_block(builder, ".pos")
-    bb_neg = cgutils.append_basic_block(builder, ".neg")
-    bb_exit = cgutils.append_basic_block(builder, ".exit")
+    is_pos = builder.fcmp(lc.FCMP_OGT, x, ZERO)
+    is_neg = builder.fcmp(lc.FCMP_OLT, x, ZERO)
 
-    builder.cbranch(cmp_zero, bb_zero, bb_postest)
+    with cgutils.ifelse(builder, is_pos) as (gt_zero, not_gt_zero):
+        with gt_zero:
+            builder.store(POS, presult)
+        with not_gt_zero:
+            with cgutils.ifelse(builder, is_neg) as (lt_zero, not_lt_zero):
+                with lt_zero:
+                    builder.store(NEG, presult)
+                with not_lt_zero:
+                    # For both NaN and 0, the result of sign() is simply
+                    # the input value.
+                    builder.store(x, presult)
 
-    with cgutils.goto_block(builder, bb_zero):
-        builder.store(ZERO, presult)
-        builder.branch(bb_exit)
-
-    with cgutils.goto_block(builder, bb_postest):
-        builder.cbranch(cmp_pos, bb_pos, bb_neg)
-
-    with cgutils.goto_block(builder, bb_pos):
-        builder.store(POS, presult)
-        builder.branch(bb_exit)
-
-    with cgutils.goto_block(builder, bb_neg):
-        builder.store(NEG, presult)
-        builder.branch(bb_exit)
-
-    builder.position_at_end(bb_exit)
     return builder.load(presult)
 
 

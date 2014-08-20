@@ -1109,7 +1109,9 @@ class TestScalarUFuncsNoPython(TestScalarUFuncs):
     """Same tests as TestScalarUFuncs, but forcing no python mode"""
     _compile_flags = no_pyobj_flags
 
+
 class TestUfuncIssues(TestCase):
+
     def test_issue_651(self):
         # Exercise the code path to make sure this does not fail
         @vectorize(["(float64,float64)"])
@@ -1173,24 +1175,24 @@ class TestLoopTypes(TestCase):
         """return a suitable array argument for testing the letter type"""
         if a_letter_type in 'bBhHiIlL':
             # an integral
-            return np.array([2, 3], dtype=a_letter_type)
+            return np.array([2, 3, 4, 0], dtype=a_letter_type)
         elif a_letter_type in '?':
             # a boolean
-            return np.array([True, False], dtype=a_letter_type)
+            return np.array([True, False, False, True], dtype=a_letter_type)
         elif a_letter_type in 'm':
             # timedelta64
-            return np.array([2, -3], dtype='m8[D]')
+            return np.array([2, -3, 'NaT', 0], dtype='m8[D]')
         elif a_letter_type in 'M':
             # datetime64
-            return np.array([2, 21], dtype='M8[D]')
+            return np.array(['Nat', 1, 25, 0], dtype='M8[D]')
         elif a_letter_type in 'fd':
             # floating point
-            return np.array([1.5, -3.5], dtype=a_letter_type)
+            return np.array([1.5, -3.5, 0.0, float('nan')], dtype=a_letter_type)
         elif a_letter_type in 'FD':
             # complex
-            return np.array([-1.0j, 1.5 + 1.5j], dtype=a_letter_type)
+            return np.array([-1.0j, 1.5 + 1.5j, 1j * float('nan'), 0j], dtype=a_letter_type)
         else:
-            return np.array([2, 3], dtype=a_letter_type)
+            return np.array([2, 3, 4, 0], dtype=a_letter_type)
 
 
     def _check_loop(self, fn, ufunc, loop):
@@ -1217,8 +1219,11 @@ class TestLoopTypes(TestCase):
         arg_nbty = [types.Array(from_dtype(t), 1, 'C') for t in arg_dty]
         cr = compile_isolated(fn, arg_nbty, flags=self._compile_flags)
 
-        c_args = [self._arg_for_type(lt) for lt in letter_types]
-        py_args = [self._arg_for_type(lt) for lt in letter_types]
+        # Ensure a good mix of input values
+        c_args = [self._arg_for_type(lt).repeat(2) for lt in letter_types]
+        for arr in c_args:
+            self.random.shuffle(arr)
+        py_args = [a.copy() for a in c_args]
 
         cr.entry_point(*c_args)
         fn(*py_args)
@@ -1231,7 +1236,6 @@ class TestLoopTypes(TestCase):
             for c, py in zip(c_arg, py_arg):
                 self.assertPreciseEqual(py, c, prec=prec,
                     msg="arrays differ: expected %r, got %r" % (py_arg, c_arg))
-
 
     def _check_ufunc_loops(self, ufunc):
         fn = _make_ufunc_usecase(ufunc)
