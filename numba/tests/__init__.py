@@ -268,9 +268,20 @@ class _MinimalResult(object):
         'failures', 'errors', 'skipped', 'expectedFailures',
         'unexpectedSuccesses', 'stream', 'shouldStop', 'testsRun')
 
+    def fixup_case(self, case):
+        """
+        Remove any unpicklable attributes from TestCase instance *case*.
+        """
+        # Python 3.3 doesn't reset this one.
+        case._outcomeForDoCleanups = None
+
     def __init__(self, original_result):
         for attr in self.__slots__:
             setattr(self, attr, getattr(original_result, attr))
+        for case, _ in self.errors:
+            self.fixup_case(case)
+        for case, _ in self.failures:
+            self.fixup_case(case)
 
 
 class _FakeStringIO(object):
