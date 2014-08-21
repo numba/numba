@@ -99,7 +99,7 @@ class RadixSort(object):
         self._cleanup(self._temp)
 
     def _call(self, temp, keys, vals, begin_bit=0, end_bit=None):
-        stream = self.stream._handle if self.stream else self.stream
+        stream = self.stream.handle if self.stream else self.stream
         begin_bit = begin_bit
         end_bit = end_bit or self.dtype.itemsize * 8
         descending = int(self.descending)
