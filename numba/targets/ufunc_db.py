@@ -178,3 +178,20 @@ def _fill_ufunc_db(ufunc_db):
         'FF->F': npyfuncs.np_complex_floor_div_impl,
         'DD->D': npyfuncs.np_complex_floor_div_impl,
     }
+
+    ufunc_db[np.power] = {
+        'bb->b': npyfuncs.np_int_power_impl,
+        'BB->B': npyfuncs.np_int_power_impl,
+        'hh->h': npyfuncs.np_int_power_impl,
+        'HH->H': npyfuncs.np_int_power_impl,
+        'ii->i': npyfuncs.np_int_power_impl,
+        'II->I': npyfuncs.np_int_power_impl,
+        'll->l': npyfuncs.np_int_power_impl,
+        'LL->L': npyfuncs.np_int_power_impl,
+        'qq->q': npyfuncs.np_int_power_impl,
+        'QQ->Q': npyfuncs.np_int_power_impl,
+        'ff->f': npyfuncs.np_real_power_impl,
+        'dd->d': npyfuncs.np_real_power_impl,
+        'FF->F': npyfuncs.np_complex_power_impl,
+        'DD->D': npyfuncs.np_complex_power_impl,
+    }

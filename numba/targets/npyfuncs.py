@@ -4,11 +4,57 @@ Typically, the kernels of several ufuncs that can't map directly to
 Python builtins
 """
 
-from __future__ import print_function, absolute_import, division 
+from __future__ import print_function, absolute_import, division
 
 
 from .. import cgutils, typing, types
 from llvm import core as lc
+
+
+def _check_arity_and_homogeneous(sig, args, arity):
+    """checks that the following are true:
+    - args and sig.args have arg_count elements
+    - all types are homogeneous
+    """
+    assert len(args) == 2
+    assert len(sig.args) == 2
+    ty = sig.args[0]
+    # must have homogeneous args
+    assert all(arg==ty for arg in sig.args) and sig.return_type == ty
+
+
+def _call_func_by_name_with_cast(context, builder, sig, args,
+                                 func_name):
+    # it is quite common in NumPy to have loops implemented as a call
+    # to the double version of the function, wrapped in casts. This
+    # helper function facilitates that.
+    mod = cgutils.get_module(builder)
+    double = lc.Type.double()
+    fnty = lc.Type.function(double, [double, double])
+    fn = mod.get_or_insert_function(fnty, name=func_name)
+    cast_args = [context.cast(builder, arg, argty, type_)
+             for arg, argty in zip(args, sig.args) ]
+
+    result = builder.call(fn, cast_args)
+    return context.cast(builder, result, types.float64, sig.result_type)
+
+
+def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
+    # assumes types in the sig are homogeneous.
+    # assumes that the function pointed by func_name has the type
+    # signature sig (but needs translation to llvm types).
+    try:
+        func_name = table[sig.result_type] # any would do... homogeneous
+    except KeyError as e:
+        raise LoweringError("No {0} function for real type {1}".format(user_name, str(e)))
+
+    mod = cgutils.get_module(builder)
+    argtypes = [context.get_argument_type(aty) for aty in sig.args]
+    restype = context.get_argument_type(sig.result_type)
+    fnty = lc.Type.function(restype, argtypes)
+    fn = mod.get_or_insert_function(fnty, name=func_name)
+    return builder.call(fn, args)
+
 
 ########################################################################
 # Division kernels inspired by NumPy loops.c.src code
@@ -186,7 +232,7 @@ def np_int_truediv_impl(context, builder, sig, args):
     return builder.fdiv(num,den)
 
 
-########################################################################    
+########################################################################
 # floor div kernels
 
 def np_real_floor_div_impl(context, builder, sig, args):
@@ -246,6 +292,46 @@ def np_complex_floor_div_impl(context, builder, sig, args):
     return out._getvalue()
 
 
+########################################################################
+# numpy power funcs
+
+def np_int_power_impl(context, builder, sig, args):
+    # In NumPy ufunc loops, integer power is performed using the double
+    # version of power with the appropriate casts
+    assert len(args) == 2
+    assert len(sig.args) == 2
+    ty = sig.args[0]
+    # must have homogeneous args
+    assert all(arg==ty for arg in sig.args) and sig.return_type == ty
+
+    return _call_func_by_name_with_cast(context, builder, sig, args,
+                                       'numba.npymath.power')
+
+
+def np_real_power_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 2)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.powf',
+        types.float64: 'numba.npymath.pow',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'power')
+
+
+def np_complex_power_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 2)
+
+    dispatch_table = {
+        types.complex64: 'numba.npymath.cpowf',
+        types.complex128: 'numba.npymath.cpow',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'power')
+
+
 def np_real_floor_impl(context, builder, sig, args):
     assert len(args) == 1
     assert len(sig.args) == 1
@@ -262,4 +348,3 @@ def np_real_floor_impl(context, builder, sig, args):
         raise LoweringError("No floor function for real type {0}".format(str(ty)))
 
     return builder.call(fn, args)
-
