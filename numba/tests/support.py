@@ -5,6 +5,7 @@ Assorted utilities for use in tests.
 import cmath
 import contextlib
 import math
+import sys
 
 import numpy as np
 
@@ -64,6 +65,19 @@ class TestCase(unittest.TestCase):
     @utils.cached_property
     def random(self):
         return np.random.RandomState(42)
+
+    def reset_module_warnings(self, module):
+        """
+        Reset the warnings registry of a module.  This can be necessary
+        as the warnings module is buggy in that regard.
+        See http://bugs.python.org/issue4180
+        """
+        if isinstance(module, str):
+            module = sys.modules[module]
+        try:
+            del module.__warningregistry__
+        except AttributeError:
+            pass
 
     @contextlib.contextmanager
     def assertTypingError(self):

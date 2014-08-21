@@ -108,6 +108,10 @@ class TestUFuncs(TestCase):
     def unary_ufunc_test(self, ufunc, flags=enable_pyobj_flags,
                          skip_inputs=[], additional_inputs=[],
                          int_output_type=None, float_output_type=None):
+        # Necessary to avoid some Numpy warnings being silenced, despite
+        # the simplefilter() call below.
+        self.reset_module_warnings(__name__)
+
         ufunc = _make_unary_ufunc_usecase(ufunc)
 
         inputs = list(self.inputs)
