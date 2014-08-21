@@ -194,6 +194,9 @@ def from_struct_dtype(dtype):
     for name, (elemdtype, offset) in dtype.fields.items():
         fields[name] = from_dtype(elemdtype), offset
 
+    # Note: dtype.alignment is not consistent.
+    #       It is different after passing into a recarray.
+    #       recarray(N, dtype=mydtype).dtype.alignment != mydtype.alignment
     size = dtype.itemsize
     aligned = dtype.isalignedstruct
 
