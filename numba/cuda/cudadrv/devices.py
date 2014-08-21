@@ -55,12 +55,12 @@ class GPU(object):
 
     def __enter__(self):
         if get_context() is not self:
-            self._context.push()
+            self.context.push()
             _gpustack.push(self)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        assert get_context() is self
-        self._context.pop()
+        assert get_device() is self
+        self.context.pop()
         _gpustack.pop()
 
     def reset(self):
@@ -77,10 +77,14 @@ def get_gpu(i):
 _gpustack = servicelib.TLStack()
 
 
-def get_context(devnum=0):
+def get_device(devnum=0):
     if not _gpustack:
-        _gpustack.push(get_gpu(devnum).context)
+        _gpustack.push(get_gpu(devnum))
     return _gpustack.top
+
+
+def get_context(devnum=0):
+    return get_device(devnum=devnum).context
 
 
 def require_context(fn):
