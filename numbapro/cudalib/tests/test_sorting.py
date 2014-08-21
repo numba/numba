@@ -10,7 +10,7 @@ class TestRadixSort(unittest.TestCase):
                    getindices=False):
         np.random.seed(seed)
         for count in counts:
-            data = np.random.rand(count).astype(dtype)
+            data = (np.random.rand(count) * 10 * count).astype(dtype)
             orig = data.copy()
             gold = data.copy()
             gold.sort()
@@ -51,7 +51,7 @@ class TestRadixSort(unittest.TestCase):
                      getindices=False):
         np.random.seed(seed)
         for k, count in zip(ks, counts):
-            data = np.random.rand(count).astype(dtype)
+            data = (np.random.rand(count) * 10 * count).astype(dtype)
             orig = data.copy()
             gold = data.copy()
             gold.sort()
