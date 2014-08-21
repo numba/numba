@@ -156,7 +156,9 @@ def map_layout(val):
 
 
 def supported_ufunc_loop(ufunc, loop):
-    """returns whether the loop for the ufunc is supported -in nopython-
+    """Return whether the *loop* for the *ufunc* is supported -in nopython-.
+
+    *loop* should be a UFuncLoopSpec instance, and *ufunc* a numpy ufunc.
 
     For ufuncs implemented using the ufunc_db, it is supported if the ufunc_db
     contains a lowering definition for 'loop' in the 'ufunc' entry.
