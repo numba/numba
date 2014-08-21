@@ -1,2 +1,2 @@
 from __future__ import absolute_import
-from .radixsort import Radixsort
+from .radixlib import RadixSort

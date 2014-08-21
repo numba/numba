@@ -7,7 +7,7 @@ GENCODE_SM20	:= -gencode arch=compute_20,code=sm_20
 GENCODE_SM30	:= -gencode arch=compute_30,code=sm_30
 GENCODE_SM35	:= -gencode arch=compute_35,code=sm_35
 
-GENCODE_FLAGS	:= $(GENCODE_SM20) $(GENCODE_SM35)
+GENCODE_FLAGS	:= $(GENCODE_SM20) $(GENCODE_SM30) $(GENCODE_SM35)
 
 mgpusort.so: mgpusort.cu
 	nvcc --compiler-options "-fPIC" $(MGPU_INCLUDE) -O3 -arch=sm_30 --shared -o $@ $+
@@ -51,5 +51,5 @@ clean:
 	rm -f radixsort.run radixselect.run
 	rm -f *.ptx
 
-radixsort.so : cubradixsort.cu
-	nvcc --compiler-options "-fPIC" $(CUB_INCLUDE) -O3 -arch=sm_30 --shared -o $@ $+
+radixsort64.so : cubradixsort.cu
+	nvcc -m64 --compiler-options "-fPIC" $(CUB_INCLUDE) -O3 $(GENCODE_FLAGS) --shared -o $@ $+
