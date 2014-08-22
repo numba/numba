@@ -17,6 +17,7 @@ except NameError:
 
 require_context = devices.require_context
 current_context = devices.get_context
+gpus = devices.gpus
 
 
 @require_context
@@ -230,7 +231,7 @@ def get_current_device():
 def list_devices():
     "List all CUDA devices"
     devices.init_gpus()
-    return devices.gpus
+    return devices._gpus
 
 
 def close():
