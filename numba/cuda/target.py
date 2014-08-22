@@ -149,14 +149,14 @@ class CUDATargetContext(BaseContext):
             if gv.name == name and gv.type.pointee == text.type:
                 break
         else:
-            gl = lmod.add_global_variable(text.type, name=name,
+            gv = lmod.add_global_variable(text.type, name=name,
                                           addrspace=nvvm.ADDRSPACE_CONSTANT)
-            gl.linkage = LINKAGE_INTERNAL
-            gl.global_constant = True
-            gl.initializer = text
+            gv.linkage = LINKAGE_INTERNAL
+            gv.global_constant = True
+            gv.initializer = text
 
-            constcharptrty = Type.pointer(charty, nvvm.ADDRSPACE_CONSTANT)
-            charptr = builder.bitcast(gl, constcharptrty)
+        constcharptrty = Type.pointer(charty, nvvm.ADDRSPACE_CONSTANT)
+        charptr = builder.bitcast(gv, constcharptrty)
 
         conv = nvvmutils.insert_addrspace_conv(lmod, charty,
                                                nvvm.ADDRSPACE_CONSTANT)
