@@ -1,10 +1,34 @@
 #include <cub/device/device_radix_sort.cuh>
 #include <stdint.h>
 
+
+// #define E(X) _debug_check((X), __LINE__, __FILE__)
+#define E(X) _release_check((X))
+
+
 struct TempStorage{
     void * storage;
     size_t storage_bytes;
 };
+
+static
+void _release_check(cudaError_t err) {
+    if (err != cudaSuccess) {
+        fprintf(stderr, "Fatal CUDA error:\n");
+        fprintf(stderr, "%s\n", cudaGetErrorString(err));
+        exit(1);
+    }
+}
+
+static
+void _debug_check(cudaError_t err, int line, const char * filename) {
+    if (err != cudaSuccess) {
+        fprintf(stderr, "Fatal CUDA error:\n");
+        fprintf(stderr, "at %d of %s\n", line, filename);
+        fprintf(stderr, "%s\n", cudaGetErrorString(err));
+        exit(1);
+    }
+}
 
 static
 void cleanup(TempStorage *ptr) {
@@ -38,61 +62,61 @@ struct RadixSort {
             // Sort KeyValue pairs
             cub::DoubleBuffer<Tv> d_values(d_value_buf, d_value_alt_buf);
             if (descending) {
-                cub::DeviceRadixSort::SortPairsDescending(temp->storage,
+                E(cub::DeviceRadixSort::SortPairsDescending(temp->storage,
                                                           temp->storage_bytes,
                                                           d_keys,
                                                           d_values,
                                                           num_items,
                                                           begin_bit,
                                                           end_bit,
-                                                          stream);
+                                                          stream));
             } else {
-                cub::DeviceRadixSort::SortPairs(  temp->storage,
+                E(cub::DeviceRadixSort::SortPairs(  temp->storage,
                                                   temp->storage_bytes,
                                                   d_keys,
                                                   d_values,
                                                   num_items,
                                                   begin_bit,
                                                   end_bit,
-                                                  stream    );
+                                                  stream    ));
             }
 
             if (temp->storage && d_value_buf != d_values.Current()){
-                cudaMemcpyAsync(d_value_buf, d_value_alt_buf,
+                E(cudaMemcpyAsync(d_value_buf, d_value_alt_buf,
                                 num_items * sizeof(Tv),
                                 cudaMemcpyDeviceToDevice,
-                                stream);
+                                stream));
             }
         } else {
             // Sort Keys only
             if (descending) {
-                cub::DeviceRadixSort::SortKeysDescending(   temp->storage,
+                E(cub::DeviceRadixSort::SortKeysDescending(   temp->storage,
                                                             temp->storage_bytes,
                                                             d_keys,
                                                             num_items,
                                                             begin_bit,
                                                             end_bit,
-                                                            stream  );
+                                                            stream  ));
             } else {
-                cub::DeviceRadixSort::SortKeys( temp->storage,
+                E(cub::DeviceRadixSort::SortKeys( temp->storage,
                                                 temp->storage_bytes,
                                                 d_keys,
                                                 num_items,
                                                 begin_bit,
                                                 end_bit,
-                                                stream  );
+                                                stream  ));
             }
         }
 
         if (temp->storage && d_key_buf != d_keys.Current()){
-            cudaMemcpyAsync(d_key_buf, d_key_alt_buf, num_items * sizeof(Tk),
-                            cudaMemcpyDeviceToDevice, stream);
+            E(cudaMemcpyAsync(d_key_buf, d_key_alt_buf, num_items * sizeof(Tk),
+                            cudaMemcpyDeviceToDevice, stream));
         }
 
         if (temp->storage == 0) {
-            cudaMalloc(&temp->storage, temp->storage_bytes);
-            return temp;
+            E(cudaMalloc(&temp->storage, temp->storage_bytes));
         }
+
         return temp;
     }
 };
@@ -100,7 +124,7 @@ struct RadixSort {
 extern "C" {
 
 #define WRAP(Fn, Tk, Tv)                        \
-void                                            \
+void*                                           \
 radixsort_ ## Fn(   TempStorage *temp,          \
                     unsigned  num_items,        \
                     Tk  *d_key_buf,             \
@@ -111,16 +135,16 @@ radixsort_ ## Fn(   TempStorage *temp,          \
                     int descending,             \
                     unsigned begin_bit,         \
                     unsigned end_bit      ) {   \
-    RadixSort<Tk, Tv>::sort(temp,               \
-                            num_items,          \
-                            d_key_buf,          \
-                            d_key_alt_buf,      \
-                            d_value_buf,        \
-                            d_value_alt_buf,    \
-                            stream,             \
-                            descending,         \
-                            begin_bit,          \
-                            end_bit);           \
+    return RadixSort<Tk, Tv>::sort(temp,            \
+                                num_items,          \
+                                d_key_buf,          \
+                                d_key_alt_buf,      \
+                                d_value_buf,        \
+                                d_value_alt_buf,    \
+                                stream,             \
+                                descending,         \
+                                begin_bit,          \
+                                end_bit);           \
 }
 
 WRAP(float, float, unsigned)
