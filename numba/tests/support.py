@@ -2,8 +2,10 @@
 Assorted utilities for use in tests.
 """
 
+import cmath
 import contextlib
 import math
+import sys
 
 import numpy as np
 
@@ -56,11 +58,26 @@ class CompilationCache(object):
 
 class TestCase(unittest.TestCase):
 
+    longMessage = True
+
     # A random state yielding the same random numbers for any test case.
     # Use as `self.random.<method name>`
     @utils.cached_property
     def random(self):
         return np.random.RandomState(42)
+
+    def reset_module_warnings(self, module):
+        """
+        Reset the warnings registry of a module.  This can be necessary
+        as the warnings module is buggy in that regard.
+        See http://bugs.python.org/issue4180
+        """
+        if isinstance(module, str):
+            module = sys.modules[module]
+        try:
+            del module.__warningregistry__
+        except AttributeError:
+            pass
 
     @contextlib.contextmanager
     def assertTypingError(self):
@@ -73,7 +90,7 @@ class TestCase(unittest.TestCase):
             yield cm
 
     _exact_typesets = [(bool, np.bool_), utils.INT_TYPES, (str,), (utils.text_type),]
-    _approx_typesets = [(float,), (complex,)]
+    _approx_typesets = [(float,), (complex,), (np.floating),]
 
     def assertPreciseEqual(self, first, second, prec='exact', msg=None):
         """
@@ -116,7 +133,7 @@ class TestCase(unittest.TestCase):
             self.assertEqual(first.dtype, second.dtype)
 
         try:
-            if math.isnan(first) and math.isnan(second):
+            if cmath.isnan(first) and cmath.isnan(second):
                 # The NaNs will compare unequal, skip regular comparison
                 return
         except TypeError:

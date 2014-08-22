@@ -12,9 +12,7 @@ from . import builtins, ufunc_db
 from .imputils import implement, Registry
 from .. import typing, types, cgutils, numpy_support
 from ..config import PYVERSION
-from ..numpy_support import (ufunc_find_matching_loop,
-                             numpy_letter_types_to_numba_types,
-                             numba_types_to_numpy_letter_types)
+from ..numpy_support import ufunc_find_matching_loop
 
 registry = Registry()
 register = registry.register
@@ -332,17 +330,15 @@ def _ufunc_db_function(ufunc):
     class _KernelImpl(_Kernel):
         def __init__(self, context, builder, outer_sig):
             super(_KernelImpl, self).__init__(context, builder, outer_sig)
-            letter_arg_types = numba_types_to_numpy_letter_types(
-                outer_sig.args[0:ufunc.nin])
-            loop = ufunc_find_matching_loop(ufunc, letter_arg_types)
-            letter_inner_sig = loop[-ufunc.nout:] + loop[:ufunc.nin]
-            inner_sig_types = numpy_letter_types_to_numba_types(letter_inner_sig)
-            self.fn = ufunc_db.get_ufunc_info(ufunc).get(loop, None)
-            self.inner_sig = typing.signature(*inner_sig_types)
+            loop = ufunc_find_matching_loop(
+                ufunc, outer_sig.args + (outer_sig.return_type,))
+            self.fn = ufunc_db.get_ufunc_info(ufunc).get(loop.ufunc_sig)
+            self.inner_sig = typing.signature(
+                *(loop.outputs + loop.inputs))
 
             if self.fn is None:
                 msg = "Don't know how to lower ufunc '{0}' for loop '{1}'"
-                raise LoweringError(msg.format(ufunc.__name__, loop))
+                raise NotImplementedError(msg.format(ufunc.__name__, loop))
 
         def generate(self, *args):
             isig = self.inner_sig
@@ -353,47 +349,6 @@ def _ufunc_db_function(ufunc):
                                                      isig.args)]
             res = self.fn(self.context, self.builder, isig, cast_args)
             return self.cast(res, isig.return_type, osig.return_type)
-
-    return _KernelImpl
-
-
-def _homogeneous_function(op, alias=None):
-    """A function that uses the underlying ufunc loop information to chose
-    an implementation for the operation op. It uses the loop
-    information provided by the ufunc in alias. Alias defaults to the
-    op if not provided.
-
-    Using the loop information, code is generated that simulates the
-    process of: converting input arguments (outer_sig) to the input
-    arguments specifies by the ufunc selected loop. The operation is
-    performed in the converted arguments, resulting in a value as
-    specified by the selected loop information. Finally, the resulting
-    value is converted to the requested output type (in outer_sig).
-    """
-    class _KernelImpl(_Kernel):
-        def __init__(self, context, builder, outer_sig):
-            super(_KernelImpl, self).__init__(context, builder, outer_sig)
-            ufunc = alias if alias is not None else op
-            letter_arg_types = numba_types_to_numpy_letter_types(
-                outer_sig.args[0:ufunc.nin])
-            self.loop = ufunc_find_matching_loop(ufunc, letter_arg_types)
-            self.loop_in_types = numpy_letter_types_to_numba_types(
-                self.loop[:ufunc.nin])
-            self.loop_out_types = numpy_letter_types_to_numba_types(
-                self.loop[-ufunc.nout:])
-            # only one output supported for now.
-            assert(len(self.loop_out_types) == 1)
-
-        def generate(self, *args):
-            inner_sig = typing.signature(self.loop_out_types[0],
-                                         *self.loop_in_types)
-            fn = self.context.get_function(op, inner_sig)
-            cast_args = [self.cast(val, inty, outty)
-                         for val, inty, outty in zip(args, self.outer_sig.args,
-                                                     self.loop_in_types)]
-            res = fn(self.builder, cast_args)
-            return self.cast(res, self.loop_out_types[0],
-                             self.outer_sig.return_type)
 
     return _KernelImpl
 
@@ -495,7 +450,7 @@ register_unary_ufunc_kernel(numpy.radians, _function_with_cast(npy.deg2rad, _flo
 # the following ufuncs rely on functions that are not based on a function
 # from npymath
 register_unary_ufunc_kernel(numpy.absolute, _ufunc_db_function(numpy.absolute))
-register_unary_ufunc_kernel(numpy.sign, _homogeneous_function(types.sign_type, numpy.sign))
+register_unary_ufunc_kernel(numpy.sign, _ufunc_db_function(numpy.sign))
 register_unary_ufunc_kernel(numpy.negative, _ufunc_db_function(numpy.negative))
 
 # for these we mostly rely on code generation for python operators.
