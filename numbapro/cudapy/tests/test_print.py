@@ -9,6 +9,11 @@ def cuhello():
     print(i, 1.234)
 
 
+def printfloat():
+    i = cuda.grid(1)
+    print(i, 23, 34.3, 321)
+
+
 def cuprintary(A):
     i = cuda.grid(1)
     print("A[", i, "]", A[i])
@@ -23,6 +28,16 @@ class TestPrint(unittest.TestCase):
         print(jcuhello.ptx)
         # self.assertTrue('.const' in jcuhello.ptx)
         jcuhello[2, 3]()
+        cuda.synchronize()
+
+    def test_printfloat(self):
+        """
+        Eyeballing required
+        """
+        jprintfloat = cuda.jit('void()', debug=False)(printfloat)
+        print(jprintfloat.ptx)
+        # self.assertTrue('.const' in jcuhello.ptx)
+        jprintfloat()
         cuda.synchronize()
 
     @unittest.skipIf(True, "Print string not implemented yet")
