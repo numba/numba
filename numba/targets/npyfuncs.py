@@ -7,7 +7,7 @@ Python builtins
 from __future__ import print_function, absolute_import, division
 
 
-from .. import cgutils, typing, types
+from .. import cgutils, typing, types, lowering
 from llvm import core as lc
 
 
@@ -36,24 +36,52 @@ def _call_func_by_name_with_cast(context, builder, sig, args,
              for arg, argty in zip(args, sig.args) ]
 
     result = builder.call(fn, cast_args)
-    return context.cast(builder, result, types.float64, sig.result_type)
+    return context.cast(builder, result, types.float64, sig.return_type)
 
 
 def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
     # assumes types in the sig are homogeneous.
     # assumes that the function pointed by func_name has the type
     # signature sig (but needs translation to llvm types).
+
+    ty = sig.return_type
     try:
-        func_name = table[sig.result_type] # any would do... homogeneous
+        func_name = table[ty] # any would do... homogeneous
     except KeyError as e:
         raise LoweringError("No {0} function for real type {1}".format(user_name, str(e)))
 
     mod = cgutils.get_module(builder)
-    argtypes = [context.get_argument_type(aty) for aty in sig.args]
-    restype = context.get_argument_type(sig.result_type)
-    fnty = lc.Type.function(restype, argtypes)
-    fn = mod.get_or_insert_function(fnty, name=func_name)
-    return builder.call(fn, args)
+    print(func_name, user_name)
+    if ty in types.complex_domain:
+        # In numba struct types are always passed by pointer. So the call has to
+        # be transformed from "result = func(ops...)" to "func(&result, ops...).
+        # note that the result value pointer as first argument is the convention
+        # used by numba.
+
+        # First, prepare the return value
+        complex_class = context.make_complex(ty)
+        out = complex_class(context, builder)
+        call_args = [out._getvalue()] + list(args)
+        # get_value_as_argument for struct types like complex allocate stack space
+        # and initialize with the value, the return value is the pointer to that
+        # allocated space (ie: pointer to a copy of the value in the stack).
+        # get_argument_type returns a pointer to the struct type in consonance.
+        call_argtys = [ty] + list(sig.args)
+        call_argltys = [context.get_argument_type(ty) for ty in call_argtys]
+        fnty = lc.Type.function(lc.Type.void(), call_argltys)
+        fn = mod.get_or_insert_function(fnty, name=func_name)
+
+        call_args = [context.get_value_as_argument(builder, argty, arg) 
+                     for argty, arg in zip(call_argtys, call_args)]
+        builder.call(fn, call_args)
+        retval = builder.load(call_args[0])
+    else:
+        argtypes = [context.get_argument_type(aty) for aty in sig.args]
+        restype = context.get_argument_type(sig.return_type)
+        fnty = lc.Type.function(restype, argtypes)
+        fn = mod.get_or_insert_function(fnty, name=func_name)
+        retval = context.call_external_function(builder, fn, sig.args, args)
+    return retval
 
 
 ########################################################################

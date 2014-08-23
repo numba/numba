@@ -9,6 +9,23 @@
 #include "_pymodule.h"
 #include <numpy/npy_math.h>
 
+
+#define NUMBA_UNARY_FUNC_WRAP(func, type)                               \
+    void npy_ ## func ## _wrapped(type* dst, type* op1)                 \
+    {                                                                   \
+        *dst = npy_ ## func(*op1);                                      \
+    }
+
+#define NUMBA_BINARY_FUNC_WRAP(func, type)                          \
+    void npy_ ## func ## _wrapped(type* dst, type* op1, type* op2)  \
+    {                                                               \
+        *dst = npy_ ## func(*op1, *op2);                            \
+    }
+
+
+NUMBA_BINARY_FUNC_WRAP(cpowf, npy_cfloat);
+NUMBA_BINARY_FUNC_WRAP(cpow, npy_cdouble);
+
 struct npy_math_entry {
     const char* name;
     void* func;
@@ -17,6 +34,9 @@ struct npy_math_entry {
 
 #define NPYMATH_SYMBOL(name) \
     { "numba.npymath." #name, (void*) npy_##name }
+
+#define NPYMATH_SYMBOL_WRAPPED(name) \
+    { "numba.npymath." #name, (void*) npy_##name##_wrapped }
 
 struct npy_math_entry exports[] = {
     /* double functions */
@@ -69,13 +89,13 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL(carg),
     NPYMATH_SYMBOL(cexp),
     NPYMATH_SYMBOL(clog),
-    NPYMATH_SYMBOL(cpow),
+    NPYMATH_SYMBOL_WRAPPED(cpow),
     NPYMATH_SYMBOL(csqrt),
     NPYMATH_SYMBOL(ccos),
     NPYMATH_SYMBOL(csin),
 
     /* complex float functions */
-    NPYMATH_SYMBOL(cpowf),
+    NPYMATH_SYMBOL_WRAPPED(cpowf),
 };
 #undef NPY_MATH_SYMBOL
 
