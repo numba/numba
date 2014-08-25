@@ -51,7 +51,6 @@ def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
         raise LoweringError("No {0} function for real type {1}".format(user_name, str(e)))
 
     mod = cgutils.get_module(builder)
-    print(func_name, user_name)
     if ty in types.complex_domain:
         # In numba struct types are always passed by pointer. So the call has to
         # be transformed from "result = func(ops...)" to "func(&result, ops...).
