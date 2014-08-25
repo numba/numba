@@ -166,6 +166,7 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL(ceil),
     NPYMATH_SYMBOL(trunc),
 
+    NPYMATH_SYMBOL(pow),
     NPYMATH_SYMBOL(sqrt),
 
     NPYMATH_SYMBOL(deg2rad),

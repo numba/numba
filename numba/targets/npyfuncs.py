@@ -24,15 +24,15 @@ def _check_arity_and_homogeneous(sig, args, arity):
 
 
 def _call_func_by_name_with_cast(context, builder, sig, args,
-                                 func_name):
+                                 func_name, ty=types.float64):
     # it is quite common in NumPy to have loops implemented as a call
     # to the double version of the function, wrapped in casts. This
     # helper function facilitates that.
     mod = cgutils.get_module(builder)
-    double = lc.Type.double()
-    fnty = lc.Type.function(double, [double, double])
+    lty = context.get_argument_type(ty)
+    fnty = lc.Type.function(lty, [lty]*len(sig.args))
     fn = mod.get_or_insert_function(fnty, name=func_name)
-    cast_args = [context.cast(builder, arg, argty, type_)
+    cast_args = [context.cast(builder, arg, argty, ty)
              for arg, argty in zip(args, sig.args) ]
 
     result = builder.call(fn, cast_args)
@@ -333,7 +333,7 @@ def np_int_power_impl(context, builder, sig, args):
     assert all(arg==ty for arg in sig.args) and sig.return_type == ty
 
     return _call_func_by_name_with_cast(context, builder, sig, args,
-                                       'numba.npymath.power')
+                                        'numba.npymath.pow', types.float64)
 
 
 def np_real_power_impl(context, builder, sig, args):
