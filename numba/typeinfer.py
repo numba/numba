@@ -17,7 +17,7 @@ from __future__ import print_function, division, absolute_import
 from pprint import pprint
 import itertools
 
-from numba import ir, types, utils, config, ctypes_utils, cffi_support
+from numba import ir, types, utils, config
 from numba.config import PYVERSION
 from numba.utils import builtins
 
@@ -533,6 +533,12 @@ class TypeInferer(object):
 
     def typeof_global(self, inst, target, gvar):
         typ = self.context.resolve_value_type(gvar.value)
+        if isinstance(typ, types.Array):
+            # We turns any global array into LLVM module level global that
+            # will be emitted as part of the native binary.
+            # This is to support nopython mode global array.
+            # Note, we are treating global arrays as constant.
+            typ = typ.copy(layout='C')
         if typ is not None:
             self.sentry_modified_builtin(inst, gvar)
             self.typevars[target.name].lock(typ)

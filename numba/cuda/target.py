@@ -3,6 +3,7 @@ import re
 from llvm.core import (Type, Builder, LINKAGE_INTERNAL, inline_function,
                        Constant, ICMP_EQ)
 import llvm.passes as lp
+import llvm.ee as le
 from numba import typing, types, cgutils
 from numba.targets.base import BaseContext
 from .cudadrv import nvvm
@@ -28,12 +29,14 @@ VALID_CHARS = re.compile(r'[^a-z0-9]', re.I)
 
 class CUDATargetContext(BaseContext):
     implement_powi_as_math_call = True
+    strict_alignment = True
 
     def init(self):
         from . import cudaimpl, libdevice
 
         self.insert_func_defn(cudaimpl.registry.functions)
         self.insert_func_defn(libdevice.registry.functions)
+        self.target_data = le.TargetData.new(nvvm.default_data_layout)
 
     def mangler(self, name, argtypes):
         def repl(m):
@@ -172,3 +175,6 @@ class CUDATargetContext(BaseContext):
         fpm.initialize()
         fpm.run(func)
         fpm.finalize()
+
+    def get_abi_sizeof(self, lty):
+        return self.target_data.abi_size(lty)
