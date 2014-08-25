@@ -9,6 +9,9 @@ ufunc
 
 from __future__ import print_function, division, absolute_import
 
+import numpy as np
+
+
 # this is lazily initialized to avoid circular imports
 _ufunc_db = None
 
@@ -37,10 +40,8 @@ def _fill_ufunc_db(ufunc_db):
     # module.
     from . import builtins, npyfuncs
 
-    import numpy as np
-
     ufunc_db[np.negative] = {
-        '?->?': builtins.number_not_impl,
+        '?->?': builtins.bool_invert_impl,
         'b->b': builtins.int_negate_impl,
         'B->B': builtins.int_negate_impl,
         'h->h': builtins.int_negate_impl,
@@ -71,6 +72,21 @@ def _fill_ufunc_db(ufunc_db):
         'Q->Q': builtins.uint_abs_impl,
         'f->f': builtins.real_abs_impl,
         'd->d': builtins.real_abs_impl,
+    }
+
+    ufunc_db[np.sign] = {
+        'b->b': builtins.int_sign_impl,
+        'B->B': builtins.int_sign_impl,
+        'h->h': builtins.int_sign_impl,
+        'H->H': builtins.int_sign_impl,
+        'i->i': builtins.int_sign_impl,
+        'I->I': builtins.int_sign_impl,
+        'l->l': builtins.int_sign_impl,
+        'L->L': builtins.int_sign_impl,
+        'q->q': builtins.int_sign_impl,
+        'Q->Q': builtins.int_sign_impl,
+        'f->f': builtins.real_sign_impl,
+        'd->d': builtins.real_sign_impl,
     }
 
     ufunc_db[np.add] = {
@@ -178,3 +194,51 @@ def _fill_ufunc_db(ufunc_db):
         'FF->F': npyfuncs.np_complex_floor_div_impl,
         'DD->D': npyfuncs.np_complex_floor_div_impl,
     }
+
+    # Inject datetime64 support
+    try:
+        from . import npdatetime
+    except NotImplementedError:
+        # Numpy 1.6
+        pass
+    else:
+        ufunc_db[np.negative].update({
+            'm->m': npdatetime.timedelta_neg_impl,
+            })
+        ufunc_db[np.absolute].update({
+            'm->m': npdatetime.timedelta_abs_impl,
+            })
+        ufunc_db[np.sign].update({
+            'm->m': npdatetime.timedelta_sign_impl,
+            })
+        ufunc_db[np.add].update({
+            'mm->m': npdatetime.timedelta_add_impl,
+            'Mm->M': npdatetime.datetime_plus_timedelta,
+            'mM->M': npdatetime.timedelta_plus_datetime,
+            })
+        ufunc_db[np.subtract].update({
+            'mm->m': npdatetime.timedelta_sub_impl,
+            'Mm->M': npdatetime.datetime_minus_timedelta,
+            'MM->m': npdatetime.datetime_minus_datetime,
+            })
+        ufunc_db[np.multiply].update({
+            'mq->m': npdatetime.timedelta_times_number,
+            'md->m': npdatetime.timedelta_times_number,
+            'qm->m': npdatetime.number_times_timedelta,
+            'dm->m': npdatetime.number_times_timedelta,
+            })
+        if np.divide != np.true_divide:
+            ufunc_db[np.divide].update({
+                'mq->m': npdatetime.timedelta_over_number,
+                'md->m': npdatetime.timedelta_over_number,
+                'mm->d': npdatetime.timedelta_over_timedelta,
+            })
+        ufunc_db[np.true_divide].update({
+            'mq->m': npdatetime.timedelta_over_number,
+            'md->m': npdatetime.timedelta_over_number,
+            'mm->d': npdatetime.timedelta_over_timedelta,
+        })
+        ufunc_db[np.floor_divide].update({
+            'mq->m': npdatetime.timedelta_over_number,
+            'md->m': npdatetime.timedelta_over_number,
+        })

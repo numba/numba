@@ -57,6 +57,10 @@ def scale_timedelta(context, builder, val, srcty, destty):
     (both numba.types.NPTimedelta instances)
     """
     factor = npdatetime.get_timedelta_conversion_factor(srcty.unit, destty.unit)
+    if factor is None:
+        # This can happen when using explicit output in a ufunc.
+        raise NotImplementedError("cannot convert timedelta64 from %r to %r"
+                                  % (srcty.unit, destty.unit))
     return scale_by_constant(builder, val, factor)
 
 def normalize_timedeltas(context, builder, left, right, leftty, rightty):
@@ -127,7 +131,7 @@ def timedelta_pos_impl(context, builder, sig, args):
 
 @builtin
 @implement('-', types.Kind(types.NPTimedelta))
-def timedelta_pos_impl(context, builder, sig, args):
+def timedelta_neg_impl(context, builder, sig, args):
     return builder.neg(args[0])
 
 @builtin
@@ -141,6 +145,25 @@ def timedelta_abs_impl(context, builder, sig, args):
             builder.store(builder.neg(val), ret)
         with otherwise:
             builder.store(val, ret)
+    return builder.load(ret)
+
+@builtin
+@implement(types.sign_type, types.Kind(types.NPTimedelta))
+def timedelta_sign_impl(context, builder, sig, args):
+    val, = args
+    ret = alloc_timedelta_result(builder)
+    zero = Constant.int(TIMEDELTA64, 0)
+    with cgutils.ifelse(builder, builder.icmp(lc.ICMP_SGT, val, zero)
+                        ) as (gt_zero, le_zero):
+        with gt_zero:
+            builder.store(Constant.int(TIMEDELTA64, 1), ret)
+        with le_zero:
+            with cgutils.ifelse(builder, builder.icmp(lc.ICMP_EQ, val, zero)
+                                ) as (eq_zero, lt_zero):
+                with eq_zero:
+                    builder.store(Constant.int(TIMEDELTA64, 0), ret)
+                with lt_zero:
+                    builder.store(Constant.int(TIMEDELTA64, -1), ret)
     return builder.load(ret)
 
 @builtin
@@ -168,7 +191,8 @@ def timedelta_sub_impl(context, builder, sig, args):
     return builder.load(ret)
 
 
-def _timedelta_times_number(context, builder, td_arg, number_arg, number_type):
+def _timedelta_times_number(context, builder, td_arg, td_type,
+                            number_arg, number_type, return_type):
     ret = alloc_timedelta_result(builder)
     with cgutils.if_likely(builder, is_not_nat(builder, td_arg)):
         if isinstance(number_type, types.Float):
@@ -177,22 +201,27 @@ def _timedelta_times_number(context, builder, td_arg, number_arg, number_type):
             val = builder.fptosi(val, TIMEDELTA64)
         else:
             val = builder.mul(td_arg, number_arg)
+        # The scaling is required for ufunc np.multiply() with an explicit
+        # output in a different unit.
+        val = scale_timedelta(context, builder, val, td_type, return_type)
         builder.store(val, ret)
     return builder.load(ret)
 
 @builtin
 @implement('*', types.Kind(types.NPTimedelta), types.Kind(types.Integer))
 @implement('*', types.Kind(types.NPTimedelta), types.Kind(types.Float))
-def timedelta_mul_impl(context, builder, sig, args):
+def timedelta_times_number(context, builder, sig, args):
     return _timedelta_times_number(context, builder,
-                                  args[0], args[1], sig.args[1])
+                                   args[0], sig.args[0], args[1], sig.args[1],
+                                   sig.return_type)
 
 @builtin
 @implement('*', types.Kind(types.Integer), types.Kind(types.NPTimedelta))
 @implement('*', types.Kind(types.Float), types.Kind(types.NPTimedelta))
-def timedelta_mul_impl(context, builder, sig, args):
+def number_times_timedelta(context, builder, sig, args):
     return _timedelta_times_number(context, builder,
-                                  args[1], args[0], sig.args[0])
+                                   args[1], sig.args[1], args[0], sig.args[0],
+                                   sig.return_type)
 
 @builtin
 @implement('/', types.Kind(types.NPTimedelta), types.Kind(types.Integer))
@@ -201,26 +230,30 @@ def timedelta_mul_impl(context, builder, sig, args):
 @implement('/', types.Kind(types.NPTimedelta), types.Kind(types.Float))
 @implement('//', types.Kind(types.NPTimedelta), types.Kind(types.Float))
 @implement('/?', types.Kind(types.NPTimedelta), types.Kind(types.Float))
-def timedelta_div_impl(context, builder, sig, args):
+def timedelta_over_number(context, builder, sig, args):
     td_arg, number_arg = args
     number_type = sig.args[1]
     ret = alloc_timedelta_result(builder)
     ok = builder.and_(is_not_nat(builder, td_arg),
-                      builder.not_(cgutils.is_scalar_zero(builder, number_arg)))
+                      builder.not_(cgutils.is_scalar_zero_or_nan(builder, number_arg)))
     with cgutils.if_likely(builder, ok):
+        # Denominator is non-zero, non-NaN
         if isinstance(number_type, types.Float):
             val = builder.sitofp(td_arg, number_arg.type)
             val = builder.fdiv(val, number_arg)
             val = builder.fptosi(val, TIMEDELTA64)
         else:
             val = builder.sdiv(td_arg, number_arg)
+        # The scaling is required for ufuncs np.*divide() with an explicit
+        # output in a different unit.
+        val = scale_timedelta(context, builder, val, sig.args[0], sig.return_type)
         builder.store(val, ret)
     return builder.load(ret)
 
 @builtin
 @implement('/', *TIMEDELTA_BINOP_SIG)
 @implement('/?', *TIMEDELTA_BINOP_SIG)
-def timedelta_div_impl(context, builder, sig, args):
+def timedelta_over_timedelta(context, builder, sig, args):
     [va, vb] = args
     [ta, tb] = sig.args
     not_nan = are_not_nat(builder, [va, vb])
@@ -411,6 +444,10 @@ def convert_datetime_for_arith(builder, dt_val, src_unit, dest_unit):
     dt_val, dt_unit = reduce_datetime_for_unit(builder, dt_val, src_unit, dest_unit)
     # Then multiply by the remaining constant factor.
     dt_factor = npdatetime.get_timedelta_conversion_factor(dt_unit, dest_unit)
+    if dt_factor is None:
+        # This can happen when using explicit output in a ufunc.
+        raise NotImplementedError("cannot convert datetime64 from %r to %r"
+                                  % (src_unit, dest_unit))
     return scale_by_constant(builder, dt_val, dt_factor)
 
 

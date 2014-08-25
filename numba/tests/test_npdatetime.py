@@ -1,6 +1,8 @@
 """
-Test numpy.timedelta64 support.
+Test numpy.datetime64 and numpy.timedelta64 support.
 """
+
+# NOTE: datetime64 and timedelta64 ufuncs are tested in test_ufuncs.
 
 from __future__ import print_function
 

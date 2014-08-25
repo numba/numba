@@ -329,6 +329,12 @@ def int_invert_impl(context, builder, sig, args):
     return builder.xor(val, Constant.all_ones(val.type))
 
 
+def bool_invert_impl(context, builder, sig, args):
+    [typ] = sig.args
+    [val] = args
+    return builder.sub(Constant.int(val.type, 1), val)
+
+
 def int_sign_impl(context, builder, sig, args):
     [x] = args
     POS = Constant.int(x.type, 1)
@@ -373,7 +379,7 @@ builtin(implement('<', types.boolean, types.boolean)(int_ult_impl))
 builtin(implement('<=', types.boolean, types.boolean)(int_ule_impl))
 builtin(implement('>', types.boolean, types.boolean)(int_ugt_impl))
 builtin(implement('>=', types.boolean, types.boolean)(int_uge_impl))
-builtin(implement('~', types.boolean)(int_invert_impl))
+builtin(implement('~', types.boolean)(bool_invert_impl))
 
 for ty in types.integer_domain:
     builtin(implement('+', ty, ty)(int_add_impl))
@@ -648,35 +654,23 @@ def real_sign_impl(context, builder, sig, args):
     NEG = Constant.real(x.type, -1)
     ZERO = Constant.real(x.type, 0)
 
-    cmp_zero = builder.fcmp(lc.FCMP_OEQ, x, ZERO)
-    cmp_pos = builder.fcmp(lc.FCMP_OGT, x, ZERO)
-
     presult = cgutils.alloca_once(builder, x.type)
 
-    bb_zero = cgutils.append_basic_block(builder, ".zero")
-    bb_postest = cgutils.append_basic_block(builder, ".postest")
-    bb_pos = cgutils.append_basic_block(builder, ".pos")
-    bb_neg = cgutils.append_basic_block(builder, ".neg")
-    bb_exit = cgutils.append_basic_block(builder, ".exit")
+    is_pos = builder.fcmp(lc.FCMP_OGT, x, ZERO)
+    is_neg = builder.fcmp(lc.FCMP_OLT, x, ZERO)
 
-    builder.cbranch(cmp_zero, bb_zero, bb_postest)
+    with cgutils.ifelse(builder, is_pos) as (gt_zero, not_gt_zero):
+        with gt_zero:
+            builder.store(POS, presult)
+        with not_gt_zero:
+            with cgutils.ifelse(builder, is_neg) as (lt_zero, not_lt_zero):
+                with lt_zero:
+                    builder.store(NEG, presult)
+                with not_lt_zero:
+                    # For both NaN and 0, the result of sign() is simply
+                    # the input value.
+                    builder.store(x, presult)
 
-    with cgutils.goto_block(builder, bb_zero):
-        builder.store(ZERO, presult)
-        builder.branch(bb_exit)
-
-    with cgutils.goto_block(builder, bb_postest):
-        builder.cbranch(cmp_pos, bb_pos, bb_neg)
-
-    with cgutils.goto_block(builder, bb_pos):
-        builder.store(POS, presult)
-        builder.branch(bb_exit)
-
-    with cgutils.goto_block(builder, bb_neg):
-        builder.store(NEG, presult)
-        builder.branch(bb_exit)
-
-    builder.position_at_end(bb_exit)
     return builder.load(presult)
 
 
