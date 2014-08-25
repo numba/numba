@@ -8,7 +8,7 @@ from numba import cuda
 import numpy as np
 
 libname = 'mgpusort.so'
-libpath = os.path.join(os.path.dirname(__file__), 'radixsort_details', libname)
+libpath = os.path.join(os.path.dirname(__file__), 'details', libname)
 
 lib = CDLL(libpath)
 
