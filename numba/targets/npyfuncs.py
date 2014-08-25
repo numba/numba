@@ -16,8 +16,8 @@ def _check_arity_and_homogeneous(sig, args, arity):
     - args and sig.args have arg_count elements
     - all types are homogeneous
     """
-    assert len(args) == 2
-    assert len(sig.args) == 2
+    assert len(args) == arity
+    assert len(sig.args) == arity
     ty = sig.args[0]
     # must have homogeneous args
     assert all(arg==ty for arg in sig.args) and sig.return_type == ty
@@ -70,7 +70,7 @@ def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
         fnty = lc.Type.function(lc.Type.void(), call_argltys)
         fn = mod.get_or_insert_function(fnty, name=func_name)
 
-        call_args = [context.get_value_as_argument(builder, argty, arg) 
+        call_args = [context.get_value_as_argument(builder, argty, arg)
                      for argty, arg in zip(call_argtys, call_args)]
         builder.call(fn, call_args)
         retval = builder.load(call_args[0])
@@ -375,3 +375,157 @@ def np_real_floor_impl(context, builder, sig, args):
         raise LoweringError("No floor function for real type {0}".format(str(ty)))
 
     return builder.call(fn, args)
+
+
+########################################################################
+# Numpy style complex sign
+
+def np_complex_sign_impl(context, builder, sig, args):
+    # equivalent to complex sign in NumPy's sign
+    # but implemented via selects, balancing the 4 cases.
+    _check_arity_and_homogeneous(sig, args, 1)
+    op = args[0]
+    ty = sig.args[0]
+    float_ty = ty.underlying_float
+    complex_class = context.make_complex(ty)
+
+    ZERO = context.get_constant(float_ty, 0.0)
+    ONE  = context.get_constant(float_ty, 1.0)
+    MINUS_ONE = context.get_constant(float_ty, -1.0)
+    NAN = context.get_constant(float_ty, float('nan'))
+    result = complex_class(context, builder)
+    result.real = ZERO
+    result.imag = ZERO
+
+    cmp_sig = typing.signature(*[ty] * 3)
+    cmp_args = [op, result._getvalue()]
+    arg1_ge_arg2 = np_complex_greater_equal_impl(context, builder, cmp_sig, cmp_args)
+    arg1_eq_arg2 = np_complex_equal_impl(context, builder, cmp_sig, cmp_args)
+    arg1_lt_arg2 = np_complex_lower_impl(context, builder, cmp_sig, cmp_args)
+
+    real_when_ge = builder.select(arg1_eq_arg2, ZERO, ONE)
+    real_when_nge = builder.select(arg1_lt_arg2, MINUS_ONE, NAN)
+    result.real = builder.select(arg1_ge_arg2, real_when_ge, real_when_nge)
+
+    return result._getvalue()
+
+
+########################################################################
+# NumPy style complex predicates
+
+def np_complex_greater_equal_impl(context, builder, sig, args):
+    # equivalent to macro CGE in NumPy's loops.c.src
+    # ((xr > yr && !npy_isnan(xi) && !npy_isnan(yi)) || (xr == yr && xi >= yi))
+    _check_arity_and_homogeneous(sig, args, 2)
+
+    complex_class = context.make_complex(sig.args[0])
+    in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
+    xr = in1.real
+    xi = in1.imag
+    yr = in2.real
+    yi = in2.imag
+
+    xr_gt_yr = builder.fcmp(lc.FCMP_OGT, xr, yr)
+    no_nan_xi_yi = builder.fcmp(lc.FCMP_ORD, xi, yi)
+    xr_eq_yr = builder.fcmp(lc.FCMP_OEQ, xr, yr)
+    xi_ge_yi = builder.fcmp(lc.FCMP_OGE, xi, yi)
+    first_term = builder.and_(xr_gt_yr, no_nan_xi_yi)
+    second_term = builder.and_(xr_eq_yr, xi_ge_yi)
+    return builder.or_(first_term, second_term)
+
+
+def np_complex_lower_equal_impl(context, builder, sig, args):
+    # equivalent to macro CLE in NumPy's loops.c.src
+    # ((xr < yr && !npy_isnan(xi) && !npy_isnan(yi)) || (xr == yr && xi <= yi))
+    _check_arity_and_homogeneous(sig, args, 2)
+
+    complex_class = context.make_complex(sig.args[0])
+    in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
+    xr = in1.real
+    xi = in1.imag
+    yr = in2.real
+    yi = in2.imag
+
+    xr_lt_yr = builder.fcmp(lc.FCMP_OLT, xr, yr)
+    no_nan_xi_yi = builder.fcmp(lc.FCMP_ORD, xi, yi)
+    xr_eq_yr = builder.fcmp(lc.FCMP_OEQ, xr, yr)
+    xi_le_yi = builder.fcmp(lc.FCMP_OLE, xi, yi)
+    first_term = builder.and_(xr_lt_yr, no_nan_xi_yi)
+    second_term = builder.and_(xr_eq_yr, xi_le_yi)
+    return builder.or_(first_term, second_term)
+
+
+def np_complex_greater_impl(context, builder, sig, args):
+    # equivalent to macro CGT in NumPy's loops.c.src
+    # ((xr > yr && !npy_isnan(xi) && !npy_isnan(yi)) || (xr == yr && xi > yi))
+    _check_arity_and_homogeneous(sig, args, 2)
+
+    complex_class = context.make_complex(sig.args[0])
+    in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
+    xr = in1.real
+    xi = in1.imag
+    yr = in2.real
+    yi = in2.imag
+
+    xr_gt_yr = builder.fcmp(lc.FCMP_OGT, xr, yr)
+    no_nan_xi_yi = builder.fcmp(lc.FCMP_ORD, xi, yi)
+    xr_eq_yr = builder.fcmp(lc.FCMP_OEQ, xr, yr)
+    xi_gt_yi = builder.fcmp(lc.FCMP_OGT, xi, yi)
+    first_term = builder.and_(xr_gt_yr, no_nan_xi_yi)
+    second_term = builder.and_(xr_eq_yr, xi_gt_yi)
+    return builder.or_(first_term, second_term)
+
+
+def np_complex_lower_impl(context, builder, sig, args):
+    # equivalent to macro CLT in NumPy's loops.c.src
+    # ((xr < yr && !npy_isnan(xi) && !npy_isnan(yi)) || (xr == yr && xi < yi))
+    _check_arity_and_homogeneous(sig, args, 2)
+
+    complex_class = context.make_complex(sig.args[0])
+    in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
+    xr = in1.real
+    xi = in1.imag
+    yr = in2.real
+    yi = in2.imag
+
+    xr_lt_yr = builder.fcmp(lc.FCMP_OLT, xr, yr)
+    no_nan_xi_yi = builder.fcmp(lc.FCMP_ORD, xi, yi)
+    xr_eq_yr = builder.fcmp(lc.FCMP_OEQ, xr, yr)
+    xi_lt_yi = builder.fcmp(lc.FCMP_OLT, xi, yi)
+    first_term = builder.and_(xr_lt_yr, no_nan_xi_yi)
+    second_term = builder.and_(xr_eq_yr, xi_lt_yi)
+    return builder.or_(first_term, second_term)
+
+
+def np_complex_equal_impl(context, builder, sig, args):
+    # equivalent to macro CEQ in NumPy's loops.c.src
+    # (xr == yr && xi == yi)
+    _check_arity_and_homogeneous(sig, args, 2)
+
+    complex_class = context.make_complex(sig.args[0])
+    in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
+    xr = in1.real
+    xi = in1.imag
+    yr = in2.real
+    yi = in2.imag
+
+    xr_eq_yr = builder.fcmp(lc.FCMP_OEQ, xr, yr)
+    xi_eq_yi = builder.fcmp(lc.FCMP_OEQ, xi, yi)
+    return builder.and_(xr_eq_yr, xi_eq_yi)
+
+
+def np_complex_not_equal_impl(complex, builder, sig, args):
+    # equivalent to marcro CNE in NumPy's loops.c.src
+    # (xr != yr || xi != yi)
+    _check_arity_and_homogeneous(sig, args, 2)
+
+    complex_class = context.make_complex(sig.args[0])
+    in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
+    xr = in1.real
+    xi = in1.imag
+    yr = in2.real
+    yi = in2.imag
+
+    xr_ne_yr = builder.fcmp(lc.FCMP_ONE, xr, yr)
+    xi_ne_yi = builder.fcmp(lc.FCMP_ONE, xi, yi)
+    return builder.or_(xr_ne_yr, xi_ne_yi)

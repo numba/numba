@@ -1256,6 +1256,8 @@ class TestLoopTypes(TestCase):
             try:
                 self._check_loop(fn, ufunc, loop)
             except AssertionError as e:
+                import traceback
+                traceback.print_exc()
                 _failed_loops.append('{2} {0}:{1}'.format(loop, str(e),
                                                           ufunc.__name__))
 
@@ -1304,7 +1306,7 @@ class TestLoopTypesNoPython(TestLoopTypes):
 class TestLoopTypesComplexNoPython(TestLoopTypes):
     _compile_flags = no_pyobj_flags
     _ufuncs = [np.negative, np.add, np.subtract, np.multiply, np.divide,
-               np.true_divide, np.floor_divide, np.power]
+               np.true_divide, np.floor_divide, np.power, np.sign]
 
     # Test complex types
     _supported_types = 'FD'

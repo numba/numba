@@ -28,6 +28,7 @@ def get_ufuncs():
     _lazy_init_db()
     return _ufunc_db.keys()
 
+
 def get_ufunc_info(ufunc_key):
     """get the lowering information for the ufunc with key ufunc_key.
 
@@ -95,6 +96,8 @@ def _fill_ufunc_db(ufunc_db):
         'Q->Q': builtins.int_sign_impl,
         'f->f': builtins.real_sign_impl,
         'd->d': builtins.real_sign_impl,
+        'F->F': npyfuncs.np_complex_sign_impl,
+        'D->D': npyfuncs.np_complex_sign_impl,
     }
 
     ufunc_db[np.add] = {
