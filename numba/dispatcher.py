@@ -4,7 +4,6 @@ import functools
 import inspect
 import sys
 
-import numpy as np
 from numba import _dispatcher, compiler, utils
 from numba.typeconv.rules import default_type_manager
 from numba import typing
