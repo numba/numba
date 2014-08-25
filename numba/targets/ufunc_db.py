@@ -15,6 +15,19 @@ import numpy as np
 # this is lazily initialized to avoid circular imports
 _ufunc_db = None
 
+def _lazy_init_db():
+    global _ufunc_db
+
+    if _ufunc_db is None:
+        _ufunc_db = {}
+        _fill_ufunc_db(_ufunc_db)
+
+
+def get_ufuncs():
+    """obtain a list of supported ufuncs in the db"""
+    _lazy_init_db()
+    return _ufunc_db.keys()
+
 def get_ufunc_info(ufunc_key):
     """get the lowering information for the ufunc with key ufunc_key.
 
@@ -25,12 +38,7 @@ def get_ufunc_info(ufunc_key):
 
     raises a KeyError if the ufunc is not in the ufunc_db
     """
-    global _ufunc_db
-
-    if _ufunc_db is None:
-        _ufunc_db = {}
-        _fill_ufunc_db(_ufunc_db)
-
+    _lazy_init_db()
     return _ufunc_db[ufunc_key]
 
 

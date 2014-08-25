@@ -449,20 +449,14 @@ register_unary_ufunc_kernel(numpy.radians, _function_with_cast(npy.deg2rad, _flo
 
 # the following ufuncs rely on functions that are not based on a function
 # from npymath
-register_unary_ufunc_kernel(numpy.absolute, _ufunc_db_function(numpy.absolute))
-register_unary_ufunc_kernel(numpy.sign, _ufunc_db_function(numpy.sign))
-register_unary_ufunc_kernel(numpy.negative, _ufunc_db_function(numpy.negative))
 
-# for these we mostly rely on code generation for python operators.
-register_binary_ufunc_kernel(numpy.add, _ufunc_db_function(numpy.add))
-register_binary_ufunc_kernel(numpy.subtract, _ufunc_db_function(numpy.subtract))
-register_binary_ufunc_kernel(numpy.multiply, _ufunc_db_function(numpy.multiply))
-if not PYVERSION >= (3, 0):
-    register_binary_ufunc_kernel(numpy.divide, _ufunc_db_function(numpy.divide))
-register_binary_ufunc_kernel(numpy.floor_divide, _ufunc_db_function(numpy.floor_divide))
-register_binary_ufunc_kernel(numpy.true_divide, _ufunc_db_function(numpy.true_divide))
-register_binary_ufunc_kernel(numpy.power, _ufunc_db_function(numpy.power))
-
+for ufunc in ufunc_db.get_ufuncs():
+    if ufunc.nin == 1:
+        register_unary_ufunc_kernel(ufunc, _ufunc_db_function(ufunc))
+    elif ufunc.nin == 2:
+        register_binary_ufunc_kernel(ufunc, _ufunc_db_function(ufunc))
+    else:
+        raise RuntimeError("Don't know how to register ufuncs from ufunc_db with arity > 2")
 
 _externs_2 = [
     (numpy.arctan2, "atan2"),
