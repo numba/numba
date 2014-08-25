@@ -259,22 +259,6 @@ class ParallelTestResult(runner.TextTestResult):
         self.unexpectedSuccesses.extend(result.unexpectedSuccesses)
 
 
-class _FakeTestCase(object):
-    __slots__ = (
-        '_shortDescription', '_repr'
-    )
-
-    def __init__(self, testcase):
-        self._repr = str(testcase)
-        self._shortDescription = testcase.shortDescription()
-
-    def shortDescription(self):
-        return self._shortDescription
-
-    def __repr__(self):
-        return self._repr
-
-
 class _MinimalResult(object):
     """
     A minimal, picklable TestResult-alike object.
@@ -298,15 +282,6 @@ class _MinimalResult(object):
             self.fixup_case(case)
         for case, _ in self.failures:
             self.fixup_case(case)
-
-        def fix(x):
-            return _FakeTestCase(x[0]), x[1]
-
-        if self.failures:
-            self.failures = [fix(x) for x in self.failures]
-
-        if self.errors:
-            self.errors = [fix(x) for x in self.errors]
 
 
 class _FakeStringIO(object):
