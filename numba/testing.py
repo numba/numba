@@ -51,12 +51,17 @@ def test(**kwargs):
         Path of XML output directory
     """
     from numba import cuda
+
     suite = discover_tests("numba.tests")
     ok = run_tests(suite, **kwargs).wasSuccessful()
     if ok:
         if cuda.is_available():
-            print("== Run CUDA tests ==")
-            ok = cuda.test()
+            gpus = cuda.list_devices()
+            if gpus and gpus[0].compute_capability >= (2, 0):
+                print("== Run CUDA tests ==")
+                ok = cuda.test()
+            else:
+                print("== Skipped CUDA tests because GPU CC < 2.0 ==")
         else:
             print("== Skipped CUDA tests ==")
 
