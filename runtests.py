@@ -5,5 +5,6 @@ import sys
 
 import numba.testing as testing
 
-result = testing.test()
-sys.exit(0 if result else 1)
+if __name__ == "__main__":
+    result = testing.test()
+    sys.exit(0 if result else 1)
