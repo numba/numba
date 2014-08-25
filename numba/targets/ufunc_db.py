@@ -81,6 +81,8 @@ def _fill_ufunc_db(ufunc_db):
         'Q->Q': builtins.uint_abs_impl,
         'f->f': builtins.real_abs_impl,
         'd->d': builtins.real_abs_impl,
+        'F->f': builtins.complex_abs_impl,
+        'D->d': builtins.complex_abs_impl,
     }
 
     ufunc_db[np.sign] = {

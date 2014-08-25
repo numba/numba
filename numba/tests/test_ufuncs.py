@@ -1306,10 +1306,14 @@ class TestLoopTypesNoPython(TestLoopTypes):
 class TestLoopTypesComplexNoPython(TestLoopTypes):
     _compile_flags = no_pyobj_flags
     _ufuncs = [np.negative, np.add, np.subtract, np.multiply, np.divide,
-               np.true_divide, np.floor_divide, np.power, np.sign]
+               np.true_divide, np.floor_divide, np.power, np.sign, np.abs,
+               np.absolute]
 
     # Test complex types
-    _supported_types = 'FD'
+    # note that some loops like "abs" contain reals as results, hence the
+    # _supported_types
+    _supported_types = 'FDfd'
+    _required_types = 'FD'
 
 
 @skip_on_numpy_16
