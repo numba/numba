@@ -880,8 +880,8 @@ class BaseContext(object):
             elemty = rectyp.typeof(attr)
             align = self.get_abi_sizeof(self.get_data_type(elemty))
             if offset % align:
-                msg = "{}.{} of type {} is not aligned".format(rectyp, attr,
-                                                               elemty)
+                msg = "{rec}.{attr} of type {type} is not aligned".format(
+                    rec=rectyp, attr=attr, type=elemty)
                 raise TypeError(msg)
 
     def make_array(self, typ):

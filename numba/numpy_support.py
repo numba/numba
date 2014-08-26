@@ -274,6 +274,23 @@ def ufunc_find_matching_loop(ufunc, arg_types):
     return None
 
 
+if numpy.__version__ <= '1.7':
+    # Numpy 1.6 and below does not have the isalignedstruct attribute
+    # for dtype.  We implement the behavior of the function here.
+    def _is_aligned_struct(struct):
+        for (dtype, offset) in struct.fields.values():
+            # Make sure all attributes have offset equal to the alignment of
+            # the attribute dtype.
+            if offset % dtype.alignment:
+                return False
+        return True
+
+else:
+    # NumPy 1.7 and above uses the isalignedstruct property.
+    def _is_aligned_struct(struct):
+        return struct.isalignedstruct
+
+
 def from_struct_dtype(dtype):
     if dtype.hasobject:
         raise TypeError("Do not support object containing dtype")
@@ -286,6 +303,6 @@ def from_struct_dtype(dtype):
     #       It is different after passing into a recarray.
     #       recarray(N, dtype=mydtype).dtype.alignment != mydtype.alignment
     size = dtype.itemsize
-    aligned = dtype.isalignedstruct
+    aligned = _is_aligned_struct(dtype)
 
     return types.Record(str(dtype.descr), fields, size, aligned, dtype)
