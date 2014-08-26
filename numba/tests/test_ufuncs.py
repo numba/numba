@@ -472,7 +472,7 @@ class TestUFuncs(TestCase):
         self.unary_ufunc_test(np.conjugate, flags=flags)
 
     def test_conjugate_ufunc_npm(self):
-        self.test_reciprocal_ufunc(flags=no_pyobj_flags)
+        self.test_conjugate_ufunc(flags=no_pyobj_flags)
 
 
     ############################################################################
