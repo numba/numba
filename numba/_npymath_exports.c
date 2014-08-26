@@ -182,6 +182,7 @@ struct npy_math_entry exports[] = {
     /* float functions */
     NPYMATH_SYMBOL(floorf),
     NPYMATH_SYMBOL(powf),
+    NPYMATH_SYMBOL(rintf),
 
     /* complex functions */
     NPYMATH_SYMBOL(cabs),

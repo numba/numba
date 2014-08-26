@@ -225,6 +225,13 @@ def _fill_ufunc_db(ufunc_db):
         'DD->D': npyfuncs.np_complex_power_impl,
     }
 
+    ufunc_db[np.rint] = {
+        'f->f': npyfuncs.np_real_rint_impl,
+        'd->d': npyfuncs.np_real_rint_impl,
+        'F->F': npyfuncs.np_complex_rint_impl,
+        'D->D': npyfuncs.np_complex_rint_impl,
+    }
+
     # Inject datetime64 support
     try:
         from . import npdatetime

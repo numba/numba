@@ -411,6 +411,37 @@ def np_complex_sign_impl(context, builder, sig, args):
 
 
 ########################################################################
+# Numpy rint
+
+def np_real_rint_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 1)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.rintf',
+        types.float64: 'numba.npymath.rint',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'rint')
+
+
+def np_complex_rint_impl(context, builder, sig, args):
+    # based on code in NumPy's funcs.inc.src
+    # rint of a complex number defined as rint of its real and imag
+    # parts
+    _check_arity_and_homogeneous(sig, args, 1)
+    ty = sig.args[0]
+    float_ty = ty.underlying_float
+    complex_class = context.make_complex(ty)
+    in1 = complex_class(context, builder, value=args[0])
+    out = complex_class(context, builder)
+
+    inner_sig = typing.signature(*[float_ty]*2)
+    out.real = np_real_rint_impl(context, builder, inner_sig, [in1.real])
+    out.imag = np_real_rint_impl(context, builder, inner_sig, [in1.imag])
+    return out._getvalue()
+
+########################################################################
 # NumPy style complex predicates
 
 def np_complex_greater_equal_impl(context, builder, sig, args):

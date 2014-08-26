@@ -434,7 +434,6 @@ _externs = [
     (numpy.floor, "floor"),
     (numpy.ceil, "ceil"),
     (numpy.trunc, "trunc"),
-    (numpy.rint, "rint"),
     (numpy.fabs, "fabs"),
 ]
 

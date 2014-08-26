@@ -1307,7 +1307,7 @@ class TestLoopTypesComplexNoPython(TestLoopTypes):
     _compile_flags = no_pyobj_flags
     _ufuncs = [np.negative, np.add, np.subtract, np.multiply, np.divide,
                np.true_divide, np.floor_divide, np.power, np.sign, np.abs,
-               np.absolute]
+               np.absolute, np.rint]
 
     # Test complex types
     # note that some loops like "abs" contain reals as results, hence the
