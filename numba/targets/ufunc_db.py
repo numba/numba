@@ -263,6 +263,13 @@ def _fill_ufunc_db(ufunc_db):
         'D->D': npyfuncs.np_complex_exp2_impl,
     }
 
+    ufunc_db[np.log] = {
+        'f->f': npyfuncs.np_real_log_impl,
+        'd->d': npyfuncs.np_real_log_impl,
+        'F->F': npyfuncs.np_complex_log_impl,
+        'D->D': npyfuncs.np_complex_log_impl,
+    }
+
     # Inject datetime64 support
     try:
         from . import npdatetime

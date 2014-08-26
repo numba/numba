@@ -524,6 +524,33 @@ def np_complex_exp2_impl(context, builder, sig, args):
 
 
 ########################################################################
+# NumPy log
+
+def np_real_log_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 1)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.logf',
+        types.float64: 'numba.npymath.log',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'log')
+
+
+def np_complex_log_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 1)
+
+    dispatch_table = {
+        types.complex64: 'numba.npymath.clogf',
+        types.complex128: 'numba.npymath.clog',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'log')
+
+
+########################################################################
 # NumPy style complex predicates
 
 def np_complex_greater_equal_impl(context, builder, sig, args):
