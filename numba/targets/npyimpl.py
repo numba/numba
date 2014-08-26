@@ -409,7 +409,6 @@ _float_binary_sig = typing.signature(types.float64, types.float64,
 # an equivalent loop that calls the function in the npymath support module (registered
 # as external function as "numba.npymath."+func
 _externs = [
-    (numpy.exp2, "exp2"),
     (numpy.expm1, "expm1"),
     (numpy.log, "log"),
     (numpy.log2, "log2"),

@@ -184,16 +184,11 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL(powf),
     NPYMATH_SYMBOL(rintf),
     NPYMATH_SYMBOL(expf),
+    NPYMATH_SYMBOL(exp2f),
 
     /* complex functions */
-    NPYMATH_SYMBOL(cabs),
-    NPYMATH_SYMBOL(carg),
-    NPYMATH_SYMBOL_WRAPPED(cexp),
-    NPYMATH_SYMBOL(clog),
     NPYMATH_SYMBOL_EXPLICIT(cpow, ufunc_cpow),
-    NPYMATH_SYMBOL(csqrt),
-    NPYMATH_SYMBOL(ccos),
-    NPYMATH_SYMBOL(csin),
+    NPYMATH_SYMBOL_WRAPPED(cexp),
 
     /* complex float functions */
     NPYMATH_SYMBOL_EXPLICIT(cpowf, ufunc_cpowf),
