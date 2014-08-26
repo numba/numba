@@ -189,6 +189,7 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL(exp2f),
     NPYMATH_SYMBOL(logf),
     NPYMATH_SYMBOL(log2f),
+    NPYMATH_SYMBOL(log10f),
 
     /* complex functions */
     NPYMATH_SYMBOL_EXPLICIT(cpow, ufunc_cpow),

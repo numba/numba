@@ -12,6 +12,13 @@ from llvm import core as lc
 
 from .. import cgutils, typing, types, lowering
 
+# some NumPy constants. Note that we could generate some of them using
+# the math library, but having the values copied from npy_math seems to
+# yield more accurate results
+_NPY_LOG2E  = 1.442695040888963407359924681001892137 # math.log(math.e, 2)
+_NPY_LOG10E = 0.434294481903251827651128918916605082 # math.log(math.e, 10)
+_NPY_LOGE2  = 0.693147180559945309417232121458176568 # math.log(2)
+
 
 def _check_arity_and_homogeneous(sig, args, arity):
     """checks that the following are true:
@@ -517,7 +524,7 @@ def np_complex_exp2_impl(context, builder, sig, args):
     complex_class = context.make_complex(ty)
     in1 = complex_class(context, builder, value=args[0])
     tmp = complex_class(context, builder)
-    loge2 = context.get_constant(float_ty, math.log(2))
+    loge2 = context.get_constant(float_ty, _NPY_LOGE2)
     tmp.real = builder.fmul(loge2, in1.real)
     tmp.imag = builder.fmul(loge2, in1.imag)
     return np_complex_exp_impl(context, builder, sig, [tmp._getvalue()])
@@ -571,9 +578,37 @@ def np_complex_log2_impl(context, builder, sig, args):
     complex_class = context.make_complex(ty)
     tmp = np_complex_log_impl(context, builder, sig, args)
     tmp = complex_class(context, builder, value=tmp)
-    log2e = context.get_constant(float_ty, math.log(math.e, 2))
+    log2e = context.get_constant(float_ty, _NPY_LOG2E)
     tmp.real = builder.fmul(log2e, tmp.real)
     tmp.imag = builder.fmul(log2e, tmp.imag)
+    return tmp._getvalue()
+
+
+########################################################################
+# NumPy log10
+
+def np_real_log10_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 1)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.log10f',
+        types.float64: 'numba.npymath.log10',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'log10')
+
+def np_complex_log10_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 1)
+
+    ty = sig.args[0]
+    float_ty = ty.underlying_float
+    complex_class = context.make_complex(ty)
+    tmp = np_complex_log_impl(context, builder, sig, args)
+    tmp = complex_class(context, builder, value=tmp)
+    log10e = context.get_constant(float_ty, _NPY_LOG10E)
+    tmp.real = builder.fmul(log10e, tmp.real)
+    tmp.imag = builder.fmul(log10e, tmp.imag)
     return tmp._getvalue()
 
 
