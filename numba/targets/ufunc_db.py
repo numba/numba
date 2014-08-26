@@ -232,6 +232,23 @@ def _fill_ufunc_db(ufunc_db):
         'D->D': npyfuncs.np_complex_rint_impl,
     }
 
+    ufunc_db[np.conjugate] = {
+        'b->b': npyfuncs.np_dummy_return_arg,
+        'B->B': npyfuncs.np_dummy_return_arg,
+        'h->h': npyfuncs.np_dummy_return_arg,
+        'H->H': npyfuncs.np_dummy_return_arg,
+        'i->i': npyfuncs.np_dummy_return_arg,
+        'I->I': npyfuncs.np_dummy_return_arg,
+        'l->l': npyfuncs.np_dummy_return_arg,
+        'L->L': npyfuncs.np_dummy_return_arg,
+        'q->q': npyfuncs.np_dummy_return_arg,
+        'Q->Q': npyfuncs.np_dummy_return_arg,
+        'f->f': npyfuncs.np_dummy_return_arg,
+        'd->d': npyfuncs.np_dummy_return_arg,
+        'F->F': npyfuncs.np_complex_conjugate_impl,
+        'D->D': npyfuncs.np_complex_conjugate_impl,
+    }
+
     # Inject datetime64 support
     try:
         from . import npdatetime

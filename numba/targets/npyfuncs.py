@@ -6,9 +6,8 @@ Python builtins
 
 from __future__ import print_function, absolute_import, division
 
-
-from .. import cgutils, typing, types, lowering
 from llvm import core as lc
+from .. import cgutils, typing, types, lowering
 
 
 def _check_arity_and_homogeneous(sig, args, arity):
@@ -81,6 +80,16 @@ def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
         fn = mod.get_or_insert_function(fnty, name=func_name)
         retval = context.call_external_function(builder, fn, sig.args, args)
     return retval
+
+
+
+def np_dummy_return_arg(context, builder, sig, args):
+    # sometimes a loop does nothing other than returning the first arg...
+    # for example, conjugate for non-complex numbers
+    # this function implements this.
+    _check_arity_and_homogeneous(sig, args, 1)
+    return args[0] # nothing to do...
+
 
 
 ########################################################################
@@ -439,6 +448,21 @@ def np_complex_rint_impl(context, builder, sig, args):
     inner_sig = typing.signature(*[float_ty]*2)
     out.real = np_real_rint_impl(context, builder, inner_sig, [in1.real])
     out.imag = np_real_rint_impl(context, builder, inner_sig, [in1.imag])
+    return out._getvalue()
+
+
+########################################################################
+# Numpy conj/conjugate
+def np_complex_conjugate_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 1)
+    ty = sig.args[0]
+    float_ty = ty.underlying_float
+    complex_class = context.make_complex(ty)
+    in1 = complex_class(context, builder, value=args[0])
+    out = complex_class(context, builder)
+    ZERO = context.get_constant(float_ty, 0.0)
+    out.real = in1.real
+    out.imag = builder.fsub(ZERO, in1.imag)
     return out._getvalue()
 
 ########################################################################

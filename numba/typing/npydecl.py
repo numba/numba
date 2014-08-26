@@ -102,7 +102,7 @@ _math_operations = [ "add", "subtract", "multiply",
                      "logaddexp", "logaddexp2", "true_divide",
                      "floor_divide", "negative", "power", 
                      "remainder", "fmod", "absolute",
-                     "rint", "sign", "conj", "exp", "exp2",
+                     "rint", "sign", "conjugate", "exp", "exp2",
                      "log", "log2", "log10", "expm1", "log1p",
                      "sqrt", "square", "reciprocal",
                      "divide", "mod", "abs", "fabs" ]
@@ -145,7 +145,7 @@ _unsupported = set([ numpy.square, numpy.spacing, numpy.signbit,
                      numpy.isfinite, numpy.invert, numpy.greater,
                      numpy.greater_equal, numpy.fmod, numpy.fmin, numpy.fmax,
                      numpy.equal, numpy.copysign,
-                     numpy.conjugate, numpy.bitwise_xor,
+                     numpy.bitwise_xor,
                      numpy.bitwise_or, numpy.bitwise_and ])
 
 # a list of ufuncs that are in fact aliases of other ufuncs. They need to insert the

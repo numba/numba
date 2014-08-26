@@ -403,7 +403,6 @@ class TestUFuncs(TestCase):
     def test_conj_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.conj, flags=flags)
 
-    @_unimplemented
     def test_conj_ufunc_npm(self):
         self.test_conj_ufunc(flags=no_pyobj_flags)
 
@@ -472,7 +471,6 @@ class TestUFuncs(TestCase):
     def test_conjugate_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.conjugate, flags=flags)
 
-    @_unimplemented
     def test_conjugate_ufunc_npm(self):
         self.test_reciprocal_ufunc(flags=no_pyobj_flags)
 
@@ -1307,7 +1305,7 @@ class TestLoopTypesComplexNoPython(TestLoopTypes):
     _compile_flags = no_pyobj_flags
     _ufuncs = [np.negative, np.add, np.subtract, np.multiply, np.divide,
                np.true_divide, np.floor_divide, np.power, np.sign, np.abs,
-               np.absolute, np.rint]
+               np.absolute, np.rint, np.conj, np.conjugate]
 
     # Test complex types
     # note that some loops like "abs" contain reals as results, hence the
