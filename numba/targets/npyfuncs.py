@@ -598,6 +598,7 @@ def np_real_log10_impl(context, builder, sig, args):
     return _dispatch_func_by_name_type(context, builder, sig, args,
                                        dispatch_table, 'log10')
 
+
 def np_complex_log10_impl(context, builder, sig, args):
     _check_arity_and_homogeneous(sig, args, 1)
 
@@ -610,6 +611,72 @@ def np_complex_log10_impl(context, builder, sig, args):
     tmp.real = builder.fmul(log10e, tmp.real)
     tmp.imag = builder.fmul(log10e, tmp.imag)
     return tmp._getvalue()
+
+
+########################################################################
+# NumPy expm1
+
+def np_real_expm1_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 1)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.expm1f',
+        types.float64: 'numba.npymath.expm1',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'expm1')
+
+def np_complex_expm1_impl(context, builder, sig, args):
+    # this is based on nc_expm1 in funcs.inc.src
+    _check_arity_and_homogeneous(sig, args, 1)
+
+    ty = sig.args[0]
+    float_ty = ty.underlying_float
+    float_unary_sig = typing.signature(*[float_ty]*2)
+    complex_class = context.make_complex(ty)
+
+    MINUS_ONE = context.get_constant(float_ty, -1.0)
+    in1 = complex_class(context, builder, value=args[0])
+    a = np_real_exp_impl(context, builder, float_unary_sig, [in1.real])
+    out = complex_class(context, builder)
+    cos_imag = np_real_cos_impl(context, builder, float_unary_sig, [in1.imag])
+    sin_imag = np_real_sin_impl(context, builder, float_unary_sig, [in1.imag])
+    tmp = builder.fmul(a, cos_imag)
+    out.imag = builder.fmul(a, sin_imag)
+    out.real = builder.fadd(tmp, MINUS_ONE)
+
+    return out._getvalue()
+
+
+########################################################################
+# NumPy sin
+
+def np_real_sin_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 1)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.sinf',
+        types.float64: 'numba.npymath.sin',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'sin')
+
+
+########################################################################
+# NumPy cos
+
+def np_real_cos_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 1)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.cosf',
+        types.float64: 'numba.npymath.cos',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'cos')
 
 
 ########################################################################
