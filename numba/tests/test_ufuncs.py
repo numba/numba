@@ -1306,7 +1306,7 @@ class TestLoopTypesComplexNoPython(TestLoopTypes):
     _ufuncs = [np.negative, np.add, np.subtract, np.multiply, np.divide,
                np.true_divide, np.floor_divide, np.power, np.sign, np.abs,
                np.absolute, np.rint, np.conj, np.conjugate, np.exp, np.exp2,
-               np.log]
+               np.log, np.log2]
 
     # Test complex types
     # note that some loops like "abs" contain reals as results, hence the

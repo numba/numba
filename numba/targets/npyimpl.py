@@ -410,7 +410,6 @@ _float_binary_sig = typing.signature(types.float64, types.float64,
 # as external function as "numba.npymath."+func
 _externs = [
     (numpy.expm1, "expm1"),
-    (numpy.log2, "log2"),
     (numpy.log10, "log10"),
     (numpy.log1p, "log1p"),
     (numpy.deg2rad, "deg2rad"),

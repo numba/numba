@@ -517,9 +517,9 @@ def np_complex_exp2_impl(context, builder, sig, args):
     complex_class = context.make_complex(ty)
     in1 = complex_class(context, builder, value=args[0])
     tmp = complex_class(context, builder)
-    npy_loge2 = context.get_constant(float_ty, math.log(2))
-    tmp.real = builder.fmul(npy_loge2, in1.real)
-    tmp.imag = builder.fmul(npy_loge2, in1.imag)
+    loge2 = context.get_constant(float_ty, math.log(2))
+    tmp.real = builder.fmul(loge2, in1.real)
+    tmp.imag = builder.fmul(loge2, in1.imag)
     return np_complex_exp_impl(context, builder, sig, [tmp._getvalue()])
 
 
@@ -548,6 +548,33 @@ def np_complex_log_impl(context, builder, sig, args):
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
                                        dispatch_table, 'log')
+
+########################################################################
+# NumPy log2
+
+def np_real_log2_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 1)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.log2f',
+        types.float64: 'numba.npymath.log2',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'log2')
+
+def np_complex_log2_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 1)
+
+    ty = sig.args[0]
+    float_ty = ty.underlying_float
+    complex_class = context.make_complex(ty)
+    tmp = np_complex_log_impl(context, builder, sig, args)
+    tmp = complex_class(context, builder, value=tmp)
+    log2e = context.get_constant(float_ty, math.log(math.e, 2))
+    tmp.real = builder.fmul(log2e, tmp.real)
+    tmp.imag = builder.fmul(log2e, tmp.imag)
+    return tmp._getvalue()
 
 
 ########################################################################
