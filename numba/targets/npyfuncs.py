@@ -452,7 +452,7 @@ def np_complex_rint_impl(context, builder, sig, args):
 
 
 ########################################################################
-# Numpy conj/conjugate
+# NumPy conj/conjugate
 def np_complex_conjugate_impl(context, builder, sig, args):
     _check_arity_and_homogeneous(sig, args, 1)
     ty = sig.args[0]
@@ -464,6 +464,34 @@ def np_complex_conjugate_impl(context, builder, sig, args):
     out.real = in1.real
     out.imag = builder.fsub(ZERO, in1.imag)
     return out._getvalue()
+
+
+########################################################################
+# NumPy exp
+
+def np_real_exp_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 1)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.expf',
+        types.float64: 'numba.npymath.exp',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'exp')
+
+
+def np_complex_exp_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 1)
+
+    dispatch_table = {
+        types.complex64: 'numba.npymath.cexpf',
+        types.complex128: 'numba.npymath.cexp',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'exp')
+
 
 ########################################################################
 # NumPy style complex predicates
