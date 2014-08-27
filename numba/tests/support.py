@@ -90,7 +90,10 @@ class TestCase(unittest.TestCase):
             yield cm
 
     _exact_typesets = [(bool, np.bool_), utils.INT_TYPES, (str,), (utils.text_type),]
-    _approx_typesets = [(float,), (complex,), (np.floating),]
+    # note: unfortunately, NumPy complex64 doesn't evaluate "True" as an instance of
+    #       complex, yet complex128 does (at least in NumPy 1.8.1). Hence it is needed
+    #       in the list of _approx_typesets
+    _approx_typesets = [(float,), (complex,), (np.floating), (np.complex64)]
 
     def assertPreciseEqual(self, first, second, prec='exact', msg=None):
         """

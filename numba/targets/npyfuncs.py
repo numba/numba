@@ -809,6 +809,18 @@ def np_real_sin_impl(context, builder, sig, args):
                                        dispatch_table, 'sin')
 
 
+def np_complex_sin_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 1)
+
+    dispatch_table = {
+        types.complex64: 'numba.npymath.csinf',
+        types.complex128: 'numba.npymath.csin',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'sin')
+
+
 ########################################################################
 # NumPy cos
 

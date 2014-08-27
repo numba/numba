@@ -1241,9 +1241,10 @@ class TestLoopTypes(TestCase):
         for c_arg, py_arg in zip(c_args, py_args):
             # XXX should assertPreciseEqual() accept numpy arrays?
             prec = 'single' if c_arg.dtype.char in 'fF' else 'exact'
+            prec = 'double' if c_arg.dtype.char in 'dD' else prec
             for c, py in zip(c_arg, py_arg):
                 self.assertPreciseEqual(py, c, prec=prec,
-                    msg="arrays differ: expected %r, got %r" % (py_arg, c_arg))
+                    msg="arrays differ (%s): expected %r, got %r" % (prec, py_arg, c_arg))
 
     def _check_ufunc_loops(self, ufunc):
         fn = _make_ufunc_usecase(ufunc)
@@ -1305,7 +1306,7 @@ class TestLoopTypesComplexNoPython(TestLoopTypes):
                np.true_divide, np.floor_divide, np.power, np.sign, np.abs,
                np.absolute, np.rint, np.conj, np.conjugate, np.exp, np.exp2,
                np.log, np.log2, np.log10, np.expm1, np.log1p, np.sqrt,
-               np.square, np.reciprocal]
+               np.square, np.reciprocal, np.sin]
 
     # Test complex types
     # note that some loops like "abs" contain reals as results, hence the
