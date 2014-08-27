@@ -903,6 +903,97 @@ def np_complex_tan_impl(context, builder, sig, args):
 
 
 ########################################################################
+# NumPy asin
+
+def np_real_asin_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 1)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.asinf',
+        types.float64: 'numba.npymath.asin',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'asin')
+
+
+def _complex_expand_series(context, builder, ty, initial, x, coefs):
+    assert ty in types.complex_domain
+    binary_sig = typing.signature(*[ty]*3)
+    complex_class = context.make_complex(ty)
+    accum = complex_class(context, builder, value=initial)
+    ONE = context.get_constant(ty.underlying_float, 1.0)
+    for coef in reversed(coefs):
+        constant = context.get_constant(ty.underlying_float, coef)
+        value = builtins.complex_mul_impl(context, builder, binary_sig,
+                                          [x, accum._getvalue()])
+        accum._setvalue(value)
+        accum.real = builder.fadd(ONE, builder.fmul(accum.real, constant))
+        accum.imag = builder.fmul(accum.imag, constant)
+
+    return accum._getvalue()
+
+
+def np_complex_asin_impl(context, builder, sig, args):
+    # npymath does not provide a complex asin. The code in funcs.inc.src
+    # is translated here...
+    _check_arity_and_homogeneous(sig, args, 1)
+
+    ty = sig.args[0]
+    float_ty = ty.underlying_float
+    complex_class = context.make_complex(ty)
+    epsilon = context.get_constant(float_ty, 1e-3)
+
+    x = complex_class(context, builder, value=args[0])
+    out = complex_class(context, builder)
+    abs_r = _fabs(context, builder, x.real)
+    abs_i = _fabs(context, builder, x.imag)
+    abs_r_gt_epsilon = builder.fcmp(lc.FCMP_OGT, abs_r, epsilon)
+    abs_i_gt_epsilon = builder.fcmp(lc.FCMP_OGT, abs_i, epsilon)
+    any_gt_epsilon = builder.or_(abs_r_gt_epsilon, abs_i_gt_epsilon)
+    complex_binary_sig = typing.signature(*[ty]*3)
+    with cgutils.ifelse(builder, any_gt_epsilon) as (then, otherwise):
+        with then:
+            I = context.get_constant_generic(builder, ty, 1.0j)
+            ONE = context.get_constant_generic(builder, ty, 1.0 + 0.0j)
+            ZERO = context.get_constant_generic(builder, ty, 0.0 + 0.0j)
+            xx = np_complex_square_impl(context, builder, sig, args)
+            one_minus_xx = builtins.complex_sub_impl(context, builder,
+                                                     complex_binary_sig,
+                                                     [ONE, xx])
+            sqrt_one_minus_xx = np_complex_sqrt_impl(context, builder, sig,
+                                                     [one_minus_xx])
+            ix = builtins.complex_mul_impl(context, builder,
+                                           complex_binary_sig,
+                                           [I, args[0]])
+            log_arg = builtins.complex_add_impl(context, builder, sig,
+                                                [ix, sqrt_one_minus_xx])
+            log = np_complex_log_impl(context, builder, sig, [log_arg])
+            ilog = builtins.complex_mul_impl(context, builder,
+                                             complex_binary_sig,
+                                             [I, log])
+            out._setvalue(builtins.complex_sub_impl(context, builder,
+                                                    complex_binary_sig,
+                                                    [ZERO, ilog]))
+        with otherwise:
+            coef_dict = {
+                types.complex64: [1.0/6.0, 9.0/20.0],
+                types.complex128: [1.0/6.0, 9.0/20.0, 25.0/42.0],
+                # types.complex256: [1.0/6.0, 9.0/20.0, 25.0/42.0, 49.0/72.0, 81.0/110.0]
+            }
+
+            xx = np_complex_square_impl(context, builder, sig, args)
+            ONE = context.get_constant_generic(builder, ty, 1.0 + 0.0j)
+            tmp = _complex_expand_series(context, builder, ty,
+                                         ONE, xx, coef_dict[ty])
+            out._setvalue(builtins.complex_mul_impl(context, builder,
+                                                    complex_binary_sig,
+                                                    [args[0], tmp]))
+
+    return out._getvalue()
+
+
+########################################################################
 # NumPy sinh
 
 def np_real_sinh_impl(context, builder, sig, args):

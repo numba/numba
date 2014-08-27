@@ -360,6 +360,13 @@ def _fill_ufunc_db(ufunc_db):
         'D->D': npyfuncs.np_complex_tan_impl,
     }
 
+    ufunc_db[np.arcsin] = {
+        'f->f': npyfuncs.np_real_asin_impl,
+        'd->d': npyfuncs.np_real_asin_impl,
+        'F->F': npyfuncs.np_complex_asin_impl,
+        'D->D': npyfuncs.np_complex_asin_impl,
+    }
+
     # Inject datetime64 support
     try:
         from . import npdatetime
