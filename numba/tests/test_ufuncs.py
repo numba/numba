@@ -463,7 +463,6 @@ class TestUFuncs(TestCase):
     def test_reciprocal_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.reciprocal, flags=flags)
 
-    @_unimplemented
     def test_reciprocal_ufunc_npm(self):
         self.test_reciprocal_ufunc(flags=no_pyobj_flags)
 
@@ -1288,7 +1287,7 @@ class TestLoopTypesNoPython(TestLoopTypes):
                np.logaddexp2, np.true_divide, np.floor_divide, np.negative,
                np.power, np.abs, np.absolute,
                np.sign, np.conj, np.exp, np.exp2, np.log, np.log2,
-               np.log10, np.expm1, np.log1p, np.sqrt, np.square,
+               np.log10, np.expm1, np.log1p, np.sqrt, np.square, np.reciprocal,
                np.conjugate, np.sin, np.cos, np.tan, np.arcsin, np.arccos,
                np.arctan, np.arctan2, np.sinh, np.cosh, np.tanh,
                np.arcsinh, np.arccosh, np.arctanh, np.deg2rad, np.rad2deg,
@@ -1305,7 +1304,8 @@ class TestLoopTypesComplexNoPython(TestLoopTypes):
     _ufuncs = [np.negative, np.add, np.subtract, np.multiply, np.divide,
                np.true_divide, np.floor_divide, np.power, np.sign, np.abs,
                np.absolute, np.rint, np.conj, np.conjugate, np.exp, np.exp2,
-               np.log, np.log2, np.log10, np.expm1, np.log1p, np.sqrt, np.square]
+               np.log, np.log2, np.log10, np.expm1, np.log1p, np.sqrt,
+               np.square, np.reciprocal]
 
     # Test complex types
     # note that some loops like "abs" contain reals as results, hence the

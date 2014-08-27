@@ -195,8 +195,8 @@ def np_complex_div_impl(context, builder, sig, args):
     #   R.L. Smith. Algorithm 116: Complex division.
     #   Communications of the ACM, 5(8):435, 1962
 
-    complexClass = context.make_complex(sig.args[0])
-    in1, in2 = [complexClass(context, builder, value=arg) for arg in args]
+    complex_class = context.make_complex(sig.args[0])
+    in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
 
     in1r = in1.real  # numerator.real
     in1i = in1.imag  # numerator.imag
@@ -204,7 +204,7 @@ def np_complex_div_impl(context, builder, sig, args):
     in2i = in2.imag  # denominator.imag
     ftype = in1r.type
     assert all([i.type==ftype for i in [in1r, in1i, in2r, in2i]]), "mismatched types"
-    out = complexClass(context, builder)
+    out = complex_class(context, builder)
 
     ZERO = lc.Constant.real(ftype, 0.0)
     ONE = lc.Constant.real(ftype, 1.0)
@@ -298,8 +298,8 @@ def np_complex_floor_div_impl(context, builder, sig, args):
     float_kind = sig.args[0].underlying_float
     floor_sig = typing.signature(float_kind, float_kind)
 
-    complexClass = context.make_complex(sig.args[0])
-    in1, in2 = [complexClass(context, builder, value=arg) for arg in args]
+    complex_class = context.make_complex(sig.args[0])
+    in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
 
     in1r = in1.real
     in1i = in1.imag
@@ -310,7 +310,7 @@ def np_complex_floor_div_impl(context, builder, sig, args):
 
     ZERO = lc.Constant.real(ftype, 0.0)
 
-    out = complexClass(context, builder)
+    out = complex_class(context, builder)
     out.imag = ZERO
 
     in2r_abs = _fabs(context, builder, in2r)
@@ -729,6 +729,69 @@ def np_complex_square_impl(context, builder, sig, args):
     binary_sig = typing.signature(*[sig.return_type]*3)
     return builtins.complex_mul_impl(context, builder, binary_sig,
                                      [args[0], args[0]])
+
+
+########################################################################
+# NumPy reciprocal
+
+def np_int_reciprocal_impl(context, builder, sig, args):
+    # based on the implementation in loops.c.src
+    # integer versions for reciprocal are performed via promotion
+    # using double, and then converted back to the type
+    _check_arity_and_homogeneous(sig, args, 1)
+    ty = sig.return_type
+
+    binary_sig = typing.signature(*[ty]*3)
+    in_as_float = context.cast(builder, args[0], ty, types.float64)
+    ONE = context.get_constant(types.float64, 1)
+    result_as_float = builder.fdiv(ONE, in_as_float)
+    return context.cast(builder, result_as_float, types.float64, ty)
+
+
+def np_real_reciprocal_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 1)
+    ONE = context.get_constant(sig.return_type, 1.0)
+    return builder.fdiv(ONE, args[0])
+
+
+def np_complex_reciprocal_impl(context, builder, sig, args):
+    # based on the implementation in loops.c.src
+    # Basically the same Smith method used for division, but with
+    # the numerator substitued by 1.0
+    _check_arity_and_homogeneous(sig, args, 1)
+
+    ty = sig.args[0]
+    float_ty = ty.underlying_float
+    complex_class = context.make_complex(ty)
+
+    ZERO = context.get_constant(float_ty, 0.0)
+    ONE = context.get_constant(float_ty, 1.0)
+    in1 = complex_class(context, builder, value=args[0])
+    out = complex_class(context, builder)
+    in1r = in1.real
+    in1i = in1.imag
+    in1r_abs = _fabs(context, builder, in1r)
+    in1i_abs = _fabs(context, builder, in1i)
+    in1i_abs_le_in1r_abs = builder.fcmp(lc.FCMP_OLE, in1i_abs, in1r_abs)
+
+    with cgutils.ifelse(builder, in1i_abs_le_in1r_abs) as (then, otherwise):
+        with then:
+            r = builder.fdiv(in1i, in1r)
+            tmp0 = builder.fmul(in1i, r)
+            d = builder.fadd(in1r, tmp0)
+            inv_d = builder.fdiv(ONE, d)
+            minus_r = builder.fsub(ZERO, r)
+            out.real = inv_d
+            out.imag = builder.fmul(minus_r, inv_d)
+        with otherwise:
+            r = builder.fdiv(in1r, in1i)
+            tmp0 = builder.fmul(in1r, r)
+            d = builder.fadd(tmp0, in1i)
+            inv_d = builder.fdiv(ONE, d)
+            out.real = builder.fmul(r, inv_d)
+            out.imag = builder.fsub(ZERO, inv_d)
+
+    return out._getvalue()
 
 
 ########################################################################

@@ -65,7 +65,7 @@ Math operations
  log1p               Yes          Yes
  sqrt                Yes          Yes
  square              Yes          Yes
- reciprocal          Yes          No
+ reciprocal          Yes          Yes
  conjugate           Yes          Yes
 ==============  =============  ===========
 
