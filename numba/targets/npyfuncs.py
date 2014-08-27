@@ -687,6 +687,31 @@ def np_complex_log1p_impl(context, builder, sig, args):
 
 
 ########################################################################
+# NumPy sqrt
+
+def np_real_sqrt_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 1)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.sqrtf',
+        types.float64: 'numba.npymath.sqrt',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'sqrt')
+
+
+def np_complex_sqrt_impl(context, builder, sig, args):
+    dispatch_table = {
+        types.complex64: 'numba.npymath.csqrtf',
+        types.complex128: 'numba.npymath.csqrt',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'sqrt')
+
+
+########################################################################
 # NumPy sin
 
 def np_real_sin_impl(context, builder, sig, args):

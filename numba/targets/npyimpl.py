@@ -423,7 +423,6 @@ _externs = [
     (numpy.arcsinh, "asinh"),
     (numpy.arccosh, "acosh"),
     (numpy.arctanh, "atanh"),
-    (numpy.sqrt, "sqrt"),
     (numpy.floor, "floor"),
     (numpy.ceil, "ceil"),
     (numpy.trunc, "trunc"),

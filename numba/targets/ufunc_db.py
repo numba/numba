@@ -298,6 +298,13 @@ def _fill_ufunc_db(ufunc_db):
         'D->D': npyfuncs.np_complex_log1p_impl,
     }
 
+    ufunc_db[np.sqrt] = {
+        'f->f': npyfuncs.np_real_sqrt_impl,
+        'd->d': npyfuncs.np_real_sqrt_impl,
+        'F->F': npyfuncs.np_complex_sqrt_impl,
+        'D->D': npyfuncs.np_complex_sqrt_impl,
+    }
+
     # Inject datetime64 support
     try:
         from . import npdatetime
