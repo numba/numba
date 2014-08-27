@@ -836,6 +836,102 @@ def np_real_cos_impl(context, builder, sig, args):
                                        dispatch_table, 'cos')
 
 
+def np_complex_cos_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 1)
+
+    dispatch_table = {
+        types.complex64: 'numba.npymath.ccosf',
+        types.complex128: 'numba.npymath.ccos',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'cos')
+
+
+########################################################################
+# NumPy tan
+
+def np_real_tan_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 1)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.tanf',
+        types.float64: 'numba.npymath.tan',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'tan')
+
+
+def np_complex_tan_impl(context, builder, sig, args):
+    # npymath does not provide complex tan functions. The code
+    # in funcs.inc.src for tan is translated here...
+    _check_arity_and_homogeneous(sig, args, 1)
+
+    ty = sig.args[0]
+    float_ty = ty.underlying_float
+    float_unary_sig = typing.signature(*[float_ty]*2)
+    complex_class = context.make_complex(ty)
+    ONE = context.get_constant(float_ty, 1.0)
+    x = complex_class(context, builder, args[0])
+    out = complex_class(context, builder)
+
+    xr = x.real
+    xi = x.imag
+    sr = np_real_sin_impl(context, builder, float_unary_sig, [xr])
+    cr = np_real_cos_impl(context, builder, float_unary_sig, [xr])
+    shi = np_real_sinh_impl(context, builder, float_unary_sig, [xi])
+    chi = np_real_cosh_impl(context, builder, float_unary_sig, [xi])
+    rs = builder.fmul(sr, chi)
+    is_ = builder.fmul(cr, shi)
+    rc = builder.fmul(cr, chi)
+    ic = builder.fmul(sr, shi) # note: opposite sign from code in funcs.inc.src
+    sqr_rc = builder.fmul(rc, rc)
+    sqr_ic = builder.fmul(ic, ic)
+    d = builder.fadd(sqr_rc, sqr_ic)
+    inv_d = builder.fdiv(ONE, d)
+    rs_rc = builder.fmul(rs, rc)
+    is_ic = builder.fmul(is_, ic)
+    is_rc = builder.fmul(is_, rc)
+    rs_ic = builder.fmul(rs, ic)
+    numr = builder.fsub(rs_rc, is_ic)
+    numi = builder.fadd(is_rc, rs_ic)
+    out.real = builder.fmul(numr, inv_d)
+    out.imag = builder.fmul(numi, inv_d)
+
+    return out._getvalue()
+
+
+########################################################################
+# NumPy sinh
+
+def np_real_sinh_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 1)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.sinhf',
+        types.float64: 'numba.npymath.sinh',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'sinh')
+
+
+########################################################################
+# NumPy cosh
+
+def np_real_cosh_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 1)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.coshf',
+        types.float64: 'numba.npymath.cosh',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'cosh')
+
+
 ########################################################################
 # NumPy atan2
 

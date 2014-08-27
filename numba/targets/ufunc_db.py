@@ -346,6 +346,20 @@ def _fill_ufunc_db(ufunc_db):
         'D->D': npyfuncs.np_complex_sin_impl,
     }
 
+    ufunc_db[np.cos] = {
+        'f->f': npyfuncs.np_real_cos_impl,
+        'd->d': npyfuncs.np_real_cos_impl,
+        'F->F': npyfuncs.np_complex_cos_impl,
+        'D->D': npyfuncs.np_complex_cos_impl,
+    }
+
+    ufunc_db[np.tan] = {
+        'f->f': npyfuncs.np_real_tan_impl,
+        'd->d': npyfuncs.np_real_tan_impl,
+        'F->F': npyfuncs.np_complex_tan_impl,
+        'D->D': npyfuncs.np_complex_tan_impl,
+    }
+
     # Inject datetime64 support
     try:
         from . import npdatetime

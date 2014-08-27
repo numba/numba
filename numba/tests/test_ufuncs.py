@@ -1306,7 +1306,7 @@ class TestLoopTypesComplexNoPython(TestLoopTypes):
                np.true_divide, np.floor_divide, np.power, np.sign, np.abs,
                np.absolute, np.rint, np.conj, np.conjugate, np.exp, np.exp2,
                np.log, np.log2, np.log10, np.expm1, np.log1p, np.sqrt,
-               np.square, np.reciprocal, np.sin]
+               np.square, np.reciprocal, np.sin, np.cos, np.tan ]
 
     # Test complex types
     # note that some loops like "abs" contain reals as results, hence the

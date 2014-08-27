@@ -411,8 +411,6 @@ _float_binary_sig = typing.signature(types.float64, types.float64,
 _externs = [
     (numpy.deg2rad, "deg2rad"),
     (numpy.rad2deg, "rad2deg"),
-    (numpy.cos, "cos"),
-    (numpy.tan, "tan"),
     (numpy.sinh, "sinh"),
     (numpy.cosh, "cosh"),
     (numpy.tanh, "tanh"),

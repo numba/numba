@@ -127,6 +127,9 @@ NUMBA_UNARY_FUNC_WRAP(csqrt, npy_cdouble);
 
 NUMBA_UNARY_FUNC_WRAP(csinf, npy_cfloat);
 NUMBA_UNARY_FUNC_WRAP(csin, npy_cdouble);
+NUMBA_UNARY_FUNC_WRAP(ccosf, npy_cfloat);
+NUMBA_UNARY_FUNC_WRAP(ccos, npy_cdouble);
+
 
 struct npy_math_entry {
     const char* name;
@@ -199,9 +202,12 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL(log1pf),
     NPYMATH_SYMBOL(sinf),
     NPYMATH_SYMBOL(cosf),
+    NPYMATH_SYMBOL(tanf),
     NPYMATH_SYMBOL(atan2f),
     NPYMATH_SYMBOL(hypotf),
     NPYMATH_SYMBOL(sqrtf),
+    NPYMATH_SYMBOL(sinhf),
+    NPYMATH_SYMBOL(coshf),
 
     /* complex functions */
     NPYMATH_SYMBOL_EXPLICIT(cpow, ufunc_cpow),
@@ -209,6 +215,7 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL_WRAPPED(clog),
     NPYMATH_SYMBOL_WRAPPED(csqrt),
     NPYMATH_SYMBOL_WRAPPED(csin),
+    NPYMATH_SYMBOL_WRAPPED(ccos),
 
     /* complex float functions */
     NPYMATH_SYMBOL_EXPLICIT(cpowf, ufunc_cpowf),
@@ -216,6 +223,7 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL_WRAPPED(clogf),
     NPYMATH_SYMBOL_WRAPPED(csqrtf),
     NPYMATH_SYMBOL_WRAPPED(csinf),
+    NPYMATH_SYMBOL_WRAPPED(ccosf),
 };
 #undef NPY_MATH_SYMBOL
 
