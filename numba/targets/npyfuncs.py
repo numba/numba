@@ -11,6 +11,7 @@ import math
 from llvm import core as lc
 
 from .. import cgutils, typing, types, lowering
+from . import builtins
 
 # some NumPy constants. Note that we could generate some of them using
 # the math library, but having the values copied from npy_math seems to
@@ -709,6 +710,25 @@ def np_complex_sqrt_impl(context, builder, sig, args):
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
                                        dispatch_table, 'sqrt')
+
+
+########################################################################
+# NumPy square
+
+def np_int_square_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 1)
+    return builder.mul(args[0], args[0])
+
+
+def np_real_square_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 1)
+    return builder.fmul(args[0], args[0])
+
+def np_complex_square_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 1)
+    binary_sig = typing.signature(*[sig.return_type]*3)
+    return builtins.complex_mul_impl(context, builder, binary_sig,
+                                     [args[0], args[0]])
 
 
 ########################################################################

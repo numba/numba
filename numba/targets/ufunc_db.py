@@ -305,6 +305,23 @@ def _fill_ufunc_db(ufunc_db):
         'D->D': npyfuncs.np_complex_sqrt_impl,
     }
 
+    ufunc_db[np.square] = {
+        'b->b': npyfuncs.np_int_square_impl,
+        'B->B': npyfuncs.np_int_square_impl,
+        'h->h': npyfuncs.np_int_square_impl,
+        'H->H': npyfuncs.np_int_square_impl,
+        'i->i': npyfuncs.np_int_square_impl,
+        'I->I': npyfuncs.np_int_square_impl,
+        'l->l': npyfuncs.np_int_square_impl,
+        'L->L': npyfuncs.np_int_square_impl,
+        'q->q': npyfuncs.np_int_square_impl,
+        'Q->Q': npyfuncs.np_int_square_impl,
+        'f->f': npyfuncs.np_real_square_impl,
+        'd->d': npyfuncs.np_real_square_impl,
+        'F->F': npyfuncs.np_complex_square_impl,
+        'D->D': npyfuncs.np_complex_square_impl,
+    }
+
     # Inject datetime64 support
     try:
         from . import npdatetime

@@ -64,7 +64,7 @@ Math operations
  expm1               Yes          Yes
  log1p               Yes          Yes
  sqrt                Yes          Yes
- square              Yes          No
+ square              Yes          Yes
  reciprocal          Yes          No
  conjugate           Yes          Yes
 ==============  =============  ===========

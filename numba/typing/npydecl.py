@@ -68,7 +68,7 @@ class Numpy_rules_ufunc(AbstractTemplate):
         # check if all the types involved in the ufunc loop are supported in this mode
         if not supported_ufunc_loop(ufunc, ufunc_loop):
             msg = "ufunc '{0}' using the loop '{1}' not supported in this mode"
-            raise TypingError(msg=msg.format(ufunc.__name__, ufunc_loop))
+            raise TypingError(msg=msg.format(ufunc.__name__, ufunc_loop.ufunc_sig))
 
         # if there is any explicit output type, check that it is valid
         explicit_outputs_np = [as_dtype(tp.dtype) for tp in explicit_outputs]
@@ -136,7 +136,7 @@ _floating_functions = [ "isfinite", "isinf", "isnan", "signbit",
 # implemented.
 #
 # It also works as a nice TODO list for ufunc support :)
-_unsupported = set([ numpy.square, numpy.spacing, numpy.signbit,
+_unsupported = set([ numpy.spacing, numpy.signbit,
                      numpy.right_shift, numpy.remainder, numpy.reciprocal,
                      numpy.not_equal, numpy.minimum, numpy.maximum,
                      numpy.logical_xor, numpy.logical_or, numpy.logical_not,
