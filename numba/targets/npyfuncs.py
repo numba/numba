@@ -650,6 +650,43 @@ def np_complex_expm1_impl(context, builder, sig, args):
 
 
 ########################################################################
+# NumPy log1p
+
+def np_real_log1p_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 1)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.log1pf',
+        types.float64: 'numba.npymath.log1p',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'log1p')
+
+def np_complex_log1p_impl(context, builder, sig, args):
+    # base on NumPy's nc_log1p in funcs.inc.src
+    _check_arity_and_homogeneous(sig, args, 1)
+
+    ty = sig.args[0]
+    float_ty = ty.underlying_float
+    float_unary_sig = typing.signature(*[float_ty]*2)
+    float_binary_sig = typing.signature(*[float_ty]*3)
+    complex_class = context.make_complex(ty)
+
+    ONE = context.get_constant(float_ty, 1.0)
+    in1 = complex_class(context, builder, value=args[0])
+    out = complex_class(context, builder)
+    real_plus_one = builder.fadd(in1.real, ONE)
+    l = np_real_hypot_impl(context, builder, float_binary_sig,
+                           [real_plus_one, in1.imag])
+    out.imag = np_real_atan2_impl(context, builder, float_binary_sig,
+                                  [in1.imag, real_plus_one])
+    out.real = np_real_log_impl(context, builder, float_unary_sig, [l])
+
+    return out._getvalue()
+
+
+########################################################################
 # NumPy sin
 
 def np_real_sin_impl(context, builder, sig, args):
@@ -677,6 +714,37 @@ def np_real_cos_impl(context, builder, sig, args):
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
                                        dispatch_table, 'cos')
+
+
+########################################################################
+# NumPy atan2
+
+def np_real_atan2_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 2)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.atan2f',
+        types.float64: 'numba.npymath.atan2',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'atan2')
+
+
+########################################################################
+# NumPy hypot
+
+def np_real_hypot_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 2)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.hypotf',
+        types.float64: 'numba.npymath.hypot',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'hypot')
+
 
 
 ########################################################################
