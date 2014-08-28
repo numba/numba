@@ -438,8 +438,6 @@ for ufunc in ufunc_db.get_ufuncs():
         raise RuntimeError("Don't know how to register ufuncs from ufunc_db with arity > 2")
 
 _externs_2 = [
-    (numpy.logaddexp, "logaddexp"),
-    (numpy.logaddexp2, "logaddexp2"),
 ]
 
 for sym, name in _externs_2:

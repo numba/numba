@@ -208,6 +208,16 @@ def _fill_ufunc_db(ufunc_db):
         'DD->D': npyfuncs.np_complex_floor_div_impl,
     }
 
+    ufunc_db[np.logaddexp] = {
+        'ff->f': npyfuncs.np_real_logaddexp_impl,
+        'dd->d': npyfuncs.np_real_logaddexp_impl,
+    }
+
+    ufunc_db[np.logaddexp2] = {
+        'ff->f': npyfuncs.np_real_logaddexp2_impl,
+        'dd->d': npyfuncs.np_real_logaddexp2_impl,
+    }
+
     ufunc_db[np.power] = {
         'bb->b': npyfuncs.np_int_power_impl,
         'BB->B': npyfuncs.np_int_power_impl,

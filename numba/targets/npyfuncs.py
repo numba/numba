@@ -262,6 +262,35 @@ def np_complex_div_impl(context, builder, sig, args):
 
 
 ########################################################################
+# NumPy logaddexp
+
+def np_real_logaddexp_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.logaddexpf',
+        types.float64: 'numba.npymath.logaddexp',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'logaddexp')
+
+########################################################################
+# NumPy logaddexp2
+
+def np_real_logaddexp2_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.logaddexp2f',
+        types.float64: 'numba.npymath.logaddexp2',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'logaddexp2')
+
+
+########################################################################
 # true div kernels
 
 def np_int_truediv_impl(context, builder, sig, args):
