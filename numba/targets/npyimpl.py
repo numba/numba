@@ -23,20 +23,6 @@ class npy:
     pass
 
 
-def _default_promotion_for_type(ty):
-    """returns the default type to be used when generating code
-    associated to the type ty."""
-    if ty in types.real_domain:
-        promote_type = types.float64
-    elif ty in types.signed_domain:
-        promote_type = types.int64
-    elif ty in types.unsigned_domain:
-        promote_type = types.uint64
-    else:
-        assert False, "type {0} not supported.".format(ty)
-
-    return promote_type
-
 ########################################################################
 
 # In the way we generate code, ufuncs work with scalar as well as
@@ -175,44 +161,19 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
         raise TypeError('unknown type for {0}'.format(where))
 
 
-def npy_math_extern(fn, fnty):
-    setattr(npy, fn, fn)
-    fn_sym = eval("npy."+fn)
-    fn_arity = len(fnty.args)
-
-    n = "numba.npymath." + fn
-    def ref_impl(context, builder, sig, args):
-        mod = cgutils.get_module(builder)
-        inner_fn = mod.get_or_insert_function(fnty, name=n)
-        return builder.call(inner_fn, args)
-
-    # This registers the function using different combinations of
-    # input types that can be cast to the actual function type.
-    #
-    # Current limitation is that it only does so for homogeneous
-    # source types. Note that it may be a better idea not providing
-    # these specialization and let the ufunc generator functions
-    # insert the appropriate castings before calling.
-    #
-    # TODO:
-    # Either let the function only register the native version without
-    # cast or provide the full range of specializations for functions
-    # with arity > 1.
-    ty_dst = types.float64
-    for ty_src in [types.int64, types.uint64, types.float64]:
-        @register
-        @implement(fn_sym, *[ty_src]*fn_arity)
-        def _impl(context, builder, sig, args):
-            cast_vals = args
-            if ty_dst != ty_src:
-                cast = context.cast
-                cast_vals = [cast(builder, val, ty_src, ty_dst) for val in args]
-            sig = typing.signature(*[ty_dst]*(len(cast_vals)+1))
-            return ref_impl(context, builder, sig, cast_vals)
-
-
 def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,
                        explicit_output=True):
+    # This is the code generator that builds all the looping needed
+    # to execute a numpy functions over several dimensions (including
+    # scalar cases).
+    #
+    # context - the code generation context
+    # builder - the code emitter
+    # sig - signature of the ufunc
+    # args - the args to the ufunc
+    # kernel_class -  a code generating subclass of _Kernel that provides
+    # explicit_output - if the output was explicit in the call
+    #                   (ie: np.add(x,y,r))
     if not explicit_output:
         args.append(Constant.null(context.get_value_type(sig.return_type)))
         tyargs = sig.args + (sig.return_type,)
@@ -270,39 +231,6 @@ class _Kernel(object):
             # let the regular cast do the rest...
 
         return self.context.cast(self.builder, val, fromty, toty)
-
-
-def _function_with_cast(op, inner_sig):
-    """a kernel implemented by a function that only exists in one signature
-    op is the operation (function
-    inner_sig is the signature of op. Operands will be cast to that signature
-    """
-    class _KernelImpl(_Kernel):
-        def __init__(self, context, builder, outer_sig):
-            """
-            op is the operation
-            outer_sig is the outer type signature (the signature of the ufunc)
-            inner_sig is the inner type signature (the signature of the
-                      operation itself)
-            """
-            super(_KernelImpl, self).__init__(context, builder, outer_sig)
-            self.fnwork = context.get_function(op, inner_sig)
-            self.inner_sig = inner_sig
-
-        def generate(self, *args):
-            # convert args from the ufunc types to the one of the
-            # kernel operation
-            cast_args = [self.cast(val, inty, outy)
-                         for val, inty, outy in zip(args, self.outer_sig.args,
-                                                    self.inner_sig.args)]
-            # perform the operation
-            res = self.fnwork(self.builder, cast_args)
-            # return the result converted to the type of the ufunc
-            # operation
-            return self.cast(res, self.inner_sig.return_type,
-                             self.outer_sig.return_type)
-
-    return _KernelImpl
 
 
 def _ufunc_db_function(ufunc):
