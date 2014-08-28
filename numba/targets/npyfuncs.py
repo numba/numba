@@ -1347,6 +1347,7 @@ def np_complex_asinh_impl(context, builder, sig, args):
 
     return out._getvalue()
 
+
 ########################################################################
 # NumPy acosh
 
@@ -1360,6 +1361,29 @@ def np_real_acosh_impl(context, builder, sig, args):
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
                                        dispatch_table, 'arccosh')
+
+
+def np_complex_acosh_impl(context, builder, sig, args):
+    # npymath does not provide a complex acosh. The code in funcs.inc.src
+    # is translated here...
+    # log(x + sqrt(x+1) * sqrt(x-1))
+    _check_arity_and_homogeneity(sig, args, 1)
+
+    ty = sig.args[0]
+    csig2 = typing.signature(*[ty]*3)
+
+    ONE = context.get_constant_generic(builder, ty, 1.0 + 0.0j)
+    x = args[0]
+
+    x_plus_one = builtins.complex_add_impl(context, builder, csig2, [x, ONE])
+    x_minus_one = builtins.complex_sub_impl(context, builder, csig2, [x, ONE])
+    sqrt_x_plus_one = np_complex_sqrt_impl(context, builder, sig, [x_plus_one])
+    sqrt_x_minus_one = np_complex_sqrt_impl(context, builder, sig, [x_minus_one])
+    prod_sqrt = builtins.complex_mul_impl(context, builder, csig2,
+                                          [sqrt_x_plus_one, sqrt_x_minus_one])
+    log_arg = builtins.complex_add_impl(context, builder, csig2, [x, prod_sqrt])
+
+    return np_complex_log_impl(context, builder, sig, [log_arg])
 
 
 ########################################################################

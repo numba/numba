@@ -422,6 +422,8 @@ def _fill_ufunc_db(ufunc_db):
     ufunc_db[np.arccosh] = {
         'f->f': npyfuncs.np_real_acosh_impl,
         'd->d': npyfuncs.np_real_acosh_impl,
+        'F->F': npyfuncs.np_complex_acosh_impl,
+        'D->D': npyfuncs.np_complex_acosh_impl,
     }
 
     ufunc_db[np.arctanh] = {
