@@ -1082,7 +1082,7 @@ def np_complex_atan_impl(context, builder, sig, args):
     binary_sig = typing.signature(*[ty]*3)
     with cgutils.ifelse(builder, any_gt_epsilon) as (then, otherwise):
         with then:
-            # ... the use formula
+            # ... then use formula
             # 0.5j * log((j + x)/(j - x))
             I = context.get_constant_generic(builder, ty, 0.0 + 1.0j)
             I2 = context.get_constant_generic(builder, ty, 0.0 + 0.5j)
@@ -1114,7 +1114,7 @@ def np_complex_atan_impl(context, builder, sig, args):
                                                     [args[0], tmp]))
 
     return out._getvalue()
-    
+
 
 ########################################################################
 # NumPy atan2
@@ -1296,6 +1296,57 @@ def np_real_asinh_impl(context, builder, sig, args):
                                        dispatch_table, 'arcsinh')
 
 
+def np_complex_asinh_impl(context, builder, sig, args):
+    # npymath does not provide a complex atan. The code in funcs.inc.src
+    # is translated here...
+    _check_arity_and_homogeneity(sig, args, 1)
+
+    ty = sig.args[0]
+    float_ty = ty.underlying_float
+    complex_class = context.make_complex(ty)
+    epsilon = context.get_constant(float_ty, 1e-3)
+
+    # if real or imag has magnitude over 1e-3...
+    x = complex_class(context, builder, value=args[0])
+    out = complex_class(context, builder)
+    abs_r = _fabs(context, builder, x.real)
+    abs_i = _fabs(context, builder, x.imag)
+    abs_r_gt_epsilon = builder.fcmp(lc.FCMP_OGT, abs_r, epsilon)
+    abs_i_gt_epsilon = builder.fcmp(lc.FCMP_OGT, abs_i, epsilon)
+    any_gt_epsilon = builder.or_(abs_r_gt_epsilon, abs_i_gt_epsilon)
+    binary_sig = typing.signature(*[ty]*3)
+    with cgutils.ifelse(builder, any_gt_epsilon) as (then, otherwise):
+        with then:
+            # ... then use formula
+            # log(sqrt(1+sqr(x)) + x)
+            ONE = context.get_constant_generic(builder, ty, 1.0 + 0.0j)
+            xx = np_complex_square_impl(context, builder, sig, args)
+            one_plus_xx = builtins.complex_add_impl(context, builder,
+                                                    binary_sig, [ONE, xx])
+            sqrt_res = np_complex_sqrt_impl(context, builder, sig,
+                                            [one_plus_xx])
+            log_arg = builtins.complex_add_impl(context, builder,
+                                                binary_sig, [sqrt_res, args[0]])
+            res = np_complex_log_impl(context, builder, sig, [log_arg])
+            out._setvalue(res)
+        with otherwise:
+            # else use series expansion (to avoid loss of precision)
+            coef_dict = {
+                types.complex64: [-1.0/6.0, -9.0/20.0],
+                types.complex128: [-1.0/6.0, -9.0/20.0, -25.0/42.0],
+                # types.complex256: [-1.0/6.0, -9.0/20.0, -25.0/42.0, -49.0/72.0, -81.0/110.0]
+            }
+
+            xx = np_complex_square_impl(context, builder, sig, args)
+            ONE = context.get_constant_generic(builder, ty, 1.0 + 0.0j)
+            tmp = _complex_expand_series(context, builder, ty,
+                                         ONE, xx, coef_dict[ty])
+            out._setvalue(builtins.complex_mul_impl(context, builder,
+                                                    binary_sig,
+                                                    [args[0], tmp]))
+
+    return out._getvalue()
+
 ########################################################################
 # NumPy acosh
 
@@ -1347,7 +1398,7 @@ def np_complex_atanh_impl(context, builder, sig, args):
     binary_sig = typing.signature(*[ty]*3)
     with cgutils.ifelse(builder, any_gt_epsilon) as (then, otherwise):
         with then:
-            # ... the use formula
+            # ... then use formula
             # 0.5 * log((1 + x)/(1 - x))
             ONE = context.get_constant_generic(builder, ty, 1.0 + 0.0j)
             HALF = context.get_constant_generic(builder, ty, 0.5 + 0.0j)
