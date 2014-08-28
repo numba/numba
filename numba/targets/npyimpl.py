@@ -6,7 +6,7 @@ import sys
 import itertools
 from collections import namedtuple
 
-from llvm.core import Constant, Type, ICMP_UGT
+from llvm  import core as lc
 
 from . import builtins, ufunc_db
 from .imputils import implement, Registry
@@ -65,7 +65,7 @@ class _ScalarHelper(object):
         self.val = val
         self.base_type = ty
         intpty = ctxt.get_value_type(types.intp)
-        self.shape = [Constant.int(intpty, 1)]
+        self.shape = [lc.Constant.int(intpty, 1)]
         self._ptr = cgutils.alloca_once(bld, ctxt.get_data_type(ty))
 
     def create_iter_indices(self):
@@ -87,14 +87,14 @@ class _ArrayIndexingHelper(namedtuple('_ArrayIndexingHelper',
     def update_indices(self, loop_indices, name):
         bld = self.array.builder
         intpty = self.array.context.get_value_type(types.intp)
-        ONE = Constant.int(Type.int(intpty.width), 1)
+        ONE = lc.Constant.int(lc.Type.int(intpty.width), 1)
 
         # we are only interested in as many inner dimensions as dimensions
         # the indexed array has (the outer dimensions are broadcast, so
         # ignoring the outer indices produces the desired result.
         indices = loop_indices[len(loop_indices) - len(self.indices):]
         for src, dst, dim in zip(indices, self.indices, self.array.shape):
-            cond = bld.icmp(ICMP_UGT, dim, ONE)
+            cond = bld.icmp(lc.ICMP_UGT, dim, ONE)
             with cgutils.ifthen(bld, cond):
                 bld.store(src, dst)
 
@@ -119,11 +119,11 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary',
     """
     def create_iter_indices(self):
         intpty = self.context.get_value_type(types.intp)
-        ZERO = Constant.int(Type.int(intpty.width), 0)
+        ZERO = lc.Constant.int(lc.Type.int(intpty.width), 0)
 
         indices = []
         for i in range(self.ndim):
-            x = cgutils.alloca_once(self.builder, Type.int(intpty.width))
+            x = cgutils.alloca_once(self.builder, lc.Type.int(intpty.width))
             self.builder.store(ZERO, x)
             indices.append(x)
         return _ArrayIndexingHelper(self, indices)
@@ -175,7 +175,7 @@ def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,
     # explicit_output - if the output was explicit in the call
     #                   (ie: np.add(x,y,r))
     if not explicit_output:
-        args.append(Constant.null(context.get_value_type(sig.return_type)))
+        args.append(lc.Constant.null(context.get_value_type(sig.return_type)))
         tyargs = sig.args + (sig.return_type,)
     else:
         tyargs = sig.args
