@@ -949,6 +949,7 @@ def np_complex_asin_impl(context, builder, sig, args):
     complex_class = context.make_complex(ty)
     epsilon = context.get_constant(float_ty, 1e-3)
 
+    # if real or imag has magnitude over 1e-3...
     x = complex_class(context, builder, value=args[0])
     out = complex_class(context, builder)
     abs_r = _fabs(context, builder, x.real)
@@ -959,6 +960,8 @@ def np_complex_asin_impl(context, builder, sig, args):
     complex_binary_sig = typing.signature(*[ty]*3)
     with cgutils.ifelse(builder, any_gt_epsilon) as (then, otherwise):
         with then:
+            # ... then use formula:
+            # - j * log(j * x + sqrt(1 - sqr(x)))
             I = context.get_constant_generic(builder, ty, 1.0j)
             ONE = context.get_constant_generic(builder, ty, 1.0 + 0.0j)
             ZERO = context.get_constant_generic(builder, ty, 0.0 + 0.0j)
@@ -981,6 +984,7 @@ def np_complex_asin_impl(context, builder, sig, args):
                                                     complex_binary_sig,
                                                     [ZERO, ilog]))
         with otherwise:
+            # ... else use series expansion (to avoid loss of precision)
             coef_dict = {
                 types.complex64: [1.0/6.0, 9.0/20.0],
                 types.complex128: [1.0/6.0, 9.0/20.0, 25.0/42.0],
@@ -1016,7 +1020,7 @@ def np_real_acos_impl(context, builder, sig, args):
 def np_complex_acos_impl(context, builder, sig, args):
     # npymath does not provide a complex acos. The code in funcs.inc.src
     # is translated here...
-    # - j * log(x + j * sqrt(1-sqr(x)))
+    # - j * log(x + j * sqrt(1 - sqr(x)))
     _check_arity_and_homogeneous(sig, args, 1)
 
     ty = sig.args[0]
@@ -1041,6 +1045,76 @@ def np_complex_acos_impl(context, builder, sig, args):
     return builtins.complex_sub_impl(context, builder, binary_sig,
                                      [ZERO, log_j])
 
+
+########################################################################
+# NumPy atan
+
+def np_real_atan_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 1)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.atanf',
+        types.float64: 'numba.npymath.atan',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'atan')
+
+
+def np_complex_atan_impl(context, builder, sig, args):
+    # npymath does not provide a complex acos. The code in funcs.inc.src
+    # is translated here...
+    _check_arity_and_homogeneous(sig, args, 1)
+
+    ty = sig.args[0]
+    float_ty = ty.underlying_float
+    complex_class = context.make_complex(ty)
+    epsilon = context.get_constant(float_ty, 1e-3)
+
+    # if real or imag has magnitude over 1e-3...
+    x = complex_class(context, builder, value=args[0])
+    out = complex_class(context, builder)
+    abs_r = _fabs(context, builder, x.real)
+    abs_i = _fabs(context, builder, x.imag)
+    abs_r_gt_epsilon = builder.fcmp(lc.FCMP_OGT, abs_r, epsilon)
+    abs_i_gt_epsilon = builder.fcmp(lc.FCMP_OGT, abs_i, epsilon)
+    any_gt_epsilon = builder.or_(abs_r_gt_epsilon, abs_i_gt_epsilon)
+    binary_sig = typing.signature(*[ty]*3)
+    with cgutils.ifelse(builder, any_gt_epsilon) as (then, otherwise):
+        with then:
+            # ... the use formula
+            # 0.5j * log((j + x)/(j - x))
+            I = context.get_constant_generic(builder, ty, 0.0 + 1.0j)
+            I2 = context.get_constant_generic(builder, ty, 0.0 + 0.5j)
+            den = builtins.complex_sub_impl(context, builder, binary_sig,
+                                            [I, args[0]])
+            num = builtins.complex_add_impl(context, builder, binary_sig,
+                                            [I, args[0]])
+            div = np_complex_div_impl(context, builder, binary_sig,
+                                      [num, den])
+            log = np_complex_log_impl(context, builder, sig, [div])
+            res = builtins.complex_mul_impl(context, builder, binary_sig,
+                                            [I2, log])
+
+            out._setvalue(res)
+        with otherwise:
+            # else use series expansion (to avoid loss of precision)
+            coef_dict = {
+                types.complex64: [-1.0/3.0, -3.0/5.0],
+                types.complex128: [-1.0/3.0, -3.0/5.0, -5.0/7.0],
+                # types.complex256: [-1.0/3.0, -3.0/5.0, -5.0/7.0, -7.0/9.0, -9.0/11.0]
+            }
+
+            xx = np_complex_square_impl(context, builder, sig, args)
+            ONE = context.get_constant_generic(builder, ty, 1.0 + 0.0j)
+            tmp = _complex_expand_series(context, builder, ty,
+                                         ONE, xx, coef_dict[ty])
+            out._setvalue(builtins.complex_mul_impl(context, builder,
+                                                    binary_sig,
+                                                    [args[0], tmp]))
+
+    return out._getvalue()
+    
 
 ########################################################################
 # NumPy sinh

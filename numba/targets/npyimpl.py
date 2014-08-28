@@ -414,7 +414,6 @@ _externs = [
     (numpy.sinh, "sinh"),
     (numpy.cosh, "cosh"),
     (numpy.tanh, "tanh"),
-    (numpy.arctan, "atan"),
     (numpy.arcsinh, "asinh"),
     (numpy.arccosh, "acosh"),
     (numpy.arctanh, "atanh"),
