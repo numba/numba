@@ -429,6 +429,8 @@ def _fill_ufunc_db(ufunc_db):
     ufunc_db[np.arctanh] = {
         'f->f': npyfuncs.np_real_atanh_impl,
         'd->d': npyfuncs.np_real_atanh_impl,
+        'F->F': npyfuncs.np_complex_atanh_impl,
+        'D->D': npyfuncs.np_complex_atanh_impl,
     }
 
     # Inject datetime64 support

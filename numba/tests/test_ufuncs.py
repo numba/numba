@@ -1308,7 +1308,7 @@ class TestLoopTypesComplexNoPython(TestLoopTypes):
                np.log, np.log2, np.log10, np.expm1, np.log1p, np.sqrt,
                np.square, np.reciprocal, np.sin, np.cos, np.tan, np.arcsin,
                np.arccos, np.arctan, np.sinh, np.cosh, np.tanh, np.arcsinh,
-               np.arccosh]
+               np.arccosh, np.arctanh ]
 
     # Test complex types
     # note that some loops like "abs" contain reals as results, hence the
