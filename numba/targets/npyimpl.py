@@ -395,28 +395,7 @@ def register_binary_ufunc_kernel(ufunc, kernel):
 
 
 ################################################################################
-# Actual registering of supported ufuncs
-
-_float_unary_function_type = Type.function(Type.double(), [Type.double()])
-_float_binary_function_type = Type.function(Type.double(),
-                                            [Type.double(), Type.double()])
-_float_unary_sig = typing.signature(types.float64, types.float64)
-_float_binary_sig = typing.signature(types.float64, types.float64,
-                                     types.float64)
-
-# _externs will be used to register ufuncs.
-# each tuple contains the ufunc to be translated. That ufunc will be converted to
-# an equivalent loop that calls the function in the npymath support module (registered
-# as external function as "numba.npymath."+func
-_externs = [
-]
-
-for sym, name in _externs:
-    npy_math_extern(name, _float_unary_function_type)
-    register_unary_ufunc_kernel(sym, _function_with_cast(getattr(npy, name), _float_unary_sig))
-
-# the following ufuncs rely on functions that are not based on a function
-# from npymath
+# Use the contents of ufunc_db to initialize the supported ufuncs
 
 for ufunc in ufunc_db.get_ufuncs():
     if ufunc.nin == 1:
@@ -426,12 +405,3 @@ for ufunc in ufunc_db.get_ufuncs():
     else:
         raise RuntimeError("Don't know how to register ufuncs from ufunc_db with arity > 2")
 
-_externs_2 = [
-]
-
-for sym, name in _externs_2:
-    npy_math_extern(name, _float_binary_function_type)
-    register_binary_ufunc_kernel(sym, _function_with_cast(getattr(npy, name), _float_binary_sig))
-
-del _float_binary_function_type, _float_binary_sig
-del _float_unary_function_type, _float_unary_sig
