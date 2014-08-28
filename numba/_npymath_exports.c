@@ -213,6 +213,7 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL(atanf),
     NPYMATH_SYMBOL(atan2f),
     NPYMATH_SYMBOL(hypotf),
+    NPYMATH_SYMBOL(sinhf),
 
     /* complex functions */
     NPYMATH_SYMBOL_EXPLICIT(cpow, ufunc_cpow),

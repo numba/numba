@@ -391,6 +391,13 @@ def _fill_ufunc_db(ufunc_db):
         'dd->d': npyfuncs.np_real_hypot_impl,
     }
 
+    ufunc_db[np.sinh] = {
+        'f->f': npyfuncs.np_real_sinh_impl,
+        'd->d': npyfuncs.np_real_sinh_impl,
+        'F->F': npyfuncs.np_complex_sinh_impl,
+        'D->D': npyfuncs.np_complex_sinh_impl,
+    }
+
     # Inject datetime64 support
     try:
         from . import npdatetime

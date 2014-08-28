@@ -1062,7 +1062,7 @@ def np_real_atan_impl(context, builder, sig, args):
 
 
 def np_complex_atan_impl(context, builder, sig, args):
-    # npymath does not provide a complex acos. The code in funcs.inc.src
+    # npymath does not provide a complex atan. The code in funcs.inc.src
     # is translated here...
     _check_arity_and_homogeneous(sig, args, 1)
 
@@ -1159,6 +1159,32 @@ def np_real_sinh_impl(context, builder, sig, args):
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
                                        dispatch_table, 'sinh')
+
+
+def np_complex_sinh_impl(context, builder, sig, args):
+    # npymath does not provide a complex sinh. The code in funcs.inc.src
+    # is translated here...
+    _check_arity_and_homogeneous(sig, args, 1)
+
+
+    ty = sig.args[0]
+    fty = ty.underlying_float
+    fsig1 = typing.signature(*[fty]*2)
+    complex_class = context.make_complex(ty)
+    x = complex_class(context, builder, args[0])
+    out = complex_class(context, builder)
+    xr = x.real
+    xi = x.imag
+
+    sxi = np_real_sin_impl(context, builder, fsig1, [xi])
+    shxr = np_real_sinh_impl(context, builder, fsig1, [xr])
+    cxi = np_real_cos_impl(context, builder, fsig1, [xi])
+    chxr = np_real_cosh_impl(context, builder, fsig1, [xr])
+
+    out.real = builder.fmul(cxi, shxr)
+    out.imag = builder.fmul(sxi, chxr)
+
+    return out._getvalue()
 
 
 ########################################################################
