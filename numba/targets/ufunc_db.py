@@ -462,6 +462,21 @@ def _fill_ufunc_db(ufunc_db):
         'd->d': npyfuncs.np_real_floor_impl,
     }
 
+    ufunc_db[np.ceil] = {
+        'f->f': npyfuncs.np_real_ceil_impl,
+        'd->d': npyfuncs.np_real_ceil_impl,
+    }
+
+    ufunc_db[np.trunc] = {
+        'f->f': npyfuncs.np_real_trunc_impl,
+        'd->d': npyfuncs.np_real_trunc_impl,
+    }
+
+    ufunc_db[np.fabs] = {
+        'f->f': npyfuncs.np_real_fabs_impl,
+        'd->d': npyfuncs.np_real_fabs_impl,
+    }
+
     # Inject datetime64 support
     try:
         from . import npdatetime

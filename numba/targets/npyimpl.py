@@ -409,9 +409,6 @@ _float_binary_sig = typing.signature(types.float64, types.float64,
 # an equivalent loop that calls the function in the npymath support module (registered
 # as external function as "numba.npymath."+func
 _externs = [
-    (numpy.ceil, "ceil"),
-    (numpy.trunc, "trunc"),
-    (numpy.fabs, "fabs"),
 ]
 
 for sym, name in _externs:

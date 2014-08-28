@@ -1531,6 +1531,51 @@ def np_real_floor_impl(context, builder, sig, args):
 
 
 ########################################################################
+# NumPy ceil
+
+def np_real_ceil_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.ceilf',
+        types.float64: 'numba.npymath.ceil',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'ceil')
+
+
+########################################################################
+# NumPy trunc
+
+def np_real_trunc_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.truncf',
+        types.float64: 'numba.npymath.trunc',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'trunc')
+
+
+########################################################################
+# NumPy fabs
+
+def np_real_fabs_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.fabsf',
+        types.float64: 'numba.npymath.fabs',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'fabs')
+
+
+########################################################################
 # NumPy style complex predicates
 
 def np_complex_greater_equal_impl(context, builder, sig, args):
