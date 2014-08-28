@@ -1484,6 +1484,52 @@ def np_complex_atanh_impl(context, builder, sig, args):
 
     return out._getvalue()
 
+
+########################################################################
+# NumPy deg2rad (radians)
+
+def np_real_deg2rad_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.deg2radf',
+        types.float64: 'numba.npymath.deg2rad',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'deg2rad')
+
+
+########################################################################
+# NumPy rad2deg (degrees)
+
+def np_real_rad2deg_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.rad2degf',
+        types.float64: 'numba.npymath.rad2deg',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'rad2deg')
+
+
+########################################################################
+# NumPy floor
+
+def np_real_floor_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.floorf',
+        types.float64: 'numba.npymath.floor',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'floor')
+
+
 ########################################################################
 # NumPy style complex predicates
 

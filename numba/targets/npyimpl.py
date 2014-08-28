@@ -409,9 +409,6 @@ _float_binary_sig = typing.signature(types.float64, types.float64,
 # an equivalent loop that calls the function in the npymath support module (registered
 # as external function as "numba.npymath."+func
 _externs = [
-    (numpy.deg2rad, "deg2rad"),
-    (numpy.rad2deg, "rad2deg"),
-    (numpy.floor, "floor"),
     (numpy.ceil, "ceil"),
     (numpy.trunc, "trunc"),
     (numpy.fabs, "fabs"),
@@ -420,11 +417,6 @@ _externs = [
 for sym, name in _externs:
     npy_math_extern(name, _float_unary_function_type)
     register_unary_ufunc_kernel(sym, _function_with_cast(getattr(npy, name), _float_unary_sig))
-
-# radians and degrees ufuncs are equivalent to deg2rad and rad2deg resp.
-# register them.
-register_unary_ufunc_kernel(numpy.degrees, _function_with_cast(npy.rad2deg, _float_unary_sig))
-register_unary_ufunc_kernel(numpy.radians, _function_with_cast(npy.deg2rad, _float_unary_sig))
 
 # the following ufuncs rely on functions that are not based on a function
 # from npymath

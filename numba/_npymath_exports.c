@@ -221,6 +221,9 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL(atanhf),
     NPYMATH_SYMBOL(logaddexpf),
     NPYMATH_SYMBOL(logaddexp2f),
+    NPYMATH_SYMBOL(deg2radf),
+    NPYMATH_SYMBOL(rad2degf),
+    NPYMATH_SYMBOL(floorf),
 
     /* complex functions */
     NPYMATH_SYMBOL_EXPLICIT(cpow, ufunc_cpow),

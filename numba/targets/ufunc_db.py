@@ -443,6 +443,25 @@ def _fill_ufunc_db(ufunc_db):
         'D->D': npyfuncs.np_complex_atanh_impl,
     }
 
+    ufunc_db[np.deg2rad] = {
+        'f->f': npyfuncs.np_real_deg2rad_impl,
+        'd->d': npyfuncs.np_real_deg2rad_impl,
+    }
+
+    ufunc_db[np.radians] = ufunc_db[np.deg2rad]
+
+    ufunc_db[np.rad2deg] = {
+        'f->f': npyfuncs.np_real_rad2deg_impl,
+        'd->d': npyfuncs.np_real_rad2deg_impl,
+    }
+
+    ufunc_db[np.degrees] = ufunc_db[np.rad2deg]
+
+    ufunc_db[np.floor] = {
+        'f->f': npyfuncs.np_real_floor_impl,
+        'd->d': npyfuncs.np_real_floor_impl,
+    }
+
     # Inject datetime64 support
     try:
         from . import npdatetime
