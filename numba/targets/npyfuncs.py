@@ -918,6 +918,11 @@ def np_real_asin_impl(context, builder, sig, args):
 
 
 def _complex_expand_series(context, builder, ty, initial, x, coefs):
+    """this is used to implement approximations using series that are
+    quite common in NumPy's source code to improve precision when the
+    magnitude of the arguments is small. In funcs.inc.src this is
+    implemented by repeated use of the macro "SERIES_HORNER_TERM
+    """
     assert ty in types.complex_domain
     binary_sig = typing.signature(*[ty]*3)
     complex_class = context.make_complex(ty)
@@ -991,6 +996,50 @@ def np_complex_asin_impl(context, builder, sig, args):
                                                     [args[0], tmp]))
 
     return out._getvalue()
+
+
+########################################################################
+# NumPy acos
+
+def np_real_acos_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 1)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.acosf',
+        types.float64: 'numba.npymath.acos',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'acos')
+
+
+def np_complex_acos_impl(context, builder, sig, args):
+    # npymath does not provide a complex acos. The code in funcs.inc.src
+    # is translated here...
+    # - j * log(x + j * sqrt(1-sqr(x)))
+    _check_arity_and_homogeneous(sig, args, 1)
+
+    ty = sig.args[0]
+    binary_sig = typing.signature(*[ty]*3)
+
+    ONE = context.get_constant_generic(builder, ty, 1.0 + 0.0j)
+    ZERO = context.get_constant_generic(builder, ty, 0.0 + 0.0j)
+    I = context.get_constant_generic(builder, ty, 0.0 + 1.0j)
+
+    xx = np_complex_square_impl(context, builder, sig, args)
+    one_minus_xx = builtins.complex_sub_impl(context, builder, binary_sig,
+                                             [ONE, xx])
+    sqrt_res = np_complex_sqrt_impl(context, builder, sig, [one_minus_xx])
+    sqrt_res_j = builtins.complex_mul_impl(context, builder, binary_sig,
+                                           [I, sqrt_res])
+
+    log_in = builtins.complex_add_impl(context, builder, binary_sig,
+                                       [args[0], sqrt_res_j])
+    log_out = np_complex_log_impl(context, builder, sig, [log_in])
+    log_j = builtins.complex_mul_impl(context, builder, binary_sig,
+                                      [I, log_out])
+    return builtins.complex_sub_impl(context, builder, binary_sig,
+                                     [ZERO, log_j])
 
 
 ########################################################################

@@ -367,6 +367,13 @@ def _fill_ufunc_db(ufunc_db):
         'D->D': npyfuncs.np_complex_asin_impl,
     }
 
+    ufunc_db[np.arccos] = {
+        'f->f': npyfuncs.np_real_acos_impl,
+        'd->d': npyfuncs.np_real_acos_impl,
+        'F->F': npyfuncs.np_complex_acos_impl,
+        'D->D': npyfuncs.np_complex_acos_impl,
+    }
+
     # Inject datetime64 support
     try:
         from . import npdatetime
