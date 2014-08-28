@@ -444,7 +444,6 @@ for ufunc in ufunc_db.get_ufuncs():
         raise RuntimeError("Don't know how to register ufuncs from ufunc_db with arity > 2")
 
 _externs_2 = [
-    (numpy.arctan2, "atan2"),
     (numpy.logaddexp, "logaddexp"),
     (numpy.logaddexp2, "logaddexp2"),
     (numpy.hypot, "hypot"),

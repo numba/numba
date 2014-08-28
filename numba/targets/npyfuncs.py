@@ -1117,6 +1117,21 @@ def np_complex_atan_impl(context, builder, sig, args):
     
 
 ########################################################################
+# NumPy atan2
+
+def np_real_atan2_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 2)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.atan2f',
+        types.float64: 'numba.npymath.atan2',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'atan2')
+
+
+########################################################################
 # NumPy sinh
 
 def np_real_sinh_impl(context, builder, sig, args):
