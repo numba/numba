@@ -21,15 +21,15 @@ _NPY_LOG10E = 0.434294481903251827651128918916605082 # math.log(math.e, 10)
 _NPY_LOGE2  = 0.693147180559945309417232121458176568 # math.log(2)
 
 
-def _check_arity_and_homogeneous(sig, args, arity):
+def _check_arity_and_homogeneity(sig, args, arity):
     """checks that the following are true:
     - args and sig.args have arg_count elements
-    - all types are homogeneous
+    - all types are homogeneity
     """
     assert len(args) == arity
     assert len(sig.args) == arity
     ty = sig.args[0]
-    # must have homogeneous args
+    # must have homogeneity args
     assert all(arg==ty for arg in sig.args) and sig.return_type == ty
 
 
@@ -50,13 +50,13 @@ def _call_func_by_name_with_cast(context, builder, sig, args,
 
 
 def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
-    # assumes types in the sig are homogeneous.
+    # assumes types in the sig are homogeneity.
     # assumes that the function pointed by func_name has the type
     # signature sig (but needs translation to llvm types).
 
     ty = sig.return_type
     try:
-        func_name = table[ty] # any would do... homogeneous
+        func_name = table[ty] # any would do... homogeneity
     except KeyError as e:
         raise LoweringError("No {0} function for real type {1}".format(user_name, str(e)))
 
@@ -98,7 +98,7 @@ def np_dummy_return_arg(context, builder, sig, args):
     # sometimes a loop does nothing other than returning the first arg...
     # for example, conjugate for non-complex numbers
     # this function implements this.
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
     return args[0] # nothing to do...
 
 
@@ -119,7 +119,7 @@ def np_int_sdiv_impl(context, builder, sig, args):
     # based on the actual code in NumPy loops.c.src for signed integer types
     num, den = args
     lltype = num.type
-    assert all(i.type==lltype for i in args), "must have homogeneous types"
+    assert all(i.type==lltype for i in args), "must have homogeneity types"
 
     ZERO = lc.Constant.int(lltype, 0)
     MINUS_ONE = lc.Constant.int(lltype, -1)
@@ -153,7 +153,7 @@ def np_int_sdiv_impl(context, builder, sig, args):
 def np_int_udiv_impl(context, builder, sig, args):
     num, den = args
     lltype = num.type
-    assert all(i.type==lltype for i in args), "must have homogeneous types"
+    assert all(i.type==lltype for i in args), "must have homogeneity types"
 
     ZERO = lc.Constant.int(lltype, 0)
     div_by_zero = builder.icmp(lc.ICMP_EQ, ZERO, den)
@@ -176,7 +176,7 @@ def np_real_div_impl(context, builder, sig, args):
     # NANs, INF and NINF
     num, den = args
     lltype = num.type
-    assert all(i.type==lltype for i in args), "must have homogeneous types"
+    assert all(i.type==lltype for i in args), "must have homogeneity types"
     return builder.fdiv(*args)
 
 
@@ -270,7 +270,7 @@ def np_int_truediv_impl(context, builder, sig, args):
     # integer truediv always yields double
     num, den = args
     lltype = num.type
-    assert all(i.type==lltype for i in args), "must have homogeneous types"
+    assert all(i.type==lltype for i in args), "must have homogeneity types"
     numty, denty = sig.args
 
     num = context.cast(builder, num, numty, types.float64)
@@ -348,7 +348,7 @@ def np_int_power_impl(context, builder, sig, args):
     assert len(args) == 2
     assert len(sig.args) == 2
     ty = sig.args[0]
-    # must have homogeneous args
+    # must have homogeneity args
     assert all(arg==ty for arg in sig.args) and sig.return_type == ty
 
     return _call_func_by_name_with_cast(context, builder, sig, args,
@@ -356,7 +356,7 @@ def np_int_power_impl(context, builder, sig, args):
 
 
 def np_real_power_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 2)
+    _check_arity_and_homogeneity(sig, args, 2)
 
     dispatch_table = {
         types.float32: 'numba.npymath.powf',
@@ -368,7 +368,7 @@ def np_real_power_impl(context, builder, sig, args):
 
 
 def np_complex_power_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 2)
+    _check_arity_and_homogeneity(sig, args, 2)
 
     dispatch_table = {
         types.complex64: 'numba.npymath.cpowf',
@@ -383,7 +383,7 @@ def np_real_floor_impl(context, builder, sig, args):
     assert len(args) == 1
     assert len(sig.args) == 1
     ty = sig.args[0]
-    assert ty == sig.return_type, "must have homogeneous types"
+    assert ty == sig.return_type, "must have homogeneity types"
     mod = cgutils.get_module(builder)
     if ty == types.float64:
         fnty = lc.Type.function(lc.Type.double(), [lc.Type.double()])
@@ -403,7 +403,7 @@ def np_real_floor_impl(context, builder, sig, args):
 def np_complex_sign_impl(context, builder, sig, args):
     # equivalent to complex sign in NumPy's sign
     # but implemented via selects, balancing the 4 cases.
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
     op = args[0]
     ty = sig.args[0]
     float_ty = ty.underlying_float
@@ -434,7 +434,7 @@ def np_complex_sign_impl(context, builder, sig, args):
 # Numpy rint
 
 def np_real_rint_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
         types.float32: 'numba.npymath.rintf',
@@ -449,7 +449,7 @@ def np_complex_rint_impl(context, builder, sig, args):
     # based on code in NumPy's funcs.inc.src
     # rint of a complex number defined as rint of its real and imag
     # parts
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
     ty = sig.args[0]
     float_ty = ty.underlying_float
     complex_class = context.make_complex(ty)
@@ -465,7 +465,7 @@ def np_complex_rint_impl(context, builder, sig, args):
 ########################################################################
 # NumPy conj/conjugate
 def np_complex_conjugate_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
     ty = sig.args[0]
     float_ty = ty.underlying_float
     complex_class = context.make_complex(ty)
@@ -481,7 +481,7 @@ def np_complex_conjugate_impl(context, builder, sig, args):
 # NumPy exp
 
 def np_real_exp_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
         types.float32: 'numba.npymath.expf',
@@ -493,7 +493,7 @@ def np_real_exp_impl(context, builder, sig, args):
 
 
 def np_complex_exp_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
         types.complex64: 'numba.npymath.cexpf',
@@ -507,7 +507,7 @@ def np_complex_exp_impl(context, builder, sig, args):
 # NumPy exp2
 
 def np_real_exp2_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
         types.float32: 'numba.npymath.exp2f',
@@ -519,7 +519,7 @@ def np_real_exp2_impl(context, builder, sig, args):
 
 
 def np_complex_exp2_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
     ty = sig.args[0]
     float_ty = ty.underlying_float
     complex_class = context.make_complex(ty)
@@ -535,7 +535,7 @@ def np_complex_exp2_impl(context, builder, sig, args):
 # NumPy log
 
 def np_real_log_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
         types.float32: 'numba.npymath.logf',
@@ -547,7 +547,7 @@ def np_real_log_impl(context, builder, sig, args):
 
 
 def np_complex_log_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
         types.complex64: 'numba.npymath.clogf',
@@ -561,7 +561,7 @@ def np_complex_log_impl(context, builder, sig, args):
 # NumPy log2
 
 def np_real_log2_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
         types.float32: 'numba.npymath.log2f',
@@ -572,7 +572,7 @@ def np_real_log2_impl(context, builder, sig, args):
                                        dispatch_table, 'log2')
 
 def np_complex_log2_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     ty = sig.args[0]
     float_ty = ty.underlying_float
@@ -589,7 +589,7 @@ def np_complex_log2_impl(context, builder, sig, args):
 # NumPy log10
 
 def np_real_log10_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
         types.float32: 'numba.npymath.log10f',
@@ -601,7 +601,7 @@ def np_real_log10_impl(context, builder, sig, args):
 
 
 def np_complex_log10_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     ty = sig.args[0]
     float_ty = ty.underlying_float
@@ -618,7 +618,7 @@ def np_complex_log10_impl(context, builder, sig, args):
 # NumPy expm1
 
 def np_real_expm1_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
         types.float32: 'numba.npymath.expm1f',
@@ -630,7 +630,7 @@ def np_real_expm1_impl(context, builder, sig, args):
 
 def np_complex_expm1_impl(context, builder, sig, args):
     # this is based on nc_expm1 in funcs.inc.src
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     ty = sig.args[0]
     float_ty = ty.underlying_float
@@ -654,7 +654,7 @@ def np_complex_expm1_impl(context, builder, sig, args):
 # NumPy log1p
 
 def np_real_log1p_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
         types.float32: 'numba.npymath.log1pf',
@@ -666,7 +666,7 @@ def np_real_log1p_impl(context, builder, sig, args):
 
 def np_complex_log1p_impl(context, builder, sig, args):
     # base on NumPy's nc_log1p in funcs.inc.src
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     ty = sig.args[0]
     float_ty = ty.underlying_float
@@ -691,7 +691,7 @@ def np_complex_log1p_impl(context, builder, sig, args):
 # NumPy sqrt
 
 def np_real_sqrt_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
         types.float32: 'numba.npymath.sqrtf',
@@ -716,16 +716,16 @@ def np_complex_sqrt_impl(context, builder, sig, args):
 # NumPy square
 
 def np_int_square_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
     return builder.mul(args[0], args[0])
 
 
 def np_real_square_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
     return builder.fmul(args[0], args[0])
 
 def np_complex_square_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
     binary_sig = typing.signature(*[sig.return_type]*3)
     return builtins.complex_mul_impl(context, builder, binary_sig,
                                      [args[0], args[0]])
@@ -738,7 +738,7 @@ def np_int_reciprocal_impl(context, builder, sig, args):
     # based on the implementation in loops.c.src
     # integer versions for reciprocal are performed via promotion
     # using double, and then converted back to the type
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
     ty = sig.return_type
 
     binary_sig = typing.signature(*[ty]*3)
@@ -749,7 +749,7 @@ def np_int_reciprocal_impl(context, builder, sig, args):
 
 
 def np_real_reciprocal_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
     ONE = context.get_constant(sig.return_type, 1.0)
     return builder.fdiv(ONE, args[0])
 
@@ -758,7 +758,7 @@ def np_complex_reciprocal_impl(context, builder, sig, args):
     # based on the implementation in loops.c.src
     # Basically the same Smith method used for division, but with
     # the numerator substitued by 1.0
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     ty = sig.args[0]
     float_ty = ty.underlying_float
@@ -798,7 +798,7 @@ def np_complex_reciprocal_impl(context, builder, sig, args):
 # NumPy sin
 
 def np_real_sin_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
         types.float32: 'numba.npymath.sinf',
@@ -810,7 +810,7 @@ def np_real_sin_impl(context, builder, sig, args):
 
 
 def np_complex_sin_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
         types.complex64: 'numba.npymath.csinf',
@@ -825,7 +825,7 @@ def np_complex_sin_impl(context, builder, sig, args):
 # NumPy cos
 
 def np_real_cos_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
         types.float32: 'numba.npymath.cosf',
@@ -837,7 +837,7 @@ def np_real_cos_impl(context, builder, sig, args):
 
 
 def np_complex_cos_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
         types.complex64: 'numba.npymath.ccosf',
@@ -852,7 +852,7 @@ def np_complex_cos_impl(context, builder, sig, args):
 # NumPy tan
 
 def np_real_tan_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
         types.float32: 'numba.npymath.tanf',
@@ -866,7 +866,7 @@ def np_real_tan_impl(context, builder, sig, args):
 def np_complex_tan_impl(context, builder, sig, args):
     # npymath does not provide complex tan functions. The code
     # in funcs.inc.src for tan is translated here...
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     ty = sig.args[0]
     float_ty = ty.underlying_float
@@ -906,7 +906,7 @@ def np_complex_tan_impl(context, builder, sig, args):
 # NumPy asin
 
 def np_real_asin_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
         types.float32: 'numba.npymath.asinf',
@@ -942,7 +942,7 @@ def _complex_expand_series(context, builder, ty, initial, x, coefs):
 def np_complex_asin_impl(context, builder, sig, args):
     # npymath does not provide a complex asin. The code in funcs.inc.src
     # is translated here...
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     ty = sig.args[0]
     float_ty = ty.underlying_float
@@ -1006,7 +1006,7 @@ def np_complex_asin_impl(context, builder, sig, args):
 # NumPy acos
 
 def np_real_acos_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
         types.float32: 'numba.npymath.acosf',
@@ -1021,7 +1021,7 @@ def np_complex_acos_impl(context, builder, sig, args):
     # npymath does not provide a complex acos. The code in funcs.inc.src
     # is translated here...
     # - j * log(x + j * sqrt(1 - sqr(x)))
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     ty = sig.args[0]
     binary_sig = typing.signature(*[ty]*3)
@@ -1050,7 +1050,7 @@ def np_complex_acos_impl(context, builder, sig, args):
 # NumPy atan
 
 def np_real_atan_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
         types.float32: 'numba.npymath.atanf',
@@ -1064,7 +1064,7 @@ def np_real_atan_impl(context, builder, sig, args):
 def np_complex_atan_impl(context, builder, sig, args):
     # npymath does not provide a complex atan. The code in funcs.inc.src
     # is translated here...
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     ty = sig.args[0]
     float_ty = ty.underlying_float
@@ -1120,7 +1120,7 @@ def np_complex_atan_impl(context, builder, sig, args):
 # NumPy atan2
 
 def np_real_atan2_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 2)
+    _check_arity_and_homogeneity(sig, args, 2)
 
     dispatch_table = {
         types.float32: 'numba.npymath.atan2f',
@@ -1135,7 +1135,7 @@ def np_real_atan2_impl(context, builder, sig, args):
 # NumPy hypot
 
 def np_real_hypot_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 2)
+    _check_arity_and_homogeneity(sig, args, 2)
 
     dispatch_table = {
         types.float32: 'numba.npymath.hypotf',
@@ -1150,7 +1150,7 @@ def np_real_hypot_impl(context, builder, sig, args):
 # NumPy sinh
 
 def np_real_sinh_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
         types.float32: 'numba.npymath.sinhf',
@@ -1164,7 +1164,7 @@ def np_real_sinh_impl(context, builder, sig, args):
 def np_complex_sinh_impl(context, builder, sig, args):
     # npymath does not provide a complex sinh. The code in funcs.inc.src
     # is translated here...
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
 
     ty = sig.args[0]
@@ -1191,7 +1191,7 @@ def np_complex_sinh_impl(context, builder, sig, args):
 # NumPy cosh
 
 def np_real_cosh_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     dispatch_table = {
         types.float32: 'numba.npymath.coshf',
@@ -1205,7 +1205,7 @@ def np_real_cosh_impl(context, builder, sig, args):
 def np_complex_cosh_impl(context, builder, sig, args):
     # npymath does not provide a complex cosh. The code in funcs.inc.src
     # is translated here...
-    _check_arity_and_homogeneous(sig, args, 1)
+    _check_arity_and_homogeneity(sig, args, 1)
 
     ty = sig.args[0]
     fty = ty.underlying_float
@@ -1228,12 +1228,123 @@ def np_complex_cosh_impl(context, builder, sig, args):
 
 
 ########################################################################
+# NumPy tanh
+
+def np_real_tanh_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.tanhf',
+        types.float64: 'numba.npymath.tanh',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'tanh')
+
+
+def np_complex_tanh_impl(context, builder, sig, args):
+    # npymath does not provide complex tan functions. The code
+    # in funcs.inc.src for tanh is translated here...
+    _check_arity_and_homogeneity(sig, args, 1)
+
+    ty = sig.args[0]
+    fty = ty.underlying_float
+    fsig1 = typing.signature(*[fty]*2)
+    complex_class = context.make_complex(ty)
+    ONE = context.get_constant(fty, 1.0)
+    x = complex_class(context, builder, args[0])
+    out = complex_class(context, builder)
+
+    xr = x.real
+    xi = x.imag
+    si = np_real_sin_impl(context, builder, fsig1, [xi])
+    ci = np_real_cos_impl(context, builder, fsig1, [xi])
+    shr = np_real_sinh_impl(context, builder, fsig1, [xr])
+    chr_ = np_real_cosh_impl(context, builder, fsig1, [xr])
+    rs = builder.fmul(ci, shr)
+    is_ = builder.fmul(si, chr_)
+    rc = builder.fmul(ci, chr_)
+    ic = builder.fmul(si, shr) # note: opposite sign from code in funcs.inc.src
+    sqr_rc = builder.fmul(rc, rc)
+    sqr_ic = builder.fmul(ic, ic)
+    d = builder.fadd(sqr_rc, sqr_ic)
+    inv_d = builder.fdiv(ONE, d)
+    rs_rc = builder.fmul(rs, rc)
+    is_ic = builder.fmul(is_, ic)
+    is_rc = builder.fmul(is_, rc)
+    rs_ic = builder.fmul(rs, ic)
+    numr = builder.fadd(rs_rc, is_ic)
+    numi = builder.fsub(is_rc, rs_ic)
+    out.real = builder.fmul(numr, inv_d)
+    out.imag = builder.fmul(numi, inv_d)
+
+    return out._getvalue()
+
+
+########################################################################
+## NumPy atanh
+
+def np_complex_atanh_impl(context, builder, sig, args):
+    # npymath does not provide a complex atanh. The code in funcs.inc.src
+    # is translated here...
+    _check_arity_and_homogeneity(sig, args, 1)
+
+    ty = sig.args[0]
+    float_ty = ty.underlying_float
+    complex_class = context.make_complex(ty)
+    epsilon = context.get_constant(float_ty, 1e-3)
+
+    # if real or imag has magnitude over 1e-3...
+    x = complex_class(context, builder, value=args[0])
+    out = complex_class(context, builder)
+    abs_r = _fabs(context, builder, x.real)
+    abs_i = _fabs(context, builder, x.imag)
+    abs_r_gt_epsilon = builder.fcmp(lc.FCMP_OGT, abs_r, epsilon)
+    abs_i_gt_epsilon = builder.fcmp(lc.FCMP_OGT, abs_i, epsilon)
+    any_gt_epsilon = builder.or_(abs_r_gt_epsilon, abs_i_gt_epsilon)
+    binary_sig = typing.signature(*[ty]*3)
+    with cgutils.ifelse(builder, any_gt_epsilon) as (then, otherwise):
+        with then:
+            # ... the use formula
+            # 0.5 * log((1 + x)/(1 - x))
+            ONE = context.get_constant_generic(builder, ty, 1.0 + 0.0j)
+            HALF = context.get_constant_generic(builder, ty, 0.5 + 0.0j)
+            den = builtins.complex_sub_impl(context, builder, binary_sig,
+                                            [ONE, args[0]])
+            num = builtins.complex_add_impl(context, builder, binary_sig,
+                                            [ONE, args[0]])
+            div = np_complex_div_impl(context, builder, binary_sig,
+                                      [num, den])
+            log = np_complex_log_impl(context, builder, sig, [div])
+            res = builtins.complex_mul_impl(context, builder, binary_sig,
+                                            [HALF, log])
+
+            out._setvalue(res)
+        with otherwise:
+            # else use series expansion (to avoid loss of precision)
+            coef_dict = {
+                types.complex64: [1.0/3.0, 3.0/5.0],
+                types.complex128: [1.0/3.0, 3.0/5.0, 5.0/7.0],
+                # types.complex256: [1.0/3.0, 3.0/5.0, 5.0/7.0, 7.0/9.0, 9.0/11.0]
+            }
+
+            xx = np_complex_square_impl(context, builder, sig, args)
+            ONE = context.get_constant_generic(builder, ty, 1.0 + 0.0j)
+            tmp = _complex_expand_series(context, builder, ty,
+                                         ONE, xx, coef_dict[ty])
+            out._setvalue(builtins.complex_mul_impl(context, builder,
+                                                    binary_sig,
+                                                    [args[0], tmp]))
+
+    return out._getvalue()
+
+########################################################################
 # NumPy style complex predicates
 
 def np_complex_greater_equal_impl(context, builder, sig, args):
     # equivalent to macro CGE in NumPy's loops.c.src
     # ((xr > yr && !npy_isnan(xi) && !npy_isnan(yi)) || (xr == yr && xi >= yi))
-    _check_arity_and_homogeneous(sig, args, 2)
+    _check_arity_and_homogeneity(sig, args, 2)
 
     complex_class = context.make_complex(sig.args[0])
     in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
@@ -1254,7 +1365,7 @@ def np_complex_greater_equal_impl(context, builder, sig, args):
 def np_complex_lower_equal_impl(context, builder, sig, args):
     # equivalent to macro CLE in NumPy's loops.c.src
     # ((xr < yr && !npy_isnan(xi) && !npy_isnan(yi)) || (xr == yr && xi <= yi))
-    _check_arity_and_homogeneous(sig, args, 2)
+    _check_arity_and_homogeneity(sig, args, 2)
 
     complex_class = context.make_complex(sig.args[0])
     in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
@@ -1275,7 +1386,7 @@ def np_complex_lower_equal_impl(context, builder, sig, args):
 def np_complex_greater_impl(context, builder, sig, args):
     # equivalent to macro CGT in NumPy's loops.c.src
     # ((xr > yr && !npy_isnan(xi) && !npy_isnan(yi)) || (xr == yr && xi > yi))
-    _check_arity_and_homogeneous(sig, args, 2)
+    _check_arity_and_homogeneity(sig, args, 2)
 
     complex_class = context.make_complex(sig.args[0])
     in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
@@ -1296,7 +1407,7 @@ def np_complex_greater_impl(context, builder, sig, args):
 def np_complex_lower_impl(context, builder, sig, args):
     # equivalent to macro CLT in NumPy's loops.c.src
     # ((xr < yr && !npy_isnan(xi) && !npy_isnan(yi)) || (xr == yr && xi < yi))
-    _check_arity_and_homogeneous(sig, args, 2)
+    _check_arity_and_homogeneity(sig, args, 2)
 
     complex_class = context.make_complex(sig.args[0])
     in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
@@ -1317,7 +1428,7 @@ def np_complex_lower_impl(context, builder, sig, args):
 def np_complex_equal_impl(context, builder, sig, args):
     # equivalent to macro CEQ in NumPy's loops.c.src
     # (xr == yr && xi == yi)
-    _check_arity_and_homogeneous(sig, args, 2)
+    _check_arity_and_homogeneity(sig, args, 2)
 
     complex_class = context.make_complex(sig.args[0])
     in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
@@ -1334,7 +1445,7 @@ def np_complex_equal_impl(context, builder, sig, args):
 def np_complex_not_equal_impl(complex, builder, sig, args):
     # equivalent to marcro CNE in NumPy's loops.c.src
     # (xr != yr || xi != yi)
-    _check_arity_and_homogeneous(sig, args, 2)
+    _check_arity_and_homogeneity(sig, args, 2)
 
     complex_class = context.make_complex(sig.args[0])
     in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
