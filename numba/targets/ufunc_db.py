@@ -386,6 +386,11 @@ def _fill_ufunc_db(ufunc_db):
         'dd->d': npyfuncs.np_real_atan2_impl,
     }
 
+    ufunc_db[np.hypot] = {
+        'ff->f': npyfuncs.np_real_hypot_impl,
+        'dd->d': npyfuncs.np_real_hypot_impl,
+    }
+
     # Inject datetime64 support
     try:
         from . import npdatetime

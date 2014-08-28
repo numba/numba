@@ -446,7 +446,6 @@ for ufunc in ufunc_db.get_ufuncs():
 _externs_2 = [
     (numpy.logaddexp, "logaddexp"),
     (numpy.logaddexp2, "logaddexp2"),
-    (numpy.hypot, "hypot"),
 ]
 
 for sym, name in _externs_2:

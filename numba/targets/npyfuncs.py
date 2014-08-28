@@ -914,7 +914,7 @@ def np_real_asin_impl(context, builder, sig, args):
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'asin')
+                                       dispatch_table, 'arcsin')
 
 
 def _complex_expand_series(context, builder, ty, initial, x, coefs):
@@ -1014,7 +1014,7 @@ def np_real_acos_impl(context, builder, sig, args):
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'acos')
+                                       dispatch_table, 'arccos')
 
 
 def np_complex_acos_impl(context, builder, sig, args):
@@ -1058,7 +1058,7 @@ def np_real_atan_impl(context, builder, sig, args):
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'atan')
+                                       dispatch_table, 'arctan')
 
 
 def np_complex_atan_impl(context, builder, sig, args):
@@ -1128,7 +1128,22 @@ def np_real_atan2_impl(context, builder, sig, args):
     }
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'atan2')
+                                       dispatch_table, 'arctan2')
+
+
+########################################################################
+# NumPy hypot
+
+def np_real_hypot_impl(context, builder, sig, args):
+    _check_arity_and_homogeneous(sig, args, 2)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.hypotf',
+        types.float64: 'numba.npymath.hypot',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'hypot')
 
 
 ########################################################################
@@ -1159,37 +1174,6 @@ def np_real_cosh_impl(context, builder, sig, args):
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
                                        dispatch_table, 'cosh')
-
-
-########################################################################
-# NumPy atan2
-
-def np_real_atan2_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 2)
-
-    dispatch_table = {
-        types.float32: 'numba.npymath.atan2f',
-        types.float64: 'numba.npymath.atan2',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'atan2')
-
-
-########################################################################
-# NumPy hypot
-
-def np_real_hypot_impl(context, builder, sig, args):
-    _check_arity_and_homogeneous(sig, args, 2)
-
-    dispatch_table = {
-        types.float32: 'numba.npymath.hypotf',
-        types.float64: 'numba.npymath.hypot',
-    }
-
-    return _dispatch_func_by_name_type(context, builder, sig, args,
-                                       dispatch_table, 'hypot')
-
 
 
 ########################################################################
