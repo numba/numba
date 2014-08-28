@@ -29,7 +29,7 @@ def _check_arity_and_homogeneity(sig, args, arity):
     assert len(args) == arity
     assert len(sig.args) == arity
     ty = sig.args[0]
-    # must have homogeneity args
+    # must have homogeneous args
     assert all(arg==ty for arg in sig.args) and sig.return_type == ty
 
 
@@ -119,7 +119,7 @@ def np_int_sdiv_impl(context, builder, sig, args):
     # based on the actual code in NumPy loops.c.src for signed integer types
     num, den = args
     lltype = num.type
-    assert all(i.type==lltype for i in args), "must have homogeneity types"
+    assert all(i.type==lltype for i in args), "must have homogeneous types"
 
     ZERO = lc.Constant.int(lltype, 0)
     MINUS_ONE = lc.Constant.int(lltype, -1)
@@ -153,7 +153,7 @@ def np_int_sdiv_impl(context, builder, sig, args):
 def np_int_udiv_impl(context, builder, sig, args):
     num, den = args
     lltype = num.type
-    assert all(i.type==lltype for i in args), "must have homogeneity types"
+    assert all(i.type==lltype for i in args), "must have homogeneous types"
 
     ZERO = lc.Constant.int(lltype, 0)
     div_by_zero = builder.icmp(lc.ICMP_EQ, ZERO, den)
@@ -176,7 +176,7 @@ def np_real_div_impl(context, builder, sig, args):
     # NANs, INF and NINF
     num, den = args
     lltype = num.type
-    assert all(i.type==lltype for i in args), "must have homogeneity types"
+    assert all(i.type==lltype for i in args), "must have homogeneous types"
     return builder.fdiv(*args)
 
 
@@ -299,7 +299,7 @@ def np_int_truediv_impl(context, builder, sig, args):
     # integer truediv always yields double
     num, den = args
     lltype = num.type
-    assert all(i.type==lltype for i in args), "must have homogeneity types"
+    assert all(i.type==lltype for i in args), "must have homogeneous types"
     numty, denty = sig.args
 
     num = context.cast(builder, num, numty, types.float64)
@@ -377,7 +377,7 @@ def np_int_power_impl(context, builder, sig, args):
     assert len(args) == 2
     assert len(sig.args) == 2
     ty = sig.args[0]
-    # must have homogeneity args
+    # must have homogeneous args
     assert all(arg==ty for arg in sig.args) and sig.return_type == ty
 
     return _call_func_by_name_with_cast(context, builder, sig, args,
@@ -412,7 +412,7 @@ def np_real_floor_impl(context, builder, sig, args):
     assert len(args) == 1
     assert len(sig.args) == 1
     ty = sig.args[0]
-    assert ty == sig.return_type, "must have homogeneity types"
+    assert ty == sig.return_type, "must have homogeneous types"
     mod = cgutils.get_module(builder)
     if ty == types.float64:
         fnty = lc.Type.function(lc.Type.double(), [lc.Type.double()])
