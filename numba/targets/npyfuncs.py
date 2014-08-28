@@ -1282,7 +1282,49 @@ def np_complex_tanh_impl(context, builder, sig, args):
 
 
 ########################################################################
-## NumPy atanh
+# NumPy asinh
+
+def np_real_asinh_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.asinhf',
+        types.float64: 'numba.npymath.asinh',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'arcsinh')
+
+
+########################################################################
+# NumPy acosh
+
+def np_real_acosh_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.acoshf',
+        types.float64: 'numba.npymath.acosh',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'arccosh')
+
+
+########################################################################
+# NumPy atanh
+
+def np_real_atanh_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.atanhf',
+        types.float64: 'numba.npymath.atanh',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'arctanh')
+
 
 def np_complex_atanh_impl(context, builder, sig, args):
     # npymath does not provide a complex atanh. The code in funcs.inc.src
