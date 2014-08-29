@@ -197,6 +197,18 @@ class ByteCodeInst(object):
     def __repr__(self):
         return '%s(arg=%s, lineno=%d)' % (self.opname, self.arg, self.lineno)
 
+    @property
+    def block_effect(self):
+        """Effect of the block stack
+        Returns +1 (push), 0 (none) or -1 (pop)
+        """
+        if self.opname.startswith('SETUP_'):
+            return 1
+        elif self.opname == 'POP_BLOCK':
+            return -1
+        else:
+            return 0
+
 
 class ByteCodeIter(object):
     def __init__(self, code):

@@ -53,7 +53,6 @@ def reject_npm1(x):
 
 
 class TestLoopLifting(TestCase):
-
     def check_lift_ok(self, pyfunc, argtypes, args):
         """
         Check that pyfunc can loop-lift even in nopython mode.
@@ -105,6 +104,27 @@ class TestLoopLifting(TestCase):
 
     def test_reject_npm1(self):
         self.check_no_lift_nopython(reject_npm1, (types.intp,), (123,))
+
+
+class TestLoopLiftingInAction(TestCase):
+    def test_issue_734(self):
+        from numba import jit, void, int32, double
+
+        @jit(void(int32, double[:]), forceobj=True)
+        def forloop_with_if(u, a):
+            if u == 0:
+                for i in range(a.shape[0]):
+                    a[i] = a[i] * 2.0
+            else:
+                for i in range(a.shape[0]):
+                    a[i] = a[i] + 1.0
+
+        for u in (0, 1):
+            nb_a = np.arange(10, dtype='int32')
+            np_a = np.arange(10, dtype='int32')
+            forloop_with_if(u, nb_a)
+            forloop_with_if.py_func(u, np_a)
+            self.assertTrue(np.all(nb_a == np_a))
 
 
 if __name__ == '__main__':
