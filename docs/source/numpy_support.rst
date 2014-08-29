@@ -129,7 +129,7 @@ Comparison functions
  greater_equal       Yes          Yes
  less                Yes          Yes
  less_equal          Yes          Yes
- not_equal           Yes          No
+ not_equal           Yes          Yes
  equal               Yes          No
  logical_and         Yes          No
  logical_or          Yes          No
