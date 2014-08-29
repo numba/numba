@@ -127,7 +127,7 @@ Comparison functions
 ==============  =============  ===========
  greater             Yes          Yes
  greater_equal       Yes          Yes
- less                Yes          No
+ less                Yes          Yes
  less_equal          Yes          No
  not_equal           Yes          No
  equal               Yes          No
