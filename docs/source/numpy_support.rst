@@ -125,7 +125,7 @@ Comparison functions
 --------------  --------------------------
     name         python-mode    no-python
 ==============  =============  ===========
- greater             Yes          No
+ greater             Yes          Yes
  greater_equal       Yes          No
  less                Yes          No
  less_equal          Yes          No

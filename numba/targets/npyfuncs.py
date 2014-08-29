@@ -21,16 +21,26 @@ _NPY_LOG10E = 0.434294481903251827651128918916605082 # math.log(math.e, 10)
 _NPY_LOGE2  = 0.693147180559945309417232121458176568 # math.log(2)
 
 
-def _check_arity_and_homogeneity(sig, args, arity):
+def _check_arity_and_homogeneity(sig, args, arity, return_type = None):
     """checks that the following are true:
     - args and sig.args have arg_count elements
-    - all types are homogeneity
+    - all input types are homogeneous
+    - return type is 'return_type' if provided, otherwise it must be
+      homogeneous with the input types.
     """
+    import inspect
+
     assert len(args) == arity
     assert len(sig.args) == arity
     ty = sig.args[0]
+    if return_type is None:
+        return_type = ty
     # must have homogeneous args
-    assert all(arg==ty for arg in sig.args) and sig.return_type == ty
+    if not( all(arg==ty for arg in sig.args) and sig.return_type == return_type):
+        import inspect
+        print (inspect.currentframe().f_back.f_code.co_name,
+               ' called with invalid types: ', sig)
+        assert False
 
 
 def _call_func_by_name_with_cast(context, builder, sig, args,
@@ -446,11 +456,11 @@ def np_complex_sign_impl(context, builder, sig, args):
     result.real = ZERO
     result.imag = ZERO
 
-    cmp_sig = typing.signature(*[ty] * 3)
+    cmp_sig = typing.signature(types.boolean, *[ty] * 2)
     cmp_args = [op, result._getvalue()]
-    arg1_ge_arg2 = np_complex_greater_equal_impl(context, builder, cmp_sig, cmp_args)
-    arg1_eq_arg2 = np_complex_equal_impl(context, builder, cmp_sig, cmp_args)
-    arg1_lt_arg2 = np_complex_lower_impl(context, builder, cmp_sig, cmp_args)
+    arg1_ge_arg2 = np_complex_ge_impl(context, builder, cmp_sig, cmp_args)
+    arg1_eq_arg2 = np_complex_eq_impl(context, builder, cmp_sig, cmp_args)
+    arg1_lt_arg2 = np_complex_lt_impl(context, builder, cmp_sig, cmp_args)
 
     real_when_ge = builder.select(arg1_eq_arg2, ZERO, ONE)
     real_when_nge = builder.select(arg1_lt_arg2, MINUS_ONE, NAN)
@@ -1576,12 +1586,14 @@ def np_real_fabs_impl(context, builder, sig, args):
 
 
 ########################################################################
-# NumPy style complex predicates
+# NumPy style predicates
 
-def np_complex_greater_equal_impl(context, builder, sig, args):
+# For real and integer types rely on builtins... but complex ordering in 
+# NumPy is lexicographic (while Python does not provide ordering).
+def np_complex_ge_impl(context, builder, sig, args):
     # equivalent to macro CGE in NumPy's loops.c.src
     # ((xr > yr && !npy_isnan(xi) && !npy_isnan(yi)) || (xr == yr && xi >= yi))
-    _check_arity_and_homogeneity(sig, args, 2)
+    _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
 
     complex_class = context.make_complex(sig.args[0])
     in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
@@ -1599,10 +1611,10 @@ def np_complex_greater_equal_impl(context, builder, sig, args):
     return builder.or_(first_term, second_term)
 
 
-def np_complex_lower_equal_impl(context, builder, sig, args):
+def np_complex_le_impl(context, builder, sig, args):
     # equivalent to macro CLE in NumPy's loops.c.src
     # ((xr < yr && !npy_isnan(xi) && !npy_isnan(yi)) || (xr == yr && xi <= yi))
-    _check_arity_and_homogeneity(sig, args, 2)
+    _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
 
     complex_class = context.make_complex(sig.args[0])
     in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
@@ -1620,10 +1632,10 @@ def np_complex_lower_equal_impl(context, builder, sig, args):
     return builder.or_(first_term, second_term)
 
 
-def np_complex_greater_impl(context, builder, sig, args):
+def np_complex_gt_impl(context, builder, sig, args):
     # equivalent to macro CGT in NumPy's loops.c.src
     # ((xr > yr && !npy_isnan(xi) && !npy_isnan(yi)) || (xr == yr && xi > yi))
-    _check_arity_and_homogeneity(sig, args, 2)
+    _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
 
     complex_class = context.make_complex(sig.args[0])
     in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
@@ -1641,10 +1653,10 @@ def np_complex_greater_impl(context, builder, sig, args):
     return builder.or_(first_term, second_term)
 
 
-def np_complex_lower_impl(context, builder, sig, args):
+def np_complex_lt_impl(context, builder, sig, args):
     # equivalent to macro CLT in NumPy's loops.c.src
     # ((xr < yr && !npy_isnan(xi) && !npy_isnan(yi)) || (xr == yr && xi < yi))
-    _check_arity_and_homogeneity(sig, args, 2)
+    _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
 
     complex_class = context.make_complex(sig.args[0])
     in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
@@ -1662,10 +1674,10 @@ def np_complex_lower_impl(context, builder, sig, args):
     return builder.or_(first_term, second_term)
 
 
-def np_complex_equal_impl(context, builder, sig, args):
+def np_complex_eq_impl(context, builder, sig, args):
     # equivalent to macro CEQ in NumPy's loops.c.src
     # (xr == yr && xi == yi)
-    _check_arity_and_homogeneity(sig, args, 2)
+    _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
 
     complex_class = context.make_complex(sig.args[0])
     in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
@@ -1679,10 +1691,10 @@ def np_complex_equal_impl(context, builder, sig, args):
     return builder.and_(xr_eq_yr, xi_eq_yi)
 
 
-def np_complex_not_equal_impl(complex, builder, sig, args):
+def np_complex_ne_impl(complex, builder, sig, args):
     # equivalent to marcro CNE in NumPy's loops.c.src
     # (xr != yr || xi != yi)
-    _check_arity_and_homogeneity(sig, args, 2)
+    _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
 
     complex_class = context.make_complex(sig.args[0])
     in1, in2 = [complex_class(context, builder, value=arg) for arg in args]

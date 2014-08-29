@@ -140,8 +140,14 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary',
         return self.builder.load(self._load_effective_address(indices))
 
     def store_data(self, indices, value):
-        assert self.context.get_data_type(self.base_type) == value.type
-        self.builder.store(value, self._load_effective_address(indices))
+        ctx = self.context
+        bld = self.builder
+        
+        # maybe there should be a "get_memory_value" or "get_storage_value"
+        store_value = ctx.get_struct_member_value(bld, self.base_type, value)
+        assert ctx.get_data_type(self.base_type) == store_value.type
+
+        bld.store(store_value, self._load_effective_address(indices))
 
 
 def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
