@@ -505,7 +505,8 @@ class ArrayIterator(IteratorType):
     def __init__(self, array_type):
         self.array_type = array_type
         name = "iter(%s)" % (self.array_type,)
-        if array_type.ndim == 1:
+        nd = array_type.ndim
+        if nd == 0 or nd == 1:
             self.yield_type = array_type.dtype
         else:
             self.yield_type = array_type.copy(ndim=array_type.ndim - 1)
