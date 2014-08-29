@@ -94,7 +94,7 @@ class TypeAnnotation(object):
                               file=io)
                         print("# Has %d overloads" % len(loop.overloads),
                               file=io)
-                        for cres in loop.overloads.values():
+                        for cres in loop._compileinfos.values():
                             print(cres.type_annotation, file=io)
             else:
                 print("# Source code unavailable", file=io)
