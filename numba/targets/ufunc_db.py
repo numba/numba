@@ -568,6 +568,24 @@ def _fill_ufunc_db(ufunc_db):
         'DD->?': npyfuncs.np_complex_ne_impl,
     }
 
+    ufunc_db[np.equal] = {
+        '??->?': builtins.int_eq_impl,
+        'bb->?': builtins.int_eq_impl,
+        'BB->?': builtins.int_eq_impl,
+        'hh->?': builtins.int_eq_impl,
+        'HH->?': builtins.int_eq_impl,
+        'ii->?': builtins.int_eq_impl,
+        'II->?': builtins.int_eq_impl,
+        'll->?': builtins.int_eq_impl,
+        'LL->?': builtins.int_eq_impl,
+        'qq->?': builtins.int_eq_impl,
+        'QQ->?': builtins.int_eq_impl,
+        'ff->?': builtins.real_eq_impl,
+        'dd->?': builtins.real_eq_impl,
+        'FF->?': npyfuncs.np_complex_eq_impl,
+        'DD->?': npyfuncs.np_complex_eq_impl,
+    }
+
 
     # Inject datetime64 support
     try:

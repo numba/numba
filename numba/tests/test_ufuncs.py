@@ -673,7 +673,6 @@ class TestUFuncs(TestCase):
     def test_equal_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test(np.equal, flags=flags)
 
-    @_unimplemented
     def test_equal_ufunc_npm(self):
         self.test_equal_ufunc(flags=no_pyobj_flags)
 
@@ -1290,7 +1289,7 @@ class TestLoopTypesNoPython(TestLoopTypes):
                np.degrees, np.radians,
                np.floor, np.ceil, np.trunc,
                np.greater, np.greater_equal, np.less, np.less_equal,
-               np.not_equal]
+               np.not_equal, np.equal ]
 
     # supported types are integral (signed and unsigned) as well as float and double
     # support for complex64(F) and complex128(D) should be coming soon.
@@ -1306,7 +1305,7 @@ class TestLoopTypesComplexNoPython(TestLoopTypes):
                np.square, np.reciprocal, np.sin, np.cos, np.tan, np.arcsin,
                np.arccos, np.arctan, np.sinh, np.cosh, np.tanh, np.arcsinh,
                np.arccosh, np.arctanh, np.greater, np.greater_equal, np.less,
-               np.less_equal, np.not_equal ]
+               np.less_equal, np.not_equal, np.equal ]
 
     # Test complex types
     # note that some loops like "abs" contain reals as results, hence the

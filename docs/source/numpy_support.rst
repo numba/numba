@@ -130,7 +130,7 @@ Comparison functions
  less                Yes          Yes
  less_equal          Yes          Yes
  not_equal           Yes          Yes
- equal               Yes          No
+ equal               Yes          Yes
  logical_and         Yes          No
  logical_or          Yes          No
  logical_xor         Yes          No
