@@ -496,6 +496,24 @@ def _fill_ufunc_db(ufunc_db):
         'DD->?': npyfuncs.np_complex_gt_impl,
     }
 
+    ufunc_db[np.greater_equal] = {
+        '??->?': builtins.int_uge_impl,
+        'bb->?': builtins.int_sge_impl,
+        'BB->?': builtins.int_uge_impl,
+        'hh->?': builtins.int_sge_impl,
+        'HH->?': builtins.int_uge_impl,
+        'ii->?': builtins.int_sge_impl,
+        'II->?': builtins.int_uge_impl,
+        'll->?': builtins.int_sge_impl,
+        'LL->?': builtins.int_uge_impl,
+        'qq->?': builtins.int_sge_impl,
+        'QQ->?': builtins.int_uge_impl,
+        'ff->?': builtins.real_ge_impl,
+        'dd->?': builtins.real_ge_impl,
+        'FF->?': npyfuncs.np_complex_ge_impl,
+        'DD->?': npyfuncs.np_complex_ge_impl,
+    }
+
     # Inject datetime64 support
     try:
         from . import npdatetime
