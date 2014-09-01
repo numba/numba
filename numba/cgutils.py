@@ -203,10 +203,6 @@ def is_not_null(builder, val):
     return builder.icmp(lc.ICMP_NE, null, val)
 
 
-is_true = is_not_null
-is_false = is_null
-
-
 def set_branch_weight(builder, brinst, trueweight, falseweight):
     module = get_module(builder)
     mdid = lc.MetaDataString.get(module, "branch_weights")
@@ -485,6 +481,8 @@ def is_scalar_zero(builder, value):
     """
     Return a predicate representing whether *value* is equal to zero.
     """
+    assert not is_pointer(value.type)
+    assert not is_struct(value.type)
     nullval = Constant.null(value.type)
     if value.type in (Type.float(), Type.double()):
         isnull = builder.fcmp(lc.FCMP_OEQ, nullval, value)
@@ -492,17 +490,38 @@ def is_scalar_zero(builder, value):
         isnull = builder.icmp(lc.ICMP_EQ, nullval, value)
     return isnull
 
+
+def is_not_scalar_zero(builder, value):
+    """
+    Return a predicate representin whether a *value* is not equal to zero.
+    not exactly "not is_scalar_zero" because of nans
+    """
+    assert not is_pointer(value.type)
+    assert not is_struct(value.type)
+    nullval = Constant.null(value.type)
+    if value.type in (Type.float(), Type.double()):
+        isnull = builder.fcmp(lc.FCMP_UNE, nullval, value)
+    else:
+        isnull = builder.icmp(lc.ICMP_NE, nullval, value)
+    return isnull
+
+
 def is_scalar_zero_or_nan(builder, value):
     """
     Return a predicate representing whether *value* is equal to either zero
     or NaN.
     """
+    assert not is_pointer(value.type)
+    assert not is_struct(value.type)
     nullval = Constant.null(value.type)
     if value.type in (Type.float(), Type.double()):
         isnull = builder.fcmp(lc.FCMP_UEQ, nullval, value)
     else:
         isnull = builder.icmp(lc.ICMP_EQ, nullval, value)
     return isnull
+
+is_true = is_not_scalar_zero
+is_false = is_scalar_zero
 
 def is_scalar_neg(builder, value):
     """is _value_ negative?. Assumes _value_ is signed"""

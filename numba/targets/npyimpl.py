@@ -66,7 +66,9 @@ class _ScalarHelper(object):
         self.base_type = ty
         intpty = ctxt.get_value_type(types.intp)
         self.shape = [lc.Constant.int(intpty, 1)]
-        self._ptr = cgutils.alloca_once(bld, ctxt.get_data_type(ty))
+
+        lty = ctxt.get_data_type(ty) if ty != types.boolean else lc.Type.int(1)
+        self._ptr = cgutils.alloca_once(bld, lty)
 
     def create_iter_indices(self):
         return _ScalarIndexingHelper()
@@ -161,10 +163,10 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
         strides = cgutils.unpack_tuple(bld, ary.strides, tyinp.ndim)
         return _ArrayHelper(ctxt, bld, ary, shape, strides, ary.data,
                             tyinp.layout, tyinp.dtype, tyinp.ndim, inp)
-    elif tyinp in types.number_domain:
+    elif tyinp in types.number_domain | set([types.boolean]):
         return _ScalarHelper(ctxt, bld, inp, tyinp)
     else:
-        raise TypeError('unknown type for {0}'.format(where))
+        raise TypeError('unknown type for {0}: {1}'.format(where, str(tyinp)))
 
 
 def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,

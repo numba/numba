@@ -131,10 +131,10 @@ Comparison functions
  less_equal          Yes          Yes
  not_equal           Yes          Yes
  equal               Yes          Yes
- logical_and         Yes          No
- logical_or          Yes          No
- logical_xor         Yes          No
- logical_not         Yes          No
+ logical_and         Yes          Yes
+ logical_or          Yes          Yes
+ logical_xor         Yes          Yes
+ logical_not         Yes          Yes
  maximum             Yes          No
  minimum             Yes          No
  fmax                Yes          No

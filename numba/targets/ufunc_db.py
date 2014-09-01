@@ -586,6 +586,77 @@ def _fill_ufunc_db(ufunc_db):
         'DD->?': npyfuncs.np_complex_eq_impl,
     }
 
+    ufunc_db[np.logical_and] = {
+        '??->?': npyfuncs.np_logical_and_impl,
+        'bb->?': npyfuncs.np_logical_and_impl,
+        'BB->?': npyfuncs.np_logical_and_impl,
+        'hh->?': npyfuncs.np_logical_and_impl,
+        'HH->?': npyfuncs.np_logical_and_impl,
+        'ii->?': npyfuncs.np_logical_and_impl,
+        'II->?': npyfuncs.np_logical_and_impl,
+        'll->?': npyfuncs.np_logical_and_impl,
+        'LL->?': npyfuncs.np_logical_and_impl,
+        'qq->?': npyfuncs.np_logical_and_impl,
+        'QQ->?': npyfuncs.np_logical_and_impl,
+        'ff->?': npyfuncs.np_logical_and_impl,
+        'dd->?': npyfuncs.np_logical_and_impl,
+        'FF->?': npyfuncs.np_complex_logical_and_impl,
+        'DD->?': npyfuncs.np_complex_logical_and_impl,
+    }
+
+    ufunc_db[np.logical_or] = {
+        '??->?': npyfuncs.np_logical_or_impl,
+        'bb->?': npyfuncs.np_logical_or_impl,
+        'BB->?': npyfuncs.np_logical_or_impl,
+        'hh->?': npyfuncs.np_logical_or_impl,
+        'HH->?': npyfuncs.np_logical_or_impl,
+        'ii->?': npyfuncs.np_logical_or_impl,
+        'II->?': npyfuncs.np_logical_or_impl,
+        'll->?': npyfuncs.np_logical_or_impl,
+        'LL->?': npyfuncs.np_logical_or_impl,
+        'qq->?': npyfuncs.np_logical_or_impl,
+        'QQ->?': npyfuncs.np_logical_or_impl,
+        'ff->?': npyfuncs.np_logical_or_impl,
+        'dd->?': npyfuncs.np_logical_or_impl,
+        'FF->?': npyfuncs.np_complex_logical_or_impl,
+        'DD->?': npyfuncs.np_complex_logical_or_impl,
+    }
+
+    ufunc_db[np.logical_xor] = {
+        '??->?': npyfuncs.np_logical_xor_impl,
+        'bb->?': npyfuncs.np_logical_xor_impl,
+        'BB->?': npyfuncs.np_logical_xor_impl,
+        'hh->?': npyfuncs.np_logical_xor_impl,
+        'HH->?': npyfuncs.np_logical_xor_impl,
+        'ii->?': npyfuncs.np_logical_xor_impl,
+        'II->?': npyfuncs.np_logical_xor_impl,
+        'll->?': npyfuncs.np_logical_xor_impl,
+        'LL->?': npyfuncs.np_logical_xor_impl,
+        'qq->?': npyfuncs.np_logical_xor_impl,
+        'QQ->?': npyfuncs.np_logical_xor_impl,
+        'ff->?': npyfuncs.np_logical_xor_impl,
+        'dd->?': npyfuncs.np_logical_xor_impl,
+        'FF->?': npyfuncs.np_complex_logical_xor_impl,
+        'DD->?': npyfuncs.np_complex_logical_xor_impl,
+    }
+
+    ufunc_db[np.logical_not] = {
+        '?->?': npyfuncs.np_logical_not_impl,
+        'b->?': npyfuncs.np_logical_not_impl,
+        'B->?': npyfuncs.np_logical_not_impl,
+        'h->?': npyfuncs.np_logical_not_impl,
+        'H->?': npyfuncs.np_logical_not_impl,
+        'i->?': npyfuncs.np_logical_not_impl,
+        'I->?': npyfuncs.np_logical_not_impl,
+        'l->?': npyfuncs.np_logical_not_impl,
+        'L->?': npyfuncs.np_logical_not_impl,
+        'q->?': npyfuncs.np_logical_not_impl,
+        'Q->?': npyfuncs.np_logical_not_impl,
+        'f->?': npyfuncs.np_logical_not_impl,
+        'd->?': npyfuncs.np_logical_not_impl,
+        'F->?': npyfuncs.np_complex_logical_not_impl,
+        'D->?': npyfuncs.np_complex_logical_not_impl,
+    }
 
     # Inject datetime64 support
     try:

@@ -1691,8 +1691,8 @@ def np_complex_eq_impl(context, builder, sig, args):
     return builder.and_(xr_eq_yr, xi_eq_yi)
 
 
-def np_complex_ne_impl(complex, builder, sig, args):
-    # equivalent to marcro CNE in NumPy's loops.c.src
+def np_complex_ne_impl(context, builder, sig, args):
+    # equivalent to macro CNE in NumPy's loops.c.src
     # (xr != yr || xi != yi)
     _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
 
@@ -1703,6 +1703,74 @@ def np_complex_ne_impl(complex, builder, sig, args):
     yr = in2.real
     yi = in2.imag
 
-    xr_ne_yr = builder.fcmp(lc.FCMP_ONE, xr, yr)
-    xi_ne_yi = builder.fcmp(lc.FCMP_ONE, xi, yi)
+    xr_ne_yr = builder.fcmp(lc.FCMP_UNE, xr, yr)
+    xi_ne_yi = builder.fcmp(lc.FCMP_UNE, xi, yi)
     return builder.or_(xr_ne_yr, xi_ne_yi)
+
+
+########################################################################
+# NumPy logical algebra
+
+# these are made generic for all types for now, assuming that
+# cgutils.is_true works in the underlying types.
+
+def _complex_is_true(context, builder, ty, val):
+    complex_class = context.make_complex(ty)
+    complex_val = complex_class(context, builder, value=val)
+    re_true = cgutils.is_true(builder, complex_val.real)
+    im_true = cgutils.is_true(builder, complex_val.imag)
+    return builder.or_(re_true, im_true)
+
+
+def np_logical_and_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
+    a = cgutils.is_true(builder, args[0])
+    b = cgutils.is_true(builder, args[1])
+    return builder.and_(a, b)
+
+
+def np_complex_logical_and_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
+    a = _complex_is_true(context, builder, sig.args[0], args[0])
+    b = _complex_is_true(context, builder, sig.args[1], args[1])
+    return builder.and_(a, b)
+
+
+def np_logical_or_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
+    a = cgutils.is_true(builder, args[0])
+    b = cgutils.is_true(builder, args[1])
+    return builder.or_(a, b)
+
+
+def np_complex_logical_or_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
+    a = _complex_is_true(context, builder, sig.args[0], args[0])
+    b = _complex_is_true(context, builder, sig.args[1], args[1])
+    return builder.or_(a, b)
+
+
+def np_logical_xor_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
+    a = cgutils.is_true(builder, args[0])
+    b = cgutils.is_true(builder, args[1])
+    return builder.xor(a, b)
+
+
+def np_complex_logical_xor_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
+    a = _complex_is_true(context, builder, sig.args[0], args[0])
+    b = _complex_is_true(context, builder, sig.args[1], args[1])
+    return builder.xor(a, b)
+
+
+def np_logical_not_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+    return cgutils.is_false(builder, args[0])
+
+
+def np_complex_logical_not_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+    a = _complex_is_true(context, builder, sig.args[0], args[0])
+    return builder.not_(a)
+

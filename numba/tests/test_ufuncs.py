@@ -679,30 +679,26 @@ class TestUFuncs(TestCase):
     def test_logical_and_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test(np.logical_and, flags=flags)
 
-    @_unimplemented
     def test_logical_and_ufunc_npm(self):
         self.test_logical_and_ufunc(flags=no_pyobj_flags)
 
     def test_logical_or_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test(np.logical_or, flags=flags)
 
-    @_unimplemented
     def test_logical_or_ufunc_npm(self):
         self.test_logical_or_ufunc(flags=no_pyobj_flags)
 
     def test_logical_xor_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test(np.logical_xor, flags=flags)
 
-    @_unimplemented
     def test_logical_xor_ufunc_npm(self):
         self.test_logical_xor_ufunc(flags=no_pyobj_flags)
 
     def test_logical_not_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.logical_not, flags=flags)
 
-    @_unimplemented
     def test_logical_not_ufunc_npm(self):
-        self.test_logical_not(flags=no_pyobj_flags)
+        self.test_logical_not_ufunc(flags=no_pyobj_flags)
 
     def test_maximum_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test(np.maximum, flags=flags)
@@ -1238,7 +1234,7 @@ class TestLoopTypes(TestCase):
             prec = 'double' if c_arg.dtype.char in 'dD' else prec
             for c, py in zip(c_arg, py_arg):
                 self.assertPreciseEqual(py, c, prec=prec,
-                    msg="arrays differ (%s): expected %r, got %r" % (prec, py_arg, c_arg))
+                    msg="ufunc %s; arrays differ (%s):\n args:%s expected %r, got %r" % (ufunc.__name__, c_args, prec, py_arg, c_arg))
 
     def _check_ufunc_loops(self, ufunc):
         fn = _make_ufunc_usecase(ufunc)
@@ -1289,7 +1285,8 @@ class TestLoopTypesNoPython(TestLoopTypes):
                np.degrees, np.radians,
                np.floor, np.ceil, np.trunc,
                np.greater, np.greater_equal, np.less, np.less_equal,
-               np.not_equal, np.equal ]
+               np.not_equal, np.equal, np.logical_and, np.logical_or,
+               np.logical_xor, np.logical_not ]
 
     # supported types are integral (signed and unsigned) as well as float and double
     # support for complex64(F) and complex128(D) should be coming soon.
@@ -1305,12 +1302,14 @@ class TestLoopTypesComplexNoPython(TestLoopTypes):
                np.square, np.reciprocal, np.sin, np.cos, np.tan, np.arcsin,
                np.arccos, np.arctan, np.sinh, np.cosh, np.tanh, np.arcsinh,
                np.arccosh, np.arctanh, np.greater, np.greater_equal, np.less,
-               np.less_equal, np.not_equal, np.equal ]
+               np.less_equal, np.not_equal, np.equal, np.logical_and,
+               np.logical_or, np.logical_xor, np.logical_not ]
 
     # Test complex types
     # note that some loops like "abs" contain reals as results, hence the
-    # _supported_types
-    _supported_types = 'FDfd'
+    # _supported_types. Boolean functions will return '?', so it is also
+    # included
+    _supported_types = 'FDfd?'
     _required_types = 'FD'
 
 
