@@ -1680,7 +1680,7 @@ def np_complex_equal_impl(context, builder, sig, args):
     return builder.and_(xr_eq_yr, xi_eq_yi)
 
 
-def np_complex_not_equal_impl(complex, builder, sig, args):
+def np_complex_not_equal_impl(context, builder, sig, args):
     # equivalent to marcro CNE in NumPy's loops.c.src
     # (xr != yr || xi != yi)
     _check_arity_and_homogeneity(sig, args, 2)
