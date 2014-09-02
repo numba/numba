@@ -141,8 +141,7 @@ _unsupported = set([ numpy.spacing, numpy.signbit,
                      numpy.left_shift, numpy.isinf,
                      numpy.isfinite, numpy.invert,
                      numpy.fmod,
-                     numpy.copysign,
-                     numpy.bitwise_xor ])
+                     numpy.copysign ])
 
 # a list of ufuncs that are in fact aliases of other ufuncs. They need to insert the
 # resolve method, but not register the ufunc itself
