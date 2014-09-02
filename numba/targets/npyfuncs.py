@@ -1812,6 +1812,21 @@ def np_real_maximum_impl(context, builder, sig, args):
     return builder.select(any_nan, nan_result, non_nan_result)
 
 
+def np_real_fmax_impl(context, builder, sig, args):
+    # fmax prefers non-nan (tries to return a non-nan).
+    _check_arity_and_homogeneity(sig, args, 2)
+
+    arg1, arg2 = args
+    arg2_nan = builder.fcmp(lc.FCMP_UNO, arg2, arg2)
+    any_nan = builder.fcmp(lc.FCMP_UNO, arg1, arg2)
+    nan_result = builder.select(arg2_nan, arg1, arg2)
+
+    arg1_ge_arg2 = builder.fcmp(lc.FCMP_OGE, arg1, arg2)
+    non_nan_result = builder.select(arg1_ge_arg2, arg1, arg2)
+
+    return builder.select(any_nan, nan_result, non_nan_result)
+
+
 def np_complex_maximum_impl(context, builder, sig, args):
     # maximum prefers nan (tries to return a nan).
     # There is an extra caveat with complex numbers, as there is more
@@ -1827,6 +1842,27 @@ def np_complex_maximum_impl(context, builder, sig, args):
     arg2_nan = np_complex_isnan_impl(context, builder, bc_sig, [arg2])
     any_nan = builder.or_(arg1_nan, arg2_nan)
     nan_result = builder.select(arg1_nan, arg1, arg2)
+
+    arg1_ge_arg2 = np_complex_ge_impl(context, builder, bcc_sig, args)
+    non_nan_result = builder.select(arg1_ge_arg2, arg1, arg2)
+
+    return builder.select(any_nan, nan_result, non_nan_result)
+
+
+def np_complex_fmax_impl(context, builder, sig, args):
+    # maximum prefers non-nan (tries to return a non-nan).
+    # There is an extra caveat with complex numbers, as there is more
+    # than one type of nan. NumPy's docs state that the nan in the
+    # first argument is returned when both arguments are nans.
+    _check_arity_and_homogeneity(sig, args, 2)
+    ty = sig.args[0]
+    bc_sig = typing.signature(types.boolean, ty)
+    bcc_sig = typing.signature(types.boolean, *[ty]*2)
+    arg1, arg2 = args
+    arg1_nan = np_complex_isnan_impl(context, builder, bc_sig, [arg1])
+    arg2_nan = np_complex_isnan_impl(context, builder, bc_sig, [arg2])
+    any_nan = builder.or_(arg1_nan, arg2_nan)
+    nan_result = builder.select(arg1_nan, arg2, arg1)
 
     arg1_ge_arg2 = np_complex_ge_impl(context, builder, bcc_sig, args)
     non_nan_result = builder.select(arg1_ge_arg2, arg1, arg2)

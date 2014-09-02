@@ -137,7 +137,7 @@ Comparison functions
  logical_not         Yes          Yes
  maximum             Yes          Yes
  minimum             Yes          Yes
- fmax                Yes          No
+ fmax                Yes          Yes
  fmin                Yes          No
 ==============  =============  ===========
 

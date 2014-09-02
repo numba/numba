@@ -140,7 +140,7 @@ _unsupported = set([ numpy.spacing, numpy.signbit,
                      numpy.right_shift, numpy.remainder,
                      numpy.left_shift, numpy.isnan, numpy.isinf,
                      numpy.isfinite, numpy.invert,
-                     numpy.fmod, numpy.fmin, numpy.fmax,
+                     numpy.fmod, numpy.fmin,
                      numpy.copysign,
                      numpy.bitwise_xor,
                      numpy.bitwise_or, numpy.bitwise_and ])
