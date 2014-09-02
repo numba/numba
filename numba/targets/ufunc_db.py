@@ -738,6 +738,22 @@ def _fill_ufunc_db(ufunc_db):
         'D->?': npyfuncs.np_complex_isnan_impl,
     }
 
+
+    # bit twiddling functions
+    ufunc_db[np.bitwise_and] = {
+        '??->?': builtins.int_and_impl,
+        'bb->b': builtins.int_and_impl,
+        'BB->B': builtins.int_and_impl,
+        'hh->h': builtins.int_and_impl,
+        'HH->H': builtins.int_and_impl,
+        'ii->i': builtins.int_and_impl,
+        'II->I': builtins.int_and_impl,
+        'll->l': builtins.int_and_impl,
+        'LL->L': builtins.int_and_impl,
+        'qq->q': builtins.int_and_impl,
+        'QQ->Q': builtins.int_and_impl,
+    }
+
     # Inject datetime64 support
     try:
         from . import npdatetime

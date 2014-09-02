@@ -591,9 +591,8 @@ class TestUFuncs(TestCase):
     def test_bitwise_and_ufunc(self, flags=enable_pyobj_flags):
         self.binary_int_ufunc_test(np.bitwise_and, flags=flags)
 
-    @_unimplemented
     def test_bitwise_and_ufunc_npm(self):
-        self.test_bitwise_and_ufunc_npm(flags=no_pyobj_flags)
+        self.test_bitwise_and_ufunc(flags=no_pyobj_flags)
 
     def test_bitwise_or_ufunc(self, flags=enable_pyobj_flags):
         self.binary_int_ufunc_test(np.bitwise_or, flags=flags)
@@ -1282,7 +1281,7 @@ class TestLoopTypesNoPython(TestLoopTypes):
                np.greater, np.greater_equal, np.less, np.less_equal,
                np.not_equal, np.equal, np.logical_and, np.logical_or,
                np.logical_xor, np.logical_not, np.maximum, np.minimum,
-               np.fmax, np.fmin, np.isnan]
+               np.fmax, np.fmin, np.isnan, np.bitwise_and]
 
     # supported types are integral (signed and unsigned) as well as float and double
     # support for complex64(F) and complex128(D) should be coming soon.

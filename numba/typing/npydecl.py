@@ -143,7 +143,7 @@ _unsupported = set([ numpy.spacing, numpy.signbit,
                      numpy.fmod,
                      numpy.copysign,
                      numpy.bitwise_xor,
-                     numpy.bitwise_or, numpy.bitwise_and ])
+                     numpy.bitwise_or ])
 
 # a list of ufuncs that are in fact aliases of other ufuncs. They need to insert the
 # resolve method, but not register the ufunc itself
