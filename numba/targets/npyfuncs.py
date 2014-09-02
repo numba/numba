@@ -28,8 +28,6 @@ def _check_arity_and_homogeneity(sig, args, arity, return_type = None):
     - return type is 'return_type' if provided, otherwise it must be
       homogeneous with the input types.
     """
-    import inspect
-
     assert len(args) == arity
     assert len(sig.args) == arity
     ty = sig.args[0]
@@ -38,9 +36,9 @@ def _check_arity_and_homogeneity(sig, args, arity, return_type = None):
     # must have homogeneous args
     if not( all(arg==ty for arg in sig.args) and sig.return_type == return_type):
         import inspect
-        print (inspect.currentframe().f_back.f_code.co_name,
-               ' called with invalid types: ', sig)
-        assert False
+        fname = inspect.currentframe().f_back.f_code.co_name)
+        msg = '{0} called with invalid types: {1}'.format(fname, sig)
+        assert False, msg
 
 
 def _call_func_by_name_with_cast(context, builder, sig, args,
@@ -1775,3 +1773,74 @@ def np_complex_logical_not_impl(context, builder, sig, args):
     a = _complex_is_true(context, builder, sig.args[0], args[0])
     return builder.not_(a)
 
+########################################################################
+# NumPy style max/min
+#
+# There are 2 different sets of functions to perform max and min in
+# NumPy: maximum/minimum and fmax/fmin.
+# Both differ in the way NaNs are handled, so the actual differences
+# come in action only on float/complex numbers. The functions used for
+# integers is shared. For booleans maximum is equivalent to or, and
+# minimum is equivalent to and. Datetime support will go elsewhere.
+
+def np_int_smax_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2)
+    arg1, arg2 = args
+    arg1_sge_arg2 = builder.icmp(lc.ICMP_SGE, arg1, arg2)
+    return builder.select(arg1_sge_arg2, arg1, arg2)
+
+
+def np_int_umax_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2)
+    arg1, arg2 = args
+    arg1_uge_arg2 = builder.icmp(lc.ICMP_UGE, arg1, arg2)
+    return builder.select(arg1_uge_arg2, arg1, arg2)
+
+
+def np_real_maximum_impl(context, builder, sig, args):
+    # maximum prefers nan (tries to return a nan).
+    _check_arity_and_homogeneity(sig, args, 2)
+
+    arg1, arg2 = args
+    arg2_nan = builder.fcmp(lc.FCMP_UNO, arg2, arg2)
+    any_nan = builder.fcmp(lc.FCMP_UNO, arg1, arg2)
+    nan_result = builder.select(arg2_nan, arg2, arg1)
+
+    arg1_ge_arg2 = builder.fcmp(lc.FCMP_OGE, arg1, arg2)
+    non_nan_result = builder.select(arg1_ge_arg2, arg1, arg2)
+
+    return builder.select(any_nan, nan_result, non_nan_result)
+
+
+def np_complex_maximum_impl(context, builder, sig, args):
+    # maximum prefers nan (tries to return a nan).
+    # There is an extra caveat with complex numbers, as there is more
+    # than one type of nan. NumPy's docs state that the nan in the
+    # first argument is returned when both arguments are nans.
+    # If only one nan is found, that nan is returned.
+    _check_arity_and_homogeneity(sig, args, 2)
+    ty = sig.args[0]
+    bc_sig = typing.signature(types.boolean, ty)
+    bcc_sig = typing.signature(types.boolean, *[ty]*2)
+    arg1, arg2 = args
+    arg1_nan = np_complex_isnan_impl(context, builder, bc_sig, [arg1])
+    arg2_nan = np_complex_isnan_impl(context, builder, bc_sig, [arg2])
+    any_nan = builder.or_(arg1_nan, arg2_nan)
+    nan_result = builder.select(arg1_nan, arg1, arg2)
+
+    arg1_ge_arg2 = np_complex_ge_impl(context, builder, bcc_sig, args)
+    non_nan_result = builder.select(arg1_ge_arg2, arg1, arg2)
+
+    return builder.select(any_nan, nan_result, non_nan_result)
+
+
+########################################################################
+# NumPy isnan
+
+def np_complex_isnan_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+
+    ty = sig.args[0]
+    complex_class = context.make_complex(ty)
+    complex_val = complex_class(context, builder, value=args[0])
+    return builder.fcmp(lc.FCMP_UNO, complex_val.real, complex_val.imag)

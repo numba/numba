@@ -658,6 +658,24 @@ def _fill_ufunc_db(ufunc_db):
         'D->?': npyfuncs.np_complex_logical_not_impl,
     }
 
+    ufunc_db[np.maximum] = {
+        '??->?': npyfuncs.np_logical_or_impl,
+        'bb->b': npyfuncs.np_int_smax_impl,
+        'BB->B': npyfuncs.np_int_umax_impl,
+        'hh->h': npyfuncs.np_int_smax_impl,
+        'HH->H': npyfuncs.np_int_umax_impl,
+        'ii->i': npyfuncs.np_int_smax_impl,
+        'II->I': npyfuncs.np_int_umax_impl,
+        'll->l': npyfuncs.np_int_smax_impl,
+        'LL->L': npyfuncs.np_int_umax_impl,
+        'qq->q': npyfuncs.np_int_smax_impl,
+        'QQ->Q': npyfuncs.np_int_umax_impl,
+        'ff->f': npyfuncs.np_real_maximum_impl,
+        'dd->d': npyfuncs.np_real_maximum_impl,
+        'FF->F': npyfuncs.np_complex_maximum_impl,
+        'DD->D': npyfuncs.np_complex_maximum_impl,
+    }
+
     # Inject datetime64 support
     try:
         from . import npdatetime
