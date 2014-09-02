@@ -45,8 +45,13 @@ class CPUContext(BaseContext):
     def init(self):
         self.execmodule = lc.Module.new("numba.exec")
         eb = le.EngineBuilder.new(self.execmodule).opt(3)
-        if not avx_support.detect_avx_support():
-            eb.mattrs("-avx")
+        # Note: LLVM 3.3 always generates vmovsd (AVX instruction) for
+        # mem<->reg move.  The transition between AVX and SSE instruction
+        # without proper vzeroupper to reset is causing a serious performance
+        # penalty because the SSE register need to save/restore.
+        # For now, we will disable the AVX feature for all processor and hope
+        # that LLVM 3.5 will fix this issue.
+        eb.mattrs("-avx")
         self.tm = tm = eb.select_target()
         self.engine = eb.create(tm)
         self.pm = self.build_pass_manager()
