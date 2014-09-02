@@ -1,19 +1,14 @@
 from __future__ import print_function, division, absolute_import
-from collections import namedtuple
 import contextlib
 import functools
 import inspect
 import sys
 
-import numpy
-
-from numba.config import PYVERSION
 from numba import _dispatcher, compiler, utils
 from numba.typeconv.rules import default_type_manager
 from numba import typing
 from numba.typing.templates import resolve_overload
 from numba import types, sigutils
-from numba import numpy_support
 from numba.bytecode import get_code_object
 
 
@@ -69,6 +64,7 @@ class _OverloadedBase(_dispatcher.Dispatcher):
                 except KeyError:
                     # Not a native function (object mode presumably)
                     pass
+
         return finalizer
 
     @property
@@ -174,6 +170,7 @@ class _OverloadedBase(_dispatcher.Dispatcher):
             # Ensure no autoscaling of integer type, to match the
             # typecode() function in _dispatcher.c.
             return types.int64
+
         tp = self.typingctx.resolve_data_type(val)
         if tp is None:
             tp = types.pyobject

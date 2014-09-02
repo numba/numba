@@ -21,13 +21,9 @@ class TestLinker(unittest.TestCase):
         global bar  # must be a global; other it is recognized as a freevar
         bar = cuda.declare_device('bar', 'int32(int32)')
 
-        link = os.path.join(os.path.dirname(__file__), 'data', 'jitlink.o')
+        link = os.path.join(os.path.dirname(__file__), 'data', 'jitlink.ptx')
         print('link to:', link)
-
-        if not os.path.isfile(link):
-            print('test skipped due to missing file')
-            return
-
+        
         @cuda.jit('void(int32[:], int32[:])', link=[link])
         def foo(x, y):
             i = cuda.grid(1)

@@ -168,8 +168,13 @@ class BaseContext(object):
         if numpy_support.is_array(val):
             ary = val
             dtype = numpy_support.from_dtype(ary.dtype)
-            # Force C contiguous
-            return types.Array(dtype, ary.ndim, 'C')
+            if ary.flags.c_contiguous:
+                layout = 'C'
+            elif ary.flags.f_contiguous:
+                layout = 'F'
+            else:
+                layout = 'A'
+            return types.Array(dtype, ary.ndim, layout)
 
         return None
 

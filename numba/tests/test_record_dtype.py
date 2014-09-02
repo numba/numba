@@ -130,12 +130,18 @@ class TestRecordDtype(unittest.TestCase):
 
     def test_set_a(self):
         self._test_set_equal(set_a, 3.1415, types.float64)
+        # Test again to check if coercion works
+        self._test_set_equal(set_a, 3., types.float32)
 
     def test_set_b(self):
         self._test_set_equal(set_b, 123, types.int32)
+        # Test again to check if coercion works
+        self._test_set_equal(set_b, 123, types.float64)
 
     def test_set_c(self):
         self._test_set_equal(set_c, 43j, types.complex64)
+        # Test again to check if coercion works
+        self._test_set_equal(set_c, 43j, types.complex128)
 
     def test_set_record(self):
         pyfunc = set_record

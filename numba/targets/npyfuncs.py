@@ -68,7 +68,8 @@ def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
     try:
         func_name = table[ty] # any would do... homogeneity
     except KeyError as e:
-        raise LoweringError("No {0} function for real type {1}".format(user_name, str(e)))
+        msg = "No {0} function for real type {1}".format(user_name, str(e))
+        raise lowering.LoweringError(msg)
 
     mod = cgutils.get_module(builder)
     if ty in types.complex_domain:
