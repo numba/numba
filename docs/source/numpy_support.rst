@@ -108,7 +108,7 @@ Bit-twiddling functions
     name         python-mode    no-python
 ==============  =============  ===========
  bitwise_and         Yes          Yes
- bitwise_or          Yes          No
+ bitwise_or          Yes          Yes
  bitwise_xor         Yes          No
  bitwise_not         Yes          No
  invert              Yes          No

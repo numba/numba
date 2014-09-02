@@ -754,6 +754,20 @@ def _fill_ufunc_db(ufunc_db):
         'QQ->Q': builtins.int_and_impl,
     }
 
+    ufunc_db[np.bitwise_or] = {
+        '??->?': builtins.int_or_impl,
+        'bb->b': builtins.int_or_impl,
+        'BB->B': builtins.int_or_impl,
+        'hh->h': builtins.int_or_impl,
+        'HH->H': builtins.int_or_impl,
+        'ii->i': builtins.int_or_impl,
+        'II->I': builtins.int_or_impl,
+        'll->l': builtins.int_or_impl,
+        'LL->L': builtins.int_or_impl,
+        'qq->q': builtins.int_or_impl,
+        'QQ->Q': builtins.int_or_impl,
+    }
+
     # Inject datetime64 support
     try:
         from . import npdatetime
