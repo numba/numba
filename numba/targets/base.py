@@ -111,6 +111,9 @@ class BaseContext(object):
     Only POD structure can life across function boundaries by copying the
     data.
     """
+    # True if the target requires strict alignment
+    # Causes exception to be raised if the record members are not aligned.
+    strict_alignment = False
 
     # Use default mangler (no specific requirement)
     mangler = None
@@ -456,6 +459,8 @@ class BaseContext(object):
     def get_setattr(self, attr, sig):
         typ = sig.args[0]
         if isinstance(typ, types.Record):
+            self.sentry_record_alignment(typ, attr)
+
             offset = typ.offset(attr)
             elemty = typ.typeof(attr)
 
@@ -464,7 +469,8 @@ class BaseContext(object):
                 [target, val] = args
                 dptr = cgutils.get_record_member(builder, target, offset,
                                                  self.get_data_type(elemty))
-                self.pack_value(builder, valty, val, dptr)
+                val = context.cast(builder, val, valty, elemty)
+                self.pack_value(builder, elemty, val, dptr)
 
             return _wrap_impl(imp, self, sig)
 
@@ -489,6 +495,7 @@ class BaseContext(object):
     def get_attribute(self, val, typ, attr):
         if isinstance(typ, types.Record):
             # Implement get attribute for records
+            self.sentry_record_alignment(typ, attr)
             offset = typ.offset(attr)
             elemty = typ.typeof(attr)
 
@@ -863,6 +870,19 @@ class BaseContext(object):
 
     def get_python_api(self, builder):
         return PythonAPI(self, builder)
+
+    def sentry_record_alignment(self, rectyp, attr):
+        """
+        Assumes offset starts from a properly aligned location
+        """
+        if self.strict_alignment:
+            offset = rectyp.offset(attr)
+            elemty = rectyp.typeof(attr)
+            align = self.get_abi_sizeof(self.get_data_type(elemty))
+            if offset % align:
+                msg = "{rec}.{attr} of type {type} is not aligned".format(
+                    rec=rectyp, attr=attr, type=elemty)
+                raise TypeError(msg)
 
     def make_array(self, typ):
         return arrayobj.make_array(typ)

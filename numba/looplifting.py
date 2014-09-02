@@ -206,7 +206,10 @@ def separate_loops(bytecode, outer, loops):
         if endloop is None:
             if inst.opname == 'SETUP_LOOP':
                 cur = [inst]
-                endloop = inst.next + inst.arg
+                # Python may set the end of loop to the final jump destination
+                # when nested in a if-else.  We need to scan the bytecode to
+                # find the actual end of loop
+                endloop = _scan_real_end_loop(bytecode, inst)
             else:
                 outer.append(inst)
         else:
@@ -220,3 +223,20 @@ def separate_loops(bytecode, outer, loops):
                 else:
                     loops.append(cur)
                 endloop = None
+
+
+def _scan_real_end_loop(bytecode, setuploop_inst):
+    """Find the end of loop.
+    Return the instruction offset.
+    """
+    start = setuploop_inst.next
+    end = start + setuploop_inst.arg
+    offset = start
+    depth = 0
+    while offset < end:
+        inst = bytecode[offset]
+        depth += inst.block_effect
+        if depth < 0:
+            return inst.next
+        offset = inst.next
+
