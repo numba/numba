@@ -721,7 +721,6 @@ class TestUFuncs(TestCase):
     def test_fmin_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test(np.fmin, flags=flags)
 
-    @_unimplemented
     def test_fmin_ufunc_npm(self):
         self.test_fmin_ufunc(flags=no_pyobj_flags)
 
@@ -745,7 +744,6 @@ class TestUFuncs(TestCase):
     def test_isnan_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.isnan, flags=flags)
 
-    @_unimplemented
     def test_isnan_ufunc_npm(self):
         self.test_isnan_ufunc(flags=no_pyobj_flags)
 
@@ -1284,7 +1282,7 @@ class TestLoopTypesNoPython(TestLoopTypes):
                np.greater, np.greater_equal, np.less, np.less_equal,
                np.not_equal, np.equal, np.logical_and, np.logical_or,
                np.logical_xor, np.logical_not, np.maximum, np.minimum,
-               np.fmax]
+               np.fmax, np.fmin, np.isnan]
 
     # supported types are integral (signed and unsigned) as well as float and double
     # support for complex64(F) and complex128(D) should be coming soon.
@@ -1302,7 +1300,7 @@ class TestLoopTypesComplexNoPython(TestLoopTypes):
                np.arccosh, np.arctanh, np.greater, np.greater_equal, np.less,
                np.less_equal, np.not_equal, np.equal, np.logical_and,
                np.logical_or, np.logical_xor, np.logical_not, np.maximum,
-               np.minimum, np.fmax]
+               np.minimum, np.fmax, np.fmin, np.isnan]
 
     # Test complex types
     # note that some loops like "abs" contain reals as results, hence the

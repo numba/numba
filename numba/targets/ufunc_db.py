@@ -712,6 +712,32 @@ def _fill_ufunc_db(ufunc_db):
         'DD->D': npyfuncs.np_complex_fmax_impl,
     }
 
+    ufunc_db[np.fmin] = {
+        '??->?': npyfuncs.np_logical_and_impl,
+        'bb->b': npyfuncs.np_int_smin_impl,
+        'BB->B': npyfuncs.np_int_umin_impl,
+        'hh->h': npyfuncs.np_int_smin_impl,
+        'HH->H': npyfuncs.np_int_umin_impl,
+        'ii->i': npyfuncs.np_int_smin_impl,
+        'II->I': npyfuncs.np_int_umin_impl,
+        'll->l': npyfuncs.np_int_smin_impl,
+        'LL->L': npyfuncs.np_int_umin_impl,
+        'qq->q': npyfuncs.np_int_smin_impl,
+        'QQ->Q': npyfuncs.np_int_umin_impl,
+        'ff->f': npyfuncs.np_real_fmin_impl,
+        'dd->d': npyfuncs.np_real_fmin_impl,
+        'FF->F': npyfuncs.np_complex_fmin_impl,
+        'DD->D': npyfuncs.np_complex_fmin_impl,
+    }
+
+    # misc floating functions
+    ufunc_db[np.isnan] = {
+        'f->?': npyfuncs.np_real_isnan_impl,
+        'd->?': npyfuncs.np_real_isnan_impl,
+        'F->?': npyfuncs.np_complex_isnan_impl,
+        'D->?': npyfuncs.np_complex_isnan_impl,
+    }
+
     # Inject datetime64 support
     try:
         from . import npdatetime

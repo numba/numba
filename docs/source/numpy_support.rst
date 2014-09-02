@@ -138,7 +138,7 @@ Comparison functions
  maximum             Yes          Yes
  minimum             Yes          Yes
  fmax                Yes          Yes
- fmin                Yes          No
+ fmin                Yes          Yes
 ==============  =============  ===========
 
 
@@ -152,7 +152,7 @@ Floating functions
 ==============  =============  ===========
  isfinite            Yes          No
  isinf               Yes          No
- isnan               Yes          No
+ isnan               Yes          Yes
  signbit             Yes          No
  copysign            Yes          No
  nextafter           Yes          No
