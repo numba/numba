@@ -135,8 +135,8 @@ Comparison functions
  logical_or          Yes          Yes
  logical_xor         Yes          Yes
  logical_not         Yes          Yes
- maximum             Yes          No
- minimum             Yes          No
+ maximum             Yes          Yes
+ minimum             Yes          Yes
  fmax                Yes          No
  fmin                Yes          No
 ==============  =============  ===========

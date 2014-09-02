@@ -36,7 +36,7 @@ def _check_arity_and_homogeneity(sig, args, arity, return_type = None):
     # must have homogeneous args
     if not( all(arg==ty for arg in sig.args) and sig.return_type == return_type):
         import inspect
-        fname = inspect.currentframe().f_back.f_code.co_name)
+        fname = inspect.currentframe().f_back.f_code.co_name
         msg = '{0} called with invalid types: {1}'.format(fname, sig)
         assert False, msg
 
@@ -1830,6 +1830,57 @@ def np_complex_maximum_impl(context, builder, sig, args):
 
     arg1_ge_arg2 = np_complex_ge_impl(context, builder, bcc_sig, args)
     non_nan_result = builder.select(arg1_ge_arg2, arg1, arg2)
+
+    return builder.select(any_nan, nan_result, non_nan_result)
+
+
+def np_int_smin_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2)
+    arg1, arg2 = args
+    arg1_sle_arg2 = builder.icmp(lc.ICMP_SLE, arg1, arg2)
+    return builder.select(arg1_sle_arg2, arg1, arg2)
+
+
+def np_int_umin_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2)
+    arg1, arg2 = args
+    arg1_ule_arg2 = builder.icmp(lc.ICMP_ULE, arg1, arg2)
+    return builder.select(arg1_ule_arg2, arg1, arg2)
+
+
+def np_real_minimum_impl(context, builder, sig, args):
+    # minimum prefers nan (tries to return a nan).
+    _check_arity_and_homogeneity(sig, args, 2)
+
+    arg1, arg2 = args
+    arg2_nan = builder.fcmp(lc.FCMP_UNO, arg2, arg2)
+    any_nan = builder.fcmp(lc.FCMP_UNO, arg1, arg2)
+    nan_result = builder.select(arg2_nan, arg2, arg1)
+
+    arg1_le_arg2 = builder.fcmp(lc.FCMP_OLE, arg1, arg2)
+    non_nan_result = builder.select(arg1_le_arg2, arg1, arg2)
+
+    return builder.select(any_nan, nan_result, non_nan_result)
+
+
+def np_complex_minimum_impl(context, builder, sig, args):
+    # minimum prefers nan (tries to return a nan).
+    # There is an extra caveat with complex numbers, as there is more
+    # than one type of nan. NumPy's docs state that the nan in the
+    # first argument is returned when both arguments are nans.
+    # If only one nan is found, that nan is returned.
+    _check_arity_and_homogeneity(sig, args, 2)
+    ty = sig.args[0]
+    bc_sig = typing.signature(types.boolean, ty)
+    bcc_sig = typing.signature(types.boolean, *[ty]*2)
+    arg1, arg2 = args
+    arg1_nan = np_complex_isnan_impl(context, builder, bc_sig, [arg1])
+    arg2_nan = np_complex_isnan_impl(context, builder, bc_sig, [arg2])
+    any_nan = builder.or_(arg1_nan, arg2_nan)
+    nan_result = builder.select(arg1_nan, arg1, arg2)
+
+    arg1_le_arg2 = np_complex_le_impl(context, builder, bcc_sig, args)
+    non_nan_result = builder.select(arg1_le_arg2, arg1, arg2)
 
     return builder.select(any_nan, nan_result, non_nan_result)
 
