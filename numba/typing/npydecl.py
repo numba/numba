@@ -139,7 +139,7 @@ _floating_functions = [ "isfinite", "isinf", "isnan", "signbit",
 _unsupported = set([ numpy.spacing, numpy.signbit,
                      numpy.right_shift, numpy.remainder,
                      numpy.left_shift, numpy.isinf,
-                     numpy.isfinite, numpy.invert,
+                     numpy.isfinite,
                      numpy.fmod,
                      numpy.copysign ])
 

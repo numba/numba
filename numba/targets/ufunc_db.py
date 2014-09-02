@@ -782,6 +782,20 @@ def _fill_ufunc_db(ufunc_db):
         'QQ->Q': builtins.int_xor_impl,
     }
 
+    ufunc_db[np.invert] = { # aka np.bitwise_not
+        '?->?': builtins.bool_invert_impl,
+        'b->b': builtins.int_invert_impl,
+        'B->B': builtins.int_invert_impl,
+        'h->h': builtins.int_invert_impl,
+        'H->H': builtins.int_invert_impl,
+        'i->i': builtins.int_invert_impl,
+        'I->I': builtins.int_invert_impl,
+        'l->l': builtins.int_invert_impl,
+        'L->L': builtins.int_invert_impl,
+        'q->q': builtins.int_invert_impl,
+        'Q->Q': builtins.int_invert_impl,
+    }
+
     # Inject datetime64 support
     try:
         from . import npdatetime

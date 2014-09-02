@@ -110,8 +110,8 @@ Bit-twiddling functions
  bitwise_and         Yes          Yes
  bitwise_or          Yes          Yes
  bitwise_xor         Yes          Yes
- bitwise_not         Yes          No
- invert              Yes          No
+ bitwise_not         Yes          Yes
+ invert              Yes          Yes
  left_shift          Yes          No
  right_shift         Yes          No
 ==============  =============  ===========

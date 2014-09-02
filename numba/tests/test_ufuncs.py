@@ -609,14 +609,12 @@ class TestUFuncs(TestCase):
     def test_invert_ufunc(self, flags=enable_pyobj_flags):
         self.unary_int_ufunc_test(np.invert, flags=flags)
 
-    @_unimplemented
     def test_invert_ufunc_npm(self):
         self.test_invert_ufunc(flags=no_pyobj_flags)
 
     def test_bitwise_not_ufunc(self, flags=enable_pyobj_flags):
         self.unary_int_ufunc_test(np.bitwise_not, flags=flags)
 
-    @_unimplemented
     def test_bitwise_not_ufunc_npm(self):
         self.test_bitwise_not_ufunc(flags=no_pyobj_flags)
 
@@ -1280,7 +1278,7 @@ class TestLoopTypesNoPython(TestLoopTypes):
                np.not_equal, np.equal, np.logical_and, np.logical_or,
                np.logical_xor, np.logical_not, np.maximum, np.minimum,
                np.fmax, np.fmin, np.isnan, np.bitwise_and, np.bitwise_or,
-               np.bitwise_xor ]
+               np.bitwise_xor, np.bitwise_not, np.invert ]
 
     # supported types are integral (signed and unsigned) as well as float and double
     # support for complex64(F) and complex128(D) should be coming soon.
