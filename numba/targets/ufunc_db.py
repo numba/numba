@@ -15,6 +15,20 @@ import numpy as np
 # this is lazily initialized to avoid circular imports
 _ufunc_db = None
 
+def _lazy_init_db():
+    global _ufunc_db
+
+    if _ufunc_db is None:
+        _ufunc_db = {}
+        _fill_ufunc_db(_ufunc_db)
+
+
+def get_ufuncs():
+    """obtain a list of supported ufuncs in the db"""
+    _lazy_init_db()
+    return _ufunc_db.keys()
+
+
 def get_ufunc_info(ufunc_key):
     """get the lowering information for the ufunc with key ufunc_key.
 
@@ -25,12 +39,7 @@ def get_ufunc_info(ufunc_key):
 
     raises a KeyError if the ufunc is not in the ufunc_db
     """
-    global _ufunc_db
-
-    if _ufunc_db is None:
-        _ufunc_db = {}
-        _fill_ufunc_db(_ufunc_db)
-
+    _lazy_init_db()
     return _ufunc_db[ufunc_key]
 
 
@@ -72,6 +81,8 @@ def _fill_ufunc_db(ufunc_db):
         'Q->Q': builtins.uint_abs_impl,
         'f->f': builtins.real_abs_impl,
         'd->d': builtins.real_abs_impl,
+        'F->f': builtins.complex_abs_impl,
+        'D->d': builtins.complex_abs_impl,
     }
 
     ufunc_db[np.sign] = {
@@ -87,6 +98,8 @@ def _fill_ufunc_db(ufunc_db):
         'Q->Q': builtins.int_sign_impl,
         'f->f': builtins.real_sign_impl,
         'd->d': builtins.real_sign_impl,
+        'F->F': npyfuncs.np_complex_sign_impl,
+        'D->D': npyfuncs.np_complex_sign_impl,
     }
 
     ufunc_db[np.add] = {
@@ -193,6 +206,275 @@ def _fill_ufunc_db(ufunc_db):
         'dd->d': npyfuncs.np_real_floor_div_impl,
         'FF->F': npyfuncs.np_complex_floor_div_impl,
         'DD->D': npyfuncs.np_complex_floor_div_impl,
+    }
+
+    ufunc_db[np.logaddexp] = {
+        'ff->f': npyfuncs.np_real_logaddexp_impl,
+        'dd->d': npyfuncs.np_real_logaddexp_impl,
+    }
+
+    ufunc_db[np.logaddexp2] = {
+        'ff->f': npyfuncs.np_real_logaddexp2_impl,
+        'dd->d': npyfuncs.np_real_logaddexp2_impl,
+    }
+
+    ufunc_db[np.power] = {
+        'bb->b': npyfuncs.np_int_power_impl,
+        'BB->B': npyfuncs.np_int_power_impl,
+        'hh->h': npyfuncs.np_int_power_impl,
+        'HH->H': npyfuncs.np_int_power_impl,
+        'ii->i': npyfuncs.np_int_power_impl,
+        'II->I': npyfuncs.np_int_power_impl,
+        'll->l': npyfuncs.np_int_power_impl,
+        'LL->L': npyfuncs.np_int_power_impl,
+        'qq->q': npyfuncs.np_int_power_impl,
+        'QQ->Q': npyfuncs.np_int_power_impl,
+        'ff->f': npyfuncs.np_real_power_impl,
+        'dd->d': npyfuncs.np_real_power_impl,
+        'FF->F': npyfuncs.np_complex_power_impl,
+        'DD->D': npyfuncs.np_complex_power_impl,
+    }
+
+    ufunc_db[np.rint] = {
+        'f->f': npyfuncs.np_real_rint_impl,
+        'd->d': npyfuncs.np_real_rint_impl,
+        'F->F': npyfuncs.np_complex_rint_impl,
+        'D->D': npyfuncs.np_complex_rint_impl,
+    }
+
+    ufunc_db[np.conjugate] = {
+        'b->b': npyfuncs.np_dummy_return_arg,
+        'B->B': npyfuncs.np_dummy_return_arg,
+        'h->h': npyfuncs.np_dummy_return_arg,
+        'H->H': npyfuncs.np_dummy_return_arg,
+        'i->i': npyfuncs.np_dummy_return_arg,
+        'I->I': npyfuncs.np_dummy_return_arg,
+        'l->l': npyfuncs.np_dummy_return_arg,
+        'L->L': npyfuncs.np_dummy_return_arg,
+        'q->q': npyfuncs.np_dummy_return_arg,
+        'Q->Q': npyfuncs.np_dummy_return_arg,
+        'f->f': npyfuncs.np_dummy_return_arg,
+        'd->d': npyfuncs.np_dummy_return_arg,
+        'F->F': npyfuncs.np_complex_conjugate_impl,
+        'D->D': npyfuncs.np_complex_conjugate_impl,
+    }
+
+    ufunc_db[np.exp] = {
+        'f->f': npyfuncs.np_real_exp_impl,
+        'd->d': npyfuncs.np_real_exp_impl,
+        'F->F': npyfuncs.np_complex_exp_impl,
+        'D->D': npyfuncs.np_complex_exp_impl,
+    }
+
+    ufunc_db[np.exp2] = {
+        'f->f': npyfuncs.np_real_exp2_impl,
+        'd->d': npyfuncs.np_real_exp2_impl,
+        'F->F': npyfuncs.np_complex_exp2_impl,
+        'D->D': npyfuncs.np_complex_exp2_impl,
+    }
+
+    ufunc_db[np.log] = {
+        'f->f': npyfuncs.np_real_log_impl,
+        'd->d': npyfuncs.np_real_log_impl,
+        'F->F': npyfuncs.np_complex_log_impl,
+        'D->D': npyfuncs.np_complex_log_impl,
+    }
+
+    ufunc_db[np.log2] = {
+        'f->f': npyfuncs.np_real_log2_impl,
+        'd->d': npyfuncs.np_real_log2_impl,
+        'F->F': npyfuncs.np_complex_log2_impl,
+        'D->D': npyfuncs.np_complex_log2_impl,
+    }
+
+    ufunc_db[np.log10] = {
+        'f->f': npyfuncs.np_real_log10_impl,
+        'd->d': npyfuncs.np_real_log10_impl,
+        'F->F': npyfuncs.np_complex_log10_impl,
+        'D->D': npyfuncs.np_complex_log10_impl,
+    }
+
+    ufunc_db[np.expm1] = {
+        'f->f': npyfuncs.np_real_expm1_impl,
+        'd->d': npyfuncs.np_real_expm1_impl,
+        'F->F': npyfuncs.np_complex_expm1_impl,
+        'D->D': npyfuncs.np_complex_expm1_impl,
+    }
+
+    ufunc_db[np.log1p] = {
+        'f->f': npyfuncs.np_real_log1p_impl,
+        'd->d': npyfuncs.np_real_log1p_impl,
+        'F->F': npyfuncs.np_complex_log1p_impl,
+        'D->D': npyfuncs.np_complex_log1p_impl,
+    }
+
+    ufunc_db[np.sqrt] = {
+        'f->f': npyfuncs.np_real_sqrt_impl,
+        'd->d': npyfuncs.np_real_sqrt_impl,
+        'F->F': npyfuncs.np_complex_sqrt_impl,
+        'D->D': npyfuncs.np_complex_sqrt_impl,
+    }
+
+    ufunc_db[np.square] = {
+        'b->b': npyfuncs.np_int_square_impl,
+        'B->B': npyfuncs.np_int_square_impl,
+        'h->h': npyfuncs.np_int_square_impl,
+        'H->H': npyfuncs.np_int_square_impl,
+        'i->i': npyfuncs.np_int_square_impl,
+        'I->I': npyfuncs.np_int_square_impl,
+        'l->l': npyfuncs.np_int_square_impl,
+        'L->L': npyfuncs.np_int_square_impl,
+        'q->q': npyfuncs.np_int_square_impl,
+        'Q->Q': npyfuncs.np_int_square_impl,
+        'f->f': npyfuncs.np_real_square_impl,
+        'd->d': npyfuncs.np_real_square_impl,
+        'F->F': npyfuncs.np_complex_square_impl,
+        'D->D': npyfuncs.np_complex_square_impl,
+    }
+
+    ufunc_db[np.reciprocal] = {
+        'b->b': npyfuncs.np_int_reciprocal_impl,
+        'B->B': npyfuncs.np_int_reciprocal_impl,
+        'h->h': npyfuncs.np_int_reciprocal_impl,
+        'H->H': npyfuncs.np_int_reciprocal_impl,
+        'i->i': npyfuncs.np_int_reciprocal_impl,
+        'I->I': npyfuncs.np_int_reciprocal_impl,
+        'l->l': npyfuncs.np_int_reciprocal_impl,
+        'L->L': npyfuncs.np_int_reciprocal_impl,
+        'q->q': npyfuncs.np_int_reciprocal_impl,
+        'Q->Q': npyfuncs.np_int_reciprocal_impl,
+        'f->f': npyfuncs.np_real_reciprocal_impl,
+        'd->d': npyfuncs.np_real_reciprocal_impl,
+        'F->F': npyfuncs.np_complex_reciprocal_impl,
+        'D->D': npyfuncs.np_complex_reciprocal_impl,
+    }
+
+    ufunc_db[np.sin] = {
+        'f->f': npyfuncs.np_real_sin_impl,
+        'd->d': npyfuncs.np_real_sin_impl,
+        'F->F': npyfuncs.np_complex_sin_impl,
+        'D->D': npyfuncs.np_complex_sin_impl,
+    }
+
+    ufunc_db[np.cos] = {
+        'f->f': npyfuncs.np_real_cos_impl,
+        'd->d': npyfuncs.np_real_cos_impl,
+        'F->F': npyfuncs.np_complex_cos_impl,
+        'D->D': npyfuncs.np_complex_cos_impl,
+    }
+
+    ufunc_db[np.tan] = {
+        'f->f': npyfuncs.np_real_tan_impl,
+        'd->d': npyfuncs.np_real_tan_impl,
+        'F->F': npyfuncs.np_complex_tan_impl,
+        'D->D': npyfuncs.np_complex_tan_impl,
+    }
+
+    ufunc_db[np.arcsin] = {
+        'f->f': npyfuncs.np_real_asin_impl,
+        'd->d': npyfuncs.np_real_asin_impl,
+        'F->F': npyfuncs.np_complex_asin_impl,
+        'D->D': npyfuncs.np_complex_asin_impl,
+    }
+
+    ufunc_db[np.arccos] = {
+        'f->f': npyfuncs.np_real_acos_impl,
+        'd->d': npyfuncs.np_real_acos_impl,
+        'F->F': npyfuncs.np_complex_acos_impl,
+        'D->D': npyfuncs.np_complex_acos_impl,
+    }
+
+    ufunc_db[np.arctan] = {
+        'f->f': npyfuncs.np_real_atan_impl,
+        'd->d': npyfuncs.np_real_atan_impl,
+        'F->F': npyfuncs.np_complex_atan_impl,
+        'D->D': npyfuncs.np_complex_atan_impl,
+    }
+
+    ufunc_db[np.arctan2] = {
+        'ff->f': npyfuncs.np_real_atan2_impl,
+        'dd->d': npyfuncs.np_real_atan2_impl,
+    }
+
+    ufunc_db[np.hypot] = {
+        'ff->f': npyfuncs.np_real_hypot_impl,
+        'dd->d': npyfuncs.np_real_hypot_impl,
+    }
+
+    ufunc_db[np.sinh] = {
+        'f->f': npyfuncs.np_real_sinh_impl,
+        'd->d': npyfuncs.np_real_sinh_impl,
+        'F->F': npyfuncs.np_complex_sinh_impl,
+        'D->D': npyfuncs.np_complex_sinh_impl,
+    }
+
+    ufunc_db[np.cosh] = {
+        'f->f': npyfuncs.np_real_cosh_impl,
+        'd->d': npyfuncs.np_real_cosh_impl,
+        'F->F': npyfuncs.np_complex_cosh_impl,
+        'D->D': npyfuncs.np_complex_cosh_impl,
+    }
+
+    ufunc_db[np.tanh] = {
+        'f->f': npyfuncs.np_real_tanh_impl,
+        'd->d': npyfuncs.np_real_tanh_impl,
+        'F->F': npyfuncs.np_complex_tanh_impl,
+        'D->D': npyfuncs.np_complex_tanh_impl,
+    }
+
+    ufunc_db[np.arcsinh] = {
+        'f->f': npyfuncs.np_real_asinh_impl,
+        'd->d': npyfuncs.np_real_asinh_impl,
+        'F->F': npyfuncs.np_complex_asinh_impl,
+        'D->D': npyfuncs.np_complex_asinh_impl,
+    }
+
+    ufunc_db[np.arccosh] = {
+        'f->f': npyfuncs.np_real_acosh_impl,
+        'd->d': npyfuncs.np_real_acosh_impl,
+        'F->F': npyfuncs.np_complex_acosh_impl,
+        'D->D': npyfuncs.np_complex_acosh_impl,
+    }
+
+    ufunc_db[np.arctanh] = {
+        'f->f': npyfuncs.np_real_atanh_impl,
+        'd->d': npyfuncs.np_real_atanh_impl,
+        'F->F': npyfuncs.np_complex_atanh_impl,
+        'D->D': npyfuncs.np_complex_atanh_impl,
+    }
+
+    ufunc_db[np.deg2rad] = {
+        'f->f': npyfuncs.np_real_deg2rad_impl,
+        'd->d': npyfuncs.np_real_deg2rad_impl,
+    }
+
+    ufunc_db[np.radians] = ufunc_db[np.deg2rad]
+
+    ufunc_db[np.rad2deg] = {
+        'f->f': npyfuncs.np_real_rad2deg_impl,
+        'd->d': npyfuncs.np_real_rad2deg_impl,
+    }
+
+    ufunc_db[np.degrees] = ufunc_db[np.rad2deg]
+
+    ufunc_db[np.floor] = {
+        'f->f': npyfuncs.np_real_floor_impl,
+        'd->d': npyfuncs.np_real_floor_impl,
+    }
+
+    ufunc_db[np.ceil] = {
+        'f->f': npyfuncs.np_real_ceil_impl,
+        'd->d': npyfuncs.np_real_ceil_impl,
+    }
+
+    ufunc_db[np.trunc] = {
+        'f->f': npyfuncs.np_real_trunc_impl,
+        'd->d': npyfuncs.np_real_trunc_impl,
+    }
+
+    ufunc_db[np.fabs] = {
+        'f->f': npyfuncs.np_real_fabs_impl,
+        'd->d': npyfuncs.np_real_fabs_impl,
     }
 
     # Inject datetime64 support

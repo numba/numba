@@ -403,7 +403,6 @@ class TestUFuncs(TestCase):
     def test_conj_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.conj, flags=flags)
 
-    @_unimplemented
     def test_conj_ufunc_npm(self):
         self.test_conj_ufunc(flags=no_pyobj_flags)
 
@@ -458,23 +457,20 @@ class TestUFuncs(TestCase):
     def test_square_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.square, flags=flags)
 
-    @_unimplemented
     def test_square_ufunc_npm(self):
         self.test_square_ufunc(flags=no_pyobj_flags)
 
     def test_reciprocal_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.reciprocal, flags=flags)
 
-    @_unimplemented
     def test_reciprocal_ufunc_npm(self):
         self.test_reciprocal_ufunc(flags=no_pyobj_flags)
 
     def test_conjugate_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.conjugate, flags=flags)
 
-    @_unimplemented
     def test_conjugate_ufunc_npm(self):
-        self.test_reciprocal_ufunc(flags=no_pyobj_flags)
+        self.test_conjugate_ufunc(flags=no_pyobj_flags)
 
 
     ############################################################################
@@ -1245,9 +1241,10 @@ class TestLoopTypes(TestCase):
         for c_arg, py_arg in zip(c_args, py_args):
             # XXX should assertPreciseEqual() accept numpy arrays?
             prec = 'single' if c_arg.dtype.char in 'fF' else 'exact'
+            prec = 'double' if c_arg.dtype.char in 'dD' else prec
             for c, py in zip(c_arg, py_arg):
                 self.assertPreciseEqual(py, c, prec=prec,
-                    msg="arrays differ: expected %r, got %r" % (py_arg, c_arg))
+                    msg="arrays differ (%s): expected %r, got %r" % (prec, py_arg, c_arg))
 
     def _check_ufunc_loops(self, ufunc):
         fn = _make_ufunc_usecase(ufunc)
@@ -1256,6 +1253,8 @@ class TestLoopTypes(TestCase):
             try:
                 self._check_loop(fn, ufunc, loop)
             except AssertionError as e:
+                import traceback
+                traceback.print_exc()
                 _failed_loops.append('{2} {0}:{1}'.format(loop, str(e),
                                                           ufunc.__name__))
 
@@ -1288,9 +1287,9 @@ class TestLoopTypesNoPython(TestLoopTypes):
     _ufuncs = [np.add, np.subtract, np.multiply, np.divide, np.logaddexp,
                np.logaddexp2, np.true_divide, np.floor_divide, np.negative,
                np.power, np.abs, np.absolute,
-               np.sign, np.exp, np.exp2, np.log, np.log2,
-               np.log10, np.expm1, np.log1p, np.sqrt,
-               np.sin, np.cos, np.tan, np.arcsin, np.arccos,
+               np.sign, np.conj, np.exp, np.exp2, np.log, np.log2,
+               np.log10, np.expm1, np.log1p, np.sqrt, np.square, np.reciprocal,
+               np.conjugate, np.sin, np.cos, np.tan, np.arcsin, np.arccos,
                np.arctan, np.arctan2, np.sinh, np.cosh, np.tanh,
                np.arcsinh, np.arccosh, np.arctanh, np.deg2rad, np.rad2deg,
                np.degrees, np.radians,
@@ -1304,10 +1303,18 @@ class TestLoopTypesNoPython(TestLoopTypes):
 class TestLoopTypesComplexNoPython(TestLoopTypes):
     _compile_flags = no_pyobj_flags
     _ufuncs = [np.negative, np.add, np.subtract, np.multiply, np.divide,
-               np.true_divide, np.floor_divide]
+               np.true_divide, np.floor_divide, np.power, np.sign, np.abs,
+               np.absolute, np.rint, np.conj, np.conjugate, np.exp, np.exp2,
+               np.log, np.log2, np.log10, np.expm1, np.log1p, np.sqrt,
+               np.square, np.reciprocal, np.sin, np.cos, np.tan, np.arcsin,
+               np.arccos, np.arctan, np.sinh, np.cosh, np.tanh, np.arcsinh,
+               np.arccosh, np.arctanh ]
 
     # Test complex types
-    _supported_types = 'FD'
+    # note that some loops like "abs" contain reals as results, hence the
+    # _supported_types
+    _supported_types = 'FDfd'
+    _required_types = 'FD'
 
 
 @skip_on_numpy_16
