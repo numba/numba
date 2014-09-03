@@ -153,7 +153,7 @@ Floating functions
  isfinite            Yes          Yes
  isinf               Yes          Yes
  isnan               Yes          Yes
- signbit             Yes          No
+ signbit             Yes          Yes
  copysign            Yes          No
  nextafter           Yes          No
  modf                Yes          No

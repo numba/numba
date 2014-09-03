@@ -2000,11 +2000,13 @@ def np_complex_isfinite_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
     x, = args
     ty, = sig.args
+    fty = ty.underlying_float
+    b_f_sig = typing.signature(types.boolean, fty)
     complex_class = context.make_complex(ty)
     complex_val = complex_class(context, builder, value=x)
-    real_isfinite = np_real_isfinite_impl(context.builder, sig,
+    real_isfinite = np_real_isfinite_impl(context, builder, b_f_sig,
                                           [complex_val.real])
-    imag_isfinite = np_real_isfinite_impl(context.builder, sig,
+    imag_isfinite = np_real_isfinite_impl(context, builder, b_f_sig,
                                           [complex_val.imag])
 
     return builder.and_(real_isfinite, imag_isfinite)
@@ -2021,11 +2023,22 @@ def np_real_isinf_impl(context, builder, sig, args):
 
 def np_complex_isinf_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
-    x, = args
     ty, = sig.args
+    fty = ty.underlying_float
+    b_f_sig = typing.signature(types.boolean, fty)
     complex_class = context.make_complex(ty)
-    complex_val = complex_class(context, builder, value=x)
-    real_isinf = np_real_isinf_impl(context.builder, sig, [complex_val.real])
-    imag_isinf = np_real_isinf_impl(context.builder, sig, [complex_val.imag])
+    x = complex_class(context, builder, value=args[0])
+    real_isinf = np_real_isinf_impl(context, builder, b_f_sig, [x.real])
+    imag_isinf = np_real_isinf_impl(context, builder, b_f_sig, [x.imag])
 
     return builder.or_(real_isinf, imag_isinf)
+
+
+def np_real_signbit_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+    x, = args
+    ty, = sig.args
+    b_ff_sig = typing.signature(types.boolean, *[ty]*2)
+    ZERO = context.get_constant(ty, 0.0)
+
+    return builtins.real_lt_impl(context, builder, b_ff_sig, [x, ZERO])

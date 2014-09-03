@@ -136,7 +136,7 @@ _floating_functions = [ "isfinite", "isinf", "isnan", "signbit",
 # implemented.
 #
 # It also works as a nice TODO list for ufunc support :)
-_unsupported = set([ numpy.spacing, numpy.signbit,
+_unsupported = set([ numpy.spacing,
                      numpy.remainder,
                      numpy.fmod,
                      numpy.copysign ])
