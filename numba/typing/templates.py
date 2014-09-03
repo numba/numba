@@ -212,6 +212,13 @@ class ConcreteTemplate(FunctionTemplate):
         return self._select(cases, args, kws)
 
 
+class UntypedAttributeError(AttributeError):
+    def __init__(self, value, attr):
+        msg = 'Unknown attribute "{attr}" of type {type}'.format(type=value,
+                                                              attr=attr)
+        super(UntypedAttributeError, self).__init__(msg)
+
+
 class AttributeTemplate(object):
     def __init__(self, context):
         self.context = context
@@ -222,13 +229,20 @@ class AttributeTemplate(object):
             fn = self.generic_resolve
             if fn is NotImplemented:
                 attrty = self.context.resolve_module_constants(value, attr)
-                if attrty is not None:
-                    return attrty
-                raise NotImplementedError(value, attr)
+                if attrty is None:
+                    raise UntypedAttributeError(value=value, attr=attr)
+                return attrty
+
             else:
-                return fn(value, attr)
+                ret = fn(value, attr)
+                if ret is None:
+                    raise UntypedAttributeError(value=value, attr=attr)
+                return ret
         else:
-            return fn(value)
+            ret = fn(value)
+            if ret is None:
+                raise UntypedAttributeError(value=value, attr=attr)
+            return ret
 
     generic_resolve = NotImplemented
 

@@ -396,6 +396,16 @@ def array_len(context, builder, sig, args):
     shapeary = ary.shape
     return builder.extract_value(shapeary, 0)
 
+@builtin
+@implement("array.sum", types.Kind(types.Array))
+def array_sum(context, builder, sig, args):
+    def impl(arr):
+        c = 0
+        for i in arr:
+            c += i
+        return c
+
+    return context.reentrant(builder, impl, sig, args)
 
 #-------------------------------------------------------------------------------
 

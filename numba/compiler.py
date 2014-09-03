@@ -161,7 +161,7 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
     status.fail_reason = None
     status.use_python_mode = flags.force_pyobject
 
-    targetctx = targetctx.localized()
+    targetctx = targetctx.localized(flags=flags)
     targetctx.metadata['wraparound'] = not flags.no_wraparound
 
     if not status.use_python_mode:

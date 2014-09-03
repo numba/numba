@@ -142,7 +142,7 @@ class BaseContext(object):
         """
         pass
 
-    def localized(self):
+    def localized(self, flags):
         """
         Returns a localized context that contains extra environment information
         """
@@ -150,6 +150,7 @@ class BaseContext(object):
         obj.metadata = utils.UniqueDict()
         obj.linking = set()
         obj.exceptions = {}
+        obj.flags = flags
         return obj
 
     def insert_func_defn(self, defns):
@@ -477,10 +478,17 @@ class BaseContext(object):
     def get_function(self, fn, sig):
         if isinstance(fn, types.Function):
             key = fn.template.key
+
             if isinstance(key, MethodType):
                 overloads = self.defns[key.im_func]
+
+            elif sig.recvr:
+                sig = typing.signature(sig.return_type,
+                                       *((sig.recvr,) + sig.args))
+                overloads = self.defns[key]
             else:
                 overloads = self.defns[key]
+
         elif isinstance(fn, types.Dispatcher):
             key = fn.overloaded.get_overload(sig.args)
             overloads = self.defns[key]
@@ -491,6 +499,9 @@ class BaseContext(object):
             return _wrap_impl(overloads.find(sig), self, sig)
         except NotImplementedError:
             raise Exception("No definition for lowering %s%s" % (key, sig))
+
+    def get_bound_function(self, builder, obj, ty):
+        return obj
 
     def get_attribute(self, val, typ, attr):
         if isinstance(typ, types.Record):
@@ -855,6 +866,20 @@ class BaseContext(object):
 
     def get_dummy_type(self):
         return GENERIC_POINTER
+
+    def reentrant(self, builder, impl, sig, args):
+        """Invoke compiler to implement a function
+        """
+        from numba.compiler import compile_extra
+        cres = compile_extra(self.typing_context, self, impl, sig.args,
+                             sig.return_type, self.flags, locals={})
+        cres.llvm_func.linkage = lc.LINKAGE_LINKONCE_ODR
+        mod = cgutils.get_module(builder)
+        fn = self.declare_function(mod, cres.fndesc)
+        status, res = self.call_function(builder, fn, sig.return_type,
+                                         sig.args, args)
+        mod.link_in(cres.llvm_module, preserve=True)
+        return res
 
     def optimize(self, module):
         pass

@@ -447,11 +447,23 @@ class ArrayAttribute(AttributeTemplate):
     def resolve_size(self, ary):
         return types.intp
 
+    def resolve_sum(self, ary):
+        return types.BoundFunction(Array_sum, ary)
+
     def generic_resolve(self, ary, attr):
         if isinstance(ary.dtype, types.Record):
             if attr in ary.dtype.fields:
                 return types.Array(ary.dtype.typeof(attr), ndim=ary.ndim,
                                    layout='A')
+
+
+class Array_sum(AbstractTemplate):
+    key = "array.sum"
+
+    def generic(self, args, kws):
+        assert not args
+        assert not kws
+        return signature(self.this.dtype, recvr=self.this)
 
 
 class Array_flatten(AbstractTemplate):
