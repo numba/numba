@@ -872,23 +872,41 @@ class BaseContext(object):
     def get_dummy_type(self):
         return GENERIC_POINTER
 
-    def compile_internal(self, builder, impl, sig, args, locals={}):
+    def compile_internal(self, builder, impl, sig, args, locals={},
+                         cache_key=None):
         """Invoke compiler to implement a function for a nopython function
+
+        Args
+        ----
+        cache_key : hashable
+            A hashable object to use as the key for caching.
+            If it is `None`, no caching is performed.
         """
-        key = impl, sig, tuple(locals.items())
-        fndesc = self.cached_internal_func.get(key)
+        if cache_key is not None:
+            # Caching is enabled
+            fndesc = self.cached_internal_func.get(cache_key)
+        else:
+            # Caching is disabled
+            fndesc = None
+
         if fndesc is None:
+            # Compile
             cres = numba.compiler.compile_internal(self.typing_context, self,
                                                    impl, sig.args,
                                                    sig.return_type,
                                                    locals=locals)
             llvm_func = cres.llvm_func
+            # Set to linkonce one-definition-rule so that the function
+            # is removed once it is linked.
             llvm_func.linkage = lc.LINKAGE_LINKONCE_ODR
             self.add_libs([cres.llvm_module])
             fndesc = cres.fndesc
-            self.cached_internal_func[key] = fndesc
 
+            # Do cache if caching is enabled
+            if cache_key is not None:
+                self.cached_internal_func[cache_key] = fndesc
 
+        # Add call to the generated function
         llvm_mod = cgutils.get_module(builder)
         fn = self.declare_function(llvm_mod, fndesc)
         status, res = self.call_function(builder, fn, sig.return_type,
