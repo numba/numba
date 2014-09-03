@@ -8,9 +8,8 @@ from llvm.core import Type, Constant
 import llvm.core as lc
 
 from .imputils import (builtin, builtin_attr, implement, impl_attribute,
-                       impl_attribute_generic, iterator_impl, iternext_impl,
-                       struct_factory)
-from .. import typing, types, cgutils, utils, errcode
+                       iternext_impl, struct_factory)
+from .. import typing, types, cgutils, utils, errcode, intrinsics
 
 
 #-------------------------------------------------------------------------------
@@ -1313,4 +1312,30 @@ def math_pi_impl(context, builder, typ, value):
 @impl_attribute(types.Module(math), "e", types.float64)
 def math_e_impl(context, builder, typ, value):
     return context.get_constant(types.float64, math.e)
+
+# -----------------------------------------------------------------------------
+
+@builtin
+@implement(intrinsics.array_ravel, types.Kind(types.Array))
+def array_ravel_impl(context, builder, sig, args):
+    [arrty] = sig.args
+    [arr] = args
+    flatarrty = sig.return_type
+
+    flatarrcls = context.make_array(flatarrty)
+    arrcls = context.make_array(arrty)
+
+    flatarr = flatarrcls(context, builder)
+    arr = arrcls(context, builder, value=arr)
+
+    shapes = cgutils.unpack_tuple(builder, arr.shape, arrty.ndim)
+    size = reduce(builder.mul, shapes)
+    strides = cgutils.unpack_tuple(builder, arr.strides, arrty.ndim)
+    unit_stride = strides[0] if arrty.layout == 'F' else strides[-1]
+
+    flatarr.data = arr.data
+    flatarr.shape = cgutils.pack_array(builder, [size])
+    flatarr.strides = cgutils.pack_array(builder, [unit_stride])
+
+    return flatarr._getvalue()
 

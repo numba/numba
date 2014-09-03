@@ -15,6 +15,7 @@ registry = Registry()
 builtin_global = registry.register_global
 builtin_attr = registry.register_attr
 
+
 @builtin_attr
 class NumpyModuleAttribute(AttributeTemplate):
     # note: many unary ufuncs are added later on, using setattr
@@ -58,7 +59,7 @@ class Numpy_rules_ufunc(AbstractTemplate):
         if not all((isinstance(output, types.Array) for output in explicit_outputs)):
             msg = "ufunc '{0}' called with an explicit output that is not an array"
             raise TypingError(msg=msg.format(ufunc.__name__))
-        
+
         # find the kernel to use, based only in the input types (as does NumPy)
         base_types = [x.dtype if isinstance(x, types.Array) else x for x in args]
         ufunc_loop = ufunc_find_matching_loop(ufunc, base_types)
@@ -100,7 +101,7 @@ class Numpy_rules_ufunc(AbstractTemplate):
 
 _math_operations = [ "add", "subtract", "multiply",
                      "logaddexp", "logaddexp2", "true_divide",
-                     "floor_divide", "negative", "power", 
+                     "floor_divide", "negative", "power",
                      "remainder", "fmod", "absolute",
                      "rint", "sign", "conj", "exp", "exp2",
                      "log", "log2", "log10", "expm1", "log1p",
@@ -115,7 +116,7 @@ _trigonometric_functions = [ "sin", "cos", "tan", "arcsin",
                              "radians" ]
 
 _bit_twiddling_functions = ["bitwise_and", "bitwise_or",
-                            "bitwise_xor", "invert", 
+                            "bitwise_xor", "invert",
                             "left_shift", "right_shift",
                             "bitwise_not" ]
 

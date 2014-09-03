@@ -17,7 +17,7 @@ from __future__ import print_function, division, absolute_import
 from pprint import pprint
 import itertools
 
-from numba import ir, types, utils, config
+from numba import ir, types, config, utils
 from numba.config import PYVERSION
 from numba.utils import builtins
 
@@ -352,7 +352,7 @@ class TypeInferer(object):
 
     def dump(self):
         print('---- type variables ----')
-        pprint(utils.dict_values(self.typevars))
+        pprint(list(utils.itervalues(self.typevars)))
 
     def seed_type(self, name, typ):
         """All arguments should be seeded.

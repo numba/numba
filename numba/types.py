@@ -418,8 +418,22 @@ class SimpleIteratorType(IteratorType):
 class RangeType(SimpleIterableType):
     pass
 
+
 class RangeIteratorType(SimpleIteratorType):
     pass
+
+
+class NumpyFlatType(IteratorType):
+    def __init__(self, arrty):
+        self.array_type = arrty
+        self.yield_type = arrty.dtype
+        name = "array.flat({arrayty})".format(arrayty=arrty)
+        super(NumpyFlatType, self).__init__(name, param=True)
+
+
+    @property
+    def key(self):
+        return self.array_type
 
 
 class EnumerateType(IteratorType):
