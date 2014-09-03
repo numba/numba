@@ -1587,7 +1587,7 @@ def np_real_fabs_impl(context, builder, sig, args):
 ########################################################################
 # NumPy style predicates
 
-# For real and integer types rely on builtins... but complex ordering in 
+# For real and integer types rely on builtins... but complex ordering in
 # NumPy is lexicographic (while Python does not provide ordering).
 def np_complex_ge_impl(context, builder, sig, args):
     # equivalent to macro CGE in NumPy's loops.c.src
@@ -1958,18 +1958,74 @@ def np_complex_fmin_impl(context, builder, sig, args):
 
 
 ########################################################################
-# NumPy isnan
+# NumPy floating point misc
 
 def np_real_isnan_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+    x, = args
 
-    return builder.fcmp(lc.FCMP_UNO, args[0], args[0])
+    return builder.fcmp(lc.FCMP_UNO, x, x)
 
 
 def np_complex_isnan_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
 
-    ty = sig.args[0]
+    x, = args
+    ty, = sig.args
     complex_class = context.make_complex(ty)
-    complex_val = complex_class(context, builder, value=args[0])
+    complex_val = complex_class(context, builder, value=x)
+
     return builder.fcmp(lc.FCMP_UNO, complex_val.real, complex_val.imag)
+
+
+def _real_is_not_finite(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+    x, = args
+    ty, = sig.args
+    f_ff_sig = typing.signature(*[ty]*3)
+    sub = builtins.real_sub_impl(context, builder, f_ff_sig, [x, x])
+
+    return np_real_isnan_impl(context, builder, sig, [sub])
+
+
+def np_real_isfinite_impl(context, builder, sig, args):
+    # in NumPy, when there is not an appropriate builtin, it falls back to
+    # ! npy_isnan((x) + (-x)). Use this code to avoid having to add a call.
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+
+    return builder.not_(_real_is_not_finite(context, builder, sig, args))
+
+
+def np_complex_isfinite_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+    x, = args
+    ty, = sig.args
+    complex_class = context.make_complex(ty)
+    complex_val = complex_class(context, builder, value=x)
+    real_isfinite = np_real_isfinite_impl(context.builder, sig,
+                                          [complex_val.real])
+    imag_isfinite = np_real_isfinite_impl(context.builder, sig,
+                                          [complex_val.imag])
+
+    return builder.and_(real_isfinite, imag_isfinite)
+
+
+def np_real_isinf_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+    x, = args
+    not_finite = _real_is_not_finite(context, builder, sig, args)
+    not_nan = builder.fcmp(lc.FCMP_ORD, x, x)
+
+    return builder.and_(not_finite, not_nan)
+
+
+def np_complex_isinf_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+    x, = args
+    ty, = sig.args
+    complex_class = context.make_complex(ty)
+    complex_val = complex_class(context, builder, value=x)
+    real_isinf = np_real_isinf_impl(context.builder, sig, [complex_val.real])
+    imag_isinf = np_real_isinf_impl(context.builder, sig, [complex_val.imag])
+
+    return builder.or_(real_isinf, imag_isinf)

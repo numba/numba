@@ -150,8 +150,8 @@ Floating functions
 --------------  --------------------------
     name         python-mode    no-python
 ==============  =============  ===========
- isfinite            Yes          No
- isinf               Yes          No
+ isfinite            Yes          Yes
+ isinf               Yes          Yes
  isnan               Yes          Yes
  signbit             Yes          No
  copysign            Yes          No

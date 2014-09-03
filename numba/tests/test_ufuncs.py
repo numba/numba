@@ -724,14 +724,12 @@ class TestUFuncs(TestCase):
     def test_isfinite_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.isfinite, flags=flags)
 
-    @_unimplemented
     def test_isfinite_ufunc_npm(self):
         self.test_isfinite_ufunc(flags=no_pyobj_flags)
 
     def test_isinf_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.isinf, flags=flags)
 
-    @_unimplemented
     def test_isinf_ufunc_npm(self):
         self.test_isinf_ufunc(flags=no_pyobj_flags)
 
@@ -1278,7 +1276,7 @@ class TestLoopTypesNoPython(TestLoopTypes):
                np.logical_xor, np.logical_not, np.maximum, np.minimum,
                np.fmax, np.fmin, np.isnan, np.bitwise_and, np.bitwise_or,
                np.bitwise_xor, np.bitwise_not, np.invert, np.left_shift,
-               np.right_shift]
+               np.right_shift, np.isinf, np.isfinite ]
 
     # supported types are integral (signed and unsigned) as well as float and double
     # support for complex64(F) and complex128(D) should be coming soon.

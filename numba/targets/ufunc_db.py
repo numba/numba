@@ -738,6 +738,19 @@ def _fill_ufunc_db(ufunc_db):
         'D->?': npyfuncs.np_complex_isnan_impl,
     }
 
+    ufunc_db[np.isinf] = {
+        'f->?': npyfuncs.np_real_isinf_impl,
+        'd->?': npyfuncs.np_real_isinf_impl,
+        'F->?': npyfuncs.np_complex_isinf_impl,
+        'D->?': npyfuncs.np_complex_isinf_impl,
+    }
+
+    ufunc_db[np.isfinite] = {
+        'f->?': npyfuncs.np_real_isfinite_impl,
+        'd->?': npyfuncs.np_real_isfinite_impl,
+        'F->?': npyfuncs.np_complex_isfinite_impl,
+        'D->?': npyfuncs.np_complex_isfinite_impl,
+    }
 
     # bit twiddling functions
     ufunc_db[np.bitwise_and] = {
