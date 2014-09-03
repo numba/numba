@@ -766,21 +766,9 @@ class TestUFuncs(TestCase):
         self.test_modf_ufunc(flags=no_pyobj_flags)
 
 
-    # FIXME - ldexp does not have homogeneous arguments, so the usual tests won't
-    #         work as they reuse both inputs
-    @unittest.skipIf(is32bits or iswindows, "Some types are not supported on "
-                                       "32-bit "
-                               "platform")
-    @unittest.skip("this test needs fixing")
-    def test_ldexp_ufunc(self, flags=enable_pyobj_flags):
-        self.binary_int_ufunc_test(np.ldexp, flags=flags)
-
-    # FIXME
-    @unittest.skipIf(is32bits or iswindows,
-                     "Some types are not supported on 32-bit platform")
-    @unittest.skip("this tests needs fixing")
-    def test_ldexp_ufunc_npm(self):
-        self.test_ldexp_ufunc(flags=no_pyobj_flags)
+    # Note: there is no entry for ldexp as this harness isn't valid for this
+    #       ufunc. this is so because ldexp requires heterogeneous inputs.
+    #       However, this ufunc is tested by the TestLoopTypes test classes.
 
     def test_frexp_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.frexp, flags=flags)
