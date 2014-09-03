@@ -77,24 +77,24 @@ class TestUFuncs(TestCase):
 
     def setUp(self):
         self.inputs = [
-            (0, types.uint32),
-            (1, types.uint32),
-            (-1, types.int32),
-            (0, types.int32),
-            (1, types.int32),
-            (0, types.uint64),
-            (1, types.uint64),
-            (-1, types.int64),
-            (0, types.int64),
-            (1, types.int64),
+            (np.uint32(0), types.uint32),
+            (np.uint32(1), types.uint32),
+            (np.int32(-1), types.int32),
+            (np.int32(0), types.int32),
+            (np.int32(1), types.int32),
+            (np.uint64(0), types.uint64),
+            (np.uint64(1), types.uint64),
+            (np.int64(-1), types.int64),
+            (np.int64(0), types.int64),
+            (np.int64(1), types.int64),
 
-            (-0.5, types.float32),
-            (0.0, types.float32),
-            (0.5, types.float32),
+            (np.float32(-0.5), types.float32),
+            (np.float32(0.0), types.float32),
+            (np.float32(0.5), types.float32),
 
-            (-0.5, types.float64),
-            (0.0, types.float64),
-            (0.5, types.float64),
+            (np.float64(-0.5), types.float64),
+            (np.float64(0.0), types.float64),
+            (np.float64(0.5), types.float64),
 
             (np.array([0,1], dtype='u4'), types.Array(types.uint32, 1, 'C')),
             (np.array([0,1], dtype='u8'), types.Array(types.uint64, 1, 'C')),
@@ -134,17 +134,17 @@ class TestUFuncs(TestCase):
                 if int_output_type:
                     output_type = types.Array(int_output_type, 1, 'C')
                 else:
-                    output_type = types.Array(types.int64, 1, 'C')
+                    output_type = types.Array(ty, 1, 'C')
             elif ty in types.unsigned_domain:
                 if int_output_type:
                     output_type = types.Array(int_output_type, 1, 'C')
                 else:
-                    output_type = types.Array(types.uint64, 1, 'C')
+                    output_type = types.Array(ty, 1, 'C')
             else:
                 if float_output_type:
                     output_type = types.Array(float_output_type, 1, 'C')
                 else:
-                    output_type = types.Array(types.float64, 1, 'C')
+                    output_type = types.Array(ty, 1, 'C')
 
             cr = self.cache.compile(pyfunc, (input_type, output_type),
                                     flags=flags)
@@ -189,7 +189,8 @@ class TestUFuncs(TestCase):
                         print("Output mismatch for invalid input",
                               input_tuple, result, expected)
                     else:
-                        self.fail("%s != %s" % (result, expected))
+                        msg = "ufunc '{0}' failed for:\ninput ({1}):\n{2}\ngot ({3}):\n{4}\nexpected ({5}):\n{6}\n".format(ufunc.__name__, input_type, input_operand, output_type, result, expected.dtype, expected) 
+                        self.fail(msg)
 
 
     def binary_ufunc_test(self, ufunc, flags=enable_pyobj_flags,
@@ -748,15 +749,12 @@ class TestUFuncs(TestCase):
     def test_copysign_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test(np.copysign, flags=flags)
 
-    @_unimplemented
     def test_copysign_ufunc_npm(self):
         self.test_copysign_ufunc(flags=no_pyobj_flags)
 
-    @_unimplemented
     def test_nextafter_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test(np.nextafter, flags=flags)
 
-    @_unimplemented
     def test_nextafter_ufunc_npm(self):
         self.test_nextafter_ufunc(flags=no_pyobj_flags)
 
@@ -812,9 +810,8 @@ class TestUFuncs(TestCase):
     def test_spacing_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.spacing, flags=flags)
 
-    @_unimplemented
     def test_spacing_ufunc_npm(self):
-        self.test_spacing_ufunc(flags=nopyobj_flags)
+        self.test_spacing_ufunc(flags=no_pyobj_flags)
 
     ############################################################################
     # Other tests
@@ -1275,7 +1272,8 @@ class TestLoopTypesNoPython(TestLoopTypes):
                np.logical_xor, np.logical_not, np.maximum, np.minimum,
                np.fmax, np.fmin, np.isnan, np.bitwise_and, np.bitwise_or,
                np.bitwise_xor, np.bitwise_not, np.invert, np.left_shift,
-               np.right_shift, np.isinf, np.isfinite, np.signbit ]
+               np.right_shift, np.isinf, np.isfinite, np.signbit, np.copysign,
+               np.nextafter, np.spacing ]
 
     # supported types are integral (signed and unsigned) as well as float and double
     # support for complex64(F) and complex128(D) should be coming soon.

@@ -188,6 +188,10 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL(logaddexp2),
     NPYMATH_SYMBOL(rint),
     NPYMATH_SYMBOL(fabs),
+    NPYMATH_SYMBOL(copysign),
+    NPYMATH_SYMBOL(nextafter),
+    NPYMATH_SYMBOL(spacing),
+
 
     /* float functions */
     NPYMATH_SYMBOL(floorf),
@@ -227,6 +231,9 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL(ceilf),
     NPYMATH_SYMBOL(truncf),
     NPYMATH_SYMBOL(fabsf),
+    NPYMATH_SYMBOL(copysignf),
+    NPYMATH_SYMBOL(nextafterf),
+    NPYMATH_SYMBOL(spacingf),
 
     /* complex functions */
     NPYMATH_SYMBOL_EXPLICIT(cpow, ufunc_cpow),

@@ -154,15 +154,15 @@ Floating functions
  isinf               Yes          Yes
  isnan               Yes          Yes
  signbit             Yes          Yes
- copysign            Yes          No
- nextafter           Yes          No
+ copysign            Yes          Yes
+ nextafter           Yes          Yes
  modf                Yes          No
  ldexp               Yes*         No
  frexp               Yes          No
  floor               Yes          Yes
  ceil                Yes          Yes
  trunc               Yes          Yes
- spacing             Yes          No
+ spacing             Yes          Yes
 ==============  =============  ===========
 
 \* not supported on windows 32 bit

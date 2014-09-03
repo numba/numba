@@ -757,6 +757,21 @@ def _fill_ufunc_db(ufunc_db):
         'd->?': npyfuncs.np_real_signbit_impl,
     }
 
+    ufunc_db[np.copysign] = {
+        'ff->f': npyfuncs.np_real_copysign_impl,
+        'dd->d': npyfuncs.np_real_copysign_impl,
+    }
+
+    ufunc_db[np.nextafter] = {
+        'ff->f': npyfuncs.np_real_nextafter_impl,
+        'dd->d': npyfuncs.np_real_nextafter_impl,
+    }
+
+    ufunc_db[np.spacing] = {
+        'f->f': npyfuncs.np_real_spacing_impl,
+        'd->d': npyfuncs.np_real_spacing_impl,
+    }
+
     # bit twiddling functions
     ufunc_db[np.bitwise_and] = {
         '??->?': builtins.int_and_impl,

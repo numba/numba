@@ -2042,3 +2042,37 @@ def np_real_signbit_impl(context, builder, sig, args):
     ZERO = context.get_constant(ty, 0.0)
 
     return builtins.real_lt_impl(context, builder, b_ff_sig, [x, ZERO])
+
+
+def np_real_copysign_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.copysignf',
+        types.float64: 'numba.npymath.copysign',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'copysign')
+
+def np_real_nextafter_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.nextafterf',
+        types.float64: 'numba.npymath.nextafter',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'nextafter')
+
+def np_real_spacing_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.spacingf',
+        types.float64: 'numba.npymath.spacing',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'spacing')
