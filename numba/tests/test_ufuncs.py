@@ -628,7 +628,6 @@ class TestUFuncs(TestCase):
     def test_right_shift_ufunc(self, flags=enable_pyobj_flags):
         self.binary_int_ufunc_test(np.right_shift, flags=flags)
 
-    @_unimplemented
     def test_right_shift_ufunc_npm(self):
         self.test_right_shift_ufunc(flags=no_pyobj_flags)
 
@@ -1278,7 +1277,8 @@ class TestLoopTypesNoPython(TestLoopTypes):
                np.not_equal, np.equal, np.logical_and, np.logical_or,
                np.logical_xor, np.logical_not, np.maximum, np.minimum,
                np.fmax, np.fmin, np.isnan, np.bitwise_and, np.bitwise_or,
-               np.bitwise_xor, np.bitwise_not, np.invert, np.left_shift ]
+               np.bitwise_xor, np.bitwise_not, np.invert, np.left_shift,
+               np.right_shift]
 
     # supported types are integral (signed and unsigned) as well as float and double
     # support for complex64(F) and complex128(D) should be coming soon.

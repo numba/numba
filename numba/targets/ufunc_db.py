@@ -809,6 +809,19 @@ def _fill_ufunc_db(ufunc_db):
         'QQ->Q': builtins.int_shl_impl,
     }
 
+    ufunc_db[np.right_shift] = {
+        'bb->b': builtins.int_ashr_impl,
+        'BB->B': builtins.int_lshr_impl,
+        'hh->h': builtins.int_ashr_impl,
+        'HH->H': builtins.int_lshr_impl,
+        'ii->i': builtins.int_ashr_impl,
+        'II->I': builtins.int_lshr_impl,
+        'll->l': builtins.int_ashr_impl,
+        'LL->L': builtins.int_lshr_impl,
+        'qq->q': builtins.int_ashr_impl,
+        'QQ->Q': builtins.int_lshr_impl,
+    }
+
     # Inject datetime64 support
     try:
         from . import npdatetime
