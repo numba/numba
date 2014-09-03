@@ -796,6 +796,19 @@ def _fill_ufunc_db(ufunc_db):
         'Q->Q': builtins.int_invert_impl,
     }
 
+    ufunc_db[np.left_shift] = {
+        'bb->b': builtins.int_shl_impl,
+        'BB->B': builtins.int_shl_impl,
+        'hh->h': builtins.int_shl_impl,
+        'HH->H': builtins.int_shl_impl,
+        'ii->i': builtins.int_shl_impl,
+        'II->I': builtins.int_shl_impl,
+        'll->l': builtins.int_shl_impl,
+        'LL->L': builtins.int_shl_impl,
+        'qq->q': builtins.int_shl_impl,
+        'QQ->Q': builtins.int_shl_impl,
+    }
+
     # Inject datetime64 support
     try:
         from . import npdatetime

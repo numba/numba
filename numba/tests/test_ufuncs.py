@@ -216,17 +216,17 @@ class TestUFuncs(TestCase):
                 if int_output_type:
                     output_type = types.Array(int_output_type, 1, 'C')
                 else:
-                    output_type = types.Array(types.int64, 1, 'C')
+                    output_type = types.Array(ty, 1, 'C')
             elif ty in types.unsigned_domain:
                 if int_output_type:
                     output_type = types.Array(int_output_type, 1, 'C')
                 else:
-                    output_type = types.Array(types.uint64, 1, 'C')
+                    output_type = types.Array(ty, 1, 'C')
             else:
                 if float_output_type:
                     output_type = types.Array(float_output_type, 1, 'C')
                 else:
-                    output_type = types.Array(types.float64, 1, 'C')
+                    output_type = types.Array(ty, 1, 'C')
 
             cr = self.cache.compile(pyfunc, (input_type, input_type, output_type),
                                     flags=flags)
@@ -250,8 +250,9 @@ class TestUFuncs(TestCase):
                     self.assertTrue(np.allclose(result[np.invert(np.isnan(result))],
                                      expected[np.invert(np.isnan(expected))]))
             else:
+                msg = 'failed for:\ninput operand:\n{0}\ntype:\n{1}\ngot ({4}):\n{2}\nexpected ({5}):\n{3}\n'.format(input_operand, input_type, result, expected, result.dtype, expected.dtype)
                 self.assertTrue(np.all(result == expected) or
-                                np.allclose(result, expected))
+                                np.allclose(result, expected), msg=msg)
 
 
     def unary_int_ufunc_test(self, name=None, flags=enable_pyobj_flags):
@@ -621,9 +622,8 @@ class TestUFuncs(TestCase):
     def test_left_shift_ufunc(self, flags=enable_pyobj_flags):
         self.binary_int_ufunc_test(np.left_shift, flags=flags)
 
-    @_unimplemented
     def test_left_shift_ufunc_npm(self):
-        self.test_left_shift_ufunc_npm(flags=no_pyobj_flags)
+        self.test_left_shift_ufunc(flags=no_pyobj_flags)
 
     def test_right_shift_ufunc(self, flags=enable_pyobj_flags):
         self.binary_int_ufunc_test(np.right_shift, flags=flags)
@@ -1278,7 +1278,7 @@ class TestLoopTypesNoPython(TestLoopTypes):
                np.not_equal, np.equal, np.logical_and, np.logical_or,
                np.logical_xor, np.logical_not, np.maximum, np.minimum,
                np.fmax, np.fmin, np.isnan, np.bitwise_and, np.bitwise_or,
-               np.bitwise_xor, np.bitwise_not, np.invert ]
+               np.bitwise_xor, np.bitwise_not, np.invert, np.left_shift ]
 
     # supported types are integral (signed and unsigned) as well as float and double
     # support for complex64(F) and complex128(D) should be coming soon.
