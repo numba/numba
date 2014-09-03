@@ -81,7 +81,7 @@ def alloc_timedelta_result(builder, name='ret'):
     """
     Allocate a NaT-initialized datetime64 (or timedelta64) result slot.
     """
-    ret = cgutils.alloca_once(builder, TIMEDELTA64, name)
+    ret = cgutils.alloca_once(builder, TIMEDELTA64, name=name)
     builder.store(NAT, ret)
     return ret
 
@@ -89,7 +89,7 @@ def alloc_boolean_result(builder, name='ret'):
     """
     Allocate an uninitialized boolean result slot.
     """
-    ret = cgutils.alloca_once(builder, Type.int(1), name)
+    ret = cgutils.alloca_once(builder, Type.int(1), name=name)
     return ret
 
 def is_not_nat(builder, val):
@@ -258,7 +258,7 @@ def timedelta_over_timedelta(context, builder, sig, args):
     [ta, tb] = sig.args
     not_nan = are_not_nat(builder, [va, vb])
     ll_ret_type = context.get_value_type(sig.return_type)
-    ret = cgutils.alloca_once(builder, ll_ret_type, 'ret')
+    ret = cgutils.alloca_once(builder, ll_ret_type, name='ret')
     builder.store(Constant.real(ll_ret_type, float('nan')), ret)
     with cgutils.if_likely(builder, not_nan):
         va, vb = normalize_timedeltas(context, builder, va, vb, ta, tb)
