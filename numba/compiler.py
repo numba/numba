@@ -114,6 +114,11 @@ class _CompileStatus(object):
     """
     __slots__ = 'fail_reason', 'use_python_mode', 'can_fallback'
 
+    def __init__(self, can_fallback, use_python_mode):
+        self.fail_reason = None
+        self.use_python_mode = use_python_mode
+        self.can_fallback = can_fallback
+
 
 @contextmanager
 def _fallback_context(status):
@@ -147,22 +152,43 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
 
 
 def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
-                     locals, lifted=(),
-                     func_attr=DEFAULT_FUNCTION_ATTRIBUTES):
-    ### Front-end: Analyze bytecode, generate Numba IR, infer types
+                     locals, lifted=(), func_attr=DEFAULT_FUNCTION_ATTRIBUTES):
+    status = _CompileStatus(can_fallback=flags.enable_pyobject,
+                            use_python_mode=flags.force_pyobject)
+    targetctx = targetctx.localized()
+    targetctx.metadata['wraparound'] = not flags.no_wraparound
 
+    return _compile_core(typingctx, targetctx, bc, args, return_type, flags,
+                         locals, lifted, func_attr, status)
+
+
+def compile_internal(typingctx, targetctx, func, args, return_type, locals={}):
+    """Compiler entry point with compiling internal implementation within a
+    nopython function.
+    """
+
+    status = _CompileStatus(can_fallback=False, use_python_mode=False)
+    lifted = ()
+
+    bc = bytecode.ByteCode(func=func)
+    if config.DUMP_BYTECODE:
+        print(bc.dump())
+    func_attr = get_function_attributes(func)
+
+    flags = DEFAULT_FLAGS.copy()
+    flags.set("no_compile")
+
+    return _compile_core(typingctx, targetctx, bc, args, return_type,
+                         flags, locals, lifted, func_attr, status)
+
+
+def _compile_core(typingctx, targetctx, bc, args, return_type, flags, locals,
+                  lifted, func_attr, status):
+    ### Front-end: Analyze bytecode, generate Numba IR, infer types
     interp = translate_stage(bc)
     nargs = len(interp.argspec.args)
     if len(args) > nargs:
         raise TypeError("Too many argument types")
-
-    status = _CompileStatus()
-    status.can_fallback = flags.enable_pyobject
-    status.fail_reason = None
-    status.use_python_mode = flags.force_pyobject
-
-    targetctx = targetctx.localized(flags=flags)
-    targetctx.metadata['wraparound'] = not flags.no_wraparound
 
     if not status.use_python_mode:
         with _fallback_context(status):
@@ -235,18 +261,18 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
     if status.use_python_mode:
         # Object mode compilation
         func, lmod, lfunc, fndesc = py_lowering_stage(targetctx, interp,
-                                                             flags.no_compile)
+                                                      flags.no_compile)
         if len(args) != nargs:
             # append missing
             args = tuple(args) + (types.pyobject,) * (nargs - len(args))
     else:
         # Native mode compilation
         func, lmod, lfunc, fndesc = native_lowering_stage(targetctx,
-                                                                 interp,
-                                                                 typemap,
-                                                                 return_type,
-                                                                 calltypes,
-                                                                 flags.no_compile)
+                                                          interp,
+                                                          typemap,
+                                                          return_type,
+                                                          calltypes,
+                                                          flags.no_compile)
 
     signature = typing.signature(return_type, *args)
 
@@ -265,12 +291,15 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
 
     # Warn if compiled function in object mode and force_pyobject not set
     if status.use_python_mode and not flags.force_pyobject:
+        warn_msg = ('Function "{name}" was compiled in object mode '
+                         'without forceobj=True').format(name=func_attr.name)
+
         if len(lifted) > 0:
-            warn_msg = 'Function "%s" was compiled in object mode without forceobj=True, but has lifted loops.' % func_attr.name,
-        else:
-            warn_msg = 'Function "%s" was compiled in object mode without forceobj=True.' % func_attr.name,
-        warnings.warn_explicit(warn_msg, config.NumbaWarning,
-                               func_attr.filename, func_attr.lineno)
+            warn_msg += ', but has lifted loops.'
+
+        warnings.warn_explicit(warn_msg,
+                               config.NumbaWarning, func_attr.filename,
+                               func_attr.lineno)
 
     return cr
 
@@ -384,14 +413,15 @@ def native_lowering_stage(targetctx, interp, typemap, restype, calltypes,
     lower = lowering.Lower(targetctx, fndesc, interp)
     lower.lower()
 
+    # Linking depending libraries
+    targetctx.link_dependencies(lower.module, targetctx.linking)
+
     if nocompile:
         return None, lower.module, lower.function, fndesc
     else:
         # Prepare for execution
         cfunc = targetctx.get_executable(lower.function, fndesc, lower.env)
-
         targetctx.insert_user_function(cfunc, fndesc)
-
         return cfunc, lower.module, lower.function, fndesc
 
 

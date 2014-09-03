@@ -6,7 +6,8 @@ import llvm.core as lc
 from llvm.core import Type, Constant
 import numpy
 
-from numba import _dynfunc, types, utils, cgutils, typing, numpy_support, errcode
+import numba
+from numba import types, utils, cgutils, typing, numpy_support, errcode
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, python_attr_impl,
                                     builtin_registry, impl_attribute,
@@ -142,7 +143,7 @@ class BaseContext(object):
         """
         pass
 
-    def localized(self, flags):
+    def localized(self):
         """
         Returns a localized context that contains extra environment information
         """
@@ -150,8 +151,12 @@ class BaseContext(object):
         obj.metadata = utils.UniqueDict()
         obj.linking = set()
         obj.exceptions = {}
-        obj.flags = flags
+        obj.cached_internal_func = {}
         return obj
+
+    def link_dependencies(self, module, depends):
+        for lib in depends:
+            module.link_in(lib, preserve=True)
 
     def insert_func_defn(self, defns):
         for defn in defns:
@@ -867,18 +872,28 @@ class BaseContext(object):
     def get_dummy_type(self):
         return GENERIC_POINTER
 
-    def reentrant(self, builder, impl, sig, args):
-        """Invoke compiler to implement a function
+    def compile_internal(self, builder, impl, sig, args, locals={}):
+        """Invoke compiler to implement a function for a nopython function
         """
-        from numba.compiler import compile_extra
-        cres = compile_extra(self.typing_context, self, impl, sig.args,
-                             sig.return_type, self.flags, locals={})
-        cres.llvm_func.linkage = lc.LINKAGE_LINKONCE_ODR
-        mod = cgutils.get_module(builder)
-        fn = self.declare_function(mod, cres.fndesc)
+        key = impl, sig, tuple(locals.items())
+        fndesc = self.cached_internal_func.get(key)
+        if fndesc is None:
+            cres = numba.compiler.compile_internal(self.typing_context, self,
+                                                   impl, sig.args,
+                                                   sig.return_type,
+                                                   locals=locals)
+            llvm_func = cres.llvm_func
+            llvm_func.linkage = lc.LINKAGE_LINKONCE_ODR
+            self.add_libs([cres.llvm_module])
+            fndesc = cres.fndesc
+            self.cached_internal_func[key] = fndesc
+
+
+        llvm_mod = cgutils.get_module(builder)
+        fn = self.declare_function(llvm_mod, fndesc)
         status, res = self.call_function(builder, fn, sig.return_type,
                                          sig.args, args)
-        mod.link_in(cres.llvm_module, preserve=True)
+
         return res
 
     def optimize(self, module):

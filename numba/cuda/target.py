@@ -122,10 +122,6 @@ class CUDATargetContext(BaseContext):
         module.verify()
         return wrapfn
 
-    def link_dependencies(self, module, depends):
-        for lib in depends:
-            module.link_in(lib, preserve=True)
-
     def make_constant_array(self, builder, typ, ary):
         """
         Return dummy value.
