@@ -224,25 +224,21 @@ class AttributeTemplate(object):
         self.context = context
 
     def resolve(self, value, attr):
+        ret = self._resolve(value, attr)
+        if ret is None:
+            raise UntypedAttributeError(value=value, attr=attr)
+        return ret
+
+    def _resolve(self, value, attr):
         fn = getattr(self, "resolve_%s" % attr, None)
         if fn is None:
             fn = self.generic_resolve
             if fn is NotImplemented:
-                attrty = self.context.resolve_module_constants(value, attr)
-                if attrty is None:
-                    raise UntypedAttributeError(value=value, attr=attr)
-                return attrty
-
+                return self.context.resolve_module_constants(value, attr)
             else:
-                ret = fn(value, attr)
-                if ret is None:
-                    raise UntypedAttributeError(value=value, attr=attr)
-                return ret
+                return fn(value, attr)
         else:
-            ret = fn(value)
-            if ret is None:
-                raise UntypedAttributeError(value=value, attr=attr)
-            return ret
+            return fn(value)
 
     generic_resolve = NotImplemented
 
