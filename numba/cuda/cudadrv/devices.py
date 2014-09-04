@@ -53,7 +53,7 @@ class _gpus(object):
 
 
 gpus = _gpus()
-
+del _gpus
 
 class GPU(object):
     """Proxy into driver.Device
@@ -105,8 +105,7 @@ class GPU(object):
 
 
 def get_gpu(i):
-    init_gpus()
-    return _gpus[i]
+    return gpus[i]
 
 
 _gpustack = servicelib.TLStack()
