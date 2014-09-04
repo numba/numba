@@ -183,4 +183,33 @@ del _math_operations, _trigonometric_functions, _bit_twiddling_functions
 del _comparison_functions, _floating_functions, _unsupported
 del _aliases, _numpy_ufunc
 
+
+# -----------------------------------------------------------------------------
+# Install global functions
+
+class Numpy_generic_reduction(AbstractTemplate):
+    def generic(self, args, kws):
+        assert not kws
+        [arr] = args
+        return signature(arr.dtype, arr)
+
+
+def _specialize_generic_reduction(key):
+    glb = dict(key=key)
+    return type("Numpy_reduce_{0}".format(key), (Numpy_generic_reduction,),
+                glb)
+
+
+_global_funcs = {
+    'sum': _specialize_generic_reduction(numpy.sum),
+}
+
+for k, v in _global_funcs.items():
+    setattr(NumpyModuleAttribute, "resolve_{0}".format(k),
+            lambda self, mod: types.Function(v))
+
+del _global_funcs
+
 builtin_global(numpy, types.Module(numpy))
+
+

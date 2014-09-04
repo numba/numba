@@ -8,6 +8,7 @@ from functools import reduce
 
 import llvm.core as lc
 
+import numpy
 from llvm.core import Constant
 from numba import errcode
 from numba import types, cgutils
@@ -426,6 +427,15 @@ def array_sum(context, builder, sig, args):
                                         cache_key=(array_sum, sig,
                                                    arrty.dtype))
 
+
+@builtin
+@implement(numpy.sum, types.Kind(types.Array))
+def numpy_sum(context, builder, sig, args):
+    def impl(arr):
+        return arr.sum()
+
+    return context.compile_internal(builder, impl, sig, args)
+
 #-------------------------------------------------------------------------------
 
 
@@ -592,4 +602,5 @@ def iternext_numpy_flatiter(context, builder, sig, args, result):
             # Set first index to out-of-bound
             idxptr = builder.gep(indptr, [context.get_constant(types.intp, 0)])
             builder.store(shapes[0], idxptr)
+
 

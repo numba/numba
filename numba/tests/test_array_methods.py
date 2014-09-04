@@ -8,6 +8,10 @@ def array_sum(arr):
     return arr.sum()
 
 
+def array_sum_global(arr):
+    return np.sum(arr)
+
+
 def array_flat(arr, out):
     for i, v in enumerate(arr.flat):
         out[i] = v
@@ -99,6 +103,16 @@ class TestArrayMethods(unittest.TestCase):
 
         self.assertTrue(np.all(out == nb_out))
 
+    def test_array_sum_global(self):
+        arr = np.arange(10, dtype=np.int32)
+        arrty = typeof(arr)
+        self.assertEqual(arrty.ndim, 1)
+        self.assertEqual(arrty.layout, 'C')
+
+        cres = compile_isolated(array_sum_global, [arrty])
+        cfunc = cres.entry_point
+
+        self.assertEqual(np.sum(arr), cfunc(arr))
 
 if __name__ == '__main__':
     unittest.main()
