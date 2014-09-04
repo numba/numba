@@ -338,7 +338,7 @@ class TypeInferer(object):
 
     def dump(self):
         print('---- type variables ----')
-        pprint(utils.dict_values(self.typevars))
+        pprint(list(utils.itervalues(self.typevars)))
 
     def seed_type(self, name, typ):
         """All arguments should be seeded.

@@ -693,6 +693,8 @@ class Object(Type):
 
 class Optional(Type):
     def __init__(self, typ):
+        assert typ != none
+        assert not isinstance(typ, Optional)
         self.type = typ
         name = "?%s" % typ
         super(Optional, self).__init__(name, param=True)
@@ -808,6 +810,9 @@ ulong = _make_unsigned(numpy.long)
 longlong = _make_signed(numpy.longlong)
 ulonglong = _make_unsigned(numpy.longlong)
 
+# optional types
+double_or_none = Optional(double)
+
 __all__ = '''
 int8
 int16
@@ -853,4 +858,5 @@ f4
 f8
 c8
 c16
+double_or_none
 '''.split()

@@ -338,6 +338,12 @@ class BaseContext(object):
         type.
         """
         # TODO: should add an option to reject unsafe type conversion
+        if types.none in (first, second):
+            if first == types.none:
+                return types.Optional(second)
+            elif second == types.none:
+                return types.Optional(first)
+
         d = self.type_compatibility(fromty=first, toty=second)
         if d is None:
             # Complex is not allowed to downcast implicitly.
