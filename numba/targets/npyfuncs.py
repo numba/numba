@@ -58,13 +58,17 @@ def _call_func_by_name_with_cast(context, builder, sig, args,
 
 
 def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
-    # assumes types in the sig are homogeneity.
+    # for most cases the functions are homogeneous on all their types.
+    # this code dispatches on the first argument type as it is the most useful
+    # for our uses (all cases but ldexp are homogeneous in all types, and
+    # dispatching on the first argument type works of ldexp as well)
+    #
     # assumes that the function pointed by func_name has the type
     # signature sig (but needs translation to llvm types).
 
-    ty = sig.return_type
+    ty = sig.args[0]
     try:
-        func_name = table[ty] # any would do... homogeneity
+        func_name = table[ty]
     except KeyError as e:
         msg = "No {0} function for real type {1}".format(user_name, str(e))
         raise lowering.LoweringError(msg)
@@ -2076,3 +2080,24 @@ def np_real_spacing_impl(context, builder, sig, args):
 
     return _dispatch_func_by_name_type(context, builder, sig, args,
                                        dispatch_table, 'spacing')
+
+
+def np_real_ldexp_impl(context, builder, sig, args):
+    # this one is slightly different to other ufuncs.
+    # arguments are not homogeneous and second arg may come as
+    # an 'i' or an 'l'.
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.ldexpf',
+        types.float64: 'numba.npymath.ldexp',
+    }
+
+    # the functions expect the second argument to be have a C int type
+    x1, x2 = args
+    ty1, ty2 = sig.args
+    # note that types.intc should be equivalent to int_ that is
+    # 'NumPy's default int')
+    x2 = context.cast(builder, x2, ty2, types.intc)
+    f_fi_sig = typing.signature(ty1, ty1, types.intc)
+    return _dispatch_func_by_name_type(context, builder, f_fi_sig, [x1, x2],
+                                       dispatch_table, 'ldexp')

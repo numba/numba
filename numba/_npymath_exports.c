@@ -8,6 +8,8 @@
 
 #include "_pymodule.h"
 #include <numpy/npy_math.h>
+#include <math.h>
+
 
 /* Some functions require being adapted from the ones in npymath for
    use in numpy loops. It is easier to do this at this point than having
@@ -191,7 +193,10 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL(copysign),
     NPYMATH_SYMBOL(nextafter),
     NPYMATH_SYMBOL(spacing),
-
+    /* npy_ldexp and npy_frexp appear in npy_math.h past NumPy 1.9, so link
+       directly to the math.h versions. */
+    NPYMATH_SYMBOL_EXPLICIT(ldexp, ldexp),
+    NPYMATH_SYMBOL_EXPLICIT(frexp, frexp),
 
     /* float functions */
     NPYMATH_SYMBOL(floorf),
@@ -234,6 +239,10 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL(copysignf),
     NPYMATH_SYMBOL(nextafterf),
     NPYMATH_SYMBOL(spacingf),
+    /* npy_ldexpf and npy_frexpf appear in npy_math.h past NumPy 1.9, so link
+       directly to the math.h versions. */
+    NPYMATH_SYMBOL_EXPLICIT(ldexpf, ldexpf),
+    NPYMATH_SYMBOL_EXPLICIT(frexpf, frexpf),
 
     /* complex functions */
     NPYMATH_SYMBOL_EXPLICIT(cpow, ufunc_cpow),
@@ -286,4 +295,3 @@ MOD_INIT(_npymath_exports) {
 
     return MOD_SUCCESS_VAL(module);
 }
-

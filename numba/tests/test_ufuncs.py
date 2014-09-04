@@ -1261,7 +1261,7 @@ class TestLoopTypesNoPython(TestLoopTypes):
                np.fmax, np.fmin, np.isnan, np.bitwise_and, np.bitwise_or,
                np.bitwise_xor, np.bitwise_not, np.invert, np.left_shift,
                np.right_shift, np.isinf, np.isfinite, np.signbit, np.copysign,
-               np.nextafter, np.spacing ]
+               np.nextafter, np.spacing, np.ldexp ]
 
     # supported types are integral (signed and unsigned) as well as float and double
     # support for complex64(F) and complex128(D) should be coming soon.

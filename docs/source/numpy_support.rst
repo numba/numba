@@ -157,7 +157,7 @@ Floating functions
  copysign            Yes          Yes
  nextafter           Yes          Yes
  modf                Yes          No
- ldexp               Yes*         No
+ ldexp               Yes*         Yes
  frexp               Yes          No
  floor               Yes          Yes
  ceil                Yes          Yes

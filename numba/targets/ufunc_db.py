@@ -772,6 +772,13 @@ def _fill_ufunc_db(ufunc_db):
         'd->d': npyfuncs.np_real_spacing_impl,
     }
 
+    ufunc_db[np.ldexp] = {
+        'fi->f': npyfuncs.np_real_ldexp_impl,
+        'fl->f': npyfuncs.np_real_ldexp_impl,
+        'di->d': npyfuncs.np_real_ldexp_impl,
+        'dl->d': npyfuncs.np_real_ldexp_impl,
+    }
+
     # bit twiddling functions
     ufunc_db[np.bitwise_and] = {
         '??->?': builtins.int_and_impl,
