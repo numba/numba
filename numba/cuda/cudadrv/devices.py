@@ -5,30 +5,54 @@ from __future__ import print_function, absolute_import, division
 import functools
 from numba import servicelib
 from .driver import driver
+import threading
 
 
-class _GPUListProxy(object):
+class _gpus(object):
+    """A thread local list of GPU instances
+    """
+
+    def __init__(self):
+        self._tls = threading.local()
+
+    @property
+    def _gpus(self):
+        try:
+            return self._tls.gpus
+        except AttributeError:
+            self._tls.gpus = self._init_gpus()
+            return self._tls.gpus
+
+    def _init_gpus(self):
+        gpus = []
+        for num in range(driver.get_device_count()):
+            device = driver.get_device(num)
+            gpus.append(GPU(device))
+        return gpus
+
     def __getitem__(self, item):
-        init_gpus()
-        return _gpus[item]
+        return self._gpus[item]
+
+    def append(self, item):
+        return self._gpus.append(item)
+
+    def __len__(self):
+        return len(self._gpus)
+
+    def __nonzero__(self):
+        return bool(self._gpus)
+
+    def __iter__(self):
+        return iter(self._gpus)
+
+    __bool__ = __nonzero__
+
+    def reset(self):
+        for gpu in self:
+            gpu.reset()
 
 
-_gpus = []
-gpus = _GPUListProxy()
-
-
-def init_gpus():
-    """
-    Populates global "gpus" as a list of GPU objects
-    """
-    if _gpus:
-        assert len(_gpus)
-        return
-    for num in range(driver.get_device_count()):
-        device = driver.get_device(num)
-        gpu = GPU(device)
-        _gpus.append(gpu)
-        globals()['gpu%d' % num] = gpu
+gpus = _gpus()
 
 
 class GPU(object):
@@ -117,8 +141,7 @@ def require_context(fn):
 
 
 def reset():
-    for gpu in _gpus:
-        gpu.reset()
+    gpus.reset()
     _gpustack.clear()
 
 

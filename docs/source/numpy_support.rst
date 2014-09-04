@@ -55,7 +55,7 @@ Math operations
  fabs                Yes          Yes
  rint                Yes          Yes
  sign                Yes          Yes
- conj                Yes          No
+ conj                Yes          Yes
  exp                 Yes          Yes
  exp2                Yes          Yes
  log                 Yes          Yes
@@ -64,9 +64,9 @@ Math operations
  expm1               Yes          Yes
  log1p               Yes          Yes
  sqrt                Yes          Yes
- square              Yes          No
- reciprocal          Yes          No
- conjugate           Yes          No
+ square              Yes          Yes
+ reciprocal          Yes          Yes
+ conjugate           Yes          Yes
 ==============  =============  ===========
 
 

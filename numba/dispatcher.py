@@ -1,17 +1,14 @@
 from __future__ import print_function, division, absolute_import
-import inspect
-from collections import namedtuple
 import contextlib
-import numpy
 import functools
+import inspect
+import sys
 
-from numba.config import PYVERSION
 from numba import _dispatcher, compiler, utils
 from numba.typeconv.rules import default_type_manager
 from numba import typing
 from numba.typing.templates import resolve_overload
 from numba import types, sigutils
-from numba import numpy_support
 from numba.bytecode import get_code_object
 
 
@@ -42,7 +39,7 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         self.doc = py_func.__doc__
         self._compiling = False
 
-        self._finalizer = self._make_finalizer()
+        utils.finalize(self, self._make_finalizer())
 
     def _make_finalizer(self):
         """
@@ -51,9 +48,9 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         """
         overloads = self.overloads
         targetctx = self.targetctx
-        # Early-bind utils.shutting_down() into the closure variables.
-        from numba.utils import shutting_down
-        def finalizer():
+        # Early-bind utils.shutting_down() into the function's local namespace
+        # (see issue #689)
+        def finalizer(shutting_down=utils.shutting_down):
             # The finalizer may crash at shutdown, skip it (resources
             # will be cleared by the process exiting, anyway).
             if shutting_down():
@@ -67,6 +64,7 @@ class _OverloadedBase(_dispatcher.Dispatcher):
                 except KeyError:
                     # Not a native function (object mode presumably)
                     pass
+
         return finalizer
 
     @property
@@ -146,12 +144,12 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         sig = tuple([self.typeof_pyval(a) for a in args])
         return self.jit(sig)
 
-    def inspect_types(self):
-        for ver, res in utils.dict_iteritems(self._compileinfos):
-            print("%s %s" % (self.py_func.__name__, ver))
-            print('-' * 80)
-            print(res.type_annotation)
-            print('=' * 80)
+    def inspect_types(self, file=sys.stdout):
+        for ver, res in utils.iteritems(self._compileinfos):
+            print("%s %s" % (self.py_func.__name__, ver), file=file)
+            print('-' * 80, file=file)
+            print(res.type_annotation, file=file)
+            print('=' * 80, file=file)
 
     def _explain_ambiguous(self, *args, **kws):
         assert not kws, "kwargs not handled"
@@ -162,44 +160,21 @@ class _OverloadedBase(_dispatcher.Dispatcher):
     def __repr__(self):
         return "%s(%s)" % (type(self).__name__, self.py_func)
 
-    @classmethod
-    def typeof_pyval(cls, val):
+    def typeof_pyval(self, val):
         """
+        Resolve the Numba type of Python value *val*.
         This is called from numba._dispatcher as a fallback if the native code
         cannot decide the type.
         """
-        if isinstance(val, numpy.ndarray):
-            # TODO complete dtype mapping
-            dtype = numpy_support.from_dtype(val.dtype)
-            ndim = val.ndim
-            if ndim == 0:
-                # is array scalar
-                return dtype
-            layout = numpy_support.map_layout(val)
-            aryty = types.Array(dtype, ndim, layout)
-            return aryty
-
-        elif isinstance(val, numpy.record):
-            return numpy_support.from_dtype(val.dtype)
-
-        # The following are handled in the C version for exact type match
-        # So test these later
-        elif isinstance(val, utils.INT_TYPES):
+        if isinstance(val, utils.INT_TYPES):
+            # Ensure no autoscaling of integer type, to match the
+            # typecode() function in _dispatcher.c.
             return types.int64
 
-        elif isinstance(val, float):
-            return types.float64
-
-        elif isinstance(val, complex):
-            return types.complex128
-
-        elif numpy_support.is_arrayscalar(val):
-            # Array scalar
-            return numpy_support.from_dtype(numpy.dtype(type(val)))
-
-        # Other object
-        else:
-            return getattr(val, "_numba_type_", types.pyobject)
+        tp = self.typingctx.resolve_data_type(val)
+        if tp is None:
+            tp = types.pyobject
+        return tp
 
 
 class Overloaded(_OverloadedBase):

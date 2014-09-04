@@ -179,6 +179,8 @@ The corresponding CFG for this bytecode is::
 The numbers in the CFG refer to the bytecode offsets shown just to the left
 of the opcode names above.
 
+.. _arch_generate_numba_ir:
+
 Stage 2: Generate the Numba IR
 ------------------------------
 

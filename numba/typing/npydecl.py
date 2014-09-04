@@ -7,9 +7,7 @@ from .templates import (AttributeTemplate, AbstractTemplate,
                                     Registry, signature)
 
 from ..numpy_support import (ufunc_find_matching_loop,
-                             numba_types_to_numpy_letter_types,
-                             numpy_letter_types_to_numba_types,
-                             supported_ufunc_loop)
+                             supported_ufunc_loop, as_dtype)
 
 from ..typeinfer import TypingError
 
@@ -63,38 +61,33 @@ class Numpy_rules_ufunc(AbstractTemplate):
         
         # find the kernel to use, based only in the input types (as does NumPy)
         base_types = [x.dtype if isinstance(x, types.Array) else x for x in args]
-        letter_arg_types = numba_types_to_numpy_letter_types(base_types[:nin])
-        ufunc_loop = ufunc_find_matching_loop(ufunc, letter_arg_types)
+        ufunc_loop = ufunc_find_matching_loop(ufunc, base_types)
         if ufunc_loop is None:
-            TypingError("can't resolve ufunc {0} for types {1}".format(ufunc.__name__, args))
+            raise TypingError("can't resolve ufunc {0} for types {1}".format(ufunc.__name__, args))
 
         # check if all the types involved in the ufunc loop are supported in this mode
         if not supported_ufunc_loop(ufunc, ufunc_loop):
             msg = "ufunc '{0}' using the loop '{1}' not supported in this mode"
-            raise TypingError(msg=msg.format(ufunc.__name__, ufunc_loop))
+            raise TypingError(msg=msg.format(ufunc.__name__, ufunc_loop.ufunc_sig))
 
         # if there is any explicit output type, check that it is valid
-        explicit_outputs_np = ''.join(numba_types_to_numpy_letter_types(
-            [ty.dtype for ty in explicit_outputs]))
+        explicit_outputs_np = [as_dtype(tp.dtype) for tp in explicit_outputs]
 
         # Numpy will happily use unsafe conversions (although it will actually warn)
-        if not all ((numpy.can_cast(fromty, toty, 'unsafe') for fromty, toty in
-                     zip(ufunc_loop[-nout], explicit_outputs_np))):
+        if not all (numpy.can_cast(fromty, toty, 'unsafe') for (fromty, toty) in
+                    zip(ufunc_loop.numpy_outputs, explicit_outputs_np)):
             msg = "ufunc '{0}' can't cast result to explicit result type"
             raise TypingError(msg=msg.format(ufunc.__name__))
 
-        # a valid loop was found that is compatible. The result of type inference should
+        # A valid loop was found that is compatible. The result of type inference should
         # be based on the explicit output types, and when not available with the type given
         # by the selected NumPy loop
         out = list(explicit_outputs)
-        if nout > len(explicit_outputs):
-            implicit_output_count = nout - len(explicit_outputs)
-            implicit_letter_types = ufunc_loop[-implicit_output_count:]
-            implicit_out_types = numpy_letter_types_to_numba_types(implicit_letter_types)
-            if ndims:
-                implicit_out_types = [types.Array(t, ndims, 'A') for t in implicit_out_types]
-
-            out.extend(implicit_out_types)
+        implicit_output_count = nout - len(explicit_outputs)
+        if implicit_output_count > 0:
+            # XXX this is currently wrong for datetime64 and timedelta64,
+            # as ufunc_find_matching_loop() doesn't do any type inference.
+            out.extend(ufunc_loop.outputs[-implicit_output_count:])
 
         # note: although the previous code should support multiple return values, only one
         #       is supported as of now (signature may not support more than one).
@@ -109,7 +102,7 @@ _math_operations = [ "add", "subtract", "multiply",
                      "logaddexp", "logaddexp2", "true_divide",
                      "floor_divide", "negative", "power", 
                      "remainder", "fmod", "absolute",
-                     "rint", "sign", "conj", "exp", "exp2",
+                     "rint", "sign", "conjugate", "exp", "exp2",
                      "log", "log2", "log10", "expm1", "log1p",
                      "sqrt", "square", "reciprocal",
                      "divide", "mod", "abs", "fabs" ]
@@ -143,8 +136,8 @@ _floating_functions = [ "isfinite", "isinf", "isnan", "signbit",
 # implemented.
 #
 # It also works as a nice TODO list for ufunc support :)
-_unsupported = set([ numpy.square, numpy.spacing, numpy.signbit,
-                     numpy.right_shift, numpy.remainder, numpy.reciprocal,
+_unsupported = set([ numpy.spacing, numpy.signbit,
+                     numpy.right_shift, numpy.remainder,
                      numpy.not_equal, numpy.minimum, numpy.maximum,
                      numpy.logical_xor, numpy.logical_or, numpy.logical_not,
                      numpy.logical_and, numpy.less,
@@ -152,7 +145,7 @@ _unsupported = set([ numpy.square, numpy.spacing, numpy.signbit,
                      numpy.isfinite, numpy.invert, numpy.greater,
                      numpy.greater_equal, numpy.fmod, numpy.fmin, numpy.fmax,
                      numpy.equal, numpy.copysign,
-                     numpy.conjugate, numpy.bitwise_xor,
+                     numpy.bitwise_xor,
                      numpy.bitwise_or, numpy.bitwise_and ])
 
 # a list of ufuncs that are in fact aliases of other ufuncs. They need to insert the
@@ -165,16 +158,17 @@ if numpy.divide == numpy.true_divide:
 
 
 def _numpy_ufunc(name):
-    the_key = eval("numpy."+name) # obtain the appropriate symbol for the key.
+    func = getattr(numpy, name)
     class typing_class(Numpy_rules_ufunc):
-        key = the_key
+        key = func
 
     typing_class.__name__ = "resolve_{0}".format(name)
     # Add the resolve method to NumpyModuleAttribute
-    setattr(NumpyModuleAttribute, "resolve_"+name, lambda s, m: types.Function(typing_class))
+    setattr(NumpyModuleAttribute, typing_class.__name__,
+            lambda s, m: types.Function(typing_class))
 
     if not name in _aliases:
-        builtin_global(the_key, types.Function(typing_class))
+        builtin_global(func, types.Function(typing_class))
 
 
 for func in itertools.chain(_math_operations, _trigonometric_functions,

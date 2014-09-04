@@ -8,6 +8,6 @@ def typeof(val):
 
     Used outside of Numba code, infers the type for the object.
     """
-    from . import dispatcher
-    return dispatcher.Overloaded.typeof_pyval(val)
+    from .targets.registry import CPUTarget
+    return CPUTarget.typing_context.resolve_data_type(val)
 

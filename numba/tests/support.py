@@ -2,7 +2,10 @@
 Assorted utilities for use in tests.
 """
 
+import cmath
 import contextlib
+import math
+import sys
 
 import numpy as np
 
@@ -21,6 +24,10 @@ force_pyobj_flags = Flags()
 force_pyobj_flags.set("force_pyobject")
 
 no_pyobj_flags = Flags()
+
+
+skip_on_numpy_16 = unittest.skipIf(np.__version__.startswith("1.6."),
+                                   "test requires Numpy 1.7 or later")
 
 
 class CompilationCache(object):
@@ -51,11 +58,26 @@ class CompilationCache(object):
 
 class TestCase(unittest.TestCase):
 
+    longMessage = True
+
     # A random state yielding the same random numbers for any test case.
     # Use as `self.random.<method name>`
     @utils.cached_property
     def random(self):
         return np.random.RandomState(42)
+
+    def reset_module_warnings(self, module):
+        """
+        Reset the warnings registry of a module.  This can be necessary
+        as the warnings module is buggy in that regard.
+        See http://bugs.python.org/issue4180
+        """
+        if isinstance(module, str):
+            module = sys.modules[module]
+        try:
+            del module.__warningregistry__
+        except AttributeError:
+            pass
 
     @contextlib.contextmanager
     def assertTypingError(self):
@@ -67,8 +89,11 @@ class TestCase(unittest.TestCase):
             (LoweringError, TypingError, TypeError, NotImplementedError)) as cm:
             yield cm
 
-    _exact_typesets = [(bool,), utils.INT_TYPES, (str,), (utils.unicode),]
-    _approx_typesets = [(float,), (complex,)]
+    _exact_typesets = [(bool, np.bool_), utils.INT_TYPES, (str,), (utils.text_type),]
+    # note: unfortunately, NumPy complex64 doesn't evaluate "True" as an instance of
+    #       complex, yet complex128 does (at least in NumPy 1.8.1). Hence it is needed
+    #       in the list of _approx_typesets
+    _approx_typesets = [(float,), (complex,), (np.floating), (np.complex64)]
 
     def assertPreciseEqual(self, first, second, prec='exact', msg=None):
         """
@@ -104,6 +129,19 @@ class TestCase(unittest.TestCase):
                 # on regular unittest comparison.
                 self.assertIs(first.__class__, second.__class__)
                 exact_comparison = True
+
+        # If a Numpy scalar, check the dtype is exactly the same too
+        # (required for datetime64 and timedelta64).
+        if hasattr(first, 'dtype') and hasattr(second, 'dtype'):
+            self.assertEqual(first.dtype, second.dtype)
+
+        try:
+            if cmath.isnan(first) and cmath.isnan(second):
+                # The NaNs will compare unequal, skip regular comparison
+                return
+        except TypeError:
+            # Not floats.
+            pass
 
         if not exact_comparison and prec != 'exact':
             if prec == 'single':

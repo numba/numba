@@ -17,7 +17,7 @@ from __future__ import print_function, division, absolute_import
 from pprint import pprint
 import itertools
 
-from numba import ir, types, utils, config, ctypes_utils, cffi_support
+from numba import ir, types, utils, config
 from numba.config import PYVERSION
 from numba.utils import builtins
 
@@ -348,13 +348,13 @@ class TypeInferer(object):
     def seed_return(self, typ):
         """Seeding of return value is optional.
         """
-        for blk in utils.dict_itervalues(self.blocks):
+        for blk in utils.itervalues(self.blocks):
             inst = blk.terminator
             if isinstance(inst, ir.Return):
                 self.typevars[inst.value.name].lock(typ)
 
     def build_constrain(self):
-        for blk in utils.dict_itervalues(self.blocks):
+        for blk in utils.itervalues(self.blocks):
             for inst in blk.body:
                 self.constrain_statement(inst)
 
@@ -433,7 +433,7 @@ class TypeInferer(object):
 
     def get_return_type(self, typemap):
         rettypes = set()
-        for blk in utils.dict_itervalues(self.blocks):
+        for blk in utils.itervalues(self.blocks):
             term = blk.terminator
             if isinstance(term, ir.Return):
                 rettypes.add(typemap[term.value.name])
@@ -457,7 +457,7 @@ class TypeInferer(object):
         The sum of all lengths of type sets is a cheap and accurate
         description of our progress.
         """
-        return sum(len(tv) for tv in utils.dict_itervalues(self.typevars))
+        return sum(len(tv) for tv in utils.itervalues(self.typevars))
 
     def constrain_statement(self, inst):
         if isinstance(inst, ir.Assign):
@@ -533,6 +533,12 @@ class TypeInferer(object):
 
     def typeof_global(self, inst, target, gvar):
         typ = self.context.resolve_value_type(gvar.value)
+        if isinstance(typ, types.Array):
+            # We turns any global array into LLVM module level global that
+            # will be emitted as part of the native binary.
+            # This is to support nopython mode global array.
+            # Note, we are treating global arrays as constant.
+            typ = typ.copy(layout='C')
         if typ is not None:
             self.sentry_modified_builtin(inst, gvar)
             self.typevars[target.name].lock(typ)
@@ -586,9 +592,6 @@ class TypeInferer(object):
                                          value=expr.value, loc=inst.loc,
                                          inst=inst)
             self.constrains.append(constrain)
-        elif expr.op == 'getitem':
-            self.typeof_intrinsic_call(inst, target, expr.op, expr.target,
-                                       expr.index, loc=inst.loc)
         elif expr.op == 'build_tuple':
             constrain = BuildTupleConstrain(target.name, items=expr.items,
                                             loc=inst.loc)

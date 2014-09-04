@@ -17,16 +17,16 @@ def parse_signature(sig):
         def readline():
             yield src
         gen = readline()
-        return tokenize.generate_tokens(lambda: utils.iter_next(gen))
+        return tokenize.generate_tokens(lambda: next(gen))
 
     def parse(src):
         tokgen = tokenizer(src)
         while True:
-            tok = utils.iter_next(tokgen)
+            tok = next(tokgen)
             if tok[1] == '(':
                 symbols = []
                 while True:
-                    tok = utils.iter_next(tokgen)
+                    tok = next(tokgen)
                     if tok[1] == ')':
                         break
                     elif tok[0] == tokenize.NAME:
@@ -36,7 +36,7 @@ def parse_signature(sig):
                     else:
                         raise ValueError('bad token in signature "%s"' % tok[1])
                 yield tuple(symbols)
-                tok = utils.iter_next(tokgen)
+                tok = next(tokgen)
                 if tok[1] == ',':
                     continue
                 elif tokenize.ISEOF(tok[0]):

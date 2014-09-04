@@ -1,10 +1,12 @@
 from __future__ import print_function, absolute_import
+
 from . import _typeconv
 
 
 class TypeManager(object):
     def __init__(self):
         self._ptr = _typeconv.new_type_manager()
+        self._types = set()
 
     def select_overload(self, sig, overloads, allow_unsafe):
         sig = [t._code for t in sig]
@@ -16,6 +18,10 @@ class TypeManager(object):
 
     def set_compatible(self, fromty, toty, by):
         _typeconv.set_compatible(self._ptr, fromty._code, toty._code, by)
+        # Ensure the types don't die, otherwise they may be recreated with
+        # other type codes and pollute the hash table.
+        self._types.add(fromty)
+        self._types.add(toty)
 
     def set_promote(self, fromty, toty):
         self.set_compatible(fromty, toty, ord("p"))

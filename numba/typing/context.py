@@ -11,7 +11,7 @@ from numba import types
 from numba.typeconv import rules
 from . import templates
 # Initialize declarations
-from . import builtins, mathdecl, npydecl, operatordecl
+from . import builtins, mathdecl, npdatetime, npydecl, operatordecl
 from numba import numpy_support, utils
 from . import ctypes_utils, cffi_utils
 
@@ -104,15 +104,42 @@ class BaseContext(object):
             if ty in types.number_domain:
                 return ty
 
-    def resolve_value_type(self, val):
+    def resolve_argument_type(self, val):
         """
-        Return the numba type of a Python value
-        Return None if fail to type.
+        Return the numba type of a Python value that is being used
+        as a function argument.  Integer types will all be considered
+        int64, regardless of size.  Numpy arrays will be accepted in
+        "C" or "F" layout.
+
+        Unknown types will be mapped to pyobject.
+        """
+        if isinstance(val, utils.INT_TYPES):
+            # Force all integers to be 64-bit
+            return types.int64
+        elif numpy_support.is_array(val):
+            dtype = numpy_support.from_dtype(val.dtype)
+            layout = numpy_support.map_layout(val)
+            return types.Array(dtype, val.ndim, layout)
+
+        tp = self.resolve_data_type(val)
+        if tp is None:
+            tp = getattr(val, "_numba_type_", types.pyobject)
+        return tp
+
+    def resolve_data_type(self, val):
+        """
+        Return the numba type of a Python value representing data
+        (e.g. a number or an array, but not more sophisticated types
+         such as functions, etc.)
         """
         if val is True or val is False:
             return types.boolean
 
-        elif isinstance(val, utils.INT_TYPES + (float,)):
+        # Under 2.x, we must guard against numpy scalars (np.intXY
+        # subclasses Python int but get_number_type() wouldn't infer the
+        # right bit width -- perhaps it should?).
+        elif (not isinstance(val, numpy.number)
+              and isinstance(val, utils.INT_TYPES + (float,))):
             return self.get_number_type(val)
 
         elif val is None:
@@ -132,14 +159,33 @@ class BaseContext(object):
             else:
                 return types.Tuple(tys)
 
-        elif numpy_support.is_arrayscalar(val):
-            return numpy_support.map_arrayscalar_type(val)
+        else:
+            try:
+                return numpy_support.map_arrayscalar_type(val)
+            except NotImplementedError:
+                pass
 
-        elif numpy_support.is_array(val):
+        if numpy_support.is_array(val):
             ary = val
             dtype = numpy_support.from_dtype(ary.dtype)
-            # Force C contiguous
-            return types.Array(dtype, ary.ndim, 'C')
+            if ary.flags.c_contiguous:
+                layout = 'C'
+            elif ary.flags.f_contiguous:
+                layout = 'F'
+            else:
+                layout = 'A'
+            return types.Array(dtype, ary.ndim, layout)
+
+        return None
+
+    def resolve_value_type(self, val):
+        """
+        Return the numba type of a Python value
+        Return None if fail to type.
+        """
+        tp = self.resolve_data_type(val)
+        if tp is not None:
+            return tp
 
         elif ctypes_utils.is_ctypes_funcptr(val):
             cfnptr = val

@@ -1,6 +1,6 @@
 // compile with:
 //
-//  nvcc -arch=sm_20 -dc jitlink.cu  -o jitlink.o
+//  nvcc -gencode arch=compute_20,code=compute_20 -ptx jitlink.cu -o jitlink.ptx
 //
 //
 

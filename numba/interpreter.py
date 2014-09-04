@@ -283,7 +283,7 @@ class Interpreter(object):
         as a builtins (second).  If both failed, return a ir.UNDEFINED.
         """
         try:
-            return utils.func_globals(self.bytecode.func)[name]
+            return utils.get_function_globals(self.bytecode.func)[name]
         except KeyError:
             return getattr(builtins, name, ir.UNDEFINED)
 

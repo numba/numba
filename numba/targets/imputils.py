@@ -3,11 +3,10 @@ Utilities to simplify the boilerplate for native lowering.
 """
 
 from __future__ import print_function, absolute_import, division
+
 import functools
 
-from numba.typing import signature
-from numba import cgutils, types
-
+from .. import typing, cgutils, types
 
 def implement(func, *argtys):
     def wrapper(impl):
@@ -16,7 +15,7 @@ def implement(func, *argtys):
             ret = impl(context, builder, sig, args)
             return ret
 
-        res.signature = signature(types.Any, *argtys)
+        res.signature = typing.signature(types.Any, *argtys)
         res.key = func
         res.__wrapped__ = impl
         return res
@@ -61,7 +60,7 @@ def user_function(func, fndesc, libs):
             context.return_errcode_propagate(builder, status.code)
         return retval
 
-    imp.signature = signature(fndesc.restype, *fndesc.argtypes)
+    imp.signature = typing.signature(fndesc.restype, *fndesc.argtypes)
     imp.key = func
     imp.libs = tuple(libs)
     return imp
@@ -180,7 +179,7 @@ def call_getiter(context, builder, iterable_type, val):
     Call the `getiter()` implementation for the given *iterable_type*
     of value *val*, and return the corresponding LLVM inst.
     """
-    getiter_sig = signature(iterable_type.iterator_type, iterable_type)
+    getiter_sig = typing.signature(iterable_type.iterator_type, iterable_type)
     getiter_impl = context.get_function('getiter', getiter_sig)
     return getiter_impl(builder, (val,))
 
@@ -194,7 +193,7 @@ def call_iternext(context, builder, iterator_type, val):
     itemty = iterator_type.yield_type
     pair_type = types.Pair(itemty, types.boolean)
     paircls = context.make_pair(pair_type.first_type, pair_type.second_type)
-    iternext_sig = signature(pair_type, iterator_type)
+    iternext_sig = typing.signature(pair_type, iterator_type)
     iternext_impl = context.get_function('iternext', iternext_sig)
     val = iternext_impl(builder, (val,))
     return _IternextResult(context, builder, paircls(context, builder, val))
@@ -252,3 +251,31 @@ class _StructRegistry(object):
 
 struct_registry = _StructRegistry()
 struct_factory = struct_registry.register
+
+
+class _TypeRegistry(object):
+
+    def __init__(self):
+        self.factories = {}
+
+    def register(self, type_class):
+        """
+        Register a LLVM type factory function for the given *type_class*
+        (i.e. a subclass of numba.types.Type).
+        """
+        assert issubclass(type_class, types.Type)
+        def decorator(func):
+            self.factories[type_class] = func
+            return func
+        return decorator
+
+    def match(self, typ):
+        """
+        Return the LLVM type factory function for the given Numba type
+        instance *typ*.
+        """
+        return self.factories[typ.__class__]
+
+
+type_registry = _TypeRegistry()
+type_factory = type_registry.register

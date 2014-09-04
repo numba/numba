@@ -2,7 +2,8 @@
 Define typing templates
 """
 from __future__ import print_function, division, absolute_import
-from numba import types
+
+from .. import types
 
 
 class Signature(object):

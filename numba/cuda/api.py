@@ -230,7 +230,6 @@ def get_current_device():
 
 def list_devices():
     "List all CUDA devices"
-    devices.init_gpus()
     return devices._gpus
 
 

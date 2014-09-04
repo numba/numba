@@ -13,7 +13,7 @@ class RemoveRedundantAssign(object):
         self.interp = interp
 
     def run(self):
-        for blkid, blk in utils.dict_iteritems(self.interp.blocks):
+        for blkid, blk in utils.iteritems(self.interp.blocks):
             self.run_block(blk)
 
     def run_block(self, blk):
@@ -23,7 +23,7 @@ class RemoveRedundantAssign(object):
         for offset, inst in enumerate(blk.body):
             self.mark_asssignment(tempassign, offset, inst)
 
-        for bag in utils.dict_itervalues(tempassign):
+        for bag in utils.itervalues(tempassign):
             if len(bag) == 2:
                 off1, off2 = bag
                 first = blk.body[off1]

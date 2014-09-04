@@ -1,22 +1,24 @@
 from __future__ import print_function
 
+import functools
 import itertools
+import re
 import sys
 import warnings
 
 import numpy as np
-import functools
 
 import numba.unittest_support as unittest
 from numba import types, typing, utils
 from numba.compiler import compile_isolated, Flags, DEFAULT_FLAGS
-from numba.numpy_support import numpy_letter_types_to_numba_types
+from numba.numpy_support import from_dtype
 from numba import vectorize
 from numba.config import PYVERSION
 from numba.typeinfer import TypingError
-from numba.tests.support import TestCase, CompilationCache
 from numba.targets import cpu
-import re
+from numba.lowering import LoweringError
+from .support import TestCase, CompilationCache, skip_on_numpy_16
+
 
 is32bits = tuple.__itemsize__ == 4
 iswindows = sys.platform.startswith('win32')
@@ -106,6 +108,10 @@ class TestUFuncs(TestCase):
     def unary_ufunc_test(self, ufunc, flags=enable_pyobj_flags,
                          skip_inputs=[], additional_inputs=[],
                          int_output_type=None, float_output_type=None):
+        # Necessary to avoid some Numpy warnings being silenced, despite
+        # the simplefilter() call below.
+        self.reset_module_warnings(__name__)
+
         ufunc = _make_unary_ufunc_usecase(ufunc)
 
         inputs = list(self.inputs)
@@ -397,7 +403,6 @@ class TestUFuncs(TestCase):
     def test_conj_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.conj, flags=flags)
 
-    @_unimplemented
     def test_conj_ufunc_npm(self):
         self.test_conj_ufunc(flags=no_pyobj_flags)
 
@@ -452,23 +457,20 @@ class TestUFuncs(TestCase):
     def test_square_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.square, flags=flags)
 
-    @_unimplemented
     def test_square_ufunc_npm(self):
         self.test_square_ufunc(flags=no_pyobj_flags)
 
     def test_reciprocal_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.reciprocal, flags=flags)
 
-    @_unimplemented
     def test_reciprocal_ufunc_npm(self):
         self.test_reciprocal_ufunc(flags=no_pyobj_flags)
 
     def test_conjugate_ufunc(self, flags=enable_pyobj_flags):
         self.unary_ufunc_test(np.conjugate, flags=flags)
 
-    @_unimplemented
     def test_conjugate_ufunc_npm(self):
-        self.test_reciprocal_ufunc(flags=no_pyobj_flags)
+        self.test_conjugate_ufunc(flags=no_pyobj_flags)
 
 
     ############################################################################
@@ -1109,7 +1111,9 @@ class TestScalarUFuncsNoPython(TestScalarUFuncs):
     """Same tests as TestScalarUFuncs, but forcing no python mode"""
     _compile_flags = no_pyobj_flags
 
+
 class TestUfuncIssues(TestCase):
+
     def test_issue_651(self):
         # Exercise the code path to make sure this does not fail
         @vectorize(["(float64,float64)"])
@@ -1119,6 +1123,13 @@ class TestUfuncIssues(TestCase):
         a = np.arange(10, dtype='f8')
         b = np.arange(10, dtype='f8')
         self.assertTrue(np.all(foo(a, b) == (a + b) + (a + b)))
+
+    def test_issue_713(self):
+        def foo(x,y):
+            return np.floor_divide(x,y)
+
+        cr = compile_isolated(foo, [types.complex128, types.complex128])
+        self.assertEqual(foo(1j, 1j), cr.entry_point(1j, 1j))
 
 
 class TestLoopTypes(TestCase):
@@ -1162,6 +1173,33 @@ class TestLoopTypes(TestCase):
     _compile_flags = enable_pyobj_flags
     _skip_types='O'
 
+    def _arg_for_type(self, a_letter_type):
+        """return a suitable array argument for testing the letter type"""
+        if a_letter_type in 'bBhHiIlLqQ':
+            # an integral
+            return np.array([2, 3, 4, 0], dtype=a_letter_type)
+        elif a_letter_type in '?':
+            # a boolean
+            return np.array([True, False, False, True], dtype=a_letter_type)
+        elif a_letter_type[0] == 'm':
+            # timedelta64
+            if len(a_letter_type) == 1:
+                a_letter_type = 'm8[D]'
+            return np.array([2, -3, 'NaT', 0], dtype=a_letter_type)
+        elif a_letter_type[0] == 'M':
+            # datetime64
+            if len(a_letter_type) == 1:
+                a_letter_type = 'M8[D]'
+            return np.array(['Nat', 1, 25, 0], dtype=a_letter_type)
+        elif a_letter_type in 'fd':
+            # floating point
+            return np.array([1.5, -3.5, 0.0, float('nan')], dtype=a_letter_type)
+        elif a_letter_type in 'FD':
+            # complex
+            return np.array([-1.0j, 1.5 + 1.5j, 1j * float('nan'), 0j], dtype=a_letter_type)
+        else:
+            raise RuntimeError("type %r not understood" % (a_letter_type,))
+
     def _check_loop(self, fn, ufunc, loop):
         # the letter types for the args
         letter_types = loop[:ufunc.nin] + loop[-ufunc.nout:]
@@ -1175,28 +1213,38 @@ class TestLoopTypes(TestCase):
                for l in letter_types):
             return
 
-        arg_nbty = numpy_letter_types_to_numba_types(letter_types)
-        arg_nbty = [types.Array(t, 1, 'C') for t in arg_nbty]
-        arg_dty = [np.dtype(l) for l in letter_types]
-        cr = compile_isolated(fn, arg_nbty, flags=self._compile_flags);
+        # if the test case requires some types to be present, skip loops
+        # not involving any of those types.
+        required_types = getattr(self, '_required_types', [])
+        if required_types and not any(l in letter_types
+                                      for l in required_types):
+            return
 
-        # now create some really silly arguments and call the generate functions.
-        # The result is checked against the result given by NumPy, but the point
-        # of the test is making sure there is no compilation error.
-        # 2 seems like a nice "no special case argument"
+        self._check_ufunc_with_dtypes(fn, ufunc, letter_types)
 
-        # use days for timedelta64 and datetime64
-        repl = { 'm': 'm8[d]', 'M': 'M8[D]' }
-        arg_types = [repl.get(t, t) for t in letter_types]
-        args1 = [np.array((2,), dtype=l) for l in arg_types]
-        args2 = [np.array((2,), dtype=l) for l in arg_types]
+    def _check_ufunc_with_dtypes(self, fn, ufunc, dtypes):
+        arg_dty = [np.dtype(t) for t in dtypes]
+        arg_nbty = [types.Array(from_dtype(t), 1, 'C') for t in arg_dty]
+        cr = compile_isolated(fn, arg_nbty, flags=self._compile_flags)
 
-        cr.entry_point(*args1)
-        fn(*args2)
+        # Ensure a good mix of input values
+        c_args = [self._arg_for_type(t).repeat(2) for t in dtypes]
+        for arr in c_args:
+            self.random.shuffle(arr)
+        py_args = [a.copy() for a in c_args]
 
-        for i in range(ufunc.nout):
-            self.assertPreciseEqual(args1[-i], args2[-i])
+        cr.entry_point(*c_args)
+        fn(*py_args)
 
+        # Check each array (including inputs, to ensure they weren't
+        # mutated).
+        for c_arg, py_arg in zip(c_args, py_args):
+            # XXX should assertPreciseEqual() accept numpy arrays?
+            prec = 'single' if c_arg.dtype.char in 'fF' else 'exact'
+            prec = 'double' if c_arg.dtype.char in 'dD' else prec
+            for c, py in zip(c_arg, py_arg):
+                self.assertPreciseEqual(py, c, prec=prec,
+                    msg="arrays differ (%s): expected %r, got %r" % (prec, py_arg, c_arg))
 
     def _check_ufunc_loops(self, ufunc):
         fn = _make_ufunc_usecase(ufunc)
@@ -1204,7 +1252,9 @@ class TestLoopTypes(TestCase):
         for loop in ufunc.types:
             try:
                 self._check_loop(fn, ufunc, loop)
-            except Exception as e:
+            except AssertionError as e:
+                import traceback
+                traceback.print_exc()
                 _failed_loops.append('{2} {0}:{1}'.format(loop, str(e),
                                                           ufunc.__name__))
 
@@ -1237,9 +1287,9 @@ class TestLoopTypesNoPython(TestLoopTypes):
     _ufuncs = [np.add, np.subtract, np.multiply, np.divide, np.logaddexp,
                np.logaddexp2, np.true_divide, np.floor_divide, np.negative,
                np.power, np.abs, np.absolute,
-               np.sign, np.exp, np.exp2, np.log, np.log2,
-               np.log10, np.expm1, np.log1p, np.sqrt,
-               np.sin, np.cos, np.tan, np.arcsin, np.arccos,
+               np.sign, np.conj, np.exp, np.exp2, np.log, np.log2,
+               np.log10, np.expm1, np.log1p, np.sqrt, np.square, np.reciprocal,
+               np.conjugate, np.sin, np.cos, np.tan, np.arcsin, np.arccos,
                np.arctan, np.arctan2, np.sinh, np.cosh, np.tanh,
                np.arcsinh, np.arccosh, np.arctanh, np.deg2rad, np.rad2deg,
                np.degrees, np.radians,
@@ -1248,6 +1298,106 @@ class TestLoopTypesNoPython(TestLoopTypes):
     # supported types are integral (signed and unsigned) as well as float and double
     # support for complex64(F) and complex128(D) should be coming soon.
     _supported_types = '?bBhHiIlLqQfd'
+
+
+class TestLoopTypesComplexNoPython(TestLoopTypes):
+    _compile_flags = no_pyobj_flags
+    _ufuncs = [np.negative, np.add, np.subtract, np.multiply, np.divide,
+               np.true_divide, np.floor_divide, np.power, np.sign, np.abs,
+               np.absolute, np.rint, np.conj, np.conjugate, np.exp, np.exp2,
+               np.log, np.log2, np.log10, np.expm1, np.log1p, np.sqrt,
+               np.square, np.reciprocal, np.sin, np.cos, np.tan, np.arcsin,
+               np.arccos, np.arctan, np.sinh, np.cosh, np.tanh, np.arcsinh,
+               np.arccosh, np.arctanh ]
+
+    # Test complex types
+    # note that some loops like "abs" contain reals as results, hence the
+    # _supported_types
+    _supported_types = 'FDfd'
+    _required_types = 'FD'
+
+
+@skip_on_numpy_16
+class TestLoopTypesDatetimeNoPython(TestLoopTypes):
+    _compile_flags = no_pyobj_flags
+    _ufuncs = [np.absolute, np.negative, np.sign,
+               np.add, np.subtract, np.multiply,
+               np.divide, np.true_divide, np.floor_divide]
+
+    # NOTE: the full list of ufuncs supporting datetime64 and timedelta64
+    # types in Numpy is:
+    # ['absolute', 'add', 'equal', 'floor_divide', 'fmax', 'fmin',
+    #  'greater', 'greater_equal', 'less', 'less_equal', 'maximum',
+    #  'minimum', 'multiply', 'negative', 'not_equal', 'sign', 'subtract',
+    #  'true_divide']
+
+    # Test datetime64 and timedelta64 types.
+    _supported_types = 'mMqd'
+    _required_types = 'mM'
+
+    # Test various units combinations (TestLoopTypes is only able to test
+    # homogeneous units).
+
+    def test_add(self):
+        ufunc = np.add
+        fn = _make_ufunc_usecase(ufunc)
+        # heterogenous inputs
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8[s]', 'm8[m]', 'm8[s]'])
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8[s]', 'm8[s]'])
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8', 'm8[m]'])
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8', 'm8[m]', 'm8[m]'])
+        # heterogenous inputs, scaled output
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8[s]', 'm8[m]', 'm8[ms]'])
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8[s]', 'm8[ms]'])
+        # Cannot upscale result (Numpy would accept this)
+        with self.assertRaises(LoweringError):
+            self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8[s]', 'm8[m]'])
+
+    def test_subtract(self):
+        ufunc = np.subtract
+        fn = _make_ufunc_usecase(ufunc)
+        # heterogenous inputs
+        self._check_ufunc_with_dtypes(fn, ufunc, ['M8[s]', 'M8[m]', 'm8[s]'])
+        self._check_ufunc_with_dtypes(fn, ufunc, ['M8[m]', 'M8[s]', 'm8[s]'])
+        # heterogenous inputs, scaled output
+        self._check_ufunc_with_dtypes(fn, ufunc, ['M8[s]', 'M8[m]', 'm8[ms]'])
+        self._check_ufunc_with_dtypes(fn, ufunc, ['M8[m]', 'M8[s]', 'm8[ms]'])
+        # Cannot upscale result (Numpy would accept this)
+        with self.assertRaises(LoweringError):
+            self._check_ufunc_with_dtypes(fn, ufunc, ['M8[m]', 'M8[s]', 'm8[m]'])
+
+    def test_multiply(self):
+        ufunc = np.multiply
+        fn = _make_ufunc_usecase(ufunc)
+        # scaled output
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8[s]', 'q', 'm8[us]'])
+        self._check_ufunc_with_dtypes(fn, ufunc, ['q', 'm8[s]', 'm8[us]'])
+        # Cannot upscale result (Numpy would accept this)
+        with self.assertRaises(LoweringError):
+            self._check_ufunc_with_dtypes(fn, ufunc, ['m8[s]', 'q', 'm8[m]'])
+
+    def test_true_divide(self):
+        ufunc = np.true_divide
+        fn = _make_ufunc_usecase(ufunc)
+        # heterogenous inputs
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8[s]', 'd'])
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8[s]', 'm8[m]', 'd'])
+        # scaled output
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'q', 'm8[s]'])
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'd', 'm8[s]'])
+        # Cannot upscale result (Numpy would accept this)
+        with self.assertRaises(LoweringError):
+            self._check_ufunc_with_dtypes(fn, ufunc, ['m8[s]', 'q', 'm8[m]'])
+
+    def test_floor_divide(self):
+        ufunc = np.floor_divide
+        fn = _make_ufunc_usecase(ufunc)
+        # scaled output
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'q', 'm8[s]'])
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'd', 'm8[s]'])
+        # Cannot upscale result (Numpy would accept this)
+        with self.assertRaises(LoweringError):
+            self._check_ufunc_with_dtypes(fn, ufunc, ['m8[s]', 'q', 'm8[m]'])
 
 
 class TestUFuncBadArgsNoPython(TestCase):
@@ -1280,7 +1430,6 @@ class TestUFuncBadArgsNoPython(TestCase):
             np.add(x, x, y)
         self.assertRaises(TypingError, compile_isolated, func, [types.float64],
                           return_type=types.float64, flags=self._compile_flags)
-
 
 
 

@@ -10,9 +10,12 @@ from numba import _dynfunc, types, utils, cgutils, typing, numpy_support, errcod
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, python_attr_impl,
                                     builtin_registry, impl_attribute,
-                                    struct_registry)
-from numba.targets import arrayobj, builtins, iterators, rangeobj
-
+                                    struct_registry, type_registry)
+from . import arrayobj, builtins, iterators, rangeobj
+try:
+    from . import npdatetime
+except NotImplementedError:
+    pass
 
 
 GENERIC_POINTER = Type.pointer(Type.int(8))
@@ -108,6 +111,9 @@ class BaseContext(object):
     Only POD structure can life across function boundaries by copying the
     data.
     """
+    # True if the target requires strict alignment
+    # Causes exception to be raised if the record members are not aligned.
+    strict_alignment = False
 
     # Use default mangler (no specific requirement)
     mangler = None
@@ -165,7 +171,7 @@ class BaseContext(object):
 
     def insert_class(self, cls, attrs):
         clsty = types.Object(cls)
-        for name, vtype in utils.dict_iteritems(attrs):
+        for name, vtype in utils.iteritems(attrs):
             imp = python_attr_impl(clsty, name, vtype)
             self.attrs[imp.key] = imp
 
@@ -236,10 +242,7 @@ class BaseContext(object):
             if gv.name == name and gv.type.pointee == text.type:
                 break
         else:
-            gv = mod.add_global_variable(text.type, name=name)
-            gv.global_constant = True
-            gv.initializer = text
-            gv.linkage = lc.LINKAGE_INTERNAL
+            gv = cgutils.global_constant(mod, name, text)
         return Constant.bitcast(gv, stringtype)
 
     def get_arguments(self, func):
@@ -271,6 +274,13 @@ class BaseContext(object):
 
         Returns None if it is an opaque pointer
         """
+        try:
+            fac = type_registry.match(ty)
+        except KeyError:
+            pass
+        else:
+            return fac(self, ty)
+
         if (isinstance(ty, types.Dummy) or
                 isinstance(ty, types.Module) or
                 isinstance(ty, types.Function) or
@@ -449,6 +459,8 @@ class BaseContext(object):
     def get_setattr(self, attr, sig):
         typ = sig.args[0]
         if isinstance(typ, types.Record):
+            self.sentry_record_alignment(typ, attr)
+
             offset = typ.offset(attr)
             elemty = typ.typeof(attr)
 
@@ -457,7 +469,8 @@ class BaseContext(object):
                 [target, val] = args
                 dptr = cgutils.get_record_member(builder, target, offset,
                                                  self.get_data_type(elemty))
-                self.pack_value(builder, valty, val, dptr)
+                val = context.cast(builder, val, valty, elemty)
+                self.pack_value(builder, elemty, val, dptr)
 
             return _wrap_impl(imp, self, sig)
 
@@ -482,6 +495,7 @@ class BaseContext(object):
     def get_attribute(self, val, typ, attr):
         if isinstance(typ, types.Record):
             # Implement get attribute for records
+            self.sentry_record_alignment(typ, attr)
             offset = typ.offset(attr)
             elemty = typ.typeof(attr)
 
@@ -857,6 +871,19 @@ class BaseContext(object):
     def get_python_api(self, builder):
         return PythonAPI(self, builder)
 
+    def sentry_record_alignment(self, rectyp, attr):
+        """
+        Assumes offset starts from a properly aligned location
+        """
+        if self.strict_alignment:
+            offset = rectyp.offset(attr)
+            elemty = rectyp.typeof(attr)
+            align = self.get_abi_sizeof(self.get_data_type(elemty))
+            if offset % align:
+                msg = "{rec}.{attr} of type {type} is not aligned".format(
+                    rec=rectyp, attr=attr, type=elemty)
+                raise TypeError(msg)
+
     def make_array(self, typ):
         return arrayobj.make_array(typ)
 
@@ -886,14 +913,7 @@ class BaseContext(object):
 
         lldtype = values[0].type
         consts = Constant.array(lldtype, values)
-
-        module = cgutils.get_module(builder)
-
-        data = module.add_global_variable(consts.type, name=".const.array"
-                                                            ".data")
-        data.linkage = lc.LINKAGE_INTERNAL
-        data.global_constant = True
-        data.initializer = consts
+        data = cgutils.global_constant(builder, ".const.array.data", consts)
 
         # Handle shape
         llintp = self.get_value_type(types.intp)
