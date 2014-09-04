@@ -328,6 +328,21 @@ class CmpOpNe(UnorderedCmpOp):
     key = '!='
 
 
+@builtin
+class CmpOpIs(ConcreteTemplate):
+    key = 'is'
+    cases = [
+        signature(types.boolean, types.none, types.none),
+    ]
+
+
+@builtin
+class CmpOpIsNot(ConcreteTemplate):
+    key = 'is not'
+    cases = [
+        signature(types.boolean, types.none, types.none),
+    ]
+
 def normalize_index(index):
     if isinstance(index, types.UniTuple):
         if index.dtype in types.integer_domain:

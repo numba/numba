@@ -429,6 +429,18 @@ for ty in types.signed_domain:
     builtin(implement('>>', ty, types.uint32)(int_ashr_impl))
 
 
+def always_return_true_impl(context, builder, sig, args):
+    return cgutils.true_bit
+
+
+def always_return_false_impl(context, builder, sig, args):
+    return cgutils.false_bit
+
+
+builtin(implement('is', types.none, types.none)(always_return_true_impl))
+builtin(implement('is not', types.none, types.none)(always_return_false_impl))
+
+
 def real_add_impl(context, builder, sig, args):
     return builder.fadd(*args)
 
