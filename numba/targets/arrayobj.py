@@ -436,6 +436,48 @@ def numpy_sum(context, builder, sig, args):
 
     return context.compile_internal(builder, impl, sig, args)
 
+
+@builtin
+@implement("array.prod", types.Kind(types.Array))
+def array_prod(context, builder, sig, args):
+    from numba.intrinsics import array_ravel
+
+    [arrty] = sig.args
+
+    def impl_any_layout(arr):
+        c = 1
+        for v in arr.flat:
+            c *= v
+        return c
+
+    def impl_contigous_layout(arr):
+        c = 1
+        for v in array_ravel(arr):
+            c *= v
+        return c
+
+    if arrty.layout in 'CF':
+        # Optimize for contiguous case because so that LLVM can perform
+        # vectorization on the reduction loop
+        return context.compile_internal(builder, impl_contigous_layout, sig,
+                                        args, locals=dict(c=arrty.dtype),
+                                        cache_key=(array_sum, sig,
+                                                   arrty.dtype))
+    else:
+        return context.compile_internal(builder, impl_any_layout, sig, args,
+                                        locals=dict(c=arrty.dtype),
+                                        cache_key=(array_sum, sig,
+                                                   arrty.dtype))
+
+
+@builtin
+@implement(numpy.prod, types.Kind(types.Array))
+def numpy_prod(context, builder, sig, args):
+    def impl(arr):
+        return arr.prod()
+
+    return context.compile_internal(builder, impl, sig, args)
+
 #-------------------------------------------------------------------------------
 
 

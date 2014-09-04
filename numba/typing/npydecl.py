@@ -185,7 +185,7 @@ del _aliases, _numpy_ufunc
 
 
 # -----------------------------------------------------------------------------
-# Install global functions
+# Install global reduction functions
 
 class Numpy_generic_reduction(AbstractTemplate):
     def generic(self, args, kws):
@@ -194,21 +194,15 @@ class Numpy_generic_reduction(AbstractTemplate):
         return signature(arr.dtype, arr)
 
 
-def _specialize_generic_reduction(key):
-    glb = dict(key=key)
-    return type("Numpy_reduce_{0}".format(key), (Numpy_generic_reduction,),
-                glb)
+def _numpy_reduction(fname):
+    npyfn = getattr(numpy, fname)
+    cls = type("Numpy_reduce_{0}".format(npyfn), (Numpy_generic_reduction,),
+               dict(key=npyfn))
+    setattr(NumpyModuleAttribute, "resolve_{0}".format(fname),
+            lambda self, mod: types.Function(cls))
 
-
-_global_funcs = {
-    'sum': _specialize_generic_reduction(numpy.sum),
-}
-
-for k, v in _global_funcs.items():
-    setattr(NumpyModuleAttribute, "resolve_{0}".format(k),
-            lambda self, mod: types.Function(v))
-
-del _global_funcs
+for func in ['sum', 'prod']:
+    _numpy_reduction(func)
 
 builtin_global(numpy, types.Module(numpy))
 
