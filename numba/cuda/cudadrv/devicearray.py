@@ -108,6 +108,9 @@ class DeviceNDArrayBase(object):
         self.stream = 0
 
     def bind(self, stream=0):
+        """Bind a CUDA stream to this object so that all subsequent operation
+        on this array defaults to the given stream.
+        """
         clone = copy.copy(self)
         clone.stream = stream
         return clone
@@ -117,6 +120,9 @@ class DeviceNDArrayBase(object):
             self.gpu_mem.free(self.gpu_head)
         except:
             pass
+
+    def _default_stream(self, stream):
+        return self.stream if not stream else stream
 
     @property
     def _numba_type_(self):
@@ -139,6 +145,7 @@ class DeviceNDArrayBase(object):
         If `ary` is a CUDA memory, perform a device-to-device transfer.
         Otherwise, perform a a host-to-device transfer.
         """
+        stream = self._default_stream(stream)
         if _driver.is_device_memory(ary):
             sz = min(self.alloc_size, ary.alloc_size)
             _driver.device_to_device(self, ary, sz, stream=stream)
@@ -152,6 +159,7 @@ class DeviceNDArrayBase(object):
 
         Always returns the host array.
         """
+        stream = self._default_stream(stream)
         if ary is None:
             hostary = np.empty(shape=self.alloc_size, dtype=np.byte)
         else:
@@ -178,6 +186,7 @@ class DeviceNDArrayBase(object):
         return hostary
 
     def to_host(self, stream=0):
+        stream = self._default_stream(stream)
         warnings.warn("to_host() is deprecated and will be removed",
                       DeprecationWarning)
         if self.__writeback is None:
@@ -189,6 +198,7 @@ class DeviceNDArrayBase(object):
         If the array cannot be equally divided, the last section will be
         smaller.
         """
+        stream = self._default_stream(stream)
         if self.ndim != 1:
             raise ValueError("only support 1d array")
         if self.strides[0] != self.dtype.itemsize:
@@ -240,6 +250,7 @@ class DeviceNDArray(DeviceNDArrayBase):
             raise NotImplementedError("operation requires copying")
 
     def ravel(self, order='C', stream=0):
+        stream = self._default_stream(stream)
         cls = type(self)
         newarr, extents = self._dummy.ravel(order=order)
 
@@ -260,7 +271,7 @@ class DeviceNDArray(DeviceNDArrayBase):
         return self._do_getitem(item, stream)
 
     def _do_getitem(self, item, stream=0):
-        stream = stream or self.stream
+        stream = self._default_stream(stream)
 
         arr = self._dummy.__getitem__(item)
         extents = list(arr.iter_contiguous_extent())
