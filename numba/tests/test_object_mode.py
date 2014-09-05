@@ -60,7 +60,7 @@ class TestObjectMode(unittest.TestCase):
     def test_array_of_object(self):
         cfunc = jit(array_of_object)
         objarr = numpy.array([object()] * 10)
-        cfunc(objarr)
+        self.assertIs(cfunc(objarr), objarr)
 
 if __name__ == '__main__':
     unittest.main()
