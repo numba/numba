@@ -5,7 +5,7 @@ import functools
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import jit, typeinfer, lowering, types, utils
+from numba import jit, typeof, lowering, types, utils
 from .support import TestCase
 
 enable_pyobj_flags = Flags()
@@ -140,11 +140,20 @@ def zip_1_usecase():
         result += i
     return result
 
+
 def zip_3_usecase():
     result = 0
     for i, j, k in zip((1, 2), (3, 4, 5), (6.7, 8.9)):
         result += i * j * k
     return result
+
+
+def pow_op_usecase(x, y):
+    return x ** y
+
+
+def pow_usecase(x, y):
+    return pow(x, y)
 
 
 class TestBuiltins(TestCase):
@@ -622,6 +631,33 @@ class TestBuiltins(TestCase):
     def test_zip_0_npm(self):
         self.test_zip_0(flags=no_pyobj_flags)
 
+    def test_pow_op_usecase(self):
+        args = [
+            (2, 3),
+            (2.0, 3),
+            (2, 3.0),
+            (2j, 3.0j),
+        ]
+
+        for x, y in args:
+            cres = compile_isolated(pow_op_usecase, (typeof(x), typeof(y)),
+                                    flags=no_pyobj_flags)
+            r = cres.entry_point(x, y)
+            self.assertPreciseEqual(r, pow_op_usecase(x, y))
+
+    def test_pow_usecase(self):
+        args = [
+            (2, 3),
+            (2.0, 3),
+            (2, 3.0),
+            (2j, 3.0j),
+        ]
+
+        for x, y in args:
+            cres = compile_isolated(pow_usecase, (typeof(x), typeof(y)),
+                                    flags=no_pyobj_flags)
+            r = cres.entry_point(x, y)
+            self.assertPreciseEqual(r, pow_usecase(x, y))
 
 if __name__ == '__main__':
     unittest.main()

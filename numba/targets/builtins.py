@@ -140,18 +140,23 @@ def int_urem_impl(context, builder, sig, args):
 def int_spower_impl(context, builder, sig, args):
     module = cgutils.get_module(builder)
     x, y = args
-    if y.type.width > 32:
-        y = builder.trunc(y, Type.int(32))
-    elif y.type.width < 32:
-        y = builder.sext(y, Type.int(32))
+
+    # Cast x to float64 to ensure enough precision for the result
+    x = context.cast(builder, x, sig.args[0], types.float64)
+    # Cast y to int32
+    y = context.cast(builder, y, sig.args[1], types.int32)
 
     if context.implement_powi_as_math_call:
-        undersig = typing.signature(sig.return_type, sig.args[0], types.int32)
+        undersig = typing.signature(sig.return_type, types.float64,
+                                    types.int32)
         impl = context.get_function(math.pow, undersig)
-        return impl(builder, (x, y))
+        res = impl(builder, (x, y))
     else:
         powerfn = lc.Function.intrinsic(module, lc.INTR_POWI, [x.type])
-        return builder.call(powerfn, (x, y))
+        res = builder.call(powerfn, (x, y))
+
+    # Cast result back
+    return context.cast(builder, res, types.float64, sig.return_type)
 
 
 def int_upower_impl(context, builder, sig, args):
@@ -410,6 +415,7 @@ for ty in types.unsigned_domain:
     builtin(implement('>', ty, ty)(int_ugt_impl))
     builtin(implement('>=', ty, ty)(int_uge_impl))
     builtin(implement('**', types.float64, ty)(int_upower_impl))
+    builtin(implement(pow, types.float64, ty)(int_upower_impl))
     # logical shift for unsigned
     builtin(implement('>>', ty, types.uint32)(int_lshr_impl))
     builtin(implement(types.abs_type, ty)(uint_abs_impl))
@@ -425,9 +431,12 @@ for ty in types.signed_domain:
     builtin(implement('>=', ty, ty)(int_sge_impl))
     builtin(implement(types.abs_type, ty)(int_abs_impl))
     builtin(implement('**', types.float64, ty)(int_spower_impl))
+    builtin(implement(pow, types.float64, ty)(int_spower_impl))
     # arithmetic shift for signed
     builtin(implement('>>', ty, types.uint32)(int_ashr_impl))
 
+builtin(implement('**', types.intp, types.intp)(int_spower_impl))
+builtin(implement(pow, types.intp, types.intp)(int_spower_impl))
 
 def real_add_impl(context, builder, sig, args):
     return builder.fadd(*args)
@@ -683,6 +692,7 @@ for ty in types.real_domain:
     builtin(implement('/', ty, ty)(real_div_impl))
     builtin(implement('%', ty, ty)(real_mod_impl))
     builtin(implement('**', ty, ty)(real_power_impl))
+    builtin(implement(pow, ty, ty)(real_power_impl))
 
     builtin(implement('==', ty, ty)(real_eq_impl))
     builtin(implement('!=', ty, ty)(real_ne_impl))
@@ -750,6 +760,7 @@ def complex128_imag_impl(context, builder, typ, value):
 
 @builtin
 @implement("**", types.complex128, types.complex128)
+@implement(pow, types.complex128, types.complex128)
 def complex128_power_impl(context, builder, sig, args):
     [ca, cb] = args
     a = Complex128(context, builder, value=ca)
