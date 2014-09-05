@@ -49,7 +49,7 @@ Math operations
  power               Yes          Yes
  remainder           Yes          Yes
  mod                 Yes          Yes
- fmod                Yes          No
+ fmod                Yes          Yes
  abs                 Yes          Yes
  absolute            Yes          Yes
  fabs                Yes          Yes

@@ -237,6 +237,11 @@ def np_int_urem_impl(context, builder, sig, args):
     return result
 
 
+# implementation of int_fmod is in fact the same as the unsigned remainder,
+# that is: srem with a special case returning 0 when the denominator is 0.
+np_int_fmod_impl = np_int_urem_impl
+
+
 def np_real_div_impl(context, builder, sig, args):
     # in NumPy real div has the same semantics as an fdiv for generating
     # NANs, INF and NINF
@@ -261,6 +266,11 @@ def np_real_mod_impl(context, builder, sig, args):
     fix_value = builder.select(needs_fixing, in2, ZERO)
 
     return builder.fadd(res, fix_value)
+
+
+def np_real_fmod_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2)
+    return builder.frem(*args)
 
 
 def _fabs(context, builder, arg):

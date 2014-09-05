@@ -223,6 +223,21 @@ def _fill_ufunc_db(ufunc_db):
         'dd->d': npyfuncs.np_real_mod_impl,
     }
 
+    ufunc_db[np.fmod] = {
+        'bb->b': npyfuncs.np_int_fmod_impl,
+        'BB->B': npyfuncs.np_int_fmod_impl,
+        'hh->h': npyfuncs.np_int_fmod_impl,
+        'HH->H': npyfuncs.np_int_fmod_impl,
+        'ii->i': npyfuncs.np_int_fmod_impl,
+        'II->I': npyfuncs.np_int_fmod_impl,
+        'll->l': npyfuncs.np_int_fmod_impl,
+        'LL->L': npyfuncs.np_int_fmod_impl,
+        'qq->q': npyfuncs.np_int_fmod_impl,
+        'QQ->Q': npyfuncs.np_int_fmod_impl,
+        'ff->f': npyfuncs.np_real_fmod_impl,
+        'dd->d': npyfuncs.np_real_fmod_impl,
+    }
+
     ufunc_db[np.logaddexp] = {
         'ff->f': npyfuncs.np_real_logaddexp_impl,
         'dd->d': npyfuncs.np_real_logaddexp_impl,

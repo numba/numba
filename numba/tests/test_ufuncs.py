@@ -356,7 +356,6 @@ class TestUFuncs(TestCase):
     def test_fmod_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test(np.fmod, flags=flags)
 
-    @_unimplemented
     def test_fmod_ufunc_npm(self):
         self.test_fmod_ufunc(flags=no_pyobj_flags)
 
@@ -1259,7 +1258,7 @@ class TestLoopTypesNoPython(TestLoopTypes):
                np.fmax, np.fmin, np.isnan, np.bitwise_and, np.bitwise_or,
                np.bitwise_xor, np.bitwise_not, np.invert, np.left_shift,
                np.right_shift, np.isinf, np.isfinite, np.signbit, np.copysign,
-               np.nextafter, np.spacing, np.ldexp ]
+               np.nextafter, np.spacing, np.ldexp, np.fmod ]
 
     # supported types are integral (signed and unsigned) as well as float and double
     # support for complex64(F) and complex128(D) should be coming soon.

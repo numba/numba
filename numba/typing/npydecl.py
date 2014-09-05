@@ -138,7 +138,7 @@ _floating_functions = [ "isfinite", "isinf", "isnan", "signbit",
 # It also works as a nice TODO list for ufunc support :)
 _unsupported = set([ numpy.frexp, # this one is tricky, as it has 2 returns
                      numpy.modf,  # this one also has 2 returns
-                     numpy.fmod ])
+                 ])
 
 # a list of ufuncs that are in fact aliases of other ufuncs. They need to insert the
 # resolve method, but not register the ufunc itself
