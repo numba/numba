@@ -47,8 +47,8 @@ Math operations
  floor_divide        Yes          Yes
  negative            Yes          Yes
  power               Yes          Yes
- remainder           Yes          No
- mod                 Yes          No
+ remainder           Yes          Yes
+ mod                 Yes          Yes
  fmod                Yes          No
  abs                 Yes          Yes
  absolute            Yes          Yes

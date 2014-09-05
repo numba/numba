@@ -344,14 +344,12 @@ class TestUFuncs(TestCase):
     def test_remainder_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test(np.remainder, flags=flags)
 
-    @_unimplemented
     def test_remainder_ufunc_npm(self):
         self.test_remainder_ufunc(flags=no_pyobj_flags)
 
     def test_mod_ufunc(self, flags=enable_pyobj_flags):
         self.binary_ufunc_test(np.mod, flags=flags)
 
-    @_unimplemented
     def test_mod_ufunc_npm(self):
         self.test_mod_ufunc(flags=no_pyobj_flags)
 
@@ -1247,7 +1245,7 @@ class TestLoopTypesNoPython(TestLoopTypes):
 
     _ufuncs = [np.add, np.subtract, np.multiply, np.divide, np.logaddexp,
                np.logaddexp2, np.true_divide, np.floor_divide, np.negative,
-               np.power, np.abs, np.absolute,
+               np.remainder, np.mod, np.power, np.abs, np.absolute,
                np.sign, np.conj, np.exp, np.exp2, np.log, np.log2,
                np.log10, np.expm1, np.log1p, np.sqrt, np.square, np.reciprocal,
                np.conjugate, np.sin, np.cos, np.tan, np.arcsin, np.arccos,

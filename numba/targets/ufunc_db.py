@@ -208,6 +208,21 @@ def _fill_ufunc_db(ufunc_db):
         'DD->D': npyfuncs.np_complex_floor_div_impl,
     }
 
+    ufunc_db[np.remainder] = {
+        'bb->b': npyfuncs.np_int_srem_impl,
+        'BB->B': npyfuncs.np_int_urem_impl,
+        'hh->h': npyfuncs.np_int_srem_impl,
+        'HH->H': npyfuncs.np_int_urem_impl,
+        'ii->i': npyfuncs.np_int_srem_impl,
+        'II->I': npyfuncs.np_int_urem_impl,
+        'll->l': npyfuncs.np_int_srem_impl,
+        'LL->L': npyfuncs.np_int_urem_impl,
+        'qq->q': npyfuncs.np_int_srem_impl,
+        'QQ->Q': npyfuncs.np_int_urem_impl,
+        'ff->f': npyfuncs.np_real_mod_impl,
+        'dd->d': npyfuncs.np_real_mod_impl,
+    }
+
     ufunc_db[np.logaddexp] = {
         'ff->f': npyfuncs.np_real_logaddexp_impl,
         'dd->d': npyfuncs.np_real_logaddexp_impl,

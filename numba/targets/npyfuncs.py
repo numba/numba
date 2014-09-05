@@ -156,9 +156,39 @@ def np_int_sdiv_impl(context, builder, sig, args):
             needs_fixing = builder.and_(not_same_sign, mod_not_zero)
             fix_value = builder.select(needs_fixing, MINUS_ONE, ZERO)
             result_otherwise = builder.add(div, fix_value)
+
     result = builder.phi(lltype)
     result.add_incoming(ZERO, bb_then)
     result.add_incoming(result_otherwise, bb_otherwise)
+
+    return result
+
+
+def np_int_srem_impl(context, builder, sig, args):
+    # based on the actual code in NumPy loops.c.src for signed integers
+    _check_arity_and_homogeneity(sig, args, 2)
+
+    num, den = args
+    ty = sig.args[0] # any arg type will do, homogeneous
+    lty = num.type
+
+    ZERO = context.get_constant(ty, 0)
+    den_not_zero = builder.icmp(lc.ICMP_NE, ZERO, den)
+    bb_no_if = builder.basic_block
+    with cgutils.if_unlikely(builder, den_not_zero):
+        bb_if = builder.basic_block
+        mod = builder.srem(num,den)
+        num_gt_zero = builder.icmp(lc.ICMP_SGT, num, ZERO)
+        den_gt_zero = builder.icmp(lc.ICMP_SGT, den, ZERO)
+        not_same_sign = builder.xor(num_gt_zero, den_gt_zero)
+        mod_not_zero = builder.icmp(lc.ICMP_NE, mod, ZERO)
+        needs_fixing = builder.and_(not_same_sign, mod_not_zero)
+        fix_value = builder.select(needs_fixing, den, ZERO)
+        final_mod = builder.add(fix_value, mod)
+
+    result = builder.phi(lty)
+    result.add_incoming(ZERO, bb_no_if)
+    result.add_incoming(final_mod, bb_if)
 
     return result
 
@@ -178,19 +208,59 @@ def np_int_udiv_impl(context, builder, sig, args):
             # divide!
             div = builder.udiv(num, den)
             bb_otherwise = builder.basic_block
+
     result = builder.phi(lltype)
     result.add_incoming(ZERO, bb_then)
     result.add_incoming(div, bb_otherwise)
     return result
 
 
+def np_int_urem_impl(context, builder, sig, args):
+    # based on the actual code in NumPy loops.c.src for signed integers
+    _check_arity_and_homogeneity(sig, args, 2)
+
+    num, den = args
+    ty = sig.args[0] # any arg type will do, homogeneous
+    lty = num.type
+
+    ZERO = context.get_constant(ty, 0)
+    den_not_zero = builder.icmp(lc.ICMP_NE, ZERO, den)
+    bb_no_if = builder.basic_block
+    with cgutils.if_unlikely(builder, den_not_zero):
+        bb_if = builder.basic_block
+        mod = builder.srem(num,den)
+
+    result = builder.phi(lty)
+    result.add_incoming(ZERO, bb_no_if)
+    result.add_incoming(mod, bb_if)
+
+    return result
+
+
 def np_real_div_impl(context, builder, sig, args):
     # in NumPy real div has the same semantics as an fdiv for generating
     # NANs, INF and NINF
-    num, den = args
-    lltype = num.type
-    assert all(i.type==lltype for i in args), "must have homogeneous types"
+    _check_arity_and_homogeneity(sig, args, 2)
     return builder.fdiv(*args)
+
+
+def np_real_mod_impl(context, builder, sig, args):
+    # note: this maps to NumPy remainder, which has the same semantics as Python
+    # based on code in loops.c.src
+    _check_arity_and_homogeneity(sig, args, 2)
+    in1, in2 = args
+    ty = sig.args[0]
+
+    ZERO = context.get_constant(ty, 0.0)
+    res = builder.frem(in1, in2)
+    res_ne_zero = builder.fcmp(lc.FCMP_ONE, res, ZERO)
+    den_lt_zero = builder.fcmp(lc.FCMP_OLT, in2, ZERO)
+    res_lt_zero = builder.fcmp(lc.FCMP_OLT, res, ZERO)
+    needs_fixing = builder.and_(res_ne_zero,
+                                builder.xor(den_lt_zero, res_lt_zero))
+    fix_value = builder.select(needs_fixing, in2, ZERO)
+
+    return builder.fadd(res, fix_value)
 
 
 def _fabs(context, builder, arg):

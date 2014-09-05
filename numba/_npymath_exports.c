@@ -198,6 +198,8 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL_EXPLICIT(ldexp, ldexp),
     NPYMATH_SYMBOL_EXPLICIT(frexp, frexp),
 
+    NPYMATH_SYMBOL(modf),
+
     /* float functions */
     NPYMATH_SYMBOL(floorf),
     NPYMATH_SYMBOL(powf),
@@ -243,6 +245,8 @@ struct npy_math_entry exports[] = {
        directly to the math.h versions. */
     NPYMATH_SYMBOL_EXPLICIT(ldexpf, ldexpf),
     NPYMATH_SYMBOL_EXPLICIT(frexpf, frexpf),
+
+    NPYMATH_SYMBOL(modff),
 
     /* complex functions */
     NPYMATH_SYMBOL_EXPLICIT(cpow, ufunc_cpow),
