@@ -1397,7 +1397,7 @@ class TestLoopTypesDatetimeNoPython(TestLoopTypes):
         self._check_ufunc_with_dtypes(fn, ufunc, ['M8[s]', 'M8[m]', '?'])
 
     def test_comparisons(self):
-        for ufunc in [np.equal]:
+        for ufunc in [np.equal, np.not_equal]:
             self._check_comparison(ufunc)
 
 

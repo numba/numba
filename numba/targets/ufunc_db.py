@@ -943,3 +943,7 @@ def _fill_ufunc_db(ufunc_db):
             'MM->?': npdatetime.datetime_eq_datetime_impl,
             'mm->?': npdatetime.timedelta_eq_timedelta_impl,
         })
+        ufunc_db[np.not_equal].update({
+            'MM->?': npdatetime.datetime_ne_datetime_impl,
+            'mm->?': npdatetime.timedelta_ne_timedelta_impl,
+        })
