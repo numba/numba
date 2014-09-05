@@ -939,3 +939,7 @@ def _fill_ufunc_db(ufunc_db):
             'mq->m': npdatetime.timedelta_over_number,
             'md->m': npdatetime.timedelta_over_number,
         })
+        ufunc_db[np.equal].update({
+            'MM->?': npdatetime.datetime_eq_datetime_impl,
+            'mm->?': npdatetime.timedelta_eq_timedelta_impl,
+        })

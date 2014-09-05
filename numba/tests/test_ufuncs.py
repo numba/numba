@@ -189,14 +189,14 @@ class TestUFuncs(TestCase):
                         print("Output mismatch for invalid input",
                               input_tuple, result, expected)
                     else:
-                        msg = '\n'.join(["ufunc '{0}' failed", 
-                                         "inputs ({1}):", "{2}", 
-                                         "got({3})", "{4}", 
+                        msg = '\n'.join(["ufunc '{0}' failed",
+                                         "inputs ({1}):", "{2}",
+                                         "got({3})", "{4}",
                                          "expected ({5}):", "{6}"
-                                     ]).format(ufunc.__name__, 
+                                     ]).format(ufunc.__name__,
                                                input_type, input_operand,
                                                output_type, result,
-                                               expected.dtype, expected) 
+                                               expected.dtype, expected)
                         self.fail(msg)
 
 
@@ -261,14 +261,14 @@ class TestUFuncs(TestCase):
                 match = np.all(result == expected) or np.allclose(result,
                                                                   expected)
                 if not match:
-                    msg = '\n'.join(["ufunc '{0}' failed", 
-                                     "inputs ({1}):", "{2}", 
-                                     "got({3})", "{4}", 
+                    msg = '\n'.join(["ufunc '{0}' failed",
+                                     "inputs ({1}):", "{2}",
+                                     "got({3})", "{4}",
                                      "expected ({5}):", "{6}"
-                                 ]).format(ufunc.__name__, 
+                                 ]).format(ufunc.__name__,
                                            input_type, input_operand,
                                            output_type, result,
-                                           expected.dtype, expected) 
+                                           expected.dtype, expected)
                     self.fail(msg)
 
 
@@ -1307,17 +1307,18 @@ class TestLoopTypesDatetimeNoPython(TestLoopTypes):
     _compile_flags = no_pyobj_flags
     _ufuncs = [np.absolute, np.negative, np.sign,
                np.add, np.subtract, np.multiply,
-               np.divide, np.true_divide, np.floor_divide]
+               np.divide, np.true_divide, np.floor_divide,
+               np.equal ]
 
     # NOTE: the full list of ufuncs supporting datetime64 and timedelta64
     # types in Numpy is:
-    # ['absolute', 'add', 'equal', 'floor_divide', 'fmax', 'fmin',
+    # ['absolute', 'add', 'divide', 'equal', 'floor_divide', 'fmax', 'fmin',
     #  'greater', 'greater_equal', 'less', 'less_equal', 'maximum',
     #  'minimum', 'multiply', 'negative', 'not_equal', 'sign', 'subtract',
     #  'true_divide']
 
     # Test datetime64 and timedelta64 types.
-    _supported_types = 'mMqd'
+    _supported_types = 'mMqd?'
     _required_types = 'mM'
 
     # Test various units combinations (TestLoopTypes is only able to test
@@ -1383,6 +1384,21 @@ class TestLoopTypesDatetimeNoPython(TestLoopTypes):
         # Cannot upscale result (Numpy would accept this)
         with self.assertRaises(LoweringError):
             self._check_ufunc_with_dtypes(fn, ufunc, ['m8[s]', 'q', 'm8[m]'])
+
+    def _check_comparison(self, ufunc):
+        fn = _make_ufunc_usecase(ufunc)
+        # timedelta
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8[s]', '?'])
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8[s]', 'm8[m]', '?'])
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8[m]', 'm8', '?'])
+        self._check_ufunc_with_dtypes(fn, ufunc, ['m8', 'm8[m]', '?'])
+        # datetime
+        self._check_ufunc_with_dtypes(fn, ufunc, ['M8[m]', 'M8[s]', '?'])
+        self._check_ufunc_with_dtypes(fn, ufunc, ['M8[s]', 'M8[m]', '?'])
+
+    def test_comparisons(self):
+        for ufunc in [np.equal]:
+            self._check_comparison(ufunc)
 
 
 class TestUFuncBadArgsNoPython(TestCase):
