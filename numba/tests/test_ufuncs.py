@@ -189,7 +189,14 @@ class TestUFuncs(TestCase):
                         print("Output mismatch for invalid input",
                               input_tuple, result, expected)
                     else:
-                        msg = "ufunc '{0}' failed for:\ninput ({1}):\n{2}\ngot ({3}):\n{4}\nexpected ({5}):\n{6}\n".format(ufunc.__name__, input_type, input_operand, output_type, result, expected.dtype, expected) 
+                        msg = '\n'.join(["ufunc '{0}' failed", 
+                                         "inputs ({1}):", "{2}", 
+                                         "got({3})", "{4}", 
+                                         "expected ({5}):", "{6}"
+                                     ]).format(ufunc.__name__, 
+                                               input_type, input_operand,
+                                               output_type, result,
+                                               expected.dtype, expected) 
                         self.fail(msg)
 
 
@@ -251,9 +258,18 @@ class TestUFuncs(TestCase):
                     self.assertTrue(np.allclose(result[np.invert(np.isnan(result))],
                                      expected[np.invert(np.isnan(expected))]))
             else:
-                msg = 'failed for:\ninput operand:\n{0}\ntype:\n{1}\ngot ({4}):\n{2}\nexpected ({5}):\n{3}\n'.format(input_operand, input_type, result, expected, result.dtype, expected.dtype)
-                self.assertTrue(np.all(result == expected) or
-                                np.allclose(result, expected), msg=msg)
+                match = np.all(result == expected) or np.allclose(result,
+                                                                  expected)
+                if not match:
+                    msg = '\n'.join(["ufunc '{0}' failed", 
+                                     "inputs ({1}):", "{2}", 
+                                     "got({3})", "{4}", 
+                                     "expected ({5}):", "{6}"
+                                 ]).format(ufunc.__name__, 
+                                           input_type, input_operand,
+                                           output_type, result,
+                                           expected.dtype, expected) 
+                    self.fail(msg)
 
 
     def unary_int_ufunc_test(self, name=None, flags=enable_pyobj_flags):
