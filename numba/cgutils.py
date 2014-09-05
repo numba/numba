@@ -22,6 +22,10 @@ def as_bool_byte(builder, value):
     return builder.zext(value, Type.int(8))
 
 
+def as_bool_bit(builder, value):
+    return builder.icmp(lc.ICMP_NE, value, Constant.null(value.type))
+
+
 def make_anonymous_struct(builder, values):
     """
     Create an anonymous struct constant containing the given LLVM *values*.

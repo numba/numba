@@ -328,20 +328,21 @@ class CmpOpNe(UnorderedCmpOp):
     key = '!='
 
 
+class CmpOpIdentity(AbstractTemplate):
+    def generic(self, args, kws):
+        [lhs, rhs] = args
+        return signature(types.boolean, lhs, rhs)
+
+
 @builtin
-class CmpOpIs(ConcreteTemplate):
+class CmpOpIs(CmpOpIdentity):
     key = 'is'
-    cases = [
-        signature(types.boolean, types.none, types.none),
-    ]
 
 
 @builtin
-class CmpOpIsNot(ConcreteTemplate):
+class CmpOpIsNot(CmpOpIdentity):
     key = 'is not'
-    cases = [
-        signature(types.boolean, types.none, types.none),
-    ]
+
 
 def normalize_index(index):
     if isinstance(index, types.UniTuple):
