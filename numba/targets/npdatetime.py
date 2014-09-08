@@ -569,3 +569,65 @@ for op, func in [('==', datetime_eq_datetime_impl),
                  ('>=', datetime_ge_datetime_impl)]:
     builtin(implement(op, *[types.Kind(types.NPDatetime)]*2)(func))
 
+
+########################################################################
+# datetime/timedelta fmax/fmin maximum/minimum support
+
+def datetime_max_impl(context, builder, sig, args):
+    # just a regular int64 max avoiding nats.
+    # note this could be optimizing relying on the actual value of NAT
+    # but as NumPy doesn't rely on this, this seems more resilient
+    in1, in2 = args
+    in1_not_nat = is_not_nat(builder, in1)
+    in2_not_nat = is_not_nat(builder, in2)
+    in1_ge_in2 = builder.icmp(lc.ICMP_SGE, in1, in2)
+    res = builder.select(in1_ge_in2, in1, in2)
+    res = builder.select(in1_not_nat, res, in2)
+    res = builder.select(in2_not_nat, res, in1)
+
+    return res
+
+
+def datetime_min_impl(context, builder, sig, args):
+    # just a regular int64 min avoiding nats.
+    # note this could be optimizing relying on the actual value of NAT
+    # but as NumPy doesn't rely on this, this seems more resilient
+    in1, in2 = args
+    in1_not_nat = is_not_nat(builder, in1)
+    in2_not_nat = is_not_nat(builder, in2)
+    in1_le_in2 = builder.icmp(lc.ICMP_SLE, in1, in2)
+    res = builder.select(in1_le_in2, in1, in2)
+    res = builder.select(in1_not_nat, res, in2)
+    res = builder.select(in2_not_nat, res, in1)
+
+    return res
+
+
+def timedelta_max_impl(context, builder, sig, args):
+    # just a regular int64 max avoiding nats.
+    # note this could be optimizing relying on the actual value of NAT
+    # but as NumPy doesn't rely on this, this seems more resilient
+    in1, in2 = args
+    in1_not_nat = is_not_nat(builder, in1)
+    in2_not_nat = is_not_nat(builder, in2)
+    in1_ge_in2 = builder.icmp(lc.ICMP_SGE, in1, in2)
+    res = builder.select(in1_ge_in2, in1, in2)
+    res = builder.select(in1_not_nat, res, in2)
+    res = builder.select(in2_not_nat, res, in1)
+
+    return res
+
+
+def timedelta_min_impl(context, builder, sig, args):
+    # just a regular int64 min avoiding nats.
+    # note this could be optimizing relying on the actual value of NAT
+    # but as NumPy doesn't rely on this, this seems more resilient
+    in1, in2 = args
+    in1_not_nat = is_not_nat(builder, in1)
+    in2_not_nat = is_not_nat(builder, in2)
+    in1_le_in2 = builder.icmp(lc.ICMP_SLE, in1, in2)
+    res = builder.select(in1_le_in2, in1, in2)
+    res = builder.select(in1_not_nat, res, in2)
+    res = builder.select(in2_not_nat, res, in1)
+
+    return res

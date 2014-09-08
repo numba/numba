@@ -1309,7 +1309,8 @@ class TestLoopTypesDatetimeNoPython(TestLoopTypes):
                np.add, np.subtract, np.multiply,
                np.divide, np.true_divide, np.floor_divide,
                np.equal, np.not_equal, np.less, np.less_equal,
-               np.greater, np.greater_equal ]
+               np.greater, np.greater_equal, np.maximum,
+               np.minimum, np.fmax, np.fmin ]
 
     # NOTE: the full list of ufuncs supporting datetime64 and timedelta64
     # types in Numpy is:

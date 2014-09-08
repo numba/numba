@@ -963,3 +963,21 @@ def _fill_ufunc_db(ufunc_db):
             'MM->?': npdatetime.datetime_ge_datetime_impl,
             'mm->?': npdatetime.timedelta_ge_timedelta_impl,
         })
+        ufunc_db[np.maximum].update({
+            'MM->M': npdatetime.datetime_max_impl,
+            'mm->m': npdatetime.timedelta_max_impl,
+        })
+        ufunc_db[np.minimum].update({
+            'MM->M': npdatetime.datetime_min_impl,
+            'mm->m': npdatetime.timedelta_min_impl,
+        })
+        # there is no difference for datetime/timedelta in maximum/fmax
+        # and minimum/fmin
+        ufunc_db[np.fmax].update({
+            'MM->M': npdatetime.datetime_max_impl,
+            'mm->m': npdatetime.timedelta_max_impl,
+        })
+        ufunc_db[np.fmin].update({
+            'MM->M': npdatetime.datetime_min_impl,
+            'mm->m': npdatetime.timedelta_min_impl,
+        })
