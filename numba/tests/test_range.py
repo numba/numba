@@ -18,6 +18,13 @@ def loop2(a, b):
     return s
 
 
+def loop3(a, b, c):
+    s = 0
+    for i in range(a, b, c):
+        s += i
+    return s
+
+
 class TestRange(unittest.TestCase):
     def test_loop1_int16(self):
         pyfunc = loop1
@@ -30,6 +37,19 @@ class TestRange(unittest.TestCase):
         cres = compile_isolated(pyfunc, [types.int16, types.int16])
         cfunc = cres.entry_point
         self.assertTrue(cfunc(1, 6), pyfunc(1, 6))
+
+    def test_loop3_int32(self):
+        pyfunc = loop3
+        cres = compile_isolated(pyfunc, [types.int32] * 3)
+        cfunc = cres.entry_point
+        arglist = [
+            (1, 2, 1),
+            (2, 8, 3),
+            (-10, -11, -10),
+            (-10, -10, -2),
+        ]
+        for args in arglist:
+            self.assertEqual(cfunc(*args), pyfunc(*args))
 
 
 if __name__ == '__main__':
