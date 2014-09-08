@@ -312,7 +312,7 @@ def _create_timedelta_ordering_impl(ll_op):
 
 
 timedelta_eq_timedelta_impl = _create_timedelta_comparison_impl(lc.ICMP_EQ, cgutils.false_bit)
-timedelta_ne_timedelta_impl = _create_timedelta_comparison_impl(lc.ICMP_NE, cgutils.false_bit)
+timedelta_ne_timedelta_impl = _create_timedelta_comparison_impl(lc.ICMP_NE, cgutils.true_bit)
 timedelta_lt_timedelta_impl = _create_timedelta_ordering_impl(lc.ICMP_SLT)
 timedelta_le_timedelta_impl = _create_timedelta_ordering_impl(lc.ICMP_SLE)
 timedelta_gt_timedelta_impl = _create_timedelta_ordering_impl(lc.ICMP_SGT)
