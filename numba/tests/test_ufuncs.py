@@ -1308,7 +1308,8 @@ class TestLoopTypesDatetimeNoPython(TestLoopTypes):
     _ufuncs = [np.absolute, np.negative, np.sign,
                np.add, np.subtract, np.multiply,
                np.divide, np.true_divide, np.floor_divide,
-               np.equal ]
+               np.equal, np.not_equal, np.less, np.less_equal,
+               np.greater, np.greater_equal ]
 
     # NOTE: the full list of ufuncs supporting datetime64 and timedelta64
     # types in Numpy is:
@@ -1397,7 +1398,8 @@ class TestLoopTypesDatetimeNoPython(TestLoopTypes):
         self._check_ufunc_with_dtypes(fn, ufunc, ['M8[s]', 'M8[m]', '?'])
 
     def test_comparisons(self):
-        for ufunc in [np.equal, np.not_equal]:
+        for ufunc in [np.equal, np.not_equal, np.less, np.less_equal,
+                      np.greater, np.greater_equal]:
             self._check_comparison(ufunc)
 
 
