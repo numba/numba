@@ -25,7 +25,7 @@ _argtypes = [
     c_uint, # end_bit
 ]
 
-_overloads = {
+_support_types = {
     np.float32: 'float',
     np.float64: 'double',
     np.int32: 'int32',
@@ -34,14 +34,14 @@ _overloads = {
     np.uint64: 'uint64'
 }
 
-overloads = {}
+_overloads = {}
 
 
 def _init():
-    for ty, name in _overloads.items():
+    for ty, name in _support_types.items():
         dtype = np.dtype(ty)
         fn = getattr(lib, "radixsort_{}".format(name))
-        overloads[dtype] = fn
+        _overloads[dtype] = fn
         fn.argtypes = _argtypes
         fn.restype = c_void_p
 
@@ -81,13 +81,31 @@ def _cu_arange(ary, count):
 
 
 class RadixSort(object):
+    """Provides radixsort and radixselect
+    """
+
     def __init__(self, maxcount, dtype, descending=False, stream=0):
-        self.maxcount = maxcount
+        """
+        Args
+        ----
+        maxcount : int
+            Maximum number of items to sort
+
+        dtype : numpy.dtype
+            The element type to sort
+
+        descending : bool
+            Sort in descending order?
+
+        stream : cuda stream
+            The cuda stream to run the kernels on
+        """
+        self.maxcount = int(maxcount)
         self.dtype = np.dtype(dtype)
-        self._arysize = self.maxcount * self.dtype.itemsize
+        self._arysize = int(self.maxcount * self.dtype.itemsize)
         self.descending = descending
         self.stream = stream
-        self._sort = overloads[self.dtype]
+        self._sort = _overloads[self.dtype]
         self._cleanup = lib.radixsort_cleanup
 
         ctx = cuda.current_context()
@@ -95,8 +113,18 @@ class RadixSort(object):
         self._temp_vals = ctx.memalloc(self._arysize)
         self._temp = self._call(temp=None, keys=None, vals=None)
 
+    def __del__(self):
+        try:
+            self.close()
+        except:
+            pass
+
     def close(self):
-        self._cleanup(self._temp)
+        """Release internal resources
+        """
+        if self._temp is not None:
+            self._cleanup(self._temp)
+            self._temp = None
 
     def _call(self, temp, keys, vals, begin_bit=0, end_bit=None):
         stream = self.stream.handle if self.stream else self.stream
@@ -128,6 +156,25 @@ class RadixSort(object):
             raise ValueError("keys array too long")
 
     def sort(self, keys, vals=None, begin_bit=0, end_bit=None):
+        """
+        Perform a inplace sort on ``keys``.  Memory transfer is performed
+        automatically.
+
+        Args
+        -----
+        keys : ndarray
+            Keys to sort inplace.
+
+        vals : ndarray of uint32; optional
+            Additional values to be reordered along the sort.
+            It is modified inplace. Only support uint32 in this version.
+
+        begin_bit : int
+            The first bit to sort
+
+        end_bit : int; optional
+            The last bit to sort
+        """
         self._sentry(keys)
         with _autodevice(keys, self.stream) as d_keys:
             with _autodevice(vals, self.stream) as d_vals:
@@ -135,6 +182,27 @@ class RadixSort(object):
                            begin_bit=begin_bit, end_bit=end_bit)
 
     def select(self, k, keys, vals=None, begin_bit=0, end_bit=None):
+        """
+        Perform a inplace k-select on ``keys``.  Memory transfer is performed
+        automatically.
+
+        Args
+        -----
+        keys : ndarray
+            Keys to sort inplace.
+
+        vals : ndarray of uint32; optional
+            Additional values to be reordered along the sort.
+            It is modified inplace. Only support uint32 in this version.
+
+        begin_bit : int
+            The first bit to sort
+
+        end_bit : int; optional
+            The last bit to sort
+
+
+        """
         self._sentry(keys)
         with _autodevice(keys, self.stream, firstk=k) as d_keys:
             with _autodevice(vals, self.stream, firstk=k) as d_vals:
@@ -142,11 +210,15 @@ class RadixSort(object):
                            begin_bit=begin_bit, end_bit=end_bit)
 
     def init_arg(self, size):
+        """Returns a cuda ndarray of uint32
+        """
         d_vals = cuda.device_array(size, dtype=np.uint32, stream=self.stream)
         _cu_arange.forall(d_vals.size, stream=self.stream)(d_vals, size)
         return d_vals
 
     def argselect(self, k, keys, begin_bit=0, end_bit=None):
+        """Similar to ``RadixSort.select`` but returns the new sorted indices.
+        """
         d_vals = self.init_arg(keys.size)
         self.select(k, keys, vals=d_vals, begin_bit=begin_bit, end_bit=end_bit)
         res = d_vals.bind(self.stream)[:k]
@@ -155,6 +227,8 @@ class RadixSort(object):
         return res
 
     def argsort(self, keys, begin_bit=0, end_bit=None):
+        """Similar to ``RadixSort.sort`` but returns the new sorted indices.
+        """
         d_vals = self.init_arg(keys.size)
         self.sort(keys, vals=d_vals, begin_bit=begin_bit, end_bit=end_bit)
         res = d_vals
@@ -162,26 +236,3 @@ class RadixSort(object):
             res = res.copy_to_host(stream=self.stream)
         return res
 
-
-def test():
-    keys = np.array(list(reversed(list(range(10 ** 3)))),
-                    dtype=np.float32)
-    orig = keys.copy()
-    vals = np.arange(keys.size, dtype=np.uint32)
-
-    # print(keys)
-    # print(vals)
-
-    rs = RadixSort(keys.size, dtype=keys.dtype, descending=True)
-
-    k = 10
-    vals = rs.argselect(k, keys)
-    print(vals)
-
-    assert np.all(orig.argsort()[::-1][:k] == vals)
-
-    assert np.all(orig == keys)
-
-
-if __name__ == '__main__':
-    test()

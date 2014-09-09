@@ -2,7 +2,8 @@ from __future__ import print_function, absolute_import, division
 import numpy as np
 from numbapro.testsupport import unittest
 from numbapro.cudalib import sorting
-from numbapro.cudalib.sorting import radixsort
+
+SELECT_THRESHOLD = 1e5
 
 
 class TestRadixSort(unittest.TestCase):
@@ -75,7 +76,7 @@ class TestRadixSort(unittest.TestCase):
                 self.assertIsNone(indices)
 
     def test_select_float32(self):
-        counts = [1, 2, 10, 13, 31, 73, 100, 101, radixsort.SELECT_THRESHOLD]
+        counts = [1, 2, 10, 13, 31, 73, 100, 101, SELECT_THRESHOLD]
         ks = [1, 1, 3, 5, 10, 60, 99, 101, 1000]
         self._test_select(np.float32, counts, ks)
         self._test_select(np.float32, counts, ks, reverse=True)
@@ -83,7 +84,7 @@ class TestRadixSort(unittest.TestCase):
                           getindices=True)
 
     def test_select_int32(self):
-        counts = [1, 2, 10, 13, 31, 73, 100, 101, radixsort.SELECT_THRESHOLD]
+        counts = [1, 2, 10, 13, 31, 73, 100, 101, SELECT_THRESHOLD]
         ks = [1, 1, 3, 5, 10, 60, 99, 101, 1000]
         self._test_select(np.int32, counts, ks)
         self._test_select(np.int32, counts, ks, reverse=True)
@@ -91,7 +92,7 @@ class TestRadixSort(unittest.TestCase):
                           getindices=True)
 
     def test_select_float64(self):
-        counts = [1, 2, 10, 13, 31, 73, 100, 101, radixsort.SELECT_THRESHOLD]
+        counts = [1, 2, 10, 13, 31, 73, 100, 101, SELECT_THRESHOLD]
         ks = [1, 1, 3, 5, 10, 60, 99, 101, 1000]
         self._test_select(np.float64, counts, ks)
         self._test_select(np.float64, counts, ks, reverse=True,

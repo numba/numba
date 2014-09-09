@@ -35,14 +35,14 @@ _overloads = [
 overloads = {}
 
 
-def init():
+def _init():
     for t in _overloads:
         fn = getattr(lib, 'segsortpairs_{}'.format(t))
         fn.argtypes = _argtypes
         overloads[np.dtype(t)] = fn
 
 
-init()
+_init()
 
 
 @contextmanager
