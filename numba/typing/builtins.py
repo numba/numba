@@ -419,6 +419,8 @@ class SetItemArray(AbstractTemplate):
         assert not kws
         ary, idx, val = args
         if isinstance(ary, types.Array):
+            if ary.const:
+                raise TypeError("Constant array")
             return signature(types.none, ary, normalize_index(idx), ary.dtype)
 
 
