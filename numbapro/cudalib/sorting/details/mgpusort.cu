@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <moderngpu.cuh>
 #include <util/mgpucontext.h>
 #include "mgpucontext.cu"
@@ -47,8 +48,12 @@ void segsortpairs_##F( Tkey *d_keys,										\
 					   cudaStream_t stream	)							\
 {  segsortpairs(d_keys, d_vals, N, d_segments, NumSegs, stream);  }
 
+WRAP(int32, int32_t, unsigned)
+WRAP(int64, int64_t, unsigned)
+WRAP(uint32, uint32_t, unsigned)
+WRAP(uint64, uint64_t, unsigned)
 WRAP(float32, float, unsigned)
-WRAP(float64, float, unsigned)
+WRAP(float64, double, unsigned)
 
 
 }

@@ -99,5 +99,35 @@ class TestRadixSort(unittest.TestCase):
                           getindices=True)
 
 
+class TestSegmentedSort(unittest.TestCase):
+    def _test_generic(self, dtype, divby=1):
+        keys = np.array(list(reversed(range(100))), dtype=dtype) / divby
+        reference = keys.copy()
+        original = keys.copy()
+        vals = np.arange(keys.size, dtype=np.int32)
+        segments = np.array([10, 40, 70], dtype=np.int32)
+        sorting.segmented_sort(keys, vals, segments)
+
+        reference[:10].sort()
+        reference[10:40].sort()
+        reference[40:70].sort()
+        reference[70:].sort()
+
+        self.assertTrue(np.all(keys == reference))
+        self.assertTrue(np.all(original[vals] == reference))
+
+    def test_float32(self):
+        self._test_generic(np.float32, divby=10)
+
+    def test_float64(self):
+        self._test_generic(np.float64, divby=10)
+
+    def test_int32(self):
+        self._test_generic(np.int32)
+
+    def test_int64(self):
+        self._test_generic(np.int64)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -40,7 +40,7 @@ _overloads = {}
 def _init():
     for ty, name in _support_types.items():
         dtype = np.dtype(ty)
-        fn = getattr(lib, "radixsort_{}".format(name))
+        fn = getattr(lib, "radixsort_{0}".format(name))
         _overloads[dtype] = fn
         fn.argtypes = _argtypes
         fn.restype = c_void_p
@@ -81,7 +81,10 @@ def _cu_arange(ary, count):
 
 
 class RadixSort(object):
-    """Provides radixsort and radixselect
+    """Provides radixsort and radixselect.
+    The algorithm implemented here is best for large arrays (N >= 1e6) due to
+    latency of kernel launch.  It is recommended to use ``segmeneted_sort``
+    batches of smaller arrays.
     """
 
     def __init__(self, maxcount, dtype, descending=False, stream=0):
@@ -218,6 +221,8 @@ class RadixSort(object):
 
     def argselect(self, k, keys, begin_bit=0, end_bit=None):
         """Similar to ``RadixSort.select`` but returns the new sorted indices.
+
+        Returns the indices indicating the new ordering.
         """
         d_vals = self.init_arg(keys.size)
         self.select(k, keys, vals=d_vals, begin_bit=begin_bit, end_bit=end_bit)
@@ -228,6 +233,8 @@ class RadixSort(object):
 
     def argsort(self, keys, begin_bit=0, end_bit=None):
         """Similar to ``RadixSort.sort`` but returns the new sorted indices.
+
+        Returns the indices indicating the new ordering.
         """
         d_vals = self.init_arg(keys.size)
         self.sort(keys, vals=d_vals, begin_bit=begin_bit, end_bit=end_bit)

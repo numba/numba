@@ -27,19 +27,23 @@ _argtypes = [
     cu_stream,
 ]
 
-_overloads = [
-    'float32',
-    'float64',
-]
+_support_types = {
+    np.float32: 'float32',
+    np.float64: 'float64',
+    np.int32: 'int32',
+    np.uint32: 'uint32',
+    np.int64: 'int64',
+    np.uint64: 'uint64'
+}
 
-overloads = {}
+_overloads = {}
 
 
 def _init():
-    for t in _overloads:
-        fn = getattr(lib, 'segsortpairs_{}'.format(t))
+    for k, v in _support_types.items():
+        fn = getattr(lib, 'segsortpairs_{0}'.format(v))
         fn.argtypes = _argtypes
-        overloads[np.dtype(t)] = fn
+        _overloads[np.dtype(k)] = fn
 
 
 _init()
@@ -57,35 +61,34 @@ def _autodevice(ary, stream):
 
 
 def _segmentedsort(d_keys, d_vals, d_segments, stream):
-    overloads[d_keys.dtype](device_pointer(d_keys),
-                            device_pointer(d_vals),
-                            d_keys.size,
-                            device_pointer(d_segments),
-                            d_segments.size,
-                            stream.handle if stream else 0)
+    _overloads[d_keys.dtype](device_pointer(d_keys),
+                             device_pointer(d_vals),
+                             d_keys.size,
+                             device_pointer(d_segments),
+                             d_segments.size,
+                             stream.handle if stream else 0)
 
 
 def segmented_sort(keys, vals, segments, stream=0):
+    """Perform a inplace sort on small segments (N < 1e6).
+
+    Args
+    ----
+    keys : 1d array
+        Keys to sort inplace.
+
+    vals: 1d array
+        Values to be reordered inplace along the sort. Only support uint32.
+
+    segments: 1d array of int32
+        Segments separation location. e.g. array([3, 6, 8]) for segment of
+        keys[:3], keys[3:6], keys[6:8], keys[8:].
+
+    stream: cuda stream; optional
+        A cuda stream in which the kernels are executed.
+    """
     with _autodevice(keys, stream) as d_keys:
         with _autodevice(vals, stream) as d_vals:
             d_segments, _ = auto_device(segments, stream=stream)
             _segmentedsort(d_keys, d_vals, d_segments, stream)
 
-
-def test():
-    keys = np.array(list(reversed(range(1000))), dtype=np.float32)
-    vals = np.arange(keys.size, dtype=np.uint32)
-    segments = np.array([500], dtype=np.int32)
-    print(keys)
-    s = 0
-
-    d_keys = cuda.to_device(keys)
-    d_vals = cuda.to_device(vals)
-    segmented_sort(d_keys, d_vals, segments, stream=s)
-    # s.synchronize()
-    print(d_keys.copy_to_host())
-    print(d_vals.copy_to_host())
-
-
-if __name__ == '__main__':
-    test()

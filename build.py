@@ -30,7 +30,7 @@ def build_cuda(basepath, out, ins, includes):
     output = os.path.join(basepath, out)
     inputs = ' '.join([os.path.join(basepath, p)
                        for p in ins])
-    argtemp = '-m64 --compiler-options "-fPIC" {} -O3 {} --shared -o {} {}'
+    argtemp = '-m64 --compiler-options "-fPIC" {0} -O3 {1} --shared -o {2} {3}'
     args = argtemp.format(includes, GENCODE_FLAGS, output, inputs)
     cmd = ' '.join([NVCC, args])
     run_shell(cmd)
