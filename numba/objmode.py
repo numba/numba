@@ -471,7 +471,7 @@ class PyLower(BaseLower):
         Delete the variable slot with the given name. This will decref
         the corresponding Python object.
         """
-        ptr = self.varmap[name]
+        ptr = self._getvar(name)  # initializes `name` if not already
         self.decref(self.builder.load(ptr))
         # This is a safety guard against double decref's, but really
         # the IR should be correct and have only one Del per variable

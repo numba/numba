@@ -194,7 +194,8 @@ class BinOpFloorDiv(ConcreteTemplate):
 @builtin
 class BinOpPower(ConcreteTemplate):
     key = "**"
-    cases = [signature(types.float64, types.float64, op)
+    cases = [signature(types.intp, types.intp, types.intp)]
+    cases += [signature(types.float64, types.float64, op)
              for op in sorted(types.signed_domain)]
     cases += [signature(types.float64, types.float64, op)
              for op in sorted(types.unsigned_domain)]
@@ -202,6 +203,13 @@ class BinOpPower(ConcreteTemplate):
              for op in sorted(types.real_domain)]
     cases += [signature(op, op, op)
              for op in sorted(types.complex_domain)]
+
+
+class PowerBuiltin(BinOpPower):
+    key = pow
+    # TODO add 3 operand version
+
+builtin_global(pow, types.Function(PowerBuiltin))
 
 
 class BitwiseShiftOperation(ConcreteTemplate):
