@@ -67,7 +67,9 @@ class BaseContext(object):
 
     def resolve_getattr(self, value, attr):
         if isinstance(value, types.Record):
-            return value.typeof(attr)
+            ret = value.typeof(attr)
+            assert ret
+            return ret
 
         try:
             attrinfo = self.attributes[value]
@@ -81,7 +83,9 @@ class BaseContext(object):
             else:
                 raise
 
-        return attrinfo.resolve(value, attr)
+        ret = attrinfo.resolve(value, attr)
+        assert ret
+        return ret
 
     def resolve_setitem(self, target, index, value):
         args = target, index, value

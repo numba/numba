@@ -343,6 +343,18 @@ class FunctionPointer(Function):
         super(FunctionPointer, self).__init__(template)
 
 
+class BoundFunction(Function):
+    def __init__(self, template, this):
+        self.this = this
+        newcls = type(template.__name__ + '.' + str(this), (template,),
+                      dict(this=this))
+        super(BoundFunction, self).__init__(newcls)
+
+    @property
+    def key(self):
+        return (self.template.__name__, self.this)
+
+
 class Method(Function):
     def __init__(self, template, this):
         self.this = this
@@ -406,8 +418,22 @@ class SimpleIteratorType(IteratorType):
 class RangeType(SimpleIterableType):
     pass
 
+
 class RangeIteratorType(SimpleIteratorType):
     pass
+
+
+class NumpyFlatType(IteratorType):
+    def __init__(self, arrty):
+        self.array_type = arrty
+        self.yield_type = arrty.dtype
+        name = "array.flat({arrayty})".format(arrayty=arrty)
+        super(NumpyFlatType, self).__init__(name, param=True)
+
+
+    @property
+    def key(self):
+        return self.array_type
 
 
 class EnumerateType(IteratorType):
