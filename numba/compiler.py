@@ -112,14 +112,17 @@ class _CompileStatus(object):
     """
     Used like a C record
     """
-    __slots__ = 'fail_reason', 'use_python_mode', 'can_fallback'
+    __slots__ = ['fail_reason', 'use_python_mode',
+                 'use_interpreter_mode', 'can_fallback', 'can_giveup']
 
 
 @contextmanager
 def _fallback_context(status):
+    """Wraps code that would signal a fallback to object mode
+    """
     try:
         yield
-    except Exception as e:
+    except BaseException as e:
         if not status.can_fallback:
             raise
         if utils.PYVERSION >= (3,):
@@ -127,6 +130,225 @@ def _fallback_context(status):
             e = e.with_traceback(None)
         status.fail_reason = e
         status.use_python_mode = True
+
+
+@contextmanager
+def _giveup_context(status):
+    """Wraps code that would signal a fallback to interpreter mode
+    """
+    try:
+        yield
+    except BaseException as e:
+        if not status.can_giveup:
+            raise
+        if utils.PYVERSION >= (3,):
+            # Clear all references attached to the traceback
+            e = e.with_traceback(None)
+        status.fail_reason = e
+        status.use_interpreter_mode = True
+
+
+class Pipeline(object):
+    """Stores and manages states for the compiler pipeline
+    """
+    def __init__(self, typingctx, targetctx, args, return_type, flags, locals):
+        self.typingctx = typingctx
+        self.targetctx = targetctx
+        self.args = args
+        self.return_type = return_type
+        self.flags = flags
+        self.locals = locals
+        self.bc = None
+        self.func_attr = None
+        self.lifted = None
+
+    def compile_extra(self, func):
+        bc = bytecode.ByteCode(func=func)
+        if config.DUMP_BYTECODE:
+            print(bc.dump())
+        func_attr = get_function_attributes(func)
+        return self.compile_bytecode(bc, func_attr=func_attr)
+
+    def compile_bytecode(self, bc, lifted=(),
+                         func_attr=DEFAULT_FUNCTION_ATTRIBUTES):
+        self.bc = bc
+        self.lifted = lifted
+        self.func_attr = func_attr
+
+        self.status = _CompileStatus()
+        self.status.can_fallback = self.flags.enable_pyobject
+        self.status.fail_reason = None
+        self.status.use_python_mode = self.flags.force_pyobject
+
+        self.targetctx = self.targetctx.localized()
+        self.targetctx.metadata['wraparound'] = not self.flags.no_wraparound
+
+        return self._compile_bytecode()
+
+    def analyze_bytecode(self):
+        self.interp = translate_stage(self.bc)
+        self.nargs = len(self.interp.argspec.args)
+        if len(self.args) > self.nargs:
+            raise TypeError("Too many argument types")
+
+    def frontend_object_mode(self):
+        self.analyze_bytecode()
+
+    def frontend_nopython_mode(self):
+        self.analyze_bytecode()
+        with _fallback_context(self.status):
+            legalize_given_types(self.args, self.return_type)
+            # Type inference
+            self.typemap, self.return_type, self.calltypes = type_inference_stage(
+                self.typingctx,
+                self.interp,
+                self.args,
+                self.return_type,
+                self.locals)
+
+        if self.status.fail_reason is not None:
+            warnings.warn_explicit('Function "%s" failed type inference: %s'
+                                   % (self.func_attr.name,
+                                      self.status.fail_reason),
+                                   config.NumbaWarning,
+                                   self.func_attr.filename,
+                                   self.func_attr.lineno)
+
+        if not self.status.use_python_mode:
+            with _fallback_context(self.status):
+                legalize_return_type(self.return_type, self.interp,
+                                     self.targetctx)
+            if self.status.fail_reason is not None:
+                warnings.warn_explicit('Function "%s" has invalid return type: %s'
+                                       % (self.func_attr.name,
+                                          self.status.fail_reason),
+                                       config.NumbaWarning,
+                                       self.func_attr.filename,
+                                       self.func_attr.lineno)
+
+    def frontend_looplift(self):
+        assert not self.lifted
+
+        # Try loop lifting
+        loop_flags = self.flags.copy()
+        outer_flags = self.flags.copy()
+        # Do not recursively loop lift
+        outer_flags.unset('enable_looplift')
+        loop_flags.unset('enable_looplift')
+        if not self.flags.enable_pyobject_looplift:
+            loop_flags.unset('enable_pyobject')
+
+        def dispatcher_factory(loopbc):
+            from . import dispatcher
+            return dispatcher.LiftedLoop(loopbc, self.typingctx,
+                                         self.targetctx,
+                                         self.locals, loop_flags)
+
+        entry, loops = looplifting.lift_loop(self.bc, dispatcher_factory)
+        if loops:
+            # Some loops were extracted
+            cres = compile_bytecode(self.typingctx, self.targetctx, entry,
+                                    self.args, self.return_type,
+                                    outer_flags, self.locals,
+                                    lifted=tuple(loops),
+                                    func_attr=self.func_attr)
+            return cres
+
+    def frontend(self):
+        """
+        Front-end: Analyze bytecode, generate Numba IR, infer types
+        """
+        if self.status.use_python_mode:
+            self.frontend_object_mode()
+        else:
+            self.frontend_nopython_mode()
+
+        if self.status.use_python_mode and self.flags.enable_looplift:
+            assert not self.lifted
+            cres = self.frontend_looplift()
+            if cres is not None:
+                return cres
+
+        if self.status.use_python_mode:
+            # Fallback typing: everything is a python object
+            self.typemap = defaultdict(lambda: types.pyobject)
+            self.calltypes = defaultdict(lambda: types.pyobject)
+            self.return_type = types.pyobject
+
+        self.type_annotation = type_annotations.TypeAnnotation(
+            interp=self.interp,
+            typemap=self.typemap,
+            calltypes=self.calltypes,
+            lifted=self.lifted)
+
+        if config.ANNOTATE:
+            print("ANNOTATION".center(80, '-'))
+            print(self.type_annotation)
+            print('=' * 80)
+
+    def backend_object_mode(self):
+        """Object mode compilation"""
+        func, lmod, lfunc, fndesc = py_lowering_stage(self.targetctx,
+                                                      self.interp,
+                                                      self.flags.no_compile)
+        if len(self.args) != self.nargs:
+            # append missing
+            self.args = (tuple(self.args) + (types.pyobject,) *
+                    (self.nargs - len(self.args)))
+
+        return func, lmod, lfunc, fndesc
+
+    def backend_nopython_mode(self):
+        """Native mode compilation"""
+        func, lmod, lfunc, fndesc = native_lowering_stage(self.targetctx,
+                                                          self.interp,
+                                                          self.typemap,
+                                                          self.return_type,
+                                                          self.calltypes,
+                                                          self.flags.no_compile)
+        return func, lmod, lfunc, fndesc
+
+    def backend(self):
+        """
+        Back-end: Generate LLVM IR from Numba IR, compile to machine code
+        """
+
+        func, lmod, lfunc, fndesc = (self.backend_object_mode()
+                                     if self.status.use_python_mode
+                                     else self.backend_nopython_mode())
+
+        signature = typing.signature(self.return_type, *self.args)
+
+        assert lfunc.module is lmod
+        cr = compile_result(typing_context=self.typingctx,
+                            target_context=self.targetctx,
+                            entry_point=func,
+                            typing_error=self.status.fail_reason,
+                            type_annotation=self.type_annotation,
+                            llvm_func=lfunc,
+                            llvm_module=lmod,
+                            signature=signature,
+                            objectmode=self.status.use_python_mode,
+                            lifted=self.lifted,
+                            fndesc=fndesc,)
+
+        # Warn if compiled function in object mode and force_pyobject not set
+        if self.status.use_python_mode and not self.flags.force_pyobject:
+            if len(self.lifted) > 0:
+                warn_msg = 'Function "%s" was compiled in object mode without forceobj=True, but has lifted loops.' % self.func_attr.name,
+            else:
+                warn_msg = 'Function "%s" was compiled in object mode without forceobj=True.' % self.func_attr.name,
+            warnings.warn_explicit(warn_msg, config.NumbaWarning,
+                                   self.func_attr.filename,
+                                   self.func_attr.lineno)
+
+        return cr
+
+    def _compile_bytecode(self):
+        cres = self.frontend()
+        if cres is not None:
+            return cres
+        return self.backend()
 
 
 def compile_extra(typingctx, targetctx, func, args, return_type, flags,
@@ -137,142 +359,16 @@ def compile_extra(typingctx, targetctx, func, args, return_type, flags,
     - return_type
         Use ``None`` to indicate
     """
-    bc = bytecode.ByteCode(func=func)
-    if config.DUMP_BYTECODE:
-        print(bc.dump())
-    func_attr = get_function_attributes(func)
-    return compile_bytecode(typingctx, targetctx, bc, args,
-                            return_type, flags, locals,
-                            func_attr=func_attr)
+    pipeline = Pipeline(typingctx, targetctx, args, return_type, flags, locals)
+    return pipeline.compile_extra(func)
 
 
 def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
                      locals, lifted=(),
                      func_attr=DEFAULT_FUNCTION_ATTRIBUTES):
-    ### Front-end: Analyze bytecode, generate Numba IR, infer types
 
-    interp = translate_stage(bc)
-    nargs = len(interp.argspec.args)
-    if len(args) > nargs:
-        raise TypeError("Too many argument types")
-
-    status = _CompileStatus()
-    status.can_fallback = flags.enable_pyobject
-    status.fail_reason = None
-    status.use_python_mode = flags.force_pyobject
-
-    targetctx = targetctx.localized()
-    targetctx.metadata['wraparound'] = not flags.no_wraparound
-
-    if not status.use_python_mode:
-        with _fallback_context(status):
-            legalize_given_types(args, return_type)
-            # Type inference
-            typemap, return_type, calltypes = type_inference_stage(typingctx,
-                                                                   interp,
-                                                                   args,
-                                                                   return_type,
-                                                                   locals)
-
-        if status.fail_reason is not None:
-            warnings.warn_explicit('Function "%s" failed type inference: %s'
-                          % (func_attr.name, status.fail_reason),
-                          config.NumbaWarning,
-                          func_attr.filename, func_attr.lineno)
-
-        if not status.use_python_mode:
-            with _fallback_context(status):
-                legalize_return_type(return_type, interp, targetctx)
-            if status.fail_reason is not None:
-                warnings.warn_explicit('Function "%s" has invalid return type: %s'
-                                       % (func_attr.name, status.fail_reason),
-                                       config.NumbaWarning,
-                                       func_attr.filename, func_attr.lineno)
-
-    if status.use_python_mode and flags.enable_looplift:
-        assert not lifted
-
-        # Try loop lifting
-        loop_flags = flags.copy()
-        outer_flags = flags.copy()
-        # Do not recursively loop lift
-        outer_flags.unset('enable_looplift')
-        loop_flags.unset('enable_looplift')
-        if not flags.enable_pyobject_looplift:
-            loop_flags.unset('enable_pyobject')
-
-        def dispatcher_factory(loopbc):
-            from . import dispatcher
-            return dispatcher.LiftedLoop(loopbc, typingctx, targetctx,
-                                         locals, loop_flags)
-
-        entry, loops = looplifting.lift_loop(bc, dispatcher_factory)
-        if loops:
-            # Some loops were extracted
-            cres = compile_bytecode(typingctx, targetctx, entry, args,
-                                    return_type, outer_flags, locals,
-                                    lifted=tuple(loops),
-                                    func_attr=func_attr)
-            return cres
-
-    if status.use_python_mode:
-        # Fallback typing: everything is a python object
-        typemap = defaultdict(lambda: types.pyobject)
-        calltypes = defaultdict(lambda: types.pyobject)
-        return_type = types.pyobject
-
-    type_annotation = type_annotations.TypeAnnotation(interp=interp,
-                                                      typemap=typemap,
-                                                      calltypes=calltypes,
-                                                      lifted=lifted)
-    if config.ANNOTATE:
-        print("ANNOTATION".center(80, '-'))
-        print(type_annotation)
-        print('=' * 80)
-
-    ### Back-end: Generate LLVM IR from Numba IR, compile to machine code
-
-    if status.use_python_mode:
-        # Object mode compilation
-        func, lmod, lfunc, fndesc = py_lowering_stage(targetctx, interp,
-                                                             flags.no_compile)
-        if len(args) != nargs:
-            # append missing
-            args = tuple(args) + (types.pyobject,) * (nargs - len(args))
-    else:
-        # Native mode compilation
-        func, lmod, lfunc, fndesc = native_lowering_stage(targetctx,
-                                                                 interp,
-                                                                 typemap,
-                                                                 return_type,
-                                                                 calltypes,
-                                                                 flags.no_compile)
-
-    signature = typing.signature(return_type, *args)
-
-    assert lfunc.module is lmod
-    cr = compile_result(typing_context=typingctx,
-                        target_context=targetctx,
-                        entry_point=func,
-                        typing_error=status.fail_reason,
-                        type_annotation=type_annotation,
-                        llvm_func=lfunc,
-                        llvm_module=lmod,
-                        signature=signature,
-                        objectmode=status.use_python_mode,
-                        lifted=lifted,
-                        fndesc=fndesc,)
-
-    # Warn if compiled function in object mode and force_pyobject not set
-    if status.use_python_mode and not flags.force_pyobject:
-        if len(lifted) > 0:
-            warn_msg = 'Function "%s" was compiled in object mode without forceobj=True, but has lifted loops.' % func_attr.name,
-        else:
-            warn_msg = 'Function "%s" was compiled in object mode without forceobj=True.' % func_attr.name,
-        warnings.warn_explicit(warn_msg, config.NumbaWarning,
-                               func_attr.filename, func_attr.lineno)
-
-    return cr
+    pipeline = Pipeline(typingctx, targetctx, args, return_type, flags, locals)
+    return pipeline.compile_bytecode(bc=bc, lifted=lifted, func_attr=func_attr)
 
 
 def _is_nopython_types(t):

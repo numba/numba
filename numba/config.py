@@ -13,6 +13,7 @@ IS_32BITS = MACHINE_BITS == 32
 class NumbaWarning(Warning):
     pass
 
+
 def _readenv(name, ctor, default):
     try:
         res = os.environ[name]
@@ -79,6 +80,9 @@ PYVERSION = sys.version_info[:2]
 
 # Disable CUDA support
 DISABLE_CUDA = _readenv("NUMBA_DISABLE_CUDA", int, 0)
+
+# Allow interpreter fallback
+INTERPRETER_FALLBACK = _readenv("NUMBA_INTERPRETER_FALLBACK", int, 0)
 
 # Force CUDA compute capability
 def _force_cc(text):
