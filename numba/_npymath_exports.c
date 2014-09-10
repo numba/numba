@@ -12,7 +12,7 @@
 
 
 /* Missing math function on windows */
-#ifdef WIN32
+#ifdef _WIN32
     float ldexpf(float x, int exp) {
         return ldexp(x, exp);
     }
