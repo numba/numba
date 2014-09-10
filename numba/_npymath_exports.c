@@ -13,12 +13,18 @@
 
 /* Missing math function on windows */
 #ifdef _WIN32
+    /* undef windows macros for the following */
+    #undef ldexpf
+    #undef frexpf
+
+    static
     float ldexpf(float x, int exp) {
-        return ldexp(x, exp);
+        return (float)ldexp(x, exp);
     }
 
+    static
     float frexpf(float x, int *exp) {
-        return frexp(x, exp)
+        return (float)frexp(x, exp)
     }
 #endif /* WIN32 */
 
