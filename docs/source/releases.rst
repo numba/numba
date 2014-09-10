@@ -8,6 +8,57 @@
 Release Notes
 ======================
 
+Version 0.14
+------------
+
+Features:
+
+* Support for nearly all the Numpy math functions (including comparison, 
+  logical, bitwise and some previously missing float functions) in nopython mode.
+* The Numpy datetime64 and timedelta64 dtypes are supported in nopython mode 
+  with Numpy 1.7 and later.
+* Support for Numpy math functions on complex numbers in nopython mode.
+* ndarray.sum() is supported in nopython mode.
+* Better error messages when unsupported types are used in Numpy math functions.
+* Set NUMBA_WARNINGS=1 in the environment to see which functions are compiled
+  in object mode vs. nopython mode.
+* Add support for the two-argument pow() builtin function in nopython mode.
+* New developer documentation describing how Numba works, and how to
+  add new types.
+* Support for Numpy record arrays on the GPU. (Note: Improper alignment of dtype
+  fields will cause an exception to be raised.)
+* Slices on GPU device arrays.
+* GPU objects can be used as Python context managers to select the active
+  device in a block.
+* GPU device arrays can be bound to a CUDA stream.  All subsequent operations
+  (such as memory copies) will be queued on that stream instead of the default.
+  This can prevent unnecessary synchronization with other streams.
+
+Fixes:
+
+* Generation of AVX instructions has been disabled to avoid performance bugs
+  when calling external math functions that may use SSE instructions, 
+  especially on OS X.
+* JIT functions can be removed by the garbage collector when they are no
+  longer accessible.
+* Various other reference counting fixes to prevent memory leaks.
+* Fixed handling of exception when input argument is out of range.
+* Prevent autojit functions from making unsafe numeric conversions when
+  called with different numeric types.
+* Fix a compilation error when an unhashable global value is accessed.
+* Gracefully handle failure to enable faulthandler in the IPython Notebook.
+* Fix a bug that caused loop lifting to fail if the loop was inside an
+  ``else`` block.
+* Fixed a problem with selecting CUDA devices in multithreaded programs on 
+  Linux.
+* The ``pow()`` function (and ``**`` operation) applied to two integers now 
+  returns an integer rather than a float.
+* Numpy arrays using the object dtype no longer cause an exception in the
+  autojit.
+* Attempts to write to a global array will cause compilation to fall back
+  to object mode, rather than attempt and fail at nopython mode.
+* ``range()`` works with all negative arguments (ex: ``range(-10, -12, -1)``)
+
 Version 0.13.4
 --------------
 
