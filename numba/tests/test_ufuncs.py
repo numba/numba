@@ -1256,9 +1256,9 @@ class TestLoopTypes(TestCase):
 
 
 class TestLoopTypesNoPython(TestLoopTypes):
-    ### NOTE: int16 is tested in a separate class due to issues with
+    ### NOTE: int16 and uint64 are tested in a separate class due to issues with
     ###       np.reciprocal.  Functions added to this test should also
-    ###       be added to TestLoopTypesInt16NoPython!
+    ###       be added to TestLoopTypesBadReciprocalNoPython!
     _compile_flags = no_pyobj_flags
 
     _ufuncs = [np.add, np.subtract, np.multiply, np.divide, np.logaddexp,
@@ -1281,11 +1281,11 @@ class TestLoopTypesNoPython(TestLoopTypes):
 
     # supported types are integral (signed and unsigned) as well as float and double
     # support for complex64(F) and complex128(D) should be coming soon.
-    _supported_types = '?bBHiIlLqQfd'  ## NOTE: "h" has been pulled into another class!
+    _supported_types = '?bBHiIlqQfd'  ## NOTE: "h" has been pulled into another class!
 
 
-class TestLoopTypesInt16NoPython(TestLoopTypes):
-    ### NOTE: int16 is tested in a separate class due to issues with
+class TestLoopTypesBadReciprocalNoPython(TestLoopTypes):
+    ### NOTE: int16/uint64 is tested in a separate class due to issues with
     ###       np.reciprocal.  Functions added to this test should also
     ###       be added to TestLoopTypesNoPython!
     _compile_flags = no_pyobj_flags
@@ -1308,9 +1308,7 @@ class TestLoopTypesInt16NoPython(TestLoopTypes):
                np.right_shift, np.isinf, np.isfinite, np.signbit, np.copysign,
                np.nextafter, np.spacing, np.ldexp, np.fmod ]
 
-    # supported types are integral (signed and unsigned) as well as float and double
-    # support for complex64(F) and complex128(D) should be coming soon.
-    _supported_types = 'h'
+    _supported_types = 'hL'
 
 
 class TestLoopTypesComplexNoPython(TestLoopTypes):
