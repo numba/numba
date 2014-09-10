@@ -69,7 +69,7 @@ class Numpy_rules_ufunc(AbstractTemplate):
         # check if all the types involved in the ufunc loop are supported in this mode
         if not supported_ufunc_loop(ufunc, ufunc_loop):
             msg = "ufunc '{0}' using the loop '{1}' not supported in this mode"
-            raise TypingError(msg=msg.format(ufunc.__name__, ufunc_loop))
+            raise TypingError(msg=msg.format(ufunc.__name__, ufunc_loop.ufunc_sig))
 
         # if there is any explicit output type, check that it is valid
         explicit_outputs_np = [as_dtype(tp.dtype) for tp in explicit_outputs]
@@ -103,7 +103,7 @@ _math_operations = [ "add", "subtract", "multiply",
                      "logaddexp", "logaddexp2", "true_divide",
                      "floor_divide", "negative", "power",
                      "remainder", "fmod", "absolute",
-                     "rint", "sign", "conj", "exp", "exp2",
+                     "rint", "sign", "conjugate", "exp", "exp2",
                      "log", "log2", "log10", "expm1", "log1p",
                      "sqrt", "square", "reciprocal",
                      "divide", "mod", "abs", "fabs" ]
@@ -137,17 +137,9 @@ _floating_functions = [ "isfinite", "isinf", "isnan", "signbit",
 # implemented.
 #
 # It also works as a nice TODO list for ufunc support :)
-_unsupported = set([ numpy.square, numpy.spacing, numpy.signbit,
-                     numpy.right_shift, numpy.remainder, numpy.reciprocal,
-                     numpy.not_equal, numpy.minimum, numpy.maximum,
-                     numpy.logical_xor, numpy.logical_or, numpy.logical_not,
-                     numpy.logical_and, numpy.less,
-                     numpy.less_equal, numpy.left_shift, numpy.isnan, numpy.isinf,
-                     numpy.isfinite, numpy.invert, numpy.greater,
-                     numpy.greater_equal, numpy.fmod, numpy.fmin, numpy.fmax,
-                     numpy.equal, numpy.copysign,
-                     numpy.conjugate, numpy.bitwise_xor,
-                     numpy.bitwise_or, numpy.bitwise_and ])
+_unsupported = set([ numpy.frexp, # this one is tricky, as it has 2 returns
+                     numpy.modf,  # this one also has 2 returns
+                 ])
 
 # a list of ufuncs that are in fact aliases of other ufuncs. They need to insert the
 # resolve method, but not register the ufunc itself

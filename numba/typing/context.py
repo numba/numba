@@ -135,6 +135,8 @@ class BaseContext(object):
         Return the numba type of a Python value representing data
         (e.g. a number or an array, but not more sophisticated types
          such as functions, etc.)
+
+        This function can return None to if it cannot decide.
         """
         if val is True or val is False:
             return types.boolean
@@ -171,7 +173,11 @@ class BaseContext(object):
 
         if numpy_support.is_array(val):
             ary = val
-            dtype = numpy_support.from_dtype(ary.dtype)
+            try:
+                dtype = numpy_support.from_dtype(ary.dtype)
+            except NotImplementedError:
+                return
+
             if ary.flags.c_contiguous:
                 layout = 'C'
             elif ary.flags.f_contiguous:
@@ -180,7 +186,7 @@ class BaseContext(object):
                 layout = 'A'
             return types.Array(dtype, ary.ndim, layout)
 
-        return None
+        return
 
     def resolve_value_type(self, val):
         """

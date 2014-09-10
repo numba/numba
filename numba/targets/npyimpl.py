@@ -6,7 +6,7 @@ import sys
 import itertools
 from collections import namedtuple
 
-from llvm.core import Constant, Type, ICMP_UGT
+from llvm  import core as lc
 
 from . import builtins, ufunc_db
 from .imputils import implement, Registry
@@ -22,20 +22,6 @@ class npy:
     """This will be used as an index of the npy_* functions"""
     pass
 
-
-def _default_promotion_for_type(ty):
-    """returns the default type to be used when generating code
-    associated to the type ty."""
-    if ty in types.real_domain:
-        promote_type = types.float64
-    elif ty in types.signed_domain:
-        promote_type = types.int64
-    elif ty in types.unsigned_domain:
-        promote_type = types.uint64
-    else:
-        assert False, "type {0} not supported.".format(ty)
-
-    return promote_type
 
 ########################################################################
 
@@ -79,8 +65,10 @@ class _ScalarHelper(object):
         self.val = val
         self.base_type = ty
         intpty = ctxt.get_value_type(types.intp)
-        self.shape = [Constant.int(intpty, 1)]
-        self._ptr = cgutils.alloca_once(bld, ctxt.get_data_type(ty))
+        self.shape = [lc.Constant.int(intpty, 1)]
+
+        lty = ctxt.get_data_type(ty) if ty != types.boolean else lc.Type.int(1)
+        self._ptr = cgutils.alloca_once(bld, lty)
 
     def create_iter_indices(self):
         return _ScalarIndexingHelper()
@@ -101,14 +89,14 @@ class _ArrayIndexingHelper(namedtuple('_ArrayIndexingHelper',
     def update_indices(self, loop_indices, name):
         bld = self.array.builder
         intpty = self.array.context.get_value_type(types.intp)
-        ONE = Constant.int(Type.int(intpty.width), 1)
+        ONE = lc.Constant.int(lc.Type.int(intpty.width), 1)
 
         # we are only interested in as many inner dimensions as dimensions
         # the indexed array has (the outer dimensions are broadcast, so
         # ignoring the outer indices produces the desired result.
         indices = loop_indices[len(loop_indices) - len(self.indices):]
         for src, dst, dim in zip(indices, self.indices, self.array.shape):
-            cond = bld.icmp(ICMP_UGT, dim, ONE)
+            cond = bld.icmp(lc.ICMP_UGT, dim, ONE)
             with cgutils.ifthen(bld, cond):
                 bld.store(src, dst)
 
@@ -133,11 +121,11 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary',
     """
     def create_iter_indices(self):
         intpty = self.context.get_value_type(types.intp)
-        ZERO = Constant.int(Type.int(intpty.width), 0)
+        ZERO = lc.Constant.int(lc.Type.int(intpty.width), 0)
 
         indices = []
         for i in range(self.ndim):
-            x = cgutils.alloca_once(self.builder, Type.int(intpty.width))
+            x = cgutils.alloca_once(self.builder, lc.Type.int(intpty.width))
             self.builder.store(ZERO, x)
             indices.append(x)
         return _ArrayIndexingHelper(self, indices)
@@ -154,8 +142,14 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary',
         return self.builder.load(self._load_effective_address(indices))
 
     def store_data(self, indices, value):
-        assert self.context.get_data_type(self.base_type) == value.type
-        self.builder.store(value, self._load_effective_address(indices))
+        ctx = self.context
+        bld = self.builder
+        
+        # maybe there should be a "get_memory_value" or "get_storage_value"
+        store_value = ctx.get_struct_member_value(bld, self.base_type, value)
+        assert ctx.get_data_type(self.base_type) == store_value.type
+
+        bld.store(store_value, self._load_effective_address(indices))
 
 
 def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
@@ -169,52 +163,27 @@ def _prepare_argument(ctxt, bld, inp, tyinp, where='input operand'):
         strides = cgutils.unpack_tuple(bld, ary.strides, tyinp.ndim)
         return _ArrayHelper(ctxt, bld, ary, shape, strides, ary.data,
                             tyinp.layout, tyinp.dtype, tyinp.ndim, inp)
-    elif tyinp in types.number_domain:
+    elif tyinp in types.number_domain | set([types.boolean]):
         return _ScalarHelper(ctxt, bld, inp, tyinp)
     else:
-        raise TypeError('unknown type for {0}'.format(where))
-
-
-def npy_math_extern(fn, fnty):
-    setattr(npy, fn, fn)
-    fn_sym = eval("npy."+fn)
-    fn_arity = len(fnty.args)
-
-    n = "numba.npymath." + fn
-    def ref_impl(context, builder, sig, args):
-        mod = cgutils.get_module(builder)
-        inner_fn = mod.get_or_insert_function(fnty, name=n)
-        return builder.call(inner_fn, args)
-
-    # This registers the function using different combinations of
-    # input types that can be cast to the actual function type.
-    #
-    # Current limitation is that it only does so for homogeneous
-    # source types. Note that it may be a better idea not providing
-    # these specialization and let the ufunc generator functions
-    # insert the appropriate castings before calling.
-    #
-    # TODO:
-    # Either let the function only register the native version without
-    # cast or provide the full range of specializations for functions
-    # with arity > 1.
-    ty_dst = types.float64
-    for ty_src in [types.int64, types.uint64, types.float64]:
-        @register
-        @implement(fn_sym, *[ty_src]*fn_arity)
-        def _impl(context, builder, sig, args):
-            cast_vals = args
-            if ty_dst != ty_src:
-                cast = context.cast
-                cast_vals = [cast(builder, val, ty_src, ty_dst) for val in args]
-            sig = typing.signature(*[ty_dst]*(len(cast_vals)+1))
-            return ref_impl(context, builder, sig, cast_vals)
+        raise TypeError('unknown type for {0}: {1}'.format(where, str(tyinp)))
 
 
 def numpy_ufunc_kernel(context, builder, sig, args, kernel_class,
                        explicit_output=True):
+    # This is the code generator that builds all the looping needed
+    # to execute a numpy functions over several dimensions (including
+    # scalar cases).
+    #
+    # context - the code generation context
+    # builder - the code emitter
+    # sig - signature of the ufunc
+    # args - the args to the ufunc
+    # kernel_class -  a code generating subclass of _Kernel that provides
+    # explicit_output - if the output was explicit in the call
+    #                   (ie: np.add(x,y,r))
     if not explicit_output:
-        args.append(Constant.null(context.get_value_type(sig.return_type)))
+        args.append(lc.Constant.null(context.get_value_type(sig.return_type)))
         tyargs = sig.args + (sig.return_type,)
     else:
         tyargs = sig.args
@@ -270,39 +239,6 @@ class _Kernel(object):
             # let the regular cast do the rest...
 
         return self.context.cast(self.builder, val, fromty, toty)
-
-
-def _function_with_cast(op, inner_sig):
-    """a kernel implemented by a function that only exists in one signature
-    op is the operation (function
-    inner_sig is the signature of op. Operands will be cast to that signature
-    """
-    class _KernelImpl(_Kernel):
-        def __init__(self, context, builder, outer_sig):
-            """
-            op is the operation
-            outer_sig is the outer type signature (the signature of the ufunc)
-            inner_sig is the inner type signature (the signature of the
-                      operation itself)
-            """
-            super(_KernelImpl, self).__init__(context, builder, outer_sig)
-            self.fnwork = context.get_function(op, inner_sig)
-            self.inner_sig = inner_sig
-
-        def generate(self, *args):
-            # convert args from the ufunc types to the one of the
-            # kernel operation
-            cast_args = [self.cast(val, inty, outy)
-                         for val, inty, outy in zip(args, self.outer_sig.args,
-                                                    self.inner_sig.args)]
-            # perform the operation
-            res = self.fnwork(self.builder, cast_args)
-            # return the result converted to the type of the ufunc
-            # operation
-            return self.cast(res, self.inner_sig.return_type,
-                             self.outer_sig.return_type)
-
-    return _KernelImpl
 
 
 def _ufunc_db_function(ufunc):
@@ -395,85 +331,13 @@ def register_binary_ufunc_kernel(ufunc, kernel):
 
 
 ################################################################################
-# Actual registering of supported ufuncs
+# Use the contents of ufunc_db to initialize the supported ufuncs
 
-_float_unary_function_type = Type.function(Type.double(), [Type.double()])
-_float_binary_function_type = Type.function(Type.double(),
-                                            [Type.double(), Type.double()])
-_float_unary_sig = typing.signature(types.float64, types.float64)
-_float_binary_sig = typing.signature(types.float64, types.float64,
-                                     types.float64)
+for ufunc in ufunc_db.get_ufuncs():
+    if ufunc.nin == 1:
+        register_unary_ufunc_kernel(ufunc, _ufunc_db_function(ufunc))
+    elif ufunc.nin == 2:
+        register_binary_ufunc_kernel(ufunc, _ufunc_db_function(ufunc))
+    else:
+        raise RuntimeError("Don't know how to register ufuncs from ufunc_db with arity > 2")
 
-# _externs will be used to register ufuncs.
-# each tuple contains the ufunc to be translated. That ufunc will be converted to
-# an equivalent loop that calls the function in the npymath support module (registered
-# as external function as "numba.npymath."+func
-_externs = [
-    (numpy.exp, "exp"),
-    (numpy.exp2, "exp2"),
-    (numpy.expm1, "expm1"),
-    (numpy.log, "log"),
-    (numpy.log2, "log2"),
-    (numpy.log10, "log10"),
-    (numpy.log1p, "log1p"),
-    (numpy.deg2rad, "deg2rad"),
-    (numpy.rad2deg, "rad2deg"),
-    (numpy.sin, "sin"),
-    (numpy.cos, "cos"),
-    (numpy.tan, "tan"),
-    (numpy.sinh, "sinh"),
-    (numpy.cosh, "cosh"),
-    (numpy.tanh, "tanh"),
-    (numpy.arcsin, "asin"),
-    (numpy.arccos, "acos"),
-    (numpy.arctan, "atan"),
-    (numpy.arcsinh, "asinh"),
-    (numpy.arccosh, "acosh"),
-    (numpy.arctanh, "atanh"),
-    (numpy.sqrt, "sqrt"),
-    (numpy.floor, "floor"),
-    (numpy.ceil, "ceil"),
-    (numpy.trunc, "trunc"),
-    (numpy.rint, "rint"),
-    (numpy.fabs, "fabs"),
-]
-
-for sym, name in _externs:
-    npy_math_extern(name, _float_unary_function_type)
-    register_unary_ufunc_kernel(sym, _function_with_cast(getattr(npy, name), _float_unary_sig))
-
-# radians and degrees ufuncs are equivalent to deg2rad and rad2deg resp.
-# register them.
-register_unary_ufunc_kernel(numpy.degrees, _function_with_cast(npy.rad2deg, _float_unary_sig))
-register_unary_ufunc_kernel(numpy.radians, _function_with_cast(npy.deg2rad, _float_unary_sig))
-
-# the following ufuncs rely on functions that are not based on a function
-# from npymath
-register_unary_ufunc_kernel(numpy.absolute, _ufunc_db_function(numpy.absolute))
-register_unary_ufunc_kernel(numpy.sign, _ufunc_db_function(numpy.sign))
-register_unary_ufunc_kernel(numpy.negative, _ufunc_db_function(numpy.negative))
-
-# for these we mostly rely on code generation for python operators.
-register_binary_ufunc_kernel(numpy.add, _ufunc_db_function(numpy.add))
-register_binary_ufunc_kernel(numpy.subtract, _ufunc_db_function(numpy.subtract))
-register_binary_ufunc_kernel(numpy.multiply, _ufunc_db_function(numpy.multiply))
-if not PYVERSION >= (3, 0):
-    register_binary_ufunc_kernel(numpy.divide, _ufunc_db_function(numpy.divide))
-register_binary_ufunc_kernel(numpy.floor_divide, _ufunc_db_function(numpy.floor_divide))
-register_binary_ufunc_kernel(numpy.true_divide, _ufunc_db_function(numpy.true_divide))
-register_binary_ufunc_kernel(numpy.power, _function_with_cast('**', _float_binary_sig))
-
-
-_externs_2 = [
-    (numpy.arctan2, "atan2"),
-    (numpy.logaddexp, "logaddexp"),
-    (numpy.logaddexp2, "logaddexp2"),
-    (numpy.hypot, "hypot"),
-]
-
-for sym, name in _externs_2:
-    npy_math_extern(name, _float_binary_function_type)
-    register_binary_ufunc_kernel(sym, _function_with_cast(getattr(npy, name), _float_binary_sig))
-
-del _float_binary_function_type, _float_binary_sig
-del _float_unary_function_type, _float_unary_sig

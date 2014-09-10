@@ -47,15 +47,15 @@ Math operations
  floor_divide        Yes          Yes
  negative            Yes          Yes
  power               Yes          Yes
- remainder           Yes          No
- mod                 Yes          No
- fmod                Yes          No
+ remainder           Yes          Yes
+ mod                 Yes          Yes
+ fmod                Yes          Yes
  abs                 Yes          Yes
  absolute            Yes          Yes
  fabs                Yes          Yes
  rint                Yes          Yes
  sign                Yes          Yes
- conj                Yes          No
+ conj                Yes          Yes
  exp                 Yes          Yes
  exp2                Yes          Yes
  log                 Yes          Yes
@@ -64,9 +64,9 @@ Math operations
  expm1               Yes          Yes
  log1p               Yes          Yes
  sqrt                Yes          Yes
- square              Yes          No
- reciprocal          Yes          No
- conjugate           Yes          No
+ square              Yes          Yes
+ reciprocal          Yes          Yes
+ conjugate           Yes          Yes
 ==============  =============  ===========
 
 
@@ -107,13 +107,13 @@ Bit-twiddling functions
 --------------  --------------------------
     name         python-mode    no-python
 ==============  =============  ===========
- bitwise_and         Yes          No
- bitwise_or          Yes          No
- bitwise_xor         Yes          No
- bitwise_not         Yes          No
- invert              Yes          No
- left_shift          Yes          No
- right_shift         Yes          No
+ bitwise_and         Yes          Yes
+ bitwise_or          Yes          Yes
+ bitwise_xor         Yes          Yes
+ bitwise_not         Yes          Yes
+ invert              Yes          Yes
+ left_shift          Yes          Yes
+ right_shift         Yes          Yes
 ==============  =============  ===========
 
 
@@ -125,20 +125,20 @@ Comparison functions
 --------------  --------------------------
     name         python-mode    no-python
 ==============  =============  ===========
- greater             Yes          No
- greater_equal       Yes          No
- less                Yes          No
- less_equal          Yes          No
- not_equal           Yes          No
- equal               Yes          No
- logical_and         Yes          No
- logical_or          Yes          No
- logical_xor         Yes          No
- logical_not         Yes          No
- maximum             Yes          No
- minimum             Yes          No
- fmax                Yes          No
- fmin                Yes          No
+ greater             Yes          Yes
+ greater_equal       Yes          Yes
+ less                Yes          Yes
+ less_equal          Yes          Yes
+ not_equal           Yes          Yes
+ equal               Yes          Yes
+ logical_and         Yes          Yes
+ logical_or          Yes          Yes
+ logical_xor         Yes          Yes
+ logical_not         Yes          Yes
+ maximum             Yes          Yes
+ minimum             Yes          Yes
+ fmax                Yes          Yes
+ fmin                Yes          Yes
 ==============  =============  ===========
 
 
@@ -150,19 +150,19 @@ Floating functions
 --------------  --------------------------
     name         python-mode    no-python
 ==============  =============  ===========
- isfinite            Yes          No
- isinf               Yes          No
- isnan               Yes          No
- signbit             Yes          No
- copysign            Yes          No
- nextafter           Yes          No
+ isfinite            Yes          Yes
+ isinf               Yes          Yes
+ isnan               Yes          Yes
+ signbit             Yes          Yes
+ copysign            Yes          Yes
+ nextafter           Yes          Yes
  modf                Yes          No
- ldexp               Yes*         No
+ ldexp               Yes*         Yes
  frexp               Yes          No
  floor               Yes          Yes
  ceil                Yes          Yes
  trunc               Yes          Yes
- spacing             Yes          No
+ spacing             Yes          Yes
 ==============  =============  ===========
 
 \* not supported on windows 32 bit
