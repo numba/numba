@@ -939,3 +939,45 @@ def _fill_ufunc_db(ufunc_db):
             'mq->m': npdatetime.timedelta_over_number,
             'md->m': npdatetime.timedelta_over_number,
         })
+        ufunc_db[np.equal].update({
+            'MM->?': npdatetime.datetime_eq_datetime_impl,
+            'mm->?': npdatetime.timedelta_eq_timedelta_impl,
+        })
+        ufunc_db[np.not_equal].update({
+            'MM->?': npdatetime.datetime_ne_datetime_impl,
+            'mm->?': npdatetime.timedelta_ne_timedelta_impl,
+        })
+        ufunc_db[np.less].update({
+            'MM->?': npdatetime.datetime_lt_datetime_impl,
+            'mm->?': npdatetime.timedelta_lt_timedelta_impl,
+        })
+        ufunc_db[np.less_equal].update({
+            'MM->?': npdatetime.datetime_le_datetime_impl,
+            'mm->?': npdatetime.timedelta_le_timedelta_impl,
+        })
+        ufunc_db[np.greater].update({
+            'MM->?': npdatetime.datetime_gt_datetime_impl,
+            'mm->?': npdatetime.timedelta_gt_timedelta_impl,
+        })
+        ufunc_db[np.greater_equal].update({
+            'MM->?': npdatetime.datetime_ge_datetime_impl,
+            'mm->?': npdatetime.timedelta_ge_timedelta_impl,
+        })
+        ufunc_db[np.maximum].update({
+            'MM->M': npdatetime.datetime_max_impl,
+            'mm->m': npdatetime.timedelta_max_impl,
+        })
+        ufunc_db[np.minimum].update({
+            'MM->M': npdatetime.datetime_min_impl,
+            'mm->m': npdatetime.timedelta_min_impl,
+        })
+        # there is no difference for datetime/timedelta in maximum/fmax
+        # and minimum/fmin
+        ufunc_db[np.fmax].update({
+            'MM->M': npdatetime.datetime_max_impl,
+            'mm->m': npdatetime.timedelta_max_impl,
+        })
+        ufunc_db[np.fmin].update({
+            'MM->M': npdatetime.datetime_min_impl,
+            'mm->m': npdatetime.timedelta_min_impl,
+        })
