@@ -136,17 +136,9 @@ _floating_functions = [ "isfinite", "isinf", "isnan", "signbit",
 # implemented.
 #
 # It also works as a nice TODO list for ufunc support :)
-_unsupported = set([ numpy.spacing, numpy.signbit,
-                     numpy.right_shift, numpy.remainder,
-                     numpy.not_equal, numpy.minimum, numpy.maximum,
-                     numpy.logical_xor, numpy.logical_or, numpy.logical_not,
-                     numpy.logical_and, numpy.less,
-                     numpy.less_equal, numpy.left_shift, numpy.isnan, numpy.isinf,
-                     numpy.isfinite, numpy.invert, numpy.greater,
-                     numpy.greater_equal, numpy.fmod, numpy.fmin, numpy.fmax,
-                     numpy.equal, numpy.copysign,
-                     numpy.bitwise_xor,
-                     numpy.bitwise_or, numpy.bitwise_and ])
+_unsupported = set([ numpy.frexp, # this one is tricky, as it has 2 returns
+                     numpy.modf,  # this one also has 2 returns
+                 ])
 
 # a list of ufuncs that are in fact aliases of other ufuncs. They need to insert the
 # resolve method, but not register the ufunc itself
