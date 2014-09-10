@@ -25,6 +25,10 @@ class TestMultiGPUContext(unittest.TestCase):
         print(A, B)
         check(A, B)
 
+        copy_plus_1[1, N](A, B)
+        print(A, B)
+        check(A, B)
+
         print(len(cuda.gpus))
 
         if len(cuda.gpus) >= 2:
@@ -44,6 +48,11 @@ class TestMultiGPUContext(unittest.TestCase):
             check(A0, B0)
             check(A1, B1)
 
+
+            A = np.arange(N, dtype=np.float64)
+            B = np.arange(N, dtype=np.float64)
+            copy_plus_1[1, N](A, B)
+            check(A, B)
 
 if __name__ == '__main__':
     unittest.main()

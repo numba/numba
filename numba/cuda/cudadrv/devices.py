@@ -55,6 +55,7 @@ class _gpus(object):
 gpus = _gpus()
 del _gpus
 
+
 class GPU(object):
     """Proxy into driver.Device
     """
@@ -86,17 +87,16 @@ class GPU(object):
         self._context.push()
 
     def __enter__(self):
-        if _get_device() is not self:
-            # Don't push the context if it is the current device
-            self.context.push()
-            _gpustack.push(self)
+        if self._context is None:
+            self.context
+        else:
+            self._context.push()
+        _gpustack.push(self)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         assert _get_device() is self
-        if len(_gpustack) > 1:
-            # Don't free the last the device on the stack
-            self.context.pop()
-            _gpustack.pop()
+        self.context.pop()
+        _gpustack.pop()
 
     def reset(self):
         if self._context:
