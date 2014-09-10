@@ -9,10 +9,21 @@ from numba.pycc import find_shared_ending, main
 base_path = os.path.dirname(os.path.abspath(__file__))
 
 
+def unset_macosx_deployment_target():
+    """Unset MACOSX_DEPLOYMENT_TARGET because we are not building portable
+    libraries
+    """
+    macosx_target = os.environ.get('MACOSX_DEPLOYMENT_TARGET', None)
+    if macosx_target is not None:
+        del os.environ['MACOSX_DEPLOYMENT_TARGET']
+
+
 @unittest.skipIf(sys.platform.startswith("win32"), "Skip win32 test for now")
 class TestPYCC(unittest.TestCase):
 
     def test_pycc_ctypes_lib(self):
+        unset_macosx_deployment_target()
+
         modulename = os.path.join(base_path, 'compile_with_pycc')
         cdll_modulename = modulename + find_shared_ending()
         if os.path.exists(cdll_modulename):
@@ -44,6 +55,8 @@ class TestPYCC(unittest.TestCase):
                 os.unlink(cdll_modulename)
 
     def test_pycc_pymodule(self):
+        unset_macosx_deployment_target()
+
         modulename = os.path.join(base_path, 'compile_with_pycc')
         tmpdir = tempfile.gettempdir()
         print('tmpdir: %s' % tmpdir)

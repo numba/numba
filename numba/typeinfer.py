@@ -17,7 +17,7 @@ from __future__ import print_function, division, absolute_import
 from pprint import pprint
 import itertools
 
-from numba import ir, types, utils, config
+from numba import ir, types, utils, config, six
 from numba.config import PYVERSION
 from numba.utils import builtins
 
@@ -338,7 +338,7 @@ class TypeInferer(object):
 
     def dump(self):
         print('---- type variables ----')
-        pprint(utils.dict_values(self.typevars))
+        pprint(list(six.itervalues(self.typevars)))
 
     def seed_type(self, name, typ):
         """All arguments should be seeded.
@@ -534,11 +534,9 @@ class TypeInferer(object):
     def typeof_global(self, inst, target, gvar):
         typ = self.context.resolve_value_type(gvar.value)
         if isinstance(typ, types.Array):
-            # We turns any global array into LLVM module level global that
-            # will be emitted as part of the native binary.
-            # This is to support nopython mode global array.
-            # Note, we are treating global arrays as constant.
-            typ = typ.copy(layout='C')
+            # Global array in nopython mode is constant
+            typ = typ.copy(layout='C', const=True)
+
         if typ is not None:
             self.sentry_modified_builtin(inst, gvar)
             self.typevars[target.name].lock(typ)

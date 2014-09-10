@@ -3,9 +3,10 @@ Testing object mode specifics.
 
 """
 from __future__ import print_function
+import numpy
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import utils
+from numba import utils, jit
 
 def complex_constant(n):
     tmp = n + 4
@@ -24,6 +25,10 @@ def loop_nest_3(x, y):
                 n += i * j
 
     return n
+
+
+def array_of_object(x):
+    return x
 
 
 class TestObjectMode(unittest.TestCase):
@@ -51,6 +56,11 @@ class TestObjectMode(unittest.TestCase):
 
         print(utils.benchmark(bm_pyfunc))
         print(utils.benchmark(bm_cfunc))
+
+    def test_array_of_object(self):
+        cfunc = jit(array_of_object)
+        objarr = numpy.array([object()] * 10)
+        self.assertIs(cfunc(objarr), objarr)
 
 if __name__ == '__main__':
     unittest.main()

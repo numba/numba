@@ -520,7 +520,7 @@ class Array(IterableType):
     # CS and FS are not reserved for inner contig but strided
     LAYOUTS = frozenset(['C', 'F', 'CS', 'FS', 'A'])
 
-    def __init__(self, dtype, ndim, layout):
+    def __init__(self, dtype, ndim, layout, const=False):
         if isinstance(dtype, Array):
             raise TypeError("Array dtype cannot be Array")
         if layout not in self.LAYOUTS:
@@ -529,7 +529,10 @@ class Array(IterableType):
         self.dtype = dtype
         self.ndim = ndim
         self.layout = layout
-        name = "array(%s, %sd, %s)" % (dtype, ndim, layout)
+        self.const = const
+        name = "array(%s, %sd, %s, %s)" % (dtype, ndim, layout,
+                                           {True: 'const',
+                                            False: 'nonconst'}[const])
         super(Array, self).__init__(name, param=True)
         self.iterator_type = ArrayIterator(self)
 
@@ -539,18 +542,20 @@ class Array(IterableType):
         """
         if self.layout != 'A':
             from numba.typeconv.rules import default_type_manager as tm
-            ary_any = Array(self.dtype, self.ndim, 'A')
+            ary_any = Array(self.dtype, self.ndim, 'A', const=self.const)
             # XXX This will make the types immortal
             tm.set_safe_convert(self, ary_any)
 
-    def copy(self, dtype=None, ndim=None, layout=None):
+    def copy(self, dtype=None, ndim=None, layout=None, const=None):
         if dtype is None:
             dtype = self.dtype
         if ndim is None:
             ndim = self.ndim
         if layout is None:
             layout = self.layout
-        return Array(dtype=dtype, ndim=ndim, layout=layout)
+        if const is None:
+            const = self.const
+        return Array(dtype=dtype, ndim=ndim, layout=layout, const=const)
 
     def get_layout(self, dim):
         assert 0 <= dim < self.ndim
@@ -580,7 +585,7 @@ class Array(IterableType):
 
     @property
     def key(self):
-        return self.dtype, self.ndim, self.layout
+        return self.dtype, self.ndim, self.layout, self.const
 
     @property
     def is_c_contig(self):
