@@ -11,6 +11,17 @@
 #include <math.h>
 
 
+/* Missing math function on windows */
+#ifdef WIN32
+    float ldexpf(float x, int exp) {
+        return ldexp(x, exp);
+    }
+
+    float frexpf(float x, int *exp) {
+        return frexp(x, exp)
+    }
+#endif /* WIN32 */
+
 /* Some functions require being adapted from the ones in npymath for
    use in numpy loops. It is easier to do this at this point than having
    to write code generation for the equivalent code.
