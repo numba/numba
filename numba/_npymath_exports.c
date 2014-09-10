@@ -24,7 +24,7 @@
 
     static
     float frexpf(float x, int *exp) {
-        return (float)frexp(x, exp)
+        return (float)frexp(x, exp);
     }
 #endif /* WIN32 */
 
