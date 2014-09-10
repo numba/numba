@@ -82,7 +82,7 @@ class _OverloadedBase(_dispatcher.Dispatcher):
     def add_overload(self, cres):
         args = tuple(cres.signature.args)
         sig = [a._code for a in args]
-        self._insert(sig, cres.entry_point, cres.objectmode)
+        self._insert(sig, cres.entry_point, cres.objectmode, cres.interpmode)
         self.overloads[args] = cres.entry_point
         self._compileinfos[args] = cres
 

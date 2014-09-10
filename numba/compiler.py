@@ -43,13 +43,22 @@ CR_FIELDS = ["typing_context",
              "signature",
              "objectmode",
              "lifted",
-             "fndesc"]
+             "fndesc",
+             "interpmode"]
 
 
 CompileResult = namedtuple("CompileResult", CR_FIELDS)
 FunctionAttributes = namedtuple("FunctionAttributes",
     ['name', 'filename', 'lineno'])
 DEFAULT_FUNCTION_ATTRIBUTES = FunctionAttributes('<anonymous>', '<unknown>', 0)
+
+
+class NoPythonError(Exception):
+    pass
+
+
+class ObjectModeError(Exception):
+    pass
 
 
 def get_function_attributes(func):
@@ -116,38 +125,6 @@ class _CompileStatus(object):
                  'use_interpreter_mode', 'can_fallback', 'can_giveup']
 
 
-@contextmanager
-def _fallback_context(status):
-    """Wraps code that would signal a fallback to object mode
-    """
-    try:
-        yield
-    except BaseException as e:
-        if not status.can_fallback:
-            raise
-        if utils.PYVERSION >= (3,):
-            # Clear all references attached to the traceback
-            e = e.with_traceback(None)
-        status.fail_reason = e
-        status.use_python_mode = True
-
-
-@contextmanager
-def _giveup_context(status):
-    """Wraps code that would signal a fallback to interpreter mode
-    """
-    try:
-        yield
-    except BaseException as e:
-        if not status.can_giveup:
-            raise
-        if utils.PYVERSION >= (3,):
-            # Clear all references attached to the traceback
-            e = e.with_traceback(None)
-        status.fail_reason = e
-        status.use_interpreter_mode = True
-
-
 class Pipeline(object):
     """Stores and manages states for the compiler pipeline
     """
@@ -161,6 +138,52 @@ class Pipeline(object):
         self.bc = None
         self.func_attr = None
         self.lifted = None
+
+    @contextmanager
+    def fallback_context(self, msg):
+        """Wraps code that would signal a fallback to object mode
+        """
+        try:
+            yield
+        except BaseException as e:
+            if not self.status.can_fallback:
+                raise
+            else:
+                if utils.PYVERSION >= (3,):
+                    # Clear all references attached to the traceback
+                    e = e.with_traceback(None)
+                self.status.fail_reason = e
+                self.status.use_python_mode = True
+
+                warnings.warn_explicit('%s: %s' % (msg, e),
+                                       config.NumbaWarning,
+                                       self.func_attr.filename,
+                                       self.func_attr.lineno)
+
+                raise NoPythonError
+
+    @contextmanager
+    def giveup_context(self, msg):
+        """Wraps code that would signal a fallback to interpreter mode
+        """
+        try:
+            yield
+        except BaseException as e:
+            if not self.status.can_giveup:
+                raise
+            else:
+                if utils.PYVERSION >= (3,):
+                    # Clear all references attached to the traceback
+                    e = e.with_traceback(None)
+                self.status.fail_reason = e
+                self.status.use_interpreter_mode = True
+
+                warnings.warn_explicit('%s: %s' % (msg, e),
+                                       config.NumbaWarning,
+                                       self.func_attr.filename,
+                                       self.func_attr.lineno)
+
+                raise ObjectModeError
 
     def compile_extra(self, func):
         bc = bytecode.ByteCode(func=func)
@@ -179,6 +202,8 @@ class Pipeline(object):
         self.status.can_fallback = self.flags.enable_pyobject
         self.status.fail_reason = None
         self.status.use_python_mode = self.flags.force_pyobject
+        self.status.can_giveup = config.INTERPRETER_FALLBACK
+        self.status.use_interpreter_mode = False
 
         self.targetctx = self.targetctx.localized()
         self.targetctx.metadata['wraparound'] = not self.flags.no_wraparound
@@ -192,11 +217,12 @@ class Pipeline(object):
             raise TypeError("Too many argument types")
 
     def frontend_object_mode(self):
-        self.analyze_bytecode()
+        # Nothing to do
+        pass
 
     def frontend_nopython_mode(self):
-        self.analyze_bytecode()
-        with _fallback_context(self.status):
+        with self.fallback_context('Function "%s" failed type inference'
+                                   % (self.func_attr.name,)):
             legalize_given_types(self.args, self.return_type)
             # Type inference
             self.typemap, self.return_type, self.calltypes = type_inference_stage(
@@ -206,25 +232,11 @@ class Pipeline(object):
                 self.return_type,
                 self.locals)
 
-        if self.status.fail_reason is not None:
-            warnings.warn_explicit('Function "%s" failed type inference: %s'
-                                   % (self.func_attr.name,
-                                      self.status.fail_reason),
-                                   config.NumbaWarning,
-                                   self.func_attr.filename,
-                                   self.func_attr.lineno)
-
-        if not self.status.use_python_mode:
-            with _fallback_context(self.status):
-                legalize_return_type(self.return_type, self.interp,
-                                     self.targetctx)
-            if self.status.fail_reason is not None:
-                warnings.warn_explicit('Function "%s" has invalid return type: %s'
-                                       % (self.func_attr.name,
-                                          self.status.fail_reason),
-                                       config.NumbaWarning,
-                                       self.func_attr.filename,
-                                       self.func_attr.lineno)
+        assert not self.status.use_python_mode
+        with self.fallback_context('Function "%s" has invalid return type'
+                                   % (self.func_attr.name,)):
+            legalize_return_type(self.return_type, self.interp,
+                                 self.targetctx)
 
     def frontend_looplift(self):
         assert not self.lifted
@@ -288,25 +300,31 @@ class Pipeline(object):
 
     def backend_object_mode(self):
         """Object mode compilation"""
-        func, lmod, lfunc, fndesc = py_lowering_stage(self.targetctx,
-                                                      self.interp,
-                                                      self.flags.no_compile)
-        if len(self.args) != self.nargs:
-            # append missing
-            self.args = (tuple(self.args) + (types.pyobject,) *
-                    (self.nargs - len(self.args)))
+        with self.giveup_context("Function %s failed at object mode lowering"
+                                 % (self.func_attr.name,)):
+            func, lmod, lfunc, fndesc = py_lowering_stage(self.targetctx,
+                                                          self.interp,
+                                                          self.flags.no_compile)
 
-        return func, lmod, lfunc, fndesc
+            if len(self.args) != self.nargs:
+                # append missing
+                self.args = (tuple(self.args) + (types.pyobject,) *
+                             (self.nargs - len(self.args)))
+
+            return func, lmod, lfunc, fndesc
 
     def backend_nopython_mode(self):
         """Native mode compilation"""
-        func, lmod, lfunc, fndesc = native_lowering_stage(self.targetctx,
-                                                          self.interp,
-                                                          self.typemap,
-                                                          self.return_type,
-                                                          self.calltypes,
-                                                          self.flags.no_compile)
-        return func, lmod, lfunc, fndesc
+        with self.fallback_context("Function %s failed at nopython "
+                                   "mode lowering" % (self.func_attr.name,)):
+            func, lmod, lfunc, fndesc = native_lowering_stage(
+                self.targetctx,
+                self.interp,
+                self.typemap,
+                self.return_type,
+                self.calltypes,
+                self.flags.no_compile)
+            return func, lmod, lfunc, fndesc
 
     def backend(self):
         """
@@ -329,6 +347,7 @@ class Pipeline(object):
                             llvm_module=lmod,
                             signature=signature,
                             objectmode=self.status.use_python_mode,
+                            interpmode=False,
                             lifted=self.lifted,
                             fndesc=fndesc,)
 
@@ -345,8 +364,52 @@ class Pipeline(object):
         return cr
 
     def _compile_bytecode(self):
+        with self.giveup_context("Function %s failed at bytecode analysis" %
+                (self.func_attr.name,)):
+            self.analyze_bytecode()
+
+        if not self.status.use_interpreter_mode:
+
+            if not self.status.use_python_mode:
+                # nopython mode
+                try:
+                    return self._compile_nopython()
+                except NoPythonError:
+                    pass
+
+            if self.status.use_python_mode:
+                # object mode
+                try:
+                    return self._compile_objectmode()
+                except ObjectModeError:
+                    pass
+
+        if self.status.use_interpreter_mode:
+            args = [types.pyobject] * len(self.args)
+            signature = typing.signature(types.pyobject, *args)
+            cr = compile_result(typing_context=self.typingctx,
+                                target_context=self.targetctx,
+                                entry_point=self.bc.func,
+                                typing_error=self.status.fail_reason,
+                                type_annotation="<Interpreter mode function>",
+                                llvm_func=None,
+                                llvm_module=None,
+                                signature=signature,
+                                objectmode=False,
+                                interpmode=True,
+                                lifted=(),
+                                fndesc=None,)
+            return cr
+
+    def _compile_nopython(self):
+        cres = self.frontend()
+        assert cres is None
+        return self.backend()
+
+    def _compile_objectmode(self):
         cres = self.frontend()
         if cres is not None:
+            # Loop jitted
             return cres
         return self.backend()
 
