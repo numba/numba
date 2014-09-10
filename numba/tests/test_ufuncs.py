@@ -1255,10 +1255,7 @@ class TestLoopTypes(TestCase):
 
 
 
-class TestLoopTypesNoPython(TestLoopTypes):
-    ### NOTE: int16 and uint64 are tested in a separate class due to issues with
-    ###       np.reciprocal.  Functions added to this test should also
-    ###       be added to TestLoopTypesBadReciprocalNoPython!
+class TestLoopTypesFloatNoPython(TestLoopTypes):
     _compile_flags = no_pyobj_flags
 
     _ufuncs = [np.add, np.subtract, np.multiply, np.divide, np.logaddexp,
@@ -1276,18 +1273,15 @@ class TestLoopTypesNoPython(TestLoopTypes):
                np.logical_xor, np.logical_not, np.maximum, np.minimum,
                np.fmax, np.fmin, np.isnan, np.bitwise_and, np.bitwise_or,
                np.bitwise_xor, np.bitwise_not, np.invert, np.left_shift,
-               np.right_shift, np.isinf, np.isfinite, np.signbit, np.copysign,
+               np.right_shift, np.isinf, np.isfinite, np.copysign,
                np.nextafter, np.spacing, np.ldexp, np.fmod ]
 
-    # supported types are integral (signed and unsigned) as well as float and double
-    # support for complex64(F) and complex128(D) should be coming soon.
-    _supported_types = '?bBHiIlqQfd'  ## NOTE: "h" has been pulled into another class!
+    _supported_types = '?fd'
 
+if not iswindows:  # NaN handling is inconsistent!
+    TestLoopTypesFloatNoPython._ufuncs.append(np.signbit)
 
-class TestLoopTypesBadReciprocalNoPython(TestLoopTypes):
-    ### NOTE: int16/uint64 is tested in a separate class due to issues with
-    ###       np.reciprocal.  Functions added to this test should also
-    ###       be added to TestLoopTypesNoPython!
+class TestLoopTypesIntNoPython(TestLoopTypes):
     _compile_flags = no_pyobj_flags
 
     _ufuncs = [np.add, np.subtract, np.multiply, np.divide, np.logaddexp,
@@ -1308,7 +1302,7 @@ class TestLoopTypesBadReciprocalNoPython(TestLoopTypes):
                np.right_shift, np.isinf, np.isfinite, np.signbit, np.copysign,
                np.nextafter, np.spacing, np.ldexp, np.fmod ]
 
-    _supported_types = 'hL'
+    _supported_types = '?bBhHiIlLqQ'
 
 
 class TestLoopTypesComplexNoPython(TestLoopTypes):
