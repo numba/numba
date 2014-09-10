@@ -47,7 +47,7 @@ class TestArrayMethods(unittest.TestCase):
         cres = compile_isolated(array_sum, [arrty])
         cfunc = cres.entry_point
 
-        self.assertEqual(arr.sum(), cfunc(arr))
+        np.testing.assert_allclose(arr.sum(), cfunc(arr), rtol=1e-6)
 
     def test_array_sum_int_2d(self):
         arr = np.arange(10, dtype=np.int32).reshape(2, 5)
@@ -69,7 +69,7 @@ class TestArrayMethods(unittest.TestCase):
         cres = compile_isolated(array_sum, [arrty])
         cfunc = cres.entry_point
 
-        self.assertEqual(arr.sum(), cfunc(arr))
+        np.testing.assert_allclose(arr.sum(), cfunc(arr), rtol=1e-6)
 
     def test_array_sum_int_3d_any(self):
         arr = (np.arange(60, dtype=np.float32)/10)[::2].reshape((2, 5, 3),
@@ -93,7 +93,7 @@ class TestArrayMethods(unittest.TestCase):
         cres = compile_isolated(array_sum, [arrty])
         cfunc = cres.entry_point
 
-        self.assertEqual(arr.sum(), cfunc(arr))
+        np.testing.assert_allclose(arr.sum(), cfunc(arr))
 
     def test_array_flat_3d(self):
         arr = np.arange(50).reshape(5, 2, 5)
@@ -143,7 +143,7 @@ class TestArrayMethods(unittest.TestCase):
         cres = compile_isolated(array_prod, [arrty])
         cfunc = cres.entry_point
 
-        self.assertEqual(arr.prod(), cfunc(arr))
+        np.testing.assert_allclose(arr.prod(), cfunc(arr))
 
     def test_array_prod_global(self):
         arr = np.arange(10, dtype=np.int32)
@@ -154,6 +154,7 @@ class TestArrayMethods(unittest.TestCase):
         cres = compile_isolated(array_prod_global, [arrty])
         cfunc = cres.entry_point
 
-        self.assertEqual(np.prod(arr), cfunc(arr))
+        np.testing.assert_allclose(np.prod(arr), cfunc(arr))
+
 if __name__ == '__main__':
     unittest.main()
