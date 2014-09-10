@@ -534,11 +534,9 @@ class TypeInferer(object):
     def typeof_global(self, inst, target, gvar):
         typ = self.context.resolve_value_type(gvar.value)
         if isinstance(typ, types.Array):
-            # We turns any global array into LLVM module level global that
-            # will be emitted as part of the native binary.
-            # This is to support nopython mode global array.
-            # Note, we are treating global arrays as constant.
-            typ = typ.copy(layout='C')
+            # Global array in nopython mode is constant
+            typ = typ.copy(layout='C', const=True)
+
         if typ is not None:
             self.sentry_modified_builtin(inst, gvar)
             self.typevars[target.name].lock(typ)
