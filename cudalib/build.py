@@ -5,6 +5,12 @@ import subprocess
 
 
 NVCC = os.environ.get('NVCC', 'nvcc')
+
+if tuple.__itemsize__ == 4:
+    OPT = '-m32 --compiler-options "-fPIC"'
+elif tuple.__itemsize__ == 8:
+    OPT = '-m64 --compiler-options "-fPIC"'
+
 CUB_INCLUDE = '-I../thirdparty/cub'
 MGPU_INCLUDE = '-I../thirdparty/moderngpu/include'
 
@@ -30,8 +36,9 @@ def build_cuda(srcdir, out, ins, includes):
     output = os.path.join(out)
     inputs = ' '.join([os.path.join(srcdir, p)
                        for p in ins])
-    argtemp = '-m64 --compiler-options "-fPIC" {0} -O3 {1} --shared -o {2} {3}'
-    args = argtemp.format(includes, GENCODE_FLAGS, output, inputs)
+    argtemp = '{opt} {inc} -O3 {gen} --shared -o {out} {inp}'
+    args = argtemp.format(inc=includes, gen=GENCODE_FLAGS, out=output,
+                          inp=inputs, opt=OPT)
     cmd = ' '.join([NVCC, args])
     run_shell(cmd)
 
