@@ -125,7 +125,7 @@ struct RadixSort {
 extern "C" {
 
 #define WRAP(Fn, Tk, Tv)                        \
-void*                                           \
+DLLEXPORT void*                                 \
 radixsort_ ## Fn(   TempStorage *temp,          \
                     unsigned  num_items,        \
                     Tk  *d_key_buf,             \
