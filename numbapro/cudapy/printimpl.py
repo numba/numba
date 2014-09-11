@@ -62,9 +62,9 @@ def print_varargs(context, builder, sig, args):
         imp = context.get_function(types.print_item_type, signature)
         imp(builder, [argval])
         if i == len(args) - 1:
-            eos = context.insert_string_const_addrspace(builder, " ")
-        else:
             eos = context.insert_string_const_addrspace(builder, "\n")
+        else:
+            eos = context.insert_string_const_addrspace(builder, " ")
 
         builder.call(vprint, (eos, Constant.null(voidptr)))
 
