@@ -1,5 +1,6 @@
 #include <cub/device/device_radix_sort.cuh>
 #include <stdint.h>
+#include "dllexport.h"
 
 
 // #define E(X) _debug_check((X), __LINE__, __FILE__)
@@ -154,7 +155,7 @@ WRAP(uint32, uint32_t, unsigned)
 WRAP(int64, int64_t, unsigned)
 WRAP(uint64, uint64_t, unsigned)
 
-void
+DLLEXPORT void
 radixsort_cleanup(TempStorage *ptr) {
     cleanup(ptr);
 }

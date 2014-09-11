@@ -2,6 +2,7 @@
 #include <moderngpu.cuh>
 #include <util/mgpucontext.h>
 #include "mgpucontext.cu"
+#include "dllexport.h"
 // #include <src/mgpuutil.cpp>
 
 namespace mgpu{
@@ -40,10 +41,10 @@ void segsortpairs( Tkey *d_keys,
 extern "C" {
 
 #define WRAP(F, Tkey, Tval)												\
-void segsortpairs_##F( Tkey *d_keys,										\
-					   Tval *d_vals,										\
+DLLEXPORT void segsortpairs_##F( Tkey *d_keys,                          \
+					   Tval *d_vals,									\
 					   unsigned N,										\
-					   const int *d_segments,								\
+					   const int *d_segments,							\
 					   unsigned NumSegs,								\
 					   cudaStream_t stream	)							\
 {  segsortpairs(d_keys, d_vals, N, d_segments, NumSegs, stream);  }
