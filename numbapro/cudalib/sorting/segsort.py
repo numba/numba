@@ -1,4 +1,5 @@
-from ctypes import *
+from __future__ import print_function, absolute_import, division
+import ctypes
 import os
 from contextlib import contextmanager
 from numba.cuda.cudadrv.driver import device_pointer
@@ -10,19 +11,19 @@ import numpy as np
 libname = 'nbpro_segsort.so'
 libpath = os.path.join(findlib.get_lib_dir(), libname)
 
-lib = CDLL(libpath)
+lib = ctypes.CDLL(libpath)
 
 _argtypes = [
     # d_key
-    c_void_p,
+    ctypes.c_void_p,
     # d_vals
-    c_void_p,
+    ctypes.c_void_p,
     # N
-    c_uint,
+    ctypes.c_uint,
     # segments
-    c_void_p,
+    ctypes.c_void_p,
     # Nseg
-    c_uint,
+    ctypes.c_uint,
     # stream
     cu_stream,
 ]

@@ -1,4 +1,5 @@
-from ctypes import *
+from __future__ import print_function, absolute_import, division
+import ctypes
 import os
 from contextlib import contextmanager
 from numba.cuda.cudadrv.driver import device_pointer
@@ -10,19 +11,19 @@ import numpy as np
 libname = 'nbpro_radixsort.so'
 libpath = os.path.join(findlib.get_lib_dir(), libname)
 
-lib = CDLL(libpath)
+lib = ctypes.CDLL(libpath)
 
 _argtypes = [
-    c_void_p, # temp
-    c_uint, # count
-    c_void_p, # d_key
-    c_void_p, # d_key_alt
-    c_void_p, # d_vals
-    c_void_p, # d_vals_alt
+    ctypes.c_void_p, # temp
+    ctypes.c_uint, # count
+    ctypes.c_void_p, # d_key
+    ctypes.c_void_p, # d_key_alt
+    ctypes.c_void_p, # d_vals
+    ctypes.c_void_p, # d_vals_alt
     cu_stream,
-    c_int, # descending
-    c_uint, # begin_bit
-    c_uint, # end_bit
+    ctypes.c_int, # descending
+    ctypes.c_uint, # begin_bit
+    ctypes.c_uint, # end_bit
 ]
 
 _support_types = {
@@ -43,12 +44,12 @@ def _init():
         fn = getattr(lib, "radixsort_{0}".format(name))
         _overloads[dtype] = fn
         fn.argtypes = _argtypes
-        fn.restype = c_void_p
+        fn.restype = ctypes.c_void_p
 
 
 _init()
 
-lib.radixsort_cleanup.argtypes = [c_void_p]
+lib.radixsort_cleanup.argtypes = [ctypes.c_void_p]
 
 
 def _devptr(p):
@@ -141,7 +142,7 @@ class RadixSort(object):
 
         return self._sort(
             temp,
-            c_uint(count),
+            ctypes.c_uint(count),
             _devptr(keys),
             _devptr(self._temp_keys),
             _devptr(vals),
