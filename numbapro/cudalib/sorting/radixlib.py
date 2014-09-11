@@ -4,11 +4,11 @@ from contextlib import contextmanager
 from numba.cuda.cudadrv.driver import device_pointer
 from numba.cuda.cudadrv.drvapi import cu_stream
 from numba.cuda.cudadrv.devicearray import auto_device, is_cuda_ndarray
-from numba import cuda
+from numba import cuda, findlib
 import numpy as np
 
-libname = 'radixsort.so'
-libpath = os.path.join(os.path.dirname(__file__), 'details', libname)
+libname = 'nbpro_radixsort.so'
+libpath = os.path.join(findlib.get_lib_dir(), libname)
 
 lib = CDLL(libpath)
 

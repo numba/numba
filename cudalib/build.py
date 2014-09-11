@@ -4,9 +4,9 @@ import os
 import subprocess
 
 
-NVCC = 'nvcc'
-CUB_INCLUDE = '-Ithirdparty/cub'
-MGPU_INCLUDE = '-Ithirdparty/moderngpu/include'
+NVCC = os.environ.get('NVCC', 'nvcc')
+CUB_INCLUDE = '-I../thirdparty/cub'
+MGPU_INCLUDE = '-I../thirdparty/moderngpu/include'
 
 GENCODE_SMXX = "-gencode arch=compute_{CC},code=sm_{CC}"
 GENCODE_SM20 = GENCODE_SMXX.format(CC=20)
@@ -26,9 +26,9 @@ def run_shell(cmd):
     subprocess.check_call(cmd, shell=True)
 
 
-def build_cuda(basepath, out, ins, includes):
-    output = os.path.join(basepath, out)
-    inputs = ' '.join([os.path.join(basepath, p)
+def build_cuda(srcdir, out, ins, includes):
+    output = os.path.join(out)
+    inputs = ' '.join([os.path.join(srcdir, p)
                        for p in ins])
     argtemp = '-m64 --compiler-options "-fPIC" {0} -O3 {1} --shared -o {2} {3}'
     args = argtemp.format(includes, GENCODE_FLAGS, output, inputs)
@@ -37,17 +37,17 @@ def build_cuda(basepath, out, ins, includes):
 
 
 def build_radixsort():
-    build_cuda(basepath='numbapro/cudalib/sorting/details/',
-               out='radixsort.so',
+    build_cuda(srcdir='src',
+               out='lib/nbpro_radixsort.so',
                ins=['cubradixsort.cu'],
-               includes=CUB_INCLUDE,)
+               includes=CUB_INCLUDE, )
 
 
 def build_mgpusort():
-    build_cuda(basepath='numbapro/cudalib/sorting/details/',
-               out='mgpusort.so',
+    build_cuda(srcdir='src',
+               out='lib/nbpro_segsort.so',
                ins=['mgpusort.cu'],
-               includes=MGPU_INCLUDE,)
+               includes=MGPU_INCLUDE, )
 
 
 if __name__ == '__main__':

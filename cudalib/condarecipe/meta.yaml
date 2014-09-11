@@ -1,0 +1,7 @@
+package:
+   name: numbapro_cudalib
+   version: 0.1
+
+build:
+  number: 0
+
