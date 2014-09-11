@@ -1,9 +1,12 @@
 package:
   name: numbapro
-  version: latest
+  version: {{ environ['GIT_DESCRIBE_TAG'] }}
+
+build:
+  number: {{ environ.get('GIT_DESCRIBE_NUMBER', 0) }}
 
 source:
-  git_url: git@github.com:ContinuumIO/numbapro.git
+  git_url: https://github.com:ContinuumIO/numbapro.git
   git_tag: master
 
 requirements:
@@ -17,10 +20,10 @@ requirements:
     - numba
     - llvmpy
     - cudatoolkit
+    - numbapro_cudalib
 
 test:
   requires:
-    - python
     - scipy
     - unittest2       [py26]
   imports:
