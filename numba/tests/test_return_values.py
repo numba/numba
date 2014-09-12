@@ -21,7 +21,7 @@ def get_nopython_func():
     return abs
 
 def get_pyobj_func():
-    return pow
+    return open
 
 def get_module_func():
     return math.floor
@@ -51,12 +51,12 @@ class TestReturnValues(unittest.TestCase):
         cfunc = cr.entry_point
         if flags == enable_pyobj_flags:
             result = cfunc()
-            self.assertEqual(result, pow)
+            self.assertEqual(result, open)
         else:
             result = cfunc()
 
     def test_pyobj_func_npm(self):
-        with self.assertRaises(TypeError):
+        with self.assertRaises(TypingError):
             self.test_pyobj_func(flags=no_pyobj_flags)
 
     def test_module_func(self, flags=enable_pyobj_flags):
