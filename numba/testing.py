@@ -17,7 +17,7 @@ def discover_tests(startdir):
     return suite
 
 
-def run_tests(suite, xmloutput=None):
+def run_tests(suite, xmloutput=None, verbosity=1):
     """
     args
     ----
@@ -25,6 +25,8 @@ def run_tests(suite, xmloutput=None):
         A suite of all tests to run
     - xmloutput [str or None]
         Path of XML output directory (optional)
+    - verbosity [int]
+        Verbosity level of tests output
 
     Returns the TestResult object after running the test *suite*.
     """
@@ -33,7 +35,7 @@ def run_tests(suite, xmloutput=None):
         runner = xmlrunner.XMLTestRunner(output=xmloutput)
     else:
         runner = None
-    prog = NumbaTestProgram(suite=suite, testRunner=runner, exit=False)
+    prog = NumbaTestProgram(suite=suite, testRunner=runner, exit=False, verbosity=verbosity)
     return prog.result
 
 
