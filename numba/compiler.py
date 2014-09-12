@@ -324,35 +324,40 @@ def legalize_given_types(args, return_type):
 def legalize_return_type(return_type, interp, targetctx):
     """
     Only accept array return type iff it is passed into the function.
+    Reject function object return types if in nopython mode.
     """
     assert assume.return_argument_array_only
 
-    if not isinstance(return_type, types.Array):
-        return
+    if isinstance(return_type, types.Array):
+        # Walk IR to discover all return statements
+        retstmts = []
+        for bid, blk in interp.blocks.items():
+            for inst in blk.body:
+                if isinstance(inst, ir.Return):
+                    retstmts.append(inst)
 
-    # Walk IR to discover all return statements
-    retstmts = []
-    for bid, blk in interp.blocks.items():
-        for inst in blk.body:
-            if isinstance(inst, ir.Return):
-                retstmts.append(inst)
+        assert retstmts, "No return statemants?"
 
-    assert retstmts, "No return statemants?"
+        # FIXME: In the future, we can return an array that is either a dynamically
+        #        allocated array or an array that is passed as argument.  This
+        #        must be statically resolvable.
 
-    # FIXME: In the future, we can return an array that is either a dynamically
-    #        allocated array or an array that is passed as argument.  This
-    #        must be statically resolvable.
+        # The return value must be the first modification of the value.
+        arguments = frozenset("%s.1" % arg for arg in interp.argspec.args)
 
-    # The return value must be the first modification of the value.
-    arguments = frozenset("%s.1" % arg for arg in interp.argspec.args)
+        if isinstance(return_type, types.Array):
+            for ret in retstmts:
+                if ret.value.name not in arguments:
+                    raise TypeError("Only accept returning of array passed into the "
+                                    "function as argument")
 
-    for ret in retstmts:
-        if ret.value.name not in arguments:
-            raise TypeError("Only accept returning of array passed into the "
-                            "function as argument")
+        # Legalized; tag return handling
+        targetctx.metadata['return.array'] = 'arg'
 
-    # Legalized; tag return handling
-    targetctx.metadata['return.array'] = 'arg'
+    elif (isinstance(return_type, types.Function) or
+            (isinstance(return_type, types.Dummy) and
+             return_type.name == 'abs')):
+        raise TypeError("Can't return function object in nopython mode")
 
 
 def translate_stage(bytecode):
