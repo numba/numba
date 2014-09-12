@@ -336,7 +336,7 @@ def legalize_return_type(return_type, interp, targetctx):
                 if isinstance(inst, ir.Return):
                     retstmts.append(inst)
 
-        assert retstmts, "No return statemants?"
+        assert retstmts, "No return statements?"
 
         # FIXME: In the future, we can return an array that is either a dynamically
         #        allocated array or an array that is passed as argument.  This
