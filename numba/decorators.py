@@ -22,10 +22,68 @@ def autojit(*args, **kws):
 
 def jit(signature_or_function=None, argtypes=None, restype=None, locals={},
         target='cpu', **targetoptions):
-    """jit([signature_or_function, [locals={}, [target='cpu',
-            [**targetoptions]]]])
+    """jit([signature_or_function, [locals={}, [target='cpu', [**targetoptions]]]])
 
-    The function can be used as the following versions:
+    This function is used to compile a Python function into native code. It is
+    designed to be used as a decorator for the function to be compiled,
+    but it can also be called as a regular function.
+    
+    Args
+    -----
+    signature_or_function: function or str
+        This argument takes either the function to be compiled, or the signature
+        of the function to be compiled. If this function is used as a decorator,
+        the function to be compiled is the decorated function. In that case,
+        this argument should only be used to optionally specify the function
+        signature. If this function is called like a regular function, and this
+        argument is used to specify the function signature, this function will
+        return another jit function object which can be called again with the
+        function to be compiled as this argument.
+
+    argtypes: deprecated
+
+    restype: deprecated
+
+    locals: dict
+        Mapping of local variable names to Numba types. Used to override the
+        types deduced by Numba's type inference engine.
+
+    targets: str
+        Specifies the target platform to compile for. Valid targets are cpu,
+        gpu, npyufunc, and cuda. Defaults to cpu.
+
+    targetoptions: 
+        For a cpu target, valid options are:
+            nopython: bool
+                Set to True to disable the use of PyObjects and Python API
+                calls. The default behavior is to allow the use of PyObjects
+                and Python API. Default value is False.
+
+            forceobj: bool
+                Set to True to force the use of PyObjects for every value.
+                Default value is False.
+
+            looplift: bool
+                Set to True to enable jitting loops in nopython mode while
+                leaving surrounding code in object mode. This allows functions
+                to allocate NumPy arrays and use Python objects, while the
+                tight loops in the function can still be compiled in nopython
+                mode. Any arrays that the tight loop uses should be created
+                before the loop is entered. Default value is True.
+
+            wraparound: bool
+                Set to True to enable array indexing wraparound for negative
+                indices, for a small performance penalty. Default value
+                is True.
+
+    Returns
+    --------
+
+    compiled function
+
+    Examples
+    --------
+    The function can be used in the following ways:
 
     1) jit(signature, [target='cpu', [**targetoptions]]) -> jit(function)
 
@@ -65,21 +123,6 @@ def jit(signature_or_function=None, argtypes=None, restype=None, locals={},
             @jit(target='cpu', nopython=True)
             def foo(x, y):
                 return x + y
-
-    Target Options
-    ---------------
-    The CPU (default target) defines the following:
-
-        - nopython: [bool]
-
-            Set to True to disable the use of PyObjects and Python API
-            calls.  The default behavior is to allow the use of PyObjects and
-            Python API.  Default value is False.
-
-        - forceobj: [bool]
-
-            Set to True to force the use of PyObjects for every value.  Default
-            value is False.
 
     """
 
@@ -133,7 +176,10 @@ def _jit(sig, locals, target, targetoptions):
 
 
 def njit(*args, **kws):
-    """Equavilent to jit(nopython=True)
+    """
+    Equivalent to jit(nopython=True)
+
+    See documentation for jit function/decorator for full description.
     """
     if 'nopython' in kws:
         warnings.warn('nopython is set for njit and is ignored', RuntimeWarning)
