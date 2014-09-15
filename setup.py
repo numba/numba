@@ -29,7 +29,6 @@ def find_packages(rootdir):
                 out.append(where.replace(os.path.sep, '.'))
             elif os.path.isdir(path):
                 stack.append(path)
-    print(out)
     return out
 
 
@@ -45,6 +44,7 @@ setup(
     description="compile Python code",
     ext_modules=ext_modules,
     packages=find_packages('numbapro'),
+    package_data={'numbapro.cudalib.sorting.details': ['*.ptx', '*.so']},
     cmdclass=cmdclass,
 )
 

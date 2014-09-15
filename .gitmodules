@@ -1,0 +1,7 @@
+[submodule "thirdparty/cub"]
+	path = thirdparty/cub
+	url = https://github.com/NVlabs/cub.git
+	branch = 1.3.2
+[submodule "thirdparty/moderngpu"]
+	path = thirdparty/moderngpu
+	url = https://github.com/NVlabs/moderngpu.git
