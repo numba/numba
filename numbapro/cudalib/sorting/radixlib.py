@@ -1,3 +1,30 @@
+"""
+Uses radixsort implementation from CUB which has the following license:
+
+Copyright (c) 2011, Duane Merrill.  All rights reserved.
+Copyright (c) 2011-2014, NVIDIA CORPORATION.  All rights reserved.
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+   Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+   Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+   Neither the name of the NVIDIA CORPORATION nor the
+      names of its contributors may be used to endorse or promote products
+      derived from this software without specific prior written permission.
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL NVIDIA CORPORATION BE LIABLE FOR ANY
+DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+"""
+
 from __future__ import print_function, absolute_import, division
 import ctypes
 import os
@@ -86,24 +113,23 @@ class RadixSort(object):
     The algorithm implemented here is best for large arrays (N >= 1e6) due to
     latency of kernel launch.  It is recommended to use ``segmeneted_sort``
     batches of smaller arrays.
+
+    Args
+    ----
+    maxcount : int
+        Maximum number of items to sort
+
+    dtype : numpy.dtype
+        The element type to sort
+
+    descending : bool
+        Sort in descending order?
+
+    stream : cuda stream
+        The cuda stream to run the kernels on
     """
 
     def __init__(self, maxcount, dtype, descending=False, stream=0):
-        """
-        Args
-        ----
-        maxcount : int
-            Maximum number of items to sort
-
-        dtype : numpy.dtype
-            The element type to sort
-
-        descending : bool
-            Sort in descending order?
-
-        stream : cuda stream
-            The cuda stream to run the kernels on
-        """
         self.maxcount = int(maxcount)
         self.dtype = np.dtype(dtype)
         self._arysize = int(self.maxcount * self.dtype.itemsize)
@@ -124,7 +150,9 @@ class RadixSort(object):
             pass
 
     def close(self):
-        """Release internal resources
+        """Explicitly release internal resources
+
+        Called automatically when the object deleted.
         """
         if self._temp is not None:
             self._cleanup(self._temp)
@@ -165,7 +193,7 @@ class RadixSort(object):
         automatically.
 
         Args
-        -----
+        ----
         keys : ndarray
             Keys to sort inplace.
 
@@ -186,12 +214,12 @@ class RadixSort(object):
                            begin_bit=begin_bit, end_bit=end_bit)
 
     def select(self, k, keys, vals=None, begin_bit=0, end_bit=None):
-        """
-        Perform a inplace k-select on ``keys``.  Memory transfer is performed
-        automatically.
+        """Perform a inplace k-select on ``keys``.
+
+        Memory transfer is performed automatically.
 
         Args
-        -----
+        ----
         keys : ndarray
             Keys to sort inplace.
 
@@ -204,8 +232,6 @@ class RadixSort(object):
 
         end_bit : int; optional
             The last bit to sort
-
-
         """
         self._sentry(keys)
         with _autodevice(keys, self.stream, firstk=k) as d_keys:
@@ -214,7 +240,19 @@ class RadixSort(object):
                            begin_bit=begin_bit, end_bit=end_bit)
 
     def init_arg(self, size):
-        """Returns a cuda ndarray of uint32
+        """Initialize an empty cuda ndarray of uint32 with ascending integers
+        starting from zero
+
+        Args
+        ----
+        size : int
+            Number of element for the output array
+
+        Returns
+        -------
+        cuda ndarray
+            With values ``[0, 1, 2, ..., size - 1]``
+
         """
         d_vals = cuda.device_array(size, dtype=np.uint32, stream=self.stream)
         _cu_arange.forall(d_vals.size, stream=self.stream)(d_vals, size)
@@ -223,7 +261,26 @@ class RadixSort(object):
     def argselect(self, k, keys, begin_bit=0, end_bit=None):
         """Similar to ``RadixSort.select`` but returns the new sorted indices.
 
-        Returns the indices indicating the new ordering.
+        Args
+        ----
+        keys : ndarray
+            Keys to sort inplace.
+
+        begin_bit : int
+            The first bit to sort
+
+        end_bit : int; optional
+            The last bit to sort
+
+        Returns
+        -------
+        cpu or cuda ndarray
+            The indices indicating the new ordering.
+
+        See Also
+        --------
+        Radixsort.select
+
         """
         d_vals = self.init_arg(keys.size)
         self.select(k, keys, vals=d_vals, begin_bit=begin_bit, end_bit=end_bit)
@@ -235,7 +292,26 @@ class RadixSort(object):
     def argsort(self, keys, begin_bit=0, end_bit=None):
         """Similar to ``RadixSort.sort`` but returns the new sorted indices.
 
-        Returns the indices indicating the new ordering.
+        Args
+        ----
+        keys : ndarray
+            Keys to sort inplace.
+
+        begin_bit : int
+            The first bit to sort
+
+        end_bit : int; optional
+            The last bit to sort
+
+        Returns
+        -------
+        cpu or cuda ndarray
+            The indices indicating the new ordering.
+
+        See Also
+        --------
+        Radixsort.sort
+
         """
         d_vals = self.init_arg(keys.size)
         self.sort(keys, vals=d_vals, begin_bit=begin_bit, end_bit=end_bit)

@@ -4,9 +4,9 @@ Writing CUDA-Python
 The CUDA JIT is a low-level entry point to the CUDA features in NumbaPro.
 It translates Python functions into `PTX
 <http://en.wikipedia.org/wiki/Parallel_Thread_Execution>`_ code which execute on
-the CUDA hardware.  The `jit` decorator is applied to Python functions written 
+the CUDA hardware.  The `jit` decorator is applied to Python functions written
 in our `Python dialect for CUDA <CUDAPySpec.html>`_.
-NumbaPro interacts with the `CUDA Driver API 
+NumbaPro interacts with the `CUDA Driver API
 <http://docs.nvidia.com/cuda/cuda-driver-api/index.html>`_ to load the PTX onto
 the CUDA device and execute.
 
@@ -34,7 +34,7 @@ Thread Identity by CUDA Intrinsics
 
 A set of CUDA intrinsics is used to identify the current execution thread.
 These intrinsics are meaningful inside a CUDA kernel or device function only.
-A common pattern to assign the computation of each element in the output array 
+A common pattern to assign the computation of each element in the output array
 to a thread.
 
 For a 1D grid::
@@ -75,7 +75,7 @@ Memory Transfer
 ---------------
 
 By default, any NumPy arrays used as argument of a CUDA kernel is transferred
-automatically to and from the device.  However, to achieve maximum performance 
+automatically to and from the device.  However, to achieve maximum performance
 and minimizing redundant memory transfer,
 user should manage the memory transfer explicitly.
 
@@ -85,7 +85,7 @@ If a non-zero `CUDA stream`_ is provided, the transfer becomes asynchronous.
 
 .. autofunction:: numbapro.cuda.to_device
 
-.. automethod:: numbapro.cudadrv.devicearray.DeviceNDArray.copy_to_host
+.. automethod:: numbapro.cuda.cudadrv.devicearray.DeviceNDArray.copy_to_host
 
 The following are special DeviceNDArray factories:
 
@@ -98,16 +98,16 @@ The following are special DeviceNDArray factories:
 Memory Lifetime
 -----------------
 
-The live time of a device array is bound to the lifetime of the 
+The live time of a device array is bound to the lifetime of the
 `DeviceNDArray` instance.
 
 
 CUDA Stream
 -----------
 
-A CUDA stream is a command queue for the CUDA device.  By specifying a stream, 
+A CUDA stream is a command queue for the CUDA device.  By specifying a stream,
 the CUDA API calls become asynchronous, meaning that the call may return before
-the command has been completed.  Memory transfer instructions and kernel 
+the command has been completed.  Memory transfer instructions and kernel
 invocation can use CUDA stream::
 
     stream = cuda.stream()
@@ -120,7 +120,7 @@ invocation can use CUDA stream::
 
 .. autofunction:: numbapro.cuda.stream
 
-.. automethod:: numbapro.cudadrv.driver.Stream.synchronize
+.. automethod:: numbapro.cuda.driver.Stream.synchronize
 
 An alternative syntax is available for use with a python context::
 

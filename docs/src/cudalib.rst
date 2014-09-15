@@ -467,3 +467,30 @@ level 2 routines.
 
     matrix-matrix addition/transposition `C = alpha * op(A) + beta * op(B)`
 
+
+
+Sorting
+========
+
+NumbaPro provides host-side sorting routines.
+
+
+Sorting Large Arrays
+---------------------
+
+The ``RadixSort`` class is recommended for sorting large (approx. more than 1
+million items) arrays of numeric  types.
+
+.. autoclass:: numbapro.cudalib.sorting.RadixSort
+   :members:
+
+Sorting Many Small Arrays
+--------------------------
+
+Using ``RadixSort`` on small (approx. less than 1 million items) arrays has
+significant overhead due to multiple kernel launch.  A better alternative
+is to use the ``segmented_sort()`` which uses a single kernel to sort many
+of small arrays in one batch.
+
+.. autofunction:: numbapro.cudalib.sorting.segmented_sort
+

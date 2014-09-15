@@ -10,7 +10,7 @@ NumbaPro
 `Get started with the NumbaPro Quick Start [pdf] <https://store.continuum.io/static/img/NumbaPro-QuickStart.pdf>`_
 
 `NumbaPro` is an enhanced version of Numba_ which adds premium features and
-functionality that allow developers to rapidly create optimized code that 
+functionality that allow developers to rapidly create optimized code that
 integrates well with NumPy_.
 
 With NumbaPro, Python developers can define NumPy ufuncs_ and `generalized ufuncs`_ (gufuncs)
@@ -98,7 +98,7 @@ High-level APIs for CPU/GPU:
 
    ufuncs
    generalizedufuncs
-   
+
 Python CUDA Programming
 
 .. toctree::
@@ -123,14 +123,22 @@ GPUs.
 Requirements
 ------------
 
-* Python 2.6 or 2.7 (support is not yet available for 3.x)
-* LLVM (>= 3.2)
+Base:
+
+* Python 2.6, 2.7, 3.3, 3.4
+* LLVM 3.3
+
+
+For CUDA GPU features:
+
 * Latest NVIDIA CUDA driver
+* CUDA Toolkit 5.5 or above
+* At least one CUDA GPU with compute capability 2.0 or above
 
 Python modules:
 
-* llvmpy (>= 0.12.0)
-* numba 0.10.2
+* llvmpy 0.12.7 or above
+* numba 0.14.0 or above
 
 Release Notes
 -------------
@@ -147,6 +155,7 @@ License Agreement
     :maxdepth: 1
 
     eula_numbapro
+    license_components
 
 .. Indices and tables
    -------------------

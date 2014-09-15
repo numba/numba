@@ -94,8 +94,8 @@ Example
        return a + b  * c
 
 
-    print foo
-    print foo(1, 2.0, 3.0j)
+    print(foo)
+    print(foo(1, 2.0, 3.0j))
 
 Output:
 

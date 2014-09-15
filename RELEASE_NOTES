@@ -1,3 +1,10 @@
+Version (0.15.0)
+================
+* Add `numbapro.cudalib.sorting`:
+    * Added GPU radixsort and radixselect using implementation from http://nvlabs.github.io/cub
+    * Added GPU segmentedsort from http://nvlabs.github.io/moderngpu
+* Fix GPU `print()` when there are multiple arguments
+
 Version (0.14.3)
 ================
 * CUDA driver is initialized lazily
@@ -13,6 +20,7 @@ Version (0.14.2)
 Version (0.14.1)
 ================
 Fixes:
+
 * UnboundReferenceError due to mishandling of incompatible driver (pre CUDA5.5
   driver).  The fix relaxes the driver requirement by allowing some features
   to fail on use.
@@ -22,11 +30,13 @@ Fixes:
 Version (0.14.0)
 ================
 Features:
+
 * Add cuSparse API
 * Improve CUDA driver and resource management
 * Some of CUDA-python language feature is now opensourced as numba.cuda
 
 Fixes:
+
 * New CUDA driver system prevents freezing OSX on kernel launch error
 
 Version (0.13.2)
