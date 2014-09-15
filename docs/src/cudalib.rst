@@ -468,6 +468,11 @@ level 2 routines.
     matrix-matrix addition/transposition `C = alpha * op(A) + beta * op(B)`
 
 
+cuSPARSE
+=========
+
+.. autoclass:: numbapro.cudalib.cusparse.Sparse
+    :members:
 
 Sorting
 ========

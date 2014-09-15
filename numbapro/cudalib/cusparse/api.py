@@ -50,6 +50,11 @@ def _readwrite(*arys):
 
 
 class Sparse(object):
+    """A minimal wrapper for cuSPARSE
+
+    Please refer to http://docs.nvidia.com/cuda/cusparse/ for documentations
+    """
+
     @cuda.require_context
     def __init__(self, idxbase=0):
         """
@@ -91,6 +96,8 @@ class Sparse(object):
     # Level 1 API
 
     def axpyi(self, alpha, xVal, xInd, y):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-axpyi
+        """
         _sentry_ndim(1, xVal=xVal, xInd=xVal, y=y)
         _sentry_dtype(np.int32, xInd=xInd)
         _sentry_dtype(xVal.dtype, y=y)
@@ -103,6 +110,8 @@ class Sparse(object):
         return y
 
     def doti(self, xVal, xInd, y):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-doti
+        """
         _sentry_ndim(1, xVal=xVal, xInd=xInd, y=y)
         _sentry_dtype(np.int32, xInd=xInd)
         _sentry_dtype(xVal.dtype, y=y)
@@ -115,6 +124,8 @@ class Sparse(object):
         return result
 
     def dotci(self, xVal, xInd, y):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-dotci
+        """
         _sentry_ndim(1, xVal=xVal, xInd=xInd, y=y)
         _sentry_dtype(np.int32, xInd=xInd)
         _sentry_dtype(xVal.dtype, y=y)
@@ -127,6 +138,8 @@ class Sparse(object):
         return result
 
     def gthr(self, y, xVal, xInd):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-gthr
+        """
         _sentry_ndim(1, xVal=xVal, xInd=xInd, y=y)
         _sentry_dtype(np.int32, xInd=xInd)
         _sentry_dtype(xVal.dtype, y=y)
@@ -137,6 +150,8 @@ class Sparse(object):
                 fn(nnz=nnz, xVal=dxval, xInd=dxind, y=dy, idxBase=self.idxbase)
 
     def gthrz(self, y, xVal, xInd):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-gthrz
+        """
         _sentry_ndim(1, xVal=xVal, xInd=xInd, y=y)
         _sentry_dtype(np.int32, xInd=xInd)
         _sentry_dtype(xVal.dtype, y=y)
@@ -147,6 +162,8 @@ class Sparse(object):
                 fn(nnz=nnz, xVal=dxval, xInd=dxind, y=dy, idxBase=self.idxbase)
 
     def roti(self, xVal, xInd, y, c, s):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-roti
+        """
         _sentry_ndim(1, xVal=xVal, xInd=xInd, y=y)
         _sentry_dtype(np.int32, xInd=xInd)
         _sentry_dtype(xVal.dtype, y=y)
@@ -158,6 +175,8 @@ class Sparse(object):
                    idxBase=self.idxbase)
 
     def sctr(self, xVal, xInd, y):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-sctr
+        """
         _sentry_ndim(1, xVal=xVal, xInd=xInd, y=y)
         _sentry_dtype(np.int32, xInd=xInd)
         _sentry_dtype(xVal.dtype, y=y)
@@ -187,6 +206,8 @@ class Sparse(object):
 
     def bsrmv(self, dir, trans, mb, nb, nnzb, alpha, descr, bsrVal,
               bsrRowPtr, bsrColInd, blockDim, x, beta, y):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-bsrmv
+        """
         _sentry_ndim(1, x=x, y=y)
         _sentry_dtype(bsrVal.dtype, x=x, y=y)
         fn = self._get_api("bsrmv", bsrVal.dtype)
@@ -202,6 +223,9 @@ class Sparse(object):
     def bsrxmv(self, dir, trans, sizeOfMask, mb, nb, nnzb, alpha, descr,
                bsrVal, bsrMaskPtr, bsrRowPtr, bsrEndPtr, bsrColInd, blockDim,
                x, beta, y):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-bsrxmv
+        """
+
         _sentry_ndim(1, x=x, y=y)
         _sentry_dtype(bsrVal.dtype, x=x, y=y)
         fn = self._get_api("bsrxmv", bsrVal.dtype)
@@ -218,6 +242,8 @@ class Sparse(object):
 
     def csrmv(self, trans, m, n, nnz, alpha, descr, csrVal, csrRowPtr,
               csrColInd, x, beta, y):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-csrmv
+        """
         _sentry_ndim(1, x=x, y=y)
         _sentry_dtype(csrVal.dtype, x=x, y=y)
         fn = self._get_api("csrmv", csrVal.dtype)
@@ -231,7 +257,8 @@ class Sparse(object):
 
     def csrsv_analysis(self, trans, m, nnz, descr, csrVal, csrRowPtr,
                        csrColInd):
-        """
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-csrsvanalysis
+
         Returns
         -------
         SolveAnalysisInfo
@@ -246,6 +273,8 @@ class Sparse(object):
 
     def csrsv_solve(self, trans, m, alpha, descr, csrVal, csrRowPtr,
                     csrColInd, info, x, y):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-csrsvsolve
+        """
         _sentry_ndim(1, x=x, y=y)
         _sentry_dtype(csrVal.dtype, x=x, y=y)
         fn = self._get_api("csrsv_solve", csrVal.dtype)
@@ -265,6 +294,8 @@ class Sparse(object):
 
     def csrmm(self, transA, m, n, k, nnz, alpha, descrA, csrValA, csrRowPtrA,
               csrColIndA, B, ldb, beta, C, ldc):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-csrmm
+        """
         _sentry_dtype(csrValA.dtype, B=B, C=C)
         fn = self._get_api("csrmm", csrValA.dtype)
         with _readonly(csrValA, csrRowPtrA, csrColIndA, B) \
@@ -277,6 +308,8 @@ class Sparse(object):
 
     def csrmm2(self, transA, transB, m, n, k, nnz, alpha, descrA, csrValA,
                csrRowPtrA, csrColIndA, B, ldb, beta, C, ldc):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-csrmm2
+        """
         _sentry_dtype(csrValA.dtype, B=B, C=C)
         fn = self._get_api("csrmm2", csrValA.dtype)
         with _readonly(csrValA, csrRowPtrA, csrColIndA, B) \
@@ -290,6 +323,8 @@ class Sparse(object):
 
     def csrsm_analysis(self, transA, m, nnz, descrA, csrValA, csrRowPtrA,
                        csrColIndA):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-csrsmanalysis
+        """
         fn = self._get_api("csrsm_analysis", csrValA.dtype)
         info = self.api.solve_analysis_info()
         with _readonly(csrValA, csrRowPtrA, csrColIndA) \
@@ -300,6 +335,8 @@ class Sparse(object):
 
     def csrsm_solve(self, transA, m, n, alpha, descrA, csrValA, csrRowPtrA,
                     csrColIndA, info, X, ldx, Y, ldy):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-csrsmsolve
+        """
         fn = self._get_api("csrsm_solve", csrValA.dtype)
         with _readonly(csrValA, csrRowPtrA, csrColIndA, X) \
             as [dcsrValA, dcsrRowPtrA, dcsrColIndA, dX]:
@@ -314,10 +351,12 @@ class Sparse(object):
 
     def XcsrgeamNnz(self, m, n, descrA, nnzA, csrRowPtrA, csrColIndA, descrB,
                     nnzB, csrRowPtrB, csrColIndB, descrC, csrRowPtrC):
-        """
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-csrgeam
+
         Returns
         -------
-        nnzC
+        int
+            nnzC
         """
         fn = self.api.XcsrgeamNnz
         with _readonly(csrRowPtrA, csrColIndA, csrRowPtrB, csrColIndB) \
@@ -334,6 +373,8 @@ class Sparse(object):
     def csrgeam(self, m, n, alpha, descrA, nnzA, csrValA, csrRowPtrA,
                 csrColIndA, beta, descrB, nnzB, csrValB, csrRowPtrB,
                 csrColIndB, descrC, csrValC, csrRowPtrC, csrColIndC):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-csrgeam
+        """
         fn = self._get_api("csrgeam", csrValA.dtype)
         with _readonly(csrValA, csrRowPtrA, csrColIndA, csrValB, csrRowPtrB,
                        csrColIndB, csrRowPtrC) \
@@ -352,10 +393,12 @@ class Sparse(object):
     def XcsrgemmNnz(self, transA, transB, m, n, k, descrA, nnzA, csrRowPtrA,
                     csrColIndA, descrB, nnzB, csrRowPtrB, csrColIndB, descrC,
                     csrRowPtrC):
-        """
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-csrgemm
+
         Returns
         -------
-        nnzC
+        int
+            nnzC
         """
         fn = self.api.XcsrgemmNnz
         with _readonly(csrRowPtrA, csrColIndA, csrRowPtrB, csrColIndB) \
@@ -373,6 +416,8 @@ class Sparse(object):
     def csrgemm(self, transA, transB, m, n, k, descrA, nnzA, csrValA,
                 csrRowPtrA, csrColIndA, descrB, nnzB, csrValB, csrRowPtrB,
                 csrColIndB, descrC, csrValC, csrRowPtrC, csrColIndC):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-csrgemm
+        """
         fn = self._get_api("csrgemm", csrValA.dtype)
         with _readonly(csrValA, csrRowPtrA, csrColIndA, csrValB, csrRowPtrB,
                        csrColIndB, csrRowPtrC) \
@@ -388,11 +433,14 @@ class Sparse(object):
                    csrRowPtrC=dcsrRowPtrC, csrColIndC=dcsrColIndC)
 
     def csrgemm_ez(self, matA, matB, transA='N', transB='N', descrA=None,
-                       descrB=None, descrC=None):
+                   descrB=None, descrC=None):
         """
-        Returns a csr matrix of the matrix product (matA * matB).
-
         Raises ValueError if the result is entirely zero.
+
+        Returns
+        -------
+        CudaSparseMatrix
+            a csr matrix of the matrix product (matA * matB).
 
         Notes
         -----
@@ -433,6 +481,8 @@ class Sparse(object):
     # Preconditioners
 
     def csric0(self, trans, m, descr, csrValM, csrRowPtrA, csrColIndA, info):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-csric0
+        """
         fn = self._get_api("csric0", csrValM.dtype)
         with _readonly(csrRowPtrA, csrColIndA) as [dcsrRowPtrA, dcsrColIndA]:
             with _readwrite(csrValM) as [dcsrValM]:
@@ -441,6 +491,8 @@ class Sparse(object):
                    csrColIndA=dcsrColIndA, info=info)
 
     def csrilu0(self, trans, m, descr, csrValM, csrRowPtrA, csrColIndA, info):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-csrilu0
+        """
         fn = self._get_api("csrilu0", csrValM.dtype)
         with _readonly(csrRowPtrA, csrColIndA) as [dcsrRowPtrA, dcsrColIndA]:
             with _readwrite(csrValM) as [dcsrValM]:
@@ -449,18 +501,24 @@ class Sparse(object):
                    csrColIndA=dcsrColIndA, info=info)
 
     def gtsv(self, m, n, dl, d, du, B, ldb):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-gtsv
+        """
         fn = self._get_api("gtsv", B.dtype)
         with _readonly(dl, d, du) as [ddl, dd, ddu]:
             with _readwrite(B) as [dB]:
                 fn(m=m, n=n, dl=ddl, d=dd, du=ddu, B=dB, ldb=ldb)
 
     def gtsv_nopivot(self, m, n, dl, d, du, B, ldb):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-gtsv_nopivot
+        """
         fn = self._get_api("gtsv_nopivot", B.dtype)
         with _readonly(dl, d, du) as [ddl, dd, ddu]:
             with _readwrite(B) as [dB]:
                 fn(m=m, n=n, dl=ddl, d=dd, du=ddu, B=dB, ldb=ldb)
 
     def gtsvStridedBatch(self, m, dl, d, du, x, batchCount, batchStride):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-gtsvstridedbatch
+        """
         fn = self._get_api("gtsvStridedBatch", x.dtype)
         with _readonly(dl, d, du) as [ddl, dd, ddu]:
             with _readwrite(x) as [dx]:
@@ -485,6 +543,8 @@ class Sparse(object):
                    csrRowPtrC=dcsrRowPtrC, csrColIndC=dcsrColIndC)
 
     def Xcoo2csr(self, cooRowInd, nnz, m, csrRowPtr):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-bsr2csr
+        """
         fn = self.api.Xcoo2csr
         with _readonly(cooRowInd) as [dcooRowInd]:
             with _readwrite(csrRowPtr) as [dcsrRowPtr]:
@@ -492,6 +552,8 @@ class Sparse(object):
                    idxBase=self.idxbase)
 
     def csc2dense(self, m, n, descrA, cscValA, cscRowIndA, cscColPtrA, A, lda):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-csc2dense
+        """
         fn = self._get_api('csc2dense', cscValA.dtype)
         with _readonly(cscValA, cscRowIndA, cscColPtrA) as [dcscValA,
                                                             dcscRowIndA,
@@ -505,6 +567,8 @@ class Sparse(object):
 
     def Xcsr2bsrNnz(self, dirA, m, n, descrA, csrRowPtrA, csrColIndA,
                     blockDim, descrC, bsrRowPtrC):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-csr2bsr
+        """
         fn = self.api.Xcsr2bsrNnz
         with _readonly(csrRowPtrA, csrColIndA, bsrRowPtrC) as [dcsrRowPtrA,
                                                                dcsrColIndA,
@@ -519,6 +583,8 @@ class Sparse(object):
 
     def csr2bsr(self, dirA, m, n, descrA, csrValA, csrRowPtrA, csrColIndA,
                 blockDim, descrC, bsrValC, bsrRowPtrC, bsrColIndC):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-csr2bsr
+        """
         fn = self._get_api('csr2bsr', csrValA.dtype)
         with _readonly(csrValA, csrRowPtrA, csrColIndA) as [dcsrValA,
                                                             dcsrRowPtrA,
@@ -533,6 +599,8 @@ class Sparse(object):
         return nnz
 
     def Xcsr2coo(self, csrRowPtr, nnz, m, cooRowInd):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-csr2coo
+        """
         fn = self.api.Xcsr2coo
         with _readonly(csrRowPtr) as [dcsrRowPtr]:
             with _readwrite(cooRowInd) as [dcooRowInd]:
@@ -541,6 +609,8 @@ class Sparse(object):
 
     def csr2csc(self, m, n, nnz, csrVal, csrRowPtr, csrColInd, cscVal,
                 cscRowInd, cscColPtr, copyValues):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-csr2csc
+        """
         fn = self._get_api('csr2csc', csrVal.dtype)
         with _readonly(csrVal, csrRowPtr, csrColInd) as [dcsrVal, dcsrRowPtr,
                                                          dcsrColInd]:
@@ -553,6 +623,8 @@ class Sparse(object):
                    idxBase=self.idxbase)
 
     def csr2dense(self, m, n, descrA, csrValA, csrRowPtrA, csrColIndA, A, lda):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-csr2dense
+        """
         fn = self._get_api('csr2dense', csrValA.dtype)
         with _readonly(csrValA, csrRowPtrA, csrColIndA) as [dcsrValA,
                                                             dcsrRowPtrA,
@@ -566,6 +638,8 @@ class Sparse(object):
 
     def dense2csc(self, m, n, descrA, A, lda, nnzPerCol, cscValA, cscRowIndA,
                   cscColPtrA):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-dense2csc
+        """
         fn = self._get_api('dense2csc', cscValA.dtype)
         with _readonly(A) as [dA]:
             with _readwrite(cscValA, cscRowIndA, cscColPtrA) as [dcscValA,
@@ -578,10 +652,12 @@ class Sparse(object):
 
     def dense2csr(self, m, n, descrA, A, lda, nnzPerRow, csrValA,
                   csrRowPtrA, csrColIndA):
-        """
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-dense2csr
+
         Returns
         -------
-        nnzTotalDevHostPtr
+        int
+            nnzTotalDevHostPtr
         """
         fn = self._get_api('dense2csr', A.dtype)
         with _readonly(A) as [dA]:
@@ -598,6 +674,8 @@ class Sparse(object):
     hyb2dense = NotImplemented
 
     def nnz(self, dirA, m, n, descrA, A, lda, nnzPerRowCol):
+        """http://docs.nvidia.com/cuda/cusparse/#cusparse-lt-t-gt-nnz
+        """
         fn = self._get_api('nnz', A.dtype)
         with _readonly(A) as [dA]:
             with _readwrite(nnzPerRowCol) as [dnnzPerRowCol]:
@@ -657,15 +735,36 @@ class CudaCSRMatrix(CudaSparseMatrix):
 
 
 def bsr_matrix(*args, **kws):
+    """Takes the same argument as ``scipy.sparse.bsr_matrix``
+
+    Returns
+    -------
+    CudaSparseMatrix
+        A BSR cuda matrix
+    """
     mat = ss.bsr_matrix(*args, **kws)
     return CudaBSRMatrix().from_host_matrix(mat)
 
 
 def csc_matrix(*args, **kws):
+    """Takes the same argument as ``scipy.sparse.csc_matrix``
+
+    Returns
+    -------
+    CudaSparseMatrix
+        A CSC cuda matrix
+    """
     mat = ss.csc_matrix(*args, **kws)
     return CudaCSCMatrix().from_host_matrix(mat)
 
 
 def csr_matrix(*args, **kws):
+    """Takes the same argument as ``scipy.sparse.csr_matrix``
+
+    Returns
+    -------
+    CudaSparseMatrix
+        A CSR cuda matrix
+    """
     mat = ss.csr_matrix(*args, **kws)
     return CudaCSRMatrix().from_host_matrix(mat)
