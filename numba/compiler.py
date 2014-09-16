@@ -186,6 +186,7 @@ def _compile_core(typingctx, targetctx, bc, args, return_type, flags, locals,
                   lifted, func_attr, status):
     ### Front-end: Analyze bytecode, generate Numba IR, infer types
     interp = translate_stage(bc)
+    #interp.dump()  # added for debug 
     nargs = len(interp.argspec.args)
     if len(args) > nargs:
         raise TypeError("Too many argument types")

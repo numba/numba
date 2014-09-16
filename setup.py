@@ -80,8 +80,10 @@ ext_modules = [ext_dynfunc, ext_npymath_exports, ext_dispatcher,
 
 packages = [
     "numba",
+    "numba.array",
     "numba.targets",
     "numba.tests",
+    "numba.tests.array",
     "numba.typing",
     "numba.typeconv",
     "numba.npyufunc",

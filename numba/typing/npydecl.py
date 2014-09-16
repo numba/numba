@@ -164,6 +164,24 @@ def _numpy_ufunc(name):
         builtin_global(func, types.Function(typing_class))
 
 
+class Numpy_binary_ufunc(AbstractTemplate):
+    def generic(self, args, kws):
+        assert not kws
+        nargs = len(args)
+        if nargs == 3:
+            [inp1, inp2, out] = args
+            if isinstance(out, types.Array) and \
+                    (isinstance(inp1, types.Array) or inp1 in types.number_domain) or \
+                    (isinstance(inp2, types.Array) or inp2 in types.number_domain):
+                return signature(out, inp1, inp2, out)
+        elif nargs == 2:
+            [inp1, inp2] = args
+            if inp1 in types.number_domain and inp2 in types.number_domain:
+                if hasattr(self, "scalar_out_type"):
+                    return signature(self.scalar_out_type, inp1, inp2)
+                else:
+                    return signature(inp1, inp1, inp2)
+
 for func in itertools.chain(_math_operations, _trigonometric_functions,
                             _bit_twiddling_functions, _comparison_functions,
                             _floating_functions):
