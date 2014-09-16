@@ -643,9 +643,12 @@ class Max(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
 
+        # max(a, b, ...)
+        if len(args) < 2:
+            return
         for a in args:
             if a not in types.number_domain:
-                raise TypeError("max() only support for numbers")
+                return
 
         retty = self.context.unify_types(*args)
         return signature(retty, *args)
@@ -657,9 +660,12 @@ class Min(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
 
+        # min(a, b, ...)
+        if len(args) < 2:
+            return
         for a in args:
             if a not in types.number_domain:
-                raise TypeError("min() only support for numbers")
+                return
 
         retty = self.context.unify_types(*args)
         return signature(retty, *args)
