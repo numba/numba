@@ -1182,7 +1182,7 @@ class TestLoopTypes(TestCase):
         # fail in no python mode. Usually the last loop in ufuncs is an all
         # object fallback
         supported_types = getattr(self, '_supported_types', [])
-        skip_types = getattr(self, 'skip_types', [])
+        skip_types = getattr(self, '_skip_types', [])
         if any(l not in supported_types or l in skip_types
                for l in letter_types):
             return
@@ -1322,7 +1322,6 @@ class TestLoopTypesComplexNoPython(TestLoopTypes):
     # note that some loops like "abs" contain reals as results, hence the
     # _supported_types. Boolean functions will return '?', so it is also
     # included
-    _supported_types = 'FDfd?'
     _required_types = 'FD'
 
 
