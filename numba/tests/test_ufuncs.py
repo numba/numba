@@ -1140,9 +1140,11 @@ class TestLoopTypes(TestCase):
 
     def _arg_for_type(self, a_letter_type):
         """return a suitable array argument for testing the letter type"""
-        if a_letter_type in 'bBhHiIlLqQ':
+        if a_letter_type in 'bhilq':
             # an integral
-            return np.array([2, 3, 4, 0], dtype=a_letter_type)
+            return np.array([1, 4, 0, -2], dtype=a_letter_type)
+        if a_letter_type in 'BHILQ':
+            return np.array([1, 2, 4, 0], dtype=a_letter_type)
         elif a_letter_type in '?':
             # a boolean
             return np.array([True, False, False, True], dtype=a_letter_type)
@@ -1248,7 +1250,6 @@ class TestLoopTypes(TestCase):
             self.fail(msg=msg)
 
 
-
 class TestLoopTypesIntNoPython(TestLoopTypes):
     _compile_flags = no_pyobj_flags
     _ufuncs = supported_ufuncs[:]
@@ -1256,6 +1257,20 @@ class TestLoopTypesIntNoPython(TestLoopTypes):
     _ufuncs.remove(np.reciprocal)
     _required_types = '?bBhHiIlLqQ'
     _skip_types = 'fdFDmMO'
+
+
+class TestLoopTypesIntReciprocalNoPython(TestLoopTypes):
+    _compile_flags = no_pyobj_flags
+    _ufuncs = [np.reciprocal] # issue #757
+    _required_types = '?bBhHiIlLqQ'
+    _skip_types = 'fdFDmMO'
+
+    def _arg_for_type(self, a_letter_type):
+        res = super(self.__class__, self)._arg_for_type(self.a_letter_type)
+        # avoid 0 as argument, as it triggers undefined behavior that my differ
+        # in results from numba to the compiler used to compile NumPy
+        res[res == 0] = 42
+        return res
 
 
 class TestLoopTypesFloatNoPython(TestLoopTypes):
