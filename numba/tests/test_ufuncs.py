@@ -19,6 +19,7 @@ from numba.targets import cpu
 from numba.lowering import LoweringError
 from .support import TestCase, CompilationCache, skip_on_numpy_16
 
+from numba.typing.npydecl import supported_ufuncs, all_ufuncs
 
 is32bits = tuple.__itemsize__ == 4
 iswindows = sys.platform.startswith('win32')
@@ -1108,6 +1109,11 @@ class TestUfuncIssues(TestCase):
 
 class TestLoopTypes(TestCase):
     """Test code generation for the different loop types defined by ufunc.
+
+    This class tests the ufuncs without forcing no-python mode. Subclasses
+    of this class tweak it so they tests no-python mode support for the
+    different ufuncs.
+
     This test relies on class variables to configure the test. Subclasses
     of this class can just override some of these variables to check other
     ufuncs in a different compilation context. The variables supported are:
@@ -1128,22 +1134,7 @@ class TestLoopTypes(TestCase):
     'types'.
     """
 
-    _ufuncs = [np.add, np.subtract, np.multiply, np.divide, np.logaddexp,
-               np.logaddexp2, np.true_divide, np.floor_divide, np.negative,
-               np.power, np.remainder, np.mod, np.fmod, np.abs, np.absolute,
-               np.rint, np.sign, np.conj, np.exp, np.exp2, np.log, np.log2,
-               np.log10, np.expm1, np.log1p, np.sqrt, np.square, np.reciprocal,
-               np.conjugate, np.sin, np.cos, np.tan, np.arcsin, np.arccos,
-               np.arctan, np.arctan2, np.hypot, np.sinh, np.cosh, np.tanh,
-               np.arcsinh, np.arccosh, np.arctanh, np.deg2rad, np.rad2deg,
-               np.degrees, np.radians, np.bitwise_and, np.bitwise_or,
-               np.bitwise_xor, np.bitwise_not, np.invert, np.left_shift,
-               np.right_shift, np.greater, np.greater_equal, np.less,
-               np.less_equal, np.not_equal, np.equal, np.logical_and,
-               np.logical_or, np.logical_xor, np.logical_not, np.maximum,
-               np.minimum, np.fmax, np.fmin, np.isfinite, np.isinf, np.isnan,
-               np.signbit, np.copysign, np.nextafter, np.modf, np.ldexp,
-               np.frexp, np.floor, np.ceil, np.trunc, np.spacing ]
+    _ufuncs = all_ufuncs[:]
     _compile_flags = enable_pyobj_flags
     _skip_types='O'
 
@@ -1170,7 +1161,8 @@ class TestLoopTypes(TestCase):
             return np.array([1.5, -3.5, 0.0, float('nan')], dtype=a_letter_type)
         elif a_letter_type in 'FD':
             # complex
-            return np.array([-1.0j, 1.5 + 1.5j, 1j * float('nan'), 0j], dtype=a_letter_type)
+            return np.array([-1.0j, 1.5 + 1.5j, 1j * float('nan'), 0j],
+                            dtype=a_letter_type)
         else:
             raise RuntimeError("type %r not understood" % (a_letter_type,))
 
@@ -1217,8 +1209,10 @@ class TestLoopTypes(TestCase):
             prec = 'single' if c_arg.dtype.char in 'fF' else 'exact'
             prec = 'double' if c_arg.dtype.char in 'dD' else prec
             for c, py in zip(c_arg, py_arg):
-                self.assertPreciseEqual(py, c, prec=prec,
-                    msg="ufunc %s; arrays differ (%s):\n args:%s expected %r, got %r" % (ufunc.__name__, c_args, prec, py_arg, c_arg))
+                msg = '\n'.join(["ufunc '{0}' arrays differ ({1}):",
+                                 "args: {2}", "expected {3}", "got {4}"])
+                msg = msg.format(ufunc.__name__, c_args, prec, py_arg, c_arg)
+                self.assertPreciseEqual(py, c, prec=prec, msg=msg) 
 
     def _check_ufunc_loops(self, ufunc):
         fn = _make_ufunc_usecase(ufunc)
@@ -1255,85 +1249,38 @@ class TestLoopTypes(TestCase):
 
 
 
-class TestLoopTypesFloatNoPython(TestLoopTypes):
-    _compile_flags = no_pyobj_flags
-
-    _ufuncs = [np.add, np.subtract, np.multiply, np.divide, np.logaddexp,
-               np.logaddexp2, np.true_divide, np.floor_divide, np.negative,
-               np.remainder, np.mod, np.power, np.abs, np.absolute,
-               np.sign, np.conj, np.exp, np.exp2, np.log, np.log2,
-               np.log10, np.expm1, np.log1p, np.sqrt, np.square, np.reciprocal,
-               np.conjugate, np.sin, np.cos, np.tan, np.arcsin, np.arccos,
-               np.arctan, np.arctan2, np.sinh, np.cosh, np.tanh,
-               np.arcsinh, np.arccosh, np.arctanh, np.deg2rad, np.rad2deg,
-               np.degrees, np.radians,
-               np.floor, np.ceil, np.trunc,
-               np.greater, np.greater_equal, np.less, np.less_equal,
-               np.not_equal, np.equal, np.logical_and, np.logical_or,
-               np.logical_xor, np.logical_not, np.maximum, np.minimum,
-               np.fmax, np.fmin, np.isnan, np.bitwise_and, np.bitwise_or,
-               np.bitwise_xor, np.bitwise_not, np.invert, np.left_shift,
-               np.right_shift, np.isinf, np.isfinite, np.copysign,
-               np.nextafter, np.spacing, np.ldexp, np.fmod ]
-
-    _supported_types = '?fd'
-
-if not iswindows:  # NaN handling is inconsistent!
-    TestLoopTypesFloatNoPython._ufuncs.append(np.signbit)
-
 class TestLoopTypesIntNoPython(TestLoopTypes):
     _compile_flags = no_pyobj_flags
+    _ufuncs = supported_ufuncs[:]
+    # reciprocal needs a special test due to issue #757
+    _ufuncs.remove(np.reciprocal)
+    _required_types = '?bBhHiIlLqQ'
+    _skip_types = 'fdFDmMO'
 
-    _ufuncs = [np.add, np.subtract, np.multiply, np.divide, np.logaddexp,
-               np.logaddexp2, np.true_divide, np.floor_divide, np.negative,
-               np.remainder, np.mod, np.power, np.abs, np.absolute,
-               np.sign, np.conj, np.exp, np.exp2, np.log, np.log2,
-               np.log10, np.expm1, np.log1p, np.sqrt, np.square,  ## np.reciprocal,
-               np.conjugate, np.sin, np.cos, np.tan, np.arcsin, np.arccos,
-               np.arctan, np.arctan2, np.sinh, np.cosh, np.tanh,
-               np.arcsinh, np.arccosh, np.arctanh, np.deg2rad, np.rad2deg,
-               np.degrees, np.radians,
-               np.floor, np.ceil, np.trunc,
-               np.greater, np.greater_equal, np.less, np.less_equal,
-               np.not_equal, np.equal, np.logical_and, np.logical_or,
-               np.logical_xor, np.logical_not, np.maximum, np.minimum,
-               np.fmax, np.fmin, np.isnan, np.bitwise_and, np.bitwise_or,
-               np.bitwise_xor, np.bitwise_not, np.invert, np.left_shift,
-               np.right_shift, np.isinf, np.isfinite, np.signbit, np.copysign,
-               np.nextafter, np.spacing, np.ldexp, np.fmod ]
 
-    _supported_types = '?bBhHiIlLqQ'
+class TestLoopTypesFloatNoPython(TestLoopTypes):
+    _compile_flags = no_pyobj_flags
+    _ufuncs = supported_ufuncs[:]
+    if iswindows:
+        _ufuncs.remove(np.signbit) # TODO: fix issue #758
+    _required_types = 'fd'
+    _skip_types = 'FDmMO'
 
 
 class TestLoopTypesComplexNoPython(TestLoopTypes):
     _compile_flags = no_pyobj_flags
-    _ufuncs = [np.negative, np.add, np.subtract, np.multiply, np.divide,
-               np.true_divide, np.floor_divide, np.power, np.sign, np.abs,
-               np.absolute, np.rint, np.conj, np.conjugate, np.exp, np.exp2,
-               np.log, np.log2, np.log10, np.expm1, np.log1p, np.sqrt,
-               np.square, np.reciprocal, np.sin, np.cos, np.tan, np.arcsin,
-               np.arccos, np.arctan, np.sinh, np.cosh, np.tanh, np.arcsinh,
-               np.arccosh, np.arctanh, np.greater, np.greater_equal, np.less,
-               np.less_equal, np.not_equal, np.equal, np.logical_and,
-               np.logical_or, np.logical_xor, np.logical_not, np.maximum,
-               np.minimum, np.fmax, np.fmin, np.isnan, np.isinf, np.isfinite ]
+    _ufuncs = supported_ufuncs[:]
 
     # Test complex types
-    # note that some loops like "abs" contain reals as results, hence the
-    # _supported_types. Boolean functions will return '?', so it is also
-    # included
+    # Every loop containing a complex argument must be tested
     _required_types = 'FD'
+    _skip_types = 'mMO'
 
 
 @skip_on_numpy_16
 class TestLoopTypesDatetimeNoPython(TestLoopTypes):
     _compile_flags = no_pyobj_flags
-    _ufuncs = [np.absolute, np.negative, np.sign,
-               np.add, np.subtract, np.multiply,
-               np.divide, np.true_divide, np.floor_divide,
-               np.equal, np.not_equal, np.less, np.less_equal,
-               np.greater, np.greater_equal, np.maximum,
-               np.minimum, np.fmax, np.fmin ]
+    _ufuncs = supported_ufuncs[:]
 
     # NOTE: the full list of ufuncs supporting datetime64 and timedelta64
     # types in Numpy is:
@@ -1343,7 +1290,6 @@ class TestLoopTypesDatetimeNoPython(TestLoopTypes):
     #  'true_divide']
 
     # Test datetime64 and timedelta64 types.
-    _supported_types = 'mMqd?'
     _required_types = 'mM'
 
     # Test various units combinations (TestLoopTypes is only able to test
