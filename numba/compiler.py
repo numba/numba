@@ -465,7 +465,7 @@ def compile_internal(typingctx, targetctx, func, args, return_type, locals={}):
 
 
 def _is_nopython_types(t):
-    return t != types.pyobject and not isinstance(t, types.Dummy)
+    return not isinstance(t, types.Dummy) or isinstance(t, types.Opaque)
 
 
 def legalize_given_types(args, return_type):
@@ -508,15 +508,14 @@ def legalize_return_type(return_type, interp, targetctx):
         if isinstance(return_type, types.Array):
             for ret in retstmts:
                 if ret.value.name not in arguments:
-                    raise TypeError("Only accept returning of array passed into the "
-                                    "function as argument")
+                    raise TypeError("Only accept returning of array passed "
+                                    "into the function as argument")
 
         # Legalized; tag return handling
         targetctx.metadata['return.array'] = 'arg'
 
     elif (isinstance(return_type, types.Function) or
-            (isinstance(return_type, types.Dummy) and
-             return_type.name == 'abs')):
+            isinstance(return_type, types.Phantom)):
         raise TypeError("Can't return function object in nopython mode")
 
 
