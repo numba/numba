@@ -46,6 +46,7 @@ def call_loop(a):
 
 class TestLoops(unittest.TestCase):
 
+    @unittest.expectedFailure
     def test_obj_loop1(self):
         self.assertTrue(obj_loop1(np.array([[None]*10]*10), 1) == 100)
 
