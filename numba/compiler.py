@@ -520,7 +520,6 @@ def legalize_return_type(return_type, interp, targetctx):
         raise TypeError("Can't return function object in nopython mode")
 
 
-
 def translate_stage(bytecode):
     interp = interpreter.Interpreter(bytecode=bytecode)
 
@@ -579,14 +578,15 @@ def native_lowering_stage(targetctx, interp, typemap, restype, calltypes,
     lower = lowering.Lower(targetctx, fndesc, interp)
     lower.lower()
 
+    # Linking depending libraries
+    targetctx.link_dependencies(lower.module, targetctx.linking)
+
     if nocompile:
         return None, lower.module, lower.function, fndesc
     else:
         # Prepare for execution
         cfunc = targetctx.get_executable(lower.function, fndesc, lower.env)
-
         targetctx.insert_user_function(cfunc, fndesc)
-
         return cfunc, lower.module, lower.function, fndesc
 
 
