@@ -124,6 +124,13 @@ class _CompileStatus(object):
     __slots__ = ['fail_reason', 'use_python_mode',
                  'use_interpreter_mode', 'can_fallback', 'can_giveup']
 
+    def __init__(self, can_fallback, use_python_mode, can_giveup):
+        self.fail_reason = None
+        self.use_python_mode = use_python_mode
+        self.can_fallback = can_fallback
+        self.use_interpreter_mode = False
+        self.can_giveup = can_giveup
+
 
 class Pipeline(object):
     """Stores and manages states for the compiler pipeline
@@ -198,13 +205,23 @@ class Pipeline(object):
         self.lifted = lifted
         self.func_attr = func_attr
 
-        self.status = _CompileStatus()
-        self.status.can_fallback = self.flags.enable_pyobject
-        self.status.fail_reason = None
-        self.status.use_python_mode = self.flags.force_pyobject
-        self.status.can_giveup = config.INTERPRETER_FALLBACK
-        self.status.use_interpreter_mode = False
+        self.status = _CompileStatus(
+            can_fallback=self.flags.enable_pyobject,
+            use_python_mode=self.flags.force_pyobject,
+            can_giveup=config.INTERPRETER_FALLBACK
+        )
 
+        self.targetctx = self.targetctx.localized()
+        self.targetctx.metadata['wraparound'] = not self.flags.no_wraparound
+
+        return self._compile_bytecode()
+
+    def compile_internal(self, bc, func_attr=DEFAULT_FUNCTION_ATTRIBUTES):
+        self.bc = bc
+        self.lifted = ()
+        self.func_attr = func_attr
+        self.status = _CompileStatus(can_fallback=False,
+                                     use_python_mode=False, can_giveup=False)
         self.targetctx = self.targetctx.localized()
         self.targetctx.metadata['wraparound'] = not self.flags.no_wraparound
 
@@ -434,6 +451,19 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
     return pipeline.compile_bytecode(bc=bc, lifted=lifted, func_attr=func_attr)
 
 
+def compile_internal(typingctx, targetctx, func, args, return_type, locals={}):
+    flags = DEFAULT_FLAGS.copy()
+    flags.set("no_compile")
+
+    bc = bytecode.ByteCode(func=func)
+    if config.DUMP_BYTECODE:
+        print(bc.dump())
+    func_attr = get_function_attributes(func)
+
+    pipeline = Pipeline(typingctx, targetctx, args, return_type, flags, locals)
+    return pipeline.compile_internal(bc=bc, func_attr=func_attr)
+
+
 def _is_nopython_types(t):
     return t != types.pyobject and not isinstance(t, types.Dummy)
 
@@ -454,35 +484,41 @@ def legalize_given_types(args, return_type):
 def legalize_return_type(return_type, interp, targetctx):
     """
     Only accept array return type iff it is passed into the function.
+    Reject function object return types if in nopython mode.
     """
     assert assume.return_argument_array_only
 
-    if not isinstance(return_type, types.Array):
-        return
+    if isinstance(return_type, types.Array):
+        # Walk IR to discover all return statements
+        retstmts = []
+        for bid, blk in interp.blocks.items():
+            for inst in blk.body:
+                if isinstance(inst, ir.Return):
+                    retstmts.append(inst)
 
-    # Walk IR to discover all return statements
-    retstmts = []
-    for bid, blk in interp.blocks.items():
-        for inst in blk.body:
-            if isinstance(inst, ir.Return):
-                retstmts.append(inst)
+        assert retstmts, "No return statements?"
 
-    assert retstmts, "No return statemants?"
+        # FIXME: In the future, we can return an array that is either a dynamically
+        #        allocated array or an array that is passed as argument.  This
+        #        must be statically resolvable.
 
-    # FIXME: In the future, we can return an array that is either a dynamically
-    #        allocated array or an array that is passed as argument.  This
-    #        must be statically resolvable.
+        # The return value must be the first modification of the value.
+        arguments = frozenset("%s.1" % arg for arg in interp.argspec.args)
 
-    # The return value must be the first modification of the value.
-    arguments = frozenset("%s.1" % arg for arg in interp.argspec.args)
+        if isinstance(return_type, types.Array):
+            for ret in retstmts:
+                if ret.value.name not in arguments:
+                    raise TypeError("Only accept returning of array passed into the "
+                                    "function as argument")
 
-    for ret in retstmts:
-        if ret.value.name not in arguments:
-            raise TypeError("Only accept returning of array passed into the "
-                            "function as argument")
+        # Legalized; tag return handling
+        targetctx.metadata['return.array'] = 'arg'
 
-    # Legalized; tag return handling
-    targetctx.metadata['return.array'] = 'arg'
+    elif (isinstance(return_type, types.Function) or
+            (isinstance(return_type, types.Dummy) and
+             return_type.name == 'abs')):
+        raise TypeError("Can't return function object in nopython mode")
+
 
 
 def translate_stage(bytecode):
@@ -512,7 +548,7 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
 
     # Seed argument types
     for arg, ty in zip(interp.argspec.args, args):
-    	infer.seed_type(arg, ty)
+        infer.seed_type(arg, ty)
 
     # Seed return type
     if return_type is not None:

@@ -28,6 +28,29 @@ class TestTupleReturn(unittest.TestCase):
         self.assertEqual(ra, a)
         self.assertEqual(rb, b)
 
+    def test_hetero_tuple(self):
+        alltypes = []
+        allvalues = []
+
+        alltypes.append((types.int32, types.int64))
+        allvalues.append((1, 2))
+
+        alltypes.append((types.float32, types.float64))
+        allvalues.append((.1, .2))
+
+        alltypes.append((types.int32, types.float64))
+        allvalues.append((1231, .2))
+
+        for (ta, tb), (a, b) in zip(alltypes, allvalues):
+            cres = compile_isolated(tuple_return_usecase, (ta, tb))
+            ra, rb = cres.entry_point(a, b)
+
+            for got, expect in zip((ra, rb), (a, b)):
+                if isinstance(got, float):
+                    self.assertAlmostEqual(got, expect)
+                else:
+                    self.assertEqual(got, expect)
+
 
 if __name__ == '__main__':
     unittest.main()

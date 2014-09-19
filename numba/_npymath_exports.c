@@ -8,6 +8,25 @@
 
 #include "_pymodule.h"
 #include <numpy/npy_math.h>
+#include <math.h>
+
+
+/* Missing math function on windows */
+#ifdef _WIN32
+    /* undef windows macros for the following */
+    #undef ldexpf
+    #undef frexpf
+
+    static
+    float ldexpf(float x, int exp) {
+        return (float)ldexp(x, exp);
+    }
+
+    static
+    float frexpf(float x, int *exp) {
+        return (float)frexp(x, exp);
+    }
+#endif /* WIN32 */
 
 /* Some functions require being adapted from the ones in npymath for
    use in numpy loops. It is easier to do this at this point than having
@@ -188,6 +207,15 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL(logaddexp2),
     NPYMATH_SYMBOL(rint),
     NPYMATH_SYMBOL(fabs),
+    NPYMATH_SYMBOL(copysign),
+    NPYMATH_SYMBOL(nextafter),
+    NPYMATH_SYMBOL(spacing),
+    /* npy_ldexp and npy_frexp appear in npy_math.h past NumPy 1.9, so link
+       directly to the math.h versions. */
+    NPYMATH_SYMBOL_EXPLICIT(ldexp, ldexp),
+    NPYMATH_SYMBOL_EXPLICIT(frexp, frexp),
+
+    NPYMATH_SYMBOL(modf),
 
     /* float functions */
     NPYMATH_SYMBOL(floorf),
@@ -227,6 +255,15 @@ struct npy_math_entry exports[] = {
     NPYMATH_SYMBOL(ceilf),
     NPYMATH_SYMBOL(truncf),
     NPYMATH_SYMBOL(fabsf),
+    NPYMATH_SYMBOL(copysignf),
+    NPYMATH_SYMBOL(nextafterf),
+    NPYMATH_SYMBOL(spacingf),
+    /* npy_ldexpf and npy_frexpf appear in npy_math.h past NumPy 1.9, so link
+       directly to the math.h versions. */
+    NPYMATH_SYMBOL_EXPLICIT(ldexpf, ldexpf),
+    NPYMATH_SYMBOL_EXPLICIT(frexpf, frexpf),
+
+    NPYMATH_SYMBOL(modff),
 
     /* complex functions */
     NPYMATH_SYMBOL_EXPLICIT(cpow, ufunc_cpow),
@@ -279,4 +316,3 @@ MOD_INIT(_npymath_exports) {
 
     return MOD_SUCCESS_VAL(module);
 }
-

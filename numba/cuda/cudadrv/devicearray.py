@@ -6,6 +6,7 @@ strides, dtype and size attributes similar to a NumPy ndarray.
 from __future__ import print_function, absolute_import, division
 import warnings
 import math
+import copy
 import numpy as np
 from .ndarray import (ndarray_populate_head, ArrayHeaderManager)
 from . import driver as _driver
@@ -103,13 +104,25 @@ class DeviceNDArrayBase(object):
         self.gpu_head = gpu_head
         self.gpu_data = gpu_data
 
-        self.__writeback = writeback # should deprecate the use of this
+        self.__writeback = writeback    # should deprecate the use of this
+        self.stream = 0
+
+    def bind(self, stream=0):
+        """Bind a CUDA stream to this object so that all subsequent operation
+        on this array defaults to the given stream.
+        """
+        clone = copy.copy(self)
+        clone.stream = stream
+        return clone
 
     def __del__(self):
         try:
             self.gpu_mem.free(self.gpu_head)
         except:
             pass
+
+    def _default_stream(self, stream):
+        return self.stream if not stream else stream
 
     @property
     def _numba_type_(self):
@@ -132,6 +145,7 @@ class DeviceNDArrayBase(object):
         If `ary` is a CUDA memory, perform a device-to-device transfer.
         Otherwise, perform a a host-to-device transfer.
         """
+        stream = self._default_stream(stream)
         if _driver.is_device_memory(ary):
             sz = min(self.alloc_size, ary.alloc_size)
             _driver.device_to_device(self, ary, sz, stream=stream)
@@ -145,6 +159,7 @@ class DeviceNDArrayBase(object):
 
         Always returns the host array.
         """
+        stream = self._default_stream(stream)
         if ary is None:
             hostary = np.empty(shape=self.alloc_size, dtype=np.byte)
         else:
@@ -171,6 +186,7 @@ class DeviceNDArrayBase(object):
         return hostary
 
     def to_host(self, stream=0):
+        stream = self._default_stream(stream)
         warnings.warn("to_host() is deprecated and will be removed",
                       DeprecationWarning)
         if self.__writeback is None:
@@ -182,6 +198,7 @@ class DeviceNDArrayBase(object):
         If the array cannot be equally divided, the last section will be
         smaller.
         """
+        stream = self._default_stream(stream)
         if self.ndim != 1:
             raise ValueError("only support 1d array")
         if self.strides[0] != self.dtype.itemsize:
@@ -215,7 +232,7 @@ class DeviceNDArray(DeviceNDArrayBase):
 
         Reshape the array and keeping the original data
         """
-        if len(newshape) == 1 and isinstance(newshape, (tuple, list)):
+        if len(newshape) == 1 and isinstance(newshape[0], (tuple, list)):
             newshape = newshape[0]
 
         cls = type(self)
@@ -233,6 +250,7 @@ class DeviceNDArray(DeviceNDArrayBase):
             raise NotImplementedError("operation requires copying")
 
     def ravel(self, order='C', stream=0):
+        stream = self._default_stream(stream)
         cls = type(self)
         newarr, extents = self._dummy.ravel(order=order)
 
@@ -253,13 +271,16 @@ class DeviceNDArray(DeviceNDArrayBase):
         return self._do_getitem(item, stream)
 
     def _do_getitem(self, item, stream=0):
+        stream = self._default_stream(stream)
+
         arr = self._dummy.__getitem__(item)
         extents = list(arr.iter_contiguous_extent())
         cls = type(self)
         if len(extents) == 1:
             newdata = self.gpu_data.view(*extents[0])
 
-            if dummyarray.is_element_indexing(item, self.ndim):
+            if not arr.is_array:
+                # Element indexing
                 hostary = np.empty(1, dtype=self.dtype)
                 _driver.device_to_host(dst=hostary, src=newdata,
                                        size=self._dummy.itemsize,

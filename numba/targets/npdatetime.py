@@ -81,7 +81,7 @@ def alloc_timedelta_result(builder, name='ret'):
     """
     Allocate a NaT-initialized datetime64 (or timedelta64) result slot.
     """
-    ret = cgutils.alloca_once(builder, TIMEDELTA64, name)
+    ret = cgutils.alloca_once(builder, TIMEDELTA64, name=name)
     builder.store(NAT, ret)
     return ret
 
@@ -89,7 +89,7 @@ def alloc_boolean_result(builder, name='ret'):
     """
     Allocate an uninitialized boolean result slot.
     """
-    ret = cgutils.alloca_once(builder, Type.int(1), name)
+    ret = cgutils.alloca_once(builder, Type.int(1), name=name)
     return ret
 
 def is_not_nat(builder, val):
@@ -258,7 +258,7 @@ def timedelta_over_timedelta(context, builder, sig, args):
     [ta, tb] = sig.args
     not_nan = are_not_nat(builder, [va, vb])
     ll_ret_type = context.get_value_type(sig.return_type)
-    ret = cgutils.alloca_once(builder, ll_ret_type, 'ret')
+    ret = cgutils.alloca_once(builder, ll_ret_type, name='ret')
     builder.store(Constant.real(ll_ret_type, float('nan')), ret)
     with cgutils.if_likely(builder, not_nan):
         va, vb = normalize_timedeltas(context, builder, va, vb, ta, tb)
@@ -270,10 +270,8 @@ def timedelta_over_timedelta(context, builder, sig, args):
 
 # Comparison operators on timedelta64
 
-def implement_equality_operator(py_op, ll_op, default_value):
-    @builtin
-    @implement(py_op, *TIMEDELTA_BINOP_SIG)
-    def timedelta_eq_impl(context, builder, sig, args):
+def _create_timedelta_comparison_impl(ll_op, default_value):
+    def impl(context, builder, sig, args):
         [va, vb] = args
         [ta, tb] = sig.args
         ret = alloc_boolean_result(builder)
@@ -291,14 +289,11 @@ def implement_equality_operator(py_op, ll_op, default_value):
                 builder.store(builder.icmp(ll_op, va, vb), ret)
         return builder.load(ret)
 
-implement_equality_operator('==', lc.ICMP_EQ, cgutils.false_bit)
-implement_equality_operator('!=', lc.ICMP_NE, cgutils.true_bit)
+    return impl
 
 
-def implement_ordering_operator(py_op, ll_op):
-    @builtin
-    @implement(py_op, *TIMEDELTA_BINOP_SIG)
-    def timedelta_eq_impl(context, builder, sig, args):
+def _create_timedelta_ordering_impl(ll_op):
+    def impl(context, builder, sig, args):
         [va, vb] = args
         [ta, tb] = sig.args
         ret = alloc_boolean_result(builder)
@@ -313,10 +308,23 @@ def implement_ordering_operator(py_op, ll_op):
                 builder.store(builder.icmp(ll_op, va, vb), ret)
         return builder.load(ret)
 
-implement_ordering_operator('<', lc.ICMP_SLT)
-implement_ordering_operator('<=', lc.ICMP_SLE)
-implement_ordering_operator('>', lc.ICMP_SGT)
-implement_ordering_operator('>=', lc.ICMP_SGE)
+    return impl
+
+
+timedelta_eq_timedelta_impl = _create_timedelta_comparison_impl(lc.ICMP_EQ, cgutils.false_bit)
+timedelta_ne_timedelta_impl = _create_timedelta_comparison_impl(lc.ICMP_NE, cgutils.true_bit)
+timedelta_lt_timedelta_impl = _create_timedelta_ordering_impl(lc.ICMP_SLT)
+timedelta_le_timedelta_impl = _create_timedelta_ordering_impl(lc.ICMP_SLE)
+timedelta_gt_timedelta_impl = _create_timedelta_ordering_impl(lc.ICMP_SGT)
+timedelta_ge_timedelta_impl = _create_timedelta_ordering_impl(lc.ICMP_SGE)
+
+for op, func in [('==', timedelta_eq_timedelta_impl),
+                 ('!=', timedelta_ne_timedelta_impl),
+                 ('<',  timedelta_lt_timedelta_impl),
+                 ('<=', timedelta_le_timedelta_impl),
+                 ('>',  timedelta_gt_timedelta_impl),
+                 ('>=', timedelta_ge_timedelta_impl)]:
+    builtin(implement(op, *TIMEDELTA_BINOP_SIG)(func))
 
 
 # Arithmetic on datetime64
@@ -522,10 +530,7 @@ def datetime_minus_datetime(context, builder, sig, args):
 
 # datetime64 comparisons
 
-def _implement_datetime_comparison(py_op, ll_op):
-
-    @builtin
-    @implement(py_op, types.Kind(types.NPDatetime), types.Kind(types.NPDatetime))
+def _create_datetime_comparison_impl(ll_op):
     def impl(context, builder, sig, args):
         va, vb = args
         ta, tb = sig.args
@@ -548,9 +553,81 @@ def _implement_datetime_comparison(py_op, ll_op):
 
     return impl
 
-_implement_datetime_comparison('==', lc.ICMP_EQ)
-_implement_datetime_comparison('!=', lc.ICMP_NE)
-_implement_datetime_comparison('<', lc.ICMP_SLT)
-_implement_datetime_comparison('<=', lc.ICMP_SLE)
-_implement_datetime_comparison('>', lc.ICMP_SGT)
-_implement_datetime_comparison('>=', lc.ICMP_SGE)
+
+datetime_eq_datetime_impl = _create_datetime_comparison_impl(lc.ICMP_EQ)
+datetime_ne_datetime_impl = _create_datetime_comparison_impl(lc.ICMP_NE)
+datetime_lt_datetime_impl = _create_datetime_comparison_impl(lc.ICMP_SLT)
+datetime_le_datetime_impl = _create_datetime_comparison_impl(lc.ICMP_SLE)
+datetime_gt_datetime_impl = _create_datetime_comparison_impl(lc.ICMP_SGT)
+datetime_ge_datetime_impl = _create_datetime_comparison_impl(lc.ICMP_SGE)
+
+for op, func in [('==', datetime_eq_datetime_impl),
+                 ('!=', datetime_ne_datetime_impl),
+                 ('<', datetime_lt_datetime_impl),
+                 ('<=', datetime_le_datetime_impl),
+                 ('>', datetime_gt_datetime_impl),
+                 ('>=', datetime_ge_datetime_impl)]:
+    builtin(implement(op, *[types.Kind(types.NPDatetime)]*2)(func))
+
+
+########################################################################
+# datetime/timedelta fmax/fmin maximum/minimum support
+
+def datetime_max_impl(context, builder, sig, args):
+    # just a regular int64 max avoiding nats.
+    # note this could be optimizing relying on the actual value of NAT
+    # but as NumPy doesn't rely on this, this seems more resilient
+    in1, in2 = args
+    in1_not_nat = is_not_nat(builder, in1)
+    in2_not_nat = is_not_nat(builder, in2)
+    in1_ge_in2 = builder.icmp(lc.ICMP_SGE, in1, in2)
+    res = builder.select(in1_ge_in2, in1, in2)
+    res = builder.select(in1_not_nat, res, in2)
+    res = builder.select(in2_not_nat, res, in1)
+
+    return res
+
+
+def datetime_min_impl(context, builder, sig, args):
+    # just a regular int64 min avoiding nats.
+    # note this could be optimizing relying on the actual value of NAT
+    # but as NumPy doesn't rely on this, this seems more resilient
+    in1, in2 = args
+    in1_not_nat = is_not_nat(builder, in1)
+    in2_not_nat = is_not_nat(builder, in2)
+    in1_le_in2 = builder.icmp(lc.ICMP_SLE, in1, in2)
+    res = builder.select(in1_le_in2, in1, in2)
+    res = builder.select(in1_not_nat, res, in2)
+    res = builder.select(in2_not_nat, res, in1)
+
+    return res
+
+
+def timedelta_max_impl(context, builder, sig, args):
+    # just a regular int64 max avoiding nats.
+    # note this could be optimizing relying on the actual value of NAT
+    # but as NumPy doesn't rely on this, this seems more resilient
+    in1, in2 = args
+    in1_not_nat = is_not_nat(builder, in1)
+    in2_not_nat = is_not_nat(builder, in2)
+    in1_ge_in2 = builder.icmp(lc.ICMP_SGE, in1, in2)
+    res = builder.select(in1_ge_in2, in1, in2)
+    res = builder.select(in1_not_nat, res, in2)
+    res = builder.select(in2_not_nat, res, in1)
+
+    return res
+
+
+def timedelta_min_impl(context, builder, sig, args):
+    # just a regular int64 min avoiding nats.
+    # note this could be optimizing relying on the actual value of NAT
+    # but as NumPy doesn't rely on this, this seems more resilient
+    in1, in2 = args
+    in1_not_nat = is_not_nat(builder, in1)
+    in2_not_nat = is_not_nat(builder, in2)
+    in1_le_in2 = builder.icmp(lc.ICMP_SLE, in1, in2)
+    res = builder.select(in1_le_in2, in1, in2)
+    res = builder.select(in1_not_nat, res, in2)
+    res = builder.select(in2_not_nat, res, in1)
+
+    return res

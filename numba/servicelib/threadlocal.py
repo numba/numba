@@ -39,5 +39,8 @@ class TLStack(object):
     def __nonzero__(self):
         return self.__bool__()
 
+    def __len__(self):
+        return len(self.stack)
+
     def clear(self):
         self.__init__()

@@ -1,8 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
-from itertools import product
 
-from numba import types
+from numba import types, intrinsics
 from numba.utils import PYVERSION
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     AbstractTemplate, builtin_global, builtin,
@@ -419,6 +418,8 @@ class SetItemArray(AbstractTemplate):
         assert not kws
         ary, idx, val = args
         if isinstance(ary, types.Array):
+            if ary.const:
+                raise TypeError("Constant array")
             return signature(types.none, ary, normalize_index(idx), ary.dtype)
 
 
@@ -455,6 +456,15 @@ class ArrayAttribute(AttributeTemplate):
     def resolve_size(self, ary):
         return types.intp
 
+    def resolve_sum(self, ary):
+        return types.BoundFunction(Array_sum, ary)
+
+    def resolve_prod(self, ary):
+        return types.BoundFunction(Array_prod, ary)
+
+    def resolve_flat(self, ary):
+        return types.NumpyFlatType(ary)
+
     def generic_resolve(self, ary, attr):
         if isinstance(ary.dtype, types.Record):
             if attr in ary.dtype.fields:
@@ -462,16 +472,22 @@ class ArrayAttribute(AttributeTemplate):
                                    layout='A')
 
 
-class Array_flatten(AbstractTemplate):
-    key = "array.flatten"
+class Array_sum(AbstractTemplate):
+    key = "array.sum"
 
     def generic(self, args, kws):
         assert not args
         assert not kws
-        this = self.this
-        if this.layout == 'C':
-            resty = this.copy(ndim=1)
-            return signature(resty, recvr=this)
+        return signature(self.this.dtype, recvr=self.this)
+
+
+class Array_prod(AbstractTemplate):
+    key = "array.prod"
+
+    def generic(self, args, kws):
+        assert not args
+        assert not kws
+        return signature(self.this.dtype, recvr=self.this)
 
 
 @builtin
@@ -627,9 +643,12 @@ class Max(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
 
+        # max(a, b, ...)
+        if len(args) < 2:
+            return
         for a in args:
             if a not in types.number_domain:
-                raise TypeError("max() only support for numbers")
+                return
 
         retty = self.context.unify_types(*args)
         return signature(retty, *args)
@@ -641,9 +660,12 @@ class Min(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
 
+        # min(a, b, ...)
+        if len(args) < 2:
+            return
         for a in args:
             if a not in types.number_domain:
-                raise TypeError("min() only support for numbers")
+                return
 
         retty = self.context.unify_types(*args)
         return signature(retty, *args)
@@ -758,7 +780,8 @@ class Enumerate(AbstractTemplate):
         assert not kws
         it = args[0]
         if len(args) > 1 and not args[1] in types.integer_domain:
-            raise TypingError("Only integers supported as start value in enumerate")
+            raise TypeError("Only integers supported as start value in "
+                            "enumerate")
         elif len(args) > 2:
             #let python raise its own error
             enumerate(*args)
@@ -783,3 +806,16 @@ class Zip(AbstractTemplate):
 
 
 builtin_global(zip, types.Function(Zip))
+
+
+@builtin
+class Intrinsic_array_ravel(AbstractTemplate):
+    key = intrinsics.array_ravel
+
+    def generic(self, args, kws):
+        assert not kws
+        [arr] = args
+        if arr.layout in 'CF' and arr.ndim >= 1:
+            return signature(arr.copy(ndim=1), arr)
+
+builtin_global(intrinsics.array_ravel, types.Function(Intrinsic_array_ravel))

@@ -53,7 +53,6 @@ class CPUContext(BaseContext):
         # that LLVM 3.5 will fix this issue.
         eb.mattrs("-avx")
         self.tm = tm = eb.select_target()
-        self.engine = eb.create(tm)
         self.pm = self.build_pass_manager()
         self.native_funcs = utils.UniqueDict()
         self.cmath_provider = {}
@@ -68,6 +67,9 @@ class CPUContext(BaseContext):
         self.insert_func_defn(npyimpl.registry.functions)
         self.insert_func_defn(operatorimpl.registry.functions)
         self.insert_func_defn(printimpl.registry.functions)
+
+        # Engine creation has sideeffect to the process symbol table
+        self.engine = eb.create(tm)
 
     def get_function_type(self, fndesc):
         """

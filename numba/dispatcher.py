@@ -144,7 +144,10 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         sig = tuple([self.typeof_pyval(a) for a in args])
         return self.jit(sig)
 
-    def inspect_types(self, file=sys.stdout):
+    def inspect_types(self, file=None):
+        if file is None:
+            file = sys.stdout
+
         for ver, res in utils.iteritems(self._compileinfos):
             print("%s %s" % (self.py_func.__name__, ver), file=file)
             print('-' * 80, file=file)
