@@ -161,8 +161,12 @@ def resolve_ambiguous_promotions(context, cases, args):
         else:
             ratings.append((rate, case))
 
-    _, bestcase = min(ratings)
-    return bestcase
+    if ratings:
+        _, bestcase = min(ratings)
+        return bestcase
+    else:
+        # Pick the case with the most precision to resolve ambiguity
+        return max(cases, key=lambda case: case.args)
 
 
 def _safe_promote_case(context, case, args):
