@@ -202,9 +202,6 @@ class CPUContext(BaseContext):
         c_helpers = _helperlib.c_helpers
         for name in ['cpow', 'sdiv', 'srem', 'udiv', 'urem']:
             le.dylib_add_symbol("numba.math.%s" % name, c_helpers[name])
-        if sys.platform.startswith(
-                'linux') and not le.dylib_address_of_symbol('__fixunsdfdi'):
-            le.dylib_add_symbol("__fixunsdfdi", c_helpers["fptoui"])
         # Necessary for Python3
         le.dylib_add_symbol("numba.round", c_helpers["round_even"])
         le.dylib_add_symbol("numba.roundf", c_helpers["roundf_even"])
