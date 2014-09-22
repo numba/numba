@@ -131,11 +131,18 @@ class _CompileStatus(object):
         self.use_interpreter_mode = False
         self.can_giveup = can_giveup
 
+    def __repr__(self):
+        vals = []
+        for k in self.__slots__:
+            vals.append("{k}={v}".format(k=k, v=getattr(self, k)))
+        return ', '.join(vals)
+
 
 class Pipeline(object):
     """Stores and manages states for the compiler pipeline
     """
-    def __init__(self, typingctx, targetctx, args, return_type, flags, locals):
+    def __init__(self, typingctx, targetctx, args, return_type, flags,
+                 locals):
         self.typingctx = typingctx
         self.targetctx = targetctx
         self.args = args
@@ -145,6 +152,12 @@ class Pipeline(object):
         self.bc = None
         self.func_attr = None
         self.lifted = None
+
+        self.status = _CompileStatus(
+            can_fallback=self.flags.enable_pyobject,
+            use_python_mode=self.flags.force_pyobject,
+            can_giveup=config.INTERPRETER_FALLBACK
+        )
 
     @contextmanager
     def fallback_context(self, msg):
@@ -193,38 +206,36 @@ class Pipeline(object):
                 raise ObjectModeError
 
     def compile_extra(self, func):
-        bc = bytecode.ByteCode(func=func)
-        if config.DUMP_BYTECODE:
-            print(bc.dump())
-        func_attr = get_function_attributes(func)
-        return self.compile_bytecode(bc, func_attr=func_attr)
+        def core():
+            with self.giveup_context("Unrecognized bytecode"):
+                self.func = func
+                func_attr = get_function_attributes(func)
+                self.func_attr = func_attr
+                bc = bytecode.ByteCode(func=func)
+                if config.DUMP_BYTECODE:
+                    print(bc.dump())
+            return self.compile_bytecode(bc, func_attr=func_attr)
+        return self._fallback(core)
 
     def compile_bytecode(self, bc, lifted=(),
                          func_attr=DEFAULT_FUNCTION_ATTRIBUTES):
         self.bc = bc
+        self.func = bc.func
         self.lifted = lifted
         self.func_attr = func_attr
-
-        self.status = _CompileStatus(
-            can_fallback=self.flags.enable_pyobject,
-            use_python_mode=self.flags.force_pyobject,
-            can_giveup=config.INTERPRETER_FALLBACK
-        )
-
         self.targetctx = self.targetctx.localized()
         self.targetctx.metadata['wraparound'] = not self.flags.no_wraparound
-
         return self._compile_bytecode()
 
     def compile_internal(self, bc, func_attr=DEFAULT_FUNCTION_ATTRIBUTES):
         self.bc = bc
         self.lifted = ()
         self.func_attr = func_attr
-        self.status = _CompileStatus(can_fallback=False,
-                                     use_python_mode=False, can_giveup=False)
+        self.status.can_fallback = False
+        self.status.use_python_mode = False
+        self.status.can_giveup = False
         self.targetctx = self.targetctx.localized()
         self.targetctx.metadata['wraparound'] = not self.flags.no_wraparound
-
         return self._compile_bytecode()
 
     def analyze_bytecode(self):
@@ -380,33 +391,27 @@ class Pipeline(object):
 
         return cr
 
-    def _compile_bytecode(self):
-        with self.giveup_context("Function %s failed at bytecode analysis" %
-                (self.func_attr.name,)):
-            self.analyze_bytecode()
-
-        if not self.status.use_interpreter_mode:
-
-            if not self.status.use_python_mode:
-                # nopython mode
-                try:
-                    return self._compile_nopython()
-                except NoPythonError:
-                    pass
+    def _fallback(self, func):
+        try:
+            try:
+                return func()
+            except NoPythonError:
+                if not self.status.can_fallback:
+                    raise
 
             if self.status.use_python_mode:
-                # object mode
-                try:
-                    return self._compile_objectmode()
-                except ObjectModeError:
-                    pass
+                return self._compile_objectmode()
+
+        except ObjectModeError:
+            if not self.status.can_giveup:
+                raise
 
         if self.status.use_interpreter_mode:
             args = [types.pyobject] * len(self.args)
             signature = typing.signature(types.pyobject, *args)
             cr = compile_result(typing_context=self.typingctx,
                                 target_context=self.targetctx,
-                                entry_point=self.bc.func,
+                                entry_point=self.func,
                                 typing_error=self.status.fail_reason,
                                 type_annotation="<Interpreter mode function>",
                                 llvm_func=None,
@@ -417,6 +422,20 @@ class Pipeline(object):
                                 lifted=(),
                                 fndesc=None,)
             return cr
+
+    def _compile_bytecode(self):
+        def core():
+            with self.giveup_context("Function %s failed at bytecode analysis" %
+                    (self.func_attr.name,)):
+                self.analyze_bytecode()
+            if not self.status.use_python_mode:
+                return self._compile_nopython()
+            else:
+                return self._compile_objectmode()
+
+            raise NoPythonError
+
+        return self._fallback(core)
 
     def _compile_nopython(self):
         cres = self.frontend()

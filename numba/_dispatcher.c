@@ -440,10 +440,6 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
         } else if (self->fallbackdef) {
             /* Have object fallback */
             retval = call_cfunc(self->fallbackdef, args, kws);
-        } else if (self->interpdef) {
-            /* Have interpreter fallback */
-            puts("Hell");
-            retval = PyObject_Call(self->interpdef, args, kws);
         } else {
             /* Raise TypeError */
             PyErr_SetString(PyExc_TypeError, "No matching definition");
