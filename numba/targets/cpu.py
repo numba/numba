@@ -209,7 +209,11 @@ class CPUContext(BaseContext):
         for name in ['cpow', 'sdiv', 'srem', 'udiv', 'urem']:
             le.dylib_add_symbol("numba.math.%s" % name, c_helpers[name])
 
-        if sys.platform.startswith('linux') and self.is32bit:
+        if sys.platform.startswith('win32') and self.is32bit:
+            # This may still be necessary for windows XP
+            _add_missing_symbol("__ftol2", c_helpers["fptoui"])
+
+        elif sys.platform.startswith('linux') and self.is32bit:
             _add_missing_symbol("__fixunsdfdi", c_helpers["fptoui"])
             _add_missing_symbol("__fixunssfdi", c_helpers["fptouif"])
 
