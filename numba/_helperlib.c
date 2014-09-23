@@ -313,6 +313,11 @@ uint64_t Numba_fptoui(double x) {
 }
 
 static
+uint64_t Numba_fptouif(float x) {
+    return (uint64_t)x;
+}
+
+static
 void Numba_release_record_buffer(Py_buffer *buf)
 {
     PyBuffer_Release(buf);
@@ -378,6 +383,7 @@ build_c_helpers_dict(void)
     declmethod(round_even);
     declmethod(roundf_even);
     declmethod(fptoui);
+    declmethod(fptouif);
     declmethod(gil_ensure);
     declmethod(gil_release);
 #define MATH_UNARY(F, R, A) declmethod(F);
