@@ -730,31 +730,29 @@ def get_complex_info(ty):
 
 
 @builtin_attr
-@impl_attribute(types.complex64, "real", types.float32)
-def complex64_real_impl(context, builder, typ, value):
-    cplx = Complex64(context, builder, value=value)
+@impl_attribute(types.Kind(types.Complex), "real")
+def complex_real_impl(context, builder, typ, value):
+    cplx_cls, _ = get_complex_info(typ)
+    cplx = cplx_cls(context, builder, value=value)
     return cplx.real
 
-
 @builtin_attr
-@impl_attribute(types.complex128, "real", types.float64)
-def complex128_real_impl(context, builder, typ, value):
-    cplx = Complex128(context, builder, value=value)
-    return cplx.real
-
-
-@builtin_attr
-@impl_attribute(types.complex64, "imag", types.float32)
-def complex64_imag_impl(context, builder, typ, value):
-    cplx = Complex64(context, builder, value=value)
+@impl_attribute(types.Kind(types.Complex), "imag")
+def complex_imag_impl(context, builder, typ, value):
+    cplx_cls, _ = get_complex_info(typ)
+    cplx = cplx_cls(context, builder, value=value)
     return cplx.imag
 
 
-@builtin_attr
-@impl_attribute(types.complex128, "imag", types.float64)
-def complex128_imag_impl(context, builder, typ, value):
-    cplx = Complex128(context, builder, value=value)
-    return cplx.imag
+@builtin
+@implement("complex.conjugate", types.Kind(types.Complex))
+def complex_imag_impl(context, builder, sig, args):
+    complexClass = context.make_complex(sig.args[0])
+    z = complexClass(context, builder, args[0])
+    imag = z.imag
+    zero = cgutils.get_null_value(imag.type)
+    z.imag = builder.fsub(zero, imag)
+    return z._getvalue()
 
 
 @builtin

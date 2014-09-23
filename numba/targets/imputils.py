@@ -23,15 +23,18 @@ def implement(func, *argtys):
     return wrapper
 
 
-def impl_attribute(ty, attr, rtype):
+def impl_attribute(ty, attr, rtype=None):
     def wrapper(impl):
         @functools.wraps(impl)
         def res(context, builder, typ, value, attr):
             ret = impl(context, builder, typ, value)
             return ret
 
-        res.return_type = rtype
-        res.key = (ty, attr)
+        if rtype is None:
+            res.signature = typing.signature(types.Any, ty)
+        else:
+            res.signature = typing.signature(rtype, ty)
+        res.attr = attr
         return res
 
     return wrapper
@@ -44,7 +47,8 @@ def impl_attribute_generic(ty):
             ret = impl(context, builder, typ, value, attr)
             return ret
 
-        res.key = (ty, None)
+        res.signature = typing.signature(types.Any, ty)
+        res.attr = None
         return res
 
     return wrapper
