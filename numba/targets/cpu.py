@@ -15,6 +15,12 @@ from numba.targets import intrinsics, mathimpl, npyimpl, operatorimpl, printimpl
 from .options import TargetOptions
 
 
+def _add_missing_symbol(symbol, addr):
+    """Add missing symbol into LLVM internal symtab
+    """
+    if not le.dylib_address_of_symbol(symbol):
+        le.dylib_add_symbol(symbol, addr)
+
 # Keep those structures in sync with _dynfunc.c.
 
 class ClosureBody(cgutils.Structure):
@@ -203,11 +209,9 @@ class CPUContext(BaseContext):
         for name in ['cpow', 'sdiv', 'srem', 'udiv', 'urem']:
             le.dylib_add_symbol("numba.math.%s" % name, c_helpers[name])
 
-        if sys.platform.startswith('linux') and utils.MACHINE_BITS == 32:
-            if not le.dylib_address_of_symbol('__fixunsdfdi'):
-                le.dylib_add_symbol("__fixunsdfdi", c_helpers["fptoui"])
-            if not le.dylib_address_of_symbol('﻿__fixunssfdi'):
-                le.dylib_add_symbol("﻿__fixunssfdi", c_helpers["fptouif"])
+        if sys.platform.startswith('linux') and self.is32bit:
+            _add_missing_symbol("__fixunsdfdi", c_helpers["fptoui"])
+            _add_missing_symbol("__fixunssfdi", c_helpers["fptouif"])
 
         # Necessary for Python3
         le.dylib_add_symbol("numba.round", c_helpers["round_even"])
