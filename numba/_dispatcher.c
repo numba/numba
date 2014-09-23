@@ -401,7 +401,7 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
     int prealloc[24];
     int matches;
     int old_can_compile;
-    PyObject *cfunc = NULL;
+    PyObject *cfunc;
 
     /* Shortcut for single definition */
     /*if (!self->can_compile && 1 == dispatcher_count(self->dispatcher)){
