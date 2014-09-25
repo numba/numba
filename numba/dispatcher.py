@@ -157,8 +157,8 @@ class _OverloadedBase(_dispatcher.Dispatcher):
     def _explain_ambiguous(self, *args, **kws):
         assert not kws, "kwargs not handled"
         args = tuple([self.typeof_pyval(a) for a in args])
-        resolve_overload(self.typingctx, self.py_func,
-                         tuple(self.overloads.keys()), args, kws)
+        sigs = [cr.signature for cr in self._compileinfos.values()]
+        resolve_overload(self.typingctx, self.py_func, sigs, args, kws)
 
     def __repr__(self):
         return "%s(%s)" % (type(self).__name__, self.py_func)

@@ -163,12 +163,17 @@ def _numpy_ufunc(name):
     if not name in _aliases:
         builtin_global(func, types.Function(typing_class))
 
+all_ufuncs = sum([_math_operations, _trigonometric_functions,
+                  _bit_twiddling_functions, _comparison_functions,
+                  _floating_functions], [])
 
-for func in itertools.chain(_math_operations, _trigonometric_functions,
-                            _bit_twiddling_functions, _comparison_functions,
-                            _floating_functions):
-    if not getattr(numpy, func) in _unsupported:
-        _numpy_ufunc(func)
+supported_ufuncs = [x for x in all_ufuncs if x not in _unsupported]
+
+for func in supported_ufuncs:
+    _numpy_ufunc(func)
+
+all_ufuncs = [getattr(numpy, name) for name in all_ufuncs]
+supported_ufuncs = [getattr(numpy, name) for name in supported_ufuncs]
 
 
 del _math_operations, _trigonometric_functions, _bit_twiddling_functions

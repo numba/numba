@@ -375,6 +375,41 @@ call_cfunc(PyObject *cfunc, PyObject *args, PyObject *kws)
 
 static
 PyObject*
+compile_and_invoke(DispatcherObject *self, PyObject *args, PyObject *kws)
+{
+    /* Compile a new one */
+    int old_can_compile;
+    PyObject *cfa, *cfunc, *retval;
+    cfa = PyObject_GetAttrString((PyObject*)self, "_compile_for_args");
+    if (cfa == NULL)
+        return NULL;
+
+    old_can_compile = self->can_compile;
+    self->can_compile = 0;
+    /* NOTE: we call the compiled function ourselves instead of
+       letting the Python derived class do it.  This is for proper
+       behaviour of globals() in jitted functions (issue #476). */
+    cfunc = PyObject_Call(cfa, args, kws);
+    Py_DECREF(cfa);
+
+    self->can_compile = old_can_compile;
+
+    if (cfunc == NULL)
+        return NULL;
+
+    if (PyObject_TypeCheck(cfunc, &PyCFunction_Type)) {
+        retval = call_cfunc(cfunc, args, kws);
+    } else {
+        // Re-enter interpreter
+        retval = PyObject_Call(cfunc, args, kws);
+    }
+    Py_DECREF(cfunc);
+
+    return retval;
+}
+
+static
+PyObject*
 Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
 {
     PyObject *tmptype, *retval = NULL;
@@ -416,27 +451,7 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
     } else if (matches == 0) {
         /* No matching definition */
         if (self->can_compile) {
-            /* Compile a new one */
-            PyObject *cfa;
-            cfa = PyObject_GetAttrString((PyObject*)self, "_compile_for_args");
-            if (cfa == NULL)
-                goto CLEANUP;
-            old_can_compile = self->can_compile;
-            self->can_compile = 0;
-            /* NOTE: we call the compiled function ourselves instead of
-               letting the Python derived class do it.  This is for proper
-               behaviour of globals() in jitted functions (issue #476). */
-            cfunc = PyObject_Call(cfa, args, kws);
-            self->can_compile = old_can_compile;
-            Py_DECREF(cfa);
-            if (cfunc != NULL) {
-                if (PyObject_TypeCheck(cfunc, &PyCFunction_Type)) {
-                    retval = call_cfunc(cfunc, args, kws);
-                } else {
-                    retval = PyObject_Call(cfunc, args, kws);
-                }
-                Py_DECREF(cfunc);
-            }
+            retval = compile_and_invoke(self, args, kws);
         } else if (self->fallbackdef) {
             /* Have object fallback */
             retval = call_cfunc(self->fallbackdef, args, kws);
@@ -445,6 +460,9 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
             PyErr_SetString(PyExc_TypeError, "No matching definition");
             retval = NULL;
         }
+    } else if (self->can_compile) {
+        /* Ambiguous, but are allowed to compile */
+        retval = compile_and_invoke(self, args, kws);
     } else {
         /* Ambiguous */
         explain_ambiguous((PyObject*)self, args, kws);

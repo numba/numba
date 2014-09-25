@@ -11,12 +11,12 @@ from .support import TestCase
 def dummy(x):
     return x
 
+
 def add(x, y):
     return x + y
 
 
 class TestDispatcher(TestCase):
-
     def test_numba_interface(self):
         """
         Check that vectorize can accept a decorated object.
@@ -58,6 +58,28 @@ class TestDispatcher(TestCase):
         with self.assertRaises(TypeError):
             # Implicit conversion of complex to int disallowed
             c_add(12.3, 45.6j)
+
+    def test_ambiguous_new_version(self):
+        """Test compiling new version in an ambiguous case
+        """
+
+        @jit
+        def foo(a, b):
+            return a + b
+
+        INT = 1
+        FLT = 1.5
+        self.assertAlmostEqual(foo(INT, FLT), INT + FLT)
+        self.assertEqual(len(foo.overloads), 1)
+        self.assertAlmostEqual(foo(FLT, INT), FLT + INT)
+        self.assertEqual(len(foo.overloads), 2)
+        self.assertAlmostEqual(foo(FLT, FLT), FLT + FLT)
+        self.assertEqual(len(foo.overloads), 3)
+        # The following call is ambiguous because (int, int) can resolve
+        # to (float, int) or (int, float) with equal weight.
+        self.assertAlmostEqual(foo(1, 1), INT + INT)
+        self.assertEqual(len(foo.overloads), 4, "didn't compile a new "
+                                                "version")
 
 
 if __name__ == '__main__':
