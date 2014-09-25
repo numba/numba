@@ -3,6 +3,7 @@ from numba.compiler import compile_isolated
 from numba.tests.support import TestCase
 import numba.unittest_support as unittest
 from numba import testing
+import re
 
 
 def del_list_item_func(x):
@@ -33,12 +34,17 @@ class TestLists(TestCase):
         cfunc = cr.entry_point
 
         errmsg = "local variable 'x' referenced before assignment"
-        with self.assertRaisesRegex(UnboundLocalError, errmsg):
+        with self.assertRaises(UnboundLocalError) as raised:
             pyfunc(1)
 
-        with self.assertRaisesRegex(UnboundLocalError, errmsg):
+        if re.search(str(raised.exception), errmsg) is None:
+            self.fail("unexpected exception: {0}".format(raised.exception))
+
+        with self.assertRaises(UnboundLocalError) as raised:
             cfunc(1)
 
+        if re.search(str(raised.exception), errmsg) is None:
+            self.fail("unexpected exception: {0}".format(raised.exception))
 
 if __name__ == '__main__':
     unittest.main()
