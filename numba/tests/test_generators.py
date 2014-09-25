@@ -1,12 +1,8 @@
 from __future__ import print_function
-import numba.unittest_support as unittest
-from numba.compiler import compile_isolated, Flags
-from numba import types, utils
-from numba.tests import usecases
+from numba.compiler import compile_isolated
 from numba.tests.support import TestCase
 import numba.unittest_support as unittest
-import math
-import numpy as np
+from numba import testing
 
 
 def generator_func():
@@ -20,14 +16,14 @@ def return_generator_func(x):
 
 class TestLists(TestCase):
 
-    @unittest.expectedFailure
+    @testing.allow_interpreter_mode
     def test_generator_func(self):
         pyfunc = generator_func
         cr = compile_isolated(pyfunc, ())
         cfunc = cr.entry_point
         self.assertEqual([x for x in cfunc()], [x for x in pyfunc()])
 
-    @unittest.expectedFailure
+    @testing.allow_interpreter_mode
     def test_return_generator_func(self):
         pyfunc = return_generator_func
         cr = compile_isolated(pyfunc, ())

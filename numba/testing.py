@@ -1,5 +1,20 @@
 from __future__ import print_function, division, absolute_import
 import sys
+import functools
+from numba import config
+
+
+def allow_interpreter_mode(fn):
+    """Temporarily re-enable intepreter mode
+    """
+    @functools.wraps(fn)
+    def _core(*args, **kws):
+        config.INTERPRETER_FALLBACK = True
+        try:
+            fn(*args, **kws)
+        finally:
+            config.INTERPRETER_FALLBACK = False
+    return _core
 
 
 def discover_tests(startdir):
