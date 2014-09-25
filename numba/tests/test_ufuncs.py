@@ -654,18 +654,16 @@ class TestUFuncs(TestCase):
     def test_bitwise_not_ufunc_npm(self):
         self.test_bitwise_not_ufunc(flags=no_pyobj_flags)
 
-    def test_left_shift_ufunc(self, flags=enable_pyobj_flags):
-        self.binary_int_ufunc_test(np.left_shift, flags=flags)
 
-    def test_left_shift_ufunc_npm(self):
-        self.test_left_shift_ufunc(flags=no_pyobj_flags)
-
-    def test_right_shift_ufunc(self, flags=enable_pyobj_flags):
-        self.binary_int_ufunc_test(np.right_shift, flags=flags)
-
-    def test_right_shift_ufunc_npm(self):
-        self.test_right_shift_ufunc(flags=no_pyobj_flags)
-
+    # Note: there is no entry for left_shift and right_shift as this harness 
+    #       is not valid for them. This is so because left_shift and right
+    #       shift implementation in NumPy has undefined behavior (in C-parlance)
+    #       when the second argument is a negative (or bigger than the number
+    #       of bits) value.
+    #       Also, right_shift for negative first arguments also relies on
+    #       implementation defined behavior, although numba warantees "sane"
+    #       behavior (arithmetic shifts on signed integers, logic shifts on
+    #       unsigned integers).
 
     ############################################################################
     # Comparison functions
@@ -798,7 +796,6 @@ class TestUFuncs(TestCase):
     @_unimplemented
     def test_modf_ufunc_npm(self):
         self.test_modf_ufunc(flags=no_pyobj_flags)
-
 
     # Note: there is no entry for ldexp as this harness isn't valid for this
     #       ufunc. this is so because ldexp requires heterogeneous inputs.
@@ -1158,7 +1155,7 @@ class TestLoopTypes(TestCase):
     _compile_flags = enable_pyobj_flags
     _skip_types='O'
 
-    def _arg_for_type(self, a_letter_type):
+    def _arg_for_type(self, a_letter_type, index=0):
         """return a suitable array argument for testing the letter type"""
         if a_letter_type in 'bhilq':
             # an integral
@@ -1216,7 +1213,8 @@ class TestLoopTypes(TestCase):
         cr = compile_isolated(fn, arg_nbty, flags=self._compile_flags)
 
         # Ensure a good mix of input values
-        c_args = [self._arg_for_type(t).repeat(2) for t in dtypes]
+        c_args = [self._arg_for_type(t, index=index).repeat(2)
+                  for index, t in enumerate(dtypes)]
         for arr in c_args:
             self.random.shuffle(arr)
         py_args = [a.copy() for a in c_args]
@@ -1275,6 +1273,8 @@ class TestLoopTypesIntNoPython(TestLoopTypes):
     _ufuncs = supported_ufuncs[:]
     # reciprocal needs a special test due to issue #757
     _ufuncs.remove(np.reciprocal)
+    _ufuncs.remove(np.left_shift) # has its own test class
+    _ufuncs.remove(np.right_shift) # has its own test class
     _required_types = '?bBhHiIlLqQ'
     _skip_types = 'fdFDmMO'
 
@@ -1282,14 +1282,68 @@ class TestLoopTypesIntNoPython(TestLoopTypes):
 class TestLoopTypesIntReciprocalNoPython(TestLoopTypes):
     _compile_flags = no_pyobj_flags
     _ufuncs = [np.reciprocal] # issue #757
-    _required_types = '?bBhHiIlLqQ'
+    _required_types = 'bBhHiIlLqQ'
     _skip_types = 'fdFDmMO'
 
-    def _arg_for_type(self, a_letter_type):
-        res = super(self.__class__, self)._arg_for_type(self.a_letter_type)
+    def _arg_for_type(self, a_letter_type, index=0):
+        res = super(self.__class__, self)._arg_for_type(self.a_letter_type,
+                                                        index=index)
         # avoid 0 as argument, as it triggers undefined behavior that my differ
         # in results from numba to the compiler used to compile NumPy
         res[res == 0] = 42
+        return res
+
+
+class TestLoopTypesIntLeftShiftNoPython(TestLoopTypes):
+    _compile_flags = no_pyobj_flags
+    _ufuncs = [np.left_shift]
+    _required_types = 'bBhHiIlLqQ'
+    _skip_types = 'fdFDmMO'
+
+    def _arg_for_type(self, a_letter_type, index=0):
+        res = super(self.__class__, self)._arg_for_type(self.a_letter_type,
+                                                        index=index)
+        # Shifting by a negative amount (argument with index 1) is undefined
+        # behavior in C. It is also undefined behavior in numba. In the same
+        # sense, it is also undefined behavior when the shift amount is larger
+        # than the number of bits in the shifted integer.
+        # To avoid problems in the test, the values are clamped (clipped) so
+        # that 0 <= shift_amount < bitcount(shifted_integer)
+        if index == 1:
+            bit_count = res.dtype.itemsize * 8
+            res = np.clip(res, 0, bit_count-1) 
+        return res
+
+
+class TestLoopTypesIntRightShiftNoPython(TestLoopTypes):
+    _compile_flags = no_pyobj_flags
+    _ufuncs = [np.right_shift]
+    _required_types = 'bBhHiIlLqQ'
+    _skip_types = 'fdFDmMO'
+
+    def _arg_for_type(self, a_letter_type, index=0):
+        res = super(self.__class__, self)._arg_for_type(self.a_letter_type,
+                                                        index=index)
+        # Shifting by a negative amount (argument with index 1) is undefined
+        # behavior in C. It is also undefined behavior in numba. In the same
+        # sense, it is also undefined behavior when the shift amount is larger
+        # than the number of bits in the shifted integer.
+        # To avoid problems in the test, the values are clamped (clipped) so
+        # that 0 <= shift_amount < bitcount(shifted_integer)
+        if index == 1:
+            bit_count = res.dtype.itemsize * 8
+            res = np.clip(res, 0, bit_count-1)
+
+        # Right shift has "implementation defined behavior" when the number
+        # shifted is negative (in C). In numba, right shift for signed integers
+        # is "arithmetic" while for unsigned integers is "logical".
+        # This test compares against the NumPy implementation, that relies
+        # on "implementation defined behavior", so the test could be a false 
+        # failure if the compiler used to compile NumPy doesn't follow the same
+        # policy.
+        # Hint: do not rely on right shifting negative numbers in NumPy.
+        if index == 0:
+            res = np.abs(res)
         return res
 
 
