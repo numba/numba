@@ -1293,6 +1293,7 @@ class TestLoopTypesIntReciprocalNoPython(TestLoopTypes):
         res[res == 0] = 42
         return res
 
+
 class TestLoopTypesIntLeftShiftNoPython(TestLoopTypes):
     _compile_flags = no_pyobj_flags
     _ufuncs = [np.left_shift]
@@ -1302,14 +1303,17 @@ class TestLoopTypesIntLeftShiftNoPython(TestLoopTypes):
     def _arg_for_type(self, a_letter_type, index=0):
         res = super(self.__class__, self)._arg_for_type(self.a_letter_type,
                                                         index=index)
-        # to avoid problems with undefined behavior, do not allow negative
-        # values to get through for the shift amount (index 1).
-        # The shift amount also has to be lower than the number of bits of
-        # the datatype to avoid undefined behavior
+        # Shifting by a negative amount (argument with index 1) is undefined
+        # behavior in C. It is also undefined behavior in numba. In the same
+        # sense, it is also undefined behavior when the shift amount is larger
+        # than the number of bits in the shifted integer.
+        # To avoid problems in the test, the values are clamped (clipped) so
+        # that 0 <= shift_amount < bitcount(shifted_integer)
         if index == 1:
             bit_count = res.dtype.itemsize * 8
             res = np.clip(res, 0, bit_count-1) 
         return res
+
 
 class TestLoopTypesIntRightShiftNoPython(TestLoopTypes):
     _compile_flags = no_pyobj_flags
@@ -1320,21 +1324,24 @@ class TestLoopTypesIntRightShiftNoPython(TestLoopTypes):
     def _arg_for_type(self, a_letter_type, index=0):
         res = super(self.__class__, self)._arg_for_type(self.a_letter_type,
                                                         index=index)
-        # to avoid problems with undefined behavior, do not allow negative
-        # values to get through for the shift amount (index 1).
-        # The shift amount also has to be lower than the number of bits of
-        # the datatype to avoid undefined behavior
+        # Shifting by a negative amount (argument with index 1) is undefined
+        # behavior in C. It is also undefined behavior in numba. In the same
+        # sense, it is also undefined behavior when the shift amount is larger
+        # than the number of bits in the shifted integer.
+        # To avoid problems in the test, the values are clamped (clipped) so
+        # that 0 <= shift_amount < bitcount(shifted_integer)
         if index == 1:
             bit_count = res.dtype.itemsize * 8
             res = np.clip(res, 0, bit_count-1)
 
-        # Right shifts have implementation defined behavior when the number
-        # shifted is negative (in C). In numba we right shifts for signed
-        # integers are "arithmetic" while for unsigned integers are "logical".
+        # Right shift has "implementation defined behavior" when the number
+        # shifted is negative (in C). In numba, right shift for signed integers
+        # is "arithmetic" while for unsigned integers is "logical".
         # This test compares against the NumPy implementation, that relies
-        # on that "implementation defined behavior", so the test could be
-        # just a false failure. Hint: do not rely on right shifting negative
-        # numbers in NumPy.
+        # on "implementation defined behavior", so the test could be a false 
+        # failure if the compiler used to compile NumPy doesn't follow the same
+        # policy.
+        # Hint: do not rely on right shifting negative numbers in NumPy.
         if index == 0:
             res = np.abs(res)
         return res
