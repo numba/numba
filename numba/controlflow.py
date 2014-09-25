@@ -342,7 +342,8 @@ class CFGraph(object):
         self._remove_node_edges(dummy_exit)
         self._exit_points.remove(dummy_exit)
         # A crude check that we've removed all references to dummy_exit
-        assert sys.getrefcount(dummy_exit) == 2, sys.getrefcount(dummy_exit)
+        if sys.gettrace() is None:
+            assert sys.getrefcount(dummy_exit) == 2, sys.getrefcount(dummy_exit)
 
     # Finding loops and back edges: see
     # http://pages.cs.wisc.edu/~fischer/cs701.f08/finding.loops.html
