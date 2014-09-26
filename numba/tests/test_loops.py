@@ -2,7 +2,11 @@ from __future__ import print_function
 from numba import jit, int_
 import numba.unittest_support as unittest
 import numpy as np
-from math import log10, sqrt
+
+try:
+    xrange
+except NameError:
+    xrange = range
 
 
 @jit
@@ -46,7 +50,6 @@ def call_loop(a):
 
 class TestLoops(unittest.TestCase):
 
-    @unittest.expectedFailure
     def test_obj_loop1(self):
         self.assertTrue(obj_loop1(np.array([[None]*10]*10), 1) == 100)
 
