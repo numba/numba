@@ -67,6 +67,7 @@ class UFuncBuilder(object):
     def __init__(self, py_func, targetoptions={}):
         self.py_func = py_func
         self.nb_func = jit(target='npyufunc', **targetoptions)(py_func)
+        self._sigs = []
 
     def add(self, sig=None, argtypes=None, restype=None):
         # Handle argtypes
@@ -78,16 +79,22 @@ class UFuncBuilder(object):
                 sig = tuple(argtypes)
             else:
                 sig = restype(*argtypes)
+
         # Do compilation
         # Return CompileResult to test
-        return self.nb_func.compile(sig)
+        cres = self.nb_func.compile(sig)
+        # Store the final signature
+        self._sigs.append(cres.signature)
 
     def build_ufunc(self):
         dtypelist = []
         ptrlist = []
         if not self.nb_func:
             raise TypeError("No definition")
-        for sig, cres in self.nb_func.overloads.items():
+
+        # Get signature in the order they are added
+        for sig in self._sigs:
+            cres = self.nb_func.overloads[sig]
             dtypenums, ptr = self.build(cres)
             dtypelist.append(dtypenums)
             ptrlist.append(utils.longint(ptr))

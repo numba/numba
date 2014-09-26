@@ -15,9 +15,10 @@ def func(dtypeA, dtypeB):
 
 
 class TestVectTypeInfer(unittest.TestCase):
-    
-    @unittest.expectedFailure
+
     def test_type_inference(self):
+        """This is testing numpy ufunc dispatch machinery
+        """
         global vector_add
         vector_add = vectorize([
             bool_(double, int_),
@@ -27,11 +28,16 @@ class TestVectTypeInfer(unittest.TestCase):
 
         cfunc = jit(func)
 
-        self.assertEqual(cfunc(np.dtype(np.float64), np.dtype('i')), int8[:])
-        self.assertEqual(cfunc(np.dtype(np.float64), np.dtype(np.float64)),
+        def numba_type_equal(a, b):
+            self.assertEqual(a.dtype, b.dtype)
+            self.assertEqual(a.ndim, b.ndim)
+
+        numba_type_equal(cfunc(np.dtype(np.float64), np.dtype('i')), bool_[:])
+        numba_type_equal(cfunc(np.dtype(np.float64), np.dtype(np.float64)),
                          double[:])
-        self.assertEqual(cfunc(np.dtype(np.float64), np.dtype(np.float32)),
-                         float_[:])
+        # This is because the double(double, double) matches first
+        numba_type_equal(cfunc(np.dtype(np.float64), np.dtype(np.float32)),
+                         double[:])
 
 
 if __name__ == '__main__':
