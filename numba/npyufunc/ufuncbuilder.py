@@ -4,14 +4,14 @@ import warnings
 import numpy as np
 from numba.decorators import jit
 from numba.targets.registry import target_registry
-from numba.targets.descriptors import TargetDescriptor
 from numba.targets.options import TargetOptions
 from numba import utils, compiler, types, sigutils
 from . import _internal
 from .sigparse import parse_signature
 from .wrappers import build_ufunc_wrapper, build_gufunc_wrapper
 from numba.targets import registry
-
+from numba import _dynfunc
+import llvm.core as lc
 
 class UFuncTargetOptions(TargetOptions):
     OPTIONS = {
@@ -68,6 +68,7 @@ class UFuncBuilder(object):
         self.py_func = py_func
         self.nb_func = jit(target='npyufunc', **targetoptions)(py_func)
         self._sigs = []
+        self._cres = {}
 
     def add(self, sig=None, argtypes=None, restype=None):
         # Handle argtypes
@@ -83,8 +84,21 @@ class UFuncBuilder(object):
         # Do compilation
         # Return CompileResult to test
         cres = self.nb_func.compile(sig)
+
+        args, return_type = sigutils.normalize_signature(sig)
+
+        if return_type is None:
+            if cres.objectmode:
+                # Object mode is used and return type is not specified
+                raise TypeError("return type must be specified for object mode")
+            else:
+                return_type = cres.signature.return_type
+
+        assert return_type != types.pyobject
+        sig = return_type(*args)
         # Store the final signature
-        self._sigs.append(cres.signature)
+        self._sigs.append(sig)
+        self._cres[sig] = cres
 
     def build_ufunc(self):
         dtypelist = []
@@ -93,11 +107,13 @@ class UFuncBuilder(object):
             raise TypeError("No definition")
 
         # Get signature in the order they are added
+        keepalive = None
         for sig in self._sigs:
-            cres = self.nb_func.overloads[sig]
-            dtypenums, ptr = self.build(cres)
+            cres = self._cres[sig]
+            dtypenums, ptr, keepalive = self.build(cres, sig)
             dtypelist.append(dtypenums)
             ptrlist.append(utils.longint(ptr))
+
         datlist = [None] * len(ptrlist)
 
         inct = len(cres.signature.args)
@@ -108,22 +124,35 @@ class UFuncBuilder(object):
         # For instance, -1 for typenum will cause segfault.
         # If elements of type-list (2nd arg) is tuple instead,
         # there will also memory corruption. (Seems like code rewrite.)
-        ufunc = _internal.fromfunc(ptrlist, dtypelist, inct, outct, datlist)
+        ufunc = _internal.fromfunc(ptrlist, dtypelist, inct, outct, datlist,
+                                   keepalive)
 
         return ufunc
 
-    def build(self, cres):
+    def build(self, cres, signature):
         # Buider wrapper for ufunc entry point
         ctx = cres.target_context
-        signature = cres.signature
-        wrapper = build_ufunc_wrapper(ctx, cres.llvm_func, signature)
+
+        env = None
+        if cres.objectmode:
+            # Get env
+            moduledict = cres.fndesc.lookup_module().__dict__
+            env = _dynfunc.Environment(globals=moduledict)
+            ll_intp = cres.target_context.get_value_type(types.intp)
+            ll_pyobj = cres.target_context.get_value_type(types.pyobject)
+            envptr = lc.Constant.int(ll_intp, id(env)).inttoptr(ll_pyobj)
+        else:
+            envptr = None
+
+        wrapper = build_ufunc_wrapper(ctx, cres.llvm_func, signature,
+                                      cres.objectmode, envptr)
         ctx.finalize(wrapper, cres.fndesc)
         ctx.engine.add_module(wrapper.module)
         ptr = ctx.engine.get_pointer_to_function(wrapper)
         # Get dtypes
         dtypenums = [np.dtype(a.name).num for a in signature.args]
         dtypenums.append(np.dtype(signature.return_type.name).num)
-        return dtypenums, ptr
+        return dtypenums, ptr, env
 
 
 class GUFuncBuilder(object):
