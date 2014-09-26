@@ -53,14 +53,6 @@ FunctionAttributes = namedtuple("FunctionAttributes",
 DEFAULT_FUNCTION_ATTRIBUTES = FunctionAttributes('<anonymous>', '<unknown>', 0)
 
 
-class NoPythonError(Exception):
-    pass
-
-
-class ObjectModeError(Exception):
-    pass
-
-
 def get_function_attributes(func):
     '''
     Extract the function attributes from a Python function or object with
@@ -121,14 +113,11 @@ class _CompileStatus(object):
     """
     Used like a C record
     """
-    __slots__ = ['fail_reason', 'use_python_mode',
-                 'use_interpreter_mode', 'can_fallback', 'can_giveup']
+    __slots__ = ['fail_reason', 'can_fallback', 'can_giveup']
 
-    def __init__(self, can_fallback, use_python_mode, can_giveup):
+    def __init__(self, can_fallback, can_giveup):
         self.fail_reason = None
-        self.use_python_mode = use_python_mode
         self.can_fallback = can_fallback
-        self.use_interpreter_mode = False
         self.can_giveup = can_giveup
 
     def __repr__(self):
@@ -136,6 +125,56 @@ class _CompileStatus(object):
         for k in self.__slots__:
             vals.append("{k}={v}".format(k=k, v=getattr(self, k)))
         return ', '.join(vals)
+
+
+class _StageResult(object):
+    def __init__(self, stage, ok, result=None, exception=None,
+                 early_escape=False):
+        self.stage = stage
+        self.ok = ok
+        self.early_escape = early_escape
+        self._result = result
+        self._exception = exception
+
+    @property
+    def result(self):
+        assert self.ok
+        return self._result
+
+    @property
+    def exception(self):
+        assert not self.ok
+        return self._exception
+
+
+class _EarlyEscape(BaseException):
+    def __init__(self, result):
+        self.result = result
+
+
+class _Stage(object):
+    def __init__(self, func, msg):
+        self.func = func
+        self.msg = msg
+
+    def __call__(self):
+        try:
+            res = self.func()
+        except _EarlyEscape as e:
+            return _StageResult(self, ok=True, result=e.result,
+                               early_escape=True)
+        except BaseException as e:
+            return _StageResult(self, ok=False, exception=e)
+        else:
+            return _StageResult(self, ok=True, result=res)
+
+
+def _raise_error(desc, exc):
+    """Patches the error
+    """
+    newmsg = "{desc}\n{exc}".format(desc=desc, exc=exc)
+    exc.args = (newmsg,)
+    return exc
 
 
 class Pipeline(object):
@@ -155,7 +194,6 @@ class Pipeline(object):
 
         self.status = _CompileStatus(
             can_fallback=self.flags.enable_pyobject,
-            use_python_mode=self.flags.force_pyobject,
             can_giveup=config.INTERPRETER_FALLBACK
         )
 
@@ -172,15 +210,12 @@ class Pipeline(object):
                 if utils.PYVERSION >= (3,):
                     # Clear all references attached to the traceback
                     e = e.with_traceback(None)
-                self.status.fail_reason = e
-                self.status.use_python_mode = True
-
                 warnings.warn_explicit('%s: %s' % (msg, e),
                                        config.NumbaWarning,
                                        self.func_attr.filename,
                                        self.func_attr.lineno)
 
-                raise NoPythonError
+                raise
 
     @contextmanager
     def giveup_context(self, msg):
@@ -195,27 +230,35 @@ class Pipeline(object):
                 if utils.PYVERSION >= (3,):
                     # Clear all references attached to the traceback
                     e = e.with_traceback(None)
-                self.status.fail_reason = e
-                self.status.use_interpreter_mode = True
-
                 warnings.warn_explicit('%s: %s' % (msg, e),
                                        config.NumbaWarning,
                                        self.func_attr.filename,
                                        self.func_attr.lineno)
 
-                raise ObjectModeError
+                raise
+
+    def extract_bytecode(self, func):
+        """
+        Extract bytecode from function
+        """
+        func_attr = get_function_attributes(func)
+        self.func = func
+        self.func_attr = func_attr
+        bc = bytecode.ByteCode(func=self.func)
+        if config.DUMP_BYTECODE:
+            print(bc.dump())
+
+        return bc
 
     def compile_extra(self, func):
-        def core():
-            with self.giveup_context("Unrecognized bytecode"):
-                self.func = func
-                func_attr = get_function_attributes(func)
-                self.func_attr = func_attr
-                bc = bytecode.ByteCode(func=func)
-                if config.DUMP_BYTECODE:
-                    print(bc.dump())
-            return self.compile_bytecode(bc, func_attr=func_attr)
-        return self._fallback(core)
+        res = _Stage(lambda: self.extract_bytecode(func),
+                    "extract bytecode")()
+        if res.ok:
+            return self.compile_bytecode(res.result, func_attr=self.func_attr)
+        elif self.status.can_giveup:
+            return self.stage_compile_interp_mode()
+        else:
+            raise res.exception
 
     def compile_bytecode(self, bc, lifted=(),
                          func_attr=DEFAULT_FUNCTION_ATTRIBUTES):
@@ -228,45 +271,29 @@ class Pipeline(object):
         return self._compile_bytecode()
 
     def compile_internal(self, bc, func_attr=DEFAULT_FUNCTION_ATTRIBUTES):
+        assert not self.flags.force_pyobject
         self.bc = bc
         self.lifted = ()
         self.func_attr = func_attr
         self.status.can_fallback = False
-        self.status.use_python_mode = False
         self.status.can_giveup = False
         self.targetctx = self.targetctx.localized()
         self.targetctx.metadata['wraparound'] = not self.flags.no_wraparound
         return self._compile_bytecode()
 
-    def analyze_bytecode(self):
+    def stage_analyze_bytecode(self):
+        """
+        Analyze bytecode and translating to Numba IR
+        """
         self.interp = translate_stage(self.bc)
         self.nargs = len(self.interp.argspec.args)
         if len(self.args) > self.nargs:
             raise TypeError("Too many argument types")
 
-    def frontend_object_mode(self):
-        # Nothing to do
-        pass
-
-    def frontend_nopython_mode(self):
-        with self.fallback_context('Function "%s" failed type inference'
-                                   % (self.func_attr.name,)):
-            legalize_given_types(self.args, self.return_type)
-            # Type inference
-            self.typemap, self.return_type, self.calltypes = type_inference_stage(
-                self.typingctx,
-                self.interp,
-                self.args,
-                self.return_type,
-                self.locals)
-
-        assert not self.status.use_python_mode
-        with self.fallback_context('Function "%s" has invalid return type'
-                                   % (self.func_attr.name,)):
-            legalize_return_type(self.return_type, self.interp,
-                                 self.targetctx)
-
     def frontend_looplift(self):
+        """
+        Loop lifting analysis and transformation
+        """
         assert not self.lifted
 
         # Try loop lifting
@@ -294,27 +321,45 @@ class Pipeline(object):
                                     func_attr=self.func_attr)
             return cres
 
-    def frontend(self):
+    def stage_objectmode_frontend(self):
         """
         Front-end: Analyze bytecode, generate Numba IR, infer types
         """
-        if self.status.use_python_mode:
-            self.frontend_object_mode()
-        else:
-            self.frontend_nopython_mode()
-
-        if self.status.use_python_mode and self.flags.enable_looplift:
+        if self.flags.enable_looplift:
             assert not self.lifted
             cres = self.frontend_looplift()
             if cres is not None:
-                return cres
+                raise _EarlyEscape(cres)
 
-        if self.status.use_python_mode:
-            # Fallback typing: everything is a python object
-            self.typemap = defaultdict(lambda: types.pyobject)
-            self.calltypes = defaultdict(lambda: types.pyobject)
-            self.return_type = types.pyobject
+        # Fallback typing: everything is a python object
+        self.typemap = defaultdict(lambda: types.pyobject)
+        self.calltypes = defaultdict(lambda: types.pyobject)
+        self.return_type = types.pyobject
 
+    def stage_nopython_frontend(self):
+        """
+        Type inference and legalization
+        """
+        with self.fallback_context('Function "%s" failed type inference'
+                                   % (self.func_attr.name,)):
+            legalize_given_types(self.args, self.return_type)
+            # Type inference
+            self.typemap, self.return_type, self.calltypes = type_inference_stage(
+                self.typingctx,
+                self.interp,
+                self.args,
+                self.return_type,
+                self.locals)
+
+        with self.fallback_context('Function "%s" has invalid return type'
+                                   % (self.func_attr.name,)):
+            legalize_return_type(self.return_type, self.interp,
+                                 self.targetctx)
+
+    def stage_annotate_type(self):
+        """
+        Create type annotation after type inference
+        """
         self.type_annotation = type_annotations.TypeAnnotation(
             interp=self.interp,
             typemap=self.typemap,
@@ -354,17 +399,12 @@ class Pipeline(object):
                 self.flags.no_compile)
             return func, lmod, lfunc, fndesc
 
-    def backend(self):
+    def _backend(self, lowerfn, objectmode):
         """
         Back-end: Generate LLVM IR from Numba IR, compile to machine code
         """
-
-        func, lmod, lfunc, fndesc = (self.backend_object_mode()
-                                     if self.status.use_python_mode
-                                     else self.backend_nopython_mode())
-
+        func, lmod, lfunc, fndesc = lowerfn()
         signature = typing.signature(self.return_type, *self.args)
-
         assert lfunc.module is lmod
         cr = compile_result(typing_context=self.typingctx,
                             target_context=self.targetctx,
@@ -374,13 +414,21 @@ class Pipeline(object):
                             llvm_func=lfunc,
                             llvm_module=lmod,
                             signature=signature,
-                            objectmode=self.status.use_python_mode,
+                            objectmode=objectmode,
                             interpmode=False,
                             lifted=self.lifted,
                             fndesc=fndesc,)
+        return cr
+
+    def stage_objectmode_backend(self):
+        """
+        Lowering for object mode
+        """
+        lowerfn = self.backend_object_mode
+        res = self._backend(lowerfn, objectmode=True)
 
         # Warn if compiled function in object mode and force_pyobject not set
-        if self.status.use_python_mode and not self.flags.force_pyobject:
+        if not self.flags.force_pyobject:
             if len(self.lifted) > 0:
                 warn_msg = 'Function "%s" was compiled in object mode without forceobj=True, but has lifted loops.' % self.func_attr.name,
             else:
@@ -388,66 +436,102 @@ class Pipeline(object):
             warnings.warn_explicit(warn_msg, config.NumbaWarning,
                                    self.func_attr.filename,
                                    self.func_attr.lineno)
+        return res
 
+    def stage_nopython_backend(self):
+        """
+        Do lowering for nopython
+        """
+        lowerfn = self.backend_nopython_mode
+        return self._backend(lowerfn, objectmode=False)
+
+    def stage_compile_interp_mode(self):
+        """
+        Just create a compile result for interpreter mode
+        """
+        args = [types.pyobject] * len(self.args)
+        signature = typing.signature(types.pyobject, *args)
+        cr = compile_result(typing_context=self.typingctx,
+                            target_context=self.targetctx,
+                            entry_point=self.func,
+                            typing_error=self.status.fail_reason,
+                            type_annotation="<Interpreter mode function>",
+                            llvm_func=None,
+                            llvm_module=None,
+                            signature=signature,
+                            objectmode=False,
+                            interpmode=True,
+                            lifted=(),
+                            fndesc=None,)
         return cr
 
-    def _fallback(self, func):
-        try:
-            try:
-                return func()
-            except NoPythonError:
-                if not self.status.can_fallback:
-                    raise
-
-            if self.status.use_python_mode:
-                return self._compile_objectmode()
-
-        except ObjectModeError:
-            if not self.status.can_giveup:
-                raise
-
-        if self.status.use_interpreter_mode:
-            args = [types.pyobject] * len(self.args)
-            signature = typing.signature(types.pyobject, *args)
-            cr = compile_result(typing_context=self.typingctx,
-                                target_context=self.targetctx,
-                                entry_point=self.func,
-                                typing_error=self.status.fail_reason,
-                                type_annotation="<Interpreter mode function>",
-                                llvm_func=None,
-                                llvm_module=None,
-                                signature=signature,
-                                objectmode=False,
-                                interpmode=True,
-                                lifted=(),
-                                fndesc=None,)
-            return cr
-
     def _compile_bytecode(self):
-        def core():
-            with self.giveup_context("Function %s failed at bytecode analysis" %
-                    (self.func_attr.name,)):
-                self.analyze_bytecode()
-            if not self.status.use_python_mode:
-                return self._compile_nopython()
+        pipelines = []
+
+        if not self.flags.force_pyobject:
+            nopython_stages = [
+                _Stage(self.stage_analyze_bytecode, "analyzing bytecode"),
+                _Stage(self.stage_nopython_frontend, "nopython frontend"),
+                _Stage(self.stage_annotate_type, "annotate type"),
+                _Stage(self.stage_nopython_backend, "nopython mode backend"),
+            ]
+            pipelines.append(nopython_stages)
+
+        if self.status.can_fallback or self.flags.force_pyobject:
+            object_stages = [
+                _Stage(self.stage_analyze_bytecode, "analyzing bytecode"),
+                _Stage(self.stage_objectmode_frontend, "object mode frontend"),
+                _Stage(self.stage_annotate_type, "annotate type"),
+                _Stage(self.stage_objectmode_backend, "object mode backend")
+            ]
+            pipelines.append(object_stages)
+
+        if self.status.can_giveup:
+            interp_stages = [
+                _Stage(self.stage_compile_interp_mode,
+                      "compiling with interpreter mode"),
+            ]
+            pipelines.append(interp_stages)
+
+        assert pipelines
+        return self._run_pipeline(pipelines)
+
+    def _run_pipeline(self, pipelines):
+        """
+        Args
+        -----
+        pipelines : sequence of sequence of Stage
+            Multiple pipeline of of Stages to execute.
+            The first pipeline is attempted first.
+            If it fails, the next pipeline is tried.
+            If all pipelines fail, an error is showed
+
+        Returns
+        -------
+        The result of the last Stage.
+        """
+        res = None
+        for pi, stages in enumerate(pipelines):
+            for stage in stages:
+                res = stage()
+                # Stage failed?
+                if not res.ok:
+                    # No more fallback pipelines?
+                    msg = "Failed at " + stage.msg
+                    if pi + 1 >= len(pipelines):
+                        raise _raise_error(msg, res.exception)
+                    # Go to next fallback pipeline
+                    else:
+                        self.status.fail_reason = _raise_error(msg,
+                                                               res.exception)
+                        break
+                # Stage OK and early escape
+                elif res.early_escape:
+                    return res.result
             else:
-                return self._compile_objectmode()
+                return res.result
 
-            raise NoPythonError
-
-        return self._fallback(core)
-
-    def _compile_nopython(self):
-        cres = self.frontend()
-        assert cres is None
-        return self.backend()
-
-    def _compile_objectmode(self):
-        cres = self.frontend()
-        if cres is not None:
-            # Loop jitted
-            return cres
-        return self.backend()
+        raise AssertionError("All pipelines has failed")
 
 
 def compile_extra(typingctx, targetctx, func, args, return_type, flags,
