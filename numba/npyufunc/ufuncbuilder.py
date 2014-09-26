@@ -99,6 +99,7 @@ class UFuncBuilder(object):
         # Store the final signature
         self._sigs.append(sig)
         self._cres[sig] = cres
+        return cres
 
     def build_ufunc(self):
         dtypelist = []
