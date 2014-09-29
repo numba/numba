@@ -94,8 +94,6 @@ def build_obj_loop_body(context, func, builder, arrays, out, offsets,
     return _build_ufunc_loop_body_objmode(load, store, context, func, builder,
                                           arrays, out, offsets, store_offset,
                                           signature, env)
-    # return _build_ufunc_loop_body(load, store, context, func, builder, arrays,
-    #                               out, offsets, store_offset, signature)
 
 
 def build_fast_loop_body(context, func, builder, arrays, out, offsets,
