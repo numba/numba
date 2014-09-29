@@ -50,7 +50,6 @@ class TestUfuncBuilding(unittest.TestCase):
         b = ufunc(a, a)
         self.assertTrue(numpy.all(a + a == b))
 
-
     def test_ufunc_struct(self):
         ufb = UFuncBuilder(add)
         cres = ufb.add("complex64(complex64, complex64)")
@@ -61,6 +60,16 @@ class TestUfuncBuilding(unittest.TestCase):
         b = ufunc(a, a)
         self.assertTrue(numpy.all(a + a == b))
         self.assertEqual(b.dtype, numpy.dtype('complex64'))
+
+    def test_ufunc_forceobj(self):
+        ufb = UFuncBuilder(add, targetoptions={'forceobj': True})
+        cres = ufb.add("int32(int32, int32)")
+        self.assertTrue(cres.objectmode)
+        ufunc = ufb.build_ufunc()
+
+        a = numpy.arange(10, dtype='int32')
+        b = ufunc(a, a)
+        self.assertTrue(numpy.all(a + a == b))
 
 
 class TestGUfuncBuilding(unittest.TestCase):
@@ -106,6 +115,13 @@ class TestGUfuncBuilding(unittest.TestCase):
 class TestVectorizeDecor(unittest.TestCase):
     def test_vectorize(self):
         ufunc = vectorize(['int32(int32, int32)'])(add)
+        a = numpy.arange(10, dtype='int32')
+        b = ufunc(a, a)
+        self.assertTrue(numpy.all(a + a == b))
+        self.assertEqual(b.dtype, numpy.dtype('int32'))
+
+    def test_vectorize_objmode(self):
+        ufunc = vectorize(['int32(int32, int32)'], forceobj=True)(add)
         a = numpy.arange(10, dtype='int32')
         b = ufunc(a, a)
         self.assertTrue(numpy.all(a + a == b))
