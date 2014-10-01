@@ -35,6 +35,7 @@ def impl_attribute(ty, attr, rtype=None):
         else:
             res.signature = typing.signature(rtype, ty)
         res.attr = attr
+        res.__wrapped__ = impl
         return res
 
     return wrapper
@@ -212,12 +213,14 @@ class Registry(object):
         curr_item = item
         while hasattr(curr_item, '__wrapped__'):
             self.functions.append(curr_item)
-            curr_item=curr_item.__wrapped__
-
+            curr_item = curr_item.__wrapped__
         return item
 
     def register_attr(self, item):
-        self.attributes.append(item)
+        curr_item = item
+        while hasattr(curr_item, '__wrapped__'):
+            self.attributes.append(curr_item)
+            curr_item=curr_item.__wrapped__
         return item
 
 

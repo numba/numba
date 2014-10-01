@@ -743,16 +743,29 @@ def complex_imag_impl(context, builder, typ, value):
     cplx = cplx_cls(context, builder, value=value)
     return cplx.imag
 
-
 @builtin
 @implement("complex.conjugate", types.Kind(types.Complex))
-def complex_imag_impl(context, builder, sig, args):
+def complex_conjugate_impl(context, builder, sig, args):
     complexClass = context.make_complex(sig.args[0])
     z = complexClass(context, builder, args[0])
     imag = z.imag
     zero = cgutils.get_null_value(imag.type)
     z.imag = builder.fsub(zero, imag)
     return z._getvalue()
+
+def real_real_impl(context, builder, typ, value):
+    return value
+
+def real_imag_impl(context, builder, typ, value):
+    return cgutils.get_null_value(value.type)
+
+def real_conjugate_impl(context, builder, sig, args):
+    return args[0]
+
+for cls in (types.Float, types.Integer):
+    builtin_attr(impl_attribute(types.Kind(cls), "real")(real_real_impl))
+    builtin_attr(impl_attribute(types.Kind(cls), "imag")(real_imag_impl))
+    builtin(implement("complex.conjugate", types.Kind(cls))(real_conjugate_impl))
 
 
 @builtin

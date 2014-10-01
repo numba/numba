@@ -40,6 +40,10 @@ class TestComplex(TestCase):
         self.run_unary(real_usecase, [types.complex64, types.complex128],
                        [1+1j, -1+1j, float('inf') + 1j, float('nan') + 1j,
                         1 + 1j * float('nan')], flags=flags)
+        self.run_unary(real_usecase, [types.int8, types.int64],
+                       [1, 0, -3], flags=flags)
+        self.run_unary(real_usecase, [types.float32, types.float64],
+                       [1.5, -0.5], flags=flags)
 
     def test_real_npm(self):
         self.test_real(flags=no_pyobj_flags)
@@ -48,6 +52,10 @@ class TestComplex(TestCase):
         self.run_unary(imag_usecase, [types.complex64, types.complex128],
                        [1+1j, 1-1j, 1j * float('inf'), 1j * float('nan'),
                         float('nan') + 1j], flags=flags)
+        self.run_unary(imag_usecase, [types.int8, types.int64],
+                       [1, 0, -3], flags=flags)
+        self.run_unary(imag_usecase, [types.float32, types.float64],
+                       [1.5, -0.5], flags=flags)
 
     def test_imag_npm(self):
         self.test_imag(flags=no_pyobj_flags)
@@ -56,6 +64,10 @@ class TestComplex(TestCase):
         self.run_unary(conjugate_usecase, [types.complex64, types.complex128],
                        [1+1j, 1-1j, 1j * float('inf'), 1j * float('nan'),
                         float('nan') + 1j], flags=flags)
+        self.run_unary(conjugate_usecase, [types.int8, types.int64],
+                       [1, 0, -3], flags=flags)
+        self.run_unary(conjugate_usecase, [types.float32, types.float64],
+                       [1.5, -0.5], flags=flags)
 
     def test_conjugate_npm(self):
         self.test_conjugate(flags=no_pyobj_flags)
