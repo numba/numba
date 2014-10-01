@@ -42,7 +42,9 @@ def var_swapping(a, b, c, d, e):
         $0.14 = $0.12 + e.2                      ['$0.12', '$0.14', 'e.2']
         del e.2                                  []
         del $0.12                                []
-        return $0.14                             ['$0.14']
+        $0.15 = cast(value=$0.14)                ['$0.14', '$0.15']
+        del $0.14                                []
+        return $0.15                             ['$0.15']
     """
     a, b = b, a
     c, d, e = e, c, d
@@ -76,7 +78,9 @@ def var_propagate1(a, b):
         del $const21.1                           []
         c = $21.3                                ['$21.3', 'c']
         del $21.3                                []
-        return c                                 ['c']
+        $21.5 = cast(value=c)                    ['$21.5', 'c']
+        del c                                    []
+        return $21.5                             ['$21.5']
     """
     c = (a if a > b else b) + 5
     return c

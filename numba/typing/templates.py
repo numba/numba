@@ -3,7 +3,8 @@ Define typing templates
 """
 from __future__ import print_function, division, absolute_import
 
-from .. import types
+from functools import reduce
+import operator
 
 
 class Signature(object):
@@ -74,37 +75,54 @@ class Rating(object):
         """
         return (self.unsafe_convert, self.safe_convert, self.promote)
 
+    def __add__(self, other):
+        if type(self) is not type(other):
+            return NotImplemented
+        rsum = Rating()
+        rsum.promote = self.promote + other.promote
+        rsum.safe_convert = self.safe_convert + other.safe_convert
+        rsum.unsafe_convert = self.unsafe_convert + other.unsafe_convert
+        return rsum
+
+
+def _rate_arguments(context, actualargs, formalargs):
+    ratings = [Rating()]
+    for actual, formal in zip(actualargs, formalargs):
+        rate = Rating()
+        by = context.type_compatibility(actual, formal)
+        if by is None:
+            return None
+
+        if by == 'promote':
+            rate.promote += 1
+        elif by == 'safe':
+            rate.safe_convert += 1
+        elif by == 'unsafe':
+            rate.unsafe_convert += 1
+        elif by == 'exact':
+            pass
+        else:
+            raise Exception("unreachable", by)
+
+        ratings.append(rate)
+    return ratings
+
 
 def resolve_overload(context, key, cases, args, kws):
     assert not kws, "Keyword arguments are not supported, yet"
     # Rate each cases
     candids = []
-    ratings = []
+    symm_ratings = []
     for case in cases:
         if len(args) == len(case.args):
-            rate = Rating()
-            for actual, formal in zip(args, case.args):
-                by = context.type_compatibility(actual, formal)
-                if by is None:
-                    break
-
-                if by == 'promote':
-                    rate.promote += 1
-                elif by == 'safe':
-                    rate.safe_convert += 1
-                elif by == 'unsafe':
-                    rate.unsafe_convert += 1
-                elif by == 'exact':
-                    pass
-                else:
-                    raise Exception("unreachable", by)
-
-            else:
-                ratings.append(rate.astuple())
+            ratings = _rate_arguments(context, args, case.args)
+            if ratings is not None:
+                combined = reduce(operator.add, ratings)
+                symm_ratings.append(combined.astuple())
                 candids.append(case)
 
     # Find the best case
-    ordered = sorted(zip(ratings, candids), key=lambda i: i[0])
+    ordered = sorted(zip(symm_ratings, candids), key=lambda i: i[0])
     if ordered:
         if len(ordered) > 1:
             (first, case1), (second, case2) = ordered[:2]
@@ -120,7 +138,7 @@ def resolve_overload(context, key, cases, args, kws):
 
                 # Try to resolve promotion
                 # TODO: need to match this to the C overloading dispatcher
-                resolvable = resolve_ambiguous_promotions(context, ambiguous,
+                resolvable = resolve_ambiguous_resolution(context, ambiguous,
                                                           args)
                 if resolvable:
                     return resolvable
@@ -133,47 +151,15 @@ def resolve_overload(context, key, cases, args, kws):
         return ordered[0][1]
 
 
-class UnsafePromotionError(Exception):
-    pass
-
-
-def safe_promotion(actual, formal):
+def resolve_ambiguous_resolution(context, cases, args):
+    """Uses asymmetric resolution to find the best version
     """
-    Allow integer to be casted to the nearest integer
-    """
-    # Integers?
-    if actual in types.integer_domain and formal in types.integer_domain:
-        # Same signedness?
-        if actual.signed == formal.signed:
-            # Score by their distance
-            return formal.bitwidth - actual.bitwidth
-    raise UnsafePromotionError(actual, formal)
-
-
-def resolve_ambiguous_promotions(context, cases, args):
     ratings = []
     for case in cases:
-        try:
-            rate = _safe_promote_case(context, case, args)
-        except UnsafePromotionError:
-            # Ignore error
-            pass
-        else:
-            ratings.append((rate, case))
+        rates = _rate_arguments(context, args, case.args)
+        ratings.append((tuple(r.astuple() for r in rates), case))
 
-    _, bestcase = min(ratings)
-    return bestcase
-
-
-def _safe_promote_case(context, case, args):
-    rate = 0
-    for actual, formal in zip(args, case.args):
-        by = context.type_compatibility(actual, formal)
-        if by == 'promote':
-            rate += safe_promotion(actual, formal)
-        else:
-            raise UnsafePromotionError(actual, formal)
-    return rate
+    return max(ratings, key=lambda x: x[0])[1]
 
 
 class FunctionTemplate(object):

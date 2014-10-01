@@ -503,7 +503,7 @@ class DataFlowAnalysis(object):
         info.terminator = inst
 
     def op_RETURN_VALUE(self, info, inst):
-        info.append(inst, retval=info.pop())
+        info.append(inst, retval=info.pop(), castval=info.make_temp())
         info.terminator = inst
 
     def op_SETUP_LOOP(self, info, inst):
