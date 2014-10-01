@@ -82,7 +82,7 @@ PYVERSION = sys.version_info[:2]
 DISABLE_CUDA = _readenv("NUMBA_DISABLE_CUDA", int, 0)
 
 # Allow interpreter fallback
-INTERPRETER_FALLBACK = _readenv("NUMBA_INTERPRETER_FALLBACK", int, 1)
+INTERPRETER_FALLBACK = _readenv("NUMBA_INTERPRETER_FALLBACK", int, 0)
 
 # Force CUDA compute capability
 def _force_cc(text):
