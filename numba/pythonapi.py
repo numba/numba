@@ -872,8 +872,8 @@ class PythonAPI(object):
             dtypeobj = dtype_addr.inttoptr(self.pyobj)
             return self.recreate_record(ptr, size, dtypeobj)
 
-        elif isinstance(typ, types.UniTuple):
-            return self.from_unituple(typ, val)
+        elif isinstance(typ, (types.Tuple, types.UniTuple)):
+            return self.from_tuple(typ, val)
 
         raise NotImplementedError(typ)
 
@@ -901,12 +901,12 @@ class PythonAPI(object):
         self.incref(parent)
         return parent
 
-    def from_unituple(self, typ, val):
+    def from_tuple(self, typ, val):
         tuple_val = self.tuple_new(typ.count)
 
-        for i in range(typ.count):
+        for i, dtype in enumerate(typ):
             item = self.builder.extract_value(val, i)
-            obj = self.from_native_value(item, typ.dtype)
+            obj = self.from_native_value(item,  dtype)
             self.tuple_setitem(tuple_val, i, obj)
 
         return tuple_val

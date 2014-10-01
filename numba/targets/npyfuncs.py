@@ -21,16 +21,24 @@ _NPY_LOG10E = 0.434294481903251827651128918916605082 # math.log(math.e, 10)
 _NPY_LOGE2  = 0.693147180559945309417232121458176568 # math.log(2)
 
 
-def _check_arity_and_homogeneity(sig, args, arity):
+def _check_arity_and_homogeneity(sig, args, arity, return_type = None):
     """checks that the following are true:
     - args and sig.args have arg_count elements
-    - all types are homogeneity
+    - all input types are homogeneous
+    - return type is 'return_type' if provided, otherwise it must be
+      homogeneous with the input types.
     """
     assert len(args) == arity
     assert len(sig.args) == arity
     ty = sig.args[0]
+    if return_type is None:
+        return_type = ty
     # must have homogeneous args
-    assert all(arg==ty for arg in sig.args) and sig.return_type == ty
+    if not( all(arg==ty for arg in sig.args) and sig.return_type == return_type):
+        import inspect
+        fname = inspect.currentframe().f_back.f_code.co_name
+        msg = '{0} called with invalid types: {1}'.format(fname, sig)
+        assert False, msg
 
 
 def _call_func_by_name_with_cast(context, builder, sig, args,
@@ -50,13 +58,17 @@ def _call_func_by_name_with_cast(context, builder, sig, args,
 
 
 def _dispatch_func_by_name_type(context, builder, sig, args, table, user_name):
-    # assumes types in the sig are homogeneity.
+    # for most cases the functions are homogeneous on all their types.
+    # this code dispatches on the first argument type as it is the most useful
+    # for our uses (all cases but ldexp are homogeneous in all types, and
+    # dispatching on the first argument type works of ldexp as well)
+    #
     # assumes that the function pointed by func_name has the type
     # signature sig (but needs translation to llvm types).
 
-    ty = sig.return_type
+    ty = sig.args[0]
     try:
-        func_name = table[ty] # any would do... homogeneity
+        func_name = table[ty]
     except KeyError as e:
         msg = "No {0} function for real type {1}".format(user_name, str(e))
         raise lowering.LoweringError(msg)
@@ -144,9 +156,39 @@ def np_int_sdiv_impl(context, builder, sig, args):
             needs_fixing = builder.and_(not_same_sign, mod_not_zero)
             fix_value = builder.select(needs_fixing, MINUS_ONE, ZERO)
             result_otherwise = builder.add(div, fix_value)
+
     result = builder.phi(lltype)
     result.add_incoming(ZERO, bb_then)
     result.add_incoming(result_otherwise, bb_otherwise)
+
+    return result
+
+
+def np_int_srem_impl(context, builder, sig, args):
+    # based on the actual code in NumPy loops.c.src for signed integers
+    _check_arity_and_homogeneity(sig, args, 2)
+
+    num, den = args
+    ty = sig.args[0] # any arg type will do, homogeneous
+    lty = num.type
+
+    ZERO = context.get_constant(ty, 0)
+    den_not_zero = builder.icmp(lc.ICMP_NE, ZERO, den)
+    bb_no_if = builder.basic_block
+    with cgutils.if_unlikely(builder, den_not_zero):
+        bb_if = builder.basic_block
+        mod = builder.srem(num,den)
+        num_gt_zero = builder.icmp(lc.ICMP_SGT, num, ZERO)
+        den_gt_zero = builder.icmp(lc.ICMP_SGT, den, ZERO)
+        not_same_sign = builder.xor(num_gt_zero, den_gt_zero)
+        mod_not_zero = builder.icmp(lc.ICMP_NE, mod, ZERO)
+        needs_fixing = builder.and_(not_same_sign, mod_not_zero)
+        fix_value = builder.select(needs_fixing, den, ZERO)
+        final_mod = builder.add(fix_value, mod)
+
+    result = builder.phi(lty)
+    result.add_incoming(ZERO, bb_no_if)
+    result.add_incoming(final_mod, bb_if)
 
     return result
 
@@ -166,19 +208,69 @@ def np_int_udiv_impl(context, builder, sig, args):
             # divide!
             div = builder.udiv(num, den)
             bb_otherwise = builder.basic_block
+
     result = builder.phi(lltype)
     result.add_incoming(ZERO, bb_then)
     result.add_incoming(div, bb_otherwise)
     return result
 
 
+def np_int_urem_impl(context, builder, sig, args):
+    # based on the actual code in NumPy loops.c.src for signed integers
+    _check_arity_and_homogeneity(sig, args, 2)
+
+    num, den = args
+    ty = sig.args[0] # any arg type will do, homogeneous
+    lty = num.type
+
+    ZERO = context.get_constant(ty, 0)
+    den_not_zero = builder.icmp(lc.ICMP_NE, ZERO, den)
+    bb_no_if = builder.basic_block
+    with cgutils.if_unlikely(builder, den_not_zero):
+        bb_if = builder.basic_block
+        mod = builder.srem(num,den)
+
+    result = builder.phi(lty)
+    result.add_incoming(ZERO, bb_no_if)
+    result.add_incoming(mod, bb_if)
+
+    return result
+
+
+# implementation of int_fmod is in fact the same as the unsigned remainder,
+# that is: srem with a special case returning 0 when the denominator is 0.
+np_int_fmod_impl = np_int_urem_impl
+
+
 def np_real_div_impl(context, builder, sig, args):
     # in NumPy real div has the same semantics as an fdiv for generating
     # NANs, INF and NINF
-    num, den = args
-    lltype = num.type
-    assert all(i.type==lltype for i in args), "must have homogeneous types"
+    _check_arity_and_homogeneity(sig, args, 2)
     return builder.fdiv(*args)
+
+
+def np_real_mod_impl(context, builder, sig, args):
+    # note: this maps to NumPy remainder, which has the same semantics as Python
+    # based on code in loops.c.src
+    _check_arity_and_homogeneity(sig, args, 2)
+    in1, in2 = args
+    ty = sig.args[0]
+
+    ZERO = context.get_constant(ty, 0.0)
+    res = builder.frem(in1, in2)
+    res_ne_zero = builder.fcmp(lc.FCMP_ONE, res, ZERO)
+    den_lt_zero = builder.fcmp(lc.FCMP_OLT, in2, ZERO)
+    res_lt_zero = builder.fcmp(lc.FCMP_OLT, res, ZERO)
+    needs_fixing = builder.and_(res_ne_zero,
+                                builder.xor(den_lt_zero, res_lt_zero))
+    fix_value = builder.select(needs_fixing, in2, ZERO)
+
+    return builder.fadd(res, fix_value)
+
+
+def np_real_fmod_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2)
+    return builder.frem(*args)
 
 
 def _fabs(context, builder, arg):
@@ -447,11 +539,11 @@ def np_complex_sign_impl(context, builder, sig, args):
     result.real = ZERO
     result.imag = ZERO
 
-    cmp_sig = typing.signature(*[ty] * 3)
+    cmp_sig = typing.signature(types.boolean, *[ty] * 2)
     cmp_args = [op, result._getvalue()]
-    arg1_ge_arg2 = np_complex_greater_equal_impl(context, builder, cmp_sig, cmp_args)
-    arg1_eq_arg2 = np_complex_equal_impl(context, builder, cmp_sig, cmp_args)
-    arg1_lt_arg2 = np_complex_lower_impl(context, builder, cmp_sig, cmp_args)
+    arg1_ge_arg2 = np_complex_ge_impl(context, builder, cmp_sig, cmp_args)
+    arg1_eq_arg2 = np_complex_eq_impl(context, builder, cmp_sig, cmp_args)
+    arg1_lt_arg2 = np_complex_lt_impl(context, builder, cmp_sig, cmp_args)
 
     real_when_ge = builder.select(arg1_eq_arg2, ZERO, ONE)
     real_when_nge = builder.select(arg1_lt_arg2, MINUS_ONE, NAN)
@@ -1577,12 +1669,14 @@ def np_real_fabs_impl(context, builder, sig, args):
 
 
 ########################################################################
-# NumPy style complex predicates
+# NumPy style predicates
 
-def np_complex_greater_equal_impl(context, builder, sig, args):
+# For real and integer types rely on builtins... but complex ordering in
+# NumPy is lexicographic (while Python does not provide ordering).
+def np_complex_ge_impl(context, builder, sig, args):
     # equivalent to macro CGE in NumPy's loops.c.src
     # ((xr > yr && !npy_isnan(xi) && !npy_isnan(yi)) || (xr == yr && xi >= yi))
-    _check_arity_and_homogeneity(sig, args, 2)
+    _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
 
     complex_class = context.make_complex(sig.args[0])
     in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
@@ -1600,10 +1694,10 @@ def np_complex_greater_equal_impl(context, builder, sig, args):
     return builder.or_(first_term, second_term)
 
 
-def np_complex_lower_equal_impl(context, builder, sig, args):
+def np_complex_le_impl(context, builder, sig, args):
     # equivalent to macro CLE in NumPy's loops.c.src
     # ((xr < yr && !npy_isnan(xi) && !npy_isnan(yi)) || (xr == yr && xi <= yi))
-    _check_arity_and_homogeneity(sig, args, 2)
+    _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
 
     complex_class = context.make_complex(sig.args[0])
     in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
@@ -1621,10 +1715,10 @@ def np_complex_lower_equal_impl(context, builder, sig, args):
     return builder.or_(first_term, second_term)
 
 
-def np_complex_greater_impl(context, builder, sig, args):
+def np_complex_gt_impl(context, builder, sig, args):
     # equivalent to macro CGT in NumPy's loops.c.src
     # ((xr > yr && !npy_isnan(xi) && !npy_isnan(yi)) || (xr == yr && xi > yi))
-    _check_arity_and_homogeneity(sig, args, 2)
+    _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
 
     complex_class = context.make_complex(sig.args[0])
     in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
@@ -1642,10 +1736,10 @@ def np_complex_greater_impl(context, builder, sig, args):
     return builder.or_(first_term, second_term)
 
 
-def np_complex_lower_impl(context, builder, sig, args):
+def np_complex_lt_impl(context, builder, sig, args):
     # equivalent to macro CLT in NumPy's loops.c.src
     # ((xr < yr && !npy_isnan(xi) && !npy_isnan(yi)) || (xr == yr && xi < yi))
-    _check_arity_and_homogeneity(sig, args, 2)
+    _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
 
     complex_class = context.make_complex(sig.args[0])
     in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
@@ -1663,10 +1757,10 @@ def np_complex_lower_impl(context, builder, sig, args):
     return builder.or_(first_term, second_term)
 
 
-def np_complex_equal_impl(context, builder, sig, args):
+def np_complex_eq_impl(context, builder, sig, args):
     # equivalent to macro CEQ in NumPy's loops.c.src
     # (xr == yr && xi == yi)
-    _check_arity_and_homogeneity(sig, args, 2)
+    _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
 
     complex_class = context.make_complex(sig.args[0])
     in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
@@ -1680,10 +1774,10 @@ def np_complex_equal_impl(context, builder, sig, args):
     return builder.and_(xr_eq_yr, xi_eq_yi)
 
 
-def np_complex_not_equal_impl(context, builder, sig, args):
-    # equivalent to marcro CNE in NumPy's loops.c.src
+def np_complex_ne_impl(context, builder, sig, args):
+    # equivalent to macro CNE in NumPy's loops.c.src
     # (xr != yr || xi != yi)
-    _check_arity_and_homogeneity(sig, args, 2)
+    _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
 
     complex_class = context.make_complex(sig.args[0])
     in1, in2 = [complex_class(context, builder, value=arg) for arg in args]
@@ -1692,6 +1786,400 @@ def np_complex_not_equal_impl(context, builder, sig, args):
     yr = in2.real
     yi = in2.imag
 
-    xr_ne_yr = builder.fcmp(lc.FCMP_ONE, xr, yr)
-    xi_ne_yi = builder.fcmp(lc.FCMP_ONE, xi, yi)
+    xr_ne_yr = builder.fcmp(lc.FCMP_UNE, xr, yr)
+    xi_ne_yi = builder.fcmp(lc.FCMP_UNE, xi, yi)
     return builder.or_(xr_ne_yr, xi_ne_yi)
+
+
+########################################################################
+# NumPy logical algebra
+
+# these are made generic for all types for now, assuming that
+# cgutils.is_true works in the underlying types.
+
+def _complex_is_true(context, builder, ty, val):
+    complex_class = context.make_complex(ty)
+    complex_val = complex_class(context, builder, value=val)
+    re_true = cgutils.is_true(builder, complex_val.real)
+    im_true = cgutils.is_true(builder, complex_val.imag)
+    return builder.or_(re_true, im_true)
+
+
+def np_logical_and_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
+    a = cgutils.is_true(builder, args[0])
+    b = cgutils.is_true(builder, args[1])
+    return builder.and_(a, b)
+
+
+def np_complex_logical_and_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
+    a = _complex_is_true(context, builder, sig.args[0], args[0])
+    b = _complex_is_true(context, builder, sig.args[1], args[1])
+    return builder.and_(a, b)
+
+
+def np_logical_or_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
+    a = cgutils.is_true(builder, args[0])
+    b = cgutils.is_true(builder, args[1])
+    return builder.or_(a, b)
+
+
+def np_complex_logical_or_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
+    a = _complex_is_true(context, builder, sig.args[0], args[0])
+    b = _complex_is_true(context, builder, sig.args[1], args[1])
+    return builder.or_(a, b)
+
+
+def np_logical_xor_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
+    a = cgutils.is_true(builder, args[0])
+    b = cgutils.is_true(builder, args[1])
+    return builder.xor(a, b)
+
+
+def np_complex_logical_xor_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2, return_type=types.boolean)
+    a = _complex_is_true(context, builder, sig.args[0], args[0])
+    b = _complex_is_true(context, builder, sig.args[1], args[1])
+    return builder.xor(a, b)
+
+
+def np_logical_not_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+    return cgutils.is_false(builder, args[0])
+
+
+def np_complex_logical_not_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+    a = _complex_is_true(context, builder, sig.args[0], args[0])
+    return builder.not_(a)
+
+########################################################################
+# NumPy style max/min
+#
+# There are 2 different sets of functions to perform max and min in
+# NumPy: maximum/minimum and fmax/fmin.
+# Both differ in the way NaNs are handled, so the actual differences
+# come in action only on float/complex numbers. The functions used for
+# integers is shared. For booleans maximum is equivalent to or, and
+# minimum is equivalent to and. Datetime support will go elsewhere.
+
+def np_int_smax_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2)
+    arg1, arg2 = args
+    arg1_sge_arg2 = builder.icmp(lc.ICMP_SGE, arg1, arg2)
+    return builder.select(arg1_sge_arg2, arg1, arg2)
+
+
+def np_int_umax_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2)
+    arg1, arg2 = args
+    arg1_uge_arg2 = builder.icmp(lc.ICMP_UGE, arg1, arg2)
+    return builder.select(arg1_uge_arg2, arg1, arg2)
+
+
+def np_real_maximum_impl(context, builder, sig, args):
+    # maximum prefers nan (tries to return a nan).
+    _check_arity_and_homogeneity(sig, args, 2)
+
+    arg1, arg2 = args
+    arg1_nan = builder.fcmp(lc.FCMP_UNO, arg1, arg1)
+    any_nan = builder.fcmp(lc.FCMP_UNO, arg1, arg2)
+    nan_result = builder.select(arg1_nan, arg1, arg2)
+
+    arg1_ge_arg2 = builder.fcmp(lc.FCMP_OGE, arg1, arg2)
+    non_nan_result = builder.select(arg1_ge_arg2, arg1, arg2)
+
+    return builder.select(any_nan, nan_result, non_nan_result)
+
+
+def np_real_fmax_impl(context, builder, sig, args):
+    # fmax prefers non-nan (tries to return a non-nan).
+    _check_arity_and_homogeneity(sig, args, 2)
+
+    arg1, arg2 = args
+    arg2_nan = builder.fcmp(lc.FCMP_UNO, arg2, arg2)
+    any_nan = builder.fcmp(lc.FCMP_UNO, arg1, arg2)
+    nan_result = builder.select(arg2_nan, arg1, arg2)
+
+    arg1_ge_arg2 = builder.fcmp(lc.FCMP_OGE, arg1, arg2)
+    non_nan_result = builder.select(arg1_ge_arg2, arg1, arg2)
+
+    return builder.select(any_nan, nan_result, non_nan_result)
+
+
+def np_complex_maximum_impl(context, builder, sig, args):
+    # maximum prefers nan (tries to return a nan).
+    # There is an extra caveat with complex numbers, as there is more
+    # than one type of nan. NumPy's docs state that the nan in the
+    # first argument is returned when both arguments are nans.
+    # If only one nan is found, that nan is returned.
+    _check_arity_and_homogeneity(sig, args, 2)
+    ty = sig.args[0]
+    bc_sig = typing.signature(types.boolean, ty)
+    bcc_sig = typing.signature(types.boolean, *[ty]*2)
+    arg1, arg2 = args
+    arg1_nan = np_complex_isnan_impl(context, builder, bc_sig, [arg1])
+    arg2_nan = np_complex_isnan_impl(context, builder, bc_sig, [arg2])
+    any_nan = builder.or_(arg1_nan, arg2_nan)
+    nan_result = builder.select(arg1_nan, arg1, arg2)
+
+    arg1_ge_arg2 = np_complex_ge_impl(context, builder, bcc_sig, args)
+    non_nan_result = builder.select(arg1_ge_arg2, arg1, arg2)
+
+    return builder.select(any_nan, nan_result, non_nan_result)
+
+
+def np_complex_fmax_impl(context, builder, sig, args):
+    # fmax prefers non-nan (tries to return a non-nan).
+    # There is an extra caveat with complex numbers, as there is more
+    # than one type of nan. NumPy's docs state that the nan in the
+    # first argument is returned when both arguments are nans.
+    _check_arity_and_homogeneity(sig, args, 2)
+    ty = sig.args[0]
+    bc_sig = typing.signature(types.boolean, ty)
+    bcc_sig = typing.signature(types.boolean, *[ty]*2)
+    arg1, arg2 = args
+    arg1_nan = np_complex_isnan_impl(context, builder, bc_sig, [arg1])
+    arg2_nan = np_complex_isnan_impl(context, builder, bc_sig, [arg2])
+    any_nan = builder.or_(arg1_nan, arg2_nan)
+    nan_result = builder.select(arg2_nan, arg1, arg2)
+
+    arg1_ge_arg2 = np_complex_ge_impl(context, builder, bcc_sig, args)
+    non_nan_result = builder.select(arg1_ge_arg2, arg1, arg2)
+
+    return builder.select(any_nan, nan_result, non_nan_result)
+
+
+def np_int_smin_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2)
+    arg1, arg2 = args
+    arg1_sle_arg2 = builder.icmp(lc.ICMP_SLE, arg1, arg2)
+    return builder.select(arg1_sle_arg2, arg1, arg2)
+
+
+def np_int_umin_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2)
+    arg1, arg2 = args
+    arg1_ule_arg2 = builder.icmp(lc.ICMP_ULE, arg1, arg2)
+    return builder.select(arg1_ule_arg2, arg1, arg2)
+
+
+def np_real_minimum_impl(context, builder, sig, args):
+    # minimum prefers nan (tries to return a nan).
+    _check_arity_and_homogeneity(sig, args, 2)
+
+    arg1, arg2 = args
+    arg1_nan = builder.fcmp(lc.FCMP_UNO, arg1, arg1)
+    any_nan = builder.fcmp(lc.FCMP_UNO, arg1, arg2)
+    nan_result = builder.select(arg1_nan, arg1, arg2)
+
+    arg1_le_arg2 = builder.fcmp(lc.FCMP_OLE, arg1, arg2)
+    non_nan_result = builder.select(arg1_le_arg2, arg1, arg2)
+
+    return builder.select(any_nan, nan_result, non_nan_result)
+
+
+def np_real_fmin_impl(context, builder, sig, args):
+    # fmin prefers non-nan (tries to return a non-nan).
+    _check_arity_and_homogeneity(sig, args, 2)
+
+    arg1, arg2 = args
+    arg1_nan = builder.fcmp(lc.FCMP_UNO, arg1, arg1)
+    any_nan = builder.fcmp(lc.FCMP_UNO, arg1, arg2)
+    nan_result = builder.select(arg1_nan, arg2, arg1)
+
+    arg1_le_arg2 = builder.fcmp(lc.FCMP_OLE, arg1, arg2)
+    non_nan_result = builder.select(arg1_le_arg2, arg1, arg2)
+
+    return builder.select(any_nan, nan_result, non_nan_result)
+
+
+def np_complex_minimum_impl(context, builder, sig, args):
+    # minimum prefers nan (tries to return a nan).
+    # There is an extra caveat with complex numbers, as there is more
+    # than one type of nan. NumPy's docs state that the nan in the
+    # first argument is returned when both arguments are nans.
+    # If only one nan is found, that nan is returned.
+    _check_arity_and_homogeneity(sig, args, 2)
+    ty = sig.args[0]
+    bc_sig = typing.signature(types.boolean, ty)
+    bcc_sig = typing.signature(types.boolean, *[ty]*2)
+    arg1, arg2 = args
+    arg1_nan = np_complex_isnan_impl(context, builder, bc_sig, [arg1])
+    arg2_nan = np_complex_isnan_impl(context, builder, bc_sig, [arg2])
+    any_nan = builder.or_(arg1_nan, arg2_nan)
+    nan_result = builder.select(arg1_nan, arg1, arg2)
+
+    arg1_le_arg2 = np_complex_le_impl(context, builder, bcc_sig, args)
+    non_nan_result = builder.select(arg1_le_arg2, arg1, arg2)
+
+    return builder.select(any_nan, nan_result, non_nan_result)
+
+
+def np_complex_fmin_impl(context, builder, sig, args):
+    # fmin prefers non-nan (tries to return a non-nan).
+    # There is an extra caveat with complex numbers, as there is more
+    # than one type of nan. NumPy's docs state that the nan in the
+    # first argument is returned when both arguments are nans.
+    _check_arity_and_homogeneity(sig, args, 2)
+    ty = sig.args[0]
+    bc_sig = typing.signature(types.boolean, ty)
+    bcc_sig = typing.signature(types.boolean, *[ty]*2)
+    arg1, arg2 = args
+    arg1_nan = np_complex_isnan_impl(context, builder, bc_sig, [arg1])
+    arg2_nan = np_complex_isnan_impl(context, builder, bc_sig, [arg2])
+    any_nan = builder.or_(arg1_nan, arg2_nan)
+    nan_result = builder.select(arg2_nan, arg1, arg2)
+
+    arg1_le_arg2 = np_complex_le_impl(context, builder, bcc_sig, args)
+    non_nan_result = builder.select(arg1_le_arg2, arg1, arg2)
+
+    return builder.select(any_nan, nan_result, non_nan_result)
+
+
+########################################################################
+# NumPy floating point misc
+
+def np_real_isnan_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+    x, = args
+
+    return builder.fcmp(lc.FCMP_UNO, x, x)
+
+
+def np_complex_isnan_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+
+    x, = args
+    ty, = sig.args
+    complex_class = context.make_complex(ty)
+    complex_val = complex_class(context, builder, value=x)
+
+    return builder.fcmp(lc.FCMP_UNO, complex_val.real, complex_val.imag)
+
+
+def _real_is_not_finite(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+    x, = args
+    ty, = sig.args
+    f_ff_sig = typing.signature(*[ty]*3)
+    sub = builtins.real_sub_impl(context, builder, f_ff_sig, [x, x])
+
+    return np_real_isnan_impl(context, builder, sig, [sub])
+
+
+def np_real_isfinite_impl(context, builder, sig, args):
+    # in NumPy, when there is not an appropriate builtin, it falls back to
+    # ! npy_isnan((x) + (-x)). Use this code to avoid having to add a call.
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+
+    return builder.not_(_real_is_not_finite(context, builder, sig, args))
+
+
+def np_complex_isfinite_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+    x, = args
+    ty, = sig.args
+    fty = ty.underlying_float
+    b_f_sig = typing.signature(types.boolean, fty)
+    complex_class = context.make_complex(ty)
+    complex_val = complex_class(context, builder, value=x)
+    real_isfinite = np_real_isfinite_impl(context, builder, b_f_sig,
+                                          [complex_val.real])
+    imag_isfinite = np_real_isfinite_impl(context, builder, b_f_sig,
+                                          [complex_val.imag])
+
+    return builder.and_(real_isfinite, imag_isfinite)
+
+
+def np_real_isinf_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+    x, = args
+    not_finite = _real_is_not_finite(context, builder, sig, args)
+    not_nan = builder.fcmp(lc.FCMP_ORD, x, x)
+
+    return builder.and_(not_finite, not_nan)
+
+
+def np_complex_isinf_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+    ty, = sig.args
+    fty = ty.underlying_float
+    b_f_sig = typing.signature(types.boolean, fty)
+    complex_class = context.make_complex(ty)
+    x = complex_class(context, builder, value=args[0])
+    real_isinf = np_real_isinf_impl(context, builder, b_f_sig, [x.real])
+    imag_isinf = np_real_isinf_impl(context, builder, b_f_sig, [x.imag])
+
+    return builder.or_(real_isinf, imag_isinf)
+
+
+def np_real_signbit_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.signbitf',
+        types.float64: 'numba.npymath.signbit',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'signbit')
+
+
+def np_real_copysign_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.copysignf',
+        types.float64: 'numba.npymath.copysign',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'copysign')
+
+def np_real_nextafter_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 2)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.nextafterf',
+        types.float64: 'numba.npymath.nextafter',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'nextafter')
+
+def np_real_spacing_impl(context, builder, sig, args):
+    _check_arity_and_homogeneity(sig, args, 1)
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.spacingf',
+        types.float64: 'numba.npymath.spacing',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'spacing')
+
+
+def np_real_ldexp_impl(context, builder, sig, args):
+    # this one is slightly different to other ufuncs.
+    # arguments are not homogeneous and second arg may come as
+    # an 'i' or an 'l'.
+
+    dispatch_table = {
+        types.float32: 'numba.npymath.ldexpf',
+        types.float64: 'numba.npymath.ldexp',
+    }
+
+    # the functions expect the second argument to be have a C int type
+    x1, x2 = args
+    ty1, ty2 = sig.args
+    # note that types.intc should be equivalent to int_ that is
+    # 'NumPy's default int')
+    x2 = context.cast(builder, x2, ty2, types.intc)
+    f_fi_sig = typing.signature(ty1, ty1, types.intc)
+    return _dispatch_func_by_name_type(context, builder, f_fi_sig, [x1, x2],
+                                       dispatch_table, 'ldexp')

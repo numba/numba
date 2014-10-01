@@ -452,6 +452,13 @@ class Lower(BaseLower):
             else:
                 # Normal function resolution
                 impl = self.context.get_function(fnty, signature)
+                if signature.recvr:
+                    # The "self" object is passed as the function object
+                    # for bounded function
+                    the_self = self.loadvar(expr.func.name)
+                    # Prepend the self reference
+                    castvals = [the_self] + castvals
+
                 res = impl(self.builder, castvals)
                 libs = getattr(impl, "libs", ())
                 if libs:
@@ -528,12 +535,19 @@ class Lower(BaseLower):
         elif expr.op == "getattr":
             val = self.loadvar(expr.value.name)
             ty = self.typeof(expr.value.name)
-            impl = self.context.get_attribute(val, ty, expr.attr)
-            if impl is None:
-                # ignore the attribute
-                res = self.context.get_dummy_value()
+
+            if isinstance(resty, types.BoundFunction):
+                # if we are getting out a method, assume we have typed this
+                # properly and just build a bound function object
+                res = self.context.get_bound_function(self.builder, val, ty)
             else:
-                res = impl(self.context, self.builder, ty, val, expr.attr)
+                impl = self.context.get_attribute(val, ty, expr.attr)
+
+                if impl is None:
+                    # ignore the attribute
+                    res = self.context.get_dummy_value()
+                else:
+                    res = impl(self.context, self.builder, ty, val, expr.attr)
             return res
 
         elif expr.op == "static_getitem":

@@ -125,6 +125,7 @@ def make_range_impl(range_state_type, range_iter_type, int_type):
 
                 with orelse:
                     rem = builder.srem(diff, step)
+                    rem = builder.select(pos_diff, rem, builder.neg(rem))
                     uneven = builder.icmp(lc.ICMP_SGT, rem, zero)
                     newcount = builder.add(builder.sdiv(diff, step),
                                            builder.select(uneven, one, zero))

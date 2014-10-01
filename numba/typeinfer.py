@@ -17,7 +17,7 @@ from __future__ import print_function, division, absolute_import
 from pprint import pprint
 import itertools
 
-from numba import ir, types, utils, config
+from numba import ir, types, utils, config, six
 from numba.config import PYVERSION
 from numba.utils import builtins
 
@@ -46,6 +46,11 @@ class TypeVar(object):
     def add_types(self, *types):
         if not types:
             return
+
+        # Sentry for None
+        for ty in types:
+            if ty is None:
+                raise TypeError("Using None as variable type")
 
         nbefore = len(self.typeset)
 
@@ -108,7 +113,9 @@ class ConstrainNetwork(object):
             except TypingError:
                 raise
             except Exception as e:
-                raise TypingError("Internal error:\n%s" % e, constrain.loc)
+                msg = "Internal error at {con}:\n{err}"
+                raise TypingError(msg.format(con=constrain, err=e),
+                                  loc=constrain.loc)
 
 
 class Propagate(object):
@@ -223,6 +230,7 @@ class CallConstrain(object):
 
     def resolve(self, context, typevars, fnty):
         assert not self.kws, "Keyword argument is not supported, yet"
+        assert fnty
         argtypes = [typevars[a.name].get() for a in self.args]
         restypes = []
         # Case analysis for each combination of argument types.
@@ -259,8 +267,14 @@ class GetAttrConstrain(object):
                 args = (self.attr, ty, self.value.name, self.inst)
                 msg = "Unknown attribute '%s' for %s %s %s" % args
                 raise TypingError(msg, loc=self.inst.loc)
-            restypes.append(attrty)
+            else:
+                assert attrty
+                restypes.append(attrty)
         typevars[self.target].add_types(*restypes)
+
+    def __repr__(self):
+        return 'resolving type of attribute "{attr}" of "{value}"'.format(
+            value=self.value, attr=self.attr)
 
 
 class SetItemConstrain(object):
@@ -338,7 +352,7 @@ class TypeInferer(object):
 
     def dump(self):
         print('---- type variables ----')
-        pprint(list(utils.itervalues(self.typevars)))
+        pprint(list(six.itervalues(self.typevars)))
 
     def seed_type(self, name, typ):
         """All arguments should be seeded.
@@ -534,11 +548,9 @@ class TypeInferer(object):
     def typeof_global(self, inst, target, gvar):
         typ = self.context.resolve_value_type(gvar.value)
         if isinstance(typ, types.Array):
-            # We turns any global array into LLVM module level global that
-            # will be emitted as part of the native binary.
-            # This is to support nopython mode global array.
-            # Note, we are treating global arrays as constant.
-            typ = typ.copy(layout='C')
+            # Global array in nopython mode is constant
+            typ = typ.copy(layout='C', const=True)
+
         if typ is not None:
             self.sentry_modified_builtin(inst, gvar)
             self.typevars[target.name].lock(typ)

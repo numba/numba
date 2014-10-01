@@ -5,7 +5,7 @@ import functools
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import jit, typeinfer, lowering, types, utils
+from numba import jit, typeof, lowering, types, utils
 from .support import TestCase
 
 enable_pyobj_flags = Flags()
@@ -98,11 +98,17 @@ def max_usecase1(x, y):
 def max_usecase2(x, y):
     return max([x, y])
 
+def max_usecase3(x):
+    return max(x)
+
 def min_usecase1(x, y):
     return min(x, y)
 
 def min_usecase2(x, y):
     return min([x, y])
+
+def min_usecase3(x):
+    return min(x)
 
 def oct_usecase(x):
     return oct(x)
@@ -140,11 +146,20 @@ def zip_1_usecase():
         result += i
     return result
 
+
 def zip_3_usecase():
     result = 0
     for i, j, k in zip((1, 2), (3, 4, 5), (6.7, 8.9)):
         result += i * j * k
     return result
+
+
+def pow_op_usecase(x, y):
+    return x ** y
+
+
+def pow_usecase(x, y):
+    return pow(x, y)
 
 
 class TestBuiltins(TestCase):
@@ -453,7 +468,6 @@ class TestBuiltins(TestCase):
             self.test_map(flags=no_pyobj_flags)
 
     def test_max_1(self, flags=enable_pyobj_flags):
-
         pyfunc = max_usecase1
         cr = compile_isolated(pyfunc, (types.int32, types.int32), flags=flags)
         cfunc = cr.entry_point
@@ -506,6 +520,59 @@ class TestBuiltins(TestCase):
     def test_min_npm_2(self):
         with self.assertTypingError():
             self.test_min_2(flags=no_pyobj_flags)
+
+    def check_min_max_invalid_types(self, pyfunc, flags=enable_pyobj_flags):
+        cr = compile_isolated(pyfunc, (types.int32, types.Dummy('list')),
+                              flags=flags)
+        cfunc = cr.entry_point
+        cfunc(1, [1])
+
+    def test_max_1_invalid_types(self):
+        # Heterogenous ordering is valid in Python 2
+        if utils.IS_PY3:
+            with self.assertRaises(TypeError):
+                self.check_min_max_invalid_types(max_usecase1)
+        else:
+            self.check_min_max_invalid_types(max_usecase1)
+
+    def test_max_1_invalid_types_npm(self):
+        with self.assertTypingError():
+            self.check_min_max_invalid_types(max_usecase1, flags=no_pyobj_flags)
+
+    def test_min_1_invalid_types(self):
+        # Heterogenous ordering is valid in Python 2
+        if utils.IS_PY3:
+            with self.assertRaises(TypeError):
+                self.check_min_max_invalid_types(min_usecase1)
+        else:
+            self.check_min_max_invalid_types(min_usecase1)
+
+    def test_min_1_invalid_types_npm(self):
+        with self.assertTypingError():
+            self.check_min_max_invalid_types(min_usecase1, flags=no_pyobj_flags)
+
+    # Test that max(1) and min(1) fail
+
+    def check_min_max_unary_non_iterable(self, pyfunc, flags=enable_pyobj_flags):
+        cr = compile_isolated(pyfunc, (types.int32,), flags=flags)
+        cfunc = cr.entry_point
+        cfunc(1)
+
+    def test_max_unary_non_iterable(self):
+        with self.assertRaises(TypeError):
+            self.check_min_max_unary_non_iterable(max_usecase3)
+
+    def test_max_unary_non_iterable_npm(self):
+        with self.assertTypingError():
+            self.check_min_max_unary_non_iterable(max_usecase3)
+
+    def test_min_unary_non_iterable(self):
+        with self.assertRaises(TypeError):
+            self.check_min_max_unary_non_iterable(min_usecase3)
+
+    def test_min_unary_non_iterable_npm(self):
+        with self.assertTypingError():
+            self.check_min_max_unary_non_iterable(min_usecase3)
 
     def test_oct(self, flags=enable_pyobj_flags):
         pyfunc = oct_usecase
@@ -622,6 +689,33 @@ class TestBuiltins(TestCase):
     def test_zip_0_npm(self):
         self.test_zip_0(flags=no_pyobj_flags)
 
+    def test_pow_op_usecase(self):
+        args = [
+            (2, 3),
+            (2.0, 3),
+            (2, 3.0),
+            (2j, 3.0j),
+        ]
+
+        for x, y in args:
+            cres = compile_isolated(pow_op_usecase, (typeof(x), typeof(y)),
+                                    flags=no_pyobj_flags)
+            r = cres.entry_point(x, y)
+            self.assertPreciseEqual(r, pow_op_usecase(x, y))
+
+    def test_pow_usecase(self):
+        args = [
+            (2, 3),
+            (2.0, 3),
+            (2, 3.0),
+            (2j, 3.0j),
+        ]
+
+        for x, y in args:
+            cres = compile_isolated(pow_usecase, (typeof(x), typeof(y)),
+                                    flags=no_pyobj_flags)
+            r = cres.entry_point(x, y)
+            self.assertPreciseEqual(r, pow_usecase(x, y))
 
 if __name__ == '__main__':
     unittest.main()

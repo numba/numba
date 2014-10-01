@@ -8,9 +8,10 @@ from functools import reduce
 
 import llvm.core as lc
 
-from llvm.core import Type, Constant
+import numpy
+from llvm.core import Constant
 from numba import errcode
-from numba import types, typing, cgutils, utils
+from numba import types, cgutils
 from numba.targets.imputils import (builtin, builtin_attr, implement,
                                     impl_attribute, impl_attribute_generic,
                                     iterator_impl, iternext_impl,
@@ -314,7 +315,7 @@ def setitem_array1d_slice(context, builder, sig, args):
     ary = arystty(context, builder, ary)
     shapes = cgutils.unpack_tuple(builder, ary.shape, aryty.ndim)
     slicestruct = Slice(context, builder, value=idx)
-    
+
     # the logic here follows that of Python's Objects/sliceobject.c
     # in particular PySlice_GetIndicesEx function
     ZERO = Constant.int(slicestruct.step.type, 0)
@@ -322,50 +323,50 @@ def setitem_array1d_slice(context, builder, sig, args):
 
     b_step_eq_zero = builder.icmp(lc.ICMP_EQ, slicestruct.step, ZERO)
     # bail if step is 0
-    with cgutils.ifthen(builder, b_step_eq_zero): 
-        context.return_errcode(builder, errcode.ASSERTION_ERROR) 
-    
+    with cgutils.ifthen(builder, b_step_eq_zero):
+        context.return_errcode(builder, errcode.ASSERTION_ERROR)
+
     # adjust for negative indices for start
-    start = cgutils.alloca_once(builder, slicestruct.start.type) 
+    start = cgutils.alloca_once(builder, slicestruct.start.type)
     builder.store(slicestruct.start, start)
     b_start_lt_zero = builder.icmp(lc.ICMP_SLT, builder.load(start), ZERO)
-    with cgutils.ifthen(builder, b_start_lt_zero): 
+    with cgutils.ifthen(builder, b_start_lt_zero):
         add = builder.add(builder.load(start), shapes[0])
         builder.store(add, start)
-        
+
     b_start_lt_zero = builder.icmp(lc.ICMP_SLT, builder.load(start), ZERO)
     with cgutils.ifthen(builder, b_start_lt_zero):
         b_step_lt_zero = builder.icmp(lc.ICMP_SLT, slicestruct.step, ZERO)
         cond = builder.select(b_step_lt_zero, NEG_ONE, ZERO)
-        builder.store(cond, start)    
-    
+        builder.store(cond, start)
+
     b_start_geq_len = builder.icmp(lc.ICMP_SGE, builder.load(start), shapes[0])
     ONE = Constant.int(shapes[0].type, 1)
     with cgutils.ifthen(builder, b_start_geq_len):
         b_step_lt_zero = builder.icmp(lc.ICMP_SLT, slicestruct.step, ZERO)
         cond = builder.select(b_step_lt_zero, builder.sub(shapes[0], ONE), shapes[0])
-        builder.store(cond, start)    
-    
+        builder.store(cond, start)
+
     # adjust stop for negative value
-    stop = cgutils.alloca_once(builder, slicestruct.stop.type) 
+    stop = cgutils.alloca_once(builder, slicestruct.stop.type)
     builder.store(slicestruct.stop, stop)
     b_stop_lt_zero = builder.icmp(lc.ICMP_SLT, builder.load(stop), ZERO)
-    with cgutils.ifthen(builder, b_stop_lt_zero): 
+    with cgutils.ifthen(builder, b_stop_lt_zero):
         add = builder.add(builder.load(stop), shapes[0])
         builder.store(add, stop)
-        
+
     b_stop_lt_zero = builder.icmp(lc.ICMP_SLT, builder.load(stop), ZERO)
     with cgutils.ifthen(builder, b_stop_lt_zero):
         b_step_lt_zero = builder.icmp(lc.ICMP_SLT, slicestruct.step, ZERO)
         cond = builder.select(b_step_lt_zero, NEG_ONE, ZERO)
-        builder.store(cond, start)    
-    
+        builder.store(cond, start)
+
     b_stop_geq_len = builder.icmp(lc.ICMP_SGE, builder.load(stop), shapes[0])
     ONE = Constant.int(shapes[0].type, 1)
     with cgutils.ifthen(builder, b_stop_geq_len):
         b_step_lt_zero = builder.icmp(lc.ICMP_SLT, slicestruct.step, ZERO)
         cond = builder.select(b_step_lt_zero, builder.sub(shapes[0], ONE), shapes[0])
-        builder.store(cond, stop)    
+        builder.store(cond, stop)
 
     b_step_gt_zero = builder.icmp(lc.ICMP_SGT, slicestruct.step, ZERO)
     with cgutils.ifelse(builder, b_step_gt_zero) as (then0, otherwise0):
@@ -383,9 +384,6 @@ def setitem_array1d_slice(context, builder, sig, args):
                 context.pack_value(builder, aryty.dtype, val, ptr)
 
 
-
-
-
 @builtin
 @implement(types.len_type, types.Kind(types.Array))
 def array_len(context, builder, sig, args):
@@ -396,6 +394,89 @@ def array_len(context, builder, sig, args):
     shapeary = ary.shape
     return builder.extract_value(shapeary, 0)
 
+
+@builtin
+@implement("array.sum", types.Kind(types.Array))
+def array_sum(context, builder, sig, args):
+    from numba.intrinsics import array_ravel
+
+    [arrty] = sig.args
+
+    def impl_any_layout(arr):
+        c = 0
+        for v in arr.flat:
+            c += v
+        return c
+
+    def impl_contigous_layout(arr):
+        c = 0
+        for v in array_ravel(arr):
+            c += v
+        return c
+
+    if arrty.layout in 'CF':
+        # Optimize for contiguous case because so that LLVM can perform
+        # vectorization on the reduction loop
+        return context.compile_internal(builder, impl_contigous_layout, sig,
+                                        args, locals=dict(c=arrty.dtype),
+                                        cache_key=(array_sum, sig,
+                                                   arrty.dtype))
+    else:
+        return context.compile_internal(builder, impl_any_layout, sig, args,
+                                        locals=dict(c=arrty.dtype),
+                                        cache_key=(array_sum, sig,
+                                                   arrty.dtype))
+
+
+@builtin
+@implement(numpy.sum, types.Kind(types.Array))
+def numpy_sum(context, builder, sig, args):
+    def impl(arr):
+        return arr.sum()
+
+    return context.compile_internal(builder, impl, sig, args)
+
+
+@builtin
+@implement("array.prod", types.Kind(types.Array))
+def array_prod(context, builder, sig, args):
+    from numba.intrinsics import array_ravel
+
+    [arrty] = sig.args
+
+    def impl_any_layout(arr):
+        c = 1
+        for v in arr.flat:
+            c *= v
+        return c
+
+    def impl_contigous_layout(arr):
+        c = 1
+        for v in array_ravel(arr):
+            c *= v
+        return c
+
+    if arrty.layout in 'CF':
+        # Optimize for contiguous case because so that LLVM can perform
+        # vectorization on the reduction loop
+        return context.compile_internal(builder, impl_contigous_layout, sig,
+                                        args, locals=dict(c=arrty.dtype),
+                                        cache_key=(array_sum, sig,
+                                                   arrty.dtype))
+    else:
+        return context.compile_internal(builder, impl_any_layout, sig, args,
+                                        locals=dict(c=arrty.dtype),
+                                        cache_key=(array_sum, sig,
+                                                   arrty.dtype))
+
+
+@builtin
+@implement(numpy.prod, types.Kind(types.Array))
+def numpy_prod(context, builder, sig, args):
+    def impl(arr):
+        return arr.prod()
+
+    return context.compile_internal(builder, impl, sig, args)
 
 #-------------------------------------------------------------------------------
 
@@ -460,4 +541,108 @@ def array_record_getattr(context, builder, typ, value, attr):
     rary.data = newdataptr
 
     return rary._getvalue()
+
+
+
+#-------------------------------------------------------------------------------
+# builtin `numpy.flat` implementation
+
+@struct_factory(types.NumpyFlatType)
+def make_array_flat_cls(flatiterty):
+    """
+    Return the Structure representation of the given *enum_type* (an
+    instance of types.EnumerateType).
+    """
+
+    class NumpyFlatIter(cgutils.Structure):
+        _fields = [('array', types.CPointer(flatiterty.array_type)),
+                   ('iters', types.CPointer(types.intp))]
+
+    return NumpyFlatIter
+
+
+@builtin_attr
+@impl_attribute(types.Array, "flat", types.Kind(types.NumpyFlatType))
+def make_array_flatiter(context, builder, arrty, arr):
+    flatitercls = make_array_flat_cls(types.NumpyFlatType(arrty))
+    flatiter = flatitercls(context, builder)
+
+    iters = cgutils.alloca_once(builder, context.get_value_type(types.intp),
+                                size=context.get_constant(types.intp,
+                                                          arrty.ndim))
+
+    arrayptr = cgutils.alloca_once(builder, arr.type)
+    builder.store(arr, arrayptr)
+
+    zero = context.get_constant(types.intp, 0)
+    for i in range(arrty.ndim):
+        p = builder.gep(iters, [context.get_constant(types.intp, i)])
+        builder.store(zero, p)
+
+    flatiter.array = arrayptr
+    flatiter.iters = iters
+
+    return flatiter._getvalue()
+
+
+@builtin
+@implement('iternext', types.Kind(types.NumpyFlatType))
+@iternext_impl
+def iternext_numpy_flatiter(context, builder, sig, args, result):
+    [flatiterty] = sig.args
+    [flatiter] = args
+
+    flatitercls = make_array_flat_cls(flatiterty)
+    flatiter = flatitercls(context, builder, value=flatiter)
+
+    arrty = flatiterty.array_type
+    arrcls = context.make_array(arrty)
+    arr = arrcls(context, builder, value=builder.load(flatiter.array))
+
+    ndim = arrty.ndim
+    shapes = cgutils.unpack_tuple(builder, arr.shape, ndim)
+    indptr = flatiter.iters
+
+    # Load indices and check if they are valid
+    indices = []
+    is_valid = cgutils.true_bit
+    zero = context.get_constant(types.intp, 0)
+    one = context.get_constant(types.intp, 1)
+    for ax in range(ndim):
+        axsize = shapes[ax]
+        idxptr = builder.gep(indptr, [context.get_constant(types.intp, ax)])
+        idx = builder.load(idxptr)
+        ax_valid = builder.icmp(lc.ICMP_SLT, idx, axsize)
+
+        indices.append(idx)
+        is_valid = builder.and_(is_valid, ax_valid)
+
+    result.set_valid(is_valid)
+
+    with cgutils.if_likely(builder, is_valid):
+        # Get yielded value
+        valptr = cgutils.get_item_pointer(builder, arrty, arr, indices)
+        yield_value = builder.load(valptr)
+        result.yield_(yield_value)
+
+        # Increment iterator indices
+        carry_flags = [cgutils.true_bit]
+        for ax, (idx, axsize) in reversed(list(enumerate(zip(indices,
+                                                             shapes)))):
+            idxptr = builder.gep(indptr, [context.get_constant(types.intp, ax)])
+            lastcarry = carry_flags[-1]
+            idxp1 = builder.add(idx, one)
+            carry = builder.icmp(lc.ICMP_SGE, idxp1, axsize)
+            idxfinal = builder.select(lastcarry,
+                                      builder.select(carry, zero, idxp1),
+                                      idx)
+            builder.store(idxfinal, idxptr)
+            carry_flags.append(builder.and_(carry, lastcarry))
+
+        with cgutils.if_unlikely(builder, carry_flags[-1]):
+            # If we have iterated all elements,
+            # Set first index to out-of-bound
+            idxptr = builder.gep(indptr, [context.get_constant(types.intp, 0)])
+            builder.store(shapes[0], idxptr)
+
 

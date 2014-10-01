@@ -20,8 +20,15 @@ class _gpus(object):
         try:
             return self._tls.gpus
         except AttributeError:
-            self._tls.gpus = []
+            self._tls.gpus = self._init_gpus()
             return self._tls.gpus
+
+    def _init_gpus(self):
+        gpus = []
+        for num in range(driver.get_device_count()):
+            device = driver.get_device(num)
+            gpus.append(GPU(device))
+        return gpus
 
     def __getitem__(self, item):
         return self._gpus[item]
@@ -46,20 +53,7 @@ class _gpus(object):
 
 
 gpus = _gpus()
-
-
-def init_gpus():
-    """
-    Populates global "gpus" as a list of GPU objects
-    """
-    if gpus:
-        assert len(gpus)
-        return
-    for num in range(driver.get_device_count()):
-        device = driver.get_device(num)
-        gpu = GPU(device)
-        gpus.append(gpu)
-        globals()['gpu%d' % num] = gpu
+del _gpus
 
 
 class GPU(object):
@@ -93,13 +87,15 @@ class GPU(object):
         self._context.push()
 
     def __enter__(self):
-        if get_context() is not self:
+        if self._context is None:
+            self.context
+        else:
             self._context.push()
-            _gpustack.push(self)
+        _gpustack.push(self)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        assert get_context() is self
-        self._context.pop()
+        assert _get_device() is self
+        self.context.pop()
         _gpustack.pop()
 
     def reset(self):
@@ -109,17 +105,25 @@ class GPU(object):
 
 
 def get_gpu(i):
-    init_gpus()
     return gpus[i]
 
 
 _gpustack = servicelib.TLStack()
 
 
-def get_context(devnum=0):
+def _get_device(devnum=0):
+    """Get the current device or use a device by device number.
+    """
     if not _gpustack:
-        _gpustack.push(get_gpu(devnum).context)
+        _gpustack.push(get_gpu(devnum))
     return _gpustack.top
+
+
+def get_context(devnum=0):
+    """Get the current device or use a device by device number, and
+    return the CUDA context.
+    """
+    return _get_device(devnum=devnum).context
 
 
 def require_context(fn):

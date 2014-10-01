@@ -182,9 +182,14 @@ def goto_entry_block(builder):
         yield
 
 
-def alloca_once(builder, ty, name=''):
+def alloca_once(builder, ty, size=None, name=''):
+    """Allocate stack memory at the entry block of the current function
+    pointed by ``builder`` withe llvm type ``ty``.  The optional ``size`` arg
+    set the number of element to allocate.  The default is 1.  The optional
+    ``name`` arg set the symbol name inside the llvm IR for debugging.
+    """
     with goto_entry_block(builder):
-        return builder.alloca(ty, name=name)
+        return builder.alloca(ty, size=size, name=name)
 
 
 def terminate(builder, bbend):
@@ -205,10 +210,6 @@ def is_null(builder, val):
 def is_not_null(builder, val):
     null = get_null_value(val.type)
     return builder.icmp(lc.ICMP_NE, null, val)
-
-
-is_true = is_not_null
-is_false = is_null
 
 
 def set_branch_weight(builder, brinst, trueweight, falseweight):
@@ -489,6 +490,8 @@ def is_scalar_zero(builder, value):
     """
     Return a predicate representing whether *value* is equal to zero.
     """
+    assert not is_pointer(value.type)
+    assert not is_struct(value.type)
     nullval = Constant.null(value.type)
     if value.type in (Type.float(), Type.double()):
         isnull = builder.fcmp(lc.FCMP_OEQ, nullval, value)
@@ -496,17 +499,38 @@ def is_scalar_zero(builder, value):
         isnull = builder.icmp(lc.ICMP_EQ, nullval, value)
     return isnull
 
+
+def is_not_scalar_zero(builder, value):
+    """
+    Return a predicate representin whether a *value* is not equal to zero.
+    not exactly "not is_scalar_zero" because of nans
+    """
+    assert not is_pointer(value.type)
+    assert not is_struct(value.type)
+    nullval = Constant.null(value.type)
+    if value.type in (Type.float(), Type.double()):
+        isnull = builder.fcmp(lc.FCMP_UNE, nullval, value)
+    else:
+        isnull = builder.icmp(lc.ICMP_NE, nullval, value)
+    return isnull
+
+
 def is_scalar_zero_or_nan(builder, value):
     """
     Return a predicate representing whether *value* is equal to either zero
     or NaN.
     """
+    assert not is_pointer(value.type)
+    assert not is_struct(value.type)
     nullval = Constant.null(value.type)
     if value.type in (Type.float(), Type.double()):
         isnull = builder.fcmp(lc.FCMP_UEQ, nullval, value)
     else:
         isnull = builder.icmp(lc.ICMP_EQ, nullval, value)
     return isnull
+
+is_true = is_not_scalar_zero
+is_false = is_scalar_zero
 
 def is_scalar_neg(builder, value):
     """is _value_ negative?. Assumes _value_ is signed"""

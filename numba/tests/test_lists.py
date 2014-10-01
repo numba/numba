@@ -4,7 +4,8 @@ import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
 from numba import types, utils
 from numba.tests import usecases
-from .support import TestCase
+from numba.tests.support import TestCase
+import numba.unittest_support as unittest
 import math
 import numpy as np
 
@@ -52,6 +53,12 @@ def list_comprehension3():
 
 def list_comprehension4():
     return sum([x * y for x in range(10) for y in range(10)])
+
+def list_comprehension5():
+    return [x * 2 for x in range(10)]
+
+def list_comprehension6():
+    return [[x for x in range(y)] for y in range(3)]
 
 def list_append(l, x):
     l.append(x)
@@ -156,18 +163,20 @@ class TestLists(TestCase):
             l = range(10)
             self.assertEqual(cfunc(l), pyfunc(l))
 
+    @unittest.expectedFailure
     def test_list_comprehension(self):
         list_tests = [list_comprehension1,
                       list_comprehension2,
                       list_comprehension3,
-                      list_comprehension3]
+                      list_comprehension4,
+                      list_comprehension5,
+                      list_comprehension6]
 
         for test in list_tests:
             pyfunc = test
-            with self.assertTypingError():
-                cr = compile_isolated(pyfunc, ())
-                cfunc = cr.entry_point
-                self.assertEqual(cfunc(), pyfunc())
+            cr = compile_isolated(pyfunc, ())
+            cfunc = cr.entry_point
+            self.assertEqual(cfunc(), pyfunc())
 
     def test_list_append(self):
         pyfunc = list_append

@@ -6,7 +6,8 @@ import llvm.core as lc
 from llvm.core import Type, Constant
 import numpy
 
-from numba import _dynfunc, types, utils, cgutils, typing, numpy_support, errcode
+import numba
+from numba import types, utils, cgutils, typing, numpy_support, errcode
 from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, python_attr_impl,
                                     builtin_registry, impl_attribute,
@@ -150,7 +151,12 @@ class BaseContext(object):
         obj.metadata = utils.UniqueDict()
         obj.linking = set()
         obj.exceptions = {}
+        obj.cached_internal_func = {}
         return obj
+
+    def link_dependencies(self, module, depends):
+        for lib in depends:
+            module.link_in(lib, preserve=True)
 
     def insert_func_defn(self, defns):
         for defn in defns:
@@ -479,10 +485,17 @@ class BaseContext(object):
     def get_function(self, fn, sig):
         if isinstance(fn, types.Function):
             key = fn.template.key
+
             if isinstance(key, MethodType):
                 overloads = self.defns[key.im_func]
+
+            elif sig.recvr:
+                sig = typing.signature(sig.return_type,
+                                       *((sig.recvr,) + sig.args))
+                overloads = self.defns[key]
             else:
                 overloads = self.defns[key]
+
         elif isinstance(fn, types.Dispatcher):
             key = fn.overloaded.get_overload(sig.args)
             overloads = self.defns[key]
@@ -493,6 +506,9 @@ class BaseContext(object):
             return _wrap_impl(overloads.find(sig), self, sig)
         except NotImplementedError:
             raise Exception("No definition for lowering %s%s" % (key, sig))
+
+    def get_bound_function(self, builder, obj, ty):
+        return obj
 
     def get_attribute(self, val, typ, attr):
         if isinstance(typ, types.Record):
@@ -904,6 +920,48 @@ class BaseContext(object):
 
     def get_dummy_type(self):
         return GENERIC_POINTER
+
+    def compile_internal(self, builder, impl, sig, args, locals={},
+                         cache_key=None):
+        """Invoke compiler to implement a function for a nopython function
+
+        Args
+        ----
+        cache_key : hashable
+            A hashable object to use as the key for caching.
+            If it is `None`, no caching is performed.
+        """
+        if cache_key is not None:
+            # Caching is enabled
+            fndesc = self.cached_internal_func.get(cache_key)
+        else:
+            # Caching is disabled
+            fndesc = None
+
+        if fndesc is None:
+            # Compile
+            cres = numba.compiler.compile_internal(self.typing_context, self,
+                                                   impl, sig.args,
+                                                   sig.return_type,
+                                                   locals=locals)
+            llvm_func = cres.llvm_func
+            # Set to linkonce one-definition-rule so that the function
+            # is removed once it is linked.
+            llvm_func.linkage = lc.LINKAGE_LINKONCE_ODR
+            self.add_libs([cres.llvm_module])
+            fndesc = cres.fndesc
+
+            # Do cache if caching is enabled
+            if cache_key is not None:
+                self.cached_internal_func[cache_key] = fndesc
+
+        # Add call to the generated function
+        llvm_mod = cgutils.get_module(builder)
+        fn = self.declare_function(llvm_mod, fndesc)
+        status, res = self.call_function(builder, fn, sig.return_type,
+                                         sig.args, args)
+
+        return res
 
     def optimize(self, module):
         pass

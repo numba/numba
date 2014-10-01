@@ -22,20 +22,24 @@ class Dim(object):
     stride:
         item stride
     """
-    __slots__ = 'start', 'stop', 'size', 'stride'
+    __slots__ = 'start', 'stop', 'size', 'stride', 'single'
 
-    def __init__(self, start, stop, size, stride):
+    def __init__(self, start, stop, size, stride, single):
         if stop < start:
             raise ValueError("end offset is before start offset")
         self.start = start
         self.stop = stop
         self.size = size
         self.stride = stride
+        self.single = single
+        assert not single or size == 1
 
     def __getitem__(self, item):
         if isinstance(item, slice):
             start, stop, step = item.start, item.stop, item.step
+            single = False
         else:
+            single = True
             start = item
             stop = start + 1
             step = None
@@ -71,7 +75,7 @@ class Dim(object):
             start = stop
             size = 0
 
-        return Dim(start, stop, size, stride)
+        return Dim(start, stop, size, stride, single)
 
     def get_offset(self, idx):
         return self.start + idx * self.stride
@@ -82,9 +86,9 @@ class Dim(object):
 
     def normalize(self, base):
         return Dim(start=self.start - base, stop=self.stop - base,
-                   size=self.size, stride=self.stride)
+                   size=self.size, stride=self.stride, single=self.single)
 
-    def copy(self, start=None, stop=None, size=None, stride=None):
+    def copy(self, start=None, stop=None, size=None, stride=None, single=None):
         if start is None:
             start = self.start
         if stop is None:
@@ -93,7 +97,9 @@ class Dim(object):
             size = self.size
         if stride is None:
             stride = self.stride
-        return Dim(start, stop, size, stride)
+        if single is None:
+            single = self.single
+        return Dim(start, stop, size, stride, single)
 
     def is_contiguous(self, itemsize):
         return self.stride == itemsize
@@ -101,6 +107,16 @@ class Dim(object):
 
 def compute_index(indices, dims):
     return sum(d.get_offset(i) for i, d in zip(indices, dims))
+
+
+class Element(object):
+    is_array = False
+
+    def __init__(self, extent):
+        self.extent = extent
+
+    def iter_contiguous_extent(self):
+        yield self.extent
 
 
 class Array(object):
@@ -127,12 +143,14 @@ class Array(object):
     extent: (start, end)
         start and end offset containing the memory region
     """
+    is_array = True
 
     @classmethod
     def from_desc(cls, offset, shape, strides, itemsize):
         dims = []
         for ashape, astride in zip(shape, strides):
-            dim = Dim(offset, offset + ashape * astride, ashape, astride)
+            dim = Dim(offset, offset + ashape * astride, ashape, astride,
+                      single=False)
             dims.append(dim)
         return cls(dims, itemsize)
 
@@ -189,7 +207,12 @@ class Array(object):
             item.append(slice(None, None))
 
         dims = [dim.__getitem__(it) for dim, it in zip(self.dims, item)]
-        return Array(dims, self.itemsize)
+        newshape = [d.size for d in dims if not d.single]
+        arr = Array(dims, self.itemsize)
+        if newshape:
+            return arr.reshape(*newshape)[0]
+        else:
+            return Element(arr.extent)
 
     @property
     def is_c_contig(self):
@@ -226,6 +249,12 @@ class Array(object):
                     yield offset, offset + self.itemsize
 
     def reshape(self, *newshape, **kws):
+        oldnd = self.ndim
+        newnd = len(newshape)
+
+        if newshape == self.shape:
+            return self, None
+
         order = kws.pop('order', 'C')
         if kws:
             raise TypeError('unknown keyword arguments %s' % kws.keys())
@@ -240,7 +269,7 @@ class Array(object):
         if newsize != self.size:
             raise ValueError("reshape changes the size of the array")
 
-        elif self.is_c_contig or self.is_f_contig:
+        elif newnd == 1 or self.is_c_contig or self.is_f_contig:
             if order == 'C':
                 newstrides = list(iter_strides_c_contig(self, newshape))
             elif order == 'F':

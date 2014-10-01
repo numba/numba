@@ -15,6 +15,7 @@ registry = Registry()
 builtin_global = registry.register_global
 builtin_attr = registry.register_attr
 
+
 @builtin_attr
 class NumpyModuleAttribute(AttributeTemplate):
     # note: many unary ufuncs are added later on, using setattr
@@ -58,7 +59,7 @@ class Numpy_rules_ufunc(AbstractTemplate):
         if not all((isinstance(output, types.Array) for output in explicit_outputs)):
             msg = "ufunc '{0}' called with an explicit output that is not an array"
             raise TypingError(msg=msg.format(ufunc.__name__))
-        
+
         # find the kernel to use, based only in the input types (as does NumPy)
         base_types = [x.dtype if isinstance(x, types.Array) else x for x in args]
         ufunc_loop = ufunc_find_matching_loop(ufunc, base_types)
@@ -100,7 +101,7 @@ class Numpy_rules_ufunc(AbstractTemplate):
 
 _math_operations = [ "add", "subtract", "multiply",
                      "logaddexp", "logaddexp2", "true_divide",
-                     "floor_divide", "negative", "power", 
+                     "floor_divide", "negative", "power",
                      "remainder", "fmod", "absolute",
                      "rint", "sign", "conjugate", "exp", "exp2",
                      "log", "log2", "log10", "expm1", "log1p",
@@ -115,7 +116,7 @@ _trigonometric_functions = [ "sin", "cos", "tan", "arcsin",
                              "radians" ]
 
 _bit_twiddling_functions = ["bitwise_and", "bitwise_or",
-                            "bitwise_xor", "invert", 
+                            "bitwise_xor", "invert",
                             "left_shift", "right_shift",
                             "bitwise_not" ]
 
@@ -136,17 +137,9 @@ _floating_functions = [ "isfinite", "isinf", "isnan", "signbit",
 # implemented.
 #
 # It also works as a nice TODO list for ufunc support :)
-_unsupported = set([ numpy.spacing, numpy.signbit,
-                     numpy.right_shift, numpy.remainder,
-                     numpy.not_equal, numpy.minimum, numpy.maximum,
-                     numpy.logical_xor, numpy.logical_or, numpy.logical_not,
-                     numpy.logical_and, numpy.less,
-                     numpy.less_equal, numpy.left_shift, numpy.isnan, numpy.isinf,
-                     numpy.isfinite, numpy.invert, numpy.greater,
-                     numpy.greater_equal, numpy.fmod, numpy.fmin, numpy.fmax,
-                     numpy.equal, numpy.copysign,
-                     numpy.bitwise_xor,
-                     numpy.bitwise_or, numpy.bitwise_and ])
+_unsupported = set([ numpy.frexp, # this one is tricky, as it has 2 returns
+                     numpy.modf,  # this one also has 2 returns
+                 ])
 
 # a list of ufuncs that are in fact aliases of other ufuncs. They need to insert the
 # resolve method, but not register the ufunc itself
@@ -170,16 +163,44 @@ def _numpy_ufunc(name):
     if not name in _aliases:
         builtin_global(func, types.Function(typing_class))
 
+all_ufuncs = sum([_math_operations, _trigonometric_functions,
+                  _bit_twiddling_functions, _comparison_functions,
+                  _floating_functions], [])
 
-for func in itertools.chain(_math_operations, _trigonometric_functions,
-                            _bit_twiddling_functions, _comparison_functions,
-                            _floating_functions):
-    if not getattr(numpy, func) in _unsupported:
-        _numpy_ufunc(func)
+supported_ufuncs = [x for x in all_ufuncs if x not in _unsupported]
+
+for func in supported_ufuncs:
+    _numpy_ufunc(func)
+
+all_ufuncs = [getattr(numpy, name) for name in all_ufuncs]
+supported_ufuncs = [getattr(numpy, name) for name in supported_ufuncs]
 
 
 del _math_operations, _trigonometric_functions, _bit_twiddling_functions
 del _comparison_functions, _floating_functions, _unsupported
 del _aliases, _numpy_ufunc
 
+
+# -----------------------------------------------------------------------------
+# Install global reduction functions
+
+class Numpy_generic_reduction(AbstractTemplate):
+    def generic(self, args, kws):
+        assert not kws
+        [arr] = args
+        return signature(arr.dtype, arr)
+
+
+def _numpy_reduction(fname):
+    npyfn = getattr(numpy, fname)
+    cls = type("Numpy_reduce_{0}".format(npyfn), (Numpy_generic_reduction,),
+               dict(key=npyfn))
+    setattr(NumpyModuleAttribute, "resolve_{0}".format(fname),
+            lambda self, mod: types.Function(cls))
+
+for func in ['sum', 'prod']:
+    _numpy_reduction(func)
+
 builtin_global(numpy, types.Module(numpy))
+
+

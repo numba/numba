@@ -164,6 +164,28 @@ def looping_usecase2(rec):
     return cum
 
 
+def del_before_definition(rec):
+    """
+    This test reveal a bug that the there is a del on uninitialized variable
+    """
+    n = 5
+    for i in range(n):
+        rec.mark(str(i))
+        n = 0
+        for j in range(n):
+            return 0
+        else:
+            if i < 2:
+                continue
+            elif i == 2:
+                for j in range(i):
+                    return i
+                rec.mark('FAILED')
+            rec.mark('FAILED')
+        rec.mark('FAILED')
+    rec.mark('OK')
+    return -1
+
 class TestObjLifetime(TestCase):
     """
     Test lifetime of Python objects inside jit-compiled functions.
@@ -242,6 +264,11 @@ class TestObjLifetime(TestCase):
         self.assertRecordOrder(rec, ['iter(a)#1 + iter(a)#1',
                                      '--outer loop bottom #1--',
                                      ])
+
+    def test_del_before_definition(self):
+        rec = self.compile_and_record(del_before_definition)
+        self.assertEqual(rec.recorded, ['0', '1', '2'])
+
 
 
 if __name__ == "__main__":
