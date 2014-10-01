@@ -17,6 +17,7 @@ FIRST_ERROR = RUNTIME_ERROR = enum()
 ASSERTION_ERROR = enum()
 INDEX_ERROR = enum()
 OUT_OF_BOUND_ERROR = enum()
+NONE_TYPE_ERROR = enum()
 
 # Count number of error
 ERROR_COUNT = enum() - FIRST_ERROR

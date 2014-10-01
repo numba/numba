@@ -3,7 +3,6 @@ These type objects do not have a fixed machine representation.  It is up to
 the targets to choose their representation.
 """
 from __future__ import print_function, division, absolute_import
-from collections import defaultdict
 
 import itertools
 import numpy
@@ -730,6 +729,13 @@ class Optional(Type):
         name = "?%s" % typ
         super(Optional, self).__init__(name, param=True)
 
+    def post_init(self):
+        """
+        Install conversion from optional(T) to T
+        """
+        from numba.typeconv.rules import default_type_manager as tm
+        tm.set_safe_convert(self, self.type)
+
     @property
     def key(self):
         return self.type
@@ -842,7 +848,7 @@ longlong = _make_signed(numpy.longlong)
 ulonglong = _make_unsigned(numpy.longlong)
 
 # optional types
-double_or_none = Optional(double)
+optional = Optional
 
 __all__ = '''
 int8
@@ -889,5 +895,5 @@ f4
 f8
 c8
 c16
-double_or_none
+optional
 '''.split()

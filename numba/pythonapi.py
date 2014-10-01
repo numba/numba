@@ -802,6 +802,21 @@ class PythonAPI(object):
         elif isinstance(typ, types.Array):
             return self.to_native_array(typ, obj)
 
+        elif isinstance(typ, types.Optional):
+            isnone = self.builder.icmp(lc.ICMP_EQ, obj, self.borrow_none())
+            with cgutils.ifelse(self.builder, isnone) as (then, orelse):
+                with then:
+                    noneval = self.context.make_optional_none(self.builder, typ.type)
+                    ret = cgutils.alloca_once(self.builder, noneval.type)
+                    self.builder.store(noneval, ret)
+
+                with orelse:
+                    val = self.to_native_value(obj, typ.type)
+                    just = self.context.make_optional_value(self.builder,
+                                                            typ.type, val)
+                    self.builder.store(just, ret)
+            return ret
+
         raise NotImplementedError(typ)
 
     def from_native_return(self, val, typ):

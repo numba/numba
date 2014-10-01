@@ -278,6 +278,8 @@ class _MinimalResult(object):
     def __init__(self, original_result):
         for attr in self.__slots__:
             setattr(self, attr, getattr(original_result, attr))
+        for case, _ in self.expectedFailures:
+            self.fixup_case(case)
         for case, _ in self.errors:
             self.fixup_case(case)
         for case, _ in self.failures:

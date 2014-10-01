@@ -302,7 +302,7 @@ class BaseContext(object):
             return Type.pointer(dty)
 
         elif isinstance(ty, types.Optional):
-            return self.get_data_type(ty.type)
+            return self.get_struct_type(self.make_optional(ty))
 
         elif isinstance(ty, types.Array):
             return self.get_struct_type(self.make_array(ty))
@@ -788,6 +788,15 @@ class BaseContext(object):
         elif isinstance(toty, types.Optional):
             casted = self.cast(builder, val, fromty, toty.type)
             return self.make_optional_value(builder, toty.type, casted)
+
+        elif isinstance(fromty, types.Optional):
+            optty = self.make_optional(fromty)
+            optval = optty(self, builder, value=val)
+            validbit = cgutils.as_bool_bit(builder, optval.valid)
+            with cgutils.if_unlikely(builder, builder.not_(validbit)):
+                self.return_errcode(builder, errcode.NONE_TYPE_ERROR)
+
+            return optval.data
 
         raise NotImplementedError("cast", val, fromty, toty)
 
