@@ -13,7 +13,7 @@ def return_double_or_none(x):
     return ret
 
 
-def return_different_statment(x):
+def return_different_statement(x):
     if x:
         return None
     else:
@@ -58,8 +58,8 @@ class TestOptional(unittest.TestCase):
         for v in [True, False]:
             self.assertEqual(pyfunc(v), cfunc(v))
 
-    def test_return_different_statment(self):
-        pyfunc = return_different_statment
+    def test_return_different_statement(self):
+        pyfunc = return_different_statement
         cres = compile_isolated(pyfunc, [types.boolean])
         cfunc = cres.entry_point
 

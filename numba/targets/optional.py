@@ -13,3 +13,11 @@ def make_optional(valtype):
                    ('valid', types.boolean)]
 
     return OptionalStruct
+
+
+def always_return_true_impl(context, builder, sig, args):
+    return cgutils.true_bit
+
+
+def always_return_false_impl(context, builder, sig, args):
+    return cgutils.false_bit

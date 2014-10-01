@@ -11,6 +11,7 @@ from .imputils import (builtin, builtin_attr, implement, impl_attribute,
                        impl_attribute_generic, iterator_impl, iternext_impl,
                        struct_factory)
 from .. import typing, types, cgutils, utils, errcode
+from . import optional
 
 
 #-------------------------------------------------------------------------------
@@ -429,14 +430,6 @@ for ty in types.signed_domain:
     builtin(implement('>>', ty, types.uint32)(int_ashr_impl))
 
 
-def always_return_true_impl(context, builder, sig, args):
-    return cgutils.true_bit
-
-
-def always_return_false_impl(context, builder, sig, args):
-    return cgutils.false_bit
-
-
 def optional_is_none(context, builder, sig, args):
     """Check if an Optional value is invalid
     """
@@ -464,9 +457,11 @@ def optional_is_not_none(context, builder, sig, args):
 
 
 # None is/not None
-builtin(implement('is', types.none, types.none)(always_return_true_impl))
+builtin(implement('is', types.none, types.none)(
+    optional.always_return_true_impl))
 
-builtin(implement('is not', types.none, types.none)(always_return_false_impl))
+builtin(implement('is not', types.none, types.none)(
+    optional.always_return_false_impl))
 
 # Optional is None
 builtin(implement('is',
@@ -484,10 +479,10 @@ builtin(implement('is not',
 
 # Any is/not None
 builtin(implement('is',
-                  types.Any, types.Any)(always_return_false_impl))
+                  types.Any, types.Any)(optional.always_return_false_impl))
 
 builtin(implement('is not',
-                  types.Any, types.Any)(always_return_true_impl))
+                  types.Any, types.Any)(optional.always_return_true_impl))
 
 
 def real_add_impl(context, builder, sig, args):
