@@ -6,6 +6,7 @@ from __future__ import print_function, division, absolute_import
 import functools
 
 from .. import types
+from ..typeinfer import TypingError
 
 
 class Signature(object):
@@ -214,7 +215,7 @@ class ConcreteTemplate(FunctionTemplate):
         return self._select(cases, args, kws)
 
 
-class UntypedAttributeError(AttributeError):
+class UntypedAttributeError(TypingError):
     def __init__(self, value, attr):
         msg = 'Unknown attribute "{attr}" of type {type}'.format(type=value,
                                                               attr=attr)
