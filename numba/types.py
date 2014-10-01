@@ -734,7 +734,22 @@ class Optional(Type):
         Install conversion from optional(T) to T
         """
         from numba.typeconv.rules import default_type_manager as tm
+
         tm.set_safe_convert(self, self.type)
+        tm.set_promote(self.type, self)
+        tm.set_promote(none, self)
+        if self.type in number_domain:
+            for t in number_domain - set([self.type]):
+                tcc = tm.check_compatible(t, self.type)
+                if tcc == 'promote':
+                    tm.set_promote(t, self)
+                elif tcc == 'safe':
+                    tm.set_safe_convert(t, self)
+                elif tcc == 'unsafe':
+                    tm.set_unsafe_convert(t, self)
+                else:
+                    assert tcc is None, tcc
+
 
     @property
     def key(self):
