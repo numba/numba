@@ -81,8 +81,10 @@ PYVERSION = sys.version_info[:2]
 # Disable CUDA support
 DISABLE_CUDA = _readenv("NUMBA_DISABLE_CUDA", int, 0)
 
-# Allow interpreter fallback
-INTERPRETER_FALLBACK = _readenv("NUMBA_INTERPRETER_FALLBACK", int, 0)
+# Allow interpreter fallback so that Numba @jit decorator will never fail
+# Use for migrating from old numba (<0.12) which supported closure, and other
+# yet-to-be-supported features.
+COMPATIBILITY_MODE = _readenv("NUMBA_COMPATIBILITY_MODE", int, 0)
 
 # Force CUDA compute capability
 def _force_cc(text):

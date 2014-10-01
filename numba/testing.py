@@ -9,11 +9,11 @@ def allow_interpreter_mode(fn):
     """
     @functools.wraps(fn)
     def _core(*args, **kws):
-        config.INTERPRETER_FALLBACK = True
+        config.COMPATIBILITY_MODE = True
         try:
             fn(*args, **kws)
         finally:
-            config.INTERPRETER_FALLBACK = False
+            config.COMPATIBILITY_MODE = False
     return _core
 
 

@@ -6,9 +6,9 @@ import warnings
 from . import config
 
 # Disable interpreter fallback upon import of this package
-if config.INTERPRETER_FALLBACK:
+if config.COMPATIBILITY_MODE:
     warnings.warn("Unset INTERPRETER_FALLBACK")
-    config.INTERPRETER_FALLBACK = False
+    config.COMPATIBILITY_MODE = False
 
 from numba.config import PYVERSION
 

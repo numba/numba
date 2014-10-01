@@ -194,7 +194,7 @@ class Pipeline(object):
 
         self.status = _CompileStatus(
             can_fallback=self.flags.enable_pyobject,
-            can_giveup=config.INTERPRETER_FALLBACK
+            can_giveup=config.COMPATIBILITY_MODE
         )
 
     @contextmanager
