@@ -50,6 +50,7 @@ def impl_attribute_generic(ty):
 
         res.signature = typing.signature(types.Any, ty)
         res.attr = None
+        res.__wrapped__ = impl
         return res
 
     return wrapper

@@ -519,6 +519,7 @@ def array_record_getattr(context, builder, typ, value, attr):
     array = arrayty(context, builder, value)
 
     rectype = typ.dtype
+    assert isinstance(rectype, types.Record)
     dtype = rectype.typeof(attr)
     offset = rectype.offset(attr)
 
