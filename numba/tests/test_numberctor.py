@@ -22,6 +22,16 @@ def docomplex2(a, b):
     return complex(a, b)
 
 
+def complex_calc(a):
+    z = complex(a)
+    return z.real ** 2 + z.imag ** 2
+
+
+def complex_calc2(a, b):
+    z = complex(a, b)
+    return z.real ** 2 + z.imag ** 2
+
+
 class TestNumberCtor(TestCase):
     def test_int(self):
         pyfunc = doint
@@ -67,6 +77,18 @@ class TestNumberCtor(TestCase):
             self.assertPreciseEqual(pyfunc(x), cfunc(x),
                 prec='single' if ty is types.float32 else 'exact')
 
+        # Check that complex(float32) really creates a complex64,
+        # by checking the accuracy of computations.
+        pyfunc = complex_calc
+        x = 1.0 + 2**-50
+        cres = compile_isolated(pyfunc, [types.float32])
+        cfunc = cres.entry_point
+        self.assertPreciseEqual(cfunc(x), 1.0)
+        # Control (complex128)
+        cres = compile_isolated(pyfunc, [types.float64])
+        cfunc = cres.entry_point
+        self.assertGreater(cfunc(x), 1.0)
+
     def test_complex2(self):
         pyfunc = docomplex2
 
@@ -81,6 +103,18 @@ class TestNumberCtor(TestCase):
             cfunc = cres.entry_point
             self.assertPreciseEqual(pyfunc(x, y), cfunc(x, y),
                 prec='single' if ty is types.float32 else 'exact')
+
+        # Check that complex(float32, float32) really creates a complex64,
+        # by checking the accuracy of computations.
+        pyfunc = complex_calc2
+        x = 1.0 + 2**-50
+        cres = compile_isolated(pyfunc, [types.float32, types.float32])
+        cfunc = cres.entry_point
+        self.assertPreciseEqual(cfunc(x, x), 2.0)
+        # Control (complex128)
+        cres = compile_isolated(pyfunc, [types.float64, types.float32])
+        cfunc = cres.entry_point
+        self.assertGreater(cfunc(x, x), 2.0)
 
 
 if __name__ == '__main__':

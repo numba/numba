@@ -23,7 +23,6 @@ def imag_usecase(x):
 def conjugate_usecase(x):
     return x.conjugate()
 
-from cmath import *
 
 def isfinite_usecase(x):
     return cmath.isfinite(x)

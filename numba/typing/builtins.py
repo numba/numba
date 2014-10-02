@@ -761,15 +761,20 @@ class Complex(AbstractTemplate):
             [arg] = args
             if arg not in types.number_domain:
                 raise TypeError("complex() only support for numbers")
-            return signature(types.complex128, arg)
+            if arg == types.float32:
+                return signature(types.complex64, arg)
+            else:
+                return signature(types.complex128, arg)
 
         elif len(args) == 2:
             [real, imag] = args
-
             if (real not in types.number_domain or
-                        imag not in types.number_domain):
+                imag not in types.number_domain):
                 raise TypeError("complex() only support for numbers")
-            return signature(types.complex128, real, imag)
+            if real == imag == types.float32:
+                return signature(types.complex64, real, imag)
+            else:
+                return signature(types.complex128, real, imag)
 
 
 builtin_global(bool, types.Function(Bool))
