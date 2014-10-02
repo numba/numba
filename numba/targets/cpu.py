@@ -107,7 +107,7 @@ class CPUContext(BaseContext):
         for ak, av in zip(fndesc.args, self.get_arguments(fn)):
             av.name = "arg.%s" % ak
         self.get_env_argument(fn).name = "env"
-        fn.args[0] = ".ret"
+        fn.args[0].name = "ret"
         return fn
 
     def get_arguments(self, func):

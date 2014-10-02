@@ -52,7 +52,10 @@ class FunctionDescriptor(object):
         # Argument types
         self.argtypes = argtypes or [self.typemap[a] for a in args]
         mangler = default_mangler if mangler is None else mangler
-        self.mangled_name = mangler(self.qualname, self.argtypes)
+        # XXX The mangled name should really be unique but this formula
+        # doesn't guarantee it entirely.
+        self.mangled_name = mangler('%s.%s' % (self.modname, self.qualname),
+                                    self.argtypes)
 
     def lookup_module(self):
         """
