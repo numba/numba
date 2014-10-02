@@ -8,8 +8,10 @@ registry = Registry()
 
 # TODO: support non-complex arguments (floats and ints)
 
+@registry.resolves_global(cmath.exp)
 class CMath_unary(ConcreteTemplate):
     cases = [signature(tp, tp) for tp in types.complex_domain]
+
 
 @registry.resolves_global(cmath.isinf)
 @registry.resolves_global(cmath.isnan)

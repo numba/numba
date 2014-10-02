@@ -87,3 +87,60 @@ def rect_impl(context, builder, sig, args):
     inner_sig = signature(sig.return_type, *sig.args + (types.boolean,))
     return context.compile_internal(builder, rect, inner_sig,
                                     args + [phi_is_finite])
+
+
+def intrinsic_complex_unary(inner_func):
+    def wrapper(context, builder, sig, args):
+        [typ] = sig.args
+        [value] = args
+        cplx_cls = context.make_complex(typ)
+        z = cplx_cls(context, builder, value=value)
+        x = z.real
+        y = z.imag
+        # Same as above: math.isfinite() is unavailable on 2.x so we precompute
+        # its value and pass it to the pure Python implementation.
+        x_is_finite = mathimpl.is_finite(builder, x)
+        y_is_finite = mathimpl.is_finite(builder, y)
+        inner_sig = signature(sig.return_type,
+                              *(typ.underlying_float,) * 2 + (types.boolean,) * 2)
+        return context.compile_internal(builder, inner_func, inner_sig,
+                                        (x, y, x_is_finite, y_is_finite))
+    return wrapper
+
+
+NAN = float('nan')
+
+@register
+@implement(cmath.exp, types.Kind(types.Complex))
+@intrinsic_complex_unary
+def exp_impl(x, y, x_is_finite, y_is_finite):
+    if x_is_finite:
+        if y_is_finite:
+            c = math.cos(y)
+            s = math.sin(y)
+            r = math.exp(x)
+            return complex(r * c, r * s)
+        else:
+            return complex(NAN, NAN)
+    elif math.isnan(x):
+        if y:
+            return complex(x, x)  # nan + j nan
+        else:
+            return complex(x, y)  # nan + 0j
+    elif x > 0.0:
+        # x == +inf
+        if y_is_finite:
+            c = math.cos(y)
+            s = math.sin(y)
+            return complex(x * c, y * s)
+        else:
+            return complex(x, NAN)
+    else:
+        # x == -inf
+        if y_is_finite:
+            r = math.exp(x)
+            c = math.cos(y)
+            s = math.sin(y)
+            return complex(r * c, r * s)
+        else:
+            return complex(r, r)

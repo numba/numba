@@ -25,6 +25,9 @@ def conjugate_usecase(x):
     return x.conjugate()
 
 
+def exp_usecase(x):
+    return cmath.exp(x)
+
 def isfinite_usecase(x):
     return cmath.isfinite(x)
 
@@ -57,8 +60,12 @@ class BaseComplexTest(object):
             cfunc = cr.entry_point
             actual_prec = 'single' if tx == types.float32 else prec
             for vx in x_values:
+                try:
+                    expected = pyfunc(vx)
+                except ValueError as e:
+                    self.assertIn("math domain error", str(e))
+                    continue
                 got = cfunc(vx)
-                expected = pyfunc(vx)
                 msg = 'for input %r' % (vx,)
                 self.assertPreciseEqual(got, expected, prec=prec, msg=msg)
 
@@ -117,8 +124,14 @@ class TestCMath(BaseComplexTest, TestCase):
     """
 
     def check_predicate_func(self, pyfunc, flags):
-        self.run_unary(pyfunc, [types.complex64, types.complex128],
+        self.run_unary(pyfunc, [types.complex128, types.complex64],
                        self.basic_values(), flags=flags)
+
+    def check_unary_func(self, pyfunc, flags, prec='exact'):
+        #self.run_unary(pyfunc, [types.complex128, types.complex64],
+                       #self.more_values(), flags=flags, prec=prec)
+        self.run_unary(pyfunc, [types.complex128, ],
+                       self.more_values(), flags=flags, prec=prec)
 
     def test_isnan(self, flags=enable_pyobj_flags):
         self.check_predicate_func(isnan_usecase, enable_pyobj_flags)
@@ -143,12 +156,19 @@ class TestCMath(BaseComplexTest, TestCase):
     def test_rect(self, flags=enable_pyobj_flags):
         values = [(z.real, z.imag) for z in self.more_values()
                   if not math.isinf(z.imag) or z.real == 0]
-        value_types = [(types.float64, types.float64)]
+        value_types = [(types.float64, types.float64),
+                       (types.float32, types.float32)]
         self.run_binary(rect_usecase, value_types, values, flags=flags,
                         prec='single')
 
     def test_rect_npm(self):
         self.test_rect(flags=no_pyobj_flags)
+
+    def test_exp(self):
+        self.check_unary_func(exp_usecase, enable_pyobj_flags, 'single')
+
+    def test_exp_npm(self):
+        self.check_unary_func(exp_usecase, no_pyobj_flags, 'single')
 
 
 if __name__ == '__main__':
