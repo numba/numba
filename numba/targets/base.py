@@ -523,20 +523,25 @@ class BaseContext(object):
             return imp
 
         if isinstance(typ, types.Module):
-            # Implement get attribute for module-level globals
-            # NOTE: we are treating them as constants
+            # Implement getattr for module-level globals.
+            # We are treating them as constants.
+            # XXX We shouldn't have to retype this
             attrty = self.typing_context.resolve_module_constants(typ, attr)
-
             if attrty is not None:
-                @impl_attribute(typ, attr, attrty)
-                def imp(context, builder, typ, val):
-                    val = getattr(typ.pymod, attr)
-                    return context.get_constant(attrty, val)
-
-                return imp
-            else:
-                # No implementation
-                return None
+                try:
+                    pyval = getattr(typ.pymod, attr)
+                    llval = self.get_constant(attrty, pyval)
+                except NotImplementedError:
+                    # Module attribute is not a simple constant
+                    # (e.g. it's a function), it will be handled later on.
+                    pass
+                else:
+                    @impl_attribute(typ, attr, attrty)
+                    def imp(context, builder, typ, val):
+                        return llval
+                    return imp
+            # No implementation
+            return None
 
         # Lookup specific attribute implementation for this type
         overloads = self.attrs[attr]

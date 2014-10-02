@@ -1,6 +1,7 @@
 from __future__ import print_function, absolute_import, division
 
 import cmath
+import itertools
 
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags, utils
@@ -22,8 +23,23 @@ def imag_usecase(x):
 def conjugate_usecase(x):
     return x.conjugate()
 
+from cmath import *
 
-class TestComplex(TestCase):
+def isfinite_usecase(x):
+    return cmath.isfinite(x)
+
+def isinf_usecase(x):
+    return cmath.isinf(x)
+
+def isnan_usecase(x):
+    return cmath.isnan(x)
+
+
+class BaseComplexTest(object):
+
+    def basic_values(self):
+        reals = [-0.0, +0.0, 1, -1, float('-inf'), float('+inf'), float('nan')]
+        return [complex(x, y) for x, y in itertools.product(reals, reals)]
 
     def run_unary(self, pyfunc, x_types, x_values, flags=enable_pyobj_flags,
                   prec='exact'):
@@ -36,10 +52,12 @@ class TestComplex(TestCase):
                 msg = 'for input %r' % (vx,)
                 self.assertPreciseEqual(got, expected, prec=prec, msg=msg)
 
+
+class TestComplex(BaseComplexTest, TestCase):
+
     def test_real(self, flags=enable_pyobj_flags):
         self.run_unary(real_usecase, [types.complex64, types.complex128],
-                       [1+1j, -1+1j, float('inf') + 1j, float('nan') + 1j,
-                        1 + 1j * float('nan')], flags=flags)
+                       self.basic_values(), flags=flags)
         self.run_unary(real_usecase, [types.int8, types.int64],
                        [1, 0, -3], flags=flags)
         self.run_unary(real_usecase, [types.float32, types.float64],
@@ -50,8 +68,7 @@ class TestComplex(TestCase):
 
     def test_imag(self, flags=enable_pyobj_flags):
         self.run_unary(imag_usecase, [types.complex64, types.complex128],
-                       [1+1j, 1-1j, 1j * float('inf'), 1j * float('nan'),
-                        float('nan') + 1j], flags=flags)
+                       self.basic_values(), flags=flags)
         self.run_unary(imag_usecase, [types.int8, types.int64],
                        [1, 0, -3], flags=flags)
         self.run_unary(imag_usecase, [types.float32, types.float64],
@@ -62,8 +79,7 @@ class TestComplex(TestCase):
 
     def test_conjugate(self, flags=enable_pyobj_flags):
         self.run_unary(conjugate_usecase, [types.complex64, types.complex128],
-                       [1+1j, 1-1j, 1j * float('inf'), 1j * float('nan'),
-                        float('nan') + 1j], flags=flags)
+                       self.basic_values(), flags=flags)
         self.run_unary(conjugate_usecase, [types.int8, types.int64],
                        [1, 0, -3], flags=flags)
         self.run_unary(conjugate_usecase, [types.float32, types.float64],
@@ -71,6 +87,34 @@ class TestComplex(TestCase):
 
     def test_conjugate_npm(self):
         self.test_conjugate(flags=no_pyobj_flags)
+
+
+class TestCMath(BaseComplexTest, TestCase):
+    """
+    Tests for cmath module support.
+    """
+
+    def check_predicate_func(self, pyfunc, flags):
+        self.run_unary(pyfunc, [types.complex64, types.complex128],
+                       self.basic_values(), flags=flags)
+
+    def test_isnan(self, flags=enable_pyobj_flags):
+        self.check_predicate_func(isnan_usecase, enable_pyobj_flags)
+
+    def test_isnan_npm(self):
+        self.check_predicate_func(isnan_usecase, no_pyobj_flags)
+
+    def test_isinf(self, flags=enable_pyobj_flags):
+        self.check_predicate_func(isinf_usecase, enable_pyobj_flags)
+
+    def test_isinf_npm(self):
+        self.check_predicate_func(isinf_usecase, no_pyobj_flags)
+
+    def test_isfinite(self, flags=enable_pyobj_flags):
+        self.check_predicate_func(isfinite_usecase, enable_pyobj_flags)
+
+    def test_isfinite_npm(self):
+        self.check_predicate_func(isfinite_usecase, no_pyobj_flags)
 
 
 if __name__ == '__main__':

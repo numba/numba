@@ -16,6 +16,35 @@ registry = Registry()
 register = registry.register
 
 
+# Helpers, shared with cmathimpl.
+
+def is_nan(builder, val):
+    """
+    Return a condition testing whether *val* is a NaN.
+    """
+    return builder.not_(builder.fcmp(lc.FCMP_OEQ, val, val))
+
+def is_inf(builder, val):
+    """
+    Return a condition testing whether *val* is an infinite.
+    """
+    pos_inf = lc.Constant.real(val.type, float("+inf"))
+    neg_inf = lc.Constant.real(val.type, float("-inf"))
+    isposinf = builder.fcmp(lc.FCMP_OEQ, val, pos_inf)
+    isneginf = builder.fcmp(lc.FCMP_OEQ, val, neg_inf)
+    return builder.or_(isposinf, isneginf)
+
+def is_finite(builder, val):
+    """
+    Return a condition testing whether *val* is a finite.
+    """
+    pos_inf = lc.Constant.real(val.type, float("+inf"))
+    neg_inf = lc.Constant.real(val.type, float("-inf"))
+    isnotposinf = builder.fcmp(lc.FCMP_ONE, val, pos_inf)
+    isnotneginf = builder.fcmp(lc.FCMP_ONE, val, neg_inf)
+    return builder.and_(isnotposinf, isnotneginf)
+
+
 def _unary_int_input_wrapper_impl(wrapped_impl):
     """
     Return an implementation factory to convert the single integral input
@@ -140,65 +169,26 @@ unary_math_extern(math.trunc, "truncf", "trunc", True)
 
 
 @register
-@implement(math.isnan, types.float32)
-def isnan_f32_impl(context, builder, sig, args):
+@implement(math.isnan, types.Kind(types.Float))
+def isnan_float_impl(context, builder, sig, args):
     [val] = args
-    return builder.not_(builder.fcmp(lc.FCMP_OEQ, val, val))
-
+    return is_nan(builder, val)
 
 @register
-@implement(math.isnan, types.float64)
-def isnan_f64_impl(context, builder, sig, args):
-    [val] = args
-    return builder.not_(builder.fcmp(lc.FCMP_OEQ, val, val))
-
-
-@register
-@implement(math.isnan, types.int64)
-def isnan_s64_impl(context, builder, sig, args):
+@implement(math.isnan, types.Kind(types.Integer))
+def isnan_int_impl(context, builder, sig, args):
     return cgutils.false_bit
 
 
 @register
-@implement(math.isnan, types.uint64)
-def isnan_u64_impl(context, builder, sig, args):
-    return cgutils.false_bit
-
-
-POS_INF_F32 = lc.Constant.real(Type.float(), float("+inf"))
-NEG_INF_F32 = lc.Constant.real(Type.float(), float("-inf"))
-
-POS_INF_F64 = lc.Constant.real(Type.double(), float("+inf"))
-NEG_INF_F64 = lc.Constant.real(Type.double(), float("-inf"))
-
-
-@register
-@implement(math.isinf, types.float32)
-def isinf_f32_impl(context, builder, sig, args):
+@implement(math.isinf, types.Kind(types.Float))
+def isinf_float_impl(context, builder, sig, args):
     [val] = args
-    isposinf = builder.fcmp(lc.FCMP_OEQ, val, POS_INF_F32)
-    isneginf = builder.fcmp(lc.FCMP_OEQ, val, NEG_INF_F32)
-    return builder.or_(isposinf, isneginf)
-
+    return is_inf(builder, val)
 
 @register
-@implement(math.isinf, types.float64)
-def isinf_f64_impl(context, builder, sig, args):
-    [val] = args
-    isposinf = builder.fcmp(lc.FCMP_OEQ, val, POS_INF_F64)
-    isneginf = builder.fcmp(lc.FCMP_OEQ, val, NEG_INF_F64)
-    return builder.or_(isposinf, isneginf)
-
-
-@register
-@implement(math.isinf, types.int64)
-def isinf_s64_impl(context, builder, sig, args):
-    return cgutils.false_bit
-
-
-@register
-@implement(math.isinf, types.uint64)
-def isinf_u64_impl(context, builder, sig, args):
+@implement(math.isinf, types.Kind(types.Integer))
+def isinf_int_impl(context, builder, sig, args):
     return cgutils.false_bit
 
 
