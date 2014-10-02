@@ -192,6 +192,19 @@ def isinf_int_impl(context, builder, sig, args):
     return cgutils.false_bit
 
 
+if utils.PYVERSION >= (3, 2):
+    @register
+    @implement(math.isfinite, types.Kind(types.Float))
+    def isfinite_float_impl(context, builder, sig, args):
+        [val] = args
+        return is_finite(builder, val)
+
+    @register
+    @implement(math.isfinite, types.Kind(types.Integer))
+    def isfinite_int_impl(context, builder, sig, args):
+        return cgutils.true_bit
+
+
 # -----------------------------------------------------------------------------
 
 

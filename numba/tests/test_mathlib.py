@@ -118,6 +118,10 @@ def isinf(x):
     return math.isinf(x)
 
 
+def isfinite(x):
+    return math.isfinite(x)
+
+
 def hypot(x, y):
     return math.hypot(x, y)
 
@@ -173,6 +177,13 @@ class TestMathLib(TestCase):
             actual_prec = 'single' if ty is types.float32 else prec
             msg = 'for inputs (%r, %r)' % (x, y)
             self.assertPreciseEqual(got, expected, prec=actual_prec, msg=msg)
+
+    def check_predicate_func(self, pyfunc, flags=enable_pyobj_flags):
+        x_types = [types.int16, types.int32, types.int64,
+                   types.uint16, types.uint32, types.uint64,
+                   types.float32, types.float32, types.float64, types.float64]
+        x_values = [0, 0, 0, 0, 0, 0, float('inf'), 0.0, float('inf'), 0.0]
+        self.run_unary(pyfunc, x_types, x_values, flags)
 
     def test_sin(self, flags=enable_pyobj_flags):
         pyfunc = sin
@@ -437,27 +448,25 @@ class TestMathLib(TestCase):
     def test_trunc_npm(self):
         self.test_trunc(flags=no_pyobj_flags)
 
-    def test_isnan(self, flags=enable_pyobj_flags):
-        pyfunc = isnan
-        x_types = [types.int16, types.int32, types.int64,
-                   types.uint16, types.uint32, types.uint64,
-                   types.float32, types.float32, types.float64, types.float64]
-        x_values = [0, 0, 0, 0, 0, 0, float('nan'), 0.0, float('nan'), 0.0]
-        self.run_unary(pyfunc, x_types, x_values, flags)
+    def test_isnan(self):
+        self.check_predicate_func(isnan, flags=enable_pyobj_flags)
 
     def test_isnan_npm(self):
-        self.test_isnan(flags=no_pyobj_flags)
+        self.check_predicate_func(isnan, flags=no_pyobj_flags)
 
-    def test_isinf(self, flags=enable_pyobj_flags):
-        pyfunc = isinf
-        x_types = [types.int16, types.int32, types.int64,
-                   types.uint16, types.uint32, types.uint64,
-                   types.float32, types.float32, types.float64, types.float64]
-        x_values = [0, 0, 0, 0, 0, 0, float('inf'), 0.0, float('inf'), 0.0]
-        self.run_unary(pyfunc, x_types, x_values, flags)
+    def test_isinf(self):
+        self.check_predicate_func(isinf, flags=enable_pyobj_flags)
 
     def test_isinf_npm(self):
-        self.test_isinf(flags=no_pyobj_flags)
+        self.check_predicate_func(isinf, flags=no_pyobj_flags)
+
+    @unittest.skipIf(utils.PYVERSION < (3, 2), "needs Python 3.2+")
+    def test_isfinite(self):
+        self.check_predicate_func(isfinite, flags=enable_pyobj_flags)
+
+    @unittest.skipIf(utils.PYVERSION < (3, 2), "needs Python 3.2+")
+    def test_isfinite_npm(self):
+        self.check_predicate_func(isfinite, flags=no_pyobj_flags)
 
     def test_hypot(self, flags=enable_pyobj_flags):
         pyfunc = hypot

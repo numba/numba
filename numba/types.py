@@ -285,7 +285,7 @@ class Function(Type):
         self.template = template
         cls = type(self)
         # TODO template is mutable.  Should use different naming scheme
-        super(Function, self).__init__("%s(%s)" % (cls.__name__, template))
+        super(Function, self).__init__("%s(%s)" % (cls.__name__, template.key))
 
     @property
     def key(self):

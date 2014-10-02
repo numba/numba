@@ -2,6 +2,7 @@ from __future__ import print_function, absolute_import, division
 
 import cmath
 import itertools
+import math
 
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags, utils
@@ -33,11 +34,20 @@ def isinf_usecase(x):
 def isnan_usecase(x):
     return cmath.isnan(x)
 
+def rect_usecase(r, phi):
+    return cmath.rect(r, phi)
+
 
 class BaseComplexTest(object):
 
     def basic_values(self):
-        reals = [-0.0, +0.0, 1, -1, float('-inf'), float('+inf'), float('nan')]
+        reals = [-0.0, +0.0, 1, -1,
+                 float('-inf'), float('+inf'), float('nan')]
+        return [complex(x, y) for x, y in itertools.product(reals, reals)]
+
+    def more_values(self):
+        reals = [-0.0, +0.0, 1, -1, +1.5, -3.5, -math.pi, +math.pi,
+                 float('-inf'), float('+inf'), float('nan')]
         return [complex(x, y) for x, y in itertools.product(reals, reals)]
 
     def run_unary(self, pyfunc, x_types, x_values, flags=enable_pyobj_flags,
@@ -45,10 +55,23 @@ class BaseComplexTest(object):
         for tx in x_types:
             cr = compile_isolated(pyfunc, [tx], flags=flags)
             cfunc = cr.entry_point
+            actual_prec = 'single' if tx == types.float32 else prec
             for vx in x_values:
                 got = cfunc(vx)
                 expected = pyfunc(vx)
                 msg = 'for input %r' % (vx,)
+                self.assertPreciseEqual(got, expected, prec=prec, msg=msg)
+
+    def run_binary(self, pyfunc, value_types, values,
+                   flags=enable_pyobj_flags, prec='exact'):
+        for tx, ty in value_types:
+            cr = compile_isolated(pyfunc, [tx, ty], flags=flags)
+            cfunc = cr.entry_point
+            actual_prec = 'single' if types.float32 in (tx, ty) else prec
+            for vx, vy in values:
+                got = cfunc(vx, vy)
+                expected = pyfunc(vx, vy)
+                msg = 'for input %r' % ((vx, vy),)
                 self.assertPreciseEqual(got, expected, prec=prec, msg=msg)
 
 
@@ -116,6 +139,16 @@ class TestCMath(BaseComplexTest, TestCase):
     @unittest.skipIf(utils.PYVERSION < (3, 2), "needs Python 3.2+")
     def test_isfinite_npm(self):
         self.check_predicate_func(isfinite_usecase, no_pyobj_flags)
+
+    def test_rect(self, flags=enable_pyobj_flags):
+        values = [(z.real, z.imag) for z in self.more_values()
+                  if not math.isinf(z.imag) or z.real == 0]
+        value_types = [(types.float64, types.float64)]
+        self.run_binary(rect_usecase, value_types, values, flags=flags,
+                        prec='single')
+
+    def test_rect_npm(self):
+        self.test_rect(flags=no_pyobj_flags)
 
 
 if __name__ == '__main__':

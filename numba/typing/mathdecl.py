@@ -92,6 +92,11 @@ class Math_predicate(ConcreteTemplate):
         signature(types.boolean, types.float64),
     ]
 
+if utils.PYVERSION >= (3, 2):
+    @registry.resolves_global(math.isfinite)
+    class Math_isfinite(Math_predicate):
+        pass
+
 
 @registry.resolves_global(math.pow)
 class Math_pow(ConcreteTemplate):
