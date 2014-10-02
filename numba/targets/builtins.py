@@ -939,15 +939,10 @@ def complex_abs_impl(context, builder, sig, args):
     """
     abs(z) := hypot(z.real, z.imag)
     """
-    [typ] = sig.args
-    [val] = args
-    cmplxcls = context.make_complex(typ)
-    flty = typ.underlying_float
-    cmplx = cmplxcls(context, builder, val)
-    [x, y] = cmplx.real, cmplx.imag
-    hypotsig = typing.signature(sig.return_type, flty, flty)
-    hypotimp = context.get_function(math.hypot, hypotsig)
-    return hypotimp(builder, [x, y])
+    def complex_abs(z):
+        return math.hypot(z.real, z.imag)
+
+    return context.compile_internal(builder, complex_abs, sig, args)
 
 
 for ty, cls in zip([types.complex64, types.complex128],

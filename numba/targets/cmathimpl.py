@@ -114,6 +114,7 @@ NAN = float('nan')
 @implement(cmath.exp, types.Kind(types.Complex))
 @intrinsic_complex_unary
 def exp_impl(x, y, x_is_finite, y_is_finite):
+    """math.exp(x + y j)"""
     if x_is_finite:
         if y_is_finite:
             c = math.cos(y)
@@ -146,21 +147,26 @@ def exp_impl(x, y, x_is_finite, y_is_finite):
             return complex(r, r)
 
 @register
+@implement(cmath.log, types.Kind(types.Complex))
+@intrinsic_complex_unary
+def log_impl(x, y, x_is_finite, y_is_finite):
+    """math.log(x + y j)"""
+    a = math.log(math.hypot(x, y))
+    b = math.atan2(y, x)
+    return complex(a, b)
+
+
+@register
 @implement(cmath.phase, types.Kind(types.Complex))
 @intrinsic_complex_unary
 def phase_impl(x, y, x_is_finite, y_is_finite):
+    """math.phase(x + y j)"""
     return math.atan2(y, x)
-
 
 @register
 @implement(cmath.polar, types.Kind(types.Complex))
 @intrinsic_complex_unary
 def polar_impl(x, y, x_is_finite, y_is_finite):
-    if math.isinf(x):
-        # This ensures *r* has the same type as *x*
-        r = abs(x)
-    elif math.isinf(y):
-        r = abs(y)
-    else:
-        r = math.hypot(x, y)
-    return r, math.atan2(y, x)
+    """math.polar(x + y j)"""
+    return math.hypot(x, y), math.atan2(y, x)
+

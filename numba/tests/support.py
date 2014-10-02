@@ -153,6 +153,15 @@ class TestCase(unittest.TestCase):
             pass
 
         if not exact_comparison and prec != 'exact':
+            if (isinstance(first, complex)
+                and cmath.isinf(first) and cmath.isinf(second)):
+                # For infinite complex numbers, recurse on real
+                # and imaginary parts.
+                self.assertPreciseEqual(first.real, second.real,
+                                        prec, ulps, msg)
+                self.assertPreciseEqual(first.imag, second.imag,
+                                        prec, ulps, msg)
+                return
             if prec == 'single':
                 bits = 24
             elif prec == 'double':

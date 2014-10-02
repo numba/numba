@@ -25,6 +25,14 @@ if utils.PYVERSION >= (3, 2):
         pass
 
 
+@registry.resolves_global(cmath.log)
+class Cmath_log(ConcreteTemplate):
+    # unary cmath.log()
+    cases = [signature(tp, tp) for tp in types.complex_domain]
+    # binary cmath.log()
+    cases += [signature(tp, tp, tp) for tp in types.complex_domain]
+
+
 @registry.resolves_global(cmath.phase)
 class Cmath_phase(ConcreteTemplate):
     cases = [signature(tp, types.complex128) for tp in [types.float64]]

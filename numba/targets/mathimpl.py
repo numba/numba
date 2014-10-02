@@ -256,7 +256,7 @@ def hypot_s64_impl(context, builder, sig, args):
     y = builder.sitofp(y, Type.double())
     x = builder.sitofp(x, Type.double())
     fsig = signature(types.float64, types.float64, types.float64)
-    return hypot_f64_impl(context, builder, fsig, (x, y))
+    return hypot_float_impl(context, builder, fsig, (x, y))
 
 @register
 @implement(math.hypot, types.uint64, types.uint64)
@@ -265,31 +265,20 @@ def hypot_u64_impl(context, builder, sig, args):
     y = builder.sitofp(y, Type.double())
     x = builder.sitofp(x, Type.double())
     fsig = signature(types.float64, types.float64, types.float64)
-    return hypot_f64_impl(context, builder, fsig, (x, y))
+    return hypot_float_impl(context, builder, fsig, (x, y))
 
 
 @register
-@implement(math.hypot, types.float32, types.float32)
-def hypot_f32_impl(context, builder, sig, args):
-    [x, y] = args
-    xx = builder.fmul(x, x)
-    yy = builder.fmul(y, y)
-    sqrtsig = signature(sig.return_type, sig.args[0])
-    sqrtimp = context.get_function(math.sqrt, sqrtsig)
-    xxyy = builder.fadd(xx, yy)
-    return sqrtimp(builder, [xxyy])
+@implement(math.hypot, types.Kind(types.Float), types.Kind(types.Float))
+def hypot_float_impl(context, builder, sig, args):
+    def hypot(x, y):
+        if math.isinf(x):
+            return abs(x)
+        elif math.isinf(y):
+            return abs(y)
+        return math.sqrt(x * x + y * y)
 
-
-@register
-@implement(math.hypot, types.float64, types.float64)
-def hypot_f64_impl(context, builder, sig, args):
-    [x, y] = args
-    xx = builder.fmul(x, x)
-    yy = builder.fmul(y, y)
-    sqrtsig = signature(sig.return_type, sig.args[0])
-    sqrtimp = context.get_function(math.sqrt, sqrtsig)
-    xxyy = builder.fadd(xx, yy)
-    return sqrtimp(builder, [xxyy])
+    return context.compile_internal(builder, hypot, sig, args)
 
 
 # -----------------------------------------------------------------------------
