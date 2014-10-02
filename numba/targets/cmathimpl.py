@@ -144,3 +144,23 @@ def exp_impl(x, y, x_is_finite, y_is_finite):
             return complex(r * c, r * s)
         else:
             return complex(r, r)
+
+@register
+@implement(cmath.phase, types.Kind(types.Complex))
+@intrinsic_complex_unary
+def phase_impl(x, y, x_is_finite, y_is_finite):
+    return math.atan2(y, x)
+
+
+@register
+@implement(cmath.polar, types.Kind(types.Complex))
+@intrinsic_complex_unary
+def polar_impl(x, y, x_is_finite, y_is_finite):
+    if math.isinf(x):
+        # This ensures *r* has the same type as *x*
+        r = abs(x)
+    elif math.isinf(y):
+        r = abs(y)
+    else:
+        r = math.hypot(x, y)
+    return r, math.atan2(y, x)

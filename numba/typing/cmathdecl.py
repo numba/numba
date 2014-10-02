@@ -1,7 +1,7 @@
 import cmath
 
 from numba import types, utils
-from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
+from numba.typing.templates import (AbstractTemplate, ConcreteTemplate,
                                     signature, Registry, bound_function)
 
 registry = Registry()
@@ -23,6 +23,22 @@ if utils.PYVERSION >= (3, 2):
     @registry.resolves_global(cmath.isfinite)
     class CMath_isfinite(CMath_predicate):
         pass
+
+
+@registry.resolves_global(cmath.phase)
+class Cmath_phase(ConcreteTemplate):
+    cases = [signature(tp, types.complex128) for tp in [types.float64]]
+    cases += [signature(types.float32, types.complex64)]
+
+
+@registry.resolves_global(cmath.polar)
+class Cmath_polar(AbstractTemplate):
+    def generic(self, args, kws):
+        assert not kws
+        [tp] = args
+        if tp in types.complex_domain:
+            float_type = tp.underlying_float
+            return signature(types.UniTuple(float_type, 2), tp)
 
 
 @registry.resolves_global(cmath.rect)

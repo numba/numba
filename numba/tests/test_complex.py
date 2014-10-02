@@ -37,6 +37,12 @@ def isinf_usecase(x):
 def isnan_usecase(x):
     return cmath.isnan(x)
 
+def phase_usecase(x):
+    return cmath.phase(x)
+
+def polar_usecase(x):
+    return cmath.polar(x)
+
 def rect_usecase(r, phi):
     return cmath.rect(r, phi)
 
@@ -168,6 +174,18 @@ class TestCMath(BaseComplexTest, TestCase):
 
     def test_exp_npm(self):
         self.check_unary_func(exp_usecase, no_pyobj_flags, ulps=2)
+
+    def test_phase(self):
+        self.check_unary_func(phase_usecase, enable_pyobj_flags)
+
+    def test_phase_npm(self):
+        self.check_unary_func(phase_usecase, no_pyobj_flags)
+
+    def test_polar(self):
+        self.check_unary_func(polar_usecase, enable_pyobj_flags)
+
+    def test_polar_npm(self):
+        self.check_unary_func(polar_usecase, no_pyobj_flags)
 
 
 if __name__ == '__main__':

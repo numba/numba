@@ -91,6 +91,7 @@ class TestCase(unittest.TestCase):
 
     _exact_typesets = [(bool, np.bool_), utils.INT_TYPES, (str,), (utils.text_type),]
     _approx_typesets = [(float,), (complex,), (np.inexact)]
+    _sequence_typesets = [(tuple,)]
 
     def assertPreciseEqual(self, first, second, prec='exact', ulps=1,
                            msg=None):
@@ -108,6 +109,15 @@ class TestCase(unittest.TestCase):
         Any value of *prec* other than 'exact', 'single' or 'double'
         will raise an error.
         """
+        for tp in self._sequence_typesets:
+            # For recognized sequences, recurse
+            if isinstance(first, tp) or isinstance(second, tp):
+                self.assertIsInstance(first, tp)
+                self.assertIsInstance(second, tp)
+                self.assertEqual(len(first), len(second), msg=msg)
+                for a, b in zip(first, second):
+                    self.assertPreciseEqual(a, b, prec, ulps, msg)
+                return
         for tp in self._exact_typesets:
             # One or another could be the expected, the other the actual;
             # test both.
