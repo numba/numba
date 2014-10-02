@@ -92,7 +92,8 @@ class TestCase(unittest.TestCase):
     _exact_typesets = [(bool, np.bool_), utils.INT_TYPES, (str,), (utils.text_type),]
     _approx_typesets = [(float,), (complex,), (np.inexact)]
 
-    def assertPreciseEqual(self, first, second, prec='exact', msg=None):
+    def assertPreciseEqual(self, first, second, prec='exact', ulps=1,
+                           msg=None):
         """
         Test that two scalars have similar types and are equal up to
         a computed precision.
@@ -101,7 +102,8 @@ class TestCase(unittest.TestCase):
         If the scalars are instances of inexact types (float, complex)
         and *prec* is not 'exact', then the number of significant bits
         is computed according to the value of *prec*: 53 bits if *prec*
-        is 'double', 24 bits if *prec* is single.
+        is 'double', 24 bits if *prec* is single.  This number of bits
+        can be lowered by raising the *ulps* value.
 
         Any value of *prec* other than 'exact', 'single' or 'double'
         will raise an error.
@@ -142,11 +144,12 @@ class TestCase(unittest.TestCase):
 
         if not exact_comparison and prec != 'exact':
             if prec == 'single':
-                k = 2**-24
+                bits = 24
             elif prec == 'double':
-                k = 2**-53
+                bits = 53
             else:
                 raise ValueError("unsupported precision %r" % (prec,))
+            k = 2 ** (ulps - bits - 1)
             delta = k * (abs(first) + abs(second))
             self.assertAlmostEqual(first, second, delta=delta, msg=msg)
         else:

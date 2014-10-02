@@ -53,12 +53,12 @@ class BaseComplexTest(object):
                  float('-inf'), float('+inf'), float('nan')]
         return [complex(x, y) for x, y in itertools.product(reals, reals)]
 
-    def run_unary(self, pyfunc, x_types, x_values, flags=enable_pyobj_flags,
-                  prec='exact'):
+    def run_unary(self, pyfunc, x_types, x_values, ulps=1,
+                  flags=enable_pyobj_flags):
         for tx in x_types:
             cr = compile_isolated(pyfunc, [tx], flags=flags)
             cfunc = cr.entry_point
-            actual_prec = 'single' if tx == types.float32 else prec
+            prec = 'single' if tx in (types.float32, types.complex64) else 'double'
             for vx in x_values:
                 try:
                     expected = pyfunc(vx)
@@ -67,19 +67,21 @@ class BaseComplexTest(object):
                     continue
                 got = cfunc(vx)
                 msg = 'for input %r' % (vx,)
-                self.assertPreciseEqual(got, expected, prec=prec, msg=msg)
+                self.assertPreciseEqual(got, expected, prec=prec,
+                                        ulps=ulps, msg=msg)
 
-    def run_binary(self, pyfunc, value_types, values,
-                   flags=enable_pyobj_flags, prec='exact'):
+    def run_binary(self, pyfunc, value_types, values, ulps=1,
+                   flags=enable_pyobj_flags):
         for tx, ty in value_types:
             cr = compile_isolated(pyfunc, [tx, ty], flags=flags)
             cfunc = cr.entry_point
-            actual_prec = 'single' if types.float32 in (tx, ty) else prec
+            prec = 'single' if types.float32 in (tx, ty) else 'double'
             for vx, vy in values:
                 got = cfunc(vx, vy)
                 expected = pyfunc(vx, vy)
                 msg = 'for input %r' % ((vx, vy),)
-                self.assertPreciseEqual(got, expected, prec=prec, msg=msg)
+                self.assertPreciseEqual(got, expected, prec=prec,
+                                        ulps=ulps, msg=msg)
 
 
 class TestComplex(BaseComplexTest, TestCase):
@@ -127,11 +129,9 @@ class TestCMath(BaseComplexTest, TestCase):
         self.run_unary(pyfunc, [types.complex128, types.complex64],
                        self.basic_values(), flags=flags)
 
-    def check_unary_func(self, pyfunc, flags, prec='exact'):
-        #self.run_unary(pyfunc, [types.complex128, types.complex64],
-                       #self.more_values(), flags=flags, prec=prec)
-        self.run_unary(pyfunc, [types.complex128, ],
-                       self.more_values(), flags=flags, prec=prec)
+    def check_unary_func(self, pyfunc, flags, ulps=1):
+        self.run_unary(pyfunc, [types.complex128, types.complex64],
+                       self.more_values(), flags=flags, ulps=ulps)
 
     def test_isnan(self, flags=enable_pyobj_flags):
         self.check_predicate_func(isnan_usecase, enable_pyobj_flags)
@@ -158,17 +158,16 @@ class TestCMath(BaseComplexTest, TestCase):
                   if not math.isinf(z.imag) or z.real == 0]
         value_types = [(types.float64, types.float64),
                        (types.float32, types.float32)]
-        self.run_binary(rect_usecase, value_types, values, flags=flags,
-                        prec='single')
+        self.run_binary(rect_usecase, value_types, values, flags=flags)
 
     def test_rect_npm(self):
         self.test_rect(flags=no_pyobj_flags)
 
     def test_exp(self):
-        self.check_unary_func(exp_usecase, enable_pyobj_flags, 'single')
+        self.check_unary_func(exp_usecase, enable_pyobj_flags, ulps=2)
 
     def test_exp_npm(self):
-        self.check_unary_func(exp_usecase, no_pyobj_flags, 'single')
+        self.check_unary_func(exp_usecase, no_pyobj_flags, ulps=2)
 
 
 if __name__ == '__main__':
