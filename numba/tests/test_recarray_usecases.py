@@ -12,8 +12,10 @@ from numba.io_support import StringIO
 def swap_stdout():
     old_stdout = sys.stdout
     sys.stdout = StringIO()
-    yield
-    sys.stdout = old_stdout
+    try:
+        yield
+    finally:
+        sys.stdout = old_stdout
 
 
 def usecase1(arr1, arr2):
