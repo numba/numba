@@ -51,12 +51,13 @@ def isinf_float_impl(context, builder, sig, args):
     return is_inf(builder, z)
 
 
-@register
-@implement(cmath.isfinite, types.Kind(types.Complex))
-def isfinite_float_impl(context, builder, sig, args):
-    [typ] = sig.args
-    [value] = args
-    cplx_cls = context.make_complex(typ)
-    z = cplx_cls(context, builder, value=value)
-    return is_finite(builder, z)
+if utils.PYVERSION > (3, 2):
+    @register
+    @implement(cmath.isfinite, types.Kind(types.Complex))
+    def isfinite_float_impl(context, builder, sig, args):
+        [typ] = sig.args
+        [value] = args
+        cplx_cls = context.make_complex(typ)
+        z = cplx_cls(context, builder, value=value)
+        return is_finite(builder, z)
 
