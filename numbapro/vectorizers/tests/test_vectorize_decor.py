@@ -1,6 +1,6 @@
 from __future__ import absolute_import, print_function, division
 from numbapro.testsupport import unittest
-from numbapro import vectorize, float64, float32
+from numba import vectorize, float64, float32
 import math
 import numpy as np
 
@@ -21,19 +21,35 @@ class TestVectorizeDecor(unittest.TestCase):
         gold = numpy_func(A)
         self.assertTrue(np.allclose(result, gold))
 
-    def test_all_cpu_based_targets(self):
-        for target in ['cpu', 'stream', 'parallel']:
-            numba_sinc = vectorize(['float64(float64)', 'float32(float32)'],
-                                   target=target)(sinc)
-            numpy_sinc = np.vectorize(sinc)
-            self._run_and_compare(numba_sinc, numpy_sinc)
+    def _test_template_1(self, target):
+        numba_sinc = vectorize(['float64(float64)', 'float32(float32)'],
+                               target=target)(sinc)
+        numpy_sinc = np.vectorize(sinc)
+        self._run_and_compare(numba_sinc, numpy_sinc)
 
-    def test_all_cpu_based_targets_2(self):
-        for target in ['cpu', 'stream', 'parallel']:
-            numba_sinc = vectorize([float64(float64), float32(float32)],
-                                   target=target)(sinc)
-            numpy_sinc = np.vectorize(sinc)
-            self._run_and_compare(numba_sinc, numpy_sinc)
+    def _test_template_2(self, target):
+        numba_sinc = vectorize([float64(float64), float32(float32)],
+                               target=target)(sinc)
+        numpy_sinc = np.vectorize(sinc)
+        self._run_and_compare(numba_sinc, numpy_sinc)
+
+    def test_cpu_1(self):
+        self._test_template_1('cpu')
+
+    def test_parallel_1(self):
+        self._test_template_1('parallel')
+
+    def test_stream_1(self):
+        self._test_template_1('stream')
+
+    def test_cpu_2(self):
+        self._test_template_2('cpu')
+
+    def test_parallel_2(self):
+        self._test_template_2('parallel')
+
+    def test_stream_2(self):
+        self._test_template_2('stream')
 
 
 if __name__ == '__main__':

@@ -14,14 +14,14 @@ import multiprocessing
 import numpy as np
 import llvm.core as lc
 import llvm.ee as le
-from numba.npyufunc import ufuncbuilder
-from numba import types
+from numba.npyufunc import ufuncbuilder, _internal
+from numba import types, utils
 
 NUM_CPU = max(1, multiprocessing.cpu_count())
 
 
 class ParallelUFuncBuilder(ufuncbuilder.UFuncBuilder):
-    def build(self, cres):
+    def build(self, cres, sig):
         _launch_threads()
 
         # Buider wrapper for ufunc entry point
@@ -33,11 +33,13 @@ class ParallelUFuncBuilder(ufuncbuilder.UFuncBuilder):
         # Get dtypes
         dtypenums = [np.dtype(a.name).num for a in signature.args]
         dtypenums.append(np.dtype(signature.return_type.name).num)
-        return dtypenums, ptr
+        keepalive = ()
+        return dtypenums, ptr, keepalive
 
 
 def build_ufunc_wrapper(ctx, lfunc, signature):
-    innerfunc = ufuncbuilder.build_ufunc_wrapper(ctx, lfunc, signature)
+    innerfunc = ufuncbuilder.build_ufunc_wrapper(ctx, lfunc, signature,
+                                                 objmode=False, env=None)
     lfunc = build_ufunc_kernel(ctx, innerfunc, signature)
     ctx.optimize(lfunc.module)
     return lfunc
