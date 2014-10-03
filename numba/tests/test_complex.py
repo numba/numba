@@ -29,6 +29,36 @@ def conjugate_usecase(x):
     return x.conjugate()
 
 
+def acos_usecase(x):
+    return cmath.acos(x)
+
+def cos_usecase(x):
+    return cmath.cos(x)
+
+def asin_usecase(x):
+    return cmath.asin(x)
+
+def sin_usecase(x):
+    return cmath.sin(x)
+
+def atan_usecase(x):
+    return cmath.atan(x)
+
+def tan_usecase(x):
+    return cmath.tan(x)
+
+def acosh_usecase(x):
+    return cmath.acosh(x)
+
+def cosh_usecase(x):
+    return cmath.cosh(x)
+
+def asinh_usecase(x):
+    return cmath.asinh(x)
+
+def sinh_usecase(x):
+    return cmath.sinh(x)
+
 def exp_usecase(x):
     return cmath.exp(x)
 
@@ -66,7 +96,7 @@ def sqrt_usecase(x):
 class BaseComplexTest(object):
 
     def basic_values(self):
-        reals = [-0.0, +0.0, 1, -1,
+        reals = [-0.0, +0.0, 1, -1, +1.5, -3.5,
                  float('-inf'), float('+inf'), float('nan')]
         return [complex(x, y) for x, y in itertools.product(reals, reals)]
 
@@ -172,9 +202,37 @@ class TestCMath(BaseComplexTest, TestCase):
         self.run_unary(pyfunc, [types.complex128, types.complex64],
                        self.basic_values(), flags=flags)
 
-    def check_unary_func(self, pyfunc, flags, ulps=1):
+    def check_unary_func(self, pyfunc, flags, ulps=1, values=None):
+        if not values:
+            values = self.more_values()
         self.run_unary(pyfunc, [types.complex128, types.complex64],
-                       self.more_values(), flags=flags, ulps=ulps)
+                       values, flags=flags, ulps=ulps)
+
+    # Conversions
+
+    def test_phase(self):
+        self.check_unary_func(phase_usecase, enable_pyobj_flags)
+
+    def test_phase_npm(self):
+        self.check_unary_func(phase_usecase, no_pyobj_flags)
+
+    def test_polar(self):
+        self.check_unary_func(polar_usecase, enable_pyobj_flags)
+
+    def test_polar_npm(self):
+        self.check_unary_func(polar_usecase, no_pyobj_flags)
+
+    def test_rect(self, flags=enable_pyobj_flags):
+        values = [(z.real, z.imag) for z in self.more_values()
+                  if not math.isinf(z.imag) or z.real == 0]
+        value_types = [(types.float64, types.float64),
+                       (types.float32, types.float32)]
+        self.run_binary(rect_usecase, value_types, values, flags=flags)
+
+    def test_rect_npm(self):
+        self.test_rect(flags=no_pyobj_flags)
+
+    # Classification
 
     def test_isnan(self, flags=enable_pyobj_flags):
         self.check_predicate_func(isnan_usecase, enable_pyobj_flags)
@@ -196,15 +254,7 @@ class TestCMath(BaseComplexTest, TestCase):
     def test_isfinite_npm(self):
         self.check_predicate_func(isfinite_usecase, no_pyobj_flags)
 
-    def test_rect(self, flags=enable_pyobj_flags):
-        values = [(z.real, z.imag) for z in self.more_values()
-                  if not math.isinf(z.imag) or z.real == 0]
-        value_types = [(types.float64, types.float64),
-                       (types.float32, types.float32)]
-        self.run_binary(rect_usecase, value_types, values, flags=flags)
-
-    def test_rect_npm(self):
-        self.test_rect(flags=no_pyobj_flags)
+    # Power and logarithms
 
     def test_exp(self):
         self.check_unary_func(exp_usecase, enable_pyobj_flags, ulps=2)
@@ -234,23 +284,47 @@ class TestCMath(BaseComplexTest, TestCase):
     def test_log10_npm(self):
         self.check_unary_func(log10_usecase, no_pyobj_flags)
 
-    def test_phase(self):
-        self.check_unary_func(phase_usecase, enable_pyobj_flags)
-
-    def test_phase_npm(self):
-        self.check_unary_func(phase_usecase, no_pyobj_flags)
-
-    def test_polar(self):
-        self.check_unary_func(polar_usecase, enable_pyobj_flags)
-
-    def test_polar_npm(self):
-        self.check_unary_func(polar_usecase, no_pyobj_flags)
-
     def test_sqrt(self):
         self.check_unary_func(sqrt_usecase, enable_pyobj_flags)
 
     def test_sqrt_npm(self):
         self.check_unary_func(sqrt_usecase, no_pyobj_flags)
+
+    # Trigonometric functions
+
+    def test_cos(self):
+        self.check_unary_func(cos_usecase, enable_pyobj_flags, ulps=2)
+
+    def test_cos_npm(self):
+        self.check_unary_func(cos_usecase, no_pyobj_flags, ulps=2)
+
+    def test_sin(self):
+        # See test_sinh.
+        self.check_unary_func(sin_usecase, enable_pyobj_flags,
+                              values=self.basic_values())
+
+    def test_sin_npm(self):
+        self.check_unary_func(sin_usecase, no_pyobj_flags,
+                              values=self.basic_values())
+
+    # Hyperbolic functions
+
+    def test_cosh(self):
+        self.check_unary_func(cosh_usecase, enable_pyobj_flags, ulps=2)
+
+    def test_cosh_npm(self):
+        self.check_unary_func(cosh_usecase, no_pyobj_flags, ulps=2)
+
+    def test_sinh(self):
+        # cmath.sinh() results around math.pi are too different in single
+        # precision and double precision, which would fail the test;
+        # hence basic_values().
+        self.check_unary_func(sinh_usecase, enable_pyobj_flags,
+                              values=self.basic_values())
+
+    def test_sinh_npm(self):
+        self.check_unary_func(sinh_usecase, no_pyobj_flags,
+                              values=self.basic_values())
 
 
 if __name__ == '__main__':

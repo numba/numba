@@ -248,3 +248,81 @@ def sqrt_impl(context, builder, sig, args):
             return complex(real, imag)
 
     return context.compile_internal(builder, sqrt_impl, sig, args)
+
+
+@register
+@implement(cmath.cos, types.Kind(types.Complex))
+def cos_impl(context, builder, sig, args):
+    def cos_impl(z):
+        """cmath.cos(z) = cmath.cosh(z j)"""
+        return cmath.cosh(complex(-z.imag, z.real))
+
+    return context.compile_internal(builder, cos_impl, sig, args)
+
+@register
+@implement(cmath.cosh, types.Kind(types.Complex))
+def cosh_impl(context, builder, sig, args):
+    def cosh_impl(z):
+        """cmath.cosh(z)"""
+        x = z.real
+        y = z.imag
+        if math.isinf(x):
+            real = abs(x)
+            if y == 0.0:
+                # x = +inf, y = 0 => cmath.cosh(x + y j) = inf + 0j
+                imag = y
+            elif math.isnan(y):
+                # x = +inf, y = NaN => cmath.cosh(x + y j) = inf + Nan * j
+                imag = y
+            elif y < 0.0:
+                # x = +inf, y < 0 => cmath.cosh(x + y j) = inf - inf * j
+                imag = -real
+            else:
+                # x = +inf, y > 0 => cmath.cosh(x + y j) = inf + inf * j
+                imag = real
+            if x < 0.0:
+                # x = -inf => negate imaginary part of result
+                imag = -imag
+            return complex(real, imag)
+        return complex(math.cos(y) * math.cosh(x),
+                       math.sin(y) * math.sinh(x))
+
+    return context.compile_internal(builder, cosh_impl, sig, args)
+
+
+@register
+@implement(cmath.sin, types.Kind(types.Complex))
+def sin_impl(context, builder, sig, args):
+    def sin_impl(z):
+        """cmath.sin(z) = -j * cmath.sinh(z j)"""
+        r = cmath.sinh(complex(-z.imag, z.real))
+        return complex(r.imag, -r.real)
+
+    return context.compile_internal(builder, sin_impl, sig, args)
+
+@register
+@implement(cmath.sinh, types.Kind(types.Complex))
+def sinh_impl(context, builder, sig, args):
+    def sinh_impl(z):
+        """cmath.sinh(z)"""
+        x = z.real
+        y = z.imag
+        if math.isinf(x):
+            real = x
+            if y == 0.0:
+                # x = +/-inf, y = 0 => cmath.sinh(x + y j) = x + y * j
+                imag = y
+            elif math.isnan(y):
+                # x = +/-inf, y = NaN => cmath.sinh(x + y j) = x + NaN * j
+                imag = y
+            elif y < 0.0:
+                # x = +/-inf, y < 0 => cmath.cosh(x + y j) = x - inf * j
+                imag = -abs(x)
+            else:
+                # x = +/-inf, y > 0 => cmath.cosh(x + y j) = x + inf * j
+                imag = abs(x)
+            return complex(real, imag)
+        return complex(math.cos(y) * math.sinh(x),
+                       math.sin(y) * math.cosh(x))
+
+    return context.compile_internal(builder, sinh_impl, sig, args)
