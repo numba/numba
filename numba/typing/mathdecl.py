@@ -72,6 +72,14 @@ else:
         pass
 
 
+@registry.resolves_global(math.copysign)
+class Math_copysign(ConcreteTemplate):
+    cases = [
+        signature(types.float32, types.float32, types.float32),
+        signature(types.float64, types.float64, types.float64),
+    ]
+
+
 @registry.resolves_global(math.hypot)
 class Math_hypot(ConcreteTemplate):
     cases = [

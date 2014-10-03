@@ -1,5 +1,6 @@
 from __future__ import print_function, absolute_import, division
 
+import itertools
 import math
 import sys
 
@@ -8,7 +9,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags, utils
 from numba import types
-from .support import TestCase
+from .support import TestCase, CompilationCache
 
 PY27_AND_ABOVE = utils.PYVERSION > (2, 6)
 
@@ -154,12 +155,19 @@ def pow(x, y):
     return math.pow(x, y)
 
 
+def copysign(x, y):
+    return math.copysign(x, y)
+
+
 class TestMathLib(TestCase):
+
+    def setUp(self):
+        self.ccache = CompilationCache()
 
     def run_unary(self, pyfunc, x_types, x_values, flags=enable_pyobj_flags,
                   prec='exact'):
         for tx, vx in zip(x_types, x_values):
-            cr = compile_isolated(pyfunc, [tx], flags=flags)
+            cr = self.ccache.compile(pyfunc, (tx,), flags=flags)
             cfunc = cr.entry_point
             got = cfunc(vx)
             expected = pyfunc(vx)
@@ -170,8 +178,8 @@ class TestMathLib(TestCase):
     def run_binary(self, pyfunc, x_types, x_values, y_values,
                    flags=enable_pyobj_flags, prec='exact'):
         for ty, x, y in zip(x_types, x_values, y_values):
-            cres = compile_isolated(pyfunc, (ty, ty), flags=flags)
-            cfunc = cres.entry_point
+            cr = self.ccache.compile(pyfunc, (ty, ty), flags=flags)
+            cfunc = cr.entry_point
             got = cfunc(x, y)
             expected = pyfunc(x, y)
             actual_prec = 'single' if ty is types.float32 else prec
@@ -571,6 +579,19 @@ class TestMathLib(TestCase):
 
     def test_pow_npm(self):
         self.test_pow(flags=no_pyobj_flags)
+
+    def test_copysign(self, flags=enable_pyobj_flags):
+        pyfunc = copysign
+        value_types = [types.float32, types.float64]
+        values = [-2, -1, -0.0, 0.0, 1, 2, float('-inf'), float('inf'),
+                  float('nan')]
+        x_types, x_values, y_values = list(zip(
+            *itertools.product(value_types, values, values)))
+        self.run_binary(pyfunc, x_types, x_values, y_values, flags)
+
+    def test_copysign_npm(self):
+        self.test_copysign(flags=no_pyobj_flags)
+
 
 if __name__ == '__main__':
     unittest.main()

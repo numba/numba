@@ -44,6 +44,34 @@ def is_finite(builder, val):
     isnotneginf = builder.fcmp(lc.FCMP_ONE, val, neg_inf)
     return builder.and_(isnotposinf, isnotneginf)
 
+def f64_as_int64(builder, val):
+    """
+    Bitcast a double into a 64-bit integer.
+    """
+    assert val.type == Type.double()
+    return builder.bitcast(val, Type.int(64))
+
+def int64_as_f64(builder, val):
+    """
+    Bitcast a 64-bit integer into a double.
+    """
+    assert val.type == Type.int(64)
+    return builder.bitcast(val, Type.double())
+
+def f32_as_int32(builder, val):
+    """
+    Bitcast a float into a 32-bit integer.
+    """
+    assert val.type == Type.float()
+    return builder.bitcast(val, Type.int(32))
+
+def int32_as_f32(builder, val):
+    """
+    Bitcast a 32-bit integer into a float.
+    """
+    assert val.type == Type.int(32)
+    return builder.bitcast(val, Type.float())
+
 
 def _unary_int_input_wrapper_impl(wrapped_impl):
     """
@@ -203,6 +231,29 @@ if utils.PYVERSION >= (3, 2):
     @implement(math.isfinite, types.Kind(types.Integer))
     def isfinite_int_impl(context, builder, sig, args):
         return cgutils.true_bit
+
+
+# XXX copysign should use the corresponding LLVM intrinsic
+
+@register
+@implement(math.copysign, types.float32, types.float32)
+def copysign_f32_impl(context, builder, sig, args):
+    a = f32_as_int32(builder, args[0])
+    b = f32_as_int32(builder, args[1])
+    a = builder.and_(a, lc.Constant.int(a.type, 0x7fffffff))
+    b = builder.and_(b, lc.Constant.int(b.type, 0x80000000))
+    res = builder.or_(a, b)
+    return int32_as_f32(builder, res)
+
+@register
+@implement(math.copysign, types.float64, types.float64)
+def copysign_f64_impl(context, builder, sig, args):
+    a = f64_as_int64(builder, args[0])
+    b = f64_as_int64(builder, args[1])
+    a = builder.and_(a, lc.Constant.int(a.type, 0x7fffffffffffffff))
+    b = builder.and_(b, lc.Constant.int(b.type, 0x8000000000000000))
+    res = builder.or_(a, b)
+    return int64_as_f64(builder, res)
 
 
 # -----------------------------------------------------------------------------
