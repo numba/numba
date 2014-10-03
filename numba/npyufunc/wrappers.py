@@ -33,6 +33,33 @@ def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
     return status.code
 
 
+def _build_ufunc_loop_body_objmode(load, store, context, func, builder,
+                                   arrays, out, offsets, store_offset,
+                                   signature, env):
+    elems = load()
+
+    # Compute
+    _objargs = [types.pyobject] * len(signature.args)
+    status, retval = context.call_function(builder, func, types.pyobject,
+                                           _objargs, elems, env=env)
+
+    # Ignoring error status and store result
+    # Store
+    if out.byref:
+        retval = builder.load(retval)
+
+    store(retval)
+
+    # increment indices
+    for off, ary in zip(offsets, arrays):
+        builder.store(builder.add(builder.load(off), ary.step), off)
+
+    builder.store(builder.add(builder.load(store_offset), out.step),
+                  store_offset)
+
+    return status.code
+
+
 def build_slow_loop_body(context, func, builder, arrays, out, offsets,
                          store_offset, signature):
     def load():
@@ -45,6 +72,28 @@ def build_slow_loop_body(context, func, builder, arrays, out, offsets,
 
     return _build_ufunc_loop_body(load, store, context, func, builder, arrays,
                                   out, offsets, store_offset, signature)
+
+
+def build_obj_loop_body(context, func, builder, arrays, out, offsets,
+                        store_offset, signature, pyapi, env):
+    def load():
+        # Load
+        elems = [ary.load_direct(builder.load(off))
+                 for off, ary in zip(offsets, arrays)]
+        # Box
+        elems = [pyapi.from_native_value(v, t)
+                 for v, t in zip(elems, signature.args)]
+        return elems
+
+    def store(retval):
+        # Unbox
+        retval = pyapi.to_native_value(retval, signature.return_type)
+        # Store
+        out.store_direct(retval, builder.load(store_offset))
+
+    return _build_ufunc_loop_body_objmode(load, store, context, func, builder,
+                                          arrays, out, offsets, store_offset,
+                                          signature, env)
 
 
 def build_fast_loop_body(context, func, builder, arrays, out, offsets,
@@ -61,7 +110,7 @@ def build_fast_loop_body(context, func, builder, arrays, out, offsets,
                                   out, offsets, store_offset, signature)
 
 
-def build_ufunc_wrapper(context, func, signature):
+def build_ufunc_wrapper(context, func, signature, objmode, env):
     """
     Wrap the scalar function with a loop that iterates over the arguments
     """
@@ -115,33 +164,48 @@ def build_ufunc_wrapper(context, func, signature):
     for ary in arrays:
         unit_strided = builder.and_(unit_strided, ary.is_unit_strided)
 
-    with cgutils.ifelse(builder, unit_strided) as (is_unit_strided,
-                                                   is_strided):
-
-        with is_unit_strided:
-            with cgutils.for_range(builder, loopcount, intp=intp_t) as ind:
-                fastloop = build_fast_loop_body(context, func, builder,
-                                                arrays, out, offsets,
-                                                store_offset, signature, ind)
-            builder.ret_void()
-
-        with is_strided:
-            # General loop
+    if objmode:
+        # General loop
+            pyapi = context.get_python_api(builder)
+            gil = pyapi.gil_ensure()
             with cgutils.for_range(builder, loopcount, intp=intp_t):
-                slowloop = build_slow_loop_body(context, func, builder,
-                                                arrays, out, offsets,
-                                                store_offset, signature)
-
+                slowloop = build_obj_loop_body(context, func, builder,
+                                               arrays, out, offsets,
+                                               store_offset, signature,
+                                               pyapi, env)
+            pyapi.gil_release(gil)
             builder.ret_void()
 
-    builder.ret_void()
+    else:
+
+        with cgutils.ifelse(builder, unit_strided) as (is_unit_strided,
+                                                       is_strided):
+
+            with is_unit_strided:
+                with cgutils.for_range(builder, loopcount, intp=intp_t) as ind:
+                    fastloop = build_fast_loop_body(context, func, builder,
+                                                    arrays, out, offsets,
+                                                    store_offset, signature, ind)
+                builder.ret_void()
+
+            with is_strided:
+                # General loop
+                with cgutils.for_range(builder, loopcount, intp=intp_t):
+                    slowloop = build_slow_loop_body(context, func, builder,
+                                                    arrays, out, offsets,
+                                                    store_offset, signature)
+
+                builder.ret_void()
+
+        builder.ret_void()
     del builder
 
     # Set core function to internal so that it is not generated
     func.linkage = LINKAGE_INTERNAL
-    # Force inline of code function
-    inline_function(slowloop)
-    inline_function(fastloop)
+    if not objmode:
+        # Force inline of code function
+        inline_function(slowloop)
+        inline_function(fastloop)
     # Run optimizer
     context.optimize(module)
 
