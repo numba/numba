@@ -8,6 +8,8 @@ registry = Registry()
 
 # TODO: support non-complex arguments (floats and ints)
 
+@registry.resolves_global(cmath.acos)
+@registry.resolves_global(cmath.acosh)
 @registry.resolves_global(cmath.cos)
 @registry.resolves_global(cmath.cosh)
 @registry.resolves_global(cmath.exp)

@@ -298,6 +298,12 @@ class TestCMath(BaseComplexTest, TestCase):
 
     # Trigonometric functions
 
+    def test_acos(self):
+        self.check_unary_func(acos_usecase, enable_pyobj_flags, ulps=2)
+
+    def test_acos_npm(self):
+        self.check_unary_func(acos_usecase, no_pyobj_flags, ulps=2)
+
     def test_cos(self):
         self.check_unary_func(cos_usecase, enable_pyobj_flags, ulps=2)
 
@@ -322,6 +328,12 @@ class TestCMath(BaseComplexTest, TestCase):
                               values=self.basic_values())
 
     # Hyperbolic functions
+
+    def test_acosh(self):
+        self.check_unary_func(acosh_usecase, enable_pyobj_flags)
+
+    def test_acosh_npm(self):
+        self.check_unary_func(acosh_usecase, no_pyobj_flags)
 
     def test_cosh(self):
         self.check_unary_func(cosh_usecase, enable_pyobj_flags, ulps=2)

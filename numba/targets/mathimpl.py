@@ -18,6 +18,13 @@ register = registry.register
 
 # Helpers, shared with cmathimpl.
 
+FLT_MAX = 3.402823466E+38
+
+FLOAT_ABS_MASK = 0x7fffffff
+FLOAT_SIGN_MASK = 0x80000000
+DOUBLE_ABS_MASK = 0x7fffffffffffffff
+DOUBLE_SIGN_MASK = 0x8000000000000000
+
 def is_nan(builder, val):
     """
     Return a condition testing whether *val* is a NaN.
@@ -71,6 +78,13 @@ def int32_as_f32(builder, val):
     """
     assert val.type == Type.int(32)
     return builder.bitcast(val, Type.float())
+
+def negate_real(builder, val):
+    """
+    Negate real number *val*, with proper handling of zeros.
+    """
+    # The negative zero forces LLVM to handle signed zeros properly.
+    return builder.fsub(lc.Constant.real(val.type, -0.0), val)
 
 
 def _unary_int_input_wrapper_impl(wrapped_impl):
@@ -240,8 +254,8 @@ if utils.PYVERSION >= (3, 2):
 def copysign_f32_impl(context, builder, sig, args):
     a = f32_as_int32(builder, args[0])
     b = f32_as_int32(builder, args[1])
-    a = builder.and_(a, lc.Constant.int(a.type, 0x7fffffff))
-    b = builder.and_(b, lc.Constant.int(b.type, 0x80000000))
+    a = builder.and_(a, lc.Constant.int(a.type, FLOAT_ABS_MASK))
+    b = builder.and_(b, lc.Constant.int(b.type, FLOAT_SIGN_MASK))
     res = builder.or_(a, b)
     return int32_as_f32(builder, res)
 
@@ -250,8 +264,8 @@ def copysign_f32_impl(context, builder, sig, args):
 def copysign_f64_impl(context, builder, sig, args):
     a = f64_as_int64(builder, args[0])
     b = f64_as_int64(builder, args[1])
-    a = builder.and_(a, lc.Constant.int(a.type, 0x7fffffffffffffff))
-    b = builder.and_(b, lc.Constant.int(b.type, 0x8000000000000000))
+    a = builder.and_(a, lc.Constant.int(a.type, DOUBLE_ABS_MASK))
+    b = builder.and_(b, lc.Constant.int(b.type, DOUBLE_SIGN_MASK))
     res = builder.or_(a, b)
     return int64_as_f64(builder, res)
 

@@ -641,14 +641,8 @@ def real_abs_impl(context, builder, sig, args):
     return impl(builder, args)
 
 def real_negate_impl(context, builder, sig, args):
-    [typ] = sig.args
-    [val] = args
-    val = context.cast(builder, val, typ, sig.return_type)
-    if sig.return_type in types.real_domain:
-        return builder.fsub(context.get_constant(sig.return_type, 0), val)
-    else:
-        return builder.neg(val)
-
+    from . import mathimpl
+    return mathimpl.negate_real(builder, args[0])
 
 def real_positive_impl(context, builder, sig, args):
     [typ] = sig.args
@@ -890,19 +884,14 @@ def complex_div_impl(context, builder, sig, args):
 
 
 def complex_negate_impl(context, builder, sig, args):
+    from . import mathimpl
     [typ] = sig.args
     [val] = args
     cmplxcls = context.make_complex(typ)
-    cmplx = cmplxcls(context, builder, val)
-
-    real = cmplx.real
-    imag = cmplx.imag
-
-    zero = Constant.real(real.type, 0)
-
+    cmplx = cmplxcls(context, builder, value=val)
     res = cmplxcls(context, builder)
-    res.real = builder.fsub(zero, real)
-    res.imag = builder.fsub(zero, imag)
+    res.real = mathimpl.negate_real(builder, cmplx.real)
+    res.imag = mathimpl.negate_real(builder, cmplx.imag)
     return res._getvalue()
 
 
@@ -943,8 +932,7 @@ def complex_abs_impl(context, builder, sig, args):
     return context.compile_internal(builder, complex_abs, sig, args)
 
 
-for ty, cls in zip([types.complex64, types.complex128],
-                   [Complex64, Complex128]):
+for ty in types.complex_domain:
     builtin(implement("+", ty, ty)(complex_add_impl))
     builtin(implement("-", ty, ty)(complex_sub_impl))
     builtin(implement("*", ty, ty)(complex_mul_impl))

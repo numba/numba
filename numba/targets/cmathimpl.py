@@ -202,8 +202,7 @@ def polar_impl(x, y, x_is_finite, y_is_finite):
 @implement(cmath.sqrt, types.Kind(types.Complex))
 def sqrt_impl(context, builder, sig, args):
     # We risk spurious overflow for components >= FLT_MAX / (1 + sqrt(2)).
-    FLT_MAX = 3.402823466E+38
-    THRES = FLT_MAX / (1 + math.sqrt(2))
+    THRES = mathimpl.FLT_MAX / (1 + math.sqrt(2))
 
     def sqrt_impl(z):
         """cmath.sqrt(z)"""
@@ -349,6 +348,7 @@ def tanh_impl(context, builder, sig, args):
             real = math.copysign(1., x)
             imag = math.copysign(0., y)
             return complex(real, imag)
+        # This is CPython's algorithm (see c_tanh() in cmathmodule.c).
         # XXX how to force float constants into single precision?
         tx = math.tanh(x)
         ty = math.tan(y)
@@ -360,3 +360,56 @@ def tanh_impl(context, builder, sig, args):
             ((ty / denom) * cx) * cx)
 
     return context.compile_internal(builder, tanh_impl, sig, args)
+
+
+@register
+@implement(cmath.acos, types.Kind(types.Complex))
+def acos_impl(context, builder, sig, args):
+    LN_4 = math.log(4)
+    THRES = mathimpl.FLT_MAX / 4
+
+    def acos_impl(z):
+        """cmath.acos(z)"""
+        # CPython's algorithm (see c_acos() in cmathmodule.c)
+        if abs(z.real) > THRES or abs(z.imag) > THRES:
+            # Avoid unnecessary overflow for large arguments
+            # (also handles infinities gracefully)
+            real = math.atan2(abs(z.imag), z.real)
+            imag = math.copysign(
+                math.log(math.hypot(z.real * 0.5, z.imag * 0.5)) + LN_4,
+                -z.imag)
+            return complex(real, imag)
+        else:
+            s1 = cmath.sqrt(complex(1. - z.real, -z.imag))
+            s2 = cmath.sqrt(complex(1. + z.real, z.imag))
+            real = 2. * math.atan2(s1.real, s2.real)
+            imag = math.asinh(s2.real * s1.imag - s2.imag * s1.real)
+            return complex(real, imag)
+
+    return context.compile_internal(builder, acos_impl, sig, args)
+
+@register
+@implement(cmath.acosh, types.Kind(types.Complex))
+def acosh_impl(context, builder, sig, args):
+    LN_4 = math.log(4)
+    THRES = mathimpl.FLT_MAX / 4
+
+    def acosh_impl(z):
+        """cmath.acosh(z)"""
+        # CPython's algorithm (see c_acosh() in cmathmodule.c)
+        if abs(z.real) > THRES or abs(z.imag) > THRES:
+            # Avoid unnecessary overflow for large arguments
+            # (also handles infinities gracefully)
+            real = math.log(math.hypot(z.real * 0.5, z.imag * 0.5)) + LN_4
+            imag = math.atan2(z.imag, z.real)
+            return complex(real, imag)
+        else:
+            s1 = cmath.sqrt(complex(z.real - 1., z.imag))
+            s2 = cmath.sqrt(complex(z.real + 1., z.imag))
+            real = math.asinh(s1.real * s2.real + s1.imag * s2.imag)
+            imag = 2. * math.atan2(s1.imag, s2.real)
+            return complex(real, imag)
+        # Condensed formula (NumPy)
+        #return cmath.log(z + cmath.sqrt(z + 1.) * cmath.sqrt(z - 1.))
+
+    return context.compile_internal(builder, acosh_impl, sig, args)
