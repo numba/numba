@@ -157,6 +157,18 @@ def log_impl(x, y, x_is_finite, y_is_finite):
 
 
 @register
+@implement(cmath.log, types.Kind(types.Complex), types.Kind(types.Complex))
+def log_base_impl(context, builder, sig, args):
+    """math.log(z, base)"""
+    [z, base] = args
+
+    def log_base(z, base):
+        return cmath.log(z) / cmath.log(base)
+
+    return context.compile_internal(builder, log_base, sig, args)
+
+
+@register
 @implement(cmath.phase, types.Kind(types.Complex))
 @intrinsic_complex_unary
 def phase_impl(x, y, x_is_finite, y_is_finite):
@@ -169,4 +181,3 @@ def phase_impl(x, y, x_is_finite, y_is_finite):
 def polar_impl(x, y, x_is_finite, y_is_finite):
     """math.polar(x + y j)"""
     return math.hypot(x, y), math.atan2(y, x)
-

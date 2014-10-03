@@ -858,37 +858,35 @@ def complex_mul_impl(context, builder, sig, args):
     return z._getvalue()
 
 
+NAN = float('nan')
+
 def complex_div_impl(context, builder, sig, args):
-    """
-    z = c^2 + d^2
-    (a+bi)/(c+di) = (ac + bd) / z, (bc - ad) / z
-    """
-    [cx, cy] = args
-    complexClass = context.make_complex(sig.args[0])
-    x = complexClass(context, builder, value=cx)
-    y = complexClass(context, builder, value=cy)
-    z = complexClass(context, builder)
-    a = x.real
-    b = x.imag
-    c = y.real
-    d = y.imag
+    def complex_div(a, b):
+        # This is CPython's algorithm (in _Py_c_quot()).
+        areal = a.real
+        aimag = a.imag
+        breal = b.real
+        bimag = b.imag
+        if abs(breal) >= abs(bimag):
+            # Divide tops and bottom by b.real
+            if not breal:
+                return complex(NAN, NAN)
+            ratio = bimag / breal
+            denom = breal + bimag * ratio
+            return complex(
+                (areal + aimag * ratio) / denom,
+                (aimag - areal * ratio) / denom)
+        else:
+            # Divide tops and bottom by b.imag
+            if not bimag:
+                return complex(NAN, NAN)
+            ratio = breal / bimag
+            denom = breal * ratio + bimag
+            return complex(
+                (a.real * ratio + a.imag) / denom,
+                (a.imag * ratio - a.real) / denom)
 
-    ac = builder.fmul(a, c)
-    bd = builder.fmul(b, d)
-    ad = builder.fmul(a, d)
-    bc = builder.fmul(b, c)
-
-    cc = builder.fmul(c, c)
-    dd = builder.fmul(d, d)
-    zz = builder.fadd(cc, dd)
-
-    ac_bd = builder.fadd(ac, bd)
-    bc_ad = builder.fsub(bc, ad)
-
-    cgutils.guard_zero(context, builder, zz)
-    z.real = builder.fdiv(ac_bd, zz)
-    z.imag = builder.fdiv(bc_ad, zz)
-    return z._getvalue()
+    return context.compile_internal(builder, complex_div, sig, args)
 
 
 def complex_negate_impl(context, builder, sig, args):

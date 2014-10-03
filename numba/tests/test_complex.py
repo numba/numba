@@ -15,6 +15,10 @@ enable_pyobj_flags.set("enable_pyobject")
 no_pyobj_flags = Flags()
 
 
+def div_usecase(x, y):
+    return x / y
+
+
 def real_usecase(x):
     return x.real
 
@@ -39,6 +43,9 @@ def isnan_usecase(x):
 
 def log_usecase(x):
     return cmath.log(x)
+
+def log_base_usecase(x, base):
+    return cmath.log(x, base)
 
 def phase_usecase(x):
     return cmath.phase(x)
@@ -84,10 +91,18 @@ class BaseComplexTest(object):
         for tx, ty in value_types:
             cr = compile_isolated(pyfunc, [tx, ty], flags=flags)
             cfunc = cr.entry_point
-            prec = 'single' if types.float32 in (tx, ty) else 'double'
+            prec = ('single'
+                    if set([tx, ty]) & set([types.float32, types.complex64])
+                    else 'double')
             for vx, vy in values:
+                try:
+                    expected = pyfunc(vx, vy)
+                except ValueError as e:
+                    self.assertIn("math domain error", str(e))
+                    continue
+                except ZeroDivisionError:
+                    continue
                 got = cfunc(vx, vy)
-                expected = pyfunc(vx, vy)
                 msg = 'for input %r' % ((vx, vy),)
                 self.assertPreciseEqual(got, expected, prec=prec,
                                         ulps=ulps, msg=msg)
@@ -127,6 +142,19 @@ class TestComplex(BaseComplexTest, TestCase):
 
     def test_conjugate_npm(self):
         self.test_conjugate(flags=no_pyobj_flags)
+
+    def test_div(self, flags=enable_pyobj_flags):
+        """
+        Test complex.__div__ implementation with non-trivial values.
+        """
+        # XXX Fold into test_operator?
+        values = list(itertools.product(self.more_values(), self.more_values()))
+        value_types = [(types.complex128, types.complex128),
+                       (types.complex64, types.complex64)]
+        self.run_binary(div_usecase, value_types, values, flags=flags)
+
+    def test_div_npm(self):
+        self.test_div(flags=no_pyobj_flags)
 
 
 class TestCMath(BaseComplexTest, TestCase):
@@ -183,6 +211,16 @@ class TestCMath(BaseComplexTest, TestCase):
 
     def test_log_npm(self):
         self.check_unary_func(log_usecase, no_pyobj_flags)
+
+    def test_log_base(self, flags=enable_pyobj_flags):
+        values = list(itertools.product(self.more_values(), self.more_values()))
+        value_types = [(types.complex128, types.complex128),
+                       (types.complex64, types.complex64)]
+        self.run_binary(log_base_usecase, value_types, values, flags=flags,
+                        ulps=2)
+
+    def test_log_base_npm(self):
+        self.test_log_base(flags=no_pyobj_flags)
 
     def test_phase(self):
         self.check_unary_func(phase_usecase, enable_pyobj_flags)
