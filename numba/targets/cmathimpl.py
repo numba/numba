@@ -1,5 +1,5 @@
 """
-Provide math calls that uses intrinsics or libc math functions.
+Implement the cmath module functions.
 """
 
 from __future__ import print_function, absolute_import, division
