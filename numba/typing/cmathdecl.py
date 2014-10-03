@@ -15,6 +15,8 @@ registry = Registry()
 @registry.resolves_global(cmath.sin)
 @registry.resolves_global(cmath.sinh)
 @registry.resolves_global(cmath.sqrt)
+@registry.resolves_global(cmath.tan)
+@registry.resolves_global(cmath.tanh)
 class CMath_unary(ConcreteTemplate):
     cases = [signature(tp, tp) for tp in types.complex_domain]
 

@@ -326,3 +326,37 @@ def sinh_impl(context, builder, sig, args):
                        math.sin(y) * math.cosh(x))
 
     return context.compile_internal(builder, sinh_impl, sig, args)
+
+
+@register
+@implement(cmath.tan, types.Kind(types.Complex))
+def tan_impl(context, builder, sig, args):
+    def tan_impl(z):
+        """cmath.tan(z) = -j * cmath.tanh(z j)"""
+        r = cmath.tanh(complex(-z.imag, z.real))
+        return complex(r.imag, -r.real)
+
+    return context.compile_internal(builder, tan_impl, sig, args)
+
+@register
+@implement(cmath.tanh, types.Kind(types.Complex))
+def tanh_impl(context, builder, sig, args):
+    def tanh_impl(z):
+        """cmath.tanh(z)"""
+        x = z.real
+        y = z.imag
+        if math.isinf(x):
+            real = math.copysign(1., x)
+            imag = math.copysign(0., y)
+            return complex(real, imag)
+        # XXX how to force float constants into single precision?
+        tx = math.tanh(x)
+        ty = math.tan(y)
+        cx = 1. / math.cosh(x)
+        txty = tx * ty
+        denom = 1. + txty * txty
+        return complex(
+            tx * (1. + ty * ty) / denom,
+            ((ty / denom) * cx) * cx)
+
+    return context.compile_internal(builder, tanh_impl, sig, args)

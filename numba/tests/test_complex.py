@@ -59,6 +59,12 @@ def asinh_usecase(x):
 def sinh_usecase(x):
     return cmath.sinh(x)
 
+def atanh_usecase(x):
+    return cmath.atanh(x)
+
+def tanh_usecase(x):
+    return cmath.tanh(x)
+
 def exp_usecase(x):
     return cmath.exp(x)
 
@@ -118,7 +124,7 @@ class BaseComplexTest(object):
                     self.assertIn("math domain error", str(e))
                     continue
                 got = cfunc(vx)
-                msg = 'for input %r' % (vx,)
+                msg = 'for input %r with prec %r' % (vx, prec)
                 self.assertPreciseEqual(got, expected, prec=prec,
                                         ulps=ulps, msg=msg)
 
@@ -139,7 +145,7 @@ class BaseComplexTest(object):
                 except ZeroDivisionError:
                     continue
                 got = cfunc(vx, vy)
-                msg = 'for input %r' % ((vx, vy),)
+                msg = 'for input %r with prec %r' % ((vx, vy), prec)
                 self.assertPreciseEqual(got, expected, prec=prec,
                                         ulps=ulps, msg=msg)
 
@@ -307,6 +313,14 @@ class TestCMath(BaseComplexTest, TestCase):
         self.check_unary_func(sin_usecase, no_pyobj_flags,
                               values=self.basic_values())
 
+    def test_tan(self):
+        self.check_unary_func(tan_usecase, enable_pyobj_flags, ulps=2,
+                              values=self.basic_values())
+
+    def test_tan_npm(self):
+        self.check_unary_func(tan_usecase, enable_pyobj_flags, ulps=2,
+                              values=self.basic_values())
+
     # Hyperbolic functions
 
     def test_cosh(self):
@@ -315,15 +329,24 @@ class TestCMath(BaseComplexTest, TestCase):
     def test_cosh_npm(self):
         self.check_unary_func(cosh_usecase, no_pyobj_flags, ulps=2)
 
+    # sinh() and tanh() results around math.pi are too different in single
+    # precision and double precision, which would fail the test;
+    # hence basic_values().
+
     def test_sinh(self):
-        # cmath.sinh() results around math.pi are too different in single
-        # precision and double precision, which would fail the test;
-        # hence basic_values().
         self.check_unary_func(sinh_usecase, enable_pyobj_flags,
                               values=self.basic_values())
 
     def test_sinh_npm(self):
         self.check_unary_func(sinh_usecase, no_pyobj_flags,
+                              values=self.basic_values())
+
+    def test_tanh(self):
+        self.check_unary_func(tanh_usecase, enable_pyobj_flags, ulps=2,
+                              values=self.basic_values())
+
+    def test_tanh_npm(self):
+        self.check_unary_func(tanh_usecase, enable_pyobj_flags, ulps=2,
                               values=self.basic_values())
 
 
