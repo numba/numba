@@ -169,6 +169,21 @@ def log_base_impl(context, builder, sig, args):
 
 
 @register
+@implement(cmath.log10, types.Kind(types.Complex))
+def log10_impl(context, builder, sig, args):
+    LN_10 = 2.302585092994045684
+
+    def log10_impl(z):
+        """cmath.log10(z)"""
+        z = cmath.log(z)
+        # This formula gives better results on +/-inf than cmath.log(z, 10)
+        # See http://bugs.python.org/issue22544
+        return complex(z.real / LN_10, z.imag / LN_10)
+
+    return context.compile_internal(builder, log10_impl, sig, args)
+
+
+@register
 @implement(cmath.phase, types.Kind(types.Complex))
 @intrinsic_complex_unary
 def phase_impl(x, y, x_is_finite, y_is_finite):

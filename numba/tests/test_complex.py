@@ -47,6 +47,9 @@ def log_usecase(x):
 def log_base_usecase(x, base):
     return cmath.log(x, base)
 
+def log10_usecase(x):
+    return cmath.log10(x)
+
 def phase_usecase(x):
     return cmath.phase(x)
 
@@ -221,6 +224,12 @@ class TestCMath(BaseComplexTest, TestCase):
 
     def test_log_base_npm(self):
         self.test_log_base(flags=no_pyobj_flags)
+
+    def test_log10(self):
+        self.check_unary_func(log10_usecase, enable_pyobj_flags)
+
+    def test_log10_npm(self):
+        self.check_unary_func(log10_usecase, no_pyobj_flags)
 
     def test_phase(self):
         self.check_unary_func(phase_usecase, enable_pyobj_flags)
