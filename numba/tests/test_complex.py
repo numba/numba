@@ -59,6 +59,9 @@ def polar_usecase(x):
 def rect_usecase(r, phi):
     return cmath.rect(r, phi)
 
+def sqrt_usecase(x):
+    return cmath.sqrt(x)
+
 
 class BaseComplexTest(object):
 
@@ -242,6 +245,12 @@ class TestCMath(BaseComplexTest, TestCase):
 
     def test_polar_npm(self):
         self.check_unary_func(polar_usecase, no_pyobj_flags)
+
+    def test_sqrt(self):
+        self.check_unary_func(sqrt_usecase, enable_pyobj_flags)
+
+    def test_sqrt_npm(self):
+        self.check_unary_func(sqrt_usecase, no_pyobj_flags)
 
 
 if __name__ == '__main__':

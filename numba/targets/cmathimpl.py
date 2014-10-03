@@ -196,3 +196,55 @@ def phase_impl(x, y, x_is_finite, y_is_finite):
 def polar_impl(x, y, x_is_finite, y_is_finite):
     """cmath.polar(x + y j)"""
     return math.hypot(x, y), math.atan2(y, x)
+
+
+@register
+@implement(cmath.sqrt, types.Kind(types.Complex))
+def sqrt_impl(context, builder, sig, args):
+    # We risk spurious overflow for components >= FLT_MAX / (1 + sqrt(2)).
+    FLT_MAX = 3.402823466E+38
+    THRES = FLT_MAX / (1 + math.sqrt(2))
+
+    def sqrt_impl(z):
+        """cmath.sqrt(z)"""
+        # This is NumPy's algorithm, see npy_csqrt() in npy_math_complex.c.src
+        a = z.real
+        b = z.imag
+        if a == 0.0 and b == 0.0:
+            return complex(abs(b), b)
+        if math.isinf(b):
+            return complex(abs(b), b)
+        if math.isnan(a):
+            return complex(a, a)
+        if math.isinf(a):
+            if a < 0.0:
+                return complex(abs(b - b), math.copysign(a, b))
+            else:
+                return complex(a, math.copysign(b - b, b))
+
+        # The remaining special case (b is NaN) is handled just fine by
+        # the normal code path below.
+
+        # Scale to avoid overflow
+        if abs(a) >= THRES or abs(b) >= THRES:
+            a *= 0.25
+            b *= 0.25
+            scale = True
+        else:
+            scale = False
+        # Algorithm 312, CACM vol 10, Oct 1967
+        if a >= 0:
+            t = math.sqrt((a + math.hypot(a, b)) * 0.5)
+            real = t
+            imag = b / (2 * t)
+        else:
+            t = math.sqrt((-a + math.hypot(a, b)) * 0.5)
+            real = abs(b) / (2 * t)
+            imag = math.copysign(t, b)
+        # Rescale
+        if scale:
+            return complex(real * 2, imag)
+        else:
+            return complex(real, imag)
+
+    return context.compile_internal(builder, sqrt_impl, sig, args)

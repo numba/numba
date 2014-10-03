@@ -10,6 +10,7 @@ registry = Registry()
 
 @registry.resolves_global(cmath.exp)
 @registry.resolves_global(cmath.log10)
+@registry.resolves_global(cmath.sqrt)
 class CMath_unary(ConcreteTemplate):
     cases = [signature(tp, tp) for tp in types.complex_domain]
 
