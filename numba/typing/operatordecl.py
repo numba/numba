@@ -48,12 +48,6 @@ class ComparisonOperator(ConcreteTemplate):
     cases += [signature(types.boolean, op, op) for op in sorted(types.complex_domain)]
 
 
-def create_resolve_method(op):
-    def resolve_op(self, mod):
-        return types.Function(op)
-    return resolve_op
-
-
 unary_operators = ['pos', 'neg', 'invert']
 truth_operators = ['not_']
 
