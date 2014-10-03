@@ -2120,12 +2120,14 @@ def np_complex_isinf_impl(context, builder, sig, args):
 
 def np_real_signbit_impl(context, builder, sig, args):
     _check_arity_and_homogeneity(sig, args, 1, return_type=types.boolean)
-    x, = args
-    ty, = sig.args
-    b_ff_sig = typing.signature(types.boolean, *[ty]*2)
-    ZERO = context.get_constant(ty, 0.0)
 
-    return builtins.real_lt_impl(context, builder, b_ff_sig, [x, ZERO])
+    dispatch_table = {
+        types.float32: 'numba.npymath.signbitf',
+        types.float64: 'numba.npymath.signbit',
+    }
+
+    return _dispatch_func_by_name_type(context, builder, sig, args,
+                                       dispatch_table, 'signbit')
 
 
 def np_real_copysign_impl(context, builder, sig, args):

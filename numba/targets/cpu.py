@@ -15,14 +15,11 @@ from numba.targets import intrinsics, mathimpl, npyimpl, operatorimpl, printimpl
 from .options import TargetOptions
 
 
-def _windows_symbol_hacks_32bits():
-    # if we don't have _ftol2, bind _ftol as _ftol2
-    ftol2 = le.dylib_address_of_symbol("_ftol2")
-    if not ftol2:
-        ftol = le.dylib_address_of_symbol("_ftol")
-        assert ftol
-        le.dylib_add_symbol("_ftol2", ftol)
-
+def _add_missing_symbol(symbol, addr):
+    """Add missing symbol into LLVM internal symtab
+    """
+    if not le.dylib_address_of_symbol(symbol):
+        le.dylib_add_symbol(symbol, addr)
 
 # Keep those structures in sync with _dynfunc.c.
 
@@ -211,19 +208,18 @@ class CPUContext(BaseContext):
         c_helpers = _helperlib.c_helpers
         for name in ['cpow', 'sdiv', 'srem', 'udiv', 'urem']:
             le.dylib_add_symbol("numba.math.%s" % name, c_helpers[name])
-        if sys.platform.startswith('win32') and not le.dylib_address_of_symbol(
-                '__ftol2'):
-            le.dylib_add_symbol("__ftol2", c_helpers["fptoui"])
-        elif sys.platform.startswith(
-                'linux') and not le.dylib_address_of_symbol('__fixunsdfdi'):
-            le.dylib_add_symbol("__fixunsdfdi", c_helpers["fptoui"])
+
+        if sys.platform.startswith('win32') and self.is32bit:
+            # This may still be necessary for windows XP
+            _add_missing_symbol("__ftol2", c_helpers["fptoui"])
+
+        elif sys.platform.startswith('linux') and self.is32bit:
+            _add_missing_symbol("__fixunsdfdi", c_helpers["fptoui"])
+            _add_missing_symbol("__fixunssfdi", c_helpers["fptouif"])
+
         # Necessary for Python3
         le.dylib_add_symbol("numba.round", c_helpers["round_even"])
         le.dylib_add_symbol("numba.roundf", c_helpers["roundf_even"])
-
-        # windows symbol hacks
-        if sys.platform.startswith('win32') and self.is32bit:
-            _windows_symbol_hacks_32bits()
 
         # List available C-math
         for fname in intrinsics.INTR_MATH:
