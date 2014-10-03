@@ -114,7 +114,7 @@ NAN = float('nan')
 @implement(cmath.exp, types.Kind(types.Complex))
 @intrinsic_complex_unary
 def exp_impl(x, y, x_is_finite, y_is_finite):
-    """math.exp(x + y j)"""
+    """cmath.exp(x + y j)"""
     if x_is_finite:
         if y_is_finite:
             c = math.cos(y)
@@ -150,7 +150,7 @@ def exp_impl(x, y, x_is_finite, y_is_finite):
 @implement(cmath.log, types.Kind(types.Complex))
 @intrinsic_complex_unary
 def log_impl(x, y, x_is_finite, y_is_finite):
-    """math.log(x + y j)"""
+    """cmath.log(x + y j)"""
     a = math.log(math.hypot(x, y))
     b = math.atan2(y, x)
     return complex(a, b)
@@ -159,7 +159,7 @@ def log_impl(x, y, x_is_finite, y_is_finite):
 @register
 @implement(cmath.log, types.Kind(types.Complex), types.Kind(types.Complex))
 def log_base_impl(context, builder, sig, args):
-    """math.log(z, base)"""
+    """cmath.log(z, base)"""
     [z, base] = args
 
     def log_base(z, base):
@@ -172,12 +172,12 @@ def log_base_impl(context, builder, sig, args):
 @implement(cmath.phase, types.Kind(types.Complex))
 @intrinsic_complex_unary
 def phase_impl(x, y, x_is_finite, y_is_finite):
-    """math.phase(x + y j)"""
+    """cmath.phase(x + y j)"""
     return math.atan2(y, x)
 
 @register
 @implement(cmath.polar, types.Kind(types.Complex))
 @intrinsic_complex_unary
 def polar_impl(x, y, x_is_finite, y_is_finite):
-    """math.polar(x + y j)"""
+    """cmath.polar(x + y j)"""
     return math.hypot(x, y), math.atan2(y, x)
