@@ -5,8 +5,7 @@ static PyObject *
 PyDynUFunc_FromFuncAndData(PyUFuncGenericFunction *func, void **data,
                            char *types, int ntypes,
                            int nin, int nout, int identity,
-                           char *name, char *doc, PyObject *object,
-                           PyObject *dispatcher)
+                           char *name, char *doc, PyObject *object)
 {
     PyUFuncObject *ufunc = NULL;
     PyObject *result;
@@ -21,7 +20,7 @@ PyDynUFunc_FromFuncAndData(PyUFuncGenericFunction *func, void **data,
     /* Kind of a gross-hack  */
     /* Py_TYPE(ufunc) = &PyDynUFunc_Type; */
 
-    result = PyDynUFunc_New(ufunc, dispatcher);
+    result = PyDynUFunc_New(ufunc, NULL);
     if (!result)
         goto err;
 
@@ -48,7 +47,6 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
     PyObject *type_obj;
     PyObject *data_obj;
     PyObject *object=NULL; /* object to hold on to while ufunc is alive */
-    PyObject *dispatcher = NULL;
 
     int i, j;
     int custom_dtype = 0;
@@ -57,16 +55,12 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
     void **data;
     PyObject *ufunc;
 
-    if (!PyArg_ParseTuple(args, "O!O!iiO|OO", &PyList_Type, &func_list,
-                                               &PyList_Type, &type_list,
-                                               &nin, &nout, &data_list,
-                                               &dispatcher,
-                                               &object)) {
+    if (!PyArg_ParseTuple(args, "O!O!iiOO", &PyList_Type, &func_list,
+                                            &PyList_Type, &type_list,
+                                            &nin, &nout, &data_list,
+                                            &object)) {
         return NULL;
     }
-
-    if (dispatcher == Py_None)
-        dispatcher = NULL;
 
     nfuncs = PyList_Size(func_list);
 
@@ -177,8 +171,7 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
                                            nout,
                                            PyUFunc_None,
                                            "ufunc", (char*)
-                                           "ufunc", object,
-                                           dispatcher);
+                                           "ufunc", object);
 
     }
     else {
@@ -188,8 +181,7 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
                                            PyUFunc_None,
                                            "ufunc",
                                            (char*) "ufunc",
-                                           object,
-                                           dispatcher);
+                                           object);
 
         PyUFunc_RegisterLoopForType((PyUFuncObject*)ufunc,
                                     custom_dtype,
