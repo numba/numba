@@ -27,19 +27,11 @@ def lift_loop(bytecode, dispatcher_factory):
     for loop in loops:
         args, rets = discover_args_and_returns(bytecode, loop, outer_rds,
                                                outer_wrs)
-        if rets:
-            # Cannot deal with loop that write to variables used in outer body
-            # Put the loop back into the outer function
-            outer = stitch_instructions(outer, loop)
-            # Recompute read-write variable set
-            wrs, rds = find_varnames_uses(bytecode, loop)
-            outer_wrs |= wrs
-            outer_rds |= rds
-        else:
-            disp = insert_loop_call(bytecode, loop, args,
-                                    outer, outerlabels, outernames,
-                                    dispatcher_factory)
-            dispatchers.append(disp)
+
+        disp = insert_loop_call(bytecode, loop, args,
+                                outer, outerlabels, rets,
+                                dispatcher_factory)
+        dispatchers.append(disp)
 
     # Build outer bytecode
     codetable = utils.SortedMap((i.offset, i) for i in outer)
@@ -53,16 +45,53 @@ def lift_loop(bytecode, dispatcher_factory):
                              co_freevars=bytecode.co_freevars,
                              table=codetable,
                              labels=outerlabels & set(codetable.keys()))
+
     return outerbc, dispatchers
 
+@utils.total_ordering
+class SubOffset(object):
+    def __init__(self, val, sub=1):
+        assert sub > 0
+        self.val = val
+        self.sub = sub
 
-def insert_loop_call(bytecode, loop, args,
-                     outer, outerlabels, outernames, dispatcher_factory):
+    def next(self):
+        return SubOffset(self.val, self.sub + 1)
+
+    def __add__(self, other):
+        return SubOffset(self.val, self.sub + other)
+
+    def __hash__(self):
+        return hash((self.val, self.sub))
+
+    def __lt__(self, other):
+        if isinstance(other, SubOffset):
+            if self.val < other.val:
+                return self
+            elif self.val == other.val:
+                return self.sub < other.sub
+            else:
+                return False
+        else:
+            return self.val < other
+
+    def __eq__(self, other):
+        if isinstance(other, SubOffset):
+            return self.val == other.val and self.sub == other.sub
+        else:
+            return False
+
+    def __repr__(self):
+        return "{0}.{1}".format(self.val, self.sub)
+
+
+def insert_loop_call(bytecode, loop, args, outer, outerlabels, returns,
+                     dispatcher_factory):
     endloopoffset = loop[-1].next
     # Accepted. Create a bytecode object for the loop
     args = tuple(args)
 
-    lbc = make_loop_bytecode(bytecode, loop, args)
+    lbc = make_loop_bytecode(bytecode, loop, args, returns)
 
     # Generate dispatcher for this inner loop, and append it to the
     # consts tuple.
@@ -71,35 +100,57 @@ def insert_loop_call(bytecode, loop, args,
     bytecode.co_consts += (disp,)
 
     # Insert jump to the end
-    jmp = ByteCodeInst.get(loop[0].offset, 'JUMP_ABSOLUTE',
-                           outer[-1].next)
+    insertpt = SubOffset(loop[0].next)
+    jmp = ByteCodeInst.get(loop[0].offset, 'JUMP_ABSOLUTE', insertpt)
     jmp.lineno = loop[0].lineno
     insert_instruction(outer, jmp)
 
     outerlabels.add(outer[-1].next)
 
     # Prepare arguments
-    loadfn = ByteCodeInst.get(outer[-1].next, "LOAD_CONST", disp_idx)
+    loadfn = ByteCodeInst.get(insertpt, "LOAD_CONST", disp_idx)
     loadfn.lineno = loop[0].lineno
     insert_instruction(outer, loadfn)
 
+    insertpt = insertpt.next()
     for arg in args:
-        loadarg = ByteCodeInst.get(outer[-1].next, 'LOAD_FAST',
+        loadarg = ByteCodeInst.get(insertpt, 'LOAD_FAST',
                                    bytecode.co_varnames.index(arg))
         loadarg.lineno = loop[0].lineno
         insert_instruction(outer, loadarg)
+        insertpt = insertpt.next()
 
     # Call function
     assert len(args) < 256
-    call = ByteCodeInst.get(outer[-1].next, "CALL_FUNCTION", len(args))
+    call = ByteCodeInst.get(insertpt, "CALL_FUNCTION", len(args))
     call.lineno = loop[0].lineno
     insert_instruction(outer, call)
 
-    poptop = ByteCodeInst.get(outer[-1].next, "POP_TOP", None)
-    poptop.lineno = loop[0].lineno
-    insert_instruction(outer, poptop)
+    insertpt = insertpt.next()
 
-    jmpback = ByteCodeInst.get(outer[-1].next, 'JUMP_ABSOLUTE',
+    if returns:
+        # Unpack arguments
+        unpackseq = ByteCodeInst.get(insertpt, "UNPACK_SEQUENCE",
+                                  len(returns))
+        unpackseq.lineno = loop[0].lineno
+        insert_instruction(outer, unpackseq)
+        insertpt = insertpt.next()
+
+        for out in returns:
+            # Store each variable
+            storefast = ByteCodeInst.get(insertpt, "STORE_FAST",
+                                      bytecode.co_varnames.index(out))
+            storefast.lineno = loop[0].lineno
+            insert_instruction(outer, storefast)
+            insertpt = insertpt.next()
+    else:
+        # No return value
+        poptop = ByteCodeInst.get(outer[-1].next, "POP_TOP", None)
+        poptop.lineno = loop[0].lineno
+        insert_instruction(outer, poptop)
+        insertpt = insertpt.next()
+
+    jmpback = ByteCodeInst.get(insertpt, 'JUMP_ABSOLUTE',
                                endloopoffset)
 
     jmpback.lineno = loop[0].lineno
@@ -120,19 +171,33 @@ def find_previous_inst(insts, offset):
     return len(insts)
 
 
-def make_loop_bytecode(bytecode, loop, args):
+def make_loop_bytecode(bytecode, loop, args, returns):
     # Add return None
     co_consts = tuple(bytecode.co_consts)
     if None not in co_consts:
         co_consts += (None,)
 
-    # Load None
-    load_none = ByteCodeInst.get(loop[-1].next, "LOAD_CONST",
-                                 co_consts.index(None))
-    load_none.lineno = loop[-1].lineno
-    loop.append(load_none)
+    if returns:
+        for out in returns:
+            # Load output
+            loadfast = ByteCodeInst.get(loop[-1].next, "LOAD_FAST",
+                                         bytecode.co_varnames.index(out))
+            loadfast.lineno = loop[-1].lineno
+            loop.append(loadfast)
+            # Build tuple
+            buildtuple = ByteCodeInst.get(loop[-1].next, "BUILD_TUPLE",
+                                        len(returns))
+            buildtuple.lineno = loop[-1].lineno
+            loop.append(buildtuple)
 
-    # Return None
+    else:
+        # Load None
+        load_none = ByteCodeInst.get(loop[-1].next, "LOAD_CONST",
+                                     co_consts.index(None))
+        load_none.lineno = loop[-1].lineno
+        loop.append(load_none)
+
+    # Return TOS
     return_value = ByteCodeInst.get(loop[-1].next, "RETURN_VALUE", 0)
     return_value.lineno = loop[-1].lineno
     loop.append(return_value)

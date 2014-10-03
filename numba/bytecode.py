@@ -293,7 +293,7 @@ class ByteCodeBase(object):
             else:
                 return ' '
 
-        return '\n'.join('%s %10d\t%s' % ((label_marker(i),) + i)
+        return '\n'.join('%s %10s\t%s' % ((label_marker(i),) + i)
                          for i in utils.iteritems(self.table))
 
 
