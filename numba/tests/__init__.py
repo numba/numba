@@ -14,7 +14,7 @@ import warnings
 from unittest import result, runner, signals
 
 from numba.utils import PYVERSION, StringIO
-
+from numba import config
 
 # "unittest.main" is really the TestProgram class!
 # (defined in a module named itself "unittest.main"...)
@@ -33,11 +33,17 @@ class NumbaTestProgram(unittest.main):
     multiprocess = False
 
     def __init__(self, *args, **kwargs):
+        # Disable interpreter fallback if we are running the test suite
+        if config.COMPATIBILITY_MODE:
+            warnings.warn("Unset INTERPRETER_FALLBACK")
+            config.COMPATIBILITY_MODE = False
+
         self.discovered_suite = kwargs.pop('suite', None)
         # HACK to force unittest not to change warning display options
         # (so that NumbaWarnings don't appear all over the place)
         sys.warnoptions.append('')
         super(NumbaTestProgram, self).__init__(*args, **kwargs)
+
 
     def createTests(self):
         if self.discovered_suite is not None:
