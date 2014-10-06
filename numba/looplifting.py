@@ -50,21 +50,34 @@ def lift_loop(bytecode, dispatcher_factory):
 
 @utils.total_ordering
 class SubOffset(object):
+    """The loop-jitting may insert bytecode between two bytecode but we
+    cannot guarantee that there is enough integral space between two offsets.
+    This class workaround the problem by introducing a fractional part to the
+    offset.
+    """
     def __init__(self, val, sub=1):
-        assert sub > 0
+        assert sub > 0, "fractional part cannot be <= 0"
         self.val = val
         self.sub = sub
 
     def next(self):
+        """Helper method to get the next suboffset by incrementing the
+        fractional part only
+        """
         return SubOffset(self.val, self.sub + 1)
 
     def __add__(self, other):
+        """Adding to a suboffset will only increment the fractional part.
+        The integral part is immutable.
+        """
         return SubOffset(self.val, self.sub + other)
 
     def __hash__(self):
         return hash((self.val, self.sub))
 
     def __lt__(self, other):
+        """Can only compare to SubOffset or int
+        """
         if isinstance(other, SubOffset):
             if self.val < other.val:
                 return self
@@ -72,16 +85,23 @@ class SubOffset(object):
                 return self.sub < other.sub
             else:
                 return False
-        else:
+        elif isinstance(other, int):
             return self.val < other
+        else:
+            return NotImplemented
 
     def __eq__(self, other):
         if isinstance(other, SubOffset):
             return self.val == other.val and self.sub == other.sub
-        else:
+        elif isinstance(other, int):
+            # Can never be equal to a integer by definition
             return False
+        else:
+            return NotImplemented
 
     def __repr__(self):
+        """Print like a floating-point by it is not one at all.
+        """
         return "{0}.{1}".format(self.val, self.sub)
 
 
