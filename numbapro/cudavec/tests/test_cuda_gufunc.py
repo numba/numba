@@ -67,6 +67,29 @@ class TestCUDAGufunc(unittest.TestCase):
 
         self.assertTrue(np.allclose(C, Gold))
 
+    def test_gufunc_auto_transfer(self):
+        matrix_ct = 2
+        A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2,
+                                                                   4)
+        B = np.arange(matrix_ct * 4 * 5, dtype=np.float32).reshape(matrix_ct, 4,
+                                                                   5)
+
+        dB = cuda.to_device(B)
+
+        ts = time()
+        C = gufunc(A, dB).copy_to_host()
+        tcuda = time() - ts
+
+        ts = time()
+        Gold = ut.matrix_multiply(A, B)
+        tcpu = time() - ts
+
+        non_stream_speedups.append(tcpu / tcuda)
+
+        print(C, Gold)
+
+        self.assertTrue(np.allclose(C, Gold))
+
     def test_gufunc(self):
         matrix_ct = 1001 # an odd number to test thread/block division in CUDA
         A = np.arange(matrix_ct * 2 * 4, dtype=np.float32).reshape(matrix_ct, 2,

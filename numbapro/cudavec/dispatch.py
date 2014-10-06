@@ -96,19 +96,18 @@ class CUDAGenerializedUFunc(object):
         assert self.engine.nout == 1, "only support single output"
 
     def __call__(self, *args, **kws):
-
         is_device_array = [devicearray.is_cuda_ndarray(a) for a in args]
-        if any(is_device_array) != all(is_device_array):
-            raise TypeError('if device array is used, '
-                            'all arguments must be device array.')
         out = kws.get('out')
         stream = kws.get('stream', 0)
 
         need_cuda_conv = not any(is_device_array)
-        if need_cuda_conv:
-            inputs = [np.array(a) for a in args]
-        else:
-            inputs = args
+
+        inputs = []
+        for a, isdev in zip(args, is_device_array):
+            if isdev:
+                inputs.append(a)
+            else:
+                inputs.append(np.array(a))
 
         input_shapes = [a.shape for a in inputs]
         schedule = self.engine.schedule(input_shapes)
@@ -121,19 +120,23 @@ class CUDAGenerializedUFunc(object):
         if out is not None and schedule.output_shapes[0] != out.shape:
             raise ValueError('output shape mismatch')
 
-        # prepare inputs
-        if need_cuda_conv:
-            params = [cuda.to_device(a, stream=stream)
-                      for a in inputs]
-        else:
-            params = list(inputs)
-
         # allocate output
         if need_cuda_conv or out is None:
             retval = cuda.device_array(shape=schedule.output_shapes[0],
                                        dtype=outdtype, stream=stream)
         else:
             retval = out
+
+        # prepare inputs
+        params = []
+        for inp, isdev in zip(inputs, is_device_array):
+            if isdev:
+                params.append(inp)
+            else:
+                params.append(cuda.to_device(inp, stream=stream))
+
+        del args, inputs
+        assert all(devicearray.is_cuda_ndarray(a) for a in params)
 
         # execute
         assert schedule.loopn > 0, "zero looping dimension"
