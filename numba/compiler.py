@@ -177,6 +177,10 @@ def _raise_error(desc, exc):
     return exc
 
 
+class CompilerError(Exception):
+    pass
+
+
 class Pipeline(object):
     """Stores and manages states for the compiler pipeline
     """
@@ -531,7 +535,8 @@ class Pipeline(object):
             else:
                 return res.result
 
-        raise AssertionError("All pipelines has failed")
+        # TODO save all error information
+        raise CompilerError("All pipelines have failed")
 
 
 def compile_extra(typingctx, targetctx, func, args, return_type, flags,
