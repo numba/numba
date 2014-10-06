@@ -204,7 +204,7 @@ class BaseLower(object):
 
         # Init blocks
         for offset in self.blocks:
-            bname = "B%d" % offset
+            bname = "B%s" % offset
             self.blkmap[offset] = self.function.append_basic_block(bname)
 
         self.pre_lower()

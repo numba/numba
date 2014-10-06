@@ -560,7 +560,7 @@ class BlockInfo(object):
 
     def make_temp(self, prefix=''):
         self.tempct += 1
-        name = '$%s%d.%d' % (prefix, self.offset, self.tempct)
+        name = '$%s%s.%s' % (prefix, self.offset, self.tempct)
         return name
 
     def push(self, val):
