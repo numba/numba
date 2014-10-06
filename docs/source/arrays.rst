@@ -92,9 +92,12 @@ Currently, a loop is rejected if:
 * the loop contains return statements;
 * the loop binds a value to a variable that is read outside of the loop.
 
+Note that replacing @njit with @jit will make these example accepted, but they
+won't be loop-jitted and will fall-back to the python object mode.
+
 The following is rejected due to a return statement in the loop::
 
-    @jit
+    @njit
     def foo(n):
         result = np.zeros(n)
 
@@ -109,7 +112,7 @@ The following is rejected due to a return statement in the loop::
 The following is rejected due to an assigning to a variable read outside of
 the loop::
 
-    @jit
+    @njit
     def foo(n):
         result = np.zeros(n)
 
@@ -124,7 +127,7 @@ the loop::
 
 The following is accepted::
 
-    @jit
+    @njit
     def foo(n):
         result = np.zeros(n)
         x = 1
@@ -138,7 +141,7 @@ The following is accepted::
 
 The following is accepted::
 
-    @jit
+    @njit
     def foo(n):
         result = np.zeros(n)
         x = 1
