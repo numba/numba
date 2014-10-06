@@ -48,7 +48,14 @@ def expand_macros_in_block(constants, block):
                     calls.append((inst, macro))
                     args = [constants[arg.name] for arg in rhs.args]
                     kws = dict((k, constants[v.name]) for k, v in rhs.kws)
-                    result = macro.func(*args, **kws)
+                    try:
+                        result = macro.func(*args, **kws)
+                    except BaseException as e:
+                        msg = str(e)
+                        headfmt = "Marco expansion failed at {line}"
+                        head = headfmt.format(line=inst.loc)
+                        newmsg = "{0}:\n{1}".format(head, msg)
+                        raise Exception(newmsg)
                     if result:
                         # Insert a new function
                         result.loc = rhs.loc

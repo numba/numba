@@ -148,6 +148,8 @@ def shared_array(shape, dtype):
     ndim = 1
     if isinstance(shape, tuple):
         ndim = len(shape)
+    elif not isinstance(shape, int):
+        raise TypeError("invalid type for shape; got {0}".format(type(shape)))
 
     fname = "ptx.smem.alloc"
     restype = types.Array(dtype, ndim, 'C')
