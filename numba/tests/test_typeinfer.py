@@ -33,6 +33,20 @@ class TestArgRetCasting(unittest.TestCase):
         else:
             self.fail("Should complain about array casting to float32")
 
+    def test_invalid_arg_type_forcing(self):
+        def foo(iters):
+            a = range(iters)
+            return iters
+
+        args = (types.uint32,)
+        return_type = types.uint8
+        cres = compile_isolated(foo, args, return_type)
+        typemap = cres.type_annotation.typemap
+        # Argument "iters" must be uint32
+        self.assertEqual(typemap['iters'], types.uint32)
+        # Localized "iters" must be uint32
+        self.assertEqual(typemap['iters.1'], types.uint32)
+
 
 class TestTupleUnify(unittest.TestCase):
     def test_int_tuple_unify(self):
