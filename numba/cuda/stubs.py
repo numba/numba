@@ -148,10 +148,12 @@ def shared_array(shape, dtype):
     ndim = 1
     if isinstance(shape, tuple):
         ndim = len(shape)
+    elif not isinstance(shape, int):
+        raise TypeError("invalid type for shape; got {0}".format(type(shape)))
 
     fname = "ptx.smem.alloc"
     restype = types.Array(dtype, ndim, 'C')
-    if ndim == 1:
+    if isinstance(shape, int):
         sig = typing.signature(restype, types.intp, types.Any)
     else:
         sig = typing.signature(restype, types.UniTuple(types.intp, ndim),
@@ -177,10 +179,12 @@ def local_array(shape, dtype):
     ndim = 1
     if isinstance(shape, tuple):
         ndim = len(shape)
+    elif not isinstance(shape, int):
+        raise TypeError("invalid type for shape; got {0}".format(type(shape)))
 
     fname = "ptx.lmem.alloc"
     restype = types.Array(dtype, ndim, 'C')
-    if ndim == 1:
+    if isinstance(shape, int):
         sig = typing.signature(restype, types.intp, types.Any)
     else:
         sig = typing.signature(restype, types.UniTuple(types.intp, ndim),
