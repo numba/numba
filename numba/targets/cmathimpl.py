@@ -109,6 +109,7 @@ def intrinsic_complex_unary(inner_func):
 
 
 NAN = float('nan')
+INF = float('inf')
 
 @register
 @implement(cmath.exp, types.Kind(types.Complex))
@@ -448,3 +449,66 @@ def asin_impl(context, builder, sig, args):
 
     return context.compile_internal(builder, asin_impl, sig, args)
 
+@register
+@implement(cmath.atan, types.Kind(types.Complex))
+def atan_impl(context, builder, sig, args):
+    def atan_impl(z):
+        """cmath.atan(z) = -j * cmath.atanh(z j)"""
+        r = cmath.atanh(complex(-z.imag, z.real))
+        return complex(r.imag, -r.real)
+
+    return context.compile_internal(builder, atan_impl, sig, args)
+
+@register
+@implement(cmath.atanh, types.Kind(types.Complex))
+def atanh_impl(context, builder, sig, args):
+    LN_4 = math.log(4)
+    THRES_LARGE = math.sqrt(mathimpl.FLT_MAX / 4)
+    THRES_SMALL = math.sqrt(mathimpl.FLT_MIN)
+    PI_12 = math.pi / 2
+
+    def atanh_impl(z):
+        """cmath.atanh(z)"""
+        # CPython's algorithm (see c_atanh() in cmathmodule.c)
+        if z.real < 0.:
+            # Reduce to case where z.real >= 0., using atanh(z) = -atanh(-z).
+            negate = True
+            z = -z
+        else:
+            negate = False
+
+        ay = abs(z.imag)
+        if math.isnan(z.real) or z.real > THRES_LARGE or ay > THRES_LARGE:
+            if math.isinf(z.imag):
+                real = math.copysign(0., z.real)
+            elif math.isinf(z.real):
+                real = 0.
+            else:
+                # may be safe from overflow, depending on hypot's implementation...
+                h = math.hypot(z.real * 0.5, z.imag * 0.5)
+                real = z.real/4./h/h
+            imag = -math.copysign(PI_12, -z.imag)
+        elif z.real == 1. and ay < THRES_SMALL:
+            # C99 standard says:  atanh(1+/-0.) should be inf +/- 0j
+            if ay == 0.:
+                real = INF
+                imag = z.imag
+            else:
+                real = -math.log(math.sqrt(ay) /
+                                 math.sqrt(math.hypot(ay, 2.)))
+                imag = math.copysign(math.atan2(2., -ay) / 2, z.imag)
+        else:
+            sqay = ay * ay
+            zr1 = 1 - z.real
+            real = math.log1p(4. * z.real / (zr1 * zr1 + sqay)) * 0.25
+            imag = -math.atan2(-2. * z.imag,
+                               zr1 * (1 + z.real) - sqay) * 0.5
+
+        if math.isnan(z.imag):
+            imag = NAN
+        if negate:
+            return complex(-real, -imag)
+        else:
+            return complex(real, imag)
+
+    return context.compile_internal(builder, atanh_impl, sig, args)

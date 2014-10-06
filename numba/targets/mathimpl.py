@@ -19,6 +19,7 @@ register = registry.register
 # Helpers, shared with cmathimpl.
 
 FLT_MAX = 3.402823466E+38
+FLT_MIN = 1.175494351E-38
 
 FLOAT_ABS_MASK = 0x7fffffff
 FLOAT_SIGN_MASK = 0x80000000
