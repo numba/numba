@@ -7,6 +7,10 @@ from __future__ import absolute_import, print_function, division
 from numba import ir
 
 
+class MacroError(Exception):
+    pass
+
+
 def expand_macros(blocks):
     constants = {}
     for blk in blocks.values():
@@ -52,10 +56,10 @@ def expand_macros_in_block(constants, block):
                         result = macro.func(*args, **kws)
                     except BaseException as e:
                         msg = str(e)
-                        headfmt = "Marco expansion failed at {line}"
+                        headfmt = "Macro expansion failed at {line}"
                         head = headfmt.format(line=inst.loc)
                         newmsg = "{0}:\n{1}".format(head, msg)
-                        raise Exception(newmsg)
+                        raise MacroError(newmsg)
                     if result:
                         # Insert a new function
                         result.loc = rhs.loc
