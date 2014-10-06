@@ -413,3 +413,38 @@ def acosh_impl(context, builder, sig, args):
         #return cmath.log(z + cmath.sqrt(z + 1.) * cmath.sqrt(z - 1.))
 
     return context.compile_internal(builder, acosh_impl, sig, args)
+
+@register
+@implement(cmath.asinh, types.Kind(types.Complex))
+def asinh_impl(context, builder, sig, args):
+    LN_4 = math.log(4)
+    THRES = mathimpl.FLT_MAX / 4
+
+    def asinh_impl(z):
+        """cmath.asinh(z)"""
+        # CPython's algorithm (see c_asinh() in cmathmodule.c)
+        if abs(z.real) > THRES or abs(z.imag) > THRES:
+            real = math.copysign(
+                math.log(math.hypot(z.real * 0.5, z.imag * 0.5)) + LN_4,
+                z.real)
+            imag = math.atan2(z.imag, abs(z.real))
+            return complex(real, imag)
+        else:
+            s1 = cmath.sqrt(complex(1. + z.imag, -z.real))
+            s2 = cmath.sqrt(complex(1. - z.imag, z.real))
+            real = math.asinh(s1.real * s2.imag - s2.real * s1.imag)
+            imag = math.atan2(z.imag, s1.real * s2.real - s1.imag * s2.imag)
+            return complex(real, imag)
+
+    return context.compile_internal(builder, asinh_impl, sig, args)
+
+@register
+@implement(cmath.asin, types.Kind(types.Complex))
+def asin_impl(context, builder, sig, args):
+    def asin_impl(z):
+        """cmath.asin(z) = -j * cmath.asinh(z j)"""
+        r = cmath.asinh(complex(-z.imag, z.real))
+        return complex(r.imag, -r.real)
+
+    return context.compile_internal(builder, asin_impl, sig, args)
+

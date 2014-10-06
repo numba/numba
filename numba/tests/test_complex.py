@@ -304,6 +304,12 @@ class TestCMath(BaseComplexTest, TestCase):
     def test_acos_npm(self):
         self.check_unary_func(acos_usecase, no_pyobj_flags, ulps=2)
 
+    def test_asin(self):
+        self.check_unary_func(asin_usecase, enable_pyobj_flags, ulps=2)
+
+    def test_asin_npm(self):
+        self.check_unary_func(asin_usecase, no_pyobj_flags, ulps=2)
+
     def test_cos(self):
         self.check_unary_func(cos_usecase, enable_pyobj_flags, ulps=2)
 
@@ -334,6 +340,12 @@ class TestCMath(BaseComplexTest, TestCase):
 
     def test_acosh_npm(self):
         self.check_unary_func(acosh_usecase, no_pyobj_flags)
+
+    def test_asinh(self):
+        self.check_unary_func(asinh_usecase, enable_pyobj_flags, ulps=2)
+
+    def test_asinh_npm(self):
+        self.check_unary_func(asinh_usecase, no_pyobj_flags, ulps=2)
 
     def test_cosh(self):
         self.check_unary_func(cosh_usecase, enable_pyobj_flags, ulps=2)
