@@ -140,6 +140,13 @@ class TestCUDAVectorize(unittest.TestCase):
         result = cuda_ufunc.reduce(dx, stream=stream)
         self.assertEqual(result, gold)
 
+    def test_auto_transfer(self):
+        n = 10
+        x = np.arange(n, dtype=np.int32)
+        dx = cuda.to_device(x)
+        y = cuda_ufunc(x, dx).copy_to_host()
+        np.testing.assert_equal(y, x + x)
+
 
 if __name__ == '__main__':
     unittest.main()

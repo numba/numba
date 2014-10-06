@@ -188,14 +188,14 @@ class UFuncMechanism(object):
 
         # Prepare argument on the device
         devarys = []
-        all_device = True
+        any_device = False
         for a in args:
             if cr.is_device_array(a):
                 devarys.append(a)
+                any_device = True
             else:
                 dev_a = cr.to_device(a, stream=stream)
                 devarys.append(dev_a)
-                all_device = False
 
         # Launch
         shape = args[0].shape
@@ -206,8 +206,8 @@ class UFuncMechanism(object):
             devarys.extend([devout])
             cr.launch(func, shape[0], stream, devarys)
 
-            if all_device:
-                # If all arguments are on device,
+            if any_device:
+                # If any of the arguments are on device,
                 # Keep output on the device
                 return devout.reshape(outshape)
             else:
