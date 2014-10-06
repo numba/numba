@@ -5,7 +5,7 @@ from numba import types, intrinsics
 from numba.utils import PYVERSION
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     AbstractTemplate, builtin_global, builtin,
-                                    builtin_attr, signature)
+                                    builtin_attr, signature, bound_function)
 
 builtin_global(range, types.range_type)
 if PYVERSION < (3, 0):
@@ -503,23 +503,31 @@ class CmpOpEqArray(AbstractTemplate):
 
 #-------------------------------------------------------------------------------
 class ComplexAttribute(AttributeTemplate):
+
     def resolve_real(self, ty):
         return self.innertype
 
     def resolve_imag(self, ty):
         return self.innertype
 
+    @bound_function("complex.conjugate")
+    def resolve_conjugate(self, ty, args, kws):
+        assert not args
+        assert not kws
+        return signature(ty)
 
-@builtin_attr
-class Complex64Attribute(ComplexAttribute):
-    key = types.complex64
-    innertype = types.float32
 
+def register_complex_attributes(ty):
+    @builtin_attr
+    class ConcreteComplexAttribute(ComplexAttribute):
+        key = ty
+        try:
+            innertype = ty.underlying_float
+        except AttributeError:
+            innertype = ty
 
-@builtin_attr
-class Complex128Attribute(ComplexAttribute):
-    key = types.complex128
-    innertype = types.float64
+for ty in types.number_domain:
+    register_complex_attributes(ty)
 
 #-------------------------------------------------------------------------------
 

@@ -128,7 +128,7 @@ class BaseContext(object):
         self.typing_context = typing_context
 
         self.defns = defaultdict(Overloads)
-        self.attrs = utils.UniqueDict()
+        self.attrs = defaultdict(Overloads)
         self.users = utils.UniqueDict()
 
         self.insert_func_defn(builtin_registry.functions)
@@ -163,8 +163,8 @@ class BaseContext(object):
             self.defns[defn.key].append(defn)
 
     def insert_attr_defn(self, defns):
-        for attr in defns:
-            self.attrs[attr.key] = attr
+        for imp in defns:
+            self.attrs[imp.attr].append(imp)
 
     def insert_user_function(self, func, fndesc, libs=()):
         imp = user_function(func, fndesc, libs)
@@ -179,7 +179,7 @@ class BaseContext(object):
         clsty = types.Object(cls)
         for name, vtype in utils.iteritems(attrs):
             imp = python_attr_impl(clsty, name, vtype)
-            self.attrs[imp.key] = imp
+            self.attrs[imp.attr].append(imp)
 
     def remove_user_function(self, func):
         """
@@ -522,33 +522,34 @@ class BaseContext(object):
                 return self.unpack_value(builder, elemty, dptr)
             return imp
 
-        key = typ, attr
+        if isinstance(typ, types.Module):
+            # Implement get attribute for module-level globals
+            # NOTE: we are treating them as constants
+            attrty = self.typing_context.resolve_module_constants(typ, attr)
+
+            if attrty is not None:
+                @impl_attribute(typ, attr, attrty)
+                def imp(context, builder, typ, val):
+                    val = getattr(typ.pymod, attr)
+                    return context.get_constant(attrty, val)
+
+                return imp
+            else:
+                # No implementation
+                return None
+
+        # Lookup specific attribute implementation for this type
+        overloads = self.attrs[attr]
         try:
-            return self.attrs[key]
-        except KeyError:
-            if isinstance(typ, types.Module):
-                # Implement get attribute for module-level globals
-                # NOTE: we are treating them as constants
-                attrty = self.typing_context.resolve_module_constants(typ, attr)
-
-                if attrty is not None:
-                    @impl_attribute(typ, attr, attrty)
-                    def imp(context, builder, typ, val):
-                        val = getattr(typ.pymod, attr)
-                        return context.get_constant(attrty, val)
-
-                    return imp
-                else:
-                    # No implementation
-                    return
-            elif typ.is_parametric:
-                key = type(typ), attr
-                if key in self.attrs:
-                    return self.attrs[key]
-                else:
-                    key = type(typ), None
-                    return self.attrs[key]
-            raise
+            return overloads.find(typing.signature(types.Any, typ))
+        except NotImplementedError:
+            pass
+        # Lookup generic getattr implementation for this type
+        overloads = self.attrs[None]
+        try:
+            return overloads.find(typing.signature(types.Any, typ))
+        except NotImplementedError:
+            raise Exception("No definition for lowering %s.%s" % (typ, attr))
 
     def get_argument_value(self, builder, ty, val):
         """

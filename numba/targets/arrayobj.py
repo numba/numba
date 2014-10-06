@@ -482,7 +482,7 @@ def numpy_prod(context, builder, sig, args):
 
 
 @builtin_attr
-@impl_attribute(types.Array, "shape", types.Kind(types.UniTuple))
+@impl_attribute(types.Kind(types.Array), "shape", types.Kind(types.UniTuple))
 def array_shape(context, builder, typ, value):
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
@@ -490,7 +490,7 @@ def array_shape(context, builder, typ, value):
 
 
 @builtin_attr
-@impl_attribute(types.Array, "strides", types.Kind(types.UniTuple))
+@impl_attribute(types.Kind(types.Array), "strides", types.Kind(types.UniTuple))
 def array_strides(context, builder, typ, value):
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
@@ -498,13 +498,13 @@ def array_strides(context, builder, typ, value):
 
 
 @builtin_attr
-@impl_attribute(types.Array, "ndim", types.intp)
+@impl_attribute(types.Kind(types.Array), "ndim", types.intp)
 def array_ndim(context, builder, typ, value):
     return context.get_constant(types.intp, typ.ndim)
 
 
 @builtin_attr
-@impl_attribute(types.Array, "size", types.intp)
+@impl_attribute(types.Kind(types.Array), "size", types.intp)
 def array_size(context, builder, typ, value):
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
@@ -513,12 +513,13 @@ def array_size(context, builder, typ, value):
 
 
 @builtin_attr
-@impl_attribute_generic(types.Array)
+@impl_attribute_generic(types.Kind(types.Array))
 def array_record_getattr(context, builder, typ, value, attr):
     arrayty = make_array(typ)
     array = arrayty(context, builder, value)
 
     rectype = typ.dtype
+    assert isinstance(rectype, types.Record)
     dtype = rectype.typeof(attr)
     offset = rectype.offset(attr)
 
@@ -562,7 +563,7 @@ def make_array_flat_cls(flatiterty):
 
 
 @builtin_attr
-@impl_attribute(types.Array, "flat", types.Kind(types.NumpyFlatType))
+@impl_attribute(types.Kind(types.Array), "flat", types.Kind(types.NumpyFlatType))
 def make_array_flatiter(context, builder, arrty, arr):
     flatitercls = make_array_flat_cls(types.NumpyFlatType(arrty))
     flatiter = flatitercls(context, builder)
