@@ -7,7 +7,7 @@ import dis
 import sys
 import inspect
 from collections import namedtuple
-from numba import utils, targets
+from numba import utils
 from numba.config import PYVERSION
 
 opcode_info = namedtuple('opcode_info', ['argsize'])

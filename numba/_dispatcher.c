@@ -14,7 +14,7 @@ typedef struct DispatcherObject{
     dispatcher_t *dispatcher;
     int can_compile;        /* Can auto compile */
     /* Borrowed references */
-    PyObject *firstdef, *fallbackdef;
+    PyObject *firstdef, *fallbackdef, *interpdef;
 } DispatcherObject;
 
 static int tc_int8;
@@ -101,6 +101,7 @@ Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
     self->can_compile = 1;
     self->firstdef = NULL;
     self->fallbackdef = NULL;
+    self->interpdef = NULL;
     return 0;
 }
 
@@ -113,9 +114,15 @@ Dispatcher_Insert(DispatcherObject *self, PyObject *args)
     int i, sigsz;
     int *sig;
     int objectmode = 0;
+    int interpmode = 0;
 
-    if (!PyArg_ParseTuple(args, "OO!|i", &sigtup, &PyCFunction_Type,
-                          &cfunc, &objectmode)) {
+    if (!PyArg_ParseTuple(args, "OO|ii", &sigtup,
+                          &cfunc, &objectmode, &interpmode)) {
+        return NULL;
+    }
+
+    if (!interpmode && !PyObject_TypeCheck(cfunc, &PyCFunction_Type) ) {
+        PyErr_SetString(PyExc_TypeError, "must be builtin_function_or_method");
         return NULL;
     }
 
@@ -126,17 +133,23 @@ Dispatcher_Insert(DispatcherObject *self, PyObject *args)
         sig[i] = PyLong_AsLong(PySequence_Fast_GET_ITEM(sigtup, i));
     }
 
-    /* The reference to cfunc is borrowed; this only works because the
-       derived Python class also stores an (owned) reference to cfunc. */
-    dispatcher_add_defn(self->dispatcher, sig, (void*) cfunc);
+    if (!interpmode) {
+        /* The reference to cfunc is borrowed; this only works because the
+           derived Python class also stores an (owned) reference to cfunc. */
+        dispatcher_add_defn(self->dispatcher, sig, (void*) cfunc);
 
-    /* Add first definition */
-    if (!self->firstdef) {
-        self->firstdef = cfunc;
+        /* Add first definition */
+        if (!self->firstdef) {
+            self->firstdef = cfunc;
+        }
     }
     /* Add pure python fallback */
     if (!self->fallbackdef && objectmode){
         self->fallbackdef = cfunc;
+    }
+    /* Add interpeter fallback */
+    if (!self->interpdef && interpmode) {
+        self->interpdef = cfunc;
     }
 
     free(sig);
@@ -384,7 +397,12 @@ compile_and_invoke(DispatcherObject *self, PyObject *args, PyObject *kws)
     if (cfunc == NULL)
         return NULL;
 
-    retval = call_cfunc(cfunc, args, kws);
+    if (PyObject_TypeCheck(cfunc, &PyCFunction_Type)) {
+        retval = call_cfunc(cfunc, args, kws);
+    } else {
+        // Re-enter interpreter
+        retval = PyObject_Call(cfunc, args, kws);
+    }
     Py_DECREF(cfunc);
 
     return retval;
@@ -426,6 +444,7 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
        has been disabled. */
     cfunc = dispatcher_resolve(self->dispatcher, tys, &matches,
                                !self->can_compile);
+
     if (matches == 1) {
         /* Definition is found */
         retval = call_cfunc(cfunc, args, kws);
