@@ -111,6 +111,11 @@ class BaseComplexTest(object):
                  float('-inf'), float('+inf'), float('nan')]
         return [complex(x, y) for x, y in itertools.product(reals, reals)]
 
+    def non_nan_values(self):
+        reals = [-0.0, +0.0, 1, -1, -math.pi, +math.pi,
+                 float('inf'), float('-inf')]
+        return [complex(x, y) for x, y in itertools.product(reals, reals)]
+
     def run_unary(self, pyfunc, x_types, x_values, ulps=1,
                   flags=enable_pyobj_flags):
         for tx in x_types:
@@ -208,12 +213,12 @@ class TestCMath(BaseComplexTest, TestCase):
         self.run_unary(pyfunc, [types.complex128, types.complex64],
                        self.basic_values(), flags=flags)
 
-    def check_unary_func(self, pyfunc, flags, ulps=1):
+    def check_unary_func(self, pyfunc, flags, ulps=1, values=None):
         self.run_unary(pyfunc, [types.complex128],
-                       self.more_values(), flags=flags, ulps=ulps)
+                       values or self.more_values(), flags=flags, ulps=ulps)
         # Avoid discontinuities around pi when in single precision.
         self.run_unary(pyfunc, [types.complex64],
-                       self.basic_values(), flags=flags, ulps=ulps)
+                       values or self.basic_values(), flags=flags, ulps=ulps)
 
     # Conversions
 
@@ -314,10 +319,12 @@ class TestCMath(BaseComplexTest, TestCase):
         self.check_unary_func(asin_usecase, no_pyobj_flags, ulps=2)
 
     def test_atan(self):
-        self.check_unary_func(atan_usecase, enable_pyobj_flags, ulps=2)
+        self.check_unary_func(atan_usecase, enable_pyobj_flags, ulps=2,)
+                              #values=self.non_infinite_values())
 
     def test_atan_npm(self):
-        self.check_unary_func(atan_usecase, no_pyobj_flags, ulps=2)
+        self.check_unary_func(atan_usecase, no_pyobj_flags, ulps=2,)
+                              #values=self.non_infinite_values())
 
     def test_cos(self):
         self.check_unary_func(cos_usecase, enable_pyobj_flags, ulps=2)

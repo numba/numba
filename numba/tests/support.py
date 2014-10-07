@@ -92,6 +92,7 @@ class TestCase(unittest.TestCase):
     _exact_typesets = [(bool, np.bool_), utils.INT_TYPES, (str,), (utils.text_type),]
     _approx_typesets = [(float,), (complex,), (np.inexact)]
     _sequence_typesets = [(tuple,)]
+    _float_types = (float, np.floating)
     _complex_types = (complex, np.complexfloating)
 
     def assertPreciseEqual(self, first, second, prec='exact', ulps=1,
@@ -124,14 +125,23 @@ class TestCase(unittest.TestCase):
 
     def _assertPreciseEqual(self, first, second, prec='exact', ulps=1,
                             msg=None):
+        """Recursive workhorse for assertPreciseEqual()."""
+
         def _assertNumberEqual(first, second, delta=None):
             if (delta is None or first == second == 0.0
                 or math.isinf(first) or math.isinf(second)):
                 self.assertEqual(first, second, msg=msg)
+                # For signed zeros
+                try:
+                    if math.copysign(1, first) != math.copysign(1, second):
+                        self.fail(
+                            self._formatMessage(msg,
+                                                "%s != %s" % (first, second)))
+                except TypeError:
+                    pass
             else:
                 self.assertAlmostEqual(first, second, delta=delta, msg=msg)
 
-        """Recursive workhorse for assertPreciseEqual()."""
         for tp in self._sequence_typesets:
             # For recognized sequences, recurse
             if isinstance(first, tp) or isinstance(second, tp):
@@ -186,13 +196,13 @@ class TestCase(unittest.TestCase):
                 raise ValueError("unsupported precision %r" % (prec,))
             k = 2 ** (ulps - bits - 1)
             delta = k * (abs(first) + abs(second))
-            if isinstance(first, self._complex_types):
-                _assertNumberEqual(first.real, second.real, delta)
-                _assertNumberEqual(first.imag, second.imag, delta)
-            else:
-                _assertNumberEqual(first, second, delta)
         else:
-            _assertNumberEqual(first, second)
+            delta = None
+        if isinstance(first, self._complex_types):
+            _assertNumberEqual(first.real, second.real, delta)
+            _assertNumberEqual(first.imag, second.imag, delta)
+        else:
+            _assertNumberEqual(first, second, delta)
 
     def run_nullary_func(self, pyfunc, flags):
         """

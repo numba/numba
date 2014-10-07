@@ -79,6 +79,10 @@ class TestAssertPreciseEqual(TestCase):
     def test_float_values(self):
         for tp in [float, np.float32, np.float64]:
             self.eq(tp(1.5), tp(1.5))
+            # Signed zeros
+            self.eq(tp(0.0), tp(0.0))
+            self.eq(tp(-0.0), tp(-0.0))
+            self.ne(tp(0.0), tp(-0.0))
             # Infinities
             self.eq(tp(INF), tp(INF))
             self.ne(tp(INF), tp(1e38))
@@ -89,11 +93,6 @@ class TestAssertPreciseEqual(TestCase):
             self.ne(tp(NAN), tp(0))
             self.ne(tp(NAN), tp(INF))
             self.ne(tp(NAN), tp(-INF))
-            # Signed zeros
-            self.eq(tp(0.0), tp(0.0))
-            self.eq(tp(-0.0), tp(-0.0))
-            # FIXME
-            #self.ne(tp(0.0), tp(-0.0))
 
     def test_float64_values(self):
         for tp in [float, np.float64]:
@@ -104,10 +103,20 @@ class TestAssertPreciseEqual(TestCase):
         self.ne(tp(1.0 + FLT_EPSILON), tp(1.0))
 
     def test_complex_values(self):
+        # Complex literals with signed zeros are confusing, better use
+        # the explicit constructor.
+        c_pp, c_pn, c_np, c_nn = [complex(0.0, 0.0), complex(0.0, -0.0),
+                                  complex(-0.0, 0.0), complex(-0.0, -0.0)]
         for tp in [complex, np.complex64, np.complex128]:
             self.eq(tp(1 + 2j), tp(1 + 2j))
             self.ne(tp(1 + 1j), tp(1 + 2j))
             self.ne(tp(2 + 2j), tp(1 + 2j))
+            # Signed zeros
+            self.eq(tp(c_pp), tp(c_pp))
+            self.eq(tp(c_np), tp(c_np))
+            self.eq(tp(c_nn), tp(c_nn))
+            self.ne(tp(c_pp), tp(c_pn))
+            self.ne(tp(c_pn), tp(c_nn))
             # Infinities
             self.eq(tp(complex(INF, INF)), tp(complex(INF, INF)))
             self.eq(tp(complex(INF, -INF)), tp(complex(INF, -INF)))

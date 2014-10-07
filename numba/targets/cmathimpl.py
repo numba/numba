@@ -75,14 +75,23 @@ def rect_impl(context, builder, sig, args):
         if not phi_is_finite:
             if not r:
                 # cmath.rect(0, phi={inf, nan}) = 0
-                return complex(r, r)
+                return abs(r)
             if math.isinf(r):
                 # cmath.rect(inf, phi={inf, nan}) = inf + j phi
                 return complex(r, phi)
-        if not phi:
-            # cmath.rect(r, 0) = r
-            return complex(r, phi)
-        return r * complex(math.cos(phi), math.sin(phi))
+        real = math.cos(phi)
+        imag = math.sin(phi)
+        if real == 0. and math.isinf(r):
+            # 0 * inf would return NaN, we want to keep 0 but xor the sign
+            real /= r
+        else:
+            real *= r
+        if imag == 0. and math.isinf(r):
+            # ditto
+            imag /= r
+        else:
+            imag *= r
+        return complex(real, imag)
 
     inner_sig = signature(sig.return_type, *sig.args + (types.boolean,))
     return context.compile_internal(builder, rect, inner_sig,
@@ -349,7 +358,10 @@ def tanh_impl(context, builder, sig, args):
         y = z.imag
         if math.isinf(x):
             real = math.copysign(1., x)
-            imag = math.copysign(0., y)
+            if math.isinf(y):
+                imag = 0.
+            else:
+                imag = math.copysign(0., math.sin(2. * y))
             return complex(real, imag)
         # This is CPython's algorithm (see c_tanh() in cmathmodule.c).
         # XXX how to force float constants into single precision?
@@ -457,7 +469,11 @@ def atan_impl(context, builder, sig, args):
     def atan_impl(z):
         """cmath.atan(z) = -j * cmath.atanh(z j)"""
         r = cmath.atanh(complex(-z.imag, z.real))
-        return complex(r.imag, -r.real)
+        if math.isinf(z.real) and math.isnan(z.imag):
+            # XXX this is odd but necessary
+            return complex(r.imag, r.real)
+        else:
+            return complex(r.imag, -r.real)
 
     return context.compile_internal(builder, atan_impl, sig, args)
 
