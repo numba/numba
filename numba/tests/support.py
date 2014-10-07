@@ -109,6 +109,20 @@ class TestCase(unittest.TestCase):
         Any value of *prec* other than 'exact', 'single' or 'double'
         will raise an error.
         """
+        try:
+            self._assertPreciseEqual(first, second, prec, ulps, msg)
+        except AssertionError as exc:
+            failure_msg = str(exc)
+            # Fall off of the 'except' scope to avoid Python 3 exception
+            # chaining.
+        else:
+            return
+        # Decorate the failure message with more information
+        self.fail("when comparing %s and %s: %s" % (first, second, failure_msg))
+
+    def _assertPreciseEqual(self, first, second, prec='exact', ulps=1,
+                            msg=None):
+        """Recursive workhorse for assertPreciseEqual()."""
         for tp in self._sequence_typesets:
             # For recognized sequences, recurse
             if isinstance(first, tp) or isinstance(second, tp):
@@ -116,7 +130,7 @@ class TestCase(unittest.TestCase):
                 self.assertIsInstance(second, tp)
                 self.assertEqual(len(first), len(second), msg=msg)
                 for a, b in zip(first, second):
-                    self.assertPreciseEqual(a, b, prec, ulps, msg)
+                    self._assertPreciseEqual(a, b, prec, ulps, msg)
                 return
         for tp in self._exact_typesets:
             # One or another could be the expected, the other the actual;
@@ -157,10 +171,10 @@ class TestCase(unittest.TestCase):
                 and cmath.isinf(first) and cmath.isinf(second)):
                 # For infinite complex numbers, recurse on real
                 # and imaginary parts.
-                self.assertPreciseEqual(first.real, second.real,
-                                        prec, ulps, msg)
-                self.assertPreciseEqual(first.imag, second.imag,
-                                        prec, ulps, msg)
+                self._assertPreciseEqual(first.real, second.real,
+                                         prec, ulps, msg)
+                self._assertPreciseEqual(first.imag, second.imag,
+                                         prec, ulps, msg)
                 return
             if prec == 'single':
                 bits = 24
