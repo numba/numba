@@ -5,7 +5,7 @@ Generic helpers for LLVM code generation.
 from __future__ import print_function, division, absolute_import
 from contextlib import contextmanager
 import functools
-
+import re
 from llvm.core import Constant, Type
 import llvm.core as lc
 
@@ -238,8 +238,8 @@ def if_likely(builder, pred):
 @contextmanager
 def ifthen(builder, pred):
     bb = builder.basic_block
-    bbif = append_basic_block(builder, bb.name + '.if')
-    bbend = append_basic_block(builder, bb.name + '.endif')
+    bbif = append_basic_block(builder, add_postfix(bb.name, '.if'))
+    bbend = append_basic_block(builder, add_postfix(bb.name, '.endif'))
     builder.cbranch(pred, bbif, bbend)
 
     with goto_block(builder, bbif):
@@ -742,3 +742,20 @@ def cbranch_or_continue(builder, cond, bbtrue):
     builder.cbranch(cond, bbtrue, bbcont)
     builder.position_at_end(bbcont)
     return bbcont
+
+
+def add_postfix(name, postfix):
+    """Add postfix to string.  If the postfix is already there, add a counter.
+    """
+    regex = "(.*{0})([0-9]*)$".format(postfix)
+    m = re.match(regex, name)
+    if m:
+        head, ct = m.group(1), m.group(2)
+        if len(ct):
+            ct = int(ct) + 1
+        else:
+            ct = 1
+
+        return "{head}{ct}".format(head=head, ct=ct)
+    return name + postfix
+
