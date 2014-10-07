@@ -132,9 +132,15 @@ def exp_impl(x, y, x_is_finite, y_is_finite):
     elif x > 0.0:
         # x == +inf
         if y_is_finite:
-            c = math.cos(y)
-            s = math.sin(y)
-            return complex(x * c, y * s)
+            real = math.cos(y)
+            imag = math.sin(y)
+            # Avoid NaNs if math.cos(y) or math.sin(y) == 0
+            # (e.g. cmath.exp(inf + 0j) == inf + 0j)
+            if real != 0:
+                real *= x
+            if imag != 0:
+                imag *= x
+            return complex(real, imag)
         else:
             return complex(x, NAN)
     else:
@@ -267,19 +273,17 @@ def cosh_impl(context, builder, sig, args):
         x = z.real
         y = z.imag
         if math.isinf(x):
-            real = abs(x)
-            if y == 0.0:
-                # x = +inf, y = 0 => cmath.cosh(x + y j) = inf + 0j
-                imag = y
-            elif math.isnan(y):
+            if math.isnan(y):
                 # x = +inf, y = NaN => cmath.cosh(x + y j) = inf + Nan * j
+                real = abs(x)
                 imag = y
-            elif y < 0.0:
-                # x = +inf, y < 0 => cmath.cosh(x + y j) = inf - inf * j
-                imag = -real
+            elif y == 0.0:
+                # x = +inf, y = 0 => cmath.cosh(x + y j) = inf + 0j
+                real = abs(x)
+                imag = y
             else:
-                # x = +inf, y > 0 => cmath.cosh(x + y j) = inf + inf * j
-                imag = real
+                real = math.copysign(x, math.cos(y))
+                imag = math.copysign(x, math.sin(y))
             if x < 0.0:
                 # x = -inf => negate imaginary part of result
                 imag = -imag
@@ -308,19 +312,17 @@ def sinh_impl(context, builder, sig, args):
         x = z.real
         y = z.imag
         if math.isinf(x):
-            real = x
-            if y == 0.0:
-                # x = +/-inf, y = 0 => cmath.sinh(x + y j) = x + y * j
-                imag = y
-            elif math.isnan(y):
+            if math.isnan(y):
                 # x = +/-inf, y = NaN => cmath.sinh(x + y j) = x + NaN * j
+                real = x
                 imag = y
-            elif y < 0.0:
-                # x = +/-inf, y < 0 => cmath.cosh(x + y j) = x - inf * j
-                imag = -abs(x)
             else:
-                # x = +/-inf, y > 0 => cmath.cosh(x + y j) = x + inf * j
-                imag = abs(x)
+                real = math.cos(y)
+                imag = math.sin(y)
+                if real != 0.:
+                    real *= x
+                if imag != 0.:
+                    imag *= abs(x)
             return complex(real, imag)
         return complex(math.cos(y) * math.sinh(x),
                        math.sin(y) * math.cosh(x))

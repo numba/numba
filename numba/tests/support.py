@@ -92,6 +92,7 @@ class TestCase(unittest.TestCase):
     _exact_typesets = [(bool, np.bool_), utils.INT_TYPES, (str,), (utils.text_type),]
     _approx_typesets = [(float,), (complex,), (np.inexact)]
     _sequence_typesets = [(tuple,)]
+    _complex_types = (complex, np.complexfloating)
 
     def assertPreciseEqual(self, first, second, prec='exact', ulps=1,
                            msg=None):
@@ -115,6 +116,7 @@ class TestCase(unittest.TestCase):
             failure_msg = str(exc)
             # Fall off of the 'except' scope to avoid Python 3 exception
             # chaining.
+            self.fail("when comparing %s and %s: %s" % (first, second, failure_msg))
         else:
             return
         # Decorate the failure message with more information
@@ -122,6 +124,13 @@ class TestCase(unittest.TestCase):
 
     def _assertPreciseEqual(self, first, second, prec='exact', ulps=1,
                             msg=None):
+        def _assertNumberEqual(first, second, delta=None):
+            if (delta is None or first == second == 0.0
+                or math.isinf(first) or math.isinf(second)):
+                self.assertEqual(first, second, msg=msg)
+            else:
+                self.assertAlmostEqual(first, second, delta=delta, msg=msg)
+
         """Recursive workhorse for assertPreciseEqual()."""
         for tp in self._sequence_typesets:
             # For recognized sequences, recurse
@@ -166,16 +175,9 @@ class TestCase(unittest.TestCase):
             # Not floats.
             pass
 
+        exact_comparison = exact_comparison or prec == 'exact'
+
         if not exact_comparison and prec != 'exact':
-            if (isinstance(first, complex)
-                and cmath.isinf(first) and cmath.isinf(second)):
-                # For infinite complex numbers, recurse on real
-                # and imaginary parts.
-                self._assertPreciseEqual(first.real, second.real,
-                                         prec, ulps, msg)
-                self._assertPreciseEqual(first.imag, second.imag,
-                                         prec, ulps, msg)
-                return
             if prec == 'single':
                 bits = 24
             elif prec == 'double':
@@ -184,9 +186,13 @@ class TestCase(unittest.TestCase):
                 raise ValueError("unsupported precision %r" % (prec,))
             k = 2 ** (ulps - bits - 1)
             delta = k * (abs(first) + abs(second))
-            self.assertAlmostEqual(first, second, delta=delta, msg=msg)
+            if isinstance(first, self._complex_types):
+                _assertNumberEqual(first.real, second.real, delta)
+                _assertNumberEqual(first.imag, second.imag, delta)
+            else:
+                _assertNumberEqual(first, second, delta)
         else:
-            self.assertEqual(first, second, msg=msg)
+            _assertNumberEqual(first, second)
 
     def run_nullary_func(self, pyfunc, flags):
         """

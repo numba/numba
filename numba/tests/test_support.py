@@ -103,6 +103,32 @@ class TestAssertPreciseEqual(TestCase):
         tp = np.float32
         self.ne(tp(1.0 + FLT_EPSILON), tp(1.0))
 
+    def test_complex_values(self):
+        for tp in [complex, np.complex64, np.complex128]:
+            self.eq(tp(1 + 2j), tp(1 + 2j))
+            self.ne(tp(1 + 1j), tp(1 + 2j))
+            self.ne(tp(2 + 2j), tp(1 + 2j))
+            # Infinities
+            self.eq(tp(complex(INF, INF)), tp(complex(INF, INF)))
+            self.eq(tp(complex(INF, -INF)), tp(complex(INF, -INF)))
+            self.eq(tp(complex(-INF, -INF)), tp(complex(-INF, -INF)))
+            self.ne(tp(complex(INF, INF)), tp(complex(INF, -INF)))
+            self.ne(tp(complex(INF, INF)), tp(complex(-INF, INF)))
+            self.eq(tp(complex(INF, 0)), tp(complex(INF, 0)))
+            self.ne(tp(complex(INF, 0)), tp(complex(INF, 1)))
+            # NaNs
+            self.eq(tp(complex(NAN, 0)), tp(complex(NAN, 0)))
+            self.eq(tp(complex(0, NAN)), tp(complex(0, NAN)))
+            self.eq(tp(complex(NAN, NAN)), tp(complex(NAN, NAN)))
+            self.eq(tp(complex(INF, NAN)), tp(complex(INF, NAN)))
+            self.eq(tp(complex(NAN, -INF)), tp(complex(NAN, -INF)))
+            # FIXME
+            #self.ne(tp(complex(NAN, INF)), tp(complex(NAN, -INF)))
+            #self.ne(tp(complex(NAN, 0)), tp(complex(NAN, 1)))
+            #self.ne(tp(complex(INF, NAN)), tp(complex(-INF, NAN)))
+            #self.ne(tp(complex(0, NAN)), tp(complex(1, NAN)))
+            #self.ne(tp(complex(NAN, 0)), tp(complex(0, NAN)))
+
 
 if __name__ == '__main__':
     unittest.main()
