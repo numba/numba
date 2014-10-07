@@ -1,11 +1,8 @@
 from __future__ import print_function
 
-import gc
 import sys
-import weakref
-
 import numba.unittest_support as unittest
-from numba import jit
+from numba import jit, testing
 
 
 class TestClosure(unittest.TestCase):
@@ -94,13 +91,15 @@ class TestClosure(unittest.TestCase):
     def test_jit_inner_function_npm(self):
         self.run_jit_inner_function(nopython=True)
 
-    @unittest.expectedFailure
+    @testing.allow_interpreter_mode
     def test_return_closure(self):
 
         def outer(x):
 
             def inner():
                 return x + 1
+
+            return inner
 
         cfunc = jit(outer)
         self.assertEqual(cfunc(10)(), outer(10)())

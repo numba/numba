@@ -4,8 +4,6 @@ Tests for numba.utils.
 
 from __future__ import print_function, absolute_import
 
-import copy
-
 from numba import utils
 from numba import unittest_support as unittest
 
