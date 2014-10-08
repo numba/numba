@@ -4,10 +4,10 @@ Even simple documentation improvements are encouraged.
 
 # Asking questions
 
-The development mailing-list is at
-https://groups.google.com/a/continuum.io/forum/#!forum/numba-dev.
-There is also a Gmane mirror allowing NNTP access:
-http://news.gmane.org/gmane.comp.python.numba.devel/
+The development mailing-list is at [Google Groups]
+(https://groups.google.com/a/continuum.io/forum/#!forum/numba-dev).
+If you prefer, there is a bidirectional [Gmane mirror]
+(http://news.gmane.org/gmane.comp.python.numba.devel/) allowing NNTP access.
 
 # Contributing patches
 
@@ -16,4 +16,5 @@ containing your work.  When you are done, open a pull request.
 
 # Further reading
 
-Please read the [contributing guide](http://numba.pydata.org/numba-doc/dev/developer/contributing.html).
+Please read the [contributing guide]
+(http://numba.pydata.org/numba-doc/dev/developer/contributing.html).
