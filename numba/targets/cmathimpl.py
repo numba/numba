@@ -75,14 +75,23 @@ def rect_impl(context, builder, sig, args):
         if not phi_is_finite:
             if not r:
                 # cmath.rect(0, phi={inf, nan}) = 0
-                return complex(r, r)
+                return abs(r)
             if math.isinf(r):
                 # cmath.rect(inf, phi={inf, nan}) = inf + j phi
                 return complex(r, phi)
-        if not phi:
-            # cmath.rect(r, 0) = r
-            return complex(r, phi)
-        return r * complex(math.cos(phi), math.sin(phi))
+        real = math.cos(phi)
+        imag = math.sin(phi)
+        if real == 0. and math.isinf(r):
+            # 0 * inf would return NaN, we want to keep 0 but xor the sign
+            real /= r
+        else:
+            real *= r
+        if imag == 0. and math.isinf(r):
+            # ditto
+            imag /= r
+        else:
+            imag *= r
+        return complex(real, imag)
 
     inner_sig = signature(sig.return_type, *sig.args + (types.boolean,))
     return context.compile_internal(builder, rect, inner_sig,
@@ -132,9 +141,15 @@ def exp_impl(x, y, x_is_finite, y_is_finite):
     elif x > 0.0:
         # x == +inf
         if y_is_finite:
-            c = math.cos(y)
-            s = math.sin(y)
-            return complex(x * c, y * s)
+            real = math.cos(y)
+            imag = math.sin(y)
+            # Avoid NaNs if math.cos(y) or math.sin(y) == 0
+            # (e.g. cmath.exp(inf + 0j) == inf + 0j)
+            if real != 0:
+                real *= x
+            if imag != 0:
+                imag *= x
+            return complex(real, imag)
         else:
             return complex(x, NAN)
     else:
@@ -267,19 +282,17 @@ def cosh_impl(context, builder, sig, args):
         x = z.real
         y = z.imag
         if math.isinf(x):
-            real = abs(x)
-            if y == 0.0:
-                # x = +inf, y = 0 => cmath.cosh(x + y j) = inf + 0j
-                imag = y
-            elif math.isnan(y):
+            if math.isnan(y):
                 # x = +inf, y = NaN => cmath.cosh(x + y j) = inf + Nan * j
+                real = abs(x)
                 imag = y
-            elif y < 0.0:
-                # x = +inf, y < 0 => cmath.cosh(x + y j) = inf - inf * j
-                imag = -real
+            elif y == 0.0:
+                # x = +inf, y = 0 => cmath.cosh(x + y j) = inf + 0j
+                real = abs(x)
+                imag = y
             else:
-                # x = +inf, y > 0 => cmath.cosh(x + y j) = inf + inf * j
-                imag = real
+                real = math.copysign(x, math.cos(y))
+                imag = math.copysign(x, math.sin(y))
             if x < 0.0:
                 # x = -inf => negate imaginary part of result
                 imag = -imag
@@ -308,19 +321,17 @@ def sinh_impl(context, builder, sig, args):
         x = z.real
         y = z.imag
         if math.isinf(x):
-            real = x
-            if y == 0.0:
-                # x = +/-inf, y = 0 => cmath.sinh(x + y j) = x + y * j
-                imag = y
-            elif math.isnan(y):
+            if math.isnan(y):
                 # x = +/-inf, y = NaN => cmath.sinh(x + y j) = x + NaN * j
+                real = x
                 imag = y
-            elif y < 0.0:
-                # x = +/-inf, y < 0 => cmath.cosh(x + y j) = x - inf * j
-                imag = -abs(x)
             else:
-                # x = +/-inf, y > 0 => cmath.cosh(x + y j) = x + inf * j
-                imag = abs(x)
+                real = math.cos(y)
+                imag = math.sin(y)
+                if real != 0.:
+                    real *= x
+                if imag != 0.:
+                    imag *= abs(x)
             return complex(real, imag)
         return complex(math.cos(y) * math.sinh(x),
                        math.sin(y) * math.cosh(x))
@@ -347,7 +358,10 @@ def tanh_impl(context, builder, sig, args):
         y = z.imag
         if math.isinf(x):
             real = math.copysign(1., x)
-            imag = math.copysign(0., y)
+            if math.isinf(y):
+                imag = 0.
+            else:
+                imag = math.copysign(0., math.sin(2. * y))
             return complex(real, imag)
         # This is CPython's algorithm (see c_tanh() in cmathmodule.c).
         # XXX how to force float constants into single precision?
@@ -455,7 +469,11 @@ def atan_impl(context, builder, sig, args):
     def atan_impl(z):
         """cmath.atan(z) = -j * cmath.atanh(z j)"""
         r = cmath.atanh(complex(-z.imag, z.real))
-        return complex(r.imag, -r.real)
+        if math.isinf(z.real) and math.isnan(z.imag):
+            # XXX this is odd but necessary
+            return complex(r.imag, r.real)
+        else:
+            return complex(r.imag, -r.real)
 
     return context.compile_internal(builder, atan_impl, sig, args)
 
