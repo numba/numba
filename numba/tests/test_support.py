@@ -21,17 +21,25 @@ class TestAssertPreciseEqual(TestCase):
     Tests for TestCase.assertPreciseEqual().
     """
 
-    def eq(self, left, right):
+    int_types = [int]
+    if utils.PYVERSION < (3,):
+        int_types.append(long)
+    np_float_types = [np.float32, np.float64]
+    float_types = [float] + np_float_types
+    np_complex_types = [np.complex64, np.complex128]
+    complex_types = [complex] + np_complex_types
+
+    def eq(self, left, right, **kwargs):
         def assert_succeed(left, right):
-            self.assertPreciseEqual(left, right)
-            self.assertPreciseEqual(right, left)
+            self.assertPreciseEqual(left, right, **kwargs)
+            self.assertPreciseEqual(right, left, **kwargs)
         assert_succeed(left, right)
         assert_succeed((left, left), (right, right))
 
-    def ne(self, left, right):
+    def ne(self, left, right, **kwargs):
         def assert_fail(left, right):
             try:
-                self.assertPreciseEqual(left, right)
+                self.assertPreciseEqual(left, right, **kwargs)
             except AssertionError:
                 pass
             else:
@@ -43,56 +51,55 @@ class TestAssertPreciseEqual(TestCase):
 
     def test_types(self):
         # assertPreciseEqual() should test for type compatibility
-        int_types = [int]
-        if utils.PYVERSION < (3,):
-            int_types.append(long)
-        np_float_types = [np.float32, np.float64]
-        float_types = [float] + np_float_types
-        np_complex_types = [np.complex64, np.complex128]
-        complex_types = [complex]
         # int-like, float-like, complex-like are not compatible
-        for i, f, c in itertools.product(int_types, float_types, complex_types):
+        for i, f, c in itertools.product(self.int_types, self.float_types,
+                                         self.complex_types):
             self.ne(i(1), f(1))
             self.ne(f(1), c(1))
             self.ne(i(1), c(1))
         # int and long are compatible between each other
-        for u, v in itertools.product(int_types, int_types):
+        for u, v in itertools.product(self.int_types, self.int_types):
             self.eq(u(1), v(1))
         # NumPy float types are not compatible between each other
-        for u, v in itertools.product(np_float_types, np_float_types):
+        for u, v in itertools.product(self.np_float_types, self.np_float_types):
             if u is v:
                 self.eq(u(1), v(1))
             else:
                 self.ne(u(1), v(1))
         # NumPy complex types are not compatible between each other
-        for u, v in itertools.product(np_complex_types, np_complex_types):
+        for u, v in itertools.product(self.np_complex_types, self.np_complex_types):
             if u is v:
                 self.eq(u(1), v(1))
             else:
                 self.ne(u(1), v(1))
 
     def test_int_values(self):
-        self.eq(0, 0)
-        self.ne(0, 1)
-        self.ne(-1, 1)
+        for tp in self.int_types:
+            for prec in ['exact', 'single', 'double']:
+                self.eq(tp(0), tp(0), prec=prec)
+                self.ne(tp(0), tp(1), prec=prec)
+                self.ne(tp(-1), tp(1), prec=prec)
+                self.ne(tp(2**80), tp(1+2**80), prec=prec)
 
     def test_float_values(self):
-        for tp in [float, np.float32, np.float64]:
-            self.eq(tp(1.5), tp(1.5))
-            # Signed zeros
-            self.eq(tp(0.0), tp(0.0))
-            self.eq(tp(-0.0), tp(-0.0))
-            self.ne(tp(0.0), tp(-0.0))
-            # Infinities
-            self.eq(tp(INF), tp(INF))
-            self.ne(tp(INF), tp(1e38))
-            self.eq(tp(-INF), tp(-INF))
-            self.ne(tp(INF), tp(-INF))
-            # NaNs
-            self.eq(tp(NAN), tp(NAN))
-            self.ne(tp(NAN), tp(0))
-            self.ne(tp(NAN), tp(INF))
-            self.ne(tp(NAN), tp(-INF))
+        for tp in self.float_types:
+            for prec in ['exact', 'single', 'double']:
+                self.eq(tp(1.5), tp(1.5), prec=prec)
+                # Signed zeros
+                self.eq(tp(0.0), tp(0.0), prec=prec)
+                self.eq(tp(-0.0), tp(-0.0), prec=prec)
+                self.ne(tp(0.0), tp(-0.0), prec=prec)
+                # Infinities
+                self.eq(tp(INF), tp(INF), prec=prec)
+                self.ne(tp(INF), tp(1e38), prec=prec)
+                self.eq(tp(-INF), tp(-INF), prec=prec)
+                self.ne(tp(INF), tp(-INF), prec=prec)
+                # NaNs
+                self.eq(tp(NAN), tp(NAN), prec=prec)
+                self.ne(tp(NAN), tp(0), prec=prec)
+                self.ne(tp(NAN), tp(INF), prec=prec)
+                self.ne(tp(NAN), tp(-INF), prec=prec)
+
 
     def test_float64_values(self):
         for tp in [float, np.float64]:
@@ -102,41 +109,79 @@ class TestAssertPreciseEqual(TestCase):
         tp = np.float32
         self.ne(tp(1.0 + FLT_EPSILON), tp(1.0))
 
+    def test_float64_values_inexact(self):
+        for tp in [float, np.float64]:
+            for scale in [1.0, -2**3, 2**-4, -2**-20]:
+                a = scale * 1.0
+                b = scale * (1.0 + DBL_EPSILON)
+                c = scale * (1.0 + DBL_EPSILON * 2)
+                d = scale * (1.0 + DBL_EPSILON * 4)
+                self.ne(tp(a), tp(b))
+                self.ne(tp(a), tp(b), prec='exact')
+                self.eq(tp(a), tp(b), prec='double')
+                self.eq(tp(a), tp(b), prec='double', ulps=1)
+                self.ne(tp(a), tp(c), prec='double')
+                self.eq(tp(a), tp(c), prec='double', ulps=2)
+                self.ne(tp(a), tp(d), prec='double', ulps=2)
+                self.eq(tp(a), tp(c), prec='double', ulps=3)
+                self.eq(tp(a), tp(d), prec='double', ulps=3)
+
+    def test_float32_values_inexact(self):
+        tp = np.float32
+        for scale in [1.0, -2**3, 2**-4, -2**-20]:
+            # About the choice of 0.9: there seem to be issues when
+            # converting
+            a = scale * 1.0
+            b = scale * (1.0 + FLT_EPSILON)
+            c = scale * (1.0 + FLT_EPSILON * 2)
+            d = scale * (1.0 + FLT_EPSILON * 4)
+            self.ne(tp(a), tp(b))
+            self.ne(tp(a), tp(b), prec='exact')
+            self.ne(tp(a), tp(b), prec='double')
+            self.eq(tp(a), tp(b), prec='single')
+            self.ne(tp(a), tp(c), prec='single')
+            self.eq(tp(a), tp(c), prec='single', ulps=2)
+            self.ne(tp(a), tp(d), prec='single', ulps=2)
+            self.eq(tp(a), tp(c), prec='single', ulps=3)
+            self.eq(tp(a), tp(d), prec='single', ulps=3)
+
     def test_complex_values(self):
         # Complex literals with signed zeros are confusing, better use
         # the explicit constructor.
         c_pp, c_pn, c_np, c_nn = [complex(0.0, 0.0), complex(0.0, -0.0),
                                   complex(-0.0, 0.0), complex(-0.0, -0.0)]
-        for tp in [complex, np.complex64, np.complex128]:
-            self.eq(tp(1 + 2j), tp(1 + 2j))
-            self.ne(tp(1 + 1j), tp(1 + 2j))
-            self.ne(tp(2 + 2j), tp(1 + 2j))
-            # Signed zeros
-            self.eq(tp(c_pp), tp(c_pp))
-            self.eq(tp(c_np), tp(c_np))
-            self.eq(tp(c_nn), tp(c_nn))
-            self.ne(tp(c_pp), tp(c_pn))
-            self.ne(tp(c_pn), tp(c_nn))
-            # Infinities
-            self.eq(tp(complex(INF, INF)), tp(complex(INF, INF)))
-            self.eq(tp(complex(INF, -INF)), tp(complex(INF, -INF)))
-            self.eq(tp(complex(-INF, -INF)), tp(complex(-INF, -INF)))
-            self.ne(tp(complex(INF, INF)), tp(complex(INF, -INF)))
-            self.ne(tp(complex(INF, INF)), tp(complex(-INF, INF)))
-            self.eq(tp(complex(INF, 0)), tp(complex(INF, 0)))
-            self.ne(tp(complex(INF, 0)), tp(complex(INF, 1)))
-            # NaNs
-            self.eq(tp(complex(NAN, 0)), tp(complex(NAN, 0)))
-            self.eq(tp(complex(0, NAN)), tp(complex(0, NAN)))
-            self.eq(tp(complex(NAN, NAN)), tp(complex(NAN, NAN)))
-            self.eq(tp(complex(INF, NAN)), tp(complex(INF, NAN)))
-            self.eq(tp(complex(NAN, -INF)), tp(complex(NAN, -INF)))
-            # FIXME
-            #self.ne(tp(complex(NAN, INF)), tp(complex(NAN, -INF)))
-            #self.ne(tp(complex(NAN, 0)), tp(complex(NAN, 1)))
-            #self.ne(tp(complex(INF, NAN)), tp(complex(-INF, NAN)))
-            #self.ne(tp(complex(0, NAN)), tp(complex(1, NAN)))
-            #self.ne(tp(complex(NAN, 0)), tp(complex(0, NAN)))
+        for tp in self.complex_types:
+            for prec in ['exact', 'single', 'double']:
+                self.eq(tp(1 + 2j), tp(1 + 2j), prec=prec)
+                self.ne(tp(1 + 1j), tp(1 + 2j), prec=prec)
+                self.ne(tp(2 + 2j), tp(1 + 2j), prec=prec)
+                # Signed zeros
+                self.eq(tp(c_pp), tp(c_pp), prec=prec)
+                self.eq(tp(c_np), tp(c_np), prec=prec)
+                self.eq(tp(c_nn), tp(c_nn), prec=prec)
+                self.ne(tp(c_pp), tp(c_pn), prec=prec)
+                self.ne(tp(c_pn), tp(c_nn), prec=prec)
+                # Infinities
+                self.eq(tp(complex(INF, INF)), tp(complex(INF, INF)), prec=prec)
+                self.eq(tp(complex(INF, -INF)), tp(complex(INF, -INF)), prec=prec)
+                self.eq(tp(complex(-INF, -INF)), tp(complex(-INF, -INF)), prec=prec)
+                self.ne(tp(complex(INF, INF)), tp(complex(INF, -INF)), prec=prec)
+                self.ne(tp(complex(INF, INF)), tp(complex(-INF, INF)), prec=prec)
+                self.eq(tp(complex(INF, 0)), tp(complex(INF, 0)), prec=prec)
+                # NaNs
+                self.eq(tp(complex(NAN, 0)), tp(complex(NAN, 0)), prec=prec)
+                self.eq(tp(complex(0, NAN)), tp(complex(0, NAN)), prec=prec)
+                self.eq(tp(complex(NAN, NAN)), tp(complex(NAN, NAN)), prec=prec)
+                self.eq(tp(complex(INF, NAN)), tp(complex(INF, NAN)), prec=prec)
+                self.eq(tp(complex(NAN, -INF)), tp(complex(NAN, -INF)), prec=prec)
+                # FIXME
+                #self.ne(tp(complex(NAN, INF)), tp(complex(NAN, -INF)))
+                #self.ne(tp(complex(NAN, 0)), tp(complex(NAN, 1)))
+                #self.ne(tp(complex(INF, NAN)), tp(complex(-INF, NAN)))
+                #self.ne(tp(complex(0, NAN)), tp(complex(1, NAN)))
+                #self.ne(tp(complex(NAN, 0)), tp(complex(0, NAN)))
+            # XXX should work with other precisions?
+            self.ne(tp(complex(INF, 0)), tp(complex(INF, 1)), prec='exact')
 
 
 if __name__ == '__main__':
