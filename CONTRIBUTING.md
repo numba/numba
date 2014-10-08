@@ -5,9 +5,9 @@ Even simple documentation improvements are encouraged.
 # Asking questions
 
 The development mailing-list is at [Google Groups]
-(https://groups.google.com/a/continuum.io/forum/#!forum/numba-dev).
+(https://groups.google.com/a/continuum.io/forum/#!forum/numba-users).
 If you prefer, there is a bidirectional [Gmane mirror]
-(http://news.gmane.org/gmane.comp.python.numba.devel/) allowing NNTP access.
+(http://news.gmane.org/gmane.comp.python.numba.user/) allowing NNTP access.
 
 # Contributing patches
 
