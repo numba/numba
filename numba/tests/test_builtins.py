@@ -183,7 +183,9 @@ class TestBuiltins(TestCase):
         for x in [-1.1, 0.0, 1.1]:
             self.assertPreciseEqual(cfunc(x), pyfunc(x), prec='single')
 
-        complex_values = [-1.1 + 0.5j, 0.0 + 0j, 1.1 + 3j]
+        complex_values = [-1.1 + 0.5j, 0.0 + 0j, 1.1 + 3j,
+                          float('inf') + 1j * float('nan'),
+                          float('nan') - 1j * float('inf')]
         cr = compile_isolated(pyfunc, (types.complex64,), flags=flags)
         cfunc = cr.entry_point
         for x in complex_values:

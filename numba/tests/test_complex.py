@@ -1,6 +1,8 @@
 from __future__ import print_function, absolute_import, division
 
 import cmath
+import itertools
+import math
 
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags, utils
@@ -13,6 +15,10 @@ enable_pyobj_flags.set("enable_pyobject")
 no_pyobj_flags = Flags()
 
 
+def div_usecase(x, y):
+    return x / y
+
+
 def real_usecase(x):
     return x.real
 
@@ -23,23 +29,132 @@ def conjugate_usecase(x):
     return x.conjugate()
 
 
-class TestComplex(TestCase):
+def acos_usecase(x):
+    return cmath.acos(x)
 
-    def run_unary(self, pyfunc, x_types, x_values, flags=enable_pyobj_flags,
-                  prec='exact'):
+def cos_usecase(x):
+    return cmath.cos(x)
+
+def asin_usecase(x):
+    return cmath.asin(x)
+
+def sin_usecase(x):
+    return cmath.sin(x)
+
+def atan_usecase(x):
+    return cmath.atan(x)
+
+def tan_usecase(x):
+    return cmath.tan(x)
+
+def acosh_usecase(x):
+    return cmath.acosh(x)
+
+def cosh_usecase(x):
+    return cmath.cosh(x)
+
+def asinh_usecase(x):
+    return cmath.asinh(x)
+
+def sinh_usecase(x):
+    return cmath.sinh(x)
+
+def atanh_usecase(x):
+    return cmath.atanh(x)
+
+def tanh_usecase(x):
+    return cmath.tanh(x)
+
+def exp_usecase(x):
+    return cmath.exp(x)
+
+def isfinite_usecase(x):
+    return cmath.isfinite(x)
+
+def isinf_usecase(x):
+    return cmath.isinf(x)
+
+def isnan_usecase(x):
+    return cmath.isnan(x)
+
+def log_usecase(x):
+    return cmath.log(x)
+
+def log_base_usecase(x, base):
+    return cmath.log(x, base)
+
+def log10_usecase(x):
+    return cmath.log10(x)
+
+def phase_usecase(x):
+    return cmath.phase(x)
+
+def polar_usecase(x):
+    return cmath.polar(x)
+
+def rect_usecase(r, phi):
+    return cmath.rect(r, phi)
+
+def sqrt_usecase(x):
+    return cmath.sqrt(x)
+
+
+class BaseComplexTest(object):
+
+    def basic_values(self):
+        reals = [-0.0, +0.0, 1, -1, +1.5, -3.5,
+                 float('-inf'), float('+inf'), float('nan')]
+        return [complex(x, y) for x, y in itertools.product(reals, reals)]
+
+    def more_values(self):
+        reals = [-0.0, +0.0, 1, -1, +1.5, -3.5, -math.pi, +math.pi,
+                 float('-inf'), float('+inf'), float('nan')]
+        return [complex(x, y) for x, y in itertools.product(reals, reals)]
+
+    def run_unary(self, pyfunc, x_types, x_values, ulps=1,
+                  flags=enable_pyobj_flags):
         for tx in x_types:
             cr = compile_isolated(pyfunc, [tx], flags=flags)
             cfunc = cr.entry_point
+            prec = 'single' if tx in (types.float32, types.complex64) else 'double'
             for vx in x_values:
+                try:
+                    expected = pyfunc(vx)
+                except ValueError as e:
+                    self.assertIn("math domain error", str(e))
+                    continue
                 got = cfunc(vx)
-                expected = pyfunc(vx)
-                msg = 'for input %r' % (vx,)
-                self.assertPreciseEqual(got, expected, prec=prec, msg=msg)
+                msg = 'for input %r with prec %r' % (vx, prec)
+                self.assertPreciseEqual(got, expected, prec=prec,
+                                        ulps=ulps, msg=msg)
+
+    def run_binary(self, pyfunc, value_types, values, ulps=1,
+                   flags=enable_pyobj_flags):
+        for tx, ty in value_types:
+            cr = compile_isolated(pyfunc, [tx, ty], flags=flags)
+            cfunc = cr.entry_point
+            prec = ('single'
+                    if set([tx, ty]) & set([types.float32, types.complex64])
+                    else 'double')
+            for vx, vy in values:
+                try:
+                    expected = pyfunc(vx, vy)
+                except ValueError as e:
+                    self.assertIn("math domain error", str(e))
+                    continue
+                except ZeroDivisionError:
+                    continue
+                got = cfunc(vx, vy)
+                msg = 'for input %r with prec %r' % ((vx, vy), prec)
+                self.assertPreciseEqual(got, expected, prec=prec,
+                                        ulps=ulps, msg=msg)
+
+
+class TestComplex(BaseComplexTest, TestCase):
 
     def test_real(self, flags=enable_pyobj_flags):
         self.run_unary(real_usecase, [types.complex64, types.complex128],
-                       [1+1j, -1+1j, float('inf') + 1j, float('nan') + 1j,
-                        1 + 1j * float('nan')], flags=flags)
+                       self.basic_values(), flags=flags)
         self.run_unary(real_usecase, [types.int8, types.int64],
                        [1, 0, -3], flags=flags)
         self.run_unary(real_usecase, [types.float32, types.float64],
@@ -50,8 +165,7 @@ class TestComplex(TestCase):
 
     def test_imag(self, flags=enable_pyobj_flags):
         self.run_unary(imag_usecase, [types.complex64, types.complex128],
-                       [1+1j, 1-1j, 1j * float('inf'), 1j * float('nan'),
-                        float('nan') + 1j], flags=flags)
+                       self.basic_values(), flags=flags)
         self.run_unary(imag_usecase, [types.int8, types.int64],
                        [1, 0, -3], flags=flags)
         self.run_unary(imag_usecase, [types.float32, types.float64],
@@ -62,8 +176,7 @@ class TestComplex(TestCase):
 
     def test_conjugate(self, flags=enable_pyobj_flags):
         self.run_unary(conjugate_usecase, [types.complex64, types.complex128],
-                       [1+1j, 1-1j, 1j * float('inf'), 1j * float('nan'),
-                        float('nan') + 1j], flags=flags)
+                       self.basic_values(), flags=flags)
         self.run_unary(conjugate_usecase, [types.int8, types.int64],
                        [1, 0, -3], flags=flags)
         self.run_unary(conjugate_usecase, [types.float32, types.float64],
@@ -71,6 +184,206 @@ class TestComplex(TestCase):
 
     def test_conjugate_npm(self):
         self.test_conjugate(flags=no_pyobj_flags)
+
+    def test_div(self, flags=enable_pyobj_flags):
+        """
+        Test complex.__div__ implementation with non-trivial values.
+        """
+        # XXX Fold into test_operator?
+        values = list(itertools.product(self.more_values(), self.more_values()))
+        value_types = [(types.complex128, types.complex128),
+                       (types.complex64, types.complex64)]
+        self.run_binary(div_usecase, value_types, values, flags=flags)
+
+    def test_div_npm(self):
+        self.test_div(flags=no_pyobj_flags)
+
+
+class TestCMath(BaseComplexTest, TestCase):
+    """
+    Tests for cmath module support.
+    """
+
+    def check_predicate_func(self, pyfunc, flags):
+        self.run_unary(pyfunc, [types.complex128, types.complex64],
+                       self.basic_values(), flags=flags)
+
+    def check_unary_func(self, pyfunc, flags, ulps=1, values=None):
+        if not values:
+            values = self.more_values()
+        self.run_unary(pyfunc, [types.complex128, types.complex64],
+                       values, flags=flags, ulps=ulps)
+
+    # Conversions
+
+    def test_phase(self):
+        self.check_unary_func(phase_usecase, enable_pyobj_flags)
+
+    def test_phase_npm(self):
+        self.check_unary_func(phase_usecase, no_pyobj_flags)
+
+    def test_polar(self):
+        self.check_unary_func(polar_usecase, enable_pyobj_flags)
+
+    def test_polar_npm(self):
+        self.check_unary_func(polar_usecase, no_pyobj_flags)
+
+    def test_rect(self, flags=enable_pyobj_flags):
+        values = [(z.real, z.imag) for z in self.more_values()
+                  if not math.isinf(z.imag) or z.real == 0]
+        value_types = [(types.float64, types.float64),
+                       (types.float32, types.float32)]
+        self.run_binary(rect_usecase, value_types, values, flags=flags)
+
+    def test_rect_npm(self):
+        self.test_rect(flags=no_pyobj_flags)
+
+    # Classification
+
+    def test_isnan(self, flags=enable_pyobj_flags):
+        self.check_predicate_func(isnan_usecase, enable_pyobj_flags)
+
+    def test_isnan_npm(self):
+        self.check_predicate_func(isnan_usecase, no_pyobj_flags)
+
+    def test_isinf(self, flags=enable_pyobj_flags):
+        self.check_predicate_func(isinf_usecase, enable_pyobj_flags)
+
+    def test_isinf_npm(self):
+        self.check_predicate_func(isinf_usecase, no_pyobj_flags)
+
+    @unittest.skipIf(utils.PYVERSION < (3, 2), "needs Python 3.2+")
+    def test_isfinite(self, flags=enable_pyobj_flags):
+        self.check_predicate_func(isfinite_usecase, enable_pyobj_flags)
+
+    @unittest.skipIf(utils.PYVERSION < (3, 2), "needs Python 3.2+")
+    def test_isfinite_npm(self):
+        self.check_predicate_func(isfinite_usecase, no_pyobj_flags)
+
+    # Power and logarithms
+
+    def test_exp(self):
+        self.check_unary_func(exp_usecase, enable_pyobj_flags, ulps=2)
+
+    def test_exp_npm(self):
+        self.check_unary_func(exp_usecase, no_pyobj_flags, ulps=2)
+
+    def test_log(self):
+        self.check_unary_func(log_usecase, enable_pyobj_flags)
+
+    def test_log_npm(self):
+        self.check_unary_func(log_usecase, no_pyobj_flags)
+
+    def test_log_base(self, flags=enable_pyobj_flags):
+        values = list(itertools.product(self.more_values(), self.more_values()))
+        value_types = [(types.complex128, types.complex128),
+                       (types.complex64, types.complex64)]
+        self.run_binary(log_base_usecase, value_types, values, flags=flags,
+                        ulps=2)
+
+    def test_log_base_npm(self):
+        self.test_log_base(flags=no_pyobj_flags)
+
+    def test_log10(self):
+        self.check_unary_func(log10_usecase, enable_pyobj_flags)
+
+    def test_log10_npm(self):
+        self.check_unary_func(log10_usecase, no_pyobj_flags)
+
+    def test_sqrt(self):
+        self.check_unary_func(sqrt_usecase, enable_pyobj_flags)
+
+    def test_sqrt_npm(self):
+        self.check_unary_func(sqrt_usecase, no_pyobj_flags)
+
+    # Trigonometric functions
+
+    def test_acos(self):
+        self.check_unary_func(acos_usecase, enable_pyobj_flags, ulps=2)
+
+    def test_acos_npm(self):
+        self.check_unary_func(acos_usecase, no_pyobj_flags, ulps=2)
+
+    def test_asin(self):
+        self.check_unary_func(asin_usecase, enable_pyobj_flags, ulps=2)
+
+    def test_asin_npm(self):
+        self.check_unary_func(asin_usecase, no_pyobj_flags, ulps=2)
+
+    def test_atan(self):
+        self.check_unary_func(atan_usecase, enable_pyobj_flags, ulps=2)
+
+    def test_atan_npm(self):
+        self.check_unary_func(atan_usecase, no_pyobj_flags, ulps=2)
+
+    def test_cos(self):
+        self.check_unary_func(cos_usecase, enable_pyobj_flags, ulps=2)
+
+    def test_cos_npm(self):
+        self.check_unary_func(cos_usecase, no_pyobj_flags, ulps=2)
+
+    def test_sin(self):
+        # See test_sinh.
+        self.check_unary_func(sin_usecase, enable_pyobj_flags,
+                              values=self.basic_values())
+
+    def test_sin_npm(self):
+        self.check_unary_func(sin_usecase, no_pyobj_flags,
+                              values=self.basic_values())
+
+    def test_tan(self):
+        self.check_unary_func(tan_usecase, enable_pyobj_flags, ulps=2,
+                              values=self.basic_values())
+
+    def test_tan_npm(self):
+        self.check_unary_func(tan_usecase, enable_pyobj_flags, ulps=2,
+                              values=self.basic_values())
+
+    # Hyperbolic functions
+
+    def test_acosh(self):
+        self.check_unary_func(acosh_usecase, enable_pyobj_flags)
+
+    def test_acosh_npm(self):
+        self.check_unary_func(acosh_usecase, no_pyobj_flags)
+
+    def test_asinh(self):
+        self.check_unary_func(asinh_usecase, enable_pyobj_flags, ulps=2)
+
+    def test_asinh_npm(self):
+        self.check_unary_func(asinh_usecase, no_pyobj_flags, ulps=2)
+
+    def test_atanh(self):
+        self.check_unary_func(atanh_usecase, enable_pyobj_flags, ulps=2)
+
+    def test_atanh_npm(self):
+        self.check_unary_func(atanh_usecase, no_pyobj_flags, ulps=2)
+
+    def test_cosh(self):
+        self.check_unary_func(cosh_usecase, enable_pyobj_flags, ulps=2)
+
+    def test_cosh_npm(self):
+        self.check_unary_func(cosh_usecase, no_pyobj_flags, ulps=2)
+
+    # sinh() and tanh() results around math.pi are too different in single
+    # precision and double precision, which would fail the test;
+    # hence basic_values().
+
+    def test_sinh(self):
+        self.check_unary_func(sinh_usecase, enable_pyobj_flags,
+                              values=self.basic_values())
+
+    def test_sinh_npm(self):
+        self.check_unary_func(sinh_usecase, no_pyobj_flags,
+                              values=self.basic_values())
+
+    def test_tanh(self):
+        self.check_unary_func(tanh_usecase, enable_pyobj_flags, ulps=2,
+                              values=self.basic_values())
+
+    def test_tanh_npm(self):
+        self.check_unary_func(tanh_usecase, enable_pyobj_flags, ulps=2,
+                              values=self.basic_values())
 
 
 if __name__ == '__main__':

@@ -300,6 +300,24 @@ class Registry(object):
     def register_global(self, v, t):
         self.globals.append((v, t))
 
+    def resolves_global(self, global_value, wrapper_type=types.Function):
+        """
+        Decorate a FunctionTemplate subclass so that it gets registered
+        as resolving *global_value* with the *wrapper_type* (by default
+        a types.Function).
+
+        Example use::
+            @resolves_global(math.fabs)
+            class Math(ConcreteTemplate):
+                cases = [signature(types.float64, types.float64)]
+        """
+        def decorate(cls):
+            class Template(cls):
+                key = global_value
+            self.register_global(global_value, wrapper_type(Template))
+            return cls
+        return decorate
+
 
 builtin_registry = Registry()
 builtin = builtin_registry.register

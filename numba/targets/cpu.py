@@ -11,7 +11,8 @@ from numba import _dynfunc, _helperlib, config
 from numba.callwrapper import PyCallWrapper
 from .base import BaseContext, PYOBJECT
 from numba import utils, cgutils, types
-from numba.targets import intrinsics, mathimpl, npyimpl, operatorimpl, printimpl
+from numba.targets import (
+    intrinsics, cmathimpl, mathimpl, npyimpl, operatorimpl, printimpl)
 from .options import TargetOptions
 
 
@@ -60,6 +61,7 @@ class CPUContext(BaseContext):
         self.map_numpy_math_functions()
 
         # Add target specific implementations
+        self.insert_func_defn(cmathimpl.registry.functions)
         self.insert_func_defn(mathimpl.registry.functions)
         self.insert_func_defn(npyimpl.registry.functions)
         self.insert_func_defn(operatorimpl.registry.functions)
@@ -105,7 +107,7 @@ class CPUContext(BaseContext):
         for ak, av in zip(fndesc.args, self.get_arguments(fn)):
             av.name = "arg.%s" % ak
         self.get_env_argument(fn).name = "env"
-        fn.args[0] = ".ret"
+        fn.args[0].name = "ret"
         return fn
 
     def get_arguments(self, func):

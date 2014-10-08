@@ -11,7 +11,7 @@ from numba import types
 from numba.typeconv import rules
 from . import templates
 # Initialize declarations
-from . import builtins, mathdecl, npdatetime, npydecl, operatordecl
+from . import builtins, cmathdecl, mathdecl, npdatetime, npydecl, operatordecl
 from numba import numpy_support, utils
 from . import ctypes_utils, cffi_utils
 
@@ -80,6 +80,7 @@ class BaseContext(object):
                 attrty = self.resolve_module_constants(value, attr)
                 if attrty is not None:
                     return attrty
+                raise
             else:
                 raise
 
@@ -105,8 +106,7 @@ class BaseContext(object):
         if isinstance(typ, types.Module):
             attrval = getattr(typ.pymod, attr)
             ty = self.resolve_value_type(attrval)
-            if ty in types.number_domain:
-                return ty
+            return ty
 
     def resolve_argument_type(self, val):
         """
@@ -380,6 +380,7 @@ class BaseContext(object):
 
 class Context(BaseContext):
     def init(self):
+        self.install(cmathdecl.registry)
         self.install(mathdecl.registry)
         self.install(npydecl.registry)
         self.install(operatordecl.registry)

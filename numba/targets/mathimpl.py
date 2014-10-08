@@ -16,6 +16,78 @@ registry = Registry()
 register = registry.register
 
 
+# Helpers, shared with cmathimpl.
+
+FLT_MAX = 3.402823466E+38
+FLT_MIN = 1.175494351E-38
+
+FLOAT_ABS_MASK = 0x7fffffff
+FLOAT_SIGN_MASK = 0x80000000
+DOUBLE_ABS_MASK = 0x7fffffffffffffff
+DOUBLE_SIGN_MASK = 0x8000000000000000
+
+def is_nan(builder, val):
+    """
+    Return a condition testing whether *val* is a NaN.
+    """
+    return builder.not_(builder.fcmp(lc.FCMP_OEQ, val, val))
+
+def is_inf(builder, val):
+    """
+    Return a condition testing whether *val* is an infinite.
+    """
+    pos_inf = lc.Constant.real(val.type, float("+inf"))
+    neg_inf = lc.Constant.real(val.type, float("-inf"))
+    isposinf = builder.fcmp(lc.FCMP_OEQ, val, pos_inf)
+    isneginf = builder.fcmp(lc.FCMP_OEQ, val, neg_inf)
+    return builder.or_(isposinf, isneginf)
+
+def is_finite(builder, val):
+    """
+    Return a condition testing whether *val* is a finite.
+    """
+    pos_inf = lc.Constant.real(val.type, float("+inf"))
+    neg_inf = lc.Constant.real(val.type, float("-inf"))
+    isnotposinf = builder.fcmp(lc.FCMP_ONE, val, pos_inf)
+    isnotneginf = builder.fcmp(lc.FCMP_ONE, val, neg_inf)
+    return builder.and_(isnotposinf, isnotneginf)
+
+def f64_as_int64(builder, val):
+    """
+    Bitcast a double into a 64-bit integer.
+    """
+    assert val.type == Type.double()
+    return builder.bitcast(val, Type.int(64))
+
+def int64_as_f64(builder, val):
+    """
+    Bitcast a 64-bit integer into a double.
+    """
+    assert val.type == Type.int(64)
+    return builder.bitcast(val, Type.double())
+
+def f32_as_int32(builder, val):
+    """
+    Bitcast a float into a 32-bit integer.
+    """
+    assert val.type == Type.float()
+    return builder.bitcast(val, Type.int(32))
+
+def int32_as_f32(builder, val):
+    """
+    Bitcast a 32-bit integer into a float.
+    """
+    assert val.type == Type.int(32)
+    return builder.bitcast(val, Type.float())
+
+def negate_real(builder, val):
+    """
+    Negate real number *val*, with proper handling of zeros.
+    """
+    # The negative zero forces LLVM to handle signed zeros properly.
+    return builder.fsub(lc.Constant.real(val.type, -0.0), val)
+
+
 def _unary_int_input_wrapper_impl(wrapped_impl):
     """
     Return an implementation factory to convert the single integral input
@@ -140,66 +212,63 @@ unary_math_extern(math.trunc, "truncf", "trunc", True)
 
 
 @register
-@implement(math.isnan, types.float32)
-def isnan_f32_impl(context, builder, sig, args):
+@implement(math.isnan, types.Kind(types.Float))
+def isnan_float_impl(context, builder, sig, args):
     [val] = args
-    return builder.not_(builder.fcmp(lc.FCMP_OEQ, val, val))
-
+    return is_nan(builder, val)
 
 @register
-@implement(math.isnan, types.float64)
-def isnan_f64_impl(context, builder, sig, args):
-    [val] = args
-    return builder.not_(builder.fcmp(lc.FCMP_OEQ, val, val))
-
-
-@register
-@implement(math.isnan, types.int64)
-def isnan_s64_impl(context, builder, sig, args):
+@implement(math.isnan, types.Kind(types.Integer))
+def isnan_int_impl(context, builder, sig, args):
     return cgutils.false_bit
 
 
 @register
-@implement(math.isnan, types.uint64)
-def isnan_u64_impl(context, builder, sig, args):
-    return cgutils.false_bit
-
-
-POS_INF_F32 = lc.Constant.real(Type.float(), float("+inf"))
-NEG_INF_F32 = lc.Constant.real(Type.float(), float("-inf"))
-
-POS_INF_F64 = lc.Constant.real(Type.double(), float("+inf"))
-NEG_INF_F64 = lc.Constant.real(Type.double(), float("-inf"))
-
-
-@register
-@implement(math.isinf, types.float32)
-def isinf_f32_impl(context, builder, sig, args):
+@implement(math.isinf, types.Kind(types.Float))
+def isinf_float_impl(context, builder, sig, args):
     [val] = args
-    isposinf = builder.fcmp(lc.FCMP_OEQ, val, POS_INF_F32)
-    isneginf = builder.fcmp(lc.FCMP_OEQ, val, NEG_INF_F32)
-    return builder.or_(isposinf, isneginf)
-
+    return is_inf(builder, val)
 
 @register
-@implement(math.isinf, types.float64)
-def isinf_f64_impl(context, builder, sig, args):
-    [val] = args
-    isposinf = builder.fcmp(lc.FCMP_OEQ, val, POS_INF_F64)
-    isneginf = builder.fcmp(lc.FCMP_OEQ, val, NEG_INF_F64)
-    return builder.or_(isposinf, isneginf)
-
-
-@register
-@implement(math.isinf, types.int64)
-def isinf_s64_impl(context, builder, sig, args):
+@implement(math.isinf, types.Kind(types.Integer))
+def isinf_int_impl(context, builder, sig, args):
     return cgutils.false_bit
 
 
+if utils.PYVERSION >= (3, 2):
+    @register
+    @implement(math.isfinite, types.Kind(types.Float))
+    def isfinite_float_impl(context, builder, sig, args):
+        [val] = args
+        return is_finite(builder, val)
+
+    @register
+    @implement(math.isfinite, types.Kind(types.Integer))
+    def isfinite_int_impl(context, builder, sig, args):
+        return cgutils.true_bit
+
+
+# XXX copysign should use the corresponding LLVM intrinsic
+
 @register
-@implement(math.isinf, types.uint64)
-def isinf_u64_impl(context, builder, sig, args):
-    return cgutils.false_bit
+@implement(math.copysign, types.float32, types.float32)
+def copysign_f32_impl(context, builder, sig, args):
+    a = f32_as_int32(builder, args[0])
+    b = f32_as_int32(builder, args[1])
+    a = builder.and_(a, lc.Constant.int(a.type, FLOAT_ABS_MASK))
+    b = builder.and_(b, lc.Constant.int(b.type, FLOAT_SIGN_MASK))
+    res = builder.or_(a, b)
+    return int32_as_f32(builder, res)
+
+@register
+@implement(math.copysign, types.float64, types.float64)
+def copysign_f64_impl(context, builder, sig, args):
+    a = f64_as_int64(builder, args[0])
+    b = f64_as_int64(builder, args[1])
+    a = builder.and_(a, lc.Constant.int(a.type, DOUBLE_ABS_MASK))
+    b = builder.and_(b, lc.Constant.int(b.type, DOUBLE_SIGN_MASK))
+    res = builder.or_(a, b)
+    return int64_as_f64(builder, res)
 
 
 # -----------------------------------------------------------------------------
@@ -253,7 +322,7 @@ def hypot_s64_impl(context, builder, sig, args):
     y = builder.sitofp(y, Type.double())
     x = builder.sitofp(x, Type.double())
     fsig = signature(types.float64, types.float64, types.float64)
-    return hypot_f64_impl(context, builder, fsig, (x, y))
+    return hypot_float_impl(context, builder, fsig, (x, y))
 
 @register
 @implement(math.hypot, types.uint64, types.uint64)
@@ -262,31 +331,20 @@ def hypot_u64_impl(context, builder, sig, args):
     y = builder.sitofp(y, Type.double())
     x = builder.sitofp(x, Type.double())
     fsig = signature(types.float64, types.float64, types.float64)
-    return hypot_f64_impl(context, builder, fsig, (x, y))
+    return hypot_float_impl(context, builder, fsig, (x, y))
 
 
 @register
-@implement(math.hypot, types.float32, types.float32)
-def hypot_f32_impl(context, builder, sig, args):
-    [x, y] = args
-    xx = builder.fmul(x, x)
-    yy = builder.fmul(y, y)
-    sqrtsig = signature(sig.return_type, sig.args[0])
-    sqrtimp = context.get_function(math.sqrt, sqrtsig)
-    xxyy = builder.fadd(xx, yy)
-    return sqrtimp(builder, [xxyy])
+@implement(math.hypot, types.Kind(types.Float), types.Kind(types.Float))
+def hypot_float_impl(context, builder, sig, args):
+    def hypot(x, y):
+        if math.isinf(x):
+            return abs(x)
+        elif math.isinf(y):
+            return abs(y)
+        return math.sqrt(x * x + y * y)
 
-
-@register
-@implement(math.hypot, types.float64, types.float64)
-def hypot_f64_impl(context, builder, sig, args):
-    [x, y] = args
-    xx = builder.fmul(x, x)
-    yy = builder.fmul(y, y)
-    sqrtsig = signature(sig.return_type, sig.args[0])
-    sqrtimp = context.get_function(math.sqrt, sqrtsig)
-    xxyy = builder.fadd(xx, yy)
-    return sqrtimp(builder, [xxyy])
+    return context.compile_internal(builder, hypot, sig, args)
 
 
 # -----------------------------------------------------------------------------

@@ -90,12 +90,11 @@ class TestCase(unittest.TestCase):
             yield cm
 
     _exact_typesets = [(bool, np.bool_), utils.INT_TYPES, (str,), (utils.text_type),]
-    # note: unfortunately, NumPy complex64 doesn't evaluate "True" as an instance of
-    #       complex, yet complex128 does (at least in NumPy 1.8.1). Hence it is needed
-    #       in the list of _approx_typesets
-    _approx_typesets = [(float,), (complex,), (np.floating), (np.complex64)]
+    _approx_typesets = [(float,), (complex,), (np.inexact)]
+    _sequence_typesets = [(tuple,)]
 
-    def assertPreciseEqual(self, first, second, prec='exact', msg=None):
+    def assertPreciseEqual(self, first, second, prec='exact', ulps=1,
+                           msg=None):
         """
         Test that two scalars have similar types and are equal up to
         a computed precision.
@@ -104,11 +103,21 @@ class TestCase(unittest.TestCase):
         If the scalars are instances of inexact types (float, complex)
         and *prec* is not 'exact', then the number of significant bits
         is computed according to the value of *prec*: 53 bits if *prec*
-        is 'double', 24 bits if *prec* is single.
+        is 'double', 24 bits if *prec* is single.  This number of bits
+        can be lowered by raising the *ulps* value.
 
         Any value of *prec* other than 'exact', 'single' or 'double'
         will raise an error.
         """
+        for tp in self._sequence_typesets:
+            # For recognized sequences, recurse
+            if isinstance(first, tp) or isinstance(second, tp):
+                self.assertIsInstance(first, tp)
+                self.assertIsInstance(second, tp)
+                self.assertEqual(len(first), len(second), msg=msg)
+                for a, b in zip(first, second):
+                    self.assertPreciseEqual(a, b, prec, ulps, msg)
+                return
         for tp in self._exact_typesets:
             # One or another could be the expected, the other the actual;
             # test both.
@@ -144,12 +153,22 @@ class TestCase(unittest.TestCase):
             pass
 
         if not exact_comparison and prec != 'exact':
+            if (isinstance(first, complex)
+                and cmath.isinf(first) and cmath.isinf(second)):
+                # For infinite complex numbers, recurse on real
+                # and imaginary parts.
+                self.assertPreciseEqual(first.real, second.real,
+                                        prec, ulps, msg)
+                self.assertPreciseEqual(first.imag, second.imag,
+                                        prec, ulps, msg)
+                return
             if prec == 'single':
-                k = 2**-24
+                bits = 24
             elif prec == 'double':
-                k = 2**-53
+                bits = 53
             else:
                 raise ValueError("unsupported precision %r" % (prec,))
+            k = 2 ** (ulps - bits - 1)
             delta = k * (abs(first) + abs(second))
             self.assertAlmostEqual(first, second, delta=delta, msg=msg)
         else:
