@@ -197,6 +197,19 @@ class AbstractTemplate(FunctionTemplate):
     def apply(self, args, kws):
         generic = getattr(self, "generic")
         sig = generic(args, kws)
+
+        # Unpack optional type if no matching signature
+        if not sig and any(isinstance(x, types.Optional) for x in args):
+            def unpack_opt(x):
+                if isinstance(x, types.Optional):
+                    return x.type
+                else:
+                    return x
+
+            args = list(map(unpack_opt, args))
+            assert not kws  # Not supported yet
+            sig = generic(args, kws)
+
         if sig:
             cases = [sig]
             return self._select(cases, args, kws)

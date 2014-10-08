@@ -312,7 +312,12 @@ class Lower(BaseLower):
             impl = self.context.get_function('setitem', signature)
 
             # Convert argument to match
-            assert targetty == signature.args[0]
+            if isinstance(targetty, types.Optional):
+                target = self.context.cast(self.builder, target, targetty,
+                                           targetty.type)
+            else:
+                assert targetty == signature.args[0]
+
             index = self.context.cast(self.builder, index, indexty,
                                       signature.args[1])
             value = self.context.cast(self.builder, value, valuety,

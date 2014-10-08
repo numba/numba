@@ -2,7 +2,7 @@ from __future__ import print_function, absolute_import
 import numpy
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated
-from numba import types, typeof
+from numba import types, typeof, njit
 
 
 def return_double_or_none(x):
@@ -101,6 +101,32 @@ class TestOptional(unittest.TestCase):
         cres = compile_isolated(pyfunc, [aryty, aryty])
         cfunc = cres.entry_point
         self.assertTrue(cfunc(ary, ary))
+
+    def test_optional_float(self):
+        def pyfunc(x, y):
+            if y is None:
+                return x
+            else:
+                return x + y
+
+        cfunc = njit("(float64, optional(float64))")(pyfunc)
+        self.assertAlmostEqual(pyfunc(1., 12.3), cfunc(1., 12.3))
+        self.assertAlmostEqual(pyfunc(1., None), cfunc(1., None))
+
+    def test_optional_array(self):
+        def pyfunc(x, y):
+            if y is None:
+                return x
+            else:
+                y[0] += x
+                return y[0]
+
+        cfunc = njit("(float32, optional(float32[:]))")(pyfunc)
+        cy = numpy.array([12.3], dtype=numpy.float32)
+        py = cy.copy()
+        self.assertAlmostEqual(pyfunc(1., py), cfunc(1., cy))
+        numpy.testing.assert_almost_equal(py, cy)
+        self.assertAlmostEqual(pyfunc(1., None), cfunc(1., None))
 
 
 if __name__ == '__main__':
