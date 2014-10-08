@@ -180,8 +180,52 @@ class TestAssertPreciseEqual(TestCase):
                 #self.ne(tp(complex(INF, NAN)), tp(complex(-INF, NAN)))
                 #self.ne(tp(complex(0, NAN)), tp(complex(1, NAN)))
                 #self.ne(tp(complex(NAN, 0)), tp(complex(0, NAN)))
-            # XXX should work with other precisions?
+            # XXX should work with other precisions as well?
             self.ne(tp(complex(INF, 0)), tp(complex(INF, 1)), prec='exact')
+
+    def test_complex128_values_inexact(self):
+        for tp in [complex, np.complex128]:
+            for scale in [1.0, -2**3, 2**-4, -2**-20]:
+                a = scale * 1.0
+                b = scale * (1.0 + DBL_EPSILON)
+                c = scale * (1.0 + DBL_EPSILON * 2)
+                aa = tp(complex(a, a))
+                ab = tp(complex(a, b))
+                bb = tp(complex(b, b))
+                self.ne(tp(aa), tp(ab))
+                self.eq(tp(aa), tp(ab), prec='double')
+                self.eq(tp(ab), tp(bb), prec='double')
+                self.eq(tp(aa), tp(bb), prec='double')
+                ac = tp(complex(a, c))
+                cc = tp(complex(c, c))
+                self.ne(tp(aa), tp(ac), prec='double')
+                self.ne(tp(ac), tp(cc), prec='double')
+                self.eq(tp(aa), tp(ac), prec='double', ulps=2)
+                self.eq(tp(ac), tp(cc), prec='double', ulps=2)
+                self.eq(tp(aa), tp(cc), prec='double', ulps=2)
+                self.eq(tp(aa), tp(cc), prec='single')
+
+    def test_complex64_values_inexact(self):
+        tp = np.complex64
+        for scale in [1.0, -2**3, 2**-4, -2**-20]:
+            a = scale * 1.0
+            b = scale * (1.0 + FLT_EPSILON)
+            c = scale * (1.0 + FLT_EPSILON * 2)
+            aa = tp(complex(a, a))
+            ab = tp(complex(a, b))
+            bb = tp(complex(b, b))
+            self.ne(tp(aa), tp(ab))
+            self.ne(tp(aa), tp(ab), prec='double')
+            self.eq(tp(aa), tp(ab), prec='single')
+            self.eq(tp(ab), tp(bb), prec='single')
+            self.eq(tp(aa), tp(bb), prec='single')
+            ac = tp(complex(a, c))
+            cc = tp(complex(c, c))
+            self.ne(tp(aa), tp(ac), prec='single')
+            self.ne(tp(ac), tp(cc), prec='single')
+            self.eq(tp(aa), tp(ac), prec='single', ulps=2)
+            self.eq(tp(ac), tp(cc), prec='single', ulps=2)
+            self.eq(tp(aa), tp(cc), prec='single', ulps=2)
 
 
 if __name__ == '__main__':
