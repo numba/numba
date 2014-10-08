@@ -279,7 +279,7 @@ class TestCMath(BaseComplexTest, TestCase):
         value_types = [(types.complex128, types.complex128),
                        (types.complex64, types.complex64)]
         self.run_binary(log_base_usecase, value_types, values, flags=flags,
-                        ulps=2)
+                        ulps=3)
 
     def test_log_base_npm(self):
         self.test_log_base(flags=no_pyobj_flags)
