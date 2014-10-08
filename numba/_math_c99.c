@@ -259,9 +259,46 @@ float m_roundf(float x) {
     }
 }
 
+/*
+   CPython implementation for atan2():
+
+   wrapper for atan2 that deals directly with special cases before
+   delegating to the platform libm for the remaining cases.  This
+   is necessary to get consistent behaviour across platforms.
+   Windows, FreeBSD and alpha Tru64 are amongst platforms that don't
+   always follow C99.
+*/
+
+double m_atan2(double y, double x)
+{
+    if (Py_IS_NAN(x) || Py_IS_NAN(y))
+        return Py_NAN;
+    if (Py_IS_INFINITY(y)) {
+        if (Py_IS_INFINITY(x)) {
+            if (copysign(1., x) == 1.)
+                /* atan2(+-inf, +inf) == +-pi/4 */
+                return copysign(0.25*Py_MATH_PI, y);
+            else
+                /* atan2(+-inf, -inf) == +-pi*3/4 */
+                return copysign(0.75*Py_MATH_PI, y);
+        }
+        /* atan2(+-inf, x) == +-pi/2 for finite x */
+        return copysign(0.5*Py_MATH_PI, y);
+    }
+    if (Py_IS_INFINITY(x) || y == 0.) {
+        if (copysign(1., x) == 1.)
+            /* atan2(+-y, +inf) = atan2(+-0, +x) = +-0. */
+            return copysign(0., y);
+        else
+            /* atan2(+-y, -inf) = atan2(+-0., -x) = +-pi. */
+            return copysign(Py_MATH_PI, y);
+    }
+    return atan2(y, x);
+}
+
 /* Map to double version directly */
 float m_atan2f(float y, float x) {
-    return atan2(y, x);
+    return m_atan2(y, x);
 }
 
 
