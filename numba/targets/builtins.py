@@ -696,14 +696,8 @@ def real_abs_impl(context, builder, sig, args):
     return impl(builder, args)
 
 def real_negate_impl(context, builder, sig, args):
-    [typ] = sig.args
-    [val] = args
-    val = context.cast(builder, val, typ, sig.return_type)
-    if sig.return_type in types.real_domain:
-        return builder.fsub(context.get_constant(sig.return_type, 0), val)
-    else:
-        return builder.neg(val)
-
+    from . import mathimpl
+    return mathimpl.negate_real(builder, args[0])
 
 def real_positive_impl(context, builder, sig, args):
     [typ] = sig.args
@@ -785,31 +779,42 @@ def get_complex_info(ty):
 
 
 @builtin_attr
-@impl_attribute(types.complex64, "real", types.float32)
-def complex64_real_impl(context, builder, typ, value):
-    cplx = Complex64(context, builder, value=value)
+@impl_attribute(types.Kind(types.Complex), "real")
+def complex_real_impl(context, builder, typ, value):
+    cplx_cls = context.make_complex(typ)
+    cplx = cplx_cls(context, builder, value=value)
     return cplx.real
 
-
 @builtin_attr
-@impl_attribute(types.complex128, "real", types.float64)
-def complex128_real_impl(context, builder, typ, value):
-    cplx = Complex128(context, builder, value=value)
-    return cplx.real
-
-
-@builtin_attr
-@impl_attribute(types.complex64, "imag", types.float32)
-def complex64_imag_impl(context, builder, typ, value):
-    cplx = Complex64(context, builder, value=value)
+@impl_attribute(types.Kind(types.Complex), "imag")
+def complex_imag_impl(context, builder, typ, value):
+    cplx_cls = context.make_complex(typ)
+    cplx = cplx_cls(context, builder, value=value)
     return cplx.imag
 
+@builtin
+@implement("complex.conjugate", types.Kind(types.Complex))
+def complex_conjugate_impl(context, builder, sig, args):
+    cplx_cls = context.make_complex(sig.args[0])
+    z = cplx_cls(context, builder, args[0])
+    imag = z.imag
+    zero = cgutils.get_null_value(imag.type)
+    z.imag = builder.fsub(zero, imag)
+    return z._getvalue()
 
-@builtin_attr
-@impl_attribute(types.complex128, "imag", types.float64)
-def complex128_imag_impl(context, builder, typ, value):
-    cplx = Complex128(context, builder, value=value)
-    return cplx.imag
+def real_real_impl(context, builder, typ, value):
+    return value
+
+def real_imag_impl(context, builder, typ, value):
+    return cgutils.get_null_value(value.type)
+
+def real_conjugate_impl(context, builder, sig, args):
+    return args[0]
+
+for cls in (types.Float, types.Integer):
+    builtin_attr(impl_attribute(types.Kind(cls), "real")(real_real_impl))
+    builtin_attr(impl_attribute(types.Kind(cls), "imag")(real_imag_impl))
+    builtin(implement("complex.conjugate", types.Kind(cls))(real_conjugate_impl))
 
 
 @builtin
@@ -902,53 +907,46 @@ def complex_mul_impl(context, builder, sig, args):
     return z._getvalue()
 
 
+NAN = float('nan')
+
 def complex_div_impl(context, builder, sig, args):
-    """
-    z = c^2 + d^2
-    (a+bi)/(c+di) = (ac + bd) / z, (bc - ad) / z
-    """
-    [cx, cy] = args
-    complexClass = context.make_complex(sig.args[0])
-    x = complexClass(context, builder, value=cx)
-    y = complexClass(context, builder, value=cy)
-    z = complexClass(context, builder)
-    a = x.real
-    b = x.imag
-    c = y.real
-    d = y.imag
+    def complex_div(a, b):
+        # This is CPython's algorithm (in _Py_c_quot()).
+        areal = a.real
+        aimag = a.imag
+        breal = b.real
+        bimag = b.imag
+        if abs(breal) >= abs(bimag):
+            # Divide tops and bottom by b.real
+            if not breal:
+                return complex(NAN, NAN)
+            ratio = bimag / breal
+            denom = breal + bimag * ratio
+            return complex(
+                (areal + aimag * ratio) / denom,
+                (aimag - areal * ratio) / denom)
+        else:
+            # Divide tops and bottom by b.imag
+            if not bimag:
+                return complex(NAN, NAN)
+            ratio = breal / bimag
+            denom = breal * ratio + bimag
+            return complex(
+                (a.real * ratio + a.imag) / denom,
+                (a.imag * ratio - a.real) / denom)
 
-    ac = builder.fmul(a, c)
-    bd = builder.fmul(b, d)
-    ad = builder.fmul(a, d)
-    bc = builder.fmul(b, c)
-
-    cc = builder.fmul(c, c)
-    dd = builder.fmul(d, d)
-    zz = builder.fadd(cc, dd)
-
-    ac_bd = builder.fadd(ac, bd)
-    bc_ad = builder.fsub(bc, ad)
-
-    cgutils.guard_zero(context, builder, zz)
-    z.real = builder.fdiv(ac_bd, zz)
-    z.imag = builder.fdiv(bc_ad, zz)
-    return z._getvalue()
+    return context.compile_internal(builder, complex_div, sig, args)
 
 
 def complex_negate_impl(context, builder, sig, args):
+    from . import mathimpl
     [typ] = sig.args
     [val] = args
     cmplxcls = context.make_complex(typ)
-    cmplx = cmplxcls(context, builder, val)
-
-    real = cmplx.real
-    imag = cmplx.imag
-
-    zero = Constant.real(real.type, 0)
-
+    cmplx = cmplxcls(context, builder, value=val)
     res = cmplxcls(context, builder)
-    res.real = builder.fsub(zero, real)
-    res.imag = builder.fsub(zero, imag)
+    res.real = mathimpl.negate_real(builder, cmplx.real)
+    res.imag = mathimpl.negate_real(builder, cmplx.imag)
     return res._getvalue()
 
 
@@ -983,19 +981,13 @@ def complex_abs_impl(context, builder, sig, args):
     """
     abs(z) := hypot(z.real, z.imag)
     """
-    [typ] = sig.args
-    [val] = args
-    cmplxcls = context.make_complex(typ)
-    flty = typ.underlying_float
-    cmplx = cmplxcls(context, builder, val)
-    [x, y] = cmplx.real, cmplx.imag
-    hypotsig = typing.signature(sig.return_type, flty, flty)
-    hypotimp = context.get_function(math.hypot, hypotsig)
-    return hypotimp(builder, [x, y])
+    def complex_abs(z):
+        return math.hypot(z.real, z.imag)
+
+    return context.compile_internal(builder, complex_abs, sig, args)
 
 
-for ty, cls in zip([types.complex64, types.complex128],
-                   [Complex64, Complex128]):
+for ty in types.complex_domain:
     builtin(implement("+", ty, ty)(complex_add_impl))
     builtin(implement("-", ty, ty)(complex_sub_impl))
     builtin(implement("*", ty, ty)(complex_mul_impl))
@@ -1345,23 +1337,26 @@ def float_impl(context, builder, sig, args):
 @builtin
 @implement(complex, types.VarArg)
 def complex_impl(context, builder, sig, args):
+    complex_type = sig.return_type
+    float_type = complex_type.underlying_float
+    complex_cls = context.make_complex(complex_type)
     if len(sig.args) == 1:
         [argty] = sig.args
         [arg] = args
         if isinstance(argty, types.Complex):
-            # Cast Complex* to Complex128
-            return context.cast(builder, arg, argty, types.complex128)
+            # Cast Complex* to Complex*
+            return context.cast(builder, arg, argty, complex_type)
         else:
-            real = context.cast(builder, arg, argty, types.float64)
-            imag = context.get_constant(types.float64, 0)
+            real = context.cast(builder, arg, argty, float_type)
+            imag = context.get_constant(float_type, 0)
 
     elif len(sig.args) == 2:
         [realty, imagty] = sig.args
         [real, imag] = args
-        real = context.cast(builder, real, realty, types.float64)
-        imag = context.cast(builder, imag, imagty, types.float64)
+        real = context.cast(builder, real, realty, float_type)
+        imag = context.cast(builder, imag, imagty, float_type)
 
-    cmplx = Complex128(context, builder)
+    cmplx = complex_cls(context, builder)
     cmplx.real = real
     cmplx.imag = imag
     return cmplx._getvalue()

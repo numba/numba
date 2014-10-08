@@ -1,13 +1,11 @@
 
 from __future__ import print_function
-import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import types, utils
-from numba.tests import usecases
+from numba import types
 from numba.tests.support import TestCase
 import numba.unittest_support as unittest
+from numba import testing
 import math
-import numpy as np
 
 enable_pyobj_flags = Flags()
 enable_pyobj_flags.set("enable_pyobject")
@@ -163,7 +161,7 @@ class TestLists(TestCase):
             l = range(10)
             self.assertEqual(cfunc(l), pyfunc(l))
 
-    @unittest.expectedFailure
+    @testing.allow_interpreter_mode
     def test_list_comprehension(self):
         list_tests = [list_comprehension1,
                       list_comprehension2,

@@ -52,7 +52,13 @@ class FunctionDescriptor(object):
         # Argument types
         self.argtypes = argtypes or [self.typemap[a] for a in args]
         mangler = default_mangler if mangler is None else mangler
-        self.mangled_name = mangler(self.qualname, self.argtypes)
+        # XXX The mangled name should really be unique but this formula
+        # doesn't guarantee it entirely.
+        if self.modname:
+            self.mangled_name = mangler('%s.%s' % (self.modname, self.qualname),
+                                        self.argtypes)
+        else:
+            self.mangled_name = mangler(self.qualname, self.argtypes)
 
     def lookup_module(self):
         """
@@ -204,7 +210,7 @@ class BaseLower(object):
 
         # Init blocks
         for offset in self.blocks:
-            bname = "B%d" % offset
+            bname = "B%s" % offset
             self.blkmap[offset] = self.function.append_basic_block(bname)
 
         self.pre_lower()

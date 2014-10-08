@@ -7,7 +7,7 @@ import dis
 import sys
 import inspect
 from collections import namedtuple
-from numba import utils, targets
+from numba import utils
 from numba.config import PYVERSION
 
 opcode_info = namedtuple('opcode_info', ['argsize'])
@@ -293,7 +293,7 @@ class ByteCodeBase(object):
             else:
                 return ' '
 
-        return '\n'.join('%s %10d\t%s' % ((label_marker(i),) + i)
+        return '\n'.join('%s %10s\t%s' % ((label_marker(i),) + i)
                          for i in utils.iteritems(self.table))
 
 

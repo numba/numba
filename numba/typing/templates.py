@@ -3,7 +3,9 @@ Define typing templates
 """
 from __future__ import print_function, division, absolute_import
 
+import functools
 from .. import types
+from ..typeinfer import TypingError
 
 
 class Signature(object):
@@ -212,7 +214,7 @@ class ConcreteTemplate(FunctionTemplate):
         return self._select(cases, args, kws)
 
 
-class UntypedAttributeError(AttributeError):
+class UntypedAttributeError(TypingError):
     def __init__(self, value, attr):
         msg = 'Unknown attribute "{attr}" of type {type}'.format(type=value,
                                                               attr=attr)
@@ -241,6 +243,39 @@ class AttributeTemplate(object):
             return fn(value)
 
     generic_resolve = NotImplemented
+
+
+def bound_function(template_key):
+    """
+    Wrap an AttributeTemplate resolve_* method to allow it to
+    resolve an instance method's signature rather than a instance attribute.
+    The wrapped method must return the resolved method's signature
+    according to the given self type, args, and keywords.
+
+    It is used thusly:
+
+        class ComplexAttributes(AttributeTemplate):
+            @bound_function("complex.conjugate")
+            def resolve_conjugate(self, ty, args, kwds):
+                return ty
+
+    *template_key* (e.g. "complex.conjugate" above) will be used by the
+    target to look up the method's implementation, as a regular function.
+    """
+    def wrapper(method_resolver):
+        @functools.wraps(method_resolver)
+        def attribute_resolver(self, ty):
+            class MethodTemplate(AbstractTemplate):
+                key = template_key
+                def generic(_, args, kws):
+                    sig = method_resolver(self, ty, args, kws)
+                    if sig is not None:
+                        sig.recvr = ty
+                        return sig
+
+            return types.BoundFunction(MethodTemplate, ty)
+        return attribute_resolver
+    return wrapper
 
 
 class ClassAttrTemplate(AttributeTemplate):
@@ -277,6 +312,24 @@ class Registry(object):
 
     def register_global(self, v, t):
         self.globals.append((v, t))
+
+    def resolves_global(self, global_value, wrapper_type=types.Function):
+        """
+        Decorate a FunctionTemplate subclass so that it gets registered
+        as resolving *global_value* with the *wrapper_type* (by default
+        a types.Function).
+
+        Example use::
+            @resolves_global(math.fabs)
+            class Math(ConcreteTemplate):
+                cases = [signature(types.float64, types.float64)]
+        """
+        def decorate(cls):
+            class Template(cls):
+                key = global_value
+            self.register_global(global_value, wrapper_type(Template))
+            return cls
+        return decorate
 
 
 builtin_registry = Registry()

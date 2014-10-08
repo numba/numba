@@ -1057,6 +1057,8 @@ class TestOperators(TestCase):
             cfunc = cres.entry_point
             self.assertEqual(pyfunc(val), cfunc(val))
 
+    # XXX test_negate should check for negative and positive zeros and infinites
+
     def test_negate_npm(self):
         pyfunc = self.op.negate_usecase
         # test native mode

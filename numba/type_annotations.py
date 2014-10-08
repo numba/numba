@@ -54,7 +54,7 @@ class TypeAnnotation(object):
         # Prepare annotations
         groupedinst = defaultdict(list)
         for blkid, blk in self.blocks.items():
-            groupedinst[blk.loc.line].append("label %d" % blkid)
+            groupedinst[blk.loc.line].append("label %s" % blkid)
             for inst in blk.body:
                 lineno = inst.loc.line
 

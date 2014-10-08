@@ -5,7 +5,7 @@ from numba import types, intrinsics
 from numba.utils import PYVERSION
 from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
                                     AbstractTemplate, builtin_global, builtin,
-                                    builtin_attr, signature)
+                                    builtin_attr, signature, bound_function)
 
 builtin_global(range, types.range_type)
 if PYVERSION < (3, 0):
@@ -519,23 +519,31 @@ class CmpOpEqArray(AbstractTemplate):
 
 #-------------------------------------------------------------------------------
 class ComplexAttribute(AttributeTemplate):
+
     def resolve_real(self, ty):
         return self.innertype
 
     def resolve_imag(self, ty):
         return self.innertype
 
+    @bound_function("complex.conjugate")
+    def resolve_conjugate(self, ty, args, kws):
+        assert not args
+        assert not kws
+        return signature(ty)
 
-@builtin_attr
-class Complex64Attribute(ComplexAttribute):
-    key = types.complex64
-    innertype = types.float32
 
+def register_complex_attributes(ty):
+    @builtin_attr
+    class ConcreteComplexAttribute(ComplexAttribute):
+        key = ty
+        try:
+            innertype = ty.underlying_float
+        except AttributeError:
+            innertype = ty
 
-@builtin_attr
-class Complex128Attribute(ComplexAttribute):
-    key = types.complex128
-    innertype = types.float64
+for ty in types.number_domain:
+    register_complex_attributes(ty)
 
 #-------------------------------------------------------------------------------
 
@@ -769,15 +777,20 @@ class Complex(AbstractTemplate):
             [arg] = args
             if arg not in types.number_domain:
                 raise TypeError("complex() only support for numbers")
-            return signature(types.complex128, arg)
+            if arg == types.float32:
+                return signature(types.complex64, arg)
+            else:
+                return signature(types.complex128, arg)
 
         elif len(args) == 2:
             [real, imag] = args
-
             if (real not in types.number_domain or
-                        imag not in types.number_domain):
+                imag not in types.number_domain):
                 raise TypeError("complex() only support for numbers")
-            return signature(types.complex128, real, imag)
+            if real == imag == types.float32:
+                return signature(types.complex64, real, imag)
+            else:
+                return signature(types.complex128, real, imag)
 
 
 builtin_global(bool, types.Function(Bool))

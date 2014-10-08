@@ -246,6 +246,22 @@ class Dummy(Type):
     For type that does not really have a representation and is compatible
     with a void*.
     """
+    pass
+
+
+class Phantom(Dummy):
+    """
+    A type that cannot be materialized.  A Phantom cannot be used as
+    argument or return type.  
+    """
+    pass
+
+
+class Opaque(Dummy):
+    """
+    A type that is a opaque pointer.
+    """
+    pass
 
 
 class Kind(Type):
@@ -284,7 +300,7 @@ class Function(Type):
         self.template = template
         cls = type(self)
         # TODO template is mutable.  Should use different naming scheme
-        super(Function, self).__init__("%s(%s)" % (cls.__name__, template))
+        super(Function, self).__init__("%s(%s)" % (cls.__name__, template.key))
 
     @property
     def key(self):
@@ -769,15 +785,15 @@ def is_int_tuple(x):
 # Short names
 
 
-pyobject = Type('pyobject')
-none = Dummy('none')
-Any = Dummy('any')
-VarArg = Dummy('...')
-string = Dummy('str')
+pyobject = Opaque('pyobject')
+none = Opaque('none')
+Any = Phantom('any')
+VarArg = Phantom('...')
+string = Opaque('str')
 
 # No operation is defined on voidptr
 # Can only pass it around
-voidptr = Dummy('void*')
+voidptr = Opaque('void*')
 
 boolean = bool_ = Type('bool')
 
@@ -799,15 +815,15 @@ float64 = Float('float64')
 complex64 = Complex('complex64', float32)
 complex128 = Complex('complex128', float64)
 
-len_type = Dummy('len')
-range_type = Dummy('range')
-slice_type = Dummy('slice')
-abs_type = Dummy('abs')
-neg_type = Dummy('neg')
-print_type = Dummy('print')
-print_item_type = Dummy('print-item')
-sign_type = Dummy('sign')
-exception_type = Dummy('exception')
+len_type = Phantom('len')
+range_type = Phantom('range')
+slice_type = Phantom('slice')
+abs_type = Phantom('abs')
+neg_type = Phantom('neg')
+print_type = Phantom('print')
+print_item_type = Phantom('print-item')
+sign_type = Phantom('sign')
+exception_type = Phantom('exception')
 
 range_iter32_type = RangeIteratorType('range_iter32', int32)
 range_iter64_type = RangeIteratorType('range_iter64', int64)

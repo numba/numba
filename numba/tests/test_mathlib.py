@@ -1,5 +1,6 @@
 from __future__ import print_function, absolute_import, division
 
+import itertools
 import math
 import sys
 
@@ -8,7 +9,7 @@ import numpy as np
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags, utils
 from numba import types
-from .support import TestCase
+from .support import TestCase, CompilationCache
 
 PY27_AND_ABOVE = utils.PYVERSION > (2, 6)
 
@@ -118,6 +119,10 @@ def isinf(x):
     return math.isinf(x)
 
 
+def isfinite(x):
+    return math.isfinite(x)
+
+
 def hypot(x, y):
     return math.hypot(x, y)
 
@@ -150,12 +155,19 @@ def pow(x, y):
     return math.pow(x, y)
 
 
+def copysign(x, y):
+    return math.copysign(x, y)
+
+
 class TestMathLib(TestCase):
+
+    def setUp(self):
+        self.ccache = CompilationCache()
 
     def run_unary(self, pyfunc, x_types, x_values, flags=enable_pyobj_flags,
                   prec='exact'):
         for tx, vx in zip(x_types, x_values):
-            cr = compile_isolated(pyfunc, [tx], flags=flags)
+            cr = self.ccache.compile(pyfunc, (tx,), flags=flags)
             cfunc = cr.entry_point
             got = cfunc(vx)
             expected = pyfunc(vx)
@@ -166,13 +178,20 @@ class TestMathLib(TestCase):
     def run_binary(self, pyfunc, x_types, x_values, y_values,
                    flags=enable_pyobj_flags, prec='exact'):
         for ty, x, y in zip(x_types, x_values, y_values):
-            cres = compile_isolated(pyfunc, (ty, ty), flags=flags)
-            cfunc = cres.entry_point
+            cr = self.ccache.compile(pyfunc, (ty, ty), flags=flags)
+            cfunc = cr.entry_point
             got = cfunc(x, y)
             expected = pyfunc(x, y)
             actual_prec = 'single' if ty is types.float32 else prec
             msg = 'for inputs (%r, %r)' % (x, y)
             self.assertPreciseEqual(got, expected, prec=actual_prec, msg=msg)
+
+    def check_predicate_func(self, pyfunc, flags=enable_pyobj_flags):
+        x_types = [types.int16, types.int32, types.int64,
+                   types.uint16, types.uint32, types.uint64,
+                   types.float32, types.float32, types.float64, types.float64]
+        x_values = [0, 0, 0, 0, 0, 0, float('inf'), 0.0, float('inf'), 0.0]
+        self.run_unary(pyfunc, x_types, x_values, flags)
 
     def test_sin(self, flags=enable_pyobj_flags):
         pyfunc = sin
@@ -437,27 +456,25 @@ class TestMathLib(TestCase):
     def test_trunc_npm(self):
         self.test_trunc(flags=no_pyobj_flags)
 
-    def test_isnan(self, flags=enable_pyobj_flags):
-        pyfunc = isnan
-        x_types = [types.int16, types.int32, types.int64,
-                   types.uint16, types.uint32, types.uint64,
-                   types.float32, types.float32, types.float64, types.float64]
-        x_values = [0, 0, 0, 0, 0, 0, float('nan'), 0.0, float('nan'), 0.0]
-        self.run_unary(pyfunc, x_types, x_values, flags)
+    def test_isnan(self):
+        self.check_predicate_func(isnan, flags=enable_pyobj_flags)
 
     def test_isnan_npm(self):
-        self.test_isnan(flags=no_pyobj_flags)
+        self.check_predicate_func(isnan, flags=no_pyobj_flags)
 
-    def test_isinf(self, flags=enable_pyobj_flags):
-        pyfunc = isinf
-        x_types = [types.int16, types.int32, types.int64,
-                   types.uint16, types.uint32, types.uint64,
-                   types.float32, types.float32, types.float64, types.float64]
-        x_values = [0, 0, 0, 0, 0, 0, float('inf'), 0.0, float('inf'), 0.0]
-        self.run_unary(pyfunc, x_types, x_values, flags)
+    def test_isinf(self):
+        self.check_predicate_func(isinf, flags=enable_pyobj_flags)
 
     def test_isinf_npm(self):
-        self.test_isinf(flags=no_pyobj_flags)
+        self.check_predicate_func(isinf, flags=no_pyobj_flags)
+
+    @unittest.skipIf(utils.PYVERSION < (3, 2), "needs Python 3.2+")
+    def test_isfinite(self):
+        self.check_predicate_func(isfinite, flags=enable_pyobj_flags)
+
+    @unittest.skipIf(utils.PYVERSION < (3, 2), "needs Python 3.2+")
+    def test_isfinite_npm(self):
+        self.check_predicate_func(isfinite, flags=no_pyobj_flags)
 
     def test_hypot(self, flags=enable_pyobj_flags):
         pyfunc = hypot
@@ -562,6 +579,19 @@ class TestMathLib(TestCase):
 
     def test_pow_npm(self):
         self.test_pow(flags=no_pyobj_flags)
+
+    def test_copysign(self, flags=enable_pyobj_flags):
+        pyfunc = copysign
+        value_types = [types.float32, types.float64]
+        values = [-2, -1, -0.0, 0.0, 1, 2, float('-inf'), float('inf'),
+                  float('nan')]
+        x_types, x_values, y_values = list(zip(
+            *itertools.product(value_types, values, values)))
+        self.run_binary(pyfunc, x_types, x_values, y_values, flags)
+
+    def test_copysign_npm(self):
+        self.test_copysign(flags=no_pyobj_flags)
+
 
 if __name__ == '__main__':
     unittest.main()
