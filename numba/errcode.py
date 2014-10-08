@@ -26,7 +26,7 @@ ERROR_COUNT = enum() - FIRST_ERROR
 def _build_errtable():
     table = {}
     for k, v in globals().items():
-        if isinstance(v, int) and v < ERROR_COUNT:
+        if k.endswith('_ERROR') and isinstance(v, int) and v < ERROR_COUNT:
             table[v] = k
     return table
 

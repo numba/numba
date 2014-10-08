@@ -3,7 +3,7 @@ import numpy
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated
 from numba import types, typeof, njit
-
+from numba.pythonapi import NativeError
 
 def return_double_or_none(x):
     if x:
@@ -128,6 +128,17 @@ class TestOptional(unittest.TestCase):
         numpy.testing.assert_almost_equal(py, cy)
         self.assertAlmostEqual(pyfunc(1., None), cfunc(1., None))
 
+    def test_optional_array_error(self):
+        def pyfunc(y):
+            return y[0]
+
+        cfunc = njit("(optional(int32[:]),)")(pyfunc)
+        with self.assertRaises(NativeError) as raised:
+            cfunc(None)
+        self.assertIn('NONE_TYPE_ERROR', str(raised.exception))
+
+        y = numpy.array([0xabcd], dtype=numpy.int32)
+        self.assertEqual(cfunc(y), pyfunc(y))
 
 if __name__ == '__main__':
     unittest.main()
