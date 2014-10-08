@@ -4,8 +4,7 @@ import numpy as np
 
 
 class TestJITMethod(unittest.TestCase):
-    def test_jit_method_with_loop_lift(self):
-
+    def test_bound_jit_method_with_loop_lift(self):
         class Something(object):
             def __init__(self, x0):
                 self.x0 = x0
@@ -25,10 +24,22 @@ class TestJITMethod(unittest.TestCase):
             np.array([15, 15, 15, 15, 15], dtype=np.float32))
 
         # Check that loop lifting in nopython mode was successful
-        [cres] = Something.method._compileinfos.values()
+        [cres] = something.method._compileinfos.values()
         jitloop = cres.lifted[0]
         [loopcres] = jitloop._compileinfos.values()
         self.assertTrue(loopcres.fndesc.native)
+
+    def test_unbound_jit_method(self):
+        class Something(object):
+            def __init__(self, x0):
+                self.x0 = x0
+
+            @jit
+            def method(self):
+                return self.x0
+
+        something = Something(3)
+        self.assertEquals(Something.method(something), 3)
 
 if __name__ == '__main__':
     unittest.main()

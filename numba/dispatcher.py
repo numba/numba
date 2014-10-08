@@ -217,7 +217,10 @@ class Overloaded(_OverloadedBase):
 
     def __get__(self, obj, objtype=None):
         '''Allow a JIT function to be bound as a method to an object'''
-        return create_bound_method(self, obj)
+        if obj is None:  # Unbound method
+            return self
+        else:  # Bound method
+            return create_bound_method(self, obj)
 
     def compile(self, sig, locals={}, **targetoptions):
         with self._compile_lock():
