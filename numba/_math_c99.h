@@ -22,6 +22,7 @@ float m_roundf(float x);
 double m_trunc(double x);
 float m_truncf(float x);
 
+double m_atan2(double y, double x);
 float m_atan2f(float y, float x);
 
 #ifdef _MSC_VER
@@ -48,5 +49,7 @@ float m_atan2f(float y, float x);
 #define atan2f(x, y) m_atan2f(x, y)
 
 #endif /* _MSC_VER */
+
+#define atan2_fixed(x, y) m_atan2(x, y)
 
 #endif /* NUMBA_MATH_C99_H_ */

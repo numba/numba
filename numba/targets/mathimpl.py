@@ -4,8 +4,11 @@ Provide math calls that uses intrinsics or libc math functions.
 
 from __future__ import print_function, absolute_import, division
 import math
+import sys
+
 import llvm.core as lc
 from llvm.core import Type
+
 from numba.targets.imputils import implement, Registry
 from numba import types, cgutils, utils
 from numba.typing import signature
@@ -308,7 +311,9 @@ def atan2_f64_impl(context, builder, sig, args):
     assert len(args) == 2
     mod = cgutils.get_module(builder)
     fnty = Type.function(Type.double(), [Type.double(), Type.double()])
-    fn = mod.get_or_insert_function(fnty, name="atan2")
+    # Workaround atan2() issues under Windows
+    fname = "atan2_fixed" if sys.platform == "win32" else "atan2"
+    fn = mod.get_or_insert_function(fnty, name=fname)
     return builder.call(fn, args)
 
 
