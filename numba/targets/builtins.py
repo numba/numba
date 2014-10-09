@@ -740,11 +740,10 @@ def complex_imag_impl(context, builder, typ, value):
 @builtin
 @implement("complex.conjugate", types.Kind(types.Complex))
 def complex_conjugate_impl(context, builder, sig, args):
+    from . import mathimpl
     cplx_cls = context.make_complex(sig.args[0])
     z = cplx_cls(context, builder, args[0])
-    imag = z.imag
-    zero = cgutils.get_null_value(imag.type)
-    z.imag = builder.fsub(zero, imag)
+    z.imag = mathimpl.negate_real(builder, z.imag)
     return z._getvalue()
 
 def real_real_impl(context, builder, typ, value):
