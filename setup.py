@@ -1,4 +1,12 @@
-from distutils.core import setup, Extension
+try:
+    # Try to use setuptools so as to enable support of the special
+    # "Microsoft Visual C++ Compiler for Python 2.7" (http://aka.ms/vcpython27)
+    # for building under Windows.
+    # Note setuptools >= 6.0 is required for this.
+    from setuptools import setup, Extension
+except ImportError:
+    from distutils.core import setup, Extension
+
 import sys
 import os
 import numpy
