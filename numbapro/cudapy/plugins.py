@@ -4,7 +4,8 @@ import operator
 from numbapro.cudadrv.autotune import AutoTuner
 from numba.cuda.compiler import CUDAKernel, CUDAKernelBase, AutoJitCUDAKernel
 from numba.cuda.descriptor import CUDATargetDesc
-from . import printimpl
+from numbapro import cuda
+from . import printimpl, reduction
 
 # Extend target features
 
@@ -95,3 +96,7 @@ class ForAll(object):
 
 
 CUDAKernelBase.forall = forall
+
+
+# Insert
+cuda.Reduce = reduction.Reduce
