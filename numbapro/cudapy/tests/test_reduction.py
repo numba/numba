@@ -1,0 +1,31 @@
+from __future__ import print_function
+import numpy as np
+from numbapro import cuda
+from numbapro.testsupport import unittest
+
+
+class TestReduction(unittest.TestCase):
+    def test_sum_reduce(self):
+        sum_reduce = cuda.Reduce(lambda a, b: a + b)
+        A = (np.arange(34567, dtype=np.float64) + 1)
+        expect = A.sum()
+        got = sum_reduce(A)
+        self.assertEqual(expect, got)
+
+    def test_prod_reduce(self):
+        prod_reduce = cuda.Reduce(lambda a, b: a * b)
+        A = (np.arange(64, dtype=np.float64) + 1)
+        expect = A.prod()
+        got = prod_reduce(A, init=1)
+        self.assertTrue(np.allclose(expect, got))
+
+    def test_max_reduce(self):
+        max_reduce = cuda.Reduce(lambda a, b: max(a, b))
+        A = (np.arange(3717, dtype=np.float64) + 1)
+        expect = A.max()
+        got = max_reduce(A, init=0)
+        self.assertEqual(expect, got)
+
+
+if __name__ == '__main__':
+    unittest.main()
