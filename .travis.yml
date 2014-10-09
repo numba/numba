@@ -32,6 +32,8 @@ before_install:
   - sudo ln -s /run/shm /dev/shm
   # Install boost for impyla
   - if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then sudo apt-get install libboost-all-dev; fi
+  # Install pytest for impyla
+  - conda install --yes pytest
 
 install:
     # Install llvmpy
@@ -42,13 +44,13 @@ install:
     # Install numba
     - python setup.py install -q >/dev/null
     # Install impyla
-    - if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then export LLVM_CONFIG=$(which llvm-config); fi
+    - if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then export LLVM_CONFIG_PATH=$(which llvm-config); fi
     - if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then cd $HOME ; git clone https://github.com/cloudera/impyla.git -q; fi
-    - if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then cd impyla ; git checkout udf ; make ; python setup.py install; fi
+    - if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then cd impyla ; make ; python setup.py install; fi
 
 script:
     - cd ~ ; python -m numba.testing -v -b
-    - if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then python $HOME/impyla/tests/test_impala.py; fi
+    - if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then cd $HOME; py.test --udf $HOME/impyla/impala/tests/test_udf_compile.py; fi
 
 notifications:
   email: false
