@@ -69,7 +69,8 @@ class ArrayHeaderManager(object):
         """Get a pagelocked staging area and record the event when we are done.
         """
         evt, stage = self.stage_queue.popleft()
-        evt.wait(stream=stream)
+        if not evt.query():
+            evt.wait(stream=stream)
         yield stage
         evt.record(stream=stream)
         self.stage_queue.append((evt, stage))
