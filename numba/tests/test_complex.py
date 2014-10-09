@@ -3,6 +3,7 @@ from __future__ import print_function, absolute_import, division
 import cmath
 import itertools
 import math
+import sys
 
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated, Flags, utils
@@ -103,12 +104,16 @@ class BaseComplexTest(object):
 
     def basic_values(self):
         reals = [-0.0, +0.0, 1, -1, +1.5, -3.5,
-                 float('-inf'), float('+inf'), float('nan')]
+                 float('-inf'), float('+inf')]
+        if sys.platform != 'win32':
+            reals += [float('nan')]
         return [complex(x, y) for x, y in itertools.product(reals, reals)]
 
     def more_values(self):
         reals = [-0.0, +0.0, 1, -1, -math.pi, +math.pi,
-                 float('-inf'), float('+inf'), float('nan')]
+                 float('-inf'), float('+inf')]
+        if sys.platform != 'win32':
+            reals += [float('nan')]
         return [complex(x, y) for x, y in itertools.product(reals, reals)]
 
     def non_nan_values(self):
@@ -320,11 +325,9 @@ class TestCMath(BaseComplexTest, TestCase):
 
     def test_atan(self):
         self.check_unary_func(atan_usecase, enable_pyobj_flags, ulps=2,)
-                              #values=self.non_infinite_values())
 
     def test_atan_npm(self):
         self.check_unary_func(atan_usecase, no_pyobj_flags, ulps=2,)
-                              #values=self.non_infinite_values())
 
     def test_cos(self):
         self.check_unary_func(cos_usecase, enable_pyobj_flags, ulps=2)
