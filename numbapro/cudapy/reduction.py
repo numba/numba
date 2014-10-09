@@ -1,6 +1,7 @@
 """
 A library written in CUDA Python for generating reduction kernels
 """
+from __future__ import print_function, division, absolute_import
 from functools import reduce
 from numbapro import cuda
 from numba.numpy_support import from_dtype
@@ -128,15 +129,14 @@ class Reduce(object):
             # Allocate output array if we don't have one already
             if dout is None or dout.size < gridsz:
                 dout = cuda.device_array(gridsz, dtype=dary.dtype,
-                                         stream=stream)
+                                         stream=stream).bind(stream=stream)
 
             # Launch reduction kernel
             kernel[gridsz, blocksz, stream](dary, dout, worksz)
 
             if diffsz:
                 assert diffsz > 0
-                hostary = dary.bind(stream=stream)[worksz:size].copy_to_host(
-                    stream=stream)
+                hostary = dary[worksz:size].copy_to_host(stream=stream)
                 evt.record(stream=stream)
 
                 def finish_diff():
@@ -184,6 +184,7 @@ class Reduce(object):
         # Run
         todos = []
         dout = None
+        dary = dary.bind(stream=stream)
         for kernel, blockSize in plan:
             while size != 1:
                 args = self._schedule_reducer(init, kernel, dary, dout, size,
@@ -197,7 +198,7 @@ class Reduce(object):
 
         # Pull all the remaining parts and do reduce all them on the host
         final = reduce(self.binop, [fn() for fn in todos], init)
-        hary = dary.bind(stream=stream)[:size].copy_to_host(stream=stream)
+        hary = dary[:size].copy_to_host(stream=stream)
 
         stream.synchronize()
         return self.binop(reduce(self.binop, hary, init), final)
