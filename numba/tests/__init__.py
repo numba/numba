@@ -41,7 +41,7 @@ class NumbaTestProgram(unittest.main):
         self.discovered_suite = kwargs.pop('suite', None)
         # HACK to force unittest not to change warning display options
         # (so that NumbaWarnings don't appear all over the place)
-        sys.warnoptions.append('')
+        sys.warnoptions.append(':x')
         super(NumbaTestProgram, self).__init__(*args, **kwargs)
 
 
