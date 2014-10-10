@@ -1151,7 +1151,6 @@ class Linker(object):
             driver.cuLinkAddData(self.handle, enums.CU_JIT_INPUT_PTX,
                                  ptxbuf, len(ptx), namebuf, 0, None, None)
         except CudaAPIError as e:
-            print(ptx)
             raise LinkerError("%s\n%s" % (e, self.error_log))
 
     def add_file(self, path, kind):
