@@ -99,4 +99,4 @@ CUDAKernelBase.forall = forall
 
 
 # Insert
-cuda.Reduce = reduction.Reduce
+cuda.reduce = cuda.Reduce = reduction.Reduce

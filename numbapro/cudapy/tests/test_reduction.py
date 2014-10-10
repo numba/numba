@@ -13,7 +13,7 @@ class TestReduction(unittest.TestCase):
         self.assertEqual(expect, got)
 
     def test_prod_reduce(self):
-        prod_reduce = cuda.Reduce(lambda a, b: a * b)
+        prod_reduce = cuda.reduce(lambda a, b: a * b)
         A = (np.arange(64, dtype=np.float64) + 1)
         expect = A.prod()
         got = prod_reduce(A, init=1)
