@@ -4,8 +4,7 @@ import itertools
 import numpy as np
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
-from numba import types, typeinfer
-from numba import typing
+from numba import types, typeinfer, typing, jit
 
 
 class TestArgRetCasting(unittest.TestCase):
@@ -122,6 +121,53 @@ class TestUnify(unittest.TestCase):
         """
         for ty in types.number_domain:
             self.assertTrue(hasattr(ty, "bitwidth"))
+
+
+def issue_797(x0, y0, x1, y1, grid):
+    nrows, ncols = grid.shape
+
+    dx = abs(x1 - x0)
+    dy = abs(y1 - y0)
+
+    sx = 0
+    if x0 < x1:
+        sx = 1
+    else:
+        sx = -1
+    sy = 0
+    if y0 < y1:
+        sy = 1
+    else:
+        sy = -1
+
+    err = dx - dy
+
+    while True:
+        if x0 == x1 and y0 == y1:
+            break
+
+        if 0 <= x0 < nrows and 0 <= y0 < ncols:
+            grid[x0, y0] += 1
+
+        e2 = 2 * err
+        if e2 > -dy:
+            err -= dy
+            x0 += sx
+        if e2 < dx:
+            err += dx
+            y0 += sy
+
+
+class TestIssue(object):
+    def test_issue_797(self):
+        """https://github.com/numba/numba/issues/797#issuecomment-58592401
+
+        Undeterministic triggering of tuple coercion error
+        """
+        foo = jit(nopython=True)(issue_797)
+        g = np.zeros(shape=(10, 10), dtype=np.int32)
+        foo(np.int32(0), np.int32(0), np.int32(1), np.int32(1), g)
+
 
 if __name__ == '__main__':
     unittest.main()
