@@ -14,4 +14,7 @@ for p in range(8):
     ans_gpu = cuda_sum(A)
     assert np.allclose(ans_cpu, ans_gpu)
     print('CPU', benchmark(lambda: A.sum()))
-    print('GPU', benchmark(lambda: cuda_sum(A)))
+
+    # Only measure in device reduction
+    dA = cuda.to_device(A)
+    print('GPU', benchmark(lambda: cuda_sum(dA)))

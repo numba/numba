@@ -3,7 +3,8 @@ A library written in CUDA Python for generating reduction kernels
 """
 from __future__ import print_function, division, absolute_import
 from functools import reduce
-from numbapro import cuda
+import math
+from numbapro import cuda, uint32
 from numba.numpy_support import from_dtype
 
 
@@ -28,8 +29,8 @@ def reduction_template(binop, typ, blocksize):
     binop = cuda.jit((typ, typ), device=True)(binop)
 
     # Compile reducer
-    @cuda.jit((typ[:], typ[:], intp))
-    def reducer(inp, out, nelem):
+    @cuda.jit((typ[:], typ[:], intp, intp))
+    def reducer(inp, out, nelem, ostride):
         tid = cuda.threadIdx.x
         i = cuda.blockIdx.x * (blocksize * 2) + tid
         gridSize = blocksize * 2 * cuda.gridDim.x
@@ -71,14 +72,47 @@ def reduction_template(binop, typ, blocksize):
                 sdata[tid] = binop(sdata[tid], sdata[tid + 1])
 
         if tid == 0:
-            out[cuda.blockIdx.x] = sdata[0]
+            out[cuda.blockIdx.x * ostride] = sdata[0]
 
     # Return reducer
     return reducer
 
 
+@cuda.autojit
+def copy_strides(arr, n, stride, tpb):
+    sm = cuda.shared.array(1, dtype=uint32)
+    i = cuda.threadIdx.x
+    base = 0
+    if i == 0:
+        sm[0] = 0
+
+    val = arr[0]
+    while base < n:
+        idx = base + i
+        if idx < n:
+            val = arr[idx * stride]
+
+        cuda.syncthreads()
+
+        if base + i < n:
+            arr[sm[0] + i] = val
+
+        if i == 0:
+            sm[0] += tpb
+
+        base += tpb
+
+
 class Reduce(object):
     """CUDA Reduce kernel
+
+    Performance Note
+    ----------------
+    Does not allocate device memory if the input is already in device.
+    The reduction kernel does not fully reduce the array on device.
+    The last few elements (less than 16) is copied back to the host
+    for the final reduction.
+
     """
 
     def __init__(self, binop):
@@ -99,7 +133,7 @@ class Reduce(object):
         self.binop = binop
         self._cache = {}
 
-    def __call__(self, arr, size=None, init=0, stream=0):
+    def _prepare(self, arr, stream):
         if arr.ndim != 1:
             raise TypeError("only support 1D array")
 
@@ -108,61 +142,11 @@ class Reduce(object):
             stream = cuda.stream()
 
         # Make sure `arr` in on the device
-        darr = (cuda.to_device(arr, stream=stream)
-                if not cuda.devicearray.is_cuda_ndarray(arr)
-                else arr)
+        darr, conv = cuda.devicearray.auto_device(arr, stream=stream)
 
-        return self._driver(darr, size=size, init=init, stream=stream)
+        return darr, stream, conv
 
-    def _schedule_reducer(self, init, kernel, dary, dout, size, blockSize,
-                          stream):
-        gridsz = size // blockSize
-        if gridsz > 0:
-            worksz = blockSize * gridsz
-            diffsz = size - worksz
-            blocksz = blockSize // 2
-
-            # Create an event if we have any leftovers
-            if diffsz:
-                evt = cuda.event()
-
-            # Allocate output array if we don't have one already
-            if dout is None or dout.size < gridsz:
-                dout = cuda.device_array(gridsz, dtype=dary.dtype,
-                                         stream=stream).bind(stream=stream)
-
-            # Launch reduction kernel
-            kernel[gridsz, blocksz, stream](dary, dout, worksz)
-
-            if diffsz:
-                assert diffsz > 0
-                hostary = dary[worksz:size].copy_to_host(stream=stream)
-                evt.record(stream=stream)
-
-                def finish_diff():
-                    # D->H transfer ready?
-                    if not evt.query():
-                        # Force host synchronization
-                        evt.synchronize()
-                    return reduce(self.binop, hostary, init)
-
-                tail = finish_diff
-            else:
-                tail = lambda: init
-
-            return dout, gridsz, tail
-
-    def _compile(self, nbtype, blockSize, init):
-        key = nbtype, blockSize, init
-        reducer = self._cache.get(key)
-        if reducer is None:
-            reducer = reduction_template(self.binop, nbtype, blockSize)
-            self._cache[key] = reducer
-        return reducer, blockSize * 2
-
-    def _driver(self, dary, size, init, stream):
-        """Driver for compiling, scheduling, launching reduction kernel
-        """
+    def _type_and_size(self, dary, size):
         nbtype = from_dtype(dary.dtype)
 
         if size is None:
@@ -172,7 +156,84 @@ class Reduce(object):
         if size > dary.size:
             raise ValueError("size > array.size")
 
-        # Compile function
+        return nbtype, size
+
+    def device_partial_inplace(self, darr, size=None, init=0, stream=0):
+        """Partially reduce a device array inplace as much as possible in an
+        efficient manner. Does not automatically transfer host array.
+
+        Returns
+        -------
+        Number of elements in ``darr`` that contains the partial reduction
+        result. User can then perform
+        ``darr[:return_value].copy_to_host().sum()`` to finish the reduction.
+
+        """
+        if stream == 0:
+            stream = cuda.stream()
+            ret = self._partial_inplace_driver(darr, size, init, stream)
+            stream.synchronize()
+        else:
+            ret = self._partial_inplace_driver(darr, size, init, stream)
+        return ret
+
+    def _partial_inplace_driver(self, dary, size, init, stream):
+        nbtype, size = self._type_and_size(dary, size)
+
+        while size >= 16:
+            # Find the closest size that is power of two
+            p2size = 2 ** int(math.log2(size))
+            # Plan for p2size
+            plan = self._plan(p2size, nbtype, init)
+
+            diffsz = size - p2size
+            size = p2size
+            # Run kernels
+            kernel, blockSize = plan[0]
+
+            gridsz = size // blockSize
+            assert gridsz <= p2size
+            if gridsz > 0:
+                worksz = blockSize * gridsz
+                blocksz = blockSize // 2
+                assert size - worksz == 0
+                # Launch reduction kernel
+                # Process data inplace
+                # Result stored at start of each threadblock
+                kernel[gridsz, blocksz, stream](dary, dary, worksz, blockSize)
+                # Stream compact
+                # Move all results to the start
+                copy_strides[1, 512, stream](dary, gridsz, blockSize, 512)
+                # New size is gridsz
+                size = gridsz
+
+            # Compact any leftover
+            if diffsz > 0:
+                itemsize = dary.dtype.itemsize
+                dst = dary.gpu_data.view(size * itemsize)
+                src = dary.gpu_data.view(p2size * itemsize)
+                cuda.driver.device_to_device(dst, src, diffsz * itemsize,
+                                             stream=stream)
+                size += diffsz
+
+        return size
+
+    def __call__(self, arr, size=None, init=0, stream=0):
+        """Performs a full reduction.
+
+        Returns the result of the full reduction
+        """
+        darr, stream, conv = self._prepare(arr, stream)
+        size = self._partial_inplace_driver(darr, size=size, init=init,
+                                            stream=stream)
+        hary = darr.bind(stream=stream)[:size].copy_to_host(stream=stream)
+        return reduce(self.binop, hary, init)
+
+    def _plan(self, size, nbtype, init):
+        """Compile the kernels necessary for the job.
+
+        Compiled kernels are cached.
+        """
         plan = []
         if size >= 1024:
             plan.append(self._compile(nbtype, 512, init))
@@ -181,25 +242,16 @@ class Reduce(object):
         if size >= 16:
             plan.append(self._compile(nbtype, 8, init))
 
-        # Run
-        todos = []
-        dout = None
-        dary = dary.bind(stream=stream)
-        for kernel, blockSize in plan:
-            while size != 1:
-                args = self._schedule_reducer(init, kernel, dary, dout, size,
-                                              blockSize, stream)
-                if args is None:
-                    break
-                dout, size, tail = args
-                dary, dout = dout, dary
+        return plan
 
-                todos.append(tail)
+    def _compile(self, nbtype, blockSize, init):
+        """Compile a kernel for the parameter.
 
-        # Pull all the remaining parts and do reduce all them on the host
-        final = reduce(self.binop, [fn() for fn in todos], init)
-        hary = dary[:size].copy_to_host(stream=stream)
-
-        stream.synchronize()
-        return self.binop(reduce(self.binop, hary, init), final)
-
+        Compiled kernels are cached.
+        """
+        key = nbtype, blockSize, init
+        reducer = self._cache.get(key)
+        if reducer is None:
+            reducer = reduction_template(self.binop, nbtype, blockSize)
+            self._cache[key] = reducer
+        return reducer, blockSize * 2
