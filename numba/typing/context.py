@@ -383,14 +383,24 @@ class BaseContext(object):
         elif d == 'promote':
             return second
         elif d in ('safe', 'unsafe'):
-            assert first in types.number_domain
-            assert second in types.number_domain
-            a = numpy.dtype(str(first))
-            b = numpy.dtype(str(second))
-            # Just use NumPy coercion rules
-            sel = numpy.promote_types(a, b)
-            # Convert NumPy dtype back to Numba types
-            return getattr(types, str(sel))
+            if first in types.number_domain and second in types.number_domain:
+                a = numpy.dtype(str(first))
+                b = numpy.dtype(str(second))
+                # Just use NumPy coercion rules
+                sel = numpy.promote_types(a, b)
+                # Convert NumPy dtype back to Numba types
+                return getattr(types, str(sel))
+            elif (isinstance(first, types.UniTuple) and
+                      isinstance(second, types.UniTuple)):
+                a = numpy.dtype(str(first.dtype))
+                b = numpy.dtype(str(second.dtype))
+                if a > b:
+                    return first
+                else:
+                    return second
+            else:
+                msg = "unrecognized '{0}' unify for {1} and {2}"
+                raise TypeError(msg.format(d, first, second))
         elif d in 'int-tuple-coerce':
             return types.UniTuple(dtype=types.intp, count=len(first))
         else:

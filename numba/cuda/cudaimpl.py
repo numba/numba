@@ -288,7 +288,10 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
             else:
                 raise ValueError("array length <= 0")
         else:
-            gvmem.linkage = lc.LINKAGE_INTERNAL
+            ## Comment out the following line to workaround a NVVM bug
+            ## which generates a invalid symbol name when the linkage
+            ## is internal and in some situation.
+            # gvmem.linkage = lc.LINKAGE_INTERNAL
             gvmem.initializer = lc.Constant.undef(laryty)
 
         if dtype not in types.number_domain:
