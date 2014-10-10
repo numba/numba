@@ -109,5 +109,22 @@ class TestUnify(unittest.TestCase):
         for ty in types.number_domain:
             self.assertTrue(hasattr(ty, "bitwidth"))
 
+    def test_unify_to_optional(self):
+        """Test unification to optional type
+        """
+        ctx = typing.Context()
+        for tys in itertools.combinations(types.number_domain, 2):
+            tys = list(tys) + [types.none]
+            res = [ctx.unify_types(*comb)
+                   for comb in itertools.permutations(tys)]
+            # All result must be equal
+            first_result = res[0]
+            self.assertIsInstance(first_result, types.Optional)
+            for other in res[1:]:
+                self.assertEqual(first_result, other)
+            print(first_result)
+
+
+
 if __name__ == '__main__':
     unittest.main()
