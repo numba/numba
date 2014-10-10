@@ -117,6 +117,7 @@ setup(name='numba',
         # "Programming Language :: Python :: 3.3",
         "Topic :: Utilities",
       ],
+      requires=["llvmpy"],
       package_data={
         "numba": ["*.c", "*.h", "*.cpp", "*.inc"],
         "numba.npyufunc": ["*.c", "*.h"],
