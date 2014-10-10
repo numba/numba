@@ -1,6 +1,8 @@
 from __future__ import print_function, absolute_import, division
 import numpy as np
 import numba.ctypes_support as ctypes
+import contextlib
+from collections import deque
 from . import devices, driver
 
 
@@ -28,7 +30,10 @@ class ArrayHeaderManager(object):
 
     # Maximum size for each array head
     #    = 4 (ndim) * 8 (sizeof intp) * 2 (shape strides) + 8 (ptr)
-    elemsize = 72
+    elemsize = 4 * 8 * 2 + 8
+
+    # Number of page-locked staging area
+    num_stages = 5
 
     def __new__(cls, context):
         key = context.handle.value
@@ -43,16 +48,32 @@ class ArrayHeaderManager(object):
     def init(self, context):
         self.context = context
         self.data = self.context.memalloc(self.elemsize * self.maxsize)
-        self.queue = []
+        self.queue = deque()
         for i in range(self.maxsize):
             offset = i * self.elemsize
             mem = self.data.view(offset, offset + self.elemsize)
             self.queue.append(mem)
         self.allocated = set()
         # A staging buffer to temporary store data for copying
-        buffer = context.memhostalloc(self.elemsize)
-        self.staging = np.ndarray(shape=self.elemsize, dtype=np.byte,
-                                  order='C', buffer=buffer)
+        self.stages = [np.ndarray(shape=self.elemsize, dtype=np.byte,
+                                  order='C',
+                                  buffer=context.memhostalloc(self.elemsize))
+                       for _ in range(self.num_stages)]
+        self.events = [context.create_event(timing=False)
+                       for _ in range(self.num_stages)]
+
+        self.stage_queue = deque(zip(self.events, self.stages))
+
+    @contextlib.contextmanager
+    def get_stage(self, stream):
+        """Get a pagelocked staging area and record the event when we are done.
+        """
+        evt, stage = self.stage_queue.popleft()
+        if not evt.query():
+            evt.wait(stream=stream)
+        yield stage
+        evt.record(stream=stream)
+        self.stage_queue.append((evt, stage))
 
     def allocate(self, nd):
         arraytype = make_array_ctype(nd)
@@ -61,7 +82,7 @@ class ArrayHeaderManager(object):
         if sizeof > self.elemsize or not self.queue:
             return _allocate_head(nd)
 
-        mem = self.queue.pop()
+        mem = self.queue.popleft()
         self.allocated.add(mem)
         return mem
 
@@ -74,11 +95,13 @@ class ArrayHeaderManager(object):
         if data.size > self.elemsize:
             # Cannot use pinned staging memory
             stage = data
+            driver.host_to_device(to, stage, data.size, stream=stream)
         else:
             # Can use pinned staging memory
-            stage = self.staging[:data.size]
-            stage[:] = data
-        driver.host_to_device(to, stage, data.size, stream=stream)
+            with self.get_stage(stream=stream) as stage_area:
+                stage = stage_area[:data.size]
+                stage[:] = data
+                driver.host_to_device(to, stage, data.size, stream=stream)
 
     def __repr__(self):
         return "<cuda managed memory %s >" % (self.context.device,)

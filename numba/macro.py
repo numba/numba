@@ -37,6 +37,8 @@ def module_getattr_folding(constants, block):
             elif isinstance(rhs, ir.Var) and rhs.name in constants:
                 constants[inst.target.name] = constants[rhs.name]
 
+            elif isinstance(rhs, ir.FreeVar):
+                constants[inst.target.name] = rhs.value
 
 def expand_macros_in_block(constants, block):
     calls = []
