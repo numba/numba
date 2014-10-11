@@ -12,7 +12,7 @@ from numba.pythonapi import PythonAPI
 from numba.targets.imputils import (user_function, python_attr_impl,
                                     builtin_registry, impl_attribute,
                                     struct_registry, type_registry)
-from . import arrayobj, builtins, iterators, rangeobj
+from . import arrayobj, builtins, iterators, rangeobj, optional
 try:
     from . import npdatetime
 except NotImplementedError:
@@ -267,7 +267,9 @@ class BaseContext(object):
             return self.get_value_type(ty)
 
     def get_return_type(self, ty):
-        if self.is_struct_type(ty):
+        if isinstance(ty, types.Optional):
+            return self.get_return_type(ty.type)
+        elif self.is_struct_type(ty):
             return self.get_argument_type(ty)
         else:
             argty = self.get_argument_type(ty)
@@ -300,7 +302,7 @@ class BaseContext(object):
             return Type.pointer(dty)
 
         elif isinstance(ty, types.Optional):
-            return self.get_data_type(ty.type)
+            return self.get_struct_type(self.make_optional(ty))
 
         elif isinstance(ty, types.Array):
             return self.get_struct_type(self.make_array(ty))
@@ -605,6 +607,30 @@ class BaseContext(object):
 
         raise NotImplementedError("value %s -> arg %s" % (val.type, argty))
 
+    def return_optional_value(self, builder, retty, valty, value):
+        if valty == types.none:
+            self.return_native_none(builder)
+
+        elif retty == valty:
+            optcls = self.make_optional(retty)
+            optval = optcls(self, builder, value=value)
+
+            validbit = builder.trunc(optval.valid, lc.Type.int(1))
+            with cgutils.ifthen(builder, validbit):
+                self.return_value(builder, optval.data)
+
+            self.return_native_none(builder)
+
+        elif not isinstance(valty, types.Optional):
+            if valty != retty.type:
+                value = self.cast(builder, value, fromty=valty,
+                                  toty=retty.type)
+            self.return_value(builder, value)
+
+        else:
+            raise NotImplementedError("returning {0} for {1}".format(valty,
+                                                                     retty))
+
     def return_value(self, builder, retval):
         fn = cgutils.get_function(builder)
         retptr = fn.args[0]
@@ -762,7 +788,39 @@ class BaseContext(object):
             # then promote to number
             return self.cast(builder, asint, types.int32, toty)
 
+        elif fromty == types.none and isinstance(toty, types.Optional):
+            return self.make_optional_none(builder, toty.type)
+
+        elif isinstance(toty, types.Optional):
+            casted = self.cast(builder, val, fromty, toty.type)
+            return self.make_optional_value(builder, toty.type, casted)
+
+        elif isinstance(fromty, types.Optional):
+            optty = self.make_optional(fromty)
+            optval = optty(self, builder, value=val)
+            validbit = cgutils.as_bool_bit(builder, optval.valid)
+            with cgutils.if_unlikely(builder, builder.not_(validbit)):
+                self.return_errcode(builder, errcode.NONE_TYPE_ERROR)
+
+            return optval.data
+
         raise NotImplementedError("cast", val, fromty, toty)
+
+    def make_optional(self, optionaltype):
+        return optional.make_optional(optionaltype.type)
+
+    def make_optional_none(self, builder, valtype):
+        optcls = optional.make_optional(valtype)
+        optval = optcls(self, builder)
+        optval.valid = cgutils.false_bit
+        return optval._getvalue()
+
+    def make_optional_value(self, builder, valtype, value):
+        optcls = optional.make_optional(valtype)
+        optval = optcls(self, builder)
+        optval.valid = cgutils.true_bit
+        optval.data = value
+        return optval._getvalue()
 
     def is_true(self, builder, typ, val):
         if typ in types.integer_domain:

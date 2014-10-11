@@ -15,7 +15,7 @@ class DivmodFixer(object):
     def run(self, module):
         for func in module.functions:
             self.run_on_func(func)
-
+        
     def run_on_func(self, func):
         to_replace = []
         for bb in func.basic_blocks:
@@ -82,8 +82,7 @@ class IntrinsicMapping(object):
     def translate_intrinsic_to_cmath(self, module):
         for fn in self._iter_unavail(module):
             # Rename unavailable intrinsic to libc calls
-            # Ignore unrecognized llvm intrinsic
-            fn.name = INTR_TO_CMATH.get(fn.name, fn.name)
+            fn.name = INTR_TO_CMATH[fn.name]
 
         if __debug__:
             module.verify()

@@ -290,12 +290,9 @@ class Lower(BaseLower):
             oty = self.typeof(inst.value.name)
             ty = self.fndesc.restype
             if isinstance(ty, types.Optional):
-                if oty == types.none:
-                    self.context.return_native_none(self.builder)
-                    return
-                else:
-                    ty = ty.type
-
+                # If returning an optional type
+                self.context.return_optional_value(self.builder, ty, oty, val)
+                return
             if ty != oty:
                 val = self.context.cast(self.builder, val, oty, ty)
             retval = self.context.get_return_value(self.builder, ty, val)
@@ -315,7 +312,12 @@ class Lower(BaseLower):
             impl = self.context.get_function('setitem', signature)
 
             # Convert argument to match
-            assert targetty == signature.args[0]
+            if isinstance(targetty, types.Optional):
+                target = self.context.cast(self.builder, target, targetty,
+                                           targetty.type)
+            else:
+                assert targetty == signature.args[0]
+
             index = self.context.cast(self.builder, index, indexty,
                                       signature.args[1])
             value = self.context.cast(self.builder, value, valuety,
@@ -602,12 +604,6 @@ class Lower(BaseLower):
             for i in range(len(castvals)):
                 tup = self.builder.insert_value(tup, castvals[i], i)
             return tup
-
-        elif expr.op == "cast":
-            val = self.loadvar(expr.value.name)
-            ty = self.typeof(expr.value.name)
-            castval = self.context.cast(self.builder, val, ty, resty)
-            return castval
 
         raise NotImplementedError(expr)
 

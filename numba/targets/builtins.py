@@ -9,8 +9,8 @@ import llvm.core as lc
 
 from .imputils import (builtin, builtin_attr, implement, impl_attribute,
                        iternext_impl, struct_factory)
+from . import optional
 from .. import typing, types, cgutils, utils, errcode, intrinsics
-
 
 #-------------------------------------------------------------------------------
 
@@ -436,6 +436,61 @@ for ty in types.signed_domain:
 
 builtin(implement('**', types.intp, types.intp)(int_spower_impl))
 builtin(implement(pow, types.intp, types.intp)(int_spower_impl))
+
+def optional_is_none(context, builder, sig, args):
+    """Check if an Optional value is invalid
+    """
+    [lty, rty] = sig.args
+    [lval, rval] = args
+
+    # Make sure None is on the right
+    if lty == types.none:
+        lty, rty = rty, lty
+        lval, rval = rval, lval
+
+    opt_type = lty
+    opt_val = lval
+
+    del lty, rty, lval, rval
+
+    opt = context.make_optional(opt_type)(context, builder, opt_val)
+    return builder.not_(cgutils.as_bool_bit(builder, opt.valid))
+
+
+def optional_is_not_none(context, builder, sig, args):
+    """Check if an Optional value is valid
+    """
+    return builder.not_(optional_is_none(context, builder, sig, args))
+
+
+# None is/not None
+builtin(implement('is', types.none, types.none)(
+    optional.always_return_true_impl))
+
+builtin(implement('is not', types.none, types.none)(
+    optional.always_return_false_impl))
+
+# Optional is None
+builtin(implement('is',
+                  types.Kind(types.Optional), types.none)(optional_is_none))
+
+builtin(implement('is',
+                  types.none, types.Kind(types.Optional))(optional_is_none))
+
+# Optional is not None
+builtin(implement('is not',
+                  types.Kind(types.Optional), types.none)(optional_is_not_none))
+
+builtin(implement('is not',
+                  types.none, types.Kind(types.Optional))(optional_is_not_none))
+
+# Any is/not None
+builtin(implement('is',
+                  types.Any, types.Any)(optional.always_return_false_impl))
+
+builtin(implement('is not',
+                  types.Any, types.Any)(optional.always_return_true_impl))
+
 
 def real_add_impl(context, builder, sig, args):
     return builder.fadd(*args)

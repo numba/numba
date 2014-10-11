@@ -218,14 +218,6 @@ class Expr(Inst):
         op = 'static_getitem'
         return cls(op=op, loc=loc, value=value, index=index)
 
-    @classmethod
-    def cast(cls, value, loc):
-        """
-        A node for implicit casting at the return statement
-        """
-        op = 'cast'
-        return cls(op=op, value=value, loc=loc)
-
     def __repr__(self):
         if self.op == 'call':
             args = ', '.join(str(a) for a in self.args)

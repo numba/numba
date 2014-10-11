@@ -292,12 +292,6 @@ class PyLower(BaseLower):
             self.check_error(res)
 
             return res
-
-        elif expr.op == 'cast':
-            val = self.loadvar(expr.value.name)
-            self.incref(val)
-            return val
-
         else:
             raise NotImplementedError(expr)
 

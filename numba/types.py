@@ -3,7 +3,6 @@ These type objects do not have a fixed machine representation.  It is up to
 the targets to choose their representation.
 """
 from __future__ import print_function, division, absolute_import
-from collections import defaultdict
 
 import itertools
 import numpy
@@ -253,7 +252,7 @@ class Dummy(Type):
 class Phantom(Dummy):
     """
     A type that cannot be materialized.  A Phantom cannot be used as
-    argument or return type.  
+    argument or return type.
     """
     pass
 
@@ -740,9 +739,41 @@ class Object(Type):
 
 class Optional(Type):
     def __init__(self, typ):
+        assert typ != none
+        assert not isinstance(typ, Optional)
         self.type = typ
         name = "?%s" % typ
         super(Optional, self).__init__(name, param=True)
+
+    def post_init(self):
+        """
+        Install conversion from optional(T) to T
+        """
+        from numba.typeconv.rules import default_type_manager as tm
+
+        # TODO make type manager remember all cast relation
+        #      so that new rule will propagate
+        tm.set_safe_convert(self, self.type)
+        tm.set_promote(self.type, self)
+        tm.set_promote(none, self)
+
+        if self.type in number_domain:
+            for t in number_domain - set([self.type]):
+                tcc = tm.check_compatible(t, self.type)
+                if tcc == 'promote':
+                    tm.set_promote(t, self)
+                elif tcc == 'safe':
+                    tm.set_safe_convert(t, self)
+                elif tcc == 'unsafe':
+                    tm.set_unsafe_convert(t, self)
+                else:
+                    assert tcc is None, tcc
+
+        if isinstance(self.type, Array):
+            if self.type.layout == 'A':
+                tm.set_promote(self.type.copy(layout='C'), self)
+                tm.set_promote(self.type.copy(layout='F'), self)
+
 
     @property
     def key(self):
@@ -855,6 +886,9 @@ ulong = _make_unsigned(numpy.long)
 longlong = _make_signed(numpy.longlong)
 ulonglong = _make_unsigned(numpy.longlong)
 
+# optional types
+optional = Optional
+
 __all__ = '''
 int8
 int16
@@ -900,4 +934,5 @@ f4
 f8
 c8
 c16
+optional
 '''.split()

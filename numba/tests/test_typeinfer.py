@@ -32,20 +32,6 @@ class TestArgRetCasting(unittest.TestCase):
         else:
             self.fail("Should complain about array casting to float32")
 
-    def test_invalid_arg_type_forcing(self):
-        def foo(iters):
-            a = range(iters)
-            return iters
-
-        args = (types.uint32,)
-        return_type = types.uint8
-        cres = compile_isolated(foo, args, return_type)
-        typemap = cres.type_annotation.typemap
-        # Argument "iters" must be uint32
-        self.assertEqual(typemap['iters'], types.uint32)
-        # Localized "iters" must be uint32
-        self.assertEqual(typemap['iters.1'], types.uint32)
-
 
 class TestTupleUnify(unittest.TestCase):
     def test_int_tuple_unify(self):
@@ -121,6 +107,21 @@ class TestUnify(unittest.TestCase):
         """
         for ty in types.number_domain:
             self.assertTrue(hasattr(ty, "bitwidth"))
+
+    def test_unify_to_optional(self):
+        """Test unification to optional type
+        """
+        ctx = typing.Context()
+        for tys in itertools.combinations(types.number_domain, 2):
+            tys = list(tys) + [types.none]
+            res = [ctx.unify_types(*comb)
+                   for comb in itertools.permutations(tys)]
+            # All result must be equal
+            first_result = res[0]
+            self.assertIsInstance(first_result, types.Optional)
+            for other in res[1:]:
+                self.assertEqual(first_result, other)
+            print(first_result)
 
 
 def issue_797(x0, y0, x1, y1, grid):

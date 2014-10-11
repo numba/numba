@@ -3,7 +3,7 @@ from __future__ import print_function, division, absolute_import
 from llvm.core import Type, Builder, Constant
 import llvm.core as lc
 
-from numba import types, cgutils
+from numba import types, cgutils, errcode
 
 
 class _ArgManager(object):
@@ -159,7 +159,6 @@ class PyCallWrapper(object):
         # !ok && exc
         builder.ret(api.get_null_object())
 
-
     def make_exception_switch(self, api, builder, code):
         """Handle user defined exceptions.
         Build a switch to check which exception class was raised.
@@ -176,7 +175,24 @@ class PyCallWrapper(object):
             builder.ret(api.get_null_object())
 
         builder.position_at_end(elseblk)
-        msg = "error in native function: %s" % self.fndesc.mangled_name
+
+        # Handle native error
+        elseblk = cgutils.append_basic_block(builder, ".invalid.native.error")
+        swt = builder.switch(code, elseblk, n=len(errcode.error_names))
+
+        msgfmt = "{error} in native function: {fname}"
+        for errnum, errname in errcode.error_names.items():
+            bb = cgutils.append_basic_block(builder,
+                                            ".native.error.%d" % errnum)
+            swt.add_case(Constant.int(code.type, errnum), bb)
+            builder.position_at_end(bb)
+
+            api.raise_native_error(msgfmt.format(error=errname,
+                                                 fname=self.fndesc.mangled_name))
+            builder.ret(api.get_null_object())
+
+        builder.position_at_end(elseblk)
+        msg = "unknown error in native function: %s" % self.fndesc.mangled_name
         api.raise_native_error(msg)
 
     def make_const_string(self, string):
