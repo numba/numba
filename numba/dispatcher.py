@@ -10,6 +10,7 @@ from numba import typing
 from numba.typing.templates import resolve_overload
 from numba import types, sigutils
 from numba.bytecode import get_code_object
+from numba.six import create_bound_method
 
 
 class _OverloadedBase(_dispatcher.Dispatcher):
@@ -213,6 +214,13 @@ class Overloaded(_OverloadedBase):
         self.locals = locals
 
         self.typingctx.insert_overloaded(self)
+
+    def __get__(self, obj, objtype=None):
+        '''Allow a JIT function to be bound as a method to an object'''
+        if obj is None:  # Unbound method
+            return self
+        else:  # Bound method
+            return create_bound_method(self, obj)
 
     def compile(self, sig, locals={}, **targetoptions):
         with self._compile_lock():
