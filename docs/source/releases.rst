@@ -8,6 +8,57 @@
 Release Notes
 ======================
 
+Version 0.14.1
+--------------
+
+Features:
+
+* Support for the Python ``cmath`` module.  (NumPy complex functions were
+  already supported.)
+* Support for ``.real``, ``.imag``, and `.conjugate()`` on non-complex
+  numbers.
+* Add support for ``math.isfinite()`` and ``math.copysign()``.
+* Compatibility mode: If enabled (off by default), a failure to compile in
+  object mode will fall back to using the pure Python implementation of the
+  function.
+* *Experimental* support for serializing JIT functions with cloudpickle.
+* Loop-jitting in object mode now works with loops that modify scalars that
+  are accessed after the loop, such as accumulators.
+* ``@vectorize`` functions can be compiled in object mode.
+* Numba can now be built using the `Visual C++ Compiler for Python 2.7 <http://aka.ms/vcpython27>`_
+  on Windows platforms.
+* CUDA JIT functions can be returned by factory functions with variables in
+  the closure frozen as constants.
+* Support for "optional" types in nopython mode, which allow ``None`` to be a
+  valid value.
+
+Fixes:
+
+* If nopython mode compilation fails for any reason, automatically fall back
+  to object mode (unless nopython=True is passed to @jit) rather than raise
+  an exeception.
+* Allow function objects to be returned from a function compiled in object
+  mode.
+* Fix a linking problem that caused slower platform math functions (such as 
+  ``exp()``) to be used on Windows, leading to performance regressions against 
+  NumPy.
+* ``min()`` and ``max()`` no longer accept scalars arguments in nopython mode.
+* Fix handling of ambigous type promotion among several compiled versions of a
+  JIT function.  The dispatcher will now compile a new version to resolve the
+  problem.  (issue #776)
+* Fix float32 to uint64 casting bug on 32-bit Linux.
+* Fix type inference to allow forced casting of return types.
+* Allow the shape of a 1D ``cuda.shared.array`` and ``cuda.local.array`` to be
+  a one-element tuple.
+* More correct handling of signed zeros.
+* Add custom implementation of ``atan2()`` on Windows to handle special cases 
+  properly.
+* Eliminated race condition in the handling of the pagelocked staging area
+  used when transferring CUDA arrays.
+* Fix non-deterministic type unification leading to varying performance.
+  (issue #797)
+
+
 Version 0.14
 ------------
 
