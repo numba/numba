@@ -362,12 +362,12 @@ semantics. Other code may not compile at all.
 When targeting the "cpu" target (the default), *numba* will either
 generate:
 
--  Fast native code -also called 'nopython'-. The compiler was able to
+-  Fast native code -also called :term:`nopython mode`-. The compiler was able to
    infer all the types in the function, so it can translate the code to
    a fast native routine without making use of the Python runtime.
 
--  Native code with calls to the Python run-time -also called object
-   mode-. The compiler was not able to infer all the types, so that at
+-  Native code with calls to the Python run-time -also called :term:`object mode`-. 
+   The compiler was not able to infer all the types, so that at
    some point a value was typed as a generic 'object'. This means the
    full native version can't be used. Instead, numba generates code
    using the Python run-time that should be faster than actual
