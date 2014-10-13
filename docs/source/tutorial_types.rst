@@ -148,8 +148,8 @@ Let's illustrate how type inference works with *numba.jit*. In order to
 illustrate this, we will use the *inspect\_types* method of a compiled
 function and prints information about the types being used while
 compiling. This will be the different native types when the function has
-been compiled successfully in *nopython* mode. If object mode has been
-used we will get plenty of *pyobject*\ s.
+been compiled successfully in :term:`nopython mode`. If :term:`object mode`
+has been used we will get plenty of *pyobject*\ s.
 
 Note that *inspect\_types* is new to *numba 0.12*. Note also that the
 behavior of object mode has changed quite a bit as well in this release.

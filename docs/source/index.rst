@@ -59,6 +59,7 @@ Numba
    pycc.rst
    debugging.rst
    releases.rst
+   glossary.rst
 
 
 **Developer Documentation**
