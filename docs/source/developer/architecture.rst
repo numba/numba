@@ -39,7 +39,7 @@ same operations as the CPython interpreter, treating ``a`` and ``b`` as
 generic Python objects.  The full semantics of Python are preserved, and the
 compiled function can used with any kind of objects that have the add operator
 defined.  When a Numba function is compiled this way, we say that it has been
-compiled in **object mode**, because the code still manipulates Python
+compiled in :term:`object mode`, because the code still manipulates Python
 objects.
 
 Numba code compiled in object mode is not much faster than executing the
@@ -48,7 +48,7 @@ specialize the function to only run with certain data types, Numba can
 generate much shorter and more efficient code that manipulates the data
 natively without any calls into the Python C API.  When code has been compiled
 for specific data types so that the function body no longer relies on the
-Python runtime, we say the function has been compiled in **nopython mode**.
+Python runtime, we say the function has been compiled in :term:`nopython mode`.
 Numeric code compiled in nopython mode can be hundreds of times faster
 than the original Python. 
 
