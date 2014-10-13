@@ -1,17 +1,13 @@
 from __future__ import print_function, division, absolute_import
 import contextlib
 import functools
-import imp
 import inspect
-import marshal
 import sys
-from types import FunctionType
 
 from numba import _dispatcher, compiler, utils
 from numba.typeconv.rules import default_type_manager
-from numba import typing
+from numba import sigutils, serialize, types, typing
 from numba.typing.templates import resolve_overload
-from numba import types, sigutils
 from numba.bytecode import get_code_object
 
 
@@ -222,40 +218,13 @@ class Overloaded(_OverloadedBase):
             sigs = []
         else:
             sigs = [cr.signature for cr in self._compileinfos.values()]
-        return (_rebuild_overloaded,
-                (self.__class__, self._reduce_function(self.py_func),
+        return (serialize._rebuild_reduction,
+                (self.__class__, serialize._reduce_function(self.py_func),
                  self.locals, self.targetoptions, self._can_compile, sigs))
-
-    def _reduce_function(self, func):
-        """
-        Reduce a Python function to picklable components
-        """
-        assert not func.__closure__
-        # XXX globals dict can contain any kind of unpicklable values
-        # (such as... modules)
-        return self._reduce_code(func.__code__), {}, func.__name__
-
-    def _reduce_code(self, code):
-        return marshal.version, imp.get_magic(), marshal.dumps(code)
-
-    @classmethod
-    def _rebuild_function(cls, code_reduced, globals, name):
-        code = cls._rebuild_code(*code_reduced)
-        return FunctionType(code, globals, name)
-
-    @classmethod
-    def _rebuild_code(cls, marshal_version, bytecode_magic, marshalled):
-        if marshal.version != marshal_version:
-            raise RuntimeError("incompatible marshal version: "
-                               "interpreter has %r, marshalled code has %r"
-                               % (marshal.version, marshal_version))
-        if imp.get_magic() != bytecode_magic:
-            raise RuntimeError("incompatible bytecode version")
-        return marshal.loads(marshalled)
 
     @classmethod
     def _rebuild(cls, func_reduced, locals, targetoptions, can_compile, sigs):
-        py_func = cls._rebuild_function(*func_reduced)
+        py_func = serialize._rebuild_function(*func_reduced)
         self = cls(py_func, locals, targetoptions)
         for sig in sigs:
             self.compile(sig)
@@ -291,10 +260,6 @@ class Overloaded(_OverloadedBase):
 
             self.add_overload(cres)
             return cres.entry_point
-
-
-def _rebuild_overloaded(cls, *args):
-    return cls._rebuild(*args)
 
 
 class LiftedLoop(_OverloadedBase):
