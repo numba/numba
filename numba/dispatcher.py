@@ -222,6 +222,11 @@ class Overloaded(_OverloadedBase):
             return create_bound_method(self, obj)
 
     def __reduce__(self):
+        """
+        Reduce the instance for pickling.  This will serialize
+        the original function as well the compilation options and
+        compiled signatures, but not the compiled code itself.
+        """
         if self._can_compile:
             sigs = []
         else:
@@ -232,6 +237,9 @@ class Overloaded(_OverloadedBase):
 
     @classmethod
     def _rebuild(cls, func_reduced, locals, targetoptions, can_compile, sigs):
+        """
+        Rebuild an Overloaded instance after it was __reduce__'d.
+        """
         py_func = serialize._rebuild_function(*func_reduced)
         self = cls(py_func, locals, targetoptions)
         for sig in sigs:
