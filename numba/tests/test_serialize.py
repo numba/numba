@@ -48,6 +48,26 @@ def closure_with_globals(x):
         return math.hypot(x, y) + sqrt(k)
     return inner
 
+@jit(nopython=True)
+def other_function(x, y):
+    return math.hypot(x, y)
+
+def closure_calling_other_function(x):
+    @jit(nopython=True)
+    def inner(y, z):
+        return other_function(x, y) + z
+    return inner
+
+def closure_calling_other_closure(x):
+    @jit(nopython=True)
+    def other_inner(y):
+        return math.hypot(x, y)
+
+    @jit(nopython=True)
+    def inner(y):
+        return other_inner(y) + x
+    return inner
+
 
 class TestDispatcherPickling(TestCase):
 
@@ -104,6 +124,14 @@ class TestDispatcherPickling(TestCase):
     def test_call_closure_with_globals(self):
         inner = closure_with_globals(3.0)
         self.run_with_protocols(self.check_call, inner, 7.0, (4.0,))
+
+    def test_call_closure_calling_other_function(self):
+        inner = closure_calling_other_function(3.0)
+        self.run_with_protocols(self.check_call, inner, 11.0, (4.0, 6.0))
+
+    def test_call_closure_calling_other_closure(self):
+        inner = closure_calling_other_closure(3.0)
+        self.run_with_protocols(self.check_call, inner, 8.0, (4.0,))
 
 
 if __name__ == '__main__':
