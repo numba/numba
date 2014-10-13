@@ -2,6 +2,7 @@ from __future__ import print_function, absolute_import, division
 
 import math
 import pickle
+import subprocess
 import sys
 
 from numba import unittest_support as unittest
@@ -71,8 +72,6 @@ def closure_calling_other_closure(x):
 
 class TestDispatcherPickling(TestCase):
 
-    # TODO check that unpickling works from an independent process
-
     def run_with_protocols(self, meth, *args, **kwargs):
         for proto in range(pickle.HIGHEST_PROTOCOL + 1):
             meth(proto, *args, **kwargs)
@@ -132,6 +131,23 @@ class TestDispatcherPickling(TestCase):
     def test_call_closure_calling_other_closure(self):
         inner = closure_calling_other_closure(3.0)
         self.run_with_protocols(self.check_call, inner, 8.0, (4.0,))
+
+    def test_other_process(self):
+        """
+        Check that reconstructing doesn't depend on resources already
+        instantiated in the original process.
+        """
+        func = closure_calling_other_closure(3.0)
+        pickled = pickle.dumps(func)
+        code = """if 1:
+            import pickle
+
+            data = {pickled!r}
+            func = pickle.loads(data)
+            res = func(4.0)
+            assert res == 8.0, res
+            """.format(**locals())
+        subprocess.check_call([sys.executable, "-c", code])
 
 
 if __name__ == '__main__':
