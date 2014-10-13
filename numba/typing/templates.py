@@ -17,9 +17,15 @@ class Signature(object):
         self.recvr = recvr
 
     def __getstate__(self):
+        """
+        Needed because of __slots__.
+        """
         return self.return_type, self.args, self.recvr
 
     def __setstate__(self, state):
+        """
+        Needed because of __slots__.
+        """
         self.return_type, self.args, self.recvr = state
 
     def __hash__(self):

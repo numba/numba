@@ -6,7 +6,10 @@ from __future__ import print_function, division, absolute_import
 
 import imp
 import marshal
-from types import FunctionType
+import sys
+from types import FunctionType, ModuleType
+
+from . import bytecode, compiler
 
 
 #
@@ -20,6 +23,36 @@ def _rebuild_reduction(cls, *args):
     return cls._rebuild(*args)
 
 
+class _ModuleRef(object):
+
+    def __init__(self, name):
+        self.name = name
+
+    def __reduce__(self):
+        return _rebuild_module, (self.name,)
+
+
+def _rebuild_module(name):
+    __import__(name)
+    return sys.modules[name]
+
+
+def _get_function_globals_for_reduction(func):
+    """
+    Analyse *func* and return a dictionary of global values suitable for
+    reduction.
+    """
+    # XXX It would be better to have a high-level API in the compiler
+    # module.
+    bc = bytecode.ByteCode(func)
+    interpreter = compiler.translate_stage(bc)
+    globs = dict(interpreter.get_used_globals())
+    for k, v in globs.items():
+        # Make modules picklable by name
+        if isinstance(v, ModuleType):
+            globs[k] = _ModuleRef(k)
+    return globs
+
 def _reduce_function(func):
     """
     Reduce a Python function to picklable components.
@@ -30,9 +63,8 @@ def _reduce_function(func):
         cells = [cell.cell_contents for cell in func.__closure__]
     else:
         cells = None
-    # XXX globals dict can contain any kind of unpicklable values
-    # (such as... modules)
-    return _reduce_code(func.__code__), {}, func.__name__, cells
+    globs = _get_function_globals_for_reduction(func)
+    return _reduce_code(func.__code__), globs, func.__name__, cells
 
 def _reduce_code(code):
     """

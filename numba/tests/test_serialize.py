@@ -1,5 +1,6 @@
 from __future__ import print_function, absolute_import, division
 
+import math
 import pickle
 import sys
 
@@ -31,6 +32,20 @@ def closure(a):
     @jit(nopython=True)
     def inner(b, c):
         return a + b + c
+    return inner
+
+K = 3.0
+
+from math import sqrt
+
+def closure_with_globals(x):
+    @jit(nopython=True)
+    def inner(y):
+        # Exercise a builtin function and a module-level constant
+        k = max(K, K + 1)
+        # Exercise two functions from another module, one accessed with
+        # dotted notation, one imported explicitly.
+        return math.hypot(x, y) + sqrt(k)
     return inner
 
 
@@ -85,6 +100,10 @@ class TestDispatcherPickling(TestCase):
     def test_call_closure(self):
         inner = closure(1)
         self.run_with_protocols(self.check_call, inner, 6, (2, 3))
+
+    def test_call_closure_with_globals(self):
+        inner = closure_with_globals(3.0)
+        self.run_with_protocols(self.check_call, inner, 7.0, (4.0,))
 
 
 if __name__ == '__main__':
