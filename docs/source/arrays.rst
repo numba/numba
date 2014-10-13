@@ -3,9 +3,9 @@ Arrays
 ******
 
 Support for NumPy arrays is a key focus of Numba development and is currently
-undergoing extensive refactorization and improvement. Most capabilities of NumPy
-arrays are supported by Numba in object mode, and a few features are supported in
-nopython mode too (with much more to come).
+undergoing extensive refactorization and improvement. Most capabilities of
+NumPy arrays are supported by Numba in :term:`object mode`, and a few features
+are supported in :term:`nopython mode` too (with much more to come).
 
 A few noteworthy limitations of arrays at this time:
 
@@ -14,7 +14,7 @@ A few noteworthy limitations of arrays at this time:
 * New arrays can only be created in object mode.
 * Currently there are no bounds checking for array indexing and slicing,
   although negative indices will wrap around correctly.
-* A small number of NumPy array ufuncs are only support in object mode, but 
+* A small number of NumPy array ufuncs are only supported in object mode, but 
   the vast majority work in nopython mode.
 * Array slicing only works in object mode.
 
