@@ -27,6 +27,11 @@ def add_nopython_fail(a, b):
     print(a.__class__)
     return a + b
 
+def closure(a):
+    @jit(nopython=True)
+    def inner(b, c):
+        return a + b + c
+    return inner
 
 
 class TestDispatcherPickling(TestCase):
@@ -76,6 +81,10 @@ class TestDispatcherPickling(TestCase):
     def test_call_nopython_fail(self):
         # Compilation fails
         self.run_with_protocols(self.check_call, add_nopython_fail, TypingError, (1, 2))
+
+    def test_call_closure(self):
+        inner = closure(1)
+        self.run_with_protocols(self.check_call, inner, 6, (2, 3))
 
 
 if __name__ == '__main__':

@@ -22,12 +22,17 @@ def _rebuild_reduction(cls, *args):
 
 def _reduce_function(func):
     """
-    Reduce a Python function to picklable components
+    Reduce a Python function to picklable components.
+    If there are cell variables (i.e. references to a closure), their
+    values will be frozen.
     """
-    assert not func.__closure__
+    if func.__closure__:
+        cells = [cell.cell_contents for cell in func.__closure__]
+    else:
+        cells = None
     # XXX globals dict can contain any kind of unpicklable values
     # (such as... modules)
-    return _reduce_code(func.__code__), {}, func.__name__
+    return _reduce_code(func.__code__), {}, func.__name__, cells
 
 def _reduce_code(code):
     """
@@ -35,12 +40,22 @@ def _reduce_code(code):
     """
     return marshal.version, imp.get_magic(), marshal.dumps(code)
 
-def _rebuild_function(code_reduced, globals, name):
+def _dummy_closure(x):
+    """
+    A dummy function allowing us to build cell objects.
+    """
+    return lambda: x
+
+def _rebuild_function(code_reduced, globals, name, cell_values):
     """
     Rebuild a function from its _reduce_function() results.
     """
+    if cell_values:
+        cells = tuple(_dummy_closure(v).__closure__[0] for v in cell_values)
+    else:
+        cells = ()
     code = _rebuild_code(*code_reduced)
-    return FunctionType(code, globals, name)
+    return FunctionType(code, globals, name, (), cells)
 
 def _rebuild_code(marshal_version, bytecode_magic, marshalled):
     """
