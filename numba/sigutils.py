@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
-from numba import types
+
+from numba import types, typing
 
 
 def is_signature(sig):
@@ -12,6 +13,8 @@ def normalize_signature(sig):
     elif isinstance(sig, tuple):
         return sig, None
     elif isinstance(sig, types.Prototype):
+        return sig.args, sig.return_type
+    elif isinstance(sig, typing.Signature):
         return sig.args, sig.return_type
     else:
         raise TypeError(type(sig))

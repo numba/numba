@@ -16,6 +16,12 @@ class Signature(object):
         self.args = args
         self.recvr = recvr
 
+    def __getstate__(self):
+        return self.return_type, self.args, self.recvr
+
+    def __setstate__(self, state):
+        self.return_type, self.args, self.recvr = state
+
     def __hash__(self):
         return hash(self.args)
 
