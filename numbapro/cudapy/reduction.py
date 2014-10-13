@@ -106,13 +106,16 @@ def copy_strides(arr, n, stride, tpb):
 class Reduce(object):
     """CUDA Reduce kernel
 
-    Performance Note
-    ----------------
-    Does not allocate device memory if the input is already in device.
-    The reduction kernel does not fully reduce the array on device.
-    The last few elements (less than 16) is copied back to the host
-    for the final reduction.
+    Notes
+    -----
+    The reduction kernels are compiled lazily as needed. A single reduction
+    can use multiple kernels specialized for different sizes. These compiled
+    kernels are cached inside the ``Reduce`` instance that created them.
+    **Keeping the instance alive can avoid re-compiling**.
 
+    The reduction kernel may not fully reduce the array on device.
+    The last few elements (usually less than 16) is copied back to the host
+    for the final reduction.
     """
 
     def __init__(self, binop):
@@ -162,12 +165,29 @@ class Reduce(object):
         """Partially reduce a device array inplace as much as possible in an
         efficient manner. Does not automatically transfer host array.
 
+        Args
+        ----
+        darr : device array
+            Used to input and output.
+
+        size : int or None
+            Number of element in ``arr``.  If None, the entire array is used.
+
+        init : dtype of darr
+            Initial value for the reduction
+
+        stream : cuda stream
+            All CUDA operations are performed on this stream if it is given.
+            Otherwise, a new stream is created.
+
         Returns
         -------
-        Number of elements in ``darr`` that contains the partial reduction
-        result. User can then perform
-        ``darr[:return_value].copy_to_host().sum()`` to finish the reduction.
+        int
+            Number of elements in ``darr`` that contains the reduction result.
 
+        Notes
+        -----
+        Use this to avoiding host reduction
         """
         if stream == 0:
             stream = cuda.stream()
@@ -222,6 +242,32 @@ class Reduce(object):
         """Performs a full reduction.
 
         Returns the result of the full reduction
+
+        Args
+        ----
+        arr : host or device array
+            If a device array is given, the reduction is performed inplace.
+            The values in the array may be overwritten.
+            If a host array is given, it is copied to the device automatically.
+
+        size : int or None
+            Number of element in ``arr``.  If None, the entire array is used.
+
+        init : dtype of darr
+            Initial value for the reduction
+
+        stream : cuda stream
+            All CUDA operations are performed on this stream if it is given.
+            Otherwise, a new stream is created.
+
+        Returns
+        -------
+        depends on ``arr.dtype``
+            Reduction result.
+
+        Notes
+        -----
+        Calls ``device_partial_inplace`` internally.
         """
         darr, stream, conv = self._prepare(arr, stream)
         size = self._partial_inplace_driver(darr, size=size, init=init,

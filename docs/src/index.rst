@@ -98,6 +98,7 @@ High-level APIs for CPU/GPU:
 
    ufuncs
    generalizedufuncs
+   reduction 
 
 Python CUDA Programming
 
