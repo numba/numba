@@ -33,7 +33,6 @@ def make_array(array_type):
         _fields = [('data', types.CPointer(dtype)),
                    ('parent', types.pyobject),
                    ('nitems', types.intp),
-                   ('flags', types.intc),
                    ('shape', types.UniTuple(types.intp, nd)),
                    ('strides', types.UniTuple(types.intp, nd)),
                    ]
