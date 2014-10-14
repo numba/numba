@@ -470,7 +470,11 @@ class PyLower(BaseLower):
         Load the llvm value of the variable named *name*.
         """
         ptr = self.varmap[name]
-        return self.builder.load(ptr)
+        val = self.builder.load(ptr)
+        with cgutils.if_unlikely(self.builder, self.is_null(val)):
+            self.pyapi.raise_missing_name_error(name)
+            self.return_error_occurred()
+        return val
 
     def delvar(self, name):
         """

@@ -158,6 +158,11 @@ class PythonAPI(object):
         cstr = self.context.insert_const_string(self.module, msg)
         self.err_set_string("PyExc_NameError", cstr)
 
+    def raise_missing_name_error(self, name):
+        msg = "name '%s' is not defined" % name
+        cstr = self.context.insert_const_string(self.module, msg)
+        self.err_set_string("PyExc_NameError", cstr)
+
     #
     # Concrete dict API
     #
