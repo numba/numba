@@ -31,9 +31,11 @@ def make_array(array_type):
     # in _helperlib.c.
     class ArrayTemplate(cgutils.Structure):
         _fields = [('data', types.CPointer(dtype)),
+                   ('parent', types.pyobject),
+                   ('flags', types.intc),
                    ('shape', types.UniTuple(types.intp, nd)),
                    ('strides', types.UniTuple(types.intp, nd)),
-                   ('parent', types.pyobject), ]
+                   ]
 
     return ArrayTemplate
 
@@ -551,8 +553,8 @@ def array_record_getattr(context, builder, typ, value, attr):
 @struct_factory(types.NumpyFlatType)
 def make_array_flat_cls(flatiterty):
     """
-    Return the Structure representation of the given *enum_type* (an
-    instance of types.EnumerateType).
+    Return the Structure representation of the given *flatiterty* (an
+    instance of types.NumpyFlatType).
     """
 
     class NumpyFlatIter(cgutils.Structure):
