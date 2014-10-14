@@ -308,8 +308,8 @@ def separate_loops(bytecode, outer, loops):
             cur.append(inst)
             if inst.next == endloop:
                 for inst in cur:
-                    if inst.opname == 'RETURN_VALUE':
-                        # Reject if return inside loop
+                    if inst.opname in ['RETURN_VALUE', 'BREAK_LOOP']:
+                        # Reject if return or break inside loop
                         outer.extend(cur)
                         break
                 else:

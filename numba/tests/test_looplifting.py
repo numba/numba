@@ -51,6 +51,14 @@ def reject1(x):
     return a
 
 
+def reject2(x):
+    a = np.arange(4)
+    for i in range(a.shape[0]):
+        if i > 2:
+            break
+    return a
+
+
 def reject_npm1(x):
     a = np.empty(3, dtype=np.int32)
     for i in range(a.size):
@@ -117,6 +125,9 @@ class TestLoopLifting(TestCase):
 
     def test_reject1(self):
         self.check_no_lift(reject1, (types.intp,), (123,))
+
+    def test_reject2(self):
+        self.check_no_lift(reject2, (types.intp,), (123,))
 
     def test_reject_npm1(self):
         self.check_no_lift_nopython(reject_npm1, (types.intp,), (123,))
