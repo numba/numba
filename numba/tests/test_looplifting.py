@@ -142,7 +142,6 @@ class TestLoopLiftingInAction(TestCase):
             forloop_with_if.py_func(u, np_a)
             self.assertTrue(np.all(nb_a == np_a))
 
-        print(forloop_with_if.inspect_types())
 
 if __name__ == '__main__':
     unittest.main()
