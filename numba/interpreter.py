@@ -79,6 +79,8 @@ class Interpreter(object):
 
         # { inst offset : ir.Block }
         self.blocks = {}
+        # { name: value } of global variables used by the bytecode
+        self.used_globals = {}
 
         # Temp states during interpretation
         self.current_block = None
@@ -91,6 +93,12 @@ class Interpreter(object):
         """TODO
         """
         pass
+
+    def get_used_globals(self):
+        """
+        Return a dictionary of global variables used by the bytecode.
+        """
+        return self.used_globals
 
     def _fill_args_into_scope(self, scope):
         for arg in self.argspec.args:
@@ -599,6 +607,7 @@ class Interpreter(object):
     def op_LOAD_GLOBAL(self, inst, res):
         name = self.code_names[inst.arg]
         value = self.get_global_value(name)
+        self.used_globals[name] = value
         gl = ir.Global(name, value, loc=self.loc)
         self.store(gl, res)
         self.constants[res] = value

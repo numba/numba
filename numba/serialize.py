@@ -1,0 +1,103 @@
+"""
+Serialization support for compiled functions.
+"""
+
+from __future__ import print_function, division, absolute_import
+
+import imp
+import marshal
+import sys
+from types import FunctionType, ModuleType
+
+from . import bytecode, compiler
+
+
+#
+# Pickle support
+#
+
+def _rebuild_reduction(cls, *args):
+    """
+    Global hook to rebuild a given class from its __reduce__ arguments.
+    """
+    return cls._rebuild(*args)
+
+
+class _ModuleRef(object):
+
+    def __init__(self, name):
+        self.name = name
+
+    def __reduce__(self):
+        return _rebuild_module, (self.name,)
+
+
+def _rebuild_module(name):
+    __import__(name)
+    return sys.modules[name]
+
+
+def _get_function_globals_for_reduction(func):
+    """
+    Analyse *func* and return a dictionary of global values suitable for
+    reduction.
+    """
+    # XXX It would be better to have a high-level API in the compiler
+    # module.
+    bc = bytecode.ByteCode(func)
+    interpreter = compiler.translate_stage(bc)
+    globs = dict(interpreter.get_used_globals())
+    for k, v in globs.items():
+        # Make modules picklable by name
+        if isinstance(v, ModuleType):
+            globs[k] = _ModuleRef(k)
+    return globs
+
+def _reduce_function(func):
+    """
+    Reduce a Python function to picklable components.
+    If there are cell variables (i.e. references to a closure), their
+    values will be frozen.
+    """
+    if func.__closure__:
+        cells = [cell.cell_contents for cell in func.__closure__]
+    else:
+        cells = None
+    globs = _get_function_globals_for_reduction(func)
+    return _reduce_code(func.__code__), globs, func.__name__, cells
+
+def _reduce_code(code):
+    """
+    Reduce a code object to picklable components.
+    """
+    return marshal.version, imp.get_magic(), marshal.dumps(code)
+
+def _dummy_closure(x):
+    """
+    A dummy function allowing us to build cell objects.
+    """
+    return lambda: x
+
+def _rebuild_function(code_reduced, globals, name, cell_values):
+    """
+    Rebuild a function from its _reduce_function() results.
+    """
+    if cell_values:
+        cells = tuple(_dummy_closure(v).__closure__[0] for v in cell_values)
+    else:
+        cells = ()
+    code = _rebuild_code(*code_reduced)
+    return FunctionType(code, globals, name, (), cells)
+
+def _rebuild_code(marshal_version, bytecode_magic, marshalled):
+    """
+    Rebuild a code object from its _reduce_code() results.
+    """
+    if marshal.version != marshal_version:
+        raise RuntimeError("incompatible marshal version: "
+                           "interpreter has %r, marshalled code has %r"
+                           % (marshal.version, marshal_version))
+    if imp.get_magic() != bytecode_magic:
+        raise RuntimeError("incompatible bytecode version")
+    return marshal.loads(marshalled)
+

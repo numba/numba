@@ -12,7 +12,7 @@ typedef struct DispatcherObject{
     PyObject_HEAD
     /* Holds borrowed references to PyCFunction objects */
     dispatcher_t *dispatcher;
-    int can_compile;        /* Can auto compile */
+    char can_compile;        /* Can auto compile */
     /* Borrowed references */
     PyObject *firstdef, *fallbackdef, *interpdef;
 } DispatcherObject;
@@ -157,18 +157,6 @@ Dispatcher_Insert(DispatcherObject *self, PyObject *args)
     Py_RETURN_NONE;
 }
 
-
-static
-PyObject*
-Dispatcher_DisableCompile(DispatcherObject *self, PyObject *args)
-{
-    int val;
-    if (!PyArg_ParseTuple(args, "i", &val)) {
-        return NULL;
-    }
-    self->can_compile = !val;
-    Py_RETURN_NONE;
-}
 
 // Unused?
 //static
@@ -418,7 +406,6 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
     int i;
     int prealloc[24];
     int matches;
-    int old_can_compile;
     PyObject *cfunc;
 
     /* Shortcut for single definition */
@@ -481,11 +468,13 @@ static PyMethodDef Dispatcher_methods[] = {
       "insert new definition"},
 //    { "_find", (PyCFunction)Dispatcher_Find, METH_VARARGS,
 //      "find matching definition and return a tuple of (argtypes, callable)"},
-    { "_disable_compile", (PyCFunction)Dispatcher_DisableCompile,
-      METH_VARARGS, "Disable compilation"},
     { NULL },
 };
 
+static PyMemberDef Dispatcher_members[] = {
+    {"_can_compile", T_BOOL, offsetof(DispatcherObject, can_compile), 0},
+    {NULL}  /* Sentinel */
+};
 
 
 static PyTypeObject DispatcherType = {
@@ -522,7 +511,7 @@ static PyTypeObject DispatcherType = {
     0,                         /* tp_iter */
     0,                         /* tp_iternext */
     Dispatcher_methods,        /* tp_methods */
-    0,                         /* tp_members */
+    Dispatcher_members,        /* tp_members */
     0,                         /* tp_getset */
     0,                         /* tp_base */
     0,                         /* tp_dict */

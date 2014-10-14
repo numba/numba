@@ -6,9 +6,8 @@ import sys
 
 from numba import _dispatcher, compiler, utils
 from numba.typeconv.rules import default_type_manager
-from numba import typing
+from numba import sigutils, serialize, types, typing
 from numba.typing.templates import resolve_overload
-from numba import types, sigutils
 from numba.bytecode import get_code_object
 from numba.six import create_bound_method
 
@@ -78,7 +77,7 @@ class _OverloadedBase(_dispatcher.Dispatcher):
     def disable_compile(self, val=True):
         """Disable the compilation of new signatures at call time.
         """
-        self._disable_compile(int(val))
+        self._can_compile = not val
 
     def add_overload(self, cres):
         args = tuple(cres.signature.args)
@@ -221,6 +220,32 @@ class Overloaded(_OverloadedBase):
             return self
         else:  # Bound method
             return create_bound_method(self, obj)
+
+    def __reduce__(self):
+        """
+        Reduce the instance for pickling.  This will serialize
+        the original function as well the compilation options and
+        compiled signatures, but not the compiled code itself.
+        """
+        if self._can_compile:
+            sigs = []
+        else:
+            sigs = [cr.signature for cr in self._compileinfos.values()]
+        return (serialize._rebuild_reduction,
+                (self.__class__, serialize._reduce_function(self.py_func),
+                 self.locals, self.targetoptions, self._can_compile, sigs))
+
+    @classmethod
+    def _rebuild(cls, func_reduced, locals, targetoptions, can_compile, sigs):
+        """
+        Rebuild an Overloaded instance after it was __reduce__'d.
+        """
+        py_func = serialize._rebuild_function(*func_reduced)
+        self = cls(py_func, locals, targetoptions)
+        for sig in sigs:
+            self.compile(sig)
+        self._can_compile = can_compile
+        return self
 
     def compile(self, sig, locals={}, **targetoptions):
         with self._compile_lock():
