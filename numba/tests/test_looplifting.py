@@ -142,6 +142,27 @@ class TestLoopLiftingInAction(TestCase):
             forloop_with_if.py_func(u, np_a)
             self.assertTrue(np.all(nb_a == np_a))
 
+    def test_issue_812(self):
+        from numba import jit
+
+        @jit('f8[:](f8[:])', forceobj=True)
+        def test(x):
+            res = np.zeros(len(x))
+            ind = 0
+            for ii in range(len(x)):
+                ind += 1
+                res[ind] = x[ind]
+                if x[ind] >= 10:
+                    break
+
+            # ind    #### Uncomment this line to get correct result
+            for ii in range(ind + 1, len(x)):
+                res[ii] = 0
+            return res
+
+        x = np.array([1., 4, 2, -3, 5, 2, 10, 5, 2, 6])
+        np.testing.assert_equal(test.py_func(x), test(x))
+
 
 if __name__ == '__main__':
     unittest.main()
