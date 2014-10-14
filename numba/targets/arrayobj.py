@@ -32,6 +32,7 @@ def make_array(array_type):
     class ArrayTemplate(cgutils.Structure):
         _fields = [('data', types.CPointer(dtype)),
                    ('parent', types.pyobject),
+                   ('nitems', types.intp),
                    ('flags', types.intc),
                    ('shape', types.UniTuple(types.intp, nd)),
                    ('strides', types.UniTuple(types.intp, nd)),
@@ -557,11 +558,40 @@ def make_array_flat_cls(flatiterty):
     instance of types.NumpyFlatType).
     """
 
-    class NumpyFlatIter(cgutils.Structure):
-        _fields = [('array', types.CPointer(flatiterty.array_type)),
-                   ('iters', types.CPointer(types.intp))]
+    array_type = flatiterty.array_type
 
-    return NumpyFlatIter
+    if array_type.layout == 'C':
+        class CContiguousFlatIter(cgutils.Structure):
+            _fields = [('array', types.CPointer(array_type)),
+                       ('index', types.CPointer(types.intp))]
+
+        return CContiguousFlatIter
+
+    else:
+        class FlatIter(cgutils.Structure):
+            _fields = [('array', types.CPointer(array_type)),
+                       ('iters', types.CPointer(types.intp))]
+
+        return FlatIter
+
+
+def _init_flatiter_generic(context, builder, arrty, arr, flatiter):
+    iters = cgutils.alloca_once(builder, context.get_value_type(types.intp),
+                                size=context.get_constant(types.intp,
+                                                          arrty.ndim))
+
+    zero = context.get_constant(types.intp, 0)
+    for i in range(arrty.ndim):
+        p = builder.gep(iters, [context.get_constant(types.intp, i)])
+        builder.store(zero, p)
+
+    flatiter.iters = iters
+
+def _init_flatiter_c_contiguous(context, builder, arrty, arr, flatiter):
+    zero = context.get_constant(types.intp, 0)
+    indexptr = cgutils.alloca_once(builder, zero.type)
+    builder.store(zero, indexptr)
+    flatiter.index = indexptr
 
 
 @builtin_attr
@@ -570,20 +600,14 @@ def make_array_flatiter(context, builder, arrty, arr):
     flatitercls = make_array_flat_cls(types.NumpyFlatType(arrty))
     flatiter = flatitercls(context, builder)
 
-    iters = cgutils.alloca_once(builder, context.get_value_type(types.intp),
-                                size=context.get_constant(types.intp,
-                                                          arrty.ndim))
-
     arrayptr = cgutils.alloca_once(builder, arr.type)
     builder.store(arr, arrayptr)
-
-    zero = context.get_constant(types.intp, 0)
-    for i in range(arrty.ndim):
-        p = builder.gep(iters, [context.get_constant(types.intp, i)])
-        builder.store(zero, p)
-
     flatiter.array = arrayptr
-    flatiter.iters = iters
+
+    if arrty.layout == 'C':
+        _init_flatiter_c_contiguous(context, builder, arrty, arr, flatiter)
+    else:
+        _init_flatiter_generic(context, builder, arrty, arr, flatiter)
 
     return flatiter._getvalue()
 
@@ -602,6 +626,29 @@ def iternext_numpy_flatiter(context, builder, sig, args, result):
     arrcls = context.make_array(arrty)
     arr = arrcls(context, builder, value=builder.load(flatiter.array))
 
+    if arrty.layout == 'C':
+        _iternext_flatiter_c_contiguous(context, builder, arrty, arr, flatiter, result)
+    else:
+        _iternext_flatiter_generic(context, builder, arrty, arr, flatiter, result)
+
+
+def _iternext_flatiter_c_contiguous(context, builder, arrty, arr, flatiter, result):
+    nitems = arr.nitems
+
+    index = builder.load(flatiter.index)
+    is_valid = builder.icmp(lc.ICMP_SLT, index, nitems)
+    result.set_valid(is_valid)
+
+    with cgutils.ifthen(builder, is_valid):
+        ptr = builder.gep(arr.data, [index])
+        value = context.unpack_value(builder, arrty.dtype, ptr)
+        result.yield_(value)
+
+        nindex = builder.add(index, context.get_constant(types.intp, 1))
+        builder.store(nindex, flatiter.index)
+
+
+def _iternext_flatiter_generic(context, builder, arrty, arr, flatiter, result):
     ndim = arrty.ndim
     shapes = cgutils.unpack_tuple(builder, arr.shape, ndim)
     indptr = flatiter.iters
