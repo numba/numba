@@ -605,6 +605,12 @@ class Lower(BaseLower):
                 tup = self.builder.insert_value(tup, castvals[i], i)
             return tup
 
+        elif expr.op == "cast":
+            val = self.loadvar(expr.value.name)
+            ty = self.typeof(expr.value.name)
+            castval = self.context.cast(self.builder, val, ty, resty)
+            return castval
+
         raise NotImplementedError(expr)
 
     def getvar(self, name):

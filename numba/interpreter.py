@@ -831,8 +831,9 @@ class Interpreter(object):
     def op_POP_BLOCK(self, inst):
         self.syntax_blocks.pop()
 
-    def op_RETURN_VALUE(self, inst, retval):
-        ret = ir.Return(self.get(retval), loc=self.loc)
+    def op_RETURN_VALUE(self, inst, retval, castval):
+        self.store(ir.Expr.cast(self.get(retval), loc=self.loc), castval)
+        ret = ir.Return(self.get(castval), loc=self.loc)
         self.current_block.append(ret)
 
     def op_COMPARE_OP(self, inst, lhs, rhs, res):

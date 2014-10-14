@@ -599,10 +599,15 @@ def legalize_return_type(return_type, interp, targetctx):
     if isinstance(return_type, types.Array):
         # Walk IR to discover all return statements
         retstmts = []
+        caststmts = {}
         for bid, blk in interp.blocks.items():
             for inst in blk.body:
                 if isinstance(inst, ir.Return):
-                    retstmts.append(inst)
+                    retstmts.append(inst.value.name)
+                if (isinstance(inst, ir.Assign)
+                        and isinstance(inst.value, ir.Expr)
+                        and inst.value.op == 'cast'):
+                    caststmts[inst.target.name] = inst.value
 
         assert retstmts, "No return statements?"
 
@@ -611,13 +616,13 @@ def legalize_return_type(return_type, interp, targetctx):
         #        must be statically resolvable.
 
         # The return value must be the first modification of the value.
-        arguments = frozenset("%s.1" % arg for arg in interp.argspec.args)
+        arguments = set("{0}.1".format(a) for a in interp.argspec.args)
 
-        if isinstance(return_type, types.Array):
-            for ret in retstmts:
-                if ret.value.name not in arguments:
-                    raise TypeError("Only accept returning of array passed into the "
-                                    "function as argument")
+        for var in retstmts:
+            cast = caststmts.get(var)
+            if cast is None or cast.value.name not in arguments:
+                raise TypeError("Only accept returning of array passed into the "
+                                "function as argument")
 
         # Legalized; tag return handling
         targetctx.metadata['return.array'] = 'arg'
