@@ -561,36 +561,103 @@ def make_array_flat_cls(flatiterty):
 
     if array_type.layout == 'C':
         class CContiguousFlatIter(cgutils.Structure):
+            """
+            .flat() implementation for C-contiguous arrays.
+            """
             _fields = [('array', types.CPointer(array_type)),
                        ('index', types.CPointer(types.intp))]
+
+            def init_specific(self, context, builder, arrty, arr):
+                zero = context.get_constant(types.intp, 0)
+                indexptr = cgutils.alloca_once(builder, zero.type)
+                builder.store(zero, indexptr)
+                self.index = indexptr
+
+            def iternext_specific(self, context, builder, arrty, arr, result):
+                nitems = arr.nitems
+
+                index = builder.load(self.index)
+                is_valid = builder.icmp(lc.ICMP_SLT, index, nitems)
+                result.set_valid(is_valid)
+
+                with cgutils.ifthen(builder, is_valid):
+                    ptr = builder.gep(arr.data, [index])
+                    value = context.unpack_value(builder, arrty.dtype, ptr)
+                    result.yield_(value)
+
+                    nindex = builder.add(index, context.get_constant(types.intp, 1))
+                    builder.store(nindex, self.index)
 
         return CContiguousFlatIter
 
     else:
         class FlatIter(cgutils.Structure):
+            """
+            Generic .flat() implementation for non-contiguous arrays.
+            """
             _fields = [('array', types.CPointer(array_type)),
                        ('iters', types.CPointer(types.intp))]
 
+            def init_specific(self, context, builder, arrty, arr):
+                zero = context.get_constant(types.intp, 0)
+                iters = cgutils.alloca_once(builder, zero.type,
+                                            size=context.get_constant(types.intp,
+                                                                      arrty.ndim))
+
+                for i in range(arrty.ndim):
+                    p = builder.gep(iters, [context.get_constant(types.intp, i)])
+                    builder.store(zero, p)
+
+                self.iters = iters
+
+            def iternext_specific(self, context, builder, arrty, arr, result):
+                ndim = arrty.ndim
+                shapes = cgutils.unpack_tuple(builder, arr.shape, ndim)
+                indptr = self.iters
+
+                # Load indices and check if they are valid
+                indices = []
+                is_valid = cgutils.true_bit
+                zero = context.get_constant(types.intp, 0)
+                one = context.get_constant(types.intp, 1)
+                for ax in range(ndim):
+                    axsize = shapes[ax]
+                    idxptr = builder.gep(indptr, [context.get_constant(types.intp, ax)])
+                    idx = builder.load(idxptr)
+                    ax_valid = builder.icmp(lc.ICMP_SLT, idx, axsize)
+
+                    indices.append(idx)
+                    is_valid = builder.and_(is_valid, ax_valid)
+
+                result.set_valid(is_valid)
+
+                with cgutils.if_likely(builder, is_valid):
+                    # Get yielded value
+                    valptr = cgutils.get_item_pointer(builder, arrty, arr, indices)
+                    yield_value = builder.load(valptr)
+                    result.yield_(yield_value)
+
+                    # Increment iterator indices
+                    carry_flags = [cgutils.true_bit]
+                    for ax, (idx, axsize) in reversed(list(enumerate(zip(indices,
+                                                                         shapes)))):
+                        idxptr = builder.gep(indptr, [context.get_constant(types.intp, ax)])
+                        lastcarry = carry_flags[-1]
+                        idxp1 = builder.add(idx, one)
+                        carry = builder.icmp(lc.ICMP_SGE, idxp1, axsize)
+                        idxfinal = builder.select(lastcarry,
+                                                  builder.select(carry, zero, idxp1),
+                                                  idx)
+                        builder.store(idxfinal, idxptr)
+                        carry_flags.append(builder.and_(carry, lastcarry))
+
+                    with cgutils.if_unlikely(builder, carry_flags[-1]):
+                        # If we have iterated all elements,
+                        # Set first index to out-of-bound
+                        idxptr = builder.gep(indptr, [context.get_constant(types.intp, 0)])
+                        builder.store(shapes[0], idxptr)
+
         return FlatIter
-
-
-def _init_flatiter_generic(context, builder, arrty, arr, flatiter):
-    iters = cgutils.alloca_once(builder, context.get_value_type(types.intp),
-                                size=context.get_constant(types.intp,
-                                                          arrty.ndim))
-
-    zero = context.get_constant(types.intp, 0)
-    for i in range(arrty.ndim):
-        p = builder.gep(iters, [context.get_constant(types.intp, i)])
-        builder.store(zero, p)
-
-    flatiter.iters = iters
-
-def _init_flatiter_c_contiguous(context, builder, arrty, arr, flatiter):
-    zero = context.get_constant(types.intp, 0)
-    indexptr = cgutils.alloca_once(builder, zero.type)
-    builder.store(zero, indexptr)
-    flatiter.index = indexptr
 
 
 @builtin_attr
@@ -603,10 +670,7 @@ def make_array_flatiter(context, builder, arrty, arr):
     builder.store(arr, arrayptr)
     flatiter.array = arrayptr
 
-    if arrty.layout == 'C':
-        _init_flatiter_c_contiguous(context, builder, arrty, arr, flatiter)
-    else:
-        _init_flatiter_generic(context, builder, arrty, arr, flatiter)
+    flatiter.init_specific(context, builder, arrty, arr)
 
     return flatiter._getvalue()
 
@@ -625,73 +689,4 @@ def iternext_numpy_flatiter(context, builder, sig, args, result):
     arrcls = context.make_array(arrty)
     arr = arrcls(context, builder, value=builder.load(flatiter.array))
 
-    if arrty.layout == 'C':
-        _iternext_flatiter_c_contiguous(context, builder, arrty, arr, flatiter, result)
-    else:
-        _iternext_flatiter_generic(context, builder, arrty, arr, flatiter, result)
-
-
-def _iternext_flatiter_c_contiguous(context, builder, arrty, arr, flatiter, result):
-    nitems = arr.nitems
-
-    index = builder.load(flatiter.index)
-    is_valid = builder.icmp(lc.ICMP_SLT, index, nitems)
-    result.set_valid(is_valid)
-
-    with cgutils.ifthen(builder, is_valid):
-        ptr = builder.gep(arr.data, [index])
-        value = context.unpack_value(builder, arrty.dtype, ptr)
-        result.yield_(value)
-
-        nindex = builder.add(index, context.get_constant(types.intp, 1))
-        builder.store(nindex, flatiter.index)
-
-
-def _iternext_flatiter_generic(context, builder, arrty, arr, flatiter, result):
-    ndim = arrty.ndim
-    shapes = cgutils.unpack_tuple(builder, arr.shape, ndim)
-    indptr = flatiter.iters
-
-    # Load indices and check if they are valid
-    indices = []
-    is_valid = cgutils.true_bit
-    zero = context.get_constant(types.intp, 0)
-    one = context.get_constant(types.intp, 1)
-    for ax in range(ndim):
-        axsize = shapes[ax]
-        idxptr = builder.gep(indptr, [context.get_constant(types.intp, ax)])
-        idx = builder.load(idxptr)
-        ax_valid = builder.icmp(lc.ICMP_SLT, idx, axsize)
-
-        indices.append(idx)
-        is_valid = builder.and_(is_valid, ax_valid)
-
-    result.set_valid(is_valid)
-
-    with cgutils.if_likely(builder, is_valid):
-        # Get yielded value
-        valptr = cgutils.get_item_pointer(builder, arrty, arr, indices)
-        yield_value = builder.load(valptr)
-        result.yield_(yield_value)
-
-        # Increment iterator indices
-        carry_flags = [cgutils.true_bit]
-        for ax, (idx, axsize) in reversed(list(enumerate(zip(indices,
-                                                             shapes)))):
-            idxptr = builder.gep(indptr, [context.get_constant(types.intp, ax)])
-            lastcarry = carry_flags[-1]
-            idxp1 = builder.add(idx, one)
-            carry = builder.icmp(lc.ICMP_SGE, idxp1, axsize)
-            idxfinal = builder.select(lastcarry,
-                                      builder.select(carry, zero, idxp1),
-                                      idx)
-            builder.store(idxfinal, idxptr)
-            carry_flags.append(builder.and_(carry, lastcarry))
-
-        with cgutils.if_unlikely(builder, carry_flags[-1]):
-            # If we have iterated all elements,
-            # Set first index to out-of-bound
-            idxptr = builder.gep(indptr, [context.get_constant(types.intp, 0)])
-            builder.store(shapes[0], idxptr)
-
-
+    flatiter.iternext_specific(context, builder, arrty, arr, result)
