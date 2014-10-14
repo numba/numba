@@ -28,7 +28,7 @@ class TestArgRetCasting(unittest.TestCase):
         try:
             cres = compile_isolated(foo, args, return_type)
         except typeinfer.TypingError as e:
-            print("Exception raised:", e)
+            pass
         else:
             self.fail("Should complain about array casting to float32")
 
@@ -121,7 +121,6 @@ class TestUnify(unittest.TestCase):
             self.assertIsInstance(first_result, types.Optional)
             for other in res[1:]:
                 self.assertEqual(first_result, other)
-            print(first_result)
 
 
 def issue_797(x0, y0, x1, y1, grid):

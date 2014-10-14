@@ -42,12 +42,10 @@ class TestPYCC(unittest.TestCase):
 
             res = c_double()
             lib.mult(byref(res), None, 123, 321)
-            print('lib.mult(123, 321) = %f' % res.value)
             self.assertEqual(res.value, 123 * 321)
 
             res = c_float()
             lib.multf(byref(res), None, 987, 321)
-            print('lib.multf(987, 321) = %f' % res.value)
             self.assertEqual(res.value, 987 * 321)
         finally:
             del lib
@@ -59,7 +57,6 @@ class TestPYCC(unittest.TestCase):
 
         modulename = os.path.join(base_path, 'compile_with_pycc')
         tmpdir = tempfile.gettempdir()
-        print('tmpdir: %s' % tmpdir)
         out_modulename = (os.path.join(tmpdir, 'compiled_with_pycc')
                           + find_shared_ending())
         main(args=['--python', '-o', out_modulename, modulename + '.py'])
@@ -69,11 +66,9 @@ class TestPYCC(unittest.TestCase):
             import compiled_with_pycc as lib
             try:
                 res = lib.mult(123, 321)
-                print('lib.mult(123, 321) = %f' % res)
                 assert res == 123 * 321
 
                 res = lib.multf(987, 321)
-                print('lib.multf(987, 321) = %f' % res)
                 assert res == 987 * 321
             finally:
                 del lib
