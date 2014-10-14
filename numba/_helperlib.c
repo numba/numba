@@ -186,7 +186,6 @@ CLEANUP:
 typedef struct {
     void *data;
     PyObject *parent;
-    int flags;
     npy_intp shape_and_strides[];
 } arystruct_t;
 
@@ -204,7 +203,6 @@ int Numba_adapt_ndarray(PyObject *obj, arystruct_t* arystruct) {
     ndim = PyArray_NDIM(ndary);
 
     arystruct->data = PyArray_DATA(ndary);
-    arystruct->flags = PyArray_FLAGS(ndary);
     arystruct->parent = obj;
     p = arystruct->shape_and_strides;
     for (i = 0; i < ndim; i++, p++) {
@@ -407,17 +405,6 @@ MOD_INIT(_helperlib) {
         return MOD_ERROR_VAL;
 
     import_array();
-
-#if NPY_VERSION >= 0x01000007
-#define ADD_NPY_FLAG(name) \
-    PyModule_AddIntConstant(m, "NPY_ARRAY_" # name , NPY_ARRAY_ ## name)
-#else
-#define ADD_NPY_FLAG(name) \
-    PyModule_AddIntConstant(m, "NPY_ARRAY_" # name , NPY_ ## name)
-#endif
-
-    ADD_NPY_FLAG(C_CONTIGUOUS);
-    ADD_NPY_FLAG(F_CONTIGUOUS);
 
     PyModule_AddObject(m, "c_helpers", build_c_helpers_dict());
     PyModule_AddIntConstant(m, "long_min", LONG_MIN);

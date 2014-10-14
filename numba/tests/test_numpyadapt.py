@@ -12,7 +12,6 @@ class ArrayStruct3D(Structure):
     _fields_ = [
         ("data", c_void_p),
         ("parent", c_void_p),
-        ("flags", c_int),
         ("shape", (c_ssize_t * 3)),
         ("strides", (c_ssize_t * 3)),
     ]
@@ -33,8 +32,6 @@ class TestArrayAdaptor(unittest.TestCase):
         for i in range(3):
             self.assertEqual(arystruct.shape[i], ary.ctypes.shape[i])
             self.assertEqual(arystruct.strides[i], ary.ctypes.strides[i])
-        self.assertTrue(arystruct.flags & _helperlib.NPY_ARRAY_C_CONTIGUOUS)
-        self.assertFalse(arystruct.flags & _helperlib.NPY_ARRAY_F_CONTIGUOUS)
 
 
 if __name__ == '__main__':

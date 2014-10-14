@@ -32,7 +32,6 @@ def make_array(array_type):
     class ArrayTemplate(cgutils.Structure):
         _fields = [('data', types.CPointer(dtype)),
                    ('parent', types.pyobject),
-                   ('flags', types.intc),
                    ('shape', types.UniTuple(types.intp, nd)),
                    ('strides', types.UniTuple(types.intp, nd)),
                    ]
