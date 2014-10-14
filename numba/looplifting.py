@@ -20,6 +20,13 @@ def lift_loop(bytecode, dispatcher_factory):
     outer_rds, outer_wrs = find_varnames_uses(bytecode, outer)
     outer_wrs |= set(bytecode.argspec.args)
 
+    # Find in-loop references to variables
+    for loop in loops:
+        args, rets = discover_args_and_returns(bytecode, loop, outer_rds,
+                                               outer_wrs)
+        outer_rds |= args
+        outer_wrs |= rets
+
     dispatchers = []
     outerlabels = set(bytecode.labels)
     outernames = list(bytecode.co_names)
