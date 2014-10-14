@@ -608,6 +608,10 @@ class TypeInferer(object):
             constrain = BuildTupleConstrain(target.name, items=expr.items,
                                             loc=inst.loc)
             self.constrains.append(constrain)
+        elif expr.op == 'cast':
+            self.constrains.append(Propagate(dst=target.name,
+                                             src=expr.value.name,
+                                             loc=inst.loc))
         else:
             raise NotImplementedError(type(expr), expr)
 
