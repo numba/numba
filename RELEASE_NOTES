@@ -1,8 +1,9 @@
-Version (???)
-=============
+Version (0.16.0)
+================
 * Add `numbapro.cuda.reduce` for autogeneration of CUDA reduce kernels and
   driver.
 * Fix device to host auto transfer logic in some ufunc function.
+* Upgrades to Numba 0.15
 
 Version (0.15.0)
 ================
