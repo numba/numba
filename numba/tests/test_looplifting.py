@@ -155,7 +155,8 @@ class TestLoopLiftingInAction(TestCase):
                 if x[ind] >= 10:
                     break
 
-            # ind    #### Uncomment this line to get correct result
+            # Invalid loopjitting will miss the usage of `ind` in the
+            # following loop.
             for ii in range(ind + 1, len(x)):
                 res[ii] = 0
             return res
