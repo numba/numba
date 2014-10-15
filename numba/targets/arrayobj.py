@@ -33,6 +33,7 @@ def make_array(array_type):
         _fields = [('data', types.CPointer(dtype)),
                    ('parent', types.pyobject),
                    ('nitems', types.intp),
+                   ('itemsize', types.intp),
                    ('shape', types.UniTuple(types.intp, nd)),
                    ('strides', types.UniTuple(types.intp, nd)),
                    ]
@@ -572,8 +573,10 @@ def make_array_flat_cls(flatiterty):
                 zero = context.get_constant(types.intp, 0)
                 self.index = cgutils.alloca_once_value(builder, zero)
                 self.pointer = cgutils.alloca_once_value(builder, arr.data)
-                # XXX perhaps the stride can be computed at compile time
-                self.stride = builder.extract_value(arr.strides, arrty.ndim - 1)
+                # We can't trust strides[-1] to always contain the right
+                # step value, see
+                # http://docs.scipy.org/doc/numpy-dev/release.html#npy-relaxed-strides-checking
+                self.stride = arr.itemsize
 
             def iternext_specific(self, context, builder, arrty, arr, result):
                 nitems = arr.nitems

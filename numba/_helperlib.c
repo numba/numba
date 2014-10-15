@@ -187,6 +187,7 @@ typedef struct {
     void *data;
     PyObject *parent;
     npy_intp nitems;
+    npy_intp itemsize;
     npy_intp shape_and_strides[];
 } arystruct_t;
 
@@ -205,6 +206,7 @@ int Numba_adapt_ndarray(PyObject *obj, arystruct_t* arystruct) {
 
     arystruct->data = PyArray_DATA(ndary);
     arystruct->nitems = PyArray_SIZE(ndary);
+    arystruct->itemsize = PyArray_ITEMSIZE(ndary);
     arystruct->parent = obj;
     p = arystruct->shape_and_strides;
     for (i = 0; i < ndim; i++, p++) {
