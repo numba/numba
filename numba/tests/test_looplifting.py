@@ -42,6 +42,16 @@ def lift3(x):
         c += a[i] * x
     return c
 
+def lift4(x):
+    # Output two variables from the loop
+    a = np.arange(5, dtype=np.int64)
+    c = 0
+    d = 0
+    for i in range(a.shape[0]):
+        c += a[i] * x
+        d += c
+    return c + d
+
 
 def reject1(x):
     a = np.arange(4)
@@ -122,6 +132,9 @@ class TestLoopLifting(TestCase):
 
     def test_lift3(self):
         self.check_lift_ok(lift3, (types.intp,), (123,))
+
+    def test_lift4(self):
+        self.check_lift_ok(lift4, (types.intp,), (123,))
 
     def test_reject1(self):
         self.check_no_lift(reject1, (types.intp,), (123,))

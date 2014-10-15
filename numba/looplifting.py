@@ -211,11 +211,12 @@ def make_loop_bytecode(bytecode, loop, args, returns):
                                          bytecode.co_varnames.index(out))
             loadfast.lineno = loop[-1].lineno
             loop.append(loadfast)
-            # Build tuple
-            buildtuple = ByteCodeInst.get(loop[-1].next, "BUILD_TUPLE",
-                                        len(returns))
-            buildtuple.lineno = loop[-1].lineno
-            loop.append(buildtuple)
+
+        # Build tuple
+        buildtuple = ByteCodeInst.get(loop[-1].next, "BUILD_TUPLE",
+                                    len(returns))
+        buildtuple.lineno = loop[-1].lineno
+        loop.append(buildtuple)
 
     else:
         # Load None
