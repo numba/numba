@@ -572,6 +572,7 @@ def make_array_flat_cls(flatiterty):
                 zero = context.get_constant(types.intp, 0)
                 self.index = cgutils.alloca_once_value(builder, zero)
                 self.pointer = cgutils.alloca_once_value(builder, arr.data)
+                # XXX perhaps the stride can be computed at compile time
                 self.stride = builder.extract_value(arr.strides, arrty.ndim - 1)
 
             def iternext_specific(self, context, builder, arrty, arr, result):
@@ -681,10 +682,7 @@ def make_array_flat_cls(flatiterty):
                             inner_ptr = cgutils.pointer_add(builder, ptr,
                                                             strides[inner_dim])
                             builder.store(inner_ptr, ptrptr)
-                            if inner_dim == ndim - 1:
-                                builder.store(one, idxptr)
-                            else:
-                                builder.store(one, idxptr)
+                            builder.store(one, idxptr)
                         builder.branch(bbcont)
 
                 # End of array => skip to end
