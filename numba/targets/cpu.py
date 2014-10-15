@@ -212,8 +212,11 @@ class CPUContext(BaseContext):
             le.dylib_add_symbol("numba.math.%s" % name, c_helpers[name])
 
         if sys.platform.startswith('win32') and self.is32bit:
-            # This may still be necessary for windows XP
-            _add_missing_symbol("__ftol2", c_helpers["fptoui"])
+            # For Windows XP __ftol2 is not defined, we will just use
+            # __ftol as a replacement.
+            # On Windows 7, this is not necessary but will work anyway.
+            ftol = le.dylib_address_of_symbol('_ftol')
+            _add_missing_symbol("_ftol2", ftol)
 
         elif sys.platform.startswith('linux') and self.is32bit:
             _add_missing_symbol("__fixunsdfdi", c_helpers["fptoui"])
