@@ -188,6 +188,21 @@ class TestLoopLiftingInAction(TestCase):
         x = np.array([1., 4, 2, -3, 5, 2, 10, 5, 2, 6])
         np.testing.assert_equal(test.py_func(x), test(x))
 
+    def test_no_iteration(self):
+        from numba import jit
+
+        @jit(forceobj=True)
+        def test(n):
+            res = 0
+            for i in range(n):
+                res = i
+            return res
+
+        # loop count = 0
+        self.assertEqual(test.py_func(-1), test(-1))
+
+        # loop count = 1
+        self.assertEqual(test.py_func(1), test(1))
 
 if __name__ == '__main__':
     unittest.main()

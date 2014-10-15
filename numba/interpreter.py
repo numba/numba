@@ -334,7 +334,7 @@ class Interpreter(object):
     def dump(self, file=None):
         file = file or sys.stdout
         for offset, block in sorted(self.blocks.items()):
-            print('label %d:' % (offset,), file=file)
+            print('label %s:' % (offset,), file=file)
             block.dump(file=file)
 
     # --- Scope operations ---

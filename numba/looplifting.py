@@ -267,8 +267,8 @@ def discover_args_and_returns(bytecode, insts, outer_rds, outer_wrs):
     This completely ignores the ordering or the read-writes.
     """
     rdnames, wrnames = find_varnames_uses(bytecode, insts)
-    # Pass names that are written outside and read locally
-    args = outer_wrs & rdnames
+    # Pass names that are written outside and write/read locally
+    args = outer_wrs & (rdnames | wrnames)
     # Return values that it written locally and read outside
     rets = wrnames & outer_rds
     return args, rets
