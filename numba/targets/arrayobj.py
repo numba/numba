@@ -563,12 +563,16 @@ def make_array_flat_cls(flatiterty):
             .flat() implementation for C-contiguous arrays.
             """
             _fields = [('array', types.CPointer(array_type)),
-                       ('index', types.CPointer(types.intp))]
+                       ('stride', types.intp),
+                       ('pointer', types.CPointer(types.CPointer(dtype))),
+                       ('index', types.CPointer(types.intp)),
+                       ]
 
             def init_specific(self, context, builder, arrty, arr):
                 zero = context.get_constant(types.intp, 0)
-                indexptr = cgutils.alloca_once_value(builder, zero)
-                self.index = indexptr
+                self.index = cgutils.alloca_once_value(builder, zero)
+                self.pointer = cgutils.alloca_once_value(builder, arr.data)
+                self.stride = builder.extract_value(arr.strides, arrty.ndim - 1)
 
             def iternext_specific(self, context, builder, arrty, arr, result):
                 nitems = arr.nitems
@@ -578,12 +582,14 @@ def make_array_flat_cls(flatiterty):
                 result.set_valid(is_valid)
 
                 with cgutils.if_likely(builder, is_valid):
-                    ptr = builder.gep(arr.data, [index])
+                    ptr = builder.load(self.pointer)
                     value = context.unpack_value(builder, arrty.dtype, ptr)
                     result.yield_(value)
 
-                    nindex = builder.add(index, context.get_constant(types.intp, 1))
-                    builder.store(nindex, self.index)
+                    index = builder.add(index, context.get_constant(types.intp, 1))
+                    builder.store(index, self.index)
+                    ptr = cgutils.pointer_add(builder, ptr, self.stride)
+                    builder.store(ptr, self.pointer)
 
         return CContiguousFlatIter
 
