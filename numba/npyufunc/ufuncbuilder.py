@@ -11,7 +11,7 @@ from .sigparse import parse_signature
 from .wrappers import build_ufunc_wrapper, build_gufunc_wrapper
 from numba.targets import registry
 from numba import _dynfunc
-import llvm.core as lc
+import llvmlite.llvmpy.core as lc
 
 class UFuncTargetOptions(TargetOptions):
     OPTIONS = {

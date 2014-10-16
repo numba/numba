@@ -331,7 +331,7 @@ def llvm33_to_32_ir(ir):
 
 
 def set_cuda_kernel(lfunc):
-    from llvm.core import MetaData, MetaDataString, Constant, Type
+    from llvmlite.llvmpy.core import MetaData, MetaDataString, Constant, Type
 
     m = lfunc.module
 

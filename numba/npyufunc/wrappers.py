@@ -1,6 +1,6 @@
 from __future__ import print_function, division, absolute_import
 import numpy as np
-from llvm.core import (Type, Builder, inline_function, LINKAGE_INTERNAL,
+from llvmlite.llvmpy.core import (Type, Builder, LINKAGE_INTERNAL,
                        ICMP_EQ, Constant)
 
 from numba import types, cgutils, config
@@ -202,10 +202,10 @@ def build_ufunc_wrapper(context, func, signature, objmode, env):
 
     # Set core function to internal so that it is not generated
     func.linkage = LINKAGE_INTERNAL
-    if not objmode:
-        # Force inline of code function
-        inline_function(slowloop)
-        inline_function(fastloop)
+    # if not objmode:
+    #     # Force inline of code function
+    #     inline_function(slowloop)
+    #     inline_function(fastloop)
     # Run optimizer
     context.optimize(module)
 

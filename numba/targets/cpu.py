@@ -2,10 +2,10 @@ from __future__ import print_function, absolute_import
 
 import sys
 
-import llvm.core as lc
-import llvm.passes as lp
-import llvm.ee as le
-from llvm.workaround import avx_support
+import llvmlite.llvmpy.core as lc
+import llvmlite.llvmpy.passes as lp
+import llvmlite.llvmpy.ee as le
+from llvmlite.llvmpy import avx_support
 
 from numba import _dynfunc, _helperlib, config
 from numba.callwrapper import PyCallWrapper

@@ -1,9 +1,9 @@
 from __future__ import print_function, absolute_import, division
 from functools import reduce
 import operator
-from llvm.core import Type
-import llvm.core as lc
-import llvm.ee as le
+from llvmlite.llvmpy.core import Type
+import llvmlite.llvmpy.core as lc
+import llvmlite.llvmpy.ee as le
 from numba.targets.imputils import implement, Registry
 from numba import cgutils
 from numba import types

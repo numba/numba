@@ -2,8 +2,8 @@ from __future__ import print_function
 from collections import namedtuple, defaultdict
 import copy
 from types import MethodType
-import llvm.core as lc
-from llvm.core import Type, Constant
+import llvmlite.llvmpy.core as lc
+from llvmlite.llvmpy.core import Type, Constant
 import numpy
 
 import numba

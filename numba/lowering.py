@@ -4,8 +4,8 @@ from collections import defaultdict
 import sys
 from types import ModuleType
 
-from llvm.core import Type, Builder, Module
-import llvm.core as lc
+from llvmlite.llvmpy.core import Type, Builder, Module
+import llvmlite.llvmpy.core as lc
 
 from numba import _dynfunc, ir, types, cgutils, utils, config, cffi_support, typing
 

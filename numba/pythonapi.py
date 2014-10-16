@@ -1,8 +1,7 @@
 from __future__ import print_function, division, absolute_import
-from llvm.core import Type, Constant
-import llvm.core as lc
-import llvm.ee as le
-from llvm import LLVMException
+from llvmlite.llvmpy.core import Type, Constant
+import llvmlite.llvmpy.core as lc
+import llvmlite.llvmpy.ee as le
 
 from numba.config import PYVERSION
 import numba.ctypes_support as ctypes
