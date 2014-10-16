@@ -372,15 +372,11 @@ compile_and_invoke(DispatcherObject *self, PyObject *args, PyObject *kws)
     if (cfa == NULL)
         return NULL;
 
-    old_can_compile = self->can_compile;
-    self->can_compile = 0;
     /* NOTE: we call the compiled function ourselves instead of
        letting the Python derived class do it.  This is for proper
        behaviour of globals() in jitted functions (issue #476). */
     cfunc = PyObject_Call(cfa, args, kws);
     Py_DECREF(cfa);
-
-    self->can_compile = old_can_compile;
 
     if (cfunc == NULL)
         return NULL;

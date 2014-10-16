@@ -804,6 +804,12 @@ class BaseContext(object):
 
             return optval.data
 
+        elif (isinstance(fromty, types.Array) and
+                  isinstance(toty, types.Array)):
+            # Type inference should have prevented illegal array casting.
+            assert toty.layout == 'A'
+            return val
+
         raise NotImplementedError("cast", val, fromty, toty)
 
     def make_optional(self, optionaltype):
