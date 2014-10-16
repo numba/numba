@@ -6,6 +6,7 @@ from types import ModuleType
 
 from llvmlite.llvmpy.core import Type, Builder, Module
 import llvmlite.llvmpy.core as lc
+import llvmlite.binding as ll
 
 from numba import _dynfunc, ir, types, cgutils, utils, config, cffi_support, typing
 
@@ -233,6 +234,7 @@ class BaseLower(object):
             print(("LLVM DUMP %s" % self.fndesc).center(80, '-'))
             print(self.module)
             print('=' * 80)
+
         self.module.verify()
         # Run function-level optimize to reduce memory usage and improve
         # module-level optimization

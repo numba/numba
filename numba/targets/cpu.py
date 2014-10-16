@@ -277,8 +277,9 @@ class CPUContext(BaseContext):
             dmf = intrinsics.DivmodFixer()
             dmf.run(func.module)
 
-        im = intrinsics.IntrinsicMapping(self)
-        im.run(func.module)
+        # XXX: Disabled for now
+        # im = intrinsics.IntrinsicMapping(self)
+        # im.run(func.module)
 
         if not fndesc.native:
             self.optimize_pythonapi(func)

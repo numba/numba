@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 import numpy as np
 from llvmlite.llvmpy.core import (Type, Builder, LINKAGE_INTERNAL,
                        ICMP_EQ, Constant)
+from llvmlite import binding as ll
 
 from numba import types, cgutils, config
 from numba import _dynfunc
@@ -207,6 +208,9 @@ def build_ufunc_wrapper(context, func, signature, objmode, env):
     #     inline_function(slowloop)
     #     inline_function(fastloop)
     # Run optimizer
+
+    module = ll.parse_assembly(str(module))
+    wrapper = module.get_function(wrapper.name)
     context.optimize(module)
 
     if config.DUMP_OPTIMIZED:
@@ -254,7 +258,7 @@ class UArrayArg(object):
 
     def store_direct(self, value, offset):
         ptr = cgutils.pointer_add(self.builder, self.data, offset)
-        assert ptr.type.pointee == value.type
+        assert ptr.type.pointee == value.type, (ptr.type, value.type)
         self.builder.store(value, ptr)
 
     def store_aligned(self, value, ind):
