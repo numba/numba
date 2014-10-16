@@ -1,5 +1,5 @@
 from __future__ import print_function, division, absolute_import
-from llvmlite.llvmpy.core import Type, Constant
+from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.llvmpy.core as lc
 import llvmlite.llvmpy.ee as le
 

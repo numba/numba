@@ -110,7 +110,7 @@ class PyCallWrapper(object):
         api = self.context.get_python_api(builder)
         self.build_wrapper(api, builder, closure, args, kws)
 
-        wrapper.verify()
+        #wrapper.verify()
         return wrapper, api
 
     def build_wrapper(self, api, builder, closure, args, kws):

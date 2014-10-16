@@ -6,6 +6,7 @@ import llvmlite.llvmpy.core as lc
 import llvmlite.llvmpy.passes as lp
 import llvmlite.llvmpy.ee as le
 from llvmlite.llvmpy import avx_support
+import llvmlite.binding as ll
 
 from numba import _dynfunc, _helperlib, config
 from numba.callwrapper import PyCallWrapper
@@ -302,16 +303,20 @@ class CPUContext(BaseContext):
     def prepare_for_call(self, func, fndesc, env):
         wrapper, api = PyCallWrapper(self, func.module, func, fndesc,
                                      exceptions=self.exceptions).build()
-        self.optimize(func.module)
+        module = ll.parse_assembly(str(func.module))
+        module.verify()
+        func = module.get_function(func.name)
+        wrapper = module.get_function(wrapper.name)
+        self.optimize(module)
 
         if config.DUMP_OPTIMIZED:
             print(("OPTIMIZED DUMP %s" % fndesc).center(80, '-'))
-            print(func.module)
+            print(module)
             print('=' * 80)
 
         if config.DUMP_ASSEMBLY:
             print(("ASSEMBLY %s" % fndesc).center(80, '-'))
-            print(self.tm.emit_assembly(func.module))
+            print(self.tm.emit_assembly(module))
             print('=' * 80)
 
         # Code gen
@@ -382,13 +387,16 @@ def remove_null_refct_call(bb):
     """
     Remove refct api calls to NULL pointer
     """
-    for inst in bb.instructions:
-        if isinstance(inst, lc.CallOrInvokeInstruction):
-            fname = inst.called_function.name
-            if fname == "Py_IncRef" or fname == "Py_DecRef":
-                arg = inst.operands[0]
-                if isinstance(arg, lc.ConstantPointerNull):
-                    inst.erase_from_parent()
+    pass
+    ## Skipped for now
+    # for inst in bb.instructions:
+    #     if isinstance(inst, lc.CallOrInvokeInstruction):
+    #         fname = inst.called_function.name
+    #         if fname == "Py_IncRef" or fname == "Py_DecRef":
+    #             arg = inst.args[0]
+    #             print(type(arg))
+    #             if isinstance(arg, lc.ConstantPointerNull):
+    #                 inst.erase_from_parent()
 
 
 def remove_refct_pairs(bb):
