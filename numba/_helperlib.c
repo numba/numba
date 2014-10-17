@@ -183,18 +183,17 @@ CLEANUP:
  * for the ArrayTemplate class).
  */
 
-static
-int Numba_adapt_ndarray(PyObject *obj, void* arystruct) {
-    PyArrayObject *ndary;
-    int ndim;
-    npy_intp *dims;
-    npy_intp *strides;
+typedef struct {
+    PyObject *parent;
     void *data;
-    void **dataptr;
-    void **objectptr;
-    npy_intp *dimsptr;
-    npy_intp *stridesptr;
-    int i;
+    npy_intp shape_and_strides[];
+} arystruct_t;
+
+static
+int Numba_adapt_ndarray(PyObject *obj, arystruct_t* arystruct) {
+    PyArrayObject *ndary;
+    int i, ndim;
+    npy_intp *p;
 
     if (!PyArray_Check(obj)) {
         return -1;
@@ -202,21 +201,16 @@ int Numba_adapt_ndarray(PyObject *obj, void* arystruct) {
 
     ndary = (PyArrayObject*)obj;
     ndim = PyArray_NDIM(ndary);
-    dims = PyArray_DIMS(ndary);
-    strides = PyArray_STRIDES(ndary);
-    data = PyArray_DATA(ndary);
 
-    dataptr = (void**)arystruct;
-    dimsptr = (npy_intp*)(dataptr + 1);
-    stridesptr = dimsptr + ndim;
-    objectptr = stridesptr + ndim;
-
-    for (i = 0; i < ndim; ++i) {
-        dimsptr[i] = dims[i];
-        stridesptr[i] = strides[i];
+    arystruct->data = PyArray_DATA(ndary);
+    arystruct->parent = obj;
+    p = arystruct->shape_and_strides;
+    for (i = 0; i < ndim; i++, p++) {
+        *p = PyArray_DIM(ndary, i);
     }
-    *dataptr = data;
-    *objectptr = obj;
+    for (i = 0; i < ndim; i++, p++) {
+        *p = PyArray_STRIDE(ndary, i);
+    }
 
     return 0;
 }
