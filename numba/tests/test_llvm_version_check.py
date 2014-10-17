@@ -5,7 +5,7 @@ import sys
 
 from numba import unittest_support as unittest
 
-
+@unittest.skip("deprecated")
 class TestLlvmVersion(unittest.TestCase):
 
     def test_llvm_version(self):

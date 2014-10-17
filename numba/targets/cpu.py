@@ -92,9 +92,32 @@ class CPUContext(BaseContext):
         Actual arguments starts at the 3rd argument position.
         Caller is responsible to allocate space for return value.
         """
+        return self.get_function_type2(fndesc.restype, fndesc.argtypes)
+
+    def get_function_type2(self, restype, argtypes):
+        """
+        Get the implemented Function type for the high-level *fndesc*.
+        Some parameters can be added or shuffled around.
+        This is kept in sync with call_function() and get_arguments().
+
+        Calling Convention
+        ------------------
+        (Same return value convention as BaseContext target.)
+        Returns: -2 for return none in native function;
+                 -1 for failure with python exception set;
+                  0 for success;
+                 >0 for user error code.
+        Return value is passed by reference as the first argument.
+
+        The 2nd argument is a _dynfunc.Environment object.
+        It MUST NOT be used if the function is in nopython mode.
+
+        Actual arguments starts at the 3rd argument position.
+        Caller is responsible to allocate space for return value.
+        """
         argtypes = [self.get_argument_type(aty)
-                    for aty in fndesc.argtypes]
-        resptr = self.get_return_type(fndesc.restype)
+                    for aty in argtypes]
+        resptr = self.get_return_type(restype)
         fnty = lc.Type.function(lc.Type.int(), [resptr, PYOBJECT] + argtypes)
         return fnty
 
@@ -302,11 +325,19 @@ class CPUContext(BaseContext):
         return cfunc
 
     def prepare_for_call(self, func, fndesc, env):
-        wrapper, api = PyCallWrapper(self, func.module, func, fndesc,
-                                     exceptions=self.exceptions).build()
-        module = ll.parse_assembly(str(func.module))
-        module.verify()
-        func = module.get_function(func.name)
+
+        wrapper_module = lc.Module.new('')
+        fnty = self.get_function_type(fndesc)
+        wrapper_callee = wrapper_module.add_function(fnty, func.name)
+        wrapper, api = PyCallWrapper(self, wrapper_module, wrapper_callee,
+                                     fndesc, exceptions=self.exceptions).build()
+        wrapper_module = ll.parse_assembly(str(wrapper_module))
+        wrapper_module.verify()
+
+        module = func.module
+        module.link_in(wrapper_module)
+
+        # func = module.get_function(func.name)
         wrapper = module.get_function(wrapper.name)
         self.optimize(module)
 
@@ -334,6 +365,8 @@ class CPUContext(BaseContext):
         return cfunc
 
     def optimize_pythonapi(self, func):
+        # XXX: Skipped for now
+        return
         # Simplify the function using
         pms = lp.build_pass_managers(tm=self.tm, opt=1,
                                      mod=func.module)

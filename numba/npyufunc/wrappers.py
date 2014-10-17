@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 import numpy as np
 from llvmlite.llvmpy.core import (Type, Builder, LINKAGE_INTERNAL,
                        ICMP_EQ, Constant)
+import llvmlite.llvmpy.core as lc
 from llvmlite import binding as ll
 
 from numba import types, cgutils, config
@@ -126,7 +127,16 @@ def build_ufunc_wrapper(context, func, signature, objmode, env):
     fnty = Type.function(Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
                                        intp_ptr_t, byte_ptr_t])
 
-    wrapper = module.add_function(fnty, "__ufunc__." + func.name)
+    wrapper_module = lc.Module.new('')
+    if objmode:
+        func_type = context.get_function_type2(
+            types.pyobject, [types.pyobject] * len(signature.args))
+    else:
+        func_type = context.get_function_type2(signature.return_type,
+                                               signature.args)
+    func = wrapper_module.add_function(func_type,
+                                       name=func.name)
+    wrapper = wrapper_module.add_function(fnty, "__ufunc__." + func.name)
     arg_args, arg_dims, arg_steps, arg_data = wrapper.args
     arg_args.name = "args"
     arg_dims.name = "dims"
@@ -202,14 +212,17 @@ def build_ufunc_wrapper(context, func, signature, objmode, env):
     del builder
 
     # Set core function to internal so that it is not generated
-    func.linkage = LINKAGE_INTERNAL
+    # func.linkage = LINKAGE_INTERNAL
     # if not objmode:
     #     # Force inline of code function
     #     inline_function(slowloop)
     #     inline_function(fastloop)
     # Run optimizer
 
-    module = ll.parse_assembly(str(module))
+    wrapper_module = ll.parse_assembly(str(wrapper_module))
+    wrapper_module.verify()
+
+    module.link_in(wrapper_module)
     wrapper = module.get_function(wrapper.name)
     context.optimize(module)
 
@@ -289,7 +302,11 @@ class _GufuncWrapper(object):
         fnty = Type.function(Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
                                            intp_ptr_t, byte_ptr_t])
 
-        wrapper = module.add_function(fnty, "__gufunc__." + self.func.name)
+        wrapper_module = lc.Module.new('')
+        func_type = self.context.get_function_type(self.fndesc)
+        func = wrapper_module.add_function(func_type, name=self.func.name)
+        wrapper = wrapper_module.add_function(fnty,
+                                              "__gufunc__." + self.func.name)
         arg_args, arg_dims, arg_steps, arg_data = wrapper.args
         arg_args.name = "args"
         arg_dims.name = "dims"
@@ -337,7 +354,7 @@ class _GufuncWrapper(object):
         # Loop
         with cgutils.for_range(builder, loopcount, intp=intp_t) as ind:
             args = [a.array_value for a in arrays]
-            innercall, error = self.gen_loop_body(builder, args)
+            innercall, error = self.gen_loop_body(builder, func, args)
             # If error, escape
             cgutils.cbranch_or_continue(builder, error, bbreturn)
 
@@ -352,24 +369,31 @@ class _GufuncWrapper(object):
 
         builder.ret_void()
 
-        module.verify()
         # Set core function to internal so that it is not generated
         self.func.linkage = LINKAGE_INTERNAL
+
+        wrapper_module = ll.parse_assembly(str(wrapper_module))
+        wrapper_module.verify()
+
+        module.link_in(wrapper_module)
+        wrapper = module.get_function(wrapper.name)
+
         # Force inline of code function
-        inline_function(innercall)
+        # Disable inlining
+        # inline_function(innercall)
         # Run optimizer
         self.context.optimize(module)
 
         if config.DUMP_OPTIMIZED:
             print(module)
 
-        wrapper.verify()
         return wrapper, self.env
 
-    def gen_loop_body(self, builder, args):
-        status, retval = self.context.call_function(builder, self.func,
+    def gen_loop_body(self, builder, func, args):
+        status, retval = self.context.call_function(builder, func,
                                                     self.signature.return_type,
                                                     self.signature.args, args)
+
         innercall = status.code
         error = status.err
         return innercall, error
@@ -382,9 +406,9 @@ class _GufuncWrapper(object):
 
 
 class _GufuncObjectWrapper(_GufuncWrapper):
-    def gen_loop_body(self, builder, args):
+    def gen_loop_body(self, builder, func, args):
         innercall, error = _prepare_call_to_object_mode(self.context,
-                                                        builder, self.func,
+                                                        builder, func,
                                                         self.signature,
                                                         args, env=self.envptr)
         return innercall, error
