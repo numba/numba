@@ -1,6 +1,7 @@
-import unittest
+from numba import unittest_support as unittest
+import numpy as np
 from numba.compiler import compile_isolated
-from numba import types
+from numba import types, njit
 import struct
 
 
@@ -14,6 +15,7 @@ def int_to_float(x):
 
 def float_to_unsigned(x):
     return types.uint32(x)
+
 
 def float_to_complex(x):
     return types.complex128(x)
@@ -36,7 +38,7 @@ class TestCasting(unittest.TestCase):
 
         self.assertEqual(cr.signature.return_type, types.float64)
         self.assertEqual(cfunc(321), pyfunc(321))
-        self.assertEqual(cfunc(321), 321./2)
+        self.assertEqual(cfunc(321), 321. / 2)
 
     def test_float_to_unsigned(self):
         pyfunc = float_to_unsigned
@@ -55,6 +57,27 @@ class TestCasting(unittest.TestCase):
         self.assertEqual(cr.signature.return_type, types.complex128)
         self.assertEqual(cfunc(-3.21), pyfunc(-3.21))
         self.assertEqual(cfunc(-3.21), -3.21 + 0j)
+
+    def test_array_to_array(self):
+        """Make sure this compiles.
+
+        Cast C to A array
+        """
+        from numba import njit
+
+        @njit("f8(f8[:])")
+        def inner(x):
+            return x[0]
+
+        inner.disable_compile()
+
+        @njit("f8(f8[::1])")
+        def driver(x):
+            return inner(x)
+
+        x = np.array([1234], dtype=np.float64)
+        self.assertEqual(driver(x), x[0])
+        self.assertEqual(len(inner.overloads), 1)
 
 
 if __name__ == '__main__':
