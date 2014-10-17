@@ -30,10 +30,13 @@ def make_array(array_type):
     # This structure should be kept in sync with Numba_adapt_ndarray()
     # in _helperlib.c.
     class ArrayTemplate(cgutils.Structure):
-        _fields = [('data', types.CPointer(dtype)),
+        _fields = [('parent', types.pyobject),
+                   # These three fields comprise the unofficiel llarray ABI
+                   # (used by the GPU backend)
+                   ('data', types.CPointer(dtype)),
                    ('shape', types.UniTuple(types.intp, nd)),
                    ('strides', types.UniTuple(types.intp, nd)),
-                   ('parent', types.pyobject), ]
+                   ]
 
     return ArrayTemplate
 
@@ -551,8 +554,8 @@ def array_record_getattr(context, builder, typ, value, attr):
 @struct_factory(types.NumpyFlatType)
 def make_array_flat_cls(flatiterty):
     """
-    Return the Structure representation of the given *enum_type* (an
-    instance of types.EnumerateType).
+    Return the Structure representation of the given *flatiterty* (an
+    instance of types.NumpyFlatType).
     """
 
     class NumpyFlatIter(cgutils.Structure):
