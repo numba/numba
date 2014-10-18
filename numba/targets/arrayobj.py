@@ -30,10 +30,12 @@ def make_array(array_type):
     # This structure should be kept in sync with Numba_adapt_ndarray()
     # in _helperlib.c.
     class ArrayTemplate(cgutils.Structure):
-        _fields = [('data', types.CPointer(dtype)),
-                   ('parent', types.pyobject),
+        _fields = [('parent', types.pyobject),
                    ('nitems', types.intp),
                    ('itemsize', types.intp),
+                   # These three fields comprise the unofficiel llarray ABI
+                   # (used by the GPU backend)
+                   ('data', types.CPointer(dtype)),
                    ('shape', types.UniTuple(types.intp, nd)),
                    ('strides', types.UniTuple(types.intp, nd)),
                    ]

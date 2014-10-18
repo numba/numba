@@ -184,10 +184,10 @@ CLEANUP:
  */
 
 typedef struct {
-    void *data;
     PyObject *parent;
     npy_intp nitems;
     npy_intp itemsize;
+    void *data;
     npy_intp shape_and_strides[];
 } arystruct_t;
 

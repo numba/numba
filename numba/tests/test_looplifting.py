@@ -42,12 +42,30 @@ def lift3(x):
         c += a[i] * x
     return c
 
+def lift4(x):
+    # Output two variables from the loop
+    a = np.arange(5, dtype=np.int64)
+    c = 0
+    d = 0
+    for i in range(a.shape[0]):
+        c += a[i] * x
+        d += c
+    return c + d
+
 
 def reject1(x):
     a = np.arange(4)
     for i in range(a.shape[0]):
         # Inner returns a variable from outer "scope" => cannot loop-lift
         return a
+    return a
+
+
+def reject2(x):
+    a = np.arange(4)
+    for i in range(a.shape[0]):
+        if i > 2:
+            break
     return a
 
 
@@ -115,8 +133,14 @@ class TestLoopLifting(TestCase):
     def test_lift3(self):
         self.check_lift_ok(lift3, (types.intp,), (123,))
 
+    def test_lift4(self):
+        self.check_lift_ok(lift4, (types.intp,), (123,))
+
     def test_reject1(self):
         self.check_no_lift(reject1, (types.intp,), (123,))
+
+    def test_reject2(self):
+        self.check_no_lift(reject2, (types.intp,), (123,))
 
     def test_reject_npm1(self):
         self.check_no_lift_nopython(reject_npm1, (types.intp,), (123,))
@@ -164,6 +188,21 @@ class TestLoopLiftingInAction(TestCase):
         x = np.array([1., 4, 2, -3, 5, 2, 10, 5, 2, 6])
         np.testing.assert_equal(test.py_func(x), test(x))
 
+    def test_no_iteration(self):
+        from numba import jit
+
+        @jit(forceobj=True)
+        def test(n):
+            res = 0
+            for i in range(n):
+                res = i
+            return res
+
+        # loop count = 0
+        self.assertEqual(test.py_func(-1), test(-1))
+
+        # loop count = 1
+        self.assertEqual(test.py_func(1), test(1))
 
 if __name__ == '__main__':
     unittest.main()

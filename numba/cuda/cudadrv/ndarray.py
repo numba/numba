@@ -4,6 +4,16 @@ import numba.ctypes_support as ctypes
 import contextlib
 from collections import deque
 from . import devices, driver
+from numba.targets.registry import CPUTarget
+from numba import types
+
+
+def _calc_array_sizeof(ndim):
+    """Use the ABI size in the CPU target
+    """
+    aryty = types.Array(types.int32, ndim, 'A')
+    ctx = CPUTarget.target_context
+    return ctx.get_abi_sizeof(ctx.get_value_type(aryty))
 
 
 class ArrayHeaderManager(object):
@@ -30,7 +40,7 @@ class ArrayHeaderManager(object):
 
     # Maximum size for each array head
     #    = 4 (ndim) * 8 (sizeof intp) * 2 (shape strides) + 8 (ptr)
-    elemsize = 4 * 8 * 2 + 8
+    elemsize = _calc_array_sizeof(4)
 
     # Number of page-locked staging area
     num_stages = 5
@@ -113,10 +123,13 @@ def make_array_ctype(ndim):
     c_intp = ctypes.c_ssize_t
 
     class c_array(ctypes.Structure):
-        _fields_ = [('data', ctypes.c_void_p),
+        _fields_ = [('parent', ctypes.c_void_p),
+                    ('data', ctypes.c_void_p),
                     ('shape', c_intp * ndim),
                     ('strides', c_intp * ndim)]
 
+    assert ctypes.sizeof(c_array) == _calc_array_sizeof(ndim), \
+        "sizeof(CUDA array struct) != sizeof(CPU array struct)"
     return c_array
 
 
@@ -146,7 +159,8 @@ def ndarray_populate_head(gpu_mem, gpu_data, shape, strides, stream=0):
     assert nd > 0, "0 or negative dimension"
 
     arraytype = make_array_ctype(nd)
-    struct = arraytype(data=driver.device_pointer(gpu_data),
+    struct = arraytype(parent=None,
+                       data=driver.device_pointer(gpu_data),
                        shape=shape,
                        strides=strides)
 

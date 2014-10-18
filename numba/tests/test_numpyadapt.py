@@ -10,10 +10,10 @@ from numba import _helperlib
 class ArrayStruct3D(Structure):
     # Mimick the structure defined in numba.targets.arrayobj's make_array()
     _fields_ = [
-        ("data", c_void_p),
         ("parent", c_void_p),
         ("nitems", c_ssize_t),
         ("itemsize", c_ssize_t),
+        ("data", c_void_p),
         ("shape", (c_ssize_t * 3)),
         ("strides", (c_ssize_t * 3)),
     ]

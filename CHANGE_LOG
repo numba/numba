@@ -1,3 +1,18 @@
+Version 0.15.1
+--------------
+
+(This was a bug-fix release that superceded version 0.15 before it was 
+announced.)
+
+Fixes:
+
+* Workaround for missing __ftol2 on Windows XP.
+* Do not lift loops for compilation that contain break statements.
+* Fix a bug in loop-lifting when multiple values need to be returned to
+  the enclosing scope.
+* Handle the loop-lifting case where an accumulator needs to be updated when
+  the loop count is zero.
+
 Version 0.15
 ------------
 

@@ -211,11 +211,12 @@ def make_loop_bytecode(bytecode, loop, args, returns):
                                          bytecode.co_varnames.index(out))
             loadfast.lineno = loop[-1].lineno
             loop.append(loadfast)
-            # Build tuple
-            buildtuple = ByteCodeInst.get(loop[-1].next, "BUILD_TUPLE",
-                                        len(returns))
-            buildtuple.lineno = loop[-1].lineno
-            loop.append(buildtuple)
+
+        # Build tuple
+        buildtuple = ByteCodeInst.get(loop[-1].next, "BUILD_TUPLE",
+                                    len(returns))
+        buildtuple.lineno = loop[-1].lineno
+        loop.append(buildtuple)
 
     else:
         # Load None
@@ -266,8 +267,8 @@ def discover_args_and_returns(bytecode, insts, outer_rds, outer_wrs):
     This completely ignores the ordering or the read-writes.
     """
     rdnames, wrnames = find_varnames_uses(bytecode, insts)
-    # Pass names that are written outside and read locally
-    args = outer_wrs & rdnames
+    # Pass names that are written outside and write/read locally
+    args = outer_wrs & (rdnames | wrnames)
     # Return values that it written locally and read outside
     rets = wrnames & outer_rds
     return args, rets
@@ -308,8 +309,8 @@ def separate_loops(bytecode, outer, loops):
             cur.append(inst)
             if inst.next == endloop:
                 for inst in cur:
-                    if inst.opname == 'RETURN_VALUE':
-                        # Reject if return inside loop
+                    if inst.opname in ['RETURN_VALUE', 'BREAK_LOOP']:
+                        # Reject if return or break inside loop
                         outer.extend(cur)
                         break
                 else:
