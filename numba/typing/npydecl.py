@@ -198,7 +198,7 @@ def _numpy_reduction(fname):
     setattr(NumpyModuleAttribute, "resolve_{0}".format(fname),
             lambda self, mod: types.Function(cls))
 
-for func in ['sum', 'prod']:
+for func in ['sum', 'prod', 'mean']:
     _numpy_reduction(func)
 
 builtin_global(numpy, types.Module(numpy))

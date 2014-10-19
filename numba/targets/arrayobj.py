@@ -481,6 +481,48 @@ def numpy_prod(context, builder, sig, args):
 
     return context.compile_internal(builder, impl, sig, args)
 
+
+@builtin
+@implement("array.mean", types.Kind(types.Array))
+def array_mean(context, builder, sig, args):
+    from numba.intrinsics import array_ravel
+
+    [arrty] = sig.args
+
+    def impl_any_layout(arr):
+        c = 0
+        for v in arr.flat:
+            c += v
+        return (1.0 * c) / arr.size
+
+    def impl_contigous_layout(arr):
+        c = 0
+        for v in array_ravel(arr):
+            c += v
+        return (1.0 * c) / arr.size
+
+
+    if arrty.layout in 'CF':
+        # Optimize for contiguous case because so that LLVM can perform
+        # vectorization on the reduction loop
+        impl = impl_contigous_layout
+    else:
+        impl = impl_any_layout
+
+    return context.compile_internal(builder, impl, sig, args,
+                                    locals=dict(c=arrty.dtype),
+                                    cache_key=(array_mean, sig, arrty.dtype))
+
+
+@builtin
+@implement(numpy.mean, types.Kind(types.Array))
+def numpy_prod(context, builder, sig, args):
+    def impl(arr):
+        return arr.mean()
+
+    return context.compile_internal(builder, impl, sig, args)
+
+
 #-------------------------------------------------------------------------------
 
 

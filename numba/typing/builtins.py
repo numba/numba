@@ -478,6 +478,9 @@ class ArrayAttribute(AttributeTemplate):
     def resolve_prod(self, ary):
         return types.BoundFunction(Array_prod, ary)
 
+    def resolve_mean(seld, ary):
+        return types.BoundFunction(Array_mean, ary)
+
     def resolve_flat(self, ary):
         return types.NumpyFlatType(ary)
 
@@ -499,6 +502,15 @@ class Array_sum(AbstractTemplate):
 
 class Array_prod(AbstractTemplate):
     key = "array.prod"
+
+    def generic(self, args, kws):
+        assert not args
+        assert not kws
+        return signature(self.this.dtype, recvr=self.this)
+
+
+class Array_mean(AbstractTemplate):
+    key = "array.mean"
 
     def generic(self, args, kws):
         assert not args
