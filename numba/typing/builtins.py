@@ -464,8 +464,6 @@ class ArrayAttribute(AttributeTemplate):
     def resolve_ndim(self, ary):
         return types.intp
 
-        #
-
     # def resolve_flatten(self, ary):
     #     return types.Method(Array_flatten, ary)
 
@@ -515,6 +513,8 @@ class Array_mean(AbstractTemplate):
     def generic(self, args, kws):
         assert not args
         assert not kws
+        if self.this.dtype in types.integer_domain:
+            return signature(types.float64, recvr=self.this)
         return signature(self.this.dtype, recvr=self.this)
 
 

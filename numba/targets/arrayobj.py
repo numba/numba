@@ -493,13 +493,13 @@ def array_mean(context, builder, sig, args):
         c = 0
         for v in arr.flat:
             c += v
-        return (1.0 * c) / arr.size
+        return float(c) / arr.size
 
     def impl_contigous_layout(arr):
         c = 0
         for v in array_ravel(arr):
             c += v
-        return (1.0 * c) / arr.size
+        return float(c) / arr.size
 
 
     if arrty.layout in 'CF':
@@ -516,7 +516,7 @@ def array_mean(context, builder, sig, args):
 
 @builtin
 @implement(numpy.mean, types.Kind(types.Array))
-def numpy_prod(context, builder, sig, args):
+def numpy_mean(context, builder, sig, args):
     def impl(arr):
         return arr.mean()
 
@@ -690,5 +690,3 @@ def iternext_numpy_flatiter(context, builder, sig, args, result):
             # Set first index to out-of-bound
             idxptr = builder.gep(indptr, [context.get_constant(types.intp, 0)])
             builder.store(shapes[0], idxptr)
-
-
