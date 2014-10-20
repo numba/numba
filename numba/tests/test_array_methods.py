@@ -95,22 +95,39 @@ class TestArrayMethods(unittest.TestCase):
 
         np.testing.assert_allclose(arr.sum(), cfunc(arr))
 
-    def test_array_flat_3d(self):
-        arr = np.arange(50).reshape(5, 2, 5)
-
-        arrty = typeof(arr)
-        self.assertEqual(arrty.ndim, 3)
-
+    def check_array_flat(self, arr):
         out = np.zeros(arr.size, dtype=arr.dtype)
         nb_out = out.copy()
 
-        cres = compile_isolated(array_flat, [arrty, typeof(out)])
+        cres = compile_isolated(array_flat, [typeof(arr), typeof(out)])
         cfunc = cres.entry_point
 
         array_flat(arr, out)
         cfunc(arr, nb_out)
 
-        self.assertTrue(np.all(out == nb_out))
+        self.assertTrue(np.all(out == nb_out), (out, nb_out))
+
+    def test_array_flat_3d(self):
+        arr = np.arange(24).reshape(4, 2, 3)
+
+        arrty = typeof(arr)
+        self.assertEqual(arrty.ndim, 3)
+        self.assertEqual(arrty.layout, 'C')
+        self.assertTrue(arr.flags.c_contiguous)
+        # Test with C-contiguous array
+        self.check_array_flat(arr)
+        # Test with Fortran-contiguous array
+        arr = arr.transpose()
+        self.assertFalse(arr.flags.c_contiguous)
+        self.assertTrue(arr.flags.f_contiguous)
+        self.assertEqual(typeof(arr).layout, 'F')
+        self.check_array_flat(arr)
+        # Test with non-contiguous array
+        arr = arr[::2]
+        self.assertFalse(arr.flags.c_contiguous)
+        self.assertFalse(arr.flags.f_contiguous)
+        self.assertEqual(typeof(arr).layout, 'A')
+        self.check_array_flat(arr)
 
     def test_array_sum_global(self):
         arr = np.arange(10, dtype=np.int32)
@@ -155,6 +172,7 @@ class TestArrayMethods(unittest.TestCase):
         cfunc = cres.entry_point
 
         np.testing.assert_allclose(np.prod(arr), cfunc(arr))
+
 
 if __name__ == '__main__':
     unittest.main()

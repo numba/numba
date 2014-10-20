@@ -192,6 +192,17 @@ def alloca_once(builder, ty, size=None, name=''):
         return builder.alloca(ty, size=size, name=name)
 
 
+def alloca_once_value(builder, value, name=''):
+    """
+    Like alloca_once(), but passing a *value* instead of a type.  The
+    type is inferred and the allocated slot is also initialized with the
+    given value.
+    """
+    storage = alloca_once(builder, value.type)
+    builder.store(value, storage)
+    return storage
+
+
 def terminate(builder, bbend):
     bb = builder.basic_block
     if bb.terminator is None:
