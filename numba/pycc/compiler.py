@@ -9,6 +9,7 @@ import functools
 import llvmlite.llvmpy.core as lc
 import llvmlite.llvmpy.ee as le
 import llvmlite.llvmpy.passes as lp
+import llvmlite.binding as ll
 
 from numba import cgutils
 from numba.utils import IS_PY3
@@ -140,9 +141,10 @@ class _Compiler(object):
         Resets the export environment afterwards.
         """
         self.exported_signatures = export_registry
+        self.exported_function_types = {}
 
         # Create new module containing everything
-        llvm_module = lc.Module.new(self.module_name)
+        llvm_module = ll.parse_assembly('')
 
         # Compile all exported functions
         typing_ctx = CPUTarget.typing_context
@@ -159,29 +161,37 @@ class _Compiler(object):
                                  entry.signature.return_type, flags,
                                  locals={})
 
+            print(entry.symbol)
             if self.export_python_wrap:
                 module = cres.llvm_func.module
+                # XXX: unsupported (necessary?)
                 cres.llvm_func.linkage = lc.LINKAGE_INTERNAL
                 wrappername = "wrapper." + cres.llvm_func.name
-                wrapper = module.get_function_named(wrappername)
+                wrapper = module.get_function(wrappername)
                 wrapper.name = entry.symbol
+                wrapper.linkage = lc.LINKAGE_EXTERNAL
+                fnty = cres.target_context.get_function_type(cres.fndesc)
+                self.exported_function_types[entry] = fnty
             else:
+                cres.llvm_func.linkage = lc.LINKAGE_EXTERNAL
                 cres.llvm_func.name = entry.symbol
 
             modules.append(cres.llvm_module)
+
+        if self.export_python_wrap:
+            wrapper_module = lc.Module.new('')
+            self._emit_python_wrapper(wrapper_module)
+            modules.append(ll.parse_assembly(str(wrapper_module)))
 
         # Link all exported functions
         for mod in modules:
             llvm_module.link_in(mod, preserve=self.export_python_wrap)
 
         # Optimize
-        tm = le.TargetMachine.new(opt=3)
+        tm = le.EngineBuilder.new(llvm_module).select_target()
         pms = lp.build_pass_managers(tm=tm, opt=3, loop_vectorize=True,
                                      fpm=False)
         pms.pm.run(llvm_module)
-
-        if self.export_python_wrap:
-            self._emit_python_wrapper(llvm_module)
 
         return llvm_module
 
@@ -234,13 +244,15 @@ class _Compiler(object):
         method_defs = []
         for entry in self.exported_signatures:
             name = entry.symbol
-            lfunc = llvm_module.get_function_named(name)
+            fnty = self.exported_function_types[entry]
+            lfunc = llvm_module.add_function(fnty, name=name)
 
             method_name_init = lc.Constant.stringz(name)
             method_name = llvm_module.add_global_variable(
                 method_name_init.type, '.method_name')
             method_name.initializer = method_name_init
-            method_name.linkage = lc.LINKAGE_EXTERNAL
+            method_name.linkage = lc.LINKAGE_INTERNAL
+            method_name.global_constant = True
             method_def_const = lc.Constant.struct((lc.Constant.gep(method_name, [ZERO, ZERO]),
                                                    lc.Constant.bitcast(lfunc, lt._void_star),
                                                    METH_VARARGS_AND_KEYWORDS,
@@ -448,7 +460,7 @@ class CompilerPy3(_Compiler):
         # (XXX for some reason comparing with the NULL constant fails llvm
         #  with an assertion in pydebug mode)
         with cgutils.ifthen(builder, cgutils.is_null(builder, mod)):
-            builder.ret(NULL)
+            builder.ret(NULL.bitcast(mod_init_fn.type.pointee.return_type))
 
         builder.ret(mod)
 

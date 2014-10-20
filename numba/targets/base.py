@@ -249,6 +249,7 @@ class BaseContext(object):
                 break
         else:
             gv = cgutils.global_constant(mod, name, text)
+            gv.linkage = lc.LINKAGE_INTERNAL
         return Constant.bitcast(gv, stringtype)
 
     def get_arguments(self, func):
