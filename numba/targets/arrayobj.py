@@ -420,14 +420,10 @@ def array_sum(context, builder, sig, args):
         # Optimize for contiguous case because so that LLVM can perform
         # vectorization on the reduction loop
         return context.compile_internal(builder, impl_contigous_layout, sig,
-                                        args, locals=dict(c=arrty.dtype),
-                                        cache_key=(array_sum, sig,
-                                                   arrty.dtype))
+                                        args, locals=dict(c=arrty.dtype))
     else:
         return context.compile_internal(builder, impl_any_layout, sig, args,
-                                        locals=dict(c=arrty.dtype),
-                                        cache_key=(array_sum, sig,
-                                                   arrty.dtype))
+                                        locals=dict(c=arrty.dtype))
 
 
 @builtin
@@ -462,14 +458,10 @@ def array_prod(context, builder, sig, args):
         # Optimize for contiguous case because so that LLVM can perform
         # vectorization on the reduction loop
         return context.compile_internal(builder, impl_contigous_layout, sig,
-                                        args, locals=dict(c=arrty.dtype),
-                                        cache_key=(array_sum, sig,
-                                                   arrty.dtype))
+                                        args, locals=dict(c=arrty.dtype))
     else:
         return context.compile_internal(builder, impl_any_layout, sig, args,
-                                        locals=dict(c=arrty.dtype),
-                                        cache_key=(array_sum, sig,
-                                                   arrty.dtype))
+                                        locals=dict(c=arrty.dtype))
 
 
 @builtin
