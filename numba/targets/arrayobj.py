@@ -463,12 +463,12 @@ def array_prod(context, builder, sig, args):
         # vectorization on the reduction loop
         return context.compile_internal(builder, impl_contigous_layout, sig,
                                         args, locals=dict(c=arrty.dtype),
-                                        cache_key=(array_sum, sig,
+                                        cache_key=(array_prod, sig,
                                                    arrty.dtype))
     else:
         return context.compile_internal(builder, impl_any_layout, sig, args,
                                         locals=dict(c=arrty.dtype),
-                                        cache_key=(array_sum, sig,
+                                        cache_key=(array_prod, sig,
                                                    arrty.dtype))
 
 
