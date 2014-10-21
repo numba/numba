@@ -229,7 +229,7 @@ class BaseContext(object):
         assert fn.is_declaration
         for ak, av in zip(fndesc.args, self.get_arguments(fn)):
             av.name = "arg.%s" % ak
-        fn.args[0] = ".ret"
+        fn.args[0].name = ".ret"
         return fn
 
     def declare_external_function(self, module, fndesc):

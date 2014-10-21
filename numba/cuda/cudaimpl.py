@@ -4,6 +4,7 @@ import operator
 from llvmlite.llvmpy.core import Type
 import llvmlite.llvmpy.core as lc
 import llvmlite.llvmpy.ee as le
+import llvmlite.binding as ll
 from numba.targets.imputils import implement, Registry
 from numba import cgutils
 from numba import types
@@ -262,7 +263,7 @@ def ptx_atomic_add_tuple(context, builder, sig, args):
 
 
 def _get_target_data(context):
-    return le.TargetData.new(nvvm.data_layout[context.address_size])
+    return ll.create_target_data(nvvm.data_layout[context.address_size])
 
 
 def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
