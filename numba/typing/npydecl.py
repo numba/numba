@@ -215,7 +215,7 @@ for func in ['sum', 'prod']:
     _numpy_reduction(func, Numpy_homogenous_reduction)
 
 # Hetrogenous Reductions
-for func in ['mean']:   # Coming soon var/std
+for func in ['mean', 'var', 'std']:
     _numpy_reduction(func, Numpy_hetrogenous_reduction)
 
 
