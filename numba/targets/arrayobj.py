@@ -523,6 +523,52 @@ def numpy_mean(context, builder, sig, args):
     return context.compile_internal(builder, impl, sig, args)
 
 
+@builtin
+@implement("array.var", types.Kind(types.Array))
+def array_var(context, builder, sig, args):
+    [arrty] = sig.args
+
+    def impl(arry):
+        m = arry.mean()
+        ssd = 0
+        for v in arry.flat:
+            ssd += (v - m) ** 2
+
+        return ssd / arry.size
+
+    return context.compile_internal(builder, impl, sig, args,
+                                    locals=dict(ssd=arrty.dtype),
+                                    cache_key=(array_var, sig, arrty.dtype))
+
+
+@builtin
+@implement(numpy.var, types.Kind(types.Array))
+def numpy_var(context, builder, sig, args):
+    def impl(arry):
+        return arry.var()
+    return context.compile_internal(builder, impl, sig, args)
+
+
+@builtin
+@implement("array.std", types.Kind(types.Array))
+def array_std(context, builder, sig, args):
+    [arrty] = sig.args
+
+    def impl(arry):
+        return numpy.sqrt(arry.var())
+
+    return context.compile_internal(builder, impl, sig, args,
+                                    locals=dict(c=arrty.dtype),
+                                    cache_key=(array_std, sig, arrty.dtype))
+
+@builtin
+@implement(numpy.std, types.Kind(types.Array))
+def numpy_std(context, builder, sig, args):
+    def impl(arry):
+        return arry.std()
+    return context.compile_internal(builder, impl, sig, args)
+
+
 #-------------------------------------------------------------------------------
 
 
