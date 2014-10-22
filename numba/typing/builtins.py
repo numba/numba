@@ -463,6 +463,7 @@ class ArrayAttribute(AttributeTemplate):
 
     def resolve_ndim(self, ary):
         return types.intp
+
     # def resolve_flatten(self, ary):
     #     return types.Method(Array_flatten, ary)
 
@@ -475,8 +476,14 @@ class ArrayAttribute(AttributeTemplate):
     def resolve_prod(self, ary):
         return types.BoundFunction(Array_prod, ary)
 
-    def resolve_mean(seld, ary):
+    def resolve_mean(self, ary):
         return types.BoundFunction(Array_mean, ary)
+
+    def resolve_var(self, ary):
+        return types.BoundFunction(Array_var, ary)
+
+    def resolve_std(self, ary):
+        return types.BoundFunction(Array_std, ary)
 
     def resolve_flat(self, ary):
         return types.NumpyFlatType(ary)
@@ -488,33 +495,27 @@ class ArrayAttribute(AttributeTemplate):
                                    layout='A')
 
 
-class Array_sum(AbstractTemplate):
-    key = "array.sum"
+def genericHomog(self, args, kws):
+    assert not args
+    assert not kws
+    return signature(self.this.dtype, recvr=self.this)
 
-    def generic(self, args, kws):
-        assert not args
-        assert not kws
-        return signature(self.this.dtype, recvr=self.this)
+def genericHetero(self, args, kws):
+    assert not args
+    assert not kws
+    if self.this.dtype in types.integer_domain:
+        return signature(types.float64, recvr=self.this)
+    return signature(self.this.dtype, recvr=self.this)
 
+def makeArrayMethod(name, generic):
+    myAttrs = {"key": "array." + name, "generic": generic}
+    return type("Array_" + name, (AbstractTemplate,), myAttrs)
 
-class Array_prod(AbstractTemplate):
-    key = "array.prod"
-
-    def generic(self, args, kws):
-        assert not args
-        assert not kws
-        return signature(self.this.dtype, recvr=self.this)
-
-
-class Array_mean(AbstractTemplate):
-    key = "array.mean"
-
-    def generic(self, args, kws):
-        assert not args
-        assert not kws
-        if self.this.dtype in types.integer_domain:
-            return signature(types.float64, recvr=self.this)
-        return signature(self.this.dtype, recvr=self.this)
+Array_sum = makeArrayMethod("sum", genericHomog)
+Array_prod = makeArrayMethod("prod", genericHomog)
+Array_mean = makeArrayMethod("mean", genericHetero)
+Array_var = makeArrayMethod("var", genericHetero)
+Array_std = makeArrayMethod("std", genericHetero)
 
 
 @builtin
