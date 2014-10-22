@@ -203,7 +203,7 @@ class Numpy_hetrogenous_reduction(AbstractTemplate):
             return signature(arr.dtype, arr)
 
 
-# Function to glue attributes onto the numpy-eque object
+# Function to glue attributes onto the numpy-esque object
 def _numpy_reduction(fname, rClass):
     npyfn = getattr(numpy, fname)
     cls = type("Numpy_reduce_{0}".format(npyfn), (rClass,), dict(key=npyfn))
