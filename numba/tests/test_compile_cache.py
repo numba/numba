@@ -5,6 +5,10 @@ from numba import types, typing
 from numba.targets import cpu
 
 class TestCompileCache(unittest.TestCase):
+    '''
+    Tests that the caching in BaseContext.compile_internal() works correctly by
+    checking the state of the cache when it is used by the CPUContext.
+    '''
 
     def test_cache(self):
         def times2(i):
@@ -26,21 +30,21 @@ class TestCompileCache(unittest.TestCase):
         context = cpu.CPUContext(typing_context).localized()
 
         # Ensure the cache is empty to begin with
-        self.assertEqual(0, len(context.cached_internal_func.keys()))
+        self.assertEqual(0, len(context.cached_internal_func))
         
         # After one compile, it should contain one entry
         context.compile_internal(builder, times2, sig, function.args)
-        self.assertEqual(1, len(context.cached_internal_func.keys()))
+        self.assertEqual(1, len(context.cached_internal_func))
 
         # After a second compilation of the same thing, it should still contain
         # one entry
         context.compile_internal(builder, times2, sig, function.args)
-        self.assertEqual(1, len(context.cached_internal_func.keys()))
+        self.assertEqual(1, len(context.cached_internal_func))
 
         # After compilation of another function, the cache should have grown by
         # one more.
         context.compile_internal(builder, times3, sig, function.args)
-        self.assertEqual(2, len(context.cached_internal_func.keys()))
+        self.assertEqual(2, len(context.cached_internal_func))
 
         sig2 = typing.signature(types.float64, types.float64)
         f64 = lc.Type.double()
@@ -53,7 +57,7 @@ class TestCompileCache(unittest.TestCase):
         # Ensure that the same function with a different signature does not
         # reuse an entry from the cache in error
         context.compile_internal(builder2, times3, sig2, function2.args)
-        self.assertEqual(3, len(context.cached_internal_func.keys()))
+        self.assertEqual(3, len(context.cached_internal_func))
 
 
 if __name__ == '__main__':
