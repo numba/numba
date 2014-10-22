@@ -6,7 +6,6 @@ from numba.compiler import compile_isolated
 import numpy as np
 
 
-
 def array_sum(arr):
     return arr.sum()
 
@@ -36,12 +35,32 @@ def array_mean_global(arr):
     return np.mean(arr)
 
 
+def array_var(arr):
+    return arr.var()
+
+
+def array_var_global(arr):
+    return np.var(arr)
+
+
+def array_std(arr):
+    return arr.std()
+
+
+def array_std_global(arr):
+    return np.std(arr)
+
+
 def base_test_arrays(dtype):
     a1 = np.arange(10, dtype=dtype) + 1
     a2 = np.arange(10, dtype=dtype).reshape(2, 5) + 1
     a3 = (np.arange(60, dtype=dtype))[::2].reshape((2, 5, 3), order='A')
 
     return [a1, a2, a3]
+
+
+def yield_test_props():
+    return [(1, 'C'), (2, 'C'), (3, 'A')]
 
 
 def full_test_arrays(dtype):
@@ -52,12 +71,6 @@ def full_test_arrays(dtype):
         array_list += [a / 10 for a in array_list]
 
     return array_list
-
-
-def yield_test_props():
-    yield (1, 'C')
-    yield (2, 'C')
-    yield (3, 'A')
 
 def run_comparative(funcToCompare, testArray):
     arrty = typeof(testArray)
@@ -99,16 +112,19 @@ class TestArrayMethods(unittest.TestCase):
 # These form a testing product where each of the combinations are tested
 reduction_funcs = [array_sum, array_sum_global, 
                    array_prod, array_prod_global, 
-                   array_mean, array_mean_global]
+                   array_mean, array_mean_global,
+                   array_var, array_var_global,
+                   array_std, array_std_global]
 dtypes_to_test = [np.int32, np.float32]
 
 # Install tests on class above
 for dt in dtypes_to_test:
     for redFunc, testArray in product(reduction_funcs, full_test_arrays(dt)):
-        # Create the name for the test function 
-        testName = "test_{0}_{1}_{2}d".format(redFunc.__name__, testArray.dtype.name, testArray.ndim)
-
+        # Make sure array is not tampered with.
         arr = testArray.copy()
+
+        # Embodiments of this functions with the above colsured varibles 
+        # installed on the unittest class above
         def installedFunction(selfish):
             numpyResult, numbaResult = run_comparative(redFunc, arr)
             if numpyResult.dtype is np.int32:
@@ -117,6 +133,11 @@ for dt in dtypes_to_test:
             elif numpyResult.dtype is np.float32:
                 allClose = np.allclose(numpyResult, numbaResult, rtol=1e-6)
                 self.assertTrue(allClose)
+
+        # Create the name for the test function 
+        testName = "test_{0}_{1}_{2}d".format(redFunc.__name__, testArray.dtype.name, testArray.ndim)
+
+        # Install it into the class
         setattr(TestArrayMethods, testName, installedFunction)
 
 if __name__ == '__main__':
