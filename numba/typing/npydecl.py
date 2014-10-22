@@ -193,12 +193,12 @@ class Numpy_homogenous_reduction(AbstractTemplate):
 
 
 # Functions where domain and range are possibly different formats
-class Numpy_hetrogenous_reduction(AbstractTemplate):
+class Numpy_heterogenous_reduction(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         [arr] = args
         if arr.dtype in types.integer_domain:
-            return signature(numpy.dtype("float64"), arr)
+            return signature(types.float64, arr)
         else:
             return signature(arr.dtype, arr)
 
@@ -216,7 +216,7 @@ for func in ['sum', 'prod']:
 
 # Hetrogenous Reductions
 for func in ['mean', 'var', 'std']:
-    _numpy_reduction(func, Numpy_hetrogenous_reduction)
+    _numpy_reduction(func, Numpy_heterogenous_reduction)
 
 
 builtin_global(numpy, types.Module(numpy))

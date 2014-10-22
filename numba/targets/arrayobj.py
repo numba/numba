@@ -399,6 +399,7 @@ def array_len(context, builder, sig, args):
 
 
 @builtin
+@implement(numpy.sum, types.Kind(types.Array))
 @implement("array.sum", types.Kind(types.Array))
 def array_sum(context, builder, sig, args):
     from numba.intrinsics import array_ravel
@@ -421,26 +422,14 @@ def array_sum(context, builder, sig, args):
         # Optimize for contiguous case because so that LLVM can perform
         # vectorization on the reduction loop
         return context.compile_internal(builder, impl_contigous_layout, sig,
-                                        args, locals=dict(c=arrty.dtype),
-                                        cache_key=(array_sum, sig,
-                                                   arrty.dtype))
+                                        args, locals=dict(c=arrty.dtype))
     else:
         return context.compile_internal(builder, impl_any_layout, sig, args,
-                                        locals=dict(c=arrty.dtype),
-                                        cache_key=(array_sum, sig,
-                                                   arrty.dtype))
+                                        locals=dict(c=arrty.dtype))
 
 
 @builtin
-@implement(numpy.sum, types.Kind(types.Array))
-def numpy_sum(context, builder, sig, args):
-    def impl(arr):
-        return arr.sum()
-
-    return context.compile_internal(builder, impl, sig, args)
-
-
-@builtin
+@implement(numpy.prod, types.Kind(types.Array))
 @implement("array.prod", types.Kind(types.Array))
 def array_prod(context, builder, sig, args):
     from numba.intrinsics import array_ravel
@@ -463,26 +452,14 @@ def array_prod(context, builder, sig, args):
         # Optimize for contiguous case because so that LLVM can perform
         # vectorization on the reduction loop
         return context.compile_internal(builder, impl_contigous_layout, sig,
-                                        args, locals=dict(c=arrty.dtype),
-                                        cache_key=(array_sum, sig,
-                                                   arrty.dtype))
+                                        args, locals=dict(c=arrty.dtype))
     else:
         return context.compile_internal(builder, impl_any_layout, sig, args,
-                                        locals=dict(c=arrty.dtype),
-                                        cache_key=(array_sum, sig,
-                                                   arrty.dtype))
+                                        locals=dict(c=arrty.dtype))
 
 
 @builtin
-@implement(numpy.prod, types.Kind(types.Array))
-def numpy_prod(context, builder, sig, args):
-    def impl(arr):
-        return arr.prod()
-
-    return context.compile_internal(builder, impl, sig, args)
-
-
-@builtin
+@implement(numpy.mean, types.Kind(types.Array))
 @implement("array.mean", types.Kind(types.Array))
 def array_mean(context, builder, sig, args):
     from numba.intrinsics import array_ravel
@@ -510,20 +487,11 @@ def array_mean(context, builder, sig, args):
         impl = impl_any_layout
 
     return context.compile_internal(builder, impl, sig, args,
-                                    locals=dict(c=arrty.dtype),
-                                    cache_key=(array_mean, sig, arrty.dtype))
+                                    locals=dict(c=arrty.dtype))
 
 
 @builtin
-@implement(numpy.mean, types.Kind(types.Array))
-def numpy_mean(context, builder, sig, args):
-    def impl(arr):
-        return arr.mean()
-
-    return context.compile_internal(builder, impl, sig, args)
-
-
-@builtin
+@implement(numpy.var, types.Kind(types.Array))
 @implement("array.var", types.Kind(types.Array))
 def array_var(context, builder, sig, args):
     [arrty] = sig.args
@@ -537,35 +505,16 @@ def array_var(context, builder, sig, args):
         return ssd / arry.size
 
     return context.compile_internal(builder, impl, sig, args,
-                                    locals=dict(ssd=arrty.dtype),
-                                    cache_key=(array_var, sig, arrty.dtype))
+                                    locals=dict(ssd=arrty.dtype))
 
-
-@builtin
-@implement(numpy.var, types.Kind(types.Array))
-def numpy_var(context, builder, sig, args):
-    def impl(arry):
-        return arry.var()
-    return context.compile_internal(builder, impl, sig, args)
-
-
-@builtin
-@implement("array.std", types.Kind(types.Array))
-def array_std(context, builder, sig, args):
-    [arrty] = sig.args
-
-    def impl(arry):
-        return numpy.sqrt(arry.var())
-
-    return context.compile_internal(builder, impl, sig, args,
-                                    locals=dict(c=arrty.dtype),
-                                    cache_key=(array_std, sig, arrty.dtype))
 
 @builtin
 @implement(numpy.std, types.Kind(types.Array))
-def numpy_std(context, builder, sig, args):
+@implement("array.std", types.Kind(types.Array))
+def array_std(context, builder, sig, args):
     def impl(arry):
-        return arry.std()
+        return numpy.sqrt(arry.var())
+
     return context.compile_internal(builder, impl, sig, args)
 
 
