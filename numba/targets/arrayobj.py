@@ -403,13 +403,13 @@ def array_len(context, builder, sig, args):
 def array_sum(context, builder, sig, args):
     [arrty] = sig.args
 
-    def impl(arr):
+    def array_sum_impl(arr):
         c = 0
         for v in arr.flat:
             c += v
         return c
 
-    return context.compile_internal(builder, impl, sig, args, 
+    return context.compile_internal(builder, array_sum_impl, sig, args, 
                                     locals=dict(c=arrty.dtype))
 
 
@@ -419,13 +419,13 @@ def array_sum(context, builder, sig, args):
 def array_prod(context, builder, sig, args):
     [arrty] = sig.args
 
-    def impl(arr):
+    def array_prod_impl(arr):
         c = 1
         for v in arr.flat:
             c *= v
         return c
 
-    return context.compile_internal(builder, impl, sig, args,
+    return context.compile_internal(builder, array_prod_impl, sig, args,
                                     locals=dict(c=arrty.dtype))
 
 
@@ -435,57 +435,36 @@ def array_prod(context, builder, sig, args):
 def array_mean(context, builder, sig, args):
     [arrty] = sig.args
 
-    def impl(arr):
-        c = float(0)
-        for v in arr.flat:
-            c += v
-        return c / arr.size
+    def array_mean_impl(arry):
+        return arry.sum() / arry.size
 
-    return context.compile_internal(builder, impl, sig, args)
+    return context.compile_internal(builder, array_mean_impl, sig, args)
 
 
 @builtin
 @implement(numpy.var, types.Kind(types.Array))
 @implement("array.var", types.Kind(types.Array))
 def array_var(context, builder, sig, args):
-    [arrty] = sig.args
-
-    def impl(arry):
+    def array_var_impl(arry):
         # Compute the mean
-        c = float(0)
-        for v in arry.flat:
-            c += v
-        m = c / arry.size
+        m = arry.mean()
 
         # Compute the sum of square diffs
         ssd = 0
         for v in arry.flat:
             ssd += (v - m) ** 2
-
         return ssd / arry.size
 
-    return context.compile_internal(builder, impl, sig, args)
+    return context.compile_internal(builder, array_var_impl, sig, args)
 
 
 @builtin
 @implement(numpy.std, types.Kind(types.Array))
 @implement("array.std", types.Kind(types.Array))
 def array_std(context, builder, sig, args):
-    def impl(arry):
-        # Compute the mean
-        c = float(0)
-        for v in arry.flat:
-            c += v
-        m = c / arry.size
-
-        # Compute the sum of square diffs
-        ssd = 0
-        for v in arry.flat:
-            ssd += (v - m) ** 2
-
-        return (ssd / arry.size)**0.5
-
-    return context.compile_internal(builder, impl, sig, args)
+    def array_std_impl(arry):
+        return arry.var() ** 0.5
+    return context.compile_internal(builder, array_std_impl, sig, args)
 
 
 #-------------------------------------------------------------------------------
