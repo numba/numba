@@ -401,92 +401,47 @@ def array_len(context, builder, sig, args):
 @implement(numpy.sum, types.Kind(types.Array))
 @implement("array.sum", types.Kind(types.Array))
 def array_sum(context, builder, sig, args):
-    from numba.intrinsics import array_ravel
-
     [arrty] = sig.args
 
-    def impl_any_layout(arr):
+    def impl(arr):
         c = 0
         for v in arr.flat:
             c += v
         return c
 
-    def impl_contigous_layout(arr):
-        c = 0
-        for v in array_ravel(arr):
-            c += v
-        return c
-
-    if arrty.layout in 'CF':
-        # Optimize for contiguous case because so that LLVM can perform
-        # vectorization on the reduction loop
-        return context.compile_internal(builder, impl_contigous_layout, sig,
-                                        args, locals=dict(c=arrty.dtype))
-    else:
-        return context.compile_internal(builder, impl_any_layout, sig, args,
-                                        locals=dict(c=arrty.dtype))
+    return context.compile_internal(builder, impl, sig, args, 
+                                    locals=dict(c=arrty.dtype))
 
 
 @builtin
 @implement(numpy.prod, types.Kind(types.Array))
 @implement("array.prod", types.Kind(types.Array))
 def array_prod(context, builder, sig, args):
-    from numba.intrinsics import array_ravel
-
     [arrty] = sig.args
 
-    def impl_any_layout(arr):
+    def impl(arr):
         c = 1
         for v in arr.flat:
             c *= v
         return c
 
-    def impl_contigous_layout(arr):
-        c = 1
-        for v in array_ravel(arr):
-            c *= v
-        return c
-
-    if arrty.layout in 'CF':
-        # Optimize for contiguous case because so that LLVM can perform
-        # vectorization on the reduction loop
-        return context.compile_internal(builder, impl_contigous_layout, sig,
-                                        args, locals=dict(c=arrty.dtype))
-    else:
-        return context.compile_internal(builder, impl_any_layout, sig, args,
-                                        locals=dict(c=arrty.dtype))
+    return context.compile_internal(builder, impl, sig, args,
+                                    locals=dict(c=arrty.dtype))
 
 
 @builtin
 @implement(numpy.mean, types.Kind(types.Array))
 @implement("array.mean", types.Kind(types.Array))
 def array_mean(context, builder, sig, args):
-    from numba.intrinsics import array_ravel
-
     [arrty] = sig.args
 
-    def impl_any_layout(arr):
-        c = 0
+    def impl(arr):
+        c = float(0)
         for v in arr.flat:
             c += v
-        return float(c) / arr.size
+        return c / arr.size
 
-    def impl_contigous_layout(arr):
-        c = 0
-        for v in array_ravel(arr):
-            c += v
-        return float(c) / arr.size
-
-
-    if arrty.layout in 'CF':
-        # Optimize for contiguous case because so that LLVM can perform
-        # vectorization on the reduction loop
-        impl = impl_contigous_layout
-    else:
-        impl = impl_any_layout
-
-    return context.compile_internal(builder, impl, sig, args,
-                                    locals=dict(c=arrty.dtype))
+    return context.compile_internal(builder, impl, sig, args)
 
 
 @builtin
@@ -512,7 +467,7 @@ def array_var(context, builder, sig, args):
 @implement("array.std", types.Kind(types.Array))
 def array_std(context, builder, sig, args):
     def impl(arry):
-        return numpy.sqrt(arry.var())
+        return arry.var() ** 0.5
 
     return context.compile_internal(builder, impl, sig, args)
 
