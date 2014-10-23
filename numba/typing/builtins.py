@@ -493,6 +493,10 @@ def generic_hetero(self, args, kws):
         return signature(types.float64, recvr=self.this)
     return signature(self.this.dtype, recvr=self.this)
 
+def generic_index(self, args, kws):
+    assert not args
+    assert not kws
+    return signature(types.int64, recvr=self.this)
 
 def install_array_method(name, generic):
     my_attr = {"key": "array." + name, "generic": generic}
@@ -503,11 +507,17 @@ def install_array_method(name, generic):
 
     setattr(ArrayAttribute, "resolve_" + name, array_attribute_attachment)
 
-install_array_method("sum", generic_homog)
-install_array_method("prod", generic_homog)
-install_array_method("mean", generic_hetero)
-install_array_method("var", generic_hetero)
-install_array_method("std", generic_hetero)
+# Functions that return the same type as the array
+for fName in ["sum", "prod", "min", "max"]:
+    install_array_method(fName, generic_homog)
+
+# Functions that require integer arrays get promoted to float64 return
+for fName in ["mean", "var", "std"]:
+    install_array_method(fName, generic_hetero)
+
+# Functions that return an index (int64)
+install_array_method("argmin", generic_index)
+install_array_method("argmax", generic_index)
 
 
 @builtin

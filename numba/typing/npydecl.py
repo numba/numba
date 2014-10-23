@@ -203,6 +203,12 @@ class Numpy_heterogenous_reduction(AbstractTemplate):
             return signature(arr.dtype, arr)
 
 
+class Numpy_index_reduction(AbstractTemplate):
+    def generic(self, args, kws):
+        assert not kws
+        [arr] = args
+        return signature(types.int64, arr)
+
 # Function to glue attributes onto the numpy-esque object
 def _numpy_reduction(fname, rClass):
     npyfn = getattr(numpy, fname)
@@ -210,13 +216,14 @@ def _numpy_reduction(fname, rClass):
     semiBound = lambda self, mod: types.Function(cls) 
     setattr(NumpyModuleAttribute, "resolve_{0}".format(fname), semiBound)
 
-# Homogenous reductions
-for func in ['sum', 'prod']:
+for func in ['sum', 'prod', 'min', 'max']:
     _numpy_reduction(func, Numpy_homogenous_reduction)
 
-# Hetrogenous Reductions
 for func in ['mean', 'var', 'std']:
     _numpy_reduction(func, Numpy_heterogenous_reduction)
+
+for func in ["argmin", "argmax"]:
+    _numpy_reduction(func, Numpy_index_reduction)
 
 
 builtin_global(numpy, types.Module(numpy))

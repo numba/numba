@@ -51,6 +51,37 @@ def array_std_global(arr):
     return np.std(arr)
 
 
+def array_min(arr):
+    return arr.min()
+
+
+def array_min_global(arr):
+    return np.min(arr)
+
+
+def array_max(arr):
+    return arr.max()
+
+
+def array_max_global(arr):
+    return np.max(arr)
+
+
+def array_argmin(arr):
+    return arr.argmin()
+
+
+def array_argmin_global(arr):
+    return np.argmin(arr)
+
+
+def array_argmax(arr):
+    return arr.argmax()
+
+
+def array_argmax_global(arr):
+    return np.argmax(arr)
+
 def base_test_arrays(dtype):
     a1 = np.arange(10, dtype=dtype) + 1
     a2 = np.arange(10, dtype=dtype).reshape(2, 5) + 1
@@ -110,6 +141,23 @@ class TestArrayMethods(unittest.TestCase):
         arr = np.arange(100)
         self.assertTrue(run_comparative(array_std, arr))
 
+    def test_min_basic(self):
+        arr = np.arange(100)
+        self.assertTrue(run_comparative(array_min, arr))
+
+    def test_max_basic(self):
+        arr = np.arange(100)
+        self.assertTrue(run_comparative(array_max, arr))
+
+    def test_argmin_basic(self):
+        arr = np.arange(100)
+        self.assertTrue(run_comparative(array_argmin, arr))
+
+    def test_argmax_basic(self):
+        arr = np.arange(100)
+        self.assertTrue(run_comparative(array_argmax, arr))
+
+
     def check_array_flat(self, arr):
         out = np.zeros(arr.size, dtype=arr.dtype)
         nb_out = out.copy()
@@ -149,7 +197,11 @@ reduction_funcs = [array_sum, array_sum_global,
                    array_prod, array_prod_global, 
                    array_mean, array_mean_global,
                    array_var, array_var_global,
-                   array_std, array_std_global]
+                   array_std, array_std_global,
+                   array_min, array_min_global,
+                   array_max, array_max_global,
+                   array_argmin, array_argmin_global,
+                   array_argmax, array_argmax_global]
 dtypes_to_test = [np.int32, np.float32]
 
 # Install tests on class above

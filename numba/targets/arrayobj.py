@@ -467,6 +467,78 @@ def array_std(context, builder, sig, args):
     return context.compile_internal(builder, array_std_impl, sig, args)
 
 
+@builtin
+@implement(numpy.min, types.Kind(types.Array))
+@implement("array.min", types.Kind(types.Array))
+def array_min(context, builder, sig, args):
+    def array_min_impl(arry):
+        for v in arry.flat:
+            min_value = v
+            break
+
+        for v in arry.flat:
+            if v < min_value:
+                min_value = v
+        return min_value
+    return context.compile_internal(builder, array_min_impl, sig, args)
+
+
+@builtin
+@implement(numpy.max, types.Kind(types.Array))
+@implement("array.max", types.Kind(types.Array))
+def array_max(context, builder, sig, args):
+    def array_max_impl(arry):
+        for v in arry.flat:
+            max_value = v
+            break
+        
+        for v in arry.flat:
+            if v > max_value:
+                max_value = v
+        return max_value
+    return context.compile_internal(builder, array_max_impl, sig, args)
+
+
+@builtin
+@implement(numpy.argmin, types.Kind(types.Array))
+@implement("array.argmin", types.Kind(types.Array))
+def array_argmin(context, builder, sig, args):
+    def array_argmin_impl(arry):
+        for v in arry.flat:
+            min_value = v
+            min_idx = 0
+            break
+
+        idx = 0
+        for v in arry.flat:
+            if v < min_value:
+                min_value = v
+                min_idx = idx
+            idx += 1
+        return min_idx
+    return context.compile_internal(builder, array_argmin_impl, sig, args)
+
+
+@builtin
+@implement(numpy.argmax, types.Kind(types.Array))
+@implement("array.argmax", types.Kind(types.Array))
+def array_argmax(context, builder, sig, args):
+    def array_argmax_impl(arry):
+        for v in arry.flat:
+            max_value = v
+            max_idx = 0
+            break
+
+        idx = 0
+        for v in arry.flat:
+            if v > max_value:
+                max_value = v
+                max_idx = idx
+            idx += 1
+        return max_idx
+    return context.compile_internal(builder, array_argmax_impl, sig, args)
+
+
 #-------------------------------------------------------------------------------
 
 
