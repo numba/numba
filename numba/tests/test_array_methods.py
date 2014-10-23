@@ -78,7 +78,10 @@ def run_comparative(funcToCompare, testArray):
     numpyResult = funcToCompare(testArray)
     numbaResult = cres.entry_point(testArray)
 
-    return numpyResult, numbaResult
+    if numpyResult.dtype is np.float32:
+        return np.allclose(numpyResult, numbaResult, rtol=1e-6)
+
+    return np.all(numpyResult == numbaResult)
 
 
 def array_prop(aray):
@@ -93,53 +96,19 @@ class TestArrayMethods(unittest.TestCase):
 
     def test_sum_basic(self):
         arr = np.arange(100)
-        numpyResult, numbaResult = run_comparative(array_sum, arr)
-        if numpyResult.dtype is np.int32:
-            allEqual = np.all(numpyResult == numbaResult)
-            self.assertTrue(allEqual)
-        elif numpyResult.dtype is np.float32:
-            allClose = np.allclose(numpyResult, numbaResult, rtol=1e-6)
-            self.assertTrue(allClose)
+        self.assertTrue(run_comparative(array_sum, arr))
 
     def test_mean_basic(self):
         arr = np.arange(100)
-        numpyResult, numbaResult = run_comparative(array_mean, arr)
-        if numpyResult.dtype is np.int32:
-            allEqual = np.all(numpyResult == numbaResult)
-            self.assertTrue(allEqual)
-        elif numpyResult.dtype is np.float32:
-            allClose = np.allclose(numpyResult, numbaResult, rtol=1e-6)
-            self.assertTrue(allClose)
+        self.assertTrue(run_comparative(array_mean, arr))
 
     def test_var_basic(self):
         arr = np.arange(100)
-        numpyResult, numbaResult = run_comparative(array_var, arr)
-        if numpyResult.dtype is np.int32:
-            allEqual = np.all(numpyResult == numbaResult)
-            self.assertTrue(allEqual)
-        elif numpyResult.dtype is np.float32:
-            allClose = np.allclose(numpyResult, numbaResult, rtol=1e-6)
-            self.assertTrue(allClose)
+        self.assertTrue(run_comparative(array_var, arr))      
 
     def test_std_basic(self):
         arr = np.arange(100)
-        numpyResult, numbaResult = run_comparative(array_std, arr)
-        if numpyResult.dtype is np.int32:
-            allEqual = np.all(numpyResult == numbaResult)
-            self.assertTrue(allEqual)
-        elif numpyResult.dtype is np.float32:
-            allClose = np.allclose(numpyResult, numbaResult, rtol=1e-6)
-            self.assertTrue(allClose)
-
-    def test_mean_basic(self):
-        arr = np.arange(100)
-        numpyResult, numbaResult = run_comparative(array_mean, arr)
-        if numpyResult.dtype is np.int32:
-            allEqual = np.all(numpyResult == numbaResult)
-            self.assertTrue(allEqual)
-        elif numpyResult.dtype is np.float32:
-            allClose = np.allclose(numpyResult, numbaResult, rtol=1e-6)
-            self.assertTrue(allClose)
+        self.assertTrue(run_comparative(array_std, arr))
 
     def check_array_flat(self, arr):
         out = np.zeros(arr.size, dtype=arr.dtype)
@@ -186,19 +155,8 @@ dtypes_to_test = [np.int32, np.float32]
 # Install tests on class above
 for dt in dtypes_to_test:
     for redFunc, testArray in product(reduction_funcs, full_test_arrays(dt)):
-        # Make sure array is not tampered with.
-        arr = testArray.copy()
-
-        # Embodiments of this functions with the above colsured varibles 
-        # installed on the unittest class above
-        def installedFunction(selfish):
-            numpyResult, numbaResult = run_comparative(redFunc, arr)
-            if numpyResult.dtype is np.int32:
-                allEqual = np.all(numpyResult == numbaResult)
-                self.assertTrue(allEqual)
-            elif numpyResult.dtype is np.float32:
-                allClose = np.allclose(numpyResult, numbaResult, rtol=1e-6)
-                self.assertTrue(allClose)
+        def installedFunction(self):
+            self.assertTrue(run_comparative(redFunc, testArray))
 
         # Create the name for the test function 
         testName = "test_{0}_{1}_{2}d".format(redFunc.__name__, testArray.dtype.name, testArray.ndim)

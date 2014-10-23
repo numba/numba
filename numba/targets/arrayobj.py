@@ -451,15 +451,20 @@ def array_var(context, builder, sig, args):
     [arrty] = sig.args
 
     def impl(arry):
-        m = arry.mean()
+        # Compute the mean
+        c = float(0)
+        for v in arry.flat:
+            c += v
+        m = c / arry.size
+
+        # Compute the sum of square diffs
         ssd = 0
         for v in arry.flat:
             ssd += (v - m) ** 2
 
         return ssd / arry.size
 
-    return context.compile_internal(builder, impl, sig, args,
-                                    locals=dict(ssd=arrty.dtype))
+    return context.compile_internal(builder, impl, sig, args)
 
 
 @builtin
@@ -467,7 +472,18 @@ def array_var(context, builder, sig, args):
 @implement("array.std", types.Kind(types.Array))
 def array_std(context, builder, sig, args):
     def impl(arry):
-        return arry.var() ** 0.5
+        # Compute the mean
+        c = float(0)
+        for v in arry.flat:
+            c += v
+        m = c / arry.size
+
+        # Compute the sum of square diffs
+        ssd = 0
+        for v in arry.flat:
+            ssd += (v - m) ** 2
+
+        return (ssd / arry.size)**0.5
 
     return context.compile_internal(builder, impl, sig, args)
 
