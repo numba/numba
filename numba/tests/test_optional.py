@@ -4,6 +4,7 @@ import numba.unittest_support as unittest
 from numba.compiler import compile_isolated
 from numba import types, typeof, njit
 from numba.pythonapi import NativeError
+from numba import lowering
 
 def return_double_or_none(x):
     if x:
@@ -76,31 +77,27 @@ class TestOptional(unittest.TestCase):
 
     def test_a_is_b_intp(self):
         pyfunc = a_is_b
-        cres = compile_isolated(pyfunc, [types.intp, types.intp])
-        cfunc = cres.entry_point
-        self.assertFalse(cfunc(1, 1))
+        with self.assertRaises(lowering.LoweringError):
+            cres = compile_isolated(pyfunc, [types.intp, types.intp])
 
     def test_a_is_b_array(self):
         pyfunc = a_is_b
         ary = numpy.arange(2)
         aryty = typeof(ary)
-        cres = compile_isolated(pyfunc, [aryty, aryty])
-        cfunc = cres.entry_point
-        self.assertFalse(cfunc(ary, ary))
+        with self.assertRaises(lowering.LoweringError):
+            compile_isolated(pyfunc, [aryty, aryty])
 
     def test_a_is_not_b_intp(self):
         pyfunc = a_is_not_b
-        cres = compile_isolated(pyfunc, [types.intp, types.intp])
-        cfunc = cres.entry_point
-        self.assertTrue(cfunc(1, 1))
+        with self.assertRaises(lowering.LoweringError):
+            cres = compile_isolated(pyfunc, [types.intp, types.intp])
 
     def test_a_is_not_b_array(self):
         pyfunc = a_is_not_b
         ary = numpy.arange(2)
         aryty = typeof(ary)
-        cres = compile_isolated(pyfunc, [aryty, aryty])
-        cfunc = cres.entry_point
-        self.assertTrue(cfunc(ary, ary))
+        with self.assertRaises(lowering.LoweringError):
+            compile_isolated(pyfunc, [aryty, aryty])
 
     def test_optional_float(self):
         def pyfunc(x, y):
