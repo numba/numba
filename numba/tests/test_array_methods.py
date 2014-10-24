@@ -109,11 +109,20 @@ def run_comparative(funcToCompare, testArray):
     numpyResult = funcToCompare(testArray)
     numbaResult = cres.entry_point(testArray)
 
-    if numpyResult.dtype is np.float32:
-        return np.allclose(numpyResult, numbaResult, rtol=1e-6)
 
-    return np.all(numpyResult == numbaResult)
+    if numpyResult.dtype in [np.float32, np.float64]:
+        success = np.allclose(numpyResult, numbaResult, rtol=1e-6)
+    else:
+        success = np.all(numpyResult == numbaResult)
 
+    # Uncomment to recieve debugging output about failures
+    # if not success:
+    #     print(funcToCompare.__name__)
+    #     print("Numpy result:", numpyResult)
+    #     print("Numba result:", numbaResult)
+    #     print("Delta:", numpyResult - numbaResult)
+
+    return success
 
 def array_prop(aray):
     arrty = typeof(aray)
@@ -207,7 +216,7 @@ dtypes_to_test = [np.int32, np.float32]
 # Install tests on class above
 for dt in dtypes_to_test:
     for redFunc, testArray in product(reduction_funcs, full_test_arrays(dt)):
-        def installedFunction(self):
+        def installedFunction(self, redFunc=redFunc, testArray=testArray):
             self.assertTrue(run_comparative(redFunc, testArray))
 
         # Create the name for the test function 
