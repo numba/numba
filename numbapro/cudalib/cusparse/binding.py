@@ -262,7 +262,7 @@ class _cuSparse(finalizer.OwnerMixin):
     @stream.setter
     def stream(self, stream):
         self._stream = stream
-        self._api.cusparseSetStream(self._handle, self._stream._handle)
+        self._api.cusparseSetStream(self._handle, self._stream.handle)
 
     @property
     def pointer_mode(self):
