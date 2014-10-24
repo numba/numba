@@ -398,79 +398,146 @@ def array_len(context, builder, sig, args):
 
 
 @builtin
+@implement(numpy.sum, types.Kind(types.Array))
 @implement("array.sum", types.Kind(types.Array))
 def array_sum(context, builder, sig, args):
-    from numba.intrinsics import array_ravel
-
     [arrty] = sig.args
 
-    def impl_any_layout(arr):
+    def array_sum_impl(arr):
         c = 0
         for v in arr.flat:
             c += v
         return c
 
-    def impl_contigous_layout(arr):
-        c = 0
-        for v in array_ravel(arr):
-            c += v
-        return c
-
-    if arrty.layout in 'CF':
-        # Optimize for contiguous case because so that LLVM can perform
-        # vectorization on the reduction loop
-        return context.compile_internal(builder, impl_contigous_layout, sig,
-                                        args, locals=dict(c=arrty.dtype))
-    else:
-        return context.compile_internal(builder, impl_any_layout, sig, args,
-                                        locals=dict(c=arrty.dtype))
-
-
-@builtin
-@implement(numpy.sum, types.Kind(types.Array))
-def numpy_sum(context, builder, sig, args):
-    def impl(arr):
-        return arr.sum()
-
-    return context.compile_internal(builder, impl, sig, args)
-
-
-@builtin
-@implement("array.prod", types.Kind(types.Array))
-def array_prod(context, builder, sig, args):
-    from numba.intrinsics import array_ravel
-
-    [arrty] = sig.args
-
-    def impl_any_layout(arr):
-        c = 1
-        for v in arr.flat:
-            c *= v
-        return c
-
-    def impl_contigous_layout(arr):
-        c = 1
-        for v in array_ravel(arr):
-            c *= v
-        return c
-
-    if arrty.layout in 'CF':
-        # Optimize for contiguous case because so that LLVM can perform
-        # vectorization on the reduction loop
-        return context.compile_internal(builder, impl_contigous_layout, sig,
-                                        args, locals=dict(c=arrty.dtype))
-    else:
-        return context.compile_internal(builder, impl_any_layout, sig, args,
-                                        locals=dict(c=arrty.dtype))
+    return context.compile_internal(builder, array_sum_impl, sig, args, 
+                                    locals=dict(c=arrty.dtype))
 
 
 @builtin
 @implement(numpy.prod, types.Kind(types.Array))
-def numpy_prod(context, builder, sig, args):
-    def impl(arr):
-        return arr.prod()
+@implement("array.prod", types.Kind(types.Array))
+def array_prod(context, builder, sig, args):
+    [arrty] = sig.args
 
-    return context.compile_internal(builder, impl, sig, args)
+    def array_prod_impl(arr):
+        c = 1
+        for v in arr.flat:
+            c *= v
+        return c
+
+    return context.compile_internal(builder, array_prod_impl, sig, args,
+                                    locals=dict(c=arrty.dtype))
+
+
+@builtin
+@implement(numpy.mean, types.Kind(types.Array))
+@implement("array.mean", types.Kind(types.Array))
+def array_mean(context, builder, sig, args):
+    [arrty] = sig.args
+
+    def array_mean_impl(arry):
+        return arry.sum() / arry.size
+
+    return context.compile_internal(builder, array_mean_impl, sig, args)
+
+
+@builtin
+@implement(numpy.var, types.Kind(types.Array))
+@implement("array.var", types.Kind(types.Array))
+def array_var(context, builder, sig, args):
+    def array_var_impl(arry):
+        # Compute the mean
+        m = arry.mean()
+
+        # Compute the sum of square diffs
+        ssd = 0
+        for v in arry.flat:
+            ssd += (v - m) ** 2
+        return ssd / arry.size
+
+    return context.compile_internal(builder, array_var_impl, sig, args)
+
+
+@builtin
+@implement(numpy.std, types.Kind(types.Array))
+@implement("array.std", types.Kind(types.Array))
+def array_std(context, builder, sig, args):
+    def array_std_impl(arry):
+        return arry.var() ** 0.5
+    return context.compile_internal(builder, array_std_impl, sig, args)
+
+
+@builtin
+@implement(numpy.min, types.Kind(types.Array))
+@implement("array.min", types.Kind(types.Array))
+def array_min(context, builder, sig, args):
+    def array_min_impl(arry):
+        for v in arry.flat:
+            min_value = v
+            break
+
+        for v in arry.flat:
+            if v < min_value:
+                min_value = v
+        return min_value
+    return context.compile_internal(builder, array_min_impl, sig, args)
+
+
+@builtin
+@implement(numpy.max, types.Kind(types.Array))
+@implement("array.max", types.Kind(types.Array))
+def array_max(context, builder, sig, args):
+    def array_max_impl(arry):
+        for v in arry.flat:
+            max_value = v
+            break
+        
+        for v in arry.flat:
+            if v > max_value:
+                max_value = v
+        return max_value
+    return context.compile_internal(builder, array_max_impl, sig, args)
+
+
+@builtin
+@implement(numpy.argmin, types.Kind(types.Array))
+@implement("array.argmin", types.Kind(types.Array))
+def array_argmin(context, builder, sig, args):
+    def array_argmin_impl(arry):
+        for v in arry.flat:
+            min_value = v
+            min_idx = 0
+            break
+
+        idx = 0
+        for v in arry.flat:
+            if v < min_value:
+                min_value = v
+                min_idx = idx
+            idx += 1
+        return min_idx
+    return context.compile_internal(builder, array_argmin_impl, sig, args)
+
+
+@builtin
+@implement(numpy.argmax, types.Kind(types.Array))
+@implement("array.argmax", types.Kind(types.Array))
+def array_argmax(context, builder, sig, args):
+    def array_argmax_impl(arry):
+        for v in arry.flat:
+            max_value = v
+            max_idx = 0
+            break
+
+        idx = 0
+        for v in arry.flat:
+            if v > max_value:
+                max_value = v
+                max_idx = idx
+            idx += 1
+        return max_idx
+    return context.compile_internal(builder, array_argmax_impl, sig, args)
+
 
 #-------------------------------------------------------------------------------
 

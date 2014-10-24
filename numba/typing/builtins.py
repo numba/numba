@@ -464,19 +464,11 @@ class ArrayAttribute(AttributeTemplate):
     def resolve_ndim(self, ary):
         return types.intp
 
-        #
-
     # def resolve_flatten(self, ary):
     #     return types.Method(Array_flatten, ary)
 
     def resolve_size(self, ary):
         return types.intp
-
-    def resolve_sum(self, ary):
-        return types.BoundFunction(Array_sum, ary)
-
-    def resolve_prod(self, ary):
-        return types.BoundFunction(Array_prod, ary)
 
     def resolve_flat(self, ary):
         return types.NumpyFlatType(ary)
@@ -488,22 +480,44 @@ class ArrayAttribute(AttributeTemplate):
                                    layout='A')
 
 
-class Array_sum(AbstractTemplate):
-    key = "array.sum"
-
-    def generic(self, args, kws):
-        assert not args
-        assert not kws
-        return signature(self.this.dtype, recvr=self.this)
+def generic_homog(self, args, kws):
+    assert not args
+    assert not kws
+    return signature(self.this.dtype, recvr=self.this)
 
 
-class Array_prod(AbstractTemplate):
-    key = "array.prod"
+def generic_hetero(self, args, kws):
+    assert not args
+    assert not kws
+    if self.this.dtype in types.integer_domain:
+        return signature(types.float64, recvr=self.this)
+    return signature(self.this.dtype, recvr=self.this)
 
-    def generic(self, args, kws):
-        assert not args
-        assert not kws
-        return signature(self.this.dtype, recvr=self.this)
+def generic_index(self, args, kws):
+    assert not args
+    assert not kws
+    return signature(types.int64, recvr=self.this)
+
+def install_array_method(name, generic):
+    my_attr = {"key": "array." + name, "generic": generic}
+    temp_class = type("Array_" + name, (AbstractTemplate,), my_attr)
+
+    def array_attribute_attachment(self, ary):
+        return types.BoundFunction(temp_class, ary)
+
+    setattr(ArrayAttribute, "resolve_" + name, array_attribute_attachment)
+
+# Functions that return the same type as the array
+for fName in ["sum", "prod", "min", "max"]:
+    install_array_method(fName, generic_homog)
+
+# Functions that require integer arrays get promoted to float64 return
+for fName in ["mean", "var", "std"]:
+    install_array_method(fName, generic_hetero)
+
+# Functions that return an index (int64)
+install_array_method("argmin", generic_index)
+install_array_method("argmax", generic_index)
 
 
 @builtin
