@@ -27,7 +27,7 @@ def discover_tests(startdir):
     return suite
 
 
-def run_tests(suite, xmloutput=None, verbosity=1):
+def run_tests(suite, xmloutput=None, verbosity=1, nomultiproc=False):
     """
     args
     ----
@@ -47,7 +47,9 @@ def run_tests(suite, xmloutput=None, verbosity=1):
         runner = xmlrunner.XMLTestRunner(output=xmloutput)
     else:
         runner = None
-    prog = NumbaTestProgram(suite=suite, testRunner=runner, exit=False, verbosity=verbosity)
+    prog = NumbaTestProgram(suite=suite, testRunner=runner, exit=False,
+                            verbosity=verbosity,
+                            nomultiproc=nomultiproc)
     return prog.result
 
 

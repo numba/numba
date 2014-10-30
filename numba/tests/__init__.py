@@ -42,6 +42,7 @@ class NumbaTestProgram(unittest.main):
         # HACK to force unittest not to change warning display options
         # (so that NumbaWarnings don't appear all over the place)
         sys.warnoptions.append(':x')
+        self.nomultiproc = kwargs.pop('nomultiproc', False)
         super(NumbaTestProgram, self).__init__(*args, **kwargs)
 
 
@@ -90,7 +91,7 @@ class NumbaTestProgram(unittest.main):
         elif self.testRunner is None:
             self.testRunner = unittest.TextTestRunner
 
-        if self.multiprocess:
+        if self.multiprocess and not self.nomultiproc:
             self.testRunner = ParallelTestRunner(self.testRunner,
                                                  verbosity=self.verbosity,
                                                  failfast=self.failfast,
