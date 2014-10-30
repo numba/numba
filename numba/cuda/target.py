@@ -63,7 +63,7 @@ class CUDATargetContext(BaseContext):
         module = func.module
         argtys = [self.get_argument_type(ty) for ty in argtypes]
         wrapfnty = Type.function(Type.void(), argtys)
-        wrapper_module = lc.Module.new('')
+        wrapper_module = self.create_module("cuda.kernel.wrapper")
         fnty = Type.function(Type.int(),
                              [self.get_return_type(types.pyobject)] + argtys)
         func = wrapper_module.add_function(fnty, name=func.name)

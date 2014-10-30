@@ -143,13 +143,14 @@ class _Compiler(object):
         self.exported_signatures = export_registry
         self.exported_function_types = {}
 
-        # Create new module containing everything
-        llvm_module = ll.parse_assembly('')
-
         # Compile all exported functions
         typing_ctx = CPUTarget.typing_context
         # TODO Use non JIT-ing target
         target_ctx = CPUTarget.target_context
+
+        # Create new module containing everything
+        llvm_module = ll.parse_assembly(str(target_ctx.create_module('pycc')))
+
         modules = []
         flags = Flags()
         if not self.export_python_wrap:
@@ -179,7 +180,7 @@ class _Compiler(object):
             modules.append(cres.llvm_module)
 
         if self.export_python_wrap:
-            wrapper_module = lc.Module.new('')
+            wrapper_module = target_ctx.create_module("wrapper")
             self._emit_python_wrapper(wrapper_module)
             modules.append(ll.parse_assembly(str(wrapper_module)))
 
@@ -190,7 +191,7 @@ class _Compiler(object):
         # Optimize
         tm = le.EngineBuilder.new(llvm_module).select_target()
         pms = lp.build_pass_managers(tm=tm, opt=3, loop_vectorize=True,
-                                     fpm=False)
+                                     fpm=False, mod=llvm_module)
         pms.pm.run(llvm_module)
 
         return llvm_module

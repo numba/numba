@@ -1075,6 +1075,11 @@ class BaseContext(object):
         """
         pass
 
+    def create_module(self, name):
+        """Create a LLVM module
+        """
+        return lc.Module.new(name)
+
 
 class _wrap_impl(object):
     def __init__(self, imp, context, sig):

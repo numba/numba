@@ -127,7 +127,7 @@ def build_ufunc_wrapper(context, func, signature, objmode, env):
     fnty = Type.function(Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
                                        intp_ptr_t, byte_ptr_t])
 
-    wrapper_module = lc.Module.new('')
+    wrapper_module = context.create_module('')
     if objmode:
         func_type = context.get_function_type2(
             types.pyobject, [types.pyobject] * len(signature.args))
@@ -302,7 +302,7 @@ class _GufuncWrapper(object):
         fnty = Type.function(Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
                                            intp_ptr_t, byte_ptr_t])
 
-        wrapper_module = lc.Module.new('')
+        wrapper_module = self.context.create_module('')
         func_type = self.context.get_function_type(self.fndesc)
         func = wrapper_module.add_function(func_type, name=self.func.name)
         wrapper = wrapper_module.add_function(fnty,

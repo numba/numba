@@ -692,8 +692,8 @@ def native_lowering_stage(targetctx, interp, typemap, restype, calltypes,
     lower.lower()
 
     # Linking depending libraries
-    module = ll.parse_assembly(str(lower.module))
-    function = module.get_function(lower.function.name)
+    module = lower.module
+    function = lower.function
     env = lower.env
     del lower
 
@@ -715,8 +715,8 @@ def py_lowering_stage(targetctx, interp, nocompile):
     lower.lower()
 
     # Linking depending libraries
-    module = ll.parse_assembly(str(lower.module))
-    function = module.get_function(lower.function.name)
+    module = lower.module
+    function = lower.function
     env = lower.env
     del lower
 

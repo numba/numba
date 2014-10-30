@@ -5,7 +5,6 @@ import sys
 import llvmlite.llvmpy.core as lc
 import llvmlite.llvmpy.passes as lp
 import llvmlite.llvmpy.ee as le
-from llvmlite.llvmpy import avx_support
 import llvmlite.binding as ll
 
 from numba import _dynfunc, _helperlib, config
@@ -41,8 +40,18 @@ class CPUContext(BaseContext):
     Changes BaseContext calling convention
     """
 
+    # Overrides
+    def create_module(self, name):
+        mod = lc.Module.new(name)
+        mod.triple = ll.get_default_triple()
+        dl = ("e-p:32:32-i64:64-v16:16-v32:32-n16:32:64"
+              if utils.MACHINE_BITS == 32
+              else"e-i64:64-v16:16-v32:32-n16:32:64")
+        mod.data_layout = dl
+        return mod
+
     def init(self):
-        self.execmodule = lc.Module.new("numba.exec")
+        self.execmodule = self.create_module("numba.exec")
         eb = le.EngineBuilder.new(self.execmodule).opt(3)
         # Note: LLVM 3.3 always generates vmovsd (AVX instruction) for
         # mem<->reg move.  The transition between AVX and SSE instruction
@@ -50,7 +59,7 @@ class CPUContext(BaseContext):
         # penalty because the SSE register need to save/restore.
         # For now, we will disable the AVX feature for all processor and hope
         # that LLVM 3.5 will fix this issue.
-        eb.mattrs("-avx")
+        # eb.mattrs("-avx")
         self.tm = tm = eb.select_target()
         self.pm = self.build_pass_manager()
         self.native_funcs = utils.UniqueDict()
@@ -189,46 +198,10 @@ class CPUContext(BaseContext):
         return EnvBody(self, builder, ref=body_ptr, cast_ref=True)
 
     def build_pass_manager(self):
-        if 0 < config.OPT <= 3:
-            # This uses the same passes for clang -O3
-            pms = lp.build_pass_managers(tm=self.tm, opt=config.OPT,
-                                         loop_vectorize=config.LOOP_VECTORIZE,
-                                         fpm=False)
-            return pms.pm
-        else:
-            # This uses minimum amount of passes for fast code.
-            # TODO: make it generate vector code
-            tm = self.tm
-            pm = lp.PassManager.new()
-            pm.add(tm.target_data.clone())
-            pm.add(lp.TargetLibraryInfo.new(tm.triple))
-            # Re-enable for target infomation for vectorization
-            # tm.add_analysis_passes(pm)
-            passes = '''
-            basicaa
-            scev-aa
-            mem2reg
-            sroa
-            adce
-            dse
-            sccp
-            instcombine
-            simplifycfg
-            loops
-            indvars
-            loop-simplify
-            licm
-            simplifycfg
-            instcombine
-            loop-vectorize
-            instcombine
-            simplifycfg
-            globalopt
-            globaldce
-            '''.split()
-            for p in passes:
-                pm.add(lp.Pass.new(p))
-            return pm
+        pms = lp.build_pass_managers(tm=self.tm, opt=config.OPT,
+                                     loop_vectorize=config.LOOP_VECTORIZE,
+                                     fpm=False, mod=self.execmodule)
+        return pms.pm
 
     def map_math_functions(self):
         c_helpers = _helperlib.c_helpers
@@ -326,7 +299,7 @@ class CPUContext(BaseContext):
 
     def prepare_for_call(self, func, fndesc, env):
 
-        wrapper_module = lc.Module.new('')
+        wrapper_module = self.create_module("wrapper")
         fnty = self.get_function_type(fndesc)
         wrapper_callee = wrapper_module.add_function(fnty, func.name)
         wrapper, api = PyCallWrapper(self, wrapper_module, wrapper_callee,
@@ -335,6 +308,8 @@ class CPUContext(BaseContext):
         wrapper_module.verify()
 
         module = func.module
+        wrapper_module.triple = module.triple
+        wrapper_module.data_layout = module.data_layout
         module.link_in(wrapper_module)
 
         # func = module.get_function(func.name)

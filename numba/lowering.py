@@ -166,7 +166,8 @@ class BaseLower(object):
         self.blocks = utils.SortedMap(utils.iteritems(interp.blocks))
 
         # Initialize LLVM
-        self.module = Module.new("module.%s" % self.fndesc.unique_name)
+        self.module = self.context.create_module("module.%s" %
+                                                 self.fndesc.unique_name)
 
         # Python execution environment (will be available to the compiled
         # function).
@@ -237,7 +238,11 @@ class BaseLower(object):
             print(self.module)
             print('=' * 80)
 
-        self.module.verify()
+
+        # Materialize LLVM Module
+        self.module = ll.parse_assembly(str(self.module))
+        self.function = self.module.get_function(self.function.name)
+
         # Run function-level optimize to reduce memory usage and improve
         # module-level optimization
         self.context.optimize_function(self.function)
