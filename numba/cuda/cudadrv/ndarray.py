@@ -124,6 +124,9 @@ def make_array_ctype(ndim):
 
     class c_array(ctypes.Structure):
         _fields_ = [('parent', ctypes.c_void_p),
+                    ('nitems', ctypes.c_size_t),
+                    ('itemsize', ctypes.c_size_t),
+                    # llarray sub-structure
                     ('data', ctypes.c_void_p),
                     ('shape', c_intp * ndim),
                     ('strides', c_intp * ndim)]
