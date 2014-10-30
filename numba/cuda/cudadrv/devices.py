@@ -13,15 +13,13 @@ class _gpus(object):
     """
 
     def __init__(self):
-        self._tls = threading.local()
+        self._lst = None
 
     @property
     def _gpus(self):
-        try:
-            return self._tls.gpus
-        except AttributeError:
-            self._tls.gpus = self._init_gpus()
-            return self._tls.gpus
+        if not self._lst:
+            self._lst = self._init_gpus()
+        return self._lst
 
     def _init_gpus(self):
         gpus = []
@@ -51,13 +49,18 @@ class _gpus(object):
         for gpu in self:
             gpu.reset()
 
+    @property
+    def current(self):
+        return _gpustack.top
+
 
 gpus = _gpus()
 del _gpus
 
 
 class GPU(object):
-    """Proxy into driver.Device
+    """Proxy into driver.Device.  Provides a CUDA runtime like layer.
+    All threads see the same GPU list and shared the same CUDA context.
     """
 
     def __init__(self, gpu):
@@ -74,28 +77,32 @@ class GPU(object):
     def __repr__(self):
         return repr(self._gpu)
 
-    @property
-    def context(self):
+    def associate_context(self):
+        """Associate the context of this GPU to the running thread
+        """
+        # No context was created for this GPU
         if self._context is None:
             self._context = self._gpu.create_context()
+
+        # Current context is not associated with the thread
+        if self._gpu.get_context() is not self._context:
+            self._context.push()
+
         return self._context
-
-    def pop(self):
-        self._context.pop()
-
-    def push(self):
-        self._context.push()
+    #
+    # def pop(self):
+    #     self._context.pop()
+    #
+    # def push(self):
+    #     self._context.push()
 
     def __enter__(self):
-        if self._context is None:
-            self.context
-        else:
-            self._context.push()
+        self.associate_context()
         _gpustack.push(self)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         assert _get_device() is self
-        self.context.pop()
+        self._context.pop()
         _gpustack.pop()
 
     def reset(self):
@@ -123,7 +130,7 @@ def get_context(devnum=0):
     """Get the current device or use a device by device number, and
     return the CUDA context.
     """
-    return _get_device(devnum=devnum).context
+    return _get_device(devnum=devnum).associate_context()
 
 
 def require_context(fn):
