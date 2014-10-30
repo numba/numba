@@ -51,6 +51,8 @@ class _gpus(object):
 
     @property
     def current(self):
+        """Get the current GPU object associated with the thread
+        """
         return _gpustack.top
 
 
