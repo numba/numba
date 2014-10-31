@@ -39,6 +39,7 @@ class CPUContext(BaseContext):
     """
     Changes BaseContext calling convention
     """
+    disable_builtins = set()
 
     # Overrides
     def create_module(self, name):
@@ -200,7 +201,8 @@ class CPUContext(BaseContext):
     def build_pass_manager(self):
         pms = lp.build_pass_managers(tm=self.tm, opt=config.OPT,
                                      loop_vectorize=config.LOOP_VECTORIZE,
-                                     fpm=False, mod=self.execmodule)
+                                     fpm=False, mod=self.execmodule,
+                                     disable_builtins=self.disable_builtins)
         return pms.pm
 
     def map_math_functions(self):
@@ -340,17 +342,16 @@ class CPUContext(BaseContext):
         return cfunc
 
     def optimize_pythonapi(self, func):
-        # XXX: Skipped for now
-        return
         # Simplify the function using
-        pms = lp.build_pass_managers(tm=self.tm, opt=1,
-                                     mod=func.module)
+        pms = lp.build_pass_managers(tm=self.tm, opt=1, mod=func.module,
+                                     disable_builtins=self.disable_builtins)
         fpm = pms.fpm
 
         fpm.initialize()
         fpm.run(func)
         fpm.finalize()
 
+        return
         # remove extra refct api calls
         remove_refct_calls(func)
 
@@ -361,7 +362,8 @@ class CPUContext(BaseContext):
         """Run O1 function passes
         """
         pms = lp.build_pass_managers(tm=self.tm, opt=1, pm=False,
-                                     mod=func.module)
+                                     mod=func.module,
+                                     disable_builtins=self.disable_builtins)
         fpm = pms.fpm
         fpm.initialize()
         fpm.run(func)
