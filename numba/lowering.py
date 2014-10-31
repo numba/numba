@@ -176,8 +176,6 @@ class BaseLower(object):
 
         # Setup function
         self.function = context.declare_function(self.module, fndesc)
-        # XXX: Why do we need this now?
-        self.function.linkage = lc.LINKAGE_LINKONCE_ODR
         self.entry_block = self.function.append_basic_block('entry')
         self.builder = Builder.new(self.entry_block)
 

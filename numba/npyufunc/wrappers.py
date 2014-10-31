@@ -1,7 +1,7 @@
 from __future__ import print_function, division, absolute_import
 import numpy as np
 from llvmlite.llvmpy.core import (Type, Builder, LINKAGE_INTERNAL,
-                       ICMP_EQ, Constant)
+                                  ICMP_EQ, Constant)
 import llvmlite.llvmpy.core as lc
 from llvmlite import binding as ll
 
@@ -134,8 +134,10 @@ def build_ufunc_wrapper(context, func, signature, objmode, env):
     else:
         func_type = context.get_function_type2(signature.return_type,
                                                signature.args)
+    oldfunc = func
     func = wrapper_module.add_function(func_type,
                                        name=func.name)
+
     wrapper = wrapper_module.add_function(fnty, "__ufunc__." + func.name)
     arg_args, arg_dims, arg_steps, arg_data = wrapper.args
     arg_args.name = "args"
@@ -176,16 +178,16 @@ def build_ufunc_wrapper(context, func, signature, objmode, env):
         unit_strided = builder.and_(unit_strided, ary.is_unit_strided)
 
     if objmode:
-        # General loop
-            pyapi = context.get_python_api(builder)
-            gil = pyapi.gil_ensure()
-            with cgutils.for_range(builder, loopcount, intp=intp_t):
-                slowloop = build_obj_loop_body(context, func, builder,
-                                               arrays, out, offsets,
-                                               store_offset, signature,
-                                               pyapi, env)
-            pyapi.gil_release(gil)
-            builder.ret_void()
+    # General loop
+        pyapi = context.get_python_api(builder)
+        gil = pyapi.gil_ensure()
+        with cgutils.for_range(builder, loopcount, intp=intp_t):
+            slowloop = build_obj_loop_body(context, func, builder,
+                                           arrays, out, offsets,
+                                           store_offset, signature,
+                                           pyapi, env)
+        pyapi.gil_release(gil)
+        builder.ret_void()
 
     else:
 
@@ -196,7 +198,8 @@ def build_ufunc_wrapper(context, func, signature, objmode, env):
                 with cgutils.for_range(builder, loopcount, intp=intp_t) as ind:
                     fastloop = build_fast_loop_body(context, func, builder,
                                                     arrays, out, offsets,
-                                                    store_offset, signature, ind)
+                                                    store_offset, signature,
+                                                    ind)
                 builder.ret_void()
 
             with is_strided:
@@ -211,19 +214,16 @@ def build_ufunc_wrapper(context, func, signature, objmode, env):
         builder.ret_void()
     del builder
 
-    # Set core function to internal so that it is not generated
-    # func.linkage = LINKAGE_INTERNAL
-    # if not objmode:
-    #     # Force inline of code function
-    #     inline_function(slowloop)
-    #     inline_function(fastloop)
-    # Run optimizer
 
+    # Run optimizer
     wrapper_module = ll.parse_assembly(str(wrapper_module))
     wrapper_module.verify()
 
     module.link_in(wrapper_module)
     wrapper = module.get_function(wrapper.name)
+    oldfunc.linkage = LINKAGE_INTERNAL
+
+    context.optimize_function(wrapper)
     context.optimize(module)
 
     if config.DUMP_OPTIMIZED:
@@ -369,14 +369,14 @@ class _GufuncWrapper(object):
 
         builder.ret_void()
 
-        # Set core function to internal so that it is not generated
-        self.func.linkage = LINKAGE_INTERNAL
-
         wrapper_module = ll.parse_assembly(str(wrapper_module))
         wrapper_module.verify()
 
         module.link_in(wrapper_module)
         wrapper = module.get_function(wrapper.name)
+
+        # Set core function to internal so that it is not generated
+        self.func.linkage = LINKAGE_INTERNAL
 
         # Force inline of code function
         # Disable inlining
