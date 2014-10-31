@@ -51,12 +51,9 @@ class CUDATargetContext(BaseContext):
     def prepare_cuda_kernel(self, func, argtypes):
         # Adapt to CUDA LLVM
         module = func.module
-        func.linkage = LINKAGE_INTERNAL
         wrapper = self.generate_kernel_wrapper(func, argtypes)
-        # func.delete()
-        # del func
+        func.linkage = LINKAGE_INTERNAL
         nvvm.fix_data_layout(module)
-
         return wrapper
 
     def generate_kernel_wrapper(self, func, argtypes):
