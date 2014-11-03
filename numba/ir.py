@@ -432,6 +432,30 @@ class Intrinsic(object):
     def __str__(self):
         return self.name
 
+class StackArray(object):
+    """
+    Represents stack array allocation
+    """
+
+    def __init__(self, type, shape, dtype):
+        self.type = type
+        self.shape = shape
+        self.dtype = dtype
+        self.name = 'stackarray'
+
+    @property
+    def args(self):
+        return (self.shape, self.dtype)
+
+    @property
+    def kws(self):
+        return ()
+
+    def __repr__(self):
+        return 'StackArray(%s, %s, %s)' % (self.type, self.self.shape, self.dtype)
+
+    def __str__(self):
+        return 'stack allocate %s of %s' % (self.shape, self.dtype)
 
 class Scope(object):
     """
