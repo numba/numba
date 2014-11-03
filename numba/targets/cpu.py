@@ -6,6 +6,7 @@ import llvmlite.llvmpy.core as lc
 import llvmlite.llvmpy.passes as lp
 import llvmlite.llvmpy.ee as le
 import llvmlite.binding as ll
+from llvmlite import ir as llvmir
 
 from numba import _dynfunc, _helperlib, config
 from numba.callwrapper import PyCallWrapper
@@ -220,7 +221,6 @@ class CPUContext(BaseContext):
         elif sys.platform.startswith('linux') and self.is32bit:
             _add_missing_symbol("__fixunsdfdi", c_helpers["fptoui"])
             _add_missing_symbol("__fixunssfdi", c_helpers["fptouif"])
-            _add_missing_symbol("__powidf2", c_helpers["powidf2"])
 
         # Necessary for Python3
         le.dylib_add_symbol("numba.round", c_helpers["round_even"])
@@ -263,6 +263,12 @@ class CPUContext(BaseContext):
     def optimize(self, module):
         self.pm.run(module)
 
+    def post_lowering(self, func):
+        mod = func.module
+
+        if sys.platform.startswith('linux'):
+            intrinsics.fix_powi_calls(mod)
+
     def finalize(self, func, fndesc):
         """Finalize the compilation.  Called by get_executable().
 
@@ -272,9 +278,11 @@ class CPUContext(BaseContext):
         """
         func.module.target = self.tm.triple
 
-        if self.is32bit:
-            dmf = intrinsics.DivmodFixer()
-            dmf.run(func.module)
+        # XXX: Disabled for now
+        #
+        # if self.is32bit:
+        #     dmf = intrinsics.DivmodFixer()
+        #     dmf.run(func.module)
 
         # XXX: Disabled for now
         # im = intrinsics.IntrinsicMapping(self)

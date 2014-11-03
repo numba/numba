@@ -334,24 +334,6 @@ void Numba_gil_release(PyGILState_STATE *state) {
     PyGILState_Release(*state);
 }
 
-/* Borrowed from compiler-rt/lib/powidf2.c */
-static
-Numba_powidf2(double a, int b)
-{
-    const int recip = b < 0;
-    double r = 1;
-    while (1)
-    {
-        if (b & 1)
-            r *= a;
-        b /= 2;
-        if (b == 0)
-            break;
-        a *= a;
-    }
-    return recip ? 1/r : r;
-}
-
 /*
 Define bridge for all math functions
 */
@@ -404,8 +386,6 @@ build_c_helpers_dict(void)
     declmethod(fptouif);
     declmethod(gil_ensure);
     declmethod(gil_release);
-    declmethod(powidf2);
-
 #define MATH_UNARY(F, R, A) declmethod(F);
 #define MATH_BINARY(F, R, A, B) declmethod(F);
     #include "mathnames.inc"

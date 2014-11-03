@@ -1075,6 +1075,11 @@ class BaseContext(object):
         """
         pass
 
+    def post_lowering(self, func):
+        """Run target specific post-lowering transformation here.
+        """
+        pass
+
     def create_module(self, name):
         """Create a LLVM module
         """

@@ -231,11 +231,13 @@ class BaseLower(object):
         self.builder.position_at_end(entry_block_tail)
         self.builder.branch(self.blkmap[self.firstblk])
 
+        # Run target specific post lowering transformation
+        self.context.post_lowering(self.function)
+
         if config.DUMP_LLVM:
             print(("LLVM DUMP %s" % self.fndesc).center(80, '-'))
             print(self.module)
             print('=' * 80)
-
 
         # Materialize LLVM Module
         self.module = ll.parse_assembly(str(self.module))
