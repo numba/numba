@@ -45,6 +45,7 @@ class StructureTestCase(TestCase):
             func = mod.get_function(function.name)
             engine = self.context.engine
             engine.add_module(mod)
+            engine.finalize_object()
             cptr = engine.get_pointer_to_function(func)
             cfunc = ctypes_fnty(cptr)
             return cfunc(*args)

@@ -149,6 +149,7 @@ class UFuncBuilder(object):
                                       cres.objectmode, envptr)
         ctx.finalize(wrapper, cres.fndesc)
         ctx.engine.add_module(wrapper.module)
+        ctx.engine.finalize_object()
         ptr = ctx.engine.get_pointer_to_function(wrapper)
         # Get dtypes
         dtypenums = [np.dtype(a.name).num for a in signature.args]
@@ -219,6 +220,7 @@ class GUFuncBuilder(object):
 
         ctx.finalize(wrapper, cres.fndesc)
         ctx.engine.add_module(wrapper.module)
+        ctx.engine.finalize_object()
         ptr = ctx.engine.get_pointer_to_function(wrapper)
         # Get dtypes
         dtypenums = []

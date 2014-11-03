@@ -330,6 +330,7 @@ class CPUContext(BaseContext):
 
         # Code gen
         self.engine.add_module(func.module)
+        self.engine.finalize_object()
         baseptr = self.engine.get_pointer_to_function(func)
         fnptr = self.engine.get_pointer_to_function(wrapper)
         cfunc = _dynfunc.make_function(fndesc.lookup_module(),
