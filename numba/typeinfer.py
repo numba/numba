@@ -420,7 +420,7 @@ class TypeInferer(object):
         for call, args, kws in self.usercalls:
             args = tuple(typemap[a.name] for a in args)
 
-            if isinstance(call.func, ir.Intrinsic):
+            if isinstance(call.func, (ir.Intrinsic, ir.StackArray)):
                 signature = call.func.type
             else:
                 assert not kws
@@ -561,7 +561,7 @@ class TypeInferer(object):
 
     def typeof_expr(self, inst, target, expr):
         if expr.op == 'call':
-            if isinstance(expr.func, ir.Intrinsic):
+            if isinstance(expr.func, (ir.Intrinsic, ir.StackArray)):
                 restype = expr.func.type.return_type
                 self.typevars[target.name].add_types(restype)
                 self.usercalls.append((inst.value, expr.args, expr.kws))
