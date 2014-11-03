@@ -220,6 +220,7 @@ class CPUContext(BaseContext):
         elif sys.platform.startswith('linux') and self.is32bit:
             _add_missing_symbol("__fixunsdfdi", c_helpers["fptoui"])
             _add_missing_symbol("__fixunssfdi", c_helpers["fptouif"])
+            _add_missing_symbol("__powidf2", c_helpers["powidf2"])
 
         # Necessary for Python3
         le.dylib_add_symbol("numba.round", c_helpers["round_even"])
