@@ -432,6 +432,8 @@ class Lower(BaseLower):
             if isinstance(expr.func, ir.Intrinsic):
                 fnty = expr.func.name
                 castvals = expr.func.args
+            elif isinstance(expr.func, ir.StackArray):
+                pass
             else:
                 assert not expr.kws, expr.kws
                 fnty = self.typeof(expr.func.name)
@@ -440,7 +442,9 @@ class Lower(BaseLower):
                             for av, at, ft in zip(argvals, argtyps,
                                                   signature.args)]
 
-            if isinstance(fnty, types.Method):
+            if isinstance(expr.func, ir.StackArray):
+                res = self.context.create_stack_array(self.builder, expr.func)
+            elif isinstance(fnty, types.Method):
                 # Method of objects are handled differently
                 fnobj = self.loadvar(expr.func.name)
                 res = self.context.call_class_method(self.builder, fnobj,
