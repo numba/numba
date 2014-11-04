@@ -1,8 +1,11 @@
 from __future__ import division
-from numba import unittest_support as unittest
-from numba import typeof
-from numba.compiler import compile_isolated
+
 import numpy as np
+
+from numba import unittest_support as unittest
+from numba import typeof, types
+from numba.compiler import compile_isolated
+from .support import TestCase
 
 
 def array_sum(arr):
@@ -25,8 +28,15 @@ def array_flat(arr, out):
     for i, v in enumerate(arr.flat):
         out[i] = v
 
+def array_flat_sum(arr):
+    s = 0
+    for i, v in enumerate(arr.flat):
+        s = s + (i + 1) * v
+    return s
 
-class TestArrayMethods(unittest.TestCase):
+
+class TestArrayMethods(TestCase):
+
     def test_array_sum_int_1d(self):
         arr = np.arange(10, dtype=np.int32)
         arrty = typeof(arr)
@@ -95,17 +105,25 @@ class TestArrayMethods(unittest.TestCase):
 
         np.testing.assert_allclose(arr.sum(), cfunc(arr))
 
-    def check_array_flat(self, arr):
+    def check_array_flat(self, arr, arrty=None):
         out = np.zeros(arr.size, dtype=arr.dtype)
         nb_out = out.copy()
+        if arrty is None:
+            arrty = typeof(arr)
 
-        cres = compile_isolated(array_flat, [typeof(arr), typeof(out)])
+        cres = compile_isolated(array_flat, [arrty, typeof(out)])
         cfunc = cres.entry_point
 
         array_flat(arr, out)
         cfunc(arr, nb_out)
 
         self.assertTrue(np.all(out == nb_out), (out, nb_out))
+
+    def check_array_flat_sum(self, arr, arrty):
+        cres = compile_isolated(array_flat_sum, [arrty])
+        cfunc = cres.entry_point
+
+        self.assertPreciseEqual(cfunc(arr), array_flat_sum(arr))
 
     def test_array_flat_3d(self):
         arr = np.arange(24).reshape(4, 2, 3)
@@ -128,6 +146,19 @@ class TestArrayMethods(unittest.TestCase):
         self.assertFalse(arr.flags.f_contiguous)
         self.assertEqual(typeof(arr).layout, 'A')
         self.check_array_flat(arr)
+
+    def test_array_flat_empty(self):
+        # Test .flat() with various shapes of empty arrays, contiguous
+        # and non-contiguous (see issue #846).
+        arr = np.zeros(0, dtype=np.int32)
+        self.check_array_flat(arr)
+        arr = arr.reshape(0, 2)
+        arrty = types.Array(types.int32, 2, layout='C')
+        self.check_array_flat_sum(arr, arrty)
+        arrty = types.Array(types.int32, 2, layout='F')
+        self.check_array_flat_sum(arr, arrty)
+        arrty = types.Array(types.int32, 2, layout='A')
+        self.check_array_flat_sum(arr, arrty)
 
     def test_array_sum_global(self):
         arr = np.arange(10, dtype=np.int32)

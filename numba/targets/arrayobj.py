@@ -601,6 +601,7 @@ def make_array_flat_cls(flatiterty):
             _fields = [('array', types.CPointer(array_type)),
                        ('pointers', types.CPointer(types.CPointer(dtype))),
                        ('indices', types.CPointer(types.intp)),
+                       ('empty', types.CPointer(types.boolean)),
                        ]
 
             def init_specific(self, context, builder, arrty, arr):
@@ -608,6 +609,8 @@ def make_array_flat_cls(flatiterty):
                 one = context.get_constant(types.intp, 1)
                 data = arr.data
                 ndim = arrty.ndim
+                shapes = cgutils.unpack_tuple(builder, arr.shape, ndim)
+
                 indices = cgutils.alloca_once(builder, zero.type,
                                               size=context.get_constant(types.intp,
                                                                         arrty.ndim))
@@ -615,6 +618,7 @@ def make_array_flat_cls(flatiterty):
                                                size=context.get_constant(types.intp,
                                                                          arrty.ndim))
                 strides = cgutils.unpack_tuple(builder, arr.strides, ndim)
+                empty = cgutils.alloca_once_value(builder, cgutils.false_byte)
 
                 # Initialize each dimension with the next index and pointer
                 # values.  For the last (inner) dimension, this is 0 and the
@@ -630,9 +634,17 @@ def make_array_flat_cls(flatiterty):
                         p = cgutils.pointer_add(builder, data, strides[dim])
                         builder.store(p, ptrptr)
                         builder.store(one, idxptr)
+                    # 0-sized dimensions really indicate an empty array,
+                    # but we have to catch that condition early to avoid
+                    # a bug inside the iteration logic (see issue #846).
+                    dim_size = shapes[dim]
+                    dim_is_empty = builder.icmp(lc.ICMP_EQ, dim_size, zero)
+                    with cgutils.if_unlikely(builder, dim_is_empty):
+                        builder.store(cgutils.true_byte, empty)
 
                 self.indices = indices
                 self.pointers = pointers
+                self.empty = empty
 
             def iternext_specific(self, context, builder, arrty, arr, result):
                 ndim = arrty.ndim
@@ -649,6 +661,12 @@ def make_array_flat_cls(flatiterty):
 
                 bbcont = cgutils.append_basic_block(builder, 'continued')
                 bbend = cgutils.append_basic_block(builder, 'end')
+
+                # Catch already computed iterator exhaustion
+                is_empty = cgutils.as_bool_bit(builder, builder.load(self.empty))
+                with cgutils.if_unlikely(builder, is_empty):
+                    result.set_valid(False)
+                    builder.branch(bbend)
 
                 # Current pointer inside last dimension
                 last_ptr = cgutils.alloca_once(builder, data.type)
