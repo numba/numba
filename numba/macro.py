@@ -8,10 +8,21 @@ from numba import ir
 
 
 class MacroError(Exception):
+    '''
+    An exception thrown during macro expansion
+    '''
     pass
 
 
 def expand_macros(blocks):
+    '''
+    Performs macro expansion on blocks
+
+    Args
+    ----
+    blocks: list
+        the blocks to macro-expand
+    '''
     constants = {}
     for blk in blocks.values():
         module_getattr_folding(constants, blk)
@@ -19,6 +30,18 @@ def expand_macros(blocks):
 
 
 def module_getattr_folding(constants, block):
+    '''
+    Performs constant-folding of getattr instructions within a block. Any
+    constants defined within the block are also added to the constant pool.
+
+    Args
+    ----
+    constants: dict
+        The pool of constants to use, which will be updated with any new
+        constants in this block
+    block: ir.Block
+        The block to perform constant folding on
+    '''
     for inst in block.body:
         if isinstance(inst, ir.Assign):
             rhs = inst.value
@@ -41,6 +64,17 @@ def module_getattr_folding(constants, block):
                 constants[inst.target.name] = rhs.value
 
 def expand_macros_in_block(constants, block):
+    '''
+    Performs macro expansion on a block.
+
+    Args
+    ----
+    constants: dict
+        The pool of constants which contains the values which contains mappings
+        from variable names to callee names
+    block: ir.Block
+        The block to perform macro expansion on
+    '''
     calls = []
     for inst in block.body:
         if isinstance(inst, ir.Assign):
@@ -82,8 +116,23 @@ def expand_macros_in_block(constants, block):
 
 
 class Macro(object):
-    """A macro object is expanded to a function call
-    """
+    '''
+    A macro object is expanded to a function call
+
+    Args
+    ----
+    name: str
+        Name of this Macro
+    func: function
+        Function that evaluates the macro expansion
+    callable: bool
+        True if the Macro represents a callable function.
+        False if it is represents some other type.
+    argnames: list
+        If ``callable`` is True, this holds a list of the names of arguments
+        to the function.
+    '''
+
     __slots__ = 'name', 'func', 'callable', 'argnames'
 
     def __init__(self, name, func, callable=False, argnames=None):
