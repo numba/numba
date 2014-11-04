@@ -644,12 +644,15 @@ def translate_stage(bytecode):
 
     interp.interpret()
 
-    if config.DEBUG:
+    if config.DEBUG or config.DUMP_IR:
+        print(("IR DUMP: %s" % interp.bytecode.func_qualname).center(80, "-"))
         interp.dump()
 
     macro.expand_macros(interp.blocks)
 
     if config.DUMP_IR:
+        print(("MACRO-EXPANDED IR DUMP: %s" % interp.bytecode.func_qualname)
+            .center(80, "-"))
         interp.dump()
 
     return interp
