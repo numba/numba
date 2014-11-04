@@ -151,8 +151,14 @@ class TestArrayMethods(TestCase):
         # Test .flat() with various shapes of empty arrays, contiguous
         # and non-contiguous (see issue #846).
         arr = np.zeros(0, dtype=np.int32)
-        self.check_array_flat(arr)
         arr = arr.reshape(0, 2)
+        arrty = types.Array(types.int32, 2, layout='C')
+        self.check_array_flat_sum(arr, arrty)
+        arrty = types.Array(types.int32, 2, layout='F')
+        self.check_array_flat_sum(arr, arrty)
+        arrty = types.Array(types.int32, 2, layout='A')
+        self.check_array_flat_sum(arr, arrty)
+        arr = arr.reshape(2, 0)
         arrty = types.Array(types.int32, 2, layout='C')
         self.check_array_flat_sum(arr, arrty)
         arrty = types.Array(types.int32, 2, layout='F')
