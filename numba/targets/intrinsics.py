@@ -31,56 +31,22 @@ class _DivmodFixer(ir.Visitor):
         if instr.type == ir.IntType(64):
             if instr.opname in ['srem', 'urem', 'sdiv', 'udiv']:
                 name = 'numba.math.{op}'.format(op=instr.opname)
-                if name not in self.module.globals:
+                fn = self.module.globals.get(name)
+                # Declare the function if it doesn't already exist
+                if fn is None:
                     opty = instr.type
                     sdivfnty = ir.FunctionType(opty, [opty, opty])
-                    sdivfn = ir.Function(self.module, sdivfnty, name=name)
-                    repl = ir.CallInstr(parent=instr.parent, func=sdivfn,
-                                        args=instr.operands, name=instr.name)
-                    instr.parent.replace(instr, repl)
+                    fn = ir.Function(self.module, sdivfnty, name=name)
+                # Replace the operation with a call to the builtin
+                repl = ir.CallInstr(parent=instr.parent, func=fn,
+                                    args=instr.operands, name=instr.name)
+                instr.parent.replace(instr, repl)
 
 
 def fix_divmod(mod):
     """Replace division and reminder instructions to builtins calls
     """
     _DivmodFixer().visit(mod)
-
-
-class DivmodFixer(object):
-    """
-    Fix 64-bit div/mod on 32-bit machines
-    """
-    NAMES = 'sdiv', 'udiv', 'srem', 'urem'
-    I64 = lc.Type.int(64)
-
-    def run(self, module):
-        for func in module.functions:
-            self.run_on_func(func)
-
-    def run_on_func(self, func):
-        to_replace = []
-        for bb in func.basic_blocks:
-            for instr in bb.instructions:
-                opname = instr.opcode_name
-                if opname in self.NAMES and instr.type == self.I64:
-                    to_replace.append((instr, "numba.math.%s" % opname))
-
-        if to_replace:
-            builder = lc.Builder.new(func.entry_basic_block)
-            for inst, name in to_replace:
-                builder.position_before(inst)
-                alt = self.declare(func.module, name)
-                replacement = builder.call(alt, inst.operands)
-                # fix replace_all_uses_with to not use ._ptr
-                inst.replace_all_uses_with(replacement._ptr)
-                inst.erase_from_parent()
-
-    def declare(self, module, fname):
-        fnty = lc.Type.function(self.I64, (self.I64, self.I64))
-        fn = module.get_or_insert_function(fnty, name=fname)
-        assert fn.is_declaration, ("%s is expected to be an intrinsic but "
-                                   "it is defined" % fname)
-        return fn
 
 
 class IntrinsicMapping(object):
