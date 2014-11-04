@@ -269,6 +269,11 @@ class CPUContext(BaseContext):
         if sys.platform.startswith('linux'):
             intrinsics.fix_powi_calls(mod)
 
+        if self.is32bit:
+            # 32-bit machine needs to replace all 64-bit div/rem to avoid
+            # calls to compiler-rt
+            intrinsics.fix_divmod(mod)
+
     def finalize(self, func, fndesc):
         """Finalize the compilation.  Called by get_executable().
 

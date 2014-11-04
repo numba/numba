@@ -26,6 +26,26 @@ def fix_powi_calls(mod):
         ir.replace_all_calls(mod, orig, repl)
 
 
+class _DivmodFixer(ir.Visitor):
+    def visit_Instruction(self, instr):
+        if instr.type == ir.IntType(64):
+            if instr.opname in ['srem', 'urem', 'sdiv', 'udiv']:
+                name = 'numba.math.{op}'.format(op=instr.opname)
+                if name not in self.module.globals:
+                    opty = instr.type
+                    sdivfnty = ir.FunctionType(opty, [opty, opty])
+                    sdivfn = ir.Function(self.module, sdivfnty, name=name)
+                    repl = ir.CallInstr(parent=instr.parent, func=sdivfn,
+                                        args=instr.operands, name=instr.name)
+                    instr.parent.replace(instr, repl)
+
+
+def fix_divmod(mod):
+    """Replace division and reminder instructions to builtins calls
+    """
+    _DivmodFixer().visit(mod)
+
+
 class DivmodFixer(object):
     """
     Fix 64-bit div/mod on 32-bit machines
