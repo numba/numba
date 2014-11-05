@@ -443,7 +443,10 @@ class Lower(BaseLower):
                                                   signature.args)]
 
             if isinstance(expr.func, ir.StackArray):
-                res = self.context.create_stack_array(self.builder, expr.func)
+                res = self.context.create_stack_array(self.builder,
+                                                      expr.func.type,
+                                                      expr.func.dtype,
+                                                      expr.func.shape)
             elif isinstance(fnty, types.Method):
                 # Method of objects are handled differently
                 fnobj = self.loadvar(expr.func.name)

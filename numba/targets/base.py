@@ -841,22 +841,22 @@ class BaseContext(object):
             return builder.or_(real_istrue, imag_istrue)
         raise NotImplementedError("is_true", val, typ)
 
-    def create_stack_array(self, builder, array):
+    def create_stack_array(self, builder, sig, dtype, shape):
         # TODO: Assuming integer shape here.
-        arystty = arrayobj.make_array(array.type.return_type)
+        arystty = arrayobj.make_array(sig.return_type)
         ary = arystty(self, builder)
 
-        nitems = self.get_constant(types.intp, array.shape)
+        nitems = self.get_constant(types.intp, shape)
         ary.nitems = nitems
 
-        itemsize = self.get_constant(types.intp, array.dtype.bitwidth/8)
+        itemsize = self.get_constant(types.intp, dtype.bitwidth/8)
         ary.itemsize = itemsize
 
-        ty = self.get_value_type(array.dtype)
+        ty = self.get_value_type(dtype)
         allocate_data = builder.alloca(ty, size=nitems)
         ary.data = allocate_data
 
-        shape = self.get_constant(types.intp, array.shape)
+        shape = self.get_constant(types.intp, shape)
         ary.shape = cgutils.pack_array(builder, [shape])
 
         strides = self.get_constant(types.intp, 1)
