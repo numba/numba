@@ -36,6 +36,14 @@ class EnvBody(cgutils.Structure):
     ]
 
 
+_x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',
+                      'i886', 'i986'])
+
+def _is_x86(triple):
+    arch = triple.split('-')[0]
+    return arch in _x86arch
+
+
 class CPUContext(BaseContext):
     """
     Changes BaseContext calling convention
@@ -55,13 +63,28 @@ class CPUContext(BaseContext):
     def init(self):
         self.execmodule = self.create_module("numba.exec")
         eb = le.EngineBuilder.new(self.execmodule).opt(3)
+
+
+        features = []
         # Note: LLVM 3.3 always generates vmovsd (AVX instruction) for
         # mem<->reg move.  The transition between AVX and SSE instruction
         # without proper vzeroupper to reset is causing a serious performance
         # penalty because the SSE register need to save/restore.
         # For now, we will disable the AVX feature for all processor and hope
         # that LLVM 3.5 will fix this issue.
-        # eb.mattrs("-avx")
+        # features.append('-avx')
+
+        # If this is x86, make sure SSE is supported
+        if config.X86_SSE and _is_x86(self.execmodule.triple):
+            features.append('+sse')
+            features.append('+sse2')
+
+        # Set feature attributes
+        eb.mattrs(','.join(features))
+
+        # Enable JIT debug
+        eb.emit_jit_debug = True
+
         self.tm = tm = eb.select_target()
         self.pm = self.build_pass_manager()
         self.native_funcs = utils.UniqueDict()
