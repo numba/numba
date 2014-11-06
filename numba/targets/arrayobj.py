@@ -8,6 +8,7 @@ from functools import reduce
 
 import llvm.core as lc
 
+import numba.ctypes_support as ctypes
 import numpy
 from llvm.core import Constant
 from numba import errcode
@@ -41,6 +42,31 @@ def make_array(array_type):
                    ]
 
     return ArrayTemplate
+
+def make_array_ctype(ndim):
+    """Create a ctypes representation of an array_type.
+
+    Parameters
+    -----------
+    ndim: int
+        number of dimensions of array
+
+    Returns
+    -----------
+        a ctypes array structure for an array with the given number of
+        dimensions
+    """
+    c_intp = ctypes.c_ssize_t
+
+    class c_array(ctypes.Structure):
+        _fields_ = [('parent', ctypes.c_void_p),
+                    ('nitems', c_intp),
+                    ('itemsize', c_intp),
+                    ('data', ctypes.c_void_p),
+                    ('shape', c_intp * ndim),
+                    ('strides', c_intp * ndim)]
+
+    return c_array
 
 
 @struct_factory(types.ArrayIterator)
