@@ -164,6 +164,8 @@ class GUFuncBuilder(object):
         self.signature = signature
         self.sin, self.sout = parse_signature(signature)
         self.targetoptions = targetoptions
+        self._sigs = []
+        self._cres = {}
 
     def add(self, sig=None, argtypes=None, restype=None):
         # Handle argtypes
@@ -175,27 +177,40 @@ class GUFuncBuilder(object):
                 sig = tuple(argtypes)
             else:
                 sig = restype(*argtypes)
-        # Actual work begins
+
+        # Do compilation
+        # Return CompileResult to test
         cres = self.nb_func.compile(sig, **self.targetoptions)
+
+        args, return_type = sigutils.normalize_signature(sig)
 
         if not cres.objectmode and cres.signature.return_type != types.void:
             raise TypeError("gufunc kernel must have void return type")
+
+        if return_type is None:
+            return_type = types.void
+
+        # Store the final signature
+        sig = return_type(*args)
+        self._sigs.append(sig)
+        self._cres[sig] = cres
 
         return cres
 
     def build_ufunc(self):
         dtypelist = []
         ptrlist = []
-        keepalive = []
-
         if not self.nb_func:
             raise TypeError("No definition")
 
-        for sig, cres in self.nb_func.overloads.items():
-            dtypenums, ptr, env = self.build(cres)
-            keepalive.append(env)   # keep env object alive
+        # Get signature in the order they are added
+        keepalive = None
+        for sig in self._sigs:
+            cres = self._cres[sig]
+            dtypenums, ptr, keepalive = self.build(cres)
             dtypelist.append(dtypenums)
             ptrlist.append(utils.longint(ptr))
+
         datlist = [None] * len(ptrlist)
 
         inct = len(self.sin)
