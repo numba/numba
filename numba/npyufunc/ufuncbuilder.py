@@ -11,7 +11,7 @@ from .sigparse import parse_signature
 from .wrappers import build_ufunc_wrapper, build_gufunc_wrapper
 from numba.targets import registry
 from numba import _dynfunc
-import llvm.core as lc
+import llvmlite.llvmpy.core as lc
 
 class UFuncTargetOptions(TargetOptions):
     OPTIONS = {
@@ -149,6 +149,7 @@ class UFuncBuilder(object):
                                       cres.objectmode, envptr)
         ctx.finalize(wrapper, cres.fndesc)
         ctx.engine.add_module(wrapper.module)
+        ctx.engine.finalize_object()
         ptr = ctx.engine.get_pointer_to_function(wrapper)
         # Get dtypes
         dtypenums = [np.dtype(a.name).num for a in signature.args]
@@ -234,6 +235,7 @@ class GUFuncBuilder(object):
 
         ctx.finalize(wrapper, cres.fndesc)
         ctx.engine.add_module(wrapper.module)
+        ctx.engine.finalize_object()
         ptr = ctx.engine.get_pointer_to_function(wrapper)
         # Get dtypes
         dtypenums = []

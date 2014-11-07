@@ -2,44 +2,51 @@
 LLVM pass that converts intrinsic into other math calls
 """
 from __future__ import print_function, absolute_import
-import llvm.core as lc
+import llvmlite.llvmpy.core as lc
+from llvmlite import ir
 
 
-class DivmodFixer(object):
+def fix_powi_calls(mod):
+    """Replace llvm.powi.f64 intrinsic because we don't have compiler-rt.
     """
-    Fix 64-bit div/mod on 32-bit machines
+    orig = mod.globals.get('llvm.powi.f64')
+    if orig is not None:
+        # Build a wrapper function for powi() to re-direct the intrinsic call
+        # to pow().
+        powinstr = mod.declare_intrinsic('llvm.pow', [ir.DoubleType()])
+        repl = ir.Function(mod, orig.function_type, name=".numba.powi_fix")
+        repl.linkage = 'internal'
+        builder = ir.IRBuilder(repl.append_basic_block())
+        base, power = repl.args
+        power = builder.sitofp(power, ir.DoubleType())
+        call = builder.call(powinstr, [base, power])
+        builder.ret(call)
+
+        # Replace all calls in the module
+        ir.replace_all_calls(mod, orig, repl)
+
+
+class _DivmodFixer(ir.Visitor):
+    def visit_Instruction(self, instr):
+        if instr.type == ir.IntType(64):
+            if instr.opname in ['srem', 'urem', 'sdiv', 'udiv']:
+                name = 'numba.math.{op}'.format(op=instr.opname)
+                fn = self.module.globals.get(name)
+                # Declare the function if it doesn't already exist
+                if fn is None:
+                    opty = instr.type
+                    sdivfnty = ir.FunctionType(opty, [opty, opty])
+                    fn = ir.Function(self.module, sdivfnty, name=name)
+                # Replace the operation with a call to the builtin
+                repl = ir.CallInstr(parent=instr.parent, func=fn,
+                                    args=instr.operands, name=instr.name)
+                instr.parent.replace(instr, repl)
+
+
+def fix_divmod(mod):
+    """Replace division and reminder instructions to builtins calls
     """
-    NAMES = 'sdiv', 'udiv', 'srem', 'urem'
-    I64 = lc.Type.int(64)
-
-    def run(self, module):
-        for func in module.functions:
-            self.run_on_func(func)
-
-    def run_on_func(self, func):
-        to_replace = []
-        for bb in func.basic_blocks:
-            for instr in bb.instructions:
-                opname = instr.opcode_name
-                if opname in self.NAMES and instr.type == self.I64:
-                    to_replace.append((instr, "numba.math.%s" % opname))
-
-        if to_replace:
-            builder = lc.Builder.new(func.entry_basic_block)
-            for inst, name in to_replace:
-                builder.position_before(inst)
-                alt = self.declare(func.module, name)
-                replacement = builder.call(alt, inst.operands)
-                # fix replace_all_uses_with to not use ._ptr
-                inst.replace_all_uses_with(replacement._ptr)
-                inst.erase_from_parent()
-
-    def declare(self, module, fname):
-        fnty = lc.Type.function(self.I64, (self.I64, self.I64))
-        fn = module.get_or_insert_function(fnty, name=fname)
-        assert fn.is_declaration, ("%s is expected to be an intrinsic but "
-                                   "it is defined" % fname)
-        return fn
+    _DivmodFixer().visit(mod)
 
 
 class IntrinsicMapping(object):
@@ -108,9 +115,7 @@ MAPPING = {
     "llvm.powi.f64": powi_as_pow,
 }
 
-
 AVAILINTR = ()
-
 
 INTR_TO_CMATH = {
     "llvm.pow.f32": "powf",

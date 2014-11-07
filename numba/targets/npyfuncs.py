@@ -8,7 +8,7 @@ from __future__ import print_function, absolute_import, division
 
 import math
 
-from llvm import core as lc
+from llvmlite.llvmpy import core as lc
 
 from .. import cgutils, typing, types, lowering
 from . import builtins

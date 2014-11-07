@@ -5,7 +5,8 @@ import ctypes
 import struct
 import sys
 
-import llvm.core as lc
+import llvmlite.llvmpy.core as lc
+import llvmlite.binding as ll
 import numpy as np
 
 import numba.unittest_support as unittest
@@ -38,9 +39,14 @@ class StructureTestCase(TestCase):
         entry_block = function.append_basic_block('entry')
         builder = lc.Builder.new(entry_block)
 
+
         def call_func(*args):
-            function.verify()
-            cptr = self.context.engine.get_pointer_to_function(function)
+            mod = ll.parse_assembly(str(module))
+            func = mod.get_function(function.name)
+            engine = self.context.engine
+            engine.add_module(mod)
+            engine.finalize_object()
+            cptr = engine.get_pointer_to_function(func)
             cfunc = ctypes_fnty(cptr)
             return cfunc(*args)
 

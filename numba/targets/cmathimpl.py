@@ -7,8 +7,8 @@ from __future__ import print_function, absolute_import, division
 import cmath
 import math
 
-import llvm.core as lc
-from llvm.core import Type
+import llvmlite.llvmpy.core as lc
+from llvmlite.llvmpy.core import Type
 
 from numba.targets.imputils import implement, Registry
 from numba import types, cgutils, utils

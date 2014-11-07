@@ -6,11 +6,11 @@ from __future__ import print_function, absolute_import, division
 
 from functools import reduce
 
-import llvm.core as lc
+import llvmlite.llvmpy.core as lc
 
 import numba.ctypes_support as ctypes
 import numpy
-from llvm.core import Constant
+from llvmlite.llvmpy.core import Constant
 from numba import errcode
 from numba import types, cgutils
 from numba.targets.imputils import (builtin, builtin_attr, implement,

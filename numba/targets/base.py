@@ -2,8 +2,8 @@ from __future__ import print_function
 from collections import namedtuple, defaultdict
 import copy
 from types import MethodType
-import llvm.core as lc
-from llvm.core import Type, Constant
+import llvmlite.llvmpy.core as lc
+from llvmlite.llvmpy.core import Type, Constant
 import numpy
 
 import numba
@@ -229,7 +229,7 @@ class BaseContext(object):
         assert fn.is_declaration
         for ak, av in zip(fndesc.args, self.get_arguments(fn)):
             av.name = "arg.%s" % ak
-        fn.args[0] = ".ret"
+        fn.args[0].name = ".ret"
         return fn
 
     def declare_external_function(self, module, fndesc):
@@ -249,6 +249,7 @@ class BaseContext(object):
                 break
         else:
             gv = cgutils.global_constant(mod, name, text)
+            gv.linkage = lc.LINKAGE_INTERNAL
         return Constant.bitcast(gv, stringtype)
 
     def get_arguments(self, func):
@@ -1066,6 +1067,16 @@ class BaseContext(object):
         Note: This is called at the end of lowering.
         """
         pass
+
+    def post_lowering(self, func):
+        """Run target specific post-lowering transformation here.
+        """
+        pass
+
+    def create_module(self, name):
+        """Create a LLVM module
+        """
+        return lc.Module.new(name)
 
 
 class _wrap_impl(object):

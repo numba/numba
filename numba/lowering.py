@@ -4,8 +4,9 @@ from collections import defaultdict
 import sys
 from types import ModuleType
 
-from llvm.core import Type, Builder, Module
-import llvm.core as lc
+from llvmlite.llvmpy.core import Type, Builder, Module
+import llvmlite.llvmpy.core as lc
+import llvmlite.binding as ll
 
 from numba import _dynfunc, ir, types, cgutils, utils, config, cffi_support, typing
 
@@ -165,7 +166,8 @@ class BaseLower(object):
         self.blocks = utils.SortedMap(utils.iteritems(interp.blocks))
 
         # Initialize LLVM
-        self.module = Module.new("module.%s" % self.fndesc.unique_name)
+        self.module = self.context.create_module("module.%s" %
+                                                 self.fndesc.unique_name)
 
         # Python execution environment (will be available to the compiled
         # function).
@@ -229,11 +231,18 @@ class BaseLower(object):
         self.builder.position_at_end(entry_block_tail)
         self.builder.branch(self.blkmap[self.firstblk])
 
+        # Run target specific post lowering transformation
+        self.context.post_lowering(self.function)
+
         if config.DUMP_LLVM:
             print(("LLVM DUMP %s" % self.fndesc).center(80, '-'))
             print(self.module)
             print('=' * 80)
-        self.module.verify()
+
+        # Materialize LLVM Module
+        self.module = ll.parse_assembly(str(self.module))
+        self.function = self.module.get_function(self.function.name)
+
         # Run function-level optimize to reduce memory usage and improve
         # module-level optimization
         self.context.optimize_function(self.function)
