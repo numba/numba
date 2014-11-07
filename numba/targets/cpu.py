@@ -54,6 +54,7 @@ class CPUContext(BaseContext):
     def create_module(self, name):
         mod = lc.Module.new(name)
         mod.triple = ll.get_default_triple()
+
         dl = ("e-p:32:32-i64:64-v16:16-v32:32-n16:32:64"
               if utils.MACHINE_BITS == 32
               else"e-i64:64-v16:16-v32:32-n16:32:64")
@@ -64,6 +65,13 @@ class CPUContext(BaseContext):
         self.execmodule = self.create_module("numba.exec")
         eb = le.EngineBuilder.new(self.execmodule).opt(3)
 
+        # Use legacy JIT on win32.
+        # MCJIT causes access violation probably due to invalid data-section
+        # references.  Let hope this is fixed in llvm3.6.
+        if sys.platform.startswith('win32'):
+            eb.use_mcjit(False)
+        else:
+            eb.use_mcjit(True)
 
         features = []
         # Note: LLVM 3.3 always generates vmovsd (AVX instruction) for
@@ -83,7 +91,7 @@ class CPUContext(BaseContext):
         eb.mattrs(','.join(features))
 
         # Enable JIT debug
-        eb.emit_jit_debug = True
+        eb.emit_jit_debug(True)
 
         self.tm = tm = eb.select_target()
         self.pm = self.build_pass_manager()
@@ -238,8 +246,8 @@ class CPUContext(BaseContext):
             # For Windows XP __ftol2 is not defined, we will just use
             # __ftol as a replacement.
             # On Windows 7, this is not necessary but will work anyway.
-            ftol = le.dylib_address_of_symbol('_ftol')
-            _add_missing_symbol("_ftol2", ftol)
+            ftol = le.dylib_address_of_symbol('__ftol')
+            _add_missing_symbol("__ftol2", ftol)
 
         elif sys.platform.startswith('linux') and self.is32bit:
             _add_missing_symbol("__fixunsdfdi", c_helpers["fptoui"])
@@ -289,7 +297,8 @@ class CPUContext(BaseContext):
     def post_lowering(self, func):
         mod = func.module
 
-        if sys.platform.startswith('linux'):
+        if (sys.platform.startswith('linux') or
+                sys.platform.startswith('win32')):
             intrinsics.fix_powi_calls(mod)
 
         if self.is32bit:
