@@ -33,9 +33,9 @@ before_install:
   - sudo rm -rf /dev/shm
   - sudo ln -s /run/shm /dev/shm
   # Install boost for impyla
-  - if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then sudo apt-get install libboost-all-dev; fi
+  #- if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then sudo apt-get install libboost-all-dev; fi
   # Install pytest for impyla
-  - conda install --yes pytest
+  #- conda install --yes pytest
 
 install:
     # Install llvmpy
