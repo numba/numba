@@ -3,8 +3,8 @@ language: python
 
 python:
   - "2.6"
-  - "2.7"
-  - "3.3"
+  #- "2.7"
+  #- "3.3"
   - "3.4"
 
 branches:
@@ -14,10 +14,12 @@ branches:
 
 before_install:
   # Install Miniconda
-  - if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then wget http://repo.continuum.io/miniconda/Miniconda-3.6.0-Linux-x86_64.sh -O miniconda.sh; else wget http://repo.continuum.io/miniconda/Miniconda3-3.6.0-Linux-x86_64.sh -O miniconda.sh; fi
+  #- if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then wget http://repo.continuum.io/miniconda/Miniconda-3.6.0-Linux-x86_64.sh -O miniconda.sh; else wget http://repo.continuum.io/miniconda/Miniconda3-3.6.0-Linux-x86_64.sh -O miniconda.sh; fi
+  - wget http://repo.continuum.io/miniconda/Miniconda3-3.6.0-Linux-x86_64.sh -O miniconda.sh
   - chmod +x miniconda.sh
   - ./miniconda.sh -b
-  - if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then export PATH=/home/travis/miniconda/bin:$PATH; else PATH=/home/travis/miniconda3/bin:$PATH; fi
+  #- if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then export PATH=/home/travis/miniconda/bin:$PATH; else PATH=/home/travis/miniconda3/bin:$PATH; fi
+  - export PATH=$HOME/miniconda3/bin:$PATH
   - conda update --yes conda
   # Setup environment
   - conda create -n travisci --yes python=${TRAVIS_PYTHON_VERSION:0:3} numpy cffi
@@ -39,8 +41,8 @@ before_install:
 
 install:
     # Install llvmpy
-    - git clone git://github.com/llvmpy/llvmpy.git -q
-    - cd llvmpy ; python setup.py install -q >/dev/null ; cd ..
+    #- git clone git://github.com/llvmpy/llvmpy.git -q
+    #- cd llvmpy ; python setup.py install -q >/dev/null ; cd ..
     # Build numba extensions without silencing compile errors
     - python setup.py build_ext -q
     # Install numba
