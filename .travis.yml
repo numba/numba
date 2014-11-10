@@ -39,7 +39,7 @@ before_install:
 install:
     # Build and install llvmlite from source
     # Disabled as it currently fails (Travis' gcc too old?):
-    #  cc1plus: error: unrecognized command line option ‘-std=c++11’
+    #  cc1plus: error: unrecognized command line option `-std=c++11`
     #- git clone git://github.com/numba/llvmlite.git -q
     #- cd llvmlite && python setup.py build && python setup.py install -q >/dev/null && cd ..
     # Build numba extensions without silencing compile errors
