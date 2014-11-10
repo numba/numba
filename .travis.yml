@@ -21,8 +21,8 @@ before_install:
   # Setup environment
   - conda create -n travisci --yes python=${TRAVIS_PYTHON_VERSION:0:3} numpy cffi
   - source activate travisci
-  # Install llvmlite (separate channel, for now)
-  - conda install --yes -c antoine llvmlite
+  # Install llvmdev (separate channel, for now)
+  - conda install --yes -c antoine llvmdev
   # Install unittest2 for Python 2
   - if [ ${TRAVIS_PYTHON_VERSION:0:3} == "2.6" ]; then conda install --yes unittest2 argparse; fi
   # Install enum34 for Python < 3.4
@@ -37,6 +37,9 @@ before_install:
   #- conda install --yes pytest
 
 install:
+    # Install llvmlite
+    - git clone git://github.com/numba/llvmlite.git -q
+    - cd llvmlite ; python setup.py build; python setup.py install -q >/dev/null ; cd ..
     # Build numba extensions without silencing compile errors
     - python setup.py build_ext -q
     # Install numba
