@@ -269,6 +269,8 @@ class Reduce(object):
         -----
         Calls ``device_partial_inplace`` internally.
         """
+        if (size is not None and size == 0) or (arr.size == 0):
+            return init
         darr, stream, conv = self._prepare(arr, stream)
         size = self._partial_inplace_driver(darr, size=size, init=init,
                                             stream=stream)
