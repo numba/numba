@@ -35,9 +35,9 @@ before_install:
   # (Travis' default gcc version doesn't support C++11).
   - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
   - sudo apt-get update -qq
-  - sudo apt-get install -qq gcc-4.9 g++-4.9
+  - sudo apt-get install -qq gcc-4.8 g++-4.8
   # Force g++ 4.9 to be the default version
-  - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.9 90
+  - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.8 90
   # Install boost for impyla
   #- if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then sudo apt-get install libboost-all-dev; fi
   # Install pytest for impyla
@@ -47,6 +47,7 @@ install:
     # Build and install llvmlite from source
     - git clone git://github.com/numba/llvmlite.git -q
     - cd llvmlite && python setup.py build && python setup.py install -q >/dev/null && cd ..
+    - ldd llvmlite/llvmlite/binding/libllvmlite.so
     # Build numba extensions without silencing compile errors
     - python setup.py build_ext -q
     # Install numba
