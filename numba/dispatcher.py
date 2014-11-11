@@ -305,6 +305,9 @@ class LiftedLoop(_OverloadedBase):
         self.flags = flags
         self.bytecode = bytecode
 
+    def get_source_location(self):
+        return next(iter(self.bytecode)).lineno
+
     def compile(self, sig):
         with self._compile_lock():
             # FIXME this is mostly duplicated from Overloaded

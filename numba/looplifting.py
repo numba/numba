@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from numba import utils
 from numba.bytecode import ByteCodeInst, CustomByteCode
+from collections import defaultdict
 
 
 def lift_loop(bytecode, dispatcher_factory):
@@ -14,18 +15,14 @@ def lift_loop(bytecode, dispatcher_factory):
     """
     outer = []
     loops = []
+    # Discover variables references
+    outer_rds, outer_wrs = find_varnames_uses(bytecode, iter(bytecode))
+    # Separate loops and outer
     separate_loops(bytecode, outer, loops)
 
-    # Discover variables references
-    outer_rds, outer_wrs = find_varnames_uses(bytecode, outer)
-    outer_wrs |= set(bytecode.argspec.args)
-
-    # Find in-loop references to variables
-    for loop in loops:
-        args, rets = discover_args_and_returns(bytecode, loop, outer_rds,
-                                               outer_wrs)
-        outer_rds |= args
-        outer_wrs |= rets
+    # Prepend arguments as negative bytecode offset
+    for a in bytecode.argspec.args:
+        outer_wrs[a] = [-1] + outer_wrs[a]
 
     dispatchers = []
     outerlabels = set(bytecode.labels)
@@ -265,23 +262,80 @@ def discover_args_and_returns(bytecode, insts, outer_rds, outer_wrs):
     """
     Basic analysis for args and returns
     This completely ignores the ordering or the read-writes.
+
+    Note:
+    An invalid argument and return set will likely to cause a RuntimeWarning
+    in the dataflow analysis due to mismatch in stack offset.
     """
     rdnames, wrnames = find_varnames_uses(bytecode, insts)
-    # Pass names that are written outside and write/read locally
-    args = outer_wrs & (rdnames | wrnames)
-    # Return values that it written locally and read outside
-    rets = wrnames & outer_rds
+
+    # Return every variables that are written inside the loop and read
+    # afterwards
+    rets = set()
+    for name, uselist in wrnames.items():
+        if name in outer_rds:
+            rdlist = rdnames[name]
+            # Find the last use in the loop
+            if rdlist:
+                # If it is used in the loop
+                # make sure it is used after the loop
+                last_use_in_loop = max(rdlist[-1], uselist[-1])
+            else:
+                last_use_in_loop = insts[-1].offset
+
+            # Find the next read
+            for nextrd in outer_rds[name]:
+                if nextrd > last_use_in_loop:
+                    break
+            else:
+                nextrd = None
+
+            # Find the next write
+            for nextwr in outer_wrs[name]:
+                if nextwr > last_use_in_loop:
+                    break
+            else:
+                nextwr = None
+
+            # If the next use is a read, it is a return value
+            if nextrd is not None and nextwr is not None:
+                if nextwr > nextrd:
+                    rets.add(name)
+            # If no usage afterwards, it is NOT a return value
+            elif nextrd is None and nextwr is None:
+                pass
+            # If there is a read but no write, it is a return value
+            elif nextwr is None:
+                rets.add(name)
+
+    # Make variables arguments if they are read before defined inside
+    # the loop.
+    args = set()
+    for name, uselist in rdnames.items():
+        if name not in wrnames:
+            args.add(name)
+        elif wrnames[name] and uselist and wrnames[name][0] > uselist[0]:
+            args.add(name)
+
+    # Make variables arguments if it is being returned but defined before the
+    # loop.
+    for name in rets:
+        if any(i < insts[0].offset for i in outer_wrs[name]):
+            args.add(name)
+
     return args, rets
 
 
 def find_varnames_uses(bytecode, insts):
-    rdnames = set()
-    wrnames = set()
+    rdnames = defaultdict(list)
+    wrnames = defaultdict(list)
     for inst in insts:
         if inst.opname == 'LOAD_FAST':
-            rdnames.add(bytecode.co_varnames[inst.arg])
+            name = bytecode.co_varnames[inst.arg]
+            rdnames[name].append(inst.offset)
         elif inst.opname == 'STORE_FAST':
-            wrnames.add(bytecode.co_varnames[inst.arg])
+            name = bytecode.co_varnames[inst.arg]
+            wrnames[name].append(inst.offset)
     return rdnames, wrnames
 
 
