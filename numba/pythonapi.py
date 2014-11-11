@@ -562,12 +562,22 @@ class PythonAPI(object):
         of the opid.
         """
         ops = ['<', '<=', '==', '!=', '>', '>=']
-        opid = ops.index(opstr)
-        assert 0 <= opid < len(ops)
-        fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj, Type.int()])
-        fn = self._get_function(fnty, name="PyObject_RichCompare")
-        lopid = self.context.get_constant(types.int32, opid)
-        return self.builder.call(fn, (lhs, rhs, lopid))
+        if opstr in ops:
+            opid = ops.index(opstr)
+            assert 0 <= opid < len(ops)
+            fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj, Type.int()])
+            fn = self._get_function(fnty, name="PyObject_RichCompare")
+            lopid = self.context.get_constant(types.int32, opid)
+            return self.builder.call(fn, (lhs, rhs, lopid))
+        elif opstr == 'is':
+            bitflag = self.builder.icmp(lc.ICMP_EQ, lhs, rhs)
+            return self.from_native_value(bitflag, types.boolean)
+        elif opstr == 'is not':
+            bitflag = self.builder.icmp(lc.ICMP_NE, lhs, rhs)
+            return self.from_native_value(bitflag, types.boolean)
+        else:
+            raise NotImplementedError("Unknown operator {op!r}".format(
+                op=opstr))
 
     def iter_next(self, iterobj):
         fnty = Type.function(self.pyobj, [self.pyobj])
