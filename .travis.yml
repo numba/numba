@@ -18,15 +18,16 @@ before_install:
   - chmod +x miniconda.sh
   - ./miniconda.sh -b
   - export PATH=$HOME/miniconda3/bin:$PATH
+  - PY_MAJOR_MINOR = ${TRAVIS_PYTHON_VERSION:0:3}
   # Setup environment
-  - conda create -n travisci --yes python=${TRAVIS_PYTHON_VERSION:0:3} numpy cffi
+  - conda create -n travisci --yes python=$PY_MAJOR_MINOR numpy cffi
   - source activate travisci
   # Install llvmdev (separate channel, for now)
   - conda install --yes -c antoine llvmdev
   # Install unittest2 for Python 2
-  - if [ ${TRAVIS_PYTHON_VERSION:0:3} == "2.6" ]; then conda install --yes unittest2 argparse; fi
+  - if [ $PY_MAJOR_MINOR == "2.6" ]; then conda install --yes unittest2 argparse; fi
   # Install enum34 for Python < 3.4
-  - if [ "3.4" > ${TRAVIS_PYTHON_VERSION:0:3}  ]; then conda install --yes enum34; fi
+  - if [ $PY_MAJOR_MINOR \< "3.4" ]; then conda install --yes enum34; fi
   # The next couple lines fix a crash with multiprocessing on Travis
   # and are not specific to using Miniconda
   - sudo rm -rf /dev/shm
