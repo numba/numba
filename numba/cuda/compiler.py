@@ -2,7 +2,7 @@ from __future__ import absolute_import, print_function
 import copy
 import ctypes
 from numba import compiler, types, errcode
-from numba.typing.templates import ConcreteTemplate
+from numba.typing.templates import ConcreteTemplate, AbstractTemplate
 from numba import typing, lowering, utils
 from .cudadrv.devices import get_context
 from .cudadrv import nvvm, devicearray, driver
@@ -49,6 +49,50 @@ def compile_kernel(pyfunc, args, link, debug=False):
                         debug=debug,
                         exceptions=cres.target_context.exceptions)
     return cukern
+
+
+class DeviceFunctionTemplate(object):
+    """Unmaterialized device function
+    """
+    def __init__(self, pyfunc, debug):
+        self.py_func = pyfunc
+        self.debug = debug
+        self._compileinfos = {}
+
+    def compile(self, args):
+        """Compile the function for the given argument types.
+
+        Each signature is compiled once by caching the compiled function inside
+        this object.
+        """
+        if args not in self._compileinfos:
+            cres = compile_cuda(self.py_func, None, args, debug=self.debug)
+            self._compileinfos[args] = cres
+            libs = [cres.llvm_module]
+            cres.target_context.insert_user_function(self, cres.fndesc, libs)
+        else:
+            cres = self._compileinfos[args]
+        return cres.signature
+
+
+def compile_device_template(pyfunc, debug=False):
+    """Create a DeviceFunctionTemplate object and register the object to
+    the CUDA typing context.
+    """
+    from .descriptor import CUDATargetDesc
+
+    dft = DeviceFunctionTemplate(pyfunc, debug=debug)
+
+    class device_function_template(AbstractTemplate):
+        key = dft
+
+        def generic(self, args, kws):
+            assert not kws
+            return dft.compile(args)
+
+    typingctx = CUDATargetDesc.typingctx
+    typingctx.insert_user_function(dft, device_function_template)
+    return dft
 
 
 def compile_device(pyfunc, return_type, args, inline=True, debug=False):
@@ -369,6 +413,7 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         self.targetoptions = targetoptions
 
         from .descriptor import CUDATargetDesc
+
         self.typingctx = CUDATargetDesc.typingctx
 
     def __call__(self, *args):
@@ -377,10 +422,13 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         cfg(*args)
 
     def specialize(self, *args):
-        argtypes = tuple([self.typingctx.resolve_argument_type(a) for a in args])
+        argtypes = tuple(
+            [self.typingctx.resolve_argument_type(a) for a in args])
         kernel = self.definitions.get(argtypes)
         if kernel is None:
-            kernel = compile_kernel(self.py_func, argtypes, link=(),
+            if 'link' not in self.targetoptions:
+                self.targetoptions['link'] = ()
+            kernel = compile_kernel(self.py_func, argtypes,
                                     **self.targetoptions)
             self.definitions[argtypes] = kernel
             if self.bind:

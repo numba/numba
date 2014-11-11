@@ -1,7 +1,15 @@
 from __future__ import print_function, absolute_import, division
 from numba import sigutils, types
 from .compiler import (compile_kernel, compile_device, declare_device_function,
-                       AutoJitCUDAKernel)
+                       AutoJitCUDAKernel, compile_device_template)
+
+
+def jitdevice(func, link=[], debug=True):
+    """Wrapper for device-jit.
+    """
+    if link:
+        raise ValueError("link keyword invalid for device function")
+    return compile_device_template(func, debug=debug)
 
 
 def jit(restype=None, argtypes=None, device=False, inline=False, bind=True,
@@ -75,32 +83,47 @@ def jit(restype=None, argtypes=None, device=False, inline=False, bind=True,
             i = cuda.grid(1) # global position of the thread for a 1D grid.
             aryOut[i] = bar(aryA[i], aryB[i])
 
+    When the function signature is not given, this decorator behaves like
+    autojit.
     """
-    restype, argtypes = convert_types(restype, argtypes)
 
-    if restype and not device and restype != types.void:
-        raise TypeError("CUDA kernel must have void return type.")
+    if argtypes is None and not sigutils.is_signature(restype):
+        if restype is None:
+            return autojit(device=device, bind=bind,
+                           link=link, debug=debug, **kws)
 
-    def kernel_jit(func):
-        kernel = compile_kernel(func, argtypes, link=link, debug=debug)
+        # restype is a function
+        else:
+            decor = autojit(device=device, bind=bind,
+                            link=link, debug=debug, **kws)
+            return decor(restype)
 
-        # Force compilation for the current context
-        if bind:
-            kernel.bind()
-
-        return kernel
-
-    def device_jit(func):
-        return compile_device(func, restype, argtypes, inline=True,
-                              debug=debug)
-
-    if device:
-        return device_jit
     else:
-        return kernel_jit
+        restype, argtypes = convert_types(restype, argtypes)
+
+        if restype and not device and restype != types.void:
+            raise TypeError("CUDA kernel must have void return type.")
+
+        def kernel_jit(func):
+            kernel = compile_kernel(func, argtypes, link=link, debug=debug)
+
+            # Force compilation for the current context
+            if bind:
+                kernel.bind()
+
+            return kernel
+
+        def device_jit(func):
+            return compile_device(func, restype, argtypes, inline=True,
+                                  debug=debug)
+
+        if device:
+            return device_jit
+        else:
+            return kernel_jit
 
 
-def autojit(func, **kws):
+def autojit(func=None, device=False, bind=True, **kws):
     """JIT at callsite.  Function signature is not needed as this
     will capture the type at call time.  Each signature of the kernel
     is cached for future use.
@@ -121,8 +144,24 @@ def autojit(func, **kws):
 
     In the above code, a version of foo with the signature
     "void(int32[:], float32[:])" is compiled.
+
+    A device function can be created as shown below::
+
+        @cuda.autojit(device=True)
+        def add(a, b):
+            return a + b
+
     """
-    return AutoJitCUDAKernel(func, bind=True, targetoptions=kws)
+    if func is None:
+        def autojitwrapper(func):
+            return autojit(func, device=device, bind=bind, **kws)
+
+        return autojitwrapper
+    else:
+        if device:
+            return jitdevice(func, **kws)
+        else:
+            return AutoJitCUDAKernel(func, bind=bind, targetoptions=kws)
 
 
 def declare_device(name, restype=None, argtypes=None):
