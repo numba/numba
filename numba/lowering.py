@@ -240,17 +240,17 @@ class BaseLower(object):
             print('=' * 80)
 
         # Materialize LLVM Module
-        self.module = ll.parse_assembly(str(self.module))
-        self.function = self.module.get_function(self.function.name)
+        self.llvm_module = ll.parse_assembly(str(self.module))
+        self.llvm_function = self.llvm_module.get_function(self.function.name)
 
         # Run function-level optimize to reduce memory usage and improve
         # module-level optimization
-        self.context.optimize_function(self.function)
+        self.context.optimize_function(self.llvm_function)
 
         if config.NUMBA_DUMP_FUNC_OPT:
             print(("LLVM FUNCTION OPTIMIZED DUMP %s" %
                    self.fndesc).center(80, '-'))
-            print(self.module)
+            print(self.llvm_module)
             print('=' * 80)
 
     def init_argument(self, arg):

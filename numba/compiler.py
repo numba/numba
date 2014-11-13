@@ -692,8 +692,8 @@ def native_lowering_stage(targetctx, interp, typemap, restype, calltypes,
     lower.lower()
 
     # Linking depending libraries
-    module = lower.module
-    function = lower.function
+    module = lower.llvm_module
+    function = lower.llvm_function
     env = lower.env
     del lower
 
@@ -714,9 +714,8 @@ def py_lowering_stage(targetctx, interp, nocompile):
     lower = objmode.PyLower(targetctx, fndesc, interp)
     lower.lower()
 
-    # Linking depending libraries
-    module = lower.module
-    function = lower.function
+    module = lower.llvm_module
+    function = lower.llvm_function
     env = lower.env
     del lower
 
