@@ -409,8 +409,8 @@ class Pipeline(object):
         Back-end: Generate LLVM IR from Numba IR, compile to machine code
         """
         func, lmod, lfunc, fndesc = lowerfn()
+        assert lfunc.module is lmod
         signature = typing.signature(self.return_type, *self.args)
-        # assert lfunc.module is lmod
         cr = compile_result(typing_context=self.typingctx,
                             target_context=self.targetctx,
                             entry_point=func,
