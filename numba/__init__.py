@@ -50,27 +50,26 @@ from_dtype
 
 def _sentry_llvm_version():
     """
-    Make sure we meet min llvmpy version
+    Make sure we meet min llvmlite version
     """
-    return
-    # import warnings
-    # import llvm
-    # min_version = (0, 12, 6)
-    #
-    # # Only look at the the major, minor and bugfix version numbers.
-    # # Ignore other stuffs
-    # regex = re.compile(r'(\d+)\.(\d+).(\d+)')
-    # m = regex.match(llvm.__version__)
-    # if m:
-    #     ver = tuple(map(int, m.groups()))
-    #     if ver < min_version:
-    #         msg = ("Numba requires at least version %d.%d.%d of llvmpy.\n"
-    #                "Installed version is %s.\n"
-    #                "Please update llvmpy." %
-    #                (min_version + (llvm.__version__,)))
-    #         raise ImportError(msg)
-    # else:
-    #     # Not matching?
-    #     warnings.warn("llvmpy version format not recognized!")
+    import warnings
+    import llvmlite
+    min_version = (0, 1, 0)
+
+    # Only look at the the major, minor and bugfix version numbers.
+    # Ignore other stuffs
+    regex = re.compile(r'(\d+)\.(\d+).(\d+)')
+    m = regex.match(llvmlite.__version__)
+    if m:
+        ver = tuple(map(int, m.groups()))
+        if ver < min_version:
+            msg = ("Numba requires at least version %d.%d.%d of llvmlite.\n"
+                   "Installed version is %s.\n"
+                   "Please update llvmlite." %
+                   (min_version + (llvmlite.__version__,)))
+            raise ImportError(msg)
+    else:
+        # Not matching?
+        warnings.warn("llvmlite version format not recognized!")
 
 _sentry_llvm_version()
