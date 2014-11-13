@@ -484,13 +484,6 @@ builtin(implement('is not',
 builtin(implement('is not',
                   types.none, types.Kind(types.Optional))(optional_is_not_none))
 
-# Any is/not None
-builtin(implement('is',
-                  types.Any, types.Any)(optional.always_return_false_impl))
-
-builtin(implement('is not',
-                  types.Any, types.Any)(optional.always_return_true_impl))
-
 
 def real_add_impl(context, builder, sig, args):
     return builder.fadd(*args)

@@ -53,10 +53,7 @@ class BaseContext(object):
             return func.template(self).apply(args, kws)
 
         if isinstance(func, types.Dispatcher):
-            try:
-                template = func.overloaded.get_call_template(args, kws)
-            except KeyError:
-                return None
+            template = func.overloaded.get_call_template(args, kws)
             return template(self).apply(args, kws)
 
         defns = self.functions[func]

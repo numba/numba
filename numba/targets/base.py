@@ -805,6 +805,12 @@ class BaseContext(object):
 
             return optval.data
 
+        elif (isinstance(fromty, types.Array) and
+                  isinstance(toty, types.Array)):
+            # Type inference should have prevented illegal array casting.
+            assert toty.layout == 'A'
+            return val
+
         raise NotImplementedError("cast", val, fromty, toty)
 
     def make_optional(self, optionaltype):
@@ -937,22 +943,11 @@ class BaseContext(object):
     def get_dummy_type(self):
         return GENERIC_POINTER
 
-    def compile_internal(self, builder, impl, sig, args, locals={},
-                         cache_key=None):
+    def compile_internal(self, builder, impl, sig, args, locals={}):
         """Invoke compiler to implement a function for a nopython function
-
-        Args
-        ----
-        cache_key : hashable
-            A hashable object to use as the key for caching.
-            If it is `None`, no caching is performed.
         """
-        if cache_key is not None:
-            # Caching is enabled
-            fndesc = self.cached_internal_func.get(cache_key)
-        else:
-            # Caching is disabled
-            fndesc = None
+        cache_key = (impl.__code__, sig)
+        fndesc = self.cached_internal_func.get(cache_key)
 
         if fndesc is None:
             # Compile
@@ -967,9 +962,7 @@ class BaseContext(object):
             self.add_libs([cres.llvm_module])
             fndesc = cres.fndesc
 
-            # Do cache if caching is enabled
-            if cache_key is not None:
-                self.cached_internal_func[cache_key] = fndesc
+            self.cached_internal_func[cache_key] = fndesc
 
         # Add call to the generated function
         llvm_mod = cgutils.get_module(builder)

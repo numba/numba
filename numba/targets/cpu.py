@@ -405,6 +405,13 @@ class CPUContext(BaseContext):
     def get_abi_sizeof(self, lty):
         return self.engine.target_data.abi_size(lty)
 
+    def calc_array_sizeof(self, ndim):
+        '''
+        Calculate the size of an array struct on the CPU target
+        '''
+        aryty = types.Array(types.int32, ndim, 'A')
+        return self.get_abi_sizeof(self.get_value_type(aryty))
+
     def optimize_function(self, func):
         """Run O1 function passes
         """

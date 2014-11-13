@@ -25,10 +25,10 @@ class _OverloadedBase(_dispatcher.Dispatcher):
 
         # A mapping of signatures to entry points
         self.overloads = {}
-        # A mapping of signatures to types.Function objects
-        self._function_types = {}
         # A mapping of signatures to compile results
         self._compileinfos = {}
+        # A list of nopython signatures
+        self._npsigs = []
 
         self.py_func = py_func
         # other parts of Numba assume the old Python 2 name for code object
@@ -74,10 +74,17 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         """
         return list(self.overloads)
 
+    @property
+    def nopython_signatures(self):
+        return self._npsigs
+
     def disable_compile(self, val=True):
         """Disable the compilation of new signatures at call time.
         """
+        # If disabling compilation then there must be at least one signature
+        assert val or len(self.signatures) > 0
         self._can_compile = not val
+
 
     def add_overload(self, cres):
         args = tuple(cres.signature.args)
@@ -91,14 +98,7 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         cfunc = cres.entry_point
         if cfunc in target.native_funcs:
             target.dynamic_map_function(cfunc)
-            # Create function type for typing
-            func_name = cres.fndesc.mangled_name
-            name = "CallTemplate(%s)" % cres.fndesc.mangled_name
-            # The `key` isn't really used except for diagnosis here,
-            # so avoid keeping a reference to `cfunc`.
-            call_template = typing.make_concrete_template(
-                name, key=func_name, signatures=[cres.signature])
-            self._function_types[args] = call_template
+            self._npsigs.append(cres.signature)
 
     def get_call_template(self, args, kws):
         """
@@ -108,9 +108,17 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         if kws:
             raise TypeError("kwargs not supported")
         # Ensure an overload is available, but avoid compiler re-entrance
-        if not self.is_compiling:
+        if self._can_compile and not self.is_compiling:
             self.compile(tuple(args))
-        return self._function_types[args]
+
+        # Create function type for typing
+        func_name = self.py_func.__name__
+        name = "CallTemplate({0})".format(func_name)
+        # The `key` isn't really used except for diagnosis here,
+        # so avoid keeping a reference to `cfunc`.
+        call_template = typing.make_concrete_template(
+            name, key=func_name, signatures=self.nopython_signatures)
+        return call_template
 
     def get_overload(self, sig):
         args, return_type = sigutils.normalize_signature(sig)

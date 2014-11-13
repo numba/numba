@@ -5,8 +5,10 @@ the targets to choose their representation.
 from __future__ import print_function, division, absolute_import
 
 import itertools
-import numpy
+import struct
 import weakref
+
+import numpy
 
 from .six import add_metaclass
 from . import npdatetime, utils
@@ -439,12 +441,15 @@ class RangeIteratorType(SimpleIteratorType):
 
 
 class NumpyFlatType(IteratorType):
+    """
+    Type class for `ndarray.flat()` objects.
+    """
+
     def __init__(self, arrty):
         self.array_type = arrty
         self.yield_type = arrty.dtype
         name = "array.flat({arrayty})".format(arrayty=arrty)
         super(NumpyFlatType, self).__init__(name, param=True)
-
 
     @property
     def key(self):
@@ -816,6 +821,8 @@ int32 = Integer('int32')
 int64 = Integer('int64')
 intp = int32 if utils.MACHINE_BITS == 32 else int64
 uintp = uint32 if utils.MACHINE_BITS == 32 else uint64
+intc = int32 if struct.calcsize('i') == 4 else int64
+uintc = uint32 if struct.calcsize('i') == 4 else uint64
 
 float32 = Float('float32')
 float64 = Float('float64')
