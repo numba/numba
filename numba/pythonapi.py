@@ -564,7 +564,6 @@ class PythonAPI(object):
         ops = ['<', '<=', '==', '!=', '>', '>=']
         if opstr in ops:
             opid = ops.index(opstr)
-            assert 0 <= opid < len(ops)
             fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj, Type.int()])
             fn = self._get_function(fnty, name="PyObject_RichCompare")
             lopid = self.context.get_constant(types.int32, opid)
