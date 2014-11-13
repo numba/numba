@@ -49,16 +49,15 @@ class CPUContext(BaseContext):
     Changes BaseContext calling convention
     """
     disable_builtins = set()
+    _data_layout = None
 
     # Overrides
     def create_module(self, name):
         mod = lc.Module.new(name)
         mod.triple = ll.get_default_triple()
 
-        dl = ("e-p:32:32-i64:64-v16:16-v32:32-n16:32:64"
-              if utils.MACHINE_BITS == 32
-              else"e-i64:64-v16:16-v32:32-n16:32:64")
-        mod.data_layout = dl
+        if self._data_layout:
+            mod.data_layout = self._data_layout
         return mod
 
     def init(self):
@@ -112,6 +111,9 @@ class CPUContext(BaseContext):
 
         # Engine creation has sideeffect to the process symbol table
         self.engine = eb.create(tm)
+        # Enforce data layout to enable layout-specific optimizations
+        self._data_layout = str(self.engine.target_data)
+        self.execmodule.data_layout = self._data_layout
 
     @property
     def target_data(self):
