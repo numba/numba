@@ -18,11 +18,17 @@ GENCODE_SMXX = "-gencode arch=compute_{CC},code=sm_{CC}"
 GENCODE_SM20 = GENCODE_SMXX.format(CC=20)
 GENCODE_SM30 = GENCODE_SMXX.format(CC=30)
 GENCODE_SM35 = GENCODE_SMXX.format(CC=35)
+GENCODE_SM50 = GENCODE_SMXX.format(CC=50)
+GENCODE_COMPUTEXX = "-gencode arch=compute_{CC},code=compute_{CC}"
+GENCODE_COMPUTE50 = GENCODE_COMPUTEXX.format(CC=50)
+
 
 SM = []
 SM.append(GENCODE_SM20)
 SM.append(GENCODE_SM30)
 SM.append(GENCODE_SM35)
+SM.append(GENCODE_SM50)
+SM.append(GENCODE_COMPUTE50)
 
 GENCODE_FLAGS = ' '.join(SM)
 
