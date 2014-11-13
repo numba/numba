@@ -162,7 +162,6 @@ class _Compiler(object):
                                  entry.signature.return_type, flags,
                                  locals={})
 
-            print(entry.symbol)
             if self.export_python_wrap:
                 module = cres.llvm_func.module
                 # XXX: unsupported (necessary?)
