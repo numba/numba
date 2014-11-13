@@ -113,6 +113,10 @@ class CPUContext(BaseContext):
         # Engine creation has sideeffect to the process symbol table
         self.engine = eb.create(tm)
 
+    @property
+    def target_data(self):
+        return self.engine.target_data
+
     def get_function_type(self, fndesc):
         """
         Get the implemented Function type for the high-level *fndesc*.
@@ -401,9 +405,6 @@ class CPUContext(BaseContext):
         return
         # remove extra refct api calls
         remove_refct_calls(func)
-
-    def get_abi_sizeof(self, lty):
-        return self.engine.target_data.abi_size(lty)
 
     def calc_array_sizeof(self, ndim):
         '''

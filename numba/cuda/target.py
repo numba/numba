@@ -37,7 +37,11 @@ class CUDATargetContext(BaseContext):
 
         self.insert_func_defn(cudaimpl.registry.functions)
         self.insert_func_defn(libdevice.registry.functions)
-        self.target_data = ll.create_target_data(nvvm.default_data_layout)
+        self._target_data = ll.create_target_data(nvvm.default_data_layout)
+
+    @property
+    def target_data(self):
+        return self._target_data
 
     def mangler(self, name, argtypes):
         def repl(m):
@@ -180,6 +184,3 @@ class CUDATargetContext(BaseContext):
         # fpm.initialize()
         # fpm.run(func)
         # fpm.finalize()
-
-    def get_abi_sizeof(self, lty):
-        return self.target_data.abi_size(lty)

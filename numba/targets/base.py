@@ -2,9 +2,12 @@ from __future__ import print_function
 from collections import namedtuple, defaultdict
 import copy
 from types import MethodType
+
+import numpy
+
+from llvmlite import ir as llvmir
 import llvmlite.llvmpy.core as lc
 from llvmlite.llvmpy.core import Type, Constant
-import numpy
 
 import numba
 from numba import types, utils, cgutils, typing, numpy_support, errcode
@@ -142,6 +145,10 @@ class BaseContext(object):
         For subclasses to add initializer
         """
         pass
+
+    @property
+    def target_data(self):
+        raise NotImplementedError
 
     def localized(self):
         """
@@ -1051,8 +1058,14 @@ class BaseContext(object):
     def add_libs(self, libs):
         self.linking |= set(libs)
 
-    def get_abi_sizeof(self, lty):
-        raise NotImplementedError
+    def get_abi_sizeof(self, ty):
+        """
+        Get the ABI size of LLVM type *ty*.
+        """
+        if isinstance(ty, llvmir.Type):
+            return ty.get_abi_size(self.target_data)
+        # XXX this one unused?
+        return self.target_data.get_abi_size(ty)
 
     def add_exception(self, exc):
         n = len(self.exceptions) + errcode.ERROR_COUNT
