@@ -258,10 +258,19 @@ def stitch_instructions(outer, loop):
     return outer[:i] + loop + outer[i:]
 
 
+def remove_from_outer_use(inneruse, outeruse):
+    for name in inneruse:
+        inuse = inneruse[name]
+        outuse = outeruse[name]
+        outeruse[name] = sorted(list(set(outuse) - set(inuse)))
+
+
 def discover_args_and_returns(bytecode, insts, outer_rds, outer_wrs):
     """
     Basic analysis for args and returns
     This completely ignores the ordering or the read-writes.
+
+    outer_rds and outer_wrs are modified
 
     Note:
     An invalid argument and return set will likely to cause a RuntimeWarning
@@ -269,52 +278,47 @@ def discover_args_and_returns(bytecode, insts, outer_rds, outer_wrs):
     """
     rdnames, wrnames = find_varnames_uses(bytecode, insts)
 
+    # Remove all local use from the set
+    remove_from_outer_use(rdnames, outer_rds)
+    remove_from_outer_use(wrnames, outer_wrs)
+
     # Return every variables that are written inside the loop and read
     # afterwards
     rets = set()
     for name, uselist in wrnames.items():
         if name in outer_rds:
-            rdlist = rdnames[name]
-            # Find the last use in the loop
-            if rdlist:
-                # If it is used in the loop
-                # make sure it is used after the loop
-                last_use_in_loop = max(rdlist[-1], uselist[-1])
-            else:
-                last_use_in_loop = insts[-1].offset
+            endofloop = insts[-1].offset
 
             # Find the next read
             for nextrd in outer_rds[name]:
-                if nextrd > last_use_in_loop:
+                if nextrd > endofloop:
                     break
             else:
                 nextrd = None
 
             # Find the next write
             for nextwr in outer_wrs[name]:
-                if nextwr > last_use_in_loop:
+                if nextwr > endofloop:
                     break
             else:
                 nextwr = None
 
-            # If the next use is a read, it is a return value
-            if nextrd is not None and nextwr is not None:
-                if nextwr > nextrd:
-                    rets.add(name)
-            # If no usage afterwards, it is NOT a return value
-            elif nextrd is None and nextwr is None:
-                pass
-            # If there is a read but no write, it is a return value
-            elif nextwr is None:
+            # If there is a read but no write OR
+            # If the next use is a read, THEN
+            # it is a return value
+            if nextrd is not None and (nextwr is None or nextwr > nextrd):
                 rets.add(name)
 
-    # Make variables arguments if they are read before defined inside
-    # the loop.
+    # Make variables arguments if they are read before defined before the loop.
+    # Since we can't tell if things are conditionally defined here,
+    # We will have to be more conservative.
     args = set()
-    for name, uselist in rdnames.items():
-        if name not in wrnames:
-            args.add(name)
-        elif wrnames[name] and uselist and wrnames[name][0] > uselist[0]:
+    firstline = insts[0].offset
+    for name in rdnames.keys():
+        outer_write = outer_wrs[name]
+        # If there exists a definition before the start of the loop
+        # for a variable read in side the loop.
+        if any(i < firstline for i in outer_write):
             args.add(name)
 
     # Make variables arguments if it is being returned but defined before the
@@ -322,6 +326,14 @@ def discover_args_and_returns(bytecode, insts, outer_rds, outer_wrs):
     for name in rets:
         if any(i < insts[0].offset for i in outer_wrs[name]):
             args.add(name)
+
+    # Re-add the arguments back to outer_rds
+    for name in args:
+        outer_rds[name] = sorted(set(outer_rds[name]) | set([firstline]))
+
+    # Re-add the arguments back to outer_wrs
+    for name in rets:
+        outer_wrs[name] = sorted(set(outer_wrs[name]) | set([firstline]))
 
     return args, rets
 

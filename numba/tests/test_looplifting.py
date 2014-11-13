@@ -233,5 +233,18 @@ class TestLoopLiftingInAction(TestCase):
         self.assertEqual(test.py_func(arg), test(arg))
 
 
+    def test_conditionally_defined_in_loop(self):
+        from numba import jit
+        @jit(forceobj=True)
+        def test():
+            x = 5
+            y = 0
+            for i in range(2):
+                if i > 0:
+                   x = 6
+                y += x
+        self.assertEqual(test.py_func(), test())
+
+
 if __name__ == '__main__':
     unittest.main()
