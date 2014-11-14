@@ -5,7 +5,6 @@ from __future__ import print_function, absolute_import, division
 import functools
 from numba import servicelib
 from .driver import driver
-import threading
 
 
 class _gpus(object):
@@ -91,12 +90,6 @@ class GPU(object):
             self._context.push()
 
         return self._context
-    #
-    # def pop(self):
-    #     self._context.pop()
-    #
-    # def push(self):
-    #     self._context.push()
 
     def __enter__(self):
         self.associate_context()
