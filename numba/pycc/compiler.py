@@ -185,7 +185,7 @@ class _Compiler(object):
 
         # Link all exported functions
         for mod in modules:
-            llvm_module.link_in(mod, preserve=self.export_python_wrap)
+            llvm_module.link_in(mod)
 
         # Optimize
         tm = le.EngineBuilder.new(llvm_module).select_target()
