@@ -3,10 +3,8 @@ from __future__ import print_function, absolute_import
 import sys
 
 import llvmlite.llvmpy.core as lc
-import llvmlite.llvmpy.passes as lp
 import llvmlite.llvmpy.ee as le
 import llvmlite.binding as ll
-from llvmlite import ir as llvmir
 
 from numba import _dynfunc, _helperlib, config
 from numba.callwrapper import PyCallWrapper
@@ -40,7 +38,6 @@ class CPUContext(BaseContext):
     """
     Changes BaseContext calling convention
     """
-    disable_builtins = set()
     _data_layout = None
 
     # Overrides
@@ -201,13 +198,6 @@ class CPUContext(BaseContext):
         body_ptr = cgutils.pointer_add(
             builder, envptr, _dynfunc._impl_info['offset_env_body'])
         return EnvBody(self, builder, ref=body_ptr, cast_ref=True)
-
-    def build_pass_manager(self):
-        pms = lp.build_pass_managers(tm=self.tm, opt=config.OPT,
-                                     loop_vectorize=config.LOOP_VECTORIZE,
-                                     fpm=False, mod=self.execmodule,
-                                     disable_builtins=self.disable_builtins)
-        return pms.pm
 
     def map_math_functions(self):
         c_helpers = _helperlib.c_helpers
