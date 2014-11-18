@@ -32,21 +32,17 @@ class StructureTestCase(TestCase):
         llvm_fnty = lc.Type.function(machine_int, [machine_int] * nargs)
         ctypes_fnty = ctypes.CFUNCTYPE(ctypes.c_size_t,
                                        * (ctypes.c_size_t,) * nargs)
-        module = lc.Module.new("test_module.%s" % self.id())
+        module = self.context.create_module("")
         function = module.get_or_insert_function(llvm_fnty,
                                                  name=self.id())
         assert function.is_declaration
         entry_block = function.append_basic_block('entry')
         builder = lc.Builder.new(entry_block)
 
-
         def call_func(*args):
-            mod = ll.parse_assembly(str(module))
-            func = mod.get_function(function.name)
-            engine = self.context.engine
-            engine.add_module(mod)
-            engine.finalize_object()
-            cptr = engine.get_pointer_to_function(func)
+            codegen = self.context.jit_codegen("test_module.%s" % self.id())
+            codegen.add_ir_module(module)
+            cptr = codegen.get_pointer_to_function(function.name)
             cfunc = ctypes_fnty(cptr)
             return cfunc(*args)
 
