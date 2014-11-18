@@ -137,6 +137,8 @@ class BaseContext(object):
         self.insert_func_defn(builtin_registry.functions)
         self.insert_attr_defn(builtin_registry.attributes)
 
+        self.cached_internal_func = {}
+
         # Initialize
         self.init()
 
@@ -149,21 +151,6 @@ class BaseContext(object):
     @property
     def target_data(self):
         raise NotImplementedError
-
-    def localized(self):
-        """
-        Returns a localized context that contains extra environment information
-        """
-        obj = copy.copy(self)
-        obj.metadata = utils.UniqueDict()
-        obj.linking = set()
-        obj.exceptions = {}
-        obj.cached_internal_func = {}
-        return obj
-
-    def link_dependencies(self, module, depends):
-        for lib in depends:
-            module.link_in(lib, preserve=True)
 
     def insert_func_defn(self, defns):
         for defn in defns:
@@ -958,15 +945,16 @@ class BaseContext(object):
 
         if fndesc is None:
             # Compile
+            codegen = self.internal_jit_codegen()
             cres = numba.compiler.compile_internal(self.typing_context, self,
                                                    impl, sig.args,
                                                    sig.return_type,
-                                                   locals=locals)
-            llvm_func = cres.llvm_func
+                                                   locals=locals,
+                                                   codegen=codegen)
+            llvm_func = codegen.get_function(cres.fndesc.llvm_func_name)
             # Set to linkonce one-definition-rule so that the function
             # is removed once it is linked.
             llvm_func.linkage = lc.LINKAGE_LINKONCE_ODR
-            self.add_libs([cres.llvm_module])
             fndesc = cres.fndesc
 
             self.cached_internal_func[cache_key] = fndesc
@@ -1055,9 +1043,6 @@ class BaseContext(object):
         cary.strides = cstrides
         return cary._getvalue()
 
-    def add_libs(self, libs):
-        self.linking |= set(libs)
-
     def get_abi_sizeof(self, ty):
         """
         Get the ABI size of LLVM type *ty*.
@@ -1066,20 +1051,6 @@ class BaseContext(object):
             return ty.get_abi_size(self.target_data)
         # XXX this one unused?
         return self.target_data.get_abi_size(ty)
-
-    def add_exception(self, exc):
-        n = len(self.exceptions) + errcode.ERROR_COUNT
-        self.exceptions[n] = exc
-        return n
-
-    def optimize_function(self, func):
-        """
-        Perform function-level optimization.
-        This may improve generated code and reduce memory usage.
-
-        Note: This is called at the end of lowering.
-        """
-        pass
 
     def post_lowering(self, func):
         """Run target specific post-lowering transformation here.

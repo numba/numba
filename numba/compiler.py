@@ -26,7 +26,6 @@ class Flags(utils.ConfigOptions):
         # Force pyobject mode inside the whole function
         'force_pyobject',
         'no_compile',
-        'no_wraparound',
         'boundcheck',
         ])
 
@@ -45,7 +44,8 @@ CR_FIELDS = ["typing_context",
              "objectmode",
              "lifted",
              "fndesc",
-             "interpmode"]
+             "interpmode",
+             "codegen"]
 
 
 CompileResult = namedtuple("CompileResult", CR_FIELDS)
@@ -186,7 +186,7 @@ class Pipeline(object):
     """Stores and manages states for the compiler pipeline
     """
     def __init__(self, typingctx, targetctx, args, return_type, flags,
-                 locals):
+                 locals, codegen):
         self.typingctx = typingctx
         self.targetctx = targetctx
         self.args = args
@@ -196,6 +196,7 @@ class Pipeline(object):
         self.bc = None
         self.func_attr = None
         self.lifted = None
+        self.codegen = codegen
 
         self.status = _CompileStatus(
             can_fallback=self.flags.enable_pyobject,
@@ -271,8 +272,6 @@ class Pipeline(object):
         self.func = bc.func
         self.lifted = lifted
         self.func_attr = func_attr
-        self.targetctx = self.targetctx.localized()
-        self.targetctx.metadata['wraparound'] = not self.flags.no_wraparound
         return self._compile_bytecode()
 
     def compile_internal(self, bc, func_attr=DEFAULT_FUNCTION_ATTRIBUTES):
@@ -282,8 +281,6 @@ class Pipeline(object):
         self.func_attr = func_attr
         self.status.can_fallback = False
         self.status.can_giveup = False
-        self.targetctx = self.targetctx.localized()
-        self.targetctx.metadata['wraparound'] = not self.flags.no_wraparound
         return self._compile_bytecode()
 
     def stage_analyze_bytecode(self):
@@ -380,44 +377,45 @@ class Pipeline(object):
         """Object mode compilation"""
         with self.giveup_context("Function %s failed at object mode lowering"
                                  % (self.func_attr.name,)):
-            func, lmod, lfunc, fndesc = py_lowering_stage(self.targetctx,
-                                                          self.interp,
-                                                          self.flags.no_compile)
-
             if len(self.args) != self.nargs:
                 # append missing
                 self.args = (tuple(self.args) + (types.pyobject,) *
                              (self.nargs - len(self.args)))
 
-            return func, lmod, lfunc, fndesc
+            return py_lowering_stage(self.codegen,
+                                     self.targetctx,
+                                     self.interp,
+                                     self.flags.no_compile)
 
     def backend_nopython_mode(self):
         """Native mode compilation"""
         with self.fallback_context("Function %s failed at nopython "
                                    "mode lowering" % (self.func_attr.name,)):
-            func, lmod, lfunc, fndesc = native_lowering_stage(
+            return native_lowering_stage(
+                self.codegen,
                 self.targetctx,
                 self.interp,
                 self.typemap,
                 self.return_type,
                 self.calltypes,
                 self.flags.no_compile)
-            return func, lmod, lfunc, fndesc
 
     def _backend(self, lowerfn, objectmode):
         """
         Back-end: Generate LLVM IR from Numba IR, compile to machine code
         """
-        func, lmod, lfunc, fndesc = lowerfn()
-        assert lfunc.module is lmod
+        if self.codegen is None:
+            self.codegen = self.targetctx.jit_codegen(self.bc.func_qualname)
+        fndesc, func = lowerfn()
         signature = typing.signature(self.return_type, *self.args)
         cr = compile_result(typing_context=self.typingctx,
                             target_context=self.targetctx,
                             entry_point=func,
                             typing_error=self.status.fail_reason,
                             type_annotation=self.type_annotation,
-                            llvm_func=lfunc,
-                            llvm_module=lmod,
+                            codegen=self.codegen,
+                            llvm_func=None,
+                            llvm_module=None,
                             signature=signature,
                             objectmode=objectmode,
                             interpmode=False,
@@ -541,26 +539,29 @@ class Pipeline(object):
 
 
 def compile_extra(typingctx, targetctx, func, args, return_type, flags,
-                  locals):
+                  locals, codegen=None):
     """
     Args
     ----
     - return_type
         Use ``None`` to indicate
     """
-    pipeline = Pipeline(typingctx, targetctx, args, return_type, flags, locals)
+    pipeline = Pipeline(typingctx, targetctx, args, return_type, flags,
+                        locals, codegen)
     return pipeline.compile_extra(func)
 
 
 def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
                      locals, lifted=(),
-                     func_attr=DEFAULT_FUNCTION_ATTRIBUTES):
+                     func_attr=DEFAULT_FUNCTION_ATTRIBUTES, codegen=None):
 
-    pipeline = Pipeline(typingctx, targetctx, args, return_type, flags, locals)
+    pipeline = Pipeline(typingctx, targetctx, args, return_type, flags,
+                        locals, codegen)
     return pipeline.compile_bytecode(bc=bc, lifted=lifted, func_attr=func_attr)
 
 
-def compile_internal(typingctx, targetctx, func, args, return_type, locals={}):
+def compile_internal(typingctx, targetctx, func, args, return_type, locals,
+                     codegen):
     flags = DEFAULT_FLAGS.copy()
     flags.set("no_compile")
 
@@ -569,7 +570,8 @@ def compile_internal(typingctx, targetctx, func, args, return_type, locals={}):
         print(bc.dump())
     func_attr = get_function_attributes(func)
 
-    pipeline = Pipeline(typingctx, targetctx, args, return_type, flags, locals)
+    pipeline = Pipeline(typingctx, targetctx, args, return_type, flags,
+                        locals, codegen)
     return pipeline.compile_internal(bc=bc, func_attr=func_attr)
 
 
@@ -625,9 +627,6 @@ def legalize_return_type(return_type, interp, targetctx):
                 raise TypeError("Only accept returning of array passed into the "
                                 "function as argument")
 
-        # Legalized; tag return handling
-        targetctx.metadata['return.array'] = 'arg'
-
     elif (isinstance(return_type, types.Function) or
             isinstance(return_type, types.Phantom)):
         raise TypeError("Can't return function object in nopython mode")
@@ -682,48 +681,39 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
     return typemap, restype, calltypes
 
 
-def native_lowering_stage(targetctx, interp, typemap, restype, calltypes,
-                          nocompile):
+def native_lowering_stage(codegen, targetctx, interp, typemap, restype,
+                          calltypes, nocompile):
     # Lowering
     fndesc = lowering.PythonFunctionDescriptor.from_specialized_function(
         interp, typemap, restype, calltypes, mangler=targetctx.mangler)
 
     lower = lowering.Lower(targetctx, fndesc, interp)
-    lower.lower()
-
-    # Linking depending libraries
-    module = lower.llvm_module
-    function = lower.llvm_function
+    lower.lower(codegen)
     env = lower.env
     del lower
 
-    targetctx.link_dependencies(module, targetctx.linking)
-
     if nocompile:
-        return None, module, function, fndesc
+        return fndesc, None
     else:
         # Prepare for execution
-        cfunc = targetctx.get_executable(function, fndesc, env)
+        cfunc = targetctx.get_executable(codegen, fndesc, env)
         targetctx.insert_user_function(cfunc, fndesc)
-        return cfunc, module, function, fndesc
+        return fndesc, cfunc
 
 
-
-def py_lowering_stage(targetctx, interp, nocompile):
+def py_lowering_stage(codegen, targetctx, interp, nocompile):
     fndesc = lowering.PythonFunctionDescriptor.from_object_mode_function(interp)
     lower = objmode.PyLower(targetctx, fndesc, interp)
-    lower.lower()
-
-    module = lower.llvm_module
-    function = lower.llvm_function
+    lower.lower(codegen)
     env = lower.env
     del lower
 
     if nocompile:
-        return None, module, function, fndesc
+        return fndesc, None
     else:
-        cfunc = targetctx.get_executable(function, fndesc, env)
-        return cfunc, module, function, fndesc
+        # Prepare for execution
+        cfunc = targetctx.get_executable(codegen, fndesc, env)
+        return fndesc, cfunc
 
 
 def ir_optimize_for_py_stage(interp):

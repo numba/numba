@@ -72,6 +72,14 @@ class FunctionDescriptor(object):
         else:
             return sys.modules[self.modname]
 
+    @property
+    def llvm_func_name(self):
+        return self.mangled_name
+
+    @property
+    def llvm_cpython_wrapper_name(self):
+        return 'wrapper.' + self.mangled_name
+
     def __repr__(self):
         return "<function descriptor %r>" % (self.unique_name)
 
@@ -174,6 +182,9 @@ class BaseLower(object):
         self.env = _dynfunc.Environment(
             globals=self.fndesc.lookup_module().__dict__)
 
+        # Mapping of error codes to exception classes or instances
+        self.exceptions = {}
+
         # Setup function
         self.function = context.declare_function(self.module, fndesc)
         self.entry_block = self.function.append_basic_block('entry')
@@ -201,7 +212,13 @@ class BaseLower(object):
         Called after all blocks are lowered
         """
 
-    def lower(self):
+    def add_exception(self, exc):
+        assert issubclass(exc, BaseException), exc
+        excid = len(self.exceptions) + 1
+        self.exceptions[excid] = exc
+        return excid
+
+    def lower(self, codegen):
         # Init argument variables
         fnargs = self.context.get_arguments(self.function)
         for ak, av in zip(self.fndesc.args, fnargs):
@@ -240,14 +257,13 @@ class BaseLower(object):
             print('=' * 80)
 
         # Materialize LLVM Module
-        self.llvm_module = ll.parse_assembly(str(self.module))
-        self.llvm_function = self.llvm_module.get_function(self.function.name)
+        codegen.add_ir_module(self.module)
 
-        # Run function-level optimize to reduce memory usage and improve
-        # module-level optimization
-        self.context.optimize_function(self.llvm_function)
+        # Create CPython wrapper
+        self.context.create_cpython_wrapper(codegen, self.fndesc, self.exceptions)
 
         if config.NUMBA_DUMP_FUNC_OPT:
+            # FIXME
             print(("LLVM FUNCTION OPTIMIZED DUMP %s" %
                    self.fndesc).center(80, '-'))
             print(self.llvm_module)
@@ -355,7 +371,7 @@ class Lower(BaseLower):
             return impl(self.builder, (target, value))
 
         elif isinstance(inst, ir.Raise):
-            excid = self.context.add_exception(inst.exception)
+            excid = self.add_exception(inst.exception)
             self.context.return_user_exc(self.builder, excid)
 
         else:
@@ -529,7 +545,7 @@ class Lower(BaseLower):
             iternext_impl = self.context.get_function('iternext',
                                                       iternext_sig)
             iterobj = getiter_impl(self.builder, (val,))
-            excid = self.context.add_exception(ValueError)
+            excid = self.add_exception(ValueError)
             # We call iternext() as many times as desired (`expr.count`).
             for i in range(expr.count):
                 pair = iternext_impl(self.builder, (iterobj,))

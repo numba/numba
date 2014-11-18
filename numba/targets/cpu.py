@@ -13,7 +13,7 @@ from numba.callwrapper import PyCallWrapper
 from .base import BaseContext, PYOBJECT
 from numba import utils, cgutils, types
 from numba.targets import (
-    intrinsics, cmathimpl, mathimpl, npyimpl, operatorimpl, printimpl)
+    codegen, intrinsics, cmathimpl, mathimpl, npyimpl, operatorimpl, printimpl)
 from .options import TargetOptions
 
 
@@ -36,14 +36,6 @@ class EnvBody(cgutils.Structure):
     ]
 
 
-_x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',
-                      'i886', 'i986'])
-
-def _is_x86(triple):
-    arch = triple.split('-')[0]
-    return arch in _x86arch
-
-
 class CPUContext(BaseContext):
     """
     Changes BaseContext calling convention
@@ -61,39 +53,8 @@ class CPUContext(BaseContext):
         return mod
 
     def init(self):
-        self.execmodule = self.create_module("numba.exec")
-        eb = le.EngineBuilder.new(self.execmodule).opt(3)
+        self._internal_codegen = codegen.JITCPUCodegen("numba.exec")
 
-        # Use legacy JIT on win32.
-        # MCJIT causes access violation probably due to invalid data-section
-        # references.  Let hope this is fixed in llvm3.6.
-        if sys.platform.startswith('win32'):
-            eb.use_mcjit(False)
-        else:
-            eb.use_mcjit(True)
-
-        features = []
-        # Note: LLVM 3.3 always generates vmovsd (AVX instruction) for
-        # mem<->reg move.  The transition between AVX and SSE instruction
-        # without proper vzeroupper to reset is causing a serious performance
-        # penalty because the SSE register need to save/restore.
-        # For now, we will disable the AVX feature for all processor and hope
-        # that LLVM 3.5 will fix this issue.
-        # features.append('-avx')
-
-        # If this is x86, make sure SSE is supported
-        if config.X86_SSE and _is_x86(self.execmodule.triple):
-            features.append('+sse')
-            features.append('+sse2')
-
-        # Set feature attributes
-        eb.mattrs(','.join(features))
-
-        # Enable JIT debug
-        eb.emit_jit_debug(True)
-
-        self.tm = tm = eb.select_target()
-        self.pm = self.build_pass_manager()
         self.native_funcs = utils.UniqueDict()
         self.cmath_provider = {}
         self.is32bit = (utils.MACHINE_BITS == 32)
@@ -109,15 +70,20 @@ class CPUContext(BaseContext):
         self.insert_func_defn(operatorimpl.registry.functions)
         self.insert_func_defn(printimpl.registry.functions)
 
-        # Engine creation has sideeffect to the process symbol table
-        self.engine = eb.create(tm)
-        # Enforce data layout to enable layout-specific optimizations
-        self._data_layout = str(self.engine.target_data)
-        self.execmodule.data_layout = self._data_layout
-
     @property
     def target_data(self):
-        return self.engine.target_data
+        return self._internal_codegen.target_data
+
+    def aot_codegen(self, name):
+        return codegen.AOTCPUCodegen(name)
+
+    def jit_codegen(self, name):
+        cg = codegen.JITCPUCodegen(name)
+        cg.add_library(self.internal_jit_codegen())
+        return cg
+
+    def internal_jit_codegen(self):
+        return self._internal_codegen
 
     def get_function_type(self, fndesc):
         """
@@ -174,7 +140,7 @@ class CPUContext(BaseContext):
         Override parent to handle get_env_argument
         """
         fnty = self.get_function_type(fndesc)
-        fn = module.get_or_insert_function(fnty, name=fndesc.mangled_name)
+        fn = module.get_or_insert_function(fnty, name=fndesc.llvm_func_name)
         assert fn.is_declaration
         for ak, av in zip(fndesc.args, self.get_arguments(fn)):
             av.name = "arg.%s" % ak
@@ -312,29 +278,7 @@ class CPUContext(BaseContext):
             # calls to compiler-rt
             intrinsics.fix_divmod(mod)
 
-    def finalize(self, func, fndesc):
-        """Finalize the compilation.  Called by get_executable().
-
-        - Rewrite intrinsics
-        - Fix div & rem instructions on 32bit platform
-        - Optimize python API calls
-        """
-        func.module.target = self.tm.triple
-
-        # XXX: Disabled for now
-        #
-        # if self.is32bit:
-        #     dmf = intrinsics.DivmodFixer()
-        #     dmf.run(func.module)
-
-        # XXX: Disabled for now
-        # im = intrinsics.IntrinsicMapping(self)
-        # im.run(func.module)
-
-        if not fndesc.native:
-            self.optimize_pythonapi(func)
-
-    def get_executable(self, func, fndesc, env):
+    def get_executable(self, codegen, fndesc, env):
         """
         Returns
         -------
@@ -347,66 +291,45 @@ class CPUContext(BaseContext):
         - env
             an execution environment (from _dynfunc)
         """
-        self.finalize(func, fndesc)
-        cfunc = self.prepare_for_call(func, fndesc, env)
+        func = codegen.get_function(fndesc.llvm_func_name)
+        cfunc = self.prepare_for_call(codegen, func, fndesc, env)
         return cfunc
 
-    def prepare_for_call(self, func, fndesc, env):
-
+    def create_cpython_wrapper(self, codegen, fndesc, exceptions):
+        func = codegen.get_function(fndesc.llvm_func_name)
         wrapper_module = self.create_module("wrapper")
         fnty = self.get_function_type(fndesc)
         wrapper_callee = wrapper_module.add_function(fnty, func.name)
-        wrapper, api = PyCallWrapper(self, wrapper_module, wrapper_callee,
-                                     fndesc, exceptions=self.exceptions).build()
-        wrapper_module = ll.parse_assembly(str(wrapper_module))
-        wrapper_module.verify()
+        PyCallWrapper(self, wrapper_module, wrapper_callee,
+                      fndesc, exceptions=exceptions).build()
+        codegen.add_ir_module(wrapper_module)
 
-        module = func.module
-        wrapper_module.triple = module.triple
-        wrapper_module.data_layout = module.data_layout
-        module.link_in(wrapper_module)
+    def prepare_for_call(self, codegen, func, fndesc, env):
+        wrapper = codegen.get_function(fndesc.llvm_cpython_wrapper_name)
 
-        # func = module.get_function(func.name)
-        wrapper = module.get_function(wrapper.name)
-        self.optimize(module)
+        # FIXME
+        #if config.DUMP_OPTIMIZED:
+            #print(("OPTIMIZED DUMP %s" % fndesc).center(80, '-'))
+            #print(module)
+            #print('=' * 80)
 
-        if config.DUMP_OPTIMIZED:
-            print(("OPTIMIZED DUMP %s" % fndesc).center(80, '-'))
-            print(module)
-            print('=' * 80)
+        #if config.DUMP_ASSEMBLY:
+            #print(("ASSEMBLY %s" % fndesc).center(80, '-'))
+            #print(self.tm.emit_assembly(module))
+            #print('=' * 80)
 
-        if config.DUMP_ASSEMBLY:
-            print(("ASSEMBLY %s" % fndesc).center(80, '-'))
-            print(self.tm.emit_assembly(module))
-            print('=' * 80)
+        # Code generation
+        baseptr = codegen.get_pointer_to_function(func.name)
+        fnptr = codegen.get_pointer_to_function(wrapper.name)
 
-        # Code gen
-        self.engine.add_module(func.module)
-        self.engine.finalize_object()
-        baseptr = self.engine.get_pointer_to_function(func)
-        fnptr = self.engine.get_pointer_to_function(wrapper)
         cfunc = _dynfunc.make_function(fndesc.lookup_module(),
                                        fndesc.qualname.split('.')[-1],
                                        fndesc.doc, fnptr, env)
 
         if fndesc.native:
-            self.native_funcs[cfunc] = fndesc.mangled_name, baseptr
+            self.native_funcs[cfunc] = fndesc.llvm_func_name, baseptr
 
         return cfunc
-
-    def optimize_pythonapi(self, func):
-        # Simplify the function using
-        pms = lp.build_pass_managers(tm=self.tm, opt=1, mod=func.module,
-                                     disable_builtins=self.disable_builtins)
-        fpm = pms.fpm
-
-        fpm.initialize()
-        fpm.run(func)
-        fpm.finalize()
-
-        return
-        # remove extra refct api calls
-        remove_refct_calls(func)
 
     def calc_array_sizeof(self, ndim):
         '''
@@ -415,16 +338,6 @@ class CPUContext(BaseContext):
         aryty = types.Array(types.int32, ndim, 'A')
         return self.get_abi_sizeof(self.get_value_type(aryty))
 
-    def optimize_function(self, func):
-        """Run O1 function passes
-        """
-        pms = lp.build_pass_managers(tm=self.tm, opt=1, pm=False,
-                                     mod=func.module,
-                                     disable_builtins=self.disable_builtins)
-        fpm = pms.fpm
-        fpm.initialize()
-        fpm.run(func)
-        fpm.finalize()
 
 # ----------------------------------------------------------------------------
 # TargetOptions

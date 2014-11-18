@@ -223,8 +223,8 @@ def build_ufunc_wrapper(context, func, signature, objmode, env):
     wrapper = module.get_function(wrapper.name)
     oldfunc.linkage = LINKAGE_INTERNAL
 
-    context.optimize_function(wrapper)
-    context.optimize(module)
+    #context.optimize_function(wrapper)
+    #context.optimize(module)
 
     if config.DUMP_OPTIMIZED:
         print(module)
