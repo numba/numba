@@ -86,13 +86,13 @@ class BaseCPUCodegen(object):
     def add_llvm_module(self, ll_module):
         def funcs(mod):
             return [f.name for f in mod.functions]
-        fpm = self._function_pass_manager(ll_module)
-        # Run function-level optimizations to reduce memory usage and improve
-        # module-level optimization.
-        for func in ll_module.functions:
-            fpm.initialize()
-            fpm.run(func)
-            fpm.finalize()
+        with self._function_pass_manager(ll_module) as fpm:
+            # Run function-level optimizations to reduce memory usage and improve
+            # module-level optimization.
+            for func in ll_module.functions:
+                fpm.initialize()
+                fpm.run(func)
+                fpm.finalize()
         self._llvm_module.link_in(ll_module)
 
     def finalize(self):
@@ -106,10 +106,11 @@ class BaseCPUCodegen(object):
     def _finalize(self):
         for codegen in self._libraries:
             self._llvm_module.link_in(codegen._llvm_module, preserve=True)
-        pm = self._module_pass_manager(self._llvm_module)
-        pm.run(self._llvm_module)
+        with self._module_pass_manager(self._llvm_module) as pm:
+            pm.run(self._llvm_module)
 
         self._finalize_specific()
+
         self._finalized = True
 
         if config.DUMP_OPTIMIZED:
@@ -148,7 +149,9 @@ class AOTCPUCodegen(BaseCPUCodegen):
         pass
 
     def _finalize_specific(self):
-        pass
+        self._tli = None
+        self._pmb = None
+        self._data_layout = None
 
     def emit_native_object(self):
         self._ensure_finalized()
@@ -188,6 +191,10 @@ class JITCPUCodegen(BaseCPUCodegen):
 
     def _finalize_specific(self):
         self._engine.finalize_object()
+        self._tli = None
+        self._pmb = None
+        self._tm = None
+        self._data_layout = None
 
     def get_pointer_to_function(self, name):
         self._ensure_finalized()
