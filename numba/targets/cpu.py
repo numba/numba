@@ -263,9 +263,6 @@ class CPUContext(BaseContext):
         if le.dylib_address_of_symbol(name) == ptr:
             le.dylib_add_symbol(name, 0)
 
-    def optimize(self, module):
-        self.pm.run(module)
-
     def post_lowering(self, func):
         mod = func.module
 
