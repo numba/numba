@@ -33,20 +33,25 @@ class StructureTestCase(TestCase):
         ctypes_fnty = ctypes.CFUNCTYPE(ctypes.c_size_t,
                                        * (ctypes.c_size_t,) * nargs)
         module = self.context.create_module("")
+
         function = module.get_or_insert_function(llvm_fnty,
                                                  name=self.id())
         assert function.is_declaration
         entry_block = function.append_basic_block('entry')
         builder = lc.Builder.new(entry_block)
 
+        first = [True]
+
         def call_func(*args):
-            codegen = self.context.jit_codegen("test_module.%s" % self.id())
-            codegen.add_ir_module(module)
-            cptr = codegen.get_pointer_to_function(function.name)
+            codegen = self.context.jit_codegen()
+            library = codegen.create_library("test_module.%s" % self.id())
+            library.add_ir_module(module)
+            cptr = library.get_pointer_to_function(function.name)
             cfunc = ctypes_fnty(cptr)
             return cfunc(*args)
 
         yield self.context, builder, function.args, call_func
+
 
     def get_bytearray_addr(self, ba):
         assert isinstance(ba, bytearray)
@@ -60,8 +65,8 @@ class StructureTestCase(TestCase):
         with self.compile_function(2) as (context, builder, args, call):
             res = builder.add(args[0], args[1])
             builder.ret(res)
-            self.assertEqual(call(5, -2), 3)
-            self.assertEqual(call(4, 2), 6)
+        self.assertEqual(call(5, -2), 3)
+        self.assertEqual(call(4, 2), 6)
 
     @contextlib.contextmanager
     def run_struct_access(self, struct_class, buf, offset=0):
@@ -74,7 +79,7 @@ class StructureTestCase(TestCase):
             yield context, builder, args, inst
 
             builder.ret(lc.Constant.int(machine_int, 0))
-            call(self.get_bytearray_addr(buf))
+        call(self.get_bytearray_addr(buf))
 
     @contextlib.contextmanager
     def run_simple_struct_test(self, struct_class, struct_fmt, struct_args):

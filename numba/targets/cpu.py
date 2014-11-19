@@ -51,6 +51,7 @@ class CPUContext(BaseContext):
 
     def init(self):
         self._internal_codegen = codegen.JITCPUCodegen("numba.exec")
+        #self._internal_library = self._internal_codegen.create_library("common")
 
         self.native_funcs = utils.UniqueDict()
         self.cmath_provider = {}
@@ -74,12 +75,7 @@ class CPUContext(BaseContext):
     def aot_codegen(self, name):
         return codegen.AOTCPUCodegen(name)
 
-    def jit_codegen(self, name):
-        cg = codegen.JITCPUCodegen(name)
-        cg.add_library(self.internal_jit_codegen())
-        return cg
-
-    def internal_jit_codegen(self):
+    def jit_codegen(self):
         return self._internal_codegen
 
     def get_function_type(self, fndesc):
@@ -265,7 +261,16 @@ class CPUContext(BaseContext):
             # calls to compiler-rt
             intrinsics.fix_divmod(mod)
 
-    def get_executable(self, codegen, fndesc, env):
+    def create_cpython_wrapper(self, library, fndesc, exceptions):
+        #func = codegen.get_function(fndesc.llvm_func_name)
+        wrapper_module = self.create_module("wrapper")
+        fnty = self.get_function_type(fndesc)
+        wrapper_callee = wrapper_module.add_function(fnty, fndesc.llvm_func_name)
+        PyCallWrapper(self, wrapper_module, wrapper_callee,
+                      fndesc, exceptions=exceptions).build()
+        library.add_ir_module(wrapper_module)
+
+    def get_executable(self, library, fndesc, env):
         """
         Returns
         -------
@@ -278,21 +283,8 @@ class CPUContext(BaseContext):
         - env
             an execution environment (from _dynfunc)
         """
-        func = codegen.get_function(fndesc.llvm_func_name)
-        cfunc = self.prepare_for_call(codegen, func, fndesc, env)
-        return cfunc
-
-    def create_cpython_wrapper(self, codegen, fndesc, exceptions):
-        func = codegen.get_function(fndesc.llvm_func_name)
-        wrapper_module = self.create_module("wrapper")
-        fnty = self.get_function_type(fndesc)
-        wrapper_callee = wrapper_module.add_function(fnty, func.name)
-        PyCallWrapper(self, wrapper_module, wrapper_callee,
-                      fndesc, exceptions=exceptions).build()
-        codegen.add_ir_module(wrapper_module)
-
-    def prepare_for_call(self, codegen, func, fndesc, env):
-        wrapper = codegen.get_function(fndesc.llvm_cpython_wrapper_name)
+        func = library.get_function(fndesc.llvm_func_name)
+        wrapper = library.get_function(fndesc.llvm_cpython_wrapper_name)
 
         # FIXME
         #if config.DUMP_OPTIMIZED:
@@ -306,8 +298,8 @@ class CPUContext(BaseContext):
             #print('=' * 80)
 
         # Code generation
-        baseptr = codegen.get_pointer_to_function(func.name)
-        fnptr = codegen.get_pointer_to_function(wrapper.name)
+        baseptr = library.get_pointer_to_function(func.name)
+        fnptr = library.get_pointer_to_function(wrapper.name)
 
         cfunc = _dynfunc.make_function(fndesc.lookup_module(),
                                        fndesc.qualname.split('.')[-1],

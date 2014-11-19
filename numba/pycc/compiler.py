@@ -16,7 +16,6 @@ from numba.utils import IS_PY3
 from . import llvm_types as lt
 from .decorators import registry as export_registry
 from numba.compiler import compile_extra, Flags
-from numba.targets.codegen import AOTCPUCodegen
 from numba.targets.registry import CPUTarget
 
 
@@ -150,6 +149,7 @@ class _Compiler(object):
         target_ctx = CPUTarget.target_context
 
         codegen = target_ctx.aot_codegen(self.module_name)
+        library = codegen.create_library(self.module_name)
 
         # Generate IR for all exported functions
         flags = Flags()
@@ -159,16 +159,16 @@ class _Compiler(object):
             cres = compile_extra(typing_ctx, target_ctx, entry.function,
                                  entry.signature.args,
                                  entry.signature.return_type, flags,
-                                 locals={}, codegen=codegen)
+                                 locals={}, library=library)
 
             func_name = cres.fndesc.llvm_func_name
-            llvm_func = codegen.get_function(func_name)
+            llvm_func = cres.library.get_function(func_name)
 
             if self.export_python_wrap:
                 # XXX: unsupported (necessary?)
                 llvm_func.linkage = lc.LINKAGE_INTERNAL
                 wrappername = cres.fndesc.llvm_cpython_wrapper_name
-                wrapper = codegen.get_function(wrappername)
+                wrapper = cres.library.get_function(wrappername)
                 wrapper.name = entry.symbol
                 wrapper.linkage = lc.LINKAGE_EXTERNAL
                 fnty = cres.target_context.get_function_type(cres.fndesc)
@@ -178,11 +178,11 @@ class _Compiler(object):
                 llvm_func.name = entry.symbol
 
         if self.export_python_wrap:
-            wrapper_module = target_ctx.create_module("wrapper")
+            wrapper_module = library.create_ir_module("wrapper")
             self._emit_python_wrapper(wrapper_module)
-            codegen.add_ir_module(wrapper_module)
+            library.add_ir_module(wrapper_module)
 
-        return codegen
+        return library
 
     def _process_inputs(self, wrap=False, **kws):
         for ifile in self.inputs:
@@ -193,15 +193,15 @@ class _Compiler(object):
 
     def write_llvm_bitcode(self, output, **kws):
         self._process_inputs(**kws)
-        codegen = self._cull_exports()
+        library = self._cull_exports()
         with open(output, 'wb') as fout:
-            fout.write(codegen.emit_bitcode())
+            fout.write(library.emit_bitcode())
 
     def write_native_object(self, output, **kws):
         self._process_inputs(**kws)
-        codegen = self._cull_exports()
+        library = self._cull_exports()
         with open(output, 'wb') as fout:
-            fout.write(codegen.emit_native_object())
+            fout.write(library.emit_native_object())
 
     def emit_type(self, tyobj):
         ret_val = str(tyobj)

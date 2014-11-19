@@ -168,14 +168,14 @@ class BaseLower(object):
     """
     Lower IR to LLVM
     """
-    def __init__(self, context, fndesc, interp):
+    def __init__(self, context, library, fndesc, interp):
         self.context = context
+        self.library = library
         self.fndesc = fndesc
         self.blocks = utils.SortedMap(utils.iteritems(interp.blocks))
 
         # Initialize LLVM
-        self.module = self.context.create_module("module.%s" %
-                                                 self.fndesc.unique_name)
+        self.module = self.library.create_ir_module(self.fndesc.unique_name)
 
         # Python execution environment (will be available to the compiled
         # function).
@@ -218,7 +218,7 @@ class BaseLower(object):
         self.exceptions[excid] = exc
         return excid
 
-    def lower(self, codegen):
+    def lower(self):
         # Init argument variables
         fnargs = self.context.get_arguments(self.function)
         for ak, av in zip(self.fndesc.args, fnargs):
@@ -257,10 +257,11 @@ class BaseLower(object):
             print('=' * 80)
 
         # Materialize LLVM Module
-        codegen.add_ir_module(self.module)
+        self.library.add_ir_module(self.module)
 
         # Create CPython wrapper
-        self.context.create_cpython_wrapper(codegen, self.fndesc, self.exceptions)
+        self.context.create_cpython_wrapper(self.library, self.fndesc,
+                                            self.exceptions)
 
         if config.NUMBA_DUMP_FUNC_OPT:
             # FIXME

@@ -112,7 +112,7 @@ def build_fast_loop_body(context, func, builder, arrays, out, offsets,
                                   out, offsets, store_offset, signature)
 
 
-def build_ufunc_wrapper(codegen, context, func, signature, objmode, env):
+def build_ufunc_wrapper(library, context, func, signature, objmode, env):
     """
     Wrap the scalar function with a loop that iterates over the arguments
     """
@@ -127,7 +127,7 @@ def build_ufunc_wrapper(codegen, context, func, signature, objmode, env):
     fnty = Type.function(Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
                                        intp_ptr_t, byte_ptr_t])
 
-    wrapper_module = codegen.create_ir_module('')
+    wrapper_module = library.create_ir_module('')
     if objmode:
         func_type = context.get_function_type2(
             types.pyobject, [types.pyobject] * len(signature.args))
@@ -216,8 +216,8 @@ def build_ufunc_wrapper(codegen, context, func, signature, objmode, env):
 
 
     # Run optimizer
-    codegen.add_ir_module(wrapper_module)
-    wrapper = codegen.get_function(wrapper.name)
+    library.add_ir_module(wrapper_module)
+    wrapper = library.get_function(wrapper.name)
     oldfunc.linkage = LINKAGE_INTERNAL
 
     if config.DUMP_OPTIMIZED:
@@ -274,8 +274,8 @@ class UArrayArg(object):
 
 
 class _GufuncWrapper(object):
-    def __init__(self, codegen, context, func, signature, sin, sout, fndesc):
-        self.codegen = codegen
+    def __init__(self, library, context, func, signature, sin, sout, fndesc):
+        self.library = library
         self.context = context
         self.func = func
         self.signature = signature
@@ -297,7 +297,7 @@ class _GufuncWrapper(object):
         fnty = Type.function(Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
                                            intp_ptr_t, byte_ptr_t])
 
-        wrapper_module = self.codegen.create_ir_module('')
+        wrapper_module = self.library.create_ir_module('')
         func_type = self.context.get_function_type(self.fndesc)
         func = wrapper_module.add_function(func_type, name=self.func.name)
         wrapper = wrapper_module.add_function(fnty,
@@ -364,8 +364,8 @@ class _GufuncWrapper(object):
 
         builder.ret_void()
 
-        self.codegen.add_ir_module(wrapper_module)
-        wrapper = self.codegen.get_function(wrapper.name)
+        self.library.add_ir_module(wrapper_module)
+        wrapper = self.library.get_function(wrapper.name)
 
         # Set core function to internal so that it is not generated
         self.func.linkage = LINKAGE_INTERNAL
@@ -417,11 +417,11 @@ class _GufuncObjectWrapper(_GufuncWrapper):
         self.pyapi.gil_release(self.gil)
 
 
-def build_gufunc_wrapper(codegen, context, func, signature, sin, sout, fndesc):
+def build_gufunc_wrapper(library, context, func, signature, sin, sout, fndesc):
     wrapcls = (_GufuncObjectWrapper
                if signature.return_type == types.pyobject
                else _GufuncWrapper)
-    return wrapcls(codegen, context, func, signature, sin, sout, fndesc).build()
+    return wrapcls(library, context, func, signature, sin, sout, fndesc).build()
 
 
 def _prepare_call_to_object_mode(context, builder, func, signature, args,

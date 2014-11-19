@@ -945,13 +945,14 @@ class BaseContext(object):
 
         if fndesc is None:
             # Compile
-            codegen = self.internal_jit_codegen()
+            library = self.jit_codegen().create_library(impl.__name__)
             cres = numba.compiler.compile_internal(self.typing_context, self,
+                                                   library,
                                                    impl, sig.args,
                                                    sig.return_type,
-                                                   locals=locals,
-                                                   codegen=codegen)
-            llvm_func = codegen.get_function(cres.fndesc.llvm_func_name)
+                                                   locals=locals)
+            # Ensure
+            llvm_func = cres.library.get_function(cres.fndesc.llvm_func_name)
             # Set to linkonce one-definition-rule so that the function
             # is removed once it is linked.
             llvm_func.linkage = lc.LINKAGE_LINKONCE_ODR

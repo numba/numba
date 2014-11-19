@@ -19,9 +19,112 @@ def _is_x86(triple):
     return arch in _x86arch
 
 
-class BaseCPUCodegen(object):
+class CodeLibrary(object):
 
     _finalized = False
+
+    def __init__(self, codegen, name):
+        self._codegen = codegen
+        self._name = name
+        self._final_module = ll.parse_assembly(
+            str(self._codegen._create_empty_module(self._name)))
+        self._codegen._engine.add_module(self._final_module)
+
+    @property
+    def codegen(self):
+        return self._codegen
+
+    def __repr__(self):
+        return "<Library %r at 0x%x>" % (self._name, id(self))
+
+    def _raise_if_finalized(self):
+        if self._finalized:
+            raise RuntimeError("operation impossible on finalized object %r"
+                               % (self,))
+
+    def _ensure_finalized(self):
+        if not self._finalized:
+            self.finalize()
+
+    def create_ir_module(self, name):
+        self._raise_if_finalized()
+        ir_module = self._codegen._create_empty_module(name)
+        return ir_module
+
+    def add_ir_module(self, ir_module):
+        self._raise_if_finalized()
+        assert isinstance(ir_module, llvmir.Module)
+        # Enforce data layout to enable layout-specific optimizations
+        ir_module.data_layout = self._codegen._data_layout
+        ll_module = ll.parse_assembly(str(ir_module))
+        ll_module.verify()
+        self.add_llvm_module(ll_module)
+
+    def add_llvm_module(self, ll_module):
+        with self._codegen._function_pass_manager(ll_module) as fpm:
+            # Run function-level optimizations to reduce memory usage and improve
+            # module-level optimization.
+            for func in ll_module.functions:
+                fpm.initialize()
+                fpm.run(func)
+                fpm.finalize()
+        self._final_module.link_in(ll_module)
+
+    def finalize(self):
+        self._raise_if_finalized()
+        with self._codegen._module_pass_manager() as pm:
+            pm.run(self._final_module)
+
+        # Link libraries for shared code
+        for library in self._codegen._libraries:
+            self._final_module.link_in(library._final_module, preserve=True)
+
+        self._final_module.verify()
+        self._finalize_specific()
+
+        self._finalized = True
+
+        if config.DUMP_OPTIMIZED:
+            # FIXME
+            print(("OPTIMIZED DUMP %s" % fndesc).center(80, '-'))
+            print(self._llvm_module)
+            print('=' * 80)
+
+        if config.DUMP_ASSEMBLY:
+            print(("ASSEMBLY %s" % fndesc).center(80, '-'))
+            print(self._tm.emit_assembly(self._llvm_module))
+            print('=' * 80)
+
+    def get_function(self, name):
+        return self._final_module.get_function(name)
+
+
+class AOTCodeLibrary(CodeLibrary):
+
+    def emit_native_object(self):
+        self._ensure_finalized()
+        return self._codegen._tm.emit_object(self._final_module)
+
+    def emit_bitcode(self):
+        self._ensure_finalized()
+        return self._final_module.as_bitcode()
+
+    def _finalize_specific(self):
+        pass
+
+
+class JITCodeLibrary(CodeLibrary):
+
+    def get_pointer_to_function(self, name):
+        self._ensure_finalized()
+        func = self.get_function(name)
+        return self._codegen._engine.get_pointer_to_function(func)
+
+    def _finalize_specific(self):
+        self._codegen._engine.finalize_object()
+
+
+class BaseCPUCodegen(object):
 
     def __init__(self, module_name):
         self._libraries = []
@@ -49,14 +152,6 @@ class BaseCPUCodegen(object):
         self._engine = engine
         self._data_layout = data_layout
 
-    def _raise_if_finalized(self):
-        if self._finalized:
-            raise RuntimeError("operation impossible on finalized codegen object")
-
-    def _ensure_finalized(self):
-        if not self._finalized:
-            self.finalize()
-
     def _create_empty_module(self, name):
         ir_module = lc.Module.new(name)
         ir_module.triple = ll.get_default_triple()
@@ -66,67 +161,16 @@ class BaseCPUCodegen(object):
     def target_data(self):
         return self._engine.target_data
 
-    def add_library(self, codegen):
-        self._libraries.append(codegen)
+    def add_linking_library(self, library):
+        library._ensure_finalized()
+        self._libraries.append(library)
 
-    def create_ir_module(self, name):
-        self._raise_if_finalized()
-        ir_module = self._create_empty_module(name)
-        # Enforce data layout to enable layout-specific optimizations
-        ir_module.data_layout = self._data_layout
-        return ir_module
+    def create_library(self, name):
+        return self._library_class(self, name)
 
-    def add_ir_module(self, ir_module):
-        self._raise_if_finalized()
-        assert isinstance(ir_module, llvmir.Module)
-        ll_module = ll.parse_assembly(str(ir_module))
-        ll_module.verify()
-        self.add_llvm_module(ll_module)
-
-    def add_llvm_module(self, ll_module):
-        def funcs(mod):
-            return [f.name for f in mod.functions]
-        with self._function_pass_manager(ll_module) as fpm:
-            # Run function-level optimizations to reduce memory usage and improve
-            # module-level optimization.
-            for func in ll_module.functions:
-                fpm.initialize()
-                fpm.run(func)
-                fpm.finalize()
-        self._llvm_module.link_in(ll_module)
-
-    def finalize(self):
-        self._raise_if_finalized()
-        self._finalize()
-        self._finalized = True
-
-    def get_function(self, name):
-        return self._llvm_module.get_function(name)
-
-    def _finalize(self):
-        for codegen in self._libraries:
-            self._llvm_module.link_in(codegen._llvm_module, preserve=True)
-        with self._module_pass_manager(self._llvm_module) as pm:
-            pm.run(self._llvm_module)
-
-        self._finalize_specific()
-
-        self._finalized = True
-
-        if config.DUMP_OPTIMIZED:
-            # FIXME
-            print(("OPTIMIZED DUMP %s" % fndesc).center(80, '-'))
-            print(self._llvm_module)
-            print('=' * 80)
-
-        if config.DUMP_ASSEMBLY:
-            print(("ASSEMBLY %s" % fndesc).center(80, '-'))
-            print(self._tm.emit_assembly(self._llvm_module))
-            print('=' * 80)
-
-    def _module_pass_manager(self, llvm_module):
+    def _module_pass_manager(self):
         pm = ll.create_module_pass_manager()
-        dl = ll.create_target_data(llvm_module.data_layout)
+        dl = ll.create_target_data(self._data_layout)
         dl.add_pass(pm)
         self._tli.add_pass(pm)
         self._tm.add_analysis_passes(pm)
@@ -145,24 +189,15 @@ class BaseCPUCodegen(object):
 
 class AOTCPUCodegen(BaseCPUCodegen):
 
+    _library_class = AOTCodeLibrary
+
     def _customize_engine_builder(self, eb):
         pass
 
-    def _finalize_specific(self):
-        self._tli = None
-        self._pmb = None
-        self._data_layout = None
-
-    def emit_native_object(self):
-        self._ensure_finalized()
-        return self._tm.emit_object(self._llvm_module)
-
-    def emit_bitcode(self):
-        self._ensure_finalized()
-        return self._llvm_module.as_bitcode()
-
 
 class JITCPUCodegen(BaseCPUCodegen):
+
+    _library_class = JITCodeLibrary
 
     def _customize_engine_builder(self, eb):
         if sys.platform.startswith('win32'):
@@ -188,16 +223,3 @@ class JITCPUCodegen(BaseCPUCodegen):
 
         # Enable JIT debug
         eb.emit_jit_debug(True)
-
-    def _finalize_specific(self):
-        self._engine.finalize_object()
-        self._tli = None
-        self._pmb = None
-        self._tm = None
-        self._data_layout = None
-
-    def get_pointer_to_function(self, name):
-        self._ensure_finalized()
-        func = self.get_function(name)
-        return self._engine.get_pointer_to_function(func)
-

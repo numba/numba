@@ -114,7 +114,7 @@ class UFuncBuilder(object):
             dtypenums, ptr, env = self.build(cres, sig)
             dtypelist.append(dtypenums)
             ptrlist.append(utils.longint(ptr))
-            keepalive.append((cres.codegen, env))
+            keepalive.append((cres.library, env))
 
         datlist = [None] * len(ptrlist)
 
@@ -134,8 +134,8 @@ class UFuncBuilder(object):
     def build(self, cres, signature):
         # Buider wrapper for ufunc entry point
         ctx = cres.target_context
-        codegen = cres.codegen
-        llvm_func = codegen.get_function(cres.fndesc.llvm_func_name)
+        library = cres.library
+        llvm_func = library.get_function(cres.fndesc.llvm_func_name)
 
         env = None
         if cres.objectmode:
@@ -148,9 +148,9 @@ class UFuncBuilder(object):
         else:
             envptr = None
 
-        wrapper = build_ufunc_wrapper(codegen, ctx, llvm_func, signature,
+        wrapper = build_ufunc_wrapper(library, ctx, llvm_func, signature,
                                       cres.objectmode, envptr)
-        ptr = codegen.get_pointer_to_function(wrapper.name)
+        ptr = library.get_pointer_to_function(wrapper.name)
 
         # Get dtypes
         dtypenums = [np.dtype(a.name).num for a in signature.args]
@@ -213,7 +213,7 @@ class GUFuncBuilder(object):
             dtypenums, ptr, env = self.build(cres)
             dtypelist.append(dtypenums)
             ptrlist.append(utils.longint(ptr))
-            keepalive.append((cres.codegen, env))
+            keepalive.append((cres.library, env))
 
         datlist = [None] * len(ptrlist)
 
@@ -231,14 +231,14 @@ class GUFuncBuilder(object):
         """
         # Buider wrapper for ufunc entry point
         ctx = cres.target_context
-        codegen = cres.codegen
+        library = cres.library
         signature = cres.signature
-        llvm_func = codegen.get_function(cres.fndesc.llvm_func_name)
-        wrapper, env = build_gufunc_wrapper(codegen, ctx, llvm_func,
+        llvm_func = library.get_function(cres.fndesc.llvm_func_name)
+        wrapper, env = build_gufunc_wrapper(library, ctx, llvm_func,
                                             signature, self.sin, self.sout,
                                             fndesc=cres.fndesc)
 
-        ptr = codegen.get_pointer_to_function(wrapper.name)
+        ptr = library.get_pointer_to_function(wrapper.name)
 
         # Get dtypes
         dtypenums = []
