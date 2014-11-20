@@ -85,7 +85,8 @@ class AutoTuner(object):
         warpsize = PHYSICAL_LIMITS[self.cc]['thread_per_warp']
         tpb = ceil(tpb, warpsize)
         # search
-        return self.table[tpb][0]
+        return self.table.get(tpb, [0])[0]
+
 
     def best_within(self, mintpb, maxtpb):
         """Returns the best tpb in the given range inclusively.
