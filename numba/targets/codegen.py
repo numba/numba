@@ -28,7 +28,6 @@ class CodeLibrary(object):
         self._name = name
         self._final_module = ll.parse_assembly(
             str(self._codegen._create_empty_module(self._name)))
-        self._codegen._engine.add_module(self._final_module)
 
     @property
     def codegen(self):
@@ -74,6 +73,11 @@ class CodeLibrary(object):
         self._raise_if_finalized()
         with self._codegen._module_pass_manager() as pm:
             pm.run(self._final_module)
+
+        # It seems add_module() must be done only here and not before
+        # linking in other modules, otherwise get_pointer_to_function()
+        # could fail.
+        self._codegen._engine.add_module(self._final_module)
 
         # Link libraries for shared code
         for library in self._codegen._libraries:
