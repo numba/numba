@@ -587,10 +587,10 @@ class Array(IterableType):
         Install conversion from this layout (if non-'A') to 'A' layout.
         """
         if self.layout != 'A':
-            from numba.typeconv.rules import default_type_manager as tm
+            from numba.typeconv.rules import default_casting_rules as tcr
             ary_any = Array(self.dtype, self.ndim, 'A', const=self.const)
-            # XXX This will make the types immortal
-            tm.set_safe_convert(self, ary_any)
+            with tcr.set_new_rules():
+                tcr.safe(self, ary_any)
 
     def copy(self, dtype=None, ndim=None, layout=None, const=None):
         if dtype is None:
@@ -754,31 +754,11 @@ class Optional(Type):
         """
         Install conversion from optional(T) to T
         """
-        from numba.typeconv.rules import default_type_manager as tm
-
-        # TODO make type manager remember all cast relation
-        #      so that new rule will propagate
-        tm.set_safe_convert(self, self.type)
-        tm.set_promote(self.type, self)
-        tm.set_promote(none, self)
-
-        if self.type in number_domain:
-            for t in number_domain - set([self.type]):
-                tcc = tm.check_compatible(t, self.type)
-                if tcc == 'promote':
-                    tm.set_promote(t, self)
-                elif tcc == 'safe':
-                    tm.set_safe_convert(t, self)
-                elif tcc == 'unsafe':
-                    tm.set_unsafe_convert(t, self)
-                else:
-                    assert tcc is None, tcc
-
-        if isinstance(self.type, Array):
-            if self.type.layout == 'A':
-                tm.set_promote(self.type.copy(layout='C'), self)
-                tm.set_promote(self.type.copy(layout='F'), self)
-
+        from numba.typeconv.rules import default_casting_rules as tcr
+        with tcr.set_new_rules():
+            tcr.safe(self, self.type)
+            tcr.promote(self.type, self)
+            tcr.promote(none, self)
 
     @property
     def key(self):
