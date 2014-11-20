@@ -212,6 +212,11 @@ def build_ufunc_wrapper(context, func, signature, objmode, env):
     if config.DUMP_OPTIMIZED:
         print(module)
 
+    if config.DUMP_ASSEMBLY:
+        print(("ASSEMBLY %s" % wrapper.name).center(80, '-'))
+        print(context.tm.emit_assembly(module))
+        print('=' * 80)
+
     return wrapper
 
 
@@ -358,6 +363,11 @@ class _GufuncWrapper(object):
 
         if config.DUMP_OPTIMIZED:
             print(module)
+
+        if config.DUMP_ASSEMBLY:
+            print(("ASSEMBLY %s" % wrapper.name).center(80, '-'))
+            print(self.context.tm.emit_assembly(module))
+            print('=' * 80)
 
         wrapper.verify()
         return wrapper, self.env
