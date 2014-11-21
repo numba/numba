@@ -1,5 +1,4 @@
 from __future__ import print_function, absolute_import
-from contextlib import contextmanager
 from . import _typeconv, castgraph
 
 
@@ -40,7 +39,7 @@ class TypeManager(object):
 class TypeCastingRules(object):
     def __init__(self, tm):
         self._tm = tm
-        self._tg = castgraph.TypeGraph()
+        self._tg = castgraph.TypeGraph(self._cb_update)
 
     def promote(self, a, b):
         self._tg.promote(a, b)
@@ -63,25 +62,13 @@ class TypeCastingRules(object):
         self._tg.unsafe(a, b)
         self._tg.unsafe(b, a)
 
-    def update(self):
-        for a, b, rel in self._tg.get_updates():
-            if rel == castgraph.Promote:
-                self._tm.set_promote(a, b)
-            elif rel == castgraph.Safe:
-                self._tm.set_safe_convert(a, b)
-            elif rel == castgraph.Unsafe:
-                self._tm.set_unsafe_convert(a, b)
-            else:
-                raise AssertionError(rel)
-
-        self._tg.clear()
-
-    @contextmanager
-    def set_new_rules(self):
-        yield
-        self.update()
-
-    def dump(self):
-        for a, b, rel in self._tg.get_updates():
-            print(a, '--', rel, '->', b)
+    def _cb_update(self, a, b, rel):
+        if rel == castgraph.Promote:
+            self._tm.set_promote(a, b)
+        elif rel == castgraph.Safe:
+            self._tm.set_safe_convert(a, b)
+        elif rel == castgraph.Unsafe:
+            self._tm.set_unsafe_convert(a, b)
+        else:
+            raise AssertionError(rel)
 

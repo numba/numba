@@ -69,7 +69,7 @@ def _init_type_manager():
     return tm
 
 
-default_type_manager = TypeManager() #_init_type_manager()
+default_type_manager = TypeManager()  # _init_type_manager()
 
 
 def dump_number_rules():
@@ -80,39 +80,36 @@ def dump_number_rules():
 
 def _init_casting_rules(tm):
     tcr = TypeCastingRules(tm)
+    tcr.safe_unsafe(types.boolean, types.int8)
 
-    with tcr.set_new_rules():
-        tcr.safe_unsafe(types.boolean, types.int8)
+    tcr.promote_unsafe(types.int8, types.int16)
+    tcr.promote_unsafe(types.uint8, types.uint16)
 
-        tcr.promote_unsafe(types.int8, types.int16)
-        tcr.promote_unsafe(types.uint8, types.uint16)
+    tcr.promote_unsafe(types.int16, types.int32)
+    tcr.promote_unsafe(types.uint16, types.uint32)
 
-        tcr.promote_unsafe(types.int16, types.int32)
-        tcr.promote_unsafe(types.uint16, types.uint32)
+    tcr.promote_unsafe(types.int32, types.int64)
+    tcr.promote_unsafe(types.uint32, types.uint64)
 
-        tcr.promote_unsafe(types.int32, types.int64)
-        tcr.promote_unsafe(types.uint32, types.uint64)
+    tcr.safe_unsafe(types.uint8, types.int16)
+    tcr.safe_unsafe(types.uint16, types.int32)
+    tcr.safe_unsafe(types.uint32, types.int64)
 
-        tcr.safe_unsafe(types.uint8, types.int16)
-        tcr.safe_unsafe(types.uint16, types.int32)
-        tcr.safe_unsafe(types.uint32, types.int64)
+    tcr.safe_unsafe(types.int32, types.float64)
 
-        tcr.safe_unsafe(types.int32, types.float64)
+    tcr.unsafe_unsafe(types.int32, types.float32)
+    tcr.safe_unsafe(types.int64, types.float64)
+    tcr.safe_unsafe(types.uint64, types.float64)
 
-        tcr.unsafe_unsafe(types.int32, types.float32)
-        tcr.safe_unsafe(types.int64, types.float64)
-        tcr.safe_unsafe(types.uint64, types.float64)
+    tcr.promote_unsafe(types.float32, types.float64)
 
-        tcr.promote_unsafe(types.float32, types.float64)
+    tcr.safe(types.float32, types.complex64)
+    tcr.safe(types.float64, types.complex128)
 
-        tcr.safe(types.float32, types.complex64)
-        tcr.safe(types.float64, types.complex128)
-
-        tcr.promote_unsafe(types.complex64, types.complex128)
-
-        # tcr.dump()
+    tcr.promote_unsafe(types.complex64, types.complex128)
 
     return tcr
+
 
 default_casting_rules = _init_casting_rules(default_type_manager)
 

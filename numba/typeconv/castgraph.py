@@ -37,29 +37,19 @@ Unsafe = _RelValue('Unsafe', 3)
 
 class CastSet(object):
     """A set of casting rules.
+
+    There is at most one rule per target type.
     """
 
     def __init__(self):
-        self._rels = defaultdict(lambda: Nil)
-
-    def promote(self, to):
-        self._rels[to] = Promote
-        return True
-
-    def safe(self, to):
-        self._rels[to] = Safe
-        return True
-
-    def unsafe(self, to):
-        self._rels[to] = Unsafe
-        return True
+        self._rels = {}
 
     def insert(self, to, rel):
-        setrel = min(rel, self._rels[to])
+        setrel = min(rel, self.get(to))
         if setrel is Nil:
             setrel = rel
 
-        old = self._rels[to]
+        old = self._rels.get(to)
         self._rels[to] = setrel
         return old != setrel
 
@@ -67,7 +57,7 @@ class CastSet(object):
         return self._rels.items()
 
     def get(self, item):
-        return self._rels[item]
+        return self._rels.get(item, Nil)
 
     def __len__(self):
         return len(self._rels)
@@ -94,10 +84,18 @@ class TypeGraph(object):
     propagating the rules.
     """
 
-    def __init__(self):
+    def __init__(self, callback=None):
+        """
+        Args
+        ----
+        - callback: callable or None
+            It is called for each new casting rule with
+            (from_type, to_type, castrel).
+        """
+        assert callback is None or callable(callback)
         self._forwards = defaultdict(CastSet)
         self._backwards = defaultdict(set)
-        self._newrules = []
+        self._callback = callback
 
     def get(self, ty):
         return self._forwards[ty]
@@ -110,7 +108,7 @@ class TypeGraph(object):
             rel = max(baserel, self._forwards[b][child])
             if a != child:
                 if self._forwards[a].insert(child, rel):
-                    self._newrules.append((a, child, rel))
+                    self._callback(a, child, rel)
                 self._backwards[child].add(a)
 
             # Propagate the relationship from nodes that connects to a
@@ -118,7 +116,7 @@ class TypeGraph(object):
                 if backnode != child:
                     backrel = max(rel, self._forwards[backnode][a])
                     if self._forwards[backnode].insert(child, backrel):
-                        self._newrules.append((backnode, child, backrel))
+                        self._callback(backnode, child, backrel)
                     self._backwards[child].add(backnode)
 
         # Every node that leads to a connects to b
@@ -126,29 +124,21 @@ class TypeGraph(object):
             rel = max(baserel, self._forwards[child][a])
             if b != child:
                 if self._forwards[child].insert(b, rel):
-                    self._newrules.append((child, b, rel))
+                    self._callback(child, b, rel)
                 self._backwards[b].add(child)
 
-    def promote(self, a, b):
-        if self._forwards[a].promote(b):
-            self._newrules.append((a, b, Promote))
+    def insert_rule(self, a, b, rel):
+        self._forwards[a].insert(b, rel)
+        self._callback(a, b, rel)
         self._backwards[b].add(a)
-        self.propagate(a, b, Promote)
+        self.propagate(a, b, rel)
+
+    def promote(self, a, b):
+        self.insert_rule(a, b, Promote)
 
     def safe(self, a, b):
-        if self._forwards[a].safe(b):
-            self._newrules.append((a, b, Safe))
-        self._backwards[b].add(a)
-        self.propagate(a, b, Safe)
+        self.insert_rule(a, b, Safe)
 
     def unsafe(self, a, b):
-        if self._forwards[a].unsafe(b):
-            self._newrules.append((a, b, Unsafe))
-        self._backwards[b].add(a)
-        self.propagate(a, b, Unsafe)
+        self.insert_rule(a, b, Unsafe)
 
-    def clear(self):
-        self._newrules.clear()
-
-    def get_updates(self):
-        return iter(self._newrules)

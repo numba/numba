@@ -589,8 +589,7 @@ class Array(IterableType):
         if self.layout != 'A':
             from numba.typeconv.rules import default_casting_rules as tcr
             ary_any = Array(self.dtype, self.ndim, 'A', const=self.const)
-            with tcr.set_new_rules():
-                tcr.safe(self, ary_any)
+            tcr.safe(self, ary_any)
 
     def copy(self, dtype=None, ndim=None, layout=None, const=None):
         if dtype is None:
@@ -755,10 +754,9 @@ class Optional(Type):
         Install conversion from optional(T) to T
         """
         from numba.typeconv.rules import default_casting_rules as tcr
-        with tcr.set_new_rules():
-            tcr.safe(self, self.type)
-            tcr.promote(self.type, self)
-            tcr.promote(none, self)
+        tcr.safe(self, self.type)
+        tcr.promote(self.type, self)
+        tcr.promote(none, self)
 
     @property
     def key(self):
