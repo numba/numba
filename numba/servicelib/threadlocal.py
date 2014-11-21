@@ -18,6 +18,7 @@ class TLStack(object):
         except AttributeError:
             # Initialize stack for the thread
             self.local.stack = []
+            return self.local.stack
 
     def push(self, item):
         self.stack.append(item)

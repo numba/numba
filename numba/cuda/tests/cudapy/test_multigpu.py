@@ -1,6 +1,7 @@
 from numba import cuda
 import numpy as np
 from numba import unittest_support as unittest
+import threading
 
 
 class TestMultiGPUContext(unittest.TestCase):
@@ -48,11 +49,43 @@ class TestMultiGPUContext(unittest.TestCase):
             check(A0, B0)
             check(A1, B1)
 
-
             A = np.arange(N, dtype=np.float64)
             B = np.arange(N, dtype=np.float64)
             copy_plus_1[1, N](A, B)
             check(A, B)
+
+    def test_multithreaded(self):
+        def work(gpu, dA, results, ridx):
+            try:
+                with gpu:
+                    arr = dA.copy_to_host()
+
+            except BaseException as e:
+                results[ridx] = e
+
+            else:
+                results[ridx] = np.all(arr == np.arange(10))
+
+
+        dA = cuda.to_device(np.arange(10))
+
+        nthreads = 10
+        results = [None] * nthreads
+        threads = [threading.Thread(target=work, args=(cuda.gpus.current,
+                                                       dA, results, i))
+                   for i in range(nthreads)]
+        for th in threads:
+            th.start()
+
+        for th in threads:
+            th.join()
+
+        for r in results:
+            if isinstance(r, BaseException):
+                raise r
+            else:
+                self.assertTrue(r)
+
 
 if __name__ == '__main__':
     unittest.main()
