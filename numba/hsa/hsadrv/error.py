@@ -13,3 +13,5 @@ class HsaApiError(HsaDriverError):
         self.code = code
         super(HsaApiError, self).__init__(msg)
 
+class HsaWarning(UserWarning):
+    pass
