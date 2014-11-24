@@ -119,7 +119,7 @@ def _build_reverse_error_warn_maps():
 
 ERROR_MAP, WARN_MAP = _build_reverse_error_warn_maps()
 
-def _check_error(fname, retcode)
+def _check_error(fname, retcode):
     def _check_error(self, fname, retcode):
         if retcode != enums.HSA_STATUS_SUCCESS:
             if retcode >= enums.HSA_STATUS_ERROR:
