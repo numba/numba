@@ -3,7 +3,6 @@ from __future__ import print_function, division, absolute_import
 import sys
 
 import llvmlite.llvmpy.core as lc
-import llvmlite.llvmpy.ee as le
 import llvmlite.llvmpy.passes as lp
 import llvmlite.binding as ll
 import llvmlite.ir as llvmir
@@ -74,29 +73,27 @@ class CodeLibrary(object):
         with self._codegen._module_pass_manager() as pm:
             pm.run(self._final_module)
 
-        # It seems add_module() must be done only here and not before
-        # linking in other modules, otherwise get_pointer_to_function()
-        # could fail.
-        self._codegen._engine.add_module(self._final_module)
-
         # Link libraries for shared code
         for library in self._codegen._libraries:
             self._final_module.link_in(library._final_module, preserve=True)
 
         self._final_module.verify()
+        # It seems add_module() must be done only here and not before
+        # linking in other modules, otherwise get_pointer_to_function()
+        # could fail.
+        self._codegen._add_module(self._final_module)
         self._finalize_specific()
 
         self._finalized = True
 
         if config.DUMP_OPTIMIZED:
-            # FIXME
-            print(("OPTIMIZED DUMP %s" % fndesc).center(80, '-'))
-            print(self._llvm_module)
+            print(("OPTIMIZED DUMP %s" % self._name).center(80, '-'))
+            print(self._final_module)
             print('=' * 80)
 
         if config.DUMP_ASSEMBLY:
-            print(("ASSEMBLY %s" % fndesc).center(80, '-'))
-            print(self._tm.emit_assembly(self._llvm_module))
+            print(("ASSEMBLY %s" % self._name).center(80, '-'))
+            print(self._tm.emit_assembly(self._final_module))
             print('=' * 80)
 
     def get_function(self, name):
@@ -138,14 +135,19 @@ class BaseCPUCodegen(object):
 
     def _init(self, llvm_module):
         assert list(llvm_module.global_variables) == [], "Module isn't empty"
-        eb = le.EngineBuilder.new(llvm_module)
-        self._customize_engine_builder(eb)
-        tm = eb.select_target()
-        #tm = le.TargetMachine.new(opt=config.OPT, reloc=le.RELOC_PIC, features='-avx',
-                                  #codemodel='jitdefault')
-        engine = eb.create(tm)
+
+        target = ll.Target.from_default_triple()
+        tm_options = dict(cpu='', features='', opt=config.OPT)
+        self._customize_tm_options(tm_options)
+        tm = target.create_target_machine(**tm_options)
+
+        # MCJIT is still defective under Windows
+        if sys.platform.startswith('win32'):
+            engine = ll.create_jit_compiler_with_tm(llvm_module, tm)
+        else:
+            engine = ll.create_mcjit_compiler(llvm_module, tm)
+
         engine.add_module(llvm_module)
-        data_layout = str(engine.target_data)
         pmb = lp.create_pass_manager_builder(
             opt=config.OPT, loop_vectorize=config.LOOP_VECTORIZE)
         tli = ll.create_target_library_info(llvm_module.triple)
@@ -154,7 +156,8 @@ class BaseCPUCodegen(object):
         self._pmb = pmb
         self._tm = tm
         self._engine = engine
-        self._data_layout = data_layout
+        self._target_data = engine.target_data
+        self._data_layout = str(self._target_data)
 
     def _create_empty_module(self, name):
         ir_module = lc.Module.new(name)
@@ -163,7 +166,7 @@ class BaseCPUCodegen(object):
 
     @property
     def target_data(self):
-        return self._engine.target_data
+        return self._target_data
 
     def add_linking_library(self, library):
         library._ensure_finalized()
@@ -194,22 +197,27 @@ class BaseCPUCodegen(object):
 class AOTCPUCodegen(BaseCPUCodegen):
 
     _library_class = AOTCodeLibrary
+    _reloc = 'pic'
+    _codemodel = 'default'
 
-    def _customize_engine_builder(self, eb):
+    def _customize_tm_options(self, options):
+        options['reloc'] = 'pic'
+        options['codemodel'] = 'default'
+
+    def _add_module(self, module):
         pass
 
 
 class JITCPUCodegen(BaseCPUCodegen):
 
     _library_class = JITCodeLibrary
+    _reloc = 'default'
+    _codemodel = 'jitdefault'
 
-    def _customize_engine_builder(self, eb):
-        if sys.platform.startswith('win32'):
-            eb.use_mcjit(False)
-        else:
-            eb.use_mcjit(True)
+    def _customize_tm_options(self, options):
         features = []
 
+        options.setdefault('reloc', 'pic')
         # Note: LLVM 3.3 always generates vmovsd (AVX instruction) for
         # mem<->reg move.  The transition between AVX and SSE instruction
         # without proper vzeroupper to reset is causing a serious performance
@@ -223,7 +231,10 @@ class JITCPUCodegen(BaseCPUCodegen):
             features.append('+sse2')
 
         # Set feature attributes
-        eb.mattrs(','.join(features))
+        options['features'] = ','.join(features)
 
         # Enable JIT debug
-        eb.emit_jit_debug(True)
+        options['jitdebug'] = True
+
+    def _add_module(self, module):
+        self._engine.add_module(module)
