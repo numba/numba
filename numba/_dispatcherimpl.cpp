@@ -85,3 +85,53 @@ dispatcher_count(dispatcher_t *obj) {
     Dispatcher *disp = static_cast<Dispatcher*>(obj);
     return disp->count();
 }
+
+// NDArray type cache
+
+#include <map>
+
+struct ndarray_type {
+    int ndim;
+    int layout;
+    int type_num;
+    ndarray_type(int ndim, int layout, int type_num): ndim(ndim), layout(layout),
+                                                      type_num(type_num) { }
+
+    bool operator<(const ndarray_type &other) const {
+        if (ndim < other.ndim)
+            return true;
+        else if (ndim > other.ndim)
+            return false;
+
+        if (layout < other.layout)
+            return true;
+        else if (layout > other.layout)
+            return false;
+
+        if (type_num < other.type_num)
+            return true;
+        else
+            return false;
+    }
+};
+
+typedef std::map<ndarray_type, int> TypeMap;
+TypeMap typemap;
+
+int
+dispatcher_get_ndarray_typecode(int ndim, int layout, int type_num) {
+    ndarray_type k(ndim, layout, type_num);
+    TypeMap::iterator i = typemap.find(k);
+    if (i == typemap.end()) {
+        return -1;
+    }
+
+    return i->second;
+}
+
+void
+dispatcher_insert_ndarray_typecode(int ndim, int layout, int type_num,
+                                   int typecode) {
+    ndarray_type k(ndim, layout, type_num);
+    typemap[k] = typecode;
+}
