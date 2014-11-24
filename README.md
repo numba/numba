@@ -21,8 +21,7 @@ data structures such as those that exist in NumPy.
 Dependencies
 ============
 
-  * LLVM 3.5
-  * llvmlite (from llvmpy/llvmpy fork)
+  * llvmlite
   * numpy (version 1.6 or higher)
   * argparse (for pycc in python2.6)
 
@@ -48,11 +47,17 @@ To select the installed version, append "=VERSION" to the package name,
 where, "VERSION" is the version number.  For example:
 
 ```bash
-$ conda create -p ~/dev/mynumba python=2.7 numpy=1.6 llvmpy
+$ conda create -p ~/dev/mynumba python=2.7 numpy=1.6 llvmlite
 ```
 
 to use Python 2.7 and Numpy 1.6.
 
+**Note**: binary packages for llvmlite are currently available from Numba's
+own binstar account, so you'll have to add it to your channels first:
+
+```bash
+$ conda config --add channels numba
+```
 
 Custom Python Environments
 ==========================
@@ -62,6 +67,7 @@ If you're not using conda, you will need to build llvmlite yourself:
 * Building and installing llvmlite
 
 See https://github.com/numba/llvmlite for the most up-to-date instructions.
+You will need a build of LLVM 3.5.
 
 ```bash
 $ git clone https://github.com/numba/llvmlite
