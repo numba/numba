@@ -23,7 +23,7 @@ before_install:
   - conda create -n travisci --yes python=$PY_MAJOR_MINOR numpy cffi
   - source activate travisci
   # Install llvmdev (separate channel, for now)
-  - conda install --yes -c antoine llvmdev
+  - conda install --yes -c numba llvmdev
   # Install unittest2 for Python 2
   - if [ $PY_MAJOR_MINOR == "2.6" ]; then conda install --yes unittest2 argparse; fi
   # Install enum34 for Python < 3.4

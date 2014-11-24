@@ -316,6 +316,9 @@ class Pipeline(object):
         entry, loops = looplifting.lift_loop(self.bc, dispatcher_factory)
         if loops:
             # Some loops were extracted
+            if config.DEBUG_FRONTEND or config.DEBUG:
+                print("Lifting loop", loops[0].get_source_location())
+
             cres = compile_bytecode(self.typingctx, self.targetctx, entry,
                                     self.args, self.return_type,
                                     outer_flags, self.locals,

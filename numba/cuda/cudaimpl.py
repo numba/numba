@@ -315,7 +315,7 @@ def _make_array(context, builder, dataptr, dtype, shape, layout='C'):
 
     targetdata = _get_target_data(context)
     lldtype = context.get_data_type(dtype)
-    itemsize = targetdata.get_abi_size(lldtype)
+    itemsize = lldtype.get_abi_size(targetdata)
     # Compute strides
     rstrides = [itemsize]
     for i, lastsize in enumerate(reversed(shape[1:])):

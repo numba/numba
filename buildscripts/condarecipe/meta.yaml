@@ -1,33 +1,33 @@
 package:
-   name: numba
-   version: 99.9.9
+  name: numba
+  version: "0.16dev1"
 
 source:
-  git_url: git@github.com:numba/numba.git
-  # git_tag: 0.10.0
+  path: ../..
+  #git_url: git@github.com:numba/numba.git
 
-#build:
+build:
+  number: 1
   #entry_points:
   #  - pycc = numba.pycc:main
 
 requirements:
   build:
-    - numpy
-    #- chrpath         [linux]
     - python
-    #- llvmmath
+    - numpy
   run:
     - python
     - argparse        [py26]
     - numpy
-    - llvmpy
-    #- llvmmath
+    # On channel https://binstar.org/numba/
+    - llvmlite
 
 test:
   requires:
+    - argparse       [py26]
     - unittest2      [py26]
+    - cudatoolkit
   files:
     - mandel.py
   commands:
     - pycc -h
-    - numba -h
