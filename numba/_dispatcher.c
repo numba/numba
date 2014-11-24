@@ -274,22 +274,12 @@ int typecode_ndarray(DispatcherObject *dispatcher, PyArrayObject *ary) {
         layout = 2;
     }
 
-    dtype = dtype_num_to_typecode(PyArray_TYPE(ary));
+    if (ndim <= 0 || ndim > N_NDIM) goto FALLBACK;
 
-    if (ndim <= 0 || ndim > N_NDIM || dtype == -1) {
-      /* "Slow" path, caching types in a map */
-      typecode = dispatcher_get_ndarray_typecode(ndim, layout,
-                                                 PyArray_TYPE(ary));
-      if (typecode == -1) {
-        typecode = typecode_fallback(dispatcher, (PyObject*)ary);
-        dispatcher_insert_ndarray_typecode(ndim, layout, PyArray_TYPE(ary),
-                                           typecode);
-      }
-      return typecode;
-    }
+    dtype = dtype_num_to_typecode(PyArray_TYPE(ary));
+    if (dtype == -1) goto FALLBACK;
 
     /* "Fast" path, using table lookup */
-
     assert(layout < N_LAYOUT);
     assert(ndim <= N_NDIM);
     assert(dtype < N_DTYPES);
@@ -299,6 +289,17 @@ int typecode_ndarray(DispatcherObject *dispatcher, PyArrayObject *ary) {
         /* First use of this table entry, so it requires populating */
         typecode = typecode_fallback(dispatcher, (PyObject*)ary);
         cached_arycode[ndim - 1][layout][dtype] = typecode;
+    }
+    return typecode;
+
+FALLBACK:
+    /* "Slow" path, caching types in a map */
+    typecode = dispatcher_get_ndarray_typecode(ndim, layout,
+                                               PyArray_TYPE(ary));
+    if (typecode == -1) {
+        typecode = typecode_fallback(dispatcher, (PyObject*)ary);
+        dispatcher_insert_ndarray_typecode(ndim, layout, PyArray_TYPE(ary),
+                                           typecode);
     }
     return typecode;
 }

@@ -116,7 +116,7 @@ struct ndarray_type {
 };
 
 typedef std::map<ndarray_type, int> TypeMap;
-TypeMap typemap;
+static TypeMap typemap;
 
 int
 dispatcher_get_ndarray_typecode(int ndim, int layout, int type_num) {
