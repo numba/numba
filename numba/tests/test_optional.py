@@ -1,7 +1,7 @@
 from __future__ import print_function, absolute_import
 import numpy
 import numba.unittest_support as unittest
-from numba.compiler import compile_isolated
+from numba.compiler import compile_isolated, Flags
 from numba import types, typeof, njit
 from numba.pythonapi import NativeError
 from numba import lowering
@@ -72,6 +72,16 @@ class TestOptional(unittest.TestCase):
         cres = compile_isolated(pyfunc, [types.intp])
         cfunc = cres.entry_point
 
+        for v in [-1, 0, 1, 2]:
+            self.assertEqual(pyfunc(v), cfunc(v))
+
+    def test_is_this_a_none_objmode(self):
+        pyfunc = is_this_a_none
+        flags = Flags()
+        flags.set('force_pyobject')
+        cres = compile_isolated(pyfunc, [types.intp], flags=flags)
+        cfunc = cres.entry_point
+        self.assertTrue(cres.objectmode)
         for v in [-1, 0, 1, 2]:
             self.assertEqual(pyfunc(v), cfunc(v))
 

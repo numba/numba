@@ -4,7 +4,7 @@ import sys
 
 def test():
     suite = discover_tests("numba.cuda.tests.cudadrv")
-    return run_tests(suite).wasSuccessful()
+    return run_tests(suite, nomultiproc=True).wasSuccessful()
 
 
 if __name__ == '__main__':
