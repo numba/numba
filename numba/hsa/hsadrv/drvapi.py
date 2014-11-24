@@ -3,7 +3,7 @@ from __future__ import print_function, absolute_import, division
 import ctypes
 
 
-hsa_status_t = c_int # enum
+hsa_status_t = ctypes.c_int # enum
 
 
 
