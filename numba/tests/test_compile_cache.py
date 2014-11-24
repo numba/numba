@@ -1,8 +1,12 @@
-import llvm.core as lc
 import numba.unittest_support as unittest
+
+import llvmlite.llvmpy.core as lc
+
 import numpy as np
+
 from numba import types, typing
 from numba.targets import cpu
+
 
 class TestCompileCache(unittest.TestCase):
     '''

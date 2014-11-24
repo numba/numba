@@ -4,7 +4,7 @@ This scripts specifies all PTX special objects.
 from __future__ import print_function, absolute_import, division
 import operator
 import numpy
-import llvm.core as lc
+import llvmlite.llvmpy.core as lc
 from numba import types, ir, typing, macro
 from .cudadrv import nvvm
 

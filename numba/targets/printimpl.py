@@ -2,7 +2,7 @@
 This file implements print functionality for the CPU.
 """
 from __future__ import print_function, absolute_import, division
-from llvm.core import Type
+from llvmlite.llvmpy.core import Type
 from numba import types, typing, cgutils
 from numba.targets.imputils import implement, Registry
 

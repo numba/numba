@@ -2,10 +2,11 @@ from __future__ import print_function, absolute_import
 
 import sys
 
-import llvm.core as lc
-import llvm.passes as lp
-import llvm.ee as le
-from llvm.workaround import avx_support
+import llvmlite.llvmpy.core as lc
+import llvmlite.llvmpy.passes as lp
+import llvmlite.llvmpy.ee as le
+import llvmlite.binding as ll
+from llvmlite import ir as llvmir
 
 from numba import _dynfunc, _helperlib, config
 from numba.callwrapper import PyCallWrapper
@@ -35,21 +36,62 @@ class EnvBody(cgutils.Structure):
     ]
 
 
+_x86arch = frozenset(['x86', 'i386', 'i486', 'i586', 'i686', 'i786',
+                      'i886', 'i986'])
+
+def _is_x86(triple):
+    arch = triple.split('-')[0]
+    return arch in _x86arch
+
+
 class CPUContext(BaseContext):
     """
     Changes BaseContext calling convention
     """
+    disable_builtins = set()
+    _data_layout = None
+
+    # Overrides
+    def create_module(self, name):
+        mod = lc.Module.new(name)
+        mod.triple = ll.get_default_triple()
+
+        if self._data_layout:
+            mod.data_layout = self._data_layout
+        return mod
 
     def init(self):
-        self.execmodule = lc.Module.new("numba.exec")
+        self.execmodule = self.create_module("numba.exec")
         eb = le.EngineBuilder.new(self.execmodule).opt(3)
+
+        # Use legacy JIT on win32.
+        # MCJIT causes access violation probably due to invalid data-section
+        # references.  Let hope this is fixed in llvm3.6.
+        if sys.platform.startswith('win32'):
+            eb.use_mcjit(False)
+        else:
+            eb.use_mcjit(True)
+
+        features = []
         # Note: LLVM 3.3 always generates vmovsd (AVX instruction) for
         # mem<->reg move.  The transition between AVX and SSE instruction
         # without proper vzeroupper to reset is causing a serious performance
         # penalty because the SSE register need to save/restore.
         # For now, we will disable the AVX feature for all processor and hope
         # that LLVM 3.5 will fix this issue.
-        eb.mattrs("-avx")
+        # features.append('-avx')
+
+        # If this is x86, make sure SSE is supported
+        if config.X86_SSE and _is_x86(self.execmodule.triple):
+            features.append('+sse')
+            features.append('+sse2')
+
+        # Set feature attributes
+        eb.mattrs(','.join(features))
+
+        # Enable JIT debug
+        eb.emit_jit_debug(True)
+
         self.tm = tm = eb.select_target()
         self.pm = self.build_pass_manager()
         self.native_funcs = utils.UniqueDict()
@@ -69,6 +111,13 @@ class CPUContext(BaseContext):
 
         # Engine creation has sideeffect to the process symbol table
         self.engine = eb.create(tm)
+        # Enforce data layout to enable layout-specific optimizations
+        self._data_layout = str(self.engine.target_data)
+        self.execmodule.data_layout = self._data_layout
+
+    @property
+    def target_data(self):
+        return self.engine.target_data
 
     def get_function_type(self, fndesc):
         """
@@ -91,9 +140,32 @@ class CPUContext(BaseContext):
         Actual arguments starts at the 3rd argument position.
         Caller is responsible to allocate space for return value.
         """
+        return self.get_function_type2(fndesc.restype, fndesc.argtypes)
+
+    def get_function_type2(self, restype, argtypes):
+        """
+        Get the implemented Function type for the high-level *fndesc*.
+        Some parameters can be added or shuffled around.
+        This is kept in sync with call_function() and get_arguments().
+
+        Calling Convention
+        ------------------
+        (Same return value convention as BaseContext target.)
+        Returns: -2 for return none in native function;
+                 -1 for failure with python exception set;
+                  0 for success;
+                 >0 for user error code.
+        Return value is passed by reference as the first argument.
+
+        The 2nd argument is a _dynfunc.Environment object.
+        It MUST NOT be used if the function is in nopython mode.
+
+        Actual arguments starts at the 3rd argument position.
+        Caller is responsible to allocate space for return value.
+        """
         argtypes = [self.get_argument_type(aty)
-                    for aty in fndesc.argtypes]
-        resptr = self.get_return_type(fndesc.restype)
+                    for aty in argtypes]
+        resptr = self.get_return_type(restype)
         fnty = lc.Type.function(lc.Type.int(), [resptr, PYOBJECT] + argtypes)
         return fnty
 
@@ -165,46 +237,11 @@ class CPUContext(BaseContext):
         return EnvBody(self, builder, ref=body_ptr, cast_ref=True)
 
     def build_pass_manager(self):
-        if 0 < config.OPT <= 3:
-            # This uses the same passes for clang -O3
-            pms = lp.build_pass_managers(tm=self.tm, opt=config.OPT,
-                                         loop_vectorize=config.LOOP_VECTORIZE,
-                                         fpm=False)
-            return pms.pm
-        else:
-            # This uses minimum amount of passes for fast code.
-            # TODO: make it generate vector code
-            tm = self.tm
-            pm = lp.PassManager.new()
-            pm.add(tm.target_data.clone())
-            pm.add(lp.TargetLibraryInfo.new(tm.triple))
-            # Re-enable for target infomation for vectorization
-            # tm.add_analysis_passes(pm)
-            passes = '''
-            basicaa
-            scev-aa
-            mem2reg
-            sroa
-            adce
-            dse
-            sccp
-            instcombine
-            simplifycfg
-            loops
-            indvars
-            loop-simplify
-            licm
-            simplifycfg
-            instcombine
-            loop-vectorize
-            instcombine
-            simplifycfg
-            globalopt
-            globaldce
-            '''.split()
-            for p in passes:
-                pm.add(lp.Pass.new(p))
-            return pm
+        pms = lp.build_pass_managers(tm=self.tm, opt=config.OPT,
+                                     loop_vectorize=config.LOOP_VECTORIZE,
+                                     fpm=False, mod=self.execmodule,
+                                     disable_builtins=self.disable_builtins)
+        return pms.pm
 
     def map_math_functions(self):
         c_helpers = _helperlib.c_helpers
@@ -215,8 +252,8 @@ class CPUContext(BaseContext):
             # For Windows XP __ftol2 is not defined, we will just use
             # __ftol as a replacement.
             # On Windows 7, this is not necessary but will work anyway.
-            ftol = le.dylib_address_of_symbol('_ftol')
-            _add_missing_symbol("_ftol2", ftol)
+            ftol = le.dylib_address_of_symbol('__ftol')
+            _add_missing_symbol("__ftol2", ftol)
 
         elif sys.platform.startswith('linux') and self.is32bit:
             _add_missing_symbol("__fixunsdfdi", c_helpers["fptoui"])
@@ -263,6 +300,18 @@ class CPUContext(BaseContext):
     def optimize(self, module):
         self.pm.run(module)
 
+    def post_lowering(self, func):
+        mod = func.module
+
+        if (sys.platform.startswith('linux') or
+                sys.platform.startswith('win32')):
+            intrinsics.fix_powi_calls(mod)
+
+        if self.is32bit:
+            # 32-bit machine needs to replace all 64-bit div/rem to avoid
+            # calls to compiler-rt
+            intrinsics.fix_divmod(mod)
+
     def finalize(self, func, fndesc):
         """Finalize the compilation.  Called by get_executable().
 
@@ -272,12 +321,15 @@ class CPUContext(BaseContext):
         """
         func.module.target = self.tm.triple
 
-        if self.is32bit:
-            dmf = intrinsics.DivmodFixer()
-            dmf.run(func.module)
+        # XXX: Disabled for now
+        #
+        # if self.is32bit:
+        #     dmf = intrinsics.DivmodFixer()
+        #     dmf.run(func.module)
 
-        im = intrinsics.IntrinsicMapping(self)
-        im.run(func.module)
+        # XXX: Disabled for now
+        # im = intrinsics.IntrinsicMapping(self)
+        # im.run(func.module)
 
         if not fndesc.native:
             self.optimize_pythonapi(func)
@@ -300,22 +352,37 @@ class CPUContext(BaseContext):
         return cfunc
 
     def prepare_for_call(self, func, fndesc, env):
-        wrapper, api = PyCallWrapper(self, func.module, func, fndesc,
-                                     exceptions=self.exceptions).build()
-        self.optimize(func.module)
+
+        wrapper_module = self.create_module("wrapper")
+        fnty = self.get_function_type(fndesc)
+        wrapper_callee = wrapper_module.add_function(fnty, func.name)
+        wrapper, api = PyCallWrapper(self, wrapper_module, wrapper_callee,
+                                     fndesc, exceptions=self.exceptions).build()
+        wrapper_module = ll.parse_assembly(str(wrapper_module))
+        wrapper_module.verify()
+
+        module = func.module
+        wrapper_module.triple = module.triple
+        wrapper_module.data_layout = module.data_layout
+        module.link_in(wrapper_module)
+
+        # func = module.get_function(func.name)
+        wrapper = module.get_function(wrapper.name)
+        self.optimize(module)
 
         if config.DUMP_OPTIMIZED:
             print(("OPTIMIZED DUMP %s" % fndesc).center(80, '-'))
-            print(func.module)
+            print(module)
             print('=' * 80)
 
         if config.DUMP_ASSEMBLY:
             print(("ASSEMBLY %s" % fndesc).center(80, '-'))
-            print(self.tm.emit_assembly(func.module))
+            print(self.tm.emit_assembly(module))
             print('=' * 80)
 
         # Code gen
         self.engine.add_module(func.module)
+        self.engine.finalize_object()
         baseptr = self.engine.get_pointer_to_function(func)
         fnptr = self.engine.get_pointer_to_function(wrapper)
         cfunc = _dynfunc.make_function(fndesc.lookup_module(),
@@ -329,19 +396,17 @@ class CPUContext(BaseContext):
 
     def optimize_pythonapi(self, func):
         # Simplify the function using
-        pms = lp.build_pass_managers(tm=self.tm, opt=1,
-                                     mod=func.module)
+        pms = lp.build_pass_managers(tm=self.tm, opt=1, mod=func.module,
+                                     disable_builtins=self.disable_builtins)
         fpm = pms.fpm
 
         fpm.initialize()
         fpm.run(func)
         fpm.finalize()
 
+        return
         # remove extra refct api calls
         remove_refct_calls(func)
-
-    def get_abi_sizeof(self, lty):
-        return self.engine.target_data.abi_size(lty)
 
     def calc_array_sizeof(self, ndim):
         '''
@@ -354,7 +419,8 @@ class CPUContext(BaseContext):
         """Run O1 function passes
         """
         pms = lp.build_pass_managers(tm=self.tm, opt=1, pm=False,
-                                     mod=func.module)
+                                     mod=func.module,
+                                     disable_builtins=self.disable_builtins)
         fpm = pms.fpm
         fpm.initialize()
         fpm.run(func)
@@ -389,13 +455,16 @@ def remove_null_refct_call(bb):
     """
     Remove refct api calls to NULL pointer
     """
-    for inst in bb.instructions:
-        if isinstance(inst, lc.CallOrInvokeInstruction):
-            fname = inst.called_function.name
-            if fname == "Py_IncRef" or fname == "Py_DecRef":
-                arg = inst.operands[0]
-                if isinstance(arg, lc.ConstantPointerNull):
-                    inst.erase_from_parent()
+    pass
+    ## Skipped for now
+    # for inst in bb.instructions:
+    #     if isinstance(inst, lc.CallOrInvokeInstruction):
+    #         fname = inst.called_function.name
+    #         if fname == "Py_IncRef" or fname == "Py_DecRef":
+    #             arg = inst.args[0]
+    #             print(type(arg))
+    #             if isinstance(arg, lc.ConstantPointerNull):
+    #                 inst.erase_from_parent()
 
 
 def remove_refct_pairs(bb):

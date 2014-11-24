@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from collections import namedtuple, defaultdict
 import warnings
 import inspect
+from llvmlite import binding as ll
 
 from numba import (bytecode, interpreter, typing, typeinfer, lowering,
                    objmode, irpasses, utils, config, type_annotations,
@@ -411,8 +412,8 @@ class Pipeline(object):
         Back-end: Generate LLVM IR from Numba IR, compile to machine code
         """
         func, lmod, lfunc, fndesc = lowerfn()
-        signature = typing.signature(self.return_type, *self.args)
         assert lfunc.module is lmod
+        signature = typing.signature(self.return_type, *self.args)
         cr = compile_result(typing_context=self.typingctx,
                             target_context=self.targetctx,
                             entry_point=func,
@@ -694,15 +695,21 @@ def native_lowering_stage(targetctx, interp, typemap, restype, calltypes,
     lower.lower()
 
     # Linking depending libraries
-    targetctx.link_dependencies(lower.module, targetctx.linking)
+    module = lower.llvm_module
+    function = lower.llvm_function
+    env = lower.env
+    del lower
+
+    targetctx.link_dependencies(module, targetctx.linking)
 
     if nocompile:
-        return None, lower.module, lower.function, fndesc
+        return None, module, function, fndesc
     else:
         # Prepare for execution
-        cfunc = targetctx.get_executable(lower.function, fndesc, lower.env)
+        cfunc = targetctx.get_executable(function, fndesc, env)
         targetctx.insert_user_function(cfunc, fndesc)
-        return cfunc, lower.module, lower.function, fndesc
+        return cfunc, module, function, fndesc
+
 
 
 def py_lowering_stage(targetctx, interp, nocompile):
@@ -710,11 +717,16 @@ def py_lowering_stage(targetctx, interp, nocompile):
     lower = objmode.PyLower(targetctx, fndesc, interp)
     lower.lower()
 
+    module = lower.llvm_module
+    function = lower.llvm_function
+    env = lower.env
+    del lower
+
     if nocompile:
-        return None, lower.module, lower.function, fndesc
+        return None, module, function, fndesc
     else:
-        cfunc = targetctx.get_executable(lower.function, fndesc, lower.env)
-        return cfunc, lower.module, lower.function, fndesc
+        cfunc = targetctx.get_executable(function, fndesc, env)
+        return cfunc, module, function, fndesc
 
 
 def ir_optimize_for_py_stage(interp):

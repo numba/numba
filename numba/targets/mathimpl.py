@@ -6,8 +6,8 @@ from __future__ import print_function, absolute_import, division
 import math
 import sys
 
-import llvm.core as lc
-from llvm.core import Type
+import llvmlite.llvmpy.core as lc
+from llvmlite.llvmpy.core import Type
 
 from numba.targets.imputils import implement, Registry
 from numba import types, cgutils, utils
@@ -168,7 +168,7 @@ def unary_math_extern(fn, f32extern, f64extern, int_restype=False):
     f64impl = _float_input_unary_math_extern_impl(f64extern, types.float64, f_restype)
     register(implement(fn, types.float32)(f32impl))
     register(implement(fn, types.float64)(f64impl))
-    
+
     if int_restype:
         # If asked for an integral return type, we choose the input type
         # as the return type.

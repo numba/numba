@@ -1,9 +1,10 @@
 from __future__ import print_function, absolute_import
 import re
-from llvm.core import (Type, Builder, LINKAGE_INTERNAL, inline_function,
+from llvmlite.llvmpy.core import (Type, Builder, LINKAGE_INTERNAL,
                        Constant, ICMP_EQ)
-import llvm.passes as lp
-import llvm.ee as le
+import llvmlite.llvmpy.core as lc
+import llvmlite.binding as ll
+
 from numba import typing, types, cgutils
 from numba.targets.base import BaseContext
 from .cudadrv import nvvm
@@ -36,7 +37,11 @@ class CUDATargetContext(BaseContext):
 
         self.insert_func_defn(cudaimpl.registry.functions)
         self.insert_func_defn(libdevice.registry.functions)
-        self.target_data = le.TargetData.new(nvvm.default_data_layout)
+        self._target_data = ll.create_target_data(nvvm.default_data_layout)
+
+    @property
+    def target_data(self):
+        return self._target_data
 
     def mangler(self, name, argtypes):
         def repl(m):
@@ -50,27 +55,26 @@ class CUDATargetContext(BaseContext):
     def prepare_cuda_kernel(self, func, argtypes):
         # Adapt to CUDA LLVM
         module = func.module
-        func.linkage = LINKAGE_INTERNAL
         wrapper = self.generate_kernel_wrapper(func, argtypes)
-        func.delete()
-        del func
-
-        nvvm.set_cuda_kernel(wrapper)
+        func.linkage = LINKAGE_INTERNAL
         nvvm.fix_data_layout(module)
-
         return wrapper
 
     def generate_kernel_wrapper(self, func, argtypes):
         module = func.module
-        argtys = self.get_arguments(func.type.pointee)
-        fnty = Type.function(Type.void(), argtys)
-        wrapfn = module.add_function(fnty, name="cudaPy_" + func.name)
+        argtys = [self.get_argument_type(ty) for ty in argtypes]
+        wrapfnty = Type.function(Type.void(), argtys)
+        wrapper_module = self.create_module("cuda.kernel.wrapper")
+        fnty = Type.function(Type.int(),
+                             [self.get_return_type(types.pyobject)] + argtys)
+        func = wrapper_module.add_function(fnty, name=func.name)
+        wrapfn = wrapper_module.add_function(wrapfnty, name="cudaPy_" + func.name)
         builder = Builder.new(wrapfn.append_basic_block(''))
 
         # Define error handling variables
         def define_error_gv(postfix):
-            gv = module.add_global_variable(Type.int(),
-                                            name=wrapfn.name + postfix)
+            gv = wrapper_module.add_global_variable(Type.int(),
+                                                    name=wrapfn.name + postfix)
             gv.initializer = Constant.null(gv.type.pointee)
             return gv
 
@@ -99,8 +103,13 @@ class CUDATargetContext(BaseContext):
 
             # Use atomic cmpxchg to prevent rewriting the error status
             # Only the first error is recorded
-            xchg = builder.atomic_cmpxchg(gv_exc, old, status.code,
-                                          "monotonic")
+
+            casfnty = lc.Type.function(old.type, [gv_exc.type, old.type,
+                                                  old.type])
+
+            casfn = wrapper_module.add_function(casfnty,
+                                                name="___numba_cas_hack")
+            xchg = builder.call(casfn, [gv_exc, old, status.code])
             changed = builder.icmp(ICMP_EQ, xchg, old)
 
             # If the xchange is successful, save the thread ID.
@@ -115,11 +124,13 @@ class CUDATargetContext(BaseContext):
                     builder.store(val, ptr)
 
         builder.ret_void()
-
         # force inline
-        inline_function(status.code)
-
+        # inline_function(status.code)
+        nvvm.set_cuda_kernel(wrapfn)
+        module.link_in(ll.parse_assembly(str(wrapper_module)))
         module.verify()
+
+        wrapfn = module.get_function(wrapfn.name)
         return wrapfn
 
     def make_constant_array(self, builder, typ, ary):
@@ -164,13 +175,12 @@ class CUDATargetContext(BaseContext):
     def optimize_function(self, func):
         """Run O1 function passes
         """
-        fpm = lp.FunctionPassManager.new(func.module)
-
-        lp.PassManagerBuilder.new().populate(fpm)
-
-        fpm.initialize()
-        fpm.run(func)
-        fpm.finalize()
-
-    def get_abi_sizeof(self, lty):
-        return self.target_data.abi_size(lty)
+        pass
+        ## XXX skipped for now
+        # fpm = lp.FunctionPassManager.new(func.module)
+        #
+        # lp.PassManagerBuilder.new().populate(fpm)
+        #
+        # fpm.initialize()
+        # fpm.run(func)
+        # fpm.finalize()

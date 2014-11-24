@@ -101,3 +101,8 @@ def _force_cc(text):
 
 
 FORCE_CUDA_CC = _readenv("NUMBA_FORCE_CUDA_CC", _force_cc, None)
+
+# X86 specific
+# Enable SSE, SSE2 on 32-bit x86 platforms.
+# Default ON
+X86_SSE = _readenv("NUMBA_X86_SSE", int, 1)

@@ -6,8 +6,8 @@ from __future__ import print_function, division, absolute_import
 from contextlib import contextmanager
 import functools
 import re
-from llvm.core import Constant, Type
-import llvm.core as lc
+from llvmlite.llvmpy.core import Constant, Type
+import llvmlite.llvmpy.core as lc
 
 from . import errcode, utils
 

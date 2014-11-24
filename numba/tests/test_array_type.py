@@ -6,6 +6,7 @@ from numba import types
 from numba.targets.arrayobj import make_array, make_array_ctype
 from numba.targets.registry import CPUTarget
 
+
 class TestArrayType(unittest.TestCase):
     '''
     Tests that the ArrayTemplate returned by make_array and the ctypes array
@@ -29,6 +30,7 @@ class TestArrayType(unittest.TestCase):
 
     def test_3d_array(self):
         self._test_array(3)
+
 
 if __name__ == '__main__':
     unittest.main()

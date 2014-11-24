@@ -299,9 +299,25 @@ class LibDevice(object):
         return self.bc
 
 
+ir_numba_cas_hack = """
+define internal i32 @___numba_cas_hack(i32* %ptr, i32 %cmp, i32 %val) alwaysinline {
+    %out = cmpxchg volatile i32* %ptr, i32 %cmp, i32 %val monotonic
+    ret i32 %out
+}
+"""
+
+
 def llvm_to_ptx(llvmir, **opts):
     cu = CompilationUnit()
     libdevice = LibDevice(arch=opts.get('arch', 'compute_20'))
+    # New LLVM generate a shorthand for datalayout that NVVM does not know
+    llvmir = llvmir.replace('e-i64:64-v16:16-v32:32-n16:32:64',
+                            default_data_layout)
+    # Replace with our cmpxchg implementation because LLVM 3.5 has a new
+    # semantic for cmpxchg.
+    llvmir = llvmir.replace('declare i32 @___numba_cas_hack(i32*, i32, i32)',
+                            ir_numba_cas_hack)
+
     llvmir = llvm33_to_32_ir(llvmir)
     cu.add_module(llvmir.encode('utf8'))
     cu.add_module(libdevice.get())
@@ -316,10 +332,13 @@ re_fnattr_def = re.compile('attributes\s+(#\d+)\s*=\s*{((?:\s*\w+)+)\s*}')
 def llvm33_to_32_ir(ir):
     """rewrite function attributes in the IR
     """
+
+    invalid_attrs = frozenset(['noduplicate'])
+
     attrs = {}
     for m in re_fnattr_def.finditer(ir):
         ct, text = m.groups()
-        attrs[ct] = text
+        attrs[ct] = ' '.join(set(text.split()) - invalid_attrs)
 
     def scanline(line):
         if line.startswith('define') or line.startswith('declare'):
@@ -334,7 +353,7 @@ def llvm33_to_32_ir(ir):
 
 
 def set_cuda_kernel(lfunc):
-    from llvm.core import MetaData, MetaDataString, Constant, Type
+    from llvmlite.llvmpy.core import MetaData, MetaDataString, Constant, Type
 
     m = lfunc.module
 
