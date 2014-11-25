@@ -22,12 +22,15 @@ def expand_macros(blocks):
     ----
     blocks: list
         the blocks to macro-expand
+    return: bool
+        True if any macros were expanded
     '''
     constants = {}
+    expanded = False
     for blk in blocks.values():
         module_getattr_folding(constants, blk)
-        expand_macros_in_block(constants, blk)
-
+        expanded = expanded or expand_macros_in_block(constants, blk)
+    return expanded
 
 def module_getattr_folding(constants, block):
     '''
@@ -74,8 +77,10 @@ def expand_macros_in_block(constants, block):
         from variable names to callee names
     block: ir.Block
         The block to perform macro expansion on
+    return: bool
+        True if any macros were expanded
     '''
-    calls = []
+    expanded = False
     for inst in block.body:
         if isinstance(inst, ir.Assign):
             rhs = inst.value
@@ -85,7 +90,6 @@ def expand_macros_in_block(constants, block):
                 if isinstance(macro, Macro):
                     # Rewrite calling macro
                     assert macro.callable
-                    calls.append((inst, macro))
                     args = [constants[arg.name] for arg in rhs.args]
                     kws = dict((k, constants[v.name]) for k, v in rhs.kws)
                     try:
@@ -101,6 +105,7 @@ def expand_macros_in_block(constants, block):
                         result.loc = rhs.loc
                         inst.value = ir.Expr.call(func=result, args=rhs.args,
                                                   kws=rhs.kws, loc=rhs.loc)
+                        expanded = True
             elif isinstance(rhs, ir.Expr) and rhs.op == 'getattr':
                 # Rewrite get attribute to macro call
                 # Non-calling macro must be triggered by get attribute
@@ -113,6 +118,8 @@ def expand_macros_in_block(constants, block):
                             intr = ir.Intrinsic(macro.name, macro.func, args=())
                             inst.value = ir.Expr.call(func=intr, args=(),
                                                       kws=(), loc=rhs.loc)
+                            expanded = True
+    return expanded
 
 
 class Macro(object):
