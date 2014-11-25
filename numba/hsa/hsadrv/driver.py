@@ -185,7 +185,8 @@ class Driver(object):
         try:
             proto = API_PROTOTYPES[fname]
         except KeyError:
-            raise AttributeError(fname)
+            return super(Driver, self).__getattr__(fname)
+
         restype = proto[0]
         argtypes = proto[1:]
 
@@ -203,7 +204,7 @@ class Driver(object):
         libfn.argtypes = argtypes
 
         @functools.wraps(libfn)
-        def safe_cuda_api_call(*args):
+        def safe_hsa_api_call(*args):
             retcode = libfn(*args)
             self._check_error(fname, retcode)
 
