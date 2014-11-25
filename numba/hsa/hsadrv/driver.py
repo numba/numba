@@ -185,7 +185,7 @@ class Driver(object):
         try:
             proto = API_PROTOTYPES[fname]
         except KeyError:
-            return super(Driver, self).__getattr__(fname)
+            return super(Driver, self).__getattribute__(fname)
 
         restype = proto[0]
         argtypes = proto[1:]
