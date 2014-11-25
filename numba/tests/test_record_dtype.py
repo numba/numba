@@ -55,9 +55,26 @@ def get_record_c(rec, val):
     return x
 
 
+def get_record_rev_a(val, rec):
+    x = rec.a
+    rec.a = val
+    return x
+
+
+def get_record_rev_b(val, rec):
+    x = rec.b
+    rec.b = val
+    return x
+
+
+def get_record_rev_c(val, rec):
+    x = rec.c
+    rec.c = val
+    return x
+
+
 def record_return(ary, i):
     return ary[i]
-
 
 recordtype = np.dtype([('a', np.float64),
                        ('b', np.int32),
@@ -161,7 +178,8 @@ class TestRecordDtype(unittest.TestCase):
             self.assertEqual(got[i], got[j])
             self.assertTrue(np.all(expect == got))
 
-    def test_record_args(self):
+
+    def _test_record_args(self, revargs):
         """
         Testing scalar record value as argument
         """
@@ -173,18 +191,36 @@ class TestRecordDtype(unittest.TestCase):
 
         for attr, valtyp, val in zip(attrs, valtypes, values):
             expected = getattr(recval, attr)
-
-            pyfunc = globals()['get_record_' + attr]
             nbrecord = numpy_support.from_dtype(recordtype)
-            cfunc = self.get_cfunc(pyfunc, (nbrecord, valtyp))
 
-            got = cfunc(recval, val)
+            if revargs:
+                prefix = 'get_record_rev_'
+                argtypes = (valtyp, nbrecord)
+                args = (val, recval)
+            else:
+                prefix = 'get_record_'
+                argtypes = (nbrecord, valtyp)
+                args = (recval, val)
+
+            pyfunc = globals()[prefix + attr]
+            cfunc = self.get_cfunc(pyfunc, argtypes)
+
+            got = cfunc(*args)
             self.assertEqual(expected, got)
             self.assertNotEqual(recval.a, got)
-            del got, expected
+            del got, expected, args
 
         # Check for potential leaks (issue #441)
         self.assertEqual(sys.getrefcount(recval), old_refcnt)
+
+
+    def test_record_args(self):
+        self._test_record_args(False)
+
+
+    def test_record_args_reverse(self):
+        self._test_record_args(True)
+
 
     def test_record_return(self):
         """
