@@ -16,59 +16,44 @@ class _ArgManager(object):
         self.arg_count = 0  # how many function arguments have been processed
         self.cleanups = []
 
-        # set up switch for error processing of function arguments
-        self.elseblk = cgutils.append_basic_block(self.builder, "arg.ok")
-        with cgutils.goto_block(self.builder, self.elseblk):
+        # Block that returns after erroneous argument unboxing/cleanup
+        self.endblk = cgutils.append_basic_block(self.builder, "arg.end")
+        with cgutils.goto_block(self.builder, self.endblk):
             self.builder.ret(self.api.get_null_object())
 
-        self.swtblk = cgutils.append_basic_block(self.builder, ".arg.err")
-        with cgutils.goto_block(self.builder, self.swtblk):
-            self.swt_val = cgutils.alloca_once(self.builder, Type.int(32))
-            self.swt = self.builder.switch(self.builder.load(self.swt_val),
-                                           self.elseblk, nargs)
-
-        self.prev = self.elseblk
+        self.nextblk = self.endblk
 
     def add_arg(self, obj, ty):
         """
-        Unbox argument and emit code that handles any error during unboxing
+        Unbox argument and emit code that handles any error during unboxing.
+        Args are cleaned up in reverse order of the parameter list, and
+        cleanup begins as soon as unboxing of any argument fails. E.g. failure
+        on arg2 will result in control flow going through:
+
+            arg2.err -> arg1.err -> arg0.err -> arg.end (returns)
         """
         # Unbox argument
         val, dtor = self.api.to_native_arg(self.builder.load(obj), ty)
-        self.cleanups.append(dtor)
-        # add to the switch each time through the loop
-        # prev and cur are references to keep track of which block to branch to
-
-        if self.arg_count == 0:
-            bb = cgutils.append_basic_block(self.builder,
-                                            "arg%d.err" % self.arg_count)
-            self.cur = bb
-            self.swt.add_case(Constant.int(Type.int(32), self.arg_count), bb)
-        else:
-            # keep a reference to the previous arg.error block
-            self.prev = self.cur
-            bb = cgutils.append_basic_block(self.builder,
-                                            "arg%d.error" % self.arg_count)
-            self.cur = bb
-            self.swt.add_case(Constant.int(Type.int(32), self.arg_count), bb)
-
-        # write the error block
-        with cgutils.goto_block(self.builder, self.cur):
-            dtor()
-            self.builder.branch(self.prev)
-
-        # store arg count into value to switch on if there is an error
-        self.builder.store(Constant.int(Type.int(32), self.arg_count),
-                           self.swt_val)
 
         # check for Python C-API Error
         error_check = self.api.err_occurred()
         err_happened = self.builder.icmp(lc.ICMP_NE, error_check,
                                          self.api.get_null_object())
-        # if error occurs -- clean up -- goto switch block
-        with cgutils.if_unlikely(self.builder, err_happened):
-            self.builder.branch(self.swtblk)
 
+        # Write the cleanup block
+        cleanupblk = cgutils.append_basic_block(self.builder,
+                                                "arg%d.err" % self.arg_count)
+        with cgutils.goto_block(self.builder, cleanupblk):
+            dtor()
+            # Go to next cleanup block
+            self.builder.branch(self.nextblk)
+
+        # If an error occurred, go to the cleanup block
+        with cgutils.if_unlikely(self.builder, err_happened):
+            self.builder.branch(cleanupblk)
+
+        self.cleanups.append(dtor)
+        self.nextblk = cleanupblk
         self.arg_count += 1
         return val
 
