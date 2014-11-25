@@ -1,7 +1,8 @@
 from __future__ import print_function, division, absolute_import
+
+import llvmlite.binding as ll
 from llvmlite.llvmpy.core import Type, Constant, LLVMException
 import llvmlite.llvmpy.core as lc
-import llvmlite.llvmpy.ee as le
 
 from numba.config import PYVERSION
 import numba.ctypes_support as ctypes
@@ -20,20 +21,20 @@ def fix_python_api():
     Execute once to install special symbols into the LLVM symbol table
     """
 
-    le.dylib_add_symbol("Py_None", ctypes.addressof(_PyNone))
-    le.dylib_add_symbol("numba_native_error", id(NativeError))
+    ll.add_symbol("Py_None", ctypes.addressof(_PyNone))
+    ll.add_symbol("numba_native_error", id(NativeError))
 
     # Add C helper functions
     c_helpers = _helperlib.c_helpers
     for py_name in c_helpers:
         c_name = "numba_" + py_name
         c_address = c_helpers[py_name]
-        le.dylib_add_symbol(c_name, c_address)
+        ll.add_symbol(c_name, c_address)
 
     # Add all built-in exception classes
     for obj in utils.builtins.__dict__.values():
         if isinstance(obj, type) and issubclass(obj, BaseException):
-            le.dylib_add_symbol("PyExc_%s" % (obj.__name__), id(obj))
+            ll.add_symbol("PyExc_%s" % (obj.__name__), id(obj))
 
 
 class PythonAPI(object):
