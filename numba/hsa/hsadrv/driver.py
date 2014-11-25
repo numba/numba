@@ -208,7 +208,7 @@ class Driver(object):
         @functools.wraps(libfn)
         def safe_hsa_api_call(*args):
             retcode = libfn(*args)
-            self._check_error(fname, retcode)
+            _check_error(fname, retcode)
 
         setattr(self, fname, safe_hsa_api_call)
         return safe_hsa_api_call
