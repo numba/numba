@@ -156,6 +156,7 @@ class Driver(object):
             if config.DISABLE_HSA:
                 raise HsaSupportError("HSA disabled by user")
             self.lib = _find_driver()
+            self.is_initialized = False
         except HsaSupportError as e:
             self.is_initialized = True
             self.initialization_error = e
