@@ -135,7 +135,6 @@ MISSING_FUNCTION_ERRMSG = """driver missing function: %s.
 """
 
 # The Driver ###########################################################
-print ("hello driver")
 class Driver(object):
     """
     Driver API functions are lazily bound.
@@ -166,13 +165,15 @@ class Driver(object):
             self.hsa_shut_down()
 
     def initialize(self):
+        print ("initializing hsa...")
         self.is_initialized = True
         try:
             self.hsa_init()
             print ("hsa has been initialized!!!!")
         except HsaApiError as e:
+            print(e)
             self.initialization_error = e
-            raise HsaSupportError("Error at driver init: \n%s:" % e)
+            raise HsaDriverError("Error at driver init: \n%s:" % e)
 
     @property
     def is_available(self):
