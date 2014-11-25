@@ -156,6 +156,7 @@ class Driver(object):
                 raise HsaSupportError("HSA disabled by user")
             self.lib = _find_driver()
             self.is_initialized = False
+            self.initialization_error = None
         except HsaSupportError as e:
             self.is_initialized = True
             self.initialization_error = e
@@ -179,7 +180,7 @@ class Driver(object):
     def is_available(self):
         if not self.is_initialized:
             self.initialize()
-        return not hasattr(self, 'initialization_error')
+        return self.initialization_error is None
 
     def __getattr__(self, fname):
         # First request of a driver API function
@@ -213,12 +214,6 @@ class Driver(object):
         return safe_cuda_api_call
 
     def _find_api(self, fname):
-        # Try version 2
-        try:
-            return getattr(self.lib, fname + "_v2")
-        except AttributeError:
-            pass
-
         # Try regular
         try:
             return getattr(self.lib, fname)
