@@ -95,7 +95,7 @@ def _raise_driver_not_found():
 
 
 DRIVER_LOAD_ERROR_MSG = """
-A HSA runtime library was fond, but failed to load with error:
+A HSA runtime library was found, but failed to load with error:
 %s
 """
 
@@ -171,7 +171,7 @@ class Driver(object):
             print ("hsa has been initialized!!!!")
         except CudaAPIError as e:
             self.initialization_error = e
-            raise CudaSupportError("Error at driver init: \n%s:" % e)
+            raise HsaSupportError("Error at driver init: \n%s:" % e)
 
     @property
     def is_available(self):
