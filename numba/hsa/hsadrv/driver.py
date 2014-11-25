@@ -211,7 +211,7 @@ class Driver(object):
             self._check_error(fname, retcode)
 
         setattr(self, fname, safe_hsa_api_call)
-        return safe_cuda_api_call
+        return safe_hsa_api_call
 
     def _find_api(self, fname):
         # Try regular
