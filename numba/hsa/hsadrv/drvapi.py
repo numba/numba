@@ -4,8 +4,12 @@ import ctypes
 
 
 hsa_status_t = ctypes.c_int # enum
+hsa_system_info_t = ctypes.c_int # enum
 
-
+hsa_agent_t = ctypes.c_uint64
+hsa_agent_feature_t = ctypes.c_int # enum
+hsa_device_type_t = ctypes.c_int # enum
+hsa_agent_info_t = ctypes.c_int # enum
 
 API_PROTOTYPES = {
     # hsa_status_t hsa_init(void)
@@ -13,4 +17,10 @@ API_PROTOTYPES = {
 
     # hsa_status_t hsa_shut_down(void)
     'hsa_shut_down': (hsa_status_t, ),
+
+    # hsa_status_t hsa_iterate_agents(hsa_status_t(*)(hsa_agent_t, void*), void*)
+    'hsa_iterate_agents': (hsa_status_t,
+                           ctypes.CFUNCTYPE(hsa_status_t, hsa_agent_t, 
+                                            ctypes.py_object), ctypes.pyobject),
+    
 }
