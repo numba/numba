@@ -21,6 +21,7 @@ API_PROTOTYPES = {
     # hsa_status_t hsa_iterate_agents(hsa_status_t(*)(hsa_agent_t, void*), void*)
     'hsa_iterate_agents': (hsa_status_t,
                            ctypes.CFUNCTYPE(hsa_status_t, hsa_agent_t, 
-                                            ctypes.py_object), ctypes.pyobject),
+                                            ctypes.py_object), 
+                           ctypes.py_object),
     
 }
