@@ -170,7 +170,7 @@ class Driver(object):
         try:
             self.hsa_init()
             print ("hsa has been initialized!!!!")
-        except CudaAPIError as e:
+        except HsaApiError as e:
             self.initialization_error = e
             raise HsaSupportError("Error at driver init: \n%s:" % e)
 
@@ -226,7 +226,7 @@ class Driver(object):
         # Not found.
         # Delay missing function error to use
         def absent_function(*args, **kws):
-            raise CudaDriverError(MISSING_FUNCTION_ERRMSG % fname)
+            raise HsaDriverError(MISSING_FUNCTION_ERRMSG % fname)
 
         setattr(self, fname, absent_function)
         return absent_function
