@@ -178,7 +178,7 @@ class Driver(object):
     def is_available(self):
         if not self.is_initialized:
             self.initialize()
-        return self.initialization_error is None
+        return hasattr(self, initialization_error)
 
     def __getattr__(self, fname):
         # First request of a driver API function
