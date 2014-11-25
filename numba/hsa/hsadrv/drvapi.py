@@ -13,7 +13,7 @@ hsa_agent_info_t = ctypes.c_int # enum
 
 
 HSA_ITER_AGENT_CALLBACK_FUNC = ctypes.CFUNCTYPE(hsa_status_t, hsa_agent_t,
-                                                ctypes.py_object), 
+                                                ctypes.py_object) 
 
 
 API_PROTOTYPES = {
