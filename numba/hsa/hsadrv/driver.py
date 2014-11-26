@@ -85,7 +85,7 @@ def _raise_platform_not_supported():
 
 
 DRIVER_NOT_FOUND_MSG = """
-The HSA runtime library cannot be found.  
+The HSA runtime library cannot be found.
 
 If you are sure that the HSA is installed, try setting environment
 variable NUMBA_HSA_DRIVER with the file path of the HSA runtime shared
@@ -188,7 +188,7 @@ class Driver(object):
             return
 
         self._initialize_api()
-        
+
         agent_ids = []
 
         def on_agent(agent_id, ctxt):
@@ -202,7 +202,7 @@ class Driver(object):
         agent_map = { agent_id: Agent(agent_id) for agent_id in agent_ids }
         del(Agent.__init__)
         @classmethod
-        def _get_agent(_, _, agent_id, **kwargs):
+        def _get_agent(_, _2, agent_id):
             try:
                 return self._agent_map[agent_id]
             except KeyError:
@@ -304,13 +304,26 @@ class Agent(object):
     This will wrap and provide an OO interface for hsa_agent_t C-API elements
     """
 
+    # Note this will be handled in a rather unconventional way. When agents get
+    # initialized by the driver, a set of instances for all the available agents
+    # will be created. After that creation, the __new__ and __init__ methods will
+    # be replaced, and the constructor will act as a mapping from an agent_id to
+    # the equivalent Agent object. Any attempt to create an Agent with a non
+    # existing agent_id will result in an error.
+    #
+    # the logic for this resides in Driver._initialize_agents
+
     def __new__(cls, agent_id):
+        # This is here to raise errors when trying to create agents
+        # before initialization. When agents are initialized, __new__ will
+        # be replaced with a version that returns the appropriate instance
+        # for existing agent_ids
         raise HsaDriverError("No known agent with id {0}".format(agent_id))
 
     def __init__(self, agent_id):
-        """note this should be unreachable once the agents get initialized,
-        as agent initialization"""
-        print ("initializing agent with id {0}".format(agent_id))
+        # This init will only happen when initializing the agents. After
+        # the agent initialization the instances of this class are considered
+        # initialized and locked, so this method will be removed.
         self.agent_id = agent_id
 
     def __repr__(self):
