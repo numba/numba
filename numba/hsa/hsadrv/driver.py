@@ -140,6 +140,7 @@ class Driver(object):
     Driver API functions are lazily bound.
     """
     _singleton = None
+    _agent_map = None
 
     def __new__(cls):
         obj = cls._singleton
@@ -165,16 +166,28 @@ class Driver(object):
         if self.is_initialized and self_initialization_error is None:
             self.hsa_shut_down()
 
-    def initialize(self):
-        print ("initializing hsa...")
+    def _initialize_api(self):
         self.is_initialized = True
         try:
             self.hsa_init()
-            print ("hsa has been initialized!!!!")
         except HsaApiError as e:
-            print(e)
             self.initialization_error = e
             raise HsaDriverError("Error at driver init: \n%s:" % e)
+
+    def _initialize_agents(self):
+        assert self._agent_map is None
+        
+        agent_ids = []
+
+        def on_agent(agent_id, ctxt):
+            agent_ids.append(agent_id)
+            return enums.HSA_STATUS_SUCCESS
+
+        callback = drvapi.HSA_ITER_AGENT_CALLBACK_FUNC(on_agent)
+        self.hsa_iterate_agents(callback, None)
+        
+        agent_map = { agent_id: Agent(agent_id) for agent_id in agent_ids } 
+        self._agent_map = agent_map
 
     @property
     def is_available(self):
@@ -194,7 +207,7 @@ class Driver(object):
 
         # Initialize driver
         if not self.is_initialized:
-            self.initialize()
+            self._initialize_api()
 
         if self.initialization_error is not None:
             raise HsaSupportError("Error at driver init: \n%s:" %
@@ -228,6 +241,15 @@ class Driver(object):
         setattr(self, fname, absent_function)
         return absent_function
 
+
+    @property
+    def agents(self):
+        if self._agent_map is None:
+            self._initialize_agents()
+
+        return self._agent_map.values()
+
+
     '''
     def get_device(self, devnum=0):
         dev = self.devices.get(devnum)
@@ -255,3 +277,10 @@ class Driver(object):
 
 driver = Driver()
 
+class Agent(object):
+    """Abstracts a HSA compute agent.
+
+    This will wrap and provide an OO interface for hsa_agent_t C-API elements"""
+
+    def __init__(self, agent_id):
+        self.agent_id = agent_id
