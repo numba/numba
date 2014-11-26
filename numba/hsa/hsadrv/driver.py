@@ -140,7 +140,6 @@ class Driver(object):
     Driver API functions are lazily bound.
     """
     _singleton = None
-    _agent_map = None
 
     def __new__(cls):
         obj = cls._singleton
@@ -161,6 +160,9 @@ class Driver(object):
         except HsaSupportError as e:
             self.is_initialized = True
             self.initialization_error = e
+
+        self._agent_map = None
+
 
     def __del__(self):
         if self.is_initialized and self_initialization_error is None:
@@ -189,18 +191,28 @@ class Driver(object):
         agent_map = { agent_id: Agent(agent_id) for agent_id in agent_ids } 
         self._agent_map = agent_map
 
+
     @property
     def is_available(self):
         if not self.is_initialized:
             self.initialize()
         return self.initialization_error is None
 
+
+    @property
+    def agents(self):
+        if self._agent_map is None:
+            self._initialize_agents()
+
+        return self._agent_map.values()
+
+
     def __getattr__(self, fname):
         # First request of a driver API function
         try:
             proto = API_PROTOTYPES[fname]
         except KeyError:
-            return super(Driver, self).__getattribute__(fname)
+            raise AttributeError(fname)
 
         restype = proto[0]
         argtypes = proto[1:]
@@ -240,14 +252,6 @@ class Driver(object):
 
         setattr(self, fname, absent_function)
         return absent_function
-
-
-    @property
-    def agents(self):
-        if self._agent_map is None:
-            self._initialize_agents()
-
-        return self._agent_map.values()
 
 
     '''
