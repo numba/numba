@@ -73,6 +73,21 @@ def get_record_rev_c(val, rec):
     return x
 
 
+def get_two_records_a(rec1, rec2):
+    x = rec1.a + rec2.a
+    return x
+
+
+def get_two_records_b(rec1, rec2):
+    x = rec1.b + rec2.b
+    return x
+
+
+def get_two_records_c(rec1, rec2):
+    x = rec1.c + rec2.c
+    return x
+
+
 def record_return(ary, i):
     return ary[i]
 
@@ -220,6 +235,26 @@ class TestRecordDtype(unittest.TestCase):
 
     def test_record_args_reverse(self):
         self._test_record_args(True)
+
+
+    def test_two_records(self):
+        '''
+        Testing the use of two scalar records of the same type
+        '''
+        recval1 = self.sample1d.copy()[0]
+        recval2 = self.sample1d.copy()[1]
+        attrs = 'abc'
+        valtypes = types.float64, types.int32, types.complex64
+
+        for attr, valtyp in zip(attrs, valtypes):
+            expected = getattr(recval1, attr) + getattr(recval2, attr)
+
+            nbrecord = numpy_support.from_dtype(recordtype)
+            pyfunc = globals()['get_two_records_' + attr]
+            cfunc = self.get_cfunc(pyfunc, (nbrecord, nbrecord))
+
+            got = cfunc(recval1, recval2)
+            self.assertEqual(expected, got)
 
 
     def test_record_return(self):
