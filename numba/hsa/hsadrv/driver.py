@@ -23,6 +23,7 @@ from . import enums, drvapi
 from numba import config
 from numba.utils import longint as long
 
+
 def _find_driver():
     envpath = os.environ.get('NUMBA_HSA_DRIVER', None)
     if envpath == '0':
@@ -182,7 +183,9 @@ class Driver(object):
 
 
     def _initialize_agents(self):
-        assert self._agent_map is None
+        if self._agent_map is not None:
+            return
+
         self._initialize_api()
         
         agent_ids = []
@@ -193,9 +196,18 @@ class Driver(object):
 
         callback = drvapi.HSA_ITER_AGENT_CALLBACK_FUNC(on_agent)
         self.hsa_iterate_agents(callback, None)
-        
+
+        del(Agent.__new__)
         agent_map = { agent_id: Agent(agent_id) for agent_id in agent_ids } 
-        self._agent_map = agent_map
+        @classmethod
+        def _get_agent(cls, agent_id):
+            try:
+                return cls._agents[agent_id]
+            except KeyError:
+                raise HsaDriverError("No known agent with id {0}".format(agent_id))
+
+        Agent._agents = agent_map
+        Agent.__new__ = _get_agent
 
 
     @property
@@ -206,10 +218,13 @@ class Driver(object):
 
     @property
     def agents(self):
-        if self._agent_map is None:
-            self._initialize_agents()
-
+        self._initialize_agents()
         return self._agent_map.values()
+
+    @property
+    def agent_ids(self):
+        self._initialize_agents()
+        return self._agent_map.keys()
 
 
     def __getattr__(self, fname):
@@ -289,7 +304,17 @@ driver = Driver()
 class Agent(object):
     """Abstracts a HSA compute agent.
 
-    This will wrap and provide an OO interface for hsa_agent_t C-API elements"""
+    This will wrap and provide an OO interface for hsa_agent_t C-API elements
+    """
+
+    def __new__(cls, agent_id):
+        raise HsaDriverError("No known agent with id {0}".format(agent_id))
 
     def __init__(self, agent_id):
+        """note this should be unreachable once the agents get initialized,
+        as agent initialization"""
+        print ("initializing agent with id {0}".format(agent_id))
         self.agent_id = agent_id
+
+    def __repr__(self):
+        return "<HSA agent with id: {0}>".format(self.agent_id)
