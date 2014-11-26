@@ -946,13 +946,18 @@ class BaseContext(object):
 
         if fndesc is None:
             # Compile
+            from numba import compiler
+
             codegen = self.jit_codegen()
             library = codegen.create_library(impl.__name__)
-            cres = numba.compiler.compile_internal(self.typing_context, self,
-                                                   library,
-                                                   impl, sig.args,
-                                                   sig.return_type,
-                                                   locals=locals)
+            flags = compiler.Flags()
+            flags.set('no_compile')
+            flags.set('no_cpython_wrapper')
+            cres = compiler.compile_internal(self.typing_context, self,
+                                             library,
+                                             impl, sig.args,
+                                             sig.return_type, flags,
+                                             locals=locals)
 
             # Set to linkonce one-definition-rule to prevent multiple
             # definitions from raising errors (this can happen with
@@ -960,8 +965,6 @@ class BaseContext(object):
             codegen.add_linking_library(cres.library)
             llvm_func = cres.library.get_function(cres.fndesc.llvm_func_name)
             llvm_func.linkage = 'linkonce_odr'
-            wrapper_func = cres.library.get_function(cres.fndesc.llvm_cpython_wrapper_name)
-            wrapper_func.linkage = 'linkonce_odr'
             fndesc = cres.fndesc
 
             self.cached_internal_func[cache_key] = fndesc

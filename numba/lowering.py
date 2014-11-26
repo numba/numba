@@ -8,7 +8,8 @@ from llvmlite.llvmpy.core import Type, Builder, Module
 import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 
-from numba import _dynfunc, ir, types, cgutils, utils, config, cffi_support, typing
+from numba import (_dynfunc, errcode, ir, types, cgutils, utils, config,
+                   cffi_support, typing)
 
 
 class LoweringError(Exception):
@@ -214,11 +215,11 @@ class BaseLower(object):
 
     def add_exception(self, exc):
         assert issubclass(exc, BaseException), exc
-        excid = len(self.exceptions) + 1
+        excid = len(self.exceptions) + errcode.ERROR_COUNT
         self.exceptions[excid] = exc
         return excid
 
-    def lower(self):
+    def lower(self, create_wrapper=True):
         # Init argument variables
         fnargs = self.context.get_arguments(self.function)
         for ak, av in zip(self.fndesc.args, fnargs):
@@ -260,8 +261,9 @@ class BaseLower(object):
         self.library.add_ir_module(self.module)
 
         # Create CPython wrapper
-        self.context.create_cpython_wrapper(self.library, self.fndesc,
-                                            self.exceptions)
+        if create_wrapper:
+            self.context.create_cpython_wrapper(self.library, self.fndesc,
+                                                self.exceptions)
 
         if config.NUMBA_DUMP_FUNC_OPT:
             # FIXME
@@ -498,8 +500,9 @@ class Lower(BaseLower):
 
                 res = impl(self.builder, castvals)
                 libs = getattr(impl, "libs", ())
-                if libs:
-                    self.context.add_libs(libs)
+                for lib in libs:
+                    # FIXME?
+                    self.library.add_llvm_module(lib)
             return self.context.cast(self.builder, res, signature.return_type,
                                      resty)
 

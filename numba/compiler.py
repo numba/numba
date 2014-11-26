@@ -27,6 +27,7 @@ class Flags(utils.ConfigOptions):
         'force_pyobject',
         'no_compile',
         'boundcheck',
+        'no_cpython_wrapper',
         ])
 
 
@@ -38,14 +39,13 @@ CR_FIELDS = ["typing_context",
              "entry_point",
              "typing_error",
              "type_annotation",
-             "llvm_module",
-             "llvm_func",
              "signature",
              "objectmode",
              "lifted",
              "fndesc",
              "interpmode",
-             "library"]
+             "library",
+             "exception_map"]
 
 
 CompileResult = namedtuple("CompileResult", CR_FIELDS)
@@ -388,7 +388,7 @@ class Pipeline(object):
             return py_lowering_stage(self.targetctx,
                                      self.library,
                                      self.interp,
-                                     self.flags.no_compile)
+                                     self.flags)
 
     def backend_nopython_mode(self):
         """Native mode compilation"""
@@ -401,7 +401,7 @@ class Pipeline(object):
                 self.typemap,
                 self.return_type,
                 self.calltypes,
-                self.flags.no_compile)
+                self.flags)
 
     def _backend(self, lowerfn, objectmode):
         """
@@ -410,7 +410,7 @@ class Pipeline(object):
         if self.library is None:
             codegen = self.targetctx.jit_codegen()
             self.library = codegen.create_library(self.bc.func_qualname)
-        fndesc, func = lowerfn()
+        fndesc, exception_map, func = lowerfn()
         signature = typing.signature(self.return_type, *self.args)
         cr = compile_result(typing_context=self.typingctx,
                             target_context=self.targetctx,
@@ -418,8 +418,7 @@ class Pipeline(object):
                             typing_error=self.status.fail_reason,
                             type_annotation=self.type_annotation,
                             library=self.library,
-                            llvm_func=None,
-                            llvm_module=None,
+                            exception_map=exception_map,
                             signature=signature,
                             objectmode=objectmode,
                             interpmode=False,
@@ -463,8 +462,6 @@ class Pipeline(object):
                             entry_point=self.func,
                             typing_error=self.status.fail_reason,
                             type_annotation="<Interpreter mode function>",
-                            llvm_func=None,
-                            llvm_module=None,
                             signature=signature,
                             objectmode=False,
                             interpmode=True,
@@ -565,18 +562,11 @@ def compile_bytecode(typingctx, targetctx, bc, args, return_type, flags,
 
 
 def compile_internal(typingctx, targetctx, library,
-                     func, args, return_type, locals):
-    flags = DEFAULT_FLAGS.copy()
-    flags.set("no_compile")
-
-    bc = bytecode.ByteCode(func=func)
-    if config.DUMP_BYTECODE:
-        print(bc.dump())
-    func_attr = get_function_attributes(func)
-
+                     func, args, return_type, flags, locals):
+    # For now this is the same thing as compile_extra().
     pipeline = Pipeline(typingctx, targetctx, library,
                         args, return_type, flags, locals)
-    return pipeline.compile_internal(bc=bc, func_attr=func_attr)
+    return pipeline.compile_extra(func)
 
 
 def _is_nopython_types(t):
@@ -689,38 +679,40 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
 
 
 def native_lowering_stage(targetctx, library, interp, typemap, restype,
-                          calltypes, nocompile):
+                          calltypes, flags):
     # Lowering
     fndesc = lowering.PythonFunctionDescriptor.from_specialized_function(
         interp, typemap, restype, calltypes, mangler=targetctx.mangler)
 
     lower = lowering.Lower(targetctx, library, fndesc, interp)
-    lower.lower()
+    lower.lower(create_wrapper=not flags.no_cpython_wrapper)
     env = lower.env
+    exception_map = lower.exceptions
     del lower
 
-    if nocompile:
-        return fndesc, None
+    if flags.no_compile:
+        return fndesc, exception_map, None
     else:
         # Prepare for execution
         cfunc = targetctx.get_executable(library, fndesc, env)
         targetctx.insert_user_function(cfunc, fndesc)
-        return fndesc, cfunc
+        return fndesc, exception_map, cfunc
 
 
-def py_lowering_stage(targetctx, library, interp, nocompile):
+def py_lowering_stage(targetctx, library, interp, flags):
     fndesc = lowering.PythonFunctionDescriptor.from_object_mode_function(interp)
     lower = objmode.PyLower(targetctx, library, fndesc, interp)
-    lower.lower()
+    lower.lower(create_wrapper=not flags.no_cpython_wrapper)
     env = lower.env
+    exception_map = lower.exceptions
     del lower
 
-    if nocompile:
-        return fndesc, None
+    if flags.no_compile:
+        return fndesc, exception_map, None
     else:
         # Prepare for execution
         cfunc = targetctx.get_executable(library, fndesc, env)
-        return fndesc, cfunc
+        return fndesc, exception_map, cfunc
 
 
 def ir_optimize_for_py_stage(interp):

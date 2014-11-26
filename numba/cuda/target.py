@@ -8,7 +8,7 @@ import llvmlite.binding as ll
 from numba import typing, types, cgutils
 from numba.targets.base import BaseContext
 from .cudadrv import nvvm
-from . import nvvmutils
+from . import codegen, nvvmutils
 
 
 # -----------------------------------------------------------------------------
@@ -35,9 +35,14 @@ class CUDATargetContext(BaseContext):
     def init(self):
         from . import cudaimpl, libdevice
 
+        self._internal_codegen = codegen.JITCUDACodegen("numba.cuda.jit")
+
         self.insert_func_defn(cudaimpl.registry.functions)
         self.insert_func_defn(libdevice.registry.functions)
         self._target_data = ll.create_target_data(nvvm.default_data_layout)
+
+    def jit_codegen(self):
+        return self._internal_codegen
 
     @property
     def target_data(self):

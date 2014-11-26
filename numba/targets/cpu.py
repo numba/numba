@@ -51,7 +51,6 @@ class CPUContext(BaseContext):
 
     def init(self):
         self._internal_codegen = codegen.JITCPUCodegen("numba.exec")
-        #self._internal_library = self._internal_codegen.create_library("common")
 
         self.native_funcs = utils.UniqueDict()
         self.cmath_provider = {}
