@@ -45,6 +45,13 @@ HSA_DEVICE_TYPE_CPU = 0
 HSA_DEVICE_TYPE_GPU = 1
 HSA_DEVICE_TYPE_DSP = 2
 
+# hsa_system_info_t
+HSA_SYSTEM_INFO_VERSION_MAJOR               = 0
+HSA_SYSTEM_INFO_VERSION_MINOR               = 1
+HSA_SYSTEM_INFO_TIMESTAMP                   = 2
+HSA_SYSTEM_INFO_TIMESTAMP_FREQUENCY         = 3
+HSA_SYSTEM_INFO_SIGNAL_MAX_WAIT             = 4
+
 # hsa_agent_info_t
 HSA_AGENT_INFO_NAME                         = 0
 HSA_AGENT_INFO_VENDOR_NAME                  = 1

@@ -77,6 +77,12 @@ def _find_driver():
         _raise_driver_error(errmsg)
 
 
+
+def _hsa_attribute_getter(func, handle, enum, val_type):
+    result = val_type()
+    func(handle, enum, ctypes.byref(result))
+    return result.value
+
 PLATFORM_NOT_SUPPORTED_ERROR = """
 HSA is not currently ussported in this platform ({0}).
 """
@@ -142,6 +148,14 @@ class Driver(object):
     """
     _singleton = None
     _agent_map = None
+
+    _hsa_properties = {
+        'version_major': (enum.HSA_SYSTEM_INFO_VERSION_MAJOR, ctypes.c_uint16),
+        'version_minor': (enum.HSA_SYSTEM_INFO_VERSIOM_MINOR, ctypes.c_uint16),
+        'timestamp': (enum.HSA_SYSTEM_INFO_TIMESTAMP, ctypes.c_uint64),
+        'timestamp_frequency': (enum.HSA_SYSTEM_INFOTIME_STAMP_FREQUENCY, ctypes.c_uint16),
+        'signal_max_wait': (enum.HSA_SYSTEM_INFO_SIGNAL_MAX_WAIT, ctypes.c_uint64),
+    }
 
     def __new__(cls):
         obj = cls._singleton
@@ -225,7 +239,16 @@ class Driver(object):
 
 
     def __getattr__(self, fname):
-        # First request of a driver API function
+        # First try if it is an hsa property
+        try:
+            enum, typ = self._hsa_properties[fname]
+            result = typ()
+            self.hsa_system_get_info(enum, ctypes.byref(result))
+            return result.value
+        except KeyError:
+            pass
+
+        # if not a property... try if it is an api call
         try:
             proto = API_PROTOTYPES[fname]
         except KeyError:
