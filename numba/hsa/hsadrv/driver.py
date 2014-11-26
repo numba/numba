@@ -201,9 +201,11 @@ class Driver(object):
         del(Agent.__new__)
         agent_map = { agent_id: Agent(agent_id) for agent_id in agent_ids } 
         @classmethod
-        def _get_agent(cls, agent_id):
+        def _get_agent(cls, *args, **kwargs):
+            assert len(args) == 1
+            assert not kwargs
             try:
-                return self._agent_map[agent_id]
+                return self._agent_map[args[0]]
             except KeyError:
                 raise HsaDriverError("No known agent with id {0}".format(agent_id))
 
