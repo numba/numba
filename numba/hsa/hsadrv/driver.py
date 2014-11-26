@@ -168,7 +168,11 @@ class Driver(object):
         if self.is_initialized and self_initialization_error is None:
             self.hsa_shut_down()
 
+
     def _initialize_api(self):
+        if self.is_initialized:
+            return
+
         self.is_initialized = True
         try:
             self.hsa_init()
@@ -176,8 +180,10 @@ class Driver(object):
             self.initialization_error = e
             raise HsaDriverError("Error at driver init: \n%s:" % e)
 
+
     def _initialize_agents(self):
         assert self._agent_map is None
+        self._initialize_api()
         
         agent_ids = []
 
@@ -194,8 +200,7 @@ class Driver(object):
 
     @property
     def is_available(self):
-        if not self.is_initialized:
-            self.initialize()
+        self.initialize()
         return self.initialization_error is None
 
 
@@ -218,8 +223,7 @@ class Driver(object):
         argtypes = proto[1:]
 
         # Initialize driver
-        if not self.is_initialized:
-            self._initialize_api()
+        self._initialize_api()
 
         if self.initialization_error is not None:
             raise HsaSupportError("Error at driver init: \n%s:" %
@@ -237,6 +241,7 @@ class Driver(object):
 
         setattr(self, fname, safe_hsa_api_call)
         return safe_hsa_api_call
+
 
     def _find_api(self, fname):
         # Try regular
