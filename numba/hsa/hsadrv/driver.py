@@ -151,7 +151,7 @@ class Driver(object):
 
     _hsa_properties = {
         'version_major': (enums.HSA_SYSTEM_INFO_VERSION_MAJOR, ctypes.c_uint16),
-        'version_minor': (enums.HSA_SYSTEM_INFO_VERSIOM_MINOR, ctypes.c_uint16),
+        'version_minor': (enums.HSA_SYSTEM_INFO_VERSION_MINOR, ctypes.c_uint16),
         'timestamp': (enums.HSA_SYSTEM_INFO_TIMESTAMP, ctypes.c_uint64),
         'timestamp_frequency': (enums.HSA_SYSTEM_INFOTIME_STAMP_FREQUENCY, ctypes.c_uint16),
         'signal_max_wait': (enums.HSA_SYSTEM_INFO_SIGNAL_MAX_WAIT, ctypes.c_uint64),
