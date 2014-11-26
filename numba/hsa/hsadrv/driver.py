@@ -200,7 +200,7 @@ class Driver(object):
 
     @property
     def is_available(self):
-        self.initialize()
+        self._initialize_api()
         return self.initialization_error is None
 
 
