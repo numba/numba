@@ -29,7 +29,8 @@ def expand_macros(blocks):
     expanded = False
     for blk in blocks.values():
         module_getattr_folding(constants, blk)
-        expanded = expanded or expand_macros_in_block(constants, blk)
+        block_expanded = expand_macros_in_block(constants, blk)
+        expanded = expanded or block_expanded
     return expanded
 
 def module_getattr_folding(constants, block):
