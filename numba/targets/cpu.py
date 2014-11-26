@@ -18,8 +18,8 @@ from .options import TargetOptions
 def _add_missing_symbol(symbol, addr):
     """Add missing symbol into LLVM internal symtab
     """
-    if not le.dylib_address_of_symbol(symbol):
-        le.dylib_add_symbol(symbol, addr)
+    if not ll.address_of_symbol(symbol):
+        ll.add_symbol(symbol, addr)
 
 # Keep those structures in sync with _dynfunc.c.
 
@@ -198,32 +198,32 @@ class CPUContext(BaseContext):
     def map_math_functions(self):
         c_helpers = _helperlib.c_helpers
         for name in ['cpow', 'sdiv', 'srem', 'udiv', 'urem']:
-            le.dylib_add_symbol("numba.math.%s" % name, c_helpers[name])
+            ll.add_symbol("numba.math.%s" % name, c_helpers[name])
 
         if sys.platform.startswith('win32') and self.is32bit:
             # For Windows XP __ftol2 is not defined, we will just use
             # __ftol as a replacement.
             # On Windows 7, this is not necessary but will work anyway.
-            ftol = le.dylib_address_of_symbol('__ftol')
-            _add_missing_symbol("__ftol2", ftol)
+            ftol = ll.address_of_symbol('_ftol')
+            _add_missing_symbol("_ftol2", ftol)
 
         elif sys.platform.startswith('linux') and self.is32bit:
             _add_missing_symbol("__fixunsdfdi", c_helpers["fptoui"])
             _add_missing_symbol("__fixunssfdi", c_helpers["fptouif"])
 
         # Necessary for Python3
-        le.dylib_add_symbol("numba.round", c_helpers["round_even"])
-        le.dylib_add_symbol("numba.roundf", c_helpers["roundf_even"])
+        ll.add_symbol("numba.round", c_helpers["round_even"])
+        ll.add_symbol("numba.roundf", c_helpers["roundf_even"])
 
         # List available C-math
         for fname in intrinsics.INTR_MATH:
-            if le.dylib_address_of_symbol(fname):
+            if ll.address_of_symbol(fname):
                 # Exist
                 self.cmath_provider[fname] = 'builtin'
             else:
                 # Non-exist
                 # Bind from C code
-                le.dylib_add_symbol(fname, c_helpers[fname])
+                ll.add_symbol(fname, c_helpers[fname])
                 self.cmath_provider[fname] = 'indirect'
 
     def map_numpy_math_functions(self):
@@ -231,11 +231,11 @@ class CPUContext(BaseContext):
         import numba._npymath_exports as npymath
 
         for sym in npymath.symbols:
-            le.dylib_add_symbol(*sym)
+            ll.add_symbol(*sym)
 
     def dynamic_map_function(self, func):
         name, ptr = self.native_funcs[func]
-        le.dylib_add_symbol(name, ptr)
+        ll.add_symbol(name, ptr)
 
     def remove_native_function(self, func):
         """
@@ -246,8 +246,8 @@ class CPUContext(BaseContext):
         # If the symbol wasn't redefined, NULL it out.
         # (otherwise, it means the corresponding Python function was
         #  re-compiled, and the new target is still alive)
-        if le.dylib_address_of_symbol(name) == ptr:
-            le.dylib_add_symbol(name, 0)
+        if ll.address_of_symbol(name) == ptr:
+            ll.add_symbol(name, 0)
 
     def post_lowering(self, func):
         mod = func.module

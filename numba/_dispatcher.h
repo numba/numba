@@ -23,6 +23,11 @@ dispatcher_resolve(dispatcher_t *obj, int sig[], int *matches,
 int
 dispatcher_count(dispatcher_t *obj);
 
+int dispatcher_get_ndarray_typecode(int ndim, int layout, int type_num);
+
+void dispatcher_insert_ndarray_typecode(int ndim, int layout, int type_num,
+                                        int typecode);
+
 #ifdef __cplusplus
     }
 #endif
