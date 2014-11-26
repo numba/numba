@@ -141,6 +141,7 @@ class Driver(object):
     Driver API functions are lazily bound.
     """
     _singleton = None
+    _agent_map = None
 
     def __new__(cls):
         obj = cls._singleton
@@ -202,11 +203,11 @@ class Driver(object):
         @classmethod
         def _get_agent(cls, agent_id):
             try:
-                return cls._agents[agent_id]
+                return self._agent_map[agent_id]
             except KeyError:
                 raise HsaDriverError("No known agent with id {0}".format(agent_id))
 
-        Agent._agents = agent_map
+        self._agent_map = agent_map
         Agent.__new__ = _get_agent
 
 
@@ -220,11 +221,6 @@ class Driver(object):
     def agents(self):
         self._initialize_agents()
         return self._agent_map.values()
-
-    @property
-    def agent_ids(self):
-        self._initialize_agents()
-        return self._agent_map.keys()
 
 
     def __getattr__(self, fname):
