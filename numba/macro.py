@@ -52,10 +52,21 @@ def module_getattr_folding(constants, block):
             if isinstance(rhs, ir.Global):
                 constants[inst.target.name] = rhs.value
 
-            elif isinstance(rhs, ir.Expr) and rhs.op == 'getattr':
-                if rhs.value.name in constants:
-                    base = constants[rhs.value.name]
-                    constants[inst.target.name] = getattr(base, rhs.attr)
+            elif isinstance(rhs, ir.Expr):
+                if rhs.op == 'getattr':
+                    if rhs.value.name in constants:
+                        base = constants[rhs.value.name]
+                        constants[inst.target.name] = getattr(base, rhs.attr)
+
+                elif rhs.op == 'build_tuple':
+                    if all(i.name in constants for i in rhs.items):
+                        tupk = tuple(constants[i.name] for i in rhs.items)
+                        constants[inst.target.name] = tupk
+
+                elif rhs.op == 'build_list':
+                    if all(i.name in constants for i in rhs.items):
+                        tupk = list(constants[i.name] for i in rhs.items)
+                        constants[inst.target.name] = tupk
 
             elif isinstance(rhs, ir.Const):
                 constants[inst.target.name] = rhs.value
@@ -91,7 +102,18 @@ def expand_macros_in_block(constants, block):
                     # Rewrite calling macro
                     assert macro.callable
                     args = [constants[arg.name] for arg in rhs.args]
-                    kws = dict((k, constants[v.name]) for k, v in rhs.kws)
+
+                    kws = {}
+                    for k, v in rhs.kws:
+                        if v.name in constants:
+                            kws[k] = constants[v.name]
+
+                        else:
+                            msg = "Argument {name!r} must be a " \
+                                  "constant at {loc}".format(name=k,
+                                                             loc=inst.loc)
+                            raise ValueError(msg)
+
                     try:
                         result = macro.func(*args, **kws)
                     except BaseException as e:
