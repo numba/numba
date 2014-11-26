@@ -88,13 +88,22 @@ def get_two_records_c(rec1, rec2):
     return x
 
 
+def get_two_records_distinct(rec1, rec2):
+    x = rec1.a + rec2.f
+    return x
+
+
 def record_return(ary, i):
     return ary[i]
+
 
 recordtype = np.dtype([('a', np.float64),
                        ('b', np.int32),
                        ('c', np.complex64),
                        ('d', (np.str, 5))])
+
+recordtype2 = np.dtype([('e', np.int32),
+                        ('f', np.float64)])
 
 
 class TestRecordDtype(unittest.TestCase):
@@ -109,6 +118,14 @@ class TestRecordDtype(unittest.TestCase):
             ary[i].b = x
             ary[i].c = x * 1j
             ary[i].d = "%d" % x
+
+        ary2 = np.recarray(3, dtype=recordtype2)
+        self.sample1d2 = ary2
+
+        for i in range(ary2.size):
+            x = i + 5
+            ary2[i].e = x
+            ary2[i].f = x / 2
 
     def get_cfunc(self, pyfunc, argspec):
         # Need to keep a reference to the compile result for the
@@ -256,6 +273,20 @@ class TestRecordDtype(unittest.TestCase):
             got = cfunc(recval1, recval2)
             self.assertEqual(expected, got)
 
+    def test_two_distinct_records(self):
+        '''
+        Testing the use of two scalar records of differing type
+        '''
+        recval1 = self.sample1d.copy()[0]
+        recval2 = self.sample1d2.copy()[0]
+        expected = recval1.a + recval2.f
+
+        nbrecord1 = numpy_support.from_dtype(recordtype)
+        nbrecord2 = numpy_support.from_dtype(recordtype2)
+        cfunc = self.get_cfunc(get_two_records_distinct, (nbrecord1, nbrecord2))
+
+        got = cfunc(recval1, recval2)
+        self.assertEqual(expected, got)
 
     def test_record_return(self):
         """
