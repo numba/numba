@@ -199,13 +199,12 @@ class Driver(object):
         self.hsa_iterate_agents(callback, None)
 
         del(Agent.__new__)
-        agent_map = { agent_id: Agent(agent_id) for agent_id in agent_ids } 
+        agent_map = { agent_id: Agent(agent_id) for agent_id in agent_ids }
+        del(Agent.__init__)
         @classmethod
-        def _get_agent(cls, *args, **kwargs):
-            assert len(args) == 1
-            assert not kwargs
+        def _get_agent(_, _, agent_id, **kwargs):
             try:
-                return self._agent_map[args[0]]
+                return self._agent_map[agent_id]
             except KeyError:
                 raise HsaDriverError("No known agent with id {0}".format(agent_id))
 
