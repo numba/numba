@@ -19,17 +19,26 @@ def _is_x86(triple):
 
 
 class CodeLibrary(object):
+    """
+    An interface for bundling LLVM code together and compiling it.
+    It is tied to a *codegen* instance (e.g. JITCPUCodegen) that will
+    determine how the LLVM code is transformed and linked together.
+    """
 
     _finalized = False
 
     def __init__(self, codegen, name):
         self._codegen = codegen
         self._name = name
+        self._linking_libraries = set()
         self._final_module = ll.parse_assembly(
             str(self._codegen._create_empty_module(self._name)))
 
     @property
     def codegen(self):
+        """
+        The codegen object owning this library.
+        """
         return self._codegen
 
     def __repr__(self):
@@ -44,12 +53,45 @@ class CodeLibrary(object):
         if not self._finalized:
             self.finalize()
 
+    def _optimize_functions(self, ll_module):
+        """
+        Internal: run function-level optimizations inside *ll_module*.
+        """
+        with self._codegen._function_pass_manager(ll_module) as fpm:
+            # Run function-level optimizations to reduce memory usage and improve
+            # module-level optimization.
+            for func in ll_module.functions:
+                fpm.initialize()
+                fpm.run(func)
+                fpm.finalize()
+
+    def _optimize_final_module(self):
+        """
+        Internal: optimize this library's final module.
+        """
+        with self._codegen._module_pass_manager() as pm:
+            pm.run(self._final_module)
+
     def create_ir_module(self, name):
+        """
+        Create a LLVM IR module for use by this library.
+        """
         self._raise_if_finalized()
         ir_module = self._codegen._create_empty_module(name)
         return ir_module
 
+    def add_linking_library(self, library):
+        """
+        Add a library for linking into this library, without losing
+        the original library.
+        """
+        library._ensure_finalized()
+        self._linking_libraries.add(library)
+
     def add_ir_module(self, ir_module):
+        """
+        Add a LLVM IR module's contents to this library.
+        """
         self._raise_if_finalized()
         assert isinstance(ir_module, llvmir.Module)
         # Enforce data layout to enable layout-specific optimizations
@@ -59,21 +101,21 @@ class CodeLibrary(object):
         self.add_llvm_module(ll_module)
 
     def add_llvm_module(self, ll_module):
-        with self._codegen._function_pass_manager(ll_module) as fpm:
-            # Run function-level optimizations to reduce memory usage and improve
-            # module-level optimization.
-            for func in ll_module.functions:
-                fpm.initialize()
-                fpm.run(func)
-                fpm.finalize()
+        self._optimize_functions(ll_module)
         self._final_module.link_in(ll_module)
 
     def finalize(self):
+        """
+        Finalize the library.  After this call, nothing can be added anymore.
+        Finalization involves various stages of code optimization and
+        linking.
+        """
         self._raise_if_finalized()
-        with self._codegen._module_pass_manager() as pm:
-            pm.run(self._final_module)
+        self._optimize_final_module()
 
         # Link libraries for shared code
+        for library in self._linking_libraries:
+            self._final_module.link_in(library._final_module, preserve=True)
         for library in self._codegen._libraries:
             self._final_module.link_in(library._final_module, preserve=True)
 
@@ -103,10 +145,21 @@ class CodeLibrary(object):
 class AOTCodeLibrary(CodeLibrary):
 
     def emit_native_object(self):
+        """
+        Return this library as a native object (a bytestring) -- for example
+        ELF under Linux.
+
+        This function implicitly calls .finalize().
+        """
         self._ensure_finalized()
         return self._codegen._tm.emit_object(self._final_module)
 
     def emit_bitcode(self):
+        """
+        Return this library as LLVM bitcode (a bytestring).
+
+        This function implicitly calls .finalize().
+        """
         self._ensure_finalized()
         return self._final_module.as_bitcode()
 
@@ -117,6 +170,12 @@ class AOTCodeLibrary(CodeLibrary):
 class JITCodeLibrary(CodeLibrary):
 
     def get_pointer_to_function(self, name):
+        """
+        Generate native code for function named *name* and return a pointer
+        to the start of the function (as an integer).
+
+        This function implicitly calls .finalize().
+        """
         self._ensure_finalized()
         func = self.get_function(name)
         return self._codegen._engine.get_pointer_to_function(func)
@@ -128,7 +187,7 @@ class JITCodeLibrary(CodeLibrary):
 class BaseCPUCodegen(object):
 
     def __init__(self, module_name):
-        self._libraries = []
+        self._libraries = set()
         self._llvm_module = ll.parse_assembly(
             str(self._create_empty_module(module_name)))
         self._init(self._llvm_module)
@@ -166,13 +225,24 @@ class BaseCPUCodegen(object):
 
     @property
     def target_data(self):
+        """
+        The LLVM "target data" object for this codegen instance.
+        """
         return self._target_data
 
     def add_linking_library(self, library):
+        """
+        Add a library for linking into all libraries created by this
+        codegen object, without losing the original library.
+        """
         library._ensure_finalized()
-        self._libraries.append(library)
+        self._libraries.add(library)
 
     def create_library(self, name):
+        """
+        Create a :class:`CodeLibrary` object for use with this codegen
+        instance.
+        """
         return self._library_class(self, name)
 
     def _module_pass_manager(self):
@@ -195,6 +265,10 @@ class BaseCPUCodegen(object):
 
 
 class AOTCPUCodegen(BaseCPUCodegen):
+    """
+    A codegen implementation suitable for Ahead-Of-Time compilation
+    (e.g. generation of object files).
+    """
 
     _library_class = AOTCodeLibrary
     _reloc = 'pic'
@@ -209,6 +283,9 @@ class AOTCPUCodegen(BaseCPUCodegen):
 
 
 class JITCPUCodegen(BaseCPUCodegen):
+    """
+    A codegen implementation suitable for Just-In-Time compilation.
+    """
 
     _library_class = JITCodeLibrary
     _reloc = 'default'

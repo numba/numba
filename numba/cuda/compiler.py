@@ -32,11 +32,8 @@ def compile_cuda(pyfunc, return_type, args, debug):
                                   flags=flags,
                                   locals={})
 
-    # Fix global naming
-    # FIXME: put this inside CUDAlibrary
-    for gv in cres.library._final_module.global_variables:
-        if '.' in gv.name:
-            gv.name = gv.name.replace('.', '_')
+    library = cres.library
+    library.finalize()
 
     return cres
 
@@ -64,8 +61,7 @@ def compile_device(pyfunc, return_type, args, inline=True, debug=False):
         cases = [cres.signature]
 
     cres.typing_context.insert_user_function(devfn, device_function_template)
-    libs = [cres.library._final_module]
-    cres.target_context.insert_user_function(devfn, cres.fndesc, libs)
+    cres.target_context.insert_user_function(devfn, cres.fndesc, [cres.library])
     return devfn
 
 

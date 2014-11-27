@@ -501,8 +501,7 @@ class Lower(BaseLower):
                 res = impl(self.builder, castvals)
                 libs = getattr(impl, "libs", ())
                 for lib in libs:
-                    # FIXME?
-                    self.library.add_llvm_module(lib)
+                    self.library.add_linking_library(lib)
             return self.context.cast(self.builder, res, signature.return_type,
                                      resty)
 

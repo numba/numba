@@ -7,11 +7,24 @@ from .cudadrv import nvvm
 
 class CUDACodeLibrary(CodeLibrary):
 
-    def add_llvm_module(self, ll_module):
-        self._final_module.link_in(ll_module)
+    def _optimize_functions(self, ll_module):
+        pass
+
+    def _optimize_final_module(self):
+        pass
+
+    def _finalize_specific(self):
+        # Fix global naming
+        for gv in self._final_module.global_variables:
+            if '.' in gv.name:
+                gv.name = gv.name.replace('.', '_')
 
 
 class JITCUDACodegen(BaseCPUCodegen):
+    """
+    This codegen implementation for CUDA actually only generates optimized
+    LLVM IR.  Generation of PTX code is done separately (see numba.cuda.compiler).
+    """
 
     _library_class = CUDACodeLibrary
 
@@ -33,5 +46,4 @@ class JITCUDACodegen(BaseCPUCodegen):
         raise NotImplementedError
 
     def _add_module(self, module):
-        #raise NotImplementedError
-        self._engine.add_module(module)
+        pass
