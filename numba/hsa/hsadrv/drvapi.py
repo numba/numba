@@ -61,7 +61,7 @@ API_PROTOTYPES = {
     #     void (*callback)(hsa_status_t status, hsa_queue_t *source),
     #     const hsa_queue_t *service_queue,
     #     hsa_queue_t **queue)
-    'hsa_queue_create': (hsa_status_t, ctypes.c_uint32, hsa_queue_type_t,
+    'hsa_queue_create': (hsa_status_t, hsa_agent_t, ctypes.c_uint32, hsa_queue_type_t,
                          HSA_QUEUE_CALLBACK_FUNC, ctypes.POINTER(hsa_queue_t),
                          ctypes.POINTER(ctypes.POINTER(hsa_queue_t))),
 
