@@ -332,10 +332,15 @@ class HsaWrapper(object):
 
         func = getattr(hsa, self._hsa_info_function)
         result = typ()
+        is_array_type = hasattr(typ, '_length_')
         # if the result is not ctypes array, get a reference)
-        result_buff = result if hasattr(result, '__len__') else ctypes.byref(result)
+        result_buff = result if is_array_type else ctypes.byref(result)
         func(self._id, enum, result_buff)
-        return result.value
+
+        if not is_array_type or typ._type_ == ctypes.c_char:
+            return result.value
+        else:
+            return list(result)
 
 
 class Agent(HsaWrapper):
@@ -355,7 +360,7 @@ class Agent(HsaWrapper):
 
     _hsa_info_function = 'hsa_agent_get_info'
     _hsa_properties = {
-        'name': (enums.HSA_AGENT_INFO_NAME, ctypes.c_char * 64).
+        'name': (enums.HSA_AGENT_INFO_NAME, ctypes.c_char * 64),
         'vendor_name': (enums.HSA_AGENT_INFO_VENDOR_NAME, ctypes.c_char * 64),
         'feature': (enums.HSA_AGENT_INFO_FEATURE, drvapi.hsa_agent_feature_t),
         'wavefront_size': (enums.HSA_AGENT_INFO_WAVEFRONT_SIZE, ctypes.c_uint32),
@@ -389,7 +394,7 @@ class Agent(HsaWrapper):
         # This init will only happen when initializing the agents. After
         # the agent initialization the instances of this class are considered
         # initialized and locked, so this method will be removed.
-        self._id = _id
+        self._id = agent_id
 
     def __repr__(self):
-        return "<HSA agent with id: {0}>".format(self.agent_id)
+        return "<HSA agent with id: {0}>".format(self._id)
