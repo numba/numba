@@ -271,8 +271,6 @@ class AOTCPUCodegen(BaseCPUCodegen):
     """
 
     _library_class = AOTCodeLibrary
-    _reloc = 'pic'
-    _codemodel = 'default'
 
     def _customize_tm_options(self, options):
         options['reloc'] = 'pic'
@@ -288,13 +286,12 @@ class JITCPUCodegen(BaseCPUCodegen):
     """
 
     _library_class = JITCodeLibrary
-    _reloc = 'default'
-    _codemodel = 'jitdefault'
 
     def _customize_tm_options(self, options):
         features = []
 
-        options.setdefault('reloc', 'pic')
+        options['reloc'] = 'pic'
+        options['codemodel'] = 'jitdefault'
         # Note: LLVM 3.3 always generates vmovsd (AVX instruction) for
         # mem<->reg move.  The transition between AVX and SSE instruction
         # without proper vzeroupper to reset is causing a serious performance
