@@ -408,8 +408,8 @@ class Agent(HsaWrapper):
         return (self.feature & enums.HSA_AGENT_FEATURE_DISPATCH) != 0
 
     def create_queue_single(self, size, callback=None, service_queue=None):
-        cb = 0 if callback is None else drvapi.HSA_QUEUE_CALLBACK_FUNC(callback)
-        sq = 0 if service_queue is None else service_queue._id
+        cb = None if callback is None else drvapi.HSA_QUEUE_CALLBACK_FUNC(callback)
+        sq = None if service_queue is None else service_queue._id
         result = ctypes.POINTER(drvapi.hsa_queue_t)()
         hsa.hsa_queue_create(self._id, size, enums.HSA_QUEUE_TYPE_SINGLE,
                              cb, sq, ctypes.byref(result))
