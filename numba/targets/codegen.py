@@ -206,7 +206,6 @@ class BaseCPUCodegen(object):
         else:
             engine = ll.create_mcjit_compiler(llvm_module, tm)
 
-        engine.add_module(llvm_module)
         pmb = lp.create_pass_manager_builder(
             opt=config.OPT, loop_vectorize=config.LOOP_VECTORIZE)
         tli = ll.create_target_library_info(llvm_module.triple)
