@@ -225,6 +225,8 @@ class TestRecordDtype(unittest.TestCase):
             expected = getattr(recval, attr)
             nbrecord = numpy_support.from_dtype(recordtype)
 
+            # Test with a record as either the first argument or the second
+            # argument (issue #870)
             if revargs:
                 prefix = 'get_record_rev_'
                 argtypes = (valtyp, nbrecord)
