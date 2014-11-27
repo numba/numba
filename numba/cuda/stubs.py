@@ -143,22 +143,21 @@ class syncthreads(Stub):
 #-------------------------------------------------------------------------------
 # shared
 
-
-def shared_array(shape, dtype):
-    ndim = 1
+def _legalize_shape(shape):
     if isinstance(shape, tuple):
-        ndim = len(shape)
-    elif not isinstance(shape, int):
+        return shape
+    elif isinstance(shape, int):
+        return (shape,)
+    else:
         raise TypeError("invalid type for shape; got {0}".format(type(shape)))
 
+
+def shared_array(shape, dtype):
+    shape = _legalize_shape(shape)
+    ndim = len(shape)
     fname = "ptx.smem.alloc"
     restype = types.Array(dtype, ndim, 'C')
-    if isinstance(shape, int):
-        sig = typing.signature(restype, types.intp, types.Any)
-    else:
-        sig = typing.signature(restype, types.UniTuple(types.intp, ndim),
-                               types.Any)
-
+    sig = typing.signature(restype, types.UniTuple(types.intp, ndim), types.Any)
     return ir.Intrinsic(fname, sig, args=(shape, dtype))
 
 
@@ -176,20 +175,11 @@ class shared(Stub):
 
 
 def local_array(shape, dtype):
-    ndim = 1
-    if isinstance(shape, tuple):
-        ndim = len(shape)
-    elif not isinstance(shape, int):
-        raise TypeError("invalid type for shape; got {0}".format(type(shape)))
-
+    shape = _legalize_shape(shape)
+    ndim = len(shape)
     fname = "ptx.lmem.alloc"
     restype = types.Array(dtype, ndim, 'C')
-    if isinstance(shape, int):
-        sig = typing.signature(restype, types.intp, types.Any)
-    else:
-        sig = typing.signature(restype, types.UniTuple(types.intp, ndim),
-                               types.Any)
-
+    sig = typing.signature(restype, types.UniTuple(types.intp, ndim), types.Any)
     return ir.Intrinsic(fname, sig, args=(shape, dtype))
 
 
