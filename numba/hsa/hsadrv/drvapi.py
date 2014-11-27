@@ -23,7 +23,7 @@ class hsa_queue_t(ctypes.Structure):
         ('type', hsa_queue_type_t),
         ('features', ctypes.c_uint32),
         ('base_address', ctypes.c_uint64),
-        ('hsa_signal_t', doorbell_signal),
+        ('doorbell_signal', hsa_signal_t),
         ('size', ctypes.c_uint32),
         ('id', ctypes.c_uint32),
         ('service_queue', ctypes.uint64)
@@ -63,7 +63,7 @@ API_PROTOTYPES = {
     #     hsa_queue_t **queue)
     'hsa_queue_create': (hsa_status_t, ctypes.c_uint32, hsa_queue_type_t,
                          HSA_QUEUE_CALLBACK_FUNC, ctypes.POINTER(hsa_queue_t),
-                         ctypes.POINTER(ctypes.POINTER(hsa_queue_t)))
+                         ctypes.POINTER(ctypes.POINTER(hsa_queue_t))),
 
     # hsa_status_t hsa_queue_destroy(
     #     hsa_queue_t *queue)
