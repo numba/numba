@@ -435,5 +435,5 @@ class Queue(object):
         return getattr(self._id.contents, fname)
 
     def __dir__(self):
-        return sorted(set(dir(self._id) +
+        return sorted(set(dir(self._id.contents) +
                           self.__dict__.keys()))
