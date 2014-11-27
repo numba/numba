@@ -75,3 +75,7 @@ HSA_EXT_AGENT_INFO_IMAGE_ARRAY_MAX_SIZE       = 18
 HSA_EXT_AGENT_INFO_IMAGE_RD_MAX               = 19
 HSA_EXT_AGENT_INFO_IMAGE_RDWR_MAX             = 20
 HSA_EXT_AGENT_INFO_SAMPLER_MAX                = 21
+
+# hsa_queue_type_t
+HSA_QUEUE_TYPE_MULTI                          = 0
+HSA_QUEUE_TYPE_SINGLE                         = 1

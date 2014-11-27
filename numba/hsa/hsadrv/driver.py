@@ -407,7 +407,25 @@ class Agent(HsaWrapper):
     def is_component(self):
         return (self.feature & enums.HSA_AGENT_FEATURE_DISPATCH) != 0
 
+    def create_queue_single(self, size, callback=None, service_queue=None):
+        cb = 0 if callback is None else drvapi.HSA_QUEUE_CALLBACK_FUNC(callback)
+        sq = 0 if service_queue is None else service_queue._id
+        result = ctypes.POINTER(hsa_queue_t)
+        hsa.hsa_queue_create(_id, size, cb, sq, ctypes.byref(result))
+        return Queue(result)
+
     def __repr__(self):
         return "<HSA agent ({0}): {1} {2} '{3}'{4}>".format(self._id, self.device,
                                                             self.vendor_name, self.name,
                                                             " (component)" if self.is_component else "")
+
+class Queue(object):
+    def __init__(self, queue_ptr):
+        """in a queue, it is a pointer to the queue object that is held"""
+        _id = queue_ptr
+
+    def __del__(self):
+        hsa.hsa_queue_destroy(_id)
+
+    def __getattr__(self, fname):
+        return getattr(queue_ptr.contents, fname)
