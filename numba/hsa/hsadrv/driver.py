@@ -326,7 +326,7 @@ class HsaWrapper(object):
         try:
             enum, typ = self._hsa_properties[fname]
         except KeyError:
-            raise AttributeError
+            raise AttributeError("%r object has no attribute %r" % (self.__class__, fname))
 
         func = getattr(hsa, self._hsa_info_function)
         result = typ()
@@ -410,8 +410,8 @@ class Agent(HsaWrapper):
     def create_queue_single(self, size, callback=None, service_queue=None):
         cb = 0 if callback is None else drvapi.HSA_QUEUE_CALLBACK_FUNC(callback)
         sq = 0 if service_queue is None else service_queue._id
-        result = ctypes.POINTER(hsa_queue_t)
-        hsa.hsa_queue_create(_id, size, cb, sq, ctypes.byref(result))
+        result = ctypes.POINTER(drvapi.hsa_queue_t)
+        hsa.hsa_queue_create(self._id, size, cb, sq, ctypes.byref(result))
         return Queue(result)
 
     def __repr__(self):

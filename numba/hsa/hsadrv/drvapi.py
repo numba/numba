@@ -26,7 +26,7 @@ class hsa_queue_t(ctypes.Structure):
         ('doorbell_signal', hsa_signal_t),
         ('size', ctypes.c_uint32),
         ('id', ctypes.c_uint32),
-        ('service_queue', ctypes.uint64)
+        ('service_queue', ctypes.c_uint64)
         ]
 
 
