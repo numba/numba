@@ -410,4 +410,4 @@ class Agent(HsaWrapper):
     def __repr__(self):
         return "<HSA agent ({0}): {1} {2} '{3}'{4}>".format(self._id, self.device,
                                                             self.vendor_name, self.name,
-                                                            " (component)" if self.component else "")
+                                                            " (component)" if self.is_component else "")
