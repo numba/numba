@@ -346,6 +346,7 @@ class HsaWrapper(object):
                           self.__dict__.keys() +
                           self._hsa_properties.keys()))
 
+
 class Agent(HsaWrapper):
     """Abstracts a HSA compute agent.
 
@@ -423,11 +424,16 @@ class Agent(HsaWrapper):
 
 class Queue(object):
     def __init__(self, queue_ptr):
-        """in a queue, it is a pointer to the queue object that is held"""
-        _id = queue_ptr
+        """in a queue, it is a pointer to the queue object returned by hsa_queue_create.
+        This object has ownership"""
+        self._id = queue_ptr
 
     def __del__(self):
-        hsa.hsa_queue_destroy(_id)
+        hsa.hsa_queue_destroy(self._id)
 
     def __getattr__(self, fname):
         return getattr(self._id.contents, fname)
+
+    def __dir__(self):
+        return sorted(set(dir(self._id) +
+                          self.__dict__.keys()))
