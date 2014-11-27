@@ -23,6 +23,12 @@ from . import enums, drvapi
 from numba import config
 from numba.utils import longint as long
 
+def _device_type_to_string(device):
+    try:
+        return ['CPU', 'GPU', 'DSP'][device]
+    except IndexError:
+        return 'Unknown'
+
 
 def _find_driver():
     envpath = os.environ.get('NUMBA_HSA_DRIVER', None)
@@ -75,14 +81,6 @@ def _find_driver():
     else:
         errmsg = '\n'.join(str(e) for e in driver_load_error)
         _raise_driver_error(errmsg)
-
-
-
-def _hsa_attribute_getter(func, handle, enum, val_type):
-    result = val_type()
-    result_arg = result if hasattr(val_type, '__len__') else ctypes.byref(result)
-    func(handle, enum, result_arg)
-    return result.value
 
 
 PLATFORM_NOT_SUPPORTED_ERROR = """
@@ -377,7 +375,7 @@ class Agent(HsaWrapper):
         'queue_max_size': (enums.HSA_AGENT_INFO_QUEUE_MAX_SIZE, ctypes.c_uint32),
         'queue_type': (enums.HSA_AGENT_INFO_QUEUE_TYPE, drvapi.hsa_queue_type_t),
         'node': (enums.HSA_AGENT_INFO_NODE, ctypes.c_uint32),
-        'device': (enums.HSA_AGENT_INFO_DEVICE, drvapi.hsa_device_type_t),
+        '_device': (enums.HSA_AGENT_INFO_DEVICE, drvapi.hsa_device_type_t),
         'cache_size': (enums.HSA_AGENT_INFO_CACHE_SIZE, ctypes.c_uint32 * 4),
         'image1d_max_dim': (enums.HSA_EXT_AGENT_INFO_IMAGE1D_MAX_DIM, drvapi.hsa_dim3_t),
         'image2d_max_dim': (enums.HSA_EXT_AGENT_INFO_IMAGE2D_MAX_DIM, drvapi.hsa_dim3_t),
@@ -401,5 +399,15 @@ class Agent(HsaWrapper):
         # initialized and locked, so this method will be removed.
         self._id = agent_id
 
+    @property
+    def device(self):
+        return _device_type_to_string(self._device)
+
+    @property
+    def is_component(self):
+        return (self.feature & enums.HSA_AGENT_FEATURE_DISPATCH) != 0
+
     def __repr__(self):
-        return "<HSA agent with id: {0}>".format(self._id)
+        return "<HSA agent ({0}): {1} {2} '{3}'{4}>".format(self._id, self.device,
+                                                            self.vendor_name, self.name,
+                                                            " (component)" if self.component else "")
