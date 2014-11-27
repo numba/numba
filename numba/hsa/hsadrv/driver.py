@@ -80,8 +80,10 @@ def _find_driver():
 
 def _hsa_attribute_getter(func, handle, enum, val_type):
     result = val_type()
-    func(handle, enum, ctypes.byref(result))
+    result_arg = result if hasattr(val_type, '__len__') else ctypes.byref(result)
+    func(handle, enum, result_arg)
     return result.value
+
 
 PLATFORM_NOT_SUPPORTED_ERROR = """
 HSA is not currently ussported in this platform ({0}).
@@ -319,9 +321,24 @@ class Driver(object):
             dev.reset()
     '''
 
-driver = Driver()
+hsa = Driver()
 
-class Agent(object):
+class HsaWrapper(object):
+    def __getattr__(self, fname):
+        try:
+            enum, typ = self._hsa_properties[fname]
+        except KeyError:
+            raise AttributeError
+
+        func = getattr(hsa, self._hsa_info_function)
+        result = typ()
+        # if the result is not ctypes array, get a reference)
+        result_buff = result if hasattr(result, '__len__') else ctypes.byref(result)
+        func(self._id, enum, result_buff)
+        return result.value
+
+
+class Agent(HsaWrapper):
     """Abstracts a HSA compute agent.
 
     This will wrap and provide an OO interface for hsa_agent_t C-API elements
@@ -336,6 +353,31 @@ class Agent(object):
     #
     # the logic for this resides in Driver._initialize_agents
 
+    _hsa_info_function = 'hsa_agent_get_info'
+    _hsa_properties = {
+        'name': (enums.HSA_AGENT_INFO_NAME, ctypes.c_char * 64).
+        'vendor_name': (enums.HSA_AGENT_INFO_VENDOR_NAME, ctypes.c_char * 64),
+        'feature': (enums.HSA_AGENT_INFO_FEATURE, drvapi.hsa_agent_feature_t),
+        'wavefront_size': (enums.HSA_AGENT_INFO_WAVEFRONT_SIZE, ctypes.c_uint32),
+        'workgroup_max_dim': (enums.HSA_AGENT_INFO_WORKGROUP_MAX_DIM, ctypes.c_uint16 * 3),
+        'grid_max_dim': (enums.HSA_AGENT_INFO_GRID_MAX_DIM, drvapi.hsa_dim3_t),
+        'grid_max_size': (enums.HSA_AGENT_INFO_GRID_MAX_SIZE, ctypes.c_uint32),
+        'fbarrier_max_size': (enums.HSA_AGENT_INFO_FBARRIER_MAX_SIZE, ctypes.c_uint32),
+        'queues_max': (enums.HSA_AGENT_INFO_QUEUES_MAX, ctypes.c_uint32),
+        'queue_max_size': (enums.HSA_AGENT_INFO_QUEUE_MAX_SIZE, ctypes.c_uint32),
+        'queue_type': (enums.HSA_AGENT_INFO_QUEUE_TYPE, drvapi.hsa_queue_type_t),
+        'node': (enums.HSA_AGENT_INFO_NODE, ctypes.c_uint32),
+        'device': (enums.HSA_AGENT_INFO_DEVICE, drvapi.hsa_device_type_t),
+        'cache_size': (enums.HSA_AGENT_INFO_CACHE_SIZE, ctypes.c_uint32 * 4),
+        'image1d_max_dim': (enums.HSA_EXT_AGENT_INFO_IMAGE1D_MAX_DIM, drvapi.hsa_dim3_t),
+        'image2d_max_dim': (enums.HSA_EXT_AGENT_INFO_IMAGE2D_MAX_DIM, drvapi.hsa_dim3_t),
+        'image3d_max_dim': (enums.HSA_EXT_AGENT_INFO_IMAGE3D_MAX_DIM, drvapi.hsa_dim3_t),
+        'image_array_max_size': (enums.HSA_EXT_AGENT_INFO_IMAGE_ARRAY_MAX_SIZE, ctypes.c_uint32),
+        'image_rd_max': (enums.HSA_EXT_AGENT_INFO_IMAGE_RD_MAX, ctypes.c_uint32),
+        'image_rdwr_max': (enums.HSA_EXT_AGENT_INFO_IMAGE_RDWR_MAX, ctypes.c_uint32),
+        'sampler_max': (enums.HSA_EXT_AGENT_INFO_SAMPLER_MAX, ctypes.c_uint32),
+    }
+
     def __new__(cls, agent_id):
         # This is here to raise errors when trying to create agents
         # before initialization. When agents are initialized, __new__ will
@@ -347,7 +389,7 @@ class Agent(object):
         # This init will only happen when initializing the agents. After
         # the agent initialization the instances of this class are considered
         # initialized and locked, so this method will be removed.
-        self.agent_id = agent_id
+        self._id = _id
 
     def __repr__(self):
         return "<HSA agent with id: {0}>".format(self.agent_id)
