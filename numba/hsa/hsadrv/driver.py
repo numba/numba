@@ -343,6 +343,11 @@ class HsaWrapper(object):
             return list(result)
 
 
+    def __dir__(self):
+        return sorted(set(dir(type(self)) +
+                          self.__dict__.keys() +
+                          self._hsa_properties.keys()))
+
 class Agent(HsaWrapper):
     """Abstracts a HSA compute agent.
 
