@@ -1,7 +1,7 @@
 from __future__ import print_function, absolute_import, division
 
 import ctypes
-
+from . import enums
 
 hsa_status_t = ctypes.c_int # enum
 hsa_system_info_t = ctypes.c_int # enum

@@ -246,7 +246,7 @@ class Driver(object):
             consumers_len = 0
 
         result = drvapi.hsa_signal_t
-        self.hsa_create_signal(initial_value, consumers_len, consumers, ctypes.byref(result))
+        self.hsa_signal_create(initial_value, consumers_len, consumers, ctypes.byref(result))
         return
 
 

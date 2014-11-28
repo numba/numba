@@ -22,8 +22,8 @@ if __name__=='__main__':
     print("Using agent: {0} with queue size: {1}".format(gpu.name, gpu.max_queue_size))
     q = gpu.create_queue_multi(gpy.max_queue_size)
 
-    a = np.random(WIDTH*HEIGHT).reshape((HEIGHT, WIDTH))
-    b = np.random(WIDTH*HEIGHT).reshape((WIDTH, HEIGHT))
+    a = np.random.random(WIDTH*HEIGHT).reshape((HEIGHT, WIDTH))
+    b = np.random.random(WIDTH*HEIGHT).reshape((WIDTH, HEIGHT))
     print("input matrix A:\n", a)
     print("input matrix B:\n", b)
 
