@@ -265,13 +265,6 @@ class BaseLower(object):
             self.context.create_cpython_wrapper(self.library, self.fndesc,
                                                 self.exceptions)
 
-        if config.NUMBA_DUMP_FUNC_OPT:
-            # FIXME
-            print(("LLVM FUNCTION OPTIMIZED DUMP %s" %
-                   self.fndesc).center(80, '-'))
-            print(self.llvm_module)
-            print('=' * 80)
-
     def init_argument(self, arg):
         return arg
 

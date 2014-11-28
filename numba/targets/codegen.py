@@ -111,6 +111,12 @@ class CodeLibrary(object):
         linking.
         """
         self._raise_if_finalized()
+
+        if config.NUMBA_DUMP_FUNC_OPT:
+            print(("FUNCTION OPTIMIZED DUMP %s" % self._name).center(80, '-'))
+            print(self._final_module)
+            print('=' * 80)
+
         self._optimize_final_module()
 
         # Link libraries for shared code
@@ -135,7 +141,7 @@ class CodeLibrary(object):
 
         if config.DUMP_ASSEMBLY:
             print(("ASSEMBLY %s" % self._name).center(80, '-'))
-            print(self._tm.emit_assembly(self._final_module))
+            print(self._codegen._tm.emit_assembly(self._final_module))
             print('=' * 80)
 
     def get_function(self, name):

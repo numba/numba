@@ -261,7 +261,6 @@ class CPUContext(BaseContext):
             intrinsics.fix_divmod(mod)
 
     def create_cpython_wrapper(self, library, fndesc, exceptions):
-        #func = codegen.get_function(fndesc.llvm_func_name)
         wrapper_module = self.create_module("wrapper")
         fnty = self.get_function_type(fndesc)
         wrapper_callee = wrapper_module.add_function(fnty, fndesc.llvm_func_name)
@@ -284,17 +283,6 @@ class CPUContext(BaseContext):
         """
         func = library.get_function(fndesc.llvm_func_name)
         wrapper = library.get_function(fndesc.llvm_cpython_wrapper_name)
-
-        # FIXME
-        #if config.DUMP_OPTIMIZED:
-            #print(("OPTIMIZED DUMP %s" % fndesc).center(80, '-'))
-            #print(module)
-            #print('=' * 80)
-
-        #if config.DUMP_ASSEMBLY:
-            #print(("ASSEMBLY %s" % fndesc).center(80, '-'))
-            #print(self.tm.emit_assembly(module))
-            #print('=' * 80)
 
         # Code generation
         baseptr = library.get_pointer_to_function(func.name)
