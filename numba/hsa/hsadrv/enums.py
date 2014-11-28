@@ -3,11 +3,15 @@
 Note that Python namespacing could be used to avoid the C-like
 prefixing, but we choose to keep the same names as found in the C
 enums, in order to match the documentation.
-
 """
 
-# hsa_status_t
+import ctypes
 
+# HSA_LARGE_MODEL should be True for 64 bit platforms (make sure of this!)
+# Maybe there would be a better test?
+HSA_LARGE_MODEL = ctypes.sizeof(ctypes.c_void_p) == 8
+
+# hsa_status_t
 HSA_STATUS_SUCCESS                            = 0
 HSA_STATUS_INFO_BREAK                         = 0x1
 HSA_EXT_STATUS_INFO_ALREADY_INITIALIZED       = 0x4000

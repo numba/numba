@@ -237,7 +237,7 @@ class Driver(object):
         self._initialize_agents()
         return self._agent_map.values()
 
-    def create_signal(initial_value, consumers=None):
+    def create_signal(self, initial_value, consumers=None):
         if consumers is not None:
             consumers_len = len(consumers)
             consumers_type = drvapi.hsa_agent_t * consumers_len
