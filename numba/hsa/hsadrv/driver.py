@@ -237,6 +237,18 @@ class Driver(object):
         self._initialize_agents()
         return self._agent_map.values()
 
+    def create_signal(initial_value, consumers=None):
+        if consumers is not None:
+            consumers_len = len(consumers)
+            consumers_type = drvapi.hsa_agent_t * consumers_len
+            consumers = consumers_type(*[c._id for c in consumers])
+        else:
+            consumers_len = 0
+
+        result = drvapi.hsa_signal_t
+        self.hsa_create_signal(initial_value, consumers_len, consumers, ctypes.byref(result))
+        return
+
 
     def __getattr__(self, fname):
         # First try if it is an hsa property
@@ -387,6 +399,7 @@ class Agent(HsaWrapper):
         'sampler_max': (enums.HSA_EXT_AGENT_INFO_SAMPLER_MAX, ctypes.c_uint32),
     }
 
+
     def __new__(cls, agent_id):
         # This is here to raise errors when trying to create agents
         # before initialization. When agents are initialized, __new__ will
@@ -394,46 +407,77 @@ class Agent(HsaWrapper):
         # for existing agent_ids
         raise HsaDriverError("No known agent with id {0}".format(agent_id))
 
+
     def __init__(self, agent_id):
         # This init will only happen when initializing the agents. After
         # the agent initialization the instances of this class are considered
         # initialized and locked, so this method will be removed.
         self._id = agent_id
 
+
     @property
     def device(self):
         return _device_type_to_string(self._device)
+
 
     @property
     def is_component(self):
         return (self.feature & enums.HSA_AGENT_FEATURE_DISPATCH) != 0
 
+
     def create_queue_single(self, size, callback=None, service_queue=None):
         cb_typ = drvapi.HSA_QUEUE_CALLBACK_FUNC
-        cb = ctypes.cast(None, cb_typ) if callback is None else cb_typ(callback) 
+        cb = ctypes.cast(None, cb_typ) if callback is None else cb_typ(callback)
         sq = None if service_queue is None else service_queue._id
         result = ctypes.POINTER(drvapi.hsa_queue_t)()
         hsa.hsa_queue_create(self._id, size, enums.HSA_QUEUE_TYPE_SINGLE,
                              cb, sq, ctypes.byref(result))
         return Queue(result)
 
+
+    def create_queue_multi(self, size, callback=None, service_queue=None):
+        cb_typ = drvapi.HSA_QUEUE_CALLBACK_FUNC
+        cb = ctypes.cast(None, cb_typ) if callback is None else cb_typ(callback)
+        sq = None if service_queue is None else service_queue._id
+        result = ctypes.POINTER(drvapi.hsa_queue_t)()
+        hsa.hsa_queue_create(self._id, size, enums.HSA_QUEUE_TYPE_MULTI,
+                             cb, sq, ctypes.byref(result))
+        return Queue(result)
+
+
     def __repr__(self):
         return "<HSA agent ({0}): {1} {2} '{3}'{4}>".format(self._id, self.device,
                                                             self.vendor_name, self.name,
                                                             " (component)" if self.is_component else "")
 
+
 class Queue(object):
     def __init__(self, queue_ptr):
-        """in a queue, it is a pointer to the queue object returned by hsa_queue_create.
-        This object has ownership"""
+        """The id in a queue is a pointer to the queue object returned by hsa_queue_create.
+        The Queue object has ownership on that queue object"""
         self._id = queue_ptr
+
 
     def __del__(self):
         hsa.hsa_queue_destroy(self._id)
 
+
+
     def __getattr__(self, fname):
         return getattr(self._id.contents, fname)
+
 
     def __dir__(self):
         return sorted(set(dir(self._id.contents) +
                           self.__dict__.keys()))
+
+
+class Signal(object):
+    """The id for the signal is going to be the hsa_signal_t returned by create_signal.
+    Lifetime of the underlying signal will be tied with this object".
+    Note that it is likely signals will have lifetime issues."""
+    def __init__(self, signal_id):
+        self._id = signal_id
+
+    def __del__(self):
+        hsa.hsa_signal_destroy(self._id)
