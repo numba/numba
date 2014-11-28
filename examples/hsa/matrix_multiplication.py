@@ -31,4 +31,3 @@ if __name__=='__main__':
 
     print(s)
 
-    return 0
