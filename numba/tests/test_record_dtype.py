@@ -55,6 +55,44 @@ def get_record_c(rec, val):
     return x
 
 
+def get_record_rev_a(val, rec):
+    x = rec.a
+    rec.a = val
+    return x
+
+
+def get_record_rev_b(val, rec):
+    x = rec.b
+    rec.b = val
+    return x
+
+
+def get_record_rev_c(val, rec):
+    x = rec.c
+    rec.c = val
+    return x
+
+
+def get_two_records_a(rec1, rec2):
+    x = rec1.a + rec2.a
+    return x
+
+
+def get_two_records_b(rec1, rec2):
+    x = rec1.b + rec2.b
+    return x
+
+
+def get_two_records_c(rec1, rec2):
+    x = rec1.c + rec2.c
+    return x
+
+
+def get_two_records_distinct(rec1, rec2):
+    x = rec1.a + rec2.f
+    return x
+
+
 def record_return(ary, i):
     return ary[i]
 
@@ -63,6 +101,9 @@ recordtype = np.dtype([('a', np.float64),
                        ('b', np.int32),
                        ('c', np.complex64),
                        ('d', (np.str, 5))])
+
+recordtype2 = np.dtype([('e', np.int32),
+                        ('f', np.float64)])
 
 
 class TestRecordDtype(unittest.TestCase):
@@ -77,6 +118,14 @@ class TestRecordDtype(unittest.TestCase):
             ary[i].b = x
             ary[i].c = x * 1j
             ary[i].d = "%d" % x
+
+        ary2 = np.recarray(3, dtype=recordtype2)
+        self.sample1d2 = ary2
+
+        for i in range(ary2.size):
+            x = i + 5
+            ary2[i].e = x
+            ary2[i].f = x / 2
 
     def get_cfunc(self, pyfunc, argspec):
         # Need to keep a reference to the compile result for the
@@ -161,7 +210,8 @@ class TestRecordDtype(unittest.TestCase):
             self.assertEqual(got[i], got[j])
             self.assertTrue(np.all(expect == got))
 
-    def test_record_args(self):
+
+    def _test_record_args(self, revargs):
         """
         Testing scalar record value as argument
         """
@@ -173,18 +223,72 @@ class TestRecordDtype(unittest.TestCase):
 
         for attr, valtyp, val in zip(attrs, valtypes, values):
             expected = getattr(recval, attr)
-
-            pyfunc = globals()['get_record_' + attr]
             nbrecord = numpy_support.from_dtype(recordtype)
-            cfunc = self.get_cfunc(pyfunc, (nbrecord, valtyp))
 
-            got = cfunc(recval, val)
+            # Test with a record as either the first argument or the second
+            # argument (issue #870)
+            if revargs:
+                prefix = 'get_record_rev_'
+                argtypes = (valtyp, nbrecord)
+                args = (val, recval)
+            else:
+                prefix = 'get_record_'
+                argtypes = (nbrecord, valtyp)
+                args = (recval, val)
+
+            pyfunc = globals()[prefix + attr]
+            cfunc = self.get_cfunc(pyfunc, argtypes)
+
+            got = cfunc(*args)
             self.assertEqual(expected, got)
             self.assertNotEqual(recval.a, got)
-            del got, expected
+            del got, expected, args
 
         # Check for potential leaks (issue #441)
         self.assertEqual(sys.getrefcount(recval), old_refcnt)
+
+
+    def test_record_args(self):
+        self._test_record_args(False)
+
+
+    def test_record_args_reverse(self):
+        self._test_record_args(True)
+
+
+    def test_two_records(self):
+        '''
+        Testing the use of two scalar records of the same type
+        '''
+        recval1 = self.sample1d.copy()[0]
+        recval2 = self.sample1d.copy()[1]
+        attrs = 'abc'
+        valtypes = types.float64, types.int32, types.complex64
+
+        for attr, valtyp in zip(attrs, valtypes):
+            expected = getattr(recval1, attr) + getattr(recval2, attr)
+
+            nbrecord = numpy_support.from_dtype(recordtype)
+            pyfunc = globals()['get_two_records_' + attr]
+            cfunc = self.get_cfunc(pyfunc, (nbrecord, nbrecord))
+
+            got = cfunc(recval1, recval2)
+            self.assertEqual(expected, got)
+
+    def test_two_distinct_records(self):
+        '''
+        Testing the use of two scalar records of differing type
+        '''
+        recval1 = self.sample1d.copy()[0]
+        recval2 = self.sample1d2.copy()[0]
+        expected = recval1.a + recval2.f
+
+        nbrecord1 = numpy_support.from_dtype(recordtype)
+        nbrecord2 = numpy_support.from_dtype(recordtype2)
+        cfunc = self.get_cfunc(get_two_records_distinct, (nbrecord1, nbrecord2))
+
+        got = cfunc(recval1, recval2)
+        self.assertEqual(expected, got)
 
     def test_record_return(self):
         """
