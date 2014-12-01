@@ -57,6 +57,8 @@ class CodeLibrary(object):
         """
         Internal: run function-level optimizations inside *ll_module*.
         """
+        # Enforce data layout to enable layout-specific optimizations
+        ll_module.data_layout = self._codegen._data_layout
         with self._codegen._function_pass_manager(ll_module) as fpm:
             # Run function-level optimizations to reduce memory usage and improve
             # module-level optimization.
@@ -94,8 +96,6 @@ class CodeLibrary(object):
         """
         self._raise_if_finalized()
         assert isinstance(ir_module, llvmir.Module)
-        # Enforce data layout to enable layout-specific optimizations
-        ir_module.data_layout = self._codegen._data_layout
         ll_module = ll.parse_assembly(str(ir_module))
         ll_module.verify()
         self.add_llvm_module(ll_module)
@@ -261,8 +261,7 @@ class BaseCPUCodegen(object):
 
     def _function_pass_manager(self, llvm_module):
         pm = ll.create_function_pass_manager(llvm_module)
-        dl = ll.create_target_data(llvm_module.data_layout)
-        dl.add_pass(pm)
+        self._target_data.add_pass(pm)
         self._tli.add_pass(pm)
         self._tm.add_analysis_passes(pm)
         self._pmb.populate(pm)
