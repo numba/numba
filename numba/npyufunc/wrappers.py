@@ -220,14 +220,6 @@ def build_ufunc_wrapper(library, context, func, signature, objmode, env):
     wrapper = library.get_function(wrapper.name)
     oldfunc.linkage = LINKAGE_INTERNAL
 
-    if config.DUMP_OPTIMIZED:
-        print(module)
-
-    if config.DUMP_ASSEMBLY:
-        print(("ASSEMBLY %s" % wrapper.name).center(80, '-'))
-        print(context.tm.emit_assembly(module))
-        print('=' * 80)
-
     return wrapper
 
 
@@ -374,14 +366,6 @@ class _GufuncWrapper(object):
 
         # Set core function to internal so that it is not generated
         self.func.linkage = LINKAGE_INTERNAL
-
-        if config.DUMP_OPTIMIZED:
-            print(module)
-
-        if config.DUMP_ASSEMBLY:
-            print(("ASSEMBLY %s" % wrapper.name).center(80, '-'))
-            print(self.context.tm.emit_assembly(module))
-            print('=' * 80)
 
         return wrapper, self.env
 
