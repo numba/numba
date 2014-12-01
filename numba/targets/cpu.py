@@ -6,12 +6,12 @@ import llvmlite.llvmpy.core as lc
 import llvmlite.llvmpy.ee as le
 import llvmlite.binding as ll
 
-from numba import _dynfunc, _helperlib, config
+from numba import _dynfunc, config
 from numba.callwrapper import PyCallWrapper
 from .base import BaseContext, PYOBJECT
 from numba import utils, cgutils, types
 from numba.targets import (
-    codegen, intrinsics, cmathimpl, mathimpl, npyimpl, operatorimpl, printimpl)
+    codegen, externals, intrinsics, cmathimpl, mathimpl, npyimpl, operatorimpl, printimpl)
 from .options import TargetOptions
 
 
@@ -54,9 +54,11 @@ class CPUContext(BaseContext):
         self.cmath_provider = {}
         self.is32bit = (utils.MACHINE_BITS == 32)
 
-        # map math functions
-        self.map_math_functions()
-        self.map_numpy_math_functions()
+        # Map external C functions.
+        # This needs to be done before creating the codegen object (below),
+        # so that CPython's msvcrt is preferred over LLVM's under Windows.
+        externals.c_math_functions.install()
+        externals.c_numpy_functions.install()
 
         # Add target specific implementations
         self.insert_func_defn(cmathimpl.registry.functions)
@@ -193,44 +195,6 @@ class CPUContext(BaseContext):
         body_ptr = cgutils.pointer_add(
             builder, envptr, _dynfunc._impl_info['offset_env_body'])
         return EnvBody(self, builder, ref=body_ptr, cast_ref=True)
-
-    def map_math_functions(self):
-        c_helpers = _helperlib.c_helpers
-        for name in ['cpow', 'sdiv', 'srem', 'udiv', 'urem']:
-            ll.add_symbol("numba.math.%s" % name, c_helpers[name])
-
-        if sys.platform.startswith('win32') and self.is32bit:
-            # For Windows XP __ftol2 is not defined, we will just use
-            # __ftol as a replacement.
-            # On Windows 7, this is not necessary but will work anyway.
-            ftol = ll.address_of_symbol('_ftol')
-            _add_missing_symbol("_ftol2", ftol)
-
-        elif sys.platform.startswith('linux') and self.is32bit:
-            _add_missing_symbol("__fixunsdfdi", c_helpers["fptoui"])
-            _add_missing_symbol("__fixunssfdi", c_helpers["fptouif"])
-
-        # Necessary for Python3
-        ll.add_symbol("numba.round", c_helpers["round_even"])
-        ll.add_symbol("numba.roundf", c_helpers["roundf_even"])
-
-        # List available C-math
-        for fname in intrinsics.INTR_MATH:
-            if ll.address_of_symbol(fname):
-                # Exist
-                self.cmath_provider[fname] = 'builtin'
-            else:
-                # Non-exist
-                # Bind from C code
-                ll.add_symbol(fname, c_helpers[fname])
-                self.cmath_provider[fname] = 'indirect'
-
-    def map_numpy_math_functions(self):
-        # add the symbols for numpy math to the execution environment.
-        import numba._npymath_exports as npymath
-
-        for sym in npymath.symbols:
-            ll.add_symbol(*sym)
 
     def dynamic_map_function(self, func):
         name, ptr = self.native_funcs[func]
