@@ -11,6 +11,13 @@ from numba import _helperlib, _npymath_exports
 from . import intrinsics
 
 
+def _add_missing_symbol(symbol, addr):
+    """Add missing symbol into LLVM internal symtab
+    """
+    if not ll.address_of_symbol(symbol):
+        ll.add_symbol(symbol, addr)
+
+
 class _Installer(object):
 
     _installed = False

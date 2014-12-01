@@ -294,7 +294,7 @@ class JITCPUCodegen(BaseCPUCodegen):
     def _customize_tm_options(self, options):
         features = []
 
-        options['reloc'] = 'pic'
+        options['reloc'] = 'default'
         options['codemodel'] = 'jitdefault'
         # Note: LLVM 3.3 always generates vmovsd (AVX instruction) for
         # mem<->reg move.  The transition between AVX and SSE instruction
