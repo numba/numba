@@ -51,7 +51,6 @@ class CPUContext(BaseContext):
 
     def init(self):
         self.native_funcs = utils.UniqueDict()
-        self.cmath_provider = {}
         self.is32bit = (utils.MACHINE_BITS == 32)
 
         # Map external C functions.
