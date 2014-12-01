@@ -12,8 +12,8 @@ to steal works from other threads.
 from __future__ import print_function, absolute_import
 import multiprocessing
 import numpy as np
-import llvm.core as lc
-import llvm.ee as le
+import llvmlite.llvmpy.core as lc
+import llvmlite.binding as ll
 from numba.npyufunc import ufuncbuilder, _internal
 from numba import types, utils
 
@@ -72,15 +72,22 @@ def build_ufunc_kernel(ctx, innerfunc, sig):
 
 
     """
+    basemod = innerfunc.module
+
     # Declare types and function
     byte_t = lc.Type.int(8)
     byte_ptr_t = lc.Type.pointer(byte_t)
 
     intp_t = ctx.get_value_type(types.intp)
 
-    fnty = lc.Type.function(lc.Type.void(), innerfunc.type.pointee.args)
-    mod = innerfunc.module
+    fnty = lc.Type.function(lc.Type.void(), [lc.Type.pointer(byte_ptr_t),
+                                             lc.Type.pointer(intp_t),
+                                             lc.Type.pointer(intp_t),
+                                             byte_ptr_t])
+
+    mod = lc.Module.new()
     lfunc = mod.add_function(fnty, name=".kernel")
+    innerfunc = mod.add_function(fnty, name=innerfunc.name)
 
     bb_entry = lfunc.append_basic_block('')
 
@@ -163,6 +170,11 @@ def build_ufunc_kernel(ctx, innerfunc, sig):
 
     builder.ret_void()
 
+    # Link
+    mod = ll.parse_assembly(str(mod))
+    mod.triple = basemod.triple
+    ll.link_modules(mod, basemod, preserve=False)
+    lfunc = mod.get_function(lfunc.name)
     return lfunc
 
 
@@ -196,18 +208,28 @@ def _make_cas_function():
     ptr, old, repl = fn.args
     bb = fn.append_basic_block('')
     builder = lc.Builder.new(bb)
-    out = builder.atomic_cmpxchg(ptr, old, repl, ordering='monotonic')
-    builder.ret(out)
+    outpack = builder.cmpxchg(ptr, old, repl, ordering='monotonic')
+    out = builder.extract_value(outpack, 0)
+    failed = builder.extract_value(outpack, 1)
+    builder.ret(builder.select(failed, old, out))
 
-    # Verify
-    mod.verify()
+    mod = ll.parse_assembly(str(mod))
+    fn = mod.get_function(fn.name)
 
     # Build
-    engine = le.EngineBuilder.new(mod).opt(3).create()
+    mod.triple = ll.get_default_triple()
+    target = ll.Target.from_triple(mod.triple)
+    tm = target.create_target_machine()
+
+    # FIXME: uses legacy jit for now
+    engine = ll.create_jit_compiler_with_tm(mod, tm)
+    # engine = ll.create_mcjit_compiler(mod, tm)
+    engine.finalize_object()
     ptr = engine.get_pointer_to_function(fn)
 
     # Keep engine alive
     _keepalive.append(engine)
+
     return engine, ptr
 
 
@@ -226,9 +248,9 @@ def _init():
     from . import workqueue as lib
     from ctypes import CFUNCTYPE, c_void_p
 
-    le.dylib_add_symbol('numba_add_task', lib.add_task)
-    le.dylib_add_symbol('numba_synchronize', lib.synchronize)
-    le.dylib_add_symbol('numba_ready', lib.ready)
+    ll.add_symbol('numba_add_task', lib.add_task)
+    ll.add_symbol('numba_synchronize', lib.synchronize)
+    ll.add_symbol('numba_ready', lib.ready)
 
     set_cas = CFUNCTYPE(None, c_void_p)(lib.set_cas)
 

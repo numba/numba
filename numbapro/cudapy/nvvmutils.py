@@ -1,5 +1,5 @@
 from __future__ import absolute_import
-import llvm.core as lc
+import llvmlite.llvmpy.core as lc
 
 
 def declare_vprint(lmod):
