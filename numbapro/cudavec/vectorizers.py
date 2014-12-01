@@ -8,7 +8,8 @@ from numba import sigutils, types, cgutils, cuda
 from numba.cuda import nvvmutils
 from numba.cuda.compiler import CUDAKernel
 from numba.utils import IS_PY3
-import llvm.core as lc
+import llvmlite.llvmpy.core as lc
+import llvmlite.binding as ll
 from . import dispatch
 
 if IS_PY3:
@@ -136,7 +137,6 @@ class CudaGUFuncVectorize(object):
 
 def build_gufunc_stager(devfn, dims):
     lmod = devfn.cres.llvm_module
-    lfunc = devfn.cres.llvm_func
     return_type = devfn.cres.signature.return_type
     args = devfn.cres.signature.args
     context = devfn.cres.target_context
@@ -151,9 +151,12 @@ def build_gufunc_stager(devfn, dims):
             typ = types.Array(arg.dtype, dim + 1, arg.layout)
         outer_args.append(typ)
 
-    # copy a new module
-    lmod = lmod.clone()
-    lfunc = lmod.get_function_named(lfunc.name)
+    # new module
+    basemod = lmod
+    lmod = lc.Module.new()
+
+    lfunc = context.declare_function(lmod, devfn.cres.fndesc)
+
     argtypes = [context.get_argument_type(t) for t in outer_args]
     dummy = lfunc.type.pointee.args[0]
     fnty = lc.Type.function(lc.Type.int(), [dummy] + argtypes)
@@ -210,7 +213,11 @@ def build_gufunc_stager(devfn, dims):
         builder.ret(status.code)
 
     builder.ret(lc.Constant.int(lc.Type.int(), 0))
-    lmod.verify()
+
+    # Link
+    lmod = ll.parse_assembly(str(lmod))
+    lmod.link_in(basemod, preserve=False)
+    lgufunc = lmod.get_function(lgufunc.name)
     return lmod, lgufunc, outer_args, excs
 
 
