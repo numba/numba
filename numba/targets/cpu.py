@@ -50,8 +50,6 @@ class CPUContext(BaseContext):
         return mod
 
     def init(self):
-        self._internal_codegen = codegen.JITCPUCodegen("numba.exec")
-
         self.native_funcs = utils.UniqueDict()
         self.cmath_provider = {}
         self.is32bit = (utils.MACHINE_BITS == 32)
@@ -66,6 +64,8 @@ class CPUContext(BaseContext):
         self.insert_func_defn(npyimpl.registry.functions)
         self.insert_func_defn(operatorimpl.registry.functions)
         self.insert_func_defn(printimpl.registry.functions)
+
+        self._internal_codegen = codegen.JITCPUCodegen("numba.exec")
 
     @property
     def target_data(self):
