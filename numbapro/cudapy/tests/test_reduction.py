@@ -12,6 +12,21 @@ class TestReduction(unittest.TestCase):
         got = sum_reduce(A)
         self.assertEqual(expect, got)
 
+    def test_empty_array_host(self):
+        sum_reduce = cuda.Reduce(lambda a, b: a + b)
+        A = (np.arange(0, dtype=np.float64) + 1)
+        expect = A.sum()
+        got = sum_reduce(A)
+        self.assertEqual(expect, got)
+
+    def test_empty_array_device(self):
+        sum_reduce = cuda.Reduce(lambda a, b: a + b)
+        A = (np.arange(0, dtype=np.float64) + 1)
+        dA = cuda.to_device(A)
+        expect = A.sum()
+        got = sum_reduce(dA)
+        self.assertEqual(expect, got)
+
     def test_prod_reduce(self):
         prod_reduce = cuda.reduce(lambda a, b: a * b)
         A = (np.arange(64, dtype=np.float64) + 1)
