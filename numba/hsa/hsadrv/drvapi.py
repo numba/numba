@@ -32,13 +32,24 @@ class hsa_queue_t(ctypes.Structure):
         ('service_queue', ctypes.c_uint64)
         ]
 
+class hsa_runtime_caller_t(ctypes.Structure):
+    _fields_ = [
+        ('caller', ctypes.c_uint64),
+    ]
+
 
 HSA_ITER_AGENT_CALLBACK_FUNC = ctypes.CFUNCTYPE(hsa_status_t, hsa_agent_t,
-                                                ctypes.py_object) 
+                                                ctypes.py_object)
 
 HSA_QUEUE_CALLBACK_FUNC = ctypes.CFUNCTYPE(hsa_status_t,
                                            ctypes.POINTER(hsa_queue_t))
 
+
+hsa_amd_code_unit_t = ctypes.c_uint64
+hsa_ext_symbol_value_callback_t = ctypes.CFUNCTYPE(hsa_status_t,
+                                                   hsa_runtime_caller_t,
+                                                   ctypes.c_char_p,
+                                                   ctypes.POINTER(ctypes.c_uint64))
 
 API_PROTOTYPES = {
     # hsa_status_t hsa_init(void)
@@ -53,7 +64,7 @@ API_PROTOTYPES = {
     # hsa_status_t hsa_iterate_agents(hsa_status_t(*)(hsa_agent_t, void*), void*)
     'hsa_iterate_agents': (hsa_status_t, HSA_ITER_AGENT_CALLBACK_FUNC,
                            ctypes.py_object),
-    
+
     # hsa_status_t hsa_agent_get_info(hsa_agent_t, hsa_agent_info_t, void*)
     'hsa_agent_get_info': (hsa_status_t, hsa_agent_info_t, ctypes.c_void_p),
 
@@ -73,8 +84,46 @@ API_PROTOTYPES = {
     'hsa_queue_destroy': (hsa_status_t, ctypes.POINTER(hsa_queue_t)),
 
     # hsa_status_t hsa_signal_create(
+    #     hsa_signal_value_t initial_value,
+    #     uint32_t agent_count,
+    #     const has_agent_t *agents,
+    #     hsa_signal_t *signal)
     'hsa_signal_create': (hsa_status_t, hsa_signal_value_t, ctypes.c_uint32,
                           ctypes.POINTER(hsa_agent_t), ctypes.POINTER(hsa_signal_t)),
 
+    # hsa_status_t hsa_signal_destroy(hsa_signal_t signal)
     'hsa_signal_destroy': (hsa_status_t, hsa_signal_t),
+
+
+
+    # AMD extensions
+
+    # code units ###############################################################
+
+    # hsa_status_t hsa_ext_code_unit_load(
+    #     hsa_runtime_caller_t caller,
+    #     const hsa_agent_t *agent,
+    #     size_t agent_count,
+    #     void *serialized_code_unit,
+    #     const char *options,
+    #     hsa_ext_symbol_value_callback_t symbol_value,
+    #     hsa_amd_code_unit_t *code_unit)
+    'hsa_ext_code_unit_load': (hsa_status_t, hsa_runtime_caller_t,
+                               ctypes.POINTER(hsa_agent_t), ctypes.c_size_t,
+                               ctypes.c_void_p, ctypes.c_char_p,
+                               hsa_ext_symbol_value_callback_t,
+                               ctypes.POINTER(hsa_amd_code_unit_t))
+
+    # hsa_status_t hsa_ext_code_unit_destroy(hsa_amd_code_unit_t code_unit)
+    'hsa_ext_code_unit_destroy': (hsa_status_t, hsa_amd_code_unit_t)
+
+    # hsa_status_t hsa_ext_code_unit_get_info(
+    #     hsa_amd_code_unit_t code_unit,
+    #     hsa_amd_code_unit_info_t attribute,
+    #     uint32_t index,
+    #     void *value)
+    'hsa_ext_code_unit_get_info': (hsa_status_t, hsa_amd_code_unit_t,
+                                   hsa_amd_code_unit_info_t, ctypes.c_uint32,
+                                   ctypes.c_void_p)
+
 }

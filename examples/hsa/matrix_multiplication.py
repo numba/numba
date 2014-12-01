@@ -29,5 +29,11 @@ if __name__=='__main__':
 
     s = hsa.create_signal(1)
 
-    print(s)
+    with open('MatMul.cl.o','rb') as f:
+        prog_binary = f.read()
+
+    code_unit = hsa.code_unit_load(prog_binary)
+    
+
+    print(code_unit)
 

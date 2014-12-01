@@ -249,6 +249,27 @@ class Driver(object):
         self.hsa_signal_create(initial_value, consumers_len, consumers, ctypes.byref(result))
         return
 
+    def load_code_unit(self, code_binary, agents=None):
+        # not sure of the purpose of caller... 
+        caller = drvapi.hsa_runtime_caller_t()
+        caller.caller = 0
+
+        if agents is not None:
+            agent_count = len(agents)
+            agents = (drvapi.hsa_agent_t * agent_count)(*agents)
+        else:
+            agent_count = 0
+
+        # callback not yet supported, always use NULL
+        cb = cast(None, drvapi.hsa_ext_symbol_value_callback_t)
+
+        result = drvapi.hsa_code_unit_t()
+        self.hsa_ext_code_unit_load(caller, agents, agent_count, code_binary,
+                                    len(code_binary), options, cb,
+                                    ctypes.byref(result))
+
+        return CodeUnit(result)
+
 
     def __getattr__(self, fname):
         # First try if it is an hsa property
@@ -305,31 +326,6 @@ class Driver(object):
         setattr(self, fname, absent_function)
         return absent_function
 
-
-    '''
-    def get_device(self, devnum=0):
-        dev = self.devices.get(devnum)
-        if dev is None:
-            dev = Device(devnum)
-            self.devices[devnum] = dev
-        return weakref.proxy(dev)
-
-    def get_device_count(self):
-        count = c_int()
-        self.cuDeviceGetCount(byref(count))
-        return count.value
-
-    def list_devices(self):
-        """Returns a list of active devices
-        """
-        return list(self.devices.values())
-
-    def reset(self):
-        """Reset all devices
-        """
-        for dev in self.devices.values():
-            dev.reset()
-    '''
 
 hsa = Driver()
 
@@ -481,3 +477,12 @@ class Signal(object):
 
     def __del__(self):
         hsa.hsa_signal_destroy(self._id)
+
+
+class CodeUnit(object):
+    def __init__(self, code_unit_id):
+        self._id = code_unit_id
+
+    def __del__(self):
+        hsa.hsa_ext_code_unit_destroy(self,_id)
+
