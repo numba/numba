@@ -14,8 +14,8 @@ import multiprocessing
 import numpy as np
 import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
-from numba.npyufunc import ufuncbuilder, _internal
-from numba import types, utils
+from numba.npyufunc import ufuncbuilder
+from numba import types
 
 NUM_CPU = max(1, multiprocessing.cpu_count())
 
@@ -173,7 +173,7 @@ def build_ufunc_kernel(ctx, innerfunc, sig):
     # Link
     mod = ll.parse_assembly(str(mod))
     mod.triple = basemod.triple
-    ll.link_modules(mod, basemod, preserve=False)
+    mod.link_in(basemod, preserve=False)
     lfunc = mod.get_function(lfunc.name)
     return lfunc
 
@@ -223,7 +223,7 @@ def _make_cas_function():
 
     # FIXME: uses legacy jit for now
     engine = ll.create_jit_compiler_with_tm(mod, tm)
-    # engine = ll.create_mcjit_compiler(mod, tm)
+    # engine = llvm.create_mcjit_compiler(mod, tm)
     engine.finalize_object()
     ptr = engine.get_pointer_to_function(fn)
 

@@ -9,7 +9,7 @@ from numba.cuda import nvvmutils
 from numba.cuda.compiler import CUDAKernel
 from numba.utils import IS_PY3
 import llvmlite.llvmpy.core as lc
-import llvmlite.binding as ll
+import llvmlite.binding as llvm
 from . import dispatch
 
 if IS_PY3:
@@ -215,7 +215,7 @@ def build_gufunc_stager(devfn, dims):
     builder.ret(lc.Constant.int(lc.Type.int(), 0))
 
     # Link
-    lmod = ll.parse_assembly(str(lmod))
+    lmod = llvm.parse_assembly(str(lmod))
     lmod.link_in(basemod, preserve=False)
     lgufunc = lmod.get_function(lgufunc.name)
     return lmod, lgufunc, outer_args, excs
