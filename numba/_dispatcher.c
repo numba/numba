@@ -3,8 +3,6 @@
 #include <string.h>
 #include <time.h>
 #include <assert.h>
-#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
-#include <numpy/ndarrayobject.h>
 #include "_dispatcher.h"
 
 
@@ -202,7 +200,7 @@ int typecode_fallback_keep_ref(DispatcherObject *dispatcher, PyObject *val) {
 #define N_LAYOUT 3
 static int cached_arycode[N_NDIM][N_LAYOUT][N_DTYPES];
 
-static int dtype_num_to_typecode(int type_num) {
+int dtype_num_to_typecode(int type_num) {
     int dtype;
     switch(type_num) {
     case NPY_INT8:
@@ -280,12 +278,19 @@ int typecode_ndarray(DispatcherObject *dispatcher, PyArrayObject *ary) {
     return typecode;
 
 FALLBACK:
-    /* "Slow" path, caching types in a map */
+    /* "Slow" path */
+
+    /* If this isn't a structured array then we can't use the cache */
+    if (PyArray_TYPE(ary) != NPY_VOID)
+        return typecode_fallback(dispatcher, (PyObject*)ary);
+
+    /* Check type cache */
     typecode = dispatcher_get_ndarray_typecode(ndim, layout,
-                                               PyArray_TYPE(ary));
+                                               PyArray_DESCR(ary));
     if (typecode == -1) {
-        typecode = typecode_fallback(dispatcher, (PyObject*)ary);
-        dispatcher_insert_ndarray_typecode(ndim, layout, PyArray_TYPE(ary),
+        /* First use of this type, use fallback and populate the cache */
+        typecode = typecode_fallback_keep_ref(dispatcher, (PyObject*)ary);
+        dispatcher_insert_ndarray_typecode(ndim, layout, PyArray_DESCR(ary),
                                            typecode);
     }
     return typecode;
@@ -298,6 +303,18 @@ int typecode_arrayscalar(DispatcherObject *dispatcher, PyObject* aryscalar) {
     descr = PyArray_DescrFromScalar(aryscalar);
     if (!descr)
         return typecode_fallback(dispatcher, aryscalar);
+
+    if (descr->type_num == NPY_VOID) {
+        typecode = dispatcher_get_arrayscalar_typecode(descr);
+        if (typecode == -1) {
+            /* Resolve through fallback then populate cache */
+            typecode = typecode_fallback_keep_ref(dispatcher, aryscalar);
+            dispatcher_insert_arrayscalar_typecode(descr, typecode);
+        }
+        Py_DECREF(descr);
+        return typecode;
+    }
+
     typecode = dtype_num_to_typecode(descr->type_num);
     Py_DECREF(descr);
     if (typecode == -1)
