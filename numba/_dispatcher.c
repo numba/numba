@@ -33,6 +33,9 @@ static int BASIC_TYPECODES[12];
 
 static int tc_intp;
 
+static PyObject* typecache;
+static PyObject* ndarray_typecache;
+
 static
 PyObject* init_types(PyObject *self, PyObject *args)
 {
@@ -72,6 +75,13 @@ PyObject* init_types(PyObject *self, PyObject *args)
         break;
     default:
         PyErr_SetString(PyExc_AssertionError, "sizeof(void*) != {4, 8}");
+        return NULL;
+    }
+
+    typecache = PyDict_New();
+    ndarray_typecache = PyDict_New();
+    if (typecache == NULL || ndarray_typecache == NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "failed to create type cache");
         return NULL;
     }
 
@@ -247,6 +257,52 @@ static int dtype_num_to_typecode(int type_num) {
     return dtype;
 }
 
+static
+int get_cached_typecode(PyArray_Descr* descr) {
+    PyObject* tmpobject = PyDict_GetItem(typecache, (PyObject*)descr);
+    if (tmpobject == NULL)
+        return -1;
+
+    return PyLong_AsLong(tmpobject);
+}
+
+static
+void cache_typecode(PyArray_Descr* descr, int typecode) {
+    PyObject* value = PyLong_FromLong(typecode);
+    PyDict_SetItem(typecache, (PyObject*)descr, value);
+    Py_DECREF(value);
+}
+
+static
+PyObject* ndarray_key(int ndim, int layout, PyArray_Descr* descr) {
+    PyObject* tmpndim = PyLong_FromLong(ndim);
+    PyObject* tmplayout = PyLong_FromLong(layout);
+    PyObject* key = PyTuple_Pack(3, tmpndim, tmplayout, descr);
+    Py_DECREF(tmpndim);
+    Py_DECREF(tmplayout);
+    return key;
+}
+
+static
+int get_cached_ndarray_typecode(int ndim, int layout, PyArray_Descr* descr) {
+    PyObject* key = ndarray_key(ndim, layout, descr);
+    PyObject *tmpobject = PyDict_GetItem(ndarray_typecache, key);
+    if (tmpobject == NULL)
+        return -1;
+
+    Py_DECREF(key);
+    return PyLong_AsLong(tmpobject);
+}
+
+static
+void cache_ndarray_typecode(int ndim, int layout, PyArray_Descr* descr,
+                            int typecode) {
+    PyObject* key = ndarray_key(ndim, layout, descr);
+    PyObject* value = PyLong_FromLong(typecode);
+    PyDict_SetItem(ndarray_typecache, key, value);
+    Py_DECREF(key);
+    Py_DECREF(value);
+}
 
 static
 int typecode_ndarray(DispatcherObject *dispatcher, PyArrayObject *ary) {
@@ -280,13 +336,18 @@ int typecode_ndarray(DispatcherObject *dispatcher, PyArrayObject *ary) {
     return typecode;
 
 FALLBACK:
-    /* "Slow" path, caching types in a map */
-    typecode = dispatcher_get_ndarray_typecode(ndim, layout,
-                                               PyArray_TYPE(ary));
+    /* "Slow" path */
+
+    /* If this isn't a structured array then we can't use the cache */
+    if (PyArray_TYPE(ary) != NPY_VOID)
+        return typecode_fallback(dispatcher, (PyObject*)ary);
+
+    /* Check type cache */
+    typecode = get_cached_ndarray_typecode(ndim, layout, PyArray_DESCR(ary));
     if (typecode == -1) {
-        typecode = typecode_fallback(dispatcher, (PyObject*)ary);
-        dispatcher_insert_ndarray_typecode(ndim, layout, PyArray_TYPE(ary),
-                                           typecode);
+        /* First use of this type, use fallback and populate the cache */
+        typecode = typecode_fallback_keep_ref(dispatcher, (PyObject*)ary);
+        cache_ndarray_typecode(ndim, layout, PyArray_DESCR(ary), typecode);
     }
     return typecode;
 }
@@ -298,6 +359,20 @@ int typecode_arrayscalar(DispatcherObject *dispatcher, PyObject* aryscalar) {
     descr = PyArray_DescrFromScalar(aryscalar);
     if (!descr)
         return typecode_fallback(dispatcher, aryscalar);
+
+    if (descr->type_num == NPY_VOID) {
+        /*typecode = dispatcher_get_arrayscalar_typecode(descr);*/
+        typecode = get_cached_typecode(descr);
+        if (typecode == -1) {
+            /* Resolve through fallback then populate cache */
+            typecode = typecode_fallback_keep_ref(dispatcher, aryscalar);
+            cache_typecode(descr, typecode);
+            //dispatcher_insert_arrayscalar_typecode(descr, typecode);
+        }
+        Py_DECREF(descr);
+        return typecode;
+    }
+
     typecode = dtype_num_to_typecode(descr->type_num);
     Py_DECREF(descr);
     if (typecode == -1)
