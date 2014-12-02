@@ -159,18 +159,25 @@ Record descr_to_record(PyArray_Descr* descr) {
 
     for (int i = 0; i < PyList_Size(keys); ++i) {
         PyObject* key = PyList_GET_ITEM(keys, i);
+#if (PY_MAJOR_VERSION >= 3)
         // Ensure all keys are in the canonical state
         if (PyUnicode_READY(key) == -1) {
             Py_DECREF(keys);
             return Record();
         }
-
+#endif
         PyObject* value = PyDict_GetItem(fields, key);
 
+#if (PY_MAJOR_VERSION >= 3)
         void* data = PyUnicode_DATA(key);
         Py_ssize_t length = PyUnicode_GET_LENGTH(key);
         int kind = PyUnicode_KIND(key);
         Py_ssize_t datalen = length * kind;
+#else
+        const char* data = PyString_AsString(key);
+        Py_ssize_t datalen = PyString_GET_SIZE(key);
+        int kind = 0;
+#endif
         void* name = malloc(datalen);
         memcpy(name, data, datalen);
 
