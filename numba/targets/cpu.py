@@ -48,8 +48,6 @@ class CPUContext(BaseContext):
         self.is32bit = (utils.MACHINE_BITS == 32)
 
         # Map external C functions.
-        # This needs to be done before creating the codegen object (below),
-        # so that CPython's msvcrt is preferred over LLVM's under Windows.
         externals.c_math_functions.install()
         externals.c_numpy_functions.install()
 

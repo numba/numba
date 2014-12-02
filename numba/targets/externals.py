@@ -18,6 +18,16 @@ def _add_missing_symbol(symbol, addr):
         ll.add_symbol(symbol, addr)
 
 
+def _get_msvcrt_symbol(symbol):
+    """
+    Under Windows, look up a symbol inside the C runtime
+    and return the raw pointer value as an integer.
+    """
+    from ctypes import cdll, cast, c_void_p
+    f = getattr(cdll.msvcrt, symbol)
+    return cast(f, c_void_p).value
+
+
 class _Installer(object):
 
     _installed = False
@@ -45,10 +55,10 @@ class _ExternalMathFunctions(_Installer):
             ll.add_symbol("numba.math.%s" % name, c_helpers[name])
 
         if sys.platform.startswith('win32') and is32bit:
-            # For Windows XP __ftol2 is not defined, we will just use
-            # __ftol as a replacement.
+            # For Windows XP _ftol2 is not defined, we will just use
+            # _ftol as a replacement.
             # On Windows 7, this is not necessary but will work anyway.
-            ftol = ll.address_of_symbol('_ftol')
+            ftol = _get_msvcrt_symbol("_ftol")
             _add_missing_symbol("_ftol2", ftol)
 
         elif sys.platform.startswith('linux') and is32bit:
@@ -61,12 +71,11 @@ class _ExternalMathFunctions(_Installer):
 
         # List available C-math
         for fname in intrinsics.INTR_MATH:
-            if not ll.address_of_symbol(fname):
-                # Bind from CPython's C runtime library.
-                # (under Windows, different versions of the C runtime can
-                #  be loaded at the same time, for example msvcrt100 by
-                #  CPython and msvcrt120 by LLVM)
-                ll.add_symbol(fname, c_helpers[fname])
+            # Force binding from CPython's C runtime library.
+            # (under Windows, different versions of the C runtime can
+            #  be loaded at the same time, for example msvcrt100 by
+            #  CPython and msvcrt120 by LLVM)
+            ll.add_symbol(fname, c_helpers[fname])
 
 
 class _ExternalNumpyFunctions(_Installer):
