@@ -157,35 +157,6 @@ Dispatcher_Insert(DispatcherObject *self, PyObject *args)
     Py_RETURN_NONE;
 }
 
-
-// Unused?
-//static
-//PyObject*
-//Dispatcher_Find(DispatcherObject *self, PyObject *args)
-//{
-//    PyObject *sigtup;
-//    int i, sigsz;
-//    int *sig;
-//    void *out;
-//
-//    if (!PyArg_ParseTuple(args, "O", &sigtup)) {
-//        return NULL;
-//    }
-//
-//    sigsz = PySequence_Fast_GET_SIZE(sigtup);
-//
-//    sig = malloc(sigsz * sizeof(int));
-//    for (i = 0; i < sigsz; ++i) {
-//        sig[i] = PyLong_AsLong(PySequence_Fast_GET_ITEM(sigtup, i));
-//    }
-//
-//    out = dispatcher_resolve(self->dispatcher, sig);
-//
-//    free(sig);
-//
-//    return PyLong_FromVoidPtr(out);
-//}
-
 static PyObject *str_typeof_pyval = NULL;
 
 static
