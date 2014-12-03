@@ -361,13 +361,11 @@ int typecode_arrayscalar(DispatcherObject *dispatcher, PyObject* aryscalar) {
         return typecode_fallback(dispatcher, aryscalar);
 
     if (descr->type_num == NPY_VOID) {
-        /*typecode = dispatcher_get_arrayscalar_typecode(descr);*/
         typecode = get_cached_typecode(descr);
         if (typecode == -1) {
             /* Resolve through fallback then populate cache */
             typecode = typecode_fallback_keep_ref(dispatcher, aryscalar);
             cache_typecode(descr, typecode);
-            //dispatcher_insert_arrayscalar_typecode(descr, typecode);
         }
         Py_DECREF(descr);
         return typecode;
