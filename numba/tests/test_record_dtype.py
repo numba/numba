@@ -129,9 +129,9 @@ class TestRecordDtype(unittest.TestCase):
 
         In this case, both accept recarrays.
         '''
-        self.npsample1d = np.recarray(3, dtype=recordtype)
-        self.npsample1d2 = np.recarray(3, dtype=recordtype2)
-        self.npsample1d3 = np.recarray(3, dtype=recordtype)
+        self.refsample1d = np.recarray(3, dtype=recordtype)
+        self.refsample1d2 = np.recarray(3, dtype=recordtype2)
+        self.refsample1d3 = np.recarray(3, dtype=recordtype)
 
         self.nbsample1d = np.recarray(3, dtype=recordtype)
         self.nbsample1d2 = np.recarray(3, dtype=recordtype2)
@@ -141,7 +141,7 @@ class TestRecordDtype(unittest.TestCase):
 
         self._createSampleArrays()
 
-        for ary in (self.npsample1d, self.nbsample1d):
+        for ary in (self.refsample1d, self.nbsample1d):
             for i in range(ary.size):
                 x = i + 1
                 ary[i]['a'] = x / 2
@@ -149,13 +149,13 @@ class TestRecordDtype(unittest.TestCase):
                 ary[i]['c'] = x * 1j
                 ary[i]['d'] = "%d" % x
 
-        for ary2 in (self.npsample1d2, self.nbsample1d2):
+        for ary2 in (self.refsample1d2, self.nbsample1d2):
             for i in range(ary2.size):
                 x = i + 5
                 ary2[i]['e'] = x
                 ary2[i]['f'] = x / 2
 
-        for ary3 in (self.npsample1d3, self.nbsample1d3):
+        for ary3 in (self.refsample1d3, self.nbsample1d3):
             for i in range(ary3.size):
                 x = i + 10
                 ary3[i]['a'] = x / 2
@@ -187,8 +187,8 @@ class TestRecordDtype(unittest.TestCase):
     def _test_get_equal(self, pyfunc):
         rec = numpy_support.from_dtype(recordtype)
         cfunc = self.get_cfunc(pyfunc, (rec[:], types.intp))
-        for i in range(self.npsample1d.size):
-            self.assertEqual(pyfunc(self.npsample1d, i), cfunc(self.nbsample1d, i))
+        for i in range(self.refsample1d.size):
+            self.assertEqual(pyfunc(self.refsample1d, i), cfunc(self.nbsample1d, i))
 
     def test_get_a(self):
         self._test_get_equal(get_a)
@@ -205,8 +205,8 @@ class TestRecordDtype(unittest.TestCase):
         '''
         rec = numpy_support.from_dtype(recordtype)
         cfunc = self.get_cfunc(pyfunc, (rec[:], rec[:], types.intp))
-        for i in range(self.npsample1d.size):
-            self.assertEqual(pyfunc(self.npsample1d, self.npsample1d3, i),
+        for i in range(self.refsample1d.size):
+            self.assertEqual(pyfunc(self.refsample1d, self.refsample1d3, i),
                               cfunc(self.nbsample1d, self.nbsample1d3, i))
 
     def test_two_distinct_arrays(self):
@@ -217,8 +217,8 @@ class TestRecordDtype(unittest.TestCase):
         rec1 = numpy_support.from_dtype(recordtype)
         rec2 = numpy_support.from_dtype(recordtype2)
         cfunc = self.get_cfunc(pyfunc, (rec1[:], rec2[:], types.intp))
-        for i in range(self.npsample1d.size):
-            pres = pyfunc(self.npsample1d, self.npsample1d2, i)
+        for i in range(self.refsample1d.size):
+            pres = pyfunc(self.refsample1d, self.refsample1d2, i)
             cres = cfunc(self.nbsample1d, self.nbsample1d2, i)
             self.assertEqual(pres,cres)
 
@@ -235,8 +235,8 @@ class TestRecordDtype(unittest.TestCase):
         rec = numpy_support.from_dtype(recordtype)
         cfunc = self.get_cfunc(pyfunc, (rec[:], types.intp, valuetype))
 
-        for i in range(self.npsample1d.size):
-            expect = self.npsample1d.copy()
+        for i in range(self.refsample1d.size):
+            expect = self.refsample1d.copy()
             pyfunc(expect, i, value)
 
             got = self.nbsample1d.copy()
@@ -267,7 +267,7 @@ class TestRecordDtype(unittest.TestCase):
 
         test_indices = [(0, 1), (1, 2), (0, 2)]
         for i, j in test_indices:
-            expect = self.npsample1d.copy()
+            expect = self.refsample1d.copy()
             pyfunc(expect, i, j)
 
             got = self.nbsample1d.copy()
@@ -283,7 +283,7 @@ class TestRecordDtype(unittest.TestCase):
         """
         Testing scalar record value as argument
         """
-        npval = self.npsample1d.copy()[0]
+        npval = self.refsample1d.copy()[0]
         nbval = self.nbsample1d.copy()[0]
         attrs = 'abc'
         valtypes = types.float64, types.int32, types.complex64
@@ -329,8 +329,8 @@ class TestRecordDtype(unittest.TestCase):
         '''
         Testing the use of two scalar records of the same type
         '''
-        npval1 = self.npsample1d.copy()[0]
-        npval2 = self.npsample1d.copy()[1]
+        npval1 = self.refsample1d.copy()[0]
+        npval2 = self.refsample1d.copy()[1]
         nbval1 = self.nbsample1d.copy()[0]
         nbval2 = self.nbsample1d.copy()[1]
         attrs = 'abc'
@@ -351,7 +351,7 @@ class TestRecordDtype(unittest.TestCase):
         Testing the use of two scalar records of differing type
         '''
         nbval1 = self.nbsample1d.copy()[0]
-        nbval2 = self.npsample1d2.copy()[0]
+        nbval2 = self.refsample1d2.copy()[0]
         expected = nbval1['a'] + nbval2['f']
 
         nbrecord1 = numpy_support.from_dtype(recordtype)
@@ -373,7 +373,7 @@ class TestRecordDtype(unittest.TestCase):
         attrs = 'abc'
         indices = [0, 1, 2]
         for index, attr in zip(indices, attrs):
-            npary = self.npsample1d.copy()
+            npary = self.refsample1d.copy()
             nbary = self.nbsample1d.copy()
             old_refcnt = sys.getrefcount(nbary)
             res = cfunc(npary, index)
@@ -413,9 +413,9 @@ class TestRecordDtypeWithStructArrays(TestRecordDtype):
         Numba using structured arrays.
         '''
 
-        self.npsample1d = np.recarray(3, dtype=recordtype)
-        self.npsample1d2 = np.recarray(3, dtype=recordtype2)
-        self.npsample1d3 = np.recarray(3, dtype=recordtype)
+        self.refsample1d = np.recarray(3, dtype=recordtype)
+        self.refsample1d2 = np.recarray(3, dtype=recordtype2)
+        self.refsample1d3 = np.recarray(3, dtype=recordtype)
 
         self.nbsample1d = np.zeros(3, dtype=recordtype)
         self.nbsample1d2 = np.zeros(3, dtype=recordtype2)
