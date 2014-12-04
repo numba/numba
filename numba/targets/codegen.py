@@ -71,8 +71,7 @@ class CodeLibrary(object):
         """
         Internal: optimize this library's final module.
         """
-        with self._codegen._module_pass_manager() as pm:
-            pm.run(self._final_module)
+        self._codegen._mpm.run(self._final_module)
 
     def create_ir_module(self, name):
         """
@@ -212,16 +211,14 @@ class BaseCPUCodegen(object):
         else:
             engine = ll.create_mcjit_compiler(llvm_module, tm)
 
-        pmb = lp.create_pass_manager_builder(
-            opt=config.OPT, loop_vectorize=config.LOOP_VECTORIZE)
         tli = ll.create_target_library_info(llvm_module.triple)
 
         self._tli = tli
-        self._pmb = pmb
         self._tm = tm
         self._engine = engine
         self._target_data = engine.target_data
         self._data_layout = str(self._target_data)
+        self._mpm = self._module_pass_manager()
 
     def _create_empty_module(self, name):
         ir_module = lc.Module.new(name)
@@ -256,7 +253,8 @@ class BaseCPUCodegen(object):
         dl.add_pass(pm)
         self._tli.add_pass(pm)
         self._tm.add_analysis_passes(pm)
-        self._pmb.populate(pm)
+        with self._pass_manager_builder() as pmb:
+            pmb.populate(pm)
         return pm
 
     def _function_pass_manager(self, llvm_module):
@@ -264,8 +262,22 @@ class BaseCPUCodegen(object):
         self._target_data.add_pass(pm)
         self._tli.add_pass(pm)
         self._tm.add_analysis_passes(pm)
-        self._pmb.populate(pm)
+        with self._pass_manager_builder() as pmb:
+            pmb.populate(pm)
         return pm
+
+    def _pass_manager_builder(self):
+        """
+        Create a PassManagerBuilder.
+
+        Note: a PassManagerBuilder seems good only for one use, so you
+        should call this method each time you want to populate a module
+        or function pass manager.  Otherwise some optimizations will be
+        missed...
+        """
+        pmb = lp.create_pass_manager_builder(
+            opt=config.OPT, loop_vectorize=config.LOOP_VECTORIZE)
+        return pmb
 
 
 class AOTCPUCodegen(BaseCPUCodegen):
@@ -296,13 +308,11 @@ class JITCPUCodegen(BaseCPUCodegen):
 
         options['reloc'] = 'default'
         options['codemodel'] = 'jitdefault'
-        # Note: LLVM 3.3 always generates vmovsd (AVX instruction) for
-        # mem<->reg move.  The transition between AVX and SSE instruction
-        # without proper vzeroupper to reset is causing a serious performance
-        # penalty because the SSE register need to save/restore.
-        # For now, we will disable the AVX feature for all processor and hope
-        # that LLVM 3.5 will fix this issue.
-        # features.append('-avx')
+        # Note: there are various performance issues with AVX and LLVM
+        # (list at http://llvm.org/bugs/buglist.cgi?quicksearch=avx).
+        # For now we don't activate it explicitly; perhaps the optimizer
+        # will choose to activate it for us...
+        #features.append('+avx')
         # If this is x86, make sure SSE is supported
         if config.X86_SSE and _is_x86(self._llvm_module.triple):
             features.append('+sse')

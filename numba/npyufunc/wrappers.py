@@ -137,6 +137,7 @@ def build_ufunc_wrapper(library, context, func, signature, objmode, env):
     oldfunc = func
     func = wrapper_module.add_function(func_type,
                                        name=func.name)
+    func.attributes.add("alwaysinline")
 
     wrapper = wrapper_module.add_function(fnty, "__ufunc__." + func.name)
     arg_args, arg_dims, arg_steps, arg_data = wrapper.args
@@ -297,6 +298,7 @@ class _GufuncWrapper(object):
         wrapper_module = self.library.create_ir_module('')
         func_type = self.context.get_function_type(self.fndesc)
         func = wrapper_module.add_function(func_type, name=self.func.name)
+        func.attributes.add("alwaysinline")
         wrapper = wrapper_module.add_function(fnty,
                                               "__gufunc__." + self.func.name)
         arg_args, arg_dims, arg_steps, arg_data = wrapper.args
