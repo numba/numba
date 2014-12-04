@@ -8,6 +8,7 @@ from llvmlite.llvmpy.core import Type, Builder, Module
 import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 
+from numba.targets import imputils
 from numba import _dynfunc, ir, types, cgutils, utils, config, cffi_support, typing
 
 
@@ -469,6 +470,10 @@ class Lower(BaseLower):
                         cgutils.get_module(self.builder), fndesc)
                 res = self.context.call_external_function(self.builder, func, fndesc.argtypes, castvals)
 
+            elif isinstance(fnty, types.UndefinedFunction):
+                # XXX: Assume self recursion
+                impl = imputils.user_function(self.function, self.fndesc, ())
+                res = impl(self.context, self.builder, signature, castvals)
             else:
                 # Normal function resolution
                 impl = self.context.get_function(fnty, signature)

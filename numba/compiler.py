@@ -662,7 +662,13 @@ def type_inference_stage(typingctx, interp, args, return_type, locals={}):
     if len(args) != len(interp.argspec.args):
         raise TypeError("Mismatch number of argument types")
 
-    infer = typeinfer.TypeInferer(typingctx, interp.blocks)
+    func_name = interp.bytecode.func_name
+    sig = typing.signature(return_type, *args)
+    recur_template = typing.make_concrete_template(
+                            func_name, key=func_name, signatures=[sig])
+
+    infer = typeinfer.TypeInferer(typingctx, interp.blocks, func_name,
+                                  recur_template)
 
     # Seed argument types
     for arg, ty in zip(interp.argspec.args, args):
