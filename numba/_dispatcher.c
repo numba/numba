@@ -169,9 +169,32 @@ Dispatcher_Insert(DispatcherObject *self, PyObject *args)
 
 static PyObject *str_typeof_pyval = NULL;
 
-/* For void types, we want to keep a reference to the returned type object so
-   that it cannot be deleted, and our cache of void types remains valid. So we
-   provide the option to do this in retain_reference */
+/* For void types, we need to keep a reference to the returned type object so
+   that it cannot be deleted. This is because of the following events occurring
+   when first using a @jit function for a given set of types:
+
+    1. typecode_fallback requests a new typecode for an arbitrary Python value;
+       this implies creating a Numba type object (on the first dispatcher call);
+       the typecode cache is then populated.
+    2. matching of the typecode list in _dispatcherimpl.cpp fails, since the
+       typecode is new.
+    3. we have to compile: compile_and_invoke() is called, it will invoke
+       Dispatcher_Insert to register the new signature.
+
+   The reference returned in step 1 is deleted as soon as we call Py_DECREF() on
+   it, since we are holding the only reference. If this happens and we use the
+   typecode we got to populate the cache, then the cache won't ever return the
+   correct typecode, and the dispatcher will never successfully match the typecodes
+   with those of some already-compiled instance. So we need to make sure that we
+   don't call Py_DECREF() on objects whose typecode will be used to populate the
+   cache. This is ensured by calling _typecode_fallback with retain_reference ==
+   0.
+
+   Note that technically we are leaking the reference, since we do not continue
+   to hold a pointer to the type object that we get back from typeof_pyval.
+   However, we don't need to refer to it again, we just need to make sure that
+   it is never deleted.
+*/
 static
 int _typecode_fallback(DispatcherObject *dispatcher, PyObject *val,
                        int retain_reference) {
