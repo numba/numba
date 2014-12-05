@@ -43,6 +43,7 @@ class UFuncDispatcher(object):
         flags = compiler.Flags()
         self.targetdescr.options.parse_as_flags(flags, topt)
         flags.set("no_compile")
+        flags.set("no_cpython_wrapper")
         # Disable loop lifting
         # The feature requires a real python function
         flags.unset("enable_looplift")
@@ -108,12 +109,13 @@ class UFuncBuilder(object):
             raise TypeError("No definition")
 
         # Get signature in the order they are added
-        keepalive = None
+        keepalive = []
         for sig in self._sigs:
             cres = self._cres[sig]
-            dtypenums, ptr, keepalive = self.build(cres, sig)
+            dtypenums, ptr, env = self.build(cres, sig)
             dtypelist.append(dtypenums)
             ptrlist.append(utils.longint(ptr))
+            keepalive.append((cres.library, env))
 
         datlist = [None] * len(ptrlist)
 
@@ -133,6 +135,8 @@ class UFuncBuilder(object):
     def build(self, cres, signature):
         # Buider wrapper for ufunc entry point
         ctx = cres.target_context
+        library = cres.library
+        llvm_func = library.get_function(cres.fndesc.llvm_func_name)
 
         env = None
         if cres.objectmode:
@@ -145,12 +149,10 @@ class UFuncBuilder(object):
         else:
             envptr = None
 
-        wrapper = build_ufunc_wrapper(ctx, cres.llvm_func, signature,
+        wrapper = build_ufunc_wrapper(library, ctx, llvm_func, signature,
                                       cres.objectmode, envptr)
-        ctx.finalize(wrapper, cres.fndesc)
-        ctx.engine.add_module(wrapper.module)
-        ctx.engine.finalize_object()
-        ptr = ctx.engine.get_pointer_to_function(wrapper)
+        ptr = library.get_pointer_to_function(wrapper.name)
+
         # Get dtypes
         dtypenums = [np.dtype(a.name).num for a in signature.args]
         dtypenums.append(np.dtype(signature.return_type.name).num)
@@ -158,6 +160,7 @@ class UFuncBuilder(object):
 
 
 class GUFuncBuilder(object):
+
     # TODO handle scalar
     def __init__(self, py_func, signature, targetoptions={}):
         self.py_func = py_func
@@ -205,12 +208,13 @@ class GUFuncBuilder(object):
             raise TypeError("No definition")
 
         # Get signature in the order they are added
-        keepalive = None
+        keepalive = []
         for sig in self._sigs:
             cres = self._cres[sig]
-            dtypenums, ptr, keepalive = self.build(cres)
+            dtypenums, ptr, env = self.build(cres)
             dtypelist.append(dtypenums)
             ptrlist.append(utils.longint(ptr))
+            keepalive.append((cres.library, env))
 
         datlist = [None] * len(ptrlist)
 
@@ -224,19 +228,19 @@ class GUFuncBuilder(object):
 
     def build(self, cres):
         """
-        Returns (dtype numbers, function ptr, EnviornmentObject)
+        Returns (dtype numbers, function ptr, EnvironmentObject)
         """
         # Buider wrapper for ufunc entry point
         ctx = cres.target_context
+        library = cres.library
         signature = cres.signature
-        wrapper, env = build_gufunc_wrapper(ctx, cres.llvm_func, signature,
-                                            self.sin, self.sout,
+        llvm_func = library.get_function(cres.fndesc.llvm_func_name)
+        wrapper, env = build_gufunc_wrapper(library, ctx, llvm_func,
+                                            signature, self.sin, self.sout,
                                             fndesc=cres.fndesc)
 
-        ctx.finalize(wrapper, cres.fndesc)
-        ctx.engine.add_module(wrapper.module)
-        ctx.engine.finalize_object()
-        ptr = ctx.engine.get_pointer_to_function(wrapper)
+        ptr = library.get_pointer_to_function(wrapper.name)
+
         # Get dtypes
         dtypenums = []
         for a in signature.args:

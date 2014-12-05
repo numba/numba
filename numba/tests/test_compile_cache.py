@@ -31,7 +31,7 @@ class TestCompileCache(unittest.TestCase):
         
         sig = typing.signature(types.int32, types.int32)
         typing_context = typing.Context()
-        context = cpu.CPUContext(typing_context).localized()
+        context = cpu.CPUContext(typing_context)
 
         # Ensure the cache is empty to begin with
         self.assertEqual(0, len(context.cached_internal_func))

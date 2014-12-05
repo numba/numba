@@ -260,7 +260,7 @@ class PyLower(BaseLower):
             has_wrong_size = self.builder.icmp(lc.ICMP_NE,
                                                tup_size, expected_size)
             with cgutils.if_unlikely(self.builder, has_wrong_size):
-                excid = self.context.add_exception(ValueError)
+                excid = self.add_exception(ValueError)
                 self.context.return_user_exc(self.builder, excid)
             return tup
         elif expr.op == 'getitem':
