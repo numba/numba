@@ -2,7 +2,7 @@
 Implement the elf utils used to load binary brig-elf files.
 """
 
-from __future__ import absolute_import, divide, print_function
+from __future__ import absolute_import, print_function
 
 import ctypes
 import os
