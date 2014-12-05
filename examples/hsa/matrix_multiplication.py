@@ -27,6 +27,16 @@ if __name__=='__main__':
     print("input matrix A:\n", a)
     print("input matrix B:\n", b)
 
+    # load Brig
+    brig_module = BrigModule.from_file('vector_copy.brig')
+
+
+    #program = hsa.create_program([gpu])
+    #module = program.add_module(module)
+
+    # finalize
+    #program.finalize([gpu], '&__vector_copy_kernel')
+
     s = hsa.create_signal(1)
 
     with open('MatMul.cl.o','rb') as f:

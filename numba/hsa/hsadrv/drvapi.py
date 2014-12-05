@@ -17,6 +17,10 @@ hsa_system_info_t = ctypes.c_int # enum
 hsa_dim3_t = ctypes.c_uint32 * 3 # in fact a x,y,z struct in C
 hsa_queue_type_t = ctypes.c_int # enum
 
+hsa_ext_brig_machine_model8_t = ctypes.c_uint8 # enum
+hsa_ext_brig_profile8_t = ctypes.c_uint8 # enum
+
+
 hsa_signal_value_t = ctypes.c_uint64 if enums.HSA_LARGE_MODEL else ctypes.c_uint32
 
 class hsa_queue_t(ctypes.Structure):
@@ -35,6 +39,26 @@ class hsa_queue_t(ctypes.Structure):
 class hsa_runtime_caller_t(ctypes.Structure):
     _fields_ = [
         ('caller', ctypes.c_uint64),
+    ]
+
+class hsa_ext_brig_module_handle_t(ctypes.Structure):
+    _fields_ = [
+        ('handle', ctypes.c_uint64),
+    ]
+
+class hsa_ext_brig_module_t(ctypes.Structure):
+    # do not directly instantiate this for now.
+    # sections is actually a variable lenght array whose lenght is
+    # given by section_count (though it is guaranteed to have at
+    # least 3). The sections themshelves have structure, but for
+    # now we are treating them as opaque.
+    #
+    # This supports loading Brig-elfs using the elf_utils C module.
+    # We will need to improve this in order to support creating our
+    # kernels without going to an elf-file.
+    _fields_ = [
+        ('section_count', ctypes.c_uint32),
+        ('sections', ctypes.c_void_p * 3),
     ]
 
 
@@ -98,6 +122,63 @@ API_PROTOTYPES = {
 
     # AMD extensions
 
+    # brig and programs ########################################################
+
+    # hsa_status_t hsa_ext_program_create(
+    #     hsa_agent_t *agents,
+    #     uint32_t agent_count,
+    #     hsa_ext_brig_machine_model8_t machine_model,
+    #     hsa_ext_brig_profile8_t profile,
+    #     hsa_ext_program_handle_t *program);
+
+    'hsa_ext_program_create': (hsa_status_t,
+                               ctypes.POINTER(hsa_agent_t), ctypes.uint32_t,
+                               hsa_ext_brig_machine_model8_t,
+                               hsa_ext_brig_profile8_t,
+                               ctypes.POINTER(hsa_ext_program_handle_t)),
+    
+
+    # hsa_status_t hsa_ext_add_module(
+    #     hsa_ext_program_handle_t program,
+    #     hsa_ext_brig_module_t *brig_module,
+    #     hsa_ext_brig_module_handle_t *module);
+    'hsa_ext_add_module': (hsa_status_t,
+                           hsa_ext_program_handle_t,
+                           ctypes.POINTER(hsa_ext_brig_module_t),
+                           ctypes.POINTER(hsa_ext_brig_module_handle_t)),
+
+    # hsa_status_t hsa_ext_finalize_program(
+    #     hsa_ext_program_handle_t program,
+    #     hsa_agent_t agent,
+    #     size_t finalization_request_count,
+    #     hsa_ext_finalization_request_t *finalization_request_list,
+    #     hsa_ext_control_directives_t *control_directives,
+    #     hsa_ext_error_message_callback_t error_message_callback,
+    #     uint8_t optimization_level,
+    #     const char *options,
+    #     int debug_information);
+    'hsa_ext_finalize_program': (hsa_status_t,
+                                 hsa_ext_program_handle_t,
+                                 hsa_agent_t,
+                                 ctypes.c_size_t,
+                                 ctypes.POINTER(hsa_ext_finalization_request_t),
+                                 ctypes.POINTER(hsa_ext_control_directives_t),
+                                 hsa_ext_error_message_callback_t,
+                                 ctypes.c_uint8,
+                                 ctypes.c_char_p,
+                                 ctypes.c_int),
+                           
+    # hsa_status_t hsa_ext_query_kernel_descriptor_address(
+    #     hsa_ext_program_handle_t program,
+    #     hsa_ext_brig_module_handle_t module,
+    #     hsa_ext_brig_code_section_offset32_t symbol,
+    #     hsa_ext_code_descriptor_t** kernel_descriptor);
+    'hsa_ext_query_kernel_descriptor_address': (hsa_status_t,
+                                                hsa_ext_program_handle_t,
+                                                hsa_ext_brig_module_handle_t,
+                                                hsa_ext_brig_code_section_offset32_t symbol,
+                                                ctypes.POINTER(ctypes.POINTER(hsa_ext_code_descriptor_t))),
+
     # code units ###############################################################
 
     # hsa_status_t hsa_ext_code_unit_load(
@@ -112,10 +193,10 @@ API_PROTOTYPES = {
                                ctypes.POINTER(hsa_agent_t), ctypes.c_size_t,
                                ctypes.c_void_p, ctypes.c_char_p,
                                hsa_ext_symbol_value_callback_t,
-                               ctypes.POINTER(hsa_amd_code_unit_t))
+                               ctypes.POINTER(hsa_amd_code_unit_t)),
 
     # hsa_status_t hsa_ext_code_unit_destroy(hsa_amd_code_unit_t code_unit)
-    'hsa_ext_code_unit_destroy': (hsa_status_t, hsa_amd_code_unit_t)
+    'hsa_ext_code_unit_destroy': (hsa_status_t, hsa_amd_code_unit_t),
 
     # hsa_status_t hsa_ext_code_unit_get_info(
     #     hsa_amd_code_unit_t code_unit,
@@ -124,6 +205,6 @@ API_PROTOTYPES = {
     #     void *value)
     'hsa_ext_code_unit_get_info': (hsa_status_t, hsa_amd_code_unit_t,
                                    hsa_amd_code_unit_info_t, ctypes.c_uint32,
-                                   ctypes.c_void_p)
+                                   ctypes.c_void_p),
 
 }

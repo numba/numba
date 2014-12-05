@@ -83,3 +83,11 @@ HSA_EXT_AGENT_INFO_SAMPLER_MAX                = 21
 # hsa_queue_type_t
 HSA_QUEUE_TYPE_MULTI                          = 0
 HSA_QUEUE_TYPE_SINGLE                         = 1
+
+# hsa_ext_brig_profile_t
+HSA_EXT_BRIG_PROFILE_BASE                     = 0
+HSA_EXT_BRIG_PROFILE_FULL                     = 1
+
+# hsa_ext_brig_machine_model_t
+HSA_EXT_BRIG_MACHINE_SMALL                    = 0
+HSA_EXT_BRIG_MACHINE_LARGE                    = 1

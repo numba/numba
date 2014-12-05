@@ -19,7 +19,7 @@ from collections import namedtuple
 from numba import utils, servicelib, mviewbuf
 from .error import HsaSupportError, HsaDriverError, HsaApiError, HsaWarning
 from .drvapi import API_PROTOTYPES
-from . import enums, drvapi
+from . import enums, drvapi, elf_utils
 from numba import config
 from numba.utils import longint as long
 
@@ -486,3 +486,18 @@ class CodeUnit(object):
     def __del__(self):
         hsa.hsa_ext_code_unit_destroy(self,_id)
 
+
+
+
+class BrigModule(object):
+    def __init__(self, brig_module_id):
+        self._id = brig_module_id
+
+    def __del__(self):
+        elf_utils.destroy_brig_module(self._id)
+
+    @classmethod
+    def from_file(file_name):
+        result = ctypes.POINTER(drvapi.hsa_ext_brig_module_t)
+        _check_error(create_brig_module_from_file(file_name, ctypes.byref(result))
+        return BrigModule(result)
