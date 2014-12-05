@@ -132,7 +132,7 @@ API_PROTOTYPES = {
     #     hsa_ext_program_handle_t *program);
 
     'hsa_ext_program_create': (hsa_status_t,
-                               ctypes.POINTER(hsa_agent_t), ctypes.uint32_t,
+                               ctypes.POINTER(hsa_agent_t), ctypes.c_uint32,
                                hsa_ext_brig_machine_model8_t,
                                hsa_ext_brig_profile8_t,
                                ctypes.POINTER(hsa_ext_program_handle_t)),
