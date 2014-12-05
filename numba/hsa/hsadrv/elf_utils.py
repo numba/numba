@@ -6,7 +6,7 @@ from __future__ import absolute_import, divide, print_function
 
 import ctypes
 import os
-import .drvapi
+from . import drvapi
 
 def _load_elf_utils_syms():
     """

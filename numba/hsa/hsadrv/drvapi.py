@@ -176,7 +176,7 @@ API_PROTOTYPES = {
     'hsa_ext_query_kernel_descriptor_address': (hsa_status_t,
                                                 hsa_ext_program_handle_t,
                                                 hsa_ext_brig_module_handle_t,
-                                                hsa_ext_brig_code_section_offset32_t symbol,
+                                                hsa_ext_brig_code_section_offset32_t,
                                                 ctypes.POINTER(ctypes.POINTER(hsa_ext_code_descriptor_t))),
 
     # code units ###############################################################
