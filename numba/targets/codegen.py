@@ -306,15 +306,19 @@ class JITCPUCodegen(BaseCPUCodegen):
     def _customize_tm_options(self, options):
         features = []
 
+        # As long as we don't want to ship the code to another machine,
+        # we can specialize for this CPU.
+        options['cpu'] = ll.get_host_cpu_name()
+
         options['reloc'] = 'default'
         options['codemodel'] = 'jitdefault'
-        # Note: there are various performance issues with AVX and LLVM
+
+        # There are various performance issues with AVX and LLVM 3.5
         # (list at http://llvm.org/bugs/buglist.cgi?quicksearch=avx).
-        # For now we don't activate it explicitly; perhaps the optimizer
-        # will choose to activate it for us...
-        #features.append('+avx')
-        # If this is x86, make sure SSE is supported
+        # For now we'd rather disable it, since it can pessimize the code.
+        features.append('-avx')
         if config.X86_SSE and _is_x86(self._llvm_module.triple):
+            # If this is x86, make sure SSE is enabled
             features.append('+sse')
             features.append('+sse2')
 
