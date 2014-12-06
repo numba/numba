@@ -3,6 +3,7 @@ from itertools import product
 from numba import unittest_support as unittest
 from numba import typeof
 from numba.compiler import compile_isolated
+from numba.tests.support import TestCase
 import numpy as np
 
 
@@ -82,6 +83,7 @@ def array_argmax(arr):
 def array_argmax_global(arr):
     return np.argmax(arr)
 
+
 def base_test_arrays(dtype):
     a1 = np.arange(10, dtype=dtype) + 1
     a2 = np.arange(10, dtype=dtype).reshape(2, 5) + 1
@@ -103,69 +105,65 @@ def full_test_arrays(dtype):
 
     return array_list
 
-def run_comparative(funcToCompare, testArray):
-    arrty = typeof(testArray)
-    cres = compile_isolated(funcToCompare, [arrty])
-    numpyResult = funcToCompare(testArray)
-    numbaResult = cres.entry_point(testArray)
 
+def run_comparative(compare_func, test_array):
+    arrty = typeof(test_array)
+    cres = compile_isolated(compare_func, [arrty])
+    numpy_result = compare_func(test_array)
+    numba_result = cres.entry_point(test_array)
 
-    if numpyResult.dtype in [np.float32, np.float64]:
-        success = np.allclose(numpyResult, numbaResult, rtol=1e-6)
-    else:
-        success = np.all(numpyResult == numbaResult)
+    return numpy_result, numba_result
 
-    # Uncomment to recieve debugging output about failures
-    # if not success:
-    #     print(funcToCompare.__name__)
-    #     print("Numpy result:", numpyResult)
-    #     print("Numba result:", numbaResult)
-    #     print("Delta:", numpyResult - numbaResult)
-
-    return success
 
 def array_prop(aray):
     arrty = typeof(aray)
     return (arrty.ndim, arrty.layout)
-    
 
-class TestArrayMethods(unittest.TestCase):
+
+class TestArrayMethods(TestCase):
     def test_array_ndim_and_layout(self):
         for testArray, testArrayProps in zip(base_test_arrays(np.int32), yield_test_props()):
             self.assertEqual(array_prop(testArray), testArrayProps)
 
     def test_sum_basic(self):
         arr = np.arange(100)
-        self.assertTrue(run_comparative(array_sum, arr))
+        npr, nbr = run_comparative(array_sum, arr)
+        self.assertPreciseEqual(npr, nbr)
 
     def test_mean_basic(self):
         arr = np.arange(100)
-        self.assertTrue(run_comparative(array_mean, arr))
+        npr, nbr = run_comparative(array_mean, arr)
+        self.assertPreciseEqual(npr, nbr, prec="double")
 
     def test_var_basic(self):
         arr = np.arange(100)
-        self.assertTrue(run_comparative(array_var, arr))      
+        npr, nbr = run_comparative(array_var, arr)
+        self.assertPreciseEqual(npr, nbr, prec="double")
 
     def test_std_basic(self):
         arr = np.arange(100)
-        self.assertTrue(run_comparative(array_std, arr))
+        npr, nbr = run_comparative(array_std, arr)
+        self.assertPreciseEqual(npr, nbr, prec="double")
 
     def test_min_basic(self):
         arr = np.arange(100)
-        self.assertTrue(run_comparative(array_min, arr))
+        npr, nbr = run_comparative(array_min, arr)
+        self.assertPreciseEqual(npr, nbr)
 
     def test_max_basic(self):
         arr = np.arange(100)
-        self.assertTrue(run_comparative(array_max, arr))
+        npr, nbr = run_comparative(array_max, arr)
+        self.assertPreciseEqual(npr, nbr)
 
     def test_argmin_basic(self):
         arr = np.arange(100)
-        self.assertTrue(run_comparative(array_argmin, arr))
+        npr, nbr = run_comparative(array_argmin, arr)
+        self.assertPreciseEqual(npr, nbr)
 
     def test_argmax_basic(self):
         arr = np.arange(100)
-        self.assertTrue(run_comparative(array_argmax, arr))
-
+        npr, nbr = run_comparative(array_argmax, arr)
+        self.assertPreciseEqual(npr, nbr)
 
     def check_array_flat(self, arr):
         out = np.zeros(arr.size, dtype=arr.dtype)
@@ -202,8 +200,8 @@ class TestArrayMethods(unittest.TestCase):
         self.check_array_flat(arr)
 
 # These form a testing product where each of the combinations are tested
-reduction_funcs = [array_sum, array_sum_global, 
-                   array_prod, array_prod_global, 
+reduction_funcs = [array_sum, array_sum_global,
+                   array_prod, array_prod_global,
                    array_mean, array_mean_global,
                    array_var, array_var_global,
                    array_std, array_std_global,
@@ -215,15 +213,16 @@ dtypes_to_test = [np.int32, np.float32]
 
 # Install tests on class above
 for dt in dtypes_to_test:
-    for redFunc, testArray in product(reduction_funcs, full_test_arrays(dt)):
-        def installedFunction(self, redFunc=redFunc, testArray=testArray):
-            self.assertTrue(run_comparative(redFunc, testArray))
+    for red_func, test_array in product(reduction_funcs, full_test_arrays(dt)):
+        # Create the name for the test function
+        test_name = "test_{0}_{1}_{2}d".format(red_func.__name__, test_array.dtype.name, test_array.ndim)
 
-        # Create the name for the test function 
-        testName = "test_{0}_{1}_{2}d".format(redFunc.__name__, testArray.dtype.name, testArray.ndim)
+        def new_test_function(self, redFunc=red_func, testArray=test_array, testName=test_name):
+            npr, nbr = run_comparative(redFunc, testArray)
+            self.assertPreciseEqual(npr, nbr, msg=test_name)
 
         # Install it into the class
-        setattr(TestArrayMethods, testName, installedFunction)
+        #setattr(TestArrayMethods, test_name, new_test_function)
 
 
 if __name__ == '__main__':
