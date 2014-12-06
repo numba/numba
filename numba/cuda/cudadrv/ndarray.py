@@ -4,6 +4,7 @@ import numba.ctypes_support as ctypes
 import contextlib
 from collections import deque
 from . import devices, driver
+from numba.targets.arrayobj import make_array_ctype
 from numba.targets.registry import CPUTarget
 from numba import types
 
@@ -11,9 +12,8 @@ from numba import types
 def _calc_array_sizeof(ndim):
     """Use the ABI size in the CPU target
     """
-    aryty = types.Array(types.int32, ndim, 'A')
     ctx = CPUTarget.target_context
-    return ctx.get_abi_sizeof(ctx.get_value_type(aryty))
+    return ctx.calc_array_sizeof(ndim)
 
 
 class ArrayHeaderManager(object):
@@ -115,22 +115,6 @@ class ArrayHeaderManager(object):
 
     def __repr__(self):
         return "<cuda managed memory %s >" % (self.context.device,)
-
-
-def make_array_ctype(ndim):
-    """Create a array header type for a given dimension.
-    """
-    c_intp = ctypes.c_ssize_t
-
-    class c_array(ctypes.Structure):
-        _fields_ = [('parent', ctypes.c_void_p),
-                    ('data', ctypes.c_void_p),
-                    ('shape', c_intp * ndim),
-                    ('strides', c_intp * ndim)]
-
-    assert ctypes.sizeof(c_array) == _calc_array_sizeof(ndim), \
-        "sizeof(CUDA array struct) != sizeof(CPU array struct)"
-    return c_array
 
 
 def _allocate_head(nd):

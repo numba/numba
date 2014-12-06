@@ -4,10 +4,12 @@ from collections import defaultdict
 import sys
 from types import ModuleType
 
-from llvm.core import Type, Builder, Module
-import llvm.core as lc
+from llvmlite.llvmpy.core import Type, Builder, Module
+import llvmlite.llvmpy.core as lc
+import llvmlite.binding as ll
 
-from numba import _dynfunc, ir, types, cgutils, utils, config, cffi_support, typing
+from numba import (_dynfunc, errcode, ir, types, cgutils, utils, config,
+                   cffi_support, typing)
 
 
 class LoweringError(Exception):
@@ -70,6 +72,14 @@ class FunctionDescriptor(object):
             return _dynamic_module
         else:
             return sys.modules[self.modname]
+
+    @property
+    def llvm_func_name(self):
+        return self.mangled_name
+
+    @property
+    def llvm_cpython_wrapper_name(self):
+        return 'wrapper.' + self.mangled_name
 
     def __repr__(self):
         return "<function descriptor %r>" % (self.unique_name)
@@ -159,18 +169,22 @@ class BaseLower(object):
     """
     Lower IR to LLVM
     """
-    def __init__(self, context, fndesc, interp):
+    def __init__(self, context, library, fndesc, interp):
         self.context = context
+        self.library = library
         self.fndesc = fndesc
         self.blocks = utils.SortedMap(utils.iteritems(interp.blocks))
 
         # Initialize LLVM
-        self.module = Module.new("module.%s" % self.fndesc.unique_name)
+        self.module = self.library.create_ir_module(self.fndesc.unique_name)
 
         # Python execution environment (will be available to the compiled
         # function).
         self.env = _dynfunc.Environment(
             globals=self.fndesc.lookup_module().__dict__)
+
+        # Mapping of error codes to exception classes or instances
+        self.exceptions = {}
 
         # Setup function
         self.function = context.declare_function(self.module, fndesc)
@@ -199,7 +213,13 @@ class BaseLower(object):
         Called after all blocks are lowered
         """
 
-    def lower(self):
+    def add_exception(self, exc):
+        assert issubclass(exc, BaseException), exc
+        excid = len(self.exceptions) + errcode.ERROR_COUNT
+        self.exceptions[excid] = exc
+        return excid
+
+    def lower(self, create_wrapper=True):
         # Init argument variables
         fnargs = self.context.get_arguments(self.function)
         for ak, av in zip(self.fndesc.args, fnargs):
@@ -229,20 +249,21 @@ class BaseLower(object):
         self.builder.position_at_end(entry_block_tail)
         self.builder.branch(self.blkmap[self.firstblk])
 
+        # Run target specific post lowering transformation
+        self.context.post_lowering(self.function)
+
         if config.DUMP_LLVM:
             print(("LLVM DUMP %s" % self.fndesc).center(80, '-'))
             print(self.module)
             print('=' * 80)
-        self.module.verify()
-        # Run function-level optimize to reduce memory usage and improve
-        # module-level optimization
-        self.context.optimize_function(self.function)
 
-        if config.NUMBA_DUMP_FUNC_OPT:
-            print(("LLVM FUNCTION OPTIMIZED DUMP %s" %
-                   self.fndesc).center(80, '-'))
-            print(self.module)
-            print('=' * 80)
+        # Materialize LLVM Module
+        self.library.add_ir_module(self.module)
+
+        # Create CPython wrapper
+        if create_wrapper:
+            self.context.create_cpython_wrapper(self.library, self.fndesc,
+                                                self.exceptions)
 
     def init_argument(self, arg):
         return arg
@@ -346,7 +367,7 @@ class Lower(BaseLower):
             return impl(self.builder, (target, value))
 
         elif isinstance(inst, ir.Raise):
-            excid = self.context.add_exception(inst.exception)
+            excid = self.add_exception(inst.exception)
             self.context.return_user_exc(self.builder, excid)
 
         else:
@@ -472,8 +493,8 @@ class Lower(BaseLower):
 
                 res = impl(self.builder, castvals)
                 libs = getattr(impl, "libs", ())
-                if libs:
-                    self.context.add_libs(libs)
+                for lib in libs:
+                    self.library.add_linking_library(lib)
             return self.context.cast(self.builder, res, signature.return_type,
                                      resty)
 
@@ -520,7 +541,7 @@ class Lower(BaseLower):
             iternext_impl = self.context.get_function('iternext',
                                                       iternext_sig)
             iterobj = getiter_impl(self.builder, (val,))
-            excid = self.context.add_exception(ValueError)
+            excid = self.add_exception(ValueError)
             # We call iternext() as many times as desired (`expr.count`).
             for i in range(expr.count):
                 pair = iternext_impl(self.builder, (iterobj,))

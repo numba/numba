@@ -204,5 +204,47 @@ class TestLoopLiftingInAction(TestCase):
         # loop count = 1
         self.assertEqual(test.py_func(1), test(1))
 
+    def test_invalid_argument(self):
+        """Test a problem caused by invalid discovery of loop argument
+        when a variable is used afterwards but not before.
+
+        Before the fix, this will result in::
+
+        numba.ir.NotDefinedError: 'i' is not defined
+        """
+        from numba import jit
+
+        @jit(forceobj=True)
+        def test(arg):
+            if type(arg) == np.ndarray: # force object mode
+                if arg.ndim == 1:
+                    result = 0.0
+                    j = 0
+                    for i in range(arg.shape[0]):
+                        pass
+                else:
+                    raise Exception
+            else:
+                result = 0.0
+                i, j = 0, 0
+                return result
+
+        arg = np.arange(10)
+        self.assertEqual(test.py_func(arg), test(arg))
+
+
+    def test_conditionally_defined_in_loop(self):
+        from numba import jit
+        @jit(forceobj=True)
+        def test():
+            x = 5
+            y = 0
+            for i in range(2):
+                if i > 0:
+                   x = 6
+                y += x
+        self.assertEqual(test.py_func(), test())
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -6,10 +6,11 @@ from __future__ import print_function, absolute_import, division
 
 from functools import reduce
 
-import llvm.core as lc
+import llvmlite.llvmpy.core as lc
 
+import numba.ctypes_support as ctypes
 import numpy
-from llvm.core import Constant
+from llvmlite.llvmpy.core import Constant
 from numba import errcode
 from numba import types, cgutils
 from numba.targets.imputils import (builtin, builtin_attr, implement,
@@ -41,6 +42,31 @@ def make_array(array_type):
                    ]
 
     return ArrayTemplate
+
+def make_array_ctype(ndim):
+    """Create a ctypes representation of an array_type.
+
+    Parameters
+    -----------
+    ndim: int
+        number of dimensions of array
+
+    Returns
+    -----------
+        a ctypes array structure for an array with the given number of
+        dimensions
+    """
+    c_intp = ctypes.c_ssize_t
+
+    class c_array(ctypes.Structure):
+        _fields_ = [('parent', ctypes.c_void_p),
+                    ('nitems', c_intp),
+                    ('itemsize', c_intp),
+                    ('data', ctypes.c_void_p),
+                    ('shape', c_intp * ndim),
+                    ('strides', c_intp * ndim)]
+
+    return c_array
 
 
 @struct_factory(types.ArrayIterator)
@@ -75,7 +101,7 @@ def getiter_array(context, builder, sig, args):
 
 def _getitem_array1d(context, builder, arrayty, array, idx):
     ptr = cgutils.get_item_pointer(builder, arrayty, array, [idx],
-                                   wraparound=context.metadata['wraparound'])
+                                   wraparound=True)
     return context.unpack_value(builder, arrayty.dtype, ptr)
 
 @builtin
@@ -139,7 +165,7 @@ def getitem_array1d_slice(context, builder, sig, args):
 
     dataptr = cgutils.get_item_pointer(builder, aryty, ary,
                                        [slicestruct.start],
-                                       wraparound=context.metadata['wraparound'])
+                                       wraparound=True)
 
     retstty = make_array(sig.return_type)
     retary = retstty(context, builder)
@@ -175,7 +201,7 @@ def getitem_array_unituple(context, builder, sig, args):
             cgutils.normalize_slice(builder, sl, sh)
         indices = [sl.start for sl in slices]
         dataptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                           wraparound=context.metadata['wraparound'])
+                                           wraparound=True)
         # Build array
         retstty = make_array(sig.return_type)
         retary = retstty(context, builder)
@@ -197,7 +223,7 @@ def getitem_array_unituple(context, builder, sig, args):
         indices = [context.cast(builder, i, t, types.intp)
                    for t, i in zip(idxty, indices)]
         ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                       wraparound=context.metadata['wraparound'])
+                                       wraparound=True)
 
         return context.unpack_value(builder, aryty.dtype, ptr)
 
@@ -235,7 +261,7 @@ def getitem_array_tuple(context, builder, sig, args):
                 start.append(ind)
 
         dataptr = cgutils.get_item_pointer(builder, aryty, ary, start,
-                                           wraparound=context.metadata['wraparound'])
+                                           wraparound=True)
         # Build array
         retstty = make_array(sig.return_type)
         retary = retstty(context, builder)
@@ -249,7 +275,7 @@ def getitem_array_tuple(context, builder, sig, args):
         indices = [context.cast(builder, i, t, types.intp)
                    for t, i in zip(idxty, indices)]
         ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                       wraparound=context.metadata['wraparound'])
+                                       wraparound=True)
 
         return context.unpack_value(builder, aryty.dtype, ptr)
 
@@ -265,7 +291,7 @@ def setitem_array1d(context, builder, sig, args):
     ary = arystty(context, builder, ary)
 
     ptr = cgutils.get_item_pointer(builder, aryty, ary, [idx],
-                                   wraparound=context.metadata['wraparound'])
+                                   wraparound=True)
 
     val = context.cast(builder, val, valty, aryty.dtype)
 
@@ -287,7 +313,7 @@ def setitem_array_unituple(context, builder, sig, args):
     indices = [context.cast(builder, i, t, types.intp)
                for t, i in zip(idxty, indices)]
     ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                   wraparound=context.metadata['wraparound'])
+                                   wraparound=True)
     context.pack_value(builder, aryty.dtype, val, ptr)
 
 
@@ -306,7 +332,7 @@ def setitem_array_tuple(context, builder, sig, args):
     indices = [context.cast(builder, i, t, types.intp)
                for t, i in zip(idxty, indices)]
     ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                   wraparound=context.metadata['wraparound'])
+                                   wraparound=True)
     context.pack_value(builder, aryty.dtype, val, ptr)
 
 @builtin
@@ -376,13 +402,13 @@ def setitem_array1d_slice(context, builder, sig, args):
             with cgutils.for_range_slice(builder, builder.load(start), builder.load(stop), slicestruct.step, slicestruct.start.type) as loop_idx1:
                 ptr = cgutils.get_item_pointer(builder, aryty, ary,
                                    [loop_idx1],
-                                   wraparound=context.metadata['wraparound'])
+                                   wraparound=True)
                 context.pack_value(builder, aryty.dtype, val, ptr)
         with otherwise0:
             with cgutils.for_range_slice(builder, builder.load(start), builder.load(stop), slicestruct.step, slicestruct.start.type, inc=False) as loop_idx2:
                 ptr = cgutils.get_item_pointer(builder, aryty, ary,
                                        [loop_idx2],
-                                       wraparound=context.metadata['wraparound'])
+                                       wraparound=True)
                 context.pack_value(builder, aryty.dtype, val, ptr)
 
 
@@ -668,6 +694,7 @@ def make_array_flat_cls(flatiterty):
             _fields = [('array', types.CPointer(array_type)),
                        ('pointers', types.CPointer(types.CPointer(dtype))),
                        ('indices', types.CPointer(types.intp)),
+                       ('empty', types.CPointer(types.boolean)),
                        ]
 
             def init_specific(self, context, builder, arrty, arr):
@@ -675,6 +702,8 @@ def make_array_flat_cls(flatiterty):
                 one = context.get_constant(types.intp, 1)
                 data = arr.data
                 ndim = arrty.ndim
+                shapes = cgutils.unpack_tuple(builder, arr.shape, ndim)
+
                 indices = cgutils.alloca_once(builder, zero.type,
                                               size=context.get_constant(types.intp,
                                                                         arrty.ndim))
@@ -682,6 +711,7 @@ def make_array_flat_cls(flatiterty):
                                                size=context.get_constant(types.intp,
                                                                          arrty.ndim))
                 strides = cgutils.unpack_tuple(builder, arr.strides, ndim)
+                empty = cgutils.alloca_once_value(builder, cgutils.false_byte)
 
                 # Initialize each dimension with the next index and pointer
                 # values.  For the last (inner) dimension, this is 0 and the
@@ -697,9 +727,17 @@ def make_array_flat_cls(flatiterty):
                         p = cgutils.pointer_add(builder, data, strides[dim])
                         builder.store(p, ptrptr)
                         builder.store(one, idxptr)
+                    # 0-sized dimensions really indicate an empty array,
+                    # but we have to catch that condition early to avoid
+                    # a bug inside the iteration logic (see issue #846).
+                    dim_size = shapes[dim]
+                    dim_is_empty = builder.icmp(lc.ICMP_EQ, dim_size, zero)
+                    with cgutils.if_unlikely(builder, dim_is_empty):
+                        builder.store(cgutils.true_byte, empty)
 
                 self.indices = indices
                 self.pointers = pointers
+                self.empty = empty
 
             def iternext_specific(self, context, builder, arrty, arr, result):
                 ndim = arrty.ndim
@@ -716,6 +754,12 @@ def make_array_flat_cls(flatiterty):
 
                 bbcont = cgutils.append_basic_block(builder, 'continued')
                 bbend = cgutils.append_basic_block(builder, 'end')
+
+                # Catch already computed iterator exhaustion
+                is_empty = cgutils.as_bool_bit(builder, builder.load(self.empty))
+                with cgutils.if_unlikely(builder, is_empty):
+                    result.set_valid(False)
+                    builder.branch(bbend)
 
                 # Current pointer inside last dimension
                 last_ptr = cgutils.alloca_once(builder, data.type)
