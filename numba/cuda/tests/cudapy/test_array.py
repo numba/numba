@@ -20,6 +20,15 @@ def copykernel(x, y):
 
 
 class TestCudaArray(unittest.TestCase):
+    def test_gpu_array_zero_length(self):
+        x = numpy.arange(0)
+        dx = cuda.to_device(x)
+        hx = dx.copy_to_host()
+        self.assertEqual(x.shape, dx.shape)
+        self.assertEqual(x.size, dx.size)
+        self.assertEqual(x.shape, hx.shape)
+        self.assertEqual(x.size, hx.size)
+
     def test_gpu_array_strided(self):
         x = numpy.arange(10, dtype=numpy.double)
         y = numpy.ndarray(shape=10 * 8, buffer=x, dtype=numpy.byte)

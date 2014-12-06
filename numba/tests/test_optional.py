@@ -1,9 +1,10 @@
 from __future__ import print_function, absolute_import
 import numpy
 import numba.unittest_support as unittest
-from numba.compiler import compile_isolated
+from numba.compiler import compile_isolated, Flags
 from numba import types, typeof, njit
 from numba.pythonapi import NativeError
+from numba import lowering
 
 def return_double_or_none(x):
     if x:
@@ -74,33 +75,39 @@ class TestOptional(unittest.TestCase):
         for v in [-1, 0, 1, 2]:
             self.assertEqual(pyfunc(v), cfunc(v))
 
+    def test_is_this_a_none_objmode(self):
+        pyfunc = is_this_a_none
+        flags = Flags()
+        flags.set('force_pyobject')
+        cres = compile_isolated(pyfunc, [types.intp], flags=flags)
+        cfunc = cres.entry_point
+        self.assertTrue(cres.objectmode)
+        for v in [-1, 0, 1, 2]:
+            self.assertEqual(pyfunc(v), cfunc(v))
+
     def test_a_is_b_intp(self):
         pyfunc = a_is_b
-        cres = compile_isolated(pyfunc, [types.intp, types.intp])
-        cfunc = cres.entry_point
-        self.assertFalse(cfunc(1, 1))
+        with self.assertRaises(lowering.LoweringError):
+            cres = compile_isolated(pyfunc, [types.intp, types.intp])
 
     def test_a_is_b_array(self):
         pyfunc = a_is_b
         ary = numpy.arange(2)
         aryty = typeof(ary)
-        cres = compile_isolated(pyfunc, [aryty, aryty])
-        cfunc = cres.entry_point
-        self.assertFalse(cfunc(ary, ary))
+        with self.assertRaises(lowering.LoweringError):
+            compile_isolated(pyfunc, [aryty, aryty])
 
     def test_a_is_not_b_intp(self):
         pyfunc = a_is_not_b
-        cres = compile_isolated(pyfunc, [types.intp, types.intp])
-        cfunc = cres.entry_point
-        self.assertTrue(cfunc(1, 1))
+        with self.assertRaises(lowering.LoweringError):
+            cres = compile_isolated(pyfunc, [types.intp, types.intp])
 
     def test_a_is_not_b_array(self):
         pyfunc = a_is_not_b
         ary = numpy.arange(2)
         aryty = typeof(ary)
-        cres = compile_isolated(pyfunc, [aryty, aryty])
-        cfunc = cres.entry_point
-        self.assertTrue(cfunc(ary, ary))
+        with self.assertRaises(lowering.LoweringError):
+            compile_isolated(pyfunc, [aryty, aryty])
 
     def test_optional_float(self):
         def pyfunc(x, y):

@@ -4,8 +4,8 @@ from __future__ import print_function, absolute_import, division
 import math
 from functools import reduce
 
-from llvm.core import Type, Constant
-import llvm.core as lc
+from llvmlite.llvmpy.core import Type, Constant
+import llvmlite.llvmpy.core as lc
 
 from .imputils import (builtin, builtin_attr, implement, impl_attribute,
                        iternext_impl, struct_factory)
@@ -483,13 +483,6 @@ builtin(implement('is not',
 
 builtin(implement('is not',
                   types.none, types.Kind(types.Optional))(optional_is_not_none))
-
-# Any is/not None
-builtin(implement('is',
-                  types.Any, types.Any)(optional.always_return_false_impl))
-
-builtin(implement('is not',
-                  types.Any, types.Any)(optional.always_return_true_impl))
 
 
 def real_add_impl(context, builder, sig, args):

@@ -1,9 +1,11 @@
 from __future__ import absolute_import, print_function
 import copy
 import ctypes
+
 from numba import compiler, types, errcode
 from numba.typing.templates import ConcreteTemplate
 from numba import typing, lowering, utils
+
 from .cudadrv.devices import get_context
 from .cudadrv import nvvm, devicearray, driver
 from .errors import KernelRuntimeError
@@ -20,6 +22,7 @@ def compile_cuda(pyfunc, return_type, args, debug):
     flags = compiler.Flags()
     # Do not compile (generate native code), just lower (to LLVM)
     flags.set('no_compile')
+    flags.set('no_cpython_wrapper')
     # Run compilation pipeline
     cres = compiler.compile_extra(typingctx=typingctx,
                                   targetctx=targetctx,
@@ -29,25 +32,23 @@ def compile_cuda(pyfunc, return_type, args, debug):
                                   flags=flags,
                                   locals={})
 
-    # Fix global naming
-    for gv in cres.llvm_module.global_variables:
-        if '.' in gv.name:
-            gv.name = gv.name.replace('.', '_')
+    library = cres.library
+    library.finalize()
 
     return cres
 
 
 def compile_kernel(pyfunc, args, link, debug=False):
     cres = compile_cuda(pyfunc, types.void, args, debug=debug)
-    kernel = cres.target_context.prepare_cuda_kernel(cres.llvm_func,
+    func = cres.library.get_function(cres.fndesc.llvm_func_name)
+    kernel = cres.target_context.prepare_cuda_kernel(func,
                                                      cres.signature.args)
-    cres = cres._replace(llvm_func=kernel)
-    cukern = CUDAKernel(llvm_module=cres.llvm_module,
-                        name=cres.llvm_func.name,
+    cukern = CUDAKernel(llvm_module=cres.library._final_module,
+                        name=kernel.name,
                         argtypes=cres.signature.args,
                         link=link,
                         debug=debug,
-                        exceptions=cres.target_context.exceptions)
+                        exceptions=cres.exception_map)
     return cukern
 
 
@@ -60,8 +61,7 @@ def compile_device(pyfunc, return_type, args, inline=True, debug=False):
         cases = [cres.signature]
 
     cres.typing_context.insert_user_function(devfn, device_function_template)
-    libs = [cres.llvm_module]
-    cres.target_context.insert_user_function(devfn, cres.fndesc, libs)
+    cres.target_context.insert_user_function(devfn, cres.fndesc, [cres.library])
     return devfn
 
 

@@ -9,7 +9,7 @@ from numba.typeconv.rules import default_type_manager
 from numba import sigutils, serialize, types, typing
 from numba.typing.templates import resolve_overload
 from numba.bytecode import get_code_object
-from numba.six import create_bound_method
+from numba.six import create_bound_method, next
 
 
 class _OverloadedBase(_dispatcher.Dispatcher):
@@ -304,6 +304,11 @@ class LiftedLoop(_OverloadedBase):
         self.locals = locals
         self.flags = flags
         self.bytecode = bytecode
+
+    def get_source_location(self):
+        """Return the starting line number of the loop.
+        """
+        return next(iter(self.bytecode)).lineno
 
     def compile(self, sig):
         with self._compile_lock():

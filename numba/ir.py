@@ -10,7 +10,14 @@ class RedefinedError(NameError):
 
 
 class NotDefinedError(NameError):
-    pass
+    def __init__(self, name, loc=None):
+        self.name = name
+        self.loc = loc
+
+    def __str__(self):
+        loc = "?" if self.loc is None else self.loc
+        return "{name!r} is not defined in {loc}".format(name=self.name,
+                                                         loc=self.loc)
 
 
 class VerificationError(Exception):

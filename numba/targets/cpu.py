@@ -2,25 +2,18 @@ from __future__ import print_function, absolute_import
 
 import sys
 
-import llvm.core as lc
-import llvm.passes as lp
-import llvm.ee as le
-from llvm.workaround import avx_support
+import llvmlite.llvmpy.core as lc
+import llvmlite.llvmpy.ee as le
+import llvmlite.binding as ll
 
-from numba import _dynfunc, _helperlib, config
+from numba import _dynfunc, config
 from numba.callwrapper import PyCallWrapper
 from .base import BaseContext, PYOBJECT
 from numba import utils, cgutils, types
 from numba.targets import (
-    intrinsics, cmathimpl, mathimpl, npyimpl, operatorimpl, printimpl)
+    codegen, externals, intrinsics, cmathimpl, mathimpl, npyimpl, operatorimpl, printimpl)
 from .options import TargetOptions
 
-
-def _add_missing_symbol(symbol, addr):
-    """Add missing symbol into LLVM internal symtab
-    """
-    if not le.dylib_address_of_symbol(symbol):
-        le.dylib_add_symbol(symbol, addr)
 
 # Keep those structures in sync with _dynfunc.c.
 
@@ -39,26 +32,24 @@ class CPUContext(BaseContext):
     """
     Changes BaseContext calling convention
     """
+    _data_layout = None
+
+    # Overrides
+    def create_module(self, name):
+        mod = lc.Module.new(name)
+        mod.triple = ll.get_default_triple()
+
+        if self._data_layout:
+            mod.data_layout = self._data_layout
+        return mod
 
     def init(self):
-        self.execmodule = lc.Module.new("numba.exec")
-        eb = le.EngineBuilder.new(self.execmodule).opt(3)
-        # Note: LLVM 3.3 always generates vmovsd (AVX instruction) for
-        # mem<->reg move.  The transition between AVX and SSE instruction
-        # without proper vzeroupper to reset is causing a serious performance
-        # penalty because the SSE register need to save/restore.
-        # For now, we will disable the AVX feature for all processor and hope
-        # that LLVM 3.5 will fix this issue.
-        eb.mattrs("-avx")
-        self.tm = tm = eb.select_target()
-        self.pm = self.build_pass_manager()
         self.native_funcs = utils.UniqueDict()
-        self.cmath_provider = {}
         self.is32bit = (utils.MACHINE_BITS == 32)
 
-        # map math functions
-        self.map_math_functions()
-        self.map_numpy_math_functions()
+        # Map external C functions.
+        externals.c_math_functions.install()
+        externals.c_numpy_functions.install()
 
         # Add target specific implementations
         self.insert_func_defn(cmathimpl.registry.functions)
@@ -67,8 +58,17 @@ class CPUContext(BaseContext):
         self.insert_func_defn(operatorimpl.registry.functions)
         self.insert_func_defn(printimpl.registry.functions)
 
-        # Engine creation has sideeffect to the process symbol table
-        self.engine = eb.create(tm)
+        self._internal_codegen = codegen.JITCPUCodegen("numba.exec")
+
+    @property
+    def target_data(self):
+        return self._internal_codegen.target_data
+
+    def aot_codegen(self, name):
+        return codegen.AOTCPUCodegen(name)
+
+    def jit_codegen(self):
+        return self._internal_codegen
 
     def get_function_type(self, fndesc):
         """
@@ -91,9 +91,32 @@ class CPUContext(BaseContext):
         Actual arguments starts at the 3rd argument position.
         Caller is responsible to allocate space for return value.
         """
+        return self.get_function_type2(fndesc.restype, fndesc.argtypes)
+
+    def get_function_type2(self, restype, argtypes):
+        """
+        Get the implemented Function type for the high-level *fndesc*.
+        Some parameters can be added or shuffled around.
+        This is kept in sync with call_function() and get_arguments().
+
+        Calling Convention
+        ------------------
+        (Same return value convention as BaseContext target.)
+        Returns: -2 for return none in native function;
+                 -1 for failure with python exception set;
+                  0 for success;
+                 >0 for user error code.
+        Return value is passed by reference as the first argument.
+
+        The 2nd argument is a _dynfunc.Environment object.
+        It MUST NOT be used if the function is in nopython mode.
+
+        Actual arguments starts at the 3rd argument position.
+        Caller is responsible to allocate space for return value.
+        """
         argtypes = [self.get_argument_type(aty)
-                    for aty in fndesc.argtypes]
-        resptr = self.get_return_type(fndesc.restype)
+                    for aty in argtypes]
+        resptr = self.get_return_type(restype)
         fnty = lc.Type.function(lc.Type.int(), [resptr, PYOBJECT] + argtypes)
         return fnty
 
@@ -102,7 +125,7 @@ class CPUContext(BaseContext):
         Override parent to handle get_env_argument
         """
         fnty = self.get_function_type(fndesc)
-        fn = module.get_or_insert_function(fnty, name=fndesc.mangled_name)
+        fn = module.get_or_insert_function(fnty, name=fndesc.llvm_func_name)
         assert fn.is_declaration
         for ak, av in zip(fndesc.args, self.get_arguments(fn)):
             av.name = "arg.%s" % ak
@@ -164,89 +187,9 @@ class CPUContext(BaseContext):
             builder, envptr, _dynfunc._impl_info['offset_env_body'])
         return EnvBody(self, builder, ref=body_ptr, cast_ref=True)
 
-    def build_pass_manager(self):
-        if 0 < config.OPT <= 3:
-            # This uses the same passes for clang -O3
-            pms = lp.build_pass_managers(tm=self.tm, opt=config.OPT,
-                                         loop_vectorize=config.LOOP_VECTORIZE,
-                                         fpm=False)
-            return pms.pm
-        else:
-            # This uses minimum amount of passes for fast code.
-            # TODO: make it generate vector code
-            tm = self.tm
-            pm = lp.PassManager.new()
-            pm.add(tm.target_data.clone())
-            pm.add(lp.TargetLibraryInfo.new(tm.triple))
-            # Re-enable for target infomation for vectorization
-            # tm.add_analysis_passes(pm)
-            passes = '''
-            basicaa
-            scev-aa
-            mem2reg
-            sroa
-            adce
-            dse
-            sccp
-            instcombine
-            simplifycfg
-            loops
-            indvars
-            loop-simplify
-            licm
-            simplifycfg
-            instcombine
-            loop-vectorize
-            instcombine
-            simplifycfg
-            globalopt
-            globaldce
-            '''.split()
-            for p in passes:
-                pm.add(lp.Pass.new(p))
-            return pm
-
-    def map_math_functions(self):
-        c_helpers = _helperlib.c_helpers
-        for name in ['cpow', 'sdiv', 'srem', 'udiv', 'urem']:
-            le.dylib_add_symbol("numba.math.%s" % name, c_helpers[name])
-
-        if sys.platform.startswith('win32') and self.is32bit:
-            # For Windows XP __ftol2 is not defined, we will just use
-            # __ftol as a replacement.
-            # On Windows 7, this is not necessary but will work anyway.
-            ftol = le.dylib_address_of_symbol('_ftol')
-            _add_missing_symbol("_ftol2", ftol)
-
-        elif sys.platform.startswith('linux') and self.is32bit:
-            _add_missing_symbol("__fixunsdfdi", c_helpers["fptoui"])
-            _add_missing_symbol("__fixunssfdi", c_helpers["fptouif"])
-
-        # Necessary for Python3
-        le.dylib_add_symbol("numba.round", c_helpers["round_even"])
-        le.dylib_add_symbol("numba.roundf", c_helpers["roundf_even"])
-
-        # List available C-math
-        for fname in intrinsics.INTR_MATH:
-            if le.dylib_address_of_symbol(fname):
-                # Exist
-                self.cmath_provider[fname] = 'builtin'
-            else:
-                # Non-exist
-                # Bind from C code
-                le.dylib_add_symbol(fname, c_helpers[fname])
-                self.cmath_provider[fname] = 'indirect'
-
-    def map_numpy_math_functions(self):
-        # add the symbols for numpy math to the execution environment.
-        import numba._npymath_exports as npymath
-
-        for sym in npymath.symbols:
-            le.dylib_add_symbol(*sym)
-
     def dynamic_map_function(self, func):
         name, ptr = self.native_funcs[func]
-        le.dylib_add_symbol(name, ptr)
+        ll.add_symbol(name, ptr)
 
     def remove_native_function(self, func):
         """
@@ -257,32 +200,30 @@ class CPUContext(BaseContext):
         # If the symbol wasn't redefined, NULL it out.
         # (otherwise, it means the corresponding Python function was
         #  re-compiled, and the new target is still alive)
-        if le.dylib_address_of_symbol(name) == ptr:
-            le.dylib_add_symbol(name, 0)
+        if ll.address_of_symbol(name) == ptr:
+            ll.add_symbol(name, 0)
 
-    def optimize(self, module):
-        self.pm.run(module)
+    def post_lowering(self, func):
+        mod = func.module
 
-    def finalize(self, func, fndesc):
-        """Finalize the compilation.  Called by get_executable().
-
-        - Rewrite intrinsics
-        - Fix div & rem instructions on 32bit platform
-        - Optimize python API calls
-        """
-        func.module.target = self.tm.triple
+        if (sys.platform.startswith('linux') or
+                sys.platform.startswith('win32')):
+            intrinsics.fix_powi_calls(mod)
 
         if self.is32bit:
-            dmf = intrinsics.DivmodFixer()
-            dmf.run(func.module)
+            # 32-bit machine needs to replace all 64-bit div/rem to avoid
+            # calls to compiler-rt
+            intrinsics.fix_divmod(mod)
 
-        im = intrinsics.IntrinsicMapping(self)
-        im.run(func.module)
+    def create_cpython_wrapper(self, library, fndesc, exceptions):
+        wrapper_module = self.create_module("wrapper")
+        fnty = self.get_function_type(fndesc)
+        wrapper_callee = wrapper_module.add_function(fnty, fndesc.llvm_func_name)
+        PyCallWrapper(self, wrapper_module, wrapper_callee,
+                      fndesc, exceptions=exceptions).build()
+        library.add_ir_module(wrapper_module)
 
-        if not fndesc.native:
-            self.optimize_pythonapi(func)
-
-    def get_executable(self, func, fndesc, env):
+    def get_executable(self, library, fndesc, env):
         """
         Returns
         -------
@@ -295,63 +236,29 @@ class CPUContext(BaseContext):
         - env
             an execution environment (from _dynfunc)
         """
-        self.finalize(func, fndesc)
-        cfunc = self.prepare_for_call(func, fndesc, env)
-        return cfunc
+        func = library.get_function(fndesc.llvm_func_name)
+        wrapper = library.get_function(fndesc.llvm_cpython_wrapper_name)
 
-    def prepare_for_call(self, func, fndesc, env):
-        wrapper, api = PyCallWrapper(self, func.module, func, fndesc,
-                                     exceptions=self.exceptions).build()
-        self.optimize(func.module)
+        # Code generation
+        baseptr = library.get_pointer_to_function(func.name)
+        fnptr = library.get_pointer_to_function(wrapper.name)
 
-        if config.DUMP_OPTIMIZED:
-            print(("OPTIMIZED DUMP %s" % fndesc).center(80, '-'))
-            print(func.module)
-            print('=' * 80)
-
-        if config.DUMP_ASSEMBLY:
-            print(("ASSEMBLY %s" % fndesc).center(80, '-'))
-            print(self.tm.emit_assembly(func.module))
-            print('=' * 80)
-
-        # Code gen
-        self.engine.add_module(func.module)
-        baseptr = self.engine.get_pointer_to_function(func)
-        fnptr = self.engine.get_pointer_to_function(wrapper)
         cfunc = _dynfunc.make_function(fndesc.lookup_module(),
                                        fndesc.qualname.split('.')[-1],
                                        fndesc.doc, fnptr, env)
 
         if fndesc.native:
-            self.native_funcs[cfunc] = fndesc.mangled_name, baseptr
+            self.native_funcs[cfunc] = fndesc.llvm_func_name, baseptr
 
         return cfunc
 
-    def optimize_pythonapi(self, func):
-        # Simplify the function using
-        pms = lp.build_pass_managers(tm=self.tm, opt=1,
-                                     mod=func.module)
-        fpm = pms.fpm
+    def calc_array_sizeof(self, ndim):
+        '''
+        Calculate the size of an array struct on the CPU target
+        '''
+        aryty = types.Array(types.int32, ndim, 'A')
+        return self.get_abi_sizeof(self.get_value_type(aryty))
 
-        fpm.initialize()
-        fpm.run(func)
-        fpm.finalize()
-
-        # remove extra refct api calls
-        remove_refct_calls(func)
-
-    def get_abi_sizeof(self, lty):
-        return self.engine.target_data.abi_size(lty)
-
-    def optimize_function(self, func):
-        """Run O1 function passes
-        """
-        pms = lp.build_pass_managers(tm=self.tm, opt=1, pm=False,
-                                     mod=func.module)
-        fpm = pms.fpm
-        fpm.initialize()
-        fpm.run(func)
-        fpm.finalize()
 
 # ----------------------------------------------------------------------------
 # TargetOptions
@@ -382,13 +289,16 @@ def remove_null_refct_call(bb):
     """
     Remove refct api calls to NULL pointer
     """
-    for inst in bb.instructions:
-        if isinstance(inst, lc.CallOrInvokeInstruction):
-            fname = inst.called_function.name
-            if fname == "Py_IncRef" or fname == "Py_DecRef":
-                arg = inst.operands[0]
-                if isinstance(arg, lc.ConstantPointerNull):
-                    inst.erase_from_parent()
+    pass
+    ## Skipped for now
+    # for inst in bb.instructions:
+    #     if isinstance(inst, lc.CallOrInvokeInstruction):
+    #         fname = inst.called_function.name
+    #         if fname == "Py_IncRef" or fname == "Py_DecRef":
+    #             arg = inst.args[0]
+    #             print(type(arg))
+    #             if isinstance(arg, lc.ConstantPointerNull):
+    #                 inst.erase_from_parent()
 
 
 def remove_refct_pairs(bb):

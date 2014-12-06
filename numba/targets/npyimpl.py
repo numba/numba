@@ -6,7 +6,7 @@ import sys
 import itertools
 from collections import namedtuple
 
-from llvm  import core as lc
+from llvmlite.llvmpy import core as lc
 
 from . import builtins, ufunc_db
 from .imputils import implement, Registry
@@ -144,7 +144,7 @@ class _ArrayHelper(namedtuple('_ArrayHelper', ('context', 'builder', 'ary',
     def store_data(self, indices, value):
         ctx = self.context
         bld = self.builder
-        
+
         # maybe there should be a "get_memory_value" or "get_storage_value"
         store_value = ctx.get_struct_member_value(bld, self.base_type, value)
         assert ctx.get_data_type(self.base_type) == store_value.type
@@ -225,7 +225,7 @@ class _Kernel(object):
         """Numpy uses cast semantics that are different from standard Python
         (for example, it does allow casting from complex to float).
 
-        This method acts as a patch to context.cast so that it allows 
+        This method acts as a patch to context.cast so that it allows
         complex to real/int casts.
 
         """

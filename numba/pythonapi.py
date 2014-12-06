@@ -1,8 +1,8 @@
 from __future__ import print_function, division, absolute_import
-from llvm.core import Type, Constant
-import llvm.core as lc
-import llvm.ee as le
-from llvm import LLVMException
+
+import llvmlite.binding as ll
+from llvmlite.llvmpy.core import Type, Constant, LLVMException
+import llvmlite.llvmpy.core as lc
 
 from numba.config import PYVERSION
 import numba.ctypes_support as ctypes
@@ -21,20 +21,20 @@ def fix_python_api():
     Execute once to install special symbols into the LLVM symbol table
     """
 
-    le.dylib_add_symbol("Py_None", ctypes.addressof(_PyNone))
-    le.dylib_add_symbol("numba_native_error", id(NativeError))
+    ll.add_symbol("Py_None", ctypes.addressof(_PyNone))
+    ll.add_symbol("numba_native_error", id(NativeError))
 
     # Add C helper functions
     c_helpers = _helperlib.c_helpers
     for py_name in c_helpers:
         c_name = "numba_" + py_name
         c_address = c_helpers[py_name]
-        le.dylib_add_symbol(c_name, c_address)
+        ll.add_symbol(c_name, c_address)
 
     # Add all built-in exception classes
     for obj in utils.builtins.__dict__.values():
         if isinstance(obj, type) and issubclass(obj, BaseException):
-            le.dylib_add_symbol("PyExc_%s" % (obj.__name__), id(obj))
+            ll.add_symbol("PyExc_%s" % (obj.__name__), id(obj))
 
 
 class PythonAPI(object):
@@ -562,12 +562,21 @@ class PythonAPI(object):
         of the opid.
         """
         ops = ['<', '<=', '==', '!=', '>', '>=']
-        opid = ops.index(opstr)
-        assert 0 <= opid < len(ops)
-        fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj, Type.int()])
-        fn = self._get_function(fnty, name="PyObject_RichCompare")
-        lopid = self.context.get_constant(types.int32, opid)
-        return self.builder.call(fn, (lhs, rhs, lopid))
+        if opstr in ops:
+            opid = ops.index(opstr)
+            fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj, Type.int()])
+            fn = self._get_function(fnty, name="PyObject_RichCompare")
+            lopid = self.context.get_constant(types.int32, opid)
+            return self.builder.call(fn, (lhs, rhs, lopid))
+        elif opstr == 'is':
+            bitflag = self.builder.icmp(lc.ICMP_EQ, lhs, rhs)
+            return self.from_native_value(bitflag, types.boolean)
+        elif opstr == 'is not':
+            bitflag = self.builder.icmp(lc.ICMP_NE, lhs, rhs)
+            return self.from_native_value(bitflag, types.boolean)
+        else:
+            raise NotImplementedError("Unknown operator {op!r}".format(
+                op=opstr))
 
     def iter_next(self, iterobj):
         fnty = Type.function(self.pyobj, [self.pyobj])
