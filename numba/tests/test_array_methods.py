@@ -304,7 +304,7 @@ for dt in dtypes_to_test:
 
         def new_test_function(self, redFunc=red_func, testArray=test_array, testName=test_name):
             npr, nbr = run_comparative(redFunc, testArray)
-            self.assertPreciseEqual(npr, nbr, msg=test_name)
+            self.assertPreciseEqual(npr, nbr, msg=test_name, prec="single")
 
         # Install it into the class
         setattr(TestArrayMethods, test_name, new_test_function)
