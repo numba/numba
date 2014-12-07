@@ -179,7 +179,7 @@ class TestCase(unittest.TestCase):
         if firstTp == secondTp == "exact":
             exact_comparison = True
 
-        if firstTp == secondTp == "inexact":
+        if firstTp == secondTp == "approximate":
             exact_comparison = False
 
         if firstTp == secondTp == "unknown":
