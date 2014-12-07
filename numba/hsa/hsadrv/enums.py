@@ -7,8 +7,6 @@ enums, in order to match the documentation.
 
 import ctypes
 
-# HSA_LARGE_MODEL should be True for 64 bit platforms (make sure of this!)
-# Maybe there would be a better test?
 HSA_LARGE_MODEL = ctypes.sizeof(ctypes.c_void_p) == 8
 
 # hsa_status_t
@@ -33,30 +31,66 @@ HSA_EXT_STATUS_ERROR_DIRECTIVE_MISMATCH       = 0x14000
 HSA_EXT_STATUS_ERROR_IMAGE_FORMAT_UNSUPPORTED = 0x14001
 HSA_EXT_STATUS_ERROR_IMAGE_SIZE_UNSUPPORTED   = 0x14002
 
+# hsa_packet_type_t
+HSA_PACKET_TYPE_ALWAYS_RESERVED               = 0
+HSA_PACKET_TYPE_INVALID                       = 1
+HSA_PACKET_TYPE_DISPATCH                      = 2
+HSA_PACKET_TYPE_BARRIER                       = 3
+HSA_PACKET_TYPE_AGENT_DISPATCH                = 4
+
+# hsa_queue_type_t
+HSA_QUEUE_TYPE_MULTI                          = 0
+HSA_QUEUE_TYPE_SINGLE                         = 1
+
+# hsa_queue_feature_t
+HSA_QUEUE_FEATURE_DISPATCH                    = 1
+HSA_QUEUE_FEATURE_AGENT_DISPATCH              = 2
+
+# hsa_fence_scope_t
+HSA_FENCE_SCOPE_NONE                          = 0
+HSA_FENCE_SCOPE_COMPONENT                     = 1
+HSA_FENCE_SCOPE_SYSTEM                        = 2
+
+# hsa_wait_expectancy_t
+HSA_WAIT_EXPECTANCY_SHORT                     = 0
+HSA_WAIT_EXPECTANCY_LONG                      = 1
+HSA_WAIT_EXPECTANCY_UNKNOWN                   = 2
+
+# hsa_signal_condition_t
+HSA_EQ                                        = 0
+HSA_NE                                        = 1
+HSA_LT                                        = 2
+HSA_GTE                                       = 3
+
+# hsa_dim_t
+HSA_DIM_X                                     = 0
+HSA_DIM_Y                                     = 1
+HSA_DIM_Z                                     = 2
+
+# hsa_extension_t
+HSA_EXT_START                                 = 0
+HSA_EXT_FINALIZER                             = HSA_EXT_START
+HSA_EXT_LINKER                                = 1
+HSA_EXT_IMAGES                                = 2
+HSA_SVEXT_START                               = 10000
+
+# hsa_agent_feature_t
+HSA_AGENT_FEATURE_DISPATCH                    = 1
+HSA_AGENT_FEATURE_AGENT_DISPATCH              = 2
+
+# hsa_device_type_t
+HSA_DEVICE_TYPE_CPU                           = 0
+HSA_DEVICE_TYPE_GPU                           = 1
+HSA_DEVICE_TYPE_DSP                           = 2
+
 # hsa_system_info_t
 HSA_SYSTEM_INFO_VERSION_MAJOR                 = 0
 HSA_SYSTEM_INFO_VERSION_MINOR                 = 1
 HSA_SYSTEM_INFO_TIMESTAMP                     = 2
 HSA_SYSTEM_INFO_TIMESTAMP_FREQUENCY           = 3
 HSA_SYSTEM_INFO_SIGNAL_MAX_WAIT               = 4
-                                               
-# hsa_agent_feature_t                          
-HSA_AGENT_FEATURE_DISPATCH                    = 1
-HSA_AGENT_FEATURE_AGENT_DISPATCH              = 2
-                                               
-# hsa_device_type_t                            
-HSA_DEVICE_TYPE_CPU                           = 0
-HSA_DEVICE_TYPE_GPU                           = 1
-HSA_DEVICE_TYPE_DSP                           = 2
-                                               
-# hsa_system_info_t                            
-HSA_SYSTEM_INFO_VERSION_MAJOR                 = 0
-HSA_SYSTEM_INFO_VERSION_MINOR                 = 1
-HSA_SYSTEM_INFO_TIMESTAMP                     = 2
-HSA_SYSTEM_INFO_TIMESTAMP_FREQUENCY           = 3
-HSA_SYSTEM_INFO_SIGNAL_MAX_WAIT               = 4
-                                               
-# hsa_agent_info_t                             
+
+# hsa_agent_info_t
 HSA_AGENT_INFO_NAME                           = 0
 HSA_AGENT_INFO_VENDOR_NAME                    = 1
 HSA_AGENT_INFO_FEATURE                        = 2
@@ -80,9 +114,72 @@ HSA_EXT_AGENT_INFO_IMAGE_RD_MAX               = 19
 HSA_EXT_AGENT_INFO_IMAGE_RDWR_MAX             = 20
 HSA_EXT_AGENT_INFO_SAMPLER_MAX                = 21
 
-# hsa_queue_type_t
-HSA_QUEUE_TYPE_MULTI                          = 0
-HSA_QUEUE_TYPE_SINGLE                         = 1
+# hsa_segment_t
+HSA_SEGMENT_GLOBAL                            = 0
+HSA_SEGMENT_PRIVATE                           = 1
+HSA_SEGMENT_GROUP                             = 2
+HSA_SEGMENT_KERNARG                           = 3
+HSA_SEGMENT_READONLY                          = 4
+HSA_SEGMENT_SPILL                             = 5
+HSA_SEGMENT_ARG                               = 6
+
+# hsa_region_flag_t
+HSA_REGION_FLAG_KERNARG                       = 1
+HSA_REGION_FLAG_CACHED_L1                     = 2
+HSA_REGION_FLAG_CACHED_L2                     = 4
+HSA_REGION_FLAG_CACHED_L3                     = 8
+HSA_REGION_FLAG_CACHED_L4                     = 16
+
+# hsa_region_info_t
+HSA_REGION_INFO_BASE                          = 0
+HSA_REGION_INFO_SIZE                          = 1
+HSA_REGION_INFO_AGENT                         = 2
+HSA_REGION_INFO_FLAGS                         = 3
+HSA_REGION_INFO_SEGMENTS                      = 4
+HSA_REGION_INFO_ALLOC_MAX_SIZE                = 5
+HSA_REGION_INFO_ALLOC_GRANULE                 = 6
+HSA_REGION_INFO_ALLOC_ALIGNMENT               = 7
+HSA_REGION_INFO_BANDWIDTH                     = 8
+HSA_REGION_INFO_NODE                          = 9
+HSA_REGION_INFO_COUNT                         = 10
+
+# hsa_powertwo_t
+HSA_POWERTWO_1                                = 0
+HSA_POWERTWO_2                                = 1
+HSA_POWERTWO_4                                = 2
+HSA_POWERTWO_8                                = 3
+HSA_POWERTWO_16                               = 4
+HSA_POWERTWO_32                               = 5
+HSA_POWERTWO_64                               = 6
+HSA_POWERTWO_128                              = 7
+HSA_POWERTWO_256                              = 8
+
+
+# hsa_system_info_t
+HSA_SYSTEM_INFO_VERSION_MAJOR                 = 0
+HSA_SYSTEM_INFO_VERSION_MINOR                 = 1
+HSA_SYSTEM_INFO_TIMESTAMP                     = 2
+HSA_SYSTEM_INFO_TIMESTAMP_FREQUENCY           = 3
+HSA_SYSTEM_INFO_SIGNAL_MAX_WAIT               = 4
+
+# hsa_ext_exception_kind_t
+HSA_EXT_EXCEPTION_INVALID_OPERATION           = 1
+HSA_EXT_EXCEPTION_DIVIDE_BY_ZERO              = 2
+HSA_EXT_EXCEPTION_OVERFLOW                    = 4
+HSA_EXT_EXCEPTION_UNDERFLOW                   = 8
+HSA_EXT_EXCEPTION_INEXACT                     = 16
+
+# hsa_ext_control_directive_present_t
+HSA_EXT_CONTROL_DIRECTIVE_ENABLE_BREAK_EXCEPTIONS       = 0
+HSA_EXT_CONTROL_DIRECTIVE_ENABLE_DETECT_EXCEPTIONS      = 1
+HSA_EXT_CONTROL_DIRECTIVE_MAX_DYNAMIC_GROUP_SIZE        = 2
+HSA_EXT_CONTROL_DIRECTIVE_MAX_FLAT_GRID_SIZE            = 4
+HSA_EXT_CONTROL_DIRECTIVE_MAX_FLOAT_WORKGROUP_SIZE      = 8
+HSA_EXT_CONTROL_DIRECTIVE_REQUESTED_WORKGROUPS_PER_CU   = 16
+HSA_EXT_CONTROL_DIRECTIVE_REQUIRED_GRID_SIZE            = 32
+HSA_EXT_CONTROL_DIRECTIVE_REQUIRED_WORKGROUP_SIZE       = 64
+HSA_EXT_CONTROL_DIRECTIVE_REQUIRED_DIM                  = 128
+HSA_EXT_CONTROL_DIRECTIVE_REQUIRE_NO_PARTIAL_WORKGROUPS = 256
 
 # hsa_ext_brig_profile_t
 HSA_EXT_BRIG_PROFILE_BASE                     = 0
@@ -91,3 +188,20 @@ HSA_EXT_BRIG_PROFILE_FULL                     = 1
 # hsa_ext_brig_machine_model_t
 HSA_EXT_BRIG_MACHINE_SMALL                    = 0
 HSA_EXT_BRIG_MACHINE_LARGE                    = 1
+
+# hsa_ext_brig_section_id_t
+HSA_EXT_BRIG_SECTION_DATA                     = 0
+HSA_EXT_BRIG_SECTION_CODE                     = 1
+HSA_EXT_BRIG_SECTION_OPERAND                  = 2
+
+# hsa_ext_code_kind_t
+HSA_EXT_CODE_NONE                             = 0
+HSA_EXT_CODE_KERNEL                           = 1
+HSA_EXT_CODE_INDIRECT_FUNCTION                = 2
+HSA_EXT_CODE_RUNTIME_FIRST                    = 0x40000000
+HSA_EXT_CODE_RUNTIME_LAST                     = 0x7fffffff
+HSA_EXT_CODE_VENDOR_FIRST                     = 0x80000000
+HSA_EXT_CODE_VENDOR_LAST                      = 0xffffffff
+
+# hsa_ext_program_call_convention_id_t
+HSA_EXT_PROGRAM_CALL_CONVENTION_FINALIZER_DETERMINED = -1
