@@ -99,7 +99,7 @@ class TestCase(unittest.TestCase):
         """
         This function returns a string description of the type family
         that the object in question belongs to.  Possible return values
-        are: "exact", "approximate", "sequence", and "unknown"
+        are: "exact", "complex", "approximate", "sequence", and "unknown"
         """
 
         for tp in self._sequence_typesets:
@@ -109,6 +109,10 @@ class TestCase(unittest.TestCase):
         for tp in self._exact_typesets:
             if isinstance(numericObject, tp):
                 return "exact"
+
+        for tp in self._complex_typesets:
+            if isinstance(numericObject, tp):
+                return "complex"
 
         for tp in self._approx_typesets:
             if isinstance(numericObject, tp):
@@ -169,20 +173,23 @@ class TestCase(unittest.TestCase):
         assertionMessage = "Type Family mismatch. (%s != %s)" % (firstTp, secondTp)
         self.assertEqual(firstTp, secondTp, msg=assertionMessage)
 
+        # We now know they are in the same comparison family
+        compareFamily = firstTp
+
         # For recognized sequences, recurse
-        if firstTp == secondTp == "sequence":
+        if compareFamily == "sequence":
             self.assertEqual(len(first), len(second), msg=msg)
             for a, b in zip(first, second):
                 self._assertPreciseEqual(a, b, prec, ulps, msg)
             return
 
-        if firstTp == secondTp == "exact":
+        if compareFamily == "exact":
             exact_comparison = True
 
-        if firstTp == secondTp == "approximate":
+        if compareFamily in ["complex", "approximate"]:
             exact_comparison = False
 
-        if firstTp == secondTp == "unknown":
+        if compareFamily == "unknown":
             # Assume these are non-numeric types: we will fall back
             # on regular unittest comparison.
             self.assertIs(first.__class__, second.__class__)
@@ -201,7 +208,6 @@ class TestCase(unittest.TestCase):
             # Not floats.
             pass
 
-        print(firstTp, secondTp)
         exact_comparison = exact_comparison or prec == 'exact'
 
         if not exact_comparison and prec != 'exact':
