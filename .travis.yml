@@ -11,6 +11,7 @@ branches:
   only:
     - master
     - llvmlite2
+    - testme
 
 before_install:
   # Install Miniconda
