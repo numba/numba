@@ -110,7 +110,7 @@ class TestCase(unittest.TestCase):
             if isinstance(numericObject, tp):
                 return "exact"
 
-        for tp in self._complex_typesets:
+        for tp in self._complex_types:
             if isinstance(numericObject, tp):
                 return "complex"
 
