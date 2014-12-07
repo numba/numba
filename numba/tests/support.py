@@ -201,6 +201,7 @@ class TestCase(unittest.TestCase):
             # Not floats.
             pass
 
+        print(firstTp, secondTp)
         exact_comparison = exact_comparison or prec == 'exact'
 
         if not exact_comparison and prec != 'exact':
