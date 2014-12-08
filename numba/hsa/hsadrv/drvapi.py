@@ -92,7 +92,7 @@ class hsa_barrier_packet_t(ctypes.Structure):
         ('header', hsa_packet_header_t),
         ('reserved2', ctypes.c_uint16),
         ('reserved3', ctypes.c_uint32),
-        ('dep_signal', hsa_signal * 5),
+        ('dep_signal', hsa_signal_t * 5),
         ('reserved4', ctypes.c_uint64)
         ('completion_signal', hsa_signal_t),
     ]
