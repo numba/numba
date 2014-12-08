@@ -19,7 +19,7 @@ def _load_elf_utils_syms():
     PTR = ctypes.POINTER
 
     create = lib.create_brig_module_from_brig_file
-    create.restype = drvapi.status_t
+    create.restype = drvapi.hsa_status_t
     create.argtypes = [ctypes.c_char_p, PTR(PTR(drvapi.hsa_ext_brig_module_t))]
     destroy = lib.destroy_brig_module
     destroy.restype = None
