@@ -191,7 +191,7 @@ class hsa_ext_code_descriptor_t(ctypes.Structure):
         ('group_segment_alignment', hsa_powertwo8_t),
         ('private_segment_alignment', hsa_powertwo8_t),
         ('wavefront_size', hsa_powertwo8_t),
-        ('program_call_convention', hsa_ext_program_call_convention_t),
+        ('program_call_convention', hsa_ext_program_call_convention_id32_t),
         ('module', hsa_ext_brig_module_handle_t),
         ('symbol', hsa_ext_brig_code_section_offset32_t),
         ('hsail_profile', hsa_ext_brig_profile8_t),
