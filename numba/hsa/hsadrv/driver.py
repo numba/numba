@@ -487,8 +487,6 @@ class CodeUnit(object):
         hsa.hsa_ext_code_unit_destroy(self,_id)
 
 
-
-
 class BrigModule(object):
     def __init__(self, brig_module_id):
         self._id = brig_module_id
@@ -499,6 +497,7 @@ class BrigModule(object):
     @classmethod
     def from_file(cls, file_name):
         result = ctypes.POINTER(drvapi.hsa_ext_brig_module_t)()
-        _check_error(elf_utils.create_brig_module_from_brig_file(
-            file_name, ctypes.byref(result)))
+        _check_error('create_brig_module_from_brig_file',
+                     elf_utils.create_brig_module_from_brig_file(
+                         file_name, ctypes.byref(result)))
         return BrigModule(result)
