@@ -7,7 +7,8 @@ import numpy as np
 from numba.hsa.hsadrv.driver import hsa, BrigModule
 
 
-if __name__=='__main__':
+
+def main():
     WIDTH = 4
     HEIGHT = 4
     # note that hsa library is automaticaaly initialized on first use
@@ -39,6 +40,7 @@ if __name__=='__main__':
 
     s = hsa.create_signal(1)
 
-    del(brig_module)
 
 
+if __name__=='__main__':
+    main()
