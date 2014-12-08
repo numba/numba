@@ -316,7 +316,8 @@ class JITCPUCodegen(BaseCPUCodegen):
         # There are various performance issues with AVX and LLVM 3.5
         # (list at http://llvm.org/bugs/buglist.cgi?quicksearch=avx).
         # For now we'd rather disable it, since it can pessimize the code.
-        features.append('-avx')
+        if not config.ENABLE_AVX:
+            features.append('-avx')
 
         # Set feature attributes
         options['features'] = ','.join(features)
