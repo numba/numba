@@ -1134,7 +1134,7 @@ API_PROTOTYPES = {
         hsa_ext_program_handle_t,
         hsa_agent_t,
         hsa_ext_brig_module_handle_t,
-        hsa_brig_code_section_offset32_t,
+        hsa_ext_brig_code_section_offset32_t,
         _PTR(ctypes.c_void_p)),
 
     # hsa_status_t HSA_API hsa_ext_define_readonly_variable_address(
