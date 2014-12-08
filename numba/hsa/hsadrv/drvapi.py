@@ -571,7 +571,7 @@ API_PROTOTYPES = {
     #     hsa_signal_value_t compare_value,
     #     uint64_t timeout_hint,
     #     hsa_wait_expectancy_t wait_expectancy_hint);
-    'hsa_signal_wait_relaxed', (
+    'hsa_signal_wait_relaxed': (
         hsa_signal_value_t,
         hsa_signal_t,
         hsa_signal_condition_t,
@@ -585,7 +585,7 @@ API_PROTOTYPES = {
     #     hsa_signal_value_t compare_value,
     #     uint64_t timeout_hint,
     #     hsa_wait_expectancy_t wait_expectancy_hint);
-    'hsa_signal_wait_acquire', (
+    'hsa_signal_wait_acquire': (
         hsa_signal_value_t,
         hsa_signal_t,
         hsa_signal_condition_t,
