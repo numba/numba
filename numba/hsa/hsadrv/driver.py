@@ -170,7 +170,6 @@ class Driver(object):
         try:
             if config.DISABLE_HSA:
                 raise HsaSupportError("HSA disabled by user")
-            print('initializing HSA driver')
             self.lib = _find_driver()
             self.is_initialized = False
             self.initialization_error = None
@@ -183,7 +182,6 @@ class Driver(object):
 
     def __del__(self):
         if self.is_initialized and self_initialization_error is None:
-            print('shutting down HSA driver')
             self.hsa_shut_down()
 
 
@@ -454,12 +452,10 @@ class Queue(object):
         """The id in a queue is a pointer to the queue object returned by hsa_queue_create.
         The Queue object has ownership on that queue object"""
         self._id = queue_ptr
-        print('initializing queue with id ', self._id)
 
 
     def __del__(self):
-        print('destroying queue with id ', self._id)
-        # hsa.hsa_queue_destroy(self._id)
+        hsa.hsa_queue_destroy(self._id)
         pass
 
     def __getattr__(self, fname):
@@ -476,22 +472,17 @@ class Signal(object):
     Lifetime of the underlying signal will be tied with this object".
     Note that it is likely signals will have lifetime issues."""
     def __init__(self, signal_id):
-        print('initializing signal with id ', signal_id)
         self._id = signal_id
 
     def __del__(self):
-        print('destroying signal with id ', self._id)
-        # hsa.hsa_signal_destroy(self._id)
-        pass
+        hsa.hsa_signal_destroy(self._id)
 
 
 class BrigModule(object):
     def __init__(self, brig_module_id):
         self._id = brig_module_id
-        print('initializing brig module with id ', brig_module_id)
 
     def __del__(self):
-        print('destroying brig module with id ', self._id)
         elf_utils.destroy_brig_module(self._id)
 
     @classmethod
