@@ -237,6 +237,16 @@ class Driver(object):
         self._initialize_agents()
         return self._agent_map.values()
 
+    def create_program(self, device_list,
+                       model=enums.HSA_EXT_BRIG_MACHINE_LARGE,
+                       profile=enums.HSA_EXT_BRIG_PROFILE_FULL):
+        device_list_len = len(device_list)
+        device_list_type = drvapi.hsa_agent_t * device_list_len
+        devices = device_list_type(*[d._id for d in device_list])
+        program = drvapi.hsa_ext_program_handle_t()
+        self.hsa_ext_program_create(devices, device_list_len, model, profile, ctypes.byref(result))
+        return Program(program.value)
+
     def create_signal(self, initial_value, consumers=None):
         if consumers is not None:
             consumers_len = len(consumers)
@@ -247,7 +257,7 @@ class Driver(object):
 
         result = drvapi.hsa_signal_t()
         self.hsa_signal_create(initial_value, consumers_len, consumers, ctypes.byref(result))
-        return Signal(result)
+        return Signal(result.value)
 
     def load_code_unit(self, code_binary, agents=None):
         # not sure of the purpose of caller... 
@@ -492,3 +502,26 @@ class BrigModule(object):
                      elf_utils.create_brig_module_from_brig_file(
                          file_name, ctypes.byref(result)))
         return BrigModule(result.contents)
+
+
+class Program(object):
+    def __init__(self, program_id):
+        self._id = program_id
+
+    def __del__(self):
+        hsa.hsa_ext_program_destroy(self._id)
+
+    def add_module(self, module):
+        result = drvapi.hsa_ext_brig_module_handle_t()
+        hsa.hsa_ext_add_module(self._id, module._id, ctypes.byref(result))
+        return BrigModuleHandle(result.value)
+
+
+class BrigModuleHandle(object):
+    def __init__(self, module_handle_id):
+        self._id = module_handle_id
+
+    def __del__(self):
+        # this handle seems to be owned by the program, probably valid within that
+        # program...
+        pass
