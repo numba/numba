@@ -317,10 +317,6 @@ class JITCPUCodegen(BaseCPUCodegen):
         # (list at http://llvm.org/bugs/buglist.cgi?quicksearch=avx).
         # For now we'd rather disable it, since it can pessimize the code.
         features.append('-avx')
-        if config.X86_SSE and _is_x86(self._llvm_module.triple):
-            # If this is x86, make sure SSE is enabled
-            features.append('+sse')
-            features.append('+sse2')
 
         # Set feature attributes
         options['features'] = ','.join(features)
