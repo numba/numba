@@ -39,4 +39,6 @@ if __name__=='__main__':
 
     s = hsa.create_signal(1)
 
+    del(brig_module)
+
 
