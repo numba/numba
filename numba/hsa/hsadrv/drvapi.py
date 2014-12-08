@@ -285,7 +285,7 @@ HSA_QUEUE_CALLBACK_FUNC = ctypes.CFUNCTYPE(
     hsa_status_t, # return value
     _PTR(hsa_queue_t))
 
-HSA_AGENT_ITERATE_REGIONES_CALLBACK_FUNC = ctypes.CFUNCTYPE(
+HSA_AGENT_ITERATE_REGIONS_CALLBACK_FUNC = ctypes.CFUNCTYPE(
     hsa_status_t, # return value
     hsa_region_t, # region
     ctypes.py_object) # this is a c_void_p used to wrap a python object
