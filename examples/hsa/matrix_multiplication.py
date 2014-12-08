@@ -4,7 +4,7 @@ Sample low-level HSA runtime example.
 from __future__ import print_function, division
 
 import numpy as np
-from numba.hsa.hsadrv.driver import hsa
+from numba.hsa.hsadrv.driver import hsa, BrigModule
 
 
 if __name__=='__main__':
@@ -28,7 +28,7 @@ if __name__=='__main__':
     print("input matrix B:\n", b)
 
     # load Brig
-    brig_module = hsa.BrigModule.from_file('vector_copy.brig')
+    brig_module = BrigModule.from_file('vector_copy.brig')
     print ("Module created: ", brig_module)
 
     #program = hsa.create_program([gpu])
