@@ -528,7 +528,7 @@ API_PROTOTYPES = {
     # hsa_status_t hsa_signal_create(
     #     hsa_signal_value_t initial_value,
     #     uint32_t agent_count,
-    #     const has_agent_t *agents,
+    #     const hsa_agent_t *agents,
     #     hsa_signal_t *signal)
     'hsa_signal_create': (hsa_status_t, hsa_signal_value_t, ctypes.c_uint32,
                           _PTR(hsa_agent_t), _PTR(hsa_signal_t)),
@@ -1076,7 +1076,7 @@ API_PROTOTYPES = {
         hsa_status_t,
         hsa_ext_program_handle_t,
         hsa_ext_brig_module_handle_t,
-        has_ext_brig_code_section_offset32_t,
+        hsa_ext_brig_code_section_offset32_t,
         _PTR(hsa_ext_brig_module_handle_t),
         _PTR(_PTR(hsa_ext_brig_module_t)),
         _PTR(hsa_ext_brig_code_section_offset32_t)),
