@@ -456,8 +456,7 @@ class Queue(object):
 
     def __del__(self):
         # hsa.hsa_queue_destroy(self._id)
-
-
+        pass
 
     def __getattr__(self, fname):
         return getattr(self._id.contents, fname)
@@ -477,6 +476,7 @@ class Signal(object):
 
     def __del__(self):
         # hsa.hsa_signal_destroy(self._id)
+        pass
 
 
 class BrigModule(object):
@@ -485,6 +485,7 @@ class BrigModule(object):
 
     def __del__(self):
         # elf_utils.destroy_brig_module(self._id)
+        pass
 
     @classmethod
     def from_file(cls, file_name):
