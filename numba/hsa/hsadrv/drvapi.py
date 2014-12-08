@@ -962,7 +962,7 @@ API_PROTOTYPES = {
     #     hsa_ext_program_handle_t program);
     'hsa_ext_program_destroy': (
         hsa_status_t,
-        hsa_ext_program_handle_t)
+        hsa_ext_program_handle_t),
 
     # hsa_status_t hsa_ext_add_module(
     #     hsa_ext_program_handle_t program,
