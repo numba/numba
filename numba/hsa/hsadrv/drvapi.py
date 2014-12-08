@@ -153,17 +153,17 @@ hsa_ext_control_directive_present64_t = ctypes.c_uint64
 
 class hsa_ext_control_directives_t(ctypes.Structure):
     _fields_ = [
-        ('enabled_control_directives': hsa_ext_control_directive_present64_t),
-        ('enable_break_exceptions': hsa_ext_exception_kind16_t),
-        ('enable_detect_exceptions': hsa_ext_exception_kind16_t),
-        ('max_dynamic_group_size': ctypes.c_uint32),
-        ('max_flat_grid_size': ctypes.c_uint32),
-        ('max_flat_workgroup_size': ctypes.c_uint32),
-        ('requested_workgroups_per_cu': ctypes.c_uint32),
-        ('required_grid_size': hsa_dim3_t),
-        ('required_workgroup_size': hsa_dim3_t),
-        ('required_dim': ctypes.c_uint8),
-        ('reserved': ctypes.c_uint8 * 75),
+        ('enabled_control_directives', hsa_ext_control_directive_present64_t),
+        ('enable_break_exceptions', hsa_ext_exception_kind16_t),
+        ('enable_detect_exceptions', hsa_ext_exception_kind16_t),
+        ('max_dynamic_group_size', ctypes.c_uint32),
+        ('max_flat_grid_size', ctypes.c_uint32),
+        ('max_flat_workgroup_size', ctypes.c_uint32),
+        ('requested_workgroups_per_cu', ctypes.c_uint32),
+        ('required_grid_size', hsa_dim3_t),
+        ('required_workgroup_size', hsa_dim3_t),
+        ('required_dim', ctypes.c_uint8),
+        ('reserved', ctypes.c_uint8 * 75),
     ]
 
 hsa_ext_code_kind32_t = ctypes.c_uint32
