@@ -516,7 +516,7 @@ class Program(object):
     def add_module(self, module):
         result = drvapi.hsa_ext_brig_module_handle_t()
         hsa.hsa_ext_add_module(self._id, module._id, ctypes.byref(result))
-        return BrigModuleHandle(result.value)
+        return BrigModuleHandle(result)
 
 
 class BrigModuleHandle(object):
