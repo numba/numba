@@ -15,6 +15,8 @@ def create_program(brig_file, symbol):
     program = hsa.create_program([gpu])
     module_handle = program.add_module(brig_module)
 
+    return program
+
 def main():
     # note that the hsa library is automatically initialized on first use.
     # the list of agents is present in the driver object, so we can use
@@ -32,15 +34,8 @@ def main():
     print("Using agent: {0} with queue size: {1}".format(gpu.name, gpu.queue_max_size))
     q = gpu.create_queue_multi(gpu.queue_max_size)
 
-    # load Brig
-    brig_module = BrigModule.from_file('vector_copy.brig')
-    print ("Module created: ", brig_module)
-
-    #program = hsa.create_program([gpu])
-    #module = program.add_module(module)
-
-    # finalize
-    #program.finalize([gpu], '&__vector_copy_kernel')
+    program = create_program('vector_copy.brig', '&__vector_copy_kernel')
+    print(program)
 
     s = hsa.create_signal(1)
 
