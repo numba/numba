@@ -107,7 +107,7 @@ class hsa_runtime_caller_t(ctypes.Structure):
         ('caller', ctypes.c_uint64),
     ]
 
-hsa_runtime_alloc_data_callback = ctypes.CFUNCTYPE(
+hsa_runtime_alloc_data_callback_t = ctypes.CFUNCTYPE(
     hsa_status_t, # return value
     hsa_runtime_caller_t, # caller
     ctypes.c_size_t, # byte_size
