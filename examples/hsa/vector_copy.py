@@ -9,10 +9,10 @@ import numpy as np
 from numba.hsa.hsadrv.driver import hsa, BrigModule
 
 
-def create_program(brig_file, symbol):
+def create_program(device, brig_file, symbol):
     brig_module = BrigModule.from_file(brig_file)
 
-    program = hsa.create_program([gpu])
+    program = hsa.create_program([device])
     module_handle = program.add_module(brig_module)
 
     return program
@@ -34,7 +34,7 @@ def main():
     print("Using agent: {0} with queue size: {1}".format(gpu.name, gpu.queue_max_size))
     q = gpu.create_queue_multi(gpu.queue_max_size)
 
-    program = create_program('vector_copy.brig', '&__vector_copy_kernel')
+    program = create_program(gpu, 'vector_copy.brig', '&__vector_copy_kernel')
     print(program)
 
     s = hsa.create_signal(1)
