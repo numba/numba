@@ -23,7 +23,7 @@ def _load_elf_utils_syms():
     create.argtypes = [ctypes.c_char_p, PTR(PTR(drvapi.hsa_ext_brig_module_t))]
     destroy = lib.destroy_brig_module
     destroy.restype = None
-    destroy.argtypes = [PTR(PTR(drvapi.hsa_ext_brig_module_t))]
+    destroy.argtypes = [PTR(drvapi.hsa_ext_brig_module_t)]
     return create, destroy
 
 
