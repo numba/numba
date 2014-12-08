@@ -244,7 +244,8 @@ class Driver(object):
         device_list_type = drvapi.hsa_agent_t * device_list_len
         devices = device_list_type(*[d._id for d in device_list])
         program = drvapi.hsa_ext_program_handle_t()
-        self.hsa_ext_program_create(devices, device_list_len, model, profile, ctypes.byref(result))
+        self.hsa_ext_program_create(devices, device_list_len, model, profile,
+                                    ctypes.byref(program))
         return Program(program.value)
 
     def create_signal(self, initial_value, consumers=None):
@@ -256,7 +257,8 @@ class Driver(object):
             consumers_len = 0
 
         result = drvapi.hsa_signal_t()
-        self.hsa_signal_create(initial_value, consumers_len, consumers, ctypes.byref(result))
+        self.hsa_signal_create(initial_value, consumers_len, consumers,
+                               ctypes.byref(result))
         return Signal(result.value)
 
     def load_code_unit(self, code_binary, agents=None):
