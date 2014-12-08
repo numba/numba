@@ -497,7 +497,7 @@ class BrigModule(object):
         elf_utils.destroy_brig_module(self._id)
 
     @classmethod
-    def from_file(file_name):
+    def from_file(cls, file_name):
         result = ctypes.POINTER(drvapi.hsa_ext_brig_module_t)
         _check_error(create_brig_module_from_file(file_name, ctypes.byref(result)))
         return BrigModule(result)
