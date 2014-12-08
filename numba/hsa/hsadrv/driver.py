@@ -499,6 +499,6 @@ class BrigModule(object):
     @classmethod
     def from_file(cls, file_name):
         result = ctypes.POINTER(drvapi.hsa_ext_brig_module_t)
-        _check_error(elf_utils.create_brig_module_from_file(
+        _check_error(elf_utils.create_brig_module_from_brig_file(
             file_name, ctypes.byref(result)))
         return BrigModule(result)
