@@ -860,7 +860,7 @@ API_PROTOTYPES = {
     'hsa_ext_finalize': (
         hsa_status_t,
         hsa_runtime_caller_t,
-        hsa_agemt_t,
+        hsa_agent_t,
         ctypes.c_uint32,
         ctypes.c_uint32,
         ctypes.c_size_t,
