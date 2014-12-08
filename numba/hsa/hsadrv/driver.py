@@ -246,7 +246,7 @@ class Driver(object):
         program = drvapi.hsa_ext_program_handle_t()
         self.hsa_ext_program_create(devices, device_list_len, model, profile,
                                     ctypes.byref(program))
-        return Program(program.value)
+        return Program(program)
 
     def create_signal(self, initial_value, consumers=None):
         if consumers is not None:
