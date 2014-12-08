@@ -484,8 +484,7 @@ class BrigModule(object):
         self._id = brig_module_id
 
     def __del__(self):
-        # elf_utils.destroy_brig_module(self._id)
-        pass
+        elf_utils.destroy_brig_module(self._id)
 
     @classmethod
     def from_file(cls, file_name):
