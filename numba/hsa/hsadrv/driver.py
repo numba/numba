@@ -249,7 +249,7 @@ class Driver(object):
 
         result = drvapi.hsa_signal_t()
         self.hsa_signal_create(initial_value, consumers_len, consumers, ctypes.byref(result))
-        return
+        return Signal(result)
 
     def load_code_unit(self, code_binary, agents=None):
         # not sure of the purpose of caller... 
@@ -500,4 +500,4 @@ class BrigModule(object):
         _check_error('create_brig_module_from_brig_file',
                      elf_utils.create_brig_module_from_brig_file(
                          file_name, ctypes.byref(result)))
-        return BrigModule(result)
+        return BrigModule(result.contents)
