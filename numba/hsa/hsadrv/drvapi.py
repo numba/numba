@@ -167,7 +167,7 @@ class hsa_ext_control_directives_t(ctypes.Structure):
     ]
 
 hsa_ext_code_kind32_t = ctypes.c_uint32
-hsa_ext_code_call_convention_id32_t = ctypes.c_uint32
+hsa_ext_program_call_convention_id32_t = ctypes.c_uint32
 
 class hsa_ext_code_handle_t(ctypes.Structure):
     _fields_ = [
