@@ -455,7 +455,7 @@ class Queue(object):
 
 
     def __del__(self):
-        hsa.hsa_queue_destroy(self._id)
+        # hsa.hsa_queue_destroy(self._id)
 
 
 
@@ -476,15 +476,7 @@ class Signal(object):
         self._id = signal_id
 
     def __del__(self):
-        hsa.hsa_signal_destroy(self._id)
-
-
-class CodeUnit(object):
-    def __init__(self, code_unit_id):
-        self._id = code_unit_id
-
-    def __del__(self):
-        hsa.hsa_ext_code_unit_destroy(self,_id)
+        # hsa.hsa_signal_destroy(self._id)
 
 
 class BrigModule(object):
@@ -492,7 +484,7 @@ class BrigModule(object):
         self._id = brig_module_id
 
     def __del__(self):
-        elf_utils.destroy_brig_module(self._id)
+        # elf_utils.destroy_brig_module(self._id)
 
     @classmethod
     def from_file(cls, file_name):
