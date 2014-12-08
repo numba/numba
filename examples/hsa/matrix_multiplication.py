@@ -28,8 +28,8 @@ if __name__=='__main__':
     print("input matrix B:\n", b)
 
     # load Brig
-    brig_module = BrigModule.from_file('vector_copy.brig')
-
+    brig_module = hsa.BrigModule.from_file('vector_copy.brig')
+    print ("Module created: ", brig_module)
 
     #program = hsa.create_program([gpu])
     #module = program.add_module(module)
@@ -39,11 +39,4 @@ if __name__=='__main__':
 
     s = hsa.create_signal(1)
 
-    with open('MatMul.cl.o','rb') as f:
-        prog_binary = f.read()
-
-    code_unit = hsa.code_unit_load(prog_binary)
-    
-
-    print(code_unit)
 
