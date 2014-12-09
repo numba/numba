@@ -116,14 +116,13 @@ class CudaGUFuncVectorize(object):
         dims = [len(x) for x in self.inputsig]
         dims += [len(x) for x in self.outputsig]
 
-        lmod, lgufunc, outertys, excs = build_gufunc_stager(cudevfn, dims)
+        library, lgufunc, outertys, excs = build_gufunc_stager(cudevfn, dims)
 
         cres = cudevfn.cres
         wrapper = cres.target_context.prepare_cuda_kernel(lgufunc, outertys)
 
-        lmod.verify()
-
-        kernel = CUDAKernel(llvm_module=lmod, name=wrapper.name,
+        kernel = CUDAKernel(llvm_module=library._final_module,
+                            name=wrapper.name,
                             argtypes=outertys, link=(), debug=False)
 
         dtypes = tuple(numpy.dtype(str(t.dtype)) for t in outertys)
@@ -136,7 +135,9 @@ class CudaGUFuncVectorize(object):
 
 
 def build_gufunc_stager(devfn, dims):
-    lmod = devfn.cres.llvm_module
+    codegen = devfn.cres.target_context.jit_codegen()
+    library = codegen.create_library('cuda.gufunc.stager')
+
     return_type = devfn.cres.signature.return_type
     args = devfn.cres.signature.args
     context = devfn.cres.target_context
@@ -152,8 +153,7 @@ def build_gufunc_stager(devfn, dims):
         outer_args.append(typ)
 
     # new module
-    basemod = lmod
-    lmod = lc.Module.new()
+    lmod = library.create_ir_module('cuda.gufunc.stager')
 
     lfunc = context.declare_function(lmod, devfn.cres.fndesc)
 
@@ -215,10 +215,11 @@ def build_gufunc_stager(devfn, dims):
     builder.ret(lc.Constant.int(lc.Type.int(), 0))
 
     # Link
-    lmod = llvm.parse_assembly(str(lmod))
-    lmod.link_in(basemod, preserve=False)
-    lgufunc = lmod.get_function(lgufunc.name)
-    return lmod, lgufunc, outer_args, excs
+    library.add_ir_module(lmod)
+    library.add_linking_library(devfn.cres.library)
+    library.finalize()
+    lgufunc = library.get_function(lgufunc.name)
+    return library, lgufunc, outer_args, excs
 
 
 def get_slice_data(builder, data, shape, strides, layout, index):
