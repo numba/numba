@@ -42,8 +42,8 @@ def compile_cuda(pyfunc, return_type, args, debug, inline):
     return cres
 
 
-def compile_kernel(pyfunc, args, link, debug=False):
-    cres = compile_cuda(pyfunc, types.void, args, debug=debug, inline=False)
+def compile_kernel(pyfunc, args, link, debug=False, inline=False):
+    cres = compile_cuda(pyfunc, types.void, args, debug=debug, inline=inline)
     func = cres.library.get_function(cres.fndesc.llvm_func_name)
     kernel = cres.target_context.prepare_cuda_kernel(func,
                                                      cres.signature.args)

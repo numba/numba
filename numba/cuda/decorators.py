@@ -89,13 +89,13 @@ def jit(restype=None, argtypes=None, device=False, inline=False, bind=True,
 
     if argtypes is None and not sigutils.is_signature(restype):
         if restype is None:
-            return autojit(device=device, bind=bind,
-                           link=link, debug=debug, **kws)
+            return autojit(device=device, bind=bind, link=link, debug=debug,
+                           inline=inline, **kws)
 
         # restype is a function
         else:
-            decor = autojit(device=device, bind=bind,
-                            link=link, debug=debug, **kws)
+            decor = autojit(device=device, bind=bind, link=link, debug=debug,
+                            inline=inline, **kws)
             return decor(restype)
 
     else:
@@ -105,7 +105,8 @@ def jit(restype=None, argtypes=None, device=False, inline=False, bind=True,
             raise TypeError("CUDA kernel must have void return type.")
 
         def kernel_jit(func):
-            kernel = compile_kernel(func, argtypes, link=link, debug=debug)
+            kernel = compile_kernel(func, argtypes, link=link, debug=debug,
+                                    inline=inline)
 
             # Force compilation for the current context
             if bind:
