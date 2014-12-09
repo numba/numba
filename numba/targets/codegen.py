@@ -193,6 +193,7 @@ class BaseCPUCodegen(object):
 
     def __init__(self, module_name):
         self._libraries = set()
+        self._data_layout = None
         self._llvm_module = ll.parse_assembly(
             str(self._create_empty_module(module_name)))
         self._init(self._llvm_module)
@@ -223,6 +224,8 @@ class BaseCPUCodegen(object):
     def _create_empty_module(self, name):
         ir_module = lc.Module.new(name)
         ir_module.triple = ll.get_default_triple()
+        if self._data_layout:
+            ir_module.data_layout = self._data_layout
         return ir_module
 
     @property

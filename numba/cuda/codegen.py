@@ -1,12 +1,16 @@
 from llvmlite import binding as ll
 from llvmlite.llvmpy import core as lc
+
 from numba.targets.codegen import BaseCPUCodegen, CodeLibrary
+from numba import utils
 from .cudadrv import nvvm
 
 
+CUDA_TRIPLE = {32: 'nvptx-nvidia-cuda',
+               64: 'nvptx64-nvidia-cuda'}
+
 
 class CUDACodeLibrary(CodeLibrary):
-
     def _optimize_functions(self, ll_module):
         pass
 
@@ -35,8 +39,9 @@ class JITCUDACodegen(BaseCPUCodegen):
 
     def _create_empty_module(self, name):
         ir_module = lc.Module.new(name)
-        # TODO
-        # ir_module.triple = ll.get_default_triple()
+        ir_module.triple = CUDA_TRIPLE[utils.MACHINE_BITS]
+        if self._data_layout:
+            ir_module.data_layout = self._data_layout
         return ir_module
 
     def _module_pass_manager(self):
