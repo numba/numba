@@ -509,7 +509,7 @@ class BrigModule(object):
         symbol_offset = drvapi.hsa_ext_brig_code_section_offset32_t()
         _check_error('find_symbol_offset',
                      elf_utils.find_symbol_offset(self._id, symbol_name, 
-                                                  ctypes.byref(symbol_offset))
+                                                  ctypes.byref(symbol_offset)))
 
         return symbol_offset.value
 
