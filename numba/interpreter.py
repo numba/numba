@@ -329,7 +329,12 @@ class Interpreter(object):
         except AttributeError:
             raise NotImplementedError(inst)
         else:
-            return fn(inst, **kws)
+            try:
+                return fn(inst, **kws)
+            except ir.NotDefinedError as e:
+                if e.loc is None:
+                    e.loc = self.loc
+                raise e
 
     def dump(self, file=None):
         file = file or sys.stdout

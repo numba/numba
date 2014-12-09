@@ -10,47 +10,56 @@ python:
 branches:
   only:
     - master
-    #- devel
-    #- release
-    #- devpatches
+    - llvmlite2
 
 before_install:
   # Install Miniconda
-  - if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then wget http://repo.continuum.io/miniconda/Miniconda-3.6.0-Linux-x86_64.sh -O miniconda.sh; else wget http://repo.continuum.io/miniconda/Miniconda3-3.6.0-Linux-x86_64.sh -O miniconda.sh; fi
+  - wget http://repo.continuum.io/miniconda/Miniconda3-3.7.0-Linux-x86_64.sh -O miniconda.sh
   - chmod +x miniconda.sh
   - ./miniconda.sh -b
-  - if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then export PATH=/home/travis/miniconda/bin:$PATH; else PATH=/home/travis/miniconda3/bin:$PATH; fi
-  - conda update --yes conda
+  - export PATH=$HOME/miniconda3/bin:$PATH
+  - PY_MAJOR_MINOR=${TRAVIS_PYTHON_VERSION:0:3}
   # Setup environment
-  - conda create -n travisci --yes python=${TRAVIS_PYTHON_VERSION:0:3} llvm numpy cffi
+  - conda create -n travisci --yes python=$PY_MAJOR_MINOR numpy cffi
   - source activate travisci
+  # Install llvmdev (separate channel, for now)
+  - conda install --yes -c numba llvmdev
   # Install unittest2 for Python 2
-  - if [ ${TRAVIS_PYTHON_VERSION:0:3} == "2.6" ]; then conda install --yes unittest2 argparse; fi
+  - if [ $PY_MAJOR_MINOR == "2.6" ]; then conda install --yes unittest2 argparse; fi
+  # Install enum34 for Python < 3.4
+  - if [ $PY_MAJOR_MINOR \< "3.4" ]; then conda install --yes enum34; fi
   # The next couple lines fix a crash with multiprocessing on Travis
   # and are not specific to using Miniconda
   - sudo rm -rf /dev/shm
   - sudo ln -s /run/shm /dev/shm
+  # We need this line to have g++ 4.8 available in apt
+  # (Travis' default gcc version doesn't support C++11).
+  - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+  - sudo apt-get update -qq
+  - sudo apt-get install -qq gcc-4.8 g++-4.8
+  # Force g++ 4.8 to be the default version
+  - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.8 90
   # Install boost for impyla
-  - if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then sudo apt-get install libboost-all-dev; fi
+  #- if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then sudo apt-get install libboost-all-dev; fi
   # Install pytest for impyla
-  - conda install --yes pytest
+  #- conda install --yes pytest
 
 install:
-    # Install llvmpy
-    - git clone git://github.com/llvmpy/llvmpy.git -q
-    - cd llvmpy ; python setup.py install -q >/dev/null ; cd ..
+    # Build and install llvmlite from source
+    - git clone git://github.com/numba/llvmlite.git -q
+    - cd llvmlite && python setup.py build && python setup.py install -q >/dev/null && cd ..
     # Build numba extensions without silencing compile errors
     - python setup.py build_ext -q
     # Install numba
     - python setup.py install -q >/dev/null
     # Install impyla
-    - if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then export LLVM_CONFIG_PATH=$(which llvm-config); fi
-    - if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then cd $HOME ; git clone https://github.com/cloudera/impyla.git -q; fi
-    - if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then cd impyla ; make ; python setup.py install; fi
+    #- if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then export LLVM_CONFIG_PATH=$(which llvm-config); fi
+    #- if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then cd $HOME ; git clone https://github.com/cloudera/impyla.git -q; fi
+    #- if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then cd impyla ; make ; python setup.py install; fi
 
 script:
-    - cd ~ ; python -m numba.testing -v -b
-    - if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then cd $HOME; py.test --udf $HOME/impyla/impala/tests/test_udf_compile.py; fi
+    - cd ~ ; python -m numba.testing -v -b -m
+    #- if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then cd $HOME; py.test --udf $HOME/impyla/impala/tests/test_udf_compile.py; fi
 
 notifications:
   email: false

@@ -1,7 +1,7 @@
 from __future__ import print_function, absolute_import, division
 import sys
 import math
-from llvm.core import Type
+from llvmlite.llvmpy.core import Type
 from numba import cgutils, types
 from numba.targets.imputils import implement, Registry
 

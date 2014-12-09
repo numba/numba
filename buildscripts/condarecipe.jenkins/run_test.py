@@ -1,7 +1,10 @@
 import sys
 import numba
 
-sys.argv += ['-m', '-b']
+if sys.platform.startswith('win32'):
+    sys.argv += ['-b']
+else:
+    sys.argv += ['-m', '-b']
 
 if not numba.test():
     print("Test failed")

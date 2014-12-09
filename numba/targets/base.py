@@ -2,9 +2,12 @@ from __future__ import print_function
 from collections import namedtuple, defaultdict
 import copy
 from types import MethodType
-import llvm.core as lc
-from llvm.core import Type, Constant
+
 import numpy
+
+from llvmlite import ir as llvmir
+import llvmlite.llvmpy.core as lc
+from llvmlite.llvmpy.core import Type, Constant
 
 import numba
 from numba import types, utils, cgutils, typing, numpy_support, errcode
@@ -134,6 +137,8 @@ class BaseContext(object):
         self.insert_func_defn(builtin_registry.functions)
         self.insert_attr_defn(builtin_registry.attributes)
 
+        self.cached_internal_func = {}
+
         # Initialize
         self.init()
 
@@ -143,20 +148,9 @@ class BaseContext(object):
         """
         pass
 
-    def localized(self):
-        """
-        Returns a localized context that contains extra environment information
-        """
-        obj = copy.copy(self)
-        obj.metadata = utils.UniqueDict()
-        obj.linking = set()
-        obj.exceptions = {}
-        obj.cached_internal_func = {}
-        return obj
-
-    def link_dependencies(self, module, depends):
-        for lib in depends:
-            module.link_in(lib, preserve=True)
+    @property
+    def target_data(self):
+        raise NotImplementedError
 
     def insert_func_defn(self, defns):
         for defn in defns:
@@ -229,7 +223,7 @@ class BaseContext(object):
         assert fn.is_declaration
         for ak, av in zip(fndesc.args, self.get_arguments(fn)):
             av.name = "arg.%s" % ak
-        fn.args[0] = ".ret"
+        fn.args[0].name = ".ret"
         return fn
 
     def declare_external_function(self, module, fndesc):
@@ -249,6 +243,7 @@ class BaseContext(object):
                 break
         else:
             gv = cgutils.global_constant(mod, name, text)
+            gv.linkage = lc.LINKAGE_INTERNAL
         return Constant.bitcast(gv, stringtype)
 
     def get_arguments(self, func):
@@ -277,10 +272,11 @@ class BaseContext(object):
 
     def get_data_type(self, ty):
         """
-        Get a data representation of the type that is safe for storage.
-        Record data are stored as byte array.
+        Get a LLVM data representation of the Numba type *ty* that is safe
+        for storage.  Record data are stored as byte array.
 
-        Returns None if it is an opaque pointer
+        The return value is a llvmlite.ir.Type object, or None if the type
+        is an opaque pointer (???).
         """
         try:
             fac = type_registry.match(ty)
@@ -950,15 +946,25 @@ class BaseContext(object):
 
         if fndesc is None:
             # Compile
-            cres = numba.compiler.compile_internal(self.typing_context, self,
-                                                   impl, sig.args,
-                                                   sig.return_type,
-                                                   locals=locals)
-            llvm_func = cres.llvm_func
-            # Set to linkonce one-definition-rule so that the function
-            # is removed once it is linked.
-            llvm_func.linkage = lc.LINKAGE_LINKONCE_ODR
-            self.add_libs([cres.llvm_module])
+            from numba import compiler
+
+            codegen = self.jit_codegen()
+            library = codegen.create_library(impl.__name__)
+            flags = compiler.Flags()
+            flags.set('no_compile')
+            flags.set('no_cpython_wrapper')
+            cres = compiler.compile_internal(self.typing_context, self,
+                                             library,
+                                             impl, sig.args,
+                                             sig.return_type, flags,
+                                             locals=locals)
+
+            # Set to linkonce one-definition-rule to prevent multiple
+            # definitions from raising errors (this can happen with
+            # nested compile_internal()).
+            codegen.add_linking_library(cres.library)
+            llvm_func = cres.library.get_function(cres.fndesc.llvm_func_name)
+            llvm_func.linkage = 'linkonce_odr'
             fndesc = cres.fndesc
 
             self.cached_internal_func[cache_key] = fndesc
@@ -970,15 +976,6 @@ class BaseContext(object):
                                          sig.args, args)
 
         return res
-
-    def optimize(self, module):
-        pass
-
-    def finalize(self, func, fndesc):
-        """Perform any necessary work to complete the compilation.
-        An implementation of get_executable() should call finalize().
-        """
-        raise NotImplementedError
 
     def get_executable(self, func, fndesc):
         raise NotImplementedError
@@ -1047,25 +1044,24 @@ class BaseContext(object):
         cary.strides = cstrides
         return cary._getvalue()
 
-    def add_libs(self, libs):
-        self.linking |= set(libs)
-
-    def get_abi_sizeof(self, lty):
-        raise NotImplementedError
-
-    def add_exception(self, exc):
-        n = len(self.exceptions) + errcode.ERROR_COUNT
-        self.exceptions[n] = exc
-        return n
-
-    def optimize_function(self, func):
+    def get_abi_sizeof(self, ty):
         """
-        Perform function-level optimization.
-        This may improve generated code and reduce memory usage.
+        Get the ABI size of LLVM type *ty*.
+        """
+        if isinstance(ty, llvmir.Type):
+            return ty.get_abi_size(self.target_data)
+        # XXX this one unused?
+        return self.target_data.get_abi_size(ty)
 
-        Note: This is called at the end of lowering.
+    def post_lowering(self, func):
+        """Run target specific post-lowering transformation here.
         """
         pass
+
+    def create_module(self, name):
+        """Create a LLVM module
+        """
+        return lc.Module.new(name)
 
 
 class _wrap_impl(object):
