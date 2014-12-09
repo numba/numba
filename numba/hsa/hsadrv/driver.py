@@ -19,7 +19,7 @@ from collections import namedtuple
 from numba import utils, servicelib, mviewbuf
 from .error import HsaSupportError, HsaDriverError, HsaApiError, HsaWarning
 from .drvapi import API_PROTOTYPES
-from . import enums, drvapi, elf_utils
+from . import enums, drvapi
 from numba import config
 from numba.utils import longint as long
 
@@ -489,6 +489,8 @@ class Signal(object):
     def __del__(self):
         hsa.hsa_signal_destroy(self._id)
 
+
+from . import elf_utils
 
 class BrigModule(object):
     def __init__(self, brig_module_id):
