@@ -92,7 +92,7 @@ ext_modules = [ext_dynfunc, ext_npymath_exports, ext_dispatcher,
 HSA_PATH = os.getenv("HSA_PATH")
 if HSA_PATH is not None:
     # TODO: merge this two files into something in the numba repo
-    hsa_support_srcs = [os.path.join(HSA_PATH, 'sample', f) for f in ('elf_utils.c', 'vector_copy.c')]
+    hsa_support_srcs = ['numba/hsa/hsadrv/elf_utils.c']
     hsa_support_include = [os.path.join(HSA_PATH, 'include')]
     hsa_support_lib = [os.path.join(HSA_PATH, 'lib')]
     ext_hsa_support = Extension(name='numba.hsa.hsadrv._hsa_support',
