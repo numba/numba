@@ -505,6 +505,14 @@ class BrigModule(object):
                          file_name, ctypes.byref(result)))
         return BrigModule(result.contents)
 
+    def find_symbol_offset(self, symbol_name):
+        symbol_offset = drvapi.hsa_ext_brig_code_section_offset32_t()
+        _check_error('find_symbol_offset',
+                     elf_utils.find_symbol_offset(self._id, symbol_name, 
+                                                  ctypes.byref(symbol_offset))
+
+        return symbol_offset.value
+
 
 class Program(object):
     def __init__(self, program_id):
@@ -527,3 +535,4 @@ class BrigModuleHandle(object):
         # this handle seems to be owned by the program, probably valid within that
         # program...
         pass
+
