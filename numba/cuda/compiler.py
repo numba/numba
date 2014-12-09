@@ -69,7 +69,7 @@ class DeviceFunctionTemplate(object):
         if args not in self._compileinfos:
             cres = compile_cuda(self.py_func, None, args, debug=self.debug)
             self._compileinfos[args] = cres
-            libs = [cres.llvm_module]
+            libs = [cres.library]
             cres.target_context.insert_user_function(self, cres.fndesc, libs)
         else:
             cres = self._compileinfos[args]
