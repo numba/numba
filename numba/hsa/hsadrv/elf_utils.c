@@ -24,9 +24,8 @@
 #include <libelf.h>
 #include <string.h>
 #include <stdio.h>
-#include "hsa.h"
-#include "elf_utils.h"
-#include "hsa_ext_finalize.h"
+#include <hsa.h>
+#include <hsa_ext_finalize.h>
 
 enum {
     SECTION_HSA_DATA = 0,
