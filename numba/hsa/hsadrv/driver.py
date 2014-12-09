@@ -19,7 +19,7 @@ from collections import namedtuple
 from numba import utils, servicelib, mviewbuf
 from .error import HsaSupportError, HsaDriverError, HsaApiError, HsaWarning
 from .drvapi import API_PROTOTYPES
-from . import enums, drvapi
+from . import enums, drvapi, elf_utils
 from numba import config
 from numba.utils import longint as long
 
@@ -496,12 +496,10 @@ class BrigModule(object):
         self._id = brig_module_id
 
     def __del__(self):
-        from . import elf_utils
         elf_utils.destroy_brig_module(self._id)
 
     @classmethod
     def from_file(cls, file_name):
-        from . import elf_utils
         result = ctypes.POINTER(drvapi.hsa_ext_brig_module_t)()
         _check_error('create_brig_module_from_brig_file',
                      elf_utils.create_brig_module_from_brig_file(
@@ -509,7 +507,6 @@ class BrigModule(object):
         return BrigModule(result.contents)
 
     def find_symbol_offset(self, symbol_name):
-        from . import elf_utils
         symbol_offset = drvapi.hsa_ext_brig_code_section_offset32_t()
         _check_error('find_symbol_offset',
                      elf_utils.find_symbol_offset(self._id, symbol_name, 
