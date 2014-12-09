@@ -12,7 +12,7 @@ from .errors import KernelRuntimeError
 from .api import get_current_device
 
 
-def compile_cuda(pyfunc, return_type, args, debug):
+def compile_cuda(pyfunc, return_type, args, debug, inline):
     # First compilation will trigger the initialization of the CUDA backend.
     from .descriptor import CUDATargetDesc
 
@@ -23,6 +23,10 @@ def compile_cuda(pyfunc, return_type, args, debug):
     # Do not compile (generate native code), just lower (to LLVM)
     flags.set('no_compile')
     flags.set('no_cpython_wrapper')
+    if debug:
+        flags.set('boundcheck')
+    if inline:
+        flags.set('forceinline')
     # Run compilation pipeline
     cres = compiler.compile_extra(typingctx=typingctx,
                                   targetctx=targetctx,
@@ -39,7 +43,7 @@ def compile_cuda(pyfunc, return_type, args, debug):
 
 
 def compile_kernel(pyfunc, args, link, debug=False):
-    cres = compile_cuda(pyfunc, types.void, args, debug=debug)
+    cres = compile_cuda(pyfunc, types.void, args, debug=debug, inline=False)
     func = cres.library.get_function(cres.fndesc.llvm_func_name)
     kernel = cres.target_context.prepare_cuda_kernel(func,
                                                      cres.signature.args)
@@ -55,9 +59,10 @@ def compile_kernel(pyfunc, args, link, debug=False):
 class DeviceFunctionTemplate(object):
     """Unmaterialized device function
     """
-    def __init__(self, pyfunc, debug):
+    def __init__(self, pyfunc, debug, inline):
         self.py_func = pyfunc
         self.debug = debug
+        self.inline = inline
         self._compileinfos = {}
 
     def compile(self, args):
@@ -67,7 +72,8 @@ class DeviceFunctionTemplate(object):
         this object.
         """
         if args not in self._compileinfos:
-            cres = compile_cuda(self.py_func, None, args, debug=self.debug)
+            cres = compile_cuda(self.py_func, None, args, debug=self.debug,
+                                inline=self.inline)
             self._compileinfos[args] = cres
             libs = [cres.library]
             cres.target_context.insert_user_function(self, cres.fndesc, libs)
@@ -76,13 +82,13 @@ class DeviceFunctionTemplate(object):
         return cres.signature
 
 
-def compile_device_template(pyfunc, debug=False):
+def compile_device_template(pyfunc, debug=False, inline=False):
     """Create a DeviceFunctionTemplate object and register the object to
     the CUDA typing context.
     """
     from .descriptor import CUDATargetDesc
 
-    dft = DeviceFunctionTemplate(pyfunc, debug=debug)
+    dft = DeviceFunctionTemplate(pyfunc, debug=debug, inline=inline)
 
     class device_function_template(AbstractTemplate):
         key = dft
@@ -97,7 +103,7 @@ def compile_device_template(pyfunc, debug=False):
 
 
 def compile_device(pyfunc, return_type, args, inline=True, debug=False):
-    cres = compile_cuda(pyfunc, return_type, args, debug=debug)
+    cres = compile_cuda(pyfunc, return_type, args, debug=debug, inline=inline)
     devfn = DeviceFunction(cres)
 
     class device_function_template(ConcreteTemplate):

@@ -4,12 +4,12 @@ from .compiler import (compile_kernel, compile_device, declare_device_function,
                        AutoJitCUDAKernel, compile_device_template)
 
 
-def jitdevice(func, link=[], debug=True):
+def jitdevice(func, link=[], debug=False, inline=False):
     """Wrapper for device-jit.
     """
     if link:
         raise ValueError("link keyword invalid for device function")
-    return compile_device_template(func, debug=debug)
+    return compile_device_template(func, debug=debug, inline=inline)
 
 
 def jit(restype=None, argtypes=None, device=False, inline=False, bind=True,
@@ -114,7 +114,7 @@ def jit(restype=None, argtypes=None, device=False, inline=False, bind=True,
             return kernel
 
         def device_jit(func):
-            return compile_device(func, restype, argtypes, inline=True,
+            return compile_device(func, restype, argtypes, inline=inline,
                                   debug=debug)
 
         if device:

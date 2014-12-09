@@ -36,11 +36,11 @@ _dynamic_module = ModuleType(_dynamic_modname)
 class FunctionDescriptor(object):
     __slots__ = ('native', 'modname', 'qualname', 'doc', 'typemap',
                  'calltypes', 'args', 'kws', 'restype', 'argtypes',
-                 'mangled_name', 'unique_name')
+                 'mangled_name', 'unique_name', 'inline')
 
     def __init__(self, native, modname, qualname, unique_name, doc,
                  typemap, restype, calltypes, args, kws, mangler=None,
-                 argtypes=None):
+                 argtypes=None, inline=False):
         self.native = native
         self.modname = modname
         self.qualname = qualname
@@ -61,6 +61,7 @@ class FunctionDescriptor(object):
                                         self.argtypes)
         else:
             self.mangled_name = mangler(self.qualname, self.argtypes)
+        self.inline = inline
 
     def lookup_module(self):
         """
@@ -115,12 +116,12 @@ class FunctionDescriptor(object):
 
     @classmethod
     def _from_python_function(cls, interp, typemap, restype, calltypes,
-                              native, mangler=None):
+                              native, mangler=None, inline=False):
         (qualname, unique_name, modname, doc, args, kws,
          )= cls._get_function_info(interp)
         self = cls(native, modname, qualname, unique_name, doc,
                    typemap, restype, calltypes,
-                   args, kws, mangler=mangler)
+                   args, kws, mangler=mangler, inline=inline)
         return self
 
 
@@ -129,12 +130,13 @@ class PythonFunctionDescriptor(FunctionDescriptor):
 
     @classmethod
     def from_specialized_function(cls, interp, typemap, restype, calltypes,
-                                  mangler):
+                                  mangler, inline):
         """
         Build a FunctionDescriptor for a specialized Python function.
         """
         return cls._from_python_function(interp, typemap, restype, calltypes,
-                                         native=True, mangler=mangler)
+                                         native=True, mangler=mangler,
+                                         inline=inline)
 
     @classmethod
     def from_object_mode_function(cls, interp):
