@@ -35,6 +35,6 @@ def _load_elf_utils_syms():
 
 
 # export our desired symbols
-create_brig_module_from_brig_file, destroy_brig_module = _load_elf_utils_syms()
+create_brig_module_from_brig_file, destroy_brig_module, find_symbol_offset = _load_elf_utils_syms()
 
 del _load_elf_utils_syms
