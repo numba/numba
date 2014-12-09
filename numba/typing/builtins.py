@@ -496,7 +496,7 @@ def generic_hetero(self, args, kws):
 def generic_index(self, args, kws):
     assert not args
     assert not kws
-    return signature(types.int64, recvr=self.this)
+    return signature(types.intp, recvr=self.this)
 
 def install_array_method(name, generic):
     my_attr = {"key": "array." + name, "generic": generic}

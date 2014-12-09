@@ -95,7 +95,7 @@ class TestCase(unittest.TestCase):
     _float_types = (float, np.floating)
     _complex_types = (complex, np.complexfloating)
 
-    def _detectFamily(self, numericObject):
+    def _detect_family(self, numeric_object):
         """
         This function returns a string description of the type family
         that the object in question belongs to.  Possible return values
@@ -103,19 +103,19 @@ class TestCase(unittest.TestCase):
         """
 
         for tp in self._sequence_typesets:
-            if isinstance(numericObject, tp):
+            if isinstance(numeric_object, tp):
                 return "sequence"
 
         for tp in self._exact_typesets:
-            if isinstance(numericObject, tp):
+            if isinstance(numeric_object, tp):
                 return "exact"
 
         for tp in self._complex_types:
-            if isinstance(numericObject, tp):
+            if isinstance(numeric_object, tp):
                 return "complex"
 
         for tp in self._approx_typesets:
-            if isinstance(numericObject, tp):
+            if isinstance(numeric_object, tp):
                 return "approximate"
 
         return "unknown"
@@ -167,29 +167,29 @@ class TestCase(unittest.TestCase):
             else:
                 self.assertAlmostEqual(first, second, delta=delta, msg=msg)
 
-        firstTp = self._detectFamily(first)
-        secondTp = self._detectFamily(second)
+        first_family = self._detect_family(first)
+        second_family = self._detect_family(second)
 
-        assertionMessage = "Type Family mismatch. (%s != %s)" % (firstTp, secondTp)
-        self.assertEqual(firstTp, secondTp, msg=assertionMessage)
+        assertion_message = "Type Family mismatch. (%s != %s)" % (first_family, second_family)
+        self.assertEqual(first_family, second_family, msg=assertion_message)
 
         # We now know they are in the same comparison family
-        compareFamily = firstTp
+        compare_family = first_family
 
         # For recognized sequences, recurse
-        if compareFamily == "sequence":
+        if compare_family == "sequence":
             self.assertEqual(len(first), len(second), msg=msg)
             for a, b in zip(first, second):
                 self._assertPreciseEqual(a, b, prec, ulps, msg)
             return
 
-        if compareFamily == "exact":
+        if compare_family == "exact":
             exact_comparison = True
 
-        if compareFamily in ["complex", "approximate"]:
+        if compare_family in ["complex", "approximate"]:
             exact_comparison = False
 
-        if compareFamily == "unknown":
+        if compare_family == "unknown":
             # Assume these are non-numeric types: we will fall back
             # on regular unittest comparison.
             self.assertIs(first.__class__, second.__class__)
