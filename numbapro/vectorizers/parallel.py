@@ -16,6 +16,7 @@ import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 from numba.npyufunc import ufuncbuilder
 from numba import types
+from numba.targets.registry import CPUTarget
 
 NUM_CPU = max(1, multiprocessing.cpu_count())
 
@@ -27,9 +28,10 @@ class ParallelUFuncBuilder(ufuncbuilder.UFuncBuilder):
         # Buider wrapper for ufunc entry point
         ctx = cres.target_context
         signature = cres.signature
-        wrapper = build_ufunc_wrapper(ctx, cres.llvm_func, signature)
-        ctx.engine.add_module(wrapper.module)
-        ptr = ctx.engine.get_pointer_to_function(wrapper)
+        library = cres.library
+        llvm_func = library.get_function(cres.fndesc.llvm_func_name)
+        wrapper = build_ufunc_wrapper(library, ctx, llvm_func, signature)
+        ptr = library.get_pointer_to_function(wrapper.name)
         # Get dtypes
         dtypenums = [np.dtype(a.name).num for a in signature.args]
         dtypenums.append(np.dtype(signature.return_type.name).num)
@@ -37,15 +39,15 @@ class ParallelUFuncBuilder(ufuncbuilder.UFuncBuilder):
         return dtypenums, ptr, keepalive
 
 
-def build_ufunc_wrapper(ctx, lfunc, signature):
-    innerfunc = ufuncbuilder.build_ufunc_wrapper(ctx, lfunc, signature,
+def build_ufunc_wrapper(library, ctx, lfunc, signature):
+    innerfunc = ufuncbuilder.build_ufunc_wrapper(library, ctx, lfunc, signature,
                                                  objmode=False, env=None)
-    lfunc = build_ufunc_kernel(ctx, innerfunc, signature)
-    ctx.optimize(lfunc.module)
+    lfunc = build_ufunc_kernel(library, ctx, innerfunc, signature)
+    library.add_ir_module(lfunc.module)
     return lfunc
 
 
-def build_ufunc_kernel(ctx, innerfunc, sig):
+def build_ufunc_kernel(library, ctx, innerfunc, sig):
     """Wrap the original CPU ufunc with a parallel dispatcher.
 
     Args
@@ -72,8 +74,6 @@ def build_ufunc_kernel(ctx, innerfunc, sig):
 
 
     """
-    basemod = innerfunc.module
-
     # Declare types and function
     byte_t = lc.Type.int(8)
     byte_ptr_t = lc.Type.pointer(byte_t)
@@ -85,7 +85,7 @@ def build_ufunc_kernel(ctx, innerfunc, sig):
                                              lc.Type.pointer(intp_t),
                                              byte_ptr_t])
 
-    mod = lc.Module.new()
+    mod = library.create_ir_module('parallel.ufunc.wrapper')
     lfunc = mod.add_function(fnty, name=".kernel")
     innerfunc = mod.add_function(fnty, name=innerfunc.name)
 
@@ -167,21 +167,15 @@ def build_ufunc_kernel(ctx, innerfunc, sig):
     builder.call(ready, ())
     # Wait for workers
     builder.call(synchronize, ())
-
     builder.ret_void()
 
-    # Link
-    mod = ll.parse_assembly(str(mod))
-    mod.triple = basemod.triple
-    mod.link_in(basemod, preserve=False)
-    lfunc = mod.get_function(lfunc.name)
     return lfunc
 
 
 class _ProtectEngineDestroy(object):
-    def __init__(self, set_cas, engine):
+    def __init__(self, set_cas, library):
         self.set_cas = set_cas
-        self.engine = engine
+        self.library = library
 
     def __del__(self):
         """
@@ -199,8 +193,12 @@ def _make_cas_function():
     Generate a compare-and-swap function for portability sake.
     """
 
+    cpucontext = CPUTarget.target_context
+    codegen = cpucontext.jit_codegen()
+    library = codegen.create_library('cas.helper')
+
     # Generate IR
-    mod = lc.Module.new("generate-cas")
+    mod = library.create_ir_module('generate-cas')
     llint = lc.Type.int()
     llintp = lc.Type.pointer(llint)
     fnty = lc.Type.function(llint, [llintp, llint, llint])
@@ -213,24 +211,11 @@ def _make_cas_function():
     failed = builder.extract_value(outpack, 1)
     builder.ret(builder.select(failed, old, out))
 
-    mod = ll.parse_assembly(str(mod))
-    fn = mod.get_function(fn.name)
+    # Build & Link
+    library.add_ir_module(mod)
+    ptr = library.get_pointer_to_function(fn.name)
 
-    # Build
-    mod.triple = ll.get_default_triple()
-    target = ll.Target.from_triple(mod.triple)
-    tm = target.create_target_machine()
-
-    # FIXME: uses legacy jit for now
-    engine = ll.create_jit_compiler_with_tm(mod, tm)
-    # engine = llvm.create_mcjit_compiler(mod, tm)
-    engine.finalize_object()
-    ptr = engine.get_pointer_to_function(fn)
-
-    # Keep engine alive
-    _keepalive.append(engine)
-
-    return engine, ptr
+    return library, ptr
 
 
 def _launch_threads():
@@ -254,10 +239,10 @@ def _init():
 
     set_cas = CFUNCTYPE(None, c_void_p)(lib.set_cas)
 
-    engine, cas_ptr = _make_cas_function()
+    library, cas_ptr = _make_cas_function()
     set_cas(c_void_p(cas_ptr))
 
-    _keepalive.append(_ProtectEngineDestroy(set_cas, engine))
+    _keepalive.append(_ProtectEngineDestroy(set_cas, library))
 
 
 _init()
