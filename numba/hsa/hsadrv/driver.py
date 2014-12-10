@@ -550,7 +550,7 @@ class Program(object):
                                      options,
                                      debug_info)
 
-        kernel_id = PTR(drvapi.hsa_ext_code_descriptor_t)()
+        kernel_id = ctypes.POINTER(drvapi.hsa_ext_code_descriptor_t)()
         hsa.hsa_ext_query_kernel_descriptor_address(
             self._id, module._id, symbol,
             ctype.byref(kernel_id))
