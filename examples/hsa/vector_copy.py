@@ -86,8 +86,8 @@ def main(src, dst):
     hsa.hsa_memory_allocate(kernarg_region, kernel_arg_buffer_size,
                             ctypes.byref(kernel_arg_buffer))
     kernargs = ctypes.cast(kernel_arg_buffer, ctypes.POINTER(ctypes.c_void_p*2))
-    kernargs[0] = dst.ctypes.data
-    kernargs[1] = src.ctypes.data
+    kernargs.contents[0] = dst.ctypes.data
+    kernargs.contents[1] = src.ctypes.data
 
     aql.kernel_object_address = code_descriptor._id.code_handle
     aql.kernarg_address = kernel_arg_buffer.value
