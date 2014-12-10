@@ -534,7 +534,7 @@ class Program(object):
                  options=None,
                  debug_info=0):
         request = drvapi.hsa_ext_finalization_request_t()
-        request.module = module._id
+        request.module.handle = module._id.handle
         request.program_call_convention = call_convention
         request.symbol = symbol
         hsa.hsa_ext_finalize_program(self._id, device._id, 1,
