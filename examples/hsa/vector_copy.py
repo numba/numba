@@ -81,7 +81,7 @@ def main(src, dst):
     hsa.hsa_agent_iterate_regions(gpu._id, callback, kernarg_region)
     assert kernarg_region != 0
 
-    kernel_arg_buffer_size = code_descriptor._id.kerarg_segment_byte_size
+    kernel_arg_buffer_size = code_descriptor._id.kernarg_segment_byte_size
     kernel_arg_buffer = ctypes.c_void_p()
     hsa.hsa_memory_allocate(kernarg_region, kernel_arg_buffer_size,
                             ctypes.byref(kernel_arg_buff))
