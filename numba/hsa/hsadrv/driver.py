@@ -539,7 +539,8 @@ class Program(object):
         request.symbol = symbol
 
         cb_typ = drvapi.hsa_ext_error_message_callback_t
-        cb= ctypes.cast(None, cb_typ) if callback is None else cb_typ(callback)
+        cb = error_message_callback
+        cb = ctypes.cast(None, cb_typ) if cb is None else cb_typ(cb)
 
         hsa.hsa_ext_finalize_program(self._id, device._id, 1,
                                      ctypes.byref(request),
