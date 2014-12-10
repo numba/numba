@@ -537,10 +537,14 @@ class Program(object):
         request.module.handle = module._id.handle
         request.program_call_convention = call_convention
         request.symbol = symbol
+
+        cb_typ = hsa_ext_error_message_callback_t
+        cb= ctypes.cast(None, cb_typ) if callback is None else cb_typ(callback)
+
         hsa.hsa_ext_finalize_program(self._id, device._id, 1,
                                      ctypes.byref(request),
                                      None, # control_directives
-                                     error_message_callback,
+                                     cb,
                                      opt_level,
                                      options,
                                      debug_info)
