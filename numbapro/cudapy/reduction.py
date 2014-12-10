@@ -202,7 +202,7 @@ class Reduce(object):
 
         while size >= 16:
             # Find the closest size that is power of two
-            p2size = 2 ** int(math.log2(size))
+            p2size = 2 ** int(math.log(size, 2))
             # Plan for p2size
             plan = self._plan(p2size, nbtype, init)
 
