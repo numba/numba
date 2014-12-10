@@ -11,8 +11,9 @@ if tuple.__itemsize__ == 4:
 elif tuple.__itemsize__ == 8:
     OPT = '-m64 --compiler-options "-fPIC"'
 
-CUB_INCLUDE = '-I../thirdparty/cub'
-MGPU_INCLUDE = '-I../thirdparty/moderngpu/include'
+DIR = os.path.abspath(os.path.join(os.path.dirname(__file__),'..'))
+CUB_INCLUDE = '-I%s/thirdparty/cub' % DIR
+MGPU_INCLUDE = '-I%s/thirdparty/moderngpu/include' % DIR
 
 GENCODE_SMXX = "-gencode arch=compute_{CC},code=sm_{CC}"
 GENCODE_SM20 = GENCODE_SMXX.format(CC=20)
@@ -32,7 +33,7 @@ SM.append(GENCODE_COMPUTE50)
 
 GENCODE_FLAGS = ' '.join(SM)
 
-LIBDIR = 'lib'
+LIBDIR = '%s/cudalib/lib' % DIR
 
 def run_shell(cmd):
     print(cmd)
