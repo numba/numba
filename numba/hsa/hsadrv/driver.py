@@ -553,7 +553,7 @@ class Program(object):
         kernel_id = ctypes.POINTER(drvapi.hsa_ext_code_descriptor_t)()
         hsa.hsa_ext_query_kernel_descriptor_address(
             self._id, module._id, symbol,
-            ctype.byref(kernel_id))
+            ctypes.byref(kernel_id))
 
         return CodeDescriptor(kernel_id.contents)
 
