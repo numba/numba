@@ -76,7 +76,8 @@ def main(src, dst):
     hsa.hsa_memory_register(dst.ctypes.data, dst.nbytes)
 
     kernarg_region = drvapi.hsa_region_t(0)
-    hsa.hsa_agent_iterate_regions(gpu._id, get_kernarg, kernarg_region)
+    callback = drvapi.HSA_AGENT_ITERATE_REGIONS_CALLBACK_FUNC(get_kernarg)
+    hsa.hsa_agent_iterate_regions(gpu._id, callback, kernarg_region)
     assert kernarg_region != 0
 
     kernel_arg_buffer_size = code_descriptor._id.kerarg_segment_byte_size
