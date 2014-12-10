@@ -26,7 +26,7 @@ def get_kernarg(region, result):
     flags = drvapi.hsa_region_flag_t()
     hsa.hsa_region_get_info(region, enums.HSA_REGION_INFO_FLAGS, ctypes.byref(flags))
     print("region {0} with flags {1}".format(hex(region), hex(flags.value)))
-    if flags & enums.HSA_REGION_FLAG_KERNARG:
+    if flags.value & enums.HSA_REGION_FLAG_KERNARG:
         result.value = region.value
 
     return enums.HSA_STATUS_SUCCESS
