@@ -89,7 +89,7 @@ def main(src, dst):
     kernargs.contents[0] = dst.ctypes.data
     kernargs.contents[1] = src.ctypes.data
 
-    aql.kernel_object_address = code_descriptor._id.code_handle
+    aql.kernel_object_address = code_descriptor._id.code.handle
     aql.kernarg_address = kernel_arg_buffer.value
 
     # going further requires modifying the API handling
