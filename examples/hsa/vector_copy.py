@@ -27,7 +27,7 @@ def get_kernarg(region, result):
     hsa.hsa_region_get_info(region, enums.HSA_REGION_INFO_FLAGS, ctypes.byref(flags))
     print("region {0} with flags {1}".format(hex(region), hex(flags.value)))
     if flags.value & enums.HSA_REGION_FLAG_KERNARG:
-        result.value = region.value
+        result.append(region.value)
 
     return enums.HSA_STATUS_SUCCESS
 
@@ -76,10 +76,11 @@ def main(src, dst):
     hsa.hsa_memory_register(src.ctypes.data, src.nbytes)
     hsa.hsa_memory_register(dst.ctypes.data, dst.nbytes)
 
-    kernarg_region = drvapi.hsa_region_t(0)
+    kernarg_regions = []
     callback = drvapi.HSA_AGENT_ITERATE_REGIONS_CALLBACK_FUNC(get_kernarg)
-    hsa.hsa_agent_iterate_regions(gpu._id, callback, kernarg_region)
-    assert kernarg_region != 0
+    hsa.hsa_agent_iterate_regions(gpu._id, callback, kernarg_regions)
+    assert kernarg_regions
+    kernarg_region = kernar_regions[0] # the first one...
 
     kernel_arg_buffer_size = code_descriptor._id.kerarg_segment_byte_size
     kernel_arg_buffer = ctypes.c_void_p()
