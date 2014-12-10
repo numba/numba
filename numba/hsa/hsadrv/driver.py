@@ -533,7 +533,7 @@ class Program(object):
                  opt_level=0,
                  options=None,
                  debug_info=0):
-        request = hsa_ext_finalization_request_t()
+        request = drvapi.hsa_ext_finalization_request_t()
         request.module = module._id
         request.program_call_convention = call_convention
         request.symbol = symbol
@@ -545,7 +545,7 @@ class Program(object):
                                      options,
                                      debug_info)
 
-        kernel_id = PTR(hsa_ext_code_descriptor_t)
+        kernel_id = PTR(drvapi.hsa_ext_code_descriptor_t)()
         hsa.hsa_ext_query_kernel_descriptor_address(
             self._id, module._id, symbol,
             ctype.byref(kernel_id))
