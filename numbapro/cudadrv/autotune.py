@@ -6,7 +6,10 @@ from __future__ import division, absolute_import, print_function
 import math
 import re
 
+SMEM16K = 16 * 2 ** 10
 SMEM48K = 48 * 2 ** 10
+SMEM64K = 64 * 2 ** 10
+SMEM96K = 64 * 2 ** 10
 
 #------------------------------------------------------------------------------
 # autotuning
@@ -40,10 +43,9 @@ class AutoTuner(object):
     """Autotune a kernel based upon the theoretical occupancy.
     """
     def __init__(self, cc, info, smem_config=None, dynsmem=0):
-        smem_config = SMEM48K if smem_config is None else smem_config
         self.cc = cc
         self.dynsmem = dynsmem
-        self._table = warp_occupancy(info=info, cc=cc, smem_config=smem_config)
+        self._table = warp_occupancy(info=info, cc=cc)
         self._by_occupancy = list(reversed(sorted(((occup, tpb)
                                                    for tpb, (occup, factor)
                                                    in self.table.items()),
@@ -114,6 +116,9 @@ class AutoTuner(object):
 #------------------------------------------------------------------------------
 # warp occupancy calculator
 
+# Reference: NVIDIA CUDA Toolkit v6.5 Programming Guide, Appendix G.
+# URL: http://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#compute-capabilities
+
 LIMITS_CC_20 = {
     'thread_per_warp': 32,
     'warp_per_sm': 48,
@@ -127,6 +132,7 @@ LIMITS_CC_20 = {
     'smem_alloc_unit': 128,
     'warp_alloc_gran': 2,
     'max_block_size': 1024,
+    'default_smem_config': SMEM16K,
 }
 
 LIMITS_CC_21 = LIMITS_CC_20
@@ -144,6 +150,7 @@ LIMITS_CC_30 = {
     'smem_alloc_unit': 256,
     'warp_alloc_gran': 4,
     'max_block_size': 1024,
+    'default_smem_config': SMEM48K,
 }
 
 LIMITS_CC_35 = LIMITS_CC_30.copy()
@@ -151,11 +158,36 @@ LIMITS_CC_35.update({
     'reg_per_thread': 255,
 })
 
+LIMITS_CC_50 = {
+    'thread_per_warp': 32,
+    'warp_per_sm': 64,
+    'thread_per_sm': 2048,
+    'block_per_sm': 32,
+    'registers': 65536, # This is 65536 in the sheet but is 65535 for other arches. bug?
+    'reg_alloc_unit': 256,
+    'reg_alloc_gran': 'warp',
+    'reg_per_thread': 255,
+    'smem_per_sm': 65536,
+    'smem_per_block': 49152,
+    'smem_alloc_unit': 256,
+    'warp_alloc_gran': 4,
+    'max_block_size': 1024,
+    'default_smem_config': SMEM64K,
+}
+
+LIMITS_CC_52 = LIMITS_CC_50.copy()
+LIMITS_CC_52.update({
+    'smem_per_sm': 98304,
+    'default_smem_config': SMEM96K,
+})
+
 PHYSICAL_LIMITS = {
     (2, 0): LIMITS_CC_20,
     (2, 1): LIMITS_CC_21,
     (3, 0): LIMITS_CC_30,
     (3, 5): LIMITS_CC_35,
+    (5, 0): LIMITS_CC_50,
+    (5, 2): LIMITS_CC_52
 }
 
 
@@ -167,7 +199,7 @@ def floor(x, s=1):
     return s * math.floor(x / s)
 
 
-def warp_occupancy(info, cc, smem_config=SMEM48K):
+def warp_occupancy(info, cc, smem_config=None):
     """Returns a dictionary of {threadperblock: occupancy, factor}
 
     Only threadperblock of multiple of warpsize is used.
@@ -178,6 +210,8 @@ def warp_occupancy(info, cc, smem_config=SMEM48K):
         limits = PHYSICAL_LIMITS[cc]
     except KeyError:
         raise ValueError("%s is not a supported compute capability" % cc)
+    if smem_config is None:
+        smem_config = limits['default_smem_config']
     warpsize = limits['thread_per_warp']
     max_thread = info.maxthreads
 

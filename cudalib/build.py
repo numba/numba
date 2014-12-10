@@ -18,14 +18,21 @@ GENCODE_SMXX = "-gencode arch=compute_{CC},code=sm_{CC}"
 GENCODE_SM20 = GENCODE_SMXX.format(CC=20)
 GENCODE_SM30 = GENCODE_SMXX.format(CC=30)
 GENCODE_SM35 = GENCODE_SMXX.format(CC=35)
+GENCODE_SM50 = GENCODE_SMXX.format(CC=50)
+GENCODE_COMPUTEXX = "-gencode arch=compute_{CC},code=compute_{CC}"
+GENCODE_COMPUTE50 = GENCODE_COMPUTEXX.format(CC=50)
+
 
 SM = []
 SM.append(GENCODE_SM20)
 SM.append(GENCODE_SM30)
 SM.append(GENCODE_SM35)
+SM.append(GENCODE_SM50)
+SM.append(GENCODE_COMPUTE50)
 
 GENCODE_FLAGS = ' '.join(SM)
 
+LIBDIR = 'lib'
 
 def run_shell(cmd):
     print(cmd)
@@ -45,18 +52,26 @@ def build_cuda(srcdir, out, ins, includes):
 
 def build_radixsort():
     build_cuda(srcdir='src',
-               out='lib/nbpro_radixsort.so',
+               out='%s/nbpro_radixsort.so' % LIBDIR,
                ins=['cubradixsort.cu'],
                includes=CUB_INCLUDE, )
 
 
 def build_mgpusort():
     build_cuda(srcdir='src',
-               out='lib/nbpro_segsort.so',
+               out='%s/nbpro_segsort.so' % LIBDIR,
                ins=['mgpusort.cu'],
                includes=MGPU_INCLUDE, )
 
 
+def ensure_libdir():
+    if os.path.exists(LIBDIR):
+        if not os.path.isdir(LIBDIR):
+            raise RuntimeError('Lib dir is a file')
+    else:
+        os.mkdir(LIBDIR)
+
 if __name__ == '__main__':
+    ensure_libdir()
     build_radixsort()
     build_mgpusort()
