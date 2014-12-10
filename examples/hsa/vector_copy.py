@@ -20,6 +20,17 @@ def create_program(device, brig_file, symbol):
 
     return program, code_descriptor
 
+
+def get_kernarg(region, result):
+    flags = drvapi.hsa_region_flag_t()
+    hsa.hsa_region_get_info(region, enums.HSA_REGION_INFO_FLAGS, ctypes.byref(flags))
+    print("region {0} with flags {1}".format(hex(region), hex(flags.value)))
+    if flags & enums.HSA_REGION_FLAG_KERNARG:
+        result.value = region.value
+
+    return enums.HSA_STATUS_SUCCESS
+
+    
 def main(src, dst):
     # note that the hsa library is automatically initialized on first use.
     # the list of agents is present in the driver object, so we can use
@@ -65,7 +76,7 @@ def main(src, dst):
     hsa.hsa_memory_register(dst.ctypes.data, dst.nbytes)
 
     kernarg_region = drvapi.hsa_region_t(0)
-    hsa.hsa_agent_iterate_regions(gpu._id, get_kerarg, ctypes.byref(kernarg_region))
+    hsa.hsa_agent_iterate_regions(gpu._id, get_kernarg, kernarg_region)
     assert kernarg_region != 0
 
     kernel_arg_buffer_size = code_descriptor._id.kerarg_segment_byte_size
