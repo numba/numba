@@ -262,7 +262,7 @@ class Driver(object):
         return Signal(result.value)
 
     def load_code_unit(self, code_binary, agents=None):
-        # not sure of the purpose of caller... 
+        # not sure of the purpose of caller...
         caller = drvapi.hsa_runtime_caller_t()
         caller.caller = 0
 
@@ -509,7 +509,7 @@ class BrigModule(object):
     def find_symbol_offset(self, symbol_name):
         symbol_offset = drvapi.hsa_ext_brig_code_section_offset32_t()
         _check_error('find_symbol_offset',
-                     elf_utils.find_symbol_offset(self._id, symbol_name, 
+                     elf_utils.find_symbol_offset(self._id, symbol_name,
                                                   ctypes.byref(symbol_offset)))
 
         return symbol_offset.value
@@ -527,6 +527,30 @@ class Program(object):
         hsa.hsa_ext_add_module(self._id, module._id, ctypes.byref(result))
         return BrigModuleHandle(result)
 
+    def finalize(self, device, module, symbol,
+                 call_convention=0,
+                 error_message_callback=None,
+                 opt_level=0,
+                 options=None,
+                 debug_info=0):
+        request = hsa_ext_finalization_request_t()
+        request.module = module._id
+        request.program_call_convention = call_convention
+        request.symbol = symbol
+        hsa.hsa_ext_finalize_program(self._id, device._id, 1,
+                                     ctypes.byref(request),
+                                     None, # control_directives
+                                     error_message_callback,
+                                     opt_level,
+                                     options,
+                                     debug_info)
+
+        kernel_id = PTR(hsa_ext_code_descriptor_t)
+        hsa.hsa_ext_query_kernel_descriptor_address(
+            self._id, module._id, symbol,
+            ctype.byref(kernel_id))
+
+        return CodeDescriptor(kernel_id.contents)
 
 class BrigModuleHandle(object):
     def __init__(self, module_handle_id):
@@ -537,3 +561,6 @@ class BrigModuleHandle(object):
         # program...
         pass
 
+class CodeDescriptor(object):
+    def __init__(self, code_descriptor_id):
+        self._id = code_descriptor_id
