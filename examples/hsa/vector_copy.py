@@ -13,7 +13,7 @@ def create_program(device, brig_file, symbol):
     brig_module = BrigModule.from_file(brig_file)
     symbol_offset = brig_module.find_symbol_offset(symbol)
     program = hsa.create_program([device])
-    module_handle = program.add_module(brig_module)
+    module = program.add_module(brig_module)
 
     program.finalize(device, module, symbol)
     print("symbol {0} at offset {1}".format(symbol, symbol_offset))
