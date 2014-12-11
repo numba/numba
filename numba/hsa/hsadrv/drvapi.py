@@ -537,7 +537,7 @@ API_PROTOTYPES = {
         'restype': hsa_status_t,
         'argtypes': [hsa_region_t, hsa_region_info_t, ctypes.c_void_p],
         'errcheck': _check_error,
-    }
+    },
 
     # hsa_status_t hsa_memory_register(
     #     void *address,
@@ -546,7 +546,7 @@ API_PROTOTYPES = {
         'restype': hsa_status_t,
         'argtypes': [ctypes.c_void_p, ctypes.c_size_t],
         'errcheck': _check_error
-    }
+    },
 
     # hsa_status_t hsa_memory_deregister(
     #     void *address,
@@ -555,7 +555,7 @@ API_PROTOTYPES = {
         'restype': hsa_status_t,
         'argtypes': [ctypes.c_void_p, ctypes.c_size_t],
         'errcheck': _check_error
-    }
+    },
 
     # hsa_status_t hsa_memory_allocate(
     #     hsa_region_t region,
@@ -563,7 +563,7 @@ API_PROTOTYPES = {
     #     void **ptr);
     'hsa_memory_allocate': {
         'restype': hsa_status_t,
-        'argtypes': [hsa_region_t, ctypes.c_size_t, _PTR(ctypes.c_void_p)]
+        'argtypes': [hsa_region_t, ctypes.c_size_t, _PTR(ctypes.c_void_p)],
         'errcheck': _check_error
     },
 
@@ -667,7 +667,7 @@ API_PROTOTYPES = {
     'hsa_signal_and_relaxed': {
         'restype': None,
         'argtypes': [hsa_signal_t, hsa_signal_value_t]
-    }
+    },
 
     # void hsa_signal_and_acquire(
     #     hsa_signal_t signal,
@@ -689,7 +689,7 @@ API_PROTOTYPES = {
     #     hsa_signal_t signal,
     #     hsa_signal_value_t value);
     'hsa_signal_and_acq_rel': {
-        'restype',
+        'restype': None,
         'argtypes': [hsa_signal_t, hsa_signal_value_t]
     },
 
@@ -759,7 +759,7 @@ API_PROTOTYPES = {
     'hsa_signal_xor_acq_rel': {
         'restype': None,
         'argtypes': [hsa_signal_t, hsa_signal_value_t]
-    }
+    },
 
     # void hsa_signal_add_relaxed(
     #     hsa_signal_t signal,
@@ -767,7 +767,7 @@ API_PROTOTYPES = {
     'hsa_signal_add_relaxed': {
         'restype': None,
         'argtypes': [hsa_signal_t, hsa_signal_value_t]
-    }
+    },
 
     # void hsa_signal_add_acquire(
     #     hsa_signal_t signal,
@@ -847,7 +847,7 @@ API_PROTOTYPES = {
     'hsa_signal_exchange_release': {
         'restype': hsa_signal_value_t,
         'argtypes': [hsa_signal_t, hsa_signal_value_t]
-    }
+    },
 
     # hsa_signal_value_t hsa_signal_exchange_acq_rel(
     #     hsa_signal_t signal,
@@ -975,7 +975,7 @@ API_PROTOTYPES = {
         'restype': hsa_status_t,
         'argtypes': [hsa_agent_t, hsa_ext_finalization_handle_t],
         'errcheck': _check_error
-    }
+    },
 
     # hsa_status_t HSA_API hsa_ext_serialize_finalization(
     #     hsa_runtime_caller_t caller,
@@ -995,7 +995,7 @@ API_PROTOTYPES = {
                      ctypes.c_int,
                      ctypes.c_void_p],
         'errcheck': _check_error
-    }
+    },
 
     # hsa_status_t HSA_API hsa_ext_deserialize_finalization(
     #     hsa_runtime_caller_t caller,
@@ -1019,7 +1019,7 @@ API_PROTOTYPES = {
                      ctypes.c_int,
                      _PTR(hsa_ext_finalization_handle_t)],
         'errcheck': _check_error
-    }
+    },
 
     # linker ###################################################################
 
@@ -1035,7 +1035,7 @@ API_PROTOTYPES = {
                      ctypes.c_uint32,
                      hsa_ext_brig_machine_model8_t,
                      hsa_ext_brig_profile8_t,
-                     _PTR(hsa_ext_program_handle_t)]
+                     _PTR(hsa_ext_program_handle_t)],
         'errcheck': _check_error
     },
 
@@ -1137,7 +1137,7 @@ API_PROTOTYPES = {
                      ctypes.c_uint32,
                      _PTR(hsa_ext_brig_module_handle_t)],
         'errcheck': _check_error
-    }
+    },
 
     # hsa_status_t HSA_API hsa_ext_query_program_brig_module(
     #     hsa_ext_program_handle_t program,
@@ -1149,7 +1149,7 @@ API_PROTOTYPES = {
                      hsa_ext_brig_module_handle_t,
                      _PTR(_PTR(hsa_ext_brig_module_t))],
         'errcheck': _checkerror
-    }
+    },
 
     # hsa_status_t HSA_API hsa_ext_query_call_convention(
     #     hsa_ext_program_handle_t program,
