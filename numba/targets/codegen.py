@@ -116,13 +116,15 @@ class CodeLibrary(object):
             print(self._final_module)
             print('=' * 80)
 
-        self._optimize_final_module()
-
         # Link libraries for shared code
         for library in self._linking_libraries:
             self._final_module.link_in(library._final_module, preserve=True)
         for library in self._codegen._libraries:
             self._final_module.link_in(library._final_module, preserve=True)
+
+        # Optimize the module after all dependences are linked in above,
+        # to allow for inlining.
+        self._optimize_final_module()
 
         self._final_module.verify()
         # It seems add_module() must be done only here and not before

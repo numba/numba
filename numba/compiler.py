@@ -695,7 +695,9 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
     else:
         # Prepare for execution
         cfunc = targetctx.get_executable(library, fndesc, env)
-        targetctx.insert_user_function(cfunc, fndesc)
+        # Insert native function for use by other jitted-functions.
+        # We also register its library to allow for inlining.
+        targetctx.insert_user_function(cfunc, fndesc, [library])
         return fndesc, exception_map, cfunc
 
 
