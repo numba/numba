@@ -10,13 +10,16 @@ UFuncCore also defines a work-stealing mechanism that allows idle threads
 to steal works from other threads.
 """
 from __future__ import print_function, absolute_import
+import sys
+import os
 import multiprocessing
+
 import numpy as np
 import llvmlite.llvmpy.core as lc
 import llvmlite.binding as ll
 from numba.npyufunc import ufuncbuilder
-from numba import types
-from numba.targets.registry import CPUTarget
+from numba import types, utils
+
 
 NUM_CPU = max(1, multiprocessing.cpu_count())
 
@@ -173,9 +176,9 @@ def build_ufunc_kernel(library, ctx, innerfunc, sig):
 
 
 class _ProtectEngineDestroy(object):
-    def __init__(self, set_cas, library):
+    def __init__(self, set_cas, engine):
         self.set_cas = set_cas
-        self.library = library
+        self.engine = engine
 
     def __del__(self):
         """
@@ -192,17 +195,12 @@ def _make_cas_function():
     """
     Generate a compare-and-swap function for portability sake.
     """
-
-    cpucontext = CPUTarget.target_context
-    codegen = cpucontext.jit_codegen()
-    library = codegen.create_library('cas.helper')
-
     # Generate IR
-    mod = library.create_ir_module('generate-cas')
+    mod = lc.Module.new('generate-cas')
     llint = lc.Type.int()
     llintp = lc.Type.pointer(llint)
     fnty = lc.Type.function(llint, [llintp, llint, llint])
-    fn = mod.add_function(fnty, name='cas')
+    fn = mod.add_function(fnty, name='.numbapro.parallel.ufunc.cas')
     ptr, old, repl = fn.args
     bb = fn.append_basic_block('')
     builder = lc.Builder.new(bb)
@@ -212,10 +210,11 @@ def _make_cas_function():
     builder.ret(builder.select(failed, old, out))
 
     # Build & Link
-    library.add_ir_module(mod)
-    ptr = library.get_pointer_to_function(fn.name)
-
-    return library, ptr
+    llmod = ll.parse_assembly(str(mod))
+    llfn = llmod.get_function(fn.name)
+    engine = ll.create_jit_compiler(llmod)
+    ptr = engine.get_pointer_to_function(llfn)
+    return engine, ptr
 
 
 def _launch_threads():
@@ -239,10 +238,26 @@ def _init():
 
     set_cas = CFUNCTYPE(None, c_void_p)(lib.set_cas)
 
-    library, cas_ptr = _make_cas_function()
+    engine, cas_ptr = _make_cas_function()
     set_cas(c_void_p(cas_ptr))
 
-    _keepalive.append(_ProtectEngineDestroy(set_cas, library))
+    _keepalive.append(_ProtectEngineDestroy(set_cas, engine))
 
 
 _init()
+
+_DYLD_WORKAROUND_SET = 'NUMBAPRO_DYLD_WORKAROUND' in os.environ
+_DYLD_WORKAROUND_VAL = int(os.environ.get('NUMBAPRO_DYLD_WORKAROUND', 0))
+
+if _DYLD_WORKAROUND_SET and _DYLD_WORKAROUND_VAL:
+    _launch_threads()
+
+elif not _DYLD_WORKAROUND_SET:
+    # Do it automatically for python2.6 linux
+    if (sys.version_info[:2] == (2, 6) and
+            sys.platform.startswith('linux') and
+            utils.MACHINE_BITS == 64):
+        _launch_threads()
+
+
+
