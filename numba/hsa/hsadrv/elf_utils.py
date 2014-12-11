@@ -21,16 +21,20 @@ def _load_elf_utils_syms():
     create = lib.create_brig_module_from_brig_file
     create.restype = drvapi.hsa_status_t
     create.argtypes = [ctypes.c_char_p, PTR(PTR(drvapi.hsa_ext_brig_module_t))]
+    create.errcheck = drvapi._check_error
 
     destroy = lib.destroy_brig_module
     destroy.restype = None
     destroy.argtypes = [PTR(drvapi.hsa_ext_brig_module_t)]
+    destroy.errcheck = drvapi._check_error
 
     find_symbol_offset = lib.find_symbol_offset
     find_symbol_offset.restype = drvapi.hsa_status_t
     find_symbol_offset.argtypes = [PTR(drvapi.hsa_ext_brig_module_t),
                                    ctypes.c_char_p,
                                    PTR(drvapi.hsa_ext_brig_code_section_offset32_t)]
+    find_symbol_offset.errcheck = drvapi._check_error
+
     return create, destroy, find_symbol_offset
 
 

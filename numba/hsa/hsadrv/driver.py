@@ -110,34 +110,6 @@ def _raise_driver_error(e):
     raise HsaSupportError(DRIVER_LOAD_ERROR_MSG % e)
 
 
-def _build_reverse_error_warn_maps():
-    err_map = utils.UniqueDict()
-    warn_map = utils.UniqueDict()
-
-    for name in [name for name in dir(enums) if name.startswith('HSA_')]:
-        code = getattr(enums, name)
-        if 'STATUS_ERROR' in name:
-            err_map[code] = name
-        elif 'STATUS_INFO' in name:
-            warn_map[code] = name
-        else:
-            pass # should we warn here?
-    return err_map, warn_map
-
-ERROR_MAP, WARN_MAP = _build_reverse_error_warn_maps()
-
-def _check_error(fname, retcode):
-    def _check_error(self, fname, retcode):
-        if retcode != enums.HSA_STATUS_SUCCESS:
-            if retcode >= enums.HSA_STATUS_ERROR:
-                errname = ERROR_MAP.get(retcode, "UNKNOWN_HSA_ERROR")
-                msg = "Call to %s results in %s" % (fname, errname)
-                raise HsaApiError(retcode, msg)
-            else:
-                warn_name = WARN_MAP.get(retcode, "UNKNOWN_HSA_INFO")
-                msg = "Call to {0} returned {1}".format(fname, warn_name)
-                warnings.warn(msg, HsaWarning)
-
 MISSING_FUNCTION_ERRMSG = """driver missing function: %s.
 """
 
@@ -311,16 +283,9 @@ class Driver(object):
 
         # Find function in driver library
         libfn = self._find_api(fname)
-        libfn.restype = restype
-        libfn.argtypes = argtypes
-
-        @functools.wraps(libfn)
-        def safe_hsa_api_call(*args):
-            retcode = libfn(*args)
-            _check_error(fname, retcode)
-
-        setattr(self, fname, safe_hsa_api_call)
-        return safe_hsa_api_call
+        libfn.__dict__.update(proto)
+        setattr(self, fname, libfn)
+        return libfn
 
 
     def _find_api(self, fname):
@@ -501,16 +466,14 @@ class BrigModule(object):
     @classmethod
     def from_file(cls, file_name):
         result = ctypes.POINTER(drvapi.hsa_ext_brig_module_t)()
-        _check_error('create_brig_module_from_brig_file',
-                     elf_utils.create_brig_module_from_brig_file(
-                         file_name, ctypes.byref(result)))
+        elf_utils.create_brig_module_from_brig_file(file_name,
+                                                    ctypes.byref(result))
         return BrigModule(result.contents)
 
     def find_symbol_offset(self, symbol_name):
         symbol_offset = drvapi.hsa_ext_brig_code_section_offset32_t()
-        _check_error('find_symbol_offset',
-                     elf_utils.find_symbol_offset(self._id, symbol_name,
-                                                  ctypes.byref(symbol_offset)))
+        elf_utils.find_symbol_offset(self._id, symbol_name,
+                                     ctypes.byref(symbol_offset))
 
         return symbol_offset.value
 
