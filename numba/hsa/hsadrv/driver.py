@@ -143,7 +143,7 @@ class Driver(object):
 
 
     def __del__(self):
-        if self.is_initialized and self_initialization_error is None:
+        if self.is_initialized and self.initialization_error is None:
             self.hsa_shut_down()
 
 
@@ -174,7 +174,7 @@ class Driver(object):
         callback = drvapi.HSA_ITER_AGENT_CALLBACK_FUNC(on_agent)
         self.hsa_iterate_agents(callback, None)
 
-        del(Agent.__new__)
+        # del(Agent.__new__)
         agent_map = { agent_id: Agent(agent_id) for agent_id in agent_ids }
         del(Agent.__init__)
         @classmethod
@@ -235,7 +235,7 @@ class Driver(object):
             agent_count = 0
 
         # callback not yet supported, always use NULL
-        cb = cast(None, drvapi.hsa_ext_symbol_value_callback_t)
+        cb = ctypes.cast(None, drvapi.hsa_ext_symbol_value_callback_t)
 
         result = drvapi.hsa_code_unit_t()
         self.hsa_ext_code_unit_load(caller, agents, agent_count, code_binary,
@@ -270,7 +270,7 @@ class Driver(object):
 
         # Find function in driver library
         libfn = self._find_api(fname)
-        
+
         for key, val in proto.items():
             setattr(libfn, key, val)
 
@@ -363,12 +363,12 @@ class Agent(HsaWrapper):
     }
 
 
-    def __new__(cls, agent_id):
-        # This is here to raise errors when trying to create agents
-        # before initialization. When agents are initialized, __new__ will
-        # be replaced with a version that returns the appropriate instance
-        # for existing agent_ids
-        raise HsaDriverError("No known agent with id {0}".format(agent_id))
+    # def __new__(cls, agent_id):
+    #     # This is here to raise errors when trying to create agents
+    #     # before initialization. When agents are initialized, __new__ will
+    #     # be replaced with a version that returns the appropriate instance
+    #     # for existing agent_ids
+    #     raise HsaDriverError("No known agent with id {0}".format(agent_id))
 
 
     def __init__(self, agent_id):
@@ -456,13 +456,14 @@ class BrigModule(object):
     @classmethod
     def from_file(cls, file_name):
         result = ctypes.POINTER(drvapi.hsa_ext_brig_module_t)()
-        elf_utils.create_brig_module_from_brig_file(file_name,
-                                                    ctypes.byref(result))
+        elf_utils.create_brig_module_from_brig_file(
+            file_name.encode('utf8'),
+            ctypes.byref(result))
         return BrigModule(result.contents)
 
     def find_symbol_offset(self, symbol_name):
         symbol_offset = drvapi.hsa_ext_brig_code_section_offset32_t()
-        elf_utils.find_symbol_offset(self._id, symbol_name,
+        elf_utils.find_symbol_offset(self._id, symbol_name.encode('utf8'),
                                      ctypes.byref(symbol_offset))
 
         return symbol_offset.value

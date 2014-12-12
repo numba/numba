@@ -319,7 +319,7 @@ def _check_error(result, func, arguments):
         if result >= enums.HSA_STATUS_ERROR:
             errname = ERROR_MAP.get(result, "UNKNOWN_HSA_ERROR")
             msg = "Call to {0} returned {1}".format(func.__name__, errname)
-            raise HsaApiError(retcode, msg)
+            raise HsaApiError(result, msg)
         else:
             warnname = WARN_MAP.get(result, "UNKNOWN_HSA_INFO")
             msg = "Call to {0} returned {1}".format(func.__name__, warnname)
@@ -349,7 +349,7 @@ API_PROTOTYPES = {
         'argtypes': [hsa_system_info_t, ctypes.c_void_p],
         'errcheck': _check_error
     },
-    
+
     # Agent ####################################################################
     # hsa_status_t hsa_iterate_agents(hsa_status_t(*)(hsa_agent_t, void*), void*)
     'hsa_iterate_agents': {
@@ -398,7 +398,7 @@ API_PROTOTYPES = {
         'argtypes': [_PTR(hsa_queue_t)],
         'errcheck': _check_error
     },
-    
+
     # uint64_t hsa_queue_load_read_index_acquire(hsa_queue_t *queue);
     'hsa_queue_load_read_index_acquire': {
         'restype': ctypes.c_uint64,
@@ -603,7 +603,7 @@ API_PROTOTYPES = {
         'argtypes': [hsa_signal_t],
         'errcheck': _check_error
     },
-        
+
 
     # hsa_signal_value_t hsa_signal_load_relaxed(
     #     hsa_signal_t signal);
