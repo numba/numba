@@ -99,7 +99,7 @@ def main(src, dst):
     index = hsa.hsa_queue_load_write_index_relaxed(q._id)
     queueMask = q._id.contents.size - 1
     real_index = index & queueMask
-    packet_array = ctypes.cast(q._id.content.s.base_address,
+    packet_array = ctypes.cast(q._id.contents.base_address,
                                ctypes.POINTER(drvapi.hsa_dispatch_packet_t))
     packet_array[real_index] = aql
     hsa.hsa_queue_store_write_index_relaxed(q._id, index+1)
