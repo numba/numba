@@ -99,7 +99,9 @@ def main(src, dst):
     index = hsa.hsa_queue_load_write_index_relaxed(q._id)
     queueMask = q._id.contents.size - 1
     real_index = index & queueMask
-    q._id.contents.base_address[real_index] = aql
+    packet_array = ctypes.cast(q._id.content.s.base_address,
+                               ctypes.POINTER(drvapi.hsa_dispatch_packet_t))
+    packet_array[real_index] = aql
     hsa.hsa_queue_store_write_index_relaxed(q._id, index+1)
     hsa.hsa_signal_store_relaxed(q.doorbell_signal, index)
     hsa.hsa_signal_wait_acquire(s._id, enums.HSA_LT, 1, -1, enums.HSA_WAIT_EXPECTANCY_UNKNOWN)
