@@ -26,7 +26,6 @@ def _load_elf_utils_syms():
     destroy = lib.destroy_brig_module
     destroy.restype = None
     destroy.argtypes = [PTR(drvapi.hsa_ext_brig_module_t)]
-    destroy.errcheck = drvapi._check_error
 
     find_symbol_offset = lib.find_symbol_offset
     find_symbol_offset.restype = drvapi.hsa_status_t

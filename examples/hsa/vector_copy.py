@@ -89,7 +89,7 @@ def main(src, dst):
     if not os.path.isfile(brigfile):
         print("Missing brig file")
         sys.exit(1)
-        
+
     program, code_descriptor = create_program(gpu, brigfile, '&__vector_copy_kernel')
     print(program)
 
@@ -121,7 +121,7 @@ def main(src, dst):
     kernarg_region = drvapi.hsa_region_t(0)
     callback = drvapi.HSA_AGENT_ITERATE_REGIONS_CALLBACK_FUNC(get_kernarg)
     hsa.hsa_agent_iterate_regions(gpu._id, callback, kernarg_region)
-    assert kernarg_region != 0
+    assert kernarg_region.value != 0
 
     kernel_arg_buffer_size = code_descriptor._id.kernarg_segment_byte_size
     print ('Kernel has kernarg_segment_byte_size {0}'.format(kernel_arg_buffer_size))
