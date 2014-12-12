@@ -7,6 +7,7 @@ from __future__ import print_function, absolute_import, division
 import warnings
 import math
 import copy
+from ctypes import c_void_p
 import numpy as np
 from .ndarray import (ndarray_populate_head, ArrayHeaderManager)
 from . import driver as _driver
@@ -87,13 +88,17 @@ class DeviceNDArrayBase(object):
         self.dtype = np.dtype(dtype)
         self.size = int(np.prod(self.shape))
         # prepare gpu memory
-        if gpu_data is None:
-            self.alloc_size = _driver.memory_size_from_info(self.shape,
-                                                            self.strides,
-                                                            self.dtype.itemsize)
-            gpu_data = devices.get_context().memalloc(self.alloc_size)
+        if self.size > 0:
+            if gpu_data is None:
+                self.alloc_size = _driver.memory_size_from_info(self.shape,
+                                                                self.strides,
+                                                                self.dtype.itemsize)
+                gpu_data = devices.get_context().memalloc(self.alloc_size)
+            else:
+                self.alloc_size = _driver.device_memory_size(gpu_data)
         else:
-            self.alloc_size = _driver.device_memory_size(gpu_data)
+            gpu_data = None
+            self.alloc_size = 0
 
         self.gpu_mem = ArrayHeaderManager(devices.get_context())
 
@@ -137,7 +142,11 @@ class DeviceNDArrayBase(object):
     def device_ctypes_pointer(self):
         """Returns the ctypes pointer to the GPU data buffer
         """
-        return self.gpu_data.device_ctypes_pointer
+        if self.gpu_data is None:
+            return c_void_p(0)
+        else:
+            return self.gpu_data.device_ctypes_pointer
+
 
     def copy_to_device(self, ary, stream=0):
         """Copy `ary` to `self`.
@@ -145,6 +154,9 @@ class DeviceNDArrayBase(object):
         If `ary` is a CUDA memory, perform a device-to-device transfer.
         Otherwise, perform a a host-to-device transfer.
         """
+        if ary.size == 0:
+            # Nothing to do
+            return
         stream = self._default_stream(stream)
         if _driver.is_device_memory(ary):
             sz = min(self.alloc_size, ary.alloc_size)
@@ -178,7 +190,10 @@ class DeviceNDArrayBase(object):
                     raise TypeError('incompatible strides; device %s; host %s' %
                                     (self.strides, ary.strides))
             hostary = ary
-        _driver.device_to_host(hostary, self, self.alloc_size, stream=stream)
+
+        assert self.alloc_size >= 0, "Negative memory size"
+        if self.alloc_size != 0:
+            _driver.device_to_host(hostary, self, self.alloc_size, stream=stream)
 
         if ary is None:
             hostary = np.ndarray(shape=self.shape, strides=self.strides,

@@ -2,6 +2,7 @@ from __future__ import print_function, division, absolute_import
 
 from numba import utils
 from numba.bytecode import ByteCodeInst, CustomByteCode
+from collections import defaultdict
 
 
 def lift_loop(bytecode, dispatcher_factory):
@@ -14,18 +15,14 @@ def lift_loop(bytecode, dispatcher_factory):
     """
     outer = []
     loops = []
+    # Discover variables references
+    outer_rds, outer_wrs = find_varnames_uses(bytecode, iter(bytecode))
+    # Separate loops and outer
     separate_loops(bytecode, outer, loops)
 
-    # Discover variables references
-    outer_rds, outer_wrs = find_varnames_uses(bytecode, outer)
-    outer_wrs |= set(bytecode.argspec.args)
-
-    # Find in-loop references to variables
-    for loop in loops:
-        args, rets = discover_args_and_returns(bytecode, loop, outer_rds,
-                                               outer_wrs)
-        outer_rds |= args
-        outer_wrs |= rets
+    # Prepend arguments as negative bytecode offset
+    for a in bytecode.argspec.args:
+        outer_wrs[a] = [-1] + outer_wrs[a]
 
     dispatchers = []
     outerlabels = set(bytecode.labels)
@@ -261,27 +258,96 @@ def stitch_instructions(outer, loop):
     return outer[:i] + loop + outer[i:]
 
 
+def remove_from_outer_use(inneruse, outeruse):
+    for name in inneruse:
+        inuse = inneruse[name]
+        outuse = outeruse[name]
+        outeruse[name] = sorted(list(set(outuse) - set(inuse)))
+
+
 def discover_args_and_returns(bytecode, insts, outer_rds, outer_wrs):
     """
     Basic analysis for args and returns
     This completely ignores the ordering or the read-writes.
+
+    outer_rds and outer_wrs are modified
+
+    Note:
+    An invalid argument and return set will likely to cause a RuntimeWarning
+    in the dataflow analysis due to mismatch in stack offset.
     """
     rdnames, wrnames = find_varnames_uses(bytecode, insts)
-    # Pass names that are written outside and write/read locally
-    args = outer_wrs & (rdnames | wrnames)
-    # Return values that it written locally and read outside
-    rets = wrnames & outer_rds
+
+    # Remove all local use from the set
+    remove_from_outer_use(rdnames, outer_rds)
+    remove_from_outer_use(wrnames, outer_wrs)
+
+    # Return every variables that are written inside the loop and read
+    # afterwards
+    rets = set()
+    for name, uselist in wrnames.items():
+        if name in outer_rds:
+            endofloop = insts[-1].offset
+
+            # Find the next read
+            for nextrd in outer_rds[name]:
+                if nextrd > endofloop:
+                    break
+            else:
+                nextrd = None
+
+            # Find the next write
+            for nextwr in outer_wrs[name]:
+                if nextwr > endofloop:
+                    break
+            else:
+                nextwr = None
+
+            # If there is a read but no write OR
+            # If the next use is a read, THEN
+            # it is a return value
+            if nextrd is not None and (nextwr is None or nextwr > nextrd):
+                rets.add(name)
+
+    # Make variables arguments if they are read before defined before the loop.
+    # Since we can't tell if things are conditionally defined here,
+    # We will have to be more conservative.
+    args = set()
+    firstline = insts[0].offset
+    for name in rdnames.keys():
+        outer_write = outer_wrs[name]
+        # If there exists a definition before the start of the loop
+        # for a variable read in side the loop.
+        if any(i < firstline for i in outer_write):
+            args.add(name)
+
+    # Make variables arguments if it is being returned but defined before the
+    # loop.
+    for name in rets:
+        if any(i < insts[0].offset for i in outer_wrs[name]):
+            args.add(name)
+
+    # Re-add the arguments back to outer_rds
+    for name in args:
+        outer_rds[name] = sorted(set(outer_rds[name]) | set([firstline]))
+
+    # Re-add the arguments back to outer_wrs
+    for name in rets:
+        outer_wrs[name] = sorted(set(outer_wrs[name]) | set([firstline]))
+
     return args, rets
 
 
 def find_varnames_uses(bytecode, insts):
-    rdnames = set()
-    wrnames = set()
+    rdnames = defaultdict(list)
+    wrnames = defaultdict(list)
     for inst in insts:
         if inst.opname == 'LOAD_FAST':
-            rdnames.add(bytecode.co_varnames[inst.arg])
+            name = bytecode.co_varnames[inst.arg]
+            rdnames[name].append(inst.offset)
         elif inst.opname == 'STORE_FAST':
-            wrnames.add(bytecode.co_varnames[inst.arg])
+            name = bytecode.co_varnames[inst.arg]
+            wrnames[name].append(inst.offset)
     return rdnames, wrnames
 
 

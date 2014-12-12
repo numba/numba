@@ -105,3 +105,7 @@ def _force_cc(text):
 
 
 FORCE_CUDA_CC = _readenv("NUMBA_FORCE_CUDA_CC", _force_cc, None)
+
+# x86-64 specific
+# Enable AVX on supported platforms.
+ENABLE_AVX = _readenv("NUMBA_ENABLE_AVX", int, 0)

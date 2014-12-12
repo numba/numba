@@ -21,8 +21,7 @@ data structures such as those that exist in NumPy.
 Dependencies
 ============
 
-  * LLVM 3.3
-  * llvmpy (from llvmpy/llvmpy fork)
+  * llvmlite
   * numpy (version 1.6 or higher)
   * argparse (for pycc in python2.6)
 
@@ -41,46 +40,39 @@ it is recommended to use conda environment to maintain multiple isolated
 development environments.  To create a new environment for Numba development:
 
 ```bash
-$ conda create -p ~/dev/mynumba python numpy llvmpy
+$ conda create -p ~/dev/mynumba python numpy llvmlite
 ```
 
 To select the installed version, append "=VERSION" to the package name,
 where, "VERSION" is the version number.  For example:
 
 ```bash
-$ conda create -p ~/dev/mynumba python=2.7 numpy=1.6 llvmpy
+$ conda create -p ~/dev/mynumba python=2.7 numpy=1.6 llvmlite
 ```
 
 to use Python 2.7 and Numpy 1.6.
 
+**Note**: binary packages for llvmlite are currently available from Numba's
+own binstar account, so you'll have to add it to your channels first:
+
+```bash
+$ conda config --add channels numba
+```
 
 Custom Python Environments
 ==========================
 
-If you're not using anaconda, you will need LLVM with RTTI enabled:
+If you're not using conda, you will need to build llvmlite yourself:
 
-* Compile LLVM 3.3
+* Building and installing llvmlite
 
-See https://github.com/llvmpy/llvmpy for the most up-to-date instructions.
-
-```bash
-$ wget http://llvm.org/releases/3.3/llvm-3.3.src.tar.gz
-$ tar zxvf llvm-3.3.src.tar.gz
-$ cd llvm-3.3.src
-$ ./configure --enable-optimized --prefix=LLVM_BUILD_DIR
-$ # It is recommended to separate the custom build from the default system
-$ # package.
-$ # Be sure your compiler architecture is same as version of Python you will use
-$ #  e.g. -arch i386 or -arch x86_64.  It might be best to be explicit about this.
-$ REQUIRES_RTTI=1 make install
-```
-
-* Install llvmpy
+See https://github.com/numba/llvmlite for the most up-to-date instructions.
+You will need a build of LLVM 3.5.
 
 ```bash
-$ git clone https://github.com/llvmpy/llvmpy
-$ cd llvmpy
-$ LLVM_CONFIG_PATH=LLVM_BUILD_DIR/bin/llvm-config python setup.py install
+$ git clone https://github.com/numba/llvmlite
+$ cd llvmlite
+$ python setup.py install
 ```
 
 * Installing Numba
@@ -101,7 +93,7 @@ $ pip install numba
 
 If you want to enable CUDA support, you will need CUDA Toolkit 5.5+ (which contains 
 ``libnvvm``). After installing the Toolkit, you might have to specify a few 
-environment variables according to http://numba.pydata.org/numba-doc/0.13/CUDASupport.html
+environment variables according to http://numba.pydata.org/numba-doc/dev/CUDASupport.html
 
 Documentation
 =============

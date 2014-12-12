@@ -1283,6 +1283,8 @@ def device_pointer(obj):
 
 def device_ctypes_pointer(obj):
     "Get the ctypes object for the device pointer"
+    if obj is None:
+        return c_void_p(0)
     require_device_memory(obj)
     return obj.device_ctypes_pointer
 

@@ -2,8 +2,8 @@
 Implementation of operations on numpy timedelta64.
 """
 
-from llvm.core import Type, Constant
-import llvm.core as lc
+from llvmlite.llvmpy.core import Type, Constant
+import llvmlite.llvmpy.core as lc
 
 from numba import npdatetime, types, typing, cgutils, utils
 from numba.targets.imputils import (builtin, builtin_attr, implement,

@@ -4,8 +4,8 @@ from __future__ import print_function, absolute_import, division
 import math
 from functools import reduce
 
-from llvm.core import Type, Constant
-import llvm.core as lc
+from llvmlite.llvmpy.core import Type, Constant
+import llvmlite.llvmpy.core as lc
 
 from .imputils import (builtin, builtin_attr, implement, impl_attribute,
                        iternext_impl, struct_factory)

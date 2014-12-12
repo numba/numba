@@ -1,5 +1,6 @@
 from __future__ import print_function, division, absolute_import
-from llvm.core import Module, Type, Builder, InlineAsm
+from llvmlite.llvmpy.core import Module, Type, Builder, InlineAsm
+from llvmlite import binding as ll
 from numba.cuda.cudadrv import nvvm
 from numba.cuda.testing import unittest, CUDATestCase
 

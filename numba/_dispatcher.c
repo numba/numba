@@ -33,6 +33,9 @@ static int BASIC_TYPECODES[12];
 
 static int tc_intp;
 
+static PyObject* typecache;
+static PyObject* ndarray_typecache;
+
 static
 PyObject* init_types(PyObject *self, PyObject *args)
 {
@@ -72,6 +75,13 @@ PyObject* init_types(PyObject *self, PyObject *args)
         break;
     default:
         PyErr_SetString(PyExc_AssertionError, "sizeof(void*) != {4, 8}");
+        return NULL;
+    }
+
+    typecache = PyDict_New();
+    ndarray_typecache = PyDict_New();
+    if (typecache == NULL || ndarray_typecache == NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "failed to create type cache");
         return NULL;
     }
 
@@ -157,39 +167,37 @@ Dispatcher_Insert(DispatcherObject *self, PyObject *args)
     Py_RETURN_NONE;
 }
 
-
-// Unused?
-//static
-//PyObject*
-//Dispatcher_Find(DispatcherObject *self, PyObject *args)
-//{
-//    PyObject *sigtup;
-//    int i, sigsz;
-//    int *sig;
-//    void *out;
-//
-//    if (!PyArg_ParseTuple(args, "O", &sigtup)) {
-//        return NULL;
-//    }
-//
-//    sigsz = PySequence_Fast_GET_SIZE(sigtup);
-//
-//    sig = malloc(sigsz * sizeof(int));
-//    for (i = 0; i < sigsz; ++i) {
-//        sig[i] = PyLong_AsLong(PySequence_Fast_GET_ITEM(sigtup, i));
-//    }
-//
-//    out = dispatcher_resolve(self->dispatcher, sig);
-//
-//    free(sig);
-//
-//    return PyLong_FromVoidPtr(out);
-//}
-
 static PyObject *str_typeof_pyval = NULL;
 
+/* For void types, we need to keep a reference to the returned type object so
+   that it cannot be deleted. This is because of the following events occurring
+   when first using a @jit function for a given set of types:
+
+    1. typecode_fallback requests a new typecode for an arbitrary Python value;
+       this implies creating a Numba type object (on the first dispatcher call);
+       the typecode cache is then populated.
+    2. matching of the typecode list in _dispatcherimpl.cpp fails, since the
+       typecode is new.
+    3. we have to compile: compile_and_invoke() is called, it will invoke
+       Dispatcher_Insert to register the new signature.
+
+   The reference returned in step 1 is deleted as soon as we call Py_DECREF() on
+   it, since we are holding the only reference. If this happens and we use the
+   typecode we got to populate the cache, then the cache won't ever return the
+   correct typecode, and the dispatcher will never successfully match the typecodes
+   with those of some already-compiled instance. So we need to make sure that we
+   don't call Py_DECREF() on objects whose typecode will be used to populate the
+   cache. This is ensured by calling _typecode_fallback with retain_reference ==
+   0.
+
+   Note that technically we are leaking the reference, since we do not continue
+   to hold a pointer to the type object that we get back from typeof_pyval.
+   However, we don't need to refer to it again, we just need to make sure that
+   it is never deleted.
+*/
 static
-int typecode_fallback(DispatcherObject *dispatcher, PyObject *val) {
+int _typecode_fallback(DispatcherObject *dispatcher, PyObject *val,
+                       int retain_reference) {
     PyObject *tmptype, *tmpcode;
     int typecode;
 
@@ -201,7 +209,8 @@ int typecode_fallback(DispatcherObject *dispatcher, PyObject *val) {
     }
 
     tmpcode = PyObject_GetAttrString(tmptype, "_code");
-    Py_DECREF(tmptype);
+    if (!retain_reference)
+        Py_DECREF(tmptype);
     if (tmpcode == NULL)
         return -1;
     typecode = PyLong_AsLong(tmpcode);
@@ -209,6 +218,17 @@ int typecode_fallback(DispatcherObject *dispatcher, PyObject *val) {
     return typecode;
 }
 
+/* Variations on _typecode_fallback for convenience */
+
+static
+int typecode_fallback(DispatcherObject *dispatcher, PyObject *val) {
+    return _typecode_fallback(dispatcher, val, 0);
+}
+
+static
+int typecode_fallback_keep_ref(DispatcherObject *dispatcher, PyObject *val) {
+    return _typecode_fallback(dispatcher, val, 1);
+}
 
 #define N_DTYPES 12
 #define N_NDIM 5    /* Fast path for up to 5D array */
@@ -260,6 +280,52 @@ static int dtype_num_to_typecode(int type_num) {
     return dtype;
 }
 
+static
+int get_cached_typecode(PyArray_Descr* descr) {
+    PyObject* tmpobject = PyDict_GetItem(typecache, (PyObject*)descr);
+    if (tmpobject == NULL)
+        return -1;
+
+    return PyLong_AsLong(tmpobject);
+}
+
+static
+void cache_typecode(PyArray_Descr* descr, int typecode) {
+    PyObject* value = PyLong_FromLong(typecode);
+    PyDict_SetItem(typecache, (PyObject*)descr, value);
+    Py_DECREF(value);
+}
+
+static
+PyObject* ndarray_key(int ndim, int layout, PyArray_Descr* descr) {
+    PyObject* tmpndim = PyLong_FromLong(ndim);
+    PyObject* tmplayout = PyLong_FromLong(layout);
+    PyObject* key = PyTuple_Pack(3, tmpndim, tmplayout, descr);
+    Py_DECREF(tmpndim);
+    Py_DECREF(tmplayout);
+    return key;
+}
+
+static
+int get_cached_ndarray_typecode(int ndim, int layout, PyArray_Descr* descr) {
+    PyObject* key = ndarray_key(ndim, layout, descr);
+    PyObject *tmpobject = PyDict_GetItem(ndarray_typecache, key);
+    if (tmpobject == NULL)
+        return -1;
+
+    Py_DECREF(key);
+    return PyLong_AsLong(tmpobject);
+}
+
+static
+void cache_ndarray_typecode(int ndim, int layout, PyArray_Descr* descr,
+                            int typecode) {
+    PyObject* key = ndarray_key(ndim, layout, descr);
+    PyObject* value = PyLong_FromLong(typecode);
+    PyDict_SetItem(ndarray_typecache, key, value);
+    Py_DECREF(key);
+    Py_DECREF(value);
+}
 
 static
 int typecode_ndarray(DispatcherObject *dispatcher, PyArrayObject *ary) {
@@ -268,30 +334,45 @@ int typecode_ndarray(DispatcherObject *dispatcher, PyArrayObject *ary) {
     int ndim = PyArray_NDIM(ary);
     int layout = 0;
 
-    if (ndim <= 0 || ndim > N_NDIM) goto FALLBACK;
-
     if (PyArray_ISFARRAY(ary)) {
         layout = 1;
     } else if (PyArray_ISCARRAY(ary)){
         layout = 2;
     }
 
+    if (ndim <= 0 || ndim > N_NDIM) goto FALLBACK;
+
     dtype = dtype_num_to_typecode(PyArray_TYPE(ary));
     if (dtype == -1) goto FALLBACK;
 
+    /* "Fast" path, using table lookup */
     assert(layout < N_LAYOUT);
     assert(ndim <= N_NDIM);
     assert(dtype < N_DTYPES);
 
     typecode = cached_arycode[ndim - 1][layout][dtype];
     if (typecode == -1) {
+        /* First use of this table entry, so it requires populating */
         typecode = typecode_fallback(dispatcher, (PyObject*)ary);
         cached_arycode[ndim - 1][layout][dtype] = typecode;
     }
     return typecode;
 
 FALLBACK:
-    return typecode_fallback(dispatcher, (PyObject*)ary);
+    /* "Slow" path */
+
+    /* If this isn't a structured array then we can't use the cache */
+    if (PyArray_TYPE(ary) != NPY_VOID)
+        return typecode_fallback(dispatcher, (PyObject*)ary);
+
+    /* Check type cache */
+    typecode = get_cached_ndarray_typecode(ndim, layout, PyArray_DESCR(ary));
+    if (typecode == -1) {
+        /* First use of this type, use fallback and populate the cache */
+        typecode = typecode_fallback_keep_ref(dispatcher, (PyObject*)ary);
+        cache_ndarray_typecode(ndim, layout, PyArray_DESCR(ary), typecode);
+    }
+    return typecode;
 }
 
 static
@@ -301,6 +382,18 @@ int typecode_arrayscalar(DispatcherObject *dispatcher, PyObject* aryscalar) {
     descr = PyArray_DescrFromScalar(aryscalar);
     if (!descr)
         return typecode_fallback(dispatcher, aryscalar);
+
+    if (descr->type_num == NPY_VOID) {
+        typecode = get_cached_typecode(descr);
+        if (typecode == -1) {
+            /* Resolve through fallback then populate cache */
+            typecode = typecode_fallback_keep_ref(dispatcher, aryscalar);
+            cache_typecode(descr, typecode);
+        }
+        Py_DECREF(descr);
+        return typecode;
+    }
+
     typecode = dtype_num_to_typecode(descr->type_num);
     Py_DECREF(descr);
     if (typecode == -1)
@@ -366,7 +459,6 @@ PyObject*
 compile_and_invoke(DispatcherObject *self, PyObject *args, PyObject *kws)
 {
     /* Compile a new one */
-    int old_can_compile;
     PyObject *cfa, *cfunc, *retval;
     cfa = PyObject_GetAttrString((PyObject*)self, "_compile_for_args");
     if (cfa == NULL)

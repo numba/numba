@@ -201,10 +201,44 @@ the ``add()`` function described above, the Numba IR looks like::
         $0.3 = a.1 + b.1
         return $0.3
 
-Stage 3: Infer Types
+Stage 3: Macro expansion
+------------------------
+
+Now that the function has been translated into the Numba IR, macro expansion can
+be performed. Macro expansion converts specific attributes that are known to
+Numba into IR nodes representing function calls. This is initiated in the
+``numba.compiler.translate_stage`` function, and is implemented in
+``numba.macro``.
+
+Examples of attributes that are macro-expanded include the CUDA instrinsics for
+grid, block and thread dimensions and indices. For example, the assignment to
+``tx`` in the following function::
+
+  @cuda.jit(argtypes=[f4[:]])
+  def f(a):
+      tx = cuda.threadIdx.x
+
+has the following representation after translation to Numba IR::
+
+  $0.1 = global(cuda: <module 'numba.cuda' from '...'>) ['$0.1']
+  $0.2 = getattr(value=$0.1, attr=threadIdx) ['$0.1', '$0.2']
+  del $0.1                                 []
+  $0.3 = getattr(value=$0.2, attr=x)       ['$0.2', '$0.3']
+  del $0.2                                 []
+  tx = $0.3                                ['$0.3', 'tx']
+
+After macro expansion, the ``$0.3 = getattr(value=$0.2, attr=x)`` IR node is
+translated into::
+
+  $0.3 = call tid.x(, )                    ['$0.3']
+
+which represents an instance of the ``Intrinsic`` IR node for calling the
+``tid.x`` intrinsic function.
+
+Stage 4: Infer Types
 --------------------
 
-Now that the function has been translated into the Numba IR, type analysis
+Now that the Numba IR has been generated and macro-expanded, type analysis
 can be performed.  The types of the function arguments can be taken either
 from the explicit function signature given in the ``@jit`` decorator 
 (such as ``@jit('float64(float64, float64)')``), or they can be taken from
@@ -244,7 +278,7 @@ fall back to object mode.  Type inference can fail when unsupported Python
 types, language features, or functions are used in the function body.
 
 
-Stage 4a: Generate No-Python LLVM IR
+Stage 5a: Generate No-Python LLVM IR
 ------------------------------------
 
 If type inference succeeds in finding a Numba type for every intermediate
@@ -305,7 +339,7 @@ to 1.  The optimizer shortens the code generated above quite significantly:
       ret i32 0
     }
 
-Stage 4b: Generate Object Mode LLVM IR
+Stage 5b: Generate Object Mode LLVM IR
 --------------------------------------
 
 If type inference fails to find Numba types for all values inside a function,
@@ -390,7 +424,7 @@ function.  Loop-lifting helps improve the performance of functions that
 need to access uncompilable code (such as I/O or plotting code) but still
 contain a time-intensive section of compilable code.
 
-Stage 5: Compile LLVM IR to Machine Code
+Stage 6: Compile LLVM IR to Machine Code
 ----------------------------------------
 
 In both "object mode" and "nopython mode", the generated LLVM IR is compiled

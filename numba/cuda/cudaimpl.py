@@ -1,9 +1,10 @@
 from __future__ import print_function, absolute_import, division
 from functools import reduce
 import operator
-from llvm.core import Type
-import llvm.core as lc
-import llvm.ee as le
+from llvmlite.llvmpy.core import Type
+import llvmlite.llvmpy.core as lc
+import llvmlite.llvmpy.ee as le
+import llvmlite.binding as ll
 from numba.targets.imputils import implement, Registry
 from numba import cgutils
 from numba import types
@@ -262,7 +263,7 @@ def ptx_atomic_add_tuple(context, builder, sig, args):
 
 
 def _get_target_data(context):
-    return le.TargetData.new(nvvm.data_layout[context.address_size])
+    return ll.create_target_data(nvvm.data_layout[context.address_size])
 
 
 def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
@@ -314,7 +315,7 @@ def _make_array(context, builder, dataptr, dtype, shape, layout='C'):
 
     targetdata = _get_target_data(context)
     lldtype = context.get_data_type(dtype)
-    itemsize = targetdata.abi_size(lldtype)
+    itemsize = lldtype.get_abi_size(targetdata)
     # Compute strides
     rstrides = [itemsize]
     for i, lastsize in enumerate(reversed(shape[1:])):

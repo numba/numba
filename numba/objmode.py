@@ -4,8 +4,8 @@ Lowering implementation for object mode.
 
 from __future__ import print_function, division, absolute_import
 
-from llvm.core import Type, Constant
-import llvm.core as lc
+from llvmlite.llvmpy.core import Type, Constant
+import llvmlite.llvmpy.core as lc
 
 from numba import cgutils, ir, types, utils
 from .lowering import BaseLower, ForbiddenConstruct
@@ -260,7 +260,7 @@ class PyLower(BaseLower):
             has_wrong_size = self.builder.icmp(lc.ICMP_NE,
                                                tup_size, expected_size)
             with cgutils.if_unlikely(self.builder, has_wrong_size):
-                excid = self.context.add_exception(ValueError)
+                excid = self.add_exception(ValueError)
                 self.context.return_user_exc(self.builder, excid)
             return tup
         elif expr.op == 'getitem':

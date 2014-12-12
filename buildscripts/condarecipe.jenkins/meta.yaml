@@ -1,13 +1,12 @@
 package:
   name: numba
-  version: "0.16dev1"
+  version: {{ environ.get('GIT_DESCRIBE_TAG','') }}
 
 source:
-  path: ../..
-  #git_url: git@github.com:numba/numba.git
+  git_url: git@github.com:numba/numba.git
 
 build:
-  number: 1
+  number: {{ environ.get('GIT_DESCRIBE_NUMBER', 0) }}
   #entry_points:
   #  - pycc = numba.pycc:main
 

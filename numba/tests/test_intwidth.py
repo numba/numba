@@ -16,6 +16,11 @@ def usecase_uint64_constant():
     return 18446744073709551615
 
 def usecase_uint64_floor():
+    # This function will only work due to LLVM optimization
+    # The following code converts max i64 to f64.
+    # Round-to-even will increase the value.
+    # When converted back to i64, it can no longer fit into 64-bit.
+    # As a result, zero is returned.
     return math.floor(18446744073709551615)
 
 
