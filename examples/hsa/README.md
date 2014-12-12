@@ -22,10 +22,6 @@ bash Miniconda-3.7.0-Linux-x86_64.sh
 Use conda to install dependencies
 
 ```bash
-conda install llvmpy numpy
-```
-
-```bash
 conda install -c https://conda.binstar.org/numba llvmlite numpy
 ```
 
@@ -66,9 +62,7 @@ The `/opt/hsa_ld_library_path` contains:
 Run HSA vector_copy example
 
 ```bash
-cd examples/hsa
-LD_LIBRARY_PATH=/opt/hsa_ld_library_path
-NUMBA_HSA_DRIVER=/opt/hsa_ld_library_path/libhsa-runtime64.so LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6 python examples/hsa/vector_copy.py
+LD_LIBRARY_PATH=/opt/hsa_ld_library_path NUMBA_HSA_DRIVER=/opt/hsa_ld_library_path/libhsa-runtime64.so LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6 python examples/hsa/vector_copy.py
 ```
 
 
