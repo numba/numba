@@ -6,6 +6,7 @@ This sample tries to mimick the vector_copy example
 from __future__ import print_function, division
 
 import sys
+import os
 import ctypes
 from ctypes.util import find_library
 
@@ -65,7 +66,7 @@ def get_kernarg(region, result):
 
     return enums.HSA_STATUS_SUCCESS
 
-    
+
 def main(src, dst):
     # note that the hsa library is automatically initialized on first use.
     # the list of agents is present in the driver object, so we can use
@@ -83,7 +84,13 @@ def main(src, dst):
     print("Using agent: {0} with queue size: {1}".format(gpu.name, gpu.queue_max_size))
     q = gpu.create_queue_multi(gpu.queue_max_size)
 
-    program, code_descriptor = create_program(gpu, 'vector_copy.brig', '&__vector_copy_kernel')
+    basedir = os.path.dirname(__file__)
+    brigfile = os.path.join(basedir, 'vector_copy.brig')
+    if not os.path.isfile(brigfile):
+        print("Missing brig file")
+        sys.exit(1)
+        
+    program, code_descriptor = create_program(gpu, brigfile, '&__vector_copy_kernel')
     print(program)
 
     s = hsa.create_signal(1)
