@@ -97,7 +97,7 @@ def main(src, dst):
     aql.kernarg_address = kernel_arg_buffer.value
 
     index = hsa.hsa_queue_load_write_index_relaxed(q._id)
-    queueMask = q._id.size - 1
+    queueMask = q._id.contents.size - 1
     real_index = index & queueMask
     q._id.base_address[real_index] = aql
     hsa.hsa_queue_store_write_index_relaxed(q._id, index+1)
