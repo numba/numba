@@ -271,7 +271,10 @@ class Driver(object):
 
         # Find function in driver library
         libfn = self._find_api(fname)
-        libfn.__dict__.update(proto)
+        
+        for key, val in proto.items():
+            setattr(libfn, key, val)
+
         setattr(self, fname, libfn)
         return libfn
 
