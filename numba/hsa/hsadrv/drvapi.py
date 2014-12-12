@@ -414,13 +414,13 @@ API_PROTOTYPES = {
     # uint64_t hsa_queue_load_write_index_acquire(hsa_queue_t *queue);
     'hsa_queue_load_write_index_acquire': {
         'restype': ctypes.c_uint64,
-        'argtypes': _PTR(hsa_queue_t)
+        'argtypes': [_PTR(hsa_queue_t)]
     },
 
     # uint64_t hsa_queue_load_write_index_relaxed(hsa_queue_t *queue);
     'hsa_queue_load_write_index_relaxed': {
         'restype': ctypes.c_uint64,
-        'argtypes': _PTR(hsa_queue_t)
+        'argtypes': [_PTR(hsa_queue_t)]
     },
 
     # void hsa_queue_store_write_index_relaxed(hsa_queue_t *queue, uint64_t value);
