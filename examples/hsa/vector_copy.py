@@ -5,10 +5,12 @@ This sample tries to mimick the vector_copy example
 """
 from __future__ import print_function, division
 
+import sys
+import ctypes
+
 import numpy as np
 from numba.hsa.hsadrv.driver import hsa, BrigModule
 from numba.hsa.hsadrv import drvapi, enums
-import ctypes
 
 def create_program(device, brig_file, symbol):
     brig_module = BrigModule.from_file(brig_file)
