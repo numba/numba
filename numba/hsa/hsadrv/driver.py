@@ -7,7 +7,6 @@ from __future__ import absolute_import, print_function, division
 import sys
 import os
 import ctypes
-import warnings
 import struct
 
 from ... import config # base numba
