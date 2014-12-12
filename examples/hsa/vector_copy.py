@@ -7,10 +7,42 @@ from __future__ import print_function, division
 
 import sys
 import ctypes
+from ctypes.util import find_library
 
 import numpy as np
 from numba.hsa.hsadrv.driver import hsa, BrigModule
 from numba.hsa.hsadrv import drvapi, enums
+
+libc = ctypes.CDLL(find_library('c'))
+libc.posix_memalign.restype = ctypes.c_int
+libc.posix_memalign.argtypes = [
+    ctypes.POINTER(ctypes.c_void_p),
+    ctypes.c_size_t,
+    ctypes.c_size_t
+]
+
+libc.free.restype = None
+libc.free.argtypes = [ctypes.c_void_p]
+
+
+def dump_aql_packet(aql):
+    for field_desc in drvapi.hsa_dispatch_packet_t._fields_:
+        fname = field_desc[0]
+        print (fname, getattr(aql, fname))
+
+def alloc_aligned(typ, alignment):
+    sz = ctypes.sizeof(typ)
+    result = ctypes.c_void_p()
+    err = libc.posix_memalign(ctypes.byref(result),
+                              alignment, sz)
+    if err != 0:
+        raise Exception('ENOMEM')
+
+    ctypes.memset(result, 0, sz)
+    return ctypes.cast(result, ctypes.POINTER(typ)).contents
+
+def free(obj):
+    libc.free(ctypes.byref(obj))
 
 def create_program(device, brig_file, symbol):
     brig_module = BrigModule.from_file(brig_file)
@@ -57,7 +89,8 @@ def main(src, dst):
     s = hsa.create_signal(1)
 
     # manually build an aql packet
-    aql = drvapi.hsa_dispatch_packet_t()
+    aql = alloc_aligned(drvapi.hsa_dispatch_packet_t, 64)
+    print (aql)
 
     aql.completion_signal = s._id
     aql.dimensions = 1
@@ -89,17 +122,21 @@ def main(src, dst):
     kernel_arg_buffer = ctypes.c_void_p()
     hsa.hsa_memory_allocate(kernarg_region, kernel_arg_buffer_size,
                             ctypes.byref(kernel_arg_buffer))
-    kernargs = ctypes.cast(kernel_arg_buffer, ctypes.POINTER(ctypes.c_void_p * 2))
-    kernargs.contents[0] = dst.ctypes.data
-    kernargs.contents[1] = src.ctypes.data
+    kernargs = ctypes.cast(kernel_arg_buffer, ctypes.POINTER(ctypes.c_void_p * 2)).contents
+    kernargs[0] = src.ctypes.data
+    kernargs[1] = dst.ctypes.data
 
-    print ('kernel_arg_buffer is {0}; kernargs is {1}'.format(kernel_arg_buffer, kernargs))
+    print ('kernel_arg_buffer is {0}; kernargs is {1}'.format(hex(kernel_arg_buffer.value),
+                                                              ctypes.byref(kernargs)))
 
-    hsa.hsa_memory_register(kernargs, ctypes.sizeof(kernargs))
+    hsa.hsa_memory_register(ctypes.byref(kernargs), ctypes.sizeof(kernargs))
 
     aql.kernel_object_address = code_descriptor._id.code.handle
-    aql.kernarg_address = kernargs
+    aql.kernarg_address = kernel_arg_buffer.value
 
+    dump_aql_packet(aql)
+
+    print("pushing packet into the queue")
     index = hsa.hsa_queue_load_write_index_relaxed(q._id)
     print ('using slot in queue: {0}'.format(index))
     queueMask = q._id.contents.size - 1
@@ -108,6 +145,7 @@ def main(src, dst):
                                ctypes.POINTER(drvapi.hsa_dispatch_packet_t))
     packet_array[real_index] = aql
     hsa.hsa_queue_store_write_index_relaxed(q._id, index+1)
+    print("ringing the bell")
     hsa.hsa_signal_store_relaxed(q.doorbell_signal, index)
 
     print ('wait for the signal to be raised')
@@ -115,6 +153,7 @@ def main(src, dst):
     hsa.hsa_signal_wait_acquire(s._id, enums.HSA_LT, 1, -1, enums.HSA_WAIT_EXPECTANCY_UNKNOWN)
 
     hsa.hsa_memory_free(kernel_arg_buffer)
+    free(aql)
 
 
 if __name__=='__main__':

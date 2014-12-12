@@ -74,7 +74,7 @@ class hsa_dispatch_packet_t(ctypes.Structure):
         ('private_segment_size', ctypes.c_uint32),
         ('group_segment_size', ctypes.c_uint32),
         ('kernel_object_address', ctypes.c_uint64),
-        ('kerarg_address', ctypes.c_uint64),
+        ('kernarg_address', ctypes.c_uint64),
         ('reserved3', ctypes.c_uint64),
         ('completion_signal', hsa_signal_t),
     ]
