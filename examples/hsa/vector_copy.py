@@ -86,7 +86,7 @@ def main(src, dst):
     kernel_arg_buffer_size = code_descriptor._id.kernarg_segment_byte_size
     print ('Kernel has kernarg_segment_byte_size {0}'.format(kernel_arg_buffer_size))
 
-    kernargs = ctypes.POINTER(ctypes.c_void_p*2)
+    kernargs = ctypes.POINTER(ctypes.c_void_p*2)()
     hsa.hsa_memory_allocate(kernarg_region, kernel_arg_buffer_size,
                             ctypes.byref(kernargs))
     kernargs.contents[0] = dst.ctypes.data
