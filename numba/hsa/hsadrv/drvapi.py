@@ -1,6 +1,9 @@
 from __future__ import print_function, absolute_import, division
 
 import ctypes
+
+from ... import utils
+
 from . import enums
 from .error import HsaApiError
 

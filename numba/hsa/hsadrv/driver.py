@@ -3,25 +3,16 @@ HSA driver bridge implementation
 """
 
 from __future__ import absolute_import, print_function, division
+
 import sys
 import os
-import traceback
 import ctypes
-import weakref
-import functools
-import copy
 import warnings
 import struct
-from ctypes import (c_int, byref, c_size_t, c_char, c_char_p, addressof,
-                    c_void_p, c_float)
-import contextlib
-from collections import namedtuple
-from numba import utils, servicelib, mviewbuf
+
+from ... import config # base numba
 from .error import HsaSupportError, HsaDriverError, HsaApiError, HsaWarning
-from .drvapi import API_PROTOTYPES
 from . import enums, drvapi, elf_utils
-from numba import config
-from numba.utils import longint as long
 
 def _device_type_to_string(device):
     try:
@@ -267,7 +258,7 @@ class Driver(object):
 
         # if not a property... try if it is an api call
         try:
-            proto = API_PROTOTYPES[fname]
+            proto = drvapi.API_PROTOTYPES[fname]
         except KeyError:
             raise AttributeError(fname)
 
