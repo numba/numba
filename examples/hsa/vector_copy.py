@@ -93,10 +93,12 @@ def main(src, dst):
     kernargs.contents[0] = dst.ctypes.data
     kernargs.contents[1] = src.ctypes.data
 
+    print ('kernel_arg_buffer is {0}; kernargs is {1}'.format(kernel_arg_buffer, kernargs))
+
     hsa.hsa_memory_register(kernargs, ctypes.sizeof(kernargs))
 
     aql.kernel_object_address = code_descriptor._id.code.handle
-    aql.kernarg_address = kernel_arg_buffer.value
+    aql.kernarg_address = kernargs
 
     index = hsa.hsa_queue_load_write_index_relaxed(q._id)
     print ('using slot in queue: {0}'.format(index))
