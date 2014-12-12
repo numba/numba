@@ -54,20 +54,21 @@ Running HSA tests
 LD_LIBRARY_PATH=/opt/hsa_ld_library_path NUMBA_HSA_DRIVER=/opt/hsa_ld_library_path/libhsa-runtime64.so LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6 python -m numba.hsa.tests.hsadrv.runtests
 ```
 
-The `LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6` is necessary to workaround a 
+The `LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6` is necessary to workaround a
 missing symbol issue with the libm shipped with Miniconda.
 
-The `/opt/hsa_ld_library_path` contains: 
+The `/opt/hsa_ld_library_path` contains:
 
-- libhsakmt.so.1  
-- libhsa-runtime64.so  
+- libhsakmt.so.1
+- libhsa-runtime64.so
 - libhsa-runtime64.so.1
 
 Run HSA vector_copy example
 
 ```bash
 cd examples/hsa
-LD_LIBRARY_PATH=/opt/hsa_ld_library_path NUMBA_HSA_DRIVER=/opt/hsa_ld_library_path/libhsa-runtime64.so LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6 python vector_copy.py
+LD_LIBRARY_PATH=/opt/hsa_ld_library_path
+NUMBA_HSA_DRIVER=/opt/hsa_ld_library_path/libhsa-runtime64.so LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6 python examples/hsa/vector_copy.py
 ```
 
 
