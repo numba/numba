@@ -96,13 +96,13 @@ def main(src, dst):
     aql.kernel_object_address = code_descriptor._id.code.handle
     aql.kernarg_address = kernel_arg_buffer.value
 
-    index = hsa.hsa_queue_load_write_index_relaxed(ctypes.byref(q))
+    index = hsa.hsa_queue_load_write_index_relaxed(q._id)
     queueMask = q._id.size - 1
     real_index = index & queueMask
     q._id.base_address[real_index] = aql
-    hsa.hsa_queue_store_write_index_relaxed(ctypes.byref(q), index+1)
+    hsa.hsa_queue_store_write_index_relaxed(q._id, index+1)
     hsa.hsa_signal_store_relaxed(q.doorbell_signal, index)
-    hsa.hsa_signal_wait_acquire(signal, enums.HSA_LT, 1, -1, enums.HSA_WAIT_EXPECTANCY_UNKNOWN)
+    hsa.hsa_signal_wait_acquire(s._id, enums.HSA_LT, 1, -1, enums.HSA_WAIT_EXPECTANCY_UNKNOWN)
 
     hsa.hsa_memory_free(kernel_arg_buffer)
 
