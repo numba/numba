@@ -97,6 +97,7 @@ def main(src, dst):
     aql.kernarg_address = kernel_arg_buffer.value
 
     index = hsa.hsa_queue_load_write_index_relaxed(q._id)
+    print ('using slot in queue: {0}'.format(index))
     queueMask = q._id.contents.size - 1
     real_index = index & queueMask
     packet_array = ctypes.cast(q._id.contents.base_address,
@@ -104,15 +105,19 @@ def main(src, dst):
     packet_array[real_index] = aql
     hsa.hsa_queue_store_write_index_relaxed(q._id, index+1)
     hsa.hsa_signal_store_relaxed(q.doorbell_signal, index)
+
+    print ('wait for the signal to be raised')
+    # wait for results
     hsa.hsa_signal_wait_acquire(s._id, enums.HSA_LT, 1, -1, enums.HSA_WAIT_EXPECTANCY_UNKNOWN)
 
     hsa.hsa_memory_free(kernel_arg_buffer)
 
 
 if __name__=='__main__':
-    src = np.random.random(1024*1024)
-    dst = np.empty_like(src)
+    src = np.random.random(1024*1024).astype(np.float32)
+    dst = np.zeros_like(src)
     main(src, dst)
+    print(src, dst)
     if np.array_equal(src, dst):
         print("PASSED")
     else:
