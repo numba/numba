@@ -1151,7 +1151,7 @@ API_PROTOTYPES = {
         'argtypes': [hsa_ext_program_handle_t,
                      hsa_ext_brig_module_handle_t,
                      _PTR(_PTR(hsa_ext_brig_module_t))],
-        'errcheck': _checkerror
+        'errcheck': _check_error
     },
 
     # hsa_status_t HSA_API hsa_ext_query_call_convention(
