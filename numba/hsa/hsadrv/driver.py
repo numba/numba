@@ -247,6 +247,9 @@ class Driver(object):
 
 
     def __getattr__(self, fname):
+        # Initialize driver
+        self._initialize_api()
+
         # First try if it is an hsa property
         try:
             enum, typ = self._hsa_properties[fname]
@@ -261,12 +264,6 @@ class Driver(object):
             proto = drvapi.API_PROTOTYPES[fname]
         except KeyError:
             raise AttributeError(fname)
-
-        restype = proto[0]
-        argtypes = proto[1:]
-
-        # Initialize driver
-        self._initialize_api()
 
         if self.initialization_error is not None:
             raise HsaSupportError("Error at driver init: \n%s:" %
