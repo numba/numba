@@ -25,6 +25,9 @@ Use conda to install dependencies
 conda install -c https://conda.binstar.org/numba llvmlite numpy
 ```
 
+Build Numba
+-----------
+
 Checkout Numba source code
 
 ```bash
@@ -44,7 +47,10 @@ Running Numba tests (non HSA)
 python runtests -m -vfb
 ```
 
-Running HSA tests
+Running HSA
+-----------
+
+Running unittests
 
 ```bash
 LD_LIBRARY_PATH=/opt/hsa_ld_library_path NUMBA_HSA_DRIVER=/opt/hsa_ld_library_path/libhsa-runtime64.so LD_PRELOAD=/lib/x86_64-linux-gnu/libm.so.6 python -m numba.hsa.tests.hsadrv.runtests
