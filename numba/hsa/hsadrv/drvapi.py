@@ -6,7 +6,7 @@ import warnings
 from ... import utils
 
 from . import enums
-from .error import HsaApiError
+from .error import HsaApiError, HsaWarning
 
 _PTR = ctypes.POINTER
 
