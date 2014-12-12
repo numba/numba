@@ -88,7 +88,7 @@ def main(src, dst):
 
     kernargs = ctypes.POINTER(ctypes.c_void_p*2)
     hsa.hsa_memory_allocate(kernarg_region, kernel_arg_buffer_size,
-                            ctypes.byref(kernargs)
+                            ctypes.byref(kernargs))
     kernargs.contents[0] = dst.ctypes.data
     kernargs.contents[1] = src.ctypes.data
 
