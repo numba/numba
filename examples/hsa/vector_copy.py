@@ -60,7 +60,7 @@ def main(src, dst):
     aql = drvapi.hsa_dispatch_packet_t()
 
     aql.completion_signal = s._id
-    aql.dimensions = len(src.shape)
+    aql.dimensions = 1
     aql.workgroup_size_x = 256
     aql.workgroup_size_y = 1
     aql.workgroup_size_z = 1
@@ -84,10 +84,12 @@ def main(src, dst):
     assert kernarg_region != 0
 
     kernel_arg_buffer_size = code_descriptor._id.kernarg_segment_byte_size
+    print ('Kernel has kernarg_segment_byte_size {0}'.format(kernel_arg_buffer_size))
+
     kernel_arg_buffer = ctypes.c_void_p()
     hsa.hsa_memory_allocate(kernarg_region, kernel_arg_buffer_size,
                             ctypes.byref(kernel_arg_buffer))
-    kernargs = ctypes.cast(kernel_arg_buffer, ctypes.POINTER(ctypes.c_void_p*2))
+    kernargs = ctypes.cast(kernel_arg_buffer.contents, ctypes.POINTER(ctypes.c_void_p*2))
     kernargs.contents[0] = dst.ctypes.data
     kernargs.contents[1] = src.ctypes.data
 
