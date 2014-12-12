@@ -4,6 +4,7 @@ Implement the elf utils used to load binary brig-elf files.
 
 from __future__ import absolute_import, print_function
 
+import sys
 import ctypes
 import os
 from . import drvapi
@@ -14,7 +15,12 @@ def _load_elf_utils_syms():
     we want.
     """
     path = os.path.dirname(__file__)
-    lib_path = os.path.join(path, '_hsa_support.so')
+    if sys.version_info[0] >= 3:
+        lib_name = '_hsa_support.cpython-{0}{1}m.so'.format(
+            *sys.version_info[:2])
+    else:
+        lib_name = '_hsa_support.so'
+    lib_path = os.path.join(path, lib_name)
     lib = ctypes.CDLL(lib_path)
     PTR = ctypes.POINTER
 
