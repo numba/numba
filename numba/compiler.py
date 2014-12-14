@@ -190,7 +190,7 @@ class _PipelineManager(object):
     def finalize(self):
         self._finalized = True
 
-    def _patch_error(desc, exc):
+    def _patch_error(self, desc, exc):
         """
         Patches the error
         """
