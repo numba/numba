@@ -44,7 +44,7 @@ python setup.py build_ext --inplace
 Running Numba tests (non HSA)
 
 ```bash
-python runtests -m -vfb
+python runtests.py -m -vfb
 ```
 
 Running HSA
