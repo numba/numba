@@ -50,7 +50,16 @@ python setup.py build_ext --inplace
 Running Numba tests (non HSA)
 
 ```bash
-python runtests.py -m -vfb
+python runtests.py -m -vb
+```
+
+Note: `-m` for multiprocess testing; `-v` for verbose; `-b` for buffered
+stdout/stderr and defer print to the end.
+
+Once the test passes, install numba
+
+```bash
+python setup.py install
 ```
 
 Running HSA
