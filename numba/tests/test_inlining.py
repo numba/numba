@@ -1,8 +1,5 @@
 from __future__ import print_function, absolute_import
 
-import gc
-import weakref
-
 from .support import TestCase, override_config, captured_stdout
 from numba import unittest_support as unittest
 from numba import jit, types
