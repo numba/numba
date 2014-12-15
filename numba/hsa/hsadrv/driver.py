@@ -460,6 +460,14 @@ class MemRegion(HsaWrapper):
     def supports_kernargs(self):
         return self._flags & enums.HSA_REGION_FLAG_KERNARG
 
+    def allocate(self, ctypes_type):
+        buff = ctypes.c_void_p()
+        hsa.hsa_memory_allocate(self._id, ctypes.sizeof(ctypes_type), ctypes.byref(buff))
+        return ctypes.cast(buff, ctypes.POINTER(ctypes_type)).contents
+
+    def free(self, ptr):
+        hsa.hsa_memory_free(ctypes.byref(ptr))
+
     _instance_dict = {}
     @classmethod
     def instance_for(cls, _id):
