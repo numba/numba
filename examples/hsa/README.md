@@ -27,7 +27,7 @@ export PATH=~/miniconda/bin:$PATH
 Use conda to install dependencies
 
 ```bash
-conda install -c https://conda.binstar.org/numba python=2.7.8 llvmlite numpy
+conda install -c https://conda.binstar.org/numba llvmlite numpy
 ```
 
 Build Numba
