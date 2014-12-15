@@ -9,6 +9,21 @@ from numba.hsa.hsadrv.driver import hsa, Queue, BrigModule
 from numba.hsa.hsadrv import drvapi, enums
 
 
+class TestLowLevelApi(unittest.Tests):
+    """This test checks that all the functions defined in drvapi
+    bind properly using ctypes."""
+
+    def test_functions_available(self):
+        missing_functions = []
+        for fname in drvapi.API_PROTOTYPES.keys():
+            try:
+                getattr(hsa, fname)
+            except Exception as e:
+                missing_functions.append("'{0}': {1}".format(fname, str(e)))
+
+        self.assertEqual(len(missing_functions), 0, msg='\n'.join(missing_functions))
+
+
 class TestAgents(unittest.TestCase):
     def test_agents_init(self):
         self.assertGreater(len(hsa.agents), 0)
