@@ -134,7 +134,7 @@ class CodeLibrary(object):
         """
         self._raise_if_finalized()
 
-        if config.NUMBA_DUMP_FUNC_OPT:
+        if config.DUMP_FUNC_OPT:
             print(("FUNCTION OPTIMIZED DUMP %s" % self._name).center(80, '-'))
             print(self._final_module)
             print('=' * 80)
@@ -166,12 +166,18 @@ class CodeLibrary(object):
             print('=' * 80)
 
         if config.DUMP_ASSEMBLY:
-            print(("ASSEMBLY %s" % self._name).center(80, '-'))
-            print(self._codegen._tm.emit_assembly(self._final_module))
-            print('=' * 80)
+            self._dump_assembly()
 
     def get_function(self, name):
         return self._final_module.get_function(name)
+
+    def _dump_assembly(self):
+        """
+        Internal: dump native assembler code for this library.
+        """
+        print(("ASSEMBLY %s" % self._name).center(80, '-'))
+        print(self._codegen._tm.emit_assembly(self._final_module))
+        print('=' * 80)
 
 
 class AOTCodeLibrary(CodeLibrary):

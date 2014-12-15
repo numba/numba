@@ -2,7 +2,7 @@ from __future__ import absolute_import, print_function
 import copy
 import ctypes
 
-from numba import compiler, types, errcode
+from numba import config, compiler, types, errcode
 from numba.typing.templates import ConcreteTemplate
 from numba import typing, lowering, utils
 
@@ -45,6 +45,7 @@ def compile_kernel(pyfunc, args, link, debug=False):
                                                      cres.signature.args)
     cukern = CUDAKernel(llvm_module=cres.library._final_module,
                         name=kernel.name,
+                        pretty_name=cres.fndesc.qualname,
                         argtypes=cres.signature.args,
                         link=link,
                         debug=debug,
@@ -144,7 +145,8 @@ class CachedPTX(object):
     """A PTX cache that uses compute capability as a cache key
     """
 
-    def __init__(self, llvmir):
+    def __init__(self, name, llvmir):
+        self.name = name
         self.llvmir = llvmir
         self.cache = {}
 
@@ -160,6 +162,10 @@ class CachedPTX(object):
             arch = nvvm.get_arch_option(*cc)
             ptx = nvvm.llvm_to_ptx(self.llvmir, opt=3, arch=arch)
             self.cache[cc] = ptx
+            if config.DUMP_ASSEMBLY:
+                print(("ASSEMBLY %s" % self.name).center(80, '-'))
+                print(ptx.decode('utf-8'))
+                print('=' * 80)
         return ptx
 
 
@@ -208,13 +214,13 @@ class CachedCUFunction(object):
 
 
 class CUDAKernel(CUDAKernelBase):
-    def __init__(self, llvm_module, name, argtypes, link=(), debug=False,
-                 exceptions={}):
+    def __init__(self, llvm_module, name, pretty_name,
+                 argtypes, link=(), debug=False, exceptions={}):
         super(CUDAKernel, self).__init__()
         self.entry_name = name
         self.argument_types = tuple(argtypes)
         self.linking = tuple(link)
-        ptx = CachedPTX(str(llvm_module))
+        ptx = CachedPTX(pretty_name, str(llvm_module))
         self._func = CachedCUFunction(self.entry_name, ptx, link)
         self.debug = debug
         self.exceptions = exceptions
