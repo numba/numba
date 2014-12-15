@@ -64,7 +64,7 @@ class TestDebugOutput(TestCase):
 
     def _check_dump_assembly(self, out):
         self.assertIn('--ASSEMBLY simple_nopython', out)
-        if platform.machine() in ('x86_64', 'i386', 'i686'):
+        if platform.machine() in ('x86_64', 'AMD64', 'i386', 'i686'):
             self.assertIn('xorl', out)
 
     def test_dump_bytecode(self):
