@@ -9,7 +9,7 @@ import sys
 
 import numpy as np
 
-from numba import types, typing, utils
+from numba import config, types, typing, utils
 from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
 from numba.lowering import LoweringError
 from numba.targets import cpu
@@ -217,3 +217,46 @@ class TestCase(unittest.TestCase):
         self.assertPreciseEqual(got, expected)
         return got, expected
 
+
+# Various helpers
+
+@contextlib.contextmanager
+def override_config(name, value):
+    old_value = getattr(config, name)
+    setattr(config, name, value)
+    try:
+        yield
+    finally:
+        setattr(config, name, old_value)
+
+
+# From CPython
+
+@contextlib.contextmanager
+def captured_output(stream_name):
+    """Return a context manager used by captured_stdout/stdin/stderr
+    that temporarily replaces the sys stream *stream_name* with a StringIO."""
+    orig_stdout = getattr(sys, stream_name)
+    setattr(sys, stream_name, utils.StringIO())
+    try:
+        yield getattr(sys, stream_name)
+    finally:
+        setattr(sys, stream_name, orig_stdout)
+
+def captured_stdout():
+    """Capture the output of sys.stdout:
+
+       with captured_stdout() as stdout:
+           print("hello")
+       self.assertEqual(stdout.getvalue(), "hello\n")
+    """
+    return captured_output("stdout")
+
+def captured_stderr():
+    """Capture the output of sys.stderr:
+
+       with captured_stderr() as stderr:
+           print("hello", file=sys.stderr)
+       self.assertEqual(stderr.getvalue(), "hello\n")
+    """
+    return captured_output("stderr")
