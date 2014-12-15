@@ -376,7 +376,7 @@ class Agent(HsaWrapper):
         # the agent initialization the instances of this class are considered
         # initialized and locked, so this method will be removed.
         self._id = agent_id
-
+        self._initialize_regions()
 
     @property
     def device(self):
@@ -387,6 +387,21 @@ class Agent(HsaWrapper):
     def is_component(self):
         return (self.feature & enums.HSA_AGENT_FEATURE_DISPATCH) != 0
 
+    @property
+    def regions(self):
+        return self._regions
+
+    def _initialize_regions(self):
+        region_ids = []
+
+        def on_region(agent_id, ctxt):
+            region_ids.append(agent_id)
+            return enums.HSA_STATUS_SUCCESS
+
+        callback = drvapi.HSA_AGENT_ITERATE_REGIONS_CALLBACK_FUNC(on_region)
+        hsa.hsa_agent_iterate_regions(self._id, callback, None)
+        self._regions = [MemRegion.instance_for(region_id)
+                         for region_id in region_ids]
 
     def create_queue_single(self, size, callback=None, service_queue=None):
         cb_typ = drvapi.HSA_QUEUE_CALLBACK_FUNC
@@ -412,6 +427,48 @@ class Agent(HsaWrapper):
         return "<HSA agent ({0}): {1} {2} '{3}'{4}>".format(self._id, self.device,
                                                             self.vendor_name, self.name,
                                                             " (component)" if self.is_component else "")
+
+class MemRegion(HsaWrapper):
+    """Abstracts a HSA memory region.
+
+    This will wrap and provide an OO interface for hsa_region_t C-API elements
+    """
+    _hsa_info_function = 'hsa_region_get_info'
+    _hsa_properties = {
+        'base': (enums.HSA_REGION_INFO_BASE, drvapi.hsa_uintptr_t),
+        'size': (enums.HSA_REGION_INFO_SIZE, ctypes.c_size_t),
+        '_agent': (enums.HSA_REGION_INFO_AGENT, drvapi.hsa_agent_t),
+        '_flags': (enums.HSA_REGION_INFO_FLAGS, drvapi.hsa_region_flag_t),
+        'segment': (enums.HSA_REGION_INFO_SEGMENT, drvapi.hsa_segment_t),
+        'alloc_max_size': (enums.HSA_REGION_INFO_ALLOC_MAX_SIZE, ctypes.c_size_t),
+        'alloc_granule': (enums.HSA_REGION_INFO_ALLOC_GRANULE, ctypes.c_size_t),
+        'alloc_alignment': (enums.HSA_REGION_INFO_ALLOC_ALIGNMENT, ctypes.c_size_t),
+        'bandwidth': (enums.HSA_REGION_INFO_BANDWIDTH, ctypes.c_uint32),
+        'node': (enums.HSA_REGION_INFO_NODE, ctypes.c_uint32),
+    }
+
+    def __init__(self, region_id):
+        """Do not instantiate MemRegion objects directly, use the factory class
+        method 'instance_for' to ensure MemRegion identity"""
+        self._id = region_id
+
+    @property
+    def agent(self):
+        return Agent(self._agent)
+
+    @property
+    def supports_kernargs(self):
+        return self._flags & enums.HSA_REGION_FLAG_KERNARG
+
+    _instance_dict = {}
+    @classmethod
+    def instance_for(cls, _id):
+        try:
+            return cls._instance_dict[_id]
+        except KeyError:
+            new_instance = cls(_id)
+            cls._instance_dict[_id] = new_instance
+            return new_instance
 
 
 class Queue(object):

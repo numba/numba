@@ -34,6 +34,8 @@ hsa_signal_t = ctypes.c_uint64
 hsa_agent_t = ctypes.c_uint64
 hsa_region_t = ctypes.c_uint64
 
+hsa_uintptr_t = ctypes.c_uint64
+
 # HSA Structures ###############################################################
 class hsa_queue_t(ctypes.Structure):
     """In theory, this should be aligned to 64 bytes. In any case, allocation
