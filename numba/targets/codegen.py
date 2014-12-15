@@ -33,6 +33,7 @@ class CodeLibrary(object):
         self._linking_libraries = set()
         self._final_module = ll.parse_assembly(
             str(self._codegen._create_empty_module(self._name)))
+        self._shared_module = None
 
     @property
     def codegen(self):
@@ -72,6 +73,28 @@ class CodeLibrary(object):
         Internal: optimize this library's final module.
         """
         self._codegen._mpm.run(self._final_module)
+
+    def _get_module_for_linking(self):
+        """
+        Internal: get a LLVM module suitable for linking multiple times
+        into another library.  Exported functions are made "linkonce_odr"
+        to allow for multiple definitions, inlining, and removal of
+        unused exports.
+        See discussion in https://github.com/numba/numba/pull/890
+        """
+        if self._shared_module is not None:
+            return self._shared_module
+        mod = self._final_module
+        to_fix = []
+        for fn in mod.functions:
+            if not fn.is_declaration and fn.linkage == ll.Linkage.external:
+                to_fix.append(fn.name)
+        if to_fix:
+            mod = mod.clone()
+            for name in to_fix:
+                mod.get_function(name).linkage = 'linkonce_odr'
+        self._shared_module = mod
+        return mod
 
     def create_ir_module(self, name):
         """
@@ -118,9 +141,11 @@ class CodeLibrary(object):
 
         # Link libraries for shared code
         for library in self._linking_libraries:
-            self._final_module.link_in(library._final_module, preserve=True)
+            self._final_module.link_in(
+                library._get_module_for_linking(), preserve=True)
         for library in self._codegen._libraries:
-            self._final_module.link_in(library._final_module, preserve=True)
+            self._final_module.link_in(
+                library._get_module_for_linking(), preserve=True)
 
         # Optimize the module after all dependences are linked in above,
         # to allow for inlining.
