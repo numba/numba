@@ -19,7 +19,7 @@ Install Miniconda
 bash Miniconda-3.7.0-Linux-x86_64.sh
 ```
 
-Ensure conda is in PATH
+Ensure conda is in PATH (assuming miniconda is installed to user home)
 ```bash
 export PATH=~/miniconda/bin:$PATH
 ```
