@@ -494,6 +494,49 @@ class Queue(object):
         return getattr(self._id.contents, fname)
 
 
+    def dispatch(self, code_descriptor, kernargs,
+                 workgroup_size=None,
+                 grid_size=None,
+                 signal=None):
+        dims = len(workgroup_size)
+        assert dims == len(grid_size)
+        assert dims <= 3
+        s = signal if signal is not None else hsa.create_signal(1)
+
+        cd = code_descriptor._id
+
+        aql = drvapi.hsa_dispatch_packet_t()
+        aql.header.type = enums.HSA_PACKET_TYPE_DISPATCH
+        aql.header.acquire_fence_scope = 2
+        aql.header.release_fence_scope = 2
+        aql.header.barrier = 1
+        aql.group_segment_size = 0
+        aql.private_segment_size = 0
+        aql.dimensions = dims
+        aql.workgroup_size_x = workgroup_size[0]
+        aql.workgroup_size_y = workgroup_size[1] if dims > 1 else 1
+        aql.workgroup_size_z = workgroup_size[2] if dims > 2 else 1
+        aql.grid_size_x = grid_size[0]
+        aql.grid_size_y = grid_size[1] if dims > 1 else 1
+        aql.grid_size_z = grid_size[2] if dims > 2 else 1
+        aql.kernel_object_address = cd.code.handle
+        aql.kernarg_address = ctypes.cast(ctypes.byref(kernargs), ctypes.c_void_p).value
+        aql.completion_signal = s._id
+
+        q = self._id
+        index = hsa.hsa_queue_load_write_index_relaxed(q)
+        hsa.hsa_queue_store_write_index_relaxed(q, index+1)
+        queue_mask = q.contents.size - 1
+        real_index = index & queue_mask
+        packet_array = ctypes.cast(q.contents.base_address,
+                                   ctypes.POINTER(drvapi.hsa_dispatch_packet_t))
+        packet_array[real_index] = aql
+        hsa.hsa_signal_store_relaxed(self.doorbell_signal, index)
+
+        # synchronous if no signal was provided
+        if signal is None:
+            hsa.hsa_signal_wait_acquire(s._id, enums.HSA_LT, 1, -1, enums.HSA_WAIT_EXPECTANCY_UNKNOWN)
+
     def __dir__(self):
         return sorted(set(dir(self._id.contents) +
                           self.__dict__.keys()))

@@ -8,6 +8,7 @@ from __future__ import print_function, division
 import sys
 import os
 import ctypes
+from time import time
 from ctypes.util import find_library
 
 import numpy as np
@@ -59,6 +60,42 @@ def main(src, dst):
     program, code_descriptor = create_program(gpu, brigfile, '&__vector_copy_kernel')
     print(program)
 
+
+    kernarg_regions = [r for r in gpu.regions if r.supports_kernargs]
+    assert kernarg_regions
+    kernarg_region = kernarg_regions[0]
+    # Specify the argument types required by the kernel and allocate them
+    # note: in an ideal world this should come from kernel metadata
+    kernarg_types = ctypes.c_void_p * 2
+    kernargs = kernarg_region.allocate(kernarg_types)
+    kernargs[0] = src.ctypes.data
+    kernargs[1] = dst.ctypes.data
+
+    hsa.hsa_memory_register(src.ctypes.data, src.nbytes)
+    hsa.hsa_memory_register(dst.ctypes.data, dst.nbytes)
+    hsa.hsa_memory_register(ctypes.byref(kernargs), ctypes.sizeof(kernargs))
+
+    # sync (in fact, dispatch will create a dummy signal for the dispatch and
+    # wait for it before returning)
+    print("dispatch synchronous... ", end="")
+    t_start = time()
+    q.dispatch(code_descriptor, kernargs, workgroup_size=(256,), grid_size=(1024*1024,))
+    t_end = time()
+    print ("ellapsed: {0:10.9f} s.".format(t_end - t_start))
+
+    # async: handle the signal by hand
+    print("dispatch asynchronous... ", end="")
+    t_start = time()
+    s = hsa.create_signal(1)
+    q.dispatch(code_descriptor, kernargs,
+               workgroup_size=(256,), grid_size=(1024*1024,), signal=s)
+    t_launched = time()
+    hsa.hsa_signal_wait_acquire(s._id, enums.HSA_LT, 1, -1,
+                                enums.HSA_WAIT_EXPECTANCY_UNKNOWN)
+    t_end = time()
+    print ("launch: {0:10.9f} s. total: {1:10.9g} s.".format(
+        t_launched - t_start, t_end - t_start))
+    """
     s = hsa.create_signal(1)
 
     # manually build an aql packet
@@ -79,20 +116,11 @@ def main(src, dst):
     aql.private_segment_size = 0
 
     # setup kernel arguments
-    hsa.hsa_memory_register(src.ctypes.data, src.nbytes)
-    hsa.hsa_memory_register(dst.ctypes.data, dst.nbytes)
+    #hsa.hsa_memory_register(src.ctypes.data, src.nbytes)
+    #hsa.hsa_memory_register(dst.ctypes.data, dst.nbytes)
 
-    kernarg_regions = [r for r in gpu.regions if r.supports_kernargs]
-    assert kernarg_regions
-    kernarg_region = kernarg_regions[0]
-    # Specify the argument types required by the kernel and allocate them
-    # note: in an ideal world this should come from kernel metadata
-    kernarg_types = ctypes.c_void_p * 2
-    kernargs = kernarg_region.allocate(kernarg_types)
-    kernargs[0] = src.ctypes.data
-    kernargs[1] = dst.ctypes.data
 
-    hsa.hsa_memory_register(ctypes.byref(kernargs), ctypes.sizeof(kernargs))
+    #hsa.hsa_memory_register(ctypes.byref(kernargs), ctypes.sizeof(kernargs))
 
     aql.kernel_object_address = code_descriptor._id.code.handle
     aql.kernarg_address = ctypes.cast(ctypes.byref(kernargs), ctypes.c_void_p).value
@@ -101,20 +129,24 @@ def main(src, dst):
 
     print("pushing packet into the queue")
     index = hsa.hsa_queue_load_write_index_relaxed(q._id)
+    hsa.hsa_queue_store_write_index_relaxed(q._id, index+1)
     print ('using slot in queue: {0}'.format(index))
     queueMask = q._id.contents.size - 1
     real_index = index & queueMask
     packet_array = ctypes.cast(q._id.contents.base_address,
                                ctypes.POINTER(drvapi.hsa_dispatch_packet_t))
     packet_array[real_index] = aql
-    hsa.hsa_queue_store_write_index_relaxed(q._id, index+1)
     print("ringing the bell")
+    t_ring = time()
     hsa.hsa_signal_store_relaxed(q.doorbell_signal, index)
 
-    print ('wait for the signal to be raised')
     # wait for results
+    t_wait = time()
     hsa.hsa_signal_wait_acquire(s._id, enums.HSA_LT, 1, -1, enums.HSA_WAIT_EXPECTANCY_UNKNOWN)
+    t_end = time()
 
+    print("wait: {0:10.9f}s. total: {1:10.9f}s.".format(t_end-t_wait, t_end-t_ring))
+    """
     # this is placed in the kernarg_region for simetry, but shouldn't be required.
     kernarg_region.free(kernargs)
     #free(aql)
