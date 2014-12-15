@@ -95,61 +95,9 @@ def main(src, dst):
     t_end = time()
     print ("launch: {0:10.9f} s. total: {1:10.9g} s.".format(
         t_launched - t_start, t_end - t_start))
-    """
-    s = hsa.create_signal(1)
 
-    # manually build an aql packet
-    aql = drvapi.hsa_dispatch_packet_t()
-    aql.completion_signal = s._id
-    aql.dimensions = 1
-    aql.workgroup_size_x = 256
-    aql.workgroup_size_y = 1
-    aql.workgroup_size_z = 1
-    aql.grid_size_x = 1024 * 1024
-    aql.grid_size_y = 1
-    aql.grid_size_z = 1
-    aql.header.type = enums.HSA_PACKET_TYPE_DISPATCH
-    aql.header.acquire_fence_scope = 2
-    aql.header.release_fence_scope = 2
-    aql.header.barrier = 1
-    aql.group_segment_size = 0
-    aql.private_segment_size = 0
-
-    # setup kernel arguments
-    #hsa.hsa_memory_register(src.ctypes.data, src.nbytes)
-    #hsa.hsa_memory_register(dst.ctypes.data, dst.nbytes)
-
-
-    #hsa.hsa_memory_register(ctypes.byref(kernargs), ctypes.sizeof(kernargs))
-
-    aql.kernel_object_address = code_descriptor._id.code.handle
-    aql.kernarg_address = ctypes.cast(ctypes.byref(kernargs), ctypes.c_void_p).value
-
-    dump_aql_packet(aql)
-
-    print("pushing packet into the queue")
-    index = hsa.hsa_queue_load_write_index_relaxed(q._id)
-    hsa.hsa_queue_store_write_index_relaxed(q._id, index+1)
-    print ('using slot in queue: {0}'.format(index))
-    queueMask = q._id.contents.size - 1
-    real_index = index & queueMask
-    packet_array = ctypes.cast(q._id.contents.base_address,
-                               ctypes.POINTER(drvapi.hsa_dispatch_packet_t))
-    packet_array[real_index] = aql
-    print("ringing the bell")
-    t_ring = time()
-    hsa.hsa_signal_store_relaxed(q.doorbell_signal, index)
-
-    # wait for results
-    t_wait = time()
-    hsa.hsa_signal_wait_acquire(s._id, enums.HSA_LT, 1, -1, enums.HSA_WAIT_EXPECTANCY_UNKNOWN)
-    t_end = time()
-
-    print("wait: {0:10.9f}s. total: {1:10.9f}s.".format(t_end-t_wait, t_end-t_ring))
-    """
-    # this is placed in the kernarg_region for simetry, but shouldn't be required.
+    # this is placed in the kernarg_region for symmetry, but shouldn't be required.
     kernarg_region.free(kernargs)
-    #free(aql)
 
 
 if __name__=='__main__':
