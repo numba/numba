@@ -36,6 +36,12 @@ cd numba
 git checkout hsa
 ```
 
+In order to build numba with HSA support, you need to set the environment variable
+HSA_PATH to point where to find HSA include files/libraries
+```bash
+export HSA_PATH=/opt/hsa
+```
+
 Build inplace
 ```bash
 python setup.py build_ext --inplace
