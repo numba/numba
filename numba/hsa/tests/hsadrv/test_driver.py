@@ -9,7 +9,7 @@ from numba.hsa.hsadrv.driver import hsa, Queue, BrigModule
 from numba.hsa.hsadrv import drvapi, enums
 
 
-class TestLowLevelApi(unittest.Tests):
+class TestLowLevelApi(unittest.TestCase):
     """This test checks that all the functions defined in drvapi
     bind properly using ctypes."""
 
