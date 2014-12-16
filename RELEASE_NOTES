@@ -1,3 +1,13 @@
+Version (0.17.0)
+================
+
+* Depends on numba 0.16.0
+* Replaces llvmpy with llvmlite, which also upgrades to llvm3.5
+* Update occupancy autotuner for CC 5.0 and CC 5.2 devices
+* Fix handling of empty array in GPU reduction
+* Fix occupancy autotuner that may pick invalid blocksize
+
+
 Version (0.16.0)
 ================
 * Add `numbapro.cuda.reduce` for autogeneration of CUDA reduce kernels and
