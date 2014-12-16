@@ -63,7 +63,7 @@ class TestMacro(unittest.TestCase):
         with self.assertRaises(MacroError) as raises:
             cuda.jit((float32[:, :],))(udt_global_build_list)
 
-        self.assertIn("invalid type for shape; got <class 'list'>",
+        self.assertIn("invalid type for shape; got {0}".format(list),
                       str(raises.exception))
 
     def test_global_constant_tuple(self):
