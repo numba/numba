@@ -222,6 +222,11 @@ class TestCase(unittest.TestCase):
 
 @contextlib.contextmanager
 def override_config(name, value):
+    """
+    Return a context manager that temporarily sets Numba config variable
+    *name* to *value*.  *name* must be the name of an existing variable
+    in numba.config.
+    """
     old_value = getattr(config, name)
     setattr(config, name, value)
     try:
