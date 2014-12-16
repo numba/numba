@@ -959,14 +959,9 @@ class BaseContext(object):
                                              sig.return_type, flags,
                                              locals=locals)
 
-            # Set to linkonce one-definition-rule to prevent multiple
-            # definitions from raising errors (this can happen with
-            # nested compile_internal()).
+            # Allow inlining the function inside callers.
             codegen.add_linking_library(cres.library)
-            llvm_func = cres.library.get_function(cres.fndesc.llvm_func_name)
-            llvm_func.linkage = 'linkonce_odr'
             fndesc = cres.fndesc
-
             self.cached_internal_func[cache_key] = fndesc
 
         # Add call to the generated function
