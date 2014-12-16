@@ -1,6 +1,7 @@
 import sys
 import os
 import re
+import platform
 
 def get_lib_dir():
     dirname = 'DLLs' if sys.platform == 'win32' else 'lib'
@@ -28,3 +29,12 @@ def find_file(pat, libdir=None):
     candidates = [os.path.join(libdir, ent)
                   for ent in entries if pat.match(ent)]
     return [c for c in candidates if os.path.isfile(c)]
+
+def library_extension():
+    p = platform.system()
+    if p == 'Linux':
+        return 'so'
+    if p == 'Windows':
+        return 'dll'
+    if p == 'Darwin':
+        return 'dylib'

@@ -36,8 +36,9 @@ from numba.cuda.cudadrv.drvapi import cu_stream
 from numba.cuda.cudadrv.devicearray import auto_device
 from numba import findlib
 import numpy as np
+from numbapro.findlib import library_extension
 
-libname = 'nbpro_segsort.so'
+libname = 'nbpro_segsort.' + library_extension()
 libpath = os.path.join(findlib.get_lib_dir(), libname)
 
 lib = ctypes.CDLL(libpath)

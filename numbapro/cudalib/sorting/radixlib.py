@@ -28,14 +28,17 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import print_function, absolute_import, division
 import ctypes
 import os
+
 from contextlib import contextmanager
 from numba.cuda.cudadrv.driver import device_pointer
 from numba.cuda.cudadrv.drvapi import cu_stream
 from numba.cuda.cudadrv.devicearray import auto_device, is_cuda_ndarray
 from numba import cuda, findlib
 import numpy as np
+from numbapro.findlib import library_extension
 
-libname = 'nbpro_radixsort.so'
+
+libname = 'nbpro_radixsort.' + library_extension()
 libpath = os.path.join(findlib.get_lib_dir(), libname)
 
 lib = ctypes.CDLL(libpath)
