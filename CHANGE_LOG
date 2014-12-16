@@ -10,7 +10,7 @@ reduces maintenance burden as LLVM tends to change a lot.  Numba also
 compiles faster than before.
 
 Other Major Changes:
-* Faster dispatch for numpy recarray arrays
+* Faster dispatch for numpy structured arrays
 * Optimized array.flat()
 * Improved CPU feature selection
 * Fix constant tuple regression in macro expansion code
