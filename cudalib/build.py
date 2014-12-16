@@ -2,7 +2,7 @@
 
 import os
 import subprocess
-
+import platform
 
 NVCC = os.environ.get('NVCC', 'nvcc')
 
@@ -39,9 +39,18 @@ def run_shell(cmd):
     print(cmd)
     subprocess.check_call(cmd, shell=True)
 
+def library_extension():
+    p = platform.system()
+    if p == 'Linux':
+        return 'so'
+    if p == 'Windows':
+        return 'dll'
+    if p == 'Darwin':
+        return 'dylib'
 
 def build_cuda(srcdir, out, ins, includes):
-    output = os.path.join(out)
+    ext = library_extension()
+    output = os.path.join(LIBDIR, '%s.%s' % (out, ext))
     inputs = ' '.join([os.path.join(srcdir, p)
                        for p in ins])
     argtemp = '{opt} {inc} -O3 {gen} --shared -o {out} {inp}'
@@ -53,14 +62,14 @@ def build_cuda(srcdir, out, ins, includes):
 
 def build_radixsort():
     build_cuda(srcdir='src',
-               out='%s/nbpro_radixsort.so' % LIBDIR,
+               out='nbpro_radixsort',
                ins=['cubradixsort.cu'],
                includes=CUB_INCLUDE, )
 
 
 def build_mgpusort():
     build_cuda(srcdir='src',
-               out='%s/nbpro_segsort.so' % LIBDIR,
+               out='nbpro_segsort',
                ins=['mgpusort.cu'],
                includes=MGPU_INCLUDE, )
 
