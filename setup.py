@@ -83,8 +83,25 @@ ext_npyufunc_ufunc = Extension(name="numba.npyufunc._internal",
 ext_mviewbuf = Extension(name='numba.mviewbuf',
                          sources=['numba/mviewbuf.c'])
 
+
 ext_modules = [ext_dynfunc, ext_npymath_exports, ext_dispatcher,
+
                ext_helperlib, ext_typeconv, ext_npyufunc_ufunc, ext_mviewbuf]
+
+
+HSA_PATH = os.getenv("HSA_PATH")
+if HSA_PATH is not None:
+    # TODO: merge this two files into something in the numba repo
+    hsa_support_srcs = ['numba/hsa/hsadrv/elf_utils.c']
+    hsa_support_include = [os.path.join(HSA_PATH, 'include')]
+    hsa_support_lib = [os.path.join(HSA_PATH, 'lib')]
+    ext_hsa_support = Extension(name='numba.hsa.hsadrv._hsa_support',
+                                sources=hsa_support_srcs,
+                                include_dirs=hsa_support_include,
+                                extra_compile_args=['-std=c99'],
+                                extra_link_args=['-lelf'])
+    ext_modules.append(ext_hsa_support)
+
 
 packages = [
     "numba",
@@ -101,6 +118,8 @@ packages = [
     "numba.cuda.tests.cudadrv",
     "numba.cuda.tests.cudadrv.data",
     "numba.cuda.tests.cudapy",
+    "numba.hsa",
+    "numba.hsa.hsadrv",
 ]
 
 setup(name='numba',
