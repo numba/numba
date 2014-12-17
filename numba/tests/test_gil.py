@@ -1,5 +1,9 @@
 from __future__ import print_function
 
+import ctypes
+import ctypes.util
+import os
+import sys
 import threading
 
 import numpy as np
@@ -10,49 +14,68 @@ from numba import jit
 from .support import TestCase
 
 
-def f(a):
-    # This function has two characteristics:
-    # - it runs long enough for threads to switch
-    # - it can't be optimized too aggressively by LLVM, so loads and
-    #   stores aren't eliminated (hopefully)
-    for n in range(100000 // a.size):
-        for idx in range(a.size):
-            tmp = a[idx]
-            a[a[idx] % a.size] = a[idx] * 3
-            a[idx] = tmp
+# This CPython API function is a portable way to get the current thread id.
+PyThread_get_thread_ident = ctypes.pythonapi.PyThread_get_thread_ident
+PyThread_get_thread_ident.restype = ctypes.c_long
+PyThread_get_thread_ident.argtypes = []
 
-f_sig = "void(uint32[:])"
+# A way of sleeping from nopython code
+if os.name == 'nt':
+    sleep = ctypes.windll.kernel32.Sleep
+    sleep.argtypes = [ctypes.c_uint]
+    sleep.restype = None
+    sleep_factor = 1  # milliseconds
+else:
+    sleep = ctypes.CDLL(ctypes.util.find_library("c")).usleep
+    sleep.argtypes = [ctypes.c_uint]
+    sleep.restype = ctypes.c_int
+    sleep_factor = 1000  # milliseconds
 
 
+def f(a, offset):
+    # If run from one thread at a time, the function will always fill the
+    # array with identical values.
+    # If run from several threads at a time, the function will probably
+    # fill the array with differing values.
+    for idx in range(a.size):
+        # Let another thread run
+        sleep(1 * sleep_factor)
+        a[(idx + offset) % a.size] = PyThread_get_thread_ident()
+
+f_sig = "void(int64[:], intp)"
+
+
+# I suspect this is https://github.com/numba/numba/issues/903
+@unittest.skipIf(os.name == 'nt' and sys.maxsize < 2**32,
+                 "generated code crashes under 32-bit Windows")
 class TestGILRelease(TestCase):
 
-    n_threads = 64
+    n_threads = 2
 
     def run_in_threads(self, func):
-        # Run a workload in parallel, several times in a row, and collect
-        # results.
-        results = []
-        for iteration in range(6):
-            threads = []
-            arr = np.arange(self.n_threads, dtype=np.uint32)
-            for i in range(self.n_threads):
-                t = threading.Thread(target=func, args=(arr,))
-                threads.append(t)
-            for t in threads:
-                t.start()
-            for t in threads:
-                t.join()
-            results.append(arr)
-        return results
+        # Run the function in parallel over an array and collect results.
+        threads = []
+        arr = np.arange(30, dtype=np.int64)
+        for i in range(self.n_threads):
+            # Ensure different threads have equally distributed start offsets
+            # into the array.
+            offset = i * arr.size // self.n_threads
+            t = threading.Thread(target=func, args=(arr, offset))
+            threads.append(t)
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        return arr
 
     def check_gil_held(self, func):
-        arrays = self.run_in_threads(func)
-        distinct = set(tuple(a) for a in arrays)
+        arr = self.run_in_threads(func)
+        distinct = set(arr)
         self.assertEqual(len(distinct), 1, distinct)
 
     def check_gil_released(self, func):
-        arrays = self.run_in_threads(func)
-        distinct = set(tuple(a) for a in arrays)
+        arr = self.run_in_threads(func)
+        distinct = set(arr)
         self.assertGreater(len(distinct), 1, distinct)
 
     def test_gil_held(self):
@@ -78,8 +101,8 @@ class TestGILRelease(TestCase):
         """
         compiled_f = jit(f_sig, nopython=True)(f)
         @jit(f_sig, nopython=True, nogil=True)
-        def caller(a):
-            compiled_f(a)
+        def caller(a, i):
+            compiled_f(a, i)
         self.check_gil_released(caller)
 
     def test_gil_released_by_caller_and_callee(self):
@@ -88,8 +111,8 @@ class TestGILRelease(TestCase):
         """
         compiled_f = jit(f_sig, nopython=True, nogil=True)(f)
         @jit(f_sig, nopython=True, nogil=True)
-        def caller(a):
-            compiled_f(a)
+        def caller(a, i):
+            compiled_f(a, i)
         self.check_gil_released(caller)
 
     def test_gil_ignored_by_callee(self):
@@ -98,8 +121,8 @@ class TestGILRelease(TestCase):
         """
         compiled_f = jit(f_sig, nopython=True, nogil=True)(f)
         @jit(f_sig, nopython=True)
-        def caller(a):
-            compiled_f(a)
+        def caller(a, i):
+            compiled_f(a, i)
         self.check_gil_held(caller)
 
 
