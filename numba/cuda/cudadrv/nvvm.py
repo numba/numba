@@ -212,9 +212,6 @@ class CompilationUnit(object):
         # get log
         self.log = self.get_log()
 
-        if config.DUMP_ASSEMBLY:
-            print(ptxbuf[:].decode('ascii'))
-
         return ptxbuf[:]
 
     def _try_error(self, err, msg):
