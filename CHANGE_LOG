@@ -1,3 +1,28 @@
+Version 0.16.0
+--------------
+
+This release contains a major refactor to switch from llvmpy to `llvmlite <https://github.com/numba/llvmlite>`_ 
+as our code generation backend.  The switch is necessary to reconcile
+different compiler requirements for LLVM 3.5 (needs C++11) and Python
+extensions (need specific compiler versions on Windows). As a bonus, we have 
+found the use of llvmlite speeds up compilation by a factor of 2!
+
+Other Major Changes:
+
+* Faster dispatch for numpy structured arrays
+* Optimized array.flat()
+* Improved CPU feature selection
+* Fix constant tuple regression in macro expansion code
+
+Known Issues:
+
+* AVX code generation is still disabled by default due to performance
+  regressions when operating on misaligned NumPy arrays.  We hope to have a
+  workaround in the future.
+* In *extremely* rare circumstances, a `known issue with LLVM 3.5 <http://llvm.org/bugs/show_bug.cgi?id=21423>`_ 
+  code generation can cause an ELF relocation error on 64-bit Linux systems.
+
+
 Version 0.15.1
 --------------
 
