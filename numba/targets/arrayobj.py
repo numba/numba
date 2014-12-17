@@ -101,7 +101,7 @@ def getiter_array(context, builder, sig, args):
 
 def _getitem_array1d(context, builder, arrayty, array, idx):
     ptr = cgutils.get_item_pointer(builder, arrayty, array, [idx],
-                                   wraparound=context.metadata['wraparound'])
+                                   wraparound=True)
     return context.unpack_value(builder, arrayty.dtype, ptr)
 
 @builtin
@@ -165,7 +165,7 @@ def getitem_array1d_slice(context, builder, sig, args):
 
     dataptr = cgutils.get_item_pointer(builder, aryty, ary,
                                        [slicestruct.start],
-                                       wraparound=context.metadata['wraparound'])
+                                       wraparound=True)
 
     retstty = make_array(sig.return_type)
     retary = retstty(context, builder)
@@ -201,7 +201,7 @@ def getitem_array_unituple(context, builder, sig, args):
             cgutils.normalize_slice(builder, sl, sh)
         indices = [sl.start for sl in slices]
         dataptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                           wraparound=context.metadata['wraparound'])
+                                           wraparound=True)
         # Build array
         retstty = make_array(sig.return_type)
         retary = retstty(context, builder)
@@ -223,7 +223,7 @@ def getitem_array_unituple(context, builder, sig, args):
         indices = [context.cast(builder, i, t, types.intp)
                    for t, i in zip(idxty, indices)]
         ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                       wraparound=context.metadata['wraparound'])
+                                       wraparound=True)
 
         return context.unpack_value(builder, aryty.dtype, ptr)
 
@@ -261,7 +261,7 @@ def getitem_array_tuple(context, builder, sig, args):
                 start.append(ind)
 
         dataptr = cgutils.get_item_pointer(builder, aryty, ary, start,
-                                           wraparound=context.metadata['wraparound'])
+                                           wraparound=True)
         # Build array
         retstty = make_array(sig.return_type)
         retary = retstty(context, builder)
@@ -275,7 +275,7 @@ def getitem_array_tuple(context, builder, sig, args):
         indices = [context.cast(builder, i, t, types.intp)
                    for t, i in zip(idxty, indices)]
         ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                       wraparound=context.metadata['wraparound'])
+                                       wraparound=True)
 
         return context.unpack_value(builder, aryty.dtype, ptr)
 
@@ -291,7 +291,7 @@ def setitem_array1d(context, builder, sig, args):
     ary = arystty(context, builder, ary)
 
     ptr = cgutils.get_item_pointer(builder, aryty, ary, [idx],
-                                   wraparound=context.metadata['wraparound'])
+                                   wraparound=True)
 
     val = context.cast(builder, val, valty, aryty.dtype)
 
@@ -313,7 +313,7 @@ def setitem_array_unituple(context, builder, sig, args):
     indices = [context.cast(builder, i, t, types.intp)
                for t, i in zip(idxty, indices)]
     ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                   wraparound=context.metadata['wraparound'])
+                                   wraparound=True)
     context.pack_value(builder, aryty.dtype, val, ptr)
 
 
@@ -332,7 +332,7 @@ def setitem_array_tuple(context, builder, sig, args):
     indices = [context.cast(builder, i, t, types.intp)
                for t, i in zip(idxty, indices)]
     ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                   wraparound=context.metadata['wraparound'])
+                                   wraparound=True)
     context.pack_value(builder, aryty.dtype, val, ptr)
 
 @builtin
@@ -402,13 +402,13 @@ def setitem_array1d_slice(context, builder, sig, args):
             with cgutils.for_range_slice(builder, builder.load(start), builder.load(stop), slicestruct.step, slicestruct.start.type) as loop_idx1:
                 ptr = cgutils.get_item_pointer(builder, aryty, ary,
                                    [loop_idx1],
-                                   wraparound=context.metadata['wraparound'])
+                                   wraparound=True)
                 context.pack_value(builder, aryty.dtype, val, ptr)
         with otherwise0:
             with cgutils.for_range_slice(builder, builder.load(start), builder.load(stop), slicestruct.step, slicestruct.start.type, inc=False) as loop_idx2:
                 ptr = cgutils.get_item_pointer(builder, aryty, ary,
                                        [loop_idx2],
-                                       wraparound=context.metadata['wraparound'])
+                                       wraparound=True)
                 context.pack_value(builder, aryty.dtype, val, ptr)
 
 

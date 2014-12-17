@@ -1,9 +1,11 @@
 from __future__ import absolute_import, print_function
 import copy
 import ctypes
-from numba import compiler, types, errcode
+
+from numba import config, compiler, types, errcode
 from numba.typing.templates import ConcreteTemplate
 from numba import typing, lowering, utils
+
 from .cudadrv.devices import get_context
 from .cudadrv import nvvm, devicearray, driver
 from .errors import KernelRuntimeError
@@ -20,6 +22,7 @@ def compile_cuda(pyfunc, return_type, args, debug):
     flags = compiler.Flags()
     # Do not compile (generate native code), just lower (to LLVM)
     flags.set('no_compile')
+    flags.set('no_cpython_wrapper')
     # Run compilation pipeline
     cres = compiler.compile_extra(typingctx=typingctx,
                                   targetctx=targetctx,
@@ -29,25 +32,24 @@ def compile_cuda(pyfunc, return_type, args, debug):
                                   flags=flags,
                                   locals={})
 
-    # Fix global naming
-    for gv in cres.llvm_module.global_variables:
-        if '.' in gv.name:
-            gv.name = gv.name.replace('.', '_')
+    library = cres.library
+    library.finalize()
 
     return cres
 
 
 def compile_kernel(pyfunc, args, link, debug=False):
     cres = compile_cuda(pyfunc, types.void, args, debug=debug)
-    kernel = cres.target_context.prepare_cuda_kernel(cres.llvm_func,
+    func = cres.library.get_function(cres.fndesc.llvm_func_name)
+    kernel = cres.target_context.prepare_cuda_kernel(func,
                                                      cres.signature.args)
-    cres = cres._replace(llvm_func=kernel)
-    cukern = CUDAKernel(llvm_module=cres.llvm_module,
-                        name=cres.llvm_func.name,
+    cukern = CUDAKernel(llvm_module=cres.library._final_module,
+                        name=kernel.name,
+                        pretty_name=cres.fndesc.qualname,
                         argtypes=cres.signature.args,
                         link=link,
                         debug=debug,
-                        exceptions=cres.target_context.exceptions)
+                        exceptions=cres.exception_map)
     return cukern
 
 
@@ -60,8 +62,7 @@ def compile_device(pyfunc, return_type, args, inline=True, debug=False):
         cases = [cres.signature]
 
     cres.typing_context.insert_user_function(devfn, device_function_template)
-    libs = [cres.llvm_module]
-    cres.target_context.insert_user_function(devfn, cres.fndesc, libs)
+    cres.target_context.insert_user_function(devfn, cres.fndesc, [cres.library])
     return devfn
 
 
@@ -144,7 +145,8 @@ class CachedPTX(object):
     """A PTX cache that uses compute capability as a cache key
     """
 
-    def __init__(self, llvmir):
+    def __init__(self, name, llvmir):
+        self.name = name
         self.llvmir = llvmir
         self.cache = {}
 
@@ -160,6 +162,10 @@ class CachedPTX(object):
             arch = nvvm.get_arch_option(*cc)
             ptx = nvvm.llvm_to_ptx(self.llvmir, opt=3, arch=arch)
             self.cache[cc] = ptx
+            if config.DUMP_ASSEMBLY:
+                print(("ASSEMBLY %s" % self.name).center(80, '-'))
+                print(ptx.decode('utf-8'))
+                print('=' * 80)
         return ptx
 
 
@@ -208,13 +214,13 @@ class CachedCUFunction(object):
 
 
 class CUDAKernel(CUDAKernelBase):
-    def __init__(self, llvm_module, name, argtypes, link=(), debug=False,
-                 exceptions={}):
+    def __init__(self, llvm_module, name, pretty_name,
+                 argtypes, link=(), debug=False, exceptions={}):
         super(CUDAKernel, self).__init__()
         self.entry_name = name
         self.argument_types = tuple(argtypes)
         self.linking = tuple(link)
-        ptx = CachedPTX(str(llvm_module))
+        ptx = CachedPTX(pretty_name, str(llvm_module))
         self._func = CachedCUFunction(self.entry_name, ptx, link)
         self.debug = debug
         self.exceptions = exceptions

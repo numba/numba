@@ -112,7 +112,7 @@ def build_fast_loop_body(context, func, builder, arrays, out, offsets,
                                   out, offsets, store_offset, signature)
 
 
-def build_ufunc_wrapper(context, func, signature, objmode, env):
+def build_ufunc_wrapper(library, context, func, signature, objmode, env):
     """
     Wrap the scalar function with a loop that iterates over the arguments
     """
@@ -127,7 +127,7 @@ def build_ufunc_wrapper(context, func, signature, objmode, env):
     fnty = Type.function(Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
                                        intp_ptr_t, byte_ptr_t])
 
-    wrapper_module = context.create_module('')
+    wrapper_module = library.create_ir_module('')
     if objmode:
         func_type = context.get_function_type2(
             types.pyobject, [types.pyobject] * len(signature.args))
@@ -137,6 +137,7 @@ def build_ufunc_wrapper(context, func, signature, objmode, env):
     oldfunc = func
     func = wrapper_module.add_function(func_type,
                                        name=func.name)
+    func.attributes.add("alwaysinline")
 
     wrapper = wrapper_module.add_function(fnty, "__ufunc__." + func.name)
     arg_args, arg_dims, arg_steps, arg_data = wrapper.args
@@ -216,23 +217,9 @@ def build_ufunc_wrapper(context, func, signature, objmode, env):
 
 
     # Run optimizer
-    wrapper_module = ll.parse_assembly(str(wrapper_module))
-    wrapper_module.verify()
-
-    module.link_in(wrapper_module)
-    wrapper = module.get_function(wrapper.name)
+    library.add_ir_module(wrapper_module)
+    wrapper = library.get_function(wrapper.name)
     oldfunc.linkage = LINKAGE_INTERNAL
-
-    context.optimize_function(wrapper)
-    context.optimize(module)
-
-    if config.DUMP_OPTIMIZED:
-        print(module)
-
-    if config.DUMP_ASSEMBLY:
-        print(("ASSEMBLY %s" % wrapper.name).center(80, '-'))
-        print(context.tm.emit_assembly(module))
-        print('=' * 80)
 
     return wrapper
 
@@ -285,7 +272,8 @@ class UArrayArg(object):
 
 
 class _GufuncWrapper(object):
-    def __init__(self, context, func, signature, sin, sout, fndesc):
+    def __init__(self, library, context, func, signature, sin, sout, fndesc):
+        self.library = library
         self.context = context
         self.func = func
         self.signature = signature
@@ -307,9 +295,10 @@ class _GufuncWrapper(object):
         fnty = Type.function(Type.void(), [byte_ptr_ptr_t, intp_ptr_t,
                                            intp_ptr_t, byte_ptr_t])
 
-        wrapper_module = self.context.create_module('')
+        wrapper_module = self.library.create_ir_module('')
         func_type = self.context.get_function_type(self.fndesc)
         func = wrapper_module.add_function(func_type, name=self.func.name)
+        func.attributes.add("alwaysinline")
         wrapper = wrapper_module.add_function(fnty,
                                               "__gufunc__." + self.func.name)
         arg_args, arg_dims, arg_steps, arg_data = wrapper.args
@@ -374,28 +363,11 @@ class _GufuncWrapper(object):
 
         builder.ret_void()
 
-        wrapper_module = ll.parse_assembly(str(wrapper_module))
-        wrapper_module.verify()
-
-        module.link_in(wrapper_module)
-        wrapper = module.get_function(wrapper.name)
+        self.library.add_ir_module(wrapper_module)
+        wrapper = self.library.get_function(wrapper.name)
 
         # Set core function to internal so that it is not generated
         self.func.linkage = LINKAGE_INTERNAL
-
-        # Force inline of code function
-        # Disable inlining
-        # inline_function(innercall)
-        # Run optimizer
-        self.context.optimize(module)
-
-        if config.DUMP_OPTIMIZED:
-            print(module)
-
-        if config.DUMP_ASSEMBLY:
-            print(("ASSEMBLY %s" % wrapper.name).center(80, '-'))
-            print(self.context.tm.emit_assembly(module))
-            print('=' * 80)
 
         return wrapper, self.env
 
@@ -441,11 +413,11 @@ class _GufuncObjectWrapper(_GufuncWrapper):
         self.pyapi.gil_release(self.gil)
 
 
-def build_gufunc_wrapper(context, func, signature, sin, sout, fndesc):
+def build_gufunc_wrapper(library, context, func, signature, sin, sout, fndesc):
     wrapcls = (_GufuncObjectWrapper
                if signature.return_type == types.pyobject
                else _GufuncWrapper)
-    return wrapcls(context, func, signature, sin, sout, fndesc).build()
+    return wrapcls(library, context, func, signature, sin, sout, fndesc).build()
 
 
 def _prepare_call_to_object_mode(context, builder, func, signature, args,

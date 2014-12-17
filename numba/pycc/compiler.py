@@ -18,6 +18,7 @@ from .decorators import registry as export_registry
 from numba.compiler import compile_extra, Flags
 from numba.targets.registry import CPUTarget
 
+
 logger = logging.getLogger(__name__)
 
 __all__ = ['which', 'find_linker', 'find_args', 'find_shared_ending', 'Compiler']
@@ -26,6 +27,7 @@ NULL = lc.Constant.null(lt._void_star)
 ZERO = lc.Constant.int(lt._int32, 0)
 ONE = lc.Constant.int(lt._int32, 1)
 METH_VARARGS_AND_KEYWORDS = lc.Constant.int(lt._int32, 1|2)
+
 
 def which(program):
     def is_exe(fpath):
@@ -143,57 +145,44 @@ class _Compiler(object):
         self.exported_signatures = export_registry
         self.exported_function_types = {}
 
-        # Compile all exported functions
         typing_ctx = CPUTarget.typing_context
-        # TODO Use non JIT-ing target
         target_ctx = CPUTarget.target_context
 
-        # Create new module containing everything
-        llvm_module = ll.parse_assembly(str(target_ctx.create_module('pycc')))
+        codegen = target_ctx.aot_codegen(self.module_name)
+        library = codegen.create_library(self.module_name)
 
-        modules = []
+        # Generate IR for all exported functions
         flags = Flags()
-        if not self.export_python_wrap:
-            flags.set("no_compile")
+        flags.set("no_compile")
 
         for entry in self.exported_signatures:
             cres = compile_extra(typing_ctx, target_ctx, entry.function,
                                  entry.signature.args,
                                  entry.signature.return_type, flags,
-                                 locals={})
+                                 locals={}, library=library)
+
+            func_name = cres.fndesc.llvm_func_name
+            llvm_func = cres.library.get_function(func_name)
 
             if self.export_python_wrap:
-                module = cres.llvm_func.module
                 # XXX: unsupported (necessary?)
-                cres.llvm_func.linkage = lc.LINKAGE_INTERNAL
-                wrappername = "wrapper." + cres.llvm_func.name
-                wrapper = module.get_function(wrappername)
+                llvm_func.linkage = lc.LINKAGE_INTERNAL
+                wrappername = cres.fndesc.llvm_cpython_wrapper_name
+                wrapper = cres.library.get_function(wrappername)
                 wrapper.name = entry.symbol
                 wrapper.linkage = lc.LINKAGE_EXTERNAL
                 fnty = cres.target_context.get_function_type(cres.fndesc)
                 self.exported_function_types[entry] = fnty
             else:
-                cres.llvm_func.linkage = lc.LINKAGE_EXTERNAL
-                cres.llvm_func.name = entry.symbol
-
-            modules.append(cres.llvm_module)
+                llvm_func.linkage = lc.LINKAGE_EXTERNAL
+                llvm_func.name = entry.symbol
 
         if self.export_python_wrap:
-            wrapper_module = target_ctx.create_module("wrapper")
+            wrapper_module = library.create_ir_module("wrapper")
             self._emit_python_wrapper(wrapper_module)
-            modules.append(ll.parse_assembly(str(wrapper_module)))
+            library.add_ir_module(wrapper_module)
 
-        # Link all exported functions
-        for mod in modules:
-            llvm_module.link_in(mod)
-
-        # Optimize
-        tm = le.EngineBuilder.new(llvm_module).select_target()
-        pms = lp.build_pass_managers(tm=tm, opt=3, loop_vectorize=True,
-                                     fpm=False, mod=llvm_module)
-        pms.pm.run(llvm_module)
-
-        return llvm_module
+        return library
 
     def _process_inputs(self, wrap=False, **kws):
         for ifile in self.inputs:
@@ -204,18 +193,15 @@ class _Compiler(object):
 
     def write_llvm_bitcode(self, output, **kws):
         self._process_inputs(**kws)
-        lmod = self._cull_exports()
+        library = self._cull_exports()
         with open(output, 'wb') as fout:
-            lmod.to_bitcode(fout)
+            fout.write(library.emit_bitcode())
 
     def write_native_object(self, output, **kws):
         self._process_inputs(**kws)
-        lmod = self._cull_exports()
-        tm = le.TargetMachine.new(opt=3, reloc=le.RELOC_PIC, features='-avx',
-                                  codemodel='default')
+        library = self._cull_exports()
         with open(output, 'wb') as fout:
-            objfile = tm.emit_object(lmod)
-            fout.write(objfile)
+            fout.write(library.emit_native_object())
 
     def emit_type(self, tyobj):
         ret_val = str(tyobj)
@@ -407,7 +393,6 @@ class CompilerPy3(_Compiler):
         return signature, "PyInit_" + self.module_name
 
     def _emit_python_wrapper(self, llvm_module):
-
         # Figure out the Python C API module creation function, and
         # get a LLVM function for it.
         create_module_fn = llvm_module.add_function(*self.module_create_definition)

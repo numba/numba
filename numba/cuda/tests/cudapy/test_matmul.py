@@ -13,7 +13,7 @@ SM_SIZE = (tpb, tpb)
 @cuda.jit(argtypes=[float32[:, ::1], float32[:, ::1], float32[:, ::1]])
 def cu_square_matrix_mul(A, B, C):
     sA = cuda.shared.array(shape=SM_SIZE, dtype=float32)
-    sB = cuda.shared.array(shape=SM_SIZE, dtype=float32)
+    sB = cuda.shared.array(shape=(tpb, tpb), dtype=float32)
 
     tx = cuda.threadIdx.x
     ty = cuda.threadIdx.y
