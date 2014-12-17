@@ -59,7 +59,7 @@ DUMP_IR = _readenv("NUMBA_DUMP_IR", int, DEBUG_FRONTEND)
 DUMP_LLVM = _readenv("NUMBA_DUMP_LLVM", int, DEBUG)
 
 # Force dump of Function optimized LLVM IR
-NUMBA_DUMP_FUNC_OPT = _readenv("NUMBA_DUMP_FUNC_OPT", int, DEBUG)
+DUMP_FUNC_OPT = _readenv("NUMBA_DUMP_FUNC_OPT", int, DEBUG)
 
 # Force dump of Optimized LLVM IR
 DUMP_OPTIMIZED = _readenv("NUMBA_DUMP_OPTIMIZED", int, DEBUG)
