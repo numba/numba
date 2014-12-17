@@ -18,7 +18,7 @@ def f(a):
     for n in range(100000 // a.size):
         for idx in range(a.size):
             tmp = a[idx]
-            a[a[idx] % a.size] = a[idx] + 1
+            a[a[idx] % a.size] = a[idx] * 3
             a[idx] = tmp
 
 f_sig = "void(uint32[:])"
@@ -26,13 +26,13 @@ f_sig = "void(uint32[:])"
 
 class TestGILRelease(TestCase):
 
-    n_threads = 32
+    n_threads = 64
 
     def run_in_threads(self, func):
         # Run a workload in parallel, several times in a row, and collect
         # results.
         results = []
-        for iteration in range(3):
+        for iteration in range(6):
             threads = []
             arr = np.arange(self.n_threads, dtype=np.uint32)
             for i in range(self.n_threads):
