@@ -10,18 +10,12 @@ class _ArgManager(object):
     """
     A utility class to handle argument unboxing and cleanup
     """
-    def __init__(self, builder, api, nargs):
+    def __init__(self, builder, api, endblk, nargs):
         self.builder = builder
         self.api = api
         self.arg_count = 0  # how many function arguments have been processed
         self.cleanups = []
-
-        # Block that returns after erroneous argument unboxing/cleanup
-        self.endblk = cgutils.append_basic_block(self.builder, "arg.end")
-        with cgutils.goto_block(self.builder, self.endblk):
-            self.builder.ret(self.api.get_null_object())
-
-        self.nextblk = self.endblk
+        self.nextblk = endblk
 
     def add_arg(self, obj, ty):
         """
@@ -64,13 +58,32 @@ class _ArgManager(object):
             dtor()
 
 
+class _GilManager(object):
+    """
+    A utility class to handle releasing the GIL and then re-acquiring it
+    again.
+    """
+
+    def __init__(self, builder, api, argman):
+        self.builder = builder
+        self.api = api
+        self.argman = argman
+        self.thread_state = api.save_thread()
+
+    def emit_cleanup(self):
+        self.api.restore_thread(self.thread_state)
+        self.argman.emit_cleanup()
+
+
 class PyCallWrapper(object):
-    def __init__(self, context, module, func, fndesc, exceptions):
+    def __init__(self, context, module, func, fndesc, exceptions,
+                 release_gil):
         self.context = context
         self.module = module
         self.func = func
         self.fndesc = fndesc
         self.exceptions = exceptions
+        self.release_gil = release_gil
 
     def build(self):
         wrapname = "wrapper.%s" % self.func.name
@@ -109,12 +122,20 @@ class PyCallWrapper(object):
         with cgutils.if_unlikely(builder, pred):
             builder.ret(api.get_null_object())
 
-        argman = _ArgManager(builder, api, nargs)
+        # Block that returns after erroneous argument unboxing/cleanup
+        endblk = cgutils.append_basic_block(builder, "arg.end")
+        with cgutils.goto_block(builder, endblk):
+            builder.ret(api.get_null_object())
+
+        cleanup_manager = _ArgManager(builder, api, endblk, nargs)
 
         innerargs = []
         for obj, ty in zip(objs, self.fndesc.argtypes):
-            val = argman.add_arg(obj, ty)
+            val = cleanup_manager.add_arg(obj, ty)
             innerargs.append(val)
+
+        if self.release_gil:
+            cleanup_manager = _GilManager(builder, api, cleanup_manager)
 
         # The wrapped function doesn't take a full closure, only
         # the Environment object.
@@ -125,7 +146,7 @@ class PyCallWrapper(object):
                                                  self.fndesc.argtypes,
                                                  innerargs, env)
         # Do clean up
-        argman.emit_cleanup()
+        cleanup_manager.emit_cleanup()
 
         # Determine return status
         with cgutils.if_likely(builder, status.ok):

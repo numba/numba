@@ -219,7 +219,7 @@ class BaseLower(object):
         self.exceptions[excid] = exc
         return excid
 
-    def lower(self, create_wrapper=True):
+    def lower(self):
         # Init argument variables
         fnargs = self.context.get_arguments(self.function)
         for ak, av in zip(self.fndesc.args, fnargs):
@@ -260,10 +260,13 @@ class BaseLower(object):
         # Materialize LLVM Module
         self.library.add_ir_module(self.module)
 
-        # Create CPython wrapper
-        if create_wrapper:
-            self.context.create_cpython_wrapper(self.library, self.fndesc,
-                                                self.exceptions)
+    def create_cpython_wrapper(self, release_gil=False):
+        """
+        Create CPython wrapper.
+        """
+        self.context.create_cpython_wrapper(self.library, self.fndesc,
+                                            self.exceptions,
+                                            release_gil=release_gil)
 
     def init_argument(self, arg):
         return arg

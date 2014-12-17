@@ -518,12 +518,30 @@ class PythonAPI(object):
     def gil_release(self, gil):
         """
         Release the acquired GIL by gil_ensure().
-        Must be pair with a gil_ensure().
+        Must be paired with a gil_ensure().
         """
         gilptrty = Type.pointer(self.gil_state)
         fnty = Type.function(Type.void(), [gilptrty])
         fn = self._get_function(fnty, "numba_gil_release")
         return self.builder.call(fn, [gil])
+
+    def save_thread(self):
+        """
+        Release the GIL and return the former thread state
+        (an opaque non-NULL pointer).
+        """
+        fnty = Type.function(self.voidptr, [])
+        fn = self._get_function(fnty, name="PyEval_SaveThread")
+        return self.builder.call(fn, [])
+
+    def restore_thread(self, thread_state):
+        """
+        Restore the given thread state by reacquiring the GIL.
+        """
+        fnty = Type.function(Type.void(), [self.voidptr])
+        fn = self._get_function(fnty, name="PyEval_RestoreThread")
+        self.builder.call(fn, [thread_state])
+
 
     #
     # Other APIs (organize them better!)

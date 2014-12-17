@@ -25,6 +25,8 @@ class Flags(utils.ConfigOptions):
         'enable_pyobject_looplift',
         # Force pyobject mode inside the whole function
         'force_pyobject',
+        # Release GIL inside the native function
+        'release_gil',
         'no_compile',
         'boundcheck',
         'no_cpython_wrapper',
@@ -685,7 +687,9 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
         interp, typemap, restype, calltypes, mangler=targetctx.mangler)
 
     lower = lowering.Lower(targetctx, library, fndesc, interp)
-    lower.lower(create_wrapper=not flags.no_cpython_wrapper)
+    lower.lower()
+    if not flags.no_cpython_wrapper:
+        lower.create_cpython_wrapper(flags.release_gil)
     env = lower.env
     exception_map = lower.exceptions
     del lower
@@ -704,7 +708,9 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
 def py_lowering_stage(targetctx, library, interp, flags):
     fndesc = lowering.PythonFunctionDescriptor.from_object_mode_function(interp)
     lower = objmode.PyLower(targetctx, library, fndesc, interp)
-    lower.lower(create_wrapper=not flags.no_cpython_wrapper)
+    lower.lower()
+    if not flags.no_cpython_wrapper:
+        lower.create_cpython_wrapper(flags.release_gil)
     env = lower.env
     exception_map = lower.exceptions
     del lower

@@ -215,12 +215,15 @@ class CPUContext(BaseContext):
             # calls to compiler-rt
             intrinsics.fix_divmod(mod)
 
-    def create_cpython_wrapper(self, library, fndesc, exceptions):
+    def create_cpython_wrapper(self, library, fndesc, exceptions,
+                               release_gil=False):
         wrapper_module = self.create_module("wrapper")
         fnty = self.get_function_type(fndesc)
         wrapper_callee = wrapper_module.add_function(fnty, fndesc.llvm_func_name)
-        PyCallWrapper(self, wrapper_module, wrapper_callee,
-                      fndesc, exceptions=exceptions).build()
+        builder = PyCallWrapper(self, wrapper_module, wrapper_callee,
+                                fndesc, exceptions=exceptions,
+                                release_gil=release_gil)
+        builder.build()
         library.add_ir_module(wrapper_module)
 
     def get_executable(self, library, fndesc, env):
@@ -266,6 +269,7 @@ class CPUContext(BaseContext):
 class CPUTargetOptions(TargetOptions):
     OPTIONS = {
         "nopython": bool,
+        "nogil": bool,
         "forceobj": bool,
         "looplift": bool,
         "wraparound": bool,
