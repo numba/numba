@@ -870,13 +870,13 @@ class BaseContext(object):
         status = Status(code=code, ok=ok, err=err, exc=exc, none=none)
         return status
 
-    def call_function_pointer(self, builder, funcptr, signature, args):
+    def call_function_pointer(self, builder, funcptr, signature, args, cconv=None):
         retty = self.get_value_type(signature.return_type)
         fnty = Type.function(retty, [a.type for a in args])
         fnptrty = Type.pointer(fnty)
         addr = self.get_constant(types.intp, funcptr)
         ptr = builder.inttoptr(addr, fnptrty)
-        return builder.call(ptr, args)
+        return builder.call(ptr, args, cconv=cconv)
 
     def call_class_method(self, builder, func, signature, args):
         api = self.get_python_api(builder)

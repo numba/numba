@@ -471,7 +471,8 @@ class Lower(BaseLower):
                 # Handle function pointer
                 pointer = fnty.funcptr
                 res = self.context.call_function_pointer(self.builder, pointer,
-                                                         signature, castvals)
+                                                         signature, castvals,
+                                                         fnty.cconv)
 
             elif isinstance(fnty, cffi_support.ExternCFunction):
                 # XXX unused?
