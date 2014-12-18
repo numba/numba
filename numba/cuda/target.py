@@ -32,6 +32,10 @@ class CUDATargetContext(BaseContext):
     implement_powi_as_math_call = True
     strict_alignment = True
 
+    # Overrides
+    def create_module(self, name):
+        return self._internal_codegen._create_empty_module(name)
+
     def init(self):
         from . import cudaimpl, libdevice
 
