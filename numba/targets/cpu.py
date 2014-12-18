@@ -187,21 +187,12 @@ class CPUContext(BaseContext):
             builder, envptr, _dynfunc._impl_info['offset_env_body'])
         return EnvBody(self, builder, ref=body_ptr, cast_ref=True)
 
-    def dynamic_map_function(self, func):
-        name, ptr = self.native_funcs[func]
-        ll.add_symbol(name, ptr)
-
     def remove_native_function(self, func):
         """
         Remove internal references to nonpython mode function *func*.
         KeyError is raised if the function isn't known to us.
         """
-        name, ptr = self.native_funcs.pop(func)
-        # If the symbol wasn't redefined, NULL it out.
-        # (otherwise, it means the corresponding Python function was
-        #  re-compiled, and the new target is still alive)
-        if ll.address_of_symbol(name) == ptr:
-            ll.add_symbol(name, 0)
+        del self.native_funcs[func]
 
     def post_lowering(self, func):
         mod = func.module

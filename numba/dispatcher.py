@@ -94,10 +94,7 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         self._compileinfos[args] = cres
 
         # Add native function for correct typing the code generation
-        target = cres.target_context
-        cfunc = cres.entry_point
-        if cfunc in target.native_funcs:
-            target.dynamic_map_function(cfunc)
+        if not cres.objectmode and not cres.interpmode:
             self._npsigs.append(cres.signature)
 
     def get_call_template(self, args, kws):
