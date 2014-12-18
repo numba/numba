@@ -2,9 +2,11 @@ from __future__ import absolute_import, print_function
 import copy
 import ctypes
 
+
+from numba.typing.templates import AbstractTemplate
 from numba import config, compiler, types, errcode
 from numba.typing.templates import ConcreteTemplate
-from numba import typing, lowering, utils
+from numba import typing, lowering
 
 from .cudadrv.devices import get_context
 from .cudadrv import nvvm, devicearray, driver
@@ -12,7 +14,7 @@ from .errors import KernelRuntimeError
 from .api import get_current_device
 
 
-def compile_cuda(pyfunc, return_type, args, debug):
+def compile_cuda(pyfunc, return_type, args, debug, inline):
     # First compilation will trigger the initialization of the CUDA backend.
     from .descriptor import CUDATargetDesc
 
@@ -23,6 +25,10 @@ def compile_cuda(pyfunc, return_type, args, debug):
     # Do not compile (generate native code), just lower (to LLVM)
     flags.set('no_compile')
     flags.set('no_cpython_wrapper')
+    if debug:
+        flags.set('boundcheck')
+    if inline:
+        flags.set('forceinline')
     # Run compilation pipeline
     cres = compiler.compile_extra(typingctx=typingctx,
                                   targetctx=targetctx,
@@ -38,8 +44,8 @@ def compile_cuda(pyfunc, return_type, args, debug):
     return cres
 
 
-def compile_kernel(pyfunc, args, link, debug=False):
-    cres = compile_cuda(pyfunc, types.void, args, debug=debug)
+def compile_kernel(pyfunc, args, link, debug=False, inline=False):
+    cres = compile_cuda(pyfunc, types.void, args, debug=debug, inline=inline)
     func = cres.library.get_function(cres.fndesc.llvm_func_name)
     kernel = cres.target_context.prepare_cuda_kernel(func,
                                                      cres.signature.args)
@@ -53,8 +59,54 @@ def compile_kernel(pyfunc, args, link, debug=False):
     return cukern
 
 
+class DeviceFunctionTemplate(object):
+    """Unmaterialized device function
+    """
+    def __init__(self, pyfunc, debug, inline):
+        self.py_func = pyfunc
+        self.debug = debug
+        self.inline = inline
+        self._compileinfos = {}
+
+    def compile(self, args):
+        """Compile the function for the given argument types.
+
+        Each signature is compiled once by caching the compiled function inside
+        this object.
+        """
+        if args not in self._compileinfos:
+            cres = compile_cuda(self.py_func, None, args, debug=self.debug,
+                                inline=self.inline)
+            self._compileinfos[args] = cres
+            libs = [cres.library]
+            cres.target_context.insert_user_function(self, cres.fndesc, libs)
+        else:
+            cres = self._compileinfos[args]
+        return cres.signature
+
+
+def compile_device_template(pyfunc, debug=False, inline=False):
+    """Create a DeviceFunctionTemplate object and register the object to
+    the CUDA typing context.
+    """
+    from .descriptor import CUDATargetDesc
+
+    dft = DeviceFunctionTemplate(pyfunc, debug=debug, inline=inline)
+
+    class device_function_template(AbstractTemplate):
+        key = dft
+
+        def generic(self, args, kws):
+            assert not kws
+            return dft.compile(args)
+
+    typingctx = CUDATargetDesc.typingctx
+    typingctx.insert_user_function(dft, device_function_template)
+    return dft
+
+
 def compile_device(pyfunc, return_type, args, inline=True, debug=False):
-    cres = compile_cuda(pyfunc, return_type, args, debug=debug)
+    cres = compile_cuda(pyfunc, return_type, args, debug=debug, inline=inline)
     devfn = DeviceFunction(cres)
 
     class device_function_template(ConcreteTemplate):
@@ -375,6 +427,7 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         self.targetoptions = targetoptions
 
         from .descriptor import CUDATargetDesc
+
         self.typingctx = CUDATargetDesc.typingctx
 
     def __call__(self, *args):
@@ -383,10 +436,13 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         cfg(*args)
 
     def specialize(self, *args):
-        argtypes = tuple([self.typingctx.resolve_argument_type(a) for a in args])
+        argtypes = tuple(
+            [self.typingctx.resolve_argument_type(a) for a in args])
         kernel = self.definitions.get(argtypes)
         if kernel is None:
-            kernel = compile_kernel(self.py_func, argtypes, link=(),
+            if 'link' not in self.targetoptions:
+                self.targetoptions['link'] = ()
+            kernel = compile_kernel(self.py_func, argtypes,
                                     **self.targetoptions)
             self.definitions[argtypes] = kernel
             if self.bind:

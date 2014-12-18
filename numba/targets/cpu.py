@@ -32,16 +32,9 @@ class CPUContext(BaseContext):
     """
     Changes BaseContext calling convention
     """
-    _data_layout = None
-
     # Overrides
     def create_module(self, name):
-        mod = lc.Module.new(name)
-        mod.triple = ll.get_default_triple()
-
-        if self._data_layout:
-            mod.data_layout = self._data_layout
-        return mod
+        return self._internal_codegen._create_empty_module(name)
 
     def init(self):
         self.native_funcs = utils.UniqueDict()
