@@ -57,22 +57,20 @@ def lifted_f(a, offset):
 
 class TestGILRelease(TestCase):
 
-    n_threads = 2
-
     def make_test_array(self, n_members):
-        return np.arange(30, dtype=np.int64)
+        return np.arange(n_members, dtype=np.int64)
 
-    def run_in_threads(self, func):
+    def run_in_threads(self, func, n_threads):
         # Run the function in parallel over an array and collect results.
         threads = []
         # Warm up compilation to avoid potential concurrency errors in compiler
         # (see https://github.com/numba/numba/issues/908)
         func(self.make_test_array(1), 0)
-        arr = self.make_test_array(30)
-        for i in range(self.n_threads):
+        arr = self.make_test_array(50)
+        for i in range(n_threads):
             # Ensure different threads have equally distributed start offsets
             # into the array.
-            offset = i * arr.size // self.n_threads
+            offset = i * arr.size // n_threads
             t = threading.Thread(target=func, args=(arr, offset))
             threads.append(t)
         for t in threads:
@@ -82,14 +80,23 @@ class TestGILRelease(TestCase):
         return arr
 
     def check_gil_held(self, func):
-        arr = self.run_in_threads(func)
+        arr = self.run_in_threads(func, n_threads=4)
         distinct = set(arr)
         self.assertEqual(len(distinct), 1, distinct)
 
     def check_gil_released(self, func):
-        arr = self.run_in_threads(func)
-        distinct = set(arr)
-        self.assertGreater(len(distinct), 1, distinct)
+        for n_threads in (4, 12, 32):
+            # Try harder each time. On an empty machine 4 threads seems
+            # sufficient, but in some contexts (e.g. Travis CI) we need more.
+            arr = self.run_in_threads(func, n_threads)
+            distinct = set(arr)
+            try:
+                self.assertGreater(len(distinct), 1, distinct)
+            except AssertionError as e:
+                failure = e
+            else:
+                return
+        raise failure
 
     def test_gil_held(self):
         """
