@@ -355,8 +355,13 @@ class Dispatcher(WeakType):
 
 
 class FunctionPointer(Function):
-    def __init__(self, template, funcptr):
+    """
+    A pointer to a native function (e.g. exported via ctypes or cffi).
+    """
+
+    def __init__(self, template, funcptr, cconv=None):
         self.funcptr = funcptr
+        self.cconv = cconv
         super(FunctionPointer, self).__init__(template)
 
 

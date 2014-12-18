@@ -27,6 +27,7 @@ class Flags(utils.ConfigOptions):
         'force_pyobject',
         'no_compile',
         'boundcheck',
+        'forceinline',
         'no_cpython_wrapper',
         ])
 
@@ -682,7 +683,8 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
                           calltypes, flags):
     # Lowering
     fndesc = lowering.PythonFunctionDescriptor.from_specialized_function(
-        interp, typemap, restype, calltypes, mangler=targetctx.mangler)
+        interp, typemap, restype, calltypes, mangler=targetctx.mangler,
+        inline=flags.forceinline)
 
     lower = lowering.Lower(targetctx, library, fndesc, interp)
     lower.lower(create_wrapper=not flags.no_cpython_wrapper)
