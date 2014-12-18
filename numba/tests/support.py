@@ -9,7 +9,7 @@ import sys
 
 import numpy as np
 
-from numba import typing, utils
+from numba import config, typing, utils
 from numba.compiler import compile_extra, compile_isolated, Flags, DEFAULT_FLAGS
 from numba.lowering import LoweringError
 from numba.targets import cpu
