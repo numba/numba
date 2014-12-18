@@ -184,23 +184,46 @@ del _aliases, _numpy_ufunc
 # -----------------------------------------------------------------------------
 # Install global reduction functions
 
-class Numpy_generic_reduction(AbstractTemplate):
+# Functions where domain and range are the same format
+class Numpy_homogenous_reduction(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         [arr] = args
         return signature(arr.dtype, arr)
 
 
-def _numpy_reduction(fname):
-    npyfn = getattr(numpy, fname)
-    cls = type("Numpy_reduce_{0}".format(npyfn), (Numpy_generic_reduction,),
-               dict(key=npyfn))
-    setattr(NumpyModuleAttribute, "resolve_{0}".format(fname),
-            lambda self, mod: types.Function(cls))
+# Functions where domain and range are possibly different formats
+class Numpy_heterogenous_reduction(AbstractTemplate):
+    def generic(self, args, kws):
+        assert not kws
+        [arr] = args
+        if arr.dtype in types.integer_domain:
+            return signature(types.float64, arr)
+        else:
+            return signature(arr.dtype, arr)
 
-for func in ['sum', 'prod']:
-    _numpy_reduction(func)
+
+class Numpy_index_reduction(AbstractTemplate):
+    def generic(self, args, kws):
+        assert not kws
+        [arr] = args
+        return signature(types.int64, arr)
+
+# Function to glue attributes onto the numpy-esque object
+def _numpy_reduction(fname, rClass):
+    npyfn = getattr(numpy, fname)
+    cls = type("Numpy_reduce_{0}".format(npyfn), (rClass,), dict(key=npyfn))
+    semiBound = lambda self, mod: types.Function(cls) 
+    setattr(NumpyModuleAttribute, "resolve_{0}".format(fname), semiBound)
+
+for func in ['sum', 'prod', 'min', 'max']:
+    _numpy_reduction(func, Numpy_homogenous_reduction)
+
+for func in ['mean', 'var', 'std']:
+    _numpy_reduction(func, Numpy_heterogenous_reduction)
+
+for func in ["argmin", "argmax"]:
+    _numpy_reduction(func, Numpy_index_reduction)
+
 
 builtin_global(numpy, types.Module(numpy))
-
-
