@@ -224,6 +224,8 @@ class BaseContext(object):
         for ak, av in zip(fndesc.args, self.get_arguments(fn)):
             av.name = "arg.%s" % ak
         fn.args[0].name = ".ret"
+        if fndesc.inline:
+            fn.attributes.add('alwaysinline')
         return fn
 
     def declare_external_function(self, module, fndesc):
