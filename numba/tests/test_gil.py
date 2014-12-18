@@ -45,9 +45,6 @@ def f(a, offset):
 f_sig = "void(int64[:], intp)"
 
 
-# I suspect this is https://github.com/numba/numba/issues/903
-@unittest.skipIf(os.name == 'nt' and sys.maxsize < 2**32,
-                 "generated code crashes under 32-bit Windows")
 class TestGILRelease(TestCase):
 
     n_threads = 2
