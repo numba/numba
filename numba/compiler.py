@@ -712,7 +712,7 @@ def py_lowering_stage(targetctx, library, interp, flags):
     lower = objmode.PyLower(targetctx, library, fndesc, interp)
     lower.lower()
     if not flags.no_cpython_wrapper:
-        lower.create_cpython_wrapper(flags.release_gil)
+        lower.create_cpython_wrapper()
     env = lower.env
     exception_map = lower.exceptions
     del lower

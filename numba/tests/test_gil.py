@@ -44,15 +44,31 @@ def f(a, offset):
 
 f_sig = "void(int64[:], intp)"
 
+def lifted_f(a, offset):
+    """
+    Same as f(), but inside a lifted loop
+    """
+    object()   # Force object mode
+    for idx in range(a.size):
+        # Let another thread run
+        sleep(1 * sleep_factor)
+        a[(idx + offset) % a.size] = PyThread_get_thread_ident()
+
 
 class TestGILRelease(TestCase):
 
     n_threads = 2
 
+    def make_test_array(self, n_members):
+        return np.arange(30, dtype=np.int64)
+
     def run_in_threads(self, func):
         # Run the function in parallel over an array and collect results.
         threads = []
-        arr = np.arange(30, dtype=np.int64)
+        # Warm up compilation to avoid potential concurrency errors in compiler
+        # (see https://github.com/numba/numba/issues/908)
+        func(self.make_test_array(1), 0)
+        arr = self.make_test_array(30)
         for i in range(self.n_threads):
             # Ensure different threads have equally distributed start offsets
             # into the array.
@@ -89,6 +105,14 @@ class TestGILRelease(TestCase):
         unpredictable results.
         """
         cfunc = jit(f_sig, nopython=True, nogil=True)(f)
+        self.check_gil_released(cfunc)
+
+    def test_gil_released_inside_lifted_loop(self):
+        """
+        Test the GIL can by released by a lifted loop even though the
+        surrounding code uses object mode.
+        """
+        cfunc = jit(f_sig, nogil=True)(lifted_f)
         self.check_gil_released(cfunc)
 
     def test_gil_released_by_caller(self):
