@@ -205,7 +205,6 @@ class TestTypeConv(unittest.TestCase):
         self.assertIn((i64, f64, castgraph.Unsafe), saved[3:7])
         self.assertIs(saved[7], None)
 
-        print(saved[8:])
         self.assertIn((f32, f64, castgraph.Promote), saved[8:14])
         self.assertIn((f64, f32, castgraph.Unsafe), saved[8:14])
         self.assertIn((f32, i32, castgraph.Unsafe), saved[8:14])
