@@ -589,6 +589,7 @@ class Array(IterableType):
         if self.layout != 'A':
             from numba.typeconv.rules import default_casting_rules as tcr
             ary_any = Array(self.dtype, self.ndim, 'A', const=self.const)
+            # XXX This will make the types immortal
             tcr.safe(self, ary_any)
 
     def copy(self, dtype=None, ndim=None, layout=None, const=None):
