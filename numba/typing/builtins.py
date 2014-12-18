@@ -364,14 +364,12 @@ def normalize_index(index):
             if (ty not in types.integer_domain and
                         ty not in types.real_domain and
                         ty != types.slice3_type):
-                return
+                raise ValueError('Type %s of index %s is unsupported for indexing'
+                                 % (ty, index))
         return index
 
     elif index == types.slice3_type:
         return types.slice3_type
-
-    # elif index == types.slice2_type:
-    #     return types.slice2_type
 
     elif isinstance(index, types.Integer):
         return types.intp if index.signed else types.uintp
