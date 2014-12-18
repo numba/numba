@@ -173,7 +173,6 @@ class TestBlackScholes(TestCase):
         cnd_jitted = cr1.entry_point
         tyctx = cr1.typing_context
         ctx = cr1.target_context
-        ctx.dynamic_map_function(cnd_jitted)
         tyctx.insert_user_function(cnd_jitted,
                                    ctx.get_user_function(cnd_jitted))
 

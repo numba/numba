@@ -224,6 +224,8 @@ class BaseContext(object):
         for ak, av in zip(fndesc.args, self.get_arguments(fn)):
             av.name = "arg.%s" % ak
         fn.args[0].name = ".ret"
+        if fndesc.inline:
+            fn.attributes.add('alwaysinline')
         return fn
 
     def declare_external_function(self, module, fndesc):
@@ -870,13 +872,13 @@ class BaseContext(object):
         status = Status(code=code, ok=ok, err=err, exc=exc, none=none)
         return status
 
-    def call_function_pointer(self, builder, funcptr, signature, args):
+    def call_function_pointer(self, builder, funcptr, signature, args, cconv=None):
         retty = self.get_value_type(signature.return_type)
         fnty = Type.function(retty, [a.type for a in args])
         fnptrty = Type.pointer(fnty)
         addr = self.get_constant(types.intp, funcptr)
         ptr = builder.inttoptr(addr, fnptrty)
-        return builder.call(ptr, args)
+        return builder.call(ptr, args, cconv=cconv)
 
     def call_class_method(self, builder, func, signature, args):
         api = self.get_python_api(builder)
@@ -959,14 +961,9 @@ class BaseContext(object):
                                              sig.return_type, flags,
                                              locals=locals)
 
-            # Set to linkonce one-definition-rule to prevent multiple
-            # definitions from raising errors (this can happen with
-            # nested compile_internal()).
+            # Allow inlining the function inside callers.
             codegen.add_linking_library(cres.library)
-            llvm_func = cres.library.get_function(cres.fndesc.llvm_func_name)
-            llvm_func.linkage = 'linkonce_odr'
             fndesc = cres.fndesc
-
             self.cached_internal_func[cache_key] = fndesc
 
         # Add call to the generated function

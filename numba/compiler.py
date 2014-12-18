@@ -27,6 +27,7 @@ class Flags(utils.ConfigOptions):
         'force_pyobject',
         'no_compile',
         'boundcheck',
+        'forceinline',
         'no_cpython_wrapper',
         ])
 
@@ -682,7 +683,8 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
                           calltypes, flags):
     # Lowering
     fndesc = lowering.PythonFunctionDescriptor.from_specialized_function(
-        interp, typemap, restype, calltypes, mangler=targetctx.mangler)
+        interp, typemap, restype, calltypes, mangler=targetctx.mangler,
+        inline=flags.forceinline)
 
     lower = lowering.Lower(targetctx, library, fndesc, interp)
     lower.lower(create_wrapper=not flags.no_cpython_wrapper)
@@ -695,7 +697,9 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
     else:
         # Prepare for execution
         cfunc = targetctx.get_executable(library, fndesc, env)
-        targetctx.insert_user_function(cfunc, fndesc)
+        # Insert native function for use by other jitted-functions.
+        # We also register its library to allow for inlining.
+        targetctx.insert_user_function(cfunc, fndesc, [library])
         return fndesc, exception_map, cfunc
 
 
