@@ -17,10 +17,9 @@ CC_SPIR_FUNC = "spir_func"
 
 class HSATypingContext(typing.BaseContext):
     def init(self):
-        pass
-        # from . import hsadecl
-        #
-        # self.install(hsadecl.registry)
+        from . import hsadecl
+
+        self.install(hsadecl.registry)
 
 # -----------------------------------------------------------------------------
 # Implementation
@@ -32,9 +31,9 @@ class HSATargetContext(BaseContext):
     implement_powi_as_math_call = True
 
     def init(self):
-        # from . import oclimpl
-        #
-        # self.insert_func_defn(oclimpl.registry.functions)
+        from . import hsaimpl
+
+        self.insert_func_defn(hsaimpl.registry.functions)
         self._internal_codegen = codegen.JITHSACodegen("numba.hsa.jit")
         self._target_data = DATALAYOUT[utils.MACHINE_BITS]
 
@@ -164,7 +163,6 @@ def set_hsa_kernel(fn):
 
     # Set SPIR kernel calling convention
     fn.calling_convention = CC_SPIR_KERNEL
-    print(fn)
 
     # Mark kernels
     ocl_kernels = mod.get_or_insert_named_metadata("opencl.kernels")

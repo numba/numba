@@ -128,25 +128,26 @@ class HSAKernelBase(object):
 
 class HSAKernel(HSAKernelBase):
     """
-    A OpenCL kernel object
+    A HSA kernel object
     """
 
     def __init__(self, llvm_module, name, argtypes):
         super(HSAKernel, self).__init__()
         self.llvm_module = llvm_module
 
+        # Finalize HSAIL
         hlcmod = hlc.Module()
         for m in llvm_module._modules:
-            if m.global_variables:  # XXX: ignore empty module for now
-                hlcmod.load_llvm(str(m))
+            hlcmod.load_llvm(str(m))
         hsail = hlcmod.finalize()
-        print(hsail)
-        raise NotImplementedError
-        self.binary = hsail
+
+        # print(hsail)
+        # raise NotImplementedError("HSAIL dispatch")
+        self.assembly = hsail
         self.entry_name = name
         self.argument_types = tuple(argtypes)
 
-        self.device, self.program, self.kernel = self.bind()
+        # self.device, self.program, self.kernel = self.bind()
 
     def bind(self):
         """
@@ -155,6 +156,7 @@ class HSAKernel(HSAKernelBase):
         raise NotImplementedError
 
     def __call__(self, *args):
+        raise NotImplementedError
         # Prepare arguments
         iter_unboxed = _prepare_arguments(args, self.argument_types)
         for i, argval in enumerate(iter_unboxed):

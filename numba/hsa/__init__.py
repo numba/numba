@@ -3,6 +3,8 @@ Module that deals with HSA in a high level way
 """
 from __future__ import print_function, absolute_import, division
 
+from .api import *
+
 
 def is_available():
     """Returns a boolean to indicate the availability of a HSA runtime.

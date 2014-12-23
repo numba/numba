@@ -3,9 +3,9 @@ from __future__ import print_function, absolute_import
 from llvmlite import binding as ll
 from llvmlite.llvmpy import core as lc
 from llvmlite import ir as llvmir
-from numba import utils, config
+from numba import utils
 from numba.targets.codegen import BaseCPUCodegen, CodeLibrary
-from .hlc import DATALAYOUT, TRIPLE, hlc
+from .hlc import DATALAYOUT, TRIPLE
 
 
 class ModuleCollection(object):
@@ -14,6 +14,9 @@ class ModuleCollection(object):
         self._gvars = {}
 
     def add(self, ir_module):
+        # if not ir_module.global_variables:
+        # # Ignore empty module
+        #     return
         assert isinstance(ir_module, llvmir.Module)
         self._modules.append(ir_module)
 
@@ -56,41 +59,6 @@ class HSACodeLibrary(CodeLibrary):
 
     def _finalize_specific(self):
         pass
-        # # Fix global naming
-        # for gv in self._final_module.global_variables:
-        # if '.' in gv.name:
-        # gv.name = gv.name.replace('.', '_')
-        #
-        # def add_ir_module(self, ir_module):
-        # """
-        # Add a LLVM IR module's contents to this library.
-        # """
-        #     raise NotImplementedError(ir_module)
-        #     self._raise_if_finalized()
-        #     assert isinstance(ir_module, llvmir.Module)
-        #     self._ir_modules.append(ir_module)
-        #
-        # def add_llvm_module(self, ll_module):
-        #     raise NotImplementedError
-
-        # @property
-        # def final_module(self):
-        #     assert len(self._ir_modules) == 1
-        #     return self._ir_modules[0]
-        #
-        # def finalize(self):
-        #     """
-        #     Finalize the library.  After this call, nothing can be added anymore.
-        #     Finalization involves various stages of code optimization and
-        #     linking.
-        #     """
-        #     self._raise_if_finalized()
-        #     self._optimize_final_module()
-        #     self._finalize_specific()
-        #     self._finalized = True
-        #
-        # def get_function(self, name):
-        #     raise NotImplementedError
 
 
 class JITHSACodegen(BaseCPUCodegen):
