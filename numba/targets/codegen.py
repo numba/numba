@@ -31,8 +31,8 @@ class CodeLibrary(object):
         self._codegen = codegen
         self._name = name
         self._linking_libraries = set()
-        self._final_module = ll.parse_assembly(
-            str(self._codegen._create_empty_module(self._name)))
+        self._final_module = self._codegen._materialize_module(
+            self._codegen._create_empty_module(self._name))
 
     @property
     def codegen(self):
@@ -95,7 +95,7 @@ class CodeLibrary(object):
         """
         self._raise_if_finalized()
         assert isinstance(ir_module, llvmir.Module)
-        ll_module = ll.parse_assembly(str(ir_module))
+        ll_module = self.codegen._materialize_module(ir_module)
         ll_module.verify()
         self.add_llvm_module(ll_module)
 
@@ -193,9 +193,12 @@ class BaseCPUCodegen(object):
 
     def __init__(self, module_name):
         self._libraries = set()
-        self._llvm_module = ll.parse_assembly(
-            str(self._create_empty_module(module_name)))
+        self._llvm_module = self._materialize_module(
+            self._create_empty_module(module_name))
         self._init(self._llvm_module)
+
+    def _materialize_module(self, ir_module):
+        return ll.parse_assembly(str(ir_module))
 
     def _init(self, llvm_module):
         assert list(llvm_module.global_variables) == [], "Module isn't empty"
