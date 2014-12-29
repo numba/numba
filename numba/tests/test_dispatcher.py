@@ -1,6 +1,7 @@
 from __future__ import print_function, division, absolute_import
 
 import numpy
+import threading
 
 from numba import unittest_support as unittest
 from numba.special import typeof
@@ -80,6 +81,28 @@ class TestDispatcher(TestCase):
         self.assertAlmostEqual(foo(1, 1), INT + INT)
         self.assertEqual(len(foo.overloads), 4, "didn't compile a new "
                                                 "version")
+
+    def test_lock(self):
+        """
+        Test that (lazy) compiling from several threads at once doesn't
+        produce errors (see issue #908).
+        """
+        errors = []
+        @jit
+        def foo(x):
+            return x + 1
+        def wrapper():
+            try:
+                self.assertEqual(foo(1), 2)
+            except BaseException as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=wrapper) for i in range(16)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertFalse(errors)
 
 
 if __name__ == '__main__':
