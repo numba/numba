@@ -37,7 +37,7 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         self.__code__ = self.func_code
 
         self.doc = py_func.__doc__
-        self._compiling = False
+        self._compile_lock = utils.NonReentrantLock()
 
         utils.finalize(self, self._make_finalizer())
 
@@ -121,19 +121,12 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         args, return_type = sigutils.normalize_signature(sig)
         return self.overloads[tuple(args)]
 
-    @contextlib.contextmanager
-    def _compile_lock(self):
-        if self._compiling:
-            raise RuntimeError("Compiler re-entrant")
-        self._compiling = True
-        try:
-            yield
-        finally:
-            self._compiling = False
-
     @property
     def is_compiling(self):
-        return self._compiling
+        """
+        Whether a specialization is currently being compiled.
+        """
+        return self._compile_lock.is_owned()
 
     def jit(self, sig, **kws):
         """Alias of compile(sig, **kws)
@@ -253,7 +246,7 @@ class Overloaded(_OverloadedBase):
         return self
 
     def compile(self, sig, locals={}, **targetoptions):
-        with self._compile_lock():
+        with self._compile_lock:
             locs = self.locals.copy()
             locs.update(locals)
 
@@ -308,7 +301,7 @@ class LiftedLoop(_OverloadedBase):
         return next(iter(self.bytecode)).lineno
 
     def compile(self, sig):
-        with self._compile_lock():
+        with self._compile_lock:
             # FIXME this is mostly duplicated from Overloaded
             flags = self.flags
             args, return_type = sigutils.normalize_signature(sig)
