@@ -4,6 +4,7 @@ from __future__ import print_function, absolute_import
 from subprocess import check_call
 import tempfile
 import os
+from collections import namedtuple
 
 from numba import config
 
@@ -30,6 +31,12 @@ class CmdLine(object):
                      "-o {fout} "
                      "{fin}")
 
+    CMD_GEN_BRIG = ("$HSAILBIN/llc -O2 "
+                    "-march=hsail64 "
+                    "-filetype=obj "
+                    "-o {fout} "
+                    "{fin}")
+
     CMD_LINK_BUILTINS = ("$HSAILBIN/llvm-link "
                          "-prelink-opt "
                          "-S "
@@ -51,6 +58,9 @@ class CmdLine(object):
 
     def generate_hsail(self, ipath, opath):
         check_call(self.CMD_GEN_HSAIL.format(fout=opath, fin=ipath), shell=True)
+
+    def generate_brig(self, ipath, opath):
+        check_call(self.CMD_GEN_BRIG.format(fout=opath, fin=ipath), shell=True)
 
     def link_builtins(self, ipath, opath):
         check_call(self.CMD_LINK_BUILTINS.format(fout=opath, fin=ipath),
@@ -142,13 +152,21 @@ class Module(object):
         hsail_path = self._track_temp_file("finalized-hsail")
         self._cmd.generate_hsail(ipath=opt_path, opath=hsail_path)
 
+        # Finalize the llvm to BRIG
+        brig_path = self._track_temp_file("finalized-brig")
+        self._cmd.generate_brig(ipath=opt_path, opath=brig_path)
+
         self._finalized = True
 
         # Read HSAIL
         with open(hsail_path, 'rb') as fin:
             hsail = fin.read().decode('ascii')
 
+        # Read BRIG
+        with open(brig_path, 'rb') as fin:
+            brig = fin.read()
+
         if config.DUMP_ASSEMBLY:
             print(hsail)
 
-        return hsail
+        return namedtuple('FinalizerResult', ['hsail', 'brig'])(hsail, brig)

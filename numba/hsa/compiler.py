@@ -139,11 +139,10 @@ class HSAKernel(HSAKernelBase):
         hlcmod = hlc.Module()
         for m in llvm_module._modules:
             hlcmod.load_llvm(str(m))
-        hsail = hlcmod.finalize()
 
-        # print(hsail)
-        # raise NotImplementedError("HSAIL dispatch")
+        hsail, brig = hlcmod.finalize()
         self.assembly = hsail
+        self.binary = brig
         self.entry_name = name
         self.argument_types = tuple(argtypes)
 

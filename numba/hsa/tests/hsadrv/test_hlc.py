@@ -40,7 +40,7 @@ class TestHLC(unittest.TestCase):
     def test_hlc(self):
         hlcmod = hlc.Module()
         hlcmod.load_llvm(SPIR_SAMPLE)
-        hsail = hlcmod.finalize()
+        hsail = hlcmod.finalize().hsail
         self.assertIn("prog kernel &square", hsail)
 
 
