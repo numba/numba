@@ -1,10 +1,8 @@
 from __future__ import print_function, absolute_import
 import re
-import itertools
 from llvmlite.llvmpy import core as lc
-from numba import typing, types, cgutils, utils
+from numba import typing, types, utils
 from numba.targets.base import BaseContext
-from numba.targets import builtins
 from . import codegen
 from .hlc import DATALAYOUT
 
@@ -99,56 +97,6 @@ class HSATargetContext(BaseContext):
         # return a._getvalue()
         raise NotImplementedError
 
-    # def make_array(self, typ):
-    #     return builtins.make_array(typ, addrspace=SPIR_GLOBAL_ADDRSPACE)
-
-
-class ArgAdaptor(object):
-    def __init__(self, ctx, typ):
-        self.ctx = ctx
-        self.type = typ
-        self.adapted_types = tuple(adapt_argument(ctx, self.type))
-
-    def pack(self, builder, args):
-        """Pack arguments to match Numba's calling convention
-        """
-        if isinstance(self.type, types.Array):
-            arycls = self.ctx.make_array(self.type)
-            ary = arycls(self.ctx, builder)
-            ary.data = args[0]
-            base = 1
-            shape = []
-            for i in range(self.type.ndim):
-                shape.append(args[base + i])
-            base += self.type.ndim
-            strides = []
-            for i in range(self.type.ndim):
-                strides.append(args[base + i])
-            base += self.type.ndim
-            ary.shape = cgutils.pack_array(builder, shape)
-            ary.strides = cgutils.pack_array(builder, strides)
-            return ary._getvalue(), base
-
-
-def adapt_argument(ctx, ty):
-    return ty
-    # if isinstance(ty, types.Array):
-    #     # Handle array
-    #     yield lc.Type.pointer(ctx.get_value_type(ty.dtype),
-    #                           addr_space=SPIR_GLOBAL_ADDRSPACE)
-    #     for i in range(2 * ty.ndim):  # shape + strides
-    #         yield ctx.get_value_type(types.intp)
-    #
-    # elif ty in types.complex_domain:
-    #     # Handle complex number
-    #     dtype = types.float32 if ty == types.complex64 else types.float64
-    #     for _ in range(2):
-    #         yield ctx.get_value_type(dtype)
-    #
-    # else:
-    #     yield ctx.get_vaue_type(ty)
-
-
 
 def set_hsa_kernel(fn):
     """
@@ -169,29 +117,29 @@ def set_hsa_kernel(fn):
     ocl_kernels.add(lc.MetaData.get(mod, [fn, gen_arg_addrspace_md(fn),
                                           gen_arg_access_qual_md(fn)]))
 
-    # SPIR version
+    # SPIR version 2.0
     make_constant = lambda x: lc.Constant.int(lc.Type.int(), x)
-    spir_version_constant = [make_constant(x) for x in (1, 2)]
+    spir_version_constant = [make_constant(x) for x in SPIR_VERSION]
 
     spir_version = mod.get_or_insert_named_metadata("opencl.spir.version")
     if not spir_version.operands:
         spir_version.add(lc.MetaData.get(mod, spir_version_constant))
 
-
     ocl_version = mod.get_or_insert_named_metadata("opencl.ocl.version")
     if not ocl_version.operands:
         ocl_version.add(lc.MetaData.get(mod, spir_version_constant))
 
+    ## The following metadata does not seem to be necessary
     # Other metadata
-    empty_md = lc.MetaData.get(mod, ())
-    others = ["opencl.used.extensions",
-              "opencl.used.optional.core.features",
-              "opencl.compiler.options"]
-
-    for name in others:
-        nmd = mod.get_or_insert_named_metadata(name)
-        if not nmd.operands:
-            nmd.add(empty_md)
+    # empty_md = lc.MetaData.get(mod, ())
+    # others = ["opencl.used.extensions",
+    #           "opencl.used.optional.core.features",
+    #           "opencl.compiler.options"]
+    #
+    # for name in others:
+    #     nmd = mod.get_or_insert_named_metadata(name)
+    #     if not nmd.operands:
+    #         nmd.add(empty_md)
 
 
 def gen_arg_addrspace_md(fn):
@@ -228,4 +176,6 @@ SPIR_PRIVATE_ADDRSPACE = 0
 SPIR_GLOBAL_ADDRSPACE = 1
 SPIR_CONSTANT_ADDRSPACE = 2
 SPIR_LOCAL_ADDRSPACE = 3
+
+SPIR_VERSION = (2, 0)
 
