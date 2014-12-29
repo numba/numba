@@ -569,6 +569,14 @@ class BrigModule(object):
             ctypes.byref(result))
         return BrigModule(result.contents)
 
+    @classmethod
+    def from_memory(cls, binary):
+        result = ctypes.POINTER(drvapi.hsa_ext_brig_module_t)()
+        elf_utils.create_brig_module_from_memory(
+            ctypes.create_string_buffer(binary), len(binary),
+            ctypes.byref(result))
+        return BrigModule(result.contents)
+
     def find_symbol_offset(self, symbol_name):
         symbol_offset = drvapi.hsa_ext_brig_code_section_offset32_t()
         elf_utils.find_symbol_offset(self._id, symbol_name.encode('utf8'),

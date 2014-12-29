@@ -37,5 +37,7 @@ enum status_t {
 };
 
 status_t create_brig_module_from_brig_file(const char* file_name, hsa_ext_brig_module_t** brig_module);
+status_t create_brig_module_from_memory(char* image, size_t size,
+                                        hsa_ext_brig_module_t** brig_module);
 
 void destroy_brig_module(hsa_ext_brig_module_t* brig_module);

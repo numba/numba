@@ -24,10 +24,16 @@ def _load_elf_utils_syms():
     lib = ctypes.CDLL(lib_path)
     PTR = ctypes.POINTER
 
-    create = lib.create_brig_module_from_brig_file
-    create.restype = drvapi.hsa_status_t
-    create.argtypes = [ctypes.c_char_p, PTR(PTR(drvapi.hsa_ext_brig_module_t))]
-    create.errcheck = drvapi._check_error
+    create_from_file = lib.create_brig_module_from_brig_file
+    create_from_file.restype = drvapi.hsa_status_t
+    create_from_file.argtypes = [ctypes.c_char_p, PTR(PTR(drvapi.hsa_ext_brig_module_t))]
+    create_from_file.errcheck = drvapi._check_error
+
+    create_from_memory = lib.create_brig_module_from_memory
+    create_from_memory.restype = drvapi.hsa_status_t
+    create_from_memory.argtypes = [ctypes.c_char_p, ctypes.c_size_t,
+                                   PTR(PTR(drvapi.hsa_ext_brig_module_t))]
+    create_from_memory.errcheck = drvapi._check_error
 
     destroy = lib.destroy_brig_module
     destroy.restype = None
@@ -40,10 +46,13 @@ def _load_elf_utils_syms():
                                    PTR(drvapi.hsa_ext_brig_code_section_offset32_t)]
     find_symbol_offset.errcheck = drvapi._check_error
 
-    return create, destroy, find_symbol_offset
+    return create_from_file, create_from_memory, destroy, find_symbol_offset
 
 
 # export our desired symbols
-create_brig_module_from_brig_file, destroy_brig_module, find_symbol_offset = _load_elf_utils_syms()
+(create_brig_module_from_brig_file,
+ create_brig_module_from_memory,
+ destroy_brig_module,
+ find_symbol_offset) = _load_elf_utils_syms()
 
 del _load_elf_utils_syms

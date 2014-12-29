@@ -85,7 +85,7 @@ static Elf_Scn* extract_elf_section (Elf *elfP,
 
 /* Extract section and copy into HsaBrig */
 static status_t extract_section_and_copy (Elf *elfP,
-                                       Elf_Data *secHdr, 
+                                       Elf_Data *secHdr,
                                        const SectionDesc* desc,
                                        hsa_ext_brig_module_t* brig_module,
                                        hsa_ext_brig_section_id_t section_id) {
@@ -112,10 +112,10 @@ static status_t extract_section_and_copy (Elf *elfP,
     }
 
     /* Create a section header */
-    brig_module->section[section_id] = (hsa_ext_brig_section_header_t*) address_to_copy; 
+    brig_module->section[section_id] = (hsa_ext_brig_section_header_t*) address_to_copy;
 
     return STATUS_SUCCESS;
-} 
+}
 
 /* Reads binary of BRIG and BIF format */
 status_t read_binary(hsa_ext_brig_module_t **brig_module_t, FILE* binary) {
@@ -136,7 +136,7 @@ status_t read_binary(hsa_ext_brig_module_t **brig_module_t, FILE* binary) {
 
     if (elf_version ( EV_CURRENT ) == EV_NONE) {
         return STATUS_KERNEL_ELF_INITIALIZATION_FAILED;
-    } 
+    }
 
     fd = fileno(binary);
     if ((elfP = elf_begin(fd, ELF_C_READ, (Elf *)0)) == NULL) {
@@ -146,16 +146,16 @@ status_t read_binary(hsa_ext_brig_module_t **brig_module_t, FILE* binary) {
     if (elf_kind (elfP) != ELF_K_ELF) {
         return STATUS_KERNEL_INVALID_ELF_CONTAINER;
     }
-  
+
     if (((ehdr = elf32_getehdr(elfP)) == NULL) ||
        ((scn = elf_getscn(elfP, ehdr->e_shstrndx)) == NULL) ||
        ((secHdr = elf_getdata(scn, NULL)) == NULL)) {
         return STATUS_KERNEL_INVALID_SECTION_HEADER;
     }
 
-    status = extract_section_and_copy(elfP, 
+    status = extract_section_and_copy(elfP,
                                    secHdr,
-                                   get_section_desc(SECTION_HSA_DATA), 
+                                   get_section_desc(SECTION_HSA_DATA),
                                    brig_module,
                                    HSA_EXT_BRIG_SECTION_DATA);
 
@@ -163,9 +163,9 @@ status_t read_binary(hsa_ext_brig_module_t **brig_module_t, FILE* binary) {
         return STATUS_KERNEL_MISSING_DATA_SECTION;
     }
 
-    status = extract_section_and_copy(elfP, 
+    status = extract_section_and_copy(elfP,
 				   secHdr,
-                                   get_section_desc(SECTION_HSA_CODE), 
+                                   get_section_desc(SECTION_HSA_CODE),
                                    brig_module,
                                    HSA_EXT_BRIG_SECTION_CODE);
 
@@ -173,9 +173,80 @@ status_t read_binary(hsa_ext_brig_module_t **brig_module_t, FILE* binary) {
         return STATUS_KERNEL_MISSING_CODE_SECTION;
     }
 
-    status = extract_section_and_copy(elfP, 
+    status = extract_section_and_copy(elfP,
                                    secHdr,
-                                   get_section_desc(SECTION_HSA_OPERAND), 
+                                   get_section_desc(SECTION_HSA_OPERAND),
+                                   brig_module,
+                                   HSA_EXT_BRIG_SECTION_OPERAND);
+
+    if (status != STATUS_SUCCESS) {
+        return STATUS_KERNEL_MISSING_OPERAND_SECTION;
+    }
+
+    elf_end(elfP);
+    *brig_module_t = brig_module;
+
+    return STATUS_SUCCESS;
+}
+
+/* Reads memory of BRIG and BIF format */
+status_t read_memory(hsa_ext_brig_module_t **brig_module_t, char *image,
+                     size_t size) {
+    /* Create the brig_module */
+    uint32_t number_of_sections = 3;
+    hsa_ext_brig_module_t* brig_module;
+
+    brig_module = (hsa_ext_brig_module_t*)
+                  (malloc (sizeof(hsa_ext_brig_module_t) + sizeof(void*)*number_of_sections));
+    brig_module->section_count = number_of_sections;
+
+    status_t status;
+    Elf* elfP = NULL;
+    Elf32_Ehdr* ehdr = NULL;
+    Elf_Data *secHdr = NULL;
+    Elf_Scn* scn = NULL;
+
+    if (elf_version ( EV_CURRENT ) == EV_NONE) {
+        return STATUS_KERNEL_ELF_INITIALIZATION_FAILED;
+    }
+
+    if ((elfP = elf_memory(image, size)) == NULL) {
+        return STATUS_KERNEL_INVALID_ELF_CONTAINER;
+    }
+
+    if (elf_kind (elfP) != ELF_K_ELF) {
+        return STATUS_KERNEL_INVALID_ELF_CONTAINER;
+    }
+
+    if (((ehdr = elf32_getehdr(elfP)) == NULL) ||
+       ((scn = elf_getscn(elfP, ehdr->e_shstrndx)) == NULL) ||
+       ((secHdr = elf_getdata(scn, NULL)) == NULL)) {
+        return STATUS_KERNEL_INVALID_SECTION_HEADER;
+    }
+
+    status = extract_section_and_copy(elfP,
+                                   secHdr,
+                                   get_section_desc(SECTION_HSA_DATA),
+                                   brig_module,
+                                   HSA_EXT_BRIG_SECTION_DATA);
+
+    if (status != STATUS_SUCCESS) {
+        return STATUS_KERNEL_MISSING_DATA_SECTION;
+    }
+
+    status = extract_section_and_copy(elfP,
+				   secHdr,
+                                   get_section_desc(SECTION_HSA_CODE),
+                                   brig_module,
+                                   HSA_EXT_BRIG_SECTION_CODE);
+
+    if (status != STATUS_SUCCESS) {
+        return STATUS_KERNEL_MISSING_CODE_SECTION;
+    }
+
+    status = extract_section_and_copy(elfP,
+                                   secHdr,
+                                   get_section_desc(SECTION_HSA_OPERAND),
                                    brig_module,
                                    HSA_EXT_BRIG_SECTION_OPERAND);
 
@@ -196,8 +267,8 @@ status_t create_brig_module_from_brig_file(const char* file_name, hsa_ext_brig_m
 
     if (status != STATUS_SUCCESS) {
         printf("Could not create BRIG module: %d\n", status);
-        if (status == STATUS_KERNEL_INVALID_SECTION_HEADER || 
-            status == STATUS_KERNEL_ELF_INITIALIZATION_FAILED || 
+        if (status == STATUS_KERNEL_INVALID_SECTION_HEADER ||
+            status == STATUS_KERNEL_ELF_INITIALIZATION_FAILED ||
             status == STATUS_KERNEL_INVALID_ELF_CONTAINER) {
             printf("The ELF file is invalid or possibley corrupted.\n");
         }
@@ -213,6 +284,30 @@ status_t create_brig_module_from_brig_file(const char* file_name, hsa_ext_brig_m
 
     return status;
 }
+
+
+status_t create_brig_module_from_memory(char *image, size_t size,
+                                        hsa_ext_brig_module_t** brig_module) {
+
+    status_t status = read_memory(brig_module, image, size);
+
+    if (status != STATUS_SUCCESS) {
+        printf("Could not create BRIG module: %d\n", status);
+        if (status == STATUS_KERNEL_INVALID_SECTION_HEADER ||
+            status == STATUS_KERNEL_ELF_INITIALIZATION_FAILED ||
+            status == STATUS_KERNEL_INVALID_ELF_CONTAINER) {
+            printf("The ELF file is invalid or possibley corrupted.\n");
+        }
+        if (status == STATUS_KERNEL_MISSING_DATA_SECTION ||
+            status == STATUS_KERNEL_MISSING_CODE_SECTION ||
+            status == STATUS_KERNEL_MISSING_OPERAND_SECTION) {
+            printf("One or more ELF sections are missing. Use readelf command to \
+            to check if hsa_data, hsa_code and hsa_operands exist.\n");
+        }
+    }
+    return status;
+}
+
 
 void destroy_brig_module(hsa_ext_brig_module_t* brig_module) {
     for (int i=0; i<brig_module->section_count; i++) {
@@ -279,32 +374,32 @@ struct BrigData {
 
 /*
  * Finds the specified symbols offset in the specified brig_module.
- * If the symbol is found the function returns HSA_STATUS_SUCCESS, 
+ * If the symbol is found the function returns HSA_STATUS_SUCCESS,
  * otherwise it returns HSA_STATUS_ERROR.
  */
-hsa_status_t find_symbol_offset(hsa_ext_brig_module_t* brig_module, 
+hsa_status_t find_symbol_offset(hsa_ext_brig_module_t* brig_module,
     char* symbol_name,
     hsa_ext_brig_code_section_offset32_t* offset) {
-    
-    /* 
-     * Get the data section 
+
+    /*
+     * Get the data section
      */
-    hsa_ext_brig_section_header_t* data_section_header = 
+    hsa_ext_brig_section_header_t* data_section_header =
                 brig_module->section[HSA_EXT_BRIG_SECTION_DATA];
-    /* 
+    /*
      * Get the code section
      */
     hsa_ext_brig_section_header_t* code_section_header =
              brig_module->section[HSA_EXT_BRIG_SECTION_CODE];
 
-    /* 
+    /*
      * First entry into the BRIG code section
      */
     BrigCodeOffset32_t code_offset = code_section_header->header_byte_count;
     BrigBase* code_entry = (BrigBase*) ((char*)code_section_header + code_offset);
     while (code_offset != code_section_header->byte_count) {
         if (code_entry->kind == BRIG_KIND_DIRECTIVE_KERNEL) {
-            /* 
+            /*
              * Now find the data in the data section
              */
             BrigDirectiveExecutable* directive_kernel = (BrigDirectiveExecutable*) (code_entry);

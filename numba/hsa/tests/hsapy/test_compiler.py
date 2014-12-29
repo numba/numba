@@ -47,7 +47,7 @@ class _TestBase(unittest.TestCase):
 
 
 class TestCodeLoading(_TestBase):
-    def test_copy_kernel_1d(self):
+    def test_loading_from_file(self):
         arytype = types.float32[:]
         kernel = compiler.compile_kernel(copy_kernel_1d, [arytype] * 2)
 
@@ -68,6 +68,21 @@ class TestCodeLoading(_TestBase):
 
         # Cleanup
         os.unlink(brig_file.name)
+
+    def test_loading_from_memory(self):
+        arytype = types.float32[:]
+        kernel = compiler.compile_kernel(copy_kernel_1d, [arytype] * 2)
+
+        # Load BRIG memory
+        symbol = '&{0}'.format(kernel.entry_name)
+        brig_module = BrigModule.from_memory(kernel.binary)
+        symbol_offset = brig_module.find_symbol_offset(symbol)
+        self.assertTrue(symbol_offset)
+        program = hsart.create_program([self.gpu])
+        module = program.add_module(brig_module)
+        code_descriptor = program.finalize(self.gpu, module, symbol_offset)
+        self.assertGreater(code_descriptor._id.kernarg_segment_byte_size, 0)
+
 
 
 if __name__ == '__main__':
