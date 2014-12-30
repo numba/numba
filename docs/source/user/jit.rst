@@ -1,9 +1,9 @@
 
+.. _jit:
+
 ===================================
 Compiling Python code with ``@jit``
 ===================================
-
-.. _jit:
 
 Numba provides several utilities for code generation, but its central
 feature is the ``@jit`` decorator.  Using this decorator, you can mark
@@ -143,8 +143,7 @@ Numba from falling back, and instead raise an error, pass ``nopython=True``.
 
 Whenever Numba optimizes Python code to native code that only works on
 native types and variables (rather than Python objects), it is not necessary
-anymore to hold Python's
-`global interpreter lock <https://docs.python.org/3/glossary.html#term-global-interpreter-lock>`_.
+anymore to hold Python's :py:term:`global interpreter lock`.
 Numba will release the GIL when entering such a compiled function if you
 passed ``nogil=True``.
 

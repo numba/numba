@@ -5,7 +5,8 @@ Glossary
 .. glossary::
 
    JIT function
-      Shorthand for "a function compiled with Numba."
+      Shorthand for "a function compiled with Numba using the
+      :ref:`@jit <jit>` decorator."
 
    loop-lifting
       See :term:`loop-jitting`.

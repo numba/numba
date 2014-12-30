@@ -3,7 +3,6 @@ Developer Manual
 ================
 
 .. toctree::
-   :maxdepth: 3
 
    contributing.rst
    architecture.rst
