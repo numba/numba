@@ -76,6 +76,8 @@ class TimedeltaMixOp(AbstractTemplate):
             td, other = right, left
         elif isinstance(left, types.NPTimedelta):
             td, other = left, right
+        else:
+            return
         # Force integer types to convert to signed because it matches
         # timedelta64 semantics better.
         if other not in types.signed_domain and other not in types.real_domain:

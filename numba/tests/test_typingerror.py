@@ -16,6 +16,8 @@ def foo():
 def bar(x):
     return x.a
 
+def issue_868(a):
+    return a.shape * 2
 
 class TestTypingError(unittest.TestCase):
     def test_unknown_function(self):
@@ -34,6 +36,18 @@ class TestTypingError(unittest.TestCase):
         else:
             self.fail("Should raise error")
 
+    def test_issue_868(self):
+        '''
+        Summary: multiplying a scalar by a non-scalar would cause a crash in
+        type inference because TimeDeltaMixOp always assumed at least one of
+        its operands was an NPTimeDelta in its generic() method.
+        '''
+        try:
+            compile_isolated(issue_868, (types.Array(types.int32, 1, 'C'),))
+        except TypingError as e:
+            self.assertTrue(e.msg.startswith('Undeclared'))
+        else:
+            self.fail('Should raise error')
 
 if __name__ == '__main__':
     unittest.main()

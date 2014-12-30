@@ -62,4 +62,27 @@ Filterbank Correlation
 ----------------------
 .. literalinclude:: /../../examples/fbcorr.py
 
+Multi-threading
+---------------
 
+The Python interpreter typically runs code serialized by the
+`Global interpreter Lock <https://docs.python.org/3/glossary.html#term-global-interpreter-lock>`_.
+Numba functions by default also run serialized, but you can use
+the ``nogil`` parameter to the ``@jit`` decorator to specify that a Numba
+function must release the GIL, and can therefore run in parallel to
+any other code.
+
+The code below showcases the potential performance improvement when
+using this feature.  For example, on a 4-core machine, I get the following
+results printed out::
+
+   numpy (1 thread)       145 ms
+   numba (1 thread)       128 ms
+   numba (4 threads)       35 ms
+
+.. note::
+   Under Python 3, you can use the standard `concurrent.futures
+   <https://docs.python.org/3/library/concurrent.futures.html>`_ module
+   rather than spawn threads and dispatch tasks by hand.
+
+.. literalinclude:: /../../examples/nogil.py
