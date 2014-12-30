@@ -6,11 +6,16 @@
 Numba documentation
 ===================
 
+This is the Numba documentation.  Unless you are already acquainted
+with Numba, we suggest you start with the :doc:`User manual <user/index>`.
+
 
 .. toctree::
-   :maxdepth: 2
+   :numbered:
+   :maxdepth: 3
 
    user/index.rst
    reference/index.rst
    cuda/index.rst
    developer/index.rst
+   glossary.rst

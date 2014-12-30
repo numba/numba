@@ -1,6 +1,8 @@
 
-Optimizing Python code on the fly
-=================================
+Compiling Python code with :func:`jit`
+=======================================
+
+.. _jit:
 
 .. todo:: write this
 
