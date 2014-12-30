@@ -1,4 +1,6 @@
 
+.. _troubleshooting:
+
 Troubleshooting and tips
 ========================
 

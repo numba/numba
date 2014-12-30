@@ -236,6 +236,8 @@ translated into::
 which represents an instance of the ``Intrinsic`` IR node for calling the
 ``tid.x`` intrinsic function.
 
+.. _arch_type_inference:
+
 Stage 4: Infer Types
 --------------------
 
