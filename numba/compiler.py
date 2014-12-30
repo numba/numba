@@ -25,6 +25,8 @@ class Flags(utils.ConfigOptions):
         'enable_pyobject_looplift',
         # Force pyobject mode inside the whole function
         'force_pyobject',
+        # Release GIL inside the native function
+        'release_gil',
         'no_compile',
         'boundcheck',
         'forceinline',
@@ -437,12 +439,17 @@ class Pipeline(object):
         # Warn if compiled function in object mode and force_pyobject not set
         if not self.flags.force_pyobject:
             if len(self.lifted) > 0:
-                warn_msg = 'Function "%s" was compiled in object mode without forceobj=True, but has lifted loops.' % self.func_attr.name,
+                warn_msg = 'Function "%s" was compiled in object mode without forceobj=True, but has lifted loops.' % (self.func_attr.name,)
             else:
-                warn_msg = 'Function "%s" was compiled in object mode without forceobj=True.' % self.func_attr.name,
+                warn_msg = 'Function "%s" was compiled in object mode without forceobj=True.' % (self.func_attr.name,)
             warnings.warn_explicit(warn_msg, config.NumbaWarning,
                                    self.func_attr.filename,
                                    self.func_attr.lineno)
+            if self.flags.release_gil:
+                warn_msg = "Code running in object mode won't allow parallel execution despite nogil=True."
+                warnings.warn_explicit(warn_msg, config.NumbaWarning,
+                                       self.func_attr.filename,
+                                       self.func_attr.lineno)
         return res
 
     def stage_nopython_backend(self):
@@ -687,7 +694,9 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
         inline=flags.forceinline)
 
     lower = lowering.Lower(targetctx, library, fndesc, interp)
-    lower.lower(create_wrapper=not flags.no_cpython_wrapper)
+    lower.lower()
+    if not flags.no_cpython_wrapper:
+        lower.create_cpython_wrapper(flags.release_gil)
     env = lower.env
     exception_map = lower.exceptions
     del lower
@@ -706,7 +715,9 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
 def py_lowering_stage(targetctx, library, interp, flags):
     fndesc = lowering.PythonFunctionDescriptor.from_object_mode_function(interp)
     lower = objmode.PyLower(targetctx, library, fndesc, interp)
-    lower.lower(create_wrapper=not flags.no_cpython_wrapper)
+    lower.lower()
+    if not flags.no_cpython_wrapper:
+        lower.create_cpython_wrapper()
     env = lower.env
     exception_map = lower.exceptions
     del lower
