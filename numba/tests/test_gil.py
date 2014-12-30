@@ -5,12 +5,13 @@ import ctypes.util
 import os
 import sys
 import threading
+import warnings
 
 import numpy as np
 
 import numba.unittest_support as unittest
 from numba.compiler import compile_isolated, Flags
-from numba import jit
+from numba import config, jit
 from .support import TestCase
 
 
@@ -52,6 +53,16 @@ def lifted_f(a, offset):
     for idx in range(a.size):
         # Let another thread run
         sleep(1 * sleep_factor)
+        a[(idx + offset) % a.size] = PyThread_get_thread_ident()
+
+def object_f(a, offset):
+    """
+    Same as f(), but in object mode
+    """
+    for idx in range(a.size):
+        # Let another thread run
+        sleep(1 * sleep_factor)
+        object()   # Force object mode
         a[(idx + offset) % a.size] = PyThread_get_thread_ident()
 
 
@@ -152,6 +163,20 @@ class TestGILRelease(TestCase):
         def caller(a, i):
             compiled_f(a, i)
         self.check_gil_held(caller)
+
+    def test_object_mode(self):
+        """
+        When the function is compiled in object mode, a warning is
+        printed out.
+        """
+        with warnings.catch_warnings(record=True) as wlist:
+            warnings.simplefilter('always', config.NumbaWarning)
+            cfunc = jit(f_sig, nogil=True)(object_f)
+        self.assertTrue(any(w.category is config.NumbaWarning
+                            and "Code running in object mode won't allow parallel execution" in str(w.message)
+                            for w in wlist), wlist)
+        # Just check it doesn't crash.
+        cfunc(self.make_test_array(1), 0)
 
 
 if __name__ == '__main__':

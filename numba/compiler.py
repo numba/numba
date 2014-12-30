@@ -439,12 +439,17 @@ class Pipeline(object):
         # Warn if compiled function in object mode and force_pyobject not set
         if not self.flags.force_pyobject:
             if len(self.lifted) > 0:
-                warn_msg = 'Function "%s" was compiled in object mode without forceobj=True, but has lifted loops.' % self.func_attr.name,
+                warn_msg = 'Function "%s" was compiled in object mode without forceobj=True, but has lifted loops.' % (self.func_attr.name,)
             else:
-                warn_msg = 'Function "%s" was compiled in object mode without forceobj=True.' % self.func_attr.name,
+                warn_msg = 'Function "%s" was compiled in object mode without forceobj=True.' % (self.func_attr.name,)
             warnings.warn_explicit(warn_msg, config.NumbaWarning,
                                    self.func_attr.filename,
                                    self.func_attr.lineno)
+            if self.flags.release_gil:
+                warn_msg = "Code running in object mode won't allow parallel execution despite nogil=True."
+                warnings.warn_explicit(warn_msg, config.NumbaWarning,
+                                       self.func_attr.filename,
+                                       self.func_attr.lineno)
         return res
 
     def stage_nopython_backend(self):
