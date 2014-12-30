@@ -137,6 +137,7 @@ Numba from falling back, and instead raise an error, pass ``nopython=True``.
 
 .. seealso:: :ref:`troubleshooting`
 
+.. _jit-nogil:
 
 ``nogil``
 ---------

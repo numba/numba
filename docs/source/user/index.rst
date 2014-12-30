@@ -10,4 +10,4 @@ User Manual
    vectorize.rst
    pycc.rst
    troubleshoot.rst
-
+   examples.rst
