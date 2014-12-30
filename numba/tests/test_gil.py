@@ -63,8 +63,8 @@ class TestGILRelease(TestCase):
     def run_in_threads(self, func, n_threads):
         # Run the function in parallel over an array and collect results.
         threads = []
-        # Warm up compilation to avoid potential concurrency errors in compiler
-        # (see https://github.com/numba/numba/issues/908)
+        # Warm up compilation, since we don't want that to interfere with
+        # the test proper.
         func(self.make_test_array(1), 0)
         arr = self.make_test_array(50)
         for i in range(n_threads):
