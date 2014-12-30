@@ -34,7 +34,7 @@ extensions = [
     'sphinx.ext.intersphinx',
     'sphinx.ext.todo',
     #'sphinx.ext.mathjax',
-    #'sphinx.ext.autodoc',
+    'sphinx.ext.autodoc',
     #'sphinx.ext.graphviz',
     'sphinxjp.themecore',
 ]
