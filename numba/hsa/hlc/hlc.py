@@ -26,13 +26,13 @@ class CmdLine(object):
                   "{fin}")
 
     CMD_GEN_HSAIL = ("$HSAILBIN/llc -O2 "
-                     "-march=hsail64 "
+                     "-march=hsail-64 "
                      "-filetype=asm "
                      "-o {fout} "
                      "{fin}")
 
     CMD_GEN_BRIG = ("$HSAILBIN/llc -O2 "
-                    "-march=hsail64 "
+                    "-march=hsail-64 "
                     "-filetype=obj "
                     "-o {fout} "
                     "{fin}")
@@ -68,7 +68,7 @@ class CmdLine(object):
 
     def link_libs(self, ipath, libpaths, opath):
         cmdline = self.CMD_LINK_LIBS.format(fout=opath, fin=ipath)
-        cmdline += ' '.join(["-l{0}".format(lib) for lib in libpaths])
+        cmdline += ' '.join(["{0}".format(lib) for lib in libpaths])
         check_call(cmdline, shell=True)
 
 
@@ -84,6 +84,7 @@ class Module(object):
         self._finalized = False
 
     def __del__(self):
+        return
         self.close()
 
     def close(self):
