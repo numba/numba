@@ -1,4 +1,3 @@
-
 ========
 Examples
 ========
@@ -8,6 +7,12 @@ Mandelbrot
 ----------
 
 .. literalinclude:: /../../examples/mandel.py
+
+
+Moving average
+--------------
+
+.. literalinclude:: /../../examples/movemean.py
 
 
 Multi-threading

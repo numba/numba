@@ -1,4 +1,3 @@
-
 .. _jit:
 
 ===================================
@@ -120,6 +119,8 @@ Compilation options
 ===================
 
 A number of keyword-only arguments can be passed to the ``@jit`` decorator.
+
+.. _jit-nopython:
 
 ``nopython``
 ------------
