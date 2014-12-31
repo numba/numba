@@ -63,8 +63,8 @@ For more advanced declarations, you have to use constructors provided
 by Numba.
 
 .. warning::
-   The APIs documented here are not guaranteed to be stable.  In general
-   it is recommended to use the automatic type inference provided by
+   The APIs documented here are not guaranteed to be stable.  Unless
+   necessary, it is recommended to let Numba infer argument types by using
    the :ref:`signature-less variant of @jit <jit-lazy>`.
 
 Numpy scalars
@@ -95,10 +95,21 @@ Arrays
 Optional types
 --------------
 
-.. class:: numba.types.Optional(typ)
+.. class:: numba.optional(typ)
 
    Create an optional type based on the underlying Numba type *typ*.
    The optional type will allow any value of either *typ* or :const:`None`.
+
+   ::
+
+      >>> @jit((optional(intp),))
+      ... def f(x):
+      ...     return x is not None
+      ...
+      >>> f(0)
+      True
+      >>> f(None)
+      False
 
 
 .. todo:: finish this

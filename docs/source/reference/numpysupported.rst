@@ -47,10 +47,10 @@ The following scalar types and features are not supported:
 * **Arbitrary Python objects**
 * **Half-precision and extended-precision** real and complex numbers
 
-
 .. seealso::
    `Numpy scalars <http://docs.scipy.org/doc/numpy/reference/arrays.scalars.html>`_
    reference.
+
 
 Array types
 ===========
