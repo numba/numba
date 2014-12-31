@@ -6,6 +6,9 @@ Supported Python features
 Language
 ========
 
+Constructs
+----------
+
 Numba strives to support as much of the Python language as possible, but
 some language features are not available inside Numba-compiled functions:
 
@@ -20,6 +23,12 @@ raising a type without explicitly creating an instance, i.e.
 
 Similarly, the ``assert`` statement is only supported without an explicit
 error message.
+
+Function calls
+--------------
+
+Numba only supports function calls using positional arguments.
+``*args`` and ``**kwargs`` are not supported.
 
 
 Built-in types
@@ -61,6 +70,23 @@ an :class:`~numba.optional` type).
 
 Built-in functions
 ==================
+
+The following built-in functions are supported:
+
+* :func:`abs`
+* :class:`bool`
+* :class:`complex`
+* :func:`enumerate`
+* :class:`float`
+* :class:`int`: only the one-argument form
+* :func:`len`
+* :func:`min`: only the multiple-argument form
+* :func:`max`: only the multiple-argument form
+* :func:`print`: only numbers and strings; no ``file`` or ``sep`` argument
+* :class:`range`
+* :func:`round`: only the two-argument form
+* :func:`zip`
+
 
 Standard library modules
 ========================
