@@ -1,7 +1,8 @@
 from __future__ import print_function, absolute_import
 import re
 from llvmlite.llvmpy import core as lc
-from numba import typing, types, utils
+from llvmlite import ir as llvmir
+from numba import typing, types, utils, cgutils
 from numba.targets.base import BaseContext
 from . import codegen
 from .hlc import DATALAYOUT
@@ -25,8 +26,20 @@ class HSATypingContext(typing.BaseContext):
 VALID_CHARS = re.compile(r'[^a-z0-9]', re.I)
 
 
+# Address spaces
+SPIR_PRIVATE_ADDRSPACE = 0
+SPIR_GLOBAL_ADDRSPACE = 1
+SPIR_CONSTANT_ADDRSPACE = 2
+SPIR_LOCAL_ADDRSPACE = 3
+SPIR_GENERIC_ADDRSPACE = 4
+
+SPIR_VERSION = (2, 0)
+
+
+
 class HSATargetContext(BaseContext):
     implement_powi_as_math_call = True
+    generic_addrspace = SPIR_GENERIC_ADDRSPACE
 
     def init(self):
         from . import hsaimpl
@@ -64,7 +77,16 @@ class HSATargetContext(BaseContext):
 
     def generate_kernel_wrapper(self, func, argtypes):
         module = func.module
-        argtys = [self.get_argument_type(ty) for ty in argtypes]
+        raw_argtys = [self.get_argument_type(ty) for ty in argtypes]
+        argtys = []
+        for arg in raw_argtys:
+            if isinstance(arg, llvmir.PointerType):
+                gptr = llvmir.PointerType(arg.pointee,
+                                          addrspace=SPIR_GLOBAL_ADDRSPACE)
+                argtys.append(gptr)
+            else:
+                argtys.append(arg)
+
         fnty = lc.Type.function(lc.Type.void(), argtys)
         wrappername = 'hsaPy_{name}'.format(name=func.name)
         wrapper = module.add_function(fnty, name=wrappername)
@@ -83,6 +105,33 @@ class HSATargetContext(BaseContext):
         builder.ret_void()
         return wrapper
 
+    def call_function(self, builder, callee, resty, argtys, args, env=None):
+        """
+        Call the Numba-compiled *callee*, using the same calling
+        convention as in get_function_type().
+        """
+        assert env is None
+        retty = callee.args[0].type.pointee
+        retval = cgutils.alloca_once(builder, retty)
+        # initialize return value
+        builder.store(lc.Constant.null(retty), retval)
+        args = [self.get_value_as_argument(builder, ty, arg)
+                for ty, arg in zip(argtys, args)]
+        realargs = [retval] + list(args)
+        # Fix addrspace
+        fixed = []
+        for arg, argty in zip(realargs, callee.function_type.args):
+            if isinstance(arg.type, llvmir.PointerType):
+                if arg.type.addrspace != argty.addrspace:
+                    arg = builder.bitcast(arg, argty)
+
+            fixed.append(arg)
+
+        code = builder.call(callee, fixed)
+        status = self.get_return_status(builder, code)
+        return status, builder.load(retval)
+
+
     def link_dependencies(self, module, depends):
         raise NotImplementedError
         for lib in depends:
@@ -96,6 +145,13 @@ class HSATargetContext(BaseContext):
         # a = self.make_array(typ)(self, builder)
         # return a._getvalue()
         raise NotImplementedError
+
+    def addrspacecast(self, builder, src, addrspace):
+        """
+        Handle addrspacecast
+        """
+        ptras = llvmir.PointerType(src.type.pointee, addrspace=addrspace)
+        return builder.bitcast(src, ptras)
 
 
 def set_hsa_kernel(fn):
@@ -114,8 +170,12 @@ def set_hsa_kernel(fn):
 
     # Mark kernels
     ocl_kernels = mod.get_or_insert_named_metadata("opencl.kernels")
-    ocl_kernels.add(lc.MetaData.get(mod, [fn, gen_arg_addrspace_md(fn),
-                                          gen_arg_access_qual_md(fn)]))
+    ocl_kernels.add(lc.MetaData.get(mod, [fn,
+                                          gen_arg_addrspace_md(fn),
+                                          gen_arg_access_qual_md(fn),
+                                          gen_arg_type(fn),
+                                          gen_arg_type_qual(fn),
+                                          gen_arg_base_type(fn)]))
 
     # SPIR version 2.0
     make_constant = lambda x: lc.Constant.int(lc.Type.int(), x)
@@ -134,7 +194,7 @@ def set_hsa_kernel(fn):
     # empty_md = lc.MetaData.get(mod, ())
     # others = ["opencl.used.extensions",
     #           "opencl.used.optional.core.features",
-    #           "opencl.compiler.options"]
+    #           "opencl.compiler.options"]cat
     #
     # for name in others:
     #     nmd = mod.get_or_insert_named_metadata(name)
@@ -166,16 +226,39 @@ def gen_arg_access_qual_md(fn):
     Generate kernel_arg_access_qual metadata
     """
     mod = fn.module
-    consts = [lc.MetaDataString.get(mod, "none")]
+    consts = [lc.MetaDataString.get(mod, "none")] * len(fn.args)
     name = lc.MetaDataString.get(mod, "kernel_arg_access_qual")
     return lc.MetaData.get(mod, [name] + consts)
 
 
-# Address spaces
-SPIR_PRIVATE_ADDRSPACE = 0
-SPIR_GLOBAL_ADDRSPACE = 1
-SPIR_CONSTANT_ADDRSPACE = 2
-SPIR_LOCAL_ADDRSPACE = 3
+def gen_arg_type(fn):
+    """
+    Generate kernel_arg_type metadata
+    """
+    mod = fn.module
+    fnty = fn.type.pointee
+    consts = [lc.MetaDataString.get(mod, str(a)) for a in fnty.args]
+    name = lc.MetaDataString.get(mod, "kernel_arg_type")
+    return lc.MetaData.get(mod, [name] + consts)
 
-SPIR_VERSION = (2, 0)
 
+def gen_arg_type_qual(fn):
+    """
+    Generate kernel_arg_type_qual metadata
+    """
+    mod = fn.module
+    fnty = fn.type.pointee
+    consts = [lc.MetaDataString.get(mod, "") for _ in fnty.args]
+    name = lc.MetaDataString.get(mod, "kernel_arg_type_qual")
+    return lc.MetaData.get(mod, [name] + consts)
+
+
+def gen_arg_base_type(fn):
+    """
+    Generate kernel_arg_base_type metadata
+    """
+    mod = fn.module
+    fnty = fn.type.pointee
+    consts = [lc.MetaDataString.get(mod, str(a)) for a in fnty.args]
+    name = lc.MetaDataString.get(mod, "kernel_arg_base_type")
+    return lc.MetaData.get(mod, [name] + consts)
