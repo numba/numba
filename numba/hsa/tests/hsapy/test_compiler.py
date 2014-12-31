@@ -180,8 +180,18 @@ class TestExecution(unittest.TestCase):
         # this is placed in the kernarg_region for symmetry, but shouldn't be required.
         kernarg_region.free(kernargs)
 
-        print(src)
-        print(dst)
+        np.testing.assert_equal(src, dst)
+
+    def test_hsa_kernel(self):
+        src = np.arange(1024, dtype=np.float32)
+        dst = np.zeros_like(src)
+
+        # Compiler kernel
+        arytype = types.float32[::1]
+        kernel = compiler.compile_kernel(copy_kernel_1d, [arytype] * 2)
+
+        # Run kernel
+        kernel[4, 256](dst, src)
 
         np.testing.assert_equal(src, dst)
 

@@ -9,7 +9,8 @@ import os
 import ctypes
 import struct
 
-from ... import config # base numba
+from numba.utils import total_ordering
+from numba import config
 from .error import HsaSupportError, HsaDriverError, HsaApiError, HsaWarning
 from . import enums, drvapi, elf_utils
 
@@ -110,6 +111,7 @@ class Driver(object):
     """
     _singleton = None
     _agent_map = None
+    _api_prototypes = drvapi.API_PROTOTYPES  # avoid premature GC at exit
 
     _hsa_properties = {
         'version_major': (enums.HSA_SYSTEM_INFO_VERSION_MAJOR, ctypes.c_uint16),
@@ -140,7 +142,6 @@ class Driver(object):
             self.initialization_error = e
 
         self._agent_map = None
-
 
     def __del__(self):
         if self.is_initialized and self.initialization_error is None:
@@ -260,7 +261,7 @@ class Driver(object):
 
         # if not a property... try if it is an api call
         try:
-            proto = drvapi.API_PROTOTYPES[fname]
+            proto = self._api_prototypes[fname]
         except KeyError:
             raise AttributeError(fname)
 
@@ -293,6 +294,15 @@ class Driver(object):
         setattr(self, fname, absent_function)
         return absent_function
 
+    @property
+    def components(self):
+        """Returns a ordered list of components
+
+        The first device should be picked first
+        """
+        return list(filter(lambda a: a.is_component, reversed(sorted(
+            self.agents))))
+
 
 hsa = Driver()
 
@@ -315,13 +325,12 @@ class HsaWrapper(object):
         else:
             return list(result)
 
-
     def __dir__(self):
         return sorted(set(dir(type(self)) +
                           self.__dict__.keys() +
                           self._hsa_properties.keys()))
 
-
+@total_ordering
 class Agent(HsaWrapper):
     """Abstracts a HSA compute agent.
 
@@ -428,6 +437,28 @@ class Agent(HsaWrapper):
                                                             self.vendor_name, self.name,
                                                             " (component)" if self.is_component else "")
 
+    def _rank(self):
+        return (self.is_component, self.grid_max_size, self._device)
+
+    def __lt__(self, other):
+        if isinstance(self, Agent):
+            return self._rank() < other._rank()
+        else:
+            return NotImplemented
+
+    def __eq__(self, other):
+        if isinstance(self, Agent):
+            return self._rank() == other._rank()
+        else:
+            return NotImplemented
+
+    def __hash__(self):
+        return hash(self._rank())
+
+    def create_context(self):
+        return Context(self)
+
+
 class MemRegion(HsaWrapper):
     """Abstracts a HSA memory region.
 
@@ -484,15 +515,13 @@ class Queue(object):
         """The id in a queue is a pointer to the queue object returned by hsa_queue_create.
         The Queue object has ownership on that queue object"""
         self._id = queue_ptr
-
+        self._dtor = hsa.hsa_queue_destroy    # avoid premature GC at exit
 
     def __del__(self):
-        hsa.hsa_queue_destroy(self._id)
-        pass
+        self._dtor(self._id)
 
     def __getattr__(self, fname):
         return getattr(self._id.contents, fname)
-
 
     def dispatch(self, code_descriptor, kernargs,
                  workgroup_size=None,
@@ -551,7 +580,6 @@ class Signal(object):
 
     def __del__(self):
         hsa.hsa_signal_destroy(self._id)
-
 
 
 class BrigModule(object):
@@ -627,6 +655,7 @@ class Program(object):
 
         return CodeDescriptor(kernel_id.contents)
 
+
 class BrigModuleHandle(object):
     def __init__(self, module_handle_id):
         self._id = module_handle_id
@@ -636,6 +665,26 @@ class BrigModuleHandle(object):
         # program...
         pass
 
+
 class CodeDescriptor(object):
     def __init__(self, code_descriptor_id):
         self._id = code_descriptor_id
+
+
+class Context(object):
+    """
+    A context is associated with a component
+    """
+
+    def __init__(self, agent):
+        self._agent = agent
+        qs = agent.queue_max_size
+        self._defaultqueue = self._agent.create_queue_multi(qs)
+
+    @property
+    def default_queue(self):
+        return self._defaultqueue
+
+    @property
+    def agent(self):
+        return self._agent

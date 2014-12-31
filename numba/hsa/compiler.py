@@ -4,6 +4,8 @@ import ctypes
 from numba.typing.templates import ConcreteTemplate
 from numba import types, compiler
 from .hlc import hlc
+from .hsadrv import devices, driver
+from numba.targets.arrayobj import make_array_ctype
 
 
 def compile_hsa(pyfunc, return_type, args, debug, functype):
@@ -130,72 +132,84 @@ class HSAKernel(HSAKernelBase):
     """
     A HSA kernel object
     """
+    INJECTED_NARG = 6
 
     def __init__(self, llvm_module, name, argtypes):
         super(HSAKernel, self).__init__()
-        self.llvm_module = llvm_module
-
-        # Finalize HSAIL
-        hlcmod = hlc.Module()
-        for m in llvm_module._modules:
-            hlcmod.load_llvm(str(m))
-
-        hsail, brig = hlcmod.finalize()
-        self.assembly = hsail
-        self.binary = brig
+        self._llvm_module = llvm_module
+        self.assembly, self.binary = self._finalize()
         self.entry_name = name
         self.argument_types = tuple(argtypes)
 
-        # self.device, self.program, self.kernel = self.bind()
+    def _finalize(self):
+        hlcmod = hlc.Module()
+        for m in self._llvm_module._modules:
+            hlcmod.load_llvm(str(m))
+        return hlcmod.finalize()
 
     def bind(self):
         """
         Bind kernel to device
         """
-        raise NotImplementedError
+        ctx = devices.get_context()
+        symbol = '&{0}'.format(self.entry_name)
+        brig_module = driver.BrigModule.from_memory(self.binary)
+        symbol_offset = brig_module.find_symbol_offset(symbol)
+        agent = ctx.agent
+        program = driver.hsa.create_program([agent])
+        module = program.add_module(brig_module)
+        code_desc = program.finalize(agent, module, symbol_offset)
+        kernarg_region = [r for r in agent.regions if r.supports_kernargs][0]
+        nargs = len(self.argument_types)
+        kernarg_types = ctypes.c_void_p * (self.INJECTED_NARG + nargs)
+        kernargs = kernarg_region.allocate(kernarg_types)
+        return ctx, code_desc, kernargs, kernarg_region
 
     def __call__(self, *args):
-        raise NotImplementedError
-        # Prepare arguments
-        iter_unboxed = _prepare_arguments(args, self.argument_types)
-        for i, argval in enumerate(iter_unboxed):
-            self.kernel.set_arg(i, argval)
+        ctx, code_desc, kernargs, kernarg_region = self.bind()
 
-        # Invoke kernel
-        do_sync = False
-        queue = self.stream
-        if queue is None:
-            do_sync = True
-            queue = self.program.context.create_command_queue(self.device)
+        unboxed = list(_prepare_arguments(args, self.argument_types))
 
-        queue.enqueue_nd_range_kernel(self.kernel, len(self.global_size),
-                                      self.global_size, self.local_size)
+        for i in range(self.INJECTED_NARG):
+            kernargs[i] = 0
 
-        if do_sync:
-            queue.finish()
+        # Insert kernel arguments
+        for i, (cval, keepalive) in enumerate(unboxed):
+            kernargs[self.INJECTED_NARG + i] = cval
+
+        qq = ctx.default_queue
+
+        # Dispatch
+        qq.dispatch(code_desc, kernargs, workgroup_size=self.local_size,
+                    grid_size=self.global_size)
+
+        # Free kernel region
+        kernarg_region.free(kernargs)
 
 
 def _prepare_arguments(args, argtys):
     for val, ty in zip(args, argtys):
-        for x in _unbox(val, ty):
-            yield x
+        yield _unbox(val, ty)
 
 
 def _unbox(val, ty):
     if isinstance(ty, types.Array):
-        data = val.data
-        shapes = [_unbox(s, types.intp) for s in val.shape]
-        strides = [_unbox(s, types.intp) for s in val.strides]
-        return [data] + shapes + strides
+        cstruct = make_array_ctype(ndim=val.ndim)
+        cval = cstruct(parent=None, data=val.ctypes.data,
+                       shape=val.ctypes.shape, strides=val.ctypes.strides)
+        return ctypes.addressof(cval), cval
 
-    elif ty in types.integer_domain:
-        return INTEGER_TYPE_MAP[ty](val)
-
-    elif ty in types.real_domain:
-        return REAL_TYPE_MAP[ty](val)
-
-    elif ty in types.complex_domain:
-        return COMPLEX_TYPE_MAP[ty](val)
+    # elif ty in types.integer_domain:
+    # cval = INTEGER_TYPE_MAP[ty](val)
+    #     return cval, cval
+    #
+    # elif ty in types.real_domain:
+    #     cval = REAL_TYPE_MAP[ty](val)
+    #     return cval, cval
+    #
+    # elif ty in types.complex_domain:
+    #     cval = COMPLEX_TYPE_MAP[ty](val)
+    #     return cval, cval
 
     raise NotImplementedError(ty)
 

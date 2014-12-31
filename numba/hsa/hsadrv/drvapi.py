@@ -316,6 +316,7 @@ def _build_reverse_error_warn_maps():
 
 ERROR_MAP, WARN_MAP = _build_reverse_error_warn_maps()
 
+
 def _check_error(result, func, arguments):
     if result != enums.HSA_STATUS_SUCCESS:
         if result >= enums.HSA_STATUS_ERROR:
@@ -326,6 +327,7 @@ def _check_error(result, func, arguments):
             warnname = WARN_MAP.get(result, "UNKNOWN_HSA_INFO")
             msg = "Call to {0} returned {1}".format(func.__name__, warnname)
             warnings.warn(msg, HsaWarning(msg))
+
 
 # The API prototypes
 API_PROTOTYPES = {
