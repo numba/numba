@@ -29,14 +29,38 @@ NumPy support in Numba comes in many forms:
 .. _gufuncs: http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
 
 
-Support array types
-===================
+Scalar types
+============
 
-.. todo:: write this
+Numba supports the following Numpy scalar types:
+
+* **Integers**: all integers of either signedness, and any width up to 64 bits
+* **Booleans**
+* **Real numbers:** single-precision (32-bit) and double-precision (64-bit) reals
+* **Complex numbers:** single-precision (2x32-bit) and double-precision (2x64-bit) complex numbers
+* **Datetimes and timestamps:** of any unit
+* **Structured scalars:** structured scalars made of any of the types above
+* **Character sequences** (but no operations are available on them)
+
+The following scalar types and features are not supported:
+
+* **Arbitrary Python objects**
+* **Half-precision and extended-precision** real and complex numbers
 
 
-Supported ufuncs
-================
+.. seealso::
+   `Numpy scalars <http://docs.scipy.org/doc/numpy/reference/arrays.scalars.html>`_
+   reference.
+
+Array types
+===========
+
+Arrays of any of the scalar types above are supported, regardless of the shape
+or layout.
+
+
+Standard ufuncs
+===============
 
 One objective of Numba is having all the
 `standard ufuncs in NumPy <http://docs.scipy.org/doc/numpy/reference/ufuncs.html#available-ufuncs>`_
