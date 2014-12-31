@@ -122,6 +122,22 @@ The following functions from the :mod:`cmath` module are supported:
 ``ctypes``
 ----------
 
+Numba is able to call ctypes-declared functions with the following argument
+and return types:
+
+* :class:`ctypes.c_int8`
+* :class:`ctypes.c_int16`
+* :class:`ctypes.c_int32`
+* :class:`ctypes.c_int64`
+* :class:`ctypes.c_uint8`
+* :class:`ctypes.c_uint16`
+* :class:`ctypes.c_uint32`
+* :class:`ctypes.c_uint64`
+* :class:`ctypes.c_float`
+* :class:`ctypes.c_double`
+* :class:`ctypes.c_void_p`
+
+
 ``math``
 --------
 
