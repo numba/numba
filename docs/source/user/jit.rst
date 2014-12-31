@@ -13,6 +13,8 @@ modes trigger differing compilation options and behaviours.
 Basic usage
 ===========
 
+.. _jit-lazy:
+
 Lazy compilation
 ----------------
 

@@ -3,7 +3,6 @@
 Numba Types
 ===========
 
-
 Basic Types
 ===========
 
@@ -60,8 +59,27 @@ contiguity or a structured array.
 Advanced Types
 ==============
 
-For more advanced declarations, you have to use constructors from the
-``numba.types`` module.
+For more advanced declarations, you have to use constructors provided
+by Numba.
+
+.. warning::
+   The APIs documented here are not guaranteed to be stable.  In general
+   it is recommended to use the automatic type inference provided by
+   the :ref:`signature-less variant of @jit <jit-lazy>`.
+
+Numpy scalars
+-------------
+
+Non-trivial scalars such as structured types need to be constructed
+programmatically.
+
+.. function:: numba.from_dtype(dtype)
+
+   Create a Numba type corresponding to the given Numpy *dtype*::
+
+      >>> struct_dtype = np.dtype([('row', np.float64), ('col', np.float64)])
+      >>> numba.from_dtype(struct_dtype)
+      Record([('row', '<f8'), ('col', '<f8')])
 
 Arrays
 ------
@@ -72,6 +90,15 @@ Arrays
    number of dimensions of the array (a positive integer).  *layout*
    is a string giving the layout of the array: ``A`` means any layout, ``C``
    means C-contiguous and ``F`` means Fortran-contiguous.
+
+
+Optional types
+--------------
+
+.. class:: numba.types.Optional(typ)
+
+   Create an optional type based on the underlying Numba type *typ*.
+   The optional type will allow any value of either *typ* or :const:`None`.
 
 
 .. todo:: finish this
