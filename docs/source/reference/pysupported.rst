@@ -91,6 +91,37 @@ The following built-in functions are supported:
 Standard library modules
 ========================
 
+``cmath``
+---------
+
+The following functions from the :mod:`cmath` module are supported:
+
+* :func:`cmath.acos`
+* :func:`cmath.acosh`
+* :func:`cmath.asin`
+* :func:`cmath.asinh`
+* :func:`cmath.atan`
+* :func:`cmath.atanh`
+* :func:`cmath.cos`
+* :func:`cmath.cosh`
+* :func:`cmath.exp`
+* :func:`cmath.isfinite`
+* :func:`cmath.isinf`
+* :func:`cmath.isnan`
+* :func:`cmath.log`
+* :func:`cmath.log10`
+* :func:`cmath.phase`
+* :func:`cmath.polar`
+* :func:`cmath.rect`
+* :func:`cmath.sin`
+* :func:`cmath.sinh`
+* :func:`cmath.sqrt`
+* :func:`cmath.tan`
+* :func:`cmath.tanh`
+
+``ctypes``
+----------
+
 ``math``
 --------
 
