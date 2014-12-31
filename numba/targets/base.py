@@ -363,8 +363,10 @@ class BaseContext(object):
         if isinstance(ty, types.Record):
             pdata = cgutils.get_record_data(builder, value)
             databuf = builder.load(pdata)
-            casted = self.addrspacecast(builder, ptr, self.generic_addrspace)
-            builder.store(databuf, casted)
+            casted = builder.bitcast(ptr, Type.pointer(databuf.type))
+            asfixed = self.addrspacecast(builder, casted,
+                                         self.generic_addrspace)
+            builder.store(databuf, asfixed)
             return
 
         if ty == types.boolean:
