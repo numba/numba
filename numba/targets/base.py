@@ -115,6 +115,9 @@ class BaseContext(object):
     Only POD structure can life across function boundaries by copying the
     data.
     """
+    # Generic addrspace
+    generic_addrspace = 0
+
     # True if the target requires strict alignment
     # Causes exception to be raised if the record members are not aligned.
     strict_alignment = False
@@ -295,7 +298,7 @@ class BaseContext(object):
 
         elif isinstance(ty, types.CPointer):
             dty = self.get_data_type(ty.dtype)
-            return Type.pointer(dty)
+            return Type.pointer(dty, addrspace=self.generic_addrspace)
 
         elif isinstance(ty, types.Optional):
             return self.get_struct_type(self.make_optional(ty))
@@ -347,9 +350,10 @@ class BaseContext(object):
         dataty = self.get_data_type(ty)
 
         if isinstance(ty, types.Record):
-            # Record data are passed by refrence
+            # Record data are passed by reference
             memory = dataty.elements[0]
-            return Type.struct([Type.pointer(memory)])
+            return Type.struct([Type.pointer(memory,
+                                             addrspace=self.generic_addrspace)])
 
         return dataty
 
@@ -359,7 +363,7 @@ class BaseContext(object):
         if isinstance(ty, types.Record):
             pdata = cgutils.get_record_data(builder, value)
             databuf = builder.load(pdata)
-            casted = builder.bitcast(ptr, Type.pointer(databuf.type))
+            casted = self.addrspacecast(builder, ptr, self.generic_addrspace)
             builder.store(databuf, casted)
             return
 
@@ -371,7 +375,6 @@ class BaseContext(object):
     def unpack_value(self, builder, ty, ptr):
         """Unpack data from array storage
         """
-
         if isinstance(ty, types.Record):
             vt = self.get_value_type(ty)
             tmp = cgutils.alloca_once(builder, vt)
@@ -1062,6 +1065,13 @@ class BaseContext(object):
         """Create a LLVM module
         """
         return lc.Module.new(name)
+
+    def addrspacecast(self, builder, src, addrspace):
+        """
+        Handle addrspacecast
+        """
+        ptras = llvmir.PointerType(src.type.pointee, addrspace=addrspace)
+        return builder.addrspacecast(src, ptras)
 
 
 class _wrap_impl(object):
