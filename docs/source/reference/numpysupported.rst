@@ -39,8 +39,8 @@ Numba supports the following Numpy scalar types:
 * **Real numbers:** single-precision (32-bit) and double-precision (64-bit) reals
 * **Complex numbers:** single-precision (2x32-bit) and double-precision (2x64-bit) complex numbers
 * **Datetimes and timestamps:** of any unit
-* **Structured scalars:** structured scalars made of any of the types above
 * **Character sequences** (but no operations are available on them)
+* **Structured scalars:** structured scalars made of any of the types above
 
 The following scalar types and features are not supported:
 
