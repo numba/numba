@@ -136,7 +136,6 @@ and return types:
 * :class:`ctypes.c_double`
 * :class:`ctypes.c_void_p`
 
-
 ``math``
 --------
 
@@ -174,11 +173,54 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.tanh`
 * :func:`math.trunc`
 
+``operator``
+------------
 
-Other modules
-=============
+The following functions from the :mod:`operator` module are supported:
 
-.. I put this here as there's only one module, otherwise it should be a separate page.
+* :func:`operator.add`
+* :func:`operator.and_`
+* :func:`operator.div` (Python 2 only)
+* :func:`operator.eq`
+* :func:`operator.floordiv`
+* :func:`operator.ge`
+* :func:`operator.gt`
+* :func:`operator.iadd`
+* :func:`operator.iand`
+* :func:`operator.idiv` (Python 2 only)
+* :func:`operator.ifloordiv`
+* :func:`operator.ilshift`
+* :func:`operator.imod`
+* :func:`operator.imul`
+* :func:`operator.invert`
+* :func:`operator.ior`
+* :func:`operator.ipow`
+* :func:`operator.irshift`
+* :func:`operator.isub`
+* :func:`operator.itruediv`
+* :func:`operator.ixor`
+* :func:`operator.le`
+* :func:`operator.lshift`
+* :func:`operator.lt`
+* :func:`operator.mod`
+* :func:`operator.mul`
+* :func:`operator.ne`
+* :func:`operator.neg`
+* :func:`operator.not_`
+* :func:`operator.or_`
+* :func:`operator.pos`
+* :func:`operator.pow`
+* :func:`operator.rshift`
+* :func:`operator.sub`
+* :func:`operator.truediv`
+* :func:`operator.xor`
+
+
+Third-party modules
+===================
+
+.. I put this here as there's only one module (apart from Numpy), otherwise
+   it should be a separate page.
 
 ``cffi``
 --------
