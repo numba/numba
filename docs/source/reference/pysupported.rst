@@ -1,4 +1,3 @@
-
 =========================
 Supported Python features
 =========================
@@ -176,4 +175,42 @@ The following functions from the :mod:`math` module are supported:
 * :func:`math.trunc`
 
 
-.. todo:: finish this
+Other modules
+=============
+
+.. I put this here as there's only one module, otherwise it should be a separate page.
+
+``cffi``
+--------
+
+Similarly to ctypes, Numba is able to call into `cffi`_-declared external
+functions, using the following C types:
+
+* :c:type:`char`
+* :c:type:`short`
+* :c:type:`int`
+* :c:type:`long`
+* :c:type:`long long`
+* :c:type:`unsigned char`
+* :c:type:`unsigned short`
+* :c:type:`unsigned int`
+* :c:type:`unsigned long`
+* :c:type:`unsigned long long`
+* :c:type:`int8_t`
+* :c:type:`uint8_t`
+* :c:type:`int16_t`
+* :c:type:`uint16_t`
+* :c:type:`int32_t`
+* :c:type:`uint32_t`
+* :c:type:`int64_t`
+* :c:type:`uint64_t`
+* :c:type:`float`
+* :c:type:`double`
+* :c:type:`char *`
+* :c:type:`void *`
+* :c:type:`uint8_t *`
+* :c:type:`ssize_t`
+* :c:type:`size_t`
+* :c:type:`void`
+
+.. _cffi: https://cffi.readthedocs.org/
