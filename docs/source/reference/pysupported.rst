@@ -91,5 +91,42 @@ The following built-in functions are supported:
 Standard library modules
 ========================
 
+``math``
+--------
 
-.. todo:: write this
+The following functions from the :mod:`math` module are supported:
+
+* :func:`math.acos`
+* :func:`math.acosh`
+* :func:`math.asin`
+* :func:`math.asinh`
+* :func:`math.atan`
+* :func:`math.atan2`
+* :func:`math.atanh`
+* :func:`math.ceil`
+* :func:`math.copysign`
+* :func:`math.cos`
+* :func:`math.cosh`
+* :func:`math.degrees`
+* :func:`math.exp`
+* :func:`math.expm1`
+* :func:`math.fabs`
+* :func:`math.floor`
+* :func:`math.hypot`
+* :func:`math.isfinite`
+* :func:`math.isinf`
+* :func:`math.isnan`
+* :func:`math.log`
+* :func:`math.log10`
+* :func:`math.log1p`
+* :func:`math.pow`
+* :func:`math.radians`
+* :func:`math.sin`
+* :func:`math.sinh`
+* :func:`math.sqrt`
+* :func:`math.tan`
+* :func:`math.tanh`
+* :func:`math.trunc`
+
+
+.. todo:: finish this
