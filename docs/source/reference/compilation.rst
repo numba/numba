@@ -2,7 +2,7 @@ Compilation
 ===========
 
 
-.. decorator:: numba.jit([signature], *, nopython=False, nojit=False, forceobj=False, locals={})
+.. decorator:: numba.jit([signature], *, nopython=False, nogil=False, forceobj=False, locals={})
 
    Compile the decorated function on-the-fly to produce efficient machine
    code.  All parameters all optional.
@@ -76,9 +76,35 @@ Compilation
       Compilation can be influenced by some dedicated :ref:`numba-envvars`.
 
 
-.. decorator:: numba.vectorize(signatures, *, ...)
+.. decorator:: numba.vectorize(signatures, *, nopython=True, forceobj=False, locals={})
+
+   Compile the decorated function on-the-fly and wrap it as a
+   `Numpy ufunc <ufuncs>`_.  The optional *nopython*, *forceobj* and
+   *locals* arguments have the same meaning as in :func:`numba.jit`.
+
+   *signatures* is a mandatory list of signatures expressed in the same
+   form as in the :func:`numba.jit` *signature* argument.
+
+   If there are several *signatures*, they must be ordered from the more
+   specific to the least specific.  Otherwise, Numpy's type-based
+   dispatching may not work as expected.  For example, the following is
+   wrong::
+
+      @vectorize(["float64(float64)", "float32(float32)"])
+      def f(x): ...
+
+   as running it over a single-precision array will choose the ``float64``
+   version of the compiled function, leading to much less efficient
+   execution.  The correct invocation is::
+
+      @vectorize(["float32(float32)", "float64(float64)"])
+      def f(x): ...
+
 
 .. decorator:: numba.guvectorize(...)
+
+
+.. _ufuncs: http://docs.scipy.org/doc/numpy/reference/ufuncs.html
 
 
 .. todo:: write this
