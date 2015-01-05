@@ -39,6 +39,10 @@ before_install:
   - sudo apt-get install -qq gcc-4.8 g++-4.8
   # Force g++ 4.8 to be the default version
   - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.8 90
+  # Install dependencies for building the documentation
+  - conda install --yes pip
+  - pip install pygments sphinxjp.themecore sphinxjp.themes.basicstrap
+
   # Install boost for impyla
   #- if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then sudo apt-get install libboost-all-dev; fi
   # Install pytest for impyla
@@ -58,6 +62,8 @@ install:
     #- if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then cd impyla ; make ; python setup.py install; fi
 
 script:
+    # Check that the documentation builds without warnings
+    - cd $TRAVIS_BUILD_DIR ; make SPHINXOPTS=-W clean html
     - cd ~ ; python -m numba.testing -v -b -m
     #- if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then cd $HOME; py.test --udf $HOME/impyla/impala/tests/test_udf_compile.py; fi
 
