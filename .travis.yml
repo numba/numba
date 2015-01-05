@@ -40,8 +40,8 @@ before_install:
   # Force g++ 4.8 to be the default version
   - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.8 90
   # Install dependencies for building the documentation
-  - conda install --yes pip
-  - pip install pygments sphinxjp.themecore sphinxjp.themes.basicstrap
+  - conda install --yes pip sphinx pygments
+  - pip install sphinxjp.themecore sphinxjp.themes.basicstrap
 
   # Install boost for impyla
   #- if [ ${TRAVIS_PYTHON_VERSION:0:1} == "2" ]; then sudo apt-get install libboost-all-dev; fi
