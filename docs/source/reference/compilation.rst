@@ -79,7 +79,7 @@ Compilation
 .. decorator:: numba.vectorize(signatures, *, nopython=True, forceobj=False, locals={})
 
    Compile the decorated function on-the-fly and wrap it as a
-   `Numpy ufunc <ufuncs>`_.  The optional *nopython*, *forceobj* and
+   `Numpy ufunc`_.  The optional *nopython*, *forceobj* and
    *locals* arguments have the same meaning as in :func:`numba.jit`.
 
    *signatures* is a mandatory list of signatures expressed in the same
@@ -101,10 +101,41 @@ Compilation
       def f(x): ...
 
 
-.. decorator:: numba.guvectorize(...)
+.. decorator:: numba.guvectorize(signatures, layout, *, nopython=True, forceobj=False, locals={})
+
+   Generalized version of :func:`numba.vectorize`.  While
+   :func:`numba.vectorize` will produce a simple ufunc whose core
+   functionality (the function you are decorating) operates on scalar
+   operands and returns a scalar value, :func:`numba.guvectorize`
+   allows you to create a `Numpy ufunc`_ whose core function takes array
+   arguments of various dimensions.
+
+   The additional argument *layout* is a string specifying, in symbolic
+   form, the dimensionality and size relationship of the argument types
+   and return types.  For example, a matrix multiplication will have
+   a layout string of ``"(m,n),(n,p)->(m,p)"``.  Its definition might
+   be (function body omitted)::
+
+      @guvectorize(["void(float64[:,:], float64[:,:], float64[:,:])"],
+                   "(m,n),(n,p)->(m,p)")
+      def f(a, b, result):
+          """Fill-in *result* matrix such as result := a * b"""
+          ...
+
+   If one of the arguments should be a scalar, the corresponding layout
+   specification is ``()`` and the argument will really be given to
+   you as a zero-dimension array (you have to dereference it to get the
+   scalar value).  For example, a :ref:`one-dimension moving average <example-movemean>`
+   with a parameterable window width may have a layout string of ``"(n),()->(n)"``.
+
+   Note that any output will be given to you preallocated as an additional
+   function argument: your code has to fill it with the appropriate values
+   for the function you are implementing.
+
+   .. seealso::
+      Specification of the `layout string <http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html#details-of-signature>`_
+      as supported by Numpy.  Note that Numpy uses the term "signature",
+      which we unfortunately use for something else.
 
 
-.. _ufuncs: http://docs.scipy.org/doc/numpy/reference/ufuncs.html
-
-
-.. todo:: write this
+.. _Numpy ufunc: http://docs.scipy.org/doc/numpy/reference/ufuncs.html

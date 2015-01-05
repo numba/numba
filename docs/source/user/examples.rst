@@ -9,6 +9,8 @@ Mandelbrot
 .. literalinclude:: /../../examples/mandel.py
 
 
+.. _example-movemean:
+
 Moving average
 --------------
 
