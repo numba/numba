@@ -1,6 +1,8 @@
 Compilation
 ===========
 
+JIT functions
+-------------
 
 .. decorator:: numba.jit([signature], *, nopython=False, nogil=False, forceobj=False, locals={})
 
@@ -67,6 +69,8 @@ Compilation
       @jit()
       def f(x): ...
 
+   The decorator returns a Dispatcher object.
+
    .. note::
       If no *signature* is given, compilation errors will be raised when
       the actual compilation occurs, i.e. when the function is first called
@@ -75,6 +79,25 @@ Compilation
    .. note::
       Compilation can be influenced by some dedicated :ref:`numba-envvars`.
 
+
+.. class:: Dispatcher
+
+   The class of objects created by calling :func:`numba.jit`.  You shouldn't
+   try to create such an object in any other way.  Dispatcher objects have
+   the following public method:
+
+   .. method:: inspect_types(file=None)
+
+      Print out a listing of the function source code annotated line-by-line
+      with the corresponding Numba IR, and the inferred types of the various
+      variables.  If *file* is specified, printing is done to that file
+      object, otherwise to sys.stdout.
+
+      .. seealso:: :ref:`architecture`
+
+
+Vectorized functions (ufuncs)
+-----------------------------
 
 .. decorator:: numba.vectorize(signatures, *, nopython=True, forceobj=False, locals={})
 
