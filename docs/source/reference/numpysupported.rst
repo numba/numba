@@ -74,7 +74,7 @@ Limitations
 Right now, only a selection of the standard ufuncs work in :term:`nopython mode`.
 
 Also, in its current implementation ufuncs working on arrays will only
-compile in nopython mode if their output array is passed explicitly.
+compile in :term:`nopython mode` if their output array is passed explicitly.
 This limitation does not apply when working with scalars.
 
 Following is a list of the different standard ufuncs that Numba is aware of,
@@ -84,11 +84,11 @@ sorted in the same way as in the NumPy documentation.
 Math operations
 ---------------
 
-==============  =============  ===========
+==============  =============  ===============
     UFUNC                  MODE
---------------  --------------------------
-    name         python-mode    no-python
-==============  =============  ===========
+--------------  ------------------------------
+    name         object mode    nopython mode
+==============  =============  ===============
  add                 Yes          Yes
  subtract            Yes          Yes
  multiply            Yes          Yes
@@ -119,17 +119,17 @@ Math operations
  square              Yes          Yes
  reciprocal          Yes          Yes
  conjugate           Yes          Yes
-==============  =============  ===========
+==============  =============  ===============
 
 
 Trigonometric functions
 -----------------------
 
-==============  =============  ===========
+==============  =============  ===============
     UFUNC                  MODE
---------------  --------------------------
-    name         python-mode    no-python
-==============  =============  ===========
+--------------  ------------------------------
+    name         object mode    nopython mode
+==============  =============  ===============
  sin                 Yes          Yes
  cos                 Yes          Yes
  tan                 Yes          Yes
@@ -148,17 +148,17 @@ Trigonometric functions
  rad2deg             Yes          Yes
  degrees             Yes          Yes
  radians             Yes          Yes
-==============  =============  ===========
+==============  =============  ===============
 
 
 Bit-twiddling functions
 -----------------------
 
-==============  =============  ===========
+==============  =============  ===============
     UFUNC                  MODE
---------------  --------------------------
-    name         python-mode    no-python
-==============  =============  ===========
+--------------  ------------------------------
+    name         object mode    nopython mode
+==============  =============  ===============
  bitwise_and         Yes          Yes
  bitwise_or          Yes          Yes
  bitwise_xor         Yes          Yes
@@ -166,17 +166,17 @@ Bit-twiddling functions
  invert              Yes          Yes
  left_shift          Yes          Yes
  right_shift         Yes          Yes
-==============  =============  ===========
+==============  =============  ===============
 
 
 Comparison functions
 --------------------
 
-==============  =============  ===========
+==============  =============  ===============
     UFUNC                  MODE
---------------  --------------------------
-    name         python-mode    no-python
-==============  =============  ===========
+--------------  ------------------------------
+    name         object mode    nopython mode
+==============  =============  ===============
  greater             Yes          Yes
  greater_equal       Yes          Yes
  less                Yes          Yes
@@ -191,17 +191,17 @@ Comparison functions
  minimum             Yes          Yes
  fmax                Yes          Yes
  fmin                Yes          Yes
-==============  =============  ===========
+==============  =============  ===============
 
 
 Floating functions
 ------------------
 
-==============  =============  ===========
+==============  =============  ===============
     UFUNC                  MODE
---------------  --------------------------
-    name         python-mode    no-python
-==============  =============  ===========
+--------------  ------------------------------
+    name         object mode    nopython mode
+==============  =============  ===============
  isfinite            Yes          Yes
  isinf               Yes          Yes
  isnan               Yes          Yes
@@ -215,6 +215,6 @@ Floating functions
  ceil                Yes          Yes
  trunc               Yes          Yes
  spacing             Yes          Yes
-==============  =============  ===========
+==============  =============  ===============
 
 (\*) not supported on windows 32 bit

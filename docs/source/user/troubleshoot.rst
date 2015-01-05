@@ -202,11 +202,11 @@ compile in nopython mode:
       >>> f(1, 2)
       3.0
       >>> f(1, "2")
-      n.py:7: NumbaWarning: Function "f" failed type inference: Internal error at <numba.typeinfer.CallConstrain object at 0x7f6b8dd24550>:
+      example.py:7: NumbaWarning: Function "f" failed type inference: Internal error at <numba.typeinfer.CallConstrain object at 0x7f6b8dd24550>:
       float() only support for numbers
-      File "n.py", line 9
+      File "example.py", line 9
         @jit
-      n.py:7: NumbaWarning: Function "f" was compiled in object mode without forceobj=True.
+      example.py:7: NumbaWarning: Function "f" was compiled in object mode without forceobj=True.
         @jit
       3.0
 
