@@ -19,4 +19,4 @@ time the function was compiled.  Also, it is not possible to change their
 values from the function.
 
 
-.. todo:: finish this
+.. todo:: This document needs completing.

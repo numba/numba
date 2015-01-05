@@ -20,12 +20,21 @@ on this mailing-list.  You can subscribe and read the archives on
 and there is also a `Gmane mirror <http://news.gmane.org/gmane.comp.python.numba.user>`_
 allowing NNTP access.
 
+.. _report-bugs:
+
 Bug tracker
 ''''''''''''
 
 We use the `Github issue tracker <https://github.com/numba/numba/issues>`_
-to track both bug reports and feature requests.
+to track both bug reports and feature requests.  If you report an issue,
+please include specifics:
 
+* what you are trying to do;
+* which operating system you have and which version of Numba you are running;
+* how Numba is misbehaving, e.g. the full error traceback, or the unexpected
+  results you are getting;
+* as far as possible, a code snippet that allows full reproduction of your
+  problem.
 
 Getting set up
 --------------

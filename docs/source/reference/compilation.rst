@@ -84,7 +84,11 @@ JIT functions
 
    The class of objects created by calling :func:`numba.jit`.  You shouldn't
    try to create such an object in any other way.  Dispatcher objects have
-   the following public method:
+   the following methods and attributes:
+
+   .. attribute:: py_func
+
+      The pure Python function which was compiled.
 
    .. method:: inspect_types(file=None)
 
