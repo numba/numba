@@ -9,18 +9,18 @@ The ``@vectorize`` decorator
 Numba's vectorize allows Python functions taking scalar input arguments to
 be used as NumPy `ufuncs`_.  Creating a traditional NumPy ufunc is not
 not the most straightforward process and involves writing some C code.
-Numba makes this easy.  Using the ``@vectorize`` decorator, Numba can
-compile a pure Python function into a ufunc that operates over NumPy
+Numba makes this easy.  Using the :func:`~numba.vectorize` decorator, Numba
+can compile a pure Python function into a ufunc that operates over NumPy
 arrays as fast as traditional ufuncs written in C.
 
 .. _ufuncs: http://docs.scipy.org/doc/numpy/reference/ufuncs.html
 
-Using ``@vectorize``, you write your function as operating over input
-scalars, rather than arrays.  Numba will generate the surrounding
+Using :func:`~numba.vectorize`, you write your function as operating over
+input scalars, rather than arrays.  Numba will generate the surrounding
 loop (or *kernel*) allowing efficient iteration over the actual inputs.
 
-The ``@vectorize`` decorator needs you to pass a list of signatures you
-want to support.  In the basic case, only one signature will be passed::
+The :func:`~numba.vectorize` decorator needs you to pass a list of signatures
+you want to support.  In the basic case, only one signature will be passed::
 
    from numba import vectorize, float64
 
@@ -61,7 +61,7 @@ but it will fail working on other types::
 You might ask yourself, "why would I go through this instead of compiling
 a simple iteration loop using the :ref:`@jit <jit>` decorator?".  The
 answer is that NumPy ufuncs automatically get other features such as
-reduction or accumulation.  Using the example above::
+reduction, accumulation or broadcasting.  Using the example above::
 
    >>> a = np.arange(12).reshape(3, 4)
    >>> a
@@ -88,16 +88,18 @@ reduction or accumulation.  Using the example above::
 The ``@guvectorize`` decorator
 ==============================
 
-While ``@vectorize`` allows you to write ufuncs that work on one element
-at a time, the ``@guvectorize`` decorator takes the concept one step further
-and allows you to write ufuncs that will work on an arbitrary number of
-elements of input arrays, and take and return arrays of differing dimensions.
-The typical example is a running median or a convolution filter.
+While :func:`~numba.vectorize` allows you to write ufuncs that work on one
+element at a time, the :func:`~numba.guvectorize` decorator takes the concept
+one step further and allows you to write ufuncs that will work on an
+arbitrary number of elements of input arrays, and take and return arrays of
+differing dimensions.  The typical example is a running median or a
+convolution filter.
 
-Contrary to ``@vectorize`` functions, ``@guvectorize`` functions don't return
-their result value: their take it as an array argument, which must be filled
-in by the function.  This is because the array is actually allocated by
-NumPy's dispatch mechanism, which calls into the Numba-generated code.
+Contrary to :func:`~numba.vectorize` functions, :func:`~numba.guvectorize`
+functions don't return their result value: their take it as an array
+argument, which must be filled in by the function.  This is because the
+array is actually allocated by NumPy's dispatch mechanism, which calls into
+the Numba-generated code.
 
 Here is a very simple example::
 
@@ -148,7 +150,7 @@ complicated inputs, depending on their shapes::
 
 
 .. note::
-   Both ``@vectorize`` and ``@guvectorize`` support passing ``nopython=True``
-   :ref:`as in the @jit decorator <jit-nopython>`.  Use it to ensure the
-   generated code does not fallback to :term:`object mode`.
-
+   Both :func:`~numba.vectorize` and :func:`~numba.guvectorize` support
+   passing ``nopython=True`` :ref:`as in the @jit decorator <jit-nopython>`.
+   Use it to ensure the generated code does not fallback to
+   :term:`object mode`.
