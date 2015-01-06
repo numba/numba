@@ -3,7 +3,11 @@
 Extending the Numba Frontend
 ============================
 
-.. warning:: The Numba APIs described in this document are not currently guaranteed to be stable.  External packages that rely on these APIs may break with new Numba releases.
+.. warning::
+   The Numba APIs described in this document are not guaranteed to be stable.
+   External packages that rely on these APIs may break with new Numba releases.
+   Their description is mostly useful in the context of extending Numba
+   withing the Numba codebase.
 
 Concepts
 ========
