@@ -23,6 +23,12 @@ def copy_kernel_1d(out, inp):
         out[i] = inp[i]
 
 
+def assign_value(out, inp):
+    i = hsa.get_global_id(0)
+    if i < out.size:
+        out[i] = inp
+
+
 class TestCodeGeneration(unittest.TestCase):
     def test_copy_kernel(self):
         arytype = types.float32[:]
@@ -99,7 +105,6 @@ class TestExecution(unittest.TestCase):
         components = [a for a in hsart.agents if a.is_component]
 
         gpu = components[0]
-
         print("Using agent: {0} with queue size: {1}".format(gpu.name,
                                                              gpu.queue_max_size))
         q = gpu.create_queue_multi(gpu.queue_max_size)
@@ -107,7 +112,7 @@ class TestExecution(unittest.TestCase):
         # Compiler kernel
         arytype = types.float32[::1]
         kernel = compiler.compile_kernel(copy_kernel_1d, [arytype] * 2)
-        print(kernel.assembly)
+        # print(kernel.assembly)
 
         # Load BRIG memory
         symbol = '&{0}'.format(kernel.entry_name)
@@ -191,9 +196,27 @@ class TestExecution(unittest.TestCase):
         kernel = compiler.compile_kernel(copy_kernel_1d, [arytype] * 2)
 
         # Run kernel
-        kernel[4, 256](dst, src)
+        kernel[src.size // 256, 256](dst, src)
 
         np.testing.assert_equal(src, dst)
+
+
+class TestKernelArgument(unittest.TestCase):
+    def _test_template(self, nbtype, src):
+        dtype = np.dtype(str(nbtype))
+        dst = np.zeros(1, dtype=dtype)
+
+        arytype = nbtype[::1]
+        kernel = compiler.compile_kernel(assign_value, [arytype, nbtype])
+        print(kernel.assembly)
+        print(dst, src)
+        kernel[1, 1](dst, src)
+
+        print(dst, src)
+        self.assertEqual(dst[0], src)
+
+    def test_float64(self):
+        self._test_template(nbtype=types.float64, src=1. / 3.)
 
 
 if __name__ == '__main__':

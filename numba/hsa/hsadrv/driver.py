@@ -5,14 +5,23 @@ HSA driver bridge implementation
 from __future__ import absolute_import, print_function, division
 
 import sys
+import atexit
 import os
 import ctypes
 import struct
+import logging
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 from numba.utils import total_ordering
 from numba import config
 from .error import HsaSupportError, HsaDriverError, HsaApiError, HsaWarning
 from . import enums, drvapi, elf_utils
+
+
+class HsaKernelTimedOut(HsaApiError):
+    pass
+
 
 def _device_type_to_string(device):
     try:
@@ -77,6 +86,8 @@ def _find_driver():
 PLATFORM_NOT_SUPPORTED_ERROR = """
 HSA is not currently ussported in this platform ({0}).
 """
+
+
 def _raise_platform_not_supported():
     raise HsaSupportError(PLATFORM_NOT_SUPPORTED_ERROR.format(sys.platform))
 
@@ -88,6 +99,8 @@ If you are sure that the HSA is installed, try setting environment
 variable NUMBA_HSA_DRIVER with the file path of the HSA runtime shared
 library.
 """
+
+
 def _raise_driver_not_found():
     raise HsaSupportError(DRIVER_NOT_FOUND_MSG)
 
@@ -96,6 +109,7 @@ DRIVER_LOAD_ERROR_MSG = """
 A HSA runtime library was found, but failed to load with error:
 %s
 """
+
 
 def _raise_driver_error(e):
     raise HsaSupportError(DRIVER_LOAD_ERROR_MSG % e)
@@ -143,22 +157,24 @@ class Driver(object):
 
         self._agent_map = None
 
-    def __del__(self):
-        if self.is_initialized and self.initialization_error is None:
-            self.hsa_shut_down()
-
-
     def _initialize_api(self):
         if self.is_initialized:
             return
 
         self.is_initialized = True
         try:
+            logger.info("HSA INIT")
             self.hsa_init()
         except HsaApiError as e:
             self.initialization_error = e
             raise HsaDriverError("Error at driver init: \n%s:" % e)
+        else:
+            hsa_shut_down = self.hsa_shut_down
 
+            @atexit.register
+            def shutdown():
+                logger.info("HSA SHUTDOWN")
+                hsa_shut_down()
 
     def _initialize_agents(self):
         if self._agent_map is not None:
@@ -175,15 +191,15 @@ class Driver(object):
         callback = drvapi.HSA_ITER_AGENT_CALLBACK_FUNC(on_agent)
         self.hsa_iterate_agents(callback, None)
 
-        # del(Agent.__new__)
-        agent_map = { agent_id: Agent(agent_id) for agent_id in agent_ids }
-        del(Agent.__init__)
+        agent_map = {agent_id: Agent(agent_id) for agent_id in agent_ids}
+
         @classmethod
         def _get_agent(_, _2, agent_id):
             try:
                 return self._agent_map[agent_id]
             except KeyError:
-                raise HsaDriverError("No known agent with id {0}".format(agent_id))
+                raise HsaDriverError(
+                    "No known agent with id {0}".format(agent_id))
 
         self._agent_map = agent_map
         Agent.__new__ = _get_agent
@@ -224,26 +240,26 @@ class Driver(object):
                                ctypes.byref(result))
         return Signal(result.value)
 
-    def load_code_unit(self, code_binary, agents=None):
-        # not sure of the purpose of caller...
-        caller = drvapi.hsa_runtime_caller_t()
-        caller.caller = 0
-
-        if agents is not None:
-            agent_count = len(agents)
-            agents = (drvapi.hsa_agent_t * agent_count)(*agents)
-        else:
-            agent_count = 0
-
-        # callback not yet supported, always use NULL
-        cb = ctypes.cast(None, drvapi.hsa_ext_symbol_value_callback_t)
-
-        result = drvapi.hsa_code_unit_t()
-        self.hsa_ext_code_unit_load(caller, agents, agent_count, code_binary,
-                                    len(code_binary), options, cb,
-                                    ctypes.byref(result))
-
-        return CodeUnit(result)
+    # def load_code_unit(self, code_binary, agents=None):
+    # # not sure of the purpose of caller...
+    #     caller = drvapi.hsa_runtime_caller_t()
+    #     caller.caller = 0
+    #
+    #     if agents is not None:
+    #         agent_count = len(agents)
+    #         agents = (drvapi.hsa_agent_t * agent_count)(*agents)
+    #     else:
+    #         agent_count = 0
+    #
+    #     # callback not yet supported, always use NULL
+    #     cb = ctypes.cast(None, drvapi.hsa_ext_symbol_value_callback_t)
+    #
+    #     result = drvapi.hsa_code_unit_t()
+    #     self.hsa_ext_code_unit_load(caller, agents, agent_count, code_binary,
+    #                                 len(code_binary), options, cb,
+    #                                 ctypes.byref(result))
+    #
+    #     return CodeUnit(result)
 
 
     def __getattr__(self, fname):
@@ -275,8 +291,16 @@ class Driver(object):
         for key, val in proto.items():
             setattr(libfn, key, val)
 
-        setattr(self, fname, libfn)
-        return libfn
+        def driver_wrapper(fn):
+            def wrapped(*args, **kwargs):
+                logger.info(fname)
+                return fn(*args, **kwargs)
+
+            return wrapped
+
+        retval = driver_wrapper(libfn)
+        setattr(self, fname, retval)
+        return retval
 
 
     def _find_api(self, fname):
@@ -306,12 +330,14 @@ class Driver(object):
 
 hsa = Driver()
 
+
 class HsaWrapper(object):
     def __getattr__(self, fname):
         try:
             enum, typ = self._hsa_properties[fname]
         except KeyError:
-            raise AttributeError("%r object has no attribute %r" % (self.__class__, fname))
+            raise AttributeError(
+                "%r object has no attribute %r" % (self.__class__, fname))
 
         func = getattr(hsa, self._hsa_info_function)
         result = typ()
@@ -329,6 +355,7 @@ class HsaWrapper(object):
         return sorted(set(dir(type(self)) +
                           self.__dict__.keys() +
                           self._hsa_properties.keys()))
+
 
 @total_ordering
 class Agent(HsaWrapper):
@@ -351,34 +378,36 @@ class Agent(HsaWrapper):
         'name': (enums.HSA_AGENT_INFO_NAME, ctypes.c_char * 64),
         'vendor_name': (enums.HSA_AGENT_INFO_VENDOR_NAME, ctypes.c_char * 64),
         'feature': (enums.HSA_AGENT_INFO_FEATURE, drvapi.hsa_agent_feature_t),
-        'wavefront_size': (enums.HSA_AGENT_INFO_WAVEFRONT_SIZE, ctypes.c_uint32),
-        'workgroup_max_dim': (enums.HSA_AGENT_INFO_WORKGROUP_MAX_DIM, ctypes.c_uint16 * 3),
+        'wavefront_size': (
+        enums.HSA_AGENT_INFO_WAVEFRONT_SIZE, ctypes.c_uint32),
+        'workgroup_max_dim': (
+        enums.HSA_AGENT_INFO_WORKGROUP_MAX_DIM, ctypes.c_uint16 * 3),
         'grid_max_dim': (enums.HSA_AGENT_INFO_GRID_MAX_DIM, drvapi.hsa_dim3_t),
         'grid_max_size': (enums.HSA_AGENT_INFO_GRID_MAX_SIZE, ctypes.c_uint32),
-        'fbarrier_max_size': (enums.HSA_AGENT_INFO_FBARRIER_MAX_SIZE, ctypes.c_uint32),
+        'fbarrier_max_size': (
+        enums.HSA_AGENT_INFO_FBARRIER_MAX_SIZE, ctypes.c_uint32),
         'queues_max': (enums.HSA_AGENT_INFO_QUEUES_MAX, ctypes.c_uint32),
-        'queue_max_size': (enums.HSA_AGENT_INFO_QUEUE_MAX_SIZE, ctypes.c_uint32),
-        'queue_type': (enums.HSA_AGENT_INFO_QUEUE_TYPE, drvapi.hsa_queue_type_t),
+        'queue_max_size': (
+        enums.HSA_AGENT_INFO_QUEUE_MAX_SIZE, ctypes.c_uint32),
+        'queue_type': (
+        enums.HSA_AGENT_INFO_QUEUE_TYPE, drvapi.hsa_queue_type_t),
         'node': (enums.HSA_AGENT_INFO_NODE, ctypes.c_uint32),
         '_device': (enums.HSA_AGENT_INFO_DEVICE, drvapi.hsa_device_type_t),
         'cache_size': (enums.HSA_AGENT_INFO_CACHE_SIZE, ctypes.c_uint32 * 4),
-        'image1d_max_dim': (enums.HSA_EXT_AGENT_INFO_IMAGE1D_MAX_DIM, drvapi.hsa_dim3_t),
-        'image2d_max_dim': (enums.HSA_EXT_AGENT_INFO_IMAGE2D_MAX_DIM, drvapi.hsa_dim3_t),
-        'image3d_max_dim': (enums.HSA_EXT_AGENT_INFO_IMAGE3D_MAX_DIM, drvapi.hsa_dim3_t),
-        'image_array_max_size': (enums.HSA_EXT_AGENT_INFO_IMAGE_ARRAY_MAX_SIZE, ctypes.c_uint32),
-        'image_rd_max': (enums.HSA_EXT_AGENT_INFO_IMAGE_RD_MAX, ctypes.c_uint32),
-        'image_rdwr_max': (enums.HSA_EXT_AGENT_INFO_IMAGE_RDWR_MAX, ctypes.c_uint32),
+        'image1d_max_dim': (
+        enums.HSA_EXT_AGENT_INFO_IMAGE1D_MAX_DIM, drvapi.hsa_dim3_t),
+        'image2d_max_dim': (
+        enums.HSA_EXT_AGENT_INFO_IMAGE2D_MAX_DIM, drvapi.hsa_dim3_t),
+        'image3d_max_dim': (
+        enums.HSA_EXT_AGENT_INFO_IMAGE3D_MAX_DIM, drvapi.hsa_dim3_t),
+        'image_array_max_size': (
+        enums.HSA_EXT_AGENT_INFO_IMAGE_ARRAY_MAX_SIZE, ctypes.c_uint32),
+        'image_rd_max': (
+        enums.HSA_EXT_AGENT_INFO_IMAGE_RD_MAX, ctypes.c_uint32),
+        'image_rdwr_max': (
+        enums.HSA_EXT_AGENT_INFO_IMAGE_RDWR_MAX, ctypes.c_uint32),
         'sampler_max': (enums.HSA_EXT_AGENT_INFO_SAMPLER_MAX, ctypes.c_uint32),
     }
-
-
-    # def __new__(cls, agent_id):
-    #     # This is here to raise errors when trying to create agents
-    #     # before initialization. When agents are initialized, __new__ will
-    #     # be replaced with a version that returns the appropriate instance
-    #     # for existing agent_ids
-    #     raise HsaDriverError("No known agent with id {0}".format(agent_id))
-
 
     def __init__(self, agent_id):
         # This init will only happen when initializing the agents. After
@@ -433,8 +462,10 @@ class Agent(HsaWrapper):
 
 
     def __repr__(self):
-        return "<HSA agent ({0}): {1} {2} '{3}'{4}>".format(self._id, self.device,
-                                                            self.vendor_name, self.name,
+        return "<HSA agent ({0}): {1} {2} '{3}'{4}>".format(self._id,
+                                                            self.device,
+                                                            self.vendor_name,
+                                                            self.name,
                                                             " (component)" if self.is_component else "")
 
     def _rank(self):
@@ -471,9 +502,11 @@ class MemRegion(HsaWrapper):
         '_agent': (enums.HSA_REGION_INFO_AGENT, drvapi.hsa_agent_t),
         '_flags': (enums.HSA_REGION_INFO_FLAGS, drvapi.hsa_region_flag_t),
         'segment': (enums.HSA_REGION_INFO_SEGMENT, drvapi.hsa_segment_t),
-        'alloc_max_size': (enums.HSA_REGION_INFO_ALLOC_MAX_SIZE, ctypes.c_size_t),
+        'alloc_max_size': (
+        enums.HSA_REGION_INFO_ALLOC_MAX_SIZE, ctypes.c_size_t),
         'alloc_granule': (enums.HSA_REGION_INFO_ALLOC_GRANULE, ctypes.c_size_t),
-        'alloc_alignment': (enums.HSA_REGION_INFO_ALLOC_ALIGNMENT, ctypes.c_size_t),
+        'alloc_alignment': (
+        enums.HSA_REGION_INFO_ALLOC_ALIGNMENT, ctypes.c_size_t),
         'bandwidth': (enums.HSA_REGION_INFO_BANDWIDTH, ctypes.c_uint32),
         'node': (enums.HSA_REGION_INFO_NODE, ctypes.c_uint32),
     }
@@ -493,13 +526,15 @@ class MemRegion(HsaWrapper):
 
     def allocate(self, ctypes_type):
         buff = ctypes.c_void_p()
-        hsa.hsa_memory_allocate(self._id, ctypes.sizeof(ctypes_type), ctypes.byref(buff))
+        hsa.hsa_memory_allocate(self._id, ctypes.sizeof(ctypes_type),
+                                ctypes.byref(buff))
         return ctypes.cast(buff, ctypes.POINTER(ctypes_type)).contents
 
     def free(self, ptr):
-        hsa.hsa_memory_free(ctypes.byref(ptr))
+        hsa.hsa_memory_free(ptr)
 
     _instance_dict = {}
+
     @classmethod
     def instance_for(cls, _id):
         try:
@@ -515,7 +550,7 @@ class Queue(object):
         """The id in a queue is a pointer to the queue object returned by hsa_queue_create.
         The Queue object has ownership on that queue object"""
         self._id = queue_ptr
-        self._dtor = hsa.hsa_queue_destroy    # avoid premature GC at exit
+        self._dtor = hsa.hsa_queue_destroy  # avoid premature GC at exit
 
     def __del__(self):
         self._dtor(self._id)
@@ -530,14 +565,16 @@ class Queue(object):
         dims = len(workgroup_size)
         assert dims == len(grid_size)
         assert dims <= 3
+        assert grid_size >= workgroup_size
         s = signal if signal is not None else hsa.create_signal(1)
 
         cd = code_descriptor._id
 
+        # Populate packet
         aql = drvapi.hsa_dispatch_packet_t()
-        aql.header.type = enums.HSA_PACKET_TYPE_DISPATCH
-        aql.header.acquire_fence_scope = 2
-        aql.header.release_fence_scope = 2
+        aql.header.type = enums.HSA_PACKET_TYPE_ALWAYS_RESERVED
+        aql.header.acquire_fence_scope = enums.HSA_FENCE_SCOPE_SYSTEM
+        aql.header.release_fence_scope = enums.HSA_FENCE_SCOPE_SYSTEM
         aql.header.barrier = 1
         aql.group_segment_size = 0
         aql.private_segment_size = 0
@@ -549,22 +586,39 @@ class Queue(object):
         aql.grid_size_y = grid_size[1] if dims > 1 else 1
         aql.grid_size_z = grid_size[2] if dims > 2 else 1
         aql.kernel_object_address = cd.code.handle
-        aql.kernarg_address = ctypes.cast(ctypes.byref(kernargs), ctypes.c_void_p).value
+        aql.kernarg_address = ctypes.addressof(kernargs)
         aql.completion_signal = s._id
 
+        # Allocate queue slot
         q = self._id
         index = hsa.hsa_queue_load_write_index_relaxed(q)
-        hsa.hsa_queue_store_write_index_relaxed(q, index+1)
+        hsa.hsa_queue_store_write_index_relaxed(q, index + 1)
         queue_mask = q.contents.size - 1
         real_index = index & queue_mask
+
         packet_array = ctypes.cast(q.contents.base_address,
                                    ctypes.POINTER(drvapi.hsa_dispatch_packet_t))
+
+        free_slot_types = (enums.HSA_PACKET_TYPE_INVALID,
+                           enums.HSA_PACKET_TYPE_ALWAYS_RESERVED)
+        while packet_array[real_index].header.type not in free_slot_types:
+            # Spin until the slot is ready
+            pass
+
+        # Copy the packet to the storage
         packet_array[real_index] = aql
+        # The packet type must be stored last
+        packet_array[real_index].header.type = enums.HSA_PACKET_TYPE_DISPATCH
+
+        # Ring the doorbell
         hsa.hsa_signal_store_relaxed(self.doorbell_signal, index)
 
         # synchronous if no signal was provided
         if signal is None:
-            hsa.hsa_signal_wait_acquire(s._id, enums.HSA_LT, 1, -1, enums.HSA_WAIT_EXPECTANCY_UNKNOWN)
+            timeout = 3
+            if not s.wait_until_ne_one(timeout=timeout):
+                msg = "Kernel timed out after {timeout} second"
+                raise HsaKernelTimedOut(msg.format(timeout=timeout))
 
     def __dir__(self):
         return sorted(set(dir(self._id.contents) +
@@ -575,8 +629,31 @@ class Signal(object):
     """The id for the signal is going to be the hsa_signal_t returned by create_signal.
     Lifetime of the underlying signal will be tied with this object".
     Note that it is likely signals will have lifetime issues."""
+
     def __init__(self, signal_id):
         self._id = signal_id
+
+    def load_relaxed(self):
+        return hsa.hsa_signal_load_relaxed(self._id)
+
+    def load_acquired(self):
+        return hsa.hsa_signal_load_acquired(self._id)
+
+    def wait_until_ne_one(self, timeout=None):
+        """
+        Returns a boolean to indicate whether the wait has timeout
+        """
+        one = 1
+        mhz = 10 ** 6
+        if timeout is None:
+            # Infinite
+            expire = -1
+        else:
+            # timeout as seconds
+            expire = timeout * hsa.timestamp_frequency * mhz
+        hsa.hsa_signal_wait_acquire(self._id, enums.HSA_NE, one, expire,
+                                    enums.HSA_WAIT_EXPECTANCY_UNKNOWN)
+        return self.load_relaxed() != one
 
     def __del__(self):
         hsa.hsa_signal_destroy(self._id)
@@ -642,7 +719,7 @@ class Program(object):
 
         hsa.hsa_ext_finalize_program(self._id, device._id, 1,
                                      ctypes.byref(request),
-                                     None, # control_directives
+                                     None,  # control_directives
                                      cb,
                                      opt_level,
                                      options,
@@ -679,7 +756,13 @@ class Context(object):
     def __init__(self, agent):
         self._agent = agent
         qs = agent.queue_max_size
-        self._defaultqueue = self._agent.create_queue_multi(qs)
+        self._defaultqueue = self._agent.create_queue_multi(qs,
+                                                            callback=self._callback)
+
+    def _callback(self, status, queue):
+        logger.info("queue error %s %r", status, queue)
+        drvapi._check_error(status, queue)
+        sys.exit(1)
 
     @property
     def default_queue(self):

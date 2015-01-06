@@ -8,6 +8,7 @@ import functools
 import re
 from llvmlite.llvmpy.core import Constant, Type
 import llvmlite.llvmpy.core as lc
+from llvmlite import ir as llvmir
 
 from . import errcode, utils
 
@@ -572,7 +573,8 @@ def is_pointer(ltyp):
     """
     Whether the LLVM type *typ* is a struct type.
     """
-    return ltyp.kind == lc.TYPE_POINTER
+    return isinstance(ltyp, llvmir.PointerType)
+    # return ltyp.kind == lc.TYPE_POINTER
 
 
 def is_struct_ptr(ltyp):

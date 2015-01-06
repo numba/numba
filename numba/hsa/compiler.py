@@ -1,8 +1,10 @@
 from __future__ import print_function, absolute_import
 import copy
 import ctypes
+import struct
+
 from numba.typing.templates import ConcreteTemplate
-from numba import types, compiler
+from numba import types, compiler, utils
 from .hlc import hlc
 from .hsadrv import devices, driver
 from numba.targets.arrayobj import make_array_ctype
@@ -147,7 +149,7 @@ class HSAKernel(HSAKernelBase):
             hlcmod.load_llvm(str(m))
         return hlcmod.finalize()
 
-    def bind(self):
+    def bind(self, nargs):
         """
         Bind kernel to device
         """
@@ -160,25 +162,27 @@ class HSAKernel(HSAKernelBase):
         module = program.add_module(brig_module)
         code_desc = program.finalize(agent, module, symbol_offset)
         kernarg_region = [r for r in agent.regions if r.supports_kernargs][0]
-        nargs = len(self.argument_types)
         kernarg_types = ctypes.c_void_p * (self.INJECTED_NARG + nargs)
         kernargs = kernarg_region.allocate(kernarg_types)
-        return ctx, code_desc, kernargs, kernarg_region
+        return ctx, code_desc, kernargs, kernarg_region, program
 
     def __call__(self, *args):
-        ctx, code_desc, kernargs, kernarg_region = self.bind()
+        unboxed_args, keepalive = _prepare_arguments(args, self.argument_types)
 
-        unboxed = list(_prepare_arguments(args, self.argument_types))
+        ctx, code_desc, kernargs, kernarg_region, program = self.bind(
+            nargs=len(unboxed_args))
 
         for i in range(self.INJECTED_NARG):
             kernargs[i] = 0
 
         # Insert kernel arguments
-        for i, (cval, keepalive) in enumerate(unboxed):
-            kernargs[self.INJECTED_NARG + i] = cval
+        for i, cval in enumerate(unboxed_args, start=self.INJECTED_NARG):
+            kernargs[i] = cval
+            print(i, cval)
 
         qq = ctx.default_queue
-
+        print(self.local_size, self.global_size)
+        # raise NotImplementedError
         # Dispatch
         qq.dispatch(code_desc, kernargs, workgroup_size=self.local_size,
                     grid_size=self.global_size)
@@ -188,8 +192,18 @@ class HSAKernel(HSAKernelBase):
 
 
 def _prepare_arguments(args, argtys):
+    """
+    Returns two list
+    * The first list contains unboxed arguments represented as one or more intp
+    * The second list contains objects to keepalive
+    """
+    out = []
+    keepalive = []
     for val, ty in zip(args, argtys):
-        yield _unbox(val, ty)
+        args, ka = _unbox(val, ty)
+        out.extend(args)
+        keepalive.append(ka)
+    return out, keepalive
 
 
 def _unbox(val, ty):
@@ -197,11 +211,21 @@ def _unbox(val, ty):
         cstruct = make_array_ctype(ndim=val.ndim)
         cval = cstruct(parent=None, data=val.ctypes.data,
                        shape=val.ctypes.shape, strides=val.ctypes.strides)
-        return ctypes.addressof(cval), cval
+        return [ctypes.c_void_p(ctypes.addressof(cval))], cval
+
+    elif ty == types.float64:
+        if utils.MACHINE_BITS == 32:
+            lo, hi = struct.unpack('II', struct.pack('d', val))
+            return [ctypes.c_void_p(lo), ctypes.c_void_p(hi)], None
+        elif utils.MACHINE_BITS == 64:
+            val = struct.unpack('Q', struct.pack('d', val))[0]
+            return [ctypes.c_void_p(val)], None
+        else:
+            raise NotImplementedError
 
     # elif ty in types.integer_domain:
     # cval = INTEGER_TYPE_MAP[ty](val)
-    #     return cval, cval
+    # return cval, cval
     #
     # elif ty in types.real_domain:
     #     cval = REAL_TYPE_MAP[ty](val)

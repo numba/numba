@@ -77,27 +77,46 @@ class HSATargetContext(BaseContext):
 
     def generate_kernel_wrapper(self, func, argtypes):
         module = func.module
-        raw_argtys = [self.get_argument_type(ty) for ty in argtypes]
-        argtys = []
-        for arg in raw_argtys:
-            if isinstance(arg, llvmir.PointerType):
-                gptr = llvmir.PointerType(arg.pointee,
-                                          addrspace=SPIR_GLOBAL_ADDRSPACE)
-                argtys.append(gptr)
-            else:
-                argtys.append(arg)
 
-        fnty = lc.Type.function(lc.Type.void(), argtys)
+        llargtys = []
+
+        for arg in argtypes:
+            if isinstance(arg, types.Array):
+                lty = self.get_argument_type(arg)
+                gptr = llvmir.PointerType(lty.pointee,
+                                          addrspace=SPIR_GLOBAL_ADDRSPACE)
+                llargtys.append(gptr)
+
+            elif arg == types.float64:
+                llargtys.append(llvmir.IntType(64))
+
+            else:
+                llargtys.append(arg)
+
+        fnty = lc.Type.function(lc.Type.void(), llargtys)
         wrappername = 'hsaPy_{name}'.format(name=func.name)
         wrapper = module.add_function(fnty, name=wrappername)
+        print(wrapper)
 
         builder = lc.Builder.new(wrapper.append_basic_block(''))
 
         callargs = []
         for at, av in zip(argtypes, wrapper.args):
-            av = self.get_argument_value(builder, at, av)
-            callargs.append(av)
+            if at == types.float64:
+                print("hello")
+                av = self.get_argument_value(builder, types.uintp, av)
+                tmp = cgutils.alloca_once_value(builder, av)
+                ptr = builder.bitcast(tmp,
+                                      self.get_argument_type(at).as_pointer())
+                callargs.append(builder.load(ptr))
 
+            else:
+                print(lty, at, av)
+                av = self.get_argument_value(builder, at, av)
+                callargs.append(av)
+
+        print(argtypes)
+        print(callargs)
         # XXX handle error status
         status, _ = self.call_function(builder, func, types.void, argtypes,
                                        callargs)
