@@ -9,6 +9,7 @@ import atexit
 import os
 import ctypes
 import struct
+import weakref
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -118,7 +119,34 @@ def _raise_driver_error(e):
 MISSING_FUNCTION_ERRMSG = """driver missing function: %s.
 """
 
+
+class Recycler(object):
+    def __init__(self):
+        self._garbage = []
+        self.enabled = True
+
+    def free(self, obj):
+        self._garbage.append(obj)
+        self.service()
+
+    def _cleanup(self):
+        for obj in self._garbage:
+            obj._finalizer(obj)
+        self._garbage = []
+
+    def service(self):
+        if self.enabled:
+            if len(self._garbage) > 10:
+                self._cleanup()
+
+    def drain(self):
+        self._cleanup()
+        self.enabled = False
+
+
 # The Driver ###########################################################
+
+
 class Driver(object):
     """
     Driver API functions are lazily bound.
@@ -156,6 +184,7 @@ class Driver(object):
             self.initialization_error = e
 
         self._agent_map = None
+        self._recycler = Recycler()
 
     def _initialize_api(self):
         if self.is_initialized:
@@ -174,6 +203,9 @@ class Driver(object):
             @atexit.register
             def shutdown():
                 logger.info("HSA SHUTDOWN")
+                for agent in self.agents:
+                    agent.release()
+                self._recycler.drain()
                 hsa_shut_down()
 
     def _initialize_agents(self):
@@ -192,18 +224,7 @@ class Driver(object):
         self.hsa_iterate_agents(callback, None)
 
         agent_map = {agent_id: Agent(agent_id) for agent_id in agent_ids}
-
-        @classmethod
-        def _get_agent(_, _2, agent_id):
-            try:
-                return self._agent_map[agent_id]
-            except KeyError:
-                raise HsaDriverError(
-                    "No known agent with id {0}".format(agent_id))
-
         self._agent_map = agent_map
-        Agent.__new__ = _get_agent
-
 
     @property
     def is_available(self):
@@ -261,7 +282,6 @@ class Driver(object):
     #
     #     return CodeUnit(result)
 
-
     def __getattr__(self, fname):
         # Initialize driver
         self._initialize_api()
@@ -301,7 +321,6 @@ class Driver(object):
         retval = driver_wrapper(libfn)
         setattr(self, fname, retval)
         return retval
-
 
     def _find_api(self, fname):
         # Try regular
@@ -414,6 +433,8 @@ class Agent(HsaWrapper):
         # the agent initialization the instances of this class are considered
         # initialized and locked, so this method will be removed.
         self._id = agent_id
+        self._recycler = hsa._recycler
+        self._queues = set()
         self._initialize_regions()
 
     @property
@@ -438,7 +459,7 @@ class Agent(HsaWrapper):
 
         callback = drvapi.HSA_AGENT_ITERATE_REGIONS_CALLBACK_FUNC(on_region)
         hsa.hsa_agent_iterate_regions(self._id, callback, None)
-        self._regions = [MemRegion.instance_for(region_id)
+        self._regions = [MemRegion.instance_for(self, region_id)
                          for region_id in region_ids]
 
     def create_queue_single(self, size, callback=None, service_queue=None):
@@ -448,8 +469,10 @@ class Agent(HsaWrapper):
         result = ctypes.POINTER(drvapi.hsa_queue_t)()
         hsa.hsa_queue_create(self._id, size, enums.HSA_QUEUE_TYPE_SINGLE,
                              cb, sq, ctypes.byref(result))
-        return Queue(result)
 
+        q = Queue(self, result)
+        self._queues.add(q)
+        return weakref.proxy(q)
 
     def create_queue_multi(self, size, callback=None, service_queue=None):
         cb_typ = drvapi.HSA_QUEUE_CALLBACK_FUNC
@@ -458,8 +481,23 @@ class Agent(HsaWrapper):
         result = ctypes.POINTER(drvapi.hsa_queue_t)()
         hsa.hsa_queue_create(self._id, size, enums.HSA_QUEUE_TYPE_MULTI,
                              cb, sq, ctypes.byref(result))
-        return Queue(result)
 
+        q = Queue(self, result)
+        self._queues.add(q)
+        return weakref.proxy(q)
+
+    def release(self):
+        """
+        Release all resources
+
+        Called at system teardown
+        """
+        for q in list(self._queues):
+            q.release()
+
+    def release_queue(self, queue):
+        self._queues.remove(queue)
+        self._recycler.free(queue)
 
     def __repr__(self):
         return "<HSA agent ({0}): {1} {2} '{3}'{4}>".format(self._id,
@@ -511,14 +549,15 @@ class MemRegion(HsaWrapper):
         'node': (enums.HSA_REGION_INFO_NODE, ctypes.c_uint32),
     }
 
-    def __init__(self, region_id):
+    def __init__(self, agent, region_id):
         """Do not instantiate MemRegion objects directly, use the factory class
         method 'instance_for' to ensure MemRegion identity"""
         self._id = region_id
+        self._owner_agent = agent
 
     @property
     def agent(self):
-        return Agent(self._agent)
+        return self._owner_agent
 
     @property
     def supports_kernargs(self):
@@ -536,24 +575,26 @@ class MemRegion(HsaWrapper):
     _instance_dict = {}
 
     @classmethod
-    def instance_for(cls, _id):
+    def instance_for(cls, owner, _id):
         try:
             return cls._instance_dict[_id]
         except KeyError:
-            new_instance = cls(_id)
+            new_instance = cls(owner, _id)
             cls._instance_dict[_id] = new_instance
             return new_instance
 
 
 class Queue(object):
-    def __init__(self, queue_ptr):
+    def __init__(self, agent, queue_ptr):
         """The id in a queue is a pointer to the queue object returned by hsa_queue_create.
         The Queue object has ownership on that queue object"""
+        self._agent = weakref.proxy(agent)
         self._id = queue_ptr
-        self._dtor = hsa.hsa_queue_destroy  # avoid premature GC at exit
+        self._as_parameter_ = self._id
+        self._finalizer = hsa.hsa_queue_destroy
 
-    def __del__(self):
-        self._dtor(self._id)
+    def release(self):
+        self._agent.release_queue(self)
 
     def __getattr__(self, fname):
         return getattr(self._id.contents, fname)
@@ -623,6 +664,24 @@ class Queue(object):
     def __dir__(self):
         return sorted(set(dir(self._id.contents) +
                           self.__dict__.keys()))
+
+    def owned(self):
+        return ManagedQueueProxy(self)
+
+
+class ManagedQueueProxy(object):
+    def __init__(self, queue):
+        self._queue = weakref.ref(queue)
+
+    def __del__(self):
+        q = self._queue()
+        if q is not None:
+            # Since atexit functions occurs before all the objects are
+            # cleaned-up, the queue could already be free.
+            q.release_queue()
+
+    def __getattr__(self, item):
+        return getattr(self._queue(), item)
 
 
 class Signal(object):
@@ -754,13 +813,13 @@ class Context(object):
     """
 
     def __init__(self, agent):
-        self._agent = agent
+        self._agent = weakref.proxy(agent)
         qs = agent.queue_max_size
-        self._defaultqueue = self._agent.create_queue_multi(qs,
-                                                            callback=self._callback)
+        defq = self._agent.create_queue_multi(qs, callback=self._callback)
+        self._defaultqueue = defq.owned()
 
     def _callback(self, status, queue):
-        logger.info("queue error %s %r", status, queue)
+        logger.error("queue error %s %r", status, queue)
         drvapi._check_error(status, queue)
         sys.exit(1)
 
