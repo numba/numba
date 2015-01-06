@@ -289,9 +289,9 @@ Stage 5a: Generate No-Python LLVM IR
 If type inference succeeds in finding a Numba type for every intermediate
 variable, then Numba can (potentially) generate specialized native code.  This
 process is called *lowering*.  The Numba IR tree is translated into LLVM IR by
-using helper classes from `llvmpy <http://www.llvmpy.org/>`_.  The  machine-
-generated LLVM IR can seem unnecessarily verbose, but the LLVM  toolchain is
-able to optimize it quite easily into compact, efficient code.
+using helper classes from `llvmlite <https://github.com/numba/llvmlite>`_.
+The  machine-generated LLVM IR can seem unnecessarily verbose, but the LLVM
+toolchain is able to optimize it quite easily into compact, efficient code.
 
 The basic lowering algorithm is generic, but the specifics of how particular
 Numba IR nodes are translated to LLVM instructions is handled by the
