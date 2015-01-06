@@ -59,7 +59,14 @@ and `llvmlite <https://github.com/numba/llvmlite>`_) with non-trivial build
 instructions.  Unless you want to build those dependencies yourself, we
 recommend you use `Conda <http://conda.pydata.org/miniconda.html>`_ to
 create a dedicated development environment and install precompiled versions
-of those dependencies there::
+of those dependencies there.
+
+First add the Binstar ``numba`` channel so as to get development builds of
+the llvmlite library::
+
+   $ conda config --add channels numba
+
+Then create an environment with the right dependencies::
 
    $ <path_to_miniconda>/conda create -n numbaenv python=3.4 llvmlite numpy
 
