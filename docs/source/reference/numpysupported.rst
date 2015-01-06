@@ -47,6 +47,10 @@ The following scalar types and features are not supported:
 * **Arbitrary Python objects**
 * **Half-precision and extended-precision** real and complex numbers
 
+The operations supported on scalar Numpy numbers are the same as on the
+equivalent built-in types such as ``int`` or ``float``.  Structured
+scalars support attribute getting and setting.
+
 .. seealso::
    `Numpy scalars <http://docs.scipy.org/doc/numpy/reference/arrays.scalars.html>`_
    reference.
@@ -57,6 +61,43 @@ Array types
 
 Arrays of any of the scalar types above are supported, regardless of the shape
 or layout.
+
+Operations
+----------
+
+Arrays support iteration and full indexing (i.e. indexing that yields
+scalar values).  Partial indexing (for example indexing a 2-d array with
+integers, which would give a 1-d subarray in pure Python) isn't supported.
+
+Attributes
+----------
+
+The following attributes of Numpy arrays are supported:
+
+* :attr:`~numpy.ndarray.flat`
+* :attr:`~numpy.ndarray.ndim`
+* :attr:`~numpy.ndarray.shape`
+* :attr:`~numpy.ndarray.size`
+* :attr:`~numpy.ndarray.strides`
+
+Methods
+-------
+
+The following methods of Numpy arrays are supported in their basic form
+(without any optional arguments):
+
+* :meth:`~numpy.ndarray.argmax`
+* :meth:`~numpy.ndarray.argmin`
+* :meth:`~numpy.ndarray.max`
+* :meth:`~numpy.ndarray.mean`
+* :meth:`~numpy.ndarray.min`
+* :meth:`~numpy.ndarray.prod`
+* :meth:`~numpy.ndarray.std`
+* :meth:`~numpy.ndarray.sum`
+* :meth:`~numpy.ndarray.var`
+
+The corresponding top-level Numpy functions (such as :func:`numpy.sum`)
+are similarly supported.
 
 
 Standard ufuncs
