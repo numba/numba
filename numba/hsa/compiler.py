@@ -142,6 +142,16 @@ class HSAKernel(HSAKernelBase):
         self.assembly, self.binary = self._finalize()
         self.entry_name = name
         self.argument_types = tuple(argtypes)
+        self._arginfos = [ArgumentInfo(argty) for argty in self.argument_types]
+        self._argloc = []
+        # Calculate argument position
+        self._injectedargsize = self.INJECTED_NARG * ctypes.sizeof(ctypes.c_void_p)
+        kas = 0
+        for ai in self._arginfos:
+            padding = ai.calc_padding(kas)
+            self._argloc.append(padding + kas + self._injectedargsize)
+            kas += padding + ai.size
+        self._kernargsize = kas + self._injectedargsize
 
     def _finalize(self):
         hlcmod = hlc.Module()
@@ -149,7 +159,7 @@ class HSAKernel(HSAKernelBase):
             hlcmod.load_llvm(str(m))
         return hlcmod.finalize()
 
-    def bind(self, nargs):
+    def bind(self):
         """
         Bind kernel to device
         """
@@ -162,27 +172,28 @@ class HSAKernel(HSAKernelBase):
         module = program.add_module(brig_module)
         code_desc = program.finalize(agent, module, symbol_offset)
         kernarg_region = [r for r in agent.regions if r.supports_kernargs][0]
-        kernarg_types = ctypes.c_void_p * (self.INJECTED_NARG + nargs)
+        kernarg_types = (ctypes.c_byte * self._kernargsize)
         kernargs = kernarg_region.allocate(kernarg_types)
+        # Inject dummy argument
+        injectargs = ctypes.cast(kernargs,
+                                 ctypes.POINTER(ctypes.c_void_p *
+                                                self.INJECTED_NARG)).contents
+        for i in range(self.INJECTED_NARG):
+            injectargs[i] = 0
+
         return ctx, code_desc, kernargs, kernarg_region, program
 
     def __call__(self, *args):
-        unboxed_args, keepalive = _prepare_arguments(args, self.argument_types)
-
-        ctx, code_desc, kernargs, kernarg_region, program = self.bind(
-            nargs=len(unboxed_args))
-
-        for i in range(self.INJECTED_NARG):
-            kernargs[i] = 0
+        ctx, code_desc, kernargs, kernarg_region, program = self.bind()
 
         # Insert kernel arguments
-        for i, cval in enumerate(unboxed_args, start=self.INJECTED_NARG):
-            kernargs[i] = cval
-            print(i, cval)
+        keepalive = []
+        for byteoffset, arginfo, argval in zip(self._argloc, self._arginfos,
+                                               args):
+            keepalive.append(arginfo.assign(kernargs, byteoffset, argval))
 
         qq = ctx.default_queue
-        print(self.local_size, self.global_size)
-        # raise NotImplementedError
+
         # Dispatch
         qq.dispatch(code_desc, kernargs, workgroup_size=self.local_size,
                     grid_size=self.global_size)
@@ -191,51 +202,53 @@ class HSAKernel(HSAKernelBase):
         kernarg_region.free(kernargs)
 
 
-def _prepare_arguments(args, argtys):
-    """
-    Returns two list
-    * The first list contains unboxed arguments represented as one or more intp
-    * The second list contains objects to keepalive
-    """
-    out = []
-    keepalive = []
-    for val, ty in zip(args, argtys):
-        args, ka = _unbox(val, ty)
-        out.extend(args)
-        keepalive.append(ka)
-    return out, keepalive
+class ArgumentInfo(object):
+    def __init__(self, ty):
+        self.byref = False
+        if isinstance(ty, types.Array):
+            self._arytype = make_array_ctype(ndim=ty.ndim)
+            self.ctype = ctypes.c_void_p
+            self.byref = True
 
+            def ctor(val):
+                cval = self._arytype(parent=None,
+                                     data=val.ctypes.data,
+                                     shape=val.ctypes.shape,
+                                     strides=val.ctypes.strides)
+                return cval
 
-def _unbox(val, ty):
-    if isinstance(ty, types.Array):
-        cstruct = make_array_ctype(ndim=val.ndim)
-        cval = cstruct(parent=None, data=val.ctypes.data,
-                       shape=val.ctypes.shape, strides=val.ctypes.strides)
-        return [ctypes.c_void_p(ctypes.addressof(cval))], cval
+            self.ctor = ctor
 
-    elif ty == types.float64:
-        if utils.MACHINE_BITS == 32:
-            lo, hi = struct.unpack('II', struct.pack('d', val))
-            return [ctypes.c_void_p(lo), ctypes.c_void_p(hi)], None
-        elif utils.MACHINE_BITS == 64:
-            val = struct.unpack('Q', struct.pack('d', val))[0]
-            return [ctypes.c_void_p(val)], None
+        elif ty in REAL_TYPE_MAP:
+            self.ctype = self.ctor = REAL_TYPE_MAP[ty]
+
+        elif ty in INTEGER_TYPE_MAP:
+            self.ctype = self.ctor = INTEGER_TYPE_MAP[ty]
+
         else:
-            raise NotImplementedError
+            raise TypeError(ty)
 
-    # elif ty in types.integer_domain:
-    # cval = INTEGER_TYPE_MAP[ty](val)
-    # return cval, cval
-    #
-    # elif ty in types.real_domain:
-    #     cval = REAL_TYPE_MAP[ty](val)
-    #     return cval, cval
-    #
-    # elif ty in types.complex_domain:
-    #     cval = COMPLEX_TYPE_MAP[ty](val)
-    #     return cval, cval
+        self.align = ctypes.sizeof(self.ctype)
+        self.size = self.align
 
-    raise NotImplementedError(ty)
+    def calc_padding(self, base):
+        rmdr = int(base) % self.align
+        if rmdr == 0:
+            return 0
+        else:
+            return self.align - rmdr
+
+    def assign(self, bytestorage, offset, val):
+        keepalive = cval = self.ctor(val)
+        if self.byref:
+            cval = ctypes.addressof(cval)
+
+        ptr = ctypes.c_void_p(ctypes.addressof(bytestorage) + offset)
+        casted = ctypes.cast(ptr, ctypes.POINTER(self.ctype))
+        casted[0] = cval
+        return keepalive
+
+
 
 
 def make_complex_ctypes(element):

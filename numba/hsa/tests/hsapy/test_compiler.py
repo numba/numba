@@ -213,10 +213,19 @@ class TestKernelArgument(unittest.TestCase):
         kernel[1, 1](dst, src)
 
         print(dst, src)
-        self.assertEqual(dst[0], src)
+        self.assertEqual(dst[0], dtype.type(src))
 
     def test_float64(self):
         self._test_template(nbtype=types.float64, src=1. / 3.)
+
+    def test_float32(self):
+        self._test_template(nbtype=types.float32, src=1. / 3.)
+
+    def test_int32(self):
+        self._test_template(nbtype=types.int32, src=123)
+
+    def test_int16(self):
+        self._test_template(nbtype=types.int16, src=123)
 
 
 if __name__ == '__main__':

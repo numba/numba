@@ -87,11 +87,9 @@ class HSATargetContext(BaseContext):
                                           addrspace=SPIR_GLOBAL_ADDRSPACE)
                 llargtys.append(gptr)
 
-            elif arg == types.float64:
-                llargtys.append(llvmir.IntType(64))
-
             else:
-                llargtys.append(arg)
+                lty = self.get_argument_type(arg)
+                llargtys.append(lty)
 
         fnty = lc.Type.function(lc.Type.void(), llargtys)
         wrappername = 'hsaPy_{name}'.format(name=func.name)
@@ -102,18 +100,9 @@ class HSATargetContext(BaseContext):
 
         callargs = []
         for at, av in zip(argtypes, wrapper.args):
-            if at == types.float64:
-                print("hello")
-                av = self.get_argument_value(builder, types.uintp, av)
-                tmp = cgutils.alloca_once_value(builder, av)
-                ptr = builder.bitcast(tmp,
-                                      self.get_argument_type(at).as_pointer())
-                callargs.append(builder.load(ptr))
-
-            else:
-                print(lty, at, av)
-                av = self.get_argument_value(builder, at, av)
-                callargs.append(av)
+            print(lty, at, av)
+            av = self.get_argument_value(builder, at, av)
+            callargs.append(av)
 
         print(argtypes)
         print(callargs)
