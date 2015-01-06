@@ -20,8 +20,8 @@ class _OverloadedBase(_dispatcher.Dispatcher):
     __numba__ = "py_func"
 
     def __init__(self, arg_count, py_func):
-        self.tm = default_type_manager
-        _dispatcher.Dispatcher.__init__(self, self.tm.get_pointer(), arg_count)
+        self._tm = default_type_manager
+        _dispatcher.Dispatcher.__init__(self, self._tm.get_pointer(), arg_count)
 
         # A mapping of signatures to entry points
         self.overloads = {}
@@ -36,10 +36,17 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         # but newer python uses a different name
         self.__code__ = self.func_code
 
+
         self.doc = py_func.__doc__
         self._compile_lock = utils.NonReentrantLock()
 
         utils.finalize(self, self._make_finalizer())
+
+    def _reset_overloads(self):
+        self._clear()
+        self.overloads.clear()
+        self._compileinfos.clear()
+        self._npsigs[:] = []
 
     def _make_finalizer(self):
         """
@@ -61,7 +68,7 @@ class _OverloadedBase(_dispatcher.Dispatcher):
                 try:
                     targetctx.remove_user_function(func)
                     targetctx.remove_native_function(func)
-                except KeyError:
+                except KeyError as e:
                     # Not a native function (object mode presumably)
                     pass
 
@@ -84,7 +91,6 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         # If disabling compilation then there must be at least one signature
         assert val or len(self.signatures) > 0
         self._can_compile = not val
-
 
     def add_overload(self, cres):
         args = tuple(cres.signature.args)
@@ -240,7 +246,7 @@ class Overloaded(_OverloadedBase):
         self._can_compile = can_compile
         return self
 
-    def compile(self, sig, locals={}, **targetoptions):
+    def compile(self, sig):
         with self._compile_lock:
             args, return_type = sigutils.normalize_signature(sig)
             # Don't recompile if signature already exists
@@ -249,19 +255,13 @@ class Overloaded(_OverloadedBase):
             if existing is not None:
                 return existing
 
-            locs = self.locals.copy()
-            locs.update(locals)
-
-            topt = self.targetoptions.copy()
-            topt.update(targetoptions)
-
             flags = compiler.Flags()
-            self.targetdescr.options.parse_as_flags(flags, topt)
+            self.targetdescr.options.parse_as_flags(flags, self.targetoptions)
 
             cres = compiler.compile_extra(self.typingctx, self.targetctx,
                                           self.py_func,
                                           args=args, return_type=return_type,
-                                          flags=flags, locals=locs)
+                                          flags=flags, locals=self.locals)
 
             # Check typing error if object mode is used
             if cres.typing_error is not None and not flags.enable_pyobject:
@@ -269,6 +269,22 @@ class Overloaded(_OverloadedBase):
 
             self.add_overload(cres)
             return cres.entry_point
+
+    def recompile(self):
+        """
+        Recompile all signatures afresh.
+        """
+        sigs = [cr.signature for cr in self._compileinfos.values()]
+        old_can_compile = self._can_compile
+        # Ensure the old overloads are disposed of, including compiled functions.
+        self._make_finalizer()()
+        self._reset_overloads()
+        self._can_compile = True
+        try:
+            for sig in sigs:
+                self.compile(sig)
+        finally:
+            self._can_compile = old_can_compile
 
 
 class LiftedLoop(_OverloadedBase):
