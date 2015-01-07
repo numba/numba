@@ -77,11 +77,20 @@ class DeviceFunctionTemplate(object):
         if args not in self._compileinfos:
             cres = compile_cuda(self.py_func, None, args, debug=self.debug,
                                 inline=self.inline)
+            first_definition = not self._compileinfos
             self._compileinfos[args] = cres
             libs = [cres.library]
-            cres.target_context.insert_user_function(self, cres.fndesc, libs)
+
+            if first_definition:
+                # First definition
+                cres.target_context.insert_user_function(self, cres.fndesc,
+                                                         libs)
+            else:
+                cres.target_context.add_user_function(self, cres.fndesc, libs)
+
         else:
             cres = self._compileinfos[args]
+
         return cres.signature
 
 
