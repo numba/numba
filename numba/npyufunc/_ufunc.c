@@ -1,43 +1,32 @@
+
 /* Included by _internal.c */
 #include "_internal.h"
 
-static PyObject *
-PyDynUFunc_FromFuncAndData(PyUFuncGenericFunction *func, void **data,
-                           char *types, int ntypes,
-                           int nin, int nout, int identity,
-                           char *name, char *doc, PyObject *object)
+static int
+dup_string(PyObject *obj, char **s, const char *type_error_message)
 {
-    PyUFuncObject *ufunc = NULL;
-    PyObject *result;
-
-    ufunc = (PyUFuncObject *) PyUFunc_FromFuncAndData(
-                        func, data, types, ntypes, nin, nout,
-                        identity, name, doc, 0);
-
-    if (!ufunc)
-        goto err;
-
-    /* Kind of a gross-hack  */
-    /* Py_TYPE(ufunc) = &PyDynUFunc_Type; */
-
-    result = PyDynUFunc_New(ufunc, NULL);
-    if (!result)
-        goto err;
-
-    /* Hold on to whatever object is passed in */
-    Py_XINCREF(object);
-    ufunc->obj = object;
-
-    return result;
-err:
-    Py_XDECREF(ufunc);
-    return NULL;
+    *s = NULL;
+    if (!PyString_Check(obj) && obj != Py_None) {
+        PyErr_SetString(PyExc_TypeError, type_error_message);
+        return -1;
+    }
+    if (obj != Py_None) {
+        *s = PyString_AsString(obj);
+        if (!obj)
+            return -1;
+        *s = strdup(*s);
+        if (!*s) {
+            PyErr_NoMemory();
+            return -1;
+        }
+    }
+    return 0;
 }
 
-PyObject *
-ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
 
-    // unsigned long func_address; // unused
+PyObject *
+ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args)
+{
     int nin, nout;
     int nfuncs, ntypes, ndata;
     PyObject *func_list;
@@ -46,19 +35,30 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
     PyObject *func_obj;
     PyObject *type_obj;
     PyObject *data_obj;
-    PyObject *object=NULL; /* object to hold on to while ufunc is alive */
+    PyObject *object = NULL; /* object to hold on to while ufunc is alive */
+    PyObject *pyname, *pydoc;
+    char *name = NULL, *doc = NULL;
+    char *signature = NULL;
 
     int i, j;
     int custom_dtype = 0;
     PyUFuncGenericFunction *funcs;
     int *types;
     void **data;
-    PyObject *ufunc;
+    PyUFuncObject *ufunc;
 
-    if (!PyArg_ParseTuple(args, "O!O!iiOO", &PyList_Type, &func_list,
-                                            &PyList_Type, &type_list,
-                                            &nin, &nout, &data_list,
-                                            &object)) {
+    if (!PyArg_ParseTuple(args, "OOO!O!iiOO|s",
+                          &pyname, &pydoc,
+                          &PyList_Type, &func_list,
+                          &PyList_Type, &type_list,
+                          &nin, &nout, &data_list,
+                          &object, &signature)) {
+        return NULL;
+    }
+    if (dup_string(pyname, &name, "name should be str or None"))
+        return NULL;
+    if (dup_string(pydoc, &doc, "doc should be str or None")) {
+        free(name);
         return NULL;
     }
 
@@ -163,27 +163,24 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
             }
         }
         PyArray_free(types);
-        ufunc = PyDynUFunc_FromFuncAndData((PyUFuncGenericFunction*) funcs,
-                                           data,
-                                           (char*) char_types,
-                                           nfuncs,
-                                           nin,
-                                           nout,
-                                           PyUFunc_None,
-                                           "ufunc", (char*)
-                                           "ufunc", object);
+        ufunc = (PyUFuncObject *) PyUFunc_FromFuncAndDataAndSignature(
+            (PyUFuncGenericFunction*) funcs, data, (char*) char_types,
+            nfuncs, nin, nout,
+            PyUFunc_None,
+            name, doc,
+            0 /* check_return */, signature);
 
     }
     else {
-        ufunc = PyDynUFunc_FromFuncAndData(0, 0, 0, 0,
-                                           nin,
-                                           nout,
-                                           PyUFunc_None,
-                                           "ufunc",
-                                           (char*) "ufunc",
-                                           object);
+        ufunc = (PyUFuncObject *) PyUFunc_FromFuncAndDataAndSignature(
+            0, 0, 0, 0,
+            nin,
+            nout,
+            PyUFunc_None,
+            name, doc,
+            0 /* check_return */, signature);
 
-        PyUFunc_RegisterLoopForType((PyUFuncObject*)ufunc,
+        PyUFunc_RegisterLoopForType(ufunc,
                                     custom_dtype,
                                     funcs[0],
                                     types,
@@ -193,5 +190,18 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args) {
         PyArray_free(data);
     }
 
-    return ufunc;
+    /* Create the sentinel object to clean up dynamically-allocated fields
+       when the ufunc is destroyed. */
+    ufunc->obj = cleaner_new(ufunc, object);
+    if (!ufunc->obj) {
+        PyArray_free(funcs);
+        PyArray_free(types);
+        PyArray_free(data);
+        free(doc);
+        free(name);
+        Py_DECREF(ufunc);
+        return NULL;
+    }
+
+    return (PyObject *) ufunc;
 }

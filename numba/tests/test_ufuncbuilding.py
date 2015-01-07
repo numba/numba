@@ -6,12 +6,14 @@ from numba import vectorize, guvectorize
 
 
 def add(a, b):
+    """An addition"""
     return a + b
 
 def equals(a, b):
     return a == b
 
 def guadd(a, b, c):
+    """A generalized addition"""
     x, y = c.shape
     for i in range(x):
         for j in range(y):
@@ -50,6 +52,10 @@ class TestUfuncBuilding(unittest.TestCase):
         b = ufunc(a, a)
         self.assertTrue(numpy.all(a + a == b))
 
+        # Metadata
+        self.assertEqual(ufunc.__name__, "add")
+        self.assertIn("An addition", ufunc.__doc__)
+
     def test_ufunc_struct(self):
         ufb = UFuncBuilder(add)
         cres = ufb.add("complex64(complex64, complex64)")
@@ -85,6 +91,9 @@ class TestGUfuncBuilding(unittest.TestCase):
         self.assertTrue(numpy.all(a + a == b))
         self.assertEqual(b.dtype, numpy.dtype('int32'))
 
+        # Metadata
+        self.assertEqual(ufunc.__name__, "guadd")
+        self.assertIn("A generalized addition", ufunc.__doc__)
 
     def test_gufunc_struct(self):
         gufb = GUFuncBuilder(guadd, "(x, y),(x, y)->(x, y)")
