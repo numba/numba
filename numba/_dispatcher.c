@@ -424,7 +424,7 @@ int typecode(DispatcherObject *dispatcher, PyObject *val) {
         return typecode_arrayscalar(dispatcher, val);
     }
     /* Array handling */
-    else if (tyobj == &PyArray_Type) {
+    else if (PyType_IsSubtype(tyobj, &PyArray_Type)) {
         return typecode_ndarray(dispatcher, (PyArrayObject*)val);
     }
 
