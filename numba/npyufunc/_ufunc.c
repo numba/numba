@@ -12,7 +12,7 @@ dup_string(PyObject *obj, char **s, const char *type_error_message)
     }
     if (obj != Py_None) {
         *s = PyString_AsString(obj);
-        if (!obj)
+        if (!*s)
             return -1;
         *s = strdup(*s);
         if (!*s) {
