@@ -81,14 +81,12 @@ class HSATargetContext(BaseContext):
         llargtys = []
 
         for arg in argtypes:
-            if isinstance(arg, types.Array):
-                lty = self.get_argument_type(arg)
+            lty = self.get_argument_type(arg)
+            if isinstance(lty, llvmir.PointerType):
                 gptr = llvmir.PointerType(lty.pointee,
                                           addrspace=SPIR_GLOBAL_ADDRSPACE)
                 llargtys.append(gptr)
-
             else:
-                lty = self.get_argument_type(arg)
                 llargtys.append(lty)
 
         fnty = lc.Type.function(lc.Type.void(), llargtys)

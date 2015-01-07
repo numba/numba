@@ -205,15 +205,11 @@ class TestKernelArgument(unittest.TestCase):
     def _test_template(self, nbtype, src):
         dtype = np.dtype(str(nbtype))
         dst = np.zeros(1, dtype=dtype)
-
+        src = dtype.type(src)
         arytype = nbtype[::1]
         kernel = compiler.compile_kernel(assign_value, [arytype, nbtype])
-        print(kernel.assembly)
-        print(dst, src)
         kernel[1, 1](dst, src)
-
-        print(dst, src)
-        self.assertEqual(dst[0], dtype.type(src))
+        self.assertEqual(dst[0], src)
 
     def test_float64(self):
         self._test_template(nbtype=types.float64, src=1. / 3.)
@@ -226,6 +222,12 @@ class TestKernelArgument(unittest.TestCase):
 
     def test_int16(self):
         self._test_template(nbtype=types.int16, src=123)
+
+    def test_complex64(self):
+        self._test_template(nbtype=types.complex64, src=12 + 34j)
+
+    def test_complex128(self):
+        self._test_template(nbtype=types.complex128, src=12 + 34j)
 
 
 if __name__ == '__main__':

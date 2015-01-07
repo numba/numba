@@ -1,10 +1,9 @@
 from __future__ import print_function, absolute_import
 import copy
 import ctypes
-import struct
 
 from numba.typing.templates import ConcreteTemplate
-from numba import types, compiler, utils
+from numba import types, compiler
 from .hlc import hlc
 from .hsadrv import devices, driver
 from numba.targets.arrayobj import make_array_ctype
@@ -145,7 +144,8 @@ class HSAKernel(HSAKernelBase):
         self._arginfos = [ArgumentInfo(argty) for argty in self.argument_types]
         self._argloc = []
         # Calculate argument position
-        self._injectedargsize = self.INJECTED_NARG * ctypes.sizeof(ctypes.c_void_p)
+        self._injectedargsize = self.INJECTED_NARG * ctypes.sizeof(
+            ctypes.c_void_p)
         kas = 0
         for ai in self._arginfos:
             padding = ai.calc_padding(kas)
@@ -225,6 +225,11 @@ class ArgumentInfo(object):
         elif ty in INTEGER_TYPE_MAP:
             self.ctype = self.ctor = INTEGER_TYPE_MAP[ty]
 
+        elif ty in COMPLEX_TYPE_MAP:
+            self.byref = True
+            self.ctype = ctypes.c_void_p
+            self.ctor = COMPLEX_TYPE_MAP[ty]
+
         else:
             raise TypeError(ty)
 
@@ -241,36 +246,36 @@ class ArgumentInfo(object):
     def assign(self, bytestorage, offset, val):
         keepalive = cval = self.ctor(val)
         if self.byref:
-            cval = ctypes.addressof(cval)
-
+            cval = ctypes.c_void_p(ctypes.addressof(cval))
         ptr = ctypes.c_void_p(ctypes.addressof(bytestorage) + offset)
         casted = ctypes.cast(ptr, ctypes.POINTER(self.ctype))
         casted[0] = cval
         return keepalive
 
 
+class _BaseComplex(ctypes.Structure):
+    def __init__(self, real_or_cmpl=0, imag=0):
+        if isinstance(real_or_cmpl, float):
+            self.real = real_or_cmpl
+            self.imag = imag
+        else:
+            self.real = real_or_cmpl.real
+            self.imag = real_or_cmpl.imag
 
 
-def make_complex_ctypes(element):
-    class BaseComplex(ctypes.Structure):
-        _fields = [
-            ('real', element),
-            ('imag', element),
-        ]
-
-        def __init__(self, real_or_cmpl=0, imag=0):
-            if isinstance(real_or_cmpl, float):
-                self.real = real_or_cmpl
-                self.imag = imag
-            else:
-                self.real = real_or_cmpl.real
-                self.imag = real_or_cmpl.imag
-
-    return BaseComplex
+class Complex(_BaseComplex):
+    _fields_ = [
+        ('real', ctypes.c_float),
+        ('imag', ctypes.c_float),
+    ]
 
 
-Complex = make_complex_ctypes(ctypes.c_float)
-DoubleComplex = make_complex_ctypes(ctypes.c_double)
+class DoubleComplex(_BaseComplex):
+    _fields_ = [
+        ('real', ctypes.c_double),
+        ('imag', ctypes.c_double),
+    ]
+
 
 INTEGER_TYPE_MAP = {
     types.int8: ctypes.c_int8,
