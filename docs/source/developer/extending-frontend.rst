@@ -9,46 +9,57 @@ Extending the Numba Frontend
    Their description is mostly useful in the context of extending Numba
    withing the Numba codebase.
 
-Concepts
+Overview
 ========
 
-The frontend of Numba analyzes the control flow of a function and performs
-type inference in order to (attempt to) deduce the types of all intermediate
-values in the function and identify points where types must be coerced.
+The frontend of Numba first analyzes the control and data flow of a function.
+It then performs type inference to deduce the types of all intermediate values
+and identify points where types must be coerced. Type inference attempts to
+determine a single specific type for variable. When a variable's type cannot be
+deduced, or it is determined to take on multiple specific types depending on the
+control flow, its type falls back to ``pyobject``.
+
+The frontend must succeed in typing all variables unambiguously (i.e. they must
+not be typed as ``pyobject``) in order for the backend to generate code in
+nopython mode, because the backend uses type information to match appropriate
+code generators with the values they operate on. Extending the frontend
+primarily consists of adding support for new types, to allow variables that hold
+instances of these types to be typed unambiguously.
 
 Numba Types
 -----------
 
-A Numba type is really a category label for values that is used by the back-
-end to match appropriate code generators with the values they operate on. All
-Numba types are instances of classes that inherit from ``numba.types.Type``.
+All Numba types are instances of classes that inherit from ``numba.types.Type``.
 Numba types can be parameterized (for example, arrays and records), in which
-case their Type classes will take constructor arguments defining the
-parameters.  Different instances of a parameterized type usually denote
-distinct types and can trigger different, specialized code generation in the
-backend.
+case their Type classes will take constructor arguments defining the parameters.
+Different instances of a parameterized type usually denote distinct types and
+can trigger different, specialized code generation in the backend.
 
-.. note:: In the rest of this document, when we refer to a "type", we mean the Numba type unless we explicitly write "Python type".
+.. note::
+   In the rest of this document, when we refer to a "type", we mean the
+   Numba type unless we explicitly write "Python type".
 
-Mapping Python Types to Numba Types
------------------------------------
+Type Inference Mechanism
+------------------------
 
-Although the ``@jit`` decorator allows explicit declarations of the Numba
-types in a function signature, sometimes Numba needs to infer the Numba type
-associated with a particular Python type.  If automatic JIT compilation is
-being used, then Numba will determine the types of function arguments from
-the Python values passed as function arguments.  Additionally, if a
-function accesses global variables, Numba types will also be inferred from
-the Python values of those globals.
+Type inference is performed for variables in three cases:
 
-Type Signatures
----------------
+* When automatic JIT compilation is used: the types of function arguments must
+  be deduced from the values passed in.
+* When global variables are accessed: the Numba types of those globals is
+  deduced from their values at the time of compilation.
+* Intermediate values: within a function, the type of every intermediate
+  variable must be deduced.
 
-Once the types of all the externally defined values (function arguments and
-globals) have been specified, the type inference engine needs to propagate
-these types through all of the expressions in the function.
+The types of intermediate values are determined by iteratively propagating type
+information through the data flow graph (DFG). Each iteration propagates type
+information along the edges of the DFG, until convergence is reached. When two
+edges flow into the same node and differing type information is propagated, the
+type of the node is resolved as ``pyobject``.
 
-Numba needs type signatures for:
+In order for the propagation to proceed through functions, operators, and
+attributes, Numba needs to make use of *Type Signatures*, which map input types
+to output types. Numba needs type signatures for:
 
 * Object attributes: This can include the attributes of instances of Python
   classes, or modules.
@@ -60,11 +71,25 @@ Numba needs type signatures for:
   must be registered.
 * Other entities not described in this document, such as builtin functions.
 
+All type inference happens with a *Typing Context*. Each target has its own
+Typing Context - presently there are two, for the CPU and CUDA backends. The
+majority of type signatures are common between these contexts, but the creation
+of a context for each target allows specialisation based on intrinsics or other
+specialised operations and types that a target may support.
 
-Tasks
-=====
+Tutorial
+========
 
-All of the tasks below will work with an example class and function::
+We will extend the Numba frontend to support typing a class that it does not
+currently support by:
+
+* Adding a Numba Type corresponding to the class,
+* Adding the relevant type signatures for a function and an attribute of the
+  class, and
+* Adding a type signature for overloading an elementary operation.
+
+The example will add support for a module named ``interval``, which is assumed
+to be external to Numba and contains the following::
 
     class Interval(object):
         '''A half-open interval on the real number line.'''
@@ -75,75 +100,68 @@ All of the tasks below will work with an example class and function::
         def __repr__(self):
             return 'Interval(%f, %f)' % (self.lo, self.hi)
 
-    # global function
     def valid_interval(interval):
         '''Return True if interval.lo <= interval.hi'''
-        pass  # This is a stub.  We will implement the function in LLVM
-
-
-Organizing Type Signatures with a Registry
-------------------------------------------
-
-If you have a lot of type signatures in a module, it can be cumbersome to make
-type information easily portable between targets. The
-``numba.typing.templates.Registry`` class simplifies this process by
-collecting lists of attribute, global and operator type signatures that can be
-installed into a typing context all at once.
-
-A common pattern in the Numba code is to collect all the type information for
-a particular package into a module that begins with::
-
-    from numba.typing.templates import (AttributeTemplate, ConcreteTemplate,
-                                        signature, Registry)
-
-    registry = Registry()  # A new registry for our new set of types
-    builtin = registry.register
-    builtin_attr = registry.register_attr
-    builtin_global = registry.register_global
-
-Then those three functions are used to record different type signatures in
-the registry (see examples below).  When the registry is fully populated,
-it is installed in the typing context::
-
-    from numba.targets.registry import target_registry
-
-    # Assuming the CPU target
-    target = target_registry['cpu']
-    target.targetdescr.typing_context.install(registry)
-
+        return interval.lo <= interval.hi
 
 Creating a New Numba Type
 -------------------------
 
-To create a new Numba type, subclass ``numba.types.Type`` and make a single
-instance of it::
+Types are defined in the ``numba.types`` module.  To create a new Numba type,
+subclass ``numba.types.Type`` and make a single instance of it::
 
     class IntervalType(numba.types.Type):
         def __init__(self):
             super(IntervalType, self).__init__(name='Interval')
+
     interval_type = IntervalType()
 
-``interval_type`` can now be used to declare argument and return types in
-``@jit`` decorations::
+This enables ``interval_type`` to be used to declare argument and return types
+in ``@jit`` decorations. For example::
 
     @jit(numba.types.bool_(interval_type, numba.types.float32))
     def inside(interval, x):
         return interval.lo <= x < interval.hi
 
-.. note:: The string form of the JIT signature ``@jit("bool_(interval_type, float32)")`` cannot be used in the above example unless ``interval_type`` has been added to the ``numba.types`` module.  This shortcoming will be fixed in a future Numba version.
+Organizing Type Signatures with a Registry
+------------------------------------------
 
+Numba uses a *Registry* (class ``numba.typing.templates.Registry``) to hold
+collections of related type signatures for attributes, globals and operators.
+
+Examples of the use of a Registry can be found
+in ``numba.typing.cmathdecl``, ``numba.typing.npydecl``, and some other modules
+in ``numba.typing``.
+
+For our ``interval`` example, we will create a new Registry. This is overkill
+for a small set of type signatures, but is representative of what would be
+required when adding type signatures for more complicated classes and modules.
+
+We will create the ``numba.typing.intervaldecl`` module and add the following::
+
+    from numba.typing.templates import Registry
+
+    registry = Registry()
+    register = registry.register
+    register_attr = registry.register_attr
+    register_global = registry.register_global
+
+``register``, ``register_attr``, and ``register_global`` may now be used later
+in the module as decorators to record functions that compute the type signatures
+of functions, attributes, and globals, respectively.
 
 Adding an Attribute Value Type Signature
 ----------------------------------------
 
 We can add type signatures for attributes of instances of ``Interval``, so
 that ``lo`` and ``hi`` are recognized as returning ``float32`` types.  This
-requires creating a subclass of ``numba.typing.templates.AttributeTemplate``::
+requires creating a subclass of ``numba.typing.templates.AttributeTemplate``
+(add the following to ``numba.typing.intervaldecl``)::
 
     from numba.types import float32
     from numba.typing.templates import AttributeTemplate
 
-    @builtin_attr
+    @register_attr
     class IntervalAttributes(AttributeTemplate):
         key = interval_type
 
@@ -165,21 +183,17 @@ being accessed, and the name of the attribute.  The return value from
 ``generic_resolve()`` is the type of the value returned by the attribute
 access.
 
-
 Adding a Function Type Signature
 --------------------------------
 
 In order for the Numba type inference engine to recognize the
-``valid_interval`` global function, we need to provide a type signature for
-it.  This is done using a ``numba.typing.templates.ConcreteTemplate``::
+``valid_interval`` global function, we need to provide a function type signature
+for it.  This is done using a ``numba.typing.templates.ConcreteTemplate``. Add
+the following to ``numba.typing.intervaldecl``::
 
     from numba.types import bool_, Function
-    from numba.targets.registry import target_registry
     from numba.typing.templates import ConcreteTemplate, signature
-
-    # Assuming the CPU target
-    target = target_registry['cpu']
-    typing_context = target.targetdescr.typing_context
+    from interval import valid_interval
 
     class ValidIntervalSignature(ConcreteTemplate):
         key = valid_interval
@@ -187,7 +201,7 @@ it.  This is done using a ``numba.typing.templates.ConcreteTemplate``::
             signature(bool_, interval_type)
         ]
 
-    builtin_global(valid_interval, Function(ValidIntervalSignature))
+    register_global(valid_interval, Function(ValidIntervalSignature))
 
 The ``key`` for looking up the function type is the Python function itself,
 ``valid_interval`` in this example.  The ``cases`` attribute lists all of the
@@ -196,19 +210,14 @@ supported function signature combinations.  The first argument to
 the function arguments.  Only positional arguments are supported for function
 types (i.e. no keyword arguments).
 
-
 Overloading Elementary Operations
 ---------------------------------
 
-Suppose we want to add support for a ``+`` operation between two intervals.
-We need to make a ``ConcreteTemplate`` where the key is the string ``"+"``::
+Next, suppose we want to add support for a ``+`` operation between two
+intervals.  We need to make a ``ConcreteTemplate`` where the key is the string
+``"+"``. Add to ``numba.typing.intervaldecl``::
 
-    from numba.targets.registry import target_registry
-    from numba.typing.templates import ConcreteTemplate, signature
-
-    # Assuming the CPU target
-    target = target_registry['cpu']
-    typing_context = target.targetdescr.typing_context
+    from numba.typing.templates import ConcreteTemplate
 
     @builtin
     class AdditionSignature(ConcreteTemplate):
@@ -218,11 +227,13 @@ We need to make a ``ConcreteTemplate`` where the key is the string ``"+"``::
         ]
 
 Several templates with the same key can be inserted, and each will be checked
-for a matching function signatures in the order of insertion. This is what
-allows the same key to be overloaded with different numbers of arguments and
-different argument types.
+for a matching function signatures in the order of insertion. This allows the
+same key to be overloaded with different numbers of arguments and different
+argument types.
 
 The list of special function keys includes:
+
+.. todo:: correct this list
 
 ============    ============
 Key             Description
@@ -250,3 +261,51 @@ These keys come directly from operations in the Numba IR (see :ref:`arch_generat
 In-place operations (like ``a += b``) are assumed to have the same signature
 as the right-hand side of the expanded form (``a = a + b``).
 
+Installing the Registry in a Typing Context
+-------------------------------------------
+
+Once all required type signatures have been added to a Registry, it can then be
+installed into a typing context. In this example, we will make the registry that
+we have created available to all typing contexts, so we will make sure that it
+is installed by modifying ``numba.typing.context.BaseContext``::
+
+    class Context(BaseContext):
+        def init(self):
+            self.install(cmathdecl.registry)
+            self.install(intervaldecl.registry)
+            self.install(mathdecl.registry)
+            self.install(npydecl.registry)
+            self.install(operatordecl.registry)
+
+Note the addition of the installation of ``intervaldecl.registry``.
+
+Enabling Type Inference for Function Arguments and Globals
+----------------------------------------------------------
+
+Numba is infers the types of arguments and global variables, using the
+``BaseContext.resolve_data_type`` method. In order to add support for the
+``Interval`` class, we must first create a function that detects ``Interval``
+instances. Create a new module, ``numba.interval_support``, containing::
+
+    import interval
+
+    def is_interval(typ):
+        return isinstance(typ, interval.Interval)
+
+Then modify the ``BaseContext.get_data_type`` function in
+``numba.typing.context`` so that just before the final ``return`` statement, the
+following check is added::
+
+    if interval_support.is_interval(val):
+        return types.interval_type
+
+and add an import for ``numba.interval_support`` to the top of the file.
+
+Conclusion
+==========
+
+So far we have added support for typing for an attribute, a function, an
+elementary operator, and have added type inference for function arguments and
+globals. However, this does not yet enable any change in the code generated by
+Numba, which requires the addition of backend support for the ``Interval``
+class, described in the next section.
