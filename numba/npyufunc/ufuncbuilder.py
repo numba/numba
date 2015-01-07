@@ -2,15 +2,18 @@
 from __future__ import print_function, division, absolute_import
 import warnings
 import numpy as np
+
 from numba.decorators import jit
 from numba.targets.registry import target_registry
 from numba.targets.options import TargetOptions
 from numba import utils, compiler, types, sigutils
+from numba.numpy_support import as_dtype
 from . import _internal
 from .sigparse import parse_signature
 from .wrappers import build_ufunc_wrapper, build_gufunc_wrapper
 from numba.targets import registry
 from numba import _dynfunc
+
 import llvmlite.llvmpy.core as lc
 
 class UFuncTargetOptions(TargetOptions):
@@ -154,8 +157,8 @@ class UFuncBuilder(object):
         ptr = library.get_pointer_to_function(wrapper.name)
 
         # Get dtypes
-        dtypenums = [np.dtype(a.name).num for a in signature.args]
-        dtypenums.append(np.dtype(signature.return_type.name).num)
+        dtypenums = [as_dtype(a).num for a in signature.args]
+        dtypenums.append(as_dtype(signature.return_type).num)
         return dtypenums, ptr, env
 
 
@@ -248,6 +251,6 @@ class GUFuncBuilder(object):
                 ty = a.dtype
             else:
                 ty = a
-            dtypenums.append(np.dtype(ty.name).num)
+            dtypenums.append(as_dtype(ty).num)
         return dtypenums, ptr, env
 

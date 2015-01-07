@@ -14,7 +14,7 @@ import numpy as np
 
 import numba.unittest_support as unittest
 from numba.typeinfer import TypingError
-from numba import config, jit, npdatetime, types
+from numba import config, jit, npdatetime, types, vectorize
 from .support import TestCase, skip_on_numpy_16
 
 
@@ -174,6 +174,39 @@ class TestModuleHelpers(TestCase):
 
 TD = np.timedelta64
 DT = np.datetime64
+
+
+class TestMiscCompiling(TestCase):
+
+    def test_jit_explicit_signature(self):
+        def _check_explicit_signature(sig):
+            f = jit(sig, nopython=True)(add_usecase)
+            # Just a sanity check
+            args = DT(1, 'ms'), TD(2, 'us')
+            expected = add_usecase(*args)
+            self.assertPreciseEqual(f(*args), expected)
+
+        # Test passing the signature in object form
+        sig = types.NPDatetime('us')(types.NPDatetime('ms'), types.NPTimedelta('us'))
+        _check_explicit_signature(sig)
+        # Same with the signature in string form
+        sig = "NPDatetime('us')(NPDatetime('ms'), NPTimedelta('us'))"
+        _check_explicit_signature(sig)
+
+    def test_vectorize_explicit_signature(self):
+        def _check_explicit_signature(sig):
+            f = vectorize([sig], nopython=True)(mul_usecase)
+            # This isn't really right but we can't do better than this,
+            # since Numpy's ufuncs don't store the metadata of return types.
+            # Related to https://github.com/numpy/numpy/issues/5429
+            self.assertPreciseEqual(f(TD(2), 3), TD(6))
+
+        # Test passing the signature in object form (issue #917)
+        sig = types.NPTimedelta('s')(types.NPTimedelta('s'), types.int64)
+        _check_explicit_signature(sig)
+        # Same with the signature in string form
+        sig = "NPTimedelta('s')(NPTimedelta('s'), int64)"
+        _check_explicit_signature(sig)
 
 
 @skip_on_numpy_16

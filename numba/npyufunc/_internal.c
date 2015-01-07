@@ -39,8 +39,8 @@ dyn_dealloc(PyDynUFuncObject *self)
         PyArray_free(ufunc->types);
     if (ufunc->data)
         PyArray_free(ufunc->data);
-    /* Py_TYPE(self)->tp_base->tp_dealloc((PyObject *)self); */
     Py_DECREF(ufunc);
+    Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
 static PyObject *
