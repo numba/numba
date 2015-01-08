@@ -68,6 +68,11 @@ by Numba.
    necessary, it is recommended to let Numba infer argument types by using
    the :ref:`signature-less variant of @jit <jit-lazy>`.
 
+.. A word of note: I only documented those types that can be genuinely
+   useful to users, i.e. types that can be passed as parameters to a JIT
+   function.  Other types such as tuple are only usable in type inference.
+
+
 Numpy scalars
 -------------
 
@@ -81,6 +86,22 @@ programmatically.
       >>> struct_dtype = np.dtype([('row', np.float64), ('col', np.float64)])
       >>> numba.from_dtype(struct_dtype)
       Record([('row', '<f8'), ('col', '<f8')])
+
+.. class:: numba.types.NPDatetime(unit)
+
+   Create a Numba type for Numpy datetimes of the given *unit*.  *unit*
+   should be a string amongst the codes recognized by Numpy (e.g.
+   ``Y``, ``M``, ``D``, etc.).
+
+.. class:: numba.types.NPTimedelta(unit)
+
+   Create a Numba type for Numpy timedeltas of the given *unit*.  *unit*
+   should be a string amongst the codes recognized by Numpy (e.g.
+   ``Y``, ``M``, ``D``, etc.).
+
+   .. seealso::
+      Numpy `datetime units <http://docs.scipy.org/doc/numpy/reference/arrays.datetime.html#datetime-units>`_.
+
 
 Arrays
 ------
@@ -111,6 +132,3 @@ Optional types
       True
       >>> f(None)
       False
-
-
-.. todo:: finish this
