@@ -123,7 +123,8 @@ class CudaGUFuncVectorize(object):
 
         kernel = CUDAKernel(llvm_module=library._final_module,
                             name=wrapper.name,
-                            argtypes=outertys, link=(), debug=False)
+                            pretty_name="cudagufunc." + cres.fndesc.qualname,
+                            argtypes=outertys, link=(), debug=False,)
 
         dtypes = tuple(numpy.dtype(str(t.dtype)) for t in outertys)
         self.kernelmap[tuple(dtypes[:-1])] = dtypes[-1], kernel
