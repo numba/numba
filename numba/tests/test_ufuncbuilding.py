@@ -1,8 +1,13 @@
 from __future__ import print_function, absolute_import, division
+
+import sys
+
 import numpy
+
 from numba import unittest_support as unittest
 from numba.npyufunc.ufuncbuilder import UFuncBuilder, GUFuncBuilder
 from numba import vectorize, guvectorize
+from . import support
 
 
 def add(a, b):
@@ -34,6 +39,14 @@ def guadd_obj(a, b, c):
 class MyException(Exception):
     pass
 
+
+def raise_inner():
+    raise MyException("I'm here")
+
+def uerror(x):
+    if x == 2:
+        raise_inner()
+    return x + 1
 
 def guerror(a, b, c):
     raise MyException
@@ -142,6 +155,23 @@ class TestVectorizeDecor(unittest.TestCase):
         r = ufunc(a,a)
         self.assertTrue(numpy.all(r))
         self.assertEqual(r.dtype, numpy.dtype('bool_'))
+
+    def test_vectorize_error_in_objectmode(self):
+        # An exception raised inside an object mode @vectorized function
+        # is printed out and ignored.
+        ufunc = vectorize(['int32(int32)'], forceobj=True)(uerror)
+        a = numpy.arange(4, dtype='int32')
+        b = numpy.zeros_like(a)
+        with support.captured_stderr() as err:
+            ufunc(a, out=b)
+        err = err.getvalue()
+        if sys.version_info >= (3, 4):
+            self.assertIn("Exception ignored in: 'object mode ufunc'", err)
+            self.assertIn("MyException: I'm here", err)
+        else:
+            self.assertRegexpMatches(err, r"Exception [^\n]* in 'object mode ufunc' ignored")
+            self.assertIn("I'm here", err)
+        self.assertTrue(numpy.all(b == numpy.array([1, 2, 0, 4])))
 
     def test_guvectorize(self):
         ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
