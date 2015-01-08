@@ -12,12 +12,12 @@ source:
 requirements:
   build:
     - python
-    - numba
+    - numba >=0.16
     - numpy
   run:
     - python
     - numpy
-    - numba
+    - numba >=0.16
     - cudatoolkit
     - numbapro_cudalib
 
