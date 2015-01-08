@@ -169,6 +169,13 @@ class BaseContext(object):
         name = "CallTemplate(%s)" % fndesc.mangled_name
         self.users[func] = type(name, baseclses, glbls)
 
+    def add_user_function(self, func, fndesc, libs=()):
+        if func not in self.users:
+            msg = "{func} is not a registered user function"
+            raise KeyError(msg.format(func=func))
+        imp = user_function(func, fndesc, libs)
+        self.defns[func].append(imp)
+
     def insert_class(self, cls, attrs):
         clsty = types.Object(cls)
         for name, vtype in utils.iteritems(attrs):
