@@ -41,8 +41,6 @@ cleaner_dealloc(PyUFuncCleaner *self)
         PyArray_free(ufunc->types);
     if (ufunc->data)
         PyArray_free(ufunc->data);
-    free((char *) ufunc->name);
-    free((char *) ufunc->doc);
     PyObject_Del(self);
 }
 

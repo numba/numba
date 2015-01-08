@@ -3,7 +3,7 @@
 #include "_internal.h"
 
 static int
-dup_string(PyObject *obj, char **s, const char *type_error_message)
+get_string(PyObject *obj, char **s, const char *type_error_message)
 {
     *s = NULL;
     if (!PyString_Check(obj) && obj != Py_None) {
@@ -14,11 +14,6 @@ dup_string(PyObject *obj, char **s, const char *type_error_message)
         *s = PyString_AsString(obj);
         if (!*s)
             return -1;
-        *s = strdup(*s);
-        if (!*s) {
-            PyErr_NoMemory();
-            return -1;
-        }
     }
     return 0;
 }
@@ -35,7 +30,7 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args)
     PyObject *func_obj;
     PyObject *type_obj;
     PyObject *data_obj;
-    PyObject *object = NULL; /* object to hold on to while ufunc is alive */
+    PyObject *object; /* object to hold on to while ufunc is alive */
     PyObject *pyname, *pydoc;
     char *name = NULL, *doc = NULL;
     char *signature = NULL;
@@ -55,12 +50,14 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args)
                           &object, &signature)) {
         return NULL;
     }
-    if (dup_string(pyname, &name, "name should be str or None"))
+    if (get_string(pyname, &name, "name should be str or None"))
         return NULL;
-    if (dup_string(pydoc, &doc, "doc should be str or None")) {
-        free(name);
+    if (get_string(pydoc, &doc, "doc should be str or None"))
         return NULL;
-    }
+    /* Ensure the pointers to C strings stay alive until the ufunc dies. */
+    object = PyTuple_Pack(3, object, pyname, pydoc);
+    if (!object)
+        return NULL;
 
     nfuncs = PyList_Size(func_list);
 
@@ -197,11 +194,11 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args)
         PyArray_free(funcs);
         PyArray_free(types);
         PyArray_free(data);
-        free(doc);
-        free(name);
         Py_DECREF(ufunc);
         return NULL;
     }
+    /* Don't own it anymore */
+    Py_DECREF(object);
 
     return (PyObject *) ufunc;
 }
