@@ -77,7 +77,8 @@ ext_typeconv = Extension(name="numba.typeconv._typeconv",
 ext_npyufunc_ufunc = Extension(name="numba.npyufunc._internal",
                                sources=["numba/npyufunc/_internal.c"],
                                include_dirs=[numpy.get_include()],
-                               depends=["numba/npyufunc/_internal.h",
+                               depends=["numba/npyufunc/_ufunc.c",
+                                        "numba/npyufunc/_internal.h",
                                         "numba/_pymodule.h"])
 
 ext_mviewbuf = Extension(name='numba.mviewbuf',
