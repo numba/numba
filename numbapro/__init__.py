@@ -3,8 +3,20 @@ from ._version import get_versions
 __version__ = get_versions()['version']
 del get_versions
 
+import warnings
+import re
 import numba
 from numba import *
+
+# Numba version checking
+m = re.match(r"(\d+)\.(\d+)\.(\d+)", numba.__version__)
+NUMBA_VERSION_REQ = (0, 16, 0)
+if tuple(map(int, m.groups())) < NUMBA_VERSION_REQ:
+    warnings.showwarning(
+        "Numba version too old; expecting %d.%d.%d" % NUMBA_VERSION_REQ,
+        ImportWarning, __name__, 1)
+del m
+
 import numbapro._cuda    # import time sideeffect
 from numbapro.decorators import autojit, jit
 from numbapro.vectorizers import vectorize, guvectorize
