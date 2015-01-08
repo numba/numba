@@ -190,6 +190,7 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args)
     /* Create the sentinel object to clean up dynamically-allocated fields
        when the ufunc is destroyed. */
     ufunc->obj = cleaner_new(ufunc, object);
+    Py_DECREF(object);
     if (!ufunc->obj) {
         PyArray_free(funcs);
         PyArray_free(types);
@@ -197,8 +198,6 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args)
         Py_DECREF(ufunc);
         return NULL;
     }
-    /* Don't own it anymore */
-    Py_DECREF(object);
 
     return (PyObject *) ufunc;
 }
