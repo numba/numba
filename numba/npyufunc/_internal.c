@@ -35,16 +35,14 @@ cleaner_dealloc(PyUFuncCleaner *self)
 {
     PyUFuncObject *ufunc = self->ufunc;
     Py_XDECREF(self->object);
-    if (ufunc) {
-        if (ufunc->functions)
-            PyArray_free(ufunc->functions);
-        if (ufunc->types)
-            PyArray_free(ufunc->types);
-        if (ufunc->data)
-            PyArray_free(ufunc->data);
-        free((char *) ufunc->name);
-        free((char *) ufunc->doc);
-    }
+    if (ufunc->functions)
+        PyArray_free(ufunc->functions);
+    if (ufunc->types)
+        PyArray_free(ufunc->types);
+    if (ufunc->data)
+        PyArray_free(ufunc->data);
+    free((char *) ufunc->name);
+    free((char *) ufunc->doc);
     PyObject_Del(self);
 }
 
