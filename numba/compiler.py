@@ -127,7 +127,7 @@ class _CompileStatus(object):
         return ', '.join(vals)
 
 
-class _EarlyPipelineCompletion(BaseException):
+class _EarlyPipelineCompletion(Exception):
     def __init__(self, result):
         self.result = result
 
