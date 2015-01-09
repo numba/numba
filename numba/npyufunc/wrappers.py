@@ -23,6 +23,10 @@ def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
     if out.byref:
         retval = builder.load(retval)
 
+    if not cgutils.is_struct(retval.type):
+        retval = context.get_value_as_argument(builder, signature.return_type,
+                                               retval)
+
     store(retval)
 
     # increment indices

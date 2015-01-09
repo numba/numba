@@ -150,16 +150,18 @@ class CPUContext(BaseContext):
             # (nopython functions).
             env = lc.Constant.null(PYOBJECT)
         retty = callee.args[0].type.pointee
-        retval = cgutils.alloca_once(builder, retty)
+        retvaltmp = cgutils.alloca_once(builder, retty)
         # initialize return value to zeros
-        builder.store(lc.Constant.null(retty), retval)
+        builder.store(lc.Constant.null(retty), retvaltmp)
 
         args = [self.get_value_as_argument(builder, ty, arg)
                 for ty, arg in zip(argtys, args)]
-        realargs = [retval, env] + list(args)
+        realargs = [retvaltmp, env] + list(args)
         code = builder.call(callee, realargs)
         status = self.get_return_status(builder, code)
-        return status, builder.load(retval)
+        retval = builder.load(retvaltmp)
+        out = self.get_returned_value(builder, resty, retval)
+        return status, out
 
     def get_env_from_closure(self, builder, clo):
         """
