@@ -6,6 +6,7 @@ import numpy as np
 from numba import jit, numpy_support, types
 from numba import unittest_support as unittest
 from numba.compiler import compile_isolated
+from numba.lowering import transform_arg_name
 from numba.utils import IS_PY3
 
 
@@ -119,6 +120,8 @@ recordtype = np.dtype([('a', np.float64),
 recordtype2 = np.dtype([('e', np.int32),
                         ('f', np.float64)])
 
+recordtype3 = np.dtype([('first', np.float32),
+                        ('second', np.float64)])
 
 class TestRecordDtype(unittest.TestCase):
 
@@ -384,6 +387,31 @@ class TestRecordDtype(unittest.TestCase):
             del res
             # Check for potential leaks
             self.assertEqual(sys.getrefcount(nbary), old_refcnt)
+
+    def test_record_arg_transform(self):
+        """
+        Testing that transforming the name of a record type argument to a
+        function does not result in the fields of the record being used to
+        uniquely identify them, and that no other condition results in the
+        transformed name being excessively long.
+        """
+        rec = numpy_support.from_dtype(recordtype3)
+        transformed = transform_arg_name(rec)
+        self.assertNotIn('first', transformed)
+        self.assertNotIn('second', transformed)
+        # len(transformed) is generally 10, but could be longer if a large
+        # number of typecodes are in use. Checking <16 should provide enough
+        # tolerance.
+        self.assertLess(len(transformed), 16)
+
+        struct_arr = types.Array(rec, 1, 'C')
+        transformed = transform_arg_name(struct_arr)
+        self.assertIn('array', transformed)
+        self.assertNotIn('first', transformed)
+        self.assertNotIn('second', transformed)
+        # Length is usually 34 - 5 chars tolerance as above.
+        self.assertLess(len(transformed), 40)
+
 
 def _get_cfunc_nopython(pyfunc, argspec):
     return jit(argspec, nopython=True)(pyfunc)

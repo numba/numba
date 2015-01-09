@@ -9,6 +9,7 @@ from numba import typing, types, cgutils
 from numba.utils import cached_property
 from numba.targets.base import BaseContext
 from numba.targets.callconv import MinimalCallConv
+from numba.lowering import transform_arg_name
 from .cudadrv import nvvm
 from . import codegen, nvvmutils
 
@@ -63,7 +64,7 @@ class CUDATargetContext(BaseContext):
             ch = m.group(0)
             return "_%X_" % ord(ch)
 
-        qualified = name + '.' + '.'.join(str(a) for a in argtypes)
+        qualified = name + '.' + '.'.join(transform_arg_name(a) for a in argtypes)
         mangled = VALID_CHARS.sub(repl, qualified)
         return mangled
 
