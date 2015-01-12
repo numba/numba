@@ -103,7 +103,7 @@ JIT functions
 Vectorized functions (ufuncs)
 -----------------------------
 
-.. decorator:: numba.vectorize(signatures, *, nopython=True, forceobj=False, locals={})
+.. decorator:: numba.vectorize(signatures, *, identity=None, nopython=True, forceobj=False, locals={})
 
    Compile the decorated function on-the-fly and wrap it as a
    `Numpy ufunc`_.  The optional *nopython*, *forceobj* and
@@ -111,6 +111,13 @@ Vectorized functions (ufuncs)
 
    *signatures* is a mandatory list of signatures expressed in the same
    form as in the :func:`numba.jit` *signature* argument.
+
+   *identity* is the identity (or unit) value of the function being
+   implemented.  Possible values are 0, 1, :const:`None`, and the string
+   ``"reorderable"``.  The default is :const:`None`.  Both :const:`None` and
+   ``"reorderable"`` mean the function has no identity value;
+   ``"reorderable"`` additionally specifies that reductions along multiple
+   axes can be reordered.
 
    If there are several *signatures*, they must be ordered from the more
    specific to the least specific.  Otherwise, Numpy's type-based
@@ -128,7 +135,7 @@ Vectorized functions (ufuncs)
       def f(x): ...
 
 
-.. decorator:: numba.guvectorize(signatures, layout, *, nopython=True, forceobj=False, locals={})
+.. decorator:: numba.guvectorize(signatures, layout, *, identity=None, nopython=True, forceobj=False, locals={})
 
    Generalized version of :func:`numba.vectorize`.  While
    :func:`numba.vectorize` will produce a simple ufunc whose core
