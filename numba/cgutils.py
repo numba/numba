@@ -115,6 +115,19 @@ class Structure(object):
                                                       self._typemap[index],
                                                       value)
         if ptr.type.pointee != value.type:
+            dstty = ptr.type.pointee
+            srcty = value.type
+            is_differ_by_addrspace = (is_pointer(dstty) and is_pointer(srcty)
+                                      and dstty.pointee == srcty.pointee)
+            if is_differ_by_addrspace:
+                genaddrspace = self._context.generic_addrspace
+                if dstty.addrspace == genaddrspace:
+                    # Is storing to generic addrspace
+                    asgen = self._context.addrspacecast(self._builder, value,
+                                                        genaddrspace)
+                    self._builder.store(asgen, ptr)
+                    return
+
             raise AssertionError("Type mismatch: __setitem__(%d, ...) "
                                  "expected %r but got %r"
                                  % (index, str(ptr.type.pointee), str(value.type)))
