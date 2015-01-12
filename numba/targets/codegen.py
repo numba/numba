@@ -147,7 +147,7 @@ class CodeLibrary(object):
         return self._final_module.get_function(name)
 
     def _link_in(self, lib):
-        return self._final_module.link_in(lib.final_module, preserve=True)
+        return self._final_module.link_in(lib._final_module, preserve=True)
 
 
 class AOTCodeLibrary(CodeLibrary):
