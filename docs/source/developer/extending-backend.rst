@@ -7,7 +7,9 @@ Extending the Numba backend
 Helper Lib
 ----------
 
-``numba/_helperlib.c`` addition of struct and adapter function::
+``numba/_helperlib.c`` addition of struct and adapter function:
+
+.. code-block:: c
 
     typedef struct {
         double lo;
@@ -24,7 +26,9 @@ Helper Lib
         return 0;
     }
 
-Building C Helpers dict::
+Building C Helpers dict:
+
+.. code-block:: c
 
     static PyObject *
     build_c_helpers_dict(void)
