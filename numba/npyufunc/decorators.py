@@ -1,37 +1,46 @@
 from __future__ import print_function, division, absolute_import
+
+from . import _internal
 from .ufuncbuilder import UFuncBuilder, GUFuncBuilder
 
 from numba.targets.registry import TargetRegistry
 
 
-class Vectorize(object):
+class _BaseVectorize(object):
+
+    @classmethod
+    def get_identity(cls, kwargs):
+        return kwargs.pop('identity', None)
+
+    @classmethod
+    def get_target_implementation(cls, kwargs):
+        target = kwargs.pop('target', 'cpu')
+        try:
+            return cls.target_registry[target]
+        except KeyError:
+            raise ValueError("Unsupported target: %s" % target)
+
+
+class Vectorize(_BaseVectorize):
     target_registry = TargetRegistry({'cpu': UFuncBuilder})
 
     def __new__(cls, func, **kws):
-        target = kws.pop('target', 'cpu')
-        try:
-            imp = cls.target_registry[target]
-        except KeyError:
-            raise ValueError("Unsupported target: %s" % target)
-
-        return imp(func, kws)
+        identity = cls.get_identity(kws)
+        imp = cls.get_target_implementation(kws)
+        return imp(func, identity, kws)
 
 
-class GUVectorize(object):
+class GUVectorize(_BaseVectorize):
     target_registry = TargetRegistry({'cpu': GUFuncBuilder})
 
     def __new__(cls, func, signature, **kws):
-        target = kws.pop('target', 'cpu')
-        try:
-            imp = cls.target_registry[target]
-        except KeyError:
-            raise ValueError("Unsupported target: %s" % target)
-
-        return imp(func, signature, kws)
+        identity = cls.get_identity(kws)
+        imp = cls.get_target_implementation(kws)
+        return imp(func, signature, identity, kws)
 
 
 def vectorize(ftylist, **kws):
-    """vectorize(ftylist[, target='cpu', [**kws]])
+    """vectorize(ftylist, target='cpu', identity=None, **kws)
 
     A decorator to create numpy ufunc object from Numba compiled code.
 
@@ -45,6 +54,11 @@ def vectorize(ftylist, **kws):
     target: str
             A string for code generation target.  Default to "cpu".
 
+    identity: int, str, or None
+        The identity (or unit) value for the element-wise function
+        being implemented.  Allowed values are None (the default), 0, 1,
+        and "reorderable".
+
     Returns
     --------
 
@@ -53,7 +67,7 @@ def vectorize(ftylist, **kws):
     Example
     -------
         @vectorize(['float32(float32, float32)',
-                    'float64(float64, float64)'])
+                    'float64(float64, float64)'], identity=1)
         def sum(a, b):
             return a + b
 
@@ -72,7 +86,7 @@ def vectorize(ftylist, **kws):
 
 
 def guvectorize(ftylist, signature, **kws):
-    """guvectorize(ftylist, signature, [, target='cpu', [**kws]])
+    """guvectorize(ftylist, signature, target='cpu', identity=None, **kws)
 
     A decorator to create numpy generialized-ufunc object from Numba compiled
     code.
@@ -84,10 +98,14 @@ def guvectorize(ftylist, signature, **kws):
         function type object or a string describing the
         function type.
 
-
     signature: str
         A NumPy generialized-ufunc signature.
         e.g. "(m, n), (n, p)->(m, p)"
+
+    identity: int, str, or None
+        The identity (or unit) value for the element-wise function
+        being implemented.  Allowed values are None (the default), 0, 1,
+        and "reorderable".
 
     target: str
             A string for code generation target.  Defaults to "cpu".
