@@ -485,8 +485,15 @@ def generic_homog(self, args, kws):
     assert not kws
     return signature(self.this.dtype, recvr=self.this)
 
+def generic_expand(self, args, kws):
+    if isinstance(self.this.dtype, types.Integer):
+        if self.this.dtype.signed:
+            return signature(types.int64, recvr=self.this)
+        else:
+            return signature(types.uint64, recvr=self.this)
+    return signature(self.this.dtype, recvr=self.this)
 
-def generic_hetero(self, args, kws):
+def generic_hetero_real(self, args, kws):
     assert not args
     assert not kws
     if self.this.dtype in types.integer_domain:
@@ -508,14 +515,18 @@ def install_array_method(name, generic):
     setattr(ArrayAttribute, "resolve_" + name, array_attribute_attachment)
 
 # Functions that return the same type as the array
-for fName in ["sum", "prod", "min", "max"]:
-    install_array_method(fName, generic_homog)
+for fname in ["min", "max"]:
+    install_array_method(fname, generic_homog)
+
+# Functions that return a type as large as possible, to avoid overflows
+for fname in ["sum", "prod"]:
+    install_array_method(fname, generic_expand)
 
 # Functions that require integer arrays get promoted to float64 return
 for fName in ["mean", "var", "std"]:
-    install_array_method(fName, generic_hetero)
+    install_array_method(fName, generic_hetero_real)
 
-# Functions that return an index (int64)
+# Functions that return an index (intp)
 install_array_method("argmin", generic_index)
 install_array_method("argmax", generic_index)
 

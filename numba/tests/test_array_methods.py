@@ -284,6 +284,41 @@ class TestArrayMethods(TestCase):
 
         np.testing.assert_allclose(np.prod(arr), cfunc(arr))
 
+    def check_aggregation_magnitude(self, pyfunc):
+        """
+        Check that integer overflows are avoided (issue #931).
+        """
+        # Overflows are always avoided here (ints are cast either to int64
+        # or float64).
+        arr = np.arange(10, dtype='int16') + 60000
+        npr, nbr = run_comparative(pyfunc, arr)
+        self.assertPreciseEqual(npr, nbr)
+        # Overflows are avoided for functions returning floats here.
+        arr = np.arange(10, dtype='int64') + 2**63
+        npr, nbr = run_comparative(pyfunc, arr)
+        self.assertPreciseEqual(npr, nbr)
+
+    def test_sum_magnitude(self):
+        self.check_aggregation_magnitude(array_sum)
+        self.check_aggregation_magnitude(array_sum_global)
+
+    def test_prod_magnitude(self):
+        self.check_aggregation_magnitude(array_prod)
+        self.check_aggregation_magnitude(array_prod_global)
+
+    def test_mean_magnitude(self):
+        self.check_aggregation_magnitude(array_mean)
+        self.check_aggregation_magnitude(array_mean_global)
+
+    def test_var_magnitude(self):
+        self.check_aggregation_magnitude(array_var)
+        self.check_aggregation_magnitude(array_var_global)
+
+    def test_std_magnitude(self):
+        self.check_aggregation_magnitude(array_std)
+        self.check_aggregation_magnitude(array_std_global)
+
+
 # These form a testing product where each of the combinations are tested
 reduction_funcs = [array_sum, array_sum_global,
                    array_prod, array_prod_global,
