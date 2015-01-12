@@ -1,33 +1,42 @@
 from __future__ import print_function, division, absolute_import
+
+from . import _internal
 from .ufuncbuilder import UFuncBuilder, GUFuncBuilder
 
 from numba.targets.registry import TargetRegistry
 
 
-class Vectorize(object):
+class _BaseVectorize(object):
+
+    @classmethod
+    def get_identity(cls, kwargs):
+        return kwargs.pop('identity', None)
+
+    @classmethod
+    def get_target_implementation(cls, kwargs):
+        target = kwargs.pop('target', 'cpu')
+        try:
+            return cls.target_registry[target]
+        except KeyError:
+            raise ValueError("Unsupported target: %s" % target)
+
+
+class Vectorize(_BaseVectorize):
     target_registry = TargetRegistry({'cpu': UFuncBuilder})
 
     def __new__(cls, func, **kws):
-        target = kws.pop('target', 'cpu')
-        try:
-            imp = cls.target_registry[target]
-        except KeyError:
-            raise ValueError("Unsupported target: %s" % target)
-
-        return imp(func, kws)
+        identity = cls.get_identity(kws)
+        imp = cls.get_target_implementation(kws)
+        return imp(func, identity, kws)
 
 
-class GUVectorize(object):
+class GUVectorize(_BaseVectorize):
     target_registry = TargetRegistry({'cpu': GUFuncBuilder})
 
     def __new__(cls, func, signature, **kws):
-        target = kws.pop('target', 'cpu')
-        try:
-            imp = cls.target_registry[target]
-        except KeyError:
-            raise ValueError("Unsupported target: %s" % target)
-
-        return imp(func, signature, kws)
+        identity = cls.get_identity(kws)
+        imp = cls.get_target_implementation(kws)
+        return imp(func, signature, identity, kws)
 
 
 def vectorize(ftylist, **kws):
