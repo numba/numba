@@ -1,16 +1,27 @@
 from __future__ import print_function, absolute_import, division
 from numba import sigutils, types
-from .compiler import compile_kernel, compile_device
+from .compiler import compile_kernel, compile_device, AutoJitHSAKernel
 
 
 def jit(signature, device=False):
     """JIT compile a python function conforming to
     the HSA-Python
     """
-    if device:
-        return _device_jit(signature)
+    if not sigutils.is_signature(signature):
+        func = signature
+        return autojit(device=device)(func)
     else:
-        return _kernel_jit(signature)
+        if device:
+            return _device_jit(signature)
+        else:
+            return _kernel_jit(signature)
+
+
+def autojit(device=False):
+    if device:
+        return _device_autojit
+    else:
+        return _kernel_autojit
 
 
 def _device_jit(signature):
@@ -32,4 +43,14 @@ def _kernel_jit(signature):
         return compile_kernel(pyfunc, argtypes)
 
     return _wrapped
+
+
+def _device_autojit(pyfunc):
+    raise NotImplementedError
+
+
+def _kernel_autojit(pyfunc):
+    return AutoJitHSAKernel(pyfunc)
+
+
 

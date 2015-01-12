@@ -35,6 +35,18 @@ class TestDecorators(unittest.TestCase):
         outer[10, 1](dst, src)
         np.testing.assert_equal(dst, src)
 
+    def test_autojit_kernel(self):
+        @hsa.jit
+        def copy_vector(dst, src):
+            tid = hsa.get_global_id(0)
+            if tid < dst.size:
+                dst[tid] = src[tid]
+
+        src = np.arange(10, dtype=np.uint32)
+        dst = np.zeros_like(src)
+        copy_vector[10, 1](dst, src)
+        np.testing.assert_equal(dst, src)
+        
 
 if __name__ == '__main__':
     unittest.main()

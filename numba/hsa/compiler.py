@@ -300,4 +300,27 @@ COMPLEX_TYPE_MAP = {
 }
 
 
+class AutoJitHSAKernel(HSAKernelBase):
+    def __init__(self, func):
+        super(AutoJitHSAKernel, self).__init__()
+        self.py_func = func
+        self.definitions = {}
+
+        from .descriptor import HSATargetDesc
+
+        self.typingctx = HSATargetDesc.typingctx
+
+    def __call__(self, *args):
+        kernel = self.specialize(*args)
+        cfg = kernel[self.global_size, self.local_size, self.stream]
+        cfg(*args)
+
+    def specialize(self, *args):
+        argtypes = tuple([self.typingctx.resolve_argument_type(a)
+                          for a in args])
+        kernel = self.definitions.get(argtypes)
+        if kernel is None:
+            kernel = compile_kernel(self.py_func, argtypes)
+            self.definitions[argtypes] = kernel
+        return kernel
 
