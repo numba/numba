@@ -573,6 +573,13 @@ class BaseContext(object):
             return builder.load(val)
         return val
 
+    def get_returned_value(self, builder, ty, val):
+        """
+        Return value representation to local value representation
+        """
+        # Same as get_argument_value
+        return self.get_argument_value(builder, ty, val)
+
     def get_return_value(self, builder, ty, val):
         """
         Local value representation to return type representation
@@ -853,15 +860,17 @@ class BaseContext(object):
         """
         assert env is None
         retty = callee.args[0].type.pointee
-        retval = cgutils.alloca_once(builder, retty)
+        retvaltmp = cgutils.alloca_once(builder, retty)
         # initialize return value
-        builder.store(lc.Constant.null(retty), retval)
+        builder.store(lc.Constant.null(retty), retvaltmp)
         args = [self.get_value_as_argument(builder, ty, arg)
                 for ty, arg in zip(argtys, args)]
-        realargs = [retval] + list(args)
+        realargs = [retvaltmp] + list(args)
         code = builder.call(callee, realargs)
         status = self.get_return_status(builder, code)
-        return status, builder.load(retval)
+        retval = builder.load(retvaltmp)
+        out = self.get_returned_value(builder, resty, retval)
+        return status, out
 
     def call_external_function(self, builder, callee, argtys, args):
         args = [self.get_value_as_argument(builder, ty, arg)

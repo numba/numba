@@ -10,21 +10,7 @@
 #include "numpy/ndarrayobject.h"
 #include "numpy/ufuncobject.h"
 
-typedef struct {
-    PyUFuncObject ufunc;
-    PyUFuncObject *ufunc_original;
-    PyObject *dispatcher;
-} PyDynUFuncObject;
-
-extern PyTypeObject PyDynUFunc_Type;
-
 extern PyObject *ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args);
-
-extern PyObject * ufunc_fromfuncsig(PyObject *NPY_UNUSED(dummy),
-                                    PyObject *args);
-
-PyObject *
-PyDynUFunc_New(PyUFuncObject *ufunc, PyObject *dispatcher);
 
 int PyUFunc_GeneralizedFunction(PyUFuncObject *ufunc,
                                 PyObject *args, PyObject *kwds,

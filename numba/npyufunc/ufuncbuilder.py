@@ -130,7 +130,8 @@ class UFuncBuilder(object):
         # For instance, -1 for typenum will cause segfault.
         # If elements of type-list (2nd arg) is tuple instead,
         # there will also memory corruption. (Seems like code rewrite.)
-        ufunc = _internal.fromfunc(ptrlist, dtypelist, inct, outct, datlist,
+        ufunc = _internal.fromfunc(self.py_func.__name__, self.py_func.__doc__,
+                                   ptrlist, dtypelist, inct, outct, datlist,
                                    keepalive)
 
         return ufunc
@@ -225,8 +226,9 @@ class GUFuncBuilder(object):
         outct = len(self.sout)
 
         # Pass envs to fromfuncsig to bind to the lifetime of the ufunc object
-        ufunc = _internal.fromfuncsig(ptrlist, dtypelist, inct, outct, datlist,
-                                      self.signature, keepalive)
+        ufunc = _internal.fromfunc(self.py_func.__name__, self.py_func.__doc__,
+                                   ptrlist, dtypelist, inct, outct, datlist,
+                                   keepalive, self.signature)
         return ufunc
 
     def build(self, cres):
