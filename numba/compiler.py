@@ -4,7 +4,6 @@ from contextlib import contextmanager
 from collections import namedtuple, defaultdict
 import warnings
 import inspect
-from llvmlite import binding as ll
 
 from numba import (bytecode, interpreter, typing, typeinfer, lowering,
                    objmode, irpasses, utils, config, type_annotations,
@@ -31,7 +30,7 @@ class Flags(utils.ConfigOptions):
         'boundcheck',
         'forceinline',
         'no_cpython_wrapper',
-        ])
+    ])
 
 
 DEFAULT_FLAGS = Flags()
@@ -53,7 +52,7 @@ CR_FIELDS = ["typing_context",
 
 CompileResult = namedtuple("CompileResult", CR_FIELDS)
 FunctionAttributes = namedtuple("FunctionAttributes",
-    ['name', 'filename', 'lineno'])
+                                ['name', 'filename', 'lineno'])
 DEFAULT_FUNCTION_ATTRIBUTES = FunctionAttributes('<anonymous>', '<unknown>', 0)
 
 
@@ -131,54 +130,65 @@ class _CompileStatus(object):
         return ', '.join(vals)
 
 
-class _StageResult(object):
-    def __init__(self, stage, ok, result=None, exception=None,
-                 early_escape=False):
-        self.stage = stage
-        self.ok = ok
-        self.early_escape = early_escape
-        self._result = result
-        self._exception = exception
-
-    @property
-    def result(self):
-        assert self.ok
-        return self._result
-
-    @property
-    def exception(self):
-        assert not self.ok
-        return self._exception
-
-
-class _EarlyEscape(BaseException):
+class _EarlyPipelineCompletion(Exception):
     def __init__(self, result):
         self.result = result
 
 
-class _Stage(object):
-    def __init__(self, func, msg):
-        self.func = func
-        self.msg = msg
+class _PipelineManager(object):
+    def __init__(self):
+        self.pipeline_order = []
+        self.pipeline_stages = {}
+        self._finalized = False
 
-    def __call__(self):
-        try:
-            res = self.func()
-        except _EarlyEscape as e:
-            return _StageResult(self, ok=True, result=e.result,
-                               early_escape=True)
-        except BaseException as e:
-            return _StageResult(self, ok=False, exception=e)
-        else:
-            return _StageResult(self, ok=True, result=res)
+    def create_pipeline(self, pipeline_name):
+        assert not self._finalized, "Pipelines can no longer be added"
+        self.pipeline_order.append(pipeline_name)
+        self.pipeline_stages[pipeline_name] = []
+        self.current = pipeline_name
 
+    def add_stage(self, stage_function, stage_description):
+        assert not self._finalized, "Stages can no longer be added."
+        current_pipeline_name = self.pipeline_order[-1]
+        func_desc_tuple = (stage_function, stage_description)
+        self.pipeline_stages[current_pipeline_name].append(func_desc_tuple)
 
-def _raise_error(desc, exc):
-    """Patches the error
-    """
-    newmsg = "{desc}\n{exc}".format(desc=desc, exc=exc)
-    exc.args = (newmsg,)
-    return exc
+    def finalize(self):
+        self._finalized = True
+
+    def _patch_error(self, desc, exc):
+        """
+        Patches the error to show the stage that it arose in.
+        """
+        newmsg = "{desc}\n{exc}".format(desc=desc, exc=exc)
+        exc.args = (newmsg,)
+        return exc
+
+    def run(self, status):
+        assert self._finalized, "PM must be finalized before run()"
+        res = None
+        for pipeline_name in self.pipeline_order:
+            is_final_pipeline = pipeline_name == self.pipeline_order[-1]
+            for stage, stage_name in self.pipeline_stages[pipeline_name]:
+                try:
+                    res = stage()
+                except _EarlyPipelineCompletion as e:
+                    return e.result
+                except BaseException as e:
+                    msg = "Failed at %s (%s)" % (pipeline_name, stage_name)
+                    patched_exception = self._patch_error(msg, e)
+                    # No more fallback pipelines?
+                    if is_final_pipeline:
+                        raise patched_exception
+                    # Go to next fallback pipeline
+                    else:
+                        status.fail_reason = patched_exception
+                        break
+            else:
+                return res
+
+        # TODO save all error information
+        raise CompilerError("All pipelines have failed")
 
 
 class CompilerError(Exception):
@@ -186,7 +196,8 @@ class CompilerError(Exception):
 
 
 class Pipeline(object):
-    """Stores and manages states for the compiler pipeline
+    """
+    Stores and manages states for the compiler pipeline
     """
     def __init__(self, typingctx, targetctx, library, args, return_type, flags,
                  locals):
@@ -208,7 +219,8 @@ class Pipeline(object):
 
     @contextmanager
     def fallback_context(self, msg):
-        """Wraps code that would signal a fallback to object mode
+        """
+        Wraps code that would signal a fallback to object mode
         """
         try:
             yield
@@ -228,7 +240,8 @@ class Pipeline(object):
 
     @contextmanager
     def giveup_context(self, msg):
-        """Wraps code that would signal a fallback to interpreter mode
+        """
+        Wraps code that would signal a fallback to interpreter mode
         """
         try:
             yield
@@ -260,14 +273,15 @@ class Pipeline(object):
         return bc
 
     def compile_extra(self, func):
-        res = _Stage(lambda: self.extract_bytecode(func),
-                    "extract bytecode")()
-        if res.ok:
-            return self.compile_bytecode(res.result, func_attr=self.func_attr)
-        elif self.status.can_giveup:
-            return self.stage_compile_interp_mode()
-        else:
-            raise res.exception
+        try:
+            bc = self.extract_bytecode(func)
+        except BaseException as e:
+            if self.status.can_giveup:
+                return self.stage_compile_interp_mode()
+            else:
+                raise e
+
+        return self.compile_bytecode(bc, func_attr=self.func_attr)
 
     def compile_bytecode(self, bc, lifted=(),
                          func_attr=DEFAULT_FUNCTION_ATTRIBUTES):
@@ -337,7 +351,7 @@ class Pipeline(object):
             assert not self.lifted
             cres = self.frontend_looplift()
             if cres is not None:
-                raise _EarlyEscape(cres)
+                raise _EarlyPipelineCompletion(cres)
 
         # Fallback typing: everything is a python object
         self.typemap = defaultdict(lambda: types.pyobject)
@@ -380,7 +394,9 @@ class Pipeline(object):
             print('=' * 80)
 
     def backend_object_mode(self):
-        """Object mode compilation"""
+        """
+        Object mode compilation
+        """
         with self.giveup_context("Function %s failed at object mode lowering"
                                  % (self.func_attr.name,)):
             if len(self.args) != self.nargs:
@@ -478,73 +494,28 @@ class Pipeline(object):
         return cr
 
     def _compile_bytecode(self):
-        pipelines = []
+        pm = _PipelineManager()
 
         if not self.flags.force_pyobject:
-            nopython_stages = [
-                _Stage(self.stage_analyze_bytecode, "analyzing bytecode"),
-                _Stage(self.stage_nopython_frontend, "nopython frontend"),
-                _Stage(self.stage_annotate_type, "annotate type"),
-                _Stage(self.stage_nopython_backend, "nopython mode backend"),
-            ]
-            pipelines.append(nopython_stages)
+            pm.create_pipeline("nopython")
+            pm.add_stage(self.stage_analyze_bytecode, "analyzing bytecode")
+            pm.add_stage(self.stage_nopython_frontend, "nopython frontend")
+            pm.add_stage(self.stage_annotate_type, "annotate type")
+            pm.add_stage(self.stage_nopython_backend, "nopython mode backend")
 
         if self.status.can_fallback or self.flags.force_pyobject:
-            object_stages = [
-                _Stage(self.stage_analyze_bytecode, "analyzing bytecode"),
-                _Stage(self.stage_objectmode_frontend, "object mode frontend"),
-                _Stage(self.stage_annotate_type, "annotate type"),
-                _Stage(self.stage_objectmode_backend, "object mode backend")
-            ]
-            pipelines.append(object_stages)
+            pm.create_pipeline("object")
+            pm.add_stage(self.stage_analyze_bytecode, "analyzing bytecode")
+            pm.add_stage(self.stage_objectmode_frontend, "object mode frontend")
+            pm.add_stage(self.stage_annotate_type, "annotate type")
+            pm.add_stage(self.stage_objectmode_backend, "object mode backend")
 
         if self.status.can_giveup:
-            interp_stages = [
-                _Stage(self.stage_compile_interp_mode,
-                      "compiling with interpreter mode"),
-            ]
-            pipelines.append(interp_stages)
+            pm.create_pipeline("interp")
+            pm.add_stage(self.stage_compile_interp_mode, "compiling with interpreter mode")
 
-        assert pipelines
-        return self._run_pipeline(pipelines)
-
-    def _run_pipeline(self, pipelines):
-        """
-        Args
-        -----
-        pipelines : sequence of sequence of Stage
-            Multiple pipeline of of Stages to execute.
-            The first pipeline is attempted first.
-            If it fails, the next pipeline is tried.
-            If all pipelines fail, an error is showed
-
-        Returns
-        -------
-        The result of the last Stage.
-        """
-        res = None
-        for pi, stages in enumerate(pipelines):
-            for stage in stages:
-                res = stage()
-                # Stage failed?
-                if not res.ok:
-                    # No more fallback pipelines?
-                    msg = "Failed at " + stage.msg
-                    if pi + 1 >= len(pipelines):
-                        raise _raise_error(msg, res.exception)
-                    # Go to next fallback pipeline
-                    else:
-                        self.status.fail_reason = _raise_error(msg,
-                                                               res.exception)
-                        break
-                # Stage OK and early escape
-                elif res.early_escape:
-                    return res.result
-            else:
-                return res.result
-
-        # TODO save all error information
-        raise CompilerError("All pipelines have failed")
+        pm.finalize()
+        return pm.run(self.status)
 
 
 def compile_extra(typingctx, targetctx, func, args, return_type, flags,
@@ -650,7 +621,7 @@ def translate_stage(bytecode):
 
     if config.DUMP_IR and expanded:
         print(("MACRO-EXPANDED IR DUMP: %s" % interp.bytecode.func_qualname)
-            .center(80, "-"))
+              .center(80, "-"))
         interp.dump()
 
     return interp

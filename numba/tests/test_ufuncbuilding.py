@@ -53,6 +53,7 @@ def guerror(a, b, c):
 
 
 class TestUfuncBuilding(unittest.TestCase):
+
     def test_basic_ufunc(self):
         ufb = UFuncBuilder(add)
         cres = ufb.add("int32(int32, int32)")
@@ -92,6 +93,7 @@ class TestUfuncBuilding(unittest.TestCase):
 
 
 class TestGUfuncBuilding(unittest.TestCase):
+
     def test_basic_gufunc(self):
         gufb = GUFuncBuilder(guadd, "(x, y),(x, y)->(x, y)")
         cres = gufb.add("void(int32[:,:], int32[:,:], int32[:,:])")
@@ -173,6 +175,21 @@ class TestVectorizeDecor(unittest.TestCase):
             self.assertIn("I'm here", err)
         self.assertTrue(numpy.all(b == numpy.array([1, 2, 0, 4])))
 
+    def test_vectorize_identity(self):
+        sig = 'int32(int32, int32)'
+        for identity in (0, 1, None, 'reorderable'):
+            ufunc = vectorize([sig], identity=identity)(add)
+            expected = None if identity == 'reorderable' else identity
+            self.assertEqual(ufunc.identity, expected)
+        # Default value is None
+        ufunc = vectorize([sig])(add)
+        self.assertIs(ufunc.identity, None)
+        # Invalid values
+        with self.assertRaises(ValueError):
+            vectorize([sig], identity='none')(add)
+        with self.assertRaises(ValueError):
+            vectorize([sig], identity=2)(add)
+
     def test_guvectorize(self):
         ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
                             "(x,y),(x,y)->(x,y)")(guadd)
@@ -194,6 +211,21 @@ class TestVectorizeDecor(unittest.TestCase):
         a = numpy.arange(10, dtype='int32').reshape(2, 5)
         with self.assertRaises(MyException):
             ufunc(a, a)
+
+    def test_guvectorize_identity(self):
+        args = (['(int32[:,:], int32[:,:], int32[:,:])'], "(x,y),(x,y)->(x,y)")
+        for identity in (0, 1, None, 'reorderable'):
+            ufunc = guvectorize(*args, identity=identity)(guadd)
+            expected = None if identity == 'reorderable' else identity
+            self.assertEqual(ufunc.identity, expected)
+        # Default value is None
+        ufunc = guvectorize(*args)(guadd)
+        self.assertIs(ufunc.identity, None)
+        # Invalid values
+        with self.assertRaises(ValueError):
+            guvectorize(*args, identity='none')(add)
+        with self.assertRaises(ValueError):
+            guvectorize(*args, identity=2)(add)
 
 
 if __name__ == '__main__':

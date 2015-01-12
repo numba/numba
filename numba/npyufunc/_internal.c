@@ -128,6 +128,12 @@ MOD_INIT(_internal)
     if (m == NULL)
         return MOD_ERROR_VAL;
 
+    if (PyModule_AddIntMacro(m, PyUFunc_One) ||
+        PyModule_AddIntMacro(m, PyUFunc_Zero) ||
+        PyModule_AddIntMacro(m, PyUFunc_None) ||
+        PyModule_AddIntMacro(m, PyUFunc_ReorderableNone))
+        return MOD_ERROR_VAL;
+
     return MOD_SUCCESS_VAL(m);
 }
 

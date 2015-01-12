@@ -397,7 +397,7 @@ class GetItemArray(AbstractTemplate):
             return
 
         idx = normalize_index(idx)
-        if not idx:
+        if idx is None:
             return
 
         if idx == types.slice3_type: #(types.slice2_type, types.slice3_type):

@@ -23,7 +23,7 @@ class TestGUVectorizeScalar(unittest.TestCase):
             tmp = 0.
             for i in range(inp.shape[0]):
                 tmp += inp[i]
-            out[0] = tmp
+            out[()] = tmp
 
         # inp is (10000, 3)
         # out is (10000)
@@ -41,7 +41,7 @@ class TestGUVectorizeScalar(unittest.TestCase):
         @guvectorize(['int32[:], int32[:], int32[:]'], '(n),()->(n)')
         def foo(inp, n, out):
             for i in range(inp.shape[0]):
-                out[i] = inp[i] * n[0]
+                out[i] = inp[i] * n[()]
 
         inp = np.arange(3 * 10, dtype=np.int32).reshape(10, 3)
         # out = np.empty_like(inp)
