@@ -14,6 +14,25 @@ register = registry.register
 
 
 def _declare_function(context, builder, name, sig, cargs):
+    """Insert declaration for a opencl builtin function.
+    Uses the Itanium mangler.
+
+    Args
+    ----
+    context: target context
+
+    builder: llvm builder
+
+    name: str
+        symbol name
+
+    sig: signature
+        function signature of the symbol being declared
+
+    cargs: sequence of str
+        C type names for the arguments
+
+    """
     mod = cgutils.get_module(builder)
     llretty = context.get_value_type(sig.return_type)
     llargs = [context.get_value_type(t) for t in sig.args]

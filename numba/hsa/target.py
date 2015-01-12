@@ -16,9 +16,10 @@ CC_SPIR_FUNC = "spir_func"
 
 class HSATypingContext(typing.BaseContext):
     def init(self):
-        from . import hsadecl
+        from . import hsadecl, mathdecl
 
         self.install(hsadecl.registry)
+        self.install(mathdecl.registry)
 
 # -----------------------------------------------------------------------------
 # Implementation
@@ -41,9 +42,10 @@ class HSATargetContext(BaseContext):
     generic_addrspace = SPIR_GENERIC_ADDRSPACE
 
     def init(self):
-        from . import hsaimpl
+        from . import hsaimpl, mathimpl
 
         self.insert_func_defn(hsaimpl.registry.functions)
+        self.insert_func_defn(mathimpl.registry.functions)
         self._internal_codegen = codegen.JITHSACodegen("numba.hsa.jit")
         self._target_data = DATALAYOUT[utils.MACHINE_BITS]
 
