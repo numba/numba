@@ -656,7 +656,7 @@ class Queue(object):
 
         # synchronous if no signal was provided
         if signal is None:
-            timeout = 3
+            timeout = 10
             if not s.wait_until_ne_one(timeout=timeout):
                 msg = "Kernel timed out after {timeout} second"
                 raise HsaKernelTimedOut(msg.format(timeout=timeout))
