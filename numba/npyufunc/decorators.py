@@ -40,7 +40,7 @@ class GUVectorize(_BaseVectorize):
 
 
 def vectorize(ftylist, **kws):
-    """vectorize(ftylist[, target='cpu', [**kws]])
+    """vectorize(ftylist, target='cpu', identity=None, **kws)
 
     A decorator to create numpy ufunc object from Numba compiled code.
 
@@ -54,6 +54,11 @@ def vectorize(ftylist, **kws):
     target: str
             A string for code generation target.  Default to "cpu".
 
+    identity: int, str, or None
+        The identity (or unit) value for the element-wise function
+        being implemented.  Allowed values are None (the default), 0, 1,
+        and "reorderable".
+
     Returns
     --------
 
@@ -62,7 +67,7 @@ def vectorize(ftylist, **kws):
     Example
     -------
         @vectorize(['float32(float32, float32)',
-                    'float64(float64, float64)'])
+                    'float64(float64, float64)'], identity=1)
         def sum(a, b):
             return a + b
 
@@ -81,7 +86,7 @@ def vectorize(ftylist, **kws):
 
 
 def guvectorize(ftylist, signature, **kws):
-    """guvectorize(ftylist, signature, [, target='cpu', [**kws]])
+    """guvectorize(ftylist, signature, target='cpu', identity=None, **kws)
 
     A decorator to create numpy generialized-ufunc object from Numba compiled
     code.
@@ -93,10 +98,14 @@ def guvectorize(ftylist, signature, **kws):
         function type object or a string describing the
         function type.
 
-
     signature: str
         A NumPy generialized-ufunc signature.
         e.g. "(m, n), (n, p)->(m, p)"
+
+    identity: int, str, or None
+        The identity (or unit) value for the element-wise function
+        being implemented.  Allowed values are None (the default), 0, 1,
+        and "reorderable".
 
     target: str
             A string for code generation target.  Defaults to "cpu".
