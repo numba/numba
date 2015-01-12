@@ -36,7 +36,6 @@ SPIR_GENERIC_ADDRSPACE = 4
 SPIR_VERSION = (2, 0)
 
 
-
 class HSATargetContext(BaseContext):
     implement_powi_as_math_call = True
     generic_addrspace = SPIR_GENERIC_ADDRSPACE
@@ -58,7 +57,7 @@ class HSATargetContext(BaseContext):
 
         qualified = name + '.' + '.'.join(str(a) for a in argtypes)
         mangled = VALID_CHARS.sub(repl, qualified)
-        return mangled
+        return 'hsapy_devfn_' + mangled
 
     def prepare_hsa_kernel(self, func, argtypes):
         module = func.module
@@ -74,6 +73,7 @@ class HSATargetContext(BaseContext):
         # Adapt to SPIR
         # module = func.module
         func.calling_convention = CC_SPIR_FUNC
+        return func
 
     def generate_kernel_wrapper(self, func, argtypes):
         module = func.module
@@ -111,6 +111,14 @@ class HSATargetContext(BaseContext):
         builder.ret_void()
         return wrapper
 
+    def declare_function(self, module, fndesc):
+        ret = super(HSATargetContext, self).declare_function(module, fndesc)
+        # XXX: Refactor fndesc instead of this special case
+        if fndesc.llvm_func_name.startswith('hsapy_devfn'):
+            ret.calling_convention = CC_SPIR_FUNC
+        return ret
+
+
     def call_function(self, builder, callee, resty, argtys, args, env=None):
         """
         Call the Numba-compiled *callee*, using the same calling
@@ -136,12 +144,6 @@ class HSATargetContext(BaseContext):
         code = builder.call(callee, fixed)
         status = self.get_return_status(builder, code)
         return status, builder.load(retval)
-
-
-    def link_dependencies(self, module, depends):
-        raise NotImplementedError
-        for lib in depends:
-            module.link_in(lib, preserve=True)
 
     def make_constant_array(self, builder, typ, ary):
         """

@@ -120,9 +120,9 @@ class CodeLibrary(object):
 
         # Link libraries for shared code
         for library in self._linking_libraries:
-            self._final_module.link_in(library._final_module, preserve=True)
+            self._link_in(library)
         for library in self._codegen._libraries:
-            self._final_module.link_in(library._final_module, preserve=True)
+            self._link_in(library)
 
         self._final_module.verify()
         # It seems add_module() must be done only here and not before
@@ -145,6 +145,9 @@ class CodeLibrary(object):
 
     def get_function(self, name):
         return self._final_module.get_function(name)
+
+    def _link_in(self, lib):
+        return self._final_module.link_in(lib.final_module, preserve=True)
 
 
 class AOTCodeLibrary(CodeLibrary):

@@ -9,7 +9,7 @@ from .hsadrv import devices, driver
 from numba.targets.arrayobj import make_array_ctype
 
 
-def compile_hsa(pyfunc, return_type, args, debug, functype):
+def compile_hsa(pyfunc, return_type, args, debug):
     # First compilation will trigger the initialization of the CUDA backend.
     from .descriptor import HSATargetDesc
 
@@ -38,7 +38,7 @@ def compile_hsa(pyfunc, return_type, args, debug, functype):
 
 
 def compile_kernel(pyfunc, args, debug=False):
-    cres = compile_hsa(pyfunc, types.void, args, debug=debug, functype='kernel')
+    cres = compile_hsa(pyfunc, types.void, args, debug=debug)
     func = cres.library.get_function(cres.fndesc.llvm_func_name)
     kernel = cres.target_context.prepare_hsa_kernel(func, cres.signature.args)
     hsakern = HSAKernel(llvm_module=cres.library._final_module,
@@ -49,7 +49,8 @@ def compile_kernel(pyfunc, args, debug=False):
 
 def compile_device(pyfunc, return_type, args, debug=False):
     cres = compile_hsa(pyfunc, return_type, args, debug=debug)
-    cres.target_context.mark_ocl_device(cres.llvm_func)
+    func = cres.library.get_function(cres.fndesc.llvm_func_name)
+    cres.target_context.mark_hsa_device(func)
     devfn = DeviceFunction(cres)
 
     class device_function_template(ConcreteTemplate):
@@ -57,7 +58,7 @@ def compile_device(pyfunc, return_type, args, debug=False):
         cases = [cres.signature]
 
     cres.typing_context.insert_user_function(devfn, device_function_template)
-    libs = [cres.llvm_module]
+    libs = [cres.library]
     cres.target_context.insert_user_function(devfn, cres.fndesc, libs)
     return devfn
 

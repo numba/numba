@@ -230,6 +230,31 @@ class TestKernelArgument(unittest.TestCase):
         self._test_template(nbtype=types.complex128, src=12 + 34j)
 
 
+def udt_devfunc(a, i):
+    return a[i]
+
+
+class TestDeviceFunction(unittest.TestCase):
+    def test_device_function(self):
+        src = np.arange(10, dtype=np.int32)
+        dst = np.zeros_like(src)
+
+        arytype = types.int32[::1]
+        devfn = compiler.compile_device(udt_devfunc, arytype.dtype,
+                                        [arytype, types.intp])
+
+        def udt_devfunc_caller(dst, src):
+            i = hsa.get_global_id(0)
+            if i < dst.size:
+                dst[i] = devfn(src, i)
+
+        kernel = compiler.compile_kernel(udt_devfunc_caller,
+                                         [arytype, arytype])
+
+        kernel[src.size, 1](dst, src)
+        np.testing.assert_equal(dst, src)
+
+
 if __name__ == '__main__':
     unittest.main()
 

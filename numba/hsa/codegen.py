@@ -60,6 +60,9 @@ class HSACodeLibrary(CodeLibrary):
     def _finalize_specific(self):
         pass
 
+    def _link_in(self, module):
+        self._final_module.link_in(module._final_module)
+
 
 class JITHSACodegen(BaseCPUCodegen):
     _library_class = HSACodeLibrary
