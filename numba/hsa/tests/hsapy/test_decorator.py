@@ -42,11 +42,12 @@ class TestDecorators(unittest.TestCase):
             if tid < dst.size:
                 dst[tid] = src[tid]
 
-        src = np.arange(10, dtype=np.uint32)
-        dst = np.zeros_like(src)
-        copy_vector[10, 1](dst, src)
-        np.testing.assert_equal(dst, src)
-        
+        for dtype in [np.uint32, np.float32]:
+            src = np.arange(10, dtype=dtype)
+            dst = np.zeros_like(src)
+            copy_vector[10, 1](dst, src)
+            np.testing.assert_equal(dst, src)
+
 
 if __name__ == '__main__':
     unittest.main()

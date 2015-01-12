@@ -20,7 +20,7 @@ from .error import HsaSupportError, HsaDriverError, HsaApiError, HsaWarning
 from . import enums, drvapi, elf_utils
 
 
-class HsaKernelTimedOut(HsaApiError):
+class HsaKernelTimedOut(HsaDriverError):
     pass
 
 
