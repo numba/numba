@@ -620,20 +620,6 @@ class Array(IterableType):
                 return 'F'
         return 'A'
 
-    def getitem(self, ind):
-        """Returns (return-type, index-type)
-        """
-        if isinstance(ind, UniTuple):
-            idxty = UniTuple(intp, ind.count)
-        else:
-            idxty = intp
-        return self.dtype, idxty
-
-    def setitem(self):
-        """Returns (index-type, value-type)
-        """
-        return intp, self.dtype
-
     @property
     def key(self):
         return self.dtype, self.ndim, self.layout, self.const
@@ -698,6 +684,7 @@ class UniTupleIter(IteratorType):
 
 
 class Tuple(Type):
+
     def __init__(self, types):
         self.types = tuple(types)
         self.count = len(self.types)
@@ -711,6 +698,7 @@ class Tuple(Type):
         return self.types[i]
 
     def __len__(self):
+        # Beware: this makes Tuple(()) false-ish
         return len(self.types)
 
     @property
