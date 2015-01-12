@@ -21,7 +21,6 @@ class _OverloadedBase(_dispatcher.Dispatcher):
 
     def __init__(self, arg_count, py_func):
         self.tm = default_type_manager
-        _dispatcher.Dispatcher.__init__(self, self.tm.get_pointer(), arg_count)
 
         # A mapping of signatures to entry points
         self.overloads = {}
@@ -35,6 +34,10 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         self.func_code = get_code_object(py_func)
         # but newer python uses a different name
         self.__code__ = self.func_code
+
+        argnames = self.__code__.co_varnames[:arg_count]
+        _dispatcher.Dispatcher.__init__(self, self.tm.get_pointer(),
+                                        arg_count, argnames)
 
         self.doc = py_func.__doc__
         self._compile_lock = utils.NonReentrantLock()
