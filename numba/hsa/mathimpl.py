@@ -26,3 +26,19 @@ def math_sin(context, builder, sig, args):
     fn = _declare_function(context, builder, 'sin', sig, ['double'])
     return builder.call(fn, [val])
 
+
+@register
+@implement(math.cos, types.float32)
+def math_cos(context, builder, sig, args):
+    [val] = args
+    fn = _declare_function(context, builder, 'cos', sig, ['float'])
+    return builder.call(fn, [val])
+
+
+@register
+@implement(math.cos, types.float64)
+def math_cos(context, builder, sig, args):
+    [val] = args
+    fn = _declare_function(context, builder, 'cos', sig, ['double'])
+    return builder.call(fn, [val])
+
