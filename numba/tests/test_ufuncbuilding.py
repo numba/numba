@@ -1,17 +1,24 @@
 from __future__ import print_function, absolute_import, division
+
+import sys
+
 import numpy
+
 from numba import unittest_support as unittest
 from numba.npyufunc.ufuncbuilder import UFuncBuilder, GUFuncBuilder
 from numba import vectorize, guvectorize
+from . import support
 
 
 def add(a, b):
+    """An addition"""
     return a + b
 
 def equals(a, b):
     return a == b
 
 def guadd(a, b, c):
+    """A generalized addition"""
     x, y = c.shape
     for i in range(x):
         for j in range(y):
@@ -33,6 +40,14 @@ class MyException(Exception):
     pass
 
 
+def raise_inner():
+    raise MyException("I'm here")
+
+def uerror(x):
+    if x == 2:
+        raise_inner()
+    return x + 1
+
 def guerror(a, b, c):
     raise MyException
 
@@ -49,6 +64,10 @@ class TestUfuncBuilding(unittest.TestCase):
         a = numpy.arange(10, dtype='int32')
         b = ufunc(a, a)
         self.assertTrue(numpy.all(a + a == b))
+
+        # Metadata
+        self.assertEqual(ufunc.__name__, "add")
+        self.assertIn("An addition", ufunc.__doc__)
 
     def test_ufunc_struct(self):
         ufb = UFuncBuilder(add)
@@ -85,6 +104,9 @@ class TestGUfuncBuilding(unittest.TestCase):
         self.assertTrue(numpy.all(a + a == b))
         self.assertEqual(b.dtype, numpy.dtype('int32'))
 
+        # Metadata
+        self.assertEqual(ufunc.__name__, "guadd")
+        self.assertIn("A generalized addition", ufunc.__doc__)
 
     def test_gufunc_struct(self):
         gufb = GUFuncBuilder(guadd, "(x, y),(x, y)->(x, y)")
@@ -133,6 +155,23 @@ class TestVectorizeDecor(unittest.TestCase):
         r = ufunc(a,a)
         self.assertTrue(numpy.all(r))
         self.assertEqual(r.dtype, numpy.dtype('bool_'))
+
+    def test_vectorize_error_in_objectmode(self):
+        # An exception raised inside an object mode @vectorized function
+        # is printed out and ignored.
+        ufunc = vectorize(['int32(int32)'], forceobj=True)(uerror)
+        a = numpy.arange(4, dtype='int32')
+        b = numpy.zeros_like(a)
+        with support.captured_stderr() as err:
+            ufunc(a, out=b)
+        err = err.getvalue()
+        if sys.version_info >= (3, 4):
+            self.assertIn("Exception ignored in: 'object mode ufunc'", err)
+            self.assertIn("MyException: I'm here", err)
+        else:
+            self.assertRegexpMatches(err, r"Exception [^\n]* in 'object mode ufunc' ignored")
+            self.assertIn("I'm here", err)
+        self.assertTrue(numpy.all(b == numpy.array([1, 2, 0, 4])))
 
     def test_guvectorize(self):
         ufunc = guvectorize(['(int32[:,:], int32[:,:], int32[:,:])'],
