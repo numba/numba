@@ -372,8 +372,8 @@ def normalize_index(index):
     # elif index == types.slice2_type:
     #     return types.slice2_type
 
-    else:
-        return types.intp
+    elif isinstance(index, types.Integer):
+        return types.intp if index.signed else types.uintp
 
 
 @builtin
@@ -415,7 +415,7 @@ class GetItemArray(AbstractTemplate):
                 res = ary.copy(ndim=ndim, layout='A')
             else:
                 res = ary.dtype
-        elif idx == types.intp:
+        elif isinstance(idx, types.Integer):
             if ary.ndim != 1:
                 return
             res = ary.dtype

@@ -77,7 +77,8 @@ def make_arrayiter_cls(iterator_type):
     """
 
     class ArrayIteratorStruct(cgutils.Structure):
-        _fields = [('index', types.CPointer(types.intp)),
+        # We use an unsigned index to avoid the cost of negative index tests.
+        _fields = [('index', types.CPointer(types.uintp)),
                    ('array', iterator_type.array_type)]
 
     return ArrayIteratorStruct
@@ -99,9 +100,9 @@ def getiter_array(context, builder, sig, args):
     return iterobj._getvalue()
 
 
-def _getitem_array1d(context, builder, arrayty, array, idx):
+def _getitem_array1d(context, builder, arrayty, array, idx, wraparound):
     ptr = cgutils.get_item_pointer(builder, arrayty, array, [idx],
-                                   wraparound=True)
+                                   wraparound=wraparound)
     return context.unpack_value(builder, arrayty.dtype, ptr)
 
 @builtin
@@ -126,15 +127,16 @@ def iternext_array(context, builder, sig, args, result):
     result.set_valid(is_valid)
 
     with cgutils.ifthen(builder, is_valid):
-        value = _getitem_array1d(context, builder, arrayty, ary, index)
+        value = _getitem_array1d(context, builder, arrayty, ary, index,
+                                 wraparound=False)
         result.yield_(value)
         nindex = builder.add(index, context.get_constant(types.intp, 1))
         builder.store(nindex, iterobj.index)
 
 @builtin
-@implement('getitem', types.Kind(types.Array), types.intp)
+@implement('getitem', types.Kind(types.Array), types.Kind(types.Integer))
 def getitem_array1d_intp(context, builder, sig, args):
-    aryty, _ = sig.args
+    aryty, idxty = sig.args
     if aryty.ndim != 1:
         # TODO
         raise NotImplementedError("1D indexing into %dD array" % aryty.ndim)
@@ -143,7 +145,8 @@ def getitem_array1d_intp(context, builder, sig, args):
 
     arystty = make_array(aryty)
     ary = arystty(context, builder, ary)
-    return _getitem_array1d(context, builder, aryty, ary, idx)
+    return _getitem_array1d(context, builder, aryty, ary, idx,
+                            wraparound=idxty.signed)
 
 @builtin
 @implement('getitem', types.Kind(types.Array), types.slice3_type)
@@ -281,17 +284,17 @@ def getitem_array_tuple(context, builder, sig, args):
 
 
 @builtin
-@implement('setitem', types.Kind(types.Array), types.intp,
+@implement('setitem', types.Kind(types.Array), types.Kind(types.Integer),
            types.Any)
 def setitem_array1d(context, builder, sig, args):
-    aryty, _, valty = sig.args
+    aryty, idxty, valty = sig.args
     ary, idx, val = args
 
     arystty = make_array(aryty)
     ary = arystty(context, builder, ary)
 
     ptr = cgutils.get_item_pointer(builder, aryty, ary, [idx],
-                                   wraparound=True)
+                                   wraparound=idxty.signed)
 
     val = context.cast(builder, val, valty, aryty.dtype)
 
