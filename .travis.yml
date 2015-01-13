@@ -28,6 +28,8 @@ before_install:
   - if [ $PY_MAJOR_MINOR == "2.6" ]; then conda install --yes unittest2 argparse; fi
   # Install enum34 for Python < 3.4
   - if [ $PY_MAJOR_MINOR \< "3.4" ]; then conda install --yes enum34; fi
+  # Install funcsigs for Python < 3.3
+  - if [ $PY_MAJOR_MINOR \< "3.3" ]; then conda install --yes -c numba funcsigs; fi
   # The next couple lines fix a crash with multiprocessing on Travis
   # and are not specific to using Miniconda
   - sudo rm -rf /dev/shm

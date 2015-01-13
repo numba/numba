@@ -32,6 +32,15 @@ else:
     longint = long
     get_ident = thread.get_ident
 
+try:
+    from inspect import signature as pysignature
+except ImportError:
+    try:
+        from funcsigs import signature as pysignature
+    except ImportError:
+        raise ImportError("please install the 'funcsigs' package "
+                          "('pip install funcsigs')")
+
 
 _shutting_down = False
 
