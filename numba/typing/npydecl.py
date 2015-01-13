@@ -197,10 +197,11 @@ class Numpy_expanded_reduction(AbstractTemplate):
         assert not kws
         [arr] = args
         if isinstance(arr.dtype, types.Integer):
+            # Expand to a machine int, not larger (like Numpy)
             if arr.dtype.signed:
-                return signature(types.int64, arr)
+                return signature(max(arr.dtype, types.intp), arr)
             else:
-                return signature(types.uint64, arr)
+                return signature(max(arr.dtype, types.uintp), arr)
         else:
             return signature(arr.dtype, arr)
 

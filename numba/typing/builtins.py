@@ -487,10 +487,11 @@ def generic_homog(self, args, kws):
 
 def generic_expand(self, args, kws):
     if isinstance(self.this.dtype, types.Integer):
+        # Expand to a machine int, not larger (like Numpy)
         if self.this.dtype.signed:
-            return signature(types.int64, recvr=self.this)
+            return signature(max(types.intp, self.this.dtype), recvr=self.this)
         else:
-            return signature(types.uint64, recvr=self.this)
+            return signature(max(types.uintp, self.this.dtype), recvr=self.this)
     return signature(self.this.dtype, recvr=self.this)
 
 def generic_hetero_real(self, args, kws):
@@ -518,7 +519,7 @@ def install_array_method(name, generic):
 for fname in ["min", "max"]:
     install_array_method(fname, generic_homog)
 
-# Functions that return a type as large as possible, to avoid overflows
+# Functions that return a machine-width type, to avoid overflows
 for fname in ["sum", "prod"]:
     install_array_method(fname, generic_expand)
 
