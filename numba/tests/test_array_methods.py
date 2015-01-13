@@ -290,7 +290,7 @@ class TestArrayMethods(TestCase):
         """
         # Overflows are avoided here (ints are cast either to intp
         # or float64).
-        n_items = 2 if is_prod else 10
+        n_items = 2 if is_prod else 10  # avoid overflow on prod()
         arr = (np.arange(n_items) + 40000).astype('int16')
         npr, nbr = run_comparative(pyfunc, arr)
         self.assertPreciseEqual(npr, nbr)
