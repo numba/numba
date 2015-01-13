@@ -86,7 +86,7 @@ class GPU(object):
             self._context = self._gpu.create_context()
 
         # Current context is not associated with the thread
-        if self._gpu.get_context() is not self._context:
+        if self._gpu.get_context() != self._context:
             self._context.push()
 
         return self._context

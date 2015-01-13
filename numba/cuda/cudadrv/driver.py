@@ -395,6 +395,8 @@ class Device(object):
     def create_context(self):
         met_requirement_for_device(self)
 
+
+
         flags = 0
         if self.CAN_MAP_HOST_MEMORY:
             flags |= enums.CU_CTX_MAP_HOST
@@ -420,7 +422,8 @@ class Device(object):
         if not handle.value:
             return None
         try:
-            return self.contexts[handle.value]
+            ctx = self.contexts[handle.value]
+            return ctx
         except KeyError:
             raise RuntimeError("Current context is not manged: %s" %
                                handle.value)
@@ -501,7 +504,9 @@ class Context(object):
     def pop(self):
         """Pop context
         """
-        driver.cuCtxPopCurrent(self.handle)
+        popped = drvapi.cu_context()
+        driver.cuCtxPopCurrent(byref(popped))
+        assert popped.value == self.handle.value
 
     def memalloc(self, bytesize):
         self.trashing.service()
@@ -624,6 +629,15 @@ class Context(object):
 
     def __repr__(self):
         return "<CUDA context %s of device %d>" % (self.handle, self.device.id)
+
+    def __eq__(self, other):
+        if isinstance(other, Context):
+            return self.handle == other.handle
+        else:
+            return NotImplemented
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
 
 def load_module_image(context, image):
