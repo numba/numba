@@ -34,10 +34,16 @@ class Lib(object):
                 fn = getattr(self.dll, name)
                 fn.restype = obj.restype
                 fn.argtypes = obj.argtypes
-                setattr(self, name, self._auto_checking_wrapper(fn))
+                setattr(self, name, self._auto_checking_wrapper(fn, name=name))
 
-    def _auto_checking_wrapper(self, fn):
+    def _auto_checking_wrapper(self, fn, name):
         def wrapped(*args, **kws):
+            nargs = len(args) + len(kws)
+            expected = len(fn.argtypes)
+            if nargs != expected:
+                msg = "expecting {expected} arguments but got {nargs}: {fname}"
+                raise TypeError(msg.format(expected=expected, nargs=nargs,
+                                           fname=name))
             status = fn(*args, **kws)
             self.check_error(status)
             return status

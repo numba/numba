@@ -138,6 +138,7 @@ class libcurand(Lib):
         curandGenerator_t)
 
     curandSetStream = ctype_function(curandStatus_t,
+                                     curandGenerator_t,
                                      cu_stream)
 
     curandSetGeneratorOffset = ctype_function(curandStatus_t,
@@ -156,11 +157,13 @@ class libcurand(Lib):
 
     curandGenerate = ctype_function(curandStatus_t,
                                     curandGenerator_t,
-                                    POINTER(c_uint))
+                                    POINTER(c_uint),
+                                    c_size_t)
 
     curandGenerateLongLong = ctype_function(curandStatus_t,
                                             curandGenerator_t,
-                                            POINTER(c_ulonglong))
+                                            POINTER(c_ulonglong),
+                                            c_size_t)
 
     curandGenerateUniform = ctype_function(curandStatus_t,
                                            curandGenerator_t,

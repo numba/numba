@@ -25,17 +25,17 @@ cufftResult = c_int
 CUFFT_FORWARD = -1
 CUFFT_INVERSE = 1
 
-CUFFT_R2C = 0x2a     # Real to Complex (interleaved)
-CUFFT_C2R = 0x2c     # Complex (interleaved) to Real
-CUFFT_C2C = 0x29     # Complex to Complex, interleaved
-CUFFT_D2Z = 0x6a     # Double to Double-Complex
-CUFFT_Z2D = 0x6c     # Double-Complex to Double
-CUFFT_Z2Z = 0x69      # Double-Complex to Double-Complex
+CUFFT_R2C = 0x2a  # Real to Complex (interleaved)
+CUFFT_C2R = 0x2c  # Complex (interleaved) to Real
+CUFFT_C2C = 0x29  # Complex to Complex, interleaved
+CUFFT_D2Z = 0x6a  # Double to Double-Complex
+CUFFT_Z2D = 0x6c  # Double-Complex to Double
+CUFFT_Z2Z = 0x69  # Double-Complex to Double-Complex
 
 cufftType = c_int
 
 CUFFT_COMPATIBILITY_NATIVE = 0x00
-CUFFT_COMPATIBILITY_FFTW_PADDING = 0x01    # The default value
+CUFFT_COMPATIBILITY_FFTW_PADDING = 0x01  # The default value
 CUFFT_COMPATIBILITY_FFTW_ASYMMETRIC = 0x02
 CUFFT_COMPATIBILITY_FFTW_ALL = 0x03
 
@@ -64,91 +64,96 @@ class libcufft(Lib):
     cufftGetVersion = ctype_function(cufftResult, POINTER(c_int))
 
     cufftPlan1d = ctype_function(cufftResult,
-                                 POINTER(cufftHandle), # plan
-                                 c_int, # nx
-                                 cufftType, # type
-                                 c_int, # batch - deprecated - use cufftPlanMany
+                                 POINTER(cufftHandle),  # plan
+                                 c_int,  # nx
+                                 cufftType,  # type
+                                 c_int,
+                                 # batch - deprecated - use cufftPlanMany
     )
 
     cufftPlan2d = ctype_function(cufftResult,
-                                 POINTER(cufftHandle), # plan
-                                 c_int, # nx
-                                 c_int, # ny
-                                 cufftType             # type
+                                 POINTER(cufftHandle),  # plan
+                                 c_int,  # nx
+                                 c_int,  # ny
+                                 cufftType  # type
     )
 
     cufftPlan3d = ctype_function(cufftResult,
-                                 POINTER(cufftHandle), # plan
-                                 c_int, # nx
-                                 c_int, # ny
-                                 c_int, # nz
-                                 cufftType              # type
+                                 POINTER(cufftHandle),  # plan
+                                 c_int,  # nx
+                                 c_int,  # ny
+                                 c_int,  # nz
+                                 cufftType  # type
     )
 
     cufftPlanMany = ctype_function(cufftResult,
-                                   POINTER(cufftHandle), # plan
-                                   c_int, # rank
-                                   c_void_p, # POINTER(c_int) n
-                                   c_void_p, # POINTER(c_int) inembed
-                                   c_int, # istride
-                                   c_int, # idist
-                                   c_void_p, # POINTER(c_int) onembed
-                                   c_int, # ostride
-                                   c_int, # odist
-                                   cufftType, # type
-                                   c_int, # batch
+                                   POINTER(cufftHandle),  # plan
+                                   c_int,  # rank
+                                   c_void_p,  # POINTER(c_int) n
+                                   c_void_p,  # POINTER(c_int) inembed
+                                   c_int,  # istride
+                                   c_int,  # idist
+                                   c_void_p,  # POINTER(c_int) onembed
+                                   c_int,  # ostride
+                                   c_int,  # odist
+                                   cufftType,  # type
+                                   c_int,  # batch
     )
 
     cufftDestroy = ctype_function(cufftResult,
-                                  cufftHandle, # plan
+                                  cufftHandle,  # plan
     )
 
     cufftExecC2C = ctype_function(cufftResult,
-                                  cufftHandle, # plan
-                                  c_void_p, # POINTER(cufftComplex) idata
-                                  c_void_p, # POINTER(cufftComplex) odata
-                                  c_int                     # direction
+                                  cufftHandle,  # plan
+                                  c_void_p,  # POINTER(cufftComplex) idata
+                                  c_void_p,  # POINTER(cufftComplex) odata
+                                  c_int,  # direction
     )
 
     cufftExecR2C = ctype_function(cufftResult,
-                                  cufftHandle, # plan
-                                  c_void_p, # POINTER(cufftReal) idata
-                                  c_void_p, # POINTER(cufftComplex) odata
+                                  cufftHandle,  # plan
+                                  c_void_p,  # POINTER(cufftReal) idata
+                                  c_void_p,  # POINTER(cufftComplex) odata
+                                  c_int,
     )
 
     cufftExecC2R = ctype_function(cufftResult,
-                                  cufftHandle, # plan
-                                  c_void_p, # POINTER(cufftComplex) idata
-                                  c_void_p, # POINTER(cufftReal) odata
+                                  cufftHandle,  # plan
+                                  c_void_p,  # POINTER(cufftComplex) idata
+                                  c_void_p,  # POINTER(cufftReal) odata
+                                  c_int,
     )
 
     cufftExecZ2Z = ctype_function(cufftResult,
-                                  cufftHandle, # plan
-                                  c_void_p, # POINTER(cufftDoubleComplex) idata
-                                  c_void_p, # POINTER(cufftDoubleComplex) odata
-                                  c_int, # direction
+                                  cufftHandle,  # plan
+                                  c_void_p,  # POINTER(cufftDoubleComplex) idata
+                                  c_void_p,  # POINTER(cufftDoubleComplex) odata
+                                  c_int,  # direction
     )
 
     cufftExecD2Z = ctype_function(cufftResult,
-                                  cufftHandle, # plan
-                                  c_void_p, # POINTER(cufftDoubleReal) idata
-                                  c_void_p, # POINTER(cufftDoubleComplex) odata
+                                  cufftHandle,  # plan
+                                  c_void_p,  # POINTER(cufftDoubleReal) idata
+                                  c_void_p,  # POINTER(cufftDoubleComplex) odata
+                                  c_int,
     )
 
     cufftExecZ2D = ctype_function(cufftResult,
-                                  cufftHandle, # plan
-                                  c_void_p, # POINTER(cufftDoubleComplex) idata
-                                  c_void_p, # POINTER(cufftDoubleReal) odata
+                                  cufftHandle,  # plan
+                                  c_void_p,  # POINTER(cufftDoubleComplex) idata
+                                  c_void_p,  # POINTER(cufftDoubleReal) odata
+                                  c_int,
     )
 
     cufftSetStream = ctype_function(cufftResult,
-                                    cufftHandle, # plan,
-                                    cu_stream, # stream
+                                    cufftHandle,  # plan,
+                                    cu_stream,  # stream
     )
 
     cufftSetCompatibilityMode = ctype_function(cufftResult,
-                                               cufftHandle, # plan,
-                                               cufftCompatibility   # mode
+                                               cufftHandle,  # plan,
+                                               cufftCompatibility  # mode
     )
 
 
@@ -169,7 +174,7 @@ class Plan(finalizer.OwnerMixin):
         inst = object.__new__(cls)
         inst._api = libcufft()
         inst._handle = cufftHandle()
-        BATCH = 1           # deprecated args to cufftPlan1d
+        BATCH = 1  # deprecated args to cufftPlan1d
         inst._api.cufftPlan1d(byref(inst._handle), int(nx), int(dtype),
                               BATCH)
         inst.dtype = dtype
