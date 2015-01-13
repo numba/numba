@@ -353,6 +353,13 @@ class Dispatcher(WeakType):
         """
         return self._get_object()
 
+    @property
+    def pysig(self):
+        """
+        A inspect.Signature object corresponding to this type.
+        """
+        return self.overloaded._pysig
+
 
 class FunctionPointer(Function):
     """

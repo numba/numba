@@ -20,7 +20,7 @@ before_install:
   - export PATH=$HOME/miniconda3/bin:$PATH
   - PY_MAJOR_MINOR=${TRAVIS_PYTHON_VERSION:0:3}
   # Setup environment
-  - conda create -n travisci --yes python=$PY_MAJOR_MINOR numpy cffi
+  - conda create -n travisci --yes python=$PY_MAJOR_MINOR numpy cffi pip
   - source activate travisci
   # Install llvmdev (separate channel, for now)
   - conda install --yes -c numba llvmdev
@@ -28,6 +28,8 @@ before_install:
   - if [ $PY_MAJOR_MINOR == "2.6" ]; then conda install --yes unittest2 argparse; fi
   # Install enum34 for Python < 3.4
   - if [ $PY_MAJOR_MINOR \< "3.4" ]; then conda install --yes enum34; fi
+  # Install funcsigs for Python < 3.3
+  - if [ $PY_MAJOR_MINOR \< "3.3" ]; then pip install funcsigs; fi
   # The next couple lines fix a crash with multiprocessing on Travis
   # and are not specific to using Miniconda
   - sudo rm -rf /dev/shm

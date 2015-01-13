@@ -96,6 +96,7 @@ PyObject* init_types(PyObject *self, PyObject *args)
 static void
 Dispatcher_dealloc(DispatcherObject *self)
 {
+    Py_DECREF(self->argnames);
     dispatcher_del(self->dispatcher);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -113,6 +114,7 @@ Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
                           &tmaddrobj, &argct, &PyTuple_Type, &self->argnames)) {
         return -1;
     }
+    Py_INCREF(self->argnames);
     tmaddr = PyLong_AsVoidPtr(tmaddrobj);
     self->dispatcher = dispatcher_new(tmaddr, argct);
     self->can_compile = 1;
