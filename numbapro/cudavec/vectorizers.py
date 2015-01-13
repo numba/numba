@@ -4,12 +4,13 @@ import warnings
 from functools import reduce
 import numpy
 from numba.npyufunc.sigparse import parse_signature
+from numba.npyufunc.ufuncbuilder import _BaseUFuncBuilder
 from numba import sigutils, types, cgutils, cuda
 from numba.cuda import nvvmutils
 from numba.cuda.compiler import CUDAKernel
 from numba.utils import IS_PY3
 import llvmlite.llvmpy.core as lc
-import llvmlite.binding as llvm
+
 from . import dispatch
 
 if IS_PY3:
@@ -35,11 +36,16 @@ def to_dtype(ty):
     return numpy.dtype(str(ty))
 
 
-class CudaVectorize(object):
-    def __init__(self, func, targetoptions={}):
+class CudaVectorize(_BaseUFuncBuilder):
+    def __init__(self, func, identity=None, targetoptions={}):
         assert not targetoptions
-        self.pyfunc = func
+        self.py_func = func
+        self.identity = self.parse_identity(identity)
         self.kernelmap = {} # { arg_dtype: (return_dtype), cudakernel }
+
+    @property
+    def pyfunc(self):
+        return self.py_func
 
     def add(self, sig=None, argtypes=None, restype=None):
         # Handle argtypes
@@ -89,14 +95,19 @@ class CudaVectorize(object):
 #------------------------------------------------------------------------------
 # Generalized CUDA ufuncs
 
-class CudaGUFuncVectorize(object):
-    def __init__(self, func, sig, targetoptions={}):
+class CudaGUFuncVectorize(_BaseUFuncBuilder):
+    def __init__(self, func, sig, identity=None, targetoptions={}):
         assert not targetoptions
-        self.pyfunc = func
+        self.py_func = func
+        self.identity = self.parse_identity(identity)
         self.signature = sig
         self.inputsig, self.outputsig = parse_signature(self.signature)
         assert len(self.outputsig) == 1, "only support 1 output"
         self.kernelmap = {}  # { arg_dtype: (return_dtype), cudakernel }
+
+    @property
+    def pyfunc(self):
+        return self.py_func
 
     def add(self, sig=None, argtypes=None, restype=None):
         # Handle argtypes
