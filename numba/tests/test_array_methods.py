@@ -290,11 +290,15 @@ class TestArrayMethods(TestCase):
         """
         # Overflows are always avoided here (ints are cast either to int64
         # or float64).
-        arr = np.arange(10, dtype='int16') + 60000
+        arr = (np.arange(10) + 60000).astype('int16')
         npr, nbr = run_comparative(pyfunc, arr)
         self.assertPreciseEqual(npr, nbr)
         # Overflows are avoided for functions returning floats here.
-        arr = np.arange(10, dtype='int64') + 2**63
+        # Other functions may wrap around.
+        arr = (np.arange(10) + 2**60).astype('int64')
+        npr, nbr = run_comparative(pyfunc, arr)
+        self.assertPreciseEqual(npr, nbr)
+        arr = arr.astype('uint64')
         npr, nbr = run_comparative(pyfunc, arr)
         self.assertPreciseEqual(npr, nbr)
 
