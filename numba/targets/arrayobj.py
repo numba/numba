@@ -436,7 +436,7 @@ def array_sum(context, builder, sig, args):
         return c
 
     return context.compile_internal(builder, array_sum_impl, sig, args, 
-                                    locals=dict(c=arrty.dtype))
+                                    locals=dict(c=sig.return_type))
 
 
 @builtin
@@ -452,7 +452,7 @@ def array_prod(context, builder, sig, args):
         return c
 
     return context.compile_internal(builder, array_prod_impl, sig, args,
-                                    locals=dict(c=arrty.dtype))
+                                    locals=dict(c=sig.return_type))
 
 
 @builtin
@@ -461,10 +461,16 @@ def array_prod(context, builder, sig, args):
 def array_mean(context, builder, sig, args):
     [arrty] = sig.args
 
-    def array_mean_impl(arry):
-        return arry.sum() / arry.size
+    def array_mean_impl(arr):
+        # Can't use the naive `arr.sum() / arr.size`, as it would return
+        # a wrong result on integer sum overflow.
+        c = 0
+        for v in arr.flat:
+            c += v
+        return c / arr.size
 
-    return context.compile_internal(builder, array_mean_impl, sig, args)
+    return context.compile_internal(builder, array_mean_impl, sig, args,
+                                    locals=dict(c=sig.return_type))
 
 
 @builtin

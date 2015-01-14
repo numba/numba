@@ -184,16 +184,28 @@ del _aliases, _numpy_ufunc
 # -----------------------------------------------------------------------------
 # Install global reduction functions
 
-# Functions where domain and range are the same format
+# Functions where input domain and output domain are the same
 class Numpy_homogenous_reduction(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         [arr] = args
         return signature(arr.dtype, arr)
 
-
 # Functions where domain and range are possibly different formats
-class Numpy_heterogenous_reduction(AbstractTemplate):
+class Numpy_expanded_reduction(AbstractTemplate):
+    def generic(self, args, kws):
+        assert not kws
+        [arr] = args
+        if isinstance(arr.dtype, types.Integer):
+            # Expand to a machine int, not larger (like Numpy)
+            if arr.dtype.signed:
+                return signature(max(arr.dtype, types.intp), arr)
+            else:
+                return signature(max(arr.dtype, types.uintp), arr)
+        else:
+            return signature(arr.dtype, arr)
+
+class Numpy_heterogenous_reduction_real(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         [arr] = args
@@ -201,7 +213,6 @@ class Numpy_heterogenous_reduction(AbstractTemplate):
             return signature(types.float64, arr)
         else:
             return signature(arr.dtype, arr)
-
 
 class Numpy_index_reduction(AbstractTemplate):
     def generic(self, args, kws):
@@ -213,16 +224,19 @@ class Numpy_index_reduction(AbstractTemplate):
 def _numpy_reduction(fname, rClass):
     npyfn = getattr(numpy, fname)
     cls = type("Numpy_reduce_{0}".format(npyfn), (rClass,), dict(key=npyfn))
-    semiBound = lambda self, mod: types.Function(cls) 
+    semiBound = lambda self, mod: types.Function(cls)
     setattr(NumpyModuleAttribute, "resolve_{0}".format(fname), semiBound)
 
-for func in ['sum', 'prod', 'min', 'max']:
+for func in ['min', 'max']:
     _numpy_reduction(func, Numpy_homogenous_reduction)
 
-for func in ['mean', 'var', 'std']:
-    _numpy_reduction(func, Numpy_heterogenous_reduction)
+for func in ['sum', 'prod']:
+    _numpy_reduction(func, Numpy_expanded_reduction)
 
-for func in ["argmin", "argmax"]:
+for func in ['mean', 'var', 'std']:
+    _numpy_reduction(func, Numpy_heterogenous_reduction_real)
+
+for func in ['argmin', 'argmax']:
     _numpy_reduction(func, Numpy_index_reduction)
 
 

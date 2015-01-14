@@ -24,6 +24,7 @@ Dependencies
   * llvmlite
   * numpy (version 1.6 or higher)
   * argparse (for pycc in python2.6)
+  * funcsigs (for Python 2)
 
 Installing
 =================

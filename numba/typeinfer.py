@@ -230,14 +230,17 @@ class CallConstrain(object):
         self.resolve(context, typevars, fnty)
 
     def resolve(self, context, typevars, fnty):
-        assert not self.kws, "Keyword argument is not supported, yet"
         assert fnty
+        n_pos_args = len(self.args)
+        kwds = [kw for (kw, var) in self.kws]
         argtypes = [typevars[a.name].get() for a in self.args]
+        argtypes += [typevars[var.name].get() for (kw, var) in self.kws]
         restypes = []
         # Case analysis for each combination of argument types.
         for args in itertools.product(*argtypes):
-            # TODO handling keyword arguments
-            sig = context.resolve_function_type(fnty, args, ())
+            pos_args = args[:n_pos_args]
+            kw_args = dict(zip(kwds, args[n_pos_args:]))
+            sig = context.resolve_function_type(fnty, pos_args, kw_args)
             if sig is None:
                 msg = "Undeclared %s%s" % (fnty, args)
                 raise TypingError(msg, loc=self.loc)
@@ -420,14 +423,14 @@ class TypeInferer(object):
 
         for call, args, kws in self.usercalls:
             args = tuple(typemap[a.name] for a in args)
+            kws = dict((kw, typemap[var.name]) for (kw, var) in kws)
 
             if isinstance(call.func, ir.Intrinsic):
                 signature = call.func.type
             else:
-                assert not kws
                 fnty = typemap[call.func.name]
-                signature = self.context.resolve_function_type(fnty, args, ())
-                assert signature is not None, (fnty, args)
+                signature = self.context.resolve_function_type(fnty, args, kws)
+                assert signature is not None, (fnty, args, kws)
             calltypes[call] = signature
 
         for inst in self.setitemcalls:
