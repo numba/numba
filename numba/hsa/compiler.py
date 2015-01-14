@@ -87,7 +87,7 @@ class HSAKernelBase(object):
 
     def __init__(self):
         self.global_size = (1,)
-        self.local_size = None
+        self.local_size = (1,)
         self.stream = None
 
     def copy(self):
@@ -312,7 +312,7 @@ class AutoJitHSAKernel(HSAKernelBase):
 
     def __call__(self, *args):
         kernel = self.specialize(*args)
-        cfg = kernel[self.global_size, self.local_size, self.stream]
+        cfg = kernel.configure(self.global_size, self.local_size, self.stream)
         cfg(*args)
 
     def specialize(self, *args):
