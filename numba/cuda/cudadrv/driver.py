@@ -414,6 +414,8 @@ class Device(object):
         return weakref.proxy(ctx)
 
     def close_all_context(self):
+        while self.get_context():
+            self.get_context().pop()
         self.contexts.clear()
 
     def get_context(self):
@@ -469,6 +471,8 @@ class Context(object):
         self.is_managed = finalizer is not None
         self.allocations = utils.UniqueDict()
         self.modules = utils.UniqueDict()
+        # For storing context specific data
+        self.extras = {}
 
     def __del__(self):
         try:

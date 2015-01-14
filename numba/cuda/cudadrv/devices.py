@@ -47,6 +47,7 @@ class _gpus(object):
     def reset(self):
         for gpu in self:
             gpu.reset()
+        self._lst = None
 
     @property
     def current(self):
@@ -101,9 +102,11 @@ class GPU(object):
         _gpustack.pop()
 
     def reset(self):
-        if self._context:
-            self._context.reset()
-            self._context = None
+        self._gpu.reset()
+
+    @property
+    def active_contexts(self):
+        return self._gpu.contexts.values()
 
 
 def get_gpu(i):
