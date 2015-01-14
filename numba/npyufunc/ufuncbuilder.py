@@ -69,14 +69,17 @@ target_registry['npyufunc'] = UFuncDispatcher
 
 class _BaseUFuncBuilder(object):
 
+    _identities = {
+        0: _internal.PyUFunc_Zero,
+        1: _internal.PyUFunc_One,
+        None: _internal.PyUFunc_None,
+        }
+    if np.__version__ >= '1.7':
+        _identities["reorderable"] = _internal.PyUFunc_ReorderableNone
+
     def parse_identity(self, identity):
         try:
-            identity = {
-                0: _internal.PyUFunc_Zero,
-                1: _internal.PyUFunc_One,
-                None: _internal.PyUFunc_None,
-                "reorderable": _internal.PyUFunc_ReorderableNone,
-            }[identity]
+            identity = self._identities[identity]
         except KeyError:
             raise ValueError("Invalid identity value %r" % (identity,))
         return identity
