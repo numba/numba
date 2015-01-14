@@ -9,7 +9,7 @@ def setitem_slice(a, start, stop, step, scalar):
     a[start:stop:step] = scalar
 
 
-def usecase(obs, nPoints, B, sigB, A, sigA, M, sigM):
+def usecase(obs, nPoints):
     center = nPoints / 2
     obs[0:center] = np.arange(center)
     obs[center] = 321
@@ -24,9 +24,10 @@ class TestStoreSlice(unittest.TestCase):
 
         flags = Flags()
         flags.set("enable_pyobject")
-        cres = compile_isolated(usecase, (), flags=flags)
-        cres.entry_point(obs_got, n, 10.0, 1.0, 2.0, 3.0, 4.0, 5.0)
-        usecase(obs_expected, n, 10.0, 1.0, 2.0, 3.0, 4.0, 5.0)
+        cres = compile_isolated(usecase, (types.float64[:], types.intp),
+                                flags=flags)
+        cres.entry_point(obs_got, n)
+        usecase(obs_expected, n)
 
         self.assertTrue(np.allclose(obs_got, obs_expected))
 
