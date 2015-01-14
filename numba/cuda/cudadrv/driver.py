@@ -393,9 +393,9 @@ class Device(object):
         return not (self == other)
 
     def create_context(self):
+        """Create a CUDA context.
+        """
         met_requirement_for_device(self)
-
-
 
         flags = 0
         if self.CAN_MAP_HOST_MEMORY:
@@ -410,19 +410,30 @@ class Device(object):
 
         ctx = Context(weakref.proxy(self), handle,
                       _context_finalizer(self.trashing, handle))
+
+        # Remember the context by its address so that we can get the associated
+        # Python object later.
         self.contexts[handle.value] = ctx
         return weakref.proxy(ctx)
 
     def close_all_context(self):
+        """Pop all contexts.
+
+        We assume we own all cuda contexts.
+        """
         while self.get_context():
             self.get_context().pop()
+
         self.contexts.clear()
 
     def get_context(self):
+        """Get current active context in CUDA driver runtime.
+        """
         handle = drvapi.cu_context()
         driver.cuCtxGetCurrent(byref(handle))
         if not handle.value:
             return None
+        # Find the cached context object by its pointer
         try:
             ctx = self.contexts[handle.value]
             return ctx

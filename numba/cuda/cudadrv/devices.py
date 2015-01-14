@@ -145,6 +145,11 @@ def require_context(fn):
 
 
 def reset():
+    """Reset the CUDA subsystem.
+
+    This removes all CUDA contexts.  Only use this at shutdown or for
+    cleaning up between tests.
+    """
     gpus.reset()
     _gpustack.clear()
 
