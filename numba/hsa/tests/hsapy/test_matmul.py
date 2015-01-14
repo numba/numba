@@ -24,21 +24,22 @@ class TestMatMul(unittest.TestCase):
 
             C[i, j] = tmp
 
-        N = 128
-        A = np.random.random((N, N))
-        B = np.random.random((N, N))
+        N = 256
+        A = np.random.random((N, N)).astype(np.float32)
+        B = np.random.random((N, N)).astype(np.float32)
         C = np.zeros_like(A)
 
-        ts = timer()
-        matmul[(N, N), (16, 16)](A, B, C)
-        te = timer()
-        print("GPU time:", te - ts)
+        with hsa.register(A, B, C):
+            ts = timer()
+            matmul[(N // 16, N // 16), (16, 16)](A, B, C)
+            te = timer()
+            print("GPU time:", te - ts)
 
         ts = timer()
         ans = np.dot(A, B)
         te = timer()
         print("CPU time:", te - ts)
-        np.testing.assert_allclose(ans, C)
+        np.testing.assert_allclose(ans, C, rtol=1e-5)
 
 
 if __name__ == '__main__':
