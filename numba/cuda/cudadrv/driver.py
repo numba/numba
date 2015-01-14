@@ -436,7 +436,7 @@ class Device(object):
         # Find the cached context object by its pointer
         try:
             ctx = self.contexts[handle.value]
-            return ctx
+            return weakref.proxy(ctx)
         except KeyError:
             raise RuntimeError("Current context is not manged: %s" %
                                handle.value)
