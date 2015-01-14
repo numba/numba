@@ -137,6 +137,11 @@ class TestGUfuncBuilding(unittest.TestCase):
 
 
 class TestVectorizeDecor(unittest.TestCase):
+
+    _supported_identities = [0, 1, None]
+    if numpy.__version__ >= '1.7':
+        _supported_identities.append("reorderable")
+
     def test_vectorize(self):
         ufunc = vectorize(['int32(int32, int32)'])(add)
         a = numpy.arange(10, dtype='int32')
@@ -177,7 +182,7 @@ class TestVectorizeDecor(unittest.TestCase):
 
     def test_vectorize_identity(self):
         sig = 'int32(int32, int32)'
-        for identity in (0, 1, None, 'reorderable'):
+        for identity in self._supported_identities:
             ufunc = vectorize([sig], identity=identity)(add)
             expected = None if identity == 'reorderable' else identity
             self.assertEqual(ufunc.identity, expected)
@@ -214,7 +219,7 @@ class TestVectorizeDecor(unittest.TestCase):
 
     def test_guvectorize_identity(self):
         args = (['(int32[:,:], int32[:,:], int32[:,:])'], "(x,y),(x,y)->(x,y)")
-        for identity in (0, 1, None, 'reorderable'):
+        for identity in self._supported_identities:
             ufunc = guvectorize(*args, identity=identity)(guadd)
             expected = None if identity == 'reorderable' else identity
             self.assertEqual(ufunc.identity, expected)
