@@ -450,17 +450,28 @@ class Lower(BaseLower):
                                      resty)
 
         elif expr.op == 'call':
-
-            argvals = [self.loadvar(a.name) for a in expr.args]
-            argtyps = [self.typeof(a.name) for a in expr.args]
             signature = self.fndesc.calltypes[expr]
 
             if isinstance(expr.func, ir.Intrinsic):
                 fnty = expr.func.name
                 castvals = expr.func.args
             else:
-                assert not expr.kws, expr.kws
                 fnty = self.typeof(expr.func.name)
+                if expr.kws:
+                    # Fold keyword arguments
+                    try:
+                        pysig = fnty.pysig
+                    except AttributeError:
+                        raise NotImplementedError("unsupported keyword arguments "
+                                                  "when calling %s" % (fnty,))
+                    ba = pysig.bind(*expr.args, **dict(expr.kws))
+                    assert not ba.kwargs
+                    args = ba.args
+                else:
+                    args = expr.args
+
+                argvals = [self.loadvar(a.name) for a in args]
+                argtyps = [self.typeof(a.name) for a in args]
 
                 castvals = [self.context.cast(self.builder, av, at, ft)
                             for av, at, ft in zip(argvals, argtyps,

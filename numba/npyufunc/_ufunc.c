@@ -34,6 +34,7 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args)
     PyObject *pyname, *pydoc;
     char *name = NULL, *doc = NULL;
     char *signature = NULL;
+    int identity;
 
     int i, j;
     int custom_dtype = 0;
@@ -42,12 +43,12 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args)
     void **data;
     PyUFuncObject *ufunc;
 
-    if (!PyArg_ParseTuple(args, "OOO!O!iiOO|s",
+    if (!PyArg_ParseTuple(args, "OOO!O!iiOOi|s",
                           &pyname, &pydoc,
                           &PyList_Type, &func_list,
                           &PyList_Type, &type_list,
                           &nin, &nout, &data_list,
-                          &object, &signature)) {
+                          &object, &identity, &signature)) {
         return NULL;
     }
     if (get_string(pyname, &name, "name should be str or None"))
@@ -163,7 +164,7 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args)
         ufunc = (PyUFuncObject *) PyUFunc_FromFuncAndDataAndSignature(
             (PyUFuncGenericFunction*) funcs, data, (char*) char_types,
             nfuncs, nin, nout,
-            PyUFunc_None,
+            identity,
             name, doc,
             0 /* check_return */, signature);
 
@@ -173,7 +174,7 @@ ufunc_fromfunc(PyObject *NPY_UNUSED(dummy), PyObject *args)
             0, 0, 0, 0,
             nin,
             nout,
-            PyUFunc_None,
+            identity,
             name, doc,
             0 /* check_return */, signature);
 
