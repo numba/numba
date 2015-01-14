@@ -28,7 +28,7 @@ error message.
 Function calls
 --------------
 
-Numba only supports function calls using positional arguments.
+Numba supports function calls using positional and named arguments.
 ``*args`` and ``**kwargs`` are not supported.
 
 
