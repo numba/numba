@@ -188,10 +188,22 @@ class CompilationUnit(object):
         if options.get('arch'):
             opts.append('-arch=%s' % options.pop('arch'))
 
-        for k in ('ftz', 'prec_sqrt', 'prec_div', 'fma'):
+        other_options = (
+            'ftz',
+            'prec_sqrt',
+            'prec_div',
+            'fma',
+        )
+
+        for k in other_options:
             if k in options:
-                v = bool(options.pop(k))
+                v = int(bool(options.pop(k)))
                 opts.append('-%s=%d' % (k.replace('_', '-'), v))
+
+        # If there are any option left
+        if options:
+            optstr = ', '.join(map(repr, options.keys()))
+            raise NvvmError("unsupported option {0}".format(optstr))
 
         # compile
         c_opts = (c_char_p * len(opts))(*[c_char_p(x.encode('utf8'))
@@ -241,36 +253,13 @@ data_layout = {
 default_data_layout = data_layout[tuple.__itemsize__ * 8]
 
 
-# List of supported compute capability in sorted order
-SUPPORTED_CC = (2, 0), (3, 0), (3, 5)
-
-
-def _find_arch(mycc):
-    for i, cc in enumerate(SUPPORTED_CC):
-        if cc == mycc:
-            # Matches
-            return cc
-        elif cc > mycc:
-            # Exceeded
-            if i == 0:
-                # CC lower than supported
-                raise NvvmSupportError("GPU compute capability %d.%d is "
-                                       "not supported (requires >=2.0)" % mycc)
-            else:
-                # return the previous CC
-                return SUPPORTED_CC[i - 1]
-
-    # CC higher than supported
-    return SUPPORTED_CC[-1]   # Choose the highest
-
-
 def get_arch_option(major, minor):
-    """Matches with the closest architecture option
+    """Returns compute_{major}{minor} or the forced compute capability
     """
     if config.FORCE_CUDA_CC:
         arch = config.FORCE_CUDA_CC
     else:
-        arch = _find_arch((major, minor))
+        arch = (major, minor)
     return 'compute_%d%d' % arch
 
 
@@ -283,14 +272,29 @@ files in the installation of CUDA.  (requires CUDA >=5.5)
 
 class LibDevice(object):
     _cache_ = {}
+    _known_arch = [
+        "compute_20",
+        "compute_30",
+        "compute_35",
+    ]
 
     def __init__(self, arch):
-        '''
+        """
         arch --- must be result from get_arch_option()
-        '''
+        """
         if arch not in self._cache_:
+            arch = self._get_closest_arch(arch)
             self._cache_[arch] = open_libdevice(arch)
+
+        self.arch = arch
         self.bc = self._cache_[arch]
+
+    def _get_closest_arch(self, arch):
+        res = self._known_arch[0]
+        for potential in self._known_arch:
+            if arch >= potential:
+                res = potential
+        return res
 
     def get(self):
         return self.bc
