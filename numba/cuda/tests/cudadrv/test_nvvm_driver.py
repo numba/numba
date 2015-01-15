@@ -6,6 +6,7 @@ from numba.cuda.cudadrv.nvvm import (NVVM, CompilationUnit, llvm_to_ptx,
                                      get_arch_option, SUPPORTED_CC)
 from ctypes import c_size_t, c_uint64, sizeof
 from numba.cuda.testing import unittest
+from numba.cuda.cudadrv.nvvm import LibDevice, NvvmError
 
 is64bit = sizeof(c_size_t) == sizeof(c_uint64)
 
@@ -56,18 +57,60 @@ class TestNvvmDriver(unittest.TestCase):
         else:
             self.assertTrue('.address_size 32' in ptx)
 
+    def _test_nvvm_support(self, arch):
+        nvvmir = self.get_ptx()
+        compute_xx = 'compute_{0}{1}'.format(*arch)
+        ptx = llvm_to_ptx(nvvmir, arch=compute_xx, ftz=1, prec_sqrt=0,
+                          prec_div=0).decode('utf8')
+        print(ptx)
+        self.assertIn(".target sm_{0}{1}".format(*arch), ptx)
+        self.assertIn('simple', ptx)
+        self.assertIn('ave', ptx)
+
+    def test_nvvm_support(self):
+        """Test supported CC by NVVM
+        """
+        for arch in SUPPORTED_CC:
+            self._test_nvvm_support(arch=arch)
+
+    def test_nvvm_future_support(self):
+        """Test unsupported CC to help track the feature support
+        """
+        future_archs = [
+            (5, 2),
+        ]
+        for arch in future_archs:
+            regex = r"\-arch=compute_{0}{1}".format(*arch)
+            with self.assertRaisesRegex(NvvmError, regex):
+                self._test_nvvm_support(arch=arch)
+
 
 class TestArchOption(unittest.TestCase):
     def test_get_arch_option(self):
         self.assertEqual(get_arch_option(2, 0), 'compute_20')
-        self.assertEqual(get_arch_option(2, 1), 'compute_20')
+        self.assertEqual(get_arch_option(2, 1), 'compute_21')
         self.assertEqual(get_arch_option(3, 0), 'compute_30')
         self.assertEqual(get_arch_option(3, 3), 'compute_30')
         self.assertEqual(get_arch_option(3, 4), 'compute_30')
         self.assertEqual(get_arch_option(3, 5), 'compute_35')
         self.assertEqual(get_arch_option(3, 6), 'compute_35')
+        self.assertEqual(get_arch_option(5, 0), 'compute_50')
+        self.assertEqual(get_arch_option(5, 1), 'compute_50')
         self.assertEqual(get_arch_option(1000, 0),
                          'compute_%d%d' % SUPPORTED_CC[-1])
+
+
+class TestLibDevice(unittest.TestCase):
+    def _libdevice_load(self, arch, expect):
+        libdevice = LibDevice(arch=arch)
+        self.assertEqual(libdevice.arch, expect)
+
+    def test_libdevice_arch_fix(self):
+        self._libdevice_load('compute_20', 'compute_20')
+        self._libdevice_load('compute_21', 'compute_20')
+        self._libdevice_load('compute_30', 'compute_30')
+        self._libdevice_load('compute_35', 'compute_35')
+        self._libdevice_load('compute_52', 'compute_35')
 
 
 gpu64 = '''
