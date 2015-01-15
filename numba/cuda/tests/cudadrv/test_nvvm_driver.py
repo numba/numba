@@ -3,7 +3,7 @@ from __future__ import absolute_import, print_function, division
 from llvmlite.llvmpy.core import Module, Type, Builder
 from numba.cuda.cudadrv.nvvm import (NVVM, CompilationUnit, llvm_to_ptx,
                                      set_cuda_kernel, fix_data_layout,
-                                     get_arch_option)
+                                     get_arch_option, SUPPORTED_CC)
 from ctypes import c_size_t, c_uint64, sizeof
 from numba.cuda.testing import unittest
 from numba.cuda.cudadrv.nvvm import LibDevice, NvvmError
@@ -60,11 +60,8 @@ class TestNvvmDriver(unittest.TestCase):
     def _test_nvvm_support(self, arch):
         nvvmir = self.get_ptx()
         compute_xx = 'compute_{0}{1}'.format(*arch)
-        ptx = llvm_to_ptx(nvvmir, arch=compute_xx,
-                          ftz=1,
-                          prec_sqrt=0,
-                          prec_div=0,
-        ).decode('utf8')
+        ptx = llvm_to_ptx(nvvmir, arch=compute_xx, ftz=1, prec_sqrt=0,
+                          prec_div=0).decode('utf8')
         print(ptx)
         self.assertIn(".target sm_{0}{1}".format(*arch), ptx)
         self.assertIn('simple', ptx)
@@ -73,14 +70,7 @@ class TestNvvmDriver(unittest.TestCase):
     def test_nvvm_support(self):
         """Test supported CC by NVVM
         """
-        archs = [
-            (2, 0),
-            (2, 1),
-            (3, 0),
-            (3, 5),
-            (5, 0),
-        ]
-        for arch in archs:
+        for arch in SUPPORTED_CC:
             self._test_nvvm_support(arch=arch)
 
     def test_nvvm_future_support(self):
@@ -97,16 +87,17 @@ class TestNvvmDriver(unittest.TestCase):
 
 class TestArchOption(unittest.TestCase):
     def test_get_arch_option(self):
-        # The behavior of get_arch_option() is changed to not fix architecture
-        # name. The fixing is moved to LibDevice. The reason being that
-        # libnvvm seems to support arch not available as libdevice.
         self.assertEqual(get_arch_option(2, 0), 'compute_20')
         self.assertEqual(get_arch_option(2, 1), 'compute_21')
         self.assertEqual(get_arch_option(3, 0), 'compute_30')
-        self.assertEqual(get_arch_option(3, 3), 'compute_33')
-        self.assertEqual(get_arch_option(3, 4), 'compute_34')
+        self.assertEqual(get_arch_option(3, 3), 'compute_30')
+        self.assertEqual(get_arch_option(3, 4), 'compute_30')
         self.assertEqual(get_arch_option(3, 5), 'compute_35')
-        self.assertEqual(get_arch_option(3, 6), 'compute_36')
+        self.assertEqual(get_arch_option(3, 6), 'compute_35')
+        self.assertEqual(get_arch_option(5, 0), 'compute_50')
+        self.assertEqual(get_arch_option(5, 1), 'compute_50')
+        self.assertEqual(get_arch_option(1000, 0),
+                         'compute_%d%d' % SUPPORTED_CC[-1])
 
 
 class TestLibDevice(unittest.TestCase):

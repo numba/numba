@@ -253,13 +253,36 @@ data_layout = {
 default_data_layout = data_layout[tuple.__itemsize__ * 8]
 
 
+# List of supported compute capability in sorted order
+SUPPORTED_CC = (2, 0), (2, 1), (3, 0), (3, 5), (5, 0)
+
+
+def _find_arch(mycc):
+    for i, cc in enumerate(SUPPORTED_CC):
+        if cc == mycc:
+            # Matches
+            return cc
+        elif cc > mycc:
+            # Exceeded
+            if i == 0:
+                # CC lower than supported
+                raise NvvmSupportError("GPU compute capability %d.%d is "
+                                       "not supported (requires >=2.0)" % mycc)
+            else:
+                # return the previous CC
+                return SUPPORTED_CC[i - 1]
+
+    # CC higher than supported
+    return SUPPORTED_CC[-1]   # Choose the highest
+
+
 def get_arch_option(major, minor):
-    """Returns compute_{major}{minor} or the forced compute capability
+    """Matches with the closest architecture option
     """
     if config.FORCE_CUDA_CC:
         arch = config.FORCE_CUDA_CC
     else:
-        arch = (major, minor)
+        arch = _find_arch((major, minor))
     return 'compute_%d%d' % arch
 
 
