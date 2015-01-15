@@ -80,9 +80,10 @@ class TestNvvmDriver(unittest.TestCase):
             (5, 2),
         ]
         for arch in future_archs:
-            regex = r"\-arch=compute_{0}{1}".format(*arch)
-            with self.assertRaisesRegex(NvvmError, regex):
+            pat = r"-arch=compute_{0}{1}".format(*arch)
+            with self.assertRaises(NvvmError) as raises:
                 self._test_nvvm_support(arch=arch)
+                self.assertIn(pat, raises.msg)
 
 
 class TestArchOption(unittest.TestCase):
