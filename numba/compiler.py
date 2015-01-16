@@ -8,9 +8,10 @@ import sys
 import warnings
 
 from numba import (bytecode, interpreter, typing, typeinfer, lowering,
-                   objmode, irpasses, utils, config, type_annotations,
+                   objmode, irpasses, utils, config,
                    types, ir, assume, looplifting, macro, types)
 from numba.targets import cpu
+from numba.annotations import type_annotations
 
 
 class Flags(utils.ConfigOptions):
@@ -408,12 +409,19 @@ class Pipeline(object):
             interp=self.interp,
             typemap=self.typemap,
             calltypes=self.calltypes,
-            lifted=self.lifted)
+            lifted=self.lifted,
+            args=self.args,
+            return_type=self.return_type,
+            func_attr=self.func_attr,
+            fancy=config.FANCY)
 
         if config.ANNOTATE:
-            print("ANNOTATION".center(80, '-'))
-            print(self.type_annotation)
-            print('=' * 80)
+            if config.FANCY:
+                print(self.type_annotation)
+            else:
+                print("ANNOTATION".center(80, '-'))
+                print(self.type_annotation)
+                print('=' * 80)
 
     def backend_object_mode(self):
         """

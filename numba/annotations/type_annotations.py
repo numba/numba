@@ -1,11 +1,14 @@
 from __future__ import print_function, absolute_import
 import inspect
 import re
-from collections import Mapping, defaultdict
+from collections import Mapping, defaultdict, OrderedDict
 import textwrap
 from contextlib import closing
 from numba.io_support import StringIO
 from numba import ir
+from . import step
+import os
+import sys
 
 
 class SourceLines(Mapping):
@@ -38,19 +41,26 @@ class SourceLines(Mapping):
 
 
 class TypeAnnotation(object):
-    def __init__(self, interp, typemap, calltypes, lifted):
+    
+    output_filename = os.path.join(os.getcwd(),
+                                   os.path.splitext(sys.argv[0])[0] + '.html')
+    data = {'func_data': OrderedDict()}
+
+    def __init__(self, interp, typemap, calltypes, lifted, args, return_type,
+                 func_attr, fancy=False):
         self.filename = interp.bytecode.filename
         self.func = interp.bytecode.func
         self.blocks = interp.blocks
         self.typemap = typemap
         self.calltypes = calltypes
         self.lifted = lifted
+        self.fancy = fancy
+        self.filename = interp.loc.filename
+        self.linenum = str(interp.loc.line)
+        self.signature = str(args) + ' -> ' + str(return_type)
+        self.func_attr = func_attr
 
-    def annotate(self):
-        source = SourceLines(self.func)
-        # if not source.avail:
-        #     return "Source code unavailable"
-
+    def prepare_annotations(self):
         # Prepare annotations
         groupedinst = defaultdict(list)
         for blkid, blk in self.blocks.items():
@@ -72,6 +82,14 @@ class TypeAnnotation(object):
                 else:
                     aline = "%s" % inst
                 groupedinst[lineno].append("  %s" % aline)
+        return groupedinst
+
+    def annotate(self):
+        source = SourceLines(self.func)
+        # if not source.avail:
+        #     return "Source code unavailable"
+
+        groupedinst = self.prepare_annotations()
 
         # Format annotations
         io = StringIO()
@@ -105,8 +123,72 @@ class TypeAnnotation(object):
 
             return io.getvalue()
 
+    def html_annotate(self):
+        root = os.path.join(os.path.dirname(__file__))
+        template_filename = os.path.join(root, 'template.html')
+        with open(template_filename, 'r') as template:
+            html = template.read()
+
+        python_source = SourceLines(self.func)
+        llvm_instructions = self.prepare_annotations()
+        line_nums = [num for num in python_source]
+
+        lifted_lines = [l.bytecode.firstlineno for l in self.lifted]
+
+        func_key = (self.filename + ':' + self.linenum, self.signature)
+        if func_key not in TypeAnnotation.data['func_data']:
+
+            TypeAnnotation.data['func_data'][func_key] = {}
+            func_data = TypeAnnotation.data['func_data'][func_key]
+
+            func_data['filename'] = self.filename
+            func_data['funcname'] = self.func_attr.name
+
+            func_data['python_indent'] = {}
+            for num in line_nums:
+                indent_len = len(_getindent(python_source[num]))
+                func_data['python_indent'][num] = '&nbsp;' * indent_len
+        
+            func_data['llvm_indent'] = {}
+            for num in line_nums:
+                func_data['llvm_indent'][num] = []
+                for inst in llvm_instructions[num]:
+                    indent_len = len(_getindent(inst))
+                    func_data['llvm_indent'][num].append('&nbsp;' * indent_len)
+
+            func_data['python_object'] = {}
+            func_data['llvm_object'] = {}
+            for num in line_nums:
+                func_data['python_object'][num] = ''
+                func_data['llvm_object'][num] = []
+                for inst in llvm_instructions[num]:
+                    if num in lifted_lines:
+                        func_data['python_object'][num] = 'lifted_tag'
+                    elif inst.endswith('pyobject'):
+                        func_data['llvm_object'][num].append('object_tag')
+                        func_data['python_object'][num] = 'object_tag'
+                    else:
+                        func_data['llvm_object'][num].append('')
+
+            func_data['python_lines'] = {}
+            for num in line_nums:
+                func_data['python_lines'][num] = python_source[num].strip()
+        
+            func_data['llvm_lines'] = {}
+            for num in line_nums:
+                func_data['llvm_lines'][num] = []
+                for inst in llvm_instructions[num]:
+                    func_data['llvm_lines'][num].append(inst.strip())
+
+        with open(self.output_filename, 'w') as output:
+            step.Template(html).stream(output, TypeAnnotation.data.copy())
+
     def __str__(self):
-        return self.annotate()
+        if self.fancy:
+            self.html_annotate()
+            return self.annotate()
+        else:
+            return self.annotate()
 
 
 re_longest_white_prefix = re.compile('^\s*')

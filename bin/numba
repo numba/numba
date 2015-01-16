@@ -37,10 +37,9 @@ if __name__ == "__main__":
     if args.dump_ast:
         print("AST dump is removed.  Numba no longer depends on AST.")
         sys.exit(1)
-    if args.fancy:
-        print("Unavailable in this release.")
 
     os.environ['NUMBA_DUMP_ANNOTATION'] = str(int(args.annotate))
+    os.environ['NUMBA_DUMP_FANCY'] = str(int(args.fancy))
     os.environ['NUMBA_DUMP_LLVM'] = str(int(args.dump_llvm))
     os.environ['NUMBA_DUMP_OPTIMIZED'] = str(int(args.dump_optimized))
     os.environ['NUMBA_DUMP_ASSEMBLY'] = str(int(args.dump_assembly))
