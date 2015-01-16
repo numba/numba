@@ -98,7 +98,6 @@ class _Runtime(object):
     def current_context(self):
         """Return the active gpu context
         """
-        assert self.context_stack
         top = self.context_stack.top
         # integrity check
         assert driver.get_context().value == top.handle.value, (
@@ -144,7 +143,7 @@ class _Runtime(object):
             # Create a context and quit
             ctx = self._create_context(gpu)
 
-        # Context stack is empty
+        # Context stack is empty or the active device is not the given gpu
         elif self.context_stack.is_empty or self.current_context.device != gpu:
             ctx = self._get_or_create_context(gpu)
 
@@ -152,9 +151,8 @@ class _Runtime(object):
         else:
             ctx = self.current_context
 
-        assert ctx
+        # Always put the new context on the stack
         self.context_stack.push(ctx)
-        assert self.context_stack
         return ctx
 
     def pop_context(self):
@@ -172,6 +170,9 @@ class _Runtime(object):
         assert self.context_stack
 
     def get_or_create_context(self, devnum):
+        """Returns the current context or push/create a context for the GPU
+        with the given device number.
+        """
         if self.context_stack:
             return self.current_context
         else:
@@ -191,10 +192,13 @@ class _Runtime(object):
             self._destroy_all_contexts()
 
     def _destroy_all_contexts(self):
+        # Destroy all contexts
         for ctx in self._contexts.values():
             ctx.reset()
+        # Reset all devices
         for gpu in self.gpus:
             gpu.reset()
+        # Clear internal references to contexts and devices
         self._contexts.clear()
         self._devctx.clear()
 
