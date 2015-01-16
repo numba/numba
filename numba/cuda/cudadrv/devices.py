@@ -18,10 +18,20 @@ from .driver import driver
 
 
 class _DeviceList(object):
-    def __init__(self, devices):
-        self.lst = tuple(devices)
+    def __init__(self):
+        # The list of devices is lazily created to defer CUDA driver
+        # initialization
+        self.lst = None
 
     def __getitem__(self, devnum):
+        if self.lst is None:
+            # Device list is not initialized.
+            # Query all CUDA devices.
+            numdev = driver.get_device_count()
+            gpus = [_DeviceContextManager(driver.get_device(devid))
+                    for devid in range(numdev)]
+            self.lst = gpus
+
         return self.lst[devnum]
 
     def __str__(self):
@@ -71,10 +81,8 @@ class _Runtime(object):
     """
 
     def __init__(self):
-        numdev = driver.get_device_count()
-        gpus = [_DeviceContextManager(driver.get_device(devid))
-                for devid in range(numdev)]
-        self.gpus = _DeviceList(gpus)
+        self.gpus = _DeviceList()
+
         # A thread local stack
         self.context_stack = servicelib.TLStack()
         # Remembers all context
@@ -204,7 +212,6 @@ class _Runtime(object):
 
 
 _runtime = _Runtime()
-
 
 # ================================ PUBLIC API ================================
 
