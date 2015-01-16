@@ -267,6 +267,15 @@ class Driver(object):
         for dev in self.devices.values():
             dev.reset()
 
+    def get_context(self):
+        """Get current active context in CUDA driver runtime.
+        Note: Lowlevel calls that returns the handle.
+        """
+        handle = drvapi.cu_context(0)
+        driver.cuCtxGetCurrent(byref(handle))
+        if not handle.value:
+            return None
+        return handle
 
 driver = Driver()
 
@@ -346,8 +355,6 @@ class Device(object):
         buf = (c_char * bufsz)()
         driver.cuDeviceGetName(buf, bufsz, self.id)
         self.name = buf.value
-        # A dictionary or all context with handle value as the key
-        self.contexts = {}
 
     @property
     def COMPUTE_CAPABILITY(self):
@@ -411,44 +418,9 @@ class Device(object):
         ctx = Context(weakref.proxy(self), handle,
                       _context_finalizer(self.trashing, handle))
 
-        # Remember the context by its address so that we can get the associated
-        # Python object later.
-        self.contexts[handle.value] = ctx
-        return weakref.proxy(ctx)
-
-    def close_all_context(self):
-        """Pop all contexts.
-
-        We assume we own all cuda contexts.
-        """
-        while self.get_context():
-            self.get_context().pop()
-
-        self.contexts.clear()
-
-    def get_context(self):
-        """Get current active context in CUDA driver runtime.
-        """
-        handle = drvapi.cu_context()
-        driver.cuCtxGetCurrent(byref(handle))
-        if not handle.value:
-            return None
-        # Find the cached context object by its pointer
-        try:
-            ctx = self.contexts[handle.value]
-            return weakref.proxy(ctx)
-        except KeyError:
-            raise RuntimeError("Current context is not manged: %s" %
-                               handle.value)
-
-    def get_or_create_context(self):
-        ctx = self.get_context()
-        if ctx is None:
-            ctx = self.create_context()
         return ctx
 
     def reset(self):
-        self.close_all_context()
         self.trashing.clear()
 
 

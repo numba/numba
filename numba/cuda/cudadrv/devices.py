@@ -1,134 +1,217 @@
 """
-Expose each GPU devices directly
+Expose each GPU devices directly.
+
+This module implements a API that is like the "CUDA runtime" context manager
+for managing CUDA context stack and clean up.  It relies on thread-local globals
+to separate the context stack management of each thread. Contexts are also
+sharable among threads.  Only the main thread can destroy Contexts.
+
+Note:
+- This module must be imported by the main-thread.
+
 """
 from __future__ import print_function, absolute_import, division
 import functools
+import threading
 from numba import servicelib
 from .driver import driver
 
 
-class _gpus(object):
-    """A thread local list of GPU instances
-    """
+class _DeviceList(object):
+    def __init__(self, devices):
+        self.lst = tuple(devices)
 
-    def __init__(self):
-        self._lst = None
+    def __getitem__(self, devnum):
+        return self.lst[devnum]
 
-    @property
-    def _gpus(self):
-        if not self._lst:
-            self._lst = self._init_gpus()
-        return self._lst
-
-    def _init_gpus(self):
-        gpus = []
-        for num in range(driver.get_device_count()):
-            device = driver.get_device(num)
-            gpus.append(GPU(device))
-        return gpus
-
-    def __getitem__(self, item):
-        return self._gpus[item]
-
-    def append(self, item):
-        return self._gpus.append(item)
-
-    def __len__(self):
-        return len(self._gpus)
-
-    def __nonzero__(self):
-        return bool(self._gpus)
+    def __str__(self):
+        return ', '.join([str(d) for d in self.lst])
 
     def __iter__(self):
-        return iter(self._gpus)
+        return iter(self.lst)
 
-    __bool__ = __nonzero__
-
-    def reset(self):
-        for gpu in self:
-            gpu.reset()
-        self._lst = None
+    def __len__(self):
+        return len(self.lst)
 
     @property
     def current(self):
-        """Get the current GPU object associated with the thread
+        """Returns the active device
         """
-        return _gpustack.top
+        return self.lst[_runtime.current_context.device.id]
 
 
-gpus = _gpus()
-del _gpus
-
-
-class GPU(object):
-    """Proxy into driver.Device.  Provides a CUDA runtime like layer.
-    All threads see the same GPU list and shared the same CUDA context.
+class _DeviceContextManager(object):
+    """Provides contextmanager functionality to Device objects
     """
 
-    def __init__(self, gpu):
-        self._gpu = gpu
-        self._context = None
+    def __init__(self, device):
+        self._device = device
 
-    def __getattr__(self, key):
-        """Redirect to self._gpu
-        """
-        if key.startswith('_'):
-            raise AttributeError(key)
-        return getattr(self._gpu, key)
-
-    def __repr__(self):
-        return repr(self._gpu)
-
-    def associate_context(self):
-        """Associate the context of this GPU to the running thread
-        """
-        # No context was created for this GPU
-        if self._context is None:
-            self._context = self._gpu.create_context()
-
-        # Current context is not associated with the thread
-        if self._gpu.get_context() != self._context:
-            self._context.push()
-
-        return self._context
+    def __getattr__(self, item):
+        return getattr(self._device, item)
 
     def __enter__(self):
-        self.associate_context()
-        _gpustack.push(self)
+        _runtime.push_context(self)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        assert _get_device() is self
-        self._context.pop()
-        _gpustack.pop()
+        _runtime.pop_context()
 
-    def reset(self):
-        self._gpu.reset()
+    def __str__(self):
+        return "<Managed Device {self.id}>".format(self=self)
+
+
+_MSG_TOO_MANY_CTX_PER_DEV = "Creating more contexts then devices"
+
+
+class _Runtime(object):
+    """Emulate the CUDA runtime context management.
+
+    It owns all Devices and Contexts.
+    Keeps at most one Context per Device
+    """
+
+    def __init__(self):
+        numdev = driver.get_device_count()
+        gpus = [_DeviceContextManager(driver.get_device(devid))
+                for devid in range(numdev)]
+        self.gpus = _DeviceList(gpus)
+        # A thread local stack
+        self.context_stack = servicelib.TLStack()
+        # Remembers all context
+        # key: context.handle.value
+        # value: Context
+        self._contexts = {}
+
+        # Device's context map
+        # key: Device.id
+        # value: Context
+        self._devctx = {}
+
+        # Remember the main thread
+        # Only the main thread can *actually* destroy
+        self._mainthread = threading.current_thread()
+
+        # Avoid mutation of runtime state in multithreaded programs
+        self._lock = threading.Lock()
 
     @property
-    def active_contexts(self):
-        return self._gpu.contexts.values()
+    def current_context(self):
+        """Return the active gpu context
+        """
+        assert self.context_stack
+        top = self.context_stack.top
+        # integrity check
+        assert driver.get_context().value == top.handle.value, (
+            "An unmanaged CUDA context is active."
+        )
+        return top
+
+    def _create_context(self, gpu):
+        """Create a new context for the given gpu
+        """
+        # Use lock to prevent internal state mutation
+        with self._lock:
+            ctx = gpu.create_context()
+            self._contexts[ctx.handle.value] = ctx
+            self._devctx[gpu.id] = ctx
+
+            assert len(self._contexts) <= len(gpus), _MSG_TOO_MANY_CTX_PER_DEV
+            assert len(self._devctx) <= len(gpus), _MSG_TOO_MANY_CTX_PER_DEV
+            return ctx
+
+    def _get_or_create_context(self, gpu):
+        """Try to use a already created context for the given gpu.  If none
+        existed, create a new context.
+
+        Returns the context
+        """
+        # Get a context from the device
+        ctx = self._devctx.get(gpu.id)
+        if ctx is None:
+            ctx = self._create_context(gpu)
+        else:
+            # Push the context to the stack
+            ctx.push()
+
+        return ctx
+
+    def push_context(self, gpu):
+        """Push a context for the given GPU if it is not the current context
+        on the context stack.
+        """
+        # First context
+        if not self._contexts:
+            # Create a context and quit
+            ctx = self._create_context(gpu)
+
+        # Context stack is empty
+        elif self.context_stack.is_empty or self.current_context.device != gpu:
+            ctx = self._get_or_create_context(gpu)
+
+        # Active context is from the gpu
+        else:
+            ctx = self.current_context
+
+        assert ctx
+        self.context_stack.push(ctx)
+        assert self.context_stack
+        return ctx
+
+    def pop_context(self):
+        """Pop a context from the context stack if there is more than
+        one context in the stack.
+
+        Will not remove the last context in the stack.
+        """
+        ctx = self.current_context
+        # If there is more than one context
+        # Do not pop the last context so there is always a active context
+        if len(self.context_stack) > 1:
+            ctx.pop()
+            self.context_stack.pop()
+        assert self.context_stack
+
+    def get_or_create_context(self, devnum):
+        if self.context_stack:
+            return self.current_context
+        else:
+            return _runtime.push_context(self.gpus[devnum])
+
+    def reset(self):
+        """Clear all contexts in the thread.  Destroy the context if and only
+        if we are in the main thread.
+        """
+        # Clear the context stack
+        while self.context_stack:
+            ctx = self.context_stack.pop()
+            ctx.pop()
+
+        # If it is the main thread
+        if threading.current_thread() == self._mainthread:
+            self._destroy_all_contexts()
+
+    def _destroy_all_contexts(self):
+        for ctx in self._contexts.values():
+            ctx.reset()
+        for gpu in self.gpus:
+            gpu.reset()
+        self._contexts.clear()
+        self._devctx.clear()
 
 
-def get_gpu(i):
-    return gpus[i]
+_runtime = _Runtime()
 
 
-_gpustack = servicelib.TLStack()
+# ================================ PUBLIC API ================================
 
-
-def _get_device(devnum=0):
-    """Get the current device or use a device by device number.
-    """
-    if not _gpustack:
-        _gpustack.push(get_gpu(devnum))
-    return _gpustack.top
+gpus = _runtime.gpus
 
 
 def get_context(devnum=0):
     """Get the current device or use a device by device number, and
     return the CUDA context.
     """
-    return _get_device(devnum=devnum).associate_context()
+    return _runtime.get_or_create_context(devnum)
 
 
 def require_context(fn):
@@ -145,12 +228,14 @@ def require_context(fn):
 
 
 def reset():
-    """Reset the CUDA subsystem.
+    """Reset the CUDA subsystem for the current thread.
 
+    In the main thread:
     This removes all CUDA contexts.  Only use this at shutdown or for
     cleaning up between tests.
+
+    In non-main threads:
+    This clear the CUDA context stack only.
+
     """
-    gpus.reset()
-    _gpustack.clear()
-
-
+    _runtime.reset()
