@@ -5,6 +5,7 @@ import threading
 
 
 class TestMultiGPUContext(unittest.TestCase):
+    @unittest.skipIf(len(cuda.gpus) < 2, "need more than 1 gpus")
     def test_multigpu_context(self):
         @cuda.jit("void(float64[:], float64[:])")
         def copy_plus_1(inp, out):
@@ -32,27 +33,26 @@ class TestMultiGPUContext(unittest.TestCase):
 
         print(len(cuda.gpus))
 
-        if len(cuda.gpus) >= 2:
-            with cuda.gpus[0]:
-                A0 = np.arange(N, dtype=np.float64)
-                B0 = np.arange(N, dtype=np.float64)
-                copy_plus_1[1, N](A0, B0)
+        with cuda.gpus[0]:
+            A0 = np.arange(N, dtype=np.float64)
+            B0 = np.arange(N, dtype=np.float64)
+            copy_plus_1[1, N](A0, B0)
 
-                with cuda.gpus[1]:
-                    A1 = np.arange(N, dtype=np.float64)
-                    B1 = np.arange(N, dtype=np.float64)
-                    copy_plus_1[1, N](A1, B1)
+            with cuda.gpus[1]:
+                A1 = np.arange(N, dtype=np.float64)
+                B1 = np.arange(N, dtype=np.float64)
+                copy_plus_1[1, N](A1, B1)
 
-            print(A0, A1)
-            print(B0, B1)
+        print(A0, A1)
+        print(B0, B1)
 
-            check(A0, B0)
-            check(A1, B1)
+        check(A0, B0)
+        check(A1, B1)
 
-            A = np.arange(N, dtype=np.float64)
-            B = np.arange(N, dtype=np.float64)
-            copy_plus_1[1, N](A, B)
-            check(A, B)
+        A = np.arange(N, dtype=np.float64)
+        B = np.arange(N, dtype=np.float64)
+        copy_plus_1[1, N](A, B)
+        check(A, B)
 
     def test_multithreaded(self):
         def work(gpu, dA, results, ridx):
@@ -85,6 +85,41 @@ class TestMultiGPUContext(unittest.TestCase):
                 raise r
             else:
                 self.assertTrue(r)
+
+
+    @unittest.skipIf(len(cuda.gpus) < 2, "need more than 1 gpus")
+    def test_with_context(self):
+
+        @cuda.jit
+        def vector_add_scalar(arr, val):
+            i = cuda.grid(1)
+            if i < arr.size:
+                arr[i] += val
+
+
+        hostarr = np.arange(10, dtype=np.float32)
+        with cuda.gpus[0]:
+            arr1 = cuda.to_device(hostarr)
+
+        with cuda.gpus[1]:
+            arr2 = cuda.to_device(hostarr)
+
+        with cuda.gpus[0]:
+            vector_add_scalar[1, 10](arr1, 1)
+
+        with cuda.gpus[1]:
+            vector_add_scalar[1, 10](arr2, 2)
+
+        with cuda.gpus[0]:
+            np.testing.assert_equal(arr1.copy_to_host(), (hostarr + 1))
+
+        with cuda.gpus[1]:
+            np.testing.assert_equal(arr2.copy_to_host(), (hostarr + 2))
+
+        with cuda.gpus[0]:
+            # Transfer from GPU1 to GPU0
+            arr1.copy_to_device(arr2)
+            np.testing.assert_equal(arr1.copy_to_host(), (hostarr + 2))
 
 
 if __name__ == '__main__':
