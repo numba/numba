@@ -18,20 +18,22 @@ from .driver import driver
 
 
 class _DeviceList(object):
-    def __init__(self):
-        # The list of devices is lazily created to defer CUDA driver
-        # initialization
-        self.lst = None
-
-    def __getitem__(self, devnum):
-        if self.lst is None:
+    def __getattr__(self, attr):
+        # First time looking at "lst" attribute.
+        if attr == "lst":
             # Device list is not initialized.
             # Query all CUDA devices.
             numdev = driver.get_device_count()
             gpus = [_DeviceContextManager(driver.get_device(devid))
                     for devid in range(numdev)]
+            # Define "lst" to avoid re-initialization
             self.lst = gpus
+            return gpus
 
+        # Other attributes
+        return super(_DeviceList, self).__getattr__(attr)
+
+    def __getitem__(self, devnum):
         return self.lst[devnum]
 
     def __str__(self):
