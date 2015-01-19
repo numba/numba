@@ -33,6 +33,7 @@ class CodeLibrary(object):
         self._linking_libraries = set()
         self._final_module = self._codegen._materialize_module(
             self._codegen._create_empty_module(self._name))
+        self._shared_module = None
 
     @property
     def codegen(self):
@@ -73,6 +74,28 @@ class CodeLibrary(object):
         """
         self._codegen._mpm.run(self._final_module)
 
+    def _get_module_for_linking(self):
+        """
+        Internal: get a LLVM module suitable for linking multiple times
+        into another library.  Exported functions are made "linkonce_odr"
+        to allow for multiple definitions, inlining, and removal of
+        unused exports.
+        See discussion in https://github.com/numba/numba/pull/890
+        """
+        if self._shared_module is not None:
+            return self._shared_module
+        mod = self._final_module
+        to_fix = []
+        for fn in mod.functions:
+            if not fn.is_declaration and fn.linkage == ll.Linkage.external:
+                to_fix.append(fn.name)
+        if to_fix:
+            mod = mod.clone()
+            for name in to_fix:
+                mod.get_function(name).linkage = 'linkonce_odr'
+        self._shared_module = mod
+        return mod
+
     def create_ir_module(self, name):
         """
         Create a LLVM IR module for use by this library.
@@ -111,18 +134,20 @@ class CodeLibrary(object):
         """
         self._raise_if_finalized()
 
-        if config.NUMBA_DUMP_FUNC_OPT:
+        if config.DUMP_FUNC_OPT:
             print(("FUNCTION OPTIMIZED DUMP %s" % self._name).center(80, '-'))
             print(self._final_module)
             print('=' * 80)
-
-        self._optimize_final_module()
 
         # Link libraries for shared code
         for library in self._linking_libraries:
             self._link_in(library)
         for library in self._codegen._libraries:
             self._link_in(library)
+
+        # Optimize the module after all dependences are linked in above,
+        # to allow for inlining.
+        self._optimize_final_module()
 
         self._final_module.verify()
         # It seems add_module() must be done only here and not before
@@ -139,15 +164,22 @@ class CodeLibrary(object):
             print('=' * 80)
 
         if config.DUMP_ASSEMBLY:
-            print(("ASSEMBLY %s" % self._name).center(80, '-'))
-            print(self._codegen._tm.emit_assembly(self._final_module))
-            print('=' * 80)
+            self._dump_assembly()
 
     def get_function(self, name):
         return self._final_module.get_function(name)
 
     def _link_in(self, lib):
-        return self._final_module.link_in(lib._final_module, preserve=True)
+        return self._final_module.link_in(lib._get_module_for_linking(),
+                                          preserve=True)
+
+    def _dump_assembly(self):
+        """
+        Internal: dump native assembler code for this library.
+        """
+        print(("ASSEMBLY %s" % self._name).center(80, '-'))
+        print(self._codegen._tm.emit_assembly(self._final_module))
+        print('=' * 80)
 
 
 class AOTCodeLibrary(CodeLibrary):
@@ -196,6 +228,7 @@ class BaseCPUCodegen(object):
 
     def __init__(self, module_name):
         self._libraries = set()
+        self._data_layout = None
         self._llvm_module = self._materialize_module(
             self._create_empty_module(module_name))
         self._init(self._llvm_module)
@@ -229,6 +262,8 @@ class BaseCPUCodegen(object):
     def _create_empty_module(self, name):
         ir_module = lc.Module.new(name)
         ir_module.triple = ll.get_default_triple()
+        if self._data_layout:
+            ir_module.data_layout = self._data_layout
         return ir_module
 
     @property

@@ -2,9 +2,11 @@ from __future__ import absolute_import, print_function
 import copy
 import ctypes
 
-from numba import compiler, types, errcode
+
+from numba.typing.templates import AbstractTemplate
+from numba import config, compiler, types, errcode
 from numba.typing.templates import ConcreteTemplate
-from numba import typing, lowering, utils
+from numba import typing, lowering
 
 from .cudadrv.devices import get_context
 from .cudadrv import nvvm, devicearray, driver
@@ -12,7 +14,7 @@ from .errors import KernelRuntimeError
 from .api import get_current_device
 
 
-def compile_cuda(pyfunc, return_type, args, debug):
+def compile_cuda(pyfunc, return_type, args, debug, inline):
     # First compilation will trigger the initialization of the CUDA backend.
     from .descriptor import CUDATargetDesc
 
@@ -23,6 +25,10 @@ def compile_cuda(pyfunc, return_type, args, debug):
     # Do not compile (generate native code), just lower (to LLVM)
     flags.set('no_compile')
     flags.set('no_cpython_wrapper')
+    if debug:
+        flags.set('boundcheck')
+    if inline:
+        flags.set('forceinline')
     # Run compilation pipeline
     cres = compiler.compile_extra(typingctx=typingctx,
                                   targetctx=targetctx,
@@ -38,22 +44,80 @@ def compile_cuda(pyfunc, return_type, args, debug):
     return cres
 
 
-def compile_kernel(pyfunc, args, link, debug=False):
-    cres = compile_cuda(pyfunc, types.void, args, debug=debug)
+def compile_kernel(pyfunc, args, link, debug=False, inline=False,
+                   fastmath=False):
+    cres = compile_cuda(pyfunc, types.void, args, debug=debug, inline=inline)
     func = cres.library.get_function(cres.fndesc.llvm_func_name)
     kernel = cres.target_context.prepare_cuda_kernel(func,
                                                      cres.signature.args)
     cukern = CUDAKernel(llvm_module=cres.library._final_module,
                         name=kernel.name,
+                        pretty_name=cres.fndesc.qualname,
                         argtypes=cres.signature.args,
                         link=link,
                         debug=debug,
-                        exceptions=cres.exception_map)
+                        exceptions=cres.exception_map,
+                        fastmath=fastmath)
     return cukern
 
 
+class DeviceFunctionTemplate(object):
+    """Unmaterialized device function
+    """
+    def __init__(self, pyfunc, debug, inline):
+        self.py_func = pyfunc
+        self.debug = debug
+        self.inline = inline
+        self._compileinfos = {}
+
+    def compile(self, args):
+        """Compile the function for the given argument types.
+
+        Each signature is compiled once by caching the compiled function inside
+        this object.
+        """
+        if args not in self._compileinfos:
+            cres = compile_cuda(self.py_func, None, args, debug=self.debug,
+                                inline=self.inline)
+            first_definition = not self._compileinfos
+            self._compileinfos[args] = cres
+            libs = [cres.library]
+
+            if first_definition:
+                # First definition
+                cres.target_context.insert_user_function(self, cres.fndesc,
+                                                         libs)
+            else:
+                cres.target_context.add_user_function(self, cres.fndesc, libs)
+
+        else:
+            cres = self._compileinfos[args]
+
+        return cres.signature
+
+
+def compile_device_template(pyfunc, debug=False, inline=False):
+    """Create a DeviceFunctionTemplate object and register the object to
+    the CUDA typing context.
+    """
+    from .descriptor import CUDATargetDesc
+
+    dft = DeviceFunctionTemplate(pyfunc, debug=debug, inline=inline)
+
+    class device_function_template(AbstractTemplate):
+        key = dft
+
+        def generic(self, args, kws):
+            assert not kws
+            return dft.compile(args)
+
+    typingctx = CUDATargetDesc.typingctx
+    typingctx.insert_user_function(dft, device_function_template)
+    return dft
+
+
 def compile_device(pyfunc, return_type, args, inline=True, debug=False):
-    cres = compile_cuda(pyfunc, return_type, args, debug=debug)
+    cres = compile_cuda(pyfunc, return_type, args, debug=debug, inline=inline)
     devfn = DeviceFunction(cres)
 
     class device_function_template(ConcreteTemplate):
@@ -143,10 +207,11 @@ class CUDAKernelBase(object):
 class CachedPTX(object):
     """A PTX cache that uses compute capability as a cache key
     """
-
-    def __init__(self, llvmir):
+    def __init__(self, name, llvmir, options):
+        self.name = name
         self.llvmir = llvmir
         self.cache = {}
+        self._extra_options = options.copy()
 
     def get(self):
         """
@@ -158,8 +223,13 @@ class CachedPTX(object):
         ptx = self.cache.get(cc)
         if ptx is None:
             arch = nvvm.get_arch_option(*cc)
-            ptx = nvvm.llvm_to_ptx(self.llvmir, opt=3, arch=arch)
+            ptx = nvvm.llvm_to_ptx(self.llvmir, opt=3, arch=arch,
+                                   **self._extra_options)
             self.cache[cc] = ptx
+            if config.DUMP_ASSEMBLY:
+                print(("ASSEMBLY %s" % self.name).center(80, '-'))
+                print(ptx.decode('utf-8'))
+                print('=' * 80)
         return ptx
 
 
@@ -208,13 +278,22 @@ class CachedCUFunction(object):
 
 
 class CUDAKernel(CUDAKernelBase):
-    def __init__(self, llvm_module, name, argtypes, link=(), debug=False,
-                 exceptions={}):
+    def __init__(self, llvm_module, name, pretty_name,
+                 argtypes, link=(), debug=False, exceptions={},
+                 fastmath=False):
         super(CUDAKernel, self).__init__()
         self.entry_name = name
         self.argument_types = tuple(argtypes)
         self.linking = tuple(link)
-        ptx = CachedPTX(str(llvm_module))
+
+        options = {}
+        if fastmath:
+            options.update(dict(ftz=True,
+                                prec_sqrt=False,
+                                prec_div=False,
+                                fma=True))
+
+        ptx = CachedPTX(pretty_name, str(llvm_module), options=options)
         self._func = CachedCUFunction(self.entry_name, ptx, link)
         self.debug = debug
         self.exceptions = exceptions
@@ -369,6 +448,7 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         self.targetoptions = targetoptions
 
         from .descriptor import CUDATargetDesc
+
         self.typingctx = CUDATargetDesc.typingctx
 
     def __call__(self, *args):
@@ -377,10 +457,13 @@ class AutoJitCUDAKernel(CUDAKernelBase):
         cfg(*args)
 
     def specialize(self, *args):
-        argtypes = tuple([self.typingctx.resolve_argument_type(a) for a in args])
+        argtypes = tuple(
+            [self.typingctx.resolve_argument_type(a) for a in args])
         kernel = self.definitions.get(argtypes)
         if kernel is None:
-            kernel = compile_kernel(self.py_func, argtypes, link=(),
+            if 'link' not in self.targetoptions:
+                self.targetoptions['link'] = ()
+            kernel = compile_kernel(self.py_func, argtypes,
                                     **self.targetoptions)
             self.definitions[argtypes] = kernel
             if self.bind:

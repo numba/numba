@@ -1,4 +1,7 @@
+#define PY_SSIZE_T_CLEAN
+
 #include "_pymodule.h"
+
 #include <structmember.h>
 #include <string.h>
 #include <time.h>
@@ -15,6 +18,8 @@ typedef struct DispatcherObject{
     char can_compile;        /* Can auto compile */
     /* Borrowed references */
     PyObject *firstdef, *fallbackdef, *interpdef;
+    /* Tuple of argument names */
+    PyObject *argnames;
 } DispatcherObject;
 
 static int tc_int8;
@@ -91,6 +96,7 @@ PyObject* init_types(PyObject *self, PyObject *args)
 static void
 Dispatcher_dealloc(DispatcherObject *self)
 {
+    Py_DECREF(self->argnames);
     dispatcher_del(self->dispatcher);
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
@@ -103,9 +109,12 @@ Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
     PyObject *tmaddrobj;
     void *tmaddr;
     int argct;
-    if (!PyArg_ParseTuple(args, "Oi", &tmaddrobj, &argct)) {
+
+    if (!PyArg_ParseTuple(args, "OiO!",
+                          &tmaddrobj, &argct, &PyTuple_Type, &self->argnames)) {
         return -1;
     }
+    Py_INCREF(self->argnames);
     tmaddr = PyLong_AsVoidPtr(tmaddrobj);
     self->dispatcher = dispatcher_new(tmaddr, argct);
     self->can_compile = 1;
@@ -419,7 +428,7 @@ int typecode(DispatcherObject *dispatcher, PyObject *val) {
         return typecode_arrayscalar(dispatcher, val);
     }
     /* Array handling */
-    else if (tyobj == &PyArray_Type) {
+    else if (PyType_IsSubtype(tyobj, &PyArray_Type)) {
         return typecode_ndarray(dispatcher, (PyArrayObject*)val);
     }
 
@@ -484,8 +493,52 @@ compile_and_invoke(DispatcherObject *self, PyObject *args, PyObject *kws)
     return retval;
 }
 
-static
-PyObject*
+static int
+find_named_args(DispatcherObject *self, PyObject **pargs, PyObject **pkws)
+{
+    PyObject *oldargs = *pargs, *newargs;
+    PyObject *kws = *pkws;
+    Py_ssize_t pos_args = PyTuple_GET_SIZE(oldargs);
+    Py_ssize_t named_args, total_args, i;
+
+    if (kws == NULL || (named_args = PyDict_Size(kws)) == 0) {
+        Py_INCREF(oldargs);
+        return 0;
+    }
+    total_args = pos_args + named_args;
+    if (total_args > PyTuple_GET_SIZE(self->argnames)) {
+        PyErr_Format(PyExc_TypeError,
+                     "too many arguments: expected %d, got %d",
+                     (int) PyTuple_GET_SIZE(self->argnames), (int) total_args);
+        return -1;
+    }
+    newargs = PyTuple_New(total_args);
+    if (!newargs)
+        return -1;
+    for (i = 0; i < pos_args; i++) {
+        PyObject *value = PyTuple_GET_ITEM(oldargs, i);
+        Py_INCREF(value);
+        PyTuple_SET_ITEM(newargs, i, value);
+    }
+    for (i = pos_args; i < total_args; i++) {
+        PyObject *name = PyTuple_GET_ITEM(self->argnames, i);
+        PyObject *value = PyDict_GetItem(kws, name);
+        if (value == NULL) {
+            PyErr_Format(PyExc_TypeError,
+                         "missing argument '%s'",
+                         PyString_AsString(name));
+            Py_DECREF(newargs);
+            return -1;
+        }
+        Py_INCREF(value);
+        PyTuple_SET_ITEM(newargs, i, value);
+    }
+    *pargs = newargs;
+    *pkws = NULL;
+    return 0;
+}
+
+static PyObject*
 Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
 {
     PyObject *tmptype, *retval = NULL;
@@ -496,11 +549,9 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
     int matches;
     PyObject *cfunc;
 
-    /* Shortcut for single definition */
-    /*if (!self->can_compile && 1 == dispatcher_count(self->dispatcher)){
-        fn = self->firstdef;
-        return fn(NULL, args, kws);
-    }*/
+    if (find_named_args(self, &args, &kws))
+        return NULL;
+    /* Now we own a reference to args */
 
     argct = PySequence_Fast_GET_SIZE(args);
 
@@ -512,7 +563,8 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
     for (i = 0; i < argct; ++i) {
         tmptype = PySequence_Fast_GET_ITEM(args, i);
         tys[i] = typecode(self, tmptype);
-        if (tys[i] == -1) goto CLEANUP;
+        if (tys[i] == -1)
+            goto CLEANUP;
     }
 
     /* We only allow unsafe conversions if compilation of new specializations
@@ -547,6 +599,7 @@ Dispatcher_call(DispatcherObject *self, PyObject *args, PyObject *kws)
 CLEANUP:
     if (tys != prealloc)
         free(tys);
+    Py_DECREF(args);
 
     return retval;
 }
@@ -554,8 +607,6 @@ CLEANUP:
 static PyMethodDef Dispatcher_methods[] = {
     { "_insert", (PyCFunction)Dispatcher_Insert, METH_VARARGS,
       "insert new definition"},
-//    { "_find", (PyCFunction)Dispatcher_Find, METH_VARARGS,
-//      "find matching definition and return a tuple of (argtypes, callable)"},
     { NULL },
 };
 

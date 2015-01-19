@@ -32,16 +32,9 @@ class CPUContext(BaseContext):
     """
     Changes BaseContext calling convention
     """
-    _data_layout = None
-
     # Overrides
     def create_module(self, name):
-        mod = lc.Module.new(name)
-        mod.triple = ll.get_default_triple()
-
-        if self._data_layout:
-            mod.data_layout = self._data_layout
-        return mod
+        return self._internal_codegen._create_empty_module(name)
 
     def init(self):
         self.native_funcs = utils.UniqueDict()
@@ -157,16 +150,18 @@ class CPUContext(BaseContext):
             # (nopython functions).
             env = lc.Constant.null(PYOBJECT)
         retty = callee.args[0].type.pointee
-        retval = cgutils.alloca_once(builder, retty)
+        retvaltmp = cgutils.alloca_once(builder, retty)
         # initialize return value to zeros
-        builder.store(lc.Constant.null(retty), retval)
+        builder.store(lc.Constant.null(retty), retvaltmp)
 
         args = [self.get_value_as_argument(builder, ty, arg)
                 for ty, arg in zip(argtys, args)]
-        realargs = [retval, env] + list(args)
+        realargs = [retvaltmp, env] + list(args)
         code = builder.call(callee, realargs)
         status = self.get_return_status(builder, code)
-        return status, builder.load(retval)
+        retval = builder.load(retvaltmp)
+        out = self.get_returned_value(builder, resty, retval)
+        return status, out
 
     def get_env_from_closure(self, builder, clo):
         """
@@ -187,21 +182,12 @@ class CPUContext(BaseContext):
             builder, envptr, _dynfunc._impl_info['offset_env_body'])
         return EnvBody(self, builder, ref=body_ptr, cast_ref=True)
 
-    def dynamic_map_function(self, func):
-        name, ptr = self.native_funcs[func]
-        ll.add_symbol(name, ptr)
-
     def remove_native_function(self, func):
         """
         Remove internal references to nonpython mode function *func*.
         KeyError is raised if the function isn't known to us.
         """
-        name, ptr = self.native_funcs.pop(func)
-        # If the symbol wasn't redefined, NULL it out.
-        # (otherwise, it means the corresponding Python function was
-        #  re-compiled, and the new target is still alive)
-        if ll.address_of_symbol(name) == ptr:
-            ll.add_symbol(name, 0)
+        del self.native_funcs[func]
 
     def post_lowering(self, func):
         mod = func.module
@@ -215,12 +201,15 @@ class CPUContext(BaseContext):
             # calls to compiler-rt
             intrinsics.fix_divmod(mod)
 
-    def create_cpython_wrapper(self, library, fndesc, exceptions):
+    def create_cpython_wrapper(self, library, fndesc, exceptions,
+                               release_gil=False):
         wrapper_module = self.create_module("wrapper")
         fnty = self.get_function_type(fndesc)
         wrapper_callee = wrapper_module.add_function(fnty, fndesc.llvm_func_name)
-        PyCallWrapper(self, wrapper_module, wrapper_callee,
-                      fndesc, exceptions=exceptions).build()
+        builder = PyCallWrapper(self, wrapper_module, wrapper_callee,
+                                fndesc, exceptions=exceptions,
+                                release_gil=release_gil)
+        builder.build()
         library.add_ir_module(wrapper_module)
 
     def get_executable(self, library, fndesc, env):
@@ -266,6 +255,7 @@ class CPUContext(BaseContext):
 class CPUTargetOptions(TargetOptions):
     OPTIONS = {
         "nopython": bool,
+        "nogil": bool,
         "forceobj": bool,
         "looplift": bool,
         "wraparound": bool,

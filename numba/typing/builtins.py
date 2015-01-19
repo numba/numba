@@ -354,7 +354,8 @@ class CmpOpIsNot(CmpOpIdentity):
 def normalize_index(index):
     if isinstance(index, types.UniTuple):
         if index.dtype in types.integer_domain:
-            return types.UniTuple(types.intp, len(index))
+            idxtype = types.intp if index.dtype.signed else types.uintp
+            return types.UniTuple(idxtype, len(index))
         elif index.dtype == types.slice3_type:
             return index
 
@@ -372,8 +373,8 @@ def normalize_index(index):
     # elif index == types.slice2_type:
     #     return types.slice2_type
 
-    else:
-        return types.intp
+    elif isinstance(index, types.Integer):
+        return types.intp if index.signed else types.uintp
 
 
 @builtin
@@ -397,7 +398,7 @@ class GetItemArray(AbstractTemplate):
             return
 
         idx = normalize_index(idx)
-        if not idx:
+        if idx is None:
             return
 
         if idx == types.slice3_type: #(types.slice2_type, types.slice3_type):
@@ -415,7 +416,7 @@ class GetItemArray(AbstractTemplate):
                 res = ary.copy(ndim=ndim, layout='A')
             else:
                 res = ary.dtype
-        elif idx == types.intp:
+        elif isinstance(idx, types.Integer):
             if ary.ndim != 1:
                 return
             res = ary.dtype
@@ -464,19 +465,11 @@ class ArrayAttribute(AttributeTemplate):
     def resolve_ndim(self, ary):
         return types.intp
 
-        #
-
     # def resolve_flatten(self, ary):
     #     return types.Method(Array_flatten, ary)
 
     def resolve_size(self, ary):
         return types.intp
-
-    def resolve_sum(self, ary):
-        return types.BoundFunction(Array_sum, ary)
-
-    def resolve_prod(self, ary):
-        return types.BoundFunction(Array_prod, ary)
 
     def resolve_flat(self, ary):
         return types.NumpyFlatType(ary)
@@ -488,22 +481,56 @@ class ArrayAttribute(AttributeTemplate):
                                    layout='A')
 
 
-class Array_sum(AbstractTemplate):
-    key = "array.sum"
+def generic_homog(self, args, kws):
+    assert not args
+    assert not kws
+    return signature(self.this.dtype, recvr=self.this)
 
-    def generic(self, args, kws):
-        assert not args
-        assert not kws
-        return signature(self.this.dtype, recvr=self.this)
+def generic_expand(self, args, kws):
+    if isinstance(self.this.dtype, types.Integer):
+        # Expand to a machine int, not larger (like Numpy)
+        if self.this.dtype.signed:
+            return signature(max(types.intp, self.this.dtype), recvr=self.this)
+        else:
+            return signature(max(types.uintp, self.this.dtype), recvr=self.this)
+    return signature(self.this.dtype, recvr=self.this)
 
+def generic_hetero_real(self, args, kws):
+    assert not args
+    assert not kws
+    if self.this.dtype in types.integer_domain:
+        return signature(types.float64, recvr=self.this)
+    return signature(self.this.dtype, recvr=self.this)
 
-class Array_prod(AbstractTemplate):
-    key = "array.prod"
+def generic_index(self, args, kws):
+    assert not args
+    assert not kws
+    return signature(types.intp, recvr=self.this)
 
-    def generic(self, args, kws):
-        assert not args
-        assert not kws
-        return signature(self.this.dtype, recvr=self.this)
+def install_array_method(name, generic):
+    my_attr = {"key": "array." + name, "generic": generic}
+    temp_class = type("Array_" + name, (AbstractTemplate,), my_attr)
+
+    def array_attribute_attachment(self, ary):
+        return types.BoundFunction(temp_class, ary)
+
+    setattr(ArrayAttribute, "resolve_" + name, array_attribute_attachment)
+
+# Functions that return the same type as the array
+for fname in ["min", "max"]:
+    install_array_method(fname, generic_homog)
+
+# Functions that return a machine-width type, to avoid overflows
+for fname in ["sum", "prod"]:
+    install_array_method(fname, generic_expand)
+
+# Functions that require integer arrays get promoted to float64 return
+for fName in ["mean", "var", "std"]:
+    install_array_method(fName, generic_hetero_real)
+
+# Functions that return an index (intp)
+install_array_method("argmin", generic_index)
+install_array_method("argmax", generic_index)
 
 
 @builtin

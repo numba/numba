@@ -126,6 +126,11 @@ class PythonAPI(object):
         fn = self._get_function(fnty, name="PyErr_SetObject")
         return self.builder.call(fn, (exctype, excval))
 
+    def err_write_unraisable(self, obj):
+        fnty = Type.function(Type.void(), [self.pyobj])
+        fn = self._get_function(fnty, name="PyErr_WriteUnraisable")
+        return self.builder.call(fn, (obj,))
+
     def raise_native_error(self, msg):
         cstr = self.context.insert_const_string(self.module, msg)
         self.err_set_string(self.native_error_type, cstr)
@@ -518,12 +523,30 @@ class PythonAPI(object):
     def gil_release(self, gil):
         """
         Release the acquired GIL by gil_ensure().
-        Must be pair with a gil_ensure().
+        Must be paired with a gil_ensure().
         """
         gilptrty = Type.pointer(self.gil_state)
         fnty = Type.function(Type.void(), [gilptrty])
         fn = self._get_function(fnty, "numba_gil_release")
         return self.builder.call(fn, [gil])
+
+    def save_thread(self):
+        """
+        Release the GIL and return the former thread state
+        (an opaque non-NULL pointer).
+        """
+        fnty = Type.function(self.voidptr, [])
+        fn = self._get_function(fnty, name="PyEval_SaveThread")
+        return self.builder.call(fn, [])
+
+    def restore_thread(self, thread_state):
+        """
+        Restore the given thread state by reacquiring the GIL.
+        """
+        fnty = Type.function(Type.void(), [self.voidptr])
+        fn = self._get_function(fnty, name="PyEval_RestoreThread")
+        self.builder.call(fn, [thread_state])
+
 
     #
     # Other APIs (organize them better!)
@@ -632,6 +655,15 @@ class PythonAPI(object):
             fname = "PyString_FromStringAndSize"
         fn = self._get_function(fnty, name=fname)
         return self.builder.call(fn, [string, size])
+
+    def string_from_string(self, string):
+        fnty = Type.function(self.pyobj, [self.cstring])
+        if PYVERSION >= (3, 0):
+            fname = "PyUnicode_FromString"
+        else:
+            fname = "PyString_FromString"
+        fn = self._get_function(fnty, name=fname)
+        return self.builder.call(fn, [string])
 
     def bytes_from_string_and_size(self, string, size):
         fnty = Type.function(self.pyobj, [self.cstring, self.py_ssize_t])

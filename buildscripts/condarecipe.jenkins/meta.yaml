@@ -20,7 +20,7 @@ requirements:
     - numpy
     # On channel https://binstar.org/numba/
     - llvmlite
-
+    - funcsigs       [py26 or py27]
 test:
   requires:
     - argparse       [py26]

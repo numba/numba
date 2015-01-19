@@ -172,6 +172,13 @@ class BaseContext(object):
         name = "CallTemplate(%s)" % fndesc.mangled_name
         self.users[func] = type(name, baseclses, glbls)
 
+    def add_user_function(self, func, fndesc, libs=()):
+        if func not in self.users:
+            msg = "{func} is not a registered user function"
+            raise KeyError(msg.format(func=func))
+        imp = user_function(func, fndesc, libs)
+        self.defns[func].append(imp)
+
     def insert_class(self, cls, attrs):
         clsty = types.Object(cls)
         for name, vtype in utils.iteritems(attrs):
@@ -227,6 +234,8 @@ class BaseContext(object):
         for ak, av in zip(fndesc.args, self.get_arguments(fn)):
             av.name = "arg.%s" % ak
         fn.args[0].name = ".ret"
+        if fndesc.inline:
+            fn.attributes.add('alwaysinline')
         return fn
 
     def declare_external_function(self, module, fndesc):
@@ -569,6 +578,13 @@ class BaseContext(object):
             return builder.load(val)
         return val
 
+    def get_returned_value(self, builder, ty, val):
+        """
+        Return value representation to local value representation
+        """
+        # Same as get_argument_value
+        return self.get_argument_value(builder, ty, val)
+
     def get_return_value(self, builder, ty, val):
         """
         Local value representation to return type representation
@@ -770,11 +786,13 @@ class BaseContext(object):
                 tup = builder.insert_value(tup, val, idx)
             return tup
 
-        elif (types.is_int_tuple(toty) and types.is_int_tuple(fromty) and
-                len(toty) == len(fromty)):
+        elif (isinstance(fromty, (types.UniTuple, types.Tuple)) and
+                  isinstance(toty, (types.UniTuple, types.Tuple)) and
+                      len(toty) == len(fromty)):
+
             olditems = cgutils.unpack_tuple(builder, val, len(fromty))
-            items = [self.cast(builder, i, t, toty.dtype)
-                     for i, t in zip(olditems, fromty.types)]
+            items = [self.cast(builder, i, f, t)
+                     for i, f, t in zip(olditems, fromty, toty)]
             tup = self.get_constant_undef(toty)
             for idx, val in enumerate(items):
                 tup = builder.insert_value(tup, val, idx)
@@ -849,15 +867,17 @@ class BaseContext(object):
         """
         assert env is None
         retty = callee.args[0].type.pointee
-        retval = cgutils.alloca_once(builder, retty)
+        retvaltmp = cgutils.alloca_once(builder, retty)
         # initialize return value
-        builder.store(lc.Constant.null(retty), retval)
+        builder.store(lc.Constant.null(retty), retvaltmp)
         args = [self.get_value_as_argument(builder, ty, arg)
                 for ty, arg in zip(argtys, args)]
-        realargs = [retval] + list(args)
+        realargs = [retvaltmp] + list(args)
         code = builder.call(callee, realargs)
         status = self.get_return_status(builder, code)
-        return status, builder.load(retval)
+        retval = builder.load(retvaltmp)
+        out = self.get_returned_value(builder, resty, retval)
+        return status, out
 
     def call_external_function(self, builder, callee, argtys, args):
         args = [self.get_value_as_argument(builder, ty, arg)
@@ -875,13 +895,13 @@ class BaseContext(object):
         status = Status(code=code, ok=ok, err=err, exc=exc, none=none)
         return status
 
-    def call_function_pointer(self, builder, funcptr, signature, args):
+    def call_function_pointer(self, builder, funcptr, signature, args, cconv=None):
         retty = self.get_value_type(signature.return_type)
         fnty = Type.function(retty, [a.type for a in args])
         fnptrty = Type.pointer(fnty)
         addr = self.get_constant(types.intp, funcptr)
         ptr = builder.inttoptr(addr, fnptrty)
-        return builder.call(ptr, args)
+        return builder.call(ptr, args, cconv=cconv)
 
     def call_class_method(self, builder, func, signature, args):
         api = self.get_python_api(builder)
@@ -964,14 +984,9 @@ class BaseContext(object):
                                              sig.return_type, flags,
                                              locals=locals)
 
-            # Set to linkonce one-definition-rule to prevent multiple
-            # definitions from raising errors (this can happen with
-            # nested compile_internal()).
+            # Allow inlining the function inside callers.
             codegen.add_linking_library(cres.library)
-            llvm_func = cres.library.get_function(cres.fndesc.llvm_func_name)
-            llvm_func.linkage = 'linkonce_odr'
             fndesc = cres.fndesc
-
             self.cached_internal_func[cache_key] = fndesc
 
         # Add call to the generated function

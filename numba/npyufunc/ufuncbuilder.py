@@ -2,15 +2,18 @@
 from __future__ import print_function, division, absolute_import
 import warnings
 import numpy as np
+
 from numba.decorators import jit
 from numba.targets.registry import target_registry
 from numba.targets.options import TargetOptions
 from numba import utils, compiler, types, sigutils
+from numba.numpy_support import as_dtype
 from . import _internal
 from .sigparse import parse_signature
 from .wrappers import build_ufunc_wrapper, build_gufunc_wrapper
 from numba.targets import registry
 from numba import _dynfunc
+
 import llvmlite.llvmpy.core as lc
 
 class UFuncTargetOptions(TargetOptions):
@@ -64,9 +67,29 @@ class UFuncDispatcher(object):
 target_registry['npyufunc'] = UFuncDispatcher
 
 
-class UFuncBuilder(object):
-    def __init__(self, py_func, targetoptions={}):
+class _BaseUFuncBuilder(object):
+
+    _identities = {
+        0: _internal.PyUFunc_Zero,
+        1: _internal.PyUFunc_One,
+        None: _internal.PyUFunc_None,
+        }
+    if np.__version__ >= '1.7':
+        _identities["reorderable"] = _internal.PyUFunc_ReorderableNone
+
+    def parse_identity(self, identity):
+        try:
+            identity = self._identities[identity]
+        except KeyError:
+            raise ValueError("Invalid identity value %r" % (identity,))
+        return identity
+
+
+class UFuncBuilder(_BaseUFuncBuilder):
+
+    def __init__(self, py_func, identity=None, targetoptions={}):
         self.py_func = py_func
+        self.identity = self.parse_identity(identity)
         self.nb_func = jit(target='npyufunc', **targetoptions)(py_func)
         self._sigs = []
         self._cres = {}
@@ -127,8 +150,9 @@ class UFuncBuilder(object):
         # For instance, -1 for typenum will cause segfault.
         # If elements of type-list (2nd arg) is tuple instead,
         # there will also memory corruption. (Seems like code rewrite.)
-        ufunc = _internal.fromfunc(ptrlist, dtypelist, inct, outct, datlist,
-                                   keepalive)
+        ufunc = _internal.fromfunc(self.py_func.__name__, self.py_func.__doc__,
+                                   ptrlist, dtypelist, inct, outct, datlist,
+                                   keepalive, self.identity)
 
         return ufunc
 
@@ -154,16 +178,17 @@ class UFuncBuilder(object):
         ptr = library.get_pointer_to_function(wrapper.name)
 
         # Get dtypes
-        dtypenums = [np.dtype(a.name).num for a in signature.args]
-        dtypenums.append(np.dtype(signature.return_type.name).num)
+        dtypenums = [as_dtype(a).num for a in signature.args]
+        dtypenums.append(as_dtype(signature.return_type).num)
         return dtypenums, ptr, env
 
 
-class GUFuncBuilder(object):
+class GUFuncBuilder(_BaseUFuncBuilder):
 
     # TODO handle scalar
-    def __init__(self, py_func, signature, targetoptions={}):
+    def __init__(self, py_func, signature, identity=None, targetoptions={}):
         self.py_func = py_func
+        self.identity = self.parse_identity(identity)
         self.nb_func = jit(target='npyufunc')(py_func)
         self.signature = signature
         self.sin, self.sout = parse_signature(signature)
@@ -222,8 +247,9 @@ class GUFuncBuilder(object):
         outct = len(self.sout)
 
         # Pass envs to fromfuncsig to bind to the lifetime of the ufunc object
-        ufunc = _internal.fromfuncsig(ptrlist, dtypelist, inct, outct, datlist,
-                                      self.signature, keepalive)
+        ufunc = _internal.fromfunc(self.py_func.__name__, self.py_func.__doc__,
+                                   ptrlist, dtypelist, inct, outct, datlist,
+                                   keepalive, self.identity, self.signature)
         return ufunc
 
     def build(self, cres):
@@ -248,6 +274,6 @@ class GUFuncBuilder(object):
                 ty = a.dtype
             else:
                 ty = a
-            dtypenums.append(np.dtype(ty.name).num)
+            dtypenums.append(as_dtype(ty).num)
         return dtypenums, ptr, env
 

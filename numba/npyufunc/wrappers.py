@@ -23,6 +23,10 @@ def _build_ufunc_loop_body(load, store, context, func, builder, arrays, out,
     if out.byref:
         retval = builder.load(retval)
 
+    if not cgutils.is_struct(retval.type):
+        retval = context.get_value_as_argument(builder, signature.return_type,
+                                               retval)
+
     store(retval)
 
     # increment indices
@@ -88,10 +92,19 @@ def build_obj_loop_body(context, func, builder, arrays, out, offsets,
         return elems
 
     def store(retval):
-        # Unbox
-        retval = pyapi.to_native_value(retval, signature.return_type)
-        # Store
-        out.store_direct(retval, builder.load(store_offset))
+        is_error = cgutils.is_null(builder, retval)
+        with cgutils.ifelse(builder, is_error) as (if_error, if_ok):
+            with if_error:
+                msg = context.insert_const_string(pyapi.module,
+                                                  "object mode ufunc")
+                msgobj = pyapi.string_from_string(msg)
+                pyapi.err_write_unraisable(msgobj)
+                pyapi.decref(msgobj)
+            with if_ok:
+                # Unbox
+                retval = pyapi.to_native_value(retval, signature.return_type)
+                # Store
+                out.store_direct(retval, builder.load(store_offset))
 
     return _build_ufunc_loop_body_objmode(load, store, context, func, builder,
                                           arrays, out, offsets, store_offset,

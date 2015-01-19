@@ -77,7 +77,7 @@ class TestUnpack(TestCase):
 
     def test_unpack_list(self):
         pyfunc = unpack_list
-        cr = compile_isolated(pyfunc, (), flags=enable_pyobj_flags)
+        cr = compile_isolated(pyfunc, (), flags=force_pyobj_flags)
         cfunc = cr.entry_point
         l = [1, 2, 3]
         self.assertEqual(cfunc(l), pyfunc(l))

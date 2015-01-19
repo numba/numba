@@ -12,6 +12,7 @@ from ..numpy_support import (ufunc_find_matching_loop,
 from ..typeinfer import TypingError
 
 registry = Registry()
+builtin = registry.register
 builtin_global = registry.register_global
 builtin_attr = registry.register_attr
 
@@ -184,23 +185,78 @@ del _aliases, _numpy_ufunc
 # -----------------------------------------------------------------------------
 # Install global reduction functions
 
-class Numpy_generic_reduction(AbstractTemplate):
+# Functions where input domain and output domain are the same
+class Numpy_homogenous_reduction(AbstractTemplate):
     def generic(self, args, kws):
         assert not kws
         [arr] = args
         return signature(arr.dtype, arr)
 
+# Functions where domain and range are possibly different formats
+class Numpy_expanded_reduction(AbstractTemplate):
+    def generic(self, args, kws):
+        assert not kws
+        [arr] = args
+        if isinstance(arr.dtype, types.Integer):
+            # Expand to a machine int, not larger (like Numpy)
+            if arr.dtype.signed:
+                return signature(max(arr.dtype, types.intp), arr)
+            else:
+                return signature(max(arr.dtype, types.uintp), arr)
+        else:
+            return signature(arr.dtype, arr)
 
-def _numpy_reduction(fname):
+class Numpy_heterogenous_reduction_real(AbstractTemplate):
+    def generic(self, args, kws):
+        assert not kws
+        [arr] = args
+        if arr.dtype in types.integer_domain:
+            return signature(types.float64, arr)
+        else:
+            return signature(arr.dtype, arr)
+
+class Numpy_index_reduction(AbstractTemplate):
+    def generic(self, args, kws):
+        assert not kws
+        [arr] = args
+        return signature(types.int64, arr)
+
+# Function to glue attributes onto the numpy-esque object
+def _numpy_reduction(fname, rClass):
     npyfn = getattr(numpy, fname)
-    cls = type("Numpy_reduce_{0}".format(npyfn), (Numpy_generic_reduction,),
-               dict(key=npyfn))
-    setattr(NumpyModuleAttribute, "resolve_{0}".format(fname),
-            lambda self, mod: types.Function(cls))
+    cls = type("Numpy_reduce_{0}".format(npyfn), (rClass,), dict(key=npyfn))
+    semiBound = lambda self, mod: types.Function(cls)
+    setattr(NumpyModuleAttribute, "resolve_{0}".format(fname), semiBound)
+
+for func in ['min', 'max']:
+    _numpy_reduction(func, Numpy_homogenous_reduction)
 
 for func in ['sum', 'prod']:
-    _numpy_reduction(func)
+    _numpy_reduction(func, Numpy_expanded_reduction)
+
+for func in ['mean', 'var', 'std']:
+    _numpy_reduction(func, Numpy_heterogenous_reduction_real)
+
+for func in ['argmin', 'argmax']:
+    _numpy_reduction(func, Numpy_index_reduction)
+
+
+# -----------------------------------------------------------------------------
+# Miscellaneous functions
+
+@builtin
+class NdEnumerate(AbstractTemplate):
+    key = numpy.ndenumerate
+
+    def generic(self, args, kws):
+        assert not kws
+        arr, = args
+
+        if isinstance(arr, types.Array):
+            enumerate_type = types.NumpyNdEnumerateType(arr)
+            return signature(enumerate_type, *args)
+
+builtin_global(numpy.ndenumerate, types.Function(NdEnumerate))
+
 
 builtin_global(numpy, types.Module(numpy))
-
-

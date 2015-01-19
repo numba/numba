@@ -451,7 +451,9 @@ def get_item_pointer2(builder, data, shape, strides, layout, inds,
             indices.append(selected)
     else:
         indices = inds
-    del inds
+    if not indices:
+        # Indexing with empty tuple
+        return builder.gep(data, [get_null_value(Type.int(32))])
     intp = indices[0].type
     # Indexing code
     if layout in 'CF':

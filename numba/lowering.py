@@ -36,11 +36,11 @@ _dynamic_module = ModuleType(_dynamic_modname)
 class FunctionDescriptor(object):
     __slots__ = ('native', 'modname', 'qualname', 'doc', 'typemap',
                  'calltypes', 'args', 'kws', 'restype', 'argtypes',
-                 'mangled_name', 'unique_name')
+                 'mangled_name', 'unique_name', 'inline')
 
     def __init__(self, native, modname, qualname, unique_name, doc,
                  typemap, restype, calltypes, args, kws, mangler=None,
-                 argtypes=None):
+                 argtypes=None, inline=False):
         self.native = native
         self.modname = modname
         self.qualname = qualname
@@ -61,6 +61,7 @@ class FunctionDescriptor(object):
                                         self.argtypes)
         else:
             self.mangled_name = mangler(self.qualname, self.argtypes)
+        self.inline = inline
 
     def lookup_module(self):
         """
@@ -115,12 +116,12 @@ class FunctionDescriptor(object):
 
     @classmethod
     def _from_python_function(cls, interp, typemap, restype, calltypes,
-                              native, mangler=None):
+                              native, mangler=None, inline=False):
         (qualname, unique_name, modname, doc, args, kws,
          )= cls._get_function_info(interp)
         self = cls(native, modname, qualname, unique_name, doc,
                    typemap, restype, calltypes,
-                   args, kws, mangler=mangler)
+                   args, kws, mangler=mangler, inline=inline)
         return self
 
 
@@ -129,12 +130,13 @@ class PythonFunctionDescriptor(FunctionDescriptor):
 
     @classmethod
     def from_specialized_function(cls, interp, typemap, restype, calltypes,
-                                  mangler):
+                                  mangler, inline):
         """
         Build a FunctionDescriptor for a specialized Python function.
         """
         return cls._from_python_function(interp, typemap, restype, calltypes,
-                                         native=True, mangler=mangler)
+                                         native=True, mangler=mangler,
+                                         inline=inline)
 
     @classmethod
     def from_object_mode_function(cls, interp):
@@ -219,7 +221,7 @@ class BaseLower(object):
         self.exceptions[excid] = exc
         return excid
 
-    def lower(self, create_wrapper=True):
+    def lower(self):
         # Init argument variables
         fnargs = self.context.get_arguments(self.function)
         for ak, av in zip(self.fndesc.args, fnargs):
@@ -260,10 +262,13 @@ class BaseLower(object):
         # Materialize LLVM Module
         self.library.add_ir_module(self.module)
 
-        # Create CPython wrapper
-        if create_wrapper:
-            self.context.create_cpython_wrapper(self.library, self.fndesc,
-                                                self.exceptions)
+    def create_cpython_wrapper(self, release_gil=False):
+        """
+        Create CPython wrapper.
+        """
+        self.context.create_cpython_wrapper(self.library, self.fndesc,
+                                            self.exceptions,
+                                            release_gil=release_gil)
 
     def init_argument(self, arg):
         return arg
@@ -445,17 +450,28 @@ class Lower(BaseLower):
                                      resty)
 
         elif expr.op == 'call':
-
-            argvals = [self.loadvar(a.name) for a in expr.args]
-            argtyps = [self.typeof(a.name) for a in expr.args]
             signature = self.fndesc.calltypes[expr]
 
             if isinstance(expr.func, ir.Intrinsic):
                 fnty = expr.func.name
                 castvals = expr.func.args
             else:
-                assert not expr.kws, expr.kws
                 fnty = self.typeof(expr.func.name)
+                if expr.kws:
+                    # Fold keyword arguments
+                    try:
+                        pysig = fnty.pysig
+                    except AttributeError:
+                        raise NotImplementedError("unsupported keyword arguments "
+                                                  "when calling %s" % (fnty,))
+                    ba = pysig.bind(*expr.args, **dict(expr.kws))
+                    assert not ba.kwargs
+                    args = ba.args
+                else:
+                    args = expr.args
+
+                argvals = [self.loadvar(a.name) for a in args]
+                argtyps = [self.typeof(a.name) for a in args]
 
                 castvals = [self.context.cast(self.builder, av, at, ft)
                             for av, at, ft in zip(argvals, argtyps,
@@ -471,7 +487,8 @@ class Lower(BaseLower):
                 # Handle function pointer
                 pointer = fnty.funcptr
                 res = self.context.call_function_pointer(self.builder, pointer,
-                                                         signature, castvals)
+                                                         signature, castvals,
+                                                         fnty.cconv)
 
             elif isinstance(fnty, cffi_support.ExternCFunction):
                 # XXX unused?

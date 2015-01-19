@@ -10,7 +10,8 @@ class CudaSupportError(ImportError):
 
 
 class NvvmError(Exception):
-    pass
+    def __str__(self):
+        return '\n'.join(map(str, self.args))
 
 
 class NvvmSupportError(ImportError):

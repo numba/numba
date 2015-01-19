@@ -267,6 +267,15 @@ class Driver(object):
         for dev in self.devices.values():
             dev.reset()
 
+    def get_context(self):
+        """Get current active context in CUDA driver runtime.
+        Note: Lowlevel calls that returns the handle.
+        """
+        handle = drvapi.cu_context(0)
+        driver.cuCtxGetCurrent(byref(handle))
+        if not handle.value:
+            return None
+        return handle
 
 driver = Driver()
 
@@ -346,8 +355,6 @@ class Device(object):
         buf = (c_char * bufsz)()
         driver.cuDeviceGetName(buf, bufsz, self.id)
         self.name = buf.value
-        # A dictionary or all context with handle value as the key
-        self.contexts = {}
 
     @property
     def COMPUTE_CAPABILITY(self):
@@ -393,6 +400,8 @@ class Device(object):
         return not (self == other)
 
     def create_context(self):
+        """Create a CUDA context.
+        """
         met_requirement_for_device(self)
 
         flags = 0
@@ -408,31 +417,10 @@ class Device(object):
 
         ctx = Context(weakref.proxy(self), handle,
                       _context_finalizer(self.trashing, handle))
-        self.contexts[handle.value] = ctx
-        return weakref.proxy(ctx)
 
-    def close_all_context(self):
-        self.contexts.clear()
-
-    def get_context(self):
-        handle = drvapi.cu_context()
-        driver.cuCtxGetCurrent(byref(handle))
-        if not handle.value:
-            return None
-        try:
-            return self.contexts[handle.value]
-        except KeyError:
-            raise RuntimeError("Current context is not manged: %s" %
-                               handle.value)
-
-    def get_or_create_context(self):
-        ctx = self.get_context()
-        if ctx is None:
-            ctx = self.create_context()
         return ctx
 
     def reset(self):
-        self.close_all_context()
         self.trashing.clear()
 
 
@@ -466,6 +454,8 @@ class Context(object):
         self.is_managed = finalizer is not None
         self.allocations = utils.UniqueDict()
         self.modules = utils.UniqueDict()
+        # For storing context specific data
+        self.extras = {}
 
     def __del__(self):
         try:
@@ -501,7 +491,9 @@ class Context(object):
     def pop(self):
         """Pop context
         """
-        driver.cuCtxPopCurrent(self.handle)
+        popped = drvapi.cu_context()
+        driver.cuCtxPopCurrent(byref(popped))
+        assert popped.value == self.handle.value
 
     def memalloc(self, bytesize):
         self.trashing.service()
@@ -624,6 +616,15 @@ class Context(object):
 
     def __repr__(self):
         return "<CUDA context %s of device %d>" % (self.handle, self.device.id)
+
+    def __eq__(self, other):
+        if isinstance(other, Context):
+            return self.handle == other.handle
+        else:
+            return NotImplemented
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
 
 def load_module_image(context, image):

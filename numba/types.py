@@ -137,6 +137,13 @@ class Type(object):
     __iter__ = NotImplemented
     cast_python_value = NotImplemented
 
+    def coerce(self, typingctx, other):
+        """Override this method to implement specialized coercion logic
+        for extending unify_pairs().  Only use this if the coercion logic cannot
+        be expressed as simple casting rules.
+        """
+        return NotImplemented
+
 
 class OpaqueType(Type):
     """
@@ -353,10 +360,22 @@ class Dispatcher(WeakType):
         """
         return self._get_object()
 
+    @property
+    def pysig(self):
+        """
+        A inspect.Signature object corresponding to this type.
+        """
+        return self.overloaded._pysig
+
 
 class FunctionPointer(Function):
-    def __init__(self, template, funcptr):
+    """
+    A pointer to a native function (e.g. exported via ctypes or cffi).
+    """
+
+    def __init__(self, template, funcptr, cconv=None):
         self.funcptr = funcptr
+        self.cconv = cconv
         super(FunctionPointer, self).__init__(template)
 
 
@@ -450,6 +469,24 @@ class NumpyFlatType(IteratorType):
         self.yield_type = arrty.dtype
         name = "array.flat({arrayty})".format(arrayty=arrty)
         super(NumpyFlatType, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.array_type
+
+
+class NumpyNdEnumerateType(IteratorType):
+    """
+    Type class for `np.ndenumerate()` objects.
+    """
+
+    def __init__(self, arrty):
+        self.array_type = arrty
+        # XXX making this a uintp has the side effect of forcing some
+        # arithmetic operations to return a float result.
+        self.yield_type = Tuple((UniTuple(intp, arrty.ndim), arrty.dtype))
+        name = "ndenumerate({arrayty})".format(arrayty=arrty)
+        super(NumpyNdEnumerateType, self).__init__(name, param=True)
 
     @property
     def key(self):
@@ -587,10 +624,10 @@ class Array(IterableType):
         Install conversion from this layout (if non-'A') to 'A' layout.
         """
         if self.layout != 'A':
-            from numba.typeconv.rules import default_type_manager as tm
+            from numba.typeconv.rules import default_casting_rules as tcr
             ary_any = Array(self.dtype, self.ndim, 'A', const=self.const)
             # XXX This will make the types immortal
-            tm.set_safe_convert(self, ary_any)
+            tcr.safe(self, ary_any)
 
     def copy(self, dtype=None, ndim=None, layout=None, const=None):
         if dtype is None:
@@ -614,20 +651,6 @@ class Array(IterableType):
             if dim == 0:
                 return 'F'
         return 'A'
-
-    def getitem(self, ind):
-        """Returns (return-type, index-type)
-        """
-        if isinstance(ind, UniTuple):
-            idxty = UniTuple(intp, ind.count)
-        else:
-            idxty = intp
-        return self.dtype, idxty
-
-    def setitem(self):
-        """Returns (index-type, value-type)
-        """
-        return intp, self.dtype
 
     @property
     def key(self):
@@ -656,10 +679,6 @@ class UniTuple(IterableType):
         self.iterator_type = UniTupleIter(self)
 
     def getitem(self, ind):
-        if isinstance(ind, UniTuple):
-            idxty = UniTuple(intp, ind.count)
-        else:
-            idxty = intp
         return self.dtype, intp
 
     def __getitem__(self, i):
@@ -677,6 +696,20 @@ class UniTuple(IterableType):
     @property
     def key(self):
         return self.dtype, self.count
+
+    @property
+    def types(self):
+        return (self.dtype,) * self.count
+
+    def coerce(self, typingctx, other):
+        """
+        Unify UniTuples with their dtype
+        """
+        if isinstance(other, UniTuple) and len(self) == len(other):
+            dtype = typingctx.unify_pairs(self.dtype, other.dtype)
+            return UniTuple(dtype=dtype, count=self.count)
+
+        return NotImplemented
 
 
 class UniTupleIter(IteratorType):
@@ -706,6 +739,7 @@ class Tuple(Type):
         return self.types[i]
 
     def __len__(self):
+        # Beware: this makes Tuple(()) false-ish
         return len(self.types)
 
     @property
@@ -714,6 +748,22 @@ class Tuple(Type):
 
     def __iter__(self):
         return iter(self.types)
+
+    def coerce(self, typingctx, other):
+        """
+        Unify elements of Tuples/UniTuples
+        """
+        # Other is UniTuple or Tuple
+        if isinstance(other, (UniTuple, Tuple)) and len(self) == len(other):
+            unified = [typingctx.unify_pairs(ta, tb)
+                       for ta, tb in zip(self, other)]
+
+            if any(t == pyobject for t in unified):
+                return NotImplemented
+
+            return Tuple(unified)
+
+        return NotImplemented
 
 
 class CPointer(Type):
@@ -754,36 +804,36 @@ class Optional(Type):
         """
         Install conversion from optional(T) to T
         """
-        from numba.typeconv.rules import default_type_manager as tm
-
-        # TODO make type manager remember all cast relation
-        #      so that new rule will propagate
-        tm.set_safe_convert(self, self.type)
-        tm.set_promote(self.type, self)
-        tm.set_promote(none, self)
-
-        if self.type in number_domain:
-            for t in number_domain - set([self.type]):
-                tcc = tm.check_compatible(t, self.type)
-                if tcc == 'promote':
-                    tm.set_promote(t, self)
-                elif tcc == 'safe':
-                    tm.set_safe_convert(t, self)
-                elif tcc == 'unsafe':
-                    tm.set_unsafe_convert(t, self)
-                else:
-                    assert tcc is None, tcc
-
-        if isinstance(self.type, Array):
-            if self.type.layout == 'A':
-                tm.set_promote(self.type.copy(layout='C'), self)
-                tm.set_promote(self.type.copy(layout='F'), self)
-
+        from numba.typeconv.rules import default_casting_rules as tcr
+        tcr.safe(self, self.type)
+        tcr.promote(self.type, self)
+        tcr.promote(none, self)
 
     @property
     def key(self):
         return self.type
 
+    def coerce(self, typingctx, other):
+        if isinstance(other, Optional):
+            unified = typingctx.unify_pairs(self.type, other.type)
+
+        else:
+            unified = typingctx.unify_pairs(self.type, other)
+
+        if unified != pyobject:
+            return Optional(unified)
+
+        return NotImplemented
+
+
+class NoneType(Opaque):
+    def coerce(self, typingctx, other):
+        """Turns anything to a Optional type
+        """
+        if isinstance(other, Optional):
+            return other
+
+        return Optional(other)
 
 # Utils
 
@@ -795,11 +845,12 @@ def is_int_tuple(x):
     else:
         return False
 
+
 # Short names
 
 
 pyobject = Opaque('pyobject')
-none = Opaque('none')
+none = NoneType('none')
 Any = Phantom('any')
 VarArg = Phantom('...')
 string = Opaque('str')
@@ -896,6 +947,35 @@ ulonglong = _make_unsigned(numpy.longlong)
 # optional types
 optional = Optional
 
+
+def is_numeric(ty):
+    return ty in number_domain
+
+_type_promote_map = {
+    int8: (int16, False),
+    uint8: (uint16, False),
+    int16: (int32, False),
+    uint16: (uint32, False),
+    int32: (int64, False),
+    uint32: (uint64, False),
+    int64: (float64, True),
+    uint64: (float64, True),
+    float32: (float64, False),
+    complex64: (complex128, True),
+}
+
+
+def promote_numeric_type(ty):
+    res = _type_promote_map.get(ty)
+    if res is None:
+        if ty not in number_domain:
+            raise TypeError(ty)
+        else:
+            return None, None  # no promote available
+
+    return res
+
+
 __all__ = '''
 int8
 int16
@@ -906,7 +986,9 @@ uint16
 uint32
 uint64
 intp
+uintp
 intc
+uintc
 boolean
 float32
 float64
