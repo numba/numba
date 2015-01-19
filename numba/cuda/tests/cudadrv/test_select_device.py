@@ -34,11 +34,11 @@ class TestSelectDevice(CUDATestCase):
             t = threading.Thread(target=newthread, args=(exception_queue,))
             t.start()
             t.join()
-        
+
         exceptions = []
         while not exception_queue.empty():
             exceptions.append(exception_queue.get())
-        self.assertEquals(exceptions, [])
+        self.assertEqual(exceptions, [])
 
 
 if __name__ == '__main__':
