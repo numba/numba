@@ -118,7 +118,7 @@ class _Runtime(object):
     def _create_context(self, gpu):
         """Create a new context for the given gpu
         """
-        # Use lock to prevent internal state mutation
+        # Use lock to prevent internal state corruption
         with self._lock:
             ctx = gpu.create_context()
             self._contexts[ctx.handle.value] = ctx
@@ -145,8 +145,8 @@ class _Runtime(object):
         return ctx
 
     def push_context(self, gpu):
-        """Push a context for the given GPU if it is not the current context
-        on the context stack.
+        """Push a context for the given GPU or create a new one if no context
+        exist for the given GPU.
         """
         # First context
         if not self._contexts:
