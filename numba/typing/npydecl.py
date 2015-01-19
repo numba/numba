@@ -12,6 +12,7 @@ from ..numpy_support import (ufunc_find_matching_loop,
 from ..typeinfer import TypingError
 
 registry = Registry()
+builtin = registry.register
 builtin_global = registry.register_global
 builtin_attr = registry.register_attr
 
@@ -238,6 +239,24 @@ for func in ['mean', 'var', 'std']:
 
 for func in ['argmin', 'argmax']:
     _numpy_reduction(func, Numpy_index_reduction)
+
+
+# -----------------------------------------------------------------------------
+# Miscellaneous functions
+
+@builtin
+class NdEnumerate(AbstractTemplate):
+    key = numpy.ndenumerate
+
+    def generic(self, args, kws):
+        assert not kws
+        arr, = args
+
+        if isinstance(arr, types.Array):
+            enumerate_type = types.NumpyNdEnumerateType(arr)
+            return signature(enumerate_type, *args)
+
+builtin_global(numpy.ndenumerate, types.Function(NdEnumerate))
 
 
 builtin_global(numpy, types.Module(numpy))

@@ -134,6 +134,8 @@ class TestTypeNames(unittest.TestCase):
         # Test that the cache doesn't grow in size when types are
         # created and disposed of.
         gc.collect()
+        # Keep strong references to existing types, to avoid spurious failures
+        existing_types = [wr() for wr in types._typecache]
         cache_len = len(types._typecache)
         a = types.Dummy('xyzzyx')
         b = types.Dummy('foox')

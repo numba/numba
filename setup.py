@@ -21,7 +21,7 @@ versioneer.parentdir_prefix = 'numba-'
 cmdclass = versioneer.get_cmdclass()
 
 setup_args = {
-    'long_description': open('README.md').read(),
+    'long_description': open('README.rst').read(),
 }
 
 GCCFLAGS = ["-std=c89", "-Wdeclaration-after-statement", "-Werror"]

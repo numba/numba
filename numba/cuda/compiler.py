@@ -44,7 +44,8 @@ def compile_cuda(pyfunc, return_type, args, debug, inline):
     return cres
 
 
-def compile_kernel(pyfunc, args, link, debug=False, inline=False):
+def compile_kernel(pyfunc, args, link, debug=False, inline=False,
+                   fastmath=False):
     cres = compile_cuda(pyfunc, types.void, args, debug=debug, inline=inline)
     func = cres.library.get_function(cres.fndesc.llvm_func_name)
     kernel = cres.target_context.prepare_cuda_kernel(func,
@@ -55,7 +56,8 @@ def compile_kernel(pyfunc, args, link, debug=False, inline=False):
                         argtypes=cres.signature.args,
                         link=link,
                         debug=debug,
-                        exceptions=cres.exception_map)
+                        exceptions=cres.exception_map,
+                        fastmath=fastmath)
     return cukern
 
 
@@ -205,11 +207,11 @@ class CUDAKernelBase(object):
 class CachedPTX(object):
     """A PTX cache that uses compute capability as a cache key
     """
-
-    def __init__(self, name, llvmir):
+    def __init__(self, name, llvmir, options):
         self.name = name
         self.llvmir = llvmir
         self.cache = {}
+        self._extra_options = options.copy()
 
     def get(self):
         """
@@ -221,7 +223,8 @@ class CachedPTX(object):
         ptx = self.cache.get(cc)
         if ptx is None:
             arch = nvvm.get_arch_option(*cc)
-            ptx = nvvm.llvm_to_ptx(self.llvmir, opt=3, arch=arch)
+            ptx = nvvm.llvm_to_ptx(self.llvmir, opt=3, arch=arch,
+                                   **self._extra_options)
             self.cache[cc] = ptx
             if config.DUMP_ASSEMBLY:
                 print(("ASSEMBLY %s" % self.name).center(80, '-'))
@@ -276,12 +279,21 @@ class CachedCUFunction(object):
 
 class CUDAKernel(CUDAKernelBase):
     def __init__(self, llvm_module, name, pretty_name,
-                 argtypes, link=(), debug=False, exceptions={}):
+                 argtypes, link=(), debug=False, exceptions={},
+                 fastmath=False):
         super(CUDAKernel, self).__init__()
         self.entry_name = name
         self.argument_types = tuple(argtypes)
         self.linking = tuple(link)
-        ptx = CachedPTX(pretty_name, str(llvm_module))
+
+        options = {}
+        if fastmath:
+            options.update(dict(ftz=True,
+                                prec_sqrt=False,
+                                prec_div=False,
+                                fma=True))
+
+        ptx = CachedPTX(pretty_name, str(llvm_module), options=options)
         self._func = CachedCUFunction(self.entry_name, ptx, link)
         self.debug = debug
         self.exceptions = exceptions
