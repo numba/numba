@@ -354,7 +354,8 @@ class CmpOpIsNot(CmpOpIdentity):
 def normalize_index(index):
     if isinstance(index, types.UniTuple):
         if index.dtype in types.integer_domain:
-            return types.UniTuple(types.intp, len(index))
+            idxtype = types.intp if index.dtype.signed else types.uintp
+            return types.UniTuple(idxtype, len(index))
         elif index.dtype == types.slice3_type:
             return index
 

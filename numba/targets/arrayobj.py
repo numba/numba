@@ -221,12 +221,12 @@ def getitem_array_unituple(context, builder, sig, args):
         return retary._getvalue()
     else:
         # Indexing
-        assert idxty.dtype == types.intp
+        assert isinstance(idxty.dtype, types.Integer)
         indices = cgutils.unpack_tuple(builder, idx, count=len(idxty))
         indices = [context.cast(builder, i, t, types.intp)
                    for t, i in zip(idxty, indices)]
         ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                       wraparound=True)
+                                       wraparound=idxty.dtype.signed)
 
         return context.unpack_value(builder, aryty.dtype, ptr)
 
@@ -316,7 +316,7 @@ def setitem_array_unituple(context, builder, sig, args):
     indices = [context.cast(builder, i, t, types.intp)
                for t, i in zip(idxty, indices)]
     ptr = cgutils.get_item_pointer(builder, aryty, ary, indices,
-                                   wraparound=True)
+                                   wraparound=idxty.dtype.signed)
     context.pack_value(builder, aryty.dtype, val, ptr)
 
 
