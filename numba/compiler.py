@@ -47,7 +47,8 @@ CR_FIELDS = ["typing_context",
              "fndesc",
              "interpmode",
              "library",
-             "exception_map"]
+             "exception_map",
+             "environment"]
 
 
 CompileResult = namedtuple("CompileResult", CR_FIELDS)
@@ -429,7 +430,7 @@ class Pipeline(object):
         if self.library is None:
             codegen = self.targetctx.jit_codegen()
             self.library = codegen.create_library(self.bc.func_qualname)
-        fndesc, exception_map, func = lowerfn()
+        fndesc, exception_map, func, env = lowerfn()
         signature = typing.signature(self.return_type, *self.args)
         cr = compile_result(typing_context=self.typingctx,
                             target_context=self.targetctx,
@@ -442,7 +443,8 @@ class Pipeline(object):
                             objectmode=objectmode,
                             interpmode=False,
                             lifted=self.lifted,
-                            fndesc=fndesc,)
+                            fndesc=fndesc,
+                            environment=env,)
         return cr
 
     def stage_objectmode_backend(self):
@@ -673,14 +675,14 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
     del lower
 
     if flags.no_compile:
-        return fndesc, exception_map, None
+        return fndesc, exception_map, None, None
     else:
         # Prepare for execution
         cfunc = targetctx.get_executable(library, fndesc, env)
         # Insert native function for use by other jitted-functions.
         # We also register its library to allow for inlining.
         targetctx.insert_user_function(cfunc, fndesc, [library])
-        return fndesc, exception_map, cfunc
+        return fndesc, exception_map, cfunc, None
 
 
 def py_lowering_stage(targetctx, library, interp, flags):
@@ -694,11 +696,11 @@ def py_lowering_stage(targetctx, library, interp, flags):
     del lower
 
     if flags.no_compile:
-        return fndesc, exception_map, None
+        return fndesc, exception_map, None, env
     else:
         # Prepare for execution
         cfunc = targetctx.get_executable(library, fndesc, env)
-        return fndesc, exception_map, cfunc
+        return fndesc, exception_map, cfunc, env
 
 
 def ir_optimize_for_py_stage(interp):
