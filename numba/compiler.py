@@ -7,7 +7,7 @@ import inspect
 
 from numba import (bytecode, interpreter, typing, typeinfer, lowering,
                    objmode, irpasses, utils, config, type_annotations,
-                   types, ir, assume, looplifting, macro)
+                   types, ir, assume, looplifting, macro, types)
 from numba.targets import cpu
 
 
@@ -306,8 +306,14 @@ class Pipeline(object):
         """
         self.interp = translate_stage(self.bc)
         self.nargs = len(self.interp.argspec.args)
-        if len(self.args) > self.nargs:
-            raise TypeError("Too many argument types")
+        if not self.args and self.flags.force_pyobject:
+            # Allow an empty argument types specification when object mode
+            # is explicitly requested.
+            self.args = (types.pyobject,) * self.nargs
+        elif len(self.args) != self.nargs:
+            raise TypeError("Signature mismatch: %d argument types given, "
+                            "but function takes %d arguments"
+                            % (len(self.args), self.nargs))
 
     def frontend_looplift(self):
         """
