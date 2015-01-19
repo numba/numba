@@ -475,6 +475,8 @@ class NumpyNdEnumerateType(IteratorType):
 
     def __init__(self, arrty):
         self.array_type = arrty
+        # XXX making this a uintp has the side effect of forcing some
+        # arithmetic operations to return a float result.
         self.yield_type = Tuple((UniTuple(intp, arrty.ndim), arrty.dtype))
         name = "ndenumerate({arrayty})".format(arrayty=arrty)
         super(NumpyNdEnumerateType, self).__init__(name, param=True)
