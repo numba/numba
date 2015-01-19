@@ -47,9 +47,10 @@ class _DeviceList(object):
 
     @property
     def current(self):
-        """Returns the active device
+        """Returns the active device or None if there's no active device
         """
-        return self.lst[_runtime.current_context.device.id]
+        if _runtime.context_stack:
+            return self.lst[_runtime.current_context.device.id]
 
 
 class _DeviceContextManager(object):
