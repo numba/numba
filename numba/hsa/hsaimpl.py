@@ -49,7 +49,8 @@ def get_global_id_impl(context, builder, sig, args):
     [dim] = args
     get_global_id = _declare_function(context, builder, 'get_global_id', sig,
                                       ['unsigned int'])
-    return builder.call(get_global_id, [dim])
+    res = builder.call(get_global_id, [dim])
+    return context.cast(builder, res, types.uintp, types.intp)
 
 
 @register
@@ -58,7 +59,8 @@ def get_local_id_impl(context, builder, sig, args):
     [dim] = args
     get_local_id = _declare_function(context, builder, 'get_local_id', sig,
                                      ['unsigned int'])
-    return builder.call(get_local_id, [dim])
+    res = builder.call(get_local_id, [dim])
+    return context.cast(builder, res, types.uintp, types.intp)
 
 
 @register
@@ -67,7 +69,8 @@ def get_global_size_impl(context, builder, sig, args):
     [dim] = args
     get_global_size = _declare_function(context, builder, 'get_global_size',
                                         sig, ['unsigned int'])
-    return builder.call(get_global_size, [dim])
+    res = builder.call(get_global_size, [dim])
+    return context.cast(builder, res, types.uintp, types.intp)
 
 
 @register
@@ -76,4 +79,5 @@ def get_local_size_impl(context, builder, sig, args):
     [dim] = args
     get_local_size = _declare_function(context, builder, 'get_local_size',
                                        sig, ['unsigned int'])
-    return builder.call(get_local_size, [dim])
+    res = builder.call(get_local_size, [dim])
+    return context.cast(builder, res, types.uintp, types.intp)

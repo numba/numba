@@ -626,6 +626,8 @@ class Queue(object):
         aql.grid_size_x = grid_size[0]
         aql.grid_size_y = grid_size[1] if dims > 1 else 1
         aql.grid_size_z = grid_size[2] if dims > 2 else 1
+        total_size = aql.grid_size_x * aql.grid_size_y * aql.grid_size_z
+        assert total_size < 2 ** 63, "Launch with grid size >= 2**63"
         aql.kernel_object_address = cd.code.handle
         aql.kernarg_address = ctypes.addressof(kernargs)
         aql.completion_signal = s._id
