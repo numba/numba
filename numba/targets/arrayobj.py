@@ -647,6 +647,43 @@ def make_array_flat_cls(flatiterty):
     Return the Structure representation of the given *flatiterty* (an
     instance of types.NumpyFlatType).
     """
+    return _make_flattening_iter_cls(flatiterty, 'flat')
+
+
+@struct_factory(types.NumpyNdEnumerateType)
+def make_array_ndenumerate_cls(nditerty):
+    """
+    Return the Structure representation of the given *nditerty* (an
+    instance of types.NumpyNdEnumerateType).
+    """
+    return _make_flattening_iter_cls(nditerty, 'ndenumerate')
+
+
+def _increment_indices(context, builder, arrty, arr, indices):
+    zero = context.get_constant(types.intp, 0)
+    one = context.get_constant(types.intp, 1)
+
+    shape = cgutils.unpack_tuple(builder, arr.shape, arrty.ndim)
+    bbend = cgutils.append_basic_block(builder, 'end_increment')
+
+    for dim in reversed(range(arrty.ndim)):
+        idxptr = cgutils.gep(builder, indices, dim)
+        idx = builder.add(builder.load(idxptr), one)
+
+        count = shape[dim]
+        in_bounds = builder.icmp(lc.ICMP_SLT, idx, count)
+        with cgutils.if_likely(builder, in_bounds):
+            builder.store(idx, idxptr)
+            builder.branch(bbend)
+        builder.store(zero, idxptr)
+
+    builder.branch(bbend)
+
+    builder.position_at_end(bbend)
+
+
+def _make_flattening_iter_cls(flatiterty, kind):
+    assert kind in ('flat', 'ndenumerate')
 
     array_type = flatiterty.array_type
     dtype = array_type.dtype
@@ -654,12 +691,13 @@ def make_array_flat_cls(flatiterty):
     if array_type.layout == 'C':
         class CContiguousFlatIter(cgutils.Structure):
             """
-            .flat() implementation for C-contiguous arrays.
+            .flat() / .ndenumerate() implementation for C-contiguous arrays.
             """
             _fields = [('array', types.CPointer(array_type)),
                        ('stride', types.intp),
                        ('pointer', types.CPointer(types.CPointer(dtype))),
                        ('index', types.CPointer(types.intp)),
+                       ('indices', types.CPointer(types.intp)),
                        ]
 
             def init_specific(self, context, builder, arrty, arr):
@@ -671,7 +709,23 @@ def make_array_flat_cls(flatiterty):
                 # http://docs.scipy.org/doc/numpy-dev/release.html#npy-relaxed-strides-checking
                 self.stride = arr.itemsize
 
+                if kind == 'ndenumerate':
+                    # Zero-initialize the indices array.
+                    indices = cgutils.alloca_once(
+                        builder, zero.type,
+                        size=context.get_constant(types.intp, arrty.ndim))
+
+                    for dim in range(arrty.ndim):
+                        idxptr = cgutils.gep(builder, indices, dim)
+                        builder.store(zero, idxptr)
+
+                    self.indices = indices
+
             def iternext_specific(self, context, builder, arrty, arr, result):
+                zero = context.get_constant(types.intp, 0)
+                one = context.get_constant(types.intp, 1)
+
+                ndim = arrty.ndim
                 nitems = arr.nitems
 
                 index = builder.load(self.index)
@@ -681,9 +735,19 @@ def make_array_flat_cls(flatiterty):
                 with cgutils.if_likely(builder, is_valid):
                     ptr = builder.load(self.pointer)
                     value = context.unpack_value(builder, arrty.dtype, ptr)
-                    result.yield_(value)
+                    if kind == 'flat':
+                        result.yield_(value)
+                    else:
+                        # ndenumerate(): fetch and increment indices
+                        indices = self.indices
+                        idxvals = [builder.load(cgutils.gep(builder, indices, dim))
+                                   for dim in range(ndim)]
+                        idxtuple = cgutils.pack_array(builder, idxvals)
+                        result.yield_(
+                            cgutils.make_anonymous_struct(builder, [idxtuple, value]))
+                        _increment_indices(context, builder, arrty, arr, indices)
 
-                    index = builder.add(index, context.get_constant(types.intp, 1))
+                    index = builder.add(index, one)
                     builder.store(index, self.index)
                     ptr = cgutils.pointer_add(builder, ptr, self.stride)
                     builder.store(ptr, self.pointer)
@@ -693,19 +757,19 @@ def make_array_flat_cls(flatiterty):
     else:
         class FlatIter(cgutils.Structure):
             """
-            Generic .flat() implementation for non-contiguous arrays.
+            Generic .flat() / .ndenumerate() implementation for
+            non-contiguous arrays.
             It keeps track of pointers along each dimension in order to
             minimize computations.
             """
             _fields = [('array', types.CPointer(array_type)),
                        ('pointers', types.CPointer(types.CPointer(dtype))),
                        ('indices', types.CPointer(types.intp)),
-                       ('empty', types.CPointer(types.boolean)),
+                       ('exhausted', types.CPointer(types.boolean)),
                        ]
 
             def init_specific(self, context, builder, arrty, arr):
                 zero = context.get_constant(types.intp, 0)
-                one = context.get_constant(types.intp, 1)
                 data = arr.data
                 ndim = arrty.ndim
                 shapes = cgutils.unpack_tuple(builder, arr.shape, ndim)
@@ -717,33 +781,25 @@ def make_array_flat_cls(flatiterty):
                                                size=context.get_constant(types.intp,
                                                                          arrty.ndim))
                 strides = cgutils.unpack_tuple(builder, arr.strides, ndim)
-                empty = cgutils.alloca_once_value(builder, cgutils.false_byte)
+                exhausted = cgutils.alloca_once_value(builder, cgutils.false_byte)
 
-                # Initialize each dimension with the next index and pointer
-                # values.  For the last (inner) dimension, this is 0 and the
-                # start pointer, for the other dimensions, this is 1 and the
-                # pointer to the next subarray after start.
+                # Initialize indices and pointers with their start values.
                 for dim in range(ndim):
                     idxptr = cgutils.gep(builder, indices, dim)
                     ptrptr = cgutils.gep(builder, pointers, dim)
-                    if dim == ndim - 1:
-                        builder.store(zero, idxptr)
-                        builder.store(data, ptrptr)
-                    else:
-                        p = cgutils.pointer_add(builder, data, strides[dim])
-                        builder.store(p, ptrptr)
-                        builder.store(one, idxptr)
+                    builder.store(data, ptrptr)
+                    builder.store(zero, idxptr)
                     # 0-sized dimensions really indicate an empty array,
                     # but we have to catch that condition early to avoid
                     # a bug inside the iteration logic (see issue #846).
                     dim_size = shapes[dim]
                     dim_is_empty = builder.icmp(lc.ICMP_EQ, dim_size, zero)
                     with cgutils.if_unlikely(builder, dim_is_empty):
-                        builder.store(cgutils.true_byte, empty)
+                        builder.store(cgutils.true_byte, exhausted)
 
                 self.indices = indices
                 self.pointers = pointers
-                self.empty = empty
+                self.exhausted = exhausted
 
             def iternext_specific(self, context, builder, arrty, arr, result):
                 ndim = arrty.ndim
@@ -755,59 +811,57 @@ def make_array_flat_cls(flatiterty):
 
                 zero = context.get_constant(types.intp, 0)
                 one = context.get_constant(types.intp, 1)
-                minus_one = context.get_constant(types.intp, -1)
-                result.set_valid(True)
 
-                bbcont = cgutils.append_basic_block(builder, 'continued')
                 bbend = cgutils.append_basic_block(builder, 'end')
 
                 # Catch already computed iterator exhaustion
-                is_empty = cgutils.as_bool_bit(builder, builder.load(self.empty))
-                with cgutils.if_unlikely(builder, is_empty):
+                is_exhausted = cgutils.as_bool_bit(
+                    builder, builder.load(self.exhausted))
+                with cgutils.if_unlikely(builder, is_exhausted):
                     result.set_valid(False)
                     builder.branch(bbend)
+                result.set_valid(True)
 
                 # Current pointer inside last dimension
-                last_ptr = cgutils.alloca_once(builder, data.type)
+                last_ptr = cgutils.gep(builder, pointers, ndim - 1)
+                ptr = builder.load(last_ptr)
+                value = context.unpack_value(builder, arrty.dtype, ptr)
+                if kind == 'flat':
+                    result.yield_(value)
+                else:
+                    # ndenumerate() => yield (indices, value)
+                    idxvals = [builder.load(cgutils.gep(builder, indices, dim))
+                               for dim in range(ndim)]
+                    idxtuple = cgutils.pack_array(builder, idxvals)
+                    result.yield_(
+                        cgutils.make_anonymous_struct(builder, [idxtuple, value]))
 
-                # Walk from inner dimension to outer
+                # Update indices and pointers by walking from inner
+                # dimension to outer.
                 for dim in reversed(range(ndim)):
                     idxptr = cgutils.gep(builder, indices, dim)
-                    idx = builder.load(idxptr)
+                    idx = builder.add(builder.load(idxptr), one)
 
                     count = shapes[dim]
                     stride = strides[dim]
                     in_bounds = builder.icmp(lc.ICMP_SLT, idx, count)
                     with cgutils.if_likely(builder, in_bounds):
-                        # Index is valid => we point to the right slot
+                        # Index is valid => pointer can simply be incremented.
+                        builder.store(idx, idxptr)
                         ptrptr = cgutils.gep(builder, pointers, dim)
                         ptr = builder.load(ptrptr)
-                        builder.store(ptr, last_ptr)
-                        # Compute next index and pointer for this dimension
-                        next_ptr = cgutils.pointer_add(builder, ptr, stride)
-                        builder.store(next_ptr, ptrptr)
-                        next_idx = builder.add(idx, one)
-                        builder.store(next_idx, idxptr)
-                        # Reset inner dimensions
+                        ptr = cgutils.pointer_add(builder, ptr, stride)
+                        builder.store(ptr, ptrptr)
+                        # Reset pointers in inner dimensions
                         for inner_dim in range(dim + 1, ndim):
-                            idxptr = cgutils.gep(builder, indices, inner_dim)
                             ptrptr = cgutils.gep(builder, pointers, inner_dim)
-                            # Compute next index and pointer for this dimension
-                            inner_ptr = cgutils.pointer_add(builder, ptr,
-                                                            strides[inner_dim])
-                            builder.store(inner_ptr, ptrptr)
-                            builder.store(one, idxptr)
-                        builder.branch(bbcont)
+                            builder.store(ptr, ptrptr)
+                        builder.branch(bbend)
+                    # Reset index and continue with next dimension
+                    builder.store(zero, idxptr)
 
-                # End of array => skip to end
-                result.set_valid(False)
-                builder.branch(bbend)
-
-                builder.position_at_end(bbcont)
-                # After processing of indices and pointers: fetch value.
-                ptr = builder.load(last_ptr)
-                value = context.unpack_value(builder, arrty.dtype, ptr)
-                result.yield_(value)
+                # End of array
+                builder.store(cgutils.true_byte, self.exhausted)
                 builder.branch(bbend)
 
                 builder.position_at_end(bbend)
@@ -847,3 +901,39 @@ def iternext_numpy_flatiter(context, builder, sig, args, result):
     arr = arrcls(context, builder, value=builder.load(flatiter.array))
 
     flatiter.iternext_specific(context, builder, arrty, arr, result)
+
+
+@builtin
+@implement(numpy.ndenumerate, types.Kind(types.Array))
+def make_array_ndenumerate(context, builder, sig, args):
+    arrty, = sig.args
+    arr, = args
+    nditercls = make_array_ndenumerate_cls(types.NumpyNdEnumerateType(arrty))
+    nditer = nditercls(context, builder)
+
+    arrayptr = cgutils.alloca_once_value(builder, arr)
+    nditer.array = arrayptr
+
+    arrcls = context.make_array(arrty)
+    arr = arrcls(context, builder, ref=arrayptr)
+
+    nditer.init_specific(context, builder, arrty, arr)
+
+    return nditer._getvalue()
+
+
+@builtin
+@implement('iternext', types.Kind(types.NumpyNdEnumerateType))
+@iternext_impl
+def iternext_numpy_nditer(context, builder, sig, args, result):
+    [nditerty] = sig.args
+    [nditer] = args
+
+    nditercls = make_array_ndenumerate_cls(nditerty)
+    nditer = nditercls(context, builder, value=nditer)
+
+    arrty = nditerty.array_type
+    arrcls = context.make_array(arrty)
+    arr = arrcls(context, builder, value=builder.load(nditer.array))
+
+    nditer.iternext_specific(context, builder, arrty, arr, result)

@@ -1,10 +1,12 @@
 from __future__ import division
+
 from itertools import product
+
+import numpy as np
 
 from numba import unittest_support as unittest
 from numba import typeof, types
 from numba.compiler import compile_isolated
-import numpy as np
 from .support import TestCase
 
 
@@ -33,6 +35,13 @@ def array_flat_sum(arr):
     s = 0
     for i, v in enumerate(arr.flat):
         s = s + (i + 1) * v
+    return s
+
+
+def array_ndenumerate_sum(arr):
+    s = 0
+    for (i, j), v in np.ndenumerate(arr):
+        s = s + (i + 1) * (j + 1) * v
     return s
 
 
@@ -187,11 +196,16 @@ class TestArrayMethods(TestCase):
 
         self.assertTrue(np.all(out == nb_out), (out, nb_out))
 
-    def check_array_flat_sum(self, arr, arrty):
-        cres = compile_isolated(array_flat_sum, [arrty])
+    def check_array_unary(self, arr, arrty, func):
+        cres = compile_isolated(func, [arrty])
         cfunc = cres.entry_point
+        self.assertPreciseEqual(cfunc(arr), func(arr))
 
-        self.assertPreciseEqual(cfunc(arr), array_flat_sum(arr))
+    def check_array_flat_sum(self, arr, arrty):
+        self.check_array_unary(arr, arrty, array_flat_sum)
+
+    def check_array_ndenumerate_sum(self, arr, arrty):
+        self.check_array_unary(arr, arrty, array_ndenumerate_sum)
 
     def test_array_sum_int_1d(self):
         arr = np.arange(10, dtype=np.int32)
@@ -232,6 +246,46 @@ class TestArrayMethods(TestCase):
         self.check_array_flat_sum(arr, arrty)
         arrty = types.Array(types.int32, 2, layout='A')
         self.check_array_flat_sum(arr, arrty)
+        arr = arr.reshape(2, 0)
+        arrty = types.Array(types.int32, 2, layout='C')
+        self.check_array_flat_sum(arr, arrty)
+        arrty = types.Array(types.int32, 2, layout='F')
+        self.check_array_flat_sum(arr, arrty)
+        arrty = types.Array(types.int32, 2, layout='A')
+        self.check_array_flat_sum(arr, arrty)
+
+    def test_array_ndenumerate_2d(self):
+        arr = np.arange(12).reshape(4, 3)
+        arrty = typeof(arr)
+        self.assertEqual(arrty.ndim, 2)
+        self.assertEqual(arrty.layout, 'C')
+        self.assertTrue(arr.flags.c_contiguous)
+        # Test with C-contiguous array
+        self.check_array_ndenumerate_sum(arr, arrty)
+        # Test with Fortran-contiguous array
+        arr = arr.transpose()
+        self.assertFalse(arr.flags.c_contiguous)
+        self.assertTrue(arr.flags.f_contiguous)
+        arrty = typeof(arr)
+        self.assertEqual(arrty.layout, 'F')
+        self.check_array_ndenumerate_sum(arr, arrty)
+        # Test with non-contiguous array
+        arr = arr[::2]
+        self.assertFalse(arr.flags.c_contiguous)
+        self.assertFalse(arr.flags.f_contiguous)
+        arrty = typeof(arr)
+        self.assertEqual(arrty.layout, 'A')
+        self.check_array_ndenumerate_sum(arr, arrty)
+
+    def test_array_ndenumerate_empty(self):
+        arr = np.zeros(0, dtype=np.int32)
+        arr = arr.reshape(0, 2)
+        arrty = types.Array(types.int32, 2, layout='C')
+        self.check_array_ndenumerate_sum(arr, arrty)
+        arrty = types.Array(types.int32, 2, layout='F')
+        self.check_array_ndenumerate_sum(arr, arrty)
+        arrty = types.Array(types.int32, 2, layout='A')
+        self.check_array_ndenumerate_sum(arr, arrty)
         arr = arr.reshape(2, 0)
         arrty = types.Array(types.int32, 2, layout='C')
         self.check_array_flat_sum(arr, arrty)

@@ -468,6 +468,22 @@ class NumpyFlatType(IteratorType):
         return self.array_type
 
 
+class NumpyNdEnumerateType(IteratorType):
+    """
+    Type class for `np.ndenumerate()` objects.
+    """
+
+    def __init__(self, arrty):
+        self.array_type = arrty
+        self.yield_type = Tuple((UniTuple(intp, arrty.ndim), arrty.dtype))
+        name = "ndenumerate({arrayty})".format(arrayty=arrty)
+        super(NumpyNdEnumerateType, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.array_type
+
+
 class EnumerateType(IteratorType):
     """
     Type class for `enumerate` objects.
