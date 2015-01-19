@@ -312,7 +312,7 @@ class BaseContext(object):
     def type_compatibility(self, fromty, toty):
         """
         Returns None or a string describing the conversion e.g. exact, promote,
-        unsafe, safe, tuple-coerce
+        unsafe, safe.
         """
         if fromty == toty:
             return 'exact'
@@ -322,11 +322,8 @@ class BaseContext(object):
                       len(fromty) == len(toty)):
             return self.type_compatibility(fromty.dtype, toty.dtype)
 
-        elif (types.is_int_tuple(fromty) and types.is_int_tuple(toty) and
-                      len(fromty) == len(toty)):
-            return 'int-tuple-coerce'
-
-        return self.tm.check_compatible(fromty, toty)
+        else:
+            return self.tm.check_compatible(fromty, toty)
 
     def unify_types(self, *typelist):
         # Sort the type list according to bit width before doing
@@ -336,6 +333,7 @@ class BaseContext(object):
             Fallback to hash() for arbitary ordering.
             """
             return getattr(obj, 'bitwidth', hash(obj))
+
         return functools.reduce(
             self.unify_pairs, sorted(typelist, key=keyfunc))
 
@@ -344,64 +342,47 @@ class BaseContext(object):
         Choose PyObject type as the abstract if we fail to determine a concrete
         type.
         """
-        # TODO: should add an option to reject unsafe type conversion
-        if types.none in (first, second):
-            if first == types.none:
-                return types.Optional(second)
-            elif second == types.none:
-                return types.Optional(first)
-
-        # Handle optional type
-        # XXX: really need to refactor type infer to reduce the number of
-        #      special cases
-        if (isinstance(first, types.Optional) or
-                isinstance(second, types.Optional)):
-            a = (first.type
-                 if isinstance(first, types.Optional)
-                 else first)
-            b = (second.type
-                 if isinstance(second, types.Optional)
-                 else second)
-            return types.Optional(self.unify_pairs(a, b))
-
-        d = self.type_compatibility(fromty=first, toty=second)
-        if d is None:
-            # Complex is not allowed to downcast implicitly.
-            # Need to try the other direction of implicit cast to find the
-            # most general type of the two.
-            first, second = second, first   # swap operand order
-            d = self.type_compatibility(fromty=first, toty=second)
-
-        if d is None:
-            return types.pyobject
-        elif d == 'exact':
-            # Same type
+        if first == second:
             return first
-        elif d == 'promote':
+
+        # Types with special coercion rule
+        first_coerce = first.coerce(self, second)
+        second_coerce = second.coerce(self, first)
+
+        if first_coerce is not NotImplemented:
+            return first_coerce
+
+        elif second_coerce is not NotImplemented:
+            return second_coerce
+
+        # TODO: should add an option to reject unsafe type conversion
+
+        # Types with simple coercion rule
+        forward = self.type_compatibility(fromty=first, toty=second)
+        backward = self.type_compatibility(fromty=second, toty=first)
+
+        strong = ('exact', 'promote')
+        weak = ('safe', 'unsafe')
+        if forward in strong:
             return second
-        elif d in ('safe', 'unsafe'):
+        elif backward in strong:
+            return first
+        elif forward is None and backward is None:
+            return types.pyobject
+        elif forward in weak or backward in weak:
+            # Use numpy to pick a type that
             if first in types.number_domain and second in types.number_domain:
                 a = numpy.dtype(str(first))
                 b = numpy.dtype(str(second))
-                # Just use NumPy coercion rules
                 sel = numpy.promote_types(a, b)
-                # Convert NumPy dtype back to Numba types
                 return getattr(types, str(sel))
-            elif (isinstance(first, types.UniTuple) and
-                      isinstance(second, types.UniTuple)):
-                a = numpy.dtype(str(first.dtype))
-                b = numpy.dtype(str(second.dtype))
-                if a > b:
-                    return first
-                else:
-                    return second
-            else:
-                msg = "unrecognized '{0}' unify for {1} and {2}"
-                raise TypeError(msg.format(d, first, second))
-        elif d in 'int-tuple-coerce':
-            return types.UniTuple(dtype=types.intp, count=len(first))
-        else:
-            raise Exception("type_compatibility returned %s" % d)
+
+
+        # Failed to unify
+        msg = ("Cannot unify {{{first}, {second}}}\n"
+               "{first}->{second}::{forward}\n"
+               "{second}->{first}::{backward} ")
+        raise AssertionError(msg.format(**locals()))
 
 
 class Context(BaseContext):

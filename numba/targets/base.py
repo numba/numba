@@ -781,11 +781,13 @@ class BaseContext(object):
                 tup = builder.insert_value(tup, val, idx)
             return tup
 
-        elif (types.is_int_tuple(toty) and types.is_int_tuple(fromty) and
-                len(toty) == len(fromty)):
+        elif (isinstance(fromty, (types.UniTuple, types.Tuple)) and
+                  isinstance(toty, (types.UniTuple, types.Tuple)) and
+                      len(toty) == len(fromty)):
+
             olditems = cgutils.unpack_tuple(builder, val, len(fromty))
-            items = [self.cast(builder, i, t, toty.dtype)
-                     for i, t in zip(olditems, fromty.types)]
+            items = [self.cast(builder, i, f, t)
+                     for i, f, t in zip(olditems, fromty, toty)]
             tup = self.get_constant_undef(toty)
             for idx, val in enumerate(items):
                 tup = builder.insert_value(tup, val, idx)
