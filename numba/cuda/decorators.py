@@ -85,6 +85,16 @@ def jit(restype=None, argtypes=None, device=False, inline=False, bind=True,
 
     When the function signature is not given, this decorator behaves like
     autojit.
+
+
+    The following addition options are available for kernel functions only.
+    They are ignored in device function.
+
+    - fastmath: bool
+        Enables flush-to-zero for denormal float;
+        Enables fused-multiply-add;
+        Disables precise division;
+        Disables precise square root.
     """
 
     if argtypes is None and not sigutils.is_signature(restype):
@@ -100,13 +110,14 @@ def jit(restype=None, argtypes=None, device=False, inline=False, bind=True,
 
     else:
         restype, argtypes = convert_types(restype, argtypes)
+        fastmath = kws.get('fastmath', False)
 
         if restype and not device and restype != types.void:
             raise TypeError("CUDA kernel must have void return type.")
 
         def kernel_jit(func):
             kernel = compile_kernel(func, argtypes, link=link, debug=debug,
-                                    inline=inline)
+                                    inline=inline, fastmath=fastmath)
 
             # Force compilation for the current context
             if bind:

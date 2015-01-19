@@ -47,6 +47,7 @@ class _gpus(object):
     def reset(self):
         for gpu in self:
             gpu.reset()
+        self._lst = None
 
     @property
     def current(self):
@@ -86,7 +87,7 @@ class GPU(object):
             self._context = self._gpu.create_context()
 
         # Current context is not associated with the thread
-        if self._gpu.get_context() is not self._context:
+        if self._gpu.get_context() != self._context:
             self._context.push()
 
         return self._context
@@ -101,9 +102,11 @@ class GPU(object):
         _gpustack.pop()
 
     def reset(self):
-        if self._context:
-            self._context.reset()
-            self._context = None
+        self._gpu.reset()
+
+    @property
+    def active_contexts(self):
+        return self._gpu.contexts.values()
 
 
 def get_gpu(i):
@@ -142,6 +145,11 @@ def require_context(fn):
 
 
 def reset():
+    """Reset the CUDA subsystem.
+
+    This removes all CUDA contexts.  Only use this at shutdown or for
+    cleaning up between tests.
+    """
     gpus.reset()
     _gpustack.clear()
 
