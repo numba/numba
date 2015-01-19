@@ -57,6 +57,14 @@ FunctionAttributes = namedtuple("FunctionAttributes",
 DEFAULT_FUNCTION_ATTRIBUTES = FunctionAttributes('<anonymous>', '<unknown>', 0)
 
 
+_LowerResult = namedtuple("_LowerResult", [
+    "fndesc",
+    "exception_map",
+    "cfunc",
+    "env",
+])
+
+
 def get_function_attributes(func):
     '''
     Extract the function attributes from a Python function or object with
@@ -430,21 +438,21 @@ class Pipeline(object):
         if self.library is None:
             codegen = self.targetctx.jit_codegen()
             self.library = codegen.create_library(self.bc.func_qualname)
-        fndesc, exception_map, func, env = lowerfn()
+        lowered = lowerfn()
         signature = typing.signature(self.return_type, *self.args)
         cr = compile_result(typing_context=self.typingctx,
                             target_context=self.targetctx,
-                            entry_point=func,
+                            entry_point=lowered.cfunc,
                             typing_error=self.status.fail_reason,
                             type_annotation=self.type_annotation,
                             library=self.library,
-                            exception_map=exception_map,
+                            exception_map=lowered.exception_map,
                             signature=signature,
                             objectmode=objectmode,
                             interpmode=False,
                             lifted=self.lifted,
-                            fndesc=fndesc,
-                            environment=env,)
+                            fndesc=lowered.fndesc,
+                            environment=lowered.env,)
         return cr
 
     def stage_objectmode_backend(self):
@@ -675,14 +683,14 @@ def native_lowering_stage(targetctx, library, interp, typemap, restype,
     del lower
 
     if flags.no_compile:
-        return fndesc, exception_map, None, None
+        return _LowerResult(fndesc, exception_map, cfunc=None, env=None)
     else:
         # Prepare for execution
         cfunc = targetctx.get_executable(library, fndesc, env)
         # Insert native function for use by other jitted-functions.
         # We also register its library to allow for inlining.
         targetctx.insert_user_function(cfunc, fndesc, [library])
-        return fndesc, exception_map, cfunc, None
+        return _LowerResult(fndesc, exception_map, cfunc=cfunc, env=None)
 
 
 def py_lowering_stage(targetctx, library, interp, flags):
@@ -696,11 +704,11 @@ def py_lowering_stage(targetctx, library, interp, flags):
     del lower
 
     if flags.no_compile:
-        return fndesc, exception_map, None, env
+        return _LowerResult(fndesc, exception_map, cfunc=None, env=env)
     else:
         # Prepare for execution
         cfunc = targetctx.get_executable(library, fndesc, env)
-        return fndesc, exception_map, cfunc, env
+        return _LowerResult(fndesc, exception_map, cfunc, env)
 
 
 def ir_optimize_for_py_stage(interp):
