@@ -302,43 +302,13 @@ class PyLower(BaseLower):
             raise NotImplementedError(expr)
 
     def lower_const(self, const):
-        from numba import dispatcher   # Avoiding toplevel circular imports
-        if isinstance(const, str):
-            ret = self.pyapi.string_from_constant_string(const)
-            self.check_error(ret)
-            return ret
-        elif isinstance(const, complex):
-            real = self.context.get_constant(types.float64, const.real)
-            imag = self.context.get_constant(types.float64, const.imag)
-            ret = self.pyapi.complex_from_doubles(real, imag)
-            self.check_error(ret)
-            return ret
-        elif isinstance(const, float):
-            fval = self.context.get_constant(types.float64, const)
-            ret = self.pyapi.float_from_double(fval)
-            self.check_error(ret)
-            return ret
-        elif isinstance(const, utils.INT_TYPES):
-            if utils.bit_length(const) >= 64:
-                raise ValueError("Integer is too big to be lowered")
-            ival = self.context.get_constant(types.intp, const)
-            return self.pyapi.long_from_ssize_t(ival)
-        elif isinstance(const, tuple):
-            items = [self.lower_const(i) for i in const]
-            return self.pyapi.tuple_pack(items)
-        elif const is Ellipsis:
-            return self.get_builtin_obj("Ellipsis")
-        elif const is None:
-            return self.pyapi.make_none()
-        else:
-            # Constants which can't be reconstructed are frozen inside
-            # the environment (e.g. callables, lifted loops).
-            index = len(self.env.consts)
-            self.env.consts.append(const)
-            ret = self.get_env_const(index)
-            self.check_error(ret)
-            self.incref(ret)
-            return ret
+        # All constants are frozen inside the environment
+        index = len(self.env.consts)
+        self.env.consts.append(const)
+        ret = self.get_env_const(index)
+        self.check_error(ret)
+        self.incref(ret)
+        return ret
 
     def lower_global(self, name, value):
         """
