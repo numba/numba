@@ -354,7 +354,8 @@ class CmpOpIsNot(CmpOpIdentity):
 def normalize_index(index):
     if isinstance(index, types.UniTuple):
         if index.dtype in types.integer_domain:
-            return types.UniTuple(types.intp, len(index))
+            idxtype = types.intp if index.dtype.signed else types.uintp
+            return types.UniTuple(idxtype, len(index))
         elif index.dtype == types.slice3_type:
             return index
 
@@ -372,8 +373,8 @@ def normalize_index(index):
     # elif index == types.slice2_type:
     #     return types.slice2_type
 
-    else:
-        return types.intp
+    elif isinstance(index, types.Integer):
+        return types.intp if index.signed else types.uintp
 
 
 @builtin
@@ -415,7 +416,7 @@ class GetItemArray(AbstractTemplate):
                 res = ary.copy(ndim=ndim, layout='A')
             else:
                 res = ary.dtype
-        elif idx == types.intp:
+        elif isinstance(idx, types.Integer):
             if ary.ndim != 1:
                 return
             res = ary.dtype
