@@ -10,7 +10,7 @@ and maps the position to an array index::
 
     from numba import cuda
 
-    @cuda.jit
+    @cuda.jit                  # mark a function to be compile to a kernel
     def increment_by_one(an_array):
         tx = cuda.threadIdx.x  # thread id in a 1D block
         ty = cuda.blockIdx.x   # block id in a 1D grid
@@ -38,6 +38,17 @@ The ``threadperblock`` and ``blockpergrid`` can be an int or a tuple of 1, 2 or
 Because the size of the array is not always divisible by the number of threads
 per block, we could be launching more threads than there are array elements.
 The kernel must check if the thread position in within the array bound.
+
+Kernel Characteristics
+----------------------
+
+A kernel is unlike normal functions.  It cannot not return any value other than
+``None`` (a bare return statement returns None).  Results should be store
+into an array passed as an output parameter.
+
+In older CUDA, a kernel can only be launched by the host.  Newer CUDA devices
+support device side kernel launching.  This feature is called *dynamic
+parallelism* but Numba does not support it currently.
 
 
 Data Independent Parallelism

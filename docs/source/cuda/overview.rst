@@ -20,7 +20,7 @@ here:
 - *device memory*: onboard memory on a GPU card
 - *kernels*: a GPU function launched by the host and executed on the device
 - *device function*: a GPU function executed on the device and can only be
-called from the device
+  called from the device
 
 Supported GPUs
 --------------
