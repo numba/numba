@@ -206,6 +206,8 @@ class HSAKernel(HSAKernelBase):
         Bind kernel to device
         """
         ctx, entry = self._cacheprog.get()
+        assert entry.code_desc._id.kernarg_segment_byte_size == ctypes.sizeof(
+            self._kernarg_types)
         kernargs = entry.kernarg_region.allocate(self._kernarg_types)
         # Inject dummy argument
         injectargs = ctypes.cast(kernargs,

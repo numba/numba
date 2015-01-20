@@ -617,8 +617,8 @@ class Queue(object):
         aql.header.acquire_fence_scope = enums.HSA_FENCE_SCOPE_SYSTEM
         aql.header.release_fence_scope = enums.HSA_FENCE_SCOPE_SYSTEM
         aql.header.barrier = 1
-        aql.group_segment_size = 0
-        aql.private_segment_size = 0
+        aql.group_segment_size = cd.workgroup_group_segment_byte_size
+        aql.private_segment_size = cd.workitem_private_segment_byte_size
         aql.dimensions = dims
         aql.workgroup_size_x = workgroup_size[0]
         aql.workgroup_size_y = workgroup_size[1] if dims > 1 else 1

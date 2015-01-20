@@ -8,6 +8,7 @@ from .stubs import (
     get_local_id,
     get_local_size,
     barrier,
+    shared,
 )
 
 from .decorators import (
