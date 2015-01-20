@@ -5,8 +5,8 @@ Numba for CUDA GPUs
 .. toctree::
 
    overview.rst
-   device-functions.rst
-   memory.rst
    kernels.rst
+   memory.rst
+   device-functions.rst
    device-management.rst
    examples.rst
