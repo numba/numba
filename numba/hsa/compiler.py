@@ -143,6 +143,10 @@ class _CachedProgram(object):
         # key: hsa context
         self._cache = {}
 
+    def __del__(self):
+        for ent in self._cache.values():
+            ent.program.release()
+
     def get(self):
         ctx = devices.get_context()
         result = self._cache.get(ctx)

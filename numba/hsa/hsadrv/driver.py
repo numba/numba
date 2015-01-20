@@ -184,6 +184,7 @@ class Driver(object):
             self.initialization_error = e
 
         self._agent_map = None
+        self._programs = {}
         self._recycler = Recycler()
 
     def _initialize_api(self):
@@ -247,6 +248,10 @@ class Driver(object):
         self.hsa_ext_program_create(devices, device_list_len, model, profile,
                                     ctypes.byref(program))
         return Program(program)
+
+    def release_program(self, prog):
+        assert isinstance(prog, Program)
+        self._recycler.free(prog)
 
     def create_signal(self, initial_value, consumers=None):
         if consumers is not None:
@@ -753,10 +758,13 @@ class BrigModule(object):
 
 class Program(object):
     def __init__(self, program_id):
+        self._drv = hsa
         self._id = program_id
+        self._as_parameter_ = self._id
+        self._finalizer = hsa.hsa_ext_program_destroy
 
-    def __del__(self):
-        hsa.hsa_ext_program_destroy(self._id)
+    def release(self):
+        hsa.release_program(self)
 
     def add_module(self, module):
         result = drvapi.hsa_ext_brig_module_handle_t()
