@@ -1,6 +1,7 @@
 from __future__ import print_function, absolute_import
 import copy
 import ctypes
+from collections import namedtuple
 
 from numba.typing.templates import ConcreteTemplate
 from numba import types, compiler
@@ -130,6 +131,41 @@ class HSAKernelBase(object):
         return self.configure(gs, blockdim, *args[2:])
 
 
+
+_CacheEntry = namedtuple("_CachedEntry", ['code_desc', 'program',
+                                          'kernarg_region'])
+
+
+class _CachedProgram(object):
+    def __init__(self, entry_name, binary):
+        self._entry_name = entry_name
+        self._binary = binary
+        # key: hsa context
+        self._cache = {}
+
+    def get(self):
+        ctx = devices.get_context()
+        result = self._cache.get(ctx)
+        # The program has not been finalized for this device
+        if result is None:
+            # Finalize
+            symbol = '&{0}'.format(self._entry_name)
+            brig_module = driver.BrigModule.from_memory(self._binary)
+            symbol_offset = brig_module.find_symbol_offset(symbol)
+            agent = ctx.agent
+            program = driver.hsa.create_program([agent])
+            module = program.add_module(brig_module)
+            code_desc = program.finalize(agent, module, symbol_offset)
+            kernarg_region = [r for r in agent.regions
+                              if r.supports_kernargs][0]
+            # Cache the finalized program
+            result = _CacheEntry(code_desc=code_desc, program=program,
+                                 kernarg_region=kernarg_region)
+            self._cache[ctx] = result
+
+        return ctx, result
+
+
 class HSAKernel(HSAKernelBase):
     """
     A HSA kernel object
@@ -152,7 +188,12 @@ class HSAKernel(HSAKernelBase):
             padding = ai.calc_padding(kas)
             self._argloc.append(padding + kas + self._injectedargsize)
             kas += padding + ai.size
-        self._kernargsize = kas + self._injectedargsize
+        kernargsize = kas + self._injectedargsize
+        self._kernarg_types = (ctypes.c_byte * kernargsize)
+
+        # cached finalized program
+        self._cacheprog = _CachedProgram(entry_name=self.entry_name,
+                                         binary=self.binary)
 
     def _finalize(self):
         hlcmod = hlc.Module()
@@ -164,17 +205,8 @@ class HSAKernel(HSAKernelBase):
         """
         Bind kernel to device
         """
-        ctx = devices.get_context()
-        symbol = '&{0}'.format(self.entry_name)
-        brig_module = driver.BrigModule.from_memory(self.binary)
-        symbol_offset = brig_module.find_symbol_offset(symbol)
-        agent = ctx.agent
-        program = driver.hsa.create_program([agent])
-        module = program.add_module(brig_module)
-        code_desc = program.finalize(agent, module, symbol_offset)
-        kernarg_region = [r for r in agent.regions if r.supports_kernargs][0]
-        kernarg_types = (ctypes.c_byte * self._kernargsize)
-        kernargs = kernarg_region.allocate(kernarg_types)
+        ctx, entry = self._cacheprog.get()
+        kernargs = entry.kernarg_region.allocate(self._kernarg_types)
         # Inject dummy argument
         injectargs = ctypes.cast(kernargs,
                                  ctypes.POINTER(ctypes.c_void_p *
@@ -182,10 +214,10 @@ class HSAKernel(HSAKernelBase):
         for i in range(self.INJECTED_NARG):
             injectargs[i] = 0
 
-        return ctx, code_desc, kernargs, kernarg_region, program
+        return ctx, entry.code_desc, kernargs, entry.kernarg_region
 
     def __call__(self, *args):
-        ctx, code_desc, kernargs, kernarg_region, program = self.bind()
+        ctx, code_desc, kernargs, kernarg_region = self.bind()
 
         # Insert kernel arguments
         keepalive = []
