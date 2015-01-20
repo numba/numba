@@ -94,18 +94,14 @@ class HSATargetContext(BaseContext):
         fnty = lc.Type.function(lc.Type.void(), llargtys)
         wrappername = 'hsaPy_{name}'.format(name=func.name)
         wrapper = module.add_function(fnty, name=wrappername)
-        print(wrapper)
 
         builder = lc.Builder.new(wrapper.append_basic_block(''))
 
         callargs = []
         for at, av in zip(argtypes, wrapper.args):
-            print(lty, at, av)
             av = self.get_argument_value(builder, at, av)
             callargs.append(av)
 
-        print(argtypes)
-        print(callargs)
         # XXX handle error status
         status, _ = self.call_function(builder, func, types.void, argtypes,
                                        callargs)
