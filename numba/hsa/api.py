@@ -7,6 +7,7 @@ from .stubs import (
     get_global_size,
     get_local_id,
     get_local_size,
+    barrier,
 )
 
 from .decorators import (

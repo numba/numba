@@ -81,3 +81,13 @@ def get_local_size_impl(context, builder, sig, args):
                                        sig, ['unsigned int'])
     res = builder.call(get_local_size, [dim])
     return context.cast(builder, res, types.uintp, types.intp)
+
+
+@register
+@implement(stubs.barrier, types.uint32)
+def get_local_size_impl(context, builder, sig, args):
+    [flags] = args
+    barrier = _declare_function(context, builder, 'barrier', sig,
+                                ['unsigned int'])
+    return builder.call(barrier, [flags])
+
