@@ -54,13 +54,14 @@ N2C = {
 def _encode(ch):
     """
     Encode a single character.
-    Anything not valid as Python identifier is encoded as '$N' where N
+    Anything not valid as Python identifier is encoded as '%N' where N
     is a decimal number of the character code point.
     """
-    if ch.isidentifier():
-        return ch
+    if ch.isalpha() or ch in '_':
+        out = ch
     else:
-        return '%%%d' % ord(ch)
+        out = "%%%d" % ord(ch)
+    return out
 
 
 def mangle_identifier(ident):
