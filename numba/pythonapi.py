@@ -173,7 +173,9 @@ class PythonAPI(object):
     #
 
     def dict_getitem_string(self, dic, name):
-        """Returns a borrowed reference
+        """Lookup name inside dict
+
+        Returns a borrowed reference
         """
         fnty = Type.function(self.pyobj, [self.pyobj, self.cstring])
         fn = self._get_function(fnty, name="PyDict_GetItemString")
@@ -181,7 +183,9 @@ class PythonAPI(object):
         return self.builder.call(fn, [dic, cstr])
 
     def dict_getitem(self, dic, name):
-        """Returns a borrowed reference
+        """Lookup name inside dict
+
+        Returns a borrowed reference
         """
         fnty = Type.function(self.pyobj, [self.pyobj, self.pyobj])
         fn = self._get_function(fnty, name="PyDict_GetItem")
@@ -646,8 +650,8 @@ class PythonAPI(object):
         return self.object_setattr_string(obj, attr, self.get_null_object())
 
     def object_delattr(self, obj, attr):
-        # PyObject_DelAttrString() is actually a C macro calling
-        # PyObject_SetAttrString() with value == NULL.
+        # PyObject_DelAttr() is actually a C macro calling
+        # PyObject_SetAttr() with value == NULL.
         return self.object_setattr(obj, attr, self.get_null_object())
 
     def object_getitem(self, obj, key):

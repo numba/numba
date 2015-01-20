@@ -42,7 +42,7 @@ class PyLower(BaseLower):
         self.ehblock = self.function.append_basic_block('error')
 
         # Strings to be frozen into the Environment object
-        self._frozen_string = set()
+        self._frozen_strings = set()
 
     def pre_lower(self):
         # Store environment argument for later use
@@ -518,12 +518,12 @@ class PyLower(BaseLower):
         """Freeze a python string object into the code.
         Insert a reference to the Environment object later.
         """
-        self._frozen_string.add(string)
+        self._frozen_strings.add(string)
         return self.context.get_constant(types.intp, id(string)).inttoptr(
             self.pyapi.pyobj)
 
     def _finalize_frozen_string(self):
         """Insert all referenced string into the Environment object.
         """
-        for fs in self._frozen_string:
+        for fs in self._frozen_strings:
             self.env.consts.append(fs)
