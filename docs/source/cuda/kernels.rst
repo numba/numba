@@ -132,26 +132,28 @@ using the shared memory::
         ty = cuda.threadIdx.y
         bpg = cuda.gridDim.x  # block per grid
 
+
+        if x >= C.shape[0] and y >= C.shape[1]:
+            # Quit if (x, y) is outside of valid C boundary
+            return
+
         tmp = 0.
         for i in range(bpg):
             # Preload into shared memory
-            if x < n and y < n:
-                sA[tx, ty] = A[x, ty + i * TPB]
-                sB[tx, ty] = B[tx + i * TPB, y]
+            sA[tx, ty] = A[x, ty + i * TPB]
+            sB[tx, ty] = B[tx + i * TPB, y]
 
             # Wait until all threads finish preloading
             cuda.syncthreads()
 
             # Computes on the shared memory
-            if x < n and y < n:
-                for k in range(TPB):
-                    tmp += sA[tx, k] * sB[k, ty]
+            for j in range(TPB):
+                tmp += sA[tx, j] * sB[j, ty]
 
             # Wait until all threads finish computing
             cuda.syncthreads()
 
-        if x < n and y < n:
-            C[x, y] = tmp
+        C[x, y] = tmp
 
 Because the shared memory is a limited resources, the code preloads small
 block at a time from the input arrays.  Then, it calls ``cuda.syncthreads()``
