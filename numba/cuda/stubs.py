@@ -88,7 +88,7 @@ def grid_expand(ndim):
             x = cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
             y = cuda.threadIdx.y + cuda.blockIdx.y * cuda.blockDim.y
             z = cuda.threadIdx.z + cuda.blockIdx.z * cuda.blockDim.z
-            return x, y
+            return x, y, z
     """
     if ndim == 1:
         fname = "ptx.grid.1d"
@@ -125,8 +125,8 @@ def gridsize_expand(ndim):
         elif ndim == 3:
             x = cuda.blockDim.x * cuda.gridDim.x
             y = cuda.blockDim.y * cuda.gridDim.y
-            y = cuda.blockDim.z * cuda.gridDim.z
-            return x, y
+            z = cuda.blockDim.z * cuda.gridDim.z
+            return x, y, z
     """
     if ndim == 1:
         fname = "ptx.gridsize.1d"
