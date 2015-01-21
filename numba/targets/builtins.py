@@ -1213,22 +1213,8 @@ def caster(restype):
 
     return _cast
 
-
-builtin(caster(types.int8))
-builtin(caster(types.int16))
-builtin(caster(types.int32))
-builtin(caster(types.int64))
-
-builtin(caster(types.uint8))
-builtin(caster(types.uint16))
-builtin(caster(types.uint32))
-builtin(caster(types.uint64))
-
-builtin(caster(types.float32))
-builtin(caster(types.float64))
-
-builtin(caster(types.complex64))
-builtin(caster(types.complex128))
+for tp in types.number_domain:
+    builtin(caster(tp))
 
 
 #-------------------------------------------------------------------------------

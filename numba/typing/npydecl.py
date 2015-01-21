@@ -242,6 +242,26 @@ for func in ['argmin', 'argmax']:
 
 
 # -----------------------------------------------------------------------------
+# Numpy scalar constructors
+
+# Register numpy.int8, etc. as convertors to the equivalent Numba types
+for nb_type in types.number_domain:
+    np_type = getattr(numpy, str(nb_type))
+
+    class Caster(AbstractTemplate):
+        key = np_type
+        restype = nb_type
+
+        def generic(self, args, kws):
+            assert not kws
+            [a] = args
+            if a in types.number_domain:
+                return signature(self.restype, a)
+
+    builtin_global(np_type, types.Function(Caster))
+
+
+# -----------------------------------------------------------------------------
 # Miscellaneous functions
 
 @builtin
