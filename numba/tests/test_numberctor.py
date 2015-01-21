@@ -138,6 +138,7 @@ class TestNumberCtor(TestCase):
                   1.5, -3.5]
         for tp_name in ('int8', 'int16', 'int32', 'int64',
                         'uint8', 'uint16', 'uint32', 'uint64',
+                        'intc', 'uintc', 'intp', 'uintp',
                         'float32', 'float64'):
             np_type = getattr(np, tp_name)
             tp = tp_factory(tp_name)
