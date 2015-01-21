@@ -41,6 +41,9 @@ class PyLower(BaseLower):
         # Add error handling block
         self.ehblock = self.function.append_basic_block('error')
 
+        # Strings to be frozen into the Environment object
+        self._frozen_strings = set()
+
     def pre_lower(self):
         # Store environment argument for later use
         self.envarg = self.context.get_env_argument(self.function)
@@ -56,6 +59,8 @@ class PyLower(BaseLower):
         with cgutils.goto_block(self.builder, self.ehblock):
             self.cleanup()
             self.context.return_exc(self.builder)
+
+        self._finalize_frozen_string()
 
     def init_argument(self, arg):
         self.incref(arg)
@@ -76,12 +81,15 @@ class PyLower(BaseLower):
         elif isinstance(inst, ir.SetAttr):
             target = self.loadvar(inst.target.name)
             value = self.loadvar(inst.value.name)
-            ok = self.pyapi.object_setattr_string(target, inst.attr, value)
+            ok = self.pyapi.object_setattr(target,
+                                           self._freeze_string(inst.attr),
+                                           value)
             self.check_int_status(ok)
 
         elif isinstance(inst, ir.DelAttr):
             target = self.loadvar(inst.target.name)
-            ok = self.pyapi.object_delattr_string(target, inst.attr)
+            ok = self.pyapi.object_delattr(target,
+                                           self._freeze_string(inst.attr))
             self.check_int_status(ok)
 
         elif isinstance(inst, ir.StoreMap):
@@ -195,7 +203,7 @@ class PyLower(BaseLower):
             return ret
         elif expr.op == 'getattr':
             obj = self.loadvar(expr.value.name)
-            res = self.pyapi.object_getattr_string(obj, expr.attr)
+            res = self.pyapi.object_getattr(obj, self._freeze_string(expr.attr))
             self.check_error(res)
             return res
         elif expr.op == 'build_tuple':
@@ -302,43 +310,13 @@ class PyLower(BaseLower):
             raise NotImplementedError(expr)
 
     def lower_const(self, const):
-        from numba import dispatcher   # Avoiding toplevel circular imports
-        if isinstance(const, str):
-            ret = self.pyapi.string_from_constant_string(const)
-            self.check_error(ret)
-            return ret
-        elif isinstance(const, complex):
-            real = self.context.get_constant(types.float64, const.real)
-            imag = self.context.get_constant(types.float64, const.imag)
-            ret = self.pyapi.complex_from_doubles(real, imag)
-            self.check_error(ret)
-            return ret
-        elif isinstance(const, float):
-            fval = self.context.get_constant(types.float64, const)
-            ret = self.pyapi.float_from_double(fval)
-            self.check_error(ret)
-            return ret
-        elif isinstance(const, utils.INT_TYPES):
-            if utils.bit_length(const) >= 64:
-                raise ValueError("Integer is too big to be lowered")
-            ival = self.context.get_constant(types.intp, const)
-            return self.pyapi.long_from_ssize_t(ival)
-        elif isinstance(const, tuple):
-            items = [self.lower_const(i) for i in const]
-            return self.pyapi.tuple_pack(items)
-        elif const is Ellipsis:
-            return self.get_builtin_obj("Ellipsis")
-        elif const is None:
-            return self.pyapi.make_none()
-        else:
-            # Constants which can't be reconstructed are frozen inside
-            # the environment (e.g. callables, lifted loops).
-            index = len(self.env.consts)
-            self.env.consts.append(const)
-            ret = self.get_env_const(index)
-            self.check_error(ret)
-            self.incref(ret)
-            return ret
+        # All constants are frozen inside the environment
+        index = len(self.env.consts)
+        self.env.consts.append(const)
+        ret = self.get_env_const(index)
+        self.check_error(ret)
+        self.incref(ret)
+        return ret
 
     def lower_global(self, name, value):
         """
@@ -348,7 +326,7 @@ class PyLower(BaseLower):
             2b) is it a module (for __main__ module)
         """
         moddict = self.get_module_dict()
-        obj = self.pyapi.dict_getitem_string(moddict, name)
+        obj = self.pyapi.dict_getitem(moddict, self._freeze_string(name))
         self.incref(obj)  # obj is borrowed
 
         try:
@@ -364,7 +342,8 @@ class PyLower(BaseLower):
             bbelse = self.builder.basic_block
 
             with cgutils.ifthen(self.builder, obj_is_null):
-                mod = self.pyapi.dict_getitem_string(moddict, "__builtins__")
+                mod = self.pyapi.dict_getitem(moddict,
+                                          self._freeze_string("__builtins__"))
                 builtin = self.builtin_lookup(mod, name)
                 bbif = self.builder.basic_block
 
@@ -388,7 +367,8 @@ class PyLower(BaseLower):
     def get_builtin_obj(self, name):
         # XXX The builtins dict could be bound into the environment
         moddict = self.get_module_dict()
-        mod = self.pyapi.dict_getitem_string(moddict, "__builtins__")
+        mod = self.pyapi.dict_getitem(moddict,
+                                      self._freeze_string("__builtins__"))
         return self.builtin_lookup(mod, name)
 
     def get_env_const(self, index):
@@ -408,13 +388,13 @@ class PyLower(BaseLower):
         name: str
             The object to lookup
         """
-        fromdict = self.pyapi.dict_getitem_string(mod, name)
+        fromdict = self.pyapi.dict_getitem(mod, self._freeze_string(name))
         self.incref(fromdict)       # fromdict is borrowed
         bbifdict = self.builder.basic_block
 
         with cgutils.if_unlikely(self.builder, self.is_null(fromdict)):
             # This happen if we are using the __main__ module
-            frommod = self.pyapi.object_getattr_string(mod, name)
+            frommod = self.pyapi.object_getattr(mod, self._freeze_string(name))
 
             with cgutils.if_unlikely(self.builder, self.is_null(frommod)):
                 self.pyapi.raise_missing_global_error(name)
@@ -533,3 +513,17 @@ class PyLower(BaseLower):
                 pass
             else:
                 self.pyapi.decref(value)
+
+    def _freeze_string(self, string):
+        """Freeze a python string object into the code.
+        Insert a reference to the Environment object later.
+        """
+        self._frozen_strings.add(string)
+        return self.context.get_constant(types.intp, id(string)).inttoptr(
+            self.pyapi.pyobj)
+
+    def _finalize_frozen_string(self):
+        """Insert all referenced string into the Environment object.
+        """
+        for fs in self._frozen_strings:
+            self.env.consts.append(fs)
