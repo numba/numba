@@ -39,7 +39,7 @@ class threadIdx(Stub):
 
 
 class blockIdx(Stub):
-    '''blockIdx.{x, y}
+    '''blockIdx.{x, y, z}
     '''
     _description_ = '<blockIdx.{x,y,z}>'
 
@@ -57,7 +57,7 @@ class blockDim(Stub):
 
 
 class gridDim(Stub):
-    '''gridDim.{x, y}
+    '''gridDim.{x, y, z}
     '''
     _description_ = '<gridDim.{x,y,z}>'
     x = macro.Macro('nctaid.x', SREG_SIGNATURE)
@@ -76,7 +76,7 @@ def _ptx_grid2d(): pass
 def grid_expand(ndim):
     """grid(ndim)
 
-    ndim: [int] 1 or 2
+    ndim: [int] 1, 2 or 3
 
         if ndim == 1:
             return cuda.threadIdx.x + cuda.blockIdx.x * cuda.blockDim.x
