@@ -127,12 +127,25 @@ def ptx_cmem_arylike(context, builder, sig, args):
     return ary._getvalue()
 
 
+_unique_smem_id = 0
+
+
+def _get_unique_smem_id(name):
+    """Due to bug with NVVM invalid internalizing of shared memory in the
+    PTX output.  We can't mark shared memory to be internal. We have to
+    ensure unique name is generated for shared memory symbol.
+    """
+    global _unique_smem_id
+    _unique_smem_id += 1
+    return "{0}_{1}".format(name, _unique_smem_id)
+
+
 @register
 @implement('ptx.smem.alloc', types.intp, types.Any)
 def ptx_smem_alloc_intp(context, builder, sig, args):
     length, dtype = args
     return _generic_array(context, builder, shape=(length,), dtype=dtype,
-                          symbol_name='_cudapy_smem',
+                          symbol_name=_get_unique_smem_id('_cudapy_smem'),
                           addrspace=nvvm.ADDRSPACE_SHARED,
                           can_dynsized=True)
 
@@ -142,7 +155,7 @@ def ptx_smem_alloc_intp(context, builder, sig, args):
 def ptx_smem_alloc_array(context, builder, sig, args):
     shape, dtype = args
     return _generic_array(context, builder, shape=shape, dtype=dtype,
-                          symbol_name='_cudapy_smem',
+                          symbol_name=_get_unique_smem_id('_cudapy_smem'),
                           addrspace=nvvm.ADDRSPACE_SHARED,
                           can_dynsized=True)
 
@@ -292,7 +305,9 @@ def _generic_array(context, builder, shape, dtype, symbol_name, addrspace,
             ## Comment out the following line to workaround a NVVM bug
             ## which generates a invalid symbol name when the linkage
             ## is internal and in some situation.
+            ## See _get_unique_smem_id()
             # gvmem.linkage = lc.LINKAGE_INTERNAL
+
             gvmem.initializer = lc.Constant.undef(laryty)
 
         if dtype not in types.number_domain:
