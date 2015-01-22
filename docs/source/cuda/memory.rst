@@ -27,7 +27,8 @@ transfer:
 Device arrays
 -------------
 
-Device array references have the following methods:
+Device array references have the following methods.  These methods are
+to be called on the host, not on the device.
 
 .. method:: copy_to_host(array=None, stream=0)
 
