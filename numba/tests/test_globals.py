@@ -24,7 +24,8 @@ def global_cplx_arr_copy(a):
 
 
 # Create a recarray with fields of distinct value
-rec_X = np.recarray(10, dtype=np.dtype([('a', np.int32), ('b', np.float32)]))
+x_dt = np.dtype([('a', np.int32), ('b', np.float32)])
+rec_X = np.recarray(10, dtype=x_dt)
 for i in range(len(rec_X)):
     rec_X[i].a = i
     rec_X[i].b = i + 0.5
@@ -42,7 +43,8 @@ def global_rec_arr_extract_fields(a, b):
 
 
 # Create additional global recarray
-rec_Y = np.recarray(10, dtype=np.dtype([('c', np.int16), ('d', np.float64)]))
+y_dt = np.dtype([('c', np.int16), ('d', np.float64)])
+rec_Y = np.recarray(10, dtype=y_dt)
 for i in range(len(rec_Y)):
     rec_Y[i].c = i + 10
     rec_Y[i].d = i + 10.5
@@ -75,7 +77,7 @@ class TestGlobals(unittest.TestCase):
     def check_global_complex_arr(self, **jitargs):
         # (see github issue #897)
         ctestfunc = jit(**jitargs)(global_cplx_arr_copy)
-        arr = np.zeros_like(cplx_X)
+        arr = np.zeros(len(cplx_X), dtype=np.complex128)
         ctestfunc(arr)
         np.testing.assert_equal(arr, cplx_X)
 
@@ -89,7 +91,7 @@ class TestGlobals(unittest.TestCase):
     def check_global_rec_arr(self, **jitargs):
         # (see github issue #897)
         ctestfunc = jit(**jitargs)(global_rec_arr_copy)
-        arr = np.zeros_like(rec_X)
+        arr = np.zeros(rec_X.shape, dtype=x_dt)
         ctestfunc(arr)
         np.testing.assert_equal(arr, rec_X)
 
