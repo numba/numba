@@ -364,7 +364,7 @@ def normalize_index(index):
             if (ty not in types.integer_domain and
                         ty not in types.real_domain and
                         ty != types.slice3_type):
-                raise ValueError('Type %s of index %s is unsupported for indexing'
+                raise TypeError('Type %s of index %s is unsupported for indexing'
                                  % (ty, index))
         return index
 
