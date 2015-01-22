@@ -283,6 +283,22 @@ class Kind(Type):
         return self.of
 
 
+class VarArg(Type):
+    """
+    Special type representing a variable number of arguments at the
+    end of a function's signature.  Only used for signature matching,
+    not for actual values.
+    """
+
+    def __init__(self, dtype):
+        self.dtype = dtype
+        super(VarArg, self).__init__("*%s" % dtype)
+
+    @property
+    def key(self):
+        return self.dtype
+
+
 class Module(Type):
     def __init__(self, pymod):
         self.pymod = pymod
@@ -868,7 +884,6 @@ def is_int_tuple(x):
 pyobject = Opaque('pyobject')
 none = NoneType('none')
 Any = Phantom('any')
-VarArg = Phantom('...')
 string = Opaque('str')
 
 # No operation is defined on voidptr

@@ -1016,7 +1016,7 @@ def iternext_numpy_nditer(context, builder, sig, args, result):
 
 
 @builtin
-@implement(numpy.ndindex, types.Kind(types.Integer), types.VarArg)
+@implement(numpy.ndindex, types.VarArg(types.Kind(types.Integer)))
 def make_array_ndindex(context, builder, sig, args):
     """ndindex(*shape)"""
     shape = [context.cast(builder, arg, argty, types.intp)
