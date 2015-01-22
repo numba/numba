@@ -432,7 +432,8 @@ class BaseContext(object):
             return Constant.struct(consts)
 
         elif isinstance(ty, types.Record):
-            consts = [self.get_constant(types.int8, b) for b in val.tobytes()]
+            consts = [self.get_constant(types.int8, b)
+                      for b in bytearray(val.tostring())]
             return Constant.array(consts[0].type, consts)
 
         else:
