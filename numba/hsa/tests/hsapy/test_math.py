@@ -40,6 +40,23 @@ class TestMath(unittest.TestCase):
 
             np.testing.assert_allclose(dst, np.cos(src), rtol=1e-6)
 
+    def test_tan(self):
+        @hsa.jit
+        def tan(dst, src):
+            i = hsa.get_global_id(0)
+            if i < dst.size:
+                dst[i] = math.tan(src[i])
+
+        these_types = [np.float32, np.float64]
+        for dtype in these_types:
+            src = np.arange(10, dtype=dtype)
+            dst = np.zeros_like(src)
+
+            tan[src.size, 1](dst, src)
+
+            np.testing.assert_allclose(dst, np.tan(src), rtol=1e-6)
+
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -42,3 +42,16 @@ def math_cos(context, builder, sig, args):
     fn = _declare_function(context, builder, 'cos', sig, ['double'])
     return builder.call(fn, [val])
 
+@register
+@implement(math.tan, types.float32)
+def math_tan(context, builder, sig, args):
+    [val] = args
+    fn = _declare_function(context, builder, 'tan', sig, ['float'])
+    return builder.call(fn, [val])
+
+@register
+@implement(math.tan, types.float64)
+def math_tan(context, builder, sig, args):
+    [val] = args
+    fn = _declare_function(context, builder, 'tan', sig, ['double'])
+    return builder.call(fn, [val])
