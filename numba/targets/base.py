@@ -431,8 +431,13 @@ class BaseContext(object):
                       for i, v in enumerate(val)]
             return Constant.struct(consts)
 
+        elif isinstance(ty, types.Record):
+            consts = [self.get_constant(types.int8, b)
+                      for b in bytearray(val.tostring())]
+            return Constant.array(consts[0].type, consts)
+
         else:
-            raise NotImplementedError(ty)
+            raise NotImplementedError("%s as constant unsupported" % ty)
 
     def get_constant(self, ty, val):
         assert not self.is_struct_type(ty)
@@ -781,11 +786,13 @@ class BaseContext(object):
                 tup = builder.insert_value(tup, val, idx)
             return tup
 
-        elif (types.is_int_tuple(toty) and types.is_int_tuple(fromty) and
-                len(toty) == len(fromty)):
+        elif (isinstance(fromty, (types.UniTuple, types.Tuple)) and
+                  isinstance(toty, (types.UniTuple, types.Tuple)) and
+                      len(toty) == len(fromty)):
+
             olditems = cgutils.unpack_tuple(builder, val, len(fromty))
-            items = [self.cast(builder, i, t, toty.dtype)
-                     for i, t in zip(olditems, fromty.types)]
+            items = [self.cast(builder, i, f, t)
+                     for i, f, t in zip(olditems, fromty, toty)]
             tup = self.get_constant_undef(toty)
             for idx, val in enumerate(items):
                 tup = builder.insert_value(tup, val, idx)
@@ -844,12 +851,11 @@ class BaseContext(object):
         if typ in types.integer_domain:
             return builder.icmp(lc.ICMP_NE, val, Constant.null(val.type))
         elif typ in types.real_domain:
-            return builder.fcmp(lc.FCMP_ONE, val, Constant.real(val.type, 0))
+            return builder.fcmp(lc.FCMP_UNE, val, Constant.real(val.type, 0))
         elif typ in types.complex_domain:
             cmplx = self.make_complex(typ)(self, builder, val)
-            fty = types.float32 if typ == types.complex64 else types.float64
-            real_istrue = self.is_true(builder, fty, cmplx.real)
-            imag_istrue = self.is_true(builder, fty, cmplx.imag)
+            real_istrue = self.is_true(builder, typ.underlying_float, cmplx.real)
+            imag_istrue = self.is_true(builder, typ.underlying_float, cmplx.imag)
             return builder.or_(real_istrue, imag_istrue)
         raise NotImplementedError("is_true", val, typ)
 
@@ -1029,12 +1035,11 @@ class BaseContext(object):
 
         # Handle data
         if self.is_struct_type(typ.dtype):
-            # FIXME
-            raise TypeError("Do not support structure dtype as constant "
-                            "array, yet.")
-
-        values = [self.get_constant(typ.dtype, flat[i])
-                  for i in range(flat.size)]
+            values = [self.get_constant_struct(builder, typ.dtype, flat[i])
+                      for i in range(flat.size)]
+        else:
+            values = [self.get_constant(typ.dtype, flat[i])
+                      for i in range(flat.size)]
 
         lldtype = values[0].type
         consts = Constant.array(lldtype, values)

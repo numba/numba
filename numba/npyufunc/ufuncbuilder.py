@@ -12,7 +12,7 @@ from . import _internal
 from .sigparse import parse_signature
 from .wrappers import build_ufunc_wrapper, build_gufunc_wrapper
 from numba.targets import registry
-from numba import _dynfunc
+
 
 import llvmlite.llvmpy.core as lc
 
@@ -165,8 +165,8 @@ class UFuncBuilder(_BaseUFuncBuilder):
         env = None
         if cres.objectmode:
             # Get env
-            moduledict = cres.fndesc.lookup_module().__dict__
-            env = _dynfunc.Environment(globals=moduledict)
+            env = cres.environment
+            assert env is not None
             ll_intp = cres.target_context.get_value_type(types.intp)
             ll_pyobj = cres.target_context.get_value_type(types.pyobject)
             envptr = lc.Constant.int(ll_intp, id(env)).inttoptr(ll_pyobj)
@@ -263,7 +263,8 @@ class GUFuncBuilder(_BaseUFuncBuilder):
         llvm_func = library.get_function(cres.fndesc.llvm_func_name)
         wrapper, env = build_gufunc_wrapper(library, ctx, llvm_func,
                                             signature, self.sin, self.sout,
-                                            fndesc=cres.fndesc)
+                                            fndesc=cres.fndesc,
+                                            env=cres.environment)
 
         ptr = library.get_pointer_to_function(wrapper.name)
 
