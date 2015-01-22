@@ -12,6 +12,17 @@ def global_ndarray_func(x):
     return y
 
 
+# Create complex array with real and imaginary parts of distinct value
+cplx_X = np.arange(10, dtype=np.complex128)
+tmp = np.arange(10, dtype=np.complex128)
+cplx_X += (tmp+10)*1j
+
+
+def global_cplx_arr_copy(a):
+    for i in range(len(a)):
+        a[i] = cplx_X[i]
+
+
 class TestGlobals(unittest.TestCase):
 
     def check_global_ndarray(self, **jitargs):
@@ -27,6 +38,18 @@ class TestGlobals(unittest.TestCase):
     def test_global_ndarray_npm(self):
         self.check_global_ndarray(nopython=True)
 
+    def check_global_complex_arr(self, **jitargs):
+        # (see github issue #897)
+        ctestfunc = jit(**jitargs)(global_cplx_arr_copy)
+        arr = np.zeros_like(cplx_X)
+        ctestfunc(arr)
+        np.testing.assert_equal(arr, cplx_X)
+
+    def test_global_complex_arr(self):
+        self.check_global_complex_arr(forceobj=True)
+
+    def test_global_complex_arr_npm(self):
+        self.check_global_complex_arr(nopython=True)
 
 if __name__ == '__main__':
     unittest.main()
