@@ -12,6 +12,50 @@ def global_ndarray_func(x):
     return y
 
 
+# Create complex array with real and imaginary parts of distinct value
+cplx_X = np.arange(10, dtype=np.complex128)
+tmp = np.arange(10, dtype=np.complex128)
+cplx_X += (tmp+10)*1j
+
+
+def global_cplx_arr_copy(a):
+    for i in range(len(a)):
+        a[i] = cplx_X[i]
+
+
+# Create a recarray with fields of distinct value
+rec_X = np.recarray(10, dtype=np.dtype([('a', np.int32), ('b', np.float32)]))
+for i in range(len(rec_X)):
+    rec_X[i].a = i
+    rec_X[i].b = i + 0.5
+
+
+def global_rec_arr_copy(a):
+    for i in range(len(a)):
+        a[i] = rec_X[i]
+
+
+def global_rec_arr_extract_fields(a, b):
+    for i in range(len(a)):
+        a[i] = rec_X[i].a
+        b[i] = rec_X[i].b
+
+
+# Create additional global recarray
+rec_Y = np.recarray(10, dtype=np.dtype([('c', np.int16), ('d', np.float64)]))
+for i in range(len(rec_Y)):
+    rec_Y[i].c = i + 10
+    rec_Y[i].d = i + 10.5
+
+
+def global_two_rec_arrs(a, b, c, d):
+    for i in range(len(a)):
+        a[i] = rec_X[i].a
+        b[i] = rec_X[i].b
+        c[i] = rec_Y[i].c
+        d[i] = rec_Y[i].d
+
+
 class TestGlobals(unittest.TestCase):
 
     def check_global_ndarray(self, **jitargs):
@@ -26,6 +70,70 @@ class TestGlobals(unittest.TestCase):
 
     def test_global_ndarray_npm(self):
         self.check_global_ndarray(nopython=True)
+
+
+    def check_global_complex_arr(self, **jitargs):
+        # (see github issue #897)
+        ctestfunc = jit(**jitargs)(global_cplx_arr_copy)
+        arr = np.zeros_like(cplx_X)
+        ctestfunc(arr)
+        np.testing.assert_equal(arr, cplx_X)
+
+    def test_global_complex_arr(self):
+        self.check_global_complex_arr(forceobj=True)
+
+    def test_global_complex_arr_npm(self):
+        self.check_global_complex_arr(nopython=True)
+
+
+    def check_global_rec_arr(self, **jitargs):
+        # (see github issue #897)
+        ctestfunc = jit(**jitargs)(global_rec_arr_copy)
+        arr = np.zeros_like(rec_X)
+        ctestfunc(arr)
+        np.testing.assert_equal(arr, rec_X)
+
+    def test_global_rec_arr(self):
+        self.check_global_rec_arr(forceobj=True)
+
+    def test_global_rec_arr_npm(self):
+        self.check_global_rec_arr(nopython=True)
+
+
+    def check_global_rec_arr_extract(self, **jitargs):
+        # (see github issue #897)
+        ctestfunc = jit(**jitargs)(global_rec_arr_extract_fields)
+        arr1 = np.zeros(rec_X.shape, dtype=np.int32)
+        arr2 = np.zeros(rec_X.shape, dtype=np.float32)
+        ctestfunc(arr1, arr2)
+        np.testing.assert_equal(arr1, rec_X.a)
+        np.testing.assert_equal(arr2, rec_X.b)
+
+    def test_global_rec_arr_extract(self):
+        self.check_global_rec_arr_extract(forceobj=True)
+
+    def test_global_rec_arr_extract_npm(self):
+        self.check_global_rec_arr_extract(nopython=True)
+
+
+    def check_two_global_rec_arrs(self, **jitargs):
+        # (see github issue #897)
+        ctestfunc = jit(**jitargs)(global_two_rec_arrs)
+        arr1 = np.zeros(rec_X.shape, dtype=np.int32)
+        arr2 = np.zeros(rec_X.shape, dtype=np.float32)
+        arr3 = np.zeros(rec_Y.shape, dtype=np.int16)
+        arr4 = np.zeros(rec_Y.shape, dtype=np.float64)
+        ctestfunc(arr1, arr2, arr3, arr4)
+        np.testing.assert_equal(arr1, rec_X.a)
+        np.testing.assert_equal(arr2, rec_X.b)
+        np.testing.assert_equal(arr3, rec_Y.c)
+        np.testing.assert_equal(arr4, rec_Y.d)
+
+    def test_two_global_rec_arrs(self):
+        self.check_two_global_rec_arrs(forceobj=True)
+
+    def test_two_global_rec_arrs_npm(self):
+        self.check_two_global_rec_arrs(nopython=True)
 
 
 if __name__ == '__main__':
