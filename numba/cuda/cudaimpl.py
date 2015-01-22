@@ -66,7 +66,7 @@ def ptx_gridsize2d(context, builder, sig, args):
 
 @register
 @implement('ptx.gridsize.3d', types.intp)
-def ptx_gridsize2d(context, builder, sig, args):
+def ptx_gridsize3d(context, builder, sig, args):
     assert len(args) == 1
     ntidx = nvvmutils.call_sreg(builder, "ntid.x")
     nctaidx = nvvmutils.call_sreg(builder, "nctaid.x")
