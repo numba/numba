@@ -493,6 +493,22 @@ class NumpyNdEnumerateType(IteratorType):
         return self.array_type
 
 
+class NumpyNdIndexType(IteratorType):
+    """
+    Type class for `np.ndindex()` objects.
+    """
+
+    def __init__(self, ndim):
+        self.ndim = ndim
+        self.yield_type = UniTuple(intp, self.ndim)
+        name = "ndindex(dims={ndim})".format(ndim=ndim)
+        super(NumpyNdIndexType, self).__init__(name, param=True)
+
+    @property
+    def key(self):
+        return self.ndim
+
+
 class EnumerateType(IteratorType):
     """
     Type class for `enumerate` objects.

@@ -258,5 +258,24 @@ class NdEnumerate(AbstractTemplate):
 
 builtin_global(numpy.ndenumerate, types.Function(NdEnumerate))
 
+@builtin
+class NdIndex(AbstractTemplate):
+    key = numpy.ndindex
+
+    def generic(self, args, kws):
+        assert not kws
+
+        # Either ndindex(shape) or ndindex(*shape)
+        if len(args) == 1 and isinstance(args[0], types.UniTuple):
+            shape = list(args[0])
+        else:
+            shape = args
+
+        if shape and all(isinstance(x, types.Integer) for x in shape):
+            iterator_type = types.NumpyNdIndexType(len(shape))
+            return signature(iterator_type, *args)
+
+builtin_global(numpy.ndindex, types.Function(NdIndex))
+
 
 builtin_global(numpy, types.Module(numpy))
