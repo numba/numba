@@ -21,7 +21,7 @@ register = registry.register
 # -----------------------------------------------------------------------------
 
 
-def _declare_function(context, builder, name, sig, cargs):
+def _declare_function(context, builder, name, sig, cargs, mangler=mangle_c):
     """Insert declaration for a opencl builtin function.
     Uses the Itanium mangler.
 
@@ -45,7 +45,7 @@ def _declare_function(context, builder, name, sig, cargs):
     llretty = context.get_value_type(sig.return_type)
     llargs = [context.get_value_type(t) for t in sig.args]
     fnty = Type.function(llretty, llargs)
-    mangled = mangle_c(name, cargs)
+    mangled = mangler(name, cargs)
     fn = mod.get_or_insert_function(fnty, mangled)
     fn.calling_convention = target.CC_SPIR_FUNC
     return fn

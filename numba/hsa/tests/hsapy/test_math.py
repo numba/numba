@@ -47,7 +47,7 @@ class TestMath(unittest.TestCase):
             if i < dst.size:
                 dst[i] = math.tan(src[i])
 
-        these_types = [np.float32, np.float64]
+        these_types = [np.float64, np.float32]
         for dtype in these_types:
             src = np.arange(10, dtype=dtype)
             dst = np.zeros_like(src)
