@@ -43,6 +43,11 @@ def bad_index(arr, arr2d):
     y = arr.y
     arr2d[x, y] = 1.0
 
+def bad_float_index(arr):
+    # 2D index required for this function because 1D index
+    # fails typing
+    return arr[1, 2.0]
+
 class TestArrayManipulation(TestCase):
 
     def test_reshape_array(self, flags=enable_pyobj_flags):
@@ -175,13 +180,20 @@ class TestArrayManipulation(TestCase):
 
     def test_bad_index_npm(self):
         with self.assertTypingError() as raises:
-            pyfunc = bad_index
             arraytype1 = from_dtype(np.dtype([('x', np.int32),
                                               ('y', np.int32)]))
             arraytype2 = types.Array(types.int32, 2, 'C')
             compile_isolated(bad_index, (arraytype1, arraytype2),
                              flags=no_pyobj_flags)
         self.assertIn('is unsupported for indexing', str(raises.exception))
+
+    def test_bad_float_index_npm(self):
+        with self.assertTypingError() as raises:
+            compile_isolated(bad_float_index,
+                             (types.Array(types.float64, 2, 'C'),))
+        self.assertIn('Type float', str(raises.exception))
+        self.assertIn('is unsupported for indexing', str(raises.exception))
+
 
 if __name__ == '__main__':
     unittest.main()
