@@ -53,6 +53,7 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         """
         overloads = self.overloads
         targetctx = self.targetctx
+
         # Early-bind utils.shutting_down() into the function's local namespace
         # (see issue #689)
         def finalizer(shutting_down=utils.shutting_down):
@@ -89,7 +90,6 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         # If disabling compilation then there must be at least one signature
         assert val or len(self.signatures) > 0
         self._can_compile = not val
-
 
     def add_overload(self, cres):
         args = tuple(cres.signature.args)
@@ -149,6 +149,17 @@ class _OverloadedBase(_dispatcher.Dispatcher):
         assert not kws
         sig = tuple([self.typeof_pyval(a) for a in args])
         return self.compile(sig)
+
+    def _get_library(self, signature):
+        return self._compileinfos[signature].library
+
+    def inspect_llvm(self, signature):
+        cg = self._get_library(signature) 
+        return cg.get_llvm_str()
+
+    def inspect_asm(self, signature):
+        cg = self._get_library(signature) 
+        return cg.get_asm_str()
 
     def inspect_types(self, file=None):
         if file is None:
