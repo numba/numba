@@ -533,9 +533,6 @@ class TestIndexing(TestCase):
         self.assertEqual(pyfunc(a, 9, 9), cfunc(a, 9, 9))
         self.assertEqual(pyfunc(a, -1, -1), cfunc(a, -1, -1))
 
-    def test_2d_float_indexing_npm(self):
-        self.test_2d_float_indexing(flags=Noflags)
-
     def test_ellipse(self, flags=enable_pyobj_flags):
         pyfunc = ellipse_usecase
         arraytype = types.Array(types.int32, 2, 'C')
