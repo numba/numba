@@ -39,8 +39,8 @@ K = 3.0
 
 from math import sqrt
 
-def closure_with_globals(x):
-    @jit(nopython=True)
+def closure_with_globals(x, **jit_args):
+    @jit(**jit_args)
     def inner(y):
         # Exercise a builtin function and a module-level constant
         k = max(K, K + 1)
@@ -52,6 +52,10 @@ def closure_with_globals(x):
 @jit(nopython=True)
 def other_function(x, y):
     return math.hypot(x, y)
+
+@jit(forceobj=True)
+def get_global_objmode(x):
+    return K * x
 
 def closure_calling_other_function(x):
     @jit(nopython=True)
@@ -116,13 +120,22 @@ class TestDispatcherPickling(TestCase):
         # Compilation fails
         self.run_with_protocols(self.check_call, add_nopython_fail, TypingError, (1, 2))
 
+    def test_call_objmode_with_global(self):
+        self.run_with_protocols(self.check_call, get_global_objmode, 7.5, (2.5,))
+
     def test_call_closure(self):
         inner = closure(1)
         self.run_with_protocols(self.check_call, inner, 6, (2, 3))
 
-    def test_call_closure_with_globals(self):
-        inner = closure_with_globals(3.0)
+    def check_call_closure_with_globals(self, **jit_args):
+        inner = closure_with_globals(3.0, **jit_args)
         self.run_with_protocols(self.check_call, inner, 7.0, (4.0,))
+
+    def test_call_closure_with_globals_nopython(self):
+        self.check_call_closure_with_globals(nopython=True)
+
+    def test_call_closure_with_globals_objmode(self):
+        self.check_call_closure_with_globals(forceobj=True)
 
     def test_call_closure_calling_other_function(self):
         inner = closure_calling_other_function(3.0)
