@@ -2,6 +2,8 @@
 Memory management
 =================
 
+.. _cuda-device-memory:
+
 Data transfer
 =============
 
@@ -27,8 +29,8 @@ transfer:
 Device arrays
 -------------
 
-Device array references have the following methods.  These methods are
-to be called on the host, not on the device.
+Device array references have the following methods.  These methods are to be
+called on the host, not on the device.
 
 .. method:: copy_to_host(array=None, stream=0)
 
@@ -86,3 +88,58 @@ CUDA streams
 
       Wait for all commands in this stream to execute.  This will commit
       any pending memory transfers.
+
+
+.. _cuda-shared-memory:
+
+Shared memory and thread synchronization
+========================================
+
+A limited amount of shared memory can be allocated on the device to speed
+up access to data, when necessary.  That memory will be shared (i.e. both
+readable and writable) amongst all threads belonging to a given block.
+You can think of it as a manually-managed data cache.
+
+The memory is allocated once for the duration of the kernel, unlike
+traditional dynamic memory management.
+
+.. function:: numba.cuda.shared.array(shape, type)
+
+   Allocate a shared array of the given *shape* and *type* on the device.
+   This function must be called on the device (i.e. from a kernel or
+   device function).  *shape* is either an integer or a tuple of integers
+   representing the array's dimensions.  *type* is a :ref:`Numba type <numba-types>`
+   of the elements needing to be stored in the array.
+
+   The returned array-like object can be read and written to like any normal
+   device array (e.g. through indexing).
+
+   A common pattern is to have each thread populate one element in the
+   shared array and then wait for all threads to finish using :func:`.syncthreads`.
+
+.. function:: numba.cuda.syncthreads()
+
+   Synchronize all threads in the same thread block.  This function
+   implements the same pattern as `barriers <http://en.wikipedia.org/wiki/Barrier_%28computer_science%29>`_
+   in traditional multi-threaded programming: this function waits
+   until all threads in the block call it, at which point it returns
+   control to all its callers.
+
+.. seealso::
+   :ref:`Matrix multiplication example <cuda-matmul>`.
+
+.. _cuda-local-memory:
+
+Local memory
+============
+
+Local memory is an area of memory private to each thread.  Using local
+memory helps allocate some scratchpad area when scalar local variables
+are not enough.  The memory is allocated once for the duration of the kernel,
+unlike traditional dynamic memory management.
+
+.. function:: numba.cuda.local.array(shape, type)
+
+   Allocate a shared array of the given *shape* and *type* on the device.
+   The returned array-like object can be read and written to like any normal
+   device array (e.g. through indexing).
