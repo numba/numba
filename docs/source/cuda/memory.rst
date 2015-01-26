@@ -74,8 +74,8 @@ called on the host, not on the device.
       d_arr = d_arr.reshape(20, 50, order='F')
 
 
-CUDA streams
-============
+Streams
+=======
 
 .. function:: numba.cuda.stream()
 
@@ -97,8 +97,10 @@ Shared memory and thread synchronization
 
 A limited amount of shared memory can be allocated on the device to speed
 up access to data, when necessary.  That memory will be shared (i.e. both
-readable and writable) amongst all threads belonging to a given block.
-You can think of it as a manually-managed data cache.
+readable and writable) amongst all threads belonging to a given block
+and has faster access times than regular device memory.  It also allows
+threads to cooperate on a given solution.  You can think of it as a
+manually-managed data cache.
 
 The memory is allocated once for the duration of the kernel, unlike
 traditional dynamic memory management.
