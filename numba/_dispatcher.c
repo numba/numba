@@ -124,10 +124,11 @@ Dispatcher_init(DispatcherObject *self, PyObject *args, PyObject *kwds)
     return 0;
 }
 
-static void
-Dispatcher_clear(DispatcherObject *self)
+static PyObject *
+Dispatcher_clear(DispatcherObject *self, PyObject *args)
 {
     dispatcher_clear(self->dispatcher);
+    Py_RETURN_NONE;
 }
 
 static
