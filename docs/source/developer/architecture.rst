@@ -40,10 +40,10 @@ the function call.
 Numba can take this bytecode and compile it to machine code that performs the
 same operations as the CPython interpreter, treating ``a`` and ``b`` as
 generic Python objects.  The full semantics of Python are preserved, and the
-compiled function can used with any kind of objects that have the add operator
-defined.  When a Numba function is compiled this way, we say that it has been
-compiled in :term:`object mode`, because the code still manipulates Python
-objects.
+compiled function can be used with any kind of objects that have the add
+operator defined.  When a Numba function is compiled this way, we say that it
+has been compiled in :term:`object mode`, because the code still manipulates
+Python objects.
 
 Numba code compiled in object mode is not much faster than executing the
 original Python function in the CPython interpreter.  However, if we
