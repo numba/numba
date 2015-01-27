@@ -68,7 +68,9 @@ _supported = ['sin', 'cos', 'tan', 'asin', 'acos', 'atan',
               'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh',
               'isnan', 'isinf',
               'ceil', 'floor',
-              'fabs']
+              'fabs',
+              'sqrt', 'exp', #'expm1' - is expm1 present in the lib?
+              ]
 for name in _supported:
     sigs = function_descriptors.get(name)
     if sigs is None:
