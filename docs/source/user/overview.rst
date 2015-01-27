@@ -6,8 +6,8 @@ Numba gives you the power to speed up your applications with high performance
 functions written directly in Python.
 
 Numba generates optimized machine code from pure Python code using
-the `LLVM compiler infrastructure <http://llvm.org/>`_.  With little to
-none annotations, array-oriented and math-heavy Python code can be
+the `LLVM compiler infrastructure <http://llvm.org/>`_.  With a few simple
+annotations, array-oriented and math-heavy Python code can be
 just-in-time optimized to performance similar as C, C++ and Fortran, without
 having to switch languages or Python interpreters.
 

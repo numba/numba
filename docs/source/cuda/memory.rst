@@ -142,6 +142,7 @@ unlike traditional dynamic memory management.
 
 .. function:: numba.cuda.local.array(shape, type)
 
-   Allocate a shared array of the given *shape* and *type* on the device.
-   The returned array-like object can be read and written to like any normal
-   device array (e.g. through indexing).
+   Allocate a local array of the given *shape* and *type* on the device.
+   The array is private to the current thread.  An array-like object is
+   returned which can be read and written to like any standard array
+   (e.g. through indexing).
