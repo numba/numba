@@ -22,18 +22,13 @@ _binary_d_dd = types.float64(types.float64, types.float64)
 function_descriptors = {
     'isnan': (_unary_b_f, _unary_b_d),
     'isinf': (_unary_b_f, _unary_b_d),
+
     'ceil': (_unary_f_f, _unary_d_d),
     'floor': (_unary_f_f, _unary_d_d),
     'fabs': (_unary_f_f, _unary_d_d),
-    'exp': (_unary_f_f, _unary_d_d),
     'sqrt': (_unary_f_f, _unary_d_d),
-    'log': (_unary_f_f, _unary_d_d),
-    'ceil': (_unary_f_f, _unary_d_d),
-    'floor': (_unary_f_f, _unary_d_d),
-    'fabs': (_unary_f_f, _unary_d_d),
     'exp': (_unary_f_f, _unary_d_d),
     'expm1': (_unary_f_f, _unary_d_d),
-    'sqrt': (_unary_f_f, _unary_d_d),
     'log': (_unary_f_f, _unary_d_d),
     'log10': (_unary_f_f, _unary_d_d),
     'log1p': (_unary_f_f, _unary_d_d),
@@ -68,7 +63,8 @@ def _mk_fn_decl(name, decl_sig):
     return core
 
 _supported = ['sin', 'cos', 'tan', 'asin', 'acos', 'atan',
-              'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh'] 
+              'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh',
+              'isnan', 'isinf']
 for name in _supported:
     sigs = function_descriptors.get(name)
     if sigs is None:

@@ -16,6 +16,7 @@ class TestMath(unittest.TestCase):
             return 1e-6
 
     def _generic_test_unary(self, math_fn, npy_fn,
+                            cases=None,
                             span=(-1., 1.), count=128,
                             types=(np.float32, np.float64)):
 
@@ -26,7 +27,11 @@ class TestMath(unittest.TestCase):
                 dst[i] = math_fn(src[i])
 
         for dtype in types:
-            src = np.arange(span[0], span[1], count, dtype=dtype)
+            if cases is None:
+                src = np.arange(span[0], span[1], count, dtype=dtype)
+            else:
+                src = np.array(cases, dtype=dtype)
+
             dst = np.zeros_like(src)
             fn[src.size, 1](dst, src)
             np.testing.assert_allclose(dst, npy_fn(src),
@@ -67,6 +72,17 @@ class TestMath(unittest.TestCase):
 
         for fn, np_fn, span in funcs:
             self._generic_test_unary(fn, np_fn, span=span)
+
+
+    def test_classify(self):
+        funcs = [math.isnan, math.isinf]
+        cases = (float('nan'), float('inf'), float('-inf'), float('-nan'),
+                 0, 3, -2)
+        for fn in funcs:
+            self._generic_test_unary(fn, getattr(np, fn.__name__),
+                                     cases=cases)
+
+
 
 if __name__ == '__main__':
     unittest.main()
