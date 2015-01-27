@@ -130,6 +130,23 @@ class TestDispatcher(TestCase):
             f(3, 4, y=6)
         self.assertIn("missing argument 'z'", str(cm.exception))
 
+    def test_signature_mismatch(self):
+        tmpl = "Signature mismatch: %d argument types given, but function takes 2 arguments"
+        with self.assertRaises(TypeError) as cm:
+            jit("()")(add)
+        self.assertIn(tmpl % 0, str(cm.exception))
+        with self.assertRaises(TypeError) as cm:
+            jit("(intc,)")(add)
+        self.assertIn(tmpl % 1, str(cm.exception))
+        with self.assertRaises(TypeError) as cm:
+            jit("(intc,intc,intc)")(add)
+        self.assertIn(tmpl % 3, str(cm.exception))
+        # With forceobj=True, an empty tuple is accepted
+        jit("()", forceobj=True)(add)
+        with self.assertRaises(TypeError) as cm:
+            jit("(intc,)", forceobj=True)(add)
+        self.assertIn(tmpl % 1, str(cm.exception))
+
 
 if __name__ == '__main__':
     unittest.main()

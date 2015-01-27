@@ -184,3 +184,70 @@ Some platforms (such as Windows) cannot be hosted by Travis-CI, and the
 Numba team has therefore access to a separate platform provided by
 `Continuum <http://continuum.io>`_, our sponsor. We hope parts of that
 infrastructure can be made public in the future.
+
+
+Documentation
+-------------
+
+The numba documentation is split over two repositories:
+
+* This documentation is in the ``docs`` directory inside the
+  `Numba repository <https://github.com/numba/numba>`_.
+
+* The `Numba homepage <http://numba.pydata.org>`_ has its sources in a
+  separate repository at https://github.com/numba/numba-webpage
+
+
+Main documentation
+''''''''''''''''''
+
+This documentation is under the ``docs`` directory of the `Numba repository`_.
+It is built with `Sphinx <http://sphinx-doc.org/>`_, which is available
+using conda or pip.
+
+To build the documentation, you need the basicstrap theme and
+its dependencies::
+
+   $ pip install sphinxjp.themes.basicstrap
+   $ pip install sphinxjp.themecore
+
+You can edit the source files under ``docs/source/``, after which you can
+build and check the documentation::
+
+   $ make html
+   $ open _build/html/index.html
+
+Core developers can upload this documentation to the Numba website
+at http://numba.pydata.org by using the ``gh-pages.py`` script under ``docs``::
+
+   $ python gh-pages.py version  # version can be 'dev' or '0.16' etc
+
+then verify the repository under the ``gh-pages`` directory and use
+``git push``.
+
+Web site homepage
+'''''''''''''''''
+
+The Numba homepage on http://numba.pydata.org can be fetched from here:
+https://github.com/numba/numba-webpage
+
+After pushing documentation to a new version, core developers will want to
+update the website.  Some notable files:
+
+* ``index.rst``       # Update main page
+* ``_templates/sidebar_versions.html``    # Update sidebar links
+* ``doc.rst``         # Update after adding a new version for numba docs
+* ``download.rst``    # Updata after uploading new numba version to pypi
+
+After updating run::
+
+   $ make html
+
+and check out ``_build/html/index.html``.  To push updates to the Web site::
+
+   $ python _scripts/gh-pages.py
+
+then verify the repository under the ``gh-pages`` directory.  Make sure the
+``CNAME`` file is present and contains a single line for ``numba.pydata.org``.
+Finally, use ``git push`` to update the website.
+

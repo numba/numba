@@ -167,7 +167,7 @@ class TestUsecases(TestCase):
 
     def test_string_slicing(self):
         pyfunc = usecases.string_slicing
-        cr = compile_isolated(pyfunc, (types.pyobject,),
+        cr = compile_isolated(pyfunc, (types.pyobject,) * 3,
                               flags=enable_pyobj_flags)
         cfunc = cr.entry_point
 
@@ -192,7 +192,7 @@ class TestUsecases(TestCase):
     def test_string_comparisons(self):
         import operator
         pyfunc = usecases.string_comparison
-        cr = compile_isolated(pyfunc, (types.pyobject, types.pyobject),
+        cr = compile_isolated(pyfunc, (types.pyobject, types.pyobject, types.pyobject),
                               flags=enable_pyobj_flags)
         cfunc = cr.entry_point
 

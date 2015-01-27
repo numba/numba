@@ -100,6 +100,34 @@ The corresponding top-level Numpy functions (such as :func:`numpy.sum`)
 are similarly supported.
 
 
+Functions
+=========
+
+The following top-level functions are supported:
+
+* :class:`numpy.ndenumerate`
+* :class:`numpy.ndindex`
+
+The following constructors are supported, only with a numeric input:
+
+* :class:`numpy.complex64`
+* :class:`numpy.complex128`
+* :class:`numpy.float32`
+* :class:`numpy.float64`
+* :class:`numpy.int8`
+* :class:`numpy.int16`
+* :class:`numpy.int32`
+* :class:`numpy.int64`
+* :class:`numpy.intc`
+* :class:`numpy.intp`
+* :class:`numpy.uint8`
+* :class:`numpy.uint16`
+* :class:`numpy.uint32`
+* :class:`numpy.uint64`
+* :class:`numpy.uintc`
+* :class:`numpy.uintp`
+
+
 Standard ufuncs
 ===============
 

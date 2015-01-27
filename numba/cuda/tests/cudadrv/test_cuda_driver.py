@@ -1,7 +1,8 @@
 from __future__ import print_function, absolute_import
 
 from ctypes import c_int, sizeof
-from numba.cuda.cudadrv.driver import driver, host_to_device, device_to_host
+from numba.cuda.cudadrv.driver import host_to_device, device_to_host
+from numba.cuda.cudadrv import devices
 from numba.cuda.testing import unittest
 
 ptx1 = '''
@@ -59,14 +60,17 @@ ptx2 = '''
 
 class TestCudaDriver(unittest.TestCase):
     def setUp(self):
-        self.assertTrue(driver.get_device_count())
-        device = driver.get_device()
+        self.assertTrue(len(devices.gpus) > 0)
+        self.context = devices.get_context()
+        device = self.context.device
         ccmajor, _ = device.compute_capability
         if ccmajor >= 2:
             self.ptx = ptx2
         else:
             self.ptx = ptx1
-        self.context = device.get_or_create_context()
+
+    def tearDown(self):
+        del self.context
 
     def test_cuda_driver_basic(self):
         module = self.context.create_module_ptx(self.ptx)
