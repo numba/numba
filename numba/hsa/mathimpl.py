@@ -37,6 +37,7 @@ function_descriptors = {
     'log': (_unary_f_f, _unary_d_d),
     'log10': (_unary_f_f, _unary_d_d),
     'log1p': (_unary_f_f, _unary_d_d),
+
     'sin': (_unary_f_f, _unary_d_d),
     'cos': (_unary_f_f, _unary_d_d),
     'tan': (_unary_f_f, _unary_d_d),
@@ -66,8 +67,9 @@ def _mk_fn_decl(name, decl_sig):
     core.__name__ = name
     return core
 
-
-for name in ['sin', 'cos', 'tan', 'asin', 'acos', 'atan']:
+_supported = ['sin', 'cos', 'tan', 'asin', 'acos', 'atan',
+              'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh'] 
+for name in _supported:
     sigs = function_descriptors.get(name)
     if sigs is None:
         warnings.warn("HSA - failed to register '{0}'".format(name))
