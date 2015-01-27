@@ -662,14 +662,16 @@ def make_array_ndenumerate_cls(nditerty):
     return _make_flattening_iter_cls(nditerty, 'ndenumerate')
 
 
-def _increment_indices(context, builder, arrty, arr, indices):
+def _increment_indices(context, builder, ndim, shape, indices, end_flag=None):
     zero = context.get_constant(types.intp, 0)
     one = context.get_constant(types.intp, 1)
 
-    shape = cgutils.unpack_tuple(builder, arr.shape, arrty.ndim)
     bbend = cgutils.append_basic_block(builder, 'end_increment')
 
-    for dim in reversed(range(arrty.ndim)):
+    if end_flag is not None:
+        builder.store(cgutils.false_byte, end_flag)
+
+    for dim in reversed(range(ndim)):
         idxptr = cgutils.gep(builder, indices, dim)
         idx = builder.add(builder.load(idxptr), one)
 
@@ -680,9 +682,80 @@ def _increment_indices(context, builder, arrty, arr, indices):
             builder.branch(bbend)
         builder.store(zero, idxptr)
 
+    if end_flag is not None:
+        builder.store(cgutils.true_byte, end_flag)
     builder.branch(bbend)
 
     builder.position_at_end(bbend)
+
+def _increment_indices_array(context, builder, arrty, arr, indices, end_flag=None):
+    shape = cgutils.unpack_tuple(builder, arr.shape, arrty.ndim)
+    _increment_indices(context, builder, arrty.ndim, shape, indices, end_flag)
+
+
+@struct_factory(types.NumpyNdIndexType)
+def make_ndindex_cls(nditerty):
+    """
+    Return the Structure representation of the given *nditerty* (an
+    instance of types.NumpyNdIndexType).
+    """
+    ndim = nditerty.ndim
+
+    class NdIndexIter(cgutils.Structure):
+        """
+        .ndindex() implementation.
+        """
+        _fields = [('shape', types.UniTuple(types.intp, ndim)),
+                   ('indices', types.CPointer(types.intp)),
+                   ('exhausted', types.CPointer(types.boolean)),
+                   ]
+
+        def init_specific(self, context, builder, shapes):
+            zero = context.get_constant(types.intp, 0)
+            indices = cgutils.alloca_once(builder, zero.type,
+                                          size=context.get_constant(types.intp,
+                                                                    ndim))
+            exhausted = cgutils.alloca_once_value(builder, cgutils.false_byte)
+
+            for dim in range(ndim):
+                idxptr = cgutils.gep(builder, indices, dim)
+                builder.store(zero, idxptr)
+                # 0-sized dimensions really indicate an empty array,
+                # but we have to catch that condition early to avoid
+                # a bug inside the iteration logic.
+                dim_size = shapes[dim]
+                dim_is_empty = builder.icmp(lc.ICMP_EQ, dim_size, zero)
+                with cgutils.if_unlikely(builder, dim_is_empty):
+                    builder.store(cgutils.true_byte, exhausted)
+
+            self.indices = indices
+            self.exhausted = exhausted
+            self.shape = cgutils.pack_array(builder, shapes)
+
+        def iternext_specific(self, context, builder, result):
+            zero = context.get_constant(types.intp, 0)
+            one = context.get_constant(types.intp, 1)
+
+            bbend = cgutils.append_basic_block(builder, 'end')
+
+            exhausted = cgutils.as_bool_bit(builder, builder.load(self.exhausted))
+            with cgutils.if_unlikely(builder, exhausted):
+                result.set_valid(False)
+                builder.branch(bbend)
+
+            indices = [builder.load(cgutils.gep(builder, self.indices, dim))
+                       for dim in range(ndim)]
+            result.yield_(cgutils.pack_array(builder, indices))
+            result.set_valid(True)
+
+            shape = cgutils.unpack_tuple(builder, self.shape, ndim)
+            _increment_indices(context, builder, ndim, shape,
+                               self.indices, self.exhausted)
+
+            builder.branch(bbend)
+            builder.position_at_end(bbend)
+
+    return NdIndexIter
 
 
 def _make_flattening_iter_cls(flatiterty, kind):
@@ -748,7 +821,7 @@ def _make_flattening_iter_cls(flatiterty, kind):
                         idxtuple = cgutils.pack_array(builder, idxvals)
                         result.yield_(
                             cgutils.make_anonymous_struct(builder, [idxtuple, value]))
-                        _increment_indices(context, builder, arrty, arr, indices)
+                        _increment_indices_array(context, builder, arrty, arr, indices)
 
                     index = builder.add(index, one)
                     builder.store(index, self.index)
@@ -940,3 +1013,47 @@ def iternext_numpy_nditer(context, builder, sig, args, result):
     arr = arrcls(context, builder, value=builder.load(nditer.array))
 
     nditer.iternext_specific(context, builder, arrty, arr, result)
+
+
+@builtin
+@implement(numpy.ndindex, types.VarArg(types.Kind(types.Integer)))
+def make_array_ndindex(context, builder, sig, args):
+    """ndindex(*shape)"""
+    shape = [context.cast(builder, arg, argty, types.intp)
+             for argty, arg in zip(sig.args, args)]
+
+    nditercls = make_ndindex_cls(types.NumpyNdIndexType(len(shape)))
+    nditer = nditercls(context, builder)
+    nditer.init_specific(context, builder, shape)
+
+    return nditer._getvalue()
+
+@builtin
+@implement(numpy.ndindex, types.Kind(types.UniTuple))
+def make_array_ndindex(context, builder, sig, args):
+    """ndindex(shape)"""
+    ndim = sig.return_type.ndim
+    idxty = sig.args[0].dtype
+    tup = args[0]
+
+    shape = cgutils.unpack_tuple(builder, tup, ndim)
+    shape = [context.cast(builder, idx, idxty, types.intp)
+             for idx in shape]
+
+    nditercls = make_ndindex_cls(types.NumpyNdIndexType(len(shape)))
+    nditer = nditercls(context, builder)
+    nditer.init_specific(context, builder, shape)
+
+    return nditer._getvalue()
+
+@builtin
+@implement('iternext', types.Kind(types.NumpyNdIndexType))
+@iternext_impl
+def iternext_numpy_ndindex(context, builder, sig, args, result):
+    [nditerty] = sig.args
+    [nditer] = args
+
+    nditercls = make_ndindex_cls(nditerty)
+    nditer = nditercls(context, builder, value=nditer)
+
+    nditer.iternext_specific(context, builder, result)

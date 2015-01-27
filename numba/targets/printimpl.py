@@ -58,7 +58,7 @@ def print_charseq(context, builder, sig, args):
 
 
 @register
-@implement(types.print_type, types.VarArg)
+@implement(types.print_type, types.VarArg(types.Any))
 def print_varargs(context, builder, sig, args):
     py = context.get_python_api(builder)
     for i, (argtype, argval) in enumerate(zip(sig.args, args)):
