@@ -212,8 +212,8 @@ def event(timing=True):
 
 def select_device(device_id):
     """Creates a new CUDA context with the selected device.
-    The context is associated with the current thread.
-    NumbaPro currently allows only one context per thread.
+    The context is associated with the current thread. Numba
+    currently allows only one context per thread.
 
     Returns a device instance
 

@@ -12,7 +12,7 @@ by Continuum Analytics.  You can either use `Anaconda
 or `Miniconda <http://conda.pydata.org/miniconda.html>`_ which will install
 the minimum packages needed to get started.
 
-If/once you have conda installed, just type::
+Once you have conda installed, just type::
 
    $ conda install numba
 
