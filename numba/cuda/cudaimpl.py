@@ -31,6 +31,14 @@ def ptx_grid2d(context, builder, sig, args):
 
 
 @register
+@implement('ptx.grid.3d', types.intp)
+def ptx_grid3d(context, builder, sig, args):
+    assert len(args) == 1
+    r1, r2, r3 = nvvmutils.get_global_id(builder, dim=3)
+    return cgutils.pack_array(builder, [r1, r2, r3])
+
+
+@register
 @implement('ptx.gridsize.1d', types.intp)
 def ptx_gridsize1d(context, builder, sig, args):
     assert len(args) == 1
@@ -54,6 +62,25 @@ def ptx_gridsize2d(context, builder, sig, args):
     r1 = builder.mul(ntidx, nctaidx)
     r2 = builder.mul(ntidy, nctaidy)
     return cgutils.pack_array(builder, [r1, r2])
+
+
+@register
+@implement('ptx.gridsize.3d', types.intp)
+def ptx_gridsize3d(context, builder, sig, args):
+    assert len(args) == 1
+    ntidx = nvvmutils.call_sreg(builder, "ntid.x")
+    nctaidx = nvvmutils.call_sreg(builder, "nctaid.x")
+
+    ntidy = nvvmutils.call_sreg(builder, "ntid.y")
+    nctaidy = nvvmutils.call_sreg(builder, "nctaid.y")
+
+    ntidz = nvvmutils.call_sreg(builder, "ntid.z")
+    nctaidz = nvvmutils.call_sreg(builder, "nctaid.z")
+
+    r1 = builder.mul(ntidx, nctaidx)
+    r2 = builder.mul(ntidy, nctaidy)
+    r3 = builder.mul(ntidz, nctaidz)
+    return cgutils.pack_array(builder, [r1, r2, r3])
 
 
 # -----------------------------------------------------------------------------
