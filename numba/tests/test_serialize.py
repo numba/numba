@@ -1,77 +1,14 @@
 from __future__ import print_function, absolute_import, division
 
-import math
 import pickle
 import subprocess
 import sys
 
 from numba import unittest_support as unittest
-from numba import jit, types
 from numba.targets import registry
 from numba.typeinfer import TypingError
 from .support import TestCase
-
-
-@jit((types.int32, types.int32))
-def add_with_sig(a, b):
-    return a + b
-
-@jit
-def add_without_sig(a, b):
-    return a + b
-
-@jit(nopython=True)
-def add_nopython(a, b):
-    return a + b
-
-@jit(nopython=True)
-def add_nopython_fail(a, b):
-    print(a.__class__)
-    return a + b
-
-def closure(a):
-    @jit(nopython=True)
-    def inner(b, c):
-        return a + b + c
-    return inner
-
-K = 3.0
-
-from math import sqrt
-
-def closure_with_globals(x, **jit_args):
-    @jit(**jit_args)
-    def inner(y):
-        # Exercise a builtin function and a module-level constant
-        k = max(K, K + 1)
-        # Exercise two functions from another module, one accessed with
-        # dotted notation, one imported explicitly.
-        return math.hypot(x, y) + sqrt(k)
-    return inner
-
-@jit(nopython=True)
-def other_function(x, y):
-    return math.hypot(x, y)
-
-@jit(forceobj=True)
-def get_global_objmode(x):
-    return K * x
-
-def closure_calling_other_function(x):
-    @jit(nopython=True)
-    def inner(y, z):
-        return other_function(x, y) + z
-    return inner
-
-def closure_calling_other_closure(x):
-    @jit(nopython=True)
-    def other_inner(y):
-        return math.hypot(x, y)
-
-    @jit(nopython=True)
-    def inner(y):
-        return other_inner(y) + x
-    return inner
+from .serialize_usecases import *
 
 
 class TestDispatcherPickling(TestCase):
@@ -144,6 +81,14 @@ class TestDispatcherPickling(TestCase):
     def test_call_closure_calling_other_closure(self):
         inner = closure_calling_other_closure(3.0)
         self.run_with_protocols(self.check_call, inner, 8.0, (4.0,))
+
+    def test_call_dyn_func(self):
+        # Check serializing a dynamically-created function
+        self.run_with_protocols(self.check_call, dyn_func, 6, (4,))
+
+    def test_call_dyn_func_objmode(self):
+        # Same with an object mode function
+        self.run_with_protocols(self.check_call, dyn_func_objmode, 6, (4,))
 
     def test_other_process(self):
         """
