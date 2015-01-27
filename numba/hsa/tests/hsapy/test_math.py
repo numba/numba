@@ -28,7 +28,7 @@ class TestMath(unittest.TestCase):
 
         for dtype in types:
             if cases is None:
-                src = np.arange(span[0], span[1], count, dtype=dtype)
+                src = np.linspace(span[0], span[1], count, dtype=dtype)
             else:
                 src = np.array(cases, dtype=dtype)
 
@@ -82,6 +82,17 @@ class TestMath(unittest.TestCase):
             self._generic_test_unary(fn, getattr(np, fn.__name__),
                                      cases=cases)
 
+
+    def test_floor_ceil(self):
+        funcs = [math.ceil, math.floor]
+
+        for fn in funcs:
+            # cases with varied decimals
+            self._generic_test_unary(fn, getattr(np, fn.__name__),
+                                     span=(-1013.14, 843.21))
+            # cases that include "exact" integers
+            self._generic_test_unary(fn, getattr(np, fn.__name__),
+                                     span=(-16, 16), count=129)
 
 
 if __name__ == '__main__':
