@@ -1,81 +1,22 @@
-.. numba documentation master file, created by
+.. Numba documentation master file, created by
+   sphinx-quickstart on Tue Dec 30 11:55:40 2014.
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Numba
-=====
+Numba documentation
+===================
 
-**User Guide**
+This is the Numba documentation.  Unless you are already acquainted
+with Numba, we suggest you start with the :doc:`User manual <user/index>`.
 
-.. toctree::
-   :titlesonly:
-   :maxdepth: 2
-
-   install.rst
-   quickstart.rst
-   types.rst
-   arrays.rst
-   ufuncs.rst
-   examples.rst
-
-**Tutorials**
 
 .. toctree::
-   :maxdepth: 1
+   :numbered:
+   :maxdepth: 3
 
-   tutorial_firststeps.rst
-   tutorial_types.rst
-
-**NumPy support**
-
-.. toctree::
-   :maxdepth: 1
-	      
-   numpy_support.rst
-
-**Interfacing with native code**
-
-.. toctree::
-   :maxdepth: 1
-
-   interface_c.rst
-
-**CUDA API (experimental)**
-
-.. toctree::
-   :maxdepth: 1
-
-   CUDAintro.rst
-   CUDAJit.rst
-   CUDADevice.rst
-   CUDASupport.rst
-
-**Misc**
-
-.. toctree::
-   :titlesonly:
-   :maxdepth: 2
-
-   pycc.rst
-   debugging.rst
-   releases.rst
+   user/index.rst
+   reference/index.rst
+   cuda/index.rst
+   developer/index.rst
    glossary.rst
-
-
-**Developer Documentation**
-
-.. toctree::
-   :titlesonly:
-   :maxdepth: 1
-
-   developer/contributing.rst
-   developer/architecture.rst
-   developer/extend_frontend.rst
-   developer/cgutils.rst
-
-**Indices and tables**
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
-
+   release-notes.rst

@@ -1,3 +1,6 @@
+
+.. _architecture:
+
 ==================
 Numba Architecture
 ==================
@@ -37,10 +40,10 @@ the function call.
 Numba can take this bytecode and compile it to machine code that performs the
 same operations as the CPython interpreter, treating ``a`` and ``b`` as
 generic Python objects.  The full semantics of Python are preserved, and the
-compiled function can used with any kind of objects that have the add operator
-defined.  When a Numba function is compiled this way, we say that it has been
-compiled in :term:`object mode`, because the code still manipulates Python
-objects.
+compiled function can be used with any kind of objects that have the add
+operator defined.  When a Numba function is compiled this way, we say that it
+has been compiled in :term:`object mode`, because the code still manipulates
+Python objects.
 
 Numba code compiled in object mode is not much faster than executing the
 original Python function in the CPython interpreter.  However, if we
@@ -50,7 +53,7 @@ natively without any calls into the Python C API.  When code has been compiled
 for specific data types so that the function body no longer relies on the
 Python runtime, we say the function has been compiled in :term:`nopython mode`.
 Numeric code compiled in nopython mode can be hundreds of times faster
-than the original Python. 
+than the original Python.
 
 Contexts
 ========
@@ -187,7 +190,7 @@ Stage 2: Generate the Numba IR
 Once the control flow and data analyses are complete, the Numba interpreter
 can step through the bytecode and translate it into an Numba-internal
 intermediate representation.  This translation process changes the function
-from a stack machine representation (used by the Python interpreter) to a 
+from a stack machine representation (used by the Python interpreter) to a
 register machine representation (used by LLVM).
 
 Although the IR is stored in memory as a tree of objects, it can be serialized
@@ -235,12 +238,14 @@ translated into::
 which represents an instance of the ``Intrinsic`` IR node for calling the
 ``tid.x`` intrinsic function.
 
+.. _arch_type_inference:
+
 Stage 4: Infer Types
 --------------------
 
 Now that the Numba IR has been generated and macro-expanded, type analysis
 can be performed.  The types of the function arguments can be taken either
-from the explicit function signature given in the ``@jit`` decorator 
+from the explicit function signature given in the ``@jit`` decorator
 (such as ``@jit('float64(float64, float64)')``), or they can be taken from
 the types of the actual function arguments if compilation is happening
 when the function is first called.
@@ -284,9 +289,9 @@ Stage 5a: Generate No-Python LLVM IR
 If type inference succeeds in finding a Numba type for every intermediate
 variable, then Numba can (potentially) generate specialized native code.  This
 process is called *lowering*.  The Numba IR tree is translated into LLVM IR by
-using helper classes from `llvmpy <http://www.llvmpy.org/>`_.  The  machine-
-generated LLVM IR can seem unnecessarily verbose, but the LLVM  toolchain is
-able to optimize it quite easily into compact, efficient code.
+using helper classes from `llvmlite <https://github.com/numba/llvmlite>`_.
+The  machine-generated LLVM IR can seem unnecessarily verbose, but the LLVM
+toolchain is able to optimize it quite easily into compact, efficient code.
 
 The basic lowering algorithm is generic, but the specifics of how particular
 Numba IR nodes are translated to LLVM instructions is handled by the
@@ -413,7 +418,7 @@ operations.  The optimized LLVM for our example ``add()`` function is:
     !0 = metadata !{metadata !"branch_weights", i32 1, i32 99}
 
 The careful reader might notice a lot of unnecessary calls to ``Py_IncRef``
-and ``Py_DecRef`` in the generated code.  A special pass is run after the 
+and ``Py_DecRef`` in the generated code.  A special pass is run after the
 LLVM optimizer to identify and remove these extra reference count calls.
 
 Object mode compilation will also attempt to identify loops which can be
@@ -451,3 +456,4 @@ setting the ``NUMBA_DUMP_ASSEMBLY`` environment variable to 1:
 
 The assembly output will also include the generated wrapper function that
 translates the Python arguments to native data types.
+
